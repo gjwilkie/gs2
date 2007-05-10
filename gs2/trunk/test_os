@@ -1,0 +1,44 @@
+#! /bin/sh
+#  set workstation type:
+#
+#    ALPHA means OSF1
+#    SGI means Silicon Graphics Irix
+#    SUN means SUNOS
+#    RS6000 means AIX
+#    ...others may require porting effort...
+#
+S=`uname -s`
+WORKSTATION_TYPE='unknown'
+if  test "$S" = 'IRIX64'; then
+      WORKSTATION_TYPE='SGI'
+elif  test "$S" = 'OSF1'; then
+      WORKSTATION_TYPE='ALPHA'
+elif test "$S" = 'AIX'; then
+      WORKSTATION_TYPE='RS6000'
+elif test "$S" = 'SunOS'; then
+    R=`uname -r | sed "s/\..//"` 
+    if test "$R" = '4'; then
+       WORKSTATION_TYPE='SUN'
+    else
+       WORKSTATION_TYPE='SUNOS'
+    fi
+elif test "$S" = 'Linux'; then
+      WORKSTATION_TYPE='LINUX'
+elif test "$S" = 'HP_UX'; then
+      WORKSTATION_TYPE='HP'
+fi
+if test $WORKSTATION_TYPE = 'unknown'; then
+    S=`uname -m`
+    if test "$S" = 'CRAY T3E'; then
+       WORKSTATION_TYPE='T3E'
+    elif test "$S" = 'CRAY J90'; then
+       WORKSTATION_TYPE='C90'
+    else
+       echo `uname -s` is not recognized by test_os script
+       exit
+    fi
+fi
+
+echo $WORKSTATION_TYPE
+# export WORKSTATION_TYPE
+

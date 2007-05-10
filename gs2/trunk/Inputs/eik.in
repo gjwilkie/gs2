@@ -1,0 +1,44 @@
+ $stuff
+ bishop=1
+ beta_prime_times = 1.
+ beta_prime_over =  -2.
+ nperiod=2,
+ rhoc = .97
+ irho=2
+ itor=1
+ ntheta = 36
+ big = 8
+
+ beta_prime_input = -.1
+ Rmaj =   1.0
+ R_geo =  1.0
+ s_hat_input = 2.
+ qinp=     5.
+ shift=    -0.
+ akappa=   1.6
+ akappri=  0.
+ tri=      0.3
+ tripri=   0.
+
+ iflux=1
+ gen_eq =   .f.
+ local_eq = .f.
+ efit_eq =  .t.
+ vmom_eq =  .f.
+ ppl_eq =   .f.
+ delrho=1.e-3
+ eqfile='g082205.03500'
+
+ beta_p1 = -0.
+ beta_p2 = -2.
+
+ nbeta = 41
+
+ isym=0,
+ rmin=0.001
+
+ equal_arc=.t.
+ writelots=.t.
+
+ ismooth=0
+ $end

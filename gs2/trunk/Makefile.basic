@@ -1,0 +1,190 @@
+F90=f90
+
+##############################################################
+# Make choices depending on the type of computer you have:
+
+# T3E debug
+#FFLAGS=-I$$MPTDIR/include  -M1110 -g 
+# T3E
+FFLAGS=-I$$MPTDIR/include  -M1110 -O vector3 -O inline4 
+# J90??
+#FFLAGS=-a taskcommon -I$$MPTDIR/include 
+# Princeton Origin 2000:
+#FFLAGS=-I$$MPTDIR/include -I/usr/pppl/include/ -r8 -64 -O -TARG:platform=ip27
+# ACL Origin 2000:
+#FFLAGS=-I$$MPTDIR/include -I/usr/local/packages/netcdf-3.4/include/ \
+#	-r8 -64 -O -TARG:platform=ip27
+
+# T3E
+FLIBS=-lnetcdf -lmpi #-lapp #-Wl"-D preset=inf" -lmalloc
+# ACL Origin 2000: 
+#FLIBS= -L/usr/local/packages/netcdf-3.4/lib64 -lnetcdf \
+#	-L$$PAL_ROOT/lib64 -lmpi -lscs # -lVT
+# Princeton Origin 2000: 
+#FLIBS= -L/usr/pppl/lib -lnetcdf -L$$PAL_ROOT/lib64 -lmpi -lscs # -lVT
+
+
+# T3E, Origin 2000
+COMMAND_LINE=command_line_posix
+# Sun
+#COMMAND_LINE=command_line_unix
+# NAG compiler
+#COMMAND_LINE=command_line_nag
+
+CRAYF90HACK=:
+#CRAYF90HACK=echo
+
+# T3E
+MP=mp_mpi
+# Origin 2000
+# MP=mp_mpi_r8
+# No MPI available
+#MP=mp_stub
+
+# T3E
+PROF=prof_none
+# Origin 2000, if you want run-time profiling
+# (which slows down the code)
+#PROF=prof_vampir
+
+# Pick one of the following choices for REDISTRIBUTE:
+# T3E, Origin 2000
+REDISTRIBUTE=redistribute_mpi
+# T3E
+#REDISTRIBUTE=redistribute_shmem
+
+# T3E
+SHMEM=shmem_cray
+# Origin 2000
+#SHMEM=shmem_stub
+
+# Pick one of the following choices for RANNUM:
+# T3E, Origin 2000
+RANNUM=ran_cray
+# Other
+#RANNUM=ran_portable
+
+##############################################################
+
+GS2MOD=gs2_diagnostics.o dist_fn.o collisions.o dist_fn_arrays.o \
+	fields.o fields_arrays.o fields_implicit.o fields_test.o init_g.o \
+	le_grids.o species.o run_parameters.o gs2_layouts.o \
+	kt_grids.o kt_grids_single.o kt_grids_range.o kt_grids_specified.o \
+	kt_grids_box.o kt_grids_xbox.o gs2_time.o redistribute.o \
+	theta_grid.o theta_grid_file.o gs2_save.o ran.o \
+	theta_grid_salpha.o theta_grid_eik.o theta_grid_gridgen.o \
+	theta_grid_params.o text_options.o file_utils.o \
+	command_line.o mp.o prof.o shmem.o
+GS2LIBMOD=splines.o geometry.o geq.o veq.o peq.o \
+	eeq.o leq.o vdimstub.o radstub.o
+GS2LIB=gridgen4.o fitpack.o
+
+stubs = vdimstub.o radstub.o
+
+all: eiktest ball rungridgen gs2
+
+eiktest: et.o fitpack.o abort.o
+	$(F90) -o eiktest et.o fitpack.o abort.o $(stubs) $(FLIBS)
+
+ball: ball.o fitpack.o  abort.o
+	$(F90) -o ball ball.o fitpack.o abort.o $(stubs) $(FLIBS)
+
+rungridgen: rungridgen.o gridgen4.o smooth.o fitpack.o abort.o
+	$(F90) -o rungridgen rungridgen.o gridgen4.o smooth.o \
+	fitpack.o abort.o
+
+gs2: gs2.o $(GS2MOD) gridgen4.o fitpack.o abort.o
+	$(F90) $(FFLAGS) -o gs2 gs2.o abort.o \
+	$(GS2MOD) $(GS2LIBMOD) $(GS2LIB) $(FLIBS)
+
+combine: combine.o command_line.o
+	$(F90) $(FFLAGS) -o combine combine.o $(FLIBS)
+
+.SUFFIXES:
+.SUFFIXES: .f90 .o .f
+.f90.o:
+	$(F90) -c $(FFLAGS) $<
+.f.o:
+	$(F90) -c $(FFLAGS) $<
+
+command_line.f90:
+	ln -s $(COMMAND_LINE).f90 command_line.f90
+
+mp.f90:
+	ln -s $(MP).f90 mp.f90
+
+prof.f90:
+	ln -s $(PROF).f90 prof.f90
+
+redistribute.f90: 
+	ln -s $(REDISTRIBUTE).f90 redistribute.f90
+
+ran.f90: 
+	ln -s $(RANNUM).f90 ran.f90
+
+shmem.f90:
+	ln -s $(SHMEM).f90 shmem.f90
+
+kt_grids_range.o: file_utils.o
+kt_grids_box.o: file_utils.o theta_grid.o
+kt_grids_xbox.o: file_utils.o theta_grid.o
+gs2_diagnostics.o: file_utils.o kt_grids.o run_parameters.o species.o mp.o 
+gs2_diagnostics.o: fields.o dist_fn.o constants.o prof.o gs2_save.o gs2_time.o
+dist_fn.o: mp.o species.o theta_grid.o kt_grids.o le_grids.o
+dist_fn.o: run_parameters.o init_g.o
+dist_fn.o: gs2_layouts.o file_utils.o dist_fn_arrays.o constants.o
+dist_fn.o: collisions.o 
+dist_fn.o: prof.o gs2_time.o
+init_g.o: mp.o species.o theta_grid.o kt_grids.o le_grids.o dist_fn_arrays.o
+init_g.o: gs2_layouts.o gs2_save.o fields_arrays.o ran.o
+run_parameters.o: mp.o file_utils.o
+le_grids.o: mp.o species.o theta_grid.o kt_grids.o file_utils.o redistribute.o
+le_grids.o: gs2_layouts.o constants.o 
+species.o: mp.o file_utils.o text_options.o
+gs2.o: mp.o file_utils.o fields.o run_parameters.o gs2_diagnostics.o 
+gs2.o: gs2_reinit.o gs2_time.o init_g.o
+file_utils.o: command_line.o
+theta_grid_salpha.o: theta_grid_params.o file_utils.o text_options.o
+theta_grid_salpha.o: constants.o theta_grid_gridgen.o
+theta_grid_eik.o: theta_grid_params.o theta_grid_gridgen.o file_utils.o
+fields.o: theta_grid.o kt_grids.o run_parameters.o dist_fn.o mp.o
+fields.o: file_utils.o dist_fn_arrays.o constants.o prof.o text_options.o
+fields.o: fields_arrays.o fields_implicit.o fields_test.o 
+fields_implicit.o: theta_grid.o kt_grids.o run_parameters.o dist_fn.o mp.o
+fields_implicit.o: fields_arrays.o theta_grid.o kt_grids.o dist_fn_arrays.o
+fields_implicit.o: run_parameters.o gs2_layouts.o mp.o prof.o file_utils.o
+fields_implicit.o: gs2_save.o
+fields_test.o: theta_grid.o kt_grids.o run_parameters.o dist_fn.o mp.o
+fields_test.o: fields_arrays.o theta_grid.o kt_grids.o dist_fn_arrays.o
+fields_test.o: run_parameters.o gs2_layouts.o mp.o prof.o file_utils.o
+kt_grids.o: mp.o file_utils.o text_options.o kt_grids_single.o theta_grid.o
+kt_grids.o: kt_grids_range.o kt_grids_specified.o kt_grids_box.o
+kt_grids.o: kt_grids_xbox.o
+kt_grids_single.o: file_utils.o
+theta_grid_gridgen.o: file_utils.o constants.o splines.o
+theta_grid_file.o: file_utils.o
+theta_grid.o: mp.o file_utils.o text_options.o theta_grid_eik.o
+theta_grid.o: theta_grid_salpha.o theta_grid_file.o
+gs2_layouts.o: mp.o
+theta_grid_params.o: file_utils.o
+collisions.o: mp.o species.o theta_grid.o kt_grids.o le_grids.o
+collisions.o: run_parameters.o file_utils.o text_options.o dist_fn_arrays.o
+collisions.o: prof.o shmem.o redistribute.o
+kt_grids_specified.o: file_utils.o
+theta_grid_eik.o: theta_grid_params.o theta_grid_gridgen.o file_utils.o geometry.o
+gs2_save.o: theta_grid.o gs2_layouts.o mp.o fields_arrays.o kt_grids.o dist_fn_arrays.o \
+	gs2_time.o
+gs2_reinit.o: collisions.o mp.o \
+	dist_fn.o fields.o fields_implicit.o fields_test.o init_g.o run_parameters.o \
+	gs2_save.o dist_fn_arrays.o fields_arrays.o 
+redistribute.o: mp.o
+
+et.o: geometry.o 
+ball.o: geometry.o
+geometry.o: veq.o geq.o eeq.o leq.o peq.o radstub.o
+veq.o: splines.o vdimstub.o
+geq.o: splines.o 
+eeq.o: splines.o
+
+rungridgen.o: file_utils.o
+
