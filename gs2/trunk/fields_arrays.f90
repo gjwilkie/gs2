@@ -14,7 +14,7 @@ module fields_arrays
 ! Within each supercell, there are are N_class primary cells.  Each 
 ! has (2*ntgrid+1)*nfield points.
   type dcell_type
-     complex, dimension(:), pointer :: supercell => null()
+     complex, dimension(:), pointer :: supercell !=> null()
   end type dcell_type
 
 ! Within each class, there may be multiple supercells.
@@ -25,7 +25,7 @@ module fields_arrays
 ! are distributed -- thus, "dcells"
 
   type :: field_matrix_type
-     type(dcell_type), dimension (:), pointer :: dcell => null()
+     type(dcell_type), dimension (:), pointer :: dcell !=> null()
   end type field_matrix_type
 
 ! There may be supercells of different sizes or "classes".  

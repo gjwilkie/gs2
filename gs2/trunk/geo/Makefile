@@ -228,12 +228,40 @@ ifeq ($(CPU),LINUX_pg)
   endif
 endif
 
+# options for Linux with Absoft f90
+ifeq ($(CPU),LINUX_abs)
+  FC = mpif90
+  FLIBS = -L/usr/lib -lnetcdf
+  u_obj = $(UTILDIR)/spl.o $(UTILDIR)/mds.o 
+  stubs = radstub.o vdimstub.o $(UTILDIR)/mdslib.o
+  PLATFORM_LINKS = linux_fuj
+  F90FLAGS_base = -N113 -p$(UTILDIR)
+
+  F90FLAGS_0 = $(F90FLAGS_base) -YEXT_SFX=
+  F90FLAGS_1 = $(F90FLAGS_base) -YEXT_SFX=_
+  F90FLAGS_2 = $(F90FLAGS_base) -YEXT_SFX=__
+
+  F90FLAGS = $(F90FLAGS_base)
+
+  ifeq ($(debug),on) 
+    F90FLAGS += -g -Rbcs
+    F90FLAGS_0 += -g -Rbcs
+    F90FLAGS_1 += -g -Rbcs
+    F90FLAGS_2 += -g -Rbcs
+  else
+    F90FLAGS += -O 
+    F90FLAGS_0 += -O 
+    F90FLAGS_1 += -O 
+    F90FLAGS_2 += -O 
+  endif
+
+endif
+
 # options for Linux with Fujitsu f90
 ifeq ($(CPU),LINUX_fuj)
   FC = mpif90
   FLIBS = \
-	-L/usr/local/lib -lnetcdf \
-	../utils/mdslib.a -L/u/bdorland/fftw/lib -lfftw -lrfftw
+	-L/usr/local/lib -lnetcdf ../utils/mdslib.a 
   PLATFORM_LINKS = linux_fuj
   u_obj = $(UTILDIR)/spl.o $(UTILDIR)/mds.o 
   stubs = radstub.o vdimstub.o
@@ -271,7 +299,7 @@ ifeq ($(CPU),LINUX)
 
 endif
 
-geo_obj = geometry.o geq.o veq.o eeq.o peq.o leq.o deq.o
+geo_obj = geometry.o geq.o veq.o eeq.o peq.o leq.o deq.o ideq.o
 
 all:	mods geo.a eiktest ball
 
@@ -285,7 +313,7 @@ clean:
 configure: configure.in
 	autoconf --local=config
 
-geometry.o : veq.o geq.o eeq.o leq.o peq.o deq.o radstub.o
+geometry.o : veq.o geq.o eeq.o leq.o peq.o deq.o radstub.o ideq.o
 
 ball: ball.o geo.a $(u_obj) $(stubs)
 	case $(PLATFORM_LINKS) in \
@@ -302,6 +330,15 @@ eiktest: et.o geo.a $(u_obj) $(stubs)
 ts : testsmoothf.o smoothf.o
 	$(FC) $(FFLAGS) -o ts testsmoothf.o smoothf.o 
 
+ifeq ($(CPU),LINUX_abs)
+
+peq.o: 
+	$(FC) $(F90FLAGS_1) -c peq.f90
+geq.o: 
+	$(FC) $(F90FLAGS_1) -c geq.f90
+
+endif
+
 et.o: geometry.o 
 ball.o: geometry.o 
 
@@ -309,6 +346,7 @@ peq.o geq.o: $(UTILDIR)/utils.a
 veq.o: $(UTILDIR)/utils.a vdimstub.o 
 eeq.o: $(UTILDIR)/utils.a
 deq.o: $(UTILDIR)/utils.a
+ideq.o: $(UTILDIR)/utils.a
 
 MODULES= $(UTILDIR)
 

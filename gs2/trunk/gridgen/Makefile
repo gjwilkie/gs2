@@ -194,6 +194,21 @@ ifeq ($(CPU),LINUX_pg)
   endif
 endif
 
+# options for Linux with Absoft f90
+ifeq ($(CPU),LINUX_abs)
+  FC = mpif90
+  FLIBS = -L/usr/local/lib -lnetcdf
+  PLATFORM_LINKS = linux_fuj
+  F90FLAGS = -N113 -p$(UTILDIR)
+
+  ifeq ($(debug),on) 
+    F90FLAGS += -g -Rbcs
+  else
+    F90FLAGS += -O 
+  endif
+
+endif
+
 # options for Linux with Fujitsu f90
 ifeq ($(CPU),LINUX_fuj)
   FC = mpif90

@@ -205,6 +205,39 @@ ifeq ($(CPU),LINUX_pg)
 
 endif
 
+# options for Linux with Absoft f90
+ifeq ($(CPU),LINUX_abs)
+  FC = mpif90
+  FLIBS = -lnetcdf
+#  FLIBS = -L../../../netcdf/netcdf-3.4/lib -lnetcdfe
+  PLATFORM_LINKS = linux_fuj
+
+#
+# Culham computers have C/Fortran libraries build with different naming 
+# conventions for how many underscores are attached to a subroutine name.
+#
+
+  F90FLAGS_base = -N113 
+  F90FLAGS_0    = $(F90FLAGS_base) -YEXT_SFX= 
+  F90FLAGS_1    = $(F90FLAGS_base) -YEXT_SFX=_
+  F90FLAGS_2    = $(F90FLAGS_base) -YEXT_SFX=__
+
+  F90FLAGS = $(F90FLAGS_base)
+
+  ifeq ($(debug),on) 
+    F90FLAGS += -g -Rbcs
+    F90FLAGS_0 += -g -Rbcs
+    F90FLAGS_1 += -g -Rbcs
+    F90FLAGS_2 += -g -Rbcs
+  else
+    F90FLAGS += -O 
+    F90FLAGS_0 += -O 
+    F90FLAGS_1 += -O 
+    F90FLAGS_2 += -O 
+  endif
+
+endif
+
 # options for Linux with Fujitsu f90
 ifeq ($(CPU),LINUX_fuj)
   FC = mpif90
@@ -264,6 +297,13 @@ clean:
 
 mpptime.o: 
 	$(CC) -c mpptime.c
+
+ifeq ($(CPU),LINUX_abs)
+
+netcdf_mod.o:
+	$(FC) $(F90FLAGS_1) netcdf_mod.f90
+
+endif
 
 ######################################################################## RULES
 .SUFFIXES:

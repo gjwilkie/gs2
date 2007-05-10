@@ -51,6 +51,8 @@ module collisions
   type (redist_type), save :: lorentz_map
 
   logical :: initialized = .false.
+  logical :: accelerated_x = .false.
+  logical :: accelerated_v = .false.
 
 contains
 
@@ -69,7 +71,7 @@ contains
     call init_species
     call init_theta_grid
     call init_kt_grids
-    call init_le_grids
+    call init_le_grids (accelerated_x, accelerated_v)
     call init_run_parameters
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
 

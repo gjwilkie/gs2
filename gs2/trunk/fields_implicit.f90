@@ -52,10 +52,14 @@ contains
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
     complex, dimension (:,:,:), intent (out) :: fl
-    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: fieldeq, fieldeqa, fieldeqp
+    complex, dimension (:,:,:), allocatable :: fieldeq, fieldeqa, fieldeqp
     integer :: istart, ifin
 
     call prof_entering ("get_field_vector", "fields_implicit")
+
+    allocate (fieldeq (-ntgrid:ntgrid,ntheta0,naky))
+    allocate (fieldeqa(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (fieldeqp(-ntgrid:ntgrid,ntheta0,naky))
 
     call getfieldeq (phi, apar, aperp, fieldeq, fieldeqa, fieldeqp)
 
@@ -78,6 +82,8 @@ contains
        ifin = (istart-1) + 2*ntgrid+1
        fl(istart:ifin,:,:) = fieldeqp
     end if
+
+    deallocate (fieldeq, fieldeqa, fieldeqp)
 
     call prof_leaving ("get_field_vector", "fields_implicit")
   end subroutine get_field_vector
@@ -143,11 +149,13 @@ contains
     use mp, only: sum_allreduce
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
-    complex, dimension (nidx, ntheta0, naky) :: fl
-    complex, dimension (0:nidx*ntheta0*naky-1) :: u
+    complex, dimension (:,:,:), allocatable :: fl
+    complex, dimension (:), allocatable :: u
     integer :: jflo, ik, it, nl, nr, i, m, n, dc
 
     call prof_entering ("getfield", "fields_implicit")
+    allocate (fl(nidx, ntheta0, naky))
+    allocate (u (0:nidx*ntheta0*naky-1))
 
     ! am*u = fl, Poisson's and Ampere's law, u is phi, apar, aperp 
     ! u = aminv*fl
@@ -174,9 +182,11 @@ contains
        end do
     end do
 
+    deallocate (fl)
     call sum_allreduce (u)
 
     call get_field_solution (u)
+    deallocate (u)
 
     call prof_leaving ("getfield", "fields_implicit")
   end subroutine getfield
@@ -201,11 +211,11 @@ contains
        call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, istep, dt_cfl)
        call getfield (phinew, aparnew, aperpnew)
 
-       call get_apar_ext (apar_ext)
-       call get_phi_ext (phi_ext)
+!       call get_apar_ext (apar_ext)
+!       call get_phi_ext (phi_ext)
 
-       phinew   = phinew   + phi + phi_ext
-       aparnew  = aparnew  + apar + apar_ext
+       phinew   = phinew   + phi !+ phi_ext
+       aparnew  = aparnew  + apar !+ apar_ext
        aperpnew = aperpnew + aperp
                  
        call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, istep, dt_cfl)
@@ -356,11 +366,15 @@ contains
     implicit none
     integer, intent (in) :: ig, ifield, ic, n
     complex, dimension(:,f_lo(ic)%llim_proc:), intent (in out) :: am
-    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: fieldeq, fieldeqa, fieldeqp
+    complex, dimension (:,:,:), allocatable :: fieldeq, fieldeqa, fieldeqp
     integer :: irow, istart, iflo, ik, it, ifin, m, nn
     real :: dt_cfl
 
     call prof_entering ("init_response_row", "fields_implicit")
+
+    allocate (fieldeq (-ntgrid:ntgrid, ntheta0, naky))
+    allocate (fieldeqa(-ntgrid:ntgrid, ntheta0, naky))
+    allocate (fieldeqp(-ntgrid:ntgrid, ntheta0, naky))
 
     call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, 0, dt_cfl)
     call getfieldeq (phinew, aparnew, aperpnew, fieldeq, fieldeqa, fieldeqp)
@@ -402,15 +416,15 @@ contains
        end do
     end do
 
+    deallocate (fieldeq, fieldeqa, fieldeqp)
     call prof_leaving ("init_response_row", "fields_implicit")
   end subroutine init_response_row
 
   subroutine init_inverse_matrix (am, ic)
-    use mp, only: iproc
     use file_utils, only: error_unit
     use kt_grids, only: aky, akx
     use theta_grid, only: ntgrid
-    use mp, only: broadcast, send, receive, barrier
+    use mp, only: broadcast, send, receive, barrier, iproc
     use gs2_layouts, only: f_lo, idx, idx_local, proc_id, jf_lo
     use gs2_layouts, only: if_idx, im_idx, in_idx
     use gs2_layouts, only: ig_idx, ifield_idx, ij_idx, mj, dj
@@ -420,8 +434,7 @@ contains
     implicit none
     integer, intent (in) :: ic
     complex, dimension(:,f_lo(ic)%llim_proc:), intent (in out) :: am
-    complex, dimension(:,:), allocatable :: a_inv
-    complex, dimension (nidx*N_class(ic),M_class(ic)) :: lhscol, rhsrow
+    complex, dimension(:,:), allocatable :: a_inv, lhscol, rhsrow
     complex, dimension (:), allocatable :: am_tmp
     complex :: fac
     integer :: i, j, k, ik, it, m, n, nn, if, ig, jsc, jf, jg, jc
@@ -430,6 +443,8 @@ contains
 
     call prof_entering ("init_inverse_matrix", "fields_implicit")
     
+    allocate (lhscol (nidx*N_class(ic),M_class(ic)))
+    allocate (rhsrow (nidx*N_class(ic),M_class(ic)))
     call barrier
    
     j = nidx*N_class(ic)
@@ -494,6 +509,8 @@ contains
    
        end do
     end do
+
+    deallocate (lhscol, rhsrow)
 
 ! fill in skipped points for each field and supercell:
 ! Do not include internal ntgrid points in sum over supercell

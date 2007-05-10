@@ -17,7 +17,7 @@ program ball
        gen_eq,efit_eq,local_eq,eqfile,ismooth,ak0,k1,k2,&
        s_hat_input,p_prime_input,invLp_input,ppl_eq, &
        diffscheme,nbeta,beta_p1,beta_p2,beta_prime_input,alpha_input, &
-       beta_prime_times, beta_prime_over, big
+       beta_prime_times, beta_prime_over,big,gs2d_eq
 
 
 ! set defaults

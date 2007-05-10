@@ -121,10 +121,10 @@ ifeq ($(CPU),T3E)
   FC = f90
   PLATFORM_LINKS = t3e
   F90FLAGS = -I$$MPTDIR/include -M1110,7212 -p$(UTILS) -p$(GRIDGEN) -p$(GEO)
-  FLIBS = -lmpi $$NETCDF -Wl"-D permok=yes" $(UTILS)/mdslib.a -L../fftw -lfftw -lrfftw
+  FLIBS = -lmpi $$NETCDF -Wl"-D permok=yes" $(UTILS)/mdslib.a -L../fftw/lib -lfftw -lrfftw
 
   ifneq ($(debug),on)
-    F90FLAGS += #-O vector3 -O aggress 
+    F90FLAGS += -O vector3 -O aggress 
   else
     F90FLAGS += -g -R abcs -e i
     FLIBS  += -Wl"-D preset=inf" # -lmalloc 
@@ -203,7 +203,7 @@ ifeq ($(CPU),RS6000)
   FLIBS = $$NETCDF -L/usr/common/usg/fftw/2.1.3/lib -lfftw -lrfftw # $$TRACE_MPIF
   ifneq ($(debug),on)
 #    F90FLAGS += -O4
-    F90FLAGS += #-O3 -qarch=pwr3 -qtune=pwr3
+    F90FLAGS += -O3 -qarch=pwr3 -qtune=pwr3
   else
     F90FLAGS += -g 
     FLIBS    += # $$TRACE_MPIF
@@ -263,6 +263,36 @@ ifeq ($(CPU),LINUX_fuj)
 
 endif
 
+# options for Linux with Absoft f90
+ifeq ($(CPU),LINUX_abs)
+  FC = mpif90
+  PLATFORM_LINKS = linux_abs
+
+#  FLIBS = $(UTILS)/mdslib.a  -L/usr/local/lib -lrfftw -lfftw 
+  FLIBS = $(UTILS)/mdslib.a  -L~kthcmr/fftw -lrfftw -lfftw 
+  FLIBS +=  -L/usr/lib -lnetcdf
+
+  F90FLAGS_base = -Rp -I/usr/include -N113 -p$(UTILS) -p$(GRIDGEN) -p$(GEO) 
+  F90FLAGS_0    = $(F90FLAGS_base) -YEXT_SFX= 
+  F90FLAGS_1    = $(F90FLAGS_base) -YEXT_SFX=_
+  F90FLAGS_2    = $(F90FLAGS_base) -YEXT_SFX=__
+
+  F90FLAGS = $(F90FLAGS_base)
+
+  ifeq ($(debug),on) 
+    F90FLAGS += -g -Rbcs
+    F90FLAGS_0 += -g -Rbcs
+    F90FLAGS_1 += -g -Rbcs
+    F90FLAGS_2 += -g -Rbcs
+  else
+    F90FLAGS += -O 
+    F90FLAGS_0 += -O 
+    F90FLAGS_1 += -O 
+    F90FLAGS_2 += -O 
+  endif
+
+endif
+
 # options for Linux with NAG f95:
 ifeq ($(CPU),LINUX)
   FC = f95
@@ -270,13 +300,13 @@ ifeq ($(CPU),LINUX)
 	-L/old/usr/local/lib -lnetcdf \
 	-L/usr/local/lib -lfftw -lrfftw -lmpif -lbproc
   PLATFORM_LINKS = linux
-  F90FLAGS = -w -f77 -r8 -I/old/usr/include -mismatch \
+  F90FLAGS = -w -f77 -r8 -I/old/usr/include -I/usr/include -mismatch \
 	-I $(GEO) -I $(GRIDGEN) -I $(UTILS)
 
   ifeq ($(debug),on)
     F90FLAGS += -C -g90 -gline
   else
-    F90FLAGS += -O 
+    F90FLAGS += -O4
   endif
 
 endif
@@ -385,6 +415,29 @@ $(GEO)/geo.a:
 
 $(GRIDGEN)/gridgen.a:  $(UTILS)/utils.a
 	cd $(GRIDGEN); $(MAKE) gridgen.a
+
+ifeq ($(CPU),LINUX_abs)
+
+gs2_io.o:
+	$(FC) $(F90FLAGS_2) -c gs2_io.f90
+gs2_save.o:
+	$(FC) $(F90FLAGS_2) -c gs2_save.f90
+netcdf_mod.o:
+	$(FC) $(F90FLAGS_2) -c netcdf_mod.f90
+
+command_line.o:
+	$(FC) $(F90FLAGS_1) -c command_line.f90
+file_utils.o:
+	$(FC) $(F90FLAGS_1) -c file_utils.f90
+mp.o:
+	$(FC) $(F90FLAGS_1) -c mp.f90
+
+fft_work.o:
+	$(FC) $(F90FLAGS_0) -c fft_work.f90 
+gs2_transforms.o:  
+	$(FC) $(F90FLAGS_0) -c gs2_transforms.f90
+
+endif
 
 ################################################################# DEPENDENCIES
 
@@ -548,7 +601,7 @@ t3e_fftw:
 	ln -sf mp_mpi.f90 mp.f90
 	ln -sf shmem_stub.f90 shmem.f90
 	ln -sf prof_none.f90 prof.f90
-	ln -sf redistribute_mpi.f90 redistribute.f90
+	ln -sf redistribute_shnew.f90 redistribute.f90
 	ln -sf check_sgi.f90 check.f90
 	ln -sf ran_cray.f90 ran.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
@@ -585,9 +638,9 @@ origin:
 	cd $(UTILS); ln -sf mds_io_stub.f90 mds.f90 
 
 linux:
-	ln -sf gs2_layouts_x.f90 gs2_layouts.f90
+	ln -sf gs2_layouts_v.f90 gs2_layouts.f90
 	ln -sf command_line_nag.f90 command_line.f90
-	ln -sf mp_stub.f90 mp.f90
+	ln -sf mp_mpi_r8.f90 mp.f90
 	ln -sf shmem_stub.f90 shmem.f90
 	ln -sf prof_none.f90 prof.f90
 	ln -sf redistribute_mpi.f90 redistribute.f90
@@ -612,6 +665,21 @@ linux_fuj:
 	cd utils; ln -sf mds_io_stub.f90 mds.f90 ; cd ..
 	ln -sf gs2_transforms_stub.f90 gs2_transforms.f90
 	ln -sf fft_work_stub.f90 fft_work.f90
+
+linux_abs:
+	ln -sf gs2_layouts_x.f90 gs2_layouts.f90
+	ln -sf command_line_unix.f90 command_line.f90
+	ln -sf mp_mpi_r8.f90 mp.f90
+	ln -sf shmem_stub.f90 shmem.f90
+	ln -sf prof_none.f90 prof.f90
+	ln -sf redistribute_mpi.f90 redistribute.f90
+	ln -sf check_portable.f90 check.f90
+	ln -sf ran_local.f90 ran.f90
+#	ln -sf gs2_save_stub.f90 gs2_save.f90
+	ln -sf gs2_save_fast.f90 gs2_save.f90
+	cd utils; ln -sf mds_io_stub.f90 mds.f90 ; cd ..
+	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
+	ln -sf fft_work_fftw.f90 fft_work.f90
 
 alpha:
 	ln -sf gs2_layouts_x.f90 gs2_layouts.f90

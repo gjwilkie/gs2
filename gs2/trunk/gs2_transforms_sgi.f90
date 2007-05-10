@@ -24,7 +24,7 @@ module gs2_transforms
   end interface
 
   interface transform2
-     module procedure transform2_5d
+     module procedure transform2_5d, transform2_5d_accel
      module procedure transform2_3d
   end interface
 
@@ -41,7 +41,7 @@ module gs2_transforms
   end interface
 
   interface inverse2
-     module procedure inverse2_5d
+     module procedure inverse2_5d, inverse2_5d_accel
      module procedure inverse2_3d
   end interface
 
@@ -56,28 +56,44 @@ module gs2_transforms
   real, dimension (:), allocatable :: fft_wrk, xtable, ytable
   real :: xscale, yscale
 
+! accel will be set to true if the v layout is used AND the number of
+! PEs is such that each PE has a complete copy of the x,y space --
+! in that case, no communication is needed to evaluate the nonlinear
+! terms
+  logical :: accel = .false.
+
   integer :: igmin_proc, igmax_proc
-  integer, dimension (:), allocatable :: igproc
+  integer, dimension (:), allocatable :: igproc, ia, iak
+  logical, dimension (:), allocatable :: aidx  ! aidx == aliased index
 
 contains
 
   subroutine init_transforms &
-       (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerate)
+       (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
-    logical, intent (out) :: accelerate
+    logical, intent (out) :: accelerated
 
     logical, save :: initialized = .false.
+    character (1) :: char
 
     if (initialized) return
     initialized = .true.
 
     call init_3d_layouts
 
-    call init_y_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+!    call pe_layout (char) 
+
+!    if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then
+!       accel = .true.
+!       call init_accel_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+!    else
+       call init_y_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+!    end if
+
     call init_y_fft (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
-    accelerate = .false.
+    accelerated = accel
 
   end subroutine init_transforms
 
@@ -448,6 +464,30 @@ contains
     call inverse_x (xxf_tmp, g)
 
   end subroutine inverse2_5d
+
+  subroutine transform2_5d_accel (g, yxf, i)
+
+!!!!!!!!!!!!!!!!! Not operational  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    use gs2_layouts, only: g_lo, xxf_lo, yxf_lo
+    implicit none
+    complex, dimension (:,:,g_lo%llim_proc:), intent (in) :: g
+    real, dimension (:,:,yxf_lo%llim_proc:), intent (out) :: yxf
+    integer :: i
+
+  end subroutine transform2_5d_accel
+
+  subroutine inverse2_5d_accel (yxf, g, i)
+
+!!!!!!!!!!!!!!!!! Not operational  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    use gs2_layouts, only: g_lo, xxf_lo, yxf_lo
+    implicit none
+    real, dimension (:,:,yxf_lo%llim_proc:), intent (in) :: yxf
+    complex, dimension (:,:,g_lo%llim_proc:), intent (out) :: g
+    integer :: i
+
+  end subroutine inverse2_5d_accel
 
   subroutine init_3d_layouts
     use theta_grid, only: ntgrid
