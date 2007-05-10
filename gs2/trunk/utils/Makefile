@@ -171,6 +171,21 @@ ifeq ($(CPU),LINUX_alpha)
 
 endif
 
+# options for Linux with Lahey lf95
+ifeq ($(CPU),LINUX_lf95)
+  FC = mpif90
+  FLIBS = -L/usr/local/lib -lnetcdf 
+  PLATFORM_LINKS = linux_lf95
+  SFLAGS = --ndbl
+  F90FLAGS = --dbl --ml cdecl 
+
+  ifeq ($(debug),on) 
+    F90FLAGS += -g  --chk aesu
+  else
+    F90FLAGS += -O 
+  endif
+
+endif
 # options for NAG f95 on a DEC alpha
 ifeq ($(CPU),ALPHA_NAG)
   FC = /usr/local/bin/f95
@@ -287,6 +302,8 @@ utils.a: $(util_obj)
 	$(RANLIB) $@
 
 mds.o: prec.o
+	$(FC) $(F90FLAGS) -c prec.f90
+	$(FC) $(F90FLAGS) $(SFLAGS) -c mds.f90
 
 mdslib.a: mdslib.o
 	$(AR) rc $@ mdslib.o

@@ -31,13 +31,14 @@ contains
 
   subroutine init_additional_linear_terms
     use theta_grid, only: init_theta_grid
+    use gs2_layouts, only: init_gs2_layouts
     implicit none
 
     if (initialized) return
     initialized = .true.
 
+    call init_gs2_layouts
     call init_theta_grid
-
     call read_parameters
 
     if (phi0_term) call init_phi0_term

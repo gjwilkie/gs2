@@ -571,7 +571,10 @@ contains
 ! 3 Check each original grid interval for matching bmag.
          grid_interval: do i = 1, nbmag-1
 ! 3.0.1 Stoopid problems near -pi.
-            if (iset == 1 .and. i == 1) cycle grid_interval
+! 'original' coding:
+!            if (iset == 1 .and. i == 1) cycle grid_interval
+! modification 5.16.02:
+            if (iset == 1 .and. (i == 1 .or. i == nbmag-1)) cycle grid_interval
             if (bmagin(i) > bmagi .and. thetain(i) /= thetai) then
 ! 3.1 Consider when the left grid point is greater than the target bmag.
 !    Then, there are three cases in which there are matching points.
@@ -1439,7 +1442,6 @@ contains
       implicit none
       real, intent (in) :: theta
       real :: bmagint
-      
       bmagint = fitp_curvp2(theta,nbmag-1,thetain,bmagin,npi,bmagspl,tension)
     end function bmagint
     

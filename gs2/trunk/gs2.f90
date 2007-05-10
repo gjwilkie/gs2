@@ -50,8 +50,21 @@ program gs2
   if (proc0) call finish_file_utils
   call finish_mp
 
+contains
+
+  subroutine timer
+    
+    character (len=10) :: zdate, ztime, zzone
+    integer, dimension(8) :: ival
+    real, save :: told=0., tnew=0.
+    
+    call date_and_time (zdate, ztime, zzone, ival)
+    tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
+    if (told > 0.) then
+       print *, 'Time since last called: ',tnew-told,' seconds'
+    end if
+    told = tnew
+  end subroutine timer
+
+
 end program gs2
-
-
-
-

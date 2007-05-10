@@ -81,10 +81,10 @@ contains
 end module gs2d
 
 module eeq
-  
+
   implicit none
   private
-  
+
   integer :: nw, nh, nbbbs, ntime, ntstar
 
   real, allocatable, dimension (:) :: psi_bar, fp, qsf, pressure, beta, spsi_bar
@@ -318,7 +318,6 @@ contains
     2022 format (2i5)      
 
   end subroutine gs2din
-
 
   subroutine efitin(eqfile, psi_0, psi_a, rmaj, B_T, amin, initeq, big)
 !
@@ -695,9 +694,11 @@ contains
 
     do i=1,nbbbs-1
        if(thetab(i) == thetab(i+1)) then
-          write(*,*) 'Duplicates near theta = 0 not allowed.'
-          write(*,*) i, i+1, ' Stopping.'
-          stop
+!          write(*,*) 'Duplicates near theta = 0 not allowed.'
+!          write(*,*) i, i+1, ' Stopping.'
+!          stop
+! put in kluge for duplicate points, which happens near theta=0:
+          thetab(i+1) = thetab(i+1)+1.e-8
        endif
     enddo
 

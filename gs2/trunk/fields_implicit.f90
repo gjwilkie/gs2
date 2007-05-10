@@ -17,17 +17,23 @@ module fields_implicit
 contains
 
   subroutine init_fields_implicit
+    use mp, only: proc0
+    use fields_arrays, only: apar_ext !, phi_ext
+    use antenna, only: init_antenna
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
+    use gs2_layouts, only: init_gs2_layouts
     implicit none
 
     if (initialized) return
     initialized = .true.
 
+    call init_gs2_layouts
     call init_theta_grid
     call init_kt_grids
     call read_parameters
     call init_response_matrix
+    call init_antenna
 
   end subroutine init_fields_implicit
 
@@ -193,8 +199,10 @@ contains
 
   subroutine advance_implicit (istep, dt_cfl)
     use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
-    use fields_arrays, only: apar_ext, phi_ext
-    use dist_fn, only: timeadv, get_apar_ext, get_phi_ext
+    use fields_arrays, only: apar_ext !, phi_ext
+    use antenna, only: antenna_amplitudes
+!    use dist_fn, only: get_apar_ext, get_phi_ext
+    use dist_fn, only: timeadv
     use dist_fn_arrays, only: g, gnew
     use nonlinear_terms, only: algorithm !, nonlin
     implicit none
@@ -203,22 +211,24 @@ contains
 
     if (algorithm == 1) then
 
+       call antenna_amplitudes (apar_ext)
+
        g = gnew
-       phi = phinew 
-       apar = aparnew
+       phi = phinew
+       apar = aparnew 
        aperp = aperpnew       
        
        call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, istep, dt_cfl)
+       aparnew = aparnew + apar_ext
+
        call getfield (phinew, aparnew, aperpnew)
 
-!       call get_apar_ext (apar_ext)
-!       call get_phi_ext (phi_ext)
-
-       phinew   = phinew   + phi !+ phi_ext
-       aparnew  = aparnew  + apar !+ apar_ext
+       phinew   = phinew   + phi  !+ phi_ext
+       aparnew  = aparnew  + apar + apar_ext
        aperpnew = aperpnew + aperp
                  
        call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, istep, dt_cfl)
+
     end if
 
   end subroutine advance_implicit
@@ -269,8 +279,12 @@ contains
     call init_fields_layouts (nfield, nidx, naky, ntheta0, M_class, N_class, i_class)
     call init_jfields_layouts (nfield, nidx, naky, ntheta0, i_class)
     call finish_fields_layouts
-
+!
 ! keep storage cost down by doing one class at a time
+! Note: could define a superclass (of all classes), a structure containing all am, 
+! then do this all at once.  This would be faster, especially for large runs in a 
+! sheared domain, and could be triggered by local_field_solve 
+! 
     do i = i_class, 1, -1
 
        call barrier
@@ -349,6 +363,7 @@ contains
 
        call init_inverse_matrix (am, i)
        deallocate (am)
+
     end do
 
     call prof_leaving ("init_response_matrix", "fields_implicit")
@@ -426,7 +441,7 @@ contains
     use theta_grid, only: ntgrid
     use mp, only: broadcast, send, receive, barrier, iproc
     use gs2_layouts, only: f_lo, idx, idx_local, proc_id, jf_lo
-    use gs2_layouts, only: if_idx, im_idx, in_idx
+    use gs2_layouts, only: if_idx, im_idx, in_idx, local_field_solve
     use gs2_layouts, only: ig_idx, ifield_idx, ij_idx, mj, dj
     use prof, only: prof_entering, prof_leaving
     use fields_arrays, only: aminv
@@ -464,15 +479,25 @@ contains
        iskip = i > nfield .and. iskip
        if (iskip) cycle
  
-       do m = 1, M_class(ic)
-          ilo = idx(f_lo(ic),i,m)
-          if (idx_local(f_lo(ic),ilo)) then
-             lhscol(:,m) = am(:,ilo)
-             rhsrow(:,m) = a_inv(:,ilo)
-          end if
-          call broadcast (lhscol(:,m), proc_id(f_lo(ic),ilo))
-          call broadcast (rhsrow(:,m), proc_id(f_lo(ic),ilo))
-       end do
+       if (local_field_solve) then
+          do m = 1, M_class(ic)
+             ilo = idx(f_lo(ic),i,m)
+             if (idx_local(f_lo(ic),ilo)) then
+                lhscol(:,m) = am(:,ilo)
+                rhsrow(:,m) = a_inv(:,ilo)
+             end if
+          end do
+       else
+          do m = 1, M_class(ic)
+             ilo = idx(f_lo(ic),i,m)
+             if (idx_local(f_lo(ic),ilo)) then
+                lhscol(:,m) = am(:,ilo)
+                rhsrow(:,m) = a_inv(:,ilo)
+             end if
+             call broadcast (lhscol(:,m), proc_id(f_lo(ic),ilo))
+             call broadcast (rhsrow(:,m), proc_id(f_lo(ic),ilo))
+          end do
+       end if
 
        do jlo = f_lo(ic)%llim_proc, f_lo(ic)%ulim_proc
 
@@ -768,6 +793,20 @@ contains
     n = 1 + l_links(ik, it)
 
   end subroutine kt2ki
+
+  subroutine timer
+    
+    character (len=10) :: zdate, ztime, zzone
+    integer, dimension(8) :: ival
+    real, save :: told=0., tnew=0.
+    
+    call date_and_time (zdate, ztime, zzone, ival)
+    tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
+    if (told > 0.) then
+       print *, 'Fields_implicit: Time since last called: ',tnew-told,' seconds'
+    end if
+    told = tnew
+  end subroutine timer
 
 end module fields_implicit
 

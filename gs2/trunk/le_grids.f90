@@ -1,3 +1,394 @@
+module egrid
+
+  use splines
+
+  implicit none
+
+  interface xgrid
+     module procedure xgrid_s, xgrid_v
+  end interface
+
+  real, dimension (:,:), allocatable :: p, am
+  real, dimension(:), allocatable :: x, gamma2, ipzero, bvec
+  real :: xmax, emax, soln, a, b, dx
+  real :: xerrbi, xerrsec
+  real :: denom, x0, xtmp
+  integer :: n, ip, ier, jp, kmax, j, k
+  integer :: nmax, np
+  logical :: err
+
+  ! spline stuff
+  logical, dimension(:), allocatable :: first 
+  type (spline), dimension(:), allocatable :: spl
+
+contains
+
+  subroutine setegrid (emax_in, np_in, nmax_in, epts, wgts)
+
+    real :: emax_in
+    integer :: np_in, nmax_in
+    real, dimension(:) :: epts, wgts
+
+    np = np_in - 1
+    nmax = nmax_in
+    emax = emax_in
+
+    call init_egrid (np)
+
+    x0 = xgrid(emax)
+    dx = x0/real(nmax-1)
+
+! Note: elegant way would be to use Gaussian integration on
+! polynomials, together with similar high order interpolation 
+! scheme to find the energies, but this is okay for now.
+
+    x = (/ (real(n)*dx, n=0,nmax-1) /)
+
+    p(:,1) = x-x0/2.
+    gamma2(2) = x0**2/12.
+
+    p(:,2)=(x-x0/2.)*p(:,1) - gamma2(2)
+
+    do ip=2,np-1
+       gamma2(ip+1) = integral(p(:,ip)**2)/integral(p(:,ip-1)**2)
+       p(:,ip+1)=(x-x0/2.)*p(:,ip) - gamma2(ip+1)*p(:,ip-1)
+    end do
+
+! probably straightforward to get all values analytically:
+!    write(*,*) (x0**2/12.-gamma2(2))/gamma2(2)
+!    write(*,*) (x0**2/15.-gamma2(3))/gamma2(3)
+!    write(*,*) (9.*x0**2/140.-gamma2(4))/gamma2(4)
+
+    ! find the zeroes of the highest polynomial
+
+    xerrbi = 1.e-10
+    xerrsec = 1.e-10
+
+    ip = 1
+    do n=1,nmax-2, 2
+       if (p(n,np)*p(n+2,np) < 0.) then
+          a = x(n)
+          b = x(n+2)
+          call rootp (np, 0., a, b, xerrbi, xerrsec, 1, ier, ipzero(ip))
+          ip = ip + 1
+       end if
+    end do
+
+    ! set up matrix to get weights
+    am (1,:) = 1.
+    do ip = 2, np
+       do jp = 1, np
+          am (ip, jp) = poly(ipzero(jp), ip-1)
+       end do
+    end do
+
+    bvec(1) = x0
+    bvec(2:) = 0.
+
+    call solve_system_of_linear_eqns (am, wgts(1:np), bvec, err)
+
+    do ip=1,np
+       epts(ip) = energy(ipzero(ip))
+    end do
+    epts(np+1) = emax
+    wgts(np+1) = 1.-x0
+
+    call finish_egrid (np)
+
+  end subroutine setegrid
+
+  subroutine rootp(ip,fval,a,b,xerrbi,xerrsec,nsolv,ier,soln)
+
+    integer, intent (in) :: ip
+    real :: fval,a,b,a1,b1,f1,f2,f3,trial,xerrbi,xerrsec,soln,aold
+    integer :: i,ier,nsolv,niter,isolv
+
+    ier=0
+    a1=a
+    b1=b
+    f1=poly(a1,ip)-fval
+    f2=poly(b1,ip)-fval
+    if(xerrbi < 0.) goto 1000
+    if(f1*f2 > 0.) then
+       write(11,*) 'f1 and f2 have same sign in bisection routine'
+       write(11,*) 'a1,f1,b1,f2=',a1,f1,b1,f2
+       write(11,*) 'fval=',fval
+       ier=1
+       goto 1000
+    endif
+    niter=int(log(abs(b-a)/xerrbi)/log(2.))+1
+    do i=1,niter
+       trial=0.5*(a1+b1)
+       f3=poly(trial,ip)-fval
+       if(f3*f1 > 0.) then
+          a1=trial
+          f1=f3
+       else
+          b1=trial
+          f2=f3
+       endif
+       !      write(11,*) 'i,a1,f1,b1,f2 ',i,a1,f1,b1,f2
+    enddo
+1000 continue
+    if( abs(f1) > abs(f2) ) then
+       f3=f1
+       f1=f2
+       f2=f3
+       aold=a1
+       a1=b1
+       b1=aold
+    endif
+    !     start secant method
+    !     write(11,*) 'a1,f1,b1,f2',a1,f1,b1,f2
+    isolv=0
+    do i=1,10
+       aold=a1
+       f3=f2-f1
+       if (abs(f3) < 1.e-11)  f3=1.e-11
+       a1=a1-f1*(b1-a1)/f3
+       f2=f1
+       b1=aold
+       !       write(11,*) 'a1,f1,b1,f2',a1,f1,b1,f2
+       if(abs(a1-b1) < xerrsec) isolv=isolv+1
+       if (isolv >= nsolv) goto 9000
+       f1=poly(a1,ip)-fval
+    enddo
+9000 soln=a1
+
+  end subroutine rootp
+
+  subroutine roote(fval,a,b,xerrbi,xerrsec,nsolv,ier,soln)
+
+    real :: fval,a,b,a1,b1,f1,f2,f3,trial,xerrbi,xerrsec,soln,aold
+    integer :: i,ier,nsolv,niter,isolv
+
+    ier=0
+    a1=a
+    b1=b
+    f1=xgrid(a1)-fval
+    f2=xgrid(b1)-fval
+    if(xerrbi < 0.) goto 1000
+    if(f1*f2 > 0.) then
+       write(11,*) 'f1 and f2 have same sign in bisection routine'
+       write(11,*) 'a1,f1,b1,f2=',a1,f1,b1,f2
+       write(11,*) 'fval=',fval
+       ier=1
+       goto 1000
+    endif
+    niter=int(log(abs(b-a)/xerrbi)/log(2.))+1
+    do i=1,niter
+       trial=0.5*(a1+b1)
+       f3=xgrid(trial)-fval
+       if(f3*f1 > 0.) then
+          a1=trial
+          f1=f3
+       else
+          b1=trial
+          f2=f3
+       endif
+       !      write(11,*) 'i,a1,f1,b1,f2 ',i,a1,f1,b1,f2
+    enddo
+1000 continue
+    if( abs(f1) > abs(f2) ) then
+       f3=f1
+       f1=f2
+       f2=f3
+       aold=a1
+       a1=b1
+       b1=aold
+    endif
+    !     start secant method
+    !     write(11,*) 'a1,f1,b1,f2',a1,f1,b1,f2
+    isolv=0
+    do i=1,10
+       aold=a1
+       f3=f2-f1
+       if (abs(f3) < 1.e-11)  f3=1.e-11
+       a1=a1-f1*(b1-a1)/f3
+       f2=f1
+       b1=aold
+       !       write(11,*) 'a1,f1,b1,f2',a1,f1,b1,f2
+       if(abs(a1-b1) < xerrsec) isolv=isolv+1
+       if (isolv >= nsolv) goto 9000
+       f1=xgrid(a1)-fval
+    enddo
+9000 soln=a1
+
+  end subroutine roote
+
+  function poly(xeval, ip)
+
+    use splines
+    integer, intent (in) :: ip
+    real :: poly, xeval
+
+    if (first(ip)) then
+       call new_spline (size(x), x, p(:,ip), spl(ip))
+       first(ip) = .false.
+    end if
+
+    poly = splint (xeval, spl(ip))
+
+  end function poly
+
+  function energy (xeval)
+
+    real :: xerrbi, xerrsec, a, b, energy, xeval
+    integer :: ier
+
+    xerrbi = 1.e-10
+    xerrsec = 1.e-10
+
+    a = 0.
+    b = emax
+    call roote (xeval, a, b, xerrbi, xerrsec, 1, ier, energy)
+
+  end function energy
+
+  function xgrid_v (e) result (xg)
+
+    use constants, only: pi
+    real, dimension (:) :: e
+    real, dimension (size(e)) :: xg
+    real :: denom
+    integer :: nmax, n, kmax, j, k
+
+    nmax = size(e)
+
+    xg = 0.
+    kmax = 50
+    do n=1,nmax
+       do k = 0, kmax
+          denom = 1
+          do j = 0, k
+             denom = denom*(1.5 + j)
+          end do
+          xg(n) = xg(n) + e(n)**(1.5+k)/denom
+       end do
+       xg(n) = xg(n)*exp(-e(n))*2./sqrt(pi)
+    end do
+
+  end function xgrid_v
+
+  function xgrid_s (e)
+
+    use constants, only: pi
+    real :: e, xgrid_s
+    real :: denom
+    integer :: kmax, j, k
+
+    kmax = 50
+    xgrid_s = 0.
+    do k = 0, kmax
+       denom = 1
+       do j = 0, k
+          denom = denom*(1.5 + j)
+       end do
+       xgrid_s = xgrid_s + e**(1.5+k)/denom
+    end do
+    xgrid_s = xgrid_s*exp(-e)*2./sqrt(pi)
+
+  end function xgrid_s
+
+  subroutine solve_system_of_linear_eqns(a, x, b, error)
+    implicit none
+    ! array specifications
+    real, dimension (:, :),           intent (in) :: a
+    real, dimension (:),              intent (out):: x
+    real, dimension (:),              intent (in) :: b
+    logical, intent (out)                         :: error
+
+    ! the working area m is a expanded with b
+    real, dimension (size (b), size (b) + 1)      :: m
+    integer, dimension (1)                        :: max_loc
+    real, dimension (size (b) + 1)                :: temp_row
+    integer                                       :: n, k, i
+
+    ! initializing m
+    n = size (b)
+    m (1:n, 1:n) = a
+    m (1:n, n+1) = b
+
+    ! triangularization
+    error = .false.
+    triangularization_loop: do k = 1, n - 1   
+       ! pivoting
+       max_loc = maxloc (abs (m (k:n, k)))
+       if ( max_loc(1) /= 1 ) then
+          temp_row (k:n+1 ) =m (k, k:n+1)
+          m (k, k:n+1)= m (k-1+max_loc(1), k:n+1)
+          m (k-1+max_loc(1), k:n+1) = temp_row(k:n+1)
+       end if
+
+       if (m (k, k) == 0) then
+          error = .true. ! singular matrix a
+          exit triangularization_loop
+       else
+          temp_row (k+1:n) = m (k+1:n, k) / m (k, k)
+          do i = k+1, n
+             m (i, k+1:n+1) = m (i, k+1:n+1) - &
+                  temp_row (i) * m (k, k+1:n+1)
+          end do
+          m (k+1:n, k) =0  ! these values are not used
+       end if
+    end do triangularization_loop
+
+    if ( m(n, n) == 0 ) error = .true.  ! singular matrix a
+
+    ! re-substitution
+    if (error) then
+       x = 0.0
+    else
+       do k = n, 1, -1
+          x (k) = (m (k, n+1) - &
+               sum (m (k, k+1:n)* x (k+1:n)) ) / m (k, k)
+       end do
+    end if
+  end subroutine solve_system_of_linear_eqns
+
+  subroutine init_egrid (np)
+    integer :: np
+
+    allocate (first(np))
+    first = .true.
+
+    allocate (spl(np))
+    allocate (p(nmax, np));    p = 0.
+    allocate (x(nmax));        x = 0.
+    allocate (am(np,np));     am = 0.
+
+    allocate (gamma2(np), ipzero(np), bvec(np))
+    gamma2 = 0.; ipzero = 0. ; bvec = 0.
+
+  end subroutine init_egrid
+
+  subroutine finish_egrid (np)
+
+    integer :: np, ip
+
+    deallocate (first)
+    deallocate (p, x, gamma2, ipzero, bvec, am)
+
+    do ip=1,np
+       call delete_spline (spl(ip))
+    end do
+
+    deallocate (spl)
+
+  end subroutine finish_egrid
+
+  function integral(x)
+
+    real, dimension (:) :: x
+    real :: integral
+
+    integral = sum(x(2:))
+
+  end function integral
+
+
+end module egrid
+
 module le_grids
   
   use redistribute, only: redist_type
@@ -6,16 +397,17 @@ module le_grids
 
   public :: init_le_grids
   public :: integrate, lintegrate, integrate_species
-  public :: e, anon, al, delal, jend, forbid
+  public :: pintegrate, pe_integrate, integrate_stress
+  public :: e, anon, al, delal, jend, forbid, dele
   public :: negrid, nlambda, ng2, lmax, integrate_moment
-  public :: geint2g, gint2g
+  public :: geint2g, gint2g, orbit_avg
   public :: intcheck
   public :: fcheck
 
   private
 
-  real, dimension (:,:), allocatable :: e, w, anon ! (negrid,nspec)
-
+  real, dimension (:,:), allocatable :: e, w, anon, dele ! (negrid,nspec)
+  real, dimension (:,:), allocatable :: orbit_avg
   real, dimension (:), allocatable :: al, delal ! (nlambda)
   real, dimension (:,:), allocatable :: wl ! (nlambda,-ntgrid:ntgrid)
   integer, dimension (:), allocatable :: jend ! (-ntgrid:ntgrid)
@@ -33,23 +425,29 @@ module le_grids
   integer :: nlambda, ng2, lmax
   logical :: accel_x = .false.
   logical :: accel_v = .false.
+  logical :: test = .false.
+  logical :: trapped_particles = .true.
+  logical :: advanced_egrid = .true.
 
   type (redist_type), save :: lambda_map, gint_map, eint_map
 
 contains
 
   subroutine init_le_grids (accelerated_x, accelerated_v)
-    use mp, only: proc0
+    use mp, only: proc0, finish_mp
     use species, only: init_species
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
+    use gs2_layouts, only: init_gs2_layouts
     implicit none
     logical, intent (out) :: accelerated_x, accelerated_v
     logical, save :: initialized = .false.
+    integer :: il, ie
 
     if (initialized) return
     initialized = .true.
 
+    call init_gs2_layouts
     call init_species
     call init_theta_grid
     call init_kt_grids
@@ -63,6 +461,20 @@ contains
 
     accelerated_x = accel_x
     accelerated_v = accel_v
+
+    if (test) then
+       if (proc0) then
+          do il = 1, nlambda
+             write(*,*) al(il)
+          end do
+          write(*,*) 
+          do ie = 1, negrid
+             write(*,*) e(ie,1)
+          end do
+       end if
+       call finish_mp
+       stop
+    endif
     
   end subroutine init_le_grids
 
@@ -71,7 +483,7 @@ contains
     use species, only: nspec
     use theta_grid, only: ntgrid
     implicit none
-    integer :: il, is
+    integer :: il, is, ie
 
     call broadcast (ngauss)
     call broadcast (negrid)
@@ -82,22 +494,33 @@ contains
     call broadcast (nlambda)
     call broadcast (ng2)
     call broadcast (lmax)
+    call broadcast (test)
+    call broadcast (trapped_particles)
+    call broadcast (advanced_egrid)
 
     if (.not. proc0) then
        allocate (e(negrid,nspec), w(negrid,nspec), anon(negrid,nspec))
+       allocate (dele(negrid,nspec))
        allocate (al(nlambda), delal(nlambda))
        allocate (wl(-ntgrid:ntgrid,nlambda))
        allocate (jend(-ntgrid:ntgrid))
        allocate (forbid(-ntgrid:ntgrid,nlambda))
+       allocate (orbit_avg(ng2,negrid))
     end if
 
     call broadcast (al)
     call broadcast (delal)
     call broadcast (jend)
+
+    do ie=1,negrid
+       call broadcast (orbit_avg(:,ie))
+    end do
+
     do is = 1, nspec
        call broadcast (e(:,is))
        call broadcast (w(:,is))
        call broadcast (anon(:,is))
+       call broadcast (dele(:,is))
     end do
     do il = 1, nlambda
        call broadcast (wl(:,il))
@@ -106,35 +529,55 @@ contains
   end subroutine broadcast_results
 
   subroutine read_parameters
-    use file_utils, only: input_unit, error_unit
+    use species, only: spec, has_slowing_down_species
+    use file_utils, only: input_unit, error_unit, input_unit_exist
     implicit none
-    integer :: ierr
+    integer :: ierr, in_file
+    logical :: exist
     namelist /le_grids_knobs/ ngauss, negrid, ecut, bouncefuzz, &
-         nesuper, nesub
+         nesuper, nesub, test, trapped_particles, advanced_egrid
 
-! For backwards compatibility, allow user to set negrid only.
-! Preferred usage is now to set nesub and nesuper separately. 
+! New default scheme: advanced_egrid is default, and user should set 
+! negrid (as in the original code)
+
+    if (advanced_egrid .and. has_slowing_down_species(spec)) then
+       ierr = error_unit()
+       write (unit=ierr, fmt='("Slowing down species approximated by Maxwellian")')
+       write (unit=ierr, fmt='("because advanced_egrid = .true.")')
+    end if
+
     nesub = 8
     nesuper = 2
     ngauss = 5
     negrid = -10
-    ecut = 2.5
+    ecut = 6.0  ! new default value for advanced scheme
     bouncefuzz = 1e-5
-    read (unit=input_unit("le_grids_knobs"), nml=le_grids_knobs)
+    in_file=input_unit_exist("le_grids_knobs", exist)
+    if (exist) read (unit=input_unit("le_grids_knobs"), nml=le_grids_knobs)
 
-! user can choose not to set negrid (preferred)
+! user can choose not to set negrid (preferred for old scheme)
     if (negrid == -10) then
        negrid = nesub + nesuper
 
-! If user chose negrid, assume nesuper makes sense and check nesub
+! New scheme for energy grid, based on GYRO algorithm (Candy and Waltz)
+! requires negrid to be set; nesub, nesuper ignored.
+
+       if (advanced_egrid) then
+          ierr = error_unit()
+          write (unit=ierr, fmt='("Using advanced energy grid with negrid = ",i5)') negrid
+       end if
+
+! If user chose negrid, assume nesuper makes sense and check nesub if necessary
     else
-       if (negrid - nesuper /= nesub) then
+       if (.not. advanced_egrid) then
+          if (negrid - nesuper /= nesub) then
 ! Report problem to error file, and continue, using nesuper and negrid
 ! (Note that nesub is not used anywhere else.)
-          nesub = negrid - nesuper
-          ierr = error_unit()
-          write (unit=ierr, fmt='("Forcing nesub = ",i5)') nesub
-       endif
+             nesub = negrid - nesuper
+             ierr = error_unit()
+             write (unit=ierr, fmt='("Forcing nesub = ",i5)') nesub
+          endif
+       end if
     endif
 
   end subroutine read_parameters
@@ -154,8 +597,6 @@ contains
     logical :: first = .true.
 
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
-    call init_lintegrate
-!    call init_eintegrate
 
     if (first) then
        first = .false.
@@ -163,12 +604,31 @@ contains
        if (char == 'x') then
           accel_x = mod(ntheta0*naky*nspec, nproc) == 0
           accel_v = .false.
-       else
+       end if
+       if (char == 'v') then
           accel_x = .false.
           accel_v = mod(negrid*nlambda*nspec, nproc) == 0
        end if
     end if
           
+
+  end subroutine init_integrations
+
+  subroutine init_slow_integrals
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo, gint_lo, geint_lo 
+    use gs2_layouts, only: ik_idx, it_idx, ie_idx, is_idx, idx
+    implicit none
+    integer :: ig, igint, igeint
+    integer :: lint_ulim, geint2g_ulim, eint_ulim, ulim
+    logical :: initialized = .false.
+
+    if (initialized) return
+    initialized = .true.
+
+    call init_lintegrate 
+    call init_eintegrate
+
     if (accel_x) return
 
     lint_lo = gint_lo%ulim_world
@@ -203,7 +663,7 @@ contains
        allocate (integration_work(-ntgrid:ntgrid,0:ulim))
     end if
 
-  end subroutine init_integrations
+  end subroutine init_slow_integrals
 
   subroutine geint2g (geint, g)
     use theta_grid, only: ntgrid
@@ -342,8 +802,9 @@ contains
     complex, dimension (-ntgrid:,geint_lo%llim_proc:), intent (out) :: geint
     complex, dimension (:,:), allocatable :: gint
 
-    allocate (gint (-ntgrid:ntgrid, gint_lo%llim_proc:gint_lo%ulim_alloc))
+    call init_slow_integrals
 
+    allocate (gint (-ntgrid:ntgrid, gint_lo%llim_proc:gint_lo%ulim_alloc))
     call lintegrate (g1, gint)
     call eintegrate (gint, geint)
 
@@ -373,31 +834,10 @@ contains
        total(:,it,ik) = total(:,it,ik) + weights(is)*geint(:,igeint)
     end do
 
-! reduce number of calls to sum_allreduce 
-
-    allocate (work((2*ntgrid+1)*naky*ntheta0))
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             work(i) = total(ig, it, ik)
-          end do
-       end do
-    end do
-
-    call sum_allreduce (work)
-
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             total(ig, it, ik) = work(i)
-          end do
-       end do
-    end do    
-    deallocate (work)
+    call sum_allreduce (total)
+!
+! condense total to 1-d work matrix, reduce, copy back for above statement
+! if Absoft compiler is used.
 
   end subroutine sum_species
 
@@ -463,6 +903,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, idx, idx_local
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use mp, only: sum_allreduce
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
@@ -471,51 +912,118 @@ contains
 ! total = total(theta, kx, ky)
     complex, dimension (:,:), allocatable :: geint
     complex, dimension (:), allocatable :: work
+    real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i
 
+!    total = 0.
+!    do is = 1, nspec
+!       do ie = 1, negrid
+!          fac = weights(is)*w(ie,is)
+!          do ik = 1, naky
+!             do it = 1, ntheta0
+!                do il = 1, nlambda
+!                   iglo = idx (g_lo, ik, it, il, ie, is)
+!                   if (.not. idx_local (g_lo, iglo)) cycle
+!                   do ig = -ntgrid, ntgrid
+!!                      total(ig, it, ik) = total(ig, it, ik) + &
+!!                              weights(is)*w(ie,is)*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
+!                      total(ig, it, ik) = total(ig, it, ik) + &
+!                              fac*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
+!                   end do
+!                end do
+!             end do
+!          end do
+!       end do
+!    end do
+
     total = 0.
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       fac = weights(is)*w(ie,is)
+
+       total(:, it, ik) = total(:, it, ik) + fac*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+    end do
+
+    call sum_allreduce (total)
+
+! Absoft compiler requires this block instead of previous line:
+!
+!    allocate (work((2*ntgrid+1)*naky*ntheta0))
+!    i = 0
+!    do ik = 1, naky
+!       do it = 1, ntheta0
+!          do ig = -ntgrid, ntgrid
+!             i = i + 1
+!             work(i) = total(ig, it, ik)
+!          end do
+!       end do
+!    end do
+!    
+!    call sum_allreduce (work) 
+!
+!    i = 0
+!    do ik = 1, naky
+!       do it = 1, ntheta0
+!          do ig = -ntgrid, ntgrid
+!             i = i + 1
+!             total(ig, it, ik) = work(i)
+!          end do
+!       end do
+!    end do
+!    deallocate (work)
+! end of Absoft block
+
+  end subroutine integrate_species
+
+  subroutine integrate_stress (g, stress)
+
+    use theta_grid, only: ntgrid, delthet, grho, bmag, gradpar
+    use species, only: nspec
+    use kt_grids, only: naky, ntheta0, aky
+    use gs2_layouts, only: g_lo, idx, idx_local
+    use mp, only: sum_reduce, proc0
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (:,:), intent (out) :: stress
+    real, dimension (-ntgrid:ntgrid) :: delnorm
+    real :: fac, wgt
+    integer :: is, ie, ik, it, il, iglo, ig
+
+    delnorm=delthet*grho/bmag/gradpar
+    delnorm=delnorm/sum(delnorm)
+    
+    wgt=0.
+    do ig=-ntgrid,ntgrid
+       wgt=wgt+delnorm(ig)
+    end do
+    delnorm=delnorm/wgt
+
+    stress = 0.
     do is = 1, nspec
-       do il = 1, nlambda
-          do ie = 1, negrid
-             do ik = 1, naky
-                do it = 1, ntheta0
+       do ie = 1, negrid
+          fac = w(ie,is)
+          do ik = 1, naky
+             if (aky(ik) > epsilon(0.0)) cycle
+             do it = 1, ntheta0
+                do il = 1, nlambda
                    iglo = idx (g_lo, ik, it, il, ie, is)
-                   if (.not. idx_local (g_lo, iglo)) cycle
-                   do ig = -ntgrid, ntgrid
-                      total(ig, it, ik) = total(ig, it, ik) + &
-                              weights(is)*w(ie,is)*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
-                   end do
+                   if (idx_local (g_lo, iglo)) then
+                      stress(it, is) = stress(it, is) + &
+                           sum(fac*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))*delnorm(:))
+                   end if
                 end do
              end do
           end do
        end do
     end do
 
-    allocate (work((2*ntgrid+1)*naky*ntheta0))
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             work(i) = total(ig, it, ik)
-          end do
-       end do
-    end do
+    call sum_reduce (stress, 0)
     
-    call sum_allreduce (work)
-    
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             total(ig, it, ik) = work(i)
-          end do
-       end do
-    end do
-    deallocate (work)
-
-  end subroutine integrate_species
+  end subroutine integrate_stress
 
   subroutine integrate_moment (g, total)
 ! returns moments to PE 0
@@ -529,19 +1037,21 @@ contains
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
 
     complex, dimension (:), allocatable :: work
+    real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i
 
     total = 0.
     do is = 1, nspec
-       do il = 1, nlambda
-          do ie = 1, negrid
-             do ik = 1, naky
-                do it = 1, ntheta0
+       do ie = 1, negrid
+          fac = w(ie,is)
+          do ik = 1, naky
+             do it = 1, ntheta0
+                do il = 1, nlambda
                    iglo = idx (g_lo, ik, it, il, ie, is)
                    if (idx_local (g_lo, iglo)) then
                       do ig = -ntgrid, ntgrid
                          total(ig, it, ik, is) = total(ig, it, ik, is) + &
-                              w(ie,is)*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
+                              fac*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
                       end do
                    end if
                 end do
@@ -550,35 +1060,39 @@ contains
        end do
     end do
 
-    allocate (work((2*ntgrid+1)*naky*ntheta0*nspec))
-    i = 0
-    do is = 1, nspec
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                work(i) = total(ig, it, ik, is)
-             end do
-          end do
-       end do
-    end do
-    
-    call sum_reduce (work, 0)
-    
-    if (proc0) then
-       i = 0
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                do ig = -ntgrid, ntgrid
-                   i = i + 1
-                   total(ig, it, ik, is) = work(i)
-                end do
-             end do
-          end do
-       end do
-    end if
-    deallocate (work)
+    call sum_reduce (total, 0)
+
+! Absoft compiler requires this block instead of previous line:
+!    allocate (work((2*ntgrid+1)*naky*ntheta0*nspec))
+!    i = 0
+!    do is = 1, nspec
+!       do ik = 1, naky
+!          do it = 1, ntheta0
+!             do ig = -ntgrid, ntgrid
+!                i = i + 1
+!                work(i) = total(ig, it, ik, is)
+!             end do
+!          end do
+!       end do
+!    end do
+!    
+!    call sum_reduce (work, 0)
+!    
+!    if (proc0) then
+!       i = 0
+!       do is = 1, nspec
+!          do ik = 1, naky
+!             do it = 1, ntheta0
+!                do ig = -ntgrid, ntgrid
+!                   i = i + 1
+!                   total(ig, it, ik, is) = work(i)
+!                end do
+!             end do
+!          end do
+!       end do
+!    end if
+!    deallocate (work)
+! end of Absoft block
 
   end subroutine integrate_moment
 
@@ -591,7 +1105,11 @@ contains
     call init_species
 
     allocate (e(negrid,nspec), w(negrid,nspec), anon(negrid,nspec))
+    allocate (dele(negrid,nspec))
     call egridset
+
+    dele(1,:) = e(1,:)
+    dele(2:,:) = e(2:,:)-e(:negrid-1,:)
 
     ng2 = 2*ngauss
     if (eps > epsilon(0.0)) then
@@ -605,15 +1123,19 @@ contains
     allocate (wl(-ntgrid:ntgrid,nlambda))
     allocate (jend(-ntgrid:ntgrid))
     allocate (forbid(-ntgrid:ntgrid,nlambda))
-    al(ng2+1:nlambda) = 1.0/bset
+    allocate (orbit_avg(ng2,negrid))
+    if (nlambda-ng2 > 0) then
+       al(ng2+1:nlambda) = 1.0/bset
+    end if
     call lgridset
-    delal(1) = 0.0
+    delal(1) = al(1)
     delal(2:) = al(2:) - al(:nlambda-1)
   end subroutine set_grids
 
   subroutine egridset
     use species, only: nspec, spec, slowing_down_species
     use constants
+    use egrid, only: setegrid
     implicit none
     real, dimension (1), parameter :: esub1 = (/ &
          0.5000000000E+00 /)
@@ -1187,179 +1709,158 @@ contains
     real, dimension (nesub) :: esub, wsub
     real, dimension (nesuper) :: xsup, wsup
     integer :: is, isup
-    integer :: ng1
+    integer :: ng1, nmax
     real :: cut
     
-    select case (nesub)
-    case (1)  
-       esub = esub1
-       wsub = wgt2
-    case (2)
-       esub = esub2
-       wsub = wgt2
-    case (3)
-       esub = esub3
-       wsub = wgt3
-    case (4)
-       esub = esub4
-       wsub = wgt4
-    case (5)
-       esub = esub5
-       wsub = wgt5
-    case (6)
-       esub = esub6
-       wsub = wgt6
-    case (7)
-       esub = esub7
-       wsub = wgt7
-    case (8)
-       esub = esub8
-       wsub = wgt8
-    case (9)
-       esub = esub9
-       wsub = wgt9
-    case (10)
-       esub = esub10
-       wsub = wgt10
-    case (12)
-       esub = esub12
-       wsub = wgt12
-    case (14)
-       esub = esub14
-       wsub = wgt14
-    case (16)
-       esub = esub16
-       wsub = wgt16
-    case (20)
-       esub = esub20
-       wsub = wgt20
-    case (24)
-       esub = esub24
-       wsub = wgt24
-    case (32)
-       esub = esub32
-       wsub = wgt32
-    case (48)
-       esub = esub48
-       wsub = wgt48
-    case (64)
-       esub = esub64
-       wsub = wgt64
-    case default
-       call stop_invalid ("nesub", nesub)
-    end select
+    if (.not. advanced_egrid) then
+       select case (nesub)
+       case (1)  
+          esub = esub1
+          wsub = wgt2
+       case (2)
+          esub = esub2
+          wsub = wgt2
+       case (3)
+          esub = esub3
+          wsub = wgt3
+       case (4)
+          esub = esub4
+          wsub = wgt4
+       case (5)
+          esub = esub5
+          wsub = wgt5
+       case (6)
+          esub = esub6
+          wsub = wgt6
+       case (7)
+          esub = esub7
+          wsub = wgt7
+       case (8)
+          esub = esub8
+          wsub = wgt8
+       case (9)
+          esub = esub9
+          wsub = wgt9
+       case (10)
+          esub = esub10
+          wsub = wgt10
+       case (12)
+          esub = esub12
+          wsub = wgt12
+       case (14)
+          esub = esub14
+          wsub = wgt14
+       case (16)
+          esub = esub16
+          wsub = wgt16
+       case (20)
+          esub = esub20
+          wsub = wgt20
+       case (24)
+          esub = esub24
+          wsub = wgt24
+       case (32)
+          esub = esub32
+          wsub = wgt32
+       case (48)
+          esub = esub48
+          wsub = wgt48
+       case (64)
+          esub = esub64
+          wsub = wgt64
+       case default
+          call stop_invalid ("nesub", nesub)
+       end select
+       
+       select case (nesuper)
+       case (1)  ! only for debugging; not correct
+          xsup = xsup2(1)
+          wsup = wsup2(1)
+       case (2)
+          xsup = xsup2
+          wsup = wsup2
+       case (3)
+          xsup = xsup3
+          wsup = wsup3
+       case (4)
+          xsup = xsup4
+          wsup = wsup4
+       case (5)
+          xsup = xsup5
+          wsup = wsup5
+       case (6)
+          xsup = xsup6
+          wsup = wsup6
+       case (7)
+          xsup = xsup7
+          wsup = wsup7
+       case (8)
+          xsup = xsup8
+          wsup = wsup8
+       case (9)
+          xsup = xsup9
+          wsup = wsup9
+       case (10)
+          xsup = xsup10
+          wsup = wsup10
+       case (12)
+          xsup = xsup12
+          wsup = wsup12
+       case (15)
+          xsup = xsup15
+          wsup = wsup15
+       case default
+          call stop_invalid ("nesuper", nesuper)
+       end select
 
-    select case (nesuper)
-    case (1)  ! only for debugging; not correct
-       xsup = xsup2(1)
-       wsup = wsup2(1)
-    case (2)
-       xsup = xsup2
-       wsup = wsup2
-    case (3)
-       xsup = xsup3
-       wsup = wsup3
-    case (4)
-       xsup = xsup4
-       wsup = wsup4
-    case (5)
-       xsup = xsup5
-       wsup = wsup5
-    case (6)
-       xsup = xsup6
-       wsup = wsup6
-    case (7)
-       xsup = xsup7
-       wsup = wsup7
-    case (8)
-       xsup = xsup8
-       wsup = wsup8
-    case (9)
-       xsup = xsup9
-       wsup = wsup9
-    case (10)
-       xsup = xsup10
-       wsup = wsup10
-    case (12)
-       xsup = xsup12
-       wsup = wsup12
-    case (15)
-       xsup = xsup15
-       wsup = wsup15
-    case default
-       call stop_invalid ("nesuper", nesuper)
-    end select
+       if (negrid < 1) call stop_invalid ("negrid", negrid)
 
-!    if (negrid < 1 .or. negrid > 16 + nesuper) call stop_invalid ("negrid", negrid)
-! negrid = 1 is not correct, but allowed here for debugging
-    if (negrid < 1) call stop_invalid ("negrid", negrid)
-
-!    if (negrid > nesuper .and. any(gaus(:negrid-nesuper,negrid-nesuper) == 0.0)) then
-!       call stop_invalid ("negrid", negrid)
-!    end if
-
-!    if (any((spec(:)%type == slowing_down_species))) then
-!       if (negrid > 16) call stop_invalid ("negrid", negrid)
-!       if (any(gaus(:negrid-1,negrid-1) == 0.0)) then
-!          call stop_invalid ("negrid", negrid)
-!       end if
-!    end if
-
-    do is = 1, nspec
-       if (spec(is)%type == slowing_down_species) then
-          e(:negrid-1,is) = esub
-          w(:negrid-1,is) = wsub*esub**2
-          anon(:negrid-1,is) = -1.5/e(:negrid-1,is)
-          e(negrid,is) = 1.0
-          w(negrid,is) = 1e-6
-          anon(negrid,is) = 1e6
-          w(:,is) = w(:,is)*0.75
-       else
-          ng1 = max(negrid-nesuper,0)
-          select case (ng1)
-          case (0)  
-             cut = 0.0
+       do is = 1, nspec
+          if (spec(is)%type == slowing_down_species) then
+             e(:negrid-1,is) = esub
+             w(:negrid-1,is) = wsub*esub**2
+             anon(:negrid-1,is) = -1.5/e(:negrid-1,is)
+             e(negrid,is) = 1.0
+             w(negrid,is) = 1e-6
+             anon(negrid,is) = 1e6
+             w(:,is) = w(:,is)*0.75
+          else
+             ng1 = max(negrid-nesuper,0)
+             select case (ng1)
+             case (0)  
+                cut = 0.0
 ! these values not correct if nesuper = 1; included for debugging only
-             do isup = 1, nesuper
-                e(isup,is) = cut + xsup(isup)
-                w(isup,is) = wsup(isup)*exp(-cut)*sqrt(e(isup,is))
-             end do
-          case default
-             cut = ecut
-             do isup = 1, nesuper
-                e(ng1+isup,is) = cut + xsup(isup)
-                w(ng1+isup,is) = wsup(isup)*exp(-cut)*sqrt(e(ng1+isup,is))
-             end do
-             e(:ng1,is) = cut*esub**(2.0/3.0)
-             w(:ng1,is) = (2.0/3.0)*exp(-e(:ng1,is))*wsub*cut**1.5             
-          end select
-          w(:,is) = w(:,is)*0.5/sqrt(pi)
-          anon(:,is) = 1.0
-       end if
+                do isup = 1, nesuper
+                   e(isup,is) = cut + xsup(isup)
+                   w(isup,is) = wsup(isup)*exp(-cut)*sqrt(e(isup,is))
+                end do
+             case default
+                cut = ecut
+                do isup = 1, nesuper
+                   e(ng1+isup,is) = cut + xsup(isup)
+                   w(ng1+isup,is) = wsup(isup)*exp(-cut)*sqrt(e(ng1+isup,is))
+                end do
+                e(:ng1,is) = cut*esub**(2.0/3.0)
+                w(:ng1,is) = (2.0/3.0)*exp(-e(:ng1,is))*wsub*cut**1.5             
+             end select
+             w(:,is) = w(:,is)*0.5/sqrt(pi)
+             anon(:,is) = 1.0
+          end if
+       end do
+       
+    else
 
-!          ng1 = max(negrid-nesuper,0)
-!          if (negrid <= nesuper) then
-!             cut = 0.0
-!          else
-!             cut = ecut
-!          end if
+       nmax = 100000
+       call setegrid (ecut, negrid, nmax, e(:,1), w(:,1))
+       do is = 2, nspec
+          e(:,is) = e(:,1)
+          w(:,is) = w(:,1)
+       end do
+       w = 0.25*w
+       anon = 1.0
 
-! default to nesuper = 2 values
-!          e(ng1+1,is) = cut + 0.58578
-!          w(ng1+1,is) = 0.853553*exp(-cut)*sqrt(e(ng1+1,is))
+    end if
 
-! if not debugging, then assign energy grid properly
-!          if (negrid > 1) then
-!             e(ng1+2,is) = cut + 3.41421
-!             w(ng1+2,is) = 0.146446*exp(-cut)*sqrt(e(ng1+2,is))
-
-!             e(:ng1,is) = cut*gaus(:ng1,ng1)**(2.0/3.0)
-!             w(:ng1,is) = (2.0/3.0)*exp(-e(:ng1,is))*w1(:ng1,ng1)*cut**1.5
-!          end if
-!          w(:,is) = w(:,is)*0.5/sqrt(pi)
-!          anon(:,is) = 1.0
-!       end if
-    end do
   end subroutine egridset
 
   subroutine lgridset
@@ -1542,7 +2043,7 @@ contains
          0.618925840125468570386, 0.644163403784967106798, 0.668718310043916153953, 0.692564536642171561344, &
          0.715676812348967626225, 0.738030643744400132851, 0.759602341176647498703, 0.780369043867433217604, &
          0.800308744139140817229, 0.819400310737931675539, 0.837623511228187121494, 0.854959033434601455463, &
-         0.871388505909296502874, 0.886894517402420416057, 0.910460635315852341319, 0.915071423120898074206, &
+         0.871388505909296502874, 0.886894517402420416057, 0.901460635315852341319, 0.915071423120898074206, &
          0.927712456722308690965, 0.939370339752755216932, 0.950032717784437635756, 0.959688291448742539300, &
          0.968326828463264212174, 0.975939174585136466453, 0.982517263563014677447, 0.988054126329623799481, &
          0.992543900323762624572, 0.995981842987209290650, 0.998364375863181677724, 0.999689503883230766828 /)
@@ -1783,11 +2284,47 @@ contains
           forbid(ig,il) = 1.0 - al(il)*bmag(ig) < -bouncefuzz
        end do
     end do
+
+    call init_orbit_average
+
   end subroutine lgridset
+
+  subroutine init_orbit_average
+
+! not sure about kxfac in the following
+
+    use theta_grid, only: drhodpsi, delthet, ntgrid, bmag
+    use constants, only: pi
+    implicit none
+    real :: vp
+    integer :: il, ig, ie
+
+! presently assuming all species are Maxwellian
+
+    orbit_avg = 0.
+    do ie=1,negrid
+       do il=1,ng2
+          do ig=-ntgrid,ntgrid
+             vp = sqrt(e(ie,1)*max(0.0,1.0-al(il)*bmag(ig)))
+             orbit_avg (il,ie) = orbit_avg(il,ie)+delthet(ig)/vp
+          end do
+       end do
+    end do
+    
+    orbit_avg = 2.*pi*drhodpsi/orbit_avg
+
+!    write (*,*) '# drhorpsi= ',drhodpsi
+!    do ie=1,negrid
+!       do il=1,ng2
+!          write (*,*) il, al(il), ie, e(ie,1), orbit_avg(il, ie)
+!       end do
+!    end do
+
+  end subroutine init_orbit_average
 
   subroutine stop_invalid (name, val)
     use file_utils, only: error_unit
-    use mp, only: proc0
+    use mp, only: proc0, finish_mp
     implicit none
     character(*), intent (in) :: name
     integer, intent (in) :: val
@@ -1797,6 +2334,7 @@ contains
        ierr = error_unit()
        write (unit=ierr, fmt='("Invalid value for ",a,": ",i5)') name, val
     end if
+    call finish_mp
     stop
   end subroutine stop_invalid
 
@@ -1956,6 +2494,85 @@ contains
     end do
   end subroutine fcheck
 
+  subroutine pintegrate (g, fld, result)
+    
+    use theta_grid, only: ntgrid, grho, bmag, gradpar, kxfac
+    use species, only: nspec
+    use kt_grids, only: naky, ntheta0, aky
+    use gs2_layouts, only: g_lo, idx, ik_idx, it_idx, is_idx, ie_idx, il_idx
+    use mp, only: sum_reduce
+
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,:), intent (in) :: fld
+    real, dimension (nlambda, nspec) :: result
+    real :: wgt, fac
+    integer :: iglo, is, il, ie, ik, it, ig 
+
+    result = 0.
+    do iglo=g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       wgt = 1./sum(grho/bmag/gradpar)
+       fac = 0.5
+       if (aky(ik) == 0.) fac = 1.0
+       do ig = -ntgrid, ntgrid
+          result(il,is) = result(il,is) + aimag( &  
+               w(ie,is)*wl(ig,il)* &  
+               (g(ig,1,iglo)+g(ig,2,iglo))*conjg(fld(ig,it,ik))*aky(ik)* &
+               grho(ig)/bmag(ig)/gradpar(ig)*wgt*0.5*kxfac*fac)
+       end do
+    end do
+    
+    do is = 1,nspec
+       result(:,is) = result(:,is)/delal(:)
+       call sum_reduce (result(:,is), 0)
+    end do
+    
+  end subroutine pintegrate
+
+  subroutine pe_integrate (g, fld, result)
+    
+    use theta_grid, only: ntgrid, grho, bmag, gradpar, kxfac
+    use species, only: nspec
+    use kt_grids, only: naky, ntheta0, aky
+    use gs2_layouts, only: g_lo, idx, ik_idx, it_idx, is_idx, ie_idx, il_idx
+    use mp, only: sum_reduce
+
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,:), intent (in) :: fld
+    real, dimension (negrid, nspec) :: result
+    real :: wgt, fac
+    integer :: iglo, is, il, ie, ik, it, ig 
+
+    result = 0.
+    do iglo=g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       wgt = 1./sum(grho/bmag/gradpar)
+       fac = 0.5
+       if (aky(ik) == 0.) fac = 1.0
+       do ig = -ntgrid, ntgrid
+          result(ie,is) = result(ie,is) + aimag( &  
+               w(ie,is)*wl(ig,il)* &  
+               (g(ig,1,iglo)+g(ig,2,iglo))*conjg(fld(ig,it,ik))*aky(ik)* &
+               grho(ig)/bmag(ig)/gradpar(ig)*wgt*0.5*kxfac*fac)
+       end do
+    end do
+    
+    result = result/dele
+
+    call sum_reduce (result, 0)
+    
+  end subroutine pe_integrate
+
   subroutine init_lintegrate
     use species, only: nspec
     use theta_grid, only: ntgrid
@@ -2084,6 +2701,10 @@ contains
     complex, dimension (:,:), allocatable :: work
 
     integer :: igint, il, ig
+    logical :: first = .true.
+
+    if (first) call init_slow_integrals
+    first = .false.
 
     allocate (glam (-ntgrid:ntgrid, 2, max(2*nlambda,2*ng2+1), &
          gint_lo%llim_proc:gint_lo%ulim_alloc))
@@ -2571,3 +3192,5 @@ end module le_grids
 !    call delete_list (from_list)
 !    endif
 
+
+ 

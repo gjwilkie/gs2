@@ -22,12 +22,15 @@ contains
   end subroutine init_theta_grid_params
 
   subroutine read_parameters
-    use file_utils, only: input_unit
+    use file_utils, only: input_unit, input_unit_exist
     implicit none
+    real :: kp = -1.
+    integer :: in_file
+    logical :: exist
 
     namelist /theta_grid_parameters/ rhoc, rmaj, r_geo, eps, epsl, &
          qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri, &
-         ntheta, nperiod
+         ntheta, nperiod, kp
 
     rhoc = 0.5
     rmaj = 3.0
@@ -44,7 +47,11 @@ contains
     tripri = 0.0
     ntheta = 24
     nperiod = 2
-    read (unit=input_unit("theta_grid_parameters"), nml=theta_grid_parameters)
+    in_file = input_unit_exist("theta_grid_parameters", exist)
+    if (exist) read (unit=input_unit("theta_grid_parameters"), nml=theta_grid_parameters)
+
+    if (kp > 0.) pk = 2.*kp
+
   end subroutine read_parameters
 
 end module theta_grid_params
@@ -74,8 +81,10 @@ contains
   end subroutine theta_grid_gridgen_init
 
   subroutine read_parameters
-    use file_utils, only: input_unit
+    use file_utils, only: input_unit, input_unit_exist
     implicit none
+    integer :: in_file
+    logical :: exist
     namelist /theta_grid_gridgen_knobs/ &
          npadd, alknob, epsknob, bpknob, extrknob, tension, thetamax, deltaw, widthw
 
@@ -88,7 +97,8 @@ contains
     thetamax = 0.0
     deltaw = 0.0
     widthw = 1.0
-    read (unit=input_unit("theta_grid_gridgen_knobs"), &
+    in_file = input_unit_exist("theta_grid_gridgen_knobs", exist)
+    if (exist) read (unit=input_unit("theta_grid_gridgen_knobs"), &
          nml=theta_grid_gridgen_knobs)
   end subroutine read_parameters
 
@@ -128,6 +138,7 @@ contains
        write(*,*) 'ntheta_old = ',ntheta_old
        write(*,*) 'ntheta_new = ',ntheta
        write(*,*) 'Stopping this run would be wise.'
+       write(*,*) 'Try again with ntheta = ',ntheta_old + 2
     end if
 
     ! interpolate to new grid
@@ -144,7 +155,7 @@ contains
        theta(-ntheta/2-i*ntheta:ntheta/2-1-i*ntheta) &
             = thetanew(1:ntheta) - real(2*i)*pi
        bmag(-ntheta/2+i*ntheta:ntheta/2-1+i*ntheta) = bmagnew(1:ntheta)
-       bmag(ntheta/2+i*ntheta) = bmagnew(1)
+       bmag( ntheta/2+i*ntheta) = bmagnew(1)
        bmag(-ntheta/2-i*ntheta:ntheta/2-1-i*ntheta) = bmagnew(1:ntheta)
     end do
 
@@ -197,7 +208,9 @@ module theta_grid_salpha
   ! internal variable
   integer :: model_switch
   integer, parameter :: model_salpha = 1, model_alpha1 = 2, &
-       model_nocurve = 3, model_ccurv = 4, model_b2 = 5, model_eps = 6
+       model_nocurve = 3, model_ccurv = 4, model_b2 = 5, &
+       model_eps = 6, model_normal_only = 7
+  
 
   real :: shift
 
@@ -217,28 +230,31 @@ contains
   end subroutine init_theta_grid_salpha
 
   subroutine read_parameters
-    use file_utils, only: input_unit, error_unit
+    use file_utils, only: input_unit, error_unit, input_unit_exist
     use theta_grid_params, only: shift_in => shift, alpmhd
     use text_options
     implicit none
 
     character(20) :: model_option
-    type (text_option), dimension (7), parameter :: modelopts = &
+    type (text_option), dimension (8), parameter :: modelopts = &
          (/ text_option('default', model_salpha), &
             text_option('s-alpha', model_salpha), &
             text_option('alpha1', model_alpha1), &
             text_option('rogers', model_eps), &
             text_option('b2', model_b2), &
+            text_option('normal_only', model_normal_only), &
             text_option('const-curv', model_ccurv), &
             text_option('no-curvature', model_nocurve) /)
 
     namelist /theta_grid_salpha_knobs/ alpmhdfac, alpha1, model_option
-    integer :: ierr
+    integer :: ierr, in_file
+    logical :: exist
 
     alpmhdfac = 0.0
     alpha1 = 0.0
     model_option = 'default'
-    read (unit=input_unit("theta_grid_salpha_knobs"), &
+    in_file = input_unit_exist("theta_grid_salpha_knobs", exist)
+    if (exist) read (unit=input_unit("theta_grid_salpha_knobs"), &
          nml=theta_grid_salpha_knobs)
 
     ierr = error_unit()
@@ -306,6 +322,13 @@ contains
           gbdrift = gbdrift/bmag**2
           gbdrift0 = gbdrift0/bmag**2
        end if
+    case (model_normal_only)
+       gbdrift = epsl*cos(theta)
+       gbdrift0 = 0.
+       gds2 = 1.0 + (shat*theta-shift*sin(theta))**2
+       gds21 = -shat*(shat*theta - shift*sin(theta))
+       gds22 = shat*shat
+       grho = 1.0
     case (model_eps)
        gbdrift = epsl*(cos(theta) -eps + (shat*theta-shift*sin(theta))*sin(theta))
        gbdrift0 = -epsl*shat*sin(theta)
@@ -313,10 +336,6 @@ contains
        gds21 = -shat*(shat*theta - shift*sin(theta))
        gds22 = shat*shat
        grho = 1.0
-       if (model_switch == model_b2) then
-          gbdrift = gbdrift/bmag**2
-          gbdrift0 = gbdrift0/bmag**2
-       end if
     case (model_ccurv,model_nocurve)
        gbdrift = epsl
        gbdrift0 = 0.0
@@ -414,6 +433,7 @@ contains
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
          gds2, gds21, gds22, grho
     real, intent (out) :: shat, drhodpsi, kxfac
+    integer :: i
 
     theta(-ntgrid:ntgrid) = theta_out(-ntgrid:ntgrid)
     gradpar(-ntgrid:ntgrid) = gradpar_out(-ntgrid:ntgrid)
@@ -438,13 +458,12 @@ contains
   end subroutine eik_get_grids
 
   subroutine read_parameters
-    use file_utils, only: input_unit
+    use file_utils, only: input_unit, input_unit_exist
     use geometry, only: nperiod
     use geometry, only: rhoc
     use geometry, only: itor, iflux, irho
-    use geometry, only: ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, local_eq, dfit_eq
-    use geometry, only: gs2d_eq
-    use geometry, only: equal_arc
+    use geometry, only: ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, local_eq, dfit_eq, gs2d_eq
+    use geometry, only: equal_arc, transp_eq
     use geometry, only: bishop
     use geometry, only: s_hat_input
     use geometry, only: alpha_input, invLp_input, beta_prime_input, dp_mult
@@ -462,10 +481,12 @@ contains
     use theta_grid_params, only: akappa_in => akappa, akappri_in => akappri
     use theta_grid_params, only: tri_in => tri, tripri_in => tripri
     implicit none
+    integer :: in_file
+    logical :: exist
 
     namelist /theta_grid_eik_knobs/ itor, iflux, irho, &
          ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, dfit_eq, &
-         equal_arc, bishop, local_eq, gs2d_eq, &
+         equal_arc, bishop, local_eq, gs2d_eq, transp_eq, &
          s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
          delrho, rmin, rmax, ismooth, ak0, k1, k2, isym, writelots
 
@@ -497,7 +518,8 @@ contains
     writelots = .false.
     local_eq = .true.
 
-    read (unit=input_unit("theta_grid_eik_knobs"), nml=theta_grid_eik_knobs)
+    in_file = input_unit_exist("theta_grid_eik_knobs", exist)
+    if (exist) read (unit=input_unit("theta_grid_eik_knobs"), nml=theta_grid_eik_knobs)
   end subroutine read_parameters
 end module theta_grid_eik
 
@@ -528,12 +550,15 @@ contains
   end subroutine init_theta_grid_file
 
   subroutine read_parameters
-    use file_utils, only: input_unit
+    use file_utils, only: input_unit, input_unit_exist
     implicit none
+    integer :: in_file
+    logical :: exist
     namelist /theta_grid_file_knobs/ gridout_file
 
     gridout_file = "grid.out"
-    read (unit=input_unit("theta_grid_file_knobs"), nml=theta_grid_file_knobs)
+    in_file = input_unit_exist("theta_grid_file_knobs", exist)
+    if (exist) read (unit=input_unit("theta_grid_file_knobs"), nml=theta_grid_file_knobs)
   end subroutine read_parameters
 
   subroutine file_get_sizes (ntheta, nperiod, nbset)
@@ -654,6 +679,7 @@ contains
     use mp, only: proc0
     implicit none
     logical, save :: initialized = .false.
+    integer :: i
 
     if (initialized) return
     initialized = .true.
@@ -666,6 +692,7 @@ contains
        call finish_init
     end if
     call broadcast_results
+
   end subroutine init_theta_grid
 
   subroutine broadcast_results
@@ -708,7 +735,7 @@ contains
   end subroutine broadcast_results
 
   subroutine read_parameters
-    use file_utils, only: input_unit, error_unit
+    use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options
     implicit none
     type (text_option), dimension (5), parameter :: eqopts = &
@@ -722,10 +749,12 @@ contains
     ! 's-alpha': s-alpha
     ! 'grid.out' 'file': read grid from grid.out file generated by rungridgen
     namelist /theta_grid_knobs/ equilibrium_option
-    integer :: ierr
+    integer :: ierr, in_file
+    logical :: exist
 
     equilibrium_option = 'default'
-    read (unit=input_unit("theta_grid_knobs"), nml=theta_grid_knobs)
+    in_file = input_unit_exist("theta_grid_knobs", exist)
+    if (exist) read (unit=input_unit("theta_grid_knobs"), nml=theta_grid_knobs)
 
     ierr = error_unit()
     call get_option_value &
@@ -754,7 +783,8 @@ contains
     implicit none
     real, dimension (nbset) :: bset_save
     real, dimension (-ntgrid:ntgrid) :: eik_save
-
+    integer :: ierr
+    
     ! in case nbset changes after gridgen
     if (nbset /= size(bset)) then
        bset_save = bset(:nbset)
@@ -765,6 +795,7 @@ contains
 
     ! in case ntgrid changes after gridgen
     if (ntgrid*2+1 /= size(theta)) then
+
        eik_save = theta(-ntgrid:ntgrid); deallocate (theta)
        allocate (theta(-ntgrid:ntgrid)); theta = eik_save
 

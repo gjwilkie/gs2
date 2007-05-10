@@ -189,6 +189,22 @@ ifeq ($(CPU),LINUX_alpha)
 
 endif
 
+# options for Linux with Lahey lf95
+ifeq ($(CPU),LINUX_lf95)
+  FC = mpif90
+  FLIBS = -L/usr/local/lib -lnetcdf $(UTILDIR)/mdslib.a
+  PLATFORM_LINKS = linux_lf95
+  u_obj = $(UTILDIR)/spl.o $(UTILDIR)/mds.o 
+  stubs = radstub.o vdimstub.o $(UTILDIR)/mdslib.o 
+  F90FLAGS = --dbl --ml cdecl -I$(UTILDIR)
+
+  ifeq ($(debug),on) 
+    F90FLAGS += -g  --chk aesu
+  else
+    F90FLAGS += -O 
+  endif
+
+endif
 # options for NAG f95 on a DEC alpha
 ifeq ($(CPU),ALPHA_NAG)
   FC = /usr/local/bin/f95
@@ -260,8 +276,8 @@ endif
 # options for Linux with Fujitsu f90
 ifeq ($(CPU),LINUX_fuj)
   FC = mpif90
-  FLIBS = \
-	-L/usr/local/lib -lnetcdf ../utils/mdslib.a 
+  FLIBS = /usr/local/lib -lnetcdf \
+	../utils/mdslib.a -L/u/bdorland/fftw/lib -lfftw -lrfftw
   PLATFORM_LINKS = linux_fuj
   u_obj = $(UTILDIR)/spl.o $(UTILDIR)/mds.o 
   stubs = radstub.o vdimstub.o

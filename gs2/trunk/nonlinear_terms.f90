@@ -54,6 +54,7 @@ contains
     use species, only: init_species, nspec
     use run_parameters, only: tnorm
     use gs2_layouts, only: init_dist_fn_layouts, yxf_lo, accelx_lo
+    use gs2_layouts, only: init_gs2_layouts
     use gs2_transforms, only: init_transforms
     implicit none
     logical :: dum1, dum2
@@ -61,6 +62,7 @@ contains
     if (initialized) return
     initialized = .true.
     
+    call init_gs2_layouts
     call init_theta_grid
     call init_kt_grids
     call init_le_grids (dum1, dum2)
@@ -121,6 +123,10 @@ contains
          C_par, C_perp, p_x, p_y, p_z, zip
     integer :: ierr, in_file
     logical :: exist
+    logical :: done = .false.
+
+    if (done) return
+    done = .true.
 
     if (proc0) then
        nonlinear_mode = 'default'
@@ -185,6 +191,7 @@ contains
     use mp, only: max_allreduce
     use theta_grid, only: ntgrid, kxfac
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: accelx_lo, yxf_lo
     use dist_fn_arrays, only: g, ittp
     use species, only: spec
     use gs2_transforms, only: transform2, inverse2
@@ -200,10 +207,11 @@ contains
     real, intent (in) :: bd
     complex, intent (in) :: fexp
     integer :: istep_last = 0
+    integer :: i, j, k
     real :: max_vel, zero
     real :: dt_cfl
 
-    integer :: iglo, ik, it, is, ig, il, ia
+    integer :: iglo, ik, it, is, ig, il, ia, isgn
     
     if (initializing) then
        dt_cfl = 1.e4
@@ -242,7 +250,11 @@ contains
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
-          g1(:,:,iglo) = g1(:,:,iglo)*spec(is)%zt + zi*aky(ik)*g(:,:,iglo)
+          do isgn = 1, 2
+             do ig = -ntgrid, ntgrid
+                g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*aky(ik)*g(ig,isgn,iglo)
+             end do
+          end do
        end do
 
        if (accelerated) then
@@ -252,11 +264,27 @@ contains
        end if
 
        if (accelerated) then
-          abracket = aba*agb*kxfac
-          max_vel = maxval(abs(aba)*cfly)
+          max_vel = 0.
+          do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
+             do j = 1, 2
+                do i = 1, 2*ntgrid+1
+                   abracket(i,j,k) = aba(i,j,k)*agb(i,j,k)*kxfac
+                   max_vel = max(max_vel, abs(aba(i,j,k)))
+                end do
+             end do
+          end do
+          max_vel = max_vel * cfly
+!          max_vel = maxval(abs(aba)*cfly)
        else
-          bracket = ba*gb*kxfac
-          max_vel = maxval(abs(ba)*cfly)
+          max_vel = 0.
+          do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
+             do i = 1, yxf_lo%ny
+                bracket(i,j) = ba(i,j)*gb(i,j)*kxfac
+                max_vel = max(max_vel,abs(ba(i,j)))
+             end do
+          end do
+          max_vel = max_vel*cfly
+!          max_vel = maxval(abs(ba)*cfly)
        endif
 
        if (fphi > zero) then
@@ -287,7 +315,11 @@ contains
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           it = it_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
-          g1(:,:,iglo) = g1(:,:,iglo)*spec(is)%zt + zi*akx(it)*g(:,:,iglo)
+          do isgn = 1, 2
+             do ig = -ntgrid, ntgrid
+                g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*akx(it)*g(ig,isgn,iglo)
+             end do
+          end do
        end do
 
        if (accelerated) then
@@ -297,11 +329,21 @@ contains
        end if
 
        if (accelerated) then
-          abracket = abracket - aba*agb*kxfac
-          max_vel = max(max_vel, maxval(abs(aba)*cflx))
+          do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
+             do j = 1, 2
+                do i = 1, 2*ntgrid+1
+                   abracket(i,j,k) = abracket(i,j,k) - aba(i,j,k)*agb(i,j,k)*kxfac
+                   max_vel = max(max_vel, abs(aba(i,j,k))*cflx)
+                end do
+             end do
+          end do
        else
-          bracket = bracket - ba*gb*kxfac
-          max_vel = max(max_vel, maxval(abs(ba)*cflx))
+          do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
+             do i = 1, yxf_lo%ny
+                bracket(i,j) = bracket(i,j) - ba(i,j)*gb(i,j)*kxfac
+                max_vel = max(max_vel,abs(ba(i,j))*cflx)
+             end do
+          end do
        end if
 
        call max_allreduce(max_vel)
@@ -356,12 +398,16 @@ contains
     subroutine load_kx_phi
 
       use dist_fn_arrays, only: aj0
+      complex :: fac
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
-         g1(:,1,iglo) = zi*akx(it)*aj0(:,iglo)*phi(:,it,ik)*fphi
-         g1(:,2,iglo) = g1(:,1,iglo)
+         do ig = -ntgrid, ntgrid
+            fac = zi*akx(it)*aj0(ig,iglo)*phi(ig,it,ik)*fphi
+            g1(ig,1,iglo) = fac
+            g1(ig,2,iglo) = fac
+         end do
       end do
 
     end subroutine load_kx_phi
@@ -369,11 +415,16 @@ contains
     subroutine load_ky_phi
 
       use dist_fn_arrays, only: aj0
+      complex :: fac
+
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
-         g1(:,1,iglo) = zi*aky(ik)*aj0(:,iglo)*phi(:,it,ik)*fphi
-         g1(:,2,iglo) = g1(:,1,iglo)
+         do ig = -ntgrid, ntgrid
+            fac = zi*aky(ik)*aj0(ig,iglo)*phi(ig,it,ik)*fphi
+            g1(ig,1,iglo) = fac
+            g1(ig,2,iglo) = fac
+         end do
       end do
 
     end subroutine load_ky_phi
@@ -389,12 +440,14 @@ contains
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
-         g1(:,1,iglo) = g1(:,1,iglo) &
-              - zi*akx(it)*aj0(:,iglo)*spec(is)%stm &
-              *vpa(:,1,iglo)*apar(:,it,ik)*fapar 
-         g1(:,2,iglo) = g1(:,2,iglo) &
-              - zi*akx(it)*aj0(:,iglo)*spec(is)%stm &
-              *vpa(:,2,iglo)*apar(:,it,ik)*fapar 
+         do ig = -ntgrid, ntgrid
+            g1(ig,1,iglo) = g1(ig,1,iglo) - zi*akx(it)*aj0(ig,iglo)*spec(is)%stm &
+                 *vpa(ig,1,iglo)*apar(ig,it,ik)*fapar 
+         end do
+         do ig = -ntgrid, ntgrid
+            g1(ig,2,iglo) = g1(ig,2,iglo) - zi*akx(it)*aj0(ig,iglo)*spec(is)%stm &
+                 *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
+         end do
       end do
 
     end subroutine load_kx_apar
@@ -408,12 +461,14 @@ contains
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
-         g1(:,1,iglo) = g1(:,1,iglo) &
-              - zi*aky(ik)*aj0(:,iglo)*spec(is)%stm &
-              *vpa(:,1,iglo)*apar(:,it,ik)*fapar 
-         g1(:,2,iglo) = g1(:,2,iglo) &
-              - zi*aky(ik)*aj0(:,iglo)*spec(is)%stm &
-              *vpa(:,2,iglo)*apar(:,it,ik)*fapar 
+         do ig = -ntgrid, ntgrid
+            g1(ig,1,iglo) = g1(ig,1,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
+                 *vpa(ig,1,iglo)*apar(ig,it,ik)*fapar 
+         end do
+         do ig = -ntgrid, ntgrid
+            g1(ig,2,iglo) = g1(ig,2,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
+                 *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
+         end do
       end do
 
     end subroutine load_ky_apar
@@ -422,6 +477,7 @@ contains
 
       use dist_fn_arrays, only: vperp2, aj1
       use gs2_layouts, only: is_idx
+      complex :: fac
 
 ! Is this factor of two from the old normalization?
 
@@ -429,9 +485,12 @@ contains
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
-         g1(:,1,iglo) = g1(:,1,iglo) + zi*akx(it)*aj1(:,iglo) &
-              *2.0*vperp2(:,iglo)*spec(is)%tz*aperp(:,it,ik)*faperp
-         g1(:,2,iglo) = g1(:,1,iglo)
+         do ig = -ntgrid, ntgrid
+            fac = g1(ig,1,iglo) + zi*akx(it)*aj1(ig,iglo) &
+                 *2.0*vperp2(ig,iglo)*spec(is)%tz*aperp(ig,it,ik)*faperp
+            g1(ig,1,iglo) = fac
+            g1(ig,2,iglo) = fac
+         end do
       end do
 
     end subroutine load_kx_aperp
@@ -440,6 +499,7 @@ contains
 
       use dist_fn_arrays, only: vperp2, aj1
       use gs2_layouts, only: is_idx
+      complex :: fac
 
 ! Is this factor of two from the old normalization?
 
@@ -447,9 +507,12 @@ contains
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
-         g1(:,1,iglo) = g1(:,1,iglo) + zi*aky(ik)*aj1(:,iglo) &
-              *2.0*vperp2(:,iglo)*spec(is)%tz*aperp(:,it,ik)*faperp
-         g1(:,2,iglo) = g1(:,1,iglo)
+         do ig = -ntgrid, ntgrid
+            fac = g1(ig,1,iglo) + zi*aky(ik)*aj1(ig,iglo) &
+                 *2.0*vperp2(ig,iglo)*spec(is)%tz*aperp(ig,it,ik)*faperp
+            g1(ig,1,iglo) = fac 
+            g1(ig,2,iglo) = fac
+         end do
       end do
 
     end subroutine load_ky_aperp

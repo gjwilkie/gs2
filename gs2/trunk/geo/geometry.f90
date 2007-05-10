@@ -29,10 +29,13 @@ module geometry
   real :: rpmin, rpmax, ak0
   
   integer :: isym, ismooth, k1, k2, big
-  integer :: eqinit = 1
+  integer :: eqinit = 0
+!  integer :: eqinit = 1   ! older version had this line.  5.26.02
   
-  logical :: gen_eq, vmom_eq, efit_eq, ppl_eq, local_eq, &
-       in_nt, writelots, equal_arc, dfit_eq, mds, idfit_eq, gs2d_eq
+  logical :: gen_eq, vmom_eq, efit_eq, ppl_eq, local_eq
+  logical :: in_nt, writelots, equal_arc, dfit_eq, mds, idfit_eq, gs2d_eq
+  logical :: transp_eq
+  
   
   integer :: bishop
 
@@ -55,6 +58,7 @@ module geometry
 !!!                           iflux = 0 forces local_eq = .true. and irho = 2
 !!!              case (1)  :: use numerical equilibrium.  4 choices:
 !!!                 ppl_eq = .true. :: use PPL style NetCDF equilibrium (Menard)
+!!!                 transp_eq = .true. :: use TRXPL style NetCDF equilibrium (Menard)
 !!!                 gen_eq = .true. :: use GA style NetCDF equilibrium (TOQ)
 !!!     -------------------> [note: if either of the above == .true., 
 !!!                          set eqfile = input file name]
@@ -153,7 +157,7 @@ contains
     
     use  veq, only: vmomin, veq_init
     use  geq, only: eqin, geq_init
-    use  peq, only: peqin => eqin, peq_init
+    use  peq, only: peqin => eqin, teqin, peq_init
     use  eeq, only: efitin, mfitin, eeq_init => efit_init, gs2din
     use  deq, only: dfitin, deq_init => dfit_init
     use ideq, only: idfitin, ideq_init => dfit_init
@@ -189,6 +193,11 @@ contains
 !     compute the initial constants
     pi=2.*acos(0.)
     
+    if (local_eq .and. iflux == 1) then
+       write (*,*) 'Forcing iflux = 0'
+       iflux = 0
+    end if
+
     if(iflux == 0 .or. iflux == 2) then
        if(.not. local_eq) write(*,*) 'Forcing local_eq = true'
        local_eq = .true.
@@ -202,7 +211,7 @@ contains
 
     call check(vmom_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq, idfit_eq) 
 
-    if(.not. vmom_eq .and. .not. gen_eq .and. .not. ppl_eq &
+    if(.not. vmom_eq .and. .not. gen_eq .and. .not. ppl_eq .and. .not. transp_eq &
          .and. .not. allocated(theta)) then
        write(*,*) 'You should call init_theta to specify the '
        write(*,*) 'number of theta grid points per 2 pi '
@@ -234,6 +243,10 @@ contains
              call tdef(nthg)
           else if(ppl_eq) then
              call peqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
+             call tdef(nthg)
+          else if(transp_eq) then
+             ppl_eq = .true.
+             call teqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
              call tdef(nthg)
           else if(efit_eq) then
              if(big <= 0) big = 8
@@ -299,7 +312,7 @@ contains
     if(writelots) then
        write(11,*) 'rp of rho = ',rp
        write(11,*) 'Rcenter(rho) = ',rcenter(rp)
-       write(11,*) 'R_geo = ',R_geo,' or ',btori(rgrid(0), 0.)
+       write(11,*) 'R_geo = ',R_geo,' !or ',btori(rgrid(0), 0.)
     endif
 
     if(R_geo > Rmaj + 1.e-5) then

@@ -46,7 +46,7 @@ contains
   end subroutine init_run_parameters
 
   subroutine read_parameters
-    use file_utils, only: input_unit, error_unit
+    use file_utils, only: input_unit, error_unit, input_unit_exist
     use mp, only: proc0, broadcast
     use gs2_save, only: init_dt
     use text_options
@@ -56,10 +56,11 @@ contains
             text_option('set_by_hand', delt_option_hand), &
             text_option('check_restart', delt_option_auto) /)
     character(20) :: delt_option
-    integer :: ierr, istatus
+    integer :: ierr, istatus, in_file
     real :: delt_saved
 
     real :: teti  ! for back-compatibility
+    logical :: exist
     namelist /parameters/ beta, zeff, tite, rhostar, teti
     namelist /knobs/ fphi, fapar, faperp, delt, nstep, wstar_units, eqzip, &
          delt_option, margin
@@ -74,8 +75,12 @@ contains
        eqzip = .false.
        delt_option = 'default'
        margin = 0.05
-       read (unit=input_unit("parameters"), nml=parameters)
-       read (unit=input_unit("knobs"), nml=knobs)
+       in_file = input_unit_exist("parameters", exist)
+       if (exist) read (unit=input_unit("parameters"), nml=parameters)
+
+       in_file = input_unit_exist("knobs", exist)
+       if (exist) read (unit=input_unit("knobs"), nml=knobs)
+
        if (teti /= -100.0) tite = teti
 
        ierr = error_unit()

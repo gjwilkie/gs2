@@ -17,13 +17,13 @@ module init_g
        ginitopt_nl = 13, ginitopt_kz0 = 14, ginitopt_restart_small = 15, &
        ginitopt_nl2 = 16, ginitopt_nl3 = 17, ginitopt_nl4 = 18, &
        ginitopt_nl5 = 19, ginitopt_alf = 20, ginitopt_kpar = 21, &
-       ginitopt_nl6 = 22
+       ginitopt_nl6 = 22, ginitopt_gs = 23
   real :: width0, phiinit, k0, imfac, refac, zf_init
   real :: den0, upar0, tpar0, tperp0
   real :: den1, upar1, tpar1, tperp1
   real :: den2, upar2, tpar2, tperp2
   real :: tstart, scale
-  logical :: chop_side, left
+  logical :: chop_side, left, even
   character(300) :: restart_file
   integer, dimension(2) :: ikk, itt
   
@@ -31,12 +31,15 @@ contains
 
   subroutine init_init_g
     use gs2_save, only: init_save
+    use gs2_layouts, only: init_gs2_layouts
     use mp, only: proc0, broadcast
     implicit none
     logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
+
+    call init_gs2_layouts
 
     if (proc0) call read_parameters
 
@@ -61,6 +64,7 @@ contains
     call broadcast (k0)
     call broadcast (tstart)
     call broadcast (chop_side)
+    call broadcast (even)
     call broadcast (left)
     call broadcast (restart_file)
     call broadcast (ikk)
@@ -88,6 +92,8 @@ contains
        call ginit_noise
     case (ginitopt_kpar)
        call ginit_kpar
+    case (ginitopt_gs)
+       call ginit_gs
     case (ginitopt_nl)
        call ginit_nl
     case (ginitopt_nl2)
@@ -95,9 +101,12 @@ contains
     case (ginitopt_nl3)
        call ginit_nl3
     case (ginitopt_nl4)
+! in an old version, this line was commented out.  Thus, to recover some old
+! results, you might need to comment out this line and...
        t0 = tstart
        call init_tstart (tstart, istatus)
        call ginit_nl4
+! this line:
        tstart = t0
        restarted = .true.
        scale = 1.
@@ -153,11 +162,11 @@ contains
   end subroutine ginit
 
   subroutine read_parameters
-    use file_utils, only: input_unit, error_unit, run_name
+    use file_utils, only: input_unit, error_unit, run_name, input_unit_exist
     use text_options
     implicit none
 
-    type (text_option), dimension (22), parameter :: ginitopts = &
+    type (text_option), dimension (23), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
             text_option('test1', ginitopt_test1), &
@@ -179,15 +188,17 @@ contains
             text_option('nl5', ginitopt_nl5), &
             text_option('nl6', ginitopt_nl6), &
             text_option('alf', ginitopt_alf), &
+            text_option('gs', ginitopt_gs), &
             text_option('kpar', ginitopt_kpar) /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, k0, chop_side, &
          restart_file, left, ikk, itt, scale, tstart, zf_init, &
-         den0, upar0, tpar0, tperp0, imfac, refac, &
+         den0, upar0, tpar0, tperp0, imfac, refac, even, &
          den1, upar1, tpar1, tperp1, &
          den2, upar2, tpar2, tperp2
 
-    integer :: ierr
+    integer :: ierr, in_file
+    logical :: exist
 
     tstart = 0.
     scale = 1.0
@@ -212,12 +223,14 @@ contains
     k0 = 1.0
     chop_side = .true.
     left = .true.
+    even = .true.
     ikk(1) = 1
     ikk(2) = 2
     itt(1) = 1
     itt(2) = 2
     restart_file = trim(run_name)//".nc"
-    read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
+    in_file = input_unit_exist ("init_g_knobs", exist)
+    if (exist) read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
 
     ierr = error_unit()
     call get_option_value &
@@ -320,7 +333,7 @@ contains
   subroutine ginit_noise
     use species, only: spec
     use theta_grid, only: ntgrid 
-    use kt_grids, only: naky, ntheta0, aky
+    use kt_grids, only: naky, ntheta0, aky, reality
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
@@ -353,9 +366,12 @@ contains
        phi(:,:,1) = phi(:,:,1)*zf_init
     end if
 ! reality condition for k_theta = 0 component:
-    do it = 1, ntheta0/2
-       phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
-    enddo
+    if (reality) then
+       do it = 1, ntheta0/2
+          phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
+       enddo
+    end if
+       
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -480,7 +496,7 @@ contains
   subroutine ginit_nl3
     use species, only: spec, has_electron_species
     use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, theta0
+    use kt_grids, only: naky, ntheta0, theta0, reality
     use le_grids, only: forbid
 !    use le_grids, only: ng2
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
@@ -489,7 +505,7 @@ contains
     use ran
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
-    real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac
+    real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
     integer :: iglo
     integer :: ig, ik, it, il, is, j
     
@@ -519,15 +535,31 @@ contains
     odd = zi * phi
     
 ! reality condition for k_theta = 0 component:
-    do it = 1, ntheta0/2
-       phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
-       odd(:,it+(ntheta0+1)/2,1) = conjg(odd(:,(ntheta0+1)/2+1-it,1))
-    enddo
-    
-    dfac     = den0   + den1 * cos(theta) + den2 * cos(2.*theta) 
-    ufac     = upar0  + upar1* sin(theta) + upar2* sin(2.*theta) 
-    tparfac  = tpar0  + tpar1* cos(theta) + tpar2* cos(2.*theta) 
-    tperpfac = tperp0 + tperp1*cos(theta) + tperp2*cos(2.*theta) 
+    if (reality) then
+       do it = 1, ntheta0/2
+          phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
+          odd(:,it+(ntheta0+1)/2,1) = conjg(odd(:,(ntheta0+1)/2+1-it,1))
+       enddo
+    end if
+
+    if (even) then
+       ct = cos(theta)
+       st = sin(theta)
+
+       c2t = cos(2.*theta)
+       s2t = sin(2.*theta)
+    else
+       ct = sin(theta)
+       st = cos(theta)
+
+       c2t = sin(2.*theta)
+       s2t = cos(2.*theta)
+    end if
+
+    dfac     = den0   + den1 * ct + den2 * c2t
+    ufac     = upar0  + upar1* st + upar2* s2t
+    tparfac  = tpar0  + tpar1* ct + tpar2* c2t
+    tperpfac = tperp0 + tperp1*ct + tperp2*c2t
 
 
 ! charge dependence keeps initial Phi from being too small
@@ -564,6 +596,8 @@ contains
     gnew = g
   end subroutine ginit_nl3
 
+! nl4 has been monkeyed with over time.  Do not expect to recover old results
+! that use this startup routine.
   subroutine ginit_nl4
     use mp, only: proc0
     use species, only: spec
@@ -826,7 +860,6 @@ contains
     tparfac  = tpar0  + tpar1* cos(theta) + tpar2* cos(2.*theta) 
     tperpfac = tperp0 + tperp1*cos(theta) + tperp2*cos(2.*theta) 
 
-
 ! charge dependence keeps initial Phi from being too small
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -857,6 +890,68 @@ contains
 
     gnew = g
   end subroutine ginit_kpar
+
+  subroutine ginit_gs
+    use species, only: spec, has_electron_species
+    use theta_grid, only: ntgrid, theta
+    use kt_grids, only: naky, ntheta0, theta0, reality
+    use le_grids, only: forbid
+    use dist_fn_arrays, only: g, gnew, vpa, vperp2
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use constants
+    use ran
+    implicit none
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
+    integer :: iglo
+    integer :: ig, ik, it, il, is
+	real :: phase
+    
+    	phi = 0.
+	odd = 0.
+        do ik=1,naky
+	do it=1,ntheta0
+	phase = 2.*pi*ranf()
+	phi(:,it,ik) = cos(theta+phase)*cmplx(refac,imfac)
+	odd(:,it,ik) = sin(theta+phase)*cmplx(refac,imfac) * zi
+	end do
+	end do
+        
+! reality condition for k_theta = 0 component:
+    do it = 1, ntheta0/2
+       phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
+       odd(:,it+(ntheta0+1)/2,1) = conjg(odd(:,(ntheta0+1)/2+1-it,1))
+    enddo
+
+! charge dependence keeps initial Phi from being too small
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)       
+
+       g(:,1,iglo) = phiinit* &!spec(is)%z* &
+            ( den1                         * phi(:,it,ik) &
+            + 2.*upar1* vpa(:,1,iglo)      * odd(:,it,ik) &
+            + tpar1*(vpa(:,1,iglo)**2-0.5) * phi(:,it,ik) &
+            + tperp1*(vperp2(:,iglo)-1.)   * phi(:,it,ik))
+       where (forbid(:,il)) g(:,1,iglo) = 0.0
+
+       g(:,2,iglo) = phiinit* &!spec(is)%z* &
+            ( den1                         * phi(:,it,ik) &
+            + 2.*upar1* vpa(:,2,iglo)      * odd(:,it,ik) &
+            + tpar1*(vpa(:,2,iglo)**2-0.5) * phi(:,it,ik) &
+            + tperp1*(vperp2(:,iglo)-1.)   * phi(:,it,ik))
+       where (forbid(:,il)) g(:,2,iglo) = 0.0
+
+    end do
+
+    if (has_electron_species(spec)) then
+       call flae (g, gnew)
+       g = g - gnew
+    end if
+
+    gnew = g
+  end subroutine ginit_gs
 
   subroutine ginit_test1
     use species, only: spec
@@ -954,8 +1049,6 @@ contains
     integer :: ik, it, il, ie, is
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)

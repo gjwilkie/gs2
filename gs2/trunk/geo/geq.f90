@@ -84,8 +84,7 @@ contains
        filename='dskeq.cdf'
     endif
 !     netcdf open file         
-      ncid = ncopn (filename, NCNOWRIT, ifail)
-!      istatus = nf_open (filename, nf_write, ncid)
+       ncid = ncopn (filename, NCNOWRIT, ifail)
 
 !     netcdf read scalar: nr
 !

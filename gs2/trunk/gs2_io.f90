@@ -7,6 +7,7 @@ module gs2_io
   public :: init_gs2_io, nc_eigenfunc, nc_final_fields, nc_final_epar
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
+  public :: nc_loop_stress
 
   logical, parameter :: serial_io = .true.
   integer :: ncid
@@ -42,6 +43,7 @@ module gs2_io
   integer :: phi_id, apar_id, aperp_id, epar_id
   integer :: antot_id, antota_id, antotp_id
   integer :: ntot_id, density_id, upar_id, tpar_id, tperp_id
+  integer :: rstress_id, ustress_id
   integer :: ntot2_id, ntot2_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
   integer :: qflux_neo_by_k_id, pflux_neo_by_k_id, input_id
@@ -167,14 +169,16 @@ contains
     use mp, only: proc0
     integer :: status
 
-    if (proc0) call save_input
-    if (proc0) status = nf_close (ncid)
-    
+    if (proc0) then
+       call save_input
+       status = nf_close (ncid)
+    end if
+
   end subroutine nc_finish
 
   subroutine save_input
     
-    use file_utils, only: num_input_lines, get_unused_unit, run_name
+    use file_utils, only: num_input_lines, get_input_unit
     use netcdf_mod
 
     character(200) line
@@ -187,15 +191,14 @@ contains
 
     nin_count(2) = 1
 
-    call get_unused_unit (unit)
-    open (unit=unit, file=trim(run_name)//".in", status="old", action="read", iostat=iostat)
+    call get_input_unit (unit)
+    rewind (unit=unit)
     do n = 1, num_input_lines
        read (unit=unit, fmt="(a)") line
        nin_count(1) = len(trim(line))
        status = nf_put_vara_text (ncid, input_id, nin_start, nin_count, line)
        nin_start(2) = nin_start(2) + 1
     end do
-    close (unit)
 
   end subroutine save_input
 
@@ -539,6 +542,9 @@ contains
     status = netcdf_def_var (ncid, 'tpar00',    nf_double, 4, loop_mom_dim, tpar00_id)
     status = netcdf_def_var (ncid, 'tperp00',   nf_double, 4, loop_mom_dim, tperp00_id)
     
+    status = netcdf_def_var (ncid, 'rstress',    nf_double, 4, loop_mom_dim, rstress_id)
+    status = netcdf_def_var (ncid, 'ustress',    nf_double, 4, loop_mom_dim, ustress_id)
+
     status = netcdf_put_att (ncid, phtot_id, 'long_name', 'Field amplitude')
 
     status = netcdf_def_var (ncid, 'input_file', nf_char, 2, nin_dim, input_id)
@@ -667,6 +673,39 @@ contains
     status = netcdf_put_var(ncid, tperp_id, ri4)
 
   end subroutine nc_final_moments
+
+  subroutine nc_loop_stress (nout, rstress, ustress)
+
+    use netcdf_mod, only: netcdf_put_vara
+    use convert, only: c2r
+
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use species, only: nspec
+
+    integer, intent (in) :: nout
+    complex, dimension (:,:), intent (in) :: rstress, ustress
+    real, dimension (2, ntheta0, nspec) :: ri2
+    integer, dimension (4) :: start, count
+    integer :: status
+
+    start(1) = 1
+    start(2) = 1
+    start(3) = 1
+    start(4) = nout
+    
+    count(1) = 2
+    count(2) = ntheta0
+    count(3) = nspec
+    count(4) = 1
+
+    call c2r (rstress, ri2)
+    status = netcdf_put_vara(ncid, rstress_id, start, count, ri2)
+
+    call c2r (ustress, ri2)
+    status = netcdf_put_vara(ncid, ustress_id, start, count, ri2)
+
+  end subroutine nc_loop_stress
 
   subroutine nc_loop_moments (nout, ntot2, ntot2_by_mode, &
        phi00, ntot00, density00, upar00, tpar00, tperp00)

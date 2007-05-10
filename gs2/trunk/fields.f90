@@ -1,5 +1,6 @@
 module fields
   use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
+  use fields_arrays, only: phi_ext, apar_ext
 
   implicit none
 
@@ -33,6 +34,7 @@ contains
     use fields_explicit, only: init_fields_explicit, init_phi_explicit
     use fields_test, only: init_fields_test, init_phi_test
     use nonlinear_terms, only: nl_finish_init => finish_init
+    use antenna, only: init_antenna
     implicit none
     logical :: restarted
 
@@ -43,7 +45,6 @@ contains
     call init_init_g
     call init_run_parameters
     call init_dist_fn
-
     call read_parameters
     call allocate_arrays
 
@@ -60,6 +61,7 @@ contains
     call nl_finish_init
 
     call ginit (restarted)
+    call init_antenna
     if (restarted) return
 
     select case (fieldopt_switch)
@@ -74,7 +76,7 @@ contains
   end subroutine init_fields
 
   subroutine read_parameters
-    use file_utils, only: input_unit, error_unit
+    use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options
     use mp, only: proc0, broadcast
     implicit none
@@ -85,12 +87,14 @@ contains
             text_option('test', fieldopt_test) /)
     character(20) :: field_option
     namelist /fields_knobs/ field_option
-    integer :: ierr
+    integer :: ierr, in_file
+    logical :: exist
 
     if (proc0) then
        field_option = 'default'
-       
-       read (unit=input_unit("fields_knobs"), nml=fields_knobs)
+
+       in_file = input_unit_exist ("fields_knobs", exist)
+       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
 
        ierr = error_unit()
        call get_option_value &
@@ -115,10 +119,13 @@ contains
        allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (aperpnew (-ntgrid:ntgrid,ntheta0,naky))
+       allocate ( phi_ext (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
     endif
     phi = 0.; phinew = 0.
     apar = 0.; aparnew = 0.
     aperp = 0.; aperpnew = 0.
+    phi_ext = 0.; apar_ext = 0.
 
     alloc = .false.
   end subroutine allocate_arrays
@@ -226,4 +233,19 @@ contains
     phinew = 0.
 
   end subroutine reset_init
+
+  subroutine timer
+    
+    character (len=10) :: zdate, ztime, zzone
+    integer, dimension(8) :: ival
+    real, save :: told=0., tnew=0.
+    
+    call date_and_time (zdate, ztime, zzone, ival)
+    tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
+    if (told > 0.) then
+       print *, 'Fields: Time since last called: ',tnew-told,' seconds'
+    end if
+    told = tnew
+  end subroutine timer
+
 end module fields

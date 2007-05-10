@@ -25,7 +25,7 @@ program eiktest
        s_hat_input,p_prime_input,invLp_input,beta_prime_input, &
        diffscheme,nbeta,beta_p1,beta_p2,alpha_input,big, &
        beta_prime_times, beta_prime_over, fast, profile_fac, &
-       tstar,shotnum,mds,gs2d_eq
+       tstar, shotnum, mds, gs2d_eq, transp_eq
 
   pi=2.*acos(0.)
      
@@ -36,8 +36,9 @@ program eiktest
   idfit_eq = .false.
   dfit_eq = .false.
   efit_eq = .false.
-  vmom_eq = .false.
   gs2d_eq = .false.
+  transp_eq = .false.
+  vmom_eq = .false.
 
   dipole = .false.
   mds = .false.
@@ -119,7 +120,8 @@ program eiktest
      if(vmom_eq) write(*,*) 'Forcing vmom_eq to be false'
      if(gen_eq) write(*,*) 'Forcing gen_eq to be false'
      if(ppl_eq) write(*,*) 'Forcing ppl_eq to be false'
-     if(vmom_eq .or. gen_eq .or. ppl_eq) write(*,*) 'because iflux.ne.1'
+     if(transp_eq) write(*,*) 'Forcing transp_eq to be false'
+     if(vmom_eq .or. gen_eq .or. ppl_eq .or. transp_eq) write(*,*) 'because iflux.ne.1'
      vmom_eq=.false.
      gen_eq=.false.
      ppl_eq=.false.
@@ -133,7 +135,8 @@ program eiktest
 !     
 !     compute the theta grid
 
-  if((.not. vmom_eq) .and. (.not. gen_eq) .and. (.not. ppl_eq)) &
+  if((.not. vmom_eq) .and. (.not. gen_eq) &
+       .and. (.not. transp_eq) .and. (.not. ppl_eq)) &
        call init_theta(ntheta)
   
   call eikcoefs
