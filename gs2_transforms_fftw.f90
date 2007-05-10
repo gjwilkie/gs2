@@ -523,8 +523,8 @@ contains
     i = (2*accel_lo%ntgrid+1)*2
     idx = 1
     do k = accel_lo%llim_proc, accel_lo%ulim_proc, accel_lo%nxnky
-       call rfftwnd_f77_complex_to_real (yf_fft%plan, i, ag(:,:,k), i, 1, &
-            axf(:,:,ia(idx)), i, 1)
+       call rfftwnd_f77_complex_to_real (yf_fft%plan, i, ag(:,:,k:), i, 1, &
+            axf(:,:,ia(idx):), i, 1)
        idx = idx + 1
     end do
 
@@ -541,8 +541,8 @@ contains
     i = (2*accel_lo%ntgrid+1)*2
     idx = 1
     do k = accelx_lo%llim_proc, accelx_lo%ulim_proc, accelx_lo%nxny
-       call rfftwnd_f77_real_to_complex (yb_fft%plan, i, axf(:,:,k), i, 1, &
-            ag(:,:,iak(idx)), i, 1)
+       call rfftwnd_f77_real_to_complex (yb_fft%plan, i, axf(:,:,k:), i, 1, &
+            ag(:,:,iak(idx):), i, 1)
        idx = idx + 1
     end do
 

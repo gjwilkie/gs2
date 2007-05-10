@@ -16,21 +16,30 @@ program eiktest
   integer :: nbeta
 
   real :: airat
-  logical :: fast
+  logical :: fast, dipole
 
   namelist/stuff/ntheta,nperiod,rmaj,akappri,akappa,shift,equal_arc, &
        rhoc,rmin,rmax,itor,qinp,iflux,delrho,tri,bishop, &
        irho,isym,tripri,vmom_eq,efit_eq,dfit_eq,writelots,R_geo, &
-       gen_eq, ppl_eq, eqfile,ismooth,ak0,k1,k2,local_eq,&
+       gen_eq, ppl_eq, eqfile,ismooth,ak0,k1,k2,local_eq,idfit_eq,&
        s_hat_input,p_prime_input,invLp_input,beta_prime_input, &
        diffscheme,nbeta,beta_p1,beta_p2,alpha_input,big, &
        beta_prime_times, beta_prime_over, fast, profile_fac, &
-       tstar, shotnum, mds
+       tstar,shotnum,mds,gs2d_eq
 
   pi=2.*acos(0.)
      
 ! set defaults
 
+  gen_eq = .false.
+  ppl_eq = .false.
+  idfit_eq = .false.
+  dfit_eq = .false.
+  efit_eq = .false.
+  vmom_eq = .false.
+  gs2d_eq = .false.
+
+  dipole = .false.
   mds = .false.
   shotnum=1001109020
   tstar = 1.0
@@ -164,7 +173,9 @@ program eiktest
 !      write(*,*) 'rho ',rhoc
 !      write(*,*) 'rp ',rpofrho(rhoc)
 !      write(*,*) 'r ',rfun(rpofrho(rhoc),0.,broot)
-  if (.not. dfit_eq) then
+  dipole = dfit_eq .or. idfit_eq
+
+  if (.not. dipole) then
      bb=beta_a_fun(rfun(rpofrho(rhoc),0.,broot),0.)
      write(21,*) '-8*pi/B_0**2 * dp/drho= '
      if(bb.ne.0.) then
@@ -175,7 +186,7 @@ program eiktest
   end if
 
   write(11,*) 'dV/drhon= ',dvdrhon
-  if (.not. dfit_eq) then
+  if (.not. dipole) then
      q=qfun(0.)
      write(11,*) 'q_0= ',q
      q=qfun(pbarofrho(rhoc))
@@ -195,7 +206,7 @@ program eiktest
         rkpri=0.5*(rkp-rkm)/delrho
         rtpri=0.5*(rtp-rtm)/delrho
         rdpri=0.5*(rdp-rdm)/delrho
-        if (dfit_eq) then
+        if (dipole) then
            shat = 0.
         else
            shat = 0.5*rhoc*(qplus-qmnus)/qfun(pbarofrho(rhoc))/delrho

@@ -16,13 +16,14 @@ module gs2_layouts
   public :: jf_lo, jf_layout_type
   public :: mj, ij, dj
 
-  public :: lambda_lo, lambda_layout_type
-  public :: init_lambda_layouts
+!  public :: lambda_lo, lambda_layout_type
+!  public :: init_lambda_layouts
 
   public :: init_lorentz_layouts
   public :: lz_lo, lz_layout_type
-  public :: gidx2lzidx, lzidx2gidx, gidx2lamidx, lamidx2gintidx
-  public :: gintidx2geidx
+  public :: gidx2lzidx !, lzidx2gidx
+!  public :: gidx2lamidx, lamidx2gintidx
+  public :: gidx2gintidx, gintidx2geidx
 
   public :: init_x_transform_layouts, init_y_transform_layouts
   public :: xxf_lo, xxf_layout_type, yxf_lo, yxf_layout_type
@@ -31,6 +32,7 @@ module gs2_layouts
 
   public :: init_accel_transform_layouts
   public :: accel_lo, accel_layout_type, dealiasing
+  public :: accelx_lo, accelx_layout_type
 
   public :: ig_idx, ik_idx, it_idx, il_idx, ie_idx, is_idx, if_idx, isign_idx
   public :: im_idx, in_idx, ij_idx, ifield_idx
@@ -62,8 +64,8 @@ module gs2_layouts
      integer :: iproc
      integer :: nidx, nfield, ntgrid, nindex, naky, ntheta0, M_class, N_class, i_class
      integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
-     integer, dimension(:,:), pointer :: ik => null()
-     integer, dimension(:,:), pointer :: it => null()
+     integer, dimension(:,:), pointer :: ik !=> null()
+     integer, dimension(:,:), pointer :: it !=> null()
   end type f_layout_type
 
   type (f_layout_type), dimension(:), allocatable :: f_lo
@@ -87,13 +89,13 @@ module gs2_layouts
 
   type (lz_layout_type) :: lz_lo
 
-  type :: lambda_layout_type
-     integer :: iproc
-     integer :: ntgrid, naky, ntheta0, negrid, nspec, ng2
-     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
-  end type lambda_layout_type
+!  type :: lambda_layout_type
+!     integer :: iproc
+!     integer :: ntgrid, naky, ntheta0, negrid, nspec, ng2
+!     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
+!  end type lambda_layout_type
 
-  type (lambda_layout_type) :: lambda_lo
+!  type (lambda_layout_type) :: lambda_lo
 
   type :: xxf_layout_type
      integer :: iproc
@@ -113,11 +115,20 @@ module gs2_layouts
 
   type :: accel_layout_type
      integer :: iproc
-     integer :: ntgrid, nsign, naky, ny, ntheta0, nx, nxny, negrid, nlambda, nspec
+     integer :: ntgrid, nsign, naky, ndky, ny, ntheta0
+     integer :: nx, nxny, nxnky, negrid, nlambda, nspec, nia
      integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
   end type accel_layout_type
 
   type (accel_layout_type) :: accel_lo
+
+  type :: accelx_layout_type
+     integer :: iproc
+     integer :: ntgrid, nsign, naky, ny, ntheta0, nx, nxny, negrid, nlambda, nspec
+     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
+  end type accelx_layout_type
+
+  type (accelx_layout_type) :: accelx_lo
 
   interface ij_idx
      module procedure ij_idx_f
@@ -154,7 +165,7 @@ module gs2_layouts
      module procedure ik_idx_geint
      module procedure ik_idx_jf
      module procedure ik_idx_lz
-     module procedure ik_idx_lambda
+!     module procedure ik_idx_lambda
      module procedure ik_idx_xxf
      module procedure ik_idx_accel
   end interface
@@ -165,7 +176,7 @@ module gs2_layouts
      module procedure it_idx_geint
      module procedure it_idx_jf
      module procedure it_idx_lz
-     module procedure it_idx_lambda
+!     module procedure it_idx_lambda
      module procedure it_idx_yxf
      module procedure it_idx_accel
   end interface
@@ -180,7 +191,7 @@ module gs2_layouts
      module procedure ie_idx_g
      module procedure ie_idx_gint
      module procedure ie_idx_lz
-     module procedure ie_idx_lambda
+!     module procedure ie_idx_lambda
      module procedure ie_idx_xxf
      module procedure ie_idx_yxf
   end interface
@@ -190,7 +201,7 @@ module gs2_layouts
      module procedure is_idx_gint
      module procedure is_idx_geint
      module procedure is_idx_lz
-     module procedure is_idx_lambda
+!     module procedure is_idx_lambda
      module procedure is_idx_xxf
      module procedure is_idx_yxf
   end interface
@@ -207,7 +218,7 @@ module gs2_layouts
      module procedure proc_id_f
      module procedure proc_id_jf
      module procedure proc_id_lz
-     module procedure proc_id_lambda
+!     module procedure proc_id_lambda
      module procedure proc_id_xxf
      module procedure proc_id_yxf
   end interface
@@ -221,7 +232,7 @@ module gs2_layouts
      module procedure idx_lz
      module procedure idx_xxf
      module procedure idx_yxf
-     module procedure idx_lambda
+!     module procedure idx_lambda
   end interface
 
   interface idx_local
@@ -233,7 +244,7 @@ module gs2_layouts
      module procedure idx_local_lz,     ig_local_lz
      module procedure idx_local_xxf,    ig_local_xxf
      module procedure idx_local_yxf,    ig_local_yxf
-     module procedure idx_local_lambda, ig_local_lambda
+!     module procedure idx_local_lambda, ig_local_lambda
  end interface
 
 contains
@@ -839,100 +850,98 @@ contains
 ! Lambda layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine init_lambda_layouts &
-       (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)       
-    use mp, only: iproc, nproc
-    implicit none
-    integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2
-    logical :: initialized = .false.
-    
-    if (initialized) return
-    initialized = .true.
-
-    lambda_lo%iproc = iproc
-    lambda_lo%ntgrid = ntgrid
-    lambda_lo%naky = naky
-    lambda_lo%ntheta0 = ntheta0
-    lambda_lo%negrid = negrid
-    lambda_lo%nspec = nspec
-    lambda_lo%ng2 = ng2
-    lambda_lo%llim_world = 0
-    lambda_lo%ulim_world = negrid*ntheta0*naky*nspec - 1
-    lambda_lo%blocksize = lambda_lo%ulim_world/nproc + 1
-    lambda_lo%llim_proc = lambda_lo%blocksize*iproc
-    lambda_lo%ulim_proc &
-         = min(lambda_lo%ulim_world, lambda_lo%llim_proc + lambda_lo%blocksize - 1)
-    lambda_lo%ulim_alloc = max(lambda_lo%llim_proc, lambda_lo%ulim_proc)
-
-  end subroutine init_lambda_layouts
-
-  pure function is_idx_lambda (lo, i)
-    implicit none
-    integer :: is_idx_lambda
-    type (lambda_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-    is_idx_lambda = 1 + mod((i - lo%llim_world) &
-         /lo%negrid/lo%ntheta0/lo%naky, lo%nspec)
-  end function is_idx_lambda
-
-  pure function ik_idx_lambda (lo, i)
-    implicit none
-    integer :: ik_idx_lambda
-    type (lambda_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-    ik_idx_lambda = 1 + mod((i - lo%llim_world) &
-         /lo%negrid/lo%ntheta0, lo%naky)
-  end function ik_idx_lambda
-
-  pure function it_idx_lambda (lo, i)
-    implicit none
-    integer :: it_idx_lambda
-    type (lambda_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-    it_idx_lambda = 1 + mod((i - lo%llim_world)/lo%negrid, lo%ntheta0)
-  end function it_idx_lambda
-
-  pure function ie_idx_lambda (lo, i)
-    implicit none
-    integer :: ie_idx_lambda
-    type (lambda_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-    ie_idx_lambda = 1 + mod(i - lo%llim_world, lo%negrid)
-  end function ie_idx_lambda
-
-  pure function idx_lambda (lo, ik, it, ie, is)
-    implicit none
-    integer :: idx_lambda
-    type (lambda_layout_type), intent (in) :: lo
-    integer, intent (in) :: ik, it, ie, is
-    idx_lambda = ie-1 + lo%negrid*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1)))
-  end function idx_lambda
-
-  pure function proc_id_lambda (lo, i)
-    implicit none
-    integer :: proc_id_lambda
-    type (lambda_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-    proc_id_lambda = i/lo%blocksize
-  end function proc_id_lambda
-
-  pure function idx_local_lambda (lo, ik, it, ie, is)
-    implicit none
-    logical :: idx_local_lambda
-    type (lambda_layout_type), intent (in) :: lo
-    integer, intent (in) :: ik, it, ie, is
-
-    idx_local_lambda = idx_local(lo, idx(lo, ik, it, ie, is))
-  end function idx_local_lambda
-
-  pure function ig_local_lambda (lo, ig)
-    implicit none
-    logical :: ig_local_lambda
-    type (lambda_layout_type), intent (in) :: lo
-    integer, intent (in) :: ig
-
-    ig_local_lambda = lo%iproc == proc_id(lo, ig)
-  end function ig_local_lambda
+!  subroutine init_lambda_layouts &
+!       (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)       
+!    use mp, only: iproc, nproc
+!    implicit none
+!    integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2
+!    logical :: initialized = .false.
+!    
+!    if (initialized) return
+!    initialized = .true.
+!
+!    lambda_lo%iproc = iproc
+!    lambda_lo%ntgrid = ntgrid
+!    lambda_lo%naky = naky
+!    lambda_lo%ntheta0 = ntheta0
+!    lambda_lo%negrid = negrid
+!    lambda_lo%nspec = nspec
+!    lambda_lo%ng2 = ng2
+!    lambda_lo%llim_world = 0
+!    lambda_lo%ulim_world = negrid*ntheta0*naky*nspec - 1
+!    lambda_lo%blocksize = lambda_lo%ulim_world/nproc + 1
+!    lambda_lo%llim_proc = lambda_lo%blocksize*iproc
+!    lambda_lo%ulim_proc &
+!         = min(lambda_lo%ulim_world, lambda_lo%llim_proc + lambda_lo%blocksize - 1)
+!    lambda_lo%ulim_alloc = max(lambda_lo%llim_proc, lambda_lo%ulim_proc)
+!
+!  end subroutine init_lambda_layouts
+!
+!  pure function is_idx_lambda (lo, i)
+!    implicit none
+!    integer :: is_idx_lambda
+!    type (lambda_layout_type), intent (in) :: lo
+!    integer, intent (in) :: i
+!    is_idx_lambda = 1 + mod((i - lo%llim_world)/lo%negrid/lo%ntheta0/lo%naky, lo%nspec)
+!  end function is_idx_lambda
+!
+!  pure function ik_idx_lambda (lo, i)
+!    implicit none
+!    integer :: ik_idx_lambda
+!    type (lambda_layout_type), intent (in) :: lo
+!    integer, intent (in) :: i
+!    ik_idx_lambda = 1 + mod((i - lo%llim_world)/lo%negrid/lo%ntheta0, lo%naky)
+!  end function ik_idx_lambda
+!
+!  pure function it_idx_lambda (lo, i)
+!    implicit none
+!    integer :: it_idx_lambda
+!    type (lambda_layout_type), intent (in) :: lo
+!    integer, intent (in) :: i
+!    it_idx_lambda = 1 + mod((i - lo%llim_world)/lo%negrid, lo%ntheta0)
+!  end function it_idx_lambda
+!
+!  pure function ie_idx_lambda (lo, i)
+!    implicit none
+!    integer :: ie_idx_lambda
+!    type (lambda_layout_type), intent (in) :: lo
+!    integer, intent (in) :: i
+!    ie_idx_lambda = 1 + mod(i - lo%llim_world, lo%negrid)
+!  end function ie_idx_lambda
+!
+!  pure function idx_lambda (lo, ik, it, ie, is)
+!    implicit none
+!    integer :: idx_lambda
+!    type (lambda_layout_type), intent (in) :: lo
+!    integer, intent (in) :: ik, it, ie, is
+!    idx_lambda = ie-1 + lo%negrid*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1)))
+!  end function idx_lambda
+!
+!  pure function proc_id_lambda (lo, i)
+!    implicit none
+!    integer :: proc_id_lambda
+!    type (lambda_layout_type), intent (in) :: lo
+!    integer, intent (in) :: i
+!    proc_id_lambda = i/lo%blocksize
+!  end function proc_id_lambda
+!
+!  pure function idx_local_lambda (lo, ik, it, ie, is)
+!    implicit none
+!    logical :: idx_local_lambda
+!    type (lambda_layout_type), intent (in) :: lo
+!    integer, intent (in) :: ik, it, ie, is
+!
+!    idx_local_lambda = idx_local(lo, idx(lo, ik, it, ie, is))
+!  end function idx_local_lambda
+!
+!  pure function ig_local_lambda (lo, ig)
+!    implicit none
+!    logical :: ig_local_lambda
+!    type (lambda_layout_type), intent (in) :: lo
+!    integer, intent (in) :: ig
+!
+!    ig_local_lambda = lo%iproc == proc_id(lo, ig)
+!  end function ig_local_lambda
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! X-space layouts
@@ -1216,24 +1225,47 @@ contains
        nny = 3*naky
     end if
 
+    accelx_lo%iproc = iproc
+    accelx_lo%ntgrid = ntgrid
+    accelx_lo%nsign = 2
+    accelx_lo%naky = naky
+    accelx_lo%ny = nny
+    accelx_lo%ntheta0 = ntheta0
+    accelx_lo%nx = nnx
+    accelx_lo%nxny = nnx*nny
+    accelx_lo%nlambda = nlambda
+    accelx_lo%negrid = negrid
+    accelx_lo%nspec = nspec
+    accelx_lo%llim_world = 0
+    accelx_lo%ulim_world = nnx*nny*nlambda*negrid*nspec - 1
+    accelx_lo%blocksize = accelx_lo%ulim_world/nproc + 1
+    accelx_lo%llim_proc = accelx_lo%blocksize*iproc
+    accelx_lo%ulim_proc &
+         = min(accelx_lo%ulim_world, accelx_lo%llim_proc + accelx_lo%blocksize - 1)
+    accelx_lo%ulim_alloc = max(accelx_lo%llim_proc, accelx_lo%ulim_proc)
+
     accel_lo%iproc = iproc
     accel_lo%ntgrid = ntgrid
     accel_lo%nsign = 2
     accel_lo%naky = naky
+    accel_lo%ndky = nny/2+1  ! Note: this is for dealiased k space quantities
     accel_lo%ny = nny
     accel_lo%ntheta0 = ntheta0
     accel_lo%nx = nnx
     accel_lo%nxny = nnx*nny
+    accel_lo%nxnky = nnx*(nny/2+1)
     accel_lo%nlambda = nlambda
     accel_lo%negrid = negrid
     accel_lo%nspec = nspec
+    accel_lo%nia = nlambda*negrid*nspec/nproc
     accel_lo%llim_world = 0
-    accel_lo%ulim_world = nnx*nny*nlambda*negrid*nspec - 1
+    accel_lo%ulim_world = nnx*(nny/2+1)*nlambda*negrid*nspec - 1
     accel_lo%blocksize = accel_lo%ulim_world/nproc + 1
     accel_lo%llim_proc = accel_lo%blocksize*iproc
     accel_lo%ulim_proc &
          = min(accel_lo%ulim_world, accel_lo%llim_proc + accel_lo%blocksize - 1)
     accel_lo%ulim_alloc = max(accel_lo%llim_proc, accel_lo%ulim_proc)
+
   end subroutine init_accel_transform_layouts
 
   pure function it_idx_accel (lo, i)
@@ -1241,7 +1273,7 @@ contains
     integer :: it_idx_accel
     type (accel_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    it_idx_accel = 1 + mod((i - lo%llim_world)/lo%ny, lo%nx)
+    it_idx_accel = 1 + mod((i - lo%llim_world)/lo%ndky, lo%nx)
   end function it_idx_accel
 
   pure function ik_idx_accel (lo, i)
@@ -1249,7 +1281,7 @@ contains
     integer :: ik_idx_accel
     type (accel_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ik_idx_accel = 1 + mod(i - lo%llim_world, lo%ny)
+    ik_idx_accel = 1 + mod(i - lo%llim_world, lo%ndky)
   end function ik_idx_accel
 
   pure function dealiasing (lo, ia)
@@ -1271,7 +1303,7 @@ contains
 ! Transformation subroutines
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  pure subroutine gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, &
+  subroutine gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, &
                               il, ilz)
     implicit none
     integer, intent (in) :: ig, isign
@@ -1312,18 +1344,31 @@ contains
          ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
   end subroutine gidx2lzidx
 
-  pure subroutine gidx2lamidx (g_lo, iglo, lambda_lo, il, ilam)
+!  pure subroutine gidx2lamidx (g_lo, iglo, lambda_lo, il, ilam)
+!    implicit none
+!    type (g_layout_type), intent (in) :: g_lo
+!    integer, intent (in) :: iglo
+!    type (lambda_layout_type), intent (in) :: lambda_lo
+!    integer, intent (out) :: il, ilam
+!
+!    il = il_idx(g_lo, iglo)
+!
+!    ilam = idx(lambda_lo, ik_idx(g_lo,iglo), it_idx(g_lo,iglo), &
+!         ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
+!  end subroutine gidx2lamidx
+
+  pure subroutine gidx2gintidx (g_lo, iglo, gint_lo, il, igint)
     implicit none
     type (g_layout_type), intent (in) :: g_lo
     integer, intent (in) :: iglo
-    type (lambda_layout_type), intent (in) :: lambda_lo
-    integer, intent (out) :: il, ilam
+    type (gint_layout_type), intent (in) :: gint_lo
+    integer, intent (out) :: il, igint
 
     il = il_idx(g_lo, iglo)
 
-    ilam = idx(lambda_lo, ik_idx(g_lo,iglo), it_idx(g_lo,iglo), &
+    igint = idx(gint_lo, ik_idx(g_lo,iglo), it_idx(g_lo,iglo), &
          ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
-  end subroutine gidx2lamidx
+  end subroutine gidx2gintidx
 
   pure subroutine gintidx2geidx (gint_lo, igint, ie, geint_lo, igeint)
     implicit none
@@ -1339,59 +1384,59 @@ contains
 
   end subroutine gintidx2geidx
 
-  pure subroutine lamidx2gintidx (lambda_lo, ilam, gint_lo, igint)
-    implicit none
-    type (lambda_layout_type), intent (in) :: lambda_lo
-    integer, intent (in) :: ilam
-    type (gint_layout_type), intent (in) :: gint_lo
-    integer, intent (out) :: igint
-
-    igint = idx(gint_lo, ik_idx(lambda_lo, ilam), it_idx(lambda_lo, ilam), &
-         ie_idx(lambda_lo, ilam), is_idx(lambda_lo, ilam))
-  end subroutine lamidx2gintidx
+!  pure subroutine lamidx2gintidx (lambda_lo, ilam, gint_lo, igint)
+!    implicit none
+!    type (lambda_layout_type), intent (in) :: lambda_lo
+!    integer, intent (in) :: ilam
+!    type (gint_layout_type), intent (in) :: gint_lo
+!    integer, intent (out) :: igint
+!
+!    igint = idx(gint_lo, ik_idx(lambda_lo, ilam), it_idx(lambda_lo, ilam), &
+!         ie_idx(lambda_lo, ilam), is_idx(lambda_lo, ilam))
+!  end subroutine lamidx2gintidx
 
 ! not used 
-  pure subroutine lzidx2gidx (il, ilz, lz_lo, g_lo, jend, ig, isign, iglo)
-    implicit none
-    integer, intent (in) :: il, ilz
-    type (lz_layout_type), intent (in) :: lz_lo
-    type (g_layout_type), intent (in) :: g_lo
-    integer, dimension (:), intent (in) :: jend
-    integer, intent (out) :: ig, isign, iglo
-    integer :: ilfold, je
-
-    ig = ig_idx(lz_lo,ilz)
-    je = jend(ig)
-
-    if (je == 0) then
-       je = lz_lo%ng2
-       if (il <= je) then
-          isign = 1
-          ilfold = il
-       else if (il > je+1) then
-          isign = 2
-          ilfold = 2*je + 1 - il
-       else
-          isign = -999999
-          ilfold = -999999
-       end if
-    else
-       if (il <= je) then
-          isign = 1
-          ilfold = il
-       else if (il <= 2*je) then
-          isign = 2
-          ilfold = 2*je - il + 1
-!          ilfold = 2*je - il 
-       else
-          isign = -999999
-          ilfold = -999999
-       end if
-    end if
-
-    iglo = idx(g_lo, ik_idx(lz_lo,ilz), it_idx(lz_lo,ilz), &
-         ilfold, ie_idx(lz_lo,ilz), is_idx(lz_lo,ilz))
-  end subroutine lzidx2gidx
+!  pure subroutine lzidx2gidx (il, ilz, lz_lo, g_lo, jend, ig, isign, iglo)
+!    implicit none
+!    integer, intent (in) :: il, ilz
+!    type (lz_layout_type), intent (in) :: lz_lo
+!    type (g_layout_type), intent (in) :: g_lo
+!    integer, dimension (:), intent (in) :: jend
+!    integer, intent (out) :: ig, isign, iglo
+!    integer :: ilfold, je
+!
+!    ig = ig_idx(lz_lo,ilz)
+!    je = jend(ig)
+!
+!    if (je == 0) then
+!       je = lz_lo%ng2
+!       if (il <= je) then
+!          isign = 1
+!          ilfold = il
+!       else if (il > je+1) then
+!          isign = 2
+!          ilfold = 2*je + 1 - il
+!       else
+!          isign = -999999
+!          ilfold = -999999
+!       end if
+!    else
+!       if (il <= je) then
+!          isign = 1
+!          ilfold = il
+!       else if (il <= 2*je) then
+!          isign = 2
+!          ilfold = 2*je - il + 1
+!!          ilfold = 2*je - il 
+!       else
+!          isign = -999999
+!          ilfold = -999999
+!       end if
+!    end if
+!
+!    iglo = idx(g_lo, ik_idx(lz_lo,ilz), it_idx(lz_lo,ilz), &
+!         ilfold, ie_idx(lz_lo,ilz), is_idx(lz_lo,ilz))
+!  end subroutine lzidx2gidx
 
   pure subroutine gidx2xxfidx (ig, isign, iglo, g_lo, xxf_lo, it, ixxf)
     implicit none

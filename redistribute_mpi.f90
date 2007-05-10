@@ -46,28 +46,28 @@ module redistribute
 
   type :: index_map
      integer :: nn
-     integer, dimension (:), pointer :: k => null() 
-     integer, dimension (:), pointer :: l => null() 
-     integer, dimension (:), pointer :: m => null() 
-     integer, dimension (:), pointer :: n => null() 
+     integer, dimension (:), pointer :: k !=> null() 
+     integer, dimension (:), pointer :: l !=> null() 
+     integer, dimension (:), pointer :: m !=> null() 
+     integer, dimension (:), pointer :: n !=> null() 
   end type index_map
 
   type :: redist_type
      private
      integer, dimension(4) :: to_low, from_low
-     type (index_map), dimension (:), pointer :: to   => null()
-     type (index_map), dimension (:), pointer :: from => null()
-     complex, dimension (:), pointer :: complex_buff  => null()
-     real, dimension (:), pointer :: real_buff        => null()
-     integer, dimension (:), pointer :: integer_buff  => null()
-     logical, dimension (:), pointer :: logical_buff  => null()
+     type (index_map), dimension (:), pointer :: to   !=> null()
+     type (index_map), dimension (:), pointer :: from !=> null()
+     complex, dimension (:), pointer :: complex_buff  !=> null()
+     real, dimension (:), pointer :: real_buff        !=> null()
+     integer, dimension (:), pointer :: integer_buff  !=> null()
+     logical, dimension (:), pointer :: logical_buff  !=> null()
   end type redist_type
   
   type :: index_list_type
-     integer, dimension(:), pointer :: first  => null()
-     integer, dimension(:), pointer :: second => null()
-     integer, dimension(:), pointer :: third  => null()
-     integer, dimension(:), pointer :: fourth => null()
+     integer, dimension(:), pointer :: first  !=> null()
+     integer, dimension(:), pointer :: second !=> null()
+     integer, dimension(:), pointer :: third  !=> null()
+     integer, dimension(:), pointer :: fourth !=> null()
   end type index_list_type
 
 contains

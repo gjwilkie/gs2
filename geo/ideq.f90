@@ -85,7 +85,7 @@ contains
     integer :: idum, jj, nthg
     integer :: jmin, jmax
     
-    character*80 :: filename, eqfile
+    character*80 :: filename
     character char*10
     character (200) :: line
     

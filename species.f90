@@ -129,7 +129,7 @@ contains
     end do
   end subroutine read_parameters
 
-  pure function has_electron_species (spec)
+  function has_electron_species (spec)
     implicit none
     type (specie), dimension (:), intent (in) :: spec
     logical :: has_electron_species

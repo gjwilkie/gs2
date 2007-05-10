@@ -443,6 +443,7 @@ contains
     use geometry, only: rhoc
     use geometry, only: itor, iflux, irho
     use geometry, only: ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, local_eq, dfit_eq
+    use geometry, only: gs2d_eq
     use geometry, only: equal_arc
     use geometry, only: bishop
     use geometry, only: s_hat_input
@@ -464,7 +465,7 @@ contains
 
     namelist /theta_grid_eik_knobs/ itor, iflux, irho, &
          ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, dfit_eq, &
-         equal_arc, bishop, local_eq, &
+         equal_arc, bishop, local_eq, gs2d_eq, &
          s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
          delrho, rmin, rmax, ismooth, ak0, k1, k2, isym, writelots
 

@@ -84,7 +84,8 @@ contains
        filename='dskeq.cdf'
     endif
 !     netcdf open file         
-       ncid = ncopn (filename, NCNOWRIT, ifail)
+      ncid = ncopn (filename, NCNOWRIT, ifail)
+!      istatus = nf_open (filename, nf_write, ncid)
 
 !     netcdf read scalar: nr
 !
@@ -319,8 +320,7 @@ contains
 !      stop
 
 ! grad(psi) in cartesian form 
-    call eqdcart(dpm, dpcart)
-    
+    call eqdcart(dpm, dpcart)    
 ! grad(psi) in Bishop form 
     call eqdbish(dpcart, dpbish)
 
@@ -400,11 +400,14 @@ contains
     use splines, only: inter_d_cspl
     implicit none
     
-    integer nth_used, ntm
-    character*1 char
-    real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
-    real tmp(2), aa(1), daa(1), rp, rpt(1)
+    integer, intent (in) :: nth_used, ntm
+    character*1, intent (in) :: char
+    real, dimension (-ntm:), intent (in)  :: rgrid, theta
+    real, dimension (-ntm:,:), intent (out) :: grad
     real, dimension(nr,nt,2) :: dcart
+    real, dimension (2) :: tmp
+    real, dimension (1) :: aa, daa, rpt
+    real :: rp
     integer i
     
     select case(char)
@@ -457,11 +460,14 @@ contains
     use splines, only: inter_d_cspl
     implicit none
     
-    integer nth_used, ntm
-    character*1 char
-    real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
-    real aa(1), daa(1), rp, rpt(1)
-    real, dimension(nr,nt,2) ::  dbish
+    integer, intent (in) :: nth_used, ntm
+    character*1, intent (in) :: char
+    real, dimension (-ntm:), intent (in)  ::  rgrid, theta
+    real, dimension (-ntm:,:), intent (out) :: grad
+    real, dimension (2) :: tmp
+    real, dimension (1) :: aa, daa, rpt
+    real, dimension(nr, nt, 2) ::  dbish
+    real :: rp
     integer i
     logical :: first = .true.
 
