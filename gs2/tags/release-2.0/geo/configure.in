@@ -1,0 +1,97 @@
+dnl Process this file with autoconf to produce a configure script
+
+AC_INIT(eikcoefs.f)
+
+AC_CONFIG_AUX_DIR(config ../config)
+
+if test -z "$NETCDFINCLUDE"
+then
+  AC_MSG_CHECKING(for netcdf.inc)
+  for i in /usr/local/include /usr/local/netcdf/include /usr/include
+  do
+    if test -r $i/netcdf.inc
+    then
+      NETCDFINCLUDE=$i
+      break
+    fi
+  done
+  if test -z "$NETCDFINCLUDE"
+  then
+    AC_MSG_ERROR(cannot find netcdf.inc)
+  else
+    AC_MSG_RESULT($NETCDFINCLUDE/netcdf.inc)
+  fi
+fi
+
+AC_SUBST(NTDIR)
+AC_SUBST(UTILDIR)
+AC_SUBST(RADIALO)
+
+AC_MSG_CHECKING(for nt)
+if test -n "$NTDIR"
+then
+  AC_MSG_RESULT(yes: $NTDIR)
+elif test -r ../nt.par
+then
+  if test -r ../ptor.f
+  then
+    NTDIR=..
+    RADIALO=radial.o
+    AC_MSG_RESULT(yes: $NTDIR)
+  else
+    NTDIR=..
+    RADIALO=radstub.o
+    AC_MSG_RESULT(no)
+  fi
+else
+  NTDIR=.
+  RADIALO=radstub.o
+  AC_MSG_RESULT(no)
+fi
+if test "$NTDIR" = .
+then :
+elif test -r $NTDIR/config.cache
+then
+  . $NTDIR/config.cache
+fi
+
+AC_SUBST(EQSHAREDIR)
+AC_MSG_CHECKING(for eqshare.inc)
+if test -r "$NTDIR/eqshare.inc"
+then
+  AC_MSG_RESULT(yes)
+  EQSHAREDIR=$NTDIR
+else
+  EQSHAREDIR=.
+  ln -s eqshare.inc_standalone eqshare.inc
+  AC_MSG_RESULT(linked to eqshare.inc_standalone)
+fi
+
+FLIBS="$FLIBS -L/usr/local/lib -lnetcdf"
+# do it the stupid way
+AC_MSG_CHECKING(nag)
+is_cray=no
+{ if cray1; then is_cray=yes; fi } 2>/dev/null
+{ if cray2; then is_cray=yes; fi } 2>/dev/null
+{ if crayc90; then is_cray=yes; fi } 2>/dev/null
+{ if crayj90; then is_cray=yes; fi } 2>/dev/null
+if test "$is_cray" = yes
+then
+  FLIBS="$FLIBS -Wl\$\$NAG"
+else
+  FLIBS="$FLIBS -L/usr/local/lib -lnag"
+fi
+AC_MSG_RESULT(ok)
+
+
+FC_PROG_F77
+FC_PROG_F77_I(
+[FFLAGS="$FFLAGS -I$NETCDFINCLUDE -I$NTDIR -I$EQSHAREDIR -p$UTILDIR"],[
+  AC_MSG_WARN(fortran does not support -I)
+  ln -s $NTDIR/radial.inc .
+])
+
+AC_PROG_RANLIB
+
+AC_OUTPUT(Makefile)
+
