@@ -114,7 +114,7 @@ module netcdf_mod
   public :: netcdf_def_var  ! define a NetCDF variable
   public :: netcdf_put_att  ! write a NetCDF attribute to file
   public :: netcdf_put_var  ! write a NetCDF variable or array to file
-  public :: netcdf_put_var1  ! write one element of a NetCDF array to file
+  public :: netcdf_put_var1 ! write one element of a NetCDF array to file
   public :: netcdf_put_vara ! write a section of a NetCDF array to file
 
 !######################################################################

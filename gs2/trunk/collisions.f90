@@ -5,7 +5,7 @@ module collisions
   implicit none
 
   public :: init_collisions
-  public :: solfp1
+  public :: solfp1, cheating, init_collisional_heating
   public :: reset_init
 
   private
@@ -17,6 +17,7 @@ module collisions
   integer :: collision_model_switch
   logical :: hypercoll
   logical :: use_shmem
+  logical :: heating = .false.
 
   integer, parameter :: collision_model_lorentz = 1
   integer, parameter :: collision_model_krook = 2
@@ -26,6 +27,10 @@ module collisions
 
   real, dimension (:,:,:), allocatable :: vnew, vnew4
   ! (naky,negrid,nspec) replicated
+
+  ! to diagnose collisional heating rate
+  complex, dimension (:,:,:), allocatable :: coll_heating
+  complex, dimension (:,:,:,:), allocatable :: rate, tot1, tot2
 
   ! only for krook
   real, dimension (:), allocatable :: vnewfe
@@ -130,8 +135,12 @@ contains
   subroutine init_arrays
     use species, only: nspec
     use le_grids, only: negrid
+    use gs2_layouts, only: g_lo
+    use kt_grids, only: naky, ntheta0
+    use theta_grid, only: ntgrid
     implicit none
     real, dimension (negrid,nspec) :: hee
+    logical :: first_time = .true.
 
     if (collision_model_switch == collision_model_none) return
 
@@ -149,6 +158,16 @@ contains
     case (collision_model_krook,collision_model_krook_test)
        call init_krook (hee)
     end select
+
+    if (first_time) then
+!       allocate (coll_heating(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+!       allocate (rate(-ntgrid:ntgrid, ntheta0, naky, nspec))
+!       allocate (tot1(-ntgrid:ntgrid, ntheta0, naky, nspec))
+!       allocate (tot2(-ntgrid:ntgrid, ntheta0, naky, nspec))
+!
+       first_time = .false.
+    end if
+
   end subroutine init_arrays
 
   subroutine init_vnew (hee)
@@ -335,9 +354,9 @@ contains
     glz = 0.0
 
     if (.not.allocated(c1)) then
-       allocate (c1(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+       allocate (c1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
        allocate (betaa(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
-       allocate (ql(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+       allocate (ql   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
     endif
 
     c1 = 0.0 ; betaa = 0.0 ; ql = 0.0
@@ -563,15 +582,35 @@ contains
   end subroutine init_lorentz_redistribute
 
   subroutine solfp1 (g, g1, phi, apar, aperp)
+    use gs2_layouts, only: g_lo, ik_idx, ie_idx, is_idx
     use theta_grid, only: ntgrid
+    use run_parameters, only: delt, tunits
     use run_parameters, only: fphi, faperp
+    use kt_grids, only: naky, ntheta0
+    use le_grids, only: e, integrate_moment
+    use species, only: nspec
+    use constants
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in out) :: g, g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
+    real, dimension (naky) :: dtinv
+    integer :: ik, ie, is, iglo
 
     if (collision_model_switch == collision_model_none) return
 
     call g_adjust (g, phi, aperp, fphi, faperp)
+    
+!    if (heating) then
+!       
+!       do iglo=g_lo%llim_proc, g_lo%ulim_proc   
+!          ie = ie_idx(g_lo,iglo)
+!          is = is_idx(g_lo,iglo)
+!          coll_heating(:,1,iglo) = g(:,1,iglo)*e(ie, is)
+!          coll_heating(:,2,iglo) = g(:,2,iglo)*e(ie, is)
+!       end do
+!
+!       call integrate_moment (coll_heating, tot1)
+!    end if
 
     select case (collision_model_switch)
     case (collision_model_lorentz,collision_model_lorentz_test)
@@ -579,6 +618,31 @@ contains
     case (collision_model_krook,collision_model_krook_test)
        call solfp_krook (g, g1)
     end select
+    
+!    if (heating) then
+!
+!       do iglo=g_lo%llim_proc, g_lo%ulim_proc
+!          ie = ie_idx(g_lo,iglo)
+!          is = is_idx(g_lo,iglo)
+!          coll_heating(:,1,iglo) = g(:,1,iglo)*e(ie, is)
+!          coll_heating(:,2,iglo) = g(:,2,iglo)*e(ie, is)
+!       end do
+!
+!       call integrate_moment (coll_heating, tot2)
+!
+!       where  (abs(tot1) < epsilon(0.0) .or. abs(tot2) < epsilon(0.0)) 
+!          rate = 0.
+!       elsewhere
+!          rate = log(tot2/tot1)*zi
+!       end where
+!       
+!       do is=1,nspec
+!          do ik=1,naky
+!             rate(:,:,ik,is) = rate(:,:,ik,is)/(delt*tunits(ik))
+!          end do
+!       end do
+!
+!    end if
 
     call g_adjust (g, phi, aperp, -fphi, -faperp)
   end subroutine solfp1
@@ -761,7 +825,11 @@ contains
        do il = je-1, 1, -1
           glz(il,ilz) = (delta(il) - c1(il,ilz)*glz(il+1,ilz))*betaa(il,ilz)
        end do
-       glz(je,ilz) = glz(jend(ig),ilz)
+!
+! bug fixed 4.14.03
+! was only a problem with collisions but with no trapped particles -- rare
+!
+       if (jend(ig) /= 0) glz(je,ilz) = glz(jend(ig),ilz)
     end do
 
 !    if (hypercoll) then
@@ -828,6 +896,22 @@ contains
 
     call prof_leaving ("solfp_lorentz", "collisions")
   end subroutine solfp_lorentz
+
+  subroutine init_collisional_heating
+    
+    heating = .true.
+
+  end subroutine init_collisional_heating
+
+  subroutine cheating (rateout)
+    
+    use theta_grid, only: ntgrid
+    complex, dimension (-ntgrid:,:,:,:), intent (out) :: rateout
+
+! NAG will not compile this for some reason.  BD 12.12.03
+!    rateout = rate
+
+  end subroutine cheating
 
   subroutine check_g (str, g)
 

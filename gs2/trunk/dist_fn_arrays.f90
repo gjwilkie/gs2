@@ -1,7 +1,7 @@
 module dist_fn_arrays
 
   ! dist fn
-  complex, dimension (:,:,:), allocatable :: g, gnew
+  complex, dimension (:,:,:), allocatable :: g, gnew, gold
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   real, dimension (:,:,:), allocatable :: vpa, vpac

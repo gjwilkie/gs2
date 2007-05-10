@@ -21,7 +21,7 @@ module gs2_save
 
 contains
 
-  subroutine gs2_save_for_restart (g, t0, delt0, istatus, exit_in)
+  subroutine gs2_save_for_restart (g, t0, delt0, istatus, fphi, fapar, faperp, exit_in)
     use theta_grid, only: ntgrid
 ! Must include g_layout_type here to avoid obscure bomb while compiling
 ! gs2_diagnostics.f90 (which uses this module) with the Compaq F90 compiler:
@@ -35,6 +35,7 @@ contains
     character (5) :: suffix
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
+    real, intent (in) :: fphi, fapar, faperp
     integer, intent (out) :: istatus
     logical, intent (in), optional :: exit_in
     include 'netcdf.inc'
@@ -143,52 +144,58 @@ contains
              goto 1
           end if
           
-          istatus = nf_def_var (ncid, "phi_r", NF_DOUBLE, 3, &
-               (/ thetaid, kyid, kxid /), phir_id)
-          if (istatus /= 0) then
-             ierr = error_unit()
-             write(ierr,*) "nf_def_var phi error: ", nf_strerror(istatus)
-             goto 1
+          if (fphi > epsilon(0.)) then
+             istatus = nf_def_var (ncid, "phi_r", NF_DOUBLE, 3, &
+                  (/ thetaid, kyid, kxid /), phir_id)
+             if (istatus /= 0) then
+                ierr = error_unit()
+                write(ierr,*) "nf_def_var phi error: ", nf_strerror(istatus)
+                goto 1
+             end if
+             
+             istatus = nf_def_var (ncid, "phi_i", NF_DOUBLE, 3, &
+                  (/ thetaid, kyid, kxid /), phii_id)
+             if (istatus /= 0) then
+                ierr = error_unit()
+                write(ierr,*) "nf_def_var phi error: ", nf_strerror(istatus)
+                goto 1
+             end if
           end if
-          
-          istatus = nf_def_var (ncid, "phi_i", NF_DOUBLE, 3, &
-               (/ thetaid, kyid, kxid /), phii_id)
-          if (istatus /= 0) then
-             ierr = error_unit()
-             write(ierr,*) "nf_def_var phi error: ", nf_strerror(istatus)
-             goto 1
+
+          if (fapar > epsilon(0.)) then
+             istatus = nf_def_var (ncid, "apar_r", NF_DOUBLE, 3, &
+                  (/ thetaid, kyid, kxid /), aparr_id)
+             if (istatus /= 0) then
+                ierr = error_unit()
+                write(ierr,*) "nf_def_var apar error: ", nf_strerror(istatus)
+                goto 1
+             end if
+             
+             istatus = nf_def_var (ncid, "apar_i", NF_DOUBLE, 3, &
+                  (/ thetaid, kyid, kxid /), apari_id)
+             if (istatus /= 0) then
+                ierr = error_unit()
+                write(ierr,*) "nf_def_var apar error: ", nf_strerror(istatus)
+                goto 1
+             end if
           end if
-          
-          istatus = nf_def_var (ncid, "apar_r", NF_DOUBLE, 3, &
-               (/ thetaid, kyid, kxid /), aparr_id)
-          if (istatus /= 0) then
-             ierr = error_unit()
-             write(ierr,*) "nf_def_var apar error: ", nf_strerror(istatus)
-             goto 1
-          end if
-          
-          istatus = nf_def_var (ncid, "apar_i", NF_DOUBLE, 3, &
-               (/ thetaid, kyid, kxid /), apari_id)
-          if (istatus /= 0) then
-             ierr = error_unit()
-             write(ierr,*) "nf_def_var apar error: ", nf_strerror(istatus)
-             goto 1
-          end if
-          
-          istatus = nf_def_var (ncid, "aperp_r", NF_DOUBLE, 3, &
-               (/ thetaid, kyid, kxid /), aperpr_id)
-          if (istatus /= 0) then
-             ierr = error_unit()
-             write(ierr,*) "nf_def_var aperp error: ", nf_strerror(istatus)
-             goto 1
-          end if
-          
-          istatus = nf_def_var (ncid, "aperp_i", NF_DOUBLE, 3, &
-               (/ thetaid, kyid, kxid /), aperpi_id)
-          if (istatus /= 0) then
-             ierr = error_unit()
-             write(ierr,*) "nf_def_var aperp error: ", nf_strerror(istatus)
-             goto 1
+
+          if (faperp > epsilon(0.)) then
+             istatus = nf_def_var (ncid, "aperp_r", NF_DOUBLE, 3, &
+                  (/ thetaid, kyid, kxid /), aperpr_id)
+             if (istatus /= 0) then
+                ierr = error_unit()
+                write(ierr,*) "nf_def_var aperp error: ", nf_strerror(istatus)
+                goto 1
+             end if
+             
+             istatus = nf_def_var (ncid, "aperp_i", NF_DOUBLE, 3, &
+                  (/ thetaid, kyid, kxid /), aperpi_id)
+             if (istatus /= 0) then
+                ierr = error_unit()
+                write(ierr,*) "nf_def_var aperp error: ", nf_strerror(istatus)
+                goto 1
+             end if
           end if
        end if
        
@@ -244,46 +251,52 @@ contains
        if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
        if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))
 
-       ftmpr = real(phinew)
-       istatus = nf_put_var_double (ncid, phir_id, ftmpr)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_put_var_double phir error: ", nf_strerror(istatus),' ',iproc
+       if (fphi > epsilon(0.)) then
+          ftmpr = real(phinew)
+          istatus = nf_put_var_double (ncid, phir_id, ftmpr)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_put_var_double phir error: ", nf_strerror(istatus),' ',iproc
+          end if
+          
+          ftmpi = aimag(phinew)
+          istatus = nf_put_var_double (ncid, phii_id, ftmpi)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_put_var_double phii error: ", nf_strerror(istatus),' ',iproc
+          end if
        end if
-       
-       ftmpi = aimag(phinew)
-       istatus = nf_put_var_double (ncid, phii_id, ftmpi)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_put_var_double phii error: ", nf_strerror(istatus),' ',iproc
+
+       if (fapar > epsilon(0.)) then
+          ftmpr = real(aparnew)
+          istatus = nf_put_var_double (ncid, aparr_id, ftmpr)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_put_var_double aparr error: ", nf_strerror(istatus),' ',iproc
+          end if
+          
+          ftmpi = aimag(aparnew)
+          istatus = nf_put_var_double (ncid, apari_id, ftmpi)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_put_var_double apari error: ", nf_strerror(istatus),' ',iproc
+          end if
        end if
-       
-       ftmpr = real(aparnew)
-       istatus = nf_put_var_double (ncid, aparr_id, ftmpr)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_put_var_double aparr error: ", nf_strerror(istatus),' ',iproc
-       end if
-       
-       ftmpi = aimag(aparnew)
-       istatus = nf_put_var_double (ncid, apari_id, ftmpi)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_put_var_double apari error: ", nf_strerror(istatus),' ',iproc
-       end if
-       
-       ftmpr = real(aperpnew)
-       istatus = nf_put_var_double (ncid, aperpr_id, ftmpr)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_put_var_double aperpr error: ", nf_strerror(istatus),' ',iproc
-       end if
-       
-       ftmpi = aimag(aperpnew)
-       istatus = nf_put_var_double (ncid, aperpi_id, ftmpi)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_put_var_double aperpi error: ", nf_strerror(istatus),' ',iproc
+
+       if (faperp > epsilon(0.)) then
+          ftmpr = real(aperpnew)
+          istatus = nf_put_var_double (ncid, aperpr_id, ftmpr)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_put_var_double aperpr error: ", nf_strerror(istatus),' ',iproc
+          end if
+          
+          ftmpi = aimag(aperpnew)
+          istatus = nf_put_var_double (ncid, aperpi_id, ftmpi)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_put_var_double aperpi error: ", nf_strerror(istatus),' ',iproc
+          end if
        end if
     end if
 
@@ -295,7 +308,7 @@ contains
 
   end subroutine gs2_save_for_restart
 
-  subroutine gs2_restore_many (g, scale, istatus, many)
+  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, faperp, many)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use mp, only: proc0, iproc, nproc
@@ -309,12 +322,14 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
+    real, intent (in) :: fphi, fapar, faperp
     logical, intent (in) :: many
     include 'netcdf.inc'
     integer :: n_elements
     double precision :: tmp1
     integer :: iglo, i, th, h, t, u, ierr
     logical :: initialized = .false.
+    real :: fac
 
     n_elements = g_lo%ulim_proc-g_lo%llim_proc+1
     if (n_elements <= 0) return
@@ -405,42 +420,48 @@ contains
        end if
        if (i /= ntheta0) write(*,*) 'Restart error: ntheta0=? ',i,' : ',ntheta0,' : ',iproc
        
-       istatus = nf_inq_varid (ncid, "phi_r", phir_id)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_inq_varid phir error: ", nf_strerror(istatus),' ',iproc
-       end if
-       
-       istatus = nf_inq_varid (ncid, "phi_i", phii_id)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_inq_varid phii error: ", nf_strerror(istatus),' ',iproc
+       if (fphi > epsilon(0.)) then
+          istatus = nf_inq_varid (ncid, "phi_r", phir_id)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_inq_varid phir error: ", nf_strerror(istatus),' ',iproc
+          end if
+          
+          istatus = nf_inq_varid (ncid, "phi_i", phii_id)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_inq_varid phii error: ", nf_strerror(istatus),' ',iproc
+          end if
        end if
 
-       istatus = nf_inq_varid (ncid, "apar_r", aparr_id)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_inq_varid aparr error: ", nf_strerror(istatus),' ',iproc
+       if (fapar > epsilon(0.)) then
+          istatus = nf_inq_varid (ncid, "apar_r", aparr_id)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_inq_varid aparr error: ", nf_strerror(istatus),' ',iproc
+          end if
+          
+          istatus = nf_inq_varid (ncid, "apar_i", apari_id)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_inq_varid apari error: ", nf_strerror(istatus),' ',iproc
+          end if
        end if
-       
-       istatus = nf_inq_varid (ncid, "apar_i", apari_id)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_inq_varid apari error: ", nf_strerror(istatus),' ',iproc
+
+       if (faperp > epsilon(0.)) then
+          istatus = nf_inq_varid (ncid, "aperp_r", aperpr_id)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_inq_varid aperpr error: ", nf_strerror(istatus),' ',iproc
+          end if
+          
+          istatus = nf_inq_varid (ncid, "aperp_i", aperpi_id)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_inq_varid aperpi error: ", nf_strerror(istatus),' ',iproc
+          end if
        end if
-       
-       istatus = nf_inq_varid (ncid, "aperp_r", aperpr_id)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_inq_varid aperpr error: ", nf_strerror(istatus),' ',iproc
-       end if
-       
-       istatus = nf_inq_varid (ncid, "aperp_i", aperpi_id)
-       if (istatus /= 0) then
-          ierr = error_unit()
-          write(ierr,*) "nf_inq_varid aperpi error: ", nf_strerror(istatus),' ',iproc
-       end if
-       
+
        istatus = nf_inq_varid (ncid, "gr", gr_id)
        if (istatus /= 0) then
           ierr = error_unit()
@@ -470,55 +491,74 @@ contains
        write(ierr,*) "nf_get_var_double gi error: ", nf_strerror(istatus),' ',iproc
     end if
 
-    g = cmplx(tmpr, tmpi)*scale
+    g = cmplx(tmpr, tmpi)
 
     if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
     if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))
 
-    istatus = nf_get_var_double (ncid, phir_id, ftmpr)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double phir error: ", nf_strerror(istatus),' ',iproc
+    if (fphi > epsilon(0.)) then
+       istatus = nf_get_var_double (ncid, phir_id, ftmpr)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double phir error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       istatus = nf_get_var_double (ncid, phii_id, ftmpi)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double phii error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       phi = 0.
+       phinew = cmplx(ftmpr, ftmpi)
     end if
 
-    istatus = nf_get_var_double (ncid, phii_id, ftmpi)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double phii error: ", nf_strerror(istatus),' ',iproc
+    if (fapar > epsilon(0.)) then
+       istatus = nf_get_var_double (ncid, aparr_id, ftmpr)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double aparr error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       istatus = nf_get_var_double (ncid, apari_id, ftmpi)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double apari error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       apar = 0.
+       aparnew = cmplx(ftmpr, ftmpi)
     end if
 
-    phi = 0.
-    phinew = cmplx(ftmpr, ftmpi)*scale
-
-    istatus = nf_get_var_double (ncid, aparr_id, ftmpr)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double aparr error: ", nf_strerror(istatus),' ',iproc
+    if (faperp > epsilon(0.)) then
+       istatus = nf_get_var_double (ncid, aperpr_id, ftmpr)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double aperpr error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       istatus = nf_get_var_double (ncid, aperpi_id, ftmpi)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double aperpi error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       aperp = 0.
+       aperpnew = cmplx(ftmpr, ftmpi)
     end if
 
-    istatus = nf_get_var_double (ncid, apari_id, ftmpi)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double apari error: ", nf_strerror(istatus),' ',iproc
+    if (scale > 0.) then
+       g = g*scale
+       phinew = phinew*scale
+       aparnew = aparnew*scale
+       aperpnew = aperpnew*scale
+    else
+       fac = - scale/(maxval(abs(phinew)))
+       g = g*fac
+       phinew = phinew*fac
+       aparnew = aparnew*fac
+       aperpnew = aperpnew*fac
     end if
-
-    apar = 0.
-    aparnew = cmplx(ftmpr, ftmpi)*scale
-
-    istatus = nf_get_var_double (ncid, aperpr_id, ftmpr)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double aperpr error: ", nf_strerror(istatus),' ',iproc
-    end if
-
-    istatus = nf_get_var_double (ncid, aperpi_id, ftmpi)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double aperpi error: ", nf_strerror(istatus),' ',iproc
-    end if
-
-    aperp = 0.
-    aperpnew = cmplx(ftmpr, ftmpi)*scale
 
 !    istatus = nf_close (ncid)       
 !    if (istatus /= 0) then
@@ -528,7 +568,7 @@ contains
 
   end subroutine gs2_restore_many
 
-  subroutine gs2_restore_one (g, scale, istatus) 
+  subroutine gs2_restore_one (g, scale, istatus, fphi, fapar, faperp) 
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use mp, only: proc0, iproc, nproc
@@ -540,6 +580,7 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
+    real, intent (in) :: fphi, fapar, faperp
     include 'netcdf.inc'
     integer :: n_elements, ierr
     double precision :: tmp1
@@ -616,40 +657,46 @@ contains
     end if
     if (i /= ntheta0) write(*,*) 'Restart error: ntheta0=? ',i,' : ',ntheta0,' : ',iproc
 
-    istatus = nf_inq_varid (ncid, "phi_r", phir_id)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_inq_varid phir error: ", nf_strerror(istatus),' ',iproc
+    if (fphi > epsilon(0.)) then
+       istatus = nf_inq_varid (ncid, "phi_r", phir_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid phir error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       istatus = nf_inq_varid (ncid, "phi_i", phii_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid phii error: ", nf_strerror(istatus),' ',iproc
+       end if
     end if
 
-    istatus = nf_inq_varid (ncid, "phi_i", phii_id)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_inq_varid phii error: ", nf_strerror(istatus),' ',iproc
+    if (fapar > epsilon(0.)) then
+       istatus = nf_inq_varid (ncid, "apar_r", aparr_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid aparr error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       istatus = nf_inq_varid (ncid, "apar_i", apari_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid apari error: ", nf_strerror(istatus),' ',iproc
+       end if
     end if
 
-    istatus = nf_inq_varid (ncid, "apar_r", aparr_id)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_inq_varid aparr error: ", nf_strerror(istatus),' ',iproc
-    end if
-
-    istatus = nf_inq_varid (ncid, "apar_i", apari_id)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_inq_varid apari error: ", nf_strerror(istatus),' ',iproc
-    end if
-
-    istatus = nf_inq_varid (ncid, "aperp_r", aperpr_id)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_inq_varid aperpr error: ", nf_strerror(istatus),' ',iproc
-    end if
-
-    istatus = nf_inq_varid (ncid, "aperp_i", aperpi_id)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_inq_varid aperpi error: ", nf_strerror(istatus),' ',iproc
+    if (faperp > epsilon(0.)) then
+       istatus = nf_inq_varid (ncid, "aperp_r", aperpr_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid aperpr error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       istatus = nf_inq_varid (ncid, "aperp_i", aperpi_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid aperpi error: ", nf_strerror(istatus),' ',iproc
+       end if
     end if
 
     istatus = nf_inq_varid (ncid, "gr", gr_id)
@@ -697,50 +744,56 @@ contains
     if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
     if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))
 
-    istatus = nf_get_var_double (ncid, phir_id, ftmpr)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double phir error: ", nf_strerror(istatus),' ',iproc
+    if (fphi > epsilon(0.)) then
+       istatus = nf_get_var_double (ncid, phir_id, ftmpr)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double phir error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       istatus = nf_get_var_double (ncid, phii_id, ftmpi)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double phii error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       phi = 0.
+       phinew = cmplx(ftmpr, ftmpi)*scale
     end if
 
-    istatus = nf_get_var_double (ncid, phii_id, ftmpi)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double phii error: ", nf_strerror(istatus),' ',iproc
+    if (fapar > epsilon(0.)) then
+       istatus = nf_get_var_double (ncid, aparr_id, ftmpr)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double aparr error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       istatus = nf_get_var_double (ncid, apari_id, ftmpi)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double apari error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       apar = 0.
+       aparnew = cmplx(ftmpr, ftmpi)*scale
     end if
 
-    phi = 0.
-    phinew = cmplx(ftmpr, ftmpi)*scale
-
-    istatus = nf_get_var_double (ncid, aparr_id, ftmpr)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double aparr error: ", nf_strerror(istatus),' ',iproc
+    if (faperp > epsilon(0.)) then
+       istatus = nf_get_var_double (ncid, aperpr_id, ftmpr)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double aperpr error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       istatus = nf_get_var_double (ncid, aperpi_id, ftmpi)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double aperpi error: ", nf_strerror(istatus),' ',iproc
+       end if
+       
+       aperp = 0.
+       aperpnew = cmplx(ftmpr, ftmpi)*scale
     end if
-
-    istatus = nf_get_var_double (ncid, apari_id, ftmpi)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double apari error: ", nf_strerror(istatus),' ',iproc
-    end if
-
-    apar = 0.
-    aparnew = cmplx(ftmpr, ftmpi)*scale
-
-    istatus = nf_get_var_double (ncid, aperpr_id, ftmpr)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double aperpr error: ", nf_strerror(istatus),' ',iproc
-    end if
-
-    istatus = nf_get_var_double (ncid, aperpi_id, ftmpi)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_get_var_double aperpi error: ", nf_strerror(istatus),' ',iproc
-    end if
-
-    aperp = 0.
-    aperpnew = cmplx(ftmpr, ftmpi)*scale
 
     istatus = nf_close (ncid)       
     if (istatus /= 0) then

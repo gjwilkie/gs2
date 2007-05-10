@@ -216,7 +216,7 @@ module kt_grids_box
 
   integer :: naky_private, ntheta0_private, nx_private, ny_private
   integer :: jtwist
-  real :: ly, y0, rtwist
+  real :: ly, y0, x0, rtwist
 
 contains
 
@@ -229,7 +229,7 @@ contains
     integer :: in_file
     logical :: exist
     namelist /kt_grids_box_parameters/ naky, ntheta0, ly, nx, ny, jtwist, &
-	y0, rtwist
+	y0, rtwist, x0
 
     call init_theta_grid
 
@@ -241,8 +241,12 @@ contains
     ny = 0
     jtwist = 1
     rtwist = 0.0
+    x0 = 0.
     in_file = input_unit_exist("kt_grids_box_parameters", exist)
     if (exist) read (unit=input_unit("kt_grids_box_parameters"), nml=kt_grids_box_parameters)
+    if (y0 < 0) then
+       y0 = -1./y0
+    end if
     if (ly == 0.) ly = 2.0*pi*y0
     if (naky == 0) naky = (ny-1)/3 + 1
     if (ntheta0 == 0) ntheta0 = 2*((nx-1)/3) + 1
@@ -276,11 +280,19 @@ contains
     ntheta0 = size(akx)
 
     if(abs(shat) <=  1.e-5) then
-       if (rtwist > 0) then
-          dkx = 2.0*pi/ly/rtwist
+       if (x0 == 0.) then
+          if (rtwist > 0) then
+             dkx = 2.0*pi/ly/rtwist
+          else
+             dkx = 2.0*pi/ly*rtwist
+          endif
        else
-          dkx = 2.0*pi/ly*abs(rtwist)
-       endif
+          if (x0 > 0.) then
+             dkx = 1./x0
+          else
+             dkx = -x0
+          end if
+       end if
     else
        dkx = 2.0*pi/real(jtwist)* 2.0*pi/ly*shat
     endif

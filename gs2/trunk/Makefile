@@ -1,6 +1,5 @@
 UTILS=utils
 GEO=geo
-GRIDGEN=gridgen
 
 #################################################################### OVERVIEW
 #
@@ -98,7 +97,7 @@ DATE=$(shell date +%D | sed 's/\///g')
 ifeq ($(CPU),T3E)
   FC = f90
   PLATFORM_LINKS = t3e
-  F90FLAGS = -I$$MPTDIR/include -M1110,7212 -p$(UTILS) -p$(GRIDGEN) -p$(GEO)
+  F90FLAGS = -I$$MPTDIR/include -M1110,7212 -p$(UTILS) -p$(GEO)
   FLIBS = -lmpi $$NETCDF -Wl"-D permok=yes" $(UTILS)/mdslib.a 
 ifeq ($(FFT),fftw)
   FLIBS += -L../fftw/lib -lfftw -lrfftw
@@ -178,9 +177,9 @@ endif
 ifeq ($(CPU),RS6000)
   FC = mpxlf90_r
   PLATFORM_LINKS = ibm
-  F90FLAGS = -qrealsize=8 -qsuffix=f=f90 -I $(UTILS) -I $(GEO) -I $(GRIDGEN) \
+  F90FLAGS = -qrealsize=8 -qsuffix=f=f90 -I $(UTILS) -I $(GEO) \
 	-I $(NETCDF_DIR)/include
-  FLIBS = $$NETCDF -L/usr/common/usg/fftw/2.1.3/lib -lfftw -lrfftw # $$TRACE_MPIF
+  FLIBS = $$NETCDF $$FFTW -lfftw -lrfftw # $$TRACE_MPIF
   ifneq ($(debug),on)
 #    F90FLAGS += -O4
     F90FLAGS += -O3 -qarch=pwr3 -qtune=pwr3
@@ -201,7 +200,7 @@ ifeq ($(CPU),ALPHA)
 # (use -non_shared because it can't map MdsLib.so at run time for some 
 # reason...)
   PLATFORM_LINKS = alpha
-  F90FLAGS = -I/usr/local/include -r8 -I$(UTILS) -I$(GRIDGEN) -I$(GEO)
+  F90FLAGS = -I/usr/local/include -r8 -I$(UTILS) -I$(GEO)
 
   ifeq ($(debug),on)
      F90FLAGS += -g -assume dummy_aliases -check bounds -check overflow \
@@ -233,7 +232,7 @@ ifeq ($(CPU),LINUX_fuj)
 	$(UTILS)/mdslib.a
   PLATFORM_LINKS = linux_fuj
   F90FLAGS = -A m -C cdRR8 -I/usr/local/include -X9 \
-	-static-flib -Kfast -I$(UTILS) -I$(GRIDGEN) -I$(GEO)
+	-static-flib -Kfast -I$(UTILS) -I$(GEO)
 
   ifeq ($(debug),on) 
     F90FLAGS += -g -H easu
@@ -252,7 +251,7 @@ ifeq ($(CPU),LINUX_abs)
   FLIBS = $(UTILS)/mdslib.a  -L~kthcmr/fftw -lrfftw -lfftw 
   FLIBS +=  -L/usr/lib -lnetcdf
 
-  F90FLAGS_base = -Rp -I/usr/include -N113 -p$(UTILS) -p$(GRIDGEN) -p$(GEO) 
+  F90FLAGS_base = -Rp -I/usr/include -N113 -p$(UTILS) -p$(GEO) 
   F90FLAGS_0    = $(F90FLAGS_base) -YEXT_SFX= 
   F90FLAGS_1    = $(F90FLAGS_base) -YEXT_SFX=_
   F90FLAGS_2    = $(F90FLAGS_base) -YEXT_SFX=__
@@ -277,13 +276,14 @@ endif
 ifeq ($(CPU),LINUX_lf95)
   FC = mpif90
   FLIBS = -L/usr/local/lib -lnetcdf \
-	-L/usr/local/lib -lfftw -lrfftw \
-	$(UTILS)/mdslib.a
+	-L/usr/local/lib -lfftw -lrfftw $(UTILS)/mdslib.a
   PLATFORM_LINKS = linux_lf95
-  F90FLAGS = --dbl --ml cdecl -I$(UTILS) -I$(GRIDGEN) -I$(GEO) -I/usr/local/include
+  F90FLAGS = --dbl --ml cdecl -I$(UTILS) -I$(GEO) -I/usr/local/include
 
   ifeq ($(debug),on) 
-    F90FLAGS += -g --chk aesu
+# -mpitrace -mpianim -mpilog
+    F90FLAGS += -g --chk aesu 
+#    F90FLAGS += -O -mpitrace 
   else
     F90FLAGS += -O 
   endif
@@ -298,7 +298,7 @@ ifeq ($(CPU),LINUX)
 	-L/usr/local/lib -lfftw -lrfftw -lmpif -lbproc
   PLATFORM_LINKS = linux
   F90FLAGS = -w -f77 -r8 -I/old/usr/include -I/usr/include -mismatch \
-	-I $(GEO) -I $(GRIDGEN) -I $(UTILS)
+	-I $(GEO) -I $(UTILS) 
 
   ifeq ($(debug),on)
     F90FLAGS += -C -g90 -gline
@@ -323,7 +323,7 @@ ifeq ($(CPU),LINUX_alpha)
 #	-L/usr/local/lib -lnetcdf
 #	-L/usr/local/mdsplus/lib -lMdsLib -lMdsShr
   PLATFORM_LINKS = linux_alpha
-  F90FLAGS = -I/usr/local/include -r8 -I$(UTILS) -I$(GRIDGEN) -I$(GEO)
+  F90FLAGS = -I/usr/local/include -r8 -I$(UTILS) -I$(GEO)
 
   ifeq ($(debug),on)
      F90FLAGS += -g -assume dummy_aliases -check bounds -check overflow \
@@ -349,14 +349,14 @@ GS2MOD= constants.o prof.o mp.o gs2_layouts.o command_line.o gs2_save.o \
 	additional_linear_terms.o nonlinear_terms.o fields_explicit.o \
 	fields.o fields_implicit.o fields_test.o init_g.o check.o \
 	dist_fn.o hyper.o gs2_diagnostics.o gs2_io.o netcdf_mod.o \
-	run_parameters.o \
-	$(GEO)/geo.a $(GRIDGEN)/gridgen.a $(UTILS)/spl.o $(UTILS)/utils.a
-#	utils/utils.a geo/geo.a gridgen/gridgen.a utils/mds.o 
+	run_parameters.o gs2_flux.o regression.o \
+	$(GEO)/geo.a gridgen4mod.o $(UTILS)/spl.o $(UTILS)/utils.a
+#	utils/utils.a geo/geo.a utils/mds.o 
 # *.a libraries must appear after any function that needs them.
 
 INGENMOD= constants.o mp.o gs2_layouts.o command_line.o \
 	text_options.o file_utils.o theta_grid.o \
-	$(GEO)/geo.a $(GRIDGEN)/gridgen.a $(UTILS)/spl.o $(UTILS)/utils.a
+	$(GEO)/geo.a gridgen4mod.o $(UTILS)/spl.o $(UTILS)/utils.a
 
 EGRIDMOD = $(UTILS)/spl.o constants.o
 
@@ -386,7 +386,7 @@ LINKS= command_line.f90 mp.f90 shmem.f90 prof.f90 redistribute.f90 ran.f90 gs2_l
 # check links and subdirectory modules before building gs2 itself:
 # (This order is important because some dependencies are known only
 # by the Makefiles in the subdirectories, etc.).
-all: $(LINKS) modules gs2 ingen 
+all: $(LINKS) file_utils.o modules gs2 ingen rungridgen
 
 gs2: gs2.o $(GS2MOD) 
 	case $(PLATFORM_LINKS) in \
@@ -412,13 +412,23 @@ egrid: egrid.o $(EGRIDMOD)
 		*)   $(FC) $(F90FLAGS) -o egrid egrid.o $(EGRIDMOD) $(FLIBS) ;; \
 	esac
 
+regress: regression.o drive.o
+	$(FC) $(F90FLAGS) -o regress drive.o regression.o $(FLIBS)
+
+rgobj = gridgen4mod.o file_utils.o mp.o command_line.o $(UTILS)/utils.a 
+
+rungridgen: rungridgen.o gridgen4mod.o file_utils.o command_line.o $(UTILS)/utils.a
+	case $(PLATFORM_LINKS) in \
+		t3e) $(FC) $(F90FLAGS) -o rungridgen rungridgen.o ;; \
+		*)   $(FC) $(F90FLAGS) -o rungridgen rungridgen.o $(rgobj) ;; \
+	esac
+
 # libraries and functions in subdirectories:
 # ??? Code bombs on Ultrix Alpha on test case s1a.in...
 
-modules:
+modules: 
 	@cd $(UTILS) ; $(MAKE)
 	@cd $(GEO)   ; $(MAKE)
-	@cd $(GRIDGEN) ; $(MAKE)
 
 $(UTILS)/utils.a:
 	cd $(UTILS) ; $(MAKE)
@@ -429,8 +439,8 @@ $(GEO)/geo.a:
 #utils/spl.o: 
 #	cd utils; $(MAKE)
 
-$(GRIDGEN)/gridgen.a:  $(UTILS)/utils.a
-	cd $(GRIDGEN); $(MAKE) gridgen.a
+file_utils.o: command_line.o mp.o
+	$(FC) $(F90FLAGS) -c file_utils.f90
 
 ifeq ($(CPU),LINUX_abs)
 
@@ -460,7 +470,6 @@ endif
 antenna.o: species.o run_parameters.o file_utils.o mp.o gs2_time.o
 antenna.o: kt_grids.o theta_grid.o ran.o constants.o 
 gs2_layouts.o: mp.o file_utils.o
-file_utils.o: command_line.o
 run_parameters.o: mp.o file_utils.o gs2_save.o kt_grids.o text_options.o 
 species.o: mp.o file_utils.o text_options.o
 gs2_save.o: theta_grid.o gs2_layouts.o mp.o fields_arrays.o kt_grids.o 
@@ -469,9 +478,10 @@ gs2_transforms.o: gs2_layouts.o mp.o prof.o fft_work.o redistribute.o
 gs2_transform.o: theta_grid.o kt_grids.o 
 gs2_diagnostics.o: file_utils.o kt_grids.o run_parameters.o species.o mp.o 
 gs2_diagnostics.o: fields.o dist_fn.o constants.o prof.o gs2_save.o gs2_time.o
-gs2_diagnostics.o: gs2_io.o le_grids.o fields_arrays.o dist_fn_arrays.o
-gs2_diagnostics.o: gs2_transforms.o nonlinear_terms.o 
-dist_fn.o: mp.o species.o theta_grid.o kt_grids.o le_grids.o
+gs2_diagnostics.o: gs2_io.o le_grids.o fields_arrays.o dist_fn_arrays.o 
+gs2_diagnostics.o: gs2_transforms.o nonlinear_terms.o collisions.o $(UTILS)/utils.a
+gs2_diagnostics.o: gs2_flux.o
+dist_fn.o: mp.o species.o theta_grid.o kt_grids.o le_grids.o antenna.o
 dist_fn.o: run_parameters.o init_g.o text_options.o fft_work.o
 dist_fn.o: gs2_layouts.o file_utils.o dist_fn_arrays.o constants.o
 dist_fn.o: collisions.o additional_linear_terms.o nonlinear_terms.o
@@ -480,10 +490,12 @@ hyper.o: kt_grids.o run_parameters.o file_utils.o text_options.o
 hyper.o: mp.o gs2_layouts.o theta_grid.o 
 init_g.o: mp.o species.o theta_grid.o kt_grids.o le_grids.o dist_fn_arrays.o
 init_g.o: gs2_layouts.o gs2_save.o fields_arrays.o ran.o text_options.o
+init_g.o: file_utils.o run_parameters.o
 le_grids.o: mp.o species.o theta_grid.o kt_grids.o file_utils.o redistribute.o
 le_grids.o: gs2_layouts.o constants.o 
 gs2.o: mp.o file_utils.o fields.o run_parameters.o gs2_diagnostics.o 
-gs2.o: gs2_reinit.o gs2_time.o init_g.o check.o
+gs2.o: gs2_reinit.o gs2_time.o init_g.o check.o dist_fn_arrays.o
+gs2.o: gs2_save.o 
 fields.o: theta_grid.o kt_grids.o run_parameters.o dist_fn.o mp.o
 fields.o: file_utils.o dist_fn_arrays.o constants.o prof.o text_options.o
 fields.o: fields_arrays.o fields_implicit.o fields_test.o fields_explicit.o 
@@ -499,7 +511,7 @@ fields_test.o: theta_grid.o kt_grids.o run_parameters.o dist_fn.o mp.o
 fields_test.o: fields_arrays.o dist_fn_arrays.o
 fields_test.o: gs2_layouts.o mp.o prof.o file_utils.o
 kt_grids.o: mp.o file_utils.o text_options.o theta_grid.o constants.o 
-theta_grid.o: mp.o file_utils.o text_options.o constants.o $(GRIDGEN)/gridgen.a $(GEO)/geo.a
+theta_grid.o: mp.o file_utils.o text_options.o constants.o gridgen4mod.o $(GEO)/geo.a
 theta_grid.o: $(UTILS)/utils.a
 collisions.o: mp.o species.o theta_grid.o kt_grids.o le_grids.o
 collisions.o: run_parameters.o file_utils.o text_options.o dist_fn_arrays.o
@@ -513,20 +525,22 @@ nonlinear_terms.o: text_options.o mp.o gs2_time.o file_utils.o
 gs2_reinit.o: additional_linear_terms.o collisions.o mp.o nonlinear_terms.o
 gs2_reinit.o: fields_explicit.o dist_fn.o fields.o fields_implicit.o fields_test.o
 gs2_reinit.o: init_g.o run_parameters.o gs2_save.o dist_fn_arrays.o fields_arrays.o
-gs2_reinit.o: file_utils.o  #additional_terms.o
+gs2_reinit.o: file_utils.o antenna.o  #additional_terms.o
 redistribute.o: mp.o
 gs2_io.o: mp.o file_utils.o netcdf_mod.o kt_grids.o theta_grid.o le_grids.o \
 	species.o run_parameters.o convert.o fields_arrays.o nonlinear_terms.o 
 check.o: mp.o file_utils.o run_parameters.o 
 netcdf_mod.o: mp.o constants.o
 ingen.o: file_utils.o
+gs2_flux.o: species.o mp.o text_options.o file_utils.o dist_fn.o regression.o 
+gridgen4mod.o:  $(UTILS)/utils.a
+
 
 ############################################################## MORE DIRECTIVES
 clean:
 	rm -f *.o *.mod *.g90 core */core ; \
 	cd $(UTILS) ; rm -f *.o *.mod *.a ; cd .. ; \
 	cd $(GEO) ; rm -f *.o *.mod *.a ; cd .. ; \
-	cd $(GRIDGEN) ; rm -f *.o *.mod *.a ; cd ..
 
 distclean:	unlink clean
 	rm -f rungridgen
@@ -583,6 +597,7 @@ c90:
 	ln -sf redistribute_mpi.f90 redistribute.f90
 	ln -sf check_sgi.f90 check.f90
 	ln -sf ran_cray.f90 ran.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
 	ln -sf fft_work_unicos.f90 fft_work.f90
 	ln -sf gs2_transforms_sgi.f90 gs2_transforms.f90
@@ -596,6 +611,7 @@ t3e_shmem:
 	ln -sf redistribute_shnew.f90 redistribute.f90
 	ln -sf check_sgi.f90 check.f90
 	ln -sf ran_cray.f90 ran.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
 	ln -sf fft_work_unicosmk.f90 fft_work.f90
 	ln -sf gs2_transforms_sgi.f90 gs2_transforms.f90
@@ -609,6 +625,7 @@ t3e:
 	ln -sf redistribute_mpi.f90 redistribute.f90
 	ln -sf check_sgi.f90 check.f90
 	ln -sf ran_cray.f90 ran.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
 	ln -sf fft_work_unicosmk.f90 fft_work.f90
 	ln -sf gs2_transforms_sgi.f90 gs2_transforms.f90
@@ -623,6 +640,7 @@ t3e_fftw:
 	ln -sf check_sgi.f90 check.f90
 	ln -sf ran_cray.f90 ran.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 	ln -sf fft_work_fftw.f90 fft_work.f90
 	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
 	cd $(UTILS); ln -sf mds_io_stub.f90 mds.f90 
@@ -635,6 +653,7 @@ ibm:
 	ln -sf redistribute_mpi.f90 redistribute.f90
 	ln -sf check_aix.f90 check.f90
 	ln -sf ran_portable.f90 ran.f90
+	ln -sf file_utils_xlf.f90 file_utils.f90
 	ln -sf fft_work_fftw.f90 fft_work.f90
 	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
 	ln -sf gs2_save_aix.f90 gs2_save.f90
@@ -648,6 +667,7 @@ origin:
 	ln -sf redistribute_mpi.f90 redistribute.f90
 	ln -sf check_sgi.f90 check.f90
 	ln -sf ran_cray.f90 ran.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
 	ln -sf fft_work_origin.f90 fft_work.f90
 	ln -sf gs2_transforms_sgi.f90 gs2_transforms.f90
@@ -662,6 +682,7 @@ linux:
 	ln -sf check_portable.f90 check.f90
 	ln -sf ran_local.f90 ran.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
 	ln -sf fft_work_fftw.f90 fft_work.f90
 	cd $(UTILS); ln -sf mds_io.f90 mds.f90 
@@ -675,6 +696,7 @@ linux_fuj:
 	ln -sf check_portable.f90 check.f90
 	ln -sf ran_local.f90 ran.f90
 #	ln -sf gs2_save_stub.f90 gs2_save.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
 	cd utils; ln -sf mds_io_stub.f90 mds.f90 ; cd ..
 	ln -sf gs2_transforms_stub.f90 gs2_transforms.f90
@@ -689,6 +711,7 @@ linux_lf95:
 	ln -sf check_portable.f90 check.f90
 	ln -sf ran_portable.f90 ran.f90
 #	ln -sf gs2_save_stub.f90 gs2_save.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
 	cd utils; ln -sf mds_io_stub.f90 mds.f90 ; cd ..
 	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
@@ -704,6 +727,7 @@ linux_abs:
 	ln -sf ran_local.f90 ran.f90
 #	ln -sf gs2_save_stub.f90 gs2_save.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 	cd utils; ln -sf mds_io_stub.f90 mds.f90 ; cd ..
 	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
 	ln -sf fft_work_fftw.f90 fft_work.f90
@@ -718,6 +742,7 @@ alpha:
 	ln -sf check_portable.f90 check.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
 	ln -sf fft_work_fftw.f90 fft_work.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
 	cd utils; ln -sf mds_io_stub.f90 mds.f90 ; cd ..
 #	cd utils; ln -sf mds_io.f90 mds.f90 ; cd ..
@@ -732,6 +757,7 @@ alpha_nag:
 	ln -sf ran_local.f90 ran.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
 	ln -sf fft_work_fftw.f90 fft_work.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
 	cd utils; ln -sf mds_io_stub.f90 mds.f90 ; cd ..
 
@@ -747,6 +773,7 @@ linux_alpha:
 	ln -sf gs2_save_stub.f90 gs2_save.f90
 #	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
 	ln -sf gs2_transforms_stub.f90 gs2_transforms.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
 #	ln -sf fft_work_fftw.f90 fft_work.f90
 	ln -sf fft_work_stub.f90 fft_work.f90
 	cd utils; ln -sf mds_io_stub.f90 mds.f90 ; cd ..
@@ -763,3 +790,5 @@ unlink:
 	rm -f fft_work.f90
 	rm -f $(UTILS)/mds.f90
 	rm -f check.f90 
+	rm -f file_utils.f90
+

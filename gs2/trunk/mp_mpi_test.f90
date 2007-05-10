@@ -22,35 +22,27 @@ module mp
   interface broadcast
      module procedure broadcast_integer 
      module procedure broadcast_integer_array 
-     module procedure broadcast_integer_array2
 
      module procedure broadcast_real    
      module procedure broadcast_real_array    
-     module procedure broadcast_real_array2    
 
      module procedure broadcast_complex 
      module procedure broadcast_complex_array
-     module procedure broadcast_complex_array2
 
      module procedure broadcast_logical 
      module procedure broadcast_logical_array 
-     module procedure broadcast_logical_array2
 
      module procedure bcastfrom_integer 
      module procedure bcastfrom_integer_array 
-     module procedure bcastfrom_integer_array2 
 
      module procedure bcastfrom_real    
      module procedure bcastfrom_real_array    
-     module procedure bcastfrom_real_array2    
 
      module procedure bcastfrom_complex 
      module procedure bcastfrom_complex_array 
-     module procedure bcastfrom_complex_array2 
 
      module procedure bcastfrom_logical 
      module procedure bcastfrom_logical_array 
-     module procedure bcastfrom_logical_array2 
 
      module procedure broadcast_character
      module procedure bcastfrom_character
@@ -59,49 +51,39 @@ module mp
   interface sum_reduce
      module procedure sum_reduce_integer
      module procedure sum_reduce_integer_array
-     module procedure sum_reduce_integer_array2
 
      module procedure sum_reduce_real
      module procedure sum_reduce_real_array
-     module procedure sum_reduce_real_array2
 
      module procedure sum_reduce_complex
      module procedure sum_reduce_complex_array
-     module procedure sum_reduce_complex_array2
   end interface
 
   interface sum_allreduce
      module procedure sum_allreduce_integer
      module procedure sum_allreduce_integer_array
-     module procedure sum_allreduce_integer_array2
 
      module procedure sum_allreduce_real
      module procedure sum_allreduce_real_array
-     module procedure sum_allreduce_real_array2
 
      module procedure sum_allreduce_complex
      module procedure sum_allreduce_complex_array
-     module procedure sum_allreduce_complex_array2
   end interface
 
   interface max_reduce
      module procedure max_reduce_integer
      module procedure max_reduce_integer_array
-     module procedure max_reduce_integer_array2
 
      module procedure max_reduce_real
      module procedure max_reduce_real_array
-     module procedure max_reduce_real_array2
   end interface
 
   interface max_allreduce
      module procedure max_allreduce_integer
      module procedure max_allreduce_integer_array
-     module procedure max_allreduce_integer_array2
 
      module procedure max_allreduce_real
      module procedure max_allreduce_real_array
-     module procedure max_allreduce_real_array2
   end interface
 
   interface min_reduce

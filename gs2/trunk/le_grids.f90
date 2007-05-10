@@ -834,10 +834,29 @@ contains
        total(:,it,ik) = total(:,it,ik) + weights(is)*geint(:,igeint)
     end do
 
-    call sum_allreduce (total)
-!
-! condense total to 1-d work matrix, reduce, copy back for above statement
-! if Absoft compiler is used.
+    allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
+    i = 0
+    do ik = 1, naky
+       do it = 1, ntheta0
+          do ig = -ntgrid, ntgrid
+             i = i + 1
+             work(i) = total(ig, it, ik)
+          end do
+       end do
+    end do
+    
+    call sum_allreduce (work) 
+
+    i = 0
+    do ik = 1, naky
+       do it = 1, ntheta0
+          do ig = -ntgrid, ntgrid
+             i = i + 1
+             total(ig, it, ik) = work(i)
+          end do
+       end do
+    end do
+    deallocate (work)
 
   end subroutine sum_species
 
@@ -866,7 +885,7 @@ contains
 
 ! reduce number of calls to sum_reduce 
 
-    allocate (work((2*ntgrid+1)*naky*ntheta0*nspec))
+    allocate (work((2*ntgrid+1)*naky*ntheta0*nspec)); work = 0.
     i = 0
     do is = 1, nspec
        do ik = 1, naky
@@ -948,34 +967,29 @@ contains
        total(:, it, ik) = total(:, it, ik) + fac*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
     end do
 
-    call sum_allreduce (total)
+    allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
+    i = 0
+    do ik = 1, naky
+       do it = 1, ntheta0
+          do ig = -ntgrid, ntgrid
+             i = i + 1
+             work(i) = total(ig, it, ik)
+          end do
+       end do
+    end do
+    
+    call sum_allreduce (work) 
 
-! Absoft compiler requires this block instead of previous line:
-!
-!    allocate (work((2*ntgrid+1)*naky*ntheta0))
-!    i = 0
-!    do ik = 1, naky
-!       do it = 1, ntheta0
-!          do ig = -ntgrid, ntgrid
-!             i = i + 1
-!             work(i) = total(ig, it, ik)
-!          end do
-!       end do
-!    end do
-!    
-!    call sum_allreduce (work) 
-!
-!    i = 0
-!    do ik = 1, naky
-!       do it = 1, ntheta0
-!          do ig = -ntgrid, ntgrid
-!             i = i + 1
-!             total(ig, it, ik) = work(i)
-!          end do
-!       end do
-!    end do
-!    deallocate (work)
-! end of Absoft block
+    i = 0
+    do ik = 1, naky
+       do it = 1, ntheta0
+          do ig = -ntgrid, ntgrid
+             i = i + 1
+             total(ig, it, ik) = work(i)
+          end do
+       end do
+    end do
+    deallocate (work)
 
   end subroutine integrate_species
 
@@ -989,9 +1003,10 @@ contains
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (:,:), intent (out) :: stress
+    complex, dimension (:), allocatable :: work
     real, dimension (-ntgrid:ntgrid) :: delnorm
     real :: fac, wgt
-    integer :: is, ie, ik, it, il, iglo, ig
+    integer :: is, ie, ik, it, il, iglo, ig, i
 
     delnorm=delthet*grho/bmag/gradpar
     delnorm=delnorm/sum(delnorm)
@@ -1021,12 +1036,33 @@ contains
        end do
     end do
 
-    call sum_reduce (stress, 0)
-    
+    allocate (work(ntheta0*nspec)) ; work = 0.
+    i = 0
+    do is=1, nspec
+       do it = 1, ntheta0
+          i = i + 1
+          work(i) = stress(it, is)
+       end do
+    end do
+
+    call sum_reduce (work, 0)
+
+    if (proc0) then
+       i = 0
+       do is = 1, nspec
+          do it = 1, ntheta0
+             i = i + 1
+             stress(it, is) = work(i)
+          end do
+       end do
+    end if
+    deallocate (work)
+
   end subroutine integrate_stress
 
   subroutine integrate_moment (g, total)
 ! returns moments to PE 0
+    use mp, only: nproc
     use theta_grid, only: ntgrid
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -1060,39 +1096,37 @@ contains
        end do
     end do
 
-    call sum_reduce (total, 0)
-
-! Absoft compiler requires this block instead of previous line:
-!    allocate (work((2*ntgrid+1)*naky*ntheta0*nspec))
-!    i = 0
-!    do is = 1, nspec
-!       do ik = 1, naky
-!          do it = 1, ntheta0
-!             do ig = -ntgrid, ntgrid
-!                i = i + 1
-!                work(i) = total(ig, it, ik, is)
-!             end do
-!          end do
-!       end do
-!    end do
-!    
-!    call sum_reduce (work, 0)
-!    
-!    if (proc0) then
-!       i = 0
-!       do is = 1, nspec
-!          do ik = 1, naky
-!             do it = 1, ntheta0
-!                do ig = -ntgrid, ntgrid
-!                   i = i + 1
-!                   total(ig, it, ik, is) = work(i)
-!                end do
-!             end do
-!          end do
-!       end do
-!    end if
-!    deallocate (work)
-! end of Absoft block
+    if (nproc > 1) then
+       allocate (work((2*ntgrid+1)*naky*ntheta0*nspec)) ; work = 0.
+       i = 0
+       do is = 1, nspec
+          do ik = 1, naky
+             do it = 1, ntheta0
+                do ig = -ntgrid, ntgrid
+                   i = i + 1
+                   work(i) = total(ig, it, ik, is)
+                end do
+             end do
+          end do
+       end do
+       
+       call sum_reduce (work, 0)
+       
+       if (proc0) then
+          i = 0
+          do is = 1, nspec
+             do ik = 1, naky
+                do it = 1, ntheta0
+                   do ig = -ntgrid, ntgrid
+                      i = i + 1
+                      total(ig, it, ik, is) = work(i)
+                   end do
+                end do
+             end do
+          end do
+       end if
+       deallocate (work)
+    end if
 
   end subroutine integrate_moment
 
@@ -2540,14 +2574,15 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0, aky
     use gs2_layouts, only: g_lo, idx, ik_idx, it_idx, is_idx, ie_idx, il_idx
-    use mp, only: sum_reduce
+    use mp, only: sum_reduce, proc0
 
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
     real, dimension (negrid, nspec) :: result
+    real, dimension (:), allocatable :: work
     real :: wgt, fac
-    integer :: iglo, is, il, ie, ik, it, ig 
+    integer :: iglo, is, il, ie, ik, it, ig, i
 
     result = 0.
     do iglo=g_lo%llim_proc, g_lo%ulim_proc
@@ -2568,8 +2603,29 @@ contains
     end do
     
     result = result/dele
+    
+    allocate (work(negrid*nspec)) ; work = 0.
+    i = 0
+    do is = 1, nspec
+       do ie = 1, negrid
+          i = i + 1
+          work(i) = result(ie,is)
+       end do
+    end do
 
-    call sum_reduce (result, 0)
+    call sum_reduce (work, 0)
+    
+    if (proc0) then
+       i = 0
+       do is = 1, nspec
+          do ie = 1, negrid
+             i = i + 1
+             result(ie,is) = work(i) 
+          end do
+       end do
+
+    end if
+    deallocate (work)
     
   end subroutine pe_integrate
 

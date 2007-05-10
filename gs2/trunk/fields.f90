@@ -1,5 +1,7 @@
 module fields
   use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
+  use fields_arrays, only: phitmp, apartmp, aperptmp
+  use fields_arrays, only: phitmp1, apartmp1, aperptmp1
   use fields_arrays, only: phi_ext, apar_ext
 
   implicit none
@@ -26,6 +28,7 @@ module fields
 contains
 
   subroutine init_fields
+    use mp, only: proc0
     use theta_grid, only: init_theta_grid
     use run_parameters, only: init_run_parameters
     use dist_fn, only: init_dist_fn, ginit
@@ -42,6 +45,7 @@ contains
     initialized = .true.
 
     call init_theta_grid
+    
     call init_init_g
     call init_run_parameters
     call init_dist_fn
@@ -119,13 +123,21 @@ contains
        allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (aperpnew (-ntgrid:ntgrid,ntheta0,naky))
-       allocate ( phi_ext (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (  phitmp (-ntgrid:ntgrid,ntheta0,naky))
+       allocate ( apartmp (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (aperptmp (-ntgrid:ntgrid,ntheta0,naky))
+!       allocate (  phitmp1(-ntgrid:ntgrid,ntheta0,naky))
+!       allocate ( apartmp1(-ntgrid:ntgrid,ntheta0,naky))
+!       allocate (aperptmp1(-ntgrid:ntgrid,ntheta0,naky))
+!       allocate ( phi_ext (-ntgrid:ntgrid,ntheta0,naky))
        allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
     endif
-    phi = 0.; phinew = 0.
-    apar = 0.; aparnew = 0.
-    aperp = 0.; aperpnew = 0.
-    phi_ext = 0.; apar_ext = 0.
+    phi = 0.; phinew = 0.; phitmp = 0. 
+    apar = 0.; aparnew = 0.; apartmp = 0. 
+    aperp = 0.; aperpnew = 0.; aperptmp = 0.
+!    phitmp1 = 0. ; apartmp1 = 0. ; aperptmp1 = 0.
+!    phi_ext = 0.
+    apar_ext = 0.
 
     alloc = .false.
   end subroutine allocate_arrays

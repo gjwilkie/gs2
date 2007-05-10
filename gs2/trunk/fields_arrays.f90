@@ -4,6 +4,8 @@ module fields_arrays
   complex, dimension (:,:,:), allocatable :: phi,    apar,    aperp
   complex, dimension (:,:,:), allocatable :: phi_ext, apar_ext
   complex, dimension (:,:,:), allocatable :: phinew, aparnew, aperpnew
+  complex, dimension (:,:,:), allocatable :: phitmp, apartmp, aperptmp
+  complex, dimension (:,:,:), allocatable :: phitmp1, apartmp1, aperptmp1
   ! (-ntgrid:ntgrid,ntheta0,naky) replicated
 
 !!  complex, dimension (:,:), allocatable :: aminv
