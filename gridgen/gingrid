@@ -1,0 +1,15 @@
+ 1.0 1.0 1.0 0.0       "eps,epsl,pk,alpmhd"
+ 1.0 1.0 0.0  0.85901316286999996   "qinp,shat,shift,beta"
+ 1.0 1.0 1.0 0.0 1.0 0.0 0.0  "aspr,rhoc,airat,akappri,akappa,tri,tripri"
+ 0.0 0.0 0.0 0.0 0.0 0.0     "ushift1,uprim1,uprim2,uprim3,uprim4,uprim5"
+ 0.85538769363  1.0 0.0     "feprim,zeff,zeffp"
+ 0.E+0,  0.85538769363  0.0 0.0   "dbeam,fprim4,an5,fprim5"
+ 0.85538769363,  1.,  0.85538769363,  2*0.E+0     "tprim1,tprim2,tprim3,tprim4,tprim5"
+ 0.0 0.0 0.0 0.0 0.0  "vnewk1,vnewk2,vnewk3,vnewk4,vnewk5"
+ 1.0 1.0 2.72E-4 1.0 1.0      "amass1,amass2,amass3,amass4,amass5"
+ 1.0 1.0 1.0 1.0 1.0  "temp1,temp2,temp3,temp4,temp5"
+ 1.0 -1.0 -1.0 1.0 1.0     "z1,z2,z3,z4,z5"
+ 0.0 0.0 0.0 1.0 0.0       "shiftpri,akappri2,tripri2,r_geo,dIdrho"
+ 0.0                      "poisfac"
+ -------------------------------------
+ 1.0 1.0 1.0 1.0
