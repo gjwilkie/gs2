@@ -31,20 +31,18 @@ module le_grids
   real :: ecut, bouncefuzz
 
   integer :: nlambda, ng2, lmax
-  logical :: accel_x = .false.
-  logical :: accel_v = .false.
+  logical :: accel = .false.
 
   type (redist_type), save :: lambda_map, gint_map, eint_map
 
 contains
 
-  subroutine init_le_grids (accelerated_x, accelerated_v)
+  subroutine init_le_grids
     use mp, only: proc0
     use species, only: init_species
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     implicit none
-    logical, intent (out) :: accelerated_x, accelerated_v
     logical, save :: initialized = .false.
 
     if (initialized) return
@@ -60,10 +58,6 @@ contains
     end if
     call broadcast_results
     call init_integrations
-
-    accelerated_x = accel_x
-    accelerated_v = accel_v
-    
   end subroutine init_le_grids
 
   subroutine broadcast_results
@@ -155,21 +149,19 @@ contains
 
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
     call init_lintegrate
-!    call init_eintegrate
+    call init_eintegrate
 
     if (first) then
        first = .false.
        call pe_layout (char)
        if (char == 'x') then
-          accel_x = mod(ntheta0*naky*nspec, nproc) == 0
-          accel_v = .false.
+          accel = mod(ntheta0*naky*nspec, nproc) == 0
        else
-          accel_x = .false.
-          accel_v = mod(negrid*nlambda*nspec, nproc) == 0
+          accel = .false.
        end if
     end if
           
-    if (accel_x) return
+    if (accel) return
 
     lint_lo = gint_lo%ulim_world
     lint_hi = gint_lo%llim_world
@@ -217,7 +209,7 @@ contains
     complex, dimension (-ntgrid:,geint_lo%llim_proc:), intent (in) :: geint
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
 
-    complex, dimension (:), allocatable :: collector
+    complex, dimension ((2*ntgrid+1)*geint_lo%blocksize) :: collector
     integer :: iglo, igeint, ik, it, is, ig, j
     integer :: igeint_lo, igeint_hi
 
@@ -226,14 +218,13 @@ contains
 
     ! Often no communication is needed, so do that case separately.
 
-    if (accel_x) then
+    if (accel) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           igeint = iglo/(nlambda*negrid)
           g(:,1,iglo) = geint(:,igeint)
           g(:,2,iglo) = geint(:,igeint)
        end do
     else
-       allocate (collector((2*ntgrid+1)*geint_lo%blocksize))
        do igeint_lo = geint_lo%llim_world, geint_lo%ulim_world, geint_lo%blocksize
           igeint_hi = min(igeint_lo + geint_lo%blocksize - 1, geint_lo%ulim_world)
           if (idx_local(geint_lo, igeint_lo)) then
@@ -255,7 +246,6 @@ contains
              end if
           end do
        end do
-       deallocate (collector)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
@@ -281,7 +271,7 @@ contains
     complex, dimension (-ntgrid:,gint_lo%llim_proc:), intent (in) :: gint
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
 
-    complex, dimension (:), allocatable :: collector
+    complex, dimension ((2*ntgrid+1)*gint_lo%blocksize) :: collector
     integer :: iglo, igint, ik, it, ie, is, ig, j
     integer :: igint_lo, igint_hi
 
@@ -290,14 +280,13 @@ contains
 
     ! Often no communication is needed, so do that case separately.
 
-    if (accel_x) then 
+    if (accel) then 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           igint = iglo/nlambda
           g(:,1,iglo) = gint(:,igint)
           g(:,2,iglo) = gint(:,igint)
        end do       
     else
-       allocate (collector((2*ntgrid+1)*gint_lo%blocksize))
        do igint_lo = gint_lo%llim_world, gint_lo%ulim_world, gint_lo%blocksize
           igint_hi = min(igint_lo + gint_lo%blocksize - 1, gint_lo%ulim_world)
           if (idx_local (gint_lo, igint_lo)) then          
@@ -319,8 +308,7 @@ contains
              end if
           end do
        end do
-       deallocate (collector)
-
+       
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
@@ -340,15 +328,12 @@ contains
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g1
     complex, dimension (-ntgrid:,geint_lo%llim_proc:), intent (out) :: geint
-    complex, dimension (:,:), allocatable :: gint
 
-    allocate (gint (-ntgrid:ntgrid, gint_lo%llim_proc:gint_lo%ulim_alloc))
+    complex, dimension (-ntgrid:ntgrid, & 
+         gint_lo%llim_proc:gint_lo%ulim_alloc) :: gint
 
     call lintegrate (g1, gint)
     call eintegrate (gint, geint)
-
-    deallocate (gint)
-
   end subroutine integrate
 
   subroutine sum_species (geint, weights, total)
@@ -360,7 +345,7 @@ contains
     complex, dimension (-ntgrid:,geint_lo%llim_proc:), intent (in) :: geint
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:), intent (out) :: total
-    complex, dimension (:), allocatable :: work
+    complex, dimension ((2*ntgrid+1)*naky*ntheta0) :: work
 
     integer :: i, ig, ik, it, is
     integer :: igeint
@@ -375,7 +360,6 @@ contains
 
 ! reduce number of calls to sum_allreduce 
 
-    allocate (work((2*ntgrid+1)*naky*ntheta0))
     i = 0
     do ik = 1, naky
        do it = 1, ntheta0
@@ -397,7 +381,6 @@ contains
           end do
        end do
     end do    
-    deallocate (work)
 
   end subroutine sum_species
 
@@ -411,7 +394,7 @@ contains
     complex, dimension (-ntgrid:,geint_lo%llim_proc:), intent (in) :: geint
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
 ! work could be smaller on PEs other than 0.  I will do this later.
-    complex, dimension (:), allocatable :: work  
+    complex, dimension ((2*ntgrid+1)*naky*ntheta0*nspec) :: work  
 
     integer :: i, ig, ik, it, is
     integer :: igeint
@@ -426,7 +409,6 @@ contains
 
 ! reduce number of calls to sum_reduce 
 
-    allocate (work((2*ntgrid+1)*naky*ntheta0*nspec))
     i = 0
     do is = 1, nspec
        do ik = 1, naky
@@ -454,132 +436,38 @@ contains
           end do
        end do
     end if
-    deallocate (work)
 
   end subroutine geint20
 
   subroutine integrate_species (g, weights, total)
     use theta_grid, only: ntgrid
-    use species, only: nspec
-    use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: g_lo, idx, idx_local
-    use mp, only: sum_allreduce
+    use gs2_layouts, only: geint_lo
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,:), intent (in) :: g
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:), intent (out) :: total
-! total = total(theta, kx, ky)
-    complex, dimension (:,:), allocatable :: geint
-    complex, dimension (:), allocatable :: work
-    integer :: is, il, ie, ik, it, iglo, ig, i
 
-    total = 0.
-    do is = 1, nspec
-       do il = 1, nlambda
-          do ie = 1, negrid
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   iglo = idx (g_lo, ik, it, il, ie, is)
-                   if (.not. idx_local (g_lo, iglo)) cycle
-                   do ig = -ntgrid, ntgrid
-                      total(ig, it, ik) = total(ig, it, ik) + &
-                              weights(is)*w(ie,is)*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
-                   end do
-                end do
-             end do
-          end do
-       end do
-    end do
+    complex, &
+         dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) :: &
+         geint
 
-    allocate (work((2*ntgrid+1)*naky*ntheta0))
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             work(i) = total(ig, it, ik)
-          end do
-       end do
-    end do
-    
-    call sum_allreduce (work)
-    
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             total(ig, it, ik) = work(i)
-          end do
-       end do
-    end do
-    deallocate (work)
-
+    call integrate (g, geint)
+    call sum_species (geint, weights, total)
   end subroutine integrate_species
 
   subroutine integrate_moment (g, total)
-! returns moments to PE 0
     use theta_grid, only: ntgrid
-    use species, only: nspec
-    use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: g_lo, idx, idx_local
-    use mp, only: sum_reduce, proc0
+    use gs2_layouts, only: geint_lo
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
 
-    complex, dimension (:), allocatable :: work
-    integer :: is, il, ie, ik, it, iglo, ig, i
+    complex, &
+         dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) :: &
+         geint
 
-    total = 0.
-    do is = 1, nspec
-       do il = 1, nlambda
-          do ie = 1, negrid
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   iglo = idx (g_lo, ik, it, il, ie, is)
-                   if (idx_local (g_lo, iglo)) then
-                      do ig = -ntgrid, ntgrid
-                         total(ig, it, ik, is) = total(ig, it, ik, is) + &
-                              w(ie,is)*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
-                      end do
-                   end if
-                end do
-             end do
-          end do
-       end do
-    end do
-
-    allocate (work((2*ntgrid+1)*naky*ntheta0*nspec))
-    i = 0
-    do is = 1, nspec
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                work(i) = total(ig, it, ik, is)
-             end do
-          end do
-       end do
-    end do
-    
-    call sum_reduce (work, 0)
-    
-    if (proc0) then
-       i = 0
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                do ig = -ntgrid, ntgrid
-                   i = i + 1
-                   total(ig, it, ik, is) = work(i)
-                end do
-             end do
-          end do
-       end do
-    end if
-    deallocate (work)
-
+    call integrate (g, geint)
+    call geint20 (geint, total)
   end subroutine integrate_moment
 
   subroutine set_grids
@@ -1813,7 +1701,8 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
     integer :: unit
     integer :: iglo, igint, ig, ik, it, il, ie, is
-    complex, dimension (:,:), allocatable :: gint
+    complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc) &
+         :: gint
     complex, dimension (negrid) :: dumout
 
     call open_output_file (unit, ".intcheck")
@@ -1832,7 +1721,6 @@ contains
        end if
        g0(:,2,iglo) = g0(:,1,iglo)
     end do
-    allocate (gint(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
     call lintegrate (g0, gint)
     do is = 1, nspec
        do it = 1, ntheta0
@@ -1897,8 +1785,7 @@ contains
           end do
        end do
     end do
-    deallocate (gint)
-    
+
     do ig = -ntgrid, ntgrid
        write (unit,*) "j ", ig
        do il = 1, nlambda
@@ -1961,17 +1848,16 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use mp, only: nproc 
-!    use gs2_layouts, only: init_lambda_layouts, lambda_lo
-!    use gs2_layouts, only: gidx2lamidx, lamidx2gintidx
-    use gs2_layouts, only: g_lo, gint_lo, gidx2gintidx
-    use gs2_layouts, only: idx_local, proc_id, init_dist_fn_layouts
+    use gs2_layouts, only: init_lambda_layouts, g_lo, lambda_lo, gint_lo
+    use gs2_layouts, only: idx_local, proc_id
+    use gs2_layouts, only: gidx2lamidx, lamidx2gintidx
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
     integer, dimension(0:nproc-1) :: nn_to, nn_from
     integer, dimension (3) :: from_low, from_high
     integer, dimension (4) :: to_low, to_high
-!    integer, dimension (2) :: to_gint_low, from_lambda_low, to_lhigh, from_lhigh
+    integer, dimension (2) :: to_gint_low, from_lambda_low, to_lhigh, from_lhigh
     integer :: iglo, isign, ig, ip, n
     integer :: ilam, il, igint
     logical :: done = .false.
@@ -1979,18 +1865,18 @@ contains
     if (done) return
     done = .true.
 
-    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    call init_lambda_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
          
     ! count number of elements to be redistributed to/from each processor
     nn_to = 0
     nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
-       call gidx2gintidx (g_lo, iglo, gint_lo, il, ilam)
+       call gidx2lamidx (g_lo, iglo, lambda_lo, il, ilam)
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
              if (idx_local(g_lo,iglo)) &
-                  nn_from(proc_id(gint_lo,ilam)) = nn_from(proc_id(gint_lo,ilam)) + 1
-             if (idx_local(gint_lo,ilam)) &
+                  nn_from(proc_id(lambda_lo,ilam)) = nn_from(proc_id(lambda_lo,ilam)) + 1
+             if (idx_local(lambda_lo,ilam)) &
                   nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
           end do
        end do
@@ -2014,9 +1900,9 @@ contains
     nn_to = 0
     nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
-       call gidx2gintidx (g_lo, iglo, gint_lo, il, ilam)
+       call gidx2lamidx (g_lo, iglo, lambda_lo, il, ilam)
        if (idx_local(g_lo,iglo)) then
-          ip = proc_id(gint_lo,ilam)
+          ip = proc_id(lambda_lo,ilam)
           do isign = 1, 2
              do ig = -ntgrid, ntgrid
                 n = nn_from(ip) + 1
@@ -2027,7 +1913,7 @@ contains
              end do
           end do
        end if
-       if (idx_local(gint_lo,ilam)) then
+       if (idx_local(lambda_lo,ilam)) then
           ip = proc_id(g_lo,iglo)
           do isign = 1, 2
              do ig = -ntgrid, ntgrid
@@ -2053,12 +1939,12 @@ contains
     to_low (1) = -ntgrid
     to_low (2) = 1
     to_low (3) = 1
-    to_low (4) = gint_lo%llim_proc
+    to_low (4) = lambda_lo%llim_proc
 
     to_high (1) = ntgrid
     to_high (2) = 2
     to_high (3) = max(2*nlambda, 2*ng2+1)
-    to_high (4) = gint_lo%ulim_alloc
+    to_high (4) = lambda_lo%ulim_alloc
 
     call init_fill (lambda_map, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
@@ -2066,50 +1952,113 @@ contains
     call delete_list (to_list)
     call delete_list (from_list)
 
-! There is old coding that allows a lambda layout different from the gint layout.
-! This was never used much, but the coding appears after the end of the module
+! following block only needed if lambda_lo and gint_lo differ in the future.
+    if (.false.) then
+    ! count number of elements to be redistributed to/from each processor after integrating
+    nn_to = 0
+    nn_from = 0
+    do ilam = lambda_lo%llim_world, lambda_lo%ulim_world
+       call lamidx2gintidx (lambda_lo, ilam, gint_lo, igint)
+       do ig = -ntgrid, ntgrid
+          if (idx_local(lambda_lo,ilam)) &
+               nn_from(proc_id(gint_lo,igint)) = nn_from(proc_id(gint_lo,igint)) + 1
+          if (idx_local(gint_lo,igint)) &
+               nn_to(proc_id(lambda_lo, ilam)) = nn_to(proc_id(lambda_lo, ilam)) + 1
+       end do
+    end do
+
+    do ip = 0, nproc-1
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first(nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first(nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+       end if
+    end do
+
+    ! get local indices of elements distributed to/from other processors
+    nn_to = 0
+    nn_from = 0
+    do ilam = lambda_lo%llim_world, lambda_lo%ulim_world
+       call lamidx2gintidx (lambda_lo, ilam, gint_lo, igint)
+       if (idx_local(lambda_lo, ilam)) then
+          ip = proc_id(gint_lo, igint)
+          do ig = -ntgrid, ntgrid
+             n = nn_from(ip) + 1
+             nn_from(ip) = n
+             from_list(ip)%first(n) = ig
+             from_list(ip)%second(n) = ilam
+          end do
+       end if
+       if (idx_local(gint_lo,igint)) then
+          ip = proc_id(lambda_lo, ilam)
+          do ig = -ntgrid, ntgrid
+             n = nn_to(ip) + 1
+             nn_to(ip) = n
+             to_list(ip)%first(n) = ig
+             to_list(ip)%second(n) = igint
+          end do
+       end if
+    end do
+
+    from_lambda_low (1) = -ntgrid
+    from_lambda_low (2) = lambda_lo%llim_proc
+
+    to_gint_low (1) = -ntgrid
+    to_gint_low (2) = gint_lo%llim_proc
+
+    to_lhigh (1) = ntgrid
+    to_lhigh (2) = gint_lo%ulim_alloc
+
+    from_lhigh (1) = ntgrid
+    from_lhigh (2) = lambda_lo%ulim_alloc
+
+    call init_fill (gint_map, 'c', to_gint_low, to_lhigh, to_list, &
+         from_lambda_low, from_lhigh, from_list)
+
+    call delete_list (to_list)
+    call delete_list (from_list)
+    endif
 
   end subroutine init_lintegrate
 
   subroutine lintegrate (g1, gint)
     use theta_grid, only: ntgrid
     use redistribute, only: gather, fill
-!    use gs2_layouts, only: lambda_lo
-    use gs2_layouts, only: g_lo, gint_lo 
+    use gs2_layouts, only: lambda_lo, g_lo, gint_lo 
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g1
     complex, dimension (-ntgrid:,gint_lo%llim_proc:), intent (out) :: gint
 
-    complex, dimension (:,:,:,:), allocatable :: glam
-    complex, dimension (:,:), allocatable :: work
+    complex, dimension (-ntgrid:ntgrid, 2, max(2*nlambda,2*ng2+1), &
+         lambda_lo%llim_proc:lambda_lo%ulim_alloc) :: glam
+    complex, dimension (-ntgrid:ntgrid, &
+         lambda_lo%llim_proc:lambda_lo%ulim_alloc) :: work
 
-    integer :: igint, il, ig
-
-    allocate (glam (-ntgrid:ntgrid, 2, max(2*nlambda,2*ng2+1), &
-         gint_lo%llim_proc:gint_lo%ulim_alloc))
-    allocate (work (-ntgrid:ntgrid, gint_lo%llim_proc:gint_lo%ulim_alloc))
+    integer :: ilam, il, ig
 
     call gather (lambda_map, g1, glam)
 
     work = 0.
-    do igint = gint_lo%llim_proc, gint_lo%ulim_proc
+    do ilam = lambda_lo%llim_proc, lambda_lo%ulim_proc
        do il = 1, nlambda
           do ig = -ntgrid, ntgrid
-             work(ig,igint) = work(ig,igint) &
-                  + wl(ig,il)*(glam(ig,1,il,igint)+ glam(ig,2,il,igint))
+             work(ig,ilam) = work(ig,ilam) &
+                  + wl(ig,il)*(glam(ig,1,il,ilam)+ glam(ig,2,il,ilam))
           end do
        end do
     end do
 
     gint = work    
-    deallocate (glam, work)
 !
 ! fill statement only needed if lambda_lo and gint_lo diverge in future.  
-! (see init_lintegrate; coding moved after end of module)
+! (see init_lintegrate)
 !
-!    if (.false.) then
-!       call fill (gint_map, work, gint)
-!    endif
+    if (.false.) then
+       call fill (gint_map, work, gint)
+    endif
 
   end subroutine lintegrate
 
@@ -2210,11 +2159,11 @@ contains
     complex, dimension (-ntgrid:,gint_lo%llim_proc:), intent (in) :: gint
     complex, dimension (-ntgrid:,geint_lo%llim_proc:), intent (out) :: geint
 
-    complex, dimension (:,:,:), allocatable :: work
+    complex, dimension (-ntgrid:ntgrid, negrid, &
+         geint_lo%llim_proc:geint_lo%ulim_alloc) :: work
 
     integer :: igeint, ie, is
 
-    allocate (work(-ntgrid:ntgrid, negrid, geint_lo%llim_proc:geint_lo%ulim_alloc))
     work = 0. ; geint = 0.
 
     call gather (eint_map, gint, work)
@@ -2225,8 +2174,6 @@ contains
           geint(:,igeint) = geint(:,igeint) + w(ie,is)*work(:,ie,igeint)
        end do
     end do
-
-    deallocate (work)
 
   end subroutine eintegrate
 
@@ -2499,75 +2446,4 @@ end module le_grids
 !         0.09762,0.08619,0.07335,0.05930,0.04428, &
 !         0.02853,0.01234 0.00000,0.00000,0.00000, &
 !         /), (/ 12, 12 /))
-
-!!!! from init_lintegrate
-! following block only needed if lambda_lo and gint_lo differ in the future.
-!    if (.false.) then
-!    ! count number of elements to be redistributed to/from each processor after integrating
-!    nn_to = 0
-!    nn_from = 0
-!    do ilam = lambda_lo%llim_world, lambda_lo%ulim_world
-!       call lamidx2gintidx (lambda_lo, ilam, gint_lo, igint)
-!       do ig = -ntgrid, ntgrid
-!          if (idx_local(lambda_lo,ilam)) &
-!               nn_from(proc_id(gint_lo,igint)) = nn_from(proc_id(gint_lo,igint)) + 1
-!          if (idx_local(gint_lo,igint)) &
-!               nn_to(proc_id(lambda_lo, ilam)) = nn_to(proc_id(lambda_lo, ilam)) + 1
-!       end do
-!    end do
-!
-!    do ip = 0, nproc-1
-!       if (nn_from(ip) > 0) then
-!          allocate (from_list(ip)%first(nn_from(ip)))
-!          allocate (from_list(ip)%second(nn_from(ip)))
-!       end if
-!       if (nn_to(ip) > 0) then
-!          allocate (to_list(ip)%first(nn_to(ip)))
-!          allocate (to_list(ip)%second(nn_to(ip)))
-!       end if
-!    end do
-!
-!    ! get local indices of elements distributed to/from other processors
-!    nn_to = 0
-!    nn_from = 0
-!    do ilam = lambda_lo%llim_world, lambda_lo%ulim_world
-!       call lamidx2gintidx (lambda_lo, ilam, gint_lo, igint)
-!       if (idx_local(lambda_lo, ilam)) then
-!          ip = proc_id(gint_lo, igint)
-!          do ig = -ntgrid, ntgrid
-!             n = nn_from(ip) + 1
-!             nn_from(ip) = n
-!             from_list(ip)%first(n) = ig
-!             from_list(ip)%second(n) = ilam
-!          end do
-!       end if
-!       if (idx_local(gint_lo,igint)) then
-!          ip = proc_id(lambda_lo, ilam)
-!          do ig = -ntgrid, ntgrid
-!             n = nn_to(ip) + 1
-!             nn_to(ip) = n
-!             to_list(ip)%first(n) = ig
-!             to_list(ip)%second(n) = igint
-!          end do
-!       end if
-!    end do
-!
-!    from_lambda_low (1) = -ntgrid
-!    from_lambda_low (2) = lambda_lo%llim_proc
-!
-!    to_gint_low (1) = -ntgrid
-!    to_gint_low (2) = gint_lo%llim_proc
-!
-!    to_lhigh (1) = ntgrid
-!    to_lhigh (2) = gint_lo%ulim_alloc
-!
-!    from_lhigh (1) = ntgrid
-!    from_lhigh (2) = lambda_lo%ulim_alloc
-!
-!    call init_fill (gint_map, 'c', to_gint_low, to_lhigh, to_list, &
-!         from_lambda_low, from_lhigh, from_list)
-!
-!    call delete_list (to_list)
-!    call delete_list (from_list)
-!    endif
 

@@ -32,7 +32,7 @@ module geometry
   integer :: eqinit = 1
   
   logical :: gen_eq, vmom_eq, efit_eq, ppl_eq, local_eq, &
-       in_nt, writelots, equal_arc, dfit_eq, mds, idfit_eq
+       in_nt, writelots, equal_arc, dfit_eq, mds
   
   integer :: bishop
 
@@ -151,13 +151,12 @@ contains
 
   subroutine eikcoefs
     
-    use  veq, only: vmomin, veq_init
-    use  geq, only: eqin, geq_init
-    use  peq, only: peqin => eqin, peq_init
-    use  eeq, only: efitin, mfitin, eeq_init => efit_init
-    use  deq, only: dfitin, deq_init => dfit_init
-    use ideq, only: idfitin, ideq_init => dfit_init
-    use  leq, only: leqin, dpdrhofun
+    use veq, only: vmomin, veq_init
+    use geq, only: eqin, geq_init
+    use peq, only: peqin => eqin, peq_init
+    use eeq, only: efitin, mfitin, eeq_init => efit_init
+    use deq, only: dfitin, deq_init => dfit_init
+    use leq, only: leqin, dpdrhofun
     use radstub, only: radial
     implicit none
 
@@ -200,7 +199,7 @@ contains
        endif
     endif
 
-    call check(vmom_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq, idfit_eq) 
+    call check(vmom_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq) 
 
     if(.not. vmom_eq .and. .not. gen_eq .and. .not. ppl_eq &
          .and. .not. allocated(theta)) then
@@ -244,9 +243,6 @@ contains
           else if(dfit_eq) then
              if(big <= 0) big = 1
              call dfitin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
-          else if(idfit_eq) then
-             call idfitin(eqfile, theta, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit) 
-             call tdef(nthg)
           endif
           if(iflux == 10) return
           if(.not.allocated(gds22)) call alloc_module_arrays(ntgrid)
@@ -328,12 +324,11 @@ contains
 !
 ! should test whether this is a new equilibrium
 !
-    if(gen_eq)   call geq_init
-    if(ppl_eq)   call peq_init
-    if(vmom_eq)  call veq_init
-    if(efit_eq)  call eeq_init
-    if(dfit_eq)  call deq_init
-    if(idfit_eq) call ideq_init
+    if(gen_eq)  call geq_init
+    if(ppl_eq)  call peq_init
+    if(vmom_eq) call veq_init
+    if(efit_eq) call eeq_init
+    if(dfit_eq) call deq_init
 
     call rmajortgrid(rgrid, theta, rmajor)
 
@@ -993,13 +988,12 @@ end subroutine eikcoefs
 
   function Rpos(r, thet)
 
-    use  geq, only: geq_R => Rpos
-    use  peq, only: peq_R => Rpos
-    use  leq, only: leq_R => Rpos
-    use  eeq, only: eeq_R => Rpos
-    use  deq, only: deq_R => Rpos
-    use ideq, only: ideq_R => Rpos
-    use  veq, only: veq_R => Rpos
+    use geq, only: geq_R => Rpos
+    use peq, only: peq_R => Rpos
+    use leq, only: leq_R => Rpos
+    use eeq, only: eeq_R => Rpos
+    use deq, only: deq_R => Rpos
+    use veq, only: veq_R => Rpos
 
     real, intent (in) :: r, thet
     real :: rpos
@@ -1009,43 +1003,39 @@ end subroutine eikcoefs
     if(vmom_eq) Rpos = veq_R (r, thet)
     if(efit_eq) Rpos = eeq_R (r, thet)
     if(dfit_eq) Rpos = deq_R (r, thet)
-    if(idfit_eq)Rpos = ideq_R (r, thet)
     if(local_eq)Rpos = leq_R (r, thet)       
 
   end function Rpos
 
   function Zpos(r, thet)
 
-    use  geq, only: geq_Z => Zpos
-    use  peq, only: peq_Z => Zpos
-    use  leq, only: leq_Z => Zpos
-    use  eeq, only: eeq_Z => Zpos
-    use  deq, only: deq_Z => Zpos
-    use ideq, only: ideq_Z => Zpos
-    use  veq, only: veq_Z => Zpos
+    use geq, only: geq_Z => Zpos
+    use peq, only: peq_Z => Zpos
+    use leq, only: leq_Z => Zpos
+    use eeq, only: eeq_Z => Zpos
+    use deq, only: deq_Z => Zpos
+    use veq, only: veq_Z => Zpos
 
     real, intent (in) :: r, thet
     real :: Zpos
 
-    if(gen_eq)  Zpos =  geq_Z (r, thet)       
-    if(ppl_eq)  Zpos =  peq_Z (r, thet)       
-    if(vmom_eq) Zpos =  veq_Z (r, thet)
-    if(efit_eq) Zpos =  eeq_Z (r, thet)
-    if(dfit_eq) Zpos =  deq_Z (r, thet)
-    if(idfit_eq)Zpos = ideq_Z (r, thet)
-    if(local_eq)Zpos =  leq_Z (r, thet)       
+    if(gen_eq)  Zpos = geq_Z (r, thet)       
+    if(ppl_eq)  Zpos = peq_Z (r, thet)       
+    if(vmom_eq) Zpos = veq_Z (r, thet)
+    if(efit_eq) Zpos = eeq_Z (r, thet)
+    if(dfit_eq) Zpos = deq_Z (r, thet)
+    if(local_eq)Zpos = leq_Z (r, thet)       
 
   end function Zpos
   
   function invRfun(r, thet)
 
-    use  geq, only: geq_invR => invR
-    use  peq, only: peq_invR => invR
-    use  leq, only: leq_invR => invR
-    use  eeq, only: eeq_invR => invR
-    use  deq, only: deq_invR => invR
-    use ideq, only: ideq_invR => invR
-    use  veq, only: veq_invR => invR
+    use geq, only: geq_invR => invR
+    use peq, only: peq_invR => invR
+    use leq, only: leq_invR => invR
+    use eeq, only: eeq_invR => invR
+    use deq, only: deq_invR => invR
+    use veq, only: veq_invR => invR
 
     real, intent (in) :: r, thet
     real :: invRfun
@@ -1053,13 +1043,12 @@ end subroutine eikcoefs
 !    if(itor == 0) then
 !       invRfun=1./rmaj
 !    else
-       if(gen_eq)  invRfun =  geq_invR (r, thet)
-       if(ppl_eq)  invRfun =  peq_invR (r, thet)
-       if(vmom_eq) invRfun =  veq_invR (r, thet)
-       if(efit_eq) invRfun =  eeq_invR (r, thet)
-       if(dfit_eq) invRfun =  deq_invR (r, thet)
-       if(idfit_eq)invRfun = ideq_invR (r, thet)
-       if(local_eq)invRfun =  leq_invR (r, thet)
+       if(gen_eq)  invRfun = geq_invR (r, thet)
+       if(ppl_eq)  invRfun = peq_invR (r, thet)
+       if(vmom_eq) invRfun = veq_invR (r, thet)
+       if(efit_eq) invRfun = eeq_invR (r, thet)
+       if(dfit_eq) invRfun = deq_invR (r, thet)
+       if(local_eq)invRfun = leq_invR (r, thet)
 !    endif
     
   end function invRfun
@@ -1279,7 +1268,6 @@ end subroutine eikcoefs
     use geq, only: geq_diameter => diameter, geq_init_diameter => initialize_diameter
     use peq, only: peq_diameter => diameter, peq_init_diameter => initialize_diameter
     use veq, only: veq_diameter => diameter, veq_init_diameter => initialize_diameter
-    use ideq,only: ideq_diameter => diameter, ideq_init_diameter => initialize_diameter
     use eeq, only: bound
     
     integer :: i, initd = 1
@@ -1298,13 +1286,11 @@ end subroutine eikcoefs
        diameter=2.*rp
     else
        if (gen_eq)  i=geq_init_diameter(initd)
-       if (idfit_eq)i=ideq_init_diameter(initd)
        if (ppl_eq)  i=peq_init_diameter(initd)
        if (vmom_eq) i=veq_init_diameter(initd)
        initd=0
          
        if(gen_eq)  diameter = geq_diameter(rp)
-       if(idfit_eq)diameter = ideq_diameter(rp)
        if(ppl_eq)  diameter = peq_diameter(rp)
        if(vmom_eq) diameter = veq_diameter(rp)
        if(efit_eq) diameter = rfun(rp, 0., bound(0.)) + rfun(rp, pi, bound(pi))
@@ -1584,13 +1570,12 @@ end subroutine eikcoefs
 
   function pfun(r,thet)
 
-    use  veq, only: veq_pfun => pfun, vm_init_pressure => initialize_pressure
-    use  geq, only: geq_pfun => pfun, geq_init_pressure => initialize_pressure
-    use  peq, only: peq_pfun => pfun, ppl_init_pressure => initialize_pressure
-    use  eeq, only: eeq_pfun => pfun, efit_init_pressure => initialize_pressure
-    use  deq, only: deq_pfun => pfun, dfit_init_pressure => initialize_pressure
-    use ideq, only: ideq_pfun => pfun, idfit_init_pressure => initialize_pressure
-    use  leq, only: leq_pfun => pfun
+    use veq, only: veq_pfun => pfun, vm_init_pressure => initialize_pressure
+    use geq, only: geq_pfun => pfun, geq_init_pressure => initialize_pressure
+    use peq, only: peq_pfun => pfun, ppl_init_pressure => initialize_pressure
+    use eeq, only: eeq_pfun => pfun, efit_init_pressure => initialize_pressure
+    use deq, only: deq_pfun => pfun, dfit_init_pressure => initialize_pressure
+    use leq, only: leq_pfun => pfun
 
     real, intent (in) :: r, thet
     real :: pfun, f
@@ -1623,9 +1608,6 @@ end subroutine eikcoefs
     elseif (dfit_eq) then
        i = dfit_init_pressure(initp)
        pfun = deq_pfun(pbar)
-    elseif (idfit_eq) then
-       i = idfit_init_pressure(initp)
-       pfun = ideq_pfun(pbar)
     endif
 
     if(initp == 1) initp = 0
@@ -1634,13 +1616,12 @@ end subroutine eikcoefs
       
   function dpfun(r, thet)
 
-    use  veq, only: veq_dpfun => dpfun, vm_init_dpressure => initialize_dpressure
-    use  geq, only: geq_dpfun => dpfun, geq_init_dpressure => initialize_dpressure
-    use  peq, only: peq_dpfun => dpfun, ppl_init_dpressure => initialize_dpressure
-    use  eeq, only: eeq_dpfun => dpfun, efit_init_dpressure => initialize_dpressure
-    use  deq, only: deq_dpfun => dpfun, dfit_init_dpressure => initialize_dpressure
-    use ideq, only: ideq_dpfun => dpfun, idfit_init_dpressure => initialize_dpressure
-    use  leq, only: leq_dpfun => dpfun
+    use veq, only: veq_dpfun => dpfun, vm_init_dpressure => initialize_dpressure
+    use geq, only: geq_dpfun => dpfun, geq_init_dpressure => initialize_dpressure
+    use peq, only: peq_dpfun => dpfun, ppl_init_dpressure => initialize_dpressure
+    use eeq, only: eeq_dpfun => dpfun, efit_init_dpressure => initialize_dpressure
+    use deq, only: deq_dpfun => dpfun, dfit_init_dpressure => initialize_dpressure
+    use leq, only: leq_dpfun => dpfun
 
 
     real, intent (in) :: r, thet
@@ -1663,26 +1644,23 @@ end subroutine eikcoefs
     if(ppl_eq)  i = ppl_init_dpressure(initdp)
     if(efit_eq) i = efit_init_dpressure(initdp)
     if(dfit_eq) i = dfit_init_dpressure(initdp)
-    if(idfit_eq)i = idfit_init_dpressure(initdp)
     initdp=0
           
-    if(vmom_eq)  dpfun = veq_dpfun(pbar)
-    if(gen_eq)   dpfun = geq_dpfun(pbar)
-    if(ppl_eq)   dpfun = peq_dpfun(pbar)
-    if(efit_eq)  dpfun = eeq_dpfun(pbar)
-    if(dfit_eq)  dpfun = deq_dpfun(pbar)
-    if(idfit_eq) dpfun = ideq_dpfun(pbar)
+    if(vmom_eq) dpfun = veq_dpfun(pbar)
+    if(gen_eq)  dpfun = geq_dpfun(pbar)
+    if(ppl_eq)  dpfun = peq_dpfun(pbar)
+    if(efit_eq) dpfun = eeq_dpfun(pbar)
+    if(dfit_eq) dpfun = deq_dpfun(pbar)
     
   end function dpfun
 
   function beta_a_fun(r,thet)
     
-    use  geq, only: geq_beta => betafun,  geq_init_beta => initialize_beta
-    use  peq, only: peq_beta => betafun,  ppl_init_beta => initialize_beta
-    use  veq, only: veq_beta => betafun,   vm_init_beta => initialize_beta
-    use  eeq, only: eeq_beta => betafun, efit_init_beta => initialize_beta
-    use  deq, only: deq_beta => betafun, dfit_init_beta => initialize_beta
-    use ideq, only: ideq_beta => betafun, idfit_init_beta => initialize_beta
+    use geq, only: geq_beta => betafun,  geq_init_beta => initialize_beta
+    use peq, only: peq_beta => betafun,  ppl_init_beta => initialize_beta
+    use veq, only: veq_beta => betafun,   vm_init_beta => initialize_beta
+    use eeq, only: eeq_beta => betafun, efit_init_beta => initialize_beta
+    use deq, only: deq_beta => betafun, dfit_init_beta => initialize_beta
 
     real, intent (in) :: r, thet
     real :: beta_a_fun
@@ -1716,9 +1694,6 @@ end subroutine eikcoefs
     elseif(dfit_eq) then
        i = dfit_init_beta(initbeta)
        f = deq_beta(pbar)
-    elseif(idfit_eq) then
-       i = idfit_init_beta(initbeta)
-       f = ideq_beta(pbar)
     endif
 
     initbeta = 0
@@ -1847,13 +1822,12 @@ end subroutine eikcoefs
       
   function psi(r, thet)
 
-    use  geq, only: geq_psi => psi,  geq_init_psi => initialize_psi
-    use  peq, only: peq_psi => psi,  ppl_init_psi => initialize_psi
-    use  veq, only: veq_psi => psi,   vm_init_psi => initialize_psi
-    use  eeq, only: eeq_psi => psi, efit_init_psi => initialize_psi
-    use  deq, only: deq_psi => psi, dfit_init_psi => initialize_psi
-    use ideq, only: ideq_psi => psi, idfit_init_psi => initialize_psi
-    use  leq, only: leq_psi => psi
+    use geq, only: geq_psi => psi,  geq_init_psi => initialize_psi
+    use peq, only: peq_psi => psi,  ppl_init_psi => initialize_psi
+    use veq, only: veq_psi => psi,   vm_init_psi => initialize_psi
+    use eeq, only: eeq_psi => psi, efit_init_psi => initialize_psi
+    use deq, only: deq_psi => psi, dfit_init_psi => initialize_psi
+    use leq, only: leq_psi => psi
 
     real :: psi
     real, intent (in) :: r, thet
@@ -1888,9 +1862,6 @@ end subroutine eikcoefs
     else if(dfit_eq) then
        i = dfit_init_psi(init)
        psi = deq_psi(r, thet)
-    else if(idfit_eq) then
-       i = idfit_init_psi(init)
-       psi = ideq_psi(r, thet)
     else if(local_eq) then
        psi = leq_psi(r, thet)
     endif
@@ -1979,7 +1950,6 @@ end subroutine geofax
     use veq, only: veq_rcenter => rcenter, veq_init_rc => initialize_rcenter
     use eeq, only: bound, eeq_init_rc => initialize_bound
     use leq, only: leq_rcenter => rcenter
-    use ideq, only: ideq_rcenter => rcenter, ideq_init_rc => initialize_rcenter
 
     real, intent (in) :: rp
     real :: rcenter
@@ -1994,13 +1964,11 @@ end subroutine geofax
     if (ppl_eq)  i = peq_init_rc(init_rc) 
     if (vmom_eq) i = veq_init_rc(init_rc) 
     if (efit_eq) i = eeq_init_rc(init_rc)
-    if (idfit_eq)i = ideq_init_rc(init_rc)
     init_rc = 0
 
     rcenter=rmaj
     if(vmom_eq)  rcenter = veq_rcenter(rp)
     if(gen_eq)   rcenter = geq_rcenter(rp) 
-    if(idfit_eq) rcenter = ideq_rcenter(rp) 
     if(ppl_eq)   rcenter = peq_rcenter(rp) 
 
     if(efit_eq)  rcenter = rmaj + 0.5*(rfun(rp, 0., bound(0.))-rfun(rp,pi,bound(pi)))
@@ -2012,7 +1980,6 @@ end subroutine geofax
 
     use veq, only: veqitem => eqitem, veqB_psi => B_psi
     use geq, only: eqitem, eqB_psi => B_psi
-    use ideq, only: ideqitem => eqitem, ideqB_psi => B_psi
 
     real :: bmodfun
     real, intent (in) :: r, thet
@@ -2030,11 +1997,6 @@ end subroutine geofax
     elseif (gen_eq) then
        
        call eqitem(r, thet, eqB_psi, f, 'R')
-       bmodfun=f
-       return
-    elseif (idfit_eq) then
-       
-       call ideqitem(r, thet, ideqB_psi, f, 'R')
        bmodfun=f
        return
     else
@@ -2531,8 +2493,8 @@ end subroutine geofax
 
   end subroutine bishop_gradB
 
-  subroutine check(veq, geq, eeq, peq, leq, deq, ideq)
-    logical, intent(in) :: veq, geq, eeq, peq, leq, deq, ideq
+  subroutine check(veq, geq, eeq, peq, leq, deq)
+    logical, intent(in) :: veq, geq, eeq, peq, leq, deq
     
     if(veq .and. geq) then
        write(*,*) 'Choosing vmom_eq = .true. AND gen_eq = .true. is not permitted.'
@@ -2628,13 +2590,12 @@ end subroutine geofax
 
   subroutine grad(rgrid, theta, gradf, char, rp, nth, ntgrid)
      
-     use  geq, only:  geq_gradient => gradient
-     use  peq, only:  peq_gradient => gradient
-     use  veq, only:  veq_gradient => gradient
-     use  eeq, only:  eeq_gradient => gradient
-     use  deq, only:  deq_gradient => gradient
-     use ideq, only: ideq_gradient => gradient
-     use  leq, only:  leq_gradient => gradient
+     use geq, only: geq_gradient => gradient
+     use peq, only: peq_gradient => gradient
+     use veq, only: veq_gradient => gradient
+     use eeq, only: eeq_gradient => gradient
+     use deq, only: deq_gradient => gradient
+     use leq, only: leq_gradient => gradient
 
      integer :: nth, ntgrid
      real, dimension(-ntgrid:) :: rgrid, theta
@@ -2642,25 +2603,23 @@ end subroutine geofax
      character*1 :: char
      real rp
 
-     if(gen_eq)   call  geq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(ppl_eq)   call  peq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(vmom_eq)  call  veq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(efit_eq)  call  eeq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(dfit_eq)  call  deq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(idfit_eq) call ideq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(local_eq) call  leq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(gen_eq)   call geq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(ppl_eq)   call peq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(vmom_eq)  call veq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(efit_eq)  call eeq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(dfit_eq)  call deq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(local_eq) call leq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
 
    end subroutine grad
 
    subroutine bgrad(rgrid, theta, gradf, char, rp, nth, ntgrid)
      
-     use  geq, only:  geq_bgradient => bgradient
-     use  peq, only:  peq_bgradient => bgradient
-     use  veq, only:  veq_bgradient => bgradient
-     use  eeq, only:  eeq_bgradient => bgradient
-     use  deq, only:  deq_bgradient => bgradient
-     use ideq, only: ideq_bgradient => bgradient
-     use  leq, only:  leq_bgradient => bgradient
+     use geq, only: geq_bgradient => bgradient
+     use peq, only: peq_bgradient => bgradient
+     use veq, only: veq_bgradient => bgradient
+     use eeq, only: eeq_bgradient => bgradient
+     use deq, only: deq_bgradient => bgradient
+     use leq, only: leq_bgradient => bgradient
 
      integer :: nth, ntgrid
      real, dimension(-ntgrid:) :: rgrid, theta
@@ -2668,13 +2627,12 @@ end subroutine geofax
      character*1 :: char
      real rp
 
-     if(gen_eq)   call  geq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(ppl_eq)   call  peq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(vmom_eq)  call  veq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(efit_eq)  call  eeq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(dfit_eq)  call  deq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(idfit_eq) call ideq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(local_eq) call  leq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(gen_eq)   call geq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(ppl_eq)   call peq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(vmom_eq)  call veq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(efit_eq)  call eeq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(dfit_eq)  call deq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(local_eq) call leq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
 
    end subroutine bgrad
 

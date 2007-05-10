@@ -12,14 +12,13 @@ module dist_fn
   public :: intcheck, vortcheck, fieldcheck
   public :: finish_intcheck, finish_vortcheck, finish_fieldcheck
   public :: t0, omega0, gamma0, thetas, k0, nperiod_guard, source0
-  public :: reset_init, write_g
+  public :: reset_init, write_g, get_apar_ext, get_phi_ext
   public :: M_class, N_class, i_class
   public :: l_links, r_links, itright, itleft, boundary
 
   private
 
   ! knobs
-  complex :: asource0, asource0new, asource_p, asource_m
   complex, dimension (:), allocatable :: fexp ! (nspec)
   real, dimension (:), allocatable :: bkdiff  ! (nspec)
   integer, dimension (:), allocatable :: bd_exp ! nspec
@@ -40,18 +39,17 @@ module dist_fn
        source_option_zero = 2, source_option_sine = 3, &
        source_option_test1 = 4, source_option_phiext_full = 5, &
        source_option_test2_full = 6, source_option_cosine = 7, &
-       source_option_convect_full = 8, source_option_aext_full = 9
+       source_option_convect_full = 8
   integer :: boundary_option_switch
   integer, parameter :: boundary_option_zero = 1, &
        boundary_option_self_periodic = 2, &
        boundary_option_alternate_zero = 3, &
-       boundary_option_linked = 4
+       boundary_option_conn_via_guards = 4, &
+       boundary_option_linked = 5
   logical :: mult_imp, test
   logical :: save_n, save_u, save_Tpar, save_Tperp
-  logical :: accelerated_x = .false.
-  logical :: accelerated_v = .false.
   integer :: nperiod_guard
-  
+
 ! k_parallel filter items
   real, dimension(:), allocatable :: work, tablekp
   real :: scale
@@ -87,8 +85,6 @@ module dist_fn
   complex, dimension (:,:,:), allocatable, save :: gnl_1, gnl_2
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
-  complex, dimension (:), allocatable :: asourcegavg
-
   ! momentum conservation
   complex, dimension (:,:), allocatable :: g3int
   real, dimension (:,:,:), allocatable :: sq
@@ -107,6 +103,10 @@ module dist_fn
   type (connections_type), dimension (:), allocatable :: connections
   ! (-g-layout-)
 
+  ! connected-via-guards only
+  integer :: lslo, lshi, ldlo, ldhi
+  integer :: rslo, rshi, rdlo, rdhi
+
   ! linked only
   type (redist_type), save :: gc_from_left, gc_from_right
   type (redist_type), save :: links_p, links_h
@@ -117,6 +117,8 @@ module dist_fn
   logical :: no_comm = .false.
   integer, dimension(:), allocatable :: M_class, N_class
   integer :: i_class
+
+  integer :: ntgrid_noguard
 
   logical :: initialized = .false.
   logical :: initializing = .true.
@@ -143,7 +145,14 @@ contains
     call init_species
     call init_theta_grid
     call init_kt_grids
-    call init_le_grids (accelerated_x, accelerated_v)
+    call init_le_grids
+    call init_run_parameters
+    call init_collisions
+    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    call init_init_g
+    call init_nonlinear_terms 
+    call init_additional_linear_terms
+
     call read_parameters
 
     if (test) then
@@ -157,13 +166,6 @@ contains
        call finish_mp
        stop
     end if
-
-    call init_run_parameters
-    call init_collisions
-    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
-    call init_init_g
-    call init_nonlinear_terms 
-    call init_additional_linear_terms
 
     call allocate_arrays
     call init_vpar
@@ -184,7 +186,7 @@ contains
     use species, only: nspec
     use mp, only: proc0, broadcast
     implicit none
-    type (text_option), dimension (10), parameter :: sourceopts = &
+    type (text_option), dimension (9), parameter :: sourceopts = &
          (/ text_option('default', source_option_full), &
             text_option('full', source_option_full), &
             text_option('zero', source_option_zero), &
@@ -192,12 +194,11 @@ contains
             text_option('cosine', source_option_cosine), &
             text_option('test1', source_option_test1), &
             text_option('phiext_full', source_option_phiext_full), &
-            text_option('aext_full', source_option_aext_full), &
             text_option('test2_full', source_option_test2_full), &
             text_option('convect_full', source_option_convect_full) /)
     character(20) :: source_option
 
-    type (text_option), dimension (8), parameter :: boundaryopts = &
+    type (text_option), dimension (9), parameter :: boundaryopts = &
          (/ text_option('default', boundary_option_zero), &
             text_option('zero', boundary_option_zero), &
             text_option('unconnected', boundary_option_zero), &
@@ -205,7 +206,9 @@ contains
             text_option('periodic', boundary_option_self_periodic), &
             text_option('kperiod=1', boundary_option_self_periodic), &
             text_option('linked', boundary_option_linked), &
-            text_option('alternate-zero', boundary_option_alternate_zero) /)
+            text_option('alternate-zero', boundary_option_alternate_zero), &
+            text_option('connected-via-guards', &
+                        boundary_option_conn_via_guards) /)
     character(20) :: boundary_option
 
     type (text_option), dimension (8), parameter :: adiabaticopts = &
@@ -240,6 +243,7 @@ contains
        gridfac = 5e4
        apfac = 1.0
        driftknob = 1.0
+       nperiod_guard = 1
        t0 = 100.0
        source0 = 1.0
        omega0 = 0.0
@@ -275,7 +279,23 @@ contains
             (adiabatic_option, adiabaticopts, adiabatic_option_switch, &
             ierr, "adiabatic_option in dist_fn_knobs")
 
-       nperiod_guard = 0
+       if (boundary_option_switch == boundary_option_conn_via_guards) then
+          if (nperiod_guard > ((nperiod-1)*2+1)/3) then
+             nperiod_guard = ((nperiod-1)*2+1)/3
+             write (error_unit(), *) "WARNING: nperiod_guard is too large ", &
+                  "for nperiod=", nperiod, &
+                  ", setting nperiod_guard to ", nperiod_guard
+             print *, "WARNING: nperiod_guard is too large ", &
+                  "for nperiod=", nperiod, &
+                  ", setting nperiod_guard to ", nperiod_guard
+          end if
+
+          if (nperiod_guard <= 0) then
+             boundary_option_switch = boundary_option_zero
+          end if
+       else
+          nperiod_guard = 0
+       end if
     end if
     if (.not.allocated(fexp)) allocate (fexp(nspec), bkdiff(nspec), bd_exp(nspec))
     if (proc0) call read_species_knobs
@@ -743,6 +763,23 @@ contains
     end do
 
     select case (boundary_option_switch)
+    case (boundary_option_conn_via_guards)
+       call init_connected_bc
+
+       if (.not. allocated(l_links)) then
+          allocate (l_links(naky, ntheta0))
+          allocate (r_links(naky, ntheta0))
+          allocate (n_links(2, naky, ntheta0))
+       end if
+       l_links = 0;   r_links = 0;  n_links = 0
+       
+       i_class = 1
+       if (.not. allocated(M_class)) then
+          allocate (M_class(i_class))
+          allocate (N_class(i_class))
+       end if
+       M_class = naky*ntheta0 ; N_class = 1
+       
     case (boundary_option_linked)
        call init_connected_bc
     case default
@@ -760,6 +797,7 @@ contains
        end if
        M_class = naky*ntheta0 ; N_class = 1
        
+       ntgrid_noguard = ntgrid
     end select
 
     initializing = .false.
@@ -788,7 +826,6 @@ contains
     integer :: iglo_left, iglo_right, i, j, k
     integer :: iglo_star, it_star, ncell
     integer :: n, isign, ig, n_links_max, nn_max
-    integer :: ng
     integer, dimension(naky*ntheta0) :: n_k
 
     logical :: done = .false.
@@ -796,12 +833,14 @@ contains
     if (done) return
     done = .true.
 
-    ng = ntheta/2 + (nperiod-1)*ntheta
+    ntgrid_noguard = ntheta/2 + (nperiod-nperiod_guard-1)*ntheta
 
     if (naky > 1 .and. ntheta0 > 1) then
-       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,2)-theta0(1,2)) + 0.1)
+       jshift0 = int((theta(ntgrid_noguard)-theta(-ntgrid_noguard)) &
+                     /(theta0(2,2)-theta0(1,2)) + 0.1)
     else if (naky == 1 .and. ntheta0 > 1 .and. aky(1) /= 0.0) then
-       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,1)-theta0(1,1)) + 0.1)
+       jshift0 = int((theta(ntgrid_noguard)-theta(-ntgrid_noguard)) &
+                     /(theta0(2,1)-theta0(1,1)) + 0.1)
     else
        jshift0 = 1
     end if
@@ -1617,6 +1656,169 @@ contains
 
     end if
 
+    if (boundary_option_switch == boundary_option_conn_via_guards) then
+       ldlo = -ntgrid
+       ldhi = -ntgrid + ntheta*nperiod_guard - 1
+       lslo = -ntgrid + ntheta*nperiod_guard + 1
+       lshi = -ntgrid + 2*ntheta*nperiod_guard
+
+       rdhi = ntgrid
+       rdlo = ntgrid - ntheta*nperiod_guard + 1
+       rshi = ntgrid - ntheta*nperiod_guard - 1
+       rslo = ntgrid - 2*ntheta*nperiod_guard
+
+       nn_from_left = 0
+       nn_to_right = 0
+
+       nn_from_right = 0
+       nn_to_left = 0
+
+       do iglo = g_lo%llim_world, g_lo%ulim_world
+          ip = proc_id(g_lo,iglo)
+          call get_left_connection (iglo, iglo_left, ipleft)
+          call get_right_connection (iglo, iglo_right, ipright)
+
+          if (ip == iproc .and. ipleft >= 0) then
+             do isign = 1, 2
+                do ig = lslo, lshi
+                   nn_from_left(ipleft) = nn_from_left(ipleft) + 1
+                end do
+             end do
+          end if
+          if (ipleft == iproc) then 
+             do isign = 1, 2
+                do ig = rdlo, rdhi
+                   nn_to_right(ip) = nn_to_right(ip) + 1
+                end do
+             end do
+          endif
+
+          if (ip == iproc .and. ipright >= 0) then
+             do isign = 1, 2
+                do ig = rslo, rshi
+                   nn_from_right(ipright) = nn_from_right(ipright) +1
+                end do
+             end do
+          end if
+          if (ipright == iproc) then
+             do isign = 1, 2
+                do ig = ldlo, ldhi
+                   nn_to_left(ip) = nn_to_left(ip) + 1
+                end do
+             end do
+          end if
+       end do
+
+       do ip = 0, nproc-1
+          if (nn_from_left(ip) > 0) then
+             allocate (from_left(ip)%first(nn_from_left(ip)))
+             allocate (from_left(ip)%second(nn_from_left(ip)))
+             allocate (from_left(ip)%third(nn_from_left(ip)))
+          endif
+          if (nn_to_right(ip) > 0) then
+             allocate (to_right(ip)%first(nn_to_right(ip)))
+             allocate (to_right(ip)%second(nn_to_right(ip)))
+             allocate (to_right(ip)%third(nn_to_right(ip)))
+          endif
+          if (nn_from_right(ip) > 0) then
+             allocate (from_right(ip)%first(nn_from_right(ip)))
+             allocate (from_right(ip)%second(nn_from_right(ip)))
+             allocate (from_right(ip)%third(nn_from_right(ip)))
+          endif
+          if (nn_to_left(ip) > 0) then
+             allocate (to_left(ip)%first(nn_to_left(ip)))
+             allocate (to_left(ip)%second(nn_to_left(ip)))
+             allocate (to_left(ip)%third(nn_to_left(ip)))
+          endif
+       end do
+
+       nn_from_left = 0
+       nn_to_right = 0
+
+       nn_from_right = 0
+       nn_to_left = 0
+
+       do iglo = g_lo%llim_world, g_lo%ulim_world
+          ip = proc_id(g_lo,iglo)
+          call get_left_connection (iglo, iglo_left, ipleft)
+          call get_right_connection (iglo, iglo_right, ipright)
+
+          if (ip == iproc .and. ipleft >= 0) then
+             do isign = 1, 2
+                do ig = lslo, lshi
+                   n = nn_from_left(ipleft) + 1
+                   nn_from_left(ipleft) = n
+                   from_left(ipleft)%first(n) = ig
+                   from_left(ipleft)%second(n) = isign
+                   from_left(ipleft)%third(n) = iglo
+                end do
+             end do
+          end if
+          if (ipleft == iproc) then
+             do isign = 1, 2
+                do ig = rdlo, rdhi
+                   n = nn_to_right(ip) + 1
+                   nn_to_right(ip) = n
+                   to_right(ip)%first(n) = ig
+                   to_right(ip)%second(n) = isign
+                   to_right(ip)%third(n) = iglo_left
+                end do
+             end do
+          end if
+
+          if (ip == iproc .and. ipright >= 0) then
+             do isign = 1, 2
+                do ig = rslo, rshi
+                   n = nn_from_right(ipright) + 1
+                   nn_from_right(ipright) = n
+                   from_right(ipright)%first(n) = ig
+                   from_right(ipright)%second(n) = isign
+                   from_right(ipright)%third(n) = iglo
+                end do
+             end do
+          end if
+          if (ipright == iproc) then
+             do isign = 1, 2
+                do ig = ldlo, ldhi
+                   n = nn_to_left(ip) + 1
+                   nn_to_left(ip) = n
+                   to_left(ip)%first(n) = ig
+                   to_left(ip)%second(n) = isign
+                   to_left(ip)%third(n) = iglo_right
+                end do
+             end do
+          end if
+       end do
+
+       from_low (1) = -ntgrid
+       from_low (2) = 1
+       from_low (3) = g_lo%llim_proc
+       
+       to_low (1) = -ntgrid
+       to_low (2) = 1 
+       to_low (3) = g_lo%llim_proc
+       
+       to_high(1) = ntgrid
+       to_high(2) = 2
+       to_high(3) = g_lo%ulim_alloc
+
+       from_high(1) = ntgrid
+       from_high(2) = 2
+       from_high(3) = g_lo%ulim_alloc
+
+       call init_fill ( gc_from_left, 'c', to_low, to_high, to_right, &
+            from_low, from_high, from_left)
+       call init_fill (gc_from_right, 'c', to_low, to_high, to_left, &
+            from_low, from_high, from_right)
+       
+       call delete_list (from_left)
+       call delete_list (to_right)
+       
+       call delete_list (from_right)
+       call delete_list (to_left)
+
+    end if
+
   end subroutine init_connected_bc
 
   subroutine get_left_connection (iglo, iglo_left, iproc_left)
@@ -1688,12 +1890,6 @@ contains
        else
           allocate (gnl_1(1,2,1), gnl_2(1,2,1))
        end if
-       select case (source_option_switch)
-       case (source_option_aext_full)
-          allocate (asourcegavg(-ntgrid:ntgrid))
-       case default
-          ! nothing
-       end select
        if (boundary_option_switch == boundary_option_linked) then
           allocate (g_h(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           g_h = 0.
@@ -1748,7 +1944,8 @@ contains
     use le_grids, only: integrate, geint2g
     use gs2_layouts, only: g_lo, geint_lo
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1
-    complex, dimension (:,:), allocatable :: g0eint, g1eint
+    complex, dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) &
+         :: g0eint, g1eint
     
     real, dimension (:,:), allocatable, save :: aintnorm
     logical :: diff_first = .true.
@@ -1757,8 +1954,6 @@ contains
 
     if (D_etg < 0.) return
 
-    allocate (g0eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-    allocate (g1eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
     if (diff_first) then
        diff_first = .false.
        allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
@@ -1797,7 +1992,6 @@ contains
     call geint2g (g0eint, g0)
     g0 = g1 + g0
     
-    deallocate (g0eint, g1eint)
   end subroutine diffuse
 
   subroutine kill (g0, g1)
@@ -1810,8 +2004,10 @@ contains
     use gs2_layouts, only: g_lo, geint_lo, gint_lo, il_idx
     use constants
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1
-    complex, dimension (:,:), allocatable :: g0eint, g1eint
-    complex, dimension (:,:), allocatable :: g1int, g2int
+    complex, dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) &
+         :: g0eint, g1eint
+    complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc) &
+         :: g1int, g2int
     
     real, dimension (:,:), allocatable, save :: aintnorm
     real :: x
@@ -1826,8 +2022,6 @@ contains
        D_kill = 0.5*sqrt(pi/2.)*noise*chi_int
     end if
 
-    allocate (g0eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-    allocate (g1eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
     if (diff_first) then
        diff_first = .false.
        allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
@@ -1862,8 +2056,6 @@ contains
 
 ! get initial momentum
     if (save_u) then
-       allocate (g1int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
-       allocate (g2int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           il = il_idx(g_lo,iglo)
           g1(:,:,iglo) = g0(:,:,iglo)*sq(:,il,:)
@@ -1906,14 +2098,11 @@ contains
        end do
        call gint2g (g1int, g1)
 
-       deallocate (g1int, g2int)
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           il = il_idx(g_lo,iglo)
           g0(:,:,iglo) = g0(:,:,iglo) + sq(:,il,:)*g1(:,:,iglo)
        end do
     end if
-
-    deallocate (g0eint, g1eint)
 
   end subroutine kill
 
@@ -1937,7 +2126,7 @@ contains
     integer, intent (in) :: isgn, iglo
     complex, intent (in) :: sourcefac
     complex, dimension (-ntgrid:), intent (out) :: source
-    real :: tfac, timep
+    real :: tfac
 
     integer :: ig, ik, it, il, ie, is
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
@@ -1951,8 +2140,7 @@ contains
     phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
                 *aj0(:,iglo)*fphi &
              + (fexp(is)*aperp(:,it,ik) + (1.0-fexp(is))*aperpnew(:,it,ik))&
-!                *aj1(:,iglo)*faperp*2.0*vperp2(:,iglo)*spec(is)%tz
-                *aj1(:,iglo)*faperp*2.0*vperp2(:,iglo)*abs(spec(is)%tz)
+                *aj1(:,iglo)*faperp*2.0*vperp2(:,iglo)*spec(is)%tz
     apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
                 *aj0(:,iglo)*fapar
 
@@ -1978,30 +2166,6 @@ contains
           if (istep > 0 .and. aky(ik) < epsilon(0.0)) then
              source(:ntgrid-1) = source(:ntgrid-1) &
                   - zi*anon(ie,is)*wdrift(:ntgrid-1,iglo)*2.0*phi_ext*sourcefac
-          end if
-       else
-          source = 0.0
-       end if
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Solve self-consistent terms + include external A_par * F_0
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case(source_option_aext_full)
-       if (il <= lmax) then
-          call set_source
-          if (istep > 0) then
-
-             asourcegavg = sin(theta)*(fexp(is)*asource0 &
-                                       +(1.0-fexp(is))*asource0new)*aj0(:,iglo)
-
-             do ig = -ntgrid, ntgrid-1
-                asource_p = asourcegavg(ig+1)+asourcegavg(ig)
-                asource_m = (aj0(ig+1,iglo)*sin(theta(ig+1))+aj0(ig,iglo)*sin(theta(ig)))&
-                     *(asource0new-asource)*0.5
-                source(ig) = source(ig)+anon(ie,is)*vpac(ig,isgn,iglo)*a_ext* &
-                     (spec(is)%zstm*asource_m+zi*wstar(ie,ik,is)*asource_p*spec(is)%stm)
-             end do
-
           end if
        else
           source = 0.0
@@ -2096,7 +2260,6 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     if (source_option_switch == source_option_full .or. &
         source_option_switch == source_option_phiext_full .or. &
-        source_option_switch == source_option_aext_full .or. &
         source_option_switch == source_option_test2_full .or. &
         source_option_switch == source_option_test1) then
        if (nlambda > ng2 .and. isgn == 2) then
@@ -2110,15 +2273,6 @@ contains
 
           if (source_option_switch == source_option_phiext_full .and.  &
                aky(ik) < epsilon(0.0) .and. istep > 0) then
-             do ig = -ntgrid, ntgrid
-                if (il /= ittp(ig)) cycle             
-                source(ig) = source(ig) - zi*anon(ie,is)* &
-                     wdriftttp(ig,ie,it,ik,is)*phi_ext*sourcefac          
-             end do
-          endif
-
-!!! just plain wrong at this point: 
-          if (source_option_switch == source_option_aext_full .and. istep > 0) then
              do ig = -ntgrid, ntgrid
                 if (il /= ittp(ig)) cycle             
                 source(ig) = source(ig) - zi*anon(ie,is)* &
@@ -2281,8 +2435,26 @@ contains
 
     kperiod_flag = kperiod_flag .or. aky(ik) == 0.0
 
-    ntgl = -ntgrid
-    ntgr = ntgrid
+    if (boundary_option_switch == boundary_option_conn_via_guards) then
+       if (istep == 0 .and. .not. kperiod_flag) then
+          ntgl = -ntgrid
+          ntgr = ntgrid
+       else
+          if (itleft(ik,it) < 0 .or. kperiod_flag) then
+             ntgl = -ntgrid_noguard
+          else
+             ntgl = -ntgrid
+          end if
+          if (itright(ik,it) < 0 .or. kperiod_flag) then
+             ntgr = ntgrid_noguard
+          else
+             ntgr = ntgrid
+          end if
+       end if
+    else
+       ntgl = -ntgrid
+       ntgr = ntgrid
+    end if
 
 ! ng2+1 is WFB
 
@@ -2365,7 +2537,6 @@ contains
 
 ! case of linked .and. WFB has problem, particularly when nu > 0, dt << 1
 ! wfb solution below fails with real links.  need to balance this properly
-! this has been fixed I believe (should double check)
 
     if (boundary_option_switch == boundary_option_linked) then
        if (speriod_flag .and. il <= ng2+1) then
@@ -2411,6 +2582,13 @@ contains
        gnew(:,2,iglo) = 0.0
     end where
 
+! fill in periodic regions as appropriate
+    if (boundary_option_switch == boundary_option_conn_via_guards &
+         .and. kperiod_flag) then
+       gnew (ldlo:ldhi,:,iglo) = gnew(rslo:rshi,:,iglo)
+       gnew (rdlo:rdhi,:,iglo) = gnew(lslo:lshi,:,iglo)
+    end if
+
 !    if (istep == 1) then
 !       write(*,*) kperiod_flag
 !       if (ik == 2 .and. it == 1) then
@@ -2441,6 +2619,98 @@ contains
     end subroutine self_periodic
 
   end subroutine invert_rhs_1
+
+  subroutine invert_rhs_conn_via_guards &
+       (phi, apar, aperp, phinew, aparnew, aperpnew, istep, sourcefac)
+    use dist_fn_arrays, only: g
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: g_lo
+    use redistribute, only: fill
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    aperp
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, aperpnew
+    integer, intent (in) :: istep
+    complex, intent (in) :: sourcefac
+
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) &
+         :: phig, aparg, aperpg, phinewg, aparnewg, aperpnewg
+    integer :: ik, it, itl, itr
+    integer :: iglo
+
+    phig = phi
+    aparg = apar
+    aperpg = aperp
+    phinewg = phinew
+    aparnewg = aparnew
+    aperpnewg = aperpnew
+    if (istep > 0) then
+       do ik = 1, naky
+          do it = 1, ntheta0
+             itl = itleft(ik,it)
+             itr = itright(ik,it)
+
+             if (itl >= 0) then
+                phig     (ldlo:ldhi,it,ik) = phi     (rslo:rshi,itl,ik)
+                aparg    (ldlo:ldhi,it,ik) = apar    (rslo:rshi,itl,ik)
+                aperpg   (ldlo:ldhi,it,ik) = aperp   (rslo:rshi,itl,ik)
+                phinewg  (ldlo:ldhi,it,ik) = phinew  (rslo:rshi,itl,ik)
+                aparnewg (ldlo:ldhi,it,ik) = aparnew (rslo:rshi,itl,ik)
+                aperpnewg(ldlo:ldhi,it,ik) = aperpnew(rslo:rshi,itl,ik)
+             else
+                phig     (ldlo:ldhi,it,ik) = 0.0
+                aparg    (ldlo:ldhi,it,ik) = 0.0
+                aperpg   (ldlo:ldhi,it,ik) = 0.0
+                phinewg  (ldlo:ldhi,it,ik) = 0.0
+                aparnewg (ldlo:ldhi,it,ik) = 0.0
+                aperpnewg(ldlo:ldhi,it,ik) = 0.0
+             end if
+
+             if (itr >= 0) then
+                phig     (rdlo:rdhi,it,ik) = phi     (lslo:lshi,itr,ik)
+                aparg    (rdlo:rdhi,it,ik) = apar    (lslo:lshi,itr,ik)
+                aperpg   (rdlo:rdhi,it,ik) = aperp   (lslo:lshi,itr,ik)
+                phinewg  (rdlo:rdhi,it,ik) = phinew  (lslo:lshi,itr,ik)
+                aparnewg (rdlo:rdhi,it,ik) = aparnew (lslo:lshi,itr,ik)
+                aperpnewg(rdlo:rdhi,it,ik) = aperpnew(lslo:lshi,itr,ik)
+             else
+                phig     (rdlo:rdhi,it,ik) = 0.0
+                aparg    (rdlo:rdhi,it,ik) = 0.0
+                aperpg   (rdlo:rdhi,it,ik) = 0.0
+                phinewg  (rdlo:rdhi,it,ik) = 0.0
+                aparnewg (rdlo:rdhi,it,ik) = 0.0
+                aperpnewg(rdlo:rdhi,it,ik) = 0.0
+             end if
+
+          end do
+       end do
+
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          if (connections(iglo)%iproc_left < 0) then
+             g(ldlo:ldhi,1,iglo) = 0.0
+             g(ldlo:ldhi,2,iglo) = 0.0
+          end if
+          if (connections(iglo)%iproc_right < 0) then
+             g(rdlo:rdhi,1,iglo) = 0.0
+             g(rdlo:rdhi,2,iglo) = 0.0
+          end if
+       end do
+
+       call fill (gc_from_left, g, g)
+       call fill (gc_from_right, g, g)
+
+    else
+       ! no guard copies when initializing response matrix
+       ! (plus, making the copies would make the matrix singular)
+       ! g = 0 when initializing response matrix
+    end if
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       call invert_rhs_1 &
+            (phig, aparg, aperpg, phinewg, aparnewg, aperpnewg, &
+            istep, iglo, sourcefac)
+    end do
+  end subroutine invert_rhs_conn_via_guards
 
   subroutine invert_rhs_linked &
        (phi, apar, aperp, phinew, aparnew, aperpnew, istep, sourcefac)
@@ -2576,7 +2846,6 @@ contains
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_time, only: stime
-    use run_parameters, only: delt
     use constants
     use prof, only: prof_entering, prof_leaving
     implicit none
@@ -2586,7 +2855,7 @@ contains
 
     integer :: iglo
 
-    real :: time, timep
+    real :: time
     complex :: sourcefac
 
     call prof_entering ("invert_rhs", "dist_fn")
@@ -2598,21 +2867,13 @@ contains
        sourcefac = (0.5 - 0.5*cos(pi*time/t0))*exp(-zi*omega0*time+gamma0*time)
     end if
 
-! factor of tunits missing -> must not use omega* units 
-    select case (source_option_switch)
-    case (source_option_aext_full)
-       timep = time + delt
-       asource0    = source0*exp(-zi*omega0*time +gamma0*time )
-       asource0new = source0*exp(-zi*omega0*timep+gamma0*timep)
-    case default
-       ! nothing
-    end select
-
-
     select case (boundary_option_switch)
     case (boundary_option_linked)
        call invert_rhs_linked &
             (phi, apar, aperp, phinew, aparnew, aperpnew, istep, sourcefac) 
+    case (boundary_option_conn_via_guards)
+       call invert_rhs_conn_via_guards &
+            (phi, apar, aperp, phinew, aparnew, aperpnew, istep, sourcefac)
     case default
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           call invert_rhs_1 (phi, apar, aperp, phinew, aparnew, aperpnew, &
@@ -2676,7 +2937,6 @@ contains
 
     integer :: ik, it, isgn, ie, is, iglo
 
-! returns moment integrals to PE 0
     call prof_entering ("getmoms", "dist_fn")
 
 ! total density
@@ -2745,6 +3005,14 @@ contains
     select case (boundary_option_switch)
     case (boundary_option_self_periodic)
        ! nothing
+    case (boundary_option_conn_via_guards)
+       do it = 1, ntheta0
+          do ik = 1, naky
+             if (aky(ik) == 0.0) cycle
+             if (itleft(ik,it) < 0) gridfac1(-ntgrid_noguard,it,ik) = gridfac
+             if (itright(ik,it) < 0) gridfac1(ntgrid_noguard,it,ik) = gridfac
+          end do
+       end do
     case (boundary_option_linked)
        do it = 1, ntheta0
           do ik = 1, naky
@@ -2832,9 +3100,11 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
     complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
     real, allocatable, dimension(:,:), save :: fl_avg, awgt
-    integer :: ik, it
+    integer :: ik, it, ng
     logical :: first = .true.
     
+    ng = ntgrid_noguard
+
     if (first) allocate (fl_avg(ntheta0, naky))
     fl_avg = 0.
 
@@ -2847,14 +3117,17 @@ contains
              do ik = 1, naky
                 do it = 1, ntheta0
                    if (aky(ik) > epsilon(0.0)) cycle
-                   awgt(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
+                   awgt(it,ik) = 1.0/sum(delthet(-ng:ng)  &
+                        *gamtot3(-ng:ng,it,ik))
                 end do
              end do
           endif
           
           do ik = 1, naky
              do it = 1, ntheta0
-                fl_avg(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
+                fl_avg(it,ik) = tite*sum(delthet(-ng:ng)  &
+                     *antot(-ng:ng,it,ik)/gamtot(-ng:ng,it,ik)) &
+                     *awgt(it,ik)
              end do
           end do
           
@@ -2868,14 +3141,17 @@ contains
              do ik = 1, naky
                 do it = 1, ntheta0
                    if (aky(ik) > epsilon(0.0)) cycle
-                   awgt(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
+                   awgt(it,ik) = 1.0/sum(delthet(-ng:ng)  &
+                        *jacob(-ng:ng)*gamtot3(-ng:ng,it,ik))
                 end do
              end do
           endif
           
           do ik = 1, naky
              do it = 1, ntheta0
-                fl_avg(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
+                fl_avg(it,ik) = tite*sum(delthet(-ng:ng)  &
+                     *jacob(-ng:ng)*antot(-ng:ng,it,ik)/gamtot(-ng:ng,it,ik)) &
+                     *awgt(it,ik)
              end do
           end do
        end if
@@ -2907,17 +3183,11 @@ contains
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
     complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
-    complex, dimension (:,:,:), allocatable :: antot, antota, antotp
-
-    allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
-    allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
-    allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: antot, antota, antotp
 
     call getan (antot, antota, antotp)
     call getfieldeq1 (phi, apar, aperp, antot, antota, antotp, &
          fieldeq, fieldeqa, fieldeqp)
-
-    deallocate (antot, antota, antotp)
   end subroutine getfieldeq
   
   subroutine getfieldexp (phi, apar, aperp)
@@ -2925,16 +3195,11 @@ contains
     use kt_grids, only: naky, ntheta0
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, aperp
-    complex, dimension (:,:,:), allocatable :: antot, antota, antotp
-
-    allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
-    allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
-    allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: antot, antota, antotp
 
     call getan (antot, antota, antotp)
     call getfieldeq2 (phi, apar, aperp, antot, antota, antotp)
 
-    deallocate (antot, antota, antotp)
   end subroutine getfieldexp
   
   subroutine getfieldeq2 (phi, apar, aperp, antot, antota, antotp)
@@ -2950,9 +3215,11 @@ contains
     real, allocatable, dimension(:,:), save :: fl_avg, awgt
     real, allocatable, dimension(:), save :: bfac
     real :: f5
-    integer :: ig, ik, it
+    integer :: ig, ik, it, ng
     logical :: first = .true.
     
+    ng = ntgrid_noguard
+
     if (first) then
 ! prepare for field-line-average term: 
        allocate (fl_avg(ntheta0, naky))
@@ -2996,14 +3263,17 @@ contains
              do ik = 1, naky
                 do it = 1, ntheta0
                    if (aky(ik) > epsilon(0.0)) cycle
-                   awgt(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
+                   awgt(it,ik) = 1.0/sum(delthet(-ng:ng)  &
+                        *gamtot3(-ng:ng,it,ik))
                 end do
              end do
           endif
           
           do ik = 1, naky
              do it = 1, ntheta0
-                fl_avg(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
+                fl_avg(it,ik) = tite*sum(delthet(-ng:ng)  &
+                     *antot(-ng:ng,it,ik)/gamtot(-ng:ng,it,ik)) &
+                     *awgt(it,ik)
              end do
           end do
        end if
@@ -3016,14 +3286,17 @@ contains
              do ik = 1, naky
                 do it = 1, ntheta0
                    if (aky(ik) > epsilon(0.0)) cycle
-                   awgt(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
+                   awgt(it,ik) = 1.0/sum(delthet(-ng:ng)  &
+                        *jacob(-ng:ng)*gamtot3(-ng:ng,it,ik))
                 end do
              end do
           endif
           
           do ik = 1, naky
              do it = 1, ntheta0
-                fl_avg(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
+                fl_avg(it,ik) = tite*sum(delthet(-ng:ng)  &
+                     *jacob(-ng:ng)*antot(-ng:ng,it,ik)/gamtot(-ng:ng,it,ik)) &
+                     *awgt(it,ik)
              end do
           end do
        end if
@@ -3119,11 +3392,13 @@ contains
     real, dimension (:,:,:), intent (out) :: qflux_par, qmflux_par, qbflux_par
     real, dimension (:,:,:), intent (out) :: qflux_perp, qmflux_perp, qbflux_perp
     real, intent (out) :: anorm
-    real, dimension (:,:,:), allocatable :: dnorm
+    real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: dnorm
     integer :: ig, it, ik, is, isgn
     integer :: iglo
 
-    allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
+    integer :: ng
+
+    ng = ntgrid_noguard
 
     if (proc0) then
        pflux = 0.0;   qflux = 0.0;   vflux = 0.0
@@ -3133,23 +3408,22 @@ contains
     if (adiabatic_option_switch == adiabatic_option_noJ) then
        dnorm = 1.
     else
-       do ik = 1, naky
-          do it = 1, ntheta0
-             dnorm(:,it,ik) = grho/bmag/gradpar
-          end do
+       do ig = -ng, ng
+          dnorm(ig,:,:) = grho(ig)/bmag(ig)/gradpar(ig)
        end do
     end if
 
     do ik = 1, naky
        do it = 1, ntheta0
-          dnorm(:,it,ik) = dnorm(:,it,ik)*delthet*woutunits(ik)/sqrt(2.0)
+          do ig = -ng, ng
+             dnorm(ig,it,ik) = dnorm(ig,it,ik)*delthet(ig)*woutunits(ik)/sqrt(2.0)
+          end do
        end do
     end do
     
 ! anorm is only actually used for QL estimates.  It is not up to date.
 
-! weird definition was here.  changed 7.13.01
-    anorm = sum(dnorm*(abs(phi)**2 + abs(apar)**2))
+    anorm = sum(dnorm(-ng:ng,:,:)*abs(phi(-ng:ng,:,:))**2 + abs(apar(-ng:ng,:,:))**2)
 
     if (fphi > epsilon(0.0)) then
        do isgn = 1, 2
@@ -3241,8 +3515,7 @@ contains
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) &
-!                  = g(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz
-                  = g(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*abs(spec(is)%tz)
+                  = g(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz
           end do
        end do
        call get_flux (aperp, pbflux, anorm, dnorm)
@@ -3256,8 +3529,7 @@ contains
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) &
-!                  = g(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz &
-                  = g(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*abs(spec(is)%tz) &
+                  = g(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz &
                     *2.*vpa(:,isgn,iglo)**2
           end do
        end do
@@ -3267,8 +3539,7 @@ contains
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) &
-!                  = g(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz &
-                  = g(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*abs(spec(is)%tz) &
+                  = g(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz &
                     *vperp2(:,iglo)
           end do
        end do
@@ -3291,48 +3562,60 @@ contains
        vbflux = 0.
     end if
 
-    deallocate (dnorm)
   end subroutine flux
 
   subroutine get_flux (fld, flx, anorm, dnorm)
     use theta_grid, only: ntgrid, kxfac
-    use kt_grids, only: ntheta0, aky, naky
-    use le_grids, only: integrate_moment
-    use species, only: nspec
-    use mp, only: proc0
+    use kt_grids, only: ntheta0, aky
+    use le_grids, only: integrate
+    use gs2_layouts, only: geint_lo, ik_idx, it_idx, is_idx, proc_id, idx_local
+    use mp, only: proc0, send, receive, barrier
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
     real, dimension (:,:,:), intent (out) :: flx
     real :: anorm
     real, dimension (-ntgrid:,:,:) :: dnorm
-    complex, dimension (:,:,:,:), allocatable :: total
-    real :: wgt
+    complex, &
+         dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) :: &
+         geint
+    real :: tmp, wgt
+    integer :: igeint
     integer :: ik, it, is
+
+    integer :: ng
+
+    ng = ntgrid_noguard
 
     if (abs(anorm) < 2.0*epsilon(0.0)) then
        if (proc0) flx = 0.0
        return
     end if
 
-    allocate (total(-ntgrid:ntgrid,ntheta0,naky,nspec))
-    call integrate_moment (g0, total)
-
-    if (proc0) then
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                wgt = sum(dnorm(:,it,ik))
-                flx(it,ik,is) = sum(aimag(total(:,it,ik,is)*conjg(fld(:,it,ik))) &
-                     *dnorm(:,it,ik)*aky(ik))/wgt/anorm
-             end do
-          end do
-       end do
-
-       ! factors of 0.5, kxfac, included 8.16.00
-       flx = flx*0.5*kxfac 
-    end if
-
-    deallocate (total)
+    call integrate (g0, geint)
+    do igeint = geint_lo%llim_proc, geint_lo%ulim_proc
+       ik = ik_idx(geint_lo,igeint)
+       it = it_idx(geint_lo,igeint)
+       wgt = sum(dnorm(-ng:ng,it,ik))
+       tmp = sum(aimag(geint(-ng:ng,igeint)*conjg(fld(-ng:ng,it,ik))) &
+                  *dnorm(-ng:ng,it,ik)*aky(ik))/wgt/anorm
+! factors of 0.5, kxfac, included 8.16.00
+       geint(0,igeint) = 0.5*kxfac*tmp
+    end do
+    do igeint = geint_lo%llim_world, geint_lo%ulim_world
+       ik = ik_idx(geint_lo,igeint)
+       it = it_idx(geint_lo,igeint)
+       is = is_idx(geint_lo,igeint)
+       call barrier
+       if (proc0) then
+          if (idx_local(geint_lo,igeint)) then
+             flx(it,ik,is) = real(geint(0,igeint))
+          else
+             call receive (flx(it,ik,is), proc_id(geint_lo,igeint), igeint)
+          end if
+       else if (idx_local(geint_lo,igeint)) then
+          call send (real(geint(0,igeint)), 0, igeint)
+       end if
+    end do
   end subroutine get_flux
 
   subroutine neoclassical_flux (pflux, qflux)
@@ -3348,17 +3631,18 @@ contains
     use constants
     implicit none
     complex, dimension (:,:,:), intent (out) :: pflux, qflux
-    real, dimension (:,:,:), allocatable :: dnorm
-    complex, dimension (:,:,:), allocatable :: anorm
-    complex, dimension (:,:), allocatable :: geint
-    integer :: ig, ik, it, ie, is, ng
+    real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: dnorm
+    complex, dimension (ntheta0,naky,nspec) :: anorm
+    complex, &
+         dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) :: &
+         geint
+    integer :: ig, ik, it, ie, is
     integer :: iglo, igeint
     complex :: x
 
-    allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
-    allocate (anorm (ntheta0,naky,nspec))
-    allocate (geint (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-    ng = ntgrid
+    integer :: ng
+
+    ng = ntgrid_noguard
 
     if (proc0) then
        pflux = 0.0
@@ -3450,8 +3734,6 @@ contains
           end do
        end do
     end do
-
-    deallocate (dnorm, anorm, geint)
   end subroutine neoclassical_flux
 
   subroutine init_fieldcheck
@@ -3468,12 +3750,9 @@ contains
     use mp, only: proc0
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
-    complex, dimension (:,:,:), allocatable :: fieldeq, fieldeqa, fieldeqp
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky)::fieldeq,fieldeqa,fieldeqp
     integer :: ig, ik, it, unit
 
-    allocate (fieldeq (-ntgrid:ntgrid,ntheta0,naky))
-    allocate (fieldeqa(-ntgrid:ntgrid,ntheta0,naky))
-    allocate (fieldeqp(-ntgrid:ntgrid,ntheta0,naky))
     call getfieldeq (phi, apar, aperp, fieldeq, fieldeqa, fieldeqp)
 
     if (proc0) then
@@ -3496,7 +3775,6 @@ contains
        end do
        call close_output_file (unit)
      end if
-     deallocate (fieldeq, fieldeqa, fieldeqp)
   end subroutine fieldcheck
 
   subroutine init_vortcheck
@@ -3517,13 +3795,12 @@ contains
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, aperp
     real, dimension (nspec) :: wgt
-    complex, dimension (:,:,:,:), allocatable :: apchk
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky,2) :: apchk
     integer :: iglo, ig, ik, it, il, ie, is
     real :: temp, z
     real, dimension (-ntgrid:ntgrid) :: vplus, cvtot, gbtot, delwd
     integer :: unit
     
-    allocate (apchk (-ntgrid:ntgrid,ntheta0,naky,2))
     apchk = 0.0
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -3574,7 +3851,6 @@ contains
        end do
     end do
     call close_output_file (unit)
-    deallocate (apchk)
   end subroutine vortcheck
 
   subroutine init_intcheck
@@ -3721,6 +3997,93 @@ contains
     end do
 
   end subroutine find_rightmost_link
+
+  subroutine get_apar_ext (apar_ext)
+
+    use theta_grid, only: theta, ntgrid
+    use kt_grids, only: naky, ntheta0, akx, aky, reality
+    use gs2_time, only: stime
+    use run_parameters, only: tnorm
+    use constants
+
+    complex, dimension (-ntgrid:,:,:) :: apar_ext
+    complex :: sourcefac
+    real :: time
+    integer :: ik, it
+
+    if (a_ext == 0.) return
+
+    time = stime()
+    if (time > t0) then
+       sourcefac = a_ext*source0*exp(-zi*omega0*tnorm*time+gamma0*tnorm*time)
+    else
+       sourcefac = (0.5 - 0.5*cos(pi*time/t0)) &
+            *exp(-zi*omega0*tnorm*time+gamma0*tnorm*time)
+    end if
+
+    do ik = 1, naky
+       if (aky(ik) /= aky_star*tnorm) cycle
+       do it = 1, ntheta0
+          if (akx(it) == akx_star*tnorm) then
+             apar_ext(:,it,ik) = sourcefac*sin(theta)
+          end if
+       end do
+    end do
+
+    if (reality) then
+       apar_ext(:,1,1) = 0.0
+       
+       do it = 1, ntheta0/2
+          apar_ext(:,it+(ntheta0+1)/2,1) = conjg(apar_ext(:,(ntheta0+1)/2+1-it,1))
+       enddo
+    end if
+
+  end subroutine get_apar_ext
+
+  subroutine get_phi_ext (phiext)
+
+    use theta_grid, only: theta, ntgrid
+    use kt_grids, only: naky, ntheta0, akx, aky, reality
+    use gs2_time, only: stime
+    use run_parameters, only: tnorm
+    use constants
+
+    complex, dimension (-ntgrid:,:,:) :: phiext
+    complex :: sourcefac
+    real :: time
+    integer :: ik, it
+
+    if (phi_ext == 0.) return
+
+    time = stime()
+    if (time > t0) then
+       sourcefac = phi_ext*source0*exp(-zi*omega0*time+gamma0*time)
+    else
+       sourcefac = (0.5 - 0.5*cos(pi*time/t0))*exp(-zi*omega0*time+gamma0*time)
+    end if
+
+    do ik = 1, naky
+       if (aky(ik) /= aky_star*tnorm) cycle
+       do it = 1, ntheta0
+          if (akx(it) == akx_star*tnorm) then
+             if (phi_ext > 0.) then
+                phiext(:,it,ik) = sourcefac*sin(theta)
+             else
+                phiext(:,it,ik) = sourcefac
+             end if
+          end if
+       end do
+    end do
+
+    if (reality) then
+       phiext(:,1,1) = 0.0
+       
+       do it = 1, ntheta0/2
+          phiext(:,it+(ntheta0+1)/2,1) = conjg(phiext(:,(ntheta0+1)/2+1-it,1))
+       enddo
+    end if
+
+  end subroutine get_phi_ext
 
 end module dist_fn
 

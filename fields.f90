@@ -1,5 +1,6 @@
 module fields
   use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
+  use fields_arrays, only: phi_ext, apar_ext
 
   implicit none
 
@@ -115,10 +116,13 @@ contains
        allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (aperpnew (-ntgrid:ntgrid,ntheta0,naky))
+       allocate ( phi_ext (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
     endif
     phi = 0.; phinew = 0.
     apar = 0.; aparnew = 0.
     aperp = 0.; aperpnew = 0.
+    phi_ext = 0.; apar_ext = 0.
 
     alloc = .false.
   end subroutine allocate_arrays

@@ -271,7 +271,7 @@ ifeq ($(CPU),LINUX)
 
 endif
 
-geo_obj = geometry.o geq.o veq.o eeq.o peq.o leq.o deq.o ideq.o
+geo_obj = geometry.o geq.o veq.o eeq.o peq.o leq.o deq.o
 
 all:	mods geo.a eiktest ball
 
@@ -285,7 +285,7 @@ clean:
 configure: configure.in
 	autoconf --local=config
 
-geometry.o : veq.o geq.o eeq.o leq.o peq.o deq.o radstub.o ideq.o
+geometry.o : veq.o geq.o eeq.o leq.o peq.o deq.o radstub.o
 
 ball: ball.o geo.a $(u_obj) $(stubs)
 	case $(PLATFORM_LINKS) in \
@@ -309,7 +309,6 @@ peq.o geq.o: $(UTILDIR)/utils.a
 veq.o: $(UTILDIR)/utils.a vdimstub.o 
 eeq.o: $(UTILDIR)/utils.a
 deq.o: $(UTILDIR)/utils.a
-ideq.o: $(UTILDIR)/utils.a
 
 MODULES= $(UTILDIR)
 

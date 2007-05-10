@@ -56,44 +56,28 @@ module gs2_transforms
   real, dimension (:), allocatable :: fft_wrk, xtable, ytable
   real :: xscale, yscale
 
-! accel will be set to true if the v layout is used AND the number of
-! PEs is such that each PE has a complete copy of the x,y space --
-! in that case, no communication is needed to evaluate the nonlinear
-! terms
-  logical :: accel = .false.
-
   integer :: igmin_proc, igmax_proc
-  integer, dimension (:), allocatable :: igproc, ia, iak
-  logical, dimension (:), allocatable :: aidx  ! aidx == aliased index
+  integer, dimension (:), allocatable :: igproc
 
 contains
 
   subroutine init_transforms &
-       (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
+       (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerate)
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
-    logical, intent (out) :: accelerated
+    logical, intent (out) :: accelerate
 
     logical, save :: initialized = .false.
-    character (1) :: char
 
     if (initialized) return
     initialized = .true.
 
     call init_3d_layouts
 
-!    call pe_layout (char) 
-
-!    if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then
-!       accel = .true.
-!       call init_accel_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
-!    else
-       call init_y_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
-!    end if
-
+    call init_y_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
     call init_y_fft (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
-    accelerated = accel
+    accelerate = .false.
 
   end subroutine init_transforms
 
