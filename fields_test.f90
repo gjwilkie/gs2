@@ -4,14 +4,16 @@ module fields_test
   public :: init_fields_test
   public :: advance_test
   public :: init_phi_test
+  public :: reset_init
 
   private
+
+  logical :: initialized = .false.
 
 contains
 
   subroutine init_fields_test
     implicit none
-    logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
@@ -36,9 +38,16 @@ contains
     use dist_fn_arrays, only: g, gnew
     implicit none
     integer, intent (in) :: istep
+    real :: dt_cfl
 
     g = gnew
-    call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, istep)
+    call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, istep, dt_cfl)
   end subroutine advance_test
+
+  subroutine reset_init
+    
+    initialized = .false.
+
+  end subroutine reset_init
 
 end module fields_test

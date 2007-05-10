@@ -7,29 +7,36 @@ module gs2_diagnostics
 
   ! knobs
 
-  logical :: print_line, print_old_units
-  logical :: write_line, write_phi, write_apar, write_aperp
-  logical :: write_omega, write_omavg, write_eik
+  logical :: print_line, print_old_units, print_flux_line
+  logical :: write_line, write_flux_line, write_phi, write_apar, write_aperp
+  logical :: write_omega, write_omavg
   logical :: write_qheat, write_pflux, write_vflux
   logical :: write_qmheat, write_pmflux, write_vmflux
   logical :: write_dmix, write_kperpnorm, write_phitot
-  logical :: write_eigenfunc, write_final_fields, write_fcheck
+  logical :: write_eigenfunc, write_final_fields, write_final_antot
+  logical :: write_fcheck
   logical :: write_intcheck, write_vortcheck, write_fieldcheck
   logical :: write_fieldline_avg_phi
-  logical :: write_neoclassical_flux
+  logical :: write_neoclassical_flux, write_nl_flux
   integer :: nwrite, igomega
   integer :: navg
   real :: omegatol, omegatinst
   logical :: exit_when_converged
 
-  logical :: dump_neoclassical_flux, dump_omega, dump_check1, dump_check2
+  logical :: dump_neoclassical_flux, dump_omega, dump_check1
+  logical :: dump_fields_periodically
+
+  logical :: save_for_restart
+  character(300) :: restart_file
+
+  integer :: nperiod_output
 
   ! internal
   logical :: write_any, write_any_fluxes, dump_any
+  logical, private :: initialized = .false.
 
   integer :: out_unit
-  integer :: dump_neoclassical_flux_unit, dump_omega_unit, &
-	dump_check1_unit, dump_check2_unit
+  integer :: dump_neoclassical_flux_unit, dump_omega_unit, dump_check1_unit
 
   complex, dimension (:,:,:), allocatable :: omegahist
   ! (navg,naky,ntheta0)
@@ -38,36 +45,48 @@ module gs2_diagnostics
   real, dimension (:,:,:), allocatable :: pmflux, qmheat, vmflux
   ! (naky,ntheta0,nspec)
 
+  integer :: ntg_out
+
 contains
 
   subroutine init_gs2_diagnostics
     use file_utils, only: open_output_file
-    use kt_grids, only: init_kt_grids
+    use theta_grid, only: init_theta_grid
+    use theta_grid, only: theta, delthet, jacob
+    use kt_grids, only: init_kt_grids, naky, ntheta0
+    use fields_arrays, only: phinew
     use run_parameters, only: init_run_parameters
     use species, only: init_species
+    use dist_fn, only: init_dist_fn
     use dist_fn, only: init_intcheck, init_vortcheck, init_fieldcheck
     use mp, only: proc0, broadcast
     implicit none
-    logical, save :: initialized = .false.
+    real :: denom
+    integer :: ik, it
 
     if (initialized) return
     initialized = .true.
 
+    call init_theta_grid
     call init_kt_grids
     call init_run_parameters
     call init_species
+    call init_dist_fn
 
     if (proc0) call real_init
     call broadcast (nwrite)
     call broadcast (write_any)
     call broadcast (write_any_fluxes)
     call broadcast (write_neoclassical_flux)
+    call broadcast (write_nl_flux)
     call broadcast (write_fcheck)
     call broadcast (dump_any)
     call broadcast (dump_neoclassical_flux)
     call broadcast (dump_omega)
     call broadcast (dump_check1)
-    call broadcast (dump_check2)
+    call broadcast (dump_fields_periodically)
+    call broadcast (save_for_restart)
+    call broadcast (restart_file)
 
     call broadcast (write_intcheck)
     call broadcast (write_vortcheck)
@@ -75,11 +94,13 @@ contains
     if (write_intcheck) call init_intcheck
     if (write_vortcheck) call init_vortcheck
     if (write_fieldcheck) call init_fieldcheck
+    call broadcast (ntg_out)
+    
   end subroutine init_gs2_diagnostics
 
   subroutine real_init
     use file_utils, only: open_output_file, get_unused_unit
-    use kt_grids, only: naky, ntheta0, aky
+    use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use mp, only: proc0
     implicit none
@@ -104,11 +125,6 @@ contains
        open (unit=dump_check1_unit, file="dump.check1", status="unknown")
     end if
 
-    if (dump_check2) then
-       call get_unused_unit (dump_check2_unit)
-       open (unit=dump_check2_unit, file="dump.check2", status="unknown")
-    end if
-
     write (unit=out_unit, fmt="('gs2')")
     datestamp(:) = ' '
     timestamp(:) = ' '
@@ -126,34 +142,42 @@ contains
     allocate (pmflux(naky,ntheta0,nspec))
     allocate (qmheat(naky,ntheta0,nspec))
     allocate (vmflux(naky,ntheta0,nspec))
+
   end subroutine real_init
 
   subroutine read_parameters
-    use file_utils, only: input_unit
+    use file_utils, only: input_unit, run_name
+    use theta_grid, only: nperiod, ntheta
+    use dist_fn, only: nperiod_guard
     implicit none
     namelist /gs2_diagnostics_knobs/ &
-         print_line, print_old_units, &
-         write_line, write_phi, write_apar, write_aperp, &
-         write_omega, write_omavg, write_eik, &
+         print_line, print_old_units, print_flux_line, &
+         write_line, write_flux_line, write_phi, write_apar, write_aperp, &
+         write_omega, write_omavg, &
          write_qheat, write_pflux, write_vflux, &
          write_qmheat, write_pmflux, write_vmflux, &
          write_dmix, write_kperpnorm, write_phitot, &
-         write_eigenfunc, write_final_fields, write_fcheck, &
+         write_eigenfunc, write_final_fields, write_final_antot, &
+         write_fcheck, &
          write_intcheck, write_vortcheck, write_fieldcheck, &
-         write_fieldline_avg_phi, write_neoclassical_flux, &
+         write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
          nwrite, navg, omegatol, omegatinst, igomega, &
          exit_when_converged, &
-         dump_neoclassical_flux, dump_omega, dump_check1, dump_check2
+         dump_neoclassical_flux, dump_omega, dump_check1, &
+         dump_fields_periodically, &
+         nperiod_output, &
+         save_for_restart, restart_file
 
     print_line = .true.
-    print_old_units = .false.
+    print_old_units = .true.
+    print_flux_line = .false.
     write_line = .true.
+    write_flux_line = .true.
     write_phi = .true.
     write_apar = .true.
     write_aperp = .true.
     write_omega = .true.
     write_omavg = .true.
-    write_eik = .true.
     write_qheat = .true.
     write_pflux = .true.
     write_vflux = .true.
@@ -165,8 +189,10 @@ contains
     write_phitot = .true.
     write_fieldline_avg_phi = .false.
     write_neoclassical_flux = .false.
+    write_nl_flux = .false.
     write_eigenfunc = .true.
     write_final_fields = .false.
+    write_final_antot = .false.
     write_fcheck = .false.
     write_intcheck = .false.
     write_vortcheck = .false.
@@ -180,7 +206,10 @@ contains
     dump_neoclassical_flux = .false.
     dump_omega = .false.
     dump_check1 = .false.
-    dump_check2 = .false.
+    dump_fields_periodically = .false.
+    nperiod_output = nperiod - nperiod_guard
+    save_for_restart = .false.
+    restart_file = trim(run_name)//".nc"
     read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
 
     write_any = write_line .or. write_phi       .or. write_apar &
@@ -189,47 +218,68 @@ contains
          .or. write_qmheat .or. write_pmflux    .or. write_vmflux &
          .or. write_dmix   .or. write_kperpnorm .or. write_phitot &
          .or. write_fieldline_avg_phi           .or. write_neoclassical_flux &
-	 .or. write_eik
+         .or. write_flux_line                   .or. write_nl_flux
     write_any_fluxes =  &
               write_qheat  .or. write_pflux     .or. write_vflux &
-         .or. write_qmheat .or. write_pmflux    .or. write_vmflux
+         .or. write_qmheat .or. write_pmflux    .or. write_vmflux &
+         .or. write_flux_line                   .or. print_flux_line &
+         .or. write_nl_flux
     dump_any = dump_neoclassical_flux           .or. dump_omega &
-         .or. dump_check1  .or. dump_check2
+         .or. dump_check1  .or. dump_fields_periodically
+
+    nperiod_output = min(nperiod,nperiod_output)
+    ntg_out = ntheta/2 + (nperiod_output-1)*ntheta
   end subroutine read_parameters
 
-  subroutine finish_gs2_diagnostics
-    use file_utils, only: open_output_file, close_output_file
-    use mp, only: proc0
+  subroutine finish_gs2_diagnostics (istep)
+    use file_utils, only: open_output_file, close_output_file, get_unused_unit
+    use mp, only: proc0, broadcast
     use species, only: nspec
-    use theta_grid, only: ntgrid, theta, bmag, gradpar
-    use theta_grid, only: gbdrift, gbdrift0, cvdrift, cvdrift0
-    use theta_grid, only: gds2, gds21, gds22
-    use kt_grids, only: naky, ntheta0, aky, akx, theta0
-    use le_grids, only: nlambda, fcheck, al
-    use fields, only: phi, apar, aperp
+    use theta_grid, only: ntgrid, theta
+    use kt_grids, only: naky, ntheta0, theta0, nx, aky_out, akx_out
+    use le_grids, only: nlambda, negrid, fcheck, al
+    use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew, aminv
+    use dist_fn, only: getan
     use dist_fn, only: finish_intcheck, finish_vortcheck, finish_fieldcheck
-    use dist_fn_arrays, only: g
+    use dist_fn_arrays, only: g, gnew
+    use gs2_layouts, only: g_lo, proc_id
+    use gs2_layouts, only: ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use gs2_save, only: gs2_save_for_restart
+    use constants
+    use gs2_time, only: stime
     implicit none
+    integer, intent (in) :: istep
     integer :: ig, ik, it, il, is, unit
     complex, dimension (nlambda,naky,ntheta0,nspec) :: fcheck_f
+    complex, dimension (:,:,:), allocatable :: xphi, xapar, xaperp
+    complex, dimension (-ntgrid:ntgrid,naky,ntheta0) :: antot, antota, antotp
+    complex :: phi0, phase
+    real :: simtime
+    integer :: istatus
 
     if (proc0) then
        call close_output_file (out_unit)
        if (dump_neoclassical_flux) close (dump_neoclassical_flux_unit)
        if (dump_omega) close (dump_omega_unit)
        if (dump_check1) close (dump_check1_unit)
-       if (dump_check2) close (dump_check2_unit)
 
        if (write_eigenfunc) then
           call open_output_file (unit, ".eigenfunc")
           do ik = 1, naky
              do it = 1, ntheta0
-                do ig = -ntgrid, ntgrid
+                phi0 = phi(0,ik,it)
+                if (abs(phi0) < 10.0*epsilon(0.0)) then
+                   phi0 = phi(1,ik,it)/(theta(1)-theta(0))
+                end if
+                if (abs(phi0) < 10.0*epsilon(0.0)) then
+                   phi0 = 1.0
+                end if
+                do ig = -ntg_out, ntg_out
                    write (unit, "(9(x,e12.5))") &
-                        theta(ig), theta0(ik,it), aky(ik), &
-                        phi(ig,ik,it)/phi(0,ik,it), &
-                        apar(ig,ik,it)/phi(0,ik,it), &
-                        aperp(ig,ik,it)/phi(0,ik,it)
+                        theta(ig), theta0(ik,it), aky_out(ik), &
+                        phi(ig,ik,it)/phi0, &
+                        apar(ig,ik,it)/phi0, &
+                        aperp(ig,ik,it)/phi0
                 end do
                 write (unit, "()")
              end do
@@ -240,11 +290,37 @@ contains
        if (write_final_fields) then
           call open_output_file (unit, ".fields")
           do ik = 1, naky
+!             if (phi(0,ik,1) /= 0.) then
+!                phase = 1. / phi(0,ik,1)
+!             else
+                phase = 1.0
+!             endif
              do it = 1, ntheta0
-                do ig = -ntgrid, ntgrid
-                   write (unit, "(9(x,e12.5))") &
-                        theta(ig), theta0(ik,it), aky(ik), &
-                        phi(ig,ik,it), apar(ig,ik,it), aperp(ig,ik,it)
+                do ig = -ntg_out, ntg_out
+                   write (unit, "(10(x,e12.5))") &
+                        theta(ig), theta0(ik,it), aky_out(ik), &
+                        phase*phi(ig,ik,it), phase*apar(ig,ik,it), phase*aperp(ig,ik,it), &
+                        theta(ig) - theta0(ik,it)
+                end do
+                write (unit, "()")
+             end do
+          end do
+          call close_output_file (unit)
+       end if
+    end if
+
+    call broadcast (write_final_antot)
+    if (write_final_antot) then
+       call getan (antot, antota, antotp)
+       if (proc0) then
+          call open_output_file (unit, ".antot")
+          do ik = 1, naky
+             do it = 1, ntheta0
+                do ig = -ntg_out, ntg_out
+                   write (unit, "(10(x,e12.5))") &
+                        theta(ig), theta0(ik,it), aky_out(ik), &
+                        antot(ig,ik,it), antota(ig,ik,it), antotp(ig,ik,it), &
+                        theta(ig) - theta0(ik,it)
                 end do
                 write (unit, "()")
              end do
@@ -262,7 +338,7 @@ contains
                 do ik = 1, naky
                    do it = 1, ntheta0
                       write (unit, "(20(x,e12.6))") 0.5*(al(il) + al(il-1)), &
-                           aky(ik), akx(it), fcheck_f(il,ik,it,is), &
+                           aky_out(ik), akx_out(it), fcheck_f(il,ik,it,is), &
                            sum((al(2:il)-al(1:il-1))*fcheck_f(2:il,ik,it,is))
                    end do
                 end do
@@ -272,35 +348,30 @@ contains
        end if
     end if
 
-    if (write_eik) then
-       if (proc0) then
-          call open_output_file (unit, ".eik")
-          do ig = -ntgrid, ntgrid
-             write(unit, "(11(x,e12.5))") &
-	       theta(ig), gradpar(ig), bmag(ig), theta(ig), &
-               gbdrift(ig), gbdrift0(ig), cvdrift(ig), cvdrift0(ig), &
-               gds2(ig), gds21(ig), gds22(ig)	       
-          end do
-	  call close_output_file (unit)
-       end if
-    end if
-
     if (write_intcheck) call finish_intcheck
     if (write_vortcheck) call finish_vortcheck
     if (write_fieldcheck) call finish_fieldcheck
+    
+    simtime = stime()
+    if (save_for_restart) then
+       call gs2_save_for_restart &
+            (gnew, aminv, simtime, istatus)
+    end if
   end subroutine finish_gs2_diagnostics
 
   subroutine loop_diagnostics (istep, nstep, exit)
     use species, only: nspec
-    use theta_grid, only: ntgrid, delthet, bmag, gradpar
-    use kt_grids, only: naky, ntheta0, aky, theta0, akx
+    use theta_grid, only: theta, ntgrid, delthet, jacob
+    use kt_grids, only: naky, ntheta0, aky_out, theta0, akx_out, aky
     use run_parameters, only: delt, woutunits
     use fields, only: phinorm, phinew, aparnew, aperpnew
     use fields, only: kperp, fieldlineavgphi
     use dist_fn, only: flux, intcheck, vortcheck, fieldcheck
     use dist_fn, only: neoclassical_flux, omega0, gamma0
     use mp, only: proc0, broadcast
+    use file_utils, only: get_unused_unit
     use prof, only: prof_entering, prof_leaving
+    use gs2_time, only: update_time => update, stime
     use constants
     implicit none
     integer, intent (in) :: istep, nstep
@@ -308,9 +379,15 @@ contains
     complex, dimension (naky,ntheta0) :: omega, omegaavg
     real, dimension (naky,ntheta0) :: phitot, akperp
     complex, dimension (naky,ntheta0,nspec) :: pfluxneo,qfluxneo
-    real :: t
-    integer :: ik, it, is
+    real :: phi2
+    real, dimension (naky,ntheta0) :: phi2_by_mode
+    real :: anorm
+    real :: t, denom
+    integer :: ig, ik, it, is, unit
     complex :: phiavg, sourcefac
+    character(200) :: filename
+    real, dimension (nspec) :: heat_fluxes
+    real, dimension (naky) :: fluxfac
 
     call prof_entering ("loop_diagnostics")
 
@@ -321,25 +398,45 @@ contains
 
     call prof_leaving ("loop_diagnostics")
 
-    if (mod(istep,nwrite) /= 0 .and. istep /= 1) return
+    call update_time (delt)
+
+    if (mod(istep,nwrite) /= 0 .and. .not. exit) return
+    t = stime()
 
     call prof_entering ("loop_diagnostics-1")
 
     if (proc0) then
        omega = omegahist(mod(istep,navg),:,:)
-       t = delt*real(istep)
        sourcefac = exp(-zi*omega0*t+gamma0*t)
        call phinorm (phitot)
+       call get_average_flux (phinew, phinew, phi2, phi2_by_mode)
     end if
 
+    if (write_any_fluxes) then
+       call flux (phinew, aparnew, aperpnew, &
+            pflux, qheat, vflux, pmflux, qmheat, vmflux, anorm)
+       do is = 1, nspec
+          call get_volume_average (qheat(:,:,is), heat_fluxes(is))
+          heat_fluxes(is) = heat_fluxes(is)*anorm
+       end do
+    end if
+
+    fluxfac = 1.0
+    if (naky > 1 .and. aky(1) == 0.0) fluxfac(1) = 0.5
+
     if (proc0) then
+       if (print_flux_line) then
+          write (unit=*, fmt="('t=',e12.6,' <phi**2>=',e10.4, &
+               & ' heat fluxes:', 3(1x,e10.4))") &
+               t, phi2, heat_fluxes(1:min(nspec,3))
+       end if
        if (print_line) then
           if (print_old_units) then
              do ik = 1, naky
                 do it = 1, ntheta0
-                   write (unit=*, fmt="('aky=',f5.2, ' th0=',f4.2, &
+                   write (unit=*, fmt="('aky=',f5.2, ' th0=',f5.2, &
                           &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e10.4)") &
-                        aky(ik), theta0(ik,it), &
+                        aky_out(ik), theta0(ik,it), &
                         real(omega(ik,it)), &
                         aimag(omega(ik,it)), &
                         real(omegaavg(ik,it)), &
@@ -350,9 +447,9 @@ contains
           else
              do ik = 1, naky
                 do it = 1, ntheta0
-                   write (unit=*, fmt="('aky=',f5.2, ' th0=',f4.2, &
+                   write (unit=*, fmt="('aky=',f5.2, ' th0=',f5.2, &
                           &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e10.4)") &
-                        aky(ik), theta0(ik,it), &
+                        aky_out(ik), theta0(ik,it), &
                         real(omega(ik,it)*woutunits(ik)), &
                         aimag(omega(ik,it)*woutunits(ik)), &
                         real(omegaavg(ik,it)*woutunits(ik)), &
@@ -361,6 +458,7 @@ contains
                 end do
              end do
           end if
+          write (*,*) 
        end if
     end if
 
@@ -374,27 +472,27 @@ contains
 
     call prof_entering ("loop_diagnostics-2")
 
-    if (write_any_fluxes) then
-       call flux (phinew, aparnew, aperpnew, &
-            pflux, qheat, vflux, pmflux, qmheat, vmflux)
-    end if
-
-    call kperp (akperp)
+    call kperp (ntg_out, akperp)
 
     if (write_neoclassical_flux .or. dump_neoclassical_flux) then
-       call neoclassical_flux (pfluxneo, qfluxneo, istep)
+       call neoclassical_flux (pfluxneo, qfluxneo)
     end if
 
     if (proc0 .and. write_any) then
        write (unit=out_unit, fmt=*) 'time=', t
+       if (write_flux_line) then
+          write (unit=out_unit, fmt="('t=',e12.6,' <phi**2>=',e10.4, &
+               & ' heat fluxes:', 3(1x,e10.4))") &
+               t, phi2, heat_fluxes(1:min(nspec,3))
+       end if
        do ik = 1, naky
           do it = 1, ntheta0
-             write (out_unit,*) "aky=",aky(ik)," theta0=",theta0(ik,it)
+             write (out_unit,*) "aky=",aky_out(ik)," theta0=",theta0(ik,it)
 
              if (write_line) then
                 write (out_unit, "('aky=',f5.2, ' th0=',f4.2, &
                        &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e8.2)") &
-                     aky(ik), theta0(ik,it), &
+                     aky_out(ik), theta0(ik,it), &
                      real(omega(ik,it)), &
                      aimag(omega(ik,it)), &
                      real(omegaavg(ik,it)), &
@@ -430,12 +528,17 @@ contains
                 end if
              end if
              if (write_kperpnorm) then
-                write (out_unit, *) 'kperpnorm=',akperp(ik,it)/aky(ik)
+                if (aky_out(ik) /= 0.0) then
+                   write (out_unit, *) 'kperpnorm=',akperp(ik,it)/aky_out(ik)
+                else
+! huh? 
+                   write (out_unit, *) 'kperpnorm*aky=',akperp(ik,it)
+                end if
              end if
              if (write_phitot) write (out_unit, *) 'phitot=', phitot(ik,it)
 
              if (write_fieldline_avg_phi) then
-                call fieldlineavgphi (ik, it, phiavg)
+                call fieldlineavgphi (ntg_out, ik, it, phiavg)
                 write (out_unit, *) '<phi>=',phiavg
              end if
 
@@ -447,6 +550,20 @@ contains
                 write (out_unit, *) 'qfluxneo/sourcefac=', &
                      qfluxneo(ik,it,:)/sourcefac
              end if
+
+             if (write_nl_flux) then
+                write (out_unit,"('ik,it,aky,akx,<phi**2>,t: ', &
+                     & 2i5,4(x,e12.6))") &
+                     ik, it, aky_out(ik), akx_out(it), phi2_by_mode(ik,it), t
+                if (ntheta0 > 1 .and. ik == 1) then
+                   write (out_unit, "('it,akx,<phi**2>,t: ',i5,3(x,e12.6))") &
+                        it, akx_out(it), sum(phi2_by_mode(:,it)*fluxfac(:)), t
+                end if
+                if (naky > 1 .and. it == 1) then
+                   write (out_unit, "('ik,aky,<phi**2>,t: ',i5,3(x,e12.6))") &
+                        ik, aky_out(ik), sum(phi2_by_mode(ik,:)*fluxfac(ik)), t
+                end if
+             end if
           end do
        end do
     end if
@@ -457,7 +574,7 @@ contains
              if (dump_neoclassical_flux) then
                 do is = 1, nspec
                    write (dump_neoclassical_flux_unit, "(20(1x,e12.5))") &
-                        t, aky(ik), akx(it), real(is), pfluxneo(ik,it,is), &
+                        t, aky_out(ik), akx_out(it), real(is), pfluxneo(ik,it,is), &
                         qfluxneo(ik,it,is), &
                         pfluxneo(ik,it,is)/sourcefac, &
                         qfluxneo(ik,it,is)/sourcefac
@@ -465,32 +582,39 @@ contains
              end if
              if (dump_omega) then
                 write (dump_omega_unit, "(20(1x,e12.5))") &
-                     t, aky(ik), akx(it), omega(ik,it)*woutunits(ik), &
+                     t, aky_out(ik), akx_out(it), omega(ik,it)*woutunits(ik), &
                      omegaavg(ik,it)*woutunits(ik)
              end if
              if (dump_check1) then
+                denom=sum(delthet(-ntg_out:ntg_out-1)*jacob(-ntg_out:ntg_out-1))
                 write (dump_check1_unit, "(20(1x,e12.5))") &
-                     t, aky(ik), akx(it), &
-                     sum(phinew(:ntgrid-1,ik,it)*delthet(:ntgrid-1) &
-                         /gradpar(:ntgrid-1)/bmag(:ntgrid-1)) &
-                     /sum(delthet(:ntgrid-1) &
-                          /gradpar(:ntgrid-1)/bmag(:ntgrid-1)), &
-                     sum(phinew(:ntgrid-1,ik,it)*delthet(:ntgrid-1) &
-                         /gradpar(:ntgrid-1)/bmag(:ntgrid-1)) &
-                     /sum(delthet(:ntgrid-1) &
-                          /gradpar(:ntgrid-1)/bmag(:ntgrid-1)) &
-                     /sourcefac
-             end if
-             if (dump_check2) then
-                write (dump_check2_unit, "(20(1x,e12.5))") &
-                     t, aky(ik), akx(it), &
-                     sum(phinew(:ntgrid-1,ik,it)*delthet(:ntgrid-1) &
-                         /gradpar(:ntgrid-1)/bmag(:ntgrid-1)) &
-                     /sum(delthet(:ntgrid-1) &
-                          /gradpar(:ntgrid-1)/bmag(:ntgrid-1))
+                     t, aky_out(ik), akx_out(it), &
+                     sum(phinew(-ntg_out:ntg_out-1,ik,it) &
+                         *delthet(-ntg_out:ntg_out-1) &
+                         *jacob(-ntg_out:ntg_out-1))/denom, &
+                     sum(phinew(-ntg_out:ntg_out-1,ik,it) &
+                         *delthet(-ntg_out:ntg_out-1) &
+                         *jacob(-ntg_out:ntg_out-1)) &
+                         /denom/sourcefac
              end if
           end do
        end do
+       if (dump_fields_periodically) then
+          call get_unused_unit (unit)
+          write (filename, "('dump.fields.t=',e12.6)") t
+          open (unit=unit, file=filename, status="unknown")
+          do it = 1, ntheta0
+             do ik = 1, naky
+                do ig = -ntg_out, ntg_out
+                   write (unit=unit, fmt="(20(x,e12.5))") &
+                        theta(ig), aky_out(ik), theta0(ik,it), &
+                        phinew(ig,ik,it), aparnew(ig,ik,it), &
+                        aperpnew(ig,ik,it), t, akx_out(it)
+                end do
+             end do
+          end do
+          close (unit=unit)
+       end if
      end if
     call prof_leaving ("loop_diagnostics-2")
   end subroutine loop_diagnostics
@@ -534,5 +658,46 @@ contains
        end if
     end if
   end subroutine get_omegaavg
+
+  subroutine get_average_flux (a, b, axb, axb_by_mode)
+    use theta_grid, only: ntgrid, delthet, grho, jacob
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: a, b
+    real, intent (out) :: axb
+    real, dimension (:,:), intent (out) :: axb_by_mode
+
+    integer :: ig, ik, it
+    integer :: ng
+    real, dimension (-ntg_out:ntg_out) :: wgt
+    real :: anorm
+
+    ng = ntg_out
+    wgt = delthet(-ng:ng)*grho(-ng:ng)*jacob(-ng:ng)
+    anorm = sum(wgt)
+
+    do it = 1, ntheta0
+       do ik = 1, naky
+          axb_by_mode(ik,it) &
+               = sum(real(conjg(a(-ng:ng,ik,it))*b(-ng:ng,ik,it))*wgt)/anorm
+       end do
+    end do
+
+    call get_volume_average (axb_by_mode, axb)
+  end subroutine get_average_flux
+
+  subroutine get_volume_average (f, favg)
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    real, dimension (:,:), intent (in) :: f
+    real, intent (out) :: favg
+    real, dimension (naky) :: fac
+
+    fac = 1.0
+    if (naky > 1) fac(1) = 0.5
+
+    favg = sum(f*spread(fac,2,ntheta0))
+
+  end subroutine get_volume_average
 
 end module gs2_diagnostics

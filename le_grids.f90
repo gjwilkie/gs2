@@ -1,4 +1,7 @@
 module le_grids
+  
+  use redistribute, only: redist_type
+
   implicit none
 
   public :: init_le_grids
@@ -14,12 +17,12 @@ module le_grids
   real, dimension (:,:), allocatable :: e, w, anon ! (negrid,nspec)
 
   real, dimension (:), allocatable :: al, delal ! (nlambda)
-  real, dimension (:,:), allocatable :: wl ! (-ntgrid:ntgrid,nlambda)
+  real, dimension (:,:), allocatable :: wl ! (nlambda,-ntgrid:ntgrid)
   integer, dimension (:), allocatable :: jend ! (-ntgrid:ntgrid)
   logical, dimension (:,:), allocatable :: forbid ! (-ntgrid:ntgrid,nlambda)
 
   integer :: lint_lo, lint_hi, eint_lo, eint_hi
-  integer :: geint2g_lo, geint2g_hi, gint2g_lo, gint2g_hi
+  integer :: geint2g_lo, geint2g_hi
   complex, dimension (:,:), allocatable :: integration_work
   ! (-ntgrid:ntgrid, -*- processor-dependent -*-)
 
@@ -28,6 +31,8 @@ module le_grids
   real :: ecut, bouncefuzz
 
   integer :: nlambda, ng2, lmax
+
+  type (redist_type), save :: lambda_map, gint_map
 
 contains
 
@@ -115,6 +120,7 @@ contains
     integer :: lint_ulim, geint2g_ulim, eint_ulim, ulim
 
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    call init_lintegrate
 
     lint_lo = gint_lo%ulim_world
     lint_hi = gint_lo%llim_world
@@ -159,20 +165,33 @@ contains
     complex, dimension (-ntgrid:,geint_lo%llim_proc:), intent (in) :: geint
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
 
-    complex, dimension (-ntgrid:ntgrid) :: collector
-    integer :: iglo, igeint, ik, it, is
+    complex, dimension ((2*ntgrid+1)*geint_lo%blocksize) :: collector
+    integer :: iglo, igeint, ik, it, is, ig, j
+    integer :: igeint_lo, igeint_hi
 
     ! essentially, spread geint_lo laid out data into g_lo layout,
     ! replicating along the virtual sign,negrid,nlambda dimensions
 
-    do igeint = geint_lo%llim_world, geint_lo%ulim_world
-       if (idx_local(geint_lo,igeint)) then
-          collector = geint(:,igeint)
+    do igeint_lo = geint_lo%llim_world, geint_lo%ulim_world, geint_lo%blocksize
+       igeint_hi = min(igeint_lo + geint_lo%blocksize - 1, geint_lo%ulim_world)
+       if (idx_local(geint_lo, igeint_lo)) then
+          do igeint = igeint_lo, igeint_hi
+             do ig = -ntgrid, ntgrid
+                j = 1 + ig + ntgrid + (2*ntgrid+1)*(igeint-igeint_lo)
+                collector(j) = geint(ig,igeint)
+             end do
+          end do
        end if
-       call broadcast (collector, proc_id(geint_lo,igeint))
-       if (igeint >= geint2g_lo .and. igeint <= geint2g_hi) then
-          integration_work(:,igeint-geint2g_lo) = collector
-       end if
+       call broadcast (collector, proc_id(geint_lo, igeint_lo))
+
+       do igeint = igeint_lo, igeint_hi
+          if (igeint >= geint2g_lo .and. igeint <= geint2g_hi) then
+             do ig = -ntgrid, ntgrid
+                j = 1 + ig + ntgrid + (2*ntgrid+1)*(igeint-igeint_lo)
+                integration_work(ig,igeint-geint2g_lo) = collector(j)
+             end do
+          end if
+       end do
     end do
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -195,20 +214,33 @@ contains
     complex, dimension (-ntgrid:,gint_lo%llim_proc:), intent (in) :: gint
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
 
-    complex, dimension (-ntgrid:ntgrid) :: collector
-    integer :: iglo, igint, ik, it, ie, is
+    complex, dimension ((2*ntgrid+1)*gint_lo%blocksize) :: collector
+    integer :: iglo, igint, ik, it, ie, is, ig, j
+    integer :: igint_lo, igint_hi
 
     ! essentially, spread gint_lo laid out data into g_lo layout,
-    ! replicating along the virtual sign,nlambda dimensions
+    ! replicating along the virtual sign, nlambda dimensions
 
-    do igint = gint_lo%llim_world, gint_lo%ulim_world
-       if (idx_local(gint_lo,igint)) then
-          collector = gint(:,igint)
+    do igint_lo = gint_lo%llim_world, gint_lo%ulim_world, gint_lo%blocksize
+       igint_hi = min(igint_lo + gint_lo%blocksize - 1, gint_lo%ulim_world)
+       if (idx_local (gint_lo, igint_lo)) then          
+          do igint = igint_lo, igint_hi
+             do ig = -ntgrid, ntgrid
+                j = 1 + ig + ntgrid + (2*ntgrid+1)*(igint-igint_lo)
+                collector(j) = gint(ig,igint)
+             end do
+          end do
        end if
-       call broadcast (collector, proc_id(gint_lo,igint))
-       if (igint >= lint_lo .and. igint <= lint_hi) then
-          integration_work(:,igint-lint_lo) = collector
-       end if
+       call broadcast (collector, proc_id(gint_lo,igint_lo))
+
+       do igint = igint_lo, igint_hi
+          if (igint >= lint_lo .and. igint <= lint_hi) then
+             do ig = -ntgrid, ntgrid
+                j = 1 + ig + ntgrid + (2*ntgrid+1)*(igint-igint_lo)
+                integration_work(ig,igint-lint_lo) = collector(j)
+             end do
+          end if
+       end do
     end do
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -221,50 +253,6 @@ contains
        g(:,2,iglo) = integration_work(:,igint-lint_lo)
     end do
   end subroutine gint2g
-
-  subroutine lintegrate (g1, gint)
-    use theta_grid, only: ntgrid
-    use mp, only: sum_reduce
-    use gs2_layouts, only: g_lo, gint_lo
-    use gs2_layouts, only: proc_id, idx_local
-    use gs2_layouts, only: ik_idx, it_idx, il_idx, ie_idx, is_idx, idx
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g1
-    complex, dimension (-ntgrid:,gint_lo%llim_proc:), intent (out) :: gint
-
-    complex, dimension (-ntgrid:ntgrid) :: collector
-    integer :: ig, igint
-    integer :: il
-
-    if (lint_hi >= lint_lo) then
-       integration_work = 0.0
-       do ig = g_lo%llim_proc, g_lo%ulim_proc
-          igint = idx(gint_lo,ik_idx(g_lo,ig),it_idx(g_lo,ig), &
-                      ie_idx(g_lo,ig),is_idx(g_lo,ig))
-          il = il_idx(g_lo,ig)
-          integration_work(:,igint-lint_lo) &
-               = integration_work(:,igint-lint_lo) &
-                 + wl(:,il)*(g1(:,1,ig) + g1(:,2,ig))
-       end do
-    end if
-
-    collector = 0.0
-    do igint = gint_lo%llim_world, gint_lo%ulim_world
-       if (igint >= lint_lo .and. igint <= lint_hi) then
-          call sum_reduce (integration_work(:,igint - lint_lo), &
-                           proc_id(gint_lo, igint))
-          if (idx_local(gint_lo, igint)) then
-             gint(:,igint) = integration_work(:,igint - lint_lo)
-          end if
-       else
-          call sum_reduce (collector, proc_id(gint_lo, igint))
-          if (idx_local(gint_lo, igint)) then
-             gint(:,igint) = collector
-             collector = 0.0
-          end if
-       end if
-    end do
-  end subroutine lintegrate
 
   subroutine eintegrate (gint, geint)
     use theta_grid, only: ntgrid
@@ -310,77 +298,6 @@ contains
     end do
   end subroutine eintegrate
 
-  subroutine lintegrate_old (g1, gint)
-    use theta_grid, only: ntgrid
-    use mp, only: sum_reduce
-    use gs2_layouts, only: g_lo, gint_lo
-    use gs2_layouts, only: proc_id, idx_local
-    use gs2_layouts, only: ik_idx, it_idx, il_idx, ie_idx, is_idx
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g1
-    complex, dimension (-ntgrid:,gint_lo%llim_proc:), intent (out) :: gint
-
-    complex, dimension (-ntgrid:ntgrid) :: collector
-    integer :: ig, igint
-    integer :: ik, it, ie, is
-    integer :: il
-
-    do igint = gint_lo%llim_world, gint_lo%ulim_world
-       ik = ik_idx(gint_lo,igint)
-       it = it_idx(gint_lo,igint)
-       ie = ie_idx(gint_lo,igint)
-       is = is_idx(gint_lo,igint)
-       collector = 0.0
-       do ig = g_lo%llim_proc, g_lo%ulim_proc
-          if (       ik == ik_idx(g_lo,ig) &
-               .and. it == it_idx(g_lo,ig) &
-               .and. ie == ie_idx(g_lo,ig) &
-               .and. is == is_idx(g_lo,ig)) &
-          then
-             il = il_idx(g_lo,ig)
-             collector = collector + wl(:,il)*(g1(:,1,ig) + g1(:,2,ig))
-          end if
-       end do
-       call sum_reduce (collector, proc_id(gint_lo, igint))
-       if (idx_local(gint_lo, igint)) gint(:,igint) = collector
-    end do
-  end subroutine lintegrate_old
-
-  subroutine eintegrate_old (gint, geint)
-    use theta_grid, only: ntgrid
-    use mp, only: sum_reduce
-    use gs2_layouts, only: gint_lo, geint_lo
-    use gs2_layouts, only: proc_id, idx_local
-    use gs2_layouts, only: ik_idx, it_idx, ie_idx, is_idx
-    implicit none
-    complex, dimension (-ntgrid:,gint_lo%llim_proc:), intent (in) :: gint
-    complex, dimension (-ntgrid:,geint_lo%llim_proc:), intent (out) :: geint
-
-    complex, dimension (-ntgrid:ntgrid) :: collector
-    integer :: igint, igeint
-
-    integer :: ik, it, is
-    integer :: ie
-
-    do igeint = geint_lo%llim_world, geint_lo%ulim_world
-       ik = ik_idx(geint_lo,igeint)
-       it = it_idx(geint_lo,igeint)
-       is = is_idx(geint_lo,igeint)
-       collector = 0.0
-       do igint = gint_lo%llim_proc, gint_lo%ulim_proc
-          if (       ik == ik_idx(gint_lo,igint) &
-               .and. it == it_idx(gint_lo,igint) &
-               .and. is == is_idx(gint_lo,igint)) &
-          then
-             ie = ie_idx(gint_lo,igint)
-             collector = collector + w(ie,is)*gint(:,igint)
-          end if
-       end do
-       call sum_reduce (collector, proc_id(geint_lo, igeint))
-       if (idx_local(geint_lo, igeint)) geint(:,igeint) = collector
-    end do
-  end subroutine eintegrate_old
-
   subroutine integrate (g1, geint)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo, gint_lo, geint_lo
@@ -388,7 +305,7 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g1
     complex, dimension (-ntgrid:,geint_lo%llim_proc:), intent (out) :: geint
 
-    complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_proc) ::&
+    complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc) ::&
          gint
 
     call lintegrate (g1, gint)
@@ -431,7 +348,7 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (out) :: total
 
     complex, &
-         dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_proc) :: &
+         dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) :: &
          geint
 
     call integrate (g, geint)
@@ -571,7 +488,7 @@ contains
          /), (/ 16, 16 /))
     ! note that gaus and w1 are transposed wrt original code
 
-    integer :: is, ie
+    integer :: is
     integer :: ng1
     real :: cut
 
@@ -615,16 +532,6 @@ contains
           end if
           w(:,is) = w(:,is)*0.5/sqrt(pi)
           anon(:,is) = 1.0
-
-          do ie = 1, negrid
-             if(e(ie,is) < spec(is)%e_flat) then
-                anon(ie,is) = spec(is)%temp_flat
-                write(*,*) 
-                print *, "At energy = ",e(ie,is)
-                print *, "Flattening energy distribution for species ",is
-             endif
-          enddo
-
        end if
     end do
   end subroutine egridset
@@ -809,7 +716,7 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
     integer :: unit
     integer :: iglo, igint, ig, ik, it, il, ie, is
-    complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_proc) &
+    complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc) &
          :: gint
     complex, dimension (negrid) :: dumout
 
@@ -951,4 +858,198 @@ contains
     end do
   end subroutine fcheck
 
+  subroutine init_lintegrate
+    use species, only: nspec
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use mp, only: nproc, iproc
+    use gs2_layouts, only: init_lambda_layouts, g_lo, lambda_lo, gint_lo
+    use gs2_layouts, only: idx_local, proc_id
+    use gs2_layouts, only: gidx2lamidx, lamidx2gintidx
+    use redistribute, only: index_list_type, init_fill, delete_list
+    implicit none
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
+    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    integer, dimension (3) :: from_low
+    integer, dimension (4) :: to_low
+    integer, dimension (2) :: to_gint_low, from_lambda_low
+    integer :: iglo, isign, ig, ip, n
+    integer :: ilam, il, igint
+    logical :: done = .false.
+
+    if (done) return
+    done = .true.
+
+    call init_lambda_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
+         
+    ! count number of elements to be redistributed to/from each processor
+    nn_to = 0
+    nn_from = 0
+    do iglo = g_lo%llim_world, g_lo%ulim_world
+       do isign = 1, 2
+          do ig = -ntgrid, ntgrid
+             call gidx2lamidx (g_lo, iglo, lambda_lo, il, ilam)
+             if (idx_local(g_lo,iglo)) &
+                  nn_from(proc_id(lambda_lo,ilam)) = nn_from(proc_id(lambda_lo,ilam)) + 1
+             if (idx_local(lambda_lo,ilam)) &
+                  nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
+          end do
+       end do
+    end do
+
+    do ip = 0, nproc-1
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first(nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+          allocate (from_list(ip)%third(nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first(nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+          allocate (to_list(ip)%third(nn_to(ip)))
+          allocate (to_list(ip)%fourth(nn_to(ip)))
+       end if
+    end do
+
+    ! get local indices of elements distributed to/from other processors
+    nn_to = 0
+    nn_from = 0
+    do iglo = g_lo%llim_world, g_lo%ulim_world
+       do isign = 1, 2
+          call gidx2lamidx (g_lo, iglo, lambda_lo, il, ilam)
+          if (idx_local(g_lo,iglo)) then
+             ip = proc_id(lambda_lo,ilam)
+             do ig = -ntgrid, ntgrid
+                n = nn_from(ip) + 1
+                nn_from(ip) = n
+                from_list(ip)%first(n) = ig
+                from_list(ip)%second(n) = isign
+                from_list(ip)%third(n) = iglo
+             end do
+          end if
+          if (idx_local(lambda_lo,ilam)) then
+             ip = proc_id(g_lo,iglo)
+             do ig = -ntgrid, ntgrid
+                n = nn_to(ip) + 1
+                nn_to(ip) = n
+                to_list(ip)%first(n) = ig
+                to_list(ip)%second(n) = isign
+                to_list(ip)%third(n) = il
+                to_list(ip)%fourth(n) = ilam
+             end do
+          end if
+       end do
+    end do
+
+    from_low (1) = -ntgrid
+    from_low (2) = 1
+    from_low (3) = g_lo%llim_proc
+
+    to_low (1) = -ntgrid
+    to_low (2) = 1
+    to_low (3) = 1
+    to_low (4) = lambda_lo%llim_proc
+
+    call init_fill (lambda_map, 'c', to_low, to_list, from_low, from_list)
+
+    call delete_list (to_list)
+    call delete_list (from_list)
+
+    ! count number of elements to be redistributed to/from each processor after integrating
+    nn_to = 0
+    nn_from = 0
+    do ilam = lambda_lo%llim_world, lambda_lo%ulim_world
+       call lamidx2gintidx (lambda_lo, ilam, gint_lo, igint)
+       do ig = -ntgrid, ntgrid
+          if (idx_local(lambda_lo,ilam)) &
+               nn_from(proc_id(gint_lo,igint)) = nn_from(proc_id(gint_lo,igint)) + 1
+          if (idx_local(gint_lo,igint)) &
+               nn_to(proc_id(lambda_lo, ilam)) = nn_to(proc_id(lambda_lo, ilam)) + 1
+       end do
+    end do
+
+    do ip = 0, nproc-1
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first(nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first(nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+       end if
+    end do
+
+    ! get local indices of elements distributed to/from other processors
+    nn_to = 0
+    nn_from = 0
+    do ilam = lambda_lo%llim_world, lambda_lo%ulim_world
+       call lamidx2gintidx (lambda_lo, ilam, gint_lo, igint)
+       if (idx_local(lambda_lo, ilam)) then
+          ip = proc_id(gint_lo, igint)
+          do ig = -ntgrid, ntgrid
+             n = nn_from(ip) + 1
+             nn_from(ip) = n
+             from_list(ip)%first(n) = ig
+             from_list(ip)%second(n) = ilam
+          end do
+       end if
+       if (idx_local(gint_lo,igint)) then
+          ip = proc_id(lambda_lo, ilam)
+          do ig = -ntgrid, ntgrid
+             n = nn_to(ip) + 1
+             nn_to(ip) = n
+             to_list(ip)%first(n) = ig
+             to_list(ip)%second(n) = igint
+          end do
+       end if
+    end do
+
+    from_lambda_low (1) = -ntgrid
+    from_lambda_low (2) = lambda_lo%llim_proc
+
+    to_gint_low (1) = -ntgrid
+    to_gint_low (2) = gint_lo%llim_proc
+
+    call init_fill (gint_map, 'c', to_gint_low, to_list, from_lambda_low, from_list)
+
+    call delete_list (to_list)
+    call delete_list (from_list)
+
+  end subroutine init_lintegrate
+
+  subroutine lintegrate (g1, gint)
+    use theta_grid, only: ntgrid
+    use redistribute, only: gather
+    use gs2_layouts, only: lambda_lo, g_lo, gint_lo, ig_idx
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g1
+    complex, dimension (-ntgrid:,gint_lo%llim_proc:), intent (out) :: gint
+
+    complex, dimension (-ntgrid:ntgrid, 2, max(2*nlambda,2*ng2+1), &
+         lambda_lo%llim_proc:lambda_lo%ulim_alloc) :: glam
+    complex, dimension (-ntgrid:ntgrid, &
+         lambda_lo%llim_proc:lambda_lo%ulim_alloc) :: work
+
+    integer :: ilam, il, ig
+
+    call gather (lambda_map, g1, glam)
+
+    work = 0.
+    do ilam = lambda_lo%llim_proc, lambda_lo%ulim_proc
+       do il = 1, nlambda
+          do ig = -ntgrid, ntgrid
+             work(ig,ilam) = work(ig,ilam) &
+                  + wl(ig,il)*(glam(ig,1,il,ilam)+ glam(ig,2,il,ilam))
+          end do
+       end do
+    end do
+
+    gint = work
+    
+!    call fill (gint_map, work, gint)
+
+  end subroutine lintegrate
+
 end module le_grids
+
+

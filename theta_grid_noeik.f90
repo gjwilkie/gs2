@@ -23,7 +23,7 @@ contains
 
   subroutine eik_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, bmag,&
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, gds2, gds21, gds22,&
-            shat, drhodpsi)
+            grho, shat, drhodpsi)
     implicit none
     integer, intent (in) :: nperiod
     integer, intent (in out) :: ntheta, ntgrid, nbset
@@ -31,7 +31,7 @@ contains
     real, dimension (nbset), intent (out) :: bset
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
-         gds2, gds21, gds22
+         gds2, gds21, gds22, grho
     real, intent (out) :: shat, drhodpsi
     stop
   end subroutine eik_get_grids

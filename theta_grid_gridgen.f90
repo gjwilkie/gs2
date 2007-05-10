@@ -42,7 +42,7 @@ contains
 
   subroutine gridgen_get_grids (nperiod, ntheta, ntgrid, nbset, &
        theta, bset, bmag, &
-       gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, gds2, gds21, gds22)
+       gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, gds2, gds21, gds22, grho)
     use constants
     implicit none
     integer, intent (in) :: nperiod
@@ -51,7 +51,7 @@ contains
     real, dimension (nbset), intent (in out) :: bset
     real, dimension (-ntgrid:ntgrid), intent (in out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
-         gds2, gds21, gds22
+         gds2, gds21, gds22, grho
     integer :: ntheta_old, ntgrid_old, nbset_old
     real, dimension (-ntgrid:ntgrid) :: thetasave
     real, dimension (ntheta+1) :: thetaold, thetanew
@@ -75,10 +75,9 @@ contains
     ntgrid = ntheta/2 + (nperiod-1)*ntheta
 
     theta(-ntheta/2:ntheta/2-1) = thetanew(1:ntheta)
-    theta(ntheta/2) = theta(-ntheta/2)+2.*pi
+    theta(ntheta/2) = thetanew(1) + real(2)*pi
     bmag(-ntheta/2:ntheta/2-1) = bmagnew(1:ntheta)
-    bmag(ntheta/2) = bmag(-ntheta/2)
-
+    bmag(ntheta/2) = bmagnew(1)
     do i = 1, nperiod-1
        theta(-ntheta/2+i*ntheta:ntheta/2-1+i*ntheta) &
             = thetanew(1:ntheta) + real(2*i)*pi
@@ -90,14 +89,15 @@ contains
        bmag(-ntheta/2-i*ntheta:ntheta/2-1-i*ntheta) = bmagnew(1:ntheta)
     end do
 
-    call regrid (ntgrid_old, thetasave, gradpar, ntgrid, theta(-ntgrid:ntgrid))
-    call regrid (ntgrid_old, thetasave, gbdrift, ntgrid, theta(-ntgrid:ntgrid))
-    call regrid (ntgrid_old, thetasave, gbdrift0, ntgrid, theta(-ntgrid:ntgrid))
-    call regrid (ntgrid_old, thetasave, cvdrift, ntgrid, theta(-ntgrid:ntgrid))
-    call regrid (ntgrid_old, thetasave, cvdrift0, ntgrid, theta(-ntgrid:ntgrid))
-    call regrid (ntgrid_old, thetasave, gds2,  ntgrid, theta(-ntgrid:ntgrid))
-    call regrid (ntgrid_old, thetasave, gds21, ntgrid, theta(-ntgrid:ntgrid))
-    call regrid (ntgrid_old, thetasave, gds22, ntgrid, theta(-ntgrid:ntgrid))
+    call regrid (ntgrid_old, thetasave, gradpar, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, gbdrift, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, gbdrift0, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, cvdrift, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, cvdrift0, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, gds2, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, gds21, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, gds22, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, grho, ntgrid, theta)
 
   end subroutine gridgen_get_grids
 
