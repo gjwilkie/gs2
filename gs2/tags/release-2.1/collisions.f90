@@ -1,14 +1,21 @@
 module collisions
+
+  use redistribute, only: redist_type
+
   implicit none
 
   public :: init_collisions
   public :: solfp1
+  public :: reset_init
+
+  private
 
   ! knobs
   real :: vncoef, absom
   integer :: ivnew
   logical :: conserve_number, conserve_momentum
   integer :: collision_model_switch
+  logical :: use_shmem
 
   integer, parameter :: collision_model_lorentz = 1
   integer, parameter :: collision_model_krook = 2
@@ -41,36 +48,13 @@ module collisions
   complex, dimension (:,:), allocatable :: g3int
   ! (-ntgrid:ntgrid, -*- gint_layout -*-)
 
-  ! only for lorentz
-  type :: mapfromg
-     integer :: n
-     integer, dimension (:), pointer :: ig
-     integer, dimension (:), pointer :: isign
-     integer, dimension (:), pointer :: iglo
-  end type mapfromg
+  type (redist_type), save :: lorentz_map
 
-  ! only for lorentz
-  type (mapfromg), dimension (:), allocatable :: g_redist
-  ! (nproc)
-
-  ! only for lorentz
-  type :: map2lz
-     integer :: n
-     integer, dimension (:), pointer :: il
-     integer, dimension (:), pointer :: ilz
-  end type map2lz
-
-  ! only for lorentz
-  type (map2lz), dimension (:), allocatable :: lz_redist
-  ! (nproc)
-
-  ! only for lorentz
-  complex, dimension (:), allocatable :: redist_buff
+  logical :: initialized = .false.
 
 contains
 
   subroutine init_collisions
-    use mp, only: proc0
     use species, only: init_species, nspec
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0
@@ -78,7 +62,6 @@ contains
     use run_parameters, only: init_run_parameters
     use gs2_layouts, only: init_dist_fn_layouts
     implicit none
-    logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
@@ -90,14 +73,15 @@ contains
     call init_run_parameters
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
 
-    if (proc0) call read_parameters
-    call broadcast_parameters
+    call read_parameters
     call init_arrays
   end subroutine init_collisions
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit
     use text_options
+    use mp, only: proc0, broadcast
+    use shmem
     implicit none
     type (text_option), dimension (7), parameter :: modelopts = &
          (/ text_option('default', collision_model_lorentz), &
@@ -109,33 +93,33 @@ contains
             text_option('collisionless', collision_model_none) /)
     character(20) :: collision_model
     namelist /collisions_knobs/ collision_model, vncoef, absom, ivnew, &
-         conserve_number, conserve_momentum
+         conserve_number, conserve_momentum, use_shmem
     integer :: ierr
 
-    collision_model = 'default'
-    vncoef = 0.6
-    absom = 0.5
-    ivnew = 0
-    conserve_number = .true.
-    conserve_momentum = .true.
-    read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
+    if (proc0) then
+       collision_model = 'default'
+       vncoef = 0.6
+       absom = 0.5
+       ivnew = 0
+       conserve_number = .true.
+       conserve_momentum = .true.
+       use_shmem = .true.
+       read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
 
-    ierr = error_unit()
-    call get_option_value &
-         (collision_model, modelopts, collision_model_switch, &
-          ierr, "collision_model in collisions_knobs")
-  end subroutine read_parameters
-
-  subroutine broadcast_parameters
-    use mp, only: broadcast
-    implicit none
+       ierr = error_unit()
+       call get_option_value &
+            (collision_model, modelopts, collision_model_switch, &
+            ierr, "collision_model in collisions_knobs")
+       use_shmem = use_shmem .and. shmem_available
+    end if
     call broadcast (vncoef)
     call broadcast (absom)
     call broadcast (ivnew)
     call broadcast (conserve_number)
     call broadcast (conserve_momentum)
     call broadcast (collision_model_switch)
-  end subroutine broadcast_parameters
+    call broadcast (use_shmem)
+  end subroutine read_parameters
 
   subroutine init_arrays
     use species, only: nspec
@@ -185,7 +169,7 @@ contains
        end do
     end do
 
-    allocate (vnew(naky,negrid,nspec))
+    if(.not.allocated(vnew)) allocate (vnew(naky,negrid,nspec))
     do is = 1, nspec
        if (spec(is)%type == electron_species) then
           do ie = 1, negrid
@@ -210,11 +194,11 @@ contains
     use le_grids, only: nlambda, al, lintegrate
     use gs2_layouts, only: g_lo, gint_lo, il_idx
     implicit none
-    complex, dimension (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc) :: g
+    complex, dimension (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc) :: g
     real :: x
     integer :: il, ig, iglo
 
-    allocate (sq(-ntgrid:ntgrid,nlambda,2))
+    if (.not. allocated(sq)) allocate (sq(-ntgrid:ntgrid,nlambda,2))
     do il = 1, nlambda
        do ig = -ntgrid, ntgrid
           x = sqrt(max(0.0, 1.0 - al(il)*bmag(ig)))
@@ -223,7 +207,10 @@ contains
        end do
     end do
 
-    allocate (g3int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_proc))
+    if (.not.allocated(g3int)) &
+         allocate (g3int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
+    g3int = 0.
+
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        x = al(il_idx(g_lo,iglo))
        g(:,1,iglo) = max(0.0, 1.0 - x*bmag(:))
@@ -241,18 +228,21 @@ contains
     use run_parameters, only: delt, zeff, tunits
     implicit none
     real, dimension (:,:), intent (in) :: hee
-    complex, dimension (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc) :: g
-    complex, dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_proc) &
+    complex, dimension (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc) :: g
+    complex, dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) &
          :: geint
     integer :: iglo, ik, il, ie, is
     real :: zeff1, vep, vhat, delta00
 
-    allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_proc))
-    g = 1.0
+    if (.not.allocated(aintnorm)) &
+         allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
+    aintnorm = 0. ; g = 1.0
     call integrate (g, geint)
     aintnorm = 1.0/real(geint)
 
-    allocate (vnewfe(g_lo%llim_proc:g_lo%ulim_proc))
+    if (.not.allocated(vnewfe)) allocate (vnewfe(g_lo%llim_proc:g_lo%ulim_alloc))
+    vnewfe = 0.
+
     if (collision_model_switch == collision_model_krook_test) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
@@ -296,7 +286,7 @@ contains
     use species, only: nspec, spec
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, negrid, al, lintegrate, jend, ng2
+    use le_grids, only: nlambda, negrid, al, jend, ng2
     use run_parameters, only: delt, tunits
     use gs2_layouts, only: init_lorentz_layouts
     use gs2_layouts, only: g_lo, gint_lo, lz_lo
@@ -311,16 +301,17 @@ contains
          (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
     call init_lorentz_redistribute
 
-    allocate (glz(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_proc))
+    if (.not.allocated(glz)) &
+         allocate (glz(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
     glz = 0.0
 
-    allocate (c1(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_proc))
-    allocate (betaa(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_proc))
-    allocate (ql(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_proc))
-    
-    c1 = 0.0
-    betaa = 0.0
-    ql = 0.0
+    if (.not.allocated(c1)) then
+       allocate (c1(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+       allocate (betaa(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+       allocate (ql(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+    endif
+
+    c1 = 0.0 ; betaa = 0.0 ; ql = 0.0
 
     do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
        is = is_idx(lz_lo,ilz)
@@ -449,216 +440,88 @@ contains
     use gs2_layouts, only: g_lo, lz_lo
     use gs2_layouts, only: idx_local, proc_id
     use gs2_layouts, only: gidx2lzidx, lzidx2gidx
+    use redistribute, only: index_list_type, init_redist, delete_list
     implicit none
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
+    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    integer, dimension(3) :: from_low
+    integer :: to_low
     integer :: ig, isign, iglo, il, ilz
     integer :: n, ip
+    logical :: done = .false.
+
+    if (done) return
 
     call init_lorentz_layouts &
          (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
 
-    allocate (g_redist(0:nproc-1), lz_redist(0:nproc-1))
-
     ! count number of elements to be redistributed to/from each processor
-    g_redist%n = 0
-    lz_redist%n = 0
+    nn_to = 0
+    nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
-             call gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, &
-                              il, ilz)
-             if (idx_local(g_lo,iglo)) then
-                g_redist(proc_id(lz_lo,ilz))%n &
-                     = g_redist(proc_id(lz_lo,ilz))%n + 1
-             end if
-             if (idx_local(lz_lo,ilz)) then
-                lz_redist(proc_id(g_lo,iglo))%n &
-                     = lz_redist(proc_id(g_lo,iglo))%n + 1
-             end if
+             call gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, il, ilz)
+             if (idx_local(g_lo,iglo)) &
+                  nn_from(proc_id(lz_lo,ilz)) = nn_from(proc_id(lz_lo,ilz)) + 1
+             if (idx_local(lz_lo,ilz)) &
+                  nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
           end do
        end do
     end do
 
-    n = 0
     do ip = 0, nproc-1
-       if (ip == iproc) cycle
-       n = max(n,g_redist(ip)%n,lz_redist(ip)%n)
-    end do
-    if (n > 0) allocate (redist_buff(n))
-
-    do ip = 0, nproc-1
-       if (g_redist(ip)%n > 0) then
-          allocate (g_redist(ip)%ig(g_redist(ip)%n))
-          allocate (g_redist(ip)%isign(g_redist(ip)%n))
-          allocate (g_redist(ip)%iglo(g_redist(ip)%n))
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first(nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+          allocate (from_list(ip)%third(nn_from(ip)))
        end if
-       if (lz_redist(ip)%n > 0) then
-          allocate (lz_redist(ip)%il(lz_redist(ip)%n))
-          allocate (lz_redist(ip)%ilz(lz_redist(ip)%n))
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first(nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
        end if
     end do
 
     ! get local indices of elements distributed to/from other processors
-    g_redist%n = 0
-    lz_redist%n = 0
+    nn_to = 0
+    nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
-             call gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, &
-                              il, ilz)
+             call gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, il, ilz)
              if (idx_local(g_lo,iglo)) then
                 ip = proc_id(lz_lo,ilz)
-                n = g_redist(ip)%n + 1
-                g_redist(ip)%n = n
-                g_redist(ip)%ig(n) = ig
-                g_redist(ip)%isign(n) = isign
-                g_redist(ip)%iglo(n) = iglo
+                n = nn_from(ip) + 1
+                nn_from(ip) = n
+                from_list(ip)%first(n) = ig
+                from_list(ip)%second(n) = isign
+                from_list(ip)%third(n) = iglo
              end if
              if (idx_local(lz_lo,ilz)) then
                 ip = proc_id(g_lo,iglo)
-                n = lz_redist(ip)%n + 1
-                lz_redist(ip)%n = n
-                lz_redist(ip)%il(n) = il
-                lz_redist(ip)%ilz(n) = ilz
+                n = nn_to(ip) + 1
+                nn_to(ip) = n
+                to_list(ip)%first(n) = il
+                to_list(ip)%second(n) = ilz
              end if
           end do
        end do
     end do
+
+    from_low (1) = -ntgrid
+    from_low (2) = 1
+    from_low (3) = g_lo%llim_proc
+
+    to_low = lz_lo%llim_proc
+
+    call init_redist (lorentz_map, 'c', to_low, to_list, from_low, from_list)
+
+    call delete_list (to_list)
+    call delete_list (from_list)
+
+    done = .true.
+
   end subroutine init_lorentz_redistribute
-
-  subroutine redistribute_to_lorentz (g)
-    use theta_grid, only: ntgrid
-    use mp, only: nproc, iproc, send, receive
-    use gs2_layouts, only: g_lo
-    use prof, only: prof_entering, prof_leaving
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
-    integer :: i, idp, ipto, ipfrom, iadp
-
-    call prof_entering ("redistribute_to_lorentz", "collisions")
-
-    ! redistribute from local processor to local processor
-    do i = 1, g_redist(iproc)%n
-       glz(lz_redist(iproc)%il(i),lz_redist(iproc)%ilz(i)) &
-            = g(g_redist(iproc)%ig(i),g_redist(iproc)%isign(i), &
-                g_redist(iproc)%iglo(i))
-    end do
-
-    ! redistribute to idpth next processor, from idpth preceding processor
-    ! or redistribute from idpth preceding processor, to idpth next processor
-    ! to avoid deadlocks
-    do idp = 1, nproc-1
-       ipto = mod(iproc + idp, nproc)
-       ipfrom = mod(iproc + nproc - idp, nproc)
-       iadp = min(idp,nproc-idp)
-
-       ! avoid deadlock AND ensure mostly parallel resolution
-       if (mod(iproc/iadp,2) == 0) then
-          if (g_redist(ipto)%n > 0) then
-             do i = 1, g_redist(ipto)%n
-                redist_buff(i) = g(g_redist(ipto)%ig(i), &
-                                   g_redist(ipto)%isign(i), &
-                                   g_redist(ipto)%iglo(i))
-             end do
-             call send (redist_buff(1:g_redist(ipto)%n), ipto, idp)
-          end if
-
-          ! receive from to idpth preceding processor
-          if (lz_redist(ipfrom)%n > 0) then
-             call receive (redist_buff(1:lz_redist(ipfrom)%n), ipfrom, idp)
-             do i = 1, lz_redist(ipfrom)%n
-                glz(lz_redist(ipfrom)%il(i),lz_redist(ipfrom)%ilz(i)) &
-                     = redist_buff(i)
-             end do
-          end if
-       else
-          if (lz_redist(ipfrom)%n > 0) then
-             call receive (redist_buff(1:lz_redist(ipfrom)%n), ipfrom, idp)
-             do i = 1, lz_redist(ipfrom)%n
-                glz(lz_redist(ipfrom)%il(i),lz_redist(ipfrom)%ilz(i)) &
-                     = redist_buff(i)
-             end do
-          end if
-
-          if (g_redist(ipto)%n > 0) then
-             do i = 1, g_redist(ipto)%n
-                redist_buff(i) = g(g_redist(ipto)%ig(i), &
-                                   g_redist(ipto)%isign(i), &
-                                   g_redist(ipto)%iglo(i))
-             end do
-             call send (redist_buff(1:g_redist(ipto)%n), ipto, idp)
-          end if
-       end if
-    end do
-
-    call prof_leaving ("redistribute_to_lorentz", "collisions")
-  end subroutine redistribute_to_lorentz
-
-  subroutine redistribute_from_lorentz (g)
-    use theta_grid, only: ntgrid
-    use mp, only: nproc, iproc, send, receive
-    use gs2_layouts, only: g_lo
-    use prof, only: prof_entering, prof_leaving
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
-    integer :: i, idp, iadp, ipto, ipfrom
-
-    call prof_entering ("redistribute_from_lorentz", "collisions")
-
-    ! redistribute from local processor to local processor
-    do i = 1, g_redist(iproc)%n
-       g(g_redist(iproc)%ig(i),g_redist(iproc)%isign(i), &
-            g_redist(iproc)%iglo(i)) &
-               = glz(lz_redist(iproc)%il(i),lz_redist(iproc)%ilz(i))
-    end do
-
-    ! redistribute to idpth next processor, from idpth preceding processor
-    ! or redistribute from idpth preceding processor, to idpth next processor
-    ! to avoid deadlocks
-    do idp = 1, nproc-1
-       ipto = mod(iproc + idp, nproc)
-       ipfrom = mod(iproc + nproc - idp, nproc)
-       iadp = min(idp,nproc-idp)
-
-       ! avoid deadlock AND ensure mostly parallel resolution
-       if (mod(iproc/iadp,2) == 0) then
-          if (lz_redist(ipto)%n > 0) then
-             do i = 1, lz_redist(ipto)%n
-                redist_buff(i) &
-                     = glz(lz_redist(ipto)%il(i),lz_redist(ipto)%ilz(i))
-             end do
-             call send (redist_buff(1:lz_redist(ipto)%n), ipto, idp)
-          end if
-
-          if (g_redist(ipfrom)%n > 0) then
-             call receive (redist_buff(1:g_redist(ipfrom)%n), ipfrom, idp)
-             do i = 1, g_redist(ipfrom)%n
-                g(g_redist(ipfrom)%ig(i),g_redist(ipfrom)%isign(i), &
-                     g_redist(ipfrom)%iglo(i)) &
-                        = redist_buff(i)
-             end do
-          end if
-       else
-          if (g_redist(ipfrom)%n > 0) then
-             call receive (redist_buff(1:g_redist(ipfrom)%n), ipfrom, idp)
-             do i = 1, g_redist(ipfrom)%n
-                g(g_redist(ipfrom)%ig(i),g_redist(ipfrom)%isign(i), &
-                     g_redist(ipfrom)%iglo(i)) &
-                        = redist_buff(i)
-             end do
-          end if
-
-          if (lz_redist(ipto)%n > 0) then
-             do i = 1, lz_redist(ipto)%n
-                redist_buff(i) &
-                     = glz(lz_redist(ipto)%il(i),lz_redist(ipto)%ilz(i))
-             end do
-             call send (redist_buff(1:lz_redist(ipto)%n), ipto, idp)
-          end if
-       end if
-    end do
-
-    call prof_leaving ("redistribute_from_lorentz", "collisions")
-  end subroutine redistribute_from_lorentz
 
   subroutine solfp1 (g, g1, phi, apar, aperp)
     use theta_grid, only: ntgrid
@@ -723,9 +586,9 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
 
-    complex, dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_proc) &
+    complex, dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) &
          :: g0eint, g1eint
-    complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_proc) &
+    complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc) &
          :: g1int, g2int
     integer :: iglo, igint, igeint, ig, ik, it, il, is
 
@@ -810,12 +673,13 @@ contains
     use gs2_layouts, only: g_lo, gint_lo, lz_lo
     use gs2_layouts, only: ig_idx, ik_idx, il_idx, ie_idx, is_idx
     use prof, only: prof_entering, prof_leaving
+    use redistribute, only: gather, scatter
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
 
     complex, dimension (max(2*nlambda,2*ng2+1)) :: delta
-    complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_proc) &
+    complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc) &
          :: g1int, g2int
     integer :: iglo, igint, ilz, ig, ik, il, ie, is, je
 
@@ -835,13 +699,13 @@ contains
        call lintegrate (g1, g1int)
     end if
 
-    call redistribute_to_lorentz (g)
+    call gather (lorentz_map, g, glz)
 
     ! solve for glz row by row
     do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
        ig = ig_idx(lz_lo,ilz)
        ik = ik_idx(lz_lo,ilz)
-       ie = ie_idx(lz_lo,ilz)
+!       ie = ie_idx(lz_lo,ilz)  ! not used
        is = is_idx(lz_lo,ilz)
        if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
        je = 2*jend(ig)
@@ -857,13 +721,13 @@ contains
           delta(il+1) = glz(il+1,ilz) - ql(il+1,ilz)*delta(il)
        end do
        
-      glz(je,ilz) = delta(je)*betaa(je,ilz)
+       glz(je,ilz) = delta(je)*betaa(je,ilz)
        do il = je-1, 1, -1
           glz(il,ilz) = (delta(il) - c1(il,ilz)*glz(il+1,ilz))*betaa(il,ilz)
        end do
     end do
 
-    call redistribute_from_lorentz (g)
+    call scatter (lorentz_map, glz, g)
 
     if (conserve_momentum) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -897,5 +761,11 @@ contains
 
     call prof_leaving ("solfp_lorentz", "collisions")
   end subroutine solfp_lorentz
+
+  subroutine reset_init
+    
+    initialized = .false.
+
+  end subroutine reset_init
 
 end module collisions

@@ -6,7 +6,8 @@ module theta_grid
   public :: bset
   public :: bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0
   public :: gds2, gds21, gds22
-  public :: bmin, bmax, eps, shat, drhodpsi
+  public :: grho
+  public :: bmin, bmax, eps, shat, drhodpsi, jacob
   public :: ntheta, ntgrid, nperiod, nbset
 
   private
@@ -16,6 +17,7 @@ module theta_grid
   real, dimension (:), allocatable :: bmag, gradpar
   real, dimension (:), allocatable :: gbdrift, gbdrift0, cvdrift, cvdrift0
   real, dimension (:), allocatable :: gds2, gds21, gds22
+  real, dimension (:), allocatable :: grho, jacob
   real :: bmin, bmax, eps, shat, drhodpsi
   integer :: ntheta, ntgrid, nperiod, nbset
 
@@ -75,7 +77,9 @@ contains
     call broadcast (gds2)
     call broadcast (gds21)
     call broadcast (gds22)
+    call broadcast (grho)
     call broadcast (shat)
+    call broadcast (jacob)
     call broadcast (drhodpsi)
   end subroutine broadcast_results
 
@@ -118,6 +122,8 @@ contains
     allocate (gds2(-ntgrid:ntgrid))
     allocate (gds21(-ntgrid:ntgrid))
     allocate (gds22(-ntgrid:ntgrid))
+    allocate (grho(-ntgrid:ntgrid))
+    allocate (jacob(-ntgrid:ntgrid))
   end subroutine allocate_arrays
 
   subroutine finish_init
@@ -164,6 +170,9 @@ contains
 
        eik_save = gds22(-ntgrid:ntgrid); deallocate (gds22)
        allocate (gds22(-ntgrid:ntgrid)); gds22 = eik_save
+
+       eik_save = grho(-ntgrid:ntgrid); deallocate (grho)
+       allocate (grho(-ntgrid:ntgrid)); grho = eik_save
     end if
 
     bmax = maxval(bmag)
@@ -179,6 +188,8 @@ contains
     delthet(:ntgrid-1) = theta(-ntgrid+1:) - theta(:ntgrid-1)
     delthet(ntgrid) = delthet(-ntgrid)
     delthet2 = delthet*delthet
+
+    jacob = 1.0/(drhodpsi*gradpar*bmag)
   end subroutine finish_init
 
   subroutine get_sizes
@@ -210,19 +221,19 @@ contains
        call eik_get_grids (nperiod, ntheta, ntgrid, nbset, &
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
-            gds2, gds21, gds22, &
+            gds2, gds21, gds22, grho, &
             shat, drhodpsi)
     case (eqopt_salpha)
        call salpha_get_grids (nperiod, ntheta, ntgrid, nbset, &
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
-            gds2, gds21, gds22, &
+            gds2, gds21, gds22, grho, &
             shat, drhodpsi)
     case (eqopt_file)
        call file_get_grids (nperiod, ntheta, ntgrid, nbset, &
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
-            gds2, gds21, gds22, &
+            gds2, gds21, gds22, grho, &
             shat, drhodpsi)
     end select
   end subroutine get_grids

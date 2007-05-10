@@ -4,6 +4,8 @@ module mp
 
   public :: init_mp, finish_mp
   public :: broadcast, sum_reduce, sum_allreduce
+  public :: max_reduce, max_allreduce
+  public :: min_reduce, min_allreduce
   public :: nproc, iproc, proc0
   public :: send, receive
   public :: barrier
@@ -17,9 +19,12 @@ module mp
      module procedure broadcast_real,    broadcast_real_array
      module procedure broadcast_complex, broadcast_complex_array
      module procedure broadcast_logical, broadcast_logical_array
+     module procedure broadcast_character
      module procedure bcastfrom_integer, bcastfrom_integer_array
      module procedure bcastfrom_real,    bcastfrom_real_array
      module procedure bcastfrom_complex, bcastfrom_complex_array
+     module procedure bcastfrom_logical, bcastfrom_logical_array
+     module procedure bcastfrom_character
   end interface
 
   interface sum_reduce
@@ -34,11 +39,32 @@ module mp
      module procedure sum_allreduce_complex, sum_allreduce_complex_array
   end interface
 
+  interface max_reduce
+     module procedure max_reduce_integer, max_reduce_integer_array
+     module procedure max_reduce_real,    max_reduce_real_array
+  end interface
+
+  interface max_allreduce
+     module procedure max_allreduce_integer, max_allreduce_integer_array
+     module procedure max_allreduce_real,    max_allreduce_real_array
+  end interface
+
+  interface min_reduce
+     module procedure min_reduce_integer, min_reduce_integer_array
+     module procedure min_reduce_real,    min_reduce_real_array
+  end interface
+
+  interface min_allreduce
+     module procedure min_allreduce_integer, min_allreduce_integer_array
+     module procedure min_allreduce_real,    min_allreduce_real_array
+  end interface
+
   interface send
      module procedure send_integer, send_integer_array
      module procedure send_real,    send_real_array
      module procedure send_complex, send_complex_array
      module procedure send_logical, send_logical_array
+     module procedure send_character
   end interface
 
   interface receive
@@ -46,6 +72,7 @@ module mp
      module procedure receive_real,    receive_real_array
      module procedure receive_complex, receive_complex_array
      module procedure receive_logical, receive_logical_array
+     module procedure receive_character
   end interface
 
 contains
@@ -96,6 +123,11 @@ contains
     logical, dimension (:), intent (in out) :: f
   end subroutine broadcast_logical_array
 
+  subroutine broadcast_character (s)
+    implicit none
+    character(*), intent (in out) :: s
+  end subroutine broadcast_character
+
   subroutine bcastfrom_integer (i, src)
     implicit none
     integer, intent (in out) :: i
@@ -137,6 +169,27 @@ contains
     integer, intent (in) :: src
     if (src /= 0) call error ("broadcast from")
   end subroutine bcastfrom_complex_array
+
+  subroutine bcastfrom_logical (f, src)
+    implicit none
+    logical, intent (in out) :: f
+    integer, intent (in) :: src
+    if (src /= 0) call error ("broadcast from")
+  end subroutine bcastfrom_logical
+
+  subroutine bcastfrom_logical_array (f, src)
+    implicit none
+    logical, dimension (:), intent (in out) :: f
+    integer, intent (in) :: src
+    if (src /= 0) call error ("broadcast from")
+  end subroutine bcastfrom_logical_array
+
+  subroutine bcastfrom_character (s, src)
+    implicit none
+    character(*), intent (in out) :: s
+    integer, intent (in) :: src
+    if (src /= 0) call error ("broadcast from")
+  end subroutine bcastfrom_character
 
   subroutine sum_reduce_integer (i, dest)
     implicit none
@@ -210,6 +263,102 @@ contains
     complex, dimension (:), intent (in out) :: z
   end subroutine sum_allreduce_complex_array
 
+  subroutine max_reduce_integer (i, dest)
+    implicit none
+    integer, intent (in out) :: i
+    integer, intent (in) :: dest
+    if (dest /= 0) call error ("reduce to")
+  end subroutine max_reduce_integer
+
+  subroutine max_reduce_integer_array (i, dest)
+    implicit none
+    integer, dimension (:), intent (in out) :: i
+    integer, intent (in) :: dest
+    if (dest /= 0) call error ("reduce to")
+  end subroutine max_reduce_integer_array
+
+  subroutine max_reduce_real (a, dest)
+    implicit none
+    real, intent (in out) :: a
+    integer, intent (in) :: dest
+    if (dest /= 0) call error ("reduce to")
+  end subroutine max_reduce_real
+
+  subroutine max_reduce_real_array (a, dest)
+    implicit none
+    real, dimension (:), intent (in out) :: a
+    integer, intent (in) :: dest
+    if (dest /= 0) call error ("reduce to")
+  end subroutine max_reduce_real_array
+
+  subroutine max_allreduce_integer (i)
+    implicit none
+    integer, intent (in out) :: i
+  end subroutine max_allreduce_integer
+
+  subroutine max_allreduce_integer_array (i)
+    implicit none
+    integer, dimension (:), intent (in out) :: i
+  end subroutine max_allreduce_integer_array
+
+  subroutine max_allreduce_real (a)
+    implicit none
+    real, intent (in out) :: a
+  end subroutine max_allreduce_real
+
+  subroutine max_allreduce_real_array (a)
+    implicit none
+    real, dimension (:), intent (in out) :: a
+  end subroutine max_allreduce_real_array
+
+  subroutine min_reduce_integer (i, dest)
+    implicit none
+    integer, intent (in out) :: i
+    integer, intent (in) :: dest
+    if (dest /= 0) call error ("reduce to")
+  end subroutine min_reduce_integer
+
+  subroutine min_reduce_integer_array (i, dest)
+    implicit none
+    integer, dimension (:), intent (in out) :: i
+    integer, intent (in) :: dest
+    if (dest /= 0) call error ("reduce to")
+  end subroutine min_reduce_integer_array
+
+  subroutine min_reduce_real (a, dest)
+    implicit none
+    real, intent (in out) :: a
+    integer, intent (in) :: dest
+    if (dest /= 0) call error ("reduce to")
+  end subroutine min_reduce_real
+
+  subroutine min_reduce_real_array (a, dest)
+    implicit none
+    real, dimension (:), intent (in out) :: a
+    integer, intent (in) :: dest
+    if (dest /= 0) call error ("reduce to")
+  end subroutine min_reduce_real_array
+
+  subroutine min_allreduce_integer (i)
+    implicit none
+    integer, intent (in out) :: i
+  end subroutine min_allreduce_integer
+
+  subroutine min_allreduce_integer_array (i)
+    implicit none
+    integer, dimension (:), intent (in out) :: i
+  end subroutine min_allreduce_integer_array
+
+  subroutine min_allreduce_real (a)
+    implicit none
+    real, intent (in out) :: a
+  end subroutine min_allreduce_real
+
+  subroutine min_allreduce_real_array (a)
+    implicit none
+    real, dimension (:), intent (in out) :: a
+  end subroutine min_allreduce_real_array
+
   subroutine barrier
   end subroutine barrier
 
@@ -277,6 +426,14 @@ contains
     call error ("send")
   end subroutine send_logical_array
 
+  subroutine send_character (s, dest, tag)
+    implicit none
+    character(*), intent (in) :: s
+    integer, intent (in) :: dest
+    integer, intent (in), optional :: tag
+    call error ("send")
+  end subroutine send_character
+
   subroutine receive_integer (i, src, tag)
     implicit none
     integer, intent (out) :: i
@@ -340,6 +497,14 @@ contains
     integer, intent (in), optional :: tag
     call error ("receive")
   end subroutine receive_logical_array
+
+  subroutine receive_character (s, src, tag)
+    implicit none
+    character(*), intent (out) :: s
+    integer, intent (in) :: src
+    integer, intent (in), optional :: tag
+    call error ("receive")
+  end subroutine receive_character
 
   subroutine error (msg)
     implicit none

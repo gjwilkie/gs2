@@ -5,6 +5,7 @@ module species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species
   public :: stm, zstm, tz, smz
+  public :: has_electron_species
 
   type :: specie
      real :: z
@@ -15,8 +16,7 @@ module species
      real :: fprim
      real :: uprim, uprim2
      real :: vnewk
-     real :: e_flat
-     real :: temp_flat
+     real :: stm, zstm, tz, smz
      integer :: type
   end type specie
 
@@ -45,15 +45,13 @@ contains
     use text_options
     use mp, only: proc0, broadcast
     implicit none
-    real :: z, mass, dens, temp, tprim, fprim, uprim, uprim2, vnewk, &
-         e_flat, temp_flat
+    real :: z, mass, dens, temp, tprim, fprim, uprim, uprim2, vnewk
     character(20) :: type
     integer :: unit
     integer :: is
     namelist /species_knobs/ nspec
     namelist /species_parameters/ &
-         z, mass, dens, temp, tprim, fprim, uprim, uprim2, vnewk, type, &
-         e_flat, temp_flat
+         z, mass, dens, temp, tprim, fprim, uprim, uprim2, vnewk, type
     integer :: ierr
 
     type (text_option), dimension (8), parameter :: typeopts = &
@@ -83,8 +81,6 @@ contains
     if (proc0) then
        do is = 1, nspec
           call get_indexed_namelist_unit (unit, "species_parameters", is)
-          e_flat = -1.
-          temp_flat = 1.
           uprim = 0.0
           uprim2 = 0.0
           vnewk = 0.0
@@ -101,8 +97,12 @@ contains
           spec(is)%uprim = uprim
           spec(is)%uprim2 = uprim2
           spec(is)%vnewk = vnewk
-          spec(is)%e_flat = e_flat
-          spec(is)%temp_flat = temp_flat
+
+          spec(is)%stm = sqrt(temp/mass)
+          spec(is)%zstm = z/sqrt(temp*mass)
+          spec(is)%tz = temp/z
+          spec(is)%smz = abs(sqrt(temp*mass)/z)
+
           ierr = error_unit()
           call get_option_value &
                (type, typeopts, spec(is)%type, &
@@ -120,9 +120,11 @@ contains
        call broadcast (spec(is)%uprim)
        call broadcast (spec(is)%uprim2)
        call broadcast (spec(is)%vnewk)
+       call broadcast (spec(is)%stm)
+       call broadcast (spec(is)%zstm)
+       call broadcast (spec(is)%tz)
+       call broadcast (spec(is)%smz)
        call broadcast (spec(is)%type)
-       call broadcast (spec(is)%e_flat)
-       call broadcast (spec(is)%temp_flat)
     end do
   end subroutine read_parameters
 
@@ -131,7 +133,7 @@ contains
     type (specie), dimension (:), intent (in) :: spec
     integer, intent (in) :: ispec
     real :: stm
-    stm = sqrt(spec(ispec)%temp/spec(ispec)%mass)
+    stm = spec(ispec)%stm
   end function stm
 
   pure function zstm (spec, ispec)
@@ -139,7 +141,7 @@ contains
     type (specie), dimension (:), intent (in) :: spec
     integer, intent (in) :: ispec
     real :: zstm
-    zstm = spec(ispec)%z/sqrt(spec(ispec)%temp*spec(ispec)%mass)
+    zstm = spec(ispec)%zstm
   end function zstm
 
   pure function tz (spec, ispec)
@@ -147,7 +149,7 @@ contains
     type (specie), dimension (:), intent (in) :: spec
     integer, intent (in) :: ispec
     real :: tz
-    tz = spec(ispec)%temp/spec(ispec)%z
+    tz = spec(ispec)%tz
   end function tz
 
   pure function smz (spec, ispec)
@@ -155,7 +157,14 @@ contains
     type (specie), dimension (:), intent (in) :: spec
     integer, intent (in) :: ispec
     real :: smz
-    smz = abs(sqrt(spec(ispec)%temp*spec(ispec)%mass)/spec(ispec)%z)
+    smz = spec(ispec)%smz
   end function smz
+
+  pure function has_electron_species (spec)
+    implicit none
+    type (specie), dimension (:), intent (in) :: spec
+    logical :: has_electron_species
+    has_electron_species = any(spec%type == electron_species)
+  end function has_electron_species
 
 end module species

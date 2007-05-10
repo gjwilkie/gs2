@@ -2,32 +2,59 @@ module init_g
   implicit none
 
   public :: ginit
+  public :: init_init_g
+  public :: width0, k0
+  public :: tstart
+  public :: reset_init
   private
 
   ! knobs
   integer :: ginitopt_switch
   integer, parameter :: ginitopt_default = 1, ginitopt_test1 = 2, &
        ginitopt_xi = 3, ginitopt_xi2 = 4, ginitopt_rh = 5, ginitopt_zero = 6, &
-       ginitopt_test3 = 7
-  real :: width0, phiinit
+       ginitopt_test3 = 7, ginitopt_convect = 8, ginitopt_restart_file = 9, &
+       ginitopt_noise = 10, ginitopt_restart_many = 11
+  real :: width0, phiinit, k0
+  real :: tstart
   logical :: chop_side
-
+  character(300) :: restart_file
+  
 contains
 
-  subroutine ginit
+  subroutine init_init_g
+    use gs2_save, only: init_save
     use mp, only: proc0, broadcast
     implicit none
+    logical, save :: initialized = .false.
 
+    if (initialized) return
+    initialized = .true.
+
+    tstart = 0.0
     if (proc0) call read_parameters
 
     call broadcast (ginitopt_switch)
     call broadcast (width0)
     call broadcast (phiinit)
+    call broadcast (k0)
+    call broadcast (tstart)
     call broadcast (chop_side)
+    call broadcast (restart_file)
 
+    call init_save (restart_file)
+
+  end subroutine init_init_g
+
+  subroutine ginit (restarted)
+    implicit none
+    logical, intent (out) :: restarted
+
+    restarted = .false.
     select case (ginitopt_switch)
     case (ginitopt_default)
        call ginit_default
+    case (ginitopt_noise)
+       call ginit_noise
     case (ginitopt_test1)
        call ginit_test1
     case (ginitopt_xi)
@@ -40,30 +67,45 @@ contains
        call ginit_zero
     case (ginitopt_test3)
        call ginit_test3
+    case (ginitopt_convect)
+       call ginit_convect
+    case (ginitopt_restart_file)
+       call ginit_restart_file 
+       restarted = .true.
+    case (ginitopt_restart_many)
+       call ginit_restart_many 
+       restarted = .true.
     end select
   end subroutine ginit
 
   subroutine read_parameters
-    use file_utils, only: input_unit, error_unit
+    use file_utils, only: input_unit, error_unit, run_name
     use text_options
     implicit none
 
-    type (text_option), dimension (7), parameter :: ginitopts = &
+    type (text_option), dimension (11), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
+            text_option('noise', ginitopt_noise), &
             text_option('test1', ginitopt_test1), &
             text_option('xi', ginitopt_xi), &
             text_option('xi2', ginitopt_xi2), &
             text_option('zero', ginitopt_zero), &
             text_option('test3', ginitopt_test3), &
-            text_option('rh', ginitopt_rh) /)
+            text_option('convect', ginitopt_convect), &
+            text_option('rh', ginitopt_rh), &
+            text_option('many', ginitopt_restart_many), &
+            text_option('file', ginitopt_restart_file) /)
     character(20) :: ginit_option
-    namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side
+    namelist /init_g_knobs/ ginit_option, width0, phiinit, k0, chop_side, &
+         restart_file
     integer :: ierr
 
     ginit_option = "default"
     width0 = 3.5
     phiinit = 1.0
+    k0 = 1.0
     chop_side = .true.
+    restart_file = trim(run_name)//".nc"
     read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
 
     ierr = error_unit()
@@ -75,7 +117,7 @@ contains
   subroutine ginit_default
     use species, only: nspec, spec
     use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, theta0
+    use kt_grids, only: naky, ntheta0, theta0, aky
     use le_grids, only: nlambda, negrid, forbid
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
@@ -93,6 +135,13 @@ contains
           if (chop_side) phi(:-1,ik,it) = 0.0
        end do
     end do
+    if (naky > 1 .and. aky(1) == 0.0) then
+       phi(:,1,:) = 0.0
+    end if
+! reality condition for k_theta = 0 component:
+    do it = 1, ntheta0/2
+       phi(:,1,it+(ntheta0+1)/2) = conjg(phi(:,1,(ntheta0+1)/2+1-it))
+    enddo
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -105,6 +154,47 @@ contains
     end do
     gnew = g
   end subroutine ginit_default
+
+  subroutine ginit_noise
+    use species, only: nspec, spec
+    use theta_grid, only: ntgrid, theta
+    use kt_grids, only: naky, ntheta0, theta0, aky
+    use le_grids, only: nlambda, negrid, forbid
+    use dist_fn_arrays, only: g, gnew
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use ran
+    implicit none
+    complex, dimension (-ntgrid:ntgrid,naky,ntheta0) :: phi
+    integer :: iglo
+    integer :: ig, ik, it, il, is
+
+    do it = 1, ntheta0
+       do ik = 1, naky
+          do ig = -ntgrid, ntgrid
+             phi(ig,ik,it) = cmplx(ranf(),ranf())
+          end do
+       end do
+    end do
+
+    if (naky > 1 .and. aky(1) == 0.0) then
+       phi(:,1,:) = 0.0
+    end if
+! reality condition for k_theta = 0 component:
+    do it = 1, ntheta0/2
+       phi(:,1,it+(ntheta0+1)/2) = conjg(phi(:,1,(ntheta0+1)/2+1-it))
+    enddo
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       g(:,1,iglo) = -phi(:,ik,it)*spec(is)%z*phiinit
+       where (forbid(:,il)) g(:,1,iglo) = 0.0
+       g(:,2,iglo) = g(:,1,iglo)
+    end do
+    gnew = g
+  end subroutine ginit_noise
 
   subroutine ginit_test1
     use species, only: spec
@@ -257,4 +347,62 @@ contains
     gnew = g
   end subroutine ginit_test3
 
+  subroutine ginit_convect
+    use dist_fn_arrays, only: g, gnew
+    use theta_grid, only: ntgrid, theta
+    use kt_grids, only: theta0
+    use gs2_layouts, only: g_lo, it_idx, ik_idx
+    use constants
+    implicit none
+    integer :: ig, it, ik, iglo
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       g(:,1,iglo) = exp(cmplx(-(theta-theta0(ik,it))**2,k0*theta))
+       g(:,2,iglo) = g(:,1,iglo)
+    end do
+    gnew = g
+  end subroutine ginit_convect
+
+  subroutine ginit_restart_file
+    use dist_fn_arrays, only: g, gnew
+    use gs2_save, only: gs2_restore
+    use mp, only: proc0
+    implicit none
+    integer :: istatus
+
+    call gs2_restore (g, tstart, istatus)
+    if (istatus /= 0) then
+       if (proc0) print *, "Error reading file: ", trim(restart_file)
+       stop
+    end if
+    gnew = g
+  end subroutine ginit_restart_file
+
+  subroutine ginit_restart_many
+    use dist_fn_arrays, only: g, gnew
+    use gs2_save, only: gs2_restore
+    use mp, only: proc0
+    implicit none
+    integer :: istatus
+    logical :: many = .true.
+
+    call gs2_restore (g, tstart, istatus, many)
+    if (istatus /= 0) then
+       if (proc0) print *, "Error reading file: ", trim(restart_file)
+       stop
+    end if
+    gnew = g
+
+  end subroutine ginit_restart_many
+
+  subroutine reset_init
+
+    ginitopt_switch = ginitopt_restart_many
+
+  end subroutine reset_init
+
 end module init_g
+
+

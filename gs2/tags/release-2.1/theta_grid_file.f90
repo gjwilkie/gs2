@@ -61,7 +61,7 @@ contains
 
   subroutine file_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, &
        bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
-       gds2, gds21, gds22, shat, drhodpsi)
+       gds2, gds21, gds22, grho, shat, drhodpsi)
     use file_utils, only: get_unused_unit
     implicit none
     integer, intent (in) :: nperiod
@@ -70,7 +70,7 @@ contains
     real, dimension (nbset), intent (out) :: bset
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
-         gds2, gds21, gds22
+         gds2, gds21, gds22, grho
     real, intent (out) :: shat, drhodpsi
     integer :: unit
     character(200) :: line
@@ -94,7 +94,7 @@ contains
 
     read (unit=unit, fmt="(a)") line
     do i = -ntgrid, ntgrid
-       read (unit=unit, fmt=*) gbdrift(i), gradpar(i)
+       read (unit=unit, fmt=*) gbdrift(i), gradpar(i), grho(i)
     end do
 
     read (unit=unit, fmt="(a)") line
