@@ -14,14 +14,10 @@ module gs2_transforms
 
   interface transform_x
      module procedure transform_x5d
-     module procedure transform_x3d
-     module procedure transform_x1d
   end interface
 
   interface transform_y
      module procedure transform_y5d
-     module procedure transform_y3d
-     module procedure transform_y1d
   end interface
 
   interface transform2
@@ -32,14 +28,10 @@ module gs2_transforms
 
   interface inverse_x
      module procedure inverse_x5d
-     module procedure inverse_x3d
-     module procedure inverse_x1d
   end interface
 
   interface inverse_y
      module procedure inverse_y5d
-     module procedure inverse_y3d
-     module procedure inverse_y1d
   end interface
 
   interface inverse2
@@ -55,6 +47,7 @@ module gs2_transforms
   ! fft
 
   type (fft_type) :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
+  type (fft_type) :: xf3d_cr, xf3d_rc
 
   logical :: xfft_initted = .false.
 
@@ -89,11 +82,10 @@ contains
     initialized = .true.
 
     call init_gs2_layouts
-    call init_3d_layouts
 
     call pe_layout (char)
 
-    if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then
+    if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then  ! not quite robust
        accel = .true.
        call init_accel_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
     else
@@ -118,8 +110,6 @@ contains
 
     if (initialized) return
     initialized = .true.
-
-    call init_3d_layouts
 
     call pe_layout (char)
 
@@ -509,7 +499,7 @@ contains
 
 ! scale ky /= 0 modes
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       if (ik_idx(g_lo, iglo) == 1) cycle
+       if (ik_idx(g_lo, iglo) == 1) cycle   ! there is a mod call in this statement
        g(:,:,iglo) = g(:,:,iglo) / 2.0
     end do
 
@@ -565,282 +555,124 @@ contains
 
   end subroutine inverse2_5d_accel
 
-  subroutine init_3d_layouts
-    use theta_grid, only: ntgrid
-    use mp, only: nproc, iproc
-    implicit none
-    integer :: ntot, nblock, ig, i_proc, n_proc
+  subroutine init_3d (nny_in, nnx_in)
+
+    use fft_work, only: init_crfftw, init_rcfftw, delete_fft
     logical :: initialized = .false.
+    integer :: nny_in, nnx_in
+    integer, save :: nnx, nny
 
-    if (initialized) return
+    if (initialized) then
+       if (nnx /= nnx_in .or. nny /= nny_in) then
+          call delete_fft(xf3d_cr)
+          call delete_fft(xf3d_rc)
+       else
+          return
+       end if
+    end if
     initialized = .true.
+    nny = nny_in
+    nnx = nnx_in
 
-    allocate (igproc(-ntgrid:ntgrid))
-    ntot = 2*ntgrid+1
-    nblock = (ntot+1)/nproc+1
+    call init_crfftw (xf3d_cr,  1, nny, nnx)
+    call init_rcfftw (xf3d_rc, -1, nny, nnx)
 
-    igmin_proc = ntgrid+1
-    igmax_proc = -ntgrid-1
-    i_proc = 0
-    n_proc = 0
-    do ig = -ntgrid, ntgrid
-       igproc(ig) = i_proc
-       if (i_proc == iproc) then
-          if (igmin_proc > ig) igmin_proc = ig
-          if (igmax_proc < ig) igmax_proc = ig
-       end if
-       n_proc = n_proc + 1
-       if (n_proc >= nblock) then
-          n_proc = 0
-          i_proc = i_proc + 1
-       end if
-    end do
-  end subroutine init_3d_layouts
+  end subroutine init_3d
 
-  subroutine transform_x3d (phi, phixxf)
+  subroutine transform2_3d (phi, phixf, nny, nnx)
+    use mp, only: proc0
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: xxf_lo 
-    use mp, only: broadcast
+    use kt_grids, only: naky, ntheta0, nx, ny, aky
     implicit none
+    integer :: nnx, nny
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
-    complex, dimension (:,:,-ntgrid:), intent (out) :: phixxf
-! replace with fftw calls
+    real, dimension (:,:,-ntgrid:), intent (out) :: phixf  
+    real, dimension (:,:,:), allocatable :: phix
+    complex, dimension (:,:,:), allocatable :: aphi
+    real :: fac
+    integer :: ig, ik, it, i
 
-!    real, dimension(:), allocatable :: aux2
-    integer :: ig, ik, nlo
+! scale, dealias and transpose
 
-    nlo = (ntheta0+1)/2+1+xxf_lo%nadd
-    if (igmin_proc <= igmax_proc) then
-!       allocate (aux2(xf_fft%naux2))
-       do ig = igmin_proc, igmax_proc
-          do ik = 1, naky
-             phixxf(:,ik,ig) = 0.0
-             phixxf(1:(ntheta0+1)/2,ik,ig) = phi(ig,ik,1:(ntheta0+1)/2)
-             phixxf(nlo:xxf_lo%nx,ik,ig) &
-                  = phi(ig,ik,(ntheta0+1)/2+1:ntheta0)
-!             call dcft (0, phixxf(:,ik,ig), 1, 0, phixxf(:,ik,ig), 1, 0, &
-!                  xxf_lo%nx, 1, &
-!                  xf_fft%is, xf_fft%scale, &
-!                  xf_fft%aux1, xf_fft%naux1, &
-!                  aux2, xf_fft%naux2)
+    call init_3d (nny, nnx)
+
+    allocate (phix (-ntgrid:ntgrid, nny, nnx))
+    allocate (aphi (-ntgrid:ntgrid, nny/2+1, nnx))
+    aphi = 0.
+
+    do ik=1,naky
+       fac = 0.5
+       if (aky(ik) < epsilon(0.)) fac = 1.0
+       do it=1,(ntheta0+1)/2
+          do ig=-ntgrid, ntgrid
+             aphi(ig,ik,it) = phi(ig,it,ik)*fac
           end do
        end do
-!       deallocate (aux2)
-    end if
-    do ig = -ntgrid, ntgrid
-       do ik = 1, naky
-          call broadcast (phixxf(:,ik,ig), igproc(ig))
-       end do
-    end do
-  end subroutine transform_x3d
-
-  subroutine inverse_x3d (phixxf, phi)
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0 
-    use gs2_layouts, only: xxf_lo 
-    implicit none
-    complex, dimension (:,:,-ntgrid:), intent (in) :: phixxf
-    complex, dimension (-ntgrid:,:,:), intent (out) :: phi
-    complex, dimension (xxf_lo%nx) :: f
-    integer :: ig, ik, nlo
-!    real, dimension(:), allocatable :: aux2
-! replace with fftw calls
-
-!    allocate (aux2(xb_fft%naux2))
-
-    nlo = (ntheta0+1)/2+1+xxf_lo%nadd
-    do ig = -ntgrid, ntgrid
-       do ik = 1, naky
-!          call dcft (0, phixxf(:,ik,ig), 1, 0, phixxf(:,ik,ig), 1, 0, &
-!               xxf_lo%nx, 1, &
-!               xb_fft%is, xb_fft%scale, &
-!               xb_fft%aux1, xb_fft%naux1, &
-!               aux2, xb_fft%naux2)
-!!          phi(ig,1:(ntheta0+1)/2,ik) = f(1:(ntheta0+1)/2)
-!!          phi(ig,(ntheta0+1)/2+1:ntheta0,ik) = f(nlo:xxf_lo%nx)
-       end do
-    end do
-
-!    deallocate (aux2)
-  end subroutine inverse_x3d
-
-  subroutine transform_y3d (phixxf, phixf)
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky 
-    use gs2_layouts, only: xxf_lo, yxf_lo
-    use mp, only: broadcast
-    implicit none
-    complex, dimension (:,:,-ntgrid:), intent (in) :: phixxf
-    real, dimension (:,:,-ntgrid:), intent (out) :: phixf
-    complex, dimension (yxf_lo%ny+1) :: f
-    integer :: ig, ix
-!    real, dimension(:), allocatable :: aux2
-! replace with fftw calls
-
-    if (igmin_proc <= igmax_proc) then
-!       allocate (aux2(yf_fft%naux2))
-       do ig = igmin_proc, igmax_proc
-          do ix = 1, xxf_lo%nx
-             f(1) = real(phixxf(ix,1,ig))
-             f(2:naky) = phixxf(ix,2:naky,ig)/2.0
-             f(naky+1:) = 0.0
-!             call dcrft(0, f, 0, phixf(:,ix,ig), 0, yxf_lo%ny, 1, &
-!                  yf_fft%is, yf_fft%scale, &
-!                  yf_fft%aux1, yf_fft%naux1, &
-!                  aux2, yf_fft%naux2)
+       do it=(ntheta0+1)/2+1,ntheta0
+          do ig=-ntgrid, ntgrid
+             aphi(ig,ik,it-ntheta0+nx) = phi(ig,it,ik)*fac
           end do
        end do
-!       deallocate (aux2)
-    end if
-    do ig = -ntgrid, ntgrid
-       do ix = 1, xxf_lo%nx
-          call broadcast (phixf(:,ix,ig), igproc(ig))
+    end do
+
+! transform
+    i = 2*ntgrid+1
+    call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
+
+    do it=1,nnx
+       do ik=1,nny
+          do ig=-ntgrid, ntgrid
+             phixf (it,ik,ig) = phix (ig,ik,it)
+          end do
        end do
     end do
-  end subroutine transform_y3d
 
-  subroutine inverse_y3d (phixf, phixxf)
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky 
-    use gs2_layouts, only: xxf_lo, yxf_lo
-    implicit none
-    real, dimension (:,:,-ntgrid:), intent (in) :: phixf
-    complex, dimension (:,:,-ntgrid:), intent (out) :: phixxf
-    complex, dimension (yxf_lo%ny+1) :: f
-    integer :: ig, ix
-!    real, dimension(:), allocatable :: aux2
-! replace with fftw calls
+    deallocate (aphi, phix)
 
-!    allocate (aux2(yb_fft%naux2))
-    do ig = -ntgrid, ntgrid
-       do ix = 1, xxf_lo%nx
-!       call drcft(0, phixf(:,ix,ig), 0, f, 0, yxf_lo%ny, 1, &
-!            yb_fft%is,   yb_fft%scale, &
-!            yb_fft%aux1, yb_fft%naux1, &
-!            aux2,        yb_fft%naux2)
-
-!          phixxf(ix,1,ig) = f(1)
-!          phixxf(ix,2:naky,ig) = f(2:naky)*2.0
-       end do
-    end do
-!    deallocate (aux2)
-  end subroutine inverse_y3d
-
-  subroutine transform2_3d (phi, phixf)
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky
-    use gs2_layouts, only: xxf_lo 
-    implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
-    real, dimension (:,:,-ntgrid:), intent (out) :: phixf
-    complex, dimension (xxf_lo%nx,naky,-ntgrid:ntgrid) :: phixxf
-
-    call transform_x (phi, phixxf)
-    call transform_y (phixxf, phixf)
   end subroutine transform2_3d
-
-  subroutine inverse2_3d (phi, phixf)
+  
+  subroutine inverse2_3d (phixf, phi, nny, nnx)
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky
-    use gs2_layouts, only: xxf_lo 
+    use kt_grids, only: naky, ntheta0, aky
     implicit none
-    real, dimension (:,:,-ntgrid:), intent (in) :: phixf
-    complex, dimension (-ntgrid:,:,:), intent (out) :: phi
-    complex, dimension (xxf_lo%nx,naky,-ntgrid:ntgrid) :: phixxf
+    real, dimension (:,:,-ntgrid:):: phixf
+    complex, dimension (-ntgrid:,:,:) :: phi
+    integer :: nnx, nny
+    complex, dimension (:,:,:), allocatable :: aphi
+    real, dimension (:,:,:), allocatable :: phix
+    real :: fac
+    integer :: i, ik, it, ig
 
-    call inverse_y (phixf, phixxf)
-    call inverse_x (phixxf, phi)
+    allocate (aphi (-ntgrid:ntgrid, nny/2+1, nnx))
+    allocate (phix (-ntgrid:ntgrid, nny, nnx))
+
+    do it=1,nnx
+       do ik=1,nny
+          do ig=-ntgrid, ntgrid
+             phix (ig,ik,it) = phixf (it,ik,ig)
+          end do
+       end do
+    end do
+
+! transform
+    i = 2*ntgrid+1
+    call rfftwnd_f77_real_to_complex (xf3d_rc%plan, i, phix, i, 1, aphi, i, 1)
+
+! dealias and scale
+    do it=1,ntheta0
+       do ik=1,naky
+          fac = 2.0
+          if (aky(ik) < epsilon(0.0)) fac = 1.0
+          do ig=-ntgrid, ntgrid
+             phi (ig,it,ik) = aphi (ig,ik,it)*fac*xf3d_rc%scale
+          end do
+       end do
+    end do
+
+    deallocate (aphi, phix)
+
   end subroutine inverse2_3d
 
-  subroutine transform_x1d (f, xf)
-    use kt_grids, only: ntheta0
-    use gs2_layouts, only: xxf_lo
-    implicit none
-    complex, dimension (:), intent (in) :: f
-    complex, dimension (:), intent (out) :: xf
-    integer :: nlo
-!    real, dimension(:), allocatable :: aux2
-! replace with fftw calls
-
-    nlo = (ntheta0+1)/2+1+xxf_lo%nadd
-    xf = 0.0
-    xf(1:(ntheta0+1)/2) = f(1:(ntheta0+1)/2)
-    xf(nlo:xxf_lo%nx) = f((ntheta0+1)/2+1:ntheta0)
-
-!    allocate (aux2(xf_fft%naux2))
-!    call dcft (0, xf, 1, 0, xf, 1, 0, xxf_lo%nx, 1, xf_fft%is, xf_fft%scale, &
-!         xf_fft%aux1, xf_fft%naux1, aux2, xf_fft%naux2)
-!    deallocate (aux2)
-
-  end subroutine transform_x1d
-
-  subroutine inverse_x1d (xf, f)
-    use kt_grids, only: ntheta0
-    use gs2_layouts, only: xxf_lo
-    implicit none
-    complex, dimension (:), intent (in out) :: xf
-    complex, dimension (:), intent (out) :: f
-    integer :: nlo
-!    real, dimension(:), allocatable :: aux2
-! replace with fftw calls
-
-!    allocate (aux2(xb_fft%naux2))
-
-    nlo = (ntheta0+1)/2+1+xxf_lo%nadd
-!    call dcft (0, xf, 1, 0, xf, 1, 0, xxf_lo%nx, 1, &
-!         xb_fft%is, xb_fft%scale, xb_fft%aux1, xb_fft%naux1, aux2, xb_fft%naux2)
-    f(1:(ntheta0+1)/2) = xf(1:(ntheta0+1)/2)
-    f((ntheta0+1)/2+1:ntheta0) = xf(nlo:xxf_lo%nx)
-
-!    deallocate (aux2)
-
-  end subroutine inverse_x1d
-
-  subroutine transform_y1d (f, xf)
-    use kt_grids, only: naky
-    use gs2_layouts, only: yxf_lo
-    implicit none
-    complex, dimension (:), intent (in) :: f
-    real, dimension (:), intent (out) :: xf
-    complex, dimension (yxf_lo%ny+1) :: fx
-!    real, dimension(:), allocatable :: aux2
-! replace with fftw calls
-
-!    allocate (aux2(yf_fft%naux2))
-
-    fx(1) = real(f(1))
-    fx(2:naky) = f(2:naky)/2.0
-    fx(naky+1:) = 0.0
-!    call dcrft(0, fx, 0, xf, 0, yxf_lo%ny, 1, &
-!         yf_fft%is,   yf_fft%scale, &
-!         yf_fft%aux1, yf_fft%naux1, &
-!         aux2,        yf_fft%naux2)
-
-!    deallocate (aux2)
-
-  end subroutine transform_y1d
-
-  subroutine inverse_y1d (xf, f)
-    use kt_grids, only: naky
-    use gs2_layouts, only: yxf_lo
-    implicit none
-    real, dimension (:), intent (in) :: xf
-    complex, dimension (:), intent (out) :: f
-    complex, dimension (yxf_lo%ny+1) :: fx
-!    real, dimension(:), allocatable :: aux2
-! replace with fftw calls
-
-!    allocate (aux2(yb_fft%naux2))
-!    call drcft(0, xf, 0, fx, 0, yxf_lo%ny, 1, &
-!         yb_fft%is,   yb_fft%scale, &
-!         yb_fft%aux1, yb_fft%naux1, &
-!         aux2,        yb_fft%naux2)
-!    f(1) = fx(1)
-!    f(2:naky) = fx(2:naky)*2.0
-!    deallocate (aux2)
-  end subroutine inverse_y1d
-  
   subroutine init_zf (ntgrid, nperiod)
 
     use fft_work, only: init_z
@@ -860,7 +692,7 @@ contains
     complex, dimension (:,:,:) :: an, an2
     integer, intent (in) :: ntheta0, naky, ntgrid
     
-    call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n, an2, 1, zf_fft%n)
+    call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)
     an2 = conjg(an2)*an2
 
   end subroutine kz_spectrum

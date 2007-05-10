@@ -201,7 +201,6 @@ contains
     use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
-!    use dist_fn, only: get_apar_ext, get_phi_ext
     use dist_fn, only: timeadv
     use dist_fn_arrays, only: g, gnew
     use nonlinear_terms, only: algorithm !, nonlin
@@ -223,7 +222,7 @@ contains
 
        call getfield (phinew, aparnew, aperpnew)
 
-       phinew   = phinew   + phi  !+ phi_ext
+       phinew   = phinew   + phi  
        aparnew  = aparnew  + apar + apar_ext
        aperpnew = aperpnew + aperp
                  
@@ -288,6 +287,7 @@ contains
     do i = i_class, 1, -1
 
        call barrier
+!       if (proc0) write(*,*) 'beginning class ',i,' with size ',nidx*N_class(i)
        allocate (am(nidx*N_class(i), f_lo(i)%llim_proc:f_lo(i)%ulim_alloc))
 
        am = 0.0
@@ -363,6 +363,7 @@ contains
 
        call init_inverse_matrix (am, i)
        deallocate (am)
+!       if (proc0) write(*,*) 'finished class ',i
 
     end do
 
@@ -371,6 +372,7 @@ contains
   end subroutine init_response_matrix
 
   subroutine init_response_row (ig, ifield, am, ic, n)
+    use mp, only: proc0
     use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
@@ -430,7 +432,6 @@ contains
                     
        end do
     end do
-
     deallocate (fieldeq, fieldeqa, fieldeqp)
     call prof_leaving ("init_response_row", "fields_implicit")
   end subroutine init_response_row

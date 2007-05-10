@@ -33,9 +33,12 @@ program ingen
   use text_options
   implicit none
   
+  character (100) :: pythonin
+  integer :: interactive_record, interactive_input
+
   integer :: nlambda
   integer :: in_file, i, ierr, unit, is, report_unit, iunit, ncut
-  logical :: exist, shat_is_known = .true.
+  logical :: exist, shat_is_known = .true., scan, stdin
   logical :: has_electrons = .false.
 
   integer, dimension (18), parameter :: nesub_ok = (/ &
@@ -57,7 +60,7 @@ program ingen
 
 ! antenna: 
   complex :: w_antenna, a, b
-  real :: amplitude
+  real :: amplitude, t0_driver, w_dot
   integer :: nk_stir, kx, ky, kz
   logical :: write_antenna, no_driver = .false., ant_off = .false., travel
   complex, dimension (:), allocatable :: a_ant, b_ant
@@ -93,9 +96,10 @@ program ingen
        ginitopt_nl = 13, ginitopt_kz0 = 14, ginitopt_restart_small = 15, &
        ginitopt_nl2 = 16, ginitopt_nl3 = 17, ginitopt_nl4 = 18, &
        ginitopt_nl5 = 19, ginitopt_alf = 20, ginitopt_kpar = 21, &
-       ginitopt_nl6 = 22, ginitopt_gs = 23
+       ginitopt_nl6 = 22, ginitopt_nl7 = 23, ginitopt_gs = 24, ginitopt_recon = 25, &
+       ginitopt_nl3r = 26
   character (20) :: ginit_option
-  type (text_option), dimension (23), parameter :: ginitopts = &
+  type (text_option), dimension (26), parameter :: ginitopts = &
        (/ text_option('default', ginitopt_default), &
        text_option('noise', ginitopt_noise), &
        text_option('test1', ginitopt_test1), &
@@ -113,18 +117,21 @@ program ingen
        text_option('nl', ginitopt_nl), &
        text_option('nl2', ginitopt_nl2), &
        text_option('nl3', ginitopt_nl3), &
+       text_option('nl3r', ginitopt_nl3r), &
        text_option('nl4', ginitopt_nl4), &
        text_option('nl5', ginitopt_nl5), &
        text_option('nl6', ginitopt_nl6), &
+       text_option('nl7', ginitopt_nl7), &
        text_option('alf', ginitopt_alf), &
        text_option('gs', ginitopt_gs), &
+       text_option('recon', ginitopt_recon), &
        text_option('kpar', ginitopt_kpar) /)
   real :: initk0
   real :: width0, phiinit, k0, imfac, refac, zf_init
   real :: den0, upar0, tpar0, tperp0
   real :: den1, upar1, tpar1, tperp1
   real :: den2, upar2, tpar2, tperp2
-  real :: tstart, scale
+  real :: tstart, scale, apar0, dphiinit
   logical :: chop_side, left
   character(300) :: restart_file
   integer, dimension(2) :: ikk, itt
@@ -143,7 +150,8 @@ program ingen
   character (20) :: source_option
   character (20) :: boundary_option
   character (30) :: adiabatic_option
-  integer :: adiabatic_option_switch
+  character (20) :: heating_option
+  integer :: adiabatic_option_switch, heating_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
        adiabatic_option_zero = 2, &
        adiabatic_option_fieldlineavg = 3, &
@@ -160,6 +168,8 @@ program ingen
        boundary_option_self_periodic = 2, &
        boundary_option_alternate_zero = 3, &
        boundary_option_linked = 4
+  integer, parameter :: heating_option_hammett = 1, &
+       heating_option_cowley = 2
 
   type (text_option), dimension (9), parameter :: sourceopts = &
        (/ text_option('default', source_option_full), &
@@ -193,6 +203,10 @@ program ingen
        text_option('iphi00=3', adiabatic_option_yavg), &
        text_option('dimits', adiabatic_option_noJ) /)
 
+    type (text_option), dimension (3), parameter :: heatingopts = &
+         (/ text_option('default', heating_option_cowley), &
+            text_option('Hammett', heating_option_hammett), &
+            text_option('Cowley',  heating_option_cowley) /)
 
 ! fields: 
   character (20) :: field_option
@@ -209,24 +223,24 @@ program ingen
   logical :: write_line, write_flux_line, write_phi, write_apar, write_aperp
   logical :: write_omega, write_omavg, write_ascii, write_lamavg
   logical :: write_qheat, write_pflux, write_vflux, write_eavg
-  logical :: write_qmheat, write_pmflux, write_vmflux
-  logical :: write_qbheat, write_pbflux, write_vbflux
+  logical :: write_qmheat, write_pmflux, write_vmflux, write_tavg
+  logical :: write_qbheat, write_pbflux, write_vbflux, write_gs
   logical :: write_dmix, write_kperpnorm, write_phitot, write_epartot
   logical :: write_eigenfunc, write_final_fields, write_final_antot
   logical :: write_final_moments, write_avg_moments
   logical :: write_fcheck, write_final_epar, write_kpar
   logical :: write_intcheck, write_vortcheck, write_fieldcheck
-  logical :: write_fieldline_avg_phi
+  logical :: write_fieldline_avg_phi, write_hrate, write_lorentzian
   logical :: write_neoclassical_flux, write_nl_flux
   logical :: exit_when_converged
   logical :: dump_neoclassical_flux, dump_check1, dump_check2
-  logical :: dump_fields_periodically
+  logical :: dump_fields_periodically, make_movie
   logical :: dump_final_xfields
   logical :: use_shmem_for_xfields
   logical :: save_for_restart
 
-  integer :: nwrite, igomega
-  integer :: navg, nperiod_output
+  integer :: nwrite, igomega, nmovie
+  integer :: navg, nperiod_output, nsave
 
   real :: omegatol, omegatinst
 
@@ -255,7 +269,8 @@ program ingen
   real :: aky, theta0, akx
   integer :: naky, ntheta0, nx, ny, jtwist
   integer :: gridopt_switch, normopt_switch
-  real :: aky_min, aky_max, theta0_min, theta0_max, lx, ly, y0, rtwist
+  real :: aky_min, aky_max, theta0_min, theta0_max, lx, ly, x0, y0, rtwist
+  real :: y0_internal
   integer, parameter :: gridopt_single = 1, gridopt_range = 2, &
        gridopt_specified = 3, gridopt_box = 4, gridopt_xbox = 5
   type (text_option), dimension (7), parameter :: gridopts = &
@@ -318,13 +333,13 @@ program ingen
   
 ! species:
   integer :: nspec
-  real :: z, mass, dens, temp, tprim, fprim, uprim, uprim2, vnewk, vnewk4
+  real :: z, mass, dens, dens0, temp, tprim, fprim, uprim, uprim2, vnewk, vnewk4
   character (20) :: type
 
   type :: specie
      real :: z
      real :: mass
-     real :: dens
+     real :: dens, dens0
      real :: temp
      real :: tprim
      real :: fprim
@@ -360,7 +375,7 @@ program ingen
   real :: delrho, rmin, rmax, ak0, k1, k2
   integer :: itor, iflux, irho, bishop, ismooth, isym
   logical :: ppl_eq, gen_eq, vmom_eq, efit_eq, dfit_eq, equal_arc, idfit_eq
-  logical :: local_eq, writelots, gs2d_eq, test_le
+  logical :: local_eq, writelots, gs2d_eq, test_le, transp_eq
   character (80) :: eqfile
   character (200) :: gridout_file
   character (20) :: equilibrium_option
@@ -442,7 +457,7 @@ program ingen
   namelist /additional_linear_terms_knobs/ phi0_term, wstar_term, use_shmem
 
 ! antenna: 
-  namelist /driver/ amplitude, w_antenna, nk_stir, write_antenna, ant_off
+  namelist /driver/ amplitude, w_antenna, nk_stir, write_antenna, ant_off, w_dot, t0
   namelist /stir/ kx, ky, kz, travel, a, b
 
 ! collisions: 
@@ -454,13 +469,13 @@ program ingen
        restart_file, left, ikk, itt, scale, tstart, zf_init, &
        den0, upar0, tpar0, tperp0, imfac, refac, even, &
        den1, upar1, tpar1, tperp1, &
-       den2, upar2, tpar2, tperp2
+       den2, upar2, tpar2, tperp2, dphiinit, apar0
 
 ! dist_fn:
   namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, &
        nperiod_guard, poisfac, adiabatic_option, &
        kfilter, afilter, mult_imp, test, def_parity, even, &
-       save_n, save_u, save_Tpar, save_Tperp, D_kill, noise
+       save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, heating_option
   
   namelist /source_knobs/ t0, omega0, gamma0, source0, &
        thetas, k0, phi_ext, source_option, a_ext, aky_star, akx_star
@@ -474,22 +489,22 @@ program ingen
   namelist /gs2_diagnostics_knobs/ &
        print_line, print_old_units, print_flux_line, &
        write_line, write_flux_line, write_phi, write_apar, write_aperp, &
-       write_omega, write_omavg, write_ascii, write_lamavg, &
+       write_omega, write_omavg, write_ascii, write_lamavg, write_tavg, &
        write_qheat, write_pflux, write_vflux, write_kpar, &
        write_qmheat, write_pmflux, write_vmflux, write_eavg, &
-       write_qbheat, write_pbflux, write_vbflux, &
+       write_qbheat, write_pbflux, write_vbflux, write_hrate, write_lorentzian, &
        write_dmix, write_kperpnorm, write_phitot, write_epartot, &
        write_eigenfunc, write_final_fields, write_final_antot, &
        write_fcheck, write_final_epar, write_final_moments, &
        write_intcheck, write_vortcheck, write_fieldcheck, &
        write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
-       nwrite, navg, omegatol, omegatinst, igomega, &
+       nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, &
        exit_when_converged, write_avg_moments, &
        dump_neoclassical_flux, dump_check1, dump_check2, &
-       dump_fields_periodically, &
+       dump_fields_periodically, make_movie, &
        dump_final_xfields, use_shmem_for_xfields, &
        nperiod_output, &
-       save_for_restart
+       save_for_restart, write_gs
 
 ! gs2_reinit: 
   namelist /reinit_knobs/ delt_adj, delt_minimum
@@ -509,7 +524,7 @@ program ingen
   namelist /kt_grids_specified_element/ aky, theta0, akx
 
   namelist /kt_grids_box_parameters/ naky, ntheta0, ly, nx, ny, jtwist, &
-       y0, rtwist
+       y0, x0, rtwist
 
   namelist /kt_grids_xbox_parameters/ ntheta0, lx, aky, nx
 
@@ -533,7 +548,7 @@ program ingen
 ! species 
   namelist /species_knobs/ nspec
   namelist /species_parameters/ &
-       z, mass, dens, temp, tprim, fprim, uprim, uprim2, vnewk, vnewk4, type
+       z, mass, dens, dens0, temp, tprim, fprim, uprim, uprim2, vnewk, vnewk4, type
 
 ! theta_grid: 
   namelist /theta_grid_parameters/ rhoc, rmaj, r_geo, eps, epsl, &
@@ -547,7 +562,7 @@ program ingen
 
   namelist /theta_grid_eik_knobs/ itor, iflux, irho, &
        ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, dfit_eq, &
-       equal_arc, bishop, local_eq, idfit_eq, gs2d_eq, &
+       equal_arc, bishop, local_eq, idfit_eq, gs2d_eq, transp_eq, &
        s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
        delrho, rmin, rmax, ismooth, ak0, k1, k2, isym, writelots
 
@@ -555,7 +570,7 @@ program ingen
 
   namelist /theta_grid_knobs/ equilibrium_option
 
-  namelist /ingen_knobs/ ncut
+  namelist /ingen_knobs/ ncut, scan, stdin
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -573,23 +588,591 @@ program ingen
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  call init_mp
+  call init_mp  
   
   call get_namelists
   call report
   call write_namelists
+
+  if (scan) call interactive
+
   call finish_mp
 
 contains
 
+  subroutine interactive
+
+    integer :: sel, nbeta, j, ise
+    real :: beta_low, beta_high, dbeta, beta_save
+    real :: fapar_save, faperp_save, pri, pe, alpi, tpe_save, ptot, alp, dbdr
+    real :: alt, aln, fac, beta_prime_save, bishop_save, beta_prime
+    real, dimension (:), allocatable :: tp_save, fp_save
+    character (500) :: tag, tag1, tag2
+    logical :: first = .true.
+
+    if (first) then
+       call get_unused_unit (interactive_record)
+       open (unit=interactive_record, file='.'//trim(run_name)//".record")
+       first = .false.
+
+       if (.not. stdin) then
+          call get_unused_unit (interactive_input)
+          open (unit=interactive_input, file=trim(pythonin))
+       else
+          interactive_input = 5
+       end if
+    end if
+
+    call tell ('Interactive specification of a parameter scan')
+
+100 continue
+    
+    call text
+    call text ('Choose a parameter that you would like to vary (1-6):')
+    call text ('(1) beta            (4) temperature gradient')
+    call text ('(2) beta_prime      (5) density gradient')
+    call text ('(3) collisionality  (6) Z_effective')
+    call text
+    call get_choice (6, sel)
+    
+    select case (sel)
+       
+    case default
+       call tell ('Try again.  Choose an integer between 1 and 6, inclusively.')
+       goto 100
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  1.0  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    case (1) 
+       call tell ('You have chosen to vary beta.')
+
+101    continue
+
+       call text
+       call text ('Choose from the following:')
+       call text ('(1) Vary beta self-consistently')
+       call text ('(2) Vary beta with all other parameters held fixed (not self-consistently).')
+       call text
+       call get_choice (2, sel)
+
+       select case (sel)
+
+       case default
+          call tell ('Try again.  Choose an integer between 1 and 2, inclusively.')
+          goto 101
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  1.1  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+       case (1) 
+          call tell ('You have chosen to vary beta self-consistently.')
+
+102       continue
+          call text
+          call text ('Choose from the following:')
+          call text ('(1) Hold beta_prime fixed, vary electron temperature gradient scale length')
+          call text ('(2) Hold beta_prime fixed, vary all temperature gradient scale lengths by same factor')
+          call text ('(3) Hold beta_prime fixed, vary all density gradient scale lengths by same factor')
+          call text
+
+          call get_choice (3, sel)
+
+          select case (sel)
+             
+          case default
+             call tell ('Try again.  Choose an integer between 1 and 2, inclusively.')
+             goto 102
+             
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  1.1.1  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+          case (1)  
+             call tell ('You have chosen to vary beta and electron temperature gradient at fixed beta_prime.')
+
+             call beta_range_low (beta_low, 'le', 0.)
+             call beta_range_high (beta_high, 'le', beta_low)
+             call num_runs (nbeta)
+
+             call tell ('Preparing a self-consistent beta scan at fixed beta_prime.', &
+                  'The electron temperature gradient scale length will be varied', &
+                  'to maintain consistency.')
+
+             call run_number (sel, nbeta)
+
+             write (tag1, fmt='(i3," runs prepared with beta_min = ",e16.10,&
+                  &" and beta_max = ",e16.10)') nbeta, beta_low, beta_high
+             write (tag2, fmt='("Files are numbered from ",i3," to ",i3)') sel, sel+nbeta-1
+
+             call tell (tag1, tag2)
+
+             ptot = 0.
+             alp = 0.
+             pri = 0.
+             pe = 0.
+             alpi = 0.
+             ise = 0
+             do is=1,nspec
+                if (spec(is)%type == 2) then
+                   pe = spec(is)%dens * spec(is)%temp
+                   ise = is
+                else
+                   pri = pri + spec(is)%dens * spec(is)%temp
+                   alpi = alpi + spec(is)%dens * spec(is)%temp *(spec(is)%fprim + spec(is)%tprim)
+                endif
+                ptot = ptot + spec(is)%dens * spec(is)%temp
+                alp = alp + spec(is)%dens * spec(is)%temp *(spec(is)%fprim + spec(is)%tprim)
+             end do
+             
+             if (.not. has_electrons) call tell ('You really should use electrons for electromagnetic runs.')
+
+             alp = alp/ptot
+             dbdr = - beta*ptot*alp
+
+             dbeta = (beta_high-beta_low)/(nbeta-1)
+             do j = sel, sel+nbeta-1
+                
+                beta_save = beta
+                beta = beta_low + (j - sel)*dbeta
+                
+                tpe_save = spec(ise)%tprim
+                spec(ise)%tprim = - (spec(ise)%fprim + alpi/pe + dbdr/beta/pe)
+
+                write (tag1, fmt='("Varying beta and L_Te self-consistently with& 
+                     & beta_prime fixed")') 
+
+                write (tag2, fmt='("beta = ",e16.10," and electron tprim = ",e16.10)') beta, spec(ise)%tprim 
+
+                call write_namelists (j, tag1, tag2)
+                spec(ise)%tprim = tpe_save
+             end do
+             beta = beta_save
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  1.1.2  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+          case (2)
+
+             call tell ('You have chosen to vary beta and all temperature &
+                  &gradient scale lengths together at fixed beta_prime.')
+
+             call beta_range_low (beta_low, 'le', 0.)
+             call beta_range_high (beta_high, 'le', beta_low)
+             call num_runs (nbeta)
+
+             call tell ('Preparing a self-consistent beta scan at fixed beta_prime.', &
+                  'All temperature gradient scale lengths will be varied', &
+                  'by the same factor to maintain consistency.')
+
+             call run_number (sel, nbeta)
+
+             write (tag1, fmt='(i3," runs prepared with beta_min = ",e16.10,&
+                  &" and beta_max = ",e16.10)') nbeta, beta_low, beta_high
+             write (tag2, fmt='("Files are numbered from ",i3," to ",i3)') sel, sel+nbeta-1
+
+             call tell (tag1, tag2)
+
+             allocate (tp_save (nspec))
+
+             ptot = 0.
+             alt = 0.
+             aln = 0.
+             do is=1,nspec
+                ptot = ptot + spec(is)%dens * spec(is)%temp
+                alt = alt + spec(is)%dens * spec(is)%temp *(spec(is)%tprim)
+                aln = aln + spec(is)%dens * spec(is)%temp *(spec(is)%fprim)
+             end do
+             
+             if (.not. has_electrons) call tell ('You really should use electrons for electromagnetic runs.')
+
+             alp = (alt+aln)/ptot
+             dbdr = - beta*ptot*alp
+
+             dbeta = (beta_high-beta_low)/(nbeta-1)
+             do j = sel, sel+nbeta-1
+                
+                beta_save = beta
+                beta = beta_low + (j - sel)*dbeta
+                
+                fac = -(dbdr/beta+aln)/alt
+                tp_save = spec%tprim
+                spec%tprim = fac*spec%tprim
+
+                write (tag1, fmt='("Varying beta and all L_T values self-consistently")')
+                write (tag2, fmt='("beta = ",e16.10," and tprim values scaled by ",e16.10)') beta, fac
+
+                call write_namelists (j, tag1, tag2) 
+                spec%tprim = tp_save
+             end do
+             beta = beta_save
+
+             deallocate (tp_save)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  1.1.3  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+          case (3)
+
+             call tell ('You have chosen to vary beta and all density &
+                  &gradient scale lengths together at fixed beta_prime.')
+
+             call beta_range_low (beta_low, 'le', 0.)
+             call beta_range_high (beta_high, 'le', beta_low)
+             call num_runs (nbeta)
+
+             call tell ('Preparing a self-consistent beta scan at fixed beta_prime.', &
+                  'All density gradient scale lengths will be varied', &
+                  'by the same factor to maintain consistency.')
+
+             call run_number (sel, nbeta)
+
+             write (tag1, fmt='(i3," runs prepared with beta_min = ",e16.10,&
+                  &" and beta_max = ",e16.10)') nbeta, beta_low, beta_high
+             write (tag2, fmt='("Files are numbered from ",i3," to ",i3)') sel, sel+nbeta-1
+
+             call tell (tag1, tag2)
+
+             allocate (fp_save (nspec))
+
+             ptot = 0.
+             alt = 0.
+             aln = 0.
+             do is=1,nspec
+                ptot = ptot + spec(is)%dens * spec(is)%temp
+                alt = alt + spec(is)%dens * spec(is)%temp *(spec(is)%tprim)
+                aln = aln + spec(is)%dens * spec(is)%temp *(spec(is)%fprim)
+             end do
+             
+             if (.not. has_electrons) call tell ('You really should use electrons for electromagnetic runs.')
+
+             alp = (alt+aln)/ptot
+             dbdr = - beta*ptot*alp
+
+             dbeta = (beta_high-beta_low)/(nbeta-1)
+             do j = sel, sel+nbeta-1
+                
+                beta_save = beta
+                beta = beta_low + (j - sel)*dbeta
+                 
+                fac = -(dbdr/beta+alt)/aln
+                fp_save = spec%fprim
+                spec%fprim = fac*spec%fprim
+
+                write (tag1, fmt='("Varying beta and all L_n values self-consistently")')
+                write (tag2, fmt='("beta = ",e16.10," and tprim values scaled by ",e16.10)') beta, fac
+
+                call write_namelists (j, tag1, tag2) 
+                spec%fprim = fp_save
+             end do
+             beta = beta_save
+
+             deallocate (fp_save)
+          end select
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  1.2  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+       case (2)
+          call tell ('You have selected to vary beta non-self-consistently.')
+          
+          call beta_range_low (beta_low, 'lt', 0.)
+          call beta_range_high (beta_high, 'le', beta_low)
+          call num_runs (nbeta)
+
+          call tell ('Preparing a non-self-consistent beta scan.')
+
+          call run_number (sel, nbeta)
+
+          write (tag1, fmt='(i3," runs prepared with beta_min = ",e16.10,&
+               &" and beta_max = ",e16.10)') nbeta, beta_low, beta_high
+          write (tag2, fmt='("Files are numbered from ",i3," to ",i3)') sel, sel+nbeta-1
+          
+          call tell (tag1, tag2)
+
+          dbeta = (beta_high-beta_low)/(nbeta-1)
+          do j = sel, sel+nbeta-1
+             
+             beta_save = beta
+             fapar_save = fapar 
+             faperp_save = faperp
+
+             beta = beta_low + (j - sel)*dbeta
+             if (beta == 0.) then 
+                fapar = 0.
+                faperp = 0.
+             else
+                if (fapar == 0. .and. faperp == 0.) then
+                   fapar = 1.0 ;  faperp = 1.0
+                end if
+             end if
+             
+             write (tag1, fmt='("Varying beta, all else fixed")')
+             write (tag2, fmt='("beta = ",e16.10)') beta
+
+             call write_namelists (j, tag1, tag2)
+
+             fapar = fapar_save 
+             faperp = faperp_save
+             beta = beta_save
+          end do
+          
+       end select
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  2.0  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    case (2) ! beta_prime
+       
+       call tell ('You have chosen to vary beta_prime.')
+
+115    continue
+       call text
+       call text ('Choose from the following:')
+       call text ('(1) Vary beta_prime self-consistently')
+       call text ('(2) Vary beta_prime with ALL other parameters held fixed (non-self-consistently).')
+       call text
+       call get_choice (2, sel)
+
+       select case (sel)
+
+       case default
+          call tell ('Try again.  Choose an integer between 1 and 2, inclusively.')
+          goto 115
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  2.1  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+       case (1)
+          call tell ('You have chosen to vary beta_prime self-consistently.')
+
+116       continue
+          call text
+          call text ('Choose from the following:')
+          call text ('(1) Hold gradient scale lengths fixed, vary beta')
+          call text
+
+          call get_choice (1, sel)
+
+          select case (sel)
+
+          case default
+             call tell ('Try again.  Choose an integer between 1 and 1, inclusively.')
+             goto 116
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  2.1.1  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+          case (1)  
+             call tell ('You have chosen to vary beta_prime while holding gradient scale lengths fixed.')
+
+             call beta_prime_range_low (beta_low)
+             call beta_prime_range_high (beta_high, beta_low)
+             call num_runs (nbeta)
+
+             call tell ('Preparing a self-consistent beta_prime scan.', &
+                  'Beta will be varied to maintain consistency.')
+
+             call run_number (sel, nbeta)
+
+             write (tag1, fmt='(i3," runs prepared with beta_prime_min = ",e16.10,&
+                  &" and beta_prime_max = ",e16.10)') nbeta, beta_low, beta_high
+             write (tag2, fmt='("Files are numbered from ",i3," to ",i3)') sel, sel+nbeta-1
+             
+             call tell (tag1, tag2)
+
+             ptot = 0.
+             alp = 0.
+             do is=1,nspec
+                ptot = ptot + spec(is)%dens * spec(is)%temp
+                alp = alp + spec(is)%dens * spec(is)%temp *(spec(is)%fprim + spec(is)%tprim)
+             end do
+            
+             alp = alp/ptot
+             dbdr = - beta*ptot*alp
+
+             if (alp == 0.) then
+                call tell ('Cannot proceed, because Lp = infinity', &
+                     'No input files for scan written')
+                return
+             end if
+
+             beta_save = beta
+             beta_prime_save = dbdr
+
+             fac = -1./(ptot*alp)
+
+             dbeta = (beta_high-beta_low)/(nbeta-1)   ! actually, this is dbeta_prime
+             do j = sel, sel+nbeta-1
+                
+                beta_prime_save = beta_prime_input
+                beta_prime_input = beta_low + (j - sel)*dbeta
+                
+                beta_save = beta
+                beta = beta_prime_input*fac
+
+                fapar_save = fapar ; faperp_save = faperp
+                if (beta == 0.) then
+                   fapar = 0.      ; faperp = 0.
+                else
+                   if (fapar == 0. .and. faperp == 0.) then
+                      fapar = 1.0 ;  faperp = 1.0
+                   end if
+                end if
+
+                select case (bishop)
+                case default
+                   bishop_save = bishop
+                   bishop = 6
+                case (4)
+                   ! nothing, continue to use bishop = 4
+                end select
+
+             
+                write (tag1, fmt='("Varying beta_prime and beta self-consistently")')
+                write (tag2, fmt='("beta_prime = ",e16.10," and beta = ",e16.10)') beta_prime_input, beta
+
+                call write_namelists (j, tag1, tag2)
+
+                fapar = fapar_save 
+                faperp = faperp_save
+                beta = beta_save
+                beta_prime_input = beta_prime_save
+
+                select case (bishop)
+                case default
+                   bishop = bishop_save
+                case (4)
+                   ! nothing, continue to use bishop = 4
+                end select
+
+             end do
+          end select
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  2.2   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+       case (2)
+
+          call tell ('You have selected to vary beta_prime non-self-consistently.')          
+          
+          call beta_prime_range_low (beta_low)
+          call beta_prime_range_high (beta_high, beta_low)
+          call num_runs (nbeta)
+
+          call tell ('Preparing a non-self-consistent beta_prime scan.')
+
+          call run_number (sel, nbeta)
+          
+          write (tag1, fmt='(i3," runs prepared with beta_prime_min = ",e16.10,& 
+               &" and beta_prime_max = ",e16.10)') nbeta, beta_low, beta_high 
+          write (tag2, fmt='("Files are numbered from ",i3," to ",i3)') sel, sel+nbeta-1 
+          
+          call tell (tag1, tag2)
+
+          dbeta = (beta_high-beta_low)/(nbeta-1) 
+          do j = sel, sel+nbeta-1
+             
+             beta_prime_save = beta_prime_input
+             beta_prime_input = beta_low + (j - sel)*dbeta
+             
+             select case (bishop)
+             case default
+                bishop_save = bishop
+                bishop = 6
+             case (4)
+                ! nothing, continue to use bishop = 4
+             end select
+             
+             write (tag1, fmt='("Varying beta_prime only (non-self-consistently)")')
+             write (tag2, fmt='("beta_prime = ",e16.10)') beta_prime_input
+
+             call write_namelists (j, tag1, tag2)
+             
+             beta_prime_input = beta_prime_save
+             
+             select case (bishop)
+             case default
+                bishop = bishop_save
+             case (4)
+                ! nothing, continue to use bishop = 4
+             end select
+             
+          end do
+          
+       end select
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   1.3  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    case (3) ! collisionality
+       call tell ('You have chosen to vary collisionality.')
+       call text ('Not yet implemented (sorry).')
+       call text
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   1.4  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    case (4) ! temperature gradient
+       call tell ('You have chosen to vary temperature gradient.')
+       call text ('Not yet implemented (sorry).')
+       call text
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   1.5  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    case (5) ! density gradient
+       call tell ('You have chosen to vary density gradient.')
+       call text ('Not yet implemented (sorry).')
+       call text
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   1.6  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    case (6) ! Z_effective
+       call tell ('You have chosen to vary Z_effective.')
+       call text ('Not yet implemented (sorry).')
+       call text
+       
+    end select
+
+10  format (a) 
+
+  end subroutine interactive
+
   subroutine get_namelists
 
     use theta_grid, only: init_theta_grid, nbset, shat_real => shat
-    call init_file_utils (name="template")
+    logical :: list
+    call init_file_utils (list, name="template")
 
     ncut = 100000
+    scan = .false.
+    stdin = .true.
+    pythonin = "."//trim(run_name)//".pythonin"
     in_file=input_unit_exist("ingen_knobs", exist)
     if (exist) read(unit=input_unit("ingen_knobs"), nml=ingen_knobs)
+
+    if (scan) then
+       if (.not. stdin) then
+          if (pythonin == "") then
+             write (*,*) 'Need to specify pythonin in ingen_knobs.'
+          end if 
+       end if 
+    end if 
 
     local_field_solve = .false.
 !    layout = 'lexys'
@@ -611,6 +1194,8 @@ contains
 
     ! antenna: 
     w_antenna = (1., 0.0)
+    t0 = -1.
+    w_dot = 0.
     amplitude = 0.
     nk_stir = 1
     ant_off = .false.
@@ -654,6 +1239,8 @@ contains
        no_driver = .true.
     end if
 
+    t0_driver = t0
+
     ! collisions: 
     collision_model = 'default'
     vncoef = 0.6
@@ -694,9 +1281,11 @@ contains
     tpar2 = 0.
     tperp2 = 0.
     phiinit = 1.0
+    dphiinit = 1.0
     zf_init = 1.0
     k0 = 1.0
     chop_side = .true.
+    apar0 = 0.
     left = .true.
     even = .true.
     ikk(1) = 1
@@ -729,60 +1318,6 @@ contains
          (field_option, fieldopts, fieldopt_switch, &
          ierr, "field_option in fields_knobs")
     
-    ! gs2_diagnostics
-    print_line = .true.
-    print_old_units = .false.
-    print_flux_line = .false.
-    write_line = .true.
-    write_flux_line = .true.
-    write_phi = .true.
-    write_kpar = .false.
-    write_apar = .true.
-    write_aperp = .true.
-    write_omega = .false.
-    write_ascii = .true.
-    write_lamavg = .false.
-    write_eavg = .false.
-    write_omavg = .false.
-    write_dmix = .false.
-    write_kperpnorm = .false.
-    write_phitot = .true.
-    write_epartot = .false.
-    write_fieldline_avg_phi = .false.
-    write_neoclassical_flux = .false.
-    write_nl_flux = .false.
-    write_eigenfunc = .false.
-    write_final_moments = .false.
-    write_avg_moments = .false.
-    write_final_fields = .false.
-    write_final_antot = .false.
-    write_final_epar = .false.
-    write_fcheck = .false.
-    write_intcheck = .false.
-    write_vortcheck = .false.
-    write_fieldcheck = .false.
-    nwrite = 100
-    navg = 100
-    nperiod_output = 1
-    omegatol = 1e-3
-    omegatinst = 1.0
-    igomega = 0
-    exit_when_converged = .true.
-    dump_neoclassical_flux = .false.
-    dump_check1 = .false.
-    dump_check2 = .false.
-    dump_fields_periodically = .false.
-    dump_final_xfields = .false.
-    use_shmem_for_xfields = .true.
-    save_for_restart = .false.
-    in_file = input_unit_exist("gs2_diagnostics_knobs", exist)
-    if (exist) then
-       read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
-       diagnostics_write = .true.
-    end if
-
-    nperiod_output = nperiod
-
     ! gs2_reinit:
     delt_adj = 2.0
     delt_minimum = 1.e-5
@@ -891,6 +1426,7 @@ contains
        naky = 0
        ntheta0 = 0
        ly = 0.0
+       x0 = 0.
        y0 = 2.0
        nx = 0
        ny = 0
@@ -902,7 +1438,13 @@ contains
                nml=kt_grids_box_parameters)
           kt_box_write = .true.
        end if
-       if (ly == 0.) ly = 2.0*pi*y0
+       y0_internal = y0
+       if (y0 < 0) then
+          y0_internal = -1./y0_internal
+       else
+          y0_internal = y0_internal
+       end if
+       if (ly == 0.) ly = 2.0*pi*y0_internal
        if (naky == 0) naky = (ny-1)/3 + 1
        if (ntheta0 == 0) ntheta0 = 2*((nx-1)/3) + 1
        if (rtwist == 0.) rtwist = real(jtwist)
@@ -1016,6 +1558,7 @@ contains
     allocate (spec(nspec))
     do is = 1, nspec
        call get_indexed_namelist_unit (unit, "species_parameters", is)
+       dens0 = 1.0
        uprim = 0.0
        uprim2 = 0.0
        vnewk = 0.0
@@ -1027,6 +1570,7 @@ contains
        spec(is)%z = z
        spec(is)%mass = mass
        spec(is)%dens = dens
+       spec(is)%dens0 = dens0
        spec(is)%temp = temp
        spec(is)%tprim = tprim
        spec(is)%fprim = fprim
@@ -1061,6 +1605,7 @@ contains
     qinp = 1.5
     shat = 0.75
     pk = 0.3
+    kp = -1.
     shift = 0.0
     akappa = 1.0
     akappri = 0.0
@@ -1084,6 +1629,9 @@ contains
        isym = 0
        writelots = .false.
        local_eq = .true.
+       transp_eq = .false.
+       beta_prime_input = 0.
+       s_hat_input = 0.
        
        in_file = input_unit_exist("theta_grid_parameters", exist)
        if (exist) then
@@ -1097,7 +1645,7 @@ contains
           theta_eik_write = .true.
        end if
 
-    case (eqopt_salpha)
+     case (eqopt_salpha)
        in_file = input_unit_exist("theta_grid_parameters", exist)
        if (exist) then
           read (unit=input_unit("theta_grid_parameters"), nml=theta_grid_parameters)
@@ -1129,6 +1677,7 @@ contains
 
     end select
 
+
     if (kp > 0.) pk = 2.*kp
 
     npadd = 2
@@ -1153,6 +1702,7 @@ contains
     save_Tperp = .true.
     boundary_option = 'default'
     adiabatic_option = 'default'
+    heating_option = 'default'
     poisfac = 0.0
     gridfac = 5e4
     apfac = 1.0
@@ -1201,7 +1751,7 @@ contains
        close (unit=unit)
     end do
 
-    call init_theta_grid
+    call init_theta_grid 
     shat = shat_real
 
     if(abs(shat) <=  1.e-5) boundary_option = 'periodic'
@@ -1212,22 +1762,121 @@ contains
          ierr, "boundary_option in dist_fn_knobs")
     
     call get_option_value &
+         (heating_option, heatingopts, heating_option_switch, &
+         ierr, "heating_option in dist_fn_knobs")
+    
+    call get_option_value &
          (source_option, sourceopts, source_option_switch, &
          ierr, "source_option in source_knobs")
     call get_option_value &
          (adiabatic_option, adiabaticopts, adiabatic_option_switch, &
          ierr, "adiabatic_option in dist_fn_knobs")
     
+
+    ! gs2_diagnostics
+    print_line = .true.
+    print_old_units = .false.
+    print_flux_line = .false.
+    write_line = .true.
+    write_flux_line = .true.
+    write_phi = .true.
+    write_kpar = .false.
+    write_apar = .true.
+    write_aperp = .true.
+    write_omega = .false.
+    write_ascii = .true.
+    write_hrate = .false.
+    write_gs = .false.
+    write_lorentzian = .false.
+    write_tavg = .false.
+    write_lamavg = .false.
+    write_eavg = .false.
+    write_omavg = .false.
+    write_dmix = .false.
+    write_kperpnorm = .false.
+    write_phitot = .true.
+    write_epartot = .false.
+    write_fieldline_avg_phi = .false.
+    write_neoclassical_flux = .false.
+    write_nl_flux = .false.
+    write_eigenfunc = .false.
+    write_final_moments = .false.
+    write_avg_moments = .false.
+    write_final_fields = .false.
+    write_final_antot = .false.
+    write_final_epar = .false.
+    write_fcheck = .false.
+    write_intcheck = .false.
+    write_vortcheck = .false.
+    write_fieldcheck = .false.
+    nsave = -1
+    nwrite = 100
+    nmovie = 1000
+    navg = 100
+    nperiod_output = 1
+    omegatol = 1e-3
+    omegatinst = 1.0
+    igomega = 0
+    exit_when_converged = .true.
+    dump_neoclassical_flux = .false.
+    dump_check1 = .false.
+    dump_check2 = .false.
+    dump_fields_periodically = .false.
+    make_movie = .false.
+    dump_final_xfields = .false.
+    use_shmem_for_xfields = .true.
+    save_for_restart = .false.
+    in_file = input_unit_exist("gs2_diagnostics_knobs", exist)
+    if (exist) then
+       read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
+       diagnostics_write = .true.
+    end if
+
+    if (.not. save_for_restart) nsave = -1
+    nperiod_output = max(nperiod, 1)
+
   end subroutine get_namelists
 
-  subroutine write_namelists
+  subroutine write_namelists (jr, tag1, tag2)
+
+    integer, intent (in), optional :: jr
+    character (*), intent (in), optional :: tag1, tag2
 
     character (100) :: line
-    integer :: i
+    integer :: th, h, t, u
+    integer :: i, j
+    character (4) :: suffix
+    character(20) :: datestamp, timestamp, zone
     
     call get_unused_unit (unit)
-    open (unit=unit, file=trim(run_name)//".inp")
+
+    if (present(jr)) then
+
+       h = jr / 100
+       t = (jr - h * 100) / 10
+       u = (jr - h * 100 - t * 10)
+       suffix = '_'//achar(48+h)//achar(48+t)//achar(48+u)
+       open (unit=unit, file=trim(run_name)//suffix//".in")
+    else
+       open (unit=unit, file=trim(run_name)//".inp")
+    endif
+
     write (unit, *)
+
+    write (unit, fmt="('gs2')")
+    datestamp(:) = ' '
+    timestamp(:) = ' '
+    zone(:) = ' '
+    call date_and_time (datestamp, timestamp, zone)
+    write (unit=unit, fmt="('Date: ',a,' Time: ',a,1x,a)") &
+         trim(datestamp), trim(timestamp), trim(zone)
+
+    if (present(tag1)) then
+       write (unit, *) '*****************************************************'
+       write (unit, *) trim(tag1)
+       if (present(tag2)) write (unit, *) trim(tag2)
+       write (unit, *) '*****************************************************'
+    end if
 
     if (layouts_write) then
        write (unit, *)
@@ -1590,14 +2239,16 @@ contains
        write (unit, fmt="(' write_line = ',L1)") write_line
        write (unit, fmt="(' print_flux_line = ',L1)") print_flux_line
        write (unit, fmt="(' write_flux_line = ',L1)") write_flux_line
+       write (unit, fmt="(' nmovie = ',i6)") nmovie
        write (unit, fmt="(' nwrite = ',i6)") nwrite
+       write (unit, fmt="(' nsave = ',i6)") nsave
        write (unit, fmt="(' navg = ',i6)") navg
        write (unit, fmt="(' omegatol = ',e16.10)") omegatol
        write (unit, fmt="(' omegatinst = ',e16.10)") omegatinst
 ! should be legal -- not checked yet
        if (igomega /= 0) write (unit, fmt="(' igomega = ',i6)") igomega  
-       if (nperiod_output /= nperiod) &
-            write (unit, fmt="(' nperiod_output = ',i3)") nperiod_output
+!       if (nperiod_output /= nperiod) &
+!            write (unit, fmt="(' nperiod_output = ',i3)") nperiod_output
        
        write (unit, fmt="(' print_old_units = ',L1)") print_old_units
        if (write_ascii) then
@@ -1607,11 +2258,14 @@ contains
           write (unit, fmt="(' write_dmix = ',L1)") write_dmix
           write (unit, fmt="(' write_kperpnorm = ',L1)") write_kperpnorm
        end if
+       write (unit, fmt="(' write_hrate = ',L1)") write_hrate
+       write (unit, fmt="(' write_lorentzian = ',L1)") write_lorentzian
        write (unit, fmt="(' write_eigenfunc = ',L1)") write_eigenfunc
        write (unit, fmt="(' write_final_fields = ',L1)") write_final_fields
        write (unit, fmt="(' write_final_epar = ',L1)") write_final_epar
        write (unit, fmt="(' write_final_moments = ',L1)") write_final_moments
        write (unit, fmt="(' write_final_antot = ',L1)") write_final_antot
+       write (unit, fmt="(' write_tavg = ',L1)") write_tavg
        write (unit, fmt="(' write_lamavg = ',L1)") write_lamavg
        write (unit, fmt="(' write_eavg = ',L1)") write_eavg
        if (write_fcheck) write (unit, fmt="(' write_fcheck = ',L1)") write_fcheck
@@ -1631,6 +2285,8 @@ contains
        if (dump_check2) write (unit, fmt="(' dump_check2 = ',L1)") dump_check2
        if (dump_fields_periodically) &
             write (unit, fmt="(' dump_fields_periodically = ',L1)") dump_fields_periodically
+       if (make_movie) &
+            write (unit, fmt="(' make_movie = ',L1)") make_movie
        if (dump_final_xfields) &
             write (unit, fmt="(' dump_final_xfields = ',L1)") dump_final_xfields
 
@@ -1857,6 +2513,7 @@ contains
                write (unit, fmt="(a)") ' type = "electron"  /'
           if (spec(i)%type == slowing_down_species) &
                write (unit, fmt="(a)") ' type = "fast"  /'
+          write (unit, fmt="(' dens0 = ',e13.6)") spec(i)%dens0
        end do
     end if
     do i=1,nspec
@@ -1973,6 +2630,7 @@ contains
        write (unit, fmt="(' dfit_eq =  ',L1)") dfit_eq
 !       write (unit, fmt="(' idfit_eq = ',L1)") idfit_eq
        write (unit, fmt="(' local_eq =  ',L1)") local_eq
+       write (unit, fmt="(' transp_eq =  ',L1)") transp_eq
        write (unit, fmt="(' gs2d_eq =  ',L1)") gs2d_eq
        write (unit, fmt="(' equal_arc =  ',L1)") equal_arc
        write (unit, fmt="(' bishop =  ',i2)") bishop
@@ -2008,6 +2666,8 @@ contains
        write (unit, fmt="(' write_antenna = ',L1)") write_antenna
        write (unit, fmt="(' amplitude = ',e16.10)") amplitude
        write (unit, fmt="(' w_antenna = (',e16.10,', ',e16.10,')')") w_antenna
+       write (unit, fmt="(' w_dot = ',e16.10)") w_dot
+       write (unit, fmt="(' t0 = ',e16.10)") t0_driver
        write (unit, fmt="(' nk_stir = ',i3)") nk_stir
        write (unit, fmt="(' /')")
 
@@ -2311,6 +2971,10 @@ contains
            nlambda = 2*ngauss
         end if
 
+        write (report_unit, *) 
+        write (report_unit, fmt="('Number of lambdas: ',i3)") nlambda
+        write (report_unit, *) 
+
         ntgrid = ntgrid_real
         if (nonlinear_mode_switch == nonlinear_mode_on) then
            if (gridopt_switch /= gridopt_box) then
@@ -2413,6 +3077,8 @@ contains
         write (report_unit, fmt="('      Temperature:  ',f7.3)") spec(is)%tprim
         write (report_unit, fmt="('      Density:      ',f7.3)") spec(is)%fprim
         write (report_unit, fmt="('      Parallel v:   ',f7.3)") spec(is)%uprim
+!        write (report_unit, fmt="('    Ignore this:')")
+!        write (report_unit, fmt="('    D_0: ',es10.4)") spec(is)%dens0
         if (spec(is)%type /= 2) then
            zeff_calc = zeff_calc + spec(is)%dens*spec(is)%z**2
            charge = charge + spec(is)%dens*spec(is)%z
@@ -2519,7 +3185,7 @@ contains
            qsf = epsl/pk
            write (report_unit, fmt="('The safety factor q =      ',f7.4)") qsf
            write (report_unit, fmt="('The magnetic shear s_hat = ',f7.4)") shat
-           if (shat <= 1.e-5) then
+           if (abs(shat) <= 1.e-5) then
               write (report_unit, fmt="('This is effectively zero; periodic boundary conditions are assumed.')")
            end if
            write (report_unit, fmt="('and epsilon == r/R = ',f7.4)") eps
@@ -2533,8 +3199,8 @@ contains
 
            if (shift > -epsilon(0.0)) then
               write (report_unit, fmt="('The s-alpha alpha parameter is ',f7.4)") shift
-              write (report_unit, fmt="('corresponding to d beta / d rho = ',f10.4)") arat*shift/qsf**2
-              if (abs(dbdr - arat*shift/qsf**2) > 1.e-2) then
+              write (report_unit, fmt="('corresponding to d beta / d rho = ',f10.4)") shift/arat/qsf**2
+              if (abs(dbdr - shift/arat/qsf**2) > 1.e-2) then
                  write (report_unit, *) 
                  write (report_unit, fmt="('################# WARNING #######################')")
                  write (report_unit, fmt="('This is inconsistent with beta and the pressure gradient.')") 
@@ -2645,7 +3311,7 @@ contains
               write (report_unit, &
                    & fmt="('Scale lengths are normalized to the major radius, R')")
            else
-              write (report_unit, fmt="('The aspect ratio R/a = ',f7.4)") arat
+              write (report_unit, fmt="('The aspect ratio R/a = ',f7.4)") Rmaj
            end if
            if (Rmaj /= R_geo) then
               write (report_unit, *) 
@@ -2684,7 +3350,7 @@ contains
            write (report_unit, *) 
            write (report_unit, fmt="('The magnetic shear s_hat = ',f7.4)") shat
            write (report_unit, fmt="('This value is set by s_hat_input in the theta_grid_eik_knobs namelist.')") 
-           if (shat <= 1.e-5) then
+           if (abs(shat) <= 1.e-5) then
               write (report_unit, fmt="('This is effectively zero; periodic boundary conditions are assumed.')")
            end if
            select case (bishop)
@@ -2786,7 +3452,7 @@ contains
               write (report_unit, *) 
               write (report_unit, fmt="('The magnetic shear s_hat = ',f7.4)") s_hat_input
               write (report_unit, fmt="('This value is set by s_hat_input in the theta_grid_eik_knobs namelist.')") 
-              if (shat <= 1.e-5) then
+              if (abs(shat) <= 1.e-5) then
                  write (report_unit, fmt="('This is effectively zero; periodic boundary conditions are assumed.')")
               end if
               write (report_unit, fmt="('The normalized inverse pressure gradient scale length = ',f8.4)") invLp_input
@@ -2796,7 +3462,7 @@ contains
               write (report_unit, *) 
               write (report_unit, fmt="('The magnetic shear s_hat = ',f7.4)") s_hat_input
               write (report_unit, fmt="('This value is set by s_hat_input in the theta_grid_eik_knobs namelist.')") 
-              if (shat <= 1.e-5) then
+              if (abs(shat) <= 1.e-5) then
                  write (report_unit, fmt="('This is effectively zero; periodic boundary conditions are assumed.')")
               end if
               write (report_unit, fmt="('The beta gradient d beta / d rho = ',f8.4)") beta_prime_input
@@ -2822,7 +3488,7 @@ contains
               write (report_unit, *) 
               write (report_unit, fmt="('The magnetic shear s_hat = ',f7.4)") s_hat_input
               write (report_unit, fmt="('This value is set by s_hat_input in the theta_grid_eik_knobs namelist.')") 
-              if (shat <= 1.e-5) then
+              if (abs(shat) <= 1.e-5) then
                  write (report_unit, fmt="('This is effectively zero; periodic boundary conditions are assumed.')")
               end if
               write (report_unit, fmt="('The alpha parameter (R beta_prime q**2) = ',f8.4)") alpha_input
@@ -2841,7 +3507,7 @@ contains
               write (report_unit, *) 
               write (report_unit, fmt="('The magnetic shear s_hat = ',f7.4)") s_hat_input
               write (report_unit, fmt="('This value is set by s_hat_input in the theta_grid_eik_knobs namelist.')") 
-              if (shat <= 1.e-5) then
+              if (abs(shat) <= 1.e-5) then
                  write (report_unit, fmt="('This is effectively zero; periodic boundary conditions are assumed.')")
               end if
               write (report_unit, fmt="('The value of dp/drho will be found from the equilibrium file.')") 
@@ -2887,12 +3553,21 @@ contains
         write (report_unit, *) 
         write (report_unit, fmt="('nbset =     ',i5)") nbset
         write (report_unit, fmt="('ntgrid =    ',i5)") ntgrid
+        write (report_unit, fmt="('ntheta =    ',i5)") ntheta
         write (report_unit, fmt="('nperiod =   ',i2)") nperiod
         write (report_unit, fmt="('drhodpsi =  ',f8.4)") drhodpsi
         write (report_unit, fmt="('R =         ',f8.4)") Rmaj
         write (report_unit, fmt="('s_hat =     ',f8.4)") shat
         write (report_unit, fmt="('kxfac =     ',f8.4)") kxfac
 
+        write (report_unit, *)
+        write (report_unit, *) 'NOTE: Regardless of the values of ntheta and nperiod'
+        write (report_unit, *) '      found in the theta_grid_parameters namelist,'
+        write (report_unit, *) '      this calculation will use the values listed here:'
+        write (report_unit, fmt="('ntgrid =    ',i5)") ntgrid
+        write (report_unit, fmt="('ntheta =    ',i5)") ntheta
+        write (report_unit, *) '      These were obtained from the gridgen output file.'
+        write (report_unit, *)
  100    continue
 
      end select
@@ -3351,6 +4026,24 @@ contains
     write (report_unit, fmt="('Data will be written to ',a,' every ',i4,' timesteps.')") trim(run_name)//'.out.nc', nwrite
     write (report_unit, *) 
 
+    if (dump_fields_periodically) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('Data will be written to dump.fields.t=* every ',i4,' timesteps.')") 10*nmovie
+       write (report_unit, *) 
+    end if
+
+    if (make_movie) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('Movie data will be written to dump.fields.x every ',i4,' timesteps.')") nmovie
+       write (report_unit, *) 
+    end if
+
+    if (save_for_restart .and. nsave > 0) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('Restart data will be written every ',i4,' timesteps.')") nsave
+       write (report_unit, *) 
+    end if
+    
     if (flow_mode_switch == flow_mode_on) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -3413,8 +4106,8 @@ contains
 
     case (gridopt_box)
 
-       if (y0 /= 2.) then
-          if (abs(2.*pi*y0 - ly) > epsilon(0.)) then
+       if (y0_internal /= 2.) then
+          if (abs(2.*pi*y0_internal - ly) > epsilon(0.)) then
              write (report_unit, *) 
              write (report_unit, fmt="('################# WARNING #######################')")
              write (report_unit, fmt="('You cannot specify both ly and y0.')")
@@ -3430,10 +4123,18 @@ contains
        write (report_unit, fmt="('The domain is ',f10.4,' rho in the y direction.')") ly
 
        if (abs(shat) <= 1.e-5) then
-          if (rtwist > 0) then
-             write (report_unit, fmt="('At theta=0, the domain has Lx = ',f10.5)") abs(rtwist)*ly
+          if (x0 == 0.) then
+             if (rtwist > 0) then
+                write (report_unit, fmt="('At theta=0, the domain has Lx = ',f10.5)") abs(rtwist)*ly
+             else
+                write (report_unit, fmt="('At theta=0, the domain has Lx = ',f10.5)") ly/abs(rtwist)
+             end if
           else
-             write (report_unit, fmt="('At theta=0, the domain has Lx = ',f10.5)") ly/abs(rtwist)
+             if (x0 > 0) then
+                write (report_unit, fmt="('At theta=0, the domain has Lx = ',f10.5)") 2.*pi*x0
+             else
+                write (report_unit, fmt="('At theta=0, the domain has Lx = ',f10.5)") -2.*pi/x0
+             end if
           end if
        else
           lx = ly * rtwist / (2.*pi*shat)
@@ -4095,6 +4796,11 @@ contains
        write (report_unit, fmt="('write_lamavg = T:          Write energy flux vs. lambda to ',a)") trim(run_name)//'.lame'
     end if
 
+    if (write_tavg) then
+       write (report_unit, fmt="('write_tavg = T:            Write particle flux vs. theta to ',a)") trim(run_name)//'.theta'
+       write (report_unit, fmt="('write_tavg = T:          Write energy flux vs. thetaa to ',a)") trim(run_name)//'.thetae'
+    end if
+
     if (write_eavg) then
        write (report_unit, &
          & fmt="('write_eavg = T:            Write particle flux vs. energy to ',a)") trim(run_name)//'.energy'
@@ -4383,17 +5089,24 @@ contains
           call factors (nspec, nspfacs, facs(:,1))
           call factors (nlambda, nlfacs, facs(:,2))
           call factors (negrid, nefacs, facs(:,3))
+          fac = 3.5*(real(nmesh))**1.1/1.e7
           do i=1,nspfacs-1
              npe = facs(i,1)
-             if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+             if (nmesh/npe > ncut) write &
+                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
+                  & npe, fac/npe**0.95
           end do
           do i=1,nlfacs-1
              npe = facs(i,2)*nspec
-             if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+             if (nmesh/npe > ncut) write &
+                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
+                  & npe, fac/npe**0.95
           end do
           do i=1,nefacs
              npe = facs(i,3)*nlambda*nspec
-             if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+             if (nmesh/npe > ncut) write &
+                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
+                  & npe, fac/npe**0.95
           end do
           deallocate (facs)
 
@@ -4406,17 +5119,24 @@ contains
           call factors (nspec, nspfacs, facs(:,1))
           call factors (negrid, nefacs, facs(:,2))
           call factors (nlambda, nlfacs, facs(:,3))
+          fac = 3.5*(real(nmesh))**1.1/1.e7
           do i=1,nspfacs-1
              npe = facs(i,1)
-             if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+             if (nmesh/npe > ncut) write &
+                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
+                  & npe, fac/npe**0.95
           end do
           do i=1,nefacs-1
              npe = facs(i,2)*nspec
-             if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+             if (nmesh/npe > ncut) write &
+                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
+                  & npe, fac/npe**0.95
           end do
           do i=1,nlfacs
              npe = facs(i,3)*negrid*nspec
-             if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+             if (nmesh/npe > ncut) write &
+                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
+                  & npe, fac/npe**0.95
           end do
           deallocate (facs)
 
@@ -4596,6 +5316,213 @@ contains
     end if
 
   end subroutine nprocs
+
+  subroutine tell (a, b, c)
+    
+    integer :: j
+    character (*), intent (in) :: a
+    character (*), intent (in), optional :: b, c
+    character (500) :: hack
+
+    j = len_trim(a)
+
+    if (present(b)) then
+       j = max(j, len_trim(b))
+       if (present(c)) j = max(j, len_trim(c))
+    end if
+
+    write (6, *)
+    write (6, *)
+    hack = repeat('*', j+2)
+    write (6, 10) '  '//trim(hack)
+    write (6, 10) '   '//trim(a)
+    write (interactive_record, 10) trim(a)
+    if (present(b)) then
+       write (6, 10) '   '//trim(b)
+       write (interactive_record, 10) trim(b)
+       if (present(c)) then
+          write (6, 10) '   '//trim(c)
+          write (interactive_record, 10) trim(c)
+       end if
+    end if
+    write (6, 10) '  '//trim(hack)
+    write (6, *)
+    write (6, *)
+
+10 format (a)
+
+  end subroutine tell
+
+  subroutine text (a)
+    
+    character (*), intent (in), optional :: a
+
+    if (present(a)) then
+       write (6, 10) trim(a)
+    else
+       write (*, *)
+    end if
+
+10 format (a)
+
+  end subroutine text
+
+  subroutine run_number (sel, nbeta)
+    
+    integer, intent (out) :: sel
+    integer, intent (in) :: nbeta
+    
+100 continue
+    do 
+       call text
+       call text ('Lowest run number for this scan (0-999):')
+       read (interactive_input, *, err = 100) sel
+       if (sel + nbeta - 1 > 999) then
+          write (6,*) 'The lowest run number for this scan must be less than ',1000-nbeta
+          call try_again
+       else if (sel < 0) then
+          write (6,*) 'The lowest run number for this scan must be greater than zero.'
+          call try_again
+       else
+          return
+       end if
+    end do
+    
+  end subroutine run_number
+  
+  subroutine try_again 
+    
+    write (6, *) '*****************'
+    write (6, *) 'Please try again.'
+    write (6, *) '*****************'
+
+  end subroutine try_again
+
+  subroutine get_choice (in, out)
+
+    integer, intent (in) :: in
+    integer, intent (out) :: out
+
+    read (interactive_input, *, err=999) out
+    if (out <= 0) out = 0
+    if (out > in) out = 0
+
+    return
+999 out = 0
+    
+  end subroutine get_choice
+  
+  subroutine beta_range_low (x, a, x0)
+    
+    real, intent (out) :: x
+    character (*), intent (in) :: a
+    real, intent (in) :: x0
+    
+    do
+100    continue
+       call text
+       if (trim(a) == 'le') then
+          call text ('Lower limit of beta for this scan (must be > 0):')
+       else if(trim(a) == 'lt') then
+          call text ('Lower limit of beta for this scan (must be >= 0):')
+       end if
+       read (interactive_input, *, err=100) x
+       if (trim(a) == 'le') then
+          if (x <= x0) then
+             call try_again
+          else
+             return
+          end if
+       else if (trim(a) == 'lt') then
+          if (x < x0) then
+             call try_again
+          else
+             return
+          end if
+       end if
+    end do
+    
+  end subroutine beta_range_low
+
+  subroutine beta_range_high (x, a, x0)
+    
+    real, intent (out) :: x
+    character (*), intent (in) :: a
+    real, intent (in) :: x0
+    
+    do
+100    continue
+       call text
+       call text ('Upper limit of beta for this scan (must be > lower limit):')
+       read (interactive_input, *, err=100) x
+       if (trim(a) == 'le') then
+          if (x <= x0) then
+             call try_again
+          else
+             return
+          end if
+       end if
+    end do
+    
+  end subroutine beta_range_high
+
+  subroutine beta_prime_range_low (x)
+
+    real, intent (out) :: x
+    
+    do
+100    continue
+       call tell ('Note: You will be asked to enter:         - d beta/d rho', &
+            'Since d beta /d rho <= 0, you should enter a number >= 0')
+       
+       call text ('Weakest beta gradient in scan (zero or positive number):')
+       read (interactive_input, *, err=100) x
+       x = -x
+       if (x > 0.) then
+          call try_again
+       else
+          return
+       end if
+    end do
+
+  end subroutine beta_prime_range_low
+  
+  subroutine beta_prime_range_high (x, x0)
+    
+    real, intent (out) :: x
+    real, intent (in) :: x0
+    
+    do
+100    continue
+       call text
+       call text ('Strongest gradient in scan: (positive number)')
+       read (interactive_input, *, err=100) x
+       x = -x
+       if (x >= x0) then
+          call try_again
+       else
+          return
+       end if
+    end do
+
+  end subroutine beta_prime_range_high
+
+  subroutine num_runs (n)
+
+    integer, intent (out) :: n
+    
+    do 
+100    continue
+       call text
+       call text ('How many runs should be done? (n > 1)')
+       read (interactive_input, *, err=100) n
+       if (n < 2) then
+          call try_again
+       else
+          return
+       end if
+    end do
+  end subroutine num_runs
 
 end program ingen
 

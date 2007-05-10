@@ -6,7 +6,7 @@ program rungridgen
   real, parameter :: pi=3.1415926535897931, twopi=6.2831853071795862
 
   ! input parameters
-  character(200) :: source, gingrid
+  character(200) :: source, gingrid, gsource
   integer :: nthetaout, nlambdaout, nperiodout
   integer :: npadd, iperiod
   real :: alknob, epsknob, extrknob, bpknob, smoothknob
@@ -16,6 +16,7 @@ program rungridgen
   logical :: auto_width, three_dim
   real :: cv_fraction, delth_max
   integer :: max_autoiter
+  logical :: list = .false.
 
 
   ! work variables
@@ -24,14 +25,17 @@ program rungridgen
   real, dimension (:), allocatable :: thetain, bmagin, bmagsm
   real, dimension (:), allocatable :: thetaout, bmagout, alambdaout
 
-  real :: drhodpsi, rmaj, shat, kxfac
+  real :: drhodpsi, rmaj, shat, kxfac, qval
   real, dimension (:), allocatable :: thetagrid
   real, dimension (:), allocatable :: gbdrift, gradpar, grho
   real, dimension (:), allocatable :: cvdrift, gds2, bmag
   real, dimension (:), allocatable :: gds21, gds22
   real, dimension (:), allocatable :: cvdrift0, gbdrift0
-
-  call init_file_utils (name="grid")
+  real, dimension (:), allocatable :: Rplot, Rprime
+  real, dimension (:), allocatable :: Zplot, Zprime
+  real, dimension (:), allocatable :: aplot, aprime
+  
+  call init_file_utils (list, name="grid")
   call read_parameters
   if (three_dim) then
      call allocate_arrays_3d
@@ -50,12 +54,13 @@ contains
 
   subroutine read_parameters
     implicit none
-    namelist /testgridgen/ source, &
+    namelist /testgridgen/ source, gsource, &
          nthetaout,nlambdaout,nperiodout, &
          npadd,alknob,epsknob,bpknob,extrknob,smoothknob, nfinegrid, &
          thetamax, deltaw, widthw, tension, gingrid, screenout, &
          auto_width, cv_fraction, delth_max, max_autoiter, three_dim, &
          iperiod
+    gsource = "eik6.out"
     source = "eik.out"
     nthetaout = 32
     nlambdaout = 20
@@ -91,7 +96,8 @@ contains
     call get_unused_unit(unit)
     open (unit=unit, file=trim(source), status="old")
     read (unit=unit, fmt="(a)") line
-    read (unit=unit, fmt=*) ntgridin, nperiodin, nthetain, drhodpsi, rmaj, shat, kxfac
+    read (unit=unit, fmt=*,err=10) ntgridin, nperiodin, nthetain, drhodpsi, rmaj, shat, kxfac, qval
+10  continue
     close (unit=unit)
     
     allocate (thetain(nthetain+1),bmagin(nthetain+1),bmagsm(nthetain+1))
@@ -107,6 +113,12 @@ contains
     allocate (gds22(-ntgridin:ntgridin))
     allocate (cvdrift0(-ntgridin:ntgridin))
     allocate (gbdrift0(-ntgridin:ntgridin))
+    allocate (Rplot(-ntgridin:ntgridin))
+    allocate (Rprime(-ntgridin:ntgridin))
+    allocate (Zplot(-ntgridin:ntgridin))
+    allocate (Zprime(-ntgridin:ntgridin))
+    allocate (aplot(-ntgridin:ntgridin))
+    allocate (aprime(-ntgridin:ntgridin))
   end subroutine allocate_arrays
 
   subroutine allocate_arrays_3d
@@ -136,12 +148,24 @@ contains
     allocate (gds22(-ntgridin:ntgridin))
     allocate (cvdrift0(-ntgridin:ntgridin))
     allocate (gbdrift0(-ntgridin:ntgridin))
+    allocate (Rplot(-ntgridin:ntgridin))
+    allocate (Rprime(-ntgridin:ntgridin))
+    allocate (Zplot(-ntgridin:ntgridin))
+    allocate (Zprime(-ntgridin:ntgridin))
+    allocate (aplot(-ntgridin:ntgridin))
+    allocate (aprime(-ntgridin:ntgridin))
 
     cvdrift0 = 0.   ! assumes theta0 = 0.
     gbdrift0 = 0.   ! assumes theta0 = 0.
     gds21 = 0.      ! assumes theta0 = 0.
     gds22 = 0.      ! assumes theta0 = 0.
     grho  = 1.      ! assumes linear calculation
+    Rplot = 1.      ! pure fiction
+    Rprime = 1.     ! pure fiction
+    Zplot = 1.      ! pure fiction
+    Zprime = 1.     ! pure fiction
+    aplot = 1.      ! pure fiction
+    aprime = 1.     ! pure fiction
     
   end subroutine allocate_arrays_3d
 
@@ -190,11 +214,13 @@ contains
   end subroutine get_initial_grids
 
   subroutine get_initial_grids_3d
+    use file_utils, only: get_unused_unit
     implicit none
     integer :: unit
     integer :: i, ntor
     real :: dpdpsi, pres, bavg, cvavg
 
+    call get_unused_unit(unit)
     open (unit=unit, file=trim(source), status="old", action="read")
 
     read (unit=unit, fmt=*) ntgridin, nthetain, ntor
@@ -365,6 +391,9 @@ contains
     real, allocatable, dimension (:) :: cvdriftout, gds2out, bmaggridout
     real, allocatable, dimension (:) :: gds21out, gds22out
     real, allocatable, dimension (:) :: cvdrift0out, gbdrift0out
+    real, allocatable, dimension (:) :: Rplotout, Rprimeout
+    real, allocatable, dimension (:) :: Zplotout, Zprimeout
+    real, allocatable, dimension (:) :: aplotout, aprimeout
 !    real, external :: fitp_curvp2
     real :: th, bmin
     integer :: ierr
@@ -416,6 +445,12 @@ contains
     allocate (gds22out(-ntgrid:ntgrid))
     allocate (cvdrift0out(-ntgrid:ntgrid))
     allocate (gbdrift0out(-ntgrid:ntgrid))
+    allocate (Rplotout(-ntgrid:ntgrid))
+    allocate (Rprimeout(-ntgrid:ntgrid))
+    allocate (Zplotout(-ntgrid:ntgrid))
+    allocate (Zprimeout(-ntgrid:ntgrid))
+    allocate (aplotout(-ntgrid:ntgrid))
+    allocate (aprimeout(-ntgrid:ntgrid))
 
     thetagridout(-ntheta/2:ntheta/2-1) = thetaout(:ntheta)
     bmaggridout(-ntheta/2:ntheta/2-1) = bmagout(:ntheta)
@@ -452,6 +487,18 @@ contains
          2*ntgrid+1,thetagridout,cvdrift0out)
     call spline (2*ntgridin+1,thetagrid,gbdrift0, &
          2*ntgrid+1,thetagridout,gbdrift0out)
+    call spline (2*ntgridin+1,thetagrid,Rplot, &
+         2*ntgrid+1,thetagridout,Rplotout)
+    call spline (2*ntgridin+1,thetagrid,Rprime, &
+         2*ntgrid+1,thetagridout,Rprimeout)
+    call spline (2*ntgridin+1,thetagrid,Zplot, &
+         2*ntgrid+1,thetagridout,Zplotout)
+    call spline (2*ntgridin+1,thetagrid,Zprime, &
+         2*ntgrid+1,thetagridout,Zprimeout)
+    call spline (2*ntgridin+1,thetagrid,aplot, &
+         2*ntgrid+1,thetagridout,aplotout)
+    call spline (2*ntgridin+1,thetagrid,aprime, &
+         2*ntgrid+1,thetagridout,aprimeout)
 
     call open_output_file (unit, ".out")
     write (unit=unit, fmt=*) 'nlambda'
@@ -461,8 +508,8 @@ contains
        write (unit=unit, fmt=*) alambdaout(i)
     enddo
 
-    write (unit=unit, fmt=*) 'ntgrid nperiod ntheta drhodpsi rmaj shat kxfac'
-    write (unit=unit, fmt=*) ntgrid, nperiodout, ntheta, drhodpsi, rmaj, shat, kxfac
+    write (unit=unit, fmt=*) 'ntgrid nperiod ntheta drhodpsi rmaj shat kxfac q'
+    write (unit=unit, fmt=*) ntgrid, nperiodout, ntheta, drhodpsi, rmaj, shat, kxfac, qval
 
     write (unit=unit, fmt=*) 'gbdrift gradpar grho tgrid'
     do i = -ntgrid,ntgrid
@@ -486,6 +533,24 @@ contains
     do i = -ntgrid,ntgrid
        write (unit=unit, fmt="(8(x,g19.10))") &
             cvdrift0out(i),gbdrift0out(i),thetagridout(i)
+    end do
+
+    write (unit=unit, fmt=*) 'Rplot Rprime tgrid'
+    do i = -ntgrid,ntgrid
+       write (unit=unit, fmt="(8(x,g19.10))") &
+            Rplotout(i),Rprimeout(i),thetagridout(i)
+    end do
+
+    write (unit=unit, fmt=*) 'Zplot Zprime tgrid'
+    do i = -ntgrid,ntgrid
+       write (unit=unit, fmt="(8(x,g19.10))") &
+            Zplotout(i),Zprimeout(i),thetagridout(i)
+    end do
+
+    write (unit=unit, fmt=*) 'aplot aprime tgrid'
+    do i = -ntgrid,ntgrid
+       write (unit=unit, fmt="(8(x,g19.10))") &
+            aplotout(i),aprimeout(i),thetagridout(i)
     end do
 
     call close_output_file (unit)

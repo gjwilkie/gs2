@@ -9,7 +9,7 @@ module species
   type :: specie
      real :: z
      real :: mass
-     real :: dens
+     real :: dens, dens0, u0
      real :: temp
      real :: tprim
      real :: fprim
@@ -44,13 +44,13 @@ contains
     use text_options
     use mp, only: proc0, broadcast
     implicit none
-    real :: z, mass, dens, temp, tprim, fprim, uprim, uprim2, vnewk, vnewk4
+    real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, vnewk4
     character(20) :: type
     integer :: unit
     integer :: is
     namelist /species_knobs/ nspec
     namelist /species_parameters/ &
-         z, mass, dens, temp, tprim, fprim, uprim, uprim2, vnewk, vnewk4, type
+         z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, vnewk4, type
     integer :: ierr, in_file
     logical :: exist
 
@@ -82,6 +82,8 @@ contains
     if (proc0) then
        do is = 1, nspec
           call get_indexed_namelist_unit (unit, "species_parameters", is)
+          dens0 = 1.0
+          u0 = 1.0
           uprim = 0.0
           uprim2 = 0.0
           vnewk = 0.0
@@ -93,6 +95,8 @@ contains
           spec(is)%z = z
           spec(is)%mass = mass
           spec(is)%dens = dens
+          spec(is)%dens0 = dens0
+          spec(is)%u0 = u0
           spec(is)%temp = temp
           spec(is)%tprim = tprim
           spec(is)%fprim = fprim
@@ -118,6 +122,8 @@ contains
        call broadcast (spec(is)%z)
        call broadcast (spec(is)%mass)
        call broadcast (spec(is)%dens)
+       call broadcast (spec(is)%dens0)
+       call broadcast (spec(is)%u0)
        call broadcast (spec(is)%temp)
        call broadcast (spec(is)%tprim)
        call broadcast (spec(is)%fprim)

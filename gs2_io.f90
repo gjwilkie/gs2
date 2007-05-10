@@ -13,11 +13,11 @@ module gs2_io
   integer :: ncid
 
   integer :: naky_dim, nakx_dim, nttot_dim, negrid_dim, nlambda_dim, nspec_dim
-  integer :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim
+  integer :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim, nheat_dim
   
-  integer, dimension (5) :: field_dim, final_mom_dim
+  integer, dimension (5) :: field_dim, final_mom_dim, heatk_dim
   integer, dimension (4) :: omega_dim, fluxk_dim, final_field_dim, loop_mom_dim
-  integer, dimension (3) :: mode_dim, phase_dim, loop_phi_dim
+  integer, dimension (3) :: mode_dim, phase_dim, loop_phi_dim, heat_dim
   integer, dimension (2) :: kx_dim, ky_dim, om_dim, flux_dim, nin_dim, fmode_dim
 
   integer :: nakx_id, naky_id, nttot_id, akx_id, aky_id, theta_id, nspec_id
@@ -43,7 +43,7 @@ module gs2_io
   integer :: phi_id, apar_id, aperp_id, epar_id
   integer :: antot_id, antota_id, antotp_id
   integer :: ntot_id, density_id, upar_id, tpar_id, tperp_id
-  integer :: rstress_id, ustress_id
+  integer :: rstress_id, ustress_id, hrateavg_id, hrate_by_k_id
   integer :: ntot2_id, ntot2_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
   integer :: qflux_neo_by_k_id, pflux_neo_by_k_id, input_id
@@ -60,11 +60,13 @@ module gs2_io
   
 contains
 
-  subroutine init_gs2_io
+  subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
+       write_phiavg, write_hrate)
 
     use mp, only: proc0, barrier
     use file_utils, only: run_name
     use netcdf_mod
+    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate
 
     character (300) :: filename
     integer :: ierr         ! 0 if initialization is successful
@@ -98,7 +100,7 @@ contains
 
     if (proc0) then
        call define_dims
-       call define_vars
+       call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate)
        call nc_grids
        call nc_species
        call nc_geo
@@ -124,11 +126,12 @@ contains
     status = netcdf_def_dim(ncid, 'egrid', negrid, negrid_dim)
     status = netcdf_def_dim(ncid, 'species', nspec, nspec_dim)
     status = netcdf_def_dim(ncid, 'sign', 2, nsign_dim)
-    status = netcdf_def_dim(ncid, 'time', NF_UNLIMITED, time_dim)
+    status = netcdf_def_dim(ncid, 't', NF_UNLIMITED, time_dim)
     status = netcdf_def_dim(ncid, 'char10', 10, char10_dim)
     status = netcdf_def_dim(ncid, 'char200', 200, char200_dim)
     status = netcdf_def_dim(ncid, 'nlines', num_input_lines, nlines_dim)
     status = netcdf_def_dim(ncid, 'ri', 2, ri_dim)
+    status = netcdf_def_dim(ncid, 'nheat', 2, nheat_dim)
 
   end subroutine define_dims
 
@@ -202,14 +205,15 @@ contains
 
   end subroutine save_input
 
-  subroutine define_vars
+  subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate)
 
     use mp, only: nproc
     use species, only: nspec
     use kt_grids, only: naky, ntheta0, theta0
     use run_parameters, only: fphi, fapar, faperp
     use netcdf_mod
-    
+    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate
+
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
     logical :: d_fields_per = .false.
@@ -252,6 +256,16 @@ contains
     fluxk_dim (2) = naky_dim
     fluxk_dim (3) = nspec_dim
     fluxk_dim (4) = time_dim
+
+    heat_dim (1) = nspec_dim
+    heat_dim (2) = nheat_dim
+    heat_dim (3) = time_dim
+
+    heatk_dim (1) = nakx_dim
+    heatk_dim (2) = naky_dim
+    heatk_dim (3) = nspec_dim
+    heatk_dim (4) = nheat_dim
+    heatk_dim (5) = time_dim
 
     field_dim (1) = ri_dim
     field_dim (2) = nttot_dim
@@ -426,15 +440,17 @@ contains
        if (naky > 1) &
        status = netcdf_def_var (ncid, 'phi2_by_ky',   nf_double, 2, ky_dim, phi2_by_ky_id)
        status = netcdf_def_var (ncid, 'phi0',         nf_double, 4, omega_dim, phi0_id)
-       status = netcdf_def_var (ncid, 'phiavg',       nf_double, 4, omega_dim, phiavg_id)
-       status = netcdf_def_var (ncid, 'es_heat_par',  nf_double, 2, flux_dim, es_heat_par_id)
-       status = netcdf_def_var (ncid, 'es_heat_perp', nf_double, 2, flux_dim, es_heat_perp_id)
-       status = netcdf_def_var (ncid, 'es_heat_flux', nf_double, 2, flux_dim, es_heat_flux_id)
-       status = netcdf_def_var (ncid, 'es_mom_flux',  nf_double, 2, flux_dim, es_mom_flux_id)
-       status = netcdf_def_var (ncid, 'es_part_flux', nf_double, 2, flux_dim, es_part_flux_id)
-       status = netcdf_def_var (ncid, 'es_heat_by_k', nf_double, 4, fluxk_dim, es_heat_by_k_id)
-       status = netcdf_def_var (ncid, 'es_mom_by_k',  nf_double, 4, fluxk_dim, es_mom_by_k_id)
-       status = netcdf_def_var (ncid, 'es_part_by_k', nf_double, 4, fluxk_dim, es_part_by_k_id)
+       if (write_phiavg) status = netcdf_def_var (ncid, 'phiavg',       nf_double, 4, omega_dim, phiavg_id)
+       if (write_nl_flux) then
+          status = netcdf_def_var (ncid, 'es_heat_par',  nf_double, 2, flux_dim, es_heat_par_id)
+          status = netcdf_def_var (ncid, 'es_heat_perp', nf_double, 2, flux_dim, es_heat_perp_id)
+          status = netcdf_def_var (ncid, 'es_heat_flux', nf_double, 2, flux_dim, es_heat_flux_id)
+          status = netcdf_def_var (ncid, 'es_mom_flux',  nf_double, 2, flux_dim, es_mom_flux_id)
+          status = netcdf_def_var (ncid, 'es_part_flux', nf_double, 2, flux_dim, es_part_flux_id)
+          status = netcdf_def_var (ncid, 'es_heat_by_k', nf_double, 4, fluxk_dim, es_heat_by_k_id)
+          status = netcdf_def_var (ncid, 'es_mom_by_k',  nf_double, 4, fluxk_dim, es_mom_by_k_id)
+          status = netcdf_def_var (ncid, 'es_part_by_k', nf_double, 4, fluxk_dim, es_part_by_k_id)
+       end if
        status = netcdf_def_var (ncid, 'phi_norm',     nf_double, 4, final_field_dim, phi_norm_id)
        status = netcdf_def_var (ncid, 'phi',          nf_double, 4, final_field_dim, phi_id)
        status = netcdf_put_att (ncid, phi_id, 'long_name', 'Electrostatic Potential')
@@ -453,14 +469,16 @@ contains
        if (naky > 1) &
        status = netcdf_def_var (ncid, 'apar2_by_ky',    nf_double, 2, ky_dim, apar2_by_ky_id)
        status = netcdf_def_var (ncid, 'apar0',          nf_double, 4, omega_dim, apar0_id)
-       status = netcdf_def_var (ncid, 'apar_heat_flux', nf_double, 2, flux_dim, apar_heat_flux_id)
-       status = netcdf_def_var (ncid, 'apar_heat_par',  nf_double, 2, flux_dim, apar_heat_par_id)
-       status = netcdf_def_var (ncid, 'apar_heat_perp', nf_double, 2, flux_dim, apar_heat_perp_id)
-       status = netcdf_def_var (ncid, 'apar_mom_flux',  nf_double, 2, flux_dim, apar_mom_flux_id)
-       status = netcdf_def_var (ncid, 'apar_part_flux', nf_double, 2, flux_dim, apar_part_flux_id)
-       status = netcdf_def_var (ncid, 'apar_heat_by_k', nf_double, 4, fluxk_dim, apar_heat_by_k_id)
-       status = netcdf_def_var (ncid, 'apar_mom_by_k',  nf_double, 4, fluxk_dim, apar_mom_by_k_id)
-       status = netcdf_def_var (ncid, 'apar_part_by_k', nf_double, 4, fluxk_dim, apar_part_by_k_id)
+       if (write_nl_flux) then
+          status = netcdf_def_var (ncid, 'apar_heat_flux', nf_double, 2, flux_dim, apar_heat_flux_id)
+          status = netcdf_def_var (ncid, 'apar_heat_par',  nf_double, 2, flux_dim, apar_heat_par_id)
+          status = netcdf_def_var (ncid, 'apar_heat_perp', nf_double, 2, flux_dim, apar_heat_perp_id)
+          status = netcdf_def_var (ncid, 'apar_mom_flux',  nf_double, 2, flux_dim, apar_mom_flux_id)
+          status = netcdf_def_var (ncid, 'apar_part_flux', nf_double, 2, flux_dim, apar_part_flux_id)
+          status = netcdf_def_var (ncid, 'apar_heat_by_k', nf_double, 4, fluxk_dim, apar_heat_by_k_id)
+          status = netcdf_def_var (ncid, 'apar_mom_by_k',  nf_double, 4, fluxk_dim, apar_mom_by_k_id)
+          status = netcdf_def_var (ncid, 'apar_part_by_k', nf_double, 4, fluxk_dim, apar_part_by_k_id)
+       end if
        status = netcdf_def_var (ncid, 'apar_norm',      nf_double, 4, final_field_dim, apar_norm_id)
        status = netcdf_def_var (ncid, 'apar',           nf_double, 4, final_field_dim, apar_id)
        status = netcdf_def_var (ncid, 'antota',         nf_double, 4, final_field_dim, antota_id)
@@ -480,14 +498,16 @@ contains
        if (naky > 1) &
        status = netcdf_def_var (ncid, 'aperp2_by_ky',    nf_double, 2, ky_dim, aperp2_by_ky_id)
        status = netcdf_def_var (ncid, 'aperp0',          nf_double, 4, omega_dim, aperp0_id)
-       status = netcdf_def_var (ncid, 'aperp_heat_flux', nf_double, 2, flux_dim, aperp_heat_flux_id)
-       status = netcdf_def_var (ncid, 'aperp_heat_par',  nf_double, 2, flux_dim, aperp_heat_par_id)
-       status = netcdf_def_var (ncid, 'aperp_heat_perp', nf_double, 2, flux_dim, aperp_heat_perp_id)
-       status = netcdf_def_var (ncid, 'aperp_mom_flux',  nf_double, 2, flux_dim, aperp_mom_flux_id)
-       status = netcdf_def_var (ncid, 'aperp_part_flux', nf_double, 2, flux_dim, aperp_part_flux_id)
-       status = netcdf_def_var (ncid, 'aperp_heat_by_k', nf_double, 4, fluxk_dim, aperp_heat_by_k_id)
-       status = netcdf_def_var (ncid, 'aperp_mom_by_k',  nf_double, 4, fluxk_dim, aperp_mom_by_k_id)
-       status = netcdf_def_var (ncid, 'aperp_part_by_k', nf_double, 4, fluxk_dim, aperp_part_by_k_id)
+       if (write_nl_flux) then
+          status = netcdf_def_var (ncid, 'aperp_heat_flux', nf_double, 2, flux_dim, aperp_heat_flux_id)
+          status = netcdf_def_var (ncid, 'aperp_heat_par',  nf_double, 2, flux_dim, aperp_heat_par_id)
+          status = netcdf_def_var (ncid, 'aperp_heat_perp', nf_double, 2, flux_dim, aperp_heat_perp_id)
+          status = netcdf_def_var (ncid, 'aperp_mom_flux',  nf_double, 2, flux_dim, aperp_mom_flux_id)
+          status = netcdf_def_var (ncid, 'aperp_part_flux', nf_double, 2, flux_dim, aperp_part_flux_id)
+          status = netcdf_def_var (ncid, 'aperp_heat_by_k', nf_double, 4, fluxk_dim, aperp_heat_by_k_id)
+          status = netcdf_def_var (ncid, 'aperp_mom_by_k',  nf_double, 4, fluxk_dim, aperp_mom_by_k_id)
+          status = netcdf_def_var (ncid, 'aperp_part_by_k', nf_double, 4, fluxk_dim, aperp_part_by_k_id)
+       end if
        status = netcdf_def_var (ncid, 'aperp_norm',      nf_double, 4, final_field_dim, aperp_norm_id)
        status = netcdf_def_var (ncid, 'aperp',           nf_double, 4, final_field_dim, aperp_id)
        status = netcdf_def_var (ncid, 'antotp',          nf_double, 4, final_field_dim, antotp_id)
@@ -505,16 +525,20 @@ contains
     status = netcdf_def_var (ncid, 'phase', nf_double, 3, phase_dim, phase_id)
     status = netcdf_put_att (ncid, phase_id, 'long_name', 'Normalizing phase')
 
-    status = netcdf_def_var (ncid, 'phtot', nf_double, 3, mode_dim, phtot_id)
-    status = netcdf_def_var (ncid, 'dmix',  nf_double, 3, mode_dim, dmix_id)
-    status = netcdf_def_var (ncid, 'kperpnorm', nf_double, 3, mode_dim, kperpnorm_id)
+!    status = netcdf_def_var (ncid, 'phtot', nf_double, 3, mode_dim, phtot_id)
+!    status = netcdf_def_var (ncid, 'dmix',  nf_double, 3, mode_dim, dmix_id)
+!    status = netcdf_def_var (ncid, 'kperpnorm', nf_double, 3, mode_dim, kperpnorm_id)
 
-    status = netcdf_def_var (ncid, 'omega',   nf_double, 4, omega_dim, omega_id)
-    status = netcdf_def_var (ncid, 'omegaavg',   nf_double, 4, omega_dim, omegaavg_id)
-    
-    status = netcdf_def_var (ncid, 'hflux_tot', nf_double, 1, time_dim, hflux_tot_id)
-    status = netcdf_def_var (ncid, 'vflux_tot', nf_double, 1, time_dim, vflux_tot_id)
-    status = netcdf_def_var (ncid, 'zflux_tot', nf_double, 1, time_dim, zflux_tot_id)
+    if (write_omega) then
+       status = netcdf_def_var (ncid, 'omega',   nf_double, 4, omega_dim, omega_id)
+       status = netcdf_def_var (ncid, 'omegaavg',   nf_double, 4, omega_dim, omegaavg_id)
+    end if
+
+    if (write_nl_flux) then
+       status = netcdf_def_var (ncid, 'hflux_tot', nf_double, 1, time_dim, hflux_tot_id)
+       status = netcdf_def_var (ncid, 'vflux_tot', nf_double, 1, time_dim, vflux_tot_id)
+       status = netcdf_def_var (ncid, 'zflux_tot', nf_double, 1, time_dim, zflux_tot_id)
+    end if
 
     if (d_neo) then
        status = netcdf_def_var (ncid, 'qflux_neo_by_k', nf_double, 4, fluxk_dim, qflux_neo_by_k_id)
@@ -542,10 +566,17 @@ contains
     status = netcdf_def_var (ncid, 'tpar00',    nf_double, 4, loop_mom_dim, tpar00_id)
     status = netcdf_def_var (ncid, 'tperp00',   nf_double, 4, loop_mom_dim, tperp00_id)
     
-    status = netcdf_def_var (ncid, 'rstress',    nf_double, 4, loop_mom_dim, rstress_id)
-    status = netcdf_def_var (ncid, 'ustress',    nf_double, 4, loop_mom_dim, ustress_id)
+    if (write_stress) then
+       status = netcdf_def_var (ncid, 'rstress',    nf_double, 4, loop_mom_dim, rstress_id)
+       status = netcdf_def_var (ncid, 'ustress',    nf_double, 4, loop_mom_dim, ustress_id)
+    end if
 
-    status = netcdf_put_att (ncid, phtot_id, 'long_name', 'Field amplitude')
+    if (write_hrate) then
+       status = netcdf_def_var (ncid, 'hrate_tot',  nf_double, 3, heat_dim, hrateavg_id)
+       status = netcdf_def_var (ncid, 'hrate_by_k', nf_double, 5, heatk_dim, hrate_by_k_id)
+    end if
+
+!    status = netcdf_put_att (ncid, phtot_id, 'long_name', 'Field amplitude')
 
     status = netcdf_def_var (ncid, 'input_file', nf_char, 2, nin_dim, input_id)
     status = netcdf_put_att (ncid, input_id, 'long_name', 'Input file')
@@ -984,11 +1015,13 @@ contains
        phi0,   phi2,   phi2_by_mode, &! phiavg, &
        apar0,  apar2,  apar2_by_mode, &
        aperp0, aperp2, aperp2_by_mode, &
-       omega, omegaavg, woutunits, phitot)
+       hrateavg, rate_by_k, &
+       omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
 
     use run_parameters, only: fphi, fapar, faperp
     use netcdf_mod, only: netcdf_put_var1, netcdf_put_vara
     use kt_grids, only: naky, ntheta0
+    use species, only: nspec
     use convert, only: c2r
 
     integer, intent (in) :: nout
@@ -996,13 +1029,17 @@ contains
     real, dimension (:), intent (in) :: fluxfac, woutunits
     complex, dimension(:,:), intent (in) :: phi0, apar0, aperp0, omega, omegaavg !, phiavg
     real, dimension(:,:), intent (in) :: phi2_by_mode, apar2_by_mode, aperp2_by_mode, phitot
+    real, dimension (:,:), intent (in) :: hrateavg
+    real, dimension (:,:,:,:), intent (in) :: rate_by_k
+    logical :: write_omega, write_hrate
     real, dimension (ntheta0) :: field2_by_kx
     real, dimension (naky) :: field2_by_ky
     real, dimension (2, ntheta0, naky) :: ri2
     complex, dimension (ntheta0, naky) :: tmp
-    integer, dimension (4) :: start0, count0
-    integer, dimension (3) :: start, count
-    integer, dimension (2) :: startx, countx, starty, county
+    integer, dimension (5) :: start5, count5
+    integer, dimension (4) :: start0, count0, start4, count4
+    integer, dimension (3) :: start, count, starth, counth
+    integer, dimension (2) :: startx, countx, starty, county, starts, counts
     integer :: status, it, ik
 
     status = netcdf_put_var1(ncid, time_id, nout, time)
@@ -1025,6 +1062,28 @@ contains
     count0(3) = naky
     count0(4) = 1
 
+    start4(1) = 1
+    start4(2) = 1
+    start4(3) = 1
+    start4(4) = nout
+
+    count4(1) = ntheta0
+    count4(2) = naky
+    count4(3) = nspec
+    count4(4) = 1
+
+    start5(1) = 1
+    start5(2) = 1
+    start5(3) = 1
+    start5(4) = 1
+    start5(5) = nout
+
+    count5(1) = ntheta0
+    count5(2) = naky
+    count5(3) = nspec
+    count5(4) = 2
+    count5(5) = 1
+
     starty(1) = 1
     starty(2) = nout
 
@@ -1036,6 +1095,20 @@ contains
 
     countx(1) = ntheta0
     countx(2) = 1
+
+    starts(1) = 1
+    starts(2) = nout
+
+    counts(1) = nspec
+    counts(2) = 1
+
+    starth(1) = 1 
+    starth(2) = 1
+    starth(3) = nout
+
+    counth(1) = nspec
+    counth(2) = 2
+    counth(3) = 1
 
     if (fphi > zero) then
 
@@ -1105,21 +1178,28 @@ contains
        status = netcdf_put_var1(ncid, aperp2_id, nout, aperp2)
     end if
         
-    do it = 1, ntheta0
-       tmp(it, :) = omega(it, :) * woutunits
-    end do
+    if (write_hrate) then
+       status = netcdf_put_vara (ncid, hrateavg_id, starth, counth, hrateavg)
+       status = netcdf_put_vara (ncid, hrate_by_k_id, start5, count5, rate_by_k)
+    end if
+
+    if (write_omega) then
+       do it = 1, ntheta0
+          tmp(it, :) = omega(it, :) * woutunits
+       end do
        
-    call c2r (tmp, ri2) 
-    status = netcdf_put_vara(ncid, omega_id, start0, count0, ri2)
-    
-    do it = 1, ntheta0
-       tmp(it, :) = omegaavg(it, :) * woutunits
-    end do
+       call c2r (tmp, ri2) 
+       status = netcdf_put_vara(ncid, omega_id, start0, count0, ri2)
        
-    call c2r (tmp, ri2) 
-    status = netcdf_put_vara(ncid, omegaavg_id, start0, count0, ri2)
-    
-    status = netcdf_put_vara(ncid, phtot_id, start, count, phitot)
+       do it = 1, ntheta0
+          tmp(it, :) = omegaavg(it, :) * woutunits
+       end do
+       
+       call c2r (tmp, ri2) 
+       status = netcdf_put_vara(ncid, omegaavg_id, start0, count0, ri2)
+    end if
+
+!    status = netcdf_put_vara(ncid, phtot_id, start, count, phitot)
     
     if (mod(nout, 10) == 0) status = nf_sync (ncid)
 

@@ -15,7 +15,7 @@ program eiktest
   real :: diffscheme, beta_p1, beta_p2, beta_prime_times, beta_prime_over
   integer :: nbeta
 
-  real :: airat
+  real :: airat, wgt, wdavg, jac
   logical :: fast, dipole
 
   namelist/stuff/ntheta,nperiod,rmaj,akappri,akappa,shift,equal_arc, &
@@ -145,8 +145,8 @@ program eiktest
   ntgrid = (size(theta)-1)/2
   ntheta = (size(theta)-1)/(2*nperiod-1)
            
-  write(21,*) ' ntgrid  nperiod  ntheta, drhodpsi, rmaj, shat, kxfac'
-  write(21,*) ntgrid, nperiod, ntheta, drhodpsin, rmaj, shat, kxfac
+  write(21,*) ' ntgrid  nperiod  ntheta, drhodpsi, rmaj, shat, kxfac, q'
+  write(21,*) ntgrid, nperiod, ntheta, drhodpsin, rmaj, shat, kxfac, qsf
   
   write(21,*) '    gbdrift     gradpar       grho    tgrid'
   do i= -ntgrid,ntgrid
@@ -228,6 +228,7 @@ program eiktest
      write(11,*) 'akappri= ',rkpri
      write(11,*) 'tri= ',rt
      write(11,*) 'tripri= ',rtpri
+     write(11,*) 'surface area= ',surfarea,' avgrmid**2'
   end if
 
 !      write(*,*) 'mag(Bp) at rho= ',rhoc
@@ -266,6 +267,28 @@ program eiktest
   endif
   close (unit=21)
 
+  open (unit=21,file='eik6.out',status='unknown')
+
+  write (21,fmt="('# shape: torus')")
+  write (21,fmt="('# q = ',e10.4,' drhodpsi = ',e10.4)") qsf, drhodpsin
+  write (21,fmt="('# theta1             R2                  Z3               alpha4      ', &
+            &   '       Rprime5              Zprime6           alpha_prime7 ')")
+  do i=-ntgrid,ntgrid
+     write (21,1000) theta(i),Rplot(i),Zplot(i),aplot(i), &
+          Rprime(i),Zprime(i),aprime(i)
+  enddo
+  close (unit=21)
+
+!  wdavg= 0.
+!  wgt = 0.
+!  do i=-ntgrid,ntgrid-1
+!     jac = abs(1./(drhodpsin*gradpar(i)*bmag(i)))
+!     wgt = wgt + (theta(i+1)-theta(i))*jac
+!     wdavg = wdavg+(theta(i+1)-theta(i))*jac!*0.5*(cvdrift(i)+cvdrift(i+1))
+!  end do
+!  wdavg=wdavg!/wgt
+!
+!  print *, 'Avg curvature = ',wdavg!, wgt
   stop
 1000  format(20(1x,1pg18.11))
 end program eiktest

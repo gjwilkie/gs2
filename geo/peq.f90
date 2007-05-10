@@ -4,7 +4,7 @@ module peq
   private
   integer :: nr, nt, i_sym
   
-  real, allocatable, dimension (:)     :: rho_d, eqpsi, psi_bar, fp, beta, pressure, diam, rc, qsf
+  real, allocatable, dimension (:)     :: rho_d, eqpsi, psi_bar, fp, beta, pressure, diam, rc, qsf, rho_b
   real, allocatable, dimension (:,:)   :: R_psi, Z_psi !, B_psi
   real, allocatable, dimension (:,:,:) :: drm, dzm, dbtm, dpm, dtm  !, dbm
   real, allocatable, dimension (:,:,:) :: dpcart, dbcart, dtcart, dbtcart
@@ -138,7 +138,7 @@ contains
 
 !       id = ncvid (ncid, 'rho', ifail)
 !       call ncvgt (ncid, id, start, cnt, workr, ifail)
-!       rho_d = workr
+!       rho_b = workr(1:nr)
 ! rho_d must be defined by hand
 
        id = ncvid (ncid, 'psivec', ifail)
@@ -293,7 +293,7 @@ contains
     real*8, allocatable, dimension(:,:) :: work
     real :: f_N, psi_N
     real pi
-
+    
     pi = 2.*acos(0.)
 !     read the data
 
@@ -366,6 +366,10 @@ contains
 
     start(1) = 1
     cnt(1) = nr
+
+    id = ncvid (ncid, 'rho', ifail)
+    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+    rho_b = workr(1:nr)
 
     id = ncvid (ncid, 'psi', ifail)
     call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
@@ -486,6 +490,10 @@ contains
 
     transp = .true.
 
+!    do i=1,nr
+!       write (*,*) rho_b(i), pressure(i), qsf(i)
+!    end do
+
   end subroutine teqin
 
   subroutine alloc_arrays(nr, nt)
@@ -493,9 +501,9 @@ contains
     integer :: nr, nt
 
     allocate(rho_d(nr), eqpsi(nr), psi_bar(nr), fp(nr), beta(nr), pressure(nr), &
-         rc(nr), diam(nr), qsf(nr))
+         rc(nr), diam(nr), qsf(nr), rho_b(nr))
     rho_d = 0. ; eqpsi = 0. ; psi_bar = 0. ; fp = 0. ; beta = 0. ; pressure = 0. 
-    rc = 0. ; diam = 0. ; qsf = 0.
+    rc = 0. ; diam = 0. ; qsf = 0. ; rho_b = 0.
     allocate(R_psi(nr, nt), Z_psi(nr, nt))
     R_psi = 0.  ; Z_psi = 0.
 !    allocate(B_psi(nr, nt))

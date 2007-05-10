@@ -15,7 +15,7 @@ contains
     character(len=40), intent(in) :: filename
     character(len=80) :: line
     integer :: i
-    open(1,file=filename,status='unknown')
+    open(1,file=trim(filename),status='unknown')
     do i=1,7
        read(1,fmt='(a80)') line
     enddo
@@ -167,6 +167,7 @@ contains
     filename = eqfile(1:i)
 ! read GS2D datafile
     call read_gs2d(filename)
+
     nw=nr ; nh=nz
     nwb = nw * big
     nhb = nh * big

@@ -48,6 +48,7 @@ module nonlinear_terms
 contains
   
   subroutine init_nonlinear_terms 
+    use mp, only: proc0
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0, nx, ny, akx, aky
     use le_grids, only: init_le_grids, nlambda, negrid
@@ -188,7 +189,7 @@ contains
   end subroutine add_nonlinear_terms
 
   subroutine add_nl (g0, g1, g2, phi, apar, aperp, istep, dt_cfl, bd, fexp)
-    use mp, only: max_allreduce
+    use mp, only: max_allreduce, proc0
     use theta_grid, only: ntgrid, kxfac
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use gs2_layouts, only: accelx_lo, yxf_lo

@@ -7,6 +7,7 @@ module antenna
 !! init_antenna should be called once per run
 !! antenna_amplitudes provides the necessary info per time step
 !!
+!! added terms needed to calculate heating by antenna (apar_old, apar_new)
 !!
 !! two kinds of namelists should be added to the input file:
 !! 
@@ -30,16 +31,20 @@ module antenna
   implicit none
   complex :: w_antenna
   complex, dimension(:), allocatable :: a_ant, b_ant, w_stir
+  complex, dimension (:,:,:), allocatable :: apar_old, apar_new
   integer, dimension(:), allocatable :: kx_stir, ky_stir, kz_stir
-  real :: amplitude
+  real :: amplitude, t0, w_dot
   integer :: nk_stir, out_unit
   logical :: no_driver = .false.
   logical :: write_antenna = .false.
   logical, dimension (:), allocatable :: trav
   logical :: ant_off = .false.
+  real :: beta_s
+  complex :: wtmp
 
   private
-  public :: init_antenna, antenna_amplitudes, dump_ant_amp
+  public :: init_antenna, dump_ant_amp, amplitude
+  public :: antenna_w, antenna_apar, antenna_amplitudes
 
 contains
 
@@ -49,7 +54,6 @@ contains
     use theta_grid, only: gradpar
     implicit none
     logical, save :: initialized = .false.
-    real :: beta_s
     integer :: i
 
     if (initialized) return
@@ -86,9 +90,11 @@ contains
     integer :: kx, ky, kz, i, unit, in_file
     logical :: exist, travel
 
-    namelist /driver/ amplitude, w_antenna, nk_stir, write_antenna, ant_off
+    namelist /driver/ amplitude, w_antenna, nk_stir, write_antenna, ant_off, w_dot, t0
     namelist /stir/ kx, ky, kz, travel, a, b
 
+    t0 = -1.
+    w_dot = 0.
     w_antenna = (1., 0.0)
     amplitude = 0.
     nk_stir = 1
@@ -144,6 +150,8 @@ contains
     end if
 
     call broadcast (w_antenna)
+    call broadcast (w_dot)
+    call broadcast (t0)
     call broadcast (amplitude)
     call broadcast (nk_stir)
     call broadcast (write_antenna)
@@ -172,7 +180,7 @@ contains
     use gs2_time, only: simdt, stime
     use kt_grids, only: naky, ntheta0, reality
     use run_parameters, only: tnorm
-    use theta_grid, only: theta, ntgrid
+    use theta_grid, only: theta, ntgrid, gradpar
     use ran
     use constants
 
@@ -180,11 +188,28 @@ contains
     complex :: force_a, force_b
     real :: dt, sigma, time
     integer :: i, it, ik
-    
+    logical, save :: first = .true.
+
     if (no_driver) return
+
+    if (first) then
+       allocate (apar_old(-ntgrid:ntgrid,ntheta0,naky)) ; apar_old = 0.
+       allocate (apar_new(-ntgrid:ntgrid,ntheta0,naky)) ; apar_new = 0.
+       first = .false.
+    end if
 
     dt = simdt()/tnorm
     time = stime()/tnorm
+
+    if (time > t0) then       
+       wtmp = w_antenna + w_dot*(time-t0)
+    else
+       wtmp = w_antenna
+    end if
+
+    do i = 1, nk_stir
+       w_stir(i) = gradpar(0)*kz_stir(i)*sqrt(2./beta_s) * (w_antenna + w_dot*(time-t0))
+    end do
 
     apar = 0.
 
@@ -192,6 +217,9 @@ contains
        
        it = 1 + mod(kx_stir(i)+ntheta0,ntheta0)
        ik = 1 + mod(ky_stir(i)+naky,naky)
+
+       apar_old (:,it,ik) = apar_old (:,it,ik) &
+            + (a_ant(i)+b_ant(i))/sqrt(2.)*exp(zi*kz_stir(i)*theta) 
 
        sigma = sqrt(12.*abs(aimag(w_stir(i)))/dt)*amplitude
 
@@ -214,22 +242,60 @@ contains
             + (a_ant(i)+b_ant(i))/sqrt(2.)*exp(zi*kz_stir(i)*theta) 
 
        if (write_antenna) then
-         if (proc0) write(out_unit, fmt='(7(1x,e13.6))') &
+         if (proc0) write(out_unit, fmt='(8(1x,e13.6))') &
 	 & time, real((a_ant(i)+b_ant(i))/sqrt(2.)), &
          &     aimag((a_ant(i)+b_ant(i))/sqrt(2.)),real(a_ant(i)), aimag(a_ant(i)), &
-         &     real(b_ant(i)), aimag(b_ant(i))
+         &     real(b_ant(i)), aimag(b_ant(i)), real(wtmp)
        end if
     end do
 
     if (reality) then
        apar(:,1,1) = 0.0
+       apar_old(:,1,1) = 0.0
        
        do it = 1, ntheta0/2
           apar(:,it+(ntheta0+1)/2,1) = conjg(apar(:,(ntheta0+1)/2+1-it,1))
+          apar_old(:,it+(ntheta0+1)/2,1) = conjg(apar_old(:,(ntheta0+1)/2+1-it,1))
        enddo
     end if
 
+    apar_new = apar
+
   end subroutine antenna_amplitudes
+
+  subroutine antenna_apar (kperp2, j_ext)
+
+! this routine returns time and space-centered (kperp**2 * A_ext)
+
+    use gs2_time, only: simdt, stime
+    use kt_grids, only: naky, ntheta0
+    use run_parameters, only: tnorm, tunits
+    use theta_grid, only: theta, ntgrid, gradpar
+    use ran
+    use constants
+
+    complex, dimension (-ntgrid:,:,:) :: j_ext
+    real, dimension (-ntgrid:,:,:) :: kperp2
+    integer :: ik, it, ig
+
+    do ik = 1, naky
+       do it = 1, ntheta0
+          do ig = -ntgrid, ntgrid-1
+             j_ext(ig,it,ik) = 0.25* &
+                  (kperp2(ig+1,it,ik)*(apar_new(ig+1,it,ik)+apar_old(ig+1,it,ik)) &
+                  +kperp2(ig,  it,ik)*(apar_new(ig,  it,ik)+apar_old(ig,  it,ik)))
+          end do
+       end do
+    end do
+    
+  end subroutine antenna_apar
+
+  function antenna_w ()
+    complex :: antenna_w
+
+    antenna_w = wtmp
+
+  end function antenna_w
 
   subroutine dump_ant_amp
     use gs2_time, only: simdt, stime

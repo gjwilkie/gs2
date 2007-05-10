@@ -7,11 +7,12 @@ module geometry
   private :: bgrad, root, fluxavg
 
   real, allocatable, dimension(:) :: grho, theta, bmag, gradpar, &
-       cvdrift, cvdrift0, gbdrift, gbdrift0, gds2, gds21, gds22, jacob
+       cvdrift, cvdrift0, gbdrift, gbdrift0, gds2, gds21, gds22, jacob, &
+       Rplot, Zplot, Rprime, Zprime, aplot, aprime
   
   real :: rhoc, rmaj, r_geo, shift, dbetadrho, kxfac
   real :: qinp, shat, akappa, akappri, tri, tripri, dpressdrho
-  real :: delrho, rmin, rmax
+  real :: delrho, rmin, rmax, qsf
   
   real :: s_hat_input, p_prime_input, invLp_input, beta_prime_input, &
        alpha_input, dp_mult
@@ -29,8 +30,7 @@ module geometry
   real :: rpmin, rpmax, ak0
   
   integer :: isym, ismooth, k1, k2, big
-  integer :: eqinit = 0
-!  integer :: eqinit = 1   ! older version had this line.  5.26.02
+  integer :: eqinit = 1
   
   logical :: gen_eq, vmom_eq, efit_eq, ppl_eq, local_eq
   logical :: in_nt, writelots, equal_arc, dfit_eq, mds, idfit_eq, gs2d_eq
@@ -189,7 +189,8 @@ contains
 
     character*1 :: char
     integer :: i, j, k, itot, nthg, n
-    
+
+        
 !     compute the initial constants
     pi=2.*acos(0.)
     
@@ -229,7 +230,7 @@ contains
        if(.not.allocated(gds22)) call alloc_module_arrays(ntgrid)
        call alloc_local_arrays(ntgrid)
     endif
-    
+
     select case (iflux)
        case (0)
           avgrmid=1.
@@ -246,6 +247,7 @@ contains
              call tdef(nthg)
           else if(transp_eq) then
              ppl_eq = .true.
+             write (*,*) 'eqfile = ',eqfile
              call teqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
              call tdef(nthg)
           else if(efit_eq) then
@@ -669,19 +671,19 @@ contains
        Bmod(nth)=Bmod(-nth)
     endif
 
-!    if(itor /= 0) then
+    if(itor /= 0) then
 !       call periodic_copy(bmagtg, 0.) 
 !       bmag = bmagtg
        if(nperiod > 1 ) call periodic_copy(Bmod, 0.) 
        bmag = Bmod
-!    else
-!       do k= -nperiod+1,nperiod-1
-!          do i=-nth,nth
-!             itot= i+k*ntheta
-!             bmag(itot)= 1./(1.+rgrid(i)*cos(theta(i))/rmaj)
-!          enddo
-!       enddo
-!    endif
+    else
+       do k= -nperiod+1,nperiod-1
+          do i=-nth,nth
+             itot= i+k*ntheta
+             bmag(itot)= 1./(1.+rgrid(i)*cos(theta(i))/rmaj)
+          enddo
+       enddo
+    endif
 
     if(isym == 1) call sym(bmag, 0, ntgrid)
 
@@ -756,11 +758,14 @@ contains
     write(25,*) rhoc, f_trap(bmag(-nth:nth))
 
     kxfac = abs(qval/rhoc/drhodpsin)
+    qsf = qval
     dum=qfun(0.5)
     if(eqinit >= 1) eqinit=0
       
+    call plotdata (rgrid, seik, grads, dpsidrho)
+
     call dealloc_local_arrays
-    
+
 contains
 
   subroutine alloc_local_arrays(n)
@@ -792,7 +797,7 @@ contains
          rmajor     (-n:n), &
          ans        (-n:n), &
          ds         (-n:n), &
-         arcl       (-n:n)  )
+         arcl       (-n:n))
 
     allocate(thgrad (-n:n,2), &
          rpgrad     (-n:n,2), &
@@ -832,7 +837,7 @@ contains
          rmajor    , &
          ans       , &
          ds        , &
-         arcl        )
+         arcl      )
 
     deallocate(thgrad, &
          rpgrad    , &
@@ -1066,9 +1071,9 @@ end subroutine eikcoefs
     real, intent (in) :: r, thet
     real :: invRfun
 
-!    if(itor == 0) then
-!       invRfun=1./rmaj
-!    else
+    if(itor == 0) then
+       invRfun=1./rmaj
+    else
        if(gen_eq)  invRfun =  geq_invR (r, thet)
        if(ppl_eq)  invRfun =  peq_invR (r, thet)
        if(vmom_eq) invRfun =  veq_invR (r, thet)
@@ -1076,7 +1081,7 @@ end subroutine eikcoefs
        if(dfit_eq) invRfun =  deq_invR (r, thet)
        if(idfit_eq)invRfun = ideq_invR (r, thet)
        if(local_eq)invRfun =  leq_invR (r, thet)
-!    endif
+    endif
     
   end function invRfun
 
@@ -1092,8 +1097,6 @@ end subroutine eikcoefs
          dummy, dummy1, curve
     real, dimension (-ntgrid:ntgrid, 2) :: pgrad, igrad, bgrad1
     real, dimension (-ntgrid:ntgrid) :: gbdrift1, gbdrift2, cvdrift1, cvdrift2
-
-    
     real, dimension (2*ntgrid + 1) :: dumdum1, dumdum2
 
     real :: dum
@@ -1102,17 +1105,17 @@ end subroutine eikcoefs
 
     ndum = 2*nth + 1
 
-!    if (itor == 0) then
-!       gbdrift = (-sin(theta)*gradstot(:,1)-cos(theta)*gradstot(:,2))/rmaj
-!       gbdrift=2.*dpsidrho*gbdrift
+    if (itor == 0) then
+       gbdrift = (-sin(theta)*gradstot(:,1)-cos(theta)*gradstot(:,2))/rmaj
+       gbdrift=2.*dpsidrho*gbdrift
 
-!       gbdrift0=(-sin(theta)*gradrptot(:,1)-cos(theta)*gradrptot(:,2))/rmaj
-!       gbdrift0=2.*dpsidrho*gbdrift0*dqdrp
+       gbdrift0=(-sin(theta)*gradrptot(:,1)-cos(theta)*gradrptot(:,2))/rmaj
+       gbdrift0=2.*dpsidrho*gbdrift0*dqdrp
 
-!       cvdrift=gbdrift
-!       cvdrift0=gbdrift0      
-!
-!    else
+       cvdrift=gbdrift
+       cvdrift0=gbdrift0      
+
+    else
        char='B'
        if(bishop >= 1) then
           call bishop_gradB(rgrid, Bmod, Bpolmag, Rpol, th_bish, ltheta, bgrad1)
@@ -1180,7 +1183,7 @@ end subroutine eikcoefs
              cvdrift0(itot)=2.*dpsidrho*cvdrift2(itot)*dqdrp/bmod(i)**2
           enddo
        enddo
-!    endif
+    endif
 
     if(isym == 1) then
        call sym(gbdrift, 0, ntgrid)
@@ -2479,7 +2482,13 @@ end subroutine geofax
          gds2       (-n:n), &
          gds21      (-n:n), &
          gds22      (-n:n), &
-         jacob      (-n:n)  )
+         jacob      (-n:n), &
+         Rplot      (-n:n), &
+         Zplot      (-n:n), &
+         aplot      (-n:n), &
+         Rprime     (-n:n), &
+         Zprime     (-n:n), &
+         aprime     (-n:n))
 
   end subroutine alloc_module_arrays
 
@@ -2962,6 +2971,49 @@ end subroutine geofax
     f_trap = 0.75*ftu + 0.25*ftl 
     
   end function f_trap
+
+  subroutine plotdata (rgrid, seik, grads, dpsidrho)
+
+    real, dimension (-ntgrid:), intent (in) :: rgrid, seik
+    real, dimension (-ntgrid:,:), intent (in) :: grads
+    real, intent (in) :: dpsidrho
+
+    real :: rplus, rminus, dr
+    integer :: i
+!
+! At the present flux surface, calculate these three functions 
+! as a function of theta, together with their derivates with 
+! respect to rho: 
+! 
+! R, Z, alpha-phi
+!
+! Call these variables
+!
+! Rplot, Zplot, aplot
+!
+! and their derivatives:
+!
+! Rprime, Zprime, aprime
+!    
+! BD: bug??
+! Is this correct for EFIT data?  Need to check
+!  
+    do i=-ntgrid,ntgrid
+       Rplot(i) = Rpos(rgrid(i), theta(i))
+       Zplot(i) = Zpos(rgrid(i), theta(i))
+       aplot(i) = seik(i)
+    end do
+
+    do i=-ntgrid,ntgrid
+       rplus  = rgrid(i)*(1.+delrho)
+       rminus = rgrid(i)*(1.-delrho)
+       dr = 2.*delrho*rgrid(i)
+       Rprime(i) = (Rpos(rplus, theta(i))-Rpos(rminus, theta(i)))/dr
+       Zprime(i) = (Zpos(rplus, theta(i))-Zpos(rminus, theta(i)))/dr
+       aprime(i) = grads(i,1)*dpsidrho
+    end do
+
+  end subroutine plotdata
 
 
 end module geometry

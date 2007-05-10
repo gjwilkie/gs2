@@ -258,14 +258,14 @@ contains
     namelist /layouts_knobs/ layout, local_field_solve
 
     local_field_solve = .false.
-    layout = 'lexys'
+    layout = 'lxyes'
     in_file=input_unit_exist("layouts_knobs", exist)
     if (exist) read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
 
   end subroutine read_parameters
     
   subroutine broadcast_results
-    use mp, only: proc0, broadcast
+    use mp, only: broadcast
     implicit none
 
     call broadcast (layout)
@@ -491,7 +491,7 @@ contains
     
   end subroutine init_dist_fn_layouts
 
-  pure function is_idx_g (lo, i)
+  elemental function is_idx_g (lo, i)
     implicit none
     integer :: is_idx_g
     type (g_layout_type), intent (in) :: lo
@@ -512,7 +512,7 @@ contains
 
   end function is_idx_g
 
-  pure function il_idx_g (lo, i)
+  elemental function il_idx_g (lo, i)
     implicit none
     integer :: il_idx_g
     type (g_layout_type), intent (in) :: lo
@@ -533,7 +533,7 @@ contains
 
   end function il_idx_g
 
-  pure function ie_idx_g (lo, i)
+  elemental function ie_idx_g (lo, i)
     implicit none
     integer :: ie_idx_g
     type (g_layout_type), intent (in) :: lo
@@ -554,7 +554,7 @@ contains
 
   end function ie_idx_g
 
-  pure function it_idx_g (lo, i)
+  elemental function it_idx_g (lo, i)
     implicit none
     integer :: it_idx_g
     type (g_layout_type), intent (in) :: lo
@@ -575,7 +575,7 @@ contains
 
   end function it_idx_g
 
-  pure function ik_idx_g (lo, i)
+  elemental function ik_idx_g (lo, i)
     implicit none
     integer :: ik_idx_g
     type (g_layout_type), intent (in) :: lo
@@ -596,7 +596,7 @@ contains
 
   end function ik_idx_g
 
-  pure function proc_id_g (lo, i)
+  elemental function proc_id_g (lo, i)
     implicit none
     integer :: proc_id_g
     type (g_layout_type), intent (in) :: lo
@@ -604,7 +604,7 @@ contains
     proc_id_g = i/lo%blocksize
   end function proc_id_g
 
-  pure function idx_g (lo, ik, it, il, ie, is)
+  elemental function idx_g (lo, ik, it, il, ie, is)
     implicit none
     integer :: idx_g
     type (g_layout_type), intent (in) :: lo
@@ -624,7 +624,7 @@ contains
     end select
   end function idx_g
 
-  pure function idx_local_g (lo, ik, it, il, ie, is)
+  elemental function idx_local_g (lo, ik, it, il, ie, is)
     implicit none
     logical :: idx_local_g
     type (g_layout_type), intent (in) :: lo
@@ -633,7 +633,7 @@ contains
     idx_local_g = idx_local(lo, idx(lo, ik, it, il, ie, is))
   end function idx_local_g
 
-  pure function ig_local_g (lo, ig)
+  elemental function ig_local_g (lo, ig)
     implicit none
     logical :: ig_local_g
     type (g_layout_type), intent (in) :: lo
@@ -646,7 +646,7 @@ contains
 ! Once-integrated distribution function layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  pure function is_idx_gint (lo, i)
+  elemental function is_idx_gint (lo, i)
     implicit none
     integer :: is_idx_gint
     type (gint_layout_type), intent (in) :: lo
@@ -666,7 +666,7 @@ contains
     end select
   end function is_idx_gint
 
-  pure function ie_idx_gint (lo, i)
+  elemental function ie_idx_gint (lo, i)
     implicit none
     integer :: ie_idx_gint
     type (gint_layout_type), intent (in) :: lo
@@ -687,7 +687,7 @@ contains
 
   end function ie_idx_gint
 
-  pure function it_idx_gint (lo, i)
+  elemental function it_idx_gint (lo, i)
     implicit none
     integer :: it_idx_gint
     type (gint_layout_type), intent (in) :: lo
@@ -707,7 +707,7 @@ contains
     end select
   end function it_idx_gint
 
-  pure function ik_idx_gint (lo, i)
+  elemental function ik_idx_gint (lo, i)
     implicit none
     integer :: ik_idx_gint
     type (gint_layout_type), intent (in) :: lo
@@ -727,7 +727,7 @@ contains
     end select
   end function ik_idx_gint
 
-  pure function proc_id_gint (lo, i)
+  elemental function proc_id_gint (lo, i)
     implicit none
     integer :: proc_id_gint
     type (gint_layout_type), intent (in) :: lo
@@ -736,7 +736,7 @@ contains
     proc_id_gint = i/lo%blocksize
   end function proc_id_gint
 
-  pure function idx_gint (lo, ik, it, ie, is)
+  elemental function idx_gint (lo, ik, it, ie, is)
     implicit none
     integer :: idx_gint
     type (gint_layout_type), intent (in) :: lo
@@ -756,7 +756,7 @@ contains
     end select
   end function idx_gint
 
-  pure function idx_local_gint (lo, ik, it, ie, is)
+  elemental function idx_local_gint (lo, ik, it, ie, is)
     implicit none
     logical :: idx_local_gint
     type (gint_layout_type), intent (in) :: lo
@@ -765,7 +765,7 @@ contains
     idx_local_gint = idx_local(lo, idx(lo, ik, it, ie, is))
   end function idx_local_gint
 
-  pure function ig_local_gint (lo, ig)
+  elemental function ig_local_gint (lo, ig)
     implicit none
     logical :: ig_local_gint
     type (gint_layout_type), intent (in) :: lo
@@ -778,7 +778,7 @@ contains
 ! Twice-integrated distribution function layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  pure function is_idx_geint (lo, i)
+  elemental function is_idx_geint (lo, i)
     implicit none
     integer :: is_idx_geint
     type (geint_layout_type), intent (in) :: lo
@@ -799,7 +799,7 @@ contains
 
   end function is_idx_geint
 
-  pure function it_idx_geint (lo, i)
+  elemental function it_idx_geint (lo, i)
     implicit none
     integer :: it_idx_geint
     type (geint_layout_type), intent (in) :: lo
@@ -819,7 +819,7 @@ contains
     end select
   end function it_idx_geint
 
-  pure function ik_idx_geint (lo, i)
+  elemental function ik_idx_geint (lo, i)
     implicit none
     integer :: ik_idx_geint
     type (geint_layout_type), intent (in) :: lo
@@ -839,7 +839,7 @@ contains
     end select
   end function ik_idx_geint
 
-  pure function proc_id_geint (lo, i)
+  elemental function proc_id_geint (lo, i)
     implicit none
     integer :: proc_id_geint
     type (geint_layout_type), intent (in) :: lo
@@ -848,7 +848,7 @@ contains
     proc_id_geint = i/lo%blocksize
   end function proc_id_geint
 
-  pure function idx_geint (lo, ik, it, is)
+  elemental function idx_geint (lo, ik, it, is)
     implicit none
     integer :: idx_geint
     type (geint_layout_type), intent (in) :: lo
@@ -868,7 +868,7 @@ contains
     end select
   end function idx_geint
 
-  pure function idx_local_geint (lo, ik, it, is)
+  elemental function idx_local_geint (lo, ik, it, is)
     implicit none
     logical :: idx_local_geint
     type (geint_layout_type), intent (in) :: lo
@@ -877,7 +877,7 @@ contains
     idx_local_geint = idx_local(lo, idx(lo, ik, it, is))
   end function idx_local_geint
 
-  pure function ig_local_geint (lo, ig)
+  elemental function ig_local_geint (lo, ig)
     implicit none
     logical :: ig_local_geint
     type (geint_layout_type), intent (in) :: lo
@@ -1184,7 +1184,7 @@ contains
 
   end subroutine init_lorentz_layouts
 
-  pure function is_idx_lz (lo, i)
+  elemental function is_idx_lz (lo, i)
     implicit none
     integer :: is_idx_lz
     type (lz_layout_type), intent (in) :: lo
@@ -1205,7 +1205,7 @@ contains
 
   end function is_idx_lz
 
-  pure function ie_idx_lz (lo, i)
+  elemental function ie_idx_lz (lo, i)
     implicit none
     integer :: ie_idx_lz
     type (lz_layout_type), intent (in) :: lo
@@ -1225,7 +1225,7 @@ contains
     end select
   end function ie_idx_lz
 
-  pure function it_idx_lz (lo, i)
+  elemental function it_idx_lz (lo, i)
     implicit none
     integer :: it_idx_lz
     type (lz_layout_type), intent (in) :: lo
@@ -1245,7 +1245,7 @@ contains
     end select
   end function it_idx_lz
 
-  pure function ik_idx_lz (lo, i)
+  elemental function ik_idx_lz (lo, i)
     implicit none
     integer :: ik_idx_lz
     type (lz_layout_type), intent (in) :: lo
@@ -1265,7 +1265,7 @@ contains
     end select
   end function ik_idx_lz
 
-  pure function ig_idx_lz (lo, i)
+  elemental function ig_idx_lz (lo, i)
     implicit none
     integer :: ig_idx_lz
     type (lz_layout_type), intent (in) :: lo
@@ -1285,7 +1285,7 @@ contains
     end select
   end function ig_idx_lz
 
-  pure function idx_lz (lo, ig, ik, it, ie, is)
+  elemental function idx_lz (lo, ig, ik, it, ie, is)
     implicit none
     integer :: idx_lz
     type (lz_layout_type), intent (in) :: lo
@@ -1311,7 +1311,7 @@ contains
 
   end function idx_lz
 
-  pure function proc_id_lz (lo, i)
+  elemental function proc_id_lz (lo, i)
     implicit none
     integer :: proc_id_lz
     type (lz_layout_type), intent (in) :: lo
@@ -1325,7 +1325,7 @@ contains
 
   end function proc_id_lz
 
-  pure function idx_local_lz (lo, ig, ik, it, ie, is)
+  elemental function idx_local_lz (lo, ig, ik, it, ie, is)
     implicit none
     logical :: idx_local_lz
     type (lz_layout_type), intent (in) :: lo
@@ -1334,7 +1334,7 @@ contains
     idx_local_lz = idx_local(lo, idx(lo, ig, ik, it, ie, is))
   end function idx_local_lz
 
-  pure function ig_local_lz (lo, ig)
+  elemental function ig_local_lz (lo, ig)
     implicit none
     logical :: ig_local_lz
     type (lz_layout_type), intent (in) :: lo
@@ -1349,7 +1349,7 @@ contains
 
   subroutine init_x_transform_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
-    use mp, only: iproc, nproc, proc0, barrier, finish_mp
+    use mp, only: iproc, nproc
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
     logical, save :: initialized = .false.
@@ -1376,7 +1376,6 @@ contains
     xxf_lo%ulim_world = naky*(2*ntgrid+1)*2*nlambda*negrid*nspec - 1
 
     call check_accel (ntheta0, naky, nlambda, negrid, nspec, nblock)
-
     if (accel_lxyes) then  
 
        xxf_lo%groupblocksize = (nblock-1)/nproc + 1
@@ -1420,7 +1419,7 @@ contains
 
   end subroutine init_x_transform_layouts
 
-  pure function is_idx_xxf (lo, i)
+  elemental function is_idx_xxf (lo, i)
     implicit none
     integer :: is_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
@@ -1441,7 +1440,7 @@ contains
 
   end function is_idx_xxf
 
-  pure function ie_idx_xxf (lo, i)
+  elemental function ie_idx_xxf (lo, i)
     implicit none
     integer :: ie_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
@@ -1461,7 +1460,7 @@ contains
     end select
   end function ie_idx_xxf
 
-  pure function il_idx_xxf (lo, i)
+  elemental function il_idx_xxf (lo, i)
     implicit none
     integer :: il_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
@@ -1481,7 +1480,7 @@ contains
     end select
   end function il_idx_xxf
 
-  pure function isign_idx_xxf (lo, i)
+  elemental function isign_idx_xxf (lo, i)
     implicit none
     integer :: isign_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
@@ -1501,7 +1500,7 @@ contains
     end select
   end function isign_idx_xxf
 
-  pure function ig_idx_xxf (lo, i)
+  elemental function ig_idx_xxf (lo, i)
     implicit none
     integer :: ig_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
@@ -1521,7 +1520,7 @@ contains
     end select
   end function ig_idx_xxf
 
-  pure function ik_idx_xxf (lo, i)
+  elemental function ik_idx_xxf (lo, i)
     implicit none
     integer :: ik_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
@@ -1541,7 +1540,7 @@ contains
     end select
   end function ik_idx_xxf
 
-  pure function idx_xxf (lo, ig, isign, ik, il, ie, is)
+  elemental function idx_xxf (lo, ig, isign, ik, il, ie, is)
     implicit none
     integer :: idx_xxf
     type (xxf_layout_type), intent (in) :: lo
@@ -1566,7 +1565,7 @@ contains
     end select
   end function idx_xxf
 
-  pure function proc_id_xxf (lo, i)
+  elemental function proc_id_xxf (lo, i)
     implicit none
     integer :: proc_id_xxf
     type (xxf_layout_type), intent (in) :: lo
@@ -1580,7 +1579,7 @@ contains
 
   end function proc_id_xxf
 
-  pure function idx_local_xxf (lo, ig, isign, ik, il, ie, is)
+  elemental function idx_local_xxf (lo, ig, isign, ik, il, ie, is)
     implicit none
     logical :: idx_local_xxf
     type (xxf_layout_type), intent (in) :: lo
@@ -1588,7 +1587,7 @@ contains
     idx_local_xxf = idx_local (lo, idx(lo, ig, isign, ik, il, ie, is))
   end function idx_local_xxf
 
-  pure function ig_local_xxf (lo, i)
+  elemental function ig_local_xxf (lo, i)
     implicit none
     logical ig_local_xxf
     type (xxf_layout_type), intent (in) :: lo
@@ -1596,7 +1595,7 @@ contains
     ig_local_xxf = lo%iproc == proc_id(lo, i)
   end function ig_local_xxf
 
-  pure function xxf_ky_is_zero (lo, i)
+  elemental function xxf_ky_is_zero (lo, i)
     implicit none
     logical xxf_ky_is_zero
     type (xxf_layout_type), intent (in) :: lo
@@ -1682,7 +1681,7 @@ contains
 
   end subroutine init_y_transform_layouts
 
-  pure function is_idx_yxf (lo, i)
+  elemental function is_idx_yxf (lo, i)
     implicit none
     integer :: is_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
@@ -1702,7 +1701,7 @@ contains
     end select
   end function is_idx_yxf
 
-  pure function ie_idx_yxf (lo, i)
+  elemental function ie_idx_yxf (lo, i)
     implicit none
     integer :: ie_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
@@ -1722,7 +1721,7 @@ contains
     end select
   end function ie_idx_yxf
 
-  pure function il_idx_yxf (lo, i)
+  elemental function il_idx_yxf (lo, i)
     implicit none
     integer :: il_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
@@ -1742,7 +1741,7 @@ contains
     end select
   end function il_idx_yxf
 
-  pure function isign_idx_yxf (lo, i)
+  elemental function isign_idx_yxf (lo, i)
     implicit none
     integer :: isign_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
@@ -1762,7 +1761,7 @@ contains
     end select
   end function isign_idx_yxf
 
-  pure function ig_idx_yxf (lo, i)
+  elemental function ig_idx_yxf (lo, i)
     implicit none
     integer :: ig_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
@@ -1782,7 +1781,7 @@ contains
     end select
   end function ig_idx_yxf
 
-  pure function it_idx_yxf (lo, i)
+  elemental function it_idx_yxf (lo, i)
     implicit none
     integer :: it_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
@@ -1802,7 +1801,7 @@ contains
     end select
   end function it_idx_yxf
 
-  pure function idx_yxf (lo, ig, isign, it, il, ie, is)
+  elemental function idx_yxf (lo, ig, isign, it, il, ie, is)
     implicit none
     integer :: idx_yxf
     type (yxf_layout_type), intent (in) :: lo
@@ -1811,7 +1810,7 @@ contains
     select case (layout)
     case ('yxels')
        idx_yxf = it-1 + lo%nx*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
-            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+            + lo%nsign*(ie-1 + lo%negrid*(il-1 + lo%nlambda*(is-1)))))
     case ('yxles')
        idx_yxf = it-1 + lo%nx*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
             + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
@@ -1827,7 +1826,7 @@ contains
     end select
   end function idx_yxf
 
-  pure function proc_id_yxf (lo, i)
+  elemental function proc_id_yxf (lo, i)
     implicit none
     integer :: proc_id_yxf
     type (yxf_layout_type), intent (in) :: lo
@@ -1840,7 +1839,7 @@ contains
     end if
   end function proc_id_yxf
 
-  pure function idx_local_yxf (lo, ig, isign, it, il, ie, is)
+  elemental function idx_local_yxf (lo, ig, isign, it, il, ie, is)
     implicit none
     logical :: idx_local_yxf
     type (yxf_layout_type), intent (in) :: lo
@@ -1848,7 +1847,7 @@ contains
     idx_local_yxf = idx_local (lo, idx(lo, ig, isign, it, il, ie, is))
   end function idx_local_yxf
 
-  pure function ig_local_yxf (lo, i)
+  elemental function ig_local_yxf (lo, i)
     implicit none
     logical ig_local_yxf
     type (yxf_layout_type), intent (in) :: lo
@@ -1926,7 +1925,7 @@ contains
 
   end subroutine init_accel_transform_layouts
 
-  pure function it_idx_accel (lo, i)
+  elemental function it_idx_accel (lo, i)
     implicit none
     integer :: it_idx_accel
     type (accel_layout_type), intent (in) :: lo
@@ -1934,7 +1933,7 @@ contains
     it_idx_accel = 1 + mod((i - lo%llim_world)/lo%ndky, lo%nx)
   end function it_idx_accel
 
-  pure function ik_idx_accel (lo, i)
+  elemental function ik_idx_accel (lo, i)
     implicit none
     integer :: ik_idx_accel
     type (accel_layout_type), intent (in) :: lo
@@ -1942,7 +1941,7 @@ contains
     ik_idx_accel = 1 + mod(i - lo%llim_world, lo%ndky)
   end function ik_idx_accel
 
-  pure function dealiasing (lo, ia)
+  elemental function dealiasing (lo, ia)
     implicit none
     logical dealiasing
     type (accel_layout_type), intent (in) :: lo
@@ -2003,7 +2002,7 @@ contains
          ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
   end subroutine gidx2lzidx
 
-  pure subroutine gidx2gintidx (g_lo, iglo, gint_lo, il, igint)
+  elemental subroutine gidx2gintidx (g_lo, iglo, gint_lo, il, igint)
     implicit none
     type (g_layout_type), intent (in) :: g_lo
     integer, intent (in) :: iglo
@@ -2016,7 +2015,7 @@ contains
          ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
   end subroutine gidx2gintidx
 
-  pure subroutine gintidx2geidx (gint_lo, igint, ie, geint_lo, igeint)
+  elemental subroutine gintidx2geidx (gint_lo, igint, ie, geint_lo, igeint)
     implicit none
     type (gint_layout_type), intent (in) :: gint_lo
     integer, intent (in) :: igint
@@ -2030,7 +2029,7 @@ contains
 
   end subroutine gintidx2geidx
 
-  pure subroutine gidx2xxfidx (ig, isign, iglo, g_lo, xxf_lo, it, ixxf)
+  elemental subroutine gidx2xxfidx (ig, isign, iglo, g_lo, xxf_lo, it, ixxf)
     implicit none
     integer, intent (in) :: ig, isign, iglo
     type (g_layout_type), intent (in) :: g_lo
@@ -2046,7 +2045,7 @@ contains
          ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
   end subroutine gidx2xxfidx
 
-  pure subroutine xxfidx2gidx (it, ixxf, xxf_lo, g_lo, ig, isign, iglo)
+  elemental subroutine xxfidx2gidx (it, ixxf, xxf_lo, g_lo, ig, isign, iglo)
     implicit none
     integer, intent (in) :: it, ixxf
     type (xxf_layout_type), intent (in) :: xxf_lo
@@ -2071,7 +2070,7 @@ contains
          ie_idx(xxf_lo,ixxf), is_idx(xxf_lo,ixxf))
   end subroutine xxfidx2gidx
 
-  pure subroutine xxfidx2yxfidx (it, ixxf, xxf_lo, yxf_lo, ik, iyxf)
+  elemental subroutine xxfidx2yxfidx (it, ixxf, xxf_lo, yxf_lo, ik, iyxf)
     implicit none
     integer, intent (in) :: it, ixxf
     type (xxf_layout_type), intent (in) :: xxf_lo
@@ -2083,7 +2082,7 @@ contains
          it, il_idx(xxf_lo,ixxf), ie_idx(xxf_lo,ixxf), is_idx(xxf_lo,ixxf))
   end subroutine xxfidx2yxfidx
 
-  pure subroutine yxfidx2xxfidx (ik, iyxf, yxf_lo, xxf_lo, it, ixxf)
+  elemental subroutine yxfidx2xxfidx (ik, iyxf, yxf_lo, xxf_lo, it, ixxf)
     implicit none
     integer, intent (in) :: ik, iyxf
     type (yxf_layout_type), intent (in) :: yxf_lo

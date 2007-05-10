@@ -53,7 +53,7 @@ program ball
 
   eqinit = 1       ! Mike K. codes do not have this variable.
 
-  diffscheme=0.33; nbeta = 1; beta_p1 = -1.; beta_p2 = -1.
+  diffscheme=0.33; nbeta = 1; beta_p1 = 0.; beta_p2 = 0.
 
       
 !     read in data
@@ -111,7 +111,8 @@ program ball
   
 !     compute the theta grid
 
-  if((.not. vmom_eq) .and. (.not. gen_eq) .and. (.not. ppl_eq)) then
+  if((.not. vmom_eq) .and. (.not. gen_eq) .and. (.not. ppl_eq) &
+       .and. (.not. transp_eq)) then
      call init_theta(ntheta)
      ntgrid = (2*nperiod - 1)*(ntheta/2)
      allocate(psi(-ntgrid:ntgrid))
@@ -164,13 +165,14 @@ program ball
      bprev=beta_prime
      pprev=psiend
      
-     write(6,998) beta_prime,iunstable,stabmhd,psiend,max(abs(cflmax),abs(cflmin))
+!     write(6,998) beta_prime,iunstable,stabmhd,psiend,max(abs(cflmax),abs(cflmin))
+     write(6,998) beta_prime,iunstable,stabmhd,psiend,dp_mult
 
-     do i=-ntgrid,ntgrid
-        write(29,996) theta(i),psi(i), &
-             gds2(i)*gradpar(i)/bmag(i),beta_prime*cvdrift(i)/(2.*bmag(i)*gradpar(i)), &
-		gds2(i), cvdrift(i), bmag(i)
-     enddo
+!     do i=-ntgrid,ntgrid
+!        write(29,996) theta(i),psi(i), &
+!             gds2(i)*gradpar(i)/bmag(i),beta_prime*cvdrift(i)/(2.*bmag(i)*gradpar(i)), &
+!		gds2(i), cvdrift(i), bmag(i)
+!     enddo
   enddo
 
 996  format(10(2x,g15.8))
@@ -231,6 +233,7 @@ subroutine mhdballn(ntgrid,beta_prime,diffscheme,iunstable,psiend,cflmax,cflmin,
      cflmax=max(cflmax,delx(i)**2*ch(i)/gh(i))
      cflmin=min(cflmin,delx(i)**2*ch(i)/gh(i))
   enddo
+
   
   do i=-ntgrid+1, ntgrid-1
      c1(i)=-delx(i+1)*(alpha*c(i)+.5*diffscheme*ch(i+1)) &
@@ -260,6 +263,6 @@ subroutine mhdballn(ntgrid,beta_prime,diffscheme,iunstable,psiend,cflmax,cflmin,
   do i=-ntgrid+1,ntgrid-1
      if(psi(i)*psi(i+1) <= 0.) iunstable=iunstable+1
   enddo
-  
+
 end subroutine mhdballn
 
