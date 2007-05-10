@@ -13,7 +13,7 @@ module dist_fn_arrays
   real, dimension (:,:,:), allocatable :: vpar
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
-  real, dimension (:,:), allocatable :: aj0, aj1
+  real, dimension (:,:), allocatable :: aj0, aj1, aj0f, aj1f
   ! (-ntgrid:ntgrid, -g-layout-)
 
   ! fieldeq
