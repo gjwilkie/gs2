@@ -2,9 +2,9 @@ module gs2_layouts
   implicit none
   private
 
-  public :: pe_layout
+  public :: pe_layout, layout, local_field_solve
   
-  public :: init_dist_fn_layouts
+  public :: init_dist_fn_layouts, init_gs2_layouts
   public :: g_lo, g_layout_type
   public :: gint_lo, gint_layout_type
   public :: geint_lo, geint_layout_type
@@ -16,13 +16,9 @@ module gs2_layouts
   public :: jf_lo, jf_layout_type
   public :: mj, ij, dj
 
-!  public :: lambda_lo, lambda_layout_type
-!  public :: init_lambda_layouts
-
   public :: init_lorentz_layouts
   public :: lz_lo, lz_layout_type
   public :: gidx2lzidx
-!  public :: gidx2lamidx, lamidx2gintidx
   public :: gidx2gintidx, gintidx2geidx
 
   public :: init_x_transform_layouts, init_y_transform_layouts
@@ -37,6 +33,9 @@ module gs2_layouts
   public :: ig_idx, ik_idx, it_idx, il_idx, ie_idx, is_idx, if_idx, isign_idx
   public :: im_idx, in_idx, ij_idx, ifield_idx
   public :: idx, proc_id, idx_local
+
+  logical :: local_field_solve, accel_lxyes, local
+  character (len=5) :: layout
 
   type :: g_layout_type
      integer :: iproc
@@ -84,23 +83,17 @@ module gs2_layouts
   type :: lz_layout_type
      integer :: iproc
      integer :: ntgrid, naky, ntheta0, negrid, nspec, ng2
-     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
+     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize, gsize
+     integer :: llim_group, ulim_group, igroup, ngroup, nprocset, iset, nset, groupblocksize
   end type lz_layout_type
 
   type (lz_layout_type) :: lz_lo
 
-!  type :: lambda_layout_type
-!     integer :: iproc
-!     integer :: ntgrid, naky, ntheta0, negrid, nspec, ng2
-!     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
-!  end type lambda_layout_type
-!
-!  type (lambda_layout_type) :: lambda_lo
-
   type :: xxf_layout_type
      integer :: iproc
      integer :: ntgrid, nsign, naky, ntheta0, nx, nadd, negrid, nlambda, nspec
-     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
+     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize, gsize
+     integer :: llim_group, ulim_group, igroup, ngroup, nprocset, iset, nset, groupblocksize
   end type xxf_layout_type
 
   type (xxf_layout_type) :: xxf_lo
@@ -108,7 +101,8 @@ module gs2_layouts
   type :: yxf_layout_type
      integer :: iproc
      integer :: ntgrid, nsign, naky, ny, ntheta0, nx, negrid, nlambda, nspec
-     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
+     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize, gsize
+     integer :: llim_group, ulim_group, igroup, ngroup, nprocset, iset, nset, groupblocksize
   end type yxf_layout_type
 
   type (yxf_layout_type) :: yxf_lo
@@ -165,7 +159,6 @@ module gs2_layouts
      module procedure ik_idx_geint
      module procedure ik_idx_jf
      module procedure ik_idx_lz
-!     module procedure ik_idx_lambda
      module procedure ik_idx_xxf
      module procedure ik_idx_accel
   end interface
@@ -176,7 +169,6 @@ module gs2_layouts
      module procedure it_idx_geint
      module procedure it_idx_jf
      module procedure it_idx_lz
-!     module procedure it_idx_lambda
      module procedure it_idx_yxf
      module procedure it_idx_accel
   end interface
@@ -191,7 +183,6 @@ module gs2_layouts
      module procedure ie_idx_g
      module procedure ie_idx_gint
      module procedure ie_idx_lz
-!     module procedure ie_idx_lambda
      module procedure ie_idx_xxf
      module procedure ie_idx_yxf
   end interface
@@ -201,7 +192,6 @@ module gs2_layouts
      module procedure is_idx_gint
      module procedure is_idx_geint
      module procedure is_idx_lz
-!     module procedure is_idx_lambda
      module procedure is_idx_xxf
      module procedure is_idx_yxf
   end interface
@@ -218,7 +208,6 @@ module gs2_layouts
      module procedure proc_id_f
      module procedure proc_id_jf
      module procedure proc_id_lz
-!     module procedure proc_id_lambda
      module procedure proc_id_xxf
      module procedure proc_id_yxf
   end interface
@@ -232,7 +221,6 @@ module gs2_layouts
      module procedure idx_lz
      module procedure idx_xxf
      module procedure idx_yxf
-!     module procedure idx_lambda
   end interface
 
   interface idx_local
@@ -244,10 +232,210 @@ module gs2_layouts
      module procedure idx_local_lz,     ig_local_lz
      module procedure idx_local_xxf,    ig_local_xxf
      module procedure idx_local_yxf,    ig_local_yxf
-!     module procedure idx_local_lambda, ig_local_lambda
   end interface
 
 contains
+
+  subroutine init_gs2_layouts
+    
+    use mp, only: proc0
+    implicit none
+    logical, save :: initialized = .false.
+
+    if (initialized) return
+    initialized = .true.
+    
+    if (proc0) call read_parameters
+    call broadcast_results
+
+  end subroutine init_gs2_layouts
+
+  subroutine read_parameters
+    use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
+    implicit none
+    integer :: in_file
+    logical :: exist
+    namelist /layouts_knobs/ layout, local_field_solve
+
+    local_field_solve = .false.
+    layout = 'lexys'
+    in_file=input_unit_exist("layouts_knobs", exist)
+    if (exist) read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
+
+  end subroutine read_parameters
+    
+  subroutine broadcast_results
+    use mp, only: proc0, broadcast
+    implicit none
+
+    call broadcast (layout)
+    call broadcast (local_field_solve)
+
+  end subroutine broadcast_results
+
+  subroutine check_accel (ntheta0, naky, nlambda, negrid, nspec, nblock)
+
+    use mp, only: nproc
+    implicit none
+    integer, intent (in) :: negrid, nspec, nlambda, naky, ntheta0
+    integer, dimension(:,:), allocatable :: facs
+    integer :: nsfacs, nefacs, nyfacs, nxfacs, nlfacs, nblock
+    integer :: i
+
+    if (.not. layout == 'lxyes') then
+       accel_lxyes = .false.
+       return
+    end if
+
+    accel_lxyes = .true.
+
+    allocate (facs(max(nspec,negrid,naky,ntheta0,nlambda)/2+1,5))
+    call factors (nspec,   nsfacs, facs(:,1))
+    call factors (negrid,  nefacs, facs(:,2))
+    call factors (naky,    nyfacs, facs(:,3))
+    call factors (ntheta0, nxfacs, facs(:,4))
+    call factors (nlambda, nlfacs, facs(:,5))
+    
+!    do i=1,nsfacs-1
+!       if (nproc == facs(i,1)) then
+!          nblock = facs(i,1)
+!          goto 100
+!       end if
+!    end do
+!    
+!    do i=1,nefacs-1
+!       if (nproc == facs(i,2)*nspec) then
+!          nblock = facs(i,2)*nspec
+!          goto 100
+!       end if
+!    end do
+    
+    nblock = negrid*nspec
+    do i=1,nyfacs-1
+       if (nproc == facs(i,3)*negrid*nspec) goto 100
+    end do
+    
+    do i=1,nxfacs-1
+       if (nproc == facs(i,4)*naky*negrid*nspec) goto 100
+    end do
+    
+    do i=1,nlfacs-1
+       if (nproc == facs(i,5)*ntheta0*naky*negrid*nspec) goto 100
+    end do
+    
+    accel_lxyes = .false.
+
+100 deallocate (facs)
+
+  end subroutine check_accel
+
+  subroutine check_local (ntheta0, naky, nlambda, negrid, nspec)
+
+    use mp, only: nproc
+    implicit none
+    integer, intent (in) :: negrid, nspec, nlambda, naky, ntheta0
+    integer, dimension(:,:), allocatable :: facs
+    integer :: nsfacs, nefacs, nyfacs, nxfacs, nlfacs
+    integer :: i
+
+    local = .true.
+
+    allocate (facs(max(nspec,negrid,naky,ntheta0,nlambda)/2+1,5))
+
+    select case (layout)
+
+    case ('lxyes')
+
+       call factors (nspec,   nsfacs, facs(:,1))
+       call factors (negrid,  nefacs, facs(:,2))
+       call factors (naky,    nyfacs, facs(:,3))
+       call factors (ntheta0, nxfacs, facs(:,4))
+       call factors (nlambda, nlfacs, facs(:,5))
+
+       do i=1,nsfacs-1
+          if (nproc == facs(i,1)) goto 100
+       end do
+       
+       do i=1,nefacs-1
+          if (nproc == facs(i,2)*nspec) goto 100
+       end do
+
+       do i=1,nyfacs-1
+          if (nproc == facs(i,3)*negrid*nspec) goto 100
+       end do
+          
+       do i=1,nxfacs-1
+          if (nproc == facs(i,4)*naky*negrid*nspec) goto 100
+       end do
+          
+       do i=1,nlfacs-1
+          if (nproc == facs(i,5)*ntheta0*naky*negrid*nspec) goto 100
+       end do
+          
+    case ('lyxes')
+
+       call factors (nspec,   nsfacs, facs(:,1))
+       call factors (negrid,  nefacs, facs(:,2))
+       call factors (ntheta0, nxfacs, facs(:,3))
+       call factors (naky,    nyfacs, facs(:,4))
+       call factors (nlambda, nlfacs, facs(:,5))
+
+       do i=1,nsfacs-1
+          if (nproc == facs(i,1)) goto 100
+       end do
+       
+       do i=1,nefacs-1
+          if (nproc == facs(i,2)*nspec) goto 100
+       end do
+
+       do i=1,nxfacs-1
+          if (nproc == facs(i,3)*negrid*nspec) goto 100
+       end do
+          
+       do i=1,nyfacs-1
+          if (nproc == facs(i,4)*ntheta0*negrid*nspec) goto 100
+       end do
+          
+       do i=1,nlfacs-1
+          if (nproc == facs(i,5)*naky*ntheta0*negrid*nspec) goto 100
+       end do
+          
+    case ('lexys')
+
+       call factors (nspec,   nsfacs, facs(:,1))
+       call factors (naky,    nyfacs, facs(:,2))
+       call factors (ntheta0, nxfacs, facs(:,3))
+       call factors (negrid,  nefacs, facs(:,4))
+       call factors (nlambda, nlfacs, facs(:,5))
+
+       do i=1,nsfacs-1
+          if (nproc == facs(i,1)) goto 100
+       end do
+       
+       do i=1,nyfacs-1
+          if (nproc == facs(i,2)*nspec) goto 100
+       end do
+
+       do i=1,nxfacs-1
+          if (nproc == facs(i,3)*naky*nspec) goto 100
+       end do
+          
+       do i=1,nefacs-1
+          if (nproc == facs(i,4)*ntheta0*naky*nspec) goto 100
+       end do
+          
+       do i=1,nlfacs-1
+          if (nproc == facs(i,5)*negrid*ntheta0*naky*nspec) goto 100
+       end do
+
+    end select
+
+    local = .false.    
+                       
+100 deallocate (facs)
+
+
+  end subroutine check_local
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Distribution function layouts
@@ -270,12 +458,12 @@ contains
     g_lo%negrid = negrid
     g_lo%nspec = nspec
     g_lo%llim_world = 0
-    g_lo%ulim_world = naky*ntheta0*nlambda*negrid*nspec - 1
+    g_lo%ulim_world = naky*ntheta0*negrid*nlambda*nspec - 1
     g_lo%blocksize = g_lo%ulim_world/nproc + 1
     g_lo%llim_proc = g_lo%blocksize*iproc
     g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
     g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
-
+    
     gint_lo%iproc = iproc
     gint_lo%naky = naky
     gint_lo%ntheta0 = ntheta0
@@ -300,6 +488,7 @@ contains
     geint_lo%ulim_proc &
          = min(geint_lo%ulim_world, geint_lo%llim_proc + geint_lo%blocksize -1)
     geint_lo%ulim_alloc = max(geint_lo%llim_proc, geint_lo%ulim_proc)
+    
   end subroutine init_dist_fn_layouts
 
   pure function is_idx_g (lo, i)
@@ -307,7 +496,20 @@ contains
     integer :: is_idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    is_idx_g = 1 + mod((i - lo%llim_world) /lo%naky/lo%ntheta0/lo%negrid/lo%nlambda, lo%nspec)
+
+    select case (layout)
+    case ('yxels')
+       is_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid/lo%nlambda, lo%nspec)
+    case ('yxles')
+       is_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%nlambda/lo%negrid, lo%nspec)
+    case ('lexys')
+       is_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%negrid/lo%ntheta0/lo%naky, lo%nspec)
+    case ('lxyes')
+       is_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
+    case ('lyxes')
+       is_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+    end select
+
   end function is_idx_g
 
   pure function il_idx_g (lo, i)
@@ -315,7 +517,20 @@ contains
     integer :: il_idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    il_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nlambda)
+
+    select case (layout)
+    case ('yxels')
+       il_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nlambda)
+    case ('yxles')
+       il_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%nlambda)
+    case ('lexys')
+       il_idx_g = 1 + mod(i - lo%llim_world, lo%nlambda)
+    case ('lxyes')
+       il_idx_g = 1 + mod(i - lo%llim_world, lo%nlambda)
+    case ('lyxes')
+       il_idx_g = 1 + mod(i - lo%llim_world, lo%nlambda)
+    end select
+
   end function il_idx_g
 
   pure function ie_idx_g (lo, i)
@@ -323,7 +538,20 @@ contains
     integer :: ie_idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ie_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
+
+    select case (layout)
+    case ('yxels')
+       ie_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
+    case ('yxles')
+       ie_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%nlambda, lo%negrid)
+    case ('lexys')
+       ie_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda, lo%negrid)
+    case ('lxyes')
+       ie_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%ntheta0/lo%naky, lo%negrid)
+    case ('lyxes')
+       ie_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky/lo%ntheta0, lo%negrid)
+    end select
+
   end function ie_idx_g
 
   pure function it_idx_g (lo, i)
@@ -331,7 +559,20 @@ contains
     integer :: it_idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    it_idx_g = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+    
+    select case (layout)
+    case ('yxels')
+       it_idx_g = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+    case ('yxles')
+       it_idx_g = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+    case ('lexys')
+       it_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%negrid, lo%ntheta0)
+    case ('lxyes')
+       it_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda, lo%ntheta0)
+    case ('lyxes')
+       it_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky, lo%ntheta0)
+    end select
+
   end function it_idx_g
 
   pure function ik_idx_g (lo, i)
@@ -339,7 +580,20 @@ contains
     integer :: ik_idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ik_idx_g = 1 + mod(i - lo%llim_world, lo%naky)
+
+    select case (layout)
+    case ('yxels')
+       ik_idx_g = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('yxles')
+       ik_idx_g = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('lexys')
+       ik_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%negrid/lo%ntheta0, lo%naky)
+    case ('lxyes')
+       ik_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%ntheta0, lo%naky)
+    case ('lyxes')
+       ik_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda, lo%naky)
+    end select
+
   end function ik_idx_g
 
   pure function proc_id_g (lo, i)
@@ -355,8 +609,19 @@ contains
     integer :: idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: ik, it, il, ie, is
-    idx_g = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(il-1 &
-         + lo%nlambda*(is-1))))
+    
+    select case (layout)
+    case ('yxels')
+       idx_g = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(il-1 + lo%nlambda*(is-1))))
+    case ('yxles')
+       idx_g = ik-1 + lo%naky*(it-1 + lo%ntheta0*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1))))
+    case ('lexys')
+       idx_g = il-1 + lo%nlambda*(ie-1 + lo%negrid*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1))))
+    case ('lxyes')
+       idx_g = il-1 + lo%nlambda*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(ie-1 + lo%negrid*(is-1))))
+    case ('lyxes')
+       idx_g = il-1 + lo%nlambda*(ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1))))
+    end select
   end function idx_g
 
   pure function idx_local_g (lo, ik, it, il, ie, is)
@@ -386,7 +651,19 @@ contains
     integer :: is_idx_gint
     type (gint_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    is_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+
+    select case (layout)
+    case ('yxels')
+       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+    case ('yxles')
+       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+    case ('lexys')
+       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%negrid/lo%ntheta0/lo%naky, lo%nspec)
+    case ('lxyes')
+       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
+    case ('lyxes')
+       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+    end select
   end function is_idx_gint
 
   pure function ie_idx_gint (lo, i)
@@ -394,7 +671,20 @@ contains
     integer :: ie_idx_gint
     type (gint_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
+
+    select case (layout)
+    case ('yxels')
+       ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
+    case ('yxles')
+       ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
+    case ('lexys')
+       ie_idx_gint = 1 + mod(i - lo%llim_world, lo%negrid)
+    case ('lxyes')
+       ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%negrid)
+    case ('lyxes')
+       ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
+    end select
+
   end function ie_idx_gint
 
   pure function it_idx_gint (lo, i)
@@ -402,7 +692,19 @@ contains
     integer :: it_idx_gint
     type (gint_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    it_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+
+    select case (layout)
+    case ('yxels')
+       it_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+    case ('yxles')
+       it_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+    case ('lexys')
+       it_idx_gint = 1 + mod((i - lo%llim_world)/lo%negrid, lo%ntheta0)
+    case ('lxyes')
+       it_idx_gint = 1 + mod((i - lo%llim_world), lo%ntheta0)
+    case ('lyxes')
+       it_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+    end select
   end function it_idx_gint
 
   pure function ik_idx_gint (lo, i)
@@ -410,7 +712,19 @@ contains
     integer :: ik_idx_gint
     type (gint_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ik_idx_gint = 1 + mod(i - lo%llim_world, lo%naky)
+
+    select case (layout)
+    case ('yxels')
+       ik_idx_gint = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('yxles')
+       ik_idx_gint = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('lexys')
+       ik_idx_gint = 1 + mod((i - lo%llim_world)/lo%negrid/lo%ntheta0, lo%naky)
+    case ('lxyes')
+       ik_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
+    case ('lyxes')
+       ik_idx_gint = 1 + mod((i - lo%llim_world), lo%naky)
+    end select
   end function ik_idx_gint
 
   pure function proc_id_gint (lo, i)
@@ -418,6 +732,7 @@ contains
     integer :: proc_id_gint
     type (gint_layout_type), intent (in) :: lo
     integer, intent (in) :: i
+
     proc_id_gint = i/lo%blocksize
   end function proc_id_gint
 
@@ -426,7 +741,19 @@ contains
     integer :: idx_gint
     type (gint_layout_type), intent (in) :: lo
     integer, intent (in) :: ik, it, ie, is
-    idx_gint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1)))
+
+    select case (layout)
+    case ('yxels')
+       idx_gint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1)))
+    case ('yxles')
+       idx_gint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1)))
+    case ('lexys')
+       idx_gint = ie-1 + lo%negrid*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1)))
+    case ('lxyes')
+       idx_gint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(ie-1 + lo%negrid*(is-1)))
+    case ('lyxes')
+       idx_gint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1)))
+    end select
   end function idx_gint
 
   pure function idx_local_gint (lo, ik, it, ie, is)
@@ -456,7 +783,20 @@ contains
     integer :: is_idx_geint
     type (geint_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    is_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%nspec)
+
+    select case (layout)
+    case ('yxels')
+       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%nspec)
+    case ('yxles')
+       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%nspec)
+    case ('lexys')
+       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%nspec)
+    case ('lxyes')
+       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%nspec)
+    case ('lyxes')
+       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%nspec)
+    end select
+
   end function is_idx_geint
 
   pure function it_idx_geint (lo, i)
@@ -464,7 +804,19 @@ contains
     integer :: it_idx_geint
     type (geint_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    it_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+
+    select case (layout)
+    case ('yxels')
+       it_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+    case ('yxles')
+       it_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+    case ('lexys')
+       it_idx_geint = 1 + mod(i - lo%llim_world, lo%ntheta0)
+    case ('lxyes')
+       it_idx_geint = 1 + mod(i - lo%llim_world, lo%ntheta0)
+    case ('lyxes')
+       it_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+    end select
   end function it_idx_geint
 
   pure function ik_idx_geint (lo, i)
@@ -472,7 +824,19 @@ contains
     integer :: ik_idx_geint
     type (geint_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ik_idx_geint = 1 + mod(i - lo%llim_world, lo%naky)
+
+    select case (layout)
+    case ('yxels')
+       ik_idx_geint = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('yxles')
+       ik_idx_geint = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('lexys')
+       ik_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
+    case ('lxyes')
+       ik_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
+    case ('lyxes')
+       ik_idx_geint = 1 + mod((i - lo%llim_world), lo%naky)
+    end select
   end function ik_idx_geint
 
   pure function proc_id_geint (lo, i)
@@ -480,6 +844,7 @@ contains
     integer :: proc_id_geint
     type (geint_layout_type), intent (in) :: lo
     integer, intent (in) :: i
+
     proc_id_geint = i/lo%blocksize
   end function proc_id_geint
 
@@ -488,7 +853,19 @@ contains
     integer :: idx_geint
     type (geint_layout_type), intent (in) :: lo
     integer, intent (in) :: ik, it, is
-    idx_geint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1))
+
+    select case (layout)
+    case ('yxels')
+       idx_geint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1))
+    case ('yxles')
+       idx_geint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1))
+    case ('lexys')
+       idx_geint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1))
+    case ('lxyes')
+       idx_geint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1))
+    case ('lyxes')
+       idx_geint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1))
+    end select
   end function idx_geint
 
   pure function idx_local_geint (lo, ik, it, is)
@@ -526,7 +903,7 @@ contains
     integer, dimension(:), intent (in) :: M_class, N_class
     integer, intent (in) :: i_class
     logical, save :: initialized = .false.
-    integer :: i
+    integer :: i, utmp, btmp
 
     if (initialized) return
     initialized = .true.
@@ -550,7 +927,13 @@ contains
        f_lo(i)%i_class = i_class
        f_lo(i)%llim_world = 0
        f_lo(i)%ulim_world = f_lo(i)%nindex*M_class(i) - 1
-       f_lo(i)%blocksize = f_lo(i)%ulim_world/nproc + 1
+       if (local_field_solve) then    ! guarantee local operations for matrix inversion
+          utmp = M_class(i) - 1
+          btmp = utmp/nproc + 1
+          f_lo(i)%blocksize = f_lo(i)%nindex*btmp
+       else
+          f_lo(i)%blocksize = f_lo(i)%ulim_world/nproc + 1
+       end if
        f_lo(i)%llim_proc = f_lo(i)%blocksize*iproc
        f_lo(i)%ulim_proc = min(f_lo(i)%ulim_world, f_lo(i)%llim_proc + f_lo(i)%blocksize - 1)
        f_lo(i)%ulim_alloc = max(f_lo(i)%llim_proc, f_lo(i)%ulim_proc)
@@ -748,6 +1131,7 @@ contains
     use mp, only: iproc, nproc
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2
+    integer :: ngroup, nprocset
     logical, save :: initialized = .false.
 
     if (initialized) return
@@ -762,11 +1146,42 @@ contains
     lz_lo%ng2 = ng2
     lz_lo%llim_world = 0
     lz_lo%ulim_world = (2*ntgrid+1)*naky*ntheta0*negrid*nspec - 1
-    lz_lo%blocksize = lz_lo%ulim_world/nproc + 1
-    lz_lo%llim_proc = lz_lo%blocksize*iproc
-    lz_lo%ulim_proc &
-         = min(lz_lo%ulim_world, lz_lo%llim_proc + lz_lo%blocksize - 1)
-    lz_lo%ulim_alloc = max(lz_lo%llim_proc, lz_lo%ulim_proc)
+
+    if (layout == 'lxyes' .or. layout == 'lexys' .or. layout == 'lyxes') &
+         call check_local (ntheta0, naky, nlambda, negrid, nspec)
+
+    if (local) then
+
+       lz_lo%groupblocksize = (naky*ntheta0*negrid*nspec-1)/nproc + 1
+       
+       ngroup = min (nproc, naky*ntheta0*negrid*nspec)
+       lz_lo%ngroup = ngroup
+       
+       nprocset = nproc / lz_lo%ngroup
+       lz_lo%nprocset = nprocset
+
+       lz_lo%iset   = mod (iproc, nprocset)
+       lz_lo%igroup = mod (iproc/nprocset, ngroup)
+
+       lz_lo%llim_group = 0
+       lz_lo%ulim_group = (2*ntgrid+1)*lz_lo%groupblocksize - 1
+       lz_lo%gsize      = (2*ntgrid+1)*lz_lo%groupblocksize 
+       
+       lz_lo%nset = lz_lo%ulim_group/lz_lo%nprocset + 1
+       
+       lz_lo%llim_proc = lz_lo%igroup*lz_lo%gsize + lz_lo%iset*lz_lo%nset
+       lz_lo%ulim_proc = min(lz_lo%ulim_group+lz_lo%igroup*lz_lo%gsize, &
+            lz_lo%llim_proc + lz_lo%nset - 1)
+       lz_lo%ulim_alloc = max(lz_lo%llim_proc, lz_lo%ulim_proc)
+    else
+
+       lz_lo%blocksize = lz_lo%ulim_world/nproc + 1
+       lz_lo%llim_proc = lz_lo%blocksize*iproc
+       lz_lo%ulim_proc &
+            = min(lz_lo%ulim_world, lz_lo%llim_proc + lz_lo%blocksize - 1)
+       lz_lo%ulim_alloc = max(lz_lo%llim_proc, lz_lo%ulim_proc)
+    end if
+
   end subroutine init_lorentz_layouts
 
   pure function is_idx_lz (lo, i)
@@ -774,7 +1189,20 @@ contains
     integer :: is_idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+
+    select case (layout)
+    case ('yxels')
+       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+    case ('yxles')
+       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+    case ('lexys')
+       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%negrid/lo%ntheta0/lo%naky, lo%nspec)
+    case ('lxyes')
+       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
+    case ('lyxes')
+       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+    end select
+
   end function is_idx_lz
 
   pure function ie_idx_lz (lo, i)
@@ -782,7 +1210,19 @@ contains
     integer :: ie_idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ie_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0, lo%negrid)
+
+    select case (layout)
+    case ('yxels')
+       ie_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0, lo%negrid)
+    case ('yxles')
+       ie_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0, lo%negrid)
+    case ('lexys')
+       ie_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%negrid)
+    case ('lxyes')
+       ie_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0/lo%naky, lo%negrid)
+    case ('lyxes')
+       ie_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0, lo%negrid)
+    end select
   end function ie_idx_lz
 
   pure function it_idx_lz (lo, i)
@@ -790,7 +1230,19 @@ contains
     integer :: it_idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    it_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky, lo%ntheta0)
+
+    select case (layout)
+    case ('yxels')
+       it_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky, lo%ntheta0)
+    case ('yxles')
+       it_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky, lo%ntheta0)
+    case ('lexys')
+       it_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%negrid, lo%ntheta0)
+    case ('lxyes')
+       it_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%ntheta0)
+    case ('lyxes')
+       it_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky, lo%ntheta0)
+    end select
   end function it_idx_lz
 
   pure function ik_idx_lz (lo, i)
@@ -798,7 +1250,19 @@ contains
     integer :: ik_idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ik_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%naky)
+
+    select case (layout)
+    case ('yxels')
+       ik_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%naky)
+    case ('yxles')
+       ik_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%naky)
+    case ('lexys')
+       ik_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%negrid/lo%ntheta0, lo%naky)
+    case ('lxyes')
+       ik_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0, lo%naky)
+    case ('lyxes')
+       ik_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%naky)
+    end select
   end function ik_idx_lz
 
   pure function ig_idx_lz (lo, i)
@@ -806,7 +1270,19 @@ contains
     integer :: ig_idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+
+    select case (layout)
+    case ('yxels')
+       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    case ('yxles')
+       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    case ('lexys')
+       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    case ('lxyes')
+       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    case ('lyxes')
+       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    end select
   end function ig_idx_lz
 
   pure function idx_lz (lo, ig, ik, it, ie, is)
@@ -814,8 +1290,25 @@ contains
     integer :: idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: ig, ik, it, ie, is
-    idx_lz = ig+lo%ntgrid + (2*lo%ntgrid+1)*(ik-1 + lo%naky*(it-1 &
-         + lo%ntheta0*(ie-1 + lo%negrid*(is-1))))
+
+    select case (layout)
+    case ('yxels')
+       idx_lz = ig+lo%ntgrid + (2*lo%ntgrid+1)*(ik-1 + lo%naky*(it-1 &
+            + lo%ntheta0*(ie-1 + lo%negrid*(is-1))))
+    case ('yxles')
+       idx_lz = ig+lo%ntgrid + (2*lo%ntgrid+1)*(ik-1 + lo%naky*(it-1 &
+            + lo%ntheta0*(ie-1 + lo%negrid*(is-1))))
+    case ('lexys')
+       idx_lz = ig+lo%ntgrid + (2*lo%ntgrid+1)*(ie-1 + lo%negrid*(it-1 &
+            + lo%ntheta0*(ik-1 + lo%naky*(is-1))))
+    case ('lxyes')
+       idx_lz = ig+lo%ntgrid + (2*lo%ntgrid+1)*(it-1 + lo%ntheta0*(ik-1 &
+            + lo%naky*(ie-1 + lo%negrid*(is-1))))
+    case ('lyxes')
+       idx_lz = ig+lo%ntgrid + (2*lo%ntgrid+1)*(ik-1 + lo%naky*(it-1 &
+            + lo%ntheta0*(ie-1 + lo%negrid*(is-1))))
+    end select
+
   end function idx_lz
 
   pure function proc_id_lz (lo, i)
@@ -823,7 +1316,13 @@ contains
     integer :: proc_id_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    proc_id_lz = i/lo%blocksize
+
+    if (local) then
+       proc_id_lz = (i/lo%gsize)*lo%nprocset + mod(i, lo%gsize)/lo%nset
+    else
+       proc_id_lz = i/lo%blocksize
+    end if
+
   end function proc_id_lz
 
   pure function idx_local_lz (lo, ig, ik, it, ie, is)
@@ -845,112 +1344,16 @@ contains
   end function ig_local_lz
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Lambda layouts
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!
-!  subroutine init_lambda_layouts &
-!       (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)       
-!    use mp, only: iproc, nproc
-!    implicit none
-!    integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2
-!    logical :: initialized = .false.
-!    
-!    if (initialized) return
-!    initialized = .true.
-!
-!    lambda_lo%iproc = iproc
-!    lambda_lo%ntgrid = ntgrid
-!    lambda_lo%naky = naky
-!    lambda_lo%ntheta0 = ntheta0
-!    lambda_lo%negrid = negrid
-!    lambda_lo%nspec = nspec
-!    lambda_lo%ng2 = ng2
-!    lambda_lo%llim_world = 0
-!    lambda_lo%ulim_world = negrid*ntheta0*naky*nspec - 1
-!    lambda_lo%blocksize = lambda_lo%ulim_world/nproc + 1
-!    lambda_lo%llim_proc = lambda_lo%blocksize*iproc
-!    lambda_lo%ulim_proc &
-!         = min(lambda_lo%ulim_world, lambda_lo%llim_proc + lambda_lo%blocksize - 1)
-!    lambda_lo%ulim_alloc = max(lambda_lo%llim_proc, lambda_lo%ulim_proc)
-!
-!  end subroutine init_lambda_layouts
-!
-!  pure function is_idx_lambda (lo, i)
-!    implicit none
-!    integer :: is_idx_lambda
-!    type (lambda_layout_type), intent (in) :: lo
-!    integer, intent (in) :: i
-!    is_idx_lambda = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
-!  end function is_idx_lambda
-!
-!  pure function ie_idx_lambda (lo, i)
-!    implicit none
-!    integer :: ie_idx_lambda
-!    type (lambda_layout_type), intent (in) :: lo
-!    integer, intent (in) :: i
-!    ie_idx_lambda = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
-!  end function ie_idx_lambda
-!
-!  pure function it_idx_lambda (lo, i)
-!    implicit none
-!    integer :: it_idx_lambda
-!    type (lambda_layout_type), intent (in) :: lo
-!    integer, intent (in) :: i
-!    it_idx_lambda = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
-!  end function it_idx_lambda
-!
-!  pure function ik_idx_lambda (lo, i)
-!    implicit none
-!    integer :: ik_idx_lambda
-!    type (lambda_layout_type), intent (in) :: lo
-!    integer, intent (in) :: i
-!    ik_idx_lambda = 1 + mod((i - lo%llim_world), lo%naky)
-!  end function ik_idx_lambda
-!
-!  pure function idx_lambda (lo, ik, it, ie, is)
-!    implicit none
-!    integer :: idx_lambda
-!    type (lambda_layout_type), intent (in) :: lo
-!    integer, intent (in) :: ik, it, ie, is
-!    idx_lambda = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1)))
-!  end function idx_lambda
-!
-!  pure function proc_id_lambda (lo, i)
-!    implicit none
-!    integer :: proc_id_lambda
-!    type (lambda_layout_type), intent (in) :: lo
-!    integer, intent (in) :: i
-!    proc_id_lambda = i/lo%blocksize
-!  end function proc_id_lambda
-!
-!  pure function idx_local_lambda (lo, ik, it, ie, is)
-!    implicit none
-!    logical :: idx_local_lambda
-!    type (lambda_layout_type), intent (in) :: lo
-!    integer, intent (in) :: ik, it, ie, is
-!
-!    idx_local_lambda = idx_local(lo, idx(lo, ik, it, ie, is))
-!  end function idx_local_lambda
-!
-!  pure function ig_local_lambda (lo, ig)
-!    implicit none
-!    logical :: ig_local_lambda
-!    type (lambda_layout_type), intent (in) :: lo
-!    integer, intent (in) :: ig
-!
-!    ig_local_lambda = lo%iproc == proc_id(lo, ig)
-!  end function ig_local_lambda
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! X-space layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine init_x_transform_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
-    use mp, only: iproc, nproc
+    use mp, only: iproc, nproc, proc0, barrier, finish_mp
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
     logical, save :: initialized = .false.
+    integer :: nprocset, ngroup, ip, nblock
 
     if (initialized) return
     initialized = .true.
@@ -971,11 +1374,50 @@ contains
     xxf_lo%nspec = nspec
     xxf_lo%llim_world = 0
     xxf_lo%ulim_world = naky*(2*ntgrid+1)*2*nlambda*negrid*nspec - 1
-    xxf_lo%blocksize = xxf_lo%ulim_world/nproc + 1
-    xxf_lo%llim_proc = xxf_lo%blocksize*iproc
-    xxf_lo%ulim_proc &
-         = min(xxf_lo%ulim_world, xxf_lo%llim_proc + xxf_lo%blocksize - 1)
-    xxf_lo%ulim_alloc = max(xxf_lo%llim_proc, xxf_lo%ulim_proc)
+
+    call check_accel (ntheta0, naky, nlambda, negrid, nspec, nblock)
+
+    if (accel_lxyes) then  
+
+       xxf_lo%groupblocksize = (nblock-1)/nproc + 1
+
+       ngroup = min (nproc, nblock)
+       xxf_lo%ngroup = ngroup
+       
+       nprocset = nproc / xxf_lo%ngroup
+       xxf_lo%nprocset = nprocset
+
+       xxf_lo%iset   = mod (iproc, nprocset)
+       xxf_lo%igroup = mod (iproc/nprocset, ngroup)
+
+       xxf_lo%llim_group = 0
+       xxf_lo%ulim_group = naky*(2*ntgrid+1)*2*nlambda*xxf_lo%groupblocksize - 1
+       xxf_lo%gsize      = naky*(2*ntgrid+1)*2*nlambda*xxf_lo%groupblocksize 
+       
+       xxf_lo%nset = xxf_lo%ulim_group/xxf_lo%nprocset + 1
+       
+       xxf_lo%llim_proc = xxf_lo%igroup*xxf_lo%gsize + xxf_lo%iset*xxf_lo%nset
+       xxf_lo%ulim_proc = min(xxf_lo%ulim_group+xxf_lo%igroup*xxf_lo%gsize, &
+            xxf_lo%llim_proc + xxf_lo%nset - 1)
+       xxf_lo%ulim_alloc = max(xxf_lo%llim_proc, xxf_lo%ulim_proc)
+
+    else
+       xxf_lo%blocksize = xxf_lo%ulim_world/nproc + 1
+       xxf_lo%llim_proc = xxf_lo%blocksize*iproc
+       xxf_lo%ulim_proc &
+            = min(xxf_lo%ulim_world, xxf_lo%llim_proc + xxf_lo%blocksize - 1)
+       xxf_lo%ulim_alloc = max(xxf_lo%llim_proc, xxf_lo%ulim_proc)
+    end if
+
+!    call barrier
+!    do ip=0,nproc-1
+!       if (ip == iproc) then
+!          write (*,*) 'iproc= ',ip,' llim= ',xxf_lo%llim_proc,' ulim= ',xxf_lo%ulim_proc, &
+!               & ' iset= ',xxf_lo%iset,' igroup= ',xxf_lo%igroup
+!       end if
+!    call barrier
+!    end do
+
   end subroutine init_x_transform_layouts
 
   pure function is_idx_xxf (lo, i)
@@ -983,7 +1425,20 @@ contains
     integer :: is_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+
+    select case (layout)
+    case ('yxels')
+       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%negrid/lo%nlambda, lo%nspec)
+    case ('yxles')
+       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+    case ('lexys')
+       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+    case ('lxyes')
+       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+    case ('lyxes')
+       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+    end select
+
   end function is_idx_xxf
 
   pure function ie_idx_xxf (lo, i)
@@ -991,7 +1446,19 @@ contains
     integer :: ie_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ie_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+
+    select case (layout)
+    case ('yxels')
+       ie_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign, lo%negrid)
+    case ('yxles')
+       ie_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+    case ('lexys')
+       ie_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+    case ('lxyes')
+       ie_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+    case ('lyxes')
+       ie_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+    end select
   end function ie_idx_xxf
 
   pure function il_idx_xxf (lo, i)
@@ -999,7 +1466,19 @@ contains
     integer :: il_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    il_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+
+    select case (layout)
+    case ('yxels')
+       il_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%negrid, lo%nlambda)
+    case ('yxles')
+       il_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('lexys')
+       il_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('lxyes')
+       il_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('lyxes')
+       il_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    end select
   end function il_idx_xxf
 
   pure function isign_idx_xxf (lo, i)
@@ -1007,7 +1486,19 @@ contains
     integer :: isign_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    isign_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1), lo%nsign)
+
+    select case (layout)
+    case ('yxels')
+       isign_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1), lo%nsign)
+    case ('yxles')
+       isign_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1), lo%nsign)
+    case ('lexys')
+       isign_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1), lo%nsign)
+    case ('lxyes')
+       isign_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1), lo%nsign)
+    case ('lyxes')
+       isign_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1), lo%nsign)
+    end select
   end function isign_idx_xxf
 
   pure function ig_idx_xxf (lo, i)
@@ -1015,7 +1506,19 @@ contains
     integer :: ig_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ig_idx_xxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%naky, 2*lo%ntgrid + 1)
+
+    select case (layout)
+    case ('yxels')
+       ig_idx_xxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%naky, 2*lo%ntgrid + 1)
+    case ('yxles')
+       ig_idx_xxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%naky, 2*lo%ntgrid + 1)
+    case ('lexys')
+       ig_idx_xxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%naky, 2*lo%ntgrid + 1)
+    case ('lxyes')
+       ig_idx_xxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%naky, 2*lo%ntgrid + 1)
+    case ('lyxes')
+       ig_idx_xxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%naky, 2*lo%ntgrid + 1)
+    end select
   end function ig_idx_xxf
 
   pure function ik_idx_xxf (lo, i)
@@ -1023,7 +1526,19 @@ contains
     integer :: ik_idx_xxf
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ik_idx_xxf = 1 + mod(i - lo%llim_world, lo%naky)
+
+    select case (layout)
+    case ('yxels')
+       ik_idx_xxf = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('yxles')
+       ik_idx_xxf = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('lexys')
+       ik_idx_xxf = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('lxyes')
+       ik_idx_xxf = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('lyxes')
+       ik_idx_xxf = 1 + mod(i - lo%llim_world, lo%naky)
+    end select
   end function ik_idx_xxf
 
   pure function idx_xxf (lo, ig, isign, ik, il, ie, is)
@@ -1031,8 +1546,24 @@ contains
     integer :: idx_xxf
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: ig, isign, ik, il, ie, is
-    idx_xxf = ik-1 + lo%naky*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
-         + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+
+    select case (layout)
+    case ('yxels')
+       idx_xxf = ik-1 + lo%naky*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(ie-1 + lo%negrid*(il-1 + lo%nlambda*(is-1)))))
+    case ('yxles')
+       idx_xxf = ik-1 + lo%naky*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+    case ('lexys')
+       idx_xxf = ik-1 + lo%naky*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+    case ('lxyes')
+       idx_xxf = ik-1 + lo%naky*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+    case ('lyxes')
+       idx_xxf = ik-1 + lo%naky*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+    end select
   end function idx_xxf
 
   pure function proc_id_xxf (lo, i)
@@ -1040,7 +1571,13 @@ contains
     integer :: proc_id_xxf
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    proc_id_xxf = i/lo%blocksize
+
+    if (accel_lxyes) then
+       proc_id_xxf = (i/lo%gsize)*lo%nprocset + mod(i, lo%gsize)/lo%nset
+    else
+       proc_id_xxf = i/lo%blocksize
+    end if
+
   end function proc_id_xxf
 
   pure function idx_local_xxf (lo, ig, isign, ik, il, ie, is)
@@ -1080,7 +1617,7 @@ contains
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
     logical, save :: initialized = .false.
-    integer :: nnx, nny
+    integer :: nnx, nny, ngroup, nprocset, nblock
 
     if (initialized) return
     initialized = .true.
@@ -1108,11 +1645,41 @@ contains
     yxf_lo%nspec = nspec
     yxf_lo%llim_world = 0
     yxf_lo%ulim_world = nnx*(2*ntgrid+1)*2*nlambda*negrid*nspec - 1
-    yxf_lo%blocksize = yxf_lo%ulim_world/nproc + 1
-    yxf_lo%llim_proc = yxf_lo%blocksize*iproc
-    yxf_lo%ulim_proc &
-         = min(yxf_lo%ulim_world, yxf_lo%llim_proc + yxf_lo%blocksize - 1)
-    yxf_lo%ulim_alloc = max(yxf_lo%llim_proc, yxf_lo%ulim_proc)
+
+    call check_accel (ntheta0, naky, nlambda, negrid, nspec, nblock)
+
+    if (accel_lxyes) then  
+
+       yxf_lo%groupblocksize = (nblock-1)/nproc + 1
+
+       ngroup = min (nproc, nblock)
+       yxf_lo%ngroup = ngroup
+       
+       nprocset = nproc / yxf_lo%ngroup
+       yxf_lo%nprocset = nprocset
+
+       yxf_lo%iset   = mod (iproc, nprocset)
+       yxf_lo%igroup = mod (iproc/nprocset, ngroup)
+
+       yxf_lo%llim_group = 0
+       yxf_lo%ulim_group = nnx*(2*ntgrid+1)*2*nlambda - 1
+       yxf_lo%gsize      = nnx*(2*ntgrid+1)*2*nlambda*yxf_lo%groupblocksize
+       
+       yxf_lo%nset = yxf_lo%ulim_group/yxf_lo%nprocset + 1
+       
+       yxf_lo%llim_proc = yxf_lo%igroup*yxf_lo%gsize + yxf_lo%iset*yxf_lo%nset
+       yxf_lo%ulim_proc = min(yxf_lo%ulim_group+yxf_lo%igroup*yxf_lo%gsize, &
+            yxf_lo%llim_proc + yxf_lo%nset - 1)
+       yxf_lo%ulim_alloc = max(yxf_lo%llim_proc, yxf_lo%ulim_proc)
+
+    else
+       yxf_lo%blocksize = yxf_lo%ulim_world/nproc + 1
+       yxf_lo%llim_proc = yxf_lo%blocksize*iproc
+       yxf_lo%ulim_proc &
+            = min(yxf_lo%ulim_world, yxf_lo%llim_proc + yxf_lo%blocksize - 1)
+       yxf_lo%ulim_alloc = max(yxf_lo%llim_proc, yxf_lo%ulim_proc)
+    end if
+
   end subroutine init_y_transform_layouts
 
   pure function is_idx_yxf (lo, i)
@@ -1120,7 +1687,19 @@ contains
     integer :: is_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+
+    select case (layout)
+    case ('yxels')
+       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%negrid/lo%nlambda, lo%nspec)
+    case ('yxles')
+       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+    case ('lexys')
+       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+    case ('lxyes')
+       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+    case ('lyxes')
+       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+    end select
   end function is_idx_yxf
 
   pure function ie_idx_yxf (lo, i)
@@ -1128,7 +1707,19 @@ contains
     integer :: ie_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ie_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+
+    select case (layout)
+    case ('yxels')
+       ie_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign, lo%negrid)
+    case ('yxles')
+       ie_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+    case ('lexys')
+       ie_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+    case ('lxyes')
+       ie_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+    case ('lyxes')
+       ie_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+    end select
   end function ie_idx_yxf
 
   pure function il_idx_yxf (lo, i)
@@ -1136,7 +1727,19 @@ contains
     integer :: il_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    il_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+
+    select case (layout)
+    case ('yxels')
+       il_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%negrid, lo%nlambda)
+    case ('yxles')
+       il_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('lexys')
+       il_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('lxyes')
+       il_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('lyxes')
+       il_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    end select
   end function il_idx_yxf
 
   pure function isign_idx_yxf (lo, i)
@@ -1144,7 +1747,19 @@ contains
     integer :: isign_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    isign_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid+1), lo%nsign)
+
+    select case (layout)
+    case ('yxels')
+       isign_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid+1), lo%nsign)
+    case ('yxles')
+       isign_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid+1), lo%nsign)
+    case ('lexys')
+       isign_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid+1), lo%nsign)
+    case ('lxyes')
+       isign_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid+1), lo%nsign)
+    case ('lyxes')
+       isign_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid+1), lo%nsign)
+    end select
   end function isign_idx_yxf
 
   pure function ig_idx_yxf (lo, i)
@@ -1152,7 +1767,19 @@ contains
     integer :: ig_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    ig_idx_yxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%nx, 2*lo%ntgrid + 1)
+
+    select case (layout)
+    case ('yxels')
+       ig_idx_yxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%nx, 2*lo%ntgrid + 1)
+    case ('yxles')
+       ig_idx_yxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%nx, 2*lo%ntgrid + 1)
+    case ('lexys')
+       ig_idx_yxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%nx, 2*lo%ntgrid + 1)
+    case ('lxyes')
+       ig_idx_yxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%nx, 2*lo%ntgrid + 1)
+    case ('lyxes')
+       ig_idx_yxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%nx, 2*lo%ntgrid + 1)
+    end select
   end function ig_idx_yxf
 
   pure function it_idx_yxf (lo, i)
@@ -1160,7 +1787,19 @@ contains
     integer :: it_idx_yxf
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    it_idx_yxf = 1 + mod(i - lo%llim_world, lo%nx)
+
+    select case (layout)
+    case ('yxels')
+       it_idx_yxf = 1 + mod(i - lo%llim_world, lo%nx)
+    case ('yxles')
+       it_idx_yxf = 1 + mod(i - lo%llim_world, lo%nx)
+    case ('lexys')
+       it_idx_yxf = 1 + mod(i - lo%llim_world, lo%nx)
+    case ('lxyes')
+       it_idx_yxf = 1 + mod(i - lo%llim_world, lo%nx)
+    case ('lyxes')
+       it_idx_yxf = 1 + mod(i - lo%llim_world, lo%nx)
+    end select
   end function it_idx_yxf
 
   pure function idx_yxf (lo, ig, isign, it, il, ie, is)
@@ -1168,8 +1807,24 @@ contains
     integer :: idx_yxf
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: ig, isign, it, il, ie, is
-    idx_yxf = it-1 + lo%nx*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
-         + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+
+    select case (layout)
+    case ('yxels')
+       idx_yxf = it-1 + lo%nx*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+    case ('yxles')
+       idx_yxf = it-1 + lo%nx*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+    case ('lexys')
+       idx_yxf = it-1 + lo%nx*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+    case ('lxyes')
+       idx_yxf = it-1 + lo%nx*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+    case ('lyxes')
+       idx_yxf = it-1 + lo%nx*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+    end select
   end function idx_yxf
 
   pure function proc_id_yxf (lo, i)
@@ -1177,7 +1832,12 @@ contains
     integer :: proc_id_yxf
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    proc_id_yxf = i/lo%blocksize
+
+    if (accel_lxyes) then
+       proc_id_yxf = (i/lo%gsize)*lo%nprocset + mod(i, lo%gsize)/lo%nset
+    else
+       proc_id_yxf = i/lo%blocksize
+    end if
   end function proc_id_yxf
 
   pure function idx_local_yxf (lo, ig, isign, it, il, ie, is)
@@ -1343,19 +2003,6 @@ contains
          ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
   end subroutine gidx2lzidx
 
-!  pure subroutine gidx2lamidx (g_lo, iglo, lambda_lo, il, ilam)
-!    implicit none
-!    type (g_layout_type), intent (in) :: g_lo
-!    integer, intent (in) :: iglo
-!    type (lambda_layout_type), intent (in) :: lambda_lo
-!    integer, intent (out) :: il, ilam
-!
-!    il = il_idx(g_lo, iglo)
-!
-!    ilam = idx(lambda_lo, ik_idx(g_lo,iglo), it_idx(g_lo,iglo), &
-!         ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
-!  end subroutine gidx2lamidx
-
   pure subroutine gidx2gintidx (g_lo, iglo, gint_lo, il, igint)
     implicit none
     type (g_layout_type), intent (in) :: g_lo
@@ -1382,17 +2029,6 @@ contains
          is_idx(gint_lo, igint))
 
   end subroutine gintidx2geidx
-
-!  pure subroutine lamidx2gintidx (lambda_lo, ilam, gint_lo, igint)
-!    implicit none
-!    type (lambda_layout_type), intent (in) :: lambda_lo
-!    integer, intent (in) :: ilam
-!    type (gint_layout_type), intent (in) :: gint_lo
-!    integer, intent (out) :: igint
-!
-!    igint = idx(gint_lo, ik_idx(lambda_lo, ilam), it_idx(lambda_lo, ilam), &
-!         ie_idx(lambda_lo, ilam), is_idx(lambda_lo, ilam))
-!  end subroutine lamidx2gintidx
 
   pure subroutine gidx2xxfidx (ig, isign, iglo, g_lo, xxf_lo, it, ixxf)
     implicit none
@@ -1471,8 +2107,68 @@ contains
 
     character (1), intent (out) :: char
 
-    char = 'v'
+    select case (layout)
+    case ('yxels')
+       char = 'v'
+    case ('yxles')
+       char = 'v'
+    case ('lexys')
+       char = 'x'
+    case ('lxyes')
+       char = 'm'    ! mixed
+    case ('lyxes')
+       char = 'b'    ! big, since this layout makes sense mainly for big runs?
+    end select
 
   end subroutine pe_layout
 
+  subroutine factors (n, j, div)
+    integer, intent (in) :: n
+    integer, intent (out) :: j
+    integer, dimension (:), intent (out) :: div
+    integer :: i, imax
+
+    do i=2,n
+       if (mod(n,i)==0) exit
+    end do
+    imax = n/i
+    j=1
+    do i=1,imax
+       if (mod(n,i)==0) then
+          div(j) = i
+          j=j+1
+       end if
+    end do
+    div(j) = n
+  end subroutine factors
+
 end module gs2_layouts
+
+
+
+! save:
+
+!       xxf_lo%groupblocksize = (negrid*nspec-1)/nproc + 1
+!
+!       xxf_lo%ngroup = min (nproc, negrid*nspec)
+!       xxf_lo%nprocset = nproc / xxf_lo%ngroup
+!
+!       xxf_lo%llim_group = xxf_lo%groupblocksize*(iproc/nprocset)
+!       xxf_lo%ulim_group = xxf_lo%llim_group + xxf_lo%groupblocksize - 1
+!       
+!       xxf_lo%nset = (naky*(2*ntgrid+1)*2*nlambda - 1)/nprocset + 1
+!       
+!       xxf_lo%llim_set = xxf_lo%nset*mod(iproc, nprocset)
+!       xxf_lo%ulim_set = min( &
+!            naky*(2*ntgrid+1)*2*nlambda - 1, xxf_lo%llim_set + xxf_lo%nset - 1)
+!
+!       llim_proc:
+!       ulim_proc:
+!       ulim_alloc:
+!
+!
+!       ixxf = iset + xxf_lo%nset*igroup + (iproc/xxf_lo%ngroup)*xxf_lo%nset*xxf_lo%ngroup
+
+! igroup: llim_group:ulim_group
+! iset: llim_set:ulim_set
+!
