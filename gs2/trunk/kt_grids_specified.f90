@@ -5,30 +5,36 @@ module kt_grids_specified
 
   private
 
-  integer :: naky_private, ntheta0_private
+  integer :: naky_private, ntheta0_private, nx_private, ny_private
 
 contains
 
   subroutine init_kt_grids_specified
     use file_utils, only: input_unit
     implicit none
-    integer :: naky, ntheta0
-    namelist /kt_grids_specified_parameters/ naky, ntheta0
+    integer :: naky, ntheta0, nx, ny
+    namelist /kt_grids_specified_parameters/ naky, ntheta0, nx, ny
 
     naky = 1
     ntheta0 = 1
+    nx = 0
+    ny = 0
     read (unit=input_unit("kt_grids_specified_parameters"), &
          nml=kt_grids_specified_parameters)
     naky_private = naky
     ntheta0_private = ntheta0
+    nx_private = nx
+    ny_private = ny
   end subroutine init_kt_grids_specified
 
-  subroutine specified_get_sizes (naky, ntheta0)
+  subroutine specified_get_sizes (naky, ntheta0, nx, ny)
     implicit none
-    integer, intent (out) :: naky, ntheta0
+    integer, intent (out) :: naky, ntheta0, nx, ny
 
     naky = naky_private
     ntheta0 = ntheta0_private
+    nx = nx_private
+    ny = ny_private
   end subroutine specified_get_sizes
 
   subroutine specified_get_grids (aky, theta0, akx)

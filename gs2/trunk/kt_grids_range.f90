@@ -29,11 +29,13 @@ contains
     ntheta0_private = ntheta0
   end subroutine init_kt_grids_range
 
-  subroutine range_get_sizes (naky, ntheta0)
+  subroutine range_get_sizes (naky, ntheta0, nx, ny)
     implicit none
-    integer, intent (out) :: naky, ntheta0
+    integer, intent (out) :: naky, ntheta0, nx, ny
     naky = naky_private
     ntheta0 = ntheta0_private
+    nx = 0
+    ny = 0
   end subroutine range_get_sizes
 
   subroutine range_get_grids (aky, theta0, akx)

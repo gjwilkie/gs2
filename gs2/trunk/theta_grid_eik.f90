@@ -39,7 +39,7 @@ contains
 
   subroutine eik_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, bmag,&
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, gds2, gds21, gds22,&
-            shat, drhodpsi)
+            grho, shat, drhodpsi)
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
     use geometry, only: theta_out => theta
     use geometry, only: gradpar_out => gradpar
@@ -51,6 +51,7 @@ contains
     use geometry, only: gds2_out => gds2
     use geometry, only: gds21_out => gds21
     use geometry, only: gds22_out => gds22
+    use geometry, only: grho_out => grho
     use geometry, only: s_hat_input, drhodpsin
     implicit none
     integer, intent (in) :: nperiod
@@ -59,7 +60,7 @@ contains
     real, dimension (nbset), intent (out) :: bset
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
-         gds2, gds21, gds22
+         gds2, gds21, gds22, grho
     real, intent (out) :: shat, drhodpsi
 
     theta(-ntgrid:ntgrid) = theta_out(-ntgrid:ntgrid)
@@ -72,14 +73,15 @@ contains
     gds2(-ntgrid:ntgrid) = gds2_out(-ntgrid:ntgrid)
     gds21(-ntgrid:ntgrid) = gds21_out(-ntgrid:ntgrid)
     gds22(-ntgrid:ntgrid) = gds22_out(-ntgrid:ntgrid)
+    grho(-ntgrid:ntgrid) = grho_out(-ntgrid:ntgrid)
 
     call theta_grid_gridgen_init
     call gridgen_get_grids (nperiod, ntheta, ntgrid, nbset, &
          theta, bset, bmag, &
-         gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, gds2, gds21, gds22)
+         gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, gds2, gds21, gds22, &
+         grho)
     shat = s_hat_input
     drhodpsi = drhodpsin
-
   end subroutine eik_get_grids
 
   subroutine read_parameters
@@ -87,7 +89,7 @@ contains
     use geometry, only: nperiod
     use geometry, only: rhoc
     use geometry, only: itor, iflux, irho
-    use geometry, only: ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile
+    use geometry, only: ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, local_eq
     use geometry, only: equal_arc
     use geometry, only: bishop
     use geometry, only: s_hat_input
@@ -110,7 +112,7 @@ contains
 
     namelist /theta_grid_eik_knobs/ itor, iflux, irho, &
          ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, &
-         equal_arc, bishop, &
+         equal_arc, bishop, local_eq, &
          s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
          delrho, rmin, rmax, ismooth, ak0, k1, k2, isym, writelots
 
@@ -140,6 +142,7 @@ contains
     isym = 0
     in_nt = .false.
     writelots = .false.
+    local_eq = .true.
 
     read (unit=input_unit("theta_grid_eik_knobs"), nml=theta_grid_eik_knobs)
   end subroutine read_parameters

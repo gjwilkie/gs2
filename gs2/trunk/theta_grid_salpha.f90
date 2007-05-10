@@ -80,7 +80,7 @@ contains
 
   subroutine salpha_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, &
        bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
-       gds2, gds21, gds22, shat, drhodpsi)
+       gds2, gds21, gds22, grho, shat, drhodpsi)
     use constants
     use theta_grid_params, only: eps, epsl, shat_param => shat, pk, qinp, rhoc
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
@@ -91,7 +91,7 @@ contains
     real, dimension (nbset), intent (out) :: bset
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
-         gds2, gds21, gds22
+         gds2, gds21, gds22, grho
     real, intent (out) :: shat, drhodpsi
     integer :: i
 
@@ -113,6 +113,7 @@ contains
        gds2 = 1.0 + (shat*theta-shift*sin(theta))**2
        gds21 = -shat*(shat*theta - shift*sin(theta))
        gds22 = shat*shat
+       grho = 1.0
        if (model_switch == model_b2) then
           gbdrift = gbdrift/bmag**2
           gbdrift0 = gbdrift0/bmag**2
@@ -123,6 +124,7 @@ contains
        gds2 = 1.0 + (shat*theta)**2
        gds21 = -shat*shat*theta
        gds22 = shat*shat
+       grho = 1.0
     end if
     cvdrift = gbdrift
     cvdrift0 = gbdrift0
@@ -134,7 +136,8 @@ contains
        call theta_grid_gridgen_init
        call gridgen_get_grids (nperiod, ntheta, ntgrid, nbset, &
             theta, bset, bmag, &
-            gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, gds2, gds21, gds22)
+            gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
+            gds2, gds21, gds22, grho)
     end if
   end subroutine salpha_get_grids
 

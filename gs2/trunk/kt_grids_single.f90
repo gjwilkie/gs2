@@ -21,11 +21,13 @@ contains
          nml=kt_grids_single_parameters)
   end subroutine init_kt_grids_single
 
-  subroutine single_get_sizes (naky, ntheta0)
+  subroutine single_get_sizes (naky, ntheta0, nx, ny)
     implicit none
-    integer, intent (out) :: naky, ntheta0
+    integer, intent (out) :: naky, ntheta0, nx, ny
     naky = 1
     ntheta0 = 1
+    nx = 0
+    ny = 0
   end subroutine single_get_sizes
 
   subroutine single_get_grids (aky, theta0, akx)

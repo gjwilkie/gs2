@@ -5,4 +5,9 @@ module fields_arrays
   complex, dimension (:,:,:), allocatable :: phinew, aparnew, aperpnew
   ! (-ntgrid:ntgrid,naky,ntheta0) replicated
 
+  complex, dimension (:,:), allocatable :: aminv
+  ! (nidx, -*- f_lo -*-)
+
+  integer, save :: nidx
+
 end module fields_arrays
