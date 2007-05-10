@@ -21,6 +21,10 @@ contains
     logical, intent (in), optional :: stop_on_error
     integer :: i, l, n_partial_matches, v_partial_match
     integer :: err
+    logical :: local_stop
+
+    local_stop = .false.
+    if (present(stop_on_error)) local_stop = stop_on_error
 
     do i = 1, size(options)
        if (trim(selection) == trim(options(i)%name)) then
@@ -80,8 +84,7 @@ contains
        end do
     end if
 
-    if (.not. present(stop_on_error)) stop
-    if (stop_on_error) stop
+    if (local_stop) stop
 
     write (unit=err, fmt="('Continuing with default selection...')")
   end subroutine get_option_value

@@ -51,6 +51,8 @@ module collisions
   type (redist_type), save :: lorentz_map
 
   logical :: initialized = .false.
+  logical :: accelerated_x = .false.
+  logical :: accelerated_v = .false.
 
 contains
 
@@ -58,7 +60,7 @@ contains
     use species, only: init_species, nspec
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0
-    use le_grids, only: init_le_grids, nlambda, negrid, ng2
+    use le_grids, only: init_le_grids, nlambda, negrid 
     use run_parameters, only: init_run_parameters
     use gs2_layouts, only: init_dist_fn_layouts
     implicit none
@@ -69,7 +71,7 @@ contains
     call init_species
     call init_theta_grid
     call init_kt_grids
-    call init_le_grids
+    call init_le_grids (accelerated_x, accelerated_v)
     call init_run_parameters
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
 
@@ -147,7 +149,7 @@ contains
   subroutine init_vnew (hee)
     use species, only: nspec, spec, electron_species
     use le_grids, only: negrid, e
-    use kt_grids, only: naky, aky
+    use kt_grids, only: naky 
     use run_parameters, only: zeff, tunits
     use constants
     real, dimension (:,:), intent (out) :: hee
@@ -222,7 +224,6 @@ contains
   subroutine init_krook (hee)
     use species, only: spec, electron_species, ion_species
     use theta_grid, only: ntgrid, eps
-    use kt_grids, only: aky
     use le_grids, only: integrate, ng2, al, e
     use gs2_layouts, only: g_lo, geint_lo, ik_idx, il_idx, ie_idx, is_idx
     use run_parameters, only: delt, zeff, tunits
@@ -231,14 +232,17 @@ contains
     complex, dimension (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc) :: g
     complex, dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) &
          :: geint
-    integer :: iglo, ik, il, ie, is
+    integer :: iglo, ik, il, ie, is, ige
     real :: zeff1, vep, vhat, delta00
 
     if (.not.allocated(aintnorm)) &
          allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
     aintnorm = 0. ; g = 1.0
     call integrate (g, geint)
-    aintnorm = 1.0/real(geint)
+
+    do ige = geint_lo%llim_proc, geint_lo%ulim_proc
+       aintnorm(:,ige) = 1.0/real(geint(:,ige))
+    end do
 
     if (.not.allocated(vnewfe)) allocate (vnewfe(g_lo%llim_proc:g_lo%ulim_alloc))
     vnewfe = 0.
@@ -289,10 +293,10 @@ contains
     use le_grids, only: nlambda, negrid, al, jend, ng2
     use run_parameters, only: delt, tunits
     use gs2_layouts, only: init_lorentz_layouts
-    use gs2_layouts, only: g_lo, gint_lo, lz_lo
-    use gs2_layouts, only: il_idx, ig_idx, ik_idx, ie_idx, is_idx
+    use gs2_layouts, only: lz_lo
+    use gs2_layouts, only: ig_idx, ik_idx, ie_idx, is_idx
     implicit none
-    integer :: ig, il, iglo, ilz, ik, ie, is, je
+    integer :: ig, il, ilz, ik, ie, is, je
     real, dimension (nlambda+1) :: aa, bb, cc
     real, dimension (max(2*nlambda,2*ng2+1)) :: a1, b1
     real :: slb0, slb1, slb2, slbl, slbr, vn
@@ -431,20 +435,21 @@ contains
   end subroutine init_lorentz
 
   subroutine init_lorentz_redistribute
+    use mp, only: nproc
     use species, only: nspec
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use le_grids, only: nlambda, negrid, jend, ng2
-    use mp, only: nproc, iproc
     use gs2_layouts, only: init_lorentz_layouts
     use gs2_layouts, only: g_lo, lz_lo
     use gs2_layouts, only: idx_local, proc_id
-    use gs2_layouts, only: gidx2lzidx, lzidx2gidx
+    use gs2_layouts, only: gidx2lzidx 
     use redistribute, only: index_list_type, init_redist, delete_list
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
     integer, dimension(0:nproc-1) :: nn_to, nn_from
-    integer, dimension(3) :: from_low
+    integer, dimension(3) :: from_low, from_high
+    integer, dimension(2) :: to_high
     integer :: to_low
     integer :: ig, isign, iglo, il, ilz
     integer :: n, ip
@@ -489,6 +494,7 @@ contains
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
              call gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, il, ilz)
+!             write(*,*) ig,':',isign,':',iglo,':',il,':',ilz
              if (idx_local(g_lo,iglo)) then
                 ip = proc_id(lz_lo,ilz)
                 n = nn_from(ip) + 1
@@ -514,7 +520,15 @@ contains
 
     to_low = lz_lo%llim_proc
 
-    call init_redist (lorentz_map, 'c', to_low, to_list, from_low, from_list)
+    to_high(1) = max(2*nlambda, 2*ng2+1)
+    to_high(2) = lz_lo%ulim_alloc
+
+    from_high(1) = ntgrid
+    from_high(2) = 2
+    from_high(3) = g_lo%ulim_alloc
+
+    call init_redist (lorentz_map, 'c', to_low, to_high, to_list, &
+         from_low, from_high, from_list)
 
     call delete_list (to_list)
     call delete_list (from_list)
@@ -536,9 +550,9 @@ contains
 
     select case (collision_model_switch)
     case (collision_model_lorentz,collision_model_lorentz_test)
-       call solfp_lorentz (g, g1, phi, apar, aperp)
+       call solfp_lorentz (g, g1)
     case (collision_model_krook,collision_model_krook_test)
-       call solfp_krook (g, g1, phi, apar, aperp)
+       call solfp_krook (g, g1)
     end select
 
     call g_adjust (g, phi, aperp, -fphi, -faperp)
@@ -565,8 +579,8 @@ contains
        is = is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
           adj = anon(ie,is)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
-                  *aperp(ig,ik,it)*facaperp &
-               + spec(is)%z*anon(ie,is)*phi(ig,ik,it)*aj0(ig,iglo) &
+                  *aperp(ig,it,ik)*facaperp &
+               + spec(is)%z*anon(ie,is)*phi(ig,it,ik)*aj0(ig,iglo) &
                   /spec(is)%temp*facphi
           g(ig,1,iglo) = g(ig,1,iglo) + adj
           g(ig,2,iglo) = g(ig,2,iglo) + adj
@@ -574,17 +588,15 @@ contains
     end do
   end subroutine g_adjust
 
-  subroutine solfp_krook (g, g1, phi, apar, aperp)
+  subroutine solfp_krook (g, g1)
     use species, only: spec, electron_species
     use theta_grid, only: ntgrid
     use le_grids, only: integrate, lintegrate, geint2g, gint2g
-    use dist_fn_arrays, only: aj0
     use gs2_layouts, only: g_lo, gint_lo, geint_lo
     use gs2_layouts, only: ik_idx, il_idx, it_idx, is_idx
     use prof, only: prof_entering, prof_leaving
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
 
     complex, dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) &
          :: g0eint, g1eint
@@ -613,7 +625,6 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
           g1(ig,1,iglo) = g(ig,1,iglo)/(1.0 + vnewfe(iglo))
           g1(ig,2,iglo) = g(ig,2,iglo)/(1.0 + vnewfe(iglo))
@@ -665,25 +676,25 @@ contains
     call prof_leaving ("solfp_krook", "collisions")
   end subroutine solfp_krook
 
-  subroutine solfp_lorentz (g, g1, phi, apar, aperp)
+  subroutine solfp_lorentz (g, g1)
     use species, only: spec, electron_species
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, jend, lintegrate, gint2g, ng2
-    use dist_fn_arrays, only: vperp2, aj1
     use gs2_layouts, only: g_lo, gint_lo, lz_lo
-    use gs2_layouts, only: ig_idx, ik_idx, il_idx, ie_idx, is_idx
+    use gs2_layouts, only: ig_idx, ik_idx, il_idx, is_idx
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
 
     complex, dimension (max(2*nlambda,2*ng2+1)) :: delta
     complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc) &
          :: g1int, g2int
-    integer :: iglo, igint, ilz, ig, ik, il, ie, is, je
+    integer :: iglo, igint, ilz, ig, ik, il, is, je
 
     call prof_entering ("solfp_lorentz", "collisions")
+
+!    call check_g ('beg', g)
 
     if (conserve_momentum) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -701,11 +712,11 @@ contains
 
     call gather (lorentz_map, g, glz)
 
+!    call check_glz ('beg', glz)
     ! solve for glz row by row
     do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
        ig = ig_idx(lz_lo,ilz)
        ik = ik_idx(lz_lo,ilz)
-!       ie = ie_idx(lz_lo,ilz)  ! not used
        is = is_idx(lz_lo,ilz)
        if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
        je = 2*jend(ig)
@@ -725,8 +736,10 @@ contains
        do il = je-1, 1, -1
           glz(il,ilz) = (delta(il) - c1(il,ilz)*glz(il+1,ilz))*betaa(il,ilz)
        end do
+       glz(je,ilz) = glz(jend(ig),ilz)
     end do
 
+!    call check_glz ('end', glz)
     call scatter (lorentz_map, glz, g)
 
     if (conserve_momentum) then
@@ -759,8 +772,58 @@ contains
        end do
     end if
 
+!    call check_g ('end', g)
+
     call prof_leaving ("solfp_lorentz", "collisions")
   end subroutine solfp_lorentz
+
+  subroutine check_g (str, g)
+
+    use gs2_layouts, only: g_lo
+    use theta_grid, only: ntgrid
+    
+    character (3) :: str 
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    integer :: ig, iglo
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do ig = -ntgrid, 0
+          if (g(ig,1,iglo) /= g(-ig,2,iglo)) then
+             if (abs((g(ig,1,iglo)-g(-ig,2,iglo))/g(ig,1,iglo)) > 1.e-8) then
+                write(*,*) str,ig,iglo,g(ig,1,iglo)-g(-ig,2,iglo)
+             endif
+          endif
+       end do
+    end do
+
+  end subroutine check_g
+
+  subroutine check_glz (str, glz)
+
+    use gs2_layouts, only: lz_lo, ig_idx, ie_idx
+    use le_grids, only: jend
+    use theta_grid, only: ntgrid
+    
+    character (3) :: str 
+    complex, dimension (:,lz_lo%llim_proc:), intent (in) :: glz
+    integer :: il, ilz, ig, ie, je, ilzp, ilp
+
+    do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
+       ig = ig_idx (lz_lo, ilz)
+       ie = ie_idx (lz_lo, ilz)
+       je = jend(ig)
+       ilzp = -ig + ntgrid + (ie-1)*(2*ntgrid+1)
+       do il = 1, je
+          ilp = 2*je+1-il
+          if (glz(il,ilz) /= glz(ilp,ilzp)) then
+             if (abs((glz(il,ilz)-glz(ilp,ilzp))/glz(il,ilz)) > 1.e-8) then
+                write(*,*) str,il,ilz,glz(il,ilz),glz(ilp,ilzp)
+             endif
+          endif
+       end do
+    end do
+
+  end subroutine check_glz
 
   subroutine reset_init
     
@@ -769,3 +832,7 @@ contains
   end subroutine reset_init
 
 end module collisions
+
+
+
+
