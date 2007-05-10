@@ -4,7 +4,6 @@ module species
   public :: init_species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species
-  public :: stm, zstm, tz, smz
   public :: has_electron_species
 
   type :: specie
@@ -16,7 +15,7 @@ module species
      real :: fprim
      real :: uprim, uprim2
      real :: vnewk
-     real :: stm, zstm, tz, smz
+     real :: stm, zstm, tz, smz, zt
      integer :: type
   end type specie
 
@@ -101,6 +100,7 @@ contains
           spec(is)%stm = sqrt(temp/mass)
           spec(is)%zstm = z/sqrt(temp*mass)
           spec(is)%tz = temp/z
+          spec(is)%zt = z/temp
           spec(is)%smz = abs(sqrt(temp*mass)/z)
 
           ierr = error_unit()
@@ -123,42 +123,11 @@ contains
        call broadcast (spec(is)%stm)
        call broadcast (spec(is)%zstm)
        call broadcast (spec(is)%tz)
+       call broadcast (spec(is)%zt)
        call broadcast (spec(is)%smz)
        call broadcast (spec(is)%type)
     end do
   end subroutine read_parameters
-
-  pure function stm (spec, ispec)
-    implicit none
-    type (specie), dimension (:), intent (in) :: spec
-    integer, intent (in) :: ispec
-    real :: stm
-    stm = spec(ispec)%stm
-  end function stm
-
-  pure function zstm (spec, ispec)
-    implicit none
-    type (specie), dimension (:), intent (in) :: spec
-    integer, intent (in) :: ispec
-    real :: zstm
-    zstm = spec(ispec)%zstm
-  end function zstm
-
-  pure function tz (spec, ispec)
-    implicit none
-    type (specie), dimension (:), intent (in) :: spec
-    integer, intent (in) :: ispec
-    real :: tz
-    tz = spec(ispec)%tz
-  end function tz
-
-  pure function smz (spec, ispec)
-    implicit none
-    type (specie), dimension (:), intent (in) :: spec
-    integer, intent (in) :: ispec
-    real :: smz
-    smz = spec(ispec)%smz
-  end function smz
 
   pure function has_electron_species (spec)
     implicit none

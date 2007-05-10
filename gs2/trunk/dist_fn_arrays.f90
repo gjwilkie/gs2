@@ -13,6 +13,9 @@ module dist_fn_arrays
   real, dimension (:,:,:), allocatable :: vpar
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
+  integer, dimension (:), allocatable :: ittp
+  ! (-ntgrid:ntgrid)
+
   real, dimension (:,:), allocatable :: aj0, aj1, aj0f, aj1f
   ! (-ntgrid:ntgrid, -g-layout-)
 

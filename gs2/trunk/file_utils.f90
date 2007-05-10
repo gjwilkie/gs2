@@ -26,6 +26,14 @@ module file_utils
   !    Rewind the input file to start of namelist NML,
   !    and return its unit number
 
+  public :: input_unit_exist
+  ! function input_unit_exist (nml,exist)
+  ! character(*), intent (in) :: nml
+  ! integer :: input_unit
+  !    Rewind the input file to start of namelist NML,
+  !    and return its unit number, setexist=.true.
+  !    If the namelist NML isn't found, set exist=.false.
+
   public :: error_unit
   ! function error_unit ()
   ! integer :: error_unit
@@ -58,6 +66,7 @@ module file_utils
 
   character(500), save :: run_name
   integer, save :: input_unit_no, error_unit_no
+  integer, save, public :: num_input_lines
 contains
   subroutine init_file_utils (input, error, name)
     implicit none
@@ -95,7 +104,6 @@ contains
        call cl_getarg (1, run_name, 500, ierr)
        if (ierr /= 0) then
           print *, "Error getting run name."
-          stop
        end if
     end if
     l = len_trim (run_name)
@@ -124,9 +132,10 @@ contains
     implicit none
     integer, intent (out) :: unit
     character (*), intent (in) :: ext
+    character (500) :: hack
     call get_unused_unit (unit)
-    open (unit=unit, file=trim(run_name)//ext, status="replace", &
-         action="write")
+    hack=trim(run_name)//ext
+    open (unit=unit, file=trim(hack), status="replace", action="write")
   end subroutine open_output_file
 
   subroutine close_output_file (unit)
@@ -197,7 +206,6 @@ contains
          action="read", iostat=iostat)
     if (iostat /= 0) then
        print "(a)", "Couldn't open input file: "//trim(run_name)//".in"
-       stop
     end if
 
     call get_unused_unit (out_unit)
@@ -205,6 +213,7 @@ contains
 
     iostat = 0
     stack_ptr = 0
+    num_input_lines = 0
     do
        read (unit=in_unit, fmt="(a)", iostat=iostat) line
        if (iostat /= 0) then
@@ -235,6 +244,7 @@ contains
        end if
        call strip_comments (line)
        write (unit=out_unit, fmt="(a)") trim(line)
+       num_input_lines = num_input_lines + 1
     end do
     close (unit=in_unit)
 
@@ -259,6 +269,7 @@ contains
     integer :: input_unit, iostat
     character(500) :: line
     intrinsic adjustl, trim
+    input_unit = input_unit_no
     if (input_unit_no > 0) then
        rewind (unit=input_unit_no)
        do
@@ -269,13 +280,39 @@ contains
           end if
           if (trim(adjustl(line)) == "&"//nml) then
              backspace (unit=input_unit_no)
-             input_unit = input_unit_no
              return
           end if
        end do
     end if
     write (unit=error_unit_no, fmt="('Couldn''t find namelist: ',a)") nml
+    write (unit=*, fmt="('Couldn''t find namelist: ',a)") nml
   end function input_unit
+
+  function input_unit_exist (nml,exist)
+    implicit none
+    character(*), intent (in) :: nml
+    logical, intent(out) :: exist
+    integer :: input_unit_exist, iostat
+    character(500) :: line
+    intrinsic adjustl, trim
+    input_unit_exist = input_unit_no
+    exist = .true.
+    if (input_unit_no > 0) then
+       rewind (unit=input_unit_no)
+       do
+          read (unit=input_unit_no, fmt="(a)", iostat=iostat) line
+          if (iostat /= 0) then
+             rewind (unit=input_unit_no)
+             exit
+          end if
+          if (trim(adjustl(line)) == "&"//nml) then
+             backspace (unit=input_unit_no)
+             return
+          end if
+       end do
+    end if
+    exist = .false.
+  end function input_unit_exist
 
   function error_unit ()
     implicit none
