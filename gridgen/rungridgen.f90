@@ -146,13 +146,16 @@ contains
   end subroutine allocate_arrays_3d
 
   subroutine get_initial_grids
+
+    use file_utils, only: get_unused_unit
     implicit none
     integer :: unit
     integer :: i
     real :: discard
     character(200) :: line
 
-    open (unit=unit, file=trim(source), status="old", action="read")
+    call get_unused_unit(unit)
+    open (unit=unit, file=trim(source), status="old")
     read (unit=unit, fmt="(a)") line
     read (unit=unit, fmt="(a)") line
 
@@ -352,6 +355,7 @@ contains
   end subroutine spline
 
   subroutine write_output
+    use splines, only: fitp_curvp2
     implicit none
     integer :: unit
     integer :: i
@@ -361,7 +365,7 @@ contains
     real, allocatable, dimension (:) :: cvdriftout, gds2out, bmaggridout
     real, allocatable, dimension (:) :: gds21out, gds22out
     real, allocatable, dimension (:) :: cvdrift0out, gbdrift0out
-    real, external :: fitp_curvp2
+!    real, external :: fitp_curvp2
     real :: th, bmin
     integer :: ierr
     integer, dimension (1) :: minloca

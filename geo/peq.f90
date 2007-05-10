@@ -4,7 +4,7 @@ module peq
   private
   integer :: nr, nt, i_sym
   
-  real, allocatable, dimension (:)     :: rho_d, eqpsi, psi_bar, fp, beta, pressure, diam, rc
+  real, allocatable, dimension (:)     :: rho_d, eqpsi, psi_bar, fp, beta, pressure, diam, rc, qsf
   real, allocatable, dimension (:,:)   :: R_psi, Z_psi !, B_psi
   real, allocatable, dimension (:,:,:) :: drm, dzm, dbtm, dpm, dtm  !, dbm
   real, allocatable, dimension (:,:,:) :: dpcart, dbcart, dtcart, dbtcart
@@ -23,9 +23,10 @@ module peq
   logical :: init_beta = .true.
   logical :: init_psi = .true.
   logical :: init_invR = .true.
+  logical :: transp = .false.
 
 !  public :: B_psi 
-  public :: peq_init, eqin, gradient, eqitem, bgradient, Hahm_Burrell
+  public :: peq_init, eqin, teqin, gradient, eqitem, bgradient, Hahm_Burrell
 
   public :: invR,     initialize_invR
   public :: Rpos
@@ -45,8 +46,11 @@ contains
   subroutine eqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
        avgrmid, initeq, in_nt, nthg) 
 
+! SHOULD MOVE AWAY FROM NETCDF MODULE AND USE INCLUDE LINE BELOW.
     use netcdf 
     implicit none
+
+!    include 'netcdf.inc'
 
 !     This subroutine reads a generic NetCDF equilibrium file
 !     containing the axisymmetric magnetic field geometry in flux 
@@ -245,7 +249,7 @@ contains
 
     avgrmid = aminor
     rmaj = R_mag 
-    B_T0 = B_T
+    B_T0 = abs(B_T)
 
     psi_N = B_T0 * avgrmid**2
     psi_a = psi_a / psi_N
@@ -261,19 +265,249 @@ contains
 
   end subroutine eqin
 
+  subroutine teqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
+       avgrmid, initeq, in_nt, nthg) 
+
+    use netcdf 
+    implicit none
+!    include 'netcdf.inc'
+
+!     This subroutine reads a generic NetCDF equilibrium file
+!     containing the axisymmetric magnetic field geometry in flux 
+!     coordinates
+
+    integer :: initeq, nthg
+    real :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid, d, R_geo
+    logical :: in_nt
+    
+    integer :: ncid, id, i, j, ifail, nchar
+    character*31 :: fortrancrap
+    character*80 :: filename, eqfile
+    integer, dimension(2) :: start, cnt
+
+!
+! what is the best way to handle the netcdf single/double problem?
+!
+    integer :: nt1
+    real*8, allocatable, dimension(:) :: workr
+    real*8, allocatable, dimension(:,:) :: work
+    real :: f_N, psi_N
+    real pi
+
+    pi = 2.*acos(0.)
+!     read the data
+
+    if(initeq == 0) then
+       nthg = nt/2
+       return
+    endif
+    if (.not.in_nt) then
+
+       nchar=index(eqfile,' ')-1
+       filename=eqfile(1:nchar)
+
+    else
+       filename='dskeq.cdf'
+    endif
+
+!     netcdf open file         
+    ncid = ncopn (filename, NCNOWRIT, ifail)
+
+!     netcdf read scalar: nr
+!
+!     nr == number of radial grid points in radial eq grid
+
+!    id = ncdid (ncid, 'dim_00021', ifail)
+!    call ncdinq (ncid, id, fortrancrap, nr, ifail)
+
+    id = ncvid (ncid, 'ns', ifail)
+    call ncvgt1 (ncid, id, 1, nr, ifail)
+    
+!     netcdf read scalar: nt
+!
+!     nt == number of theta grid points in theta eq grid
+
+    id = ncvid (ncid, 'nt1', ifail)
+    call ncvgt1 (ncid, id, 1, nt, ifail)
+    
+!    id = ncdid (ncid, 'dim_00050', ifail)
+!    call ncdinq (ncid, id, fortrancrap, nt, ifail)
+   
+    call alloc_arrays(nr, nt)
+
+!     netcdf read scalars: psi_0,psi_a,B_T
+!
+!     psi_0 == value of psi at the magnetic axis
+!     psi_a == value of psi at the boundary of the plasma
+!     B_T == vacuum toroidal magnetic field at R_center
+
+!       id = ncvid (ncid, 'B_T', ifail)
+!       call ncvgt1 (ncid, id, start, work1, ifail)
+!       B_T = work1*1.e-4  ! cgs to MKS
+
+!     netcdf read vectors: eqpsi,fp,qsf,beta,pressure
+!
+!     rho_d(1:nr) == half diameters of flux surfaces at elevation 
+!                             of Z_mag on the radial grid
+!     psi is the poloidal flux
+!     eqpsi(1:nr) == values of psi on the radial grid
+!     psi_bar(1:nr) == values of psi_bar on the radial grid
+!     [psi_bar == (eqpsi - psi_0)/(psi_a - psi_0) if not available]
+!     fp(1:nr) == the function that satisfies 
+!              B = fp grad zeta + grad zeta x grad psi
+!     qsf(1:nr) == q profile on the radial grid
+!     beta(1:nr) == local beta, with the magnetic field defined 
+!     to be vacuum magnetic field on axis
+!     pressure(1:nr) == pressure profile on the radial grid,
+!     normalized to the value at the magnetic axis.     
+
+    allocate(workr(nr))
+    workr = 0.
+
+    start(1) = 1
+    cnt(1) = nr
+
+    id = ncvid (ncid, 'psi', ifail)
+    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+    eqpsi = abs(workr(1:nr))
+    
+    psi_0 = eqpsi(1)
+    psi_a = eqpsi(nr)
+
+    psi_bar = (eqpsi-psi_0)/(psi_a-psi_0)
+    
+    id = ncvid (ncid, 'g', ifail)
+    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+    fp = abs(workr(1:nr))
+    
+! not needed
+    id = ncvid (ncid, 'q', ifail)
+    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+    qsf = abs(workr(1:nr))
+    
+    id = ncvid (ncid, 'p', ifail)
+    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)       
+    pressure = workr(1:nr)
+
+!       id = ncvid (ncid, 'beta', ifail)
+!       call ncvgt (ncid, id, start, cnt, workr, ifail)
+!       beta = workr
+!       beta_0 = beta(1)
+
+!     netcdf read 2d field: R_psi,Z_psi and B_psi (mod(B))
+!     eq_Rpsi(1:nr, 1:nt)
+!     eq_Zpsi(1:nr, 1:nt)
+!     eq_Bpsi(1:nr, 1:nt)
+!         
+
+    allocate(work(nt,nr))
+    
+    start(1) = 1
+    start(2) = 1
+    cnt(1) = nt
+    cnt(2) = nr
+    id = ncvid (ncid, 'R', ifail)
+    call ncvgt (ncid, id, start, cnt, work, ifail)
+
+    do j=1,nt
+       do i=1,nr
+          R_psi(i,j) = work(j,i)
+       enddo
+    enddo
+    
+    cnt(1) = nt
+    cnt(2) = nr
+    id = ncvid (ncid, 'Z', ifail)
+    call ncvgt (ncid, id, start, cnt, work, ifail)
+
+    do j=1,nt
+       do i=1,nr
+          Z_psi(i,j) = work(j,i)
+       enddo
+    enddo
+    
+    call ncclos (ncid, ifail)
+    
+    deallocate(work,workr)
+
+!    endif   ! end of external reads
+
+! mildly gimpy at the moment, because the TRANSP output does not 
+! regularly include the point at theta=0.  
+
+! find aminor
+    aminor = 0.5*(R_psi(nr,nt/2)-R_psi(nr,1))
+
+! find R_geo
+    R_geo = 0.5*(R_psi(nr,nt/2)+R_psi(nr,1))
+
+! find rho_d
+
+    rho_d = 0.5*(R_psi(:,nt/2)-R_psi(:,1))/aminor
+
+! find magnetic axis
+
+    R_mag = R_psi(1,1)
+    Z_mag = Z_psi(1,1)
+
+! Find normalizing magnetic field
+
+    B_T = fp(nr)/R_geo
+!
+!     Normalize, rename quantities 
+!
+
+    R_mag = R_mag
+    Z_mag = Z_mag
+    R_geo = R_geo/aminor
+    R_psi = R_psi/aminor
+    Z_psi = Z_psi/aminor
+     
+
+    beta = 8. * pi * 1.e-7 * pressure / B_T**2  ! not correct definition yet?
+    beta_0 = beta(1)
+    pressure = pressure/pressure(1)
+
+    avgrmid = aminor
+    rmaj = R_mag / aminor   ! used to reference the grid
+    B_T0 = abs(B_T)
+
+    psi_N = B_T0 * avgrmid**2
+    psi_a = psi_a / psi_N
+    psi_0 = psi_0 / psi_N
+    psi_a_out = psi_a 
+    psi_0_out = psi_0 
+    eqpsi = eqpsi / psi_N
+
+    f_N = B_T0*avgrmid
+    fp=fp/f_N
+
+    nthg=nt/2
+
+    transp = .true.
+
+  end subroutine teqin
+
   subroutine alloc_arrays(nr, nt)
 
     integer :: nr, nt
 
     allocate(rho_d(nr), eqpsi(nr), psi_bar(nr), fp(nr), beta(nr), pressure(nr), &
-         rc(nr), diam(nr))
+         rc(nr), diam(nr), qsf(nr))
+    rho_d = 0. ; eqpsi = 0. ; psi_bar = 0. ; fp = 0. ; beta = 0. ; pressure = 0. 
+    rc = 0. ; diam = 0. ; qsf = 0.
     allocate(R_psi(nr, nt), Z_psi(nr, nt))
+    R_psi = 0.  ; Z_psi = 0.
 !    allocate(B_psi(nr, nt))
     allocate(drm(nr, nt, 2), dzm(nr, nt, 2), dbtm(nr, nt, 2), &
          dpm(nr, nt, 2), dtm(nr, nt, 2))
+    drm = 0. ; dzm = 0. ; dbtm = 0. ; dpm = 0. ; dtm = 0.
 !    allocate(dbm(nr, nt, 2), dbcart(nr, nt, 2), dbbish(nr, nt, 2))
     allocate(dpcart(nr, nt, 2), dtcart(nr, nt, 2), dbtcart(nr, nt, 2))
     allocate(dpbish(nr, nt, 2), dtbish(nr, nt, 2), dbtbish(nr, nt, 2))
+
+    dpcart = 0. ; dtcart = 0. ; dbtcart = 0. 
+    dpbish = 0. ; dtbish = 0. ; dbtbish = 0.
 
   end subroutine alloc_arrays
 
@@ -285,15 +519,24 @@ contains
     real pi
     integer i, j
    
-    pi=2*acos(0.)
     do j=1,nt
        do i=1,nr
           eqbtor(i,j) = fp(i)/R_psi(i,j)
           eqpsi1(i,j) = eqpsi(i)
-          eqth(i,j) = (j-1)*pi/float(nt-1)
        enddo
     enddo
     
+    pi=2*acos(0.)
+    if (transp) then
+       do j=1,nt
+          eqth(:,j) = (j-1)*2.*pi/float(nt-1)-pi
+       enddo
+    else
+       do j=1,nt
+          eqth(:,j) = (j-1)*pi/float(nt-1)
+       enddo
+    end if
+
     call derm(eqth,   dtm,  'T')
     call derm(R_psi,  drm,  'E')
     call derm(Z_psi,  dzm,  'O')
@@ -360,29 +603,55 @@ contains
     i=nr
     dfm(i,:,1) = 0.5*(3*f(i,:)-4*f(i-1,:)+f(i-2,:))
    
+    if (.not. transp) then
 ! assume up-down symmetry for now:
- 
-    select case (char)
-    case ('E') 
-       j=1
-       dfm(:,j,2) = 0.5*(f(:,j+1)-f(:,j+1))
        
-       j=nt      
-       dfm(:,j,2) = -0.5*(f(:,j-1)-f(:,j-1))
-    case ('O')
-       j=1
-       dfm(:,j,2) = 0.5*(f(:,j+1)+f(:,j+1))
+       select case (char)
+       case ('E') 
+          j=1
+          dfm(:,j,2) = 0.5*(f(:,j+1)-f(:,j+1))
+          
+          j=nt      
+          dfm(:,j,2) = -0.5*(f(:,j-1)-f(:,j-1))
+       case ('O')
+          j=1
+          dfm(:,j,2) = 0.5*(f(:,j+1)+f(:,j+1))
+          
+          j=nt      
+          dfm(:,j,2) = -0.5*(f(:,j-1)+f(:,j-1))
+       case ('T')
+          j=1
+          dfm(:,j,2) = f(:,j+1)
+          
+          j=nt      
+          dfm(:,j,2) = pi - f(:,j-1)
+       end select
        
-       j=nt      
-       dfm(:,j,2) = -0.5*(f(:,j-1)+f(:,j-1))
-    case ('T')
-       j=1
-       dfm(:,j,2) = f(:,j+1)
-       
-       j=nt      
-       dfm(:,j,2) = pi - f(:,j-1)
-    end select
+    else
 
+       select case (char)
+       case ('E') 
+          j=1
+          dfm(:,j,2) = 0.5*(f(:,j+1)-f(:,nt-1))
+          
+          j=nt      
+          dfm(:,j,2) = 0.5*(f(:,2)-f(:,j-1))
+       case ('O')
+          j=1
+          dfm(:,j,2) = 0.5*(f(:,j+1)-f(:,nt-1))
+          
+          j=nt      
+          dfm(:,j,2) = 0.5*(f(:,2)-f(:,j-1))
+       case ('T')
+          j=1
+          dfm(:,j,2) = 0.5*(f(:,j+1)-f(:,nt-1)+2.*pi)
+          
+          j=nt
+          dfm(:,j,2) = 0.5*(2.*pi + f(:,2) - f(:,j-1))
+       end select
+       
+    end if
+    
     do i=2,nr-1
        dfm(i,:,1)=0.5*(f(i+1,:)-f(i-1,:))
     enddo
@@ -390,7 +659,17 @@ contains
     do j=2,nt-1
        dfm(:,j,2)=0.5*(f(:,j+1)-f(:,j-1))
     enddo
-    
+
+!    if (char=='T') then
+!       do i=1,nr
+!          write(*,*) i,'1'
+!          write(*,*) dfm(i,:,1)
+!          write(*,*) i,'2'
+!          write(*,*) dfm(i,:,2)
+!          write(*,*)
+!       enddo
+!    end if
+
   end subroutine derm
 
   subroutine gradient(rgrid, theta, grad, char, rp, nth_used, ntm)
@@ -425,7 +704,7 @@ contains
        call eqitem(rgrid(i), theta(i), f, tmp(1), 'R')
        f(:,:) = dcart(:,:,2)
        call eqitem(rgrid(i), theta(i), f, tmp(2), 'Z')
-       if(char == 'T') then
+       if(char == 'T' .and. .not. transp) then
           grad(i,1)=-tmp(1)
           grad(i,2)=-tmp(2)
        else
@@ -487,7 +766,7 @@ contains
        call eqitem(rgrid(i), theta(i), dbish(:,:,2), grad(i,2), 'Z')
     enddo
 
-    if (char == 'T') then
+    if (char == 'T' .and. .not. transp) then
        where (theta(-nth_used:nth_used) < 0.0)
           grad(-nth_used:nth_used,1) = -grad(-nth_used:nth_used,1)
           grad(-nth_used:nth_used,2) = -grad(-nth_used:nth_used,2)
@@ -570,55 +849,99 @@ contains
 
     thet = mod2pi(theta_in)
 
+!    write(*,*) 'theta_in, thet = ',theta_in, thet
+
 ! assume up-down symmetry
 
-    tp=abs(thet)
-    tps=1.
-    if(char == 'Z' .and. tp >= 1.e-10) tps=thet/tp
-        
+    if (.not. transp) then
+       tp=abs(thet)
+       tps=1.
+       if(char == 'Z' .and. tp >= 1.e-10) tps=thet/tp
+
 ! get thet on theta mesh
 
-    do j=1,nt
-       mtheta(j)=(j-1)*pi/float(nt-1)
-    enddo
-  
+       do j=1,nt
+          mtheta(j)=(j-1)*pi/float(nt-1)
+       enddo
+       
 ! note that theta(1)=0 for gen_eq theta 
 
-    jstar=-1
-    do j=1,nt
-       if(jstar /= -1) cycle
-       if(tp < mtheta(j)) then
-          dt = tp - mtheta(j-1)
-          st = mtheta(j) - tp
-          jstar=j-1
-       endif
-    enddo
+       jstar=-1
+       do j=1,nt
+          if(jstar /= -1) cycle
+          if(tp < mtheta(j)) then
+             dt = tp - mtheta(j-1)
+             st = mtheta(j) - tp
+             jstar=j-1
+          endif
+       enddo
       
 ! treat theta = pi separately
   
-    if(jstar == -1) then
-       jstar=nt-1
-       dt=mtheta(jstar+1)-mtheta(jstar)
-       st=0.
-    endif
+       if(jstar == -1) then
+          jstar=nt-1
+          dt=mtheta(jstar+1)-mtheta(jstar)
+          st=0.
+       endif
 
 ! use opposite area stencil to interpolate
 
 !    if(char == 'R') i=1
 !    if(char == 'Z') i=2
-    fstar=f(istar    , jstar    ) * sr * st &
-         +f(istar + 1, jstar    ) * dr * st &
-         +f(istar    , jstar + 1) * sr * dt &
-         +f(istar + 1, jstar + 1) * dr * dt
-    fstar=fstar*tps &
-         /abs(eqpsi(istar+1)-eqpsi(istar)) &
-         /(mtheta(jstar+1)-mtheta(jstar))
-!     write(*,*) i, dr, dt, sr, st
+       fstar=f(istar    , jstar    ) * sr * st &
+            +f(istar + 1, jstar    ) * dr * st &
+            +f(istar    , jstar + 1) * sr * dt &
+            +f(istar + 1, jstar + 1) * dr * dt
+       fstar=fstar*tps &
+            /abs(eqpsi(istar+1)-eqpsi(istar)) &
+            /(mtheta(jstar+1)-mtheta(jstar))
+
+    else
+
+! get thet on theta mesh
+
+       do j=1,nt
+          mtheta(j)=(j-1)*2.*pi/float(nt-1)-pi
+       enddo
+       
+! note that theta(1)=0 for gen_eq theta 
+
+       jstar=-1
+       do j=1,nt
+          if(jstar /= -1) cycle
+          if(thet < mtheta(j)) then
+             dt = thet - mtheta(j-1)
+             st = mtheta(j) - thet
+             jstar=j-1
+          endif
+       enddo
+      
+! treat pi separately
+  
+       if(jstar == -1) then
+          jstar=nt-1
+          dt=mtheta(jstar+1)-mtheta(jstar)
+          st=0.
+       endif
+
+! use opposite area stencil to interpolate
+
+!    if(char == 'R') i=1
+!    if(char == 'Z') i=2
+       fstar=f(istar    , jstar    ) * sr * st &
+            +f(istar + 1, jstar    ) * dr * st &
+            +f(istar    , jstar + 1) * sr * dt &
+            +f(istar + 1, jstar + 1) * dr * dt
+       fstar=fstar &
+            /abs(eqpsi(istar+1)-eqpsi(istar)) &
+            /(mtheta(jstar+1)-mtheta(jstar))
+    end if
+!     write(*,*) i, dr, dt, sr, st, istar, jstar
 !     write(*,*) f(istar,jstar+1),f(istar+1,jstar+1)
 !     write(*,*) f(istar,jstar),f(istar+1,jstar)
 !     write(*,*) eqpsi(istar),eqpsi(istar+1)
 !     write(*,*) mtheta(jstar),mtheta(jstar+1)
-      
+!     write(*,*) 
 
   end subroutine eqitem
 
@@ -777,7 +1100,7 @@ contains
     type (spline), save :: spl
 
     if(init_diameter) then
-       diam(:) = R_psi(:,1) - R_psi(:,nt)
+       diam(:) = R_psi(:,nt/2) - R_psi(:,1)
        call new_spline(nr, eqpsi, diam, spl)
        init_diameter = .false.
     endif
@@ -803,7 +1126,7 @@ contains
     type (spline), save :: spl
 
     if(init_rcenter) then
-       rc(:) = 0.5*(R_psi(:,1) + R_psi(:,nt))
+       rc(:) = 0.5*(R_psi(:,1) + R_psi(:,nt/2))
        call new_spline(nr, eqpsi, rc, spl)
        init_rcenter = .false.
     endif
@@ -870,10 +1193,14 @@ contains
 
   function qfun (pbar)
   
+    use splines
     real :: pbar, qfun
+    type (spline), save :: spl
 
-    write(*,*) 'qfun not available in peq.'
-    qfun = 1.
+    if(init_q) call new_spline(nr, psi_bar, qsf, spl)
+    init_q = .false.
+
+    qfun = splint(pbar, spl)
 
   end function qfun
 
@@ -1009,8 +1336,8 @@ contains
        write(24,1000) i, pbar(i), rho_eq, pres(i), gamma(i)
     enddo
 
-    write(*,*) 1/(psi_a-psi_0)
-    if(irho == 1) write(* ,*) '# irho = 1 produces psi instead of rho_eq'
+!    write(*,*) 1/(psi_a-psi_0)
+!    if(irho == 1) write(* ,*) '# irho = 1 produces psi instead of rho_eq'
     if(irho == 1) write(24,*) '# irho = 1 produces psi instead of rho_eq'
 
 1000 format(i5,11(1x,e16.9))

@@ -164,6 +164,22 @@ ifeq ($(CPU),LINUX_alpha)
   endif
 endif
 
+# options for Linux with Lahey lf95
+ifeq ($(CPU),LINUX_lf95)
+  FC = mpif90
+  FLIBS = -L/usr/local/lib -lnetcdf
+  PLATFORM_LINKS = linux_lf95
+  FFLAGS = --dbl --ml cdecl -I$(UTILDIR)
+  F90FLAGS = --dbl --ml cdecl -I$(UTILDIR)
+
+  ifeq ($(debug),on) 
+    F90FLAGS += -g --chk aesu
+  else
+    FFLAGS += -O 
+    F90FLAGS += -O 
+  endif
+
+endif
 # options for NAG f95 on a DEC alpha
 ifeq ($(CPU),ALPHA_NAG)
   FC = /usr/local/bin/f95
@@ -194,21 +210,6 @@ ifeq ($(CPU),LINUX_pg)
   endif
 endif
 
-# options for Linux with Absoft f90
-ifeq ($(CPU),LINUX_abs)
-  FC = mpif90
-  FLIBS = -L/usr/local/lib -lnetcdf
-  PLATFORM_LINKS = linux_fuj
-  F90FLAGS = -N113 -p$(UTILDIR)
-
-  ifeq ($(debug),on) 
-    F90FLAGS += -g -Rbcs
-  else
-    F90FLAGS += -O 
-  endif
-
-endif
-
 # options for Linux with Fujitsu f90
 ifeq ($(CPU),LINUX_fuj)
   FC = mpif90
@@ -223,6 +224,21 @@ ifeq ($(CPU),LINUX_fuj)
     FFLAGS   += -O -X9 -f 2004,2006,2008 -Wa,--no-warn
     F90FLAGS += -O -X9 -f 2004,2006,2008 -Wa,--no-warn
   endif
+endif
+
+# options for Linux with Absoft f90
+ifeq ($(CPU),LINUX_abs)
+  FC = mpif90
+  FLIBS = -L/usr/local/lib -lnetcdf
+  PLATFORM_LINKS = linux_fuj
+  F90FLAGS = -N113 -p$(UTILDIR)
+
+  ifeq ($(debug),on) 
+    F90FLAGS += -g -Rbcs
+  else
+    F90FLAGS += -O 
+  endif
+
 endif
 
 # options for Linux with NAG f95:

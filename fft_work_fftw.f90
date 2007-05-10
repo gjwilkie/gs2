@@ -3,7 +3,7 @@ module fft_work
   implicit none
 
   public :: fft_type, delete_fft
-  public :: init_ccfftw, init_crfftw, init_rcfftw
+  public :: init_ccfftw, init_crfftw, init_rcfftw, init_z
   
   interface init_crfftw
      module procedure init_crfftw_1d
@@ -20,15 +20,31 @@ module fft_work
      real :: scale
   end type fft_type
 
-  integer fftw_in_place
-  parameter (fftw_in_place=8)
+  integer, parameter :: fftw_estimate   =  0
+  integer, parameter :: fftw_measure    =  1
+  integer, parameter :: fftw_in_place   =  8
+  integer, parameter :: fftw_use_wisdom = 16
 
-  integer fftw_estimate,fftw_measure
-  parameter (fftw_estimate=0,fftw_measure=1)
-  
   private
 
 contains
+
+  subroutine init_z (fft, is, n)
+
+    type (fft_type), intent (out) :: fft
+    integer, intent (in) :: is, n
+    integer :: j
+    
+    fft%n = n
+    fft%is = is
+    fft%scale = 1./real(n)
+    if (is > 0) fft%scale = 1.
+    fft%type = 1
+    
+    j = fftw_measure + fftw_use_wisdom
+    call fftw_f77_create_plan(fft%plan,n,is,j)
+
+  end subroutine init_z
 
   subroutine init_ccfftw (fft, is, n)
 
@@ -42,7 +58,7 @@ contains
     if (is > 0) fft%scale = 1.
     fft%type = 1
     
-    j = fftw_in_place + fftw_measure
+    j = fftw_in_place + fftw_measure + fftw_use_wisdom
     call fftw_f77_create_plan(fft%plan,n,is,j)
 
   end subroutine init_ccfftw
@@ -51,6 +67,7 @@ contains
 
     type (fft_type), intent (out) :: fft
     integer, intent (in) :: is, n
+    integer :: j
 
     fft%n = n
     fft%is = is
@@ -58,7 +75,8 @@ contains
     if (is > 0) fft%scale = 1.
     fft%type = 0
 
-    call rfftwnd_f77_create_plan(fft%plan,1,N,is,FFTW_MEASURE)
+    j = fftw_measure + fftw_use_wisdom
+    call rfftwnd_f77_create_plan(fft%plan,1,N,is,j)
 
   end subroutine init_rcfftw_1d
   
@@ -66,6 +84,7 @@ contains
 
     type (fft_type), intent (out) :: fft
     integer, intent (in) :: is, n
+    integer :: j
 
     fft%n = n
     fft%is = is
@@ -73,7 +92,8 @@ contains
     if (is > 0) fft%scale = 1.
     fft%type = 0
 
-    call rfftwnd_f77_create_plan(fft%plan,1,N,is,FFTW_MEASURE)
+    j = fftw_measure + fftw_use_wisdom
+    call rfftwnd_f77_create_plan(fft%plan,1,N,is,j)
 
   end subroutine init_crfftw_1d
 
@@ -81,11 +101,13 @@ contains
 
     type (fft_type), intent (out) :: fft
     integer, intent (in) :: is, m, n
+    integer :: j
 
     fft%scale = 1./real(m*n)
     if (is > 0) fft%scale = 1.
 
-    call rfftw2d_f77_create_plan(fft%plan,m,n,is,FFTW_MEASURE)
+    j = fftw_measure + fftw_use_wisdom
+    call rfftw2d_f77_create_plan(fft%plan,m,n,is,j)
 
   end subroutine init_rcfftw_2d
   
@@ -93,11 +115,13 @@ contains
 
     type (fft_type), intent (out) :: fft
     integer, intent (in) :: is, m, n
+    integer :: j
 
     fft%scale = 1./real(m*n)
     if (is > 0) fft%scale = 1.
 
-    call rfftw2d_f77_create_plan(fft%plan,m,n,is,FFTW_MEASURE)
+    j = fftw_measure + fftw_use_wisdom
+    call rfftw2d_f77_create_plan(fft%plan,m,n,is,j)
 
   end subroutine init_crfftw_2d
 

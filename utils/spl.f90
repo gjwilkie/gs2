@@ -430,7 +430,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n-1)/(x(n)-x(1))
+    sigmap = abs(sigma)*real(n-1)/(x(n)-x(1))
 !
 ! approximate end slopes
 !
@@ -670,7 +670,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n-1)/(x(n)-x(1))
+    sigmap = abs(sigma)*real(n-1)/(x(n)-x(1))
 !
 ! set up and perform interpolation
 !
@@ -747,7 +747,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n-1)/(x(n)-x(1))
+    sigmap = abs(sigma)*real(n-1)/(x(n)-x(1))
 !
 ! set up and perform differentiation
 !
@@ -823,7 +823,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n-1)/(x(n)-x(1))
+    sigmap = abs(sigma)*real(n-1)/(x(n)-x(1))
 !
 ! determine actual upper and lower bounds
 !
@@ -1019,7 +1019,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n)/p
+    sigmap = abs(sigma)*real(n)/p
 !
 ! set up right hand side and tridiagonal system for yp and
 ! perform forward elimination
@@ -1279,7 +1279,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n)/p
+    sigmap = abs(sigma)*real(n)/p
 !
 ! set up and perform interpolation
 !
@@ -1362,7 +1362,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n)/p
+    sigmap = abs(sigma)*real(n)/p
 !
 ! set up and perform interpolation
 !
@@ -1450,7 +1450,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n)/p
+    sigmap = abs(sigma)*real(n)/p
 !
 ! determine actual upper and lower bounds
 !
@@ -1463,7 +1463,7 @@ contains
     uper = int((xu-x(1))/p)
     if (xu .lt. x(1)) uper = uper-1
     ideltp = uper-lper
-    bdy = float(ideltp)*(xxu-xxl) .lt. 0.
+    bdy = real(ideltp)*(xxu-xxl) .lt. 0.
     if ((ideltp .eq. 0 .and. xxu .lt. xxl) .or. ideltp .lt. 0) isign = -1
     if (bdy) ideltp = ideltp-isign
     if (xxu .ge. xxl) go to 1
@@ -1649,9 +1649,9 @@ contains
 20  so = s1+s2+s6+s7
     si = s3+s4+s5+s8
     if (bdy) go to 21
-    fitp_curvpi = float(ideltp)*(so+si)+float(isign)*si
+    fitp_curvpi = real(ideltp)*(so+si)+real(isign)*si
     return
-21  fitp_curvpi = float(ideltp)*(so+si)+float(isign)*so
+21  fitp_curvpi = real(ideltp)*(so+si)+real(isign)*so
     return
   end function fitp_curvpi
   subroutine fitp_kurv1 (n,x,y,slp1,slpn,islpsw,xp,yp,temp,s,sigma,ierr)
@@ -1758,7 +1758,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n-1)/s(n)
+    sigmap = abs(sigma)*real(n-1)/s(n)
 !
 ! approximate end slopes
 !
@@ -1915,7 +1915,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n-1)/s(n)
+    sigmap = abs(sigma)*real(n-1)/s(n)
 !
 ! set up and perform interpolation
 !
@@ -2019,7 +2019,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n-1)/s(n)
+    sigmap = abs(sigma)*real(n-1)/s(n)
 !
 ! set up and perform interpolation
 !
@@ -2147,7 +2147,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n)/s(n)
+    sigmap = abs(sigma)*real(n)/s(n)
 !
 ! set up right hand sides of tridiagonal (with corner
 ! elements) linear system for xp and yp
@@ -2298,7 +2298,7 @@ contains
 !
 ! determine interval
 !
-    tn = t-float(int(t))
+    tn = t-real(int(t))
     if (tn .lt. 0.) tn = tn+1.
     tn = s(n)*tn+s(1)
     im1 = n
@@ -2308,7 +2308,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n)/s(n)
+    sigmap = abs(sigma)*real(n)/s(n)
 !
 ! set up and perform interpolation
 !
@@ -2407,7 +2407,7 @@ contains
 !
 ! determine interval
 !
-    tn = t-float(int(t))
+    tn = t-real(int(t))
     if (tn .lt. 0.) tn = tn+1.
     tn = s(n)*tn+s(1)
     im1 = n
@@ -2417,7 +2417,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n)/s(n)
+    sigmap = abs(sigma)*real(n)/s(n)
 !
 ! set up and perform interpolation
 !
@@ -2605,7 +2605,7 @@ contains
 !
 ! denormalize tension factor in y-direction
 !
-    sigmay = abs(sigma)*float(n-1)/(y(n)-y(1))
+    sigmay = abs(sigma)*real(n-1)/(y(n)-y(1))
 !
 ! obtain y-partial derivatives along y = y(1)
 !
@@ -2653,7 +2653,7 @@ contains
 !
 ! denormalize tension factor in x-direction
 !
-    sigmax = abs(sigma)*float(m-1)/(x(m)-x(1))
+    sigmax = abs(sigma)*real(m-1)/(x(m)-x(1))
 !
 ! obtain x-partial derivatives along x = x(1)
 !
@@ -2943,8 +2943,8 @@ contains
 !
 ! denormalize tension factor in x and y direction
 !
-    sigmax = abs(sigma)*float(m-1)/(x(m)-x(1))
-    sigmay = abs(sigma)*float(n-1)/(y(n)-y(1))
+    sigmax = abs(sigma)*real(m-1)/(x(m)-x(1))
+    sigmay = abs(sigma)*real(n-1)/(y(n)-y(1))
 !
 ! determine y interval
 !
@@ -3206,7 +3206,7 @@ contains
 !
 ! denormalize tension factor
 !
-    sigmap = abs(sigma)*float(n)/p
+    sigmap = abs(sigma)*real(n)/p
 !
 ! form t matrix and second differences of y into ys
 !
@@ -3308,7 +3308,7 @@ contains
 !
 ! test for straight line fit
 !
-     con = sumy/float(n)
+     con = sumy/real(n)
      sum = 0.
      do i = 1,n
         sum = sum+(y(i)-con)**2
@@ -3670,7 +3670,7 @@ contains
 !
 ! denormalize tension factor
 !
-     sigmap = abs(sigma)*float(n-1)/(x(n)-x(1))
+     sigmap = abs(sigma)*real(n-1)/(x(n)-x(1))
 !
 ! form t matrix and second differences of y into ys
 !
@@ -3978,7 +3978,7 @@ contains
      data i /1/
 
      nper = (t-x(1))/p
-     tp = t-float(nper)*p
+     tp = t-real(nper)*p
      if (tp .lt. x(1)) tp = tp+p
      tt = tp
 !

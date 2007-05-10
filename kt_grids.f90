@@ -10,14 +10,17 @@ module kt_grids_single
 contains
 
   subroutine init_kt_grids_single
-    use file_utils, only: input_unit
+    use file_utils, only: input_unit, input_unit_exist
     implicit none
+    integer :: in_file
+    logical :: exist
     namelist /kt_grids_single_parameters/ aky, theta0, akx
 
     aky = 0.4
     theta0 = 0.0
     akx = 0.0
-    read (unit=input_unit("kt_grids_single_parameters"), &
+    in_file = input_unit_exist ("kt_grids_single_parameters", exist)
+    if (exist) read (unit=input_unit("kt_grids_single_parameters"), &
          nml=kt_grids_single_parameters)
   end subroutine init_kt_grids_single
 
@@ -63,9 +66,11 @@ module kt_grids_range
 contains
 
   subroutine init_kt_grids_range
-    use file_utils, only: input_unit
+    use file_utils, only: input_unit, input_unit_exist
     implicit none
     integer :: naky, ntheta0
+    integer :: in_file
+    logical :: exist
     namelist /kt_grids_range_parameters/ naky, ntheta0, &
          aky_min, aky_max, theta0_min, theta0_max
 
@@ -75,7 +80,8 @@ contains
     aky_max = 0.0
     theta0_min = 0.0
     theta0_max = 0.0
-    read (unit=input_unit("kt_grids_range_parameters"), &
+    in_file = input_unit_exist ("kt_grids_range_parameters", exist)
+    if (exist) read (unit=input_unit("kt_grids_range_parameters"), &
          nml=kt_grids_range_parameters)
     naky_private = naky
     ntheta0_private = ntheta0
@@ -131,16 +137,19 @@ module kt_grids_specified
 contains
 
   subroutine init_kt_grids_specified
-    use file_utils, only: input_unit
+    use file_utils, only: input_unit, input_unit_exist
     implicit none
     integer :: naky, ntheta0, nx, ny
+    integer :: in_file
+    logical :: exist
     namelist /kt_grids_specified_parameters/ naky, ntheta0, nx, ny
 
     naky = 1
     ntheta0 = 1
     nx = 0
     ny = 0
-    read (unit=input_unit("kt_grids_specified_parameters"), &
+    in_file = input_unit_exist("kt_grids_specified_parameters", exist)
+    if (exist) read (unit=input_unit("kt_grids_specified_parameters"), &
          nml=kt_grids_specified_parameters)
     naky_private = naky
     ntheta0_private = ntheta0
@@ -213,10 +222,12 @@ contains
 
   subroutine init_kt_grids_box
     use theta_grid, only: init_theta_grid
-    use file_utils, only: input_unit
+    use file_utils, only: input_unit, input_unit_exist
     use constants
     implicit none
     integer :: naky, ntheta0, nx, ny
+    integer :: in_file
+    logical :: exist
     namelist /kt_grids_box_parameters/ naky, ntheta0, ly, nx, ny, jtwist, &
 	y0, rtwist
 
@@ -230,8 +241,8 @@ contains
     ny = 0
     jtwist = 1
     rtwist = 0.0
-    read (unit=input_unit("kt_grids_box_parameters"), &
-         nml=kt_grids_box_parameters)
+    in_file = input_unit_exist("kt_grids_box_parameters", exist)
+    if (exist) read (unit=input_unit("kt_grids_box_parameters"), nml=kt_grids_box_parameters)
     if (ly == 0.) ly = 2.0*pi*y0
     if (naky == 0) naky = (ny-1)/3 + 1
     if (ntheta0 == 0) ntheta0 = 2*((nx-1)/3) + 1
@@ -286,6 +297,9 @@ contains
        akx(i) = real(i-ntheta0-1)*dkx
     end do
 
+!!! Is there a negative sign missing here?  For up-down symmetric
+!!! equilibria, it would not matter, but otherwise it could??
+!!! This is mainly used to define wdrift and kperp2
     do i = 1, ntheta0
        theta0(i,2:) = akx(i)/(aky(2:)*shat)
        theta0(i,1) = 0.0
@@ -308,9 +322,11 @@ module kt_grids_xbox
 contains
 
   subroutine init_kt_grids_xbox
-    use file_utils, only: input_unit
+    use file_utils, only: input_unit, input_unit_exist
     implicit none
     integer :: ntheta0, nx
+    integer :: in_file
+    logical :: exist
     real :: aky
     namelist /kt_grids_xbox_parameters/ ntheta0, lx, aky, nx
 
@@ -318,7 +334,8 @@ contains
     lx = 1.0
     aky = 0.2
     nx = 0
-    read (unit=input_unit("kt_grids_xbox_parameters"), &
+    in_file = input_unit_exist ("kt_grids_xbox_parameters", exist)
+    if (exist) read (unit=input_unit("kt_grids_xbox_parameters"), &
          nml=kt_grids_xbox_parameters)
     ntheta0_private = ntheta0
     aky_private = aky
@@ -448,7 +465,7 @@ contains
   end subroutine init_kt_grids
 
   subroutine read_parameters
-    use file_utils, only: input_unit, error_unit
+    use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options
     implicit none
     type (text_option), dimension (7), parameter :: gridopts = &
@@ -472,11 +489,13 @@ contains
     character(20) :: norm_option
 
     namelist /kt_grids_knobs/ grid_option, norm_option
-    integer :: ierr
+    integer :: ierr, in_file
+    logical :: exist
 
     norm_option = 'default'
     grid_option = 'default'
-    read (unit=input_unit("kt_grids_knobs"), nml=kt_grids_knobs)
+    in_file = input_unit_exist ("kt_grids_knobs", exist)
+    if (exist) read (unit=input_unit("kt_grids_knobs"), nml=kt_grids_knobs)
 
     ierr = error_unit()
     call get_option_value &

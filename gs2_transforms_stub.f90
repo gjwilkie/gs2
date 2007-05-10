@@ -6,7 +6,7 @@ module gs2_transforms
   implicit none
 
   public :: init_transforms
-  public :: init_x_transform
+  public :: init_x_transform, init_zf, kz_spectrum
   public :: transform_x, transform_y, transform2
   public :: inverse_x, inverse_y, inverse2
 
@@ -729,5 +729,21 @@ contains
     enddo
    
   end subroutine reality
+
+  subroutine init_zf (ntgrid, nperiod)
+
+    implicit none
+    integer, intent (in) :: ntgrid, nperiod
+
+  end subroutine init_zf
+    
+  subroutine kz_spectrum (an, an2, ntheta0, naky)
+
+    complex, dimension (:,:,:) :: an, an2
+    integer, intent (in) :: ntheta0, naky
+
+    an2 = 0.
+
+  end subroutine kz_spectrum
 
 end module gs2_transforms

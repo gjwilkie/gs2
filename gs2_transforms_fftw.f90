@@ -6,7 +6,7 @@ module gs2_transforms
   implicit none
 
   public :: init_transforms
-  public :: init_x_transform
+  public :: init_x_transform, init_zf, kz_spectrum
   public :: transform_x, transform_y, transform2
   public :: inverse_x, inverse_y, inverse2
 
@@ -54,7 +54,7 @@ module gs2_transforms
 
   ! fft
 
-  type (fft_type) :: xf_fft, xb_fft, yf_fft, yb_fft
+  type (fft_type) :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
 
   logical :: xfft_initted = .false.
 
@@ -75,6 +75,7 @@ contains
   subroutine init_transforms &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
     use mp, only: nproc
+    use gs2_layouts, only: init_gs2_layouts
     use gs2_layouts, only: pe_layout, init_accel_transform_layouts
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
@@ -87,6 +88,7 @@ contains
     if (initialized) return
     initialized = .true.
 
+    call init_gs2_layouts
     call init_3d_layouts
 
     call pe_layout (char)
@@ -233,6 +235,7 @@ contains
           allocate (to_list(ip)%second(nn_to(ip)))
        end if
     end do
+
 
     ! get local indices of elements distributed to/from other processors
     nn_to = 0
@@ -654,8 +657,8 @@ contains
 !               xb_fft%is, xb_fft%scale, &
 !               xb_fft%aux1, xb_fft%naux1, &
 !               aux2, xb_fft%naux2)
-          phi(ig,1:(ntheta0+1)/2,ik) = f(1:(ntheta0+1)/2)
-          phi(ig,(ntheta0+1)/2+1:ntheta0,ik) = f(nlo:xxf_lo%nx)
+!!          phi(ig,1:(ntheta0+1)/2,ik) = f(1:(ntheta0+1)/2)
+!!          phi(ig,(ntheta0+1)/2+1:ntheta0,ik) = f(nlo:xxf_lo%nx)
        end do
     end do
 
@@ -717,8 +720,8 @@ contains
 !            yb_fft%aux1, yb_fft%naux1, &
 !            aux2,        yb_fft%naux2)
 
-          phixxf(ix,1,ig) = f(1)
-          phixxf(ix,2:naky,ig) = f(2:naky)*2.0
+!          phixxf(ix,1,ig) = f(1)
+!          phixxf(ix,2:naky,ig) = f(2:naky)*2.0
        end do
     end do
 !    deallocate (aux2)
@@ -833,9 +836,33 @@ contains
 !         yb_fft%is,   yb_fft%scale, &
 !         yb_fft%aux1, yb_fft%naux1, &
 !         aux2,        yb_fft%naux2)
-    f(1) = fx(1)
-    f(2:naky) = fx(2:naky)*2.0
+!    f(1) = fx(1)
+!    f(2:naky) = fx(2:naky)*2.0
 !    deallocate (aux2)
   end subroutine inverse_y1d
+  
+  subroutine init_zf (ntgrid, nperiod)
+
+    use fft_work, only: init_z
+    implicit none
+    integer, intent (in) :: ntgrid, nperiod
+    logical :: done = .false.
+
+    if (done) return
+    done = .true.
+
+    call init_z (zf_fft, 1, 2*ntgrid)
+
+  end subroutine init_zf
+    
+  subroutine kz_spectrum (an, an2, ntgrid, ntheta0, naky)
+
+    complex, dimension (:,:,:) :: an, an2
+    integer, intent (in) :: ntheta0, naky, ntgrid
+    
+    call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n, an2, 1, zf_fft%n)
+    an2 = conjg(an2)*an2
+
+  end subroutine kz_spectrum
 
 end module gs2_transforms

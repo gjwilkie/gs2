@@ -39,6 +39,8 @@ module file_utils
   ! integer :: error_unit
   !    Return the error unit number
 
+  public :: get_input_unit
+
   public :: open_output_file
   ! subroutine open_output_file (unit, ext)
   ! integer, intent (out) :: unit
@@ -209,7 +211,8 @@ contains
     end if
 
     call get_unused_unit (out_unit)
-    open (unit=out_unit, status="scratch", action="readwrite")
+!    open (unit=out_unit, status="scratch", action="readwrite")
+    open (unit=out_unit, file="."//trim(run_name)//".in")
 
     iostat = 0
     stack_ptr = 0
@@ -320,20 +323,35 @@ contains
     error_unit = error_unit_no
   end function error_unit
 
+  subroutine get_input_unit (unit)
+    implicit none
+    integer, intent (out) :: unit
+
+    unit = input_unit_no
+
+  end subroutine get_input_unit
+
   subroutine get_indexed_namelist_unit (unit, nml, index)
     implicit none
     integer, intent (out) :: unit
     character (*), intent (in) :: nml
     integer, intent (in) :: index
     character(500) :: line
-    integer :: iunit, iostat
+    integer :: iunit, iostat, in_file
+    logical :: exist
+
+    call get_unused_unit (unit)
+!    open (unit=unit, status="scratch", action="readwrite")
+    open (unit=unit, file="."//trim(run_name)//".scratch")
 
     write (line, *) index
     line = nml//"_"//trim(adjustl(line))
-    iunit = input_unit(trim(line))
-
-    call get_unused_unit (unit)
-    open (unit=unit, status="scratch", action="readwrite")
+    in_file = input_unit_exist(trim(line), exist)
+    if (exist) then
+       iunit = input_unit(trim(line))
+    else
+       return
+    end if
 
     read (unit=iunit, fmt="(a)") line
     write (unit=unit, fmt="('&',a)") nml

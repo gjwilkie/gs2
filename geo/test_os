@@ -56,5 +56,23 @@ if test "$WORKSTATION_TYPE" = 'LINUX'; then
     fi
 fi
 
+# Check if using Linux with Lahey-Fujitsu F90 compiler
+if test "$WORKSTATION_TYPE" = 'LINUX'; then
+    S=`lf95 --version 2>&1`
+    S=`echo $S | grep Lahey`
+    if test ${#S} != 0 ; then
+	WORKSTATION_TYPE='LINUX_lf95'
+    fi
+fi
+
+# Check if using Linux with Absoft compiler
+if test "$WORKSTATION_TYPE" = 'LINUX'; then
+    S=`mpif90 -show 2>&1`
+    S=`echo $S | grep absoft`
+    if test ${#S} != 0 ; then
+	WORKSTATION_TYPE='LINUX_abs'
+    fi
+fi
+
 echo $WORKSTATION_TYPE
 # export WORKSTATION_TYPE

@@ -4,7 +4,7 @@ module gs2_transforms
 
   implicit none
 
-  public :: init_transforms
+  public :: init_transforms, init_zf, kz_spectrum
   public :: init_x_transform
   public :: transform_x, transform_y, transform2
   public :: inverse_x, inverse_y, inverse2
@@ -65,6 +65,13 @@ module gs2_transforms
   integer :: igmin_proc, igmax_proc
   integer, dimension (:), allocatable :: igproc, ia, iak
   logical, dimension (:), allocatable :: aidx  ! aidx == aliased index
+
+! k_parallel filter items
+  real, dimension (:), allocatable :: kpar  ! (2*ntgrid)
+  real, dimension(:), allocatable :: zwork, ztable
+  real :: zscale
+  integer :: nztable, nzwork
+
 
 contains
 
@@ -739,6 +746,90 @@ contains
 
 
   end subroutine init_xf
+
+  subroutine init_zf (ntgrid, nperiod)
+
+    use fft_work, only: ccfft_work0, ccfft_work1, ccfft_table0, ccfft_table1
+    implicit none
+    integer, intent (in) :: ntgrid, nperiod
+    complex, dimension(2*ntgrid) :: b
+    real :: L_theta
+    integer :: i
+    logical :: done = .false.
+
+    if (done) return
+    done = .true.
+
+!    allocate (kpar(2*ntgrid))
+    
+!    do i = 1, ntgrid
+!       kpar(i) = real(i-1)
+!       kpar(i+ntgrid) = real(i-ntgrid-1)
+!    enddo
+
+!    L_theta = real(2*nperiod-1)
+!    kpar = kpar / L_theta * kfilter
+    
+    zscale=1.0/sqrt(real(2*ntgrid))
+    
+! FFT work array: 
+    nzwork=ccfft_work0 + ccfft_work1*2*ntgrid
+    
+! trig table: 
+    nztable = ccfft_table0 + ccfft_table1*2*ntgrid
+    
+    if (nzwork > 0 .and. nztable > 0) then
+       allocate(zwork(nzwork), ztable(nztable)) 
+
+       b = 0.
+       call ccfft(0, 2*ntgrid, zscale, b, b, ztable, zwork, 0)
+    else
+       ! no fft will be done
+    end if
+
+  end subroutine init_zf
+    
+  subroutine kz_spectrum (an, an2, ntgrid, ntheta0, naky)
+
+    complex, dimension (:,:,:) :: an, an2
+    integer, intent (in) :: ntgrid, ntheta0, naky
+    integer :: it, ik
+
+    do ik = 1, naky
+       do it = 1, ntheta0
+          call ccfft (-1, 2*ntgrid, zscale, an(:,it,ik), an2(:,it,ik), ztable, zwork, 0)
+       end do
+    end do
+
+    an2 = conjg(an2)*an2
+
+  end subroutine kz_spectrum
+
+!  subroutine par_filter(an)
+
+!    use fft_work
+!    use theta_grid, only: ntgrid
+!    use kt_grids, only: naky, ntheta0
+!    complex, dimension(:,:,:) :: an
+!    complex, dimension(2*ntgrid) :: bn
+!    integer :: it, ik
+
+!    if (allocated(tablekp)) then
+!       do ik = 1, naky
+!          do it = 1, ntheta0
+!             call ccfft(-1, 2*ntgrid, scale, an(:,it,ik), bn, tablekp, work, 0)
+!             bn=bn/(1+kpar**4)
+!             call ccfft( 1, 2*ntgrid, scale, bn, an(:,it,ik), tablekp, work, 0)
+!          enddo
+!       enddo
+!       
+!! take care of last grid point in theta; should not matter
+!       an(2*ntgrid+1,:,:) = an(1,:,:)
+!    else
+!       ! no fft in this case
+!    end if
+
+!  end subroutine par_filter
 
 end module gs2_transforms
 
