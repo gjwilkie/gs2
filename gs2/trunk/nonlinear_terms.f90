@@ -56,14 +56,13 @@ contains
     use gs2_layouts, only: init_dist_fn_layouts, yxf_lo, accelx_lo
     use gs2_transforms, only: init_transforms
     implicit none
-    logical :: dum1, dum2
 
     if (initialized) return
     initialized = .true.
     
     call init_theta_grid
     call init_kt_grids
-    call init_le_grids (dum1, dum2)
+    call init_le_grids
     call init_species
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
 
@@ -316,20 +315,20 @@ contains
        end if
           
 ! factor of one-half appears elsewhere
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          il = il_idx(g_lo, iglo)
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             il = il_idx(g_lo, iglo)
 ! Totally trapped particles get no bakdif 
-          do ig = -ntgrid, ntgrid-1
-             if (il == ittp(ig)) cycle
-             g1(ig,1,iglo) = (1.+bd)*g1(ig+1,1,iglo) + (1.-bd)*g1(ig,1,iglo)
-             g1(ig,2,iglo) = (1.-bd)*g1(ig+1,2,iglo) + (1.+bd)*g1(ig,2,iglo)
-          end do
+             do ig = -ntgrid, ntgrid-1
+                if (il == ittp(ig)) cycle
+                g1(ig,1,iglo) = (1.+bd)*g1(ig+1,1,iglo) + (1.-bd)*g1(ig,1,iglo)
+                g1(ig,2,iglo) = (1.-bd)*g1(ig+1,2,iglo) + (1.+bd)*g1(ig,2,iglo)
+             end do
 ! zero out spurious g1 outside trapped boundary
-          where (forbid(:,il))
-             g1(:,1,iglo) = 0.0
-             g1(:,2,iglo) = 0.0
-          end where
-       end do
+             where (forbid(:,il))
+                g1(:,1,iglo) = 0.0
+                g1(:,2,iglo) = 0.0
+             end where
+          end do
 
     endif
 

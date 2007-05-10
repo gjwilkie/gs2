@@ -96,7 +96,6 @@ contains
     call broadcast (nstep)
     call broadcast (wstar_units)
     call broadcast (eqzip)
-    call broadcast (margin)
     delt_max = delt
 
     delt_saved = delt

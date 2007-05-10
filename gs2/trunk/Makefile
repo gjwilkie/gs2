@@ -121,10 +121,10 @@ ifeq ($(CPU),T3E)
   FC = f90
   PLATFORM_LINKS = t3e
   F90FLAGS = -I$$MPTDIR/include -M1110,7212 -p$(UTILS) -p$(GRIDGEN) -p$(GEO)
-  FLIBS = -lmpi $$NETCDF -Wl"-D permok=yes" $(UTILS)/mdslib.a -L../fftw/lib -lfftw -lrfftw
+  FLIBS = -lmpi $$NETCDF -Wl"-D permok=yes" $(UTILS)/mdslib.a -L../fftw -lfftw -lrfftw
 
   ifneq ($(debug),on)
-    F90FLAGS += -O vector3 -O aggress 
+    F90FLAGS += #-O vector3 -O aggress 
   else
     F90FLAGS += -g -R abcs -e i
     FLIBS  += -Wl"-D preset=inf" # -lmalloc 
@@ -203,7 +203,7 @@ ifeq ($(CPU),RS6000)
   FLIBS = $$NETCDF -L/usr/common/usg/fftw/2.1.3/lib -lfftw -lrfftw # $$TRACE_MPIF
   ifneq ($(debug),on)
 #    F90FLAGS += -O4
-    F90FLAGS += -O3 -qarch=pwr3 -qtune=pwr3
+    F90FLAGS += #-O3 -qarch=pwr3 -qtune=pwr3
   else
     F90FLAGS += -g 
     FLIBS    += # $$TRACE_MPIF
@@ -270,13 +270,13 @@ ifeq ($(CPU),LINUX)
 	-L/old/usr/local/lib -lnetcdf \
 	-L/usr/local/lib -lfftw -lrfftw -lmpif -lbproc
   PLATFORM_LINKS = linux
-  F90FLAGS = -w -f77 -r8 -I/old/usr/include -I/usr/include -mismatch \
+  F90FLAGS = -w -f77 -r8 -I/old/usr/include -mismatch \
 	-I $(GEO) -I $(GRIDGEN) -I $(UTILS)
 
   ifeq ($(debug),on)
     F90FLAGS += -C -g90 -gline
   else
-    F90FLAGS += -O4
+    F90FLAGS += -O 
   endif
 
 endif
@@ -548,7 +548,7 @@ t3e_fftw:
 	ln -sf mp_mpi.f90 mp.f90
 	ln -sf shmem_stub.f90 shmem.f90
 	ln -sf prof_none.f90 prof.f90
-	ln -sf redistribute_shnew.f90 redistribute.f90
+	ln -sf redistribute_mpi.f90 redistribute.f90
 	ln -sf check_sgi.f90 check.f90
 	ln -sf ran_cray.f90 ran.f90
 	ln -sf gs2_save_fast.f90 gs2_save.f90
@@ -585,9 +585,9 @@ origin:
 	cd $(UTILS); ln -sf mds_io_stub.f90 mds.f90 
 
 linux:
-	ln -sf gs2_layouts_v.f90 gs2_layouts.f90
+	ln -sf gs2_layouts_x.f90 gs2_layouts.f90
 	ln -sf command_line_nag.f90 command_line.f90
-	ln -sf mp_mpi_r8.f90 mp.f90
+	ln -sf mp_stub.f90 mp.f90
 	ln -sf shmem_stub.f90 shmem.f90
 	ln -sf prof_none.f90 prof.f90
 	ln -sf redistribute_mpi.f90 redistribute.f90

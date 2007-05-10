@@ -24,8 +24,6 @@ module additional_linear_terms
   ! nx, naky, negrid, nspec
 
   logical :: initialized = .false.
-  logical :: accelerated_x = .false.
-  logical :: accelerated_v = .false.
 
 contains
 
@@ -174,7 +172,7 @@ contains
     call init_run_parameters
     call init_theta_grid
     call init_kt_grids
-    call init_le_grids (accelerated_x, accelerated_v)
+    call init_le_grids
     call init_species
     call init_x_transform_layouts &
          (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
@@ -252,7 +250,7 @@ contains
     call init_run_parameters
     call init_theta_grid
     call init_kt_grids
-    call init_le_grids (accelerated_x, accelerated_v)
+    call init_le_grids
     call init_species
     call init_x_transform_layouts &
          (ntgrid, naky, ntheta0, nlambda, negrid, nx, nspec)
