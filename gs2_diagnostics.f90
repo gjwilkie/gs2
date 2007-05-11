@@ -30,7 +30,7 @@ module gs2_diagnostics
   logical :: write_fcheck, write_final_epar, write_kpar
   logical :: write_intcheck, write_vortcheck, write_fieldcheck
   logical :: write_fieldline_avg_phi, write_hrate, write_lorentzian
-  logical :: write_neoclassical_flux, write_nl_flux
+  logical :: write_neoclassical_flux, write_nl_flux, write_Epolar
   logical :: exit_when_converged
   logical :: dump_neoclassical_flux, dump_check1, dump_check2
   logical :: dump_fields_periodically, make_movie
@@ -46,7 +46,7 @@ module gs2_diagnostics
   logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
 
-  integer :: out_unit, kp_unit, heat_unit
+  integer :: out_unit, kp_unit, heat_unit, polar_unit
   integer :: dump_neoclassical_flux_unit, dump_check1_unit, dump_check2_unit
 
   complex, dimension (:,:,:), allocatable :: omegahist
@@ -136,6 +136,7 @@ contains
     call broadcast (write_eavg)
     call broadcast (write_tavg)
     call broadcast (write_hrate)
+    call broadcast (write_Epolar)
     call broadcast (write_lorentzian)
     call broadcast (write_eigenfunc)
     
@@ -184,6 +185,10 @@ contains
           call open_output_file (heat_unit, ".heat")
        end if
        
+       if (write_Epolar .and. write_ascii) then
+          call open_output_file (polar_unit, ".kspectrum")
+       end if
+
        if (dump_neoclassical_flux) then
           call get_unused_unit (dump_neoclassical_flux_unit)
           open (unit=dump_neoclassical_flux_unit, file="dump.neoflux", &
@@ -265,7 +270,7 @@ contains
          write_dmix, write_kperpnorm, write_phitot, write_epartot, &
          write_eigenfunc, write_final_fields, write_final_antot, &
          write_fcheck, write_final_epar, write_final_moments, &
-         write_intcheck, write_vortcheck, write_fieldcheck, &
+         write_intcheck, write_vortcheck, write_fieldcheck, write_Epolar, &
          write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, write_stress, &
@@ -283,6 +288,7 @@ contains
        write_flux_line = .true.
        write_kpar = .false.
        write_hrate = .false.
+       write_Epolar = .false.
        write_gs = .false.
        write_g = .false.
        write_lorentzian = .false.
@@ -348,7 +354,7 @@ contains
             .or. write_aperp  .or. write_omega     .or. write_omavg &
             .or. write_dmix   .or. write_kperpnorm .or. write_phitot &
             .or. write_fieldline_avg_phi           .or. write_neoclassical_flux &
-            .or. write_flux_line                   .or. write_nl_flux &
+            .or. write_flux_line                   .or. write_nl_flux .or. write_Epolar &
             .or. write_kpar   .or. write_hrate     .or. write_lorentzian  .or. write_gs
        write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux &
             .or. gs2_flux_adjust
@@ -420,6 +426,7 @@ contains
     if (proc0) then
        if (write_ascii) call close_output_file (out_unit)
        if (write_ascii .and. write_hrate) call close_output_file (heat_unit)
+       if (write_ascii .and. write_Epolar) call close_output_file (polar_unit)
        if (dump_neoclassical_flux) close (dump_neoclassical_flux_unit)
 
        if (dump_check1) close (dump_check1_unit)
@@ -1118,6 +1125,7 @@ contains
     use theta_grid, only: theta, ntgrid, delthet, jacob
     use theta_grid, only: gradpar, nperiod
     use kt_grids, only: naky, ntheta0, aky_out, theta0, akx_out, aky
+    use kt_grids, only: nkpolar, akpolar, akpolar_out
     use run_parameters, only: delt, woutunits, funits, fapar, fphi, faperp
     use run_parameters, only: tnorm
     use fields, only: phinew, aparnew, aperpnew
@@ -1178,6 +1186,7 @@ contains
     real, dimension (nspec) :: mheat_par, mheat_perp
     real, dimension (nspec) :: bheat_par, bheat_perp
     real, dimension (naky) :: fluxfac
+    real, dimension (:), allocatable :: phi_by_k, apar_by_k, aperp_by_k
     real :: hflux_tot, zflux_tot, vflux_tot
     character(200) :: filename
 
@@ -1208,7 +1217,9 @@ contains
        nny = yxf_lo%ny
        if (fphi > epsilon(0.0)) then
           allocate (yxphi(nnx,nny,-ntgrid:ntgrid))
-          call transform2 (phinew, yxphi, nny, nnx)
+          call getmoms (phinew, ntot, density, upar, tpar, tperp)
+          call transform2 (ntot, yxphi, nny, nnx)
+!          call transform2 (phinew, yxphi, nny, nnx)
        end if
        if (fapar > epsilon(0.0)) then
           allocate (yxapar(nnx,nny,-ntgrid:ntgrid))
@@ -1415,6 +1426,26 @@ contains
 
     i=istep/nwrite
     call check_flux (i, t, heat_fluxes)
+
+    if (write_Epolar .and. proc0) then
+       allocate (phi_by_k(nkpolar)) ; phi_by_k = 0.
+       allocate (apar_by_k(nkpolar)) ; apar_by_k = 0.
+       allocate (aperp_by_k(nkpolar)) ; aperp_by_k = 0.
+       
+       if (fphi > 0)    call get_polar_integrand (phinew, phinew, phi_by_k)
+       if (fapar > 0.)  call get_polar_integrand (aparnew, aparnew, apar_by_k)
+       if (faperp > 0.) call get_polar_integrand (aperpnew, aperpnew, aperp_by_k)
+       
+       do i=2,nkpolar
+          write (unit=polar_unit, fmt="('t= ',e16.10,' k= ',e10.4, &
+               & ' Ephi= ',e10.4, ' Eapar= ',e10.4, ' Eaperp= ',e10.4)") &
+               & t, akpolar_out(i), phi_by_k(i), apar_by_k(i), aperp_by_k(i)
+       end do
+       write (unit=polar_unit, fmt='(a)') ''       
+
+       deallocate (phi_by_k, apar_by_k, aperp_by_k)
+    end if
+
 
     if (write_intcheck) call intcheck
     if (write_vortcheck) call vortcheck (phinew, aperpnew)
@@ -1820,6 +1851,63 @@ contains
        end if
     end if
   end subroutine get_omegaavg
+
+  subroutine get_polar_integrand (a, b, axb_by_k)
+    use theta_grid, only: ntgrid, delthet, jacob
+    use kt_grids, only: naky, ntheta0, nkpolar, aky, akx, akpolar
+    use constants, only: pi
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: a, b
+    real, dimension (:), intent (out) :: axb_by_k
+    real, dimension (ntheta0, naky) :: axb_by_mode
+
+    integer :: ig, ik, it, i, ikp
+    integer :: ng
+    real, dimension (-ntg_out:ntg_out) :: wgt
+    real :: anorm, kperp, fac
+
+    ng = ntg_out
+    wgt = delthet(-ng:ng)*jacob(-ng:ng)
+    anorm = sum(wgt)
+
+! integrate along field line first
+
+    do ik = 1, naky
+       do it = 1, ntheta0
+          axb_by_mode(it,ik) &
+               = sum(real(conjg(a(-ng:ng,it,ik))*b(-ng:ng,it,ik))*wgt)/anorm
+       end do
+    end do
+
+! Now get integrand of expression like E_tot = 2 pi int ( a* b k  dkpolar)
+! I.e., get axb_by_k == a* times  b times |k|
+! For now, assume square domain with nx=ny.  Should be generalized.
+! Ignore modes with k > ky_max = kx_max b/c this gives funny cutoff feature
+! that we do not care about
+
+! Note: kpolar = ky for now; hence kpolar(1) = 0.
+!
+    axb_by_k = 0.
+    do ik = 1, naky
+       fac = 0.5
+       if (aky(ik) < epsilon(0.)) fac = 1.0
+
+       do it = 1, ntheta0
+          if (it == 1 .and. ik == 1) cycle
+          kperp = sqrt(akx(it)**2+aky(ik)**2)
+          do i=1,nkpolar
+             if (kperp >= akpolar(i)) then
+                ikp=i
+             else
+                exit 
+             endif
+          enddo
+          if (kperp > aky(naky)) cycle
+          axb_by_k(ikp) = axb_by_k(ikp) + axb_by_mode(it, ik)*2.*pi*akpolar(ikp)
+       end do
+    end do
+
+  end subroutine get_polar_integrand
 
   subroutine get_vol_average_all (a, b, axb, axb_by_mode)
     use theta_grid, only: ntgrid, delthet, jacob

@@ -234,7 +234,7 @@ program ingen
   logical :: write_fcheck, write_final_epar, write_kpar
   logical :: write_intcheck, write_vortcheck, write_fieldcheck
   logical :: write_fieldline_avg_phi, write_hrate, write_lorentzian
-  logical :: write_neoclassical_flux, write_nl_flux
+  logical :: write_neoclassical_flux, write_nl_flux, write_Epolar
   logical :: exit_when_converged
   logical :: dump_neoclassical_flux, dump_check1, dump_check2
   logical :: dump_fields_periodically, make_movie
@@ -503,7 +503,7 @@ program ingen
        write_dmix, write_kperpnorm, write_phitot, write_epartot, &
        write_eigenfunc, write_final_fields, write_final_antot, &
        write_fcheck, write_final_epar, write_final_moments, &
-       write_intcheck, write_vortcheck, write_fieldcheck, &
+       write_intcheck, write_vortcheck, write_fieldcheck, write_Epolar, &
        write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
        nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, &
        exit_when_converged, write_avg_moments, &
@@ -1808,6 +1808,7 @@ contains
     write_omega = .false.
     write_ascii = .true.
     write_hrate = .false.
+    write_Epolar = .false.
     write_gs = .false.
     write_lorentzian = .false.
     write_tavg = .false.
@@ -2283,6 +2284,8 @@ contains
           write (unit, fmt="(' write_dmix = ',L1)") write_dmix
           write (unit, fmt="(' write_kperpnorm = ',L1)") write_kperpnorm
        end if
+       if (write_Epolar) &
+            write (unit, fmt="(' write_Epolar = ',L1)") write_Epolar
        write (unit, fmt="(' write_hrate = ',L1)") write_hrate
        write (unit, fmt="(' write_lorentzian = ',L1)") write_lorentzian
        write (unit, fmt="(' write_eigenfunc = ',L1)") write_eigenfunc

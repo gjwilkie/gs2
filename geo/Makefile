@@ -144,7 +144,7 @@ ifeq ($(CPU),Dawson)
   PLATFORM_LINKS = ibm
   u_obj = $(UTILDIR)/utils.a
   stubs = radstub.o vdimstub.o $(UTILDIR)/mdslib.o
-  FFLAGS   = -qautodbl=dbl4 -I $(UTILDIR)
+  FFLAGS   = -qautodbl=dbl -I $(UTILDIR)
   F90FLAGS = -qmoddir=/tmp/bdorland -I/tmp/bdorland -qautodbl=dbl4 -qsuffix=f=f90 \
 	-I $(UTILDIR) 
   FLIBS = -L/u/local/apps/netcdf/lib -lnetcdf 

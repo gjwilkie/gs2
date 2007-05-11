@@ -674,7 +674,7 @@ contains
     real :: scale
 
     call kz_spectrum (an, an2, ntgrid, ntheta0, naky)
-    scale = 1./real(ntgrid**2)
+    scale = 1./real(4*ntgrid**2)
     an2 = an2*scale
 
   end subroutine par_spectrum
