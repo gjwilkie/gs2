@@ -3647,25 +3647,26 @@ contains
                      -aperp(ig+1,it,ik)-aperp(ig,it,ik))*faperp*dtinv
                 
                 apar_avg = 0.25*(apar(ig,it,ik)+apar(ig+1,it,ik) &
-                     + aparnew(ig,it,ik)+aparnew(ig+1,it,ik))
+                     + aparnew(ig,it,ik)+aparnew(ig+1,it,ik))*fapar
 
                 aperp_avg = 0.25*(aperp(ig,it,ik)+aperp(ig+1,it,ik) &
-                     + aperpnew(ig,it,ik)+aperpnew(ig+1,it,ik))
+                     + aperpnew(ig,it,ik)+aperpnew(ig+1,it,ik))*faperp
 ! J.E
                 fac = real(conjg(j_ext(ig,it,ik))*apar_m)*wgt(ig)*fac2
 
                 rate_by_k(it,ik,1,2) = rate_by_k(it,ik,1,2) + real(fac)
 ! d/dt delta B**2
-                fac = (conjg(apar_m)*apar_avg*kperp2(ig,it,ik) &
-                     + conjg(aperp_m)*aperp_avg)*wgt(ig)*fac2/beta*0.5
+                if (beta > epsilon(0.)) then
+                   fac = (conjg(apar_m)*apar_avg*kperp2(ig,it,ik) &
+                        + conjg(aperp_m)*aperp_avg)*wgt(ig)*fac2/beta*0.5
 
-                rate_by_k(it,ik,1,3) = rate_by_k(it,ik,1,3) + real(fac)
+                   rate_by_k(it,ik,1,3) = rate_by_k(it,ik,1,3) + real(fac)
 ! B**2/2
-                fac = 0.5*(conjg(apar_avg)*apar_avg*kperp2(ig,it,ik) &
-                     + conjg(aperp_avg)*aperp_avg)*wgt(ig)*fac2/beta*0.5
+                   fac = 0.5*(conjg(apar_avg)*apar_avg*kperp2(ig,it,ik) &
+                        + conjg(aperp_avg)*aperp_avg)*wgt(ig)*fac2/beta*0.5
 
-                rate_by_k(it,ik,1,4) = rate_by_k(it,ik,1,4) + real(fac)
-
+                   rate_by_k(it,ik,1,4) = rate_by_k(it,ik,1,4) + real(fac)
+                end if
              end do
              heating_rate(1,2) = heating_rate(1,2) + rate_by_k(it,ik,1,2)
 !             heating_rate(1,3) = heating_rate(1,3) + rate_by_k(it,ik,1,3)

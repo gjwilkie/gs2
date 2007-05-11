@@ -56,7 +56,7 @@ module gs2_io
   integer :: antot_id, antota_id, antotp_id
   integer :: ntot_id, density_id, upar_id, tpar_id, tperp_id
   integer :: rstress_id, ustress_id, hrateavg_id, hrate_by_k_id
-  integer :: ntot2_id, ntot2_by_mode_id
+  integer :: ntot2_id, ntot2_by_mode_id, ntot20_id, ntot20_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
   integer :: qflux_neo_by_k_id, pflux_neo_by_k_id, input_id
   integer :: charge_id, mass_id, dens_id, temp_id, tprim_id, fprim_id
@@ -669,6 +669,10 @@ contains
     status = netcdf_def_var (ncid, 'ntot2',         nf_double, 2, flux_dim,  ntot2_id)
     status = netcdf_def_var (ncid, 'ntot2_by_mode', nf_double, 4, fluxk_dim, ntot2_by_mode_id)
 
+    status = netcdf_def_var (ncid, 'ntot20',         nf_double, 2, flux_dim,  ntot20_id)
+    status = netcdf_put_att (ncid, ntot20_id, 'long_name', 'Density**2 at theta=0')
+    status = netcdf_def_var (ncid, 'ntot20_by_mode', nf_double, 4, fluxk_dim, ntot20_by_mode_id)
+
     status = netcdf_def_var (ncid, 'ntot',    nf_double, 5, final_mom_dim, ntot_id)
     status = netcdf_def_var (ncid, 'density', nf_double, 5, final_mom_dim, density_id)
     status = netcdf_def_var (ncid, 'upar',    nf_double, 5, final_mom_dim, upar_id)
@@ -897,7 +901,7 @@ contains
 
   end subroutine nc_loop_stress
 
-  subroutine nc_loop_moments (nout, ntot2, ntot2_by_mode, &
+  subroutine nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, ntot20_by_mode, &
        phi00, ntot00, density00, upar00, tpar00, tperp00)
 
     use netcdf_mod, only: netcdf_put_vara
@@ -908,8 +912,8 @@ contains
     use species, only: nspec
 
     integer, intent (in) :: nout
-    real, dimension (:), intent (in) :: ntot2
-    real, dimension (:,:,:), intent (in) :: ntot2_by_mode
+    real, dimension (:), intent (in) :: ntot2, ntot20
+    real, dimension (:,:,:), intent (in) :: ntot2_by_mode, ntot20_by_mode
     complex, dimension (:), intent (in) :: phi00
     complex, dimension (:,:), intent (in) :: ntot00, density00, upar00, tpar00, tperp00
     real, dimension (2, ntheta0, nspec) :: ri2
@@ -955,6 +959,9 @@ contains
 
     status = netcdf_put_vara(ncid, ntot2_id, start, count, ntot2)
     status = netcdf_put_vara(ncid, ntot2_by_mode_id, start4, count4, ntot2_by_mode)
+
+    status = netcdf_put_vara(ncid, ntot20_id, start, count, ntot20)
+    status = netcdf_put_vara(ncid, ntot20_by_mode_id, start4, count4, ntot20_by_mode)
 
     call c2r (phi00, ri1)
     status = netcdf_put_vara(ncid, phi00_id, start3, count3, ri1)
