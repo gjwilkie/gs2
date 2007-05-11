@@ -5,6 +5,10 @@ module gs2_diagnostics
   public :: finish_gs2_diagnostics
   public :: loop_diagnostics
 
+  interface get_vol_average
+     module procedure get_vol_average_one, get_vol_average_all
+  end interface
+
   ! knobs
 
   real :: omegatol, omegatinst
@@ -1126,7 +1130,7 @@ contains
     complex, dimension (ntheta0, naky, nspec) :: pfluxneo,qfluxneo
     real :: phi2, apar2, aperp2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, aperp2_by_mode
-    real, dimension (ntheta0, naky, nspec) :: ntot2_by_mode
+    real, dimension (ntheta0, naky, nspec) :: ntot2_by_mode, ntot20_by_mode
     real :: anorm, dmix, dmix4, dmixx
     real :: t, denom
     integer :: ig, ik, it, is, unit, il, i, nnx, nny
@@ -1142,7 +1146,7 @@ contains
     real, dimension (:), allocatable :: dl_over_b
     real, dimension (2*ntgrid) :: kpar
     real, dimension (ntheta0, nspec) :: x_qmflux
-    real, dimension (nspec) ::  heat_fluxes,  part_fluxes, mom_fluxes,  ntot2
+    real, dimension (nspec) ::  heat_fluxes,  part_fluxes, mom_fluxes,  ntot2, ntot20
     real, dimension (nspec) :: mheat_fluxes, mpart_fluxes, mmom_fluxes
     real, dimension (nspec) :: bheat_fluxes, bpart_fluxes, bmom_fluxes
     real, dimension (nspec) ::  heat_par,  heat_perp
@@ -1604,8 +1608,14 @@ contains
                   ntot2(is), ntot2_by_mode(:,:,is))
           end do
 
-          call nc_loop_moments (nout, ntot2, ntot2_by_mode, &
-               phi00, ntot00, density00, upar00, tpar00, tperp00)
+          do is = 1, nspec
+             call get_vol_average (ntot(0,:,:,is), ntot(0,:,:,is), &
+                  ntot20(is), ntot20_by_mode(:,:,is))
+          end do
+
+          call nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, &
+               ntot20_by_mode, phi00, ntot00, density00, upar00, &
+               tpar00, tperp00)
 
        end if
     end if
@@ -1695,7 +1705,7 @@ contains
        
        wgt = delthet*jacob
        wgt = wgt/sum(wgt)
-       
+          
        hrateavg(:,7) = 0.0
        
        do is = 1, nspec
@@ -1779,7 +1789,7 @@ contains
     end if
   end subroutine get_omegaavg
 
-  subroutine get_vol_average (a, b, axb, axb_by_mode)
+  subroutine get_vol_average_all (a, b, axb, axb_by_mode)
     use theta_grid, only: ntgrid, delthet, jacob
     use kt_grids, only: naky, ntheta0
     implicit none
@@ -1804,7 +1814,25 @@ contains
     end do
 
     call get_volume_average (axb_by_mode, axb)
-  end subroutine get_vol_average
+  end subroutine get_vol_average_all
+
+  subroutine get_vol_average_one (a, b, axb, axb_by_mode)
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    complex, dimension (:,:), intent (in) :: a, b
+    real, intent (out) :: axb
+    real, dimension (:,:), intent (out) :: axb_by_mode
+
+    integer :: ik, it
+
+    do ik = 1, naky
+       do it = 1, ntheta0
+          axb_by_mode(it,ik) = real(conjg(a(it,ik))*b(it,ik))
+       end do
+    end do
+
+    call get_volume_average (axb_by_mode, axb)
+  end subroutine get_vol_average_one
 
   subroutine get_volume_average (f, favg)
     use mp, only: iproc

@@ -185,7 +185,7 @@ contains
 
     complex, dimension (-ntgrid:,:,:) :: apar
     complex :: force_a, force_b
-    real :: dt, sigma, time
+    real :: dt, sigma, time, amp
     integer :: i, it, ik
     logical, save :: first = .true.
 
@@ -242,8 +242,14 @@ contains
        call broadcast (a_ant)
        call broadcast (b_ant)
 
-       apar(:,it,ik) = apar(:,it,ik) &
-            + (a_ant(i)+b_ant(i))/sqrt(2.)*exp(zi*kz_stir(i)*theta) 
+!       if (time < t0) then
+!          apar(:,it,ik) = apar(:,it,ik) &
+!               + (a_ant(i)+b_ant(i))/sqrt(2.)*exp(zi*kz_stir(i)*theta) &
+!               * (0.5-0.5*cos(time*pi/t0)
+!       else
+          apar(:,it,ik) = apar(:,it,ik) &
+               + (a_ant(i)+b_ant(i))/sqrt(2.)*exp(zi*kz_stir(i)*theta) 
+!       end if
 
        if (write_antenna) then
          if (proc0) write(out_unit, fmt='(8(1x,e13.6))') &

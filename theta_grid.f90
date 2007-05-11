@@ -336,55 +336,75 @@ contains
     qval = epsl/pk
     select case (model_switch)
     case (model_salpha,model_alpha1,model_b2)
-       gbdrift = epsl*(cos(theta) + (shat*theta-shift*sin(theta))*sin(theta))
-       gbdrift0 = -epsl*shat*sin(theta)
+       cvdrift = epsl*(cos(theta) + (shat*theta-shift*sin(theta))*sin(theta))
+       cvdrift0 = -epsl*shat*sin(theta)
        gds2 = 1.0 + (shat*theta-shift*sin(theta))**2
        gds21 = -shat*(shat*theta - shift*sin(theta))
        gds22 = shat*shat
        grho = 1.0
        if (model_switch == model_b2) then
-          gbdrift = gbdrift/bmag**2
-          gbdrift0 = gbdrift0/bmag**2
+          cvdrift = cvdrift/bmag**2
+          cvdrift0 = cvdrift0/bmag**2
        end if
        if (epsl < epsilon(0.)) shape = 'slab    '
+       gbdrift = cvdrift
+       gbdrift0 = cvdrift0
+    
     case (model_normal_only)
-       gbdrift = epsl*cos(theta)
-       gbdrift0 = 0.
+       cvdrift = epsl*cos(theta)
+       cvdrift0 = 0.
        gds2 = 1.0 + (shat*theta-shift*sin(theta))**2
        gds21 = -shat*(shat*theta - shift*sin(theta))
        gds22 = shat*shat
        grho = 1.0
        if (epsl < epsilon(0.)) shape = 'slab    '
+       gbdrift = cvdrift
+       gbdrift0 = cvdrift0
+    
     case (model_eps)
-       gbdrift = epsl*(cos(theta) -eps + (shat*theta-shift*sin(theta))*sin(theta))
-       gbdrift0 = -epsl*shat*sin(theta)
+       cvdrift = epsl*(cos(theta) -eps + (shat*theta-shift*sin(theta))*sin(theta))
+       cvdrift0 = -epsl*shat*sin(theta)
        gds2 = 1.0 + (shat*theta-shift*sin(theta))**2
        gds21 = -shat*(shat*theta - shift*sin(theta))
        gds22 = shat*shat
        grho = 1.0
        if (epsl < epsilon(0.)) shape = 'slab    '
+       gbdrift = cvdrift
+       gbdrift0 = cvdrift0
+    
     case (model_ccurv,model_nocurve)
-       gbdrift = epsl
-       gbdrift0 = 0.0
+       cvdrift = epsl
+       cvdrift0 = 0.0
 
+! Some strangeness here to get straight at some point:
+!    ccurv == constant curvature should be the case used for cylindrical
+!             geometry, but evidently Paolo and Barrett do not like the 
+!             gds2 definition there, and have been using the slab
+!             option (no_curvature) for their Z-pinch studies.  
+!
+!    Simply need to look into the shift dependence of gds2
+!
        if (model_switch == model_nocurve) then
           gds2 = 1.0 + (shat*theta)**2
           gds21 = -shat*shat*theta
           shape = 'slab    '
+          gbdrift = cvdrift*(1.-shift)
+          gbdrift0 = cvdrift0
+    
        else
           gds2 = 1.0 + (shat*theta-shift*sin(theta))**2
+! probably should be:
+!          gds2 = 1.0 + (shat*theta)**2
           gds21 = -shat*shat*theta
           shape = 'cylinder'
+          gbdrift = cvdrift*(1.-shift)
+          gbdrift0 = cvdrift0
        endif
 
        gds22 = shat*shat
        grho = 1.0
+       
     end select
-! currently always set cvdrift = gbdrift in s_alpha module, but 
-! there are reasons to build in more generality.  Need to talk with 
-! Rogers and Ricci about their Z-pinch application, for example.
-    cvdrift = gbdrift
-    cvdrift0 = gbdrift0
     gradpar = pk/2.0
 
     if (model_switch /= model_alpha1) then
