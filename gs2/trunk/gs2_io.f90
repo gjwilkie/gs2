@@ -1258,7 +1258,7 @@ contains
     count5(1) = ntheta0
     count5(2) = naky
     count5(3) = nspec
-    count5(4) = 6
+    count5(4) = 7
     count5(5) = 1
 
     starty(1) = 1

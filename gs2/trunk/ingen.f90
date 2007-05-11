@@ -2146,8 +2146,7 @@ contains
                   & '"no-field-line-average-term"'
              
           case (adiabatic_option_fieldlineavg)
-             write (unit, fmt="(' adiabatic_option = ',a)") &
-                  '"field-line-average-term"'
+             write (unit, fmt="(' adiabatic_option = ',a)") '"field-line-average-term"'
              
           case (adiabatic_option_yavg)
              write (unit, fmt="(' adiabatic_option = ',a)") '"iphi00=3"'

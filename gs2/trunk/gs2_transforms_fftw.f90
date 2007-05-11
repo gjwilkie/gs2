@@ -70,6 +70,8 @@ contains
     use mp, only: nproc
     use gs2_layouts, only: init_gs2_layouts
     use gs2_layouts, only: pe_layout, init_accel_transform_layouts
+    use gs2_layouts, only: init_y_transform_layouts
+    use gs2_layouts, only: init_x_transform_layouts
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
@@ -91,6 +93,10 @@ contains
     else
        call init_y_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
     end if
+
+! need these for movies
+    call init_y_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+    call init_x_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
 
     call init_y_fft (ntgrid)
 
