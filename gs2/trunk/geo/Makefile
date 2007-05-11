@@ -317,21 +317,21 @@ endif
 
 # options for Linux with NAG f95:
 ifeq ($(CPU),LINUX)
-  FC = f95
-  FLIBS = -L/usr/local/lib -L/usr/lib -lnetcdf \
-	-L/usr/local/mdsplus/lib -lMdsLib -lMdsShr 
+  FC = mpif90
+  FLIBS = -L/usr/local/lib -lnetcdf $(UTILDIR)/mdslib.a
+#	-L/usr/local/mdsplus/lib -lMdsLib -lMdsShr 
   PLATFORM_LINKS = linux
   u_obj = $(UTILDIR)/spl.o $(UTILDIR)/mds.o 
   stubs = radstub.o vdimstub.o 
-  FFLAGS = -w -r8 -132 -f77 -I/usr/include  
-  F90FLAGS = -mismatch -w -r8 -f77 -I $(UTILDIR) -I/usr/include
+  FFLAGS = -r8 -132 -mismatch -I/usr/local/include  
+  F90FLAGS = -r8 -mismatch -I$(UTILDIR) -I/usr/local/include
 
   ifeq ($(debug),on)
-    FFLAGS   += -C -g90 -gline 
-    F90FLAGS += -C -g90 -gline  
+    FFLAGS   += -C=array -C=bits -C=dangling -C=do -C=present -C=pointer -gline 
+    F90FLAGS += -C=array -C=bits -C=dangling -C=do -C=present -C=pointer -gline 
   else
-    FFLAGS   += -O 
-    F90FLAGS += -O
+    FFLAGS   += -O4 -w
+    F90FLAGS += -O4 -w
   endif
 
 endif

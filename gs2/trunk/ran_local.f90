@@ -2,7 +2,7 @@ module ran
 
 contains
 
-  function ranf()
+  function ranf(idum)
 
 !.....Replaces cray routine ranf(). What follows is the
 !     same as FUNCTION RAN1(idum) of numerical recipes p196,
@@ -13,6 +13,7 @@ contains
 !     Set idum to any negative value to initialize
 !     or reinitialize the sequence
 
+    integer :: idum
     real :: ranf
     parameter (ia=16807,im=2147483647,am=1./im,iq=127773,ir=2836, &
          ntab=32,ndiv=1+(im-1)/ntab,eps=1.2e-7,rnmx=1.-eps)
@@ -21,7 +22,7 @@ contains
     data iv /ntab*0/, iy /0/
 
 !.....To conform to cray, do not pass idum
-    idum=1
+!    idum=1
     
     if (idum <= 0.or.iy == 0) then
        idum=max(-idum,1)

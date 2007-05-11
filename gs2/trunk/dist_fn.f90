@@ -2940,6 +2940,7 @@ contains
     integer :: ig, ik, it
     logical :: first = .true.
     
+    
     if (first) then
 ! prepare for field-line-average term: 
        allocate (fl_avg(ntheta0, naky))
@@ -3390,8 +3391,8 @@ contains
     use mp, only: proc0
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
-    real, dimension (:,:,:), intent (out) :: flx
-    real, dimension (-ntgrid:,:), intent (out) :: theta_flx
+    real, dimension (:,:,:), intent (in out) :: flx
+    real, dimension (-ntgrid:,:), intent (in out) :: theta_flx
     real :: anorm
     real, dimension (-ntgrid:,:,:) :: dnorm
     complex, dimension (:,:,:,:), allocatable :: total
@@ -3441,13 +3442,14 @@ contains
     deallocate (total)
   end subroutine get_flux
 
-  subroutine get_heat (heating_rate, rate_by_k, phi, apar, aperp, phinew, aparnew, aperpnew)
+  subroutine get_heat (h, hk, phi, apar, aperp, phinew, aparnew, aperpnew)
 
     use mp, only: proc0, iproc
-    use constants, only: pi
+    use constants, only: pi, zi
     use kt_grids, only: ntheta0, naky, aky, akx
     use dist_fn_arrays, only: vpa, vpac, aj0, aj1, vperp2, g, gnew, kperp2
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use gs2_heating, only: heating_diagnostics
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, ie_idx
     use le_grids, only: integrate_moment
     use species, only: spec, nspec
     use theta_grid, only: jacob, delthet, ntgrid
@@ -3456,18 +3458,18 @@ contains
     use antenna, only: antenna_apar
     use hyper, only: D_v, D_eta
     implicit none
+    type (heating_diagnostics) :: h
+    type (heating_diagnostics), dimension(:,:) :: hk
     complex, dimension (-ntgrid:,:,:) :: phi, apar, aperp, phinew, aparnew, aperpnew
-    real, dimension (:,:) :: heating_rate
-    real, dimension (:,:,:,:) :: rate_by_k
     complex, dimension(:,:,:,:), allocatable :: tot
     complex, dimension(:,:,:), allocatable :: epar, aperpdot, apardot, phidot, j_ext
-    complex :: fac, hfac, pfac, jpold, afac
-    complex :: j0phi, j0apar, j1aperp, chidot, eparavg, j0phidot
+    complex :: fac, hfac, pfac, jpold, afac, chi
+    complex :: j0phi, j1aperp, chidot, eparavg, j0phidot
     complex :: phi_m, apar_m, aperp_m, pstar, pstardot, gdot, hdot, hold
     complex :: phi_avg, apar_avg, aperp_avg
     real, dimension (:), allocatable :: wgt
     real :: fac2, dtinv, akperp4
-    integer :: isgn, iglo, ig, is, ik, it
+    integer :: isgn, iglo, ig, is, ik, it, ie
 
     g0(ntgrid,:,:) = 0.
 
@@ -3597,9 +3599,6 @@ contains
     allocate (tot(-ntgrid:ntgrid, ntheta0, naky, nspec))
     call integrate_moment (g0, tot)
 
-    heating_rate(:,1:6) = 0.
-    rate_by_k(:,:,:,1:6) = 0.
-    
     if (proc0) then
        allocate (wgt(-ntgrid:ntgrid))
        wgt = 0.
@@ -3615,20 +3614,20 @@ contains
              do it = 1, ntheta0
                 if (nonlin .and. it == 1 .and. ik == 1) cycle
                 do ig = -ntgrid, ntgrid-1
-                   rate_by_k(it,ik,is,1) = rate_by_k(it,ik,is,1) &
+                   hk(it,ik) % heating(is) = hk(it,ik) % heating(is) &
                         + real(tot(ig,it,ik,is))*wgt(ig)*fac2*spec(is)%dens
                 end do
-                heating_rate(is,1) = heating_rate(is,1)+rate_by_k(it,ik,is,1)
+                h % heating(is) = h % heating(is) + hk(it,ik) % heating(is)
              end do
           end do
        end do
 
-! now calculate antenna power, insert into second slot of heating_rate, rate_by_k
-! Put d/dt (energy) in third slot, energy in fourth slot, hyper-damping in fifth
+! now calculate antenna power, and d/dt (energy), energy, hyper-damping 
 
-       allocate (j_ext(-ntgrid:ntgrid, ntheta0, naky))
-       j_ext = 0.
-       call antenna_apar (kperp2, j_ext)
+!       allocate (epar (-ntgrid:ntgrid, ntheta0, naky)) ; epar = 0.
+       allocate (j_ext(-ntgrid:ntgrid, ntheta0, naky)) ; j_ext = 0.
+       call antenna_apar (kperp2, j_ext)       
+!       call get_epar (phi, apar, phinew, aparnew, epar)
        
        do ik=1,naky
           fac2 = 0.5
@@ -3651,35 +3650,30 @@ contains
 
                 aperp_avg = 0.25*(aperp(ig,it,ik)+aperp(ig+1,it,ik) &
                      + aperpnew(ig,it,ik)+aperpnew(ig+1,it,ik))*faperp
-! J.E
+! J_ext.E
                 fac = real(conjg(j_ext(ig,it,ik))*apar_m)*wgt(ig)*fac2
 
-                rate_by_k(it,ik,1,2) = rate_by_k(it,ik,1,2) + real(fac)
+                hk(it,ik) % antenna = hk(it, ik) % antenna + real(fac)
 ! d/dt delta B**2
                 if (beta > epsilon(0.)) then
                    fac = (conjg(apar_m)*apar_avg*kperp2(ig,it,ik) &
                         + conjg(aperp_m)*aperp_avg)*wgt(ig)*fac2/beta*0.5
-
-                   rate_by_k(it,ik,1,3) = rate_by_k(it,ik,1,3) + real(fac)
+                   
+                   hk(it,ik) % energy_dot = hk(it,ik) % energy_dot  + real(fac)
 ! B**2/2
                    fac = 0.5*(conjg(apar_avg)*apar_avg*kperp2(ig,it,ik) &
                         + conjg(aperp_avg)*aperp_avg)*wgt(ig)*fac2/beta*0.5
 
-                   rate_by_k(it,ik,1,4) = rate_by_k(it,ik,1,4) + real(fac)
+                   hk(it,ik) % energy = hk(it,ik) % energy + real(fac)
                 end if
              end do
-             heating_rate(1,2) = heating_rate(1,2) + rate_by_k(it,ik,1,2)
-!             heating_rate(1,3) = heating_rate(1,3) + rate_by_k(it,ik,1,3)
-!             heating_rate(1,4) = heating_rate(1,4) + rate_by_k(it,ik,1,4)
-
-!             heating_rate(2,2) = heating_rate(2,2) + rate_by_k(it,ik,2,2)
-!             heating_rate(2,3) = heating_rate(2,3) + rate_by_k(it,ik,2,3)
-!             heating_rate(2,4) = heating_rate(2,4) + rate_by_k(it,ik,2,4)
+             h % antenna = h % antenna + hk(it, ik) % antenna
           end do
        end do
        deallocate (j_ext)
+!       deallocate (j_ext, epar)
     end if
-     
+
     allocate (phidot(-ntgrid:ntgrid, ntheta0, naky))
     
     do ik=1,naky
@@ -3741,7 +3735,7 @@ contains
                     conjg(hfac)*hdot &
                   + conjg(phi_avg)*phidot(ig,it,ik)*spec(is)%zt &
                   - conjg(j0phidot)*hfac &
-                  - conjg(pfac)*hdot) 
+                  - conjg(pfac)*hdot)
           end do
        end do
     end do
@@ -3756,13 +3750,103 @@ contains
              if (nonlin .and. it == 1 .and. ik == 1) cycle
              do is = 1, nspec
                 do ig = -ntgrid, ntgrid-1
-                   rate_by_k(it,ik,1,3) = rate_by_k(it,ik,1,3) + real(tot(ig,it,ik,is))*wgt(ig)*fac2
+                   hk(it,ik) % energy_dot = hk(it,ik) % energy_dot + real(tot(ig,it,ik,is))*wgt(ig)*fac2
                 end do
              end do
-             heating_rate(1,3) = heating_rate(1,3)+rate_by_k(it,ik,1,3)
+             h % energy_dot = h % energy_dot + hk(it,ik) % energy_dot
           end do
        end do
     end if
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! Calculate gradient contributions:
+
+    do iglo=g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo, iglo)
+       it = it_idx(g_lo, iglo)
+       ik = ik_idx(g_lo, iglo)
+       ie = ie_idx(g_lo, iglo)
+       if (nonlin .and. it == 1 .and. ik == 1) cycle
+
+       do isgn=1,2
+          do ig=-ntgrid, ntgrid-1
+             
+!
+! construct time and space-centered chi
+! (should use actual bakdif and fexpr values)
+!
+             chi = aj0(ig,iglo)*(phi(ig,it,ik)*fphi &
+                  - vpac(ig,isgn,iglo) * spec(is)%stm * apar(ig,it,ik)*fapar) &
+                  + aj1(ig,iglo)*2.0*vperp2(ig,iglo)*aperp(ig,it,ik)*spec(is)%tz*faperp
+                
+             chi = chi + &
+                  aj0(ig+1,iglo)*(phi(ig+1,it,ik)*fphi &
+                  - vpac(ig+1,isgn,iglo) * spec(is)%stm * apar(ig+1,it,ik)*fapar) &
+                  + aj1(ig+1,iglo)*2.0*vperp2(ig+1,iglo)*aperp(ig+1,it,ik)*spec(is)%tz*faperp
+
+             chi = aj0(ig,iglo)*(phinew(ig,it,ik)*fphi &
+                  - vpac(ig,isgn,iglo) * spec(is)%stm * aparnew(ig,it,ik)*fapar) &
+                  + aj1(ig,iglo)*2.0*vperp2(ig,iglo)*aperpnew(ig,it,ik)*spec(is)%tz*faperp
+                
+             chi = chi + &
+                  aj0(ig+1,iglo)*(phinew(ig+1,it,ik)*fphi &
+                  - vpac(ig+1,isgn,iglo) * spec(is)%stm * aparnew(ig+1,it,ik)*fapar) &
+                  + aj1(ig+1,iglo)*2.0*vperp2(ig+1,iglo)*aperpnew(ig+1,it,ik)*spec(is)%tz*faperp
+
+!
+! construct time and space-centered h
+!
+
+             j0phi   = aj0(ig,iglo)*phi(ig,it,ik)*spec(is)%zt
+             j1aperp = aj1(ig,iglo)*2.0*vperp2(ig,iglo)*aperp(ig,it,ik)
+             
+             hfac = g(ig,isgn,iglo)+(j0phi*fphi+j1aperp*faperp)
+             
+             j0phi   = aj0(ig+1,iglo)*phi(ig+1,it,ik)*spec(is)%zt
+             j1aperp = aj1(ig+1,iglo)*2.0*vperp2(ig+1,iglo)*aperp(ig+1,it,ik)
+             
+             hfac = hfac + g(ig+1,isgn,iglo)+(j0phi*fphi+j1aperp*faperp)
+             
+             j0phi   = aj0(ig,iglo)*phinew(ig,it,ik)*spec(is)%zt
+             j1aperp = aj1(ig,iglo)*2.0*vperp2(ig,iglo)*aperpnew(ig,it,ik)
+             
+             hfac = hfac + gnew(ig,isgn,iglo)+(j0phi*fphi + j1aperp*faperp)
+             
+             j0phi   = aj0(ig+1,iglo)*phinew(ig+1,it,ik)*spec(is)%zt
+             j1aperp = aj1(ig+1,iglo)*2.0*vperp2(ig+1,iglo)*aperpnew(ig+1,it,ik)
+             
+             hfac = hfac + gnew(ig+1,isgn,iglo)+(j0phi*fphi + j1aperp*faperp)
+             
+             hfac = 0.25 * hfac ! added in fields at two values of theta and at two time steps
+             chi  = 0.25 * chi
+
+             g0(ig,isgn,iglo) = zi * wstar(ik,ie,is)/delt * conjg(hfac)*chi &
+                  * spec(is)%dens
+            
+          end do
+       end do
+    end do
+
+    call integrate_moment (g0, tot)
+
+    if (proc0) then
+       do is = 1, nspec
+          do ik = 1, naky
+             fac2 = 0.5
+             if (aky(ik) < epsilon(0.0)) fac2 = 1.0
+             do it = 1, ntheta0
+                if (nonlin .and. it == 1 .and. ik == 1) cycle
+                do ig = -ntgrid, ntgrid-1
+                   hk(it,ik) % gradients(is) = hk(it,ik) % gradients(is) + real(tot(ig,it,ik,is))*wgt(ig)*fac2
+                end do
+                h % gradients(is) = h % gradients(is) + hk(it,ik) % gradients(is)
+             end do
+          end do
+       end do
+    end if
+    
 
 ! Now get hyper damping contributions to energy
 
@@ -3814,10 +3898,10 @@ contains
                 if (nonlin .and. it == 1 .and. ik == 1) cycle
                 do is = 1, nspec
                    do ig = -ntgrid, ntgrid-1
-                      rate_by_k(it,ik,is,5) = rate_by_k(it,ik,is,5) &
+                      hk(it,ik) % hypervisc(is) = hk(it,ik) % hypervisc(is) &
                            + real(tot(ig,it,ik,is))*wgt(ig)*fac2
                    end do
-                   heating_rate(is,5) = heating_rate(is,5)+rate_by_k(it,ik,is,5)
+                   h % hypervisc(is) = h % hypervisc(is) + hk(it,ik) % hypervisc(is)
                 end do
              end do
           end do
@@ -3864,10 +3948,10 @@ contains
                 if (nonlin .and. it == 1 .and. ik == 1) cycle
                 do is = 1, nspec
                    do ig = -ntgrid, ntgrid-1
-                      rate_by_k(it,ik,is,6) = rate_by_k(it,ik,is,6) &
+                      hk(it,ik) % hyperres(is) = hk(it,ik) % hyperres(is) &
                            + real(tot(ig,it,ik,is))*wgt(ig)*fac2
                    end do
-                   heating_rate(is,6) = heating_rate(is,6)+rate_by_k(it,ik,is,6)
+                   h % hyperres(is) = h % hyperres(is)+hk(it,ik) % hyperres(is)
                 end do
              end do
           end do
@@ -3932,10 +4016,10 @@ contains
              if (nonlin .and. it == 1 .and. ik == 1) cycle
              do is = 1, nspec             
                 do ig = -ntgrid, ntgrid-1
-                   rate_by_k(it,ik,1,4) = rate_by_k(it,ik,1,4) + real(tot(ig,it,ik,is))*wgt(ig)*fac2
+                   hk(it,ik) % energy = hk(it,ik) % energy + real(tot(ig,it,ik,is))*wgt(ig)*fac2
                 end do
              end do
-             heating_rate(1,4) = heating_rate(1,4)+rate_by_k(it,ik,1,4)
+             h % energy = h % energy + hk(it,ik) % energy
           end do
        end do
        deallocate (wgt)

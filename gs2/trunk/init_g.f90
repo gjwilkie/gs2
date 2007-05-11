@@ -1118,6 +1118,18 @@ contains
 !       end if
 !    end do
 
+!    do ik = 1, naky
+!       do it=1,ntheta0
+!          if ((it == 2 .or. it == ntheta0) .and. ik == 1) cycle
+!          phinew(:,it,ik) = 0.
+!          aparnew(:,it,ik) = 0.
+!          aperpnew(:,it,ik) = 0.
+!          phi(:,it,ik) = 0.
+!          apar(:,it,ik) = 0.
+!          aperp(:,it,ik) = 0.          
+!       end do
+!    end do
+
     do ik = 1, naky
        do it=1,ntheta0
           if (it == 1 .and. ik == 2) cycle
@@ -1133,7 +1145,7 @@ contains
     do ik = 1, naky
        do it = 1, ntheta0
           do ig = -ntgrid, ntgrid
-             phiz(ig,it,ik) = cmplx(ranf(),ranf())
+             phiz(ig,it,ik) = cmplx(ranf()-0.5,ranf()-0.5)
           end do
           if (chop_side) then
              if (left) then
@@ -1209,7 +1221,7 @@ contains
     do ik = 1, naky
        do it = 1, ntheta0
           do ig = -ntgrid, ntgrid
-             phiz(ig,it,ik) = cmplx(ranf(),ranf())
+             phiz(ig,it,ik) = cmplx(ranf()-0.5,ranf()-0.5)
           end do
           if (chop_side) then
              if (left) then
@@ -1224,7 +1236,7 @@ contains
     do ik = 1, naky
        do it = 1, ntheta0
           do ig = -ntgrid, ntgrid
-             phiz(ig,it,ik) = cmplx(ranf(),ranf())
+             phiz(ig,it,ik) = cmplx(ranf()-0.5,ranf()-0.5)
           end do
           if (chop_side) then
              if (left) then

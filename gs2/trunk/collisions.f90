@@ -149,6 +149,12 @@ contains
     real, dimension (negrid,nspec) :: hee
     logical :: first_time = .true.
 
+    if (first_time) then
+       allocate (c_rate(-ntgrid:ntgrid, ntheta0, naky, nspec))
+       c_rate = 0.
+       first_time = .false.
+    end if
+
     if (collision_model_switch == collision_model_none) return
 
     call init_vnew (hee)
@@ -165,12 +171,6 @@ contains
     case (collision_model_krook,collision_model_krook_test)
        call init_krook (hee)
     end select
-
-    if (first_time .and. heating) then
-       allocate (c_rate(-ntgrid:ntgrid, ntheta0, naky, nspec))
-       c_rate = 0.
-       first_time = .false.
-    end if
 
   end subroutine init_arrays
 

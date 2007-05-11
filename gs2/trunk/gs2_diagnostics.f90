@@ -1,4 +1,11 @@
+! what about boundary condition contributions?  In the presence 
+! of magnetic shear, there are not always zero amplitudes at the ends
+! of the supercells.
+
 module gs2_diagnostics
+
+  use gs2_heating, only: heating_diagnostics
+
   implicit none
 
   public :: init_gs2_diagnostics
@@ -10,7 +17,6 @@ module gs2_diagnostics
   end interface
 
   ! knobs
-
   real :: omegatol, omegatinst
   logical :: print_line, print_old_units, print_flux_line, print_summary
   logical :: write_line, write_flux_line, write_phi, write_apar, write_aperp
@@ -40,13 +46,13 @@ module gs2_diagnostics
   logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
 
-  integer :: out_unit, kp_unit
+  integer :: out_unit, kp_unit, heat_unit
   integer :: dump_neoclassical_flux_unit, dump_check1_unit, dump_check2_unit
 
   complex, dimension (:,:,:), allocatable :: omegahist
-  real, dimension (:,:,:), allocatable :: hratehist
-  real, dimension (:,:,:,:,:), allocatable :: hkratehist
   ! (navg,ntheta0,naky)
+  type (heating_diagnostics), dimension(:), allocatable :: h_hist
+  type (heating_diagnostics), dimension(:,:,:), allocatable :: hk_hist
 
   real, dimension (:,:,:,:), allocatable ::  qheat !,  qheat_par,  qheat_perp
   real, dimension (:,:,:,:), allocatable :: qmheat !, qmheat_par, qmheat_perp
@@ -68,13 +74,14 @@ contains
 
   subroutine init_gs2_diagnostics (list, nstep)
     use theta_grid, only: init_theta_grid
-    use kt_grids, only: init_kt_grids
+    use kt_grids, only: init_kt_grids, ntheta0, naky
     use run_parameters, only: init_run_parameters
-    use species, only: init_species
+    use species, only: init_species, nspec
     use dist_fn, only: init_dist_fn
     use dist_fn, only: init_intcheck, init_vortcheck, init_fieldcheck
     use gs2_flux, only: init_gs2_flux
     use gs2_io, only: init_gs2_io
+    use gs2_heating, only: init_htype
     use mp, only: broadcast
     implicit none
     logical, intent (in) :: list
@@ -134,11 +141,24 @@ contains
     
     nmovie_tot = nstep/nmovie
 
+! allocate heating diagnostic data structures
+    if (write_hrate) then
+       allocate (h_hist(0:navg-1))
+       call init_htype (h_hist,  nspec)
+
+       allocate (hk_hist(ntheta0,naky,0:navg-1))
+       call init_htype (hk_hist, nspec)
+    end if
+       
+!       allocate (hratehist(nspec, 7, 0:navg-1));  hratehist = 0.0
+!       allocate (hkratehist(ntheta0, naky, nspec, 7, 0:navg-1));  hkratehist = 0.0
+
     call init_gs2_io (write_nl_flux, write_omega, write_stress, &
          write_fieldline_avg_phi, write_hrate, write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot)
     
   end subroutine init_gs2_diagnostics
+ 
 
   subroutine real_init (list)
     use file_utils, only: open_output_file, get_unused_unit
@@ -158,6 +178,10 @@ contains
        if (write_ascii) then
           call open_output_file (out_unit, ".out")
 !          if (write_kpar) call open_output_file (kp_unit, ".kp")
+       end if
+       
+       if (write_hrate .and. write_ascii) then
+          call open_output_file (heat_unit, ".heat")
        end if
        
        if (dump_neoclassical_flux) then
@@ -190,36 +214,33 @@ contains
        omegahist = 0.0
     end if
 
-    allocate (hratehist(nspec, 7, 0:navg-1));  hratehist = 0.0
-    allocate (hkratehist(ntheta0, naky, nspec, 7, 0:navg-1));  hkratehist = 0.0
-
-    allocate (pflux (ntheta0,naky,nspec))
-    allocate (qheat (ntheta0,naky,nspec,3))
+    allocate (pflux (ntheta0,naky,nspec)) ; pflux = 0.
+    allocate (qheat (ntheta0,naky,nspec,3)) ; qheat = 0.
 !       allocate (qheat_par  (ntheta0,naky,nspec))
 !       allocate (qheat_perp (ntheta0,naky,nspec))
-    allocate (vflux (ntheta0,naky,nspec))
-    allocate (pmflux(ntheta0,naky,nspec))
-    allocate (qmheat(ntheta0,naky,nspec,3))
+    allocate (vflux (ntheta0,naky,nspec)) ; vflux = 0.
+    allocate (pmflux(ntheta0,naky,nspec)) ; pmflux = 0.
+    allocate (qmheat(ntheta0,naky,nspec,3)) ; qmheat = 0.
 !       allocate (qmheat_par (ntheta0,naky,nspec))
 !       allocate (qmheat_perp(ntheta0,naky,nspec))
-    allocate (vmflux(ntheta0,naky,nspec))
-    allocate (pbflux(ntheta0,naky,nspec))
-    allocate (qbheat(ntheta0,naky,nspec,3))
+    allocate (vmflux(ntheta0,naky,nspec)) ; vmflux = 0.
+    allocate (pbflux(ntheta0,naky,nspec)) ; pbflux = 0.
+    allocate (qbheat(ntheta0,naky,nspec,3)) ; qbheat = 0.
 !       allocate (qbheat_par (ntheta0,naky,nspec))
 !       allocate (qbheat_perp(ntheta0,naky,nspec))
-    allocate (vbflux(ntheta0,naky,nspec))
+    allocate (vbflux(ntheta0,naky,nspec)) ; vbflux = 0.
        
-    allocate (theta_pflux (-ntgrid:ntgrid, nspec))
-    allocate (theta_vflux (-ntgrid:ntgrid, nspec))
-    allocate (theta_qflux (-ntgrid:ntgrid, nspec, 3))
+    allocate (theta_pflux (-ntgrid:ntgrid, nspec)) ; theta_pflux = 0.
+    allocate (theta_vflux (-ntgrid:ntgrid, nspec)) ; theta_vflux = 0.
+    allocate (theta_qflux (-ntgrid:ntgrid, nspec, 3)) ; theta_qflux = 0.
     
-    allocate (theta_pmflux (-ntgrid:ntgrid, nspec))
-    allocate (theta_vmflux (-ntgrid:ntgrid, nspec))
-    allocate (theta_qmflux (-ntgrid:ntgrid, nspec, 3))
+    allocate (theta_pmflux (-ntgrid:ntgrid, nspec)) ; theta_pmflux = 0.
+    allocate (theta_vmflux (-ntgrid:ntgrid, nspec)) ; theta_vmflux = 0.
+    allocate (theta_qmflux (-ntgrid:ntgrid, nspec, 3)) ; theta_qmflux = 0.
     
-    allocate (theta_pbflux (-ntgrid:ntgrid, nspec))
-    allocate (theta_vbflux (-ntgrid:ntgrid, nspec))
-    allocate (theta_qbflux (-ntgrid:ntgrid, nspec, 3))
+    allocate (theta_pbflux (-ntgrid:ntgrid, nspec)) ; theta_pbflux = 0.
+    allocate (theta_vbflux (-ntgrid:ntgrid, nspec)) ; theta_vbflux = 0.
+    allocate (theta_qbflux (-ntgrid:ntgrid, nspec, 3)) ; theta_qbflux = 0.
 
   end subroutine real_init
 
@@ -398,6 +419,7 @@ contains
 
     if (proc0) then
        if (write_ascii) call close_output_file (out_unit)
+       if (write_ascii .and. write_hrate) call close_output_file (heat_unit)
        if (dump_neoclassical_flux) close (dump_neoclassical_flux_unit)
 
        if (dump_check1) close (dump_check1_unit)
@@ -1115,6 +1137,7 @@ contains
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
     use gs2_flux, only: check_flux
+    use gs2_heating, only: heating_diagnostics, init_htype, del_htype
     use constants
     implicit none
     integer :: nout = 1
@@ -1124,9 +1147,11 @@ contains
     logical :: accelerated
     real, dimension(:,:,:), allocatable :: yxphi, yxapar, yxaperp
     complex, dimension (ntheta0, naky) :: omega, omegaavg
-    real, dimension (nspec, 7) :: hrateavg
+
+    type (heating_diagnostics) :: h
+    type (heating_diagnostics), dimension(:,:), allocatable :: hk
+
     real, dimension (ntheta0, naky) :: phitot, akperp
-    real, dimension (ntheta0, naky, nspec, 7) :: rate_by_k
     complex, dimension (ntheta0, naky, nspec) :: pfluxneo,qfluxneo
     real :: phi2, apar2, aperp2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, aperp2_by_mode
@@ -1163,10 +1188,12 @@ contains
     if (proc0) call get_omegaavg (istep, exit, omegaavg)
     call broadcast (exit)
 
-    hrateavg = 0.
-    rate_by_k = 0.
     if (write_hrate) then
-       call heating (istep, hrateavg, rate_by_k)
+       call init_htype (h,  nspec)
+       allocate (hk(ntheta0, naky))
+       call init_htype (hk, nspec)
+
+       call heating (istep, h, hk)
     end if
 
     call prof_leaving ("loop_diagnostics")
@@ -1408,9 +1435,25 @@ contains
     if (proc0 .and. write_any) then
        if (write_ascii) write (unit=out_unit, fmt=*) 'time=', t
        if (write_ascii .and. write_hrate) then
-          write (unit=out_unit, fmt="('t= ',e12.6,' heating_rate= ',12(1x,e12.6))") t, &
-               hrateavg(:,1), hrateavg(1,2), hrateavg(1,3), hrateavg(1,4), hrateavg(:,5), &
-               hrateavg(:,6), hrateavg(:,7)!, hrateavg(2,4)
+          write (unit=heat_unit, fmt="('t= ',e12.6,' energy= ',e12.6)") t, h % energy
+          write (unit=heat_unit, fmt="('t= ',e12.6,' energy_dot= ',e12.6)") t, h % energy_dot
+          write (unit=heat_unit, fmt="('t= ',e12.6,' J_ant.E= ',e12.6)") t, h % antenna
+          write (unit=heat_unit, fmt="('t= ',e12.6,' hvisc= ',12(1x,e12.6))") t, h % hypervisc
+          write (unit=heat_unit, fmt="('t= ',e12.6,' hres= ',12(1x,e12.6))") t, h % hyperres
+          write (unit=heat_unit, fmt="('t= ',e12.6,' hCh= ',12(1x,e12.6))") t, h % collisions
+          write (unit=heat_unit, fmt="('t= ',e12.6,' hw*= ',12(1x,e12.6))") t, h % gradients
+!         write (unit=heat_unit, fmt="('t= ',e12.6,' hwd= ',12(1x,e12.6))") t, h % curvature
+          write (unit=heat_unit, fmt="('t= ',e12.6,' heating= ',12(1x,e12.6))") t, h % heating
+
+          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hvisc= ',e12.6)") t, sum(h % hypervisc)
+          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hres= ',e12.6)") t, sum(h % hyperres)
+          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hCh= ',e12.6)") t, sum(h % collisions)
+          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hw*= ',e12.6)") t, sum(h % gradients)
+          write (unit=heat_unit, fmt="('t= ',e12.6,' total_heating= ',e12.6)") t, sum(h % heating)
+
+          write (unit=heat_unit, fmt="('t= ',e12.6,' total_power= ',e12.6)") t, &
+               sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot
+          write (unit=heat_unit, fmt='(a)') ''
        end if
 
        if (write_flux_line) then
@@ -1482,8 +1525,7 @@ contains
                phinew(igomega,:,:), phi2, phi2_by_mode, &
                aparnew(igomega,:,:), apar2, apar2_by_mode, &
                aperpnew(igomega,:,:), aperp2, aperp2_by_mode, &
-               hrateavg, rate_by_k, &
-               omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
+               h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
        end if
        if (write_ascii) then
           do ik = 1, naky
@@ -1678,11 +1720,17 @@ contains
     if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) &
          call flush_output_file (out_unit, ".out")
 
+    if (write_hrate) then
+       call del_htype (h)
+       call del_htype (hk)
+       deallocate (hk)
+    end if
+
     call prof_leaving ("loop_diagnostics-2")
 
   end subroutine loop_diagnostics
 
-  subroutine heating (istep, hrateavg, rate_by_k)
+  subroutine heating (istep, h, hk)
 
     use mp, only: proc0, iproc
     use dist_fn, only: get_heat
@@ -1693,10 +1741,12 @@ contains
     use antenna, only: amplitude
     use nonlinear_terms, only: nonlin
     use dist_fn_arrays, only: c_rate
+    use gs2_heating, only: heating_diagnostics, avg_h, avg_hk
     implicit none
     integer, intent (in) :: istep
-    real, dimension(:,:) :: hrateavg
-    real, dimension (:,:,:,:) :: rate_by_k
+    type (heating_diagnostics) :: h
+    type (heating_diagnostics), dimension(:,:) :: hk
+
     real, dimension(-ntgrid:ntgrid) :: wgt
     real :: fac
     integer :: is, ik, it, ig
@@ -1706,8 +1756,6 @@ contains
        wgt = delthet*jacob
        wgt = wgt/sum(wgt)
           
-       hrateavg(:,7) = 0.0
-       
        do is = 1, nspec
           do ik = 1, naky
              fac = 0.5
@@ -1715,37 +1763,21 @@ contains
              do it = 1, ntheta0
                 if (aky(ik) < epsilon(0.0) .and. abs(akx(it)) < epsilon(0.0)) cycle
                 do ig = -ntgrid, ntgrid
-                   rate_by_k(it,ik,is,7) = rate_by_k(it,ik,is,7)+real(c_rate(ig,it,ik,is)) &
-                        *fac*wgt(ig)*spec(is)%temp*spec(is)%dens
-                   hrateavg(is,7) = hrateavg(is,7) + real(c_rate(ig,it,ik,is)) &
-                        *fac*wgt(ig)*spec(is)%temp*spec(is)%dens
+
+                   hk(it, ik) % collisions(is) = hk(it, ik) % collisions(is) &
+                        + real(c_rate(ig,it,ik,is))*fac*wgt(ig)*spec(is)%temp*spec(is)%dens
+
                 end do
+                h % collisions(is) = h % collisions(is) + hk(it, ik) % collisions(is)
              end do
           end do
        end do
     end if
 
-    call get_heat (hrateavg, rate_by_k, phi, apar, aperp, phinew, aparnew, aperpnew)    
-    if (proc0) then
-       if (navg > 1) then
-          if (istep > 1) then
-             hratehist(:,:,mod(istep,navg)) = hrateavg
-             hkratehist(:,:,:,:,mod(istep,navg)) = rate_by_k
-          end if
-          
-          if (istep > navg) then
-             hrateavg = sum(hratehist/real(navg), dim=3)
-             rate_by_k = sum(hkratehist/real(navg), dim=5)
-          end if
-       end if
-       if (.not. nonlin .and. abs(amplitude) > epsilon(0.0)) then
-!          hrateavg = hrateavg/amplitude**2
-!          rate_by_k = rate_by_k/amplitude**2
-       end if
-    else
-       hrateavg = 0.
-       rate_by_k = 0.
-    end if
+    call get_heat (h, hk, phi, apar, aperp, phinew, aparnew, aperpnew)    
+
+    call avg_h(h, h_hist, istep, navg)
+    call avg_hk(hk, hk_hist, istep, navg)
 
   end subroutine heating
 

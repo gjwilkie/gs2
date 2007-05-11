@@ -30,7 +30,7 @@ module antenna
   implicit none
   complex :: w_antenna
   complex, dimension(:), allocatable :: a_ant, b_ant, w_stir
-  complex, dimension (:,:,:), allocatable :: apar_new
+  complex, save, dimension (:,:,:), allocatable :: apar_new, apar_old
   integer, dimension(:), allocatable :: kx_stir, ky_stir, kz_stir
   real :: amplitude, t0, w_dot
   integer :: nk_stir, out_unit
@@ -193,8 +193,11 @@ contains
 
     if (first) then
        allocate (apar_new(-ntgrid:ntgrid,ntheta0,naky)) ; apar_new = 0.
+       allocate (apar_old(-ntgrid:ntgrid,ntheta0,naky)) 
        first = .false.
     end if
+
+    apar_old = apar_new
 
     dt = simdt()/tnorm
     time = stime()/tnorm
@@ -289,7 +292,10 @@ contains
        do it = 1, ntheta0
           do ig = -ntgrid, ntgrid-1
              j_ext(ig,it,ik) = 0.5* &
-                  (kperp2(ig+1,it,ik)*apar_new(ig+1,it,ik) &
+                  ( &
+!                  kperp2(ig+1,it,ik)*apar_old(ig+1,it,ik) &
+!                  +kperp2(ig,  it,ik)*apar_old(ig,  it,ik) &
+                  +kperp2(ig+1,it,ik)*apar_new(ig+1,it,ik) &
                   +kperp2(ig,  it,ik)*apar_new(ig,  it,ik))
           end do
        end do
@@ -307,7 +313,7 @@ contains
   end function antenna_w
 
   subroutine dump_ant_amp
-    use gs2_time, only: simdt, stime
+    use gs2_time, only: stime
     use run_parameters, only: tnorm
     use theta_grid, only: ntgrid, theta
     use mp, only: proc0
