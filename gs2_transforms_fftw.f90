@@ -58,10 +58,10 @@ module gs2_transforms
   logical :: accel = .false.
 
   integer :: igmin_proc, igmax_proc
-  logical, dimension (:), allocatable :: aidx  ! aidx == aliased index
-  integer, dimension (:), allocatable :: igproc, ia, iak
-  complex, dimension (:, :), allocatable :: fft, xxf
-  complex, dimension (:, :, :), allocatable :: ag
+  logical, save, dimension (:), allocatable :: aidx  ! aidx == aliased index
+  integer, save, dimension (:), allocatable :: igproc, ia, iak
+  complex, save, dimension (:, :), allocatable :: fft, xxf
+  complex, save, dimension (:, :, :), allocatable :: ag
 
 contains
 

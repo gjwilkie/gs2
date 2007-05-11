@@ -55,7 +55,7 @@ module gs2_io
   integer :: phi_id, apar_id, aperp_id, epar_id
   integer :: antot_id, antota_id, antotp_id
   integer :: ntot_id, density_id, upar_id, tpar_id, tperp_id
-  integer :: rstress_id, ustress_id, hrateavg_id, hrate_by_k_id
+  integer :: rstress_id, ustress_id
   integer :: ntot2_id, ntot2_by_mode_id, ntot20_id, ntot20_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
   integer :: qflux_neo_by_k_id, pflux_neo_by_k_id, input_id
@@ -65,6 +65,12 @@ module gs2_io
   integer :: cvdrift_id, cvdrift0_id, gds2_id, gds21_id, gds22_id
   integer :: grho_id, jacob_id, shat_id, eps_id, drhodpsi_id, q_id
   integer :: code_id, datestamp_id, timestamp_id, timezone_id
+  integer :: h_energy_id, h_energy_dot_id, h_antenna_id
+  integer :: h_hypervisc_id, h_hyperres_id, h_collisions_id
+  integer :: h_gradients_id, h_curvature_id, h_heating_id
+  integer :: hk_energy_id, hk_energy_dot_id, hk_antenna_id
+  integer :: hk_hypervisc_id, hk_hyperres_id, hk_collisions_id
+  integer :: hk_gradients_id, hk_curvature_id, hk_heating_id
 
   real :: zero
   
@@ -692,8 +698,29 @@ contains
     end if
 
     if (write_hrate) then
-       status = netcdf_def_var (ncid, 'hrate_tot',  nf_double, 3, heat_dim, hrateavg_id)
-       status = netcdf_def_var (ncid, 'hrate_by_k', nf_double, 5, heatk_dim, hrate_by_k_id)
+       status = netcdf_def_var (ncid, 'h_energy',     nf_double, 1, time_dim, h_energy_id)
+       status = netcdf_def_var (ncid, 'h_energy_dot', nf_double, 1, time_dim, h_energy_dot_id)
+       status = netcdf_def_var (ncid, 'h_antenna',    nf_double, 1, time_dim, h_antenna_id)
+
+       status = netcdf_def_var (ncid, 'h_hypervisc',  nf_double, 2, flux_dim, h_hypervisc_id)
+       status = netcdf_def_var (ncid, 'h_hyperres',   nf_double, 2, flux_dim, h_hyperres_id)
+       status = netcdf_def_var (ncid, 'h_collisions', nf_double, 2, flux_dim, h_collisions_id)
+       status = netcdf_def_var (ncid, 'h_gradients',  nf_double, 2, flux_dim, h_gradients_id)
+!       status = netcdf_def_var (ncid, 'h_curvature',  nf_double, 2, flux_dim, h_curvature_id)
+       status = netcdf_def_var (ncid, 'h_heating',    nf_double, 2, flux_dim, h_heating_id)
+       status = netcdf_put_att (ncid, h_heating_id, 'long_name', 'Total heating by species')
+
+       status = netcdf_def_var (ncid, 'hk_energy',    nf_double, 3, mode_dim, hk_energy_id)
+       status = netcdf_def_var (ncid, 'hk_energy_dot',nf_double, 3, mode_dim, hk_energy_dot_id)
+       status = netcdf_def_var (ncid, 'hk_antenna',   nf_double, 3, mode_dim, hk_antenna_id)
+
+       status = netcdf_def_var (ncid, 'hk_hypervisc',  nf_double, 4, fluxk_dim, hk_hypervisc_id)
+       status = netcdf_def_var (ncid, 'hk_hyperres',   nf_double, 4, fluxk_dim, hk_hyperres_id)
+       status = netcdf_def_var (ncid, 'hk_collisions', nf_double, 4, fluxk_dim, hk_collisions_id)
+       status = netcdf_def_var (ncid, 'hk_gradients',  nf_double, 4, fluxk_dim, hk_gradients_id)
+!       status = netcdf_def_var (ncid, 'hk_curvature',  nf_double, 4, fluxk_dim, hk_curvature_id)
+       status = netcdf_def_var (ncid, 'hk_heating',    nf_double, 4, fluxk_dim, hk_heating_id)
+       status = netcdf_put_att (ncid, hk_heating_id, 'long_name', 'Total heating by species and mode')
     end if
 
 !    status = netcdf_put_att (ncid, phtot_id, 'long_name', 'Field amplitude')
@@ -1192,9 +1219,9 @@ contains
        phi0,   phi2,   phi2_by_mode, &! phiavg, &
        apar0,  apar2,  apar2_by_mode, &
        aperp0, aperp2, aperp2_by_mode, &
-       hrateavg, rate_by_k, &
-       omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
+       h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
 
+    use gs2_heating, only: heating_diagnostics, hk_repack
     use run_parameters, only: fphi, fapar, faperp
     use netcdf_mod, only: netcdf_put_var1, netcdf_put_vara
     use kt_grids, only: naky, ntheta0
@@ -1206,18 +1233,18 @@ contains
     real, dimension (:), intent (in) :: fluxfac, woutunits
     complex, dimension(:,:), intent (in) :: phi0, apar0, aperp0, omega, omegaavg !, phiavg
     real, dimension(:,:), intent (in) :: phi2_by_mode, apar2_by_mode, aperp2_by_mode, phitot
-    real, dimension (:,:), intent (in) :: hrateavg
-    real, dimension (:,:,:,:), intent (in) :: rate_by_k
+    type(heating_diagnostics), intent (in) :: h
+    type(heating_diagnostics), dimension(:,:), intent (in) :: hk
     logical :: write_omega, write_hrate
     real, dimension (ntheta0) :: field2_by_kx
     real, dimension (naky) :: field2_by_ky
     real, dimension (2, ntheta0, naky) :: ri2
+    real, dimension (ntheta0, naky, nspec) :: tmps
     complex, dimension (ntheta0, naky) :: tmp
-    integer, dimension (5) :: start5, count5
     integer, dimension (4) :: start0, count0, start4, count4
     integer, dimension (3) :: start, count, starth, counth
     integer, dimension (2) :: startx, countx, starty, county, starts, counts
-    integer :: status, it, ik
+    integer :: status, it, ik, is
 
     status = netcdf_put_var1(ncid, time_id, nout, time)
 
@@ -1248,18 +1275,6 @@ contains
     count4(2) = naky
     count4(3) = nspec
     count4(4) = 1
-
-    start5(1) = 1
-    start5(2) = 1
-    start5(3) = 1
-    start5(4) = 1
-    start5(5) = nout
-
-    count5(1) = ntheta0
-    count5(2) = naky
-    count5(3) = nspec
-    count5(4) = 7
-    count5(5) = 1
 
     starty(1) = 1
     starty(2) = nout
@@ -1356,8 +1371,38 @@ contains
     end if
         
     if (write_hrate) then
-       status = netcdf_put_vara (ncid, hrateavg_id, starth, counth, hrateavg)
-       status = netcdf_put_vara (ncid, hrate_by_k_id, start5, count5, rate_by_k)
+       status = netcdf_put_var1(ncid, h_energy_id,     nout, h%energy)
+       status = netcdf_put_var1(ncid, h_energy_dot_id, nout, h%energy_dot)
+       status = netcdf_put_var1(ncid, h_antenna_id,    nout, h%antenna)
+
+       status = netcdf_put_vara (ncid, h_hypervisc_id, starts, counts, h%hypervisc)
+       status = netcdf_put_vara (ncid, h_hyperres_id,  starts, counts, h%hyperres)
+       status = netcdf_put_vara (ncid, h_collisions_id,starts, counts, h%collisions)
+       status = netcdf_put_vara (ncid, h_gradients_id, starts, counts, h%gradients)
+!       status = netcdf_put_vara (ncid, h_curvature_id, starts, counts, h%curvature)
+       status = netcdf_put_vara (ncid, h_heating_id,   starts, counts, h%heating)
+
+       status = netcdf_put_vara (ncid, hk_energy_id,     start, count, hk%energy)
+       status = netcdf_put_vara (ncid, hk_energy_dot_id, start, count, hk%energy_dot)
+       status = netcdf_put_vara (ncid, hk_antenna_id,    start, count, hk%antenna)
+
+       call hk_repack (hk, 1, tmps)
+       status = netcdf_put_vara (ncid, hk_hypervisc_id, start4, count4, tmps)
+
+       call hk_repack (hk, 2, tmps)
+       status = netcdf_put_vara (ncid, hk_hyperres_id,  start4, count4, tmps)
+
+       call hk_repack (hk, 3, tmps)
+       status = netcdf_put_vara (ncid, hk_collisions_id,start4, count4, tmps)
+
+       call hk_repack (hk, 4, tmps)
+       status = netcdf_put_vara (ncid, hk_gradients_id, start4, count4, tmps)
+
+!       call hk_repack (hk, 6, tmps)
+!       status = netcdf_put_vara (ncid, hk_curvature_id, start4, count4, tmps)
+
+       call hk_repack (hk, 5, tmps)
+       status = netcdf_put_vara (ncid, hk_heating_id,   start4, count4, tmps)
     end if
 
     if (write_omega) then

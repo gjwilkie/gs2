@@ -22,10 +22,10 @@ module nonlinear_terms
 
   !complex, dimension(:,:), allocatable :: phi_avg, apar_avg, aperp_avg  
 
-  real, dimension (:,:), allocatable :: ba, gb, bracket
+  real, save, dimension (:,:), allocatable :: ba, gb, bracket
   ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
 
-  real, dimension (:,:,:), allocatable :: aba, agb, abracket
+  real, save, dimension (:,:,:), allocatable :: aba, agb, abracket
   ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
 
   !complex, dimension (:,:), allocatable :: xax, xbx, g_xf
@@ -48,7 +48,7 @@ module nonlinear_terms
 contains
   
   subroutine init_nonlinear_terms 
-    use mp, only: proc0
+    use mp, only: proc0, iproc
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0, nx, ny, akx, aky
     use le_grids, only: init_le_grids, nlambda, negrid
@@ -80,22 +80,19 @@ contains
     if (nonlinear_mode_switch /= nonlinear_mode_none) then
        call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
 
-       if (accelerated) then
-          if (alloc) then
+       if (alloc) then
+          if (accelerated) then
              allocate (     aba(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
              allocate (     agb(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
              allocate (abracket(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
-             alloc = .false.
-          endif
-          aba = 0. ; agb = 0. ; abracket = 0.
-       else
-          if (alloc) then
+             aba = 0. ; agb = 0. ; abracket = 0.
+          else
              allocate (     ba(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
              allocate (     gb(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
              allocate (bracket(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-             alloc = .false.
-          endif
-          ba = 0. ; gb = 0. ; bracket = 0.
+             ba = 0. ; gb = 0. ; bracket = 0.
+          end if
+          alloc = .false.
        end if
 
        cfly = aky(naky)/cfl*0.5/tnorm

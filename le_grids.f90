@@ -11,11 +11,11 @@ module legendre
 
 contains
 
-  subroutine nrgauleg (x1, x2, x, w, eps)
+  subroutine nrgauleg (x1, x2, x, w)!, eps)
 
     real, intent(in) :: x1, x2
     real, dimension(:), intent(out) :: x, w
-    real, intent(in) :: eps
+    real  :: eps
 
     integer :: its, j, m, n
     integer, parameter :: maxit=100
@@ -23,6 +23,9 @@ contains
     double precision, dimension((size(x)+1)/2) :: p1, p2, p3, pp, z, z1
     logical, dimension((size(x)+1)/2) :: unfinished
 
+! hack for now
+    eps = epsilon(xm)
+    
     n = size(x)
     pi = asin(real(1.0,kind(pi)))*2.0
     m = (n+1)/2
@@ -111,7 +114,7 @@ contains
     
     x0 = xgrid(ecut)      ! function xgrid_s (single element)
     
-    call nrgauleg(0., x0, zeroes, wgts(1:np), eps**1.5)
+    call nrgauleg(0., x0, zeroes, wgts(1:np))!, eps**1.5)
     
     do ie=1,np
        epts(ie) = energy(zeroes(ie), Ecut)
@@ -1824,7 +1827,7 @@ contains
     real :: ww
     integer :: ig, il
 
-    call nrgauleg(1., 0., xx, wx, tiny**1.5)
+    call nrgauleg(1., 0., xx, wx)!, tiny**1.5)
 
     wl = 0.0
     
