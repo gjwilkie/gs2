@@ -1768,7 +1768,6 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, aperp
     complex, dimension (:,:), allocatable :: g0eint, g1eint
-    complex, dimension (:,:), allocatable :: g1int, g2int
     
     real, dimension (:,:), allocatable, save :: aintnorm
     real :: x
@@ -1783,111 +1782,62 @@ contains
        D_kill = 0.5*sqrt(pi/2.)*noise*chi_int
     end if
 
-!    allocate (g0eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-!    allocate (g1eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-!    if (diff_first) then
-!       diff_first = .false.
-!       allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-!       aintnorm = 0. ; g1 = 1.0
-!       call integrate (g1, g1eint)
-!       do ige = geint_lo%llim_proc, geint_lo%ulim_proc
-!          aintnorm(:,ige) = 1.0/real(g1eint(:,ige))
-!       end do
-!
-!       if (save_u) then
-!          if (.not. allocated(sq)) allocate (sq(-ntgrid:ntgrid,nlambda,2))
-!          do il = 1, nlambda
-!             do ig = -ntgrid, ntgrid
-!                x = sqrt(max(0.0, 1.0 - al(il)*bmag(ig)))
-!                sq(ig,il,1) =  x
-!                sq(ig,il,2) = -x
-!             end do
-!          end do
-!          
-!          if (.not.allocated(g3int)) &
-!               allocate (g3int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
-!          g3int = 0.
-!          
-!          do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!             x = al(il_idx(g_lo,iglo))
-!             g1(:,1,iglo) = max(0.0, 1.0 - x*bmag(:))
-!             g1(:,2,iglo) = max(0.0, 1.0 - x*bmag(:))
-!          end do
-!          call lintegrate (g1, g3int)
-!       end if
-!    end if
+    if (save_n) then
+       allocate (g0eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
+       allocate (g1eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
+
+       if (diff_first) then
+          diff_first = .false.
+          allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
+          aintnorm = 0. ; g1 = 1.0
+          call integrate (g1, g1eint)
+          do ige = geint_lo%llim_proc, geint_lo%ulim_proc
+             aintnorm(:,ige) = 1.0/real(g1eint(:,ige))
+          end do
+       end if
+! get initial particle number
+       call integrate (g0, g0eint)
+    end if
 
     if (h_kill) call g_adjust (g0, phi, aperp, fphi, faperp)
-
-!! get initial momentum
-!    if (save_u) then
-!       allocate (g1int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
-!       allocate (g2int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
-!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!          il = il_idx(g_lo,iglo)
-!          g1(:,:,iglo) = g0(:,:,iglo)*sq(:,il,:)
-!       end do
-!       call lintegrate (g1, g1int)
-!    end if
-!
-!! get initial particle number
-!    if (save_n) call integrate (g0, g0eint)
 
 ! kill higher moments of f
     if (kill_grid) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo, iglo)
           it = it_idx(g_lo, iglo)
-          g0(:,1,iglo) = g0(:,1,iglo) &
+          g1(:,1,iglo) = g0(:,1,iglo) &
                * exp(-0.5*(akx(it)**2 + aky(ik)**2) * D_kill * delt / tnorm)
-          g0(:,2,iglo) = g0(:,2,iglo) &
+          g1(:,2,iglo) = g0(:,2,iglo) &
                * exp(-0.5*(akx(it)**2 + aky(ik)**2) * D_kill * delt / tnorm)
        end do
     else       
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo, iglo)
           it = it_idx(g_lo, iglo)
-          g0(:,1,iglo) = g0(:,1,iglo) &
+          g1(:,1,iglo) = g0(:,1,iglo) &
                * exp(-0.5*kperp2(:,it,ik) * D_kill * delt / tnorm)
-          g0(:,2,iglo) = g0(:,2,iglo) &
+          g1(:,2,iglo) = g0(:,2,iglo) &
                * exp(-0.5*kperp2(:,it,ik) * D_kill * delt / tnorm)
        end do
     end if
 
-!! restore particle number, momentum
-!    
-!    if (save_n) then
-!       call integrate (g1, g1eint)
-!       do ige = geint_lo%llim_proc, geint_lo%ulim_proc
-!          g0eint(:,ige) = (g0eint(:,ige) - g1eint(:,ige)) &
-!               *aintnorm(:,ige)
-!       end do
-!       call geint2g (g0eint, g0)
-!       g0 = g1 + g0
-!    endif
-!
-!    if (save_u) then
-!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!          il = il_idx(g_lo,iglo)
-!          g1(:,:,iglo) = g0(:,:,iglo)*sq(:,il,:)
-!       end do
-!       call lintegrate (g1, g2int)
-!
-!       do igint = gint_lo%llim_proc, gint_lo%ulim_proc
-!          g1int(:,igint) = (g1int(:,igint) - g2int(:,igint))/g3int(:,igint)
-!       end do
-!       call gint2g (g1int, g1)
-!
-!       deallocate (g1int, g2int)
-!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!          il = il_idx(g_lo,iglo)
-!          g0(:,:,iglo) = g0(:,:,iglo) + sq(:,il,:)*g1(:,:,iglo)
-!       end do
-!    end if
-!
-    if (h_kill) call g_adjust (g0, phi, aperp, -fphi, -faperp)
+    if (h_kill) call g_adjust (g1, phi, aperp, -fphi, -faperp)
 
-!    deallocate (g0eint, g1eint)
+! restore particle number
+    if (save_n) then
+       call integrate (g1, g1eint)
+       do ige = geint_lo%llim_proc, geint_lo%ulim_proc
+          g0eint(:,ige) = (g0eint(:,ige) - g1eint(:,ige)) &
+               *aintnorm(:,ige)
+       end do
+       call geint2g (g0eint, g0)
+       g0 = g0 + g1
+    else
+       g0 = g1
+    endif
+
+    if (save_n) deallocate (g0eint, g1eint)
 
   end subroutine kill
 
@@ -3501,7 +3451,7 @@ contains
     use le_grids, only: integrate_moment
     use species, only: spec, nspec
     use theta_grid, only: jacob, delthet, ntgrid
-    use run_parameters, only: fphi, fapar, faperp, delt, tunits, beta
+    use run_parameters, only: fphi, fapar, faperp, delt, tunits, beta, tnorm
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_apar
     use hyper, only: D_v, D_eta
@@ -3848,8 +3798,8 @@ contains
                 
                 hfac = 0.25 * hfac 
                 
-                g0(ig,isgn,iglo) = -0.5*spec(is)%dens*spec(is)%temp* &
-                     conjg(hfac)*hfac*D_v*akperp4
+                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp* &
+                     conjg(hfac)*hfac*D_v*akperp4/tnorm
              end do
           end do
        end do
@@ -3898,8 +3848,8 @@ contains
                 
                 afac = 0.25*fapar*spec(is)%stm*afac
                 
-                g0(ig,isgn,iglo) = -spec(is)%dens*spec(is)%z* &
-                     conjg(hfac)*afac*D_eta*akperp4
+                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%z* &
+                     conjg(hfac)*afac*D_eta*akperp4/tnorm
              end do
           end do
        end do

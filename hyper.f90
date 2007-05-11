@@ -28,7 +28,7 @@ contains
   subroutine init_hyper
 
     use kt_grids, only: ntheta0, naky, akx, aky
-    use run_parameters, only: delt, wunits
+    use run_parameters, only: delt, tnorm
     use gs2_layouts, only: init_gs2_layouts
     implicit none
     integer :: ik, it
@@ -59,7 +59,7 @@ contains
     if (D_hyperres > 0.) then
        do ik = 1, naky
           do it = 1, ntheta0
-             D_res(it, ik) = D_hyperres*delt*wunits(ik) &
+             D_res(it, ik) = D_hyperres*delt/tnorm &
                   * (aky(ik)**2 + akx(it)**2)**2/akperp4_max
           end do
        end do
@@ -202,7 +202,7 @@ contains
     use mp, only: proc0
     use gs2_layouts, only: ik_idx, it_idx, is_idx
     use theta_grid, only: ntgrid
-    use run_parameters, only: delt, wunits, fphi, faperp
+    use run_parameters, only: delt, tnorm, fphi, faperp
     use gs2_layouts, only: g_lo
     use kt_grids, only: aky, akx, naky, ntheta0
     implicit none
@@ -294,19 +294,19 @@ contains
          
          if(aky(ik) == 0.) then
             
-            g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * delt * wunits(ik) &
+            g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * delt / tnorm &
                  * ( shear_rate_z_nz(:) *  akx(it) ** 4 / akx4_max )))
             
-            g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * delt * wunits(ik) &
+            g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * delt / tnorm & 
                  * ( shear_rate_z_nz(:) *  akx(it) ** 4 / akx4_max )))
             
          else
             
-            g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * delt * wunits(ik) &
+            g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * delt / tnorm & 
                  * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**2 / akperp4_max & 
                  + shear_rate_z(:) * akx(it) ** 4 / akx4_max * aky(ik) / aky_max )))
             
-            g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * delt * wunits(ik) &
+            g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * delt / tnorm &
                  * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**2 / akperp4_max & 
                  + shear_rate_z(:) * akx(it) ** 4 / akx4_max * aky(ik) / aky_max )))
             
@@ -343,10 +343,10 @@ contains
          ik = ik_idx(g_lo, iglo)
          it = it_idx(g_lo, iglo)
          
-         g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * delt * wunits(ik) &
+         g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * delt / tnorm &
               * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**2 / akperp4_max)))
          
-         g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * delt * wunits(ik) &
+         g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * delt / tnorm &
               * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**2 / akperp4_max)))
       end do
       
