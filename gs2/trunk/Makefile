@@ -191,14 +191,12 @@ ifeq ($(CPU),RS6000)
 
 endif
 
-# For Dawson, specify CPU=Dawson when invoking make, or 
-# set the environment variable CPU=Dawson. 
 # Dawson G5 cluster:
 ifeq ($(CPU),Dawson)
   FC = xlf95
   PLATFORM_LINKS = ibm
   F90FLAGS = -qmoddir=/tmp/bdorland -I/tmp/bdorland \
-	-qsuffix=f=f90 -I $(UTILS) -I $(GEO) \
+	-qautodbl=dbl4 -qsuffix=f=f90 -I $(UTILS) -I $(GEO) \
 	-I /u/local/apps/netcdf/include -I/u/local/mpi/mpilam/include 
   FLIBS = -L/u/local/apps/netcdf/lib -lnetcdf \
 	-L/u/home2/nfl/FFTW/lib -lfftw -lrfftw \
@@ -206,11 +204,9 @@ ifeq ($(CPU),Dawson)
 #-L/u/local/apps/fftw/lib -lfftw -lrfftw 
   ifneq ($(debug),on)
 #    F90FLAGS += -O4
-    F90FLAGS += -qautodbl=dbl4 -O3 -qarch=g5 -qtune=g5
-    F90FLAGS_2 = $(F90FLAGS) -O3 -qarch=g5 -qtune=g5
+    F90FLAGS += -O3 -qarch=g5 -qtune=g5
   else
-    F90FLAGS += -qautodbl=dbl4 -g 
-    F90FLAGS_2 = $(F90FLAGS) -g 
+    F90FLAGS += -g 
     FLIBS    += # $$TRACE_MPIF
   endif
 
@@ -488,10 +484,6 @@ ifeq ($(CPU),Dawson)
 
 le_grids.o:
 	$(FC) $(F90FLAGS) -qautodbl=dbl -c le_grids.f90
-
-netcdf_mod.o: netcdf_mod.f90
-	$(FC) $(F90FLAGS_2) -c netcdf_mod.f90	
-
 endif
 
 ifeq ($(CPU),RS6000)

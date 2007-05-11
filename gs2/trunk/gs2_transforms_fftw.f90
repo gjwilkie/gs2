@@ -23,6 +23,7 @@ module gs2_transforms
   interface transform2
      module procedure transform2_5d_accel
      module procedure transform2_5d
+     module procedure transform2_4d
      module procedure transform2_3d
   end interface
 
@@ -679,6 +680,58 @@ contains
 
   end subroutine inverse2_3d
 
+  subroutine transform2_4d (den, phixf, nny, nnx)
+    use mp, only: proc0
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0, nx, ny, aky
+    implicit none
+    integer :: nnx, nny
+    complex, dimension (-ntgrid:,:,:,:), intent (in) :: den
+    real, dimension (:,:,-ntgrid:), intent (out) :: phixf  
+    real, dimension (:,:,:), allocatable :: phix
+    complex, dimension (:,:,:), allocatable :: aphi
+    real :: fac
+    integer :: ig, ik, it, i
+
+! scale, dealias and transpose
+
+    call init_3d (nny, nnx)
+
+    allocate (phix (-ntgrid:ntgrid, nny, nnx))
+    allocate (aphi (-ntgrid:ntgrid, nny/2+1, nnx))
+    aphi = 0.
+
+    do ik=1,naky
+       fac = 0.5
+       if (aky(ik) < epsilon(0.)) fac = 1.0
+       do it=1,(ntheta0+1)/2
+          do ig=-ntgrid, ntgrid
+             aphi(ig,ik,it) = den(ig,it,ik,1)*fac
+          end do
+       end do
+       do it=(ntheta0+1)/2+1,ntheta0
+          do ig=-ntgrid, ntgrid
+             aphi(ig,ik,it-ntheta0+nx) = den(ig,it,ik,1)*fac
+          end do
+       end do
+    end do
+
+! transform
+    i = 2*ntgrid+1
+    call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
+
+    do it=1,nnx
+       do ik=1,nny
+          do ig=-ntgrid, ntgrid
+             phixf (it,ik,ig) = phix (ig,ik,it)
+          end do
+       end do
+    end do
+
+    deallocate (aphi, phix)
+
+  end subroutine transform2_4d
+  
   subroutine init_zf (ntgrid, nperiod)
 
     use fft_work, only: init_z
