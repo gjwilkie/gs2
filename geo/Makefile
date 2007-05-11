@@ -123,8 +123,8 @@ ifeq ($(CPU),RS6000)
 #  u_obj = $(UTILDIR)/spl.o $(UTILDIR)/mds.o $(UTILDIR)/netcdf.o
   u_obj = $(UTILDIR)/utils.a
   stubs = radstub.o vdimstub.o $(UTILDIR)/mdslib.o
-  FFLAGS   = -qrealsize=8 -I $(UTILDIR)
-  F90FLAGS = -qrealsize=8 -qsuffix=f=f90 -I $(UTILDIR)
+  FFLAGS   = -qautodbl=dbl4 -I $(UTILDIR)
+  F90FLAGS = -qautodbl=dbl4 -qsuffix=f=f90 -I $(UTILDIR)
   FLIBS = $$NETCDF 
   ifneq ($(debug),on)
 #    FFLAGS   += -O4
@@ -135,6 +135,23 @@ ifeq ($(CPU),RS6000)
     FFLAGS   += -g 
     F90FLAGS += -g 
     FLIBS    += # $$TRACE_MPIF
+  endif
+endif
+
+# Dawson G5 cluster:
+ifeq ($(CPU),Dawson)
+  FC = xlf95
+  PLATFORM_LINKS = ibm
+  u_obj = $(UTILDIR)/utils.a
+  stubs = radstub.o vdimstub.o $(UTILDIR)/mdslib.o
+  FFLAGS   = -qautodbl=dbl -I $(UTILDIR)
+  F90FLAGS = -qmoddir=/tmp/bdorland -I/tmp/bdorland -qautodbl=dbl4 -qsuffix=f=f90 \
+	-I $(UTILDIR) 
+  FLIBS = -L/u/local/apps/netcdf/lib -lnetcdf 
+  ifneq ($(debug),on)
+    F90FLAGS += -O3 -qarch=g5 -qtune=g5
+  else
+    F90FLAGS += -g 
   endif
 endif
 

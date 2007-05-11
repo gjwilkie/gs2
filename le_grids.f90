@@ -1,391 +1,296 @@
-module egrid
+module legendre
 
-  use splines
+! Taken from Numerical Recipes, incorporated here by Tomo Tatsuno
+! Aug, 2005
 
   implicit none
+
+  public :: nrgauleg
+
+  private
+
+contains
+
+  subroutine nrgauleg (x1, x2, x, w, eps)
+
+    real, intent(in) :: x1, x2
+    real, dimension(:), intent(out) :: x, w
+    real, intent(in) :: eps
+
+    integer :: its, j, m, n
+    integer, parameter :: maxit=100
+    double precision :: xl, xm, pi
+    double precision, dimension((size(x)+1)/2) :: p1, p2, p3, pp, z, z1
+    logical, dimension((size(x)+1)/2) :: unfinished
+
+    n = size(x)
+    pi = asin(real(1.0,kind(pi)))*2.0
+    m = (n+1)/2
+
+    xm = real(0.5,kind(xm)) * (x1+x2)   ! middle of the section
+    xl = real(0.5,kind(xl)) * (x2-x1)   ! signed half length of the section
+    z = (/ (cos(pi*(j-0.25)/(n+0.5)), j=1,m) /)
+    unfinished = .true.
+
+    do its=1, maxit
+       where(unfinished)
+          p1 = real(1.0,kind(p1(1)))
+          p2 = real(0.0,kind(p2(1)))
+       end where
+       do j=1, n
+          where (unfinished)
+             p3 = p2
+             p2 = p1
+             p1 = ((2*j-1) * z * p2 - (j-1) * p3) / j
+          end where
+       end do
+! p1 now contains the desired legendre polynomials.
+       where (unfinished)
+          pp = n * (z * p1 - p2) / (z**2 - 1.0)
+          z1 = z
+          z = z1 - p1 / pp
+          unfinished = (abs(z-z1) > eps)
+       end where
+       if (.not. any(unfinished)) exit
+    end do
+
+    if (its == maxit+1) then
+       print*, 'too many iterations in nrgauleg'
+       stop
+    end if
+    x(1:m) = xm - xl * z
+    x(n:n-m+1:-1) = xm + xl * z
+    w(1:m) = 2.0 * abs(xl) / ((1.0 - z**2) * pp**2)
+    w(n:n-m+1:-1) = w(1:m)
+
+  end subroutine nrgauleg
+  
+end module legendre
+
+module egrid
+
+! By Tomo Tatsuno, Aug 2005
+! Improved accuracy and speed and maximum number of energy grid points
+!
+
+  implicit none
+
+  public :: energy, xgrid, setegrid
+
+  private
 
   interface xgrid
      module procedure xgrid_s, xgrid_v
   end interface
 
-  real, dimension (:,:), allocatable :: p, am
-  real, dimension(:), allocatable :: x, gamma2, ipzero, bvec
-  real :: xmax, emax, soln, a, b, dx
-  real :: xerrbi, xerrsec
-  real :: denom, x0, xtmp
-  integer :: n, ip, ier, jp, kmax, j, k
-  integer :: nmax, np
-  logical :: err
-
-  ! spline stuff
-  logical, dimension(:), allocatable :: first 
-  type (spline), dimension(:), allocatable :: spl
-
 contains
 
-  subroutine setegrid (emax_in, np_in, nmax_in, epts, wgts)
+  subroutine setegrid (Ecut, negrid, epts, wgts)
 
-    real :: emax_in
-    integer :: np_in, nmax_in
-    real, dimension(:) :: epts, wgts
-
-    np = np_in - 1
-    nmax = nmax_in
-    emax = emax_in
-
-    call init_egrid (np)
-
-    x0 = xgrid(emax)
-    dx = x0/real(nmax-1)
-
-! Note: elegant way would be to use Gaussian integration on
-! polynomials, together with similar high order interpolation 
-! scheme to find the energies, but this is okay for now.
-
-    x = (/ (real(n)*dx, n=0,nmax-1) /)
-
-    p(:,1) = x-x0/2.
-    gamma2(2) = x0**2/12.
-
-    p(:,2)=(x-x0/2.)*p(:,1) - gamma2(2)
-
-    do ip=2,np-1
-       gamma2(ip+1) = integral(p(:,ip)**2)/integral(p(:,ip-1)**2)
-       p(:,ip+1)=(x-x0/2.)*p(:,ip) - gamma2(ip+1)*p(:,ip-1)
+    use legendre, only: nrgauleg
+    implicit none
+    
+    integer, intent (in) :: negrid
+    real, intent (in) :: ecut
+    real, dimension(:), intent (out) :: epts, wgts
+    integer :: ie, np
+    
+    real :: eps=1.e-15, x0
+    real, dimension(:), allocatable :: zeroes
+    
+    real :: x
+    
+    if (Ecut > 20.0) then
+! should go to runname.error?
+       write (*,*) 'E -> x transformation is not numerically correct for such a large Ecut'
+       write (*,*) 'x(E=20) =', xgrid(20.), ' is too close to 1.0'
+    end if
+    
+    np = negrid-1
+    allocate (zeroes(np))
+    
+    x0 = xgrid(ecut)      ! function xgrid_s (single element)
+    
+    call nrgauleg(0., x0, zeroes, wgts(1:np), eps**1.5)
+    
+    do ie=1,np
+       epts(ie) = energy(zeroes(ie), Ecut)
     end do
 
-! probably straightforward to get all values analytically:
-!    write(*,*) (x0**2/12.-gamma2(2))/gamma2(2)
-!    write(*,*) (x0**2/15.-gamma2(3))/gamma2(3)
-!    write(*,*) (9.*x0**2/140.-gamma2(4))/gamma2(4)
-
-    ! find the zeroes of the highest polynomial
-
-    xerrbi = 1.e-10
-    xerrsec = 1.e-10
-
-    ip = 1
-    do n=1,nmax-2, 2
-       if (p(n,np)*p(n+2,np) < 0.) then
-          a = x(n)
-          b = x(n+2)
-          call rootp (np, 0., a, b, xerrbi, xerrsec, 1, ier, ipzero(ip))
-          ip = ip + 1
-       end if
-    end do
-
-    ! set up matrix to get weights
-    am (1,:) = 1.
-    do ip = 2, np
-       do jp = 1, np
-          am (ip, jp) = poly(ipzero(jp), ip-1)
-       end do
-    end do
-
-    bvec(1) = x0
-    bvec(2:) = 0.
-
-    call solve_system_of_linear_eqns (am, wgts(1:np), bvec, err)
-
-    do ip=1,np
-       epts(ip) = energy(ipzero(ip))
-    end do
-    epts(np+1) = emax
+    epts(np+1) = ecut
     wgts(np+1) = 1.-x0
+    
+    if (wgts(negrid) > wgts(np)) then
+       write (*,*) 'WARNING: weight at ecut: ', wgts(negrid)
+       write (*,*) 'WARNING: is larger than the one at lower grid: ', wgts(np)
+       write (*,*) 'WARNING: Recommend using fewer energy grid points'
+       if (ecut < 20.0) &
+            & write (*,*) 'WARNING: or you should increase ecut (<= 20)'
+    end if
 
-    call finish_egrid (np)
-
+    deallocate (zeroes)
+    
   end subroutine setegrid
 
-  subroutine rootp(ip,fval,a,b,xerrbi,xerrsec,nsolv,ier,soln)
+  function energy (xeval, ecut)
+    real, intent (in) :: xeval, ecut
+    real :: xerrbi, xerrsec, a, b, energy
+    integer :: ier
 
-    integer, intent (in) :: ip
-    real :: fval,a,b,a1,b1,f1,f2,f3,trial,xerrbi,xerrsec,soln,aold
-    integer :: i,ier,nsolv,niter,isolv
+    xerrbi = 1.e-5
+    xerrsec = 1.e-13
 
-    ier=0
-    a1=a
-    b1=b
-    f1=poly(a1,ip)-fval
-    f2=poly(b1,ip)-fval
-    if(xerrbi < 0.) goto 1000
-    if(f1*f2 > 0.) then
-       write(11,*) 'f1 and f2 have same sign in bisection routine'
-       write(11,*) 'a1,f1,b1,f2=',a1,f1,b1,f2
-       write(11,*) 'fval=',fval
-       ier=1
-       goto 1000
-    endif
-    niter=int(log(abs(b-a)/xerrbi)/log(2.))+1
-    do i=1,niter
-       trial=0.5*(a1+b1)
-       f3=poly(trial,ip)-fval
-       if(f3*f1 > 0.) then
-          a1=trial
-          f1=f3
-       else
-          b1=trial
-          f2=f3
-       endif
-       !      write(11,*) 'i,a1,f1,b1,f2 ',i,a1,f1,b1,f2
-    enddo
-1000 continue
-    if( abs(f1) > abs(f2) ) then
-       f3=f1
-       f1=f2
-       f2=f3
-       aold=a1
-       a1=b1
-       b1=aold
-    endif
-    !     start secant method
-    !     write(11,*) 'a1,f1,b1,f2',a1,f1,b1,f2
-    isolv=0
-    do i=1,10
-       aold=a1
-       f3=f2-f1
-       if (abs(f3) < 1.e-11)  f3=1.e-11
-       a1=a1-f1*(b1-a1)/f3
-       f2=f1
-       b1=aold
-       !       write(11,*) 'a1,f1,b1,f2',a1,f1,b1,f2
-       if(abs(a1-b1) < xerrsec) isolv=isolv+1
-       if (isolv >= nsolv) goto 9000
-       f1=poly(a1,ip)-fval
-    enddo
-9000 soln=a1
+    a = 0.0
+    b = ecut
+!    b = 1.0
+    call roote (xeval, a, b, xerrbi, xerrsec, 1, ier, energy)
 
-  end subroutine rootp
+  end function energy
+
+! called as roote (xeval, a, b, xerrbi, xerrsec, 1, ier, energy)
 
   subroutine roote(fval,a,b,xerrbi,xerrsec,nsolv,ier,soln)
 
-    real :: fval,a,b,a1,b1,f1,f2,f3,trial,xerrbi,xerrsec,soln,aold
-    integer :: i,ier,nsolv,niter,isolv
+! TT
+! solve xgrid(E) == fval for E
+!   xerrbi: error max in x for bisection routine
+!   xerrsec: error max in x for secant (Newton-Raphson) method
+! TT
+
+    integer, intent(in) :: nsolv
+    integer, intent(out) :: ier
+    real, intent(in) :: fval, a, b, xerrbi, xerrsec
+    real, intent(out) :: soln
+    integer, parameter :: maxit=30
+    integer :: i, niter, isolv
+    real :: a1, b1, f1, f2, f3, trial, aold
 
     ier=0
     a1=a
     b1=b
     f1=xgrid(a1)-fval
     f2=xgrid(b1)-fval
-    if(xerrbi < 0.) goto 1000
-    if(f1*f2 > 0.) then
-       write(11,*) 'f1 and f2 have same sign in bisection routine'
-       write(11,*) 'a1,f1,b1,f2=',a1,f1,b1,f2
-       write(11,*) 'fval=',fval
-       ier=1
-       goto 1000
-    endif
-    niter=int(log(abs(b-a)/xerrbi)/log(2.))+1
-    do i=1,niter
-       trial=0.5*(a1+b1)
-       f3=xgrid(trial)-fval
-       if(f3*f1 > 0.) then
-          a1=trial
-          f1=f3
+
+    if (xerrbi > 0.) then
+       if (f1*f2 < 0.) then
+          niter = int(log(abs(b-a)/xerrbi)/log(2.))+1
+          do i=1, niter
+             trial = 0.5*(a1+b1)
+             f3 = xgrid(trial) - fval
+             if (f3*f1 > 0.) then
+                a1 = trial
+                f1 = f3
+             else
+                b1 = trial
+                f2 = f3
+             endif
+             !      write(11,*) 'i,a1,f1,b1,f2 ',i,a1,f1,b1,f2
+          enddo
        else
-          b1=trial
-          f2=f3
+          ! TT: This should be connected to '$(run_name).error'?
+          write(11,*) 'f1 and f2 have same sign in bisection routine'
+          write(11,*) 'a1,f1,b1,f2=',a1,f1,b1,f2
+          write(11,*) 'fval=',fval
+          ier=1
        endif
-       !      write(11,*) 'i,a1,f1,b1,f2 ',i,a1,f1,b1,f2
-    enddo
-1000 continue
-    if( abs(f1) > abs(f2) ) then
-       f3=f1
+    end if
+
+    ! to make (a1,f1) the closest
+    if ( abs(f1) > abs(f2) ) then
        f1=f2
-       f2=f3
        aold=a1
        a1=b1
        b1=aold
     endif
-    !     start secant method
-    !     write(11,*) 'a1,f1,b1,f2',a1,f1,b1,f2
-    isolv=0
-    do i=1,10
-       aold=a1
-       f3=f2-f1
-       if (abs(f3) < 1.e-11)  f3=1.e-11
-       a1=a1-f1*(b1-a1)/f3
-       f2=f1
-       b1=aold
-       !       write(11,*) 'a1,f1,b1,f2',a1,f1,b1,f2
-       if(abs(a1-b1) < xerrsec) isolv=isolv+1
-       if (isolv >= nsolv) goto 9000
-       f1=xgrid(a1)-fval
-    enddo
-9000 soln=a1
+
+! Newton-Raphson method (formerly it was secant method)
+    isolv = 0
+    do i=1, maxit
+       b1 = a1
+       a1 = a1 - f1 / xgrid_prime(a1)
+       if (abs(a1-b1) < xerrsec) isolv = isolv+1
+       if (isolv >= nsolv) exit
+       f1 = xgrid(a1) - fval
+    end do
+
+    if (i > maxit) then
+! TT: This should be connected to '$(run_name).error'?
+       write (11,*) 'bad convergence in roote'
+       ier = 1
+    end if
+
+    soln = a1
 
   end subroutine roote
 
-  function poly(xeval, ip)
-
-    use splines
-    integer, intent (in) :: ip
-    real :: poly, xeval
-
-    if (first(ip)) then
-       call new_spline (size(x), x, p(:,ip), spl(ip))
-       first(ip) = .false.
-    end if
-
-    poly = splint (xeval, spl(ip))
-
-  end function poly
-
-  function energy (xeval)
-
-    real :: xerrbi, xerrsec, a, b, energy, xeval
-    integer :: ier
-
-    xerrbi = 1.e-10
-    xerrsec = 1.e-10
-
-    a = 0.
-    b = emax
-    call roote (xeval, a, b, xerrbi, xerrsec, 1, ier, energy)
-
-  end function energy
-
-  function xgrid_v (e) result (xg)
-
-    use constants, only: pi
-    real, dimension (:) :: e
-    real, dimension (size(e)) :: xg
-    real :: denom
-    integer :: nmax, n, kmax, j, k
-
-    nmax = size(e)
-
-    xg = 0.
-    kmax = 50
-    do n=1,nmax
-       do k = 0, kmax
-          denom = 1
-          do j = 0, k
-             denom = denom*(1.5 + j)
-          end do
-          xg(n) = xg(n) + e(n)**(1.5+k)/denom
-       end do
-       xg(n) = xg(n)*exp(-e(n))*2./sqrt(pi)
-    end do
-
-  end function xgrid_v
-
   function xgrid_s (e)
+! TT
+! this is a function
+!              2           E
+!   x(E) = ---------- * int   exp(-e) sqrt(e) de
+!           sqrt(pi)       0
+! which gives energy integral with a Maxwellian weight
+! x is a monotonic function of E with
+!    E | 0 -> infinity
+!   -------------------
+!    x | 0 -> 1
+! The integral is an error function and numerical evaluation is
+! obtained from the formula of incomplete gamma function
+! TT
 
-    use constants, only: pi
+    double precision :: xg, denom, pi
     real :: e, xgrid_s
-    real :: denom
-    integer :: kmax, j, k
+    integer :: kmax, k, j
 
-    kmax = 50
-    xgrid_s = 0.
+    pi = asin(real(1.0,kind(pi))) * 2.0
+    kmax = 100
+    xg = 0.0
+
+    denom = 1.0
     do k = 0, kmax
-       denom = 1
-       do j = 0, k
-          denom = denom*(1.5 + j)
-       end do
-       xgrid_s = xgrid_s + e**(1.5+k)/denom
+       denom = denom * (1.5+k)
+       xg = xg + e**(1.5+k) / denom
     end do
-    xgrid_s = xgrid_s*exp(-e)*2./sqrt(pi)
+
+    xgrid_s = xg * exp(-e) * 2. / sqrt(pi)
 
   end function xgrid_s
 
-  subroutine solve_system_of_linear_eqns(a, x, b, error)
-    implicit none
-    ! array specifications
-    real, dimension (:, :),           intent (in) :: a
-    real, dimension (:),              intent (out):: x
-    real, dimension (:),              intent (in) :: b
-    logical, intent (out)                         :: error
+  function xgrid_prime (e)
 
-    ! the working area m is a expanded with b
-    real, dimension (size (b), size (b) + 1)      :: m
-    integer, dimension (1)                        :: max_loc
-    real, dimension (size (b) + 1)                :: temp_row
-    integer                                       :: n, k, i
+! TT
+! this is a function
+!               2
+!   x'(E) = ---------- * exp(-e) sqrt(e)
+!            sqrt(pi)
+! TT
 
-    ! initializing m
-    n = size (b)
-    m (1:n, 1:n) = a
-    m (1:n, n+1) = b
+    real :: e, xgrid_prime, pi
 
-    ! triangularization
-    error = .false.
-    triangularization_loop: do k = 1, n - 1   
-       ! pivoting
-       max_loc = maxloc (abs (m (k:n, k)))
-       if ( max_loc(1) /= 1 ) then
-          temp_row (k:n+1 ) =m (k, k:n+1)
-          m (k, k:n+1)= m (k-1+max_loc(1), k:n+1)
-          m (k-1+max_loc(1), k:n+1) = temp_row(k:n+1)
-       end if
+    pi = asin(1.0) * 2.0
+    xgrid_prime = exp(-e) * sqrt(e) * 2. / sqrt(pi)
 
-       if (m (k, k) == 0) then
-          error = .true. ! singular matrix a
-          exit triangularization_loop
-       else
-          temp_row (k+1:n) = m (k+1:n, k) / m (k, k)
-          do i = k+1, n
-             m (i, k+1:n+1) = m (i, k+1:n+1) - &
-                  temp_row (i) * m (k, k+1:n+1)
-          end do
-          m (k+1:n, k) =0  ! these values are not used
-       end if
-    end do triangularization_loop
+  end function xgrid_prime
 
-    if ( m(n, n) == 0 ) error = .true.  ! singular matrix a
+  function xgrid_v (e) result (xg)
 
-    ! re-substitution
-    if (error) then
-       x = 0.0
-    else
-       do k = n, 1, -1
-          x (k) = (m (k, n+1) - &
-               sum (m (k, k+1:n)* x (k+1:n)) ) / m (k, k)
-       end do
-    end if
-  end subroutine solve_system_of_linear_eqns
+    real, dimension (:) :: e
+    real, dimension (size(e)) :: xg
+    real :: denom, pi
+    integer :: kmax, k
 
-  subroutine init_egrid (np)
-    integer :: np
+    pi = asin(1.0) * 2.0
 
-    allocate (first(np))
-    first = .true.
-
-    allocate (spl(np))
-    allocate (p(nmax, np));    p = 0.
-    allocate (x(nmax));        x = 0.
-    allocate (am(np,np));     am = 0.
-
-    allocate (gamma2(np), ipzero(np), bvec(np))
-    gamma2 = 0.; ipzero = 0. ; bvec = 0.
-
-  end subroutine init_egrid
-
-  subroutine finish_egrid (np)
-
-    integer :: np, ip
-
-    deallocate (first)
-    deallocate (p, x, gamma2, ipzero, bvec, am)
-
-    do ip=1,np
-       call delete_spline (spl(ip))
+    xg = 0.
+    kmax = 100
+    denom=1.
+    do k = 0, kmax
+       denom = denom * (1.5 + k)
+       xg = xg + e**(1.5+k) / denom
     end do
+    xg = xg * exp(-e) * 2. / sqrt(pi)
 
-    deallocate (spl)
-
-  end subroutine finish_egrid
-
-  function integral(x)
-
-    real, dimension (:) :: x
-    real :: integral
-
-    integral = sum(x(2:))
-
-  end function integral
-
+  end function xgrid_v
 
 end module egrid
 
@@ -1169,9 +1074,11 @@ contains
 
   subroutine egridset
     use species, only: nspec, spec, slowing_down_species
+    use legendre, only: nrgauleg
     use constants
     use egrid, only: setegrid
     implicit none
+
     real, dimension (1), parameter :: esub1 = (/ &
          0.5000000000E+00 /)
     real, dimension (2), parameter :: esub2 = (/ &
@@ -1744,10 +1651,14 @@ contains
     real, dimension (nesub) :: esub, wsub
     real, dimension (nesuper) :: xsup, wsup
     integer :: is, isup
-    integer :: ng1, nmax
+    integer :: ng1
     real :: cut
-    
+    real :: eps=1.e-15
+
     if (.not. advanced_egrid) then
+
+!       call nrgauleg (0., 1.0, esub, wsub, eps**1.5)
+
        select case (nesub)
        case (1)  
           esub = esub1
@@ -1885,8 +1796,7 @@ contains
        
     else
 
-       nmax = 100000
-       call setegrid (ecut, negrid, nmax, e(:,1), w(:,1))
+       call setegrid (ecut, negrid, e(:,1), w(:,1))
        do is = 2, nspec
           e(:,is) = e(:,1)
           w(:,is) = w(:,1)
@@ -1899,391 +1809,24 @@ contains
   end subroutine egridset
 
   subroutine lgridset
+
+! Modified to use nrgauleg routine, Tomo Tatsuno, Aug 2005
+
     use theta_grid, only: ntgrid, bmag, bmax, eps
+    use legendre, only: nrgauleg
     use constants
     implicit none
-    real, dimension (1), parameter :: xgauss1 = (/ &
-         0.577350269189626 /)
-    real, dimension (2), parameter :: xgauss2 = (/ &
-         0.339981043584856, &
-         0.861136311594053 /)
-    real, dimension (3), parameter :: xgauss3 = (/ &
-         0.238619186083197, &
-         0.661209386466265, &
-         0.932469514203152 /)
-    real, dimension (4), parameter :: xgauss4 = (/ &
-         0.183434642495650, &
-         0.525532409916329, &
-         0.796666477413627, &
-         0.960289856497536 /)
-    real, dimension (5), parameter :: xgauss5 = (/ &
-         0.148874338981631, &
-         0.433395394129247, &
-         0.679409568299024, &
-         0.865063366688985, &
-         0.973906528517172 /)
-    real, dimension (6), parameter :: xgauss6 = (/ &
-         0.125233408511469, &
-         0.367831498998180, &
-         0.587317954286617, &
-         0.769902674194305, &
-         0.904117256370475, &
-         0.981560634246719 /)
-    real, dimension (8), parameter :: xgauss8 = (/ &
-         0.095012509837637440185, &
-         0.281603550779258913230, &
-         0.458016777657227386342, &
-         0.617876244402643748447, &
-         0.755404408355003033895, &
-         0.865631202387831743880, &
-         0.944575023073232576078, &
-         0.989400934991649932596 /)
-    real, dimension (10), parameter :: xgauss10 = (/ &
-         0.076526521133497333755, &
-         0.227785851141645078080, &
-         0.373706088715419560673, &
-         0.510867001950827098004, &
-         0.636053680726515025453, &
-         0.746331906460150792614, &
-         0.839116971822218823395, &
-         0.912234428251325905868, &
-         0.963971927277913791268, &
-         0.993128599185094924786 /)
-    real, dimension (12), parameter :: xgauss12 = (/ &
-         0.064056892862605626085, &
-         0.191118867473616309159, &
-         0.315042679696163374387, &
-         0.433793507626045138487, &
-         0.545421471388839535658, &
-         0.648093651936975569252, &
-         0.740124191578554364244, &
-         0.820001985973902921954, &
-         0.886415527004401034213, &
-         0.938274552002732758524, &
-         0.974728555971309498198, &
-         0.995187219997021360180 /)
-    real, dimension (16), parameter :: xgauss16 = (/ &
-         0.048307665687738316235, &
-         0.144471961582796493485, &
-         0.239287362252137074545, &
-         0.331868602282127649780, &
-         0.421351276130635345364, &
-         0.506899908932229390024, &
-         0.587715757240762329041, &
-         0.663044266930215200975, &
-         0.732182118740289680387, &
-         0.794483795967942406963, &
-         0.849367613732569970134, &
-         0.896321155766052123965, &
-         0.934906075937739689171, &
-         0.964762255587506430774, &
-         0.985611511545268335400, &
-         0.997263861849481563545 /)
-    real, dimension (20), parameter :: xgauss20 = (/ &
-         0.038772417506050821933, &
-         0.116084070675255208483, &
-         0.192697580701371099716, &
-         0.268152185007253681141, &
-         0.341994090825758473007, &
-         0.413779204371605001525, &
-         0.483075801686178712909, &
-         0.549467125095128202076, &
-         0.612553889667980237953, &
-         0.671956648614179548379, &
-         0.727318255189927103281, &
-         0.778305651426519387659, &
-         0.824612230833311663196, &
-         0.865959503212259503821, &
-         0.902098806968874296728, &
-         0.932812808278676533361, &
-         0.957916819213791655805, &
-         0.977259949983774262663, &
-         0.990726238699457006453, &
-         0.998237709710559200350 /)
-    real, dimension (24), parameter :: xgauss24 = (/ &
-         0.032380170962869362933, &
-         0.097004699209462698930, &
-         0.161222356068891718056, &
-         0.224763790394689061225, &
-         0.287362487355455576736, &
-         0.348755886292160738160, &
-         0.408686481990716729916, &
-         0.466902904750958404545, &
-         0.523160974722233033678, &
-         0.577224726083972703818, &
-         0.628867396776513623995, &
-         0.677872379632663905212, &
-         0.724034130923814654674, &
-         0.767159032515740339254, &
-         0.807066204029442627083, &
-         0.843588261624393530711, &
-         0.876572020274247885906, &
-         0.905879136715569672822, &
-         0.931386690706554333114, &
-         0.952987703160430860723, &
-         0.970591592546247250461, &
-         0.984124583722826857745, &
-         0.993530172266350757548, &
-         0.998771007252426118601 /)
-    real, dimension (32), parameter :: xgauss32 = (/ &
-         0.024350292663424432509, &
-         0.072993121787799039450, &
-         0.121462819296120554470, &
-         0.169644420423992818037, &
-         0.217423643740007084150, &
-         0.264687162208767416374, &
-         0.311322871990210956158, &
-         0.357220158337668115950, &
-         0.402270157963991603696, &
-         0.446366017253464087985, &
-         0.489403145707052957479, &
-         0.531279464019894545658, &
-         0.571895646202634034284, &
-         0.611155355172393250249, &
-         0.648965471254657339858, &
-         0.685236313054233242564, &
-         0.719881850171610826849, &
-         0.752819907260531896612, &
-         0.783972358943341407610, &
-         0.813265315122797559742, &
-         0.840629296252580362752, &
-         0.865999398154092819761, &
-         0.889315445995114105853, &
-         0.910522137078502805756, &
-         0.929569172131939575821, &
-         0.946411374858402816062, &
-         0.961008799652053718919, &
-         0.973326827789910963742, &
-         0.983336253884625956931, &
-         0.991013371476744320739, &
-         0.996340116771955279347, &
-         0.999305041735772139457 /)
-    real, dimension (40), parameter :: xgauss40 = (/ &
-         0.019511383256793997654, 0.058504437152420668629, 0.097408398441584599063, 0.136164022809143886559, &
-         0.174712291832646812559, 0.212994502857666132572, 0.250952358392272120493, 0.288528054884511853109, &
-         0.325664370747701194619, 0.362304753499487315619, 0.398393405881969227024, 0.433875370831756093062, &
-         0.468696615170544477036, 0.502804111888748987594, 0.536145920897131932020, 0.568671268122709784725, &
-         0.600330622829751743155, 0.631075773046871966248, 0.660859898986119801736, 0.689637644342027600771, &
-         0.717365185362099880254, 0.744000297583597272317, 0.769502420135041373866, 0.793832717504605449949, &
-         0.816954138681463470371, 0.838831473580255275617, 0.859431406663111096977, 0.878722567678213828704, &
-         0.896675579438770683194, 0.913263102571757654165, 0.928459877172445795953, 0.942242761309872674752, &
-         0.954590766343634905493, 0.965485089043799251452, 0.974909140585727793386, 0.982848572738629070418, &
-         0.989291302499755531027, 0.994227540965688277892, 0.997649864398237688900, 0.999553822651630629880 /)
-    real, dimension (48), parameter :: xgauss48 = (/ &
-         0.016276744849602969579, 0.048812985136049731112, 0.081297495464425558994, 0.113695850110665920911, &
-         0.145973714654896941989, 0.178096882367618602759, 0.210031310460567203603, 0.241743156163840012328, &
-         0.273198812591049141487, 0.304364944354496353024, 0.335208522892625422616, 0.365696861472313635031, &
-         0.395797649828908603285, 0.425478988407300545365, 0.454709422167743008636, 0.483457973920596359768, &
-         0.511694177154667673586, 0.539388108324357436227, 0.566510418561397168404, 0.593032364777572080684, &
-         0.618925840125468570386, 0.644163403784967106798, 0.668718310043916153953, 0.692564536642171561344, &
-         0.715676812348967626225, 0.738030643744400132851, 0.759602341176647498703, 0.780369043867433217604, &
-         0.800308744139140817229, 0.819400310737931675539, 0.837623511228187121494, 0.854959033434601455463, &
-         0.871388505909296502874, 0.886894517402420416057, 0.901460635315852341319, 0.915071423120898074206, &
-         0.927712456722308690965, 0.939370339752755216932, 0.950032717784437635756, 0.959688291448742539300, &
-         0.968326828463264212174, 0.975939174585136466453, 0.982517263563014677447, 0.988054126329623799481, &
-         0.992543900323762624572, 0.995981842987209290650, 0.998364375863181677724, 0.999689503883230766828 /)
-    
-    real, dimension (1), parameter :: wgauss1 = (/ &
-         1.0 /)
-    real, dimension (2), parameter :: wgauss2 = (/ &
-         0.652145154862546, &
-         0.347854845137454 /)
-    real, dimension (3), parameter :: wgauss3 = (/ &
-         0.467913934572691, &
-         0.360761573048139, &
-         0.171324492379170 /)
-    real, dimension (4), parameter :: wgauss4 = (/ &
-         0.362683783378362, &
-         0.313706645877887, &
-         0.222381034453374, &
-         0.101228536290376 /)
-    real, dimension (5), parameter :: wgauss5 = (/ &
-         0.295524224714753, &
-         0.269266719309996, &
-         0.219086362515982, &
-         0.149451349150581, &
-         0.066671344308688 /)
-    real, dimension (6), parameter :: wgauss6 = (/ &
-         0.249147045813403, &
-         0.233492536538355, &
-         0.203167426723066, &
-         0.160078328543346, &
-         0.106939325995318, &
-         0.047175336386512 /)
-    real, dimension (8), parameter :: wgauss8 = (/ &
-         0.189450610455068496285, &
-         0.182603415044923588867, &
-         0.169156519395002538189, &
-         0.149595988816576732081, &
-         0.124628971255533872052, &
-         0.095158511682492784810, &
-         0.062253523938647892863, &
-         0.027152459411754094852 /)
-    real, dimension (10), parameter :: wgauss10 = (/ &
-         0.152753387130725850698, &
-         0.149172986472603746788, &
-         0.142096109318382051329, &
-         0.131688638449176626898, &
-         0.118194531961518417312, &
-         0.101930119817240435037, &
-         0.083276741576704748725, &
-         0.062672048334109063570, &
-         0.040601429800386941331, &
-         0.017614007139152118312 /)
-    real, dimension (12), parameter :: wgauss12 = (/ &
-         0.127938195346752156974, &
-         0.125837456346828296121, &
-         0.121670472927803391204, &
-         0.115505668053725601353, &
-         0.107444270115965634783, &
-         0.097618652104113888270, &
-         0.086190161531953275917, &
-         0.073346481411080305734, &
-         0.059298584915436780746, &
-         0.044277438817419806169, &
-         0.028531388628933663181, &
-         0.012341229799987199547 /)
-    real, dimension (16), parameter :: wgauss16 = (/ &
-         0.096540088514727800567, &
-         0.095638720079274859419, &
-         0.093844399080804565639, &
-         0.091173878695763884713, &
-         0.087652093004403811143, &
-         0.083311924226946755222, &
-         0.078193895787070306472, &
-         0.072345794108848506225, &
-         0.065822222776361846838, &
-         0.058684093478535547145, &
-         0.050998059262376176196, &
-         0.042835898022226680657, &
-         0.034273862913021433103, &
-         0.025392065309262059456, &
-         0.016274394730905670605, &
-         0.007018610009470096600 /)
-    real, dimension (20), parameter :: wgauss20 = (/ &
-         0.077505947978424811264, &
-         0.077039818164247965588, &
-         0.076110361900626242372, &
-         0.074723169057968264200, &
-         0.072886582395804059061, &
-         0.070611647391286779695, &
-         0.067912045815233903826, &
-         0.064804013456601038075, &
-         0.061306242492928939167, &
-         0.057439769099391551367, &
-         0.053227846983936824355, &
-         0.048695807635072232061, &
-         0.043870908185673271992, &
-         0.038782167974472017640, &
-         0.033460195282547847393, &
-         0.027937006980023401098, &
-         0.022245849194166957262, &
-         0.016421058381907888713, &
-         0.010498284531152813615, &
-         0.004521277098533191258 /)
-    real, dimension (24), parameter :: wgauss24 = (/ &
-         0.064737696812683922503, 0.064466164435950082207, 0.063924238584648186624, 0.063114192286254025657, &
-         0.062039423159892663904, 0.060704439165893880053, 0.059114839698395635746, 0.057277292100403215705, &
-         0.055199503699984162868, 0.052890189485193667096, 0.050359035553854474958, 0.047616658492490474826, &
-         0.044674560856694280419, 0.041545082943464749214, 0.038241351065830706317, 0.034777222564770438893, &
-         0.031167227832798088902, 0.027426509708356498200, 0.023570760839324379141, 0.019616160457355527814, &
-         0.015579315722943848728, 0.011477234579234539490, 0.007327553901276262102, 0.003153346052305838633 /)
-    real, dimension (32), parameter :: wgauss32 = (/ &
-         0.048690957009139720383, 0.048575467441503426935, 0.048344672234802957170, 0.047999388596458307728, &
-         0.047540165714830308662, 0.046968182816210017325, 0.046284796581314417296, 0.045491627927418144480, &
-         0.044590558163756563060, 0.043583724529323453377, 0.042473515123653589007, 0.041262563242623528610, &
-         0.039953741132720341387, 0.038550153178615629129, 0.037055128540240046040, 0.035472213256882383811, &
-         0.033805161837141609392, 0.032057928354851553585, 0.030234657072402478868, 0.028339672614259483228, &
-         0.026377469715054658672, 0.024352702568710873338, 0.022270173808383254159, 0.020134823153530209372, &
-         0.017951715775697343085, 0.015726030476024719322, 0.013463047896718642598, 0.011168139460131128819, &
-         0.008846759826363947723, 0.006504457968978362856, 0.004147033260562467635, 0.001783280721696432947 /)
-    real, dimension (40), parameter :: wgauss40 = (/ &
-         0.039017813656306654811, 0.038958395962769531199, 0.038839651059051968932, 0.038661759774076463327, &
-         0.038424993006959423185, 0.038129711314477638344, 0.037776364362001397490, 0.037365490238730490027, &
-         0.036897714638276008839, 0.036373749905835978044, 0.035794393953416054603, 0.035160529044747593496, &
-         0.034473120451753928794, 0.033733214984611522817, 0.032941939397645401383, 0.032100498673487773148, &
-         0.031210174188114701642, 0.030272321759557980661, 0.029288369583287847693, 0.028259816057276862397, &
-         0.027188227500486380674, 0.026075235767565117903, 0.024922535764115491105, 0.023731882865930101293, &
-         0.022505090246332461926, 0.021244026115782006389, 0.019950610878141998929, 0.018626814208299031429, &
-         0.017274652056269306359, 0.015896183583725688045, 0.014493508040509076117, 0.013068761592401339294, &
-         0.011624114120797826916, 0.010161766041103064521, 0.008683945269260858426, 0.007192904768117312753, &
-         0.005690922451403198649, 0.004180313124694895237, 0.002663533589512681669, 0.001144950003186941534 /)
-    real, dimension (48), parameter :: wgauss48 = (/ &
-         0.032550614492363166242, 0.032516118713868835987, 0.032447163714064269364, 0.032343822568575928429, &
-         0.032206204794030250669, 0.032034456231992663218, 0.031828758894411006535, 0.031589330770727168558, &
-         0.031316425596861355813, 0.031010332586313837423, 0.030671376123669149014, 0.030299915420827593794, &
-         0.029896344136328385984, 0.029461089958167905970, 0.028994614150555236543, 0.028497411065085385646, &
-         0.027970007616848334440, 0.027412962726029242823, 0.026826866725591762198, 0.026212340735672413913, &
-         0.025570036005349361499, 0.024900633222483610288, 0.024204841792364691282, 0.023483399085926219842, &
-         0.022737069658329374001, 0.021966644438744349195, 0.021172939892191298988, 0.020356797154333324595, &
-         0.019519081140145022410, 0.018660679627411467385, 0.017782502316045260838, 0.016885479864245172450, &
-         0.015970562902562291381, 0.015038721026994938006, 0.014090941772314860916, 0.013128229566961572637, &
-         0.012151604671088319635, 0.011162102099838498591, 0.010160770535008415758, 0.009148671230783386633, &
-         0.008126876925698759217, 0.007096470791153865269, 0.006058545504235961683, 0.005014202742927517693, &
-         0.003964554338444686674, 0.002910731817934946408, 0.001853960788946921732, 0.000796792065552012429 /)
 
-    ! note that xgauss and wgauss are transposed wrt original code
+! note that xgauss and wgauss are transposed wrt original code
 
+    real :: tiny = 1.e-15
     real, dimension (2*ngauss) :: wx, xx
-    real, dimension (ngauss) :: xgauss, wgauss
     real :: ww
     integer :: ig, il
 
-    select case (ngauss)
-    case (1)
-       xgauss = xgauss1
-       wgauss = wgauss1
-    case (2)
-       xgauss = xgauss2
-       wgauss = wgauss2
-    case (3)
-       xgauss = xgauss3
-       wgauss = wgauss3
-    case (4)
-       xgauss = xgauss4
-       wgauss = wgauss4
-    case (5)
-       xgauss = xgauss5
-       wgauss = wgauss5
-    case (6) 
-       xgauss = xgauss6
-       wgauss = wgauss6
-    case (8) 
-       xgauss = xgauss8
-       wgauss = wgauss8
-    case (10)
-       xgauss = xgauss10
-       wgauss = wgauss10
-    case (12)
-       xgauss = xgauss12
-       wgauss = wgauss12
-    case (16)
-       xgauss = xgauss16
-       wgauss = wgauss16
-    case (20) 
-       xgauss = xgauss20
-       wgauss = wgauss20
-    case (24)
-       xgauss = xgauss24
-       wgauss = wgauss24
-    case (32)
-       xgauss = xgauss32
-       wgauss = wgauss32
-    case (40)
-       xgauss = xgauss40
-       wgauss = wgauss40
-    case (48)
-       xgauss = xgauss48
-       wgauss = wgauss48
-    case default
-       call stop_invalid ("ngauss", ngauss)
-    end select
+    call nrgauleg(1., 0., xx, wx, tiny**1.5)
 
     wl = 0.0
-    xx(:ngauss) = 0.5*(1.0+xgauss(ngauss:1:-1))
-    xx(ngauss+1:2*ngauss) = 0.5*(1.0-xgauss(1:ngauss))
-    wx(:ngauss) = 0.5*wgauss(ngauss:1:-1)
-    wx(ngauss+1:2*ngauss) = 0.5*wgauss(:ngauss)
     
     al(:ng2) = (1.0 - xx(:ng2)**2)/bmax
 
@@ -2910,345 +2453,6 @@ contains
   end subroutine eintegrate
 
 end module le_grids
-
-
-!    real, dimension (16, 16), parameter :: gaus = reshape((/ &
-!         0.5000000000,0.0000000000,0.0000000000,0.0000000000, & 
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.2113248654,0.7886751346,0.0000000000,0.0000000000, & 
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.1127016654,0.5000000000,0.8872983346,0.0000000000, & 
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0694318442,0.3300094782,0.6699905218,0.9305681558, & 
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0469100770,0.2307653449,0.5000000000,0.7692346551, & 
-!         0.9530899230,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0337652429,0.1693953068,0.3806904070,0.6193095930, & 
-!         0.8306046932,0.9662347571,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0254460438,0.1292344072,0.2970774243,0.5000000000, & 
-!         0.7029225757,0.8707655928,0.9745539562,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0198550718,0.1016667613,0.2372337950,0.4082826788, & 
-!         0.5917173212,0.7627662050,0.8983332387,0.9801449282, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.01592     ,0.08199     ,0.19332     ,0.33788     , & 
-!         0.50000     ,0.66213     ,0.80669     ,0.91802     , &
-!         0.98408     ,0.00000     ,0.00000     ,0.00000     , &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.01305     ,0.06747     ,0.16030     ,0.28330     , & 
-!         0.42557     ,0.57444     ,0.71670     ,0.83971     , &
-!         0.93253     ,0.98696     ,0.00000     ,0.00000     , &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, & 
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.00922     ,0.04794     ,0.11505     ,0.20634     , & 
-!         0.31609     ,0.43739     ,0.56262     ,0.68392     , &
-!         0.79366     ,0.88495     ,0.95206     ,0.99078     , &
-!         0.00000     ,0.00000     ,0.00000     ,0.00000     , &
-!
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, & 
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, & 
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, & 
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.00530     ,0.02771     ,0.06719     ,0.12230     , & 
-!         0.19106     ,0.27099     ,0.35920     ,0.45250     , &
-!         0.54754     ,0.64080     ,0.72901     ,0.80894     , &
-!         0.87770     ,0.93282     ,0.97229     ,0.99470       &
-!         /), (/ 16, 16 /))
-!    real, dimension (16, 16), parameter :: w1 = reshape((/ &
-!         1.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.5000000000,0.5000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.2777777778,0.4444444444,0.2777777778,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.1739274226,0.3260725774,0.3260725774,0.1739274226, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.1184634425,0.2393143352,0.2844444444,0.2393143352, &
-!         0.1184634425,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0856622462,0.1803807865,0.2339569673,0.2339569673, &
-!         0.1803807865,0.0856622462,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0647424831,0.1398526957,0.1909150253,0.2089795918, &
-!         0.1909150253,0.1398526957,0.0647424831,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0506142681,0.1111905172,0.1568533229,0.1813418917, &
-!         0.1813418917,0.1568533229,0.1111905172,0.0506142681, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.04064,     0.09033,     0.13031,     0.15618,      &
-!         0.16512,     0.15618,     0.13031,     0.09033,      &
-!         0.04064,     0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.03334,     0.07473,     0.10955,     0.13464,      &
-!         0.14776,     0.14776,     0.13464,     0.10955,      &
-!         0.07473,     0.03334,     0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.02359,     0.05347,     0.08004,     0.10159,      &
-!         0.11675,     0.12458,     0.12458,     0.11675,      &
-!         0.10159,     0.08004,     0.05347,     0.02359,      &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!         0.0000000000,0.0000000000,0.0000000000,0.0000000000, &
-!
-!         0.01358,     0.03113,     0.04758,     0.06232,      &
-!         0.07480,     0.08458,     0.09130,     0.09473,      &
-!         0.09473,     0.09130,     0.08458,     0.07480,      &
-!         0.06232,     0.04758,     0.03113,     0.01358       &
-!         /), (/ 16, 16 /))
-! note that gaus and w1 are transposed wrt original code
-!
-!
-!    real, dimension (12,12), parameter :: xgauss = reshape((/ &
-!         0.57735,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.33998,0.86114,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.23861,0.66120,0.93246,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.18343,0.52553,0.79666,0.96028,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.14887,0.43339,0.67940,0.86506,0.97390, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.12523,0.36783,0.58732,0.76990,0.90411, &
-!         0.98156,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.09501,0.28160,0.45802,0.61788,0.75540, &
-!         0.86563,0.94458,0.98940,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.07653,0.22779,0.37371,0.51087,0.63605, &
-!         0.74633,0.83912,0.91223,0.96397,0.99313, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.06406,0.19112,0.31504,0.43379,0.54542, &
-!         0.64809,0.74012,0.82000,0.88642,0.93827, &
-!         0.97473,0.99519 0.00000,0.00000,0.00000, &
-!         /), (/ 12, 12 /))
-
-
-
-!    real, dimension (12,12), parameter :: wgauss = reshape((/ &
-!         1.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.65215,0.34785,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.46791,0.36076,0.17132,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.36268,0.31370,0.22238,0.10122,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.29552,0.26926,0.21908,0.14945,0.06667, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.24915,0.23349,0.20317,0.16008,0.10694, &
-!         0.04718,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.18945,0.18260,0.16916,0.14960,0.12463, &
-!         0.09516,0.06225,0.02715,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.15275,0.14917,0.14210,0.13169,0.11819, &
-!         0.10193,0.08328,0.06267,0.04060,0.01761, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!         0.00000,0.00000,0.00000,0.00000,0.00000, &
-!
-!         0.12794,0.12584,0.12167,0.11551,0.10744, &
-!         0.09762,0.08619,0.07335,0.05930,0.04428, &
-!         0.02853,0.01234 0.00000,0.00000,0.00000, &
-!         /), (/ 12, 12 /))
-
-!!!! from init_lintegrate
-! following block only needed if lambda_lo and gint_lo differ in the future.
-!    if (.false.) then
-!    ! count number of elements to be redistributed to/from each processor after integrating
-!    nn_to = 0
-!    nn_from = 0
-!    do ilam = lambda_lo%llim_world, lambda_lo%ulim_world
-!       call lamidx2gintidx (lambda_lo, ilam, gint_lo, igint)
-!       do ig = -ntgrid, ntgrid
-!          if (idx_local(lambda_lo,ilam)) &
-!               nn_from(proc_id(gint_lo,igint)) = nn_from(proc_id(gint_lo,igint)) + 1
-!          if (idx_local(gint_lo,igint)) &
-!               nn_to(proc_id(lambda_lo, ilam)) = nn_to(proc_id(lambda_lo, ilam)) + 1
-!       end do
-!    end do
-!
-!    do ip = 0, nproc-1
-!       if (nn_from(ip) > 0) then
-!          allocate (from_list(ip)%first(nn_from(ip)))
-!          allocate (from_list(ip)%second(nn_from(ip)))
-!       end if
-!       if (nn_to(ip) > 0) then
-!          allocate (to_list(ip)%first(nn_to(ip)))
-!          allocate (to_list(ip)%second(nn_to(ip)))
-!       end if
-!    end do
-!
-!    ! get local indices of elements distributed to/from other processors
-!    nn_to = 0
-!    nn_from = 0
-!    do ilam = lambda_lo%llim_world, lambda_lo%ulim_world
-!       call lamidx2gintidx (lambda_lo, ilam, gint_lo, igint)
-!       if (idx_local(lambda_lo, ilam)) then
-!          ip = proc_id(gint_lo, igint)
-!          do ig = -ntgrid, ntgrid
-!             n = nn_from(ip) + 1
-!             nn_from(ip) = n
-!             from_list(ip)%first(n) = ig
-!             from_list(ip)%second(n) = ilam
-!          end do
-!       end if
-!       if (idx_local(gint_lo,igint)) then
-!          ip = proc_id(lambda_lo, ilam)
-!          do ig = -ntgrid, ntgrid
-!             n = nn_to(ip) + 1
-!             nn_to(ip) = n
-!             to_list(ip)%first(n) = ig
-!             to_list(ip)%second(n) = igint
-!          end do
-!       end if
-!    end do
-!
-!    from_lambda_low (1) = -ntgrid
-!    from_lambda_low (2) = lambda_lo%llim_proc
-!
-!    to_gint_low (1) = -ntgrid
-!    to_gint_low (2) = gint_lo%llim_proc
-!
-!    to_lhigh (1) = ntgrid
-!    to_lhigh (2) = gint_lo%ulim_alloc
-!
-!    from_lhigh (1) = ntgrid
-!    from_lhigh (2) = lambda_lo%ulim_alloc
-!
-!    call init_fill (gint_map, 'c', to_gint_low, to_lhigh, to_list, &
-!         from_lambda_low, from_lhigh, from_list)
-!
-!    call delete_list (to_list)
-!    call delete_list (from_list)
-!    endif
 
 
  

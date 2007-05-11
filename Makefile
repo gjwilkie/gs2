@@ -178,12 +178,33 @@ endif
 ifeq ($(CPU),RS6000)
   FC = mpxlf90_r
   PLATFORM_LINKS = ibm
-  F90FLAGS = -qrealsize=8 -qsuffix=f=f90 -I $(UTILS) -I $(GEO) \
+  F90FLAGS = -qautodbl=dbl4 -qsuffix=f=f90 -I $(UTILS) -I $(GEO) \
 	-I $(NETCDF_DIR)/include
   FLIBS = $$NETCDF $$FFTW -lfftw -lrfftw # $$TRACE_MPIF
   ifneq ($(debug),on)
 #    F90FLAGS += -O4
     F90FLAGS += -O3 -qarch=pwr3 -qtune=pwr3
+  else
+    F90FLAGS += -g 
+    FLIBS    += # $$TRACE_MPIF
+  endif
+
+endif
+
+# Dawson G5 cluster:
+ifeq ($(CPU),Dawson)
+  FC = xlf95
+  PLATFORM_LINKS = ibm
+  F90FLAGS = -qmoddir=/tmp/bdorland -I/tmp/bdorland \
+	-qautodbl=dbl4 -qsuffix=f=f90 -I $(UTILS) -I $(GEO) \
+	-I /u/local/apps/netcdf/include -I/u/local/mpi/mpilam/include 
+  FLIBS = -L/u/local/apps/netcdf/lib -lnetcdf \
+	-L/u/home2/nfl/FFTW/lib -lfftw -lrfftw \
+	-L/u/local/mpi/mpilam/lib -llammpio -llamf77mpi -lmpi -llam
+#-L/u/local/apps/fftw/lib -lfftw -lrfftw 
+  ifneq ($(debug),on)
+#    F90FLAGS += -O4
+    F90FLAGS += -O3 -qarch=g5 -qtune=g5
   else
     F90FLAGS += -g 
     FLIBS    += # $$TRACE_MPIF
@@ -447,6 +468,24 @@ $(GEO)/geo.a:
 file_utils.o: 
 	$(FC) $(F90FLAGS) -c file_utils.f90
 
+ifeq ($(CPU),LINUX_lf95)
+
+le_grids.o:
+	$(FC) --quad $(F90FLAGS) -c le_grids.f90
+endif
+
+ifeq ($(CPU),Dawson)
+
+le_grids.o:
+	$(FC) $(F90FLAGS) -qautodbl=dbl -c le_grids.f90
+endif
+
+ifeq ($(CPU),RS6000)
+
+le_grids.o:
+	$(FC) $(F90FLAGS) -qautodbl=dbl -c le_grids.f90
+endif
+
 ifeq ($(CPU),LINUX_abs)
 
 gs2_io.o:
@@ -533,12 +572,12 @@ gs2_reinit.o: fields_explicit.o dist_fn.o fields.o fields_implicit.o fields_test
 gs2_reinit.o: init_g.o run_parameters.o gs2_save.o dist_fn_arrays.o fields_arrays.o
 gs2_reinit.o: file_utils.o antenna.o  #additional_terms.o
 redistribute.o: mp.o
-gs2_io.o: mp.o file_utils.o netcdf_mod.o kt_grids.o theta_grid.o le_grids.o \
-	species.o run_parameters.o convert.o fields_arrays.o \
-	nonlinear_terms.o gs2_layouts.o constants.o gs2_transforms.o
+gs2_io.o: mp.o file_utils.o netcdf_mod.o kt_grids.o theta_grid.o le_grids.o 
+gs2_io.o: species.o run_parameters.o convert.o fields_arrays.o 
+gs2_io.o: nonlinear_terms.o gs2_layouts.o constants.o gs2_transforms.o
 check.o: mp.o file_utils.o run_parameters.o 
 netcdf_mod.o: mp.o constants.o
-ingen.o: file_utils.o
+ingen.o: file_utils.o text_options.o constants.o theta_grid.o
 gs2_flux.o: species.o mp.o text_options.o file_utils.o dist_fn.o regression.o 
 gridgen4mod.o:  $(UTILS)/utils.a
 

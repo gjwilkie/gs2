@@ -1473,7 +1473,7 @@ end subroutine eikcoefs
  ! returns dI/dpsi
 
     use veq, only: veq_dbtori => dbtori , vm_init_dbtori => initialize_dbtori
-    use geq, only: geq_dbtori => dbtori , initialize_dbtori
+    use geq, only: geq_dbtori => dbtori , geq_init_dbtori => initialize_dbtori
     use peq, only: peq_dbtori => dbtori , ppl_init_dbtori => initialize_dbtori
     use leq, only: leq_dbtori => dbtori
     use eeq, only: eeq_dbtori => dbtori, efit_init_dbtori => initialize_dbtori
@@ -1489,17 +1489,21 @@ end subroutine eikcoefs
        pbar=min(1.,max(0.,(rpfun(r,thet)-psi_0)/(psi_a-psi_0)))
 
        if(vmom_eq) then
-          i=vm_init_dbtori(initdb)
-          f=veq_dbtori(pbar)
+
+          i=vm_init_dbtori(initdb)     ;  f=veq_dbtori(pbar)
+
        elseif (gen_eq) then
-          i=initialize_dbtori(initdb)
-          f=geq_dbtori(pbar)
+
+          i=geq_init_dbtori(initdb)    ;  f=geq_dbtori(pbar)
+
        elseif (ppl_eq) then
-          i=ppl_init_dbtori(initdb)
-          f=peq_dbtori(pbar)
-       elseif (efit_eq) then
-          i = efit_init_dbtori(initdb)
-          f=eeq_dbtori(pbar)
+
+          i=ppl_init_dbtori(initdb)    ;  f=peq_dbtori(pbar)
+
+       elseif (efit_eq) then        
+
+          i = efit_init_dbtori(initdb) ; f=eeq_dbtori(pbar)
+
        elseif (dfit_eq) then
           f=0.
        endif
@@ -2033,7 +2037,7 @@ end subroutine geofax
   function bmodfun(r,thet)
 
     use veq, only: veqitem => eqitem, veqB_psi => B_psi
-    use geq, only: eqitem, eqB_psi => B_psi
+    use geq, only: geqitem => eqitem, eqB_psi => B_psi
     use ideq, only: ideqitem => eqitem, ideqB_psi => B_psi
 
     real :: bmodfun
@@ -2051,7 +2055,7 @@ end subroutine geofax
        
     elseif (gen_eq) then
        
-       call eqitem(r, thet, eqB_psi, f, 'R')
+       call geqitem(r, thet, eqB_psi, f, 'R')
        bmodfun=f
        return
     elseif (idfit_eq) then

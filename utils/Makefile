@@ -126,6 +126,19 @@ ifeq ($(CPU),RS6000)
   endif
 endif
 
+# Dawson G5 cluster:
+ifeq ($(CPU),Dawson)
+  FC = xlf95
+  PLATFORM_LINKS = ibm
+  F90FLAGS = -qmoddir=/tmp/bdorland -I/tmp/bdorland -qautodbl=dbl4 -qsuffix=f=f90 
+  FLIBS = -L/u/local/apps/netcdf/lib -lnetcdf -L/u/local/apps/fftw/lib -lfftw -lrfftw 
+  ifneq ($(debug),on)
+    F90FLAGS += -O3 -qarch=g5 -qtune=g5
+  else
+    F90FLAGS += -g 
+  endif
+endif
+
 # DEC alpha options:
 ifeq ($(CPU),ALPHA)
   FC = f95
@@ -355,4 +368,10 @@ test_make:
 	@echo F90FLAGS is $(F90FLAGS)
 	@echo debug is $(debug)
 	@echo CPU is $(CPU)
+
+ifeq ($(CPU),Dawson)
+
+mds.o:
+	$(FC) $(F90FLAGS) -qautodbl=dbl -c mds.f90
+endif
 

@@ -1,7 +1,7 @@
 module text_options
   implicit none
 
-  integer, parameter :: maxlen = 20
+  integer, parameter :: maxlen = 30
 
   type :: text_option
      character(maxlen) :: name
