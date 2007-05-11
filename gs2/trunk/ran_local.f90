@@ -1,8 +1,16 @@
 module ran
 
+  integer, save :: idum = -1
+
 contains
 
-  function ranf(idum)
+  real function ranf()
+    
+    ranf = ranf_2(idum)
+
+  end function ranf
+
+  function ranf_2(idum)
 
 !.....Replaces cray routine ranf(). What follows is the
 !     same as FUNCTION RAN1(idum) of numerical recipes p196,
@@ -43,7 +51,7 @@ contains
 !     ran1=min(AM*iy,RNMX) (change name to ranf)
     ranf=min(AM*iy,RNMX)
     
-  end function ranf
+  end function ranf_2
 !  (C) Copr. 1986-92 Numerical Recipes Software n2'%).
 
 end module ran

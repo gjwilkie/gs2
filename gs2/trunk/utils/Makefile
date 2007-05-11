@@ -288,18 +288,18 @@ endif
 
 # options for Linux with NAG f95:
 ifeq ($(CPU),LINUX)
-  FC = f95
+  FC = mpif90
   FLIBS = -L/usr/local/lib -L/usr/lib -lnetcdf
   PLATFORM_LINKS = linux
-  FFLAGS   = -r8 -132 -w -f77 -I/usr/local/include
-  F90FLAGS = -r8 -w -f77 -I/usr/local/include -mismatch
+  FFLAGS   = -w -r8 -132 -I/usr/local/include
+  F90FLAGS = -w -r8 -I/usr/local/include 
 
   ifeq ($(debug),on)
-    FFLAGS   += -C -g90 -gline 
-    F90FLAGS += -C -g90 -gline 
+    FFLAGS   += -C=array -C=bits -C=dangling -C=do -C=present -C=pointer -gline
+    F90FLAGS += -C=array -C=bits -C=dangling -C=do -C=present -C=pointer -gline
   else
-    FFLAGS   += -O 
-    F90FLAGS += -O
+    FFLAGS   += -O4
+    F90FLAGS += -O4
   endif
 
 endif
