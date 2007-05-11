@@ -20,7 +20,12 @@ module dist_fn_arrays
   ! (-ntgrid:ntgrid, -g-layout-)
 
   ! fieldeq
+  complex, dimension (:,:,:), allocatable :: apar_ext
   real, dimension (:,:,:), allocatable :: kperp2
-  ! (-ntgrid:ntgrid,naky,ntheta0) replicated
+  ! (-ntgrid:ntgrid,ntheta0,naky) replicated
+
+  ! collisional diagnostic of heating rate
+  complex, dimension (:,:,:,:), allocatable :: c_rate
+  ! (-ntgrid:ntgrid,ntheta0,naky) replicated
 
 end module dist_fn_arrays

@@ -3,8 +3,9 @@ module hyper
   implicit none
   private
   public :: init_hyper, hyper_diff, D_res
+  public :: D_v, D_eta
 
-
+  real :: D_v, D_eta
   real :: D_hypervisc, D_hyperres, omega_osc
   real :: akx4_max, aky4_max, aky_max, akperp4_max
 
@@ -15,6 +16,7 @@ module hyper
        hyper_option_both = 4
   logical :: const_amp, include_kpar, isotropic_shear
   logical :: hyper_on = .false.
+  logical :: gridnorm
 
   real, dimension (:,:), allocatable, save :: D_res
   ! (it, ik)
@@ -40,10 +42,17 @@ contains
 
 ! Define variables used in hyperviscosity and hyperresistivity models
 
-    akx4_max    = akx(ntheta0/2 + 1) ** 4
-    aky_max     = aky(naky)
-    aky4_max     = aky(naky) ** 4
-    akperp4_max = ( akx(ntheta0/2 + 1) ** 2  +  aky(naky) ** 2) ** 2
+    if (gridnorm) then
+       akx4_max    = akx(ntheta0/2 + 1) ** 4
+       aky_max     = aky(naky)
+       aky4_max     = aky(naky) ** 4
+       akperp4_max = ( akx(ntheta0/2 + 1) ** 2  +  aky(naky) ** 2) ** 2
+    else
+       akx4_max = 1.
+       aky_max = 1.
+       aky4_max = 1.
+       akperp4_max = 1.
+    end if
 
 ! Get D_res set up if needed
 
@@ -54,9 +63,18 @@ contains
                   * (aky(ik)**2 + akx(it)**2)**2/akperp4_max
           end do
        end do
+       D_eta = D_hyperres/akperp4_max
     else
        D_res = 0.
+       D_eta = 0.
     end if
+
+    if (D_hypervisc > 0.) then
+       D_v = D_hypervisc/akperp4_max
+    else
+       D_v = 0.
+    end if
+
   end subroutine init_hyper
 
   subroutine read_parameters
@@ -75,7 +93,7 @@ contains
     logical :: exist
     
     namelist /hyper_knobs/ hyper_option, const_amp, include_kpar, &
-         isotropic_shear, D_hyperres, D_hypervisc, omega_osc
+         isotropic_shear, D_hyperres, D_hypervisc, omega_osc, gridnorm
     
     if (proc0) then
        const_amp = .false.
@@ -85,6 +103,7 @@ contains
        D_hypervisc = -10.
        hyper_option = 'default'
        omega_osc = 0.4
+       gridnorm = .true.
        in_file=input_unit_exist("hyper_knobs",exist)
        if (exist) read (unit=input_unit("hyper_knobs"), nml=hyper_knobs)
 
@@ -161,6 +180,7 @@ contains
     call broadcast (hyper_option_switch)
     call broadcast (hyper_on)
     call broadcast (omega_osc)
+    call broadcast (gridnorm)
 
   end subroutine read_parameters
 
@@ -177,17 +197,17 @@ contains
 
   end subroutine allocate_arrays
 
-  subroutine hyper_diff (g0, phi)
+  subroutine hyper_diff (g0, phi, aperp)
 
     use mp, only: proc0
     use gs2_layouts, only: ik_idx, it_idx, is_idx
     use theta_grid, only: ntgrid
-    use run_parameters, only: delt, wunits
+    use run_parameters, only: delt, wunits, fphi, faperp
     use gs2_layouts, only: g_lo
     use kt_grids, only: aky, akx, naky, ntheta0
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, aperp
 
     real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, &
          shear_rate_z, shear_rate_z_nz
@@ -211,27 +231,13 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     if (.not. hyper_on) return
+    if (D_hypervisc < 0.) return
 
     if(isotropic_shear) then
        call iso_shear
     else
        call aniso_shear
     end if
-
-!    if (proc0) then
-!       ncall=ncall+1
-!       if(mod(ncall,100) .eq. 0) then
-!          print *, "akx, aky="
-!          print *, akx
-!          print *, aky
-!          print *, "shear_rate_nz = "
-!          print *, shear_rate_nz
-!          print *, "shear_rate_z = "
-!          print *, shear_rate_z
-!          print *, "shear_rate_z_nz = "
-!          print *, shear_rate_z_nz
-!       endif
-!    endif 
 
   contains
 
@@ -280,6 +286,8 @@ contains
 ! end of anisotropic shearing rate calculations
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+      call g_adjust (g0, phi, aperp, fphi, faperp)
+
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
          it = it_idx(g_lo, iglo)
@@ -305,6 +313,8 @@ contains
          endif
       end do
     
+      call g_adjust (g0, phi, aperp, -fphi, -faperp)
+
     end subroutine aniso_shear
 
     subroutine iso_shear
@@ -327,6 +337,8 @@ contains
          shear_rate_nz = shear_rate_nz**0.5
       end if
       
+      call g_adjust (g0, phi, aperp, fphi, faperp)
+
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
          it = it_idx(g_lo, iglo)
@@ -338,7 +350,40 @@ contains
               * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**2 / akperp4_max)))
       end do
       
+      call g_adjust (g0, phi, aperp, -fphi, -faperp)
+
     end subroutine iso_shear
   end subroutine hyper_diff
+
+  subroutine g_adjust (g, phi, aperp, facphi, facaperp)
+    use species, only: spec
+    use theta_grid, only: ntgrid
+    use le_grids, only: anon
+    use dist_fn_arrays, only: vperp2, aj0, aj1
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, aperp
+    real, intent (in) :: facphi, facaperp
+
+    integer :: iglo, ig, ik, it, ie, is
+    complex :: adj
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do ig = -ntgrid, ntgrid
+          adj = anon(ie,is)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
+                  *aperp(ig,it,ik)*facaperp &
+               + spec(is)%z*anon(ie,is)*phi(ig,it,ik)*aj0(ig,iglo) &
+                  /spec(is)%temp*facphi
+          g(ig,1,iglo) = g(ig,1,iglo) + adj
+          g(ig,2,iglo) = g(ig,2,iglo) + adj
+       end do
+    end do
+  end subroutine g_adjust
+
 
 end module hyper

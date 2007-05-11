@@ -1080,9 +1080,9 @@ contains
     do is = 1, nspec
        do ie = 1, negrid
           fac = w(ie,is)
-          do ik = 1, naky
+          do il = 1, nlambda
              do it = 1, ntheta0
-                do il = 1, nlambda
+                do ik = 1, naky
                    iglo = idx (g_lo, ik, it, il, ie, is)
                    if (idx_local (g_lo, iglo)) then
                       do ig = -ntgrid, ntgrid

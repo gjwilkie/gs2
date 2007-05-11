@@ -7,7 +7,7 @@ module antenna
 !! init_antenna should be called once per run
 !! antenna_amplitudes provides the necessary info per time step
 !!
-!! added terms needed to calculate heating by antenna (apar_old, apar_new)
+!! added terms needed to calculate heating by antenna (apar_new)
 !!
 !! two kinds of namelists should be added to the input file:
 !! 
@@ -15,7 +15,6 @@ module antenna
 !!       
 !!    amplitude : RMS amplitude of | apar_antenna |
 !!    w_antenna : frequency of driving, normalized to kpar v_Alfven
-!!                (assuming pk=2. or kp=1. in the theta_grid_parameters)
 !!                Note: the imaginary part is the decorrelation rate
 !!    nk_stir   : Number of k modes that should be driven
 !!    write_antenna: .true. for direct antenna output to runname.antenna
@@ -31,7 +30,7 @@ module antenna
   implicit none
   complex :: w_antenna
   complex, dimension(:), allocatable :: a_ant, b_ant, w_stir
-  complex, dimension (:,:,:), allocatable :: apar_old, apar_new
+  complex, dimension (:,:,:), allocatable :: apar_new
   integer, dimension(:), allocatable :: kx_stir, ky_stir, kz_stir
   real :: amplitude, t0, w_dot
   integer :: nk_stir, out_unit
@@ -193,7 +192,6 @@ contains
     if (no_driver) return
 
     if (first) then
-       allocate (apar_old(-ntgrid:ntgrid,ntheta0,naky)) ; apar_old = 0.
        allocate (apar_new(-ntgrid:ntgrid,ntheta0,naky)) ; apar_new = 0.
        first = .false.
     end if
@@ -218,25 +216,31 @@ contains
        it = 1 + mod(kx_stir(i)+ntheta0,ntheta0)
        ik = 1 + mod(ky_stir(i)+naky,naky)
 
-       apar_old (:,it,ik) = apar_old (:,it,ik) &
-            + (a_ant(i)+b_ant(i))/sqrt(2.)*exp(zi*kz_stir(i)*theta) 
-
-       sigma = sqrt(12.*abs(aimag(w_stir(i)))/dt)*amplitude
-
-       force_a = cmplx(ranf() - 0.5, ranf() - 0.5) * sigma
-       if (trav(i)) then
-          force_b = cmplx(ranf() - 0.5, ranf() - 0.5) * sigma
-       else
-          force_b = force_a
+       if (proc0) then
+          sigma = sqrt(12.*abs(aimag(w_stir(i)))/dt)*amplitude
+          
+          force_a = cmplx(ranf() - 0.5, ranf() - 0.5) * sigma
+          if (trav(i)) then
+             force_b = cmplx(ranf() - 0.5, ranf() - 0.5) * sigma
+          else
+             force_b = force_a
+          end if
+          
+          if (trav(i) .and. abs(aimag(w_stir(i))) < epsilon(0.0)) then
+             a_ant(i) = a_ant(i)*exp(-zi*w_stir(i)*dt)+force_a*dt
+             b_ant(i) = 0.
+          else
+             a_ant(i) = a_ant(i)*exp(-zi*w_stir(i)*dt)+force_a*dt
+             b_ant(i) = b_ant(i)*exp(zi*conjg(w_stir(i))*dt)+force_b*dt
+          end if
        end if
 
-       if (trav(i) .and. abs(aimag(w_stir(i))) < epsilon(0.0)) then
-          a_ant(i) = a_ant(i)*exp(-zi*w_stir(i)*dt)+force_a*dt
-          b_ant(i) = 0.
-       else
-          a_ant(i) = a_ant(i)*exp(-zi*w_stir(i)*dt)+force_a*dt
-          b_ant(i) = b_ant(i)*exp(zi*conjg(w_stir(i))*dt)+force_b*dt
-       end if
+! potential existed for a bug here, if different processors 
+! got different random numbers; antennas driving different parts of
+! velocity space at the same k could be driven differently.  BD 6.7.05
+
+       call broadcast (a_ant)
+       call broadcast (b_ant)
 
        apar(:,it,ik) = apar(:,it,ik) &
             + (a_ant(i)+b_ant(i))/sqrt(2.)*exp(zi*kz_stir(i)*theta) 
@@ -251,11 +255,9 @@ contains
 
     if (reality) then
        apar(:,1,1) = 0.0
-       apar_old(:,1,1) = 0.0
        
        do it = 1, ntheta0/2
           apar(:,it+(ntheta0+1)/2,1) = conjg(apar(:,(ntheta0+1)/2+1-it,1))
-          apar_old(:,it+(ntheta0+1)/2,1) = conjg(apar_old(:,(ntheta0+1)/2+1-it,1))
        enddo
     end if
 
@@ -265,31 +267,30 @@ contains
 
   subroutine antenna_apar (kperp2, j_ext)
 
-! this routine returns time and space-centered (kperp**2 * A_ext)
+! this routine returns space-centered (kperp**2 * A_ext) at the current time
 
-    use gs2_time, only: simdt, stime
     use kt_grids, only: naky, ntheta0
-    use run_parameters, only: tnorm, tunits
-    use theta_grid, only: theta, ntgrid, gradpar
-    use ran
-    use constants
+    use run_parameters, only: beta
+    use theta_grid, only: ntgrid
 
     complex, dimension (-ntgrid:,:,:) :: j_ext
     real, dimension (-ntgrid:,:,:) :: kperp2
     integer :: ik, it, ig
 
-    if (.not. allocated(apar_old)) return
+    if (.not. allocated(apar_new)) return
 
     do ik = 1, naky
        do it = 1, ntheta0
           do ig = -ntgrid, ntgrid-1
-             j_ext(ig,it,ik) = 0.25* &
-                  (kperp2(ig+1,it,ik)*(apar_new(ig+1,it,ik)+apar_old(ig+1,it,ik)) &
-                  +kperp2(ig,  it,ik)*(apar_new(ig,  it,ik)+apar_old(ig,  it,ik)))
+             j_ext(ig,it,ik) = 0.5* &
+                  (kperp2(ig+1,it,ik)*apar_new(ig+1,it,ik) &
+                  +kperp2(ig,  it,ik)*apar_new(ig,  it,ik))
           end do
        end do
     end do
-    
+     
+    if (beta > 0.) j_ext = j_ext * 0.5 / beta
+
   end subroutine antenna_apar
 
   function antenna_w ()
@@ -302,10 +303,11 @@ contains
   subroutine dump_ant_amp
     use gs2_time, only: simdt, stime
     use run_parameters, only: tnorm
+    use theta_grid, only: ntgrid, theta
     use mp, only: proc0
     implicit none
     real :: time
-    integer :: i
+    integer :: i, it, ik, ig
 
     if (no_driver) return
     if (.not. write_antenna) then

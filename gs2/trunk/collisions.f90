@@ -5,7 +5,7 @@ module collisions
   implicit none
 
   public :: init_collisions
-  public :: solfp1, cheating
+  public :: solfp1
   public :: reset_init
 
   private
@@ -16,7 +16,7 @@ module collisions
   logical :: conserve_number, conserve_momentum, const_v
   integer :: collision_model_switch
   logical :: hypercoll
-  logical :: use_shmem, adjust, rogers
+  logical :: use_shmem, adjust
   logical :: heating
 
   integer, parameter :: collision_model_lorentz = 1
@@ -27,9 +27,6 @@ module collisions
 
   real, dimension (:,:,:), allocatable :: vnew, vnew4
   ! (naky,negrid,nspec) replicated
-
-  ! to diagnose collisional heating rate
-  complex, dimension (:,:,:,:), allocatable :: rate
 
   ! only for krook
   real, dimension (:), allocatable :: vnewfe
@@ -103,13 +100,12 @@ contains
     character(20) :: collision_model
     namelist /collisions_knobs/ collision_model, vncoef, absom, ivnew, &
          conserve_number, conserve_momentum, use_shmem, hypercoll, heating, &
-         adjust, rogers, const_v, cfac
+         adjust, const_v, cfac
     integer :: ierr, in_file
     logical :: exist
 
     if (proc0) then
        cfac = 0.
-       rogers = .false.
        adjust = .true.
        collision_model = 'default'
        vncoef = 0.6
@@ -140,7 +136,6 @@ contains
     call broadcast (hypercoll)
     call broadcast (heating)
     call broadcast (adjust)
-    call broadcast (rogers)
   end subroutine read_parameters
 
   subroutine init_arrays
@@ -149,6 +144,7 @@ contains
     use gs2_layouts, only: g_lo
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
+    use dist_fn_arrays, only: c_rate
     implicit none
     real, dimension (negrid,nspec) :: hee
     logical :: first_time = .true.
@@ -170,8 +166,9 @@ contains
        call init_krook (hee)
     end select
 
-    if (first_time) then
-       allocate (rate(-ntgrid:ntgrid, ntheta0, naky, nspec))
+    if (first_time .and. heating) then
+       allocate (c_rate(-ntgrid:ntgrid, ntheta0, naky, nspec))
+       c_rate = 0.
        first_time = .false.
     end if
 
@@ -428,6 +425,11 @@ contains
              slbl = (slb1 + slb0)/2.0  ! xi(j-1/2)
              slbr = (slb1 + slb2)/2.0  ! xi(j+1/2)
 
+! worried about this factor of 0.5, since kperp2 is smaller than 
+! normally think, by a factor of 0.5   
+! this is the usual sqrt(2) issue in the definition of vt
+! which, here in the guts of gs2, is defined vt = sqrt(2T/m)
+! BD 6/1/05
              ee = vn*delt*0.5*e(ie,is)*(1+slb1**2) &
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
@@ -696,6 +698,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use le_grids, only: e, integrate_moment
     use species, only: nspec
+    use dist_fn_arrays, only: c_rate
     use constants
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in out) :: g, g1
@@ -707,18 +710,16 @@ contains
 
     if (collision_model_switch == collision_model_none) return
 
-    if  (heating) then
+
+    if (heating) then
        allocate (gc(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       gc = 0.0
+    else
+       allocate (gc(1,1,1))
     end if
 
-    if (adjust) then
-       if (rogers) then
-          call g_adjust (g, phi, aperp, 0., faperp)
-       else
-          call g_adjust (g, phi, aperp, fphi, faperp)
-       end if
-    end if
+    gc = 0.0
+
+    if (adjust) call g_adjust (g, phi, aperp, fphi, faperp)
 
     select case (collision_model_switch)
     case (collision_model_lorentz,collision_model_lorentz_test)
@@ -727,19 +728,11 @@ contains
        call solfp_krook (g, g1)
     end select
     
-    if (heating) then
-       call integrate_moment (gc, rate)
-       deallocate (gc)
-    end if
+    if (heating) call integrate_moment (gc, c_rate)
+    deallocate (gc)
 
-    if (adjust) then
-       if (rogers) then
-          call g_adjust (g, phi, aperp, 0., -faperp)
-       else
-          call g_adjust (g, phi, aperp, -fphi, -faperp)
-       end if
-    end if
-
+    if (adjust) call g_adjust (g, phi, aperp, -fphi, -faperp)
+    
   end subroutine solfp1
 
   subroutine g_adjust (g, phi, aperp, facphi, facaperp)
@@ -903,7 +896,7 @@ contains
 
           je = 2*jend(ig)          
           if (je == 0) then
-             je = 2*ng2+1
+             je = 2*ng2 
           end if
 
           do il = 1, je-1
@@ -1016,19 +1009,6 @@ contains
 
     call prof_leaving ("solfp_lorentz", "collisions")
   end subroutine solfp_lorentz
-
-  subroutine cheating (rateout)
-    
-    complex, dimension (:,:,:,:), intent (out) :: rateout
-
-    if (heating) then
-! this statement can cause the NAG compiler to bomb.  I do not understand why.
-       rateout = rate
-    else
-       rateout = 0.
-    end if
-
-  end subroutine cheating
 
   subroutine check_g (str, g)
 

@@ -67,12 +67,15 @@ program ingen
   integer, dimension (:), allocatable :: kx_stir, ky_stir, kz_stir
   logical, dimension (:), allocatable :: trav
 
+  real :: cfac
+
 ! collisions: 
   integer :: collision_model_switch
-  real :: vncoef, absom, cfac
+  real :: vncoef, absom, cfac_nu
   integer :: ivnew
   character (20) :: collision_model
   logical :: conserve_number, conserve_momentum, use_shmem, hypercoll
+  logical :: heating
   integer, parameter :: collision_model_lorentz = 1
   integer, parameter :: collision_model_krook = 2
   integer, parameter :: collision_model_none = 3
@@ -143,7 +146,7 @@ program ingen
   real :: gridfac, apfac, driftknob, poisfac
   real :: kfilter, afilter, D_kill, noise
   real :: t0, omega0, gamma0, source0, thetas, phi_ext, a_ext
-  real :: akx_star, aky_star
+  real :: akx_star, aky_star, cfac_df
   integer :: nperiod_guard 
   logical :: mult_imp, test, def_parity, even, save_n, save_u, save_Tpar
   logical :: save_Tperp, test_df
@@ -435,6 +438,9 @@ program ingen
   logical :: theta_write = .false.
   logical :: knobs_write = .false.
 
+  integer :: iostat
+  real :: tmpfac
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -463,7 +469,7 @@ program ingen
 
 ! collisions: 
   namelist /collisions_knobs/ collision_model, vncoef, absom, ivnew, &
-       conserve_number, conserve_momentum, use_shmem, hypercoll, cfac
+       conserve_number, conserve_momentum, use_shmem, hypercoll, cfac, heating
 
 ! init_g:
   namelist /init_g_knobs/ ginit_option, width0, phiinit, k0, chop_side, &
@@ -474,7 +480,7 @@ program ingen
 
 ! dist_fn:
   namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, &
-       nperiod_guard, poisfac, adiabatic_option, &
+       nperiod_guard, poisfac, adiabatic_option, cfac, &
        kfilter, afilter, mult_imp, test, def_parity, even, &
        save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, heating_option
   
@@ -1244,6 +1250,7 @@ contains
 
     ! collisions: 
     collision_model = 'default'
+    tmpfac = cfac
     cfac = 0.
     vncoef = 0.6
     absom = 0.5
@@ -1251,6 +1258,7 @@ contains
     conserve_number = .true.
     conserve_momentum = .true.
     hypercoll = .false.
+    heating = .false.
     in_file=input_unit_exist("collisions_knobs",exist)
     if (exist) then
        read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
@@ -1262,6 +1270,8 @@ contains
          (collision_model, coll_modelopts, collision_model_switch, &
          ierr, "collision_model in collisions_knobs")
 
+    cfac_nu = cfac
+    cfac = tmpfac
 
     ! init_g:
     tstart = 0.
@@ -1570,7 +1580,7 @@ contains
        vnewk = 0.0
        vnewk4 = 0.0
        type = "default"
-       read (unit=unit, nml=species_parameters)
+       read (unit=unit, nml=species_parameters, iostat=iostat)
        close (unit=unit)
 
        spec(is)%z = z
@@ -1733,6 +1743,8 @@ contains
     even = .true.
     source_option = 'default'
     nperiod_guard = 0
+    tmpfac = cfac
+    cfac = 1.0
 
     in_file= input_unit_exist("dist_fn_knobs", exist)
     if (exist) then
@@ -1740,6 +1752,8 @@ contains
        dist_fn_write = .true.
     end if
 
+    cfac_df = cfac
+    cfac = tmpfac
     test_df = test
 
     in_file= input_unit_exist("source_knobs", exist)
@@ -1917,6 +1931,7 @@ contains
           write (unit, fmt="(' collision_model = ',a)") '"krook"'
           write (unit, fmt="(' conserve_number = ',L1)") conserve_number
           write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
+          write (unit, fmt="(' vncoef = ',f5.3)") vncoef
        case (collision_model_krook_test)
           write (unit, fmt="(' collision_model = ',a)") '"krook-test"'
           write (unit, fmt="(' conserve_number = ',L1)") conserve_number
@@ -1924,8 +1939,8 @@ contains
        case (collision_model_none)
           write (unit, fmt="(' collision_model = ',a)") '"collisionless"'
        end select
-       write (unit, fmt="(' vncoef = ',f5.3)") vncoef
-       write (unit, fmt="(' cfac = ',f5.3)") cfac
+       write (unit, fmt="(' cfac = ',f5.3)") cfac_nu
+       write (unit, fmt="(' heating = ',L1)") heating
        write (unit, fmt="(' /')")
     end if
 
@@ -2068,6 +2083,7 @@ contains
 
        case (ginitopt_gs)
           write (unit, fmt="(' ginit_option = ',a)") '"gs"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
           write (unit, fmt="(' refac = ',e16.10)") refac
           write (unit, fmt="(' imfac = ',e16.10)") imfac
           write (unit, fmt="(' den1 = ',e16.10)") den1
@@ -2163,6 +2179,7 @@ contains
           write (unit, fmt="(' save_Tperp = ',L1)") save_Tperp
        end if
        if (noise > 0.) write (unit, fmt="(' noise = ',e16.10)") noise
+       if (cfac_df < 1.) write (unit, fmt="(' cfac = ',e16.10)") cfac_df
        write (unit, fmt="(' /')")
     end if
 
@@ -2708,7 +2725,7 @@ contains
      complex, intent (in out) :: fexp_out
      real, intent (in out) :: bakdif_out
      integer, intent (in out) :: bd_exp_out
-     integer :: bd_exp
+     integer :: bd_exp, iostat
      real :: fexpr, fexpi, bakdif
      namelist /dist_fn_species_knobs/ fexpr, fexpi, bakdif, bd_exp
 
@@ -2716,7 +2733,7 @@ contains
      fexpi = aimag(fexp_out)
      bakdif = bakdif_out
      bd_exp = bd_exp_out
-     read (unit=unit, nml=dist_fn_species_knobs)
+     read (unit=unit, nml=dist_fn_species_knobs, iostat=iostat)
      fexp_out = cmplx(fexpr,fexpi)
      bd_exp_out = bd_exp
      bakdif_out = bakdif
@@ -2979,7 +2996,7 @@ contains
 
      if (le_ok) then
         if (.not. advanced_egrid) negrid = nesub + nesuper
-!        if (eps > epsilon(0.0)) then
+        if (eps < epsilon(0.0)) trapped_particles = .false.
         if (trapped_particles) then
            nlambda = 2*ngauss + nbset
         else
@@ -3391,7 +3408,7 @@ contains
               end if
            case (5) 
               write (report_unit, fmt="('The alpha parameter (R beta_prime q**2) = ',f8.4)") alpha_input
-              write (*,*) alpha_input, dbdr, qinp, Rmaj
+!              write (*,*) alpha_input, dbdr, qinp, Rmaj
               if (abs(alpha_input + dbdr*qinp**2*Rmaj) > 1.e-2) then
                  write (report_unit, *) 
                  write (report_unit, fmt="('################# WARNING #######################')")
@@ -3754,8 +3771,8 @@ contains
        write (report_unit, fmt="('Initial conditions:')")
        write (report_unit, fmt="('  Randomly phased kpar=1 sines and cosines')") 
        write (report_unit, fmt="('  in density, upar, tpar, or tperp.')") 
-       write (report_unit, fmt="('  Real part amplitude:  ',f10.4)") refac
-       write (report_unit, fmt="('  Imag part amplitude:  ',f10.4)") imfac
+       write (report_unit, fmt="('  Real part amplitude:  ',f10.4)") refac*phiinit
+       write (report_unit, fmt="('  Imag part amplitude:  ',f10.4)") imfac*phiinit
        if (abs( den1)  > epsilon(0.0)) write (report_unit, fmt="('  Density amplitude:  ',f10.4)") den1
        if (abs( upar1) > epsilon(0.0)) write (report_unit, fmt="('  Upar amplitude:  ',f10.4)") upar1
        if (abs( tpar1) > epsilon(0.0)) write (report_unit, fmt="('  Tpar amplitude:  ',f10.4)") tpar1
