@@ -3,7 +3,7 @@ module nonlinear_terms
 ! not correct for slowing down species
 ! terms like df/dU should involve anon, etc.
 !
-! missing factors of 1/B in A_perp terms??
+! missing factors of B_a/B(theta) in A_perp terms??
 !
   implicit none
 

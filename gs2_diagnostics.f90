@@ -13,7 +13,7 @@ module gs2_diagnostics
   logical :: write_omega, write_omavg, write_ascii, write_lamavg, write_eavg
   logical :: write_qheat, write_pflux, write_vflux, write_tavg
   logical :: write_qmheat, write_pmflux, write_vmflux, write_gs
-  logical :: write_qbheat, write_pbflux, write_vbflux
+  logical :: write_qbheat, write_pbflux, write_vbflux, write_g
   logical :: write_dmix, write_kperpnorm, write_phitot, write_epartot
   logical :: write_eigenfunc, write_final_fields, write_final_antot
   logical :: write_final_moments, write_avg_moments, write_stress
@@ -110,7 +110,9 @@ contains
     call broadcast (use_shmem_for_xfields)
     call broadcast (save_for_restart)
     call broadcast (write_gs)
+    call broadcast (write_g)
     call broadcast (write_stress)
+    call broadcast (write_final_antot)
 
     call broadcast (write_intcheck)
     call broadcast (write_vortcheck)
@@ -124,11 +126,13 @@ contains
     call broadcast (write_tavg)
     call broadcast (write_hrate)
     call broadcast (write_lorentzian)
+    call broadcast (write_eigenfunc)
     
     nmovie_tot = nstep/nmovie
 
     call init_gs2_io (write_nl_flux, write_omega, write_stress, &
-         write_fieldline_avg_phi, write_hrate, make_movie, nmovie_tot)
+         write_fieldline_avg_phi, write_hrate, write_final_antot, &
+         write_eigenfunc, make_movie, nmovie_tot)
     
   end subroutine init_gs2_diagnostics
 
@@ -182,8 +186,8 @@ contains
        omegahist = 0.0
     end if
 
-    allocate (hratehist(nspec, 3, 0:navg-1));  hratehist = 0.0
-    allocate (hkratehist(ntheta0, naky, nspec, 3, 0:navg-1));  hkratehist = 0.0
+    allocate (hratehist(nspec, 7, 0:navg-1));  hratehist = 0.0
+    allocate (hkratehist(ntheta0, naky, nspec, 7, 0:navg-1));  hkratehist = 0.0
 
     allocate (pflux (ntheta0,naky,nspec))
     allocate (qheat (ntheta0,naky,nspec,3))
@@ -231,7 +235,7 @@ contains
          write_line, write_flux_line, write_phi, write_apar, write_aperp, &
          write_omega, write_omavg, write_ascii, write_kpar, write_lamavg, &
          write_qheat, write_pflux, write_vflux, write_eavg, write_gs, &
-         write_qmheat, write_pmflux, write_vmflux, write_tavg, &
+         write_qmheat, write_pmflux, write_vmflux, write_tavg, write_g, &
          write_qbheat, write_pbflux, write_vbflux, write_hrate, &
          write_dmix, write_kperpnorm, write_phitot, write_epartot, &
          write_eigenfunc, write_final_fields, write_final_antot, &
@@ -255,6 +259,7 @@ contains
        write_kpar = .false.
        write_hrate = .false.
        write_gs = .false.
+       write_g = .false.
        write_lorentzian = .false.
        write_phi = .true.
        write_apar = .true.
@@ -344,7 +349,7 @@ contains
     use fields_arrays, only: phi, apar, aperp, phinew, aparnew
     use dist_fn, only: getan, get_epar, getmoms, par_spectrum, lambda_flux
     use dist_fn, only: e_flux
-!    use dist_fn, only: write_g
+    use dist_fn, only: write_f
     use dist_fn, only: finish_intcheck, finish_vortcheck, finish_fieldcheck
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
@@ -383,7 +388,7 @@ contains
     real :: zxy11, zxym1, zxy1n, zxymn, L_x, L_y, rxt, ryt, bxt, byt
     integer :: istatus, nnx, nny, nnx4, nny4, ulim, llim, iblock, i, g_unit
 
-!    call write_g
+    if (write_g) call write_f
 
     phi0 = 1.
 
@@ -448,37 +453,19 @@ contains
        end if
        
        if (write_kpar) then
+
           allocate (phi2(-ntgrid:ntgrid,ntheta0,naky))   ; phi2 = 0.
           allocate (apar2(-ntgrid:ntgrid,ntheta0,naky))  ; apar2 = 0.
           allocate (aperp2(-ntgrid:ntgrid,ntheta0,naky)) ; aperp2 = 0.
 
-          phi2 = 0. ; apar2 = 0. ; aperp2 = 0.
           if (fphi > epsilon(0.0)) then
              call par_spectrum(phi, phi2)
-!             do ik = 1, naky
-!                do it = 1, ntheta0                
-!                   if (real(sum(phi2(:,it,ik))) > 0.) &
-!                   phi2(:,it,ik) = phi2(:,it,ik) / sum(phi2(:,it,ik))
-!                end do
-!             end do
           end if
           if (fapar > epsilon(0.0)) then
              call par_spectrum(apar, apar2)
-!             do ik = 1, naky
-!                do it = 1, ntheta0                
-!                   if (real(sum(apar2(:,it,ik))) > 0.) &
-!                   apar2(:,it,ik) = apar2(:,it,ik) / sum(apar2(:,it,ik))
-!                end do
-!             end do
           endif
           if (faperp > epsilon(0.0)) then
              call par_spectrum(aperp, aperp2)
-!             do ik = 1, naky
-!                do it = 1, ntheta0                
-!                   if (real(sum(aperp2(:,it,ik))) > 0.) &
-!                   aperp2(:,it,ik) = aperp2(:,it,ik) / sum(aperp2(:,it,ik))
-!                end do
-!             end do
           endif
 
           call open_output_file (unit, ".kpar")
@@ -488,7 +475,7 @@ contains
           end do
           do ik = 1, naky
              do it = 1, ntheta0
-                do ig = ntgrid+2,2*ntgrid
+                do ig = ntgrid+1,2*ntgrid
                    write (unit, "(9(1x,e12.5))") &
                         kpar(ig), aky_out(ik), akx_out(it), &
                         phi2(ig-ntgrid-1,it,ik), &
@@ -713,7 +700,6 @@ contains
        deallocate (ntot, density, upar, tpar, tperp)
     end if
 
-    call broadcast (write_final_antot)
     if (write_final_antot) then
        
        allocate ( antot(-ntgrid:ntgrid,ntheta0,naky)) ; antot = 0.
@@ -1134,9 +1120,9 @@ contains
     logical :: accelerated
     real, dimension(:,:,:), allocatable :: yxphi, yxapar, yxaperp
     complex, dimension (ntheta0, naky) :: omega, omegaavg
-    real, dimension (nspec, 3) :: hrateavg
+    real, dimension (nspec, 7) :: hrateavg
     real, dimension (ntheta0, naky) :: phitot, akperp
-    real, dimension (ntheta0, naky, nspec, 3) :: rate_by_k
+    real, dimension (ntheta0, naky, nspec, 7) :: rate_by_k
     complex, dimension (ntheta0, naky, nspec) :: pfluxneo,qfluxneo
     real :: phi2, apar2, aperp2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, aperp2_by_mode
@@ -1381,8 +1367,8 @@ contains
 !                        real( omegaavg(it,ik)*woutunits(ik)), &
 !                        aimag(omegaavg(it,ik)*woutunits(ik)), &
 !                        phitot(it,ik)
-                   write (unit=*, fmt="('ky=',f6.3, ' kx=',f6.3, &
-                          &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e10.4)") &
+                   write (unit=*, fmt="('ky=',f7.4, ' kx=',f7.4, &
+                          &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e8.2)") &
                         aky_out(ik), akx_out(it), &
                         real( omega(it,ik)*woutunits(ik)), &
                         aimag(omega(it,ik)*woutunits(ik)), &
@@ -1395,36 +1381,6 @@ contains
           write (*,*) 
        end if
     end if
-
-!    if (write_kpar .and. proc0) then
-!       allocate (phik2(-ntgrid:ntgrid,ntheta0,naky))   
-!       
-!       phik2 = 0. 
-!       if (fphi > epsilon(0.0)) then
-!          call par_spectrum(phinew, phik2)
-!          do ig = 1, ntgrid
-!             kpar(ig) = (ig-1)*gradpar(ig)/real(2*nperiod-1)
-!             kpar(2*ntgrid-ig+1)=-(ig)*gradpar(ig)/real(2*nperiod-1)
-!          end do
-!!          do ik = 1, naky
-!          ik = 2
-!!             do it = 1, ntheta0
-!          it = 1
-!                do ig = ntgrid+2,2*ntgrid
-!                   write (kp_unit, "(1x,e12.5,3(1x,i4),9(1x,e12.5))") &
-!                        t, -2*ntgrid-1+ig, ik, it, kpar(ig), aky_out(ik), akx_out(it), &
-!                        phik2(ig-ntgrid-1,it,ik)
-!                end do
-!                do ig = 1, ntgrid
-!                   write (kp_unit, "(1x,e12.5,3(1x,i4),9(1x,e12.5))") &
-!                        t, ig-1, ik, it, kpar(ig), aky_out(ik), akx_out(it), &
-!                        phik2(ig-ntgrid-1,it,ik)
-!                end do
-!!             end do
-!!          end do
-!          deallocate (phik2)
-!       end if
-!    end if
 
     i=istep/nwrite
     call check_flux (i, t, heat_fluxes)
@@ -1448,16 +1404,9 @@ contains
     if (proc0 .and. write_any) then
        if (write_ascii) write (unit=out_unit, fmt=*) 'time=', t
        if (write_ascii .and. write_hrate) then
-          write (unit=out_unit, fmt="('t= ',e16.10,' heating_rate= ',6(1x,e16.10))") t, hrateavg
-          do is = 1, nspec
-             do ik=1,naky
-                do it=1,ntheta0
-                   write (out_unit,"('ik,it,is,aky,akx,<hrate>,t: ', &
-                        & 3i5,4(1x,e12.6))") &
-                        ik, it, is, aky_out(ik), akx_out(it), rate_by_k(it,ik,is,1), t
-                end do
-             end do
-          end do
+          write (unit=out_unit, fmt="('t= ',e12.6,' heating_rate= ',12(1x,e12.6))") t, &
+               hrateavg(:,1), hrateavg(1,2), hrateavg(1,3), hrateavg(1,4), hrateavg(:,5), &
+               hrateavg(:,6), hrateavg(:,7)!, hrateavg(2,4)
        end if
 
        if (write_flux_line) then
@@ -1572,14 +1521,14 @@ contains
        end if
        do ik = 1, naky
           do it = 1, ntheta0
-!             if (write_kperpnorm) then
-!                if (aky_out(ik) /= 0.0) then
-!                   write (out_unit, *) 'kperpnorm=',akperp(it,ik)/aky_out(ik)
-!                else
-!! huh? 
-!                   write (out_unit, *) 'kperpnorm*aky=',akperp(it,ik)
-!                end if
-!             end if
+             if (write_kperpnorm) then
+                if (aky_out(ik) /= 0.0) then
+                   write (out_unit, *) 'kperpnorm=',akperp(it,ik)/aky_out(ik)
+                else
+! huh? 
+                   write (out_unit, *) 'kperpnorm*aky=',akperp(it,ik)
+                end if
+             end if
 !             if (write_phitot) write (out_unit, *) 'phitot=', phitot(it,ik)
 
 !             if (write_fieldline_avg_phi) then
@@ -1720,6 +1669,7 @@ contains
          call flush_output_file (out_unit, ".out")
 
     call prof_leaving ("loop_diagnostics-2")
+
   end subroutine loop_diagnostics
 
   subroutine heating (istep, hrateavg, rate_by_k)
@@ -1727,56 +1677,43 @@ contains
     use mp, only: proc0, iproc
     use dist_fn, only: get_heat
     use fields, only: phi, apar, aperp, phinew, aparnew, aperpnew
-    use collisions, only: cheating
     use species, only: nspec, spec
-    use kt_grids, only: naky, ntheta0, aky
+    use kt_grids, only: naky, ntheta0, aky, akx
     use theta_grid, only: ntgrid, delthet, jacob
     use antenna, only: amplitude
     use nonlinear_terms, only: nonlin
+    use dist_fn_arrays, only: c_rate
     implicit none
     integer, intent (in) :: istep
-    complex, dimension(:,:,:,:), allocatable :: rate
     real, dimension(:,:) :: hrateavg
     real, dimension (:,:,:,:) :: rate_by_k
     real, dimension(-ntgrid:ntgrid) :: wgt
     real :: fac
     integer :: is, ik, it, ig
     
-    allocate (rate(-ntgrid:ntgrid, ntheta0, naky, nspec))
-    call cheating (rate)
-
     if (proc0) then
        
-! Put in factor of temperature for collisional heating rate:
-       do is = 1,nspec
-          do ik=1,naky
-             do it=1,ntheta0
-                do ig=-ntgrid,ntgrid
-                   rate(ig,it,ik,is) = rate(ig,it,ik,is)*spec(is)%temp
-                end do
-             end do
-          end do
-       end do
-
        wgt = delthet*jacob
        wgt = wgt/sum(wgt)
        
-       hrateavg(:,3) = 0.0
+       hrateavg(:,7) = 0.0
        
        do is = 1, nspec
           do ik = 1, naky
              fac = 0.5
              if (aky(ik) < epsilon(0.)) fac = 1.0
              do it = 1, ntheta0
+                if (aky(ik) < epsilon(0.0) .and. abs(akx(it)) < epsilon(0.0)) cycle
                 do ig = -ntgrid, ntgrid
-                   hrateavg(is,3) = hrateavg(is,3) + rate(ig,it,ik,is)*fac*wgt(ig)
+                   rate_by_k(it,ik,is,7) = rate_by_k(it,ik,is,7)+real(c_rate(ig,it,ik,is)) &
+                        *fac*wgt(ig)*spec(is)%temp*spec(is)%dens
+                   hrateavg(is,7) = hrateavg(is,7) + real(c_rate(ig,it,ik,is)) &
+                        *fac*wgt(ig)*spec(is)%temp*spec(is)%dens
                 end do
              end do
           end do
        end do
     end if
-       
-    deallocate (rate)
 
     call get_heat (hrateavg, rate_by_k, phi, apar, aperp, phinew, aparnew, aperpnew)    
     if (proc0) then
@@ -1792,8 +1729,8 @@ contains
           end if
        end if
        if (.not. nonlin .and. abs(amplitude) > epsilon(0.0)) then
-          hrateavg = hrateavg/amplitude**2
-          rate_by_k = rate_by_k/amplitude**2
+!          hrateavg = hrateavg/amplitude**2
+!          rate_by_k = rate_by_k/amplitude**2
        end if
     else
        hrateavg = 0.

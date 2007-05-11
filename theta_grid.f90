@@ -326,9 +326,14 @@ contains
     end if
 
     shat = shat_param
-    drhodpsi = qinp/rhoc
+!    drhodpsi = qinp/rhoc
+    if (eps > epsilon(0.0)) then
+       drhodpsi = epsl/pk/eps
+    else
+       drhodpsi = 1.0
+    end if
     kxfac = 1.0
-    qval = qinp
+    qval = epsl/pk
     select case (model_switch)
     case (model_salpha,model_alpha1,model_b2)
        gbdrift = epsl*(cos(theta) + (shat*theta-shift*sin(theta))*sin(theta))

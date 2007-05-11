@@ -18,7 +18,6 @@ contains
 
   subroutine init_fields_implicit
     use mp, only: proc0
-    use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: init_antenna
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
@@ -218,12 +217,12 @@ contains
        aperp = aperpnew       
        
        call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, istep, dt_cfl)
-       aparnew = aparnew + apar_ext
+       aparnew = aparnew + apar_ext 
 
        call getfield (phinew, aparnew, aperpnew)
 
-       phinew   = phinew   + phi  
-       aparnew  = aparnew  + apar + apar_ext
+       phinew   = phinew   + phi
+       aparnew  = aparnew  + apar !+ apar_ext 
        aperpnew = aperpnew + aperp
                  
        call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, istep, dt_cfl)

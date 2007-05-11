@@ -181,6 +181,7 @@ contains
   subroutine kperp (ntgrid_output, akperp)
     use theta_grid, only: delthet
     use kt_grids, only: naky, aky, ntheta0
+    use run_parameters, only: fphi, fapar, faperp
     use dist_fn_arrays, only: kperp2
     implicit none
     integer, intent (in) :: ntgrid_output
@@ -190,18 +191,18 @@ contains
 
     do ik = 1, naky
        do it = 1, ntheta0
-          anorm = sum(abs(phinew(-ntgrid_output:ntgrid_output,it,ik) &
-                         + aparnew(-ntgrid_output:ntgrid_output,it,ik) &
-                         + aperpnew(-ntgrid_output:ntgrid_output,it,ik))**2 &
+          anorm = sum(abs(phinew(-ntgrid_output:ntgrid_output,it,ik)*fphi &
+                         + aparnew(-ntgrid_output:ntgrid_output,it,ik)*fapar &
+                         + aperpnew(-ntgrid_output:ntgrid_output,it,ik)*faperp)**2 &
                       *delthet(-ntgrid_output:ntgrid_output))
           if (anorm < 2.0*epsilon(0.0) .or. aky(ik) == 0.0) then
              akperp(it,ik) = 0.0
           else
              akperp(it,ik) &
                   = sqrt(sum(kperp2(-ntgrid_output:ntgrid_output,it,ik) &
-                     *abs(phinew(-ntgrid_output:ntgrid_output,it,ik) &
-                          + aparnew(-ntgrid_output:ntgrid_output,it,ik) &
-                          + aperpnew(-ntgrid_output:ntgrid_output,it,ik))**2 &
+                     *abs(phinew(-ntgrid_output:ntgrid_output,it,ik)*fphi &
+                          + aparnew(-ntgrid_output:ntgrid_output,it,ik)*fapar &
+                          + aperpnew(-ntgrid_output:ntgrid_output,it,ik)*faperp)**2 &
                      *delthet(-ntgrid_output:ntgrid_output))/anorm)
           end if
        end do

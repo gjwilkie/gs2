@@ -73,7 +73,8 @@ module gs2_io
 contains
 
   subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
-      write_phiavg, write_hrate, make_movie, nmovie_tot)
+      write_phiavg, write_hrate, write_final_antot, write_eigenfunc, &
+      make_movie, nmovie_tot)
 !David has made some changes to this subroutine (may 2005) now should be able to do movies for 
 !linear box runs as well as nonlinear box runs.
 
@@ -88,6 +89,7 @@ contains
     use species, only: nspec
 
     logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, make_movie
+    logical :: write_final_antot, write_eigenfunc
     logical :: accelerated
     character (300) :: filename, filename_movie
     integer :: ierr         ! 0 if initialization is successful
@@ -147,7 +149,8 @@ contains
 
     if (proc0) then
        call define_dims (nmovie_tot)
-       call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate)
+       call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
+            write_hrate, write_final_antot, write_eigenfunc)
        call nc_grids
        call nc_species
        call nc_geo
@@ -181,7 +184,7 @@ contains
     status = netcdf_def_dim(ncid, 'char200', 200, char200_dim)
     status = netcdf_def_dim(ncid, 'nlines', num_input_lines, nlines_dim)
     status = netcdf_def_dim(ncid, 'ri', 2, ri_dim)
-    status = netcdf_def_dim(ncid, 'nheat', 3, nheat_dim)
+    status = netcdf_def_dim(ncid, 'nheat', 7, nheat_dim)
 
     ! added by EAB 03/05/04 for GS2 movies
     if(my_make_movie) then
@@ -304,7 +307,8 @@ contains
 
   end subroutine save_input
 
-  subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate)
+  subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
+       write_hrate, write_final_antot, write_eigenfunc)
 
     use mp, only: nproc
     use species, only: nspec
@@ -312,6 +316,7 @@ contains
     use run_parameters, only: fphi, fapar, faperp
     use netcdf_mod
     logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate
+    logical :: write_final_antot, write_eigenfunc
 
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
@@ -555,12 +560,14 @@ contains
           status = netcdf_def_var (ncid, 'es_mom_by_k',  nf_double, 4, fluxk_dim, es_mom_by_k_id)
           status = netcdf_def_var (ncid, 'es_part_by_k', nf_double, 4, fluxk_dim, es_part_by_k_id)
        end if
-       status = netcdf_def_var (ncid, 'phi_norm',     nf_double, 4, final_field_dim, phi_norm_id)
+       if (write_eigenfunc) &
+            status = netcdf_def_var (ncid, 'phi_norm',     nf_double, 4, final_field_dim, phi_norm_id)
        status = netcdf_def_var (ncid, 'phi',          nf_double, 4, final_field_dim, phi_id)
        status = netcdf_put_att (ncid, phi_id, 'long_name', 'Electrostatic Potential')
        status = netcdf_put_att (ncid, phi_id, 'idl_name', '!7U!6')
        status = netcdf_put_att (ncid, phi_id, 'units', 'T/q rho/L')
-       status = netcdf_def_var (ncid, 'antot',        nf_double, 4, final_field_dim, antot_id)
+       if (write_final_antot) &
+            status = netcdf_def_var (ncid, 'antot',        nf_double, 4, final_field_dim, antot_id)
        if (d_fields_per) &
             status = netcdf_def_var (ncid, 'phi_t',        nf_double, 5, field_dim, phi_t_id)
     end if
@@ -584,9 +591,11 @@ contains
           status = netcdf_def_var (ncid, 'apar_mom_by_k',  nf_double, 4, fluxk_dim, apar_mom_by_k_id)
           status = netcdf_def_var (ncid, 'apar_part_by_k', nf_double, 4, fluxk_dim, apar_part_by_k_id)
        end if
-       status = netcdf_def_var (ncid, 'apar_norm',      nf_double, 4, final_field_dim, apar_norm_id)
+       if (write_eigenfunc) &
+            status = netcdf_def_var (ncid, 'apar_norm',      nf_double, 4, final_field_dim, apar_norm_id)
        status = netcdf_def_var (ncid, 'apar',           nf_double, 4, final_field_dim, apar_id)
-       status = netcdf_def_var (ncid, 'antota',         nf_double, 4, final_field_dim, antota_id)
+       if (write_final_antot) &
+            status = netcdf_def_var (ncid, 'antota',         nf_double, 4, final_field_dim, antota_id)
        if (d_fields_per) &
             status = netcdf_def_var (ncid, 'apar_t',  nf_double, 5, field_dim, apar_t_id)
        status = netcdf_put_att (ncid, apar2_by_mode_id, 'long_name', 'Apar squared')
@@ -613,9 +622,11 @@ contains
           status = netcdf_def_var (ncid, 'aperp_mom_by_k',  nf_double, 4, fluxk_dim, aperp_mom_by_k_id)
           status = netcdf_def_var (ncid, 'aperp_part_by_k', nf_double, 4, fluxk_dim, aperp_part_by_k_id)
        end if
-       status = netcdf_def_var (ncid, 'aperp_norm',      nf_double, 4, final_field_dim, aperp_norm_id)
+       if (write_eigenfunc) &
+            status = netcdf_def_var (ncid, 'aperp_norm',      nf_double, 4, final_field_dim, aperp_norm_id)
        status = netcdf_def_var (ncid, 'aperp',           nf_double, 4, final_field_dim, aperp_id)
-       status = netcdf_def_var (ncid, 'antotp',          nf_double, 4, final_field_dim, antotp_id)
+       if (write_final_antot) &
+            status = netcdf_def_var (ncid, 'antotp',          nf_double, 4, final_field_dim, antotp_id)
        if (d_fields_per) &
             status = netcdf_def_var (ncid, 'aperp_t', nf_double, 5, field_dim, aperp_t_id)
        status = netcdf_put_att (ncid, aperp2_by_mode_id, 'long_name', 'A_perp squared')
@@ -1240,7 +1251,7 @@ contains
     count5(1) = ntheta0
     count5(2) = naky
     count5(3) = nspec
-    count5(4) = 3
+    count5(4) = 6
     count5(5) = 1
 
     starty(1) = 1
@@ -1266,7 +1277,7 @@ contains
     starth(3) = nout
 
     counth(1) = nspec
-    counth(2) = 3
+    counth(2) = 7
     counth(3) = 1
 
     if (fphi > zero) then
