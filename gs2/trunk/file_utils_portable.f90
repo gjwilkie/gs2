@@ -89,7 +89,7 @@ contains
 
   subroutine init_file_utils (list, input, error, name)
     implicit none
-    logical, intent (out) :: list
+    logical :: list
     logical, intent (in), optional :: input, error
     character(*), intent (in), optional :: name
     logical :: inp, err
@@ -107,7 +107,7 @@ contains
     if (.not. present (name)) then
        arun_name = "unknown"
     else
-       arun_name = name
+       arun_name = trim(name)
     end if
 
     call run_type (list)
@@ -136,7 +136,11 @@ contains
     end if
 
     l = len_trim (arun_name)
-    list = (l > 5 .and. arun_name(l-4:l) == ".list") 
+    if (l>5) then
+       list = arun_name(l-4:l) == ".list"
+    else
+       list = .false.
+    end if
 
   end subroutine run_type
 

@@ -28,6 +28,7 @@ GEO=geo
 #
 #    "make" to build an optimized version of GS2
 #    "make debug=on" to build debug version
+#    "make static=on" to build semi-portable version
 #
 # This uses the shell script ./test_os to figure out which platform 
 # we are running on to set the right compiler switches and library 
@@ -280,6 +281,10 @@ ifeq ($(CPU),LINUX_lf95)
   PLATFORM_LINKS = linux_lf95
   F90FLAGS = --dbl --ml cdecl -I$(UTILS) -I$(GEO) -I/usr/local/include
 
+  ifeq ($(static),on)
+    F90FLAGS += --staticlink
+  endif
+
   ifeq ($(debug),on) 
 # -mpitrace -mpianim -mpilog
     F90FLAGS += -g --chk aesu 
@@ -374,7 +379,7 @@ LINKS= command_line.f90 mp.f90 shmem.f90 prof.f90 redistribute.f90 ran.f90 gs2_l
 
 ######################################################################## RULES
 .SUFFIXES:
-.SUFFIXES: .f90
+.SUFFIXES: .f90 .o
 
 .f90.o: 
 	$(FC) $(F90FLAGS) -c $<
@@ -386,7 +391,7 @@ LINKS= command_line.f90 mp.f90 shmem.f90 prof.f90 redistribute.f90 ran.f90 gs2_l
 # check links and subdirectory modules before building gs2 itself:
 # (This order is important because some dependencies are known only
 # by the Makefiles in the subdirectories, etc.).
-all: $(LINKS) file_utils.o modules gs2 ingen rungridgen
+all: $(LINKS) modules gs2 ingen rungridgen
 
 gs2: gs2.o $(GS2MOD) 
 	case $(PLATFORM_LINKS) in \
@@ -439,7 +444,7 @@ $(GEO)/geo.a:
 #utils/spl.o: 
 #	cd utils; $(MAKE)
 
-file_utils.o: command_line.o mp.o
+file_utils.o: 
 	$(FC) $(F90FLAGS) -c file_utils.f90
 
 ifeq ($(CPU),LINUX_abs)
@@ -453,7 +458,7 @@ netcdf_mod.o:
 
 command_line.o:
 	$(FC) $(F90FLAGS_1) -c command_line.f90
-file_utils.o:
+file_utils.o: 
 	$(FC) $(F90FLAGS_1) -c file_utils.f90
 mp.o:
 	$(FC) $(F90FLAGS_1) -c mp.f90
@@ -467,6 +472,7 @@ endif
 
 ################################################################# DEPENDENCIES
 
+file_utils.o: command_line.o mp.o file_utils.f90
 antenna.o: species.o run_parameters.o file_utils.o mp.o gs2_time.o
 antenna.o: kt_grids.o theta_grid.o ran.o constants.o 
 gs2_layouts.o: mp.o file_utils.o
@@ -528,7 +534,8 @@ gs2_reinit.o: init_g.o run_parameters.o gs2_save.o dist_fn_arrays.o fields_array
 gs2_reinit.o: file_utils.o antenna.o  #additional_terms.o
 redistribute.o: mp.o
 gs2_io.o: mp.o file_utils.o netcdf_mod.o kt_grids.o theta_grid.o le_grids.o \
-	species.o run_parameters.o convert.o fields_arrays.o nonlinear_terms.o 
+	species.o run_parameters.o convert.o fields_arrays.o \
+	nonlinear_terms.o gs2_layouts.o constants.o gs2_transforms.o
 check.o: mp.o file_utils.o run_parameters.o 
 netcdf_mod.o: mp.o constants.o
 ingen.o: file_utils.o

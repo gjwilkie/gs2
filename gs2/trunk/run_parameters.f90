@@ -7,6 +7,7 @@ module run_parameters
   public :: fphi, fapar, faperp
   public :: delt, delt_max, wunits, woutunits, tunits, funits, tnorm
   public :: nstep, wstar_units, eqzip, margin
+  public :: secondary, tertiary
 
   private
 
@@ -16,6 +17,7 @@ module run_parameters
   real, dimension (:), allocatable :: wunits, woutunits, tunits
   integer :: nstep
   logical :: wstar_units, eqzip
+  logical :: secondary, tertiary
 
   integer :: delt_option_switch
   integer, parameter :: delt_option_hand = 1, delt_option_auto = 2
@@ -63,7 +65,7 @@ contains
     logical :: exist
     namelist /parameters/ beta, zeff, tite, rhostar, teti
     namelist /knobs/ fphi, fapar, faperp, delt, nstep, wstar_units, eqzip, &
-         delt_option, margin
+         delt_option, margin, secondary, tertiary
 
     if (proc0) then
        beta = 0.0
@@ -73,6 +75,8 @@ contains
        rhostar = 0.1
        wstar_units = .false.
        eqzip = .false.
+       secondary = .true.
+       tertiary = .false.
        delt_option = 'default'
        margin = 0.05
        in_file = input_unit_exist("parameters", exist)
@@ -82,6 +86,15 @@ contains
        if (exist) read (unit=input_unit("knobs"), nml=knobs)
 
        if (teti /= -100.0) tite = teti
+
+       if (eqzip) then
+          if (secondary .and. tertiary) then
+             ierr = error_unit()
+             write (ierr, *) 'Forcing secondary = FALSE'
+             write (ierr, *) 'because you have chosen tertiary = TRUE'
+             secondary = .false.
+          end if
+       end if
 
        ierr = error_unit()
        call get_option_value &
@@ -101,6 +114,8 @@ contains
     call broadcast (nstep)
     call broadcast (wstar_units)
     call broadcast (eqzip)
+    call broadcast (secondary)
+    call broadcast (tertiary)
     call broadcast (margin)
     delt_max = delt
 

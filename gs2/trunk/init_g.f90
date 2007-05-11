@@ -108,11 +108,11 @@ contains
     case (ginitopt_nl4)
 ! in an old version, this line was commented out.  Thus, to recover some old
 ! results, you might need to comment out this line and...
-       t0 = tstart
-       call init_tstart (tstart, istatus)
+!       t0 = tstart
        call ginit_nl4
+       call init_tstart (tstart, istatus)
 ! this line:
-       tstart = t0
+!       tstart = t0
        restarted = .true.
        scale = 1.
     case (ginitopt_nl5)
@@ -355,8 +355,64 @@ contains
     gnew = g
   end subroutine ginit_kz0
 
+!  subroutine ginit_noise
+!    use species, only: spec
+!    use theta_grid, only: ntgrid 
+!    use kt_grids, only: naky, ntheta0, aky, reality
+!    use le_grids, only: forbid
+!    use dist_fn_arrays, only: g, gnew
+!    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+!    use ran
+!    implicit none
+!    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
+!    real :: a, b
+!    integer :: iglo
+!    integer :: ig, ik, it, il, is
+!
+!! keep old (it, ik) loop order to get old results exactly: 
+!    do it = 1, ntheta0
+!       do ik = 1, naky
+!          do ig = -ntgrid, ntgrid
+!             a = ranf()-0.5
+!             b = ranf()-0.5
+!!             phi(:,it,ik) = cmplx(a,b)
+!             phi(ig,it,ik) = cmplx(a,b)
+!          end do
+!          if (chop_side) then
+!             if (left) then
+!                phi(:-1,it,ik) = 0.0
+!             else
+!                phi(1:,it,ik) = 0.0
+!             end if
+!          end if
+!       end do
+!    end do
+!
+!    if (naky > 1 .and. aky(1) == 0.0) then
+!       phi(:,:,1) = phi(:,:,1)*zf_init
+!    end if
+!! reality condition for k_theta = 0 component:
+!    if (reality) then
+!       do it = 1, ntheta0/2
+!          phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
+!       enddo
+!    end if
+!       
+!
+!    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!       ik = ik_idx(g_lo,iglo)
+!       it = it_idx(g_lo,iglo)
+!       il = il_idx(g_lo,iglo)
+!       is = is_idx(g_lo,iglo)
+!       g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit
+!       where (forbid(:,il)) g(:,1,iglo) = 0.0
+!       g(:,2,iglo) = g(:,1,iglo)
+!    end do
+!    gnew = g
+!  end subroutine ginit_noise
+  
   subroutine ginit_noise
-    use species, only: spec
+    use species, only: spec, tracer_species
     use theta_grid, only: ntgrid 
     use kt_grids, only: naky, ntheta0, aky, reality
     use le_grids, only: forbid
@@ -364,10 +420,17 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use ran
     implicit none
-    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
     real :: a, b
     integer :: iglo
-    integer :: ig, ik, it, il, is
+    integer :: ig, ik, it, il, is, nn
+
+    phit = 0.
+    do it=2,ntheta0/2+1
+       nn = it-1
+! extra factor of 4 to reduce the high k wiggles for now
+       phit (:, it, 1) = (-1)**nn*exp(-8.*(real(nn)/ntheta0)**2)
+    end do
 
 ! keep old (it, ik) loop order to get old results exactly: 
     do it = 1, ntheta0
@@ -377,7 +440,7 @@ contains
              b = ranf()-0.5
 !             phi(:,it,ik) = cmplx(a,b)
              phi(ig,it,ik) = cmplx(a,b)
-          end do
+           end do
           if (chop_side) then
              if (left) then
                 phi(:-1,it,ik) = 0.0
@@ -395,20 +458,25 @@ contains
     if (reality) then
        do it = 1, ntheta0/2
           phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
+          phit(:,it+(ntheta0+1)/2,1) = conjg(phit(:,(ntheta0+1)/2+1-it,1))
        enddo
     end if
        
-
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit
+       if (spec(is)%type == tracer_species) then          
+          g(:,1,iglo) =-phit(:,it,ik)*spec(is)%z*phiinit
+       else
+          g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit
+       end if
        where (forbid(:,il)) g(:,1,iglo) = 0.0
        g(:,2,iglo) = g(:,1,iglo)
     end do
     gnew = g
+
   end subroutine ginit_noise
   
   subroutine ginit_nl
@@ -875,32 +943,44 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if ((it == 2 .or. it == ntheta0) .and. ik == 1) cycle
+!       if ((it == 2 .or. it == ntheta0) .and. ik == 1) cycle
 !       if (ik == 1) cycle
-!       if (it == 1 .and. ik == 2) cycle
+       if (it == 1 .and. ik == 2) cycle
 
        g (:,1,iglo) = 0.
        g (:,2,iglo) = 0.
     end do
 
-    do ik = 1, naky
-       if (ik /= 2) then
-          phinew(:,:,ik) = 0.
-          aparnew(:,:,ik) = 0.
-          aperpnew(:,:,ik) = 0.
-          phi(:,:,ik) = 0.
-          apar(:,:,ik) = 0.
-          aperp(:,:,ik) = 0.
-       else
-          phinew(:,2:ntheta0,ik) = 0.
-          aparnew(:,2:ntheta0,ik) = 0.
-          aperpnew(:,2:ntheta0,ik) = 0.
-          phi(:,2:ntheta0,ik) = 0.
-          apar(:,2:ntheta0,ik) = 0.
-          aperp(:,2:ntheta0,ik) = 0.
-       end if
-    end do
+!    do ik = 1, naky
+!       if (ik /= 2) then
+!          phinew(:,:,ik) = 0.
+!          aparnew(:,:,ik) = 0.
+!          aperpnew(:,:,ik) = 0.
+!          phi(:,:,ik) = 0.
+!          apar(:,:,ik) = 0.
+!          aperp(:,:,ik) = 0.
+!       else
+!          phinew(:,2:ntheta0,ik) = 0.
+!          aparnew(:,2:ntheta0,ik) = 0.
+!          aperpnew(:,2:ntheta0,ik) = 0.
+!          phi(:,2:ntheta0,ik) = 0.
+!          apar(:,2:ntheta0,ik) = 0.
+!          aperp(:,2:ntheta0,ik) = 0.
+!       end if
+!    end do
 
+    do ik = 1, naky
+       do it=1,ntheta0
+          if (it == 1 .and. ik == 2) cycle
+          phinew(:,it,ik) = 0.
+          aparnew(:,it,ik) = 0.
+          aperpnew(:,it,ik) = 0.
+          phi(:,it,ik) = 0.
+          apar(:,it,ik) = 0.
+          aperp(:,it,ik) = 0.          
+       end do
+    end do
+    
     do ik = 1, naky
        do it = 1, ntheta0
           do ig = -ntgrid, ntgrid

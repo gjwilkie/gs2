@@ -38,7 +38,6 @@ module gs2_diagnostics
 
   integer :: out_unit, kp_unit
   integer :: dump_neoclassical_flux_unit, dump_check1_unit, dump_check2_unit
-  integer :: dump_3Dfields_x_unit, dump_3Dfields_k_unit  
 
   complex, dimension (:,:,:), allocatable :: omegahist
   real, dimension (:,:,:), allocatable :: hratehist
@@ -63,21 +62,21 @@ module gs2_diagnostics
 
 contains
 
-  subroutine init_gs2_diagnostics (list)
+  subroutine init_gs2_diagnostics (list, nstep)
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use run_parameters, only: init_run_parameters
     use species, only: init_species
     use dist_fn, only: init_dist_fn
     use dist_fn, only: init_intcheck, init_vortcheck, init_fieldcheck
-    use collisions, only: init_collisional_heating
     use gs2_flux, only: init_gs2_flux
     use gs2_io, only: init_gs2_io
     use mp, only: broadcast
     implicit none
     logical, intent (in) :: list
+    integer, intent (in) :: nstep
     real :: denom
-    integer :: ik, it
+    integer :: ik, it, nmovie_tot
 
     if (initialized) return
     initialized = .true.
@@ -126,10 +125,10 @@ contains
     call broadcast (write_hrate)
     call broadcast (write_lorentzian)
     
-    call init_gs2_io (write_nl_flux, write_omega, write_stress, &
-         write_fieldline_avg_phi, write_hrate)
+    nmovie_tot = nstep/nmovie
 
-!    if (write_hrate) call init_collisional_heating 
+    call init_gs2_io (write_nl_flux, write_omega, write_stress, &
+         write_fieldline_avg_phi, write_hrate, make_movie, nmovie_tot)
     
   end subroutine init_gs2_diagnostics
 
@@ -159,72 +158,6 @@ contains
                status="unknown")
        end if
        
-       ! added by EAB on 10/16/03 for dumping fields(x,y,theta) vs. t and (kx,ky,theta) vs. t
-       if (make_movie) then
-          call get_unused_unit (dump_3Dfields_k_unit)
-          open (unit=dump_3Dfields_k_unit, file="dump.fields.k", &
-             status="unknown")
-          write (dump_3Dfields_k_unit, *) 'fields in (kx, ky, theta) space'
-          write (dump_3Dfields_k_unit, "()")
-          write (dump_3Dfields_k_unit, *) & 
-               'dimensions: nkx = ',  ntheta0, ', naky = ',  naky, ', ntheta = ', 2*ntgrid+1
-          write (dump_3Dfields_k_unit, "()")
-          write (dump_3Dfields_k_unit, *) &
-               'output: phi_r  phi_i  apar_r  apar_i  aperp_r  aperp_i'
-          write (dump_3Dfields_k_unit, "()")
-
-          write (dump_3Dfields_k_unit, *) 'kx:'
-          do it = 1, ntheta0
-             write (dump_3Dfields_k_unit, "((1x,e12.5))") akx_out(it)
-          end do
-          write (dump_3Dfields_k_unit, "()")
-          write (dump_3Dfields_k_unit, *) 'ky:'
-          do ik = 1, naky
-             write (dump_3Dfields_k_unit, "((1x,e12.5))") aky_out(ik)
-          end do              
-          write (dump_3Dfields_k_unit, "()")
-          write (dump_3Dfields_k_unit, *) 'theta:'
-          do ig = -ntg_out, ntg_out
-             write (dump_3Dfields_k_unit, "((1x,e12.5))") theta(ig)
-          end do
-          write (dump_3Dfields_k_unit, "()")
-
-          call get_unused_unit (dump_3Dfields_x_unit)
-          open (unit=dump_3Dfields_x_unit, file="dump.fields.x", &
-             status="unknown")
-          write (dump_3Dfields_x_unit, *) 'fields in (x, y, theta) space'
-          write (dump_3Dfields_x_unit, "()")
-          write (dump_3Dfields_x_unit, *) & 
-               'dimensions: nx = ',  yxf_lo%nx, ', ny = ',  yxf_lo%ny, ', ntheta = ', 2*ntgrid+1
-          write (dump_3Dfields_x_unit, "()")
-          write (dump_3Dfields_x_unit, *) 'output: phi   apar   aperp'
-          write (dump_3Dfields_x_unit, "()")
-          
-          write (dump_3Dfields_x_unit, *) 'x:'
-          do it = 1, yxf_lo%nx 
-             write (dump_3Dfields_x_unit, "((1x,e12.5))") & 
-                  2.0*pi/akx_out(2)*real(it-1-yxf_lo%nx/2)/real(yxf_lo%nx)
-             write(*,*) "x coordinates", &
-                  2.0*pi/akx_out(2)*real(it-1-yxf_lo%nx/2)/real(yxf_lo%nx)
-          end do
-          write (dump_3Dfields_x_unit, "()")
-          write (dump_3Dfields_x_unit, *) 'y:'
-          do ik = 1, yxf_lo%ny
-             write (dump_3Dfields_x_unit, "((1x,e12.5))") &
-                  2.0*pi/aky_out(2)*real(ik-1-yxf_lo%ny/2)/real(yxf_lo%ny)
-             write(*,*) "y coordinates", &
-                  2.0*pi/aky_out(2)*real(ik-1-yxf_lo%ny/2)/real(yxf_lo%ny)
-          end do 
-          write (dump_3Dfields_x_unit, "()")
-          write (dump_3Dfields_x_unit, *) 'theta:'
-          do ig = -ntg_out, ntg_out
-             write (dump_3Dfields_x_unit, "((1x,e12.5))") theta(ig)
-          end do
-          write (dump_3Dfields_x_unit, "()")
-
-       end if
-
-
        if (dump_check1) then
           call get_unused_unit (dump_check1_unit)
           open (unit=dump_check1_unit, file="dump.check1", status="unknown")
@@ -249,8 +182,8 @@ contains
        omegahist = 0.0
     end if
 
-    allocate (hratehist(nspec, 2, 0:navg-1));  hratehist = 0.0
-    allocate (hkratehist(ntheta0, naky, nspec, 2, 0:navg-1));  hkratehist = 0.0
+    allocate (hratehist(nspec, 3, 0:navg-1));  hratehist = 0.0
+    allocate (hkratehist(ntheta0, naky, nspec, 3, 0:navg-1));  hkratehist = 0.0
 
     allocate (pflux (ntheta0,naky,nspec))
     allocate (qheat (ntheta0,naky,nspec,3))
@@ -457,12 +390,6 @@ contains
     if (proc0) then
        if (write_ascii) call close_output_file (out_unit)
        if (dump_neoclassical_flux) close (dump_neoclassical_flux_unit)
-
-       if (make_movie) then
-          close(dump_3Dfields_k_unit)
-          close(dump_3Dfields_x_unit)
-       end if
-
 
        if (dump_check1) close (dump_check1_unit)
        if (dump_check2) call close_output_file (dump_check2_unit)
@@ -1191,6 +1118,7 @@ contains
     use gs2_time, only: update_time => update, stime
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
     use gs2_io, only: nc_loop_stress
+    use gs2_io, only: nc_loop_movie
     use gs2_layouts, only: yxf_lo
     use gs2_transforms, only: init_transforms, transform2
     use le_grids, only: nlambda
@@ -1200,14 +1128,15 @@ contains
     use constants
     implicit none
     integer :: nout = 1
+    integer :: nout_movie = 1
     integer, intent (in) :: istep
     logical, intent (out) :: exit
     logical :: accelerated
     real, dimension(:,:,:), allocatable :: yxphi, yxapar, yxaperp
     complex, dimension (ntheta0, naky) :: omega, omegaavg
-    real, dimension (nspec, 2) :: hrateavg
+    real, dimension (nspec, 3) :: hrateavg
     real, dimension (ntheta0, naky) :: phitot, akperp
-    real, dimension (ntheta0, naky, nspec, 2) :: rate_by_k
+    real, dimension (ntheta0, naky, nspec, 3) :: rate_by_k
     complex, dimension (ntheta0, naky, nspec) :: pfluxneo,qfluxneo
     real :: phi2, apar2, aperp2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, aperp2_by_mode
@@ -1226,6 +1155,7 @@ contains
     complex :: wtmp_old = 0.
     real, dimension (:), allocatable :: dl_over_b
     real, dimension (2*ntgrid) :: kpar
+    real, dimension (ntheta0, nspec) :: x_qmflux
     real, dimension (nspec) ::  heat_fluxes,  part_fluxes, mom_fluxes,  ntot2
     real, dimension (nspec) :: mheat_fluxes, mpart_fluxes, mmom_fluxes
     real, dimension (nspec) :: bheat_fluxes, bpart_fluxes, bmom_fluxes
@@ -1247,14 +1177,41 @@ contains
     rate_by_k = 0.
     if (write_hrate) then
        call heating (istep, hrateavg, rate_by_k)
-!       do is=1,nspec
-!          hrateavg(is) = hrateavg(is)*spec(is)%temp
-!       end do
     end if
 
     call prof_leaving ("loop_diagnostics")
 
     call update_time (delt)
+
+    if (make_movie .and. mod(istep,nmovie)==0) then
+       t = stime()/tnorm    
+       ! EAB 09/17/03 -- modify dump_fields_periodically to print out inverse fft of fields in x,y
+       ! write(*,*) "iproc now in dump_fields_periodically case", iproc 
+       nnx = yxf_lo%nx
+       nny = yxf_lo%ny
+       if (fphi > epsilon(0.0)) then
+          allocate (yxphi(nnx,nny,-ntgrid:ntgrid))
+          call transform2 (phinew, yxphi, nny, nnx)
+       end if
+       if (fapar > epsilon(0.0)) then
+          allocate (yxapar(nnx,nny,-ntgrid:ntgrid))
+          call transform2 (aparnew, yxapar, nny, nnx)
+       end if
+       if (faperp > epsilon(0.0)) then 
+          allocate (yxaperp(nnx,nny,-ntgrid:ntgrid))
+          call transform2 (aperpnew, yxaperp, nny, nnx)
+       end if
+
+       if (proc0) then
+          call nc_loop_movie(nout_movie, t, yxphi, yxapar, yxaperp)
+       end if
+
+       if (fphi > epsilon(0.0)) deallocate (yxphi)
+       if (fapar > epsilon(0.0)) deallocate (yxapar)
+       if (faperp > epsilon(0.0)) deallocate (yxaperp)
+       nout_movie = nout_movie + 1
+
+    end if
 
     if (mod(istep,nwrite) /= 0 .and. .not. exit) return
     t = stime()/tnorm
@@ -1334,6 +1291,8 @@ contains
                 qmheat(:,:,is,1)=qmheat(:,:,is,1)*anorm*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qmheat(:,:,is,1), mheat_fluxes(is))
+
+                call get_surf_average (qmheat(:,:,is,1), x_qmflux(:,is))
 
                 qmheat(:,:,is,2)=qmheat(:,:,is,2)*anorm*funits &
                      *spec(is)%dens*spec(is)%temp
@@ -1489,7 +1448,7 @@ contains
     if (proc0 .and. write_any) then
        if (write_ascii) write (unit=out_unit, fmt=*) 'time=', t
        if (write_ascii .and. write_hrate) then
-          write (unit=out_unit, fmt="('t= ',e16.10,' heating_rate= ',4(1x,e16.10))") t, hrateavg
+          write (unit=out_unit, fmt="('t= ',e16.10,' heating_rate= ',6(1x,e16.10))") t, hrateavg
           do is = 1, nspec
              do ik=1,naky
                 do it=1,ntheta0
@@ -1556,7 +1515,7 @@ contains
              call nc_qflux (nout, qheat(:,:,:,1), qmheat(:,:,:,1), qbheat(:,:,:,1), &
                   heat_par, mheat_par, bheat_par, &
                   heat_perp, mheat_perp, bheat_perp, &
-                  heat_fluxes, mheat_fluxes, bheat_fluxes, hflux_tot, anorm)
+                  heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot, anorm)
 !          call nc_qflux (nout, qheat, qmheat, qbheat, &
 !               heat_par, mheat_par, bheat_par, &
 !               heat_perp, mheat_perp, bheat_perp, &
@@ -1756,96 +1715,6 @@ contains
        close (unit=unit)
     end if
     
-    if (make_movie .and. mod(istep,nmovie)==0) then
-       
-       ! EAB fudge case for fftw testing for single processor
-       ! do ik = 1, naky
-       !   do it = 1, ntheta0
-       !      do ig = -ntg_out, ntg_out
-       !         if (ig == 2 .and. (it == 2 .or. it == ntheta0) .and. ik == 2) then
-       !            print *, "nonzero theta, aky, and akx", theta(ig), aky_out(ik), akx_out(it) 
-       !            phinew(ig,it,ik) = 1.0
-       !         else
-       !            phinew(ig,it,ik) = 0.0
-       !         end if  
-       !      end do
-       !   end do
-       ! end do
-       
-       if (proc0) then
-          write (dump_3Dfields_k_unit, *) 't = ', t
-          write (dump_3Dfields_k_unit, "()")
-          do ig = -ntg_out, ntg_out
-             do ik = 1, naky
-                do it = 1, ntheta0  
-                   if (fapar > epsilon(0.0) .or. faperp > epsilon(0.0)) then
-                      write (dump_3Dfields_k_unit, "(10(1x,e12.5))") &
-                           phinew(ig,it,ik), aparnew(ig,it,ik), aperpnew(ig,it,ik)
-                   else
-                      write (dump_3Dfields_k_unit, "(4(1x,e12.5))") &
-                           phinew(ig,it,ik)
-                   end if
-!                      write (dump_3Dfields_k_unit, "(20(1x,e12.5))") &
-!                           theta(ig), &
-!                           akx_out(it), theta0(it,ik), aky_out(ik), &
-!                           phinew(ig,it,ik), aparnew(ig,it,ik), &
-!                           aperpnew(ig,it,ik)
-                end do
-             end do
-          end do
-          write (dump_3Dfields_k_unit, "()")
-       end if
-
-!         EAB 09/17/03 -- modify dump_fields_periodically to print out inverse fft of fields in x,y
-!         write(*,*) "iproc now in dump_fields_periodically case", iproc 
-       nnx = yxf_lo%nx
-       nny = yxf_lo%ny
-       if (fphi > epsilon(0.0)) then
-          allocate (yxphi(nnx,nny,-ntgrid:ntgrid))
-          call transform2 (phinew, yxphi, nny, nnx)
-       end if
-       if (fapar > epsilon(0.0)) then
-          allocate (yxapar(nnx,nny,-ntgrid:ntgrid))
-          call transform2 (aparnew, yxapar, nny, nnx)
-       end if
-       if (faperp > epsilon(0.0)) then 
-          allocate (yxaperp(nnx,nny,-ntgrid:ntgrid))
-          call transform2 (aperpnew, yxaperp, nny, nnx)
-       end if
-       
-       if (proc0) then
-          write (dump_3Dfields_x_unit, *) 't = ', t
-          write (dump_3Dfields_x_unit, "()")
-          do ig = -ntg_out, ntg_out      
-             do ik = 1, yxf_lo%ny
-                do it = 1, yxf_lo%nx
-
-                   if (fphi > epsilon(0.) .and. fapar == 0. .and. faperp == 0) then
-                      write (dump_3Dfields_x_unit, "((1x,e12.5))") &
-                           yxphi(it,ik,ig)
-
-                   elseif (fphi> epsilon(0.) .and. fapar > epsilon(0.) .and. faperp == 0) then
-                      write (dump_3Dfields_x_unit, "(3(1x,e12.5))") &
-                           yxphi(it,ik,ig), yxapar(it,ik,ig)
-
-                   elseif (fphi> epsilon(0.) .and. fapar > epsilon(0.) .and. faperp > epsilon(0.)) then
-                      write (dump_3Dfields_x_unit, "(3(1x,e12.5))") &
-                           yxphi(it,ik,ig), yxapar(it,ik,ig), yxaperp(it,ik,ig)
-
-                   end if
-
-                end do
-             end do
-          end do
-          write (dump_3Dfields_x_unit, "()")
-          close (dump_3Dfields_x_unit)
-          open (dump_3Dfields_x_unit, file="dump.fields.x",status="old",action="write")!,access="append")
-       end if
-       if (fphi > epsilon(0.0)) deallocate (yxphi)
-       if (fapar > epsilon(0.0)) deallocate (yxapar)
-       if (faperp > epsilon(0.0)) deallocate (yxaperp)
-    end if
-       
     nout = nout + 1
     if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) &
          call flush_output_file (out_unit, ".out")
@@ -1858,8 +1727,8 @@ contains
     use mp, only: proc0, iproc
     use dist_fn, only: get_heat
     use fields, only: phi, apar, aperp, phinew, aparnew, aperpnew
-!    use collisions, only: cheating
-    use species, only: nspec
+    use collisions, only: cheating
+    use species, only: nspec, spec
     use kt_grids, only: naky, ntheta0, aky
     use theta_grid, only: ntgrid, delthet, jacob
     use antenna, only: amplitude
@@ -1873,29 +1742,41 @@ contains
     real :: fac
     integer :: is, ik, it, ig
     
-!    allocate (rate(-ntgrid:ntgrid, ntheta0, naky, nspec))
-!    call cheating (rate)
+    allocate (rate(-ntgrid:ntgrid, ntheta0, naky, nspec))
+    call cheating (rate)
 
-!    if (proc0) then
-!       wgt = delthet*jacob
-!       wgt = wgt/sum(wgt)
-!       
-!       hrateavg = 0.
-!       
-!       do is = 1, nspec
-!          do ik = 1, naky
-!             fac = 0.5
-!             if (aky(ik) < epsilon(0.)) fac = 1.0
-!             do it = 1, ntheta0
-!                do ig = -ntgrid, ntgrid
-!                   hrateavg(is) = hrateavg(is) + rate(ig,it,ik,is)*fac*wgt(ig)
-!                end do
-!             end do
-!          end do
-!       end do
-!    end if
-!       
-!    deallocate (rate)
+    if (proc0) then
+       
+! Put in factor of temperature for collisional heating rate:
+       do is = 1,nspec
+          do ik=1,naky
+             do it=1,ntheta0
+                do ig=-ntgrid,ntgrid
+                   rate(ig,it,ik,is) = rate(ig,it,ik,is)*spec(is)%temp
+                end do
+             end do
+          end do
+       end do
+
+       wgt = delthet*jacob
+       wgt = wgt/sum(wgt)
+       
+       hrateavg(:,3) = 0.0
+       
+       do is = 1, nspec
+          do ik = 1, naky
+             fac = 0.5
+             if (aky(ik) < epsilon(0.)) fac = 1.0
+             do it = 1, ntheta0
+                do ig = -ntgrid, ntgrid
+                   hrateavg(is,3) = hrateavg(is,3) + rate(ig,it,ik,is)*fac*wgt(ig)
+                end do
+             end do
+          end do
+       end do
+    end if
+       
+    deallocate (rate)
 
     call get_heat (hrateavg, rate_by_k, phi, apar, aperp, phinew, aparnew, aperpnew)    
     if (proc0) then
@@ -2019,5 +1900,28 @@ contains
 !    fac(1) = 1.0
 
   end subroutine get_volume_average
+
+  subroutine get_surf_average (f, favg)
+    use mp, only: iproc
+    use kt_grids, only: naky, ntheta0, aky
+    implicit none
+    real, dimension (:,:), intent (in) :: f
+    real, dimension (:), intent (out) :: favg
+    real :: fac
+    integer :: ik, it
+
+! ky=0 modes have correct amplitudes; rest must be scaled
+! note contrast with scaling factors in FFT routines.
+
+    favg = 0.
+    do ik = 1, naky
+       fac = 0.5
+       if (aky(ik) == 0.) fac = 1.0
+       do it = 1, ntheta0
+          favg(it) = favg(it) + f(it, ik) * fac
+       end do
+    end do
+
+  end subroutine get_surf_average
 
 end module gs2_diagnostics

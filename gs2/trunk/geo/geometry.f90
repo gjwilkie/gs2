@@ -28,7 +28,8 @@ module geometry
 
   real, dimension(3) :: rpval
   real :: rpmin, rpmax, ak0
-  
+  real :: s_hat_new
+
   integer :: isym, ismooth, k1, k2, big
   integer :: eqinit = 1
   
@@ -185,7 +186,7 @@ contains
     real :: pi, bi, Ltot, rinv
 
     real :: a_b, b_b, c_b
-    real :: s_hat_new, s_hat, dp, di, pressure, tmp
+    real :: s_hat, dp, di, pressure, tmp
 
     character*1 :: char
     integer :: i, j, k, itot, nthg, n
@@ -532,7 +533,7 @@ contains
           if(writelots) write(*,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
        case (8)
           s_hat_new = s_hat_input
-          dp_new = dp * dp_mult
+          dp_new = 0.5*beta_prime_input*drhodpsi * dp_mult
           di_new = (s_hat_new/tmp -2*c_b -dp_new*b_b) / a_b
           write(11,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
           if(writelots) write(*,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
@@ -603,6 +604,8 @@ contains
           enddo
        endif
     
+       s_hat_new = shat
+
        rpval(1)=rp
        rpval(2)=rp1
        rpval(3)=rp2

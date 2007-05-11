@@ -69,7 +69,7 @@ program ingen
 
 ! collisions: 
   integer :: collision_model_switch
-  real :: vncoef, absom
+  real :: vncoef, absom, cfac
   integer :: ivnew
   character (20) :: collision_model
   logical :: conserve_number, conserve_momentum, use_shmem, hypercoll
@@ -322,7 +322,7 @@ program ingen
   real :: fphi, fapar, faperp
   real :: delt, margin
   integer :: nstep
-  logical :: wstar_units, eqzip
+  logical :: wstar_units, eqzip, secondary, tertiary
   integer :: delt_option_switch
   integer, parameter :: delt_option_hand = 1, delt_option_auto = 2
   type (text_option), dimension (3), parameter :: deltopts = &
@@ -376,6 +376,7 @@ program ingen
   integer :: itor, iflux, irho, bishop, ismooth, isym
   logical :: ppl_eq, gen_eq, vmom_eq, efit_eq, dfit_eq, equal_arc, idfit_eq
   logical :: local_eq, writelots, gs2d_eq, test_le, transp_eq
+  logical :: gb_to_cv
   character (80) :: eqfile
   character (200) :: gridout_file
   character (20) :: equilibrium_option
@@ -462,7 +463,7 @@ program ingen
 
 ! collisions: 
   namelist /collisions_knobs/ collision_model, vncoef, absom, ivnew, &
-       conserve_number, conserve_momentum, use_shmem, hypercoll
+       conserve_number, conserve_momentum, use_shmem, hypercoll, cfac
 
 ! init_g:
   namelist /init_g_knobs/ ginit_option, width0, phiinit, k0, chop_side, &
@@ -543,7 +544,7 @@ program ingen
   namelist /parameters/ beta, zeff, tite, rhostar, teti
 
   namelist /knobs/ fphi, fapar, faperp, delt, nstep, wstar_units, eqzip, &
-       delt_option, margin
+       delt_option, margin, secondary, tertiary
 
 ! species 
   namelist /species_knobs/ nspec
@@ -568,7 +569,7 @@ program ingen
 
   namelist /theta_grid_file_knobs/ gridout_file
 
-  namelist /theta_grid_knobs/ equilibrium_option
+  namelist /theta_grid_knobs/ equilibrium_option, gb_to_cv
 
   namelist /ingen_knobs/ ncut, scan, stdin
 
@@ -1159,7 +1160,7 @@ contains
     logical :: list
     call init_file_utils (list, name="template")
 
-    ncut = 100000
+    ncut= 100000
     scan = .false.
     stdin = .true.
     pythonin = "."//trim(run_name)//".pythonin"
@@ -1243,6 +1244,7 @@ contains
 
     ! collisions: 
     collision_model = 'default'
+    cfac = 0.
     vncoef = 0.6
     absom = 0.5
     ivnew = 0
@@ -1525,6 +1527,8 @@ contains
     rhostar = 0.1
     wstar_units = .false.
     eqzip = .false.
+    secondary = .true.
+    tertiary = .false.
     delt_option = 'default'
     margin = 0.05
 
@@ -1539,6 +1543,8 @@ contains
        read (unit=input_unit("knobs"), nml=knobs)
        knobs_write = .true.
     end if
+
+    if (secondary .and. tertiary) secondary = .false.
 
     if (teti /= -100.0) tite = teti
 
@@ -1584,6 +1590,7 @@ contains
             ierr, "type in species_parameters_x")
     end do
 
+    gb_to_cv = .false.
     equilibrium_option = 'default'
     in_file= input_unit_exist("theta_grid_knobs", exist)
     if (exist) then
@@ -1725,6 +1732,7 @@ contains
     def_parity = .false.
     even = .true.
     source_option = 'default'
+    nperiod_guard = 0
 
     in_file= input_unit_exist("dist_fn_knobs", exist)
     if (exist) then
@@ -1917,6 +1925,7 @@ contains
           write (unit, fmt="(' collision_model = ',a)") '"collisionless"'
        end select
        write (unit, fmt="(' vncoef = ',f5.3)") vncoef
+       write (unit, fmt="(' cfac = ',f5.3)") cfac
        write (unit, fmt="(' /')")
     end if
 
@@ -2476,7 +2485,11 @@ contains
        write (unit, fmt="(' delt = ',e16.10)") delt
        write (unit, fmt="(' nstep = ',i8)") nstep
        write (unit, fmt="(' wstar_units = ',L1)") wstar_units
-       if (eqzip) write (unit, fmt="(' eqzip = ',L1)") eqzip
+       if (eqzip) then
+          write (unit, fmt="(' eqzip = ',L1)") eqzip
+          write (unit, fmt="(' secondary = ',L1)") secondary
+          write (unit, fmt="(' tertiary = ',L1)") tertiary
+       end if
        write (unit, fmt="(' margin = ',e16.10)") margin
        select case (delt_option_switch)
        case (delt_option_auto)
@@ -2542,6 +2555,7 @@ contains
           write (unit, fmt="(a)") ' equilibrium_option = "file"'
 
        end select
+       write (unit, fmt="(' gb_to_cv = ',L1)") gb_to_cv
        write (unit, fmt="(' /')")
     end if
 
@@ -2965,7 +2979,8 @@ contains
 
      if (le_ok) then
         if (.not. advanced_egrid) negrid = nesub + nesuper
-        if (eps > epsilon(0.0)) then
+!        if (eps > epsilon(0.0)) then
+        if (trapped_particles) then
            nlambda = 2*ngauss + nbset
         else
            nlambda = 2*ngauss
@@ -3572,6 +3587,20 @@ contains
 
      end select
 
+     if (gb_to_cv) then
+        write (report_unit, *) 'The grad B drift coefficients have been set equal to the'
+        write (report_unit, *) 'values for the curvature drift coefficients.  Do not use'
+        write (report_unit, *) 'faperp = 1.0 in this case.'
+        write (report_unit, *)
+        write (report_unit, *) 'You got this option by setting gb_to_cv = .true.'
+        write (report_unit, *) 
+        write (report_unit, fmt="('################# WARNING #######################')")
+        write (report_unit, fmt="('You have chosen to set the grad B drift equal to the curvature drift.')")
+        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+        write (report_unit, fmt="('################# WARNING #######################')")
+        write (report_unit, *) 
+     end if
+
      write (report_unit, *) 
      write (report_unit, fmt="('------------------------------------------------------------')")
      write (report_unit, *) 
@@ -4034,7 +4063,7 @@ contains
 
     if (make_movie) then
        write (report_unit, *) 
-       write (report_unit, fmt="('Movie data will be written to dump.fields.x every ',i4,' timesteps.')") nmovie
+       write (report_unit, fmt="('Movie data will be written to runname.movie.nc every ',i4,' timesteps.')") nmovie
        write (report_unit, *) 
     end if
 
@@ -4702,6 +4731,8 @@ contains
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, *) 
+       if (secondary) write (report_unit, fmt="('Mode with kx = 0, ky = ky_min fixed in time')")
+       if (tertiary)  write (report_unit, fmt="('Mode with ky = 0, kx = kx_min fixed in time')")
     end if
 
 ! diagnostic controls:
