@@ -18,7 +18,7 @@ module init_g
        ginitopt_nl2 = 16, ginitopt_nl3 = 17, ginitopt_nl4 = 18, & 
        ginitopt_nl5 = 19, ginitopt_alf = 20, ginitopt_kpar = 21, &
        ginitopt_nl6 = 22, ginitopt_nl7 = 23, ginitopt_gs = 24, ginitopt_recon = 25, &
-       ginitopt_nl3r = 26, ginitopt_smallflat = 27
+       ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_recon2 = 28
   real :: width0, dphiinit, phiinit, k0, imfac, refac, zf_init
   real :: den0, upar0, tpar0, tperp0
   real :: den1, upar1, tpar1, tperp1
@@ -27,6 +27,7 @@ module init_g
   logical :: chop_side, left, even
   character(300) :: restart_file
   integer, dimension(2) :: ikk, itt
+  integer, dimension(3) :: ikkk, ittt
   
 contains
 
@@ -72,6 +73,8 @@ contains
     call broadcast (restart_file)
     call broadcast (ikk)
     call broadcast (itt) 
+    call broadcast (ikkk)
+    call broadcast (ittt) 
     call broadcast (scale)
 
     call init_save (restart_file)
@@ -126,6 +129,13 @@ contains
        t0 = tstart
        call init_tstart (tstart, istatus)
        call ginit_recon
+       tstart = t0
+       restarted = .true.
+       scale = 1.
+    case (ginitopt_recon2)
+       t0 = tstart
+       call init_tstart (tstart, istatus)
+       call ginit_recon2
        tstart = t0
        restarted = .true.
        scale = 1.
@@ -185,7 +195,7 @@ contains
     use text_options
     implicit none
 
-    type (text_option), dimension (27), parameter :: ginitopts = &
+    type (text_option), dimension (28), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
             text_option('test1', ginitopt_test1), &
@@ -212,13 +222,14 @@ contains
             text_option('gs', ginitopt_gs), &
             text_option('kpar', ginitopt_kpar), &
             text_option('smallflat', ginitopt_smallflat), &
-            text_option('recon', ginitopt_recon) /)
+            text_option('recon', ginitopt_recon), &
+            text_option('recon2', ginitopt_recon2) /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, k0, chop_side, &
          restart_file, left, ikk, itt, scale, tstart, zf_init, &
          den0, upar0, tpar0, tperp0, imfac, refac, even, &
          den1, upar1, tpar1, tperp1, &
-         den2, upar2, tpar2, tperp2, dphiinit, apar0
+         den2, upar2, tpar2, tperp2, dphiinit, apar0, ikkk, ittt
 
     integer :: ierr, in_file
     logical :: exist
@@ -253,6 +264,12 @@ contains
     ikk(2) = 2
     itt(1) = 1
     itt(2) = 2
+    ikkk(1) = 1
+    ikkk(2) = 2
+    ikkk(3) = 2
+    ittt(1) = 1
+    ittt(2) = 2
+    ittt(3) = 2
     restart_file = trim(run_name)//".nc"
     in_file = input_unit_exist ("init_g_knobs", exist)
     if (exist) read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
@@ -794,7 +811,7 @@ contains
     gnew = g
   end subroutine ginit_nl3r
 
-  subroutine ginit_recon
+  subroutine ginit_recon2
     use mp, only: proc0
     use species, only: spec, has_electron_species
     use theta_grid, only: ntgrid, theta
@@ -826,6 +843,135 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
+       if (ik == 2) cycle
+
+       g (:,1,iglo) = 0.
+       g (:,2,iglo) = 0.
+    end do
+	
+    phinew(:,:,1) = 0.
+    aparnew(:,:,1) = 0.
+    aperpnew(:,:,1) = 0.
+    phi(:,:,1) = 0.
+    apar(:,:,1) = 0.
+    aperp(:,:,1) = 0.
+
+    phinew(:,:,3:naky) = 0.
+    aparnew(:,:,3:naky) = 0.
+    aperpnew(:,:,3:naky) = 0.
+    phi(:,:,3:naky) = 0.
+    apar(:,:,3:naky) = 0.
+    aperp(:,:,3:naky) = 0.
+
+    phiz = 0.
+    odd = 0.
+    do j = 1, 2
+       ik = ikk(j)
+       it = itt(j)
+       do ig = -ntgrid, ntgrid
+          phiz(ig,it,ik) = cmplx(refac, imfac)
+       end do
+    end do
+
+    odd = zi * phiz
+    
+! reality condition for k_theta = 0 component:
+    if (reality) then
+       do it = 1, ntheta0/2
+          phiz(:,it+(ntheta0+1)/2,1) = conjg(phiz(:,(ntheta0+1)/2+1-it,1))
+          odd (:,it+(ntheta0+1)/2,1) = conjg(odd (:,(ntheta0+1)/2+1-it,1))
+       enddo
+    end if
+
+    if (even) then
+       ct = cos(theta)
+       st = sin(theta)
+
+       c2t = cos(2.*theta)
+       s2t = sin(2.*theta)
+    else
+       ct = sin(theta)
+       st = cos(theta)
+
+       c2t = sin(2.*theta)
+       s2t = cos(2.*theta)
+    end if
+
+    dfac     = den0   + den1 * ct + den2 * c2t
+    ufac     = upar0  + upar1* st + upar2* s2t
+    tparfac  = tpar0  + tpar1* ct + tpar2* c2t
+    tperpfac = tperp0 + tperp1*ct + tperp2*c2t
+
+
+! charge dependence keeps initial Phi from being too small
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)       
+
+       g(:,1,iglo) = phiinit* &!spec(is)%z* &
+            ( dfac*spec(is)%dens0            * phiz(:,it,ik) &
+            + 2.*ufac* vpa(:,1,iglo)         * odd (:,it,ik) &
+            + tparfac*(vpa(:,1,iglo)**2-0.5) * phiz(:,it,ik) &
+            +tperpfac*(vperp2(:,iglo)-1.)    * phiz(:,it,ik))
+       where (forbid(:,il)) g(:,1,iglo) = 0.0
+
+       g(:,2,iglo) = phiinit* &!spec(is)%z* &
+            ( dfac*spec(is)%dens0            * phiz(:,it,ik) &
+            + 2.*ufac* vpa(:,2,iglo)         * odd (:,it,ik) &
+            + tparfac*(vpa(:,2,iglo)**2-0.5) * phiz(:,it,ik) &
+            +tperpfac*(vperp2(:,iglo)-1.)    * phiz(:,it,ik))
+       where (forbid(:,il)) g(:,2,iglo) = 0.0
+
+!       if (il == ng2+1) g(:,:,iglo) = 0.0
+    end do
+
+!    if (has_electron_species(spec)) then
+!       call flae (g, gnew)
+!       g = g - gnew
+!    end if
+
+    gnew = g
+  end subroutine ginit_recon2
+
+  subroutine ginit_recon
+    use mp, only: proc0
+    use species, only: spec, has_electron_species
+    use theta_grid, only: ntgrid, theta
+    use kt_grids, only: naky, ntheta0, theta0, reality
+    use le_grids, only: forbid
+!    use le_grids, only: ng2
+    use gs2_save, only: gs2_restore
+    use dist_fn_arrays, only: g, gnew, vpa, vperp2
+    use fields_arrays, only: phi, apar, aperp
+    use fields_arrays, only: phinew, aparnew, aperpnew
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use file_utils, only: error_unit
+    use run_parameters, only: fphi, fapar, faperp
+    use constants
+    use ran
+    implicit none
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz, odd
+    real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
+    real :: kfac
+    integer :: iglo, istatus, ierr
+    integer :: ig, ik, it, il, is, j
+    logical :: many = .true.
+    
+!
+! hard-wiring some changes for a test run.  7/13/05
+!
+
+    call gs2_restore (g, scale, istatus, fphi, fapar, faperp, many)
+    if (istatus /= 0) then
+       ierr = error_unit()
+       if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
+       g = 0.
+    end if
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
        if (ik == 1) cycle
 
        g (:,1,iglo) = 0.
@@ -841,11 +987,14 @@ contains
 
     phiz = 0.
     odd = 0.
-    do j = 1, 2
-       ik = ikk(j)
-       it = itt(j)
+    kfac = 1.
+    do j = 1, 3
+       ik = ikkk(j)
+       it = ittt(j)
+       if (j == 2) kfac =  0.5
+       if (j == 3) kfac = -0.5
        do ig = -ntgrid, ntgrid
-          phiz(ig,it,ik) = cmplx(refac, imfac)
+          phiz(ig,it,ik) = cmplx(refac, imfac)*kfac
        end do
     end do
 
