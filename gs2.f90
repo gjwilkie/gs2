@@ -54,7 +54,7 @@ program gs2
   if (.not. proc0) run_name => cbuff
 
   call init_fields
-  call init_gs2_diagnostics (list)
+  call init_gs2_diagnostics (list, nstep)
   call init_time (tstart*tnorm, delt)
   if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
   istep_end = nstep

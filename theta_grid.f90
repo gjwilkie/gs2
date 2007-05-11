@@ -291,7 +291,8 @@ contains
   subroutine salpha_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, &
        bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
        gds2, gds21, gds22, grho, &       
-       Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, qval, shape)
+       Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, &
+       qval, shape, gb_to_cv)
     use constants
     use theta_grid_params, only: eps, epsl, shat_param => shat, pk, qinp, rhoc
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
@@ -306,6 +307,7 @@ contains
          Rplot, Zplot, Rprime, Zprime, aplot, aprime
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     character (8), intent(out) :: shape
+    logical, intent (in) :: gb_to_cv
     integer :: i
 
     theta = (/ (real(i)*2.0*pi/real(ntheta), i=-ntgrid,ntgrid) /)
@@ -373,6 +375,9 @@ contains
        gds22 = shat*shat
        grho = 1.0
     end select
+! currently always set cvdrift = gbdrift in s_alpha module, but 
+! there are reasons to build in more generality.  Need to talk with 
+! Rogers and Ricci about their Z-pinch application, for example.
     cvdrift = gbdrift
     cvdrift0 = gbdrift0
     gradpar = pk/2.0
@@ -438,7 +443,8 @@ contains
 
   subroutine eik_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, bmag,&
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, gds2, gds21, gds22,&
-            grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, qval)
+            grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi,&
+            kxfac, qval, gb_to_cv)
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
     use geometry, only: kxfac_out => kxfac
     use geometry, only: theta_out => theta
@@ -459,7 +465,7 @@ contains
     use geometry, only: Zprime_out => Zprime
     use geometry, only: aprime_out => aprime
     use geometry, only: qsf
-    use geometry, only: s_hat_input, drhodpsin
+    use geometry, only: s_hat_new, drhodpsin
     implicit none
     integer, intent (in) :: nperiod
     integer, intent (in out) :: ntheta, ntgrid, nbset
@@ -470,6 +476,7 @@ contains
          gds2, gds21, gds22, grho, &
          Rplot, Zplot, Rprime, Zprime, aplot, aprime
     real, intent (out) :: shat, drhodpsi, kxfac, qval
+    logical, intent (in) :: gb_to_cv
     integer :: i, ig
 
     do ig=-ntgrid,ntgrid
@@ -492,6 +499,13 @@ contains
        aprime(ig)   = aprime_out(ig)
     end do
        
+    if (gb_to_cv) then
+       do ig=-ntgrid,ntgrid
+          gbdrift(ig) = cvdrift_out(ig)
+          gbdrift0(ig) = cvdrift0_out(ig)
+       end do
+    end if
+
 !    do ig=-ntgrid,ntgrid
 !       write (*,*) theta(ig), gradpar(ig), bmag(ig), grho(ig), &
 !            gbdrift(ig), gbdrift(ig), gds2(ig)
@@ -502,7 +516,7 @@ contains
          theta, bset, bmag, &
          gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, gds2, gds21, gds22, &
          grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime)
-    shat = s_hat_input
+    shat = s_hat_new
     drhodpsi = drhodpsin
     kxfac = kxfac_out
     qval = qsf
@@ -649,7 +663,7 @@ contains
        bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
        gds2, gds21, gds22, grho, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
-       shat, drhodpsi, kxfac, qval)
+       shat, drhodpsi, kxfac, qval, gb_to_cv)
     use file_utils, only: get_unused_unit
     implicit none
     integer, intent (in) :: nperiod
@@ -661,6 +675,7 @@ contains
          gds2, gds21, gds22, grho, &
          Rplot, Zplot, Rprime, Zprime, aplot, aprime         
     real, intent (out) :: shat, drhodpsi, kxfac, qval
+    logical, intent (in) :: gb_to_cv
     integer :: unit
     character(200) :: line
     integer :: i
@@ -703,6 +718,13 @@ contains
        read (unit=unit, fmt=*) cvdrift0(i), gbdrift0(i)
     end do
 
+    if (gb_to_cv) then
+       do i =-ntgrid,ntgrid
+          gbdrift(i) = cvdrift(i)
+          gbdrift0(i) = cvdrift0(i)
+       end do
+    end if
+
     read (unit=unit, fmt="(a)",err=100) line
     do i = -ntgrid, ntgrid
        read (unit=unit, fmt=*, err=100) Rplot(i), Rprime(i)
@@ -718,7 +740,7 @@ contains
        read (unit=unit, fmt=*, err=100) aplot(i), aprime(i)
     end do
 
-    close (unit=unit)
+    close (unit=unit)    
     return
 
 100 continue
@@ -746,7 +768,7 @@ module theta_grid
   public :: bmin, bmax, eps, shat, drhodpsi, jacob
   public :: ntheta, ntgrid, nperiod, nbset
   public :: Rplot, Zplot, aplot, Rprime, Zprime, aprime
-  public :: shape
+  public :: shape, gb_to_cv
 
   private
 
@@ -760,6 +782,7 @@ module theta_grid
   real, dimension (:), allocatable :: Rprime, Zprime, aprime
   real :: bmin, bmax, eps, shat, drhodpsi, kxfac, qval
   integer :: ntheta, ntgrid, nperiod, nbset
+  logical :: gb_to_cv
 
   ! internal variables
   integer :: eqopt_switch
@@ -832,6 +855,7 @@ contains
     call broadcast (Zprime)
     call broadcast (aprime)
     call broadcast (drhodpsi)
+    call broadcast (gb_to_cv)
   end subroutine broadcast_results
 
   subroutine read_parameters
@@ -848,10 +872,11 @@ contains
     ! 'default' 'eik': call eikcoefs for parameterized equilibrium
     ! 's-alpha': s-alpha
     ! 'grid.out' 'file': read grid from grid.out file generated by rungridgen
-    namelist /theta_grid_knobs/ equilibrium_option
+    namelist /theta_grid_knobs/ equilibrium_option, gb_to_cv
     integer :: ierr, in_file
     logical :: exist
 
+    gb_to_cv = .false.
     equilibrium_option = 'default'
     in_file = input_unit_exist("theta_grid_knobs", exist)
     if (exist) read (unit=input_unit("theta_grid_knobs"), nml=theta_grid_knobs)
@@ -947,9 +972,11 @@ contains
 
     bmax = maxval(bmag)
     bmin = minval(bmag)
-! ?? check collision operator coding
+! ?? check Krook collision operator coding which is only place eps is used
+! the line with bmin/bmax was the original coding.  Changed in 2002-2004 time 
+! frame, now changed back (8.19.04) BD
     eps = 1.0 - sqrt(bmin/bmax)
-    eps = 1.0 - 1.0/bmax
+!    eps = 1.0 - 1.0/bmax
 
     allocate (theta2(-ntgrid:ntgrid))
     allocate (delthet(-ntgrid:ntgrid))
@@ -995,7 +1022,7 @@ contains
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
             gds2, gds21, gds22, grho, &
             Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
-            shat, drhodpsi, kxfac, qval)
+            shat, drhodpsi, kxfac, qval, gb_to_cv)
        shape = 'torus   '
     case (eqopt_salpha)
        call salpha_get_grids (nperiod, ntheta, ntgrid, nbset, &
@@ -1003,14 +1030,14 @@ contains
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
             gds2, gds21, gds22, grho, &
             Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
-            shat, drhodpsi, kxfac, qval, shape)
+            shat, drhodpsi, kxfac, qval, shape, gb_to_cv)
     case (eqopt_file)
        call file_get_grids (nperiod, ntheta, ntgrid, nbset, &
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
             gds2, gds21, gds22, grho, &
             Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
-            shat, drhodpsi, kxfac, qval)
+            shat, drhodpsi, kxfac, qval, gb_to_cv)
        shape = 'torus   '
     end select
     kxfac = abs(kxfac)

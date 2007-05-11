@@ -179,6 +179,10 @@ ifeq ($(CPU),LINUX_lf95)
   SFLAGS = --ndbl
   F90FLAGS = --dbl --ml cdecl 
 
+  ifeq ($(static),on)
+    F90FLAGS += --staticlink
+  endif
+
   ifeq ($(debug),on) 
     F90FLAGS += -g  --chk aesu
   else

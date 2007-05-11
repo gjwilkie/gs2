@@ -5,11 +5,13 @@ program ball
 
   real, dimension(:), pointer :: psi
 
-  integer :: nbeta, nth, ntgrid, ntheta, i, iunstable, ibeta
+  integer :: nbeta, nth, ntgrid, ntheta, i, iunstable, ibeta, ishat
+  integer :: nshat, order
 
   real :: beta_p1, beta_p2, diffscheme, psiend, beta_prime, cflmax, cflmin
   real :: beta_prime_times, beta_prime_over
-  real :: bprev, pprev, stabmhd
+  real :: bprev, pprev, stabmhd, bcrit, s_hat_max, shat_0
+  logical :: diagram
 
   namelist/stuff/ntheta,nperiod,rmaj,akappri,akappa,shift,equal_arc, &
        rhoc,rmin,rmax,itor,qinp,iflux,delrho,tri,bishop, &
@@ -17,7 +19,8 @@ program ball
        gen_eq,efit_eq,local_eq,eqfile,ismooth,ak0,k1,k2,&
        s_hat_input,p_prime_input,invLp_input,ppl_eq, &
        diffscheme,nbeta,beta_p1,beta_p2,beta_prime_input,alpha_input, &
-       beta_prime_times, beta_prime_over, big, gs2d_eq, transp_eq
+       beta_prime_times, beta_prime_over, big, gs2d_eq, transp_eq, &
+       diagram, nshat, s_hat_max
 
 
 ! set defaults
@@ -31,6 +34,9 @@ program ball
 
   rmin=0.05
   rmax=1.0  ! other than unity is an inconsistent normalization
+
+  diagram = .false.
+  nshat = 1 ; s_hat_max = 2.0
 
 
   rmaj = 3   ;     akappa = 1   ;     tri = 0   ;     qinp = 2
@@ -64,12 +70,11 @@ program ball
   writelots = .false. 
 
   if(.not.local_eq) then
-
      if(beta_prime_times >= 0) then
 	if(beta_prime_over == -1) beta_prime_over = beta_prime_times
-     endif
-     
+     endif     
   endif
+
   equal_arc = .false.   ! this should not be required
   
   if(k1.lt.0) k1=(ntheta/abs(k1))**2
@@ -123,62 +128,127 @@ program ball
   open(11,file='ball.out')
   open(29,file='psi.out')
 
-  do ibeta=1,nbeta
-     
-     if(bishop >= 7) then
-        if(nbeta == 1) then
-           dp_mult = beta_prime_times
-        else
-           dp_mult = 1./beta_prime_over+(ibeta-1) &
-                *(beta_prime_times-1./beta_prime_over)/(nbeta-1)
-        endif
-     else
-        if(nbeta == 1) then
-           beta_prime=beta_p1
-        else
-           beta_prime=beta_p1+(ibeta-1)*(beta_p2-beta_p1)/(nbeta-1)
-        endif
-        beta_prime_input = beta_prime
-     endif
+  if (.not. diagram) then
+     order = 1
+     call beta_loop (bcrit, order)
+     stop
+  endif
 
-     call eikcoefs
-    
-     if(.not.local_eq) then
-        ntgrid = (size(theta)-1)/2
-        ntheta = (size(theta)-1)/(2*nperiod-1)
-	deallocate(psi)
-        allocate(psi(-ntgrid:ntgrid))
-     endif
+! Attempt to sketch out an s-alpha type diagram
 
-     if(bishop>= 7) beta_prime = dbetadrho
+  if (bishop /= 8) stop  ! just do one case for now
+
+  shat_0 = s_hat_input
+
+  do order = 1, 2
+     do ishat = 1, nshat
+        if (nshat > 1) &
+             s_hat_input = shat_0 + (ishat-1)*(s_hat_max-shat_0)/(nshat-1)
         
-     call mhdballn(ntgrid, beta_prime, diffscheme, iunstable, psiend, &
-          cflmax, cflmin, psi)
-     
-     if(ibeta.eq.1) then
-        stabmhd=0.
-     else
-        stabmhd=0.
-        if(psiend /= pprev) &
-             stabmhd=beta_prime-psiend*(beta_prime-bprev)/(psiend-pprev)
-     endif
-     bprev=beta_prime
-     pprev=psiend
-     
-!     write(6,998) beta_prime,iunstable,stabmhd,psiend,max(abs(cflmax),abs(cflmin))
-     write(6,998) beta_prime,iunstable,stabmhd,psiend,dp_mult
+        bcrit = 0.
+        call beta_loop (bcrit, order)
+        
+        if (bcrit /= 0.) then
+           write (*,*) 'shat= ',s_hat_input,' alpha= ', -Rmaj*qinp**2*bcrit
+        end if
+     end do
+     write (*,*) 
+  end do
 
+contains
+  
+  subroutine beta_loop (bcrit, order)
+
+    integer :: order
+    real :: bcrit
+    logical :: done 
+    integer :: ibmin, ibmax, ibstep
+
+    done = .false.
+
+    if (order == 1) then
+       ibmin = 1
+       ibmax = nbeta
+       ibstep = 1
+    else
+       ibmin = nbeta
+       ibmax = 1
+       ibstep = -1
+    end if
+
+    do ibeta=ibmin, ibmax, ibstep
+       
+       if(bishop >= 7) then
+          if(nbeta == 1) then
+             dp_mult = beta_prime_times
+          else
+             dp_mult = 1./beta_prime_over+(ibeta-1) &
+                  *(beta_prime_times-1./beta_prime_over)/(nbeta-1)
+          endif
+       else
+          if(nbeta == 1) then
+             beta_prime=beta_p1
+          else
+             beta_prime=beta_p1+(ibeta-1)*(beta_p2-beta_p1)/(nbeta-1)
+          endif
+          beta_prime_input = beta_prime
+       endif
+       
+       call eikcoefs
+       
+       if(.not.local_eq) then
+          ntgrid = (size(theta)-1)/2
+          ntheta = (size(theta)-1)/(2*nperiod-1)
+          deallocate(psi)
+          allocate(psi(-ntgrid:ntgrid))
+       endif
+       
+       if(bishop>= 7) beta_prime = dbetadrho
+       
+       call mhdballn(ntgrid, beta_prime, diffscheme, iunstable, psiend, &
+            cflmax, cflmin, psi)
+       
+       if(ibeta.eq.1) then
+          stabmhd=0.
+       else
+          stabmhd=0.
+          if(psiend /= pprev) then
+             stabmhd=beta_prime-psiend*(beta_prime-bprev)/(psiend-pprev)
+          end if
+
+          if (diagram) then
+             if (iunstable == 1 .and. .not. done) then
+                bcrit = stabmhd
+                done = .true.
+             end if
+          end if
+
+       endif
+       bprev=beta_prime
+       pprev=psiend
+
+       if (done) cycle
+       
+!     write(6,998) beta_prime,iunstable,stabmhd,psiend,max(abs(cflmax),abs(cflmin))
+       if (.not. diagram) then
+        write(6,998) beta_prime,iunstable,stabmhd,max(abs(cflmax),abs(cflmin)),dp_mult
+       end if
 !     do i=-ntgrid,ntgrid
 !        write(29,996) theta(i),psi(i), &
 !             gds2(i)*gradpar(i)/bmag(i),beta_prime*cvdrift(i)/(2.*bmag(i)*gradpar(i)), &
 !		gds2(i), cvdrift(i), bmag(i)
 !     enddo
-  enddo
+    enddo
 
 996  format(10(2x,g15.8))
 998  format(1x,g13.6,2x,i2,3x,g13.6,2x,2(1pe11.4,1x))
 
+
+  end subroutine beta_loop
+  
 end program ball
+
+
 
 
 subroutine mhdballn(ntgrid,beta_prime,diffscheme,iunstable,psiend,cflmax,cflmin,psi)

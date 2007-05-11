@@ -1146,7 +1146,8 @@ contains
     dele(2:,:) = e(2:,:)-e(:negrid-1,:)
 
     ng2 = 2*ngauss
-    if (eps > epsilon(0.0)) then
+!    if (eps > epsilon(0.0)) then
+    if (trapped_particles .and. eps > epsilon(0.0)) then
        nlambda = ng2+nbset
        lmax = nlambda-1
     else
@@ -2296,7 +2297,8 @@ contains
     jend = 0
     forbid = .false.
 
-    if (eps <= epsilon(0.0)) return
+!    if (eps <= epsilon(0.0)) return
+    if (.not. trapped_particles .or. eps <= epsilon(0.0)) return
 
     jend = ng2 + 1
     do il = ng2+1, nlambda-1

@@ -278,6 +278,8 @@ contains
     real, dimension (-ntgrid:,:,:) :: kperp2
     integer :: ik, it, ig
 
+    if (.not. allocated(apar_old)) return
+
     do ik = 1, naky
        do it = 1, ntheta0
           do ig = -ntgrid, ntgrid-1

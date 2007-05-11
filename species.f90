@@ -3,7 +3,7 @@ module species
 
   public :: init_species
   public :: nspec, specie, spec
-  public :: ion_species, electron_species, slowing_down_species
+  public :: ion_species, electron_species, slowing_down_species, tracer_species
   public :: has_electron_species, has_slowing_down_species
 
   type :: specie
@@ -24,6 +24,7 @@ module species
   integer, parameter :: ion_species = 1
   integer, parameter :: electron_species = 2 ! for collision operator
   integer, parameter :: slowing_down_species = 3 ! slowing-down distn
+  integer, parameter :: tracer_species = 4 ! for test particle diffusion studies
 
   integer :: nspec
   type (specie), dimension (:), allocatable :: spec
@@ -54,7 +55,7 @@ contains
     integer :: ierr, in_file
     logical :: exist
 
-    type (text_option), dimension (8), parameter :: typeopts = &
+    type (text_option), dimension (9), parameter :: typeopts = &
          (/ text_option('default', ion_species), &
             text_option('ion', ion_species), &
             text_option('electron', electron_species), &
@@ -62,7 +63,8 @@ contains
             text_option('beam', slowing_down_species), &
             text_option('fast', slowing_down_species), &
             text_option('alpha', slowing_down_species), &
-            text_option('slowing-down', slowing_down_species) /)
+            text_option('slowing-down', slowing_down_species), &
+            text_option('trace', tracer_species) /)
 
     if (proc0) then
        nspec = 2

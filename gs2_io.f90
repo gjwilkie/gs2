@@ -8,6 +8,7 @@ module gs2_io
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
   public :: nc_loop_stress
+  public :: nc_loop_movie
 
   logical, parameter :: serial_io = .true.
   integer :: ncid
@@ -17,8 +18,18 @@ module gs2_io
   
   integer, dimension (5) :: field_dim, final_mom_dim, heatk_dim
   integer, dimension (4) :: omega_dim, fluxk_dim, final_field_dim, loop_mom_dim
+  integer, dimension (3) :: fluxx_dim
   integer, dimension (3) :: mode_dim, phase_dim, loop_phi_dim, heat_dim
   integer, dimension (2) :: kx_dim, ky_dim, om_dim, flux_dim, nin_dim, fmode_dim
+
+  ! added by EAB 03/05/04 for movies
+  logical :: my_make_movie
+  integer :: ncid_movie
+  integer :: nx_dim, ny_dim, nth_dim, time_movie_dim
+  integer, dimension (4) :: xmode_dim
+  integer :: nx_id, ny_id, nth_id, x_id, y_id, th_id, time_movie_id
+  integer :: phi_by_xmode_id, apar_by_xmode_id, aperp_by_xmode_id
+  integer :: code_id_movie
 
   integer :: nakx_id, naky_id, nttot_id, akx_id, aky_id, theta_id, nspec_id
   integer :: time_id, phi2_id, apar2_id, aperp2_id, theta0_id, nproc_id, nmesh_id
@@ -37,6 +48,7 @@ module gs2_io
   integer :: hflux_tot_id, zflux_tot_id, vflux_tot_id
   integer :: es_heat_by_k_id, es_mom_by_k_id, es_part_by_k_id
   integer :: apar_heat_by_k_id, apar_mom_by_k_id, apar_part_by_k_id
+  integer :: apar_heat_by_x_id
   integer :: aperp_heat_by_k_id, aperp_mom_by_k_id, aperp_part_by_k_id
   integer :: phi_t_id, apar_t_id, aperp_t_id
   integer :: phi_norm_id, apar_norm_id, aperp_norm_id
@@ -51,7 +63,7 @@ module gs2_io
   integer :: uprim_id, uprim2_id, vnewk_id, spec_type_id
   integer :: bmag_id, gradpar_id, gbdrift_id, gbdrift0_id
   integer :: cvdrift_id, cvdrift0_id, gds2_id, gds21_id, gds22_id
-  integer :: grho_id, jacob_id, shat_id, eps_id, drhodpsi_id
+  integer :: grho_id, jacob_id, shat_id, eps_id, drhodpsi_id, q_id
   integer :: code_id, datestamp_id, timestamp_id, timezone_id
 
   real :: zero
@@ -61,17 +73,27 @@ module gs2_io
 contains
 
   subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
-       write_phiavg, write_hrate)
+      write_phiavg, write_hrate, make_movie, nmovie_tot)
+!David has made some changes to this subroutine (may 2005) now should be able to do movies for 
+!linear box runs as well as nonlinear box runs.
 
     use mp, only: proc0, barrier
     use file_utils, only: run_name
     use netcdf_mod
-    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate
+    use gs2_transforms, only: init_transforms
+    use kt_grids, only: naky, ntheta0,nx,ny
+    use gs2_layouts, only: yxf_lo
+    use theta_grid, only: ntgrid
+    use le_grids, only: nlambda, negrid
+    use species, only: nspec
 
-    character (300) :: filename
+    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, make_movie
+    logical :: accelerated
+    character (300) :: filename, filename_movie
     integer :: ierr         ! 0 if initialization is successful
-
+    integer :: nmovie_tot
     integer :: status
+
 
     zero = epsilon(0.0)
     ierr = 0
@@ -98,8 +120,33 @@ contains
        ierr = 1
     endif
 
+    ! added by EAB 03/2004 for making movie netcdf files
+    my_make_movie = make_movie
+    if(my_make_movie) then
+    !perhaps put a call to init_y_transform
+!    call init_y_transform_layouts  
+    call init_transforms(ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
+       filename_movie = trim(trim(run_name)//'.movie.nc')
+       if(serial_io) then
+          ! only proc0 opens the file:
+          if (proc0) &
+               status = nf_create(trim(filename_movie), 0, ncid_movie) 
+       else
+          ! all processors open the file
+          call barrier
+          status = nf_create(trim(filename_movie), 0, ncid_movie) ! overwrites old
+          call barrier
+       endif
+       
+       if(status /= nf_noerr) then
+          write(*,*) 'Unable to create netcdf file for movies', filename_movie
+          write(*,*) nf_strerror(status)
+          ierr = 1
+       endif
+    endif
+
     if (proc0) then
-       call define_dims
+       call define_dims (nmovie_tot)
        call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate)
        call nc_grids
        call nc_species
@@ -108,16 +155,19 @@ contains
 
   end subroutine init_gs2_io
 
-  subroutine define_dims
+  subroutine define_dims (nmovie_tot)
 
     use file_utils, only: num_input_lines
-    use kt_grids, only: naky, ntheta0
+    use kt_grids, only: naky, ntheta0,nx,ny
+    use gs2_layouts, only: yxf_lo    
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, negrid
     use species, only: nspec
     use netcdf_mod
 
+    integer, intent (in) :: nmovie_tot
     integer :: status
+
 
     status = netcdf_def_dim(ncid, 'ky', naky, naky_dim)
     status = netcdf_def_dim(ncid, 'kx', ntheta0, nakx_dim)
@@ -131,7 +181,25 @@ contains
     status = netcdf_def_dim(ncid, 'char200', 200, char200_dim)
     status = netcdf_def_dim(ncid, 'nlines', num_input_lines, nlines_dim)
     status = netcdf_def_dim(ncid, 'ri', 2, ri_dim)
-    status = netcdf_def_dim(ncid, 'nheat', 2, nheat_dim)
+    status = netcdf_def_dim(ncid, 'nheat', 3, nheat_dim)
+
+    ! added by EAB 03/05/04 for GS2 movies
+    if(my_make_movie) then
+
+
+
+       
+       nx=yxf_lo%nx
+       ny=yxf_lo%ny
+       status = netcdf_def_dim(ncid_movie, 'x', nx, nx_dim)
+       status = netcdf_def_dim(ncid_movie, 'y', ny, ny_dim)
+       status = netcdf_def_dim(ncid_movie, 'theta', 2*ntgrid+1, nth_dim)
+!
+! can only have one NF_UNLIMITED, so:
+!
+!       status = netcdf_def_dim(ncid_movie, 't', NF_UNLIMITED, time_movie_dim)
+       status = netcdf_def_dim(ncid_movie, 'tm', nmovie_tot, time_movie_dim)
+    endif
 
   end subroutine define_dims
 
@@ -139,13 +207,19 @@ contains
 
     use theta_grid, only: ntgrid, theta, eps, ntheta
     use kt_grids, only: naky, ntheta0, theta0, akx_out, aky_out, nx, ny
+    use gs2_layouts, only: yxf_lo
     use species, only: nspec
     use le_grids, only: negrid, nlambda
     use nonlinear_terms, only: nonlin
     use netcdf_mod
+    use constants
 
     integer :: status
     real :: nmesh
+
+    real, dimension(:), allocatable :: x, y
+    integer :: ik, it
+
 
     status = netcdf_put_var (ncid, nttot_id, 2*ntgrid+1)
     status = netcdf_put_var (ncid, naky_id, naky)
@@ -165,6 +239,28 @@ contains
 
     status = netcdf_put_var (ncid, nmesh_id, nmesh)
 
+    ! added by EAB 03/05/04 for GS2 movies
+    if(my_make_movie) then
+
+       allocate(x(yxf_lo%nx))
+       allocate(y(yxf_lo%ny))
+       do it = 1, yxf_lo%nx 
+          x(it) = 2.0*pi/akx_out(2)*(-0.5+ real(it-1)/real(yxf_lo%nx))
+       end do
+       do ik = 1, yxf_lo%ny
+          y(ik) = 2.0*pi/aky_out(2)*(-0.5+ real(ik-1)/real(yxf_lo%ny))
+       end do
+       
+       status = netcdf_put_var (ncid_movie, nx_id, yxf_lo%nx)
+       status = netcdf_put_var (ncid_movie, ny_id, yxf_lo%ny)
+       status = netcdf_put_var (ncid_movie, nth_id, 2*ntgrid+1)
+       status = netcdf_put_var (ncid_movie, x_id, x)
+       status = netcdf_put_var (ncid_movie, y_id, y)
+       status = netcdf_put_var (ncid_movie, th_id, theta)
+       deallocate(x)
+       deallocate(y)
+    endif
+
   end subroutine nc_grids
 
   subroutine nc_finish
@@ -175,6 +271,9 @@ contains
     if (proc0) then
        call save_input
        status = nf_close (ncid)
+       if(my_make_movie) then
+          status = nf_close (ncid_movie)
+       endif
     end if
 
   end subroutine nc_finish
@@ -257,6 +356,10 @@ contains
     fluxk_dim (3) = nspec_dim
     fluxk_dim (4) = time_dim
 
+    fluxx_dim (1) = nakx_dim
+    fluxx_dim (2) = nspec_dim
+    fluxx_dim (3) = time_dim
+
     heat_dim (1) = nspec_dim
     heat_dim (2) = nheat_dim
     heat_dim (3) = time_dim
@@ -295,7 +398,7 @@ contains
 
     status = netcdf_put_att (ncid, nf_global, 'title', 'GS2 Simulation Data')
     status = netcdf_put_att (ncid, nf_global, 'Conventions', &
-         'http://kendall.umd.edu/~bdorland/GS2')
+         'http://gs2.sourceforge.net')
 
     datestamp(:) = ' '
     timestamp(:) = ' '
@@ -422,6 +525,7 @@ contains
     status = netcdf_def_var (ncid, 'grho', nf_double, 1, nttot_dim, grho_id)
     status = netcdf_def_var (ncid, 'jacob', nf_double, 1, nttot_dim, jacob_id)
 
+    status = netcdf_def_var (ncid, 'q', nf_double, 0, 0, q_id)
     status = netcdf_def_var (ncid, 'eps', nf_double, 0, 0, eps_id)
     status = netcdf_def_var (ncid, 'shat', nf_double, 0, 0, shat_id)
     status = netcdf_put_att (ncid, shat_id, 'long_name', '(rho/q) dq/drho')
@@ -476,6 +580,7 @@ contains
           status = netcdf_def_var (ncid, 'apar_mom_flux',  nf_double, 2, flux_dim, apar_mom_flux_id)
           status = netcdf_def_var (ncid, 'apar_part_flux', nf_double, 2, flux_dim, apar_part_flux_id)
           status = netcdf_def_var (ncid, 'apar_heat_by_k', nf_double, 4, fluxk_dim, apar_heat_by_k_id)
+          status = netcdf_def_var (ncid, 'apar_heat_by_x', nf_double, 3, fluxx_dim, apar_heat_by_x_id)
           status = netcdf_def_var (ncid, 'apar_mom_by_k',  nf_double, 4, fluxk_dim, apar_mom_by_k_id)
           status = netcdf_def_var (ncid, 'apar_part_by_k', nf_double, 4, fluxk_dim, apar_part_by_k_id)
        end if
@@ -584,6 +689,49 @@ contains
     status = nf_enddef (ncid)  ! out of definition mode
 
     status = netcdf_put_var (ncid, nproc_id, nproc)
+
+        ! added by EAB 03/05/04 for GS2 movies
+    if(my_make_movie) then
+       xmode_dim (1) = nx_dim
+       xmode_dim (2) = ny_dim
+       xmode_dim (3) = nth_dim
+       xmode_dim (4) = time_movie_dim
+       status = netcdf_put_att (ncid_movie, nf_global, 'title', 'GS2 Simulation x,y,theta Data for Movies')
+       status = netcdf_put_att (ncid_movie, nf_global, 'Conventions', &
+            'http://gs2.sourceforge.net')
+       !    status = netcdf_def_var (ncid_movie, 'code_info_movie', nf_char, 1, char10_dim, code_id_movie)
+       !    status = netcdf_put_att (ncid_movie, code_id_movie, 'long_name', 'GS2')
+       !    ci = 'c1'
+       !    status = netcdf_put_att (ncid_movie, code_id_movie, trim(ci), 'Date: '//trim(datestamp))
+       !    ci = 'c2'
+       !    status = netcdf_put_att (ncid_movie, code_id_movie, trim(ci), &
+       !         'Time: '//trim(timestamp)//' '//trim(timezone))
+       !    ci = 'c3'
+       !    status = netcdf_put_att (ncid_movie, code_id_movie, trim(ci), &
+       !         'netCDF version '//trim(NF_INQ_LIBVERS()))
+       
+       status = netcdf_def_var (ncid_movie, 'nx', nf_int, 0, 0, nx_id)
+       status = netcdf_def_var (ncid_movie, 'ny', nf_int, 0, 0, ny_id)
+       status = netcdf_def_var (ncid_movie, 'ntheta', nf_int, 0, 0, nth_id)    
+       status = netcdf_def_var (ncid_movie, 'tm', nf_double, 1, time_movie_dim, time_movie_id)
+       status = netcdf_put_att (ncid_movie, time_movie_id, 'long_name', 'Time')
+       status = netcdf_put_att (ncid_movie, time_movie_id, 'units', 'L/vt')
+       status = netcdf_def_var (ncid_movie, 'x', nf_double, 1, nx_dim, x_id)
+       status = netcdf_put_att (ncid_movie, x_id, 'long_name', 'x / rho')
+       status = netcdf_def_var (ncid_movie, 'y', nf_double, 1, ny_dim, y_id)
+       status = netcdf_put_att (ncid_movie, y_id, 'long_name', 'y / rho')
+       status = netcdf_def_var (ncid_movie, 'theta', nf_double, 1, nth_dim, th_id)
+       if(fphi > zero) then
+          status = netcdf_def_var (ncid_movie, 'phi_by_xmode', nf_double, 4, xmode_dim, phi_by_xmode_id)
+       end if
+       if(fapar > zero) then
+          status = netcdf_def_var (ncid_movie, 'apar_by_xmode', nf_double, 4, xmode_dim, apar_by_xmode_id)
+       end if
+       if(faperp > zero) then
+          status = netcdf_def_var (ncid_movie, 'aperp_by_xmode', nf_double, 4, xmode_dim, aperp_by_xmode_id)
+       end if
+       status = nf_enddef (ncid_movie)  ! out of definition mode
+    endif
 
   end subroutine define_vars
 
@@ -849,7 +997,7 @@ contains
   subroutine nc_qflux (nout, qheat, qmheat, qbheat, &
        heat_par,  mheat_par,  bheat_par, &
        heat_perp, mheat_perp, bheat_perp, &
-       heat_fluxes, mheat_fluxes, bheat_fluxes, hflux_tot, anorm)
+       heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot, anorm)
 
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -861,10 +1009,20 @@ contains
     real, dimension (:), intent (in) :: heat_par, mheat_par, bheat_par
     real, dimension (:), intent (in) :: heat_perp, mheat_perp, bheat_perp
     real, dimension (:), intent (in) :: heat_fluxes, mheat_fluxes, bheat_fluxes
+    real, dimension (:,:), intent (in) :: x_qmflux
     real, intent (in) :: hflux_tot, anorm
     integer, dimension (2) :: start, count
+    integer, dimension (3) :: start3, count3
     integer, dimension (4) :: start4, count4
     integer :: status
+
+    start3(1) = 1
+    start3(2) = 1
+    start3(3) = nout
+
+    count3(1) = ntheta0
+    count3(2) = nspec
+    count3(3) = 1    
 
     start4(1) = 1
     start4(2) = 1
@@ -896,6 +1054,7 @@ contains
        status = netcdf_put_vara(ncid, apar_heat_par_id,  start, count, mheat_par)
        status = netcdf_put_vara(ncid, apar_heat_perp_id, start, count, mheat_perp)
        status = netcdf_put_vara(ncid, apar_heat_by_k_id, start4, count4, qmheat)
+       status = netcdf_put_vara(ncid, apar_heat_by_x_id, start3, count3, qmheat)
     end if
 
     if (faperp > zero) then
@@ -1081,7 +1240,7 @@ contains
     count5(1) = ntheta0
     count5(2) = naky
     count5(3) = nspec
-    count5(4) = 2
+    count5(4) = 3
     count5(5) = 1
 
     starty(1) = 1
@@ -1107,7 +1266,7 @@ contains
     starth(3) = nout
 
     counth(1) = nspec
-    counth(2) = 2
+    counth(2) = 3
     counth(3) = 1
 
     if (fphi > zero) then
@@ -1205,6 +1364,46 @@ contains
 
   end subroutine nc_loop
 
+  ! added by EAB on 03/05/04
+  subroutine nc_loop_movie (nout_movie, time, yxphi, yxapar, yxaperp)
+    use gs2_layouts, only: yxf_lo
+    use theta_grid, only: ntgrid
+    use run_parameters, only: fphi, fapar, faperp
+    use netcdf_mod, only: netcdf_put_var1, netcdf_put_vara
+    integer, intent (in) :: nout_movie
+    real, intent (in) :: time
+    real, dimension (:,:,:), intent (in):: yxphi, yxapar, yxaperp 
+    integer :: status
+    integer, dimension (4) :: start, count
+
+      
+    status = netcdf_put_var1(ncid_movie, time_movie_id, nout_movie, time)
+    start(1) = 1
+    start(2) = 1
+    start(3) = 1
+    start(4) = nout_movie
+    count(1) = yxf_lo%nx
+    count(2) = yxf_lo%ny
+    count(3) = 2*ntgrid+1
+    count(4) = 1
+
+
+    if ( fphi > zero) then
+       status = netcdf_put_vara(ncid_movie, phi_by_xmode_id, start, count, yxphi)
+    end if
+    if ( fapar > zero) then
+       status = netcdf_put_vara(ncid_movie, apar_by_xmode_id, start, count, yxapar)
+    end if
+
+    if ( faperp > zero) then
+       status = netcdf_put_vara(ncid_movie, aperp_by_xmode_id, start, count, yxaperp)
+    end if
+
+    if (mod(nout_movie, 10) == 0) status = nf_sync (ncid_movie)
+
+
+  end subroutine nc_loop_movie
+
   subroutine nc_species
     
     use run_parameters, only: beta
@@ -1251,6 +1450,8 @@ contains
 
     status = netcdf_put_var (ncid, shat_id, shat)
     status = netcdf_put_var (ncid, eps_id, eps)
+!    status = netcdf_put_var (ncid, q_id, eps)  ! find the q variable: qsf, q_val, or qinp?
+!    status = netcdf_put_var (ncid, q_id, eps)  ! write both beta_prime variables with comment
     status = netcdf_put_var (ncid, drhodpsi_id, drhodpsi)   
 
   end subroutine nc_geo
