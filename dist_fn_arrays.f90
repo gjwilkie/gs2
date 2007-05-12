@@ -4,6 +4,9 @@ module dist_fn_arrays
   complex, dimension (:,:,:), allocatable :: g, gnew, gold
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
+  real, dimension(:), allocatable :: kx_shift
+  ! (naky)
+
   real, dimension (:,:,:), allocatable :: vpa, vpac
   ! (-ntgrid:ntgrid,2, -g-layout-)
 

@@ -1,3 +1,8 @@
+!
+! This version of init_g has changes from Paolo Ricci.  They are eventually incorporated 
+! into the main code.
+!
+
 module init_g
   implicit none
 

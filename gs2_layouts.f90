@@ -3,6 +3,7 @@ module gs2_layouts
   private
 
   public :: pe_layout, layout, local_field_solve
+  public :: kx_local
   
   public :: init_dist_fn_layouts, init_gs2_layouts
   public :: g_lo, g_layout_type
@@ -334,7 +335,7 @@ contains
 
   end subroutine check_accel
 
-  subroutine check_local (ntheta0, naky, nlambda, negrid, nspec)
+  subroutine check_llocal (ntheta0, naky, nlambda, negrid, nspec)
 
     use mp, only: nproc
     implicit none
@@ -440,7 +441,7 @@ contains
 100 deallocate (facs)
 
 
-  end subroutine check_local
+  end subroutine check_llocal
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Distribution function layouts
@@ -495,6 +496,13 @@ contains
     geint_lo%ulim_alloc = max(geint_lo%llim_proc, geint_lo%ulim_proc)
     
   end subroutine init_dist_fn_layouts
+
+  logical function kx_local
+    implicit none
+    
+    kx_local = .true.
+
+  end function kx_local
 
   elemental function is_idx_g (lo, i)
     implicit none
@@ -1153,7 +1161,7 @@ contains
     lz_lo%ulim_world = (2*ntgrid+1)*naky*ntheta0*negrid*nspec - 1
 
     if (layout == 'lxyes' .or. layout == 'lexys' .or. layout == 'lyxes') &
-         call check_local (ntheta0, naky, nlambda, negrid, nspec)
+         call check_llocal (ntheta0, naky, nlambda, negrid, nspec)
 
     if (local) then
 

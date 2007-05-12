@@ -200,7 +200,7 @@ contains
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
-    use dist_fn, only: timeadv
+    use dist_fn, only: timeadv, exb_shear
     use dist_fn_arrays, only: g, gnew
     use nonlinear_terms, only: algorithm !, nonlin
     implicit none
@@ -215,6 +215,8 @@ contains
        phi = phinew
        apar = aparnew 
        bpar = bparnew       
+
+       call exb_shear (g, phi, apar, bpar)
        
        call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
        aparnew = aparnew + apar_ext 
