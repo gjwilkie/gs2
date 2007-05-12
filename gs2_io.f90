@@ -7,7 +7,7 @@ module gs2_io
   public :: init_gs2_io, nc_eigenfunc, nc_final_fields, nc_final_epar
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
-  public :: nc_loop_stress,  nc_loop_vres
+  public :: nc_loop_stress, nc_loop_vres
   public :: nc_loop_movie
 
   logical, parameter :: serial_io = .true.
@@ -16,8 +16,8 @@ module gs2_io
   integer :: naky_dim, nakx_dim, nttot_dim, negrid_dim, nlambda_dim, nspec_dim, ncoord_dim, ncoordt_dim
   integer :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim, nheat_dim
   
-  integer, dimension (6) :: err_dim, lp_dim
-  integer, dimension (5) :: field_dim, final_mom_dim, heatk_dim
+  integer, dimension (6) :: lp_dim
+  integer, dimension (5) :: field_dim, final_mom_dim, heatk_dim, err_dim
   integer, dimension (4) :: omega_dim, fluxk_dim, final_field_dim, loop_mom_dim
   integer, dimension (3) :: fluxx_dim
   integer, dimension (3) :: mode_dim, phase_dim, loop_phi_dim, heat_dim
@@ -71,12 +71,12 @@ module gs2_io
   integer :: h_delfs2_id, h_hs2_id, h_phis2_id
   integer :: h_hypervisc_id, h_hyperres_id, h_collisions_id
   integer :: h_gradients_id, h_hypercoll_id, h_heating_id
-  integer :: h_S_ext_id
+  integer :: h_imp_colls_id
   integer :: hk_energy_id, hk_energy_dot_id, hk_antenna_id
   integer :: hk_eapar_id, hk_ebpar_id
   integer :: hk_delfs2_id, hk_hs2_id, hk_phis2_id
   integer :: hk_hypervisc_id, hk_hyperres_id, hk_collisions_id
-  integer :: hk_gradients_id, hk_hypercoll_id, hk_heating_id, hk_S_ext_id
+  integer :: hk_gradients_id, hk_hypercoll_id, hk_heating_id, hk_imp_colls_id
 
   real :: zero
   
@@ -197,8 +197,6 @@ contains
     status = netcdf_def_dim(ncid, 'nlines', num_input_lines, nlines_dim)
     status = netcdf_def_dim(ncid, 'ri', 2, ri_dim)
     status = netcdf_def_dim(ncid, 'nheat', 7, nheat_dim)
-    status = netcdf_def_dim(ncid, 'coordt', 4, ncoordt_dim)
-    status = netcdf_def_dim(ncid, 'coord', 2, ncoord_dim)
 
     ! added by EAB 03/05/04 for GS2 movies
     if(my_make_movie) then
@@ -349,9 +347,8 @@ contains
     err_dim (1) = nttot_dim
     err_dim (2) = nakx_dim
     err_dim (3) = naky_dim
-    err_dim (4) = nspec_dim
-    err_dim (5) = ncoordt_dim
-    err_dim (6) = time_dim
+    err_dim (4) = ncoordt_dim
+    err_dim (5) = time_dim
 
     lp_dim (1) = nttot_dim
     lp_dim (2) = nakx_dim
@@ -567,8 +564,8 @@ contains
     status = netcdf_put_att (ncid, drhodpsi_id, 'long_name', 'drho/dPsi')
 
     if (write_verr) then
-       status = netcdf_def_var (ncid, 'errest_by_mode', nf_double, 6, err_dim, errest_by_mode_id)
-       status = netcdf_def_var (ncid, 'lpcoef_by_mode', nf_double, 6, lp_dim, lpcoef_by_mode_id)
+!       status = netcdf_def_var (ncid, 'errest_by_mode', nf_double, 5, err_dim, errest_by_mode_id)
+!       status = netcdf_def_var (ncid, 'lpcoef_by_mode', nf_double, 6, lp_dim, lpcoef_by_mode_id)
     end if
 
     if (fphi > zero) then
@@ -736,7 +733,7 @@ contains
        status = netcdf_def_var (ncid, 'h_collisions', nf_double, 2, flux_dim, h_collisions_id)
        status = netcdf_def_var (ncid, 'h_gradients',  nf_double, 2, flux_dim, h_gradients_id)
        status = netcdf_def_var (ncid, 'h_hypercoll',  nf_double, 2, flux_dim, h_hypercoll_id)
-       status = netcdf_def_var (ncid, 'h_S_ext',      nf_double, 2, flux_dim, h_S_ext_id)
+       status = netcdf_def_var (ncid, 'h_imp_colls',  nf_double, 2, flux_dim, h_imp_colls_id)
        status = netcdf_def_var (ncid, 'h_heating',    nf_double, 2, flux_dim, h_heating_id)
        status = netcdf_put_att (ncid, h_heating_id, 'long_name', 'Total heating by species')
 
@@ -753,7 +750,7 @@ contains
        status = netcdf_def_var (ncid, 'hk_hyperres',   nf_double, 4, fluxk_dim, hk_hyperres_id)
        status = netcdf_def_var (ncid, 'hk_collisions', nf_double, 4, fluxk_dim, hk_collisions_id)
        status = netcdf_def_var (ncid, 'hk_gradients',  nf_double, 4, fluxk_dim, hk_gradients_id)
-       status = netcdf_def_var (ncid, 'hk_S_ext',      nf_double, 4, fluxk_dim, hk_S_ext_id)
+       status = netcdf_def_var (ncid, 'hk_imp_colls',  nf_double, 4, fluxk_dim, hk_imp_colls_id)
        status = netcdf_def_var (ncid, 'hk_hypercoll',  nf_double, 4, fluxk_dim, hk_hypercoll_id)
        status = netcdf_def_var (ncid, 'hk_heating',    nf_double, 4, fluxk_dim, hk_heating_id)
        status = netcdf_put_att (ncid, hk_heating_id, 'long_name', 'Total heating by species and mode')
@@ -975,23 +972,30 @@ contains
     use species, only: nspec
 
     integer, intent (in) :: nout
-    real, dimension(:,:,:,:,:), intent (in) :: errest_by_mode, lpcoef_by_mode
-    integer, dimension (6) :: start, count1, count2 
+    real, dimension(:,:,:,:), intent (in) :: errest_by_mode
+    real, dimension(:,:,:,:,:), intent (in) :: lpcoef_by_mode
+    integer, dimension (6) :: start2, count2
+    integer, dimension (5) :: start1, count1
     integer :: status
 
-    start(1) = 1
-    start(2) = 1
-    start(3) = 1
-    start(4) = 1
-    start(5) = 1
-    start(6) = nout
+    start1(1) = 1
+    start1(2) = 1
+    start1(3) = 1
+    start1(4) = 1
+    start1(5) = nout
+
+    start2(1) = 1
+    start2(2) = 1
+    start2(3) = 1
+    start2(4) = 1
+    start2(5) = 1
+    start2(6) = nout
   
     count1(1) = 2*ntgrid+1
     count1(2) = ntheta0
     count1(3) = naky
-    count1(4) = nspec
-    count1(5) = 4
-    count1(6) = 1
+    count1(4) = 4
+    count1(5) = 1
 
     count2(1) = 2*ntgrid+1
     count2(2) = ntheta0
@@ -1000,8 +1004,8 @@ contains
     count2(5) = 2
     count2(6) = 1
 
-    status = netcdf_put_vara(ncid, errest_by_mode_id, start, count1, errest_by_mode)
-    status = netcdf_put_vara(ncid, lpcoef_by_mode_id, start, count2, lpcoef_by_mode)
+!    status = netcdf_put_vara(ncid, errest_by_mode_id, start1, count1, errest_by_mode)
+!    status = netcdf_put_vara(ncid, lpcoef_by_mode_id, start2, count2, lpcoef_by_mode)
 
   end subroutine nc_loop_vres
 
@@ -1296,21 +1300,18 @@ contains
        bpar0, bpar2, bpar2_by_mode, &
        h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
 
-
     use gs2_heating, only: heating_diagnostics, hk_repack
     use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod, only: netcdf_put_var1, netcdf_put_vara
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use convert, only: c2r
-    use theta_grid, only: ntgrid
 
     integer, intent (in) :: nout
     real, intent (in) :: time, phi2, apar2, bpar2
     real, dimension (:), intent (in) :: fluxfac, woutunits
     complex, dimension(:,:), intent (in) :: phi0, apar0, bpar0, omega, omegaavg !, phiavg
     real, dimension(:,:), intent (in) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode, phitot
-
     type(heating_diagnostics), intent (in) :: h
     type(heating_diagnostics), dimension(:,:), intent (in) :: hk
     logical :: write_omega, write_hrate
@@ -1402,7 +1403,6 @@ contains
 !       status = netcdf_put_vara(ncid, phiavg_id, start0, count0, ri2)
        status = netcdf_put_vara(ncid, phi2_by_mode_id, start, count, phi2_by_mode)
        status = netcdf_put_var1(ncid, phi2_id, nout, phi2)
-
     end if
 
     if (fapar > zero) then
@@ -1463,7 +1463,7 @@ contains
        status = netcdf_put_vara (ncid, h_hyperres_id,  starts, counts, h%hyperres)
        status = netcdf_put_vara (ncid, h_collisions_id,starts, counts, h%collisions)
        status = netcdf_put_vara (ncid, h_gradients_id, starts, counts, h%gradients)
-       status = netcdf_put_vara (ncid, h_S_ext_id,     starts, counts, h%S_ext)
+       status = netcdf_put_vara (ncid, h_imp_colls_id, starts, counts, h%imp_colls)
        status = netcdf_put_vara (ncid, h_hypercoll_id, starts, counts, h%hypercoll)
        status = netcdf_put_vara (ncid, h_heating_id,   starts, counts, h%heating)
 
@@ -1501,7 +1501,7 @@ contains
        status = netcdf_put_vara (ncid, hk_phis2_id,     start4, count4, tmps)
 
        call hk_repack (hk, 10, tmps)
-       status = netcdf_put_vara (ncid, hk_S_ext_id,     start4, count4, tmps)
+       status = netcdf_put_vara (ncid, hk_imp_colls_id,  start4, count4, tmps)
     end if
 
     if (write_omega) then

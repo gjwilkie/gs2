@@ -6,6 +6,7 @@ module init_g
   public :: width0, k0
   public :: tstart
   public :: reset_init
+  public :: init_vnmult
   private
 
   ! knobs
@@ -23,9 +24,6 @@ module init_g
   real :: den0, upar0, tpar0, tperp0
   real :: den1, upar1, tpar1, tperp1
   real :: den2, upar2, tpar2, tperp2
-!b MAB
-  real :: den1b, upar1b
-!e MAB
   real :: tstart, scale, apar0
   logical :: chop_side, left, even
   character(300) :: restart_file
@@ -57,10 +55,6 @@ contains
     call broadcast (tperp0)
     call broadcast (den1)
     call broadcast (upar1)
-!b MAB
-    call broadcast (den1b)
-    call broadcast (upar1b)
-!e MAB
     call broadcast (tpar1)
     call broadcast (tperp1)
     call broadcast (den2)
@@ -228,10 +222,7 @@ contains
          restart_file, left, ikk, itt, scale, tstart, zf_init, &
          den0, upar0, tpar0, tperp0, imfac, refac, even, &
          den1, upar1, tpar1, tperp1, &
-         den2, upar2, tpar2, tperp2, dphiinit, apar0, &
-!b MAB
-         den1b, upar1b
-!e MAB
+         den2, upar2, tpar2, tperp2, dphiinit, apar0
 
     integer :: ierr, in_file
     logical :: exist
@@ -247,9 +238,7 @@ contains
     tpar0 = 0.
     tperp0 = 0.
     den1 = 0.
-    den1b = 0.
     upar1 = 0.
-    upar1b = 0.
     tpar1 = 0.
     tperp1 = 0.
     den2 = 0.
@@ -1376,11 +1365,7 @@ contains
     use ran
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
-!b MAB
-!    real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac
-    real, dimension (-ntgrid:ntgrid) :: tparfac, tperpfac
-    complex, dimension (-ntgrid:ntgrid) :: dfac, ufac
-!e MAB
+    real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac
     integer :: iglo
     integer :: ig, ik, it, il, is, j
     
@@ -1404,13 +1389,9 @@ contains
     end if
 
     odd = zi * phi
-
-!b MAB        
-!    dfac     = den0   + den1 * cos(theta) + den2 * cos(2.*theta) 
-!    ufac     = upar0  + upar1* sin(theta) + upar2* sin(2.*theta) 
-    dfac = den0 + den1 * cos(theta) + zi * den1b * sin(theta) + den2 * cos(2.*theta)
-    ufac = upar0 + upar1 * cos(theta) + zi * upar1b * sin(theta)
-!e MAB 
+        
+    dfac     = den0   + den1 * cos(theta) + den2 * cos(2.*theta) 
+    ufac     = upar0  + upar1* sin(theta) + upar2* sin(2.*theta) 
     tparfac  = tpar0  + tpar1* cos(theta) + tpar2* cos(2.*theta) 
     tperpfac = tperp0 + tperp1*cos(theta) + tperp2*cos(2.*theta) 
 
@@ -1423,20 +1404,14 @@ contains
 
        g(:,1,iglo) = phiinit* &!spec(is)%z* &
             ( dfac                           * phi(:,it,ik) &
-!b MAB
-!            + 2.*ufac* vpa(:,1,iglo)         * odd(:,it,ik) &
-            + 2.*ufac* vpa(:,1,iglo)          * phi(:,it,ik) &
-!e MAB
+            + 2.*ufac* vpa(:,1,iglo)         * odd(:,it,ik) &
             + tparfac*(vpa(:,1,iglo)**2-0.5) * phi(:,it,ik) &
             +tperpfac*(vperp2(:,iglo)-1.)    * phi(:,it,ik))
        where (forbid(:,il)) g(:,1,iglo) = 0.0
 
        g(:,2,iglo) = phiinit* &!spec(is)%z* &
             ( dfac                           * phi(:,it,ik) &
-!b MAB
-!            + 2.*ufac* vpa(:,2,iglo)         * odd(:,it,ik) &
-            + 2.*ufac* vpa(:,2,iglo)         * phi(:,it,ik) &
-!e MAB
+            + 2.*ufac* vpa(:,2,iglo)         * odd(:,it,ik) &
             + tparfac*(vpa(:,2,iglo)**2-0.5) * phi(:,it,ik) &
             +tperpfac*(vperp2(:,iglo)-1.)    * phi(:,it,ik))
        where (forbid(:,il)) g(:,2,iglo) = 0.0
@@ -1856,6 +1831,17 @@ contains
     end do
 
   end subroutine flae
+
+  subroutine init_vnmult (vnm)
+
+    use gs2_save, only: init_vnm
+
+    real, dimension (2) :: vnm
+    integer :: istatus
+
+    call init_vnm (vnm, istatus)
+
+  end subroutine init_vnmult
 
 end module init_g
 

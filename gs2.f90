@@ -17,6 +17,7 @@ program gs2
   use gs2_time, only: user_time, user_dt
   use init_g, only: tstart
   use check, only: checkstop
+  use collisions, only: vnmult
 
   implicit none
   real :: time_init = 0., time_advance = 0., time_finish = 0., time_total
@@ -61,7 +62,7 @@ program gs2
 
      call advance (istep)
      if (nsave > 0 .and. mod(istep, nsave) == 0) &
-          call gs2_save_for_restart (gnew, user_time, user_dt, istatus, fphi, fapar, fbpar)
+          call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
 
      call loop_diagnostics (istep, exit)
      call check_time_step (istep, reset, exit)

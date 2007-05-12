@@ -54,9 +54,9 @@ module gs2_heating
      real, dimension(:), pointer :: phis2      => null() !int q^2 n/T phi^2/2
      real, dimension(:), pointer :: hypervisc  => null() 
      real, dimension(:), pointer :: hyperres   => null()
-     real, dimension(:), pointer :: S_ext      => null()
      real, dimension(:), pointer :: hypercoll  => null()
      real, dimension(:), pointer :: collisions => null()
+     real, dimension(:), pointer :: imp_colls => null()
      real, dimension(:), pointer :: gradients  => null()
 !     real, dimension(:), pointer :: curvature  => null()
      real, dimension(:), pointer :: heating    => null()
@@ -82,9 +82,9 @@ contains
     allocate (h % phis2(nspec))      
     allocate (h % hypervisc(nspec))   
     allocate (h % hyperres(nspec))    
-    allocate (h % S_ext(nspec))  
     allocate (h % hypercoll(nspec))  
     allocate (h % collisions(nspec))  
+    allocate (h % imp_colls(nspec))  
     allocate (h % gradients(nspec))   
 !    allocate (h % curvature(nspec))   
     allocate (h % heating(nspec))     
@@ -107,9 +107,9 @@ contains
        allocate (h(n) % phis2(nspec))      
        allocate (h(n) % hypervisc(nspec))   
        allocate (h(n) % hyperres(nspec))    
-       allocate (h(n) % S_ext(nspec))  
        allocate (h(n) % hypercoll(nspec))  
        allocate (h(n) % collisions(nspec))  
+       allocate (h(n) % imp_colls(nspec))  
        allocate (h(n) % gradients(nspec))   
        !    allocate (h(n) % curvature(nspec))   
        allocate (h(n) % heating(nspec))     
@@ -135,9 +135,9 @@ contains
           allocate (h(m,n) % phis2(nspec))      
           allocate (h(m,n) % hypervisc(nspec))   
           allocate (h(m,n) % hyperres(nspec))    
-          allocate (h(m,n) % S_ext(nspec))  
           allocate (h(m,n) % hypercoll(nspec))  
           allocate (h(m,n) % collisions(nspec))  
+          allocate (h(m,n) % imp_colls(nspec))  
           allocate (h(m,n) % gradients(nspec))   
           !    allocate (h(m,n) % curvature(nspec))   
           allocate (h(m,n) % heating(nspec))     
@@ -166,9 +166,9 @@ contains
              allocate (h(l,m,n) % phis2(nspec))      
              allocate (h(l,m,n) % hypervisc(nspec))   
              allocate (h(l,m,n) % hyperres(nspec))    
-             allocate (h(l,m,n) % S_ext(nspec))  
              allocate (h(l,m,n) % hypercoll(nspec))  
              allocate (h(l,m,n) % collisions(nspec))  
+             allocate (h(l,m,n) % imp_colls(nspec))  
              allocate (h(l,m,n) % gradients(nspec))   
              !    allocate (h(l,m,n) % curvature(nspec))   
              allocate (h(l,m,n) % heating(nspec))     
@@ -194,9 +194,9 @@ contains
     h % phis2 = 0. 
     h % hypervisc = 0. 
     h % hyperres = 0.  
-    h % S_ext = 0.  
     h % hypercoll = 0.  
     h % collisions = 0.
+    h % imp_colls = 0.
     h % gradients = 0. 
 !    h % curvature = 0. 
     h % heating = 0.   
@@ -221,9 +221,9 @@ contains
        h(n) % phis2 = 0. 
        h(n) % hypervisc = 0. 
        h(n) % hyperres = 0.  
-       h(n) % S_ext = 0.  
        h(n) % hypercoll = 0.  
        h(n) % collisions = 0.
+       h(n) % imp_colls = 0.
        h(n) % gradients = 0. 
        !    h(n) % curvature = 0. 
        h(n) % heating = 0.   
@@ -251,9 +251,9 @@ contains
           h(m,n) % phis2 = 0. 
           h(m,n) % hypervisc = 0. 
           h(m,n) % hyperres = 0.  
-          h(m,n) % S_ext = 0.  
           h(m,n) % hypercoll = 0.  
           h(m,n) % collisions = 0.
+          h(m,n) % imp_colls = 0.
           h(m,n) % gradients = 0. 
           !    h(m,n) % curvature = 0. 
           h(m,n) % heating = 0.   
@@ -284,9 +284,9 @@ contains
              h(l,m,n) % phis2 = 0. 
              h(l,m,n) % hypervisc = 0. 
              h(l,m,n) % hyperres = 0.  
-             h(l,m,n) % S_ext = 0.  
              h(l,m,n) % hypercoll = 0.  
              h(l,m,n) % collisions = 0.
+             h(l,m,n) % imp_colls = 0.
              h(l,m,n) % gradients = 0. 
              !    h(l,m,n) % curvature = 0. 
              h(l,m,n) % heating = 0.   
@@ -305,9 +305,9 @@ contains
     deallocate (h % phis2)
     deallocate (h % hypervisc)
     deallocate (h % hyperres)
-    deallocate (h % S_ext)
     deallocate (h % hypercoll)
     deallocate (h % collisions)
+    deallocate (h % imp_colls)
     deallocate (h % gradients)
 !    deallocate (h % curvature)
     deallocate (h % heating)
@@ -329,9 +329,9 @@ contains
           deallocate (h(m,n) % phis2)
           deallocate (h(m,n) % hypervisc)
           deallocate (h(m,n) % hyperres)
-          deallocate (h(m,n) % S_ext)
           deallocate (h(m,n) % hypercoll)
           deallocate (h(m,n) % collisions)
+          deallocate (h(m,n) % imp_colls)
           deallocate (h(m,n) % gradients)
           !    deallocate (h(m,n) % curvature)
           deallocate (h(m,n) % heating)
@@ -362,9 +362,9 @@ contains
              h_hist(mod(istep,navg)) % phis2      = h % phis2
              h_hist(mod(istep,navg)) % hypervisc  = h % hypervisc
              h_hist(mod(istep,navg)) % hyperres   = h % hyperres
-             h_hist(mod(istep,navg)) % S_ext      = h % S_ext
              h_hist(mod(istep,navg)) % hypercoll  = h % hypercoll
              h_hist(mod(istep,navg)) % collisions = h % collisions
+             h_hist(mod(istep,navg)) % imp_colls  = h % imp_colls
              h_hist(mod(istep,navg)) % gradients  = h % gradients
 !             h_hist(mod(istep,navg)) % curvature  = h % curvature
              h_hist(mod(istep,navg)) % heating    = h % heating
@@ -384,9 +384,9 @@ contains
                    h % phis2(is)      = h%phis2(is)      + h_hist(i) % phis2(is) / real(navg)
                    h % hypervisc(is)  = h%hypervisc(is)  + h_hist(i) % hypervisc(is) / real(navg)
                    h % hyperres(is)   = h%hyperres(is)   + h_hist(i) % hyperres(is) / real(navg)
-                   h % S_ext(is)      = h%S_ext(is)      + h_hist(i) % S_ext(is) / real(navg)
                    h % hypercoll(is)  = h%hypercoll(is)  + h_hist(i) % hypercoll(is) / real(navg)
                    h % collisions(is) = h%collisions(is) + h_hist(i) % collisions(is) / real(navg)
+                   h % imp_colls(is) = h%imp_colls(is) + h_hist(i) % imp_colls(is) / real(navg)
                    h % gradients(is)  = h%gradients(is)  + h_hist(i) % gradients(is) / real(navg)
 !                  h % curvature(is)  = h%curvature(is)  + h_hist(i) % curvature(is) / real(navg)
                    h % heating(is)    = h%heating(is)    + h_hist(i) % heating(is) / real(navg)
@@ -426,9 +426,9 @@ contains
                       hk_hist(m,n,mod(istep,navg)) % phis2(is)      = hk(m,n) % phis2(is)
                       hk_hist(m,n,mod(istep,navg)) % hypervisc(is)  = hk(m,n) % hypervisc(is)
                       hk_hist(m,n,mod(istep,navg)) % hyperres(is)   = hk(m,n) % hyperres(is)
-                      hk_hist(m,n,mod(istep,navg)) % S_ext(is)      = hk(m,n) % S_ext(is)
                       hk_hist(m,n,mod(istep,navg)) % hypercoll(is)  = hk(m,n) % hypercoll(is)
                       hk_hist(m,n,mod(istep,navg)) % collisions(is) = hk(m,n) % collisions(is)
+                      hk_hist(m,n,mod(istep,navg)) % imp_colls(is)  = hk(m,n) % imp_colls(is)
                       hk_hist(m,n,mod(istep,navg)) % gradients(is)  = hk(m,n) % gradients(is)
 !                     hk_hist(m,n,mod(istep,navg)) % curvature(is)  = hk(m,n) % curvature(is)
                       hk_hist(m,n,mod(istep,navg)) % heating(is)    = hk(m,n) % heating(is)
@@ -453,9 +453,9 @@ contains
                          hk(m,n)%phis2(is)      = hk(m,n)%phis2(is)     + hk_hist(m,n,i) % phis2(is) / real(navg)
                          hk(m,n)%hypervisc(is)  = hk(m,n)%hypervisc(is) + hk_hist(m,n,i) % hypervisc(is) / real(navg)
                          hk(m,n)%hyperres(is)   = hk(m,n)%hyperres(is)  + hk_hist(m,n,i) % hyperres(is) / real(navg)
-                         hk(m,n)%S_ext(is)      = hk(m,n)%S_ext(is)     + hk_hist(m,n,i) % S_ext(is) / real(navg)
                          hk(m,n)%hypercoll(is)  = hk(m,n)%hypercoll(is) + hk_hist(m,n,i) % hypercoll(is) / real(navg)
                          hk(m,n)%collisions(is) = hk(m,n)%collisions(is)+ hk_hist(m,n,i) % collisions(is) / real(navg)
+                         hk(m,n)%imp_colls(is)  = hk(m,n)%imp_colls(is) + hk_hist(m,n,i) % imp_colls(is) / real(navg)
                          hk(m,n)%gradients(is)  = hk(m,n)%gradients(is) + hk_hist(m,n,i) % gradients(is) / real(navg)
 !                        hk(m,n)%curvature(is)  = hk(m,n)%curvature(is) + hk_hist(m,n,i) % curvature(is) / real(navg)
                          hk(m,n)%heating(is)    = hk(m,n)%heating(is)   + hk_hist(m,n,i) % heating(is) / real(navg)
@@ -557,7 +557,7 @@ contains
        do is=1,nspec
           do n=1,nmax
              do m=1,mmax
-                tmp(m,n,is) = hk(m,n)%S_ext(is)
+                tmp(m,n,is) = hk(m,n)%imp_colls(is)
              end do
           end do
        end do
@@ -815,8 +815,8 @@ contains
     h % hypervisc  = h % hypervisc * funits
     h % hyperres   = h % hyperres * funits
     h % hypercoll  = h % hypercoll * funits
-    h % S_ext      = h % S_ext * funits
     h % collisions = h % collisions * funits
+    h % imp_colls  = h % imp_colls * funits
     h % gradients  = h % gradients * funits
     h % heating    = h % heating * funits
 
@@ -847,9 +847,9 @@ contains
              hk(m,n) % phis2(i)      = hk(m,n) % phis2(i) * funits
              hk(m,n) % hypervisc(i)  = hk(m,n) % hypervisc(i) * funits
              hk(m,n) % hyperres(i)   = hk(m,n) % hyperres(i) * funits
-             hk(m,n) % S_ext(i)      = hk(m,n) % S_ext(i) * funits
              hk(m,n) % hypercoll(i)  = hk(m,n) % hypercoll(i) * funits
              hk(m,n) % collisions(i) = hk(m,n) % collisions(i) * funits
+             hk(m,n) % imp_colls(i)  = hk(m,n) % imp_colls(i) * funits
              hk(m,n) % gradients(i)  = hk(m,n) % gradients(i) * funits
              hk(m,n) % heating(i)    = hk(m,n) % heating(i) * funits
           end do

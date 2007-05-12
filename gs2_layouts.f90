@@ -22,6 +22,9 @@ module gs2_layouts
   public :: gidx2lzidx
   public :: gidx2gintidx, gintidx2geidx
 
+  public :: init_escatter_layouts
+  public :: e_lo, e_layout_type
+
   public :: init_x_transform_layouts, init_y_transform_layouts
   public :: xxf_lo, xxf_layout_type, yxf_lo, yxf_layout_type
   public :: gidx2xxfidx, xxfidx2yxfidx, yxfidx2xxfidx, xxfidx2gidx
@@ -90,6 +93,14 @@ module gs2_layouts
 
   type (lz_layout_type) :: lz_lo
 
+  type :: e_layout_type
+     integer :: iproc
+     integer :: ntgrid, naky, ntheta0, nlambda, nspec, nsign
+     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
+  end type e_layout_type
+
+  type (e_layout_type) :: e_lo
+
   type :: xxf_layout_type
      integer :: iproc
      integer :: ntgrid, nsign, naky, ntheta0, nx, nadd, negrid, nlambda, nspec
@@ -149,6 +160,7 @@ module gs2_layouts
 
   interface ig_idx
      module procedure ig_idx_lz
+     module procedure ig_idx_e
      module procedure ig_idx_xxf
      module procedure ig_idx_yxf
      module procedure ig_idx_f
@@ -160,6 +172,7 @@ module gs2_layouts
      module procedure ik_idx_geint
      module procedure ik_idx_jf
      module procedure ik_idx_lz
+     module procedure ik_idx_e
      module procedure ik_idx_xxf
      module procedure ik_idx_accel
      module procedure ik_idx_accelx
@@ -171,6 +184,7 @@ module gs2_layouts
      module procedure it_idx_geint
      module procedure it_idx_jf
      module procedure it_idx_lz
+     module procedure it_idx_e
      module procedure it_idx_yxf
      module procedure it_idx_accel
      module procedure it_idx_accelx
@@ -178,6 +192,7 @@ module gs2_layouts
 
   interface il_idx
      module procedure il_idx_g
+     module procedure il_idx_e
      module procedure il_idx_xxf
      module procedure il_idx_yxf
      module procedure il_idx_accelx
@@ -197,6 +212,7 @@ module gs2_layouts
      module procedure is_idx_gint
      module procedure is_idx_geint
      module procedure is_idx_lz
+     module procedure is_idx_e
      module procedure is_idx_xxf
      module procedure is_idx_yxf
      module procedure is_idx_accelx
@@ -214,8 +230,10 @@ module gs2_layouts
      module procedure proc_id_f
      module procedure proc_id_jf
      module procedure proc_id_lz
+     module procedure proc_id_e
      module procedure proc_id_xxf
      module procedure proc_id_yxf
+     module procedure proc_id_accelx
   end interface
 
   interface idx
@@ -225,8 +243,10 @@ module gs2_layouts
      module procedure idx_f
      module procedure idx_jf
      module procedure idx_lz
+     module procedure idx_e
      module procedure idx_xxf
      module procedure idx_yxf
+     module procedure idx_accelx
   end interface
 
   interface idx_local
@@ -236,8 +256,10 @@ module gs2_layouts
      module procedure idx_local_f,      ig_local_f
      module procedure idx_local_jf,     ig_local_jf
      module procedure idx_local_lz,     ig_local_lz
+     module procedure idx_local_e,      ig_local_e
      module procedure idx_local_xxf,    ig_local_xxf
      module procedure idx_local_yxf,    ig_local_yxf
+     module procedure idx_local_accelx, ig_local_accelx
   end interface
 
 contains
@@ -1233,6 +1255,37 @@ contains
   end function ig_local_jf
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Energy scattering layouts
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine init_escatter_layouts &
+       (ntgrid, naky, ntheta0, nlambda, nspec)
+    use mp, only: iproc, nproc
+    implicit none
+    integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, nspec
+    logical, save :: initialized = .false.
+
+    if (initialized) return
+    initialized = .true.
+    
+    e_lo%iproc = iproc
+    e_lo%ntgrid = ntgrid
+    e_lo%nsign = 2
+    e_lo%ntheta0 = ntheta0
+    e_lo%naky = naky
+    e_lo%nspec = nspec
+    e_lo%nlambda = nlambda
+    e_lo%llim_world = 0
+    e_lo%ulim_world = (2*ntgrid+1)*naky*ntheta0*nlambda*nspec*2 - 1
+    e_lo%blocksize = e_lo%ulim_world/nproc + 1
+    e_lo%llim_proc = e_lo%blocksize*iproc
+    e_lo%ulim_proc &
+         = min(e_lo%ulim_world, e_lo%llim_proc + e_lo%blocksize - 1)
+    e_lo%ulim_alloc = max(e_lo%llim_proc, e_lo%ulim_proc)
+
+  end subroutine init_escatter_layouts
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Lorentz layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -1452,6 +1505,160 @@ contains
 
     ig_local_lz = lo%iproc == proc_id(lo, ig)
   end function ig_local_lz
+
+  elemental function is_idx_e (lo, i)
+    implicit none
+    integer :: is_idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    select case (layout)
+    case ('yxels')
+       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0/lo%nlambda, lo%nspec)
+    case ('yxles')
+       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0/lo%nlambda, lo%nspec)
+    case ('lexys')
+       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0/lo%naky, lo%nspec)
+    case ('lxyes')
+       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0/lo%naky, lo%nspec)
+    case ('lyxes')
+       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%naky/lo%ntheta0, lo%nspec)
+    end select
+  end function is_idx_e
+
+  elemental function il_idx_e (lo, i)
+    implicit none
+    integer :: il_idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    select case (layout)
+    case ('yxels')
+       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0, lo%nlambda)
+    case ('yxles')
+       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0, lo%nlambda)
+    case ('lexys')
+       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('lxyes')
+       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('lyxes')
+       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    end select
+  end function il_idx_e
+
+  elemental function it_idx_e (lo, i)
+    implicit none
+    integer :: it_idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    select case (layout)
+    case ('yxels')
+       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky, lo%ntheta0)
+    case ('yxles')
+       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky, lo%ntheta0)
+    case ('lexys')
+       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%ntheta0)
+    case ('lxyes')
+       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%ntheta0)
+    case ('lyxes')
+       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%naky, lo%ntheta0)
+    end select
+  end function it_idx_e
+
+  elemental function ik_idx_e (lo, i)
+    implicit none
+    integer :: ik_idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    select case (layout)
+    case ('yxels')
+       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%naky)
+    case ('yxles')
+       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%naky)
+    case ('lexys')
+       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0, lo%naky)
+    case ('lxyes')
+       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0, lo%naky)
+    case ('lyxes')
+       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%naky)
+    end select
+  end function ik_idx_e
+
+  elemental function ig_idx_e (lo, i)
+    implicit none
+    integer :: ig_idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    select case (layout)
+    case ('yxels')
+       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    case ('yxles')
+       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    case ('lexys')
+       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    case ('lxyes')
+       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    case ('lyxes')
+       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    end select
+  end function ig_idx_e
+
+  elemental function idx_e (lo, ig, isign, ik, it, il, is)
+    implicit none
+    integer :: idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: ig, isign, ik, it, il, is
+
+    select case (layout)
+    case ('yxels')
+       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(ik-1 &
+            + lo%naky*(it-1 + lo%ntheta0*(il-1 + lo%nlambda*(is-1)))))
+    case ('yxles')
+       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(ik-1 &
+            + lo%naky*(it-1 + lo%ntheta0*(il-1 + lo%nlambda*(is-1)))))
+    case ('lexys')
+       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(il-1 &
+            + lo%nlambda*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1)))))
+    case ('lxyes')
+       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(il-1 &
+            + lo%nlambda*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1)))))
+    case ('lyxes')
+       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(il-1 &
+            + lo%nlambda*(ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1)))))
+    end select
+
+  end function idx_e
+
+  elemental function proc_id_e (lo, i)
+    implicit none
+    integer :: proc_id_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    proc_id_e = i/lo%blocksize
+
+  end function proc_id_e
+
+  elemental function idx_local_e (lo, ig, isign, ik, it, il, is)
+    implicit none
+    logical :: idx_local_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: ig, isign, ik, it, il, is
+
+    idx_local_e = idx_local(lo, idx(lo, ig, isign, ik, it, il, is))
+  end function idx_local_e
+
+  elemental function ig_local_e (lo, ig)
+    implicit none
+    logical :: ig_local_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: ig
+
+    ig_local_e = lo%iproc == proc_id(lo, ig)
+  end function ig_local_e
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! X-space layouts
@@ -1911,6 +2118,22 @@ contains
     end select
   end function it_idx_yxf
 
+  elemental function idx_accelx (lo, ik, it, il, ie, is)
+    implicit none
+    integer :: idx_accelx
+    type (accelx_layout_type), intent (in) :: lo
+    integer, intent (in) :: ik, it, il, ie, is
+
+    select case (layout)
+    case ('yxels')
+       idx_accelx = ik-1 + lo%ny*(it-1 + lo%nx*(ie-1 + &
+            lo%negrid*(il-1 + lo%nlambda*(is-1))))
+    case ('yxles')
+       idx_accelx = ik-1 + lo%ny*(it-1 + lo%nx*(il-1 + &
+            lo%nlambda*(ie-1 + lo%negrid*(is-1))))
+    end select
+  end function idx_accelx
+
   elemental function idx_yxf (lo, ig, isign, it, il, ie, is)
     implicit none
     integer :: idx_yxf
@@ -1936,6 +2159,16 @@ contains
     end select
   end function idx_yxf
 
+  elemental function proc_id_accelx (lo, i)
+    implicit none
+    integer :: proc_id_accelx
+    type (accelx_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    proc_id_accelx = i/lo%blocksize
+
+  end function proc_id_accelx
+
   elemental function proc_id_yxf (lo, i)
     implicit none
     integer :: proc_id_yxf
@@ -1948,6 +2181,22 @@ contains
        proc_id_yxf = i/lo%blocksize
     end if
   end function proc_id_yxf
+
+  elemental function idx_local_accelx (lo, ik, it, il, ie, is)
+    implicit none
+    logical :: idx_local_accelx
+    type (accelx_layout_type), intent (in) :: lo
+    integer, intent (in) :: ik, it, il, ie, is
+    idx_local_accelx = idx_local (lo, idx(lo, ik, it, il, ie, is))
+  end function idx_local_accelx
+
+  elemental function ig_local_accelx (lo, i)
+    implicit none
+    logical ig_local_accelx
+    type (accelx_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+    ig_local_accelx = lo%iproc == proc_id(lo, i)
+  end function ig_local_accelx
 
   elemental function idx_local_yxf (lo, ig, isign, it, il, ie, is)
     implicit none

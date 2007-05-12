@@ -13,7 +13,7 @@ contains
 
   subroutine reset_time_step (istep, exit)
 
-    use collisions, only: c_reset => reset_init
+    use collisions, only: c_reset => reset_init, vnmult
     use dist_fn, only: d_reset => reset_init
     use fields, only: f_reset => reset_init, init_fields
     use fields_implicit, only: fi_reset => reset_init
@@ -51,7 +51,7 @@ contains
     end if
 
     if (proc0) call dump_ant_amp
-    call gs2_save_for_restart (gnew, user_time, user_dt, istatus, fphi, fapar, fbpar)
+    call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
 
     gnew = 0.
 

@@ -14,7 +14,7 @@ module gs2_save
 
 contains
 
-  subroutine gs2_save_for_restart (g, t0, delt0, istatus, exit_in)
+  subroutine gs2_save_for_restart (g, t0, delt0, vnm, istatus, exit_in)
 
     use theta_grid, only: ntgrid
 ! Must include g_layout_type here to avoid obscure bomb while compiling
@@ -24,6 +24,7 @@ contains
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
+    real, dimension (2), intent (in) :: vnm
     integer, intent (out) :: istatus
     logical, intent (in), optional :: exit_in
 

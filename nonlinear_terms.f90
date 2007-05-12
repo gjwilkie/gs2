@@ -9,7 +9,7 @@ module nonlinear_terms
 
   public :: init_nonlinear_terms
   public :: add_nonlinear_terms, finish_nl_terms
-  public :: finish_init, reset_init, algorithm, nonlin
+  public :: finish_init, reset_init, algorithm, nonlin, accelerated
 
   private
 
