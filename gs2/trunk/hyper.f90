@@ -1,15 +1,22 @@
+! nexp has been changed in a rush.  Only known to be correct for nexp=2
+!
+!
+
 module hyper
   
   implicit none
   private
   public :: init_hyper, hyper_diff, D_res
-  public :: D_v, D_eta
+  public :: D_v, D_eta, nexp
+
+! D_v, D_eta are hyper coefficients, normalized correctly 
+! i.e., either by unity or by 1/k_perp**2*nexp
 
   real :: D_v, D_eta
-  real :: D_hypervisc, D_hyperres, omega_osc
+  real :: D_hypervisc, D_hyperres, omega_osc, D_hyper
   real :: akx4_max, aky4_max, aky_max, akperp4_max
 
-  integer :: hyper_option_switch
+  integer :: hyper_option_switch, nexp
   integer, parameter :: hyper_option_none = 1, &
        hyper_option_visc = 2, &
        hyper_option_res  = 3, &
@@ -28,7 +35,8 @@ contains
   subroutine init_hyper
 
     use kt_grids, only: ntheta0, naky, akx, aky
-    use run_parameters, only: delt, tnorm
+    use run_parameters, only: tnorm
+    use gs2_time, only: code_dt
     use gs2_layouts, only: init_gs2_layouts
     implicit none
     integer :: ik, it
@@ -43,10 +51,10 @@ contains
 ! Define variables used in hyperviscosity and hyperresistivity models
 
     if (gridnorm) then
-       akx4_max    = akx(ntheta0/2 + 1) ** 4
+       akx4_max    = akx(ntheta0/2 + 1) ** (2*nexp)
        aky_max     = aky(naky)
-       aky4_max     = aky(naky) ** 4
-       akperp4_max = ( akx(ntheta0/2 + 1) ** 2  +  aky(naky) ** 2) ** 2
+       aky4_max     = aky(naky) ** (2*nexp)
+       akperp4_max = ( akx(ntheta0/2 + 1) ** 2  +  aky(naky) ** 2) ** (nexp)
     else
        akx4_max = 1.
        aky_max = 1.
@@ -59,8 +67,8 @@ contains
     if (D_hyperres > 0.) then
        do ik = 1, naky
           do it = 1, ntheta0
-             D_res(it, ik) = D_hyperres*delt/tnorm &
-                  * (aky(ik)**2 + akx(it)**2)**2/akperp4_max
+             D_res(it, ik) = D_hyperres*code_dt/tnorm &
+                  * (aky(ik)**2 + akx(it)**2)**nexp/akperp4_max
           end do
        end do
        D_eta = D_hyperres/akperp4_max
@@ -93,14 +101,16 @@ contains
     logical :: exist
     
     namelist /hyper_knobs/ hyper_option, const_amp, include_kpar, &
-         isotropic_shear, D_hyperres, D_hypervisc, omega_osc, gridnorm
+         isotropic_shear, D_hyperres, D_hypervisc, D_hyper, omega_osc, gridnorm, nexp
     
     if (proc0) then
        const_amp = .false.
        include_kpar = .false.
        isotropic_shear = .true.
+       nexp = 2
        D_hyperres = -10.
        D_hypervisc = -10.
+       D_hyper = -10.
        hyper_option = 'default'
        omega_osc = 0.4
        gridnorm = .true.
@@ -108,10 +118,15 @@ contains
        if (exist) read (unit=input_unit("hyper_knobs"), nml=hyper_knobs)
 
        ierr = error_unit()
-       
+
        call get_option_value &
             (hyper_option, hyperopts, hyper_option_switch, &
             ierr, "hyper_option in hyper_knobs")
+
+       if (.not. isotropic_shear .and. nexp /=2) then
+          write (ierr, *) 'Forcing nexp = 2.  Higher values not implemented for anisotropic shear model.'
+          nexp = 2
+       end if
 
        select case (hyper_option_switch)
 
@@ -129,6 +144,8 @@ contains
 
        case (hyper_option_visc)
           hyper_on = .true.
+          write (ierr, *) 'WARNING: It is inconsistent to set D_hypervisc different from ', &
+               'D_hyperres.  Recommend: Set them equal.'
           if (D_hyperres > 0.) then
              write(ierr, *) 'hyper_option = ',hyper_option, &
                   ' chooses no hyperresistivity.  D_hyperres ignored.'
@@ -143,6 +160,8 @@ contains
 
        case (hyper_option_res)
           hyper_on = .true.
+          write (ierr, *) 'WARNING: It is inconsistent to set D_hypervisc different from ', &
+               'D_hyperres.  Recommend: Set them equal.'
           if (D_hyperres < 0.) then
              write(ierr, *) 'hyper_option = ',hyper_option, &
                   ' chooses hyperresistivity but  D_hyperres < 0 is illegal.'
@@ -157,6 +176,18 @@ contains
 
        case (hyper_option_both)
           hyper_on = .true.
+          
+          if (D_hyper < 0.) then
+             if (D_hyperres /= D_hyperres) then
+                write (ierr, *) 'WARNING: It is inconsistent to set D_hypervisc different from ', &
+                     'D_hyperres.  Recommend: Set them equal.'
+             end if
+          else
+             write (ierr, *) 'WARNING: Setting D_hypervisc = D_hyperres, each to value of D_hyper'
+             D_hyperres  = D_hyper
+             D_hypervisc = D_hyper
+          end if
+
           if (D_hyperres < 0.) then
              write(ierr, *) 'hyper_option = ',hyper_option, &
                   ' chooses hyperresistivity but  D_hyperres < 0 is illegal.'
@@ -175,12 +206,14 @@ contains
     call broadcast (const_amp)
     call broadcast (include_kpar)
     call broadcast (isotropic_shear)
+    call broadcast (D_hyper)
     call broadcast (D_hyperres)
     call broadcast (D_hypervisc)
     call broadcast (hyper_option_switch)
     call broadcast (hyper_on)
     call broadcast (omega_osc)
     call broadcast (gridnorm)
+    call broadcast (nexp)
 
   end subroutine read_parameters
 
@@ -197,22 +230,29 @@ contains
 
   end subroutine allocate_arrays
 
-  subroutine hyper_diff (g0, phi, aperp)
+  subroutine hyper_diff (g0, g1, phi, bpar)
 
     use mp, only: proc0
     use gs2_layouts, only: ik_idx, it_idx, is_idx
     use theta_grid, only: ntgrid
-    use run_parameters, only: delt, tnorm, fphi, faperp
-    use gs2_layouts, only: g_lo
+    use run_parameters, only: tnorm, fphi, fbpar
+    use gs2_time, only: code_dt
+    use gs2_layouts, only: g_lo, geint_lo, gint_lo
     use kt_grids, only: aky, akx, naky, ntheta0
+    use le_grids, only: integrate, geint2g
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, aperp
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
+    complex, dimension (:,:), allocatable :: g0eint, g1eint
+    real, dimension (:,:), allocatable, save :: aintnorm
+    logical :: first = .true.
+    logical :: conserve_number = .false.
+    logical :: conserve_inth = .true.
 
     real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, &
          shear_rate_z, shear_rate_z_nz
 
-    integer :: iglo, ik, it
+    integer :: iglo, ik, it, ige
     integer :: ncall = 0 ! variables declared with value are automatically saved
  
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -228,16 +268,53 @@ contains
 !
 ! Begun December 2001
 !
+! Number conservation added April 2006
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     if (.not. hyper_on) return
     if (D_hypervisc < 0.) return
+
+
+    if (conserve_number) then ! get initial particle number
+       allocate (g0eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
+       allocate (g1eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
+
+       if (first) then
+          first = .false.
+          allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
+          aintnorm = 0. ; g1 = 1.0
+          call integrate (g1, g1eint)
+          do ige = geint_lo%llim_proc, geint_lo%ulim_proc
+             aintnorm(:,ige) = 1.0/real(g1eint(:,ige))
+          end do
+       end if
+
+       if (conserve_inth) call g_adjust (g0, phi, bpar, fphi, fbpar)
+       call integrate (g0, g0eint)
+       if (conserve_inth) call g_adjust (g0, phi, bpar, -fphi, -fbpar)
+
+    end if
 
     if(isotropic_shear) then
        call iso_shear
     else
        call aniso_shear
     end if
+
+    if (conserve_number) then ! restore particle number
+       if (conserve_inth) call g_adjust (g1, phi, bpar, fphi, fbpar)
+       call integrate (g1, g1eint)
+       if (conserve_inth) call g_adjust (g1, phi, bpar, -fphi, -fbpar)
+       do ige = geint_lo%llim_proc, geint_lo%ulim_proc
+          g0eint(:,ige) = (g0eint(:,ige) - g1eint(:,ige)) &
+               *aintnorm(:,ige)
+       end do
+       call geint2g (g0eint, g0)
+       g0 = g0 + g1
+       deallocate (g0eint, g1eint)
+    else
+       g0 = g1
+    endif
 
   contains
 
@@ -286,35 +363,31 @@ contains
 ! end of anisotropic shearing rate calculations
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-      call g_adjust (g0, phi, aperp, fphi, faperp)
-
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
          it = it_idx(g_lo, iglo)
          
          if(aky(ik) == 0.) then
             
-            g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * delt / tnorm &
+            g1(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt / tnorm &
                  * ( shear_rate_z_nz(:) *  akx(it) ** 4 / akx4_max )))
             
-            g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * delt / tnorm & 
+            g1(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt / tnorm & 
                  * ( shear_rate_z_nz(:) *  akx(it) ** 4 / akx4_max )))
             
          else
             
-            g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * delt / tnorm & 
-                 * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**2 / akperp4_max & 
-                 + shear_rate_z(:) * akx(it) ** 4 / akx4_max * aky(ik) / aky_max )))
+            g1(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt / tnorm & 
+                 * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max & 
+                 + shear_rate_z(:) * akx(it) ** 4/ akx4_max * aky(ik) / aky_max )))
             
-            g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * delt / tnorm &
-                 * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**2 / akperp4_max & 
+            g1(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt / tnorm &
+                 * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max & 
                  + shear_rate_z(:) * akx(it) ** 4 / akx4_max * aky(ik) / aky_max )))
             
          endif
       end do
     
-      call g_adjust (g0, phi, aperp, -fphi, -faperp)
-
     end subroutine aniso_shear
 
     subroutine iso_shear
@@ -336,26 +409,22 @@ contains
          end do
          shear_rate_nz = shear_rate_nz**0.5
       end if
-      
-      call g_adjust (g0, phi, aperp, fphi, faperp)
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
          it = it_idx(g_lo, iglo)
          
-         g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * delt / tnorm &
-              * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**2 / akperp4_max)))
+         g1(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt / tnorm &
+              * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
          
-         g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * delt / tnorm &
-              * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**2 / akperp4_max)))
+         g1(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt / tnorm &
+              * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
       end do
       
-      call g_adjust (g0, phi, aperp, -fphi, -faperp)
-
     end subroutine iso_shear
   end subroutine hyper_diff
 
-  subroutine g_adjust (g, phi, aperp, facphi, facaperp)
+  subroutine g_adjust (g, phi, bpar, facphi, facbpar)
     use species, only: spec
     use theta_grid, only: ntgrid
     use le_grids, only: anon
@@ -363,8 +432,8 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, aperp
-    real, intent (in) :: facphi, facaperp
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
+    real, intent (in) :: facphi, facbpar
 
     integer :: iglo, ig, ik, it, ie, is
     complex :: adj
@@ -376,7 +445,7 @@ contains
        is = is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
           adj = anon(ie,is)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
-                  *aperp(ig,it,ik)*facaperp &
+                  *bpar(ig,it,ik)*facbpar &
                + spec(is)%z*anon(ie,is)*phi(ig,it,ik)*aj0(ig,iglo) &
                   /spec(is)%temp*facphi
           g(ig,1,iglo) = g(ig,1,iglo) + adj

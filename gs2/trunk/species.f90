@@ -14,7 +14,10 @@ module species
      real :: tprim
      real :: fprim
      real :: uprim, uprim2
-     real :: vnewk, vnewk4
+     real :: vnewk, nustar
+     real :: nu, nu_h  ! nu will be the preferred collisionality parameter moving forward
+                       ! as it will have a consistent v_t scaling
+                       ! nu_h controls a hyperviscous term embedded in the collision operator
      real :: stm, zstm, tz, smz, zt
      integer :: type
   end type specie
@@ -45,13 +48,13 @@ contains
     use text_options
     use mp, only: proc0, broadcast
     implicit none
-    real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, vnewk4
+    real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h
     character(20) :: type
     integer :: unit
     integer :: is
     namelist /species_knobs/ nspec
-    namelist /species_parameters/ &
-         z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, vnewk4, type
+    namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
+         tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h
     integer :: ierr, in_file
     logical :: exist
 
@@ -88,8 +91,10 @@ contains
           u0 = 1.0
           uprim = 0.0
           uprim2 = 0.0
+          nustar = -1.0
           vnewk = 0.0
-          vnewk4 = 0.0
+          nu = -1.0
+          nu_h = 0.0
           type = "default"
           read (unit=unit, nml=species_parameters)
           close (unit=unit)
@@ -105,7 +110,9 @@ contains
           spec(is)%uprim = uprim
           spec(is)%uprim2 = uprim2
           spec(is)%vnewk = vnewk
-          spec(is)%vnewk4 = vnewk4
+          spec(is)%nustar = nustar
+          spec(is)%nu = nu
+          spec(is)%nu_h = nu_h
 
           spec(is)%stm = sqrt(temp/mass)
           spec(is)%zstm = z/sqrt(temp*mass)
@@ -114,9 +121,7 @@ contains
           spec(is)%smz = abs(sqrt(temp*mass)/z)
 
           ierr = error_unit()
-          call get_option_value &
-               (type, typeopts, spec(is)%type, &
-               ierr, "type in species_parameters_x")
+          call get_option_value (type, typeopts, spec(is)%type, ierr, "type in species_parameters_x")
        end do
     end if
 
@@ -132,7 +137,9 @@ contains
        call broadcast (spec(is)%uprim)
        call broadcast (spec(is)%uprim2)
        call broadcast (spec(is)%vnewk)
-       call broadcast (spec(is)%vnewk4)
+       call broadcast (spec(is)%nu)
+       call broadcast (spec(is)%nu_h)
+       call broadcast (spec(is)%nustar)
        call broadcast (spec(is)%stm)
        call broadcast (spec(is)%zstm)
        call broadcast (spec(is)%tz)

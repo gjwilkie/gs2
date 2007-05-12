@@ -275,14 +275,13 @@ contains
   end subroutine box_get_sizes
 
 !  subroutine box_get_grids (aky, theta0, akx, akpolar)
-  subroutine box_get_grids (aky, theta0, akx, ikx, iky)
+  subroutine box_get_grids (aky, theta0, akx)
     use theta_grid, only: shat
     use constants
     implicit none
     real, dimension (:), intent (out) :: aky
     real, dimension (:,:), intent (out) :: theta0
     real, dimension (:), intent (out) :: akx
-    integer, dimension (:), intent (out) :: ikx, iky
 !    real, dimension (:), intent (out) :: akpolar
     integer :: i, naky, ntheta0
     real :: dkx
@@ -309,17 +308,14 @@ contains
     endif
 
     do i = 1, naky
-       iky(i) = i-1
        aky(i) = real(i-1)*2.*pi/ly
     end do
 
     do i = 1, (ntheta0+1)/2
-       ikx(i) = i-1
        akx(i) = real(i-1)*dkx
     end do
 
     do i = (ntheta0+1)/2+1, ntheta0
-       ikx(i) = i-ntheta0-1
        akx(i) = real(i-ntheta0-1)*dkx
     end do
 
@@ -407,12 +403,11 @@ module kt_grids
   public :: aky, theta0, akx, akr
   public :: aky_out, akx_out, akr_out
   public :: naky, ntheta0, nx, ny, reality
-  public :: nkpolar 
-  public :: ikx, iky
+  public :: nkpolar !, akpolar, akpolar_out
+
   private
 
   integer :: naky, ntheta0, nx, ny, nkpolar
-  integer, dimension(:), allocatable :: ikx, iky
   real, dimension (:), allocatable :: aky, aky_out
   real, dimension (:,:), allocatable :: theta0
   real, dimension (:), allocatable :: akx, akx_out
@@ -556,10 +551,6 @@ contains
     allocate (akx_out(ntheta0))
     allocate (akr(-ntgrid:ntgrid,ntheta0))
     allocate (akr_out(-ntgrid:ntgrid,ntheta0))
-
-    allocate (ikx(ntheta0))
-    allocate (iky(naky))
-
 !    if (nkpolar > 0) &
 !         allocate (akpolar(nkpolar), akpolar_out(nkpolar))
   end subroutine allocate_arrays
@@ -608,7 +599,7 @@ contains
        call specified_get_grids (aky, theta0, akx)
     case (gridopt_box)
 !       call box_get_grids (aky, theta0, akx, akpolar)
-       call box_get_grids (aky, theta0, akx, ikx, iky)
+       call box_get_grids (aky, theta0, akx)
     case (gridopt_xbox)
        call xbox_get_grids (aky, theta0, akx)
     end select

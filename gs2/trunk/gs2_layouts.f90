@@ -161,6 +161,7 @@ module gs2_layouts
      module procedure ik_idx_lz
      module procedure ik_idx_xxf
      module procedure ik_idx_accel
+     module procedure ik_idx_accelx
   end interface
 
   interface it_idx
@@ -171,12 +172,14 @@ module gs2_layouts
      module procedure it_idx_lz
      module procedure it_idx_yxf
      module procedure it_idx_accel
+     module procedure it_idx_accelx
   end interface
 
   interface il_idx
      module procedure il_idx_g
      module procedure il_idx_xxf
      module procedure il_idx_yxf
+     module procedure il_idx_accelx
   end interface
 
   interface ie_idx
@@ -185,6 +188,7 @@ module gs2_layouts
      module procedure ie_idx_lz
      module procedure ie_idx_xxf
      module procedure ie_idx_yxf
+     module procedure ie_idx_accelx
   end interface
 
   interface is_idx
@@ -194,6 +198,7 @@ module gs2_layouts
      module procedure is_idx_lz
      module procedure is_idx_xxf
      module procedure is_idx_yxf
+     module procedure is_idx_accelx
   end interface
 
   interface isign_idx
@@ -1924,6 +1929,60 @@ contains
     accel_lo%ulim_alloc = max(accel_lo%llim_proc, accel_lo%ulim_proc)
 
   end subroutine init_accel_transform_layouts
+
+  elemental function is_idx_accelx (lo, i)
+    implicit none
+    integer :: is_idx_accelx
+    type (accelx_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+    is_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nxny/lo%negrid/lo%nlambda, lo%nspec)
+  end function is_idx_accelx
+
+  elemental function ie_idx_accelx (lo, i)
+    implicit none
+    integer :: ie_idx_accelx
+    type (accelx_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    select case (layout)
+    case ('yxels')
+       ie_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nxny, lo%negrid)
+    case ('yxles')
+       ie_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nxny/lo%nlambda, lo%negrid)
+    end select
+  end function ie_idx_accelx
+
+  elemental function il_idx_accelx (lo, i)
+    implicit none
+    integer :: il_idx_accelx
+    type (accelx_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    select case (layout)
+    case ('yxels')
+       il_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nxny/lo%negrid, lo%nlambda)
+    case ('yxles')
+       il_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nxny, lo%nlambda)
+    end select
+  end function il_idx_accelx
+
+  elemental function it_idx_accelx (lo, i)
+    implicit none
+    integer :: it_idx_accelx
+    type (accelx_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    it_idx_accelx = 1 + mod((i - lo%llim_world)/lo%ny, lo%nx)
+  end function it_idx_accelx
+
+  elemental function ik_idx_accelx (lo, i)
+    implicit none
+    integer :: ik_idx_accelx
+    type (accelx_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    ik_idx_accelx = 1 + mod((i - lo%llim_world), lo%ny)
+  end function ik_idx_accelx
 
   elemental function it_idx_accel (lo, i)
     implicit none

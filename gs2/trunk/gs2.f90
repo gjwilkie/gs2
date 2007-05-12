@@ -5,22 +5,21 @@ program gs2
   use fields, only: init_fields
   use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
   use gs2_diagnostics, only: nsave
-  use run_parameters, only: nstep, delt, tnorm
-  use run_parameters, only: fphi, fapar, faperp
+  use run_parameters, only: nstep
+  use run_parameters, only: fphi, fapar, fbpar
   use fields, only: advance
   use dist_fn_arrays, only: gnew
   use gs2_save, only: gs2_save_for_restart
   use gs2_diagnostics, only: loop_diagnostics
   use gs2_reinit, only: reset_time_step, check_time_step
   use gs2_reinit, only: time_message, time_nc, time_reinit
-  use gs2_time, only: init_time, write_dt, stime, simdt
+  use gs2_time, only: write_dt, init_tstart
+  use gs2_time, only: user_time, user_dt
   use init_g, only: tstart
   use check, only: checkstop
 
   implicit none
   real :: time_init = 0., time_advance = 0., time_finish = 0., time_total
-  real :: dt_cfl
-  real :: simtime, deltsave
   integer :: istep, istep_end, unit, istatus
   logical :: exit, reset, list
   character (500), target :: cbuff
@@ -55,21 +54,19 @@ program gs2
 
   call init_fields
   call init_gs2_diagnostics (list, nstep)
-  call init_time (tstart*tnorm, delt)
+  call init_tstart (tstart)   ! tstart is in user units 
   if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
   istep_end = nstep
   do istep = 1, nstep
 
-     call advance (istep, dt_cfl)
-     if (nsave > 0 .and. mod(istep, nsave) == 0) then
-        simtime = stime()/tnorm
-        deltsave = simdt()/tnorm
-        call gs2_save_for_restart (gnew, simtime, deltsave, istatus, fphi, fapar, faperp)
-     end if
+     call advance (istep)
+     if (nsave > 0 .and. mod(istep, nsave) == 0) &
+          call gs2_save_for_restart (gnew, user_time, user_dt, istatus, fphi, fapar, fbpar)
+
      call loop_diagnostics (istep, exit)
-     call check_time_step (istep, delt, dt_cfl, reset, exit)
+     call check_time_step (istep, reset, exit)
      if (proc0) call time_message(.false.,.true.,time_advance,' Advance time step')
-     if (reset) call reset_time_step (istep, dt_cfl, exit)
+     if (reset) call reset_time_step (istep, exit)
 
      if (mod(istep,5) == 0) call checkstop(exit)
 
@@ -78,7 +75,7 @@ program gs2
         exit
      end if
   end do
-  if (proc0) call write_dt(tnorm)
+  if (proc0) call write_dt
 
   call finish_gs2_diagnostics (istep_end)
   if (proc0) call finish_file_utils

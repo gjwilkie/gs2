@@ -17,7 +17,6 @@ module collisions
   integer :: collision_model_switch
   logical :: use_shmem, adjust
   logical :: heating
-  logical :: hyper_colls
 
   integer, parameter :: collision_model_lorentz = 1
   integer, parameter :: collision_model_krook = 2
@@ -57,7 +56,6 @@ module collisions
 
   type (redist_type), save :: lorentz_map
 
-  logical :: hypermult
   logical :: initialized = .false.
   logical :: accelerated_x = .false.
   logical :: accelerated_v = .false.
@@ -65,7 +63,7 @@ module collisions
 contains
 
   subroutine init_collisions
-    use species, only: init_species, nspec, spec
+    use species, only: init_species, nspec
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0
     use le_grids, only: init_le_grids, nlambda, negrid 
@@ -78,10 +76,6 @@ contains
 
     call init_gs2_layouts
     call init_species
-
-    hyper_colls = .false.
-    if (any(spec%nu_h > epsilon(0.0))) hyper_colls = .true.
-
     call init_theta_grid
     call init_kt_grids
     call init_le_grids (accelerated_x, accelerated_v)
@@ -108,12 +102,11 @@ contains
     character(20) :: collision_model
     namelist /collisions_knobs/ collision_model, vncoef, absom, ivnew, &
          conserve_number, conserve_momentum, use_shmem, heating, &
-         adjust, const_v, cfac, hypermult
+         adjust, const_v, cfac
     integer :: ierr, in_file
     logical :: exist
 
     if (proc0) then
-       hypermult = .false.
        cfac = 1.   ! DEFAULT CHANGED TO INCLUDE CLASSICAL DIFFUSION: APRIL 18, 2006
        adjust = .true.
        collision_model = 'default'
@@ -133,7 +126,6 @@ contains
             ierr, "collision_model in collisions_knobs")
     end if
 
-    call broadcast (hypermult)
     call broadcast (cfac)
     call broadcast (vncoef)
     call broadcast (absom)
@@ -232,8 +224,8 @@ contains
 !    end do
 
     if(.not.allocated(vnew)) allocate (vnew(naky,negrid,nspec))
-    if (hyper_colls .and. .not.allocated(vnewh)) allocate (vnewh(-ntgrid:ntgrid,ntheta0,naky,nspec))
-
+! should test for hyperdiffusive collisions and save space if off
+    if(.not.allocated(vnewh)) allocate (vnewh(-ntgrid:ntgrid,ntheta0,naky,nspec))
     do is = 1, nspec
        if (spec(is)%type == electron_species) then
           do ie = 1, negrid
@@ -260,25 +252,20 @@ contains
              end do
           end do
        end if
-
        ! add hyper-terms inside collision operator
 !BD: Warning!
 !BD: For finite magnetic shear, this is different in form from what appears in hyper.f90 
 !BD: because kperp2 /= akx**2 + aky**2;  there are cross terms that are dropped in hyper.f90
 !BD: Warning!
 !BD: Also: there is no "grid_norm" option here and the exponent is fixed to 4 for now
-       if (hyper_colls) then
-          k4max = (maxval(kperp2))**2 
-          do ik = 1, naky
-             do it = 1, ntheta0
-                do ig=-ntgrid,ntgrid
-                   vnewh(ig,it,ik,is) = spec(is)%nu_h * kperp2(ig,it,ik)**2/k4max
-                end do
+       k4max = (maxval(kperp2))**2 
+       do ik = 1, naky
+          do it = 1, ntheta0
+             do ig=-ntgrid,ntgrid
+                vnewh(ig,it,ik,is) = spec(is)%nu_h * kperp2(ig,it,ik)**2/k4max
              end do
           end do
-       else
-          vnewh = 0.
-       end if
+       end do
     end do
     
   end subroutine init_vnew
@@ -431,15 +418,9 @@ contains
           vnc = 0.
           vnh = 0.
        else
-          if (hypermult) then
-             vn = vnew(ik,ie,is)*(1.+vnewh(ig,it,ik,is))
-             vnc = vnew(ik,ie,is)
-             vnh = vnewh(ig,it,ik,is)*vnc
-          else
-             vn = vnew(ik,ie,is)+vnewh(ig,it,ik,is)
-             vnc = vnew(ik,ie,is)
-             vnh = vnewh(ig,it,ik,is)
-          end if
+          vn = vnew(ik,ie,is)+vnewh(ig,it,ik,is)
+          vnc = vnew(ik,ie,is)
+          vnh = vnewh(ig,it,ik,is)
        end if
 ! no trapped particles if je == 0 
        if (je == 0) then  
@@ -774,7 +755,7 @@ contains
     if (heating) call integrate_moment (gc1, c_rate(:,:,:,:,1))
     deallocate (gc1)
 
-    if (heating .and. hyper_colls) call integrate_moment (gc2, c_rate(:,:,:,:,2))
+    if (heating) call integrate_moment (gc2, c_rate(:,:,:,:,2))
     deallocate (gc2)
 
     if (adjust) call g_adjust (g, phi, bpar, -fphi, -fbpar)
@@ -952,22 +933,20 @@ contains
        end do
        call scatter (lorentz_map, glzc, gc)
 
-       if (hyper_colls) then
-          do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
-             ig = ig_idx(lz_lo,ilz)
-             
-             je = 2*jend(ig)          
-             if (je == 0) then
-                je = 2*ng2 
-             end if
-             
-             do il = 1, je-1
-                fac = glz(il+1,ilz)-glz(il,ilz)
-                glzc(il,ilz) = conjg(fac)*fac*h1(il,ilz)  ! h1 accounts for hH(h) entropy
-             end do
+       do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
+          ig = ig_idx(lz_lo,ilz)
+
+          je = 2*jend(ig)          
+          if (je == 0) then
+             je = 2*ng2 
+          end if
+
+          do il = 1, je-1
+             fac = glz(il+1,ilz)-glz(il,ilz)
+             glzc(il,ilz) = conjg(fac)*fac*h1(il,ilz)  ! h1 accounts for hH(h) entropy
           end do
-          call scatter (lorentz_map, glzc, gh)
-       end if
+       end do
+       call scatter (lorentz_map, glzc, gh)
     end if
 
 !    call check_glz ('beg', glz)

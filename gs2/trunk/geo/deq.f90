@@ -129,7 +129,7 @@ contains
        dfit_Z(j) = zhei*(float(j-1)/float(nhb-1)-0.5)
     enddo
 
-    read(5,2020) (dummy(j), j = 1, nw)
+    read(5,2020) (dummy(j), j = 1, nw)  ! pressure read
     call inter_cspl(nw, spsi_bar, dummy, nwb, psi_bar, pressure)
     read(5,2020) ((dfit_psi(i,j) , i = 1, nw) , j = 1, nh)
 !    read(5,2020) ((sdfit_psi(i,j) , i = 1, nw) , j = 1, nh)

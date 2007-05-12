@@ -119,6 +119,7 @@ endif
 # NERSC IBM options:
 ifeq ($(CPU),RS6000)
   FC = mpxlf90_r
+#  FC = h5pfc
   PLATFORM_LINKS = ibm
 #  u_obj = $(UTILDIR)/spl.o $(UTILDIR)/mds.o $(UTILDIR)/netcdf.o
   u_obj = $(UTILDIR)/utils.a
@@ -129,8 +130,8 @@ ifeq ($(CPU),RS6000)
   ifneq ($(debug),on)
 #    FFLAGS   += -O4
 #    F90FLAGS += -O4
-    FFLAGS   += -O3 -qarch=pwr3 -qtune=pwr3
-    F90FLAGS += -O3 -qarch=pwr3 -qtune=pwr3
+    FFLAGS   += -O3 -qarch=auto -qtune=auto
+    F90FLAGS += -O3 -qarch=auto -qtune=auto
   else
     FFLAGS   += -g 
     F90FLAGS += -g 

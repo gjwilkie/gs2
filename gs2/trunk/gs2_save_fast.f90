@@ -3,7 +3,7 @@ module gs2_save
   implicit none
 
   public :: gs2_restore, gs2_save_for_restart
-  public :: init_save, init_dt, init_tstart
+  public :: init_save, init_dt, init_tstart, init_ant_amp
 
   interface gs2_restore
      module procedure gs2_restore_many, gs2_restore_one
@@ -13,27 +13,30 @@ module gs2_save
   character(300), save :: restart_file
 
   double precision, allocatable, dimension(:,:,:) :: tmpr, tmpi, ftmpr, ftmpi
-  integer :: ncid, thetaid, signid, gloid, kyid, kxid
-  integer :: phir_id, phii_id, aparr_id, apari_id, aperpr_id, aperpi_id
+  double precision, allocatable, dimension(:) :: atmp
+  integer :: ncid, thetaid, signid, gloid, kyid, kxid, nk_stir_dim
+  integer :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
   integer :: delt0id, t0id, gr_id, gi_id
+  integer :: a_antr_id, b_antr_id, a_anti_id, b_anti_id
 
 contains
 
-  subroutine gs2_save_for_restart (g, t0, delt0, istatus, fphi, fapar, faperp, exit_in)
+  subroutine gs2_save_for_restart (g, t0, delt0, istatus, fphi, fapar, fbpar, exit_in)
     use theta_grid, only: ntgrid
 ! Must include g_layout_type here to avoid obscure bomb while compiling
 ! gs2_diagnostics.f90 (which uses this module) with the Compaq F90 compiler:
     use gs2_layouts, only: g_lo, g_layout_type
     use mp, only: nproc, iproc, proc0
-    use fields_arrays, only: phinew, aparnew, aperpnew
+    use fields_arrays, only: phinew, aparnew, bparnew
     use kt_grids, only: naky, ntheta0
     use file_utils, only: error_unit
+    use antenna_data, only: nk_stir, a_ant, b_ant, ant_on
     implicit none
     character (305) :: file_proc
     character (5) :: suffix
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
-    real, intent (in) :: fphi, fapar, faperp
+    real, intent (in) :: fphi, fapar, fbpar
     integer, intent (out) :: istatus
     logical, intent (in), optional :: exit_in
     include 'netcdf.inc'
@@ -123,6 +126,43 @@ contains
        goto 1
     end if
     
+    if (ant_on) then
+       istatus = nf_def_dim (ncid, "nk_stir", nk_stir, nk_stir_dim)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_def_dim nk_stir error: ", nf_strerror(istatus)
+          goto 1
+       end if
+
+       istatus = nf_def_var (ncid, "a_ant_r", NF_DOUBLE, 1, nk_stir_dim, a_antr_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_def_var a_ant_r error: ", nf_strerror(istatus)
+          goto 1
+       end if
+
+       istatus = nf_def_var (ncid, "a_ant_i", NF_DOUBLE, 1, nk_stir_dim, a_anti_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_def_var a_ant_i error: ", nf_strerror(istatus)
+          goto 1
+       end if
+
+       istatus = nf_def_var (ncid, "b_ant_r", NF_DOUBLE, 1, nk_stir_dim, b_antr_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_def_var b_ant_r error: ", nf_strerror(istatus)
+          goto 1
+       end if
+
+       istatus = nf_def_var (ncid, "b_ant_i", NF_DOUBLE, 1, nk_stir_dim, b_anti_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_def_var b_ant_i error: ", nf_strerror(istatus)
+          goto 1
+       end if
+    end if
+
     if (n_elements > 0) then
        istatus = nf_def_var (ncid, "gr", NF_DOUBLE, 3, &
             (/ thetaid, signid, gloid /), gr_id)
@@ -176,9 +216,9 @@ contains
           end if
        end if
        
-       if (faperp > epsilon(0.)) then
+       if (fbpar > epsilon(0.)) then
           istatus = nf_def_var (ncid, "aperp_r", NF_DOUBLE, 3, &
-               (/ thetaid, kyid, kxid /), aperpr_id)
+               (/ thetaid, kyid, kxid /), bparr_id)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_var aperp error: ", nf_strerror(istatus)
@@ -186,7 +226,7 @@ contains
           end if
           
           istatus = nf_def_var (ncid, "aperp_i", NF_DOUBLE, 3, &
-               (/ thetaid, kyid, kxid /), aperpi_id)
+               (/ thetaid, kyid, kxid /), bpari_id)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_var aperp error: ", nf_strerror(istatus)
@@ -225,6 +265,41 @@ contains
     end if
 
     if (n_elements > 0) then
+
+       if (ant_on) then
+
+          if (.not. allocated(atmp)) allocate (atmp(nk_stir))
+          atmp = real(a_ant)
+          istatus = nf_put_var_double (ncid, a_antr_id, atmp)
+
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_put_var_double a_antr error: ", nf_strerror(istatus),' ',iproc
+          end if
+
+          atmp = aimag(a_ant)
+          istatus = nf_put_var_double (ncid, a_anti_id, atmp)
+
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_put_var_double a_anti error: ", nf_strerror(istatus),' ',iproc
+          end if
+
+          atmp = real(b_ant)
+          istatus = nf_put_var_double (ncid, b_antr_id, atmp)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_put_var_double b_antr error: ", nf_strerror(istatus),' ',iproc
+          end if
+
+          atmp = aimag(b_ant)
+          istatus = nf_put_var_double (ncid, b_anti_id, atmp)
+          if (istatus /= 0) then
+             ierr = error_unit()
+             write(ierr,*) "nf_put_var_double b_anti error: ", nf_strerror(istatus),' ',iproc
+          end if
+          deallocate (atmp)
+       end if
 
        if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
 
@@ -277,16 +352,16 @@ contains
           end if
        end if
 
-       if (faperp > epsilon(0.)) then
-          ftmpr = real(aperpnew)
-          istatus = nf_put_var_double (ncid, aperpr_id, ftmpr)
+       if (fbpar > epsilon(0.)) then
+          ftmpr = real(bparnew)
+          istatus = nf_put_var_double (ncid, bparr_id, ftmpr)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_put_var_double aperpr error: ", nf_strerror(istatus),' ',iproc
           end if
           
-          ftmpi = aimag(aperpnew)
-          istatus = nf_put_var_double (ncid, aperpi_id, ftmpi)
+          ftmpi = aimag(bparnew)
+          istatus = nf_put_var_double (ncid, bpari_id, ftmpi)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_put_var_double aperpi error: ", nf_strerror(istatus),' ',iproc
@@ -302,12 +377,12 @@ contains
 
   end subroutine gs2_save_for_restart
 
-  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, faperp, many)
+  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, many)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use mp, only: proc0, iproc, nproc
-    use fields_arrays, only: phinew, aparnew, aperpnew
-    use fields_arrays, only: phi, apar, aperp
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use fields_arrays, only: phi, apar, bpar
     use kt_grids, only: naky, ntheta0
     use file_utils, only: error_unit
     implicit none
@@ -316,7 +391,7 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
-    real, intent (in) :: fphi, fapar, faperp
+    real, intent (in) :: fphi, fapar, fbpar
     logical, intent (in) :: many
     include 'netcdf.inc'
     integer :: n_elements
@@ -439,14 +514,14 @@ contains
        end if
     end if
     
-    if (faperp > epsilon(0.)) then
-       istatus = nf_inq_varid (ncid, "aperp_r", aperpr_id)
+    if (fbpar > epsilon(0.)) then
+       istatus = nf_inq_varid (ncid, "aperp_r", bparr_id)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_inq_varid aperpr error: ", nf_strerror(istatus),' ',iproc
        end if
        
-       istatus = nf_inq_varid (ncid, "aperp_i", aperpi_id)
+       istatus = nf_inq_varid (ncid, "aperp_i", bpari_id)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_inq_varid aperpi error: ", nf_strerror(istatus),' ',iproc
@@ -520,34 +595,34 @@ contains
        aparnew = cmplx(ftmpr, ftmpi)
     end if
 
-    if (faperp > epsilon(0.)) then
-       istatus = nf_get_var_double (ncid, aperpr_id, ftmpr)
+    if (fbpar > epsilon(0.)) then
+       istatus = nf_get_var_double (ncid, bparr_id, ftmpr)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_get_var_double aperpr error: ", nf_strerror(istatus),' ',iproc
        end if
        
-       istatus = nf_get_var_double (ncid, aperpi_id, ftmpi)
+       istatus = nf_get_var_double (ncid, bpari_id, ftmpi)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_get_var_double aperpi error: ", nf_strerror(istatus),' ',iproc
        end if
        
-       aperp = 0.
-       aperpnew = cmplx(ftmpr, ftmpi)
+       bpar = 0.
+       bparnew = cmplx(ftmpr, ftmpi)
     end if
 
     if (scale > 0.) then
        g = g*scale
        phinew = phinew*scale
        aparnew = aparnew*scale
-       aperpnew = aperpnew*scale
+       bparnew = bparnew*scale
     else
        fac = - scale/(maxval(abs(phinew)))
        g = g*fac
        phinew = phinew*fac
        aparnew = aparnew*fac
-       aperpnew = aperpnew*fac
+       bparnew = bparnew*fac
     end if
 
     istatus = nf_close (ncid)       
@@ -558,19 +633,19 @@ contains
 
   end subroutine gs2_restore_many
 
-  subroutine gs2_restore_one (g, scale, istatus, fphi, fapar, faperp) 
+  subroutine gs2_restore_one (g, scale, istatus, fphi, fapar, fbpar) 
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use mp, only: proc0, iproc, nproc
-    use fields_arrays, only: phinew, aparnew, aperpnew
-    use fields_arrays, only: phi, apar, aperp
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use fields_arrays, only: phi, apar, bpar
     use kt_grids, only: naky, ntheta0
     use file_utils, only: error_unit
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
-    real, intent (in) :: fphi, fapar, faperp
+    real, intent (in) :: fphi, fapar, fbpar
     include 'netcdf.inc'
     integer :: n_elements, ierr
     double precision :: tmp1
@@ -675,14 +750,14 @@ contains
        end if
     end if
 
-    if (faperp > epsilon(0.)) then
-       istatus = nf_inq_varid (ncid, "aperp_r", aperpr_id)
+    if (fbpar > epsilon(0.)) then
+       istatus = nf_inq_varid (ncid, "aperp_r", bparr_id)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_inq_varid aperpr error: ", nf_strerror(istatus),' ',iproc
        end if
        
-       istatus = nf_inq_varid (ncid, "aperp_i", aperpi_id)
+       istatus = nf_inq_varid (ncid, "aperp_i", bpari_id)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_inq_varid aperpi error: ", nf_strerror(istatus),' ',iproc
@@ -706,7 +781,7 @@ contains
     if (n_elements <= 0) then
        phinew = 0.
        aparnew = 0.
-       aperpnew = 0.
+       bparnew = 0.
        return
     endif
 
@@ -768,21 +843,21 @@ contains
        aparnew = cmplx(ftmpr, ftmpi)*scale
     end if
 
-    if (faperp > epsilon(0.)) then
-       istatus = nf_get_var_double (ncid, aperpr_id, ftmpr)
+    if (fbpar > epsilon(0.)) then
+       istatus = nf_get_var_double (ncid, bparr_id, ftmpr)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_get_var_double aperpr error: ", nf_strerror(istatus),' ',iproc
        end if
        
-       istatus = nf_get_var_double (ncid, aperpi_id, ftmpi)
+       istatus = nf_get_var_double (ncid, bpari_id, ftmpi)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_get_var_double aperpi error: ", nf_strerror(istatus),' ',iproc
        end if
        
-       aperp = 0.
-       aperpnew = cmplx(ftmpr, ftmpi)*scale
+       bpar = 0.
+       bparnew = cmplx(ftmpr, ftmpi)*scale
     end if
 
     istatus = nf_close (ncid)       
@@ -843,6 +918,108 @@ contains
     call broadcast (delt0)
 
   end subroutine init_dt
+
+! This routine gets a_ant and b_ant for proc 0 only!!
+  subroutine init_ant_amp (a_ant, b_ant, nk_stir, istatus)
+
+    use mp, only: proc0
+    use file_utils, only: error_unit
+    use constants
+    implicit none
+    character (305) :: file_proc
+    complex, dimension(:), intent (in out) :: a_ant, b_ant
+    integer, intent (in) :: nk_stir
+    integer, intent (out) :: istatus
+    integer :: ierr, i
+    include 'netcdf.inc'
+
+    if (proc0) then
+       a_ant = 0. ; b_ant = 0.
+
+       file_proc=trim(trim(restart_file)//'.0000')
+       
+       istatus = nf_open (file_proc, 0, ncid)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_open in init_ant_amp error: ", nf_strerror(istatus) 
+          write(ierr,*) "If you did not intend for this to be a restarted run with an external antenna,"
+          write(ierr,*) "you may ignore the error message above."
+          return
+       endif
+
+       istatus = nf_inq_dimid (ncid, "nk_stir", nk_stir_dim)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_dimid nk_stir error: ", nf_strerror(istatus)
+       end if
+
+       istatus = nf_inq_dimlen (ncid, nk_stir_dim, i)       
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_dimlen nk_stir error: ", nf_strerror(istatus)
+       end if
+       if (i /= nk_stir) write(*,*) 'Restart error: nk_stir=? ',i,' : ',nk_stir
+
+       istatus = nf_inq_varid (ncid, "a_ant_r", a_antr_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid for a_ant_r in init_dt: ", nf_strerror(istatus) 
+       endif
+
+       istatus = nf_inq_varid (ncid, "a_ant_i", a_anti_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid for a_ant_i in init_dt: ", nf_strerror(istatus) 
+       endif
+
+       istatus = nf_inq_varid (ncid, "b_ant_r", b_antr_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid for b_ant_r in init_dt: ", nf_strerror(istatus) 
+       endif
+
+       istatus = nf_inq_varid (ncid, "b_ant_i", b_anti_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid for b_ant_i in init_dt: ", nf_strerror(istatus) 
+       endif
+
+       if (.not. allocated(atmp)) allocate (atmp(nk_stir))
+       atmp = 0.
+
+       istatus = nf_get_var_double (ncid, a_antr_id, atmp)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double a_ant_r error: ", nf_strerror(istatus) 
+       endif
+       a_ant = atmp
+
+       istatus = nf_get_var_double (ncid, a_anti_id, atmp)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double a_ant_i error: ", nf_strerror(istatus) 
+       endif
+       a_ant = a_ant + zi * atmp
+
+       istatus = nf_get_var_double (ncid, b_antr_id, atmp)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double b_ant_r error: ", nf_strerror(istatus) 
+       endif
+       b_ant = atmp
+
+       istatus = nf_get_var_double (ncid, b_anti_id, atmp)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double b_ant_i error: ", nf_strerror(istatus) 
+       endif
+       b_ant = b_ant + zi * atmp
+
+       deallocate (atmp)
+       istatus = nf_close (ncid)       
+    endif
+
+  end subroutine init_ant_amp
 
   subroutine init_tstart (tstart, istatus)
 

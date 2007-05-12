@@ -69,19 +69,19 @@ contains
   end subroutine read_parameters
 
   subroutine add_additional_linear_terms &
-       (g, g1, phi, apar, aperp, phinew, aparnew, aperpnew)
+       (g, g1, phi, apar, bpar, phinew, aparnew, bparnew)
     use theta_grid, only: ntgrid
     use gs2_transforms, only: transform_x, inverse_x
     use gs2_layouts, only: g_lo, xxf_lo, ik_idx, it_idx, ie_idx, is_idx
     use prof, only: prof_entering, prof_leaving
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1
     use species, only: spec
-    use run_parameters, only: fphi, fapar, faperp, wunits
+    use run_parameters, only: fphi, fapar, fbpar, wunits
     use constants
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    aperp
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, aperpnew
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
 
     complex, dimension (:,:), allocatable:: xxf, phixxf
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
@@ -111,9 +111,9 @@ contains
           phigavg = (fexp_wstar*phi(:,it,ik) &
                      + (1.0-fexp_wstar)*phinew(:,it,ik)) &
                     *aj0(:,iglo)*fphi &
-                  + (fexp_wstar*aperp(:,it,ik) &
-                     + (1.0-fexp_wstar)*aperpnew(:,it,ik)) &
-                    *aj1(:,iglo)*faperp*2.0*vperp2(:,iglo)*spec(is)%tz
+                  + (fexp_wstar*bpar(:,it,ik) &
+                     + (1.0-fexp_wstar)*bparnew(:,it,ik)) &
+                    *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
           apargavg = (fexp_wstar*apar(:,it,ik) &
                       + (1.0-fexp_wstar)*aparnew(:,it,ik)) &
                      *aj0(:,iglo)*fapar
@@ -149,7 +149,8 @@ contains
     use species, only: init_species, nspec
     use gs2_layouts, only: init_x_transform_layouts 
     use gs2_transforms, only: init_x_transform
-    use run_parameters, only: init_run_parameters, rhostar, delt, tunits
+    use run_parameters, only: init_run_parameters, rhostar, tunits
+    use gs2_time, only: code_dt
     use file_utils, only: input_unit, error_unit
     use mp, only: proc0, broadcast
     use text_options
@@ -214,8 +215,8 @@ contains
 
     if(.not.allocated(fac_phi0)) allocate (fac_phi0(nx,naky))
     do i = 1, naky
-       fac_phi0(:,i) = cmplx(1.0,-aky(i)*tunits(i)*delt*fexp_phi0*dphi0) &
-                       /cmplx(1.0,aky(i)*tunits(i)*delt*(1.0-fexp_phi0)*dphi0)
+       fac_phi0(:,i) = cmplx(1.0,-aky(i)*tunits(i)*code_dt*fexp_phi0*dphi0) &
+                       /cmplx(1.0,aky(i)*tunits(i)*code_dt*(1.0-fexp_phi0)*dphi0)
     end do
     deallocate (x, dphi0)
   end subroutine init_phi0_term
@@ -229,7 +230,8 @@ contains
     use species, only: init_species, nspec
     use gs2_layouts, only: init_x_transform_layouts 
     use gs2_transforms, only: init_x_transform
-    use run_parameters, only: init_run_parameters, delt, wunits
+    use run_parameters, only: init_run_parameters, wunits
+    use gs2_time, only: code_dt
     use mp, only: proc0, broadcast
     use constants
     implicit none
@@ -308,7 +310,7 @@ contains
     end select
 
     do ik = 1, naky
-       dwstar(:,ik,:,:) = dwstar(:,ik,:,:)*delt*wunits(ik)
+       dwstar(:,ik,:,:) = dwstar(:,ik,:,:)*code_dt*wunits(ik)
     end do
 
     deallocate (x)

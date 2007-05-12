@@ -110,15 +110,17 @@ endif
 # NERSC IBM options:
 ifeq ($(CPU),RS6000)
   FC = mpxlf90_r
+#  FC = h5pfc
   PLATFORM_LINKS = ibm
   FFLAGS   = -qrealsize=8
-  F90FLAGS = -qrealsize=8 -qsuffix=f=f90
+  F90FLAGS2 = -qrealsize=8 -qsuffix=f=f90
+  F90FLAGS = -qautodbl=dbl4 -qsuffix=f=f90
   FLIBS = $$NETCDF 
   ifneq ($(debug),on)
 #    FFLAGS   += -O4
 #    F90FLAGS += -O4
-    FFLAGS   += -O3 -qarch=pwr3 -qtune=pwr3
-    F90FLAGS += -O3 -qarch=pwr3 -qtune=pwr3
+    FFLAGS   += -O3 -qarch=auto -qtune=auto
+    F90FLAGS += -O3 -qarch=auto -qtune=auto
   else
     FFLAGS   += -g 
     F90FLAGS += -g 
@@ -319,8 +321,8 @@ utils.a: $(util_obj)
 	$(RANLIB) $@
 
 mds.o: prec.o
-	$(FC) $(F90FLAGS) -c prec.f90
-	$(FC) $(F90FLAGS) $(SFLAGS) -c mds.f90
+	$(FC) $(F90FLAGS2) -c prec.f90
+	$(FC) $(F90FLAGS2) $(SFLAGS) -c mds.f90
 
 mdslib.a: mdslib.o
 	$(AR) rc $@ mdslib.o

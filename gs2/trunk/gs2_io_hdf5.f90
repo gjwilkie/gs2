@@ -27,30 +27,30 @@ module gs2_io
   integer :: nx_dim, ny_dim, nth_dim, time_movie_dim
   integer, dimension (4) :: xmode_dim
   integer :: nx_id, ny_id, nth_id, x_id, y_id, th_id, time_movie_id
-  integer :: phi_by_xmode_id, apar_by_xmode_id, aperp_by_xmode_id
+  integer :: phi_by_xmode_id, apar_by_xmode_id, bpar_by_xmode_id
   integer :: code_id_movie
 
   integer :: nakx_id, naky_id, nttot_id, akx_id, aky_id, theta_id, nspec_id
-  integer :: time_id, phi2_id, apar2_id, aperp2_id, theta0_id, nproc_id, nmesh_id
-  integer :: phi2_by_mode_id, apar2_by_mode_id, aperp2_by_mode_id, anorm_id
+  integer :: time_id, phi2_id, apar2_id, bpar2_id, theta0_id, nproc_id, nmesh_id
+  integer :: phi2_by_mode_id, apar2_by_mode_id, bpar2_by_mode_id, anorm_id
   integer :: phtot_id, dmix_id, kperpnorm_id
-  integer :: phi2_by_kx_id, apar2_by_kx_id, aperp2_by_kx_id
-  integer :: phi2_by_ky_id, apar2_by_ky_id, aperp2_by_ky_id
-  integer :: phi0_id, apar0_id, aperp0_id, sourcefac_id
+  integer :: phi2_by_kx_id, apar2_by_kx_id, bpar2_by_kx_id
+  integer :: phi2_by_ky_id, apar2_by_ky_id, bpar2_by_ky_id
+  integer :: phi0_id, apar0_id, bpar0_id, sourcefac_id
   integer :: omega_id, omegaavg_id, phase_id, phiavg_id
   integer :: es_heat_flux_id, es_mom_flux_id, es_part_flux_id
   integer :: es_heat_par_id, es_heat_perp_id
   integer :: apar_heat_flux_id, apar_mom_flux_id, apar_part_flux_id
   integer :: apar_heat_par_id, apar_heat_perp_id
-  integer :: aperp_heat_flux_id, aperp_mom_flux_id, aperp_part_flux_id
-  integer :: aperp_heat_par_id, aperp_heat_perp_id
+  integer :: bpar_heat_flux_id, bpar_mom_flux_id, bpar_part_flux_id
+  integer :: bpar_heat_par_id, bpar_heat_perp_id
   integer :: hflux_tot_id, zflux_tot_id, vflux_tot_id
   integer :: es_heat_by_k_id, es_mom_by_k_id, es_part_by_k_id
   integer :: apar_heat_by_k_id, apar_mom_by_k_id, apar_part_by_k_id
-  integer :: aperp_heat_by_k_id, aperp_mom_by_k_id, aperp_part_by_k_id
-  integer :: phi_t_id, apar_t_id, aperp_t_id
-  integer :: phi_norm_id, apar_norm_id, aperp_norm_id
-  integer :: phi_id, apar_id, aperp_id, epar_id
+  integer :: bpar_heat_by_k_id, bpar_mom_by_k_id, bpar_part_by_k_id
+  integer :: phi_t_id, apar_t_id, bpar_t_id
+  integer :: phi_norm_id, apar_norm_id, bpar_norm_id
+  integer :: phi_id, apar_id, bpar_id, epar_id
   integer :: antot_id, antota_id, antotp_id
   integer :: ntot_id, density_id, upar_id, tpar_id, tperp_id
   integer :: rstress_id, ustress_id, hrateavg_id, hrate_by_k_id
@@ -307,7 +307,7 @@ contains
     use mp, only: nproc
     use species, only: nspec
     use kt_grids, only: naky, ntheta0, theta0
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod
     logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate
 
@@ -588,33 +588,33 @@ contains
        status = netcdf_put_att (ncid, apar2_id, 'long_name', 'Total A_par squared')
     end if
 
-    if (faperp > zero) then
-       status = netcdf_def_var (ncid, 'aperp2',          nf_double, 1, time_dim, aperp2_id)
-       status = netcdf_def_var (ncid, 'aperp2_by_mode',  nf_double, 3, mode_dim, aperp2_by_mode_id)
+    if (fbpar > zero) then
+       status = netcdf_def_var (ncid, 'bpar2',          nf_double, 1, time_dim, bpar2_id)
+       status = netcdf_def_var (ncid, 'bpar2_by_mode',  nf_double, 3, mode_dim, bpar2_by_mode_id)
        if (ntheta0 > 1) &
-       status = netcdf_def_var (ncid, 'aperp2_by_kx',    nf_double, 2, kx_dim, aperp2_by_kx_id)
+       status = netcdf_def_var (ncid, 'bpar2_by_kx',    nf_double, 2, kx_dim, bpar2_by_kx_id)
        if (naky > 1) &
-       status = netcdf_def_var (ncid, 'aperp2_by_ky',    nf_double, 2, ky_dim, aperp2_by_ky_id)
-       status = netcdf_def_var (ncid, 'aperp0',          nf_double, 4, omega_dim, aperp0_id)
+       status = netcdf_def_var (ncid, 'bpar2_by_ky',    nf_double, 2, ky_dim, bpar2_by_ky_id)
+       status = netcdf_def_var (ncid, 'bpar0',          nf_double, 4, omega_dim, bpar0_id)
        if (write_nl_flux) then
-          status = netcdf_def_var (ncid, 'aperp_heat_flux', nf_double, 2, flux_dim, aperp_heat_flux_id)
-          status = netcdf_def_var (ncid, 'aperp_heat_par',  nf_double, 2, flux_dim, aperp_heat_par_id)
-          status = netcdf_def_var (ncid, 'aperp_heat_perp', nf_double, 2, flux_dim, aperp_heat_perp_id)
-          status = netcdf_def_var (ncid, 'aperp_mom_flux',  nf_double, 2, flux_dim, aperp_mom_flux_id)
-          status = netcdf_def_var (ncid, 'aperp_part_flux', nf_double, 2, flux_dim, aperp_part_flux_id)
-          status = netcdf_def_var (ncid, 'aperp_heat_by_k', nf_double, 4, fluxk_dim, aperp_heat_by_k_id)
-          status = netcdf_def_var (ncid, 'aperp_mom_by_k',  nf_double, 4, fluxk_dim, aperp_mom_by_k_id)
-          status = netcdf_def_var (ncid, 'aperp_part_by_k', nf_double, 4, fluxk_dim, aperp_part_by_k_id)
+          status = netcdf_def_var (ncid, 'bpar_heat_flux', nf_double, 2, flux_dim, bpar_heat_flux_id)
+          status = netcdf_def_var (ncid, 'bpar_heat_par',  nf_double, 2, flux_dim, bpar_heat_par_id)
+          status = netcdf_def_var (ncid, 'bpar_heat_perp', nf_double, 2, flux_dim, bpar_heat_perp_id)
+          status = netcdf_def_var (ncid, 'bpar_mom_flux',  nf_double, 2, flux_dim, bpar_mom_flux_id)
+          status = netcdf_def_var (ncid, 'bpar_part_flux', nf_double, 2, flux_dim, bpar_part_flux_id)
+          status = netcdf_def_var (ncid, 'bpar_heat_by_k', nf_double, 4, fluxk_dim, bpar_heat_by_k_id)
+          status = netcdf_def_var (ncid, 'bpar_mom_by_k',  nf_double, 4, fluxk_dim, bpar_mom_by_k_id)
+          status = netcdf_def_var (ncid, 'bpar_part_by_k', nf_double, 4, fluxk_dim, bpar_part_by_k_id)
        end if
-       status = netcdf_def_var (ncid, 'aperp_norm',      nf_double, 4, final_field_dim, aperp_norm_id)
-       status = netcdf_def_var (ncid, 'aperp',           nf_double, 4, final_field_dim, aperp_id)
+       status = netcdf_def_var (ncid, 'bpar_norm',      nf_double, 4, final_field_dim, bpar_norm_id)
+       status = netcdf_def_var (ncid, 'bpar',           nf_double, 4, final_field_dim, bpar_id)
        status = netcdf_def_var (ncid, 'antotp',          nf_double, 4, final_field_dim, antotp_id)
        if (d_fields_per) &
-            status = netcdf_def_var (ncid, 'aperp_t', nf_double, 5, field_dim, aperp_t_id)
-       status = netcdf_put_att (ncid, aperp2_by_mode_id, 'long_name', 'A_perp squared')
-       status = netcdf_put_att (ncid, aperp_id, 'long_name', 'delta B Parallel')      
-       status = netcdf_put_att (ncid, aperp_id, 'idl_name', '!6B!9!D#!N!6')          
-       status = netcdf_put_att (ncid, aperp2_id, 'long_name', 'Total A_perp squared')
+            status = netcdf_def_var (ncid, 'bpar_t', nf_double, 5, field_dim, bpar_t_id)
+       status = netcdf_put_att (ncid, bpar2_by_mode_id, 'long_name', 'A_perp squared')
+       status = netcdf_put_att (ncid, bpar_id, 'long_name', 'delta B Parallel')      
+       status = netcdf_put_att (ncid, bpar_id, 'idl_name', '!6B!9!D#!N!6')          
+       status = netcdf_put_att (ncid, bpar2_id, 'long_name', 'Total A_perp squared')
     end if
 
     status = netcdf_def_var (ncid, 'anorm', nf_double, 1, time_dim, anorm_id)
@@ -720,8 +720,8 @@ contains
        if(fapar > zero) then
           status = netcdf_def_var (ncid_movie, 'apar_by_xmode', nf_double, 4, xmode_dim, apar_by_xmode_id)
        end if
-       if(faperp > zero) then
-          status = netcdf_def_var (ncid_movie, 'aperp_by_xmode', nf_double, 4, xmode_dim, aperp_by_xmode_id)
+       if(fbpar > zero) then
+          status = netcdf_def_var (ncid_movie, 'bpar_by_xmode', nf_double, 4, xmode_dim, bpar_by_xmode_id)
        end if
        status = nf_enddef (ncid_movie)  ! out of definition mode
     endif
@@ -732,8 +732,8 @@ contains
 
     use netcdf_mod, only: netcdf_put_var
     use convert, only: c2r
-    use run_parameters, only: fphi, fapar, faperp
-    use fields_arrays, only: phi, apar, aperp
+    use run_parameters, only: fphi, fapar, fbpar
+    use fields_arrays, only: phi, apar, bpar
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     complex, dimension(:,:), intent (in) :: phase
@@ -762,12 +762,12 @@ contains
        status = netcdf_put_var(ncid, apar_norm_id, ri3)
     end if
 
-    if (faperp > zero) then
+    if (fbpar > zero) then
        do ig = -ntgrid, ntgrid
-          tmp(ig,:,:) = aperp(ig,:,:)/phase(:,:)
+          tmp(ig,:,:) = bpar(ig,:,:)/phase(:,:)
        end do
        call c2r (tmp, ri3)
-       status = netcdf_put_var(ncid, aperp_norm_id, ri3)
+       status = netcdf_put_var(ncid, bpar_norm_id, ri3)
     end if
 
   end subroutine nc_eigenfunc
@@ -776,8 +776,8 @@ contains
 
     use netcdf_mod, only: netcdf_put_var
     use convert, only: c2r
-    use run_parameters, only: fphi, fapar, faperp
-    use fields_arrays, only: phi, apar, aperp
+    use run_parameters, only: fphi, fapar, fbpar
+    use fields_arrays, only: phi, apar, bpar
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
@@ -793,9 +793,9 @@ contains
        status = netcdf_put_var(ncid, apar_id, ri3)
     end if
 
-    if (faperp > zero) then
-       call c2r (aperp, ri3)
-       status = netcdf_put_var(ncid, aperp_id, ri3)
+    if (fbpar > zero) then
+       call c2r (bpar, ri3)
+       status = netcdf_put_var(ncid, bpar_id, ri3)
     end if
 
   end subroutine nc_final_fields
@@ -804,7 +804,7 @@ contains
 
     use netcdf_mod, only: netcdf_put_var
     use convert, only: c2r
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     complex, dimension (:,:,:), intent (in) :: epar
@@ -963,7 +963,7 @@ contains
     use netcdf_mod, only: netcdf_put_var
     use convert, only: c2r
 
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     complex, dimension (:,:,:) :: antot, antota, antotp
@@ -980,7 +980,7 @@ contains
        status = netcdf_put_var(ncid, antota_id, ri3)
     end if
 
-    if (faperp > zero) then
+    if (fbpar > zero) then
        call c2r (antotp, ri3)
        status = netcdf_put_var(ncid, antotp_id, ri3)
     end if
@@ -994,7 +994,7 @@ contains
 
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod, only: netcdf_put_vara, netcdf_put_var1
 
     integer, intent (in) :: nout
@@ -1039,11 +1039,11 @@ contains
        status = netcdf_put_vara(ncid, apar_heat_by_k_id, start4, count4, qmheat)
     end if
 
-    if (faperp > zero) then
-       status = netcdf_put_vara(ncid, aperp_heat_flux_id, start, count, bheat_fluxes)
-       status = netcdf_put_vara(ncid, aperp_heat_par_id,  start, count, bheat_par)
-       status = netcdf_put_vara(ncid, aperp_heat_perp_id, start, count, bheat_perp)
-       status = netcdf_put_vara(ncid, aperp_heat_by_k_id, start4, count4, qbheat)
+    if (fbpar > zero) then
+       status = netcdf_put_vara(ncid, bpar_heat_flux_id, start, count, bheat_fluxes)
+       status = netcdf_put_vara(ncid, bpar_heat_par_id,  start, count, bheat_par)
+       status = netcdf_put_vara(ncid, bpar_heat_perp_id, start, count, bheat_perp)
+       status = netcdf_put_vara(ncid, bpar_heat_by_k_id, start4, count4, qbheat)
     end if
     
     status = netcdf_put_var1(ncid, hflux_tot_id, nout, hflux_tot)
@@ -1055,7 +1055,7 @@ contains
 
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod, only: netcdf_put_vara, netcdf_put_var1
 
     integer, intent (in) :: nout
@@ -1092,9 +1092,9 @@ contains
        status = netcdf_put_vara(ncid, apar_part_by_k_id, start4, count4, pmflux)
     end if
 
-    if (faperp > zero) then
-       status = netcdf_put_vara(ncid, aperp_part_flux_id, start, count, bpart_fluxes)
-       status = netcdf_put_vara(ncid, aperp_part_by_k_id, start4, count4, pbflux)
+    if (fbpar > zero) then
+       status = netcdf_put_vara(ncid, bpar_part_flux_id, start, count, bpart_fluxes)
+       status = netcdf_put_vara(ncid, bpar_part_by_k_id, start4, count4, pbflux)
     end if
     
     status = netcdf_put_var1(ncid, zflux_tot_id, nout, zflux_tot)
@@ -1106,7 +1106,7 @@ contains
 
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod, only: netcdf_put_vara, netcdf_put_var1
 
     integer, intent (in) :: nout
@@ -1143,9 +1143,9 @@ contains
        status = netcdf_put_vara(ncid, apar_mom_by_k_id, start4, count4, vmflux)
     end if
 
-    if (faperp > zero) then
-       status = netcdf_put_vara(ncid, aperp_mom_flux_id, start, count, bmom_fluxes)
-       status = netcdf_put_vara(ncid, aperp_mom_by_k_id, start4, count4, vbflux)
+    if (fbpar > zero) then
+       status = netcdf_put_vara(ncid, bpar_mom_flux_id, start, count, bmom_fluxes)
+       status = netcdf_put_vara(ncid, bpar_mom_by_k_id, start4, count4, vbflux)
     end if
     
     status = netcdf_put_var1(ncid, vflux_tot_id, nout, vflux_tot)
@@ -1155,21 +1155,21 @@ contains
   subroutine nc_loop (nout, time, fluxfac, &
        phi0,   phi2,   phi2_by_mode, &! phiavg, &
        apar0,  apar2,  apar2_by_mode, &
-       aperp0, aperp2, aperp2_by_mode, &
+       bpar0, bpar2, bpar2_by_mode, &
        hrateavg, rate_by_k, &
        omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
 
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod, only: netcdf_put_var1, netcdf_put_vara
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use convert, only: c2r
 
     integer, intent (in) :: nout
-    real, intent (in) :: time, phi2, apar2, aperp2
+    real, intent (in) :: time, phi2, apar2, bpar2
     real, dimension (:), intent (in) :: fluxfac, woutunits
-    complex, dimension(:,:), intent (in) :: phi0, apar0, aperp0, omega, omegaavg !, phiavg
-    real, dimension(:,:), intent (in) :: phi2_by_mode, apar2_by_mode, aperp2_by_mode, phitot
+    complex, dimension(:,:), intent (in) :: phi0, apar0, bpar0, omega, omegaavg !, phiavg
+    real, dimension(:,:), intent (in) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode, phitot
     real, dimension (:,:), intent (in) :: hrateavg
     real, dimension (:,:,:,:), intent (in) :: rate_by_k
     logical :: write_omega, write_hrate
@@ -1297,26 +1297,26 @@ contains
        status = netcdf_put_var1(ncid, apar2_id, nout, apar2)
     end if
 
-    if (faperp > zero) then
+    if (fbpar > zero) then
 
        if (ntheta0 > 1) then
           do it = 1, ntheta0
-             field2_by_kx(it) = sum(aperp2_by_mode(it,:)*fluxfac(:))
+             field2_by_kx(it) = sum(bpar2_by_mode(it,:)*fluxfac(:))
           end do
-          status = netcdf_put_vara(ncid, aperp2_by_kx_id, startx, countx, field2_by_kx)
+          status = netcdf_put_vara(ncid, bpar2_by_kx_id, startx, countx, field2_by_kx)
        end if
 
        if (naky > 1) then
           do ik = 1, naky
-             field2_by_ky(ik) = sum(aperp2_by_mode(:,ik)*fluxfac(ik))
+             field2_by_ky(ik) = sum(bpar2_by_mode(:,ik)*fluxfac(ik))
           end do
-          status = netcdf_put_vara(ncid, aperp2_by_ky_id, starty, county, field2_by_ky)
+          status = netcdf_put_vara(ncid, bpar2_by_ky_id, starty, county, field2_by_ky)
        end if
 
-       call c2r (aperp0, ri2) 
-       status = netcdf_put_vara(ncid, aperp0_id, start0, count0, ri2)
-       status = netcdf_put_vara(ncid, aperp2_by_mode_id, start, count, aperp2_by_mode)
-       status = netcdf_put_var1(ncid, aperp2_id, nout, aperp2)
+       call c2r (bpar0, ri2) 
+       status = netcdf_put_vara(ncid, bpar0_id, start0, count0, ri2)
+       status = netcdf_put_vara(ncid, bpar2_by_mode_id, start, count, bpar2_by_mode)
+       status = netcdf_put_var1(ncid, bpar2_id, nout, bpar2)
     end if
         
     if (write_hrate) then
@@ -1347,14 +1347,14 @@ contains
   end subroutine nc_loop
 
   ! added by EAB on 03/05/04
-  subroutine nc_loop_movie (nout_movie, time, yxphi, yxapar, yxaperp)
+  subroutine nc_loop_movie (nout_movie, time, yxphi, yxapar, yxbpar)
     use gs2_layouts, only: yxf_lo
     use theta_grid, only: ntgrid
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod, only: netcdf_put_var1, netcdf_put_vara
     integer, intent (in) :: nout_movie
     real, intent (in) :: time
-    real, dimension (:,:,:), intent (in):: yxphi, yxapar, yxaperp 
+    real, dimension (:,:,:), intent (in):: yxphi, yxapar, yxbpar 
     integer :: status
     integer, dimension (4) :: start, count
 
@@ -1377,8 +1377,8 @@ contains
        status = netcdf_put_vara(ncid_movie, apar_by_xmode_id, start, count, yxapar)
     end if
 
-    if ( faperp > zero) then
-       status = netcdf_put_vara(ncid_movie, aperp_by_xmode_id, start, count, yxaperp)
+    if ( fbpar > zero) then
+       status = netcdf_put_vara(ncid_movie, bpar_by_xmode_id, start, count, yxbpar)
     end if
 
     if (mod(nout_movie, 10) == 0) status = nf_sync (ncid_movie)

@@ -1,7 +1,7 @@
 module fields
-  use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
-  use fields_arrays, only: phitmp, apartmp, aperptmp
-  use fields_arrays, only: phitmp1, apartmp1, aperptmp1
+  use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+  use fields_arrays, only: phitmp, apartmp, bpartmp
+  use fields_arrays, only: phitmp1, apartmp1, bpartmp1
   use fields_arrays, only: phi_ext, apar_ext
 
   implicit none
@@ -9,7 +9,7 @@ module fields
   public :: init_fields
   public :: advance
   public :: phinorm, kperp, fieldlineavgphi
-  public :: phi, apar, aperp, phinew, aparnew, aperpnew
+  public :: phi, apar, bpar, phinew, aparnew, bparnew
   public :: reset_init
 
   private
@@ -119,42 +119,41 @@ contains
     if (alloc) then
        allocate (     phi (-ntgrid:ntgrid,ntheta0,naky))
        allocate (    apar (-ntgrid:ntgrid,ntheta0,naky))
-       allocate (   aperp (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (   bpar (-ntgrid:ntgrid,ntheta0,naky))
        allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
-       allocate (aperpnew (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (bparnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (  phitmp (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( apartmp (-ntgrid:ntgrid,ntheta0,naky))
-       allocate (aperptmp (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (bpartmp (-ntgrid:ntgrid,ntheta0,naky))
 !       allocate (  phitmp1(-ntgrid:ntgrid,ntheta0,naky))
 !       allocate ( apartmp1(-ntgrid:ntgrid,ntheta0,naky))
-!       allocate (aperptmp1(-ntgrid:ntgrid,ntheta0,naky))
+!       allocate (bpartmp1(-ntgrid:ntgrid,ntheta0,naky))
 !       allocate ( phi_ext (-ntgrid:ntgrid,ntheta0,naky))
        allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
     endif
     phi = 0.; phinew = 0.; phitmp = 0. 
     apar = 0.; aparnew = 0.; apartmp = 0. 
-    aperp = 0.; aperpnew = 0.; aperptmp = 0.
-!    phitmp1 = 0. ; apartmp1 = 0. ; aperptmp1 = 0.
+    bpar = 0.; bparnew = 0.; bpartmp = 0.
+!    phitmp1 = 0. ; apartmp1 = 0. ; bpartmp1 = 0.
 !    phi_ext = 0.
     apar_ext = 0.
 
     alloc = .false.
   end subroutine allocate_arrays
 
-  subroutine advance (istep, dt_cfl)
+  subroutine advance (istep)
     use fields_implicit, only: advance_implicit
     use fields_explicit, only: advance_explicit
     use fields_test, only: advance_test
     implicit none
     integer, intent (in) :: istep
-    real :: dt_cfl
 
     select case (fieldopt_switch)
     case (fieldopt_implicit)
-       call advance_implicit (istep, dt_cfl)
+       call advance_implicit (istep)
     case (fieldopt_explicit)
-       call advance_explicit (istep, dt_cfl)
+       call advance_explicit (istep)
     case (fieldopt_test)
        call advance_test (istep)
     end select
@@ -172,7 +171,7 @@ contains
        do it = 1, ntheta0
           phitot(it,ik) = 0.5/pi &
            *(sum((abs(phinew(:,it,ik))**2 + abs(aparnew(:,it,ik))**2 &
-                  + abs(aperpnew(:,it,ik))**2) &
+                  + abs(bparnew(:,it,ik))**2) &
                  *delthet))
        end do
     end do
@@ -181,7 +180,7 @@ contains
   subroutine kperp (ntgrid_output, akperp)
     use theta_grid, only: delthet
     use kt_grids, only: naky, aky, ntheta0
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kperp2
     implicit none
     integer, intent (in) :: ntgrid_output
@@ -193,7 +192,7 @@ contains
        do it = 1, ntheta0
           anorm = sum(abs(phinew(-ntgrid_output:ntgrid_output,it,ik)*fphi &
                          + aparnew(-ntgrid_output:ntgrid_output,it,ik)*fapar &
-                         + aperpnew(-ntgrid_output:ntgrid_output,it,ik)*faperp)**2 &
+                         + bparnew(-ntgrid_output:ntgrid_output,it,ik)*fbpar)**2 &
                       *delthet(-ntgrid_output:ntgrid_output))
           if (anorm < 2.0*epsilon(0.0) .or. aky(ik) == 0.0) then
              akperp(it,ik) = 0.0
@@ -202,7 +201,7 @@ contains
                   = sqrt(sum(kperp2(-ntgrid_output:ntgrid_output,it,ik) &
                      *abs(phinew(-ntgrid_output:ntgrid_output,it,ik)*fphi &
                           + aparnew(-ntgrid_output:ntgrid_output,it,ik)*fapar &
-                          + aperpnew(-ntgrid_output:ntgrid_output,it,ik)*faperp)**2 &
+                          + bparnew(-ntgrid_output:ntgrid_output,it,ik)*fbpar)**2 &
                      *delthet(-ntgrid_output:ntgrid_output))/anorm)
           end if
        end do

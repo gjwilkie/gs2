@@ -154,6 +154,8 @@ contains
 
   subroutine roote(fval,a,b,xerrbi,xerrsec,nsolv,ier,soln)
 
+    use mp, only: proc0
+    use file_utils, only: error_unit
 ! TT
 ! solve xgrid(E) == fval for E
 !   xerrbi: error max in x for bisection routine
@@ -165,7 +167,7 @@ contains
     real, intent(in) :: fval, a, b, xerrbi, xerrsec
     real, intent(out) :: soln
     integer, parameter :: maxit=30
-    integer :: i, niter, isolv
+    integer :: i, niter, isolv, ierr
     real :: a1, b1, f1, f2, f3, trial, aold
 
     ier=0
@@ -191,9 +193,12 @@ contains
           enddo
        else
           ! TT: This should be connected to '$(run_name).error'?
-          write(11,*) 'f1 and f2 have same sign in bisection routine'
-          write(11,*) 'a1,f1,b1,f2=',a1,f1,b1,f2
-          write(11,*) 'fval=',fval
+          if (proc0) then
+             ierr = error_unit()
+             write(ierr,*) 'f1 and f2 have same sign in bisection routine'
+             write(ierr,*) 'a1,f1,b1,f2=',a1,f1,b1,f2
+             write(ierr,*) 'fval=',fval
+          end if
           ier=1
        endif
     end if
@@ -218,7 +223,10 @@ contains
 
     if (i > maxit) then
 ! TT: This should be connected to '$(run_name).error'?
-       write (11,*) 'bad convergence in roote'
+       if (proc0) then
+          ierr = error_unit()
+          write (ierr,*) 'le_grids:roote: bad convergence'
+       end if
        ier = 1
     end if
 
@@ -970,6 +978,8 @@ contains
 
   subroutine integrate_moment (g, total)
 ! returns moments to PE 0
+!GGH NOTE: Takes a 5-D dist function g and returns the moment integrated
+!   over all velocity
     use mp, only: nproc
     use theta_grid, only: ntgrid
     use species, only: nspec

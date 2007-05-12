@@ -22,6 +22,7 @@ module mp
   public :: barrier
   public :: scope, allprocs, subprocs
   public :: init_jobs
+  public :: communicator
 
   integer, pointer :: nproc
   integer, target :: ntot_proc, ngroup_proc

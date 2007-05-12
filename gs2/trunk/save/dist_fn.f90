@@ -132,6 +132,7 @@ contains
     use collisions, only: init_collisions
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
     use nonlinear_terms, only: init_nonlinear_terms
+    use additional_linear_terms, only: init_additional_linear_terms
     use init_g, only: init_init_g
     use hyper, only: init_hyper
     implicit none
@@ -164,6 +165,7 @@ contains
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
     call init_init_g 
     call init_nonlinear_terms 
+    call init_additional_linear_terms
     call allocate_arrays
     call init_vpar
     call init_wdrift
@@ -1717,6 +1719,7 @@ contains
     use theta_grid, only: ntgrid
     use collisions, only: solfp1
     use dist_fn_arrays, only: gnew, g, gold
+    use additional_linear_terms, only: add_additional_linear_terms
     use nonlinear_terms, only: add_nonlinear_terms
     use hyper, only: hyper_diff
     implicit none
@@ -1736,6 +1739,8 @@ contains
        call hyper_diff (gnew, g0, phinew, bparnew)
        call kill (gnew, g0, phinew, bparnew)
        call solfp1 (gnew, g0, phinew, aparnew, bparnew)
+       call add_additional_linear_terms &
+            (gnew, g0, phi, apar, bpar, phinew, aparnew, bparnew)
        
        if (def_parity) then
           if (even) then
@@ -3788,7 +3793,7 @@ contains
     use run_parameters, only: fphi, fapar, fbpar, tunits, beta, tnorm, tite
     use gs2_time, only: code_dt
     use nonlinear_terms, only: nonlin
-    use antenna, only: antenna_apar, a_ext_data
+    use antenna, only: antenna_apar
     use hyper, only: D_v, D_eta, nexp
     implicit none
     type (heating_diagnostics) :: h
@@ -3796,11 +3801,11 @@ contains
 !    complex, dimension (-ntgrid:,:,:), pointer :: hh, hnew
     complex, dimension (-ntgrid:,:,:) :: phi, apar, bpar, phinew, aparnew, bparnew
     complex, dimension(:,:,:,:), allocatable :: tot
-    complex, dimension(:,:,:), allocatable :: epar, bpardot, apardot, phidot, j_ext, a_ext_old, a_ext_new
+    complex, dimension(:,:,:), allocatable :: epar, bpardot, apardot, phidot, j_ext
     complex :: fac, hfac, pfac, jpold, afac, chi, havg, gavg
     complex :: bfac                                   !B_|| intermediate calculation
     complex :: chidot, eparavg, j0phidot, j0phiavg, j1bparavg, j0aparavg
-    complex :: phi_m, apar_m, bpar_m, pstar, pstardot, gdot, hdot, hold, adot
+    complex :: phi_m, apar_m, bpar_m, pstar, pstardot, gdot, hdot, hold
     complex :: phi_avg, apar_avg, bpar_avg, bperp_m, bperp_avg
     complex :: de, denew, chinew,chi1,chi2, havg2,havg2new,h2dot
     real, dimension (:), allocatable :: wgt
@@ -3809,9 +3814,9 @@ contains
 
     g0(ntgrid,:,:) = 0.
 
-! ==========================================================================
-! Ion/Electron heating------------------------------------------------------
-! ==========================================================================
+!GGH ==========================================================================
+!GGH Ion/Electron heating------------------------------------------------------
+!GGH ==========================================================================
 
     allocate ( phidot(-ntgrid:ntgrid, ntheta0, naky))
     allocate (apardot(-ntgrid:ntgrid, ntheta0, naky))
@@ -3884,73 +3889,17 @@ contains
                 if (nonlin .and. it == 1 .and. ik == 1) cycle
                 do ig = -ntgrid, ntgrid-1
                     hk(it,ik) % heating(is) = hk(it,ik) % heating(is) &
-                        + real(tot(ig,it,ik,is))*wgt(ig)*fac2 
+                        + real(tot(ig,it,ik,is))*wgt(ig)*fac2*spec(is)%dens
                 end do
                 h % heating(is) = h % heating(is) + hk(it,ik) % heating(is)
              end do
           end do
        end do
-    end if
+!GGH ==========================================================================
+!GGH Antenna Power and B-field contribution to E and E_dot---------------------
+!GGH ==========================================================================
+! now calculate antenna power, and d/dt (energy), energy, hyper-damping 
 
-! ==========================================================================
-! Antenna contribution to entropy equations for each species
-! ==========================================================================
-
-    allocate (a_ext_old(-ntgrid:ntgrid, ntheta0, naky))
-    allocate (a_ext_new(-ntgrid:ntgrid, ntheta0, naky))
-
-    call a_ext_data (a_ext_old, a_ext_new)
-
-    do iglo=g_lo%llim_proc, g_lo%ulim_proc
-       is = is_idx(g_lo, iglo)
-       it = it_idx(g_lo, iglo)
-       ik = ik_idx(g_lo, iglo)
-       if (nonlin .and. it == 1 .and. ik == 1) cycle
-       dtinv = 1./(code_dt*tunits(ik))
-       do isgn=1,2
-          do ig=-ntgrid, ntgrid-1
-             
-             adot = fdot (a_ext_old(ig  ,it,ik), &
-                          a_ext_old(ig+1,it,ik), &
-                          a_ext_new(ig  ,it,ik), &
-                          a_ext_new(ig+1,it,ik), dtinv)
-             
-             havg = favg (g   (ig  ,isgn,iglo)*aj0(ig  ,iglo)*vpa(ig  ,isgn,iglo), &
-                          g   (ig+1,isgn,iglo)*aj0(ig+1,iglo)*vpa(ig+1,isgn,iglo), &
-                          gnew(ig  ,isgn,iglo)*aj0(ig  ,iglo)*vpa(ig  ,isgn,iglo), &
-                          gnew(ig+1,isgn,iglo)*aj0(ig+1,iglo)*vpa(ig+1,isgn,iglo))
-             
-             g0(ig,isgn,iglo) = conjg(havg) * spec(is)%z * spec(is)%stm * spec(is)%dens * adot
-
-          end do
-       end do
-    end do
-
-    deallocate (a_ext_old, a_ext_new)
-
-    call integrate_moment (g0, tot)
-
-    if (proc0) then
-       do is = 1, nspec
-          do ik = 1, naky
-             fac2 = 0.5
-             if (aky(ik) < epsilon(0.0)) fac2 = 1.0
-             do it = 1, ntheta0
-                if (nonlin .and. it == 1 .and. ik == 1) cycle
-                do ig = -ntgrid, ntgrid-1
-                    hk(it,ik) % S_ext(is) = hk(it,ik) % S_ext(is) &
-                        + real(tot(ig,it,ik,is))*wgt(ig)*fac2
-                end do
-                h % S_ext(is) = h % S_ext(is) + hk(it,ik) % S_ext(is)
-             end do
-          end do
-       end do
-    end if
-
-! ==========================================================================
-! Antenna Power and B-field contribution to E and E_dot---------------------
-! ==========================================================================
-    if (proc0) then
 !       allocate (epar (-ntgrid:ntgrid, ntheta0, naky)) ; epar = 0.
        allocate (j_ext(-ntgrid:ntgrid, ntheta0, naky)) ; j_ext = 0.
        call antenna_apar (kperp2, j_ext)       
@@ -4007,6 +3956,10 @@ contains
                         real(0.25 * conjg(bperp_m)*bperp_avg + conjg(bpar_m)*bpar_avg) &
                         * wgt(ig)*fac2*(2.0/beta)
 
+!                   hk(it,ik) % energy_dot = hk(it,ik) % energy_dot + real(( &
+!                       0.25*( conjg(bperp_m)*bperp_avg +bperp_m*conjg(bperp_avg )) &
+!                       + conjg(bpar_m)*bpar_avg + bpar_m*conjg(bpar_avg)) * wgt(ig)*fac2/beta)
+
 ! B**2/2
 !! GGH: Bug fixed on 2/06; error was in relative weight of B_par**2 and B_perp**2   
                    hk(it,ik) % energy = hk(it,ik) % energy &
@@ -4040,12 +3993,10 @@ contains
        deallocate (j_ext)
     end if
 
-! ==========================================================================
-! Finish E_dot--------------------------------------------------------------
-! ==========================================================================
-
-!GGH Include response of Boltzmann species for single-species runs
-
+!GGH ==========================================================================
+!GGH Finish E_dot--------------------------------------------------------------
+!GGH ==========================================================================
+    !Correct for single species runs (include response of Boltzmann species)
     if (.not. has_electron_species(spec)) then
        if (proc0) then
           !NOTE: It is assumed here that n0i=n0e and zi=-ze
@@ -4154,9 +4105,10 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-! ==========================================================================
-! Gradient Contributions to Heating-----------------------------------------
-! ==========================================================================
+!GGH ==========================================================================
+!GGH Gradient Contributions to Heating-----------------------------------------
+!GGH ==========================================================================
+! Calculate gradient contributions:
 
     do iglo=g_lo%llim_proc, g_lo%ulim_proc
        is = is_idx(g_lo, iglo)
@@ -4219,10 +4171,10 @@ contains
           end do
        end do
     end if
-! ==========================================================================
-! Hyperviscosity------------------------------------------------------------
-! ==========================================================================
-
+!GGH ==========================================================================
+!GGH Hyperviscosity------------------------------------------------------------
+!GGH ==========================================================================
+! Now get hyperviscous damping contributions to energy
     if (D_v > epsilon(0.)) then
 
        do iglo=g_lo%llim_proc, g_lo%ulim_proc
@@ -4282,7 +4234,7 @@ contains
 ! ==========================================================================
 ! Hyperresistivity------------------------------------------------------------
 ! ==========================================================================
- 
+! Now get hyperresistive damping contributions to energy
     if (D_eta > epsilon(0.)) then
 
        do iglo=g_lo%llim_proc, g_lo%ulim_proc
@@ -4333,11 +4285,59 @@ contains
 
     end if !End Hyperresistivity Heating Calculation
 
-!==========================================================================
-!Finish Energy-------------------------------------------------------------
-!==========================================================================
+!=============OLD VERSION==================================================
+    !GGH NOTE: Commented out 06 APR 10 to use g_s based hyperviscosity above
+    if (.false.) then
+    if (D_v > epsilon(0.)) then
 
-!GGH Calculate hs2-------------------------------------------------------------
+       do iglo=g_lo%llim_proc, g_lo%ulim_proc
+          is = is_idx(g_lo, iglo)
+          it = it_idx(g_lo, iglo)
+          ik = ik_idx(g_lo, iglo)
+          if (nonlin .and. it == 1 .and. ik == 1) cycle
+          akperp4 = (aky(ik)**2 + akx(it)**2)**2
+          do isgn=1,2
+             do ig=-ntgrid, ntgrid-1
+                
+                havg = favg (g   (ig  ,isgn,iglo), &
+                             g   (ig+1,isgn,iglo), &
+                             gnew(ig  ,isgn,iglo), &
+                             gnew(ig+1,isgn,iglo)) 
+! What is tnorm doing here?  
+!                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp* &
+!                     conjg(havg)*havg*D_v*akperp4/tnorm
+                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp* &
+                     D_v*akperp4*conjg(havg)*havg
+             end do
+          end do
+       end do
+
+       call integrate_moment (g0, tot)
+       
+       if (proc0) then
+          do ik = 1, naky
+             fac2 = 0.5
+             if (aky(ik) < epsilon(0.0)) fac2 = 1.0
+             do it = 1, ntheta0
+                if (nonlin .and. it == 1 .and. ik == 1) cycle
+                do is = 1, nspec
+                   do ig = -ntgrid, ntgrid-1
+                      hk(it,ik) % hypervisc(is) = hk(it,ik) % hypervisc(is) &
+                           + real(tot(ig,it,ik,is))*wgt(ig)*fac2
+!                      hk(it,ik) % hypervisc(is) = hk(it,ik) % hypervisc(is) &
+!                           + real(tot(ig,it,ik,is))*wgt(ig)*fac2/tnorm
+                   end do
+                   h % hypervisc(is) = h % hypervisc(is) + hk(it,ik) % hypervisc(is)
+                end do
+             end do
+          end do
+       end if
+    end if      
+    endif!GGH NOTE: Commented out 06 APR 10 to use g_s based hyperviscosity above
+!GGH ==========================================================================
+!GGH Finish Energy-------------------------------------------------------------
+!GGH ==========================================================================
+    !Calculate hs2-------------------------------------------------------------
     do iglo=g_lo%llim_proc, g_lo%ulim_proc
        is = is_idx(g_lo, iglo)
        it = it_idx(g_lo, iglo)
@@ -4404,9 +4404,8 @@ contains
        end do
     endif
 
-! Calculate delfs2 (rest of energy)-----------------------------------------------
-
-!GGH  Include response of Boltzmann species for single species runs
+!Calculate delfs2 (rest of energy)-----------------------------------------------
+!Correct for single species runs (include response of Boltzmann species)
     if (.not. has_electron_species(spec)) then
        if (proc0) then
           !NOTE: It is assumed here that n0i=n0e and zi=-ze
@@ -4436,8 +4435,7 @@ contains
              end do
           end do
        endif
-    endif !END Correction to energy for single species runs---------------------
-
+    endif !END Correction to E_dot for single species runs---------------------
     do iglo=g_lo%llim_proc, g_lo%ulim_proc
        is = is_idx(g_lo, iglo)
        it = it_idx(g_lo, iglo)
@@ -4505,7 +4503,7 @@ contains
 
   end subroutine get_heat
 !==============================================================================
-
+!==============================================================================
   subroutine get_stress (rstress, ustress)
 
     use mp, only: proc0
@@ -4916,7 +4914,6 @@ contains
 
   end subroutine boundary
 
-! This subroutine only returns epar correctly for linear runs.
   subroutine get_epar (phi, apar, phinew, aparnew, epar)
 
     use theta_grid, only: ntgrid, delthet, gradpar

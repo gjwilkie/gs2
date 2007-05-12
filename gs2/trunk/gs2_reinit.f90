@@ -11,7 +11,7 @@ module gs2_reinit
 
 contains
 
-  subroutine reset_time_step (istep, delt_cfl, exit)
+  subroutine reset_time_step (istep, exit)
 
     use additional_linear_terms, only: alt_reset => reset_init
 !    use additional_terms, only: at_reset => reset_init
@@ -22,17 +22,17 @@ contains
     use fields_explicit, only: fe_reset => reset_init
     use fields_test, only: ft_reset => reset_init
     use init_g, only: g_reset => reset_init
-    use run_parameters, only: delt, tnorm, fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
+    use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
     use gs2_save, only: gs2_save_for_restart
     use dist_fn_arrays, only: gnew
-    use gs2_time, only: stime, simdt
+    use gs2_time, only: user_time, user_dt, code_dt, code_dt_min
     use nonlinear_terms, only: nl_reset => reset_init
     use mp, only: proc0
     use file_utils, only: error_unit
     use antenna, only: dump_ant_amp
 
     logical :: exit
-    real :: delt_cfl, simtime, deltsave
     integer :: istep 
     integer, save :: istep_last = -1 ! allow adjustment on first time step
     integer :: istatus
@@ -46,32 +46,32 @@ contains
        return
     end if
 
-    if (delt/delt_adj <= delt_minimum*tnorm) then
-       delt = delt_minimum*tnorm  ! set it so restart is ok
+    if (code_dt/delt_adj <= code_dt_min) then
+       code_dt = code_dt_min  ! set it so restart is ok
        exit = .true.
        return
     end if
 
-    simtime = stime()/tnorm
-    deltsave = simdt()/tnorm
-
     if (proc0) call dump_ant_amp
-    call gs2_save_for_restart (gnew, simtime, deltsave, istatus, &
-         fphi, fapar, faperp)
+    call gs2_save_for_restart (gnew, user_time, user_dt, istatus, fphi, fapar, fbpar)
 
     gnew = 0.
 
 ! change timestep 
 
 ! If timestep is too big, make it smaller
-    if (delt > delt_cfl) then
-       delt = delt/delt_adj
+    if (code_dt > code_dt_cfl) then
+       code_dt = code_dt/delt_adj
+
 ! If timestep is too small, make it bigger
-    else if (delt < min(dt0, delt_cfl/delt_adj/delt_cushion)) then
-       delt = min(delt*delt_adj, dt0)
+    else if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
+       code_dt = min(code_dt*delt_adj, dt0)
+
     endif
     
-    if (proc0) write(*,*) 'Changing time step to ',delt/tnorm
+    call save_dt (code_dt)
+
+    if (proc0) write(*,*) 'Changing time step to ', user_dt
     
 ! prepare to reinitialize inversion matrix, etc.
     call alt_reset
@@ -93,10 +93,11 @@ contains
 
   end subroutine reset_time_step
 
-  subroutine check_time_step (istep, delt, delt_cfl, reset, exit)
+  subroutine check_time_step (istep, reset, exit)
+
+    use gs2_time, only: code_dt_cfl, code_dt
 
     integer :: istep
-    real :: delt, delt_cfl
     logical :: reset, exit
     logical :: first = .true.
 
@@ -108,28 +109,29 @@ contains
     if (exit) return
 
 ! If timestep is too big, make it smaller
-    if (delt > delt_cfl) reset = .true.
+    if (code_dt > code_dt_cfl) reset = .true.
        
 ! If timestep is too small, make it bigger
-    if (delt < min(dt0, delt_cfl/delt_adj/delt_cushion)) reset = .true.
+    if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) reset = .true.
 
 ! other choices
 !     if (mod(istep,200) == 0) reset = .true.
-!     if (delt > delt_cfl) exit = .true.
+!     if (code_dt > code_dt_cfl) exit = .true.
 
   end subroutine check_time_step
 
   subroutine init_reinit
 
-    use run_parameters, only: delt_max, tnorm
+    use run_parameters, only: code_delt_max
     use mp, only: proc0, broadcast
     use file_utils, only: input_unit, input_unit_exist
+    use gs2_time, only: save_dt_min
     integer in_file
     logical exist
     namelist /reinit_knobs/ delt_adj, delt_minimum
     
     if (proc0) then
-       dt0 = delt_max*tnorm
+       dt0 = code_delt_max
        delt_adj = 2.0
        delt_minimum = 1.e-5
        in_file = input_unit_exist("reinit_knobs",exist)
@@ -139,6 +141,8 @@ contains
     call broadcast (dt0)
     call broadcast (delt_adj)
     call broadcast (delt_minimum)
+
+    call save_dt_min (delt_minimum)
 
   end subroutine init_reinit
 

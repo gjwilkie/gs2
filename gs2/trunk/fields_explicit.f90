@@ -28,38 +28,37 @@ contains
   end subroutine init_fields_explicit
 
   subroutine init_phi_explicit
-    use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn, only: getfieldexp
 
-    call getfieldexp (phinew, aparnew, aperpnew)
-    phi = phinew; apar = aparnew; aperp = aperpnew
+    call getfieldexp (phinew, aparnew, bparnew)
+    phi = phinew; apar = aparnew; bpar = bparnew
   end subroutine init_phi_explicit
 
-  subroutine advance_explicit (istep, dt_cfl)
-    use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
-    use fields_arrays, only: phitmp, apartmp, aperptmp
-    use fields_arrays, only: phitmp1, apartmp1, aperptmp1
+  subroutine advance_explicit (istep)
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use fields_arrays, only: phitmp, apartmp, bpartmp
+    use fields_arrays, only: phitmp1, apartmp1, bpartmp1
     use dist_fn, only: timeadv, getfieldexp
     use dist_fn_arrays, only: g, gnew, gold
     implicit none
     integer, intent (in) :: istep
-    real :: dt_cfl
 
-!    gold = g ; phitmp1 = phi ; apartmp1 = apar ; aperptmp1 = aperp
+!    gold = g ; phitmp1 = phi ; apartmp1 = apar ; bpartmp1 = bpar
 
-    g = gnew ; phi = phinew ; apar = aparnew ; aperp = aperpnew
+    g = gnew ; phi = phinew ; apar = aparnew ; bpar = bparnew
 
-    call getfieldexp (phinew, aparnew, aperpnew)
+    call getfieldexp (phinew, aparnew, bparnew)
 
 !    phitmp = (8.*phinew - 7.*phi + 2.*phitmp1)/3.
 !    apartmp = (1.5*aparnew - 0.5*apar)
-!    aperptmp = (1.5*aperpnew - 0.5*aperp)
+!    bpartmp = (1.5*bparnew - 0.5*bpar)
 
     phitmp = (1.5*phinew - 0.5*phi)
 !    apartmp = (1.5*aparnew - 0.5*apar)
-!    aperptmp = (1.5*aperpnew - 0.5*aperp)
+!    bpartmp = (1.5*bparnew - 0.5*bpar)
 
-    call timeadv (phitmp, apartmp, aperptmp, phitmp, apartmp, aperptmp, istep, dt_cfl, -1)
+    call timeadv (phitmp, apartmp, bpartmp, phitmp, apartmp, bpartmp, istep, -1)
 
   end subroutine advance_explicit
 
