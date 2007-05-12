@@ -1,4 +1,4 @@
-UTILS=utils
+ UTILS=utils
 GEO=geo
 
 #################################################################### OVERVIEW
@@ -329,17 +329,20 @@ ifeq ($(CPU),LINUX)
 	-L/usr/local/lib -lnetcdf \
 	-L/usr/local/lib -lfftw -lrfftw
   PLATFORM_LINKS = linux
-  F90FLAGS = -w -r8 -mismatch -I/opt/mpich.gccf95-2/include \
-	-I/usr/local/include -I $(GEO) -I $(UTILS)
-  F90FLAGS_2  = -w -mismatch -I/opt/mpich.gccf95-2/include \
-	-I/usr/local/include -I $(GEO) -I $(UTILS)
-  F90FLAGS_3  = -r8 -mismatch -I/opt/mpich.gccf95-2/include \
-	-I/usr/local/include -I $(GEO) -I $(UTILS)
+  F90FLAGS = -Bstatic -f77 -w -r8 -I/usr/local/mpich-1.2.4/include \
+	-I/usr/local/include -mismatch \
+	-I $(GEO) -I $(UTILS) 
+  F90FLAGS_2 = -Bstatic -w -r8 -I/usr/local/mpich-1.2.4/include \
+	-I/usr/local/include -mismatch \
+	-I $(GEO) -I $(UTILS) 
+  F90FLAGS_3 = -Bstatic -r8 -I/usr/local/mpich-1.2.4/include \
+	-I/usr/local/include -mismatch \
+	-I $(GEO) -I $(UTILS) 
 
   ifeq ($(debug),on)
-    F90FLAGS += -C=array -C=bits -C=dangling -C=do -C=present -C=pointer -gline 
-    F90FLAGS_2 += -C=array -C=bits -C=dangling -C=do -C=present -C=pointer -gline
-    F90FLAGS_3 += -C=array -C=bits -C=dangling -C=do -C=present -C=pointer -gline
+    F90FLAGS += -g90 -gline -C=array -C=present -C=pointer -nan
+    F90FLAGS_2 += -g90 -gline -C=array -C=present -C=pointer -nan
+    F90FLAGS_3 += -g90 -gline -C=array -C=present -C=pointer -nan
   else
     F90FLAGS += -O4 
   endif
@@ -400,8 +403,8 @@ GS2MOD= constants.o prof.o mp.o gs2_layouts.o command_line.o gs2_save.o \
 	fields.o fields_implicit.o fields_test.o init_g.o check.o \
 	dist_fn.o hyper.o gs2_diagnostics.o gs2_io.o netcdf_mod.o \
 	run_parameters.o gs2_flux.o regression.o gs2_heating.o \
-	$(GEO)/geo.a gridgen4mod.o $(UTILS)/spl.o $(UTILS)/utils.a
-#	utils/utils.a geo/geo.a utils/mds.o 
+	$(GEO)/geo.a gridgen4mod.o $(UTILS)/spl.o $(UTILS)/utils.a \
+	utils/utils.a geo/geo.a utils/mds.o 
 # *.a libraries must appear after any function that needs them.
 
 INGENMOD= constants.o mp.o gs2_layouts.o command_line.o \
@@ -494,23 +497,23 @@ file_utils.o:
 	$(FC) $(F90FLAGS) -c file_utils.f90
 
 gs2_dist_io.o: gs2_dist_io.f90
-	$(FC5) $(F90FLAGS) -c gs2_dist_io.f90
+	$(FC) $(F90FLAGS) -c gs2_dist_io.f90
 
 ifeq ($(CPU),LINUX_lf95)
 
-le_grids.o: le_grids.f90
+le_grids.o:
 	$(FC) --quad $(F90FLAGS) -c le_grids.f90
 endif
 
 ifeq ($(CPU),Dawson)
 
-le_grids.o: le_grids.f90
+le_grids.o:
 	$(FC) $(F90FLAGS) -qautodbl=dbl -c le_grids.f90
 endif
 
 ifeq ($(CPU),RS6000)
 
-le_grids.o: le_grids.f90
+le_grids.o: mp.o species.o theta_grid.o kt_grids.o file_utils.o redistribute.o gs2_layouts.o constants.o 
 	$(FC) $(F90FLAGS) -qautodbl=dbl -c le_grids.f90
 endif
 
@@ -519,13 +522,20 @@ endif
 # incompatibility between f95 and my C libraries (I think)
 ifeq ($(CPU),LINUX)
 
-gs2_transforms.o: gs2_transforms.f90
-	$(FC) $(F90FLAGS_3) -c $<
+#gs2_transforms.o: gs2_transforms.f90
+#	$(FC) $(F90FLAGS_3) -c $<
+#
+#nonlinear_terms.o: nonlinear_terms.f90
+#	$(FC) $(F90FLAGS_3) -c $<
+#
+#netcdf_mod.o: netcdf_mod.f90
+#	$(FC) $(F90FLAGS_2) -c netcdf_mod.f90
 
-nonlinear_terms.o: nonlinear_terms.f90
-	$(FC) $(F90FLAGS_3) -c $<
-
-netcdf_mod.o: netcdf_mod.f90
+gs2_io.o:
+	$(FC) $(F90FLAGS_2) -c gs2_io.f90
+gs2_save.o:
+	$(FC) $(F90FLAGS_2) -c gs2_save.f90
+netcdf_mod.o:
 	$(FC) $(F90FLAGS_2) -c netcdf_mod.f90
 
 endif
@@ -569,7 +579,7 @@ gs2_diagnostics.o: file_utils.o kt_grids.o run_parameters.o species.o mp.o
 gs2_diagnostics.o: fields.o dist_fn.o constants.o prof.o gs2_save.o gs2_time.o
 gs2_diagnostics.o: gs2_io.o le_grids.o fields_arrays.o dist_fn_arrays.o 
 gs2_diagnostics.o: gs2_transforms.o nonlinear_terms.o collisions.o $(UTILS)/utils.a
-gs2_diagnostics.o: gs2_flux.o gs2_heating.o gs2_dist_io.o 
+gs2_diagnostics.o: gs2_flux.o gs2_heating.o gs2_dist_io.o
 gs2_heating.o: mp.o species.o
 dist_fn.o: mp.o species.o theta_grid.o kt_grids.o le_grids.o antenna.o
 dist_fn.o: run_parameters.o init_g.o text_options.o fft_work.o gs2_heating.o
@@ -652,7 +662,6 @@ tar:
            src_$(DATE)/*.html  \
            src_$(DATE)/test*os ; \
         gzip GS2_src_$(DATE).tar 
-
 
 ############################################################### DEFAULT RULES
 
@@ -782,6 +791,24 @@ linux:
 	ln -sf fft_work_fftw.f90 fft_work.f90
 	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
 	cd $(UTILS); ln -sf mds_io_stub.f90 mds.f90 
+
+# Added the following lines for Dartmouth discovery build	
+linux_andes:
+	ln -sf command_line_unix.f90 command_line.f90
+	ln -sf mp_mpi_r8.f90 mp.f90
+	ln -sf shmem_stub.f90 shmem.f90
+	ln -sf prof_none.f90 prof.f90
+	ln -sf redistribute_mpi.f90 redistribute.f90
+	ln -sf check_portable.f90 check.f90
+	ln -sf ran_portable.f90 ran.f90
+#	ln -sf ran_cray.f90 ran.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
+	ln -sf gs2_save_fast.f90 gs2_save.f90
+	ln -sf fft_work_fftw.f90 fft_work.f90
+	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
+	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
+	cd $(UTILS); ln -sf mds_io_stub.f90 mds.f90 
+
 
 linux_fuj:
 	ln -sf command_line_unix.f90 command_line.f90

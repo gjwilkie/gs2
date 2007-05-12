@@ -46,6 +46,8 @@ contains
     call init_fields_implicit
     call getfield (phinew, aparnew, bparnew)
     phi = phinew; apar = aparnew; bpar = bparnew
+
+
   end subroutine init_phi_implicit
 
   subroutine get_field_vector (fl, phi, apar, bpar)
@@ -204,17 +206,18 @@ contains
     use dist_fn_arrays, only: g, gnew
     use nonlinear_terms, only: algorithm !, nonlin
     implicit none
+    integer :: diagnostics = 1
+!    integer :: nphi = 0
     integer, intent (in) :: istep
 
     if (algorithm == 1) then
 
        !GGH NOTE: apar_ext is initialized in this call
        call antenna_amplitudes (apar_ext)
-
        call exb_shear (gnew, phinew, aparnew, bparnew)
        
        g = gnew
-       phi = phinew
+       phi = phinew !*nphi
        apar = aparnew 
        bpar = bparnew       
 
@@ -225,11 +228,11 @@ contains
 
        call getfield (phinew, aparnew, bparnew)
 
-       phinew   = phinew   + phi
+       phinew   = (phinew   + phi)!*nphi
        aparnew  = aparnew  + apar
        bparnew = bparnew + bpar
                  
-       call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+       call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
 
     end if
 

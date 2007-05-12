@@ -16,7 +16,8 @@ module fft_work
   end interface
 
   type :: fft_type
-     integer :: n, plan, is, type
+     integer*8 :: plan
+     integer :: n, is, type
      real :: scale
   end type fft_type
 

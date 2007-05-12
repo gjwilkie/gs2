@@ -22,8 +22,8 @@ module gs2_diagnostics
   logical :: write_line, write_flux_line, write_phi, write_apar, write_bpar, write_aperp
   logical :: write_omega, write_omavg, write_ascii, write_lamavg, write_eavg
   logical :: write_qheat, write_pflux, write_vflux, write_tavg
-  logical :: write_qmheat, write_pmflux, write_vmflux, write_gs
-  logical :: write_qbheat, write_pbflux, write_vbflux, write_g, write_gg
+  logical :: write_qmheat, write_pmflux, write_vmflux, write_gs, write_lpoly
+  logical :: write_qbheat, write_pbflux, write_vbflux, write_g, write_gg, write_gyx
   logical :: write_dmix, write_kperpnorm, write_phitot, write_epartot
   logical :: write_eigenfunc, write_final_fields, write_final_antot
   logical :: write_final_moments, write_avg_moments, write_stress
@@ -31,9 +31,9 @@ module gs2_diagnostics
   logical :: write_vortcheck, write_fieldcheck
   logical :: write_fieldline_avg_phi, write_hrate, write_lorentzian
   logical :: write_neoclassical_flux, write_nl_flux, write_Epolar
-!b MAB
-  logical :: write_verr
-!e MAB
+!>MAB
+  logical :: write_verr, write_cerr
+!<MAB
   logical :: exit_when_converged
   logical :: dump_neoclassical_flux, dump_check1, dump_check2
   logical :: dump_fields_periodically, make_movie
@@ -53,14 +53,16 @@ module gs2_diagnostics
   logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
 
-  integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, vtmp_unit
+  integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: dv_unit, jext_unit   !GGH Additions
-  integer :: dump_neoclassical_flux_unit, dump_check1_unit, dump_check2_unit
+  integer :: dump_neoclassical_flux_unit, dump_check1_unit, dump_check2_unit, res_unit
 
   complex, dimension (:,:,:), allocatable :: omegahist
   ! (navg,ntheta0,naky)
-  type (heating_diagnostics), dimension(:), allocatable :: h_hist
-  type (heating_diagnostics), dimension(:,:,:), allocatable :: hk_hist
+  type (heating_diagnostics), save :: h
+  type (heating_diagnostics), dimension(:), save, allocatable :: h_hist
+  type (heating_diagnostics), dimension(:,:), save, allocatable :: hk
+  type (heating_diagnostics), dimension(:,:,:), save, allocatable :: hk_hist
   !GGH Density/velocity pertubration diagnostics
   type (dens_vel_diagnostics), dimension(:), allocatable :: dv_hist
   type (dens_vel_diagnostics), dimension(:,:,:), allocatable :: dvk_hist
@@ -109,10 +111,11 @@ contains
     use gs2_flux, only: init_gs2_flux
     use gs2_io, only: init_gs2_io
     use gs2_heating, only: init_htype,init_dvtype
+    use collisions, only: collision_model_switch, init_lorentz_error
     use mp, only: broadcast, proc0
-!b MAB
+!>MAB
     use le_grids, only: init_weights
-!e MAB
+!<MAB
     implicit none
     logical, intent (in) :: list
     integer, intent (in) :: nstep
@@ -152,12 +155,17 @@ contains
     call broadcast (save_for_restart)
     call broadcast (write_gs)
     call broadcast (write_g)
+!>MAB
+    call broadcast (write_gyx)
+!<MAB
     call broadcast (write_gg)
     call broadcast (write_stress)
     call broadcast (write_final_antot)
-!b MAB
+!>MAB
     call broadcast (write_verr)
-!e MAB
+    call broadcast (write_lpoly)
+    call broadcast (write_cerr)
+!<MAB
 
     call broadcast (write_vortcheck)
     call broadcast (write_fieldcheck)
@@ -172,13 +180,11 @@ contains
     
     nmovie_tot = nstep/nmovie
 
-!b MAB
+!>MAB
 ! initialize weights for less accurate integrals used
-! to provide an error estimate for v-space integrals
-!    if (proc0) write(*,*) 'gs2_diagnostics: pre-init_weights'
+! to provide an error estimate for v-space integrals (energy and untrapped)
     if (write_verr .and. proc0) call init_weights
-!   if (proc0) write(*,*) 'gs2_diagnostics: post-init_weights'
-!e MAB
+!<MAB
 
 ! allocate heating diagnostic data structures
     if (write_hrate) then
@@ -187,8 +193,14 @@ contains
 
        allocate (hk_hist(ntheta0,naky,0:navg-1))
        call init_htype (hk_hist, nspec)
+
+       call init_htype (h,  nspec)
+
+       allocate (hk(ntheta0, naky))
+       call init_htype (hk, nspec)
     else
        allocate (h_hist(0))
+       allocate (hk(1,1))
        allocate (hk_hist(1,1,0))
     end if
        
@@ -210,11 +222,17 @@ contains
 !       allocate (hratehist(nspec, 7, 0:navg-1));  hratehist = 0.0
 !       allocate (hkratehist(ntheta0, naky, nspec, 7, 0:navg-1));  hkratehist = 0.0
 
-!    if (proc0) write(*,*) 'gs2_diagnostics: pre-init_gs2_io'
     call init_gs2_io (write_nl_flux, write_omega, write_stress, &
          write_fieldline_avg_phi, write_hrate, write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot, write_verr)
-!    if (proc0) write(*,*) 'gs2_diagnostics: post-init_gs2_io'
+    
+    if (write_cerr) then
+       if (collision_model_switch == 1 .or. collision_model_switch == 5) then
+          call init_lorentz_error
+       else
+          write_cerr = .false.
+       end if
+    end if
 
   end subroutine init_gs2_diagnostics
  
@@ -235,16 +253,31 @@ contains
 
     call read_parameters (list)
     if (proc0) then
-       if (write_ascii) call open_output_file (out_unit, ".out")
-       if (write_hrate .and. write_ascii) call open_output_file (heat_unit, ".heat")
-!       if (write_verr .and. write_ascii) call open_output_file (vtmp_unit, ".vtmp")
+       if (write_ascii) then
+          call open_output_file (out_unit, ".out")
+!          if (write_kpar) call open_output_file (kp_unit, ".kp")
+       end if
+       
+       if (write_hrate .and. write_ascii) then
+          call open_output_file (heat_unit, ".heat")
+          call open_output_file (heat_unit2, ".heat2")
+       end if
+
+       if (write_verr .and. write_ascii) then
+          call open_output_file (res_unit, ".vres")
+          call open_output_file (lpc_unit, ".lpc")
+       end if
 
        !GGH Density and velocity perturbations
-       if (write_density_velocity .and. write_ascii) call open_output_file (dv_unit, ".dv")
+       if (write_density_velocity .and. write_ascii) then
+          call open_output_file (dv_unit, ".dv")
+       end if
 
        !GGH J_external, only if A_parallel is being calculated.
        if (write_jext .and. fapar > epsilon(0.0)) then
-          if (write_ascii) call open_output_file (jext_unit, ".jext")
+          if (write_ascii) then
+             call open_output_file (jext_unit, ".jext")
+          end if
        else
           write_jext = .false.
        end if
@@ -266,6 +299,7 @@ contains
        end if
        
        if (dump_check2) then
+          call get_unused_unit (dump_check2_unit)
           call open_output_file (dump_check2_unit, ".dc2")
        end if
        
@@ -328,12 +362,12 @@ contains
          print_line, print_old_units, print_flux_line, &
          write_line, write_flux_line, write_phi, write_apar, write_bpar, write_aperp, &
          write_omega, write_omavg, write_ascii, write_kpar, write_lamavg, &
-         write_qheat, write_pflux, write_vflux, write_eavg, write_gs, &
+         write_qheat, write_pflux, write_vflux, write_eavg, write_gs, write_gyx, &
          write_qmheat, write_pmflux, write_vmflux, write_tavg, write_g, write_gg, &
-         write_qbheat, write_pbflux, write_vbflux, write_hrate, &
+         write_qbheat, write_pbflux, write_vbflux, write_hrate, write_lpoly, &
          write_dmix, write_kperpnorm, write_phitot, write_epartot, &
          write_eigenfunc, write_final_fields, write_final_antot, &
-         write_fcheck, write_final_epar, write_final_moments, &
+         write_fcheck, write_final_epar, write_final_moments, write_cerr, &
          write_vortcheck, write_fieldcheck, write_Epolar, write_verr, &
          write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
@@ -355,6 +389,8 @@ contains
        write_Epolar = .false.
        write_gs = .false.
        write_g = .false.
+       write_gyx = .false.
+       write_lpoly = .false.
        write_gg = .false.
        write_lorentzian = .false.
        write_phi = .true.
@@ -384,9 +420,10 @@ contains
        write_fcheck = .false.
        write_vortcheck = .false.
        write_fieldcheck = .false.
-!b MAB
+!>MAB
        write_verr = .false.
-!e MAB
+       write_cerr = .false.
+!<MAB
        nwrite = 100
        nmovie = 1000
        navg = 100
@@ -427,6 +464,8 @@ contains
 ! Disable polar integrals if nx /= ny
        if (nx /= ny) write_Epolar = .false.
 
+!       write_avg_moments = write_avg_moments .or. write_neoclassical_flux
+
        write_any = write_line .or. write_phi       .or. write_apar &
             .or. write_bpar  .or. write_omega     .or. write_omavg &
             .or. write_dmix   .or. write_kperpnorm .or. write_phitot &
@@ -457,10 +496,11 @@ contains
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn, only: getan, get_epar, getmoms, par_spectrum, lambda_flux
     use dist_fn, only: e_flux
-    use dist_fn, only: write_f
-!b MAB
-    use dist_fn, only: write_vres, write_ftran, get_verr, get_gtran
-!e MAB
+    use dist_fn, only: write_f, write_fyx
+!>MAB
+    use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
+    use collisions, only: vnmult
+!<MAB
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
     use gs2_transforms, only: transform2, inverse2
@@ -496,39 +536,56 @@ contains
     real, dimension (:,:), allocatable :: bxsavg, bysavg
     real, dimension (:), allocatable :: stemp, zx1, zxm, zy1, zyn, xx, yy
     real :: zxy11, zxym1, zxy1n, zxymn, L_x, L_y, rxt, ryt, bxt, byt
+    real :: max_e_err, max_al_err, max_trap_err, avg_e_err, avg_al_err, avg_trap_err
     integer :: istatus, nnx, nny, nnx4, nny4, ulim, llim, iblock, i, g_unit
     logical :: last = .true.
-    real, dimension (2*ntgrid+1,ntheta0,naky,nspec,4) :: errest_by_mode
-    real, dimension (2*ntgrid+1,ntheta0,naky,nspec,2) :: lpcoef_by_mode
 
+!    real, dimension (:,:,:,:,:), allocatable :: lpcoef_by_mode
+    integer, dimension (:,:), allocatable :: erridx
+    real, dimension (:,:), allocatable :: errest
+
+    if (write_gyx) call write_fyx (phinew,bparnew,last)
     if (write_g) call write_f (last)
+    if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
+    if (write_cerr) call collision_error (phinew, bparnew, last)
 
-!b MAB
-!    if (write_verr) then
-!       call write_vres (last, phinew, bparnew, istep)
-!       call write_ftran (last, phinew, bparnew, istep)
-!       call get_verr (errest_by_mode, phinew, bparnew, istep)
+!>MAB
+    if (write_verr) then
+!       allocate(lpcoef_by_mode(2*ntgrid+1,ntheta0,naky,nspec,2))
+       allocate(errest(3,2), erridx(3,3))
+
+! gets integral error estimates by comparing with integral accurate to lower-order
+       call get_verr (errest, erridx, phinew, bparnew)
+
+! estimation of error based on size of legendre polynomial coefficients
 !       call get_gtran (lpcoef_by_mode, phinew, bparnew, istep)
-!
-!       if (proc0 .and. write_ascii) then
-!          do ig=1,2*ntgrid+1
-!             write(vtmp_unit,*) lpcoef_by_mode(ig,1,1,1,1), lpcoef_by_mode(ig,1,1,1,2), ig
-!             write(vtmp_unit,*) errest_by_mode(ig,1,1,1,1), errest_by_mode(ig,1,1,1,2), errest_by_mode(ig,1,1,1,3), errest_by_mode(ig,1,1,1,4), ig
-!          end do
-!          write(vtmp_unit,*)
-!       end if
-!       if (proc0) write(*,*) 'post ascii'
-!    end if
-!e MAB
+
+! dump error estimates to ascii file
+       if (proc0 .and. write_ascii) then
+          write(res_unit,"(3(i8),2(1x,e12.6),3(i8),2(1x,e12.6),3(i8),4(1x,e12.6))") &
+               erridx(1,1), erridx(1,2), erridx(1,3), errest(1,1), errest(1,2), &
+               erridx(2,1), erridx(2,2), erridx(2,3), errest(2,1), errest(2,2), &
+               erridx(3,1), erridx(3,2), erridx(3,3), errest(3,1), errest(3,2), &
+               vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
+!          write(lpc_unit,"(2(1x,e12.6))") lpcoef_by_mode(ntgrid+1,1,1,1,1), lpcoef_by_mode(ntgrid+1,1,1,1,2)
+       end if
+       deallocate(erridx,errest)
+!       deallocate(lpcoef_by_mode)
+    end if
+!<MAB
 
     if (write_gg) call write_dist (g)
 
     phi0 = 1.
 
     if (proc0) then
-!       if (write_verr) call close_output_file (vtmp_unit)
+       if (write_ascii .and. write_verr) then
+          call close_output_file (res_unit)
+          call close_output_file (lpc_unit)
+       end if
        if (write_ascii) call close_output_file (out_unit)
        if (write_ascii .and. write_hrate) call close_output_file (heat_unit)
+       if (write_ascii .and. write_hrate) call close_output_file (heat_unit2)
        if (write_ascii .and. write_density_velocity) call close_output_file (dv_unit)
        if (write_ascii .and. write_jext) call close_output_file (jext_unit)
        if (write_ascii .and. write_Epolar) then
@@ -922,7 +979,7 @@ contains
     end if
 
     if (save_for_restart) then
-       call gs2_save_for_restart (gnew, user_time, user_dt, istatus, &
+       call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
             fphi, fapar, fbpar, .true.)
     end if
 
@@ -1235,11 +1292,12 @@ contains
     use run_parameters, only: woutunits, funits, fapar, fphi, fbpar
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
-    use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f
+    use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum
-!b MAB
-    use dist_fn, only: write_vres, write_ftran, get_verr, get_gtran
-!e MAB
+!>MAB
+    use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
+    use collisions, only: ncheck, vnmult
+!<MAB
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
@@ -1265,9 +1323,6 @@ contains
     real, dimension(:,:,:), allocatable :: yxphi, yxapar, yxbpar
     complex, dimension (ntheta0, naky) :: omega, omegaavg
 
-    type (heating_diagnostics) :: h
-    type (heating_diagnostics), dimension(:,:), allocatable :: hk
-
     type (dens_vel_diagnostics) :: dv
     type (dens_vel_diagnostics), dimension(:,:), allocatable :: dvk
     !GGH J_external
@@ -1278,8 +1333,10 @@ contains
     real :: phi2, apar2, bpar2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode
     real, dimension (ntheta0, naky, nspec) :: ntot2_by_mode, ntot20_by_mode
-    real, dimension (2*ntgrid+1, ntheta0, naky, nspec, 4) :: errest_by_mode
-    real, dimension (2*ntgrid+1, ntheta0, naky, nspec, 2) :: lpcoef_by_mode
+!    real, dimension (:,:,:,:,:), allocatable :: lpcoef_by_mode
+!    real, dimension (:,:,:,:), allocatable :: errest_by_mode
+    integer, dimension (:,:), allocatable :: erridx
+    real, dimension (:,:), allocatable :: errest
     real :: dmix, dmix4, dmixx
     real :: t, denom
     integer :: ig, ik, it, is, unit, il, i, j, nnx, nny, ifield
@@ -1304,6 +1361,7 @@ contains
     real, dimension (naky) :: fluxfac
 !    real, dimension (:), allocatable :: phi_by_k, apar_by_k, bpar_by_k
     real :: hflux_tot, zflux_tot, vflux_tot
+    real, dimension(nspec) :: tprim_tot, fprim_tot
     character(200) :: filename
     logical :: last = .false.
 
@@ -1314,15 +1372,7 @@ contains
     if (proc0) call get_omegaavg (istep, exit, omegaavg)
     call broadcast (exit)
 
-    if (write_hrate) then
-       call init_htype (h,  nspec)
-       allocate (hk(ntheta0, naky))
-       call init_htype (hk, nspec)
-
-       call heating (istep, h, hk)
-    else
-       allocate (hk(1,1))
-    end if
+    if (write_hrate) call heating (istep, h, hk)
 
 !>GGH
     !Write density and velocity perturbations
@@ -1377,17 +1427,45 @@ contains
 
     end if
 
+    if (write_gyx .and. mod(istep,nmovie) == 0) call write_fyx (phinew,bparnew,last)
+    if (write_verr .and. mod(istep,ncheck) == 0) then
+
+!       allocate(lpcoef_by_mode(2*ntgrid+1,ntheta0,naky,nspec,2))
+       allocate(errest(3,2), erridx(3,3))
+
+!       lpcoef_by_mode = 0.0
+       errest = 0.0; erridx = 0
+
+! error estimate obtained by comparing standard integral with less-accurate integral
+       call get_verr (errest, erridx, phinew, bparnew)
+
+! error estimate based on monitoring amplitudes of legendre polynomial coefficients
+!       call get_gtran (lpcoef_by_mode, phinew, bparnew, istep)
+       if (proc0) then
+
+! write error estimates to .nc file          
+!          call nc_loop_vres (nout, errest_by_mode, lpcoef_by_mode)
+
+! write error estimates for ion dist. fn. at outboard midplane with ik=it=1 to ascii files
+          if (write_ascii) then
+!             write(lpc_unit,"(2(1x,e12.6))") lpcoef_by_mode(ntgrid+1,1,1,1,1), lpcoef_by_mode(ntgrid+1,1,1,1,2)
+             write(res_unit,"(3(i8),2(1x,e12.6),3(i8),2(1x,e12.6),3(i8),4(1x,e12.6))") &
+                  erridx(1,1), erridx(1,2), erridx(1,3), errest(1,1), errest(1,2), &
+                  erridx(2,1), erridx(2,2), erridx(2,3), errest(2,1), errest(2,2), &
+                  erridx(3,1), erridx(3,2), erridx(3,3), errest(3,1), errest(3,2), &
+                  vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
+          end if
+       end if
+!       deallocate(lpcoef_by_mode)
+       deallocate(errest,erridx)
+    end if
+
+
     if (mod(istep,nwrite) /= 0 .and. .not. exit) return
     t = user_time
 
-    if (write_g) call write_f (last)
-
-!b MAB
-    if (write_verr) then
-       call write_vres (last, phinew, bparnew, istep)
-!       call write_ftran (last, phinew, bparnew, istep)
-    end if
-!e MAB
+!    if (write_g) call write_f (last)
+    if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
 
     call prof_entering ("loop_diagnostics-1")
 
@@ -1686,7 +1764,7 @@ contains
     call kperp (ntg_out, akperp)
 
     if (write_neoclassical_flux .or. dump_neoclassical_flux) then
-       call neoclassical_flux (pfluxneo, qfluxneo)
+       call neoclassical_flux (pfluxneo, qfluxneo, phinew, bparnew)
     end if
 
     if (proc0 .and. write_any) then
@@ -1700,21 +1778,21 @@ contains
 !   2        Energy              
 !   3        dEnergy/dt            
 !   4        J_ant.E             
-!   5        J_1 . E_ant
-!   6        J_2 . E_ant
-!   7        [h H(h)]_1
-!   8        [h H(h)]_2
-!   9        [h C(h)]_1
-!  10        [h C(h)]_2
+!   5        [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0 for species 1
+!   6        [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0 for species 2
+!   7       -[h H(h) * T_0]_1
+!   8       -[h H(h) * T_0]_2
+!   9       -[h C(h) * T_0]_1 
+!  10       -[h C(h) * T_0]_2
 !  11        [h w_* h]_1
 !  12        [h w_* h]_2
-!  13        [chi dh/dt]_1
-!  14        [chi dh/dt]_2
-!  15      sum (J_s . E_ant)      
-!  16      sum (h H(h))      
-!  17      sum (h C(h))   
+!  13        [h * (q dchi/dt - dh/dt * T0)]_1
+!  14        [h * (q dchi/dt - dh/dt * T0)]_2
+!  15      sum (h C(h) * T_0)  in total, as in 5, 6      
+!  16     -sum (h H(h) * T_0)      
+!  17     -sum (h C(h) * T_0)   
 !  18      sum (h w_* h)  
-!  19      sum (chi dh/dt)
+!  19      sum [h (q dchi/dt - dh/dt * T0)]
 !  20      3 + 4 + 18 + 19
 !  21      (k_perp A)**2
 !  22      B_par**2
@@ -1724,17 +1802,54 @@ contains
 !  26      h_2 ** 2
 !  27      Phi_bar_1 ** 2
 !  28      Phi_bar_2 ** 2
+!
+!
+! For case with one species:
+!
+! Column     Item               
+!   1        time              
+!   2        Energy              
+!   3        dEnergy/dt            
+!   4        J_ant.E             
+!   5        [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0 
+!   6       -[h H(h) * T_0]
+!   7       -[h C(h) * T_0]
+!   8        [h w_* h]
+!   9        [h * (q dchi/dt - dh/dt * T0)]_1
+!  10      sum (h C(h) * T_0)  in total, as in 5, 6      
+!  11     -sum (h H(h) * T_0)      
+!  12     -sum (h C(h) * T_0)   
+!  13      sum (h w_* h)  
+!  14      sum [h (q dchi/dt - dh/dt * T0)]
+!  15      3 + 4 + 9 + 10
+!  16      (k_perp A)**2
+!  17      B_par**2
+!  18      df ** 2
+!  19      h ** 2
+!  20      Phi_bar ** 2
 
           write (unit=heat_unit, fmt="(28es12.4)") t,h % energy,  &
-               h % energy_dot, h % antenna, h % S_ext, h % hypercoll, h % collisions, &
-               h % gradients, h % heating, sum(h % S_ext), sum(h % hypercoll), sum(h % collisions), &
+               h % energy_dot, h % antenna, h % imp_colls, h % hypercoll, h % collisions, &
+               h % gradients, h % heating, sum(h % imp_colls), sum(h % hypercoll), sum(h % collisions), &
                sum(h % gradients), sum(h % heating),sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot, &
                h % eapar, h % ebpar, h % delfs2(:),  h % hs2(:), h % phis2(:)
+          
+          do is=1,nspec
+             write (unit=heat_unit2, fmt="(15es12.4)") t,h % energy,  &
+                  h % energy_dot, h % antenna, h % imp_colls(is), h % hypercoll(is), h % collisions(is), &
+                  h % gradients(is), h % heating(is), &
+                  h % eapar, h % ebpar, h % delfs2(is),  h % hs2(is), h % phis2(is), real(is)
+             write (unit=heat_unit2, fmt=*)
+          end do
+          write (unit=heat_unit2, fmt=*)
+
+          call flush_output_file (heat_unit, ".heat")
+          call flush_output_file (heat_unit2, ".heat2")
 
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' energy= ',e12.6)") t, h % energy
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' energy_dot= ',e12.6)") t, h % energy_dot
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' J_ant.E= ',e12.6)") t, h % antenna
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' S_ext= ',12(1x,e12.6))") t, h % S_ext
+
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hyperC= ',12(1x,e12.6))") t, h % hypercoll
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hCh= ',12(1x,e12.6))") t, h % collisions
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hw*= ',12(1x,e12.6))") t, h % gradients
@@ -1842,7 +1957,6 @@ contains
              call nc_pflux (nout, pflux, pmflux, pbflux, &
                   part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
           end if
-
           call nc_loop (nout, t, fluxfac, &
                phinew(igomega,:,:), phi2, phi2_by_mode, &
                aparnew(igomega,:,:), apar2, apar2_by_mode, &
@@ -1904,20 +2018,11 @@ contains
 !                write (out_unit, *) '<phi>=',phiavg
 !             end if
 
-             if (write_neoclassical_flux) then
-                write (out_unit, *) 't= ',t,' pfluxneo=', real(pfluxneo(it,ik,:))!,aimag(pfluxneo(it,ik,:))
-                write (out_unit, *) 't= ',t,' qfluxneo=', real(qfluxneo(it,ik,:))!,aimag(qfluxneo(it,ik,:))
-!                write (out_unit, *) 'pfluxneo/sourcefac=', &
-!                     pfluxneo(it,ik,:)/sourcefac
-!                write (out_unit, *) 'qfluxneo/sourcefac=', &
-!                     qfluxneo(it,ik,:)/sourcefac
-             end if
-
              if (write_nl_flux) then
                 if (write_ascii) then
-                   write (out_unit,"('ik,it,aky,akx,<phi**2>,t: ', &
-                        & 2i5,4(1x,e12.6))") &
-                        ik, it, aky_out(ik), akx_out(it), phi2_by_mode(it,ik), t
+!                   write (out_unit,"('ik,it,aky,akx,<phi**2>,t: ', &
+!                        & 2i5,4(1x,e12.6))") &
+!                        ik, it, aky_out(ik), akx_out(it), phi2_by_mode(it,ik), t
 !                   write (out_unit,"('ik,it,aky,akx,<apar**2>,t: ', &
 !                        & 2i5,4(1x,e12.6))") &
 !                        ik, it, aky_out(ik), akx_out(it), apar2_by_mode(it,ik), t
@@ -1934,12 +2039,9 @@ contains
           end do
        end do
     end if
-    
-    if (write_verr) then
-       call get_verr (errest_by_mode, phinew, bparnew, istep)
-       call get_gtran (lpcoef_by_mode, phinew, bparnew, istep)
-       if (proc0) call nc_loop_vres (nout, errest_by_mode, lpcoef_by_mode)
-    end if
+
+    if (write_cerr) call collision_error(phinew,bparnew,last)
+
 
     if (write_stress) then
        call get_stress (rstress, ustress)
@@ -1983,12 +2085,26 @@ contains
                   ntot20(is), ntot20_by_mode(:,:,is))
           end do
 
+!          write (out_unit, "('t,u0 ',2(1x,e12.6))") t, aimag(upar00 (1,1))
+
           call nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, &
                ntot20_by_mode, phi00, ntot00, density00, upar00, &
                tpar00, tperp00)
 
        end if
     end if
+
+    if (write_neoclassical_flux .and. proc0) then
+       do is=1,nspec
+          tprim_tot(is) = spec(is)%tprim-0.333*aimag(tpar00(1,is))-0.6667*aimag(tperp00(1,is))
+          fprim_tot(is) = spec(is)%fprim-aimag(density00(1,is))
+          write (out_unit, "('t= ',e12.6,' is= ',i2,' pfluxneo= ',e12.6,' nprim_tot= ',e12.6,' tprim_tot= ',e12.6)") &
+               t, is, real(pfluxneo(1,1,is)), fprim_tot(is), tprim_tot(is)
+          write (out_unit, "('t= ',e12.6,' is= ',i2,' qfluxneo= ',e12.6,' tprim_tot= ',3(1x,e12.6))") &
+               t, is, real(qfluxneo(1,1,is)), tprim_tot(is), -0.333*aimag(tpar00(1,is)), -0.6667*aimag(tperp00(1,is))
+       end do
+    end if
+
 
     if (proc0 .and. dump_any) then
 !
@@ -2048,11 +2164,9 @@ contains
     if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) &
          call flush_output_file (out_unit, ".out")
 
-    if (write_hrate) then
-       call del_htype (h)
-       call del_htype (hk)
-       deallocate (hk)
-    end if
+    if (write_ascii .and. write_verr .and. mod(nout, 10) == 0 .and. proc0) &
+         call flush_output_file (res_unit, ".vres")
+
 !>GGH
     !Deallocate variables for density and velocity perturbations
     if (write_density_velocity) then
@@ -2110,9 +2224,13 @@ contains
                    hk(it, ik) % hypercoll(is) = hk(it, ik) % hypercoll(is) &
                         + real(c_rate(ig,it,ik,is,2))*fac*wgt(ig)*spec(is)%temp*spec(is)%dens
 
+                   hk(it, ik) % imp_colls(is) = hk(it, ik) % imp_colls(is) &
+                        + real(c_rate(ig,it,ik,is,3))*fac*wgt(ig)*spec(is)%temp*spec(is)%dens
+
                 end do
                 h % collisions(is) = h % collisions(is) + hk(it, ik) % collisions(is)
                 h % hypercoll(is)  = h % hypercoll(is)  + hk(it, ik) % hypercoll(is)
+                h % imp_colls(is)  = h % imp_colls(is)  + hk(it, ik) % imp_colls(is)
              end do
           end do
        end do

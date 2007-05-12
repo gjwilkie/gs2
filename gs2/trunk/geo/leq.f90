@@ -422,6 +422,10 @@ contains
     
     dr = r - surf%r
 
+! For Y Xiao: 
+!    g = surf%delp/surf%r + surf%d * sin(theta)**2
+!    Rpos = surf%R_center*(1.+r*(cos(theta)-g)-g*dr)
+
     g = cos(theta + surf%d * sin(theta))
     gp = -sin(theta + surf%d * sin(theta))*surf%dp*sin(theta)
     

@@ -4,6 +4,7 @@ module gs2_save
 
   public :: gs2_restore, gs2_save_for_restart
   public :: init_save, init_dt, init_tstart, init_ant_amp
+  public :: init_vnm
 
   interface gs2_restore
      module procedure gs2_restore_many, gs2_restore_one
@@ -16,14 +17,14 @@ module gs2_save
   real, allocatable, dimension(:) :: atmp
   integer :: ncid, thetaid, signid, gloid, kyid, kxid, nk_stir_dim
   integer :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
-  integer :: delt0id, t0id, gr_id, gi_id
+  integer :: delt0id, t0id, gr_id, gi_id, vnm1id, vnm2id
   integer :: a_antr_id, b_antr_id, a_anti_id, b_anti_id
 
   logical :: initialized = .false.
 
 contains
 
-  subroutine gs2_save_for_restart (g, t0, delt0, istatus, fphi, fapar, fbpar, exit_in)
+  subroutine gs2_save_for_restart (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in)
     use theta_grid, only: ntgrid
 ! Must include g_layout_type here to avoid obscure bomb while compiling
 ! gs2_diagnostics.f90 (which uses this module) with the Compaq F90 compiler:
@@ -38,6 +39,7 @@ contains
     character (5) :: suffix
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
+    real, dimension (2), intent (in) :: vnm
     real, intent (in) :: fphi, fapar, fbpar
     integer, intent (out) :: istatus
     logical, intent (in), optional :: exit_in
@@ -127,6 +129,20 @@ contains
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_def_var delt0 error: ", nf_strerror(istatus)
+          goto 1
+       end if
+       
+       istatus = nf_def_var (ncid, "vnm1", NF_DOUBLE, 0, 0, vnm1id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_def_var vnm(1) error: ", nf_strerror(istatus)
+          goto 1
+       end if
+       
+       istatus = nf_def_var (ncid, "vnm2", NF_DOUBLE, 0, 0, vnm2id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_def_var vnm(2) error: ", nf_strerror(istatus)
           goto 1
        end if
        
@@ -264,6 +280,22 @@ contains
        goto 1
     end if
  
+    tmp1 = vnm(1)
+    istatus = nf_put_var_double (ncid, vnm1id, tmp1)
+    if (istatus /= 0) then
+       ierr = error_unit()
+       write(ierr,*) "nf_put_var_double vnm(1) error: ", nf_strerror(istatus)
+       goto 1
+    end if
+ 
+    tmp1 = vnm(2)
+    istatus = nf_put_var_double (ncid, vnm2id, tmp1)
+    if (istatus /= 0) then
+       ierr = error_unit()
+       write(ierr,*) "nf_put_var_double vnm(2) error: ", nf_strerror(istatus)
+       goto 1
+    end if
+
 1   continue
     if (istatus /= 0) then
        i = nf_close (ncid)
@@ -930,6 +962,69 @@ contains
     call broadcast (delt0)
 
   end subroutine init_dt
+
+  subroutine init_vnm (vnm, istatus)
+
+    use mp, only: nproc, proc0, broadcast
+    use file_utils, only: error_unit
+    implicit none
+    character (305) :: file_proc
+    real, dimension(2), intent (in out) :: vnm
+    integer, intent (out) :: istatus
+    integer :: ierr
+    include 'netcdf.inc'
+    real :: tmp1
+
+    if (.not. initialized .and. proc0) then
+       file_proc=trim(trim(restart_file)//'.0000')
+
+       istatus = nf_open (file_proc, 0, ncid)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_open in init_dt error: ", nf_strerror(istatus) 
+       endif
+
+       istatus = nf_inq_varid (ncid, "vnm1", vnm1id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid for vnm(1) in init_vnm: ", nf_strerror(istatus) 
+       endif
+
+       istatus = nf_inq_varid (ncid, "vnm2", vnm2id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid for vnm(2) in init_vnm: ", nf_strerror(istatus) 
+       endif
+    end if
+
+    if (proc0) then
+       istatus = nf_get_var_double (ncid, vnm1id, tmp1)
+
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double vnm(1) error: ", nf_strerror(istatus) 
+          vnm(1) = 0.
+       else
+          vnm(1) = tmp1
+       endif           
+
+       istatus = nf_get_var_double (ncid, vnm2id, tmp1)
+
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double vnm(2) error: ", nf_strerror(istatus) 
+          vnm(2) = 0.
+       else
+          vnm(2) = tmp1
+       endif           
+
+       if (.not. initialized) istatus = nf_close (ncid)       
+    endif
+
+    call broadcast (istatus)
+    call broadcast (vnm)
+
+  end subroutine init_vnm
 
 ! This routine gets a_ant and b_ant for proc 0 only!!
   subroutine init_ant_amp (a_ant, b_ant, nk_stir, istatus)
