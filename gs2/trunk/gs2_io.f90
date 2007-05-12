@@ -33,7 +33,7 @@ module gs2_io
 
   integer :: nakx_id, naky_id, nttot_id, akx_id, aky_id, theta_id, nspec_id
   integer :: time_id, phi2_id, apar2_id, bpar2_id, theta0_id, nproc_id, nmesh_id
-  integer :: phi2_by_mode_id, apar2_by_mode_id, bpar2_by_mode_id, anorm_id
+  integer :: phi2_by_mode_id, apar2_by_mode_id, bpar2_by_mode_id
   integer :: phtot_id, dmix_id, kperpnorm_id
   integer :: phi2_by_kx_id, apar2_by_kx_id, bpar2_by_kx_id
   integer :: phi2_by_ky_id, apar2_by_ky_id, bpar2_by_ky_id
@@ -646,9 +646,6 @@ contains
        status = netcdf_put_att (ncid, bpar2_id, 'long_name', 'Total A_perp squared')
     end if
 
-    status = netcdf_def_var (ncid, 'anorm', nf_double, 1, time_dim, anorm_id)
-    status = netcdf_put_att (ncid, anorm_id, 'long_name', 'Normalizing factor')
-
     status = netcdf_def_var (ncid, 'phase', nf_double, 3, phase_dim, phase_id)
     status = netcdf_put_att (ncid, phase_id, 'long_name', 'Normalizing phase')
 
@@ -1061,7 +1058,7 @@ contains
   subroutine nc_qflux (nout, qheat, qmheat, qbheat, &
        heat_par,  mheat_par,  bheat_par, &
        heat_perp, mheat_perp, bheat_perp, &
-       heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot, anorm)
+       heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
 
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -1074,7 +1071,7 @@ contains
     real, dimension (:), intent (in) :: heat_perp, mheat_perp, bheat_perp
     real, dimension (:), intent (in) :: heat_fluxes, mheat_fluxes, bheat_fluxes
     real, dimension (:,:), intent (in) :: x_qmflux
-    real, intent (in) :: hflux_tot, anorm
+    real, intent (in) :: hflux_tot
     integer, dimension (2) :: start, count
     integer, dimension (3) :: start3, count3
     integer, dimension (4) :: start4, count4
@@ -1103,8 +1100,6 @@ contains
     
     count(1) = nspec
     count(2) = 1
-
-    status = netcdf_put_var1(ncid, anorm_id, nout, anorm)
 
     if (fphi > zero) then
        status = netcdf_put_vara(ncid, es_heat_flux_id, start, count, heat_fluxes)

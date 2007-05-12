@@ -486,19 +486,19 @@ gs2_dist_io.o: gs2_dist_io.f90
 
 ifeq ($(CPU),LINUX_lf95)
 
-le_grids.o:
+le_grids.o: le_grids.f90
 	$(FC) --quad $(F90FLAGS) -c le_grids.f90
 endif
 
 ifeq ($(CPU),Dawson)
 
-le_grids.o:
+le_grids.o: le_grids.f90
 	$(FC) $(F90FLAGS) -qautodbl=dbl -c le_grids.f90
 endif
 
 ifeq ($(CPU),RS6000)
 
-le_grids.o:
+le_grids.o: le_grids.f90
 	$(FC) $(F90FLAGS) -qautodbl=dbl -c le_grids.f90
 endif
 
@@ -550,7 +550,7 @@ run_parameters.o: mp.o file_utils.o gs2_save.o kt_grids.o text_options.o
 run_parameters.o: gs2_time.o
 species.o: mp.o file_utils.o text_options.o
 gs2_save.o: theta_grid.o gs2_layouts.o mp.o fields_arrays.o kt_grids.o 
-gs2_save.o: file_utils.o
+gs2_save.o: file_utils.o antenna_data.o
 gs2_transforms.o: gs2_layouts.o mp.o prof.o fft_work.o redistribute.o
 gs2_transform.o: theta_grid.o kt_grids.o 
 gs2_diagnostics.o: file_utils.o kt_grids.o run_parameters.o species.o mp.o 

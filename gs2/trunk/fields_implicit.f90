@@ -211,12 +211,14 @@ contains
        !GGH NOTE: apar_ext is initialized in this call
        call antenna_amplitudes (apar_ext)
 
+       call exb_shear (gnew, phinew, aparnew, bparnew)
+       
        g = gnew
        phi = phinew
        apar = aparnew 
        bpar = bparnew       
 
-       call exb_shear (g, phi, apar, bpar)
+!       call exb_shear (g, phi, apar, bpar)
        
        call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
        aparnew = aparnew + apar_ext 

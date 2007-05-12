@@ -164,12 +164,12 @@ contains
 
   end subroutine read_parameters
 
-  subroutine add_nonlinear_terms (g0, g1, g2, phi, apar, bpar, istep, bd, fexp)
+  subroutine add_nonlinear_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_time, only: save_dt_cfl
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1, g2
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
@@ -182,11 +182,11 @@ contains
        dt_cfl = 1.e8
        call save_dt_cfl (dt_cfl)
     case (nonlinear_mode_on)
-       if (istep /= 0) call add_nl (g0, g1, g2, phi, apar, bpar, istep, bd, fexp)
+       if (istep /= 0) call add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
     end select
   end subroutine add_nonlinear_terms
 
-  subroutine add_nl (g0, g1, g2, phi, apar, bpar, istep, bd, fexp)
+  subroutine add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
     use mp, only: max_allreduce, proc0
     use theta_grid, only: ntgrid, kxfac
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
@@ -200,7 +200,7 @@ contains
     use gs2_time, only: save_dt_cfl
     use constants, only: zi
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1, g2
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
@@ -218,9 +218,14 @@ contains
        return
     endif
 
+!
+! Currently not self-starting.  Need to fix this.
+!
+
     if (istep /= istep_last) then
 
        zero = epsilon(0.0)
+       g3 = g2
        g2 = g1
 
        if (fphi > zero) then

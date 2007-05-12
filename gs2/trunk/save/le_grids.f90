@@ -317,6 +317,7 @@ module le_grids
   public :: e, anon, al, delal, jend, forbid, dele
   public :: negrid, nlambda, ng2, lmax, integrate_moment
   public :: geint2g, gint2g, orbit_avg
+  public :: intcheck
   public :: fcheck
 
   private
@@ -975,20 +976,19 @@ contains
 
   end subroutine integrate_stress
 
-  subroutine integrate_moment (g, total, all)
-! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
-! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
-! is over all velocity space
+  subroutine integrate_moment (g, total)
+! returns moments to PE 0
+!GGH NOTE: Takes a 5-D dist function g and returns the moment integrated
+!   over all velocity
     use mp, only: nproc
     use theta_grid, only: ntgrid
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, idx, idx_local
-    use mp, only: sum_reduce, proc0, sum_allreduce
+    use mp, only: sum_reduce, proc0
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
-    integer, optional, intent(in) :: all
 
     complex, dimension (:), allocatable :: work
     real :: fac
@@ -1028,13 +1028,9 @@ contains
           end do
        end do
        
-       if (present(all)) then
-          call sum_allreduce (work)
-       else
-          call sum_reduce (work, 0)
-       end if
-
-       if (proc0 .or. present(all)) then
+       call sum_reduce (work, 0)
+       
+       if (proc0) then
           i = 0
           do is = 1, nspec
              do ik = 1, naky
@@ -1933,6 +1929,116 @@ contains
     call finish_mp
     stop
   end subroutine stop_invalid
+
+  subroutine intcheck (g0)
+    use file_utils, only: open_output_file, close_output_file
+    use species, only: nspec 
+    use theta_grid, only: ntgrid, bmag, bmax
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: g_lo, gint_lo, idx_local, proc_id
+    use gs2_layouts, only: idx, il_idx, ie_idx 
+    use mp, only: proc0, send, receive
+    use constants
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
+    integer :: unit
+    integer :: iglo, igint, ig, ik, it, il, ie, is
+    complex, dimension (:,:), allocatable :: gint
+    complex, dimension (negrid) :: dumout
+
+    call open_output_file (unit, ".intcheck")
+
+    write (unit,*) "bmax ", bmax
+
+    write (unit,*) "untrapped check:"
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       if (il <= 2*ngauss) then
+          g0(:,1,iglo) = bmax/bmag*(1.0 + zi)*sqrt(1.0 - al(il)*bmag) &
+               *(1.0 - bmax*al(il))**(0.5*real(ie-2))
+       else
+          g0(:,1,iglo) = 0.0
+       end if
+       g0(:,2,iglo) = g0(:,1,iglo)
+    end do
+    allocate (gint(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
+    call lintegrate (g0, gint)
+    do is = 1, nspec
+       do it = 1, ntheta0
+          do ik = 1, naky
+             do ig = -ntgrid, ntgrid
+                do ie = 1, negrid
+                   igint = idx(gint_lo,ik,it,ie,is)
+                   if (proc0) then
+                      if (idx_local(gint_lo,igint)) then
+                         dumout(ie) = gint(ig,igint)
+                      else
+                         call receive (dumout(ie), proc_id(gint_lo,igint))
+                      end if
+                   else if (idx_local(gint_lo,igint)) then
+                      call send (gint(ig,igint), 0)
+                   end if
+                end do
+                write (unit,*) "is,j,fac ", &
+                     is, ig, max(0.0,1.0-bmag(ig)/bmag)**0.5
+                write (unit,"(20(1x,1pe12.5))") 0.25*real(ie)*dumout
+             end do
+          end do
+       end do
+    end do
+
+    write (unit,*)
+    write (unit,*)
+    write (unit,*) "trapped check:"
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       if (il <= 2*ngauss) then
+          g0(:,1,iglo) = 0.0
+       else
+          g0(:,1,iglo) = (max(0.0,1.0-al(il)*bmag)**0.5)**real(ie-1)
+       end if
+       g0(:,2,iglo) = g0(:,1,iglo)
+    end do
+    call lintegrate (g0, gint)
+    do is = 1, nspec
+       do it = 1, ntheta0
+          do ik = 1, naky
+             do ig = -ntgrid, ntgrid
+                do ie = 1, negrid
+                   igint = idx(gint_lo,ik,it,ie,is)
+                   if (proc0) then
+                      if (idx_local(gint_lo,igint)) then
+                         dumout(ie) = gint(ig,igint)
+                      else
+                         call receive (dumout(ie), proc_id(gint_lo,igint))
+                      end if
+                   else if (idx_local(gint_lo,igint)) then
+                      call send (gint(ig,igint), 0)
+                   end if
+                end do
+                write (unit,*) "is,j,fac ", &
+                     is, ig, max(0.0,1.0-bmag(ig)/bmag)**0.5
+                write (unit,"(20(1x,1pe12.5))") &
+                     0.5*real(ie)*dumout &
+                     /(max(0.0,1.0-bmag(ig)/bmag)**0.5)**real(ie)
+             end do
+          end do
+       end do
+    end do
+    deallocate (gint)
+    
+    do ig = -ntgrid, ntgrid
+       write (unit,*) "j ", ig
+       do il = 1, nlambda
+          write (unit,*) "il,wl,sq ",il,wl(ig,il), &
+               sqrt(max(0.0,1.0-al(il)*bmag(ig)))
+       end do
+    end do
+
+    call close_output_file (unit)
+  end subroutine intcheck
 
   subroutine fcheck (g, f)
     use species, only: nspec

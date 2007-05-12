@@ -8,7 +8,7 @@ module run_parameters
 !  public :: delt, delt_max, wunits, woutunits, tunits, funits, tnorm
   public :: code_delt_max, wunits, woutunits, tunits, funits, tnorm
   public :: nstep, wstar_units, eqzip, margin
-  public :: secondary, tertiary
+  public :: secondary, tertiary, harris
 
   private
 
@@ -18,7 +18,7 @@ module run_parameters
   real, dimension (:), allocatable :: wunits, woutunits, tunits
   integer :: nstep
   logical :: wstar_units, eqzip
-  logical :: secondary, tertiary
+  logical :: secondary, tertiary, harris
 
   integer :: delt_option_switch
   integer, parameter :: delt_option_hand = 1, delt_option_auto = 2
@@ -70,7 +70,7 @@ contains
     logical :: exist
     namelist /parameters/ beta, zeff, tite, rhostar, teti
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
-         delt_option, margin, secondary, tertiary, faperp
+         delt_option, margin, secondary, tertiary, faperp, harris
 
     if (proc0) then
        fbpar = -1.0
@@ -84,6 +84,7 @@ contains
        eqzip = .false.
        secondary = .true.
        tertiary = .false.
+       harris = .false.
        delt_option = 'default'
        margin = 0.05
        in_file = input_unit_exist("parameters", exist)
@@ -107,6 +108,18 @@ contains
              write (ierr, *) 'because you have chosen tertiary = TRUE'
              secondary = .false.
           end if
+          if (secondary .and. harris) then
+             ierr = error_unit()
+             write (ierr, *) 'Forcing secondary = FALSE'
+             write (ierr, *) 'because you have chosen harris = TRUE'
+             secondary = .false.
+          end if
+          if (tertiary .and. harris) then
+             ierr = error_unit()
+             write (ierr, *) 'Forcing tertiary = FALSE'
+             write (ierr, *) 'because you have chosen harris = TRUE'
+             tertiary = .false.
+          end if
        end if
 
        ierr = error_unit()
@@ -129,6 +142,7 @@ contains
     call broadcast (eqzip)
     call broadcast (secondary)
     call broadcast (tertiary)
+    call broadcast (harris)
     call broadcast (margin)
     user_delt_max = delt
 

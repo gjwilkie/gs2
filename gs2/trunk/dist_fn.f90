@@ -3,13 +3,11 @@ module dist_fn
   use redistribute, only: redist_type
   implicit none
   public :: init_dist_fn
-  public :: timeadv, get_stress
+  public :: timeadv, get_stress, exb_shear
   public :: getfieldeq, getan, getfieldexp, getmoms
   public :: flux, neoclassical_flux, lambda_flux
   public :: ginit, get_epar, e_flux, get_heat
-  public :: init_intcheck, init_vortcheck, init_fieldcheck
-  public :: intcheck, vortcheck, fieldcheck
-  public :: finish_intcheck, finish_vortcheck, finish_fieldcheck
+  public :: vortcheck, fieldcheck
   public :: t0, omega0, gamma0, thetas, k0, nperiod_guard, source0
   public :: reset_init, write_f, reset_physics
   public :: M_class, N_class, i_class, par_spectrum
@@ -27,7 +25,7 @@ module dist_fn
   real :: t0, omega0, gamma0, thetas, k0, source0
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
-  real :: D_kill, noise, cfac, wfb
+  real :: D_kill, noise, cfac, wfb, g_exb
 
   integer :: adiabatic_option_switch!, heating_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -41,7 +39,9 @@ module dist_fn
        source_option_zero = 2, source_option_sine = 3, &
        source_option_test1 = 4, source_option_phiext_full = 5, &
        source_option_test2_full = 6, source_option_cosine = 7, &
-       source_option_convect_full = 8, source_option_hm_force = 9
+       source_option_convect_full = 8, source_option_hm_force = 9, &
+       source_option_neo = 10
+  
   integer :: boundary_option_switch
   integer, parameter :: boundary_option_zero = 1, &
        boundary_option_self_periodic = 2, &
@@ -85,7 +85,7 @@ module dist_fn
   complex, dimension (:,:,:), allocatable :: g_adj
   ! (N(links), 2, -g-layout-)
 
-  complex, dimension (:,:,:), allocatable, save :: gnl_1, gnl_2
+  complex, dimension (:,:,:), allocatable, save :: gnl_1, gnl_2, gnl_3
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   ! momentum conservation
@@ -160,7 +160,6 @@ contains
 
     call init_run_parameters
     call init_kperp2
-    call init_collisions ! needs to be after init_run_parameters
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
     call init_init_g 
     call init_nonlinear_terms 
@@ -170,6 +169,7 @@ contains
     call init_wstar
     call init_bessel
     call init_par_filter
+    call init_collisions ! needs to be after init_run_parameters
     call init_invert_rhs
     call init_fieldeq
     call init_hyper
@@ -184,7 +184,7 @@ contains
     use species, only: nspec
     use mp, only: proc0, broadcast
     implicit none
-    type (text_option), dimension (10), parameter :: sourceopts = &
+    type (text_option), dimension (11), parameter :: sourceopts = &
          (/ text_option('default', source_option_full), &
             text_option('full', source_option_full), &
             text_option('zero', source_option_zero), &
@@ -194,7 +194,8 @@ contains
             text_option('hm', source_option_hm_force), &
             text_option('phiext_full', source_option_phiext_full), &
             text_option('test2_full', source_option_test2_full), &
-            text_option('convect_full', source_option_convect_full) /)
+            text_option('convect_full', source_option_convect_full), &
+            text_option('neo', source_option_neo) /)
     character(20) :: source_option
 
     type (text_option), dimension (8), parameter :: boundaryopts = &
@@ -230,7 +231,7 @@ contains
          nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, flr, cfac, &
-         kill_grid, h_kill
+         kill_grid, h_kill, g_exb
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
            thetas, k0, phi_ext, source_option, a_ext, aky_star, akx_star
@@ -267,6 +268,7 @@ contains
        a_ext = 0.0
        afilter = 0.0
        kfilter = 0.0
+       g_exb = 0.0
        h_kill = .true.
        D_kill = -10.0
        noise = -1.
@@ -330,6 +332,7 @@ contains
     call broadcast (a_ext)
     call broadcast (D_kill)
     call broadcast (h_kill)
+    call broadcast (g_exb)
     call broadcast (noise)
     call broadcast (afilter)
     call broadcast (kfilter)
@@ -1695,9 +1698,10 @@ contains
        if (nonlin) then
           allocate (gnl_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           allocate (gnl_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          gnl_1 = 0. ; gnl_2 = 0.
+          allocate (gnl_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          gnl_1 = 0. ; gnl_2 = 0. ; gnl_3 = 0.
        else
-          allocate (gnl_1(1,2,1), gnl_2(1,2,1))
+          allocate (gnl_1(1,2,1), gnl_2(1,2,1), gnl_3(1,2,1))
        end if
        if (boundary_option_switch == boundary_option_linked) then
           allocate (g_h(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -1725,17 +1729,18 @@ contains
     integer, intent (in) :: istep
     integer, optional, intent (in) :: mode
     integer :: modep
+    integer :: diagnostics = 1
 
     modep = 0
     if (present(mode)) modep = mode
 
     if (modep <= 0) then
-       call add_nonlinear_terms (g, gnl_1, gnl_2, &
+       call add_nonlinear_terms (gnl_1, gnl_2, gnl_3, &
             phi, apar, bpar, istep, bkdiff(1), fexp(1))
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
        call hyper_diff (gnew, g0, phinew, bparnew)
        call kill (gnew, g0, phinew, bparnew)
-       call solfp1 (gnew, g0, phinew, aparnew, bparnew)
+       call solfp1 (gnew, g0, phinew, aparnew, bparnew, diagnostics)
        
        if (def_parity) then
           if (even) then
@@ -1753,9 +1758,12 @@ contains
 
   subroutine exb_shear (g0, phi, apar, bpar)
 
-    use gs2_layouts, only: ik_idx, it_idx, g_lo, kx_local, idx_local
+    use gs2_layouts, only: ik_idx, it_idx, g_lo, is_kx_local, idx_local, idx
+    use file_utils, only: error_unit
     use theta_grid, only: ntgrid
-    use kt_grids, only: akx, aky, nky, ikx, ntheta0
+    use kt_grids, only: akx, aky, naky, ikx, ntheta0, box
+    use le_grids, only: negrid, nlambda
+    use species, only: nspec
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kx_shift
     use gs2_time, only: code_dt
@@ -1764,19 +1772,38 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
     integer, dimension(:), allocatable, save :: jump, ikx_indexed
     integer, dimension(1), save :: itmin
-    integer :: ik, it, ie, is, il, ig, isgn
-    real :: dkx, gdt, g_exb
+    integer :: ik, it, ie, is, il, ig, isgn, to_iglo, from_iglo, ierr
+    real :: dkx, gdt
     logical :: exb_first = .true.
+    logical :: kx_local
 
 ! If not in box configuration, return
+    if (.not. box) then
+       ierr = error_unit()
+       if (abs(g_exb) > epsilon(0.0)) &
+            write (ierr, &
+            fmt="('g_ExB set to zero unless box configuration is used.')")
+       g_exb = 0.
+       return
+    end if
 
-! Need to input a value for gamma_ExB == g_exb
+! If kx data is not local, no ExB shear will be included.
+
+    call is_kx_local (negrid, nspec, nlambda, naky, ntheta0, kx_local)
+    if (.not. kx_local) then
+       ierr = error_unit()
+       if (abs(g_exb) > epsilon(0.0)) &
+            write (ierr, &
+            fmt="('Non-zero g_ExB not implemented for this layout.  g_ExB set to zero.')")
+       g_exb = 0.
+       return
+    end if
 
 ! Initialize kx_shift, jump, idx_indexed
 
     if (exb_first) then
        exb_first = .false.
-       allocate (kx_shift(nky), jump(nky))
+       allocate (kx_shift(naky), jump(naky))
        kx_shift = 0.
        jump = 0
 
@@ -1794,6 +1821,8 @@ contains
 
     dkx = akx(2)
     
+! BD: To do: Put the right timestep in here.
+!
 ! For now, approximate Greg's dt == 1/2 (t_(n+1) - t_(n-1))
 ! with code_dt.  
 !
@@ -1810,10 +1839,10 @@ contains
        kx_shift(ik) = kx_shift(ik) - jump(ik)*dkx
     end do
 
-! Should save kx_shift array in restart file
+! BD: To do: Should save kx_shift array in restart file
 
     do ik = naky, 2, -1
-       if (jump(ik) == 0) cycle  ! Greg had exit instead of cycle
+!       if (jump(ik) == 0) exit
 
        if (jump(ik) < 0) then
 
@@ -1821,6 +1850,11 @@ contains
              do it = 1, ntheta0 + jump(ik)
                 do ig=-ntgrid,ntgrid
                    phi (ig,ikx_indexed(it),ik) = phi (ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+             do it = ntheta0 + jump(ik) + 1, ntheta0
+                do ig=-ntgrid,ntgrid
+                   phi (ig,ikx_indexed(it),ik) = 0.
                 end do
              end do
           end if
@@ -1831,6 +1865,11 @@ contains
                    apar(ig,ikx_indexed(it),ik) = apar(ig,ikx_indexed(it-jump(ik)),ik)
                 end do
              end do
+             do it = ntheta0 + jump(ik) + 1, ntheta0
+                do ig=-ntgrid,ntgrid
+                   apar (ig,ikx_indexed(it),ik) = 0.
+                end do
+             end do
           end if
 
           if (fbpar > epsilon(0.0)) then
@@ -1839,12 +1878,17 @@ contains
                    bpar(ig,ikx_indexed(it),ik) = bpar(ig,ikx_indexed(it-jump(ik)),ik)
                 end do
              end do
+             do it = ntheta0 + jump(ik) + 1, ntheta0
+                do ig=-ntgrid,ntgrid
+                   bpar (ig,ikx_indexed(it),ik) = 0.
+                end do
+             end do
           end if
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! For some data layouts, there is no communication required.  Try such a case first.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-! Assume all kx data is local until kx_local function is written
           if (kx_local) then
              do is=1,nspec
                 do ie=1,negrid
@@ -1862,18 +1906,36 @@ contains
                             end do
                          end if
                       end do
+
+                      do it = ntheta0 + jump(ik) + 1, ntheta0
+                         
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+                         
+                         if (idx_local (g_lo, to_iglo)) then
+                            do isgn=1,2
+                               do ig=-ntgrid,ntgrid
+                                  g0(ig,isgn,to_iglo) = 0.
+                               end do
+                            end do
+                         end if
+                      end do
                    end do
                 end do
              end do
           end if
-          
+       end if
 
-       else  ! case for jump(ik) > 0
+       if (jump(ik) > 0) then 
 
           if (fphi > epsilon(0.0)) then
              do it = ntheta0, 1+jump(ik), -1
                 do ig=-ntgrid,ntgrid
                    phi (ig,ikx_indexed(it),ik) = phi (ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+             do it = jump(ik), 1, -1
+                do ig=-ntgrid,ntgrid
+                   phi (ig,ikx_indexed(it),ik) = 0.
                 end do
              end do
           end if
@@ -1884,6 +1946,11 @@ contains
                    apar(ig,ikx_indexed(it),ik) = apar(ig,ikx_indexed(it-jump(ik)),ik)
                 end do
              end do
+             do it = jump(ik), 1, -1
+                do ig=-ntgrid,ntgrid
+                   apar(ig,ikx_indexed(it),ik) = 0.
+                end do
+             end do
           end if
 
           if (fbpar > epsilon(0.0)) then
@@ -1892,12 +1959,17 @@ contains
                    bpar(ig,ikx_indexed(it),ik) = bpar(ig,ikx_indexed(it-jump(ik)),ik)
                 end do
              end do
+             do it = jump(ik), 1, -1
+                do ig=-ntgrid,ntgrid
+                   bpar(ig,ikx_indexed(it),ik) = 0.
+                end do
+             end do
           end if
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! For some data layouts, there is no communication required.  Try such a case first.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-! Assume all kx data is local until kx_local function is written
           if (kx_local) then
              do is=1,nspec
                 do ie=1,negrid
@@ -1911,6 +1983,19 @@ contains
                             do isgn=1,2
                                do ig=-ntgrid,ntgrid
                                   g0(ig,isgn,to_iglo) = g0(ig,isgn,from_iglo)
+                               end do
+                            end do
+                         end if
+                      end do
+
+                      do it = jump(ik), 1, -1
+
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+
+                         if (idx_local (g_lo, to_iglo)) then
+                            do isgn=1,2
+                               do ig=-ntgrid,ntgrid
+                                  g0(ig,isgn,to_iglo) = 0.
                                end do
                             end do
                          end if
@@ -2104,9 +2189,24 @@ contains
     case(source_option_phiext_full)
        if (il <= lmax) then
           call set_source
-          if (istep > 0 .and. aky(ik) < epsilon(0.0)) then
+          if (aky(ik) < epsilon(0.0)) then
              source(:ntgrid-1) = source(:ntgrid-1) &
-                  - zi*anon(ie,is)*wdrift(:ntgrid-1,iglo)*2.0*phi_ext*sourcefac &
+                  - zi*anon(ie,is)*wdrift(:ntgrid-1,iglo) &
+                  *2.0*phi_ext*sourcefac*aj0(:ntgrid-1,iglo)
+          end if
+       else
+          source = 0.0
+       end if
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Solve self-consistent terms + include external i omega_d * F_0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    case(source_option_neo)
+       if (il <= lmax) then
+          call set_source
+          if (aky(ik) < epsilon(0.0)) then
+             source(:ntgrid-1) = source(:ntgrid-1) &
+                  - anon(ie,is)*wdrift(:ntgrid-1,iglo)*2.0*phi_ext*sourcefac &
                   *(spec(is)%fprim+spec(is)%tprim*(e(ie,is)-1.5))
           end if
        else
@@ -2214,6 +2314,7 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     if (source_option_switch == source_option_full .or. &
         source_option_switch == source_option_phiext_full .or. &
+        source_option_switch == source_option_neo .or. &
         source_option_switch == source_option_hm_force .or. &
         source_option_switch == source_option_test2_full .or. &
         source_option_switch == source_option_test1) then
@@ -2227,11 +2328,20 @@ contains
           end do
 
           if (source_option_switch == source_option_phiext_full .and.  &
-               aky(ik) < epsilon(0.0) .and. istep > 0) then
+               aky(ik) < epsilon(0.0)) then
              do ig = -ntgrid, ntgrid
                 if (il /= ittp(ig)) cycle             
                 source(ig) = source(ig) - zi*anon(ie,is)* &
-                     wdriftttp(ig,it,ik,ie,is)*phi_ext*sourcefac &
+                     wdriftttp(ig,it,ik,ie,is)*2.0*phi_ext*sourcefac
+             end do
+          endif
+
+          if (source_option_switch == source_option_neo .and.  &
+               aky(ik) < epsilon(0.0)) then
+             do ig = -ntgrid, ntgrid
+                if (il /= ittp(ig)) cycle             
+                source(ig) = source(ig) - anon(ie,is)* &
+                     wdriftttp(ig,it,ik,ie,is)*2.0*phi_ext*sourcefac &
                      *(spec(is)%fprim+spec(is)%tprim*(e(ie,is)-1.5))          
              end do
           endif
@@ -2247,11 +2357,19 @@ contains
                    if (il /= ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
                 end do
-             case default
+             case (2) 
                 do ig = -ntgrid, ntgrid
                    if (il /= ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*tfac*( &
                         1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
+                end do                   
+             case default
+                do ig = -ntgrid, ntgrid
+                   if (il /= ittp(ig)) cycle
+                   source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+                          (23./12.)*gnl_1(ig,isgn,iglo) &
+                        - (4./3.)*gnl_2(ig,isgn,iglo) &
+                        + (5./12.)*gnl_3(ig,isgn,iglo))
                 end do
              end select
           end if
@@ -2314,10 +2432,17 @@ contains
             do ig = -ntgrid, ntgrid-1
                source(ig) = source(ig) + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
             end do
-         case default
+         case (2) 
             do ig = -ntgrid, ntgrid-1
                source(ig) = source(ig) + 0.5*code_dt*tfac*( &
                     1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
+            end do
+         case default
+            do ig = -ntgrid, ntgrid-1
+               source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+                      (23./12.)*gnl_1(ig,isgn,iglo) &
+                    - (4./3.)*gnl_2(ig,isgn,iglo) &
+                    + (5./12.)*gnl_3(ig,isgn,iglo))
             end do
          end select
       end if
@@ -2330,7 +2455,7 @@ contains
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         iglo, sourcefac)
     use dist_fn_arrays, only: gnew, ittp
-    use run_parameters, only: eqzip, secondary, tertiary
+    use run_parameters, only: eqzip, secondary, tertiary, harris
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, ng2, lmax, forbid
     use kt_grids, only: aky, ntheta0
@@ -2363,6 +2488,7 @@ contains
        if (tertiary .and. ik == 1) then
           if (it == 2 .or. it == ntheta0) return ! do not evolve periodic equilibrium
        end if
+       if (harris .and. ik == 1) return ! do not evolve primary mode       
     end if
 
     do isgn = 1, 2
@@ -3369,8 +3495,7 @@ contains
        pbflux, qbflux, vbflux, &
        theta_pflux, theta_vflux, theta_qflux, &
        theta_pmflux, theta_vmflux, theta_qmflux, & 
-       theta_pbflux, theta_vbflux, theta_qbflux, &
-       anorm)
+       theta_pbflux, theta_vbflux, theta_qbflux)
     use species, only: spec
     use theta_grid, only: ntgrid, bmag, gradpar, grho, delthet
     use kt_grids, only: naky, ntheta0
@@ -3390,8 +3515,8 @@ contains
     real, dimension (-ntgrid:,:,:), intent (out) :: theta_qflux, theta_qmflux, theta_qbflux
 !    real, dimension (:,:,:), intent (out) :: qflux_par, qmflux_par, qbflux_par
 !    real, dimension (:,:,:), intent (out) :: qflux_perp, qmflux_perp, qbflux_perp
-    real, intent (out) :: anorm
     real, dimension (:,:,:), allocatable :: dnorm
+    real :: anorm
     integer :: ig, it, ik, is, isgn
     integer :: iglo
 
@@ -3424,8 +3549,6 @@ contains
        end do
     end do
     
-! anorm is only actually used for QL estimates.  It is not up to date.
-
 ! weird definition was here.  changed 7.13.01
     anorm = sum(dnorm*(abs(phi)**2 + abs(apar)**2))
 
@@ -3433,27 +3556,27 @@ contains
        do isgn = 1, 2
           g0(:,isgn,:) = g(:,isgn,:)*aj0
        end do
-       call get_flux (phi, pflux, theta_pflux, anorm, dnorm)
+       call get_flux (phi, pflux, theta_pflux, dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           g0(:,:,iglo) = g0(:,:,iglo)*e(ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
        end do
-       call get_flux (phi, qflux(:,:,:,1), theta_qflux(:,:,1), anorm, dnorm)
+       call get_flux (phi, qflux(:,:,:,1), theta_qflux(:,:,1), dnorm)
 
        do isgn = 1, 2
           g0(:,isgn,:) = g(:,isgn,:)*2.*vpa(:,isgn,:)**2*aj0
        end do
-       call get_flux (phi, qflux(:,:,:,2), theta_qflux(:,:,2), anorm, dnorm)
+       call get_flux (phi, qflux(:,:,:,2), theta_qflux(:,:,2), dnorm)
 
        do isgn = 1, 2
           g0(:,isgn,:) = g(:,isgn,:)*vperp2*aj0
        end do
-       call get_flux (phi, qflux(:,:,:,3), theta_qflux(:,:,3), anorm, dnorm)
+       call get_flux (phi, qflux(:,:,:,3), theta_qflux(:,:,3), dnorm)
 
        do isgn = 1, 2
           g0(:,isgn,:) = g(:,isgn,:)*aj0*vpac(:,isgn,:)
        end do
-       call get_flux (phi, vflux, theta_vflux, anorm, dnorm)
+       call get_flux (phi, vflux, theta_vflux, dnorm)
 
     else
        pflux = 0.
@@ -3471,12 +3594,12 @@ contains
                   = -g(:,isgn,iglo)*aj0(:,iglo)*spec(is)%stm*vpa(:,isgn,iglo)
           end do
        end do
-       call get_flux (apar, pmflux, theta_pmflux, anorm, dnorm)
+       call get_flux (apar, pmflux, theta_pmflux, dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           g0(:,:,iglo) = g0(:,:,iglo)*e(ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
        end do
-       call get_flux (apar, qmflux(:,:,:,1), theta_qmflux(:,:,1), anorm, dnorm)
+       call get_flux (apar, qmflux(:,:,:,1), theta_qmflux(:,:,1), dnorm)
        
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -3486,7 +3609,7 @@ contains
                   *2.*vpa(:,isgn,iglo)**2
           end do
        end do
-       call get_flux (apar, qmflux(:,:,:,2), theta_qmflux(:,:,2), anorm, dnorm)
+       call get_flux (apar, qmflux(:,:,:,2), theta_qmflux(:,:,2), dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -3496,7 +3619,7 @@ contains
                   *vperp2(:,iglo)
           end do
        end do
-       call get_flux (apar, qmflux(:,:,:,3), theta_qmflux(:,:,3), anorm, dnorm)
+       call get_flux (apar, qmflux(:,:,:,3), theta_qmflux(:,:,3), dnorm)
        
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -3506,7 +3629,7 @@ contains
                   *vpa(:,isgn,iglo)*vpac(:,isgn,iglo)
           end do
        end do
-       call get_flux (apar, vmflux, theta_vmflux, anorm, dnorm)
+       call get_flux (apar, vmflux, theta_vmflux, dnorm)
     else
        pmflux = 0.
        qmflux = 0.
@@ -3523,12 +3646,12 @@ contains
                   = g(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz
           end do
        end do
-       call get_flux (bpar, pbflux, theta_pbflux, anorm, dnorm)
+       call get_flux (bpar, pbflux, theta_pbflux, dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           g0(:,:,iglo) = g0(:,:,iglo)*e(ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
        end do
-       call get_flux (bpar, qbflux(:,:,:,1), theta_qbflux(:,:,1), anorm, dnorm)
+       call get_flux (bpar, qbflux(:,:,:,1), theta_qbflux(:,:,1), dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -3538,7 +3661,7 @@ contains
                     *2.*vpa(:,isgn,iglo)**2
           end do
        end do
-       call get_flux (bpar, qbflux(:,:,:,2), theta_qbflux(:,:,2), anorm, dnorm)
+       call get_flux (bpar, qbflux(:,:,:,2), theta_qbflux(:,:,2), dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -3548,7 +3671,7 @@ contains
                     *vperp2(:,iglo)
           end do
        end do
-       call get_flux (bpar, qbflux(:,:,:,3), theta_qbflux(:,:,3), anorm, dnorm)
+       call get_flux (bpar, qbflux(:,:,:,3), theta_qbflux(:,:,3), dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -3558,7 +3681,7 @@ contains
                   *spec(is)%tz*vpac(:,isgn,iglo)
           end do
        end do
-       call get_flux (bpar, vbflux, theta_vbflux, anorm, dnorm)
+       call get_flux (bpar, vbflux, theta_vbflux, dnorm)
     else
        pbflux = 0.
        qbflux = 0.
@@ -3570,7 +3693,7 @@ contains
     deallocate (dnorm)
   end subroutine flux
 
-  subroutine get_flux (fld, flx, theta_flx, anorm, dnorm)
+  subroutine get_flux (fld, flx, theta_flx, dnorm)
     use theta_grid, only: ntgrid, delthet
     use kt_grids, only: ntheta0, aky, naky
     use le_grids, only: integrate_moment
@@ -3581,16 +3704,10 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
     real, dimension (:,:,:), intent (in out) :: flx
     real, dimension (-ntgrid:,:), intent (in out) :: theta_flx
-    real :: anorm
     real, dimension (-ntgrid:,:,:) :: dnorm
     complex, dimension (:,:,:,:), allocatable :: total
     real :: wgt
     integer :: ik, it, is, ig
-
-    if (abs(anorm) < 2.0*epsilon(0.0)) then
-       if (proc0) flx = 0.0
-       return
-    end if
 
     allocate (total(-ntgrid:ntgrid,ntheta0,naky,nspec))
     call integrate_moment (g0, total)
@@ -3601,7 +3718,7 @@ contains
              do it = 1, ntheta0
                 wgt = sum(dnorm(:,it,ik)*grho)
                 flx(it,ik,is) = sum(aimag(total(:,it,ik,is)*conjg(fld(:,it,ik))) &
-                     *dnorm(:,it,ik)*aky(ik))/wgt/anorm
+                     *dnorm(:,it,ik)*aky(ik))/wgt
              end do
           end do
        end do
@@ -3615,7 +3732,7 @@ contains
           do ik = 1, naky
              do it = 1, ntheta0
                 do ig = -ntgrid, ntgrid
-                   wgt = sum(dnorm(:,it,ik)*grho)*anorm*delthet(ig)
+                   wgt = sum(dnorm(:,it,ik)*grho)*delthet(ig)
                    theta_flx(ig,is) = theta_flx(ig,is) + &
                         aimag(total(ig,it,ik,is)*conjg(fld(ig,it,ik)) &
                         *dnorm(ig,it,ik)*aky(ik))/wgt
@@ -4739,10 +4856,10 @@ contains
   subroutine neoclassical_flux (pflux, qflux)
     use species, only: nspec
     use theta_grid, only: ntgrid, gradpar, bmag, delthet
-    use kt_grids, only: naky, ntheta0
-    use le_grids, only: e, integrate
+    use kt_grids, only: naky, ntheta0, akx
+    use le_grids, only: e, integrate, integrate_moment
     use dist_fn_arrays, only: g
-    use gs2_layouts, only: g_lo, geint_lo, ik_idx, it_idx, ie_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
     use gs2_layouts, only: idx, proc_id, idx_local
     use mp, only: proc0, send, receive, broadcast
     use run_parameters, only: woutunits
@@ -4752,14 +4869,15 @@ contains
     complex, dimension (:,:,:), intent (out) :: pflux, qflux
     real, dimension (:,:,:), allocatable :: dnorm
     complex, dimension (:,:,:), allocatable :: anorm
-    complex, dimension (:,:), allocatable :: geint
+    complex, dimension (:,:,:,:), allocatable :: total
     integer :: ig, ik, it, ie, is, ng
-    integer :: iglo, igeint
+    integer :: iglo
     complex :: x
+    real :: kx2
 
     allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
     allocate (anorm (ntheta0,naky,nspec))
-    allocate (geint (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
+    allocate (total(-ntgrid:ntgrid,ntheta0,naky,nspec))
     ng = ntgrid
 
     if (proc0) then
@@ -4775,7 +4893,7 @@ contains
        end do
     end do
     dnorm(-ntgrid,:,:) = 0.5*dnorm(-ntgrid,:,:)
-    dnorm(ntgrid,:,:)  = 0.5*dnorm(ntgrid,:,:)
+    dnorm( ntgrid,:,:) = 0.5*dnorm( ntgrid,:,:)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -4783,84 +4901,63 @@ contains
        g0(:,1,iglo) = dnorm(:,it,ik)
        g0(:,2,iglo) = dnorm(:,it,ik)
     end do
-    call integrate (g0, geint)
-    do is = 1, nspec
-       do ik = 1, naky
-          do it = 1, ntheta0
-             igeint = idx(geint_lo,ik,it,is)
-             if (idx_local(geint_lo,igeint)) then
-                anorm(it,ik,is) &
-                     = sum(geint(-ng:ng-1,igeint)*delthet(-ng:ng-1))
-             end if
-             call broadcast (anorm(it,ik,is), proc_id(geint_lo,igeint))
+
+    call integrate_moment (g0, total)
+    if (proc0) then
+       do is = 1, nspec
+          do ik = 1, naky
+             do it = 1, ntheta0
+                anorm(it,ik,is) = sum(total(-ng:ng-1,it,ik,is)*delthet(-ng:ng-1))
+             end do
           end do
        end do
-    end do
+    end if
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
-       g0(:,1,iglo) = dnorm(:,it,ik)*zi*wdrift(:,iglo)/code_dt*g(:,1,iglo)
-       g0(:,2,iglo) = dnorm(:,it,ik)*zi*wdrift(:,iglo)/code_dt*g(:,2,iglo)
+       if (abs(akx(it)) < epsilon(0.0)) then
+          kx2 = 1.
+       else
+          kx2 = akx(it)**2
+       end if
+       g0(:,1,iglo) = dnorm(:,it,ik)*wdrift(:,iglo)*g(:,1,iglo)/code_dt/kx2
+       g0(:,2,iglo) = dnorm(:,it,ik)*wdrift(:,iglo)*g(:,2,iglo)/code_dt/kx2
     end do
-    call integrate (g0, geint)
-    do is = 1, nspec
-       do ik = 1, naky
-          do it = 1, ntheta0
-             igeint = idx(geint_lo,ik,it,is)
-             if (proc0) then
-                if (idx_local(geint_lo,igeint)) then
-                   pflux(it,ik,is) &
-                        = sum(geint(-ng:ng-1,igeint) &
-                              *delthet(-ng:ng-1))/anorm(it,ik,is)
-                else
-                   call receive (pflux(it,ik,is), proc_id(geint_lo,igeint))
-                end if
-             else if (idx_local(geint_lo,igeint)) then
-                x = sum(geint(-ng:ng-1,igeint)*delthet(-ng:ng-1)) &
-                     /anorm(it,ik,is)
-                call send (x, 0)
-             end if
+
+
+    call integrate_moment (g0, total)
+    if (proc0) then
+       do is = 1, nspec
+          do ik = 1, naky
+             do it = 1, ntheta0
+                pflux(it,ik,is) &
+                     = sum(total(-ng:ng-1,it,ik,is)*delthet(-ng:ng-1))/anorm(it,ik,is)
+             end do
           end do
        end do
-    end do
+    end if
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       g0(:,:,iglo) = g0(:,:,iglo)*e(ie,is)**(-1.5)
+       g0(:,:,iglo) = g0(:,:,iglo)*e(ie,is)
     end do
-    call integrate (g0, geint)
-    do is = 1, nspec
-       do ik = 1, naky
-          do it = 1, ntheta0
-             igeint = idx(geint_lo,ik,it,is)
-             if (proc0) then
-                if (idx_local(geint_lo,igeint)) then
-                   qflux(it,ik,is) &
-                        = sum(geint(-ng:ng-1,igeint) &
-                              *delthet(-ng:ng-1))/anorm(it,ik,is)
-                else
-                   call receive (qflux(it,ik,is), proc_id(geint_lo,igeint))
-                end if
-             else if (idx_local(geint_lo,igeint)) then
-                x = sum(geint(-ng:ng-1,igeint)*delthet(-ng:ng-1)) &
-                     /anorm(it,ik,is)
-                call send (x, 0)
-             end if
+
+    call integrate_moment (g0, total)
+    if (proc0) then
+       do is = 1, nspec
+          do ik = 1, naky
+             do it = 1, ntheta0
+                qflux(it,ik,is) &
+                     = sum(total(-ng:ng-1,it,ik,is)*delthet(-ng:ng-1))/anorm(it,ik,is)
+             end do
           end do
        end do
-    end do
+    end if
 
-    deallocate (dnorm, anorm, geint)
+    deallocate (dnorm, anorm)
   end subroutine neoclassical_flux
-
-  subroutine init_fieldcheck
-  end subroutine init_fieldcheck
-
-  subroutine finish_fieldcheck
-  end subroutine finish_fieldcheck
 
   subroutine fieldcheck (phi, apar, bpar)
     use file_utils, only: open_output_file, close_output_file
@@ -4903,12 +5000,6 @@ contains
      end if
      deallocate (fieldeq, fieldeqa, fieldeqp)
   end subroutine fieldcheck
-
-  subroutine init_vortcheck
-  end subroutine init_vortcheck
-
-  subroutine finish_vortcheck
-  end subroutine finish_vortcheck
 
   subroutine vortcheck (phi, bpar)
     use file_utils, only: open_output_file, close_output_file
@@ -4983,18 +5074,6 @@ contains
     deallocate (apchk)
   end subroutine vortcheck
 
-  subroutine init_intcheck
-  end subroutine init_intcheck
-
-  subroutine finish_intcheck
-  end subroutine finish_intcheck
-
-  subroutine intcheck
-    use le_grids, only: le_intcheck => intcheck
-    implicit none
-    call le_intcheck (g0)
-  end subroutine intcheck
-
   subroutine reset_init
 
     use dist_fn_arrays, only: gnew, g
@@ -5028,6 +5107,7 @@ contains
     use le_grids, only: al, e, forbid
     use theta_grid, only: bmag
     use gs2_time, only: user_time
+    use dist_fn_arrays, only: g
 
     integer :: iglo, ik, it, is
     integer :: ie, il, ig, ie_last
@@ -5054,9 +5134,9 @@ contains
        il = il_idx(g_lo, iglo)
        if (idx_local (g_lo, ik, it, il, ie, is)) then
           if (proc0) then 
-             gtmp = g0(ig,:,iglo)
+             gtmp = g(ig,:,iglo)
           else
-             call send (g0(ig,:,iglo), 0)
+             call send (g(ig,:,iglo), 0)
           endif
        else if (proc0) then
           call receive (gtmp, proc_id(g_lo, iglo))
@@ -5070,7 +5150,7 @@ contains
              vpa = sqrt(e(ie,is)*max(0.0, 1.0-al(il)*bmag(ig)))
              vpe = sqrt(e(ie,is)*al(il)*bmag(ig))
 !             write (unit, "(8(1x,e12.6))") vpe,vpa,gtmp(1),-vpa,gtmp(2)             
-             gtmp = gtmp !* exp(-e(ie,is))
+             gtmp = gtmp* exp(-e(ie,is))
              write (unit, "(8(1x,e12.6),1x,i2)") vpe,vpa,gtmp(1),-vpa,gtmp(2),user_time,is
           end if
        end if

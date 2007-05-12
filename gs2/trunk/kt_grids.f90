@@ -473,6 +473,7 @@ contains
     if (proc0) call get_grids
     call broadcast (aky)
     call broadcast (akx)
+    call broadcast (ikx)
     do ik = 1, naky
        call broadcast (theta0(:,ik))
     end do
