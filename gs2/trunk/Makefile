@@ -384,7 +384,7 @@ GS2MOD= constants.o prof.o mp.o gs2_layouts.o command_line.o gs2_save.o \
 	gs2_reinit.o gs2_time.o convert.o fft_work.o shmem.o \
 	theta_grid.o kt_grids.o dist_fn_arrays.o species.o gs2_dist_io.o \
 	fields_arrays.o le_grids.o collisions.o gs2_transforms.o \
-	additional_linear_terms.o nonlinear_terms.o fields_explicit.o \
+	nonlinear_terms.o fields_explicit.o \
 	fields.o fields_implicit.o fields_test.o init_g.o check.o \
 	dist_fn.o hyper.o gs2_diagnostics.o gs2_io.o netcdf_mod.o \
 	run_parameters.o gs2_flux.o regression.o gs2_heating.o \
@@ -562,7 +562,7 @@ gs2_heating.o: mp.o species.o
 dist_fn.o: mp.o species.o theta_grid.o kt_grids.o le_grids.o antenna.o
 dist_fn.o: run_parameters.o init_g.o text_options.o fft_work.o gs2_heating.o
 dist_fn.o: gs2_layouts.o file_utils.o dist_fn_arrays.o constants.o  gs2_time.o
-dist_fn.o: collisions.o additional_linear_terms.o nonlinear_terms.o
+dist_fn.o: collisions.o nonlinear_terms.o
 dist_fn.o: gs2_transforms.o prof.o gs2_time.o redistribute.o hyper.o
 hyper.o: kt_grids.o run_parameters.o file_utils.o text_options.o 
 hyper.o: mp.o gs2_layouts.o theta_grid.o gs2_time.o le_grids.o
@@ -594,13 +594,10 @@ theta_grid.o: $(UTILS)/utils.a
 collisions.o: mp.o species.o theta_grid.o kt_grids.o le_grids.o gs2_time.o
 collisions.o: run_parameters.o file_utils.o text_options.o dist_fn_arrays.o
 collisions.o: prof.o shmem.o redistribute.o gs2_layouts.o constants.o 
-additional_linear_terms.o: file_utils.o theta_grid.o kt_grids.o le_grids.o gs2_time.o
-additional_linear_terms.o: species.o run_parameters.o constants.o dist_fn_arrays.o 
-additional_linear_terms.o: gs2_transforms.o gs2_layouts.o mp.o prof.o text_options.o 
 nonlinear_terms.o: theta_grid.o kt_grids.o le_grids.o species.o gs2_layouts.o 
 nonlinear_terms.o: dist_fn_arrays.o gs2_transforms.o run_parameters.o constants.o 
 nonlinear_terms.o: text_options.o mp.o gs2_time.o file_utils.o 
-gs2_reinit.o: additional_linear_terms.o collisions.o mp.o nonlinear_terms.o gs2_time.o
+gs2_reinit.o: collisions.o mp.o nonlinear_terms.o gs2_time.o
 gs2_reinit.o: fields_explicit.o dist_fn.o fields.o fields_implicit.o fields_test.o
 gs2_reinit.o: init_g.o run_parameters.o gs2_save.o dist_fn_arrays.o fields_arrays.o
 gs2_reinit.o: file_utils.o antenna.o  #additional_terms.o

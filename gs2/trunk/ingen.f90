@@ -55,9 +55,6 @@ program ingen
   character (len=5) :: layout
   logical :: local_field_solve
 
-! additional_linear_terms: 
-  logical :: phi0_term, wstar_term
-
 ! antenna: 
   complex :: w_antenna, a, b
   real :: amplitude, t0_driver, w_dot
@@ -408,7 +405,6 @@ program ingen
        text_option('grid.out', eqopt_file), &
        text_option('file', eqopt_file) /)
 
-  logical :: additional_linear_terms_write = .false.
   logical :: layouts_write = .false.
   logical :: driver_write = .false.
   logical :: stir_write = .false.
@@ -460,9 +456,6 @@ program ingen
 
 ! gs2_layouts:
   namelist /layouts_knobs/ layout, local_field_solve
-
-! additional_linear_terms: 
-  namelist /additional_linear_terms_knobs/ phi0_term, wstar_term, use_shmem
 
 ! antenna: 
   namelist /driver/ amplitude, w_antenna, nk_stir, write_antenna, ant_off, w_dot, t0
@@ -1190,15 +1183,6 @@ contains
        read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
        layouts_write = .true.
     end if
-
-    ! additional_linear_terms: 
-    phi0_term = .false.
-    wstar_term = .false.
-    use_shmem = .true.
-    in_file = input_unit_exist("additional_linear_terms_knobs",exist)
-    if(exist) read (unit=in_file, nml=additional_linear_terms_knobs)
-
-    if (phi0_term .or. wstar_term) additional_linear_terms_write = .true.
 
     ! antenna: 
     w_antenna = (1., 0.0)
@@ -1942,14 +1926,6 @@ contains
        write (unit, fmt="(' /')")
     end if
 
-    if (additional_linear_terms_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "additional_linear_terms_knobs"
-       write (unit, fmt="(' phi0_term = ',L1)") phi0_term
-       write (unit, fmt="(' wstar_term = ',L1)") wstar_term
-       write (unit, fmt="(' /')")
-    end if
-
     if (collisions_write) then
        write (unit, *)
        write (unit, fmt="(' &',a)") "collisions_knobs"
@@ -2527,7 +2503,6 @@ contains
        if (collision_model_switch /= collision_model_none) &
             write (unit, fmt="(' zeff = ',e16.10)") zeff
        if (.not. has_electrons)  write (unit, fmt="(' tite = ',e16.10)") tite
-       if (phi0_term) write (unit, fmt="(' rhostar = ',e16.10)") rhostar
        if (zip) write (unit, fmt="(' zip = ',L1)") zip
        write (unit, fmt="(' /')")
     end if
@@ -4507,14 +4482,6 @@ contains
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, fmt="('The variable aky_star in the source_knobs namelist does nothing.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
-    if (phi0_term .or. wstar_term) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('Nothing in the additional_linear_terms_knobs namelist is functional.')")
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, *) 
     end if

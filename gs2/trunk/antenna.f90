@@ -277,8 +277,8 @@ contains
 !               + (a_ant(i)+b_ant(i))/sqrt(2.)*exp(zi*kz_stir(i)*theta) &
 !               * (0.5-0.5*cos(time*pi/t0)
 !       else
-! GGH NOTE: The apar(:,it,ik) is unnecessary on the RHS here (=0)
-! BD ANSWER: No, we are inside the nk_stir loop.  In general case, apar /= 0 here.
+! NOTE: Is the apar(:,it,ik) unnecessary on the RHS here (=0)?
+! ANSWER: No, we are inside the nk_stir loop.  In general case, apar /= 0 here.
           apar(:,it,ik) = apar(:,it,ik) &
                + (a_ant(i)+b_ant(i))/sqrt(2.)*exp(zi*kz_stir(i)*theta) 
 !       end if

@@ -2216,17 +2216,12 @@ contains
 !    allocate(kp_by_mode(ntheta0,naky)) ; kp_by_mode(:,:)=0.
     allocate (polar_index(ntheta0,naky)) ; polar_index(:,:)=0
 
-    !Loop through all modes and sum number at each kperp
+! Loop through all modes and sum number at each kperp
     do it = 1,ntheta0
        do ik= 1,naky
           if (nonlin .and. it == 1 .and. ik == 1) cycle
-! Move determination to point where kx, ky are defined, to avoid future bugs.
-!   Determine appropriate nkx and nky values from it and ik
-!          nkx=-(mod((it-1)+int(ntheta0/2),ntheta0)-int(ntheta0/2))
-!          nky=ik-1
-!          i=nkx**2+nky**2
 
-          !Add to number and calculate magnitude of this kperp
+! Add to number and calculate magnitude of this kperp
           i = ikx(it)**2 + iky(ik)**2
           num(i)=num(i)+1
 ! In unsheared slab, this is kp = kperp.  Generalize to kp = sqrt(kperp2)
@@ -2247,7 +2242,6 @@ contains
     allocate (nbin(1:nbx)); nbin=0
     allocate (kpbin(1:nbx)); kpbin=0.
     allocate (ebincorr(1:nbx)); ebincorr=0.
-    !NOTE: This allows space for two species in the array
     allocate (ebinarray(1:nbx,3+3*nspec)); ebinarray=0. !Used in loop diagnostics
     allocate (etmp(1:ntheta0,1:naky)); etmp=0.
 

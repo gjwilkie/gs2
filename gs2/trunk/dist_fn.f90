@@ -1751,6 +1751,181 @@ contains
 
   end subroutine timeadv
 
+  subroutine exb_shear (g0, phi, apar, bpar)
+
+    use gs2_layouts, only: ik_idx, it_idx, g_lo, kx_local, idx_local
+    use theta_grid, only: ntgrid
+    use kt_grids, only: akx, aky, nky, ikx, ntheta0
+    use run_parameters, only: fphi, fapar, fbpar
+    use dist_fn_arrays, only: kx_shift
+    use gs2_time, only: code_dt
+
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
+    integer, dimension(:), allocatable, save :: jump, ikx_indexed
+    integer, dimension(1), save :: itmin
+    integer :: ik, it, ie, is, il, ig, isgn
+    real :: dkx, gdt, g_exb
+    logical :: exb_first = .true.
+
+! If not in box configuration, return
+
+! Need to input a value for gamma_ExB == g_exb
+
+! Initialize kx_shift, jump, idx_indexed
+
+    if (exb_first) then
+       exb_first = .false.
+       allocate (kx_shift(nky), jump(nky))
+       kx_shift = 0.
+       jump = 0
+
+       allocate (ikx_indexed(ntheta0))
+       itmin = minloc (ikx)
+
+       do it=itmin(1), ntheta0
+          ikx_indexed (it+1-itmin(1)) = it
+       end do
+
+       do it=1,itmin(1)-1
+          ikx_indexed (ntheta0 - itmin(1) + 1 + it)= it
+       end do
+    end if
+
+    dkx = akx(2)
+    
+! For now, approximate Greg's dt == 1/2 (t_(n+1) - t_(n-1))
+! with code_dt.  
+!
+! Note: at first time step, there is a difference of a factor of 2.
+!
+
+    gdt = code_dt
+
+! kx_shift is a function of time.   Update it here:
+
+    do ik=1, naky
+       kx_shift(ik) = kx_shift(ik) - aky(ik)*g_exb*gdt
+       jump(ik) = nint(kx_shift(ik)/dkx)
+       kx_shift(ik) = kx_shift(ik) - jump(ik)*dkx
+    end do
+
+! Should save kx_shift array in restart file
+
+    do ik = naky, 2, -1
+       if (jump(ik) == 0) cycle  ! Greg had exit instead of cycle
+
+       if (jump(ik) < 0) then
+
+          if (fphi > epsilon(0.0)) then
+             do it = 1, ntheta0 + jump(ik)
+                do ig=-ntgrid,ntgrid
+                   phi (ig,ikx_indexed(it),ik) = phi (ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+          end if
+
+          if (fapar > epsilon(0.0)) then
+             do it = 1, ntheta0 + jump(ik)
+                do ig=-ntgrid,ntgrid
+                   apar(ig,ikx_indexed(it),ik) = apar(ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+          end if
+
+          if (fbpar > epsilon(0.0)) then
+             do it = 1, ntheta0 + jump(ik)
+                do ig=-ntgrid,ntgrid
+                   bpar(ig,ikx_indexed(it),ik) = bpar(ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+          end if
+
+! For some data layouts, there is no communication required.  Try such a case first.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! Assume all kx data is local until kx_local function is written
+          if (kx_local) then
+             do is=1,nspec
+                do ie=1,negrid
+                   do il=1,nlambda
+                      do it = 1, ntheta0 + jump(ik)
+                         
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+                         from_iglo = idx(g_lo, ik, ikx_indexed(it-jump(ik)), il, ie, is)
+                         
+                         if (idx_local (g_lo, to_iglo)) then
+                            do isgn=1,2
+                               do ig=-ntgrid,ntgrid
+                                  g0(ig,isgn,to_iglo) = g0(ig,isgn,from_iglo)
+                               end do
+                            end do
+                         end if
+                      end do
+                   end do
+                end do
+             end do
+          end if
+          
+
+       else  ! case for jump(ik) > 0
+
+          if (fphi > epsilon(0.0)) then
+             do it = ntheta0, 1+jump(ik), -1
+                do ig=-ntgrid,ntgrid
+                   phi (ig,ikx_indexed(it),ik) = phi (ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+          end if
+
+          if (fapar > epsilon(0.0)) then
+             do it = ntheta0, 1+jump(ik), -1
+                do ig=-ntgrid,ntgrid
+                   apar(ig,ikx_indexed(it),ik) = apar(ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+          end if
+
+          if (fbpar > epsilon(0.0)) then
+             do it = ntheta0, 1+jump(ik), -1
+                do ig=-ntgrid,ntgrid
+                   bpar(ig,ikx_indexed(it),ik) = bpar(ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+          end if
+
+! For some data layouts, there is no communication required.  Try such a case first.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! Assume all kx data is local until kx_local function is written
+          if (kx_local) then
+             do is=1,nspec
+                do ie=1,negrid
+                   do il=1,nlambda
+                      do it = ntheta0, 1+jump(ik), -1
+
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+                         from_iglo = idx(g_lo, ik, ikx_indexed(it-jump(ik)), il, ie, is)
+
+                         if (idx_local (g_lo, to_iglo)) then
+                            do isgn=1,2
+                               do ig=-ntgrid,ntgrid
+                                  g0(ig,isgn,to_iglo) = g0(ig,isgn,from_iglo)
+                               end do
+                            end do
+                         end if
+                      end do
+                   end do
+                end do
+             end do
+          end if
+
+       end if
+
+    end do
+       
+  end subroutine exb_shear
+
   subroutine kill (g0, g1, phi, bpar)
     
     use gs2_layouts, only: ik_idx, it_idx

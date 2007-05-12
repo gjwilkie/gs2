@@ -13,8 +13,6 @@ contains
 
   subroutine reset_time_step (istep, exit)
 
-    use additional_linear_terms, only: alt_reset => reset_init
-!    use additional_terms, only: at_reset => reset_init
     use collisions, only: c_reset => reset_init
     use dist_fn, only: d_reset => reset_init
     use fields, only: f_reset => reset_init, init_fields
@@ -74,8 +72,6 @@ contains
     if (proc0) write(*,*) 'Changing time step to ', user_dt
     
 ! prepare to reinitialize inversion matrix, etc.
-    call alt_reset
-!    call at_reset
     call d_reset
     call c_reset
     call f_reset
