@@ -257,7 +257,7 @@ contains
     print *, "write_line=", string
     print *, "write_phi=", string
     print *, "write_apar=", string
-    print *, "write_aperp=", string
+    print *, "write_bpar=", string
     print *, "write_omega=", string
     print *, "write_omavg=", string
     print *, "write_qheat=", string
@@ -310,7 +310,7 @@ contains
     print "('&knobs')"
     print *, "fphi=", test1
     print *, "fapar=", test2
-    print *, "faperp=", test3
+    print *, "fbpar=", test3
     print *, "delt=", delt
     print *, "nstep=", nstep
     print "('/')"

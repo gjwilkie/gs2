@@ -4,16 +4,17 @@ module run_parameters
   public :: init_run_parameters
 
   public :: beta, zeff, tite, rhostar
-  public :: fphi, fapar, faperp
-  public :: delt, delt_max, wunits, woutunits, tunits, funits, tnorm
+  public :: fphi, fapar, fbpar
+!  public :: delt, delt_max, wunits, woutunits, tunits, funits, tnorm
+  public :: code_delt_max, wunits, woutunits, tunits, funits, tnorm
   public :: nstep, wstar_units, eqzip, margin
   public :: secondary, tertiary
 
   private
 
   real :: beta, zeff, tite, rhostar
-  real :: fphi, fapar, faperp
-  real :: delt, delt_max, funits, tnorm, margin
+  real :: fphi, fapar, fbpar, faperp
+  real :: delt, code_delt_max, user_delt_max, funits, tnorm, margin
   real, dimension (:), allocatable :: wunits, woutunits, tunits
   integer :: nstep
   logical :: wstar_units, eqzip
@@ -26,6 +27,8 @@ contains
 
   subroutine init_run_parameters
     use kt_grids, only: init_kt_grids, naky
+    use gs2_time, only: init_delt, user2code
+    
     implicit none
     logical, save :: initialized = .false.
 
@@ -33,10 +36,12 @@ contains
     initialized = .true.
 
     call read_parameters
-    call init_kt_grids (tnorm)
 
-! possible internal sqrt(2.) normalization of time:
-    delt = delt * tnorm
+    call init_kt_grids (tnorm)
+    call init_delt (delt, tnorm)
+    call user2code (user_delt_max, code_delt_max)
+
+!    delt = delt * tnorm
 
     allocate (wunits(naky))
     allocate (woutunits(naky))
@@ -64,10 +69,12 @@ contains
     real :: teti  ! for back-compatibility
     logical :: exist
     namelist /parameters/ beta, zeff, tite, rhostar, teti
-    namelist /knobs/ fphi, fapar, faperp, delt, nstep, wstar_units, eqzip, &
-         delt_option, margin, secondary, tertiary
+    namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
+         delt_option, margin, secondary, tertiary, faperp
 
     if (proc0) then
+       fbpar = -1.0
+       faperp = 0.0
        beta = 0.0
        zeff = 1.0
        tite = 1.0
@@ -86,6 +93,12 @@ contains
        if (exist) read (unit=input_unit("knobs"), nml=knobs)
 
        if (teti /= -100.0) tite = teti
+
+! Allow faperp-style initialization for backwards compatibility.
+! Only fbpar is used outside of this subroutine.
+       if (fbpar == -1.) then
+          fbpar = faperp
+       end if
 
        if (eqzip) then
           if (secondary .and. tertiary) then
@@ -110,14 +123,14 @@ contains
     call broadcast (rhostar)
     call broadcast (fphi)
     call broadcast (fapar)
-    call broadcast (faperp)
+    call broadcast (fbpar)
     call broadcast (nstep)
     call broadcast (wstar_units)
     call broadcast (eqzip)
     call broadcast (secondary)
     call broadcast (tertiary)
     call broadcast (margin)
-    delt_max = delt
+    user_delt_max = delt
 
     delt_saved = delt
     if (delt_option_switch == delt_option_auto) then

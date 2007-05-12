@@ -20,7 +20,7 @@ module nonlinear_terms
   integer, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
   integer, parameter :: flow_mode_off = 1, flow_mode_on = 2
 
-  !complex, dimension(:,:), allocatable :: phi_avg, apar_avg, aperp_avg  
+  !complex, dimension(:,:), allocatable :: phi_avg, apar_avg, bpar_avg  
 
   real, save, dimension (:,:), allocatable :: ba, gb, bracket
   ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
@@ -48,7 +48,6 @@ module nonlinear_terms
 contains
   
   subroutine init_nonlinear_terms 
-    use mp, only: proc0, iproc
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0, nx, ny, akx, aky
     use le_grids, only: init_le_grids, nlambda, negrid
@@ -102,7 +101,7 @@ contains
   end subroutine init_nonlinear_terms
 
   subroutine read_parameters
-    use file_utils, only: input_unit, input_unit_exist, error_unit
+    use file_utils, only: input_unit_exist, error_unit
     use text_options
     use mp, only: proc0, broadcast
     implicit none
@@ -165,12 +164,13 @@ contains
 
   end subroutine read_parameters
 
-  subroutine add_nonlinear_terms (g0, g1, g2, phi, apar, aperp, istep, dt_cfl, bd, fexp)
+  subroutine add_nonlinear_terms (g0, g1, g2, phi, apar, bpar, istep, bd, fexp)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
+    use gs2_time, only: save_dt_cfl
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1, g2
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    aperp
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
     complex, intent (in) :: fexp
@@ -178,14 +178,15 @@ contains
 
     select case (nonlinear_mode_switch)
     case (nonlinear_mode_none)
-       dt_cfl = 1.e4
-       ! nothing
+!!! NEED TO DO SOMETHING HERE...  BD GGH
+       dt_cfl = 1.e8
+       call save_dt_cfl (dt_cfl)
     case (nonlinear_mode_on)
-       if (istep /= 0) call add_nl (g0, g1, g2, phi, apar, aperp, istep, dt_cfl, bd, fexp)
+       if (istep /= 0) call add_nl (g0, g1, g2, phi, apar, bpar, istep, bd, fexp)
     end select
   end subroutine add_nonlinear_terms
 
-  subroutine add_nl (g0, g1, g2, phi, apar, aperp, istep, dt_cfl, bd, fexp)
+  subroutine add_nl (g0, g1, g2, phi, apar, bpar, istep, bd, fexp)
     use mp, only: max_allreduce, proc0
     use theta_grid, only: ntgrid, kxfac
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
@@ -193,14 +194,14 @@ contains
     use dist_fn_arrays, only: g, ittp
     use species, only: spec
     use gs2_transforms, only: transform2, inverse2
-    use run_parameters, only: delt, fapar, faperp, fphi
-    use kt_grids, only: aky, akx, ntheta0
+    use run_parameters, only: fapar, fbpar, fphi
+    use kt_grids, only: aky, akx
     use le_grids, only: forbid
-    use gs2_time, only: save_dt
+    use gs2_time, only: save_dt_cfl
     use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1, g2
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
     complex, intent (in) :: fexp
@@ -212,7 +213,8 @@ contains
     integer :: iglo, ik, it, is, ig, il, ia, isgn
     
     if (initializing) then
-       dt_cfl = 1.e4
+       dt_cfl = 1.e8
+       call save_dt_cfl (dt_cfl)
        return
     endif
 
@@ -227,7 +229,7 @@ contains
           g1 = 0.
        end if
 
-       if (faperp > zero) call load_kx_aperp
+       if (fbpar > zero) call load_kx_bpar
        if (fapar  > zero) call load_kx_apar
 
        if (accelerated) then
@@ -241,7 +243,7 @@ contains
        else
           g1 = 0.
        end if
-       if (faperp > zero) call load_ky_aperp
+       if (fbpar > zero) call load_ky_bpar
 
 ! more generally, there should probably be a factor of anon...
 
@@ -291,7 +293,7 @@ contains
           g1 = 0.
        end if
 
-       if (faperp > zero) call load_ky_aperp
+       if (fbpar > zero) call load_ky_bpar
        if (fapar  > zero) call load_ky_apar
 
        if (accelerated) then
@@ -306,7 +308,7 @@ contains
           g1 = 0.
        end if
 
-       if (faperp > zero) call load_kx_aperp
+       if (fbpar > zero) call load_kx_bpar
 
 ! more generally, there should probably be a factor of anon...
 
@@ -347,7 +349,7 @@ contains
        call max_allreduce(max_vel)
 
        dt_cfl = 1./max_vel
-       call save_dt (delt, dt_cfl)
+       call save_dt_cfl (dt_cfl)
        
        if (accelerated) then
           call inverse2 (abracket, g1, ia)
@@ -471,7 +473,7 @@ contains
 
     end subroutine load_ky_apar
 
-    subroutine load_kx_aperp
+    subroutine load_kx_bpar
 
       use dist_fn_arrays, only: vperp2, aj1
       use gs2_layouts, only: is_idx
@@ -485,15 +487,15 @@ contains
          is = is_idx(g_lo,iglo)
          do ig = -ntgrid, ntgrid
             fac = g1(ig,1,iglo) + zi*akx(it)*aj1(ig,iglo) &
-                 *2.0*vperp2(ig,iglo)*spec(is)%tz*aperp(ig,it,ik)*faperp
+                 *2.0*vperp2(ig,iglo)*spec(is)%tz*bpar(ig,it,ik)*fbpar
             g1(ig,1,iglo) = fac
             g1(ig,2,iglo) = fac
          end do
       end do
 
-    end subroutine load_kx_aperp
+    end subroutine load_kx_bpar
 
-    subroutine load_ky_aperp
+    subroutine load_ky_bpar
 
       use dist_fn_arrays, only: vperp2, aj1
       use gs2_layouts, only: is_idx
@@ -507,13 +509,13 @@ contains
          is = is_idx(g_lo,iglo)
          do ig = -ntgrid, ntgrid
             fac = g1(ig,1,iglo) + zi*aky(ik)*aj1(ig,iglo) &
-                 *2.0*vperp2(ig,iglo)*spec(is)%tz*aperp(ig,it,ik)*faperp
+                 *2.0*vperp2(ig,iglo)*spec(is)%tz*bpar(ig,it,ik)*fbpar
             g1(ig,1,iglo) = fac 
             g1(ig,2,iglo) = fac
          end do
       end do
 
-    end subroutine load_ky_aperp
+    end subroutine load_ky_bpar
 
   end subroutine add_nl
 

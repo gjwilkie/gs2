@@ -39,7 +39,7 @@ module gs2_diagnostics
   logical :: save_for_restart
 !>GGH
   logical, parameter :: write_density_velocity=.false.
-  logical :: write_jext=.false.
+  logical, parameter :: write_jext=.false.
 !<GGH
 
   integer :: nperiod_output
@@ -190,10 +190,14 @@ contains
     end if
        
 !GGH Allocate density and velocity perturbation diagnostic structures
-    if (write_jext) allocate (j_ext_hist(ntheta0, naky,0:navg-1)) 
+    if (write_jext) then
+        allocate (j_ext_hist(ntheta0, naky,0:navg-1)) 
+    end if
 
 !Initialize polar spectrum diagnostic
-    if (write_Epolar .and. proc0) call init_polar_spectrum
+    if (write_Epolar .and. proc0) then
+       call init_polar_spectrum()
+    endif
 
 !       allocate (hratehist(nspec, 7, 0:navg-1));  hratehist = 0.0
 !       allocate (hkratehist(ntheta0, naky, nspec, 7, 0:navg-1));  hkratehist = 0.0
@@ -206,7 +210,6 @@ contains
  
 
   subroutine real_init (list)
-    use run_parameters, only: fapar
     use file_utils, only: open_output_file, get_unused_unit
     use theta_grid, only: ntgrid, theta
     use kt_grids, only: naky, ntheta0, aky_out, akx_out
@@ -234,16 +237,11 @@ contains
        if (write_density_velocity .and. write_ascii) then
           call open_output_file (dv_unit, ".dv")
        end if
-
-       !GGH J_external, only if A_parallel is being calculated.
-       if (write_jext .and. fapar > epsilon(0.0)) then
-          if (write_ascii) then
-             call open_output_file (jext_unit, ".jext")
-          end if
-       else
-          write_jext = .false.
+       !GGH J_external
+       if (write_jext .and. write_ascii) then
+          call open_output_file (jext_unit, ".jext")
        end if
-
+       
        if (write_Epolar .and. write_ascii) then
           call open_output_file (polar_raw_unit, ".kspec_raw")
           call open_output_file (polar_avg_unit, ".kspec_avg")
@@ -314,7 +312,7 @@ contains
     use theta_grid, only: nperiod, ntheta
     use gs2_flux, only: gs2_flux_adjust
     use dist_fn, only: nperiod_guard
-    use kt_grids, only: box, nx, ny
+    use kt_grids, only: box
     use mp, only: proc0
     implicit none
     integer :: in_file
@@ -414,12 +412,6 @@ contains
        if (.not. save_for_restart) nsave = -1
        write_avg_moments = write_avg_moments .and. box
        write_stress = write_stress .and. box
-
-! Only calculate polar integrals in box layout
-       write_Epolar = write_Epolar .and. box
-
-! Disable polar integrals if nx /= ny
-       if (nx /= ny) write_Epolar = .false.
 
        write_any = write_line .or. write_phi       .or. write_apar &
             .or. write_bpar  .or. write_omega     .or. write_omavg &
@@ -542,7 +534,9 @@ contains
        end if
 
        !Finish polar spectrum diagnostic (deallocate variables)
-       if (write_Epolar) call finish_polar_spectrum
+       if (write_Epolar) then
+          call finish_polar_spectrum()
+       endif
 
        if (write_final_fields) then
           if (write_ascii) then
@@ -1252,7 +1246,7 @@ contains
     real, dimension (ntheta0, naky, nspec) :: ntot2_by_mode, ntot20_by_mode
     real :: anorm, dmix, dmix4, dmixx
     real :: t, denom
-    integer :: ig, ik, it, is, unit, il, i, j, nnx, nny, ifield
+    integer :: ig, ik, it, is, unit, il, i, j, nnx, nny
     complex :: phiavg, sourcefac
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
          upar, tpar, tperp
@@ -1534,15 +1528,16 @@ contains
 
     i=istep/nwrite
     call check_flux (i, t, heat_fluxes)
-! Polar spectrum calculation----------------------------------------------
-    if (write_Epolar .and. proc0) then
+    !NEW polar spectrum calculation----------------------------------------------
+    if (write_Epolar .and. proc0 .and. 1. .eq. 1.) then
        ebinarray(:,:)=0.
        
        !Calculate polar spectrum of energies 
-       call get_polar_spectrum (hk%energy, ebinarray(:,iefluc))
-       call get_polar_spectrum (hk%eapar,  ebinarray(:,ieapar))
-       call get_polar_spectrum (hk%ebpar,  ebinarray(:,iebpar))
-
+       call get_polar_spectrum(hk%energy,ebinarray(:,iefluc))
+       call get_polar_spectrum(hk%eapar,ebinarray(:,ieapar))
+       call get_polar_spectrum(hk%ebpar,ebinarray(:,iebpar))
+       !NOTE: Below the extra loops are tedious and inelegant but seem necessary
+       ! to convince F90 to compile. Data structures can be a hassle!-- GGH
        do is=1,nspec
           do ik= 1,naky
              do it=1,ntheta0
@@ -1565,78 +1560,63 @@ contains
        enddo
        
 !
-! BD:
+! BD some bugs here:
 ! --- must have write_hrate = T for Epolar to work b/c hk array is used
+! --- must have fphi = fapar = fbpar = 1. or log(0.) happens
 
+! seems to require two species... BD
        !Output raw kspectrum to file
-       if (nspec == 1) then
-          do i=1,nbx
-             write (unit=polar_raw_unit, fmt="('t= ',e16.10,' kperp= ',e10.4, &
-                  &' E= '     ,e10.4,' Eapar= ',e10.4,' Ebpar= ',e10.4, &
-                  &' Ephis2= ',e10.4,' Ehss2= ',e10.4,' Edfs2= ',e10.4)") &
-                  & t, kpbin(i),ebinarray(i,1:6)
-          end do
-       else  !Only writing this data for first two species for now
-! Labels assume first species is ion species.
-          do i=1,nbx
-             write (unit=polar_raw_unit, fmt="('t= ',e16.10,' kperp= ',e10.4, &
-                  &' E= '     ,e10.4,' Eapar= ',e10.4,' Ebpar= ',e10.4, &
-                  &' Ephii2= ',e10.4,' Ehsi2= ',e10.4,' Edfi2= ',e10.4, &
-                  &' Ephie2= ',e10.4,' Ehse2= ',e10.4,' Edfe2= ',e10.4)") &
-                  & t, kpbin(i),ebinarray(i,1:9)
-          end do
-       end if
+       do i=1,nbx
+          write (unit=polar_raw_unit, fmt="('t= ',e16.10,' kperp= ',e10.4, &
+               &' E= '     ,e10.4,' Eapar= ',e10.4,' Ebpar= ',e10.4, &
+               &' Ephii2= ',e10.4,' Ehsi2= ',e10.4,' Edfi2= ',e10.4, &
+               &' Ephie2= ',e10.4,' Ehse2= ',e10.4,' Edfe2= ',e10.4)") &
+               & t, kpbin(i),ebinarray(i,1:9)
+       end do
        write (unit=polar_raw_unit, fmt='(a)') ''      
 
        !Compute log-averaged polar spectrum
+       eavgarray(:,:)=0.
+       do i =1,nbx
+          j=polar_avg_index(i)
+          eavgarray(j,:)=eavgarray(j,:)+log(ebinarray(i,:))
+       enddo
+       !Finish log-averaging
+       do j=1,nkpolar
+          eavgarray(j,:)=eavgarray(j,:)/numavg(j)
+       enddo
+       eavgarray(:,:)=exp(eavgarray(:,:))
        
-       do ifield = 1, 3+nspec*3
-          eavgarray(:,ifield)=0.
-
-          if (ifield == 2 .and. fapar > epsilon(0.0)) then
-             continue
-          else
-             cycle
-          end if
-
-          if (ifield == 3 .and. fbpar > epsilon(0.0)) then
-             continue
-          else
-             cycle
-          end if
-
-         do i = 1,nbx
-             j=polar_avg_index(i)
-             eavgarray(j,ifield)=eavgarray(j,ifield)+log(ebinarray(i,ifield))
-          enddo
-! Finish log-averaging
-          do j=1,nkpolar
-             eavgarray(j,ifield)=eavgarray(j,ifield)/numavg(j)
-          enddo
-          eavgarray(:,ifield)=exp(eavgarray(:,ifield))
+       !Output log-averaged kspectrum to file
+       do i=1,nkpolar
+          write (unit=polar_avg_unit, fmt="('t= ',e16.10,' kperp= ',e10.4, &
+               &' E= '     ,e10.4,' Eapar= ',e10.4,' Ebpar= ',e10.4, &
+               &' Ephii2= ',e10.4,' Ehsi2= ',e10.4,' Edfi2= ',e10.4, &
+               &' Ephie2= ',e10.4,' Ehse2= ',e10.4,' Edfe2= ',e10.4)") &
+               & t, kpavg(i),eavgarray(i,1:9)
        end do
-
-! Output log-averaged kspectrum to file
-       if (nspec == 1) then
-          do i=1,nkpolar
-             write (unit=polar_avg_unit, fmt="('t= ',e16.10,' kperp= ',e10.4, &
-                  &' E= '     ,e10.4,' Eapar= ',e10.4,' Ebpar= ',e10.4, &
-                  &' Ephis2= ',e10.4,' Ehss2= ',e10.4,' Edfs2= ',e10.4)") &
-                  & t, kpavg(i),eavgarray(i,1:6)
-          end do
-       else ! Only writing this data for first two species right now
-! Labels assume first species is ion species.
-          do i=1,nkpolar
-             write (unit=polar_avg_unit, fmt="('t= ',e16.10,' kperp= ',e10.4, &
-                  &' E= '     ,e10.4,' Eapar= ',e10.4,' Ebpar= ',e10.4, &
-                  &' Ephii2= ',e10.4,' Ehsi2= ',e10.4,' Edfi2= ',e10.4, &
-                  &' Ephie2= ',e10.4,' Ehse2= ',e10.4,' Edfe2= ',e10.4)") &
-                  & t, kpavg(i),eavgarray(i,1:9)
-          end do
-       end if
        write (unit=polar_avg_unit, fmt='(a)') ''      
 
-    end if 
+    end if ! END NEW polar spectrum calculation----------------------------------
+    !OLD polar spectrum calculation----------------------------------------------
+!    if (write_Epolar .and. proc0 .and. 0. .eq. 1.) then
+!       allocate (phi_by_k(nkpolar))  ; phi_by_k = 0.
+!       allocate (apar_by_k(nkpolar)) ; apar_by_k = 0.
+!       allocate (bpar_by_k(nkpolar)) ; bpar_by_k = 0.
+!       
+!       if (fphi > 0)   call get_polar_integrand (phinew, phinew, phi_by_k)
+!       if (fapar > 0.) call get_polar_integrand (aparnew, aparnew, apar_by_k)
+!       if (fbpar > 0.) call get_polar_integrand (bparnew, bparnew, bpar_by_k)
+!       
+!       do i=2,nkpolar-1
+!          write (unit=polar_unit, fmt="('t= ',e16.10,' k= ',e10.4, &
+!               & ' Ephi= ',e10.4, ' Eapar= ',e10.4, ' Ebpar= ',e10.4)") &
+!               & t, akpolar_out(i), phi_by_k(i), apar_by_k(i), bpar_by_k(i)
+!       end do
+!       write (unit=polar_unit, fmt='(a)') ''       
+!       deallocate (phi_by_k, apar_by_k, bpar_by_k)
+!    end if ! END OLD polar spectrum calculation---------------------------------
+
 
     if (write_intcheck) call intcheck
     if (write_vortcheck) call vortcheck (phinew, bparnew)
@@ -1661,22 +1641,22 @@ contains
 ! For case with two species:
 !
 ! Column     Item               
-!   1        time              
-!   2        Energy              
-!   3        dEnergy/dt            
-!   4        J_ant.E             
-!   5        J_1 . E_ant
-!   6        J_2 . E_ant
-!   7        [h H(h)]_1
-!   8        [h H(h)]_2
+!   1         time              
+!   2       Energy              
+!   3     dEnergy/dt            
+!   4       J_ant.E             
+!   5        Hv_1               
+!   6        Hv_2               
+!   7        Hr_1
+!   8        Hr_2
 !   9        [h C(h)]_1
 !  10        [h C(h)]_2
 !  11        [h w_* h]_1
 !  12        [h w_* h]_2
 !  13        [chi dh/dt]_1
 !  14        [chi dh/dt]_2
-!  15      sum (J_s . E_ant)      
-!  16      sum (h H(h))      
+!  15      sum (H_v)      
+!  16      sum (H_r)      
 !  17      sum (h C(h))   
 !  18      sum (h w_* h)  
 !  19      sum (chi dh/dt)
@@ -1691,23 +1671,23 @@ contains
 !  28      Phi_bar_2 ** 2
 
           write (unit=heat_unit, fmt="(28es12.4)") t,h % energy,  &
-               h % energy_dot, h % antenna, h % S_ext, h % hypercoll, h % collisions, &
-               h % gradients, h % heating, sum(h % S_ext), sum(h % hypercoll), sum(h % collisions), &
+               h % energy_dot, h % antenna, h % hypervisc, h % hyperres, h % collisions, &
+               h % gradients, h % heating, sum(h % hypervisc), sum(h % hyperres), sum(h % collisions), &
                sum(h % gradients), sum(h % heating),sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot, &
                h % eapar, h % ebpar, h % delfs2(:),  h % hs2(:), h % phis2(:)
 
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' energy= ',e12.6)") t, h % energy
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' energy_dot= ',e12.6)") t, h % energy_dot
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' J_ant.E= ',e12.6)") t, h % antenna
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' S_ext= ',12(1x,e12.6))") t, h % S_ext
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hyperC= ',12(1x,e12.6))") t, h % hypercoll
+!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hvisc= ',12(1x,e12.6))") t, h % hypervisc
+!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hres= ',12(1x,e12.6))") t, h % hyperres
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hCh= ',12(1x,e12.6))") t, h % collisions
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hw*= ',12(1x,e12.6))") t, h % gradients
 !GGH!         write (unit=heat_unit, fmt="('t= ',e12.6,' hwd= ',12(1x,e12.6))") t, h % curvature
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' heating= ',12(1x,e12.6))") t, h % heating
 
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hvisc= ',e12.6)") t, sum(h % hypervisc)
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hyperC= ',e12.6)") t, sum(h % hypercoll)
+!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hres= ',e12.6)") t, sum(h % hyperres)
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hCh= ',e12.6)") t, sum(h % collisions)
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hw*= ',e12.6)") t, sum(h % gradients)
 !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_heating= ',e12.6)") t, sum(h % heating)
@@ -2018,8 +1998,10 @@ contains
        call del_dvtype (dvk)
        deallocate(dvk)
     endif
-! Deallocate variable for Jexternal
-    if (write_jext) deallocate(j_ext)
+    !Deallocate variable for Jexternal
+    if (write_jext) then
+       deallocate(j_ext)
+    endif
 !<GGH
 
     call prof_leaving ("loop_diagnostics-2")
@@ -2034,6 +2016,7 @@ contains
     use species, only: nspec, spec
     use kt_grids, only: naky, ntheta0, aky, akx
     use theta_grid, only: ntgrid, delthet, jacob
+    use antenna, only: amplitude
     use run_parameters, only: funits
     use nonlinear_terms, only: nonlin
     use dist_fn_arrays, only: c_rate
@@ -2061,16 +2044,17 @@ contains
                 if (aky(ik) < epsilon(0.0) .and. abs(akx(it)) < epsilon(0.0)) cycle
                 do ig = -ntgrid, ntgrid
                    
+!BD   TO DO
+!BD   Need to save c_rate(:,:,:,:,2), which is the entropy term from hyper-diff in 
+!BD   the collision operator. Integration and normalization factors should be the 
+!BD   same as appear here for crate(...,1), I think. 
+
                    !Sum heating by k over all z points (ig)
                    hk(it, ik) % collisions(is) = hk(it, ik) % collisions(is) &
                         + real(c_rate(ig,it,ik,is,1))*fac*wgt(ig)*spec(is)%temp*spec(is)%dens
 
-                   hk(it, ik) % hypercoll(is) = hk(it, ik) % hypercoll(is) &
-                        + real(c_rate(ig,it,ik,is,2))*fac*wgt(ig)*spec(is)%temp*spec(is)%dens
-
                 end do
                 h % collisions(is) = h % collisions(is) + hk(it, ik) % collisions(is)
-                h % hypercoll(is)  = h % hypercoll(is)  + hk(it, ik) % hypercoll(is)
              end do
           end do
        end do
@@ -2187,51 +2171,43 @@ contains
 ! Set up corrections for polar energy spectrum
 !================================================================================
 !NOTE: Here we calculate the correction factors for each possible kperp
-  subroutine init_polar_spectrum
-    use dist_fn_arrays, only: kperp2
-    use kt_grids, only: naky, ntheta0, aky, akx, nkpolar, ikx, iky
+!NOTE: Here it is assumed the ntheta0 modes are in order
+!         (1 to ntheta0) => 0,-1,...,-ntheta0/2,ntheta0/2,ntheta0/2-1,...,1 
+!      (with integer division rules)
+!      and the naky modes are in order
+!         (1 to naky) => 0,1,...,naky-1
+  subroutine init_polar_spectrum()
+    use kt_grids, only: naky, ntheta0, aky, akx, nkpolar
     use constants, only: pi
     use nonlinear_terms, only: nonlin
     use species, only: nspec
     implicit none
 !    real, dimension(:,:), allocatable :: kp_by_mode
-    integer, dimension(:), allocatable :: num, nbin
-    real, dimension(:), allocatable :: kp
-1    real, dimension(:), allocatable :: kpavg_lim
+    real, dimension(:), allocatable :: num, kp, nbin
+    real, dimension(:), allocatable :: kpavg_lim
     real :: kpmax,dkp
-    integer :: nkperp                           !Total possible number of kperps
-    integer :: ik, it, i,j,inbx !,nkx,nky
-    integer :: ig = 0
+    integer :: nx                           !Total possible number of kperps
+    integer :: ik, it, i,j,inbx,nkx,nky
 
-! Not yet properly generalized for kperp2 = kperp2 (theta).  Currently 
-! set up using kperp**2 values calculated at theta = 0 (by setting ig = 0 above).
-
-! NOTE: In this routine, a square domain is assumed! (nx=ny)
-! In read_parameters, write_Epolar => .false. if nx /= ny
-
+    !NOTE: In this routine, a square domain is assumed! ntheta0=naky (nx=ny)
     !Determine total number of possible kperps and allocate array
-    nkperp = ntheta0**2 + naky**2
-    allocate (num(1:nkperp)); num=0
-    allocate (kp(1:nkperp)); kp(:)=huge(kp)
+    nx=ntheta0**2 + naky**2
+    allocate(num(1:nx)); num=0.
+    allocate(kp(1:nx)); kp(:)=huge(kp)
 !    allocate(kp_by_mode(ntheta0,naky)) ; kp_by_mode(:,:)=0.
-    allocate (polar_index(ntheta0,naky)) ; polar_index(:,:)=0
+    allocate(polar_index(ntheta0,naky)) ; polar_index(:,:)=0
 
     !Loop through all modes and sum number at each kperp
     do it = 1,ntheta0
        do ik= 1,naky
           if (nonlin .and. it == 1 .and. ik == 1) cycle
-! Move determination to point where kx, ky are defined, to avoid future bugs.
-!   Determine appropriate nkx and nky values from it and ik
-!          nkx=-(mod((it-1)+int(ntheta0/2),ntheta0)-int(ntheta0/2))
-!          nky=ik-1
-!          i=nkx**2+nky**2
-
+         !Determine appropriate nkx and nky values from it and ik
+          nkx=-(mod((it-1)+int(ntheta0/2),ntheta0)-int(ntheta0/2))
+          nky=ik-1
           !Add to number and calculate magnitude of this kperp
-          i = ikx(it)**2 + iky(ik)**2
+          i=nkx**2+nky**2
           num(i)=num(i)+1
-! In unsheared slab, this is kp = kperp.  Generalize to kp = sqrt(kperp2)
-!         kp(i)=sqrt(akx(it)**2+aky(ik)**2)
-          kp(i) = sqrt(kperp2(ig, it, ik))
+          kp(i)=sqrt(akx(it)**2+aky(ik)**2)
           polar_index(it,ik)=i
        enddo
     enddo
@@ -2239,36 +2215,36 @@ contains
     !Collapse bins to only existing values of kperp
     !Find total number of existing kperps
     nbx=0
-    do i=1,nkperp
-       if (num(i) > 0) nbx=nbx+1
+    do i=1,nx
+       if (num(i) .gt. 0.) nbx=nbx+1
     enddo
     
     !Allocate bin variables
-    allocate (nbin(1:nbx)); nbin=0
-    allocate (kpbin(1:nbx)); kpbin=0.
-    allocate (ebincorr(1:nbx)); ebincorr=0.
+    allocate(nbin(1:nbx)); nbin=0.
+    allocate(kpbin(1:nbx)); kpbin=0.
+    allocate(ebincorr(1:nbx)); ebincorr=0.
     !NOTE: This allows space for two species in the array
-    allocate (ebinarray(1:nbx,3+3*nspec)); ebinarray=0. !Used in loop diagnostics
-    allocate (etmp(1:ntheta0,1:naky)); etmp=0.
+    allocate(ebinarray(1:nbx,9)); ebinarray=0. !Used in loop diagnostics
+    allocate(etmp(1:ntheta0,1:naky)); etmp=0.
 
     !Copy data
     inbx=0
-    do i=1,nkperp
-       if (num(i) > 0) then
+    do i=1,nx
+       if (num(i) .gt. 0.) then
           inbx=inbx+1
           nbin(inbx)=num(i)
           kpbin(inbx)=kp(i)
           !Correct polar_index
           do it = 1,ntheta0
              do ik= 1,naky
-                if (polar_index(it,ik) == i) polar_index(it,ik)=inbx
+                if (polar_index(it,ik) .eq. i) polar_index(it,ik)=inbx
              enddo
           enddo
        endif
     enddo
 
     !Calculate the correction factor for the discrete values
-    ebincorr=pi*kpbin/real(nbin)
+    ebincorr=pi*kpbin/nbin
 
     !Deallocate variables
     deallocate(num,kp,nbin)
@@ -2407,7 +2383,7 @@ contains
 !
 !================================================================================
 ! Deallocate variables used for polar spectrum
-  subroutine finish_polar_spectrum
+  subroutine finish_polar_spectrum()
     implicit none
 
     !Deallocate variables
@@ -2415,7 +2391,60 @@ contains
     deallocate(numavg,kpavg,eavgarray,polar_avg_index)
 
   end subroutine finish_polar_spectrum
-
+!================================================================================
+!  subroutine get_polar_integrand (a, b, axb_by_k)
+!    use theta_grid, only: ntgrid, delthet, jacob
+!    use kt_grids, only: naky, ntheta0, nkpolar, aky, akx!, akpolar
+!    use constants, only: pi
+!    implicit none
+!    complex, dimension (-ntgrid:,:,:), intent (in) :: a, b
+!    real, dimension (:), intent (out) :: axb_by_k
+!    real, dimension (ntheta0, naky) :: axb_by_mode
+!
+!    integer :: ig, ik, it, i, ikp
+!    integer :: ng
+!    real, dimension (-ntg_out:ntg_out) :: wgt
+!    real :: anorm, kperp, fac
+!
+!    ng = ntg_out
+!    wgt = delthet(-ng:ng)*jacob(-ng:ng)
+!    anorm = sum(wgt)
+!
+!! integrate along field line first
+!
+!    do ik = 1, naky
+!       do it = 1, ntheta0
+!          axb_by_mode(it,ik) &
+!               = sum(real(conjg(a(-ng:ng,it,ik))*b(-ng:ng,it,ik))*wgt)/anorm
+!       end do
+!    end do
+!
+!! Now get integrand of expression like E_tot = 2 pi int ( a* b k  dkpolar)
+!! I.e., get axb_by_k == a* times  b times |k|
+!! For now, assume square domain with nx=ny.  Should be generalized.
+!! Ignore modes with k > ky_max = kx_max b/c this gives funny cutoff feature
+!! that we do not care about
+!
+!! Note: kpolar = ky for now; hence kpolar(1) = 0.
+!!
+!    axb_by_k = 0.
+!    do ikp=1,nkpolar-1
+!       do ik = 1, naky
+!          fac = 0.5
+!          if (aky(ik) < epsilon(0.)) fac = 1.0
+!          
+!          do it = 1, ntheta0
+!             kperp = sqrt(akx(it)**2+aky(ik)**2)
+!
+!             if (kperp >= akpolar(ikp) .and. kperp < akpolar(ikp+1)) then
+!                axb_by_k(ikp) = axb_by_k(ikp) + axb_by_mode(it, ik)*fac
+!             end if
+!          end do
+!       end do
+!    end do
+!
+!  end subroutine get_polar_integrand
+!================================================================================
   subroutine get_vol_average_all (a, b, axb, axb_by_mode)
     use theta_grid, only: ntgrid, delthet, jacob
     use kt_grids, only: naky, ntheta0

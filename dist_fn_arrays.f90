@@ -25,7 +25,7 @@ module dist_fn_arrays
   ! (-ntgrid:ntgrid,ntheta0,naky) replicated
 
   ! collisional diagnostic of heating rate
-  complex, dimension (:,:,:,:), allocatable :: c_rate
-  ! (-ntgrid:ntgrid,ntheta0,naky) replicated
+  complex, dimension (:,:,:,:,:), allocatable :: c_rate
+  ! (-ntgrid:ntgrid,ntheta0,naky,nspecies,2) replicated
 
 end module dist_fn_arrays

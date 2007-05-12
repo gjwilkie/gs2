@@ -21,27 +21,26 @@ contains
   end subroutine init_fields_test
 
   subroutine init_phi_test
-    use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     implicit none
 
     phi = 0.0
     apar = 0.0
-    aperp = 0.0
+    bpar = 0.0
     phinew = 0.0
     aparnew = 0.0
-    aperpnew = 0.0
+    bparnew = 0.0
   end subroutine init_phi_test
 
   subroutine advance_test (istep)
-    use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn, only: timeadv
     use dist_fn_arrays, only: g, gnew
     implicit none
     integer, intent (in) :: istep
-    real :: dt_cfl
 
     g = gnew
-    call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, istep, dt_cfl)
+    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
   end subroutine advance_test
 
   subroutine reset_init

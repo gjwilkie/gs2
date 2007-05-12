@@ -14,13 +14,13 @@ contains
     logical, intent (in out) :: exit
 
     real :: timelimit, timeleft, timeused
-    integer :: iret, mpptime, unit
+    integer :: iret, unit
     integer, dimension(0:nproc-1) :: exit_array
 
 ! If any PE is running out of time, set exit flag
     exit_array = 0
-    iret=mpptime(timelimit, timeleft, timeused)
-    if (timeleft/timelimit < margin) exit_array(iproc) = 1
+!    iret=mpptime(timelimit, timeleft, timeused)
+!    if (timeleft/timelimit < margin) exit_array(iproc) = 1
 
 ! If .stop file has appeared, set exit flag
     if (proc0) then

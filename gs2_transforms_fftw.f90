@@ -58,9 +58,8 @@ module gs2_transforms
 ! terms
   logical :: accel = .false.
 
-  integer :: igmin_proc, igmax_proc
   logical, save, dimension (:), allocatable :: aidx  ! aidx == aliased index
-  integer, save, dimension (:), allocatable :: igproc, ia, iak
+  integer, save, dimension (:), allocatable :: ia, iak
   complex, save, dimension (:, :), allocatable :: fft, xxf
   complex, save, dimension (:, :, :), allocatable :: ag
 
@@ -88,7 +87,7 @@ contains
 
     call pe_layout (char)
 
-    if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then  ! not quite robust
+    if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then  
        accel = .true.
        call init_accel_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
     else
@@ -463,7 +462,7 @@ contains
   end subroutine inverse_y5d
 
   subroutine transform2_5d (g, yxf)
-    use gs2_layouts, only: g_lo, xxf_lo, yxf_lo, ik_idx
+    use gs2_layouts, only: g_lo, yxf_lo, ik_idx
     implicit none
     complex, dimension (:,:,g_lo%llim_proc:), intent (in out) :: g
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
@@ -479,7 +478,7 @@ contains
   end subroutine transform2_5d
 
   subroutine inverse2_5d (yxf, g)
-    use gs2_layouts, only: g_lo, xxf_lo, yxf_lo, ik_idx
+    use gs2_layouts, only: g_lo, yxf_lo, ik_idx
     implicit none
     real, dimension (:,yxf_lo%llim_proc:), intent (in out) :: yxf
     complex, dimension (:,:,g_lo%llim_proc:), intent (out) :: g
@@ -587,9 +586,8 @@ contains
   end subroutine init_3d
 
   subroutine transform2_3d (phi, phixf, nny, nnx)
-    use mp, only: proc0
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0, nx, ny, aky
+    use kt_grids, only: naky, ntheta0, nx, aky
     implicit none
     integer :: nnx, nny
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
@@ -681,9 +679,8 @@ contains
   end subroutine inverse2_3d
 
   subroutine transform2_4d (den, phixf, nny, nnx)
-    use mp, only: proc0
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0, nx, ny, aky
+    use kt_grids, only: naky, ntheta0, nx, aky
     implicit none
     integer :: nnx, nny
     complex, dimension (-ntgrid:,:,:,:), intent (in) :: den

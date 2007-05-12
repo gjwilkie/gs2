@@ -40,22 +40,22 @@ contains
   end subroutine read_parameters
 
   subroutine init_phi_implicit
-    use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     implicit none
 
     call init_fields_implicit
-    call getfield (phinew, aparnew, aperpnew)
-    phi = phinew; apar = aparnew; aperp = aperpnew
+    call getfield (phinew, aparnew, bparnew)
+    phi = phinew; apar = aparnew; bpar = bparnew
   end subroutine init_phi_implicit
 
-  subroutine get_field_vector (fl, phi, apar, aperp)
+  subroutine get_field_vector (fl, phi, apar, bpar)
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use dist_fn, only: getfieldeq
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use prof, only: prof_entering, prof_leaving
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (:,:,:), intent (out) :: fl
     complex, dimension (:,:,:), allocatable :: fieldeq, fieldeqa, fieldeqp
     integer :: istart, ifin
@@ -66,7 +66,7 @@ contains
     allocate (fieldeqa(-ntgrid:ntgrid,ntheta0,naky))
     allocate (fieldeqp(-ntgrid:ntgrid,ntheta0,naky))
 
-    call getfieldeq (phi, apar, aperp, fieldeq, fieldeqa, fieldeqp)
+    call getfieldeq (phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
 
     ifin = 0
 
@@ -82,7 +82,7 @@ contains
        fl(istart:ifin,:,:) = fieldeqa
     end if
 
-    if (faperp > epsilon(0.0)) then
+    if (fbpar > epsilon(0.0)) then
        istart = ifin + 1
        ifin = (istart-1) + 2*ntgrid+1
        fl(istart:ifin,:,:) = fieldeqp
@@ -94,10 +94,10 @@ contains
   end subroutine get_field_vector
 
   subroutine get_field_solution (u)
-    use fields_arrays, only: phinew, aparnew, aperpnew
+    use fields_arrays, only: phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use gs2_layouts, only: jf_lo, ij_idx
     use prof, only: prof_entering, prof_leaving
     implicit none
@@ -130,13 +130,13 @@ contains
        end do
     endif
 
-    if (faperp > epsilon(0.0)) then
+    if (fbpar > epsilon(0.0)) then
        ifield = ifield + 1
        do ik = 1, naky
           do it = 1, ntheta0
              ll = ij_idx (jf_lo, -ntgrid, ifield, ik, it)
              lr = ll + 2*ntgrid
-             aperpnew(:,it,ik) = u(ll:lr)
+             bparnew(:,it,ik) = u(ll:lr)
           end do
        end do
     endif
@@ -144,7 +144,7 @@ contains
     call prof_leaving ("get_field_solution", "fields_implicit")
   end subroutine get_field_solution
 
-  subroutine getfield (phi, apar, aperp)
+  subroutine getfield (phi, apar, bpar)
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: f_lo, jf_lo, ij, mj, dj
     use prof, only: prof_entering, prof_leaving
@@ -153,7 +153,7 @@ contains
     use dist_fn, only: N_class
     use mp, only: sum_allreduce
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, aperp
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (:,:,:), allocatable :: fl
     complex, dimension (:), allocatable :: u
     integer :: jflo, ik, it, nl, nr, i, m, n, dc
@@ -162,10 +162,10 @@ contains
     allocate (fl(nidx, ntheta0, naky))
     allocate (u (0:nidx*ntheta0*naky-1))
 
-    ! am*u = fl, Poisson's and Ampere's law, u is phi, apar, aperp 
+    ! am*u = fl, Poisson's and Ampere's law, u is phi, apar, bpar 
     ! u = aminv*fl
 
-    call get_field_vector (fl, phi, apar, aperp)
+    call get_field_vector (fl, phi, apar, bpar)
     
     u = 0.
     do jflo = jf_lo%llim_proc, jf_lo%ulim_proc
@@ -196,8 +196,8 @@ contains
     call prof_leaving ("getfield", "fields_implicit")
   end subroutine getfield
 
-  subroutine advance_implicit (istep, dt_cfl)
-    use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
+  subroutine advance_implicit (istep)
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
     use dist_fn, only: timeadv
@@ -205,27 +205,27 @@ contains
     use nonlinear_terms, only: algorithm !, nonlin
     implicit none
     integer, intent (in) :: istep
-    real :: dt_cfl
 
     if (algorithm == 1) then
 
+       !GGH NOTE: apar_ext is initialized in this call
        call antenna_amplitudes (apar_ext)
 
        g = gnew
        phi = phinew
        apar = aparnew 
-       aperp = aperpnew       
+       bpar = bparnew       
        
-       call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, istep, dt_cfl)
+       call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
        aparnew = aparnew + apar_ext 
 
-       call getfield (phinew, aparnew, aperpnew)
+       call getfield (phinew, aparnew, bparnew)
 
        phinew   = phinew   + phi
-       aparnew  = aparnew  + apar !+ apar_ext 
-       aperpnew = aperpnew + aperp
+       aparnew  = aparnew  + apar
+       bparnew = bparnew + bpar
                  
-       call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, istep, dt_cfl)
+       call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
 
     end if
 
@@ -252,12 +252,12 @@ contains
 
   subroutine init_response_matrix
     use mp, only: barrier
-    use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use dist_fn_arrays, only: g
     use dist_fn, only: M_class, N_class, i_class
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use gs2_layouts, only: init_fields_layouts, f_lo
     use gs2_layouts, only: init_jfields_layouts
     use prof, only: prof_entering, prof_leaving
@@ -271,7 +271,7 @@ contains
     nfield = 0
     if (fphi > epsilon(0.0)) nfield = nfield + 1
     if (fapar > epsilon(0.0)) nfield = nfield + 1
-    if (faperp > epsilon(0.0)) nfield = nfield + 1
+    if (fbpar > epsilon(0.0)) nfield = nfield + 1
     nidx = (2*ntgrid+1)*nfield
 
     call init_fields_layouts (nfield, nidx, naky, ntheta0, M_class, N_class, i_class)
@@ -294,10 +294,10 @@ contains
        
        phi = 0.0
        apar = 0.0
-       aperp = 0.0
+       bpar = 0.0
        phinew = 0.0
        aparnew = 0.0
-       aperpnew = 0.0
+       bparnew = 0.0
 
        do n = 1, N_class(i)
           do ig = -ntgrid, ntgrid
@@ -340,22 +340,22 @@ contains
                 aparnew = 0.0
              end if
              
-             if (faperp > epsilon(0.0)) then
+             if (fbpar > epsilon(0.0)) then
                 ifield = ifield + 1
                 if (endpoint) then
                    do m = 1, M_class(i)
                       ik = f_lo(i)%ik(m,n-1)
                       it = f_lo(i)%it(m,n-1)
-                      aperpnew(ntgrid,it,ik) = 1.0
+                      bparnew(ntgrid,it,ik) = 1.0
                    end do
                 endif
                 do m = 1, M_class(i)
                    ik = f_lo(i)%ik(m,n)
                    it = f_lo(i)%it(m,n)
-                   aperpnew(ig,it,ik) = 1.0
+                   bparnew(ig,it,ik) = 1.0
                 end do
                 call init_response_row (ig, ifield, am, i, n)
-                aperpnew = 0.0
+                bparnew = 0.0
              end if
           end do
        end do
@@ -372,11 +372,11 @@ contains
 
   subroutine init_response_row (ig, ifield, am, ic, n)
     use mp, only: proc0
-    use fields_arrays, only: phi, apar, aperp, phinew, aparnew, aperpnew
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use dist_fn, only: getfieldeq, timeadv, M_class, N_class
-    use run_parameters, only: fphi, fapar, faperp
+    use run_parameters, only: fphi, fapar, fbpar
     use gs2_layouts, only: f_lo, idx, idx_local
     use prof, only: prof_entering, prof_leaving
     implicit none
@@ -384,7 +384,6 @@ contains
     complex, dimension(:,f_lo(ic)%llim_proc:), intent (in out) :: am
     complex, dimension (:,:,:), allocatable :: fieldeq, fieldeqa, fieldeqp
     integer :: irow, istart, iflo, ik, it, ifin, m, nn
-    real :: dt_cfl
 
     call prof_entering ("init_response_row", "fields_implicit")
 
@@ -392,8 +391,8 @@ contains
     allocate (fieldeqa(-ntgrid:ntgrid, ntheta0, naky))
     allocate (fieldeqp(-ntgrid:ntgrid, ntheta0, naky))
 
-    call timeadv (phi, apar, aperp, phinew, aparnew, aperpnew, 0, dt_cfl)
-    call getfieldeq (phinew, aparnew, aperpnew, fieldeq, fieldeqa, fieldeqp)
+    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, 0)
+    call getfieldeq (phinew, aparnew, bparnew, fieldeq, fieldeqa, fieldeqp)
 
     do nn = 1, N_class(ic)
        do m = 1, M_class(ic)
@@ -421,7 +420,7 @@ contains
                 am(istart:ifin:nfield,iflo) = fieldeqa(:,it,ik)
              end if
              
-             if (faperp > epsilon(0.0)) then
+             if (fbpar > epsilon(0.0)) then
                 ifin = istart + nidx
                 istart = istart + 1
                 am(istart:ifin:nfield,iflo) = fieldeqp(:,it,ik)

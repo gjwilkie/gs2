@@ -69,13 +69,12 @@ module gs2_io
   integer :: h_eapar_id, h_ebpar_id
   integer :: h_delfs2_id, h_hs2_id, h_phis2_id
   integer :: h_hypervisc_id, h_hyperres_id, h_collisions_id
-  integer :: h_gradients_id, h_hypercoll_id, h_heating_id
-  integer :: h_S_ext_id
+  integer :: h_gradients_id, h_curvature_id, h_heating_id
   integer :: hk_energy_id, hk_energy_dot_id, hk_antenna_id
   integer :: hk_eapar_id, hk_ebpar_id
   integer :: hk_delfs2_id, hk_hs2_id, hk_phis2_id
   integer :: hk_hypervisc_id, hk_hyperres_id, hk_collisions_id
-  integer :: hk_gradients_id, hk_hypercoll_id, hk_heating_id, hk_S_ext_id
+  integer :: hk_gradients_id, hk_curvature_id, hk_heating_id
 
   real :: zero
   
@@ -716,8 +715,7 @@ contains
        status = netcdf_def_var (ncid, 'h_hyperres',   nf_double, 2, flux_dim, h_hyperres_id)
        status = netcdf_def_var (ncid, 'h_collisions', nf_double, 2, flux_dim, h_collisions_id)
        status = netcdf_def_var (ncid, 'h_gradients',  nf_double, 2, flux_dim, h_gradients_id)
-       status = netcdf_def_var (ncid, 'h_hypercoll',  nf_double, 2, flux_dim, h_hypercoll_id)
-       status = netcdf_def_var (ncid, 'h_S_ext',      nf_double, 2, flux_dim, h_S_ext_id)
+!       status = netcdf_def_var (ncid, 'h_curvature',  nf_double, 2, flux_dim, h_curvature_id)
        status = netcdf_def_var (ncid, 'h_heating',    nf_double, 2, flux_dim, h_heating_id)
        status = netcdf_put_att (ncid, h_heating_id, 'long_name', 'Total heating by species')
 
@@ -734,8 +732,7 @@ contains
        status = netcdf_def_var (ncid, 'hk_hyperres',   nf_double, 4, fluxk_dim, hk_hyperres_id)
        status = netcdf_def_var (ncid, 'hk_collisions', nf_double, 4, fluxk_dim, hk_collisions_id)
        status = netcdf_def_var (ncid, 'hk_gradients',  nf_double, 4, fluxk_dim, hk_gradients_id)
-       status = netcdf_def_var (ncid, 'hk_S_ext',      nf_double, 4, fluxk_dim, hk_S_ext_id)
-       status = netcdf_def_var (ncid, 'hk_hypercoll',  nf_double, 4, fluxk_dim, hk_hypercoll_id)
+!       status = netcdf_def_var (ncid, 'hk_curvature',  nf_double, 4, fluxk_dim, hk_curvature_id)
        status = netcdf_def_var (ncid, 'hk_heating',    nf_double, 4, fluxk_dim, hk_heating_id)
        status = netcdf_put_att (ncid, hk_heating_id, 'long_name', 'Total heating by species and mode')
     end if
@@ -1403,8 +1400,7 @@ contains
        status = netcdf_put_vara (ncid, h_hyperres_id,  starts, counts, h%hyperres)
        status = netcdf_put_vara (ncid, h_collisions_id,starts, counts, h%collisions)
        status = netcdf_put_vara (ncid, h_gradients_id, starts, counts, h%gradients)
-       status = netcdf_put_vara (ncid, h_S_ext_id,     starts, counts, h%S_ext)
-       status = netcdf_put_vara (ncid, h_hypercoll_id, starts, counts, h%hypercoll)
+!       status = netcdf_put_vara (ncid, h_curvature_id, starts, counts, h%curvature)
        status = netcdf_put_vara (ncid, h_heating_id,   starts, counts, h%heating)
 
        status = netcdf_put_vara (ncid, hk_energy_id,     start, count, hk%energy)
@@ -1425,11 +1421,11 @@ contains
        call hk_repack (hk, 4, tmps)
        status = netcdf_put_vara (ncid, hk_gradients_id, start4, count4, tmps)
 
+!       call hk_repack (hk, 6, tmps)
+!       status = netcdf_put_vara (ncid, hk_curvature_id, start4, count4, tmps)
+
        call hk_repack (hk, 5, tmps)
        status = netcdf_put_vara (ncid, hk_heating_id,   start4, count4, tmps)
-
-       call hk_repack (hk, 6, tmps)
-       status = netcdf_put_vara (ncid, hk_hypercoll_id, start4, count4, tmps)
 
        call hk_repack (hk, 7, tmps)
        status = netcdf_put_vara (ncid, hk_delfs2_id,    start4, count4, tmps)
@@ -1439,9 +1435,6 @@ contains
 
        call hk_repack (hk, 9, tmps)
        status = netcdf_put_vara (ncid, hk_phis2_id,     start4, count4, tmps)
-
-       call hk_repack (hk, 10, tmps)
-       status = netcdf_put_vara (ncid, hk_S_ext_id,     start4, count4, tmps)
     end if
 
     if (write_omega) then

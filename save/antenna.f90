@@ -45,7 +45,7 @@ module antenna
 
   private
   public :: init_antenna, dump_ant_amp, amplitude
-  public :: antenna_w, antenna_apar, antenna_amplitudes, a_ext_data
+  public :: antenna_w, antenna_apar, antenna_amplitudes
 
 contains
 !=============================================================================
@@ -208,7 +208,9 @@ contains
     use ran
     use constants
 
-    complex, dimension (-ntgrid:,:,:), intent(out) :: apar
+    !GGH QUES Is apar passed in or out or both?
+    ! ==> Should specify Intent(out)
+    complex, dimension (-ntgrid:,:,:) :: apar
     complex :: force_a, force_b
     real :: dt, sigma, time, amp
     integer :: i, it, ik
@@ -224,6 +226,11 @@ contains
 
     apar_old = apar_new
 
+! BD: I do not understand why user_time was here.  
+!    dt = user_dt
+!    time = user_time
+! Switching to code_time     4.20.06
+!
     dt = code_dt
     time = code_time
 
@@ -238,6 +245,7 @@ contains
        w_stir(i) = gradpar(0)*kz_stir(i)*sqrt(1./beta_s) * wtmp * tnorm
     end do
 
+    !GGH Do we really want to initialize apar here? ==> Yes
     apar = 0.
 
     do i=1, nk_stir
@@ -277,8 +285,7 @@ contains
 !               + (a_ant(i)+b_ant(i))/sqrt(2.)*exp(zi*kz_stir(i)*theta) &
 !               * (0.5-0.5*cos(time*pi/t0)
 !       else
-! GGH NOTE: The apar(:,it,ik) is unnecessary on the RHS here (=0)
-! BD ANSWER: No, we are inside the nk_stir loop.  In general case, apar /= 0 here.
+       !GGH NOTE: The apar(:,it,ik) is unnecessary on the RHS here (=0)
           apar(:,it,ik) = apar(:,it,ik) &
                + (a_ant(i)+b_ant(i))/sqrt(2.)*exp(zi*kz_stir(i)*theta) 
 !       end if
@@ -303,70 +310,39 @@ contains
     apar_new = apar
 
   end subroutine antenna_amplitudes
-
 !=============================================================================
-
   subroutine antenna_apar (kperp2, j_ext)
-!      GGH ERR? Is this correct? It uses apar_new rather than just the applied
-!      current, so does this include the plasma response? 
-!      BD: No error.  Here, apar and apar_new are local variables for the antenna only. 7.1.06
-!
-!      this routine returns space-centered (kperp**2 * A_ext) at the current time
+    !GGH ERR? Is this correct? It uses apar_new rather than just the applied
+    !      current, so does this include the plasma response?
+! this routine returns space-centered (kperp**2 * A_ext) at the current time
 
     use kt_grids, only: naky, ntheta0
-    use run_parameters, only: beta, fapar
+    use run_parameters, only: beta
     use theta_grid, only: ntgrid
 
     complex, dimension (-ntgrid:,:,:) :: j_ext
     real, dimension (-ntgrid:,:,:) :: kperp2
     integer :: ik, it, ig
 
-    if (fapar > epsilon(0.0)) then
+    if (.not. allocated(apar_new)) return
 
-       if (.not. allocated(apar_new)) return
-       
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid-1
-                j_ext(ig,it,ik) = 0.5* &
-                     ( &
+    do ik = 1, naky
+       do it = 1, ntheta0
+          do ig = -ntgrid, ntgrid-1
+             j_ext(ig,it,ik) = 0.5* &
+                  ( &
 !                  kperp2(ig+1,it,ik)*apar_old(ig+1,it,ik) &
 !                 +kperp2(ig,  it,ik)*apar_old(ig,  it,ik) &
-                     +kperp2(ig+1,it,ik)*apar_new(ig+1,it,ik) &
-                     +kperp2(ig,  it,ik)*apar_new(ig,  it,ik))
-             end do
+                  +kperp2(ig+1,it,ik)*apar_new(ig+1,it,ik) &
+                  +kperp2(ig,  it,ik)*apar_new(ig,  it,ik))
           end do
        end do
+    end do
      
-! GGH Is this some normalization?  Yes.
-       if (beta > 0.) j_ext = j_ext * 0.5 / beta
-
-    else ! if apar itself is not being advanced in time, there should be no j_ext
-       j_ext = 0.
-    end if
+    !GGH Is this some normalization?
+    if (beta > 0.) j_ext = j_ext * 0.5 / beta
 
   end subroutine antenna_apar
-
-!=============================================================================
-
-  subroutine a_ext_data (A_ext_old, A_ext_new)
-!      this routine returns current and previous A_ext vectors
-
-    use run_parameters, only: beta, fapar
-    use theta_grid, only: ntgrid
-
-    complex, dimension (-ntgrid:,:,:) :: A_ext_old, A_ext_new
-
-    if (.not. allocated(apar_new)) then
-       A_ext_old = 0.
-       A_ext_new = 0.
-       return
-    else
-       A_ext_old = apar_old
-       A_ext_new = apar_new
-    end if
-
-  end subroutine a_ext_data
 !=============================================================================
   function antenna_w ()
     complex :: antenna_w

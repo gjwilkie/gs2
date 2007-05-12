@@ -253,7 +253,7 @@ program ingen
 ! hyper: 
   character (9) :: hyper_option
   logical :: const_amp, include_kpar, isotropic_shear
-  real :: D_hypervisc, D_hyperres, omega_osc
+  real :: D_hypervisc, D_hyperres, omega_osc, D_hyper
   integer :: hyper_option_switch
   integer, parameter :: hyper_option_none = 1, &
        hyper_option_visc = 2, &
@@ -266,6 +266,7 @@ program ingen
        text_option('res_only', hyper_option_res), &
        text_option('both', hyper_option_both) /)
   logical :: hyper_on = .false.
+  logical :: gridnorm
 
 ! kt_grids:
   real, dimension (:), allocatable :: aky_tmp, theta0_tmp, akx_tmp
@@ -322,7 +323,7 @@ program ingen
 
 ! run_parameters:
   real :: beta, zeff, tite, rhostar, teti
-  real :: fphi, fapar, faperp
+  real :: fphi, fapar, fbpar, faperp
   real :: delt, margin
   integer :: nstep
   logical :: wstar_units, eqzip, secondary, tertiary
@@ -518,7 +519,7 @@ program ingen
 
 ! hyper: 
   namelist /hyper_knobs/ hyper_option, const_amp, include_kpar, &
-       isotropic_shear, D_hyperres, D_hypervisc, omega_osc
+       isotropic_shear, D_hyperres, D_hypervisc, omega_osc, D_hyper, gridnorm
 
 ! kt_grids:
   namelist /kt_grids_single_parameters/ aky, theta0, akx
@@ -549,7 +550,7 @@ program ingen
 ! run_parameters:
   namelist /parameters/ beta, zeff, tite, rhostar, teti
 
-  namelist /knobs/ fphi, fapar, faperp, delt, nstep, wstar_units, eqzip, &
+  namelist /knobs/ fphi, fapar, fbpar, faperp, delt, nstep, wstar_units, eqzip, &
        delt_option, margin, secondary, tertiary
 
 ! species 
@@ -1345,8 +1346,10 @@ contains
     isotropic_shear = .true.
     D_hyperres = -10.
     D_hypervisc = -10.
+    D_hyper = -10.
     hyper_option = 'default'
     omega_osc = 0.4
+    gridnorm = .true.
     in_file=input_unit_exist("hyper_knobs",exist)
     if (exist) then
        read (unit=input_unit("hyper_knobs"), nml=hyper_knobs)
@@ -1357,6 +1360,27 @@ contains
     call get_option_value &
          (hyper_option, hyperopts, hyper_option_switch, &
          ierr, "hyper_option in hyper_knobs")
+
+    select case (hyper_option_switch)
+
+       case (hyper_option_none)
+          if (D_hyperres > 0.)  D_hyperres = -10.
+          if (D_hypervisc > 0.) D_hypervisc = -10.
+
+       case (hyper_option_visc)
+          if (D_hyperres > 0.) D_hyperres = -10.
+
+       case (hyper_option_res)
+          if (D_hypervisc > 0.) D_hypervisc = -10.
+
+       case (hyper_option_both)
+          
+          if (D_hyper >= 0.) then
+             D_hyperres  = D_hyper
+             D_hypervisc = D_hyper
+          end if
+
+    end select
 
     ! kt_grids:
     norm_option = 'default'
@@ -1530,6 +1554,8 @@ contains
          ierr, "flow_mode in nonlinear_terms_knobs")
 
     ! run_parameters:
+    fbpar = -1.0
+    faperp = 0.0
     beta = 0.0
     zeff = 1.0
     tite = 1.0
@@ -1557,6 +1583,13 @@ contains
     if (secondary .and. tertiary) secondary = .false.
 
     if (teti /= -100.0) tite = teti
+
+! Allow faperp-style initialization for backwards compatibility.
+! Only fbpar is used outside of this subroutine.
+       if (fbpar == -1.) then
+          fbpar = faperp
+       end if
+
 
     ierr = error_unit()
     call get_option_value &
@@ -2350,9 +2383,12 @@ contains
              
           case (hyper_option_both) 
              write (unit, fmt="(' hyper_option = ',a)") '"both"'
-             write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
-             write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
-             
+             if (D_hyperres == D_hypervisc) then
+                write (unit, fmt="(' D_hyper = ',e16.10)") D_hyper
+             else
+                write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
+                write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
+             end if
           end select
 
 !          write (unit, fmt="(' include_kpar = ',L1)") include_kpar
@@ -2362,6 +2398,7 @@ contains
           if (.not. isotropic_shear) &
                write (unit, fmt="(' omega_osc = ',e16.10)") omega_osc
 
+          write (unit, fmt="(' gridnorm = ',L1)") gridnorm
           write (unit, fmt="(' /')")
        end if
     end if
@@ -2486,7 +2523,7 @@ contains
     if (parameters_write) then
        write (unit, *)
        write (unit, fmt="(' &',a)") "parameters"
-       write (unit, fmt="(' beta = ',e16.10)") beta       ! if zero, fapar, faperp should be zero
+       write (unit, fmt="(' beta = ',e16.10)") beta       ! if zero, fapar, fbpar should be zero
        if (collision_model_switch /= collision_model_none) &
             write (unit, fmt="(' zeff = ',e16.10)") zeff
        if (.not. has_electrons)  write (unit, fmt="(' tite = ',e16.10)") tite
@@ -2500,7 +2537,7 @@ contains
        write (unit, fmt="(' &',a)") "knobs"
        write (unit, fmt="(' fphi   = ',f6.3)") fphi
        write (unit, fmt="(' fapar  = ',f6.3)") fapar
-       write (unit, fmt="(' faperp = ',f6.3)") faperp
+       write (unit, fmt="(' fbpar = ',f6.3)") fbpar
        write (unit, fmt="(' delt = ',e16.10)") delt
        write (unit, fmt="(' nstep = ',i8)") nstep
        write (unit, fmt="(' wstar_units = ',L1)") wstar_units
@@ -3186,7 +3223,7 @@ contains
      write (report_unit, fmt="('------------------------------------------------------------')")
 
      write (report_unit, *) 
-     write (report_unit, fmt="('GS2 beta parameter = ',f7.4)") beta
+     write (report_unit, fmt="('GS2 beta parameter = ',f9.4)") beta
      write (report_unit, fmt="('Total beta = ',f9.4)") beta*ptot
      write (report_unit, *) 
      write (report_unit, fmt="('The total normalized inverse pressure gradient scale length is ',f10.4)") alp
@@ -3609,7 +3646,7 @@ contains
      if (gb_to_cv) then
         write (report_unit, *) 'The grad B drift coefficients have been set equal to the'
         write (report_unit, *) 'values for the curvature drift coefficients.  Do not use'
-        write (report_unit, *) 'faperp = 1.0 in this case.'
+        write (report_unit, *) 'fbpar = 1.0 in this case.'
         write (report_unit, *)
         write (report_unit, *) 'You got this option by setting gb_to_cv = .true.'
         write (report_unit, *) 
@@ -4725,17 +4762,17 @@ contains
        write (report_unit, *) 
     end if
 
-    if (faperp == 0.) then
+    if (fbpar == 0.) then
        write (report_unit, fmt="('B_parallel will not be included in the calculation.')")
     end if
-    if (faperp == 1.) then
+    if (fbpar == 1.) then
        write (report_unit, fmt="('B_parallel will be included in the calculation.')")
     end if
-    if (faperp /= 0. .and. faperp /= 1.) then
+    if (fbpar /= 0. .and. fbpar /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('faperp in the knobs namelist = ',e10.4)") faperp
-       write (report_unit, fmt="('faperp is a scale factor of all instances of B_parallel &
+       write (report_unit, fmt="('fbpar in the knobs namelist = ',e10.4)") fbpar
+       write (report_unit, fmt="('fbpar is a scale factor of all instances of B_parallel &
            & (the perturbed parallel magnetic field).')")
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
        write (report_unit, fmt="('################# WARNING #######################')")
