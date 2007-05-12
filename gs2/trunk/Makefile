@@ -8,7 +8,7 @@ GEO=geo
 #
 #  Makefile written by Bill Dorland, Greg Hammett and Darin Ernst
 #
-#  LAST UPDATE: 7/29/02
+#  LAST UPDATE: 5/12/07
 #
 ############################################################# WALL CLOCK TIMES
 #
