@@ -7,15 +7,16 @@ module gs2_io
   public :: init_gs2_io, nc_eigenfunc, nc_final_fields, nc_final_epar
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
-  public :: nc_loop_stress
+  public :: nc_loop_stress,  nc_loop_vres
   public :: nc_loop_movie
 
   logical, parameter :: serial_io = .true.
   integer :: ncid
 
-  integer :: naky_dim, nakx_dim, nttot_dim, negrid_dim, nlambda_dim, nspec_dim
+  integer :: naky_dim, nakx_dim, nttot_dim, negrid_dim, nlambda_dim, nspec_dim, ncoord_dim, ncoordt_dim
   integer :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim, nheat_dim
   
+  integer, dimension (6) :: err_dim, lp_dim
   integer, dimension (5) :: field_dim, final_mom_dim, heatk_dim
   integer, dimension (4) :: omega_dim, fluxk_dim, final_field_dim, loop_mom_dim
   integer, dimension (3) :: fluxx_dim
@@ -33,7 +34,7 @@ module gs2_io
 
   integer :: nakx_id, naky_id, nttot_id, akx_id, aky_id, theta_id, nspec_id
   integer :: time_id, phi2_id, apar2_id, bpar2_id, theta0_id, nproc_id, nmesh_id
-  integer :: phi2_by_mode_id, apar2_by_mode_id, bpar2_by_mode_id
+  integer :: phi2_by_mode_id, apar2_by_mode_id, bpar2_by_mode_id, errest_by_mode_id, lpcoef_by_mode_id
   integer :: phtot_id, dmix_id, kperpnorm_id
   integer :: phi2_by_kx_id, apar2_by_kx_id, bpar2_by_kx_id
   integer :: phi2_by_ky_id, apar2_by_ky_id, bpar2_by_ky_id
@@ -85,7 +86,7 @@ contains
 
   subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
       write_phiavg, write_hrate, write_final_antot, write_eigenfunc, &
-      make_movie, nmovie_tot)
+      make_movie, nmovie_tot, write_verr)
 !David has made some changes to this subroutine (may 2005) now should be able to do movies for 
 !linear box runs as well as nonlinear box runs.
 
@@ -100,7 +101,7 @@ contains
     use species, only: nspec
 
     logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, make_movie
-    logical :: write_final_antot, write_eigenfunc
+    logical :: write_final_antot, write_eigenfunc, write_verr
     logical :: accelerated
     character (300) :: filename, filename_movie
     integer :: ierr         ! 0 if initialization is successful
@@ -161,7 +162,7 @@ contains
     if (proc0) then
        call define_dims (nmovie_tot)
        call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
-            write_hrate, write_final_antot, write_eigenfunc)
+            write_hrate, write_final_antot, write_eigenfunc, write_verr)
        call nc_grids
        call nc_species
        call nc_geo
@@ -196,6 +197,8 @@ contains
     status = netcdf_def_dim(ncid, 'nlines', num_input_lines, nlines_dim)
     status = netcdf_def_dim(ncid, 'ri', 2, ri_dim)
     status = netcdf_def_dim(ncid, 'nheat', 7, nheat_dim)
+    status = netcdf_def_dim(ncid, 'coordt', 4, ncoordt_dim)
+    status = netcdf_def_dim(ncid, 'coord', 2, ncoord_dim)
 
     ! added by EAB 03/05/04 for GS2 movies
     if(my_make_movie) then
@@ -319,7 +322,7 @@ contains
   end subroutine save_input
 
   subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
-       write_hrate, write_final_antot, write_eigenfunc)
+       write_hrate, write_final_antot, write_eigenfunc, write_verr)
 
     use mp, only: nproc
     use species, only: nspec
@@ -327,7 +330,7 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod
     logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate
-    logical :: write_final_antot, write_eigenfunc
+    logical :: write_final_antot, write_eigenfunc, write_verr
 
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
@@ -342,6 +345,20 @@ contains
     mode_dim (1) = nakx_dim
     mode_dim (2) = naky_dim
     mode_dim (3) = time_dim
+
+    err_dim (1) = nttot_dim
+    err_dim (2) = nakx_dim
+    err_dim (3) = naky_dim
+    err_dim (4) = nspec_dim
+    err_dim (5) = ncoordt_dim
+    err_dim (6) = time_dim
+
+    lp_dim (1) = nttot_dim
+    lp_dim (2) = nakx_dim
+    lp_dim (3) = naky_dim
+    lp_dim (4) = nspec_dim
+    lp_dim (5) = ncoord_dim
+    lp_dim (6) = time_dim
 
     kx_dim (1) = nakx_dim
     kx_dim (2) = time_dim
@@ -548,6 +565,11 @@ contains
 
     status = netcdf_def_var (ncid, 'drhodpsi', nf_double, 0, 0, drhodpsi_id)
     status = netcdf_put_att (ncid, drhodpsi_id, 'long_name', 'drho/dPsi')
+
+    if (write_verr) then
+       status = netcdf_def_var (ncid, 'errest_by_mode', nf_double, 6, err_dim, errest_by_mode_id)
+       status = netcdf_def_var (ncid, 'lpcoef_by_mode', nf_double, 6, lp_dim, lpcoef_by_mode_id)
+    end if
 
     if (fphi > zero) then
        status = netcdf_def_var (ncid, 'phi2',         nf_double, 1, time_dim, phi2_id)
@@ -944,6 +966,45 @@ contains
 
   end subroutine nc_loop_stress
 
+  subroutine nc_loop_vres (nout, errest_by_mode, lpcoef_by_mode)
+
+    use netcdf_mod, only: netcdf_put_vara
+
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use species, only: nspec
+
+    integer, intent (in) :: nout
+    real, dimension(:,:,:,:,:), intent (in) :: errest_by_mode, lpcoef_by_mode
+    integer, dimension (6) :: start, count1, count2 
+    integer :: status
+
+    start(1) = 1
+    start(2) = 1
+    start(3) = 1
+    start(4) = 1
+    start(5) = 1
+    start(6) = nout
+  
+    count1(1) = 2*ntgrid+1
+    count1(2) = ntheta0
+    count1(3) = naky
+    count1(4) = nspec
+    count1(5) = 4
+    count1(6) = 1
+
+    count2(1) = 2*ntgrid+1
+    count2(2) = ntheta0
+    count2(3) = naky
+    count2(4) = nspec
+    count2(5) = 2
+    count2(6) = 1
+
+    status = netcdf_put_vara(ncid, errest_by_mode_id, start, count1, errest_by_mode)
+    status = netcdf_put_vara(ncid, lpcoef_by_mode_id, start, count2, lpcoef_by_mode)
+
+  end subroutine nc_loop_vres
+
   subroutine nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, ntot20_by_mode, &
        phi00, ntot00, density00, upar00, tpar00, tperp00)
 
@@ -1235,18 +1296,21 @@ contains
        bpar0, bpar2, bpar2_by_mode, &
        h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
 
+
     use gs2_heating, only: heating_diagnostics, hk_repack
     use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod, only: netcdf_put_var1, netcdf_put_vara
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use convert, only: c2r
+    use theta_grid, only: ntgrid
 
     integer, intent (in) :: nout
     real, intent (in) :: time, phi2, apar2, bpar2
     real, dimension (:), intent (in) :: fluxfac, woutunits
     complex, dimension(:,:), intent (in) :: phi0, apar0, bpar0, omega, omegaavg !, phiavg
     real, dimension(:,:), intent (in) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode, phitot
+
     type(heating_diagnostics), intent (in) :: h
     type(heating_diagnostics), dimension(:,:), intent (in) :: hk
     logical :: write_omega, write_hrate
@@ -1338,6 +1402,7 @@ contains
 !       status = netcdf_put_vara(ncid, phiavg_id, start0, count0, ri2)
        status = netcdf_put_vara(ncid, phi2_by_mode_id, start, count, phi2_by_mode)
        status = netcdf_put_var1(ncid, phi2_id, nout, phi2)
+
     end if
 
     if (fapar > zero) then

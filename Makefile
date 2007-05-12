@@ -191,7 +191,7 @@ ifeq ($(CPU),RS6000)
 #    F90FLAGS += -O4
     F90FLAGS += -O3 -qarch=auto -qtune=auto
   else
-    F90FLAGS += -g 
+    F90FLAGS += -g -qflttrap=nanq
     FLIBS    += # $$TRACE_MPIF
   endif
 
@@ -201,7 +201,7 @@ endif
 ifeq ($(CPU),Dawson)
   FC = xlf95
   PLATFORM_LINKS = ibm
-  F90FLAGS = -qmoddir=/tmp/bdorland -I/tmp/bdorland \
+  F90FLAGS = -qmoddir=/tmp/mabarnes -I/tmp/mabarnes \
 	-qautodbl=dbl4 -qsuffix=f=f90 -I $(UTILS) -I $(GEO) \
 	-I /u/local/apps/netcdf/include -I/u/local/mpi/mpilam/include 
   FLIBS = -L/u/local/apps/netcdf/lib -lnetcdf \
@@ -256,7 +256,7 @@ endif
 ifeq ($(CPU),LINUX_fuj)
   FC = mpif90
   FLIBS = -L/usr/local/lib -lnetcdf \
-	-L/u/bdorland/fftw/lib -lfftw -lrfftw \
+	-L/u/mabarnes/fftw/lib -lfftw -lrfftw \
 	$(UTILS)/mdslib.a
   PLATFORM_LINKS = linux_fuj
   F90FLAGS = -A m -C cdRR8 -I/usr/local/include -X9 \

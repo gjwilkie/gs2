@@ -78,7 +78,7 @@ module egrid
 
   implicit none
 
-  public :: energy, xgrid, setegrid, init_egrid
+  public :: energy, xgrid, setegrid
 !b MAB
   public :: zeroes, x0
 !e MAB
@@ -96,18 +96,6 @@ module egrid
 
 contains
 
-  subroutine init_egrid (negrid)
-    
-    integer, intent (in) :: negrid
-    logical :: first = .true.
-
-    if (first) then
-       first = .false.
-       allocate (zeroes(negrid-1)) ; zeroes = 0.
-    end if
-
-  end subroutine init_egrid
-
   subroutine setegrid (Ecut, negrid, epts, wgts)
 
     use legendre, only: nrgauleg
@@ -119,12 +107,11 @@ contains
     integer :: ie, np
  
 !b MAB   
-    real :: eps=1.e-15
+    real :: eps=1.e-15!, x0
+!    real, dimension(:), allocatable :: zeroes
 !e MAB    
 
     real :: x
-
-    call init_egrid (negrid)
     
     if (Ecut > 20.0) then
 ! should go to runname.error?
@@ -133,6 +120,7 @@ contains
     end if
     
     np = negrid-1
+    allocate (zeroes(np))
     
     x0 = xgrid(ecut)      ! function xgrid_s (single element)
     
@@ -152,6 +140,10 @@ contains
        if (ecut < 20.0) &
             & write (*,*) 'WARNING: or you should increase ecut (<= 20)'
     end if
+
+!b MAB
+!    deallocate (zeroes)
+!e MAB    
 
   end subroutine setegrid
 
@@ -341,14 +333,14 @@ module le_grids
 !b MAB
   public :: xx
   public :: init_weights, legendre_transform
-  public :: eint_error, lint_error, integrate_test, trap_error
+  public :: eint_error, lint_error, integrate_test
 !e MAB
 
   private
 
 !b MAB
   real, dimension (:), allocatable :: xx ! (ng2)
-  real, dimension (:,:), allocatable, save :: werr, wlerr, wlerr2, wlterr
+  real, dimension (:,:), allocatable, save :: werr, wlerr, wlerr2
 !e MAB
 
   real, dimension (:,:), allocatable :: e, w, anon, dele ! (negrid,nspec)
@@ -374,11 +366,8 @@ module le_grids
   logical :: trapped_particles = .true.
   logical :: advanced_egrid = .true.
 
-  integer :: testfac = 1
-  integer :: nmax = 500
-
-  real :: wgt_max = 2.0
-  real :: wgt_min = 0.5
+  integer :: testfac = 9
+  integer :: nmax = 5
 
   type (redist_type), save :: lambda_map, gint_map, eint_map
 
@@ -432,7 +421,6 @@ contains
   subroutine broadcast_results
     use mp, only: proc0, broadcast
     use species, only: nspec
-    use egrid, only: zeroes, x0, init_egrid
     use theta_grid, only: ntgrid
     implicit none
     integer :: il, is, ie
@@ -451,8 +439,6 @@ contains
     call broadcast (nmax)
     call broadcast (trapped_particles)
     call broadcast (advanced_egrid)
-    call broadcast (wgt_max)
-    call broadcast (wgt_min)
 
     if (.not. proc0) then
        allocate (e(negrid,nspec), w(negrid,nspec), anon(negrid,nspec))
@@ -462,15 +448,7 @@ contains
        allocate (jend(-ntgrid:ntgrid))
        allocate (forbid(-ntgrid:ntgrid,nlambda))
        allocate (orbit_avg(ng2,negrid))
-       allocate (xx(ng2))
     end if
-
-!<MAB
-    call init_egrid (negrid)
-    call broadcast (xx)
-    call broadcast (x0)
-    call broadcast (zeroes)
-!<MAB
 
     call broadcast (al)
     call broadcast (delal)
@@ -499,8 +477,7 @@ contains
     integer :: ierr, in_file
     logical :: exist
     namelist /le_grids_knobs/ ngauss, negrid, ecut, bouncefuzz, &
-         nesuper, nesub, test, trapped_particles, advanced_egrid, &
-         testfac, nmax, wgt_min, wgt_max
+         nesuper, nesub, test, trapped_particles, advanced_egrid, testfac, nmax
 
 ! New default scheme: advanced_egrid is default, and user should set 
 ! negrid (as in the original code)
@@ -642,20 +619,15 @@ contains
 
     real, dimension(negrid-2) :: modzeroes, werrtmp
     real, dimension(ng2-1) :: lmodzeroes, wlerrtmp, wlerr2tmp, wxerrtmp
-    integer :: ipt, ie, il, ndiv, divmax
-    integer, save :: wgt_unit, wgt_unit2
-
-    logical :: eflag = .false.
-
-    real :: tmpsum
+    integer :: ipt, wgt_unit, ie, il
 
     allocate(werr(negrid-1,negrid-1), wlerr(ng2,ng2), wlerr2(ng2,ng2))
 
     werr = 0.0; modzeroes = 0.0; werrtmp = 0.0
     wlerr = 0.0; lmodzeroes = 0.0; wlerrtmp = 0.0; wlerr2tmp = 0.0; wxerrtmp = 0.0; wlerr2 = 0.0
 
-!    call open_output_file(wgt_unit,".lwgts")
-!    call open_output_file(wgt_unit2,".ewgts")
+    call get_unused_unit(wgt_unit)
+    call open_output_file(wgt_unit,".wgts")
 
 ! loop to obtain weights for energy grid points.  negrid-1 sets
 ! of weights are needed because we want to compute integrals
@@ -671,22 +643,20 @@ contains
 
 ! get weights for energy grid points
        
-       call get_weights (nmax,0.0,x0,modzeroes,werrtmp,ndiv,divmax,eflag)
+       call get_weights (0.0,x0,modzeroes,werrtmp)
        
 ! a zero is left in the position corresponding to the dropped point
 ! factor of 0.25 is necessary to account for plus/minus vpa and
 ! 1/2 factor in lambda integrals
 
+       if (ipt == 1) then
+          do ie=1,negrid-2
+             write(wgt_unit,*) 'pts= ', modzeroes(ie), 'wgts= ', werrtmp(ie), nmax
+          end do
+       end if
+
        if (ipt /= 1) werr(:ipt-1,ipt) = werrtmp(:ipt-1)*0.25
        if (ipt /= negrid-1) werr(ipt+1:,ipt) = werrtmp(ipt:)*0.25
-
-       tmpsum = 0.0
-
-!       do ie=1,negrid-2
-!          tmpsum = tmpsum + werrtmp(ie)*modzeroes(ie)**testfac
-!          write(wgt_unit2,*) 'pts= ', modzeroes(ie), 'wgts= ', werrtmp(ie), ipt, tmpsum, eflag
-!       end do
-!       write(wgt_unit2,*)
        
     end do
 
@@ -695,12 +665,10 @@ contains
 
     do ipt=1,ng2
 
-       tmpsum = 0.0
-
        if (ipt /= 1) lmodzeroes(:ipt-1) = xx(:ipt-1)
        if (ipt /= ng2) lmodzeroes(ipt:ng2-1) = xx(ipt+1:)
 
-       call get_weights (nmax,1.0,0.0,lmodzeroes,wlerrtmp,ndiv,divmax,eflag)
+       call get_weights (1.0,0.0,lmodzeroes,wlerrtmp)
 
        wlerr2tmp = 0.0
 
@@ -716,143 +684,77 @@ contains
        if (ipt /= 1) wlerr2(:ipt-1,ipt) = wlerr2tmp(:ipt-1)
        if (ipt /= ng2) wlerr2(ipt+1:,ipt) = wlerr2tmp(ipt:)
 
-!       do il=1,ng2-1
-!          tmpsum = tmpsum + wlerrtmp(il)*lmodzeroes(il)**testfac
-!          write(wgt_unit,*) 'pts= ', lmodzeroes(il), 'wgts= ', wlerrtmp(il), ipt, tmpsum, eflag
-!       end do
-!       write(wgt_unit,*)
+!       if (ipt == 1) then
+!          do il=1,ng2-1
+!             write(wgt_unit,*) 'pts= ', lmodzeroes(il), 'wgts= ', wlerrtmp(il), nmax
+!          end do
+!       end if
 
     end do
 
-!    call close_output_file(wgt_unit)
-!    call close_output_file(wgt_unit2)
+    call close_output_file(wgt_unit)
 
   end subroutine init_weights
 
-  subroutine get_weights (maxpts_in, llim, ulim, nodes, wgts, ndiv, divmax, err_flag)
-
-    use file_utils, only: get_unused_unit, open_output_file, close_output_file
+  subroutine get_weights (llim, ulim, nodes, wgts)
 
     implicit none
 
-    integer, intent (in) :: maxpts_in
     real, intent (in) :: llim, ulim
     real, dimension (:), intent (in) :: nodes
     real, dimension (:), intent (out) :: wgts
-    logical, intent (out) :: err_flag
-    integer, intent (out) :: ndiv, divmax
 
-    integer :: npts, rmndr, basepts, divrmndr, base_idx, idiv, epts, im, maxpts
+    integer :: npts, rmndr, ndiv, basepts, divrmndr, base_idx, idiv
     integer, dimension (:), allocatable :: divpts
-
-    logical, save :: first = .true.
-    logical :: down
-    integer, save :: div_unit
-
-    down = .false.
 
     npts = size(nodes)
 
-    wgts = 0.0; epts = npts; basepts = nmax; divrmndr = 0; ndiv = 1; divmax = npts
-
-    maxpts = min(maxpts_in,npts)
-
-!    im = 2
-
-!    if (first) then
-!       call open_output_file (div_unit, ".div")
-!    end if
-
-!    do
-!       if (real(npts)/real(maxpts) .le. im) exit
-!       maxpts = im*nmax
-!       im = im + 1
-!    end do
-
-    do
-
-       if (maxpts .ge. npts) then
-          call get_intrvl_weights (llim, ulim, nodes, wgts)
+    rmndr = mod(npts,nmax)
+    
+    if (rmndr == 0) then
+       ndiv = npts/nmax
+       allocate (divpts(ndiv))
+       divpts = nmax
+    else
+       ndiv = npts/nmax + 1
+       allocate (divpts(ndiv))
+       basepts = npts/ndiv
+       divrmndr = mod(npts,ndiv)
+       if (ndiv == 1) then
+          divpts(1) = basepts
+       else if (divrmndr == 0) then
+          divpts = basepts
        else
-          rmndr = mod(npts-maxpts,maxpts-1)
-          
-          if (rmndr == 0) then
-             ndiv = (npts-maxpts)/(maxpts-1) + 1
-             allocate (divpts(ndiv))
-             divpts = maxpts
+          divpts(:divrmndr) = basepts + 1
+          divpts(divrmndr+1:) = basepts
+       end if
+    end if
+    
+    base_idx = 0
+
+! get the weights for the negrid-2 point grid corresponding to
+! the ipt point dropped
+
+    do idiv=1,ndiv
+       if (idiv == 1) then
+          if (idiv == ndiv) then
+             call get_intrvl_weights (llim, ulim, &
+                  nodes(base_idx+1:base_idx+divpts(idiv)),wgts(base_idx+1:base_idx+divpts(idiv)))
           else
-             ndiv = (npts-maxpts)/(maxpts-1) + 2
-             allocate (divpts(ndiv))
-             epts = npts + ndiv - 1
-             basepts = epts/ndiv
-             divrmndr = mod(epts,ndiv)
-             
-             if (divrmndr == 0) then
-                divpts = basepts
-             else
-                divpts(:divrmndr) = basepts + 1
-                divpts(divrmndr+1:) = basepts
-             end if
+             call get_intrvl_weights (llim, nodes(base_idx+divpts(idiv)+1), &
+                  nodes(base_idx+1:base_idx+divpts(idiv)),wgts(base_idx+1:base_idx+divpts(idiv)))
           end if
-          
-!          if (first) then
-!             write (div_unit,*) 'npts= ', npts, 'ndiv= ', ndiv, 'epts= ', epts, 'basepts= ', basepts, 'divrmndr= ',divrmndr, 'maxpts= ',maxpts
-!             do idiv=1,ndiv
-!                write (div_unit,*) 'divpts= ', divpts(idiv)
-!             end do
-!          end if
-
-          base_idx = 0
-          
-          do idiv=1,ndiv
-             if (idiv == 1) then
-                call get_intrvl_weights (llim, nodes(base_idx+divpts(idiv)), &
-                     nodes(base_idx+1:base_idx+divpts(idiv)),wgts(base_idx+1:base_idx+divpts(idiv)))
-             else if (idiv == ndiv) then
-                call get_intrvl_weights (nodes(base_idx+1), ulim, &
-                     nodes(base_idx+1:base_idx+divpts(idiv)),wgts(base_idx+1:base_idx+divpts(idiv)))
-             else
-                call get_intrvl_weights (nodes(base_idx+1), nodes(base_idx+divpts(idiv)), &
-                     nodes(base_idx+1:base_idx+divpts(idiv)),wgts(base_idx+1:base_idx+divpts(idiv)))
-             end if
-!             if (first) then
-!                write (div_unit,*) 'idiv= ', idiv, 'base+1= ',base_idx+1, 'base+div= ',base_idx + divpts(idiv)
-!             end if
-             base_idx = base_idx + divpts(idiv) - 1
-          end do
-          
-          divmax = maxval(divpts)
-
-          deallocate (divpts)
-       end if
-
-!       if (first) then
-!          write(div_unit, *) 'maxpts= ', maxpts, 'max_wgt= ', abs(maxval(wgts))
-!          write(div_unit, *)
-!       end if
-
-       if (abs(maxval(wgts)) .gt. wgt_max) then
-          if (maxpts .lt. 3) then
-             err_flag = .true.
-             exit
-          end if
-!          maxpts = maxpts - 1
-          maxpts = divmax - 1
-!          down = .true.
-!       else if (abs(maxval(wgts)) .lt. wgt_min) then
-!          if ((maxpts .ge. npts) .or. down) exit
-!          maxpts = maxpts + 1
+       else if (idiv == ndiv) then
+          call get_intrvl_weights (nodes(base_idx+1), ulim, &
+               nodes(base_idx+1:base_idx+divpts(idiv)),wgts(base_idx+1:base_idx+divpts(idiv)))
        else
-          exit
+          call get_intrvl_weights (nodes(base_idx+1), nodes(base_idx+divpts(idiv)+1), &
+               nodes(base_idx+1:base_idx+divpts(idiv)),wgts(base_idx+1:base_idx+divpts(idiv)))
        end if
-
-       wgts = 0.0; epts = npts; divrmndr = 0; basepts = nmax
+       base_idx = base_idx + divpts(idiv)
     end do
 
-    if (first) then
-!       call close_output_file(div_unit)
-       first = .false.
-    end if
+    deallocate (divpts)
 
   end subroutine get_weights
 
@@ -864,7 +766,7 @@ contains
     ! llim (ulim) is lower (upper) limit of integration
     real, intent (in) :: llim, ulim
     real, dimension (:), intent (in) :: nodes
-    real, dimension (:), intent (in out) :: wgts
+    real, dimension (:), intent (out) :: wgts
     
     ! stuff needed to do guassian quadrature 
     real, dimension (:), allocatable :: gnodes, gwgts, omprod
@@ -874,6 +776,8 @@ contains
     
     call nrgauleg(llim, ulim, gnodes, gwgts)
     
+    wgts = 0.0
+
     do iw=1,size(wgts)
        omprod = 1.0
        
@@ -1291,13 +1195,12 @@ contains
 !GGH NOTE: Takes a 5-D dist function g and returns the moment integrated
 !   over all velocity
     use mp, only: nproc, broadcast
-    use theta_grid, only: ntgrid, bmag
+    use theta_grid, only: ntgrid
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, idx, idx_local
     use mp, only: sum_reduce, proc0
     use egrid, only: zeroes, x0
-    use file_utils, only: open_output_file, close_output_file
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
@@ -1307,32 +1210,24 @@ contains
 
     complex, dimension (:), allocatable :: work
     real :: fac
-    integer :: is, il, ie, ik, it, iglo, ig, i, unit
+    integer :: is, il, ie, ik, it, iglo, ig, i
     logical, save :: first = .true.
-    real, dimension (:,:), allocatable, save :: wltmp
+
+    if (.not. allocated(xx)) then
+       allocate (xx(ng2))
+       call broadcast (xx)
+    end if
+
+!    if (.not. allocated(zeroes)) then
+!       allocate (zeroes(negrid-1))
+!       call broadcast (zeroes)
+!    end if
 
 !    if (first) then
 !       allocate (xpts2(negrid))
 !       xpts2(:negrid-1) = zeroes
 !       xpts2(negrid) = x0
-
-!       allocate(wltmp(-ntgrid:ntgrid,nlambda))
-
-!       if (proc0) call open_output_file(unit,".test")
-
-! TEMPORARY...NEED TO CHANGE IMMEDIATELY AFTER TESTING
-!       wltmp(:,:ng2) = 0.0
-!       wltmp(:,ng2+1:) = wl(:,ng2+1:)
-
-!       if (proc0) then
-!          do il=1,nlambda
-!             write(unit,*) wltmp(0,il), il, ng2, nlambda, al(il), 1.0-al(il)*bmag(0), bouncefuzz
-!          end do
-
-!          call close_output_file(unit)
-!       end if
 !       first = .false.
-
 !    end if
 
     total = 0.
@@ -1346,7 +1241,7 @@ contains
                    if (idx_local (g_lo, iglo)) then
                       do ig = -ntgrid, ntgrid
                          total(ig, it, ik, is) = total(ig, it, ik, is) + &
-                              fac*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
+                              fac*wl(ig,il)*cos(istep*0.1*xx(il))!*(g(ig,1,iglo)+g(ig,2,iglo))
                       end do
                    end if
                 end do
@@ -1393,7 +1288,7 @@ contains
     
     use egrid, only: zeroes, x0
     use mp, only: nproc, broadcast
-    use file_utils, only: open_output_file, close_output_file
+    use file_utils, only: get_unused_unit, open_output_file, close_output_file
     use theta_grid, only: ntgrid
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -1410,18 +1305,23 @@ contains
     integer :: is, il, ie, ik, it, iglo, ig, i, j, im
     logical :: first = .true.
 
-    real, dimension (:,:), allocatable, save :: lpe, lpl, lpltmp
+    real, dimension (:,:), allocatable, save :: lpe, lpl
     real, dimension (ng2) :: yshift
     real, dimension (negrid-1) :: xshift
 
     if (first) then
        allocate(lpe(negrid-1,0:negrid-2))
-       allocate(lpltmp(ng2,0:ng2-1))
        allocate(lpl(nlambda,0:ng2-1))
+       if (.not. allocated(zeroes)) then
+          allocate(zeroes(negrid-1))
+          call broadcast (zeroes)
+       end if
+       if (.not. allocated(xx)) then
+          allocate(xx(ng2))
+          call broadcast (xx)
+       end if
        call legendre_polynomials (x0,zeroes,lpe)
-       call legendre_polynomials (1.0,xx,lpltmp)
-       lpl = 0.0
-       lpl(1:ng2,:) = lpltmp
+       call legendre_polynomials (1.0,xx,lpl)
        first = .false.
     end if
 
@@ -1438,12 +1338,12 @@ contains
                    iglo = idx (g_lo, ik, it, il, ie, is)
                    if (idx_local (g_lo, iglo)) then
                       do ig=-ntgrid,ntgrid
-                         totfac = fac*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
+                         totfac = fac*wl(ig,il)!*(g(ig,1,iglo)+g(ig,2,iglo))
                          do im=0,negrid-2
-                            tote(im, ig, it, ik, is) = tote(im, ig, it, ik, is) + totfac*lpe(ie,im)*(2*im+1)!*(3.*xshift(ie)**2-1.0)*0.5
+                            tote(im, ig, it, ik, is) = tote(im, ig, it, ik, is) + totfac*lpe(ie,im)*(2*im+1)
                          end do
                          do im=0,ng2-1
-                            totl(im, ig, it, ik, is) = totl(im, ig, it, ik, is) + totfac*lpl(il,im)*(2*im+1)!*cos(istep*0.1*xx(il))
+                            totl(im, ig, it, ik, is) = totl(im, ig, it, ik, is) + totfac*lpl(il,im)*(2*im+1)*cos(istep*0.1*xx(il))
                          end do
                       end do
                    end if
@@ -1510,14 +1410,14 @@ contains
     real, dimension (:), intent (in)   :: xptsdum
     real, dimension (:,0:), intent(out) :: lpdum
 
-    integer :: j, im, mmax
+    integer :: j, im, nmax
 
     lpdum = 0.0
 
 !    nmax = size(lpdum(1,:))
-    mmax = size(xptsdum)
+    nmax = size(xptsdum)
 
-    allocate(lp1(mmax),lp2(mmax),lp3(mmax),zshift(mmax))
+    allocate(lp1(nmax),lp2(nmax),lp3(nmax),zshift(nmax))
 
     lp1 = real(1.0,kind(lp1(1)))
     lp2 = real(0.0,kind(lp2(1)))
@@ -1543,7 +1443,7 @@ contains
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
 ! is over all velocity space
-    use mp, only: nproc, iproc
+    use mp, only: nproc
     use theta_grid, only: ntgrid
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -1557,14 +1457,12 @@ contains
     complex, dimension (:), allocatable :: work
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i
-!    logical :: only = .true.
 
     total = 0.
     do is = 1, nspec
        do ie = 1, negrid
           fac = w(ie,is)
           do il = 1, nlambda
-!             if (ie==1 .and. only) write (*,*) 'iproc= ',iproc,'  wl(0',',',il,')= ',wl(0,il)
              do it = 1, ntheta0
                 do ik = 1, naky
                    iglo = idx (g_lo, ik, it, il, ie, is)
@@ -1579,8 +1477,6 @@ contains
           end do
        end do
     end do
-
-!    only = .false.
 
     if (nproc > 1) then
        allocate (work((2*ntgrid+1)*naky*ntheta0*nspec)) ; work = 0.
@@ -1641,9 +1537,9 @@ contains
 
     if (first) then
        if (proc0) then
-          allocate (wlmod(-ntgrid:ntgrid,nlambda,ng2), wlmod2(-ntgrid:ntgrid,nlambda,ng2))
+          allocate (wlmod(-ntgrid:ntgrid,nlambda,nlambda), wlmod2(-ntgrid:ntgrid,nlambda,nlambda))
           wlmod = 0.0; wlmod2 = 0.0
-          do ipt = 1, ng2
+          do ipt = 1,ng2
              do il = 1, ng2
                 do ig = -ntgrid, ntgrid
                    wlmod(ig,il,ipt) = wlerr(il,ipt)*2.0*sqrt((bmag(ig)/bmax) &
@@ -1652,24 +1548,23 @@ contains
                         *((1.0/bmax-al(il))/(1.0/bmag(ig)-al(il))))
                 end do
              end do
-             if (nlambda > ng2) then
-                wlmod(:,ng2+1:,ipt) = wl(:,ng2+1:)
-                wlmod2(:,ng2+1:,ipt) = wl(:,ng2+1:)
-             end if
           end do
        end if
 
        if (.not. proc0) then
-          allocate(wlmod(-ntgrid:ntgrid,nlambda,ng2),wlmod2(-ntgrid:ntgrid,nlambda,ng2))
+          allocate(wlmod(-ntgrid:ntgrid,nlambda,nlambda),wlmod2(-ntgrid:ntgrid,nlambda,nlambda))
+          if (.not. allocated(xx)) allocate (xx(ng2))
           wlmod = 0.0; wlmod2 = 0.0
        end if
 
-       do ipt=1,ng2
+       do ipt=1,nlambda
           do il=1,nlambda
              call broadcast (wlmod(:,il,ipt))
              call broadcast (wlmod2(:,il,ipt))
           end do
        end do
+
+       call broadcast (xx)
 
        first = .false.
     end if
@@ -1686,7 +1581,7 @@ contains
                       if (idx_local (g_lo, iglo)) then
                          do ig = -ntgrid, ntgrid
                             total(ig, it, ik, is, ipt) = total(ig, it, ik, is, ipt) + &
-                                 fac*wlmod(ig,il,ipt)*(g(ig,1,iglo)+g(ig,2,iglo))
+                                 fac*wlmod(ig,il,ipt)*cos(istep*0.1*xx(il))!*(g(ig,1,iglo)+g(ig,2,iglo))
                          end do
                       end if
                    end do
@@ -1730,97 +1625,7 @@ contains
 
   end subroutine lint_error
 
-  subroutine trap_error (g, total, istep)
-
-    use mp, only: nproc, broadcast
-    use theta_grid, only: ntgrid, bmag, bmax
-    use species, only: nspec
-    use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: g_lo, idx, idx_local
-    use mp, only: sum_reduce, proc0
-    use file_utils, only: open_output_file, close_output_file
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
-    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
-    complex, dimension (:), allocatable :: work
-    integer :: is, il, ie, ik, it, iglo, ig, i, unit
-    real, dimension(:,:), allocatable, save :: wtmod
-    logical, save :: first = .true.
-    real :: fac
-    integer, intent(in) :: istep
-
-    if (first) then
-       if (proc0) then
-          allocate (wtmod(-ntgrid:ntgrid,nlambda))
-          wtmod(:,:ng2) = wl(:,:ng2)
-          wtmod(:,ng2+1:) = wlterr(:,ng2+1:)
-       else
-          allocate(wtmod(-ntgrid:ntgrid,nlambda))
-          wtmod = 0.0
-       end if
-
-       do il=1,nlambda
-          call broadcast (wtmod(:,il))
-       end do
-
-       first = .false.
-    end if
-
-    total(:,:,:,:) = 0.
-    do is = 1, nspec
-       do ie = 1, negrid
-          fac = w(ie,is)
-          do il = 1, nlambda
-             do it = 1, ntheta0
-                do ik = 1, naky
-                   iglo = idx (g_lo, ik, it, il, ie, is)
-                   if (idx_local (g_lo, iglo)) then
-                      do ig = -ntgrid, ntgrid
-                         total(ig, it, ik, is) = total(ig, it, ik, is) + &
-                              fac*wtmod(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
-                      end do
-                   end if
-                end do
-             end do
-          end do
-       end do
-    end do
-
-    if (nproc > 1) then
-       allocate (work((2*ntgrid+1)*naky*ntheta0*nspec)) ; work = 0.
-       i = 0
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                do ig = -ntgrid, ntgrid
-                   i = i + 1
-                   work(i) = total(ig, it, ik, is)
-                end do
-             end do
-          end do
-       end do
-          
-       call sum_reduce (work, 0)
-
-       if (proc0) then
-          i = 0
-          do is = 1, nspec
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   do ig = -ntgrid, ntgrid
-                      i = i + 1
-                      total(ig, it, ik, is) = work(i)
-                   end do
-                end do
-             end do
-          end do
-       end if
-       deallocate (work)
-    end if
-
-  end subroutine trap_error
-
-  subroutine eint_error (g, total)
+  subroutine eint_error (g, total, istep)
 
     use mp, only: nproc, broadcast
     use theta_grid, only: ntgrid
@@ -1832,6 +1637,7 @@ contains
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:,:), intent (out) :: total
+    integer, intent (in) :: istep
     complex, dimension (:), allocatable :: work
     integer :: is, il, ie, ik, it, iglo, ig, i, ipt
     real, dimension(:,:), allocatable, save :: wmod
@@ -1849,11 +1655,15 @@ contains
 
        if (.not. proc0) then
           allocate (wmod(negrid,negrid-1))
+          if (.not. allocated(zeroes)) allocate (zeroes(negrid-1))
+          wmod = 0.0
        end if
 
-       do ie = 1, negrid-1
-          call broadcast (wmod(:,ie))
+       do ie = 1, negrid
+          call broadcast (wmod(ie,:))
        end do
+
+       call broadcast (zeroes)
 
        allocate(xpts(negrid))
 
@@ -2702,6 +2512,7 @@ contains
     use theta_grid, only: ntgrid, bmag, bmax, eps
     use legendre, only: nrgauleg
     use constants
+    use mp, only: proc0
     use file_utils, only: get_unused_unit, open_output_file, close_output_file
     implicit none
 
@@ -2710,20 +2521,21 @@ contains
     real :: tiny = 1.e-15
 !b MAB
     real, dimension (2*ngauss) :: wx!, xx
-    real, dimension (:), allocatable :: ytmp, ww, wterr
-    integer :: icnt, npts
-    integer, save :: unit
-    real :: tmpsum, tmpsum2
-    logical :: eflag = .false.
+    real, dimension (:), allocatable :: ytmp, ww
+    integer :: icnt, unit, npts, npt2, npt3,npt4
+    real :: tmpsum
 !e MAB
 
-    integer :: ig, il, ndiv, divmax, divmaxerr, ndiverr
+    integer :: ig, il
 
 !b MAB
     allocate (xx(2*ngauss))
 !e MAB
 
-!    call open_output_file (unit,".trap")
+    if (proc0) then
+       call get_unused_unit (unit)
+       call open_output_file (unit,".trap")
+    end if
 
     call nrgauleg(1., 0., xx, wx)!, tiny**1.5)
 
@@ -2744,61 +2556,74 @@ contains
 !    if (eps <= epsilon(0.0)) return
     if (.not. trapped_particles .or. eps <= epsilon(0.0)) return
 
-    allocate(wlterr(-ntgrid:ntgrid,nlambda))
-
-    wlterr = 0.0
+    jend = ng2 + 1
 
     do ig = -ntgrid, ntgrid
        npts = 0
+       npt2 = 0
+       npt3 = 0
+
+       do il = ng2+1, nlambda-1
+          if ((1.0 - al(il)*bmag(ig) > -bouncefuzz) .and. &
+               (1.0 - al(il+1)*bmag(ig) > -bouncefuzz)) then
+             npt2 = npt2 + 1
+             if (il == nlambda-1) npt2 = npt2 + 1
+          end if
+       end do
 
        do il = ng2+1, nlambda
-          if (1.0 - al(il)*bmag(ig) > -bouncefuzz) then
+          if (1.0 - al(il)*bmag(ig) > 0.0) then
              npts = npts + 1
           end if
-       end do
-
-       jend(ig) = ng2 + npts
-       
-!       write(unit, *) ig, npts, jend(ig)
-
-       allocate(ytmp(npts), ww(npts), wterr(npts))
-       
-       ytmp = 0.0; ww = 0.0; wterr = 0.0
-       
-       icnt = 1
-       do il = ng2+1, nlambda
           if (1.0 - al(il)*bmag(ig) > -bouncefuzz) then
-             ytmp(icnt) = sqrt(max(1 - al(il)*bmag(ig), 0.0))
-!             write (unit,*) 'tmp= ', ytmp(icnt), icnt, npts
-             icnt = icnt + 1
+             npt3 = npt3 + 1
           end if
        end do
 
-       call get_weights (nmax, sqrt(max(1.0-bmag(ig)/bmax,0.0)), 0.0, ytmp, ww, ndiv, divmax, eflag)
-       if (divmax > 2) then
-          call get_weights (divmax-1, sqrt(max(1.0-bmag(ig)/bmax,0.0)), 0.0, ytmp, wterr, ndiverr, divmaxerr, eflag)
-       end if
+!       jend(ig) = ng2 + npt2 + 1
+       jend(ig) = ng2 + npt2
+       
+       write(unit, *) ig, npts, npt2, npt3, jend(ig)
 
-       tmpsum = 0.0; tmpsum2 = 0.0
+       allocate(ytmp(npt2), ww(npt2))
+       
+       ytmp = 0.0; ww = 0.0
+       
+       icnt = 1
+       do il = ng2+1, nlambda-1
+          if ((1.0 - al(il)*bmag(ig) > -bouncefuzz) .and. &
+               (1.0 - al(il+1)*bmag(ig) > -bouncefuzz)) then
+             ytmp(icnt) = sqrt(max(1 - al(il)*bmag(ig), 0.0))
+             write (unit,*) 'tmp= ', ytmp(icnt), icnt, npt2
+             icnt = icnt + 1
+             if (il == nlambda-1) ytmp(icnt) = sqrt(max(1.-al(nlambda)*bmag(ig),0.0))
+          end if
+       end do
+
+       call get_weights (sqrt(max(1.0-bmag(ig)/bmax,0.0)), 0.0, ytmp, ww)
+
+       tmpsum = 0.0
 
        icnt = 1
-       do il = ng2+1, nlambda
-          if (1.0 - al(il)*bmag(ig) > -bouncefuzz) then
+       do il = ng2+1, nlambda-1
+          if ((1.0 - al(il)*bmag(ig) > -bouncefuzz) .and. &
+               (1.0 - al(il+1)*bmag(ig) > -bouncefuzz)) then
              wl(ig,il) = 2.0*ww(icnt)
-             wlterr(ig,il) = 2.0*wterr(icnt)
-!             tmpsum = tmpsum + wl(ig,il)*cos(ytmp(il)*0.1*istep)
-!             tmpsum2 = tmpsum2 + 2.0*wterr(ig,il)*cos(ytmp(il)*0.1*istep)
-!             if (ig==0) write(unit,*) 'wlterr= ', wlterr(ig,icnt), 'ytmp= ', ytmp(icnt), ig, divmax
+             tmpsum = tmpsum + wl(ig,il)*ytmp(icnt)**testfac 
+             write(unit,*) 'ww= ', ww(icnt), 'ytmp= ', ytmp(icnt), ig
              icnt = icnt + 1
+             if (il == nlambda-1) then 
+                wl(ig,il+1) = 2.0*ww(icnt)
+                write(unit,*) 'ww= ', ww(icnt), 'ytmp= ', ytmp(icnt), ig
+             end if
           else
              wl(ig,il) = 0.0
-             wlterr(ig,il) = 0.0
           end if
        end do
        
-!       if (ig==0) write(unit,*) tmpsum, tmpsum2, sqrt(max(1.0 - bmag(ig)/bmax,0.0)), ig!, 'ndiv= ', ndiv
+       write(unit,*) tmpsum, sqrt(max(1.0 - bmag(ig)/bmax,0.0))
 
-       deallocate(ytmp, ww, wterr)
+       deallocate(ytmp, ww)
     end do
 
     do il = ng2+1, nlambda
@@ -2807,7 +2632,7 @@ contains
        end do
     end do
     
-!    call close_output_file (unit)
+    call close_output_file (unit)
 
     call init_orbit_average
 

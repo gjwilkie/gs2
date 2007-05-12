@@ -31,6 +31,9 @@ module gs2_diagnostics
   logical :: write_vortcheck, write_fieldcheck
   logical :: write_fieldline_avg_phi, write_hrate, write_lorentzian
   logical :: write_neoclassical_flux, write_nl_flux, write_Epolar
+!b MAB
+  logical :: write_verr
+!e MAB
   logical :: exit_when_converged
   logical :: dump_neoclassical_flux, dump_check1, dump_check2
   logical :: dump_fields_periodically, make_movie
@@ -50,7 +53,7 @@ module gs2_diagnostics
   logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
 
-  integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit
+  integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, vtmp_unit
   integer :: dv_unit, jext_unit   !GGH Additions
   integer :: dump_neoclassical_flux_unit, dump_check1_unit, dump_check2_unit
 
@@ -107,6 +110,9 @@ contains
     use gs2_io, only: init_gs2_io
     use gs2_heating, only: init_htype,init_dvtype
     use mp, only: broadcast, proc0
+!b MAB
+    use le_grids, only: init_weights
+!e MAB
     implicit none
     logical, intent (in) :: list
     integer, intent (in) :: nstep
@@ -149,6 +155,9 @@ contains
     call broadcast (write_gg)
     call broadcast (write_stress)
     call broadcast (write_final_antot)
+!b MAB
+    call broadcast (write_verr)
+!e MAB
 
     call broadcast (write_vortcheck)
     call broadcast (write_fieldcheck)
@@ -162,6 +171,14 @@ contains
     call broadcast (write_eigenfunc)
     
     nmovie_tot = nstep/nmovie
+
+!b MAB
+! initialize weights for less accurate integrals used
+! to provide an error estimate for v-space integrals
+!    if (proc0) write(*,*) 'gs2_diagnostics: pre-init_weights'
+    if (write_verr .and. proc0) call init_weights
+!   if (proc0) write(*,*) 'gs2_diagnostics: post-init_weights'
+!e MAB
 
 ! allocate heating diagnostic data structures
     if (write_hrate) then
@@ -193,10 +210,12 @@ contains
 !       allocate (hratehist(nspec, 7, 0:navg-1));  hratehist = 0.0
 !       allocate (hkratehist(ntheta0, naky, nspec, 7, 0:navg-1));  hkratehist = 0.0
 
+!    if (proc0) write(*,*) 'gs2_diagnostics: pre-init_gs2_io'
     call init_gs2_io (write_nl_flux, write_omega, write_stress, &
          write_fieldline_avg_phi, write_hrate, write_final_antot, &
-         write_eigenfunc, make_movie, nmovie_tot)
-    
+         write_eigenfunc, make_movie, nmovie_tot, write_verr)
+!    if (proc0) write(*,*) 'gs2_diagnostics: post-init_gs2_io'
+
   end subroutine init_gs2_diagnostics
  
 
@@ -216,25 +235,16 @@ contains
 
     call read_parameters (list)
     if (proc0) then
-       if (write_ascii) then
-          call open_output_file (out_unit, ".out")
-!          if (write_kpar) call open_output_file (kp_unit, ".kp")
-       end if
-       
-       if (write_hrate .and. write_ascii) then
-          call open_output_file (heat_unit, ".heat")
-       end if
+       if (write_ascii) call open_output_file (out_unit, ".out")
+       if (write_hrate .and. write_ascii) call open_output_file (heat_unit, ".heat")
+!       if (write_verr .and. write_ascii) call open_output_file (vtmp_unit, ".vtmp")
 
        !GGH Density and velocity perturbations
-       if (write_density_velocity .and. write_ascii) then
-          call open_output_file (dv_unit, ".dv")
-       end if
+       if (write_density_velocity .and. write_ascii) call open_output_file (dv_unit, ".dv")
 
        !GGH J_external, only if A_parallel is being calculated.
        if (write_jext .and. fapar > epsilon(0.0)) then
-          if (write_ascii) then
-             call open_output_file (jext_unit, ".jext")
-          end if
+          if (write_ascii) call open_output_file (jext_unit, ".jext")
        else
           write_jext = .false.
        end if
@@ -256,7 +266,6 @@ contains
        end if
        
        if (dump_check2) then
-          call get_unused_unit (dump_check2_unit)
           call open_output_file (dump_check2_unit, ".dc2")
        end if
        
@@ -325,7 +334,7 @@ contains
          write_dmix, write_kperpnorm, write_phitot, write_epartot, &
          write_eigenfunc, write_final_fields, write_final_antot, &
          write_fcheck, write_final_epar, write_final_moments, &
-         write_vortcheck, write_fieldcheck, write_Epolar, &
+         write_vortcheck, write_fieldcheck, write_Epolar, write_verr, &
          write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, write_stress, &
@@ -375,6 +384,9 @@ contains
        write_fcheck = .false.
        write_vortcheck = .false.
        write_fieldcheck = .false.
+!b MAB
+       write_verr = .false.
+!e MAB
        nwrite = 100
        nmovie = 1000
        navg = 100
@@ -415,8 +427,6 @@ contains
 ! Disable polar integrals if nx /= ny
        if (nx /= ny) write_Epolar = .false.
 
-       write_avg_moments = write_avg_moments .or. write_neoclassical_flux
-
        write_any = write_line .or. write_phi       .or. write_apar &
             .or. write_bpar  .or. write_omega     .or. write_omavg &
             .or. write_dmix   .or. write_kperpnorm .or. write_phitot &
@@ -444,10 +454,13 @@ contains
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, aky_out, akx_out, aky, akx
     use le_grids, only: nlambda, negrid, fcheck, al, delal
     use le_grids, only: e, dele
-    use fields_arrays, only: phi, apar, bpar, phinew, aparnew
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn, only: getan, get_epar, getmoms, par_spectrum, lambda_flux
     use dist_fn, only: e_flux
     use dist_fn, only: write_f
+!b MAB
+    use dist_fn, only: write_vres, write_ftran, get_verr, get_gtran
+!e MAB
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
     use gs2_transforms, only: transform2, inverse2
@@ -485,14 +498,35 @@ contains
     real :: zxy11, zxym1, zxy1n, zxymn, L_x, L_y, rxt, ryt, bxt, byt
     integer :: istatus, nnx, nny, nnx4, nny4, ulim, llim, iblock, i, g_unit
     logical :: last = .true.
+    real, dimension (2*ntgrid+1,ntheta0,naky,nspec,4) :: errest_by_mode
+    real, dimension (2*ntgrid+1,ntheta0,naky,nspec,2) :: lpcoef_by_mode
 
     if (write_g) call write_f (last)
+
+!b MAB
+!    if (write_verr) then
+!       call write_vres (last, phinew, bparnew, istep)
+!       call write_ftran (last, phinew, bparnew, istep)
+!       call get_verr (errest_by_mode, phinew, bparnew, istep)
+!       call get_gtran (lpcoef_by_mode, phinew, bparnew, istep)
+!
+!       if (proc0 .and. write_ascii) then
+!          do ig=1,2*ntgrid+1
+!             write(vtmp_unit,*) lpcoef_by_mode(ig,1,1,1,1), lpcoef_by_mode(ig,1,1,1,2), ig
+!             write(vtmp_unit,*) errest_by_mode(ig,1,1,1,1), errest_by_mode(ig,1,1,1,2), errest_by_mode(ig,1,1,1,3), errest_by_mode(ig,1,1,1,4), ig
+!          end do
+!          write(vtmp_unit,*)
+!       end if
+!       if (proc0) write(*,*) 'post ascii'
+!    end if
+!e MAB
 
     if (write_gg) call write_dist (g)
 
     phi0 = 1.
 
     if (proc0) then
+!       if (write_verr) call close_output_file (vtmp_unit)
        if (write_ascii) call close_output_file (out_unit)
        if (write_ascii .and. write_hrate) call close_output_file (heat_unit)
        if (write_ascii .and. write_density_velocity) call close_output_file (dv_unit)
@@ -1203,12 +1237,15 @@ contains
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum
+!b MAB
+    use dist_fn, only: write_vres, write_ftran, get_verr, get_gtran
+!e MAB
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: update_time, user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
-    use gs2_io, only: nc_loop_stress
+    use gs2_io, only: nc_loop_stress, nc_loop_vres
     use gs2_io, only: nc_loop_movie
     use gs2_layouts, only: yxf_lo
     use gs2_transforms, only: init_transforms, transform2
@@ -1241,6 +1278,8 @@ contains
     real :: phi2, apar2, bpar2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode
     real, dimension (ntheta0, naky, nspec) :: ntot2_by_mode, ntot20_by_mode
+    real, dimension (2*ntgrid+1, ntheta0, naky, nspec, 4) :: errest_by_mode
+    real, dimension (2*ntgrid+1, ntheta0, naky, nspec, 2) :: lpcoef_by_mode
     real :: dmix, dmix4, dmixx
     real :: t, denom
     integer :: ig, ik, it, is, unit, il, i, j, nnx, nny, ifield
@@ -1265,7 +1304,6 @@ contains
     real, dimension (naky) :: fluxfac
 !    real, dimension (:), allocatable :: phi_by_k, apar_by_k, bpar_by_k
     real :: hflux_tot, zflux_tot, vflux_tot
-    real, dimension(nspec) :: tprim_tot, fprim_tot
     character(200) :: filename
     logical :: last = .false.
 
@@ -1342,7 +1380,14 @@ contains
     if (mod(istep,nwrite) /= 0 .and. .not. exit) return
     t = user_time
 
-!    if (write_g) call write_f (last)
+    if (write_g) call write_f (last)
+
+!b MAB
+    if (write_verr) then
+       call write_vres (last, phinew, bparnew, istep)
+!       call write_ftran (last, phinew, bparnew, istep)
+    end if
+!e MAB
 
     call prof_entering ("loop_diagnostics-1")
 
@@ -1640,6 +1685,10 @@ contains
 
     call kperp (ntg_out, akperp)
 
+    if (write_neoclassical_flux .or. dump_neoclassical_flux) then
+       call neoclassical_flux (pfluxneo, qfluxneo)
+    end if
+
     if (proc0 .and. write_any) then
        if (write_ascii) write (unit=out_unit, fmt=*) 'time=', t
        if (write_ascii .and. write_hrate) then
@@ -1793,6 +1842,7 @@ contains
              call nc_pflux (nout, pflux, pmflux, pbflux, &
                   part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
           end if
+
           call nc_loop (nout, t, fluxfac, &
                phinew(igomega,:,:), phi2, phi2_by_mode, &
                aparnew(igomega,:,:), apar2, apar2_by_mode, &
@@ -1854,6 +1904,15 @@ contains
 !                write (out_unit, *) '<phi>=',phiavg
 !             end if
 
+             if (write_neoclassical_flux) then
+                write (out_unit, *) 't= ',t,' pfluxneo=', real(pfluxneo(it,ik,:))!,aimag(pfluxneo(it,ik,:))
+                write (out_unit, *) 't= ',t,' qfluxneo=', real(qfluxneo(it,ik,:))!,aimag(qfluxneo(it,ik,:))
+!                write (out_unit, *) 'pfluxneo/sourcefac=', &
+!                     pfluxneo(it,ik,:)/sourcefac
+!                write (out_unit, *) 'qfluxneo/sourcefac=', &
+!                     qfluxneo(it,ik,:)/sourcefac
+             end if
+
              if (write_nl_flux) then
                 if (write_ascii) then
                    write (out_unit,"('ik,it,aky,akx,<phi**2>,t: ', &
@@ -1874,6 +1933,12 @@ contains
              end if
           end do
        end do
+    end if
+    
+    if (write_verr) then
+       call get_verr (errest_by_mode, phinew, bparnew, istep)
+       call get_gtran (lpcoef_by_mode, phinew, bparnew, istep)
+       if (proc0) call nc_loop_vres (nout, errest_by_mode, lpcoef_by_mode)
     end if
 
     if (write_stress) then
@@ -1918,28 +1983,12 @@ contains
                   ntot20(is), ntot20_by_mode(:,:,is))
           end do
 
-!          write (out_unit, "('t,u0 ',2(1x,e12.6))") t, aimag(upar00 (1,1))
-
           call nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, &
                ntot20_by_mode, phi00, ntot00, density00, upar00, &
                tpar00, tperp00)
 
        end if
     end if
-
-    if (write_neoclassical_flux .or. dump_neoclassical_flux) call neoclassical_flux (pfluxneo, qfluxneo)
-
-    if (write_neoclassical_flux .and. proc0) then
-       do is=1,nspec
-          tprim_tot(is) = spec(is)%tprim-0.333*aimag(tpar00(1,is))-0.6667*aimag(tperp00(1,is))
-          fprim_tot(is) = spec(is)%fprim-aimag(density00(1,is))
-          write (out_unit, "('t= ',e12.6,' is= ',i2,' pfluxneo= ',e12.6,' nprim_tot= ',e12.6,' tprim_tot= ',e12.6)") &
-               t, is, real(pfluxneo(1,1,is)), fprim_tot(is), tprim_tot(is)
-          write (out_unit, "('t= ',e12.6,' is= ',i2,' qfluxneo= ',e12.6,' tprim_tot= ',3(1x,e12.6))") &
-               t, is, real(qfluxneo(1,1,is)), tprim_tot(is), -0.333*aimag(tpar00(1,is)), -0.6667*aimag(tperp00(1,is))
-       end do
-    end if
-
 
     if (proc0 .and. dump_any) then
 !
