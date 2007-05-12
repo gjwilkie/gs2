@@ -25,7 +25,7 @@ module collisions
   integer, parameter :: collision_model_krook_test = 4
   integer, parameter :: collision_model_lorentz_test = 5
 
-  real, dimension (:,:,:), allocatable :: vnew
+  real, dimension (:,:,:), allocatable :: vnew, vnew_ss
   ! (naky,negrid,nspec) replicated
 
   ! only for hyper-diffusive collisions
@@ -40,7 +40,10 @@ module collisions
   real, dimension (:,:), allocatable :: aintnorm
   ! (-ntgrid:ntgrid, -*- geint_layout -*-)
 
-  ! only for lorentz
+  ! only for "new" momentum conservation (8.06)
+  complex, dimension(:,:,:), allocatable :: z0, z1
+
+  ! only for original parallel mom conservation (not used nowadays)
   real, dimension (:,:,:), allocatable :: sq
   ! (-ntgrid:ntgrid,nlambda,2) replicated
 
@@ -121,7 +124,7 @@ contains
        absom = 0.5
        ivnew = 0
        conserve_number = .true.
-       conserve_momentum = .false.
+       conserve_momentum = .true.  ! DEFAULT CHANGED TO REFLECT IMPROVED MOMENTUM CONSERVATION, 8/06
        const_v = .false.
        heating = .false.
        in_file = input_unit_exist ("collisions_knobs", exist)
@@ -170,19 +173,275 @@ contains
        collision_model_switch = collision_model_none
        return
     end if
-    if (conserve_momentum) call init_g3int
+    if (conserve_momentum .and. &
+         collision_model_switch == collision_model_krook) call init_g3int
 
     select case (collision_model_switch)
     case (collision_model_lorentz,collision_model_lorentz_test)
        call init_lorentz
+       if (conserve_momentum) call init_lz_mom_conserve
     case (collision_model_krook,collision_model_krook_test)
        call init_krook (hee)
     end select
 
   end subroutine init_arrays
 
+  subroutine init_lz_mom_conserve 
+
+!
+! Precompute two quantities needed for momentum conservation:
+! z0, z1
+    
+    use gs2_layouts, only: g_lo, ie_idx, is_idx, ik_idx, il_idx, it_idx
+    use species, only: nspec, spec
+    use kt_grids, only: naky, ntheta0
+    use theta_grid, only: ntgrid
+    use le_grids, only: e, al, integrate_moment
+    use gs2_time, only: code_dt
+    use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
+
+    logical, save :: first = .true.
+    complex, dimension (1,1,1) :: dum1 = 0., dum2 = 0.
+    complex, dimension (:,:,:), allocatable :: gtmp
+    complex, dimension (:,:,:,:), allocatable :: v0z0, v0z1, v1z0, v1z1, Enuinv
+    integer :: ie, il, ik, is, ig, isgn, iglo, all, it
+
+! TO DO: 
+! tunits not included anywhere yet
+
+    if (first) then
+       allocate (z0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (z1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       first = .false.
+    end if
+
+! First, get Enu and then 1/Enu == Enuinv
+
+    allocate (gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate (Enuinv(-ntgrid:ntgrid, ntheta0, naky, nspec))       
+
+!
+! Enu == int (E nu f_0);  Enu = Enu(z, kx, ky, s)
+! Enuinv = 1/Enu
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+             gtmp(ig,isgn,iglo) = e(ie,is)*vnew_ss(ik,ie,is)
+          end do
+       end do
+    end do
+
+    all = 1
+    call integrate_moment (gtmp, Enuinv, all)  ! not 1/Enu yet
+
+    where (cabs(Enuinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
+                                   ! Enuinv=0 iff vnew=0 so ok to keep Enuinv=0.
+       Enuinv = 1./Enuinv  ! now it is 1/Enu
+    end where
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Now get z0 (first form)
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+! V_perp == e(ie,is)*al(il)*aj1(ig,iglo)
+! u0 = -3 nu V_perp dt a f_0 / Enu
+! where a = kperp2 * (T m / q**2)  ! missing factor of 1/B(theta)**2 ???
+             z0(ig,isgn,iglo) = - 3.*vnew_ss(ik,ie,is)*e(ie,is)*al(il)*aj1(ig,iglo) &
+                  * code_dt * spec(is)%smz**2 * kperp2(ig,it,ik) * Enuinv(ig,it,ik,is)
+          end do
+       end do
+    end do
+
+    call solfp_lorentz (z0, dum1, dum2)   ! z0 is redefined below
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Now get z1 (first form)
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+! v_parallel == vpa 
+! V_parallel == v_parallel J0
+! u1 = -3 nu V_parallel dt f_0 / Enu
+!
+! No factor of sqrt(T/m) here on purpose (see derivation) 
+!
+             z1(ig,isgn,iglo) = - 3.*vnew_ss(ik,ie,is)*vpa(ig,isgn,iglo)*aj0(ig,iglo) &
+                  * code_dt * Enuinv(ig,it,ik,is)
+          end do
+       end do
+    end do
+
+    deallocate (Enuinv)  ! Done with this variable
+
+    call solfp_lorentz (z1, dum1, dum2)    ! z1 is redefined below
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Now get v0z0
+
+    allocate (v0z0(-ntgrid:ntgrid, ntheta0, naky, nspec))         
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+! V_perp == e(ie,is)*al(il)*aj1(ig,iglo)
+! v0 = nu V_perp
+             gtmp(ig,isgn,iglo) = vnew_ss(ik,ie,is)*e(ie,is)*al(il)*aj1(ig,iglo) &
+                  * z0(ig,isgn,iglo)
+          end do
+       end do
+    end do
+
+    call integrate_moment (gtmp, v0z0, all)    ! v0z0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Now get v1z0
+
+    allocate (v1z0(-ntgrid:ntgrid, ntheta0, naky, nspec))         
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+! v_parallel == vpa
+! V_parallel == v_parallel J0
+! v1 = nu V_parallel f_0
+!
+! No factor of sqrt(T/m) here on purpose (see derivation) 
+!
+             gtmp(ig,isgn,iglo) = vnew_ss(ik,ie,is)*vpa(ig,isgn,iglo)*aj0(ig,iglo) &
+                  * z0(ig,isgn,iglo)
+          end do
+       end do
+    end do
+
+    call integrate_moment (gtmp, v1z0, all)    ! v1z0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Now get v0z1
+
+    allocate (v0z1(-ntgrid:ntgrid, ntheta0, naky, nspec))         
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+! V_perp == e(ie,is)*al(il)*aj1(ig,iglo)
+! v0 = nu V_perp
+             gtmp(ig,isgn,iglo) = vnew_ss(ik,ie,is)*e(ie,is)*al(il)*aj1(ig,iglo) &
+                  * z1(ig,isgn,iglo)
+          end do
+       end do
+    end do
+
+    call integrate_moment (gtmp, v0z1, all)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Now redefine z1 == z1 - z0 [v0 . z1]/(1+v0.z0)
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn=1,2
+          do ig=-ntgrid,ntgrid
+             z1(ig,isgn,iglo) = z1(ig,isgn,iglo) - z0(ig,isgn,iglo)*v0z1(ig,it,ik,is) &
+                  / (1.+v0z0(ig,it,ik,is))
+          end do
+       end do
+    end do
+
+    deallocate (v0z1)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Now get v1z1
+
+    allocate (v1z1(-ntgrid:ntgrid, ntheta0, naky, nspec))         
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+! v_parallel == vpa
+! V_parallel == v_parallel J0
+! v1 = nu V_parallel f_0
+!
+! No factor of sqrt(T/m) here on purpose (see derivation) 
+!
+             gtmp(ig,isgn,iglo) = vnew_ss(ik,ie,is)*vpa(ig,isgn,iglo)*aj0(ig,iglo) &
+                  * z1(ig,isgn,iglo)
+          end do
+       end do
+    end do
+
+    call integrate_moment (gtmp, v1z1, all)    ! redefined below
+
+    deallocate (gtmp)
+    
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Now redefine z1 == z1/(1 + v1z1)
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn=1,2
+          do ig=-ntgrid,ntgrid
+             z1(ig,isgn,iglo) = z1(ig,isgn,iglo) / (1.+v1z1(ig,it,ik,is))
+          end do
+       end do
+    end do
+
+    deallocate (v1z1)
+    
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Now redefine z0 == (z1 * v1z0 - z0) / (1 + v0z0)
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn=1,2
+          do ig=-ntgrid,ntgrid
+             z0(ig,isgn,iglo) = (z1(ig,isgn,iglo) * v1z0(ig,it,ik,is) - z0(ig,isgn,iglo)) &
+                  / (1.+v0z0(ig,it,ik,is))
+          end do
+       end do
+    end do
+
+    deallocate (v0z0, v1z0)
+    
+  end subroutine init_lz_mom_conserve
+
   subroutine init_vnew (hee)
-    use species, only: nspec, spec, electron_species
+    use species, only: nspec, spec, electron_species, has_electron_species
     use le_grids, only: negrid, e
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
@@ -231,8 +490,11 @@ contains
 !
 !    end do
 
-    if(.not.allocated(vnew)) allocate (vnew(naky,negrid,nspec))
-    if (hyper_colls .and. .not.allocated(vnewh)) allocate (vnewh(-ntgrid:ntgrid,ntheta0,naky,nspec))
+    if(.not.allocated(vnew)) then
+       allocate (vnew(naky,negrid,nspec))
+       allocate (vnew_ss(naky,negrid,nspec))
+    end if
+    if(.not.allocated(vnewh)) allocate (vnewh(-ntgrid:ntgrid,ntheta0,naky,nspec))
 
     do is = 1, nspec
        if (spec(is)%type == electron_species) then
@@ -241,9 +503,13 @@ contains
                 if (const_v) then
                    vnew(ik,ie,is) = spec(is)%vnewk &
                         *(zeff+heevth(ie,is))*0.5*tunits(ik)                   
+                   vnew_ss(ik,ie,is) = spec(is)%vnewk &
+                        *heevth(ie,is)*0.5*tunits(ik)                   
                 else
                    vnew(ik,ie,is) = spec(is)%vnewk/e(ie,is)**1.5 &
                         *(zeff + hee(ie,is))*0.5*tunits(ik)
+                   vnew_ss(ik,ie,is) = spec(is)%vnewk/e(ie,is)**1.5 &
+                        *hee(ie,is)*0.5*tunits(ik)
                 end if
              end do
           end do
@@ -257,6 +523,7 @@ contains
                    vnew(ik,ie,is) = spec(is)%vnewk/e(ie,is)**1.5 &
                         *hee(ie,is)*0.5*tunits(ik)
                 end if
+                vnew_ss(ik,ie,is) = vnew(ik,ie,is)
              end do
           end do
        end if
@@ -453,12 +720,7 @@ contains
              slbl = (slb1 + slb0)/2.0  ! xi(j-1/2)
              slbr = (slb1 + slb2)/2.0  ! xi(j+1/2)
 
-! worried about this factor of 0.5, since kperp2 is smaller than 
-! normally think, by a factor of 0.5   
-! this is the usual sqrt(2) issue in the definition of vt
-! which, here in the guts of gs2, is defined vt = sqrt(2T/m)
-! BD 6/1/05
-             ee = 0.5*e(ie,is)*(1+slb1**2) &
+             ee = 0.25*e(ie,is)*(1+slb1**2) &
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
 
@@ -480,7 +742,7 @@ contains
           slbl = (slb1 + slb0)/2.0
           slbr = (slb1 + slb2)/2.0
 
-          ee = 0.5*e(ie,is)*(1+slb1**2) &
+          ee = 0.25*e(ie,is)*(1+slb1**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
           
@@ -500,7 +762,7 @@ contains
           slbl = (slb1 + slb0)/2.0
           slbr = (slb1 + slb2)/2.0
 
-          ee = 0.5*e(ie,is)*(1+slb1**2) &
+          ee = 0.25*e(ie,is)*(1+slb1**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
@@ -549,7 +811,7 @@ contains
              slbl = (slb1 + slb0)/2.0
              slbr = (slb1 + slb2)/2.0
 
-             ee = 0.5*e(ie,is)*(1+slb1**2) &
+             ee = 0.25*e(ie,is)*(1+slb1**2) &
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
 
@@ -567,7 +829,7 @@ contains
 
           slbr = (slb1 + slb2)/2.0
 
-          ee = 0.5*e(ie,is)*(1+slb1**2) &
+          ee = 0.25*e(ie,is)*(1+slb1**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
@@ -583,7 +845,7 @@ contains
           slb1 = 0.
           slb2 = -slb0                                                        
 
-          ee = 0.5*e(ie,is)*(1+slb1**2) &
+          ee = 0.25*e(ie,is)*(1+slb1**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
@@ -729,8 +991,8 @@ contains
 
   end subroutine init_lorentz_redistribute
 
-  subroutine solfp1 (g, g1, phi, apar, bpar)
-    use gs2_layouts, only: g_lo, ik_idx, ie_idx, is_idx
+  subroutine solfp1 (g, g1, phi, apar, bpar, diagnostics)
+    use gs2_layouts, only: g_lo
     use theta_grid, only: ntgrid
     use run_parameters, only: tunits
     use run_parameters, only: fphi, fbpar
@@ -744,42 +1006,135 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in out) :: g, g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (:,:,:), allocatable :: gc1, gc2
+    integer, optional, intent (in) :: diagnostics
 
     real, dimension (naky) :: dtinv
     integer :: ik, ie, is, iglo
 
     if (collision_model_switch == collision_model_none) return
 
-
-    if (heating) then
-       allocate (gc1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (gc2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    if (heating .and. present(diagnostics)) then
+       allocate (gc1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc)) ; gc1 = 0.
+       allocate (gc2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc)) ; gc2 = 0.
     else
-       allocate (gc1(1,1,1))
-       allocate (gc2(1,1,1))
+       allocate (gc1(1,1,1)) ; gc1 = 0.
+       allocate (gc2(1,1,1)) ; gc2 = 0.
     end if
-
-    gc1 = 0.0
-    gc2 = 0.0
-
+    
     if (adjust) call g_adjust (g, phi, bpar, fphi, fbpar)
 
     select case (collision_model_switch)
     case (collision_model_lorentz,collision_model_lorentz_test)
-       call solfp_lorentz (g, g1, gc1, gc2)
+       if (present(diagnostics)) then
+          call solfp_lorentz (g, gc1, gc2, diagnostics)
+       else
+          call solfp_lorentz (g, gc1, gc2)
+       end if
+
+       if (conserve_momentum) call conserve_mom (g, g1)
+
     case (collision_model_krook,collision_model_krook_test)
        call solfp_krook (g, g1)
     end select
     
-    if (heating) call integrate_moment (gc1, c_rate(:,:,:,:,1))
-    deallocate (gc1)
+    if (present(diagnostics)) then
+       if (heating) call integrate_moment (gc1, c_rate(:,:,:,:,1))
+       deallocate (gc1)
 
-    if (heating .and. hyper_colls) call integrate_moment (gc2, c_rate(:,:,:,:,2))
-    deallocate (gc2)
+       if (heating .and. hyper_colls) call integrate_moment (gc2, c_rate(:,:,:,:,2))
+       deallocate (gc2)
+    end if
 
     if (adjust) call g_adjust (g, phi, bpar, -fphi, -fbpar)
     
   end subroutine solfp1
+
+  subroutine conserve_mom (g, g1)
+
+    use mp, only: proc0
+    use theta_grid, only: ntgrid
+    use species, only: nspec
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
+    use le_grids, only: e, al, integrate_moment
+    use dist_fn_arrays, only: aj0, aj1, vpa
+    
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
+    complex, dimension (:,:,:,:), allocatable :: v0y0, v1y0
+
+    integer :: ig, isgn, iglo, ik, ie, il, is, it, all = 1
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! First get v0y0
+
+    allocate (v0y0(-ntgrid:ntgrid, ntheta0, naky, nspec))         
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+! V_perp == e(ie,is)*al(il)*aj1(ig,iglo)
+! v0 = nu V_perp
+             g1(ig,isgn,iglo) = vnew_ss(ik,ie,is)*e(ie,is)*al(il)*aj1(ig,iglo) &
+                  * g(ig,isgn,iglo)
+          end do
+       end do
+    end do
+
+    call integrate_moment (g1, v0y0, all)    ! v0y0
+    
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Now get v1y0
+
+    allocate (v1y0(-ntgrid:ntgrid, ntheta0, naky, nspec))         
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+! v_parallel == vpa
+! V_parallel == v_parallel J0
+! v1 = nu V_parallel f_0
+!
+! No factor of sqrt(T/m) here on purpose (see derivation) 
+!
+             g1(ig,isgn,iglo) = vnew_ss(ik,ie,is)*vpa(ig,isgn,iglo)*aj0(ig,iglo) &
+                  * g(ig,isgn,iglo)
+          end do
+       end do
+    end do
+
+    call integrate_moment (g1, v1y0, all)    ! v1y0
+
+!    if (proc0) then
+!       write (*,*) v1y0
+!    end if
+
+! Conserve momentum:
+
+!    write (*,*) sum(z0)
+    
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn=1,2
+          do ig=-ntgrid,ntgrid
+             g(ig,isgn,iglo) = g(ig,isgn,iglo) + 2.0*z0(ig,isgn,iglo)*v0y0(ig,it,ik,is) &
+                  - 2.0*z1(ig,isgn,iglo) * v1y0(ig,it,ik,is)
+          end do
+       end do
+    end do
+
+    deallocate (v0y0, v1y0)
+
+  end subroutine conserve_mom
 
   subroutine g_adjust (g, phi, bpar, facphi, facbpar)
     use species, only: spec
@@ -899,7 +1254,7 @@ contains
     call prof_leaving ("solfp_krook", "collisions")
   end subroutine solfp_krook
 
-  subroutine solfp_lorentz (g, g1, gc, gh)
+  subroutine solfp_lorentz (g, gc, gh, diagnostics)
     use species, only: spec, electron_species
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, jend, lintegrate, gint2g, ng2
@@ -908,10 +1263,10 @@ contains
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1, gc, gh
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, gc, gh
+    integer, optional, intent (in) :: diagnostics
 
     complex, dimension (max(2*nlambda,2*ng2+1)) :: delta
-    complex, dimension (:,:), allocatable :: g1int, g2int
     complex :: fac
     integer :: iglo, igint, ilz, ig, ik, il, is, je, it
 
@@ -919,24 +1274,9 @@ contains
 
 !    call check_g ('beg', g)
 
-    if (conserve_momentum) then
-       allocate (g1int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
-             g1(:,:,iglo) = 0.0
-          else
-             g1(:,:,iglo) = g(:,:,iglo)*sq(:,il,:)
-          end if
-       end do
-       call lintegrate (g1, g1int)
-    end if
-
     call gather (lorentz_map, g, glz)
 
-    if (heating) then
+    if (heating .and. present(diagnostics)) then
        do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
           ig = ig_idx(lz_lo,ilz)
 
@@ -1009,38 +1349,6 @@ contains
 !    call check_glz ('end', glz)
     call scatter (lorentz_map, glz, g)
 
-    if (conserve_momentum) then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
-             g1(:,:,iglo) = 0.0
-          else
-             g1(:,:,iglo) = g(:,:,iglo)*sq(:,il,:)
-          end if
-       end do
-       allocate (g2int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
-       call lintegrate (g1, g2int)
-
-       do igint = gint_lo%llim_proc, gint_lo%ulim_proc
-          g1int(:,igint) = (g1int(:,igint) - g2int(:,igint))/g3int(:,igint)
-       end do
-       call gint2g (g1int, g1)
-       deallocate (g1int, g2int)
-
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
-          else if (spec(is)%type == electron_species) then
-          else
-             g(:,:,iglo) = g(:,:,iglo) + sq(:,il,:)*g1(:,:,iglo)
-          end if
-       end do
-    end if
-
 !    call check_g ('end', g)
 
     call prof_leaving ("solfp_lorentz", "collisions")
@@ -1104,4 +1412,54 @@ contains
   end subroutine reset_init
 
 end module collisions
+
+! OLD MOMENTUM CONSERVATION CODING
+!    if (conserve_momentum) then
+!       allocate (g1int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
+!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!          ik = ik_idx(g_lo,iglo)
+!          il = il_idx(g_lo,iglo)
+!          is = is_idx(g_lo,iglo)
+!          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
+!             g1(:,:,iglo) = 0.0
+!          else
+!             g1(:,:,iglo) = g(:,:,iglo)*sq(:,il,:)
+!          end if
+!       end do
+!       call lintegrate (g1, g1int)
+!    end if
+
+! ...
+
+!    if (conserve_momentum) then
+!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!          ik = ik_idx(g_lo,iglo)
+!          il = il_idx(g_lo,iglo)
+!          is = is_idx(g_lo,iglo)
+!          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
+!             g1(:,:,iglo) = 0.0
+!          else
+!             g1(:,:,iglo) = g(:,:,iglo)*sq(:,il,:)
+!          end if
+!       end do
+!       allocate (g2int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
+!       call lintegrate (g1, g2int)
+!
+!       do igint = gint_lo%llim_proc, gint_lo%ulim_proc
+!          g1int(:,igint) = (g1int(:,igint) - g2int(:,igint))/g3int(:,igint)
+!       end do
+!       call gint2g (g1int, g1)
+!       deallocate (g1int, g2int)
+!
+!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!          ik = ik_idx(g_lo,iglo)
+!          il = il_idx(g_lo,iglo)
+!          is = is_idx(g_lo,iglo)
+!          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
+!          else if (spec(is)%type == electron_species) then
+!          else
+!             g(:,:,iglo) = g(:,:,iglo) + sq(:,il,:)*g1(:,:,iglo)
+!          end if
+!       end do
+!    end if
 

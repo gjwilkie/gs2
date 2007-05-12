@@ -3,7 +3,7 @@ module gs2_layouts
   private
 
   public :: pe_layout, layout, local_field_solve
-  public :: kx_local
+  public :: is_kx_local
   
   public :: init_dist_fn_layouts, init_gs2_layouts
   public :: g_lo, g_layout_type
@@ -35,7 +35,7 @@ module gs2_layouts
   public :: im_idx, in_idx, ij_idx, ifield_idx
   public :: idx, proc_id, idx_local
 
-  logical :: local_field_solve, accel_lxyes, local
+  logical :: local_field_solve, accel_lxyes, lambda_local
   character (len=5) :: layout
 
   type :: g_layout_type
@@ -344,7 +344,7 @@ contains
     integer :: nsfacs, nefacs, nyfacs, nxfacs, nlfacs
     integer :: i
 
-    local = .true.
+    lambda_local = .true.
 
     allocate (facs(max(nspec,negrid,naky,ntheta0,nlambda)/2+1,5))
 
@@ -436,7 +436,7 @@ contains
 
     end select
 
-    local = .false.    
+    lambda_local = .false.    
                        
 100 deallocate (facs)
 
@@ -497,12 +497,109 @@ contains
     
   end subroutine init_dist_fn_layouts
 
-  logical function kx_local
+  subroutine is_kx_local(negrid, nspec, nlambda, naky, ntheta0, kx_local)  
+
+    use mp, only: nproc
     implicit none
-    
+    integer, intent (in) :: negrid, nspec, nlambda, naky, ntheta0
+    logical, intent (out) :: kx_local
+    integer, dimension(:,:), allocatable :: facs
+    integer :: nsfacs, nefacs, nyfacs, nxfacs, nlfacs
+    integer :: i
+
     kx_local = .true.
 
-  end function kx_local
+    allocate (facs(max(nspec,negrid,naky,nlambda)/2+1,3))
+
+    select case (layout)
+
+    case ('yxels')
+
+       call factors (nspec,   nsfacs, facs(:,1))
+       call factors (nlambda, nlfacs, facs(:,2))
+       call factors (negrid,  nefacs, facs(:,3))
+
+       do i=1,nsfacs-1
+          if (nproc == facs(i,1)) goto 100
+       end do
+       
+       do i=1,nlfacs-1
+          if (nproc == facs(i,2)*nspec) goto 100
+       end do
+
+       do i=1,nefacs-1
+          if (nproc == facs(i,3)*nlambda*nspec) goto 100
+       end do
+          
+    case ('yxles')
+
+       call factors (nspec,   nsfacs, facs(:,1))
+       call factors (negrid,  nefacs, facs(:,2))
+       call factors (nlambda, nlfacs, facs(:,3))
+
+       do i=1,nsfacs-1
+          if (nproc == facs(i,1)) goto 100
+       end do
+       
+       do i=1,nefacs-1
+          if (nproc == facs(i,2)*nspec) goto 100
+       end do
+
+       do i=1,nlfacs-1
+          if (nproc == facs(i,3)*negrid*nspec) goto 100
+       end do
+          
+    case ('lxyes')
+
+       call factors (nspec,   nsfacs, facs(:,1))
+       call factors (negrid,  nefacs, facs(:,2))
+       call factors (naky,    nyfacs, facs(:,3))
+
+       do i=1,nsfacs-1
+          if (nproc == facs(i,1)) goto 100
+       end do
+       
+       do i=1,nefacs-1
+          if (nproc == facs(i,2)*nspec) goto 100
+       end do
+
+       do i=1,nyfacs-1
+          if (nproc == facs(i,3)*negrid*nspec) goto 100
+       end do
+          
+    case ('lyxes')
+
+       call factors (nspec,   nsfacs, facs(:,1))
+       call factors (negrid,  nefacs, facs(:,2))
+
+       do i=1,nsfacs-1
+          if (nproc == facs(i,1)) goto 100
+       end do
+       
+       do i=1,nefacs-1
+          if (nproc == facs(i,2)*nspec) goto 100
+       end do
+
+    case ('lexys')
+
+       call factors (nspec,   nsfacs, facs(:,1))
+       call factors (naky,    nyfacs, facs(:,2))
+
+       do i=1,nsfacs-1
+          if (nproc == facs(i,1)) goto 100
+       end do
+       
+       do i=1,nyfacs-1
+          if (nproc == facs(i,2)*nspec) goto 100
+       end do
+
+    end select
+
+    kx_local = .false.    
+                       
+100 deallocate (facs)
+
+  end subroutine is_kx_local
 
   elemental function is_idx_g (lo, i)
     implicit none
@@ -1163,7 +1260,7 @@ contains
     if (layout == 'lxyes' .or. layout == 'lexys' .or. layout == 'lyxes') &
          call check_llocal (ntheta0, naky, nlambda, negrid, nspec)
 
-    if (local) then
+    if (lambda_local) then
 
        lz_lo%groupblocksize = (naky*ntheta0*negrid*nspec-1)/nproc + 1
        
@@ -1330,7 +1427,7 @@ contains
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
 
-    if (local) then
+    if (lambda_local) then
        proc_id_lz = (i/lo%gsize)*lo%nprocset + mod(i, lo%gsize)/lo%nset
     else
        proc_id_lz = i/lo%blocksize

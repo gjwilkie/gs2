@@ -28,7 +28,7 @@ module gs2_diagnostics
   logical :: write_eigenfunc, write_final_fields, write_final_antot
   logical :: write_final_moments, write_avg_moments, write_stress
   logical :: write_fcheck, write_final_epar, write_kpar
-  logical :: write_intcheck, write_vortcheck, write_fieldcheck
+  logical :: write_vortcheck, write_fieldcheck
   logical :: write_fieldline_avg_phi, write_hrate, write_lorentzian
   logical :: write_neoclassical_flux, write_nl_flux, write_Epolar
   logical :: exit_when_converged
@@ -103,7 +103,6 @@ contains
     use run_parameters, only: init_run_parameters
     use species, only: init_species, nspec
     use dist_fn, only: init_dist_fn
-    use dist_fn, only: init_intcheck, init_vortcheck, init_fieldcheck
     use gs2_flux, only: init_gs2_flux
     use gs2_io, only: init_gs2_io
     use gs2_heating, only: init_htype,init_dvtype
@@ -151,12 +150,8 @@ contains
     call broadcast (write_stress)
     call broadcast (write_final_antot)
 
-    call broadcast (write_intcheck)
     call broadcast (write_vortcheck)
     call broadcast (write_fieldcheck)
-    if (write_intcheck) call init_intcheck
-    if (write_vortcheck) call init_vortcheck
-    if (write_fieldcheck) call init_fieldcheck
     call broadcast (ntg_out)
     call broadcast (write_lamavg)
     call broadcast (write_eavg)
@@ -330,7 +325,7 @@ contains
          write_dmix, write_kperpnorm, write_phitot, write_epartot, &
          write_eigenfunc, write_final_fields, write_final_antot, &
          write_fcheck, write_final_epar, write_final_moments, &
-         write_intcheck, write_vortcheck, write_fieldcheck, write_Epolar, &
+         write_vortcheck, write_fieldcheck, write_Epolar, &
          write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, write_stress, &
@@ -378,7 +373,6 @@ contains
        write_final_antot = .false.
        write_final_epar = .false.
        write_fcheck = .false.
-       write_intcheck = .false.
        write_vortcheck = .false.
        write_fieldcheck = .false.
        nwrite = 100
@@ -421,6 +415,8 @@ contains
 ! Disable polar integrals if nx /= ny
        if (nx /= ny) write_Epolar = .false.
 
+       write_avg_moments = write_avg_moments .or. write_neoclassical_flux
+
        write_any = write_line .or. write_phi       .or. write_apar &
             .or. write_bpar  .or. write_omega     .or. write_omavg &
             .or. write_dmix   .or. write_kperpnorm .or. write_phitot &
@@ -452,7 +448,6 @@ contains
     use dist_fn, only: getan, get_epar, getmoms, par_spectrum, lambda_flux
     use dist_fn, only: e_flux
     use dist_fn, only: write_f
-    use dist_fn, only: finish_intcheck, finish_vortcheck, finish_fieldcheck
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
     use gs2_transforms, only: transform2, inverse2
@@ -892,10 +887,6 @@ contains
        deallocate (fcheck_f)
     end if
 
-    if (write_intcheck) call finish_intcheck
-    if (write_vortcheck) call finish_vortcheck
-    if (write_fieldcheck) call finish_fieldcheck
-    
     if (save_for_restart) then
        call gs2_save_for_restart (gnew, user_time, user_dt, istatus, &
             fphi, fapar, fbpar, .true.)
@@ -1210,7 +1201,7 @@ contains
     use run_parameters, only: woutunits, funits, fapar, fphi, fbpar
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
-    use dist_fn, only: flux, intcheck, vortcheck, fieldcheck, get_stress, write_f
+    use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
@@ -1250,7 +1241,7 @@ contains
     real :: phi2, apar2, bpar2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode
     real, dimension (ntheta0, naky, nspec) :: ntot2_by_mode, ntot20_by_mode
-    real :: anorm, dmix, dmix4, dmixx
+    real :: dmix, dmix4, dmixx
     real :: t, denom
     integer :: ig, ik, it, is, unit, il, i, j, nnx, nny, ifield
     complex :: phiavg, sourcefac
@@ -1274,6 +1265,7 @@ contains
     real, dimension (naky) :: fluxfac
 !    real, dimension (:), allocatable :: phi_by_k, apar_by_k, bpar_by_k
     real :: hflux_tot, zflux_tot, vflux_tot
+    real, dimension(nspec) :: tprim_tot, fprim_tot
     character(200) :: filename
     logical :: last = .false.
 
@@ -1378,94 +1370,93 @@ contains
             pbflux, qbheat, vbflux, &
        theta_pflux, theta_vflux, theta_qflux, &
        theta_pmflux, theta_vmflux, theta_qmflux, & 
-       theta_pbflux, theta_vbflux, theta_qbflux, anorm)
+       theta_pbflux, theta_vbflux, theta_qbflux)
 !       call flux (phinew, aparnew, bparnew, &
 !            pflux, qheat, qheat_par, qheat_perp, vflux, &
 !            pmflux, qmheat, qmheat_par, qmheat_perp, vmflux, &
-!            pbflux, qbheat, qbheat_par, qbheat_perp, vbflux, &
-!            anorm)
+!            pbflux, qbheat, qbheat_par, qbheat_perp, vbflux)
        if (proc0) then
           if (fphi > epsilon(0.0)) then
              do is = 1, nspec
-                qheat(:,:,is,1) = qheat(:,:,is,1)*anorm*funits &
+                qheat(:,:,is,1) = qheat(:,:,is,1)*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qheat(:,:,is,1), heat_fluxes(is))
                 
-                qheat(:,:,is,2) = qheat(:,:,is,2)*anorm*funits &
+                qheat(:,:,is,2) = qheat(:,:,is,2)*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qheat(:,:,is,2), heat_par(is))
 
-                qheat(:,:,is,3) = qheat(:,:,is,3)*anorm*funits &
+                qheat(:,:,is,3) = qheat(:,:,is,3)*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qheat(:,:,is,3), heat_perp(is))
                 
-                theta_qflux(:,is,1) = theta_qflux(:,is,1)*anorm*funits &
+                theta_qflux(:,is,1) = theta_qflux(:,is,1)*funits &
                      *spec(is)%dens*spec(is)%temp
-                theta_qflux(:,is,2) = theta_qflux(:,is,2)*anorm*funits &
+                theta_qflux(:,is,2) = theta_qflux(:,is,2)*funits &
                      *spec(is)%dens*spec(is)%temp
-                theta_qflux(:,is,3) = theta_qflux(:,is,3)*anorm*funits &
+                theta_qflux(:,is,3) = theta_qflux(:,is,3)*funits &
                      *spec(is)%dens*spec(is)%temp
 
-                pflux(:,:,is) = pflux(:,:,is)*anorm*funits &
+                pflux(:,:,is) = pflux(:,:,is)*funits &
                      *spec(is)%dens
                 call get_volume_average (pflux(:,:,is), part_fluxes(is))
 
-                theta_pflux(:,is) = theta_pflux(:,is)*anorm*funits &
+                theta_pflux(:,is) = theta_pflux(:,is)*funits &
                      *spec(is)%dens
                 
-                vflux(:,:,is) = vflux(:,:,is)*anorm*funits &
+                vflux(:,:,is) = vflux(:,:,is)*funits &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vflux(:,:,is), mom_fluxes(is))
 
-                theta_vflux(:,is) = theta_vflux(:,is)*anorm*funits &
+                theta_vflux(:,is) = theta_vflux(:,is)*funits &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
 
              end do
           end if
           if (fapar > epsilon(0.0)) then
              do is = 1, nspec
-                qmheat(:,:,is,1)=qmheat(:,:,is,1)*anorm*funits &
+                qmheat(:,:,is,1)=qmheat(:,:,is,1)*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qmheat(:,:,is,1), mheat_fluxes(is))
 
                 call get_surf_average (qmheat(:,:,is,1), x_qmflux(:,is))
 
-                qmheat(:,:,is,2)=qmheat(:,:,is,2)*anorm*funits &
+                qmheat(:,:,is,2)=qmheat(:,:,is,2)*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qmheat(:,:,is,2), mheat_par(is))
 
-                qmheat(:,:,is,3)=qmheat(:,:,is,3)*anorm*funits &
+                qmheat(:,:,is,3)=qmheat(:,:,is,3)*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qmheat(:,:,is,3), mheat_perp(is))
                 
-                pmflux(:,:,is)=pmflux(:,:,is)*anorm*funits &
+                pmflux(:,:,is)=pmflux(:,:,is)*funits &
                      *spec(is)%dens
                 call get_volume_average (pmflux(:,:,is), mpart_fluxes(is))
 
-                vmflux(:,:,is)=vmflux(:,:,is)*anorm*funits &
+                vmflux(:,:,is)=vmflux(:,:,is)*funits &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vmflux(:,:,is), mmom_fluxes(is))
              end do
           end if
           if (fbpar > epsilon(0.0)) then
              do is = 1, nspec
-                qbheat(:,:,is,1)=qbheat(:,:,is,1)*anorm*funits &
+                qbheat(:,:,is,1)=qbheat(:,:,is,1)*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qbheat(:,:,is,1), bheat_fluxes(is))
 
-                qbheat(:,:,is,2)=qbheat(:,:,is,2)*anorm*funits &
+                qbheat(:,:,is,2)=qbheat(:,:,is,2)*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qbheat(:,:,is,2), bheat_par(is))
 
-                qbheat(:,:,is,3)=qbheat(:,:,is,3)*anorm*funits &
+                qbheat(:,:,is,3)=qbheat(:,:,is,3)*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qbheat(:,:,is,3), bheat_perp(is))
                 
-                pbflux(:,:,is)=pbflux(:,:,is)*anorm*funits &
+                pbflux(:,:,is)=pbflux(:,:,is)*funits &
                      *spec(is)%dens
                 call get_volume_average (pbflux(:,:,is), bpart_fluxes(is))
 
-                vbflux(:,:,is)=vbflux(:,:,is)*anorm*funits &
+                vbflux(:,:,is)=vbflux(:,:,is)*funits &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vbflux(:,:,is), bmom_fluxes(is))
              end do
@@ -1638,7 +1629,6 @@ contains
 
     end if 
 
-    if (write_intcheck) call intcheck
     if (write_vortcheck) call vortcheck (phinew, bparnew)
     if (write_fieldcheck) call fieldcheck (phinew, aparnew, bparnew)
 
@@ -1649,10 +1639,6 @@ contains
     call prof_entering ("loop_diagnostics-2")
 
     call kperp (ntg_out, akperp)
-
-    if (write_neoclassical_flux .or. dump_neoclassical_flux) then
-       call neoclassical_flux (pfluxneo, qfluxneo)
-    end if
 
     if (proc0 .and. write_any) then
        if (write_ascii) write (unit=out_unit, fmt=*) 'time=', t
@@ -1797,11 +1783,11 @@ contains
              call nc_qflux (nout, qheat(:,:,:,1), qmheat(:,:,:,1), qbheat(:,:,:,1), &
                   heat_par, mheat_par, bheat_par, &
                   heat_perp, mheat_perp, bheat_perp, &
-                  heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot, anorm)
+                  heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
 !          call nc_qflux (nout, qheat, qmheat, qbheat, &
 !               heat_par, mheat_par, bheat_par, &
 !               heat_perp, mheat_perp, bheat_perp, &
-!               heat_fluxes, mheat_fluxes, bheat_fluxes, hflux_tot, anorm)
+!               heat_fluxes, mheat_fluxes, bheat_fluxes, hflux_tot)
              call nc_vflux (nout, vflux, vmflux, vbflux, &
                   mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot)
              call nc_pflux (nout, pflux, pmflux, pbflux, &
@@ -1868,15 +1854,6 @@ contains
 !                write (out_unit, *) '<phi>=',phiavg
 !             end if
 
-!             if (write_neoclassical_flux) then
-!                write (out_unit, *) 'pfluxneo=', pfluxneo(it,ik,:)
-!                write (out_unit, *) 'qfluxneo=', qfluxneo(it,ik,:)
-!                write (out_unit, *) 'pfluxneo/sourcefac=', &
-!                     pfluxneo(it,ik,:)/sourcefac
-!                write (out_unit, *) 'qfluxneo/sourcefac=', &
-!                     qfluxneo(it,ik,:)/sourcefac
-!             end if
-
              if (write_nl_flux) then
                 if (write_ascii) then
                    write (out_unit,"('ik,it,aky,akx,<phi**2>,t: ', &
@@ -1941,12 +1918,28 @@ contains
                   ntot20(is), ntot20_by_mode(:,:,is))
           end do
 
+!          write (out_unit, "('t,u0 ',2(1x,e12.6))") t, aimag(upar00 (1,1))
+
           call nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, &
                ntot20_by_mode, phi00, ntot00, density00, upar00, &
                tpar00, tperp00)
 
        end if
     end if
+
+    if (write_neoclassical_flux .or. dump_neoclassical_flux) call neoclassical_flux (pfluxneo, qfluxneo)
+
+    if (write_neoclassical_flux .and. proc0) then
+       do is=1,nspec
+          tprim_tot(is) = spec(is)%tprim-0.333*aimag(tpar00(1,is))-0.6667*aimag(tperp00(1,is))
+          fprim_tot(is) = spec(is)%fprim-aimag(density00(1,is))
+          write (out_unit, "('t= ',e12.6,' is= ',i2,' pfluxneo= ',e12.6,' nprim_tot= ',e12.6,' tprim_tot= ',e12.6)") &
+               t, is, real(pfluxneo(1,1,is)), fprim_tot(is), tprim_tot(is)
+          write (out_unit, "('t= ',e12.6,' is= ',i2,' qfluxneo= ',e12.6,' tprim_tot= ',3(1x,e12.6))") &
+               t, is, real(qfluxneo(1,1,is)), tprim_tot(is), -0.333*aimag(tpar00(1,is)), -0.6667*aimag(tperp00(1,is))
+       end do
+    end if
+
 
     if (proc0 .and. dump_any) then
 !

@@ -3,7 +3,7 @@ module dist_fn
   use redistribute, only: redist_type
   implicit none
   public :: init_dist_fn
-  public :: timeadv, get_stress
+  public :: timeadv, get_stress, exb_shear
   public :: getfieldeq, getan, getfieldexp, getmoms
   public :: flux, neoclassical_flux, lambda_flux
   public :: ginit, get_epar, e_flux, get_heat
@@ -27,7 +27,7 @@ module dist_fn
   real :: t0, omega0, gamma0, thetas, k0, source0
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
-  real :: D_kill, noise, cfac, wfb
+  real :: D_kill, noise, cfac, wfb, g_exb
 
   integer :: adiabatic_option_switch!, heating_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -132,7 +132,6 @@ contains
     use collisions, only: init_collisions
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
     use nonlinear_terms, only: init_nonlinear_terms
-    use additional_linear_terms, only: init_additional_linear_terms
     use init_g, only: init_init_g
     use hyper, only: init_hyper
     implicit none
@@ -165,7 +164,6 @@ contains
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
     call init_init_g 
     call init_nonlinear_terms 
-    call init_additional_linear_terms
     call allocate_arrays
     call init_vpar
     call init_wdrift
@@ -232,7 +230,7 @@ contains
          nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, flr, cfac, &
-         kill_grid, h_kill
+         kill_grid, h_kill, g_exb
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
            thetas, k0, phi_ext, source_option, a_ext, aky_star, akx_star
@@ -269,6 +267,7 @@ contains
        a_ext = 0.0
        afilter = 0.0
        kfilter = 0.0
+       g_exb = 0.0
        h_kill = .true.
        D_kill = -10.0
        noise = -1.
@@ -332,6 +331,7 @@ contains
     call broadcast (a_ext)
     call broadcast (D_kill)
     call broadcast (h_kill)
+    call broadcast (g_exb)
     call broadcast (noise)
     call broadcast (afilter)
     call broadcast (kfilter)
@@ -1719,7 +1719,6 @@ contains
     use theta_grid, only: ntgrid
     use collisions, only: solfp1
     use dist_fn_arrays, only: gnew, g, gold
-    use additional_linear_terms, only: add_additional_linear_terms
     use nonlinear_terms, only: add_nonlinear_terms
     use hyper, only: hyper_diff
     implicit none
@@ -1739,8 +1738,6 @@ contains
        call hyper_diff (gnew, g0, phinew, bparnew)
        call kill (gnew, g0, phinew, bparnew)
        call solfp1 (gnew, g0, phinew, aparnew, bparnew)
-       call add_additional_linear_terms &
-            (gnew, g0, phi, apar, bpar, phinew, aparnew, bparnew)
        
        if (def_parity) then
           if (even) then
@@ -1755,6 +1752,256 @@ contains
     end if
 
   end subroutine timeadv
+
+  subroutine exb_shear (g0, phi, apar, bpar)
+
+    use gs2_layouts, only: ik_idx, it_idx, g_lo, is_kx_local, idx_local, idx
+    use file_utils, only: error_unit
+    use theta_grid, only: ntgrid
+    use kt_grids, only: akx, aky, naky, ikx, ntheta0, box
+    use le_grids, only: negrid, nlambda
+    use species, only: nspec
+    use run_parameters, only: fphi, fapar, fbpar
+    use dist_fn_arrays, only: kx_shift
+    use gs2_time, only: code_dt
+
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
+    integer, dimension(:), allocatable, save :: jump, ikx_indexed
+    integer, dimension(1), save :: itmin
+    integer :: ik, it, ie, is, il, ig, isgn, to_iglo, from_iglo, ierr
+    real :: dkx, gdt
+    logical :: exb_first = .true.
+    logical :: kx_local
+
+! If not in box configuration, return
+    if (.not. box) then
+       ierr = error_unit()
+       g_exb = 0.
+       write (ierr, fmt="('g_ExB set to zero unless box configuration is used.')")
+       return
+    end if
+
+! If kx data is not local, no ExB shear will be included.
+
+    call is_kx_local (negrid, nspec, nlambda, naky, ntheta0, kx_local)
+    if (.not. kx_local) then
+       ierr = error_unit()
+       g_exb = 0.
+       write (ierr, fmt="('Non-zero g_ExB not implemented for this layout.  g_ExB set to zero.')")
+       return
+    end if
+
+! Initialize kx_shift, jump, idx_indexed
+
+    if (exb_first) then
+       exb_first = .false.
+       allocate (kx_shift(naky), jump(naky))
+       kx_shift = 0.
+       jump = 0
+
+       allocate (ikx_indexed(ntheta0))
+       itmin = minloc (ikx)
+
+       do it=itmin(1), ntheta0
+          ikx_indexed (it+1-itmin(1)) = it
+       end do
+
+       do it=1,itmin(1)-1
+          ikx_indexed (ntheta0 - itmin(1) + 1 + it)= it
+       end do
+    end if
+
+    dkx = akx(2)
+    
+! BD: To do: Put the right timestep in here.
+!
+! For now, approximate Greg's dt == 1/2 (t_(n+1) - t_(n-1))
+! with code_dt.  
+!
+! Note: at first time step, there is a difference of a factor of 2.
+!
+
+    gdt = code_dt
+
+! kx_shift is a function of time.   Update it here:
+
+    do ik=1, naky
+       kx_shift(ik) = kx_shift(ik) - aky(ik)*g_exb*gdt
+       jump(ik) = nint(kx_shift(ik)/dkx)
+       kx_shift(ik) = kx_shift(ik) - jump(ik)*dkx
+    end do
+
+! BD: To do: Should save kx_shift array in restart file
+
+    do ik = naky, 2, -1
+       if (jump(ik) == 0) exit
+
+       if (jump(ik) < 0) then
+
+          if (fphi > epsilon(0.0)) then
+             do it = 1, ntheta0 + jump(ik)
+                do ig=-ntgrid,ntgrid
+                   phi (ig,ikx_indexed(it),ik) = phi (ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+             do it = ntheta0 + jump(ik) + 1, ntheta0
+                do ig=-ntgrid,ntgrid
+                   phi (ig,ikx_indexed(it),ik) = 0.
+                end do
+             end do
+          end if
+
+          if (fapar > epsilon(0.0)) then
+             do it = 1, ntheta0 + jump(ik)
+                do ig=-ntgrid,ntgrid
+                   apar(ig,ikx_indexed(it),ik) = apar(ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+             do it = ntheta0 + jump(ik) + 1, ntheta0
+                do ig=-ntgrid,ntgrid
+                   apar (ig,ikx_indexed(it),ik) = 0.
+                end do
+             end do
+          end if
+
+          if (fbpar > epsilon(0.0)) then
+             do it = 1, ntheta0 + jump(ik)
+                do ig=-ntgrid,ntgrid
+                   bpar(ig,ikx_indexed(it),ik) = bpar(ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+             do it = ntheta0 + jump(ik) + 1, ntheta0
+                do ig=-ntgrid,ntgrid
+                   bpar (ig,ikx_indexed(it),ik) = 0.
+                end do
+             end do
+          end if
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! For some data layouts, there is no communication required.  Try such a case first.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+          if (kx_local) then
+             do is=1,nspec
+                do ie=1,negrid
+                   do il=1,nlambda
+                      do it = 1, ntheta0 + jump(ik)
+                         
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+                         from_iglo = idx(g_lo, ik, ikx_indexed(it-jump(ik)), il, ie, is)
+                         
+                         if (idx_local (g_lo, to_iglo)) then
+                            do isgn=1,2
+                               do ig=-ntgrid,ntgrid
+                                  g0(ig,isgn,to_iglo) = g0(ig,isgn,from_iglo)
+                               end do
+                            end do
+                         end if
+                      end do
+
+                      do it = ntheta0 + jump(ik) + 1, ntheta0
+                         
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+                         
+                         if (idx_local (g_lo, to_iglo)) then
+                            do isgn=1,2
+                               do ig=-ntgrid,ntgrid
+                                  g0(ig,isgn,to_iglo) = 0.
+                               end do
+                            end do
+                         end if
+                      end do
+                   end do
+                end do
+             end do
+          end if
+
+       else  ! case for jump(ik) > 0
+
+          if (fphi > epsilon(0.0)) then
+             do it = ntheta0, 1+jump(ik), -1
+                do ig=-ntgrid,ntgrid
+                   phi (ig,ikx_indexed(it),ik) = phi (ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+             do it = jump(ik), 1, -1
+                do ig=-ntgrid,ntgrid
+                   phi (ig,ikx_indexed(it),ik) = 0.
+                end do
+             end do
+          end if
+
+          if (fapar > epsilon(0.0)) then
+             do it = ntheta0, 1+jump(ik), -1
+                do ig=-ntgrid,ntgrid
+                   apar(ig,ikx_indexed(it),ik) = apar(ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+             do it = jump(ik), 1, -1
+                do ig=-ntgrid,ntgrid
+                   apar(ig,ikx_indexed(it),ik) = 0.
+                end do
+             end do
+          end if
+
+          if (fbpar > epsilon(0.0)) then
+             do it = ntheta0, 1+jump(ik), -1
+                do ig=-ntgrid,ntgrid
+                   bpar(ig,ikx_indexed(it),ik) = bpar(ig,ikx_indexed(it-jump(ik)),ik)
+                end do
+             end do
+             do it = jump(ik), 1, -1
+                do ig=-ntgrid,ntgrid
+                   bpar(ig,ikx_indexed(it),ik) = 0.
+                end do
+             end do
+          end if
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! For some data layouts, there is no communication required.  Try such a case first.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+          if (kx_local) then
+             do is=1,nspec
+                do ie=1,negrid
+                   do il=1,nlambda
+                      do it = ntheta0, 1+jump(ik), -1
+
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+                         from_iglo = idx(g_lo, ik, ikx_indexed(it-jump(ik)), il, ie, is)
+
+                         if (idx_local (g_lo, to_iglo)) then
+                            do isgn=1,2
+                               do ig=-ntgrid,ntgrid
+                                  g0(ig,isgn,to_iglo) = g0(ig,isgn,from_iglo)
+                               end do
+                            end do
+                         end if
+                      end do
+
+                      do it = jump(ik), 1, -1
+
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+
+                         if (idx_local (g_lo, to_iglo)) then
+                            do isgn=1,2
+                               do ig=-ntgrid,ntgrid
+                                  g0(ig,isgn,to_iglo) = 0.
+                               end do
+                            end do
+                         end if
+                      end do
+                   end do
+                end do
+             end do
+          end if
+
+       end if
+
+    end do
+       
+  end subroutine exb_shear
 
   subroutine kill (g0, g1, phi, bpar)
     
@@ -3793,7 +4040,7 @@ contains
     use run_parameters, only: fphi, fapar, fbpar, tunits, beta, tnorm, tite
     use gs2_time, only: code_dt
     use nonlinear_terms, only: nonlin
-    use antenna, only: antenna_apar
+    use antenna, only: antenna_apar, a_ext_data
     use hyper, only: D_v, D_eta, nexp
     implicit none
     type (heating_diagnostics) :: h
@@ -3801,11 +4048,11 @@ contains
 !    complex, dimension (-ntgrid:,:,:), pointer :: hh, hnew
     complex, dimension (-ntgrid:,:,:) :: phi, apar, bpar, phinew, aparnew, bparnew
     complex, dimension(:,:,:,:), allocatable :: tot
-    complex, dimension(:,:,:), allocatable :: epar, bpardot, apardot, phidot, j_ext
+    complex, dimension(:,:,:), allocatable :: epar, bpardot, apardot, phidot, j_ext, a_ext_old, a_ext_new
     complex :: fac, hfac, pfac, jpold, afac, chi, havg, gavg
     complex :: bfac                                   !B_|| intermediate calculation
     complex :: chidot, eparavg, j0phidot, j0phiavg, j1bparavg, j0aparavg
-    complex :: phi_m, apar_m, bpar_m, pstar, pstardot, gdot, hdot, hold
+    complex :: phi_m, apar_m, bpar_m, pstar, pstardot, gdot, hdot, hold, adot
     complex :: phi_avg, apar_avg, bpar_avg, bperp_m, bperp_avg
     complex :: de, denew, chinew,chi1,chi2, havg2,havg2new,h2dot
     real, dimension (:), allocatable :: wgt
@@ -3814,9 +4061,9 @@ contains
 
     g0(ntgrid,:,:) = 0.
 
-!GGH ==========================================================================
-!GGH Ion/Electron heating------------------------------------------------------
-!GGH ==========================================================================
+! ==========================================================================
+! Ion/Electron heating------------------------------------------------------
+! ==========================================================================
 
     allocate ( phidot(-ntgrid:ntgrid, ntheta0, naky))
     allocate (apardot(-ntgrid:ntgrid, ntheta0, naky))
@@ -3889,17 +4136,73 @@ contains
                 if (nonlin .and. it == 1 .and. ik == 1) cycle
                 do ig = -ntgrid, ntgrid-1
                     hk(it,ik) % heating(is) = hk(it,ik) % heating(is) &
-                        + real(tot(ig,it,ik,is))*wgt(ig)*fac2*spec(is)%dens
+                        + real(tot(ig,it,ik,is))*wgt(ig)*fac2 
                 end do
                 h % heating(is) = h % heating(is) + hk(it,ik) % heating(is)
              end do
           end do
        end do
-!GGH ==========================================================================
-!GGH Antenna Power and B-field contribution to E and E_dot---------------------
-!GGH ==========================================================================
-! now calculate antenna power, and d/dt (energy), energy, hyper-damping 
+    end if
 
+! ==========================================================================
+! Antenna contribution to entropy equations for each species
+! ==========================================================================
+
+    allocate (a_ext_old(-ntgrid:ntgrid, ntheta0, naky))
+    allocate (a_ext_new(-ntgrid:ntgrid, ntheta0, naky))
+
+    call a_ext_data (a_ext_old, a_ext_new)
+
+    do iglo=g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo, iglo)
+       it = it_idx(g_lo, iglo)
+       ik = ik_idx(g_lo, iglo)
+       if (nonlin .and. it == 1 .and. ik == 1) cycle
+       dtinv = 1./(code_dt*tunits(ik))
+       do isgn=1,2
+          do ig=-ntgrid, ntgrid-1
+             
+             adot = fdot (a_ext_old(ig  ,it,ik), &
+                          a_ext_old(ig+1,it,ik), &
+                          a_ext_new(ig  ,it,ik), &
+                          a_ext_new(ig+1,it,ik), dtinv)
+             
+             havg = favg (g   (ig  ,isgn,iglo)*aj0(ig  ,iglo)*vpa(ig  ,isgn,iglo), &
+                          g   (ig+1,isgn,iglo)*aj0(ig+1,iglo)*vpa(ig+1,isgn,iglo), &
+                          gnew(ig  ,isgn,iglo)*aj0(ig  ,iglo)*vpa(ig  ,isgn,iglo), &
+                          gnew(ig+1,isgn,iglo)*aj0(ig+1,iglo)*vpa(ig+1,isgn,iglo))
+             
+             g0(ig,isgn,iglo) = conjg(havg) * spec(is)%z * spec(is)%stm * spec(is)%dens * adot
+
+          end do
+       end do
+    end do
+
+    deallocate (a_ext_old, a_ext_new)
+
+    call integrate_moment (g0, tot)
+
+    if (proc0) then
+       do is = 1, nspec
+          do ik = 1, naky
+             fac2 = 0.5
+             if (aky(ik) < epsilon(0.0)) fac2 = 1.0
+             do it = 1, ntheta0
+                if (nonlin .and. it == 1 .and. ik == 1) cycle
+                do ig = -ntgrid, ntgrid-1
+                    hk(it,ik) % S_ext(is) = hk(it,ik) % S_ext(is) &
+                        + real(tot(ig,it,ik,is))*wgt(ig)*fac2
+                end do
+                h % S_ext(is) = h % S_ext(is) + hk(it,ik) % S_ext(is)
+             end do
+          end do
+       end do
+    end if
+
+! ==========================================================================
+! Antenna Power and B-field contribution to E and E_dot---------------------
+! ==========================================================================
+    if (proc0) then
 !       allocate (epar (-ntgrid:ntgrid, ntheta0, naky)) ; epar = 0.
        allocate (j_ext(-ntgrid:ntgrid, ntheta0, naky)) ; j_ext = 0.
        call antenna_apar (kperp2, j_ext)       
@@ -3956,10 +4259,6 @@ contains
                         real(0.25 * conjg(bperp_m)*bperp_avg + conjg(bpar_m)*bpar_avg) &
                         * wgt(ig)*fac2*(2.0/beta)
 
-!                   hk(it,ik) % energy_dot = hk(it,ik) % energy_dot + real(( &
-!                       0.25*( conjg(bperp_m)*bperp_avg +bperp_m*conjg(bperp_avg )) &
-!                       + conjg(bpar_m)*bpar_avg + bpar_m*conjg(bpar_avg)) * wgt(ig)*fac2/beta)
-
 ! B**2/2
 !! GGH: Bug fixed on 2/06; error was in relative weight of B_par**2 and B_perp**2   
                    hk(it,ik) % energy = hk(it,ik) % energy &
@@ -3993,10 +4292,12 @@ contains
        deallocate (j_ext)
     end if
 
-!GGH ==========================================================================
-!GGH Finish E_dot--------------------------------------------------------------
-!GGH ==========================================================================
-    !Correct for single species runs (include response of Boltzmann species)
+! ==========================================================================
+! Finish E_dot--------------------------------------------------------------
+! ==========================================================================
+
+!GGH Include response of Boltzmann species for single-species runs
+
     if (.not. has_electron_species(spec)) then
        if (proc0) then
           !NOTE: It is assumed here that n0i=n0e and zi=-ze
@@ -4105,10 +4406,9 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-!GGH ==========================================================================
-!GGH Gradient Contributions to Heating-----------------------------------------
-!GGH ==========================================================================
-! Calculate gradient contributions:
+! ==========================================================================
+! Gradient Contributions to Heating-----------------------------------------
+! ==========================================================================
 
     do iglo=g_lo%llim_proc, g_lo%ulim_proc
        is = is_idx(g_lo, iglo)
@@ -4171,10 +4471,10 @@ contains
           end do
        end do
     end if
-!GGH ==========================================================================
-!GGH Hyperviscosity------------------------------------------------------------
-!GGH ==========================================================================
-! Now get hyperviscous damping contributions to energy
+! ==========================================================================
+! Hyperviscosity------------------------------------------------------------
+! ==========================================================================
+
     if (D_v > epsilon(0.)) then
 
        do iglo=g_lo%llim_proc, g_lo%ulim_proc
@@ -4234,7 +4534,7 @@ contains
 ! ==========================================================================
 ! Hyperresistivity------------------------------------------------------------
 ! ==========================================================================
-! Now get hyperresistive damping contributions to energy
+ 
     if (D_eta > epsilon(0.)) then
 
        do iglo=g_lo%llim_proc, g_lo%ulim_proc
@@ -4285,59 +4585,11 @@ contains
 
     end if !End Hyperresistivity Heating Calculation
 
-!=============OLD VERSION==================================================
-    !GGH NOTE: Commented out 06 APR 10 to use g_s based hyperviscosity above
-    if (.false.) then
-    if (D_v > epsilon(0.)) then
+!==========================================================================
+!Finish Energy-------------------------------------------------------------
+!==========================================================================
 
-       do iglo=g_lo%llim_proc, g_lo%ulim_proc
-          is = is_idx(g_lo, iglo)
-          it = it_idx(g_lo, iglo)
-          ik = ik_idx(g_lo, iglo)
-          if (nonlin .and. it == 1 .and. ik == 1) cycle
-          akperp4 = (aky(ik)**2 + akx(it)**2)**2
-          do isgn=1,2
-             do ig=-ntgrid, ntgrid-1
-                
-                havg = favg (g   (ig  ,isgn,iglo), &
-                             g   (ig+1,isgn,iglo), &
-                             gnew(ig  ,isgn,iglo), &
-                             gnew(ig+1,isgn,iglo)) 
-! What is tnorm doing here?  
-!                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp* &
-!                     conjg(havg)*havg*D_v*akperp4/tnorm
-                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp* &
-                     D_v*akperp4*conjg(havg)*havg
-             end do
-          end do
-       end do
-
-       call integrate_moment (g0, tot)
-       
-       if (proc0) then
-          do ik = 1, naky
-             fac2 = 0.5
-             if (aky(ik) < epsilon(0.0)) fac2 = 1.0
-             do it = 1, ntheta0
-                if (nonlin .and. it == 1 .and. ik == 1) cycle
-                do is = 1, nspec
-                   do ig = -ntgrid, ntgrid-1
-                      hk(it,ik) % hypervisc(is) = hk(it,ik) % hypervisc(is) &
-                           + real(tot(ig,it,ik,is))*wgt(ig)*fac2
-!                      hk(it,ik) % hypervisc(is) = hk(it,ik) % hypervisc(is) &
-!                           + real(tot(ig,it,ik,is))*wgt(ig)*fac2/tnorm
-                   end do
-                   h % hypervisc(is) = h % hypervisc(is) + hk(it,ik) % hypervisc(is)
-                end do
-             end do
-          end do
-       end if
-    end if      
-    endif!GGH NOTE: Commented out 06 APR 10 to use g_s based hyperviscosity above
-!GGH ==========================================================================
-!GGH Finish Energy-------------------------------------------------------------
-!GGH ==========================================================================
-    !Calculate hs2-------------------------------------------------------------
+!GGH Calculate hs2-------------------------------------------------------------
     do iglo=g_lo%llim_proc, g_lo%ulim_proc
        is = is_idx(g_lo, iglo)
        it = it_idx(g_lo, iglo)
@@ -4404,8 +4656,9 @@ contains
        end do
     endif
 
-!Calculate delfs2 (rest of energy)-----------------------------------------------
-!Correct for single species runs (include response of Boltzmann species)
+! Calculate delfs2 (rest of energy)-----------------------------------------------
+
+!GGH  Include response of Boltzmann species for single species runs
     if (.not. has_electron_species(spec)) then
        if (proc0) then
           !NOTE: It is assumed here that n0i=n0e and zi=-ze
@@ -4435,7 +4688,8 @@ contains
              end do
           end do
        endif
-    endif !END Correction to E_dot for single species runs---------------------
+    endif !END Correction to energy for single species runs---------------------
+
     do iglo=g_lo%llim_proc, g_lo%ulim_proc
        is = is_idx(g_lo, iglo)
        it = it_idx(g_lo, iglo)
@@ -4503,7 +4757,7 @@ contains
 
   end subroutine get_heat
 !==============================================================================
-!==============================================================================
+
   subroutine get_stress (rstress, ustress)
 
     use mp, only: proc0
@@ -4914,6 +5168,7 @@ contains
 
   end subroutine boundary
 
+! This subroutine only returns epar correctly for linear runs.
   subroutine get_epar (phi, apar, phinew, aparnew, epar)
 
     use theta_grid, only: ntgrid, delthet, gradpar
