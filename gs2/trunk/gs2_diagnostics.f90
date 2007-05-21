@@ -1707,17 +1707,17 @@ contains
        do ifield = 1, 3+nspec*3
           eavgarray(:,ifield)=0.
 
-          if (ifield == 2 .and. fapar > epsilon(0.0)) then
-             continue
-          else
-             cycle
-          end if
+!          if (ifield == 2 .and. fapar > epsilon(0.0)) then
+!             continue
+!          else
+!             cycle
+!          end if
 
-          if (ifield == 3 .and. fbpar > epsilon(0.0)) then
-             continue
-          else
-             cycle
-          end if
+!          if (ifield == 3 .and. fbpar > epsilon(0.0)) then
+!             continue
+!          else
+!             cycle
+!          end if
 
          do i = 1,nbx
              j=polar_avg_index(i)
