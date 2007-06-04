@@ -2193,7 +2193,7 @@ contains
     use run_parameters, only: funits
     use nonlinear_terms, only: nonlin
     use dist_fn_arrays, only: c_rate
-    use gs2_heating, only: heating_diagnostics, avg_h, avg_hk, htimesx
+    use gs2_heating, only: heating_diagnostics, avg_h, avg_hk, htimesx, zero_htype
     implicit none
     integer, intent (in) :: istep
     type (heating_diagnostics) :: h
@@ -2203,6 +2203,10 @@ contains
     real :: fac
     integer :: is, ik, it, ig
     
+    !Zero out variables for heating diagnostics
+    call zero_htype(h)
+    call zero_htype(hk)
+
     if (proc0) then
        
        !GGH NOTE: Here wgt is 1/(2*ntgrid+1)
