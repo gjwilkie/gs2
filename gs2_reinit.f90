@@ -34,11 +34,18 @@ contains
     integer :: istep 
     integer, save :: istep_last = -1 ! allow adjustment on first time step
     integer :: istatus
+    integer, save :: nconsec=0
 
 ! save fields and distribution function
 
 ! calls on consecutive time steps is probably an error
     if (istep_last + 1 == istep) then
+       nconsec=nconsec+1
+    else
+       nconsec=0
+    endif
+
+    if (nconsec .gt. 4) then
        exit = .true.
        if (proc0) write(error_unit(), *) 'Time step changing rapidly.  Abort run.'
        return
