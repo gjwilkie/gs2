@@ -1676,8 +1676,7 @@ contains
              enddo
           enddo
           call get_polar_spectrum(etmp(:,:), ebinarray(:,iedelfs2 + (is-1)*3))
-       enddo
-       
+       enddo       
 !
 ! BD:
 ! --- must have write_hrate = T for Epolar to work b/c hk array is used
@@ -1703,10 +1702,10 @@ contains
        write (unit=polar_raw_unit, fmt='(a)') ''      
 
        !Compute log-averaged polar spectrum
-       
+       eavgarray(:,:)=0.
        do ifield = 1, 3+nspec*3
-          eavgarray(:,ifield)=0.
 
+!ERROR- Below is an attempt to be more efficient, but it is not right
 !          if (ifield == 2 .and. fapar > epsilon(0.0)) then
 !             continue
 !          else
@@ -1750,7 +1749,8 @@ contains
        end if
        write (unit=polar_avg_unit, fmt='(a)') ''      
 
-    end if 
+    end if !END Polar spectrum calculation----------------------------------
+
 
     if (write_vortcheck) call vortcheck (phinew, bparnew)
     if (write_fieldcheck) call fieldcheck (phinew, aparnew, bparnew)
