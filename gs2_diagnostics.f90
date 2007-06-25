@@ -511,7 +511,7 @@ contains
     use gs2_io, only: nc_final_moments, nc_finish
     use antenna, only: dump_ant_amp
     use splines, only: fitp_surf1, fitp_surf2
-    use gs2_dist_io, only: write_dist
+!    use gs2_dist_io, only: write_dist
     implicit none
     integer, intent (in) :: istep
     integer :: ig, ik, it, il, ie, is, unit, ierr
@@ -574,7 +574,7 @@ contains
     end if
 !<MAB
 
-    if (write_gg) call write_dist (g)
+!    if (write_gg) call write_dist (g)
 
     phi0 = 1.
 
@@ -2540,7 +2540,7 @@ contains
     anorm = sum(wgt)
 
     !Initialize ebin
-    write (*,*) size(ebin),' is size of ebin'
+!    write (*,*) size(ebin),' is size of ebin'
     ebin=0.
 
     !Loop through all modes and sum number at each kperp
@@ -2551,7 +2551,7 @@ contains
 
           if (nonlin .and. it == 1 .and. ik == 1) cycle
 
-          write (*,*) polar_index(it,ik),' should be < nbx?'
+!          write (*,*) polar_index(it,ik),' should be < nbx?'
           ebin(polar_index(it,ik))= ebin(polar_index(it,ik)) + &
                sum(real(a(-ng:ng,it,ik)*b(-ng:ng,it,ik)*wgt(-ng:ng)))/anorm*fac
        enddo

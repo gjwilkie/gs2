@@ -156,6 +156,22 @@ ifeq ($(CPU),Dawson)
   endif
 endif
 
+ifeq ($(CPU),LINUX_ifort)
+  FC = ifort
+  PLATFORM_LINKS = mrf
+  FLIBS = -L/usr/local/lib -lnetcdf -L/opt/intel/mkl/9.1/lib/32 -lvml
+  u_obj = $(UTILDIR)/spl.o $(UTILDIR)/mds.o $(UTILDIR)/mdslib.o
+  stubs = radstub.o vdimstub.o
+  ifeq ($(debug),on)
+    FFLAGS = -r8 -g -I/usr/local/include -check bounds -lowercase
+    F90FLAGS = -r8 -g -I/usr/local/include/netcdf -module $(UTILDIR) -check bounds -lowercase
+  else	
+    FFLAGS   = -parallel -r8 -w -xT -arch SSE -O3 -I $(UTILDIR) -lowercase -I/usr/local/include
+    F90FLAGS = -parallel -r8 -w -xT -arch SSE -O3 -I $(UTILDIR) -I/usr/local/include -lowercase
+  endif
+endif
+ 
+
 # DEC alpha options:
 ifeq ($(CPU),ALPHA)
   FC = f95
@@ -362,7 +378,7 @@ ball: ball.o geo.a $(u_obj) $(stubs)
 eiktest: et.o geo.a $(u_obj) $(stubs)
 	case $(PLATFORM_LINKS) in \
 		t3e) $(FC) -o eiktest et.o $(stubs) $(FLIBS) ;; \
-		*) $(FC) -o eiktest et.o $(stubs) $(geo_obj) $(u_obj) $(FLIBS) ;; \
+		*) $(FC) $(FFLAGS) -o eiktest et.o $(stubs) $(geo_obj) $(u_obj) $(FLIBS) ;; \
 	esac 
 
 ts : testsmoothf.o smoothf.o
