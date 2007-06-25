@@ -1324,8 +1324,7 @@ contains
                 do ij=1,ng2
                    if (ij /= ip) then
                       do im=1,ng2
-                         if (im /= ip .and. im /= ij) &
-                              d2lcoef(ig,il,ip) = d2lcoef(ig,il,ip) + 1./((slb(il)-slb(im))*(slb(il)-slb(ij)))
+                         if (im /= ip .and. im /= ij) d2lcoef(ig,il,ip) = d2lcoef(ig,il,ip) + 1./((slb(il)-slb(im))*(slb(il)-slb(ij)))
                       end do
                    end if
                 end do
@@ -1376,8 +1375,7 @@ contains
                    do ij=ng2+1,te
                       if (ij /= ip+ng2) then
                          do im=ng2+1,te
-                            if (im /= ip+ng2 .and. im /= ij) &
-                                 d2lcoef(ig,il,ip) = d2lcoef(ig,il,ip) + 1./((slb(il)-slb(im))*(slb(il)-slb(ij)))
+                            if (im /= ip+ng2 .and. im /= ij) d2lcoef(ig,il,ip) = d2lcoef(ig,il,ip) + 1./((slb(il)-slb(im))*(slb(il)-slb(ij)))
                          end do
                       end if
                    end do

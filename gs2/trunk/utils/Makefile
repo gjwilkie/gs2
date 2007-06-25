@@ -141,6 +141,23 @@ ifeq ($(CPU),Dawson)
   endif
 endif
 
+ifeq ($(CPU),LINUX_ifort)
+  FC = ifort
+  PLATFORM_LINKS = mrf
+  FLIBS = -L/usr/local/lib -lnetcdf
+  F90FLAGS = -r8 -lowercase -vec-report0
+ 
+  ifeq ($(debug),on)
+    FFLAGS   += -g -Mbounds
+    F90FLAGS += -g -check bounds
+  else
+    FFLAGS   += -w -xT -arch SSE -O3 -parallel 
+    F90FLAGS += -w -xT -arch SSE -O3 -parallel 
+  endif
+ 
+endif
+
+
 # DEC alpha options:
 ifeq ($(CPU),ALPHA)
   FC = f95
