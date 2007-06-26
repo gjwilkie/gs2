@@ -1827,6 +1827,8 @@ contains
     logical :: exb_first = .true.
     logical :: kx_local
 
+    if (abs(g_exb) < epsilon(0.0)) return
+
 ! If not in box configuration, return
     if (.not. box) then
        ierr = error_unit()

@@ -186,7 +186,7 @@ contains
     real :: pi, bi, Ltot, rinv
 
     real :: a_b, b_b, c_b
-    real :: s_hat, dp, di, pressure, tmp
+    real :: s_hat, dp, di, pressure, tmp, rbar
 
     character*1 :: char
     integer :: i, j, k, itot, nthg, n
@@ -326,10 +326,18 @@ contains
     endif
 
     if(writelots) then
+       rbar = 0.
        do i= -nth,nth         
           write(99,*) 'i=',i,' thet= ',theta(i),' rgrid= ',rgrid(i)
 !          write(99,*) theta(i),Rpos(rgrid(i),theta(i)),Zpos(rgrid(i),theta(i))
        enddo
+
+       do i=-nth,nth-1
+          rbar = rbar + rgrid(i) * (theta(i+1)-theta(i))
+       end do
+       rbar = rbar / (2.*pi)
+       write (*,*) 'r_bar = ',rbar
+       write (*,*)
     endif
 
     call drho_drp(rp, drhodrp)
