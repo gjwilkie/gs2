@@ -11,6 +11,7 @@ program eiktest
   real :: rt, rtm, rtp, rtpri
   real :: rd, rdm, rdp, rdpri
   real :: rhocm, rhocp
+  real :: bbar
 
   real :: diffscheme, beta_p1, beta_p2, beta_prime_times, beta_prime_over
   integer :: nbeta
@@ -144,6 +145,16 @@ program eiktest
 
   ntgrid = (size(theta)-1)/2
   ntheta = (size(theta)-1)/(2*nperiod-1)
+
+  if (writelots) then
+     bbar = 0.
+     do i=-ntgrid,ntgrid-1
+        bbar = bbar + bmag(i)*(theta(i+1)-theta(i))
+     end do
+     bbar = bbar/(2.*pi)
+
+     write(*,*) 'B_bar = ',bbar
+  end if
            
   write(21,*) ' ntgrid  nperiod  ntheta, drhodpsi, rmaj, shat, kxfac, q'
   write(21,*) ntgrid, nperiod, ntheta, drhodpsin, rmaj, shat, kxfac, qsf
