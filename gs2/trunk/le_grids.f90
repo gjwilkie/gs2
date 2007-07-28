@@ -79,16 +79,12 @@ module egrid
   implicit none
 
   public :: energy, xgrid, setegrid, init_egrid
-!> MAB
   public :: zeroes, x0
-!< MAB
 
   private
 
-!> MAB
   real :: x0
   real, dimension(:), allocatable, save :: zeroes
-!< MAB
 
   interface xgrid
      module procedure xgrid_s, xgrid_v
@@ -118,9 +114,7 @@ contains
     real, dimension(:), intent (out) :: epts, wgts
     integer :: ie, np
  
-!> MAB   
     real :: eps=1.e-15
-!< MAB    
 
     real :: x
 
@@ -338,20 +332,16 @@ module le_grids
   public :: negrid, nlambda, ng2, lmax, integrate_moment
   public :: geint2g, gint2g, orbit_avg, xloc
   public :: fcheck
-!> MAB
   public :: xx, nterp, testfac, new_trap_int, ecut
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
-  public :: eints_error, lints_error, traps_error, integrate_stest
-!< MAB
+  public :: eint_error, lint_error, trap_error, integrate_test
 
   private
 
-!> MAB
   real, dimension (:), allocatable :: xx ! (ng2)
   real, dimension (:,:), allocatable, save :: werr, wlerr, xloc ! mbmark
   real, dimension (:,:,:), allocatable, save :: wlterr
   real, dimension (:,:,:,:), allocatable, save :: lgrnge
-!< MAB
 
   real, dimension (:,:), allocatable :: e, w, anon, dele ! (negrid,nspec)
   real, dimension (:,:), allocatable :: orbit_avg
@@ -469,18 +459,14 @@ contains
        allocate (forbid(-ntgrid:ntgrid,nlambda))
        allocate (orbit_avg(ng2,negrid))
        allocate (xx(ng2))
-!> MAB
        allocate (lgrnge(-ntgrid:ntgrid,nlambda,tsize,2))
        allocate (xloc(-ntgrid:ntgrid,tsize))
-!< MAB
     end if
 
-!> MAB
     call init_egrid (negrid)
     call broadcast (xx)
     call broadcast (x0)
     call broadcast (zeroes)
-!< MAB
 
     call broadcast (al)
     call broadcast (delal)
@@ -501,7 +487,6 @@ contains
        call broadcast (forbid(:,il))
     end do
 
-!> MAB
     do ipt = 1, tsize
        call broadcast (xloc(:,ipt))
        do isgn=1,2
@@ -510,7 +495,6 @@ contains
           end do
        end do
     end do
-!< MAB
 
   end subroutine broadcast_results
 
@@ -652,7 +636,6 @@ contains
 
   end subroutine init_slow_integrals
 
-!> MAB
   subroutine init_weights
 
     use file_utils, only: open_output_file, close_output_file
@@ -851,8 +834,6 @@ contains
     end do
        
   end subroutine get_intrvl_weights
-
-!< MAB
 
   subroutine geint2g (geint, g)
     use theta_grid, only: ntgrid
@@ -1249,8 +1230,7 @@ contains
 
   end subroutine integrate_stress
 
-!> MAB
-  subroutine integrate_stest (g, weights, total, istep)
+  subroutine integrate_test (g, weights, total, istep)
     use egrid, only: x0, zeroes
     use theta_grid, only: ntgrid, bmag
     use species, only: nspec
@@ -1328,7 +1308,7 @@ contains
 
     deallocate(ypt)
 !    deallocate(xpt)
-  end subroutine integrate_stest
+  end subroutine integrate_test
 
   subroutine legendre_transform (g, tote, totl, istep)
     
@@ -1390,7 +1370,7 @@ contains
 
     if (nproc > 1) then
        allocate (worke((2*ntgrid+1)*naky*ntheta0*nspec*(negrid-1))) ; worke = 0.
-       allocate (workl((2*ntgrid+1)*naky*ntheta0*nspec*nlambda)) ; workl = 0.
+       allocate (workl((2*ntgrid+1)*naky*ntheta0*nspec*ng2)) ; workl = 0.
        i = 0 ; j = 0
        do is = 1, nspec
           do ik = 1, naky
@@ -1400,7 +1380,7 @@ contains
                       i = i + 1
                       worke(i) = tote(im, ig, it, ik, is)
                    end do
-                   do im = 0, nlambda-1
+                   do im = 0, ng2-1
                       j = j + 1
                       workl(j) = totl(im, ig, it, ik, is)
                    end do
@@ -1422,7 +1402,7 @@ contains
                          i = i + 1
                          tote(im, ig, it, ik, is) = worke(i)
                       end do
-                      do im = 0, nlambda-1
+                      do im = 0, ng2-1
                          j = j + 1
                          totl(im, ig, it, ik, is) = workl(j)
                       end do
@@ -1563,8 +1543,6 @@ contains
 
   end subroutine lagrange_interp
 
-!< MAB
-
   subroutine integrate_moment (g, total, all)
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
@@ -1646,7 +1624,7 @@ contains
 
   end subroutine integrate_moment
 
-  subroutine lints_error (g, weights, total)
+  subroutine lint_error (g, weights, total)
     use theta_grid, only: ntgrid, bmag, bmax
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -1730,9 +1708,9 @@ contains
        deallocate (work)
     end do
 
-  end subroutine lints_error
+  end subroutine lint_error
 
-  subroutine traps_error (g, weights, total)
+  subroutine trap_error (g, weights, total)
     use theta_grid, only: ntgrid, bmag, bmax
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -1824,9 +1802,9 @@ contains
        deallocate (work)
     end do
 
-  end subroutine traps_error
+  end subroutine trap_error
 
-  subroutine eints_error (g, weights, total)
+  subroutine eint_error (g, weights, total)
     use egrid, only: x0, zeroes
     use theta_grid, only: ntgrid
     use species, only: nspec
@@ -1907,9 +1885,7 @@ contains
     end do
 
 !    deallocate(xpt)
-  end subroutine eints_error
-
-!< MAB
+  end subroutine eint_error
 
   subroutine set_grids
     use species, only: init_species, nspec
@@ -2706,7 +2682,6 @@ contains
 ! note that xgauss and wgauss are transposed wrt original code
 
     real :: tiny = 1.e-15
-!> MAB
     real, dimension (2*ngauss) :: wx
     real, dimension (:), allocatable :: ytmp, yb, yberr, wb, wberrtmp
     real, dimension (:,:), allocatable :: wberr
@@ -2719,8 +2694,6 @@ contains
     integer :: ie, is
 
     allocate (xx(2*ngauss))
-
-!< MAB
 
     call nrgauleg(1., 0., xx, wx)!, tiny**1.5)
 
@@ -2741,7 +2714,6 @@ contains
 !    if (eps <= epsilon(0.0)) return
     if (.not. trapped_particles .or. eps <= epsilon(0.0)) return
 
-!> MAB
 ! pick integration method (new=high-order interp, old=finite difference)
     if (new_trap_int) then
 
@@ -2859,7 +2831,6 @@ contains
 
 ! old (finite-difference) integration scheme
     else
-!< MAB
        jend = ng2 + 1
        wlterr = 0.0
        do il = ng2+1, nlambda-1
@@ -2888,7 +2859,6 @@ contains
 
   end subroutine lgridset
 
-!> MAB
   subroutine lagrange_coefs (ig, nodes, lfac, xloc)
     
     use theta_grid, only: bmag, bmax
@@ -2932,7 +2902,6 @@ contains
     end do
 
   end subroutine lagrange_coefs
-!< MAB
 
   subroutine init_orbit_average
 
