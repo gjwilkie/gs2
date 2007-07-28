@@ -9,6 +9,7 @@ module run_parameters
   public :: code_delt_max, wunits, woutunits, tunits, funits, tnorm
   public :: nstep, wstar_units, eqzip, margin
   public :: secondary, tertiary, harris
+  public :: vnm_init
 
   private
 
@@ -16,6 +17,7 @@ module run_parameters
   real :: fphi, fapar, fbpar, faperp
   real :: delt, code_delt_max, user_delt_max, funits, tnorm, margin
   real, dimension (:), allocatable :: wunits, woutunits, tunits
+  real, dimension (2) :: vnm_init
   integer :: nstep
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
@@ -55,7 +57,7 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use mp, only: proc0, broadcast
-    use gs2_save, only: init_dt
+    use gs2_save, only: init_dt, init_vnm
     use text_options
     implicit none
     type (text_option), dimension (3), parameter :: deltopts = &
@@ -65,6 +67,7 @@ contains
     character(20) :: delt_option
     integer :: ierr, istatus, in_file
     real :: delt_saved
+    real, dimension (2) :: vnm_saved
 
     real :: teti  ! for back-compatibility
     logical :: exist
@@ -148,6 +151,9 @@ contains
 
     delt_saved = delt
     if (delt_option_switch == delt_option_auto) then
+       vnm_init = 1.0
+       call init_vnm (vnm_saved, istatus)
+       if (istatus == 0) vnm_init = vnm_saved
        call init_dt (delt_saved, istatus)
        if (istatus == 0) delt  = delt_saved
     endif
