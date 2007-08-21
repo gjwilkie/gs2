@@ -26,7 +26,7 @@ program eiktest
        s_hat_input,p_prime_input,invLp_input,beta_prime_input, &
        diffscheme,nbeta,beta_p1,beta_p2,alpha_input,big, &
        beta_prime_times, beta_prime_over, fast, profile_fac, &
-       tstar, shotnum, mds, gs2d_eq, transp_eq
+       tstar, shotnum, mds, gs2d_eq, transp_eq, Xanthopoulos
 
   pi=2.*acos(0.)
      
@@ -40,6 +40,7 @@ program eiktest
   gs2d_eq = .false.
   transp_eq = .false.
   vmom_eq = .false.
+  Xanthopoulos = .false.
 
   dipole = .false.
   mds = .false.

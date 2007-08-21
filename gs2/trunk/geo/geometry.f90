@@ -8,11 +8,16 @@ module geometry
 
   real, allocatable, dimension(:) :: grho, theta, bmag, gradpar, &
        cvdrift, cvdrift0, gbdrift, gbdrift0, gds2, gds21, gds22, jacob, &
-       Rplot, Zplot, Rprime, Zprime, aplot, aprime
+       Rplot, Zplot, Rprime, Zprime, aplot, aprime, Uk1, Uk2
   
+  real, allocatable, dimension(:) :: J_X, B_X, g11_X, g12_X, g22_X, &
+       K1_X, K2_X, gradpar_X
+
+  real :: Rref_X, Bref_X
+
   real :: rhoc, rmaj, r_geo, shift, dbetadrho, kxfac
   real :: qinp, shat, akappa, akappri, tri, tripri, dpressdrho
-  real :: delrho, rmin, rmax, qsf
+  real :: delrho, rmin, rmax, qsf  
   
   real :: s_hat_input, p_prime_input, invLp_input, beta_prime_input, &
        alpha_input, dp_mult
@@ -35,7 +40,7 @@ module geometry
   
   logical :: gen_eq, vmom_eq, efit_eq, ppl_eq, local_eq
   logical :: in_nt, writelots, equal_arc, dfit_eq, mds, idfit_eq, gs2d_eq
-  logical :: transp_eq
+  logical :: transp_eq, Xanthopoulos
   
   
   integer :: bishop
@@ -777,6 +782,29 @@ contains
 
     call dealloc_local_arrays
 
+! Generate metric tensor elements to compare with Xanthopoulos and Jenko    
+! Need to change normalization to match XJ
+
+!    if (Xanthopoulos) then
+!
+!       Rref_phys = (rmaj+rgrid(0)) * avgrmid ! This is R_ref in physical units
+!
+!       Bref_X = 
+!       Rref_X =
+!
+!       call alloc_Xanth (ntgrid)
+!       
+!       K1_X = - Rref_X * gbdrift0 ! Must be clear: changing normalization, or unnormalizing?
+!       K2_X = - Rref_X * gbdrift  ! Must be clear: changing normalization, or unnormalizing?
+!       gradpar_X = gradpar ! dimensionless for both of us, but same normalization?
+!       B_X = bmag  ! * Bref ??
+!       J_X = jacob ! coordinates are different, so this is trickier
+!       g11_X = 
+!       g12_X = 
+!       g22_X = 
+!
+!    end if
+    
 contains
 
   subroutine alloc_local_arrays(n)
@@ -2483,6 +2511,23 @@ end subroutine geofax
 
   end subroutine tdef
 
+  subroutine alloc_Xanth (n)
+
+    integer n
+
+    if (allocated(g11_X)) return
+
+    allocate (g11_X     (-n:n), &
+              g12_X     (-n:n), &
+              g22_X     (-n:n), &
+              B_X       (-n:n), &
+              J_X       (-n:n), &
+              K1_X      (-n:n), &
+              K2_X      (-n:n), &
+              gradpar_X (-n:n))
+
+  end subroutine alloc_Xanth
+
   subroutine alloc_module_arrays(n)
 
     integer n
@@ -2503,7 +2548,9 @@ end subroutine geofax
          aplot      (-n:n), &
          Rprime     (-n:n), &
          Zprime     (-n:n), &
-         aprime     (-n:n))
+         aprime     (-n:n), &
+         Uk1        (-n:n), &
+         Uk2        (-n:n))
 
   end subroutine alloc_module_arrays
 
