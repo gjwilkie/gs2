@@ -140,10 +140,10 @@ contains
     use kt_grids, only: init_kt_grids, naky, ntheta0, akx, aky
     use le_grids, only: init_le_grids, nlambda, negrid
     use run_parameters, only: init_run_parameters
-    use collisions, only: init_collisions, vnmult
+    use collisions, only: init_collisions!, vnmult
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
     use nonlinear_terms, only: init_nonlinear_terms
-    use init_g, only: init_init_g, init_vnmult
+    use init_g, only: init_init_g!, init_vnmult
     use hyper, only: init_hyper
     implicit none
 
@@ -180,7 +180,7 @@ contains
     call init_wstar
     call init_bessel
     call init_par_filter
-    call init_vnmult (vnmult)
+!    call init_vnmult (vnmult)
     call init_collisions ! needs to be after init_run_parameters
     call init_invert_rhs
     call init_fieldeq
