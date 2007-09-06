@@ -6035,22 +6035,38 @@ contains
 
        else       ! trapped particle runs          
           je = jend(ig)
-          te = 2*jend(ig) - 1
-       
-          do il = 1,te
-             if (il <= ng2) then
-                do ip=1,ng2
-                   lcoll(il,ilz) = lcoll(il,ilz) + dtot(ig,il,ip)*glze(ip,ilz)
-                end do
-             else if (il >= 2*je-ng2) then
-                do ip=2*je-ng2,te
-                   lcoll(il,ilz) = lcoll(il,ilz) + dtot(ig,te-il+1,te-ip+1)*glze(ip,ilz)             
-                end do
-             else
-                do ip=ng2+1,te-ng2
-                   lcoll(il,ilz) = lcoll(il,ilz) + dtot(ig,il,ip-ng2)*glze(ip,ilz)
-                end do
-             end if
+          te = 2*je - 1
+
+          il = 1
+          do ip = il, il+2
+             lcoll(il,ilz) = lcoll(il,ilz) + dtot(ig,il,ip)*glze(ip,ilz)
+          end do
+
+          il = 2
+          do ip = il-1, il+1
+             lcoll(il,ilz) = lcoll(il,ilz) + dtot(ig,il,ip-il+2)*glze(ip,ilz)
+          end do
+
+          do il=3,je
+             do ip=il-2,il+2
+                lcoll(il,ilz) = lcoll(il,ilz) + dtot(ig,il,ip-il+3)*glze(ip,ilz)
+             end do
+          end do
+
+          do il=je+1, te-2
+             do ip = il-2,il+2
+                lcoll(il,ilz) = lcoll(il,ilz) + dtot(ig,te-il+1,il-ip+3)*glze(ip,ilz)
+             end do
+          end do
+
+          il = te-1
+          do ip = il-1, il+1
+             lcoll(il,ilz) = lcoll(il,ilz) + dtot(ig,2,il-ip+2)*glze(ip,ilz)
+          end do
+
+          il = te
+          do ip = il-2, il
+             lcoll(il,ilz) = lcoll(il,ilz) + dtot(ig,1,il-ip+1)*glze(ip,ilz)
           end do
 
 ! is il=je handled correctly here?
@@ -6080,7 +6096,7 @@ contains
        if (je == 0) then
           te = 2*ng2
        else
-          te = 2*jend(ig)-1
+          te = 2*je-1
        end if
 
        if (idx_local (lz_lo, ilz)) then
@@ -6120,7 +6136,8 @@ contains
     emax = emax/ltmax
 
     if (proc0) then
-       write(unit,"((1x,e12.6),6(i8),2(1x,e12.6))") time, igmax, ikmax, itmax, iemax, ilmax, ismax, emax, eavg
+       write(unit,"((1x,e12.6),6(i8),2(1x,e12.6))") time, &
+            igmax, ikmax, itmax, iemax, ilmax, ismax, emax, eavg
        if (last) then
           call close_output_file (unit)
        end if
