@@ -1153,8 +1153,8 @@ contains
 ! Are cc(il) and aa(il) missing a factor of 2 here? I think it should be:
 ! cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0...MAB
 ! was originally cc(il)-0.5*vn*code_dt*(1.0-slbl*slbl)/slbl/slb0
-!          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0  ! NEW LINE
-          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slbl/slb0   ! OLD LINE
+          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0  ! NEW LINE
+!          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slbl/slb0   ! OLD LINE
           aa(il) = cc(il)
           bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
 
@@ -1198,18 +1198,18 @@ contains
     use theta_grid, only: ntgrid, bmag
     implicit none
     
-    integer :: je, te, ig, il, ip, ij, im
+    integer :: je, ig, il, ip, ij, im
     real :: slb0, slb1, slb2, slbr, slbl
     real, dimension (:), allocatable :: slb
     real, dimension (:,:), allocatable :: dprod
     real, dimension (:,:,:), allocatable :: dlcoef, d2lcoef
 
     allocate(slb(2*nlambda))
-    allocate (dprod(2*nlambda,5))
+    allocate (dprod(nlambda,5))
 
-    allocate (dlcoef(-ntgrid:ntgrid,2*nlambda-ng2,5))
-    allocate (d2lcoef(-ntgrid:ntgrid,2*nlambda-ng2,5))
-    allocate (dtot(-ntgrid:ntgrid,2*nlambda-ng2,5))
+    allocate (dlcoef(-ntgrid:ntgrid,nlambda,5))
+    allocate (d2lcoef(-ntgrid:ntgrid,nlambda,5))
+    allocate (dtot(-ntgrid:ntgrid,nlambda,5))
     allocate (fdf(-ntgrid:ntgrid,nlambda), fdb(-ntgrid:ntgrid,nlambda))
 
     dlcoef = 1.0; d2lcoef = 0.0; dtot = 0.0
@@ -1262,6 +1262,8 @@ contains
 
           fdf(ig,il) = (1.0 - slbr*slbr)/(slbr-slbl)/(slb2-slb1)
           fdb(ig,il) = (1.0 - slbl*slbl)/(slbr-slbl)/(slb1-slb0)
+
+          slb(ng2+1:) = -slb(ng2:1:-1)
        else          ! run with trapped particles
           do il=2,je-1
              slb(il) = sqrt(abs(1.0-al(il)*bmag(ig)))
@@ -1299,10 +1301,12 @@ contains
 
           fdf(ig,il) = (1.0 - slbl*slbl)/slb0/slb0
           fdb(ig,il) = fdf(ig,il)
+
+          slb(je+1:2*je-1) = -slb(je-1:1:-1)
        end if
 
 ! compute coefficients (dlcoef) multipyling first derivative of h
-       do il=3,ng2-2
+       do il=3,ng2
           do ip=il-2,il+2
              if (il == ip) then
                 dlcoef(ig,il,ip-il+3) = 0.0
@@ -1357,51 +1361,10 @@ contains
           dlcoef(ig,il,ip-il+2) = -2.0*slb(il)*dlcoef(ig,il,ip-il+2)
        end do
 
-       do il = ng2-1, ng2
-          do ip=il-2,il+2
-             if (il == ip) then
-                dlcoef(ig,il,ip-il+3) = 0.0
-                do ij=il-2,il+2
-                   if (ij /= ip) then
-                      if (ij <= ng2) then
-                         dlcoef(ig,il,ip-il+3) = dlcoef(ig,il,ip-il+3) + 1/(slb(il)-slb(ij))
-                      else
-                         dlcoef(ig,il,ip-il+3) = dlcoef(ig,il,ip-il+3) + 1/(slb(il)+slb(2*ng2-ij+1))
-                      end if
-                   end if
-                end do
-             else
-                do ij=il-2,il+2
-                   if (ij /= ip .and. ij /= il) then
-                      if (ij <= ng2 .and. ip <= ng2) then
-                         dlcoef(ig,il,ip-il+3) = dlcoef(ig,il,ip-il+3) &
-                              *(slb(il)-slb(ij))/(slb(ip)-slb(ij))
-                      else if (ip <= ng2) then
-                         dlcoef(ig,il,ip-il+3) = dlcoef(ig,il,ip-il+3) &
-                              *(slb(il)+slb(2*ng2-ij+1))/(slb(ip)+slb(2*ng2-ij+1))
-                      else if (ij <= ng2) then
-                         dlcoef(ig,il,ip-il+3) = dlcoef(ig,il,ip-il+3) &
-                              *(slb(il)-slb(ij))/(-slb(2*ng2-ip+1)-slb(ij))
-                      else
-                         dlcoef(ig,il,ip-il+3) = dlcoef(ig,il,ip-il+3) &
-                              *(slb(il)+slb(2*ng2-ij+1))/(-slb(2*ng2-ip+1)+slb(2*ng2-ij+1))
-                      end if
-                   end if
-                end do
-                if (ip <= ng2) then
-                   dlcoef(ig,il,ip-il+3) = dlcoef(ig,il,ip-il+3)/(slb(ip)-slb(il))
-                else
-                   dlcoef(ig,il,ip-il+3) = dlcoef(ig,il,ip-il+3)/(-slb(2*ng2-ip+1)-slb(il))
-                end if
-             end if
-             dlcoef(ig,il,ip-il+3) = -2.0*slb(il)*dlcoef(ig,il,ip-il+3)
-          end do
-       end do
-
        dprod = 2.0
 
 ! compute coefficients (d2lcoef) multiplying second derivative of h
-       do il=3,ng2-2
+       do il=3,ng2
           do ip=il-2,il+2
              if (il == ip) then
                 do ij=il-2,il+2
@@ -1464,7 +1427,8 @@ contains
              do ij=il-1,il+1
                 if (ij /= ip) then
                    do im=il-1,il+1
-                      if (im /= ip .and. im /= ij) d2lcoef(ig,il,ip-il+2) = d2lcoef(ig,il,ip-il+2) + 1./((slb(il)-slb(im))*(slb(il)-slb(ij)))
+                      if (im /= ip .and. im /= ij) d2lcoef(ig,il,ip-il+2) &
+                           = d2lcoef(ig,il,ip-il+2) + 1./((slb(il)-slb(im))*(slb(il)-slb(ij)))
                    end do
                 end if
              end do
@@ -1484,117 +1448,64 @@ contains
           end if
           d2lcoef(ig,il,ip-il+2) = (1.0-slb(il)**2)*d2lcoef(ig,il,ip-il+2)
        end do
-
-       do il = ng2-1, ng2
-          do ip=il-2,il+2
-             if (il == ip) then
-                do ij=il-2,il+2
-                   if (ij /= ip) then
-                      do im=il-2,il+2
-                         if (im /= ip .and. im /= ij) then
-                            if (im <= ng2 .and. ij <= ng2) then
-                               d2lcoef(ig,il,ip-il+3) = d2lcoef(ig,il,ip-il+3) + 1./((slb(il)-slb(im))*(slb(il)-slb(ij)))
-                            else if (ij <= ng2) then
-                               d2lcoef(ig,il,ip-il+3) = d2lcoef(ig,il,ip-il+3) + 1./((slb(il)+slb(2*ng2-im+1))*(slb(il)-slb(ij)))
-                            else if (im <= ng2) then
-                               d2lcoef(ig,il,ip-il+3) = d2lcoef(ig,il,ip-il+3) + 1./((slb(il)-slb(im))*(slb(il)+slb(2*ng2-ij+1)))
-                            else
-                               d2lcoef(ig,il,ip-il+3) = d2lcoef(ig,il,ip-il+3) + 1./((slb(il)+slb(2*ng2-im+1))*(slb(il)+slb(2*ng2-ij+1)))
-                            end if
-                         end if
-                      end do
-                   end if
-                end do
-             else
-                do ij=il-2,il+2
-                   if (ij /= il .and. ij /= ip) then
-                      if (ij <= ng2 .and. ip <= ng2) then
-                         dprod(il,ip-il+3) = dprod(il,ip-il+3)*(slb(il)-slb(ij))/(slb(ip)-slb(ij))
-                      else if (ip <= ng2) then
-                         dprod(il,ip-il+3) = dprod(il,ip-il+3)*(slb(il)+slb(2*ng2-ij+1))/(slb(ip)+slb(2*ng2-ij+1))
-                      else if (ij <= ng2) then
-                         dprod(il,ip-il+3) = dprod(il,ip-il+3)*(slb(il)-slb(ij))/(-slb(2*ng2-ip+1)-slb(ij))
-                      else
-                         dprod(il,ip-il+3) = dprod(il,ip-il+3)*(slb(il)+slb(2*ng2-ij+1))/(-slb(2*ng2-ip+1)+slb(2*ng2-ij+1))
-                      end if
-                   end if
-                end do
-                
-                do ij=il-2,il+2
-                   if (ij /= ip .and. ij /= il) then
-                      if (ij <= ng2) then
-                         d2lcoef(ig,il,ip-il+3) = d2lcoef(ig,il,ip-il+3) + 1./(slb(il)-slb(ij))
-                      else
-                         d2lcoef(ig,il,ip-il+3) = d2lcoef(ig,il,ip-il+3) + 1./(slb(il)+slb(2*ng2-ij+1))
-                      end if
-                   end if
-                end do
-                if (ip <= ng2) then
-                   d2lcoef(ig,il,ip-il+3) = dprod(il,ip-il+3)*d2lcoef(ig,il,ip-il+3)/(slb(ip)-slb(il))
-                else
-                   d2lcoef(ig,il,ip-il+3) = dprod(il,ip-il+3)*d2lcoef(ig,il,ip-il+3)/(-slb(2*ng2-ip+1)-slb(il))
-                end if
-             end if
-             d2lcoef(ig,il,ip-il+3) = (1.0-slb(il)**2)*d2lcoef(ig,il,ip-il+3)
-          end do
-       end do
        
        if (je /= 0) then      ! have to handle trapped particles
-          te = 2*je-ng2-1
-          slb(je+1:te) = -slb(je-1:ng2+1:-1)          
 
-          do ip=1,te-ng2
-             do il=ng2+1,te
-                if (il == ip+ng2) then
-                   dlcoef(ig,il,ip) = 0.0
-                   do ij=ng2+1,te
-                      if (ij /= ip+ng2) dlcoef(ig,il,ip) = dlcoef(ig,il,ip) + 1/(slb(il)-slb(ij))
+          do il=ng2+1,je
+             do ip=il-2,il+2
+                if (il == ip) then
+                   dlcoef(ig,il,ip-il+3) = 0.0
+                   do ij=il-2,il+2
+                      if (ij /= ip) dlcoef(ig,il,ip-il+3) = dlcoef(ig,il,ip-il+3) + 1/(slb(il)-slb(ij))
                    end do
                 else
-                   do ij=ng2+1,te
-                      if (ij /= ip+ng2 .and. ij /= il) then
-                         dlcoef(ig,il,ip) = dlcoef(ig,il,ip)*(slb(il)-slb(ij))/(slb(ip+ng2)-slb(ij))
+                   do ij=il-2,il+2
+                      if (ij /= ip .and. ij /= il) then
+                         dlcoef(ig,il,ip-il+3) = dlcoef(ig,il,ip-il+3)*(slb(il)-slb(ij))/(slb(ip)-slb(ij))
                       end if
                    end do
-                   dlcoef(ig,il,ip) = dlcoef(ig,il,ip)/(slb(ip+ng2)-slb(il))
+                   dlcoef(ig,il,ip-il+3) = dlcoef(ig,il,ip-il+3)/(slb(ip)-slb(il))
                 end if
-                dlcoef(ig,il,ip) = -2.0*slb(il)*dlcoef(ig,il,ip)
+                dlcoef(ig,il,ip-il+3) = -2.0*slb(il)*dlcoef(ig,il,ip-il+3)
              end do
           end do
-          
-          do ip=1,te-ng2
-             do il=ng2+1,te
-                if (il == ip+ng2) then
-                   do ij=ng2+1,te
-                      if (ij /= ip+ng2) then
-                         do im=ng2+1,te
-                            if (im /= ip+ng2 .and. im /= ij) d2lcoef(ig,il,ip) = d2lcoef(ig,il,ip) + 1./((slb(il)-slb(im))*(slb(il)-slb(ij)))
+
+          do il=ng2+1,je
+             do ip=il-2,il+2
+                if (il == ip) then
+                   do ij=il-2,il+2
+                      if (ij /= ip) then
+                         do im=il-2,il+2
+                            if (im /= ip .and. im /= ij) d2lcoef(ig,il,ip-il+3) = &
+                                 d2lcoef(ig,il,ip-il+3) + 1./((slb(il)-slb(im))*(slb(il)-slb(ij)))
                          end do
                       end if
                    end do
                 else
-                   do ij=ng2+1,te
-                      if (ij /= il .and. ij /= ip+ng2) then
-                         dprod(il,ip) = dprod(il,ip)*(slb(il)-slb(ij))/(slb(ip+ng2)-slb(ij))
+                   do ij=il-2,il+2
+                      if (ij /= il .and. ij /= ip) then
+                         dprod(il,ip-il+3) = dprod(il,ip-il+3)*(slb(il)-slb(ij))/(slb(ip)-slb(ij))
                       end if
                    end do
                    
-                   do ij=ng2+1,te
-                      if (ij /= ip+ng2 .and. ij /= il) then
-                         d2lcoef(ig,il,ip) = d2lcoef(ig,il,ip) + 1./(slb(il)-slb(ij))
+                   do ij=il-2,il+2
+                      if (ij /= ip .and. ij /= il) then
+                         d2lcoef(ig,il,ip-il+3) = d2lcoef(ig,il,ip-il+3) + 1./(slb(il)-slb(ij))
                       end if
                    end do
-                   d2lcoef(ig,il,ip) = dprod(il,ip)*d2lcoef(ig,il,ip)/(slb(ip+ng2)-slb(il))
+                   d2lcoef(ig,il,ip-il+3) = dprod(il,ip-il+3) &
+                        *d2lcoef(ig,il,ip-il+3)/(slb(ip)-slb(il))
                 end if
-                d2lcoef(ig,il,ip) = (1.0-slb(il)**2)*d2lcoef(ig,il,ip)
+                d2lcoef(ig,il,ip-il+3) = (1.0-slb(il)**2)*d2lcoef(ig,il,ip-il+3)
              end do
           end do
+          
        end if
     end do
 
     dtot = dlcoef + d2lcoef
 
-    deallocate(slb,dprod,dlcoef,d2lcoef)
+    deallocate (slb, dprod, dlcoef, d2lcoef)
   end subroutine init_lorentz_error
 
   subroutine init_lorentz_redistribute
