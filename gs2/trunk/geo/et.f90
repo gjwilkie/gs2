@@ -157,6 +157,11 @@ program eiktest
      write(*,*) 'B_bar = ',bbar
   end if
            
+  if (dipole) then
+     shat = max(1.e-7, shat)
+     if (shat == 1.e-7) gds22 = shat*shat
+  end if
+
   write(21,*) ' ntgrid  nperiod  ntheta, drhodpsi, rmaj, shat, kxfac, q'
   write(21,*) ntgrid, nperiod, ntheta, drhodpsin, rmaj, shat, kxfac, qsf
   
