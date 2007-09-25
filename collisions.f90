@@ -942,6 +942,7 @@ contains
     use gs2_layouts, only: init_lorentz_layouts
     use gs2_layouts, only: lz_lo
     use gs2_layouts, only: ig_idx, ik_idx, ie_idx, is_idx, it_idx
+
     implicit none
 
     real, intent (in), optional :: vnmult_target
@@ -950,8 +951,8 @@ contains
     real, dimension (nlambda+1) :: aa, bb, cc, dd, hh
     real, dimension (max(2*nlambda,2*ng2+1)) :: a1, b1
     real :: slb0, slb1, slb2, slbl, slbr, vn, ee, vnh, vnc
+    real :: dela, delb, delc, aatmp, cctmp  ! MAB
     logical :: first_time = .true.
-
     if (first_time) then
        vnmult(1) = max(1.0, vnmult(1))
        first_time = .false.
@@ -1014,42 +1015,80 @@ contains
              slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))     ! xi_j
              slb2 = sqrt(abs(1.0 - bmag(ig)*al(il+1)))   ! xi_{j+1}
 
-!             write (*,*) il,' xi = ',slb1
-             slbl = (slb1 + slb0)/2.0  ! xi(j-1/2)
-             slbr = (slb1 + slb2)/2.0  ! xi(j+1/2)
+!>MAB
+             dela = slb1 - slb0
+             delb = slb2 - slb0
+             delc = slb2 - slb1
+
+             aatmp = 2.0*(1.0 - slb1**2 + slb1*delc)/(dela*delb)
+             cctmp = 2.0*(1.0 - slb1**2 - slb1*dela)/(delc*delb) 
 
              ee = 0.25*e(ie,is)*(1+slb1**2) &
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
 
-             ! coefficients for tridiagonal matrix:
-             cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
-             aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
+             ! coefficients for tridiagonal matrix using Lagrange interpolation:
+             cc(il) = -vn*code_dt*cctmp
+             aa(il) = -vn*code_dt*aatmp
              bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
 
+             ! coefficients for entropy heating calculation using Lagrange interpolation:
+             dd(il) =vnc*(cctmp + ee)
+             hh(il) =vnh*(cctmp + ee)
+
+
+! Following is old approach using Taylor expansion
+!             write (*,*) il,' xi = ',slb1
+!             slbl = (slb1 + slb0)/2.0  ! xi(j-1/2)
+!             slbr = (slb1 + slb2)/2.0  ! xi(j+1/2)
+
+             ! coefficients for tridiagonal matrix:
+!             cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
+!             aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
+!             bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
+
              ! coefficients for entropy heating calculation
-             dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-             hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+!             dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+!             hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
           end do
 
 ! boundary at xi = 1
-          slb0 = 1.0
-          slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
-          slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
+          slb0 = sqrt(abs(1.0-bmag(ig)*al(1)))
+          slb1 = sqrt(abs(1.0-bmag(ig)*al(2)))
+          slb2 = sqrt(abs(1.0-bmag(ig)*al(3)))
 
-          slbl = (slb1 + slb0)/2.0
-          slbr = (slb1 + slb2)/2.0
+          dela = slb1 - slb0
+          delb = slb2 - slb0
+          delc = slb2 - slb1
 
-          ee = 0.25*e(ie,is)*(1+slb1**2) &
+          ee = 0.25*e(ie,is)*(1+slb0**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
-               * kperp2(ig,it,ik)*cfac
-          
-          cc(1) = -vn*code_dt*(-1.0 - slbr)/(slb2-slb1)
-          aa(1) = 0.0
-          bb(1) = 1.0 - (aa(1) + cc(1)) + ee*vn*code_dt
+               * kperp2(ig,it,ik)*cfac          
 
-          dd(1) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-          hh(1) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+          cctmp = 2.0*(1.0-slb0**2 + slb0*dela)/(delb*delc)
+          aatmp = 2.0*(1.0-slb0**2 + slb0*(dela+delb))/(dela*delb)
+
+          cc(1) = 1.0-vn*code_dt*(cctmp + ee)
+          aa(1) = -vn*code_dt*aatmp
+          bb(1) = vn*code_dt*2.0*(1.0 - slb0**2 + slb0*delb)/(dela*delc)
+
+          dd(1) = vnc*(cctmp + ee)
+          hh(1) = vnh*(cctmp + ee)
+
+! old scheme
+!          slb0 = 1.0
+!          slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
+!          slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
+
+!          slbl = (slb1 + slb0)/2.0
+!          slbr = (slb1 + slb2)/2.0
+          
+!          cc(1) = -vn*code_dt*(-1.0 - slbr)/(slb2-slb1)
+!          aa(1) = 0.0
+!          bb(1) = 1.0 - (aa(1) + cc(1)) + ee*vn*code_dt
+
+!          dd(1) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+!          hh(1) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
 
 ! boundary at xi = 0
           il = ng2
@@ -1057,19 +1096,35 @@ contains
           slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))
           slb2 = -slb1
 
-          slbl = (slb1 + slb0)/2.0
-          slbr = (slb1 + slb2)/2.0
-
           ee = 0.25*e(ie,is)*(1+slb1**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-          cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
-          aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
-          bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
+          dela = slb1 - slb0
+          delb = slb2 - slb0
+          delc = slb2 - slb1
 
-          dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-          hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+          aatmp = 2.0*(1.0 - slb1**2 + slb1*delc)/(dela*delb)
+          cctmp = 2.0*(1.0 - slb1**2 - slb1*dela)/(delc*delb) 
+
+          cc(il) = -vn*code_dt*cctmp
+          aa(il) = -vn*code_dt*aatmp
+          bb(il) = 1.0 - (aa(il) + cc(il))  + ee*vn*code_dt
+
+          dd(il) =vnc*(cctmp + ee)
+          hh(il) =vnh*(cctmp + ee)
+
+! old scheme
+!          slbl = (slb1 + slb0)/2.0
+!          slbr = (slb1 + slb2)/2.0
+
+!          cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
+!          aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
+!          bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
+
+!          dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+!          hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+
 
 ! start to fill in the arrays for the tridiagonal
           a1(:ng2) = aa(:ng2)
@@ -1106,37 +1161,71 @@ contains
              slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))
              slb2 = sqrt(abs(1.0 - bmag(ig)*al(il+1)))
 
-             slbl = (slb1 + slb0)/2.0
-             slbr = (slb1 + slb2)/2.0
-
              ee = 0.25*e(ie,is)*(1+slb1**2) &
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
 
-             cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
-             aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
-             bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
+             dela = slb1 - slb0
+             delb = slb2 - slb0
+             delc = slb2 - slb1
 
-             dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-             hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+             aatmp = 2.0*(1.0 - slb1**2 + slb1*delc)/(dela*delb)
+             cctmp = 2.0*(1.0 - slb1**2 - slb1*dela)/(delc*delb) 
+
+             cc(il) = -vn*code_dt*cctmp
+             aa(il) = -vn*code_dt*aatmp
+             bb(il) = 1.0 - (aa(il) + cc(il))  + ee*vn*code_dt
+             
+             dd(il) =vnc*(cctmp + ee)
+             hh(il) =vnh*(cctmp + ee)
+
+! old scheme
+!             slbl = (slb1 + slb0)/2.0
+!             slbr = (slb1 + slb2)/2.0
+
+!             cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
+!             aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
+!             bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
+
+!             dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+!             hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
           end do
 
-          slb0 = 1.0
-          slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
-          slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
+          slb0 = sqrt(abs(1.0-bmag(ig)*al(1)))
+          slb1 = sqrt(abs(1.0-bmag(ig)*al(2)))
+          slb2 = sqrt(abs(1.0-bmag(ig)*al(3)))
 
-          slbr = (slb1 + slb2)/2.0
-
-          ee = 0.25*e(ie,is)*(1+slb1**2) &
+          ee = 0.25*e(ie,is)*(1+slb0**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-          cc(1) = -vn*code_dt*(-1.0 - slbr)/(slb2-slb1)
-          aa(1) = 0.0
-          bb(1) = 1.0 - (aa(1) + cc(1)) + ee*vn*code_dt
+          dela = slb1 - slb0
+          delb = slb2 - slb0
+          delc = slb2 - slb1
 
-          dd(1) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-          hh(1) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+          cctmp = 2.0*(1.0-slb0**2 + slb0*dela)/(delb*delc)
+          aatmp = 2.0*(1.0-slb0**2 + slb0*(dela+delb))/(dela*delb)
+
+          cc(1) = 1.0-vn*code_dt*(cctmp + ee)
+          aa(1) = -vn*code_dt*aatmp
+          bb(1) = vn*code_dt*2.0*(1.0 - slb0**2 + slb0*delb)/(dela*delc)
+
+          dd(1) = vnc*(cctmp + ee)
+          hh(1) = vnh*(cctmp + ee)
+
+! old scheme
+!          slb0 = 1.0
+!          slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
+!          slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
+
+!          slbr = (slb1 + slb2)/2.0
+
+!          cc(1) = -vn*code_dt*(-1.0 - slbr)/(slb2-slb1)
+!          aa(1) = 0.0
+!          bb(1) = 1.0 - (aa(1) + cc(1)) + ee*vn*code_dt
+
+!          dd(1) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+!          hh(1) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
 
           il = je
           slb0 = sqrt(abs(1.0-bmag(ig)*al(il-1)))
@@ -1147,20 +1236,35 @@ contains
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-          slbl = (slb1 + slb0)/2.0
-          slbr = (slb1 + slb2)/2.0
+          dela = slb1 - slb0
+          delb = slb2 - slb0
+          delc = slb2 - slb1
+
+          cctmp = 2.0*(1.0 - slb1**2 + slb1*delc)/(dela*delb)
+          aatmp = 2.0*(1.0 - slb1**2 - slb1*dela)/(delc*delb) 
+
+          cc(il) = -vn*code_dt*cctmp
+          aa(il) = -vn*code_dt*aatmp
+          bb(il) = 1.0 - (aa(il) + cc(il))  + ee*vn*code_dt
+
+          dd(il) =vnc*(cctmp + ee)
+          hh(il) =vnh*(cctmp + ee)
+
+! old scheme
+!          slbl = (slb1 + slb0)/2.0
+!          slbr = (slb1 + slb2)/2.0
 
 ! Are cc(il) and aa(il) missing a factor of 2 here? I think it should be:
 ! cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0...MAB
 ! was originally cc(il)-0.5*vn*code_dt*(1.0-slbl*slbl)/slbl/slb0
-          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0  ! NEW LINE
+!          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0  ! NEW LINE
 !          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slbl/slb0   ! OLD LINE
-          aa(il) = cc(il)
-          bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
+!          aa(il) = cc(il)
+!          bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
 
-          dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-          hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-
+!          dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+!          hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+!<MAB
           a1(:je) = aa(:je)
           b1(:je) = bb(:je)
           c1(:je,ilz) = cc(:je)
