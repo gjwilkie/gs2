@@ -6,7 +6,7 @@ module init_g
   public :: width0, k0
   public :: tstart
   public :: reset_init
-!  public :: init_vnmult
+  public :: init_vnmult
   private
 
   ! knobs
@@ -1832,16 +1832,16 @@ contains
 
   end subroutine flae
 
-!  subroutine init_vnmult (vnm)
+  subroutine init_vnmult (vnm)
 
-!    use gs2_save, only: init_vnm
+    use gs2_save, only: init_vnm
 
-!    real, dimension (2) :: vnm
-!    integer :: istatus
+    real, dimension (2) :: vnm
+    integer :: istatus
 
-!    call init_vnm (vnm, istatus)
+    call init_vnm (vnm, istatus)
 
-!  end subroutine init_vnmult
+  end subroutine init_vnmult
 
 end module init_g
 

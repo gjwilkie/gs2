@@ -240,7 +240,7 @@ contains
     use gs2_layouts, only: g_lo, ie_idx, is_idx, ik_idx, il_idx, it_idx
     use species, only: nspec, spec
     use kt_grids, only: naky, ntheta0
-    use theta_grid, only: ntgrid
+    use theta_grid, only: ntgrid, bmag
     use le_grids, only: e, al, integrate_moment
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
@@ -305,7 +305,8 @@ contains
 ! u0 = -3 nu V_perp dt a f_0 / Enu
 ! where a = kperp2 * (T m / q**2)  ! missing factor of 1/B(theta)**2 ???
              z0(ig,isgn,iglo) = - 3.*vnm*vnew_ss(ik,ie,is)*e(ie,is)*al(il)*aj1(ig,iglo) &
-                  * code_dt * spec(is)%smz**2 * kperp2(ig,it,ik) * Enuinv(ig,it,ik,is)
+                  * code_dt * spec(is)%smz**2 * kperp2(ig,it,ik) * Enuinv(ig,it,ik,is) &
+                  / bmag(ig)**2
           end do
        end do
     end do

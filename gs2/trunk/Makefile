@@ -346,7 +346,7 @@ ifeq ($(CPU),LINUX)
 
 endif
 
-ifeq ($(CPU),LINUX_ifort)
+ifeq ($(CPU),LINUX_ifort_mrf)
   FC = ifort
   FLIBS = $(UTILS)/mdslib.a -L/usr/local/lib -lnetcdf -lfftw -lrfftw
   PLATFORM_LINKS = linux_ifort

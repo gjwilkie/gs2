@@ -683,7 +683,7 @@ contains
   subroutine init_kperp2
     use dist_fn_arrays, only: kperp2
     use species, only: spec
-    use theta_grid, only: ntgrid, bmag, gds2, gds21, gds22, shat
+    use theta_grid, only: ntgrid, gds2, gds21, gds22, shat
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
     implicit none
     integer :: ik, it
@@ -2065,7 +2065,7 @@ contains
     
     use gs2_layouts, only: ik_idx, it_idx
     use kt_grids, only: akx, aky
-    use theta_grid, only: ntgrid, bmag
+    use theta_grid, only: ntgrid
     use run_parameters, only: fphi, fbpar, tnorm
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: kperp2
