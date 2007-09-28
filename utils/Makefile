@@ -141,7 +141,7 @@ ifeq ($(CPU),Dawson)
   endif
 endif
 
-ifeq ($(CPU),LINUX_ifort)
+ifeq ($(CPU),LINUX_ifort_mrf)
   FC = ifort
   PLATFORM_LINKS = mrf
   FLIBS = -L/usr/local/lib -lnetcdf
