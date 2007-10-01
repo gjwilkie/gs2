@@ -1054,24 +1054,20 @@ contains
           end do
 
 ! boundary at xi = 1
-          slb0 = sqrt(abs(1.0-bmag(ig)*al(1)))
-          slb1 = sqrt(abs(1.0-bmag(ig)*al(2)))
-          slb2 = sqrt(abs(1.0-bmag(ig)*al(3)))
+          slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
+          slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
 
-          dela = slb1 - slb0
-          delb = slb2 - slb0
           delc = slb2 - slb1
 
-          ee = 0.25*e(ie,is)*(1+slb0**2) &
+          ee = 0.25*e(ie,is)*(1+slb1**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac          
 
-          cctmp = 2.0*(1.0-slb0**2 + slb0*dela)/(delb*delc)
-          aatmp = 2.0*(1.0-slb0**2 + slb0*(dela+delb))/(dela*delb)
+          cctmp = -2.0*slb1/delc
 
-          cc(1) = 1.0-vn*code_dt*(cctmp + ee)
-          aa(1) = -vn*code_dt*aatmp
-          bb(1) = vn*code_dt*2.0*(1.0 - slb0**2 + slb0*delb)/(dela*delc)
+          cc(1) = -vn*code_dt*cctmp
+          aa(1) = 0.0
+          bb(1) = 1.0 - cc(1) + vn*code_dt*ee
 
           dd(1) = vnc*(cctmp + ee)
           hh(1) = vnh*(cctmp + ee)
@@ -1108,6 +1104,8 @@ contains
           aatmp = 2.0*(1.0 - slb1**2 + slb1*delc)/(dela*delb)
           cctmp = 2.0*(1.0 - slb1**2 - slb1*dela)/(delc*delb) 
 
+! is it valid to have cc(ng2) nonzero when doing tridiagonal inversion?
+! same issue also comes up with trapped particles
           cc(il) = -vn*code_dt*cctmp
           aa(il) = -vn*code_dt*aatmp
           bb(il) = 1.0 - (aa(il) + cc(il))  + ee*vn*code_dt
@@ -1192,24 +1190,20 @@ contains
 !             hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
           end do
 
-          slb0 = sqrt(abs(1.0-bmag(ig)*al(1)))
-          slb1 = sqrt(abs(1.0-bmag(ig)*al(2)))
-          slb2 = sqrt(abs(1.0-bmag(ig)*al(3)))
+          slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
+          slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
 
-          ee = 0.25*e(ie,is)*(1+slb0**2) &
+          ee = 0.25*e(ie,is)*(1+slb1**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-          dela = slb1 - slb0
-          delb = slb2 - slb0
           delc = slb2 - slb1
 
-          cctmp = 2.0*(1.0-slb0**2 + slb0*dela)/(delb*delc)
-          aatmp = 2.0*(1.0-slb0**2 + slb0*(dela+delb))/(dela*delb)
+          cctmp = -2.0*slb1/delc
 
-          cc(1) = 1.0-vn*code_dt*(cctmp + ee)
-          aa(1) = -vn*code_dt*aatmp
-          bb(1) = vn*code_dt*2.0*(1.0 - slb0**2 + slb0*delb)/(dela*delc)
+          cc(1) = -vn*code_dt*cctmp
+          aa(1) = 0.0
+          bb(1) = 1.0 - cc(1) + vn*code_dt*ee
 
           dd(1) = vnc*(cctmp + ee)
           hh(1) = vnh*(cctmp + ee)
