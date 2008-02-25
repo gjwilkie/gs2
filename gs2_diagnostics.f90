@@ -1259,7 +1259,7 @@ contains
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
-    use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum
+    use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use collisions, only: ncheck, vnmult, vary_vnew
     use mp, only: proc0, broadcast, iproc
@@ -1306,8 +1306,9 @@ contains
     integer :: ig, ik, it, is, unit, il, i, j, nnx, nny, ifield, write_mod
     complex :: phiavg, sourcefac
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
-         upar, tpar, tperp
+         upar, tpar, tperp, upartot, ttot
     complex, dimension (ntheta0, nspec) :: ntot00, density00, upar00, tpar00, tperp00
+    complex, dimension (ntheta0, nspec) :: upartot00, ttot00
     complex, dimension (ntheta0, nspec) :: rstress, ustress
     complex, dimension (ntheta0) :: phi00
     complex, allocatable, dimension (:,:,:) :: phik2
@@ -1439,7 +1440,7 @@ contains
     if (mod(istep,nwrite) /= 0 .and. .not. exit) return
     t = user_time
 
-!    if (write_g) call write_f (last)
+    if (write_g) call write_f (last)
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
 
     call prof_entering ("loop_diagnostics-1")
