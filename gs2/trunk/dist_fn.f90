@@ -4,7 +4,7 @@ module dist_fn
   implicit none
   public :: init_dist_fn
   public :: timeadv, get_stress, exb_shear
-  public :: getfieldeq, getan, getfieldexp, getmoms
+  public :: getfieldeq, getan, getfieldexp, getmoms, gettotmoms
   public :: flux, neoclassical_flux, lambda_flux
   public :: ginit, get_epar, e_flux, get_heat
   public :: vortcheck, fieldcheck
@@ -3056,6 +3056,77 @@ contains
     call prof_leaving ("getmoms", "dist_fn")
   end subroutine getmoms
 
+  subroutine gettotmoms (phi, ntot, upar, ttot)
+    use dist_fn_arrays, only: vpa, vperp2, aj0, gnew
+    use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
+    use species, only: nspec, spec
+    use theta_grid, only: ntgrid
+    use le_grids, only: integrate_moment, anon, e
+    use prof, only: prof_entering, prof_leaving
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
+    complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, &
+         upar, ttot
+
+    integer :: ik, it, isgn, ie, is, iglo, ig
+
+! returns moment integrals to PE 0
+    call prof_entering ("gettotmoms", "dist_fn")
+
+! total density
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+
+       do isgn = 1, 2
+          g0(:,isgn,iglo) = (aj0(:,iglo)**2-1.0)*anon(ie,is) &
+               *phi(:,it,ik)*spec(is)%zt*spec(is)%dens
+       end do
+    end do
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) + g0(ig,isgn,iglo)
+          end do
+       end do
+    end do
+    call integrate_moment (g0, ntot)
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+             g0(ig,isgn,iglo) = g0(ig,isgn,iglo)*e(ie,is)
+          end do
+       end do
+    end do
+
+    call integrate_moment (g0, ttot)
+!    ttot = ttot - ntot
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+             g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,iglo)*gnew(ig,isgn,iglo)
+          end do
+       end do
+    end do
+
+    call integrate_moment (g0, upar)
+
+    do is=1,nspec
+       ntot(:,:,:,is)=ntot(:,:,:,is)*spec(is)%dens
+       upar(:,:,:,is)=upar(:,:,:,is)*spec(is)%stm
+       ttot(:,:,:,is)=ttot(:,:,:,is)*spec(is)%temp
+    end do
+
+    call prof_leaving ("gettotmoms", "dist_fn")
+  end subroutine gettotmoms
+
   subroutine init_fieldeq
     use dist_fn_arrays, only: aj0, aj1, vperp2, kperp2
     use species, only: nspec, spec, has_electron_species
@@ -5118,7 +5189,7 @@ contains
     use dist_fn_arrays, only: gnew, aj0, vpa
     use run_parameters, only: fphi, fapar, fbpar, beta
     use gs2_layouts, only: g_lo
-    use collisions, only: init_lorentz, init_escatter, init_lz_mom_conserve
+    use collisions, only: init_lorentz, init_ediffuse, init_mom_conserve, init_energy_conserve
     use collisions, only: etol, ewindow, etola, ewindowa
     use collisions, only: vnmult, vary_vnew
     use nonlinear_terms, only: nonlin
@@ -5293,8 +5364,10 @@ contains
        else if (errest(1,2) < etol - ewindow .and. errest(4,2) < etola - ewindowa) then
           call get_vnewk (vnmult(2), vnmult_target, decrease)
        end if
-       
-       call init_escatter (vnmult_target)
+
+       if (proc0) write(*,*) errest(1,2), etol, ewindow, vnmult(2), vnmult_target
+       call init_ediffuse (vnmult_target)
+       if (proc0) write (*,*) vnmult(2)
     end if
     
 ! sets gtdiff equal to the minimum difference between the various
@@ -5367,7 +5440,8 @@ contains
        end if
        
        call init_lorentz (vnmult_target)
-       call init_lz_mom_conserve
+       call init_mom_conserve
+       call init_energy_conserve
     end if
     
     deallocate (wgt, errtmp, idxtmp)

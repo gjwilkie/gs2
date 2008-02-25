@@ -22,7 +22,7 @@ module gs2_layouts
   public :: gidx2lzidx
   public :: gidx2gintidx, gintidx2geidx
 
-  public :: init_escatter_layouts
+  public :: init_ediffuse_layouts
   public :: e_lo, e_layout_type
 
   public :: init_x_transform_layouts, init_y_transform_layouts
@@ -1258,7 +1258,7 @@ contains
 ! Energy scattering layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine init_escatter_layouts &
+  subroutine init_ediffuse_layouts &
        (ntgrid, naky, ntheta0, nlambda, nspec)
     use mp, only: iproc, nproc
     implicit none
@@ -1283,7 +1283,7 @@ contains
          = min(e_lo%ulim_world, e_lo%llim_proc + e_lo%blocksize - 1)
     e_lo%ulim_alloc = max(e_lo%llim_proc, e_lo%ulim_proc)
 
-  end subroutine init_escatter_layouts
+  end subroutine init_ediffuse_layouts
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Lorentz layouts
