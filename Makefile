@@ -8,7 +8,7 @@ GEO=geo
 #
 #  Makefile written by Bill Dorland, Greg Hammett and Darin Ernst
 #
-#  LAST UPDATE: 5/12/07
+#  LAST UPDATE: 7/29/02
 #
 ############################################################# WALL CLOCK TIMES
 #
@@ -346,15 +346,6 @@ ifeq ($(CPU),LINUX)
 
 endif
 
-ifeq ($(CPU),LINUX_ifort_mrf)
-  FC = ifort
-  FLIBS = $(UTILS)/mdslib.a -L/usr/local/lib -lnetcdf -lfftw -lrfftw
-  PLATFORM_LINKS = linux_ifort
-  F90FLAGS = -parallel -vec-report0 -r8 -xT -arch SSE -O3 -I$(UTILS) -I$(GEO) -I /usr/local/include/netcdf
-endif
-
-
-
 # added 3/2007 for discovery at Dartmouth 
 # options for Linux with Portland Group or intel compilers
 ifeq ($(CPU),LINUX_andes)
@@ -403,7 +394,7 @@ endif
 GS2MOD= constants.o prof.o mp.o gs2_layouts.o command_line.o gs2_save.o \
 	text_options.o file_utils.o ran.o redistribute.o antenna_data.o antenna.o \
 	gs2_reinit.o gs2_time.o convert.o fft_work.o shmem.o \
-	theta_grid.o kt_grids.o dist_fn_arrays.o species.o \
+	theta_grid.o kt_grids.o dist_fn_arrays.o species.o gs2_dist_io.o \
 	fields_arrays.o le_grids.o collisions.o gs2_transforms.o \
 	nonlinear_terms.o fields_explicit.o \
 	fields.o fields_implicit.o fields_test.o init_g.o check.o \
@@ -503,7 +494,7 @@ file_utils.o:
 	$(FC) $(F90FLAGS) -c file_utils.f90
 
 gs2_dist_io.o: gs2_dist_io.f90
-	$(FC) $(F90FLAGS) -c gs2_dist_io.f90
+	$(FC5) $(F90FLAGS) -c gs2_dist_io.f90
 
 ifeq ($(CPU),LINUX_lf95)
 
@@ -578,7 +569,7 @@ gs2_diagnostics.o: file_utils.o kt_grids.o run_parameters.o species.o mp.o
 gs2_diagnostics.o: fields.o dist_fn.o constants.o prof.o gs2_save.o gs2_time.o
 gs2_diagnostics.o: gs2_io.o le_grids.o fields_arrays.o dist_fn_arrays.o 
 gs2_diagnostics.o: gs2_transforms.o nonlinear_terms.o collisions.o $(UTILS)/utils.a
-gs2_diagnostics.o: gs2_flux.o gs2_heating.o #gs2_dist_io.o 
+gs2_diagnostics.o: gs2_flux.o gs2_heating.o gs2_dist_io.o 
 gs2_heating.o: mp.o species.o
 dist_fn.o: mp.o species.o theta_grid.o kt_grids.o le_grids.o antenna.o
 dist_fn.o: run_parameters.o init_g.o text_options.o fft_work.o gs2_heating.o
@@ -631,8 +622,8 @@ netcdf_mod.o: mp.o constants.o
 ingen.o: file_utils.o text_options.o constants.o theta_grid.o
 gs2_flux.o: species.o mp.o text_options.o file_utils.o dist_fn.o regression.o 
 gridgen4mod.o:  $(UTILS)/utils.a
-#gs2_dist_io.o: mp.o gs2_transforms.o kt_grids.o gs2_layouts.o theta_grid.o
-#gs2_dist_io.o: le_grids.o species.o file_utils.o
+gs2_dist_io.o: mp.o gs2_transforms.o kt_grids.o gs2_layouts.o theta_grid.o
+gs2_dist_io.o: le_grids.o species.o file_utils.o
 
 ############################################################## MORE DIRECTIVES
 clean:
@@ -780,21 +771,6 @@ origin:
 linux:
 	ln -sf command_line_nag.f90 command_line.f90
 	ln -sf mp_mpi_r8.f90 mp.f90
-	ln -sf shmem_stub.f90 shmem.f90
-	ln -sf prof_none.f90 prof.f90
-	ln -sf redistribute_mpi.f90 redistribute.f90
-	ln -sf check_portable.f90 check.f90
-	ln -sf ran_portable.f90 ran.f90
-	ln -sf gs2_save_fast.f90 gs2_save.f90
-	ln -sf file_utils_portable.f90 file_utils.f90
-	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-	ln -sf fft_work_fftw.f90 fft_work.f90
-	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-	cd $(UTILS); ln -sf mds_io_stub.f90 mds.f90 
-
-linux_ifort:
-	ln -sf command_line_unix.f90 command_line.f90
-	ln -sf mp_stub.f90 mp.f90
 	ln -sf shmem_stub.f90 shmem.f90
 	ln -sf prof_none.f90 prof.f90
 	ln -sf redistribute_mpi.f90 redistribute.f90
