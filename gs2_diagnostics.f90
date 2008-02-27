@@ -31,7 +31,9 @@ module gs2_diagnostics
   logical :: write_vortcheck, write_fieldcheck
   logical :: write_fieldline_avg_phi, write_hrate, write_lorentzian
   logical :: write_neoclassical_flux, write_nl_flux, write_Epolar
-  logical :: write_verr, write_cerr, write_max_verr
+!>MAB
+  logical :: write_verr, write_cerr
+!<MAB
   logical :: exit_when_converged
   logical :: dump_neoclassical_flux, dump_check1, dump_check2
   logical :: dump_fields_periodically, make_movie
@@ -53,8 +55,7 @@ module gs2_diagnostics
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: dv_unit, jext_unit   !GGH Additions
-  integer :: dump_neoclassical_flux_unit, dump_check1_unit, dump_check2_unit
-  integer :: res_unit, res_unit2
+  integer :: dump_neoclassical_flux_unit, dump_check1_unit, dump_check2_unit, res_unit
 
   complex, dimension (:,:,:), allocatable :: omegahist
   ! (navg,ntheta0,naky)
@@ -112,8 +113,9 @@ contains
     use gs2_heating, only: init_htype,init_dvtype
     use collisions, only: collision_model_switch, init_lorentz_error
     use mp, only: broadcast, proc0
+!>MAB
     use le_grids, only: init_weights
-
+!<MAB
     implicit none
     logical, intent (in) :: list
     integer, intent (in) :: nstep
@@ -153,14 +155,17 @@ contains
     call broadcast (save_for_restart)
     call broadcast (write_gs)
     call broadcast (write_g)
+!>MAB
     call broadcast (write_gyx)
+!<MAB
     call broadcast (write_gg)
     call broadcast (write_stress)
     call broadcast (write_final_antot)
+!>MAB
     call broadcast (write_verr)
-    call broadcast (write_max_verr)
     call broadcast (write_lpoly)
     call broadcast (write_cerr)
+!<MAB
 
     call broadcast (write_vortcheck)
     call broadcast (write_fieldcheck)
@@ -175,9 +180,11 @@ contains
     
     nmovie_tot = nstep/nmovie
 
+!>MAB
 ! initialize weights for less accurate integrals used
 ! to provide an error estimate for v-space integrals (energy and untrapped)
     if (write_verr .and. proc0) call init_weights
+!<MAB
 
 ! allocate heating diagnostic data structures
     if (write_hrate) then
@@ -259,7 +266,6 @@ contains
        if (write_verr .and. write_ascii) then
           call open_output_file (res_unit, ".vres")
           call open_output_file (lpc_unit, ".lpc")
-          if (write_max_verr) call open_output_file (res_unit2, ".vres2")
        end if
 
        !GGH Density and velocity perturbations
@@ -362,7 +368,7 @@ contains
          write_dmix, write_kperpnorm, write_phitot, write_epartot, &
          write_eigenfunc, write_final_fields, write_final_antot, &
          write_fcheck, write_final_epar, write_final_moments, write_cerr, &
-         write_vortcheck, write_fieldcheck, write_Epolar, write_verr, write_max_verr, &
+         write_vortcheck, write_fieldcheck, write_Epolar, write_verr, &
          write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, write_stress, &
@@ -414,9 +420,10 @@ contains
        write_fcheck = .false.
        write_vortcheck = .false.
        write_fieldcheck = .false.
+!>MAB
        write_verr = .false.
-       write_max_verr = .false.
        write_cerr = .false.
+!<MAB
        nwrite = 100
        nmovie = 1000
        navg = 100
@@ -490,8 +497,10 @@ contains
     use dist_fn, only: getan, get_epar, getmoms, par_spectrum, lambda_flux
     use dist_fn, only: e_flux
     use dist_fn, only: write_f, write_fyx
+!>MAB
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use collisions, only: vnmult
+!<MAB
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
     use gs2_transforms, only: transform2, inverse2
@@ -527,18 +536,44 @@ contains
     real, dimension (:,:), allocatable :: bxsavg, bysavg
     real, dimension (:), allocatable :: stemp, zx1, zxm, zy1, zyn, xx, yy
     real :: zxy11, zxym1, zxy1n, zxymn, L_x, L_y, rxt, ryt, bxt, byt
-    real :: geavg, glavg
+    real :: max_e_err, max_al_err, max_trap_err, avg_e_err, avg_al_err, avg_trap_err
     integer :: istatus, nnx, nny, nnx4, nny4, ulim, llim, iblock, i, g_unit
     logical :: last = .true.
 
-    real, dimension (:,:,:,:), allocatable :: errest_by_mode
+!    real, dimension (:,:,:,:,:), allocatable :: lpcoef_by_mode
     integer, dimension (:,:), allocatable :: erridx
     real, dimension (:,:), allocatable :: errest
 
     if (write_gyx) call write_fyx (phinew,bparnew,last)
     if (write_g) call write_f (last)
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
-    if (write_cerr) call collision_error (phinew, bparnew, last, istep)
+    if (write_cerr) call collision_error (phinew, bparnew, last)
+
+!>MAB
+    if (write_verr) then
+!       allocate(lpcoef_by_mode(2*ntgrid+1,ntheta0,naky,nspec,2))
+       allocate(errest(3,2), erridx(3,3))
+
+! gets integral error estimates by comparing with integral accurate to lower-order
+       call get_verr (errest, erridx, phinew, bparnew)
+
+! estimation of error based on size of legendre polynomial coefficients
+!       call get_gtran (lpcoef_by_mode, phinew, bparnew, istep)
+
+! dump error estimates to ascii file
+       if (proc0 .and. write_ascii) then
+          write(res_unit,"(3(i8),2(1x,e12.6),3(i8),2(1x,e12.6),3(i8),4(1x,e12.6))") &
+               erridx(1,1), erridx(1,2), erridx(1,3), errest(1,1), errest(1,2), &
+               erridx(2,1), erridx(2,2), erridx(2,3), errest(2,1), errest(2,2), &
+               erridx(3,1), erridx(3,2), erridx(3,3), errest(3,1), errest(3,2), &
+               vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
+!          write(lpc_unit,"(2(1x,e12.6))") lpcoef_by_mode(ntgrid+1,1,1,1,1), lpcoef_by_mode(ntgrid+1,1,1,1,2)
+       end if
+       deallocate(erridx,errest)
+!       deallocate(lpcoef_by_mode)
+    end if
+!<MAB
+
 !    if (write_gg) call write_dist (g)
 
     phi0 = 1.
@@ -547,7 +582,6 @@ contains
        if (write_ascii .and. write_verr) then
           call close_output_file (res_unit)
           call close_output_file (lpc_unit)
-          if (write_max_verr) call close_output_file (res_unit2)
        end if
        if (write_ascii) call close_output_file (out_unit)
        if (write_ascii .and. write_hrate) call close_output_file (heat_unit)
@@ -1259,9 +1293,11 @@ contains
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
-    use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
+    use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum
+!>MAB
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
-    use collisions, only: ncheck, vnmult, vary_vnew
+    use collisions, only: ncheck, vnmult
+!<MAB
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
@@ -1297,18 +1333,17 @@ contains
     real :: phi2, apar2, bpar2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode
     real, dimension (ntheta0, naky, nspec) :: ntot2_by_mode, ntot20_by_mode
-    real, dimension (:,:,:,:), allocatable :: errest_by_mode
+!    real, dimension (:,:,:,:,:), allocatable :: lpcoef_by_mode
+!    real, dimension (:,:,:,:), allocatable :: errest_by_mode
     integer, dimension (:,:), allocatable :: erridx
     real, dimension (:,:), allocatable :: errest
-    real :: geavg, glavg
     real :: dmix, dmix4, dmixx
     real :: t, denom
-    integer :: ig, ik, it, is, unit, il, i, j, nnx, nny, ifield, write_mod
+    integer :: ig, ik, it, is, unit, il, i, j, nnx, nny, ifield
     complex :: phiavg, sourcefac
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
-         upar, tpar, tperp, upartot, ttot
+         upar, tpar, tperp
     complex, dimension (ntheta0, nspec) :: ntot00, density00, upar00, tpar00, tperp00
-    complex, dimension (ntheta0, nspec) :: upartot00, ttot00
     complex, dimension (ntheta0, nspec) :: rstress, ustress
     complex, dimension (ntheta0) :: phi00
     complex, allocatable, dimension (:,:,:) :: phik2
@@ -1393,25 +1428,19 @@ contains
     end if
 
     if (write_gyx .and. mod(istep,nmovie) == 0) call write_fyx (phinew,bparnew,last)
+    if (write_verr .and. mod(istep,ncheck) == 0) then
 
-    if (vary_vnew) then
-       write_mod = mod(istep,ncheck)
-    else
-       write_mod = mod(istep,nwrite)
-    end if
+!       allocate(lpcoef_by_mode(2*ntgrid+1,ntheta0,naky,nspec,2))
+       allocate(errest(3,2), erridx(3,3))
 
-    if (write_max_verr) write_verr = .true.
-    if (write_verr .and. write_mod == 0) then
-
-       allocate(errest(5,2), erridx(5,3))
-
+!       lpcoef_by_mode = 0.0
        errest = 0.0; erridx = 0
 
 ! error estimate obtained by comparing standard integral with less-accurate integral
        call get_verr (errest, erridx, phinew, bparnew)
 
 ! error estimate based on monitoring amplitudes of legendre polynomial coefficients
-       call get_gtran (geavg, glavg, phinew, bparnew, istep)
+!       call get_gtran (lpcoef_by_mode, phinew, bparnew, istep)
        if (proc0) then
 
 ! write error estimates to .nc file          
@@ -1419,28 +1448,23 @@ contains
 
 ! write error estimates for ion dist. fn. at outboard midplane with ik=it=1 to ascii files
           if (write_ascii) then
-             t = user_time
-             write(lpc_unit,"(3(1x,e12.6))") t, geavg, glavg             
-             write(res_unit,"(8(1x,e12.6))") t, errest(1,2), errest(2,2), errest(3,2), &
-                  errest(4,2), errest(5,2), vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
-             if (write_max_verr) then
-                write(res_unit2,"(3(i8),(1x,e12.6),3(i8),(1x,e12.6), &
-                     3(i8),(1x,e12.6),3(i8),(1x,e12.6),3(i8),(1x,e12.6))") &
-                     erridx(1,1), erridx(1,2), erridx(1,3), errest(1,1), &
-                     erridx(2,1), erridx(2,2), erridx(2,3), errest(2,1), &
-                     erridx(3,1), erridx(3,2), erridx(3,3), errest(3,1), &
-                     erridx(4,1), erridx(4,2), erridx(4,3), errest(4,1), &
-                     erridx(5,1), erridx(5,2), erridx(5,3), errest(5,1)
-             end if
+!             write(lpc_unit,"(2(1x,e12.6))") lpcoef_by_mode(ntgrid+1,1,1,1,1), lpcoef_by_mode(ntgrid+1,1,1,1,2)
+             write(res_unit,"(3(i8),2(1x,e12.6),3(i8),2(1x,e12.6),3(i8),4(1x,e12.6))") &
+                  erridx(1,1), erridx(1,2), erridx(1,3), errest(1,1), errest(1,2), &
+                  erridx(2,1), erridx(2,2), erridx(2,3), errest(2,1), errest(2,2), &
+                  erridx(3,1), erridx(3,2), erridx(3,3), errest(3,1), errest(3,2), &
+                  vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
           end if
        end if
+!       deallocate(lpcoef_by_mode)
        deallocate(errest,erridx)
     end if
+
 
     if (mod(istep,nwrite) /= 0 .and. .not. exit) return
     t = user_time
 
-    if (write_g) call write_f (last)
+!    if (write_g) call write_f (last)
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
 
     call prof_entering ("loop_diagnostics-1")
@@ -1679,21 +1703,21 @@ contains
        write (unit=polar_raw_unit, fmt='(a)') ''      
 
        !Compute log-averaged polar spectrum
-       eavgarray(:,:)=0.
+       
        do ifield = 1, 3+nspec*3
+          eavgarray(:,ifield)=0.
 
-!ERROR- Below is an attempt to be more efficient, but it is not right
-!          if (ifield == 2 .and. fapar > epsilon(0.0)) then
-!             continue
-!          else
-!             cycle
-!          end if
+          if (ifield == 2 .and. fapar > epsilon(0.0)) then
+             continue
+          else
+             cycle
+          end if
 
-!          if (ifield == 3 .and. fbpar > epsilon(0.0)) then
-!             continue
-!          else
-!             cycle
-!          end if
+          if (ifield == 3 .and. fbpar > epsilon(0.0)) then
+             continue
+          else
+             cycle
+          end if
 
          do i = 1,nbx
              j=polar_avg_index(i)
@@ -1726,7 +1750,7 @@ contains
        end if
        write (unit=polar_avg_unit, fmt='(a)') ''      
 
-    end if !END Polar spectrum calculation----------------------------------
+    end if 
 
     if (write_vortcheck) call vortcheck (phinew, bparnew)
     if (write_fieldcheck) call fieldcheck (phinew, aparnew, bparnew)
@@ -2016,7 +2040,7 @@ contains
        end do
     end if
 
-    if (write_cerr) call collision_error(phinew,bparnew,last,istep)
+    if (write_cerr) call collision_error(phinew,bparnew,last)
 
 
     if (write_stress) then
@@ -2169,7 +2193,7 @@ contains
     use run_parameters, only: funits
     use nonlinear_terms, only: nonlin
     use dist_fn_arrays, only: c_rate
-    use gs2_heating, only: heating_diagnostics, avg_h, avg_hk, htimesx, zero_htype
+    use gs2_heating, only: heating_diagnostics, avg_h, avg_hk, htimesx
     implicit none
     integer, intent (in) :: istep
     type (heating_diagnostics) :: h
@@ -2179,10 +2203,6 @@ contains
     real :: fac
     integer :: is, ik, it, ig
     
-    !Zero out variables for heating diagnostics
-    call zero_htype(h)
-    call zero_htype(hk)
-
     if (proc0) then
        
        !GGH NOTE: Here wgt is 1/(2*ntgrid+1)
@@ -2516,7 +2536,7 @@ contains
     anorm = sum(wgt)
 
     !Initialize ebin
-!    write (*,*) size(ebin),' is size of ebin'
+    write (*,*) size(ebin),' is size of ebin'
     ebin=0.
 
     !Loop through all modes and sum number at each kperp
@@ -2527,7 +2547,7 @@ contains
 
           if (nonlin .and. it == 1 .and. ik == 1) cycle
 
-!          write (*,*) polar_index(it,ik),' should be < nbx?'
+          write (*,*) polar_index(it,ik),' should be < nbx?'
           ebin(polar_index(it,ik))= ebin(polar_index(it,ik)) + &
                sum(real(a(-ng:ng,it,ik)*b(-ng:ng,it,ik)*wgt(-ng:ng)))/anorm*fac
        enddo

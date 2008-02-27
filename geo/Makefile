@@ -139,6 +139,24 @@ ifeq ($(CPU),RS6000)
   endif
 endif
 
+# imported from AGK by TT FEB 01 2008
+# NERSC Cray XT4 (Franklin) options: GGH 07 SEP 17
+ifeq ($(CPU),XT4)
+  FC = ftn
+  PLATFORM_LINKS = cxt4
+  u_obj = $(UTILDIR)/utils.a
+  stubs = radstub.o vdimstub.o $(UTILDIR)/mdslib.o
+  F90FLAGS = -r8 -target=linux -I $(UTILDIR) 
+  FLIBS = -L$$NETCDF_DIR/lib -lnetcdf 
+  ifneq ($(debug),on)
+    F90FLAGS += -fastsse
+  else
+    F90FLAGS += -g
+  endif
+endif
+# import end
+
+
 # Dawson G5 cluster:
 ifeq ($(CPU),Dawson)
   FC = xlf95
@@ -155,22 +173,6 @@ ifeq ($(CPU),Dawson)
     F90FLAGS += -g 
   endif
 endif
-
-ifeq ($(CPU),LINUX_ifort_mrf)
-  FC = ifort
-  PLATFORM_LINKS = mrf
-  FLIBS = -L/usr/local/lib -lnetcdf -L/opt/intel/mkl/9.1/lib/32 -lvml
-  u_obj = $(UTILDIR)/spl.o $(UTILDIR)/mds.o $(UTILDIR)/mdslib.o
-  stubs = radstub.o vdimstub.o
-  ifeq ($(debug),on)
-    FFLAGS = -r8 -g -I/usr/local/include -check bounds -lowercase
-    F90FLAGS = -r8 -g -I/usr/local/include/netcdf -module $(UTILDIR) -check bounds -lowercase
-  else	
-    FFLAGS   = -parallel -r8 -w -xT -arch SSE -O3 -I $(UTILDIR) -lowercase -I/usr/local/include
-    F90FLAGS = -parallel -r8 -w -xT -arch SSE -O3 -I $(UTILDIR) -I/usr/local/include -lowercase
-  endif
-endif
- 
 
 # DEC alpha options:
 ifeq ($(CPU),ALPHA)
@@ -378,7 +380,7 @@ ball: ball.o geo.a $(u_obj) $(stubs)
 eiktest: et.o geo.a $(u_obj) $(stubs)
 	case $(PLATFORM_LINKS) in \
 		t3e) $(FC) -o eiktest et.o $(stubs) $(FLIBS) ;; \
-		*) $(FC) $(FFLAGS) -o eiktest et.o $(stubs) $(geo_obj) $(u_obj) $(FLIBS) ;; \
+		*) $(FC) -o eiktest et.o $(stubs) $(geo_obj) $(u_obj) $(FLIBS) ;; \
 	esac 
 
 ts : testsmoothf.o smoothf.o

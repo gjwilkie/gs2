@@ -39,6 +39,17 @@ if test $WORKSTATION_TYPE = 'unknown'; then
     fi
 fi
 
+# Are we on franklin.nersc.gov,  an XT4:
+if test "$WORKSTATION_TYPE" = 'LINUX'; then
+    S=`uname -m`
+    if test "$S" = 'x86_64'; then
+      FC=`which ftn | grep /opt/xt-pe`
+      if test ${#FC} != 0 ; then
+          WORKSTATION_TYPE='XT4'
+      fi
+    fi
+fi
+
 # distinguish between Linux on Intel or Alpha machines:
 if test "$WORKSTATION_TYPE" = 'LINUX'; then
     S=`uname -m`

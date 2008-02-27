@@ -17,7 +17,7 @@ module gs2_save
   double precision, allocatable, dimension(:) :: atmp
   integer :: ncid, thetaid, signid, gloid, kyid, kxid, nk_stir_dim
   integer :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
-  integer :: t0id, gr_id, gi_id, vnm1id, vnm2id, delt0id
+  integer :: delt0id, t0id, gr_id, gi_id, vnm1id, vnm2id
   integer :: a_antr_id, b_antr_id, a_anti_id, b_anti_id
 
   logical :: initialized = .false.
@@ -73,11 +73,12 @@ contains
           suffix = '.'//achar(48+th)//achar(48+h)//achar(48+t)//achar(48+u)
           file_proc = trim(trim(file_proc)//suffix)
        endif
-       
+    
        istatus = nf_create (file_proc, 0, ncid)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_create error: ", nf_strerror(istatus)
+          goto 1
        end if
        
        if (n_elements > 0) then
@@ -85,30 +86,35 @@ contains
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_dim theta error: ", nf_strerror(istatus)
+             goto 1
           end if
           
           istatus = nf_def_dim (ncid, "sign", 2, signid)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_dim sign error: ", nf_strerror(istatus)
+             goto 1
           end if
           
           istatus = nf_def_dim (ncid, "glo", n_elements, gloid)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_dim glo error: ", nf_strerror(istatus)
+             goto 1
           end if
           
           istatus = nf_def_dim (ncid, "aky", naky, kyid)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_dim aky error: ", nf_strerror(istatus)
+             goto 1
           end if
           
           istatus = nf_def_dim (ncid, "akx", ntheta0, kxid)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_dim akx error: ", nf_strerror(istatus)
+             goto 1
           end if
        end if
        
@@ -116,24 +122,28 @@ contains
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_def_var t0 error: ", nf_strerror(istatus)
+          goto 1
        end if
        
        istatus = nf_def_var (ncid, "delt0", NF_DOUBLE, 0, 0, delt0id)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_def_var delt0 error: ", nf_strerror(istatus)
+          goto 1
        end if
        
        istatus = nf_def_var (ncid, "vnm1", NF_DOUBLE, 0, 0, vnm1id)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_def_var vnm(1) error: ", nf_strerror(istatus)
+          goto 1
        end if
        
        istatus = nf_def_var (ncid, "vnm2", NF_DOUBLE, 0, 0, vnm2id)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_def_var vnm(2) error: ", nf_strerror(istatus)
+          goto 1
        end if
        
        if (ant_on) then
@@ -141,30 +151,35 @@ contains
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_dim nk_stir error: ", nf_strerror(istatus)
+             goto 1
           end if
           
           istatus = nf_def_var (ncid, "a_ant_r", NF_DOUBLE, 1, nk_stir_dim, a_antr_id)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_var a_ant_r error: ", nf_strerror(istatus)
+             goto 1
           end if
           
           istatus = nf_def_var (ncid, "a_ant_i", NF_DOUBLE, 1, nk_stir_dim, a_anti_id)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_var a_ant_i error: ", nf_strerror(istatus)
+             goto 1
           end if
           
           istatus = nf_def_var (ncid, "b_ant_r", NF_DOUBLE, 1, nk_stir_dim, b_antr_id)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_var b_ant_r error: ", nf_strerror(istatus)
+             goto 1
           end if
           
           istatus = nf_def_var (ncid, "b_ant_i", NF_DOUBLE, 1, nk_stir_dim, b_anti_id)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_var b_ant_i error: ", nf_strerror(istatus)
+             goto 1
           end if
        end if
        
@@ -174,6 +189,7 @@ contains
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_var g error: ", nf_strerror(istatus)
+             goto 1
           end if
           
           istatus = nf_def_var (ncid, "gi", NF_DOUBLE, 3, &
@@ -181,6 +197,7 @@ contains
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_var g error: ", nf_strerror(istatus)
+             goto 1
           end if
           
           if (fphi > epsilon(0.)) then
@@ -189,6 +206,7 @@ contains
              if (istatus /= 0) then
                 ierr = error_unit()
                 write(ierr,*) "nf_def_var phi error: ", nf_strerror(istatus)
+                goto 1
              end if
              
              istatus = nf_def_var (ncid, "phi_i", NF_DOUBLE, 3, &
@@ -196,15 +214,17 @@ contains
              if (istatus /= 0) then
                 ierr = error_unit()
                 write(ierr,*) "nf_def_var phi error: ", nf_strerror(istatus)
+                goto 1
              end if
           end if
-
+          
           if (fapar > epsilon(0.)) then
              istatus = nf_def_var (ncid, "apar_r", NF_DOUBLE, 3, &
                   (/ thetaid, kyid, kxid /), aparr_id)
              if (istatus /= 0) then
                 ierr = error_unit()
                 write(ierr,*) "nf_def_var apar error: ", nf_strerror(istatus)
+                goto 1
              end if
              
              istatus = nf_def_var (ncid, "apar_i", NF_DOUBLE, 3, &
@@ -212,15 +232,17 @@ contains
              if (istatus /= 0) then
                 ierr = error_unit()
                 write(ierr,*) "nf_def_var apar error: ", nf_strerror(istatus)
+                goto 1
              end if
           end if
-
+          
           if (fbpar > epsilon(0.)) then
              istatus = nf_def_var (ncid, "aperp_r", NF_DOUBLE, 3, &
                   (/ thetaid, kyid, kxid /), bparr_id)
              if (istatus /= 0) then
                 ierr = error_unit()
                 write(ierr,*) "nf_def_var aperp error: ", nf_strerror(istatus)
+                goto 1
              end if
              
              istatus = nf_def_var (ncid, "aperp_i", NF_DOUBLE, 3, &
@@ -228,50 +250,56 @@ contains
              if (istatus /= 0) then
                 ierr = error_unit()
                 write(ierr,*) "nf_def_var aperp error: ", nf_strerror(istatus)
+                goto 1
              end if
           end if
        end if
        
        istatus = nf_enddef (ncid)
-       
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_enddef error: ", nf_strerror(istatus)
+          goto 1
        end if
     end if
 
-    tmp1 = delt0
-    istatus = nf_inq_varid (ncid, "delt0", delt0id)
-    istatus = nf_put_var_double (ncid, delt0id, tmp1)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       write(ierr,*) "nf_put_var_double delt0 error: ", nf_strerror(istatus)
-    end if
- 
     tmp1 = t0
-    istatus = nf_inq_varid (ncid, "t0", t0id)
     istatus = nf_put_var_double (ncid, t0id, tmp1)
     if (istatus /= 0) then
        ierr = error_unit()
        write(ierr,*) "nf_put_var_double t0 error: ", nf_strerror(istatus)
+       goto 1
+    end if
+ 
+    tmp1 = delt0
+    istatus = nf_put_var_double (ncid, delt0id, tmp1)
+    if (istatus /= 0) then
+       ierr = error_unit()
+       write(ierr,*) "nf_put_var_double delt0 error: ", nf_strerror(istatus)
+       goto 1
     end if
  
     tmp1 = vnm(1)
-    istatus = nf_inq_varid (ncid, "vnm1", vnm1id)
     istatus = nf_put_var_double (ncid, vnm1id, tmp1)
     if (istatus /= 0) then
        ierr = error_unit()
        write(ierr,*) "nf_put_var_double vnm(1) error: ", nf_strerror(istatus)
+       goto 1
     end if
  
     tmp1 = vnm(2)
-    istatus = nf_inq_varid (ncid, "vnm2", vnm2id)
     istatus = nf_put_var_double (ncid, vnm2id, tmp1)
     if (istatus /= 0) then
        ierr = error_unit()
        write(ierr,*) "nf_put_var_double vnm(2) error: ", nf_strerror(istatus)
+       goto 1
     end if
 
+1   continue
+    if (istatus /= 0) then
+       i = nf_close (ncid)
+       return
+    end if
 
     if (n_elements > 0) then
 
@@ -378,11 +406,11 @@ contains
        end if
     end if
 
-    if (exit) then
-       i = nf_close (ncid)
-    else
-       i = nf_sync (ncid)
-    end if
+!    if (exit) then
+    i = nf_close (ncid)
+!    else
+!       i = nf_sync (ncid)
+!    end if
 
   end subroutine gs2_save_for_restart
 
@@ -407,7 +435,7 @@ contains
     double precision :: tmp1
     integer :: iglo, i, th, h, t, u, ierr
     real :: fac
-!    logical :: initialized = .false.
+    logical :: initialized = .false.
 
     n_elements = g_lo%ulim_proc-g_lo%llim_proc+1
     if (n_elements <= 0) return
@@ -511,7 +539,7 @@ contains
              write(ierr,*) "nf_inq_varid phii error: ", nf_strerror(istatus),' ',iproc
           end if
        end if
-
+       
        if (fapar > epsilon(0.)) then
           istatus = nf_inq_varid (ncid, "apar_r", aparr_id)
           if (istatus /= 0) then
@@ -525,7 +553,7 @@ contains
              write(ierr,*) "nf_inq_varid apari error: ", nf_strerror(istatus),' ',iproc
           end if
        end if
-
+       
        if (fbpar > epsilon(0.)) then
           istatus = nf_inq_varid (ncid, "aperp_r", bparr_id)
           if (istatus /= 0) then
@@ -539,7 +567,7 @@ contains
              write(ierr,*) "nf_inq_varid aperpi error: ", nf_strerror(istatus),' ',iproc
           end if
        end if
-
+       
        istatus = nf_inq_varid (ncid, "gr", gr_id)
        if (istatus /= 0) then
           ierr = error_unit()
@@ -552,7 +580,7 @@ contains
           write(ierr,*) "nf_inq_varid gi error: ", nf_strerror(istatus),' ',iproc
        end if
     end if
-    
+
     if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
     if (.not. allocated(tmpi)) allocate (tmpi(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
 
@@ -638,11 +666,11 @@ contains
        bparnew = bparnew*fac
     end if
 
-!    istatus = nf_close (ncid)       
-!    if (istatus /= 0) then
-!    ierr = error_unit()
-!       write(ierr,*) "nf_close error: ", nf_strerror(istatus),' ',iproc
-!    end if
+    istatus = nf_close (ncid)       
+    if (istatus /= 0) then
+    ierr = error_unit()
+       write(ierr,*) "nf_close error: ", nf_strerror(istatus),' ',iproc
+    end if
 
   end subroutine gs2_restore_many
 
@@ -873,11 +901,11 @@ contains
        bparnew = cmplx(ftmpr, ftmpi)*scale
     end if
 
-!    istatus = nf_close (ncid)       
-!    if (istatus /= 0) then
-!       ierr = error_unit()
-!       write(ierr,*) "nf_close error: ", nf_strerror(istatus),' ',iproc
-!    end if
+    istatus = nf_close (ncid)       
+    if (istatus /= 0) then
+       ierr = error_unit()
+       write(ierr,*) "nf_close error: ", nf_strerror(istatus),' ',iproc
+    end if
 
   end subroutine gs2_restore_one
 
@@ -902,7 +930,7 @@ contains
 
     if (.not. initialized .and. proc0) then
        file_proc=trim(trim(restart_file)//'.0000')
-
+       
        istatus = nf_open (file_proc, 0, ncid)
        if (istatus /= 0) then
           ierr = error_unit()
@@ -918,15 +946,15 @@ contains
 
     if (proc0) then
        istatus = nf_get_var_double (ncid, delt0id, tmp1)
-
+       
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_get_var_double delt0 error: ", nf_strerror(istatus) 
           delt0 = -1.
        else
           delt0 = tmp1
-       endif           
-       if (.not. initialized) istatus = nf_close (ncid)
+       endif
+       if (.not. initialized) istatus = nf_close (ncid)       
     endif
 
     call broadcast (istatus)
@@ -944,7 +972,7 @@ contains
     integer, intent (out) :: istatus
     integer :: ierr
     include 'netcdf.inc'
-    double precision :: tmp1
+    real :: tmp1
 
     if (.not. initialized .and. proc0) then
        file_proc=trim(trim(restart_file)//'.0000')
@@ -952,7 +980,7 @@ contains
        istatus = nf_open (file_proc, 0, ncid)
        if (istatus /= 0) then
           ierr = error_unit()
-          write(ierr,*) "nf_open in init_vnm error: ", nf_strerror(istatus) 
+          write(ierr,*) "nf_open in init_dt error: ", nf_strerror(istatus) 
        endif
 
        istatus = nf_inq_varid (ncid, "vnm1", vnm1id)
@@ -1113,21 +1141,21 @@ contains
 
     if (.not. initialized .and. proc0) then
        file_proc=trim(trim(restart_file)//'.0000')
-
+       
        istatus = nf_open (file_proc, 0, ncid)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_open in init_dt error: ", nf_strerror(istatus) 
        endif
-    end if
 
-    if (proc0) then
        istatus = nf_inq_varid (ncid, "t0", t0id)
        if (istatus /= 0) then
           ierr = error_unit()
           write(ierr,*) "nf_inq_varid for t0 in init_tstart: ", nf_strerror(istatus) 
        endif
+    end if
 
+    if (proc0) then
        istatus = nf_get_var_double (ncid, t0id, tmp1)
 
        if (istatus /= 0) then

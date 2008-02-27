@@ -128,6 +128,21 @@ ifeq ($(CPU),RS6000)
   endif
 endif
 
+# imported from AGK by TT FEB 01 2008
+# NERSC Cray XT4 (Franklin) options: GGH 07 SEP 17
+ifeq ($(CPU),XT4)
+  FC = ftn
+  PLATFORM_LINKS = cxt4
+  F90FLAGS = -r8 -target=linux -I$$NETCDF_DIR/include 
+  FLIBS = -L$$NETCDF_DIR/lib -lnetcdf 
+  ifneq ($(debug),on)
+    F90FLAGS += -fastsse
+  else
+    F90FLAGS += -g
+  endif
+endif
+# import end
+
 # Dawson G5 cluster:
 ifeq ($(CPU),Dawson)
   FC = xlf95
@@ -140,23 +155,6 @@ ifeq ($(CPU),Dawson)
     F90FLAGS += -g 
   endif
 endif
-
-ifeq ($(CPU),LINUX_ifort_mrf)
-  FC = ifort
-  PLATFORM_LINKS = mrf
-  FLIBS = -L/usr/local/lib -lnetcdf
-  F90FLAGS = -r8 -lowercase -vec-report0
- 
-  ifeq ($(debug),on)
-    FFLAGS   += -g -Mbounds
-    F90FLAGS += -g -check bounds
-  else
-    FFLAGS   += -w -xT -arch SSE -O3 -parallel 
-    F90FLAGS += -w -xT -arch SSE -O3 -parallel 
-  endif
- 
-endif
-
 
 # DEC alpha options:
 ifeq ($(CPU),ALPHA)
