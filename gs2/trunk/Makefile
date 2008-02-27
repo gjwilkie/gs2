@@ -350,7 +350,10 @@ ifeq ($(CPU),LINUX_ifort_mrf)
   FC = ifort
   FLIBS = $(UTILS)/mdslib.a -L/usr/local/lib -lnetcdf -lfftw -lrfftw
   PLATFORM_LINKS = linux_ifort
-  F90FLAGS = -parallel -vec-report0 -r8 -xT -arch SSE -O3 -I$(UTILS) -I$(GEO) -I /usr/local/include/netcdf
+  F90FLAGS = -vec-report0 -r8 -xT -arch SSE -O3 -I$(UTILS) -I$(GEO) -I /usr/local/include/netcdf
+  ifeq ($(debug),on)
+    F90FLAGS += -CB -g
+  endif
 endif
 
 

@@ -1330,7 +1330,6 @@ contains
     use gs2_layouts, only: ig_idx, ik_idx, ie_idx, is_idx, it_idx
     use file_utils, only: open_output_file, close_output_file
     use mp, only: proc0
-
     implicit none
 
     real, intent (in), optional :: vnmult_target
@@ -1417,6 +1416,7 @@ contains
              dela = slb1 - slb0
              delb = slb2 - slb0
              delc = slb2 - slb1
+
              delfac = delc/dela - dela/delc
 
              ! coefficients for tridiagonal matrix (2nd order accurate)
@@ -1456,6 +1456,7 @@ contains
           end do
 
 ! boundary at xi = 1
+          slb0 = 1.0
           slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
           slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
 
@@ -1475,10 +1476,10 @@ contains
 
           cc(1) = -vn*code_dt*cctmp
           aa(1) = 0.0
-          bb(1) = 1.0 - cc(1) + vn*code_dt*ee
+          bb(1) = 1.0 - (aa(1) + cc(1)) + ee*vn*code_dt
 
-          dd(1) = vnc*(cctmp + ee)
-          hh(1) = vnh*(cctmp + ee)
+          dd(1) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+          hh(1) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
 
 ! old scheme
 !          slb0 = 1.0
@@ -1512,9 +1513,9 @@ contains
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-          dela = slb1 - slb0
-          delb = slb2 - slb0
-          delc = slb2 - slb1
+!          cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
+!          aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
+!          bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
           delfac = delc/dela - dela/delc
 
           aatmp = 2.0*((1.0 - slbl**2)*delc/(delb*dela**2) &
@@ -1595,9 +1596,9 @@ contains
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
 
-             dela = slb1 - slb0
-             delb = slb2 - slb0
-             delc = slb2 - slb1
+             cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
+             aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
+             bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
              delfac = delc/dela - dela/delc
 
              slbl = 0.5*(slb0 + slb1)
@@ -1628,6 +1629,7 @@ contains
 
           end do
 
+          slb0 = 1.0
           slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
           slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
 
@@ -1650,10 +1652,10 @@ contains
 
           cc(1) = -vn*code_dt*cctmp
           aa(1) = 0.0
-          bb(1) = 1.0 - cc(1) + vn*code_dt*ee
+          bb(1) = 1.0 - (aa(1) + cc(1)) + ee*vn*code_dt
 
-          dd(1) = vnc*(cctmp + ee)
-          hh(1) = vnh*(cctmp + ee)
+          dd(1) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+          hh(1) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
 
 ! old scheme
 !          slb0 = 1.0
@@ -1682,9 +1684,8 @@ contains
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-          dela = slb1 - slb0
-          delb = slb2 - slb0
-          delc = slb2 - slb1
+          slbl = (slb1 + slb0)/2.0
+          slbr = (slb1 + slb2)/2.0
           delfac = delc/dela - dela/delc
 
           slbl = 0.5*(slb0 + slb1)
@@ -1710,17 +1711,13 @@ contains
 !          slbl = (slb1 + slb0)/2.0
 !          slbr = (slb1 + slb2)/2.0
 !
-!! Are cc(il) and aa(il) missing a factor of 2 here? I think it should be:
-!! cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0...MAB
-!! was originally cc(il)-0.5*vn*code_dt*(1.0-slbl*slbl)/slbl/slb0
-!          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0  ! NEW LINE
-!          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slbl/slb0   ! OLD LINE
+!          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0  
 !          aa(il) = cc(il)
 !          bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
 !
 !          dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
 !          hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-!<MAB
+
           a1(:je) = aa(:je)
           b1(:je) = bb(:je)
           c1(:je,ilz) = cc(:je)

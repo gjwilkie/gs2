@@ -145,14 +145,14 @@ ifeq ($(CPU),LINUX_ifort_mrf)
   FC = ifort
   PLATFORM_LINKS = mrf
   FLIBS = -L/usr/local/lib -lnetcdf
-  F90FLAGS = -r8 -lowercase -vec-report0
+  F90FLAGS = -r8 -lowercase 
  
   ifeq ($(debug),on)
     FFLAGS   += -g -Mbounds
     F90FLAGS += -g -check bounds
   else
-    FFLAGS   += -w -xT -arch SSE -O3 -parallel 
-    F90FLAGS += -w -xT -arch SSE -O3 -parallel 
+    FFLAGS   += -O3 
+    F90FLAGS += -O3 
   endif
  
 endif

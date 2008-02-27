@@ -332,9 +332,10 @@ contains
 
     if(writelots) then
        rbar = 0.
+       write(78,*) '# theta_pol,  R,   Z'
        do i= -nth,nth         
           write(99,*) 'i=',i,' thet= ',theta(i),' rgrid= ',rgrid(i)
-!          write(99,*) theta(i),Rpos(rgrid(i),theta(i)),Zpos(rgrid(i),theta(i))
+          write(78,*) theta(i),Rpos(rgrid(i),theta(i)),Zpos(rgrid(i),theta(i))
        enddo
 
        do i=-nth,nth-1
@@ -751,6 +752,8 @@ contains
     surfarea=2.*pi*(ans(nth)-ans(-nth))
 !    write(*,*) 'surface area= ',surfarea,' avgrmid**2'
 
+    
+
 !     compute dV/drhon = 2 pi Int(J dtheta)
     call integrate(jacob, theta, ans, nth)
     dvdrhon=2.*pi*(ans(nth)-ans(-nth))
@@ -762,8 +765,9 @@ contains
     do i=-nth,nth
        grho2(i)=grho(i)**2*jacob(i)
     enddo
-    call integrate(grho2, theta, ans, nth)
-    grho2n=2.*pi*(ans(nth)-ans(-nth))
+!    call integrate(grho2, theta, ans, nth)
+!    grho2n=2.*pi*(ans(nth)-ans(-nth))
+!    write (*,*) '< |grad rho|**2 > = ',grho2n
 
     if(isym == 1) then 
        call sym(gds2, 0, ntgrid)

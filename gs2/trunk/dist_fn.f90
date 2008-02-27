@@ -5819,7 +5819,7 @@ contains
 
     do iglo = g_lo%llim_world, g_lo%ulim_world
        ik = ik_idx(g_lo, iglo) ; if (ik /= 1) cycle
-       it = it_idx(g_lo, iglo) ; if (it /= 1) cycle
+       it = it_idx(g_lo, iglo) ; if (it /= 2) cycle
        is = is_idx(g_lo, iglo) ; if (is /= 1) cycle
        ie = ie_idx(g_lo, iglo) 
        ig = 0
@@ -5837,8 +5837,8 @@ contains
           if (.not. forbid(ig,il)) then
              vpa = sqrt(e(ie,is)*max(0.0, 1.0-al(il)*bmag(ig)))
              vpe = sqrt(e(ie,is)*al(il)*bmag(ig))
-             write (unit, "(8(1x,e12.6))") vpa, vpe, e(ie,is), al(il), &
-                  xpts(ie), ypts(il), real(gtmp(1)), real(gtmp(2))
+             write (unit, "(10(1x,e12.6))") vpa, vpe, e(ie,is), al(il), &
+                  xpts(ie), ypts(il), real(gtmp(1)), real(gtmp(2)), aimag(gtmp(1)), aimag(gtmp(2))
           end if
        end if
     end do

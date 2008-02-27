@@ -134,6 +134,7 @@ program eiktest
   open(unit=25,file='trap.out',status='unknown')
   open(unit=11,file='eik2.out',status='unknown')
   open(unit=99,file='eik3.out',status='unknown')
+  open(unit=78,file='eik7.out',status='unknown')
 !     
 !     compute the theta grid
 

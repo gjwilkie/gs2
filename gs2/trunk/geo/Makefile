@@ -159,15 +159,15 @@ endif
 ifeq ($(CPU),LINUX_ifort_mrf)
   FC = ifort
   PLATFORM_LINKS = mrf
-  FLIBS = -L/usr/local/lib -lnetcdf -L/opt/intel/mkl/9.1/lib/32 -lvml
+  FLIBS = -L/usr/local/lib -lnetcdf #-L/opt/intel/mkl/9.1/lib/32 -lvml
   u_obj = $(UTILDIR)/spl.o $(UTILDIR)/mds.o $(UTILDIR)/mdslib.o
   stubs = radstub.o vdimstub.o
   ifeq ($(debug),on)
     FFLAGS = -r8 -g -I/usr/local/include -check bounds -lowercase
     F90FLAGS = -r8 -g -I/usr/local/include/netcdf -module $(UTILDIR) -check bounds -lowercase
   else	
-    FFLAGS   = -parallel -r8 -w -xT -arch SSE -O3 -I $(UTILDIR) -lowercase -I/usr/local/include
-    F90FLAGS = -parallel -r8 -w -xT -arch SSE -O3 -I $(UTILDIR) -I/usr/local/include -lowercase
+    FFLAGS   = -r8 -O3 -I $(UTILDIR) -lowercase -I/usr/local/include
+    F90FLAGS = -r8 -O3 -I $(UTILDIR) -I/usr/local/include -lowercase
   endif
 endif
  
