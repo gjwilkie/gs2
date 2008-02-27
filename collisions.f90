@@ -1330,6 +1330,7 @@ contains
     use gs2_layouts, only: ig_idx, ik_idx, ie_idx, is_idx, it_idx
     use file_utils, only: open_output_file, close_output_file
     use mp, only: proc0
+
     implicit none
 
     real, intent (in), optional :: vnmult_target
@@ -1416,7 +1417,6 @@ contains
              dela = slb1 - slb0
              delb = slb2 - slb0
              delc = slb2 - slb1
-
              delfac = delc/dela - dela/delc
 
              ! coefficients for tridiagonal matrix (2nd order accurate)
@@ -1456,7 +1456,6 @@ contains
           end do
 
 ! boundary at xi = 1
-          slb0 = 1.0
           slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
           slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
 
@@ -1476,10 +1475,10 @@ contains
 
           cc(1) = -vn*code_dt*cctmp
           aa(1) = 0.0
-          bb(1) = 1.0 - (aa(1) + cc(1)) + ee*vn*code_dt
+          bb(1) = 1.0 - cc(1) + ee*vn*code_dt
 
-          dd(1) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-          hh(1) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+          dd(1) = vnc*(cctmp + ee)
+          hh(1) = vnh*(cctmp + ee)
 
 ! old scheme
 !          slb0 = 1.0
@@ -1513,9 +1512,9 @@ contains
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-!          cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
-!          aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
-!          bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
+          dela = slb1 - slb0
+          delb = slb2 - slb0
+          delc = slb2 - slb1
           delfac = delc/dela - dela/delc
 
           aatmp = 2.0*((1.0 - slbl**2)*delc/(delb*dela**2) &
@@ -1596,9 +1595,9 @@ contains
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
 
-             cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
-             aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
-             bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
+             dela = slb1 - slb0
+             delb = slb2 - slb0
+             delc = slb2 - slb1
              delfac = delc/dela - dela/delc
 
              slbl = 0.5*(slb0 + slb1)
@@ -1629,7 +1628,6 @@ contains
 
           end do
 
-          slb0 = 1.0
           slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
           slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
 
@@ -1643,19 +1641,16 @@ contains
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-          dela = slb1 - slb0
-          delb = slb2 - slb0
           delc = slb2 - slb1
-          delfac = delc/dela - dela/delc
 
           cctmp = -(1.0 + slbr) / delc
 
           cc(1) = -vn*code_dt*cctmp
           aa(1) = 0.0
-          bb(1) = 1.0 - (aa(1) + cc(1)) + ee*vn*code_dt
+          bb(1) = 1.0 - cc(1) + vn*code_dt*ee
 
-          dd(1) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-          hh(1) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+          dd(1) = vnc*(cctmp + ee)
+          hh(1) = vnh*(cctmp + ee)
 
 ! old scheme
 !          slb0 = 1.0
@@ -1684,21 +1679,18 @@ contains
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-          slbl = (slb1 + slb0)/2.0
-          slbr = (slb1 + slb2)/2.0
-          delfac = delc/dela - dela/delc
-
           slbl = 0.5*(slb0 + slb1)
           slbr = 0.5*(slb1 + slb2)
-             
+
+          dela = slb1 - slb0
+          delb = slb2 - slb0
+          delc = slb2 - slb1
+          delfac = delc/dela - dela/delc
+
           aatmp = 2.0*((1.0 - slbl**2)*delc/(delb*dela**2) &
                - (1.0 - slb1**2)*delfac*delc/(dela*delb**2))
           cctmp = 2.0*((1.0 - slbr**2)*dela/(delb*delc**2) &
                + (1.0 - slb1**2)*delfac*dela/(delc*delb**2))
-
-! old lagrangian stuff
-!          cctmp = 2.0*(1.0 - slb1**2 + slb1*delc)/(dela*delb)
-!          aatmp = 2.0*(1.0 - slb1**2 - slb1*dela)/(delc*delb) 
 
           cc(il) = -vn*code_dt*cctmp
           aa(il) = -vn*code_dt*aatmp
@@ -1711,7 +1703,7 @@ contains
 !          slbl = (slb1 + slb0)/2.0
 !          slbr = (slb1 + slb2)/2.0
 !
-!          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0  
+!          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0
 !          aa(il) = cc(il)
 !          bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
 !

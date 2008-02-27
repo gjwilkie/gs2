@@ -181,8 +181,8 @@ ifeq ($(CPU),RS6000)
   PLATFORM_LINKS = ibm
   F90FLAGS = -qautodbl=dbl4 -qsuffix=f=f90 -I $(UTILS) -I $(GEO) \
 	-I $(NETCDF_DIR)/include 
-  FLIBS = $$NETCDF $$FFTW -lfftw -lrfftw
-  FLIBS5 = $$NETCDF $$FFTW -lfftw -lrfftw \
+  FLIBS = $$NETCDF $$FFTW -ldfftw -ldrfftw
+  FLIBS5 = $$NETCDF $$FFTW -ldfftw -ldrfftw \
 	-I/usr/common/usg/hdf5/64/1.6.4/parallel/lib \
 	-L/usr/common/usg/zlib/default/lib -L/usr/common/usg/szip/default/lib \
 	/usr/common/usg/hdf5/64/1.6.4/parallel/lib/libhdf5_fortran.a \
