@@ -2821,7 +2821,7 @@ end subroutine geofax
     
 ! need to bracket root.  
 
-    bmult=0.25
+    bmult=0.01
     jmax=5
     kmax=5
        
