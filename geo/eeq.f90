@@ -364,7 +364,8 @@ contains
     
 ! Read the data
 
-    read(5,1000) char, char, char, char, char, i, nw, nh
+   read(5,1000) char, char, char, char, char, i, nw, nh
+   write(*,1000) char, char, char, char, char, i, nw, nh
 
     nwb = nw * big
     nhb = nh * big
@@ -373,6 +374,9 @@ contains
 
     read(5,2020) rwid, zhei, rcentr, rleft, xdum      
     read(5,2020) R_mag, Z_mag, psi_0, psi_a, bcentr
+    write(*,2020) rwid, zhei, rcentr, rleft, xdum      
+    write(*,2020) R_mag, Z_mag, psi_0, psi_a, bcentr
+
 !
 ! pbar is defined by
 ! pbar = (psi-psi_0)/(psi_a-psi_0)
@@ -408,6 +412,7 @@ contains
     read(5,2020) (dummy(j),     j = 1 ,nw)
     read(5,2020) ((sefit_psi(i,j) , i = 1, nw) , j = 1, nh)
 
+
     allocate(zp(3*nw*nh), temp(nw+2*nh))
     allocate(zx1(nh), zxm(nh), zy1(nw), zyn(nw))
 
@@ -431,7 +436,7 @@ contains
     nh = nhb
 
     read(5,2022) nbbbs, ndum
-    allocate(rbbbs(nbbbs), zbbbs(nbbbs), thetab(nbbbs), r_bound(nbbbs))
+   allocate(rbbbs(nbbbs), zbbbs(nbbbs), thetab(nbbbs), r_bound(nbbbs))
     read(5,2020) (rbbbs(i), zbbbs(i) , i = 1, nbbbs)
 
 ! get r_boundary(theta)
@@ -440,6 +445,7 @@ contains
     r_bound = sqrt( (rbbbs - R_mag)**2 + (zbbbs - Z_mag)**2 )
 
     call sort(thetab, r_bound, zbbbs, rbbbs)
+
 
 ! Allow for duplicated points near +- pi:
 

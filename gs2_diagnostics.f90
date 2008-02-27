@@ -1776,8 +1776,8 @@ contains
 !  24      df_2 ** 2
 !  25      h_1 ** 2
 !  26      h_2 ** 2
-!  27      Phi_bar_1 ** 2
-!  28      Phi_bar_2 ** 2
+!  27      (q Phi_bar/T)_1 ** 2
+!  28      (q Phi_bar/T)_2 ** 2
 !
 !
 ! For case with one species:
@@ -1802,7 +1802,7 @@ contains
 !  17      B_par**2
 !  18      df ** 2
 !  19      h ** 2
-!  20      Phi_bar ** 2
+!  20      (q Phi_bar/T) ** 2
 
           write (unit=heat_unit, fmt="(28es12.4)") t,h % energy,  &
                h % energy_dot, h % antenna, h % imp_colls, h % hypercoll, h % collisions, &
@@ -1996,9 +1996,9 @@ contains
 
              if (write_nl_flux) then
                 if (write_ascii) then
-!                   write (out_unit,"('ik,it,aky,akx,<phi**2>,t: ', &
-!                        & 2i5,4(1x,e12.6))") &
-!                        ik, it, aky_out(ik), akx_out(it), phi2_by_mode(it,ik), t
+                   write (out_unit,"('ik,it,aky,akx,<phi**2>,t: ', &
+                        & 2i5,4(1x,e12.6))") &
+                        ik, it, aky_out(ik), akx_out(it), phi2_by_mode(it,ik), t
 !                   write (out_unit,"('ik,it,aky,akx,<apar**2>,t: ', &
 !                        & 2i5,4(1x,e12.6))") &
 !                        ik, it, aky_out(ik), akx_out(it), apar2_by_mode(it,ik), t
@@ -2061,7 +2061,8 @@ contains
                   ntot20(is), ntot20_by_mode(:,:,is))
           end do
 
-!          write (out_unit, "('t,u0 ',2(1x,e12.6))") t, aimag(upar00 (1,1))
+          write (out_unit, "('t,u0 ',2(1x,e12.6))") t, aimag(upar00 (1,1))
+          write (out_unit, "('t,tperp0 ',9(1x,e12.6))") t, tperp00 (1,:), tperp00(2,:)
 
           call nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, &
                ntot20_by_mode, phi00, ntot00, density00, upar00, &
