@@ -2734,100 +2734,101 @@ contains
              end if
           end do
 
+          if (npts > 0) then
+
 ! jend(ig) is total # of al grid points at each theta value
-          jend(ig) = ng2 + npts
+             jend(ig) = ng2 + npts
           
 ! ytmp is an array containing pitch angle grid points (for vpa >= 0) 
-          allocate(ytmp(npts), yb(2*npts-1), wb(2*npts-1))
-          allocate(wberr(npts,npts))
+             allocate(ytmp(npts), yb(2*npts-1), wb(2*npts-1))
+             allocate(wberr(npts,npts))
 
-          ytmp = 0.0; yb = 0.0; wb = 0.0; wberr = 0.0
+             ytmp = 0.0; yb = 0.0; wb = 0.0; wberr = 0.0
           
-          icnt = 1
+             icnt = 1
 
 ! loop computes transformed variable of integration
-          do il = ng2+1, nlambda
-             if (1.0 - al(il)*bmag(ig) > -bouncefuzz) then
-                ytmp(icnt) = sqrt(max(1 - al(il)*bmag(ig), 0.0))
-                icnt = icnt + 1
-             end if
-          end do
+             do il = ng2+1, nlambda
+                if (1.0 - al(il)*bmag(ig) > -bouncefuzz) then
+                   ytmp(icnt) = sqrt(max(1 - al(il)*bmag(ig), 0.0))
+                   icnt = icnt + 1
+                end if
+             end do
           
 ! define array (yb) with pitch-angle gridpts corresponding to both positive and negative vpa
-          if (npts > 0) yb(:npts-1) = -ytmp(:npts-1)
-          do ix=1,npts
-             yb(ix+npts-1) = ytmp(npts-ix+1)
-          end do
+             yb(:npts-1) = -ytmp(:npts-1)
+             do ix=1,npts
+                yb(ix+npts-1) = ytmp(npts-ix+1)
+             end do
 
 ! get lagrange coefficients for construction of lagrange interpolating polynomial
 ! this is not necessary for integration, but can be useful diagnostic for integral accuracy
-          call lagrange_coefs (ig, yb, lgrnge(ig,:,:,:), xloc(ig,:))
+!          call lagrange_coefs (ig, yb, lgrnge(ig,:,:,:), xloc(ig,:))
 
 ! gets grid point weights for trapped particle integral
-          ulim = sqrt(max(1.0-bmag(ig)/bmax,0.0))
-          llim = -ulim
-          call get_weights (nmax, llim, ulim, yb, wb, ndiv, divmax, eflag) 
+             ulim = sqrt(max(1.0-bmag(ig)/bmax,0.0))
+             llim = -ulim
+             call get_weights (nmax, llim, ulim, yb, wb, ndiv, divmax, eflag) 
 
 ! gets weights for less accurate trapped particle integrals (for purposes of error estimation)
 
 ! can't get error estimate for npts = 0 or 1
-          if (npts > 1) then
-             do ix=1,npts
+             if (npts > 1) then
+                do ix=1,npts
 
-                if (ix == 1) then
+                   if (ix == 1) then
 ! drop the first and last grid points from the integral
-                   allocate (yberr(2*npts-3),wberrtmp(2*npts-3))
-                   yberr = 0.0; wberrtmp = 0.0
-                   yberr = yb(2:2*npts-2)
-                else if (ix == npts) then
+                      allocate (yberr(2*npts-3),wberrtmp(2*npts-3))
+                      yberr = 0.0; wberrtmp = 0.0
+                      yberr = yb(2:2*npts-2)
+                   else if (ix == npts) then
 ! drop the vpa=0 grid point from the integral
-                   allocate (yberr(2*npts-2),wberrtmp(2*npts-2))
-                   yberr = 0.0; wberrtmp = 0.0
-                   yberr(:npts-1) = yb(:npts-1)
-                   yberr(npts:) = yb(npts+1:)
-                else
+                      allocate (yberr(2*npts-2),wberrtmp(2*npts-2))
+                      yberr = 0.0; wberrtmp = 0.0
+                      yberr(:npts-1) = yb(:npts-1)
+                      yberr(npts:) = yb(npts+1:)
+                   else
 ! drop the grid points corresponding to ix and its negative from the integral
-                   allocate (yberr(2*npts-3),wberrtmp(2*npts-3))
-                   yberr = 0.0; wberrtmp = 0.0
-                   yberr(:ix-1) = yb(:ix-1)
-                   yberr(ix:2*npts-ix-2) = yb(ix+1:2*npts-ix-1)
-                   yberr(2*npts-ix-1:) = yb(2*npts-ix+1:)
-                end if
+                      allocate (yberr(2*npts-3),wberrtmp(2*npts-3))
+                      yberr = 0.0; wberrtmp = 0.0
+                      yberr(:ix-1) = yb(:ix-1)
+                      yberr(ix:2*npts-ix-2) = yb(ix+1:2*npts-ix-1)
+                      yberr(2*npts-ix-1:) = yb(2*npts-ix+1:)
+                   end if
 
-                call get_weights (nmax, llim, ulim, yberr, wberrtmp, ndiverr, divmaxerr, eflag) 
+                   call get_weights (nmax, llim, ulim, yberr, wberrtmp, ndiverr, divmaxerr, eflag) 
  
 ! insert a weight of zero into indeces corresponding to ix and its conjugate               
-                if (ix /= 1) wberr(:ix-1,ix) = wberrtmp(:ix-1)
-                if (ix /= npts) wberr(ix+1:,ix) = wberrtmp(ix:npts-1)
+                   if (ix /= 1) wberr(:ix-1,ix) = wberrtmp(:ix-1)
+                   if (ix /= npts) wberr(ix+1:,ix) = wberrtmp(ix:npts-1)
 
 !                wberr(npts,ix) = wberr(npts,ix)*0.5
 
+                   deallocate (yberr,wberrtmp)
 
-                deallocate (yberr,wberrtmp)
+                end do
+             end if
 
-             end do
-          end if
+             icnt = 1
 
-          icnt = 1
-
-          do il = ng2+1, nlambda
-             if (1.0 - al(il)*bmag(ig) > -bouncefuzz) then
+             do il = ng2+1, nlambda
+                if (1.0 - al(il)*bmag(ig) > -bouncefuzz) then
 
 ! avoid double counting of gridpoint at vpa=0               
-                if (icnt .eq. npts) then
-                   wl(ig,il) = wb(icnt)
-                   wlterr(ig,il,:npts) = wberr(icnt,:)
-                else
-                   wl(ig,il) = 2.0*wb(icnt)
-                   wlterr(ig,il,:npts) = 2.0*wberr(icnt,:)
+                   if (icnt .eq. npts) then
+                      wl(ig,il) = wb(icnt)
+                      wlterr(ig,il,:npts) = wberr(icnt,:)
+                   else
+                      wl(ig,il) = 2.0*wb(icnt)
+                      wlterr(ig,il,:npts) = 2.0*wberr(icnt,:)
+                   end if
+                   icnt = icnt + 1
                 end if
-                icnt = icnt + 1
-             end if
-          end do
+             end do
 
-          deallocate(ytmp, yb, wb, wberr)
+             deallocate(ytmp, yb, wb, wberr)
+          end if
        end do
-! mbmark
 
 ! old (finite-difference) integration scheme
     else
