@@ -342,7 +342,6 @@ contains
 ! Now get z1 (first form)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-! 'it' was missing in old implementation -- MAB (1.23.08)
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
@@ -1171,7 +1170,8 @@ contains
     end do
 
 ! around for testing -- MAB
-!    if (first) then
+!    if (first .and. proc0) then
+!       is = 1
 !       call open_output_file (tmp_unit, ".tmp2")
 
 !       do ie = 2, negrid-1
