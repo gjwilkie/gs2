@@ -5189,7 +5189,7 @@ contains
     use dist_fn_arrays, only: gnew, aj0, vpa
     use run_parameters, only: fphi, fapar, fbpar, beta
     use gs2_layouts, only: g_lo
-    use collisions, only: init_lorentz, init_ediffuse, init_mom_conserve, init_energy_conserve
+    use collisions, only: init_lorentz, init_ediffuse, init_lorentz_conserve, init_diffuse_conserve
     use collisions, only: etol, ewindow, etola, ewindowa
     use collisions, only: vnmult, vary_vnew
     use nonlinear_terms, only: nonlin
@@ -5365,9 +5365,8 @@ contains
           call get_vnewk (vnmult(2), vnmult_target, decrease)
        end if
 
-       if (proc0) write(*,*) errest(1,2), etol, ewindow, vnmult(2), vnmult_target
        call init_ediffuse (vnmult_target)
-       if (proc0) write (*,*) vnmult(2)
+       call init_diffuse_conserve
     end if
     
 ! sets gtdiff equal to the minimum difference between the various
@@ -5440,8 +5439,7 @@ contains
        end if
        
        call init_lorentz (vnmult_target)
-       call init_mom_conserve
-       call init_energy_conserve
+       call init_lorentz_conserve
     end if
     
     deallocate (wgt, errtmp, idxtmp)
@@ -5819,7 +5817,7 @@ contains
 
     do iglo = g_lo%llim_world, g_lo%ulim_world
        ik = ik_idx(g_lo, iglo) ; if (ik /= 1) cycle
-       it = it_idx(g_lo, iglo) ; if (it /= 2) cycle
+       it = it_idx(g_lo, iglo) ; if (it /= 1) cycle
        is = is_idx(g_lo, iglo) ; if (is /= 1) cycle
        ie = ie_idx(g_lo, iglo) 
        ig = 0
@@ -5837,8 +5835,8 @@ contains
           if (.not. forbid(ig,il)) then
              vpa = sqrt(e(ie,is)*max(0.0, 1.0-al(il)*bmag(ig)))
              vpe = sqrt(e(ie,is)*al(il)*bmag(ig))
-             write (unit, "(10(1x,e12.6))") vpa, vpe, e(ie,is), al(il), &
-                  xpts(ie), ypts(il), real(gtmp(1)), real(gtmp(2)), aimag(gtmp(1)), aimag(gtmp(2))
+             write (unit, "(8(1x,e12.6))") vpa, vpe, e(ie,is), al(il), &
+                  xpts(ie), ypts(il), real(gtmp(1)), real(gtmp(2))
           end if
        end if
     end do

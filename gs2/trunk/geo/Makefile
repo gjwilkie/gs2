@@ -133,8 +133,8 @@ ifeq ($(CPU),RS6000)
     FFLAGS   += -O3 -qarch=auto -qtune=auto
     F90FLAGS += -O3 -qarch=auto -qtune=auto
   else
-    FFLAGS   += -g 
-    F90FLAGS += -g 
+    FFLAGS   += -C -g 
+    F90FLAGS += -C -g 
     FLIBS    += # $$TRACE_MPIF
   endif
 endif

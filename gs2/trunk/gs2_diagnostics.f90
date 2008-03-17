@@ -38,6 +38,7 @@ module gs2_diagnostics
   logical :: dump_final_xfields
   logical :: use_shmem_for_xfields
   logical :: save_for_restart
+  logical :: test_conserve
 !>GGH
   logical, parameter :: write_density_velocity=.false.
   logical :: write_jext=.false.
@@ -369,7 +370,7 @@ contains
          dump_neoclassical_flux, dump_check1, dump_check2, &
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
-         nperiod_output, &
+         nperiod_output, test_conserve, &
          save_for_restart
 
     if (proc0) then
@@ -417,6 +418,7 @@ contains
        write_verr = .false.
        write_max_verr = .false.
        write_cerr = .false.
+       test_conserve = .false.
        nwrite = 100
        nmovie = 1000
        navg = 100
@@ -448,7 +450,9 @@ contains
        end if
 
        if (.not. save_for_restart) nsave = -1
-       write_avg_moments = write_avg_moments .and. box
+! changed temporarily for testing -- MAB
+!       write_avg_moments = write_avg_moments .and. box
+       write_avg_moments = write_avg_moments
        write_stress = write_stress .and. box
 
 ! Only calculate polar integrals in box layout
@@ -1776,8 +1780,8 @@ contains
 !  24      df_2 ** 2
 !  25      h_1 ** 2
 !  26      h_2 ** 2
-!  27      (q Phi_bar/T)_1 ** 2
-!  28      (q Phi_bar/T)_2 ** 2
+!  27      Phi_bar_1 ** 2
+!  28      Phi_bar_2 ** 2
 !
 !
 ! For case with one species:
@@ -1802,7 +1806,7 @@ contains
 !  17      B_par**2
 !  18      df ** 2
 !  19      h ** 2
-!  20      (q Phi_bar/T) ** 2
+!  20      Phi_bar ** 2
 
           write (unit=heat_unit, fmt="(28es12.4)") t,h % energy,  &
                h % energy_dot, h % antenna, h % imp_colls, h % hypercoll, h % collisions, &
@@ -1996,9 +2000,9 @@ contains
 
              if (write_nl_flux) then
                 if (write_ascii) then
-                   write (out_unit,"('ik,it,aky,akx,<phi**2>,t: ', &
-                        & 2i5,4(1x,e12.6))") &
-                        ik, it, aky_out(ik), akx_out(it), phi2_by_mode(it,ik), t
+!                   write (out_unit,"('ik,it,aky,akx,<phi**2>,t: ', &
+!                        & 2i5,4(1x,e12.6))") &
+!                        ik, it, aky_out(ik), akx_out(it), phi2_by_mode(it,ik), t
 !                   write (out_unit,"('ik,it,aky,akx,<apar**2>,t: ', &
 !                        & 2i5,4(1x,e12.6))") &
 !                        ik, it, aky_out(ik), akx_out(it), apar2_by_mode(it,ik), t
@@ -2024,10 +2028,13 @@ contains
        if (proc0) call nc_loop_stress(nout, rstress, ustress)
     end if
 
+    call broadcast (test_conserve)
     call broadcast (write_avg_moments)
     if (write_avg_moments) then
 
        call getmoms (phinew, ntot, density, upar, tpar, tperp)
+
+       if (test_conserve) call gettotmoms (phinew, ntot, upartot, ttot)
 
        if (proc0) then
           allocate (dl_over_b(-ntg_out:ntg_out))
@@ -2042,9 +2049,24 @@ contains
                 upar00(it, is)   = sum( upar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
                 tpar00(it, is)   = sum( tpar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
                 tperp00(it, is)  = sum(tperp(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+
+                if (test_conserve) then
+                   upartot00(it,is) = sum(upartot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                   ttot00(it,is) = sum(ttot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                end if
              end do
           end do
           
+          if (test_conserve) then
+             if (nspec == 1) then
+                write (out_unit, *) 'moms', real(ntot00(1,1)), aimag(ntot00(1,1)), &
+                     real(upartot00(1,1)), aimag(upartot00(1,1)), real(ttot00(1,1)), aimag(ttot00(1,1))
+             else
+                write (out_unit, *) 'moms', real(ntot00(1,1)), real(ntot00(1,2)), &
+                     aimag(upartot00(1,1)), aimag(upartot00(1,2)), real(ttot00(1,1)), real(ttot00(1,2))
+             end if
+          end if
+
           do it = 1, ntheta0
              phi00(it)   = sum( phinew(-ntg_out:ntg_out,it,1)*dl_over_b)
           end do
@@ -2061,8 +2083,7 @@ contains
                   ntot20(is), ntot20_by_mode(:,:,is))
           end do
 
-          write (out_unit, "('t,u0 ',2(1x,e12.6))") t, aimag(upar00 (1,1))
-          write (out_unit, "('t,tperp0 ',9(1x,e12.6))") t, tperp00 (1,:), tperp00(2,:)
+!          write (out_unit, "('t,u0 ',2(1x,e12.6))") t, aimag(upar00 (1,1))
 
           call nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, &
                ntot20_by_mode, phi00, ntot00, density00, upar00, &
