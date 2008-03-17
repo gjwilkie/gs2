@@ -224,8 +224,7 @@ contains
 !       call exb_shear (g, phi, apar, bpar)
        
        call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-!       aparnew = aparnew + apar_ext 
-       phinew = phinew + apar_ext 
+       aparnew = aparnew + apar_ext 
 
        call getfield (phinew, aparnew, bparnew)
 
