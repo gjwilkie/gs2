@@ -197,6 +197,23 @@ ifeq ($(CPU),RS6000)
 
 endif
 
+# imported from AGK by TT FEB 01 2008
+# NERSC Cray XT4 (Franklin) options: GGH 07 SEP 17
+ifeq ($(CPU),XT4)
+  FC = ftn
+  FC5 = ftn
+  PLATFORM_LINKS = cxt4
+  F90FLAGS = -r8 -target=linux -I $(UTILS) -I $(GEO) \
+	-I$$NETCDF_DIR/include $$FFTW_INCLUDE_OPTS
+  FLIBS = -L$$NETCDF_DIR/lib -lnetcdf $$FFTW_POST_LINK_OPTS -ldfftw -ldrfftw
+  ifneq ($(debug),on)
+    F90FLAGS += -fastsse
+  else
+    F90FLAGS += -g
+  endif
+endif
+# import end
+
 # Dawson G5 cluster:
 ifeq ($(CPU),Dawson)
   FC = xlf95
@@ -749,6 +766,23 @@ t3e_fftw:
 	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
 	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
 	cd $(UTILS); ln -sf mds_io_stub.f90 mds.f90 
+
+# imported from AGK by TT FEB 01 2008
+cxt4:
+	ln -sf command_line_unix.f90 command_line.f90
+	ln -sf mp_mpi_r8.f90 mp.f90
+	ln -sf ran_portable.f90 ran.f90
+	ln -sf file_utils_xlf.f90 file_utils.f90
+	ln -sf fft_work_fftw.f90 fft_work.f90
+	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
+	ln -sf gs2_save_aix.f90 gs2_save.f90
+	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
+	ln -sf shmem_stub.f90 shmem.f90
+	ln -sf prof_none.f90 prof.f90
+	ln -sf redistribute_mpi.f90 redistribute.f90
+	ln -sf check_aix.f90 check.f90
+	cd $(UTILS); ln -sf mds_io_stub.f90 mds.f90 
+# import end
 
 ibm:
 	ln -sf command_line_unix.f90 command_line.f90

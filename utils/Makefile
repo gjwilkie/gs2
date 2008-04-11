@@ -128,6 +128,24 @@ ifeq ($(CPU),RS6000)
   endif
 endif
 
+# imported from AGK by TT FEB 01 2008
+# NERSC Cray XT4 (Franklin) options: GGH 07 SEP 17
+ifeq ($(CPU),XT4)
+  FC = ftn
+  FC5 = ftn
+  PLATFORM_LINKS = cxt4
+  F90FLAGS = -r8 -target=linux -I$$NETCDF_DIR/include $$FFTW_INCLUDE_OPTS
+#  F90FLAGS = -default64 -target=linux -I$$NETCDF_DIR/include $$FFTW_INCLUDE_OPTS
+  FLIBS = -L$$NETCDF_DIR/lib -lnetcdf $$FFTW_POST_LINK_OPTS -ldfftw -ldrfftw
+  ifneq ($(debug),on)
+#    F90FLAGS += -O2# -fastsse
+    F90FLAGS += -fastsse
+  else
+    F90FLAGS += -g
+  endif
+endif
+# import end
+
 # Dawson G5 cluster:
 ifeq ($(CPU),Dawson)
   FC = xlf95
