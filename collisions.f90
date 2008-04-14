@@ -13,6 +13,7 @@ module collisions
   public :: init_lorentz, init_ediffuse
   public :: init_lorentz_conserve, init_diffuse_conserve
   public :: init_lorentz_error, collision_model_switch
+  public :: ntot_diff, upar_diff, uperp_diff, ttot_diff
 
   private
 
@@ -20,7 +21,7 @@ module collisions
   real :: vncoef, absom
   integer :: ivnew
   logical :: conserve_number, conserve_momentum, const_v, conserve_moments
-  logical :: test_mom_conserve
+  logical :: test_mom_conserve, new_coll_scheme
   integer :: collision_model_switch
   logical :: use_shmem, adjust
   logical :: heating
@@ -54,6 +55,10 @@ module collisions
   real, dimension (:,:,:,:), allocatable :: vnewh
   ! (-ntgrid:ntgrid,ntheta0,naky,nspec) replicated
 
+  ! TEMPORARY FOR TESTING -- MAB
+  complex, dimension (:,:,:,:), allocatable :: ntot_diff, upar_diff, uperp_diff, ttot_diff
+  ! (-ntgrid:ntgrid,ntheta0,naky,nspec) replicated
+
   ! only for krook
   real, dimension (:), allocatable :: vnewfe
   ! (-*- g_layout -*-)
@@ -75,7 +80,7 @@ module collisions
 
   ! only for energy diffusion
   real, dimension (:,:), allocatable :: ec1, ebetaa, eql
-  complex, dimension (:,:), allocatable :: ged
+  real, dimension (:,:), allocatable :: era1, erb1, erc1
 
 ! only around for testing -- MAB
 !  real, dimension (:), allocatable :: ea1, eb1
@@ -83,7 +88,11 @@ module collisions
   ! only for lorentz
   real :: cfac
   real, dimension (:,:), allocatable :: c1, betaa, ql, d1, h1
-  complex, dimension (:,:), allocatable :: glz, glzc
+  real, dimension (:,:), allocatable :: ra1, rb1, rc1
+
+! not necessary to make these variables global (only used in solfp_lorentz)
+! MAB
+!  complex, dimension (:,:), allocatable :: glz, glzc
   ! (max(2*nlambda,2*ng2+1), -*- lz_layout -*-)
   ! (-ntgrid:ntgrid,naky,max(2*nlambda,2*ng2+1),negrid,nspec)
 
@@ -148,7 +157,7 @@ contains
          conserve_number, conserve_momentum, use_shmem, heating, &
          adjust, const_v, cfac, hypermult, diffuse_energy, vnfac, &
          etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, &
-         test_mom_conserve, conserve_moments
+         test_mom_conserve, conserve_moments, new_coll_scheme
     integer :: ierr, in_file
     logical :: exist
 
@@ -170,6 +179,7 @@ contains
        conserve_number = .true.
        conserve_momentum = .true.  ! DEFAULT CHANGED TO REFLECT IMPROVED MOMENTUM CONSERVATION, 8/06
        conserve_moments = .false.
+       new_coll_scheme = .true.
        test_mom_conserve = .false.
        diffuse_energy = .false.
        vary_vnew = .false.
@@ -200,6 +210,7 @@ contains
     call broadcast (conserve_number)
     call broadcast (conserve_momentum)
     call broadcast (conserve_moments)
+    call broadcast (new_coll_scheme)
     call broadcast (test_mom_conserve)
     call broadcast (diffuse_energy)
     call broadcast (const_v)
@@ -1178,7 +1189,7 @@ contains
     use species, only: nspec, spec
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, negrid, ng2, e, ecut, integrate_moment, al
+    use le_grids, only: nlambda, negrid, ng2, e, ecut, integrate_moment, al, w
     use egrid, only: zeroes, x0, energy
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
@@ -1193,22 +1204,13 @@ contains
     real, intent (in), optional :: vnmult_target
 
     integer :: ie, is, iglo, ik, ielo, il, ig, it
-    real, dimension (:), allocatable :: aa, bb, cc, xe
+    real, dimension (:), allocatable :: aa, bb, cc, xe, ba, rba, eec
     real :: vn, xe0, xe1, xe2, xer, xel, er, el, fac
     real :: dela, delb, delc, delfac
-    real :: capgl, capgr, slb1, ee
+    real :: capgl, capgr, slb1, ee, eea, eeb
+    real :: delp, delm, del, capg, mu, eta, wxe, capgp
 
-    integer, save :: tmp_unit  ! temporary for testing -- MAB
     logical :: first_time = .true.
-    logical :: first = .true.  ! temporary variable for testing -- MAB
-
-    complex, dimension (:), allocatable :: rhs
-    complex, dimension (:,:,:), allocatable :: gtmp
-    complex, dimension (:,:,:,:), allocatable :: tot
-
-    allocate (gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-    allocate (tot(-ntgrid:ntgrid, ntheta0, naky, nspec))
-    allocate (rhs(negrid))
 
     if (first_time) then
        vnmult(2) = max(1.0, vnmult(2))
@@ -1219,13 +1221,17 @@ contains
          (ntgrid, naky, ntheta0, nlambda, nspec)
     call init_ediffuse_redistribute
 
-    if (.not.allocated(ged)) then
-       allocate (ged(negrid+1,e_lo%llim_proc:e_lo%ulim_alloc))
-       ged = 0.0
-    end if
+! no point in making these global variables and allocating here (only used in solfp_ediffuse)
+! MAB
+!    if (.not.allocated(ged)) then
+!       allocate (ged(negrid+1,e_lo%llim_proc:e_lo%ulim_alloc))
+!       allocate (ged0(negrid+1,e_lo%llim_proc:e_lo%ulim_alloc))
+!       ged = 0.0 ; ged0 = 0.0
+!    end if
 
     allocate (aa(negrid), bb(negrid), cc(negrid))
-    allocate (xe(negrid))
+    allocate (ba(negrid), rba(negrid))
+    allocate (xe(negrid), eec(negrid))
 
 ! want to use x variables instead of e because we want conservative form
 ! for the x-integration
@@ -1234,12 +1240,11 @@ contains
 
     if (.not.allocated(ec1)) then
        allocate (ec1   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
+       allocate (era1   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
+       allocate (erb1   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
+       allocate (erc1   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
        allocate (ebetaa(negrid,e_lo%llim_proc:e_lo%ulim_alloc))
        allocate (eql   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
-
-! only around for testing -- MAB
-!       allocate (ea1   (negrid))
-!       allocate (eb1   (negrid))
     endif
 
     if (present(vnmult_target)) then
@@ -1247,8 +1252,7 @@ contains
     end if
 
     ec1 = 0.0 ; ebetaa = 0.0 ; eql = 0.0
-! only around for testing -- MAB
-!    ea1 = 0.0 ; eb1 = 0.0
+    era1 = 0.0 ; erb1 = 0.0 ; erc1 = 0.0
 
     do ielo = e_lo%llim_proc, e_lo%ulim_proc
        is = is_idx(e_lo, ielo)
@@ -1261,127 +1265,180 @@ contains
 
        slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))     ! xi_j
 
-       do ie = 2, negrid-1
-
-          xe0 = xe(ie-1)
-          xe1 = xe(ie)
-          xe2 = xe(ie+1)
-
-          capgl = 0.5*(xe0*sqrt(e(ie-1,is))*exp(-2.0*e(ie-1,is)) &
-               +xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is)))
-          capgr = 0.5*(xe2*sqrt(e(ie+1,is))*exp(-2.0*e(ie+1,is)) &
-               +xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is)))
-
-          dela = xe1 - xe0
-          delb = xe2 - xe0
-          delc = xe2 - xe1
-          delfac = delc/dela - dela/delc
-       
-          fac = -16.0*vn*code_dt/pi
-
-          ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
-               / (bmag(ig)*spec(is)%zstm)**2 &
-               * kperp2(ig,it,ik)*cfac
-
-          aa(ie) = fac*delc/(delb*dela)*(capgl/dela &
-               - xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))*delfac/delb)
-          cc(ie) = fac*dela/(delb*delc)*(capgr/delc &
-               + xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))*delfac/delb)
-          bb(ie) = 1.0 - (aa(ie) + cc(ie)) + ee*vn*code_dt
-
-       end do
+       ee =cfac*0.25*(1-slb1**2)*kperp2(ig,it,ik)*vn*code_dt &
+            / (bmag(ig)*spec(is)%zstm)**2
 
        ! boundary at xe = 0
+       wxe = 4.0*w(1,is)
        xe1 = xe(1)
        xe2 = xe(2)
 
-       xer = (xe2 + xe1)*0.5
+!       ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
+!            / (bmag(ig)*spec(is)%zstm)**2 &
+!            * kperp2(ig,it,ik)*cfac
+
+       delp = xe(2) - wxe
+       delm = xe(1) - wxe
+       del  = xe(2) - xe(1)
+
+       capg = 8.0*xe1*sqrt(e(1,is))*exp(-2.0*e(1,is))/pi
+       capgp = 8.0*exp(-e(1,is))*(sqrt(e(1,is))*exp(-e(1,is)) &
+            + 0.25*sqrt(pi)*xe1*(1.-4.*e(1,is))/e(1,is))/pi
+
+       ! TEMP FOR TESTING -- MAB
+!       capg = 1.0 ; capgp = 0.0 ; vn = 1.0
+
+       mu = 0.5*(delp + delm)
+       eta = (1.0 - mu*capgp/capg)*del
+
+       eec(1) = -ee*wxe*delm*mu/(eta*energy(wxe,ecut)**1.5)
+       eeb = -ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
+
+       erc1(1,ielo) = -delm*mu/eta
+       cc(1) = -(code_dt*vn*capg + delm*mu)/eta
        
-       er = energy(xer,ecut)
-
-       fac = -8.0*vn*code_dt/pi
-
-       ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
-            / (bmag(ig)*spec(is)%zstm)**2 &
-            * kperp2(ig,it,ik)*cfac
-
+       rba(1) = -delp*mu/eta
+       erb1(1,ielo) = 1.0 - 0.25*rba(1)/w(1,is)
+       ba(1) = -(code_dt*vn*capg + delp*mu)/eta
+       bb(1) = 1.0 - 0.25*(ba(1) + eeb)/w(1,is) + ee*xe1/e(1,is)**1.5
+       
+       era1(1,ielo) = 0.0
        aa(1) = 0.0
-       cc(1) = fac*sqrt(er)*exp(-2.0*er)/(xe2 - xe1)
-       bb(1) = 1.0 - cc(1) + ee*vn*code_dt
+
+! non-conservative scheme
+!       xer = (xe2 + xe1)*0.5
+!       
+!       er = energy(xer,ecut)
+!
+!       fac = -8.0*vn*code_dt/pi
+!
+!       ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
+!            / (bmag(ig)*spec(is)%zstm)**2 &
+!            * kperp2(ig,it,ik)*cfac
+!
+!       aa(1) = 0.0
+!       cc(1) = fac*sqrt(er)*exp(-2.0*er)/(xe2 - xe1)
+!       bb(1) = 1.0 - cc(1) + ee*vn*code_dt
+
+       do ie = 2, negrid-1
+
+          eea = ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
+
+          wxe = 4.0*sum(w(:ie,is))
+          xe1 = xe(ie)
+          xe2 = xe(ie+1)
+
+          delp = xe2 - wxe
+          delm = xe1 - wxe
+          del  = xe2 - xe1
+
+          capg = 8.0*xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))/pi
+          capgp = 8.0*exp(-e(ie,is))*(sqrt(e(ie,is))*exp(-e(ie,is)) &
+               + 0.25*sqrt(pi)*xe1*(1.-4.*e(ie,is))/e(ie,is))/pi
+
+          ! TEMP FOR TESTING -- MAB
+!          capg = 1.0 ; capgp = 0.0 ; vn = 1.0
+
+          mu = 0.5*(delp + delm)
+          eta = (1.0 - mu*capgp/capg)*del
+
+          eeb = -ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5) - eec(ie-1)
+          eec(ie) = -ee*wxe*delm*mu/(eta*energy(wxe,ecut)**1.5)
+
+          erc1(ie,ielo) = -delm*mu/eta
+          cc(ie) = -(code_dt*vn*capg + delm*mu)/eta
+
+          rba(ie) = -delp*mu/eta
+          erb1(ie,ielo) = 1.0 - 0.25*(rba(ie) + erc1(ie-1,ielo))/w(ie,is)
+          ba(ie) = -(code_dt*vn*capg + delp*mu)/eta
+          bb(ie) = 1.0 - 0.25*(cc(ie-1) + ba(ie) + eeb)/w(ie,is) + ee*xe1/e(ie,is)**1.5
+
+          era1(ie,ielo) = 0.25*rba(ie-1)/w(ie,is)
+          aa(ie) = 0.25*(ba(ie-1) + eea)/w(ie,is)
+
+! old non-conservative scheme
+!          xe0 = xe(ie-1)
+!          xe1 = xe(ie)
+!          xe2 = xe(ie+1)
+!
+!          capgl = 0.5*(xe0*sqrt(e(ie-1,is))*exp(-2.0*e(ie-1,is)) &
+!               +xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is)))
+!          capgr = 0.5*(xe2*sqrt(e(ie+1,is))*exp(-2.0*e(ie+1,is)) &
+!               +xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is)))
+!
+!          dela = xe1 - xe0
+!          delb = xe2 - xe0
+!          delc = xe2 - xe1
+!          delfac = delc/dela - dela/delc
+!       
+!          fac = -16.0*vn*code_dt/pi
+!
+!          ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
+!               / (bmag(ig)*spec(is)%zstm)**2 &
+!               * kperp2(ig,it,ik)*cfac
+!
+!          aa(ie) = fac*delc/(delb*dela)*(capgl/dela &
+!               - xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))*delfac/delb)
+!          cc(ie) = fac*dela/(delb*delc)*(capgr/delc &
+!               + xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))*delfac/delb)
+!          bb(ie) = 1.0 - (aa(ie) + cc(ie)) + ee*vn*code_dt
+
+       end do
 
        ! boundary at xe = 1
+
+       ie = negrid
+
+       eea = ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
        
-       xe0 = xe(negrid-1)
-       xe1 = xe(negrid)
-       xe2 = 1.0
+       xe1 = xe(ie)
+ 
+       eeb = -eec(ie-1)
+       eec(ie) = 0.0
 
-       xel = (xe1 + xe0)*0.5
+       erc1(ie,ielo) = 0.0
+       cc(ie) = 0.0
+          
+       erb1(ie,ielo) = 1.0 - 0.25*erc1(ie-1,ielo)/w(ie,is)
+       bb(ie) = 1.0 - 0.25*(cc(ie-1) + eeb)/w(ie,is) + ee*xe1/e(ie,is)**1.5
+       
+       era1(ie,ielo) = 0.25*rba(ie-1)/w(ie,is)
+       aa(ie) = 0.25*(ba(ie-1) + eea)/w(ie,is)
 
-       el = energy(xel,ecut)
-
-       fac = -8.0*vn*code_dt/pi/(xe2 - xel)
-
-       ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
-            / (bmag(ig)*spec(is)%zstm)**2 &
-            * kperp2(ig,it,ik)*cfac
-
-       aa(negrid) = fac*sqrt(el)*xel*exp(-2.0*el)/(xe1-xe0)
-       cc(negrid) = 0.0
-       bb(negrid) = 1.0 - aa(negrid) + ee*vn*code_dt
-
-! TEMPORARY FOR TESTING -- MAB
-!    aa = 1.0 ; bb = 2.0 ; cc = 1.0
-!    aa(1) = 0.0 ; cc(negrid) = 0.0
-
-! only around for testing - MAB
-!       ea1 = aa ; eb1 = bb
+!       xe0 = xe(negrid-1)
+!       xe1 = xe(negrid)
+!       xe2 = 1.0
+!
+!       xel = (xe1 + xe0)*0.5
+!
+!       el = energy(xel,ecut)
+!
+!       fac = -8.0*vn*code_dt/pi/(xe2 - xel)
+!
+!       ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
+!            / (bmag(ig)*spec(is)%zstm)**2 &
+!            * kperp2(ig,it,ik)*cfac
+!
+!       aa(negrid) = fac*sqrt(el)*xel*exp(-2.0*el)/(xe1-xe0)
+!       cc(negrid) = 0.0
+!       bb(negrid) = 1.0 - aa(negrid) + ee*vn*code_dt
 
 ! fill in the arrays for the tridiagonal
-       ec1(:,ielo) = cc
+       erc1(:,ielo) = 0.25*erc1(:,ielo)/w(:,is)
+       ec1(:,ielo) = 0.25*(cc + eec)/w(:,is)
        ebetaa(1,ielo) = 1.0/bb(1)
        do ie = 1, negrid-1
           eql(ie+1,ielo) = aa(ie+1)*ebetaa(ie,ielo)
           ebetaa(ie+1,ielo) = 1.0/(bb(ie+1)-eql(ie+1,ielo)*ec1(ie,ielo))
        end do
 
+!       do ie = 1, negrid
+!          write (*,*) aa(ie), bb(ie), ec1(ie,ielo), era1(ie,ielo), erb1(ie,ielo), erc1(ie,ielo), ielo, ie
+!       end do
+
     end do
 
-! around for testing -- MAB
-    if (first .and. proc0) then
-       is = 1
-       call open_output_file (tmp_unit, ".tmp2")
-
-       do ie = 2, negrid-1
-          rhs(ie) = aa(ie)*cos(2.*sqrt(e(ie-1,is))) + cc(ie)*cos(2.*sqrt(e(ie+1,is))) + (bb(ie)-1.0)*cos(2.*sqrt(e(ie,is)))
-!          rhs(ie) = aa(ie)*xe(ie-1) + cc(ie)*xe(ie+1) + (bb(ie)-1.0)*xe(ie)
-       end do
-       rhs(1) = (bb(1)-1.0)*cos(2.*sqrt(e(1,is))) + cc(1)*cos(2.*sqrt(e(2,is)))
-!       rhs(1) = (bb(1)-1.0)*xe(1) + cc(1)*xe(2)
-       rhs(negrid) = (bb(negrid)-1.0)*cos(2.*sqrt(e(negrid,is))) + aa(negrid)*cos(2.*sqrt(e(negrid-1,is)))
-!       rhs(negrid) = (bb(negrid)-1.0)*xe(negrid) + aa(negrid)*xe(negrid-1)
-
-!       gtmp = 0.0
-!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!          ie = ie_idx(g_lo,iglo)
-!          gtmp(:,:,iglo) = rhs(ie)
-!       end do
-
-!       call integrate_moment(gtmp, tot)
-       do ie = 1, negrid
-          write (tmp_unit,*) sqrt(e(ie,is)), real(rhs(ie))
-       end do
-
-!       write (tmp_unit,*) '1', sqrt(e(1,is)), xe(1), ((bb(1)-1.0)*cos(xe(1)) + cc(1)*cos(xe(2)))/code_dt/vn
-!       do ie = 2, negrid-1
-!          write (tmp_unit,*) ie, sqrt(e(ie,is)), xe(ie), (aa(ie)*cos(xe(ie-1)) + (bb(ie)-1.0)*cos(xe(ie)) + cc(ie)*cos(xe(ie+1)))/code_dt/vn!, 8./pi*xe(ie)*sqrt(e(ie,is))*exp(-2.*e(ie,is))*cos(x(ie)) + 8./pi*sqrt(e(ie,is))*exp(-2.*e(ie,is))*sin(x(ie))
-!       end do
-!       write (tmp_unit,*) negrid, sqrt(e(negrid,is)), xe(negrid), (aa(negrid)*cos(xe(negrid-1)) + (bb(negrid)-1.0)*cos(xe(negrid)))/code_dt/vn
-       first = .false.
-       call close_output_file (tmp_unit)
-    end if
-
-    deallocate (gtmp, tot, rhs)
-    deallocate(aa, bb, cc, xe)
+    deallocate(aa, bb, cc, ba, rba, xe, eec)
 
   end subroutine init_ediffuse
 
@@ -1416,6 +1473,7 @@ contains
     do iglo = g_lo%llim_world, g_lo%ulim_world
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
+! ik = ik_idx, etc. should be moved outside of isign and ig loops here and later
              ik = ik_idx(g_lo,iglo)
              it = it_idx(g_lo,iglo)
              il = il_idx(g_lo,iglo)
@@ -1500,7 +1558,7 @@ contains
     use species, only: nspec, spec
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, negrid, al, jend, ng2,e
+    use le_grids, only: nlambda, negrid, al, jend, ng2,e, wl
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: kperp2
@@ -1514,15 +1572,18 @@ contains
 
     real, intent (in), optional :: vnmult_target
 
-    integer :: ig, il, ilz, it, ik, ie, is, je
-    real, dimension (nlambda+1) :: aa, bb, cc, dd, hh
+    integer :: ig, il, ilz, it, ik, ie, is, je, te, te2, teh
+    real, dimension (nlambda+1) :: aa, bb, cc
+    real, dimension (nlambda+1) :: ra, rba, rb, rc, ba
     real, dimension (max(2*nlambda,2*ng2+1)) :: a1, b1
+    real, dimension (nlambda+1) :: eec
+    real, dimension (:), allocatable :: dd, hh
     real :: slb0, slb1, slb2, slbl, slbr, vn, ee, vnh, vnc
-    real :: dela, delb, delc, delfac, aatmp, cctmp  ! MAB
+    real :: wslb, eta, mu, capg, delp, delm, del, wll
+    real :: eea, eeb
     logical :: first_time = .true.
-    logical :: first = .true.
-    logical :: last = .false.
-    integer, save :: lorentz_unit
+
+    if (heating) allocate (dd(nlambda+1), hh(nlambda+1))
 
     if (first_time) then
        vnmult(1) = max(1.0, vnmult(1))
@@ -1533,24 +1594,36 @@ contains
          (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
     call init_lorentz_redistribute
 
-    if (.not.allocated(glz)) then
-       allocate (glz(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
-       glz = 0.0
-       if (heating) then
-          allocate (glzc(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
-          glzc = 0.0
-       end if
-    end if
+! no point in making these global variables and allocating here (only used in solfp_lorentz)
+! MAB
+!    if (.not.allocated(glz)) then
+!       allocate (glz(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+!       glz = 0.0
+!       if (heating) then
+!          allocate (glzc(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+!          glzc = 0.0
+!       end if
+!    end if
 
     if (.not.allocated(c1)) then
        allocate (c1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+       allocate (ra1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+       allocate (rb1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+       allocate (rc1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
        allocate (betaa(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
        allocate (ql   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
-       allocate (d1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
-       allocate (h1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+! changed to reduce memory storage -- MAB
+!       allocate (d1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+!       allocate (h1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+       if (heating) then
+          allocate (d1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+          allocate (h1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+          d1 = 0.0 ; h1 = 0.0
+       end if
     endif
 
-    c1 = 0.0 ; betaa = 0.0 ; ql = 0.0 ; d1 = 0.0 ; h1 = 0.0
+    c1 = 0.0 ; betaa = 0.0 ; ql = 0.0
+    ra1 = 0.0; rb1 = 0.0; rc1 = 0.0
 
     if (present(vnmult_target)) then
        vnmult(1) = max (vnmult_target, 1.0)
@@ -1563,6 +1636,15 @@ contains
        ie = ie_idx(lz_lo,ilz)
        ig = ig_idx(lz_lo,ilz)
        je = jend(ig)
+       if (je <= ng2+1) then
+          te = ng2
+          te2 = 2*ng2
+          teh = ng2
+       else
+          te = je 
+          te2 = 2*je - 1 
+          teh = je-1
+       end if
        if (collision_model_switch == collision_model_lorentz_test) then
           vn = vnmult(1)*abs(spec(is)%vnewk)*tunits(ik)
           vnc = 0.
@@ -1578,363 +1660,279 @@ contains
              vnh = vnewh(ig,it,ik,is)
           end if
        end if
-! no trapped particles if je == 0 
-       if (je == 0) then  
-          do il = 2, ng2-1
-             ! slb = xi = v_par/v
-             slb0 = sqrt(abs(1.0 - bmag(ig)*al(il-1)))   ! xi_{j-1}
-             slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))     ! xi_j
-             slb2 = sqrt(abs(1.0 - bmag(ig)*al(il+1)))   ! xi_{j+1}
 
-!>MAB
-             slbl = 0.5*(slb0 + slb1)
-             slbr = 0.5*(slb1 + slb2)
+       ! TEMP FOR TESTING -- MAB
+!       vn = 1.0
 
-! around for testing -- MAB
-!             glz(il,ilz) = slb1
+       if (new_coll_scheme) then
 
-             dela = slb1 - slb0
-             delb = slb2 - slb0
-             delc = slb2 - slb1
-             delfac = delc/dela - dela/delc
+          ee = cfac*0.5*e(ie,is)*kperp2(ig,it,ik)*vn*code_dt &
+               / (bmag(ig)*spec(is)%zstm)**2
 
-             ! coefficients for tridiagonal matrix (1st order accurate)
-             aatmp = 2.0*((1.0 - slbl**2)*delc/(delb*dela**2) &
-                  - (1.0 - slb1**2)*delfac*delc/(dela*delb**2))
-             cctmp = 2.0*((1.0 - slbr**2)*dela/(delb*delc**2) &
-                  + (1.0 - slb1**2)*delfac*dela/(delc*delb**2))
-
-!             ee = 0.25*e(ie,is)*(1+slb1**2) &
-             ee = 0.5*e(ie,is)*(1+slb1**2) &
-                  / (bmag(ig)*spec(is)%zstm)**2 &
-                  * kperp2(ig,it,ik)*cfac
-
-             ! coefficients for tridiagonal matrix
-             cc(il) = -vn*code_dt*cctmp
-             aa(il) = -vn*code_dt*aatmp
-             bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
-
-             ! coefficients for entropy heating calculation
-             dd(il) =vnc*(cctmp + ee)
-             hh(il) =vnh*(cctmp + ee)
-
-! Following is old approach using Taylor expansion
-!             write (*,*) il,' xi = ',slb1
-!             slbl = (slb1 + slb0)/2.0  ! xi(j-1/2)
-!             slbr = (slb1 + slb2)/2.0  ! xi(j+1/2)
-!
-!             ! coefficients for tridiagonal matrix:
-!             cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
-!             aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
-!             bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
-!
-!             ! coefficients for entropy heating calculation
-!             dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-!             hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-
-          end do
-
-! boundary at xi = 1
-          slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
-          slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
-
-! around for testing -- MAB
-!          glz(1,ilz) = slb1
-
-          slbr = 0.5*(slb1 + slb2)
-
-          delc = slb2 - slb1
-
-!          ee = 0.25*e(ie,is)*(1+slb1**2) &
-          ee = 0.5*e(ie,is)*(1+slb1**2) &
-               / (bmag(ig)*spec(is)%zstm)**2 &
-               * kperp2(ig,it,ik)*cfac          
-
-          cctmp = -(1.0 + slbr) / delc
-
-          cc(1) = -vn*code_dt*cctmp
-          aa(1) = 0.0
-          bb(1) = 1.0 - cc(1) + vn*code_dt*ee
-
-          dd(1) = vnc*(cctmp + ee)
-          hh(1) = vnh*(cctmp + ee)
-
-! old scheme
-!          slb0 = 1.0
-!          slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
-!          slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
-!
-!          slbl = (slb1 + slb0)/2.0
-!          slbr = (slb1 + slb2)/2.0
-!          
-!          cc(1) = -vn*code_dt*(-1.0 - slbr)/(slb2-slb1)
-!          aa(1) = 0.0
-!          bb(1) = 1.0 - (aa(1) + cc(1)) + ee*vn*code_dt
-!
-!          dd(1) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-!          hh(1) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-
-! boundary at xi = 0
-          il = ng2
-          slb0 = sqrt(abs(1.0 - bmag(ig)*al(il-1)))
+          il = 1
+          wslb = 1.0 - 0.5*sum(wl(ig,:il))
           slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))
-          slb2 = -slb1
-          
-          slbl = 0.5*(slb0 + slb1)
-          slbr = 0.5*(slb1 + slb2)
+          slb2 = sqrt(abs(1.0 - bmag(ig)*al(il+1)))
 
-! around for testing -- MAB
-!          glz(il,ilz) = slb1
+          delp = wslb - slb2
+          delm = wslb - slb1
+          del  = slb1 - slb2
 
-!          ee = 0.25*e(ie,is)*(1+slb1**2) &
-          ee = 0.5*e(ie,is)*(1+slb1**2) &
-               / (bmag(ig)*spec(is)%zstm)**2 &
-               * kperp2(ig,it,ik)*cfac
+          capg = 1.0 - wslb**2
 
-          dela = slb1 - slb0
-          delb = slb2 - slb0
-          delc = slb2 - slb1
-          delfac = delc/dela - dela/delc
+          mu = 0.5*(delp + delm)
+          eta = (1.0 + wslb*(delp + delm)/capg)*del
 
-          aatmp = 2.0*((1.0 - slbl**2)*delc/(delb*dela**2) &
-               - (1.0 - slb1**2)*delfac*delc/(dela*delb**2))
-          cctmp = 2.0*((1.0 - slbr**2)*dela/(delb*delc**2) &
-               + (1.0 - slb1**2)*delfac*dela/(delc*delb**2))
+          eec(il) = -ee*(1.0 + wslb**2)*delm*mu/eta
+!          eeb = -ee*((1.0 + wslb**2)*delp*mu/eta + (1+slb1**2))
+          eeb = -ee*(1.0 + wslb**2)*delp*mu/eta
 
-          cc(il) = -vn*code_dt*cctmp
-          aa(il) = -vn*code_dt*aatmp
-          bb(il) = 1.0 - (aa(il) + cc(il))  + ee*vn*code_dt
+          rc(il) = -delm*mu/eta
+          cc(il) = -(code_dt*vn*capg + delm*mu)/eta
+       
+          rba(il) = -delp*mu/eta
+          rb(il) = 1.0 - 2.0*rba(il)/wl(ig,il)
+          ba(il) = -(code_dt*vn*capg + delp*mu)/eta
+          bb(il) = 1.0 - 2.0*(ba(il) + eeb)/wl(ig,il) + ee*(1.+slb1**2)
+       
+          ra(il) = 0.0
+          aa(il) = 0.0
 
-          dd(il) =vnc*(cctmp + ee)
-          hh(il) =vnh*(cctmp + ee)
+          ! coefficients for entropy heating calculation
+          if (heating) then
+             dd(il) =vnc*(2.0*(capg + delm*mu)/(eta*wl(ig,il)) + ee)
+             hh(il) =vnh*(2.0*(capg + delm*mu)/(eta*wl(ig,il)) + ee)
+          end if
 
-! old scheme
-!          slbl = (slb1 + slb0)/2.0
-!          slbr = (slb1 + slb2)/2.0
-!
-!          cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
-!          aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
-!          bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
-!
-!          dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-!          hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+          do il = 2, te-1
+             
+             eea = ee*(1.0 + wslb**2)*delp*mu/eta
 
-! around for testing -- MAB
-!          glz(ng2+1:2*ng2,ilz) = -glz(ng2:1:-1,ilz)
-
-! start to fill in the arrays for the tridiagonal
-          a1(:ng2) = aa(:ng2)
-          b1(:ng2) = bb(:ng2)
-          c1(:ng2,ilz) = cc(:ng2)
-
-          d1(:ng2,ilz) = dd(:ng2)
-          h1(:ng2,ilz) = hh(:ng2)
-
-! assuming symmetry in xi, fill in the rest of the arrays.
-          a1(ng2+1:2*ng2) = cc(ng2:1:-1)
-          b1(ng2+1:2*ng2) = bb(ng2:1:-1)
-          c1(ng2+1:2*ng2,ilz) =aa(ng2:1:-1)
-
-          d1(ng2+1:2*ng2,ilz) = dd(ng2:1:-1)
-          h1(ng2+1:2*ng2,ilz) = hh(ng2:1:-1)
-
-          betaa(1,ilz) = 1.0/b1(1)
-          do il = 1, 2*ng2-1
-             ql(il+1,ilz) = a1(il+1)*betaa(il,ilz)
-             betaa(il+1,ilz) = 1.0/(b1(il+1)-ql(il+1,ilz)*c1(il,ilz))
-          end do
-
-          ql(1,ilz) = 0.0
-          ql(2*ng2+1:,ilz) = 0.0
-          c1(2*ng2+1:,ilz) = 0.0
-          betaa(2*ng2+1:,ilz) = 0.0
-
-          d1(2*ng2+1:,ilz) = 0.0
-          h1(2*ng2+1:,ilz) = 0.0
-
-! around for testing -- MAB
-!          if (ig == 0 .and. ie == 1) then
-!             write (*,*) '1', real(glz(1,ilz)), real((b1(1)-1.0)*sin(glz(1,ilz)) + c1(1,ilz)*sin(glz(2,ilz)))/code_dt/vn, 2.*glz(1,ilz)*cos(glz(1,ilz)) + (1.0-glz(1,ilz)**2)*sin(glz(1,ilz))
-!             do il = 2, 2*ng2-1
-!                write (*,*) il, real(glz(il,ilz)), real(a1(il)*sin(glz(il-1,ilz)) + (b1(il)-1.0)*sin(glz(il,ilz)) + c1(il,ilz)*sin(glz(il+1,ilz)))/code_dt/vn, 2.*glz(il,ilz)*cos(glz(il,ilz)) + (1.0-glz(il,ilz)**2)*sin(glz(il,ilz))
-!             end do
-!             write (*,*) 2*ng2, real(glz(2*ng2,ilz)), real(a1(2*ng2)*sin(glz(2*ng2-1,ilz)) + (b1(2*ng2)-1.0)*sin(glz(2*ng2,ilz)))/code_dt/vn, 2.*glz(2*ng2,ilz)*cos(glz(2*ng2,ilz)) + (1.0-glz(2*ng2,ilz)**2)*sin(glz(2*ng2,ilz))
-!          end if
-       else
-          do il = 2, je-1
-             slb0 = sqrt(abs(1.0 - bmag(ig)*al(il-1)))
+             wslb = 1.0 - 0.5*sum(wl(ig,:il))
              slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))
              slb2 = sqrt(abs(1.0 - bmag(ig)*al(il+1)))
+             
+             delp = wslb - slb2
+             delm = wslb - slb1
+             del  = slb1 - slb2
 
-! around for testing -- MAB
-             glz(il,ilz) = slb1
+             capg = 1.0 - wslb**2
 
-!             ee = 0.25*e(ie,is)*(1+slb1**2) &
+             mu = 0.5*(delp + delm)
+             eta = (1.0 + wslb*(delp + delm)/capg)*del
+
+!             eeb = -ee*((1.0 + wslb**2)*delp*mu/eta + (1.0 + slb1**2)) - eec(il-1)
+             eeb = -ee*(1.0 + wslb**2)*delp*mu/eta - eec(il-1)
+             eec(il) = -ee*(1.0 + wslb**2)*delm*mu/eta
+
+             rc(il) = -delm*mu/eta
+             cc(il) = -(code_dt*vn*capg + delm*mu)/eta
+
+             rba(il) = -delp*mu/eta
+             rb(il) = 1.0 - 2.0*(rba(il) + rc(il-1))/wl(ig,il)
+             ba(il) = -(code_dt*vn*capg + delp*mu)/eta
+             bb(il) = 1.0 - 2.0*(cc(il-1) + ba(il) + eeb)/wl(ig,il) + ee*(1.+slb1**2)
+
+             ra(il) = 2.0*rba(il-1)/wl(ig,il)
+             aa(il) = 2.0*(ba(il-1) + eea)/wl(ig,il)
+
+             ! coefficients for entropy heating calculation
+             if (heating) then
+                dd(il) =vnc*(2.0*(capg + delm*mu)/(eta*wl(ig,il)) + ee)
+                hh(il) =vnh*(2.0*(capg + delm*mu)/(eta*wl(ig,il)) + ee)
+             end if
+
+          end do
+
+          ! boundary at xi = 0
+          il = te
+
+          eea = ee*(1.0 + wslb**2)*delp*mu/eta
+ 
+          if (te == ng2) then
+             slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))
+             slb2 = -slb1
+             wll = wl(ig,il)
+          else
+             slb1 = 0.0
+             slb2 = -sqrt(abs(1.0 - bmag(ig)*al(il-1)))
+             wll = 2.0*wl(ig,il)
+          end if
+          wslb = 1.0 - 0.5*(sum(wl(ig,:il-1))+wll)
+
+!          ee = 0.5*e(ie,is)*(1+slb1**2) / (bmag(ig)*spec(is)%zstm)**2 &
+!               * kperp2(ig,it,ik)*cfac
+             
+          delp = wslb - slb2
+          delm = wslb - slb1
+          del  = slb1 - slb2
+             
+          capg = 1.0 - wslb**2
+             
+          mu = 0.5*(delp + delm)
+          eta = (1.0 + wslb*(delp + delm)/capg)*del
+          
+!          eeb = -ee*((1.0 + wslb**2)*delp*mu/eta - (1.0 + slb1**2)) + eec(il-1)
+          eeb = -ee*(1.0 + wslb**2)*delp*mu/eta - eec(il-1)
+          eec(il) = -ee*(1.0 + wslb**2)*delm*mu/eta
+
+          rc(il) = -delm*mu/eta
+          cc(il) = -(code_dt*vn*capg + delm*mu)/eta
+          
+          rba(il) = -delp*mu/eta
+          rb(il) = 1.0 - 2.0*(rba(il) + rc(il-1))/wll
+          ba(il) = -(code_dt*vn*capg + delp*mu)/eta
+          bb(il) = 1.0 - 2.0*(cc(il-1) + ba(il) + eeb)/wll + ee*(1.+slb1**2)
+       
+          ra(il) = 2.0*rba(il-1)/wll
+          aa(il) = 2.0*(ba(il-1) + eea)/wll
+
+          ! coefficients for entropy heating calculation
+          if (heating) then
+             dd(il) =vnc*(2.0*(capg + delm*mu)/(eta*wll) + ee)
+             hh(il) =vnh*(2.0*(capg + delm*mu)/(eta*wll) + ee)
+          end if
+
+          cc(:te-1) = 2.0*(cc(:te-1) + eec(:te-1))/wl(ig,:te-1)
+          rc(:te-1) = 2.0*rc(:te-1)/wl(ig,:te-1)
+
+          cc(te) = 2.0*(cc(te) + eec(te))/wll
+          rc(te) = 2.0*rc(te)/wll
+
+       else
+ 
+! old finite difference scheme
+
+          do il = 2, te-1
+             slb0 = sqrt(abs(1.0 - bmag(ig)*al(il-1))) 
+             slb1 = sqrt(abs(1.0 - bmag(ig)*al(il))) 
+             slb2 = sqrt(abs(1.0 - bmag(ig)*al(il+1))) 
+
+             slbl = (slb1 + slb0)*0.5  ! xi(j-1/2)
+             slbr = (slb1 + slb2)*0.5  ! xi(j+1/2)
+
              ee = 0.5*e(ie,is)*(1+slb1**2) &
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
-
-             dela = slb1 - slb0
-             delb = slb2 - slb0
-             delc = slb2 - slb1
-             delfac = delc/dela - dela/delc
-
-             slbl = 0.5*(slb0 + slb1)
-             slbr = 0.5*(slb1 + slb2)
+          
+             ! coefficients for tridiagonal matrix:
+             cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
+             aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
+             bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
              
-             aatmp = 2.0*((1.0 - slbl**2)*delc/(delb*dela**2) &
-                  - (1.0 - slb1**2)*delfac*delc/(dela*delb**2))
-             cctmp = 2.0*((1.0 - slbr**2)*dela/(delb*delc**2) &
-                  + (1.0 - slb1**2)*delfac*dela/(delc*delb**2))
-
-             cc(il) = -vn*code_dt*cctmp
-             aa(il) = -vn*code_dt*aatmp
-             bb(il) = 1.0 - (aa(il) + cc(il))  + ee*vn*code_dt
-             
-             dd(il) =vnc*(cctmp + ee)
-             hh(il) =vnh*(cctmp + ee)
-
-! old finite difference scheme (doesn't account of unequal spacing)
-!             slbl = (slb1 + slb0)/2.0
-!             slbr = (slb1 + slb2)/2.0
-!
-!             cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
-!             aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
-!             bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
-!
-!             dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-!             hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-
+             ! coefficients for entropy heating calculation
+             if (heating) then
+                dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+                hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+             end if
           end do
 
+          ! boundary at xi = 1
+          slb0 = 1.0
           slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
           slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
 
-! around for testing -- MAB
-          glz(1,ilz) = slb1
+          slbl = (slb1 + slb0)*0.5
+          slbr = (slb1 + slb2)*0.5
 
-          slbr = 0.5*(slb1 + slb2)
-
-!          ee = 0.25*e(ie,is)*(1+slb1**2) &
           ee = 0.5*e(ie,is)*(1+slb1**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
-
-          delc = slb2 - slb1
-
-          cctmp = -(1.0 + slbr) / delc
-
-          cc(1) = -vn*code_dt*cctmp
+          
+          cc(1) = -vn*code_dt*(-1.0 - slbr)/(slb2-slb1)
           aa(1) = 0.0
-          bb(1) = 1.0 - cc(1) + vn*code_dt*ee
+          bb(1) = 1.0 - (aa(1) + cc(1)) + ee*vn*code_dt
 
-          dd(1) = vnc*(cctmp + ee)
-          hh(1) = vnh*(cctmp + ee)
+          if (heating) then
+             dd(1) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+             hh(1) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+          end if
 
-! old scheme
-!          slb0 = 1.0
-!          slb1 = sqrt(abs(1.0-bmag(ig)*al(1)))
-!          slb2 = sqrt(abs(1.0-bmag(ig)*al(2)))
-!
-!          slbr = (slb1 + slb2)/2.0
-!
-!          cc(1) = -vn*code_dt*(-1.0 - slbr)/(slb2-slb1)
-!          aa(1) = 0.0
-!          bb(1) = 1.0 - (aa(1) + cc(1)) + ee*vn*code_dt
-!
-!          dd(1) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-!          hh(1) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+          ! boundary at xi = 0
+          il = te
+          slb0 = sqrt(abs(1.0 - bmag(ig)*al(il-1))) 
+          if (te == ng2) then
+             slb1 = sqrt(abs(1.0 - bmag(ig)*al(il))) 
+             slb2 = -slb1
+          else
+             slb1 = 0.0
+             slb2 = -slb0
+          end if
 
-          il = je
-          slb0 = sqrt(abs(1.0-bmag(ig)*al(il-1)))
-          slb1 = 0.
-          slb2 = -slb0                                                        
+          slbl = (slb1 + slb0)*0.5
+          slbr = (slb1 + slb2)*0.5
 
-! around for testing -- MAB
-          glz(il,ilz) = slb1
-
-!          ee = 0.25*e(ie,is)*(1+slb1**2) &
           ee = 0.5*e(ie,is)*(1+slb1**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-          dela = slb1 - slb0
-          delb = slb2 - slb0
-          delc = slb2 - slb1
-          delfac = delc/dela - dela/delc
+          cc(il) = -vn*code_dt*(1.0 - slbr*slbr)/(slbr - slbl)/(slb2 - slb1)
+          aa(il) = -vn*code_dt*(1.0 - slbl*slbl)/(slbr - slbl)/(slb1 - slb0)
+          bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
 
-          slbl = 0.5*(slb0 + slb1)
-          slbr = 0.5*(slb1 + slb2)
-             
-          aatmp = 2.0*((1.0 - slbl**2)*delc/(delb*dela**2) &
-               - (1.0 - slb1**2)*delfac*delc/(dela*delb**2))
-          cctmp = 2.0*((1.0 - slbr**2)*dela/(delb*delc**2) &
-               + (1.0 - slb1**2)*delfac*dela/(delc*delb**2))
-
-          cc(il) = -vn*code_dt*cctmp
-          aa(il) = -vn*code_dt*aatmp
-          bb(il) = 1.0 - (aa(il) + cc(il))  + ee*vn*code_dt
-
-          dd(il) =vnc*(cctmp + ee)
-          hh(il) =vnh*(cctmp + ee)
-
-! old scheme
-!          slbl = (slb1 + slb0)/2.0
-!          slbr = (slb1 + slb2)/2.0
-!
-!          cc(il) = -0.5*vn*code_dt*(1.0-slbl*slbl)/slb0/slb0
-!          aa(il) = cc(il)
-!          bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
-!
-!          dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-!          hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
-
-          a1(:je) = aa(:je)
-          b1(:je) = bb(:je)
-          c1(:je,ilz) = cc(:je)
-
-          d1(:je,ilz) = dd(:je)
-          h1(:je,ilz) = hh(:je)
-
-          a1(je+1:2*je-1) = cc(je-1:1:-1)
-          b1(je+1:2*je-1) = bb(je-1:1:-1)
-          c1(je+1:2*je-1,ilz) = aa(je-1:1:-1)
-
-          d1(je+1:2*je-1,ilz) = dd(je-1:1:-1)
-          h1(je+1:2*je-1,ilz) = hh(je-1:1:-1)
-
-          betaa(1,ilz) = 1.0/b1(1)
-          do il = 1, 2*je-2
-             ql(il+1,ilz) = a1(il+1)*betaa(il,ilz)
-             betaa(il+1,ilz) = 1.0/(b1(il+1)-ql(il+1,ilz)*c1(il,ilz))
-          end do
-
-          ql(1,ilz) = 0.0
-          c1(2*je:,ilz) = 0.0
-          betaa(2*je:,ilz) = 0.0
-          d1(2*je:,ilz) = 0.0
-          h1(2*je:,ilz) = 0.0
-
-! around for testing -- MAB
-          glz(je+1:2*je-1,ilz) = -glz(je-1:1:-1,ilz)
-
-          if (first) then
-             if (proc0) call open_output_file (lorentz_unit,".lorentz")
-             first = .false.
+          if (heating) then
+             dd(il) =vnc*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
+             hh(il) =vnh*((1.0-slbr*slbr)/(slbr-slbl)/(slb2-slb1) + ee)
           end if
 
-          if (proc0 .and. .not. last .and. ig == 0 .and. ie == negrid) then
-             write (lorentz_unit,*) '1', real(glz(1,ilz)), real((b1(1)-1.0)*cos(glz(1,ilz)) + c1(1,ilz)*cos(glz(2,ilz))), real(-2.*glz(1,ilz)*sin(glz(1,ilz)) + (1.0-glz(1,ilz)**2)*cos(glz(1,ilz)))
-             do il = 2, 2*je-2
-                write (lorentz_unit,*) il, real(glz(il,ilz)), real(a1(il)*cos(glz(il-1,ilz)) + (b1(il)-1.0)*cos(glz(il,ilz)) + c1(il,ilz)*cos(glz(il+1,ilz))), real(-2.*glz(il,ilz)*sin(glz(il,ilz)) + (1.0-glz(il,ilz)**2)*cos(glz(il,ilz)))
-             end do
-             write (lorentz_unit,*) 2*je-1, real(glz(2*je-1,ilz)), real(a1(2*je-1)*cos(glz(2*je-2,ilz)) + (b1(2*je-1)-1.0)*cos(glz(2*je-1,ilz))), real(-2.*glz(2*je-1,ilz)*sin(glz(2*je-1,ilz)) + (1.0-glz(2*je-1,ilz)**2)*cos(glz(2*je-1,ilz)))
-             last = .true.
-             call close_output_file (lorentz_unit)
-          end if
+          ra = 0.0 ; rb = 1.0 ; rc = 0.0
 
        end if
+
+! start to fill in the arrays for the tridiagonal
+       a1(:te) = aa(:te)
+       b1(:te) = bb(:te)
+       c1(:te,ilz) = cc(:te)
+       
+       ra1(:te,ilz) = ra(:te)
+       rb1(:te,ilz) = rb(:te)
+       rc1(:te,ilz) = rc(:te)
+       
+       if (heating) then
+          d1(:te,ilz) = dd(:te)
+          h1(:te,ilz) = hh(:te)
+       end if
+
+! assuming symmetry in xi, fill in the rest of the arrays.
+       a1(te+1:te2) = cc(teh:1:-1)
+       b1(te+1:te2) = bb(teh:1:-1)
+       c1(te+1:te2,ilz) =aa(teh:1:-1)
+       
+       ra1(te+1:te2,ilz) = rc(teh:1:-1)
+       rb1(te+1:te2,ilz) = rb(teh:1:-1)
+       rc1(te+1:te2,ilz) = ra(teh:1:-1)
+       
+!       do il = 1, te2
+!          write (*,*) ig, il, sqrt(max(0.0,1.0-al(il)*bmag(ig))), 0.5*wl(ig,il), 1.0-0.5*sum(wl(ig,:il))
+!       end do
+!       write (*,*)
+
+!       do il = 1, te2
+!          write (*,*) ig, il, a1(il), b1(il), c1(il,ilz), ra1(il,ilz), rb1(il,ilz), rc1(il,ilz)
+!       end do
+!       write (*,*)
+
+       if (heating) then
+          d1(te+1:te2,ilz) = dd(teh:1:-1)
+          h1(te+1:te2,ilz) = hh(teh:1:-1)
+          d1(te2+1:,ilz) = 0.0
+          h1(te2+1:,ilz) = 0.0
+       end if
+
+       betaa(1,ilz) = 1.0/b1(1)
+       do il = 1, te2-1
+          ql(il+1,ilz) = a1(il+1)*betaa(il,ilz)
+          betaa(il+1,ilz) = 1.0/(b1(il+1)-ql(il+1,ilz)*c1(il,ilz))
+       end do
+
+       ql(1,ilz) = 0.0
+       ql(te2+1:,ilz) = 0.0
+       c1(te2+1:,ilz) = 0.0
+       betaa(te2+1:,ilz) = 0.0
+       
     end do
+
+    if (heating) deallocate (dd, hh)
 
   end subroutine init_lorentz
 
@@ -1965,7 +1963,7 @@ contains
     do ig=-ntgrid,ntgrid
        je = jend(ig)
        
-       if (je == 0) then            ! no trapped particles
+       if (je <= ng2+1) then            ! no trapped particles
 
 ! calculation of xi and finite difference coefficients for non-boundary points
           do il=2,ng2-1
@@ -2196,7 +2194,7 @@ contains
           d2lcoef(ig,il,ip-il+2) = (1.0-slb(il)**2)*d2lcoef(ig,il,ip-il+2)
        end do
        
-       if (je /= 0) then      ! have to handle trapped particles
+       if (je > ng2+1) then      ! have to handle trapped particles
 
           do il=ng2+1,je
              do ip=il-2,il+2
@@ -2378,6 +2376,11 @@ contains
 
     integer :: ik, ie, is, iglo
 
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, upar, uperp, ttot
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot2, upar2, uperp2, ttot2
+
+    logical :: first = .true.
+
     if (collision_model_switch == collision_model_none) return
 
     if (heating .and. present(diagnostics)) then
@@ -2392,6 +2395,8 @@ contains
     
     if (adjust) call g_adjust (g, phi, bpar, fphi, fbpar)
     if (adjust) call g_adjust (gold, phi, bpar, fphi, fbpar)
+
+    call conserve_test (g, phinew, ntot, upar, uperp, ttot)
 
     select case (collision_model_switch)
     case (collision_model_full)
@@ -2415,6 +2420,7 @@ contains
        else
           call solfp_lorentz (g, gc1, gc2)
        end if
+
        if (conserve_moments) call conserve_lorentz (g, g1)
 
     case (collision_model_ediffuse)
@@ -2442,6 +2448,21 @@ contains
 
        deallocate (gc3)
     end if
+
+    call conserve_test (g, phinew, ntot2, upar2, uperp2, ttot2)
+
+    if (.not. allocated(ntot_diff)) then
+       allocate (ntot_diff(-ntgrid:ntgrid,ntheta0,naky,nspec))
+       allocate (upar_diff(-ntgrid:ntgrid,ntheta0,naky,nspec))
+       allocate (uperp_diff(-ntgrid:ntgrid,ntheta0,naky,nspec))
+       allocate (ttot_diff(-ntgrid:ntgrid,ntheta0,naky,nspec))
+       ntot_diff = 0.0 ; upar_diff = 0.0 ; uperp_diff = 0.0 ; ttot_diff = 0.0
+    end if
+
+    ntot_diff = ntot_diff + (ntot2 - ntot)
+    upar_diff = upar_diff + (upar2 - upar)
+    uperp_diff = uperp_diff + (uperp2 - uperp)
+    ttot_diff = ttot_diff + (ttot2 - ttot)
 
     if (adjust) call g_adjust (g, phi, bpar, -fphi, -fbpar)
     if (adjust) call g_adjust (gold, phi, bpar, -fphi, -fbpar)
@@ -2663,7 +2684,7 @@ contains
   end subroutine conserve_diffuse
 
 !>MAB
-  subroutine conserve_test (g, phi, ntot, upar, uperp)
+  subroutine conserve_test (g, phi, ntot, upar, uperp, ttot)
 
     use mp, only: proc0
     use theta_grid, only: ntgrid
@@ -2681,7 +2702,7 @@ contains
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
-    complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, upar, uperp
+    complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, upar, uperp, ttot
 
     g0 = 0.0
 
@@ -2691,37 +2712,50 @@ contains
        ik = ik_idx(g_lo, iglo)
        is = is_idx(g_lo, iglo)
        do ig = -ntgrid, ntgrid
-!          g0(ig,:,iglo) =  anon(ie,is)*phi(ig,it,ik)*spec(is)%zt*spec(is)%dens
-          g0(ig,:,iglo) =  anon(ie,is)*aj0(ig,iglo)*phi(ig,it,ik)*spec(is)%zt*spec(is)%dens
+          g0(ig,:,iglo) =  anon(ie,is)*phi(ig,it,ik)*spec(is)%zt*spec(is)%dens
+!          g0(ig,:,iglo) =  anon(ie,is)*aj0(ig,iglo)*phi(ig,it,ik)*spec(is)%zt*spec(is)%dens
        end do
     end do
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do ig=-ntgrid, ntgrid
-!          g0(ig,:,iglo) = aj0(ig,iglo)*g(ig,:,iglo) - g0(ig,:,iglo)
-          g0(ig,:,iglo) = g(ig,:,iglo) + g0(ig,:,iglo)
+          g0(ig,:,iglo) = aj0(ig,iglo)*g(ig,:,iglo) - g0(ig,:,iglo)
+!          g0(ig,:,iglo) = g(ig,:,iglo) + g0(ig,:,iglo)
        end do
     end do
-    call integrate_moment (g0, ntot)
+!    call integrate_moment (g0, ntot)
+    call integrate_moment (g, ntot)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do ig = -ntgrid, ntgrid
-!          g0(ig,:,iglo) = vpa(ig,:,iglo)*aj0(ig,iglo)*g(ig,:,iglo)
+          g0(ig,:,iglo) = vpa(ig,:,iglo)*aj0(ig,iglo)*g(ig,:,iglo)
 !          g0(ig,:,iglo) = vpa(ig,:,iglo)*g(ig,:,iglo)
        end do
     end do
-    call integrate_moment (vpa*g0, upar, all)
+    call integrate_moment (g0, upar, all)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ie = ie_idx(g_lo, iglo)
        il = il_idx(g_lo, iglo)
        is = is_idx(g_lo, iglo)
        do ig = -ntgrid, ntgrid
-!          g0(ig,:,iglo) = e(ie,is)*al(il)*aj1(ig,iglo)*g(ig,:,iglo)
-          g0(ig,:,iglo) = e(ie,is)*al(il)*g0(ig,:,iglo)
+          g0(ig,:,iglo) = e(ie,is)*al(il)*aj1(ig,iglo)*g(ig,:,iglo)
+!          g0(ig,:,iglo) = e(ie,is)*al(il)*g0(ig,:,iglo)
        end do
     end do
     call integrate_moment (g0, uperp, all)
+
+   do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ie = ie_idx(g_lo, iglo)
+       il = il_idx(g_lo, iglo)
+       is = is_idx(g_lo, iglo)
+       do ig = -ntgrid, ntgrid
+          g0(ig,:,iglo) = e(ie,is)*aj0(ig,iglo)*g(ig,:,iglo) &
+               - 0.5*anon(ie,is)*phi(ig,it,ik)*spec(is)%zt*spec(is)%dens
+!          g0(ig,:,iglo) = e(ie,is)*al(il)*g0(ig,:,iglo)
+       end do
+    end do
+    call integrate_moment (g0, ttot, all)
 
   end subroutine conserve_test
 !<MAB
@@ -2852,50 +2886,43 @@ contains
     use gs2_layouts, only: ig_idx, ik_idx, il_idx, is_idx, it_idx, ie_idx
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
-    use file_utils, only: open_output_file, close_output_file
+
     implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, gc, gh
     integer, optional, intent (in) :: diagnostics
 
+    complex, dimension (:,:), allocatable :: glz, glzc
+    complex, dimension (:), allocatable :: glz0
     complex, dimension (max(2*nlambda,2*ng2+1)) :: delta
     complex :: fac
     integer :: iglo, igint, ilz, ig, ik, il, is, je, it, ie
 
-    integer, save :: tmp_unit
     logical :: first = .true.
     
     call prof_entering ("solfp_lorentz", "collisions")
 
+    allocate (glz(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+    allocate (glz0(max(2*nlambda,2*ng2+1)))
+    glz = 0.0 ; glz0 = 0.0
+    if (heating) then
+       allocate (glzc(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+       glzc = 0.0
+    end if
+
 !    call check_g ('beg', g)
 
-    call gather (lorentz_map, g, glz)
+    ! TEMPORARY FOR TESTING -- MAB
+!    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!       ie = ie_idx(g_lo,iglo)
+!       il = il_idx(g_lo,iglo)
+!       do ig = -ntgrid, ntgrid
+!          g(ig,1,iglo) = il
+!          g(ig,2,iglo) = -il
+!       end do
+!    end do
 
-!    if (first) then
-!       do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
-!          ig = ig_idx(lz_lo,ilz)
-!          ie = ie_idx(lz_lo,ilz)
-!          if (ig == 0 .and. ie == 1) then
-!             je = 2*jend(ig)
-!             if (je==0) je=2*ng2+1
-!             do il=1,je/2
-!                glz(il, ilz) = sqrt(abs(1.0-al(il)*bmag(ig)))
-!                write(tmp_unit,*) jend(ig), ng2, je, il, al(il), real(glz(il, ilz)), size(glz(:,ilz))
-!             end do
-!             glz(je:je/2+1:-1,ilz) = -glz(1:je/2,ilz)
-!             do il = je/2+1, je
-!                write(tmp_unit,*) jend(ig), ng2, je, il, al(je-il+1), real(glz(il, ilz)), size(glz(:,ilz))
-!             end do
-!          end if
-!       end do
-!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!          ie = ie_idx(g_lo,iglo)
-!          il = il_idx(g_lo,iglo)
-!          if (ie == 1) then
-!             write(tmp_unit,*) il, al(il), g(0,1,iglo), g(0,2,iglo)
-!          end if
-!       end do
-!       first = .false.
-!    end if
+    call gather (lorentz_map, g, glz)
 
     if (heating .and. present(diagnostics)) then
        do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
@@ -2939,17 +2966,50 @@ contains
 !    call check_glz ('beg', glz)
     ! solve for glz row by row
     do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
+       ie = ie_idx(lz_lo,ilz)
        ig = ig_idx(lz_lo,ilz)
        ik = ik_idx(lz_lo,ilz)
        is = is_idx(lz_lo,ilz)
        if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
-       je = 2*jend(ig)
 
-       if (je == 0) then
+       je = jend(ig)
+
+       if (je > ng2+1) then
+          je = 2*je
+       else
           je = 2*ng2+1
        end if
 
+!       je = 2*jend(ig)
+
+!       if (je <= ng2) then
+!          je = 2*ng2+1
+!       end if
+
+       ! deal with special case of wfb
+       if (jend(ig) == ng2+1) then
+          ! if wfb, remove vpa = 0 point (which has wgt of zero)
+          glz0(:ng2) = glz(:ng2,ilz)
+          glz0(ng2+1:je-1) = glz(ng2+2:je,ilz)
+       else
+          glz0 = glz(:,ilz)
+       end if
+
+!       do il = 1, je
+!          if (ilz == 1) write (*,*) ie, il, ig, real(glz0(il)), 'glz(il,ilz=1)', sqrt(max(0.0,1.0-al(il)*bmag(ig)))
+!       end do
+
+       glz(1,ilz) = rb1(1,ilz)*glz0(1) + rc1(1,ilz)*glz0(2)
+       glz(je-1,ilz) = ra1(je-1,ilz)*glz0(je-2) + rb1(je-1,ilz)*glz0(je-1)
+       do il = 2, je-2
+          glz(il,ilz) = ra1(il,ilz)*glz0(il-1) + rb1(il,ilz)*glz0(il) + rc1(il,ilz)*glz0(il+1)
+       end do
+
        glz(je:,ilz) = 0.0
+
+!       do il = 1, je
+!          if (ilz == 1) write (*,*) ie, il, ig, real(glz(il,ilz)), 'glz0(il,ilz=1)', sqrt(max(0.0,1.0-al(il)*bmag(ig)))
+!       end do
 
        ! right and left sweeps for tridiagonal solve:
 
@@ -2962,13 +3022,28 @@ contains
        do il = je-1, 1, -1
           glz(il,ilz) = (delta(il) - c1(il,ilz)*glz(il+1,ilz))*betaa(il,ilz)
        end do
+
+       ! interpolate to obtain glz(vpa = 0) point for wfb
+       ! and insert this point into glz
+       if (jend(ig) == ng2+1) then
+          glz0(ng2+2:je) = glz(ng2+1:je-1,ilz)
+          glz(ng2+1,ilz) = 0.5*(glz(ng2,ilz)+glz(ng2+1,ilz))
+          glz(ng2+2:je,ilz) = glz0(ng2+2:je)
+       end if
+
 !
 ! bug fixed 4.14.03
 ! was only a problem with collisions but with no trapped particles
 ! because of an array index out of bounds 
 ! Overall, this was a rare bug.
 !
-       if (jend(ig) /= 0) glz(je,ilz) = glz(jend(ig),ilz)
+
+!       if (jend(ig) /= 0) glz(je,ilz) = glz(jend(ig),ilz)
+       if (jend(ig) /= 0) glz(2*jend(ig),ilz) = glz(jend(ig),ilz)
+
+!       do il = 1, je
+!          if (ilz == 1) write (*,*) ie, il, ig, real(glz(il,ilz)), 'final glz', sqrt(max(0.0,1.0-al(il)*bmag(ig)))
+!       end do
 
     end do
 
@@ -2976,6 +3051,9 @@ contains
     call scatter (lorentz_map, glz, g)
 
 !    call check_g ('end', g)
+
+    deallocate (glz, glz0)
+    if (heating) deallocate (glzc)
 
     call prof_leaving ("solfp_lorentz", "collisions")
   end subroutine solfp_lorentz
@@ -2992,39 +3070,55 @@ contains
     use file_utils, only: open_output_file, close_output_file
     use egrid, only: zeroes, x0
 
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, ie_idx, il_idx
-    use gs2_layouts, only: idx_local, proc_id
-    use le_grids, only: forbid
-    use mp, only: send, receive
+    use gs2_layouts, only: ik_idx, it_idx, is_idx, ie_idx, il_idx, ig_idx
 
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
 
+    complex, dimension (:,:), allocatable :: ged
+    complex, dimension (:), allocatable :: ged0
     complex, dimension (negrid) :: delta
-    integer :: ielo, ie, is, iglo, ig, isgn
-!    integer, save :: scat_unit
-!    logical, save :: first = .true.
+    integer :: ielo, ie, is, iglo, ig, isgn, it, ik, il
 
-!    complex, dimension (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc) :: gtmp, grhs
-!    complex, dimension (:,:,:,:), allocatable, save :: ndiff
-!    complex, dimension (-ntgrid:ntgrid, ntheta0, naky, nspec) :: ntmp1, ntmp2, ntmp3
-!    complex, dimension (negrid, e_lo%llim_proc:e_lo%ulim_alloc) :: rhs, lhs
-!    complex :: gdiff
+    allocate (ged(negrid+1,e_lo%llim_proc:e_lo%ulim_alloc))
+    allocate (ged0(negrid+1))
+    ged = 0.0 ; ged0 = 0.0
 
-!    gtmp = g
+    ! TEMP FOR TESTING -- MAB
+!    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!       ie = ie_idx(g_lo,iglo)
+!       g(:,:,iglo) = ie
+!    end do
 
     call gather (ediffuse_map, g, ged)
-
-! TEMP FOR TESTING -- MAB
-!    ged = 1.0
 
     ! solve for ged row by row
     do ielo = e_lo%llim_proc, e_lo%ulim_proc
        is = is_idx(e_lo,ielo)
-!       is = 1
+       ! TEMP -- MAB
+!       ik = ik_idx(e_lo,ielo)
+!       ig = ig_idx(e_lo,ielo)
+!       il = il_idx(e_lo,ielo)
+!       it = it_idx(e_lo,ielo)
 
        if (spec(is)%vnewk < 2.0*epsilon(0.0)) cycle
+
+!       do ie = 1, negrid
+!          write (*,*) ie, ged(ie,ielo), 'pre', ielo
+!       end do
+
+       ged0(1) = erb1(1,ielo)*ged(1,ielo) + erc1(1,ielo)*ged(2,ielo)
+       do ie = 2, negrid-1
+          ged0(ie) = era1(ie,ielo)*ged(ie-1,ielo) + erb1(ie,ielo)*ged(ie,ielo) + erc1(ie,ielo)*ged(ie+1,ielo)
+       end do
+       ged0(negrid) = era1(negrid,ielo)*ged(negrid-1,ielo) + erb1(negrid,ielo)*ged(negrid,ielo)
+
+!       do ie = 1, negrid
+!          write (*,*) ie, ged0(ie), 'intermediate', ielo
+!       end do
+
+       ged(:,ielo) = ged0
 
        delta(1) = ged(1,ielo)
 ! should be ie = 1, negrid? and pad ged, eql, etc. with extra element?
@@ -3038,51 +3132,15 @@ contains
           ged(ie,ielo) = (delta(ie) - ec1(ie,ielo)*ged(ie+1,ielo))*ebetaa(ie,ielo)
        end do
 
+!       do ie = 1, negrid
+!          write (*,*) ie, ged(ie,ielo), 'after', ielo
+!       end do
+
     end do
 
-!    do ielo = e_lo%llim_proc, e_lo%ulim_proc
-!       do ie = 1, negrid
-!          ged(ie,ielo) = cos(e(ie,1))
-!       end do
-!    end do
-
     call scatter (ediffuse_map, ged, g)
-! for testing -- MAB
-!    call integrate_moment (gtmp, ntmp1)
-!    call integrate_moment (g, ntmp2)
 
-!    call gather (ediffuse_map, g, lhs)
-
-!    do ie = 2, negrid-1
-!       rhs(ie,:) = ea1(ie)*lhs(ie-1,:) + ec1(ie)*lhs(ie+1,:) + eb1(ie)*lhs(ie,:)
-!    end do
-!    rhs(1,:) = eb1(1)*lhs(1,:) + ec1(1)*lhs(2,:)
-!    rhs(negrid,:) = eb1(negrid)*lhs(negrid,:) + ea1(negrid)*lhs(negrid-1,:)
-
-!    call scatter (ediffuse_map, rhs, grhs)
-
-!    call integrate_moment(grhs-gtmp, ntmp3)
-    
-!    if (first) then 
-!       call open_output_file (scat_unit,".redist")
-!       allocate (ndiff(-ntgrid:ntgrid, ntheta0, naky, nspec))
-!       ndiff = 0.0
-!       first = .false.
-!    end if
-
-!    ndiff = ndiff + (ntmp2 - ntmp1)
-
-!    write (scat_unit,*) real(ndiff(0,1,1,1)), aimag(ndiff(0,1,1,1)), real(ntmp3(0,1,1,1)), aimag(ntmp3(0,1,1,1))
-
-!    do iglo = g_lo%llim_proc, g_lo%ulim_alloc
-!       ie = ie_idx(g_lo,iglo)
-!          do isgn = 1, 2
-!             do ig = -ntgrid, ntgrid
-!          write (scat_unit,*) e(ie,1), real(g(0,1,iglo)), aimag(g(0,1,iglo)), real(g(ig,isgn,iglo)-cos(e(ie,1))), aimag(g(ig,isgn,iglo)-cos(e(ie,1))), gdiff
-!       if (ie==1) write (scat_unit,*) ie, real(g(0,1,iglo)), aimag(g(0,1,iglo)), real(ndiff(0,1,1,1)), aimag(ndiff(0,1,1,1))
-!             end do
-!          end do
-!    end do
+    deallocate (ged, ged0)
 
   end subroutine solfp_ediffuse
 

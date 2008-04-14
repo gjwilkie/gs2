@@ -328,7 +328,7 @@ module le_grids
   public :: init_le_grids
   public :: integrate, lintegrate, integrate_species
   public :: pintegrate, pe_integrate, integrate_stress
-  public :: e, anon, al, delal, jend, forbid, dele
+  public :: e, anon, al, delal, jend, forbid, dele, wl, w
   public :: negrid, nlambda, ng2, lmax, integrate_moment
   public :: geint2g, gint2g, orbit_avg, xloc
   public :: fcheck
@@ -2670,7 +2670,7 @@ contains
 
 ! Modified to use nrgauleg routine, Tomo Tatsuno, Aug 2005
 
-    use theta_grid, only: ntgrid, bmag, bmax, eps
+    use theta_grid, only: ntgrid, bmag, bmax, eps, ntheta
     use legendre, only: nrgauleg
     use constants
     use file_utils, only: open_output_file, close_output_file

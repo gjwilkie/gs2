@@ -1264,8 +1264,9 @@ contains
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
-    use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
+    use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
     use collisions, only: ncheck, vnmult, vary_vnew
+    use collisions, only: ntot_diff, upar_diff, uperp_diff, ttot_diff
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
@@ -1333,6 +1334,8 @@ contains
     real, dimension(nspec) :: tprim_tot, fprim_tot
     character(200) :: filename
     logical :: last = .false.
+
+    complex, dimension (nspec) :: ntdiff, upadiff, upediff, ttdiff
 
     call prof_entering ("loop_diagnostics")
 
@@ -1428,8 +1431,7 @@ contains
              write(res_unit,"(8(1x,e12.6))") t, errest(1,2), errest(2,2), errest(3,2), &
                   errest(4,2), errest(5,2), vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
              if (write_max_verr) then
-                write(res_unit2,"(3(i8),(1x,e12.6),3(i8),(1x,e12.6), &
-                     3(i8),(1x,e12.6),3(i8),(1x,e12.6),3(i8),(1x,e12.6))") &
+                write(res_unit2,"(3(i8),(1x,e12.6),3(i8),(1x,e12.6),3(i8),(1x,e12.6),3(i8),(1x,e12.6),3(i8),(1x,e12.6))") &
                      erridx(1,1), erridx(1,2), erridx(1,3), errest(1,1), &
                      erridx(2,1), erridx(2,2), erridx(2,3), errest(2,1), &
                      erridx(3,1), erridx(3,2), erridx(3,3), errest(3,1), &
@@ -1743,7 +1745,7 @@ contains
 
     call kperp (ntg_out, akperp)
 
-    if (write_neoclassical_flux .or. dump_neoclassical_flux) then
+    if (write_neoclassical_flux .or. dump_neoclassical_flux .and. neoflux) then
        call neoclassical_flux (pfluxneo, qfluxneo, phinew, bparnew)
     end if
 
@@ -2034,7 +2036,7 @@ contains
 
        call getmoms (phinew, ntot, density, upar, tpar, tperp)
 
-       if (test_conserve) call gettotmoms (phinew, ntot, upartot, ttot)
+!       if (test_conserve) call gettotmoms (phinew, bparnew, ntot, upartot, ttot)
 
        if (proc0) then
           allocate (dl_over_b(-ntg_out:ntg_out))
@@ -2051,19 +2053,22 @@ contains
                 tperp00(it, is)  = sum(tperp(-ntg_out:ntg_out,it,1,is)*dl_over_b)
 
                 if (test_conserve) then
-                   upartot00(it,is) = sum(upartot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                   ttot00(it,is) = sum(ttot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                   ntdiff(is) = sum(ntot_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
+                   upadiff(is) = sum(upar_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
+                   upediff(is) = sum(uperp_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
+                   ttdiff(is) = sum(ttot_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
                 end if
              end do
           end do
           
           if (test_conserve) then
              if (nspec == 1) then
-                write (out_unit, *) 'moms', real(ntot00(1,1)), aimag(ntot00(1,1)), &
-                     real(upartot00(1,1)), aimag(upartot00(1,1)), real(ttot00(1,1)), aimag(ttot00(1,1))
+                write (out_unit, *) 'moms', real(ntdiff(1)),  &
+                     aimag(upadiff(1)), real(upediff(1)), aimag(upediff(1)), &
+                     real(ttdiff(1))
              else
-                write (out_unit, *) 'moms', real(ntot00(1,1)), real(ntot00(1,2)), &
-                     aimag(upartot00(1,1)), aimag(upartot00(1,2)), real(ttot00(1,1)), real(ttot00(1,2))
+                write (out_unit, *) 'moms', real(ntdiff(1)), real(ntdiff(2)), &
+                     aimag(upadiff(1)), aimag(upadiff(2)), real(ttdiff(1)), real(ttdiff(2))
              end if
           end if
 
@@ -2092,7 +2097,7 @@ contains
        end if
     end if
 
-    if (write_neoclassical_flux .and. proc0) then
+    if (write_neoclassical_flux .and. neoflux .and. proc0) then
        do is=1,nspec
           tprim_tot(is) = spec(is)%tprim-0.333*aimag(tpar00(1,is))-0.6667*aimag(tperp00(1,is))
           fprim_tot(is) = spec(is)%fprim-aimag(density00(1,is))
@@ -2111,7 +2116,7 @@ contains
        do ik = 1, naky
           do it = 1, ntheta0
 !             it = 2
-             if (dump_neoclassical_flux) then
+             if (dump_neoclassical_flux .and. neoflux) then
                 do is = 1, nspec
                    write (dump_neoclassical_flux_unit, "(20(1x,e12.5))") &
                         t, aky_out(ik), akx_out(it), real(is), pfluxneo(it,ik,is), &
