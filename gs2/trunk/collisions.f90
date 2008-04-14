@@ -1,3 +1,4 @@
+
 module collisions
   
   use redistribute, only: redist_type
@@ -22,6 +23,7 @@ module collisions
   integer :: ivnew
   logical :: conserve_number, conserve_momentum, const_v, conserve_moments
   logical :: test_mom_conserve, new_coll_scheme
+!  logical :: testing ! TEMP FOR TESTING -- MAB
   integer :: collision_model_switch
   logical :: use_shmem, adjust
   logical :: heating
@@ -157,7 +159,8 @@ contains
          conserve_number, conserve_momentum, use_shmem, heating, &
          adjust, const_v, cfac, hypermult, diffuse_energy, vnfac, &
          etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, &
-         test_mom_conserve, conserve_moments, new_coll_scheme
+         test_mom_conserve, conserve_moments, new_coll_scheme!, &
+!         testing ! TEMP FOR TESTING -- MAB
     integer :: ierr, in_file
     logical :: exist
 
@@ -180,6 +183,7 @@ contains
        conserve_momentum = .true.  ! DEFAULT CHANGED TO REFLECT IMPROVED MOMENTUM CONSERVATION, 8/06
        conserve_moments = .false.
        new_coll_scheme = .true.
+!       testing = .true.  ! TEMP FOR TESTING -- MAB
        test_mom_conserve = .false.
        diffuse_energy = .false.
        vary_vnew = .false.
@@ -211,6 +215,7 @@ contains
     call broadcast (conserve_momentum)
     call broadcast (conserve_moments)
     call broadcast (new_coll_scheme)
+!    call broadcast (testing) ! TEMP FOR TESTING -- MAB
     call broadcast (test_mom_conserve)
     call broadcast (diffuse_energy)
     call broadcast (const_v)
@@ -285,13 +290,11 @@ contains
     logical, save :: first = .true.
     complex, dimension (1,1,1) :: dum1 = 0., dum2 = 0.
     complex, dimension (:,:,:), allocatable :: gtmp
-    complex, dimension (:,:,:,:), allocatable :: v0z0, v0z1, v1z0, v1z1, duinv
+! TEMP FOR TESTING -- MAB
+!    complex, dimension (:,:,:,:), allocatable :: v0z0, v0z1, v1z0, v1z1, duinv
+    complex, dimension (:,:,:,:), allocatable :: v0z0, v1z1, duinv
     real, dimension (:,:,:), allocatable :: vns
-!    real :: vnm1, vnm2
     integer :: ie, il, ik, is, ig, isgn, iglo, all, it
-
-!    vnm1 = vnmult(1)
-!    vnm2 = vnmult(2)
 
 ! TO DO: 
 ! tunits not included anywhere yet
@@ -308,7 +311,6 @@ contains
     allocate (duinv(-ntgrid:ntgrid, ntheta0, naky, nspec))       
     allocate (vns(naky,negrid,nspec))
 
-!    vns = (vnm1-vnm2)*vnew_D + vnm2*vnew_s
     vns = vnmult(1)*vnew_D
 
 !
@@ -413,70 +415,77 @@ contains
     call integrate_moment (gtmp, v0z0, all)    ! v0z0
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now get v1z0
-
-    allocate (v1z0(-ntgrid:ntgrid, ntheta0, naky, nspec))         
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-! v_parallel == vpa
-! V_parallel == v_parallel J0
-! v1 = nu V_parallel f_0
+! v1z0 is zero analytically -- MAB
+! TEMP FOR TESTING -- MAB
+!    if (testing) then
+!       ! Now get v1z0
 !
-! No factor of sqrt(T/m) here on purpose (see derivation) 
+!       allocate (v1z0(-ntgrid:ntgrid, ntheta0, naky, nspec))         
 !
-             gtmp(ig,isgn,iglo) = vns(ik,ie,is)*vpa(ig,isgn,iglo)*aj0(ig,iglo) &
-                  * z0(ig,isgn,iglo)
-          end do
-       end do
-    end do
-
-    call integrate_moment (gtmp, v1z0, all)    ! v1z0
-
+!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!          ik = ik_idx(g_lo,iglo)
+!          ie = ie_idx(g_lo,iglo)
+!          il = il_idx(g_lo,iglo)
+!          is = is_idx(g_lo,iglo)
+!          do isgn = 1, 2
+!             do ig=-ntgrid, ntgrid
+!! v_parallel == vpa
+!! V_parallel == v_parallel J0
+!! v1 = nu V_parallel f_0
+!!
+!! No factor of sqrt(T/m) here on purpose (see derivation) 
+!!
+!                gtmp(ig,isgn,iglo) = vns(ik,ie,is)*vpa(ig,isgn,iglo)*aj0(ig,iglo) &
+!                     * z0(ig,isgn,iglo)
+!             end do
+!          end do
+!       end do
+!
+!       call integrate_moment (gtmp, v1z0, all)    ! v1z0
+!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now get v0z1
-
-    allocate (v0z1(-ntgrid:ntgrid, ntheta0, naky, nspec))         
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-! V_perp == e(ie,is)*al(il)*aj1(ig,iglo)*bmag(ig)
-! v0 = nu V_perp
-! no sqrt(kperp2 smz**2 / bmag) in v0 because it was absorbed into u0 -- MAB 
-             gtmp(ig,isgn,iglo) = vns(ik,ie,is)*e(ie,is)*al(il)*aj1(ig,iglo) &
-                  * z1(ig,isgn,iglo)
-          end do
-       end do
-    end do
-
-    call integrate_moment (gtmp, v0z1, all)
-
+! v0z1 is zero analytically -- MAB
+!       ! Now get v0z1
+!
+!       allocate (v0z1(-ntgrid:ntgrid, ntheta0, naky, nspec))         
+!
+!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!          ik = ik_idx(g_lo,iglo)
+!          ie = ie_idx(g_lo,iglo)
+!          il = il_idx(g_lo,iglo)
+!          is = is_idx(g_lo,iglo)
+!          do isgn = 1, 2
+!             do ig=-ntgrid, ntgrid
+!! V_perp == e(ie,is)*al(il)*aj1(ig,iglo)*bmag(ig)
+!! v0 = nu V_perp
+!! no sqrt(kperp2 smz**2 / bmag) in v0 because it was absorbed into u0 -- MAB 
+!                gtmp(ig,isgn,iglo) = vns(ik,ie,is)*e(ie,is)*al(il)*aj1(ig,iglo) &
+!                     * z1(ig,isgn,iglo)
+!             end do
+!          end do
+!       end do
+!
+!       call integrate_moment (gtmp, v0z1, all)
+!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now redefine z1 == z1 - z0 [v0 . z1]/(1+v0.z0)
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn=1,2
-          do ig=-ntgrid,ntgrid
-             z1(ig,isgn,iglo) = z1(ig,isgn,iglo) - z0(ig,isgn,iglo)*v0z1(ig,it,ik,is) &
-                  / (1.+v0z0(ig,it,ik,is))
-          end do
-       end do
-    end do
-
-    deallocate (v0z1)
+! following not necessary because v0z1 = 0
+!! Now redefine z1 == z1 - z0 [v0 . z1]/(1+v0.z0)
+!
+!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!          ik = ik_idx(g_lo,iglo)
+!          it = it_idx(g_lo,iglo)
+!          is = is_idx(g_lo,iglo)
+!          do isgn=1,2
+!             do ig=-ntgrid,ntgrid
+!                z1(ig,isgn,iglo) = z1(ig,isgn,iglo) - z0(ig,isgn,iglo)*v0z1(ig,it,ik,is) &
+!                     / (1.+v0z0(ig,it,ik,is))
+!             end do
+!          end do
+!       end do
+!       
+!       deallocate (v0z1)
+!
+!    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v1z1
@@ -502,7 +511,7 @@ contains
        end do
     end do
 
-    call integrate_moment (gtmp, v1z1, all)    ! redefined below
+    call integrate_moment (gtmp, v1z1, all)
 
     deallocate (gtmp, vns)
     
@@ -523,7 +532,8 @@ contains
     deallocate (v1z1)
     
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now redefine z0 == (z1 * v1z0 - z0) / (1 + v0z0)
+! v1z0 = 0, so actually redefine z0 == z0/(1 + v0z0)
+!! Now redefine z0 == (z1 * v1z0 - z0) / (1 + v0z0)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -531,13 +541,20 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn=1,2
           do ig=-ntgrid,ntgrid
-             z0(ig,isgn,iglo) = (z1(ig,isgn,iglo) * v1z0(ig,it,ik,is) - z0(ig,isgn,iglo)) &
-                  / (1.+v0z0(ig,it,ik,is))
+! TEMP FOR TESTING -- MAB
+!             if (testing) then
+!                z0(ig,isgn,iglo) = (z1(ig,isgn,iglo) * v1z0(ig,it,ik,is) - z0(ig,isgn,iglo)) &
+!                     / (1.+v0z0(ig,it,ik,is))
+!             else
+             z0(ig,isgn,iglo) = z0(ig,isgn,iglo) / (1.+v0z0(ig,it,ik,is))
+!             end if
           end do
        end do
     end do
 
-    deallocate (v0z0, v1z0)
+! MAB
+!    if (testing) deallocate (v0z0, v1z0)
+    deallocate (v0z0)
     
   end subroutine init_lorentz_conserve
 
@@ -2459,10 +2476,12 @@ contains
        ntot_diff = 0.0 ; upar_diff = 0.0 ; uperp_diff = 0.0 ; ttot_diff = 0.0
     end if
 
-    ntot_diff = ntot_diff + (ntot2 - ntot)
-    upar_diff = upar_diff + (upar2 - upar)
-    uperp_diff = uperp_diff + (uperp2 - uperp)
-    ttot_diff = ttot_diff + (ttot2 - ttot)
+    ntot_diff = ntot_diff + 0.5*(ntot2 - ntot)
+    upar_diff = upar_diff + 0.5*(upar2 - upar)
+! TEMP FOR TESTING -- MAB
+!    uperp_diff = uperp_diff + 0.5*(uperp2 - uperp)
+    uperp_diff = aimag(upar)+(0,1)*aimag(upar2)
+    ttot_diff = ttot_diff + 0.5*(ttot2 - ttot)
 
     if (adjust) call g_adjust (g, phi, bpar, -fphi, -fbpar)
     if (adjust) call g_adjust (gold, phi, bpar, -fphi, -fbpar)
@@ -2484,14 +2503,9 @@ contains
     real, dimension (:,:,:), allocatable :: vns
 
     integer :: ig, isgn, iglo, ik, ie, il, is, it, all = 1
-!    real :: vnm1, vnm2
 
     allocate (vns(naky,negrid,nspec))
 
-!    vnm1 = vnmult(1)
-!    vnm2 = vnmult(2)
-
-!    vns = (vnm1 - vnm2)*vnew_D + vnm2*vnew_s
     vns = vnmult(1)*vnew_D
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2560,7 +2574,8 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn=1,2
           do ig=-ntgrid,ntgrid
-             g(ig,isgn,iglo) = g(ig,isgn,iglo) + z0(ig,isgn,iglo)*v0y0(ig,it,ik,is) &
+!             g(ig,isgn,iglo) = g(ig,isgn,iglo) + z0(ig,isgn,iglo)*v0y0(ig,it,ik,is) &
+             g(ig,isgn,iglo) = g(ig,isgn,iglo) - z0(ig,isgn,iglo)*v0y0(ig,it,ik,is) &
                   - z1(ig,isgn,iglo) * v1y0(ig,it,ik,is)
           end do
        end do
@@ -2723,8 +2738,8 @@ contains
 !          g0(ig,:,iglo) = g(ig,:,iglo) + g0(ig,:,iglo)
        end do
     end do
-!    call integrate_moment (g0, ntot)
-    call integrate_moment (g, ntot)
+    call integrate_moment (g0, ntot)
+!    call integrate_moment (g, ntot)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do ig = -ntgrid, ntgrid
