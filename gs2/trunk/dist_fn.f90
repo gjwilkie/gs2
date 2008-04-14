@@ -15,6 +15,7 @@ module dist_fn
   public :: init_kperp2
   public :: get_dens_vel, get_jext !GGH
   public :: get_verr, get_gtran, write_fyx, collision_error
+  public :: neoflux
 
   private
 
@@ -52,7 +53,7 @@ module dist_fn
   logical :: save_n, save_u, save_Tpar, save_Tperp, flr
   logical :: accelerated_x = .false.
   logical :: accelerated_v = .false., kill_grid, h_kill
-  logical :: neo = .false.
+  logical :: neo = .false., neoflux
   integer :: nfac = 1
   integer :: nperiod_guard
   
@@ -243,7 +244,7 @@ contains
          nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, flr, cfac, &
-         kill_grid, h_kill, g_exb
+         kill_grid, h_kill, g_exb, neoflux
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
            thetas, k0, phi_ext, source_option, a_ext, aky_star, akx_star
@@ -289,6 +290,7 @@ contains
        test = .false.
        def_parity = .false.
        even = .true.
+       neoflux = .false.
        source_option = 'default'
        kill_grid = .false.
        in_file = input_unit_exist("dist_fn_knobs", exist)
@@ -317,6 +319,7 @@ contains
     end if
     if (.not.allocated(fexp)) allocate (fexp(nspec), bkdiff(nspec), bd_exp(nspec))
     if (proc0) call read_species_knobs
+    neoflux = neoflux .or. source_option_switch == source_option_neo
 
     call broadcast (cfac)
     call broadcast (kill_grid)
@@ -358,6 +361,7 @@ contains
     call broadcast (def_parity)
     call broadcast (even)
     call broadcast (wfb)
+    call broadcast (neoflux)
 
     if (source_option_switch == source_option_neo) nfac = 0
 
@@ -462,26 +466,31 @@ contains
     wdrift = 0.  ; wdriftttp = 0.
 
 !>MAB    
-    if (alloc) allocate (wdrift_neo(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-    if (alloc) allocate (wdriftttp_neo(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
-    wdrift_neo = 0.  ; wdriftttp_neo = 0.
+    if ((neoflux) .and. alloc) then
+       allocate (wdrift_neo(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (wdriftttp_neo(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
+       wdrift_neo = 0.  ; wdriftttp_neo = 0.
+    end if
 !<MAB
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do ig = -ntgrid, ntgrid
           wdrift(ig,iglo) &
                = wdrift_func(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), &
-                                 it_idx(g_lo,iglo), ik_idx(g_lo,iglo), &
-                                 is_idx(g_lo,iglo))
+               it_idx(g_lo,iglo), ik_idx(g_lo,iglo), &
+               is_idx(g_lo,iglo))
 !> MAB
-          wdrift_neo(ig,iglo) &
-               = wdrift_func_neo(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), &
-                                 it_idx(g_lo,iglo), ik_idx(g_lo,iglo), &
-                                 is_idx(g_lo,iglo))
+          if (neoflux) then
+             wdrift_neo(ig,iglo) &
+                  = wdrift_func_neo(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), &
+                  it_idx(g_lo,iglo), ik_idx(g_lo,iglo), &
+                  is_idx(g_lo,iglo))
+          end if
 !< MAB
        end do
     end do
-    wdriftttp = 0.0; wdriftttp_neo = 0.0
+    wdriftttp = 0.0
+    if (neoflux) wdriftttp_neo = 0.0
     do is = 1, nspec
        do ie = 1, negrid
           do ik = 1, naky
@@ -492,8 +501,10 @@ contains
                    wdriftttp(ig,it,ik,ie,is) &
                         = wdrift_func(ig,ittp(ig),ie,it,ik,is)*driftknob
 !> MAB
-                   wdriftttp_neo(ig,it,ik,ie,is) &
-                        = wdrift_func_neo(ig,ittp(ig),ie,it,ik,is)*driftknob
+                   if (neoflux) then
+                      wdriftttp_neo(ig,it,ik,ie,is) &
+                           = wdrift_func_neo(ig,ittp(ig),ie,it,ik,is)*driftknob
+                   end if
 !< MAB
                 end do
              end do
@@ -506,7 +517,7 @@ contains
        do ig = -ntgrid, ntgrid-1
           wdrift(ig,iglo) = 0.5*(wdrift(ig,iglo) + wdrift(ig+1,iglo))*driftknob
 ! MAB
-          wdrift_neo(ig,iglo) = 0.5*(wdrift_neo(ig,iglo) + wdrift_neo(ig+1,iglo))*driftknob
+          if (neoflux) wdrift_neo(ig,iglo) = 0.5*(wdrift_neo(ig,iglo) + wdrift_neo(ig+1,iglo))*driftknob
        end do
     end do
 
@@ -2577,17 +2588,24 @@ contains
     end if
 !!!
     if (il == ng2+1) then
-       g1(ntgl,1) = wfb  ! wfb should be unity here; variable is for testing
+!! changed 4.13.08 -- MAB
+!!       g1(ntgl,1) = wfb  ! wfb should be unity here; variable is for testing
        g1(ntgr,2) = wfb  ! wfb should be unity here; variable is for testing
     end if
 
     ! g2 is the initial condition for the homogeneous solution
     g2 = 0.0
     ! initialize to 1.0 at upper bounce point
+    ! (but not for wfb or ttp -- MAB)
     if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
        do ig=ntgl,ntgr-1
           if (forbid(ig+1,il).and..not.forbid(ig,il)) g2(ig,2) = 1.0
        end do
+    end if
+
+!! added 4.13.08 -- MAB
+    if (.not.kperiod_flag .and. il == ng2+1) then
+       gnew(ntgr,2,iglo) = ainv(ntgr,iglo)*source(ntgr,2)
     end if
 
     ! time advance vpar < 0 inhomogeneous part
@@ -2599,6 +2617,7 @@ contains
     if (kperiod_flag) then
        ilmin = 1
     else
+
 !!!       ilmin = ng2 + 2
        ilmin = ng2 + 1
     end if
@@ -2620,6 +2639,12 @@ contains
        end do
     end if
 
+!! added 4.13.08 -- MAB
+    if (.not. kperiod_flag .and. il == ng2+1) then
+       g1(ntgl,1) = g1(ntgl,2)
+       gnew(ntgl,1,iglo) = gnew(ntgl,2,iglo)
+    end if
+       
     ! time advance vpar > 0 inhomogeneous part
     if (il <= lmax) then
        do ig = ntgl, ntgr-1
@@ -2667,9 +2692,10 @@ contains
        ! add correct amount of homogeneous solution now
        if (kperiod_flag .and. il <= ng2+1) then
           call self_periodic
+!! changed 4.13.08 -- MAB
 !!!
-       else if (il == ng2 + 1) then
-          call self_periodic
+!!       else if (il == ng2 + 1) then
+!!         call self_periodic
        end if
 
     end if
@@ -2687,6 +2713,19 @@ contains
           gnew(ig,1,iglo) = gnew(ig,1,iglo) + beta1*g1(ig,1)
           gnew(ig,2,iglo) = gnew(ig,2,iglo) + beta1*g1(ig,2)
        end do
+    end if
+
+!! added 4.13.08 -- MAB
+    if (.not.kperiod_flag .and. il == ng2+1) then
+       beta1 = (gnew(ntgr,1,iglo) - gnew(ntgr,2,iglo))/(1.0 - g1(ntgr,1))
+       do ig = ntgr, ntgl, -1
+          gnew(ig,1,iglo) = gnew(ig,1,iglo) + beta1*g1(ig,1)
+          gnew(ig,2,iglo) = gnew(ig,2,iglo) + beta1*g1(ig,2)
+       end do
+
+!       do ig = ntgl, ntgr
+!          write (*,*) ie, ig, real(gnew(ig,1,iglo)), aimag(gnew(ig,1,iglo)), real(gnew(ig,2,iglo)), aimag(gnew(ig,2,iglo))
+!       end do
     end if
 
     if (def_parity) then
@@ -3056,15 +3095,16 @@ contains
     call prof_leaving ("getmoms", "dist_fn")
   end subroutine getmoms
 
-  subroutine gettotmoms (phi, ntot, upar, ttot)
+  subroutine gettotmoms (phi, bpar, ntot, upar, ttot)
     use dist_fn_arrays, only: vpa, vperp2, aj0, gnew
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use le_grids, only: integrate_moment, anon, e
     use prof, only: prof_entering, prof_leaving
+    use run_parameters, only: fphi, fbpar
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, &
          upar, ttot
 
@@ -3086,14 +3126,19 @@ contains
        end do
     end do
 
+!    call g_adjust (gnew, phi, bpar, fphi, fbpar)
+
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
           do ig=-ntgrid, ntgrid
              g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) + g0(ig,isgn,iglo)
+!             g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)
           end do
        end do
     end do
     call integrate_moment (g0, ntot)
+
+!    call g_adjust (gnew, phi, bpar, -fphi, -fbpar)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ie = ie_idx(g_lo,iglo)
@@ -5158,8 +5203,10 @@ contains
     
     wdrift = 0.
     wdriftttp = 0.
-    wdrift_neo = 0.
-    wdriftttp_neo = 0.
+    if (neoflux) then
+       wdrift_neo = 0.
+       wdriftttp_neo = 0.
+    end if
     a = 0.
     b = 0.
     r = 0.
@@ -5381,32 +5428,33 @@ contains
        do ik=1,naky
           do it=1,ntheta0
              do ig=-ntgrid,ntgrid
-                gpsum = 0.0; gpcnt = 0
-                if (kmax(it,ik)*cabs(phi_app(ig,it,ik)) > errcut_phi .and. &
-                     kmax(it,ik)*cabs(phi_app(ig,it,ik)) > 10*epsilon(0.0)) then
-                   do ipt=1,jend(ig)-ng2
+                if (jend(ig) > ng2+1) then
+                   gpsum = 0.0; gpcnt = 0
+                   if (kmax(it,ik)*cabs(phi_app(ig,it,ik)) > errcut_phi .and. &
+                        kmax(it,ik)*cabs(phi_app(ig,it,ik)) > 10*epsilon(0.0)) then
+                      do ipt=1,jend(ig)-ng2
+                         
+                         gptmp = kmax(it,ik)*cabs(phi_app(ig,it,ik) - phi_t(ig,it,ik,ipt))
+                         
+                         gpsum = gpsum + gptmp
+                         gpcnt = gpcnt + 1
+                         
+                      end do
                       
-                      gptmp = kmax(it,ik)*cabs(phi_app(ig,it,ik) - phi_t(ig,it,ik,ipt))
+                      gpavg = gpsum/gpcnt
                       
-                      gpsum = gpsum + gptmp
-                      gpcnt = gpcnt + 1
+                      if (gpavg > gdmax) then
+                         igmax = ig
+                         ikmax = ik
+                         itmax = it
+                         gdmax = gpavg
+                         gsmax = kmax(it,ik)*cabs(phi_app(ig,it,ik))
+                      end if
                       
-                   end do
-                   
-                   gpavg = gpsum/gpcnt
-                   
-                   if (gpavg > gdmax) then
-                      igmax = ig
-                      ikmax = ik
-                      itmax = it
-                      gdmax = gpavg
-                      gsmax = kmax(it,ik)*cabs(phi_app(ig,it,ik))
+                      gnsum = gnsum + gpavg
+                      gdsum = gdsum + kmax(it,ik)*cabs(phi_app(ig,it,ik))
                    end if
-                   
-                   gnsum = gnsum + gpavg
-                   gdsum = gdsum + kmax(it,ik)*cabs(phi_app(ig,it,ik))
                 end if
-                
              end do
           end do
        end do
