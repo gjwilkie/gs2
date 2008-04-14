@@ -2065,7 +2065,7 @@ contains
              if (nspec == 1) then
                 write (out_unit, *) 'moms', real(ntdiff(1)),  &
                      aimag(upadiff(1)), real(upediff(1)), aimag(upediff(1)), &
-                     real(ttdiff(1))
+                     real(ttdiff(1)), aimag(uperp_diff(0,1,1,1)), aimag(upar_diff(0,1,1,1))
              else
                 write (out_unit, *) 'moms', real(ntdiff(1)), real(ntdiff(2)), &
                      aimag(upadiff(1)), aimag(upadiff(2)), real(ttdiff(1)), real(ttdiff(2))
