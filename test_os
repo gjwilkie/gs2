@@ -74,5 +74,16 @@ if test "$WORKSTATION_TYPE" = 'LINUX'; then
     fi
 fi
 
+# TT> added intel compiler
+# Check if using Linux with Intel fortran compiler
+if test "$WORKSTATION_TYPE" = 'LINUX'; then
+    S=`ifort -V 2>&1`
+    S=`echo $S | grep Intel`
+    if test ${#S} != 0 ; then
+        WORKSTATION_TYPE='LINUX_ifort'
+    fi
+fi
+# <TT
+
 echo $WORKSTATION_TYPE
 # export WORKSTATION_TYPE

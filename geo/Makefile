@@ -4,7 +4,7 @@ UTILDIR=../utils
 # If CPU is undefined; use the test_os script to figure it out:
 
 ifeq ($(CPU),)
-   CPU_tmp := $(shell sh ./test_os)
+   CPU_tmp := $(shell sh ../test_os)
    ifeq ($(CPU_tmp),ALPHA)
       CPU := ALPHA
 #     CPU := ALPHA_NAG
@@ -372,6 +372,23 @@ ifeq ($(CPU),LINUX)
   endif
 
 endif
+
+# TT> local intel linux machine options:
+ifeq ($(CPU),LINUX_ifort)
+  FC = ifort
+  F90FLAGS = -r8 -I$(UTILDIR)
+  FLIBS = -lnetcdf -lsvml
+  PLATFORM_LINKS = linux
+  u_obj = $(UTILDIR)/utils.a $(UTILDIR)/mdslib.a
+  stubs = radstub.o vdimstub.o 
+  ifeq ($(debug),on)
+    F90FLAGS += -g -implicitnone -warn all -check bounds -traceback
+  else
+# -xN is for Pentium 4 chips
+    F90FLAGS += -O3 -xN -vec_report0
+  endif
+endif
+# <TT
 
 geo_obj = geometry.o geq.o veq.o eeq.o peq.o leq.o deq.o ideq.o
 

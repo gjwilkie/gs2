@@ -874,7 +874,7 @@ contains
        istatus = nf_open (file_proc, 0, ncid)
        if (istatus /= 0) then
           ierr = error_unit()
-          write(ierr,*) "nf_open in init_dt error: ", nf_strerror(istatus) 
+          write(ierr,*) "nf_open in init_tstart error: ", nf_strerror(istatus) 
        endif
 
        istatus = nf_inq_varid (ncid, "t0", t0id)

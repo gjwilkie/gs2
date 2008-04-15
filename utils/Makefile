@@ -1,7 +1,7 @@
 RANLIB=ranlib
 # If CPU is undefined; use the test_os script to figure it out:
 ifeq ($(CPU),)
-   CPU_tmp := $(shell sh ./test_os)
+   CPU_tmp := $(shell sh ../test_os)
    ifeq ($(CPU_tmp),ALPHA)
       CPU := ALPHA
 #     CPU := ALPHA_NAG
@@ -340,6 +340,19 @@ ifeq ($(CPU),LINUX)
   endif
 
 endif
+
+# TT> local intel linux machine options:
+ifeq ($(CPU),LINUX_ifort)
+  FC = ifort
+  F90FLAGS = -r8
+  ifeq ($(debug),on)
+    F90FLAGS += -g -implicitnone -warn all -check bounds -traceback
+  else
+# -xN is for Pentium 4 chips
+    F90FLAGS += -O3 -xN -vec_report0
+  endif
+endif
+# <TT
 
 util_obj = spl.o mds.o prec.o netcdf.o 
 

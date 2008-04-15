@@ -1488,13 +1488,21 @@ contains
     nn_to = 0
     nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
+! TT> moved here from below
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+! <TT
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
 ! ik = ik_idx, etc. should be moved outside of isign and ig loops here and later
-             ik = ik_idx(g_lo,iglo)
-             it = it_idx(g_lo,iglo)
-             il = il_idx(g_lo,iglo)
-             is = is_idx(g_lo,iglo)
+! TT>
+!!$             ik = ik_idx(g_lo,iglo)
+!!$             it = it_idx(g_lo,iglo)
+!!$             il = il_idx(g_lo,iglo)
+!!$             is = is_idx(g_lo,iglo)
+! <TT
              ielo = idx(e_lo,ig,isign,ik,it,il,is)
              if (idx_local(g_lo,iglo)) &
                   nn_from(proc_id(e_lo,ielo)) = nn_from(proc_id(e_lo,ielo)) + 1
@@ -1520,13 +1528,22 @@ contains
     nn_to = 0
     nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
+! TT> moved here from below
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+! <TT
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
-             ik = ik_idx(g_lo,iglo)
-             it = it_idx(g_lo,iglo)
-             il = il_idx(g_lo,iglo)
-             is = is_idx(g_lo,iglo)
-             ie = ie_idx(g_lo,iglo)
+! TT>
+!!$             ik = ik_idx(g_lo,iglo)
+!!$             it = it_idx(g_lo,iglo)
+!!$             il = il_idx(g_lo,iglo)
+!!$             is = is_idx(g_lo,iglo)
+!!$             ie = ie_idx(g_lo,iglo)
+! <TT
              ielo = idx(e_lo,ig,isign,ik,it,il,is)
 
              if (idx_local(g_lo,iglo)) then
@@ -2279,7 +2296,10 @@ contains
     use gs2_layouts, only: init_lorentz_layouts
     use gs2_layouts, only: g_lo, lz_lo
     use gs2_layouts, only: idx_local, proc_id
-    use gs2_layouts, only: gidx2lzidx 
+! TT>
+!!$    use gs2_layouts, only: gidx2lzidx 
+    use gs2_layouts, only: ik_idx, it_idx, ie_idx, is_idx, il_idx, idx
+! <TT
     use redistribute, only: index_list_type, init_redist, delete_list
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
@@ -2288,6 +2308,9 @@ contains
     integer, dimension(2) :: to_high
     integer :: to_low
     integer :: ig, isign, iglo, il, ilz
+! TT>
+    integer :: ik, it, ie, is, je
+! <TT
     integer :: n, ip
     logical :: done = .false.
 
@@ -2300,9 +2323,18 @@ contains
     nn_to = 0
     nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
+! TT> expansion of gidx2lzidx
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+! <TT
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
-             call gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, il, ilz)
+! TT>
+!!$             call gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, il, ilz)
+             ilz = idx(lz_lo, ig, ik, it, ie, is)
+! <TT
              if (idx_local(g_lo,iglo)) &
                   nn_from(proc_id(lz_lo,ilz)) = nn_from(proc_id(lz_lo,ilz)) + 1
              if (idx_local(lz_lo,ilz)) &
@@ -2327,9 +2359,36 @@ contains
     nn_to = 0
     nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
+! TT> expansion of gidx2lzidx
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+! <TT
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
-             call gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, il, ilz)
+! TT>
+!!$             call gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, il, ilz)
+! TT: following just the inline expansion of gidx2lzidx except that
+! TT: the arguments of idx function is replaced by variables
+             je = jend(ig)
+             il = il_idx(g_lo,iglo)
+             if (je == 0) then
+                if (isign == 2) then
+                   il = 2*g_lo%nlambda+1 - il
+                end if
+             else
+                if (il == je) then
+                   if (isign == 1) il = 2*je  ! throw this info away
+                else if (il > je) then 
+                   if (isign == 1) il = il + je
+                   if (isign == 2) il = 2*g_lo%nlambda + 1 - il + je
+                else
+                   if (isign == 2) il = 2*je - il !+ 1
+                end if
+             end if
+             ilz = idx(lz_lo, ig, ik, it, ie, is)
+! <TT
 !             write(*,*) ig,':',isign,':',iglo,':',il,':',ilz
              if (idx_local(g_lo,iglo)) then
                 ip = proc_id(lz_lo,ilz)
