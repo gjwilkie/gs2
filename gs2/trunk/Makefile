@@ -363,6 +363,21 @@ ifeq ($(CPU),LINUX)
 
 endif
 
+# TT> local intel linux machine options:
+ifeq ($(CPU),LINUX_ifort)
+  FC = ifort
+  PLATFORM_LINKS = linux_ifort
+  F90FLAGS = -r8 -I/usr/local/include/netcdf -I$(UTILS) -I$(GEO)
+  FLIBS = $(UTILS)/mdslib.a -lnetcdf -lrfftw -lfftw
+  ifeq ($(debug),on)
+    F90FLAGS += -g -implicitnone -warn all -check bounds -traceback
+  else
+# -xN is for Pentium 4 chips
+    F90FLAGS += -O3 -xN -vec_report0
+  endif
+endif
+# <TT
+
 ifeq ($(CPU),LINUX_ifort_mrf)
   FC = ifort
   FLIBS = $(UTILS)/mdslib.a -L/usr/local/lib -lnetcdf -lfftw -lrfftw

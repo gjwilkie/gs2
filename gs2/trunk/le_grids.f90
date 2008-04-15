@@ -1551,7 +1551,10 @@ contains
     use theta_grid, only: ntgrid
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: g_lo, idx, idx_local
+! TT>
+!    use gs2_layouts, only: g_lo, idx, idx_local
+    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx
+! <TT
     use mp, only: sum_reduce, proc0, sum_allreduce
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
@@ -1564,25 +1567,40 @@ contains
 !    logical :: only = .true.
 
     total = 0.
-    do is = 1, nspec
-       do ie = 1, negrid
-          fac = w(ie,is)
-          do il = 1, nlambda
-!             if (ie==1 .and. only) write (*,*) 'iproc= ',iproc,'  wl(0',',',il,')= ',wl(0,il)
-             do it = 1, ntheta0
-                do ik = 1, naky
-                   iglo = idx (g_lo, ik, it, il, ie, is)
-                   if (idx_local (g_lo, iglo)) then
-                      do ig = -ntgrid, ntgrid
-                         total(ig, it, ik, is) = total(ig, it, ik, is) + &
-                              fac*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
-                      end do
-                   end if
-                end do
-             end do
-          end do
+! TT> changed loop structure
+!!$    do is = 1, nspec
+!!$       do ie = 1, negrid
+!!$          fac = w(ie,is)
+!!$          do il = 1, nlambda
+!!$!             if (ie==1 .and. only) write (*,*) 'iproc= ',iproc,'  wl(0',',',il,')= ',wl(0,il)
+!!$             do it = 1, ntheta0
+!!$                do ik = 1, naky
+!!$                   iglo = idx (g_lo, ik, it, il, ie, is)
+!!$                   if (idx_local (g_lo, iglo)) then
+!!$                      do ig = -ntgrid, ntgrid
+!!$                         total(ig, it, ik, is) = total(ig, it, ik, is) + &
+!!$                              fac*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
+!!$                      end do
+!!$                   end if
+!!$                end do
+!!$             end do
+!!$          end do
+!!$       end do
+!!$    end do
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       fac = w(ie,is)
+
+       do ig = -ntgrid, ntgrid
+          total(ig, it, ik, is) = total(ig, it, ik, is) + &
+               fac*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
        end do
     end do
+! <TT
 
 !    only = .false.
 
