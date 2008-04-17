@@ -1,1 +1,9 @@
-../../Makefiles/Makefile.DARWIN
+# OS: Mac OS X
+
+PLATFORM_LINKS=darwin
+
+ifdef STATIC
+# Mac OS X does not support static linking
+$(warning STATIC is not supported on DARWIN)
+	override STATIC =
+endif

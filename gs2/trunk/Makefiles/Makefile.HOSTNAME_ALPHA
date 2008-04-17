@@ -1,1 +1,13 @@
-../../Makefiles/Makefile.HOSTNAME_ALPHA
+# Host: unknown (used to be known as CPU=ALPHA system)
+
+include Makefile.compaq
+
+include Makefile.ALPHA
+
+FC = f95
+
+FFT_LIBS = -L/u/hammett/local/alpha/lib -lfftw -lrfftw \
+
+#	-non_shared -L/usr/local/mdsplus_new/lib -lMdsLib -lMdsShr
+# (use -non_shared because it can't map MdsLib.so at run time for some 
+# reason...)

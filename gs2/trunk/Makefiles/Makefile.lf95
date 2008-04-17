@@ -1,1 +1,18 @@
-../../Makefiles/Makefile.lf95
+# Compiler: Lahey/Fujitsu Fortran
+
+FC = 
+F90FLAGS = --dbl --ml cdecl
+F90FLAGS_real_double_promote = --quad $(F90FLAGS)
+
+ifdef STATIC
+	F90FLAGS += --staticlink
+endif
+
+ifdef DEBUG
+# -mpitrace -mpianim -mpilog
+	F90FLAGS += -g --chk aesu 
+#	F90FLAGS += -mpitrace 
+	F90OPTFLAGS =
+else
+	F90OPTFLAGS += -O 
+endif

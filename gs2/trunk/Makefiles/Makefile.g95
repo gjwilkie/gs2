@@ -1,1 +1,14 @@
-../../Makefiles/Makefile.g95
+# Compiler: GNU g95
+
+FC = g95
+F90FLAGS = -r8 -ffree-line-length-huge
+
+ifdef STATIC
+endif
+
+ifdef DEBUG
+	F90FLAGS += -g -Wall -fbounds-check
+	F90OPTFLAGS =
+else
+	F90OPTFLAGS += -O2
+endif

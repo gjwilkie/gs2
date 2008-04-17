@@ -1,1 +1,34 @@
-../../Makefiles/Makefile.bassi
+# Host: bassi at NERSC (IBM POWER 5)
+
+CHIP=auto
+ifdef STATIC
+$(warning STATIC is not supported on bassi)
+	override STATIC=
+endif
+
+COMPILER=xlf
+
+include Makefile.RS6000
+
+include Makefile.$(COMPILER)
+
+FC = mpxlf90_r
+
+NETCDF_INC = -I$$NETCDF_DIR/include  
+NETCDF_LIB = $$NETCDF
+FFT_INC = $$FFTW
+FFT_LIB = $$FFTW -ldfftw -ldrfftw
+
+ifdef HDF5
+      FC5	= h5pfc
+      DIST_IO	= agk_dist_io_hdf.f90
+      HDF5_INC	+= $$HDF5_INCLUDE
+      HDF5_LIB	+= $$HDF5
+else
+      DIST_IO	= agk_dist_io_stub.f90
+endif
+
+ifeq ($(PROJECT),gs2)
+	HDF5_INC += $$HDF5_INCLUDE
+	HDF5_LIB += $$HDF5
+endif

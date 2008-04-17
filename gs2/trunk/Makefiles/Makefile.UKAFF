@@ -1,1 +1,9 @@
-../../Makefiles/Makefile.UKAFF
+# UKAFF1A
+include Makefile.xlf
+
+FC = mpif90
+PLATFORM_LINKS = ibm
+
+NETCDF_INC = -I/usr/local/netcdf/include 
+NETCDF_LIB = -L/usr/local/netcdf/lib64 -lnetcdf
+FFT_LIB = -L/usr/local/fftw-2.1.5/lib -lfftw -lrfftw

@@ -1,1 +1,26 @@
-../../Makefiles/Makefile.jaguar
+# Host: jaguar at ORNL (Cray XT4)
+#
+# module load netcdf
+# module load fftw
+
+COMPILER=pgi
+
+include Makefile.XT4
+
+include Makefile.$(COMPILER)
+
+FC=ftn
+
+NETCDF_INC = -I$$NETCDF_DIR/include
+NETCDF_LIB = -L$$NETCDF_DIR/lib -lnetcdf
+FFT_INC = $$FFTW_INCLUDE_OPTS
+FFT_LIB = $$FFTW_POST_LINK_OPTS -ldfftw -ldrfftw
+
+ifdef HDF5
+	FC5 = h5pfc
+	DIST_IO = agk_dist_io_hdf.f90
+	HDF5_INC = -I$$HDF5_DIR/lib
+	HDF5_LIB = $$HDF5
+else
+	DIST_IO = agk_dist_io_stub.f90
+endif

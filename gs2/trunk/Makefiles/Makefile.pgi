@@ -1,1 +1,17 @@
-../../Makefiles/Makefile.pgi
+# Compiler: Portrand Group Fortran PGI
+
+FC=pgf90
+F90FLAGS = -r8
+
+ifdef STATIC
+	LDFLAGS += -Bstatic
+endif
+
+ifdef DEBUG
+# -c: bounds check
+# -v: displays compiler, assembler, and linker invocations (too noisy) 
+	F90FLAGS += -g -c -v
+else
+# -fastsse = -O2 -Munroll=c:1 -Mnoframe -Mlre
+	F90OPTFLAGS = -fastsse
+endif	

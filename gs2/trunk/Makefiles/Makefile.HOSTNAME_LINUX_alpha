@@ -1,1 +1,10 @@
-../../Makefiles/Makefile.HOSTNAME_LINUX_alpha
+# Host: unknown (used to be known as CPU=LINUX_alpha)
+
+include Makefile.comaq
+FC = f90
+LIBS += -L/u/hammett/local/alinux/lib # what for?
+#	$(UTILS)/mdslib.a  # this is not needed due to Makefile update
+#	$(UTILS)/netcdf_stub.a # # this may not work
+#	-L/usr/local/lib -lnetcdf
+#	-L/usr/local/mdsplus/lib -lMdsLib -lMdsShr
+PLATFORM_LINKS = linux_alpha

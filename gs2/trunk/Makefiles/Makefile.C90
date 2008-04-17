@@ -1,1 +1,6 @@
-../../Makefiles/Makefile.C90
+# System: C90/J90
+
+include Makefile.cray
+PLATFORM_LINKS = c90
+
+NETCDF_LIB = $$NETCDF

@@ -1,1 +1,12 @@
-../../Makefiles/Makefile.NCSA
+# NCSA Xeon cluster
+CHIP=xeon
+include Makefile.ifort
+
+PLATFORM_LINKS = linux_lf95
+ifdef MPI
+	FC = cmpif90c
+endif
+
+NETCDF_INC = -I/u/ac/aschekoc/tatsuno/libs/netcdf-3.6.2/include
+NETCDF_LIB = -L/u/ac/aschekoc/tatsuno/libs/netcdf-3.6.2/lib -lnetcdf
+FFT_LIB = -L$$FFTW_HOME/lib -ldrfftw -ldfftw
