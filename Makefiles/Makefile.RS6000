@@ -1,1 +1,5 @@
-../../Makefiles/Makefile.RS6000
+# System: NERSC IBM p575 POWER 5 System
+
+F90FLAGS += -q64
+
+PLATFORM_LINKS	= ibm

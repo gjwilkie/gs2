@@ -1,1 +1,7 @@
-../../Makefiles/Makefile.HOSTNAME_LINUX_fuj
+# Host: unknown (used to be known as CPU=LINUX_fuj)
+include Makefile.fuj
+FC = mpif90
+PLATFORM_LINKS = linux_fuj
+
+NETCDF_LIB = -L/usr/local/lib -lnetcdf
+FFT_LIB = -L/u/bdorland/fftw/lib -lfftw -lrfftw

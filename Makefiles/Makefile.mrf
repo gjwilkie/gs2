@@ -1,1 +1,14 @@
-../../Makefiles/Makefile.mrf
+# Host: Mr Fusion Maryland local intel machine
+
+CHIP=core2duo
+SSE=on
+MPI=
+COMPILER=ifort
+
+include Makefile.LINUX
+
+include Makefile.$(COMPILER)
+
+NETCDF_INC = -I/usr/local/include/netcdf 
+NETCDF_LIB = -L/usr/local/lib -lnetcdf
+FFT_LIB = -L/usr/local/lib -lrfftw -lfftw

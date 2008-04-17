@@ -1,1 +1,6 @@
-../../Makefiles/Makefile.XT4
+# System: Cray XT4 with Linux
+
+F90FLAGS += -target=linux
+#F90FLAGS += -target=linux -default64
+
+PLATFORM_LINKS = cxt4

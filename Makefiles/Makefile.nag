@@ -1,1 +1,19 @@
-../../Makefiles/Makefile.nag
+# Compiler: NAGWare f95
+
+FC = 
+F90FLAGS = -mismatch 
+
+ifdef STATIC
+endif
+
+ifdef DEBUG
+	F90FLAGS += -C=array -C=bits -C=dangling -C=do \
+			-C=present -C=pointer -gline 
+	F90OPTFLAGS =
+else
+	F90OPTFLAGS += -O4 
+endif
+
+F90FLAGS = -w -r8 $(F90FLAGS)
+F90FLAGS_no_real_promotion = -w $(F90FLAGS)
+F90FLAGS_without_minus_w = -r8 $(F90FLAGS)

@@ -1,1 +1,14 @@
-../../Makefiles/Makefile.LINUX_ifort
+# LINUX ifort
+CHIP=pentium4
+include Makefile.ifort
+
+PLATFORM_LINKS = linux_nomp
+ifeq ($(HOST),??) #Maryland machine
+	NETCDF_INC = -I/usr/local/include/netcdf
+endif
+ifeq ($(HOST),??)
+	# Cambridge public machine
+	NETCDF_INC = -I${SCR}/comp/netcdf-3.6.2/include
+	NETCDF_LIB = -L${SCR}/comp/netcdf-3.6.2/lib -lnetcdf
+	FFT_LIB   = -L${SCR}/comp/fftw/fftw-2.1.5/lib -lrfftw -lfftw
+endif

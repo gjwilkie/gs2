@@ -1,1 +1,23 @@
-../../Makefiles/Makefile.ORIGIN
+# System: SGI ORIGIN
+
+FC = f90 # what compiler is this
+PLATFORM_LINKS = origin
+F90FLAGS =  -I/usr/pppl/include -64 -r8 -TARG:platform=ip27
+
+ifdef MPI
+	LIBS += -lmpi 
+endif
+
+LIBS = -L/usr/pppl/lib -lscs
+
+ifdef DEBUG
+#       -DEBUG:div_check=3:subscript_check=on:trap_uninitialized=on
+# should be the full debug options, but then the compiler bombs on some
+# of the routines (even the new beta version 7.3 of the compiler).
+    F90FLAGS += -g -DEBUG:div_check=3:trap_uninitialized=on
+else
+# Other options tried (no more than 15% speedup):
+#    F90FLAGS =  -I/usr/pppl/include -64 -r8 -Ofast=ip27 \
+#	-TARG:platform=ip27 -OPT:IEEE_arithmetic=3 -lfastm
+    F90OPTFLAGS += -O -TARG:platform=ip27
+endif

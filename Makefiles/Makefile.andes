@@ -1,1 +1,13 @@
-../../Makefiles/Makefile.andes
+# Host: andes? (discovery at Dartmouth)
+
+include Makefile.pgi
+#include Makefile.ifort
+
+F90FLAGS += -i-static -static-libcxa -w -r8
+NETCDF_INC = -I/usr/local/include/netcdf
+FFTW_LIB = libfftw.a librfftw.a
+
+LIBS += -L/usr/local/toolworks/totalview.8.1.0-0/linux-x86-64/lib -ltvheep_64 \
+	-WI,-rpath,/usr/local/toolworks/totalview.8.1.0-0/lib
+
+PLATFORM_LINKS = linux_andes

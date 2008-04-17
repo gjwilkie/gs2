@@ -1,1 +1,7 @@
-../../Makefiles/Makefile.HOSTNAME_LINUX_lf95
+# Host: unknown (used to be known as CPU=LINUX_lf95)
+include Makefile.lf95
+FC = mpif90
+PLATFORM_LINKS = linux_lf95
+
+NETCDF_LIB = -L/usr/local/lib -lnetcdf
+FFT_LIB = -L/usr/local/lib -lfftw -lrfftw

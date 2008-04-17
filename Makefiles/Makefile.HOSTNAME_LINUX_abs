@@ -1,1 +1,7 @@
-../../Makefiles/Makefile.HOSTNAME_LINUX_abs
+# Host: unknown (used to be known as CPU=LINUX_abs)
+include Makefile.abs
+FC = mpif90
+PLATFORM_LINKS = linux_abs
+
+NETCDF_LIB = -L/usr/lib -lnetcdf
+FFT_LIB = -L~kthcmr/fftw -lrfftw -lfftw 

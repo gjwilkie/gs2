@@ -1,1 +1,3 @@
-../../Makefiles/Makefile.ALPHA
+# System: DEC Alpha
+
+PLATFORM_LINKS = alpha

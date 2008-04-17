@@ -1,1 +1,11 @@
-../../Makefiles/Makefile.HOSTNAME_ALPHA_nag
+# Host: unknown (used to be known as CPU=ALPHA_nag)
+include Makefile.nag
+FC = /usr/local/bin/f95
+PLATFORM_LINKS = alpha_nag
+
+ifdef DEBUG
+	F90FLAGS = -C -hpf -r8 -g90 -dusty
+else
+	F90FLAGS = -C -hpf -r8 -dusty
+	F90FLAGS += -O
+endif
