@@ -1744,6 +1744,7 @@ contains
     real :: zero = 0.
     real :: one = 1.
 
+    integer :: i
 !
 !---initialize---
     ier = 133
