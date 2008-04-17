@@ -133,6 +133,8 @@ contains
 !       the job control system can detect as a fatal error.
 !
     character ierrmsg*(*)
+    real :: zz0, zz1
+    integer :: iunit,ilunerr
     common /abortcmn/ zz0,zz1
 !
 ! zz0 is in a common block to prevent an optimizing compiler
