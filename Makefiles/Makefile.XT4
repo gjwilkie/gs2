@@ -1,6 +1,8 @@
 # System: Cray XT4 with Linux
 
-F90FLAGS += -target=linux
-#F90FLAGS += -target=linux -default64
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = cxt4
+endif
 
-PLATFORM_LINKS = cxt4
+F90FLAGS += -target=linux
+CFLAGS += -target=linux

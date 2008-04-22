@@ -1,4 +1,5 @@
 # Compiler: DEC/Compaq F90
+
 FC = f95
 F90FLAGS = -r8
 

@@ -1,14 +1,29 @@
-# Host: Mr Fusion Maryland local intel machine
+# Host: mrf Mr Fusion Maryland local intel machine
 
+COMPILER=intel
 CHIP=core2duo
 SSE=on
-MPI=
-COMPILER=ifort
+
+ifdef MPI
+$(warning MPI does not work on mrf)
+override MPI=
+endif
 
 include Makefile.LINUX
 
 include Makefile.$(COMPILER)
+# mrf does not have intel C compiler
+# first clear icc settings, and load gnu-gcc settings
+CC =
+CFLAGS =
+COPTFLAGS =
+include Makefile.gnu-gcc
 
-NETCDF_INC = -I/usr/local/include/netcdf 
-NETCDF_LIB = -L/usr/local/lib -lnetcdf
-FFT_LIB = -L/usr/local/lib -lrfftw -lfftw
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = -L/usr/local/lib -lrfftw -lfftw
+endif
+
+ifdef USE_NETCDF
+	NETCDF_INC = -I/usr/local/include/netcdf 
+	NETCDF_LIB = -L/usr/local/lib -lnetcdf
+endif

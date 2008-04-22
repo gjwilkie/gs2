@@ -11,7 +11,7 @@ endif
 
 NETCDF_LIB = $$NETCDF -Wl"-D permok=yes"
 
-ifeq ($(FFT),fftw)
+ifeq ($(USE_FFT),fftw)
      FFT_LIB	= -L../fftw/lib -lfftw -lrfftw
 endif
 

@@ -1,14 +1,9 @@
-# Compiler: Pathscale pathf90/pathcc
+# Compiler: GNU g95/gcc
 
-FC = pathf90
-CC = pathcc
-F90FLAGS +=
-CPPFLAGS +=
-
-ifeq ($(PROJECT),gs2)
-# this is to avoid confliction with intrinsic kill
-	F90FLAGS += -no-intrinsic=kill
-endif
+FC = g95
+CC = gcc
+F90FLAGS += -ffree-line-length-huge
+CPPFLAGS += -DCL=_UNIX_ -DFILE=_PORT_
 
 ifdef DBLE
 	F90FLAGS += -r8
@@ -19,9 +14,9 @@ ifdef STATIC
 endif
 
 ifdef DEBUG
-	F90FLAGS += -g -C
+	F90FLAGS += -g -Wall -fimplicit-none -fbounds-check
 	F90OPTFLAGS =
-	CFLAGS += -g
+	CFLAGS += -g -Wall -fbounds-check
 	COPTFLAGS =
 else
 	ifdef OPT

@@ -1,7 +1,19 @@
 # Host: unknown (used to be known as CPU=LINUX_abs)
-include Makefile.abs
-FC = mpif90
-PLATFORM_LINKS = linux_abs
 
-NETCDF_LIB = -L/usr/lib -lnetcdf
-FFT_LIB = -L~kthcmr/fftw -lrfftw -lfftw 
+COMPILER=absoft
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = linux_abs
+endif
+
+include Makefile.$(COMPILER)
+
+FC = mpif90
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = -L~kthcmr/fftw -lrfftw -lfftw 
+endif
+
+ifdef USE_NETCDF
+	NETCDF_LIB = -L/usr/lib -lnetcdf
+endif

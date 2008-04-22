@@ -1,16 +1,19 @@
-# Host: unknown (used to be known as CPU=LINUX_lf95)
+# Host: unknown (used to be known as CPU=LINUX) 
+# ?? MIT Linux cluster with NAG f95 ??
 
-COMPILER=lahey
+COMPILER=nag
 
 ifeq ($(PROJECT),gs2)
-	PLATFORM_LINKS = linux_lf95
+	override MPI=on
 endif
+
+include Makefile.LINUX
 
 include Makefile.$(COMPILER)
 
 ifdef MPI
 	FC = mpif90
-	CC = mpicc
+	MPI_INC = -I/opt/mpich.gccf95-2/include
 endif
 
 ifeq ($(USE_FFT),fftw)

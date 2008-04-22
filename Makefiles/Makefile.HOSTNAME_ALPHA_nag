@@ -1,7 +1,14 @@
 # Host: unknown (used to be known as CPU=ALPHA_nag)
+
+COMPILER=nag
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = alpha_nag
+endif
+
 include Makefile.nag
+
 FC = /usr/local/bin/f95
-PLATFORM_LINKS = alpha_nag
 
 ifdef DEBUG
 	F90FLAGS = -C -hpf -r8 -g90 -dusty

@@ -1,17 +1,33 @@
-# Compiler: Portrand Group Fortran PGI
+# Compiler: Portrand Group Fortran PGI pgf90/pgcc
 
 FC=pgf90
-F90FLAGS = -r8
+CC=pgcc
+F90FLAGS +=
+CPPFLAGS += -DCL=_UNIX_ -DFILE=_PORT_
+
+ifdef DBLE
+	F90FLAGS += -r8
+endif
 
 ifdef STATIC
 	LDFLAGS += -Bstatic
 endif
 
 ifdef DEBUG
-# -c: bounds check
 # -v: displays compiler, assembler, and linker invocations (too noisy) 
-	F90FLAGS += -g -c -v
+	F90FLAGS += -g -Mbounds -v
+	F90OPTFLAGS =
+	CFLAGS += -g -Mbounds -v
+	COPTFLAGS =
 else
 # -fastsse = -O2 -Munroll=c:1 -Mnoframe -Mlre
-	F90OPTFLAGS = -fastsse
+	ifdef OPT
+		F90OPTFLAGS += -O3 -fastsse
+		COPTFLAGS += -O3 -fastsse
+	endif
+
+	ifdef PROF
+		F90FLAGS += -pg
+		CFLAGS += -pg
+	endif
 endif	

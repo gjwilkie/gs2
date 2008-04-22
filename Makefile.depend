@@ -1,522 +1,666 @@
-antenna.o: \
+#
+# Auto-generated file by fortdep. Do not edit!
+#
+om_mod = \
+	 command_line.o \
+	 om.o 
+
+eiktest_mod = \
+	 prec.o \
+	 deq.o \
+	 spl.o \
+	 radstub.o \
+	 netcdf.o \
+	 veq.o \
+	 leq.o \
+	 ideq.o \
+	 peq.o \
+	 geometry.o \
+	 eeq.o \
+	 et.o \
+	 vdimstub.o \
+	 geq.o \
+	 mds.o 
+
+ingen_mod = \
+	 eeq.o \
+	 ideq.o \
+	 command_line.o \
+	 geq.o \
+	 mp.o \
+	 theta_grid.o \
+	 deq.o \
+	 ingen.o \
+	 netcdf.o \
+	 prec.o \
+	 file_utils.o \
+	 text_options.o \
+	 geometry.o \
+	 mds.o \
+	 vdimstub.o \
+	 radstub.o \
+	 peq.o \
+	 constants.o \
+	 gridgen4mod.o \
+	 veq.o \
+	 leq.o \
+	 spl.o 
+
+drive_mod = \
+	 regression.o \
+	 drive.o 
+
+hrate_mod = \
+	 command_line.o \
+	 hrate.o 
+
+kp_mod = \
+	 command_line.o \
+	 kpar.o 
+
+rungridgen_mod = \
+	 mp.o \
+	 gridgen4mod.o \
+	 file_utils.o \
+	 rungridgen.o \
+	 spl.o \
+	 command_line.o 
+
+gs2_mod = \
+	 dist_fn_arrays.o \
+	 redistribute.o \
+	 deq.o \
+	 gridgen4mod.o \
+	 fields_arrays.o \
+	 radstub.o \
 	 antenna_data.o \
-	 mp.o \
-	 constants.o \
-	 species.o \
-	 run_parameters.o \
-	 theta_grid.o \
-	 file_utils.o \
 	 gs2_save.o \
-	 gs2_time.o \
-	 kt_grids.o \
-	 ran.o 
-antenna_data.o: 
-check.o: \
-	 mp.o \
-	 file_utils.o 
-check_aix.o: \
-	 mp.o \
-	 file_utils.o \
-	 run_parameters.o 
-check_portable.o: \
-	 mp.o \
-	 file_utils.o 
-check_sgi.o: \
-	 mp.o \
-	 file_utils.o \
-	 run_parameters.o 
-collisions.o: \
-	 redistribute.o \
+	 peq.o \
 	 species.o \
-	 dist_fn_arrays.o \
-	 gs2_time.o \
-	 constants.o \
-	 le_grids.o \
-	 prof.o \
-	 theta_grid.o \
-	 kt_grids.o \
-	 le_grids.o \
-	 run_parameters.o \
-	 gs2_layouts.o \
-	 file_utils.o \
-	 text_options.o \
-	 mp.o 
-command_line.o: 
-command_line_alpha.o: 
-command_line_darwin.o: 
-command_line_nag.o: 
-command_line_posix.o: 
-command_line_unix.o: 
-constants.o: 
-convert.o: 
-dist_fn.o: \
-	 init_g.o \
-	 redistribute.o \
-	 nonlinear_terms.o \
-	 hyper.o \
-	 file_utils.o \
-	 text_options.o \
-	 dist_fn_arrays.o \
-	 gs2_time.o \
-	 gs2_transforms.o \
-	 constants.o \
-	 prof.o \
-	 gs2_heating.o \
-	 mp.o \
+	 prec.o \
 	 antenna.o \
+	 check.o \
+	 collisions.o \
+	 gs2_layouts.o \
+	 gs2_time.o \
+	 init_g.o \
+	 geq.o \
+	 eeq.o \
+	 gs2_io.o \
+	 ideq.o \
+	 command_line.o \
 	 le_grids.o \
-	 species.o \
-	 theta_grid.o \
+	 gs2_diagnostics.o \
+	 constants.o \
+	 regression.o \
+	 fields_test.o \
+	 gs2_transforms.o \
+	 veq.o \
+	 nonlinear_terms.o \
+	 gs2.o \
+	 leq.o \
+	 vdimstub.o \
+	 prof.o \
+	 mp.o \
+	 convert.o \
+	 hyper.o \
+	 fields.o \
 	 kt_grids.o \
+	 netcdf_mod.o \
+	 file_utils.o \
+	 ran.o \
+	 geometry.o \
+	 fields_implicit.o \
+	 mds.o \
+	 gs2_flux.o \
+	 dist_fn.o \
+	 spl.o \
+	 text_options.o \
+	 run_parameters.o \
+	 gs2_heating.o \
+	 fields_explicit.o \
+	 fft_work.o \
+	 netcdf.o \
+	 gs2_reinit.o \
+	 theta_grid.o 
+
+ball_mod = \
+	 prec.o \
+	 deq.o \
+	 spl.o \
+	 radstub.o \
+	 netcdf.o \
+	 veq.o \
+	 leq.o \
+	 ideq.o \
+	 peq.o \
+	 geometry.o \
+	 eeq.o \
+	 ball.o \
+	 vdimstub.o \
+	 geq.o \
+	 mds.o 
+
+regressp_mod = \
+	 regression.o \
+	 regress.o 
+
+prec.o: 
+mds_io_stub.o: \
+	 prec.o 
+mds.o: \
+	 prec.o 
+init_g.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 run_parameters.o \
+	 text_options.o \
 	 le_grids.o \
+	 theta_grid.o \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
+	 gs2_save.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o \
+	 ran.o \
+	 species.o 
+gs2.o: \
+	 gs2_diagnostics.o \
 	 run_parameters.o \
 	 collisions.o \
-	 gs2_layouts.o 
-dist_fn_arrays.o: 
-fft_work.o: 
-fft_work_aix.o: 
-fft_work_fftw.o: 
-fft_work_origin.o: 
-fft_work_stub.o: 
-fft_work_unicos.o: 
-fft_work_unicosmk.o: 
-fields.o: \
-	 fields_arrays.o \
-	 mp.o \
-	 antenna.o \
-	 file_utils.o \
-	 text_options.o \
-	 kt_grids.o \
-	 constants.o \
-	 dist_fn_arrays.o \
-	 theta_grid.o \
-	 run_parameters.o \
-	 dist_fn.o \
 	 init_g.o \
-	 fields_implicit.o \
-	 fields_explicit.o \
-	 fields_test.o \
-	 nonlinear_terms.o 
-fields_arrays.o: 
-fields_explicit.o: \
-	 theta_grid.o \
-	 kt_grids.o \
-	 fields_arrays.o \
-	 dist_fn.o \
-	 dist_fn_arrays.o 
-fields_implicit.o: \
-	 fields_arrays.o \
-	 mp.o \
-	 nonlinear_terms.o \
+	 fields.o \
+	 gs2_time.o \
+	 gs2_reinit.o \
+	 dist_fn_arrays.o \
+	 check.o \
+	 gs2_save.o \
 	 file_utils.o \
-	 antenna.o \
-	 theta_grid.o \
-	 kt_grids.o \
+	 mp.o 
+nonlinear_terms.o: \
 	 gs2_layouts.o \
-	 dist_fn.o \
+	 kt_grids.o \
 	 run_parameters.o \
-	 prof.o \
-	 dist_fn_arrays.o 
-fields_test.o: \
+	 text_options.o \
+	 gs2_time.o \
+	 le_grids.o \
+	 gs2_transforms.o \
+	 theta_grid.o \
+	 dist_fn_arrays.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o \
+	 species.o 
+fields_explicit.o: \
+	 kt_grids.o \
+	 theta_grid.o \
+	 dist_fn_arrays.o \
 	 fields_arrays.o \
-	 dist_fn.o \
-	 dist_fn_arrays.o 
-file_utils.o: \
+	 dist_fn.o 
+om.o: \
+	 command_line.o 
+mp_mpi_r8.o: 
+file_utils_xlf.o: \
 	 command_line.o \
 	 mp.o 
+theta_grid_eik_stub.o: 
+nag_args.o: 
+check_portable.o: \
+	 file_utils.o \
+	 mp.o 
+dist_fn_arrays.o: 
+gs2_heating.o: \
+	 mp.o \
+	 species.o 
 file_utils_gnu.o: \
 	 command_line.o \
+	 mp.o 
+regression.o: 
+redistribute_shnew.o: \
+	 mp.o 
+gs2_dist_io.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 le_grids.o \
+	 gs2_transforms.o \
+	 theta_grid.o \
+	 file_utils.o \
+	 mp.o \
+	 species.o 
+prof.o: 
+gs2_save_new.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 theta_grid.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 mp.o 
+constants.o: 
+vdimstub.o: 
+netcdf_stub.o: 
+gridgen4mod.o: \
+	 spl.o 
+gs2_save_fast.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 theta_grid.o \
+	 antenna_data.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o 
+gs2_save_aix.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 theta_grid.o \
+	 antenna_data.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o 
+command_line_darwin.o: 
+hrate.o: \
+	 command_line.o 
+et.o: \
+	 geometry.o 
+kt_grids.o: \
+	 text_options.o \
+	 theta_grid.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o 
+convert.o: 
+gs2_io_hdf5.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 run_parameters.o \
+	 nonlinear_terms.o \
+	 le_grids.o \
+	 gs2_transforms.o \
+	 theta_grid.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o \
+	 netcdf_mod.o \
+	 species.o \
+	 convert.o 
+mdslib.o: 
+kpar.o: \
+	 command_line.o 
+shmem_stub.o: 
+fft_work_aix.o: 
+geometry.o: \
+	 leq.o \
+	 radstub.o \
+	 peq.o \
+	 ideq.o \
+	 veq.o \
+	 geq.o \
+	 deq.o \
+	 eeq.o 
+command_line.o: 
+check_aix.o: \
+	 run_parameters.o \
+	 file_utils.o \
+	 mp.o 
+collisions.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 run_parameters.o \
+	 redistribute.o \
+	 text_options.o \
+	 gs2_time.o \
+	 le_grids.o \
+	 theta_grid.o \
+	 dist_fn_arrays.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o \
+	 species.o \
+	 prof.o 
+dist_fn.o: \
+	 antenna.o \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 run_parameters.o \
+	 redistribute.o \
+	 collisions.o \
+	 init_g.o \
+	 nonlinear_terms.o \
+	 text_options.o \
+	 gs2_time.o \
+	 le_grids.o \
+	 gs2_transforms.o \
+	 theta_grid.o \
+	 dist_fn_arrays.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o \
+	 gs2_heating.o \
+	 species.o \
+	 hyper.o \
+	 prof.o 
+gs2_transforms_sgi.o: \
+	 fft_work.o \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 redistribute.o \
+	 theta_grid.o \
+	 mp.o \
+	 prof.o 
+gs2_dist_io_hdf.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 gs2_dist_io.o \
+	 le_grids.o \
+	 gs2_transforms.o \
+	 theta_grid.o \
+	 file_utils.o \
+	 mp.o \
+	 species.o 
+gs2_transforms_stub.o: \
+	 fft_work.o \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 redistribute.o \
+	 theta_grid.o \
+	 mp.o \
+	 prof.o 
+antenna.o: \
+	 kt_grids.o \
+	 run_parameters.o \
+	 gs2_time.o \
+	 theta_grid.o \
+	 antenna_data.o \
+	 gs2_save.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o \
+	 ran.o \
+	 species.o 
+spl.o: 
+prof_none.o: 
+eeq.o: \
+	 spl.o \
+	 mds.o 
+mp_mpi.o: 
+netcdf.o: 
+redistribute_mpi.o: \
+	 mp.o 
+redistribute.o: \
+	 mp.o 
+shmem.o: 
+gs2_save_hdf5.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 theta_grid.o \
+	 fields_arrays.o \
+	 file_utils.o \
 	 mp.o 
 file_utils_portable.o: \
 	 command_line.o \
 	 mp.o 
-file_utils_xlf.o: \
-	 command_line.o \
-	 mp.o 
-gridgen4mod.o: \
-	 spl.o 
-gs2.o: \
-	 mp.o \
-	 file_utils.o \
-	 check.o \
-	 collisions.o \
-	 fields.o \
-	 gs2_diagnostics.o \
-	 run_parameters.o \
-	 dist_fn_arrays.o \
-	 gs2_save.o \
-	 gs2_reinit.o \
-	 gs2_time.o \
-	 init_g.o 
-gs2_diagnostics.o: \
-	 gs2_heating.o \
-	 theta_grid.o \
-	 le_grids.o \
-	 file_utils.o \
-	 gs2_layouts.o \
-	 constants.o \
-	 fields_arrays.o \
-	 dist_fn_arrays.o \
-	 gs2_transforms.o \
-	 gs2_save.o \
-	 gs2_time.o \
-	 antenna.o \
-	 kt_grids.o \
-	 spl.o \
-	 fields.o \
-	 prof.o \
-	 nonlinear_terms.o \
-	 run_parameters.o \
-	 species.o \
-	 dist_fn.o \
-	 gs2_flux.o \
-	 gs2_io.o \
-	 collisions.o \
-	 mp.o 
-gs2_dist_io.o: \
-	 mp.o \
-	 gs2_transforms.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 theta_grid.o \
-	 le_grids.o \
-	 species.o \
-	 file_utils.o 
-gs2_dist_io_hdf.o: \
-	 mp.o \
-	 gs2_transforms.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 theta_grid.o \
-	 le_grids.o \
-	 species.o \
-	 gs2_dist_io.o \
-	 file_utils.o 
-gs2_dist_io_stub.o: \
-	 mp.o \
-	 gs2_transforms.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 theta_grid.o \
-	 le_grids.o \
-	 species.o \
-	 gs2_dist_io.o \
-	 file_utils.o 
-gs2_flux.o: \
-	 regression.o \
-	 species.o \
-	 file_utils.o \
-	 mp.o \
-	 text_options.o \
-	 dist_fn.o 
-gs2_heating.o: \
-	 mp.o \
-	 species.o 
-gs2_io.o: \
-	 mp.o \
-	 file_utils.o \
-	 constants.o \
-	 run_parameters.o \
-	 convert.o \
-	 fields_arrays.o \
-	 gs2_heating.o \
-	 netcdf_mod.o \
-	 gs2_transforms.o \
-	 kt_grids.o \
-	 gs2_layouts.o \
-	 theta_grid.o \
-	 le_grids.o \
-	 species.o \
-	 nonlinear_terms.o 
-gs2_io_hdf5.o: \
-	 mp.o \
-	 file_utils.o \
-	 constants.o \
-	 run_parameters.o \
-	 convert.o \
-	 fields_arrays.o \
-	 netcdf_mod.o \
-	 gs2_transforms.o \
-	 kt_grids.o \
-	 gs2_layouts.o \
-	 theta_grid.o \
-	 le_grids.o \
-	 species.o \
-	 nonlinear_terms.o 
-gs2_layouts.o: \
-	 mp.o \
-	 file_utils.o 
-gs2_reinit.o: \
-	 collisions.o \
-	 dist_fn.o \
-	 dist_fn_arrays.o \
-	 nonlinear_terms.o \
-	 mp.o \
-	 file_utils.o \
-	 antenna.o \
-	 fields.o \
-	 fields_implicit.o \
-	 fields_explicit.o \
-	 fields_test.o \
-	 init_g.o \
-	 run_parameters.o \
-	 gs2_time.o \
-	 gs2_save.o 
-gs2_save.o: \
-	 theta_grid.o \
-	 gs2_layouts.o \
-	 mp.o \
-	 fields_arrays.o \
-	 kt_grids.o \
-	 file_utils.o \
-	 antenna_data.o \
-	 constants.o 
-gs2_save_aix.o: \
-	 theta_grid.o \
-	 gs2_layouts.o \
-	 mp.o \
-	 fields_arrays.o \
-	 kt_grids.o \
-	 file_utils.o \
-	 antenna_data.o \
-	 constants.o 
-gs2_save_fast.o: \
-	 theta_grid.o \
-	 gs2_layouts.o \
-	 mp.o \
-	 fields_arrays.o \
-	 kt_grids.o \
-	 file_utils.o \
-	 antenna_data.o \
-	 constants.o 
-gs2_save_hdf5.o: \
-	 theta_grid.o \
-	 gs2_layouts.o \
-	 mp.o \
-	 fields_arrays.o \
-	 kt_grids.o \
-	 file_utils.o 
-gs2_save_new.o: \
-	 theta_grid.o \
-	 gs2_layouts.o \
-	 mp.o \
-	 fields_arrays.o \
-	 kt_grids.o \
-	 file_utils.o 
-gs2_save_stub.o: \
-	 theta_grid.o \
-	 gs2_layouts.o 
-gs2_time.o: 
-gs2_transforms.o: \
-	 redistribute.o \
-	 fft_work.o \
-	 mp.o \
-	 gs2_layouts.o \
-	 prof.o \
-	 theta_grid.o \
-	 kt_grids.o 
-gs2_transforms_aix.o: \
-	 redistribute.o \
-	 fft_work.o \
-	 gs2_layouts.o \
-	 mp.o \
-	 prof.o \
-	 theta_grid.o \
-	 kt_grids.o 
-gs2_transforms_fftw.o: \
-	 redistribute.o \
-	 fft_work.o \
-	 mp.o \
-	 gs2_layouts.o \
-	 prof.o \
-	 theta_grid.o \
-	 kt_grids.o 
-gs2_transforms_sgi.o: \
-	 redistribute.o \
-	 gs2_layouts.o \
-	 fft_work.o \
-	 mp.o \
-	 prof.o \
-	 theta_grid.o \
-	 kt_grids.o 
-gs2_transforms_stub.o: \
-	 redistribute.o \
-	 fft_work.o \
-	 gs2_layouts.o \
-	 mp.o \
-	 prof.o \
-	 theta_grid.o \
-	 kt_grids.o 
-hyper.o: \
-	 kt_grids.o \
-	 run_parameters.o \
-	 dist_fn_arrays.o \
-	 gs2_time.o \
-	 gs2_layouts.o \
-	 file_utils.o \
-	 text_options.o \
-	 mp.o \
-	 theta_grid.o \
-	 le_grids.o \
-	 species.o 
-ingen.o: \
-	 mp.o \
-	 constants.o \
-	 file_utils.o \
-	 text_options.o \
-	 theta_grid.o 
-init_g.o: \
-	 gs2_save.o \
-	 gs2_layouts.o \
-	 ran.o \
-	 constants.o \
-	 fields_arrays.o \
-	 run_parameters.o \
-	 theta_grid.o \
-	 mp.o \
-	 file_utils.o \
-	 text_options.o \
-	 species.o \
-	 theta_grid.o \
-	 kt_grids.o \
-	 le_grids.o \
-	 dist_fn_arrays.o 
-kt_grids.o: \
-	 file_utils.o \
-	 theta_grid.o \
-	 constants.o \
-	 mp.o \
-	 text_options.o 
-le_grids.o: \
-	 mp.o \
-	 file_utils.o \
-	 redistribute.o \
-	 species.o \
-	 theta_grid.o \
-	 kt_grids.o \
-	 gs2_layouts.o \
-	 constants.o 
-mds.o: \
-	 prec.o 
-mp.o: 
-mp_mpi.o: 
-mp_mpi_r8.o: 
-mp_mpi_test.o: 
-mp_stub.o: 
-nag_args.o: 
-netcdf_mod.o: \
-	 mp.o \
-	 constants.o 
-nonlinear_terms.o: \
-	 theta_grid.o \
-	 kt_grids.o \
-	 gs2_time.o \
-	 dist_fn_arrays.o \
-	 constants.o \
-	 le_grids.o \
-	 species.o \
-	 run_parameters.o \
-	 gs2_layouts.o \
-	 gs2_transforms.o \
-	 file_utils.o \
-	 text_options.o \
-	 mp.o 
-prof.o: 
-prof_none.o: 
-prof_vampir.o: 
-ran.o: 
-ran_cray.o: 
-ran_local.o: 
-ran_portable.o: 
-redistribute.o: \
-	 mp.o 
-redistribute_mpi.o: \
-	 mp.o 
 redistribute_shmem.o: \
 	 mp.o 
-redistribute_shnew.o: \
-	 mp.o 
-regression.o: 
-run_parameters.o: \
+gs2_io.o: \
+	 gs2_layouts.o \
 	 kt_grids.o \
-	 gs2_time.o \
+	 run_parameters.o \
+	 nonlinear_terms.o \
+	 le_grids.o \
+	 gs2_transforms.o \
+	 theta_grid.o \
+	 fields_arrays.o \
 	 file_utils.o \
 	 mp.o \
-	 gs2_save.o \
-	 text_options.o 
-rungridgen.o: \
-	 file_utils.o \
-	 gridgen4mod.o \
-	 spl.o 
-shmem.o: 
-shmem_cray.o: 
-shmem_stub.o: 
-species.o: \
-	 file_utils.o \
-	 text_options.o \
-	 mp.o 
-test_layouts.o: \
-	 mp.o 
-text_options.o: 
-theta_grid.o: \
-	 file_utils.o \
-	 gridgen4mod.o \
 	 constants.o \
-	 spl.o \
+	 netcdf_mod.o \
+	 gs2_heating.o \
+	 species.o \
+	 convert.o 
+species.o: \
 	 text_options.o \
-	 geometry.o \
+	 file_utils.o \
 	 mp.o 
-theta_grid_eik_stub.o: 
-mds_io.o: \
-	 prec.o 
-mds_io_stub.o: \
-	 prec.o 
-mdslib.o: 
-netcdf.o: 
-netcdf_stub.o: 
-prec.o: 
-spl.o: 
-ball.o: \
-	 geometry.o 
+prof_vampir.o: 
+radstub.o: 
+gs2_flux.o: \
+	 regression.o \
+	 text_options.o \
+	 file_utils.o \
+	 mp.o \
+	 dist_fn.o \
+	 species.o 
+le_grids.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 redistribute.o \
+	 theta_grid.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o \
+	 species.o 
+fields.o: \
+	 antenna.o \
+	 kt_grids.o \
+	 run_parameters.o \
+	 fields_implicit.o \
+	 init_g.o \
+	 nonlinear_terms.o \
+	 fields_explicit.o \
+	 text_options.o \
+	 fields_test.o \
+	 theta_grid.o \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 mp.o \
+	 dist_fn.o \
+	 constants.o 
+gs2_transforms_aix.o: \
+	 fft_work.o \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 redistribute.o \
+	 theta_grid.o \
+	 mp.o \
+	 prof.o 
+leq.o: \
+	 spl.o 
+mp_mpi_test.o: 
 deq.o: \
 	 spl.o 
-ediff.o: 
-eeq.o: \
+gs2_dist_io_stub.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 gs2_dist_io.o \
+	 le_grids.o \
+	 gs2_transforms.o \
+	 theta_grid.o \
+	 file_utils.o \
+	 mp.o \
+	 species.o 
+drive.o: \
+	 regression.o 
+fft_work_unicos.o: 
+regress.o: \
+	 regression.o 
+command_line_posix.o: 
+ran_local.o: 
+check.o: \
+	 file_utils.o \
+	 mp.o 
+ran_portable.o: 
+command_line_unix.o: 
+command_line_alpha.o: 
+fft_work_stub.o: 
+hyper.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 run_parameters.o \
+	 text_options.o \
+	 gs2_time.o \
+	 le_grids.o \
+	 theta_grid.o \
+	 dist_fn_arrays.o \
+	 file_utils.o \
+	 mp.o \
+	 species.o 
+fields_arrays.o: 
+mds_io.o: \
+	 prec.o 
+rungridgen.o: \
 	 spl.o \
-	 mds.o 
-et.o: \
-	 geometry.o 
-geometry.o: \
-	 veq.o \
-	 geq.o \
-	 peq.o \
-	 eeq.o \
-	 deq.o \
-	 ideq.o \
-	 leq.o \
-	 radstub.o 
+	 gridgen4mod.o \
+	 file_utils.o 
+ran.o: 
+check_sgi.o: \
+	 run_parameters.o \
+	 file_utils.o \
+	 mp.o 
+shmem_cray.o: 
+fft_work_fftw.o: 
+test_layouts.o: \
+	 mp.o 
+fft_work_unicosmk.o: 
+gs2_transforms.o: \
+	 fft_work.o \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 redistribute.o \
+	 theta_grid.o \
+	 mp.o \
+	 prof.o 
+gs2_transforms_fftw.o: \
+	 fft_work.o \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 redistribute.o \
+	 theta_grid.o \
+	 mp.o \
+	 prof.o 
 geq.o: \
 	 netcdf.o \
 	 spl.o 
-ideq.o: \
-	 spl.o 
-leq.o: \
-	 spl.o 
+ran_cray.o: 
+theta_grid.o: \
+	 spl.o \
+	 text_options.o \
+	 geometry.o \
+	 gridgen4mod.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o 
+text_options.o: 
+fft_work.o: 
+command_line_nag.o: 
+ingen.o: \
+	 text_options.o \
+	 theta_grid.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o 
+ball.o: \
+	 geometry.o 
+gs2_layouts.o: \
+	 file_utils.o \
+	 mp.o 
+gs2_time.o: 
+mp.o: 
+fields_test.o: \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
+	 dist_fn.o 
+gs2_save_stub.o: \
+	 gs2_layouts.o \
+	 theta_grid.o 
+fields_implicit.o: \
+	 antenna.o \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 run_parameters.o \
+	 nonlinear_terms.o \
+	 theta_grid.o \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 mp.o \
+	 dist_fn.o \
+	 prof.o 
+file_utils.o: \
+	 command_line.o \
+	 mp.o 
 peq.o: \
 	 netcdf.o \
 	 spl.o 
-radstub.o: 
-vdimstub.o: 
+netcdf_mod.o: \
+	 mp.o \
+	 constants.o 
+mp_stub.o: 
+fft_work_origin.o: 
+gs2_diagnostics.o: \
+	 antenna.o \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 run_parameters.o \
+	 gs2_flux.o \
+	 collisions.o \
+	 spl.o \
+	 nonlinear_terms.o \
+	 fields.o \
+	 gs2_time.o \
+	 le_grids.o \
+	 gs2_transforms.o \
+	 theta_grid.o \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
+	 gs2_save.o \
+	 file_utils.o \
+	 mp.o \
+	 dist_fn.o \
+	 constants.o \
+	 gs2_io.o \
+	 gs2_heating.o \
+	 species.o \
+	 prof.o 
+gs2_reinit.o: \
+	 antenna.o \
+	 run_parameters.o \
+	 fields_implicit.o \
+	 collisions.o \
+	 init_g.o \
+	 nonlinear_terms.o \
+	 fields_explicit.o \
+	 fields.o \
+	 gs2_time.o \
+	 fields_test.o \
+	 dist_fn_arrays.o \
+	 gs2_save.o \
+	 file_utils.o \
+	 mp.o \
+	 dist_fn.o 
 veq.o: \
-	 vdimstub.o \
+	 spl.o \
+	 vdimstub.o 
+gs2_save.o: \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 theta_grid.o \
+	 antenna_data.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 mp.o \
+	 constants.o 
+ideq.o: \
 	 spl.o 
-drive.o: \
-	 regression.o 
-hrate.o: \
-	 command_line.o 
-kpar.o: \
-	 command_line.o 
-om.o: \
-	 command_line.o 
-regress.o: \
-	 regression.o 
+antenna_data.o: 
+ediff.o: 
+run_parameters.o: \
+	 kt_grids.o \
+	 text_options.o \
+	 gs2_time.o \
+	 gs2_save.o \
+	 file_utils.o \
+	 mp.o 

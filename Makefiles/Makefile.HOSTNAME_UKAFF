@@ -1,0 +1,22 @@
+# Host: unknown (used to be known as CPU=UKAFF)
+
+COMPILER=xl
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = ibm
+endif
+
+include Makefile.$(COMPILER)
+
+ifdef MPI
+	FC = mpif90
+endif
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = -L/usr/local/fftw-2.1.5/lib -lfftw -lrfftw
+endif
+
+ifdef USE_NETCDF
+	NETCDF_INC = -I/usr/local/netcdf/include 
+	NETCDF_LIB = -L/usr/local/netcdf/lib64 -lnetcdf
+endif
