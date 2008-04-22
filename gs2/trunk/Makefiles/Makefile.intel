@@ -1,0 +1,65 @@
+# Compiler: Intel ifort/icc
+
+FC = ifort
+CC = icc
+F90FLAGS +=
+CPPFLAGS += -DCL=_UNIX_ -DFILE=_PORT_
+
+ifdef DBLE
+	ifeq ($(PROJECT),agk)
+		F90FLAGS += -r8 -double-size 128
+	endif
+# double to quad promotion may cause errors in gs2
+# turn it off just in case
+	ifeq ($(PROJECT),gs2)
+		F90FLAGS += -r8
+	endif
+endif
+
+ifdef STATIC
+	LDFLAGS += -static
+endif
+
+ifdef DEBUG
+	F90FLAGS += -g -implicitnone -warn all -check bounds -traceback
+	F90OPTFLAGS =
+	CFLAGS += -g -warn all -check bounds -traceback
+	COPTFLAGS =
+else
+	ifdef OPT
+		ifeq ($(OPT),aggressive)
+# -fast = -O3 -ipo -static
+			F90OPTFLAGS += -O3 -ipo -vec_report0
+			COPTFLAGS += -O3 -ipo -vec_report0
+		else
+			F90OPTFLAGS += -O3 -vec_report0
+			COPTFLAGS += -O3 -vec_report0
+		endif
+	endif
+
+	ifdef OPT
+		ifeq ($(CHIP),xeon)
+			F90OPTFLAGS += -xW
+			COPTFLAGS += -xW
+		endif
+		ifeq ($(CHIP),pentium4)
+			F90OPTFLAGS += -xN
+			COPTFLAGS += -xN
+		endif
+		ifeq ($(CHIP),core2duo)
+			F90OPTFLAGS += -xT
+			COPTFLAGS += -xT
+		endif
+		ifdef SSE
+			# optimizes for intel pentium 4 processors with 
+			# streaming simd extensions
+			F90OPTFLAGS += -arch SSE
+			COPTFLAGS += -arch SSE
+		endif
+	endif
+
+	ifdef PROF
+		F90FLAGS += -pg
+		CFLAGS += -pg
+	endif
+endif

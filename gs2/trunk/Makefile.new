@@ -3,23 +3,24 @@
 #  Makefile for the GS2/AstroGK Gyrokinetic Turbulence code 
 #  (requires GNU's gmake)
 #
+PROJECT ?= gs2
+#PROJECT ?= agk
+#
 #  Makefile written by Bill Dorland and Ryusuke Numata
 #
 #  LAST UPDATE: 04/15/08
 #
-# **** TODO
+# * TODO
 #
-# Environment dependencies are set by system-base makefile Makefile.$(SYSTEM)
-# We provide compiler dependent definition in Makefile.$(COMPILER)
-# In Makefile.$(SYSTEM), $(COMPILER) and some library, include search pathes
-# may be enough. There may be no architecture dependencies.
+# Write a README file which fully explains new make system.
+# Replace PLATFORM_LINKS by cpp mechanism in gs2. 
 #
 # * Available Compilers (tested on limited hosts)
 #
 # Intel ifort
 # GNU's gfortran and g95
 # IBM XL Fortran xlf90
-# PathScale 
+# PathScale Compiler Suite pathf90
 # The Portland Group pgf90
 # --- NAGWare
 # --- Fujitsu
@@ -36,12 +37,39 @@
 #
 # * Switches:
 #
-# Just check if they are defined or not
-# Do not set DEBUG=off to turn it off
+# Here is a list of switches with simple explanation.
+# In the brackets, values accepted are shown,
+# where "undefined" means blank.
+# Switches with (bin) are checked if they are defined or not
+# What values they have do not matter.
+# Be careful that DEBUG=off means DEBUG=on.
 #
+# turns on debug mode (bin)
 DEBUG ?=
+# turns on test mode (bin)
+TEST ?=
+# turns on profile mode (bin)
+PROF ?=
+# optimization (on,aggressive,undefined)
+OPT ?= on
+# prevents linking with shared libraries (bin)
 STATIC ?=
-MPI ?=on
+# turns on distributed memory parallelization using MPI (bin)
+MPI ?= on
+# promotes precisions of real and complex (bin)
+DBLE ?= on
+# which FFT library to use (fftw,undefined) 
+USE_FFT ?= fftw
+# uses netcdf library (new,old,undefined)
+USE_NETCDF ?= new
+# uses hdf5 library (bin)
+USE_HDF5 ?=
+# Use function pointer in agk_layouts_indices.c (bin)
+# see also README.cpp
+USE_C_INDEX ?= 
+# Use Numerical Recipes local random number generator (bin)
+# see also README.cpp
+USE_NR_RAN ?=
 #
 # * Targets:
 #
@@ -51,26 +79,26 @@ MPI ?=on
 #  distclean: does "make clean" + removes platform links & executables
 #  tar: pack
 #
-############################################################# DEFAULT VALUE
+############################################################### DEFAULT VALUE
+#
+# These variables can be set in platform-dependent Makefile.
+#
 
-PROJECT ?= gs2
-#PROJECT ?= agk
-
-UTILS=utils
-GEO=geo
-
+MAKE = make -f Makefile.new
 CPP = cpp
+CPPFLAGS = -C -P -traditional
 FC = f90
-FC5 = $(FC)
-CC =
-LD = $(FC)
-CPPFLAGS =
 F90FLAGS =
 F90OPTFLAGS =
+CC = cc
+CFLAGS =
+COPTFLAGS =
+LD = $(FC)
 LDFLAGS = $(F90FLAGS)
 ARCH = ar
 ARCHFLAGS = cr
 RANLIB=ranlib
+AWK = awk
 
 # work around
 F90FLAGS_real_double_promote = $(F90FLAGS)
@@ -80,18 +108,87 @@ F90FLAGS_SFX0 =
 F90FLAGS_SFX1 =
 F90FLAGS_SFX2 =
 
-PLATFORM_LINKS ?= undefined
-
 MPI_INC =
 MPI_LIB =
 FFT_INC =
-FFT_LIB = -lfftw -lrfftw
+FFT_LIB =
 NETCDF_INC =
-NETCDF_LIB = -lnetcdf
+NETCDF_LIB =
 HDF5_INC =
 HDF5_LIB =
 
-###########################################################################
+PLATFORM_LINKS ?= undefined
+
+######################################################### PLATFORM DEPENDENCE
+
+# include system-dependent make variables
+sinclude Makefile.$(SYSTEM)
+
+# include Makefile.local if exists
+sinclude Makefile.local
+
+#############################################################################
+
+UTILS=utils
+GEO=geo
+
+ifdef TEST
+$(warning TEST mode is not working yet)
+endif
+
+ifdef USE_HDF5
+	ifndef MPI
+$(error Currently, USE_HDF5 works with MPI)
+	endif
+endif
+ifeq ($(PROJECT),gs2) 
+	ifndef DBLE
+$(error DBLE cannot be off for gs2)
+	endif
+	ifndef USE_FFT
+$(error USE_FFT cannot be off for gs2)
+		USE_FFT=fftw
+	endif
+	ifndef USE_NETCDF
+$(error USE_NETCDF cannot be off for gs2)
+		USE_NETCDF=new
+	endif
+endif
+
+ifdef MPI
+	CPPFLAGS += -DMPI
+endif
+ifeq ($(USE_FFT),fftw)
+	CPPFLAGS += -DFFT=_FFTW_
+	FFT_LIB ?= -lfftw -lrfftw
+endif
+ifdef USE_NETCDF
+	ifeq ($(USE_NETCDF),new)
+		CPPFLAGS += -DNETCDF=_DEFAULT_
+	endif
+	ifeq ($(USE_NETCDF),old)
+		CPPFLAGS += -DNETCDF=_OLD_
+	endif
+	NETCDF_LIB ?= -lnetcdf
+endif
+ifdef USE_HDF5
+	ifdef MPI
+		FC = h5pfc
+	endif
+	CPPFLAGS += -DHDF
+endif
+ifdef USE_C_INDEX
+	CPPFLAGS += -DUSE_C_INDEX
+endif
+ifdef USE_NR_RAN
+	CPPFLAGS += -DUSE_NR_RAN
+endif
+
+LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB)
+F90FLAGS+= $(F90OPTFLAGS) \
+	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
+CFLAGS += $(COPTFLAGS)
+
 DATE=$(shell date +%D | sed 's/\///g')
 TOPDIR=$(CURDIR)
 ifeq ($(notdir $(CURDIR)), $(UTILS))
@@ -103,9 +200,14 @@ endif
 ifneq ($(TOPDIR),$(CURDIR))
 	SUBDIR=true
 endif
-VPATH=.:$(UTILS):$(GEO):Aux
+
+VPATH = $(UTILS):$(GEO):Aux:../$(UTILS):../$(GEO)
+# this just removes non-existing directory from VPATH
+VPATH_tmp := $(foreach tmpvp,$(subst :, ,$(VPATH)),$(shell [ -d $(tmpvp) ] && echo $(tmpvp)))
+VPATH = .:$(shell echo $(VPATH_tmp) | sed "s/ /:/g")
+#
 ifdef SUBDIR
-	VPATH +=:..:../$(UTILS):../$(GEO)
+	VPATH +=:..
 endif
 DEPEND=Makefile.depend
 PERL_CMD=perl
@@ -124,85 +226,43 @@ DEFAULT_LIB_LIST =
 DEFAULT_INC=$(foreach tmpinc,$(DEFAULT_INC_LIST),$(shell [ -d $(tmpinc) ] && echo -I$(tmpinc)))
 DEFAULT_LIB=$(foreach tmplib,$(DEFAULT_LIB_LIST),$(shell [ -d $(tmplib) ] && echo -L$(tmplib)))
 
-########################################################## PLATFORM DEPENDENCE
-
-# include system-dependent make variables
-sinclude Makefile.$(SYSTEM)
-
-# include Makefile.local if exists
-sinclude Makefile.local
-
-LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB)
-F90FLAGS+= $(F90OPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
-
-########################################################## MODULE DECLARATIONS
-
-GS2MOD= constants.o prof.o mp.o gs2_layouts.o command_line.o gs2_save.o \
-	text_options.o file_utils.o ran.o redistribute.o antenna_data.o antenna.o \
-	gs2_reinit.o gs2_time.o convert.o fft_work.o shmem.o \
-	theta_grid.o kt_grids.o dist_fn_arrays.o species.o \
-	fields_arrays.o le_grids.o collisions.o gs2_transforms.o \
-	nonlinear_terms.o fields_explicit.o \
-	fields.o fields_implicit.o fields_test.o init_g.o check.o \
-	dist_fn.o hyper.o gs2_diagnostics.o gs2_io.o netcdf_mod.o \
-	run_parameters.o gs2_flux.o regression.o gs2_heating.o \
-	geo.a gridgen4mod.o spl.o utils.a
-#	utils/utils.a geo/geo.a utils/mds.o 
-# *.a libraries must appear after any function that needs them.
-
-AGKMOD= constants.o mp.o agk_layouts.o agk_heating_index.o command_line.o \
-	agk_save.o file_utils.o agk_mem.o ran.o redistribute.o antenna_data.o \
-	agk_reinit.o agk_time.o fft_work.o antenna.o \
-	theta_grid.o kgrids.o dist_fn_arrays.o species.o \
-	fields_arrays.o le_grids.o collisions.o agk_transforms.o \
-	nonlinear_terms.o \
-	fields.o fields_implicit.o init_g.o \
-	dist_fn.o hyper.o agk_diagnostics.o agk_io.o netcdf_mod.o \
-	run_parameters.o agk_heating.o spl.o agk_dist_io.o
-
-INGENMOD= constants.o mp.o gs2_layouts.o command_line.o \
-	text_options.o file_utils.o theta_grid.o \
-	geo.a gridgen4mod.o spl.o utils.a
-
-UTIL_OBJ = spl.o mds.o prec.o netcdf.o
-GEO_OBJ = geometry.o geq.o veq.o eeq.o peq.o leq.o deq.o ideq.o
-RG_OBJ = gridgen4mod.o file_utils.o mp.o command_line.o utils.a 
-STUB_OBJ = radstub.o vdimstub.o mdslib.o
-GEO_UOBJ = spl.o mds.o
+######################################################### MODULE DECLARATIONS
 
 # this should be removed. use command_line_nag, instead. (RN)
 ifeq ($(CPU),LINUX)
 	GS2MOD += nag_args.o
 endif
 
+ifeq ($(PROJECT),gs2)
 LINKS_gs2 = \
 	command_line.f90 mp.f90 shmem.f90 prof.f90 redistribute.f90 ran.f90 \
 	gs2_layouts.f90 gs2_save.f90 gs2_transforms.f90 fft_work.f90 \
-	mds.f90 check.f90
-ifdef SUBDIR
-LINKS_gs2 = \
-	command_line.f90 mp.f90 shmem.f90 prof.f90 redistribute.f90 ran.f90 \
-	gs2_layouts.f90 gs2_save.f90 gs2_transforms.f90 fft_work.f90 \
-	../mds.f90 check.f90
+	check.f90
+	ifdef SUBDIR
+		LINKS_gs2 += ../mds.f90
+	else
+		LINKS_gs2 += mds.f90
+	endif
 endif
 
-LINKS_agk = \
-	command_line.f90 mp.f90 ran.f90 agk_save.f90 agk_transforms.f90 \
-        fft_work.f90 file_utils.f90 agk_dist_io.f90
-
-######################################################################## RULES
+####################################################################### RULES
 
 .SUFFIXES:
-.SUFFIXES: .f90 .o
+.SUFFIXES: .fpp .f90 .c .o
 
 .f90.o: 
 	$(FC) $(F90FLAGS) -c $<
+.fpp.f90:
+	$(CPP) $(CPPFLAGS) $< $@
+.c.o:
+	$(CC) $(CFLAGS) -c $<
 
-###################################################################### TARGETS
+##################################################################### TARGETS
 
+ifeq ($(PROJECT),gs2)
 ifeq ($(PLATFORM_LINKS),undefined)
 $(error PLATFORM_LINKS is $(PLATFORM_LINKS))
+endif
 endif
 
 .DEFAULT_GOAL = $(PROJECT)_all
@@ -217,29 +277,41 @@ endif
 
 all: $(.DEFAULT_GOAL)
 
+include $(DEPEND)
+
 gs2_all: $(LINKS_gs2) modules gs2 ingen rungridgen
 
-gs2: gs2.o $(GS2MOD) 
+ifeq ($(PROJECT),gs2)
+# define module in mdslib.f90, otherwise the script cannot determine
+# dependency correctly
+gs2_mod += mdslib.o
+ingen_mod += mdslib.o
+eiktest_mod += mdslib.o
+ball_mod += mdslib.o
+eeq.o: mdslib.o
+endif
+
+gs2: $(gs2_mod) 
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-gs2.x: gs2.o $(GS2MOD) 
+gs2.x: $(gs2_mod) 
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-agk_all: $(LINKS_agk) agk
+agk_all: agk
 
-agk: agk.o $(AGKMOD) 
+agk: $(astrogk_mod) 
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-agk.x: agk.o $(AGKMOD) 
+agk.x: $(astrogk_mod) 
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-ingen: ingen.o $(INGENMOD)
+ingen: $(ingen_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-rungridgen: rungridgen.o $(RG_OBJ)
+rungridgen: $(rungridgen_mod)
 	$(LD) $(LDFLAGS) -o $@ $^
 
-regress: regression.o drive.o
+regress: $(drive_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 # libraries and functions in subdirectories:
@@ -252,48 +324,50 @@ modules: utils.a geo.a
 ### UTILS
 utils_all: utils.a mdslib.a
 
+UTIL_OBJ = spl.o mds.o prec.o netcdf.o
 utils.a: $(UTIL_OBJ)
 	$(ARCH) $(ARCHFLAGS) $@ $^
 	$(RANLIB) $@
 
 mdslib.a: mdslib.o
-	$(AR) rc $@ $^
+	$(ARCH) $(ARCHFLAGS) $@ $^
 	$(RANLIB) $@
 
 ### GEO
 geo_all: geo.a eiktest ball
 
-geo.a: $(STUB_OBJ) $(GEO_OBJ)
-	$(AR) rc $@ $(GEO_OBJ) $(STUB_OBJ)
+GEO_OBJ = geometry.o geq.o veq.o eeq.o peq.o leq.o deq.o ideq.o \
+	radstub.o vdimstub.o mdslib.o
+geo.a: $(GEO_OBJ)
+	$(ARCH) $(ARCHFLAGS) $@ $^
 	$(RANLIB) $@
 
-ball: ball.o geo.a $(GEO_UOBJ) $(STUBS)
+ball: $(ball_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-eiktest: et.o geo.a $(GEO_UOBJ) $(STUBS)
+eiktest: $(eiktest_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-################################################################ SPECIAL RULES
+############################################################### SPECIAL RULES
 
-# HDF5 needs specific compiler
-agk_dist_io.o: agk_dist_io.f90
-	$(FC5) $(F90FLAGS) -c $<
-
+ifeq ($(PROJECT),gs2)
 # le_grids needs quad precision on some hosts
 le_grids.o: le_grids.f90
 	$(FC) $(F90FLAGS_real_double_promote) -c $<
 # mds neeeds quad precision on some hosts
 mds.o: mds.f90
 	$(FC) $(F90FLAGS_real_double_promote) -c $<
-
+endif
 # No optimizations for some routines: stupid workarounds because of 
 # incompatibility between f95 and my C libraries (I think)
 
 # NAG: without -w
 gs2_transforms.o: gs2_transforms.f90
 	$(FC) $(F90FLAGS_without_minus_w) $(F90FLAGS_SFX0) -c $<
-agk_transforms.o: agk_transforms.f90
-	$(FC) $(F90FLAGS_without_minus_w) $(F90FLAGS_SFX0) -c $<
+agk_transforms.o: agk_transforms.fpp
+	$(CPP) $(CPPFLAGS) $< $*.f90
+	$(FC) $(F90FLAGS_without_minus_w) $(F90FLAGS_SFX0) -c $*.f90
+	rm -f $*.f90
 nonlinear_terms.o: nonlinear_terms.f90
 	$(FC) $(F90FLAGS_without_minus_w) -c $<
 
@@ -306,40 +380,71 @@ gs2_io.o: gs2_io.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
 gs2_save.o: gs2_save.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
-agk_io.o: agk_io.f90
-	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
-agk_save.o: agk_save.f90
-	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
+agk_io.o: agk_io.fpp
+	$(CPP) $(CPPFLAGS) $< $*.f90
+	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $*.f90
+	rm -f $*.f90
+agk_save.o: agk_save.fpp
+	$(CPP) $(CPPFLAGS) $< $*.f90
+	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $*.f90
+	rm -f $*.f90
 #netcdf_mod.o: netcdf_mod.f90
 #	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
 
+ifeq ($(PROJECT),gs2)
 command_line.o: command_line.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX1) -c $<
 file_utils.o: file_utils.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX1) -c $<
 mp.o: mp.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX1) -c $<
-
 fft_work.o: fft_work.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $<
+endif
+ifeq ($(PROJECT),agk)
+command_line.o: command_line.fpp
+	$(CPP) $(CPPFLAGS) $< $*.f90
+	$(FC) $(F90FLAGS) $(F90FLAGS_SFX1) -c $*.f90
+	rm -f $*.f90
+file_utils.o: file_utils.fpp
+	$(CPP) $(CPPFLAGS) $< $*.f90
+	$(FC) $(F90FLAGS) $(F90FLAGS_SFX1) -c $*.f90
+	rm -f $*.f90
+mp.o: mp.fpp
+	$(CPP) $(CPPFLAGS) $< $*.f90
+	$(FC) $(F90FLAGS) $(F90FLAGS_SFX1) -c $*.f90
+	rm -f $*.f90
+fft_work.o: fft_work.fpp
+	$(CPP) $(CPPFLAGS) $< $*.f90
+	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $*.f90
+	rm -f $*.f90
+endif
 #gs2_transforms.o: gs2_transforms.f90
 #	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $<
 #agk_transforms.o: agk_transforms.f90
 #	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $<
 
-############################################################## MORE DIRECTIVES
+agk_layouts_indices.o: agk_layouts_type.h
+agk_layouts_type.h: agk_layouts_type.f90
+	$(AWK) -f makehead.awk $^ > $@
+
+############################################################# MORE DIRECTIVES
 
 .PHONY: depend clean distclean tar test_make
 
 # this dependency does not appear for some PLATFORM_LINKS
 check.o: run_parameters.o
+ifeq ($(PROJECT),gs2)
 depend:
-	$(MAKE) -C $(TOPDIR) -f Makefile.new $(PLATFORM_LINKS)
-	$(DEPEND_CMD) -d $(DEPEND) -1 -o $(VPATH)
-include $(DEPEND)
+	@$(MAKE) -C $(TOPDIR) $(PLATFORM_LINKS)
+	@$(DEPEND_CMD) -d $(DEPEND) -1 -o $(VPATH)
+else
+depend:
+	@$(DEPEND_CMD) -m "$(MAKE)" -d $(DEPEND) -1 -o $(VPATH)
+endif
 
 clean:
-	-rm -f *.o *.mod *.g90 core */core
+	-rm -f *.o *.mod *.g90 .h core */core
 
 distclean: unlink clean
 	-rm -f $(PROJECT)
@@ -369,7 +474,8 @@ tar_agk:
 	@echo $(PROJECT)_$(DATE) > .package
 	@-rm -rf `cat .package`
 	@mkdir `cat .package`
-	@ln *.f90 test_os Makefile AstroGK.in `cat .package`
+	@ln *.f90 *.fpp *.c makehead.awk test_os Makefile AstroGK.in \
+	 README* `cat .package`
 	tar cvf - `cat .package` | bzip2 -9 > `cat .package`.tar.bz2
 	@rm -rf `cat .package` .package
 
@@ -379,25 +485,43 @@ test_make:
 	@echo VPATH is $(VPATH)
 	@echo CURDIR is $(CURDIR)
 	@echo TOPDIR is $(TOPDIR)
-	@echo MPI is $(MPI)
-	@echo DEBUG is $(DEBUG)
-	@echo STATIC is $(STATIC)
-	@echo PLATFORM_LINKS is $(PLATFORM_LINKS)
+	@echo
+	@echo Compile mode:
+	@echo  DEBUG is $(DEBUG)
+	@echo  TEST is $(TEST)
+	@echo  PROF is $(PROF)
+	@echo  OPT is $(OPT)
+	@echo  STATIC is $(STATIC)
+	@echo
+	@echo Functions:
+	@echo  MPI is $(MPI)
+	@echo  DBLE is $(DBLE)
+	@echo  USE_FFT is $(USE_FFT)
+	@echo  USE_NETCDF is $(USE_NETCDF)
+	@echo  USE_HDF5 is $(USE_HDF5)
+	@echo  USE_C_INDEX is $(USE_C_INDEX)
+	@echo  USE_NR_RAN is $(USE_NR_RAN)
+	@echo
 	@echo FC is $(FC)
-	@echo FC5 is $(FC5)
-	@echo LD is $(LD)
-	@echo DIST_IO is $(DIST_IO)
 	@echo F90FLAGS is $(F90FLAGS)
-	@echo LIBS is $(LIBS)
+	@echo F90OPTFLAGS is $(F90OPTFLAGS)
+	@echo CC is $(CC)
+	@echo CFLAGS is $(CFLAGS)
+	@echo COPTFLAGS is $(COPTFLAGS)
+	@echo LD is $(LD)
 	@echo LDFLAGS is $(LDFLAGS)
+	@echo CPP is $(CPP)
+	@echo CPPFLAGS is $(CPPFLAGS)
+	@echo LIBS is $(LIBS)
+	@echo PLATFORM_LINKS is $(PLATFORM_LINKS)
 
-############################################################### PLATFORM LINKS
+############################################################## PLATFORM LINKS
 #
 # If one of the platform-specific logical links doesn't exist, set them up:
+# This is not used in agk any more
 #
-# this target works only on the top directory where Makefile.new exists
 $(LINKS_$(PROJECT)):
-	@$(MAKE) -C $(TOPDIR) -f Makefile.new --no-print-directory $(PLATFORM_LINKS)
+	@$(MAKE) -C $(TOPDIR) --no-print-directory $(PLATFORM_LINKS)
 
 #
 # Platform-specific logical links:
@@ -417,15 +541,6 @@ cxt4_gs2:
 	ln -sf redistribute_mpi.f90 redistribute.f90
 	ln -sf check_aix.f90 check.f90
 	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90 
-cxt4_agk:
-	ln -sf command_line_unix.f90 command_line.f90
-	ln -sf mp_mpi_r8.f90 mp.f90
-	ln -sf ran_portable.f90 ran.f90
-	ln -sf file_utils_portable.f90 file_utils.f90
-	ln -sf fft_work_fftw.f90 fft_work.f90
-	ln -sf agk_transforms_fftw.f90 agk_transforms.f90
-	ln -sf agk_save_aix.f90 agk_save.f90
-	ln -sf $(DIST_IO) agk_dist_io.f90
 
 c90: c90_$(PROJECT)
 c90_gs2:
@@ -506,15 +621,6 @@ ibm_gs2:
 	ln -sf gs2_save_aix.f90 gs2_save.f90
 	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
 	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-ibm_agk:
-	ln -sf command_line_unix.f90 command_line.f90
-	ln -sf mp_mpi_r8.f90 mp.f90
-	ln -sf ran_portable.f90 ran.f90
-	ln -sf file_utils_xlf.f90 file_utils.f90
-	ln -sf fft_work_fftw.f90 fft_work.f90
-	ln -sf agk_transforms_fftw.f90 agk_transforms.f90
-	ln -sf agk_save_aix.f90 agk_save.f90
-	ln -sf $(DIST_IO) agk_dist_io.f90
 
 origin: origin_$(PROJECT)
 origin_gs2:
@@ -547,18 +653,9 @@ linux_gs2:
 	ln -sf fft_work_fftw.f90 fft_work.f90
 	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
 	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-linux_agk:
-	ln -sf command_line_nag.f90 command_line.f90
-	ln -sf mp_mpi_r8.f90 mp.f90
-	ln -sf ran_portable.f90 ran.f90
-	ln -sf agk_save_fast.f90 agk_save.f90
-	ln -sf file_utils_portable.f90 file_utils.f90
-	ln -sf agk_transforms_fftw.f90 agk_transforms.f90
-	ln -sf fft_work_fftw.f90 fft_work.f90
-	ln -sf agk_dist_io_stub.f90 agk_dist_io.f90
 
-linux_ifort: linux_ifort_$(PROJECT)
-linux_ifort_gs2:
+linux_nomp: linux_nomp_$(PROJECT)
+linux_nomp_gs2:
 	ln -sf command_line_unix.f90 command_line.f90
 	ln -sf mp_stub.f90 mp.f90
 	ln -sf shmem_stub.f90 shmem.f90
@@ -589,15 +686,6 @@ linux_fuj_gs2:
 	ln -sf fft_work_stub.f90 fft_work.f90
 	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
 	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-linux_fuj_agk:
-	ln -sf command_line_unix.f90 command_line.f90
-	ln -sf mp_stub.f90 mp.f90
-	ln -sf ran_local.f90 ran.f90
-	ln -sf file_utils_portable.f90 file_utils.f90
-	ln -sf agk_save_fast.f90 agk_save.f90
-	ln -sf agk_transforms_stub.f90 agk_transforms.f90
-	ln -sf fft_work_stub.f90 fft_work.f90
-	ln -sf agk_dist_io_stub.f90 agk_dist_io.f90
 
 linux_lf95: linux_lf95_$(PROJECT)
 linux_lf95_gs2:
@@ -615,15 +703,6 @@ linux_lf95_gs2:
 	ln -sf fft_work_fftw.f90 fft_work.f90
 	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
 	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-linux_lf95_agk:
-	ln -sf command_line_unix.f90 command_line.f90
-	ln -sf mp_mpi_r8.f90 mp.f90
-	ln -sf ran_portable.f90 ran.f90
-	ln -sf file_utils_portable.f90 file_utils.f90
-	ln -sf agk_save_fast.f90 agk_save.f90
-	ln -sf agk_transforms_fftw.f90 agk_transforms.f90
-	ln -sf fft_work_fftw.f90 fft_work.f90
-	ln -sf agk_dist_io_stub.f90 agk_dist_io.f90
 
 linux_abs: linux_abs_$(PROJECT)
 linux_abs_gs2:
@@ -641,15 +720,6 @@ linux_abs_gs2:
 	ln -sf fft_work_fftw.f90 fft_work.f90
 	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
 	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-linux_abs_agk:
-	ln -sf command_line_unix.f90 command_line.f90
-	ln -sf mp_mpi_r8.f90 mp.f90
-	ln -sf ran_local.f90 ran.f90
-	ln -sf agk_save_fast.f90 agk_save.f90
-	ln -sf file_utils_portable.f90 file_utils.f90
-	ln -sf agk_transforms_fftw.f90 agk_transforms.f90
-	ln -sf fft_work_fftw.f90 fft_work.f90
-	ln -sf agk_dist_io_stub.f90 agk_dist_io.f90
 
 alpha: alpha_$(PROJECT)
 alpha_gs2:
@@ -702,17 +772,6 @@ linux_alpha_gs2:
 	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
 	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
 
-linux_nomp: linux_nomp_$(PROJECT)
-linux_nomp_agk:
-	ln -sf command_line_unix.f90 command_line.f90
-	ln -sf mp_stub.f90 mp.f90
-	ln -sf ran_portable.f90 ran.f90
-	ln -sf file_utils_portable.f90 file_utils.f90
-	ln -sf agk_save_fast.f90 agk_save.f90
-	ln -sf agk_transforms_fftw.f90 agk_transforms.f90
-	ln -sf fft_work_fftw.f90 fft_work.f90
-	ln -sf agk_dist_io_stub.f90 agk_dist_io.f90
-
 darwin: darwin_$(PROJECT)
 darwin_gs2:
 	ln -sf command_line_darwin.f90 command_line.f90
@@ -728,15 +787,22 @@ darwin_gs2:
 	ln -sf fft_work_fftw.f90 fft_work.f90
 	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
 	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-darwin_agk:
-	ln -sf command_line_darwin.f90 command_line.f90
+
+jacquard: jacquard_$(PROJECT)
+jacquard_gs2:
+	ln -sf command_line_unix.f90 command_line.f90
 	ln -sf mp_mpi_r8.f90 mp.f90
+	ln -sf shmem_stub.f90 shmem.f90
+	ln -sf prof_none.f90 prof.f90
+	ln -sf redistribute_mpi.f90 redistribute.f90
+	ln -sf check_portable.f90 check.f90
 	ln -sf ran_portable.f90 ran.f90
-	ln -sf file_utils_gnu.f90 file_utils.f90
-	ln -sf agk_save_fast.f90 agk_save.f90
-	ln -sf agk_transforms_fftw.f90 agk_transforms.f90
+	ln -sf gs2_save_fast.f90 gs2_save.f90
+	ln -sf file_utils_portable.f90 file_utils.f90
+	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
 	ln -sf fft_work_fftw.f90 fft_work.f90
-	ln -sf agk_dist_io_stub.f90 agk_dist_io.f90
+	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
+	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
 
 unlink:	unlink_$(PROJECT)
 unlink_gs2:
@@ -755,11 +821,16 @@ unlink_gs2:
 	-rm -f $(TOPDIR)/mds.f90
 
 unlink_agk:
-	-rm -f $(TOPDIR)/command_line.f90
-	-rm -f $(TOPDIR)/mp.f90
-	-rm -f $(TOPDIR)/ran.f90
+	-rm -f $(TOPDIR)/$(PROJECT)_dist_io.f90
+	-rm -f $(TOPDIR)/$(PROJECT)_io.f90
+	-rm -f $(TOPDIR)/$(PROJECT)_layouts.f90
+	-rm -f $(TOPDIR)/$(PROJECT)_layouts_type.h
+	-rm -f $(TOPDIR)/$(PROJECT)_mem.f90
 	-rm -f $(TOPDIR)/$(PROJECT)_save.f90
 	-rm -f $(TOPDIR)/$(PROJECT)_transforms.f90
+	-rm -f $(TOPDIR)/command_line.f90
+	-rm -f $(TOPDIR)/constants.f90
 	-rm -f $(TOPDIR)/fft_work.f90
 	-rm -f $(TOPDIR)/file_utils.f90
-	-rm -f $(TOPDIR)/$(PROJECT)_dist_io.f90
+	-rm -f $(TOPDIR)/mp.f90
+	-rm -f $(TOPDIR)/ran.f90

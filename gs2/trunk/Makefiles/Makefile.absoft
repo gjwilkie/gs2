@@ -3,6 +3,11 @@
 FC =
 F90FLAGS = -Rp -N113
 
+ifndef USE_NR_RAN
+$(warning USE_NR_RAN cannot be off for Absoft Compiler)
+	override USE_NR_RAN = on
+endif
+
 ifdef STATIC
 endif
 

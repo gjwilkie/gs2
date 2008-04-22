@@ -1,4 +1,0 @@
-FC5 = h5pfc
-DISST_IO = agk_dist_io_hdf.f90
-HDF5_INC = $$HDF5_INCLUDE
-HDF5_LIB = $$HDF5

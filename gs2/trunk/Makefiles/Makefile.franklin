@@ -1,26 +1,39 @@
 # Host: franklin at NERSC (Cray XT4)
-#
-# module load netcdf
-# module load fftw
 
 COMPILER=pgi
+ifdef FFTW
+	USE_FFT = fftw
+else
+	override USE_FFT =
+endif
+ifdef NETCDF
+	USE_NETCDF = new
+else
+	override USE_NETCDF =
+endif
+ifdef HDF5
+	USE_HDF5 = on
+else
+	override USE_HDF5 =
+endif
 
 include Makefile.XT4
 
 include Makefile.$(COMPILER)
 
 FC=ftn
+CC=cc
 
-NETCDF_INC = -I$$NETCDF_DIR/include
-NETCDF_LIB = -L$$NETCDF_DIR/lib -lnetcdf
-FFT_INC = $$FFTW_INCLUDE_OPTS
-FFT_LIB = $$FFTW_POST_LINK_OPTS -ldfftw -ldrfftw
+ifeq ($(USE_FFT),fftw)
+	FFT_INC = $$FFTW_INCLUDE_OPTS
+	ifdef DBLE
+		FFT_LIB = $$FFTW_POST_LINK_OPTS -ldfftw -ldrfftw
+	else
+		FFT_LIB = $$FFTW_POST_LINK_OPTS -lsfftw -lsrfftw
+	endif
+endif
 
-ifdef HDF5
-	FC5 = h5pfc
-	DIST_IO = agk_dist_io_hdf.f90
-	HDF5_INC = -I$$HDF5_DIR/lib
-	HDF5_LIB = $$HDF5
-else
-	DIST_IO = agk_dist_io_stub.f90
+ifdef USE_NETCDF
+	NETCDF_INC = -I$$NETCDF_DIR/include
+	NETCDF_LIB = -L$$NETCDF_DIR/lib -lnetcdf
 endif

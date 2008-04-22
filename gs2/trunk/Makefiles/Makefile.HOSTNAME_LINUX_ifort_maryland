@@ -1,0 +1,16 @@
+# Host: unknown (used to be known as LINUX_ifort)
+
+COMPILER=intel
+CHIP=pentium4
+
+ifeq ($(PROJECT),gs2)
+	override MPI=
+endif
+
+include Makefile.LINUX
+
+include Makefile.$(COMPILER)
+
+ifdef USE_NETCDF
+	NETCDF_INC = -I/usr/local/include/netcdf
+endif

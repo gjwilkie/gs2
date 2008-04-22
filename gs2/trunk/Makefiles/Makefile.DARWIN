@@ -1,6 +1,8 @@
 # OS: Mac OS X
 
-PLATFORM_LINKS=darwin
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS=darwin
+endif
 
 ifdef STATIC
 # Mac OS X does not support static linking

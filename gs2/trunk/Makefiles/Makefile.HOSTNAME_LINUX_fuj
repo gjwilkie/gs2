@@ -1,7 +1,19 @@
 # Host: unknown (used to be known as CPU=LINUX_fuj)
-include Makefile.fuj
-FC = mpif90
-PLATFORM_LINKS = linux_fuj
 
-NETCDF_LIB = -L/usr/local/lib -lnetcdf
-FFT_LIB = -L/u/bdorland/fftw/lib -lfftw -lrfftw
+COMPILER=fuj
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = linux_fuj
+endif
+
+include Makefile.$(COMPILER)
+
+FC = mpif90
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = -L/u/bdorland/fftw/lib -lfftw -lrfftw
+endif
+
+ifdef USE_NETCDF
+	NETCDF_LIB = -L/usr/local/lib -lnetcdf
+endif

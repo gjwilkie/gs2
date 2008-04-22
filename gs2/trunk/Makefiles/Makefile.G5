@@ -1,7 +1,7 @@
-# System: NERSC IBM p575 POWER 5 System
+# System: G5 
 
 ifeq ($(PROJECT),gs2)
 	PLATFORM_LINKS = ibm
 endif
 
-CHIP=power5
+CHIP=g5

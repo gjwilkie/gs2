@@ -2,7 +2,9 @@
 
 FC = 
 F90FLAGS = --dbl --ml cdecl
-F90FLAGS_real_double_promote = --quad $(F90FLAGS)
+ifeq ($(PROJECT),gs2)
+	F90FLAGS_real_double_promote = --quad $(F90FLAGS)
+endif
 
 ifdef STATIC
 	F90FLAGS += --staticlink
