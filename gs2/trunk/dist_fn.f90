@@ -1801,7 +1801,7 @@ contains
     call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
     call hyper_diff (gnew, g0, phinew, bparnew)
     call kill (gnew, g0, phinew, bparnew)
-    call solfp1 (gnew, g, g0, phi, bpar, phinew, bparnew, modep)   !! BUGS IN SOLFP1 B/C phi, phinew misused?
+    call solfp1 (gnew, g, g0, phi, bpar, phinew, bparnew, istep, modep)   !! BUGS IN SOLFP1 B/C phi, phinew misused?
     
     if (def_parity) then
        if (even) then
@@ -2604,9 +2604,10 @@ contains
     end if
 
 !! added 4.13.08 -- MAB
-    if (.not.kperiod_flag .and. il == ng2+1) then
-       gnew(ntgr,2,iglo) = ainv(ntgr,iglo)*source(ntgr,2)
-    end if
+! think this is wrong -- MAB (4.16.08)
+!    if (.not.kperiod_flag .and. il == ng2+1) then
+!       gnew(ntgr,2,iglo) = ainv(ntgr,iglo)*source(ntgr,2)
+!    end if
 
     ! time advance vpar < 0 inhomogeneous part
     do ig = ntgr-1, ntgl, -1
@@ -3046,6 +3047,7 @@ contains
           end do
        end do
     end do
+
     call integrate_moment (g0, ntot)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -5229,7 +5231,6 @@ contains
     use le_grids, only: integrate_test, integrate_species
     use le_grids, only: eint_error, trap_error, lint_error
     use le_grids, only: ng2, nlambda, negrid, new_trap_int, jend
-    use egrid, only: x0
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky, aky, akx
     use species, only: nspec, spec
@@ -5828,7 +5829,7 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx, ie_idx
     use gs2_layouts, only: idx_local, proc_id
     use le_grids, only: al, e, forbid, negrid, nlambda
-    use egrid, only: zeroes, x0
+!    use egrid, only: zeroes, x0
     use theta_grid, only: bmax, bmag
     use gs2_time, only: user_time
     use dist_fn_arrays, only: g, gnew
@@ -5846,13 +5847,15 @@ contains
     if (.not. allocated(xpts)) allocate(xpts(negrid))
     if (.not. allocated(ypts)) allocate(ypts(nlambda))
 
+    ! should really just get rid of xpts and ypts
     if (first) then
-       xpts(1:negrid-1) = zeroes
-       xpts(negrid) = x0
+!       xpts(1:negrid-1) = zeroes
+!       xpts(negrid) = x0
+       xpts = 0.0
        ypts = 0.0
-       do il=1,nlambda
-          if (1.0-al(il)*bmax .gt. 0.0) ypts(il) = sqrt(1.0-al(il)*bmax)
-       end do
+!       do il=1,nlambda
+!          if (1.0-al(il)*bmax .gt. 0.0) ypts(il) = sqrt(1.0-al(il)*bmax)
+!       end do
     end if
 
     if (proc0) then

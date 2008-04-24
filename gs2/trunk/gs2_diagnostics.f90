@@ -113,7 +113,7 @@ contains
     use gs2_heating, only: init_htype,init_dvtype
     use collisions, only: collision_model_switch, init_lorentz_error
     use mp, only: broadcast, proc0
-    use le_grids, only: init_weights
+    use le_grids, only: init_weights, uniform_egrid
 
     implicit none
     logical, intent (in) :: list
@@ -178,6 +178,7 @@ contains
 
 ! initialize weights for less accurate integrals used
 ! to provide an error estimate for v-space integrals (energy and untrapped)
+!    if (write_verr .and. .not.uniform_egrid .and. proc0) call init_weights
     if (write_verr .and. proc0) call init_weights
 
 ! allocate heating diagnostic data structures
@@ -239,6 +240,7 @@ contains
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
     use mp, only: proc0
+    use le_grids, only: uniform_egrid
     use constants
     implicit none
     logical, intent (in) :: list
@@ -257,6 +259,7 @@ contains
           call open_output_file (heat_unit2, ".heat2")
        end if
 
+!       if (write_verr .and. write_ascii .and. .not.uniform_egrid) then
        if (write_verr .and. write_ascii) then
           call open_output_file (res_unit, ".vres")
           call open_output_file (lpc_unit, ".lpc")
@@ -489,7 +492,7 @@ contains
     use theta_grid, only: drhodpsi, qval, shape
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, aky_out, akx_out, aky, akx
     use le_grids, only: nlambda, negrid, fcheck, al, delal
-    use le_grids, only: e, dele
+    use le_grids, only: e, dele, uniform_egrid
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn, only: getan, get_epar, getmoms, par_spectrum, lambda_flux
     use dist_fn, only: e_flux
@@ -548,6 +551,7 @@ contains
     phi0 = 1.
 
     if (proc0) then
+!       if (write_ascii .and. write_verr .and. .not.uniform_egrid) then
        if (write_ascii .and. write_verr) then
           call close_output_file (res_unit)
           call close_output_file (lpc_unit)
@@ -1276,7 +1280,7 @@ contains
     use gs2_io, only: nc_loop_movie
     use gs2_layouts, only: yxf_lo
     use gs2_transforms, only: init_transforms, transform2
-    use le_grids, only: nlambda
+    use le_grids, only: nlambda, uniform_egrid
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
     use gs2_flux, only: check_flux
@@ -1408,6 +1412,7 @@ contains
     end if
 
     if (write_max_verr) write_verr = .true.
+!    if (write_verr .and. .not.uniform_egrid .and. write_mod == 0) then
     if (write_verr .and. write_mod == 0) then
 
        allocate(errest(5,2), erridx(5,3))
@@ -2024,7 +2029,6 @@ contains
 
     if (write_cerr) call collision_error(phinew,bparnew,last,istep)
 
-
     if (write_stress) then
        call get_stress (rstress, ustress)
        if (proc0) call nc_loop_stress(nout, rstress, ustress)
@@ -2052,7 +2056,7 @@ contains
                 tpar00(it, is)   = sum( tpar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
                 tperp00(it, is)  = sum(tperp(-ntg_out:ntg_out,it,1,is)*dl_over_b)
 
-                if (test_conserve) then
+                if (test_conserve .and. allocated(ntot_diff)) then
                    ntdiff(is) = sum(ntot_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
                    upadiff(is) = sum(upar_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
                    upediff(is) = sum(uperp_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
@@ -2061,11 +2065,11 @@ contains
              end do
           end do
           
-          if (test_conserve) then
+          if (test_conserve .and. allocated(ntot_diff)) then
              if (nspec == 1) then
-                write (out_unit, *) 'moms', real(ntdiff(1)),  &
-                     aimag(upadiff(1)), real(upediff(1)), aimag(upediff(1)), &
-                     real(ttdiff(1)), aimag(uperp_diff(0,1,1,1)), aimag(upar_diff(0,1,1,1))
+                write (out_unit, *) 'moms', real(ntdiff(1)), aimag(ntdiff(1)), &
+                     real(upadiff(1)), aimag(upadiff(1)), real(upediff(1)), aimag(upediff(1)), &
+                     real(ttdiff(1)), aimag(ttdiff(1))
              else
                 write (out_unit, *) 'moms', real(ntdiff(1)), real(ntdiff(2)), &
                      aimag(upadiff(1)), aimag(upadiff(2)), real(ttdiff(1)), real(ttdiff(2))
@@ -2167,6 +2171,7 @@ contains
     if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) &
          call flush_output_file (out_unit, ".out")
 
+!    if (write_ascii .and. write_verr .and. .not.uniform_egrid .and. mod(nout, 10) == 0 .and. proc0) &
     if (write_ascii .and. write_verr .and. mod(nout, 10) == 0 .and. proc0) &
          call flush_output_file (res_unit, ".vres")
 

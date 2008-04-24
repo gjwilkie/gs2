@@ -21,7 +21,7 @@ program gs2
 
   implicit none
   real :: time_init = 0., time_advance = 0., time_finish = 0., time_total
-  integer :: istep, istep_end, unit, istatus
+  integer :: istep = 0, istep_end, unit, istatus
   logical :: exit, reset, list
   character (500), target :: cbuff
 
