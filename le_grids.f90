@@ -104,13 +104,16 @@ contains
 
   end subroutine init_egrid
 
-  subroutine setegrid (Ecut, negrid, epts, wgts)
+! TEMP FOR TESTING -- MAB
+  subroutine setegrid (Ecut, negrid, epts, wgts, emin)
 
     use legendre, only: nrgauleg
     implicit none
     
     integer, intent (in) :: negrid
     real, intent (in) :: ecut
+! TEMP FOR TESTING -- MAB
+    real, intent (in), optional :: emin
     real, dimension(:), intent (out) :: epts, wgts
     integer :: ie, np
  
@@ -120,34 +123,121 @@ contains
 
     call init_egrid (negrid)
     
-    if (Ecut > 20.0) then
-! should go to runname.error?
-       write (*,*) 'E -> x transformation is not numerically correct for such a large Ecut'
-       write (*,*) 'x(E=20) =', xgrid(20.), ' is too close to 1.0'
-    end if
-    
     np = negrid-1
     
-    x0 = xgrid(ecut)      ! function xgrid_s (single element)
-    
-    call nrgauleg(0., x0, zeroes, wgts(1:np))!, eps**1.5)
-    
-    do ie=1,np
-       epts(ie) = energy(zeroes(ie), Ecut)
-    end do
+    ! TEMP FOR TESTING -- MAB    
+    if (present(emin)) then
 
-    epts(np+1) = ecut
-    wgts(np+1) = 1.-x0
-    
-    if (wgts(negrid) > wgts(np)) then
-       write (*,*) 'WARNING: weight at ecut: ', wgts(negrid)
-       write (*,*) 'WARNING: is larger than the one at lower grid: ', wgts(np)
-       write (*,*) 'WARNING: Recommend using fewer energy grid points'
-       if (ecut < 20.0) &
-            & write (*,*) 'WARNING: or you should increase ecut (<= 20)'
+       call uniformx (emin, ecut, epts, wgts)
+       zeroes = sqrt(epts(:np))
+       x0 = sqrt(ecut)
+
+    else
+
+       if (Ecut > 20.0) then
+          ! should go to runname.error?
+          write (*,*) 'E -> x transformation is not numerically correct for such a large Ecut'
+          write (*,*) 'x(E=20) =', xgrid(20.), ' is too close to 1.0'
+       end if
+
+       x0 = xgrid(ecut)      ! function xgrid_s (single element)
+
+       call nrgauleg(0., x0, zeroes, wgts(1:np))!, eps**1.5)
+
+       do ie=1,np
+          epts(ie) = energy(zeroes(ie), Ecut)
+       end do
+
+       epts(np+1) = ecut
+       wgts(np+1) = 1.-x0
+
+       if (wgts(negrid) > wgts(np)) then
+          write (*,*) 'WARNING: weight at ecut: ', wgts(negrid)
+          write (*,*) 'WARNING: is larger than the one at lower grid: ', wgts(np)
+          write (*,*) 'WARNING: Recommend using fewer energy grid points'
+          if (ecut < 20.0) &
+               & write (*,*) 'WARNING: or you should increase ecut (<= 20)'
+       end if
+
     end if
 
   end subroutine setegrid
+
+  ! TEMP FOR TESTING -- MAB
+  subroutine uniformx (emin, ecut, ee, ww)
+    
+    implicit none
+
+    real, intent (in) :: emin, ecut
+    real, dimension (:), intent (out) :: ee, ww
+
+    integer :: ix, nx
+    real :: xcut, xmin, dx, fac
+    double precision :: pi
+    real, dimension (:), allocatable :: aa, bb, cc, xx
+
+    pi = asin(real(1.0,kind(pi)))*2.0
+    nx = size(ee)
+
+    allocate (aa(nx), bb(nx), cc(nx), xx(nx))
+
+    xcut = sqrt(ecut)
+    xmin = sqrt(emin)
+    dx = (xcut-xmin)/(nx-1)
+    fac = .125/dx**2
+    xmin = min(xmin, dx)
+
+    do ix = 1, nx
+       xx(ix) = xmin + (ix-1)*dx
+    end do
+
+    do ix = 3, nx-2
+       bb(ix) = fac*(2.*exp(-xx(ix+1)**2)*(3.*dx-xx(ix)+exp(4.*dx*xx(ix)) &
+            * (3.*dx+xx(ix)))/sqrt(pi) - (2.*xx(ix+1)*xx(ix-1) + 3.) &
+            * (erf(xx(ix+1)) - erf(xx(ix-1))))
+    end do
+
+    do ix = 4, nx-1
+       cc(ix) = 0.5*fac*(exp(-xx(ix)**2)*2.*(xx(ix-1)-exp(4.*dx*xx(ix-1)) &
+            * xx(ix) - dx*(5.+4.*dx*xx(ix)))/sqrt(pi) + (3. + 2.*xx(ix-2)*xx(ix-1)) &
+            * (erf(xx(ix)) - erf(xx(ix-2))))
+    end do
+
+    do ix = 2, nx-3
+       aa(ix) = 0.5*fac*(exp(-xx(ix+2)**2)*2.*(xx(ix)-exp(4.*dx*xx(ix+1)) &
+            * (dx*(5.-4.*dx*xx(ix))+xx(ix+1)))/sqrt(pi) + (3.+2.*xx(ix+1)*xx(ix+2)) &
+            * (erf(xx(ix+2)) - erf(xx(ix))))
+    end do
+
+    ! dealing with lower boundary
+    cc(1) = 0.0
+    bb(1) = 0.25/(sqrt(pi)*dx)*(exp(-xx(2)**2)*2.-2.+sqrt(pi)*xx(2)*erf(xx(2)))
+    aa(1) = 0.5*fac/sqrt(pi)*(exp(-xx(3)**2)*2.*xx(1)-4.*(xx(3)+xx(2)) &
+         + sqrt(pi)*(3. + 2.*xx(2)*xx(3))*erf(xx(3)))
+    bb(2) = fac/sqrt(pi)*(exp(-xx(3)**2)*(6.*dx-2.*xx(2)) &
+         + 8.*xx(2) - sqrt(pi)*(3.+2.*xx(1)*xx(3))*erf(xx(3)))
+    cc(2) = 0.25/(sqrt(pi)*dx)*(-2.*exp(-xx(2)**2)*(1.+dx*xx(2)) + 2.-sqrt(pi)*xx(1)*erf(xx(2)))
+    cc(3) = 0.5*fac/sqrt(pi)*(exp(-xx(3)**2)*2.*(xx(2)-dx*(5.+4.*dx*xx(3))) &
+         + 4.*dx - 8.*xx(2) + sqrt(pi)*(3.+2.*xx(1)*xx(2))*erf(xx(3)))
+  
+    ! dealing with upper boundary
+    aa(nx) = 0.0
+    bb(nx) = 0.25/dx*(2.*exp(-xx(nx-1)**2)/sqrt(pi)-xx(nx-1)*(1.-erf(xx(nx-1))))
+    aa(nx-1) = 0.25/dx*(2.*(xx(nx-1)*dx-1.)*exp(-xx(nx-1)**2)/sqrt(pi) &
+         + xx(nx)*(1.-erf(xx(nx-1))))
+    aa(nx-2) = 0.5*fac*(-2.*exp(-xx(nx-2)**2)*(dx*(5.-4.*dx*xx(nx-2))+xx(nx-1))/sqrt(pi) &
+         + (3.+2.*xx(nx-1)*xx(nx))*(1.-erf(xx(nx-2))))
+    bb(nx-1) = fac*(2.*exp(-xx(nx-2)**2)*(3.*dx+xx(nx-1))/sqrt(pi) &
+         - (3. + 2.*xx(nx-2)*xx(nx))*(1.-erf(xx(nx-2))))
+    cc(nx) = -0.5*fac*(2.*exp(-xx(nx-2)**2)*xx(nx)/sqrt(pi) &
+         - (3.+2.*xx(nx-1)*xx(nx-2))*(1.-erf(xx(nx-2))))
+    
+    ww = (aa+bb+cc)*0.5
+    ee = xx**2
+
+    deallocate (aa, bb, cc, xx)
+
+  end subroutine uniformx
 
   function energy (xeval, ecut)
     real, intent (in) :: xeval, ecut
@@ -275,9 +365,14 @@ contains
     do k = 0, kmax
        denom = denom * (1.5+k)
        xg = xg + e**(1.5+k) / denom
+! TEMP FOR TESTING -- MAB
+!       denom = denom * (1.0+k)
+!       xg = xg + e**(1.0+k) / denom
     end do
 
     xgrid_s = xg * exp(-e) * 2. / sqrt(pi)
+! TEMP FOR TESTING -- MAB
+!    xgrid_s = xg * exp(-e)
 
   end function xgrid_s
 
@@ -294,6 +389,7 @@ contains
 
     pi = asin(1.0) * 2.0
     xgrid_prime = exp(-e) * sqrt(e) * 2. / sqrt(pi)
+!    xgrid_prime = exp(-e)
 
   end function xgrid_prime
 
@@ -331,8 +427,8 @@ module le_grids
   public :: e, anon, al, delal, jend, forbid, dele, wl, w
   public :: negrid, nlambda, ng2, lmax, integrate_moment
   public :: geint2g, gint2g, orbit_avg, xloc
-  public :: fcheck
-  public :: xx, nterp, testfac, new_trap_int, ecut
+  public :: fcheck, uniform_egrid ! TEMP FOR TESTING -- MAB
+  public :: xx, nterp, testfac, new_trap_int, ecut, emin ! TEMP FOR TESTING -- MAB
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
   public :: eint_error, lint_error, trap_error, integrate_test
 
@@ -358,6 +454,7 @@ module le_grids
  ! knobs
   integer :: ngauss, negrid, nesuper, nesub
   real :: ecut, bouncefuzz
+  real :: emin ! TEMP FOR TESTING -- MAB
 
   integer :: nlambda, ng2, lmax
   logical :: accel_x = .false.
@@ -365,6 +462,7 @@ module le_grids
   logical :: test = .false.
   logical :: trapped_particles = .true.
   logical :: advanced_egrid = .true.
+  logical :: uniform_egrid = .false.  ! TEMP FOR TESTING -- MAB
   logical :: new_trap_int = .true.
 
   integer :: testfac = 1
@@ -437,6 +535,7 @@ contains
     call broadcast (nesuper)
     call broadcast (nesub)
     call broadcast (ecut)
+    call broadcast (emin) ! TEMP FOR TESTING -- MAB
     call broadcast (bouncefuzz)
     call broadcast (nlambda)
     call broadcast (ng2)
@@ -446,6 +545,7 @@ contains
     call broadcast (nmax)
     call broadcast (trapped_particles)
     call broadcast (advanced_egrid)
+    call broadcast (uniform_egrid) ! TEMP FOR TESTING -- MAB
     call broadcast (wgt_fac)
     call broadcast (new_trap_int)
     call broadcast (nterp)
@@ -506,7 +606,8 @@ contains
     logical :: exist
     namelist /le_grids_knobs/ ngauss, negrid, ecut, bouncefuzz, &
          nesuper, nesub, test, trapped_particles, advanced_egrid, &
-         testfac, nmax, wgt_fac, new_trap_int, nterp
+         testfac, nmax, wgt_fac, new_trap_int, nterp, &
+         emin, uniform_egrid ! TEMP FOR TESTING -- MAB
 
 ! New default scheme: advanced_egrid is default, and user should set 
 ! negrid (as in the original code)
@@ -522,6 +623,7 @@ contains
     ngauss = 5
     negrid = -10
     ecut = 6.0  ! new default value for advanced scheme
+    emin = 0.01  ! TEMP FOR TESTING -- MAB
     bouncefuzz = 1e-5
     in_file=input_unit_exist("le_grids_knobs", exist)
     if (exist) read (unit=input_unit("le_grids_knobs"), nml=le_grids_knobs)
@@ -1267,9 +1369,6 @@ contains
        is = is_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        fac = weights(is)*w(ie,is)
-
-! MUST COMMENT IMMEDIATELY AFTER TESTING
-!       wl(:,:ng2) = 0.0
 
 !       do ig=-ntgrid,ntgrid
 !          if (.not. forbid(ig,il)) then
@@ -2670,13 +2769,26 @@ contains
           end if
        end do
        
-    else
+    else if (uniform_egrid) then
 
-       call setegrid (ecut, negrid, e(:,1), w(:,1))
+       call setegrid (ecut, negrid, e(:,1), w(:,1), emin)
+
        do is = 2, nspec
           e(:,is) = e(:,1)
           w(:,is) = w(:,1)
        end do
+
+       anon = 1.0
+
+    else
+
+       call setegrid (ecut, negrid, e(:,1), w(:,1))
+
+       do is = 2, nspec
+          e(:,is) = e(:,1)
+          w(:,is) = w(:,1)
+       end do
+
        w = 0.25*w
        anon = 1.0
 
