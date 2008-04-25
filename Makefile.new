@@ -228,11 +228,6 @@ DEFAULT_LIB=$(foreach tmplib,$(DEFAULT_LIB_LIST),$(shell [ -d $(tmplib) ] && ech
 
 ######################################################### MODULE DECLARATIONS
 
-# this should be removed. use command_line_nag, instead. (RN)
-ifeq ($(CPU),LINUX)
-	GS2MOD += nag_args.o
-endif
-
 ifeq ($(PROJECT),gs2)
 LINKS_gs2 = \
 	command_line.f90 mp.f90 shmem.f90 prof.f90 redistribute.f90 ran.f90 \
@@ -437,14 +432,14 @@ check.o: run_parameters.o
 ifeq ($(PROJECT),gs2)
 depend:
 	@$(MAKE) -C $(TOPDIR) $(PLATFORM_LINKS)
-	@$(DEPEND_CMD) -d $(DEPEND) -1 -o $(VPATH)
+	@$(DEPEND_CMD) -f $(DEPEND) -1 -o $(VPATH)
 else
 depend:
-	@$(DEPEND_CMD) -m "$(MAKE)" -d $(DEPEND) -1 -o $(VPATH)
+	@$(DEPEND_CMD) -m "$(MAKE)" -f $(DEPEND) -1 -o $(VPATH)
 endif
 
 clean:
-	-rm -f *.o *.mod *.g90 .h core */core
+	-rm -f *.o *.mod *.g90 *.h core */core
 
 distclean: unlink clean
 	-rm -f $(PROJECT)
@@ -472,12 +467,20 @@ tar_gs2:
 
 tar_agk:
 	@echo $(PROJECT)_$(DATE) > .package
-	@-rm -rf `cat .package`
-	@mkdir `cat .package`
-	@ln *.f90 *.fpp *.c makehead.awk test_os Makefile AstroGK.in \
-	 README* `cat .package`
-	tar cvf - `cat .package` | bzip2 -9 > `cat .package`.tar.bz2
-	@rm -rf `cat .package` .package
+	@if [ -d "`cat .package`" ]; then \
+	  echo ERROR: directory `cat .package` exits.  Stop. ;\
+	  exit ;\
+  	else \
+	  rm -rf `cat .package` ;\
+	  mkdir `cat .package` `cat .package`/Makefiles ;\
+	  for name in *.f90 *.fpp *.c makehead.awk test_os AstroGK.in \
+		Makefile Makefile.{new,depend} Makefiles/* ;\
+	  do ( ln $$name `cat .package`/$$name ; ) ;\
+	  done ;\
+	  echo tar cvf - `cat .package` \| bzip2 -9 \> `cat .package`.tar.bz2;\
+	  tar cvf - `cat .package` | bzip2 -9 > `cat .package`.tar.bz2 ;\
+	  rm -rf `cat .package` .package ;\
+	fi
 
 test_make:
 	@echo SYSTEM is $(SYSTEM)
