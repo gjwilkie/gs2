@@ -454,10 +454,10 @@ INGENMOD= constants.o mp.o gs2_layouts.o command_line.o \
 
 EGRIDMOD = $(UTILS)/spl.o constants.o
 
-ifeq ($(CPU),LINUX)
-  GS2MOD += nag_args.o
-  mp.o: nag_args.o
-endif
+#ifeq ($(CPU),LINUX)
+#  GS2MOD += nag_args.o
+#  mp.o: nag_args.o
+#endif
 
 # ifneq ($(loc),mit) 
 #	GS2MOD += utils/mdslib.o 
