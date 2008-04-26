@@ -432,10 +432,10 @@ check.o: run_parameters.o
 ifeq ($(PROJECT),gs2)
 depend:
 	@$(MAKE) -C $(TOPDIR) $(PLATFORM_LINKS)
-	@$(DEPEND_CMD) -f $(DEPEND) -1 -o $(VPATH)
+	@$(DEPEND_CMD) -1 -o -v=0 $(VPATH)
 else
 depend:
-	@$(DEPEND_CMD) -m "$(MAKE)" -f $(DEPEND) -1 -o $(VPATH)
+	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=0 $(VPATH)
 endif
 
 clean:
