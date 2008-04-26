@@ -3,12 +3,12 @@
 #
 om_mod = \
 	 command_line.o \
-	 om.f90 
+	 om.o 
 
 eiktest_mod = \
 	 deq.o \
 	 eeq.o \
-	 et.f90 \
+	 et.o \
 	 geometry.o \
 	 geq.o \
 	 ideq.o \
@@ -32,7 +32,7 @@ ingen_mod = \
 	 geq.o \
 	 gridgen4mod.o \
 	 ideq.o \
-	 ingen.f90 \
+	 ingen.o \
 	 leq.o \
 	 mds.o \
 	 mp.o \
@@ -48,14 +48,14 @@ ingen_mod = \
 
 hrate_mod = \
 	 command_line.o \
-	 hrate.f90 
+	 hrate.o 
 
 kp_mod = \
 	 command_line.o \
-	 kpar.f90 
+	 kpar.o 
 
 drive_mod = \
-	 drive.f90 \
+	 drive.o \
 	 regression.o 
 
 rungridgen_mod = \
@@ -63,7 +63,7 @@ rungridgen_mod = \
 	 file_utils.o \
 	 gridgen4mod.o \
 	 mp.o \
-	 rungridgen.f90 \
+	 rungridgen.o \
 	 spl.o 
 
 gs2_mod = \
@@ -88,7 +88,7 @@ gs2_mod = \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
-	 gs2.f90 \
+	 gs2.o \
 	 gs2_diagnostics.o \
 	 gs2_flux.o \
 	 gs2_heating.o \
@@ -125,11 +125,11 @@ gs2_mod = \
 	 veq.o 
 
 regressp_mod = \
-	 regress.f90 \
+	 regress.o \
 	 regression.o 
 
 ball_mod = \
-	 ball.f90 \
+	 ball.o \
 	 deq.o \
 	 eeq.o \
 	 geometry.o \
