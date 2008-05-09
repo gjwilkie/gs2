@@ -456,7 +456,7 @@ tar_gs2:
 	@for dir in utils geo Makefiles ;\
 	do ( mkdir `cat .package`/$$dir ; ) ;\
 	done
-	@for name in *.f90 test_os Makefile Makefile.* \
+	@for name in *.f90 test_os Makefile Makefile.{new,depend} \
 		utils/*.f90 utils/Makefile \
 		geo/*.f90 geo/Makefile \
 		Makefiles/*; \
