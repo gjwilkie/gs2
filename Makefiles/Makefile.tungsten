@@ -1,4 +1,5 @@
 # Host: tungsten at NCSA (Xeon cluster)
+# TT: Can't compile any more for broken ifort?
 
 COMPILER=intel
 CHIP=xeon
@@ -18,6 +19,6 @@ ifeq ($(USE_FFT),fftw)
 endif
 
 ifdef USE_NETCDF
-	NETCDF_INC = -I/u/ac/aschekoc/tatsuno/libs/netcdf-3.6.2/include
-	NETCDF_LIB = -L/u/ac/aschekoc/tatsuno/libs/netcdf-3.6.2/lib -lnetcdf
+	NETCDF_INC = -I/u/ac/tatsuno/libs/netcdf-3.6.2/include
+	NETCDF_LIB = -L/u/ac/tatsuno/libs/netcdf-3.6.2/lib -lnetcdf
 endif

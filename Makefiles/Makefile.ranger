@@ -1,6 +1,6 @@
 # Host: ranger at TACC (Sun Constellation Linux cluster with opteron)
 
-COMPILER=ifort
+COMPILER=intel
 ifdef TACC_FFTW2_DIR
 	USE_FFT = fftw
 else
