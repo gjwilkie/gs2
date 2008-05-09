@@ -365,14 +365,9 @@ contains
     do k = 0, kmax
        denom = denom * (1.5+k)
        xg = xg + e**(1.5+k) / denom
-! TEMP FOR TESTING -- MAB
-!       denom = denom * (1.0+k)
-!       xg = xg + e**(1.0+k) / denom
     end do
 
     xgrid_s = xg * exp(-e) * 2. / sqrt(pi)
-! TEMP FOR TESTING -- MAB
-!    xgrid_s = xg * exp(-e)
 
   end function xgrid_s
 
@@ -463,7 +458,7 @@ module le_grids
   logical :: trapped_particles = .true.
   logical :: advanced_egrid = .true.
   logical :: uniform_egrid = .false.  ! TEMP FOR TESTING -- MAB
-  logical :: new_trap_int = .true.
+  logical :: new_trap_int = .false.
 
   integer :: testfac = 1
   integer :: nmax = 500
@@ -2985,7 +2980,7 @@ contains
           forbid(ig,il) = 1.0 - al(il)*bmag(ig) < -bouncefuzz
        end do
     end do
-    
+
     call init_orbit_average
 
   end subroutine lgridset

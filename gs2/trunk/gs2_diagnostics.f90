@@ -1270,7 +1270,7 @@ contains
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
     use collisions, only: ncheck, vnmult, vary_vnew
-    use collisions, only: ntot_diff, upar_diff, uperp_diff, ttot_diff
+!    use collisions, only: ntot_diff, upar_diff, uperp_diff, ttot_diff
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
@@ -1315,7 +1315,7 @@ contains
     integer :: ig, ik, it, is, unit, il, i, j, nnx, nny, ifield, write_mod
     complex :: phiavg, sourcefac
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
-         upar, tpar, tperp, upartot, ttot
+         upar, tpar, tperp, upartot, uperptot, ttot
     complex, dimension (ntheta0, nspec) :: ntot00, density00, upar00, tpar00, tperp00
     complex, dimension (ntheta0, nspec) :: upartot00, ttot00
     complex, dimension (ntheta0, nspec) :: rstress, ustress
@@ -2040,7 +2040,7 @@ contains
 
        call getmoms (phinew, ntot, density, upar, tpar, tperp)
 
-!       if (test_conserve) call gettotmoms (phinew, bparnew, ntot, upartot, ttot)
+       if (test_conserve) call gettotmoms (phinew, bparnew, ntot, upartot, uperptot, ttot)
 
        if (proc0) then
           allocate (dl_over_b(-ntg_out:ntg_out))
@@ -2052,27 +2052,32 @@ contains
              do it = 1, ntheta0
                 ntot00(it, is)   = sum( ntot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
                 density00(it,is) = sum(density(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                upar00(it, is)   = sum( upar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                tpar00(it, is)   = sum( tpar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                tperp00(it, is)  = sum(tperp(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+!                upar00(it, is)   = sum( upar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                upar00(it, is)   = sum( upartot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+!                tpar00(it, is)   = sum( tpar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                tpar00(it, is)   = sum( ttot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+!                tperp00(it, is)  = sum(tperp(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                tperp00(it, is)  = sum(uperptot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
 
-                if (test_conserve .and. allocated(ntot_diff)) then
-                   ntdiff(is) = sum(ntot_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
-                   upadiff(is) = sum(upar_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
-                   upediff(is) = sum(uperp_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
-                   ttdiff(is) = sum(ttot_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
-                end if
+!                if (test_conserve .and. allocated(ntot_diff)) then
+!                   ntdiff(is) = sum(ntot_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
+!                   upadiff(is) = sum(upar_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
+!                   upediff(is) = sum(uperp_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
+!                   ttdiff(is) = sum(ttot_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
+!                end if
              end do
           end do
           
-          if (test_conserve .and. allocated(ntot_diff)) then
+!          if (test_conserve .and. allocated(ntot_diff)) then
+          if (test_conserve) then
              if (nspec == 1) then
-                write (out_unit, *) 'moms', real(ntdiff(1)), aimag(ntdiff(1)), &
-                     real(upadiff(1)), aimag(upadiff(1)), real(upediff(1)), aimag(upediff(1)), &
-                     real(ttdiff(1)), aimag(ttdiff(1))
+                write (out_unit, *) 'moms', real(ntot00(1,1)), aimag(upar00(1,1)), real(tperp00(1,1)), real(tpar00(1,1))
+!                write (out_unit, *) 'moms', real(ntdiff(1)), aimag(ntdiff(1)), &
+!                     real(upadiff(1)), aimag(upadiff(1)), real(upediff(1)), aimag(upediff(1)), &
+!                     real(ttdiff(1)), aimag(ttdiff(1))
              else
-                write (out_unit, *) 'moms', real(ntdiff(1)), real(ntdiff(2)), &
-                     aimag(upadiff(1)), aimag(upadiff(2)), real(ttdiff(1)), real(ttdiff(2))
+!                write (out_unit, *) 'moms', real(ntdiff(1)), real(ntdiff(2)), &
+!                     aimag(upadiff(1)), aimag(upadiff(2)), real(ttdiff(1)), real(ttdiff(2))
              end if
           end if
 
