@@ -1801,7 +1801,7 @@ contains
     call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
     call hyper_diff (gnew, g0, phinew, bparnew)
     call kill (gnew, g0, phinew, bparnew)
-    call solfp1 (gnew, g, g0, phi, bpar, phinew, bparnew, istep, modep)   !! BUGS IN SOLFP1 B/C phi, phinew misused?
+    call solfp1 (gnew, g, g0, phi, bpar, phinew, bparnew, modep)   !! BUGS IN SOLFP1 B/C phi, phinew misused?
     
     if (def_parity) then
        if (even) then
@@ -2590,6 +2590,8 @@ contains
     if (il == ng2+1) then
 !! changed 4.13.08 -- MAB
 !!       g1(ntgl,1) = wfb  ! wfb should be unity here; variable is for testing
+!! reverted 5.9.08 -- MAB
+       g1(ntgl,1) = wfb  ! wfb should be unity here; variable is for testing
        g1(ntgr,2) = wfb  ! wfb should be unity here; variable is for testing
     end if
 
@@ -2602,12 +2604,6 @@ contains
           if (forbid(ig+1,il).and..not.forbid(ig,il)) g2(ig,2) = 1.0
        end do
     end if
-
-!! added 4.13.08 -- MAB
-! think this is wrong -- MAB (4.16.08)
-!    if (.not.kperiod_flag .and. il == ng2+1) then
-!       gnew(ntgr,2,iglo) = ainv(ntgr,iglo)*source(ntgr,2)
-!    end if
 
     ! time advance vpar < 0 inhomogeneous part
     do ig = ntgr-1, ntgl, -1
@@ -2640,11 +2636,12 @@ contains
        end do
     end if
 
-!! added 4.13.08 -- MAB
-    if (.not. kperiod_flag .and. il == ng2+1) then
-       g1(ntgl,1) = g1(ntgl,2)
-       gnew(ntgl,1,iglo) = gnew(ntgl,2,iglo)
-    end if
+!! removed 5.9.08 -- MAB
+!! added 4.13.08 to treat wfb as trapped at ends but not in middle wells -- MAB
+!    if (.not. kperiod_flag .and. il == ng2+1) then
+!       g1(ntgl,1) = g1(ntgl,2)
+!       gnew(ntgl,1,iglo) = gnew(ntgl,2,iglo)
+!    end if
        
     ! time advance vpar > 0 inhomogeneous part
     if (il <= lmax) then
@@ -2697,6 +2694,9 @@ contains
 !!!
 !!       else if (il == ng2 + 1) then
 !!         call self_periodic
+!! reverted 5.9.08 -- MAB
+       else if (il == ng2 + 1) then
+          call self_periodic
        end if
 
     end if
@@ -2716,18 +2716,15 @@ contains
        end do
     end if
 
-!! added 4.13.08 -- MAB
-    if (.not.kperiod_flag .and. il == ng2+1) then
-       beta1 = (gnew(ntgr,1,iglo) - gnew(ntgr,2,iglo))/(1.0 - g1(ntgr,1))
-       do ig = ntgr, ntgl, -1
-          gnew(ig,1,iglo) = gnew(ig,1,iglo) + beta1*g1(ig,1)
-          gnew(ig,2,iglo) = gnew(ig,2,iglo) + beta1*g1(ig,2)
-       end do
-
-!       do ig = ntgl, ntgr
-!          write (*,*) ie, ig, real(gnew(ig,1,iglo)), aimag(gnew(ig,1,iglo)), real(gnew(ig,2,iglo)), aimag(gnew(ig,2,iglo))
+!! removed 5.9.08 to regain consistency with linked case -- MAB
+!! added 4.13.08 to treat wfb as trapped between ends but not middle wells -- MAB
+!    if (.not.kperiod_flag .and. il == ng2+1) then
+!       beta1 = (gnew(ntgr,1,iglo) - gnew(ntgr,2,iglo))/(1.0 - g1(ntgr,1))
+!       do ig = ntgr, ntgl, -1
+!          gnew(ig,1,iglo) = gnew(ig,1,iglo) + beta1*g1(ig,1)
+!          gnew(ig,2,iglo) = gnew(ig,2,iglo) + beta1*g1(ig,2)
 !       end do
-    end if
+!    end if
 
     if (def_parity) then
        if (even) then
@@ -3097,20 +3094,20 @@ contains
     call prof_leaving ("getmoms", "dist_fn")
   end subroutine getmoms
 
-  subroutine gettotmoms (phi, bpar, ntot, upar, ttot)
-    use dist_fn_arrays, only: vpa, vperp2, aj0, gnew
-    use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
+  subroutine gettotmoms (phi, bpar, ntot, upar, uperp, ttot)
+    use dist_fn_arrays, only: vpa, vperp2, aj0, gnew, aj1, kperp2
+    use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx, il_idx
     use species, only: nspec, spec
-    use theta_grid, only: ntgrid
-    use le_grids, only: integrate_moment, anon, e
+    use theta_grid, only: ntgrid, bmag
+    use le_grids, only: integrate_moment, anon, e, al
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, &
-         upar, ttot
+         upar, uperp, ttot
 
-    integer :: ik, it, isgn, ie, is, iglo, ig
+    integer :: ik, it, isgn, ie, is, iglo, ig, il
 
 ! returns moment integrals to PE 0
     call prof_entering ("gettotmoms", "dist_fn")
@@ -3128,19 +3125,14 @@ contains
        end do
     end do
 
-!    call g_adjust (gnew, phi, bpar, fphi, fbpar)
-
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
           do ig=-ntgrid, ntgrid
              g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) + g0(ig,isgn,iglo)
-!             g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)
           end do
        end do
     end do
     call integrate_moment (g0, ntot)
-
-!    call g_adjust (gnew, phi, bpar, -fphi, -fbpar)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ie = ie_idx(g_lo,iglo)
@@ -3153,7 +3145,6 @@ contains
     end do
 
     call integrate_moment (g0, ttot)
-!    ttot = ttot - ntot
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
@@ -3165,9 +3156,26 @@ contains
 
     call integrate_moment (g0, upar)
 
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+             g0(ig,isgn,iglo) = aj1(ig,iglo)*e(ie,is)*al(il)*gnew(ig,isgn,iglo) &
+                  * spec(is)%smz * sqrt(kperp2(ig,it,ik) / bmag(ig))
+          end do
+       end do
+    end do
+
+    call integrate_moment (g0, uperp)
+
     do is=1,nspec
        ntot(:,:,:,is)=ntot(:,:,:,is)*spec(is)%dens
        upar(:,:,:,is)=upar(:,:,:,is)*spec(is)%stm
+       uperp(:,:,:,is)=uperp(:,:,:,is)*spec(is)%stm
        ttot(:,:,:,is)=ttot(:,:,:,is)*spec(is)%temp
     end do
 
