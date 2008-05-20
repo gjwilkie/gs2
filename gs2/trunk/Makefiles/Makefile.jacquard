@@ -23,7 +23,7 @@ endif
 
 include Makefile.$(COMPILER)
 
-ifdef MPI
+ifdef USE_MPI
 	FC = mpif90
 	CC = mpicc
 endif

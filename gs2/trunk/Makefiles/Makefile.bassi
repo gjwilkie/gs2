@@ -30,7 +30,7 @@ endif
 
 include Makefile.$(COMPILER)
 
-ifdef MPI
+ifdef USE_MPI
 	FC = mpxlf90_r
 	CC = mpcc_r
 endif

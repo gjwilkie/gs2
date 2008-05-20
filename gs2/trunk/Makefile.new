@@ -48,16 +48,16 @@ PROJECT ?= gs2
 DEBUG ?=
 # turns on test mode (bin)
 TEST ?=
-# turns on profile mode (bin)
+# turns on profile mode (gprof,ipm)
 PROF ?=
 # optimization (on,aggressive,undefined)
 OPT ?= on
 # prevents linking with shared libraries (bin)
 STATIC ?=
-# turns on distributed memory parallelization using MPI (bin)
-MPI ?= on
 # promotes precisions of real and complex (bin)
 DBLE ?= on
+# turns on distributed memory parallelization using MPI (bin)
+USE_MPI ?= on
 # which FFT library to use (fftw,undefined) 
 USE_FFT ?= fftw
 # uses netcdf library (new,old,undefined)
@@ -84,7 +84,10 @@ USE_NR_RAN ?=
 # These variables can be set in platform-dependent Makefile.
 #
 
-MAKE = make -f Makefile.new
+MAKE = make
+ifeq ($(PROJECT),gs2)
+	MAKE = make -f Makefile.new
+endif
 CPP = cpp
 CPPFLAGS = -C -P -traditional
 FC = f90
@@ -116,10 +119,18 @@ NETCDF_INC =
 NETCDF_LIB =
 HDF5_INC =
 HDF5_LIB =
+IPM_LIB =
 
 PLATFORM_LINKS ?= undefined
 
 ######################################################### PLATFORM DEPENDENCE
+
+# compile mode switches (DEBUG, TEST, PROF, OPT, STATIC, DBLE)
+# must be set before loading Makefile.$(SYSTEM) because they may affect
+# compiler options.
+# However, Makefile.local may override some options set in Makefile.$(SYSTEM),
+# thus it is included before and after Makefile.$(SYSTEM)
+sinclude Makefile.local
 
 # include system-dependent make variables
 sinclude Makefile.$(SYSTEM)
@@ -132,13 +143,18 @@ sinclude Makefile.local
 UTILS=utils
 GEO=geo
 
+ifeq ($(MAKECMDGOALS),depend)
+# must invoke full functionality when make depend
+	MAKE = make USE_HDF5=on USE_FFT=fftw USE_NETCDF=new USE_MPI=on
+endif
+
 ifdef TEST
 $(warning TEST mode is not working yet)
 endif
 
 ifdef USE_HDF5
-	ifndef MPI
-$(error Currently, USE_HDF5 works with MPI)
+	ifndef USE_MPI
+$(error Currently, USE_HDF5 works with USE_MPI)
 	endif
 endif
 ifeq ($(PROJECT),gs2) 
@@ -155,7 +171,7 @@ $(error USE_NETCDF cannot be off for gs2)
 	endif
 endif
 
-ifdef MPI
+ifdef USE_MPI
 	CPPFLAGS += -DMPI
 endif
 ifeq ($(USE_FFT),fftw)
@@ -172,7 +188,7 @@ ifdef USE_NETCDF
 	NETCDF_LIB ?= -lnetcdf
 endif
 ifdef USE_HDF5
-	ifdef MPI
+	ifdef USE_MPI
 		FC = h5pfc
 	endif
 	CPPFLAGS += -DHDF
@@ -184,12 +200,17 @@ ifdef USE_NR_RAN
 	CPPFLAGS += -DUSE_NR_RAN
 endif
 
-LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB)
+LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
+		$(IPM_LIB)
+#LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
 	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
 CFLAGS += $(COPTFLAGS)
 
-DATE=$(shell date +%D | sed 's/\///g')
+# TT> format changed to yymmdd
+#DATE=$(shell date +%D | sed 's/\///g')
+DATE=$(shell date +%y%m%d)
+# <TT
 TOPDIR=$(CURDIR)
 ifeq ($(notdir $(CURDIR)), $(UTILS))
 	TOPDIR=$(subst /$(UTILS),,$(CURDIR))
@@ -211,7 +232,7 @@ ifdef SUBDIR
 endif
 DEPEND=Makefile.depend
 PERL_CMD=perl
-DEPEND_CMD=fortdep
+DEPEND_CMD=$(PERL_CMD) fortdep
 
 # most common include and library directories
 DEFAULT_INC_LIST = . $(UTILS) $(GEO) .. ../$(UTILS) ../$(GEO) \
@@ -294,6 +315,12 @@ gs2.x: $(gs2_mod)
 
 agk_all: agk
 
+ifeq ($(PROJECT),agk)
+ifdef USE_C_INDEX
+astrogk_mod += agk_layouts_indices.o
+endif
+endif
+
 agk: $(astrogk_mod) 
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
@@ -307,6 +334,9 @@ rungridgen: $(rungridgen_mod)
 	$(LD) $(LDFLAGS) -o $@ $^
 
 regress: $(drive_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+slice_g: $(slice_g_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 # libraries and functions in subdirectories:
@@ -434,7 +464,7 @@ depend:
 	@$(MAKE) -C $(TOPDIR) $(PLATFORM_LINKS)
 	@$(DEPEND_CMD) -1 -o -v=0 $(VPATH)
 else
-depend:
+depend:	
 	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=0 $(VPATH)
 endif
 
@@ -446,6 +476,7 @@ distclean: unlink clean
 	-rm -f *.a
 	-rm -f ingen rungridgen regress
 	-rm -f ball eiktest
+	-rm -f slice_g
 
 tar: tar_$(PROJECT)
 
@@ -456,7 +487,7 @@ tar_gs2:
 	@for dir in utils geo Makefiles ;\
 	do ( mkdir `cat .package`/$$dir ; ) ;\
 	done
-	@for name in *.f90 test_os Makefile Makefile.{new,depend} \
+	@for name in *.f90 test_os Makefile Makefile.* \
 		utils/*.f90 utils/Makefile \
 		geo/*.f90 geo/Makefile \
 		Makefiles/*; \
@@ -469,12 +500,11 @@ tar_agk:
 	@echo $(PROJECT)_$(DATE) > .package
 	@if [ -d "`cat .package`" ]; then \
 	  echo ERROR: directory `cat .package` exits.  Stop. ;\
-	  exit ;\
-  	else \
+	else \
 	  rm -rf `cat .package` ;\
 	  mkdir `cat .package` `cat .package`/Makefiles ;\
-	  for name in *.f90 *.fpp *.c makehead.awk test_os AstroGK.in \
-		Makefile Makefile.{new,depend} Makefiles/* ;\
+	  for name in *.f90 *.fpp *.inc *.c makehead.awk test_os fortdep \
+		AstroGK.in Makefile Makefile.depend Makefiles/* ;\
 	  do ( ln $$name `cat .package`/$$name ; ) ;\
 	  done ;\
 	  echo tar cvf - `cat .package` \| bzip2 -9 \> `cat .package`.tar.bz2;\
@@ -495,10 +525,10 @@ test_make:
 	@echo  PROF is $(PROF)
 	@echo  OPT is $(OPT)
 	@echo  STATIC is $(STATIC)
+	@echo  DBLE is $(DBLE)
 	@echo
 	@echo Functions:
-	@echo  MPI is $(MPI)
-	@echo  DBLE is $(DBLE)
+	@echo  USE_MPI is $(USE_MPI)
 	@echo  USE_FFT is $(USE_FFT)
 	@echo  USE_NETCDF is $(USE_NETCDF)
 	@echo  USE_HDF5 is $(USE_HDF5)

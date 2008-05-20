@@ -6,7 +6,7 @@ include Makefile.BLUEGENE
 
 include Makefile.xl
 
-ifdef MPI
+ifdef USE_MPI
 	FC = mpif90.ibm
 	CC = mpcc_r
 endif

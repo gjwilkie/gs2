@@ -3,7 +3,7 @@
 FC = ifort
 CC = icc
 F90FLAGS +=
-CPPFLAGS += -DCL=_UNIX_ -DFILE=_PORT_
+CPPFLAGS += -DFCOMPILER=_INTEL_
 
 ifdef DBLE
 	ifeq ($(PROJECT),agk)
@@ -58,7 +58,7 @@ else
 		endif
 	endif
 
-	ifdef PROF
+	ifeq ($(findstring gprof,$(PROF)),gprof)
 		F90FLAGS += -pg
 		CFLAGS += -pg
 	endif

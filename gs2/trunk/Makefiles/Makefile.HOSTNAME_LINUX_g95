@@ -3,7 +3,7 @@
 COMPILER=gnu-g95
 
 ifeq ($(PROJECT),gs2)
-	override MPI=
+	override USE_MPI=
 endif
 
 include Makefile.LINUX

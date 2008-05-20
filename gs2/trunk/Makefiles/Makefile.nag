@@ -3,7 +3,7 @@
 
 FC = f95
 F90FLAGS = -mismatch 
-CPPFLAGS += -DCL=_NAG_ -DNO_SIZEOF
+CPPFLAGS += -DFCOMPILER=_NAG_ -DNO_SIZEOF
 
 include Makefile.gnu-gcc
 
@@ -30,7 +30,7 @@ else
 		F90OPTFLAGS += -O4 
 	endif
 
-	ifdef PROF
+	ifeq ($(findstring gprof,$(PROF)),gprof)
 		F90FLAGS += -pg
 	endif
 endif

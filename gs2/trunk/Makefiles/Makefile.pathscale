@@ -2,8 +2,8 @@
 
 FC = pathf90
 CC = pathcc
-F90FLAGS +=
-CPPFLAGS +=
+F90FLAGS += -intrinsic=G77
+CPPFLAGS += -DFCOMPILER=_PATHSCALE_
 
 ifeq ($(PROJECT),gs2)
 # this is to avoid confliction with intrinsic kill
@@ -29,7 +29,7 @@ else
 		COPTFLAGS += -O3
 	endif
 
-	ifdef PROF
+	ifeq ($(findstring gprof,$(PROF)),gprof)
 		F90FLAGS += -pg
 		CFLAGS += -pg
 	endif
