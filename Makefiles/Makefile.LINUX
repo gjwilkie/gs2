@@ -1,7 +1,7 @@
 # OS: Linux
 
 ifeq ($(PROJECT),gs2)
-	ifdef MPI
+	ifdef USE_MPI
 		PLATFORM_LINKS=linux
 	else
 		PLATFORM_LINKS=linux_nomp

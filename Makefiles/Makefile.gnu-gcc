@@ -12,7 +12,7 @@ else
 		COPTFLAGS += -O3
 	endif
 
-	ifdef PROF
+	ifeq ($(findstring gprof,$(PROF)),gprof)
 		CFLAGS += -pg
 	endif
 endif

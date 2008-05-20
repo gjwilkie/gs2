@@ -9,7 +9,7 @@ FC = xlf90_r
 CC = xlc_r
 F90FLAGS += -qsuffix=f=f90
 CFLAGS += -DNO_UNDERSCORE
-CPPFLAGS += -DCL=_UNIX_ -DFILE=_XLF_
+CPPFLAGS += -DFCOMPILER=_XL_
 
 ifeq ($(CHIP),power5)
 	F90FLAGS += -q64
@@ -74,7 +74,7 @@ else
 		endif
 	endif
 
-	ifdef PROF
+	ifeq ($(findstring gprof,$(PROF)),gprof)
 		F90FLAGS += -pg
 		CFLAGS += -pg
 	endif

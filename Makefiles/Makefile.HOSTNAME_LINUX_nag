@@ -4,14 +4,14 @@
 COMPILER=nag
 
 ifeq ($(PROJECT),gs2)
-	override MPI=on
+	override USE_MPI=on
 endif
 
 include Makefile.LINUX
 
 include Makefile.$(COMPILER)
 
-ifdef MPI
+ifdef USE_MPI
 	FC = mpif90
 	MPI_INC = -I/opt/mpich.gccf95-2/include
 endif

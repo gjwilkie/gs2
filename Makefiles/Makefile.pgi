@@ -3,7 +3,19 @@
 FC=pgf90
 CC=pgcc
 F90FLAGS +=
-CPPFLAGS += -DCL=_UNIX_ -DFILE=_PORT_
+CPPFLAGS += -DFCOMPILER=_PGI_
+
+v1:=$(shell pgf90 -V | grep pgf90 | awk '{print $$2}')
+v2:=$(shell echo $(v1) | awk -F. '{print $$2}')
+PGIMAJORVERSION=$(shell echo $(v1) | awk -F. '{print $$1}')
+PGIMINORVERSION=$(shell echo $(v2) | awk -F- '{print $$1}')
+PGIMINORSUBVERSION=$(shell echo $(v2) | awk -F- '{print $$2}')
+
+# sizeof is implemented from ver. 7.1
+NOSIZEOF=$(shell [ $(PGIMAJORVERSION) -le 6 -o \( $(PGIMAJORVERSION) -eq 7 -a $(PGIMINORVERSION) -lt 1 \) ] && echo on)
+ifeq ($(NOSIZEOF),on) # this cannot be replaced by ifdef
+	CPPFLAGS += -DNO_SIZEOF
+endif
 
 ifdef DBLE
 	F90FLAGS += -r8
@@ -26,7 +38,7 @@ else
 		COPTFLAGS += -O3 -fastsse
 	endif
 
-	ifdef PROF
+	ifeq ($(findstring gprof,$(PROF)),gprof)
 		F90FLAGS += -pg
 		CFLAGS += -pg
 	endif

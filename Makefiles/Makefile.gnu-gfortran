@@ -3,7 +3,7 @@
 FC = gfortran
 CC = gcc
 F90FLAGS += -ffree-line-length-none
-CPPFLAGS += -DCL=_GFORTRAN_ -DFILE=_GNU_ -DNO_SIZEOF
+CPPFLAGS += -DFCOMPILER=_GFORTRAN_ -DNO_SIZEOF
 
 ifdef DBLE
 	F90FLAGS += -fdefault-real-8
@@ -24,7 +24,7 @@ else
 		COPTFLAGS += -O3
 	endif
 
-	ifdef PROF
+	ifeq ($(findstring gprof,$(PROF)),gprof)
 		F90FLAGS += -pg
 		CFLAGS += -pg
 	endif

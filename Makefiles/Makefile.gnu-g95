@@ -3,7 +3,7 @@
 FC = g95
 CC = gcc
 F90FLAGS += -ffree-line-length-huge
-CPPFLAGS += -DCL=_UNIX_ -DFILE=_PORT_
+CPPFLAGS += -DFCOMPILER=_G95_
 
 ifdef DBLE
 	F90FLAGS += -r8
@@ -14,7 +14,7 @@ ifdef STATIC
 endif
 
 ifdef DEBUG
-	F90FLAGS += -g -Wall -fimplicit-none -fbounds-check
+	F90FLAGS += -g -Wall -fimplicit-none -fbounds-check -ftrace=full
 	F90OPTFLAGS =
 	CFLAGS += -g -Wall -fbounds-check
 	COPTFLAGS =
@@ -24,7 +24,7 @@ else
 		COPTFLAGS += -O3
 	endif
 
-	ifdef PROF
+	ifeq ($(findstring gprof,$(PROF)),gprof)
 		F90FLAGS += -pg
 		CFLAGS += -pg
 	endif

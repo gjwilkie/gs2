@@ -10,7 +10,7 @@ endif
 
 include Makefile.$(COMPILER)
 
-ifdef MPI
+ifdef USE_MPI
 	FC = cmpif90c
 endif
 
@@ -19,6 +19,6 @@ ifeq ($(USE_FFT),fftw)
 endif
 
 ifdef USE_NETCDF
-	NETCDF_INC = -I/u/ac/tatsuno/libs/netcdf-3.6.2/include
-	NETCDF_LIB = -L/u/ac/tatsuno/libs/netcdf-3.6.2/lib -lnetcdf
+	NETCDF_INC = -I/u/ac/aschekoc/tatsuno/libs/netcdf-3.6.2/include
+	NETCDF_LIB = -L/u/ac/aschekoc/tatsuno/libs/netcdf-3.6.2/lib -lnetcdf
 endif

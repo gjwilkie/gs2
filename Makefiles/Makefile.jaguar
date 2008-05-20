@@ -1,17 +1,17 @@
 # Host: jaguar at ORNL (Cray XT4)
 
 COMPILER=pgi
-ifdef FFTW
+ifdef FFTW_DIR
 	USE_FFT = fftw
 else
 	override USE_FFT =
 endif
-ifdef NETCDF
+ifdef NETCDF_DIR
 	USE_NETCDF = new
 else
 	override USE_NETCDF =
 endif
-ifdef HDF5
+ifdef HDF5_DIR
 	USE_HDF5 = on
 else
 	override USE_HDF5 =
