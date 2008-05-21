@@ -179,15 +179,24 @@ contains
   subroutine get_unused_unit (unit)
     implicit none
     integer, intent (out) :: unit
-    character(20) :: read, write, readwrite
+! TT>
+!    character(20) :: read, write, readwrite
+    logical :: od
+! <TT
     unit = 50
     do
-       inquire (unit=unit, read=read, write=write, readwrite=readwrite)
-       if (read == "UNKNOWN" .and. write == "UNKNOWN" &
-            .and. readwrite == "UNKNOWN") &
-       then
-          return
-       end if
+! TT>
+!       inquire (unit=unit, read=read, write=write, readwrite=readwrite)
+!       if (read == "UNKNOWN" .and. write == "UNKNOWN" &
+!            .and. readwrite == "UNKNOWN") &
+!       then
+!          return
+!       end if
+       ! TT: Can we do the same thing like this?
+       ! TT: The above fails in gfortran/g95.
+       inquire (unit=unit, opened=od)
+       if (.not.od) return
+! <TT
        unit = unit + 1
     end do
   end subroutine get_unused_unit
