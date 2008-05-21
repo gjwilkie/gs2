@@ -193,7 +193,7 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use theta_grid, only: nperiod, shat
     use init_g, only: init_g_k0 => k0
-    use text_options
+    use text_options, only: text_option, get_option_value
     use species, only: nspec
     use mp, only: proc0, broadcast
     implicit none

@@ -30,7 +30,7 @@ program ingen
   use mp, only: init_mp, finish_mp
   use constants 
   use file_utils
-  use text_options
+  use text_options, only: text_option, get_option_value
   implicit none
   
   character (100) :: pythonin

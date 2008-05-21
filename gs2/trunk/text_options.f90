@@ -1,5 +1,8 @@
 module text_options
   implicit none
+  private
+  public :: text_option
+  public :: get_option_value
 
   integer, parameter :: maxlen = 30
 

@@ -81,7 +81,7 @@ contains
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
-    use text_options
+    use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     implicit none
     type (text_option), dimension (4), parameter :: fieldopts = &
