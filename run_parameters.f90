@@ -58,7 +58,7 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use mp, only: proc0, broadcast
     use gs2_save, only: init_dt, init_vnm
-    use text_options
+    use text_options, only: text_option, get_option_value
     implicit none
     type (text_option), dimension (3), parameter :: deltopts = &
          (/ text_option('default', delt_option_hand), &

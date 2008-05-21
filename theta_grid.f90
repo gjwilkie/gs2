@@ -240,7 +240,7 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use theta_grid_params, only: shift_in => shift, alpmhd
-    use text_options
+    use text_options, only: text_option, get_option_value
     implicit none
 
     character(20) :: model_option

@@ -45,7 +45,7 @@ contains
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, get_indexed_namelist_unit, input_unit_exist
-    use text_options
+    use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     implicit none
     real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h

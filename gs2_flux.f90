@@ -65,7 +65,7 @@ contains
   
   subroutine read_parameters 
     use mp
-    use text_options
+    use text_options, only: text_option, get_option_value
     use file_utils, only: input_unit, run_name, input_unit_exist, error_unit
     use file_utils, only: get_indexed_namelist_unit
     use species, only: nspec
