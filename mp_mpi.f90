@@ -15,7 +15,7 @@ module mp
   public :: nproc, iproc, proc0, job
   public :: send, receive
   public :: barrier
-  public :: scope, allprocs, subprocs
+!RN  public :: scope, allprocs, subprocs
   public :: init_jobs
 
   integer, pointer :: nproc
@@ -984,6 +984,9 @@ contains
 
 !let all processors have the group0 array
     call broadcast (group0)
+
+!RN
+    call scope (subprocs)
 
   end subroutine init_jobs
 

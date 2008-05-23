@@ -157,18 +157,21 @@ contains
 
   end subroutine init_run_name
 
-  subroutine init_job_name (njobs, group0, job_list)
-    use command_line
-    use mp
+!  subroutine init_job_name (njobs, group0, job_list)
+  subroutine init_job_name (jobname)
+!    use command_line
+!    use mp
     implicit none
-    integer, intent (in) :: njobs
-    integer, intent (in), dimension(0:) :: group0
-    character (len=500), dimension(0:) :: job_list
+!    integer, intent (in) :: njobs
+!    integer, intent (in), dimension(0:) :: group0
+!    character (len=500), dimension(0:) :: job_list
+    character (len=500), intent(in) :: jobname
     logical :: err = .true., inp = .true.
-    integer :: i
+!    integer :: i
 
-    call scope (subprocs)
-    job_name = trim(job_list(job))
+!    call scope (subprocs)
+!    job_name = trim(job_list(job))
+    job_name = trim(jobname)
     run_name => job_name
 
     call init_error_unit (err)
