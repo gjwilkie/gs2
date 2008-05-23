@@ -562,7 +562,8 @@ contains
 
     integer :: i, j, init, ndum, nhb, nwb, ierr
     
-    integer :: mdsopen, mdsconnect, boo
+!    integer :: mdsopen, mdsconnect, boo
+    integer :: boo
 
     data init /1/
     save init

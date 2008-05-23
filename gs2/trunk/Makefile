@@ -557,6 +557,8 @@ ifeq ($(CPU),RS6000)
 
 le_grids.o: le_grids.f90
 	$(FC) $(F90FLAGS) -qautodbl=dbl -c le_grids.f90
+constants.o: constants.f90
+	$(FC) $(F90FLAGS) -qautodbl=dbl -c constants.f90
 endif
 
 #
