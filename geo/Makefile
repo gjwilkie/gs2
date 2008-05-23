@@ -434,7 +434,7 @@ et.o: geometry.o
 ball.o: geometry.o 
 
 peq.o geq.o: $(UTILDIR)/utils.a
-veq.o: $(UTILDIR)/utils.a vdimstub.o 
+veq.o: $(UTILDIR)/utils.a vdimstub.o
 eeq.o: $(UTILDIR)/utils.a
 deq.o: $(UTILDIR)/utils.a
 ideq.o: $(UTILDIR)/utils.a

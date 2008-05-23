@@ -548,7 +548,8 @@ contains
 !     zhei       total height of domain
 !
     use splines, only: fitp_surf1, fitp_surf2, inter_cspl
-    use mdsio, only: mds_read 
+    use mdsio, only: mds_read
+    use mdslib, only: mdsopen, mdsconnect, mdsclose
     implicit none
 
     integer, intent (in) :: shotnum, initeq, big
