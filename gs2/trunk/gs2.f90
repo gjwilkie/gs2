@@ -1,6 +1,7 @@
 program gs2
   use mp, only: init_mp, finish_mp, proc0, iproc, nproc, broadcast, init_jobs
-  use mp, only: scope, allprocs, subprocs, send, receive, barrier, job
+!  use mp, only: scope, allprocs, subprocs, send, receive, barrier, job
+  use mp, only: send, receive, barrier, job
   use file_utils, only: init_file_utils, finish_file_utils, run_name, list_name
   use fields, only: init_fields
   use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
@@ -193,7 +194,8 @@ contains
     allocate (group0(0:njobs-1))
 
     call init_jobs (njobs, group0, ierr)
-    call init_job_name (njobs, group0, job_list)
+!    call init_job_name (njobs, group0, job_list)
+    call init_job_name (job_list(job))
 
     if (nproc > 1 .and. proc0) &
          & write(*,*) 'Job ',job,' is called ',trim(run_name),&
