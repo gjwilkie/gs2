@@ -1,28 +1,40 @@
-function mdsopen (c,int )
-  integer :: mdsopen
-  character*1 :: c
-  integer :: int
+! RN 2008/05/22: modularized
+! this is only used in geo/eeq.f90
+! I don't understand what this is doing
+module mdslib
+  implicit none
+  private
+  public :: mdsopen, mdsconnect, mdsclose
 
-  mdsopen = 1
+contains
 
-end function mdsopen
+  function mdsopen (c,int )
+    integer :: mdsopen
+    character*1 :: c
+    integer, optional :: int
 
-function mdsconnect (c, int)
-  integer :: mdsconnect
-  character*1 :: c
-  integer :: int
+    mdsopen = 1
 
-  mdsconnect = 1
+  end function mdsopen
 
-end function mdsconnect
+  function mdsconnect (c, int)
+    integer :: mdsconnect
+    character*1 :: c
+    integer, optional :: int
 
-function mdsclose (c, int)
-  integer :: mdsclose
-  character*1 :: c
-  integer :: int
+    mdsconnect = 1
 
-  mdsclose = 1
+  end function mdsconnect
 
-end function mdsclose
+!  function mdsclose (c, int)
+  subroutine mdsclose (c, int)
+!    integer :: mdsclose
+    character*1 :: c
+    integer :: int
 
+!    mdsclose = 1
 
+!  end function mdsclose
+  end subroutine mdsclose
+
+end module mdslib

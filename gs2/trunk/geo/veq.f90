@@ -43,7 +43,7 @@ module veq
   real :: vr_max, vRmag, vz_max, vZmag, vavgrmid
   real :: vB_T, R_0, Z_0, vI_0, vp_0
   real, allocatable, dimension (:) :: rho_d, qsf, fp, psi_bar, beta, pressure, cur, eqpsi, &
-	vdvdrho, varea
+       vdvdrho, varea
   real, allocatable, dimension (:,:,:) :: drm, dzm, dpm, dtm, dbm
   real, allocatable, dimension (:,:,:) :: dpcart, dtcart, dbcart
   real, allocatable, dimension (:,:,:) :: dpbish, dtbish, dbbish

@@ -463,7 +463,8 @@ EGRIDMOD = $(UTILS)/spl.o constants.o
 #	GS2MOD += utils/mdslib.o 
 # endif
 
-LINKS= command_line.f90 mp.f90 shmem.f90 prof.f90 redistribute.f90 ran.f90 gs2_layouts.f90 \
+LINKS= file_utils.f90 command_line.f90 mp.f90 shmem.f90 prof.f90 \
+	redistribute.f90 ran.f90 gs2_layouts.f90 \
 	gs2_save.f90 gs2_transforms.f90 fft_work.f90 $(UTILS)/mds.f90 check.f90
 
 ######################################################################## RULES
