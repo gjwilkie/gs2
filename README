@@ -1,0 +1,112 @@
+This text explains how to make agk/gs2. (2008/05/05 RN)
+
+* Compile
+
+You must set two environment variables to compile agk/gs2: SYSTEM and MAKEFLAGS.
+Since system-specific settings are written in Makefiles/Makefile.$(SYSTEM),
+you should specify what system you are on. Officially supported common systems
+are franklin, bassi, jacquard (NERSC), ranger (TACC), tungsten (NCSA),
+and jaguar (ORNL).
+
+And, to load Makefile.$(SYSTEM) in Makefiles/ directory, you must tell "make" 
+command that you need to include some files in Makefiles/ directory. This can 
+be done by command line option
+
+ # make -IMakefiles
+
+or, alternatively, use MAKEFLAGS environment variable to give "-I" option.
+
+Those environment variables can be set in your .cshrc or .bashrc. Add the 
+following,
+
+(tcsh)
+ # setenv MAKEFLAGS -IMakefiles
+ # setenv SYSTEM 'your system'
+
+(bash)
+ # export MAKEFLAGS=-IMakefiles
+ # export SYSTEM='your system'
+
+For utils and geo directories in gs2, do as follows,
+
+ # make -I.. -I../Makefiles
+
+or
+ # setenv MAKEFLAGS "-IMakefiles -I.. -I../Makefiles" (tcsh)
+ # export MAKEFLAGS="-IMakeflags -I.. -I../Makefiles" (bash)
+
+After setting those environment variable, you just type "make" to get an
+executable. The default target is automatically chosen depending on 
+where you are making. Other common targets are,
+test_make, clean, distclean, tar, and depend.
+
+We have prepared some compile-time switches. To invoke them, add SWITCH=value
+to your make command. For example, if you want to invoke DEBUG flags,
+ 
+ # make DEBUG=on
+
+Following is the full list of switches:
+ DEBUG (defined [undefined]): turns on debug mode
+ TEST (defined [undefined]): turns on test mode (not working yet)
+ PROF (gprof,ipm [undefined]): turns on profiling mode
+			       can set gprof and ipm at the same time
+			       ipm is working on limited system. if not
+			       supported this option is simply ignored
+ OPT (defined,aggressive [defined]): optimization
+ STATIC (defined, [undefined]): prevents linking with shared libraries
+ DBLE (defined [defined]): promotes precisions of real and complex
+ USE_MPI (defined [defined]): turns on distributed memory parallelization
+			      with MPI
+ USE_FFT (fftw [fftw]): FFT library to use
+ USE_NETCDF (new,old [new]): NETCDF library to use
+ USE_HDF5 (defined [undefined]): use HDF5 library or no
+ USE_C_INDEX (defined [undefined]): use function pointer
+ USE_NR_RAN (defined [undefined]): use Numerical Recipes' local random 
+ 	    	     		   number generator
+
+Values that each switches takes are shown in the bracket, where
+"defined" ("undefined") means whether the switch is defined (or not),
+but not having that value. (Technically speaking, ifdef statement is 
+used in the makefile.) Thus, note that DEBUG=off means DEBUG is defined
+because this flag is just checked if it is defined or not. Be careful!
+
+In the square bracket, default values in the main makefile (Makefile)
+are given. Some of those default values are overwritten depending on
+hosts, compilers, and also environment variables. This implies that,
+for some systems where "module" is provided, those default values are 
+set properly depending on what modules are loaded.
+
+See also README.cpp for some switches.
+
+Note for GS2: cpp options and some other options are currently not available.
+
+* Porting
+
+Users of a new system needs to prepare Makefile.$(SYSTEM) in Makefiles/
+directory. SYSTEM can be whatever you like, but we recommend to use hostname.
+In this file, most simply, you just needs to set your compiler
+and to include your compiler's setting as written in Makefile.simple.
+If you want to get parallelized version, override FC by mpif90 etc after
+loading Makefile.$(COMPILER). You may also want to set libraries places.
+Define FFT_INC, FFT_LIB, NETCDF_INC, NETCDF_LIB etc in this file.
+Write other your host's specific setting if necessary.
+
+Makefile.local is another recommended file to write your local settings.
+This file is always included if exists.
+
+* Dependency
+
+The dependency list is given in Makefile.depend, which is auto-generated
+by the depend target using the perl script "fortdep". The script is
+distributed for developers convenience. Users do not need to reconstruct
+it.
+
+* TODO
+
+1. auto detection of the system for common system (like test_os script)
+2. Makefile.HOSTNAME_* are probably host-specific setting extracted from
+   old makefile. If still used, give nice names, otherwise, remove them.
+3. all PLATFORM_LINKS related work-arounds makes the file ugly.
+   can be removed by using preprocessor.
+4. most of gs2 specific setting can be avoidable after rewriting the code
+   appropriately.
