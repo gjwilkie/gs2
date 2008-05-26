@@ -394,12 +394,14 @@ geo_obj = geometry.o geq.o veq.o eeq.o peq.o leq.o deq.o ideq.o
 
 all:	mods geo.a eiktest ball
 
-geo.a: $(stubs) $(geo_obj) 
+geo.a: $(stubs) $(geo_obj)
 	$(AR) rc $@ $(geo_obj) $(stubs)
 	$(RANLIB) $@
 
 clean:
 	rm -f *.o *~ geometry.a *.tmp *.mod *.trace core eiktest
+distclean:
+	-rm ball eiktest
 
 configure: configure.in
 	autoconf --local=config
@@ -473,3 +475,4 @@ test_make:
 	@echo debug is $(debug)
 	@echo CPU is $(CPU)
 
+$(UTILDIR)/utils.a: mods
