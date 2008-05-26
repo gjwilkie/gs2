@@ -37,3 +37,7 @@ ifdef USE_NETCDF
 	NETCDF_INC = -I/usr/local/include/netcdf 
 	NETCDF_LIB = -L/usr/local/lib -lnetcdf
 endif
+
+ifeq ($(findstring ipm,$(PROF)),ipm)
+	IPM_LIB = -L$(HOME)/src/ipm/lib -lipm
+endif
