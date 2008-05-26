@@ -370,6 +370,7 @@ utils.a: $(util_obj)
 
 mds.o: prec.o
 	$(FC) $(F90FLAGS2) -c prec.f90
+	[ -L mds.f90 ] || ln -f -s mds_io_stub.f90 mds.f90
 	$(FC) $(F90FLAGS2) $(SFLAGS) -c mds.f90
 
 mdslib.a: mdslib.o
@@ -425,3 +426,5 @@ mds.o:
 	$(FC) $(F90FLAGS) -qautodbl=dbl -c mds.f90
 endif
 
+distclean:
+	-rm mds.f90
