@@ -1,0 +1,36 @@
+# Compiler: Pathscale pathf90/pathcc
+
+FC = pathf90
+CC = pathcc
+F90FLAGS += -intrinsic=G77
+CPPFLAGS += -DFCOMPILER=_PATHSCALE_
+
+ifeq ($(PROJECT),gs2)
+# this is to avoid confliction with intrinsic kill
+	F90FLAGS += -no-intrinsic=kill
+endif
+
+ifdef DBLE
+	F90FLAGS += -r8
+endif
+
+ifdef STATIC
+	LDFLAGS += -static
+endif
+
+ifdef DEBUG
+	F90FLAGS += -g -C
+	F90OPTFLAGS =
+	CFLAGS += -g
+	COPTFLAGS =
+else
+	ifdef OPT
+		F90OPTFLAGS += -O3
+		COPTFLAGS += -O3
+	endif
+
+	ifeq ($(findstring gprof,$(PROF)),gprof)
+		F90FLAGS += -pg
+		CFLAGS += -pg
+	endif
+endif

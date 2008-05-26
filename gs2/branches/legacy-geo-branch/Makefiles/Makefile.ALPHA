@@ -1,0 +1,5 @@
+# System: DEC Alpha
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = alpha
+endif

@@ -1,0 +1,22 @@
+# Host: unknown (used to be known as CPU=LINUX_lf95)
+
+COMPILER=lahey
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = linux_lf95
+endif
+
+include Makefile.$(COMPILER)
+
+ifdef USE_MPI
+	FC = mpif90
+	CC = mpicc
+endif
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = -L/usr/local/lib -lfftw -lrfftw
+endif
+
+ifdef USE_NETCDF
+	NETCDF_LIB = -L/usr/local/lib -lnetcdf
+endif

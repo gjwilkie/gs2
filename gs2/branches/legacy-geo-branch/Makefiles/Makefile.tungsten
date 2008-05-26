@@ -1,0 +1,24 @@
+# Host: tungsten at NCSA (Xeon cluster)
+# TT: Can't compile any more for broken ifort?
+
+COMPILER=intel
+CHIP=xeon
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = linux_lf95
+endif
+
+include Makefile.$(COMPILER)
+
+ifdef USE_MPI
+	FC = cmpif90c
+endif
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = -L$$FFTW_HOME/lib -ldrfftw -ldfftw
+endif
+
+ifdef USE_NETCDF
+	NETCDF_INC = -I/u/ac/aschekoc/tatsuno/libs/netcdf-3.6.2/include
+	NETCDF_LIB = -L/u/ac/aschekoc/tatsuno/libs/netcdf-3.6.2/lib -lnetcdf
+endif

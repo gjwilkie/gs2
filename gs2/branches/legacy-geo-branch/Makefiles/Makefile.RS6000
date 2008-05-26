@@ -1,0 +1,7 @@
+# System: NERSC IBM p575 POWER 5 System
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = ibm
+endif
+
+CHIP=power5

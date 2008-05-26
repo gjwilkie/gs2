@@ -1,0 +1,43 @@
+# Host: jacquard at NERSC (Opteron cluster)
+
+COMPILER=pathscale
+ifdef FFTW
+	USE_FFT = fftw
+else
+	override USE_FFT =
+endif
+ifdef NETCDF
+	USE_NETCDF = new
+else
+	override USE_NETCDF =
+endif
+ifdef HDF5
+	USE_HDF5 = on
+else
+	override USE_HDF5 =
+endif
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = jacquard
+endif
+
+include Makefile.$(COMPILER)
+
+ifdef USE_MPI
+	FC = mpif90
+	CC = mpicc
+endif
+
+ifeq ($(USE_FFT),fftw)
+	FFT_INC = $$FFTW
+	ifdef DBLE
+		FFT_LIB = $$FFTW -ldfftw -ldrfftw
+	else
+		FFT_LIB = $$FFTW -lsfftw -lsrfftw
+	endif
+endif
+
+ifdef USE_NETCDF
+	NETCDF_INC = -I$$NETCDF_DIR/include
+	NETCDF_LIB = -L$$NETCDF_DIR/lib -lnetcdf
+endif

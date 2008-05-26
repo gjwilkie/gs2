@@ -1,0 +1,5 @@
+# System: C90/J90
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = c90
+endif

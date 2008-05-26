@@ -1,0 +1,38 @@
+# Host: ranger at TACC (Sun Constellation Linux cluster with opteron)
+
+COMPILER=intel
+ifdef TACC_FFTW2_DIR
+	USE_FFT = fftw
+else
+	override USE_FFT =
+endif
+ifdef TACC_NETCDF_DIR
+	USE_NETCDF = new
+else
+	override USE_NETCDF =
+endif
+#ifdef HDF5
+#	USE_HDF5 = on
+#else
+	override USE_HDF5 =
+#endif
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS =
+endif
+
+include Makefile.$(COMPILER)
+
+ifdef USE_MPI
+	FC=mpif90
+	CC=mpicc
+endif
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = -L$$TACC_FFTW2_LIB -lfftw -lrfftw
+endif
+
+ifdef USE_NETCDF
+	NETCDF_INC = -I$$TACC_NETCDF_INC
+	NETCDF_LIB = -L$$TACC_NETCDF_LIB -lnetcdf
+endif

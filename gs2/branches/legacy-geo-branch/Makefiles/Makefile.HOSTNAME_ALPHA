@@ -1,0 +1,17 @@
+# Host: unknown (used to be known as CPU=ALPHA system)
+
+COMPILER=compaq
+
+include Makefile.ALPHA
+
+include Makefile.$(COMPILER)
+
+FC = f95
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIBS = -L/u/hammett/local/alpha/lib -lfftw -lrfftw
+endif
+
+#	-non_shared -L/usr/local/mdsplus_new/lib -lMdsLib -lMdsShr
+# (use -non_shared because it can't map MdsLib.so at run time for some 
+# reason...)

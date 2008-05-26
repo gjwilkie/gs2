@@ -1,0 +1,19 @@
+# Dorland Desktop
+
+COMPILER=gnu-g95
+
+ifeq ($(PROJECT),gs2)
+	override USE_MPI=
+endif
+
+include Makefile.LINUX
+
+include Makefile.$(COMPILER)
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = -L/usr/local/lib -lrfftw -lfftw
+endif
+
+ifdef USE_NETCDF
+	NETCDF_LIB = -L/usr/local/lib -lnetcdf
+endif

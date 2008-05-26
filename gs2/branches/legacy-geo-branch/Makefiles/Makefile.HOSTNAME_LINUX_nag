@@ -1,0 +1,25 @@
+# Host: unknown (used to be known as CPU=LINUX) 
+# ?? MIT Linux cluster with NAG f95 ??
+
+COMPILER=nag
+
+ifeq ($(PROJECT),gs2)
+	override USE_MPI=on
+endif
+
+include Makefile.LINUX
+
+include Makefile.$(COMPILER)
+
+ifdef USE_MPI
+	FC = mpif90
+	MPI_INC = -I/opt/mpich.gccf95-2/include
+endif
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = -L/usr/local/lib -lfftw -lrfftw
+endif
+
+ifdef USE_NETCDF
+	NETCDF_LIB = -L/usr/local/lib -lnetcdf
+endif

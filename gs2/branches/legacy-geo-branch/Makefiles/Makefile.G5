@@ -1,0 +1,7 @@
+# System: G5 
+
+ifeq ($(PROJECT),gs2)
+	PLATFORM_LINKS = ibm
+endif
+
+CHIP=g5

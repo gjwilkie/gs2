@@ -1,0 +1,42 @@
+# Compiler: NAGWare f95
+# NAG does not provide C compiler, use gcc
+
+FC = f95
+F90FLAGS = -mismatch 
+CPPFLAGS += -DFCOMPILER=_NAG_ -DNO_SIZEOF
+
+include Makefile.gnu-gcc
+
+ifdef DBLE
+	ifeq ($(PROJECT),agk) # for gs2 see below
+		F90FLAGS += -r8
+	endif
+endif
+
+ifdef STATIC
+	LDFLAGS += -Bstatic
+endif
+
+ifdef DEBUG
+	F90FLAGS += -u -nan -C=array -C=bits -C=dangling -C=do \
+			-C=present -C=pointer -gline 
+	F90OPTFLAGS =
+else
+	ifeq ($(PROJECT),agk)
+		F90FLAGS += -w
+	endif
+
+	ifdef OPT
+		F90OPTFLAGS += -O4 
+	endif
+
+	ifeq ($(findstring gprof,$(PROF)),gprof)
+		F90FLAGS += -pg
+	endif
+endif
+
+ifeq ($(PROJECT),gs2)
+	F90FLAGS_no_real_promotion = -w $(F90FLAGS)
+	F90FLAGS_without_minus_w = -r8 $(F90FLAGS)
+	F90FLAGS = -w -r8 $(F90FLAGS)
+endif
