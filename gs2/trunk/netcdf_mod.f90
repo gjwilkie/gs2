@@ -101,7 +101,7 @@ module netcdf_mod
 !######################################################################
 
   use mp, only: proc0, iproc, broadcast
-  use constants
+  use constants, only: kind_rd
   implicit none
   private
   include 'netcdf.inc'
@@ -566,7 +566,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(in) :: var
+    real(kind=kind_rd), intent(in) :: var
     integer :: status
     status = nf_noerr
 
@@ -592,7 +592,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(in), dimension(:) :: var
+    real(kind=kind_rd), intent(in), dimension(:) :: var
     integer :: status
     status = nf_noerr
 
@@ -613,7 +613,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(in), dimension(:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -634,7 +634,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(in), dimension(:,:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -655,7 +655,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(in), dimension(:,:,:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -676,7 +676,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(in), dimension(:,:,:,:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -697,7 +697,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(in), dimension(:,:,:,:,:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:,:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -718,7 +718,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(in), dimension(:,:,:,:,:,:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:,:,:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -989,7 +989,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(out) :: var
+    real(kind=kind_rd), intent(out) :: var
     integer :: status
     status = nf_noerr
 
@@ -1010,7 +1010,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(out), dimension(:) :: var
+    real(kind=kind_rd), intent(out), dimension(:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1031,7 +1031,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(out), dimension(:,:) :: var
+    real(kind=kind_rd), intent(out), dimension(:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1052,7 +1052,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(out), dimension(:,:,:) :: var
+    real(kind=kind_rd), intent(out), dimension(:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1073,7 +1073,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(out), dimension(:,:,:,:) :: var
+    real(kind=kind_rd), intent(out), dimension(:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1094,7 +1094,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(out), dimension(:,:,:,:,:) :: var
+    real(kind=kind_rd), intent(out), dimension(:,:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1115,7 +1115,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(out), dimension(:,:,:,:,:,:) :: var
+    real(kind=kind_rd), intent(out), dimension(:,:,:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1136,7 +1136,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid
-    real(dp), intent(out), dimension(:,:,:,:,:,:,:) :: var
+    real(kind=kind_rd), intent(out), dimension(:,:,:,:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1213,7 +1213,7 @@ contains
     implicit none
     integer, intent(in)  :: ncid, varid
     integer, dimension(:), intent(in) :: start, count
-    real(dp), intent(in), dimension(:) :: var
+    real(kind=kind_rd), intent(in), dimension(:) :: var
 
     integer :: status
     status = nf_noerr
@@ -1238,7 +1238,7 @@ contains
     implicit none
     integer, intent(in)  :: ncid, varid
     integer, intent(in) :: start, count
-    real(dp), intent(in), dimension(:) :: var
+    real(kind=kind_rd), intent(in), dimension(:) :: var
 
     integer :: status
     status = nf_noerr
@@ -1264,7 +1264,7 @@ contains
     integer, intent(in)  :: ncid, varid
     integer, intent(in), dimension(:) :: start
     integer, intent(in) :: count
-    real(dp), intent(in), dimension(:) :: var
+    real(kind=kind_rd), intent(in), dimension(:) :: var
 
     integer :: status
     status = nf_noerr
@@ -1290,7 +1290,7 @@ contains
     integer, intent(in)  :: ncid, varid
     integer, intent(in) :: start
     integer, intent(in), dimension(:) :: count
-    real(dp), intent(in), dimension(:) :: var
+    real(kind=kind_rd), intent(in), dimension(:) :: var
 
     integer :: status
     status = nf_noerr
@@ -1316,7 +1316,7 @@ contains
     integer, intent(in)  :: ncid, varid
     integer, dimension(:), intent(in) :: start, count
 
-    real(dp), intent(in), dimension(:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1341,7 +1341,7 @@ contains
     integer, intent(in)  :: ncid, varid
     integer, dimension(:), intent(in) :: start, count
 
-    real(dp), intent(in), dimension(:,:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1366,7 +1366,7 @@ contains
     integer, intent(in)  :: ncid, varid
     integer, dimension(:), intent(in) :: start, count
 
-    real(dp), intent(in), dimension(:,:,:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1391,7 +1391,7 @@ contains
     integer, intent(in)  :: ncid, varid
     integer, dimension(:), intent(in) :: start, count
 
-    real(dp), intent(in), dimension(:,:,:,:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1416,7 +1416,7 @@ contains
     integer, intent(in)  :: ncid, varid
     integer, dimension(:), intent(in) :: start, count
 
-    real(dp), intent(in), dimension(:,:,:,:,:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:,:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1441,7 +1441,7 @@ contains
     integer, intent(in)  :: ncid, varid
     integer, dimension(:), intent(in) :: start, count
 
-    real(dp), intent(in), dimension(:,:,:,:,:,:,:) :: var
+    real(kind=kind_rd), intent(in), dimension(:,:,:,:,:,:,:) :: var
     integer :: status
     status = nf_noerr
 
@@ -1518,7 +1518,7 @@ contains
 
     implicit none
     integer, intent(in)  :: ncid, varid, index
-    real(dp), intent(in) :: var
+    real(kind=kind_rd), intent(in) :: var
     integer :: status
     status = nf_noerr
 
@@ -1540,7 +1540,7 @@ contains
     implicit none
     integer, intent(in)  :: ncid, varid
     integer, intent(in), dimension(:)  :: index
-    real(dp), intent(in) :: var
+    real(kind=kind_rd), intent(in) :: var
     integer :: status
     status = nf_noerr
 

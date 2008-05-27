@@ -1,3 +1,5 @@
+# include "define.inc"
+
 module constants
 
 !
@@ -9,8 +11,7 @@ module constants
 
   public :: size_of
   public :: kind_is, kind_id, kind_rs, kind_rd
-  public :: zi, pi
-  public :: dp,sp
+  public :: zi, pi, twopi
 
   private
 
@@ -25,11 +26,6 @@ module constants
   integer, parameter :: kind_rd = selected_real_kind (p=12)
   ! There is a selected_real_kind bug in xlf and the following doesn't work
   integer, parameter :: kind_rq = selected_real_kind (p=24)
-
-! RN 2008/05/23: they are used in netcdf_mod
-  integer, parameter :: sp = kind_rs
-  integer, parameter :: dp = kind_rd
-!
 
   integer, parameter :: sizeof_i1 = 1
   integer, parameter :: sizeof_ih = 2
@@ -52,7 +48,7 @@ module constants
 
   complex, parameter :: zi = ( 0.0 , 1.0 )
 !  real, parameter :: pi = 3.1415926535897931
-  real, parameter :: pi = 3.14159265358979323846
+  real, parameter :: pi = 3.14159265358979323846, twopi=2.*pi
 
 ! Note: we will use dp="double precision" for almost everything.
 !

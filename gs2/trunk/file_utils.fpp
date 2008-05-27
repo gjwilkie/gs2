@@ -1,4 +1,7 @@
+# include "define.inc"
+
 module file_utils
+
   implicit none
   private
 
@@ -79,11 +82,16 @@ module file_utils
   !    Copy namelist, NML // '_' // INDEX, from the input file to
   !    namelist, NML, in a temporary file, UNIT
 
-  character(500), pointer :: run_name
-  character(500), target :: arun_name, job_name
-  character(len=500) :: list_name
-  integer, save :: input_unit_no, error_unit_no
-  integer, save, public :: num_input_lines
+  public :: num_input_lines
+
+  character (500), pointer :: run_name
+  character (500), target :: arun_name, job_name
+  character (500) :: list_name
+  integer, save :: input_unit_no, error_unit_no=6
+! TT>
+!  integer, save, public :: num_input_lines
+  integer, save :: num_input_lines
+! <TT
 
 contains
 
@@ -94,23 +102,34 @@ contains
     character(*), intent (in), optional :: name
     logical :: inp, err
 
-    if (.not. present (input)) then
-       inp = .true.
-    else
+    if (present (input)) then
        inp = input
-    end if
-    if (.not. present (error)) then
-       err = .true.
     else
+       inp = .true.
+    end if
+    if (present (error)) then
        err = error
-    end if
-    if (.not. present (name)) then
-       arun_name = "unknown"
     else
-       arun_name = name
+       err = .true.
+    end if
+    if (present (name)) then
+!# if FCOMPILER == _XL_
+!       arun_name = name
+!# else
+       arun_name = trim(name)
+!# endif
+    else
+       arun_name = "unknown"
     end if
 
-    call run_type (list)
+! TT> changed for slice_g
+!    call run_type (list)
+    if (inp) then
+       call run_type (list)
+    else
+       list = .false.
+    end if
+! <TT
 
     if (list) then
        list_name = arun_name
@@ -123,9 +142,16 @@ contains
   end subroutine init_file_utils
 
   subroutine run_type (list)
-    use command_line
+! TT> This line made tungsten compiler (NCSA) to hang up
+!    use command_line
+# if FCOMPILER == _GFORTRAN_
+    use command_line, only: cl_getarg
+# else
+    use command_line, only: iargc, cl_getarg
+# endif
+! <TT
     implicit none
-    logical :: list
+    logical, intent (out) :: list
     integer :: l, ierr
 
     if (iargc() /= 0) then
@@ -136,7 +162,15 @@ contains
     end if
 
     l = len_trim (arun_name)
-    list = (l > 5 .and. arun_name(l-4:l) == ".list") 
+!!$# if FCOMPILER == _XL_
+    list = (l > 5 .and. arun_name(l-4:l) == ".list")
+!!$# else
+!!$    if (l>5) then
+!!$       list = arun_name(l-4:l) == ".list"
+!!$    else
+!!$       list = .false.
+!!$    end if
+!!$# endif
 
   end subroutine run_type
 
@@ -153,21 +187,27 @@ contains
 
   end subroutine init_run_name
 
+! TT>
 !  subroutine init_job_name (njobs, group0, job_list)
-  subroutine init_job_name (jobname)
 !    use command_line
 !    use mp
+!    use mp, only: scope, subprocs, job
+  subroutine init_job_name (jobname)
+! <TT
     implicit none
+! TT>
 !    integer, intent (in) :: njobs
 !    integer, intent (in), dimension(0:) :: group0
 !    character (len=500), dimension(0:) :: job_list
-    character (len=500), intent(in) :: jobname
+    character (len=500), intent (in) :: jobname
+! <TT
     logical :: err = .true., inp = .true.
-!    integer :: i
 
+! TT>
 !    call scope (subprocs)
 !    job_name = trim(job_list(job))
     job_name = trim(jobname)
+! <TT
     run_name => job_name
 
     call init_error_unit (err)
@@ -178,15 +218,24 @@ contains
   subroutine get_unused_unit (unit)
     implicit none
     integer, intent (out) :: unit
-    character(20) :: read, write, readwrite
+! TT>
+!    character(20) :: read, write, readwrite
+    logical :: od
+! <TT
     unit = 50
     do
-       inquire (unit=unit, read=read, write=write, readwrite=readwrite)
-       if (read == "UNKNOWN" .and. write == "UNKNOWN" &
-            .and. readwrite == "UNKNOWN") &
-       then
-          return
-       end if
+! TT>
+!       inquire (unit=unit, read=read, write=write, readwrite=readwrite)
+!       if (read == "UNKNOWN" .and. write == "UNKNOWN" &
+!            .and. readwrite == "UNKNOWN") &
+!       then
+!          return
+!       end if
+       ! TT: Can we do the same thing like this?
+       ! TT: The above fails in gfortran/g95.
+       inquire (unit=unit, opened=od)
+       if (.not.od) return
+! <TT
        unit = unit + 1
     end do
   end subroutine get_unused_unit
@@ -210,20 +259,31 @@ contains
   subroutine flush_output_file (unit, ext)
     implicit none
     integer, intent (in) :: unit
-    character (*), intent (in) :: ext
-    character (500) :: hack
+! TT>
+!    character (*), intent (in) :: ext
+    character (*), intent (in), optional :: ext
+!    character (500) :: hack
 !    hack=trim(run_name)//ext
-!    close(unit=unit)
-!    open (unit=unit, file=trim(hack), status="old", action="write", access="append")
+! <TT
+# if FCOMPILER == _XL_
     call flush_(unit)
+# else
+    call flush (unit)
+!!$    close(unit=unit)
+!!$    open (unit=unit, file=trim(hack), status="old", action="write", position="append")
+# endif
   end subroutine flush_output_file
 
   subroutine init_error_unit (open_it)
     implicit none
     logical, intent (in) :: open_it
-    error_unit_no = 6
+! TT> changed for slice_g
+!    error_unit_no = 6
+    error_unit_no = 0
+! <TT
     if (run_name /= "unknown" .and. open_it) then
        call open_output_file (error_unit_no, ".error")
+       ! TT: error_unit_no is overwritten for .error file
     end if
   end subroutine init_error_unit
 

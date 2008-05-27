@@ -1,15 +1,20 @@
+# include "define.inc"
+
 module shmem
   implicit none
   private
 
   public :: shmem_available
+# ifdef SHMEM
+  logical, parameter :: shmem_available = .true.
+#else
+  logical, parameter :: shmem_available = .false.
+
   public :: shmem_integer_put, shmem_real_put, shmem_logical_put
   public :: shmem_character_put
   public :: shmem_integer_get, shmem_real_get, shmem_logical_get
   public :: shmem_character_get
   public :: shmem_wait
-
-  logical, parameter :: shmem_available = .false.
 
   interface shmem_integer_put
      module procedure shmem_integer_put_array, shmem_integer_put_scalar
@@ -201,5 +206,6 @@ contains
     real, dimension (:), allocatable :: a
     deallocate (a)
   end subroutine coredump
+#endif
 
 end module shmem

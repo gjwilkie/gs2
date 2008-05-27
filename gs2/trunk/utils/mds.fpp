@@ -1,3 +1,5 @@
+# include "define.inc"
+
 !-----------------------------------------------------------------------
 !     file mdsplus_io.f.
 !     performs mdsplus tree io
@@ -23,13 +25,15 @@
 !     declarations.
 !-----------------------------------------------------------------------
 module mdsio
-  use prec
+  use constants, only: kind_rd, kind_rs
   implicit none
   private
+# ifdef MDSPLUS
   external mdssetdefault
   logical  mdssetdefault
   external mdsvalue, mdsput
   logical  mdsvalue, mdsput
+# endif
   public :: mds_read
   public :: mds_write
   public :: checkmds
@@ -134,6 +138,7 @@ contains
   subroutine checkmds(status,msg)
     logical, intent(in) :: status
     character(*), intent(in) :: msg
+# ifdef MDSPLUS
     character(512) text
     integer istat
     logical lstat
@@ -145,11 +150,13 @@ contains
        write(*,*) msg
        !       call program_stop(msg//", "//trim(text))
     endif
+# endif
   end subroutine checkmds
 
   subroutine getmdserrortext(status,text)
     logical, intent(in) :: status
-    character(*) :: text
+    character(*) :: text ! intent?
+# ifdef MDSPLUS
     logical loc_status
     integer istat
     equivalence (loc_status,istat)
@@ -162,6 +169,7 @@ contains
        write(text,*) "error status = ",istat
     endif
     return
+# endif
   end subroutine getmdserrortext
 
 
@@ -172,17 +180,20 @@ contains
   subroutine mds_r_log_0(name,value)
     character(*), intent(in) :: name
     logical, intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
     status = mdsvalue(name//char(0),descr(8,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_log_0
 
   subroutine mds_r_char_1(name,value)
     character(*), intent(in) :: name
     character*(*) , intent(out):: value
+# ifdef MDSPLUS
     logical :: status
     integer :: clen 
     integer :: descr
@@ -190,22 +201,26 @@ contains
          &descr(14,value,0,len(value)),0,clen)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_char_1
 
   subroutine mds_r_int_0(name,value)
     character(*), intent(in) :: name
     integer , intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
     status = mdsvalue(name//char(0),descr(8,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_int_0
 
   subroutine mds_r_int_1(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -214,11 +229,13 @@ contains
     status = mdsvalue(name//char(0),descr(8,value,dim1,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_int_1
 
   subroutine mds_r_int_2(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -228,11 +245,13 @@ contains
     status = mdsvalue(name//char(0),descr(8,value,dim1,dim2,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_int_2
 
   subroutine mds_r_int_3(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -243,11 +262,13 @@ contains
     status = mdsvalue(name//char(0),descr(8,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_int_3
 
   subroutine mds_r_int_4(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -260,11 +281,13 @@ contains
          &descr(8,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_int_4
 
   subroutine mds_r_int_5(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -278,11 +301,13 @@ contains
          &descr(8,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_int_5
 
   subroutine mds_r_int_6(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -297,11 +322,13 @@ contains
          &descr(8,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_int_6
 
   subroutine mds_r_int_7(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:,:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -317,22 +344,26 @@ contains
          &descr(8,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_int_7
 
   subroutine mds_r_real_0(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , intent(out) :: value
+    real(kind=kind_rs) , intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
     status = mdsvalue(name//char(0),descr(10,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_real_0
 
   subroutine mds_r_real_1(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:), intent(out) :: value
+    real(kind=kind_rs) , dimension(:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -341,11 +372,13 @@ contains
     status = mdsvalue(name//char(0),descr(10,value,dim1,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_real_1
 
   subroutine mds_r_real_2(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:), intent(out) :: value
+    real(kind=kind_rs) , dimension(:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -356,11 +389,13 @@ contains
          &descr(10,value,dim1,dim2,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_real_2
 
   subroutine mds_r_real_3(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:,:), intent(out) :: value
+    real(kind=kind_rs) , dimension(:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -372,11 +407,13 @@ contains
          &descr(10,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_real_3
 
   subroutine mds_r_real_4(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:,:,:), intent(out) :: value
+    real(kind=kind_rs) , dimension(:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -389,11 +426,13 @@ contains
          &descr(10,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_real_4
 
   subroutine mds_r_real_5(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:,:,:,:), intent(out) :: value
+    real(kind=kind_rs) , dimension(:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -407,11 +446,13 @@ contains
          &descr(10,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_real_5
 
   subroutine mds_r_real_6(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:,:,:,:,:), intent(out) :: value
+    real(kind=kind_rs) , dimension(:,:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -426,11 +467,13 @@ contains
          &descr(10,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_real_6
 
   subroutine mds_r_real_7(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:,:,:,:,:,:), intent(out) :: value
+    real(kind=kind_rs) , dimension(:,:,:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -446,22 +489,26 @@ contains
          &descr(10,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_real_7
 
   subroutine mds_r_doub_0(name,value)
     character(*), intent(in) :: name
-    real(kind=dp) , intent(out):: value
+    real(kind=kind_rd) , intent(out):: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
     status = mdsvalue(name//char(0),descr(11,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_doub_0
 
   subroutine mds_r_doub_1(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:), intent(out) :: value
+    real(kind=kind_rd), dimension(:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -470,11 +517,13 @@ contains
     status = mdsvalue(name//char(0),descr(11,value,dim1,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_doub_1
 
   subroutine mds_r_doub_2(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:), intent(out) :: value
+    real(kind=kind_rd), dimension(:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -485,11 +534,13 @@ contains
          &descr(11,value,dim1,dim2,0,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_doub_2
 
   subroutine mds_r_doub_3(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:,:), intent(out) :: value
+    real(kind=kind_rd), dimension(:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -501,11 +552,13 @@ contains
          &descr(11,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_doub_3
 
   subroutine mds_r_doub_4(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:,:,:), intent(out) :: value
+    real(kind=kind_rd), dimension(:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -518,11 +571,13 @@ contains
          &descr(11,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_doub_4
 
   subroutine mds_r_doub_5(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:,:,:,:), intent(out) :: value
+    real(kind=kind_rd), dimension(:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -536,11 +591,13 @@ contains
          &descr(11,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_doub_5
 
   subroutine mds_r_doub_6(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:,:,:,:,:), intent(out) :: value
+    real(kind=kind_rd), dimension(:,:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -555,11 +612,13 @@ contains
          &descr(11,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_doub_6
 
   subroutine mds_r_doub_7(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:,:,:,:,:,:), intent(out) :: value
+    real(kind=kind_rd), dimension(:,:,:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -575,22 +634,26 @@ contains
          &descr(11,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_doub_7
 
   subroutine mds_r_cmplx_0(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), intent(out) :: value
+    complex(kind=kind_rs), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
     status = mdsvalue(name//char(0),descr(12,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_cmplx_0
 
   subroutine mds_r_cmplx_1(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:), intent(out) :: value
+    complex(kind=kind_rs), dimension(:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -599,11 +662,13 @@ contains
     status = mdsvalue(name//char(0),descr(12,value,dim1,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_cmplx_1
 
   subroutine mds_r_cmplx_2(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:), intent(out) :: value
+    complex(kind=kind_rs), dimension(:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -614,11 +679,13 @@ contains
          &descr(12,value,dim1,dim2,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_cmplx_2
 
   subroutine mds_r_cmplx_3(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:,:), intent(out) :: value
+    complex(kind=kind_rs), dimension(:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -630,11 +697,13 @@ contains
          &descr(12,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_cmplx_3
 
   subroutine mds_r_cmplx_4(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:,:,:), intent(out) :: value
+    complex(kind=kind_rs), dimension(:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -647,11 +716,13 @@ contains
          &descr(12,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_cmplx_4
 
   subroutine mds_r_cmplx_5(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:,:,:,:), intent(out) :: value
+    complex(kind=kind_rs), dimension(:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -665,11 +736,13 @@ contains
          &descr(12,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_cmplx_5
 
   subroutine mds_r_cmplx_6(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:,:,:,:,:), intent(out) :: value
+    complex(kind=kind_rs), dimension(:,:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -684,11 +757,13 @@ contains
          &descr(12,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_cmplx_6
 
   subroutine mds_r_cmplx_7(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:,:,:,:,:,:), intent(out) :: value
+    complex(kind=kind_rs), dimension(:,:,:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -704,22 +779,26 @@ contains
          &descr(12,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_cmplx_7
 
   subroutine mds_r_dcmplx_0(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), intent(out) :: value
+    complex(kind=kind_rd), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
     status = mdsvalue(name//char(0),descr(13,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_dcmplx_0
 
   subroutine mds_r_dcmplx_1(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:), intent(out) :: value
+    complex(kind=kind_rd), dimension(:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -728,11 +807,13 @@ contains
     status = mdsvalue(name//char(0),descr(13,value,dim1,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_dcmplx_1
 
   subroutine mds_r_dcmplx_2(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:), intent(out) :: value
+    complex(kind=kind_rd), dimension(:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -743,11 +824,13 @@ contains
          &descr(13,value,dim1,dim2,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_dcmplx_2
 
   subroutine mds_r_dcmplx_3(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:,:), intent(out) :: value
+    complex(kind=kind_rd), dimension(:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -759,11 +842,13 @@ contains
          &descr(13,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_dcmplx_3
 
   subroutine mds_r_dcmplx_4(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:,:,:), intent(out) :: value
+    complex(kind=kind_rd), dimension(:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -776,11 +861,13 @@ contains
          &descr(13,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_dcmplx_4
 
   subroutine mds_r_dcmplx_5(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:,:,:,:), intent(out) :: value
+    complex(kind=kind_rd), dimension(:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -794,11 +881,13 @@ contains
          &descr(13,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_dcmplx_5
 
   subroutine mds_r_dcmplx_6(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:,:,:,:,:), intent(out) :: value
+    complex(kind=kind_rd), dimension(:,:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -813,11 +902,13 @@ contains
          &descr(13,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_dcmplx_6
 
   subroutine mds_r_dcmplx_7(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:,:,:,:,:,:), intent(out) :: value
+    complex(kind=kind_rd), dimension(:,:,:,:,:,:,:), intent(out) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -833,6 +924,7 @@ contains
          &descr(13,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error reading "//name)
     return
+# endif
   end subroutine mds_r_dcmplx_7
 
 !--------------------------------------------
@@ -841,38 +933,45 @@ contains
 
   subroutine mds_w_log_0(name,value)
     character(*), intent(in) :: name
-    logical :: value
+    logical :: value ! intent?
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     status = mdsput(name//char(0),"$",descr(8,value,0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_log_0
 
   subroutine mds_w_char_1(name,value)
     character(*), intent(in) :: name
     character*(*), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     status = mdsput(name//char(0),"$",&
          &descr(14,value,0,len(value)),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_char_1
 
   subroutine mds_w_int_0(name,value)
     character(*), intent(in) :: name
     integer , intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     status = mdsput(name//char(0),"$",descr(8 ,value, 0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_int_0
 
   subroutine mds_w_int_1(name,value)
     character(*), intent(in) :: name
     integer , dimension(:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     integer :: dim1
@@ -880,11 +979,13 @@ contains
     status = mdsput(name//char(0),"$",descr(8 ,value, dim1, 0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_int_1
 
   subroutine mds_w_int_2(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -895,11 +996,13 @@ contains
          &"$",descr(8,value,dim1,dim2,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_int_2
 
   subroutine mds_w_int_3(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -911,11 +1014,13 @@ contains
          &"$",descr(8,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_int_3
 
   subroutine mds_w_int_4(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -928,11 +1033,13 @@ contains
          &"$",descr(8,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_int_4
 
   subroutine mds_w_int_5(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -946,11 +1053,13 @@ contains
          &"$",descr(8,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_int_5
 
   subroutine mds_w_int_6(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -965,11 +1074,13 @@ contains
          &"$",descr(8,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_int_6
 
   subroutine mds_w_int_7(name,value)
     character(*), intent(in) :: name 
     integer , dimension(:,:,:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -985,21 +1096,25 @@ contains
          &"$",descr(8,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_int_7
 
   subroutine mds_w_real_0(name,value)
     character(*), intent(in) :: name
-    real(kind=sp), intent(in) :: value
+    real(kind=kind_rs), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     status = mdsput(name//char(0),"$",descr(10,value,0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_real_0
 
   subroutine mds_w_real_1(name,value)
     character(*), intent(in) :: name
-    real(kind=sp), dimension(:), intent(in) :: value
+    real(kind=kind_rs), dimension(:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     integer :: dim1
@@ -1007,11 +1122,13 @@ contains
     status = mdsput(name//char(0),"$",descr(10,value,dim1,0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_real_1
 
   subroutine mds_w_real_2(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:), intent(in) :: value
+    real(kind=kind_rs) , dimension(:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1022,11 +1139,13 @@ contains
          &"$",descr(10,value,dim1,dim2,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_real_2
 
   subroutine mds_w_real_3(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:,:), intent(in) :: value
+    real(kind=kind_rs) , dimension(:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1038,11 +1157,13 @@ contains
          &"$",descr(10,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_real_3
 
   subroutine mds_w_real_4(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:,:,:), intent(in) :: value
+    real(kind=kind_rs) , dimension(:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1055,11 +1176,13 @@ contains
          &"$",descr(10,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_real_4
 
   subroutine mds_w_real_5(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:,:,:,:), intent(in) :: value
+    real(kind=kind_rs) , dimension(:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1073,11 +1196,13 @@ contains
          &"$",descr(10,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_real_5
 
   subroutine mds_w_real_6(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:,:,:,:,:), intent(in) :: value
+    real(kind=kind_rs) , dimension(:,:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1092,11 +1217,13 @@ contains
          &"$",descr(10,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_real_6
 
   subroutine mds_w_real_7(name,value)
     character(*), intent(in) :: name
-    real(kind=sp) , dimension(:,:,:,:,:,:,:), intent(in) :: value
+    real(kind=kind_rs) , dimension(:,:,:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1112,21 +1239,25 @@ contains
          &"$",descr(10,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_real_7
 
   subroutine mds_w_doub_0(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), intent(in) :: value
+    real(kind=kind_rd), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     status = mdsput(name//char(0),"$",descr(11,value,0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_doub_0
 
   subroutine mds_w_doub_1(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:), intent(in) :: value
+    real(kind=kind_rd), dimension(:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     integer :: dim1
@@ -1134,11 +1265,13 @@ contains
     status = mdsput(name//char(0),"$",descr(11,value,dim1,0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_doub_1
 
   subroutine mds_w_doub_2(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:), intent(in) :: value
+    real(kind=kind_rd), dimension(:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     integer :: dim1,dim2
@@ -1148,11 +1281,13 @@ contains
          &descr(11,value,dim1,dim2,0,0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_doub_2
 
   subroutine mds_w_doub_3(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:,:), intent(in) :: value
+    real(kind=kind_rd), dimension(:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     integer :: dim1,dim2,dim3
@@ -1163,11 +1298,13 @@ contains
          &descr(11,value,dim1,dim2,dim3,0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_doub_3
 
   subroutine mds_w_doub_4(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:,:,:), intent(in) :: value
+    real(kind=kind_rd), dimension(:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1180,11 +1317,13 @@ contains
          &"$",descr(11,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_doub_4
 
   subroutine mds_w_doub_5(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:,:,:,:), intent(in) :: value
+    real(kind=kind_rd), dimension(:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1198,11 +1337,13 @@ contains
          &"$",descr(11,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_doub_5
 
   subroutine mds_w_doub_6(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:,:,:,:,:), intent(in) :: value
+    real(kind=kind_rd), dimension(:,:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1217,11 +1358,13 @@ contains
          &"$",descr(11,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_doub_6
 
   subroutine mds_w_doub_7(name,value)
     character(*), intent(in) :: name
-    real(kind=dp), dimension(:,:,:,:,:,:,:), intent(in) :: value
+    real(kind=kind_rd), dimension(:,:,:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1237,21 +1380,25 @@ contains
          &"$",descr(11,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_doub_7
 
   subroutine mds_w_cmplx_0(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), intent(in) :: value
+    complex(kind=kind_rs), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     status = mdsput(name//char(0),"$",descr(12,value,0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_cmplx_0
 
   subroutine mds_w_cmplx_1(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:), intent(in) :: value
+    complex(kind=kind_rs), dimension(:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     integer :: dim1
@@ -1259,11 +1406,13 @@ contains
     status = mdsput(name//char(0),"$",descr(12,value,dim1,0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_cmplx_1
 
   subroutine mds_w_cmplx_2(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:), intent(in) :: value
+    complex(kind=kind_rs), dimension(:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1274,11 +1423,13 @@ contains
          &"$",descr(12,value,dim1,dim2,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_cmplx_2
 
   subroutine mds_w_cmplx_3(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:,:), intent(in) :: value
+    complex(kind=kind_rs), dimension(:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1290,11 +1441,13 @@ contains
          &"$",descr(12,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_cmplx_3
 
   subroutine mds_w_cmplx_4(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:,:,:), intent(in) :: value
+    complex(kind=kind_rs), dimension(:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1307,11 +1460,13 @@ contains
          &"$",descr(12,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_cmplx_4
 
   subroutine mds_w_cmplx_5(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:,:,:,:), intent(in) :: value
+    complex(kind=kind_rs), dimension(:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1325,11 +1480,13 @@ contains
          &"$",descr(12,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_cmplx_5
 
   subroutine mds_w_cmplx_6(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:,:,:,:,:), intent(in) :: value
+    complex(kind=kind_rs), dimension(:,:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1344,11 +1501,13 @@ contains
          &"$",descr(12,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_cmplx_6
 
   subroutine mds_w_cmplx_7(name,value)
     character(*), intent(in) :: name
-    complex(kind=sp), dimension(:,:,:,:,:,:,:), intent(in) :: value
+    complex(kind=kind_rs), dimension(:,:,:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1364,21 +1523,25 @@ contains
          &"$",descr(12,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_cmplx_7
 
   subroutine mds_w_dcmplx_0(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), intent(in) :: value
+    complex(kind=kind_rd), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     status = mdsput(name//char(0),"$",descr(13,value,0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_dcmplx_0
 
   subroutine mds_w_dcmplx_1(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:), intent(in) :: value
+    complex(kind=kind_rd), dimension(:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: descr
     integer :: dim1
@@ -1386,11 +1549,13 @@ contains
     status = mdsput(name//char(0),"$",descr(13,value,dim1,0),0)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_dcmplx_1
 
   subroutine mds_w_dcmplx_2(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:), intent(in) :: value
+    complex(kind=kind_rd), dimension(:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1401,11 +1566,13 @@ contains
          &"$",descr(13,value,dim1,dim2,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_dcmplx_2
 
   subroutine mds_w_dcmplx_3(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:,:), intent(in) :: value
+    complex(kind=kind_rd), dimension(:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1417,11 +1584,13 @@ contains
          &"$",descr(13,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_dcmplx_3
 
   subroutine mds_w_dcmplx_4(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:,:,:), intent(in) :: value
+    complex(kind=kind_rd), dimension(:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1434,11 +1603,13 @@ contains
          &"$",descr(13,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_dcmplx_4
 
   subroutine mds_w_dcmplx_5(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:,:,:,:), intent(in) :: value
+    complex(kind=kind_rd), dimension(:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1452,11 +1623,13 @@ contains
          &"$",descr(13,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_dcmplx_5
 
   subroutine mds_w_dcmplx_6(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:,:,:,:,:), intent(in) :: value
+    complex(kind=kind_rd), dimension(:,:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1471,11 +1644,13 @@ contains
          &"$",descr(13,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_dcmplx_6
 
   subroutine mds_w_dcmplx_7(name,value)
     character(*), intent(in) :: name
-    complex(kind=dp), dimension(:,:,:,:,:,:,:), intent(in) :: value
+    complex(kind=kind_rd), dimension(:,:,:,:,:,:,:), intent(in) :: value
+# ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
@@ -1491,6 +1666,7 @@ contains
          &"$",descr(13,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error writing "//name)
     return
+# endif
   end subroutine mds_w_dcmplx_7
 
 end module mdsio

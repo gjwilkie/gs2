@@ -1,12 +1,14 @@
 # Host: unknown (used to be known as CPU=ORIGIN)
 
-#COMPILER= unknown
+#COMPILER = unknown
+COMPILER = cray
+USE_POSIX=on
 
 include Makefile.ORIGIN
 
-#include Makefile.$(COMPILER)
+include Makefile.$(COMPILER)
 
-FC = f90 # what compiler is this
+FC = f90 # what compiler is this - maybe cray
 
 ifdef USE_MPI
 	LIBS += -lmpi 

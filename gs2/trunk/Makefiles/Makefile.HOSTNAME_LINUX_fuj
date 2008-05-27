@@ -1,6 +1,7 @@
 # Host: unknown (used to be known as CPU=LINUX_fuj)
 
 COMPILER=fuj
+USE_NR_RAN=on
 
 ifeq ($(PROJECT),gs2)
 	PLATFORM_LINKS = linux_fuj
