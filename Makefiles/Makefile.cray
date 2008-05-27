@@ -3,6 +3,7 @@
 FC = f90
 
 F90FLAGS =  -M1110
+CPPFLAGS += -DFCOMPILER=_CRAY_
 
 ifdef STATIC
 endif

@@ -3,6 +3,7 @@
 #
 ball_mod = \
 	 ball.o \
+	 constants.o \
 	 deq.o \
 	 eeq.o \
 	 geometry.o \
@@ -13,7 +14,6 @@ ball_mod = \
 	 mdslib.o \
 	 netcdf.o \
 	 peq.o \
-	 prec.o \
 	 radstub.o \
 	 spl.o \
 	 vdimstub.o \
@@ -24,6 +24,7 @@ drive_mod = \
 	 regression.o 
 
 eiktest_mod = \
+	 constants.o \
 	 deq.o \
 	 eeq.o \
 	 et.o \
@@ -35,7 +36,6 @@ eiktest_mod = \
 	 mdslib.o \
 	 netcdf.o \
 	 peq.o \
-	 prec.o \
 	 radstub.o \
 	 spl.o \
 	 vdimstub.o \
@@ -86,7 +86,6 @@ gs2_mod = \
 	 netcdf_mod.o \
 	 nonlinear_terms.o \
 	 peq.o \
-	 prec.o \
 	 prof.o \
 	 radstub.o \
 	 ran.o \
@@ -121,7 +120,6 @@ ingen_mod = \
 	 mp.o \
 	 netcdf.o \
 	 peq.o \
-	 prec.o \
 	 radstub.o \
 	 spl.o \
 	 text_options.o \
@@ -170,9 +168,6 @@ check_aix.o: \
 	 file_utils.o \
 	 mp.o \
 	 run_parameters.o 
-check_portable.o: \
-	 file_utils.o \
-	 mp.o 
 check_sgi.o: \
 	 file_utils.o \
 	 mp.o \
@@ -271,12 +266,6 @@ fields_test.o: \
 	 dist_fn_arrays.o \
 	 fields_arrays.o 
 file_utils.o: \
-	 command_line.o 
-file_utils_gnu.o: \
-	 command_line.o 
-file_utils_portable.o: \
-	 command_line.o 
-file_utils_xlf.o: \
 	 command_line.o 
 geometry.o: \
 	 deq.o \
@@ -561,11 +550,7 @@ le_grids.o: \
 leq.o: \
 	 spl.o 
 mds.o: \
-	 prec.o 
-mds_io.o: \
-	 prec.o 
-mds_io_stub.o: \
-	 prec.o 
+	 constants.o 
 mdslib.o: 
 mp.o: 
 netcdf.o: 
@@ -591,7 +576,6 @@ om.o: \
 peq.o: \
 	 netcdf.o \
 	 spl.o 
-prec.o: 
 prof.o: 
 radstub.o: 
 ran.o: 

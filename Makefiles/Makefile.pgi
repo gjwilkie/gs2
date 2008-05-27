@@ -5,7 +5,11 @@ CC=pgcc
 F90FLAGS +=
 CPPFLAGS += -DFCOMPILER=_PGI_
 
-v1:=$(shell pgf90 -V | grep pgf90 | awk '{print $$2}')
+cmd=$(shell basename $(shell which $(FC)))
+ifneq ($(cmd),$(FC))
+$(error $(FC) not found)
+endif
+v1:=$(shell $(FC) -V | grep $(FC) | awk '{print $$2}')
 v2:=$(shell echo $(v1) | awk -F. '{print $$2}')
 PGIMAJORVERSION=$(shell echo $(v1) | awk -F. '{print $$1}')
 PGIMINORVERSION=$(shell echo $(v2) | awk -F- '{print $$1}')

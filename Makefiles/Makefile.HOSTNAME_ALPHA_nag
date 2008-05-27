@@ -1,6 +1,7 @@
 # Host: unknown (used to be known as CPU=ALPHA_nag)
 
 COMPILER=nag
+USE_NR_RAN=on
 
 ifeq ($(PROJECT),gs2)
 	PLATFORM_LINKS = alpha_nag

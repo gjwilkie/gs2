@@ -1,6 +1,7 @@
 # Host: unknown (used to be known as CPU=ALPHA system)
 
 COMPILER=compaq
+USE_NR_RAN=on
 
 include Makefile.ALPHA
 
