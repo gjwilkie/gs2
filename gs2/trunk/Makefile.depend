@@ -223,7 +223,8 @@ eeq.o: \
 	 spl.o 
 et.o: \
 	 geometry.o 
-fft_work.o: 
+fft_work.o: \
+	 constants.o 
 fields.o: \
 	 antenna.o \
 	 constants.o \
@@ -469,14 +470,6 @@ gs2_transforms_aix.o: \
 	 prof.o \
 	 redistribute.o \
 	 theta_grid.o 
-gs2_transforms_fftw.o: \
-	 fft_work.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 mp.o \
-	 prof.o \
-	 redistribute.o \
-	 theta_grid.o 
 gs2_transforms_sgi.o: \
 	 fft_work.o \
 	 gs2_layouts.o \
@@ -552,7 +545,8 @@ leq.o: \
 mds.o: \
 	 constants.o 
 mdslib.o: 
-mp.o: 
+mp.o: \
+	 constants.o 
 netcdf.o: 
 netcdf_mod.o: \
 	 constants.o \
