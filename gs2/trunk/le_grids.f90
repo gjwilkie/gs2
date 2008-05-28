@@ -166,6 +166,7 @@ contains
   ! TEMP FOR TESTING -- MAB
   subroutine uniformx (emin, ecut, ee, ww)
     
+    use constants, only: pi
     implicit none
 
     real, intent (in) :: emin, ecut
@@ -173,10 +174,14 @@ contains
 
     integer :: ix, nx
     real :: xcut, xmin, dx, fac
-    double precision :: pi
+    ! RN 2008/05/28: this is meaningless
+    ! If double precision is necessary, everything should be double.
+    ! use real pi from module constants
+!    double precision :: pi
     real, dimension (:), allocatable :: aa, bb, cc, xx
+    real :: erf ! this is needed for PGI: RN
 
-    pi = asin(real(1.0,kind(pi)))*2.0
+!    pi = asin(real(1.0,kind(pi)))*2.0
     nx = size(ee)
 
     allocate (aa(nx), bb(nx), cc(nx), xx(nx))

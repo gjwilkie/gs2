@@ -1,9 +1,18 @@
 # Compiler: Lahey/Fujitsu Fortran
 
 FC = 
-F90FLAGS = --dbl --ml cdecl
-ifeq ($(PROJECT),gs2)
-	F90FLAGS_real_double_promote = --quad $(F90FLAGS)
+F90FLAGS = --ml cdecl
+
+ifndef DBLE
+$(warning DBLE cannot be off for lahey)
+override DBLE=on
+endif
+
+ifdef DBLE
+	F90FLAGS += --dbl
+	ifeq ($(PROJECT),gs2)
+		F90FLAGS_real_double_promote = --quad $(F90FLAGS)
+	endif
 endif
 
 ifdef STATIC

@@ -51,8 +51,8 @@ else
 			COPTFLAGS += -xT
 		endif
 		ifdef SSE
-			# optimizes for intel pentium 4 processors with 
-			# streaming simd extensions
+# optimizes for intel pentium 4 processors with 
+# streaming simd extensions
 			F90OPTFLAGS += -arch SSE
 			COPTFLAGS += -arch SSE
 		endif

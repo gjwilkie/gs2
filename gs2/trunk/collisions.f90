@@ -1120,7 +1120,7 @@ contains
     real :: dela, delb, delc, delfac
     real :: capgl, capgr, slb1, ee, eea, eeb
     real :: delp, delm, del, capg, mu, eta, wxe, capgp
-
+    real :: erf ! this is needed for PGI: RN
     logical :: first_time = .true.
 
     if (first_time) then
