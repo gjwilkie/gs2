@@ -1,10 +1,7 @@
 # Dorland Desktop
 
 COMPILER=gnu-g95
-
-ifeq ($(PROJECT),gs2)
-	override USE_MPI=
-endif
+override USE_MPI=
 
 include Makefile.LINUX
 

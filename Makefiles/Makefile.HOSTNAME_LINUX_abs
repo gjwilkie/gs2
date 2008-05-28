@@ -1,7 +1,7 @@
 # Host: unknown (used to be known as CPU=LINUX_abs)
 
 COMPILER=absoft
-USE_NR_RAN=on
+override USE_NR_RAN=on
 
 ifeq ($(PROJECT),gs2)
 	PLATFORM_LINKS = linux_abs

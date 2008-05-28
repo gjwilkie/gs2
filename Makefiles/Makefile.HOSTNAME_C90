@@ -1,6 +1,7 @@
 # Host: unknown (used to be known as CPU=C90)
 
 COMPILER=cray
+override USE_MPI=
 
 include Makefile.C90
 	

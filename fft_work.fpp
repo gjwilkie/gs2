@@ -1,10 +1,16 @@
+# include "define.inc"
+
 module fft_work
+
+  use constants, only: kind_id
 
   implicit none
 
   public :: fft_type, delete_fft
   public :: init_ccfftw, init_crfftw, init_rcfftw, init_z
   
+  private
+
   interface init_crfftw
      module procedure init_crfftw_1d
      module procedure init_crfftw_2d
@@ -16,8 +22,11 @@ module fft_work
   end interface
 
   type :: fft_type
-     integer*8 :: plan
+! TT>
+!     integer :: n, plan, is, type
      integer :: n, is, type
+     integer (kind_id) :: plan
+! <TT
      real :: scale
   end type fft_type
 
@@ -25,8 +34,6 @@ module fft_work
   integer, parameter :: fftw_measure    =  1
   integer, parameter :: fftw_in_place   =  8
   integer, parameter :: fftw_use_wisdom = 16
-
-  private
 
 contains
 
@@ -43,7 +50,9 @@ contains
     fft%type = 1
     
     j = fftw_measure + fftw_use_wisdom
+# if FFT == _FFTW_
     call fftw_f77_create_plan(fft%plan,n,is,j)
+# endif
 
   end subroutine init_z
 
@@ -60,7 +69,9 @@ contains
     fft%type = 1
     
     j = fftw_in_place + fftw_measure + fftw_use_wisdom
+# if FFT == _FFTW_
     call fftw_f77_create_plan(fft%plan,n,is,j)
+# endif
 
   end subroutine init_ccfftw
 
@@ -77,7 +88,9 @@ contains
     fft%type = 0
 
     j = fftw_measure + fftw_use_wisdom
+# if FFT == _FFTW_
     call rfftwnd_f77_create_plan(fft%plan,1,N,is,j)
+# endif
 
   end subroutine init_rcfftw_1d
   
@@ -94,7 +107,9 @@ contains
     fft%type = 0
 
     j = fftw_measure + fftw_use_wisdom
+# if FFT == _FFTW_
     call rfftwnd_f77_create_plan(fft%plan,1,N,is,j)
+# endif
 
   end subroutine init_crfftw_1d
 
@@ -108,7 +123,9 @@ contains
     if (is > 0) fft%scale = 1.
 
     j = fftw_measure + fftw_use_wisdom
+# if FFT == _FFTW_
     call rfftw2d_f77_create_plan(fft%plan,m,n,is,j)
+# endif
 
   end subroutine init_rcfftw_2d
   
@@ -122,7 +139,9 @@ contains
     if (is > 0) fft%scale = 1.
 
     j = fftw_measure + fftw_use_wisdom
+# if FFT == _FFTW_
     call rfftw2d_f77_create_plan(fft%plan,m,n,is,j)
+# endif
 
   end subroutine init_crfftw_2d
 
@@ -130,11 +149,13 @@ contains
     
     type (fft_type), intent (in out) :: fft
 
+# if FFT == _FFTW_
     if (fft%type == 1) then
        call fftw_f77_destroy_plan(fft%plan)
     else
        call rfftw_f77_destroy_plan(fft%plan)
     end if
+# endif
 
   end subroutine delete_fft
 

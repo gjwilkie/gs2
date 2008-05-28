@@ -1,3 +1,5 @@
+# include "define.inc"
+
 module gs2_transforms
 
   use redistribute, only: redist_type
@@ -14,10 +16,14 @@ module gs2_transforms
 
   interface transform_x
      module procedure transform_x5d
+!     module procedure transform_x3d
+!     module procedure transform_x1d
   end interface
 
   interface transform_y
      module procedure transform_y5d
+!     module procedure transform_y3d
+!     module procedure transform_y1d
   end interface
 
   interface transform2
@@ -29,10 +35,14 @@ module gs2_transforms
 
   interface inverse_x
      module procedure inverse_x5d
+!     module procedure inverse_x3d
+!     module procedure inverse_x1d
   end interface
 
   interface inverse_y
      module procedure inverse_y5d
+!     module procedure inverse_y3d
+!     module procedure inverse_y1d
   end interface
 
   interface inverse2
@@ -390,7 +400,9 @@ contains
     i = xxf_lo%ulim_proc - xxf_lo%llim_proc + 1
 
     allocate (aux(xf_fft%n))
+# if FFT == _FFTW_
     call fftw_f77 (xf_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
+# endif
     deallocate (aux)
 
     call prof_leaving ("transform_x5d", "gs2_transforms")
@@ -412,7 +424,9 @@ contains
 
     ! do ffts
     allocate (aux(xb_fft%n))
+# if FFT == _FFTW_
     call fftw_f77 (xb_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
+# endif
     deallocate (aux)
 
     call scatter (g2x, xxf, g)
@@ -426,7 +440,11 @@ contains
     use redistribute, only: gather
     implicit none
     complex, dimension (:,xxf_lo%llim_proc:), intent (in) :: xxf
+# ifdef FFT
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
+# else
+    real, dimension (:,yxf_lo%llim_proc:) :: yxf
+# endif
     integer :: i
 
     call prof_entering ("transform_y5d", "gs2_transforms")
@@ -436,7 +454,9 @@ contains
 
     ! do ffts
     i = yxf_lo%ulim_proc - yxf_lo%llim_proc + 1
+# if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (yf_fft%plan, i, fft, 1, yxf_lo%ny/2+1, yxf, 1, yxf_lo%ny)
+# endif
 
     call prof_leaving ("transform_y5d", "gs2_transforms")
   end subroutine transform_y5d
@@ -454,7 +474,9 @@ contains
 
     ! do ffts
     i = yxf_lo%ulim_proc - yxf_lo%llim_proc + 1
+# if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (yb_fft%plan, i, yxf, 1, yxf_lo%ny, fft, 1, yxf_lo%ny/2+1)
+# endif
 
     call scatter (x2y, fft, xxf)
 
@@ -500,7 +522,11 @@ contains
     use gs2_layouts, only: g_lo, accel_lo, accelx_lo, ik_idx
     implicit none
     complex, dimension (:,:,g_lo%llim_proc:), intent (in out) :: g
+# ifdef FFT
     real, dimension (:,:,accelx_lo%llim_proc:), intent (out) :: axf
+# else
+    real, dimension (:,:,accelx_lo%llim_proc:) :: axf
+# endif
     integer :: iglo, k, i, idx
 
 ! scale ky /= 0 modes
@@ -522,8 +548,10 @@ contains
     i = (2*accel_lo%ntgrid+1)*2
     idx = 1
     do k = accel_lo%llim_proc, accel_lo%ulim_proc, accel_lo%nxnky
+# if FFT == _FFTW_
        call rfftwnd_f77_complex_to_real (yf_fft%plan, i, ag(:,:,k:), i, 1, &
             axf(:,:,ia(idx):), i, 1)
+# endif
        idx = idx + 1
     end do
 
@@ -540,8 +568,10 @@ contains
     i = (2*accel_lo%ntgrid+1)*2
     idx = 1
     do k = accelx_lo%llim_proc, accelx_lo%ulim_proc, accelx_lo%nxny
+# if FFT == _FFTW_
        call rfftwnd_f77_real_to_complex (yb_fft%plan, i, axf(:,:,k:), i, 1, &
             ag(:,:,iak(idx):), i, 1)
+# endif
        idx = idx + 1
     end do
 
@@ -622,7 +652,9 @@ contains
 
 ! transform
     i = 2*ntgrid+1
+# if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
+# endif
 
     do it=1,nnx
        do ik=1,nny
@@ -661,7 +693,9 @@ contains
 
 ! transform
     i = 2*ntgrid+1
+# if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (xf3d_rc%plan, i, phix, i, 1, aphi, i, 1)
+# endif
 
 ! dealias and scale
     do it=1,ntheta0
@@ -715,7 +749,9 @@ contains
 
 ! transform
     i = 2*ntgrid+1
+# if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
+# endif
 
     do it=1,nnx
        do ik=1,nny
@@ -747,13 +783,12 @@ contains
 
     complex, dimension (:,:,:) :: an, an2
     integer, intent (in) :: ntheta0, naky, ntgrid
-    
+
+# if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)
+# endif
     an2 = conjg(an2)*an2
 
   end subroutine kz_spectrum
 
 end module gs2_transforms
-
-
-

@@ -2,10 +2,7 @@
 # ?? MIT Linux cluster with NAG f95 ??
 
 COMPILER=nag
-
-ifeq ($(PROJECT),gs2)
-	override USE_MPI=on
-endif
+override USE_MPI=on
 
 include Makefile.LINUX
 
