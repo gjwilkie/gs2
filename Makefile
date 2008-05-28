@@ -108,6 +108,8 @@ AWK = awk
 F90FLAGS_real_double_promote = $(F90FLAGS)
 F90FLAGS_no_real_promotion = $(F90FLAGS)
 F90FLAGS_without_minus_w = $(F90FLAGS)
+# this is used for constatns.fpp in gs2
+F90FLAGS_use_realsize8 = $(F90FLAGS)
 F90FLAGS_SFX0 =
 F90FLAGS_SFX1 =
 F90FLAGS_SFX2 =
@@ -133,7 +135,8 @@ endif
 
 ifeq ($(PROJECT),gs2) 
 	ifndef DBLE
-$(error DBLE cannot be off for gs2)
+$(warning DBLE cannot be off for gs2)
+		override DBLE = on
 	endif
 endif
 ######################################################### PLATFORM DEPENDENCE
@@ -398,6 +401,10 @@ mds.o: mds.fpp
 	$(CPP) $(CPPFLAGS) $< $*.f90
 	$(FC) $(F90FLAGS_real_double_promote) -c $*.f90
 	rm -f $*.f90
+constants.o: constants.fpp
+	$(CPP) $(CPPFLAGS) $< $*.f90
+	$(FC) $(F90FLAGS_use_realsize8) -c $*.f90
+	rm -f $*.f90
 endif
 # No optimizations for some routines: stupid workarounds because of 
 # incompatibility between f95 and my C libraries (I think)
@@ -490,9 +497,9 @@ tar_gs2:
 	@for dir in utils geo Makefiles ;\
 	do ( mkdir `cat .package`/$$dir ; ) ;\
 	done
-	@for name in *.f90 test_os Makefile Makefile.* \
-		utils/*.f90 utils/Makefile \
-		geo/*.f90 geo/Makefile \
+	@for name in *.f90 *.fpp *.inc test_os Makefile Makefile.* \
+		utils/*.f90 utils/*.fpp utils/*.inc utils/Makefile \
+		geo/*.f90 geo/*.fpp geo/*.inc geo/Makefile \
 		Makefiles/*; \
 	do (ln $$name `cat .package`/$$name ; ); \
 	done

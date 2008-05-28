@@ -26,9 +26,10 @@ ifdef DBLE
 # Note: this work around can be removed by writing the code properly
 		F90FLAGS += -qautodbl=dbl4
 # promotes only real->dble
-		F90FLAGS_real_double_promote += $(F90FLAGS) -qautodbl=dbl
+		F90FLAGS_real_double_promote = $(subst dbl4,dbl,$(F90FLAGS))
 # makes real -> dble, and dble -> quad
 # this option is used only for le_grids.f90 and mds.f90
+		F90FLAGS_use_realsize8 = $(subst qautodbl=dbl4,qrealsize=8,$(F90FLAGS))
 	endif
 endif
 
@@ -52,7 +53,7 @@ else
 			COPTFLAGS += -O3
 		endif
 	endif
-	
+
 	ifdef OPT
 		ifeq ($(CHIP),g5) # dawson
 			F90OPTFLAGS += -qarch=g5 -qtune=g5

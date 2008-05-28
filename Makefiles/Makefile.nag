@@ -2,15 +2,13 @@
 # NAG does not provide C compiler, use gcc
 
 FC = f95
-F90FLAGS = -mismatch 
+F90FLAGS = -mismatch -w
 CPPFLAGS += -DFCOMPILER=_NAG_ -DNO_SIZEOF
 
 include Makefile.gnu-gcc
 
 ifdef DBLE
-	ifeq ($(PROJECT),agk) # for gs2 see below
-		F90FLAGS += -r8
-	endif
+	F90FLAGS += -r8
 endif
 
 ifdef STATIC
@@ -22,10 +20,6 @@ ifdef DEBUG
 			-C=present -C=pointer -gline 
 	F90OPTFLAGS =
 else
-	ifeq ($(PROJECT),agk)
-		F90FLAGS += -w
-	endif
-
 	ifdef OPT
 		F90OPTFLAGS += -O4 
 	endif
@@ -36,7 +30,6 @@ else
 endif
 
 ifeq ($(PROJECT),gs2)
-	F90FLAGS_no_real_promotion = -w $(F90FLAGS)
-	F90FLAGS_without_minus_w = -r8 $(F90FLAGS)
-	F90FLAGS = -w -r8 $(F90FLAGS)
+	F90FLAGS_no_real_promotion = $(subst -r8,,$(F90FLAGS))
+	F90FLAGS_without_minus_w = $(subst -w,,$(F90FLAGS))
 endif
