@@ -1,9 +1,10 @@
 program rungridgen
   use file_utils
   use gridgen4mod
+  use constants, only: pi, twopi
   implicit none
 
-  real, parameter :: pi=3.1415926535897931, twopi=6.2831853071795862
+!  real, parameter :: pi=3.1415926535897931, twopi=6.2831853071795862
 
   ! input parameters
   character(200) :: source, gingrid, gsource

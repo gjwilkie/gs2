@@ -2,6 +2,7 @@
 
 COMPILER=nag
 override USE_NR_RAN=on
+override USE_MPI=
 
 ifeq ($(PROJECT),gs2)
 	PLATFORM_LINKS = alpha_nag

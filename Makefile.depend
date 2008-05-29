@@ -3,16 +3,19 @@
 #
 ball_mod = \
 	 ball.o \
+	 command_line.o \
 	 constants.o \
 	 deq.o \
 	 eeq.o \
+	 file_utils.o \
 	 geometry.o \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
 	 mds.o \
 	 mdslib.o \
-	 netcdf.o \
+	 mp.o \
+	 netcdf_utils.o \
 	 peq.o \
 	 radstub.o \
 	 spl.o \
@@ -24,17 +27,20 @@ drive_mod = \
 	 regression.o 
 
 eiktest_mod = \
+	 command_line.o \
 	 constants.o \
 	 deq.o \
 	 eeq.o \
 	 et.o \
+	 file_utils.o \
 	 geometry.o \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
 	 mds.o \
 	 mdslib.o \
-	 netcdf.o \
+	 mp.o \
+	 netcdf_utils.o \
 	 peq.o \
 	 radstub.o \
 	 spl.o \
@@ -82,8 +88,7 @@ gs2_mod = \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
-	 netcdf.o \
-	 netcdf_mod.o \
+	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
 	 prof.o \
@@ -118,7 +123,7 @@ ingen_mod = \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
-	 netcdf.o \
+	 netcdf_utils.o \
 	 peq.o \
 	 radstub.o \
 	 spl.o \
@@ -141,6 +146,7 @@ regressp_mod = \
 
 rungridgen_mod = \
 	 command_line.o \
+	 constants.o \
 	 file_utils.o \
 	 gridgen4mod.o \
 	 rungridgen.o \
@@ -278,7 +284,8 @@ geometry.o: \
 	 radstub.o \
 	 veq.o 
 geq.o: \
-	 netcdf.o \
+	 constants.o \
+	 netcdf_utils.o \
 	 spl.o 
 gridgen4mod.o: \
 	 spl.o 
@@ -320,18 +327,8 @@ gs2_diagnostics.o: \
 	 species.o \
 	 spl.o \
 	 theta_grid.o 
-gs2_dist_io.o: \
-	 file_utils.o \
-	 gs2_layouts.o \
-	 gs2_transforms.o \
-	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
-	 species.o \
-	 theta_grid.o 
 gs2_dist_io_hdf.o: \
 	 file_utils.o \
-	 gs2_dist_io.o \
 	 gs2_layouts.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
@@ -341,7 +338,7 @@ gs2_dist_io_hdf.o: \
 	 theta_grid.o 
 gs2_dist_io_stub.o: \
 	 file_utils.o \
-	 gs2_dist_io.o \
+	 gs2_dist_io_hdf.o \
 	 gs2_layouts.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
@@ -370,7 +367,7 @@ gs2_io.o: \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
-	 netcdf_mod.o \
+	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
 	 species.o \
@@ -385,7 +382,6 @@ gs2_io_hdf5.o: \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
-	 netcdf_mod.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
 	 species.o \
@@ -417,24 +413,7 @@ gs2_save.o: \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 mp.o \
-	 theta_grid.o 
-gs2_save_aix.o: \
-	 antenna_data.o \
-	 constants.o \
-	 fields_arrays.o \
-	 file_utils.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 mp.o \
-	 theta_grid.o 
-gs2_save_fast.o: \
-	 antenna_data.o \
-	 constants.o \
-	 fields_arrays.o \
-	 file_utils.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 mp.o \
+	 netcdf_utils.o \
 	 theta_grid.o 
 gs2_save_hdf5.o: \
 	 fields_arrays.o \
@@ -449,9 +428,6 @@ gs2_save_new.o: \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 mp.o \
-	 theta_grid.o 
-gs2_save_stub.o: \
-	 gs2_layouts.o \
 	 theta_grid.o 
 gs2_time.o: 
 gs2_transforms.o: \
@@ -547,9 +523,9 @@ mds.o: \
 mdslib.o: 
 mp.o: \
 	 constants.o 
-netcdf.o: 
-netcdf_mod.o: \
+netcdf_utils.o: \
 	 constants.o \
+	 file_utils.o \
 	 mp.o 
 nonlinear_terms.o: \
 	 constants.o \
@@ -568,14 +544,13 @@ nonlinear_terms.o: \
 om.o: \
 	 command_line.o 
 peq.o: \
-	 netcdf.o \
+	 constants.o \
+	 netcdf_utils.o \
 	 spl.o 
 prof.o: 
 radstub.o: 
 ran.o: 
 redistribute.o: \
-	 mp.o 
-redistribute_mpi.o: \
 	 mp.o 
 redistribute_shmem.o: \
 	 mp.o 
@@ -592,6 +567,7 @@ run_parameters.o: \
 	 mp.o \
 	 text_options.o 
 rungridgen.o: \
+	 constants.o \
 	 file_utils.o \
 	 gridgen4mod.o \
 	 spl.o 

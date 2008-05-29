@@ -1,10 +1,26 @@
+# include "define.inc"
+
 module peq
+
+# ifdef NETCDF
+  use netcdf, only: NF90_FLOAT, NF90_DOUBLE
+  use netcdf, only: NF90_NOWRITE, NF90_CLOBBER, NF90_NOERR
+  use netcdf, only: nf90_create, nf90_open, nf90_sync, nf90_close
+  use netcdf, only: nf90_def_dim, nf90_def_var, nf90_enddef
+  use netcdf, only: nf90_put_var, nf90_get_var, nf90_strerror
+  use netcdf, only: nf90_inq_dimid, nf90_inquire_dimension
+  use netcdf, only: nf90_inq_varid, nf90_inquire_variable
+  
+  use netcdf_utils, only: netcdf_error
+# endif
+
   implicit none
 
   private
   integer :: nr, nt, i_sym
   
-  real, allocatable, dimension (:)     :: rho_d, eqpsi, psi_bar, fp, beta, pressure, diam, rc, qsf, rho_b
+  real, allocatable, dimension (:)     :: rho_d, eqpsi, psi_bar, fp, beta
+  real, allocatable, dimension (:)     :: pressure, diam, rc, qsf, rho_b
   real, allocatable, dimension (:,:)   :: R_psi, Z_psi !, B_psi
   real, allocatable, dimension (:,:,:) :: drm, dzm, dbtm, dpm, dtm  !, dbm
   real, allocatable, dimension (:,:,:) :: dpcart, dbcart, dtcart, dbtcart
@@ -46,8 +62,9 @@ contains
   subroutine eqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
        avgrmid, initeq, in_nt, nthg) 
 
+    use constants, only: pi
 ! SHOULD MOVE AWAY FROM NETCDF MODULE AND USE INCLUDE LINE BELOW.
-    use netcdf 
+!    use netcdf 
     implicit none
 
 !    include 'netcdf.inc'
@@ -56,62 +73,98 @@ contains
 !     containing the axisymmetric magnetic field geometry in flux 
 !     coordinates
 
-    integer :: initeq, nthg
-    real :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid, d, R_geo
-    logical :: in_nt
+    character (len=80) :: eqfile
+    real, intent(out) :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid
+    integer, intent(in) :: initeq
+    integer, intent(out) :: nthg
+!    integer :: initeq, nthg
+!    real :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid, d, R_geo
+    real :: d, R_geo
+!    logical :: in_nt
+    logical, intent(in) :: in_nt
     
-    integer :: ncid, id, i, j, ifail, nchar
-    character*31 :: fortrancrap
-    character*80 :: filename, eqfile
-    integer, dimension(2) :: start, cnt
+    integer :: istatus
+    integer :: ncid, id, i, j
+    integer :: nchar
+!    integer :: ncid, id, i, j, ifail, nchar
+!    character*31 :: fortrancrap
+!    character*80 :: filename, eqfile
+    character (len=80) :: filename
+!    integer, dimension(2) :: start, cnt
 
 !
 ! what is the best way to handle the netcdf single/double problem?
 !
-    integer*4 :: iwork
+!    integer*4 :: iwork
     integer nz1, nz2
-    real*4, allocatable, dimension(:) :: workr, work
+!    real*4, allocatable, dimension(:) :: workr, work
+    real, allocatable, dimension(:) :: work
     real :: f_N, psi_N
 
-    real pi   
-    pi=2*acos(0.)
+!    real pi   
+!    pi=2*acos(0.)
 
 !     read the data
 
+# ifdef NETCDF
     if(initeq == 0) return
     if (.not.in_nt) then
 
        nchar=index(eqfile,' ')-1
        filename=eqfile(1:nchar)
+!       filename=trim(eqfile) ?
+
 !     netcdf open file         
-       ncid = ncopn (filename, NCNOWRIT, ifail)
+!       ncid = ncopn (filename, NCNOWRIT, ifail)
+       istatus = nf90_open(filename, NF90_NOWRITE, ncid)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=filename)
 
 !     netcdf read scalar: nr
 !
 !     nz2 == number of points in radial array
 !     nr == number of actual grid points in radial array
 
-       id = ncdid (ncid, 'z2', ifail)
-       call ncdinq (ncid, id, fortrancrap, nz2, ifail)
+!       id = ncdid (ncid, 'z2', ifail)
+!       call ncdinq (ncid, id, fortrancrap, nz2, ifail)
+       istatus = nf90_inq_dimid (ncid, 'z2', id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='z2')
+       istatus = nf90_inquire_dimension (ncid, id, len=nz2)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=id)
 
-       id = ncdid (ncid, 'z1', ifail)
-       call ncdinq (ncid, id,fortrancrap, nz1, ifail)
+!       id = ncdid (ncid, 'z1', ifail)
+!       call ncdinq (ncid, id,fortrancrap, nz1, ifail)
+       istatus = nf90_inq_dimid (ncid, 'z1', id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='z1')
+       istatus = nf90_inquire_dimension (ncid, id, len=nz1)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=id)
 
-       id = ncdid (ncid, 'npsi', ifail)
-       call ncdinq (ncid, id, fortrancrap, nr, ifail)
+!       id = ncdid (ncid, 'npsi', ifail)
+!       call ncdinq (ncid, id, fortrancrap, nr, ifail)
+       istatus = nf90_inq_dimid (ncid, 'npsi', id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='npsi')
+       istatus = nf90_inquire_dimension (ncid, id, len=nr)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=id)
 
-       start(1) = 8
-       id = ncvid (ncid, 'nxy', ifail)
-       call ncvgt1 (ncid, id, start, iwork, ifail)
-       i_sym = iwork
+!       start(1) = 8
+!       id = ncvid (ncid, 'nxy', ifail)
+!       call ncvgt1 (ncid, id, start, iwork, ifail)
+!       i_sym = iwork
+       istatus = nf90_inq_varid (ncid, 'nxy', id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='nxy')
+       istatus = nf90_get_var (ncid, id, i_sym, start=(/ 8 /))
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
 !     netcdf read scalar: nt
 !
 !     nt == number of theta grid points in theta eq grid
 
-       id = ncdid (ncid, 'nthe', ifail)
-       call ncdinq (ncid, id, fortrancrap, nt, ifail)
-!       nt = iwork
+!       id = ncdid (ncid, 'nthe', ifail)
+!       call ncdinq (ncid, id, fortrancrap, nt, ifail)
+!!       nt = iwork
+       istatus = nf90_inq_dimid (ncid, 'nthe', id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='nthe')
+       istatus = nf90_inquire_dimension (ncid, id, len=nt)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=id)
 
        call alloc_arrays(nr, nt)
 
@@ -130,28 +183,39 @@ contains
 !     pressure(1:nr) == pressure profile on the radial grid,
 !     normalized to the value at the magnetic axis.     
 
-       allocate(workr(nz2))
-       workr = 0.
-
-       start(1) = 1
-       cnt(1) = nz2
+!       allocate(workr(nz2))
+!       workr = 0.
+!       start(1) = 1
+!       cnt(1) = nz2
 
 !       id = ncvid (ncid, 'rho', ifail)
 !       call ncvgt (ncid, id, start, cnt, workr, ifail)
 !       rho_b = workr(1:nr)
 ! rho_d must be defined by hand
 
-       id = ncvid (ncid, 'psivec', ifail)
-       call ncvgt (ncid, id, start, cnt, workr, ifail)
-       eqpsi = workr(1:nr)    !*1.e-8
+!       id = ncvid (ncid, 'psivec', ifail)
+!       call ncvgt (ncid, id, start, cnt, workr, ifail)
+!       eqpsi = workr(1:nr)    !*1.e-8
+       istatus = nf90_inq_varid (ncid, 'psivec', id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='psivec')
+       istatus = nf90_get_var (ncid, id, eqpsi, count=(/ nr /))
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
-       id = ncvid (ncid, 'fvec', ifail)
-       call ncvgt (ncid, id, start, cnt, workr, ifail)
-       fp = workr(1:nr)
+!       id = ncvid (ncid, 'fvec', ifail)
+!       call ncvgt (ncid, id, start, cnt, workr, ifail)
+!       fp = workr(1:nr)
+       istatus = nf90_inq_varid (ncid, 'fvec', id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='fvec')
+       istatus = nf90_get_var (ncid, id, fp, count=(/ nr /))
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
-       id = ncvid (ncid, 'pvec', ifail)
-       call ncvgt (ncid, id, start, cnt, workr, ifail)       
-       pressure = workr(1:nr)
+!       id = ncvid (ncid, 'pvec', ifail)
+!       call ncvgt (ncid, id, start, cnt, workr, ifail)       
+!       pressure = workr(1:nr)
+       istatus = nf90_inq_varid (ncid, 'pvec', id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='pvec')
+       istatus = nf90_get_var (ncid, id, eqpsi, count=(/ nr /))
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
 !     assign scalars: psi_0, psi_a, B_T
 !
@@ -172,12 +236,16 @@ contains
 
        allocate(work(nz1*nz2))
 
-       start(1) = 1
-       start(2) = 1
-       cnt(1) = nz1
-       cnt(2) = nz2
-       id = ncvid (ncid, 'x', ifail)
-       call ncvgt (ncid, id, start, cnt, work, ifail)
+!       start(1) = 1
+!       start(2) = 1
+!       cnt(1) = nz1
+!       cnt(2) = nz2
+!       id = ncvid (ncid, 'x', ifail)
+!       call ncvgt (ncid, id, start, cnt, work, ifail)
+       istatus = nf90_inq_varid (ncid, 'x', id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='x')
+       istatus = nf90_get_var (ncid, id, work, count=(/ nz1*nz2 /))
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
        if(i_sym == 0) then
           write(*,*) 'Up-down asymmetries not yet handled correctly.'
@@ -189,10 +257,14 @@ contains
           enddo
        enddo
 
-       cnt(1) = nz1
-       cnt(2) = nz2
-       id = ncvid (ncid, 'z', ifail)
-       call ncvgt (ncid, id, start, cnt, work, ifail)
+!       cnt(1) = nz1
+!       cnt(2) = nz2
+!       id = ncvid (ncid, 'z', ifail)
+!       call ncvgt (ncid, id, start, cnt, work, ifail)
+       istatus = nf90_inq_varid (ncid, 'z', id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='z')
+       istatus = nf90_get_var (ncid, id, work, count=(/ nz1, nz2 /))
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
        if(i_sym == 0) then
           write(*,*) 'Up-down asymmetries not yet handled correctly.'
@@ -237,9 +309,12 @@ contains
        beta_0 = beta(1)
        pressure = pressure/pressure(1)
 
-       call ncclos (ncid, ifail)
+!       call ncclos (ncid, ifail)
+       istatus = nf90_close(ncid)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus)
 
-       deallocate(work,workr)
+!       deallocate(work,workr)
+       deallocate(work)
 
     endif   ! end of external reads
                        
@@ -262,13 +337,17 @@ contains
     fp=fp/f_N
 
     nthg=nt
+# else
+    write(*,*) 'error: peq eqin is called without netcdf'; stop
+# endif
 
   end subroutine eqin
 
   subroutine teqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
        avgrmid, initeq, in_nt, nthg) 
 
-    use netcdf 
+    use constants, only: pi
+!    use netcdf 
     implicit none
 !    include 'netcdf.inc'
 
@@ -276,25 +355,36 @@ contains
 !     containing the axisymmetric magnetic field geometry in flux 
 !     coordinates
 
-    integer :: initeq, nthg
-    real :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid, d, R_geo
-    logical :: in_nt
-    
-    integer :: ncid, id, i, j, ifail, nchar
-    character*31 :: fortrancrap
-    character*80 :: filename, eqfile
-    integer, dimension(2) :: start, cnt
+    character (len=80) :: eqfile
+    real, intent(out) :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid
+    integer, intent(in) :: initeq
+    integer, intent(out) :: nthg
+!    integer :: initeq, nthg
+!    real :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid, d, R_geo
+    real :: d, R_geo
+!    logical :: in_nt
+    logical, intent(in) :: in_nt
+
+    integer :: istatus
+    integer :: ncid, id, i, j
+    integer :: nchar
+!    integer :: ncid, id, i, j, ifail, nchar
+!    character*31 :: fortrancrap
+!    character*80 :: filename, eqfile
+    character (len=80) :: filename
+!    integer, dimension(2) :: start, cnt
 
 !
 ! what is the best way to handle the netcdf single/double problem?
 !
-    integer :: nt1
-    real*8, allocatable, dimension(:) :: workr
-    real*8, allocatable, dimension(:,:) :: work
+!    integer :: nt1
+!    real*8, allocatable, dimension(:) :: workr
+!    real*8, allocatable, dimension(:,:) :: work
+    real, allocatable, dimension(:,:) :: work
     real :: f_N, psi_N
-    real pi
+!    real pi
     
-    pi = 2.*acos(0.)
+!    pi = 2.*acos(0.)
 !     read the data
 
     if(initeq == 0) then
@@ -305,13 +395,16 @@ contains
 
        nchar=index(eqfile,' ')-1
        filename=eqfile(1:nchar)
-
+!       filename=trim(eqfile)
     else
        filename='dskeq.cdf'
     endif
 
+# ifdef NETCDF
 !     netcdf open file         
-    ncid = ncopn (filename, NCNOWRIT, ifail)
+!    ncid = ncopn (filename, NCNOWRIT, ifail)
+    istatus = nf90_open(filename, NF90_NOWRITE, ncid)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=filename)
 
 !     netcdf read scalar: nr
 !
@@ -320,15 +413,23 @@ contains
 !    id = ncdid (ncid, 'dim_00021', ifail)
 !    call ncdinq (ncid, id, fortrancrap, nr, ifail)
 
-    id = ncvid (ncid, 'ns', ifail)
-    call ncvgt1 (ncid, id, 1, nr, ifail)
+!    id = ncvid (ncid, 'ns', ifail)
+!    call ncvgt1 (ncid, id, 1, nr, ifail)
+    istatus = nf90_inq_dimid (ncid, 'ns', id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='ns')
+    istatus = nf90_inquire_dimension (ncid, id, len=nr)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
     
 !     netcdf read scalar: nt
 !
 !     nt == number of theta grid points in theta eq grid
 
-    id = ncvid (ncid, 'nt1', ifail)
-    call ncvgt1 (ncid, id, 1, nt, ifail)
+!    id = ncvid (ncid, 'nt1', ifail)
+!    call ncvgt1 (ncid, id, 1, nt, ifail)
+    istatus = nf90_inq_dimid (ncid, 'nt1', id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='nt1')
+    istatus = nf90_inquire_dimension (ncid, id, len=nt)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
     
 !    id = ncdid (ncid, 'dim_00050', ifail)
 !    call ncdinq (ncid, id, fortrancrap, nt, ifail)
@@ -361,37 +462,60 @@ contains
 !     pressure(1:nr) == pressure profile on the radial grid,
 !     normalized to the value at the magnetic axis.     
 
-    allocate(workr(nr))
-    workr = 0.
+!    allocate(workr(nr))
+!    workr = 0.
 
-    start(1) = 1
-    cnt(1) = nr
+!    start(1) = 1
+!    cnt(1) = nr
 
-    id = ncvid (ncid, 'rho', ifail)
-    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
-    rho_b = workr(1:nr)
+!    id = ncvid (ncid, 'rho', ifail)
+!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+!    rho_b = workr(1:nr)
+    istatus = nf90_inq_varid (ncid, 'rho', id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='rho')
+    istatus = nf90_get_var (ncid, id, rho_b)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
-    id = ncvid (ncid, 'psi', ifail)
-    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
-    eqpsi = abs(workr(1:nr))
+!    id = ncvid (ncid, 'psi', ifail)
+!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+!    eqpsi = abs(workr(1:nr))
+    istatus = nf90_inq_varid (ncid, 'psi', id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='psi')
+    istatus = nf90_get_var (ncid, id, eqpsi)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+    eqpsi(1:nr) = abs(eqpsi(1:nr))
     
     psi_0 = eqpsi(1)
     psi_a = eqpsi(nr)
 
     psi_bar = (eqpsi-psi_0)/(psi_a-psi_0)
     
-    id = ncvid (ncid, 'g', ifail)
-    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
-    fp = abs(workr(1:nr))
+!    id = ncvid (ncid, 'g', ifail)
+!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+!    fp = abs(workr(1:nr))
+    istatus = nf90_inq_varid (ncid, 'g', id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='g')
+    istatus = nf90_get_var (ncid, id, fp)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+    fp(1:nr) = abs(fp(1:nr))
     
 ! not needed
-    id = ncvid (ncid, 'q', ifail)
-    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
-    qsf = abs(workr(1:nr))
+!    id = ncvid (ncid, 'q', ifail)
+!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+!    qsf = abs(workr(1:nr))
+    istatus = nf90_inq_varid (ncid, 'q', id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='q')
+    istatus = nf90_get_var (ncid, id, qsf)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+    qsf(1:nr) = abs(qsf(1:nr))
     
-    id = ncvid (ncid, 'p', ifail)
-    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)       
-    pressure = workr(1:nr)
+!    id = ncvid (ncid, 'p', ifail)
+!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)       
+!    pressure = workr(1:nr)
+    istatus = nf90_inq_varid (ncid, 'p', id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='p')
+    istatus = nf90_get_var (ncid, id, pressure)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
 !       id = ncvid (ncid, 'beta', ifail)
 !       call ncvgt (ncid, id, start, cnt, workr, ifail)
@@ -405,13 +529,17 @@ contains
 !         
 
     allocate(work(nt,nr))
-    
-    start(1) = 1
-    start(2) = 1
-    cnt(1) = nt
-    cnt(2) = nr
-    id = ncvid (ncid, 'R', ifail)
-    call ncvgt (ncid, id, start, cnt, work, ifail)
+!    start(1) = 1
+!    start(2) = 1
+!    cnt(1) = nt
+!    cnt(2) = nr
+
+!    id = ncvid (ncid, 'R', ifail)
+!    call ncvgt (ncid, id, start, cnt, work, ifail)
+    istatus = nf90_inq_varid (ncid, 'R', id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='R')
+    istatus = nf90_get_var (ncid, id, work)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
     do j=1,nt
        do i=1,nr
@@ -419,10 +547,14 @@ contains
        enddo
     enddo
     
-    cnt(1) = nt
-    cnt(2) = nr
-    id = ncvid (ncid, 'Z', ifail)
-    call ncvgt (ncid, id, start, cnt, work, ifail)
+!    cnt(1) = nt
+!    cnt(2) = nr
+!    id = ncvid (ncid, 'Z', ifail)
+!    call ncvgt (ncid, id, start, cnt, work, ifail)
+    istatus = nf90_inq_varid (ncid, 'Z', id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='Z')
+    istatus = nf90_get_var (ncid, id, work)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
     do j=1,nt
        do i=1,nr
@@ -430,9 +562,12 @@ contains
        enddo
     enddo
     
-    call ncclos (ncid, ifail)
+!    call ncclos (ncid, ifail)
+    istatus = nf90_close (ncid)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus)
     
-    deallocate(work,workr)
+!    deallocate(work,workr)
+    deallocate(work)
 
 !    endif   ! end of external reads
 
@@ -493,6 +628,9 @@ contains
 !    do i=1,nr
 !       write (*,*) rho_b(i), pressure(i), qsf(i)
 !    end do
+# else
+    write(*,*) 'error: peq teqin is called without netcdf'; stop
+# endif
 
   end subroutine teqin
 
@@ -521,10 +659,11 @@ contains
 
   subroutine peq_init
 
+    use constants, only: pi
     implicit none
     real, dimension(nr,nt) :: eqpsi1, eqth, eqbtor
 
-    real pi
+!    real pi
     integer i, j
    
     do j=1,nt
@@ -534,7 +673,7 @@ contains
        enddo
     enddo
     
-    pi=2*acos(0.)
+!    pi=2*acos(0.)
     if (transp) then
        do j=1,nt
           eqth(:,j) = (j-1)*2.*pi/float(nt-1)-pi
@@ -598,12 +737,14 @@ contains
 
   subroutine derm(f, dfm, char)
 
+    use constants, only: pi
     implicit none
     integer i, j
     character*1 :: char
-    real f(:,:), dfm(:,:,:), pi
+!    real f(:,:), dfm(:,:,:), pi
+    real :: f(:,:), dfm(:,:,:)
 
-    pi = 2*acos(0.)
+!    pi = 2*acos(0.)
     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))         
@@ -691,7 +832,7 @@ contains
     real tmp(2), aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) :: dcart
     real, dimension(nr,nt) :: f
-    integer i
+    integer :: i
     
     select case(char)
     case('B') 
@@ -748,12 +889,12 @@ contains
     use splines, only: inter_d_cspl
     implicit none
     
-    integer nth_used, ntm
-    character*1 char
-    real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
-    real aa(1), daa(1), rp, rpt(1)
+    integer :: nth_used, ntm
+    character*1 :: char
+    real :: rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
+    real :: aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) ::  dbish
-    integer i
+    integer :: i
 
     select case(char)
     case('B') 
@@ -795,15 +936,17 @@ contains
   end subroutine bgradient
 
   subroutine eqitem(r, theta_in, f, fstar, char)
-      
+ 
+    use constants, only: pi
     integer :: i, j, istar, jstar
     character*1 :: char
     real :: r, thet, fstar, sign, tp, tps, theta_in
-    real :: st, dt, sr, dr, pi
+!    real :: st, dt, sr, dr, pi
+    real :: st, dt, sr, dr
     real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
     
-    pi = 2.*acos(0.)
+!    pi = 2.*acos(0.)
 
 ! check for axis evaluation
       
@@ -1068,12 +1211,14 @@ contains
   end function psi
 
   function mod2pi (theta)
-    
+
+    use constants, only: pi
     real, intent(in) :: theta
-    real :: pi, th, mod2pi
+!    real :: pi, th, mod2pi
+    real :: th, mod2pi
     logical :: out
     
-    pi=2.*acos(0.)
+!    pi=2.*acos(0.)
     
     if(theta <= pi .and. theta >= -pi) then
        mod2pi = theta

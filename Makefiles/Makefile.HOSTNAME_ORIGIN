@@ -2,7 +2,8 @@
 
 #COMPILER = unknown
 COMPILER = cray
-USE_POSIX=on
+override USE_POSIX=on
+override USE_FFT=
 
 include Makefile.ORIGIN
 
