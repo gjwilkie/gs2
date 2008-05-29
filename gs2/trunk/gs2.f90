@@ -84,7 +84,7 @@ program gs2
   if (proc0) then
      call time_message(.false., .false., time_finish,'Finished run')
      time_total=time_init+time_advance+time_nc+time_reinit+time_finish
-     PRINT '(/,'' Initialization'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+     print '(/,'' Initialization'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
        &'' Advance steps'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
        &'' Write restart'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
        &'' Re-initialize'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
@@ -95,7 +95,7 @@ program gs2
        time_nc/60.,time_nc/time_total, &
        time_reinit/60.,time_reinit/time_total, &
        time_finish/60.,time_finish/time_total,time_total/60.
-  ENDIF
+  endif
 
 
   call finish_mp

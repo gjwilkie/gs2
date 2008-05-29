@@ -2,6 +2,7 @@
 
 COMPILER=fuj
 override USE_NR_RAN=on
+override USE_MPI=
 override USE_FFT=
 
 ifeq ($(PROJECT),gs2)

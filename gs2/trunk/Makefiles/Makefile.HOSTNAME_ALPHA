@@ -2,6 +2,7 @@
 
 COMPILER=compaq
 override USE_NR_RAN=on
+override USE_MPI=
 
 include Makefile.ALPHA
 

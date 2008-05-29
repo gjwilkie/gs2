@@ -2,6 +2,7 @@
 
 COMPILER=cray
 override USE_MPI=
+override USE_FFT=
 
 include Makefile.C90
 	
