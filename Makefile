@@ -58,7 +58,7 @@ STATIC ?=
 DBLE ?= on
 # turns on distributed memory parallelization using MPI (bin)
 USE_MPI ?= on
-# turns on SHMEM parallel communications on SGI
+# turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?= 
 # which FFT library to use (fftw,undefined) 
 USE_FFT ?= fftw
@@ -66,13 +66,15 @@ USE_FFT ?= fftw
 USE_NETCDF ?= new
 # uses hdf5 library (bin)
 USE_HDF5 ?=
+# uses MDSplus (bin)
+USE_MDSPLUS ?= 
 # Use function pointer in agk_layouts_indices.c (bin)
 # see also README.cpp
 USE_C_INDEX ?= 
 # Use Numerical Recipes local random number generator (bin)
 # see also README.cpp
 USE_NR_RAN ?=
-# Use posix for command_line
+# Use posix for command_line (bin)
 USE_POSIX ?=
 #
 # * Targets:
@@ -105,11 +107,11 @@ RANLIB=ranlib
 AWK = awk
 
 # work around
-F90FLAGS_real_double_promote = $(F90FLAGS)
-F90FLAGS_no_real_promotion = $(F90FLAGS)
+#F90FLAGS_real_double_promote = $(F90FLAGS)
+#F90FLAGS_no_real_promotion = $(F90FLAGS)
 F90FLAGS_without_minus_w = $(F90FLAGS)
 # this is used for constatns.fpp in gs2
-F90FLAGS_use_realsize8 = $(F90FLAGS)
+#F90FLAGS_use_realsize8 = $(F90FLAGS)
 F90FLAGS_SFX0 =
 F90FLAGS_SFX1 =
 F90FLAGS_SFX2 =
@@ -133,12 +135,12 @@ $(warning TEST mode is not working yet)
 	override TEST =
 endif
 
-ifeq ($(PROJECT),gs2) 
-	ifndef DBLE
-$(warning DBLE cannot be off for gs2)
-		override DBLE = on
-	endif
-endif
+#ifeq ($(PROJECT),gs2) 
+#	ifndef DBLE
+#$(warning DBLE cannot be off for gs2)
+#		override DBLE = on
+#	endif
+#endif
 ######################################################### PLATFORM DEPENDENCE
 
 # compile mode switches (DEBUG, TEST, PROF, OPT, STATIC, DBLE)
@@ -166,7 +168,7 @@ endif
 
 ifdef USE_SHMEM
 $(warning USE_SHMEM is not working yet)
-#	override USE_SHMEM =	
+	override USE_SHMEM =	
 endif
 
 ifdef USE_HDF5
@@ -392,24 +394,24 @@ eiktest: $(eiktest_mod)
 
 ############################################################### SPECIAL RULES
 
-ifeq ($(PROJECT),gs2)
-# le_grids needs quad precision on some hosts
-le_grids.o: le_grids.f90
-	$(FC) $(F90FLAGS_real_double_promote) -c $<
-# mds neeeds quad precision on some hosts
-mds.o: mds.fpp
-	$(CPP) $(CPPFLAGS) $< $*.f90
-	$(FC) $(F90FLAGS_real_double_promote) -c $*.f90
-	rm -f $*.f90
-constants.o: constants.fpp
-	$(CPP) $(CPPFLAGS) $< $*.f90
-	$(FC) $(F90FLAGS_use_realsize8) -c $*.f90
-	rm -f $*.f90
-endif
+#ifeq ($(PROJECT),gs2)
+## le_grids needs quad precision on some hosts
+#le_grids.o: le_grids.f90
+#	$(FC) $(F90FLAGS_real_double_promote) -c $<
+## mds neeeds quad precision on some hosts
+#mds.o: mds.fpp
+#	$(CPP) $(CPPFLAGS) $< $*.f90
+#	$(FC) $(F90FLAGS_real_double_promote) -c $*.f90
+#	rm -f $*.f90
+#constants.o: constants.fpp
+#	$(CPP) $(CPPFLAGS) $< $*.f90
+#	$(FC) $(F90FLAGS_use_realsize8) -c $*.f90
+#	rm -f $*.f90
+#endif
 # No optimizations for some routines: stupid workarounds because of 
 # incompatibility between f95 and my C libraries (I think)
 
-# NAG: without -w
+# NAG: without -w ! is this cause any problem? if not, remove.
 #gs2_transforms.o: gs2_transforms.f90
 #	$(FC) $(F90FLAGS_without_minus_w) $(F90FLAGS_SFX0) -c $<
 #agk_transforms.o: agk_transforms.fpp

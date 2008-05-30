@@ -17,20 +17,20 @@ ifeq ($(CHIP),power5)
 endif
 
 ifdef DBLE
-	ifeq ($(PROJECT),agk)
+#	ifeq ($(PROJECT),agk)
 		F90FLAGS += -qrealsize=8
 # promotes real->dble, dble->quad
 # but, does not promote if kind is explicitly specified
-	endif
-	ifeq ($(PROJECT),gs2)
+#	endif
+#	ifeq ($(PROJECT),gs2)
 # Note: this work around can be removed by writing the code properly
-		F90FLAGS += -qautodbl=dbl4
+#		F90FLAGS += -qautodbl=dbl4
 # promotes only real->dble
-		F90FLAGS_real_double_promote = $(subst dbl4,dbl,$(F90FLAGS))
+#		F90FLAGS_real_double_promote = $(subst dbl4,dbl,$(F90FLAGS))
 # makes real -> dble, and dble -> quad
 # this option is used only for le_grids.f90 and mds.f90
-		F90FLAGS_use_realsize8 = $(subst qautodbl=dbl4,qrealsize=8,$(F90FLAGS))
-	endif
+#		F90FLAGS_use_realsize8 = $(subst qautodbl=dbl4,qrealsize=8,$(F90FLAGS))
+#	endif
 endif
 
 ifdef STATIC

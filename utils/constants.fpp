@@ -11,7 +11,7 @@ module constants
 
   public :: size_of
   public :: kind_is, kind_id, kind_rs, kind_rd
-  public :: zi, pi, twopi
+  public :: zi, pi, twopi, dpi, dtwopi
 
   private
 
@@ -48,7 +48,11 @@ module constants
 
   complex, parameter :: zi = ( 0.0 , 1.0 )
 !  real, parameter :: pi = 3.1415926535897931
-  real, parameter :: pi = 3.14159265358979323846, twopi=2.*pi
+!  real, parameter :: pi = 3.14159265358979323846, twopi=2.*pi
+  ! this is actually quad precision
+  double precision, parameter :: dpi = &
+       3.14159265358979311599796346854418516159057617188, dtwopi=2.*dpi
+  real, parameter :: pi = dpi, twopi= dtwopi
 
 ! Note: we will use dp="double precision" for almost everything.
 !

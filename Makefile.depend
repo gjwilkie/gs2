@@ -50,7 +50,6 @@ eiktest_mod = \
 gs2_mod = \
 	 antenna.o \
 	 antenna_data.o \
-	 check.o \
 	 collisions.o \
 	 command_line.o \
 	 constants.o \
@@ -82,6 +81,7 @@ gs2_mod = \
 	 hyper.o \
 	 ideq.o \
 	 init_g.o \
+	 job_manage.o \
 	 kt_grids.o \
 	 le_grids.o \
 	 leq.o \
@@ -167,17 +167,6 @@ antenna.o: \
 antenna_data.o: 
 ball.o: \
 	 geometry.o 
-check.o: \
-	 file_utils.o \
-	 mp.o 
-check_aix.o: \
-	 file_utils.o \
-	 mp.o \
-	 run_parameters.o 
-check_sgi.o: \
-	 file_utils.o \
-	 mp.o \
-	 run_parameters.o 
 collisions.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
@@ -290,7 +279,6 @@ geq.o: \
 gridgen4mod.o: \
 	 spl.o 
 gs2.o: \
-	 check.o \
 	 collisions.o \
 	 dist_fn_arrays.o \
 	 fields.o \
@@ -300,6 +288,7 @@ gs2.o: \
 	 gs2_save.o \
 	 gs2_time.o \
 	 init_g.o \
+	 job_manage.o \
 	 mp.o \
 	 run_parameters.o 
 gs2_diagnostics.o: \
@@ -329,16 +318,6 @@ gs2_diagnostics.o: \
 	 theta_grid.o 
 gs2_dist_io_hdf.o: \
 	 file_utils.o \
-	 gs2_layouts.o \
-	 gs2_transforms.o \
-	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
-	 species.o \
-	 theta_grid.o 
-gs2_dist_io_stub.o: \
-	 file_utils.o \
-	 gs2_dist_io_hdf.o \
 	 gs2_layouts.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
@@ -422,39 +401,8 @@ gs2_save_hdf5.o: \
 	 kt_grids.o \
 	 mp.o \
 	 theta_grid.o 
-gs2_save_new.o: \
-	 fields_arrays.o \
-	 file_utils.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 mp.o \
-	 theta_grid.o 
 gs2_time.o: 
 gs2_transforms.o: \
-	 fft_work.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 mp.o \
-	 prof.o \
-	 redistribute.o \
-	 theta_grid.o 
-gs2_transforms_aix.o: \
-	 fft_work.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 mp.o \
-	 prof.o \
-	 redistribute.o \
-	 theta_grid.o 
-gs2_transforms_sgi.o: \
-	 fft_work.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 mp.o \
-	 prof.o \
-	 redistribute.o \
-	 theta_grid.o 
-gs2_transforms_stub.o: \
 	 fft_work.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
@@ -499,6 +447,9 @@ init_g.o: \
 	 species.o \
 	 text_options.o \
 	 theta_grid.o 
+job_manage.o: \
+	 file_utils.o \
+	 mp.o 
 kpar.o: \
 	 command_line.o 
 kt_grids.o: \
@@ -551,8 +502,6 @@ prof.o:
 radstub.o: 
 ran.o: 
 redistribute.o: \
-	 mp.o 
-redistribute_shmem.o: \
 	 mp.o 
 redistribute_shnew.o: \
 	 mp.o 

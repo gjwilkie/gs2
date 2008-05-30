@@ -1,5 +1,14 @@
 # include "define.inc"
 
+! RN 2008/05/30: Note for precision
+! The real and complex variables which is explicitly declared to have
+! a given kind should not be promoted to higher precision.
+! Real (kind=kind_rs) should be always single precision, and so on.
+! I guess MDSplus library does not handle quad precision real, so
+! the promotion of precision may cause error. Currently, there's no
+! problem because mds related routines are not used for double variables.
+! (Note that some compilers (xl, for example) have an option to promote 
+! precisions even when the kind is gievn.)
 !-----------------------------------------------------------------------
 !     file mdsplus_io.f.
 !     performs mdsplus tree io
@@ -33,13 +42,21 @@ module mdsio
   logical  mdssetdefault
   external mdsvalue, mdsput
   logical  mdsvalue, mdsput
+
+! these are stolen from  mdslib.inc
+  integer, parameter :: IDTYPE_UNSIGNED_BYTE=2, IDTYPE_BYTE=6
+  integer, parameter :: IDTYPE_UNSIGNED_SHORT=3, IDTYPE_SHORT=7
+  integer, parameter :: IDTYPE_UNSIGNED_LONG=4, IDTYPE_LONG=8
+  integer, parameter :: IDTYPE_UNSIGNED_LONGLONG=5, IDTYPE_LONGLONG=8
+  integer, parameter :: IDTYPE_FLOAT=10, IDTYPE_DOUBLE=11
+  integer, parameter :: IDTYPE_COMPLEX=12, IDTYPE_DOUBLE_COMPLEX=13
+  integer, parameter :: IDTYPE_CSTRING=14
 # endif
   public :: mds_read
   public :: mds_write
   public :: checkmds
   public :: getmdserrortext
-
-
+  
   interface mds_read
      module procedure mds_r_log_0
      module procedure mds_r_char_1
@@ -162,8 +179,8 @@ contains
     equivalence (loc_status,istat)
     integer length
     integer :: descr
-    loc_status = mdsvalue("getmsg($)",descr(8,status,0),&
-         &descr(14,text,0,len(text),0),0,length)
+    loc_status = mdsvalue("getmsg($)",descr(IDTYPE_LONG,status,0),&
+         &descr(IDTYPE_CSTRING,text,0,len(text),0),0,length)
     if (iand(istat,1) .eq. 0) then
        loc_status = status
        write(text,*) "error status = ",istat
@@ -184,7 +201,7 @@ contains
     logical :: status
     integer :: len
     integer :: descr
-    status = mdsvalue(name//char(0),descr(8,value,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_LONG,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -198,7 +215,7 @@ contains
     integer :: clen 
     integer :: descr
     status = mdsvalue(name//char(0),&
-         &descr(14,value,0,len(value)),0,clen)
+         &descr(IDTYPE_CSTRING,value,0,len(value)),0,clen)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -211,7 +228,7 @@ contains
     logical :: status
     integer :: len
     integer :: descr
-    status = mdsvalue(name//char(0),descr(8,value,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_LONG,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -226,7 +243,7 @@ contains
     integer :: descr
     integer :: dim1
     dim1 = size(value,1)
-    status = mdsvalue(name//char(0),descr(8,value,dim1,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_LONG,value,dim1,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -242,7 +259,7 @@ contains
     integer :: dim1,dim2
     dim1 = size(value,1)
     dim2 = size(value,2)
-    status = mdsvalue(name//char(0),descr(8,value,dim1,dim2,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_LONG,value,dim1,dim2,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -259,7 +276,8 @@ contains
     dim1 = size(value,1)
     dim2 = size(value,2)
     dim3 = size(value,3)
-    status = mdsvalue(name//char(0),descr(8,value,dim1,dim2,dim3,0),0,len)
+    status = mdsvalue(name//char(0), &
+         descr(IDTYPE_LONG,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -278,7 +296,7 @@ contains
     dim3 = size(value,3)
     dim4 = size(value,4)
     status = mdsvalue(name//char(0),&
-         &descr(8,value,dim1,dim2,dim3,dim4,0),0,len)
+         &descr(IDTYPE_LONG,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -298,7 +316,7 @@ contains
     dim4 = size(value,4)
     dim5 = size(value,5)
     status = mdsvalue(name//char(0),&
-         &descr(8,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
+         &descr(IDTYPE_LONG,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -319,7 +337,7 @@ contains
     dim5 = size(value,5)
     dim6 = size(value,6)
     status = mdsvalue(name//char(0),&
-         &descr(8,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
+         &descr(IDTYPE_LONG,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -341,7 +359,7 @@ contains
     dim6 = size(value,6)
     dim7 = size(value,7)
     status = mdsvalue(name//char(0),&
-         &descr(8,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
+         &descr(IDTYPE_LONG,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -354,7 +372,7 @@ contains
     logical :: status
     integer :: len
     integer :: descr
-    status = mdsvalue(name//char(0),descr(10,value,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_FLOAT,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -369,7 +387,7 @@ contains
     integer :: descr
     integer :: dim1
     dim1 = size(value,1)
-    status = mdsvalue(name//char(0),descr(10,value,dim1,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_FLOAT,value,dim1,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -386,7 +404,7 @@ contains
     dim1 = size(value,1)
     dim2 = size(value,2)
     status = mdsvalue(name//char(0),&
-         &descr(10,value,dim1,dim2,0),0,len)
+         &descr(IDTYPE_FLOAT,value,dim1,dim2,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -404,7 +422,7 @@ contains
     dim2 = size(value,2)
     dim3 = size(value,3)
     status = mdsvalue(name//char(0),&
-         &descr(10,value,dim1,dim2,dim3,0),0,len)
+         &descr(IDTYPE_FLOAT,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -423,7 +441,7 @@ contains
     dim3 = size(value,3)
     dim4 = size(value,4)
     status = mdsvalue(name//char(0),&
-         &descr(10,value,dim1,dim2,dim3,dim4,0),0,len)
+         &descr(IDTYPE_FLOAT,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -443,7 +461,7 @@ contains
     dim4 = size(value,4)
     dim5 = size(value,5)
     status = mdsvalue(name//char(0),&
-         &descr(10,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
+         &descr(IDTYPE_FLOAT,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -464,7 +482,7 @@ contains
     dim5 = size(value,5)
     dim6 = size(value,6)
     status = mdsvalue(name//char(0),&
-         &descr(10,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
+         &descr(IDTYPE_FLOAT,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -486,7 +504,7 @@ contains
     dim6 = size(value,6)
     dim7 = size(value,7)
     status = mdsvalue(name//char(0),&
-         &descr(10,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
+         &descr(IDTYPE_FLOAT,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -494,12 +512,13 @@ contains
 
   subroutine mds_r_doub_0(name,value)
     character(*), intent(in) :: name
-    real(kind=kind_rd) , intent(out):: value
+!    real(kind=kind_rd) , intent(out):: value
+    double precision, intent(out):: value
 # ifdef MDSPLUS
     logical :: status
     integer :: len
     integer :: descr
-    status = mdsvalue(name//char(0),descr(11,value,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_DOUBLE,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -514,7 +533,7 @@ contains
     integer :: descr
     integer :: dim1
     dim1 = size(value,1)
-    status = mdsvalue(name//char(0),descr(11,value,dim1,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_DOUBLE,value,dim1,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -531,7 +550,7 @@ contains
     dim1 = size(value,1)
     dim2 = size(value,2)
     status = mdsvalue(name//char(0),&
-         &descr(11,value,dim1,dim2,0,0),0,len)
+         &descr(IDTYPE_DOUBLE,value,dim1,dim2,0,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -549,7 +568,7 @@ contains
     dim2 = size(value,2)
     dim3 = size(value,3)
     status = mdsvalue(name//char(0),&
-         &descr(11,value,dim1,dim2,dim3,0),0,len)
+         &descr(IDTYPE_DOUBLE,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -568,7 +587,7 @@ contains
     dim3 = size(value,3)
     dim4 = size(value,4)
     status = mdsvalue(name//char(0),&
-         &descr(11,value,dim1,dim2,dim3,dim4,0),0,len)
+         &descr(IDTYPE_DOUBLE,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -588,7 +607,7 @@ contains
     dim4 = size(value,4)
     dim5 = size(value,5)
     status = mdsvalue(name//char(0),&
-         &descr(11,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
+         &descr(IDTYPE_DOUBLE,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -609,7 +628,7 @@ contains
     dim5 = size(value,5)
     dim6 = size(value,6)
     status = mdsvalue(name//char(0),&
-         &descr(11,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
+         &descr(IDTYPE_DOUBLE,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -631,7 +650,7 @@ contains
     dim6 = size(value,6)
     dim7 = size(value,7)
     status = mdsvalue(name//char(0),&
-         &descr(11,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
+         &descr(IDTYPE_DOUBLE,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -644,7 +663,7 @@ contains
     logical :: status
     integer :: len
     integer :: descr
-    status = mdsvalue(name//char(0),descr(12,value,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_COMPLEX,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -659,7 +678,7 @@ contains
     integer :: descr
     integer :: dim1
     dim1 = size(value,1)
-    status = mdsvalue(name//char(0),descr(12,value,dim1,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_COMPLEX,value,dim1,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -676,7 +695,7 @@ contains
     dim1 = size(value,1)
     dim2 = size(value,2)
     status = mdsvalue(name//char(0),&
-         &descr(12,value,dim1,dim2,0),0,len)
+         &descr(IDTYPE_COMPLEX,value,dim1,dim2,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -694,7 +713,7 @@ contains
     dim2 = size(value,2)
     dim3 = size(value,3)
     status = mdsvalue(name//char(0),&
-         &descr(12,value,dim1,dim2,dim3,0),0,len)
+         &descr(IDTYPE_COMPLEX,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -713,7 +732,7 @@ contains
     dim3 = size(value,3)
     dim4 = size(value,4)
     status = mdsvalue(name//char(0),&
-         &descr(12,value,dim1,dim2,dim3,dim4,0),0,len)
+         &descr(IDTYPE_COMPLEX,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -733,7 +752,7 @@ contains
     dim4 = size(value,4)
     dim5 = size(value,5)
     status = mdsvalue(name//char(0),&
-         &descr(12,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
+         &descr(IDTYPE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -754,7 +773,7 @@ contains
     dim5 = size(value,5)
     dim6 = size(value,6)
     status = mdsvalue(name//char(0),&
-         &descr(12,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
+         &descr(IDTYPE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -776,7 +795,7 @@ contains
     dim6 = size(value,6)
     dim7 = size(value,7)
     status = mdsvalue(name//char(0),&
-         &descr(12,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
+         &descr(IDTYPE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -789,7 +808,7 @@ contains
     logical :: status
     integer :: len
     integer :: descr
-    status = mdsvalue(name//char(0),descr(13,value,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_DOUBLE_COMPLEX,value,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -804,7 +823,7 @@ contains
     integer :: descr
     integer :: dim1
     dim1 = size(value,1)
-    status = mdsvalue(name//char(0),descr(13,value,dim1,0),0,len)
+    status = mdsvalue(name//char(0),descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -821,7 +840,7 @@ contains
     dim1 = size(value,1)
     dim2 = size(value,2)
     status = mdsvalue(name//char(0),&
-         &descr(13,value,dim1,dim2,0),0,len)
+         &descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -839,7 +858,7 @@ contains
     dim2 = size(value,2)
     dim3 = size(value,3)
     status = mdsvalue(name//char(0),&
-         &descr(13,value,dim1,dim2,dim3,0),0,len)
+         &descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -858,7 +877,7 @@ contains
     dim3 = size(value,3)
     dim4 = size(value,4)
     status = mdsvalue(name//char(0),&
-         &descr(13,value,dim1,dim2,dim3,dim4,0),0,len)
+         &descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -878,7 +897,7 @@ contains
     dim4 = size(value,4)
     dim5 = size(value,5)
     status = mdsvalue(name//char(0),&
-         &descr(13,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
+         &descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -899,7 +918,7 @@ contains
     dim5 = size(value,5)
     dim6 = size(value,6)
     status = mdsvalue(name//char(0),&
-         &descr(13,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
+         &descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -921,7 +940,7 @@ contains
     dim6 = size(value,6)
     dim7 = size(value,7)
     status = mdsvalue(name//char(0),&
-         &descr(13,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
+         &descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error reading "//name)
     return
 # endif
@@ -937,7 +956,7 @@ contains
 # ifdef MDSPLUS
     logical :: status
     integer :: descr
-    status = mdsput(name//char(0),"$",descr(8,value,0),0)
+    status = mdsput(name//char(0),"$",descr(IDTYPE_LONG,value,0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -950,7 +969,7 @@ contains
     logical :: status
     integer :: descr
     status = mdsput(name//char(0),"$",&
-         &descr(14,value,0,len(value)),0)
+         &descr(IDTYPE_CSTRING,value,0,len(value)),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -962,7 +981,7 @@ contains
 # ifdef MDSPLUS
     logical :: status
     integer :: descr
-    status = mdsput(name//char(0),"$",descr(8 ,value, 0),0)
+    status = mdsput(name//char(0),"$",descr(IDTYPE_LONG ,value, 0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -976,7 +995,7 @@ contains
     integer :: descr
     integer :: dim1
     dim1 = size(value,1)
-    status = mdsput(name//char(0),"$",descr(8 ,value, dim1, 0),0)
+    status = mdsput(name//char(0),"$",descr(IDTYPE_LONG ,value, dim1, 0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -993,7 +1012,7 @@ contains
     dim1 = size(value,1)
     dim2 = size(value,2)
     status = mdsput(name//char(0),&
-         &"$",descr(8,value,dim1,dim2,0),0,len)
+         &"$",descr(IDTYPE_LONG,value,dim1,dim2,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1011,7 +1030,7 @@ contains
     dim2 = size(value,2)
     dim3 = size(value,3)
     status = mdsput(name//char(0),&
-         &"$",descr(8,value,dim1,dim2,dim3,0),0,len)
+         &"$",descr(IDTYPE_LONG,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1030,7 +1049,7 @@ contains
     dim3 = size(value,3)
     dim4 = size(value,4)
     status = mdsput(name//char(0),&
-         &"$",descr(8,value,dim1,dim2,dim3,dim4,0),0,len)
+         &"$",descr(IDTYPE_LONG,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1050,7 +1069,7 @@ contains
     dim4 = size(value,4)
     dim5 = size(value,5)
     status = mdsput(name//char(0),&
-         &"$",descr(8,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
+         &"$",descr(IDTYPE_LONG,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1071,7 +1090,7 @@ contains
     dim5 = size(value,5)
     dim6 = size(value,6)
     status = mdsput(name//char(0),&
-         &"$",descr(8,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
+         &"$",descr(IDTYPE_LONG,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1093,7 +1112,7 @@ contains
     dim6 = size(value,6)
     dim7 = size(value,7)
     status = mdsput(name//char(0),&
-         &"$",descr(8,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
+         &"$",descr(IDTYPE_LONG,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1105,7 +1124,7 @@ contains
 # ifdef MDSPLUS
     logical :: status
     integer :: descr
-    status = mdsput(name//char(0),"$",descr(10,value,0),0)
+    status = mdsput(name//char(0),"$",descr(IDTYPE_FLOAT,value,0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1119,7 +1138,7 @@ contains
     integer :: descr
     integer :: dim1
     dim1 = size(value,1)
-    status = mdsput(name//char(0),"$",descr(10,value,dim1,0),0)
+    status = mdsput(name//char(0),"$",descr(IDTYPE_FLOAT,value,dim1,0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1136,7 +1155,7 @@ contains
     dim1 = size(value,1)
     dim2 = size(value,2)
     status = mdsput(name//char(0),&
-         &"$",descr(10,value,dim1,dim2,0),0,len)
+         &"$",descr(IDTYPE_FLOAT,value,dim1,dim2,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1154,7 +1173,7 @@ contains
     dim2 = size(value,2)
     dim3 = size(value,3)
     status = mdsput(name//char(0),&
-         &"$",descr(10,value,dim1,dim2,dim3,0),0,len)
+         &"$",descr(IDTYPE_FLOAT,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1173,7 +1192,7 @@ contains
     dim3 = size(value,3)
     dim4 = size(value,4)
     status = mdsput(name//char(0),&
-         &"$",descr(10,value,dim1,dim2,dim3,dim4,0),0,len)
+         &"$",descr(IDTYPE_FLOAT,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1193,7 +1212,7 @@ contains
     dim4 = size(value,4)
     dim5 = size(value,5)
     status = mdsput(name//char(0),&
-         &"$",descr(10,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
+         &"$",descr(IDTYPE_FLOAT,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1214,7 +1233,7 @@ contains
     dim5 = size(value,5)
     dim6 = size(value,6)
     status = mdsput(name//char(0),&
-         &"$",descr(10,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
+         &"$",descr(IDTYPE_FLOAT,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1236,7 +1255,7 @@ contains
     dim6 = size(value,6)
     dim7 = size(value,7)
     status = mdsput(name//char(0),&
-         &"$",descr(10,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
+         &"$",descr(IDTYPE_FLOAT,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1248,7 +1267,7 @@ contains
 # ifdef MDSPLUS
     logical :: status
     integer :: descr
-    status = mdsput(name//char(0),"$",descr(11,value,0),0)
+    status = mdsput(name//char(0),"$",descr(IDTYPE_DOUBLE,value,0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1262,7 +1281,7 @@ contains
     integer :: descr
     integer :: dim1
     dim1 = size(value,1)
-    status = mdsput(name//char(0),"$",descr(11,value,dim1,0),0)
+    status = mdsput(name//char(0),"$",descr(IDTYPE_DOUBLE,value,dim1,0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1278,7 +1297,7 @@ contains
     dim1 = size(value,1)
     dim2 = size(value,2)
     status = mdsput(name//char(0),"$",&
-         &descr(11,value,dim1,dim2,0,0),0)
+         &descr(IDTYPE_DOUBLE,value,dim1,dim2,0,0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1295,7 +1314,7 @@ contains
     dim2 = size(value,2)
     dim3 = size(value,3)
     status = mdsput(name//char(0),"$",&
-         &descr(11,value,dim1,dim2,dim3,0),0)
+         &descr(IDTYPE_DOUBLE,value,dim1,dim2,dim3,0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1314,7 +1333,7 @@ contains
     dim3 = size(value,3)
     dim4 = size(value,4)
     status = mdsput(name//char(0),&
-         &"$",descr(11,value,dim1,dim2,dim3,dim4,0),0,len)
+         &"$",descr(IDTYPE_DOUBLE,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1334,7 +1353,7 @@ contains
     dim4 = size(value,4)
     dim5 = size(value,5)
     status = mdsput(name//char(0),&
-         &"$",descr(11,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
+         &"$",descr(IDTYPE_DOUBLE,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1355,7 +1374,7 @@ contains
     dim5 = size(value,5)
     dim6 = size(value,6)
     status = mdsput(name//char(0),&
-         &"$",descr(11,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
+         &"$",descr(IDTYPE_DOUBLE,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1377,7 +1396,7 @@ contains
     dim6 = size(value,6)
     dim7 = size(value,7)
     status = mdsput(name//char(0),&
-         &"$",descr(11,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
+         &"$",descr(IDTYPE_DOUBLE,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1389,7 +1408,7 @@ contains
 # ifdef MDSPLUS
     logical :: status
     integer :: descr
-    status = mdsput(name//char(0),"$",descr(12,value,0),0)
+    status = mdsput(name//char(0),"$",descr(IDTYPE_COMPLEX,value,0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1403,7 +1422,7 @@ contains
     integer :: descr
     integer :: dim1
     dim1 = size(value,1)
-    status = mdsput(name//char(0),"$",descr(12,value,dim1,0),0)
+    status = mdsput(name//char(0),"$",descr(IDTYPE_COMPLEX,value,dim1,0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1420,7 +1439,7 @@ contains
     dim1 = size(value,1)
     dim2 = size(value,2)
     status = mdsput(name//char(0),&
-         &"$",descr(12,value,dim1,dim2,0),0,len)
+         &"$",descr(IDTYPE_COMPLEX,value,dim1,dim2,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1438,7 +1457,7 @@ contains
     dim2 = size(value,2)
     dim3 = size(value,3)
     status = mdsput(name//char(0),&
-         &"$",descr(12,value,dim1,dim2,dim3,0),0,len)
+         &"$",descr(IDTYPE_COMPLEX,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1457,7 +1476,7 @@ contains
     dim3 = size(value,3)
     dim4 = size(value,4)
     status = mdsput(name//char(0),&
-         &"$",descr(12,value,dim1,dim2,dim3,dim4,0),0,len)
+         &"$",descr(IDTYPE_COMPLEX,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1477,7 +1496,7 @@ contains
     dim4 = size(value,4)
     dim5 = size(value,5)
     status = mdsput(name//char(0),&
-         &"$",descr(12,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
+         &"$",descr(IDTYPE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1498,7 +1517,7 @@ contains
     dim5 = size(value,5)
     dim6 = size(value,6)
     status = mdsput(name//char(0),&
-         &"$",descr(12,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
+         &"$",descr(IDTYPE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1520,7 +1539,7 @@ contains
     dim6 = size(value,6)
     dim7 = size(value,7)
     status = mdsput(name//char(0),&
-         &"$",descr(12,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
+         &"$",descr(IDTYPE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1532,7 +1551,7 @@ contains
 # ifdef MDSPLUS
     logical :: status
     integer :: descr
-    status = mdsput(name//char(0),"$",descr(13,value,0),0)
+    status = mdsput(name//char(0),"$",descr(IDTYPE_DOUBLE_COMPLEX,value,0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1546,7 +1565,7 @@ contains
     integer :: descr
     integer :: dim1
     dim1 = size(value,1)
-    status = mdsput(name//char(0),"$",descr(13,value,dim1,0),0)
+    status = mdsput(name//char(0),"$",descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,0),0)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1563,7 +1582,7 @@ contains
     dim1 = size(value,1)
     dim2 = size(value,2)
     status = mdsput(name//char(0),&
-         &"$",descr(13,value,dim1,dim2,0),0,len)
+         &"$",descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1581,7 +1600,7 @@ contains
     dim2 = size(value,2)
     dim3 = size(value,3)
     status = mdsput(name//char(0),&
-         &"$",descr(13,value,dim1,dim2,dim3,0),0,len)
+         &"$",descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,dim3,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1600,7 +1619,7 @@ contains
     dim3 = size(value,3)
     dim4 = size(value,4)
     status = mdsput(name//char(0),&
-         &"$",descr(13,value,dim1,dim2,dim3,dim4,0),0,len)
+         &"$",descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,dim3,dim4,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1620,7 +1639,7 @@ contains
     dim4 = size(value,4)
     dim5 = size(value,5)
     status = mdsput(name//char(0),&
-         &"$",descr(13,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
+         &"$",descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1641,7 +1660,7 @@ contains
     dim5 = size(value,5)
     dim6 = size(value,6)
     status = mdsput(name//char(0),&
-         &"$",descr(13,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
+         &"$",descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,dim6,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
@@ -1663,7 +1682,7 @@ contains
     dim6 = size(value,6)
     dim7 = size(value,7)
     status = mdsput(name//char(0),&
-         &"$",descr(13,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
+         &"$",descr(IDTYPE_DOUBLE_COMPLEX,value,dim1,dim2,dim3,dim4,dim5,dim6,dim7,0),0,len)
     call checkmds(status,"error writing "//name)
     return
 # endif
