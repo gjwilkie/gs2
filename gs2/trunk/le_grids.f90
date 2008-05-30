@@ -13,13 +13,15 @@ contains
 
   subroutine nrgauleg (x1, x2, x, w)!, eps)
 
+    use constants, only: pi => dpi
     real, intent(in) :: x1, x2
     real, dimension(:), intent(out) :: x, w
     real  :: eps
 
     integer :: its, j, m, n
     integer, parameter :: maxit=100
-    double precision :: xl, xm, pi
+!    double precision :: xl, xm, pi
+    double precision :: xl, xm
     double precision, dimension((size(x)+1)/2) :: p1, p2, p3, pp, z, z1
     logical, dimension((size(x)+1)/2) :: unfinished
 
@@ -27,7 +29,7 @@ contains
     eps = epsilon(xm)
     
     n = size(x)
-    pi = asin(real(1.0,kind(pi)))*2.0
+!    pi = asin(real(1.0,kind(pi)))*2.0
     m = (n+1)/2
 
     xm = real(0.5,kind(xm)) * (x1+x2)   ! middle of the section
@@ -358,11 +360,13 @@ contains
 ! obtained from the formula of incomplete gamma function
 ! TT
 
-    double precision :: xg, denom, pi
+    use constants, only: pi => dpi
+!    double precision :: xg, denom, pi
+    double precision :: xg, denom
     real :: e, xgrid_s
     integer :: kmax, k, j
 
-    pi = asin(real(1.0,kind(pi))) * 2.0
+!    pi = asin(real(1.0,kind(pi))) * 2.0
     kmax = 100
     xg = 0.0
 
@@ -385,22 +389,25 @@ contains
 !            sqrt(pi)
 ! TT
 
-    real :: e, xgrid_prime, pi
+    use constants, only: pi
+!    real :: e, xgrid_prime, pi
+    real :: e, xgrid_prime
 
-    pi = asin(1.0) * 2.0
+!    pi = asin(1.0) * 2.0
     xgrid_prime = exp(-e) * sqrt(e) * 2. / sqrt(pi)
 !    xgrid_prime = exp(-e)
 
   end function xgrid_prime
 
   function xgrid_v (e) result (xg)
-
+    use constants, only: pi
     real, dimension (:) :: e
     real, dimension (size(e)) :: xg
-    real :: denom, pi
+!    real :: denom, pi
+    real :: denom
     integer :: kmax, k
 
-    pi = asin(1.0) * 2.0
+!    pi = asin(1.0) * 2.0
 
     xg = 0.
     kmax = 100

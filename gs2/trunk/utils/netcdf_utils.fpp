@@ -29,7 +29,7 @@ module netcdf_utils
   logical :: test = .false.
 
 contains
-  
+
   function get_netcdf_code_precision () result (code_real)
     use constants, only: pi, kind_rs, kind_rd
     use file_utils, only: error_unit

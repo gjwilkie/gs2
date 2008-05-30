@@ -29,7 +29,8 @@ else
 	endif
 endif
 
+# check
 ifeq ($(PROJECT),gs2)
-	F90FLAGS_no_real_promotion = $(subst -r8,,$(F90FLAGS))
+#	F90FLAGS_no_real_promotion = $(subst -r8,,$(F90FLAGS))
 	F90FLAGS_without_minus_w = $(subst -w,,$(F90FLAGS))
 endif
