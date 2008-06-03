@@ -512,8 +512,8 @@ contains
 
   subroutine mds_r_doub_0(name,value)
     character(*), intent(in) :: name
-!    real(kind=kind_rd) , intent(out):: value
-    double precision, intent(out):: value
+    real(kind=kind_rd) , intent(out):: value
+!    double precision, intent(out):: value
 # ifdef MDSPLUS
     logical :: status
     integer :: len
