@@ -452,6 +452,7 @@ contains
     if (itor == 0) rhoc = 1.5*delrho
 !    print *, 'itor= ',itor, ' rhoc= ',rhoc, 'rhoc_save = ',rhoc_save
     call eikcoefs
+
     rhoc = rhoc_save
   end subroutine init_theta_grid_eik
 

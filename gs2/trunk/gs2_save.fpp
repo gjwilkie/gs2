@@ -72,8 +72,8 @@ contains
     integer, intent (out) :: istatus
     logical, intent (in), optional :: exit_in
 # ifdef NETCDF
-    character (305) :: file_proc
-    character (5) :: suffix
+    character (306) :: file_proc
+    character (6) :: suffix
     integer :: i, n_elements, ierr
     logical :: exit
 
@@ -459,8 +459,8 @@ contains
     real, intent (in) :: fphi, fapar, fbpar
     logical, intent (in) :: many
 # ifdef NETCDF
-    character (305) :: file_proc
-    character (5) :: suffix
+    character (306) :: file_proc
+    character (6) :: suffix
     integer :: i, n_elements, ierr
     real :: fac
 
@@ -839,7 +839,7 @@ contains
     real, intent (in out) :: delt0
     integer, intent (out) :: istatus
 # ifdef NETCDF
-    character (305) :: file_proc
+    character (306) :: file_proc
 
     if (proc0) then
 
@@ -885,7 +885,7 @@ contains
     real, dimension(2), intent (in out) :: vnm
     integer, intent (out) :: istatus
 # ifdef NETCDF
-    character (305) :: file_proc
+    character (306) :: file_proc
 
     if (proc0) then
        if (.not.initialized) then
@@ -943,7 +943,7 @@ contains
     integer, intent (in) :: nk_stir
     integer, intent (out) :: istatus
 # ifdef NETCDF
-    character (305) :: file_proc
+    character (306) :: file_proc
     integer :: ierr, i
 
     if (proc0) then
@@ -1025,7 +1025,7 @@ contains
     real, intent (in out) :: tstart
     integer, intent (out) :: istatus
 # ifdef NETCDF
-    character (305) :: file_proc
+    character (306) :: file_proc
     integer :: ierr
 
     if (proc0) then
