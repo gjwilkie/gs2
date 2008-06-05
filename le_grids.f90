@@ -180,6 +180,7 @@ contains
     ! If double precision is necessary, everything should be double.
     ! use real pi from module constants
 !    double precision :: pi
+    double precision :: derf
     real, dimension (:), allocatable :: aa, bb, cc, xx
     real :: erf ! this is needed for PGI: RN
 
@@ -201,43 +202,43 @@ contains
     do ix = 3, nx-2
        bb(ix) = fac*(2.*exp(-xx(ix+1)**2)*(3.*dx-xx(ix)+exp(4.*dx*xx(ix)) &
             * (3.*dx+xx(ix)))/sqrt(pi) - (2.*xx(ix+1)*xx(ix-1) + 3.) &
-            * (erf(xx(ix+1)) - erf(xx(ix-1))))
+            * (derf(xx(ix+1)) - derf(xx(ix-1))))
     end do
 
     do ix = 4, nx-1
        cc(ix) = 0.5*fac*(exp(-xx(ix)**2)*2.*(xx(ix-1)-exp(4.*dx*xx(ix-1)) &
             * xx(ix) - dx*(5.+4.*dx*xx(ix)))/sqrt(pi) + (3. + 2.*xx(ix-2)*xx(ix-1)) &
-            * (erf(xx(ix)) - erf(xx(ix-2))))
+            * (derf(xx(ix)) - derf(xx(ix-2))))
     end do
 
     do ix = 2, nx-3
        aa(ix) = 0.5*fac*(exp(-xx(ix+2)**2)*2.*(xx(ix)-exp(4.*dx*xx(ix+1)) &
             * (dx*(5.-4.*dx*xx(ix))+xx(ix+1)))/sqrt(pi) + (3.+2.*xx(ix+1)*xx(ix+2)) &
-            * (erf(xx(ix+2)) - erf(xx(ix))))
+            * (derf(xx(ix+2)) - derf(xx(ix))))
     end do
 
     ! dealing with lower boundary
     cc(1) = 0.0
-    bb(1) = 0.25/(sqrt(pi)*dx)*(exp(-xx(2)**2)*2.-2.+sqrt(pi)*xx(2)*erf(xx(2)))
+    bb(1) = 0.25/(sqrt(pi)*dx)*(exp(-xx(2)**2)*2.-2.+sqrt(pi)*xx(2)*derf(xx(2)))
     aa(1) = 0.5*fac/sqrt(pi)*(exp(-xx(3)**2)*2.*xx(1)-4.*(xx(3)+xx(2)) &
-         + sqrt(pi)*(3. + 2.*xx(2)*xx(3))*erf(xx(3)))
+         + sqrt(pi)*(3. + 2.*xx(2)*xx(3))*derf(xx(3)))
     bb(2) = fac/sqrt(pi)*(exp(-xx(3)**2)*(6.*dx-2.*xx(2)) &
-         + 8.*xx(2) - sqrt(pi)*(3.+2.*xx(1)*xx(3))*erf(xx(3)))
-    cc(2) = 0.25/(sqrt(pi)*dx)*(-2.*exp(-xx(2)**2)*(1.+dx*xx(2)) + 2.-sqrt(pi)*xx(1)*erf(xx(2)))
+         + 8.*xx(2) - sqrt(pi)*(3.+2.*xx(1)*xx(3))*derf(xx(3)))
+    cc(2) = 0.25/(sqrt(pi)*dx)*(-2.*exp(-xx(2)**2)*(1.+dx*xx(2)) + 2.-sqrt(pi)*xx(1)*derf(xx(2)))
     cc(3) = 0.5*fac/sqrt(pi)*(exp(-xx(3)**2)*2.*(xx(2)-dx*(5.+4.*dx*xx(3))) &
-         + 4.*dx - 8.*xx(2) + sqrt(pi)*(3.+2.*xx(1)*xx(2))*erf(xx(3)))
+         + 4.*dx - 8.*xx(2) + sqrt(pi)*(3.+2.*xx(1)*xx(2))*derf(xx(3)))
   
     ! dealing with upper boundary
     aa(nx) = 0.0
-    bb(nx) = 0.25/dx*(2.*exp(-xx(nx-1)**2)/sqrt(pi)-xx(nx-1)*(1.-erf(xx(nx-1))))
+    bb(nx) = 0.25/dx*(2.*exp(-xx(nx-1)**2)/sqrt(pi)-xx(nx-1)*(1.-derf(xx(nx-1))))
     aa(nx-1) = 0.25/dx*(2.*(xx(nx-1)*dx-1.)*exp(-xx(nx-1)**2)/sqrt(pi) &
-         + xx(nx)*(1.-erf(xx(nx-1))))
+         + xx(nx)*(1.-derf(xx(nx-1))))
     aa(nx-2) = 0.5*fac*(-2.*exp(-xx(nx-2)**2)*(dx*(5.-4.*dx*xx(nx-2))+xx(nx-1))/sqrt(pi) &
-         + (3.+2.*xx(nx-1)*xx(nx))*(1.-erf(xx(nx-2))))
+         + (3.+2.*xx(nx-1)*xx(nx))*(1.-derf(xx(nx-2))))
     bb(nx-1) = fac*(2.*exp(-xx(nx-2)**2)*(3.*dx+xx(nx-1))/sqrt(pi) &
-         - (3. + 2.*xx(nx-2)*xx(nx))*(1.-erf(xx(nx-2))))
+         - (3. + 2.*xx(nx-2)*xx(nx))*(1.-derf(xx(nx-2))))
     cc(nx) = -0.5*fac*(2.*exp(-xx(nx-2)**2)*xx(nx)/sqrt(pi) &
-         - (3.+2.*xx(nx-1)*xx(nx-2))*(1.-erf(xx(nx-2))))
+         - (3.+2.*xx(nx-1)*xx(nx-2))*(1.-derf(xx(nx-2))))
     
     ww = (aa+bb+cc)*0.5
     ee = xx**2

@@ -99,7 +99,6 @@ program gs2
        time_finish/60.,time_finish/time_total,time_total/60.
   endif
 
-
   call finish_mp
 
 !!$contains

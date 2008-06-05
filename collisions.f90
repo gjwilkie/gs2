@@ -1111,6 +1111,7 @@ contains
 
     implicit none
     
+    double precision :: derf
     real, intent (in), optional :: vnmult_target
 
     integer :: ie, is, iglo, ik, ielo, il, ig, it
@@ -1187,8 +1188,8 @@ contains
              xer = (xe1 + xe2)*0.5
 	
              if (uniform_egrid) then
-                capgr = exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
-                capgl = exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+                capgr = exp(-xer**2)*(derf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+                capgl = exp(-xel**2)*(derf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
              else
                 capgr = 8.0*xer*sqrt(el(ie+1))*exp(-2.0*el(ie+1))/pi
                 capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
@@ -1217,7 +1218,7 @@ contains
           xer = (xe1 + xe2)*0.5
 
           if (uniform_egrid) then
-             capgr = exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+             capgr = exp(-xer**2)*(derf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
           else
              capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
           end if
@@ -1242,7 +1243,7 @@ contains
           xel = (xe1 + xe0)*0.5
 
           if (uniform_egrid) then
-             capgl = exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+             capgl = exp(-xel**2)*(derf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
           else
              capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
           end if
