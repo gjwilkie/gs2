@@ -236,7 +236,7 @@ contains
           
           if (fphi > epsilon(0.)) then
              istatus = nf90_def_var (ncid, "phi_r", netcdf_real, &
-                  (/ thetaid, kyid, kxid /), phir_id)
+                  (/ thetaid, kxid, kyid /), phir_id)
              if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
                 write(ierr,*) "nf90_def_var phi error: ", nf90_strerror(istatus)
@@ -244,7 +244,7 @@ contains
              end if
              
              istatus = nf90_def_var (ncid, "phi_i", netcdf_real, &
-                  (/ thetaid, kyid, kxid /), phii_id)
+                  (/ thetaid, kxid, kyid /), phii_id)
              if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
                 write(ierr,*) "nf90_def_var phi error: ", nf90_strerror(istatus)
@@ -254,7 +254,7 @@ contains
 
           if (fapar > epsilon(0.)) then
              istatus = nf90_def_var (ncid, "apar_r", netcdf_real, &
-                  (/ thetaid, kyid, kxid /), aparr_id)
+                  (/ thetaid, kxid, kyid /), aparr_id)
              if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
                 write(ierr,*) "nf90_def_var apar error: ", nf90_strerror(istatus)
@@ -262,7 +262,7 @@ contains
              end if
              
              istatus = nf90_def_var (ncid, "apar_i", netcdf_real, &
-                  (/ thetaid, kyid, kxid /), apari_id)
+                  (/ thetaid, kxid, kyid /), apari_id)
              if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
                 write(ierr,*) "nf90_def_var apar error: ", nf90_strerror(istatus)
@@ -276,7 +276,7 @@ contains
 # else
              istatus = nf90_def_var (ncid, "bpar_r", netcdf_real, &
 # endif
-                  (/ thetaid, kyid, kxid /), bparr_id)
+                  (/ thetaid, kxid, kyid /), bparr_id)
              if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
                 write(ierr,*) "nf90_def_var bparr error: ", nf90_strerror(istatus)
@@ -288,7 +288,7 @@ contains
 # else
              istatus = nf90_def_var (ncid, "bpar_i", netcdf_real, &
 # endif
-                  (/ thetaid, kyid, kxid /), bpari_id)
+                  (/ thetaid, kxid, kyid /), bpari_id)
              if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
                 write(ierr,*) "nf90_def_var bpari error: ", nf90_strerror(istatus)
@@ -468,7 +468,7 @@ contains
     if (n_elements <= 0) return
     
     if (.not.initialized) then
-       initialized = .true.
+!       initialized = .true.
        file_proc = trim(restart_file)
 
 # if NETCDF == _OLD_       
@@ -633,7 +633,7 @@ contains
     end if
 
     ! RN 2008/05/23: this was commented out. why?
-    istatus = nf90_close (ncid)
+!    istatus = nf90_close (ncid)
     if (istatus /= NF90_NOERR) then
        ierr = error_unit()
        write(ierr,*) "nf90_close error: ", nf90_strerror(istatus),' ',iproc
@@ -807,7 +807,7 @@ contains
     end if
 
     ! RN 2008/05/23: this was commented out. why?
-    istatus = nf90_close (ncid)       
+!    istatus = nf90_close (ncid)       
     if (istatus /= NF90_NOERR) then
        ierr = error_unit()
        write(ierr,*) "nf90_close error: ", nf90_strerror(istatus),' ',iproc
