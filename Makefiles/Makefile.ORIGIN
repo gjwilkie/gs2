@@ -1,5 +1,0 @@
-# System: SGI ORIGIN
-
-ifeq ($(PROJECT),gs2)
-	PLATFORM_LINKS = origin
-endif

@@ -1,7 +1,0 @@
-# System: IBM Blue Gene/L
-
-ifeq ($(PROJECT),gs2)
-	PLATFORM_LINKS = ibm
-endif
-
-CHIP=bluegene_l
