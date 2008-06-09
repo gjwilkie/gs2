@@ -1984,6 +1984,7 @@ end subroutine eikcoefs
     real :: a, b, aa, bb
     real, dimension(-ntgrid:ntgrid) :: rgrid
     real :: rp, hmaxu, hmaxl, rmaxu, rmaxl
+    real :: rmid, Rlo, Rhi, Rinnr, Routr
 
     integer :: i
 
@@ -2017,11 +2018,25 @@ end subroutine eikcoefs
           hmaxl = bb
           rmaxl = aa
        endif
+
+       Rlo = min(a,aa)
+       Rhi = max(a,aa)
+       if (Rinnr > Rlo) then
+          Rinnr = Rlo
+       end if
+       if (Routr < Rhi) then
+          Routr = Rhi
+       endif
     enddo
     a = (Rpos(rgrid(0), theta(0))-Rpos(rgrid(nth), theta(nth)))
     e = (hmaxu-hmaxl)/a
-    rmax = rmaxu
-    t = asin(rcenter(rp)-rmax)
+! Ro=(Routr+Rinnr)/2. should = rcenter(rp)    
+    rmid=(Routr-Rinnr)/2. ! midplane minor radius of this surface
+! Returning only the upper triangularity:
+    rmax=rmaxu
+! wasn't properly normalized before 29 Feb 08, and don't use asin:
+!    t = asin(rcenter(rp)-rmax)
+    t = (rcenter(rp)-rmax)/rmid
     d = rcenter(rp) - rcenter(psi_a)
 end subroutine geofax
       
