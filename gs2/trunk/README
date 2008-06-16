@@ -31,10 +31,6 @@ For utils and geo directories in gs2, do as follows,
 
  # make -I.. -I../Makefiles
 
-or
- # setenv MAKEFLAGS "-IMakefiles -I.. -I../Makefiles" (tcsh)
- # export MAKEFLAGS="-IMakeflags -I.. -I../Makefiles" (bash)
-
 After setting those environment variable, you just type "make" to get an
 executable. The default target is automatically chosen depending on 
 where you are making. Other common targets are,
@@ -57,12 +53,16 @@ Following is the full list of switches:
  DBLE (defined [defined]): promotes precisions of real and complex
  USE_MPI (defined [defined]): turns on distributed memory parallelization
 			      with MPI
+ USE_SHMEM (defined [undefined]): turns on SHMEM parallel communications 
+                                  on SGI (not working yet)
  USE_FFT (fftw [fftw]): FFT library to use
  USE_NETCDF (new,old [new]): NETCDF library to use
  USE_HDF5 (defined [undefined]): use HDF5 library or no
+ USE_MDSPLUS (defined [undefind]): use MDSplus for geo (gs2 only)
  USE_C_INDEX (defined [undefined]): use function pointer
  USE_NR_RAN (defined [undefined]): use Numerical Recipes' local random 
  	    	     		   number generator
+ USE_POSIX (define [undefined]): use posix routines
 
 Values that each switches takes are shown in the bracket, where
 "defined" ("undefined") means whether the switch is defined (or not),
@@ -76,9 +76,87 @@ hosts, compilers, and also environment variables. This implies that,
 for some systems where "module" is provided, those default values are 
 set properly depending on what modules are loaded.
 
-See also README.cpp for some switches.
+* More details in CPPFLAGS (by Tomo Tatsuno 04/16/08)
 
-Note for GS2: cpp options and some other options are currently not available.
+Here, the description of full CPPFLAGS available are given. However,
+CPPFLAGS are basically set by above make swithces and users need not
+be aware of the exact CPPFLAGS.
+
+In the values column, the top line is the value chosen for the undefined
+macro (-D{variable} is NOT invoked).  The second line corresponds to the
+DEFAULT value when the variable is invoked but the value is not specified
+(-D{variable} only).  The rest of choices will become available only when
+the value is specified by -D{variable}=_value_.  Note that no space should
+be placed within each definition ('-D{value} = _value_' do not work as one
+might expect).
+
+variable	values		description
+
+FCOMPILER	_XL_		Fortran compiler choices
+		_GFORTRAN_      (replaces CL and FILE in the previous version)
+		_G95_
+		_NAG_
+		_ALPHA_
+		_INTEL_
+		_PGI_
+		_PATHSCALE_
+		...
+
+FFT		_NONE_		We can choose to not compile fftw.
+		_FFTW_		At the moment only fftw is the available 
+				fft option.
+
+HDF		_NONE_		No hdf5 subroutines compiled.
+				Use of -DHDF makes hdf work.
+
+MPI		_NONE_		No mpi subroutines compiled.
+				Use of -DMPI makes mpi work.
+
+NETCDF		_NONE_		No netcdf subroutines compiled.
+		_DEFAULT_	Uses f90 netcdf functions.
+		_OLD_		This should be used when one uses old data.
+
+NO_SIZEOF	_NONE_		This is for memory accounting.
+				In most compilers, non-standard sizeof function
+				works fine as C function.
+				For a compiler which does not support sizeof
+				function, one can use hard-wired fortran
+				implementation of size_of function instead
+				by specifying -DNO_SIZEOF.
+
+USE_C_INDEX	_NONE_		When invoked, function pointers in agk_layouts_
+				indices.c is used.  A little bit of performance
+				upgrade.  For agk_layouts_indices.c, there is
+				another CFLAG '-DNO_UNDERSCORE' for the
+				resolution of Fortran-C linking problem.
+				The CFLAG '-DUNDERSCORE=2' can also be used
+				when 2 underscores are needed.
+
+USE_NR_RAN	_NONE_		When invoked, local random number generator
+				from Numerical Recipes is used.  This comes
+				from ran_local.f90.
+
+USE_L2E_MAP	_NONE_		Affects collision.fpp.  When invoked, l2e_map
+(agk only)			becomes available, which describes direct map
+				from lorentz to ediffuse layouts.
+				Requires additional memory, but might enhance
+				performance --- not much, though.
+
+USE_LE_LAYOUT	_NONE_		Affects collision.fpp.  Under development.
+(agk only)			Mutually exclusive with USE_L2E_MAP.
+
+
+The standard .F90 extension is not used since some file systems do not
+distinguish the case difference of the file names, eg. Windows or Mac.
+In order to make your emacs recognize .fpp extension as a f90 source code,
+you may add the following line to your .emacs file:
+
+  (setq auto-mode-alist (append '(("\\.fpp$" . f90-mode)) auto-mode-alist))
+
+
+To do:
+- compilation on NAG?
+- can test the Sun f90 on ranger
 
 * Porting
 
@@ -106,7 +184,3 @@ it.
 1. auto detection of the system for common system (like test_os script)
 2. Makefile.HOSTNAME_* are probably host-specific setting extracted from
    old makefile. If still used, give nice names, otherwise, remove them.
-3. all PLATFORM_LINKS related work-arounds makes the file ugly.
-   can be removed by using preprocessor.
-4. most of gs2 specific setting can be avoidable after rewriting the code
-   appropriately.
