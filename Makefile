@@ -8,12 +8,10 @@ PROJECT ?= gs2
 #
 #  Makefile written by Bill Dorland and Ryusuke Numata
 #
-#  LAST UPDATE: 04/15/08
+#  LAST UPDATE: 06/16/08
 #
-# * TODO
-#
-# Write a README file which fully explains new make system.
-# Replace PLATFORM_LINKS by cpp mechanism in gs2. 
+# * Changelogs
+#	06/16/08: clean up unused statements related to PLATFORM_LINKS
 #
 # * Available Compilers (tested on limited hosts)
 #
@@ -59,7 +57,7 @@ DBLE ?= on
 # turns on distributed memory parallelization using MPI (bin)
 USE_MPI ?= on
 # turns on SHMEM parallel communications on SGI (bin)
-USE_SHMEM ?= 
+USE_SHMEM ?=
 # which FFT library to use (fftw,undefined) 
 USE_FFT ?= fftw
 # uses netcdf library (new,old,undefined)
@@ -67,7 +65,7 @@ USE_NETCDF ?= new
 # uses hdf5 library (bin)
 USE_HDF5 ?=
 # uses MDSplus (bin)
-USE_MDSPLUS ?= 
+USE_MDSPLUS ?=
 # Use function pointer in agk_layouts_indices.c (bin)
 # see also README.cpp
 USE_C_INDEX ?= 
@@ -106,12 +104,7 @@ ARCHFLAGS = cr
 RANLIB=ranlib
 AWK = awk
 
-# work around
-#F90FLAGS_real_double_promote = $(F90FLAGS)
-#F90FLAGS_no_real_promotion = $(F90FLAGS)
-F90FLAGS_without_minus_w = $(F90FLAGS)
-# this is used for constatns.fpp in gs2
-#F90FLAGS_use_realsize8 = $(F90FLAGS)
+# These macros are used for the suffix problem of absoft
 F90FLAGS_SFX0 =
 F90FLAGS_SFX1 =
 F90FLAGS_SFX2 =
@@ -126,8 +119,6 @@ HDF5_INC =
 HDF5_LIB =
 IPM_LIB =
 
-PLATFORM_LINKS ?= undefined
-
 ################################################### SET COMPILE MODE SWITCHES
 
 ifdef TEST
@@ -135,12 +126,6 @@ $(warning TEST mode is not working yet)
 	override TEST =
 endif
 
-#ifeq ($(PROJECT),gs2) 
-#	ifndef DBLE
-#$(warning DBLE cannot be off for gs2)
-#		override DBLE = on
-#	endif
-#endif
 ######################################################### PLATFORM DEPENDENCE
 
 # compile mode switches (DEBUG, TEST, PROF, OPT, STATIC, DBLE)
@@ -182,17 +167,6 @@ $(warning USE_FFT is off)
 $(warning Be sure that nonlinear run makes no sense)
 endif
 
-#ifeq ($(PROJECT),gs2) 
-#	ifndef USE_FFT
-#$(error USE_FFT cannot be off for gs2)
-#		USE_FFT=fftw
-#	endif
-#	ifndef USE_NETCDF
-#$(error USE_NETCDF cannot be off for gs2)
-#		USE_NETCDF=new
-#	endif
-#endif
-
 ifdef USE_MPI
 	CPPFLAGS += -DMPI
 endif
@@ -230,12 +204,10 @@ endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
 		$(IPM_LIB)
-#LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
 	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
 CFLAGS += $(COPTFLAGS)
 
-#DATE=$(shell date +%D | sed 's/\///g')
 DATE=$(shell date +%y%m%d)
 TARDIR=$(PROJECT)_$(DATE)
 TOPDIR=$(CURDIR)
@@ -274,21 +246,6 @@ DEFAULT_LIB_LIST =
 DEFAULT_INC=$(foreach tmpinc,$(DEFAULT_INC_LIST),$(shell [ -d $(tmpinc) ] && echo -I$(tmpinc)))
 DEFAULT_LIB=$(foreach tmplib,$(DEFAULT_LIB_LIST),$(shell [ -d $(tmplib) ] && echo -L$(tmplib)))
 
-######################################################### MODULE DECLARATIONS
-
-#ifeq ($(PROJECT),gs2)
-#LINKS_gs2 = 
-#	redistribute.f90
-#	command_line.f90 mp.f90 shmem.f90 prof.f90 redistribute.f90 ran.f90 \
-#	gs2_layouts.f90 gs2_save.f90 gs2_transforms.f90 fft_work.f90 \
-#	check.f90
-#	ifdef SUBDIR
-#		LINKS_gs2 += ../mds.f90
-#	else
-#		LINKS_gs2 += mds.f90
-#	endif
-#endif
-
 ####################################################################### RULES
 
 .SUFFIXES:
@@ -302,12 +259,6 @@ DEFAULT_LIB=$(foreach tmplib,$(DEFAULT_LIB_LIST),$(shell [ -d $(tmplib) ] && ech
 	$(CC) $(CFLAGS) -c $<
 
 ##################################################################### TARGETS
-
-#ifeq ($(PROJECT),gs2)
-#ifeq ($(PLATFORM_LINKS),undefined)
-#$(error PLATFORM_LINKS is $(PLATFORM_LINKS))
-#endif
-#endif
 
 .DEFAULT_GOAL = $(PROJECT)_all
 ifeq ($(notdir $(CURDIR)),utils)
@@ -323,7 +274,6 @@ all: $(.DEFAULT_GOAL)
 
 include $(DEPEND)
 
-#gs2_all: $(LINKS_gs2) modules gs2 ingen rungridgen
 gs2_all: modules gs2 ingen rungridgen
 
 gs2: $(gs2_mod) 
@@ -358,9 +308,6 @@ regress: $(drive_mod)
 slice_g: $(slice_g_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-# libraries and functions in subdirectories:
-# ??? Code bombs on Ultrix Alpha on test case s1a.in...
-
 .PHONY: modules utils_all geo_all
 
 modules: utils.a geo.a
@@ -394,54 +341,12 @@ eiktest: $(eiktest_mod)
 
 ############################################################### SPECIAL RULES
 
-#ifeq ($(PROJECT),gs2)
-## le_grids needs quad precision on some hosts
-#le_grids.o: le_grids.f90
-#	$(FC) $(F90FLAGS_real_double_promote) -c $<
-## mds neeeds quad precision on some hosts
-#mds.o: mds.fpp
-#	$(CPP) $(CPPFLAGS) $< $*.f90
-#	$(FC) $(F90FLAGS_real_double_promote) -c $*.f90
-#	rm -f $*.f90
-#constants.o: constants.fpp
-#	$(CPP) $(CPPFLAGS) $< $*.f90
-#	$(FC) $(F90FLAGS_use_realsize8) -c $*.f90
-#	rm -f $*.f90
-#endif
-# No optimizations for some routines: stupid workarounds because of 
-# incompatibility between f95 and my C libraries (I think)
-
-# NAG: without -w ! is this cause any problem? if not, remove.
-#gs2_transforms.o: gs2_transforms.f90
-#	$(FC) $(F90FLAGS_without_minus_w) $(F90FLAGS_SFX0) -c $<
-#agk_transforms.o: agk_transforms.fpp
-#	$(CPP) $(CPPFLAGS) $< $*.f90
-#	$(FC) $(F90FLAGS_without_minus_w) $(F90FLAGS_SFX0) -c $*.f90
-#	rm -f $*.f90
+# These are special rules for the suffix problem of absoft
+# (not tested)
 $(PROJECT)_transforms.o: $(PROJECT)_transforms.fpp
 	$(CPP) $(CPPFLAGS) $< $*.f90
-	$(FC) $(F90FLAGS_without_minus_w) $(F90FLAGS_SFX0) -c $*.f90
+	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $*.f90
 	rm -f $*.f90
-nonlinear_terms.o: nonlinear_terms.f90
-	$(FC) $(F90FLAGS_without_minus_w) -c $<
-
-# NAG: without -r8: this should be removed
-#netcdf_mod.o: netcdf_mod.f90
-#	$(FC) $(F90FLAGS_no_real_promotion) $(F90FLAGS_SFX2) -c $<
-
-# Absoft: needs special treatment for suffix(?)
-#gs2_io.o: gs2_io.f90
-#	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
-#gs2_save.o: gs2_save.f90
-#	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
-#agk_io.o: agk_io.fpp
-#	$(CPP) $(CPPFLAGS) $< $*.f90
-#	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $*.f90
-#	rm -f $*.f90
-#agk_save.o: agk_save.fpp
-#	$(CPP) $(CPPFLAGS) $< $*.f90
-#	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $*.f90
-#	rm -f $*.f90
 $(PROJECT)_io.o: $(PROJECT)_io.fpp
 	$(CPP) $(CPPFLAGS) $< $*.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $*.f90
@@ -450,25 +355,14 @@ $(PROJECT)_save.o: $(PROJECT)_save.fpp
 	$(CPP) $(CPPFLAGS) $< $*.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $*.f90
 	rm -f $*.f90
-#netcdf_mod.o: netcdf_mod.f90
-#	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
-
-#ifeq ($(PROJECT),gs2)
-#mp.o: mp.f90
-#	$(FC) $(F90FLAGS) $(F90FLAGS_SFX1) -c $<
-#fft_work.o: fft_work.f90
-#	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $<
-#endif
-#ifeq ($(PROJECT),agk)
-#mp.o: mp.fpp
-#	$(CPP) $(CPPFLAGS) $< $*.f90
-#	$(FC) $(F90FLAGS) $(F90FLAGS_SFX1) -c $*.f90
-#	rm -f $*.f90
-#fft_work.o: fft_work.fpp
-#	$(CPP) $(CPPFLAGS) $< $*.f90
-#	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $*.f90
-#	rm -f $*.f90
-#endif
+mp.o: mp.fpp
+	$(CPP) $(CPPFLAGS) $< $*.f90
+	$(FC) $(F90FLAGS) $(F90FLAGS_SFX1) -c $*.f90
+	rm -f $*.f90
+fft_work.o: fft_work.fpp
+	$(CPP) $(CPPFLAGS) $< $*.f90
+	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $*.f90
+	rm -f $*.f90
 
 agk_layouts_indices.o: agk_layouts_type.h
 agk_layouts_type.h: agk_layouts_type.f90
@@ -478,14 +372,8 @@ agk_layouts_type.h: agk_layouts_type.f90
 
 .PHONY: depend clean distclean tar test_make
 
-# this dependency does not appear for some PLATFORM_LINKS
-#ifeq ($(PROJECT),gs2)
-#depend:
-#	@$(MAKE) -C $(TOPDIR) $(PLATFORM_LINKS)
-#else
 depend:	
 	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=0 $(VPATH)
-#endif
 
 clean:
 	-rm -f *.o *.mod *.g90 *.h core */core
@@ -497,7 +385,9 @@ distclean: unlink clean
 	-rm -f ball eiktest
 	-rm -f slice_g
 
-tar: tar_new # tar_$(PROJECT)
+tar:
+	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
+	@[ -d $(TARDIR) ] || $(MAKE) tar_exec
 
 ### setting tar_exec local $(TARLIST*) variables
 # expand wildcards listed $(TARLIST_wild) in ( $(TARLIST_dir) + . )
@@ -506,10 +396,6 @@ tar_exec: TARLIST = test_os makehead.awk fortdep AstroGK.in
 tar_exec: TARLIST_dir = Makefiles utils geo
 tar_exec: TARLIST_wild = *.f90 *.fpp *.inc *.c Makefile Makefile.* README README.*
 tar_exec: TARLIST += $(foreach dir,. $(TARLIST_dir),$(wildcard $(addprefix $(dir)/,$(TARLIST_wild))))
-
-tar_new:
-	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
-	@[ -d $(TARDIR) ] || $(MAKE) tar_exec
 
 tar_exec:
 	@mkdir $(TARDIR)
@@ -521,38 +407,6 @@ tar_exec:
 	done
 	@tar cvf - $(TARDIR) | bzip2 -9 > $(TARDIR).tar.bz2
 	@rm -rf $(TARDIR)
-
-tar_gs2:
-	@echo $(PROJECT)_$(DATE) > .package
-	@-rm -rf `cat .package`
-	@mkdir `cat .package`
-	@for dir in utils geo Makefiles ;\
-	do ( mkdir `cat .package`/$$dir ; ) ;\
-	done
-	@for name in *.f90 *.fpp *.inc test_os Makefile Makefile.* \
-		utils/*.f90 utils/*.fpp utils/*.inc utils/Makefile \
-		geo/*.f90 geo/*.fpp geo/*.inc geo/Makefile \
-		Makefiles/*; \
-	do (ln $$name `cat .package`/$$name ; ); \
-	done
-	tar cvf - `cat .package` | bzip2 -9 > `cat .package`.tar.bz2
-	@rm -rf `cat .package` .package
-
-tar_agk:
-	@echo $(PROJECT)_$(DATE) > .package
-	@if [ -d "`cat .package`" ]; then \
-	  echo ERROR: directory `cat .package` exits.  Stop. ;\
-	else \
-	  rm -rf `cat .package` ;\
-	  mkdir `cat .package` `cat .package`/Makefiles ;\
-	  for name in *.f90 *.fpp *.inc *.c makehead.awk test_os fortdep \
-		AstroGK.in Makefile Makefile.depend Makefiles/* ;\
-	  do ( ln $$name `cat .package`/$$name ; ) ;\
-	  done ;\
-	  echo tar cvf - `cat .package` \| bzip2 -9 \> `cat .package`.tar.bz2;\
-	  tar cvf - `cat .package` | bzip2 -9 > `cat .package`.tar.bz2 ;\
-	  rm -rf `cat .package` .package ;\
-	fi
 
 test_make:
 	@echo SYSTEM is $(SYSTEM)
@@ -571,11 +425,14 @@ test_make:
 	@echo
 	@echo Functions:
 	@echo  USE_MPI is $(USE_MPI)
+	@echo  USE_SHMEM is $(USE_SHMEM)
 	@echo  USE_FFT is $(USE_FFT)
 	@echo  USE_NETCDF is $(USE_NETCDF)
 	@echo  USE_HDF5 is $(USE_HDF5)
+	@echo  USE_MDSPLUS is $(USE_MDSPLUS)
 	@echo  USE_C_INDEX is $(USE_C_INDEX)
 	@echo  USE_NR_RAN is $(USE_NR_RAN)
+	@echo  USE_POSIX is $(USE_POSIX)
 	@echo
 	@echo FC is $(FC)
 	@echo F90FLAGS is $(F90FLAGS)
@@ -588,330 +445,8 @@ test_make:
 	@echo CPP is $(CPP)
 	@echo CPPFLAGS is $(CPPFLAGS)
 	@echo LIBS is $(LIBS)
-#	@echo PLATFORM_LINKS is $(PLATFORM_LINKS)
 
-############################################################## PLATFORM LINKS
-#
-# If one of the platform-specific logical links doesn't exist, set them up:
-# This is not used in agk any more
-#
-#$(LINKS_$(PROJECT)):
-#	@$(MAKE) -C $(TOPDIR) --no-print-directory $(PLATFORM_LINKS)
-
-#
-# Platform-specific logical links:
-#
-cxt4: cxt4_$(PROJECT)
-cxt4_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-#	ln -sf gs2_save_aix.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf mp_mpi_r8.f90 mp.f90
-#	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_aix.f90 check.f90
-#	ln -sf command_line_unix.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_portable.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90 
-
-c90: c90_$(PROJECT)
-c90_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_sgi.f90 gs2_transforms.f90
-#	ln -sf mp_stub.f90 mp.f90
-#	ln -sf fft_work_unicos.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_sgi.f90 check.f90
-#	ln -sf command_line_unix.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_cray.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90 
-
-t3e_shmem: t3e_shmem_$(PROJECT)
-t3e_shmem_gs2:
-#	ln -sf redistribute_shnew.f90 redistribute.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_sgi.f90 gs2_transforms.f90
-#	ln -sf mp_mpi.f90 mp.f90
-#	ln -sf fft_work_unicosmk.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_sgi.f90 check.f90
-#	ln -sf command_line_posix.f90 command_line.f90
-#	ln -sf shmem_cray.f90 shmem.f90
-#	ln -sf ran_cray.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-t3e: t3e_$(PROJECT)
-t3e_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_sgi.f90 gs2_transforms.f90
-#	ln -sf mp_mpi.f90 mp.f90
-#	ln -sf fft_work_unicosmk.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_sgi.f90 check.f90
-#	ln -sf command_line_posix.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_cray.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90 
-
-t3e_fftw: t3e_fftw_$(PROJECT)
-t3e_fftw_gs2:
-#	ln -sf redistribute_shnew.f90 redistribute.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf mp_mpi.f90 mp.f90
-#	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_sgi.f90 check.f90
-#	ln -sf command_line_posix.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_cray.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-ibm: ibm_$(PROJECT)
-ibm_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-#	ln -sf gs2_save_aix.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf mp_mpi_r8.f90 mp.f90
-#	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_xlf.f90 file_utils.f90
-#	ln -sf check_aix.f90 check.f90
-#	ln -sf command_line_unix.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_portable.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-origin: origin_$(PROJECT)
-origin_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_sgi.f90 gs2_transforms.f90
-#	ln -sf mp_mpi_r8.f90 mp.f90
-#	ln -sf fft_work_origin.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_sgi.f90 check.f90
-#	ln -sf command_line_posix.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_cray.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-linux: linux_$(PROJECT)
-linux_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf mp_mpi_r8.f90 mp.f90
-#	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_portable.f90 check.f90
-#	ln -sf command_line_nag.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_portable.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-linux_nomp: linux_nomp_$(PROJECT)
-linux_nomp_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf mp_stub.f90 mp.f90
-#	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_portable.f90 check.f90
-#	ln -sf command_line_unix.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_portable.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-linux_fuj: linux_fuj_$(PROJECT)
-linux_fuj_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-##	ln -sf gs2_save_stub.f90 gs2_save.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_stub.f90 gs2_transforms.f90
-#	ln -sf mp_stub.f90 mp.f90
-#	ln -sf fft_work_stub.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_portable.f90 check.f90
-#	ln -sf command_line_unix.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_local.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-linux_lf95: linux_lf95_$(PROJECT)
-linux_lf95_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-##	ln -sf gs2_save_stub.f90 gs2_save.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf mp_mpi_r8.f90 mp.f90
-#	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_portable.f90 check.f90
-#	ln -sf command_line_unix.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_portable.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-linux_abs: linux_abs_$(PROJECT)
-linux_abs_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-##	ln -sf gs2_save_stub.f90 gs2_save.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf mp_mpi_r8.f90 mp.f90
-#	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_portable.f90 check.f90
-#	ln -sf command_line_unix.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_local.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-alpha: alpha_$(PROJECT)
-alpha_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf mp_stub.f90 mp.f90
-#	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_portable.f90 check.f90
-#	ln -sf command_line_alpha.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_local.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-alpha_nag: alpha_nag_$(PROJECT)
-alpha_nag_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf mp_stub.f90 mp.f90
-#	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_portable.f90 check.f90
-#	ln -sf command_line_nag.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_local.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-linux_alpha: linux_alpha_$(PROJECT)
-linux_alpha_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-##	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_save_stub.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-##	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf gs2_transforms_stub.f90 gs2_transforms.f90
-#	ln -sf mp_stub.f90 mp.f90
-#	ln -sf fft_work_stub.f90 fft_work.f90
-##	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_portable.f90 check.f90
-#	ln -sf command_line_alpha.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_local.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-darwin: darwin_$(PROJECT)
-darwin_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf mp_mpi_r8.f90 mp.f90
-#	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_gnu.f90 file_utils.f90
-#	ln -sf check_portable.f90 check.f90
-#	ln -sf command_line_darwin.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_portable.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-jacquard: jacquard_$(PROJECT)
-jacquard_gs2:
-#	ln -sf redistribute_mpi.f90 redistribute.f90
-#	ln -sf gs2_save_fast.f90 gs2_save.f90
-#	ln -sf gs2_dist_io_stub.f90 gs2_dist_io.f90
-#	ln -sf gs2_transforms_fftw.f90 gs2_transforms.f90
-#	ln -sf mp_mpi_r8.f90 mp.f90
-#	ln -sf fft_work_fftw.f90 fft_work.f90
-#	ln -sf file_utils_portable.f90 file_utils.f90
-#	ln -sf check_portable.f90 check.f90
-#	ln -sf command_line_unix.f90 command_line.f90
-#	ln -sf shmem_stub.f90 shmem.f90
-#	ln -sf ran_portable.f90 ran.f90
-#	ln -sf prof_none.f90 prof.f90
-#	ln -sf $(UTILS)/mds_io_stub.f90 mds.f90
-
-#unlink:	unlink_new unlink_$(PROJECT)
-unlink:	unlink_new
-unlink_gs2:
-	-rm -f $(TOPDIR)/$(PROJECT)_dist_io.f90
-	-rm -f $(TOPDIR)/$(PROJECT)_save.f90
-	-rm -f $(TOPDIR)/$(PROJECT)_transforms.f90
-	-rm -f $(TOPDIR)/command_line.f90
-	-rm -f $(TOPDIR)/mp.f90
-	-rm -f $(TOPDIR)/shmem.f90
-	-rm -f $(TOPDIR)/prof.f90
-	-rm -f $(TOPDIR)/redistribute.f90
-	-rm -f $(TOPDIR)/ran.f90
-	-rm -f $(TOPDIR)/fft_work.f90
-	-rm -f $(TOPDIR)/file_utils.f90
-	-rm -f $(TOPDIR)/mds.f90
-#	-rm -f $(TOPDIR)/check.f90 
-
-unlink_agk:
-	-rm -f $(TOPDIR)/$(PROJECT)_dist_io.f90
-	-rm -f $(TOPDIR)/$(PROJECT)_io.f90
-	-rm -f $(TOPDIR)/$(PROJECT)_layouts.f90
-	-rm -f $(TOPDIR)/$(PROJECT)_layouts_type.h
-	-rm -f $(TOPDIR)/$(PROJECT)_mem.f90
-	-rm -f $(TOPDIR)/$(PROJECT)_save.f90
-	-rm -f $(TOPDIR)/$(PROJECT)_transforms.f90
-	-rm -f $(TOPDIR)/command_line.f90
-	-rm -f $(TOPDIR)/constants.f90
-	-rm -f $(TOPDIR)/fft_work.f90
-	-rm -f $(TOPDIR)/file_utils.f90
-	-rm -f $(TOPDIR)/mp.f90
-	-rm -f $(TOPDIR)/ran.f90
-
-unlink_new:
+unlink:
 	@for name in `find . -name "*.fpp"` ;\
 	do \
 	 namef90=`basename $$name | sed "s/\.fpp/\.f90/g"` ;\
