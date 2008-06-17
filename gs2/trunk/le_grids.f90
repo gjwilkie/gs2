@@ -5,9 +5,13 @@ module legendre
 
   implicit none
 
-  public :: nrgauleg
+  public :: nrgauleg, nrgaulag
 
   private
+
+  interface arth
+     module procedure arth_d, arth_i
+  end interface
 
 contains
 
@@ -69,6 +73,121 @@ contains
     w(n:n-m+1:-1) = w(1:m)
 
   end subroutine nrgauleg
+
+  subroutine nrgaulag (x, w, alf)
+
+    implicit none
+
+    real, intent(in) :: alf
+    real, dimension(:), intent(out) :: x, w
+    double precision, parameter :: eps = 3.0e-13
+
+    integer :: its, j, n
+    integer, parameter :: maxit=10
+    real :: anu
+    real, parameter :: c1=9.084064e-01, c2=5.214976e-02
+    real, parameter :: c3=2.579930e-03, c4=3.986126e-03
+    real, dimension(size(x)) :: rhs, r2, r3, theta
+    double precision, dimension(size(x)) :: p1, p2, p3, pp, z, z1
+    logical, dimension(size(x)) :: unfinished
+    double precision :: pi
+
+    n = size(x)
+    pi = asin(real(1.0,kind(pi)))*2.0
+    anu = 4.0*n+2.0*alf+2.0
+    rhs = arth(4*n-1,-4,n)*pi/anu
+    r3 = rhs**(1.0/3.0)
+    r2 = r3**2
+    theta = r3*(c1 + r2*(c2 + r2*(c3 + r2*c4)))
+    z = anu*cos(theta)**2
+    unfinished = .true.
+
+    do its=1, maxit
+       where(unfinished)
+          p1 = real(1.0,kind(p1(1)))
+          p2 = real(0.0,kind(p2(1)))
+       end where
+       do j=1, n
+          where (unfinished)
+             p3 = p2
+             p2 = p1
+             p1 = ((2.0d0*j-1.0d0+alf-z)*p2 - (j-1.0d0+alf)*p3) / j
+          end where
+       end do
+! p1 now contains the desired laguerre polynomials.
+       where (unfinished)
+          pp = (n*p1-(n+alf)*p2)/z
+          z1 = z
+          z = z1 - p1/pp
+          unfinished = (abs(z-z1) > eps*z)
+       end where
+       if (.not. any(unfinished)) exit
+    end do
+
+    if (its == maxit+1) then
+       print*, 'too many iterations in nrgaulag'
+       stop
+    end if
+    x = z
+    w = -exp(gammln(alf+n)-gammln(real(n)))/(pp*n*p2)
+
+  end subroutine nrgaulag
+
+  function arth_d (first,increment,n)
+
+    implicit none
+
+    double precision, intent (in) :: first, increment
+    integer, intent (in) :: n
+    double precision, dimension (n) :: arth_d
+    integer :: k, k2
+    double precision :: temp
+
+    if (n <= 0) write (*,*) "ERROR IN ARTH: NESUPER MUST BE GREATER THAN ZERO"
+    arth_d(1) = first
+    do k=2,n
+       arth_d(k) = arth_d(k-1) + increment
+    end do
+
+  end function arth_d
+
+  function arth_i (first,increment,n)
+
+    implicit none
+
+    integer, intent (in) :: first, increment, n
+    integer, dimension (n) :: arth_i
+    integer :: k, k2, temp
+
+    if (n <= 0) write (*,*) "ERROR IN ARTH: NESUPER MUST BE GREATER THAN ZERO"
+    arth_i(1) = first
+    do k=2,n
+       arth_i(k) = arth_i(k-1) + increment
+    end do
+
+  end function arth_i
+
+  function gammln (xx)
+    
+    implicit none
+
+    real, intent (in) :: xx
+    real :: gammln   ! returns ln[(xx)] for xx > 0.
+    double precision :: tmp, x
+
+    double precision :: stp = 2.5066282746310005d0
+    double precision, dimension(6) :: coef=(/ 76.18009172947146d0, &
+         -86.50532032941677d0, 24.01409824083091d0, -1.231739572450155d0,  &
+         .1208650973866179d-2, -.5395239384953d-5 /)
+
+    if (xx <= 0.0) write (*,*) "ERROR IN GAMMLN: NESUP MUST BE GREATER THAN ZERO"
+    x = xx
+    tmp = x + 5.5d0
+    tmp = (x+0.5d0)*log(tmp)-tmp
+    gammln = tmp+log(stp*(1.000000000190015d0 + &
+         sum(coef(:)/arth(x+1.0d0,1.0d0,size(coef))))/x)
+    
+  end function gammln
   
 end module legendre
 
@@ -107,32 +226,53 @@ contains
   end subroutine init_egrid
 
 ! TEMP FOR TESTING -- MAB
-  subroutine setegrid (Ecut, negrid, epts, wgts, emin)
+  subroutine setegrid (Ecut, negrid, epts, wgts, cutoff, nesub, emin)
 
-    use legendre, only: nrgauleg
+    use legendre, only: nrgauleg, nrgaulag
     implicit none
     
     integer, intent (in) :: negrid
     real, intent (in) :: ecut
 ! TEMP FOR TESTING -- MAB
+    logical, intent (in) :: cutoff
+    integer, intent (in) :: nesub
     real, intent (in), optional :: emin
     real, dimension(:), intent (out) :: epts, wgts
     integer :: ie, np
- 
+    double precision :: pi ! TEMP FOR TESTING -- MAB
+
     real :: eps=1.e-15
 
     real :: x
+    pi = asin(real(1.0,kind(pi)))*2.0 ! TEMP FOR TESTING -- MAB
 
     call init_egrid (negrid)
     
     np = negrid-1
     
-    ! TEMP FOR TESTING -- MAB    
+!< TEMP FOR TESTING -- MAB    
     if (present(emin)) then
 
        call uniformx (emin, ecut, epts, wgts)
        zeroes = sqrt(epts(:np))
        x0 = sqrt(ecut)
+
+!> END TEMP FOR TESTING
+
+    else if (cutoff) then
+
+       x0 = sqrt(ecut)
+
+       call nrgauleg (0., x0, epts(:nesub), wgts(:nesub))
+       epts(:nesub) = epts(:nesub)**2
+       wgts(:nesub) = 4.0*wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
+
+       call nrgaulag (epts(nesub+1:), wgts(nesub+1:), 0.0)
+       epts(nesub+1:) = epts(nesub+1:) + ecut
+       wgts(nesub+1:) = wgts(nesub+1:)*2.0*sqrt(epts(nesub+1:)/pi)*exp(-ecut)
+
+       zeroes = sqrt(epts(:np))
+       x0 = sqrt(epts(np+1))
 
     else
 
@@ -436,7 +576,7 @@ module le_grids
   public :: negrid, nlambda, ng2, lmax, integrate_moment
   public :: geint2g, gint2g, orbit_avg, xloc
   public :: fcheck, uniform_egrid ! TEMP FOR TESTING -- MAB
-  public :: xx, nterp, testfac, new_trap_int, ecut, emin ! TEMP FOR TESTING -- MAB
+  public :: xx, nterp, testfac, new_trap_int, ecut, emin, cutoff ! TEMP FOR TESTING -- MAB
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
   public :: eint_error, lint_error, trap_error, integrate_test
 
@@ -463,6 +603,7 @@ module le_grids
   integer :: ngauss, negrid, nesuper, nesub
   real :: ecut, bouncefuzz
   real :: emin ! TEMP FOR TESTING -- MAB
+  logical :: cutoff ! TEMP FOR TESTING -- MAB
 
   integer :: nlambda, ng2, lmax
   logical :: accel_x = .false.
@@ -544,6 +685,7 @@ contains
     call broadcast (nesub)
     call broadcast (ecut)
     call broadcast (emin) ! TEMP FOR TESTING -- MAB
+    call broadcast (cutoff) ! TEMP FOR TESTING
     call broadcast (bouncefuzz)
     call broadcast (nlambda)
     call broadcast (ng2)
@@ -615,7 +757,7 @@ contains
     namelist /le_grids_knobs/ ngauss, negrid, ecut, bouncefuzz, &
          nesuper, nesub, test, trapped_particles, advanced_egrid, &
          testfac, nmax, wgt_fac, new_trap_int, nterp, &
-         emin, uniform_egrid ! TEMP FOR TESTING -- MAB
+         emin, uniform_egrid, cutoff ! TEMP FOR TESTING -- MAB
 
 ! New default scheme: advanced_egrid is default, and user should set 
 ! negrid (as in the original code)
@@ -632,6 +774,7 @@ contains
     negrid = -10
     ecut = 6.0  ! new default value for advanced scheme
     emin = 0.01  ! TEMP FOR TESTING -- MAB
+    cutoff = .false. ! TEMP FOR TESTING - MAB
     bouncefuzz = 1e-5
     in_file=input_unit_exist("le_grids_knobs", exist)
     if (exist) read (unit=input_unit("le_grids_knobs"), nml=le_grids_knobs)
@@ -2779,7 +2922,7 @@ contains
        
     else if (uniform_egrid) then
 
-       call setegrid (ecut, negrid, e(:,1), w(:,1), emin)
+       call setegrid (ecut, negrid, e(:,1), w(:,1), cutoff, nesub, emin)
 
        do is = 2, nspec
           e(:,is) = e(:,1)
@@ -2790,7 +2933,7 @@ contains
 
     else
 
-       call setegrid (ecut, negrid, e(:,1), w(:,1))
+       call setegrid (ecut, negrid, e(:,1), w(:,1), cutoff, nesub)
 
        do is = 2, nspec
           e(:,is) = e(:,1)
