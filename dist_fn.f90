@@ -3014,6 +3014,10 @@ contains
     use theta_grid, only: ntgrid
     use le_grids, only: integrate_moment, anon
     use prof, only: prof_entering, prof_leaving
+
+    ! TEMP FOR TESTING -- MAB
+    use le_grids, only: e
+
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
@@ -3030,6 +3034,9 @@ contains
        is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
+
+       ! TEMP FOR TESTING -- MAB
+!       gnew(:,:,iglo) = sqrt(e(ie,is))
 
        do isgn = 1, 2
           g0(:,isgn,iglo) = (aj0(:,iglo)**2-1.0)*anon(ie,is) &

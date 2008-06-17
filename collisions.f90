@@ -1099,7 +1099,7 @@ contains
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use le_grids, only: nlambda, negrid, ng2, e, ecut, integrate_moment, al, w
-    use le_grids, only: uniform_egrid
+    use le_grids, only: uniform_egrid, cutoff
     use egrid, only: zeroes, x0, energy
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
@@ -1142,6 +1142,10 @@ contains
 ! for the x-integration
     xe(1:negrid-1) = zeroes
     xe(negrid) = x0
+
+!    do ie = 1, negrid
+!       if (proc0) write (*,*) 'x', ie, xe(ie), w(ie,1)
+!    end do
 
     if (.not.allocated(ec1)) then
        allocate (ec1   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
@@ -1187,13 +1191,15 @@ contains
              xel = (xe0 + xe1)*0.5
              xer = (xe1 + xe2)*0.5
 	
-             if (uniform_egrid) then
-                capgr = exp(-xer**2)*(derf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
-                capgl = exp(-xel**2)*(derf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+             if (uniform_egrid .or. cutoff) then
+                capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+                capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
              else
                 capgr = 8.0*xer*sqrt(el(ie+1))*exp(-2.0*el(ie+1))/pi
                 capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
              end if
+
+             if (proc0) write (*,*) ie, xe(ie), capgr, capgl
 
              ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
                   / (bmag(ig)*spec(is)%zstm)**2 &
@@ -1217,8 +1223,8 @@ contains
 
           xer = (xe1 + xe2)*0.5
 
-          if (uniform_egrid) then
-             capgr = exp(-xer**2)*(derf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+          if (uniform_egrid .or. cutoff) then
+             capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
           else
              capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
           end if
@@ -1242,11 +1248,13 @@ contains
 
           xel = (xe1 + xe0)*0.5
 
-          if (uniform_egrid) then
-             capgl = exp(-xel**2)*(derf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+          if (uniform_egrid .or. cutoff) then
+             capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
           else
              capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
           end if
+
+          write (*,*) 'bound', capgr, capgl
 
           ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
                / (bmag(ig)*spec(is)%zstm)**2 &
@@ -1365,71 +1373,156 @@ contains
 
           ! non-conservative scheme
 
-          xe1 = xe(1)
-          xe2 = xe(2)
-
-          xer = (xe2 + xe1)*0.5
-       
-!          er = energy(xer,ecut)
-       
-          fac = -8.0*vn*code_dt/pi
-       
-          ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
-               / (bmag(ig)*spec(is)%zstm)**2 &
-               * kperp2(ig,it,ik)*cfac
-       
-          aa(1) = 0.0
-          cc(1) = fac*sqrt(el(2))*exp(-2.0*el(2))/(xe2 - xe1)
-          bb(1) = 1.0 - cc(1) + ee*vn*code_dt
-
           do ie = 2, negrid-1
              xe0 = xe(ie-1)
              xe1 = xe(ie)
              xe2 = xe(ie+1)
-
-             capgl = 0.5*(xe0*sqrt(e(ie-1,is))*exp(-2.0*e(ie-1,is)) &
-                  +xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is)))
-             capgr = 0.5*(xe2*sqrt(e(ie+1,is))*exp(-2.0*e(ie+1,is)) &
-                  +xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is)))
-
-             dela = xe1 - xe0
-             delb = xe2 - xe0
-             delc = xe2 - xe1
-             delfac = delc/dela - dela/delc
-       
-             fac = -16.0*vn*code_dt/pi
+             
+             xel = (xe0 + xe1)*0.5
+             xer = (xe1 + xe2)*0.5
+	
+             if (uniform_egrid .or. cutoff) then
+                capgr = exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+                capgl = exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+             else
+                capgr = 8.0*xer*sqrt(el(ie+1))*exp(-2.0*el(ie+1))/pi
+                capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
+             end if
 
              ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
-
-             aa(ie) = fac*delc/(delb*dela)*(capgl/dela &
-                  - xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))*delfac/delb)
-             cc(ie) = fac*dela/(delb*delc)*(capgr/delc &
-                  + xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))*delfac/delb)
+          
+             ! coefficients for tridiagonal matrix:
+             cc(ie) = -vn*code_dt*capgr/((xer-xel)*(xe2 - xe1))
+             aa(ie) = -vn*code_dt*capgl/((xer-xel)*(xe1 - xe0))
              bb(ie) = 1.0 - (aa(ie) + cc(ie)) + ee*vn*code_dt
+             
+             ! coefficients for entropy heating calculation
+!             if (heating) then
+!                dd(il) =vnc*(0.25*capgr/(w(ie,is)*(xe2-xe1)) + ee)
+!                hh(il) =vnh*(0.25*capgr/(w(ie,is)*(xe2-xe1)) + ee)
+!             end if
           end do
 
+          ! boundary at xe = 0
+          xe1 = xe(1)
+          xe2 = xe(2)
+
+          xer = (xe1 + xe2)*0.5
+
+          if (uniform_egrid .or. cutoff) then
+             capgr = exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+          else
+             capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
+          end if
+
+          ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
+               / (bmag(ig)*spec(is)%zstm)**2 &
+               * kperp2(ig,it,ik)*cfac
+
+          cc(1) = -vn*code_dt*capgr/(xer*(xe2 - xe1))
+          aa(1) = 0.0
+          bb(1) = 1.0 - cc(1) + ee*vn*code_dt
+
+!          if (heating) then
+!             dd(1) =vnc*(0.25*capgr/(w(1,is)*(xe2-xe1)) + ee)
+!             hh(1) =vnh*(0.25*capgr/(w(1,is)*(xe2-xe1)) + ee)
+!          end if
+
+          ! boundary at xe = 1
           xe0 = xe(negrid-1)
           xe1 = xe(negrid)
-          xe2 = 1.0
-          
+
           xel = (xe1 + xe0)*0.5
-          
-!          el = energy(xel,ecut)
-          
-          fac = -8.0*vn*code_dt/pi/(xe2 - xel)
-          
+
+          if (uniform_egrid .or. cutoff) then
+             capgl = exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+          else
+             capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
+          end if
+
           ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-          aa(negrid) = fac*sqrt(el(negrid))*xel*exp(-2.0*el(negrid))/(xe1-xe0)
           cc(negrid) = 0.0
+          aa(negrid) = -vn*code_dt*capgl/((1.0-xel)*(xe1 - xe0))
           bb(negrid) = 1.0 - aa(negrid) + ee*vn*code_dt
+
+!          if (heating) then
+!             dd(negrid) =vnc*ee
+!             hh(negrid) =vnh*ee
+!          end if
 
           ec1(:,ielo) = cc
           era1 = 0.0 ; erb1 = 1.0 ; erc1 = 0.0
+
+!          xe1 = xe(1)
+!          xe2 = xe(2)
+!
+!          xer = (xe2 + xe1)*0.5
+!       
+!!          er = energy(xer,ecut)
+!       
+!          fac = -8.0*vn*code_dt/pi
+!       
+!          ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
+!               / (bmag(ig)*spec(is)%zstm)**2 &
+!               * kperp2(ig,it,ik)*cfac
+!       
+!          aa(1) = 0.0
+!          cc(1) = fac*sqrt(el(2))*exp(-2.0*el(2))/(xe2 - xe1)
+!          bb(1) = 1.0 - cc(1) + ee*vn*code_dt
+!
+!          do ie = 2, negrid-1
+!             xe0 = xe(ie-1)
+!             xe1 = xe(ie)
+!             xe2 = xe(ie+1)
+!
+!             capgl = 0.5*(xe0*sqrt(e(ie-1,is))*exp(-2.0*e(ie-1,is)) &
+!                  +xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is)))
+!             capgr = 0.5*(xe2*sqrt(e(ie+1,is))*exp(-2.0*e(ie+1,is)) &
+!                  +xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is)))
+!
+!             dela = xe1 - xe0
+!             delb = xe2 - xe0
+!             delc = xe2 - xe1
+!             delfac = delc/dela - dela/delc
+!       
+!             fac = -16.0*vn*code_dt/pi
+!
+!             ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
+!                  / (bmag(ig)*spec(is)%zstm)**2 &
+!                  * kperp2(ig,it,ik)*cfac
+!
+!             aa(ie) = fac*delc/(delb*dela)*(capgl/dela &
+!                  - xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))*delfac/delb)
+!             cc(ie) = fac*dela/(delb*delc)*(capgr/delc &
+!                  + xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))*delfac/delb)
+!             bb(ie) = 1.0 - (aa(ie) + cc(ie)) + ee*vn*code_dt
+!          end do
+!
+!          xe0 = xe(negrid-1)
+!          xe1 = xe(negrid)
+!          xe2 = 1.0
+!          
+!          xel = (xe1 + xe0)*0.5
+!          
+!!          el = energy(xel,ecut)
+!          
+!          fac = -8.0*vn*code_dt/pi/(xe2 - xel)
+!          
+!          ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
+!               / (bmag(ig)*spec(is)%zstm)**2 &
+!               * kperp2(ig,it,ik)*cfac
+!
+!          aa(negrid) = fac*sqrt(el(negrid))*xel*exp(-2.0*el(negrid))/(xe1-xe0)
+!          cc(negrid) = 0.0
+!          bb(negrid) = 1.0 - aa(negrid) + ee*vn*code_dt
+!
+!          ec1(:,ielo) = cc
+!          era1 = 0.0 ; erb1 = 1.0 ; erc1 = 0.0
           
        end select
 
@@ -2537,11 +2630,14 @@ contains
     if (adjust) call g_adjust (g, phi, bpar, fphi, fbpar)
     if (adjust) call g_adjust (gold, phi, bpar, fphi, fbpar)
 
+    ! added 5.11.08 -- MAB
+    if (heating .and. present(diagnostics)) gc3 = g
+
     select case (collision_model_switch)
     case (collision_model_full)
 
        if (heating .and. present(diagnostics)) then
-          gc3 = g
+!          gc3 = g
           call solfp_lorentz (g, gc1, gc2, diagnostics)
        else
           call solfp_lorentz (g, gc1, gc2)
@@ -2554,7 +2650,7 @@ contains
     case (collision_model_lorentz,collision_model_lorentz_test)
 
        if (heating .and. present(diagnostics)) then
-          gc3 = g
+!          gc3 = g
           call solfp_lorentz (g, gc1, gc2, diagnostics)
        else
           call solfp_lorentz (g, gc1, gc2)
