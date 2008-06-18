@@ -253,9 +253,9 @@ contains
 !< TEMP FOR TESTING -- MAB    
     if (present(emin)) then
 
-       call uniformx (emin, ecut, epts, wgts)
-       zeroes = sqrt(epts(:np))
-       x0 = sqrt(ecut)
+!       call uniformx (emin, ecut, epts, wgts)
+!       zeroes = sqrt(epts(:np))
+!       x0 = sqrt(ecut)
 
 !> END TEMP FOR TESTING
 
@@ -306,86 +306,86 @@ contains
   end subroutine setegrid
 
   ! TEMP FOR TESTING -- MAB
-  subroutine uniformx (emin, ecut, ee, ww)
-    
-    use constants, only: pi
-    implicit none
+!  subroutine uniformx (emin, ecut, ee, ww)
+!    
+!    use constants, only: pi
+!    implicit none
 
-    real, intent (in) :: emin, ecut
-    real, dimension (:), intent (out) :: ee, ww
+!    real, intent (in) :: emin, ecut
+!    real, dimension (:), intent (out) :: ee, ww
 
-    integer :: ix, nx
-    real :: xcut, xmin, dx, fac
+!    integer :: ix, nx
+!    real :: xcut, xmin, dx, fac
     ! RN 2008/05/28: this is meaningless
     ! If double precision is necessary, everything should be double.
     ! use real pi from module constants
-!    double precision :: pi
-    double precision :: derf
-    real, dimension (:), allocatable :: aa, bb, cc, xx
-    real :: erf ! this is needed for PGI: RN
+!!    double precision :: pi
+!    double precision :: derf
+!    real, dimension (:), allocatable :: aa, bb, cc, xx
+!    real :: erf ! this is needed for PGI: RN
 
-!    pi = asin(real(1.0,kind(pi)))*2.0
-    nx = size(ee)
+!!    pi = asin(real(1.0,kind(pi)))*2.0
+!    nx = size(ee)
 
-    allocate (aa(nx), bb(nx), cc(nx), xx(nx))
+!    allocate (aa(nx), bb(nx), cc(nx), xx(nx))
 
-    xcut = sqrt(ecut)
-    xmin = sqrt(emin)
-    dx = (xcut-xmin)/(nx-1)
-    fac = .125/dx**2
-    xmin = min(xmin, dx)
+!    xcut = sqrt(ecut)
+!    xmin = sqrt(emin)
+!    dx = (xcut-xmin)/(nx-1)
+!    fac = .125/dx**2
+!    xmin = min(xmin, dx)
 
-    do ix = 1, nx
-       xx(ix) = xmin + (ix-1)*dx
-    end do
+!    do ix = 1, nx
+!       xx(ix) = xmin + (ix-1)*dx
+!    end do
 
-    do ix = 3, nx-2
-       bb(ix) = fac*(2.*exp(-xx(ix+1)**2)*(3.*dx-xx(ix)+exp(4.*dx*xx(ix)) &
-            * (3.*dx+xx(ix)))/sqrt(pi) - (2.*xx(ix+1)*xx(ix-1) + 3.) &
-            * (derf(xx(ix+1)) - derf(xx(ix-1))))
-    end do
+!    do ix = 3, nx-2
+!       bb(ix) = fac*(2.*exp(-xx(ix+1)**2)*(3.*dx-xx(ix)+exp(4.*dx*xx(ix)) &
+!            * (3.*dx+xx(ix)))/sqrt(pi) - (2.*xx(ix+1)*xx(ix-1) + 3.) &
+!            * (derf(xx(ix+1)) - derf(xx(ix-1))))
+!    end do
 
-    do ix = 4, nx-1
-       cc(ix) = 0.5*fac*(exp(-xx(ix)**2)*2.*(xx(ix-1)-exp(4.*dx*xx(ix-1)) &
-            * xx(ix) - dx*(5.+4.*dx*xx(ix)))/sqrt(pi) + (3. + 2.*xx(ix-2)*xx(ix-1)) &
-            * (derf(xx(ix)) - derf(xx(ix-2))))
-    end do
+!    do ix = 4, nx-1
+!       cc(ix) = 0.5*fac*(exp(-xx(ix)**2)*2.*(xx(ix-1)-exp(4.*dx*xx(ix-1)) &
+!            * xx(ix) - dx*(5.+4.*dx*xx(ix)))/sqrt(pi) + (3. + 2.*xx(ix-2)*xx(ix-1)) &
+!            * (derf(xx(ix)) - derf(xx(ix-2))))
+!    end do
 
-    do ix = 2, nx-3
-       aa(ix) = 0.5*fac*(exp(-xx(ix+2)**2)*2.*(xx(ix)-exp(4.*dx*xx(ix+1)) &
-            * (dx*(5.-4.*dx*xx(ix))+xx(ix+1)))/sqrt(pi) + (3.+2.*xx(ix+1)*xx(ix+2)) &
-            * (derf(xx(ix+2)) - derf(xx(ix))))
-    end do
+!    do ix = 2, nx-3
+!       aa(ix) = 0.5*fac*(exp(-xx(ix+2)**2)*2.*(xx(ix)-exp(4.*dx*xx(ix+1)) &
+!            * (dx*(5.-4.*dx*xx(ix))+xx(ix+1)))/sqrt(pi) + (3.+2.*xx(ix+1)*xx(ix+2)) &
+!            * (derf(xx(ix+2)) - derf(xx(ix))))
+!    end do
 
     ! dealing with lower boundary
-    cc(1) = 0.0
-    bb(1) = 0.25/(sqrt(pi)*dx)*(exp(-xx(2)**2)*2.-2.+sqrt(pi)*xx(2)*derf(xx(2)))
-    aa(1) = 0.5*fac/sqrt(pi)*(exp(-xx(3)**2)*2.*xx(1)-4.*(xx(3)+xx(2)) &
-         + sqrt(pi)*(3. + 2.*xx(2)*xx(3))*derf(xx(3)))
-    bb(2) = fac/sqrt(pi)*(exp(-xx(3)**2)*(6.*dx-2.*xx(2)) &
-         + 8.*xx(2) - sqrt(pi)*(3.+2.*xx(1)*xx(3))*derf(xx(3)))
-    cc(2) = 0.25/(sqrt(pi)*dx)*(-2.*exp(-xx(2)**2)*(1.+dx*xx(2)) + 2.-sqrt(pi)*xx(1)*derf(xx(2)))
-    cc(3) = 0.5*fac/sqrt(pi)*(exp(-xx(3)**2)*2.*(xx(2)-dx*(5.+4.*dx*xx(3))) &
-         + 4.*dx - 8.*xx(2) + sqrt(pi)*(3.+2.*xx(1)*xx(2))*derf(xx(3)))
+!    cc(1) = 0.0
+!    bb(1) = 0.25/(sqrt(pi)*dx)*(exp(-xx(2)**2)*2.-2.+sqrt(pi)*xx(2)*derf(xx(2)))
+!    aa(1) = 0.5*fac/sqrt(pi)*(exp(-xx(3)**2)*2.*xx(1)-4.*(xx(3)+xx(2)) &
+!         + sqrt(pi)*(3. + 2.*xx(2)*xx(3))*derf(xx(3)))
+!    bb(2) = fac/sqrt(pi)*(exp(-xx(3)**2)*(6.*dx-2.*xx(2)) &
+!         + 8.*xx(2) - sqrt(pi)*(3.+2.*xx(1)*xx(3))*derf(xx(3)))
+!    cc(2) = 0.25/(sqrt(pi)*dx)*(-2.*exp(-xx(2)**2)*(1.+dx*xx(2)) + 2.-sqrt(pi)*xx(1)*derf(xx(2)))
+!    cc(3) = 0.5*fac/sqrt(pi)*(exp(-xx(3)**2)*2.*(xx(2)-dx*(5.+4.*dx*xx(3))) &
+!         + 4.*dx - 8.*xx(2) + sqrt(pi)*(3.+2.*xx(1)*xx(2))*derf(xx(3)))
   
     ! dealing with upper boundary
-    aa(nx) = 0.0
-    bb(nx) = 0.25/dx*(2.*exp(-xx(nx-1)**2)/sqrt(pi)-xx(nx-1)*(1.-derf(xx(nx-1))))
-    aa(nx-1) = 0.25/dx*(2.*(xx(nx-1)*dx-1.)*exp(-xx(nx-1)**2)/sqrt(pi) &
-         + xx(nx)*(1.-derf(xx(nx-1))))
-    aa(nx-2) = 0.5*fac*(-2.*exp(-xx(nx-2)**2)*(dx*(5.-4.*dx*xx(nx-2))+xx(nx-1))/sqrt(pi) &
-         + (3.+2.*xx(nx-1)*xx(nx))*(1.-derf(xx(nx-2))))
-    bb(nx-1) = fac*(2.*exp(-xx(nx-2)**2)*(3.*dx+xx(nx-1))/sqrt(pi) &
-         - (3. + 2.*xx(nx-2)*xx(nx))*(1.-derf(xx(nx-2))))
-    cc(nx) = -0.5*fac*(2.*exp(-xx(nx-2)**2)*xx(nx)/sqrt(pi) &
-         - (3.+2.*xx(nx-1)*xx(nx-2))*(1.-derf(xx(nx-2))))
+!    aa(nx) = 0.0
+!    bb(nx) = 0.25/dx*(2.*exp(-xx(nx-1)**2)/sqrt(pi)-xx(nx-1)*(1.-derf(xx(nx-1))))
+!    aa(nx-1) = 0.25/dx*(2.*(xx(nx-1)*dx-1.)*exp(-xx(nx-1)**2)/sqrt(pi) &
+!         + xx(nx)*(1.-derf(xx(nx-1))))
+!    aa(nx-2) = 0.5*fac*(-2.*exp(-xx(nx-2)**2)*(dx*(5.-4.*dx*xx(nx-2))+xx(nx-1))/sqrt(pi) &
+!         + (3.+2.*xx(nx-1)*xx(nx))*(1.-derf(xx(nx-2))))
+!    bb(nx-1) = fac*(2.*exp(-xx(nx-2)**2)*(3.*dx+xx(nx-1))/sqrt(pi) &
+!         - (3. + 2.*xx(nx-2)*xx(nx))*(1.-derf(xx(nx-2))))
+!    cc(nx) = -0.5*fac*(2.*exp(-xx(nx-2)**2)*xx(nx)/sqrt(pi) &
+!         - (3.+2.*xx(nx-1)*xx(nx-2))*(1.-derf(xx(nx-2))))
     
-    ww = (aa+bb+cc)*0.5
-    ee = xx**2
+!    ww = (aa+bb+cc)*0.5
+!    ee = xx**2
 
-    deallocate (aa, bb, cc, xx)
+!    deallocate (aa, bb, cc, xx)
 
-  end subroutine uniformx
+!  end subroutine uniformx
 
   function energy (xeval, ecut)
     real, intent (in) :: xeval, ecut
@@ -2920,16 +2920,16 @@ contains
           end if
        end do
        
-    else if (uniform_egrid) then
+!    else if (uniform_egrid) then
 
-       call setegrid (ecut, negrid, e(:,1), w(:,1), cutoff, nesub, emin)
+!       call setegrid (ecut, negrid, e(:,1), w(:,1), cutoff, nesub, emin)
 
-       do is = 2, nspec
-          e(:,is) = e(:,1)
-          w(:,is) = w(:,1)
-       end do
+!       do is = 2, nspec
+!          e(:,is) = e(:,1)
+!          w(:,is) = w(:,1)
+!       end do
 
-       anon = 1.0
+!       anon = 1.0
 
     else
 
