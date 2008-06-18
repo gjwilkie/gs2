@@ -1199,8 +1199,6 @@ contains
                 capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
              end if
 
-             if (proc0) write (*,*) ie, xe(ie), capgr, capgl
-
              ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
@@ -1253,8 +1251,6 @@ contains
           else
              capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
           end if
-
-          write (*,*) 'bound', capgr, capgl
 
           ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
                / (bmag(ig)*spec(is)%zstm)**2 &

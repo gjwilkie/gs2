@@ -3037,6 +3037,7 @@ contains
 
        ! TEMP FOR TESTING -- MAB
 !       gnew(:,:,iglo) = sqrt(e(ie,is))
+!       gnew = 1.0
 
        do isgn = 1, 2
           g0(:,isgn,iglo) = (aj0(:,iglo)**2-1.0)*anon(ie,is) &
