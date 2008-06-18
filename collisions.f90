@@ -1192,8 +1192,8 @@ contains
              xer = (xe1 + xe2)*0.5
 	
              if (uniform_egrid .or. cutoff) then
-                capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
-                capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+                capgr = 2.0*exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer/sqrt(pi)
+                capgl = 2.0*exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel/sqrt(pi)
              else
                 capgr = 8.0*xer*sqrt(el(ie+1))*exp(-2.0*el(ie+1))/pi
                 capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
@@ -1222,7 +1222,7 @@ contains
           xer = (xe1 + xe2)*0.5
 
           if (uniform_egrid .or. cutoff) then
-             capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+             capgr = 2.0*exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer/sqrt(pi)
           else
              capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
           end if
@@ -1247,7 +1247,7 @@ contains
           xel = (xe1 + xe0)*0.5
 
           if (uniform_egrid .or. cutoff) then
-             capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+             capgl = 2.0*exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel/sqrt(pi)
           else
              capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
           end if
@@ -1378,8 +1378,8 @@ contains
              xer = (xe1 + xe2)*0.5
 	
              if (uniform_egrid .or. cutoff) then
-                capgr = exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
-                capgl = exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+                capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+                capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
              else
                 capgr = 8.0*xer*sqrt(el(ie+1))*exp(-2.0*el(ie+1))/pi
                 capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
@@ -1408,7 +1408,7 @@ contains
           xer = (xe1 + xe2)*0.5
 
           if (uniform_egrid .or. cutoff) then
-             capgr = exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+             capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
           else
              capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
           end if
@@ -1433,7 +1433,7 @@ contains
           xel = (xe1 + xe0)*0.5
 
           if (uniform_egrid .or. cutoff) then
-             capgl = exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+             capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
           else
              capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
           end if
@@ -3170,6 +3170,11 @@ contains
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
 
+    ! TEMP FOR TESTING -- MAB
+!    use gs2_layouts, only: ik_idx, ie_idx, il_idx
+!    use gs2_time, only: code_dt
+!    use le_grids, only: e
+
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
@@ -3182,6 +3187,14 @@ contains
     allocate (ged(negrid+1,e_lo%llim_proc:e_lo%ulim_alloc))
     allocate (ged0(negrid+1))
     ged = 0.0 ; ged0 = 0.0
+
+    ! TEMP FOR TESTING -- MAB
+!    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!       ik = ik_idx(g_lo,iglo)
+!       ie = ie_idx(g_lo,iglo)
+!       is = is_idx(g_lo,iglo)
+!       g(:,:,iglo) = e(ie,is)*(1. + vnew_E(ik,ie,is)*code_dt)
+!    end do
 
     call gather (ediffuse_map, g, ged)
 
@@ -3212,6 +3225,13 @@ contains
     end do
 
     call scatter (ediffuse_map, ged, g)
+
+    ! TEMP FOR TESTING -- MAB
+!    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!       il = il_idx(g_lo,iglo)
+!       ie = ie_idx(g_lo,iglo)
+!       if (il == 1) write (*,*) "test", ie, sqrt(e(ie,1)), real(g(0,1,iglo))
+!    end do
 
     deallocate (ged, ged0)
 

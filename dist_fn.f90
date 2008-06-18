@@ -3016,7 +3016,7 @@ contains
     use prof, only: prof_entering, prof_leaving
 
     ! TEMP FOR TESTING -- MAB
-    use le_grids, only: e
+!    use le_grids, only: e
 
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
