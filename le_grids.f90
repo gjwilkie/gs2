@@ -76,6 +76,8 @@ contains
 
   subroutine nrgaulag (x, w, alf)
 
+    use constants, only: pi => dpi
+
     implicit none
 
     real, intent(in) :: alf
@@ -90,10 +92,10 @@ contains
     real, dimension(size(x)) :: rhs, r2, r3, theta
     double precision, dimension(size(x)) :: p1, p2, p3, pp, z, z1
     logical, dimension(size(x)) :: unfinished
-    double precision :: pi
+!    double precision :: pi
 
     n = size(x)
-    pi = asin(real(1.0,kind(pi)))*2.0
+!    pi = asin(real(1.0,kind(pi)))*2.0
     anu = 4.0*n+2.0*alf+2.0
     rhs = arth(4*n-1,-4,n)*pi/anu
     r3 = rhs**(1.0/3.0)
@@ -199,7 +201,7 @@ module egrid
 
   implicit none
 
-  public :: energy, xgrid, setegrid, init_egrid
+  public :: energy, xgrid, setegrid, setvgrid, init_egrid
   public :: zeroes, x0
 
   private
@@ -225,167 +227,90 @@ contains
 
   end subroutine init_egrid
 
-! TEMP FOR TESTING -- MAB
-  subroutine setegrid (Ecut, negrid, epts, wgts, cutoff, nesub, emin)
+  subroutine setegrid (Ecut, negrid, epts, wgts)
 
-    use legendre, only: nrgauleg, nrgaulag
+    use legendre, only: nrgauleg
     implicit none
     
     integer, intent (in) :: negrid
     real, intent (in) :: ecut
-! TEMP FOR TESTING -- MAB
-    logical, intent (in) :: cutoff
-    integer, intent (in) :: nesub
-    real, intent (in), optional :: emin
     real, dimension(:), intent (out) :: epts, wgts
     integer :: ie, np
-    double precision :: pi ! TEMP FOR TESTING -- MAB
 
     real :: eps=1.e-15
 
     real :: x
-    pi = asin(real(1.0,kind(pi)))*2.0 ! TEMP FOR TESTING -- MAB
 
     call init_egrid (negrid)
     
     np = negrid-1
     
-!< TEMP FOR TESTING -- MAB    
-    if (present(emin)) then
-
-!       call uniformx (emin, ecut, epts, wgts)
-!       zeroes = sqrt(epts(:np))
-!       x0 = sqrt(ecut)
-
-!> END TEMP FOR TESTING
-
-    else if (cutoff) then
-
-       x0 = sqrt(ecut)
-
-       call nrgauleg (0., x0, epts(:nesub), wgts(:nesub))
-       epts(:nesub) = epts(:nesub)**2
-       wgts(:nesub) = 4.0*wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
-
-       call nrgaulag (epts(nesub+1:), wgts(nesub+1:), 0.0)
-       epts(nesub+1:) = epts(nesub+1:) + ecut
-       wgts(nesub+1:) = wgts(nesub+1:)*2.0*sqrt(epts(nesub+1:)/pi)*exp(-ecut)
-
-       zeroes = sqrt(epts(:np))
-       x0 = sqrt(epts(np+1))
-
-    else
-
-       if (Ecut > 20.0) then
-          ! should go to runname.error?
-          write (*,*) 'E -> x transformation is not numerically correct for such a large Ecut'
-          write (*,*) 'x(E=20) =', xgrid(20.), ' is too close to 1.0'
-       end if
-
-       x0 = xgrid(ecut)      ! function xgrid_s (single element)
-
-       call nrgauleg(0., x0, zeroes, wgts(1:np))!, eps**1.5)
-
-       do ie=1,np
-          epts(ie) = energy(zeroes(ie), Ecut)
-       end do
-
-       epts(np+1) = ecut
-       wgts(np+1) = 1.-x0
-
-       if (wgts(negrid) > wgts(np)) then
-          write (*,*) 'WARNING: weight at ecut: ', wgts(negrid)
-          write (*,*) 'WARNING: is larger than the one at lower grid: ', wgts(np)
-          write (*,*) 'WARNING: Recommend using fewer energy grid points'
-          if (ecut < 20.0) &
-               & write (*,*) 'WARNING: or you should increase ecut (<= 20)'
-       end if
-
+    if (Ecut > 20.0) then
+       ! should go to runname.error?
+       write (*,*) 'E -> x transformation is not numerically correct for such a large Ecut'
+       write (*,*) 'x(E=20) =', xgrid(20.), ' is too close to 1.0'
+    end if
+    
+    x0 = xgrid(ecut)      ! function xgrid_s (single element)
+    
+    call nrgauleg(0., x0, zeroes, wgts(1:np))!, eps**1.5)
+    
+    do ie=1,np
+       epts(ie) = energy(zeroes(ie), Ecut)
+    end do
+    
+    epts(np+1) = ecut
+    wgts(np+1) = 1.-x0
+    
+    if (wgts(negrid) > wgts(np)) then
+       write (*,*) 'WARNING: weight at ecut: ', wgts(negrid)
+       write (*,*) 'WARNING: is larger than the one at lower grid: ', wgts(np)
+       write (*,*) 'WARNING: Recommend using fewer energy grid points'
+       if (ecut < 20.0) &
+            & write (*,*) 'WARNING: or you should increase ecut (<= 20)'
     end if
 
   end subroutine setegrid
 
-  ! TEMP FOR TESTING -- MAB
-!  subroutine uniformx (emin, ecut, ee, ww)
-!    
-!    use constants, only: pi
-!    implicit none
+  subroutine setvgrid (vcut, negrid, epts, wgts, nesub)
 
-!    real, intent (in) :: emin, ecut
-!    real, dimension (:), intent (out) :: ee, ww
+    use constants, only: pi => dpi
+    use legendre, only: nrgauleg, nrgaulag
 
-!    integer :: ix, nx
-!    real :: xcut, xmin, dx, fac
-    ! RN 2008/05/28: this is meaningless
-    ! If double precision is necessary, everything should be double.
-    ! use real pi from module constants
-!!    double precision :: pi
-!    double precision :: derf
-!    real, dimension (:), allocatable :: aa, bb, cc, xx
-!    real :: erf ! this is needed for PGI: RN
-
-!!    pi = asin(real(1.0,kind(pi)))*2.0
-!    nx = size(ee)
-
-!    allocate (aa(nx), bb(nx), cc(nx), xx(nx))
-
-!    xcut = sqrt(ecut)
-!    xmin = sqrt(emin)
-!    dx = (xcut-xmin)/(nx-1)
-!    fac = .125/dx**2
-!    xmin = min(xmin, dx)
-
-!    do ix = 1, nx
-!       xx(ix) = xmin + (ix-1)*dx
-!    end do
-
-!    do ix = 3, nx-2
-!       bb(ix) = fac*(2.*exp(-xx(ix+1)**2)*(3.*dx-xx(ix)+exp(4.*dx*xx(ix)) &
-!            * (3.*dx+xx(ix)))/sqrt(pi) - (2.*xx(ix+1)*xx(ix-1) + 3.) &
-!            * (derf(xx(ix+1)) - derf(xx(ix-1))))
-!    end do
-
-!    do ix = 4, nx-1
-!       cc(ix) = 0.5*fac*(exp(-xx(ix)**2)*2.*(xx(ix-1)-exp(4.*dx*xx(ix-1)) &
-!            * xx(ix) - dx*(5.+4.*dx*xx(ix)))/sqrt(pi) + (3. + 2.*xx(ix-2)*xx(ix-1)) &
-!            * (derf(xx(ix)) - derf(xx(ix-2))))
-!    end do
-
-!    do ix = 2, nx-3
-!       aa(ix) = 0.5*fac*(exp(-xx(ix+2)**2)*2.*(xx(ix)-exp(4.*dx*xx(ix+1)) &
-!            * (dx*(5.-4.*dx*xx(ix))+xx(ix+1)))/sqrt(pi) + (3.+2.*xx(ix+1)*xx(ix+2)) &
-!            * (derf(xx(ix+2)) - derf(xx(ix))))
-!    end do
-
-    ! dealing with lower boundary
-!    cc(1) = 0.0
-!    bb(1) = 0.25/(sqrt(pi)*dx)*(exp(-xx(2)**2)*2.-2.+sqrt(pi)*xx(2)*derf(xx(2)))
-!    aa(1) = 0.5*fac/sqrt(pi)*(exp(-xx(3)**2)*2.*xx(1)-4.*(xx(3)+xx(2)) &
-!         + sqrt(pi)*(3. + 2.*xx(2)*xx(3))*derf(xx(3)))
-!    bb(2) = fac/sqrt(pi)*(exp(-xx(3)**2)*(6.*dx-2.*xx(2)) &
-!         + 8.*xx(2) - sqrt(pi)*(3.+2.*xx(1)*xx(3))*derf(xx(3)))
-!    cc(2) = 0.25/(sqrt(pi)*dx)*(-2.*exp(-xx(2)**2)*(1.+dx*xx(2)) + 2.-sqrt(pi)*xx(1)*derf(xx(2)))
-!    cc(3) = 0.5*fac/sqrt(pi)*(exp(-xx(3)**2)*2.*(xx(2)-dx*(5.+4.*dx*xx(3))) &
-!         + 4.*dx - 8.*xx(2) + sqrt(pi)*(3.+2.*xx(1)*xx(2))*derf(xx(3)))
-  
-    ! dealing with upper boundary
-!    aa(nx) = 0.0
-!    bb(nx) = 0.25/dx*(2.*exp(-xx(nx-1)**2)/sqrt(pi)-xx(nx-1)*(1.-derf(xx(nx-1))))
-!    aa(nx-1) = 0.25/dx*(2.*(xx(nx-1)*dx-1.)*exp(-xx(nx-1)**2)/sqrt(pi) &
-!         + xx(nx)*(1.-derf(xx(nx-1))))
-!    aa(nx-2) = 0.5*fac*(-2.*exp(-xx(nx-2)**2)*(dx*(5.-4.*dx*xx(nx-2))+xx(nx-1))/sqrt(pi) &
-!         + (3.+2.*xx(nx-1)*xx(nx))*(1.-derf(xx(nx-2))))
-!    bb(nx-1) = fac*(2.*exp(-xx(nx-2)**2)*(3.*dx+xx(nx-1))/sqrt(pi) &
-!         - (3. + 2.*xx(nx-2)*xx(nx))*(1.-derf(xx(nx-2))))
-!    cc(nx) = -0.5*fac*(2.*exp(-xx(nx-2)**2)*xx(nx)/sqrt(pi) &
-!         - (3.+2.*xx(nx-1)*xx(nx-2))*(1.-derf(xx(nx-2))))
+    implicit none
     
-!    ww = (aa+bb+cc)*0.5
-!    ee = xx**2
+    integer, intent (in) :: negrid
+    real, intent (in) :: vcut
+    integer, intent (in) :: nesub
+    real, dimension(:), intent (out) :: epts, wgts
+    integer :: ie
 
-!    deallocate (aa, bb, cc, xx)
+    real :: x
 
-!  end subroutine uniformx
+    call init_egrid (negrid)
+    
+    ! get grid points in v up to vcut (epts is not E yet)
+    call nrgauleg (0., vcut, epts(:nesub), wgts(:nesub))
+
+    ! change from v to E
+    epts(:nesub) = epts(:nesub)**2
+
+    ! absorb exponential and volume element in weights
+    wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
+
+    ! get grid points in y = E - vcut**2 (epts not E yet)
+    call nrgaulag (epts(nesub+1:), wgts(nesub+1:), 0.0)
+
+    ! change from y to E
+    epts(nesub+1:) = epts(nesub+1:) + vcut**2
+
+    ! absort exponential and volume element in weights
+    wgts(nesub+1:) = wgts(nesub+1:)*0.5*sqrt(epts(nesub+1:)/pi)*exp(-vcut**2)
+    
+    zeroes = sqrt(epts(:negrid-1))
+    x0 = sqrt(epts(negrid))
+
+  end subroutine setvgrid
 
   function energy (xeval, ecut)
     real, intent (in) :: xeval, ecut
@@ -575,8 +500,8 @@ module le_grids
   public :: e, anon, al, delal, jend, forbid, dele, wl, w
   public :: negrid, nlambda, ng2, lmax, integrate_moment
   public :: geint2g, gint2g, orbit_avg, xloc
-  public :: fcheck, uniform_egrid ! TEMP FOR TESTING -- MAB
-  public :: xx, nterp, testfac, new_trap_int, ecut, emin, cutoff ! TEMP FOR TESTING -- MAB
+  public :: fcheck
+  public :: xx, nterp, testfac, new_trap_int, ecut, vcut, vgrid
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
   public :: eint_error, lint_error, trap_error, integrate_test
 
@@ -601,9 +526,7 @@ module le_grids
 
  ! knobs
   integer :: ngauss, negrid, nesuper, nesub
-  real :: ecut, bouncefuzz
-  real :: emin ! TEMP FOR TESTING -- MAB
-  logical :: cutoff ! TEMP FOR TESTING -- MAB
+  real :: ecut, bouncefuzz, vcut
 
   integer :: nlambda, ng2, lmax
   logical :: accel_x = .false.
@@ -611,8 +534,8 @@ module le_grids
   logical :: test = .false.
   logical :: trapped_particles = .true.
   logical :: advanced_egrid = .true.
-  logical :: uniform_egrid = .false.  ! TEMP FOR TESTING -- MAB
   logical :: new_trap_int = .false.
+  logical :: vgrid = .false.
 
   integer :: testfac = 1
   integer :: nmax = 500
@@ -684,8 +607,7 @@ contains
     call broadcast (nesuper)
     call broadcast (nesub)
     call broadcast (ecut)
-    call broadcast (emin) ! TEMP FOR TESTING -- MAB
-    call broadcast (cutoff) ! TEMP FOR TESTING
+    call broadcast (vcut)
     call broadcast (bouncefuzz)
     call broadcast (nlambda)
     call broadcast (ng2)
@@ -695,7 +617,7 @@ contains
     call broadcast (nmax)
     call broadcast (trapped_particles)
     call broadcast (advanced_egrid)
-    call broadcast (uniform_egrid) ! TEMP FOR TESTING -- MAB
+    call broadcast (vgrid)
     call broadcast (wgt_fac)
     call broadcast (new_trap_int)
     call broadcast (nterp)
@@ -756,8 +678,7 @@ contains
     logical :: exist
     namelist /le_grids_knobs/ ngauss, negrid, ecut, bouncefuzz, &
          nesuper, nesub, test, trapped_particles, advanced_egrid, &
-         testfac, nmax, wgt_fac, new_trap_int, nterp, &
-         emin, uniform_egrid, cutoff ! TEMP FOR TESTING -- MAB
+         testfac, nmax, wgt_fac, new_trap_int, nterp, vcut, vgrid
 
 ! New default scheme: advanced_egrid is default, and user should set 
 ! negrid (as in the original code)
@@ -772,9 +693,8 @@ contains
     nesuper = 2
     ngauss = 5
     negrid = -10
+    vcut = 4.0
     ecut = 6.0  ! new default value for advanced scheme
-    emin = 0.01  ! TEMP FOR TESTING -- MAB
-    cutoff = .false. ! TEMP FOR TESTING - MAB
     bouncefuzz = 1e-5
     in_file=input_unit_exist("le_grids_knobs", exist)
     if (exist) read (unit=input_unit("le_grids_knobs"), nml=le_grids_knobs)
@@ -2202,7 +2122,7 @@ contains
     use species, only: nspec, spec, slowing_down_species
     use legendre, only: nrgauleg
     use constants
-    use egrid, only: setegrid
+    use egrid, only: setegrid, setvgrid
     implicit none
 
     real, dimension (1), parameter :: esub1 = (/ &
@@ -2781,7 +2701,24 @@ contains
     real :: cut
     real :: eps=1.e-15
 
-    if (.not. advanced_egrid) then
+    if (vgrid) then
+
+       ! if negrid specified in input file, auto-calculate nesub, nesuper
+       if (negrid > 0) then
+          nesuper = min(negrid/10+1, 5)
+          nesub = negrid - nesuper
+       end if
+
+       call setvgrid (vcut, negrid, e(:,1), w(:,1), nesub)
+       
+       do is = 2, nspec
+          e(:,is) = e(:,1)
+          w(:,is) = w(:,1)
+       end do
+
+       anon = 1.0
+
+    else if (.not. advanced_egrid) then
 
 !       call nrgauleg (0., 1.0, esub, wsub, eps**1.5)
 
@@ -2920,20 +2857,9 @@ contains
           end if
        end do
        
-!    else if (uniform_egrid) then
-
-!       call setegrid (ecut, negrid, e(:,1), w(:,1), cutoff, nesub, emin)
-
-!       do is = 2, nspec
-!          e(:,is) = e(:,1)
-!          w(:,is) = w(:,1)
-!       end do
-
-!       anon = 1.0
-
     else
 
-       call setegrid (ecut, negrid, e(:,1), w(:,1), cutoff, nesub)
+       call setegrid (ecut, negrid, e(:,1), w(:,1))
 
        do is = 2, nspec
           e(:,is) = e(:,1)

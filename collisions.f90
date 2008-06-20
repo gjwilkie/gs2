@@ -1099,7 +1099,7 @@ contains
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use le_grids, only: nlambda, negrid, ng2, e, ecut, integrate_moment, al, w
-    use le_grids, only: uniform_egrid, cutoff
+    use le_grids, only: vgrid
     use egrid, only: zeroes, x0, energy
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
@@ -1191,7 +1191,7 @@ contains
              xel = (xe0 + xe1)*0.5
              xer = (xe1 + xe2)*0.5
 	
-             if (uniform_egrid .or. cutoff) then
+             if (vgrid) then
                 capgr = 2.0*exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer/sqrt(pi)
                 capgl = 2.0*exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel/sqrt(pi)
              else
@@ -1221,7 +1221,7 @@ contains
 
           xer = (xe1 + xe2)*0.5
 
-          if (uniform_egrid .or. cutoff) then
+          if (vgrid) then
              capgr = 2.0*exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer/sqrt(pi)
           else
              capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
@@ -1246,7 +1246,7 @@ contains
 
           xel = (xe1 + xe0)*0.5
 
-          if (uniform_egrid .or. cutoff) then
+          if (vgrid) then
              capgl = 2.0*exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel/sqrt(pi)
           else
              capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
@@ -1377,7 +1377,7 @@ contains
              xel = (xe0 + xe1)*0.5
              xer = (xe1 + xe2)*0.5
 	
-             if (uniform_egrid .or. cutoff) then
+             if (vgrid) then
                 capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
                 capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
              else
@@ -1407,7 +1407,7 @@ contains
 
           xer = (xe1 + xe2)*0.5
 
-          if (uniform_egrid .or. cutoff) then
+          if (vgrid) then
              capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
           else
              capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
@@ -1432,7 +1432,7 @@ contains
 
           xel = (xe1 + xe0)*0.5
 
-          if (uniform_egrid .or. cutoff) then
+          if (vgrid) then
              capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
           else
              capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
