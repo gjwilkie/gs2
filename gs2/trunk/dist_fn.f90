@@ -3045,6 +3045,9 @@ contains
        end do
     end do
 
+    ! TEMP FOR TESTING -- MAB
+!    g0 = 0.0
+
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
           do ig=-ntgrid, ntgrid
@@ -5845,7 +5848,7 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx, ie_idx
     use gs2_layouts, only: idx_local, proc_id
     use le_grids, only: al, e, forbid, negrid, nlambda
-!    use egrid, only: zeroes, x0
+    use egrid, only: zeroes, x0
     use theta_grid, only: bmax, bmag
     use gs2_time, only: user_time
     use dist_fn_arrays, only: g, gnew
@@ -5865,13 +5868,13 @@ contains
 
     ! should really just get rid of xpts and ypts
     if (first) then
-!       xpts(1:negrid-1) = zeroes
-!       xpts(negrid) = x0
-       xpts = 0.0
-       ypts = 0.0
-!       do il=1,nlambda
-!          if (1.0-al(il)*bmax .gt. 0.0) ypts(il) = sqrt(1.0-al(il)*bmax)
-!       end do
+       xpts(1:negrid-1) = zeroes
+       xpts(negrid) = x0
+!       xpts = 0.0
+!       ypts = 0.0
+       do il=1,nlambda
+          if (1.0-al(il)*bmax .gt. 0.0) ypts(il) = sqrt(1.0-al(il)*bmax)
+       end do
     end if
 
     if (proc0) then

@@ -113,7 +113,7 @@ contains
     use gs2_heating, only: init_htype,init_dvtype
     use collisions, only: collision_model_switch, init_lorentz_error
     use mp, only: broadcast, proc0
-    use le_grids, only: init_weights, uniform_egrid
+    use le_grids, only: init_weights
 
     implicit none
     logical, intent (in) :: list
@@ -178,7 +178,6 @@ contains
 
 ! initialize weights for less accurate integrals used
 ! to provide an error estimate for v-space integrals (energy and untrapped)
-!    if (write_verr .and. .not.uniform_egrid .and. proc0) call init_weights
     if (write_verr .and. proc0) call init_weights
 
 ! allocate heating diagnostic data structures
@@ -240,7 +239,6 @@ contains
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
     use mp, only: proc0
-    use le_grids, only: uniform_egrid
     use constants
     implicit none
     logical, intent (in) :: list
@@ -259,7 +257,6 @@ contains
           call open_output_file (heat_unit2, ".heat2")
        end if
 
-!       if (write_verr .and. write_ascii .and. .not.uniform_egrid) then
        if (write_verr .and. write_ascii) then
           call open_output_file (res_unit, ".vres")
           call open_output_file (lpc_unit, ".lpc")
@@ -492,7 +489,7 @@ contains
     use theta_grid, only: drhodpsi, qval, shape
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, aky_out, akx_out, aky, akx
     use le_grids, only: nlambda, negrid, fcheck, al, delal
-    use le_grids, only: e, dele, uniform_egrid
+    use le_grids, only: e, dele
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn, only: getan, get_epar, getmoms, par_spectrum, lambda_flux
     use dist_fn, only: e_flux
@@ -551,7 +548,6 @@ contains
     phi0 = 1.
 
     if (proc0) then
-!       if (write_ascii .and. write_verr .and. .not.uniform_egrid) then
        if (write_ascii .and. write_verr) then
           call close_output_file (res_unit)
           call close_output_file (lpc_unit)
@@ -806,18 +802,20 @@ contains
                 do ik = 1, naky
                    do it = 1, ntheta0
                       do ig = -ntg_out, ntg_out
-                         write (unit, *) &
-                              real(density(ig,it,ik,is)/phi0(it,ik)), &
-                              real(tpar(ig,it,ik,is)/phi0(it,ik))
-!                         write (unit, "(15(1x,e12.5))") &
-!                              theta(ig), aky_out(ik), akx_out(it), &
-!                              ntot(ig,it,ik,is)/phi0(it,ik), &
-!                              density(ig,it,ik,is)/phi0(it,ik), &
-!                              upar(ig,it,ik,is)/phi0(it,ik), &
-!                              tpar(ig,it,ik,is)/phi0(it,ik), &
-!                              tperp(ig,it,ik,is)/phi0(it,ik), &
-!                              theta(ig) - theta0(it,ik), &
-!                              real(is)
+                         ! TEMP FOR TESTING -- MAB
+!                         write (unit, *) &
+!                              real(ntot(ig,it,ik,is)/phi0(it,ik)), &
+!                              real(density(ig,it,ik,is)/phi0(it,ik)), &
+!                              real(tpar(ig,it,ik,is)/phi0(it,ik))
+                         write (unit, "(15(1x,e12.5))") &
+                              theta(ig), aky_out(ik), akx_out(it), &
+                              ntot(ig,it,ik,is)/phi0(it,ik), &
+                              density(ig,it,ik,is)/phi0(it,ik), &
+                              upar(ig,it,ik,is)/phi0(it,ik), &
+                              tpar(ig,it,ik,is)/phi0(it,ik), &
+                              tperp(ig,it,ik,is)/phi0(it,ik), &
+                              theta(ig) - theta0(it,ik), &
+                              real(is)
                       end do
                       write (unit, "()")
                    end do
@@ -1283,7 +1281,7 @@ contains
     use gs2_io, only: nc_loop_movie
     use gs2_layouts, only: yxf_lo
     use gs2_transforms, only: init_transforms, transform2
-    use le_grids, only: nlambda, uniform_egrid
+    use le_grids, only: nlambda
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
     use gs2_flux, only: check_flux
@@ -1415,7 +1413,6 @@ contains
     end if
 
     if (write_max_verr) write_verr = .true.
-!    if (write_verr .and. .not.uniform_egrid .and. write_mod == 0) then
     if (write_verr .and. write_mod == 0) then
 
        allocate(errest(5,2), erridx(5,3))
@@ -2179,7 +2176,6 @@ contains
     if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) &
          call flush_output_file (out_unit, ".out")
 
-!    if (write_ascii .and. write_verr .and. .not.uniform_egrid .and. mod(nout, 10) == 0 .and. proc0) &
     if (write_ascii .and. write_verr .and. mod(nout, 10) == 0 .and. proc0) &
          call flush_output_file (res_unit, ".vres")
 
