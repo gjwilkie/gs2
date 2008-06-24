@@ -1737,26 +1737,6 @@ contains
 !    logical :: only = .true.
 
     total = 0.
-! TT> changed loop structure
-!!$    do is = 1, nspec
-!!$       do ie = 1, negrid
-!!$          fac = w(ie,is)
-!!$          do il = 1, nlambda
-!!$!             if (ie==1 .and. only) write (*,*) 'iproc= ',iproc,'  wl(0',',',il,')= ',wl(0,il)
-!!$             do it = 1, ntheta0
-!!$                do ik = 1, naky
-!!$                   iglo = idx (g_lo, ik, it, il, ie, is)
-!!$                   if (idx_local (g_lo, iglo)) then
-!!$                      do ig = -ntgrid, ntgrid
-!!$                         total(ig, it, ik, is) = total(ig, it, ik, is) + &
-!!$                              fac*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
-!!$                      end do
-!!$                   end if
-!!$                end do
-!!$             end do
-!!$          end do
-!!$       end do
-!!$    end do
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
@@ -1770,9 +1750,6 @@ contains
                fac*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
        end do
     end do
-! <TT
-
-!    only = .false.
 
     if (nproc > 1) then
        allocate (work((2*ntgrid+1)*naky*ntheta0*nspec)) ; work = 0.
