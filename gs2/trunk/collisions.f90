@@ -1148,12 +1148,12 @@ contains
 !    end do
 
     if (.not.allocated(ec1)) then
-       allocate (ec1   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
+       allocate (ec1    (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
        allocate (era1   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
        allocate (erb1   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
        allocate (erc1   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
-       allocate (ebetaa(negrid,e_lo%llim_proc:e_lo%ulim_alloc))
-       allocate (eql   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
+       allocate (ebetaa (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
+       allocate (eql    (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
     endif
 
     if (present(vnmult_target)) then
@@ -1575,21 +1575,12 @@ contains
     nn_to = 0
     nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
-! TT> moved here from below
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-! <TT
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
-! ik = ik_idx, etc. should be moved outside of isign and ig loops here and later
-! TT>
-!!$             ik = ik_idx(g_lo,iglo)
-!!$             it = it_idx(g_lo,iglo)
-!!$             il = il_idx(g_lo,iglo)
-!!$             is = is_idx(g_lo,iglo)
-! <TT
              ielo = idx(e_lo,ig,isign,ik,it,il,is)
              if (idx_local(g_lo,iglo)) &
                   nn_from(proc_id(e_lo,ielo)) = nn_from(proc_id(e_lo,ielo)) + 1
@@ -1615,22 +1606,13 @@ contains
     nn_to = 0
     nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
-! TT> moved here from below
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
-! <TT
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
-! TT>
-!!$             ik = ik_idx(g_lo,iglo)
-!!$             it = it_idx(g_lo,iglo)
-!!$             il = il_idx(g_lo,iglo)
-!!$             is = is_idx(g_lo,iglo)
-!!$             ie = ie_idx(g_lo,iglo)
-! <TT
              ielo = idx(e_lo,ig,isign,ik,it,il,is)
 
              if (idx_local(g_lo,iglo)) then
