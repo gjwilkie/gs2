@@ -524,6 +524,8 @@ species.o: \
 	 file_utils.o \
 	 mp.o \
 	 text_options.o 
+spfunc.o: \
+	 constants.o 
 spl.o: 
 test_layouts.o: \
 	 mp.o 
