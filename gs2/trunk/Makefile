@@ -74,6 +74,10 @@ USE_C_INDEX ?=
 USE_NR_RAN ?=
 # Use posix for command_line (bin)
 USE_POSIX ?=
+# Use local bessel functions (bin)
+USE_LOCAL_BESSEL ?= 
+# Use local error function (bin)
+USE_LOCAL_ERF ?= 
 #
 # * Targets:
 #
@@ -148,7 +152,8 @@ GEO=geo
 
 ifeq ($(MAKECMDGOALS),depend)
 # must invoke full functionality when make depend
-	MAKE += USE_HDF5=on USE_FFT=fftw USE_NETCDF=new USE_MPI=on
+	MAKE += USE_HDF5=on USE_FFT=fftw USE_NETCDF=new USE_MPI=on \
+		USE_LOCAL_BESSEL=on
 endif
 
 ifdef USE_SHMEM
@@ -200,6 +205,12 @@ ifdef USE_NR_RAN
 endif
 ifdef USE_POSIX
 	CPPFLAGS += -DPOSIX
+endif
+ifdef USE_LOCAL_BESSEL
+	CPPFLAGS += -DLOCAL_BESSEL
+endif
+ifdef USE_LOCAL_ERF
+	CPPFLAGS += -DLOCAL_ERF
 endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
