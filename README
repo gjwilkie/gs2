@@ -1,5 +1,9 @@
 This text explains how to make agk/gs2. (2008/05/05 RN)
 
+* Changelog
+2008/07/01 [RN]: Add new switches, USE_LOCAL_SPFUNC, USE_NAGLIB to choose
+	   	 what special functions to use.
+
 * Compile
 
 You must set two environment variables to compile agk/gs2: SYSTEM and MAKEFLAGS.
@@ -57,14 +61,19 @@ Following is the full list of switches:
                                   on SGI (not working yet)
  USE_FFT (fftw [fftw]): FFT library to use
  USE_NETCDF (new,old [new]): NETCDF library to use
- USE_HDF5 (defined [undefined]): use HDF5 library or no
- USE_MDSPLUS (defined [undefind]): use MDSplus for geo (gs2 only)
- USE_C_INDEX (defined [undefined]): use function pointer
- USE_NR_RAN (defined [undefined]): use Numerical Recipes' local random 
+ USE_HDF5 (defined [undefined]): uses HDF5 library or no
+ USE_MDSPLUS (defined [undefind]): uses MDSplus for geo (gs2 only)
+ USE_C_INDEX (defined [undefined]): uses function pointer
+ USE_NR_RAN (defined [undefined]): uses Numerical Recipes' local random 
  	    	     		   number generator
- USE_POSIX (defined [undefined]): use posix routines
- USE_LOCAL_BESSEL (defined [undefined]): use local bessel functions
- USE_LOCAL_ERF (defined [undefined]): use local error function
+ USE_POSIX (defined [undefined]): uses posix routines
+ USE_LOCAL_SPFUNC (defined [undefined]): use local special functions
+	 (this overrides compiler's intrinsic special functions and
+	 NAG library's)
+ USE_NAGLIB (spfunc [undefined]): uses NAG library
+ 	    	    		  Currently, only used for special functions
+				  (NOTE: NAG_PREC=dble (or sngl) must be 
+				  chosen appropriately for your NAG library)
 
 Values that each switches takes are shown in the bracket, where
 "defined" ("undefined") means whether the switch is defined (or not),
@@ -138,8 +147,13 @@ USE_NR_RAN	_NONE_		When invoked, local random number generator
 				from Numerical Recipes is used.  This comes
 				from ran_local.f90.
 
-USE_LOCAL_{BESSEL,ERF} _NONE_	When invoked, local {bessel,error} functions
-		       		are used.
+USE_LOCAL_SPFUNC _NONE_	 	Uses compiler's intrinsic special functions
+		 _LOCAL_      	Uses local special functions
+		 _NAG_		Uses NAG library's special functions
+		 		(NOTE: for compiles not having intrinsic 
+				special functions like XL fortran, _LOCAL_ or
+				_NAG_ should be chosen. Current default for XL
+				is _LOCAL_)
 
 USE_L2E_MAP	_NONE_		Affects collision.fpp.  When invoked, l2e_map
 (agk only)			becomes available, which describes direct map
