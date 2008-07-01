@@ -19,3 +19,9 @@
 # define _OLD_ 32
 
 # define _FFTW_ 41
+
+# define _SPLOCAL_ 51
+# define _SPNAG_ 52
+
+# define _NAGDBLE_ 61
+# define _NAGSNGL_ 62
