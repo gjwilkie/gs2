@@ -11,6 +11,7 @@ PROJECT ?= gs2
 #  LAST UPDATE: 06/16/08
 #
 # * Changelogs
+#	07/01/08: new switches USE_LOCAL_SPFUNC and USE_NAGLIB
 #	06/16/08: clean up unused statements related to PLATFORM_LINKS
 #
 # * Available Compilers (tested on limited hosts)
@@ -74,10 +75,10 @@ USE_C_INDEX ?=
 USE_NR_RAN ?=
 # Use posix for command_line (bin)
 USE_POSIX ?=
-# Use local bessel functions (bin)
-USE_LOCAL_BESSEL ?= 
-# Use local error function (bin)
-USE_LOCAL_ERF ?= 
+# Use local special functions (bin)
+USE_LOCAL_SPFUNC ?= 
+# Use nag libraray (spfunc,undefined)
+USE_NAGLIB ?= 
 #
 # * Targets:
 #
@@ -122,6 +123,8 @@ NETCDF_LIB =
 HDF5_INC =
 HDF5_LIB =
 IPM_LIB =
+NAG_LIB =
+NAG_PREC ?= dble
 
 ################################################### SET COMPILE MODE SWITCHES
 
@@ -206,15 +209,30 @@ endif
 ifdef USE_POSIX
 	CPPFLAGS += -DPOSIX
 endif
-ifdef USE_LOCAL_BESSEL
-	CPPFLAGS += -DLOCAL_BESSEL
+ifdef USE_LOCAL_SPFUNC
+	CPPFLAGS += -DSPFUNC=_SPLOCAL_
+else
+	ifeq ($(findstring spfunc,$(USE_NAGLIB)),spfunc)
+		CPPFLAGS += -DSPFUNC=_SPNAG_
+	endif
 endif
-ifdef USE_LOCAL_ERF
-	CPPFLAGS += -DLOCAL_ERF
+ifdef USE_NAGLIB
+	ifeq ($(NAG_PREC),dble)
+		ifndef DBLE
+$(warning Precision mismatch with NAG libarray)	
+		endif
+		CPPFLAGS += -DNAG_PREC=_NAGDBLE_
+	endif
+	ifeq ($(NAG_PREC),sngl)
+		ifdef DBLE
+$(warning Precision mismatch with NAG libarray)	
+		endif
+		CPPFLAGS += -DNAG_PREC=_NAGSNGL_
+	endif
 endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
-		$(IPM_LIB)
+		$(IPM_LIB) $(NAG_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
 	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
 CFLAGS += $(COPTFLAGS)
@@ -444,6 +462,8 @@ test_make:
 	@echo  USE_C_INDEX is $(USE_C_INDEX)
 	@echo  USE_NR_RAN is $(USE_NR_RAN)
 	@echo  USE_POSIX is $(USE_POSIX)
+	@echo  USE_LOCAL_SPFUNC is $(USE_LOCAL_SPFUNC)
+	@echo  USE_NAGLIB is $(USE_NAGLIB)
 	@echo
 	@echo FC is $(FC)
 	@echo F90FLAGS is $(F90FLAGS)
