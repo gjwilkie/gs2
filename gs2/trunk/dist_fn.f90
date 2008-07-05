@@ -3036,7 +3036,7 @@ contains
        it = it_idx(g_lo,iglo)
 
        ! TEMP FOR TESTING -- MAB
-!       gnew(:,:,iglo) = sqrt(e(ie,is))
+!       gnew(:,:,iglo) = cos(2.*sqrt(e(ie,is)))
 !       gnew = 1.0
 
        do isgn = 1, 2
@@ -5246,9 +5246,9 @@ contains
 
   subroutine get_verr (errest, erridx, phi, bpar)
      
-    use mp, only: proc0
+    use mp, only: proc0, broadcast
     use le_grids, only: integrate_test, integrate_species
-    use le_grids, only: eint_error, trap_error, lint_error
+    use le_grids, only: eint_error, trap_error, lint_error, wdim
     use le_grids, only: ng2, nlambda, negrid, new_trap_int, jend
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky, aky, akx
@@ -5260,6 +5260,13 @@ contains
     use collisions, only: etol, ewindow, etola, ewindowa
     use collisions, only: vnmult, vary_vnew
     use nonlinear_terms, only: nonlin
+
+    ! TEMP FOR TESTING -- MAB
+!    use gs2_layouts, only: il_idx
+!    use theta_grid, only: bmag, bmax
+!    use le_grids, only: al
+
+    implicit none
 
     integer :: ig, it, ik, is, il, ipt, iglo, isgn, ntrap
 
@@ -5280,22 +5287,27 @@ contains
     real :: vnmult_target
     integer :: igmax, ikmax, itmax, gpcnt
 
-    logical :: increase = .true., decrease = .false.
+    logical :: increase = .true., decrease = .false., first = .true.
     logical :: trap_flag
 
     allocate(wgt(nspec))
     allocate(errtmp(2))
     allocate(idxtmp(3))
 
+    if (first) then
+       call broadcast (wdim)
+       first = .false.
+    end if
+
     if (fphi > epsilon(0.0)) then
        allocate(phi_app(-ntgrid:ntgrid,ntheta0,naky))
-       allocate(phi_e(-ntgrid:ntgrid,ntheta0,naky,negrid-1))
+       allocate(phi_e(-ntgrid:ntgrid,ntheta0,naky,wdim))
        allocate(phi_l(-ntgrid:ntgrid,ntheta0,naky,ng2))
     end if
 
     if (fapar > epsilon(0.0)) then
        allocate(apar_app(-ntgrid:ntgrid,ntheta0,naky))
-       allocate(apar_e(-ntgrid:ntgrid,ntheta0,naky,negrid-1))
+       allocate(apar_e(-ntgrid:ntgrid,ntheta0,naky,wdim))
        allocate(apar_l(-ntgrid:ntgrid,ntheta0,naky,ng2))
     end if
 
@@ -5307,9 +5319,14 @@ contains
 ! take gyro-average of h at fixed total position (not g.c. position)
     if (fphi > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          ! TEMP FOR TESTING -- MAB
+!          il = il_idx(g_lo,iglo)
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
+                ! TEMP FOR TESTING -- MAB
+!                g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
+!                g0(ig,isgn,iglo) = sqrt(max(0.0,1.0-bmag(ig)*al(il)))
+!                g0 = 1.
              end do
           end do
        end do
@@ -5317,8 +5334,7 @@ contains
        wgt = spec%z*spec%dens
 
        call integrate_species (g0, wgt, phi_app)
-
-!    call integrate_test (g0, wgt, phi_app, istep)  ! only around for testing
+!       call integrate_test (g0, wgt, phi_app, istep)  ! only around for testing
 
 ! integrates dist fn of each species over v-space
 ! after dropping an energy grid point and returns
@@ -5341,6 +5357,19 @@ contains
           allocate(phi_t(-ntgrid:ntgrid,ntheta0,naky,ntrap))       
           phi_t = 0.0
           call trap_error (g0, wgt, phi_t)
+
+          ! TEMP FOR TESTING -- MAB
+!          do ig = -ntgrid, ntgrid
+!             do ipt = 1, wdim
+!                if (proc0) write (*,*) 'phi_e', ig, ipt, phi_e(ig,1,1,ipt), phi_app(ig,1,1)
+!             end do
+!             do ipt = 1, ng2
+!                if (proc0) write (*,*) 'phi_l', ig, ipt, phi_l(ig,1,1,ipt), phi_app(ig,1,1)
+!             end do
+!             do ipt = 1, jend(ig)-ng2
+!                if (proc0) write (*,*) 'phi_t', ig, ipt, phi_t(ig,1,1,ipt), phi_app(ig,1,1)
+!             end do
+!          end do
        end if
 
     end if
@@ -5401,6 +5430,14 @@ contains
        call estimate_error (phi_app, phi_l, kmax, errcut_phi, errtmp, idxtmp)
        errest(2,:) = errtmp
        erridx(2,:) = idxtmp
+
+       if (nlambda > ng2 .and. new_trap_int) then       
+          call estimate_error (phi_app, phi_t, kmax, errcut_phi, errtmp, idxtmp, trap_flag)
+          errest(3,:) = errtmp
+          erridx(3,:) = idxtmp
+          deallocate (phi_t)
+       end if
+
     end if
     
     if (fapar > epsilon(0.0)) then
@@ -5442,58 +5479,58 @@ contains
 
 ! gstapp(ig,it,ik,ipt) = 0.0 if ipt > jend(ig)-ng2
 
-    if (nlambda > ng2 .and. new_trap_int) then
-       igmax = 0; ikmax = 0; itmax = 0
-       gdsum = 0.0; gnsum = 0.0; gdmax = 0.0; gpavg = 0.0; gsmax = 0.0
-       do ik=1,naky
-          do it=1,ntheta0
-             do ig=-ntgrid,ntgrid
-                if (jend(ig) > ng2+1) then
-                   gpsum = 0.0; gpcnt = 0
-                   if (kmax(it,ik)*cabs(phi_app(ig,it,ik)) > errcut_phi .and. &
-                        kmax(it,ik)*cabs(phi_app(ig,it,ik)) > 10*epsilon(0.0)) then
-                      do ipt=1,jend(ig)-ng2
-                         
-                         gptmp = kmax(it,ik)*cabs(phi_app(ig,it,ik) - phi_t(ig,it,ik,ipt))
-                         
-                         gpsum = gpsum + gptmp
-                         gpcnt = gpcnt + 1
-                         
-                      end do
-                      
-                      gpavg = gpsum/gpcnt
-                      
-                      if (gpavg > gdmax) then
-                         igmax = ig
-                         ikmax = ik
-                         itmax = it
-                         gdmax = gpavg
-                         gsmax = kmax(it,ik)*cabs(phi_app(ig,it,ik))
-                      end if
-                      
-                      gnsum = gnsum + gpavg
-                      gdsum = gdsum + kmax(it,ik)*cabs(phi_app(ig,it,ik))
-                   end if
-                end if
-             end do
-          end do
-       end do
-       
-       gdmax = gdmax/gsmax
-       
-       erridx(3,1) = igmax
-       erridx(3,2) = ikmax
-       erridx(3,3) = itmax
-       errest(3,1) = gdmax
-       errest(3,2) = gnsum/gdsum
-       
-       deallocate(phi_t)
-       trap_flag = .true.
-    else
-       erridx(3,:) = 0
-       errest(3,:) = 0.0
-       trap_flag = .false.
-    end if
+!    if (nlambda > ng2 .and. new_trap_int) then
+!       igmax = 0; ikmax = 0; itmax = 0
+!       gdsum = 0.0; gnsum = 0.0; gdmax = 0.0; gpavg = 0.0; gsmax = 0.0
+!       do ik=1,naky
+!          do it=1,ntheta0
+!             do ig=-ntgrid,ntgrid
+!                if (jend(ig) > ng2+1) then
+!                   gpsum = 0.0; gpcnt = 0
+!                   if (kmax(it,ik)*cabs(phi_app(ig,it,ik)) > errcut_phi .and. &
+!                        kmax(it,ik)*cabs(phi_app(ig,it,ik)) > 10*epsilon(0.0)) then
+!                      do ipt=1,jend(ig)-ng2
+!                         
+!                         gptmp = kmax(it,ik)*cabs(phi_app(ig,it,ik) - phi_t(ig,it,ik,ipt))
+!                         
+!                         gpsum = gpsum + gptmp
+!                         gpcnt = gpcnt + 1
+!                         
+!                      end do
+!                      
+!                      gpavg = gpsum/gpcnt
+!                      
+!                      if (gpavg > gdmax) then
+!                         igmax = ig
+!                         ikmax = ik
+!                         itmax = it
+!                         gdmax = gpavg
+!                         gsmax = kmax(it,ik)*cabs(phi_app(ig,it,ik))
+!                      end if
+!                      
+!                      gnsum = gnsum + gpavg
+!                      gdsum = gdsum + kmax(it,ik)*cabs(phi_app(ig,it,ik))
+!                   end if
+!                end if
+!             end do
+!          end do
+!       end do
+!       
+!       gdmax = gdmax/gsmax
+!       
+!       erridx(3,1) = igmax
+!       erridx(3,2) = ikmax
+!       erridx(3,3) = itmax
+!       errest(3,1) = gdmax
+!       errest(3,2) = gnsum/gdsum
+!       
+!       deallocate(phi_t)
+!       trap_flag = .true.
+!    else
+!       erridx(3,:) = 0
+!       errest(3,:) = 0.0
+!       trap_flag = .false.
+!    end if
     
     if (vary_vnew) then
        vnmult_target = vnmult(1)
@@ -5536,10 +5573,11 @@ contains
 
   end subroutine get_vnewk
 
-  subroutine estimate_error (app1, app2, kmax, errcut, errest, erridx)
+  subroutine estimate_error (app1, app2, kmax, errcut, errest, erridx, trap)
 
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
+    use le_grids, only: ng2, jend
 
     implicit none
 
@@ -5547,10 +5585,11 @@ contains
     complex, dimension (-ntgrid:,:,:,:), intent (in) :: app2
     real, dimension (:,:), intent (in) :: kmax
     real, intent (in) :: errcut
+    logical, intent (in), optional :: trap
     real, dimension (:), intent (out) :: errest
     integer, dimension (:), intent (out) :: erridx
 
-    integer :: ik, it, ig, ipt
+    integer :: ik, it, ig, ipt, end_idx
     integer :: igmax, ikmax, itmax, gpcnt
     real :: gdsum, gdmax, gpavg, gnsum, gsmax, gpsum, gptmp
 
@@ -5559,32 +5598,40 @@ contains
     do ik = 1, naky
        do it = 1, ntheta0
           do ig=-ntgrid,ntgrid
-             gpcnt = 0; gpsum = 0.0
-             if ((kmax(it,ik)*cabs(app1(ig,it,ik)) > errcut) .and. &
-                  (kmax(it,ik)*cabs(app1(ig,it,ik)) > 10*epsilon(0.0))) then
-                do ipt=1,size(app2(0,1,1,:))
+             if (.not.present(trap) .or. jend(ig) > ng2+1) then
+                gpcnt = 0; gpsum = 0.0
+                if ((kmax(it,ik)*cabs(app1(ig,it,ik)) > errcut) .and. &
+                     (kmax(it,ik)*cabs(app1(ig,it,ik)) > 10*epsilon(0.0))) then
+
+                   if (present(trap)) then
+                      end_idx = jend(ig)-ng2
+                   else
+                      end_idx = size(app2,4)
+                   end if
+
+                   do ipt=1,end_idx
                       
-                   gptmp = kmax(it,ik)*cabs(app1(ig,it,ik) - app2(ig,it,ik,ipt))
-                   gpsum = gpsum + gptmp
-                   gpcnt = gpcnt + 1
+                      gptmp = kmax(it,ik)*cabs(app1(ig,it,ik) - app2(ig,it,ik,ipt))
+                      gpsum = gpsum + gptmp
+                      gpcnt = gpcnt + 1
                       
-                end do
+                   end do
                    
-                gpavg = gpsum/gpcnt
+                   gpavg = gpsum/gpcnt
                    
-                if (gpavg > gdmax) then
-                   igmax = ig
-                   ikmax = ik
-                   itmax = it
-                   gdmax = gpavg
-                   gsmax = kmax(it,ik)*cabs(app1(ig,it,ik))
+                   if (gpavg > gdmax) then
+                      igmax = ig
+                      ikmax = ik
+                      itmax = it
+                      gdmax = gpavg
+                      gsmax = kmax(it,ik)*cabs(app1(ig,it,ik))
+                   end if
+                   
+                   gnsum = gnsum + gpavg
+                   gdsum = gdsum + kmax(it,ik)*cabs(app1(ig,it,ik))
+
                 end if
-                   
-                gnsum = gnsum + gpavg
-                gdsum = gdsum + kmax(it,ik)*cabs(app1(ig,it,ik))
-
              end if
-
           end do
        end do
     end do
@@ -5685,9 +5732,9 @@ contains
 !  end subroutine write_ftran
 !< mbmark
 
-  subroutine get_gtran (geavg, glavg, phi, bpar, istep)
+  subroutine get_gtran (geavg, glavg, gtavg, phi, bpar, istep)
 
-    use le_grids, only: legendre_transform, negrid, nlambda, ng2
+    use le_grids, only: legendre_transform, negrid, nlambda, ng2, vgrid, nesub, jend
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
@@ -5698,26 +5745,38 @@ contains
 
     integer, intent (in) :: istep
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-    real, intent (out) :: geavg, glavg
+    real, intent (out) :: geavg, glavg, gtavg
 
-    real, dimension (:), allocatable :: gne2, gnl2
-    complex, dimension (:,:,:,:,:), allocatable :: getran, gltran    
+    real, dimension (:), allocatable :: gne2, gnl2, gnt2
+    complex, dimension (:,:,:,:,:), allocatable :: getran, gltran, gttran
 
     real :: genorm, gemax, genum, gedenom
     real :: glnorm, glmax, glnum, gldenom
-    integer :: ig, it, ik, is, ie, il, iglo, isgn
+    real :: gtnorm, gtmax, gtnum, gtdenom
+    integer :: ig, it, ik, is, ie, il, iglo, isgn, gesize
 
-    allocate(gne2(0:negrid-2))
+    if (vgrid) then
+       gesize = nesub
+    else
+       gesize = negrid-1
+    end if
+
+    allocate(gne2(0:gesize-1))
     allocate(gnl2(0:ng2-1))
+    allocate(gnt2(0:2*(nlambda-ng2-1)))
 
-    genorm = 0.0 ; glnorm = 0.0
-    gne2  = 0.0 ; gnl2 = 0.0; gemax = 0.0; glmax = 0.0
-    genum = 0.0; gedenom = 0.0; glnum = 0.0; gldenom = 0.0
+    genorm = 0.0 ; glnorm = 0.0 ; gtnorm = 0.0
+    gne2  = 0.0 ; gnl2 = 0.0 ; gnt2 = 0.0
+    gemax = 0.0 ; glmax = 0.0 ; gtmax = 0.0
+    genum = 0.0 ; gedenom = 0.0
+    glnum = 0.0 ; gldenom = 0.0
+    gtnum = 0.0 ; gtdenom = 0.0
 
-    allocate(getran(0:negrid-2,-ntgrid:ntgrid,ntheta0,naky,nspec))
+    allocate(getran(0:gesize-1,-ntgrid:ntgrid,ntheta0,naky,nspec))
     allocate(gltran(0:ng2-1,-ntgrid:ntgrid,ntheta0,naky,nspec))
+    allocate(gttran(0:2*(nlambda-ng2-1),-ntgrid:ntgrid,ntheta0,naky,nspec))
     
-    getran = 0.0; gltran = 0.0
+    getran = 0.0; gltran = 0.0 ; gttran = 0.0
 
 ! transform from g to h
     call g_adjust (gnew, phi, bpar, fphi, fbpar)
@@ -5732,7 +5791,14 @@ contains
 
 ! perform legendre transform on dist. fn. to obtain coefficients
 ! used when expanding dist. fn. in legendre polynomials 
-    call legendre_transform (g0, getran, gltran, istep)
+    call legendre_transform (g0, getran, gltran, gttran, istep)
+
+! TEMP FOR TESTING -- MAB
+!    do ig = -ntgrid, ntgrid
+!       do il = 0, 2*(nlambda-ng2-1)
+!          if (proc0) write (*,*) 'gttran', ig, il, gttran(il,ig,1,1,1)
+!       end do
+!    end do
 
 ! transform from h back to g
     call g_adjust (gnew, phi, bpar, -fphi, -fbpar)
@@ -5742,25 +5808,37 @@ contains
           do ik=1,naky
              do it=1,ntheta0
                 do ig=-ntgrid,ntgrid
-                   do ie=0,negrid-2
+                   do ie=0,gesize-1
                       gne2(ie) = real(getran(ie,ig,it,ik,is)*conjg(getran(ie,ig,it,ik,is)))
                    end do
                    do il=0,ng2-1
                       gnl2(il) = real(gltran(il,ig,it,ik,is)*conjg(gltran(il,ig,it,ik,is)))
                    end do
+                   do il=0,2*(jend(ig)-ng2-1)
+                      gnt2(il) = real(gttran(il,ig,it,ik,is)*conjg(gttran(il,ig,it,ik,is)))
+                   end do
                    genorm = maxval(gne2)
-                   if (negrid < 4) then
+                   if (gesize < 3) then
                       gemax = gne2(size(gne2)-1)
                    else
-                      gemax = maxval(gne2(negrid-4:negrid-2))
+                      gemax = maxval(gne2(gesize-3:gesize-1))
                    end if
                    glnorm = maxval(gnl2)
                    glmax = maxval(gnl2(ng2-3:ng2-1))
+
+                   gtnorm = maxval(gnt2(0:2*(jend(ig)-ng2-1)))
+                   if (jend(ig) > ng2+1) then
+                      gtmax = maxval(gnt2(2*(jend(ig)-ng2-1)-2:2*(jend(ig)-ng2-1)))
+                   else
+                      gtmax = gnt2(0)
+                   end if
 
                    genum = genum + gemax
                    gedenom = gedenom + genorm
                    glnum = glnum + glmax
                    gldenom = gldenom + glnorm
+                   gtnum = gtnum + gtmax
+                   gtdenom = gtdenom + gtnorm
 
                 end do
              end do
@@ -5768,13 +5846,15 @@ contains
        end do
        geavg = genum/gedenom
        glavg = glnum/gldenom
+       gtavg = gtnum/gtdenom
     end if
 
     call broadcast (geavg)
     call broadcast (glavg)
+    call broadcast (gtavg)
 
-    deallocate(gne2, gnl2)    
-    deallocate(getran, gltran)
+    deallocate(gne2, gnl2, gnt2)    
+    deallocate(getran, gltran, gttran)
 
   end subroutine get_gtran
 
