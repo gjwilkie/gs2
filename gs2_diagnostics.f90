@@ -806,6 +806,7 @@ contains
 !                         write (unit, *) &
 !                              real(ntot(ig,it,ik,is)/phi0(it,ik)), &
 !                              real(density(ig,it,ik,is)/phi0(it,ik)), &
+!                              real(upar(ig,it,ik,is)/phi0(it,ik)), &
 !                              real(tpar(ig,it,ik,is)/phi0(it,ik))
                          write (unit, "(15(1x,e12.5))") &
                               theta(ig), aky_out(ik), akx_out(it), &
@@ -1310,7 +1311,7 @@ contains
     real, dimension (:,:,:,:), allocatable :: errest_by_mode
     integer, dimension (:,:), allocatable :: erridx
     real, dimension (:,:), allocatable :: errest
-    real :: geavg, glavg
+    real :: geavg, glavg, gtavg
     real :: dmix, dmix4, dmixx
     real :: t, denom
     integer :: ig, ik, it, is, unit, il, i, j, nnx, nny, ifield, write_mod
@@ -1423,7 +1424,7 @@ contains
        call get_verr (errest, erridx, phinew, bparnew)
 
 ! error estimate based on monitoring amplitudes of legendre polynomial coefficients
-       call get_gtran (geavg, glavg, phinew, bparnew, istep)
+       call get_gtran (geavg, glavg, gtavg, phinew, bparnew, istep)
        if (proc0) then
 
 ! write error estimates to .nc file          
@@ -1432,7 +1433,7 @@ contains
 ! write error estimates for ion dist. fn. at outboard midplane with ik=it=1 to ascii files
           if (write_ascii) then
              t = user_time
-             write(lpc_unit,"(3(1x,e12.6))") t, geavg, glavg             
+             write(lpc_unit,"(4(1x,e12.6))") t, geavg, glavg, gtavg
              write(res_unit,"(8(1x,e12.6))") t, errest(1,2), errest(2,2), errest(3,2), &
                   errest(4,2), errest(5,2), vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
              if (write_max_verr) then
