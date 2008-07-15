@@ -5763,20 +5763,24 @@ contains
 
     allocate(gne2(0:gesize-1))
     allocate(gnl2(0:ng2-1))
-    allocate(gnt2(0:2*(nlambda-ng2-1)))
 
-    genorm = 0.0 ; glnorm = 0.0 ; gtnorm = 0.0
-    gne2  = 0.0 ; gnl2 = 0.0 ; gnt2 = 0.0
-    gemax = 0.0 ; glmax = 0.0 ; gtmax = 0.0
+    genorm = 0.0 ; glnorm = 0.0
+    gne2  = 0.0 ; gnl2 = 0.0
+    gemax = 0.0 ; glmax = 0.0
     genum = 0.0 ; gedenom = 0.0
     glnum = 0.0 ; gldenom = 0.0
     gtnum = 0.0 ; gtdenom = 0.0
 
     allocate(getran(0:gesize-1,-ntgrid:ntgrid,ntheta0,naky,nspec))
     allocate(gltran(0:ng2-1,-ntgrid:ntgrid,ntheta0,naky,nspec))
-    allocate(gttran(0:2*(nlambda-ng2-1),-ntgrid:ntgrid,ntheta0,naky,nspec))
-    
-    getran = 0.0; gltran = 0.0 ; gttran = 0.0
+ 
+    getran = 0.0; gltran = 0.0
+
+    if (nlambda-ng2 > 0) then
+       allocate(gnt2(0:2*(nlambda-ng2-1)))
+       allocate(gttran(0:2*(nlambda-ng2-1),-ntgrid:ntgrid,ntheta0,naky,nspec))      
+       gtnorm = 0.0 ; gnt2 = 0.0 ; gtmax = 0.0 ; gttran = 0.0
+    end if
 
 ! transform from g to h
     call g_adjust (gnew, phi, bpar, fphi, fbpar)
@@ -5791,7 +5795,11 @@ contains
 
 ! perform legendre transform on dist. fn. to obtain coefficients
 ! used when expanding dist. fn. in legendre polynomials 
-    call legendre_transform (g0, getran, gltran, gttran, istep)
+    if (allocated(gttran)) then
+       call legendre_transform (g0, getran, gltran, istep, gttran)
+    else
+       call legendre_transform (g0, getran, gltran, istep)
+    end if
 
 ! TEMP FOR TESTING -- MAB
 !    do ig = -ntgrid, ntgrid
@@ -5814,9 +5822,6 @@ contains
                    do il=0,ng2-1
                       gnl2(il) = real(gltran(il,ig,it,ik,is)*conjg(gltran(il,ig,it,ik,is)))
                    end do
-                   do il=0,2*(jend(ig)-ng2-1)
-                      gnt2(il) = real(gttran(il,ig,it,ik,is)*conjg(gttran(il,ig,it,ik,is)))
-                   end do
                    genorm = maxval(gne2)
                    if (gesize < 3) then
                       gemax = gne2(size(gne2)-1)
@@ -5826,19 +5831,25 @@ contains
                    glnorm = maxval(gnl2)
                    glmax = maxval(gnl2(ng2-3:ng2-1))
 
-                   gtnorm = maxval(gnt2(0:2*(jend(ig)-ng2-1)))
-                   if (jend(ig) > ng2+1) then
-                      gtmax = maxval(gnt2(2*(jend(ig)-ng2-1)-2:2*(jend(ig)-ng2-1)))
-                   else
-                      gtmax = gnt2(0)
-                   end if
-
                    genum = genum + gemax
                    gedenom = gedenom + genorm
                    glnum = glnum + glmax
                    gldenom = gldenom + glnorm
-                   gtnum = gtnum + gtmax
-                   gtdenom = gtdenom + gtnorm
+
+                   if (nlambda > ng2) then
+                      do il=0,2*(jend(ig)-ng2-1)
+                         gnt2(il) = real(gttran(il,ig,it,ik,is)*conjg(gttran(il,ig,it,ik,is)))
+                      end do
+                      gtnorm = maxval(gnt2(0:2*(jend(ig)-ng2-1)))
+                      if (jend(ig) > ng2+1) then
+                         gtmax = maxval(gnt2(2*(jend(ig)-ng2-1)-2:2*(jend(ig)-ng2-1)))
+                      else
+                         gtmax = gnt2(0)
+                      end if
+                      
+                      gtnum = gtnum + gtmax
+                      gtdenom = gtdenom + gtnorm
+                   end if
 
                 end do
              end do
@@ -5846,15 +5857,18 @@ contains
        end do
        geavg = genum/gedenom
        glavg = glnum/gldenom
-       gtavg = gtnum/gtdenom
+       if (nlambda > ng2) gtavg = gtnum/gtdenom
     end if
 
     call broadcast (geavg)
     call broadcast (glavg)
-    call broadcast (gtavg)
+    if (nlambda > ng2) then
+       call broadcast (gtavg)
+       deallocate (gnt2, gttran)
+    end if
 
-    deallocate(gne2, gnl2, gnt2)    
-    deallocate(getran, gltran, gttran)
+    deallocate(gne2, gnl2)    
+    deallocate(getran, gltran)
 
   end subroutine get_gtran
 

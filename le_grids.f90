@@ -1537,7 +1537,7 @@ contains
 !    deallocate(xpt)
   end subroutine integrate_test
 
-  subroutine legendre_transform (g, tote, totl, tott, istep)
+  subroutine legendre_transform (g, tote, totl, istep, tott)
     
     use egrid, only: zeroes, x0
     use mp, only: nproc, broadcast
@@ -1548,7 +1548,8 @@ contains
     use mp, only: sum_reduce, proc0
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
-    complex, dimension (0:,-ntgrid:,:,:,:), intent (out) :: tote, totl, tott
+    complex, dimension (0:,-ntgrid:,:,:,:), intent (out) :: tote, totl
+    complex, dimension (0:,-ntgrid:,:,:,:), intent (out), optional :: tott
     integer, intent (in) :: istep
 
     complex :: totfac
@@ -1590,7 +1591,7 @@ contains
        lpl = 0.0
        lpl(1:ng2,:) = lpltmp
 
-       if (nlambda - ng2 > 0) then
+       if (present(tott)) then
           allocate (lpt(nlambda,0:2*(nlambda-ng2-1),-ntgrid:ntgrid,2))
           lpt = 0.0
           do ig = -ntgrid, ntgrid
@@ -1631,7 +1632,8 @@ contains
 
     ! carry out legendre transform to get coefficients of
     ! legendre polynomial expansion of g
-    totfac = 0. ; tote = 0. ; totl = 0. ; tott = 0.
+    totfac = 0. ; tote = 0. ; totl = 0.
+    if (present(tott)) tott = 0.
     do is = 1, nspec
        do ie = 1, negrid
           fac = w(ie,is)
@@ -1648,10 +1650,12 @@ contains
                          do im=0,ng2-1
                             totl(im, ig, it, ik, is) = totl(im, ig, it, ik, is) + totfac*lpl(il,im)*(2*im+1)
                          end do
-                         do im=0,2*(jend(ig)-ng2-1)
-                            tott(im, ig, it, ik, is) = tott(im, ig, it, ik, is) + &
-                                 fac*wl(ig,il)*(lpt(il,im,ig,1)*g(ig,1,iglo)+lpt(il,im,ig,2)*g(ig,2,iglo))*(2*im+1)
-                         end do
+                         if (present(tott)) then
+                            do im=0,2*(jend(ig)-ng2-1)
+                               tott(im, ig, it, ik, is) = tott(im, ig, it, ik, is) + &
+                                    fac*wl(ig,il)*(lpt(il,im,ig,1)*g(ig,1,iglo)+lpt(il,im,ig,2)*g(ig,2,iglo))*(2*im+1)
+                            end do
+                         end if
                       end do
                    end if
                 end do
@@ -1663,7 +1667,7 @@ contains
     if (nproc > 1) then
        allocate (worke((2*ntgrid+1)*naky*ntheta0*nspec*lpesize)) ; worke = 0.
        allocate (workl((2*ntgrid+1)*naky*ntheta0*nspec*ng2)) ; workl = 0.
-       allocate (workt((2*ntgrid+1)*naky*ntheta0*nspec*(2*(nlambda-ng2)-1))) ; workt = 0.
+       if (present(tott)) allocate (workt((2*ntgrid+1)*naky*ntheta0*nspec*(2*(nlambda-ng2)-1))) ; workt = 0.
        i = 0 ; j = 0 ; k = 0
        do is = 1, nspec
           do ik = 1, naky
@@ -1677,10 +1681,12 @@ contains
                       j = j + 1
                       workl(j) = totl(im, ig, it, ik, is)
                    end do
-                   do im = 0, 2*(nlambda-ng2-1)
-                      k = k + 1
-                      workt(k) = tott(im, ig, it, ik, is)
-                   end do
+                   if (present(tott)) then
+                      do im = 0, 2*(nlambda-ng2-1)
+                         k = k + 1
+                         workt(k) = tott(im, ig, it, ik, is)
+                      end do
+                   end if
                 end do
              end do
           end do
@@ -1688,7 +1694,7 @@ contains
 
        call sum_reduce (worke, 0)
        call sum_reduce (workl, 0)
-       call sum_reduce (workt, 0)
+       if (present(tott)) call sum_reduce (workt, 0)
 
        if (proc0) then
           i = 0 ; j = 0 ; k = 0
@@ -1704,17 +1710,20 @@ contains
                          j = j + 1
                          totl(im, ig, it, ik, is) = workl(j)
                       end do
-                      do im = 0, 2*(nlambda-ng2-1)
-                         k = k + 1
-                         tott(im, ig, it, ik, is) = workt(k)
-                      end do
+                      if (present(tott)) then
+                         do im = 0, 2*(nlambda-ng2-1)
+                            k = k + 1
+                            tott(im, ig, it, ik, is) = workt(k)
+                         end do
+                      end if
                    end do
                 end do
              end do
           end do
        end if
 
-       deallocate (worke,workl,workt)
+       deallocate (worke,workl)
+       if (present(tott)) deallocate (workt)
     end if
 
   end subroutine legendre_transform
