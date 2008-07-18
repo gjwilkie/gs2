@@ -1163,11 +1163,13 @@ contains
     ec1 = 0.0 ; ebetaa = 0.0 ; eql = 0.0
     era1 = 0.0 ; erb1 = 0.0 ; erc1 = 0.0
 
-    do ie = 2, negrid
-       xel = (xe(ie-1)+xe(ie))*0.5
-       el(ie) = energy(xel,ecut)
-    end do
-    
+    if (.not. vgrid) then
+       do ie = 2, negrid
+          xel = (xe(ie-1)+xe(ie))*0.5
+          el(ie) = energy(xel,ecut)
+       end do
+    end if
+
     do ielo = e_lo%llim_proc, e_lo%ulim_proc
        is = is_idx(e_lo, ielo)
        ik = ik_idx(e_lo, ielo)
