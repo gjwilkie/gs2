@@ -5324,7 +5324,7 @@ contains
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
                 ! TEMP FOR TESTING -- MAB
-!                g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
 !                g0(ig,isgn,iglo) = sqrt(max(0.0,1.0-bmag(ig)*al(il)))
 !                g0 = 1.
              end do
