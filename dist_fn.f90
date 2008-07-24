@@ -872,6 +872,7 @@ contains
 
     ng = ntheta/2 + (nperiod-1)*ntheta
 
+    ! jshift0 corresponds to J (not delta j) from Beer thesis (unsure about +0.1) -- MAB
     if (naky > 1 .and. ntheta0 > 1) then
        jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,2)-theta0(1,2)) + 0.1)
     else if (naky == 1 .and. ntheta0 > 1 .and. aky(1) /= 0.0) then
@@ -886,13 +887,16 @@ contains
     do ik = 1, naky
        do it = 1, ntheta0
           if (it > (ntheta0+1)/2) then
+             ! akx is negative (-1 shift because akx(1) = 0) -- MAB
              it0 = it - ntheta0 - 1
           else
+             ! akx is positive (-1 shift because akx(1) = 0) -- MAB
              it0 = it - 1
           end if
 
           if (ik == 1) then
              if (aky(ik) /= 0.0 .and. naky == 1) then
+                ! for this case, jshift0 is delta j from Beer thesis -- MAB
                 itl = it0 + jshift0
                 itr = it0 - jshift0
              else
@@ -902,19 +906,24 @@ contains
                 itr = it0
              end if
           else
+             ! ik = 1 corresponds to aky=0, so shift index by 1
+             ! (ik-1)*jshift0 is delta j from Beer thesis -- MAB
              itl = it0 + (ik-1)*jshift0
              itr = it0 - (ik-1)*jshift0
           end if
 
+          ! remap to usual GS2 indices -- MAB
           if (itl >= 0 .and. itl < (ntheta0+1)/2) then
              itleft(ik,it) = itl + 1
           else if (itl + ntheta0 + 1 > (ntheta0+1)/2 &
              .and. itl + ntheta0 + 1 <= ntheta0) then
              itleft(ik,it) = itl + ntheta0 + 1
           else
+             ! j' = j + delta j not included in simulation, so can't connect -- MAB
              itleft(ik,it) = -1
           end if
 
+          ! same stuff for j' = j - delta j -- MAB
           if (itr >= 0 .and. itr < (ntheta0+1)/2) then
              itright(ik,it) = itr + 1
           else if (itr + ntheta0 + 1 > (ntheta0+1)/2 &
@@ -934,6 +943,9 @@ contains
        il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+
+       ! get processors and indices for j' (kx') modes connecting
+       ! to mode j (kx) so we can set up communication -- MAB
 
 ! if non-wfb trapped particle, no connections
        if (nlambda > ng2 .and. il >= ng2+2) then
@@ -5965,9 +5977,10 @@ contains
        xpts(1:negrid-1) = zeroes
        xpts(negrid) = x0
 !       xpts = 0.0
-!       ypts = 0.0
+       ypts = 0.0
+       ! change argument of bmag depending on which theta you want to write out
        do il=1,nlambda
-          if (1.0-al(il)*bmax .gt. 0.0) ypts(il) = sqrt(1.0-al(il)*bmax)
+          if (1.0-al(il)*bmag(0) .gt. 0.0) ypts(il) = sqrt(1.0-al(il)*bmag(0))
        end do
     end if
 
@@ -5980,6 +5993,7 @@ contains
     endif
 
     do iglo = g_lo%llim_world, g_lo%ulim_world
+       ! writing out g(vpar,vperp) at ik=it=is=1, ig=0
        ik = ik_idx(g_lo, iglo) ; if (ik /= 1) cycle
        it = it_idx(g_lo, iglo) ; if (it /= 1) cycle
        is = is_idx(g_lo, iglo) ; if (is /= 1) cycle

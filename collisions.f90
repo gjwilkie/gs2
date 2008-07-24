@@ -3009,7 +3009,7 @@ contains
     complex, dimension (:,:), allocatable :: glz, glzc
     complex, dimension (:), allocatable :: glz0
     complex, dimension (max(2*nlambda,2*ng2+1)) :: delta
-    complex :: fac
+    complex :: fac, gwfb
     integer :: iglo, igint, ilz, ig, ik, il, is, je, it, ie
 
     logical :: first = .true.
@@ -3089,6 +3089,8 @@ contains
           ! if wfb, remove vpa = 0 point (which has wgt of zero)
           glz0(:ng2) = glz(:ng2,ilz)
           glz0(ng2+1:je-1) = glz(ng2+2:je,ilz)
+          ! save gwfb for reinsertion later
+          gwfb = glz(ng2+1,ilz)
        else
           glz0 = glz(:,ilz)
        end if
@@ -3113,11 +3115,14 @@ contains
           glz(il,ilz) = (delta(il) - c1(il,ilz)*glz(il+1,ilz))*betaa(il,ilz)
        end do
 
-       ! interpolate to obtain glz(vpa = 0) point for wfb
-       ! and insert this point into glz
+!       ! interpolate to obtain glz(vpa = 0) point for wfb
+!       ! and insert this point into glz
+       ! interpolation described above mysteriously causing numerical instability
+       ! stabilized by using old (pre-collision) value of g for wfb
        if (jend(ig) == ng2+1) then
           glz0(ng2+2:je) = glz(ng2+1:je-1,ilz)
-          glz(ng2+1,ilz) = 0.5*(glz(ng2,ilz)+glz(ng2+1,ilz))
+!          glz(ng2+1,ilz) = 0.5*(glz(ng2,ilz)+glz(ng2+1,ilz))
+          glz(ng2+1,ilz) = gwfb
           glz(ng2+2:je,ilz) = glz0(ng2+2:je)
        end if
 
