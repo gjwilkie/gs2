@@ -1117,9 +1117,10 @@ contains
     integer :: ie, is, iglo, ik, ielo, il, ig, it
     real, dimension (:), allocatable :: aa, bb, cc, xe, ba, rba, eec, el
     real :: vn, xe0, xe1, xe2, xer, xel, er, fac
-    real :: dela, delb, delc, delfac
+!    real :: dela, delb, delc, delfac
+    real :: fg, dtzet, sig, eta, delp, delm, del
     real :: capgl, capgr, slb1, ee, eea, eeb
-    real :: delp, delm, del, capg, mu, eta, wxe, capgp
+!    real :: delp, delm, del, capg, mu, eta, wxe, capgp
     real :: erf ! this is needed for PGI: RN
     logical :: first_time = .true.
 
@@ -1279,104 +1280,197 @@ contains
           ec1(:,ielo) = cc
           era1 = 0.0 ; erb1 = 1.0 ; erc1 = 0.0
 
-! case ediff_scheme_compact has not been kept updated for all changes
-! related to the new vgrid.  only around for testing these days -- MAB
        case (ediff_scheme_compact)
 
-          ee =cfac*0.25*(1-slb1**2)*kperp2(ig,it,ik)*vn*code_dt &
+          ! this case only setup for vgrid currently
+
+          ee = 0.125*(1.-slb1**2)*kperp2(ig,it,ik)*cfac &
                / (bmag(ig)*spec(is)%zstm)**2
-          
-          ! boundary at xe = 0
-          wxe = 4.0*w(1,is)
+
+          ! boundary at v = 0
           xe1 = xe(1)
           xe2 = xe(2)
 
-!       ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
-!            / (bmag(ig)*spec(is)%zstm)**2 &
-!            * kperp2(ig,it,ik)*cfac
-
-          delp = xe(2) - wxe
-          delm = xe(1) - wxe
-          del  = xe(2) - xe(1)
+          delp = xe(2) - xe(1)
           
-          capg = 8.0*xe1*sqrt(e(1,is))*exp(-2.0*e(1,is))/pi
-          capgp = 8.0*exp(-e(1,is))*(sqrt(e(1,is))*exp(-e(1,is)) &
-               + 0.25*sqrt(pi)*xe1*(1.-4.*e(1,is))/e(1,is))/pi
-
-          mu = 0.5*(delp + delm)
-          eta = (1.0 - mu*capgp/capg)*del
-          
-          eec(1) = -ee*wxe*delm*mu/(eta*energy(wxe,ecut)**1.5)
-          eeb = -ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
-          
-          erc1(1,ielo) = -delm*mu/eta
-          cc(1) = -(code_dt*vn*capg + delm*mu)/eta
-       
-          rba(1) = -delp*mu/eta
-          erb1(1,ielo) = 1.0 - 0.25*rba(1)/w(1,is)
-          ba(1) = -(code_dt*vn*capg + delp*mu)/eta
-          bb(1) = 1.0 - 0.25*(ba(1) + eeb)/w(1,is) + ee*xe1/e(1,is)**1.5
-       
-          era1(1,ielo) = 0.0
+          cc(1) = -4.*code_dt*vn*xe(1)*exp(e(1,is))/(3.*sqrt(pi)*delp*e(1,is))
+          bb(1) = 1.0 - cc(1) + ee*vnew_s(ik,1,is)*code_dt
           aa(1) = 0.0
+
+          era1(1,ielo) = 0.0
+          erb1(1,ielo) = 1.0
+          erc1(1,ielo) = 0.0
+
+          ! boundary at v = infinity
+
+          xe0 = xe(negrid-1)
+          xe1 = xe(negrid)
+
+          delm = xe1 - xe0
+
+          ! assuming G h'' << 1 at negrid (order delx**2 or smaller)
+          ! and G' h'' << 1 at negrid (order delx or smaller)
+
+          cc(negrid) = -0.125*code_dt*vn*(2.*exp(-e(negrid,is))*sqrt(e(negrid,is))*(1.+4.*e(negrid,is))/sqrt(pi) &
+               - erf(sqrt(e(negrid,is)))*(1.+2.*e(negrid,is)))/(e(negrid,is)**2*delm)
+          bb(negrid) = 1.0 - cc(negrid) + ee*vnew_s(ik,negrid,is)*code_dt
+          aa(negrid) = 0.0
+
+          era1(negrid,ielo) = 0.0
+          erb1(negrid,ielo) = 1.0
+          erc1(negrid,ielo) = 0.0
 
           do ie = 2, negrid-1
 
-             eea = ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
-
-             wxe = 4.0*sum(w(:ie,is))
+             xe0 = xe(ie-1)
              xe1 = xe(ie)
              xe2 = xe(ie+1)
 
-             delp = xe2 - wxe
-             delm = xe1 - wxe
-             del  = xe2 - xe1
+             delp = xe2 - xe1
+             delm = xe1 - xe0
+             del  = delp + delm
 
-             capg = 8.0*xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))/pi
-             capgp = 8.0*exp(-e(ie,is))*(sqrt(e(ie,is))*exp(-e(ie,is)) &
-                  + 0.25*sqrt(pi)*xe1*(1.-4.*e(ie,is))/e(ie,is))/pi
+             fg = vnew_s(ik,ie,is)*0.25
+             eta = 1.0 + (delp-delm)*vn*(2.*exp(-e(ie,is))*sqrt(e(ie,is))*(2.+3.*e(ie,is))/sqrt(pi) &
+                  - (2.+e(ie,is))*erf(sqrt(e(ie,is)))) / (3.0*fg*e(ie,is)**2)
+             sig = (delp-delm)/(3.0*eta)
+             dtzet = 0.5*code_dt*vn*(2.*exp(-e(ie,is))*sqrt(e(ie,is))*(1.+4.*e(ie,is))/sqrt(pi) &
+                  - (1.+2.*e(ie,is))*erf(sqrt(e(ie,is))))/e(ie,is)**2 &
+                  + sig*(2.*code_dt*vn*(erf(sqrt(e(ie,is)))*(1.+e(ie,is)) &
+                  - 2.*exp(-e(ie,is))*sqrt(e(ie,is))*(1.+2.*e(ie,is)*(1.+e(ie,is)))/sqrt(pi))/e(ie,is)**2.5 &
+                  - (1. + code_dt*vnew_s(ik,ie,is)*ee))
 
-             mu = 0.5*(delp + delm)
-             eta = (1.0 - mu*capgp/capg)*del
+             cc(ie) = -(2.*code_dt*fg/eta + delm*dtzet)/(delp*del)
+             aa(ie) = (delp*dtzet - 2.*code_dt*fg/eta)/(delm*del)
+             bb(ie) = 1.0+((delm-delp)*dtzet+2.*code_dt*fg/eta)/(delp*delm) &
+                  + code_dt*ee*(vnew_s(ik,ie,is)+sig*(2.*vn*(2.*exp(-e(ie,is))*sqrt(e(ie,is)) &
+                  * (3.+2.*e(ie,is))/sqrt(pi) - 3.*erf(sqrt(e(ie,is))))/e(ie,is)**2))
 
-             eeb = -ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5) - eec(ie-1)
-             eec(ie) = -ee*wxe*delm*mu/(eta*energy(wxe,ecut)**1.5)
-
-             erc1(ie,ielo) = -delm*mu/eta
-             cc(ie) = -(code_dt*vn*capg + delm*mu)/eta
-
-             rba(ie) = -delp*mu/eta
-             erb1(ie,ielo) = 1.0 - 0.25*(rba(ie) + erc1(ie-1,ielo))/w(ie,is)
-             ba(ie) = -(code_dt*vn*capg + delp*mu)/eta
-             bb(ie) = 1.0 - 0.25*(cc(ie-1) + ba(ie) + eeb)/w(ie,is) + ee*xe1/e(ie,is)**1.5
-
-             era1(ie,ielo) = 0.25*rba(ie-1)/w(ie,is)
-             aa(ie) = 0.25*(ba(ie-1) + eea)/w(ie,is)
+             erc1(ie,ielo) = sig*delm/(delp*del)
+             era1(ie,ielo) = -sig*delp/(delm*del)
+             erb1(ie,ielo) = 1.0 + sig*(delp-delm)/(delp*delm)
 
           end do
 
-          ! boundary at xe = 1
+          ec1(:,ielo) = cc
 
-          ie = negrid
-
-          eea = ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
-       
-          xe1 = xe(ie)
- 
-          eeb = -eec(ie-1)
-          eec(ie) = 0.0
-
-          erc1(ie,ielo) = 0.0
-          cc(ie) = 0.0
-          
-          erb1(ie,ielo) = 1.0 - 0.25*erc1(ie-1,ielo)/w(ie,is)
-          bb(ie) = 1.0 - 0.25*(cc(ie-1) + eeb)/w(ie,is) + ee*xe1/e(ie,is)**1.5
-       
-          era1(ie,ielo) = 0.25*rba(ie-1)/w(ie,is)
-          aa(ie) = 0.25*(ba(ie-1) + eea)/w(ie,is)
-
-          erc1(:,ielo) = 0.25*erc1(:,ielo)/w(:,is)
-          ec1(:,ielo) = 0.25*(cc + eec)/w(:,is)
+!          ! boundary at xe = 1
+!
+!          ie = negrid
+!
+!          eea = ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
+!       
+!          xe1 = xe(ie)
+! 
+!          eeb = -eec(ie-1)
+!          eec(ie) = 0.0
+!
+!          erc1(ie,ielo) = 0.0
+!          cc(ie) = 0.0
+!          
+!          erb1(ie,ielo) = 1.0 - 0.25*erc1(ie-1,ielo)/w(ie,is)
+!          bb(ie) = 1.0 - 0.25*(cc(ie-1) + eeb)/w(ie,is) + ee*xe1/e(ie,is)**1.5
+!       
+!          era1(ie,ielo) = 0.25*rba(ie-1)/w(ie,is)
+!          aa(ie) = 0.25*(ba(ie-1) + eea)/w(ie,is)
+!
+!          erc1(:,ielo) = 0.25*erc1(:,ielo)/w(:,is)
+!          ec1(:,ielo) = 0.25*(cc + eec)/w(:,is)
+!
+!          ee =cfac*0.25*(1-slb1**2)*kperp2(ig,it,ik)*vn*code_dt &
+!               / (bmag(ig)*spec(is)%zstm)**2
+!          
+!          ! boundary at xe = 0
+!          wxe = 4.0*w(1,is)
+!          xe1 = xe(1)
+!          xe2 = xe(2)
+!
+!!       ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
+!!            / (bmag(ig)*spec(is)%zstm)**2 &
+!!            * kperp2(ig,it,ik)*cfac
+!
+!          delp = xe(2) - wxe
+!          delm = xe(1) - wxe
+!          del  = xe(2) - xe(1)
+!          
+!          capg = 8.0*xe1*sqrt(e(1,is))*exp(-2.0*e(1,is))/pi
+!          capgp = 8.0*exp(-e(1,is))*(sqrt(e(1,is))*exp(-e(1,is)) &
+!               + 0.25*sqrt(pi)*xe1*(1.-4.*e(1,is))/e(1,is))/pi
+!
+!          mu = 0.5*(delp + delm)
+!          eta = (1.0 - mu*capgp/capg)*del
+!          
+!          eec(1) = -ee*wxe*delm*mu/(eta*energy(wxe,ecut)**1.5)
+!          eeb = -ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
+!          
+!          erc1(1,ielo) = -delm*mu/eta
+!          cc(1) = -(code_dt*vn*capg + delm*mu)/eta
+!       
+!          rba(1) = -delp*mu/eta
+!          erb1(1,ielo) = 1.0 - 0.25*rba(1)/w(1,is)
+!          ba(1) = -(code_dt*vn*capg + delp*mu)/eta
+!          bb(1) = 1.0 - 0.25*(ba(1) + eeb)/w(1,is) + ee*xe1/e(1,is)**1.5
+!       
+!          era1(1,ielo) = 0.0
+!          aa(1) = 0.0
+!
+!          do ie = 2, negrid-1
+!
+!             eea = ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
+!
+!             wxe = 4.0*sum(w(:ie,is))
+!             xe1 = xe(ie)
+!             xe2 = xe(ie+1)
+!
+!             delp = xe2 - wxe
+!             delm = xe1 - wxe
+!             del  = xe2 - xe1
+!
+!             capg = 8.0*xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))/pi
+!             capgp = 8.0*exp(-e(ie,is))*(sqrt(e(ie,is))*exp(-e(ie,is)) &
+!                  + 0.25*sqrt(pi)*xe1*(1.-4.*e(ie,is))/e(ie,is))/pi
+!
+!             mu = 0.5*(delp + delm)
+!             eta = (1.0 - mu*capgp/capg)*del
+!
+!             eeb = -ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5) - eec(ie-1)
+!             eec(ie) = -ee*wxe*delm*mu/(eta*energy(wxe,ecut)**1.5)
+!
+!             erc1(ie,ielo) = -delm*mu/eta
+!             cc(ie) = -(code_dt*vn*capg + delm*mu)/eta
+!
+!             rba(ie) = -delp*mu/eta
+!             erb1(ie,ielo) = 1.0 - 0.25*(rba(ie) + erc1(ie-1,ielo))/w(ie,is)
+!             ba(ie) = -(code_dt*vn*capg + delp*mu)/eta
+!             bb(ie) = 1.0 - 0.25*(cc(ie-1) + ba(ie) + eeb)/w(ie,is) + ee*xe1/e(ie,is)**1.5
+!
+!             era1(ie,ielo) = 0.25*rba(ie-1)/w(ie,is)
+!             aa(ie) = 0.25*(ba(ie-1) + eea)/w(ie,is)
+!
+!          end do
+!
+!          ! boundary at xe = 1
+!
+!          ie = negrid
+!
+!          eea = ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
+!       
+!          xe1 = xe(ie)
+! 
+!          eeb = -eec(ie-1)
+!          eec(ie) = 0.0
+!
+!          erc1(ie,ielo) = 0.0
+!          cc(ie) = 0.0
+!          
+!          erb1(ie,ielo) = 1.0 - 0.25*erc1(ie-1,ielo)/w(ie,is)
+!          bb(ie) = 1.0 - 0.25*(cc(ie-1) + eeb)/w(ie,is) + ee*xe1/e(ie,is)**1.5
+!       
+!          era1(ie,ielo) = 0.25*rba(ie-1)/w(ie,is)
+!          aa(ie) = 0.25*(ba(ie-1) + eea)/w(ie,is)
+!
+!          erc1(:,ielo) = 0.25*erc1(:,ielo)/w(:,is)
+!          ec1(:,ielo) = 0.25*(cc + eec)/w(:,is)
 
        case (ediff_scheme_old)
 
