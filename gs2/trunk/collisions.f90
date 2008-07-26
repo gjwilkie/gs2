@@ -1116,7 +1116,6 @@ contains
 
     integer :: ie, is, iglo, ik, ielo, il, ig, it
     real, dimension (:), allocatable :: aa, bb, cc, xe, ba, rba, eec, el
-!    real :: vn, xe0, xe1, xe2, xer, xel, er, el, fac
     real :: vn, xe0, xe1, xe2, xer, xel, er, fac
     real :: dela, delb, delc, delfac
     real :: capgl, capgr, slb1, ee, eea, eeb
@@ -1138,14 +1137,10 @@ contains
     allocate (xe(negrid), eec(negrid))
     allocate (el(negrid))
 
-! want to use x variables instead of e because we want conservative form
-! for the x-integration
+    ! want to use x variables instead of e because we want conservative form
+    ! for the x-integration
     xe(1:negrid-1) = zeroes
     xe(negrid) = x0
-
-!    do ie = 1, negrid
-!       if (proc0) write (*,*) 'x', ie, xe(ie), w(ie,1)
-!    end do
 
     if (.not.allocated(ec1)) then
        allocate (ec1    (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
@@ -1201,9 +1196,14 @@ contains
                 capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
              end if
 
-             ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
+             ee = 0.125*(1.-slb1**2)*vnew_s(ik,ie,is) &
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
+
+! old implementation that only works for egrid (not vgrid)
+!             ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
+!                  / (bmag(ig)*spec(is)%zstm)**2 &
+!                  * kperp2(ig,it,ik)*cfac
           
              ! coefficients for tridiagonal matrix:
              cc(ie) = -0.25*vn*code_dt*capgr/(w(ie,is)*(xe2 - xe1))
@@ -1217,7 +1217,7 @@ contains
 !             end if
           end do
 
-          ! boundary at xe = 0
+          ! boundary at v = 0
           xe1 = xe(1)
           xe2 = xe(2)
 
@@ -1229,9 +1229,14 @@ contains
              capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
           end if
 
-          ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
+          ee = 0.125*(1.-slb1**2)*vnew_s(ik,1,is) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
+
+! old implementation that only works for egrid (not vgrid)
+!          ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
+!               / (bmag(ig)*spec(is)%zstm)**2 &
+!               * kperp2(ig,it,ik)*cfac
 
           cc(1) = -0.25*vn*code_dt*capgr/(w(1,is)*(xe2 - xe1))
           aa(1) = 0.0
@@ -1242,7 +1247,7 @@ contains
 !             hh(1) =vnh*(0.25*capgr/(w(1,is)*(xe2-xe1)) + ee)
 !          end if
 
-          ! boundary at xe = 1
+          ! boundary at v = infinity
           xe0 = xe(negrid-1)
           xe1 = xe(negrid)
 
@@ -1254,9 +1259,13 @@ contains
              capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
           end if
 
-          ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
+          ee = 0.125*(1.-slb1**2)*vnew_s(ik,negrid,is) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
+
+!          ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
+!               / (bmag(ig)*spec(is)%zstm)**2 &
+!               * kperp2(ig,it,ik)*cfac
 
           cc(negrid) = 0.0
           aa(negrid) = -0.25*vn*code_dt*capgl/(w(negrid,is)*(xe1 - xe0))
@@ -1270,6 +1279,8 @@ contains
           ec1(:,ielo) = cc
           era1 = 0.0 ; erb1 = 1.0 ; erc1 = 0.0
 
+! case ediff_scheme_compact has not been kept updated for all changes
+! related to the new vgrid.  only around for testing these days -- MAB
        case (ediff_scheme_compact)
 
           ee =cfac*0.25*(1-slb1**2)*kperp2(ig,it,ik)*vn*code_dt &
@@ -1387,9 +1398,13 @@ contains
                 capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
              end if
 
-             ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
+             ee = 0.125*(1.-slb1**2)*vnew_s(ik,ie,is) &
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
+
+!             ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
+!                  / (bmag(ig)*spec(is)%zstm)**2 &
+!                  * kperp2(ig,it,ik)*cfac
           
              ! coefficients for tridiagonal matrix:
              cc(ie) = -vn*code_dt*capgr/((xer-xel)*(xe2 - xe1))
@@ -1415,9 +1430,13 @@ contains
              capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
           end if
 
-          ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
+          ee = 0.125*(1.-slb1**2)*vnew_s(ik,1,is) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
+
+!          ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
+!               / (bmag(ig)*spec(is)%zstm)**2 &
+!               * kperp2(ig,it,ik)*cfac
 
           cc(1) = -vn*code_dt*capgr/(xer*(xe2 - xe1))
           aa(1) = 0.0
@@ -1440,9 +1459,13 @@ contains
              capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
           end if
 
-          ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
+          ee = 0.125*(1.-slb1**2)*vnew_s(ik,negrid,is) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
+
+!          ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
+!               / (bmag(ig)*spec(is)%zstm)**2 &
+!               * kperp2(ig,it,ik)*cfac
 
           cc(negrid) = 0.0
           aa(negrid) = -vn*code_dt*capgl/((1.0-xel)*(xe1 - xe0))
