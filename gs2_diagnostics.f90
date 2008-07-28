@@ -2041,7 +2041,7 @@ contains
 
        call getmoms (phinew, ntot, density, upar, tpar, tperp)
 
-       if (test_conserve) call gettotmoms (phinew, bparnew, ntot, upartot, uperptot, ttot)
+!       if (test_conserve) call gettotmoms (phinew, bparnew, ntot, upartot, uperptot, ttot)
 
        if (proc0) then
           allocate (dl_over_b(-ntg_out:ntg_out))

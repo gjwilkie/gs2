@@ -1211,7 +1211,7 @@ contains
              ! coefficients for tridiagonal matrix:
              cc(ie) = -0.25*vn*code_dt*capgr/(w(ie,is)*(xe2 - xe1))
              aa(ie) = -0.25*vn*code_dt*capgl/(w(ie,is)*(xe1 - xe0))
-             bb(ie) = 1.0 - (aa(ie) + cc(ie)) + ee*vn*code_dt
+             bb(ie) = 1.0 - (aa(ie) + cc(ie)) + ee*code_dt
              
              ! coefficients for entropy heating calculation
 !             if (heating) then
@@ -1243,7 +1243,7 @@ contains
 
           cc(1) = -0.25*vn*code_dt*capgr/(w(1,is)*(xe2 - xe1))
           aa(1) = 0.0
-          bb(1) = 1.0 - cc(1) + ee*vn*code_dt
+          bb(1) = 1.0 - cc(1) + ee*code_dt
 
 !          if (heating) then
 !             dd(1) =vnc*(0.25*capgr/(w(1,is)*(xe2-xe1)) + ee)
@@ -1272,7 +1272,7 @@ contains
 
           cc(negrid) = 0.0
           aa(negrid) = -0.25*vn*code_dt*capgl/(w(negrid,is)*(xe1 - xe0))
-          bb(negrid) = 1.0 - aa(negrid) + ee*vn*code_dt
+          bb(negrid) = 1.0 - aa(negrid) + ee*code_dt
 
 !          if (heating) then
 !             dd(negrid) =vnc*ee
@@ -1505,7 +1505,7 @@ contains
              ! coefficients for tridiagonal matrix:
              cc(ie) = -vn*code_dt*capgr/((xer-xel)*(xe2 - xe1))
              aa(ie) = -vn*code_dt*capgl/((xer-xel)*(xe1 - xe0))
-             bb(ie) = 1.0 - (aa(ie) + cc(ie)) + ee*vn*code_dt
+             bb(ie) = 1.0 - (aa(ie) + cc(ie)) + ee*code_dt
              
              ! coefficients for entropy heating calculation
 !             if (heating) then
@@ -1536,7 +1536,7 @@ contains
 
           cc(1) = -vn*code_dt*capgr/(xer*(xe2 - xe1))
           aa(1) = 0.0
-          bb(1) = 1.0 - cc(1) + ee*vn*code_dt
+          bb(1) = 1.0 - cc(1) + ee*code_dt
 
 !          if (heating) then
 !             dd(1) =vnc*(0.25*capgr/(w(1,is)*(xe2-xe1)) + ee)
@@ -1565,7 +1565,7 @@ contains
 
           cc(negrid) = 0.0
           aa(negrid) = -vn*code_dt*capgl/((1.0-xel)*(xe1 - xe0))
-          bb(negrid) = 1.0 - aa(negrid) + ee*vn*code_dt
+          bb(negrid) = 1.0 - aa(negrid) + ee*code_dt
 
 !          if (heating) then
 !             dd(negrid) =vnc*ee
