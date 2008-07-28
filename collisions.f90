@@ -1108,10 +1108,11 @@ contains
     use gs2_layouts, only: ig_idx, it_idx, il_idx
     use file_utils, only: open_output_file, close_output_file
     use dist_fn_arrays, only: kperp2
+    use spfunc, only: erf => erf_ext
 
     implicit none
     
-    double precision :: derf
+!    double precision :: derf
     real, intent (in), optional :: vnmult_target
 
     integer :: ie, is, iglo, ik, ielo, il, ig, it
@@ -1119,7 +1120,7 @@ contains
     real :: vn, xe0, xe1, xe2, xer, xel, er, fac
     real :: fg, dtzet, sig, eta, delp, delm, del
     real :: capgl, capgr, slb1, ee, eea, eeb
-    real :: erf ! this is needed for PGI: RN
+!    real :: erf ! this is needed for PGI: RN
     logical :: first_time = .true.
 
     if (first_time) then
@@ -1191,8 +1192,8 @@ contains
              xer = (xe1 + xe2)*0.5
 	
              if (vgrid) then
-                capgr = 2.0*exp(-xer**2)*(derf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer/sqrt(pi)
-                capgl = 2.0*exp(-xel**2)*(derf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel/sqrt(pi)
+                capgr = 2.0*exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer/sqrt(pi)
+                capgl = 2.0*exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel/sqrt(pi)
              else
                 capgr = 8.0*xer*sqrt(el(ie+1))*exp(-2.0*el(ie+1))/pi
                 capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
@@ -1226,7 +1227,7 @@ contains
           xer = (xe1 + xe2)*0.5
 
           if (vgrid) then
-             capgr = 2.0*exp(-xer**2)*(derf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer/sqrt(pi)
+             capgr = 2.0*exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer/sqrt(pi)
           else
              capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
           end if
@@ -1256,7 +1257,7 @@ contains
           xel = (xe1 + xe0)*0.5
 
           if (vgrid) then
-             capgl = 2.0*exp(-xel**2)*(derf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel/sqrt(pi)
+             capgl = 2.0*exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel/sqrt(pi)
           else
              capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
           end if
@@ -1313,7 +1314,7 @@ contains
           ! and G' h'' << 1 at negrid (order delx or smaller)
 
           cc(negrid) = -0.125*code_dt*vn*(2.*exp(-e(negrid,is))*sqrt(e(negrid,is))*(1.+4.*e(negrid,is))/sqrt(pi) &
-               - derf(sqrt(e(negrid,is)))*(1.+2.*e(negrid,is)))/(e(negrid,is)**2*delm)
+               - erf(sqrt(e(negrid,is)))*(1.+2.*e(negrid,is)))/(e(negrid,is)**2*delm)
           bb(negrid) = 1.0 - cc(negrid) + ee*vnew_s(ik,negrid,is)*code_dt
           aa(negrid) = 0.0
 
@@ -1333,11 +1334,11 @@ contains
 
              fg = vnew_s(ik,ie,is)*0.25
              eta = 1.0 + (delp-delm)*vn*(2.*exp(-e(ie,is))*sqrt(e(ie,is))*(2.+3.*e(ie,is))/sqrt(pi) &
-                  - (2.+e(ie,is))*derf(sqrt(e(ie,is)))) / (3.0*fg*e(ie,is)**2)
+                  - (2.+e(ie,is))*erf(sqrt(e(ie,is)))) / (3.0*fg*e(ie,is)**2)
              sig = (delp-delm)/(3.0*eta)
              dtzet = 0.5*code_dt*vn*(2.*exp(-e(ie,is))*sqrt(e(ie,is))*(1.+4.*e(ie,is))/sqrt(pi) &
-                  - (1.+2.*e(ie,is))*derf(sqrt(e(ie,is))))/e(ie,is)**2 &
-                  + sig*(2.*code_dt*vn*(derf(sqrt(e(ie,is)))*(1.+e(ie,is)) &
+                  - (1.+2.*e(ie,is))*erf(sqrt(e(ie,is))))/e(ie,is)**2 &
+                  + sig*(2.*code_dt*vn*(erf(sqrt(e(ie,is)))*(1.+e(ie,is)) &
                   - 2.*exp(-e(ie,is))*sqrt(e(ie,is))*(1.+2.*e(ie,is)*(1.+e(ie,is)))/sqrt(pi))/e(ie,is)**2.5 &
                   - (1. + code_dt*vnew_s(ik,ie,is)*ee))
 
@@ -1345,7 +1346,7 @@ contains
              aa(ie) = (delp*dtzet - 2.*code_dt*fg/eta)/(delm*del)
              bb(ie) = 1.0+((delm-delp)*dtzet+2.*code_dt*fg/eta)/(delp*delm) &
                   + code_dt*ee*(vnew_s(ik,ie,is)+sig*(2.*vn*(2.*exp(-e(ie,is))*sqrt(e(ie,is)) &
-                  * (3.+2.*e(ie,is))/sqrt(pi) - 3.*derf(sqrt(e(ie,is))))/e(ie,is)**2))
+                  * (3.+2.*e(ie,is))/sqrt(pi) - 3.*erf(sqrt(e(ie,is))))/e(ie,is)**2))
 
              erc1(ie,ielo) = sig*delm/(delp*del)
              era1(ie,ielo) = -sig*delp/(delm*del)
@@ -1486,8 +1487,8 @@ contains
              xer = (xe1 + xe2)*0.5
 	
              if (vgrid) then
-                capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(derf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
-                capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(derf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+                capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+                capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
              else
                 capgr = 8.0*xer*sqrt(el(ie+1))*exp(-2.0*el(ie+1))/pi
                 capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
@@ -1520,7 +1521,7 @@ contains
           xer = (xe1 + xe2)*0.5
 
           if (vgrid) then
-             capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(derf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+             capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
           else
              capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
           end if
@@ -1549,7 +1550,7 @@ contains
           xel = (xe1 + xe0)*0.5
 
           if (vgrid) then
-             capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(derf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
+             capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
           else
              capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
           end if

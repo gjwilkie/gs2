@@ -98,6 +98,7 @@ gs2_mod = \
 	 regression.o \
 	 run_parameters.o \
 	 species.o \
+	 spfunc.o \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
@@ -180,6 +181,7 @@ collisions.o: \
 	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
+	 spfunc.o \
 	 text_options.o \
 	 theta_grid.o 
 command_line.o: 
@@ -207,6 +209,7 @@ dist_fn.o: \
 	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
+	 spfunc.o \
 	 text_options.o \
 	 theta_grid.o 
 dist_fn_arrays.o: 
@@ -498,6 +501,8 @@ peq.o: \
 	 constants.o \
 	 netcdf_utils.o \
 	 spl.o 
+pgplot_utils.o: \
+	 constants.o 
 prof.o: 
 radstub.o: 
 ran.o: 
