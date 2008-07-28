@@ -3052,7 +3052,7 @@ contains
 
        ! TEMP FOR TESTING -- MAB
 !       gnew(:,:,iglo) = cos(2.*sqrt(e(ie,is)))
-       gnew = 1.0
+!       gnew = 1.0
 
        do isgn = 1, 2
           g0(:,isgn,iglo) = (aj0(:,iglo)**2-1.0)*anon(ie,is) &
@@ -3061,7 +3061,7 @@ contains
     end do
 
     ! TEMP FOR TESTING -- MAB
-    g0 = 0.0
+!    g0 = 0.0
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
