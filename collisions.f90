@@ -1099,7 +1099,7 @@ contains
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use le_grids, only: nlambda, negrid, ng2, e, ecut, integrate_moment, al, w
-    use le_grids, only: vgrid
+    use le_grids, only: vgrid, forbid
     use egrid, only: zeroes, x0, energy
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
@@ -1171,9 +1171,12 @@ contains
        ig = ig_idx(e_lo, ielo)
        it = it_idx(e_lo, ielo)
 
+       if (forbid(ig,il)) cycle
+
        vn = vnmult(2)*spec(is)%vnewk*tunits(ik)
 
-       slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))     ! xi_j
+!       slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))     ! xi_j
+       slb1 = sqrt(max(0.0,1.0 - bmag(ig)*al(il)))     ! xi_j
 
        select case (ediff_switch)
 
@@ -3269,8 +3272,8 @@ contains
     use species, only: spec, nspec
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
-    use le_grids, only: negrid, integrate_moment
-    use gs2_layouts, only: is_idx, e_lo, g_lo
+    use le_grids, only: negrid, integrate_moment, forbid
+    use gs2_layouts, only: ig_idx, il_idx, is_idx, e_lo, g_lo
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
 
@@ -3305,8 +3308,10 @@ contains
     ! solve for ged row by row
     do ielo = e_lo%llim_proc, e_lo%ulim_proc
        is = is_idx(e_lo,ielo)
+       ig = ig_idx(e_lo,ielo)
+       il = il_idx(e_lo,ielo)
 
-       if (spec(is)%vnewk < 2.0*epsilon(0.0)) cycle
+       if (spec(is)%vnewk < 2.0*epsilon(0.0) .or. forbid(ig,il)) cycle
 
        ged0(1) = erb1(1,ielo)*ged(1,ielo) + erc1(1,ielo)*ged(2,ielo)
        do ie = 2, negrid-1
