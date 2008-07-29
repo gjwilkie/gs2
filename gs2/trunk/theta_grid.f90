@@ -632,6 +632,7 @@ module theta_grid_file
 
   character(200) :: gridout_file
   real :: shat_input, drhodpsi_input, kxfac_input, qval_input
+  logical :: no_geo_info = .false.
 
 contains
 
@@ -652,7 +653,7 @@ contains
     implicit none
     integer :: in_file
     logical :: exist
-    namelist /theta_grid_file_knobs/ gridout_file
+    namelist /theta_grid_file_knobs/ gridout_file, no_geo_info
 
     gridout_file = "grid.out"
     in_file = input_unit_exist("theta_grid_file_knobs", exist)
@@ -751,23 +752,26 @@ contains
        end do
     end if
 
-    read (unit=unit, fmt="(a)",err=100) line
-    do i = -ntgrid, ntgrid
-       read (unit=unit, fmt=*, err=100) Rplot(i), Rprime(i)
-    end do
+    if (.not. no_geo_info) then
 
-    read (unit=unit, fmt="(a)",err=100) line
-    do i = -ntgrid, ntgrid
-       read (unit=unit, fmt=*, err=100) Zplot(i), Zprime(i)
-    end do
+       read (unit=unit, fmt="(a)",err=100) line
+       do i = -ntgrid, ntgrid
+          read (unit=unit, fmt=*, err=100) Rplot(i), Rprime(i)
+       end do
 
-    read (unit=unit, fmt="(a)",err=100) line
-    do i = -ntgrid, ntgrid
-       read (unit=unit, fmt=*, err=100) aplot(i), aprime(i)
-    end do
+       read (unit=unit, fmt="(a)",err=100) line
+       do i = -ntgrid, ntgrid
+          read (unit=unit, fmt=*, err=100) Zplot(i), Zprime(i)
+       end do
 
-    close (unit=unit)    
-    return
+       read (unit=unit, fmt="(a)",err=100) line
+       do i = -ntgrid, ntgrid
+          read (unit=unit, fmt=*, err=100) aplot(i), aprime(i)
+       end do
+
+       close (unit=unit)    
+       return
+    end if
 
 100 continue
 
