@@ -9,10 +9,6 @@ module legendre
 
   private
 
-  interface arth
-     module procedure arth_d, arth_i
-  end interface
-
 contains
 
   subroutine nrgauleg (x1, x2, x, w)!, eps)
@@ -76,6 +72,7 @@ contains
 
   subroutine nrgaulag (x, w, alf)
 
+    use spfunc, only: lgamma
     use constants, only: pi => dpi
 
     implicit none
@@ -131,65 +128,27 @@ contains
        stop
     end if
     x = z
-    w = -exp(gammln(alf+n)-gammln(real(n)))/(pp*n*p2)
+! TT>
+!    w = -exp(gammln(alf+n)-gammln(real(n)))/(pp*n*p2)
+    w = -exp(lgamma(alf+n)-lgamma(real(n)))/(pp*n*p2)
+! <TT
+
+  contains
+
+    function arth (first, increment, n)
+      implicit none
+      integer, intent (in) :: first, increment, n
+      integer, dimension (n) :: arth
+      integer :: k, k2, temp
+      if (n <= 0) write (*,*) "ERROR IN ARTH: NESUPER MUST BE GREATER THAN ZERO"
+
+      arth(1) = first
+      do k=2,n
+         arth(k) = arth(k-1) + increment
+      end do
+    end function arth
 
   end subroutine nrgaulag
-
-  function arth_d (first,increment,n)
-
-    implicit none
-
-    double precision, intent (in) :: first, increment
-    integer, intent (in) :: n
-    double precision, dimension (n) :: arth_d
-    integer :: k, k2
-    double precision :: temp
-
-    if (n <= 0) write (*,*) "ERROR IN ARTH: NESUPER MUST BE GREATER THAN ZERO"
-    arth_d(1) = first
-    do k=2,n
-       arth_d(k) = arth_d(k-1) + increment
-    end do
-
-  end function arth_d
-
-  function arth_i (first,increment,n)
-
-    implicit none
-
-    integer, intent (in) :: first, increment, n
-    integer, dimension (n) :: arth_i
-    integer :: k, k2, temp
-
-    if (n <= 0) write (*,*) "ERROR IN ARTH: NESUPER MUST BE GREATER THAN ZERO"
-    arth_i(1) = first
-    do k=2,n
-       arth_i(k) = arth_i(k-1) + increment
-    end do
-
-  end function arth_i
-
-  function gammln (xx)
-    
-    implicit none
-
-    real, intent (in) :: xx
-    real :: gammln   ! returns ln[(xx)] for xx > 0.
-    double precision :: tmp, x
-
-    double precision :: stp = 2.5066282746310005d0
-    double precision, dimension(6) :: coef=(/ 76.18009172947146d0, &
-         -86.50532032941677d0, 24.01409824083091d0, -1.231739572450155d0,  &
-         .1208650973866179d-2, -.5395239384953d-5 /)
-
-    if (xx <= 0.0) write (*,*) "ERROR IN GAMMLN: NESUP MUST BE GREATER THAN ZERO"
-    x = xx
-    tmp = x + 5.5d0
-    tmp = (x+0.5d0)*log(tmp)-tmp
-    gammln = tmp+log(stp*(1.000000000190015d0 + &
-         sum(coef(:)/arth(x+1.0d0,1.0d0,size(coef))))/x)
-    
-  end function gammln
   
 end module legendre
 
