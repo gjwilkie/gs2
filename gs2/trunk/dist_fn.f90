@@ -1816,8 +1816,8 @@ contains
     call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
     call hyper_diff (gnew, g0, phinew, bparnew)
     call kill (gnew, g0, phinew, bparnew)
-    call solfp1 (gnew, g, g0, phi, bpar, phinew, bparnew, modep)   !! BUGS IN SOLFP1 B/C phi, phinew misused?
-    
+    call solfp1 (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)   !! BUGS IN SOLFP1 B/C phi, phinew misused?
+                                                                                  !! bug comment above addressed (probably) -- MAB
     if (def_parity) then
        if (even) then
           gnew(-ntgrid:-1, 1,:) = gnew( ntgrid: 1:-1,2,:)
@@ -5662,92 +5662,6 @@ contains
 
   end subroutine estimate_error
 
-!> mbmark
-!  subroutine write_ftran (last, phi, bpar, istep)
-
-!    use mp, only: proc0
-!    use file_utils, only: open_output_file, close_output_file
-!    use le_grids, only: legendre_transform, negrid, nlambda, ng2
-!    use theta_grid, only: ntgrid
-!    use kt_grids, only: ntheta0, naky
-!    use species, only: nspec
-!    use dist_fn_arrays, only: gnew, aj0
-!    use run_parameters, only: fphi, fbpar
-!    use gs2_layouts, only: g_lo
-
-!    integer :: im, ig, iglo, isgn
-!    integer, save :: ne_unit, nl_unit
-!    logical, save :: first = .true.
-!    logical, intent(in)  :: last
-!    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-!    integer, intent (in) :: istep
-!    real :: genorm, glnorm
-
-!    real, dimension (0:negrid-2) :: gne2
-!    real, dimension (0:ng2-1) :: gnl2
-
-!    complex, dimension(0:negrid-2,-ntgrid:ntgrid,ntheta0,naky,nspec) :: getran
-!    complex, dimension(0:ng2-1,-ntgrid:ntgrid,ntheta0,naky,nspec) :: gltran
-!    complex, dimension(0:negrid-2) :: ngetmp
-!    complex, dimension (0:ng2-1) :: ngltmp
-    
-!    ngetmp = 0.0 ; ngltmp = 0.0 
-!    genorm = 0.0 ; glnorm = 0.0
-!    gne2  = 0.0 ; gnl2 = 0.0
-
-!    if (proc0) then
-!       if (first) then
-!          call open_output_file (ne_unit, ".nedist")
-!          call open_output_file (nl_unit, ".nldist")
-!          first = .false.
-!       end if
-!    endif
-
-!    call g_adjust (gnew, phi, bpar, fphi, fbpar)
-
-!    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!       do isgn = 1, 2
-!          do ig=-ntgrid, ntgrid
-!             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
-!          end do
-!       end do
-!    end do
-    
-!    call legendre_transform (g0, getran, gltran, istep)
-!    call g_adjust (gnew, phi, bpar, -fphi, -fbpar)
-
-!    ngetmp = getran(0:,0,1,1,1)
-!    ngltmp = gltran(0:,0,1,1,1)
-
-!    do im=0,negrid-2
-!       gne2(im) = real(ngetmp(im)*Conjg(ngetmp(im)))
-!    end do
-
-!    do im=0,ng2-1
-!       gnl2(im) = real(ngltmp(im)*Conjg(ngltmp(im)))
-!    end do
-
-!    genorm = sum(gne2)
-!    glnorm = sum(gnl2)
-
-!    if (proc0) then
-!       do im=0,negrid-2
-!          write(ne_unit,"(1x,e12.6)") gne2(im)!/genorm
-!       end do
-!       do im=0,ng2-1
-!          write(nl_unit,"(1x,e12.6)") gnl2(im)!/glnorm
-!       end do
-!       write (ne_unit, *)
-!       write (nl_unit, *)
-!       if (last) then
-!          call close_output_file (ne_unit)
-!          call close_output_file (nl_unit)
-!       end if
-!    end if
-
-!  end subroutine write_ftran
-!< mbmark
-
   subroutine get_gtran (geavg, glavg, gtavg, phi, bpar, istep)
 
     use le_grids, only: legendre_transform, negrid, nlambda, ng2, vgrid, nesub, jend
@@ -5816,13 +5730,6 @@ contains
     else
        call legendre_transform (g0, getran, gltran, istep)
     end if
-
-! TEMP FOR TESTING -- MAB
-!    do ig = -ntgrid, ntgrid
-!       do il = 0, 2*(nlambda-ng2-1)
-!          if (proc0) write (*,*) 'gttran', ig, il, gttran(il,ig,1,1,1)
-!       end do
-!    end do
 
 ! transform from h back to g
     call g_adjust (gnew, phi, bpar, -fphi, -fbpar)
