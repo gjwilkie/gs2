@@ -45,8 +45,9 @@ contains
 
     call init_fields_implicit
     call getfield (phinew, aparnew, bparnew)
+    ! TEMP FOR TESTING -- MAB
+!    aparnew = cmplx(100.,100.)
     phi = phinew; apar = aparnew; bpar = bparnew
-
 
   end subroutine init_phi_implicit
 

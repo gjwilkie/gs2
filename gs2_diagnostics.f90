@@ -2041,7 +2041,7 @@ contains
 
        call getmoms (phinew, ntot, density, upar, tpar, tperp)
 
-!       if (test_conserve) call gettotmoms (phinew, bparnew, ntot, upartot, uperptot, ttot)
+       if (test_conserve) call gettotmoms (phinew, bparnew, ntot, upartot, uperptot, ttot)
 
        if (proc0) then
           allocate (dl_over_b(-ntg_out:ntg_out))
@@ -2059,26 +2059,15 @@ contains
                 tpar00(it, is)   = sum( ttot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
 !                tperp00(it, is)  = sum(tperp(-ntg_out:ntg_out,it,1,is)*dl_over_b)
                 tperp00(it, is)  = sum(uperptot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-
-!                if (test_conserve .and. allocated(ntot_diff)) then
-!                   ntdiff(is) = sum(ntot_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
-!                   upadiff(is) = sum(upar_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
-!                   upediff(is) = sum(uperp_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
-!                   ttdiff(is) = sum(ttot_diff(-ntg_out:ntg_out,1,1,is)*dl_over_b)
-!                end if
              end do
           end do
           
-!          if (test_conserve .and. allocated(ntot_diff)) then
           if (test_conserve) then
              if (nspec == 1) then
                 write (out_unit, *) 'moms', real(ntot00(1,1)), aimag(upar00(1,1)), real(tperp00(1,1)), real(tpar00(1,1))
-!                write (out_unit, *) 'moms', real(ntdiff(1)), aimag(ntdiff(1)), &
-!                     real(upadiff(1)), aimag(upadiff(1)), real(upediff(1)), aimag(upediff(1)), &
-!                     real(ttdiff(1)), aimag(ttdiff(1))
              else
-!                write (out_unit, *) 'moms', real(ntdiff(1)), real(ntdiff(2)), &
-!                     aimag(upadiff(1)), aimag(upadiff(2)), real(ttdiff(1)), real(ttdiff(2))
+                write (out_unit, *) 'moms', real(ntot00(1,1)), real(ntot00(1,2)), aimag(upar00(1,1)), aimag(upar00(1,2)), &
+                     real(tperp00(1,1)), real(tperp00(1,2)), real(tpar00(1,1)), real(tpar00(1,2))
              end if
           end if
 

@@ -1402,6 +1402,13 @@ contains
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)       
 
+       ! TEMP FOR TESTING -- MAB
+!       if (is == 2) then
+!          ufac = 2.*upar0
+!       else
+!          ufac = upar0
+!       end if
+
        g(:,1,iglo) = phiinit* &!spec(is)%z* &
             ( dfac                           * phi(:,it,ik) &
             + 2.*ufac* vpa(:,1,iglo)         * odd(:,it,ik) &
