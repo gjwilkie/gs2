@@ -640,7 +640,7 @@ if (debug) write(6,*) "eikcoefs: call thetagrad"
              write (11,*) i,rgrid(i),rgrid1(i),rgrid2(i)
           enddo
        endif
-    
+ 
        s_hat_new = shat
 
        rpval(1)=rp
