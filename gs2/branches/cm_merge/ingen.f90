@@ -71,7 +71,7 @@ program ingen
   real :: vncoef, absom, cfac_nu
   integer :: ivnew
   character (20) :: collision_model
-  logical :: conserve_number, conserve_momentum, use_shmem, hypercoll
+  logical :: conserve_number, conserve_momentum, use_shmem, hypercoll, const_v
   logical :: heating
   integer, parameter :: collision_model_lorentz = 1
   integer, parameter :: collision_model_krook = 2
@@ -1776,7 +1776,6 @@ if (debug) write(6,*) 'get_namelists: case (eqopt_switch), eqopt_switch=',eqopt_
     cfac = 1.0
 
 if (debug) write(6,*) 'get_namelists: dist_fn_knobs'
-
     in_file= input_unit_exist("dist_fn_knobs", exist)
     if (exist) then
        read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
@@ -1968,6 +1967,7 @@ if (debug) write(6,*) 'get_namelists: returning'
        end select
        write (unit, fmt="(' cfac = ',f5.3)") cfac_nu
        write (unit, fmt="(' heating = ',L1)") heating
+       write (unit, fmt="(' cfac = ',f5.3)") cfac
        write (unit, fmt="(' /')")
     end if
 
@@ -3667,6 +3667,9 @@ if (debug) write(6,*) 'get_namelists: returning'
         select case (collision_model_switch)
         case (collision_model_lorentz,collision_model_lorentz_test)
            write (report_unit, fmt="('A Lorentz collision operator has been selected.')")
+           if (cfac > 0) write (report_unit, fmt="('This has both terms of Lorentz collision operator (cfac=1.0)')")
+           if (cfac == 0) write (report_unit, fmt="('This is only a partial Lorentz collision operator (cfac=0.0)')")
+           if (const_v) write (report_unit, fmt="('This is an energy independent Lorentz collision operator (const_v=true)')")  
  !          if (hypercoll) call init_hyper_lorentz
        case (collision_model_krook,collision_model_krook_test)
           write (report_unit, fmt="('A Krook collision operator has been selected.')")

@@ -385,6 +385,9 @@ contains
 !    Simply need to look into the shift dependence of gds2
 !
        if (model_switch == model_nocurve) then
+!dja fix for no curvature
+          gbdrift0 = 0.0
+!dja end
           gds2 = 1.0 + (shat*theta)**2
           gds21 = -shat*shat*theta
           shape = 'slab    '
