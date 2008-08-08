@@ -1186,6 +1186,7 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
        end if 
     end if 
 
+if (debug) write(6,*) 'get_namelists: layouts'
     local_field_solve = .false.
 !    layout = 'lexys'
     layout = 'lxyes'
@@ -1194,6 +1195,16 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
        read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
        layouts_write = .true.
     end if
+
+if (debug) write(6,*) 'get_namelists: additional linear terms'
+    ! additional_linear_terms: 
+    phi0_term = .false.
+    wstar_term = .false.
+    use_shmem = .true.
+    in_file = input_unit_exist("additional_linear_terms_knobs",exist)
+    if(exist) read (unit=in_file, nml=additional_linear_terms_knobs)
+
+    if (phi0_term .or. wstar_term) additional_linear_terms_write = .true.
 
     ! antenna: 
     w_antenna = (1., 0.0)
@@ -1244,6 +1255,7 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
 
     t0_driver = t0
 
+if (debug) write(6,*) 'get_namelists: collisions'
     ! collisions: 
     collision_model = 'default'
     tmpfac = cfac
@@ -1269,6 +1281,7 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
     cfac_nu = cfac
     cfac = tmpfac
 
+if (debug) write(6,*) 'get_namelists: init_g'
     ! init_g:
     tstart = 0.
     scale = 1.0
@@ -1326,6 +1339,7 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
          (field_option, fieldopts, fieldopt_switch, &
          ierr, "field_option in fields_knobs")
     
+if (debug) write(6,*) 'get_namelists: gs2_reinit'
     ! gs2_reinit:
     delt_adj = 2.0
     delt_minimum = 1.e-5
@@ -1335,6 +1349,7 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
        reinit_write = .true.
     end if
 
+if (debug) write(6,*) 'get_namelists: hyper'
     ! hyper:
     const_amp = .false.
     include_kpar = .false.
@@ -1377,6 +1392,7 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
 
     end select
 
+if (debug) write(6,*) 'get_namelists: kt_grids'
     ! kt_grids:
     norm_option = 'default'
     grid_option = 'default'
@@ -1494,6 +1510,7 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
 
     end select
 
+if (debug) write(6,*) 'get_namelists: le_grids'
     ! le_grids:
     nesub = 8
     nesuper = 2
@@ -1524,6 +1541,7 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
        endif
     endif
 
+if (debug) write(6,*) 'get_namelists: nonlinear terms'
     ! nonlinear_terms:
     nonlinear_mode = 'default'
     flow_mode = 'default'
@@ -1591,14 +1609,17 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
          (delt_option, deltopts, delt_option_switch, ierr, &
          "delt_option in knobs")
 
+if (debug) write(6,*) 'get_namelists: species'
     ! species: 
     nspec = 2
     in_file = input_unit_exist("species_knobs", exist)
     if (exist) then
        read (unit=input_unit("species_knobs"), nml=species_knobs)
        species_write = .true.
+if (debug) write(6,*) 'get_namelists: species_knobs exist, nspec=',nspec
     end if
 
+if (debug) write(6,*) 'get_namelists: nspec=',nspec
     allocate (spec(nspec))
     do is = 1, nspec
        call get_indexed_namelist_unit (unit, "species_parameters", is)
@@ -1629,6 +1650,7 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
     end do
 
     gb_to_cv = .false.
+if (debug) write(6,*) 'get_namelists: theta_grid_knobs'
     equilibrium_option = 'default'
     in_file= input_unit_exist("theta_grid_knobs", exist)
     if (exist) then
@@ -3268,8 +3290,10 @@ if (debug) write(6,*) 'get_namelists: returning'
 
            if (shift > -epsilon(0.0)) then
               write (report_unit, fmt="('The s-alpha alpha parameter is ',f7.4)") shift
-              write (report_unit, fmt="('corresponding to d beta / d rho = ',f10.4)") shift/arat/qsf**2
-              if (abs(dbdr - shift/arat/qsf**2) > 1.e-2) then
+!CMR 10/11/06: correct sign of dbeta/drho in s-alpha
+              write (report_unit, fmt="('corresponding to d beta / d rho = ',f10.4)") -shift/arat/qsf**2
+!CMR 10/11/06: correct sign of dbeta/drho in s-alpha in this check
+              if (abs(dbdr + shift/arat/qsf**2) > 1.e-2) then
                  write (report_unit, *) 
                  write (report_unit, fmt="('################# WARNING #######################')")
                  write (report_unit, fmt="('This is inconsistent with beta and the pressure gradient.')") 
