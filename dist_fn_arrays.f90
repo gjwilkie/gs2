@@ -19,7 +19,8 @@ module dist_fn_arrays
   integer, dimension (:), allocatable :: ittp
   ! (-ntgrid:ntgrid)
 
-  real, dimension (:,:), allocatable :: aj0, aj1, aj0f, aj1f
+! DJA: 17/1/06, add variable aj2 to store J_2(x)
+  real, dimension (:,:), allocatable :: aj0, aj1, aj2, aj0f, aj1f
   ! (-ntgrid:ntgrid, -g-layout-)
 
   ! fieldeq
