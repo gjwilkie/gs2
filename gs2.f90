@@ -27,8 +27,12 @@ program gs2
   integer :: istep = 0, istep_end, unit, istatus
   logical :: exit, reset, list
   character (500), target :: cbuff
+!cmr nov04: adding following debug switch
+  logical :: debug=.false.
+!cmr
 
 ! initialize message passing 
+if (debug) write(6,*) "gs2: call init_mp"
   call init_mp
 
 ! report # of processors being used
@@ -56,11 +60,15 @@ program gs2
   call broadcast (cbuff)
   if (.not. proc0) run_name => cbuff
 
+if (debug) write(6,*) "gs2: call init_fields"
   call init_fields
+if (debug) write(6,*) "gs2: call init_diagnostics"
   call init_gs2_diagnostics (list, nstep)
+if (debug) write(6,*) "gs2: call init_time"
   call init_tstart (tstart)   ! tstart is in user units 
   if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
   istep_end = nstep
+if (debug) write(6,*) "gs2: start istep loop"
   do istep = 1, nstep
 
      call advance (istep)

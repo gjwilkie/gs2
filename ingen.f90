@@ -573,6 +573,9 @@ program ingen
 
   namelist /ingen_knobs/ ncut, scan, stdin
 
+!CMR
+  logical:: debug=.false.
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -589,12 +592,17 @@ program ingen
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  call init_mp  
+  call init_mp
+ 
+  if (debug) write(6,*) 'ingen: call get_namelists'
   
   call get_namelists
+  if (debug) write(6,*) 'ingen: call report'
   call report
+  if (debug) write(6,*) 'ingen: call write_namelists'
   call write_namelists
 
+  if (debug) write(6,*) 'ingen: call interactive, scan=',scan
   if (scan) call interactive
 
   call finish_mp
@@ -1158,8 +1166,10 @@ contains
 
     use theta_grid, only: init_theta_grid, nbset, shat_real => shat
     logical :: list
+!CMR
+    logical:: debug=.false.
     call init_file_utils (list, name="template")
-
+if (debug) write(6,*) 'get_namelists: called init_file_utils'
     ncut= 100000
     scan = .false.
     stdin = .true.
@@ -1167,6 +1177,7 @@ contains
     in_file=input_unit_exist("ingen_knobs", exist)
     if (exist) read(unit=input_unit("ingen_knobs"), nml=ingen_knobs)
 
+if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
     if (scan) then
        if (.not. stdin) then
           if (pythonin == "") then
@@ -1648,6 +1659,7 @@ contains
     ntheta = 24
     nperiod = 2
 
+if (debug) write(6,*) 'get_namelists: case (eqopt_switch), eqopt_switch=',eqopt_switch
     select case (eqopt_switch)
     case (eqopt_eik)
        itor = 1
@@ -1763,6 +1775,8 @@ contains
     tmpfac = cfac
     cfac = 1.0
 
+if (debug) write(6,*) 'get_namelists: dist_fn_knobs'
+
     in_file= input_unit_exist("dist_fn_knobs", exist)
     if (exist) then
        read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
@@ -1790,7 +1804,9 @@ contains
        close (unit=unit)
     end do
 
+if (debug) write(6,*) 'get_namelists: call init_theta_grid'
     call init_theta_grid 
+if (debug) write(6,*) 'get_namelists: called init_theta_grid'
     shat = shat_real
 
     if(abs(shat) <=  1.e-5) boundary_option = 'periodic'
@@ -1874,6 +1890,7 @@ contains
 
     if (.not. save_for_restart) nsave = -1
     nperiod_output = max(nperiod, 1)
+if (debug) write(6,*) 'get_namelists: returning'
 
   end subroutine get_namelists
 
@@ -3090,6 +3107,12 @@ contains
            end if
         else
            nmesh = (2*ntgrid+1)*2*nlambda*negrid*ntheta0*naky*nspec
+           write (report_unit, fmt="('ntgrid :    ',i12)") ntgrid
+           write (report_unit, fmt="('nlambda:    ',i12)") nlambda
+           write (report_unit, fmt="('negrid :    ',i12)") negrid
+           write (report_unit, fmt="('ntheta0:    ',i12)") ntheta0
+           write (report_unit, fmt="('naky   :    ',i12)") naky
+           write (report_unit, fmt="('nspec  :    ',i12)") nspec
         end if
 
         write (report_unit, fmt="('Number of meshpoints:    ',i12)") nmesh

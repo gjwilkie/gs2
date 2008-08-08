@@ -164,12 +164,17 @@ contains
     use  veq, only: vmomin, veq_init
     use  geq, only: eqin, geq_init
     use  peq, only: peqin => eqin, teqin, peq_init
-    use  eeq, only: efitin, mfitin, eeq_init => efit_init, gs2din
+    use  eeq, only: efitin, mfitin, efit_init, gs2din
+!cmr    use  eeq, only: efitin, mfitin, eeq_init => efit_init, gs2din
     use  deq, only: dfitin, deq_init => dfit_init
     use ideq, only: idfitin, ideq_init => dfit_init
     use  leq, only: leqin, dpdrhofun
     use radstub, only: radial
     implicit none
+!cmr nov04: adding following debug switch
+    logical :: debug=.false.
+!cmr
+
 
 ! Local variables:
 
@@ -200,6 +205,7 @@ contains
 !     compute the initial constants
     pi=2.*acos(0.)
     
+if (debug) write(6,*) "eikcoefs: local_eq=",local_eq
     if (local_eq .and. iflux == 1) then
        write (*,*) 'Forcing iflux = 0'
        iflux = 0
@@ -216,6 +222,7 @@ contains
        endif
     endif
 
+if (debug) write(6,*) "eikcoefs: call check"
     call check(vmom_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq, idfit_eq) 
 
     if(.not. vmom_eq .and. .not. gen_eq .and. .not. ppl_eq .and. .not. transp_eq &
@@ -237,6 +244,7 @@ contains
        call alloc_local_arrays(ntgrid)
     endif
 
+if (debug) write(6,*) "eikcoefs: iflux=",iflux
     select case (iflux)
        case (0)
           avgrmid=1.
@@ -252,16 +260,20 @@ contains
              call peqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
              call tdef(nthg)
           else if(transp_eq) then
+if (debug) write(6,*) 'eikcoefs: transp_eq=',transp_eq
              ppl_eq = .true.
-             write (*,*) 'eqfile = ',eqfile
+             write (6,*) 'eqfile = ',eqfile
              call teqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
+if (debug) write(6,*) 'eikcoefs: called teqin'
              call tdef(nthg)
           else if(efit_eq) then
              if(big <= 0) big = 8
              if (mds) then
                 call mfitin(shotnum, tstar, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
              else if(gs2d_eq) then
+if (debug) write(6,*) "eikcoefs: call gs2din"
                 call gs2din(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
+if (debug) write(6,*) "eikcoefs: done gs2din"
              else
                 call efitin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
              endif
@@ -278,7 +290,8 @@ contains
        case (2) 
           continue
     end select
-
+if (debug) writelots=.true.
+if (debug) write(6,*) "eikcoefs: if (writelots)"
     if(writelots) then
        write(11,*) 'All lengths normalized to the avg midplane minor radius'
        if(irho /= 2) then
@@ -361,13 +374,20 @@ contains
 !
 ! should test whether this is a new equilibrium
 !
+
+ if (debug) write(11,*) 'eikcoefs: various logs', gen_eq, ppl_eq, vmom_eq,efit_eq,dfit_eq,idfit_eq
+
     if(gen_eq)   call geq_init
     if(ppl_eq)   call peq_init
     if(vmom_eq)  call veq_init
-    if(efit_eq)  call eeq_init
+if (debug) write(6,*) "eikcoefs: call eeq_init"
+!    if(efit_eq)  call eeq_init
+    if(efit_eq)  call efit_init
+if (debug) write(6,*) "eikcoefs: done eeq_init"
     if(dfit_eq)  call deq_init
     if(idfit_eq) call ideq_init
 
+if (debug) write(6,*) "eikcoefs: call rmajortgrid"
     call rmajortgrid(rgrid, theta, rmajor)
 
 !     compute gradient of rp
@@ -397,6 +417,8 @@ contains
        endif
     endif 
 !     compute  coordinate gradients
+
+if (debug) write(6,*) "eikcoefs: call thetagrad"
 
     call thetagrad(rgrid,thgrad)
      

@@ -164,7 +164,9 @@ program eiktest
   end if
 
   write(21,*) ' ntgrid  nperiod  ntheta, drhodpsi, rmaj, shat, kxfac, q'
-  write(21,*) ntgrid, nperiod, ntheta, drhodpsin, rmaj, shat, kxfac, qsf
+!CMR 14/01/05 change format to prevent line breaks with intel compiler and allow runngridgen to read the output files
+  write(21,fmt='(3i8,1p5e12.4)') ntgrid, nperiod, ntheta, drhodpsin, rmaj, shat, kxfac, qsf
+!CMR
   
   write(21,*) '    gbdrift     gradpar       grho    tgrid'
   do i= -ntgrid,ntgrid

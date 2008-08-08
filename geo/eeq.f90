@@ -772,7 +772,11 @@ contains
 
     real, dimension(nw, nh) :: eqth 
     integer :: i, j
-    
+!cmr nov04: adding following debug switch
+    logical :: debug=.false.
+!cmr
+
+if (debug) write(6,*) "efit_init: do i"     
     do i = 1, nw
        do j = 1,nh
           if(efit_Z(j) == Z_mag .and. efit_R(i) == R_mag) then
