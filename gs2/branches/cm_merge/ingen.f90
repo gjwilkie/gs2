@@ -141,7 +141,7 @@ program ingen
   real, dimension (:), allocatable :: bkdiff  ! (nspec)
   integer, dimension (:), allocatable :: bd_exp ! nspec
   real :: gridfac, apfac, driftknob, tpdriftknob, poisfac
-  real :: kfilter, afilter, D_kill, noise
+  real :: kfilter, afilter, D_kill, noise, g_exb
   real :: t0, omega0, gamma0, source0, thetas, phi_ext, a_ext
   real :: akx_star, aky_star, cfac_df
   integer :: nperiod_guard 
@@ -473,7 +473,8 @@ program ingen
        den2, upar2, tpar2, tperp2, dphiinit, apar0
 
 ! dist_fn:
-  namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, tpdriftknob, &
+  namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, &
+       driftknob, tpdriftknob, g_exb, &
        nperiod_guard, poisfac, adiabatic_option, cfac, &
        kfilter, afilter, mult_imp, test, def_parity, even, &
        save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, heating_option
@@ -1787,6 +1788,7 @@ if (debug) write(6,*) 'get_namelists: case (eqopt_switch), eqopt_switch=',eqopt_
     a_ext = 0.0
     afilter = 0.0
     kfilter = 0.0
+    g_exb = 0.0
     D_kill = -10.0
     noise = -1.
     mult_imp = .false.
@@ -4447,6 +4449,11 @@ if (debug) write(6,*) 'get_namelists: returning'
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, *) 
        end if
+
+    write (report_unit, *) 
+    write (report_unit, fmt="('------------------------------------------------------------')")
+    write (report_unit, *) 
+    write (report_unit, fmt="('The ExB parameter is ',f7.4)") g_exb
 
     write (report_unit, *) 
     write (report_unit, fmt="('------------------------------------------------------------')")
