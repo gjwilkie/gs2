@@ -140,7 +140,7 @@ program ingen
   complex, dimension (:), allocatable :: fexp ! (nspec)
   real, dimension (:), allocatable :: bkdiff  ! (nspec)
   integer, dimension (:), allocatable :: bd_exp ! nspec
-  real :: gridfac, apfac, driftknob, poisfac
+  real :: gridfac, apfac, driftknob, tpdriftknob, poisfac
   real :: kfilter, afilter, D_kill, noise
   real :: t0, omega0, gamma0, source0, thetas, phi_ext, a_ext
   real :: akx_star, aky_star, cfac_df
@@ -473,7 +473,7 @@ program ingen
        den2, upar2, tpar2, tperp2, dphiinit, apar0
 
 ! dist_fn:
-  namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, &
+  namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, tpdriftknob, &
        nperiod_guard, poisfac, adiabatic_option, cfac, &
        kfilter, afilter, mult_imp, test, def_parity, even, &
        save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, heating_option
@@ -1775,6 +1775,7 @@ if (debug) write(6,*) 'get_namelists: case (eqopt_switch), eqopt_switch=',eqopt_
     gridfac = 5e4
     apfac = 1.0
     driftknob = 1.0
+    tpdriftknob = -9.9e9
     t0 = 100.0
     source0 = 1.0
     omega0 = 0.0
@@ -1801,6 +1802,7 @@ if (debug) write(6,*) 'get_namelists: dist_fn_knobs'
     in_file= input_unit_exist("dist_fn_knobs", exist)
     if (exist) then
        read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
+       if (tpdriftknob == -9.9e9) tpdriftknob=driftknob
        dist_fn_write = .true.
     end if
 
@@ -2208,6 +2210,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
        if (apfac /= 1.) write (unit, fmt="(' apfac = ',e16.10)") apfac
        if (driftknob /= 1.) write (unit, fmt="(' driftknob = ',e16.10)") driftknob
+       if (tpdriftknob /= 1.) write (unit, fmt="(' tpdriftknob = ',e16.10)") tpdriftknob
        if (poisfac /= 0.) write (unit, fmt="(' poisfac = ',e16.10)") poisfac
        if (kfilter /= 0.) write (unit, fmt="(' kfilter = ',e16.10)") kfilter
        if (afilter /= 0.) write (unit, fmt="(' afilter = ',e16.10)") afilter
@@ -4298,9 +4301,19 @@ if (debug) write(6,*) 'get_namelists: returning'
     if (driftknob /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('You selected driftknob = ',e10.4,' in dist_fn_knobs.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('You selected driftknob = ',e10.4,' in dist_fn_knobs.')") driftknob
+       write (report_unit, fmt="('THIS IS EITHER AN ERROR, or you are DELIBERATELY SCALING THE DRIFTS.')") 
        write (report_unit, fmt="('The normal choice is driftknob = 1.')")
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (tpdriftknob /= 1.) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('You selected tpdriftknob = ',e10.4,' in dist_fn_knobs.')") tpdriftknob
+       write (report_unit, fmt="('THIS IS EITHER AN ERROR, or you are DELIBERATELY SCALING THE TRAPPED PARTICLE DRIFTS (either via driftknob or via tpdriftknob).')") 
+       write (report_unit, fmt="('The normal choice is tpdriftknob = 1.')")
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, *) 
     end if

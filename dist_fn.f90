@@ -23,7 +23,7 @@ module dist_fn
   complex, dimension (:), allocatable :: fexp ! (nspec)
   real, dimension (:), allocatable :: bkdiff  ! (nspec)
   integer, dimension (:), allocatable :: bd_exp ! nspec
-  real :: gridfac, apfac, driftknob, poisfac
+  real :: gridfac, apfac, driftknob, tpdriftknob, poisfac
   real :: t0, omega0, gamma0, thetas, k0, source0
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
@@ -241,7 +241,7 @@ contains
     character(30) :: adiabatic_option
             
     namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, &
-         nperiod_guard, poisfac, adiabatic_option, &
+         tpdriftknob, nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, flr, cfac, &
          kill_grid, h_kill, g_exb, neoflux
@@ -269,6 +269,7 @@ contains
        gridfac = 1.0  ! used to be 5.e4
        apfac = 1.0
        driftknob = 1.0
+       tpdriftknob = -9.9e9
        t0 = 100.0
        source0 = 1.0
        omega0 = 0.0
@@ -295,6 +296,8 @@ contains
        kill_grid = .false.
        in_file = input_unit_exist("dist_fn_knobs", exist)
        if (exist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
+       if (tpdriftknob == -9.9e9) tpdriftknob=driftknob
+
        in_file = input_unit_exist("source_knobs", exist)
        if (exist) read (unit=input_unit("source_knobs"), nml=source_knobs)
 
@@ -335,6 +338,7 @@ contains
     call broadcast (poisfac)
     call broadcast (apfac)
     call broadcast (driftknob)
+    call broadcast (tpdriftknob)
     call broadcast (t0)
     call broadcast (source0)
     call broadcast (omega0)
@@ -440,7 +444,7 @@ contains
     use species, only: nspec
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: negrid, nlambda, al, jend
+    use le_grids, only: negrid, ng2, nlambda, al, jend
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use dist_fn_arrays, only: ittp
     implicit none
@@ -467,7 +471,6 @@ contains
     if (alloc) allocate (wdrift(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
     if (alloc) allocate (wdriftttp(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
     wdrift = 0.  ; wdriftttp = 0.
-
 !>MAB    
     if ((neoflux) .and. alloc) then
        allocate (wdrift_neo(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -478,10 +481,23 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do ig = -ntgrid, ntgrid
-          wdrift(ig,iglo) &
+!CMR, 13/3/2007:     isolate passing and trapped particle drift knobs
+          il=il_idx(g_lo,iglo)
+          if ( jend(ig) > 0 .and. jend(ig) <= nlambda .and. il >= ng2+1 .and. il <= jend(ig)) then
+             wdrift(ig,iglo) &
                = wdrift_func(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), &
                it_idx(g_lo,iglo), ik_idx(g_lo,iglo), &
-               is_idx(g_lo,iglo))
+               is_idx(g_lo,iglo))*tpdriftknob
+!CMR:  multiply trapped particle drift by tpdriftknob 
+!CMR:               (tpdriftknob defaults to driftknob if not supplied)
+          else
+             wdrift(ig,iglo) &
+               = wdrift_func(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), &
+                                 it_idx(g_lo,iglo), ik_idx(g_lo,iglo), &
+                                 is_idx(g_lo,iglo))*driftknob
+!CMR:  multiply passing particle drift by driftknob
+          endif
+!CMRend
 !> MAB
           if (neoflux) then
              wdrift_neo(ig,iglo) &
@@ -502,7 +518,8 @@ contains
                 do ig = -ntgrid, ntgrid
                    if (ittp(ig) == 0) cycle
                    wdriftttp(ig,it,ik,ie,is) &
-                        = wdrift_func(ig,ittp(ig),ie,it,ik,is)*driftknob
+                        = wdrift_func(ig,ittp(ig),ie,it,ik,is)*tpdriftknob
+!CMR:  totally trapped particle drifts also scaled by tpdriftknob 
 !> MAB
                    if (neoflux) then
                       wdriftttp_neo(ig,it,ik,ie,is) &
@@ -518,7 +535,9 @@ contains
 ! This should be weighted by bakdif to be completely consistent
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do ig = -ntgrid, ntgrid-1
-          wdrift(ig,iglo) = 0.5*(wdrift(ig,iglo) + wdrift(ig+1,iglo))*driftknob
+!CMR, 13/3/2007: remove driftknob factor as this is now accounted for above
+          wdrift(ig,iglo) = 0.5*(wdrift(ig,iglo) + wdrift(ig+1,iglo))
+!CMRend
 ! MAB
           if (neoflux) wdrift_neo(ig,iglo) = 0.5*(wdrift_neo(ig,iglo) + wdrift_neo(ig+1,iglo))*driftknob
        end do
@@ -526,7 +545,7 @@ contains
 
     alloc = .false.
 !CMR
-    if (debug) write(6,*) 'init_wdrift: driftknob=',driftknob
+    if (debug) write(6,*) 'init_wdrift: driftknob, tpdriftknob=',driftknob,tpdriftknob
 
   end subroutine init_wdrift
 
