@@ -1197,16 +1197,6 @@ if (debug) write(6,*) 'get_namelists: layouts'
        layouts_write = .true.
     end if
 
-if (debug) write(6,*) 'get_namelists: additional linear terms'
-    ! additional_linear_terms: 
-    phi0_term = .false.
-    wstar_term = .false.
-    use_shmem = .true.
-    in_file = input_unit_exist("additional_linear_terms_knobs",exist)
-    if(exist) read (unit=in_file, nml=additional_linear_terms_knobs)
-
-    if (phi0_term .or. wstar_term) additional_linear_terms_write = .true.
-
     ! antenna: 
     w_antenna = (1., 0.0)
     t0 = -1.

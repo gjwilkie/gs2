@@ -289,7 +289,7 @@ DEFAULT_LIB=$(foreach tmplib,$(DEFAULT_LIB_LIST),$(shell [ -d $(tmplib) ] && ech
 
 ##################################################################### TARGETS
 
-.DEFAULT_GOAL = $(PROJECT)_all
+.DEFAULT_GOAL := $(PROJECT)_all
 ifeq ($(notdir $(CURDIR)),utils)
 	.DEFAULT_GOAL = utils_all
 endif

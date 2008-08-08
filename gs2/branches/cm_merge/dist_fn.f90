@@ -16,7 +16,6 @@ module dist_fn
   public :: get_dens_vel, get_jext !GGH
   public :: get_verr, get_gtran, write_fyx, collision_error
   public :: neoflux
-  public :: exb_shear, jump ! MR
 
   private
 
@@ -30,7 +29,6 @@ module dist_fn
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
   real :: D_kill, noise, cfac, wfb, g_exb
-  real :: g_exb   ! MR
 
   integer :: adiabatic_option_switch!, heating_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -1879,7 +1877,6 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kx_shift
     use gs2_time, only: code_dt
-    use run_parameters, only: delt
     use mp, only: iproc, proc0, send, receive
 
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
@@ -3015,32 +3012,10 @@ contains
 !                   from gnew, phinew and bparnew.
 !           nb  <delta_f> = g_wesson J0 - q phi/T F_m  where <> = gyroaverage
 !           ie  <delta_f>/F_m = g_wesson J0 - q phi/T
-
-       ! TEMP FOR TESTING -- MAB
-!       gnew(:,:,iglo) = cos(2.*sqrt(e(ie,is)))
-!       gnew = 1.0
+!
 ! use g0 as dist_fn dimensioned working space for all moments
 ! (avoid making more copies of gnew to save memory!)
-
-       do isgn = 1, 2
-          g0(:,isgn,iglo) = (aj0(:,iglo)**2-1.0)*anon(ie,is) &
-               *phi(:,it,ik)*spec(is)%zt*spec(is)%dens
-       end do
-    end do
-
-    ! TEMP FOR TESTING -- MAB
-!    g0 = 0.0
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) + g0(ig,isgn,iglo)
-          end do
-       end do
-    end do
-
-    call integrate_moment (g0, ntot)
-
+!
 ! set gnew = g_wesson, but return gnew to entry state prior to exit 
     call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
 
@@ -3054,8 +3029,7 @@ contains
        ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig=-ntgrid, ntgrid
-!             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
-             g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)
+             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
           end do
        end do
     end do
@@ -3079,8 +3053,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
-!             g0(ig,isgn,iglo) = vperp2(ig,iglo)*gnew(ig,isgn,iglo)*aj0(ig,iglo)
-             g0(ig,isgn,iglo) = vperp2(ig,iglo)*gnew(ig,isgn,iglo)
+             g0(ig,isgn,iglo) = vperp2(ig,iglo)*gnew(ig,isgn,iglo)*aj0(ig,iglo)
           end do
        end do
     end do
