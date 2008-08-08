@@ -655,7 +655,7 @@ contains
   end subroutine init_wstar
 
   subroutine init_bessel
-    use dist_fn_arrays, only: aj0, aj1, kperp2
+    use dist_fn_arrays, only: aj0, aj1, aj2, kperp2
     use species, only: spec
     use theta_grid, only: ntgrid, bmag, gds2, gds21, gds22, shat
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
@@ -677,7 +677,8 @@ contains
 
     allocate (aj0(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (aj1(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-    aj0 = 0. ; aj1 = 0.
+    allocate (aj2(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+    aj0 = 0. ; aj1 = 0. ; aj2=0.
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -688,7 +689,9 @@ contains
        do ig = -ntgrid, ntgrid
           arg = spec(is)%smz*sqrt(e(ie,is)*al(il)/bmag(ig)*kperp2(ig,it,ik))
           aj0(ig,iglo) = j0(arg)
+! CMR 17/1/06: BEWARE, j1 returns and aj1 stores J_1(x)/x (NOT J_1(x)), 
           aj1(ig,iglo) = j1(arg)
+          aj2(ig,iglo) = 2.0d0*aj1(ig,iglo)-aj0(ig,iglo)
        end do
     end do
 
@@ -3022,19 +3025,18 @@ contains
     call prof_leaving ("getan", "dist_fn")
   end subroutine getan
 
-  subroutine getmoms (phi, ntot, density, upar, tpar, tperp)
+  subroutine getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp)
+! CMR: 17/1/06, better to get phinew, bparnew directly from field_arrays
     use dist_fn_arrays, only: vpa, vperp2, aj0, gnew
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use le_grids, only: integrate_moment, anon
     use prof, only: prof_entering, prof_leaving
-
-    ! TEMP FOR TESTING -- MAB
-!    use le_grids, only: e
-
+    use run_parameters, only: fphi, faperp
+    use collisions, only: g_adjust
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phinew,bparnew
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
          upar, tpar, tperp, ntot
 
@@ -3043,16 +3045,16 @@ contains
 ! returns moment integrals to PE 0
     call prof_entering ("getmoms", "dist_fn")
 
-! total density
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
+! DJA+CMR: 17/1/06, use g_adjust routine to extract g_wesson
+!                   from gnew, phinew and bparnew.
+!           nb  <delta_f> = g_wesson J0 - q phi/T F_m  where <> = gyroaverage
+!           ie  <delta_f>/F_m = g_wesson J0 - q phi/T
 
        ! TEMP FOR TESTING -- MAB
 !       gnew(:,:,iglo) = cos(2.*sqrt(e(ie,is)))
 !       gnew = 1.0
+! use g0 as dist_fn dimensioned working space for all moments
+! (avoid making more copies of gnew to save memory!)
 
        do isgn = 1, 2
           g0(:,isgn,iglo) = (aj0(:,iglo)**2-1.0)*anon(ie,is) &
@@ -3073,7 +3075,17 @@ contains
 
     call integrate_moment (g0, ntot)
 
+! set gnew = g_wesson, but return gnew to entry state prior to exit 
+    call g_adjust(gnew,phinew,bparnew,fphi,faperp)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! integrate moments over the nonadiabatic part of <delta_f>
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! set g0= J0 g_wesson = nonadiabatic piece of <delta_f>/F_m 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ie = ie_idx(g_lo,iglo) ; is = is_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig=-ntgrid, ntgrid
 !             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
@@ -3082,21 +3094,22 @@ contains
        end do
     end do
 
-! guiding center density
-    call integrate_moment (gnew, density)
+! CMR: density is the nonadiabatic piece of perturbed density
+    call integrate_moment (g0, density)
 
-! guiding center upar
-    g0 = vpa*gnew
-
+! DJA/CMR: upar and tpar moments 
+! (nb adiabatic part of <delta f> does not contribute to upar, tpar or tperp)
+    g0 = vpa*g0
     call integrate_moment (g0, upar)
 
-! guiding center tpar
+! CMR: why the factor 2 in 2.*vpa*g0? 
     g0 = 2.*vpa*g0
-
     call integrate_moment (g0, tpar)
+! tpar transiently stores ppar, nonadiabatic perturbed par pressure 
+!                         ppar = tpar + density, and so:
     tpar = tpar - density
 
-! guiding center tperp
+! CMR: tperp....       why no factor of 2 as in tpar?
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
@@ -3105,9 +3118,28 @@ contains
           end do
        end do
     end do
-
     call integrate_moment (g0, tperp)
+! tperp transiently stores pperp, nonadiabatic perturbed perp pressure
+!                          pperp = tperp + density, and so:
     tperp = tperp - density
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! now include the adiabatic part of <delta f>
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! set g0 = <delta_f>/F_m, including the adiabatic term
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ie = ie_idx(g_lo,iglo) ; is = is_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) - anon(ie,is)*phinew(ig,it,ik)*spec(is)%zt
+          end do
+       end do
+    end do
+
+! total perturbed density
+    call integrate_moment (g0, ntot)
 
     do is=1,nspec
        ntot(:,:,:,is)=ntot(:,:,:,is)*spec(is)%dens
@@ -3116,6 +3148,9 @@ contains
        tpar(:,:,:,is)=tpar(:,:,:,is)*spec(is)%temp
        tperp(:,:,:,is)=tperp(:,:,:,is)*spec(is)%temp
     end do
+
+! return gnew to its initial state, the variable evolved in GS2
+    call g_adjust(gnew,phinew,bparnew,-fphi,-faperp)
 
     call prof_leaving ("getmoms", "dist_fn")
   end subroutine getmoms
@@ -3551,6 +3586,7 @@ contains
 ! replaced by bessel function implementation of RN and TT (in utils/spfunc.fpp)
 !  elemental function j0 (x)
 !! A&S, p. 369, 9.4
+!! CMR: 17/1/06, correct b(2) (typo?)
 !    implicit none
 !    real, intent (in) :: x
 !    real :: j0
@@ -3558,7 +3594,7 @@ contains
 !         (/ 1.0000000, -2.2499997, 1.2656208, -0.3163866, &
 !            0.0444479, -0.0039444, 0.0002100 /)
 !    real, parameter, dimension (7) :: b = &
-!         (/  0.79788456, -0.00000770, -0.00552740, -0.00009512, &
+!         (/  0.79788456, -0.00000077, -0.00552740, -0.00009512, &
 !             0.00137237, -0.00072805,  0.00014476 /)
 !    real, parameter, dimension (7) :: c = &
 !         (/ -0.78539816, -0.04166397, -0.00003954,  0.00262573, &
@@ -3578,15 +3614,18 @@ contains
 !
 !  elemental function j1 (x)
 !! A&S, p. 370, 9.4 j1 = 1/x J_1(x)
+!! CMR: 17/1/06, correct the sign of b(7), (typo?)
+!! CMR: 17/1/06, NB this function returns j1 = J_1(x)/x and NOT J_1(x) 
 !    implicit none
 !    real, intent (in) :: x
 !    real :: j1
 !    real, parameter, dimension (7) :: a = &
 !         (/  0.50000000, -0.56249985,  0.21093573, -0.03954289, &
 !             0.00443319, -0.00031761,  0.00001109 /)
+!!CMR, 17/1/06:  corrected b elements: previously b(7) had wrong sign
 !    real, parameter, dimension (7) :: b = &
 !         (/  0.79788456,  0.00000156,  0.01659667,  0.00017105, &
-!            -0.00249511,  0.00113653,  0.00020033 /)
+!            -0.00249511,  0.00113653, -0.00020033 /)
 !    real, parameter, dimension (7) :: c = &
 !         (/ -2.35619449,  0.12499612,  0.00005650,  -0.00637879, &
 !             0.00074348,  0.00079824, -0.00029166 /)
