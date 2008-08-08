@@ -12,7 +12,8 @@ contains
 
   subroutine read_gs2d(filename)
     implicit none
-    character(len=40), intent(in) :: filename
+!CMR, 2/3/2006: lengthen the string filename to 80
+    character(len=80), intent(in) :: filename
     character(len=80) :: line
     integer :: i
     open(1,file=trim(filename),status='unknown')
