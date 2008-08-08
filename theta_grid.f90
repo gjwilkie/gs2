@@ -386,7 +386,7 @@ contains
 !
        if (model_switch == model_nocurve) then
 !dja fix for no curvature
-          gbdrift0 = 0.0
+          gbdrift = 0.0
 !dja end
           gds2 = 1.0 + (shat*theta)**2
           gds21 = -shat*shat*theta
@@ -439,18 +439,34 @@ contains
     use geometry, only: init_theta
     use geometry, only: eikcoefs, itor, delrho, rhoc
     use theta_grid_params, only: init_theta_grid_params, ntheta
+!CMR, 21/6/06:
+!CMR add use statements to avoid inappropriate calls to init_theta
+    use geometry, only: ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, local_eq, dfit_eq, gs2d_eq
+    use geometry, only: equal_arc, transp_eq
+!CMRend
     implicit none
     real :: rhoc_save
     logical, save :: initialized = .false.
+!CMR nov04: adding following debug switch
+    logical :: debug=.false.
+!CMR
 
 
     if (initialized) return
     initialized = .true.
-
+if (debug) write(6,*) "init_theta_grid_eik: call init_theta_grid_params, ntheta=",ntheta
     call init_theta_grid_params
 
+if (debug) write(6,*) "init_theta_grid_eik: call read_parameters, ntheta=",ntheta
     call read_parameters
-    call init_theta (ntheta)
+!CMR replace call init_theta(ntheta) with following condition 
+!    to avoid inappropriate calls to init_theta (as in geo/et.f90)
+    if((.not. vmom_eq) .and. (.not. gen_eq) &
+       .and. (.not. transp_eq) .and. (.not. ppl_eq)) then 
+       if (debug) write(6,*) "init_theta_grid_eik: call init_theta, ntheta=",ntheta
+       call init_theta (ntheta)
+    endif
+!CMRend
     rhoc_save = rhoc
     if (itor == 0) rhoc = 1.5*delrho
 !    print *, 'itor= ',itor, ' rhoc= ',rhoc, 'rhoc_save = ',rhoc_save

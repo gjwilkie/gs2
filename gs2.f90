@@ -64,7 +64,7 @@ if (debug) write(6,*) "gs2: call init_fields"
   call init_fields
 if (debug) write(6,*) "gs2: call init_diagnostics"
   call init_gs2_diagnostics (list, nstep)
-if (debug) write(6,*) "gs2: call init_time"
+if (debug) write(6,*) "gs2: call init_tstart"
   call init_tstart (tstart)   ! tstart is in user units 
   if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
   istep_end = nstep
