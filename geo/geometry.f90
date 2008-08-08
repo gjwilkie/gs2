@@ -256,15 +256,16 @@ if (debug) write(6,*) "eikcoefs: iflux=",iflux
           else if(gen_eq) then
              call eqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
              call tdef(nthg)
-          else if(ppl_eq) then
-             call peqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-             call tdef(nthg)
+!CMR+SSAAR: moved following if clause ahead of ppl_eq to avoid ball problems 
           else if(transp_eq) then
-if (debug) write(6,*) 'eikcoefs: transp_eq=',transp_eq
+if (debug) write(6,*) 'eikcoefs: transp_eq, eqfile=',eqfile
              ppl_eq = .true.
-             write (6,*) 'eqfile = ',eqfile
              call teqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
 if (debug) write(6,*) 'eikcoefs: called teqin'
+             call tdef(nthg)
+!CMRend
+          else if(ppl_eq) then
+             call peqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
              call tdef(nthg)
           else if(efit_eq) then
              if(big <= 0) big = 8
