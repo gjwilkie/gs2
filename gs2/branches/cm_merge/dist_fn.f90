@@ -447,6 +447,9 @@ contains
     integer :: ig, ik, it, il, ie, is
     integer :: iglo, ierr
     logical :: alloc = .true.
+!CMR
+    logical :: debug = .false.
+!CMR
 
 ! find totally trapped particles 
     if (alloc) allocate (ittp(-ntgrid:ntgrid))
@@ -522,6 +525,8 @@ contains
     end do
 
     alloc = .false.
+!CMR
+    if (debug) write(6,*) 'init_wdrift: driftknob=',driftknob
 
   end subroutine init_wdrift
 

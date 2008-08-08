@@ -258,11 +258,13 @@ if (debug) write(6,*) "eikcoefs: iflux=",iflux
              call tdef(nthg)
 !CMR+SSAAR: moved following if clause ahead of ppl_eq to avoid ball problems 
           else if(transp_eq) then
-if (debug) write(6,*) 'eikcoefs: transp_eq, eqfile=',eqfile
+if (debug) write(6,fmt='("eikcoefs: transp_eq, eqfile=",a)') eqfile
              ppl_eq = .true.
              call teqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-if (debug) write(6,*) 'eikcoefs: called teqin'
+if (debug) write(6,*) 'eikcoefs: transp_eq, called teqin'
+if (debug) write(6,fmt='("eikcoefs: teqin returns",1p5e10.2,i6,l,i6)') psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg
              call tdef(nthg)
+if (debug) write(6,*) 'eikcoefs: transp_eq, called tdef'
 !CMRend
           else if(ppl_eq) then
              call peqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
@@ -285,8 +287,11 @@ if (debug) write(6,*) "eikcoefs: done gs2din"
              call idfitin(eqfile, theta, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit) 
              call tdef(nthg)
           endif
+if (debug) write(6,*) 'eikcoefs: iflux=',iflux
           if(iflux == 10) return
+if (debug) write(6,*) 'eikcoefs: alloc_module_arrays, ntgrid=',ntgrid
           if(.not.allocated(gds22)) call alloc_module_arrays(ntgrid)
+if (debug) write(6,*) 'eikcoefs: alloc_local_arrays'
           call alloc_local_arrays(ntgrid)
        case (2) 
           continue
@@ -490,6 +495,16 @@ if (debug) write(6,*) "eikcoefs: call thetagrad"
 
        if(iflux == 0 .or. iflux == 2) trip = trip * dpsidrp
 
+!CMR, June06
+if (debug) write(6,*) rpgrad(-nth:nth,1)
+if (debug) write(6,*) rpgrad(-nth:nth,2)
+if (debug) write(6,*) thgrad(-nth:nth,1)
+if (debug) write(6,*) thgrad(-nth:nth,2)
+if (debug) write(6,*) 1.0d0/trip(-nth:nth)
+if (debug) write(6,*) Rpol(-nth:nth)/-bpolmag(-nth:nth)
+!CMRend
+
+
        da_bish = da_bish/trip
        db_bish = db_bish/trip
        dc_bish = dc_bish/trip
@@ -519,6 +534,10 @@ if (debug) write(6,*) "eikcoefs: call thetagrad"
        if (abs(qval) > epsilon(0.)) then
           tmp = rho/qval/(2.*pi)/drhodpsi
           s_hat = tmp*(a_b*di+ b_b*dp + c_b*2)
+!CMR, June06
+          if (debug) write(6,*) "a_b (f'), b_b (p'), c_b terms =", a_b*di, b_b*dp, c_b*2
+          if (debug) write(6,*) 'qval, rho, drhodpsi, s_hat =', qval, rho, drhodpsi, s_hat 
+!CMRend
        else
           tmp = 1.
           s_hat = 0.
@@ -2527,6 +2546,9 @@ end subroutine geofax
     
     real :: pi
     integer :: nthg, nthsave, i
+!cmr Jun06: adding following debug switch
+    logical :: debug=.false.
+!cmr
 !    logical :: first = .true.
     
 !    if(.not.first) return
@@ -2536,6 +2558,7 @@ end subroutine geofax
     
     nthsave=nth
     nth=nthg-1
+    if (debug) write(6,*) "tdef: nthg,nth=",nthg,nth
 !    write(*,*) 'old nth: ',nthsave,' new nth: ',nth
     ntheta=2*nth
     ntgrid=(2*nperiod-1)*nth
@@ -2544,7 +2567,10 @@ end subroutine geofax
     !     note that the gen_eq theta grid has theta(1)=0.
     !     problems avoided by mtheta grid in eqitem.  
     
+    if (debug) write(6,*) "tdef: allocated(theta)=",allocated(theta)
+    if (debug .and. allocated(theta)) write(6,*) "tdef: size(theta)=",size(theta)
     if(.not.allocated(theta)) allocate(theta(-ntgrid:ntgrid))
+    if (debug) write(6,*) "tdef: ntgrid=",ntgrid
     theta(0)=0.
     do i=1,nth
        theta(i)=i*pi/float(nth)
@@ -2573,7 +2599,11 @@ end subroutine geofax
   subroutine alloc_module_arrays(n)
 
     integer n
-
+!cmr Jun06: adding following debug switch
+    logical :: debug=.false.
+!cmr
+    if (debug) write(6,*) "alloc_module_arrays: n=",n
+!CMR
     allocate(grho   (-n:n), &
          bmag       (-n:n), &
          gradpar    (-n:n), &
@@ -2593,7 +2623,7 @@ end subroutine geofax
          aprime     (-n:n), &
          Uk1        (-n:n), &
          Uk2        (-n:n))
-
+    if (debug) write(6,*) "alloc_module_arrays: done"
   end subroutine alloc_module_arrays
 
   subroutine init_theta(nt)
@@ -2601,11 +2631,15 @@ end subroutine geofax
     integer, intent(in) :: nt
     integer i
     real :: pi
+!cmr Jun06: adding following debug switch
+    logical :: debug=.false.
+!cmr
     
     pi = 2*acos(0.)
     ntheta=nt
     nth = nt / 2
     ntgrid = (2*nperiod - 1)*nth       
+    if (debug) write(6,*) "init_theta: allocated(theta),ntgrid=",allocated(theta),ntgrid
     if(.not.allocated(theta)) allocate(theta(-ntgrid:ntgrid))
 
     theta = (/ (i*pi/real(nth), i=-ntgrid, ntgrid ) /) 
