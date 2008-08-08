@@ -413,6 +413,7 @@ module kt_grids
 
   integer :: naky, ntheta0, nx, ny, nkpolar
   integer, dimension(:), allocatable :: ikx, iky
+  integer, dimension(:), allocatable :: ikx             ! MR
   real, dimension (:), allocatable :: aky, aky_out
   real, dimension (:,:), allocatable :: theta0
   real, dimension (:), allocatable :: akx, akx_out
@@ -471,6 +472,7 @@ contains
     call broadcast (nx)
     call allocate_arrays
     if (proc0) call get_grids
+    call broadcast (ikx)     ! MR
     call broadcast (aky)
     call broadcast (akx)
     call broadcast (ikx)

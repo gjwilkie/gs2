@@ -1259,7 +1259,7 @@ contains
 1000  format(20(1x,1pg18.11))
   end subroutine finish_gs2_diagnostics
 
-  subroutine loop_diagnostics (istep, exit)
+  subroutine loop_diagnostics (istep, exit, debopt)
     use species, only: nspec, spec
     use theta_grid, only: theta, ntgrid, delthet, jacob
     use theta_grid, only: gradpar, nperiod
@@ -1340,14 +1340,22 @@ contains
     real, dimension(nspec) :: tprim_tot, fprim_tot
     character(200) :: filename
     logical :: last = .false.
+    logical,optional:: debopt
+    logical:: debug=.false.
 
     complex, dimension (nspec) :: ntdiff, upadiff, upediff, ttdiff
+
+    if (present(debopt)) debug=debopt
 
     call prof_entering ("loop_diagnostics")
 
     exit = .false.
 
-    if (proc0) call get_omegaavg (istep, exit, omegaavg)
+    if (proc0) then
+if (debug) write(6,*) "loop_diagnostics: proc0 call get_omegaavg"
+       call get_omegaavg (istep, exit, omegaavg, debug)
+if (debug) write(6,*) "loop_diagnostics: proc0 done called get_omegaavg"
+    endif
     call broadcast (exit)
 
     if (write_hrate) call heating (istep, h, hk)
@@ -1369,6 +1377,7 @@ contains
 !<GGH
 
     call prof_leaving ("loop_diagnostics")
+if (debug) write(6,*) "loop_diagnostics: call update_time"
 
     call update_time
 
@@ -1456,6 +1465,7 @@ contains
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
 
     call prof_entering ("loop_diagnostics-1")
+if (debug) write(6,*) "loop_diagnostics: -1"
 
     if (proc0) then
        omega = omegahist(mod(istep,navg),:,:)
@@ -1747,6 +1757,7 @@ contains
 
     if (.not. (write_any .or. dump_any)) return
 
+if (debug) write(6,*) "loop_diagnostics: -2"
     call prof_entering ("loop_diagnostics-2")
 
     call kperp (ntg_out, akperp)
@@ -2182,6 +2193,7 @@ contains
 
     call prof_leaving ("loop_diagnostics-2")
 
+if (debug) write(6,*) "loop_diagnostics: done"
   end subroutine loop_diagnostics
 
   subroutine heating (istep, h, hk)
@@ -2310,7 +2322,7 @@ contains
 !=============================================================================
 !<GGH
 
-  subroutine get_omegaavg (istep, exit, omegaavg)
+  subroutine get_omegaavg (istep, exit, omegaavg, debug)
     use kt_grids, only: naky, ntheta0
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use gs2_time, only: code_dt
@@ -2319,9 +2331,12 @@ contains
     integer, intent (in) :: istep
     logical, intent (in out) :: exit
     complex, dimension (:,:), intent (out) :: omegaavg
-    complex, dimension (navg,ntheta0,naky) :: domega
+    complex, allocatable, dimension (:,:,:) :: domega
     integer :: j
-
+    logical, optional :: debug
+if (.not. allocated(domega)) allocate(domega(navg,ntheta0,naky))
+    if (.not. present(debug)) debug=.false.
+if (debug) write(6,*) "get_omeaavg: start"
     j = igomega
     where (abs(phinew(j,:,:)+aparnew(j,:,:)+bparnew(j,:,:)) < epsilon(0.0) &
            .or. abs(phi(j,:,:)+apar(j,:,:)+bpar(j,:,:)) < epsilon(0.0))
@@ -2333,6 +2348,7 @@ contains
     end where
 
     omegaavg = sum(omegahist/real(navg),dim=1)
+if (debug) write(6,*) "get_omegaavg: omegaavg=",omegaavg
 
     if (istep > navg) then
        domega = spread(omegaavg,1,navg) - omegahist
@@ -2348,6 +2364,7 @@ contains
           exit = .true.
        end if
     end if
+if (debug) write(6,*) "get_omegaavg: done"
   end subroutine get_omegaavg
 !================================================================================
 ! Set up corrections for polar energy spectrum

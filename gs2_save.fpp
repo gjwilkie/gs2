@@ -35,10 +35,12 @@ module gs2_save
 
 # ifdef NETCDF
   real, allocatable, dimension(:,:,:) :: tmpr, tmpi, ftmpr, ftmpi
+  real, allocatable, dimension(:) :: stmp  ! MR: tmp var for kx_shift
   real, allocatable, dimension(:) :: atmp
 !  integer, parameter :: kind_nf = kind (NF90_NOERR)
   integer (kind_nf) :: ncid, thetaid, signid, gloid, kyid, kxid, nk_stir_dim
   integer (kind_nf) :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
+  integer (kind_nf) :: kx_shift_id   ! MR: added to save kx_shift variable
   integer (kind_nf) :: t0id, gr_id, gi_id, vnm1id, vnm2id, delt0id
   integer (kind_nf) :: a_antr_id, b_antr_id, a_anti_id, b_anti_id
 !  integer (kind_nf) :: netcdf_real=0
@@ -51,10 +53,11 @@ contains
 
   subroutine gs2_save_for_restart &
        (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in)
-    
+!MR, 2007: save kx_shift array in restart file if allocated    
 # ifdef NETCDF
     use constants, only: kind_rs, kind_rd, pi
     use fields_arrays, only: phinew, aparnew, bparnew
+    use dist_fn_arrays, only: kx_shift  !MR
     use kt_grids, only: naky, ntheta0
     use antenna_data, only: nk_stir, a_ant, b_ant, ant_on
 # endif    
@@ -296,6 +299,16 @@ contains
              end if
           end if
        end if
+
+       if (allocated(kx_shift)) then   ! MR begin
+          istatus = nf90_def_var (ncid, "kx_shift", netcdf_real, &
+                  (/ kyid /), kx_shift_id)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_var kx_shift error: ", nf90_strerror(istatus)
+             goto 1
+          endif
+       endif   ! MR end 
        
        istatus = nf90_enddef (ncid)
        if (istatus /= NF90_NOERR) then
@@ -425,6 +438,13 @@ contains
        end if
     end if
 
+    if (allocated(kx_shift)) then ! MR begin
+       if (.not. allocated(stmp)) allocate (stmp(naky))   
+       stmp = kx_shift
+       istatus = nf90_put_var (ncid, kx_shift_id, stmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kx_shift_id)
+    endif ! MR end
+
     if (exit) then
        i = nf90_close (ncid)
     else
@@ -443,10 +463,12 @@ contains
   end subroutine gs2_save_for_restart
 
   subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, many)
+!MR, 2007: restore kx_shift array if already allocated
 # ifdef NETCDF
     use mp, only: proc0, iproc, nproc
     use fields_arrays, only: phinew, aparnew, bparnew
     use fields_arrays, only: phi, apar, bpar
+    use dist_fn_arrays, only: kx_shift   ! MR
     use kt_grids, only: naky, ntheta0
 # endif
     use theta_grid, only: ntgrid
@@ -562,6 +584,11 @@ contains
 # endif
        end if
 
+       if (allocated(kx_shift)) then   ! MR begin
+          istatus = nf90_inq_varid (ncid, "kx_shift", kx_shift_id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='kx_shift')
+       endif   ! MR end
+
        istatus = nf90_inq_varid (ncid, "gr", gr_id)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='gr')
        
@@ -585,6 +612,13 @@ contains
 
     if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
     if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))
+
+    if (allocated(kx_shift)) then   ! MR begin
+       if (.not. allocated(stmp)) allocate (stmp(naky))   ! MR 
+       istatus = nf90_get_var (ncid, kx_shift_id, stmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kx_shift_id)
+       kx_shift = stmp
+    endif   ! MR end
 
     if (fphi > epsilon(0.)) then
        istatus = nf90_get_var (ncid, phir_id, ftmpr)
@@ -651,10 +685,12 @@ contains
 ! RN 2008/05/23:
 !  This can be removed. restore_many seems to work for single proc.
   subroutine gs2_restore_one (g, scale, istatus, fphi, fapar, fbpar)
+!MR, 2007: restore kx_shift array if allocated
 # ifdef NETCDF
     use mp, only: proc0, iproc, nproc
     use fields_arrays, only: phinew, aparnew, bparnew
     use fields_arrays, only: phi, apar, bpar
+    use dist_fn_arrays, only: kx_shift   ! MR
     use kt_grids, only: naky, ntheta0
 # endif
     use theta_grid, only: ntgrid
@@ -739,6 +775,11 @@ contains
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='bpar_i')
     end if
 
+    if (allocated(kx_shift)) then   ! MR begin
+       istatus = nf90_inq_varid (ncid, "kx_shift", kx_shift_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='kx_shift')
+    endif   ! MR end
+
     istatus = nf90_inq_varid (ncid, "gr", gr_id)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='gr')
 
@@ -772,6 +813,14 @@ contains
 
     if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
     if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))
+
+    if (allocated(kx_shift)) then   ! MR begin
+       if (.not. allocated(stmp)) allocate (stmp(naky))   ! MR
+       istatus = nf90_get_var (ncid, kx_shift_id, stmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kx_shift_id)
+       kx_shift = stmp
+    endif   ! MR end
+
 
     if (fphi > epsilon(0.)) then
        istatus = nf90_get_var (ncid, phir_id, ftmpr)
