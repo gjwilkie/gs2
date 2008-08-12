@@ -202,7 +202,6 @@ contains
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
     use dist_fn, only: timeadv, exb_shear
-    use dist_fn, only: exb_shear   ! MR
     use dist_fn_arrays, only: g, gnew, kx_shift
     use nonlinear_terms, only: algorithm !, nonlin
     implicit none
@@ -210,11 +209,11 @@ contains
 !    integer :: nphi = 0
     integer, intent (in) :: istep
 
+
     if (algorithm == 1) then
 
        !GGH NOTE: apar_ext is initialized in this call
        call antenna_amplitudes (apar_ext)
-       call exb_shear (gnew, phinew, aparnew, bparnew)
        
        if (allocated(kx_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
 

@@ -70,14 +70,18 @@ if (debug) write(6,*) "gs2: call init_tstart"
   istep_end = nstep
 if (debug) write(6,*) "gs2: start istep loop"
   do istep = 1, nstep
+if (debug) write(6,*) "gs2: istep =",istep
 
      call advance (istep)
      if (nsave > 0 .and. mod(istep, nsave) == 0) &
           call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
 
+if (debug) write(6,*) "gs2: loop_diagnostics"
      call loop_diagnostics (istep, exit)
+if (debug) write(6,*) "gs2: check_time_step"
      call check_time_step (istep, reset, exit)
      if (proc0) call time_message(.false.,.true.,time_advance,' Advance time step')
+if (debug) write(6,*) "gs2: reset_time_step"
      if (reset) call reset_time_step (istep, exit)
 
      if (mod(istep,5) == 0) call checkstop(exit)
