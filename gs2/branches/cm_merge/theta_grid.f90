@@ -1033,7 +1033,7 @@ contains
 
     theta2 = theta*theta
     delthet(:ntgrid-1) = theta(-ntgrid+1:) - theta(:ntgrid-1)
-    delthet(ntgrid) = delthet(-ntgrid)
+    delthet(ntgrid) = 0.!delthet(-ntgrid)
     delthet2 = delthet*delthet
 
     jacob = 1.0/(drhodpsi*gradpar*bmag)
