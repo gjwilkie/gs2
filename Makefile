@@ -125,6 +125,7 @@ HDF5_LIB =
 IPM_LIB =
 NAG_LIB =
 NAG_PREC ?= dble
+PGPLOT_LIB =
 
 ################################################### SET COMPILE MODE SWITCHES
 
@@ -230,9 +231,15 @@ $(warning Precision mismatch with NAG libarray)
 		CPPFLAGS += -DNAG_PREC=_NAGSNGL_
 	endif
 endif
+ifndef PGPLOT_LIB
+	ifeq ($(MAKECMDGOALS),agk_fields_plot)
+$(error PGPLOT_LIB is not defined)
+	endif
+endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
 		$(IPM_LIB) $(NAG_LIB)
+PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
 	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
 CFLAGS += $(COPTFLAGS)
@@ -289,12 +296,14 @@ DEFAULT_LIB=$(foreach tmplib,$(DEFAULT_LIB_LIST),$(shell [ -d $(tmplib) ] && ech
 
 ##################################################################### TARGETS
 
-.DEFAULT_GOAL = $(PROJECT)_all
+# .DEFAULT_GOAL works for GNU make 3.81 (or higher)
+# For 3.80 or less, see all target
+.DEFAULT_GOAL := $(PROJECT)_all
 ifeq ($(notdir $(CURDIR)),utils)
-	.DEFAULT_GOAL = utils_all
+	.DEFAULT_GOAL := utils_all
 endif
 ifeq ($(notdir $(CURDIR)),geo)
-	.DEFAULT_GOAL = geo_all
+	.DEFAULT_GOAL := geo_all
 endif
 
 .PHONY: all gs2_all agk_all
@@ -336,6 +345,9 @@ regress: $(drive_mod)
 
 slice_g: $(slice_g_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+agk_fields_plot: $(agk_fields_plot_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(PLIBS)
 
 .PHONY: modules utils_all geo_all
 
@@ -413,6 +425,7 @@ distclean: unlink clean
 	-rm -f ingen rungridgen regress
 	-rm -f ball eiktest
 	-rm -f slice_g
+	-rm -f agk_fields_plot
 
 tar:
 	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
@@ -422,7 +435,7 @@ tar:
 # expand wildcards listed $(TARLIST_wild) in ( $(TARLIST_dir) + . )
 # directories and add them into TARLIST
 tar_exec: TARLIST = test_os makehead.awk fortdep AstroGK.in
-tar_exec: TARLIST_dir = Makefiles utils geo
+tar_exec: TARLIST_dir = Makefiles utils geo Aux
 tar_exec: TARLIST_wild = *.f90 *.fpp *.inc *.c Makefile Makefile.* README README.*
 tar_exec: TARLIST += $(foreach dir,. $(TARLIST_dir),$(wildcard $(addprefix $(dir)/,$(TARLIST_wild))))
 
@@ -476,6 +489,7 @@ test_make:
 	@echo CPP is $(CPP)
 	@echo CPPFLAGS is $(CPPFLAGS)
 	@echo LIBS is $(LIBS)
+	@echo PLIBS is $(PLIBS)
 
 unlink:
 	@for name in `find . -name "*.fpp"` ;\
