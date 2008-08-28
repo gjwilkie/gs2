@@ -2064,9 +2064,9 @@ contains
           
           if (test_conserve) then
              if (nspec == 1) then
-                write (out_unit, *) 'moms', real(ntot00(1,1)), aimag(upar00(1,1)), real(tperp00(1,1)), real(tpar00(1,1))
+                write (out_unit, *) 'moms', t, real(ntot00(1,1)), aimag(upar00(1,1)), real(tperp00(1,1)), real(tpar00(1,1))
              else
-                write (out_unit, *) 'moms', real(ntot00(1,1)), real(ntot00(1,2)), aimag(upar00(1,1)), aimag(upar00(1,2)), &
+                write (out_unit, *) 'moms', t, real(ntot00(1,1)), real(ntot00(1,2)), aimag(upar00(1,1)), aimag(upar00(1,2)), &
                      real(tperp00(1,1)), real(tperp00(1,2)), real(tpar00(1,1)), real(tpar00(1,2))
              end if
           end if
