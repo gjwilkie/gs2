@@ -387,19 +387,25 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-! du == int (E nu_s f_0);  du = du(z, kx, ky, s)
-! duinv = 1/du
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
-          gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*e(ie,is)
+    ! du == int (E nu_s f_0);  du = du(z, kx, ky, s)
+    ! duinv = 1/du
+    if (conservative) then
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          ik = ik_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          do isgn = 1, 2
+             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*e(ie,is)
+          end do
        end do
-    end do
-
-    all = 1
-    call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
+       
+       all = 1
+       call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
+    else
+       do is = 1, nspec
+          duinv(:,:,:,is) = vnmult(1)*spec(is)%vnewk*sqrt(2./pi)
+       end do
+    end if
 
     where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
                                         ! duinv=0 iff vnew=0 so ok to keep duinv=0.
@@ -634,18 +640,24 @@ contains
     vns(:,:,:,2) = vnmult(2)*vnew_s
 
     ! first obtain 1/du
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
-          gtmp(:,isgn,iglo) = e(ie,is)*vnmult(2)*vnew_E(ik,ie,is)
+    if (conservative) then
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          ik = ik_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          do isgn = 1, 2
+             gtmp(:,isgn,iglo) = e(ie,is)*vnmult(2)*vnew_E(ik,ie,is)
+          end do
        end do
-    end do
-    
-    all = 1
-    call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
-    
+       
+       all = 1
+       call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
+    else
+       do is = 1, nspec
+          duinv(:,:,:,is) = vnmult(2)*spec(is)%vnewk*sqrt(2./pi)
+       end do
+    end if
+
     where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
                                         ! duinv=0 iff vnew=0 so ok to keep duinv=0.
        duinv = 1./duinv  ! now it is 1/du
@@ -699,20 +711,26 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-! redefine dq = du (for momentum-conserving terms)
-! du == int (E nu_s f_0);  du = du(z, kx, ky, s)
-! duinv = 1/du
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
-          gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*e(ie,is)
+    ! redefine dq = du (for momentum-conserving terms)
+    ! du == int (E nu_s f_0);  du = du(z, kx, ky, s)
+    ! duinv = 1/du
+    if (conservative) then
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          ik = ik_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          do isgn = 1, 2
+             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*e(ie,is)
+          end do
        end do
-    end do
-
-    all = 1
-    call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
+       
+       all = 1
+       call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
+    else
+       do is = 1, nspec
+          duinv(:,:,:,is) = vnmult(2)*spec(is)%vnewk*sqrt(2./pi)
+       end do
+    end if
 
     where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
                                         ! duinv=0 iff vnew=0 so ok to keep duinv=0.
@@ -2835,7 +2853,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use le_grids, only: e, integrate_moment
     use species, only: nspec, spec, electron_species
-    use dist_fn_arrays, only: c_rate, vpac, kperp2
+    use dist_fn_arrays, only: c_rate, vpa, kperp2
     use constants
 
     implicit none
@@ -2874,6 +2892,9 @@ contains
     select case (collision_model_switch)
     case (collision_model_full)
 
+       call solfp_ediffuse (g)
+       if (conserve_moments) call conserve_diffuse (g, g1)
+
        if (resistivity .and. beta > epsilon(0.0)) then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              is = is_idx(g_lo,iglo)
@@ -2882,8 +2903,9 @@ contains
              ik = ik_idx(g_lo,iglo)
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
-                g(ig,:,iglo) = g(ig,:,iglo) - vpac(ig,:,iglo)*vnew_D(ik,ie,is)*kperp2(ig,it,ik)*aparnew(ig,it,ik) &
-                     / (beta*spec(is)%z*spec(is)%stm)
+                g(ig,:,iglo) = g(ig,:,iglo) - vnmult(1)*spec(is)%vnewk*code_dt &
+                     * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik) &
+                     / (beta*spec(is)%stm*e(ie,is)**1.5)
              end do
           end do
        end if
@@ -2895,9 +2917,6 @@ contains
        end if
        if (conserve_moments) call conserve_lorentz (g, g1)
 
-       call solfp_ediffuse (g)
-       if (conserve_moments) call conserve_diffuse (g, g1)
-
     case (collision_model_lorentz,collision_model_lorentz_test)
 
        if (resistivity .and. beta > epsilon(0.0)) then
@@ -2908,8 +2927,9 @@ contains
              ik = ik_idx(g_lo,iglo)
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
-                g(ig,:,iglo) = g(ig,:,iglo) - vpac(ig,:,iglo)*vnew_D(ik,ie,is)*kperp2(ig,it,ik)*aparnew(ig,it,ik) &
-                     / (beta*spec(is)%z*spec(is)%stm)
+                g(ig,:,iglo) = g(ig,:,iglo) - vnmult(1)*spec(is)%vnewk*code_dt &
+                     * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik) &
+                     / (beta*spec(is)%stm*e(ie,is)**1.5)
              end do
           end do
        end if

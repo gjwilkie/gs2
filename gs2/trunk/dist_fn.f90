@@ -16,6 +16,7 @@ module dist_fn
   public :: get_dens_vel, get_jext !GGH
   public :: get_verr, get_gtran, write_fyx, collision_error
   public :: neoflux
+  public :: get_init_field
 
   private
 
@@ -3128,6 +3129,7 @@ contains
     use le_grids, only: integrate_moment, anon, e, al
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
+    use constants, only: pi => dpi
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, &
@@ -3195,6 +3197,19 @@ contains
           end do
        end do
     end do
+
+    ! TEMP FOR TESTING -- MAB
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig=-ntgrid, ntgrid
+             g0(ig,isgn,iglo) = 0.75*sqrt(pi)*aj0(ig,iglo)*vpa(ig,isgn,iglo)*gnew(ig,isgn,iglo) &
+                  / e(ie,is)**1.5
+          end do
+       end do
+    end do
+    ! END TEMP FOR TESTING
 
     call integrate_moment (g0, uperp)
 
@@ -3687,7 +3702,71 @@ contains
     end if
 
   end subroutine e_flux
-      
+
+! MAB> ported from agk
+! TT> Given initial distribution function this obtains consistent fields
+  subroutine get_init_field (phi, apar, bpar)
+    ! inverts the field equations:
+    !   gamtot * phi - gamtot1 * bpar = antot
+    !   kperp2 * apar = antota
+    !   beta/2 * gamtot1 * phi + (beta * gamtot2 + 1) * bpar = - beta * antotp
+    ! I haven't made any check for use_Bpar=T case.
+    use run_parameters, only: beta, fphi, fapar, fbpar
+    use theta_grid, only: ntgrid
+    use kt_grids, only: ntheta0, naky
+    use species, only: nspec
+    use dist_fn_arrays, only: aj0, vpa, kperp2
+
+    complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
+    real, dimension (nspec) :: wgt
+    real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: denominator
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: antot, antota, antotp
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: numerator
+
+    antot=0.0 ; antota=0.0 ; antotp=0.0
+    call getan (antot, antota, antotp)
+
+    ! get phi
+    if (fphi > epsilon(0.0)) then
+       numerator = (beta * gamtot2 + 1.0) * antot &
+            & - (beta * gamtot1) * antotp
+       denominator = (beta * gamtot2 + 1.0) * gamtot &
+            & + (beta/2.0) * gamtot1 * gamtot1
+       where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
+          phi = 0.0
+       elsewhere
+          phi = numerator / denominator
+       end where
+    end if
+
+    ! get apar
+    if (fapar > epsilon(0.0)) then
+       denominator = kperp2
+       where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
+          apar = 0.0
+       elsewhere
+          apar = antota / denominator
+       end where
+    end if
+
+    ! get bpar
+    if (fbpar > epsilon(0.0)) then
+       numerator = - (beta * gamtot) * antotp &
+            & - (beta/2.0) * gamtot1 * antot
+       ! following line is actually same with the denom for phi
+       denominator = gamtot * (beta * gamtot2 + 1.0) &
+            & + (beta/2.0) * gamtot1 * gamtot1
+       where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
+          bpar = 0.0
+       elsewhere
+          bpar = numerator / denominator
+       end where
+    end if
+
+  end subroutine get_init_field
+! <TT
+! <MAB     
+ 
 !  subroutine flux (phi, apar, bpar, &
 !       pflux, qflux, qflux_par, qflux_perp, vflux, &
 !       pmflux, qmflux, qmflux_par, qmflux_perp, vmflux, &
