@@ -7,6 +7,7 @@ module init_g
   public :: tstart
   public :: reset_init
   public :: init_vnmult
+  public :: new_field_init
   private
 
   ! knobs
@@ -25,7 +26,7 @@ module init_g
   real :: den1, upar1, tpar1, tperp1
   real :: den2, upar2, tpar2, tperp2
   real :: tstart, scale, apar0
-  logical :: chop_side, left, even
+  logical :: chop_side, left, even, new_field_init
   character(300) :: restart_file
   integer, dimension(2) :: ikk, itt
   
@@ -74,6 +75,7 @@ contains
     call broadcast (ikk)
     call broadcast (itt) 
     call broadcast (scale)
+    call broadcast (new_field_init)
 
     call init_save (restart_file)
 
@@ -222,7 +224,8 @@ contains
          restart_file, left, ikk, itt, scale, tstart, zf_init, &
          den0, upar0, tpar0, tperp0, imfac, refac, even, &
          den1, upar1, tpar1, tperp1, &
-         den2, upar2, tpar2, tperp2, dphiinit, apar0
+         den2, upar2, tpar2, tperp2, dphiinit, apar0, &
+         new_field_init
 
     integer :: ierr, in_file
     logical :: exist
@@ -253,6 +256,7 @@ contains
     chop_side = .true.
     left = .true.
     even = .true.
+    new_field_init = .true.
     ikk(1) = 1
     ikk(2) = 2
     itt(1) = 1
