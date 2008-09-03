@@ -352,10 +352,16 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u0 = -2 nu_D^{ei} vpa J0 dt f0
-          z0(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpa(:,isgn,iglo)*aj0(:,iglo)
+          if (conservative) then
+             z0(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpdiff(:,isgn,il) &
+                  * sqrt(e(ie,is))*aj0(:,iglo)
+          else
+             z0(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpa(:,isgn,iglo)*aj0(:,iglo)
+          end if
        end do
     end do
 
@@ -2853,7 +2859,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use le_grids, only: e, integrate_moment
     use species, only: nspec, spec, electron_species
-    use dist_fn_arrays, only: c_rate, vpa, kperp2
+    use dist_fn_arrays, only: c_rate, vpa, kperp2, aj0
     use constants
 
     implicit none
@@ -2892,9 +2898,6 @@ contains
     select case (collision_model_switch)
     case (collision_model_full)
 
-       call solfp_ediffuse (g)
-       if (conserve_moments) call conserve_diffuse (g, g1)
-
        if (resistivity .and. beta > epsilon(0.0)) then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              is = is_idx(g_lo,iglo)
@@ -2903,8 +2906,8 @@ contains
              ik = ik_idx(g_lo,iglo)
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
-                g(ig,:,iglo) = g(ig,:,iglo) - vnmult(1)*spec(is)%vnewk*code_dt &
-                     * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik) &
+                g(ig,:,iglo) = g(ig,:,iglo) + vnmult(1)*spec(is)%vnewk*code_dt &
+                     * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
                      / (beta*spec(is)%stm*e(ie,is)**1.5)
              end do
           end do
@@ -2916,6 +2919,9 @@ contains
           call solfp_lorentz (g, gc1, gc2)
        end if
        if (conserve_moments) call conserve_lorentz (g, g1)
+       
+       call solfp_ediffuse (g)
+       if (conserve_moments) call conserve_diffuse (g, g1)
 
     case (collision_model_lorentz,collision_model_lorentz_test)
 
@@ -2927,8 +2933,8 @@ contains
              ik = ik_idx(g_lo,iglo)
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
-                g(ig,:,iglo) = g(ig,:,iglo) - vnmult(1)*spec(is)%vnewk*code_dt &
-                     * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik) &
+                g(ig,:,iglo) = g(ig,:,iglo) + vnmult(1)*spec(is)%vnewk*code_dt &
+                     * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
                      / (beta*spec(is)%stm*e(ie,is)**1.5)
              end do
           end do
