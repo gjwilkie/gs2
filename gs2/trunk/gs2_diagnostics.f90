@@ -1282,7 +1282,7 @@ contains
     use gs2_io, only: nc_loop_movie
     use gs2_layouts, only: yxf_lo
     use gs2_transforms, only: init_transforms, transform2
-    use le_grids, only: nlambda
+    use le_grids, only: nlambda, ng2
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
     use gs2_flux, only: check_flux
@@ -1425,6 +1425,7 @@ contains
 
 ! error estimate based on monitoring amplitudes of legendre polynomial coefficients
        call get_gtran (geavg, glavg, gtavg, phinew, bparnew, istep)
+
        if (proc0) then
 
 ! write error estimates to .nc file          
@@ -1433,7 +1434,11 @@ contains
 ! write error estimates for ion dist. fn. at outboard midplane with ik=it=1 to ascii files
           if (write_ascii) then
              t = user_time
-             write(lpc_unit,"(4(1x,e12.6))") t, geavg, glavg, gtavg
+             if (nlambda - ng2 > 1) then
+                write(lpc_unit,"(4(1x,e12.6))") t, geavg, glavg, gtavg
+             else
+                write(lpc_unit,"(3(1x,e12.6))") t, geavg, glavg
+             end if
              write(res_unit,"(8(1x,e12.6))") t, errest(1,2), errest(2,2), errest(3,2), &
                   errest(4,2), errest(5,2), vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
              if (write_max_verr) then
@@ -1492,7 +1497,7 @@ contains
                 qheat(:,:,is,1) = qheat(:,:,is,1)*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qheat(:,:,is,1), heat_fluxes(is))
-                
+
                 qheat(:,:,is,2) = qheat(:,:,is,2)*funits &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qheat(:,:,is,2), heat_par(is))
