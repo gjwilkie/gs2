@@ -334,7 +334,8 @@ contains
     
     vns(:,:,:,1) = vnmult(1)*vnew_D
     vns(:,:,:,2) = vnmult(1)*vnew_s
-    
+    vns(:,:,:,3) = 0.0
+
     if (resistivity) then
        do is = 1, nspec
           if (spec(is)%type /= electron_species) cycle
@@ -342,8 +343,6 @@ contains
              vns(ik,:,is,3) = vnmult(1)*spec(is)%vnewk*tunits(ik)/e(:,is)**1.5
           end do
        end do
-    else
-       vns(:,:,:,3) = 0.0
     end if
     
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -364,7 +363,7 @@ contains
           end if
        end do
     end do
-
+    
     call solfp_lorentz (z0,dum1,dum2)   ! z0 is redefined below
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -399,12 +398,15 @@ contains
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
           ie = ie_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
-             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*e(ie,is)
+             gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
+                  * vpdiff(:,isgn,il)*sqrt(e(ie,is))
+!             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*e(ie,is)
           end do
        end do
-       
+
        all = 1
        call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
     else
@@ -425,11 +427,17 @@ contains
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u1 = -3 nu_s vpa dt J0 f_0 / du
-          s0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
-               * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
+          if (conservative) then
+             s0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpdiff(:,isgn,il)*sqrt(e(ie,is)) &
+                  * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
+          else
+             s0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
+                  * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
+          end if
        end do
     end do
 
@@ -505,9 +513,15 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u2 = -3 dt J1 vperp vus a f0 / du
-          w0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*e(ie,is)*al(il)*aj1(:,iglo) &
-               * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
-               / bmag
+          if (conservative) then
+             w0(:,isgn,iglo) = -vns(ik,ie,is,1)*e(ie,is)*al(il)*aj1(:,iglo) &
+                  * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
+                  / bmag
+          else
+             w0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*e(ie,is)*al(il)*aj1(:,iglo) &
+                  * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
+                  / bmag
+          end if
        end do
     end do
 
@@ -726,7 +740,9 @@ contains
           ie = ie_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
-             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*e(ie,is)
+             gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,iglo)**2
+!             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*e(ie,is)
+
           end do
        end do
        
@@ -753,8 +769,13 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u1 = -3 nu_s vpa dt J0 f_0 / du
-          bs0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
-               * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
+          if (conservative) then
+             bs0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
+                  * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
+          else
+             bs0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
+                  * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
+          end if
        end do
     end do
 
@@ -828,9 +849,15 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u0 = -3 dt J1 vperp vus a f0 / du
-          bw0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*e(ie,is)*al(il)*aj1(:,iglo) &
-               * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
-               / bmag
+          if (conservative) then
+             bw0(:,isgn,iglo) = -vns(ik,ie,is,1)*e(ie,is)*al(il)*aj1(:,iglo) &
+                  * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
+                  / bmag
+          else
+             bw0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*e(ie,is)*al(il)*aj1(:,iglo) &
+                  * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
+                  / bmag
+          end if
        end do
     end do
 
@@ -2898,6 +2925,9 @@ contains
     select case (collision_model_switch)
     case (collision_model_full)
 
+       call solfp_ediffuse (g)
+       if (conserve_moments) call conserve_diffuse (g, g1)
+
        if (resistivity .and. beta > epsilon(0.0)) then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              is = is_idx(g_lo,iglo)
@@ -2919,9 +2949,6 @@ contains
           call solfp_lorentz (g, gc1, gc2)
        end if
        if (conserve_moments) call conserve_lorentz (g, g1)
-       
-       call solfp_ediffuse (g)
-       if (conserve_moments) call conserve_diffuse (g, g1)
 
     case (collision_model_lorentz,collision_model_lorentz_test)
 

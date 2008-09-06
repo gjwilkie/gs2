@@ -28,10 +28,8 @@ program gs2
   logical :: exit, reset, list
   character (500), target :: cbuff
 
-  write (*,*) 'pre-init_mp'
 ! initialize message passing 
   call init_mp
-  write (*,*) 'post-init_mp'
 
 ! report # of processors being used
   if (proc0) then
@@ -44,7 +42,6 @@ program gs2
 ! figure out run name or get list of jobs
      call init_file_utils (list, name="gs")
   end if
-  write (*,*) 'post-init_file_utils'
 
   call broadcast (list)
 
@@ -59,22 +56,17 @@ program gs2
   call broadcast (cbuff)
   if (.not. proc0) run_name => cbuff
 
-  write (*,*) 'pre-init_fields'
   call init_fields
-  write (*,*) 'pre-init_gs2diagn'
   call init_gs2_diagnostics (list, nstep)
-  write (*,*) 'pre-tstart'
   call init_tstart (tstart)   ! tstart is in user units 
   if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
   istep_end = nstep
   do istep = 1, nstep
 
-     write (*,*) 'pre-advance'
      call advance (istep)
      if (nsave > 0 .and. mod(istep, nsave) == 0) &
           call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
      
-     write (*,*) 'pre-loop_diagn'
      call loop_diagnostics (istep, exit)
      call check_time_step (istep, reset, exit)
      if (proc0) call time_message(.false.,.true.,time_advance,' Advance time step')

@@ -4013,7 +4013,9 @@ contains
        do is = 1, nspec
           do ik = 1, naky
              do it = 1, ntheta0
-                do ig = -ntgrid, ntgrid
+                ! delthet(ntgrid) = 0.0 => theta_flx(ntgrid,is) => inf
+!                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    wgt = sum(dnorm(:,it,ik)*grho)*delthet(ig)
                    theta_flx(ig,is) = theta_flx(ig,is) + &
                         aimag(total(ig,it,ik,is)*conjg(fld(ig,it,ik)) &
@@ -4027,6 +4029,7 @@ contains
     end if
 
     deallocate (total)
+
   end subroutine get_flux
 !>GGH
 !=============================================================================
@@ -5478,6 +5481,7 @@ contains
           end do
        end do
        
+
        wgt = 2.0*beta*spec%z*spec%dens*sqrt(spec%temp/spec%mass)
        call integrate_species (g0, wgt, apar_app)
 
@@ -5695,8 +5699,8 @@ contains
           do ig=-ntgrid,ntgrid
              if (.not.present(trap) .or. jend(ig) > ng2+1) then
                 gpcnt = 0; gpsum = 0.0
-                if ((kmax(it,ik)*cabs(app1(ig,it,ik)) > errcut) .and. &
-                     (kmax(it,ik)*cabs(app1(ig,it,ik)) > 10*epsilon(0.0))) then
+!                if ((kmax(it,ik)*cabs(app1(ig,it,ik)) > errcut) .and. &
+!                     (kmax(it,ik)*cabs(app1(ig,it,ik)) > 10*epsilon(0.0))) then
 
                    if (present(trap)) then
                       end_idx = jend(ig)-ng2
@@ -5725,7 +5729,7 @@ contains
                    gnsum = gnsum + gpavg
                    gdsum = gdsum + kmax(it,ik)*cabs(app1(ig,it,ik))
 
-                end if
+!                end if
              end if
           end do
        end do
