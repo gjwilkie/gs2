@@ -14,22 +14,23 @@ contains
   subroutine nrgauleg (x1, x2, x, w)!, eps)
 
     use constants, only: pi => dpi
+    use file_utils, only: error_unit
     real, intent(in) :: x1, x2
     real, dimension(:), intent(out) :: x, w
     real  :: eps
 
-    integer :: its, j, m, n
+    integer :: its, j, m, n, ierr
     integer, parameter :: maxit=100
-!    double precision :: xl, xm, pi
     double precision :: xl, xm
     double precision, dimension((size(x)+1)/2) :: p1, p2, p3, pp, z, z1
     logical, dimension((size(x)+1)/2) :: unfinished
 
-! hack for now
-    eps = epsilon(xm)
+! TT> too severe for Jaguar (10/16/08)
+!    eps = epsilon(xm)
+    eps = epsilon(xm)*2.0
+! <TT
     
     n = size(x)
-!    pi = asin(real(1.0,kind(pi)))*2.0
     m = (n+1)/2
 
     xm = real(0.5,kind(xm)) * (x1+x2)   ! middle of the section
@@ -60,8 +61,16 @@ contains
     end do
 
     if (its == maxit+1) then
-       print*, 'too many iterations in nrgauleg'
-       stop
+       ierr = error_unit()
+       write (ierr,*) 'ERROR: too many iterations in nrgauleg'
+! TT> more message for failure (10/16/08)
+       do j=1, m
+          if (unfinished(j)) &
+               write (ierr,*) j, ': z= ', z(j), ' z1= ', z1(j)
+       end do
+! TT: commented out
+!       stop
+! <TT
     end if
     x(1:m) = xm - xl * z
     x(n:n-m+1:-1) = xm + xl * z
