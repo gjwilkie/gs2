@@ -254,6 +254,7 @@ fields_implicit.o: \
 	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
+	 init_g.o \
 	 kt_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \

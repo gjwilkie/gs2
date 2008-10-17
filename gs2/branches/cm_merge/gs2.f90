@@ -75,7 +75,7 @@ if (debug) write(6,*) "gs2: istep =",istep
      call advance (istep)
      if (nsave > 0 .and. mod(istep, nsave) == 0) &
           call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
-
+     
 if (debug) write(6,*) "gs2: loop_diagnostics"
      call loop_diagnostics (istep, exit)
 if (debug) write(6,*) "gs2: check_time_step"
