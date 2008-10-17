@@ -501,7 +501,7 @@ if (debug) write(6,*) rpgrad(-nth:nth,2)
 if (debug) write(6,*) thgrad(-nth:nth,1)
 if (debug) write(6,*) thgrad(-nth:nth,2)
 if (debug) write(6,*) 1.0d0/trip(-nth:nth)
-if (debug) write(6,*) Rpol(-nth:nth)/-bpolmag(-nth:nth)
+if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 !CMRend
 
 

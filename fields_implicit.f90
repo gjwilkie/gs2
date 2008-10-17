@@ -40,12 +40,24 @@ contains
   end subroutine read_parameters
 
   subroutine init_phi_implicit
+
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use dist_fn_arrays, only: g, gnew
+    use dist_fn, only: get_init_field
+    use init_g, only: new_field_init
+
     implicit none
 
     call init_fields_implicit
-    call getfield (phinew, aparnew, bparnew)
-    phi = phinew; apar = aparnew; bpar = bparnew
+    ! MAB> new field init option ported from agk
+    if (new_field_init) then
+       call get_init_field (phinew, aparnew, bparnew)
+       phi = phinew; apar = aparnew; bpar = bparnew; g = gnew
+    else
+       call getfield (phinew, aparnew, bparnew)
+       phi = phinew; apar = aparnew; bpar = bparnew
+    end if
+    ! <MAB
 
   end subroutine init_phi_implicit
 
