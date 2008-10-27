@@ -2327,7 +2327,7 @@ if (debug) write(6,*) "loop_diagnostics: done"
 !=============================================================================
 !<GGH
 
-  subroutine get_omegaavg (istep, exit, omegaavg, debug)
+  subroutine get_omegaavg (istep, exit, omegaavg, debopt)
     use kt_grids, only: naky, ntheta0
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use gs2_time, only: code_dt
@@ -2338,9 +2338,10 @@ if (debug) write(6,*) "loop_diagnostics: done"
     complex, dimension (:,:), intent (out) :: omegaavg
     complex, allocatable, dimension (:,:,:) :: domega
     integer :: j
-    logical, optional :: debug
+    logical, optional :: debopt
+    logical :: debug=.false.
 if (.not. allocated(domega)) allocate(domega(navg,ntheta0,naky))
-    if (.not. present(debug)) debug=.false.
+    if (present(debopt)) debug=debopt
 if (debug) write(6,*) "get_omeaavg: start"
     j = igomega
     where (abs(phinew(j,:,:)+aparnew(j,:,:)+bparnew(j,:,:)) < epsilon(0.0) &

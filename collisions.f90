@@ -966,6 +966,8 @@ contains
     integer :: ik, ie, is, it, ig
     real :: v, k4max
     real :: vl, vr, dv2l, dv2r
+!    real :: erf ! this is needed for PGI: RN
+
 
     do is = 1, nspec
        do ie = 1, negrid
