@@ -8,9 +8,10 @@ PROJECT ?= gs2
 #
 #  Makefile written by Bill Dorland and Ryusuke Numata
 #
-#  LAST UPDATE: 09/26/08
+#  LAST UPDATE: 10/27/08
 #
 # * Changelogs
+#       10/27/08: default commands for MPI and HDF5 are defined
 #       09/26/08: hack for treating intermediate f90 files properly
 #	 	 (this is to keep all intermediate f90 files when 
 #		 .PRECIOUS is given)
@@ -100,9 +101,15 @@ MAKE = make
 CPP = cpp
 CPPFLAGS = -C -P -traditional
 FC = f90
+MPIFC	= mpif90
+H5FC	= h5fc
+H5FC_par	= h5pfc
 F90FLAGS =
 F90OPTFLAGS =
 CC = cc
+MPICC	= mpicc
+H5CC	= h5cc
+H5CC_par	= h5pcc
 CFLAGS =
 COPTFLAGS =
 LD = $(FC)
@@ -180,6 +187,8 @@ $(warning Be sure that nonlinear run makes no sense)
 endif
 
 ifdef USE_MPI
+	FC = $(MPIFC)
+	CC = $(MPICC)
 	CPPFLAGS += -DMPI
 endif
 ifdef USE_SHMEM
@@ -200,7 +209,11 @@ ifdef USE_NETCDF
 endif
 ifdef USE_HDF5
 	ifdef USE_MPI
-		FC = h5pfc
+		FC = $(H5FC_par)
+		CC = $(H5CC_par)
+	else
+		FC = $(H5FC)
+		CC = $(H5CC)
 	endif
 	CPPFLAGS += -DHDF
 endif
