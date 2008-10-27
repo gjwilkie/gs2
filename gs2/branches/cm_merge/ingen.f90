@@ -3124,14 +3124,16 @@ if (debug) write(6,*) 'get_namelists: returning'
            end if
         else
            nmesh = (2*ntgrid+1)*2*nlambda*negrid*ntheta0*naky*nspec
-           write (report_unit, fmt="('ntgrid :    ',i12)") ntgrid
-           write (report_unit, fmt="('nlambda:    ',i12)") nlambda
-           write (report_unit, fmt="('negrid :    ',i12)") negrid
-           write (report_unit, fmt="('ntheta0:    ',i12)") ntheta0
-           write (report_unit, fmt="('naky   :    ',i12)") naky
-           write (report_unit, fmt="('nspec  :    ',i12)") nspec
         end if
 
+        write (report_unit, fmt="('ntgrid :    ',i12)") ntgrid
+        write (report_unit, fmt="('nlambda:    ',i12)") nlambda
+        write (report_unit, fmt="('negrid :    ',i12)") negrid
+        write (report_unit, fmt="('ntheta0:    ',i12)") ntheta0
+        write (report_unit, fmt="('naky   :    ',i12)") naky
+        write (report_unit, fmt="('ny     :    ',i12)") ny
+        write (report_unit, fmt="('nx     :    ',i12)") nx
+        write (report_unit, fmt="('nspec  :    ',i12)") nspec
         write (report_unit, fmt="('Number of meshpoints:    ',i12)") nmesh
 
         call nprocs (nmesh)
