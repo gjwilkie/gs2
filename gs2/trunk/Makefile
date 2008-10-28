@@ -8,9 +8,10 @@ PROJECT ?= gs2
 #
 #  Makefile written by Bill Dorland and Ryusuke Numata
 #
-#  LAST UPDATE: 10/27/08
+#  LAST UPDATE: 10/28/08
 #
 # * Changelogs
+#       10/28/08: some non-standard macros respect environment variables
 #       10/27/08: default commands for MPI and HDF5 are defined
 #       09/26/08: hack for treating intermediate f90 files properly
 #	 	 (this is to keep all intermediate f90 files when 
@@ -97,45 +98,45 @@ USE_NAGLIB ?=
 # These variables can be set in platform-dependent Makefile.
 #
 
-MAKE = make
-CPP = cpp
-CPPFLAGS = -C -P -traditional
-FC = f90
-MPIFC	= mpif90
-H5FC	= h5fc
-H5FC_par	= h5pfc
-F90FLAGS =
-F90OPTFLAGS =
-CC = cc
-MPICC	= mpicc
-H5CC	= h5cc
-H5CC_par	= h5pcc
-CFLAGS =
-COPTFLAGS =
-LD = $(FC)
-LDFLAGS = $(F90FLAGS)
-ARCH = ar
-ARCHFLAGS = cr
-RANLIB=ranlib
-AWK = awk
+MAKE		= make
+CPP		= cpp
+CPPFLAGS	= -C -P -traditional
+FC		= f90
+MPIFC		?= mpif90
+H5FC		?= h5fc
+H5FC_par	?= h5pfc
+F90FLAGS	=
+F90OPTFLAGS	=
+CC		= cc
+MPICC		?= mpicc
+H5CC		?= h5cc
+H5CC_par	?= h5pcc
+CFLAGS		=
+COPTFLAGS 	=
+LD 		= $(FC)
+LDFLAGS 	= $(F90FLAGS)
+ARCH 		= ar
+ARCHFLAGS 	= cr
+RANLIB		= ranlib
+AWK 		= awk
 
 # These macros are used for the suffix problem of absoft
 F90FLAGS_SFX0 =
 F90FLAGS_SFX1 =
 F90FLAGS_SFX2 =
 
-MPI_INC =
-MPI_LIB =
-FFT_INC =
-FFT_LIB =
-NETCDF_INC =
-NETCDF_LIB =
-HDF5_INC =
-HDF5_LIB =
-IPM_LIB =
-NAG_LIB =
+MPI_INC	?=
+MPI_LIB ?=
+FFT_INC ?=
+FFT_LIB ?=
+NETCDF_INC ?=
+NETCDF_LIB ?=
+HDF5_INC ?=
+HDF5_LIB ?=
+IPM_LIB ?=
+NAG_LIB ?=
 NAG_PREC ?= dble
-PGPLOT_LIB =
+PGPLOT_LIB ?=
 
 ################################################### SET COMPILE MODE SWITCHES
 
@@ -286,9 +287,10 @@ PERL_CMD=perl
 DEPEND_CMD=$(PERL_CMD) fortdep
 
 # most common include and library directories
-DEFAULT_INC_LIST = . $(UTILS) $(GEO) .. ../$(UTILS) ../$(GEO) \
-		/usr/include /usr/local/include \
-	   	/opt/local/include /sw/include
+DEFAULT_INC_LIST = . $(UTILS) $(GEO) .. ../$(UTILS) ../$(GEO)
+#DEFAULT_INC_LIST = . $(UTILS) $(GEO) .. ../$(UTILS) ../$(GEO) \
+#		/usr/include /usr/local/include \
+#	   	/opt/local/include /sw/include
 DEFAULT_LIB_LIST =
 #DEFAULT_LIB_LIST = /usr/lib /usr/local/lib \
 #		/opt/local/lib /sw/lib
