@@ -1689,6 +1689,9 @@ if (debug) write(6,*) 'get_namelists: case (eqopt_switch), eqopt_switch=',eqopt_
        writelots = .false.
        local_eq = .true.
        transp_eq = .false.
+       idfit_eq=.false.
+       dfit_eq=.false.
+       gs2d_eq=.false.
        beta_prime_input = 0.
        s_hat_input = 0.
        
@@ -1700,7 +1703,9 @@ if (debug) write(6,*) 'get_namelists: case (eqopt_switch), eqopt_switch=',eqopt_
 
        in_file= input_unit_exist("theta_grid_eik_knobs", exist)
        if (exist) then
+write(6,*) "get_namelists: reading theta_grid_eik_knobs"
           read (unit=input_unit("theta_grid_eik_knobs"), nml=theta_grid_eik_knobs)
+write(6,*) "get_namelists: done theta_grid_eik_knobs"
           theta_eik_write = .true.
        end if
 
@@ -3068,6 +3073,7 @@ if (debug) write(6,*) 'get_namelists: returning'
               write (report_unit, *) 
            end if
 
+           write (report_unit, fmt="('nmesh=(2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec')")
            nmesh = (2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec
 
  !
@@ -3123,6 +3129,7 @@ if (debug) write(6,*) 'get_namelists: returning'
               write (report_unit, *) 
            end if
         else
+           write (report_unit, fmt="('nmesh=(2*ntgrid+1)*2*nlambda*negrid*ntheta0*naky*nspec')")
            nmesh = (2*ntgrid+1)*2*nlambda*negrid*ntheta0*naky*nspec
         end if
 

@@ -274,9 +274,9 @@ if (debug) write(6,*) 'eikcoefs: transp_eq, called tdef'
              if (mds) then
                 call mfitin(shotnum, tstar, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
              else if(gs2d_eq) then
-if (debug) write(6,*) "eikcoefs: call gs2din"
+if (debug) write(6,*) "eikcoefs: call gs2din eqfile=",eqfile
                 call gs2din(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
-if (debug) write(6,*) "eikcoefs: done gs2din"
+if (debug) write(6,*) "eikcoefs: done gs2din  psi_0,psi_a, rmaj, B_T0, avgrmid=",psi_0,psi_a, rmaj, B_T0, avgrmid
              else
                 call efitin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
              endif
@@ -311,10 +311,13 @@ if (debug) write(6,*) "eikcoefs: if (writelots)"
 
     rho=rhoc
 
+if (debug) write(6,*) "eikcoefs: find rp"
     if(iflux == 1) then
        rpmin = psi_0
        rpmax = psi_a
+if (debug) write(6,*) "eikcoefs: rpmin,rpmax=",rpmin,rpmax
        rp = rpofrho(rho)
+if (debug) write(6,*) "eikcoefs: rp=",rp
     else
        rpmin = 0.
        rpmax = 1.0
@@ -329,7 +332,8 @@ if (debug) write(6,*) "eikcoefs: if (writelots)"
 !    endif
 
     if(iflux == 1) R_geo=rcenter(rpmax)
-    
+
+if (debug) write(6,*) "eikcoefs: find rgrid"    
     if(efit_eq .or. dfit_eq) then
        call rtg(rgrid, rp)
     else

@@ -470,7 +470,9 @@ if (debug) write(6,*) "init_theta_grid_eik: call read_parameters, ntheta=",nthet
     rhoc_save = rhoc
     if (itor == 0) rhoc = 1.5*delrho
 !    print *, 'itor= ',itor, ' rhoc= ',rhoc, 'rhoc_save = ',rhoc_save
+if (debug) write(6,*) "init_theta_grid_eik: call eikcoefs"
     call eikcoefs
+if (debug) write(6,*) "init_theta_grid_eik: done"
 
     rhoc = rhoc_save
   end subroutine init_theta_grid_eik
@@ -580,7 +582,7 @@ if (debug) write(6,*) "init_theta_grid_eik: call read_parameters, ntheta=",nthet
     use geometry, only: rhoc
     use geometry, only: itor, iflux, irho
     use geometry, only: ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, local_eq, dfit_eq, gs2d_eq
-    use geometry, only: equal_arc, transp_eq
+    use geometry, only: equal_arc, transp_eq, idfit_eq
     use geometry, only: bishop
     use geometry, only: s_hat_input
     use geometry, only: alpha_input, invLp_input, beta_prime_input, dp_mult
@@ -603,7 +605,7 @@ if (debug) write(6,*) "init_theta_grid_eik: call read_parameters, ntheta=",nthet
 
     namelist /theta_grid_eik_knobs/ itor, iflux, irho, &
          ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, dfit_eq, &
-         equal_arc, bishop, local_eq, gs2d_eq, transp_eq, &
+         equal_arc, bishop, local_eq, idfit_eq, gs2d_eq, transp_eq, &
          s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
          delrho, rmin, rmax, ismooth, ak0, k1, k2, isym, writelots
 
@@ -845,15 +847,20 @@ contains
     implicit none
     logical, save :: initialized = .false.
     integer :: i
-
+    logical :: debug=.false.
     if (initialized) return
     initialized = .true.
 
     if (proc0) then
+if (debug) write(6,*) "init_theta_grid: call read_parameters"
        call read_parameters
+if (debug) write(6,*) "init_theta_grid: call get_sizes"
        call get_sizes
+if (debug) write(6,*) "init_theta_grid: call allocate_arrays"
        call allocate_arrays
+if (debug) write(6,*) "init_theta_grid: call get_grids"
        call get_grids
+if (debug) write(6,*) "init_theta_grid: call finish_init"
        call finish_init
     end if
     call broadcast_results
@@ -1044,18 +1051,27 @@ contains
     use theta_grid_salpha, only: salpha_get_sizes, init_theta_grid_salpha
     use theta_grid_file, only: file_get_sizes, init_theta_grid_file
     implicit none
+    logical:: debug=.false.
+if (debug) write(6,*) 'get_sizes: eqopt_switch=',eqopt_switch
     select case (eqopt_switch)
     case (eqopt_eik)
+if (debug) write(6,*) 'get_sizes: call init_theta_grid_eik'
        call init_theta_grid_eik
+if (debug) write(6,*) 'get_sizes: call eik_get_sizes'
        call eik_get_sizes (ntheta, nperiod, nbset)
     case (eqopt_salpha)
+if (debug) write(6,*) 'get_sizes: call init_theta_grid_salpha'
        call init_theta_grid_salpha
+if (debug) write(6,*) 'get_sizes: call salpha_get_sizes'
        call salpha_get_sizes (ntheta, nperiod, nbset)
     case (eqopt_file)
+if (debug) write(6,*) 'get_sizes: call init_theta_grid_file'
        call init_theta_grid_file
+if (debug) write(6,*) 'get_sizes: call file_get_sizes'
        call file_get_sizes (ntheta, nperiod, nbset)
     end select
-    ntgrid = ntheta/2 + (nperiod-1)*ntheta
+    ntgrid = ntheta/2 + (nperiod-1)*ntheta 
+if (debug) write(6,*) 'get_sizes: done'
   end subroutine get_sizes
 
   subroutine get_grids
