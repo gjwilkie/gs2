@@ -158,16 +158,22 @@ contains
     
     data init /1/
     save init
+
+    logical:: debug =.false.
     
 ! Need to generalize initialization condition if equilibrium changes
 
+if (debug) write(6,*) "gs2din: initeq=",initeq
     if(initeq == 0) return
     init=0
     
     i=index(eqfile,' ')-1
     filename = eqfile(1:i)
+if (debug) write(6,*) "gs2din: filename=",filename
 ! read GS2D datafile
     call read_gs2d(filename)
+if (debug) write(6,*) "gs2din: read_gs2d done, "
+if (debug) write(6,fmt='(T2,"psmin",T15,"psedge (Wb)",T27,"b0 (T)",T39,"ip(A)"/1p,4e16.8)') psmin,psip,b0,ippsi
 
     nw=nr ; nh=nz
     nwb = nw * big
@@ -179,6 +185,7 @@ contains
 
     psi_0 = psi_0/(8.0*atan(1.))
     psi_a = psi_a/(8.0*atan(1.))
+if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
 
 !
 ! pbar is defined by
@@ -266,8 +273,11 @@ contains
        endif
     enddo
 
+if (debug) write(6,*) "gs2din:  rbbbs=",rbbbs
+if (debug) write(6,*) "gs2din:  zbbbs=",zbbbs
     call a_minor(rbbbs, zbbbs, Z_mag, amin)
     aminor=amin
+if (debug) write(6,*) "gs2din:  aminor=",aminor
 
     deallocate (rbbbs, zbbbs)
 
@@ -290,6 +300,9 @@ contains
     psi_a = psi_a / (B_T0*aminor**2)
     psi_0 = psi_0 / (B_T0*aminor**2)
     psi_N = psi_a - psi_0
+
+if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0, psi_a
+
     
     p_0=pressure(1)
 !    do i=1,nw
@@ -1237,8 +1250,15 @@ if (debug) write(6,*) "efit_init: do i"
     real, dimension(nz) :: rtmp, ztmp
     integer i, j, i1, n
     type (spline) :: spl
-
+!CMR, 28/10/08: add code to avoid duplicate points in 5 point spline 
+!               to determine r2 on inboard mid-plane
+    integer :: k = 0 
+    logical:: debug=.false.
     n = size(r)
+
+    if (debug) write(6,*) "aminor:"
+    if (debug) write(6,fmt='("r=",10f8.4)') r
+    if (debug) write(6,fmt='("z=",10f8.4)') z
 
     if(n < nz) then
        write(*,*) 'nbbbs < nz -- very strange.  Stopping.'
@@ -1266,6 +1286,10 @@ if (debug) write(6,*) "efit_init: do i"
           rtmp(j) = r(i)
        enddo
     endif
+
+    if (debug) write(6,fmt='("rtmp=",5f8.4)') rtmp
+    if (debug) write(6,fmt='("ztmp=",5f8.4)') ztmp
+    if (debug) write(6,fmt='("Z_mag=",f8.4)') Z_mag
     
     call new_spline(nz, ztmp, rtmp, spl)
     r1 = splint(Z_mag, spl)    
@@ -1280,16 +1304,32 @@ if (debug) write(6,*) "efit_init: do i"
        endif
     enddo
 
+!CMR, 28/10/08: modify this code to avoid duplicate points in 5 point spline 
+!               to determine r2 on inboard mid-plane
     do i = 1, nz
-       rtmp(i) = r(i1 - nz/2 + i - 1)
-       ztmp(i) = z(i1 - nz/2 + i - 1)
+       rtmp(i) = r(i1 - nz/2 + i - 1 + k )
+       ztmp(i) = z(i1 - nz/2 + i - 1 + k )
+       if ( i.gt.1 ) then
+          if ((rtmp(i)-rtmp(i-1))**2+(ztmp(i)-ztmp(i-1))**2 .lt. 1.0e-7) then
+             k=k+1
+             if (debug) write(6,fmt='("a_minor: duplicate pt, set k=",i2)') k
+             rtmp(i) = r(i1 - nz/2 + i - 1 + k)
+             ztmp(i) = z(i1 - nz/2 + i - 1 + k)
+          endif
+       endif
     enddo
+
+    if (debug) write(6,fmt='("a_minor: rtmp=",5f8.4)') rtmp
+    if (debug) write(6,fmt='("a_minor: ztmp=",5f8.4)') ztmp
+    if (debug) write(6,fmt='("a_minor: Z_mag=",f8.4)') Z_mag
 
     call new_spline(nz, ztmp, rtmp, spl)
     r2 = splint(Z_mag, spl)
     call delete_spline(spl)
 
     a = (r2 - r1)/2.
+    if (debug) write(6,*) "a_minor: r1,r2=",r1,r2
+    if (debug) write(6,*) "a_minor: a=",a
 
   end subroutine a_minor
 
