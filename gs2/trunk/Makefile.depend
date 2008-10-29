@@ -14,7 +14,6 @@ ball_mod = \
 	 leq.o \
 	 mds.o \
 	 mdslib.o \
-	 mp.o \
 	 netcdf_utils.o \
 	 peq.o \
 	 radstub.o \
@@ -39,7 +38,6 @@ eiktest_mod = \
 	 leq.o \
 	 mds.o \
 	 mdslib.o \
-	 mp.o \
 	 netcdf_utils.o \
 	 peq.o \
 	 radstub.o \
@@ -481,8 +479,7 @@ mp.o: \
 	 constants.o 
 netcdf_utils.o: \
 	 constants.o \
-	 file_utils.o \
-	 mp.o 
+	 file_utils.o 
 nonlinear_terms.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
