@@ -1974,7 +1974,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 
                 if (write_line) then
                    write (out_unit, "('t= ',e16.10,' aky= ',f5.2, ' akx= ',f5.2, &
-                        &' om= ',2f8.3,' omav= ', 2f8.3,' phtot= ',e8.2)") &
+                        &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4)") &
                         t, aky_out(ik), akx_out(it), &
                         real( omega(it,ik)*woutunits(ik)), &
                         aimag(omega(it,ik)*woutunits(ik)), &
@@ -1983,14 +1983,22 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                         phitot(it,ik)
                 end if
                 
-                if (write_omega) write (out_unit, *) &
-                     'omega=', omega(it,ik), &
-                     ' omega/(vt/a)=', real(omega(it,ik)*woutunits(ik)), &
-                     aimag(omega(it,ik)*woutunits(ik))
-                if (write_omavg) write (out_unit, *) &
-                     'omavg=', omegaavg(it,ik), &
-                     ' omavg/(vt/a)=', real(omegaavg(it,ik)*woutunits(ik)), &
-                     aimag(omegaavg(it,ik)*woutunits(ik))
+!                if (write_omega) write (out_unit, *) &
+!                     'omega=', omega(it,ik), &
+!                     ' omega/(vt/a)=', real(omega(it,ik)*woutunits(ik)), &
+!                     aimag(omega(it,ik)*woutunits(ik))
+                if (write_omega) write (out_unit,&
+                         fmt='(" omega= (",1pe12.4,",",1pe12.4,")",t45,&
+                          "omega/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
+                     omega(it,ik), omega(it,ik)*woutunits(ik)
+                if (write_omavg) write (out_unit,&
+                         fmt='(" omavg= (",1pe12.4,",",1pe12.4,")",t45,&
+                               "omavg/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
+                     omegaavg(it,ik), omegaavg(it,ik)*woutunits(ik)
+!                if (write_omavg) write (out_unit, *) &
+!                     'omavg=', omegaavg(it,ik), &
+!                     ' omavg/(vt/a)=', real(omegaavg(it,ik)*woutunits(ik)), &
+!                     aimag(omegaavg(it,ik)*woutunits(ik))
                 
                 if (write_dmix) then
                    if (abs(akperp(it,ik)) < 2.0*epsilon(0.0)) then
@@ -1999,7 +2007,8 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                       dmix = 2.0*woutunits(ik)*aimag(omega(it,ik))/akperp(it,ik)**2
                       dmix4 = dmix*dmix/(woutunits(ik)*aimag(omega(it,ik)))
                       dmixx = 2.0*woutunits(ik)*aimag(omega(it,ik))/(akperp(it,ik)**2-aky(ik)**2)
-                      write (out_unit, *) 'dmix=', dmix,' dmix4= ',dmix4,' dmixx= ',dmixx
+!                      write (out_unit, *) 'dmix=', dmix,' dmix4= ',dmix4,' dmixx= ',dmixx
+                      write (out_unit,fmt='(" dmix=",1pe12.4," dmix4=",1pe12.4," dmixx=",1pe12.4)') dmix, dmix4, dmixx
                    end if
                 end if
              end do
