@@ -2345,7 +2345,8 @@ if (debug) write(6,*) "loop_diagnostics: done"
     integer, intent (in) :: istep
     logical, intent (in out) :: exit
     complex, dimension (:,:), intent (out) :: omegaavg
-    complex, allocatable, dimension (:,:,:) :: domega
+!CMR, 7/11/2008: save here crucial to avoid crippling memory leak with mpixl!
+    complex, allocatable, save, dimension (:,:,:) :: domega
     integer :: j
     logical, optional :: debopt
     logical :: debug=.false.
