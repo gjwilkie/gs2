@@ -159,7 +159,7 @@ module geometry
    
 contains
 
-  subroutine eikcoefs
+  subroutine eikcoefs (ntheta_returned)
     
     use  veq, only: vmomin, veq_init
     use  geq, only: eqin, geq_init
@@ -170,6 +170,8 @@ contains
     use  leq, only: leqin, dpdrhofun
     use radstub, only: radial
     implicit none
+
+    integer, optional, intent (out) :: ntheta_returned
 
 ! Local variables:
 
@@ -196,7 +198,6 @@ contains
     character*1 :: char
     integer :: i, j, k, itot, nthg, n
 
-        
 !     compute the initial constants
     pi=2.*acos(0.)
     
@@ -244,18 +245,18 @@ contains
           if (gs2d_eq) efit_eq = .true.
           if(vmom_eq) then
              call vmomin(      psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-             call tdef(nthg)
+             call tdef(nthg, ntheta_returned)
           else if(gen_eq) then
              call eqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-             call tdef(nthg)
+             call tdef(nthg, ntheta_returned)
           else if(ppl_eq) then
              call peqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-             call tdef(nthg)
+             call tdef(nthg, ntheta_returned)
           else if(transp_eq) then
              ppl_eq = .true.
              write (*,*) 'eqfile = ',eqfile
              call teqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-             call tdef(nthg)
+             call tdef(nthg, ntheta_returned)
           else if(efit_eq) then
              if(big <= 0) big = 8
              if (mds) then
@@ -270,11 +271,11 @@ contains
              call dfitin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
           else if(idfit_eq) then
              call idfitin(eqfile, theta, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit) 
-             call tdef(nthg)
+             call tdef(nthg, ntheta_returned)
           endif
           if(iflux == 10) return
           if(.not.allocated(gds22)) call alloc_module_arrays(ntgrid)
-          call alloc_local_arrays(ntgrid)
+          call alloc_local_arrays(ntgrid)  
        case (2) 
           continue
     end select
@@ -782,7 +783,7 @@ contains
     dum=qfun(0.5)
     if(eqinit >= 1) eqinit=0
       
-    call plotdata (rgrid, seik, grads, dpsidrho)
+    if (nperiod ==1) call plotdata (rgrid, seik, grads, dpsidrho)
 
     call dealloc_local_arrays
 
@@ -2500,10 +2501,10 @@ end subroutine geofax
   100 format(20(1x,g12.6))
   end subroutine test
 
-  subroutine tdef(nthg)
+  subroutine tdef(nthg, ntheta_returned)
     
     real :: pi
-    integer :: nthg, nthsave, i
+    integer :: nthg, nthsave, i, ntheta_returned
 !    logical :: first = .true.
     
 !    if(.not.first) return
@@ -2511,10 +2512,11 @@ end subroutine geofax
 
     pi = 2*acos(0.)
     
-    nthsave=nth
-    nth=nthg-1
+!    nthsave=nth
+    nth=nthg/2   ! correct, at least for geq
 !    write(*,*) 'old nth: ',nthsave,' new nth: ',nth
-    ntheta=2*nth
+    ntheta_returned=2*nth  ! guarantees even
+    ntheta = ntheta_returned
     ntgrid=(2*nperiod-1)*nth
     
     !     redefine theta grid used by the rest of the code.
@@ -2578,12 +2580,15 @@ end subroutine geofax
     integer, intent(in) :: nt
     integer i
     real :: pi
-    
+    logical :: first_local = .true.
+
     pi = 2*acos(0.)
     ntheta=nt
     nth = nt / 2
     ntgrid = (2*nperiod - 1)*nth       
-    if(.not.allocated(theta)) allocate(theta(-ntgrid:ntgrid))
+    if (.not. first_local) deallocate (theta)
+    allocate(theta(-ntgrid:ntgrid))
+    first_local = .false.
 
     theta = (/ (i*pi/real(nth), i=-ntgrid, ntgrid ) /) 
 
@@ -2611,7 +2616,7 @@ end subroutine geofax
           a(itot) = a(i) + k*ext
        enddo
     enddo
-        
+
   end subroutine periodic_copy
 
   subroutine bishop_gradB(rgrid, Bmod, Bpolmag, Rpol, th_bish, ltheta, &
