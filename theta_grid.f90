@@ -433,9 +433,9 @@ module theta_grid_eik
 contains
 
   subroutine init_theta_grid_eik
-    use geometry, only: init_theta
+    use geometry, only: init_theta, nperiod_geo => nperiod
     use geometry, only: eikcoefs, itor, delrho, rhoc
-    use theta_grid_params, only: init_theta_grid_params, ntheta
+    use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
     implicit none
     real :: rhoc_save
     logical, save :: initialized = .false.
@@ -444,21 +444,29 @@ contains
     if (initialized) return
     initialized = .true.
 
+! After this call, would think you have ntheta from input file
+! stored in theta_grid_params data structure.
+! but when running from numerical equilibrium, this is not right
+! Instead, get it stored via the eikcoefs call below.  
     call init_theta_grid_params
 
     call read_parameters
-    call init_theta (ntheta)
+!    call init_theta (ntheta)
+
+    nperiod_geo = nperiod 
     rhoc_save = rhoc
     if (itor == 0) rhoc = 1.5*delrho
 !    print *, 'itor= ',itor, ' rhoc= ',rhoc, 'rhoc_save = ',rhoc_save
-    call eikcoefs
+    call eikcoefs (ntheta)
+
+!    write (*,*) 'init_theta_grid_eik: ntheta = ',ntheta
 
     rhoc = rhoc_save
   end subroutine init_theta_grid_eik
 
   subroutine eik_get_sizes (nthetaout, nperiodout, nbsetout)
     use geometry, only: nperiod
-    use theta_grid_params, only: ntheta
+    use theta_grid_params, only: ntheta, nperiod_th => nperiod
     implicit none
     integer, intent (out) :: nthetaout, nperiodout, nbsetout
 
@@ -588,7 +596,7 @@ contains
          s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
          delrho, rmin, rmax, ismooth, ak0, k1, k2, isym, writelots
 
-    nperiod = nperiod_in
+    nperiod = nperiod_in  
     rhoc = rhoc_in
     s_hat_input = shat_in
     alpha_input = alpmhd_in
