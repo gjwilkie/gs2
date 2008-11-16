@@ -435,6 +435,7 @@ contains
   subroutine init_theta_grid_eik
     use geometry, only: init_theta, nperiod_geo => nperiod
     use geometry, only: eikcoefs, itor, delrho, rhoc
+    use geometry, only: vmom_eq, gen_eq, ppl_eq, transp_eq
     use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
     implicit none
     real :: rhoc_save
@@ -451,6 +452,10 @@ contains
     call init_theta_grid_params
 
     call read_parameters
+
+    if(.not. vmom_eq .and. .not. gen_eq .and. .not. ppl_eq .and. &
+         .not. transp_eq) call init_theta(ntheta)
+
 !    call init_theta (ntheta)
 
     nperiod_geo = nperiod 
