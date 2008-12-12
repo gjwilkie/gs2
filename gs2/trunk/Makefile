@@ -8,9 +8,10 @@ PROJECT ?= gs2
 #
 #  Makefile written by Bill Dorland and Ryusuke Numata
 #
-#  LAST UPDATE: 10/28/08
+#  LAST UPDATE: 12/11/08
 #
 # * Changelogs
+#       12/11/08: add support for NAGWare and Lahey compilers
 #       10/28/08: some non-standard macros respect environment variables
 #       10/27/08: default commands for MPI and HDF5 are defined
 #       09/26/08: hack for treating intermediate f90 files properly
@@ -26,16 +27,14 @@ PROJECT ?= gs2
 # IBM XL Fortran xlf90
 # PathScale Compiler Suite pathf90
 # The Portland Group pgf90
-# --- NAGWare
-# --- Fujitsu
-# --- Absoft
-# --- Lahey/Fujitsu Fortran lf95
+# NAGWare f95 (v5.1)
+# Lahey/Fujitsu Fortran lf95
 # 
 # * Frequently Tested Hosts, Systems
 #
 # Standard Linux
 # Standard Mac OS X with MacPorts
-# Franklin at NERSC (Cray XT4 with PGI)
+# Franklin at NERSC and Jaguar at NCCS (Cray XT4 with PGI)
 # Bassi at NERSC (IBM Power 5 with IBM XL Fortran)
 # Ranger (... with Intel)
 #
