@@ -263,7 +263,8 @@ contains
     itt(2) = 2
     restart_file = trim(run_name)//".nc"
     in_file = input_unit_exist ("init_g_knobs", exist)
-    if (exist) read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
+!    if (exist) read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
+    if (exist) read (unit=in_file,nml=init_g_knobs)
 
     ierr = error_unit()
     call get_option_value &

@@ -295,9 +295,11 @@ contains
        source_option = 'default'
        kill_grid = .false.
        in_file = input_unit_exist("dist_fn_knobs", exist)
-       if (exist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
+!       if (exist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
+       if (exist) read (unit=in_file, nml=dist_fn_knobs)
        in_file = input_unit_exist("source_knobs", exist)
-       if (exist) read (unit=input_unit("source_knobs"), nml=source_knobs)
+!       if (exist) read (unit=input_unit("source_knobs"), nml=source_knobs)
+       if (exist) read (unit=in_file, nml=source_knobs)
 
        if(abs(shat) <=  1.e-5) boundary_option = 'periodic'
 
@@ -3723,6 +3725,7 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: antot, antota, antotp
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: numerator
 
+    phi=0. ; apar=0. ; bpar=0.
     antot=0.0 ; antota=0.0 ; antotp=0.0
     call getan (antot, antota, antotp)
 

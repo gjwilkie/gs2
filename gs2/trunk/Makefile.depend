@@ -506,6 +506,7 @@ prof.o:
 radstub.o: 
 ran.o: 
 redistribute.o: \
+	 job_manage.o \
 	 mp.o 
 redistribute_shnew.o: \
 	 mp.o 

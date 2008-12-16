@@ -72,7 +72,8 @@ contains
     if (proc0) then
        nspec = 2
        in_file = input_unit_exist("species_knobs", exist)
-       if (exist) read (unit=input_unit("species_knobs"), nml=species_knobs)
+!       if (exist) read (unit=input_unit("species_knobs"), nml=species_knobs)
+       if (exist) read (unit=in_file, nml=species_knobs)
        if (nspec < 1) then
           ierr = error_unit()
           write (unit=ierr, &

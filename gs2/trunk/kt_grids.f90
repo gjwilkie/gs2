@@ -20,8 +20,9 @@ contains
     theta0 = 0.0
     akx = 0.0
     in_file = input_unit_exist ("kt_grids_single_parameters", exist)
-    if (exist) read (unit=input_unit("kt_grids_single_parameters"), &
-         nml=kt_grids_single_parameters)
+!    if (exist) read (unit=input_unit("kt_grids_single_parameters"), &
+!         nml=kt_grids_single_parameters)
+    if (exist) read (unit=in_file,nml=kt_grids_single_parameters)
   end subroutine init_kt_grids_single
 
   subroutine single_get_sizes (naky, ntheta0, nx, ny)
@@ -533,7 +534,8 @@ contains
     norm_option = 'default'
     grid_option = 'default'
     in_file = input_unit_exist ("kt_grids_knobs", exist)
-    if (exist) read (unit=input_unit("kt_grids_knobs"), nml=kt_grids_knobs)
+!    if (exist) read (unit=input_unit("kt_grids_knobs"), nml=kt_grids_knobs)
+    if (exist) read (unit=in_file, nml=kt_grids_knobs)
 
     ierr = error_unit()
     call get_option_value &
