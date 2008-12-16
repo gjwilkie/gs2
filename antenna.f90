@@ -214,6 +214,8 @@ contains
     integer :: i, it, ik
     logical, save :: first = .true.
 
+    apar=0.
+
     if (no_driver) return
 
     if (first) then

@@ -201,7 +201,8 @@ contains
        const_v = .false.
        heating = .false.
        in_file = input_unit_exist ("collisions_knobs", exist)
-       if (exist) read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
+!       if (exist) read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
+       if (exist) read (unit=in_file,nml=collisions_knobs)
 
        ierr = error_unit()
        call get_option_value &

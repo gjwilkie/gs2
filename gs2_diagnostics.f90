@@ -437,7 +437,8 @@ contains
        nperiod_output = nperiod - nperiod_guard
        save_for_restart = .false.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
-       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
+!       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
+       if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
 
 ! If either the old or new variable was set to .false., choose false.
        write_bpar = write_bpar .and. write_aperp

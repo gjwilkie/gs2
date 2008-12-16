@@ -664,7 +664,8 @@ contains
     ecut = 6.0  ! new default value for advanced scheme
     bouncefuzz = 1e-5
     in_file=input_unit_exist("le_grids_knobs", exist)
-    if (exist) read (unit=input_unit("le_grids_knobs"), nml=le_grids_knobs)
+!    if (exist) read (unit=input_unit("le_grids_knobs"), nml=le_grids_knobs)
+    if (exist) read (unit=in_file, nml=le_grids_knobs)
 
 ! user can choose not to set negrid (preferred for old scheme)
     if (negrid == -10) then

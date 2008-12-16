@@ -98,7 +98,8 @@ contains
        field_option = 'default'
 
        in_file = input_unit_exist ("fields_knobs", exist)
-       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
+!       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
+       if (exist) read (unit=in_file, nml=fields_knobs)
 
        ierr = error_unit()
        call get_option_value &

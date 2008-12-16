@@ -91,10 +91,12 @@ contains
        delt_option = 'default'
        margin = 0.05
        in_file = input_unit_exist("parameters", exist)
-       if (exist) read (unit=input_unit("parameters"), nml=parameters)
+!       if (exist) read (unit=input_unit("parameters"), nml=parameters)
+       if (exist) read (unit=in_file,nml=parameters)
 
        in_file = input_unit_exist("knobs", exist)
-       if (exist) read (unit=input_unit("knobs"), nml=knobs)
+!       if (exist) read (unit=input_unit("knobs"), nml=knobs)
+       if (exist) read (unit=in_file, nml=knobs)
 
        if (teti /= -100.0) tite = teti
 
