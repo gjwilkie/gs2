@@ -108,6 +108,7 @@ contains
     use run_parameters, only: init_run_parameters
     use species, only: init_species, nspec
     use dist_fn, only: init_dist_fn
+    use init_g, only: init_init_g
     use gs2_flux, only: init_gs2_flux
     use gs2_io, only: init_gs2_io
     use gs2_heating, only: init_htype,init_dvtype
@@ -128,6 +129,7 @@ contains
     call init_kt_grids
     call init_run_parameters
     call init_species
+    call init_init_g
     call init_dist_fn
     call init_gs2_flux
 

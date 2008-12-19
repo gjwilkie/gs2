@@ -1,14 +1,13 @@
 module dist_fn
-  use init_g, only: ginit
   use redistribute, only: redist_type
   implicit none
   public :: init_dist_fn
   public :: timeadv, get_stress, exb_shear
   public :: getfieldeq, getan, getfieldexp, getmoms, gettotmoms
   public :: flux, neoclassical_flux, lambda_flux
-  public :: ginit, get_epar, e_flux, get_heat
+  public :: get_epar, e_flux, get_heat
   public :: vortcheck, fieldcheck
-  public :: t0, omega0, gamma0, thetas, k0, nperiod_guard, source0
+  public :: t0, omega0, gamma0, thetas, nperiod_guard, source0
   public :: reset_init, write_f, reset_physics, write_poly
   public :: M_class, N_class, i_class, par_spectrum
   public :: l_links, r_links, itright, itleft, boundary
@@ -25,7 +24,7 @@ module dist_fn
   real, dimension (:), allocatable :: bkdiff  ! (nspec)
   integer, dimension (:), allocatable :: bd_exp ! nspec
   real :: gridfac, apfac, driftknob, poisfac
-  real :: t0, omega0, gamma0, thetas, k0, source0
+  real :: t0, omega0, gamma0, thetas, source0
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
   real :: D_kill, noise, cfac, wfb, g_exb
@@ -145,7 +144,6 @@ contains
     use collisions, only: init_collisions!, vnmult
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
     use nonlinear_terms, only: init_nonlinear_terms
-    use init_g, only: init_init_g!, init_vnmult
     use hyper, only: init_hyper
     implicit none
 
@@ -174,7 +172,6 @@ contains
     call init_run_parameters
     call init_kperp2
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
-    call init_init_g 
     call init_nonlinear_terms 
     call allocate_arrays
     call init_vpar
@@ -193,7 +190,6 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use theta_grid, only: nperiod, shat
-    use init_g, only: init_g_k0 => k0
     use text_options, only: text_option, get_option_value
     use species, only: nspec
     use mp, only: proc0, broadcast
@@ -248,7 +244,7 @@ contains
          kill_grid, h_kill, g_exb, neoflux
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
-           thetas, k0, phi_ext, source_option, a_ext, aky_star, akx_star
+           thetas, phi_ext, source_option, a_ext, aky_star, akx_star
     integer :: ierr, is, in_file
     logical :: exist
     real :: bd
@@ -275,7 +271,6 @@ contains
        omega0 = 0.0
        gamma0 = 0.0
        thetas = 1.0
-       k0 = init_g_k0
        aky_star = 0.0
        akx_star = 0.0
        phi_ext = 0.0
@@ -343,7 +338,6 @@ contains
     call broadcast (omega0)
     call broadcast (gamma0)
     call broadcast (thetas)
-    call broadcast (k0)
     call broadcast (aky_star)
     call broadcast (akx_star)
     call broadcast (phi_ext)
@@ -2222,6 +2216,7 @@ contains
     use nonlinear_terms, only: nonlin
     use hyper, only: D_res
     use constants
+    use run_parameters, only: k0
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew

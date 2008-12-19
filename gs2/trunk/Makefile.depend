@@ -198,7 +198,6 @@ dist_fn.o: \
 	 gs2_time.o \
 	 gs2_transforms.o \
 	 hyper.o \
-	 init_g.o \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
@@ -309,6 +308,7 @@ gs2_diagnostics.o: \
 	 gs2_save.o \
 	 gs2_time.o \
 	 gs2_transforms.o \
+	 init_g.o \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \

@@ -31,7 +31,8 @@ contains
     use mp, only: proc0
     use theta_grid, only: init_theta_grid
     use run_parameters, only: init_run_parameters
-    use dist_fn, only: init_dist_fn, ginit
+    use dist_fn, only: init_dist_fn
+    use init_g, only: ginit
     use init_g, only: init_init_g
     use fields_implicit, only: init_fields_implicit, init_phi_implicit
     use fields_explicit, only: init_fields_explicit, init_phi_explicit
@@ -46,8 +47,8 @@ contains
 
     call init_theta_grid
     
-    call init_init_g
     call init_run_parameters
+    call init_init_g
     call init_dist_fn
     call read_parameters
     call allocate_arrays
