@@ -96,11 +96,12 @@ contains
 
   end subroutine reset_time_step
 
-  subroutine check_time_step (istep, reset, exit)
+!  subroutine check_time_step (istep, reset, exit)
+  subroutine check_time_step (reset, exit)
 
     use gs2_time, only: code_dt_cfl, code_dt
 
-    integer :: istep
+!    integer :: istep
     logical :: reset, exit
     logical :: first = .true.
 
