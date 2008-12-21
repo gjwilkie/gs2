@@ -545,7 +545,7 @@ contains
     if (write_gyx) call write_fyx (phinew,bparnew,last)
     if (write_g) call write_f (last)
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
-    if (write_cerr) call collision_error (phinew, bparnew, last, istep)
+    if (write_cerr) call collision_error (phinew, bparnew, last)
 !    if (write_gg) call write_dist (g)
 
     phi0 = 1.
@@ -2036,7 +2036,7 @@ contains
        end do
     end if
 
-    if (write_cerr) call collision_error(phinew,bparnew,last,istep)
+    if (write_cerr) call collision_error(phinew,bparnew,last)
 
     if (write_stress) then
        call get_stress (rstress, ustress)
@@ -2049,7 +2049,7 @@ contains
 
        call getmoms (phinew, ntot, density, upar, tpar, tperp)
 
-       if (test_conserve) call gettotmoms (phinew, bparnew, ntot, upartot, uperptot, ttot)
+       if (test_conserve) call gettotmoms (phinew, ntot, upartot, uperptot, ttot)
 
        if (proc0) then
           allocate (dl_over_b(-ntg_out:ntg_out))
