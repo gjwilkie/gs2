@@ -16,6 +16,7 @@ module dist_fn
   public :: get_verr, get_gtran, write_fyx, collision_error
   public :: neoflux
   public :: get_init_field
+  public :: g_adjust ! MAB (needed for Trinity)
 
   private
 
@@ -441,8 +442,8 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use dist_fn_arrays, only: ittp
     implicit none
-    integer :: ig, ik, it, il, ie, is
-    integer :: iglo, ierr
+    integer :: ig, ik, it, ie, is
+    integer :: iglo
     logical :: alloc = .true.
 
 ! find totally trapped particles 
@@ -479,9 +480,7 @@ contains
 !> MAB
           if (neoflux) then
              wdrift_neo(ig,iglo) &
-                  = wdrift_func_neo(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), &
-                  it_idx(g_lo,iglo), ik_idx(g_lo,iglo), &
-                  is_idx(g_lo,iglo))
+                  = wdrift_func_neo(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
           end if
 !< MAB
        end do
@@ -500,7 +499,7 @@ contains
 !> MAB
                    if (neoflux) then
                       wdriftttp_neo(ig,it,ik,ie,is) &
-                           = wdrift_func_neo(ig,ittp(ig),ie,it,ik,is)*driftknob
+                           = wdrift_func_neo(ig,ittp(ig),ie,is)*driftknob
                    end if
 !< MAB
                 end do
@@ -548,7 +547,7 @@ contains
   end function wdrift_func
 
 !> MAB
-  function wdrift_func_neo (ig, il, ie, it, ik, is)
+  function wdrift_func_neo (ig, il, ie, is)
     use theta_grid, only: bmag, gbdrift, gbdrift0, cvdrift, cvdrift0
     use theta_grid, only: shat
     use kt_grids, only: aky, theta0, akx
@@ -557,7 +556,7 @@ contains
     use gs2_time, only: code_dt
     implicit none
     real :: wdrift_func_neo
-    integer, intent (in) :: ig, ik, it, il, ie, is
+    integer, intent (in) :: ig, il, ie, is
 
     wdrift_func_neo = 1./shat &
                     *(cvdrift0(ig)*e(ie,is)*(1.0 - al(il)*bmag(ig)) &
@@ -575,7 +574,7 @@ contains
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx
     implicit none
-    integer :: iglo, ik, is, ie, il
+    integer :: iglo, ik, is
     real :: al1, e1
     
 
@@ -636,6 +635,7 @@ contains
     use le_grids, only: negrid, e
     use run_parameters, only: wunits
     use gs2_time, only: code_dt
+
     implicit none
     integer :: ik, ie, is
 
@@ -735,7 +735,6 @@ contains
     use kt_grids, only: naky, ntheta0
 
     complex, dimension(:,:,:) :: an, an2    
-    integer :: it, ik
     real :: scale
 
     call kz_spectrum (an, an2, ntgrid, ntheta0, naky)
@@ -850,18 +849,14 @@ contains
     use constants
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
-    type (index_list_type), dimension(0:nproc-1) :: to_left, from_right
-    type (index_list_type), dimension(0:nproc-1) :: to_right, from_left
     type (index_list_type), dimension(0:nproc-1) :: to, from
-    integer, dimension (0:nproc-1) :: nn_from_left, nn_to_right
-    integer, dimension (0:nproc-1) :: nn_from_right, nn_to_left
     integer, dimension (0:nproc-1) :: nn_from, nn_to
     integer, dimension (3) :: to_low, from_low, to_high, from_high
     integer :: ik, it, il, ie, is, iglo, it0, itl, itr, jshift0
     integer :: ip, ipleft, ipright
     integer :: iglo_left, iglo_right, i, j, k
     integer :: iglo_star, it_star, ncell
-    integer :: n, isign, ig, n_links_max, nn_max
+    integer :: n, n_links_max, nn_max
     integer :: ng
     integer, dimension(naky*ntheta0) :: n_k
 
@@ -1803,7 +1798,6 @@ contains
     integer, intent (in) :: istep
     integer, optional, intent (in) :: mode
     integer :: modep
-    integer :: diagnostics = 1
 
     modep = 0
     if (present(mode)) modep = mode
@@ -2100,8 +2094,7 @@ contains
     complex, dimension (:,:), allocatable :: g0eint, g1eint
     
     real, dimension (:,:), allocatable, save :: aintnorm
-    real :: x
-    integer :: iglo, ik, it, il, ige, ig, igint
+    integer :: iglo, ik, it, ige
     logical :: diff_first = .true.
     real :: chi_int ! chi_int needs to be calculated before it can be used.
 
@@ -2224,7 +2217,7 @@ contains
     integer, intent (in) :: isgn, iglo
     complex, intent (in) :: sourcefac
     complex, dimension (-ntgrid:), intent (out) :: source
-    real :: tfac, timep
+    real :: tfac
 
     integer :: ig, ik, it, il, ie, is
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg!, bpargavg !GGH added bpargavg
@@ -2799,8 +2792,8 @@ contains
     integer, intent (in) :: istep
     complex, intent (in) :: sourcefac
 
-    complex :: b0, fac, facd, b1
-    integer :: il, ik, it, n, i, j, it_star
+    complex :: b0, fac, facd
+    integer :: il, ik, it, n, i, j
     integer :: iglo, ncell
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -2929,7 +2922,7 @@ contains
 
     integer :: iglo
 
-    real :: time, timep
+    real :: time
     complex :: sourcefac
 
     call prof_entering ("invert_rhs", "dist_fn")
@@ -3118,7 +3111,7 @@ contains
     call prof_leaving ("getmoms", "dist_fn")
   end subroutine getmoms
 
-  subroutine gettotmoms (phi, bpar, ntot, upar, uperp, ttot)
+  subroutine gettotmoms (phi, ntot, upar, uperp, ttot)
     use dist_fn_arrays, only: vpa, vperp2, aj0, gnew, aj1, kperp2
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx, il_idx
     use species, only: nspec, spec
@@ -3128,7 +3121,7 @@ contains
     use run_parameters, only: fphi, fbpar
     use constants, only: pi => dpi
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, &
          upar, uperp, ttot
 
@@ -3715,7 +3708,6 @@ contains
     use dist_fn_arrays, only: aj0, vpa, kperp2
 
     complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
-    real, dimension (nspec) :: wgt
     real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: denominator
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: antot, antota, antotp
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: numerator
@@ -3797,7 +3789,7 @@ contains
 !    real, dimension (:,:,:), intent (out) :: qflux_perp, qmflux_perp, qbflux_perp
     real, dimension (:,:,:), allocatable :: dnorm
     real :: anorm
-    integer :: ig, it, ik, is, isgn
+    integer :: it, ik, is, isgn
     integer :: iglo
 
     allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
@@ -4371,15 +4363,16 @@ contains
 !    complex, dimension (-ntgrid:,:,:), pointer :: hh, hnew
     complex, dimension (-ntgrid:,:,:) :: phi, apar, bpar, phinew, aparnew, bparnew
     complex, dimension(:,:,:,:), allocatable :: tot
-    complex, dimension(:,:,:), allocatable :: epar, bpardot, apardot, phidot, j_ext, a_ext_old, a_ext_new
-    complex :: fac, hfac, pfac, jpold, afac, chi, havg, gavg
-    complex :: bfac                                   !B_|| intermediate calculation
-    complex :: chidot, eparavg, j0phidot, j0phiavg, j1bparavg, j0aparavg
-    complex :: phi_m, apar_m, bpar_m, pstar, pstardot, gdot, hdot, hold, adot
-    complex :: phi_avg, apar_avg, bpar_avg, bperp_m, bperp_avg
-    complex :: de, denew, chinew,chi1,chi2, havg2,havg2new,h2dot
+!    complex, dimension (:,:,:), allocatable :: epar
+    complex, dimension(:,:,:), allocatable :: bpardot, apardot, phidot, j_ext
+    complex :: chi, havg
+    complex :: chidot, j0phiavg, j1bparavg, j0aparavg
+!    complex :: pstar, pstardot, gdot
+    complex :: phi_m, apar_m, bpar_m, hdot
+    complex :: phi_avg, bpar_avg, bperp_m, bperp_avg
+    complex :: de, denew
     real, dimension (:), allocatable :: wgt
-    real :: fac2, dtinv, akperp4 , akperp6, akperp2
+    real :: fac2, dtinv, akperp4
     integer :: isgn, iglo, ig, is, ik, it, ie
 
     g0(ntgrid,:,:) = 0.
@@ -5101,7 +5094,6 @@ contains
     real, dimension (:,:,:), allocatable :: dnorm
     integer :: ig, ik, it, ie, is, ng
     integer :: iglo
-    complex :: x
     real :: kx2
 
     allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
@@ -5364,7 +5356,7 @@ contains
 
     implicit none
 
-    integer :: ig, it, ik, is, il, ipt, iglo, isgn, ntrap
+    integer :: ig, it, ik, iglo, isgn, ntrap
 
     integer, dimension (:,:), intent (out) :: erridx
     real, dimension (:,:), intent (out) :: errest
@@ -5378,10 +5370,8 @@ contains
     complex, dimension (:,:,:,:), allocatable :: phi_e, phi_l, phi_t
     complex, dimension (:,:,:,:), allocatable :: apar_e, apar_l, apar_t
 
-    real :: gptmp, gdsum, gpsum, gdmax, gpavg, gnsum, gsmax
     real :: errcut_phi, errcut_apar
     real :: vnmult_target
-    integer :: igmax, ikmax, itmax, gpcnt
 
     logical :: increase = .true., decrease = .false., first = .true.
     logical :: trap_flag
@@ -5952,7 +5942,7 @@ contains
     use dist_fn_arrays, only: g, gnew
 
     integer :: iglo, ik, it, is
-    integer :: ie, il, ig, ie_last
+    integer :: ie, il, ig
     integer, save :: unit
     real :: vpa, vpe
     complex, dimension(2) :: gtmp
@@ -6167,7 +6157,7 @@ contains
 
   end subroutine write_fyx
 
-  subroutine collision_error (phi, bpar, last, istep)
+  subroutine collision_error (phi, bpar, last)
     
     use mp, only: proc0, send, receive, barrier
     use le_grids, only: ng2, jend, nlambda, al, forbid
@@ -6184,9 +6174,8 @@ contains
 
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     logical, intent (in) :: last
-    integer, intent (in) :: istep    
 
-    integer :: iglo, je, te, ig, il, ip, ilz, isgn, ie, is, ik, it
+    integer :: je, te, ig, il, ip, ilz, ie, is, ik, it
     integer :: igmax, ikmax, itmax, iemax, ilmax, ismax
     integer, save :: unit
     complex, dimension (:), allocatable :: ltmp, ftmp
