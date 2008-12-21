@@ -88,8 +88,14 @@ contains
     if (proc0) then
        do is = 1, nspec
           call get_indexed_namelist_unit (unit, "species_parameters", is)
+          z = 1
+          mass = 1.0
+          dens = 1.0
           dens0 = 1.0
           u0 = 1.0
+          temp = 1.0
+          tprim = 6.9
+          fprim = 2.2
           uprim = 0.0
           uprim2 = 0.0
           nustar = -1.0

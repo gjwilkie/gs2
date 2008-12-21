@@ -384,7 +384,7 @@ contains
     character(200) line
     integer, dimension (2) :: nin_start, nin_count
 
-    integer :: status, n, unit, iostat
+    integer :: status, n, unit
 
     nin_start(1) = 1
     nin_start(2) = 1
@@ -1375,7 +1375,7 @@ contains
 # ifdef NETCDF
     integer, dimension (6) :: start2, count2
     integer, dimension (5) :: start1, count1
-    integer :: status
+!    integer :: status
 
     start1(1) = 1
     start1(2) = 1
@@ -1783,7 +1783,7 @@ contains
     integer, dimension (4) :: start0, count0, start4, count4
     integer, dimension (3) :: start, count, starth, counth
     integer, dimension (2) :: startx, countx, starty, county, starts, counts
-    integer :: status, it, ik, is
+    integer :: status, it, ik
 
     status = nf90_put_var (ncid, time_id, time, start=(/ nout /))
 
@@ -2095,7 +2095,7 @@ contains
 # ifdef NETCDF
     use netcdf, only: nf90_put_var
 
-    real :: betatot
+!    real :: betatot
     integer :: status
 
     status = nf90_put_var (ncid, charge_id, spec%z)
