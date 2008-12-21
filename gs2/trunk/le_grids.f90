@@ -247,7 +247,6 @@ contains
     real, intent (in) :: vcut
     integer, intent (in) :: nesub
     real, dimension(:), intent (out) :: epts, wgts
-    integer :: ie
 
     call init_egrid (negrid)
     
@@ -396,7 +395,7 @@ contains
 !    double precision :: xg, denom, pi
     double precision :: xg, denom
     real :: e, xgrid_s
-    integer :: kmax, k, j
+    integer :: kmax, k
 
 !    pi = asin(real(1.0,kind(pi))) * 2.0
     kmax = 100
