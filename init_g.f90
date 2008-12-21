@@ -1578,11 +1578,11 @@ contains
   subroutine ginit_rh
     use le_grids, only: forbid, e
     use dist_fn_arrays, only: g, gnew
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use gs2_layouts, only: g_lo, it_idx, il_idx, ie_idx, is_idx
     use constants
     implicit none
     integer :: iglo
-    integer :: ik, it, il, ie, is
+    integer :: it, il, ie, is
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        il = il_idx(g_lo,iglo)
