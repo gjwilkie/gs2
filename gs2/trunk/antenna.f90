@@ -42,9 +42,10 @@ module antenna
   logical :: ant_off = .false.
   real :: beta_s
   complex :: wtmp
+  logical, save :: initialized = .false.
 
   private
-  public :: init_antenna, dump_ant_amp, amplitude
+  public :: init_antenna, dump_ant_amp, amplitude, reset_init
   public :: antenna_w, antenna_apar, antenna_amplitudes, a_ext_data
 
 contains
@@ -56,23 +57,25 @@ contains
     use antenna_data, only: init_antenna_data
     use theta_grid, only: gradpar
     implicit none
-    logical, save :: initialized = .false.
+
     integer :: i
 
     if (initialized) return
     initialized = .true.
 
-    call init_species
+    if (.not. allocated(w_stir)) then
+       call init_species
 
-    call read_parameters
-    if (no_driver) then
-       i = -1
-       call init_antenna_data (i)
-       return
+       call read_parameters
+       if (no_driver) then
+          i = -1
+          call init_antenna_data (i)
+          return
+       end if
+
+       allocate (w_stir(nk_stir))
     end if
 
-    allocate (w_stir(nk_stir))
-    
     beta_s = 0.
     if (beta > epsilon(0.0)) then
        do i=1,nspec
@@ -398,6 +401,16 @@ contains
     end if
 
   end subroutine dump_ant_amp
+!=============================================================================
+
+! used when interfacing GS2 with Trinity -- MAB
+  subroutine reset_init
+
+    implicit none
+    
+    initialized = .false.
+
+  end subroutine reset_init
 !=============================================================================
 end module antenna
 
