@@ -30,6 +30,7 @@ module geometry
   real :: dp_new, di_new
   real, private :: psi_0, psi_a
   real :: B_T0, avgrmid, dvdrhon, surfarea, grho1n, grho2n, drhodpsin
+  real :: grhoavg  ! needed for Trinity -- MAB
 
   real, dimension(3) :: rpval
   real :: rpmin, rpmax, ak0
@@ -766,6 +767,10 @@ contains
     do i=-nth,nth
        grho2(i)=grho(i)**2*jacob(i)
     enddo
+!> MAB -- needed for Trinity
+    call integrate(abs(grho)*jacob, theta, ans, nth)
+    grhoavg=2.*pi*(ans(nth)-ans(-nth))
+!< MAB
 !    call integrate(grho2, theta, ans, nth)
 !    grho2n=2.*pi*(ans(nth)-ans(-nth))
 !    write (*,*) '< |grad rho|**2 > = ',grho2n
