@@ -68,7 +68,7 @@ program gs2
           call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
      
      call loop_diagnostics (istep, exit)
-     call check_time_step (istep, reset, exit)
+     call check_time_step (reset, exit)
      if (proc0) call time_message(.false.,.true.,time_advance,' Advance time step')
      if (reset) call reset_time_step (istep, exit)
 
