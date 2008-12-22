@@ -809,7 +809,8 @@ contains
     use dist_fn_arrays, only: g, gnew, vpa, vperp2, aj0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
     use constants
-    use ran    use run_parameters, only: k0
+    use ran
+    use run_parameters, only: k0
     implicit none
     complex, dimension (ntheta0,naky) :: phi
     integer :: iglo
