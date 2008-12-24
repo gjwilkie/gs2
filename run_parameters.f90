@@ -11,6 +11,7 @@ module run_parameters
   public :: secondary, tertiary, harris
   public :: k0
   public :: vnm_init
+  public :: avail_cpu_time
 
   private
 
@@ -19,6 +20,7 @@ module run_parameters
   real :: delt, code_delt_max, user_delt_max, funits, tnorm, margin
   real, dimension (:), allocatable :: wunits, woutunits, tunits
   real, dimension (2) :: vnm_init
+  real :: avail_cpu_time
   integer :: nstep
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
@@ -74,7 +76,8 @@ contains
     logical :: exist
     namelist /parameters/ beta, zeff, tite, rhostar, teti, k0
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
-         delt_option, margin, secondary, tertiary, faperp, harris
+         delt_option, margin, secondary, tertiary, faperp, harris, &
+         avail_cpu_time
 
     if (proc0) then
        fbpar = -1.0
@@ -92,6 +95,8 @@ contains
        k0 = 1.
        delt_option = 'default'
        margin = 0.05
+       avail_cpu_time = 1.e10
+
        in_file = input_unit_exist("parameters", exist)
 !       if (exist) read (unit=input_unit("parameters"), nml=parameters)
        if (exist) read (unit=in_file,nml=parameters)
@@ -152,6 +157,8 @@ contains
     call broadcast (harris)
     call broadcast (margin)
     call broadcast (k0)
+    call broadcast (avail_cpu_time)
+
     user_delt_max = delt
 
     delt_saved = delt

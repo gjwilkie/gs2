@@ -1,5 +1,5 @@
 program gs2
-  use job_manage, only: checkstop, job_fork
+  use job_manage, only: checkstop, job_fork, checktime
   use mp, only: init_mp, finish_mp, proc0, nproc, broadcast
 !  use mp, only: init_mp, finish_mp, proc0, iproc, nproc, broadcast, init_jobs
 !  use mp, only: scope, allprocs, subprocs, send, receive, barrier, job
@@ -10,6 +10,7 @@ program gs2
   use gs2_diagnostics, only: nsave
   use run_parameters, only: nstep
   use run_parameters, only: fphi, fapar, fbpar
+  use run_parameters, only: avail_cpu_time
   use fields, only: advance
   use dist_fn_arrays, only: gnew
   use gs2_save, only: gs2_save_for_restart
@@ -30,6 +31,7 @@ program gs2
 
 ! initialize message passing 
   call init_mp
+  call checktime(avail_cpu_time,exit) ! initialize
 
 ! report # of processors being used
   if (proc0) then
@@ -73,6 +75,8 @@ program gs2
      if (reset) call reset_time_step (istep, exit)
 
      if (mod(istep,5) == 0) call checkstop(exit)
+
+     call checktime(avail_cpu_time,exit)
 
      if (exit) then
         istep_end = istep
