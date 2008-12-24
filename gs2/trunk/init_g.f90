@@ -28,6 +28,7 @@ module init_g
   real :: tstart, scale, apar0
   logical :: chop_side, left, even, new_field_init
   character(300) :: restart_file
+  character (len=150) :: restart_dir
   integer, dimension(2) :: ikk, itt
   
 contains
@@ -45,6 +46,12 @@ contains
     call init_gs2_layouts
 
     if (proc0) call read_parameters
+
+    ! prepend restart_dir to restart_file
+    ! append trailing slash if not exists
+    if(restart_dir(len_trim(restart_dir):) /= "/") &
+         restart_dir=trim(restart_dir)//"/"
+    restart_file=trim(restart_dir)//trim(restart_file)
 
     call broadcast (ginitopt_switch)
     call broadcast (width0)
@@ -220,7 +227,7 @@ contains
             text_option('recon', ginitopt_recon) /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
-         restart_file, left, ikk, itt, scale, tstart, zf_init, &
+         restart_file, restart_dir, left, ikk, itt, scale, tstart, zf_init, &
          den0, upar0, tpar0, tperp0, imfac, refac, even, &
          den1, upar1, tpar1, tperp1, &
          den2, upar2, tpar2, tperp2, dphiinit, apar0, &
@@ -260,6 +267,7 @@ contains
     itt(1) = 1
     itt(2) = 2
     restart_file = trim(run_name)//".nc"
+    restart_dir = "./"
     in_file = input_unit_exist ("init_g_knobs", exist)
 !    if (exist) read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
     if (exist) read (unit=in_file,nml=init_g_knobs)
