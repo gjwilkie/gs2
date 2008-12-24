@@ -3013,19 +3013,19 @@ contains
     call prof_leaving ("getan", "dist_fn")
   end subroutine getan
 
-  subroutine getmoms (phi, ntot, density, upar, tpar, tperp)
-    use dist_fn_arrays, only: vpa, vperp2, aj0, gnew
+  subroutine getmoms (ntot, density, upar, tpar, tperp)
+    use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use le_grids, only: integrate_moment, anon
     use prof, only: prof_entering, prof_leaving
+    use fields_arrays, only: phinew, bparnew
 
     ! TEMP FOR TESTING -- MAB
 !    use le_grids, only: e
 
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
          upar, tpar, tperp, ntot
 
@@ -3040,25 +3040,12 @@ contains
        is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
-
-       ! TEMP FOR TESTING -- MAB
-!       gnew(:,:,iglo) = cos(2.*sqrt(e(ie,is)))
-!       gnew = 1.0
-
        do isgn = 1, 2
-          g0(:,isgn,iglo) = (aj0(:,iglo)**2-1.0)*anon(ie,is) &
-               *phi(:,it,ik)*spec(is)%zt*spec(is)%dens
-       end do
-    end do
-
-    ! TEMP FOR TESTING -- MAB
-!    g0 = 0.0
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) + g0(ig,isgn,iglo)
-          end do
+          g0(:,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) &
+               + (aj0(:,iglo)**2-1.0)*anon(ie,is) &
+               * phinew(:,it,ik)*spec(is)%zt &
+               + aj0(:,iglo)*aj1(:,iglo)*vperp2(:,iglo)*2.*anon(ie,is) &
+               * bparnew(:,it,ik)
        end do
     end do
 
@@ -3110,8 +3097,8 @@ contains
 
     call prof_leaving ("getmoms", "dist_fn")
   end subroutine getmoms
-
-  subroutine gettotmoms (phi, ntot, upar, uperp, ttot)
+  
+  subroutine gettotmoms (ntot, upar, uperp, ttot)
     use dist_fn_arrays, only: vpa, vperp2, aj0, gnew, aj1, kperp2
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx, il_idx
     use species, only: nspec, spec
@@ -3119,9 +3106,9 @@ contains
     use le_grids, only: integrate_moment, anon, e, al
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
-    use constants, only: pi => dpi
+    use constants, only: pi
+    use fields_arrays, only: phinew, bparnew
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, &
          upar, uperp, ttot
 
@@ -3136,20 +3123,15 @@ contains
        is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
-
        do isgn = 1, 2
-          g0(:,isgn,iglo) = (aj0(:,iglo)**2-1.0)*anon(ie,is) &
-               *phi(:,it,ik)*spec(is)%zt*spec(is)%dens
+          g0(:,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) &
+               + (aj0(:,iglo)**2-1.0)*anon(ie,is) &
+               * phinew(:,it,ik)*spec(is)%zt &
+               + aj0(:,iglo)*aj1(:,iglo)*vperp2(:,iglo)*2.*anon(ie,is) &
+               * bparnew(:,it,ik)
        end do
     end do
 
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) + g0(ig,isgn,iglo)
-          end do
-       end do
-    end do
     call integrate_moment (g0, ntot)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
