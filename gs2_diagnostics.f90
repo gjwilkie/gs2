@@ -795,7 +795,7 @@ contains
        allocate (upar(-ntgrid:ntgrid,ntheta0,naky,nspec))
        allocate (tpar(-ntgrid:ntgrid,ntheta0,naky,nspec))
        allocate (tperp(-ntgrid:ntgrid,ntheta0,naky,nspec))
-       call getmoms (phinew, ntot, density, upar, tpar, tperp)
+       call getmoms (ntot, density, upar, tpar, tperp)
 
        if (proc0) then
           if (write_ascii) then
@@ -1383,7 +1383,7 @@ contains
        nny = yxf_lo%ny
        if (fphi > epsilon(0.0)) then
           allocate (yxphi(nnx,nny,-ntgrid:ntgrid))
-          call getmoms (phinew, ntot, density, upar, tpar, tperp)
+          call getmoms (ntot, density, upar, tpar, tperp)
 !          call transform2 (ntot, yxphi, nny, nnx)
           call transform2 (phinew, yxphi, nny, nnx)
        end if
@@ -2047,9 +2047,9 @@ contains
     call broadcast (write_avg_moments)
     if (write_avg_moments) then
 
-       call getmoms (phinew, ntot, density, upar, tpar, tperp)
+       call getmoms (ntot, density, upar, tpar, tperp)
 
-       if (test_conserve) call gettotmoms (phinew, ntot, upartot, uperptot, ttot)
+       if (test_conserve) call gettotmoms (ntot, upartot, uperptot, ttot)
 
        if (proc0) then
           allocate (dl_over_b(-ntg_out:ntg_out))
