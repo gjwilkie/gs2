@@ -17,6 +17,7 @@ program gs2
   use gs2_diagnostics, only: loop_diagnostics
   use gs2_reinit, only: reset_time_step, check_time_step
   use gs2_reinit, only: time_message, time_nc, time_reinit
+  use gs2_time, only: update_time
   use gs2_time, only: write_dt, init_tstart
   use gs2_time, only: user_time, user_dt
   use init_g, only: tstart
@@ -63,12 +64,16 @@ program gs2
   call init_tstart (tstart)   ! tstart is in user units 
   if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
   istep_end = nstep
+
+  call loop_diagnostics(0,exit)
+
   do istep = 1, nstep
 
      call advance (istep)
      if (nsave > 0 .and. mod(istep, nsave) == 0) &
           call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
      
+     call update_time
      call loop_diagnostics (istep, exit)
      call check_time_step (reset, exit)
      if (proc0) call time_message(.false.,.true.,time_advance,' Advance time step')

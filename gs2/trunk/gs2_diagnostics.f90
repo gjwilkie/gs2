@@ -1279,7 +1279,7 @@ contains
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
-    use gs2_time, only: update_time, user_time
+    use gs2_time, only: user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
     use gs2_io, only: nc_loop_stress, nc_loop_vres
     use gs2_io, only: nc_loop_movie
@@ -1372,8 +1372,6 @@ contains
 !<GGH
 
     call prof_leaving ("loop_diagnostics")
-
-    call update_time
 
     if (make_movie .and. mod(istep,nmovie)==0) then
        t = user_time
