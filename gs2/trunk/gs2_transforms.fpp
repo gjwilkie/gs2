@@ -31,6 +31,7 @@ module gs2_transforms
      module procedure transform2_5d
      module procedure transform2_4d
      module procedure transform2_3d
+     module procedure transform2_2d
   end interface
 
   interface inverse_x
@@ -49,6 +50,7 @@ module gs2_transforms
      module procedure inverse2_5d_accel
      module procedure inverse2_5d
      module procedure inverse2_3d
+     module procedure inverse2_2d
   end interface
 
   ! redistribution
@@ -711,6 +713,89 @@ contains
     deallocate (aphi, phix)
 
   end subroutine inverse2_3d
+
+  subroutine transform2_2d (phi, phixf, nny, nnx)
+    use fft_work, only: FFTW_BACKWARD, delete_fft, init_crfftw
+    use kt_grids, only: naky, nakx => ntheta0, nx, aky, akx
+    implicit none
+    integer :: nnx, nny
+    complex, intent (in) :: phi(:,:)
+    real, intent (out) :: phixf  (:,:)
+    real, allocatable :: phix(:,:)
+    complex, allocatable :: aphi(:,:)
+    real :: fac
+    integer :: ik, it
+    type (fft_type) :: xf2d
+
+    call init_crfftw (xf2d, FFTW_BACKWARD, nny, nnx)
+
+    allocate (phix (nny, nnx))
+    allocate (aphi (nny/2+1, nnx))
+    phix(:,:)=0.; aphi(:,:)=cmplx(0.,0.)
+
+! scale, dealias and transpose
+    do ik=1,naky
+       fac = 0.5
+       if (aky(ik) < epsilon(0.)) fac = 1.0
+       do it=1,(nakx+1)/2
+          aphi(ik,it) = phi(it,ik)*fac
+       end do
+       do it=(nakx+1)/2+1,nakx
+          aphi(ik,it-nakx+nx) = phi(it,ik)*fac
+       end do
+    end do
+
+! transform
+# if FFT == _FFTW_
+    call rfftwnd_f77_complex_to_real (xf2d%plan, 1, aphi, 1, 1, phix, 1, 1)
+# endif
+
+    phixf(:,:)=transpose(phix(:,:))
+
+    deallocate (aphi, phix)
+!RN> this statement causes error for lahey with DEBUG. I don't know why
+!    call delete_fft(xf2d)
+  end subroutine transform2_2d
+
+  subroutine inverse2_2d (phixf, phi, nny, nnx)
+    use fft_work, only: FFTW_FORWARD, delete_fft, init_rcfftw
+    use kt_grids, only: naky, nakx => ntheta0, aky
+    implicit none
+    real, intent(in) :: phixf(:,:)
+    complex, intent(out) :: phi(:,:)
+    integer :: nnx, nny
+    complex, allocatable :: aphi(:,:)
+    real, allocatable :: phix(:,:)
+    real :: fac
+    integer :: ik, it
+    type (fft_type) :: xf2d
+
+    call init_rcfftw (xf2d, FFTW_FORWARD, nny, nnx)
+
+    allocate (aphi (nny/2+1, nnx))
+    allocate (phix (nny, nnx))
+    phix(:,:)=cmplx(0.,0.); aphi(:,:)=cmplx(0.,0.)
+
+    phix(:,:)=transpose(phixf(:,:))
+
+! transform
+# if FFT == _FFTW_
+    call rfftwnd_f77_real_to_complex (xf2d%plan, 1, phix, 1, 1, aphi, 1, 1)
+# endif
+
+! scale, dealias and transpose
+    do it=1,nakx
+       do ik=1,naky
+          fac = 2.0
+          if (aky(ik) < epsilon(0.0)) fac = 1.0
+          phi(it,ik) = aphi(ik,it)*fac*xf2d%scale
+       end do
+    end do
+
+    deallocate (aphi, phix)
+!RN> this statement causes error for lahey with DEBUG. I don't know why
+!    call delete_fft(xf2d)
+  end subroutine inverse2_2d
 
   subroutine transform2_4d (den, phixf, nny, nnx)
     use theta_grid, only: ntgrid
