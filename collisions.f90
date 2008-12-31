@@ -136,7 +136,6 @@ contains
     call init_le_grids (accelerated_x, accelerated_v)
     call init_run_parameters
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
-
     call read_parameters
     call init_arrays
   end subroutine init_collisions
@@ -202,7 +201,7 @@ contains
        heating = .false.
        in_file = input_unit_exist ("collisions_knobs", exist)
 !       if (exist) read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
-       if (exist) read (unit=in_file,nml=collisions_knobs)
+       if (exist) read (unit=in_file, nml=collisions_knobs)
 
        ierr = error_unit()
        call get_option_value &
@@ -254,7 +253,9 @@ contains
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use dist_fn_arrays, only: c_rate
+
     implicit none
+
     real, dimension (negrid,nspec) :: hee
     logical :: first_time = .true.
 
@@ -1358,6 +1359,7 @@ contains
 
        vn = vnmult(2)*spec(is)%vnewk*tunits(ik)
 
+!       slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))     ! xi_j
        slb1 = sqrt(max(0.0,1.0 - bmag(ig)*al(il)))     ! xi_j
 
        select case (ediff_switch)
@@ -1774,6 +1776,7 @@ contains
 
     call init_lorentz_layouts &
          (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
+
     call init_lorentz_redistribute
 
     if (.not.allocated(c1)) then
@@ -1788,9 +1791,72 @@ contains
           allocate (h1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
           d1 = 0.0 ; h1 = 0.0
        end if
-       if (conservative) allocate (vpdiff(-ntgrid:ntgrid,2,nlambda))
-    endif
+       if (conservative) then
+          allocate (vpdiff(-ntgrid:ntgrid,2,nlambda))
+          vpdiff = 0.0
 
+          do ig = -ntgrid, ntgrid
+
+             je = jend(ig)
+             if (je <= ng2+1) then
+                te = ng2
+             else
+                te = je 
+             end if
+             do il = 2, te-1
+                slb0 = sqrt(abs(1.0 - bmag(ig)*al(il-1))) 
+                slb1 = sqrt(abs(1.0 - bmag(ig)*al(il))) 
+                slb2 = sqrt(abs(1.0 - bmag(ig)*al(il+1))) 
+                
+                slbl = (slb1 + slb0)*0.5  ! xi(j-1/2)
+                slbr = (slb1 + slb2)*0.5  ! xi(j+1/2)
+                
+                vpdiff(ig,1,il) = (slbl**2 - slbr**2)/wl(ig,il)
+!                if (ig == 0 .and. proc0) then
+!                   write (*,501) 'slb', real(il), real(ng2), real(te), slb0, slb1, slb2, slbl, slbr, wl(ig,il), vpdiff(ig,1,il)
+!                end if
+             end do
+
+!501          format (a5,10(1x,1pg18.11))
+             
+             ! boundary at xi = 1
+             slb1 = sqrt(abs(1.0 - bmag(ig)*al(1))) 
+             slb2 = sqrt(abs(1.0 - bmag(ig)*al(2))) 
+             slbr = 0.5*(slb1 + slb2)
+             vpdiff(ig,1,1) = (1.0 - slbr**2)/wl(ig,1)
+             
+             ! boundary at xi = 0
+             il = te
+             slb0 = sqrt(abs(1.0 - bmag(ig)*al(il-1))) 
+             if (te == ng2) then
+                slb1 = sqrt(abs(1.0 - bmag(ig)*al(il))) 
+                slb2 = -slb1
+             else
+                slb1 = 0.0
+                slb2 = -slb0
+             end if
+             
+             slbl = (slb1 + slb0)*0.5
+             slbr = (slb1 + slb2)*0.5
+             vpdiff(ig,1,il) = (slbl**2 - slbr**2)/wl(ig,il)
+             
+             vpdiff(ig,2,:) = -vpdiff(ig,1,:)
+          
+          end do
+          ! TMP FOR TESTING -- MAB
+!          if (proc0) then
+!             do ig = -ntgrid, ntgrid
+!                do il = 1, nlambda
+!                   write (*,401) 'vpdiff', real(il), real(ig), al(il), bmag(ig), wl(ig,il), sqrt(max(0.0,1.0-al(il)*bmag(ig))), vpdiff(ig,1,il), vpdiff(ig,2,il) 
+!                end do
+!             end do
+!          end if
+
+!401       format (a8,8(1x,1pg18.11))
+
+       end if
+    end if
+       
     c1 = 0.0 ; betaa = 0.0 ; ql = 0.0
     ra1 = 0.0; rb1 = 0.0; rc1 = 0.0
 
@@ -1830,42 +1896,52 @@ contains
           end if
        end if
 
-       if (conservative) then
-          do il = 2, te-1
-             slb0 = sqrt(abs(1.0 - bmag(ig)*al(il-1))) 
-             slb1 = sqrt(abs(1.0 - bmag(ig)*al(il))) 
-             slb2 = sqrt(abs(1.0 - bmag(ig)*al(il+1))) 
+!       if (conservative) then
+!          do il = 2, te-1
+!             slb0 = sqrt(abs(1.0 - bmag(ig)*al(il-1))) 
+!             slb1 = sqrt(abs(1.0 - bmag(ig)*al(il))) 
+!             slb2 = sqrt(abs(1.0 - bmag(ig)*al(il+1))) 
              
-             slbl = (slb1 + slb0)*0.5  ! xi(j-1/2)
-             slbr = (slb1 + slb2)*0.5  ! xi(j+1/2)
-             
-             vpdiff(ig,1,il) = (slbl**2 - slbr**2)/wl(ig,il)
-          end do
-          
-          ! boundary at xi = 1
-          slb1 = sqrt(abs(1.0 - bmag(ig)*al(1))) 
-          slb2 = sqrt(abs(1.0 - bmag(ig)*al(2))) 
-          slbr = 0.5*(slb1 + slb2)
-          vpdiff(ig,1,1) = (1.0 - slbr**2)/wl(ig,1)
-          
-          ! boundary at xi = 0
-          il = te
-          slb0 = sqrt(abs(1.0 - bmag(ig)*al(il-1))) 
-          if (te == ng2) then
-             slb1 = sqrt(abs(1.0 - bmag(ig)*al(il))) 
-             slb2 = -slb1
-          else
-             slb1 = 0.0
-             slb2 = -slb0
-          end if
-          
-          slbl = (slb1 + slb0)*0.5
-          slbr = (slb1 + slb2)*0.5
-          vpdiff(ig,1,il) = (slbl**2 - slbr**2)/wl(ig,il)
-          
-          vpdiff(ig,2,:) = -vpdiff(ig,1,:)
-          
-       end if
+!             slbl = (slb1 + slb0)*0.5  ! xi(j-1/2)
+!             slbr = (slb1 + slb2)*0.5  ! xi(j+1/2)
+!             
+!             vpdiff(ig,1,il) = (slbl**2 - slbr**2)/wl(ig,il)
+!          end do
+!          
+!          ! boundary at xi = 1
+!          slb1 = sqrt(abs(1.0 - bmag(ig)*al(1))) 
+!          slb2 = sqrt(abs(1.0 - bmag(ig)*al(2))) 
+!          slbr = 0.5*(slb1 + slb2)
+!          vpdiff(ig,1,1) = (1.0 - slbr**2)/wl(ig,1)
+!          
+!          ! boundary at xi = 0
+!          il = te
+!          slb0 = sqrt(abs(1.0 - bmag(ig)*al(il-1))) 
+!          if (te == ng2) then
+!             slb1 = sqrt(abs(1.0 - bmag(ig)*al(il))) 
+!             slb2 = -slb1
+!          else
+!             slb1 = 0.0
+!             slb2 = -slb0
+!          end if
+!          
+!          slbl = (slb1 + slb0)*0.5
+!          slbr = (slb1 + slb2)*0.5
+!          vpdiff(ig,1,il) = (slbl**2 - slbr**2)/wl(ig,il)
+!          
+!          vpdiff(ig,2,:) = -vpdiff(ig,1,:)
+!          
+!
+!          ! TMP FOR TESTING -- MAB
+!          if (proc0) then
+!             do ig = -ntgrid, ntgrid
+!                do il = 1, nlambda
+!!                   write (*,*) 'vpdiff', vpdiff(ig,1,il), vpdiff(ig,2,il) 
+!                end do
+!             end do
+!          end if
+
+!       end if
 
        select case (lorentz_switch)
 
@@ -2523,11 +2599,12 @@ contains
     use gs2_layouts, only: g_lo, lz_lo
     use gs2_layouts, only: idx_local, proc_id
 ! TT>
-!!$    use gs2_layouts, only: gidx2lzidx 
+!!$    use gs2_layouts, only: gidx2lzidx
     use gs2_layouts, only: ik_idx, it_idx, ie_idx, is_idx, il_idx, idx
 ! <TT
     use redistribute, only: index_list_type, init_redist, delete_list
     implicit none
+
     type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
     integer, dimension(0:nproc-1) :: nn_to, nn_from
     integer, dimension(3) :: from_low, from_high
@@ -2668,6 +2745,7 @@ contains
     use le_grids, only: e, integrate_moment
     use species, only: nspec, spec, electron_species
     use dist_fn_arrays, only: c_rate, vpa, kperp2, aj0
+
     use constants
 
     implicit none
@@ -2798,6 +2876,8 @@ contains
     use le_grids, only: e, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
     
+    implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
     complex, dimension (:,:,:), allocatable :: gtmp
     complex, dimension (:,:,:,:), allocatable :: v0y0, v1y1, v2y2
