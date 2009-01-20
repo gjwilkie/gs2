@@ -2347,7 +2347,7 @@ contains
 
     if (istep > navg) then
        domega = spread(omegaavg,1,navg) - omegahist
-       if (omg_conv_test. and. &
+       if (omg_conv_test .and. &
             all(sqrt(sum(abs(domega)**2/real(navg),dim=1)) &
             < min(abs(omegaavg),1.0)*omegatol)) &
        then
