@@ -2965,6 +2965,8 @@ contains
 
     call prof_entering ("getan", "dist_fn")
 
+    antot=0. ; antota=0. ; antotp=0.
+
     if (fphi > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           do isgn = 1, 2

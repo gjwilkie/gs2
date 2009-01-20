@@ -100,6 +100,7 @@ gs2_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
+	 theta_grid_params.o \
 	 vdimstub.o \
 	 veq.o 
 
@@ -128,6 +129,7 @@ ingen_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
+	 theta_grid_params.o \
 	 vdimstub.o \
 	 veq.o 
 
@@ -192,6 +194,7 @@ dist_fn.o: \
 	 collisions.o \
 	 constants.o \
 	 dist_fn_arrays.o \
+	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_heating.o \
 	 gs2_layouts.o \
@@ -448,7 +451,8 @@ init_g.o: \
 	 run_parameters.o \
 	 species.o \
 	 text_options.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 theta_grid_params.o 
 job_manage.o: \
 	 file_utils.o \
 	 mp.o 
@@ -542,7 +546,10 @@ theta_grid.o: \
 	 gridgen4mod.o \
 	 mp.o \
 	 spl.o \
-	 text_options.o 
+	 text_options.o \
+	 theta_grid_params.o 
+theta_grid_params.o: \
+	 file_utils.o 
 vdimstub.o: 
 veq.o: \
 	 spl.o \
