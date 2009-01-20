@@ -404,7 +404,7 @@ contains
     denom = 1.0
     do k = 0, kmax
        denom = denom * (1.5+k)
-       xg = xg + e**(1.5+k) / denom
+       xg = xg + dble(e)**dble(1.5+k) / denom
     end do
 
     xgrid_s = xg * exp(-e) * 2. / sqrt(pi)
