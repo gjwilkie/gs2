@@ -20,6 +20,7 @@ program gs2
   use gs2_time, only: update_time
   use gs2_time, only: write_dt, init_tstart
   use gs2_time, only: user_time, user_dt
+  use gs2_time, only: code_time
   use init_g, only: tstart
  ! use check, only: checkstop
   use collisions, only: vnmult

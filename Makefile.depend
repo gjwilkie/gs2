@@ -439,11 +439,13 @@ ingen.o: \
 	 theta_grid.o 
 init_g.o: \
 	 constants.o \
+	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 gs2_save.o \
+	 gs2_transforms.o \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
