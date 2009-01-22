@@ -1703,9 +1703,9 @@ if (debug) write(6,*) 'get_namelists: case (eqopt_switch), eqopt_switch=',eqopt_
 
        in_file= input_unit_exist("theta_grid_eik_knobs", exist)
        if (exist) then
-write(6,*) "get_namelists: reading theta_grid_eik_knobs"
+if (debug) write(6,*) "get_namelists: reading theta_grid_eik_knobs"
           read (unit=input_unit("theta_grid_eik_knobs"), nml=theta_grid_eik_knobs)
-write(6,*) "get_namelists: done theta_grid_eik_knobs"
+if (debug) write(6,*) "get_namelists: done theta_grid_eik_knobs"
           theta_eik_write = .true.
        end if
 
