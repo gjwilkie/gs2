@@ -20,7 +20,8 @@ module init_g
        ginitopt_nl2 = 16, ginitopt_nl3 = 17, ginitopt_nl4 = 18, & 
        ginitopt_nl5 = 19, ginitopt_alf = 20, ginitopt_kpar = 21, &
        ginitopt_nl6 = 22, ginitopt_nl7 = 23, ginitopt_gs = 24, ginitopt_recon = 25, &
-       ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28
+       ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28, &
+       ginitopt_recon3 = 29
   real :: width0, dphiinit, phiinit, imfac, refac, zf_init
   real :: den0, upar0, tpar0, tperp0
   real :: den1, upar1, tpar1, tperp1
@@ -30,7 +31,30 @@ module init_g
   character(300) :: restart_file
   character (len=150) :: restart_dir
   integer, dimension(2) :: ikk, itt
+  integer, dimension(3) :: ikkk,ittt
+
+  ! RN> for recon3
+  real :: phiinit0 ! amplitude of equilibrium
+  real :: a0,b0 ! amplitude of equilibrium Apara or By 
+  ! if b0 /= 0, u0 is rescaled to give this By amplitude by overriding a0
+  ! if a0 /= 0, u0 is rescaled to give this Apara amplitude
+  logical :: null_phi, null_bpar, null_apar ! nullify fields
+  ! if use_{Phi,Bpar,Apar} = F, override corresponding flags
+  integer :: adj_spec ! adjust input parameter of this spec
+  ! if = 0, just warn if given conditions are not satisfied
+  character (len=20) :: eq_type = ''
+  ! equilibrium type = 'sinusoidal', 'porcelli', 'doubleharris'
+  real :: prof_width=-.05
+  ! width of porcelli, doubleharris profile
+  ! if negative, this gives the ratio to the box size
+  integer :: eq_mode_n=0, eq_mode_u=1
+  ! mode number in x for sinusoidal equilibrium
+  logical :: input_check_recon=.false.
+  complex :: nkxy_pt(3), ukxy_pt(3)
+  ! <RN
   
+  logical :: debug = .false.
+
 contains
 
   subroutine init_init_g
@@ -80,9 +104,27 @@ contains
     call broadcast (restart_file)
     call broadcast (ikk)
     call broadcast (itt) 
+    call broadcast (ikkk)
+    call broadcast (ittt) 
     call broadcast (scale)
     call broadcast (new_field_init)
 
+    ! RN>
+    call broadcast (phiinit0)
+    call broadcast (a0)
+    call broadcast (b0)
+    call broadcast (null_phi)
+    call broadcast (null_bpar)
+    call broadcast (null_apar)
+    call broadcast (adj_spec)
+    call broadcast (eq_type)
+    call broadcast (prof_width)
+    call broadcast (eq_mode_n)
+    call broadcast (eq_mode_u)
+    call broadcast (input_check_recon)
+    call broadcast (nkxy_pt)
+    call broadcast (ukxy_pt)
+    ! <RN
     call init_save (restart_file)
 
   end subroutine init_init_g
@@ -188,6 +230,8 @@ contains
     case (ginitopt_continue)
        restarted = .true.
        scale = 1.
+    case (ginitopt_recon3)
+       call ginit_recon3
     end select
   end subroutine ginit
 
@@ -196,7 +240,7 @@ contains
     use text_options, only: text_option, get_option_value
     implicit none
 
-    type (text_option), dimension (28), parameter :: ginitopts = &
+    type (text_option), dimension (29), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
             text_option('test1', ginitopt_test1), &
@@ -224,14 +268,20 @@ contains
             text_option('kpar', ginitopt_kpar), &
             text_option('smallflat', ginitopt_smallflat), &
             text_option('harris', ginitopt_harris), &
-            text_option('recon', ginitopt_recon) /)
+            text_option('recon', ginitopt_recon), &
+            text_option('recon3', ginitopt_recon3) &
+            /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
          restart_file, restart_dir, left, ikk, itt, scale, tstart, zf_init, &
          den0, upar0, tpar0, tperp0, imfac, refac, even, &
          den1, upar1, tpar1, tperp1, &
          den2, upar2, tpar2, tperp2, dphiinit, apar0, &
-         new_field_init
+         new_field_init, &
+         phiinit0, a0, b0, null_phi, null_bpar, null_apar, adj_spec, &
+         eq_type, prof_width, eq_mode_u, eq_mode_n, &
+         input_check_recon, nkxy_pt, ukxy_pt, &
+         ikkk, ittt
 
     integer :: ierr, in_file
     logical :: exist
@@ -266,6 +316,25 @@ contains
     ikk(2) = 2
     itt(1) = 1
     itt(2) = 2
+
+    ! >RN
+    ikkk(1) = 1 ; ikkk(2) = 2 ; ikkk(3) = 2
+    ittt(1) = 1 ; ittt(2) = 2 ; ittt(3) = 2
+    phiinit0 = 0.
+    a0 = 0.
+    b0 = 0.
+    null_phi = .false.
+    null_bpar = .false.
+    null_apar = .false.
+    adj_spec = 0
+    eq_type = 'sinusoidal'
+    prof_width=-0.1
+    eq_mode_n=0
+    eq_mode_u=1
+    input_check_recon=.false.
+    nkxy_pt=cmplx(0.,0.)
+    ukxy_pt=cmplx(0.,0.)
+    ! <RN
     restart_file = trim(run_name)//".nc"
     restart_dir = "./"
     in_file = input_unit_exist ("init_g_knobs", exist)
@@ -1687,6 +1756,702 @@ contains
     gnew = g
   end subroutine ginit_convect
 
+  subroutine ginit_recon3
+    use mp, only: proc0
+    use species, only: nspec, spec, has_electron_species
+    use theta_grid, only: ntgrid, theta
+    use kt_grids, only: naky, nakx => ntheta0, akx, reality
+    use kt_grids, only: nx,ny
+    use kt_grids_box, only: x0,y0
+    use dist_fn_arrays, only: g, gnew, vpa, vperp2
+    use dist_fn_arrays, only: aj0,aj1,vperp2
+    use dist_fn_arrays, only: kperp2
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use gs2_transforms, only: inverse2,transform2
+    use run_parameters, only: beta
+    use le_grids, only: integrate_moment
+    use dist_fn, only: getmoms_notgc, get_init_field
+    use dist_fn, only: mom_coeff, mom_shift_para, mom_shift_perp
+    use dist_fn, only: gamtot, gamtot1, gamtot2
+    use constants, only: pi, zi
+    use file_utils, only: error_unit, get_unused_unit
+    implicit none
+    integer :: iglo
+    integer :: ig, ik, it, is, is2
+    integer :: i,j
+
+    ! nkxyz and ukxyz determine profiles in kx-ky plane
+    ! nkxyz is for N, T, and ukxyz is for U
+    ! [do not control amplitude by these variables]
+    complex :: nkxyz(-ntgrid:ntgrid,nakx,naky)
+    complex :: ukxyz(-ntgrid:ntgrid,nakx,naky)
+    complex :: nkxyz_eq(-ntgrid:ntgrid,nakx,naky)
+    complex :: ukxyz_eq(-ntgrid:ntgrid,nakx,naky)
+    complex, allocatable :: g_eq(:,:,:)
+
+    ! equilibrium and perturbation
+    complex :: nkxy_eq(nakx,naky), ukxy_eq(nakx,naky)
+
+    ! *fac determine z profile
+    ! [do not control amplitude by these variables]
+    real :: dfac(-ntgrid:ntgrid), ufac(-ntgrid:ntgrid)
+    real :: tparfac(-ntgrid:ntgrid), tperpfac(-ntgrid:ntgrid)
+    real :: ct(-ntgrid:ntgrid), st(-ntgrid:ntgrid)
+    real :: c2t(-ntgrid:ntgrid), s2t(-ntgrid:ntgrid)
+
+    ! normalization
+    real :: fac
+    real, allocatable :: nnrm(:,:,:),unrm(:,:,:)
+    real, allocatable :: tparanrm(:,:,:),tperpnrm(:,:,:)
+
+    real :: check(3)=0.,current=0.
+    character (len=2) :: cfit='A0'
+    complex, allocatable :: dens(:,:,:,:),upar(:,:,:,:)
+    complex, allocatable :: tpar(:,:,:,:),tper(:,:,:,:)
+    complex, allocatable :: phi(:,:,:),apar(:,:,:),bpar(:,:,:)
+    complex, allocatable :: jpar(:,:,:)
+
+    real :: save_dens0, save_tperp0, save_u0
+    real :: ratio
+
+    ! real space profile to be Fourier transformed
+    real :: xx,dx,lx,ly
+    integer, parameter :: nfx=2**10
+    real, allocatable :: nxy(:,:),uxy(:,:)
+    real, allocatable :: phixy(:,:,:),aparxy(:,:,:),bparxy(:,:,:)
+    real, allocatable :: jparxy(:,:,:)
+    real, allocatable :: densxy(:,:,:,:),uparxy(:,:,:,:)
+    real, allocatable :: tparxy(:,:,:,:),tperxy(:,:,:,:)
+
+    complex, allocatable :: by(:,:,:)
+    real, allocatable :: byxy(:,:,:)
+
+    integer :: nnx,nny
+    integer :: unit
+    real :: xmax, bymax, xa, xl1, xl2
+    real :: fmin, fmax
+
+    if(debug.and.proc0) write(6,*) 'Initialization recon3'
+
+!!! adjust input parameters to kill initial field if wanted
+    if(debug.and.proc0) write(6,*) 'check parameters'
+
+    do is=1,nspec
+       if(adj_spec == is) cycle
+       check(1)=check(1)+spec(is)%z*spec(is)%dens*spec(is)%dens0
+       check(2)=check(2)+spec(is)%dens*spec(is)%temp* &
+            & (spec(is)%dens0+spec(is)%tperp0)
+       check(3)=check(3)+spec(is)%z*spec(is)%dens*spec(is)%stm*spec(is)%u0
+    end do
+
+    if(adj_spec == 0) then
+       ! just warn if fields don't satisfy given conditions
+       if(null_phi.and.null_bpar) then
+          if(sum(check(1:2)) /= 0.) then
+             if(proc0) write(6,'(a)') &
+                  'WARNING: finite Phi or Bpar in initial condition'
+          endif
+       else if(null_bpar.and..not.null_phi) then
+          ratio=gamtot1(0,eq_mode_n+1,1)/gamtot(0,eq_mode_n+1,1)
+          if(check(1)/check(2) /= ratio) then
+             if(proc0) write(6,'(a)') &
+                  'WARNING: finite Bpar in initial condition'
+          endif
+       else if(null_phi.and..not.null_bpar) then
+          ratio=-(2.*gamtot2(0,eq_mode_n+1,1)+2./beta) &
+               & /gamtot1(0,eq_mode_n+1,1)
+          if(check(1)/check(2) /= ratio) then
+             if(proc0) write(6,'(a)') &
+                  'WARNING: finite Bpar in initial condition'
+          endif
+       endif
+       if(null_apar) then
+          if(check(3) /= 0.) then
+             if(proc0) write(6,'(a)') &
+                  'WARNING: finite Apar in initial condition'
+          endif
+       endif
+    else
+       ! adjust input parameter to satisfy given conditions
+       if(null_phi.and.null_bpar) then
+          save_dens0=spec(adj_spec)%dens0
+          save_tperp0=spec(adj_spec)%tperp0
+          spec(adj_spec)%dens0=-check(1)/(spec(adj_spec)%z*spec(adj_spec)%dens)
+          spec(adj_spec)%tperp0=-spec(adj_spec)%dens0 &
+               & -check(2)/(spec(adj_spec)%dens*spec(adj_spec)%temp)
+
+          if(spec(adj_spec)%dens0 /= save_dens0) then
+             if(proc0) write(6,'(a,i0,a,f10.2,a)') &
+                  & 'WARNING: Initial density of spec=', spec(adj_spec)%type, &
+                  & ' is adjusted to ', spec(adj_spec)%dens0, &
+                  & ' to kill Phi and Bpar'
+          endif
+          if(spec(adj_spec)%tperp0 /= save_tperp0) then
+             if(proc0) write(6,'(a,i0,a,f10.2,a)') &
+                  & 'WARNING: Initial Tperp of spec=', spec(adj_spec)%type, &
+                  & ' is adjusted to ', spec(adj_spec)%tperp0, &
+                  & ' to kill Phi and Bpar'
+          endif
+       else if(null_bpar.and..not.null_phi.and.eq_type.eq.'sinusoidal') then
+          save_tperp0=spec(adj_spec)%tperp0
+          check(1)=check(1)+ &
+               & spec(adj_spec)%z*spec(adj_spec)%dens*spec(adj_spec)%dens0
+          ratio=gamtot1(0,eq_mode_n+1,1)/gamtot(0,eq_mode_n+1,1)
+
+          spec(adj_spec)%tperp0=(-check(1)*ratio-check(2)) &
+               & /(spec(adj_spec)%dens*spec(adj_spec)%temp) &
+               & -spec(adj_spec)%dens0
+          if(spec(adj_spec)%tperp0 /= save_tperp0) then
+             if(proc0) write(6,'(a,i0,a,f10.2,a)') &
+                  & 'WARNING: Initial Tperp of spec=', spec(adj_spec)%type, &
+                  & ' is adjusted to ', spec(adj_spec)%tperp0, &
+                  & ' to kill Bpar'
+          endif
+       else if(null_phi.and..not.null_bpar.and.eq_type.eq.'sinusoidal') then
+          save_tperp0=spec(adj_spec)%tperp0
+          check(1)=check(1)+ &
+               & spec(adj_spec)%z*spec(adj_spec)%dens*spec(adj_spec)%dens0
+          ratio=-(2.*gamtot2(0,eq_mode_n+1,1)+2./beta) &
+               & /gamtot1(0,eq_mode_n+1,1)
+
+          spec(adj_spec)%tperp0=(-check(1)*ratio-check(2)) &
+               & /(spec(adj_spec)%dens*spec(adj_spec)%temp) &
+               & -spec(adj_spec)%dens0
+
+          if(spec(adj_spec)%tperp0 /= save_tperp0) then
+             if(proc0) write(6,'(a,i0,a,f10.2,a)') &
+                  & 'WARNING: Initial Tperp of spec=', spec(adj_spec)%type, &
+                  & ' is adjusted to ', spec(adj_spec)%tperp0, &
+                  & ' to kill Phi'
+          endif
+       endif
+    
+       if (null_apar) then
+          save_u0=spec(adj_spec)%u0
+          spec(adj_spec)%u0=-check(3)/ &
+               & (spec(adj_spec)%z*spec(adj_spec)%dens*spec(adj_spec)%stm)
+          if(spec(adj_spec)%u0 /= save_u0) then
+             if(proc0) write(6,'(a,i0,a,f10.2,a)') &
+                  & 'WARNING: Initial U of spec=', spec(adj_spec)%type, &
+                  & ' is adjusted to ', spec(adj_spec)%u0, &
+                  & ' to kill Apar'
+          endif
+       endif
+    endif
+
+!!! initialize
+    if(debug.and.proc0) write(6,*) 'initialize variable'
+    nkxyz(-ntgrid:ntgrid,1:nakx,1:naky)=cmplx(0.,0.)
+    ukxyz(-ntgrid:ntgrid,1:nakx,1:naky)=cmplx(0.,0.)
+    nkxyz_eq(-ntgrid:ntgrid,1:nakx,1:naky)=cmplx(0.,0.)
+    ukxyz_eq(-ntgrid:ntgrid,1:nakx,1:naky)=cmplx(0.,0.)
+
+    nkxy_eq(1:nakx,1:naky)=cmplx(0.,0.)
+    ukxy_eq(1:nakx,1:naky)=cmplx(0.,0.)
+
+    dfac(-ntgrid:ntgrid)=1.
+    ufac(-ntgrid:ntgrid)=1.
+    tparfac(-ntgrid:ntgrid)=1.
+    tperpfac(-ntgrid:ntgrid)=1.
+
+!!! equilibrium
+    if(phiinit0 /= 0.) then
+       if(nakx==1 .and. naky==1) then ! grid_option = single case
+          nkxy_eq(1,1)=cmplx(.5,0.)
+          ukxy_eq(1,1)=cmplx(.5,0.)
+       else
+          if(debug.and.proc0) write(6,*) 'set equilibrium profile'
+          allocate(nxy(nfx,ny),uxy(nfx,ny))
+          lx=2.*pi*x0; ly=2.*pi*y0
+          dx=lx/nfx
+          ! if width is negative, it gives the ratio to the box size
+          if(prof_width < 0. ) prof_width=-prof_width*lx
+          select case (eq_type)
+          case ('sinusoidal')
+             ! this gives n,Tpara,Tperp \propto cos^2 (2 pi/Lx)
+             ! nxy(eq_mode1(1),eq_mode1(2))=cmplx(.25, 0.)
+             ! this gives Apara \propto cos(2 pi/Lx), By \propto sin(2 pi x/Lx)
+             ! uxy(eq_mode2(1),eq_mode2(2))=cmplx(.5, 0.)
+             do it=1,nfx
+                xx=dx*(it-1)
+                nxy(it,1:ny)=0.
+                uxy(it,1:ny)=cos(2.*pi/lx*xx*eq_mode_u)
+             end do
+          case ('porcelli')
+             do it=1,nfx
+                xx=dx*(it-1)
+                nxy(it,1:ny)=0.
+                uxy(it,1:ny)=1./cosh((xx-.5*lx)/prof_width)**2 &
+                     & * (tanh(2.*pi/lx*xx)**2+tanh(2.*pi/lx*(xx-lx))**2 &
+                     & - tanh(2.*pi)**2) / (2.*tanh(pi)**2-tanh(2.*pi)**2)
+             end do
+          case ('doubleharris')
+             do it=1,nfx
+                fmin=tanh(.75*lx/prof_width)-tanh(.25*lx/prof_width)
+                fmax=2.*tanh(.25*lx/prof_width)
+                xx=dx*(it-1)
+                nxy(it,1:ny)=0.
+                uxy(it,1:ny)= 2.*( &
+                     & tanh((xx-.25*lx)/prof_width) - &
+                     & tanh((xx-.75*lx)/prof_width) - fmin)/(fmax-fmin)-1.
+             end do
+          case default
+             if(proc0) write(error_unit(),'(2a)') &
+                  & 'ERROR: Invalid equilibrium type', eq_type
+             stop
+          end select
+          ! subtract (0,0) mode
+          ! since it (constant part of potential) does nothing
+          do ik=1,ny
+             uxy(1:nfx,ik)=uxy(1:nfx,ik) &
+                  - sum(uxy(1:nfx,ik))/nfx
+          end do
+          call inverse2(nxy, nkxy_eq, ny, nfx)
+          call inverse2(uxy, ukxy_eq, ny, nfx)
+          deallocate(nxy,uxy)
+       endif
+    endif
+
+    do ig = -ntgrid, ntgrid
+       nkxyz(ig,1:nakx,1:naky) = phiinit0*nkxy_eq(1:nakx,1:naky)
+       ukxyz(ig,1:nakx,1:naky) = phiinit0*ukxy_eq(1:nakx,1:naky)
+    end do
+    if(.not.(nakx==1 .and. naky==1)) then ! grid_option /= single case
+       nkxyz(-ntgrid:ntgrid,1,1)=cmplx(0.,0.)
+       ukxyz(-ntgrid:ntgrid,1,1)=cmplx(0.,0.)
+    endif
+
+!!! save equilibrium profile
+    nkxyz_eq(-ntgrid:ntgrid,1:nakx,1:naky)= &
+         & nkxyz(-ntgrid:ntgrid,1:nakx,1:naky)
+    ukxyz_eq(-ntgrid:ntgrid,1:nakx,1:naky)= &
+         & ukxyz(-ntgrid:ntgrid,1:nakx,1:naky)
+
+!!! perturbation
+    if(phiinit /= 0.) then
+       if(debug.and.proc0) write(6,*) 'set perturbation profile'
+       do j = 1, 3
+          if(ikkk(j).eq.0) ukxy_pt(j)=.5*ukxy_pt(j) !reality
+          ik = ikkk(j)+1
+          if(ittt(j) >= 0) then
+             it = ittt(j)+1
+          else
+             it = nakx + ittt(j) + 1
+          endif
+          do ig = -ntgrid, ntgrid
+             ukxyz(ig,it,ik) = ukxyz(ig,it,ik) + phiinit*ukxy_pt(j)
+          end do
+       end do
+    endif
+
+!!! reality condition for k_theta = 0 component:
+    if(debug.and.proc0) write(6,*) 'set reality condition'
+    if (reality) then
+       do it = 1, nakx/2
+          nkxyz(-ntgrid:ntgrid,it+(nakx+1)/2,1) = &
+               & conjg(nkxyz(-ntgrid:ntgrid,(nakx+1)/2+1-it,1))
+          ukxyz(-ntgrid:ntgrid,it+(nakx+1)/2,1) = &
+               & conjg(ukxyz(-ntgrid:ntgrid,(nakx+1)/2+1-it,1))
+          nkxyz_eq(-ntgrid:ntgrid,it+(nakx+1)/2,1) = &
+               & conjg(nkxyz_eq(-ntgrid:ntgrid,(nakx+1)/2+1-it,1))
+          ukxyz_eq(-ntgrid:ntgrid,it+(nakx+1)/2,1) = &
+               & conjg(ukxyz_eq(-ntgrid:ntgrid,(nakx+1)/2+1-it,1))
+       enddo
+    end if
+
+!!! parallel profile
+    if(debug.and.proc0) write(6,*) 'set parallel profile'
+    if (even) then
+       ct = cos(theta)
+       st = sin(theta)
+
+       c2t = cos(2.*theta)
+       s2t = sin(2.*theta)
+    else
+       ct = sin(theta)
+       st = cos(theta)
+
+       c2t = sin(2.*theta)
+       s2t = cos(2.*theta)
+    end if
+
+    dfac     = dfac     + den1   * ct + den2   * c2t
+    ufac     = ufac     + upar1  * st + upar2  * s2t
+    tparfac  = tparfac  + tpar1  * ct + tpar2  * c2t
+    tperpfac = tperpfac + tperp1 * ct + tperp2 * c2t
+
+!!! normalization
+    if(debug.and.proc0) write(6,*) 'normalization'
+    if(b0 /= 0.) then
+       if(.not.(nakx==1 .and. naky==1)) then ! grid_option /= single case
+          if(eq_type == 'porcelli') then
+             xmax=.5*prof_width*log(2.+sqrt(3.))+.5*lx
+             xmax=get_xmax(xmax)
+             xa=(xmax-.5*lx)/prof_width
+             xl1=2.*pi/lx*xmax; xl2=xl1-2.*pi
+             bymax=(-2./prof_width*sinh(xa)/cosh(xa)**3* &
+                  & (tanh(xl1)**2+tanh(xl2)**2-tanh(2.*pi)**2) &
+                  & + 1./cosh(xa)**2*4.*pi/lx* &
+                  & (sinh(xl1)/cosh(xl1)**3+sinh(xl2)/cosh(xl2)**3) ) &
+                  & / (2.*tanh(pi)**2-tanh(2.*pi)**2)
+          else if(eq_type == 'doubleharris') then
+             bymax=2.*tanh(.5*lx/prof_width)**2/(prof_width*(fmax-fmin))
+          else
+             bymax=akx(eq_mode_u+1)
+          endif
+       else
+          bymax=sqrt(kperp2(0,1,1))
+       endif
+       a0 = b0/bymax
+       cfit='B0'
+    endif
+
+    allocate(nnrm(nakx,naky,nspec),unrm(nakx,naky,nspec))
+    allocate(tparanrm(nakx,naky,nspec),tperpnrm(nakx,naky,nspec))
+    do is=1,nspec
+       nnrm(:,:,is)=mom_coeff(:,:,is,1)
+       unrm(:,:,is)=2.*mom_coeff(:,:,is,2)
+       tparanrm(:,:,is)=2.*(mom_coeff(:,:,is,4)- &
+            & 2.*mom_coeff(:,:,is,2)*mom_shift_para(:,:,is))
+       tperpnrm(:,:,is)=2.*(mom_coeff(:,:,is,8)- &
+             & mom_coeff(:,:,is,6)*mom_shift_perp(:,:,is))
+
+       if(a0 /= 0.) then
+          ! rescale parallel momentum to obtain a given amplitude of Apar
+          current=sum(spec(1:nspec)%z*spec(1:nspec)%dens &
+               & *spec(1:nspec)%stm*spec(1:nspec)%u0)
+          if(current==0.) then
+             if(proc0) write(error_unit(),'(a)') &
+                  & 'ERROR in init_g: invalid input a0, u0'
+             stop
+          endif
+          do it=1,nakx
+             do ik=1,naky
+                if(cabs(ukxyz(0,it,ik)) /= 0. .and. spec(is)%u0 /= 0.) then
+                   fac=2.*beta*current/kperp2(0,it,ik)/a0
+                   unrm(it,ik,is)=unrm(it,ik,is)*fac
+                   if(proc0) write(6,'(a,a2,a,3(i3,1x),f20.12)') &
+                        & 'INFO: u0 is rescaled to fit ',cfit,' input', &
+                        & it,ik,is,spec(is)%u0/fac
+                end if
+             end do
+          end do
+       end if
+    end do
+
+    if(debug.and.proc0) write(6,*) 'calculate g'
+    allocate(g_eq(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+
+       g(:,1,iglo) = ( &
+            & ( dfac*spec(is)%dens0 / nnrm(it,ik,is) &
+            & + tparfac*spec(is)%tpar0 / tparanrm(it,ik,is) &
+            & * (vpa(:,1,iglo)**2-mom_shift_para(it,ik,is)) &
+            & + tperpfac*spec(is)%tperp0 / tperpnrm(it,ik,is) &
+            & * (vperp2(:,iglo)-mom_shift_perp(it,ik,is)) &
+            & ) * nkxyz(:,it,ik) &
+            & + ufac*2.*vpa(:,1,iglo)*spec(is)%u0 / unrm(it,ik,is) &
+            & * ukxyz(:,it,ik) &
+            )
+       g(:,2,iglo) = ( &
+            & ( dfac*spec(is)%dens0 / nnrm(it,ik,is) &
+            & + tparfac*spec(is)%tpar0 / tparanrm(it,ik,is) &
+            & * (vpa(:,2,iglo)**2-mom_shift_para(it,ik,is)) &
+            & + tperpfac*spec(is)%tperp0 / tperpnrm(it,ik,is) &
+            & * (vperp2(:,iglo)-mom_shift_perp(it,ik,is)) &
+            & ) * nkxyz(:,it,ik) &
+            & + ufac*2.*vpa(:,2,iglo)*spec(is)%u0 / unrm(it,ik,is) &
+            & * ukxyz(:,it,ik) &
+            )
+
+       g_eq(:,1,iglo) = ( &
+            & ( dfac*spec(is)%dens0 / nnrm(it,ik,is) &
+            & + tparfac*spec(is)%tpar0 / tparanrm(it,ik,is) &
+            & * (vpa(:,1,iglo)**2-mom_shift_para(it,ik,is)) &
+            & + tperpfac*spec(is)%tperp0 / tperpnrm(it,ik,is) &
+            & * (vperp2(:,iglo)-mom_shift_perp(it,ik,is)) &
+            & ) * nkxyz_eq(:,it,ik) &
+            & + ufac*2.*vpa(:,1,iglo)*spec(is)%u0 / unrm(it,ik,is) &
+            & * ukxyz_eq(:,it,ik) &
+            )
+       g_eq(:,2,iglo) = ( &
+            & ( dfac*spec(is)%dens0 / nnrm(it,ik,is) &
+            & + tparfac*spec(is)%tpar0 / tparanrm(it,ik,is) &
+            & * (vpa(:,2,iglo)**2-mom_shift_para(it,ik,is)) &
+            & + tperpfac*spec(is)%tperp0 / tperpnrm(it,ik,is) &
+            & * (vperp2(:,iglo)-mom_shift_perp(it,ik,is)) &
+            & ) * nkxyz_eq(:,it,ik) &
+            & + ufac*2.*vpa(:,2,iglo)*spec(is)%u0 / unrm(it,ik,is) &
+            & * ukxyz_eq(:,it,ik) &
+            )
+    end do
+
+    deallocate(nnrm,unrm,tparanrm,tperpnrm)
+
+!!! store equilibrium fields
+    allocate(phi(-ntgrid:ntgrid,1:nakx,1:naky))
+    allocate(apar(-ntgrid:ntgrid,1:nakx,1:naky))
+    allocate(bpar(-ntgrid:ntgrid,1:nakx,1:naky))
+    allocate(jpar(-ntgrid:ntgrid,1:nakx,1:naky))
+    allocate(dens(-ntgrid:ntgrid,nakx,naky,nspec))
+    allocate(upar(-ntgrid:ntgrid,nakx,naky,nspec))
+    allocate(tpar(-ntgrid:ntgrid,nakx,naky,nspec))
+    allocate(tper(-ntgrid:ntgrid,nakx,naky,nspec))
+
+    phi(:,:,:)=cmplx(0.,0.); apar(:,:,:)=cmplx(0.,0.);
+    bpar(:,:,:)=cmplx(0.,0.); jpar(:,:,:)=cmplx(0.,0.)
+    dens(:,:,:,:)=cmplx(0.,0.); upar(:,:,:,:)=cmplx(0.,0.)
+    tpar(:,:,:,:)=cmplx(0.,0.); tper(:,:,:,:)=cmplx(0.,0.)
+
+    if(.not.(nakx==1 .and. naky==1)) then ! grid_option /= single case
+       if(debug.and.proc0) write(6,*) 'save equilibrium profile'
+       if(nx>nakx) then
+          nnx=nx
+       else ! nx=nakx=1
+          nnx=(3*nakx+1)/2
+       endif
+       if(ny>naky) then
+          nny=ny
+       else ! ny=naky=1
+          nny=3*naky
+       endif
+
+       allocate(phixy(nnx,nny,-ntgrid:ntgrid))
+       allocate(aparxy(nnx,nny,-ntgrid:ntgrid))
+       allocate(bparxy(nnx,nny,-ntgrid:ntgrid))
+       allocate(jparxy(nnx,nny,-ntgrid:ntgrid))
+       allocate(densxy(nnx,nny,-ntgrid:ntgrid,nspec))
+       allocate(uparxy(nnx,nny,-ntgrid:ntgrid,nspec))
+       allocate(tparxy(nnx,nny,-ntgrid:ntgrid,nspec))
+       allocate(tperxy(nnx,nny,-ntgrid:ntgrid,nspec))
+       phixy (:,:,:)=0.; aparxy(:,:,:)=0.
+       bparxy(:,:,:)=0.; jparxy(:,:,:)=0.
+       densxy(:,:,:,:)=0.; uparxy(:,:,:,:)=0.
+       tparxy(:,:,:,:)=0.; tperxy(:,:,:,:)=0.
+
+       allocate(by(-ntgrid:ntgrid,1:nakx,1:naky))
+       allocate(byxy(nnx,nny,-ntgrid:ntgrid))
+       by(:,:,:)=cmplx(0.,0.)
+       byxy(:,:,:)=0.
+
+       ! get equilibrium fields
+       gnew(:,:,:)=g_eq(:,:,:)
+       call get_init_field(phi,apar,bpar)
+       call getmoms_notgc(dens,upar,tpar,tper,jpar=jpar)
+       call transform2(phi,phixy,nny,nnx)
+       call transform2(apar,aparxy,nny,nnx)
+       call transform2(bpar,bparxy,nny,nnx)
+       call transform2(jpar,jparxy,nny,nnx)
+       do is=1,nspec
+          call transform2(dens(:,:,:,is),densxy(:,:,:,is),nny,nnx)
+          call transform2(upar(:,:,:,is),uparxy(:,:,:,is),nny,nnx)
+          call transform2(tpar(:,:,:,is),tparxy(:,:,:,is),nny,nnx)
+          call transform2(tper(:,:,:,is),tperxy(:,:,:,is),nny,nnx)
+       end do
+
+       ! store equilibrium fields
+       if(proc0) then
+          call get_unused_unit(unit)
+          open(unit,file='equilibrium.dat',form='unformatted')
+          write(unit) phixy(:,:,0),aparxy(:,:,0),bparxy(:,:,0),jparxy(:,:,0)
+          write(unit) densxy(:,:,0,:),uparxy(:,:,0,:), &
+               & tparxy(:,:,0,:),tperxy(:,:,0,:)
+          close(unit)
+       endif
+    endif
+
+    deallocate(g_eq)
+
+    ! now store the actual g in gnew
+    gnew(:,:,:) = g(:,:,:)
+
+!!! check
+    if(debug.and.proc0) write(6,*) 'check'
+    if(input_check_recon) then
+
+       call getmoms_notgc(dens,upar,tpar,tper)
+       call get_init_field(phi,apar,bpar)
+
+       if(nakx==1 .and. naky==1) then ! grid_option = single case
+          if(proc0) then
+             do is=1,nspec
+                write(6,'(" spec = ",i0)') is
+                write(6,'(" upar=",2e25.17)') &
+                     & real(upar(0,1,1,is)),aimag(upar(0,1,1,is))
+                write(6,'(" dens=",2e25.17)') &
+                     & real(dens(0,1,1,is)),aimag(dens(0,1,1,is))
+                write(6,'(" tpar=",2e25.17)') &
+                     & real(tpar(0,1,1,is)),aimag(tpar(0,1,1,is))
+                write(6,'(" tper=",2e25.17)') &
+                     & real(tper(0,1,1,is)),aimag(tper(0,1,1,is))
+             end do
+             write(6,'(" phi  = ",2e25.17)') &
+                  & real(phi (0,1,1)),aimag(phi (0,1,1))
+             write(6,'(" apar = ",2e25.17)') &
+                  & real(apar(0,1,1)),aimag(apar(0,1,1))
+             write(6,'(" bpar = ",2e25.17)') &
+                  & real(bpar(0,1,1)),aimag(bpar(0,1,1))
+          endif
+       else
+          do is=1,nspec
+             call transform2(dens(:,:,:,is),densxy(:,:,:,is),nny,nnx)
+             call transform2(upar(:,:,:,is),uparxy(:,:,:,is),nny,nnx)
+             call transform2(tpar(:,:,:,is),tparxy(:,:,:,is),nny,nnx)
+             call transform2(tper(:,:,:,is),tperxy(:,:,:,is),nny,nnx)
+          end do
+
+          if(proc0) then
+             do is=1,nspec
+                write(6,'(" spec = ",i0)') is
+                write(6,'(" upar: mode=",2i4," amp=",e25.17)') &
+                     & eq_mode_u,0, &
+                     & real(upar(0,eq_mode_u+1,1,is))
+                write(6,'(" dens: mode=",2i4," amp=",e25.17)') &
+                     & eq_mode_n,0, &
+                     & real(dens(0,eq_mode_n+1,1,is))
+                write(6,'(" tpar: mode=",2i4," amp=",e25.17)') &
+                     & eq_mode_n,0, &
+                     & real(tpar(0,eq_mode_n+1,1,is))
+                write(6,'(" tper: mode=",2i4," amp=",e25.17)') &
+                     & eq_mode_n,0, &
+                     & real(tper(0,eq_mode_n+1,1,is))
+             end do
+
+             call get_unused_unit(unit)
+             open(unit,file='check_moment.dat')
+             write(unit,'(a1,1x,2a20,4(4a20))') '#','x','y', &
+                  & ('dens','upar','tpar','tperp',i=1,nspec)
+             do it=1,nx+1
+                i=mod(it-1,nx)+1
+                do ik=1,ny+1
+                   j=mod(ik-1,ny)+1
+                   write(unit,'(2x,22d20.12)') lx/nx*(it-1),ly/ny*(ik-1), &
+                        & (densxy(i,j,0,is),uparxy(i,j,0,is), &
+                        &  tparxy(i,j,0,is),tperxy(i,j,0,is),is=1,nspec)
+                end do
+                write(unit,*)
+             end do
+             close(unit)
+          endif
+
+          write(6,*)
+
+          call transform2(phi,phixy,nny,nnx)
+          call transform2(apar,aparxy,nny,nnx)
+          call transform2(bpar,bparxy,nny,nnx)
+          do it=1,nakx
+             by(:,it,:)=-zi*akx(it)*apar(:,it,:)
+          end do
+          call transform2(by,byxy,nny,nnx)
+
+          if(proc0) then
+             write(6,'(" phi : mode=",2i4," amp=",e25.17)') &
+                  & eq_mode_n,0, &
+                  & real(phi (0,eq_mode_n+1,1))
+             write(6,'(" apar: mode=",2i4," amp=",e25.17)') &
+                  & eq_mode_u,0, &
+                  & real(apar(0,eq_mode_u+1,1))
+             write(6,'(" bpar: mode=",2i4," amp=",e25.17)') &
+                  & eq_mode_n,0, &
+                  & real(bpar(0,eq_mode_n+1,1))
+
+             call get_unused_unit(unit)
+             open(unit,file='check_field.dat')
+             write(unit,'(a1,1x,5a20)') '#','x','y','phi','apar','bpar','by'
+             do it=1,nx+1
+                i=mod(it-1,nx)+1
+                do ik=1,ny+1
+                   j=mod(ik-1,ny)+1
+                   write(unit,'(2x,6d20.12)') lx/nx*(it-1),ly/ny*(ik-1), &
+                        & phixy(i,j,0),aparxy(i,j,0),bparxy(i,j,0),byxy(i,j,0)
+                end do
+                write(unit,*)
+             end do
+             close(unit)
+          endif
+
+       endif
+    endif
+
+    deallocate(dens,upar,tpar,tper)
+    deallocate(phi,apar,bpar)
+    deallocate(jpar)
+    if(.not.(nakx==1 .and. naky==1)) then ! grid_option /= single case
+       deallocate(densxy,uparxy,tparxy,tperxy)
+       deallocate(phixy,aparxy,bparxy)
+       deallocate(jparxy)
+    endif
+
+  contains
+    function get_xmax(xguess) result(xsol)
+      real :: xsol
+      real, intent(in) :: xguess
+      real, parameter :: tol=1.e-20
+      real :: xold
+      integer :: i
+      integer :: itmax=1000
+      xold=xguess
+      do i=1,itmax
+         xsol=xold-f(xold)/fprime(xold)
+         if(abs(xsol-xold) > tol) then
+            xold=xsol
+         else
+            return
+         endif
+      end do
+    end function get_xmax
+
+    function f(x)
+      real :: f
+      real, intent(in) :: x
+      real :: xa, xl1, xl2
+      xa=(x-.5*lx)/prof_width
+      xl1=2.*pi/lx*x
+      xl2=xl1-2.*pi
+
+      f= &
+           & 2./prof_width**2*(cosh(2.*xa)-2.)/cosh(xa)**4* & ! f''
+           & (tanh(xl1)**2+tanh(xl2)**2-tanh(2.*pi)**2) & ! g
+           & + 2. * &
+           & (-2./prof_width)*sinh(xa)/cosh(xa)**3* & ! f'
+           & 4.*pi/lx*(sinh(xl1)/cosh(xl1)**3+sinh(xl2)/cosh(xl2)**3) & ! g'
+           & + &
+           & 1./cosh(xa)**2* & ! f
+           & 8.*(pi/lx)**2*((2.-cosh(2.*xl1))/cosh(xl1)**4 & ! g''
+           &               +(2.-cosh(2.*xl2))/cosh(xl2)**4)
+
+    end function f
+
+    function fprime(x)
+      real :: fprime
+      real, intent(in) :: x
+      real :: xa, xl1, xl2
+      xa=(x-.5*lx)/prof_width
+      xl1=2.*pi/lx*x
+      xl2=xl1-2.*pi
+
+      fprime = &
+           & 8./prof_width**3*(2.*sinh(xa)-sinh(xa)**3)/cosh(xa)**5* & ! f''' 
+           & (tanh(xl1)**2+tanh(xl2)**2-tanh(2.*pi)**2) & ! g
+           & + 3. * &
+           & 2./prof_width**2*(cosh(2.*xa)-2.)/cosh(xa)**4* & ! f''
+           & 4.*pi/lx*(sinh(xl1)/cosh(xl1)**3+sinh(xl2)/cosh(xl2)**3) & ! g'
+           & + 3. * &
+           & (-2./prof_width)*sinh(xa)/cosh(xa)**3* & ! f'
+           & 8.*(pi/lx)**2*((2.-cosh(2.*xl1))/cosh(xl1)**4 & ! g''
+           &               +(2.-cosh(2.*xl2))/cosh(xl2)**4) &
+           & + &
+           & 1./cosh(xa)**2* & ! f
+           & (-64.)*(pi/lx)**3 * ( & ! g'''
+           & (2.*sinh(xl1)-sinh(xl1)**3)/cosh(xl1)**5 + &
+           & (2.*sinh(xl2)-sinh(xl2)**3)/cosh(xl2)**5 )
+    end function fprime
+
+  end subroutine ginit_recon3
+
   subroutine ginit_restart_file
     use dist_fn_arrays, only: g, gnew
     use gs2_save, only: gs2_restore
@@ -1854,4 +2619,3 @@ contains
   end subroutine init_vnmult
 
 end module init_g
-

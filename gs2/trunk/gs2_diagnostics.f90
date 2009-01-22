@@ -27,6 +27,7 @@ module gs2_diagnostics
   logical :: write_dmix, write_kperpnorm, write_phitot, write_epartot
   logical :: write_eigenfunc, write_final_fields, write_final_antot
   logical :: write_final_moments, write_avg_moments, write_stress
+  logical :: write_full_moments_notgc
   logical :: write_fcheck, write_final_epar, write_kpar
   logical :: write_vortcheck, write_fieldcheck
   logical :: write_fieldline_avg_phi, write_hrate, write_lorentzian
@@ -177,6 +178,7 @@ contains
     call broadcast (write_lorentzian)
     call broadcast (write_eigenfunc)
 
+    call broadcast (write_full_moments_notgc)
     call broadcast (omg_conv_test)
 
     nmovie_tot = nstep/nmovie
@@ -223,7 +225,8 @@ contains
 
     call init_gs2_io (write_nl_flux, write_omega, write_stress, &
          write_fieldline_avg_phi, write_hrate, write_final_antot, &
-         write_eigenfunc, make_movie, nmovie_tot, write_verr)
+         write_eigenfunc, make_movie, nmovie_tot, write_verr, &
+         write_full_moments_notgc)
     
     if (write_cerr) then
        if (collision_model_switch == 1 .or. collision_model_switch == 5) then
@@ -372,6 +375,7 @@ contains
          write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, write_stress, &
+         write_full_moments_notgc, &
          dump_neoclassical_flux, dump_check1, dump_check2, &
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
@@ -415,6 +419,7 @@ contains
        write_final_moments = .false.
        write_stress = .false.
        write_avg_moments = .false.
+       write_full_moments_notgc = .false.
        write_final_fields = .false.
        write_final_antot = .false.
        write_final_epar = .false.
@@ -480,7 +485,8 @@ contains
        write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux &
             .or. gs2_flux_adjust
        dump_any = dump_neoclassical_flux .or. dump_check1  .or. dump_fields_periodically &
-            .or. dump_check2 .or. make_movie .or. print_summary
+            .or. dump_check2 .or. make_movie .or. print_summary &
+            .or. write_full_moments_notgc
 
        nperiod_output = min(nperiod,nperiod_output)
        ntg_out = ntheta/2 + (nperiod_output-1)*ntheta
@@ -1279,6 +1285,7 @@ contains
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
+    use dist_fn, only: getmoms_notgc
     use collisions, only: ncheck, vnmult, vary_vnew
 !    use collisions, only: ntot_diff, upar_diff, uperp_diff, ttot_diff
     use mp, only: proc0, broadcast, iproc
@@ -1286,6 +1293,7 @@ contains
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
+    use gs2_io, only: nc_loop_fullmom
     use gs2_io, only: nc_loop_stress, nc_loop_vres
     use gs2_io, only: nc_loop_movie
     use gs2_layouts, only: yxf_lo
@@ -2107,6 +2115,18 @@ contains
        end if
     end if
 
+    ! RN> output not guiding center moments in x-y plane
+    if (write_full_moments_notgc) then !RN
+       call getmoms_notgc(density,upar,tpar,tperp,ntot)
+       if(proc0) then
+          call nc_loop_fullmom(nout,t, &
+               & ntot(igomega,:,:,:),density(igomega,:,:,:), &
+               & upar(igomega,:,:,:), &
+               & tpar(igomega,:,:,:),tperp(igomega,:,:,:) )
+       endif
+    endif
+    ! <RN
+
     if (write_neoclassical_flux .and. neoflux .and. proc0) then
        do is=1,nspec
           tprim_tot(is) = spec(is)%tprim-0.333*aimag(tpar00(1,is))-0.6667*aimag(tperp00(1,is))
@@ -2325,7 +2345,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use gs2_time, only: code_dt
-    use constants
+    use constants, only: zi
     implicit none
     integer, intent (in) :: istep
     logical, intent (in out) :: exit
@@ -2342,7 +2362,6 @@ contains
             = log((phinew(j,:,:) + aparnew(j,:,:) + bparnew(j,:,:)) &
                   /(phi(j,:,:)   + apar(j,:,:)    + bpar(j,:,:)))*zi/code_dt
     end where
-
     omegaavg = sum(omegahist/real(navg),dim=1)
 
     if (istep > navg) then

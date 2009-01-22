@@ -10,6 +10,7 @@ module species
      real :: z
      real :: mass
      real :: dens, dens0, u0
+     real :: tpar0,tperp0
      real :: temp
      real :: tprim
      real :: fprim
@@ -49,12 +50,14 @@ contains
     use mp, only: proc0, broadcast
     implicit none
     real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h
+    real :: tperp0, tpar0
     character(20) :: type
     integer :: unit
     integer :: is
     namelist /species_knobs/ nspec
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
-         tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h
+         tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
+         tperp0, tpar0
     integer :: ierr, in_file
     logical :: exist
 
@@ -93,6 +96,8 @@ contains
           dens = 1.0
           dens0 = 1.0
           u0 = 1.0
+          tperp0 = 0.
+          tpar0 = 0.
           temp = 1.0
           tprim = 6.9
           fprim = 2.2
@@ -111,6 +116,8 @@ contains
           spec(is)%dens = dens
           spec(is)%dens0 = dens0
           spec(is)%u0 = u0
+          spec(is)%tperp0 = tperp0
+          spec(is)%tpar0 = tpar0
           spec(is)%temp = temp
           spec(is)%tprim = tprim
           spec(is)%fprim = fprim
@@ -138,6 +145,8 @@ contains
        call broadcast (spec(is)%dens)
        call broadcast (spec(is)%dens0)
        call broadcast (spec(is)%u0)
+       call broadcast (spec(is)%tperp0)
+       call broadcast (spec(is)%tpar0)
        call broadcast (spec(is)%temp)
        call broadcast (spec(is)%tprim)
        call broadcast (spec(is)%fprim)
