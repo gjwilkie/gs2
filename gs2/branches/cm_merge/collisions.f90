@@ -961,6 +961,8 @@ contains
     use run_parameters, only: zeff, tunits
     use dist_fn_arrays, only: kperp2
     use constants
+    use spfunc, only: erf => erf_ext
+
     real, dimension (:,:), intent (out) :: hee
     real,dimension (negrid,nspec)::heevth, hsg, hsgvth
     integer :: ik, ie, is, it, ig
