@@ -3,7 +3,7 @@ module init_g
 
   public :: ginit
   public :: init_init_g
-  public :: width0, k0
+  public :: width0
   public :: tstart
   public :: reset_init
   public :: init_vnmult
@@ -21,7 +21,7 @@ module init_g
        ginitopt_nl5 = 19, ginitopt_alf = 20, ginitopt_kpar = 21, &
        ginitopt_nl6 = 22, ginitopt_nl7 = 23, ginitopt_gs = 24, ginitopt_recon = 25, &
        ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28
-  real :: width0, dphiinit, phiinit, k0, imfac, refac, zf_init
+  real :: width0, dphiinit, phiinit, imfac, refac, zf_init
   real :: den0, upar0, tpar0, tperp0
   real :: den1, upar1, tpar1, tperp1
   real :: den2, upar2, tpar2, tperp2
@@ -65,7 +65,6 @@ contains
     call broadcast (phiinit)
     call broadcast (dphiinit)
     call broadcast (zf_init)
-    call broadcast (k0)
     call broadcast (apar0)
     call broadcast (tstart)
     call broadcast (chop_side)
@@ -220,7 +219,7 @@ contains
             text_option('harris', ginitopt_harris), &
             text_option('recon', ginitopt_recon) /)
     character(20) :: ginit_option
-    namelist /init_g_knobs/ ginit_option, width0, phiinit, k0, chop_side, &
+    namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
          restart_file, left, ikk, itt, scale, tstart, zf_init, &
          den0, upar0, tpar0, tperp0, imfac, refac, even, &
          den1, upar1, tpar1, tperp1, &
@@ -251,7 +250,6 @@ contains
     phiinit = 1.0
     dphiinit = 1.0
     zf_init = 1.0
-    k0 = 1.0
     apar0 = 0.
     chop_side = .true.
     left = .true.
@@ -263,7 +261,8 @@ contains
     itt(2) = 2
     restart_file = trim(run_name)//".nc"
     in_file = input_unit_exist ("init_g_knobs", exist)
-    if (exist) read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
+!    if (exist) read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
+    if (exist) read (unit=in_file,nml=init_g_knobs)
 
     ierr = error_unit()
     call get_option_value &
@@ -811,6 +810,7 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
     use constants
     use ran
+    use run_parameters, only: k0
     implicit none
     complex, dimension (ntheta0,naky) :: phi
     integer :: iglo
@@ -818,7 +818,6 @@ contains
     real, dimension(nx) :: lx_pr, a_pr
     complex,dimension(nx) :: ff_pr
     real:: L, dx_pr
-    
 ! 
 ! Specifying function on x grid, with nx points.  Transforming to kx grid, with 
 ! nkx < nx points.  Result is function that will be used for initial condition.
@@ -828,7 +827,6 @@ contains
 
 ! Can specify x0 along with y0; no need to use this construction, although it is okay.
     L=2.*pi*k0
-    
     
 ! nx is available from kt_grids:
     dx_pr=L/real(nx)
@@ -1581,11 +1579,11 @@ contains
   subroutine ginit_rh
     use le_grids, only: forbid, e
     use dist_fn_arrays, only: g, gnew
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use gs2_layouts, only: g_lo, it_idx, il_idx, ie_idx, is_idx
     use constants
     implicit none
     integer :: iglo
-    integer :: ik, it, il, ie, is
+    integer :: it, il, ie, is
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        il = il_idx(g_lo,iglo)
@@ -1668,7 +1666,7 @@ contains
     use theta_grid, only: theta
     use kt_grids, only: theta0
     use gs2_layouts, only: g_lo, it_idx, ik_idx
-    use constants
+    use run_parameters, only: k0
     implicit none
     integer :: it, ik, iglo
 

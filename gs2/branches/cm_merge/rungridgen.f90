@@ -403,7 +403,7 @@ contains
     call open_output_file (unit, ".input.out")
     write (unit=unit, fmt="('#',i5)") nthetain+1
     do i = 1, nthetain+1
-       write (unit=unit, fmt="(3(x,g19.12))") thetain(i), bmagin(i), bmagsm(i)
+       write (unit=unit, fmt="(3(1x,g19.12))") thetain(i), bmagin(i), bmagsm(i)
     enddo
     call close_output_file (unit)
 
@@ -423,7 +423,7 @@ contains
     call open_output_file (unit, ".bmag.out")
     write (unit=unit, fmt="('#',i5)") ntheta
     do i = 1, ntheta
-       write (unit=unit, fmt="(2(x,g19.12))") thetaout(i), bmagout(i)
+       write (unit=unit, fmt="(2(1x,g19.12))") thetaout(i), bmagout(i)
     enddo
     call close_output_file (unit)
 
@@ -514,43 +514,43 @@ contains
 
     write (unit=unit, fmt=*) 'gbdrift gradpar grho tgrid'
     do i = -ntgrid,ntgrid
-       write (unit=unit, fmt="(8(x,g19.10))") &
+       write (unit=unit, fmt="(8(1x,g19.10))") &
             gbdriftout(i),gradparout(i),grhoout(i),thetagridout(i)
     end do
 
     write (unit=unit, fmt=*) 'cvdrift gds2 bmag tgrid'
     do i = -ntgrid,ntgrid
-       write (unit=unit, fmt="(8(x,g19.10))") &
+       write (unit=unit, fmt="(8(1x,g19.10))") &
             cvdriftout(i),gds2out(i),bmaggridout(i),thetagridout(i)
     end do
 
     write (unit=unit, fmt=*) 'gds21 gds22 tgrid'
     do i = -ntgrid,ntgrid
-       write (unit=unit, fmt="(8(x,g19.10))") &
+       write (unit=unit, fmt="(8(1x,g19.10))") &
             gds21out(i),gds22out(i),thetagridout(i)
     end do
 
     write (unit=unit, fmt=*) 'cvdrift0 gbdrift0 tgrid'
     do i = -ntgrid,ntgrid
-       write (unit=unit, fmt="(8(x,g19.10))") &
+       write (unit=unit, fmt="(8(1x,g19.10))") &
             cvdrift0out(i),gbdrift0out(i),thetagridout(i)
     end do
 
     write (unit=unit, fmt=*) 'Rplot Rprime tgrid'
     do i = -ntgrid,ntgrid
-       write (unit=unit, fmt="(8(x,g19.10))") &
+       write (unit=unit, fmt="(8(1x,g19.10))") &
             Rplotout(i),Rprimeout(i),thetagridout(i)
     end do
 
     write (unit=unit, fmt=*) 'Zplot Zprime tgrid'
     do i = -ntgrid,ntgrid
-       write (unit=unit, fmt="(8(x,g19.10))") &
+       write (unit=unit, fmt="(8(1x,g19.10))") &
             Zplotout(i),Zprimeout(i),thetagridout(i)
     end do
 
     write (unit=unit, fmt=*) 'aplot aprime tgrid'
     do i = -ntgrid,ntgrid
-       write (unit=unit, fmt="(8(x,g19.10))") &
+       write (unit=unit, fmt="(8(1x,g19.10))") &
             aplotout(i),aprimeout(i),thetagridout(i)
     end do
 
@@ -559,7 +559,7 @@ contains
     if (screenout) then
        write (*, *) 'cvdrift       gds2          bmag          theta'
        do i = -ntheta/2,ntheta/2
-          write (unit=*, fmt="(4(x,g13.5))") &
+          write (unit=*, fmt="(4(1x,g13.5))") &
                cvdriftout(i),gds2out(i),bmaggridout(i),thetagridout(i)
        end do
     end if

@@ -20,8 +20,9 @@ contains
     theta0 = 0.0
     akx = 0.0
     in_file = input_unit_exist ("kt_grids_single_parameters", exist)
-    if (exist) read (unit=input_unit("kt_grids_single_parameters"), &
-         nml=kt_grids_single_parameters)
+!    if (exist) read (unit=input_unit("kt_grids_single_parameters"), &
+!         nml=kt_grids_single_parameters)
+    if (exist) read (unit=in_file,nml=kt_grids_single_parameters)
   end subroutine init_kt_grids_single
 
   subroutine single_get_sizes (naky, ntheta0, nx, ny)
@@ -222,7 +223,7 @@ module kt_grids_box
 contains
 
   subroutine init_kt_grids_box
-    use theta_grid, only: init_theta_grid
+    use theta_grid, only: init_theta_grid, shat
     use file_utils, only: input_unit, input_unit_exist
     use constants
     implicit none
@@ -241,7 +242,9 @@ contains
     y0 = 2.0
     nx = 0
     ny = 0
-    jtwist = 1
+!    jtwist = 1
+    ! default jtwist -- MAB
+    jtwist = int(2.0*pi*shat + 0.5)
     rtwist = 0.0
     x0 = 0.
     in_file = input_unit_exist("kt_grids_box_parameters", exist)
@@ -305,7 +308,11 @@ contains
           end if
        end if
     else
-       dkx = 2.0*pi/real(jtwist)* 2.0*pi/ly*shat
+       if (jtwist /= 0) then
+          dkx = 2.0*pi/real(jtwist)* 2.0*pi/ly*shat
+       else
+          dkx = 2.0*pi/ly
+       end if
     endif
 
     do i = 1, naky
@@ -534,7 +541,8 @@ contains
     norm_option = 'default'
     grid_option = 'default'
     in_file = input_unit_exist ("kt_grids_knobs", exist)
-    if (exist) read (unit=input_unit("kt_grids_knobs"), nml=kt_grids_knobs)
+!    if (exist) read (unit=input_unit("kt_grids_knobs"), nml=kt_grids_knobs)
+    if (exist) read (unit=in_file, nml=kt_grids_knobs)
 
     ierr = error_unit()
     call get_option_value &

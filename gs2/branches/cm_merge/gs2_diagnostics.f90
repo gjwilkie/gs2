@@ -108,6 +108,7 @@ contains
     use run_parameters, only: init_run_parameters
     use species, only: init_species, nspec
     use dist_fn, only: init_dist_fn
+    use init_g, only: init_init_g
     use gs2_flux, only: init_gs2_flux
     use gs2_io, only: init_gs2_io
     use gs2_heating, only: init_htype,init_dvtype
@@ -128,6 +129,7 @@ contains
     call init_kt_grids
     call init_run_parameters
     call init_species
+    call init_init_g
     call init_dist_fn
     call init_gs2_flux
 
@@ -437,7 +439,8 @@ contains
        nperiod_output = nperiod - nperiod_guard
        save_for_restart = .false.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
-       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
+!       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
+       if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
 
 ! If either the old or new variable was set to .false., choose false.
        write_bpar = write_bpar .and. write_aperp
@@ -542,7 +545,7 @@ contains
     if (write_gyx) call write_fyx (phinew,bparnew,last)
     if (write_g) call write_f (last)
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
-    if (write_cerr) call collision_error (phinew, bparnew, last, istep)
+    if (write_cerr) call collision_error (phinew, bparnew, last)
 !    if (write_gg) call write_dist (g)
 
     phi0 = 1.
@@ -2053,7 +2056,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        end do
     end if
 
-    if (write_cerr) call collision_error(phinew,bparnew,last,istep)
+    if (write_cerr) call collision_error(phinew,bparnew,last)
 
     if (write_stress) then
        call get_stress (rstress, ustress)
@@ -2066,7 +2069,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 
        call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp)
 
-       if (test_conserve) call gettotmoms (phinew, bparnew, ntot, upartot, uperptot, ttot)
+       if (test_conserve) call gettotmoms (phinew, ntot, upartot, uperptot, ttot)
 
        if (proc0) then
           allocate (dl_over_b(-ntg_out:ntg_out))

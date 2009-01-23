@@ -202,7 +202,8 @@ contains
        const_v = .false.
        heating = .false.
        in_file = input_unit_exist ("collisions_knobs", exist)
-       if (exist) read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
+!       if (exist) read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
+       if (exist) read (unit=in_file,nml=collisions_knobs)
 
        ierr = error_unit()
        call get_option_value &
@@ -1360,7 +1361,6 @@ contains
 
        vn = vnmult(2)*spec(is)%vnewk*tunits(ik)
 
-!       slb1 = sqrt(abs(1.0 - bmag(ig)*al(il)))     ! xi_j
        slb1 = sqrt(max(0.0,1.0 - bmag(ig)*al(il)))     ! xi_j
 
        select case (ediff_switch)
@@ -1387,11 +1387,6 @@ contains
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
 
-! old implementation that only works for egrid (not vgrid)
-!             ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
-!                  / (bmag(ig)*spec(is)%zstm)**2 &
-!                  * kperp2(ig,it,ik)*cfac
-          
              ! coefficients for tridiagonal matrix:
              cc(ie) = -0.25*vn*code_dt*capgr/(w(ie,is)*(xe2 - xe1))
              aa(ie) = -0.25*vn*code_dt*capgl/(w(ie,is)*(xe1 - xe0))
@@ -1420,11 +1415,6 @@ contains
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-! old implementation that only works for egrid (not vgrid)
-!          ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
-!               / (bmag(ig)*spec(is)%zstm)**2 &
-!               * kperp2(ig,it,ik)*cfac
-
           cc(1) = -0.25*vn*code_dt*capgr/(w(1,is)*(xe2 - xe1))
           aa(1) = 0.0
           bb(1) = 1.0 - cc(1) + ee*code_dt
@@ -1449,10 +1439,6 @@ contains
           ee = 0.125*(1.-slb1**2)*vnew_s(ik,negrid,is) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
-
-!          ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
-!               / (bmag(ig)*spec(is)%zstm)**2 &
-!               * kperp2(ig,it,ik)*cfac
 
           cc(negrid) = 0.0
           aa(negrid) = -0.25*vn*code_dt*capgl/(w(negrid,is)*(xe1 - xe0))
@@ -1540,124 +1526,6 @@ contains
 
           ec1(:,ielo) = cc
 
-!          ! boundary at xe = 1
-!
-!          ie = negrid
-!
-!          eea = ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
-!       
-!          xe1 = xe(ie)
-! 
-!          eeb = -eec(ie-1)
-!          eec(ie) = 0.0
-!
-!          erc1(ie,ielo) = 0.0
-!          cc(ie) = 0.0
-!          
-!          erb1(ie,ielo) = 1.0 - 0.25*erc1(ie-1,ielo)/w(ie,is)
-!          bb(ie) = 1.0 - 0.25*(cc(ie-1) + eeb)/w(ie,is) + ee*xe1/e(ie,is)**1.5
-!       
-!          era1(ie,ielo) = 0.25*rba(ie-1)/w(ie,is)
-!          aa(ie) = 0.25*(ba(ie-1) + eea)/w(ie,is)
-!
-!          erc1(:,ielo) = 0.25*erc1(:,ielo)/w(:,is)
-!          ec1(:,ielo) = 0.25*(cc + eec)/w(:,is)
-!
-!          ee =cfac*0.25*(1-slb1**2)*kperp2(ig,it,ik)*vn*code_dt &
-!               / (bmag(ig)*spec(is)%zstm)**2
-!          
-!          ! boundary at xe = 0
-!          wxe = 4.0*w(1,is)
-!          xe1 = xe(1)
-!          xe2 = xe(2)
-!
-!!       ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
-!!            / (bmag(ig)*spec(is)%zstm)**2 &
-!!            * kperp2(ig,it,ik)*cfac
-!
-!          delp = xe(2) - wxe
-!          delm = xe(1) - wxe
-!          del  = xe(2) - xe(1)
-!          
-!          capg = 8.0*xe1*sqrt(e(1,is))*exp(-2.0*e(1,is))/pi
-!          capgp = 8.0*exp(-e(1,is))*(sqrt(e(1,is))*exp(-e(1,is)) &
-!               + 0.25*sqrt(pi)*xe1*(1.-4.*e(1,is))/e(1,is))/pi
-!
-!          mu = 0.5*(delp + delm)
-!          eta = (1.0 - mu*capgp/capg)*del
-!          
-!          eec(1) = -ee*wxe*delm*mu/(eta*energy(wxe,ecut)**1.5)
-!          eeb = -ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
-!          
-!          erc1(1,ielo) = -delm*mu/eta
-!          cc(1) = -(code_dt*vn*capg + delm*mu)/eta
-!       
-!          rba(1) = -delp*mu/eta
-!          erb1(1,ielo) = 1.0 - 0.25*rba(1)/w(1,is)
-!          ba(1) = -(code_dt*vn*capg + delp*mu)/eta
-!          bb(1) = 1.0 - 0.25*(ba(1) + eeb)/w(1,is) + ee*xe1/e(1,is)**1.5
-!       
-!          era1(1,ielo) = 0.0
-!          aa(1) = 0.0
-!
-!          do ie = 2, negrid-1
-!
-!             eea = ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
-!
-!             wxe = 4.0*sum(w(:ie,is))
-!             xe1 = xe(ie)
-!             xe2 = xe(ie+1)
-!
-!             delp = xe2 - wxe
-!             delm = xe1 - wxe
-!             del  = xe2 - xe1
-!
-!             capg = 8.0*xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))/pi
-!             capgp = 8.0*exp(-e(ie,is))*(sqrt(e(ie,is))*exp(-e(ie,is)) &
-!                  + 0.25*sqrt(pi)*xe1*(1.-4.*e(ie,is))/e(ie,is))/pi
-!
-!             mu = 0.5*(delp + delm)
-!             eta = (1.0 - mu*capgp/capg)*del
-!
-!             eeb = -ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5) - eec(ie-1)
-!             eec(ie) = -ee*wxe*delm*mu/(eta*energy(wxe,ecut)**1.5)
-!
-!             erc1(ie,ielo) = -delm*mu/eta
-!             cc(ie) = -(code_dt*vn*capg + delm*mu)/eta
-!
-!             rba(ie) = -delp*mu/eta
-!             erb1(ie,ielo) = 1.0 - 0.25*(rba(ie) + erc1(ie-1,ielo))/w(ie,is)
-!             ba(ie) = -(code_dt*vn*capg + delp*mu)/eta
-!             bb(ie) = 1.0 - 0.25*(cc(ie-1) + ba(ie) + eeb)/w(ie,is) + ee*xe1/e(ie,is)**1.5
-!
-!             era1(ie,ielo) = 0.25*rba(ie-1)/w(ie,is)
-!             aa(ie) = 0.25*(ba(ie-1) + eea)/w(ie,is)
-!
-!          end do
-!
-!          ! boundary at xe = 1
-!
-!          ie = negrid
-!
-!          eea = ee*wxe*delp*mu/(eta*energy(wxe,ecut)**1.5)
-!       
-!          xe1 = xe(ie)
-! 
-!          eeb = -eec(ie-1)
-!          eec(ie) = 0.0
-!
-!          erc1(ie,ielo) = 0.0
-!          cc(ie) = 0.0
-!          
-!          erb1(ie,ielo) = 1.0 - 0.25*erc1(ie-1,ielo)/w(ie,is)
-!          bb(ie) = 1.0 - 0.25*(cc(ie-1) + eeb)/w(ie,is) + ee*xe1/e(ie,is)**1.5
-!       
-!          era1(ie,ielo) = 0.25*rba(ie-1)/w(ie,is)
-!          aa(ie) = 0.25*(ba(ie-1) + eea)/w(ie,is)
-!
-!          erc1(:,ielo) = 0.25*erc1(:,ielo)/w(:,is)
-!          ec1(:,ielo) = 0.25*(cc + eec)/w(:,is)
-
        case (ediff_scheme_old)
 
           ! non-conservative scheme
@@ -1682,10 +1550,6 @@ contains
                   / (bmag(ig)*spec(is)%zstm)**2 &
                   * kperp2(ig,it,ik)*cfac
 
-!             ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
-!                  / (bmag(ig)*spec(is)%zstm)**2 &
-!                  * kperp2(ig,it,ik)*cfac
-          
              ! coefficients for tridiagonal matrix:
              cc(ie) = -vn*code_dt*capgr/((xer-xel)*(xe2 - xe1))
              aa(ie) = -vn*code_dt*capgl/((xer-xel)*(xe1 - xe0))
@@ -1714,10 +1578,6 @@ contains
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-!          ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
-!               / (bmag(ig)*spec(is)%zstm)**2 &
-!               * kperp2(ig,it,ik)*cfac
-
           cc(1) = -vn*code_dt*capgr/(xer*(xe2 - xe1))
           aa(1) = 0.0
           bb(1) = 1.0 - cc(1) + ee*code_dt
@@ -1743,10 +1603,6 @@ contains
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
 
-!          ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
-!               / (bmag(ig)*spec(is)%zstm)**2 &
-!               * kperp2(ig,it,ik)*cfac
-
           cc(negrid) = 0.0
           aa(negrid) = -vn*code_dt*capgl/((1.0-xel)*(xe1 - xe0))
           bb(negrid) = 1.0 - aa(negrid) + ee*code_dt
@@ -1759,72 +1615,6 @@ contains
           ec1(:,ielo) = cc
           era1 = 0.0 ; erb1 = 1.0 ; erc1 = 0.0
 
-!          xe1 = xe(1)
-!          xe2 = xe(2)
-!
-!          xer = (xe2 + xe1)*0.5
-!       
-!!          er = energy(xer,ecut)
-!       
-!          fac = -8.0*vn*code_dt/pi
-!       
-!          ee = 0.25/e(1,is)**1.5*(1-slb1**2)*xe1 &
-!               / (bmag(ig)*spec(is)%zstm)**2 &
-!               * kperp2(ig,it,ik)*cfac
-!       
-!          aa(1) = 0.0
-!          cc(1) = fac*sqrt(el(2))*exp(-2.0*el(2))/(xe2 - xe1)
-!          bb(1) = 1.0 - cc(1) + ee*vn*code_dt
-!
-!          do ie = 2, negrid-1
-!             xe0 = xe(ie-1)
-!             xe1 = xe(ie)
-!             xe2 = xe(ie+1)
-!
-!             capgl = 0.5*(xe0*sqrt(e(ie-1,is))*exp(-2.0*e(ie-1,is)) &
-!                  +xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is)))
-!             capgr = 0.5*(xe2*sqrt(e(ie+1,is))*exp(-2.0*e(ie+1,is)) &
-!                  +xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is)))
-!
-!             dela = xe1 - xe0
-!             delb = xe2 - xe0
-!             delc = xe2 - xe1
-!             delfac = delc/dela - dela/delc
-!       
-!             fac = -16.0*vn*code_dt/pi
-!
-!             ee = 0.25/e(ie,is)**1.5*(1-slb1**2)*xe1 &
-!                  / (bmag(ig)*spec(is)%zstm)**2 &
-!                  * kperp2(ig,it,ik)*cfac
-!
-!             aa(ie) = fac*delc/(delb*dela)*(capgl/dela &
-!                  - xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))*delfac/delb)
-!             cc(ie) = fac*dela/(delb*delc)*(capgr/delc &
-!                  + xe1*sqrt(e(ie,is))*exp(-2.0*e(ie,is))*delfac/delb)
-!             bb(ie) = 1.0 - (aa(ie) + cc(ie)) + ee*vn*code_dt
-!          end do
-!
-!          xe0 = xe(negrid-1)
-!          xe1 = xe(negrid)
-!          xe2 = 1.0
-!          
-!          xel = (xe1 + xe0)*0.5
-!          
-!!          el = energy(xel,ecut)
-!          
-!          fac = -8.0*vn*code_dt/pi/(xe2 - xel)
-!          
-!          ee = 0.25/e(negrid,is)**1.5*(1-slb1**2)*xe1 &
-!               / (bmag(ig)*spec(is)%zstm)**2 &
-!               * kperp2(ig,it,ik)*cfac
-!
-!          aa(negrid) = fac*sqrt(el(negrid))*xel*exp(-2.0*el(negrid))/(xe1-xe0)
-!          cc(negrid) = 0.0
-!          bb(negrid) = 1.0 - aa(negrid) + ee*vn*code_dt
-!
-!          ec1(:,ielo) = cc
-!          era1 = 0.0 ; erb1 = 1.0 ; erc1 = 0.0
-          
        end select
 
 ! fill in the arrays for the tridiagonal
@@ -1833,17 +1623,6 @@ contains
           eql(ie+1,ielo) = aa(ie+1)*ebetaa(ie,ielo)
           ebetaa(ie+1,ielo) = 1.0/(bb(ie+1)-eql(ie+1,ielo)*ec1(ie,ielo))
        end do
-
-!       do ie = 1, negrid
-!          if (ielo == 1) write (*,*) 'abc', aa(ie), bb(ie), ec1(ie,ielo), ielo, ie, w(ie,is), xe(ie)
-!       end do
-!       if (ielo == 1) write (*,*)
-
-!       if (ielo == 1) write (*,*) 'cf', (bb(1)-1.0)*e(1,is) + cc(1)*e(2,is), e(1,is)
-!       do ie = 2, negrid-1
-!          if (ielo == 1) write (*,*) 'cf', aa(ie)*e(ie-1,is) + (bb(ie)-1.0)*e(ie,is) + cc(ie)*e(ie+1,is), e(ie,is)
-!       end do
-!       if (ielo == 1) write (*,*) 'cf', aa(negrid)*e(negrid-1,is), (bb(negrid)-1.0)*e(negrid,is), e(negrid,is)
 
     end do
 

@@ -107,11 +107,15 @@ FCOMPILER	_XL_		Fortran compiler choices
 		_GFORTRAN_      (replaces CL and FILE in the previous version)
 		_G95_
 		_NAG_
-		_ALPHA_
 		_INTEL_
 		_PGI_
 		_PATHSCALE_
-		...
+		_LAHEY_ 
+		_ABSOFT_ (*1)
+		_ALPHA_ (*1)
+		_COMPAQ_ (*1)
+		_CRAY_ (*1)
+		_SUN_ (*1)
 
 FFT		_NONE_		We can choose to not compile fftw.
 		_FFTW_		At the moment only fftw is the available 
@@ -164,6 +168,7 @@ USE_L2E_MAP	_NONE_		Affects collision.fpp.  When invoked, l2e_map
 USE_LE_LAYOUT	_NONE_		Affects collision.fpp.  Under development.
 (agk only)			Mutually exclusive with USE_L2E_MAP.
 
+*1) Currently, not supported
 
 The standard .F90 extension is not used since some file systems do not
 distinguish the case difference of the file names, eg. Windows or Mac.
@@ -171,11 +176,6 @@ In order to make your emacs recognize .fpp extension as a f90 source code,
 you may add the following line to your .emacs file:
 
   (setq auto-mode-alist (append '(("\\.fpp$" . f90-mode)) auto-mode-alist))
-
-
-To do:
-- compilation on NAG?
-- can test the Sun f90 on ranger
 
 * Porting
 
@@ -201,5 +201,5 @@ it.
 * TODO
 
 1. auto detection of the system for common system (like test_os script)
-2. Makefile.HOSTNAME_* are probably host-specific setting extracted from
-   old makefile. If still used, give nice names, otherwise, remove them.
+2. can test the Sun f90 on ranger
+

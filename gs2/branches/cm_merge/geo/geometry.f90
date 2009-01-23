@@ -30,6 +30,7 @@ module geometry
   real :: dp_new, di_new
   real, private :: psi_0, psi_a
   real :: B_T0, avgrmid, dvdrhon, surfarea, grho1n, grho2n, drhodpsin
+  real :: grhoavg  ! needed for Trinity -- MAB
 
   real, dimension(3) :: rpval
   real :: rpmin, rpmax, ak0
@@ -159,7 +160,7 @@ module geometry
    
 contains
 
-  subroutine eikcoefs
+  subroutine eikcoefs (ntheta_returned)
     
     use  veq, only: vmomin, veq_init
     use  geq, only: eqin, geq_init
@@ -174,7 +175,7 @@ contains
 !cmr nov04: adding following debug switch
     logical :: debug=.false.
 !cmr
-
+    integer, optional, intent (out) :: ntheta_returned
 
 ! Local variables:
 
@@ -201,7 +202,6 @@ contains
     character*1 :: char
     integer :: i, j, k, itot, nthg, n
 
-        
 !     compute the initial constants
     pi=2.*acos(0.)
     
@@ -252,10 +252,10 @@ if (debug) write(6,*) "eikcoefs: iflux=",iflux
           if (gs2d_eq) efit_eq = .true.
           if(vmom_eq) then
              call vmomin(      psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-             call tdef(nthg)
+             call tdef(nthg, ntheta_returned)
           else if(gen_eq) then
              call eqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-             call tdef(nthg)
+             call tdef(nthg, ntheta_returned)
 !CMR+SSAAR: moved following if clause ahead of ppl_eq to avoid ball problems 
           else if(transp_eq) then
 if (debug) write(6,fmt='("eikcoefs: transp_eq, eqfile=",a)') eqfile
@@ -263,12 +263,12 @@ if (debug) write(6,fmt='("eikcoefs: transp_eq, eqfile=",a)') eqfile
              call teqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
 if (debug) write(6,*) 'eikcoefs: transp_eq, called teqin'
 if (debug) write(6,fmt='("eikcoefs: teqin returns",1p5e10.2,i6,l,i6)') psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg
-             call tdef(nthg)
+             call tdef(nthg, ntheta_returned)
 if (debug) write(6,*) 'eikcoefs: transp_eq, called tdef'
 !CMRend
           else if(ppl_eq) then
              call peqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-             call tdef(nthg)
+             call tdef(nthg,ntheta_returned)
           else if(efit_eq) then
              if(big <= 0) big = 8
              if (mds) then
@@ -285,7 +285,7 @@ if (debug) write(6,*) "eikcoefs: done gs2din  psi_0,psi_a, rmaj, B_T0, avgrmid="
              call dfitin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
           else if(idfit_eq) then
              call idfitin(eqfile, theta, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit) 
-             call tdef(nthg)
+             call tdef(nthg, ntheta_returned)
           endif
 if (debug) write(6,*) 'eikcoefs: iflux=',iflux
           if(iflux == 10) return
@@ -811,6 +811,10 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
     do i=-nth,nth
        grho2(i)=grho(i)**2*jacob(i)
     enddo
+!> MAB -- needed for Trinity
+    call integrate(abs(grho)*jacob, theta, ans, nth)
+    grhoavg=2.*pi*(ans(nth)-ans(-nth))
+!< MAB
 !    call integrate(grho2, theta, ans, nth)
 !    grho2n=2.*pi*(ans(nth)-ans(-nth))
 !    write (*,*) '< |grad rho|**2 > = ',grho2n
@@ -828,7 +832,7 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
     dum=qfun(0.5)
     if(eqinit >= 1) eqinit=0
       
-    call plotdata (rgrid, seik, grads, dpsidrho)
+    if (nperiod ==1) call plotdata (rgrid, seik, grads, dpsidrho)
 
     call dealloc_local_arrays
 
@@ -2546,10 +2550,10 @@ end subroutine geofax
   100 format(20(1x,g12.6))
   end subroutine test
 
-  subroutine tdef(nthg)
+  subroutine tdef(nthg, ntheta_returned)
     
     real :: pi
-    integer :: nthg, nthsave, i
+    integer :: nthg, nthsave, i, ntheta_returned
 !cmr Jun06: adding following debug switch
     logical :: debug=.false.
 !cmr
@@ -2560,11 +2564,12 @@ end subroutine geofax
 
     pi = 2*acos(0.)
     
-    nthsave=nth
-    nth=nthg-1
+!    nthsave=nth
+    nth=nthg/2   ! correct, at least for geq
     if (debug) write(6,*) "tdef: nthg,nth=",nthg,nth
 !    write(*,*) 'old nth: ',nthsave,' new nth: ',nth
-    ntheta=2*nth
+    ntheta_returned=2*nth  ! guarantees even
+    ntheta = ntheta_returned
     ntgrid=(2*nperiod-1)*nth
     
     !     redefine theta grid used by the rest of the code.
@@ -2638,13 +2643,16 @@ end subroutine geofax
 !cmr Jun06: adding following debug switch
     logical :: debug=.false.
 !cmr
-    
+    logical :: first_local = .true.
+
     pi = 2*acos(0.)
     ntheta=nt
     nth = nt / 2
     ntgrid = (2*nperiod - 1)*nth       
     if (debug) write(6,*) "init_theta: allocated(theta),ntgrid=",allocated(theta),ntgrid
-    if(.not.allocated(theta)) allocate(theta(-ntgrid:ntgrid))
+    if (.not. first_local) deallocate (theta)
+    allocate(theta(-ntgrid:ntgrid))
+    first_local = .false.
 
     theta = (/ (i*pi/real(nth), i=-ntgrid, ntgrid ) /) 
 
@@ -2672,7 +2680,7 @@ end subroutine geofax
           a(itot) = a(i) + k*ext
        enddo
     enddo
-        
+
   end subroutine periodic_copy
 
   subroutine bishop_gradB(rgrid, Bmod, Bpolmag, Rpol, th_bish, ltheta, &

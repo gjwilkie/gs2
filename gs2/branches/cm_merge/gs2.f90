@@ -79,7 +79,7 @@ if (debug) write(6,*) "gs2: istep =",istep
 if (debug) write(6,*) "gs2: loop_diagnostics"
      call loop_diagnostics (istep, exit)
 if (debug) write(6,*) "gs2: check_time_step"
-     call check_time_step (istep, reset, exit)
+     call check_time_step (reset, exit)
      if (proc0) call time_message(.false.,.true.,time_advance,' Advance time step')
 if (debug) write(6,*) "gs2: reset_time_step"
      if (reset) call reset_time_step (istep, exit)

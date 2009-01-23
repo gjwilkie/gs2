@@ -48,7 +48,8 @@ contains
     ntheta = 24
     nperiod = 2
     in_file = input_unit_exist("theta_grid_parameters", exist)
-    if (exist) read (unit=input_unit("theta_grid_parameters"), nml=theta_grid_parameters)
+!    if (exist) read (unit=input_unit("theta_grid_parameters"), nml=theta_grid_parameters)
+    if (exist) read (unit=in_file, nml=theta_grid_parameters)
 
     if (kp > 0.) pk = 2.*kp
 
@@ -262,8 +263,9 @@ contains
     alpha1 = 0.0
     model_option = 'default'
     in_file = input_unit_exist("theta_grid_salpha_knobs", exist)
-    if (exist) read (unit=input_unit("theta_grid_salpha_knobs"), &
-         nml=theta_grid_salpha_knobs)
+!    if (exist) read (unit=input_unit("theta_grid_salpha_knobs"), &
+!         nml=theta_grid_salpha_knobs)
+    if (exist) read (unit=in_file,nml=theta_grid_salpha_knobs)
 
     ierr = error_unit()
     call get_option_value &
@@ -436,9 +438,10 @@ module theta_grid_eik
 contains
 
   subroutine init_theta_grid_eik
-    use geometry, only: init_theta
+    use geometry, only: init_theta, nperiod_geo => nperiod
     use geometry, only: eikcoefs, itor, delrho, rhoc
-    use theta_grid_params, only: init_theta_grid_params, ntheta
+    use geometry, only: vmom_eq, gen_eq, ppl_eq, transp_eq
+    use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
 !CMR, 21/6/06:
 !CMR add use statements to avoid inappropriate calls to init_theta
     use geometry, only: ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, local_eq, dfit_eq, gs2d_eq
@@ -455,31 +458,38 @@ contains
     if (initialized) return
     initialized = .true.
 if (debug) write(6,*) "init_theta_grid_eik: call init_theta_grid_params, ntheta=",ntheta
+! After this call, would think you have ntheta from input file
+! stored in theta_grid_params data structure.
+! but when running from numerical equilibrium, this is not right
+! Instead, get it stored via the eikcoefs call below.  
     call init_theta_grid_params
 
 if (debug) write(6,*) "init_theta_grid_eik: call read_parameters, ntheta=",ntheta
     call read_parameters
 !CMR replace call init_theta(ntheta) with following condition 
 !    to avoid inappropriate calls to init_theta (as in geo/et.f90)
-    if((.not. vmom_eq) .and. (.not. gen_eq) &
-       .and. (.not. transp_eq) .and. (.not. ppl_eq)) then 
+    if(.not. vmom_eq .and. .not. gen_eq .and. .not. ppl_eq .and. &
+       .not. transp_eq ) then 
        if (debug) write(6,*) "init_theta_grid_eik: call init_theta, ntheta=",ntheta
        call init_theta (ntheta)
     endif
 !CMRend
+    nperiod_geo = nperiod 
     rhoc_save = rhoc
     if (itor == 0) rhoc = 1.5*delrho
 !    print *, 'itor= ',itor, ' rhoc= ',rhoc, 'rhoc_save = ',rhoc_save
 if (debug) write(6,*) "init_theta_grid_eik: call eikcoefs"
-    call eikcoefs
+    call eikcoefs (ntheta)
 if (debug) write(6,*) "init_theta_grid_eik: done"
+
+!    write (*,*) 'init_theta_grid_eik: ntheta = ',ntheta
 
     rhoc = rhoc_save
   end subroutine init_theta_grid_eik
 
   subroutine eik_get_sizes (nthetaout, nperiodout, nbsetout)
     use geometry, only: nperiod
-    use theta_grid_params, only: ntheta
+    use theta_grid_params, only: ntheta, nperiod_th => nperiod
     implicit none
     integer, intent (out) :: nthetaout, nperiodout, nbsetout
 
@@ -609,7 +619,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done"
          s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
          delrho, rmin, rmax, ismooth, ak0, k1, k2, isym, writelots
 
-    nperiod = nperiod_in
+    nperiod = nperiod_in  
     rhoc = rhoc_in
     s_hat_input = shat_in
     alpha_input = alpmhd_in
@@ -935,7 +945,8 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     gb_to_cv = .false.
     equilibrium_option = 'default'
     in_file = input_unit_exist("theta_grid_knobs", exist)
-    if (exist) read (unit=input_unit("theta_grid_knobs"), nml=theta_grid_knobs)
+!    if (exist) read (unit=input_unit("theta_grid_knobs"), nml=theta_grid_knobs)
+    if (exist) read (unit=in_file, nml=theta_grid_knobs)
 
     ierr = error_unit()
     call get_option_value &
