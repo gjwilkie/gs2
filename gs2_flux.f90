@@ -2,7 +2,7 @@ module gs2_flux
   
   use regression, only: reg_type
   implicit none
-  public :: init_gs2_flux
+  public :: init_gs2_flux, reset_init
   
   real :: delta, eps
   integer :: nflux
@@ -66,7 +66,7 @@ contains
   subroutine read_parameters 
     use mp
     use text_options, only: text_option, get_option_value
-    use file_utils, only: input_unit, run_name, input_unit_exist, error_unit
+    use file_utils, only: input_unit, input_unit_exist, error_unit
     use file_utils, only: get_indexed_namelist_unit
     use species, only: nspec
     integer :: ierr, in_file, is, unit
@@ -128,7 +128,7 @@ contains
     real, dimension(:), intent (in) :: heat_fluxes
     real, dimension (nspec) :: tp
     real :: t_interval
-    integer :: j, ireg
+    integer :: j
     integer :: isave = 0, iuse
     logical :: first = .true.
     logical :: second = .false., third = .false.
@@ -241,4 +241,13 @@ contains
 
   end subroutine check_flux
   
+  subroutine reset_init
+
+    implicit none
+
+    deallocate (qin)
+    initialized = .false.
+
+  end subroutine reset_init
+
 end module gs2_flux

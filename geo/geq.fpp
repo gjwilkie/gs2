@@ -122,6 +122,7 @@ contains
 !    call ncdinq (ncid, id, fortrancrap, nr, ifail)
     istatus = nf90_inq_dimid (ncid, 'psi', id)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='psi')
+
     istatus = nf90_inquire_dimension (ncid, id, len=nr)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=id)
 
@@ -133,9 +134,10 @@ contains
 !    call ncdinq (ncid, id, fortrancrap, nt, ifail)
     istatus = nf90_inq_dimid (ncid, 'theta', id)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='theta')
-    istatus = nf90_inquire_dimension (ncid, id, len=nr)
+    istatus = nf90_inquire_dimension (ncid, id, len=nt)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=id)
 
+!    write (*,*) nr, nt
     call alloc_arrays(nr, nt)
 
     !     netcdf read scalars: psi_0,psi_a,B_T,I_0
@@ -315,6 +317,7 @@ contains
 !          R_psi(i,j) = work(1+i-1+nr*(j-1))/100./aminor
 !       enddo
 !    enddo
+
     istatus = nf90_inq_varid (ncid, 'R_psi', id)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='R_psi')
     istatus = nf90_get_var (ncid, id, R_psi, count=(/ nr, nt /))

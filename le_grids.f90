@@ -205,10 +205,6 @@ contains
     real, dimension(:), intent (out) :: epts, wgts
     integer :: ie, np
 
-    real :: eps=1.e-15
-
-    real :: x
-
     call init_egrid (negrid)
     
     np = negrid-1
@@ -221,7 +217,7 @@ contains
     
     x0 = xgrid(ecut)      ! function xgrid_s (single element)
     
-    call nrgauleg(0., x0, zeroes, wgts(1:np))!, eps**1.5)
+    call nrgauleg(0., x0, zeroes, wgts(1:np))
     
     do ie=1,np
        epts(ie) = energy(zeroes(ie), Ecut)
@@ -251,9 +247,6 @@ contains
     real, intent (in) :: vcut
     integer, intent (in) :: nesub
     real, dimension(:), intent (out) :: epts, wgts
-    integer :: ie
-
-    real :: x
 
     call init_egrid (negrid)
     
@@ -402,7 +395,7 @@ contains
 !    double precision :: xg, denom, pi
     double precision :: xg, denom
     real :: e, xgrid_s
-    integer :: kmax, k, j
+    integer :: kmax, k
 
 !    pi = asin(real(1.0,kind(pi))) * 2.0
     kmax = 100
@@ -670,7 +663,8 @@ contains
     ecut = 6.0  ! new default value for advanced scheme
     bouncefuzz = 1e-5
     in_file=input_unit_exist("le_grids_knobs", exist)
-    if (exist) read (unit=input_unit("le_grids_knobs"), nml=le_grids_knobs)
+!    if (exist) read (unit=input_unit("le_grids_knobs"), nml=le_grids_knobs)
+    if (exist) read (unit=in_file, nml=le_grids_knobs)
 
 ! user can choose not to set negrid (preferred for old scheme)
     if (negrid == -10) then
@@ -2783,7 +2777,6 @@ contains
     integer :: is, isup
     integer :: ng1
     real :: cut
-    real :: eps=1.e-15
 
     if (vgrid) then
 
@@ -2972,7 +2965,6 @@ contains
 
 ! note that xgauss and wgauss are transposed wrt original code
 
-    real :: tiny = 1.e-15
     real, dimension (2*ngauss) :: wx
     real, dimension (:), allocatable :: ytmp, yb, yberr, wb, wberrtmp
     real, dimension (:,:), allocatable :: wberr
@@ -2986,7 +2978,7 @@ contains
 
     allocate (xx(2*ngauss))
 
-    call nrgauleg(1., 0., xx, wx)!, tiny**1.5)
+    call nrgauleg(1., 0., xx, wx)
 
     wl = 0.0
 
@@ -3165,7 +3157,7 @@ contains
 ! old (finite-difference) integration scheme
     else
        jend = ng2 + 1
-       wlterr = 0.0
+!       wlterr = 0.0
        do il = ng2+1, nlambda-1
           do ig = -ntgrid, ntgrid
              if (1.0-al(il)*bmag(ig) > -bouncefuzz &

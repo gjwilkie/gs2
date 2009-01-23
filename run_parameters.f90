@@ -9,6 +9,7 @@ module run_parameters
   public :: code_delt_max, wunits, woutunits, tunits, funits, tnorm
   public :: nstep, wstar_units, eqzip, margin
   public :: secondary, tertiary, harris
+  public :: k0
   public :: vnm_init
 
   private
@@ -21,7 +22,7 @@ module run_parameters
   integer :: nstep
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
-
+  real :: k0
   integer :: delt_option_switch
   integer, parameter :: delt_option_hand = 1, delt_option_auto = 2
 
@@ -71,7 +72,7 @@ contains
 
     real :: teti  ! for back-compatibility
     logical :: exist
-    namelist /parameters/ beta, zeff, tite, rhostar, teti
+    namelist /parameters/ beta, zeff, tite, rhostar, teti, k0
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
          delt_option, margin, secondary, tertiary, faperp, harris
 
@@ -88,13 +89,16 @@ contains
        secondary = .true.
        tertiary = .false.
        harris = .false.
+       k0 = 1.
        delt_option = 'default'
        margin = 0.05
        in_file = input_unit_exist("parameters", exist)
-       if (exist) read (unit=input_unit("parameters"), nml=parameters)
+!       if (exist) read (unit=input_unit("parameters"), nml=parameters)
+       if (exist) read (unit=in_file,nml=parameters)
 
        in_file = input_unit_exist("knobs", exist)
-       if (exist) read (unit=input_unit("knobs"), nml=knobs)
+!       if (exist) read (unit=input_unit("knobs"), nml=knobs)
+       if (exist) read (unit=in_file, nml=knobs)
 
        if (teti /= -100.0) tite = teti
 
@@ -147,6 +151,7 @@ contains
     call broadcast (tertiary)
     call broadcast (harris)
     call broadcast (margin)
+    call broadcast (k0)
     user_delt_max = delt
 
     delt_saved = delt
