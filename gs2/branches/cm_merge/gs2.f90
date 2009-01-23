@@ -1,5 +1,5 @@
 program gs2
-  use job_manage, only: checkstop, job_fork
+  use job_manage, only: checkstop, job_fork, checktime
   use mp, only: init_mp, finish_mp, proc0, nproc, broadcast
 !  use mp, only: init_mp, finish_mp, proc0, iproc, nproc, broadcast, init_jobs
 !  use mp, only: scope, allprocs, subprocs, send, receive, barrier, job
@@ -10,14 +10,17 @@ program gs2
   use gs2_diagnostics, only: nsave
   use run_parameters, only: nstep
   use run_parameters, only: fphi, fapar, fbpar
+  use run_parameters, only: avail_cpu_time
   use fields, only: advance
   use dist_fn_arrays, only: gnew
   use gs2_save, only: gs2_save_for_restart
   use gs2_diagnostics, only: loop_diagnostics
   use gs2_reinit, only: reset_time_step, check_time_step
   use gs2_reinit, only: time_message, time_nc, time_reinit
+  use gs2_time, only: update_time
   use gs2_time, only: write_dt, init_tstart
   use gs2_time, only: user_time, user_dt
+  use gs2_time, only: code_time
   use init_g, only: tstart
  ! use check, only: checkstop
   use collisions, only: vnmult
@@ -34,6 +37,7 @@ program gs2
 ! initialize message passing 
 if (debug) write(6,*) "gs2: call init_mp"
   call init_mp
+  call checktime(avail_cpu_time,exit) ! initialize
 
 ! report # of processors being used
   if (proc0) then
@@ -69,6 +73,9 @@ if (debug) write(6,*) "gs2: call init_tstart"
   if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
   istep_end = nstep
 if (debug) write(6,*) "gs2: start istep loop"
+
+  call loop_diagnostics(0,exit)
+
   do istep = 1, nstep
 if (debug) write(6,*) "gs2: istep =",istep
 
@@ -77,6 +84,7 @@ if (debug) write(6,*) "gs2: istep =",istep
           call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
      
 if (debug) write(6,*) "gs2: loop_diagnostics"
+     call update_time
      call loop_diagnostics (istep, exit)
 if (debug) write(6,*) "gs2: check_time_step"
      call check_time_step (reset, exit)
@@ -85,6 +93,8 @@ if (debug) write(6,*) "gs2: reset_time_step"
      if (reset) call reset_time_step (istep, exit)
 
      if (mod(istep,5) == 0) call checkstop(exit)
+
+     call checktime(avail_cpu_time,exit)
 
      if (exit) then
         istep_end = istep

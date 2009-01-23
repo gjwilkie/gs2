@@ -18,6 +18,13 @@ module dist_fn
   public :: get_init_field
   public :: g_adjust ! MAB (needed for Trinity)
 
+  public :: gamtot,gamtot1,gamtot2
+  public :: getmoms_notgc
+  public :: mom_coeff, ncnt_mom_coeff
+  public :: mom_coeff_npara, mom_coeff_nperp
+  public :: mom_coeff_tpara, mom_coeff_tperp
+  public :: mom_shift_para, mom_shift_perp
+
   private
 
   ! knobs
@@ -134,6 +141,12 @@ module dist_fn
   logical :: initialized = .false.
   logical :: initializing = .true.
 
+  real, allocatable :: mom_coeff(:,:,:,:)
+  real, allocatable :: mom_coeff_npara(:,:,:), mom_coeff_nperp(:,:,:)
+  real, allocatable :: mom_coeff_tpara(:,:,:), mom_coeff_tperp(:,:,:)
+  real, allocatable :: mom_shift_para(:,:,:), mom_shift_perp(:,:,:)
+  integer, parameter :: ncnt_mom_coeff=8
+
 contains
 
   subroutine init_dist_fn
@@ -187,6 +200,7 @@ contains
     call init_fieldeq
     call init_hyper
 
+    call init_mom_coeff
   end subroutine init_dist_fn
 
   subroutine read_parameters
@@ -2931,6 +2945,8 @@ contains
 
     call prof_entering ("getan", "dist_fn")
 
+    antot=0. ; antota=0. ; antotp=0.
+
     if (fphi > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           do isgn = 1, 2
@@ -2979,9 +2995,8 @@ contains
     call prof_leaving ("getan", "dist_fn")
   end subroutine getan
 
-  subroutine getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp)
-! CMR: 17/1/06, better to get phinew, bparnew directly from field_arrays
-    use dist_fn_arrays, only: vpa, vperp2, aj0, gnew
+  subroutine getmoms (ntot, density, upar, tpar, tperp)
+    use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
@@ -2989,8 +3004,12 @@ contains
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
     use collisions, only: g_adjust
+    use fields_arrays, only: phinew, bparnew
+
+    ! TEMP FOR TESTING -- MAB
+!    use le_grids, only: e
+
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phinew,bparnew
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
          upar, tpar, tperp, ntot
 
@@ -3084,8 +3103,8 @@ contains
 
     call prof_leaving ("getmoms", "dist_fn")
   end subroutine getmoms
-
-  subroutine gettotmoms (phi, ntot, upar, uperp, ttot)
+  
+  subroutine gettotmoms (ntot, upar, uperp, ttot)
     use dist_fn_arrays, only: vpa, vperp2, aj0, gnew, aj1, kperp2
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx, il_idx
     use species, only: nspec, spec
@@ -3093,9 +3112,9 @@ contains
     use le_grids, only: integrate_moment, anon, e, al
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
-    use constants, only: pi => dpi
+    use constants, only: pi
+    use fields_arrays, only: phinew, bparnew
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, &
          upar, uperp, ttot
 
@@ -3110,20 +3129,15 @@ contains
        is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
-
        do isgn = 1, 2
-          g0(:,isgn,iglo) = (aj0(:,iglo)**2-1.0)*anon(ie,is) &
-               *phi(:,it,ik)*spec(is)%zt*spec(is)%dens
+          g0(:,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) &
+               + (aj0(:,iglo)**2-1.0)*anon(ie,is) &
+               * phinew(:,it,ik)*spec(is)%zt &
+               + aj0(:,iglo)*aj1(:,iglo)*vperp2(:,iglo)*2.*anon(ie,is) &
+               * bparnew(:,it,ik)
        end do
     end do
 
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) + g0(ig,isgn,iglo)
-          end do
-       end do
-    end do
     call integrate_moment (g0, ntot)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -3186,6 +3200,122 @@ contains
 
     call prof_leaving ("gettotmoms", "dist_fn")
   end subroutine gettotmoms
+
+  ! moment at not guiding center coordinate
+  subroutine getmoms_notgc (dens, upar, tpar, tper, ntot, jpar)
+    use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
+    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx
+    use species, only: nspec, spec
+    use theta_grid, only: ntgrid
+    use kt_grids, only: nakx => ntheta0, naky
+    use le_grids, only: integrate_moment
+    use mp, only: iproc
+    use fields_arrays, only: phinew, bparnew
+    implicit none
+    complex, intent (out) :: &
+         & dens(-ntgrid:,:,:,:), upar(-ntgrid:,:,:,:), &
+         & tpar(-ntgrid:,:,:,:), tper(-ntgrid:,:,:,:)
+    complex, intent (out), optional :: ntot(-ntgrid:,:,:,:)
+    complex, intent (out), optional :: jpar(-ntgrid:,:,:)
+    integer :: isgn, iglo, is
+
+    real :: a, b, tpar2, tper2
+    integer :: ig, it, ik
+
+! returns moment integrals to PE 0
+
+! not guiding center n_total
+    if(present(ntot)) then
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          is = is_idx(g_lo,iglo)
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+
+          do isgn = 1, 2
+             g0(:,isgn,iglo) = aj0(:,iglo) * gnew(:,isgn,iglo)
+          end do
+          do isgn = 1, 2
+             g0(:,isgn,iglo) = g0(:,isgn,iglo) + phinew(:,it,ik) &
+                  & *(aj0(:,iglo)**2-1.0) * spec(is)%zt
+          end do
+          do isgn = 1, 2
+             g0(:,isgn,iglo) = g0(:,isgn,iglo) &
+                  & + 2.*vperp2(:,iglo)*aj1(:,iglo)*aj0(:,iglo) &
+                  & * bparnew(:,it,ik)
+          end do
+       end do
+       call integrate_moment (g0, ntot, 1)
+    endif
+
+! not guiding center density
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do isgn = 1, 2
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)
+       end do
+    end do
+
+    call integrate_moment (g0, dens, 1)
+
+! not guiding center upar
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do isgn = 1, 2
+          g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
+       end do
+    end do
+
+    call integrate_moment (g0, upar, 1)
+
+! not guiding center tpar
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do isgn = 1, 2
+          g0(:,isgn,iglo) = 2.*aj0(:,iglo)*vpa(:,isgn,iglo)**2*gnew(:,isgn,iglo)
+       end do
+    end do
+
+    call integrate_moment (g0, tpar, 1)
+    
+! not guiding center tperp
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do isgn = 1, 2
+          g0(:,isgn,iglo) = 2.*vperp2(:,iglo)*aj1(:,iglo)*gnew(:,isgn,iglo)
+       end do
+    end do
+
+    call integrate_moment (g0, tper, 1)
+
+    do ig=-ntgrid,ntgrid
+       do it=1,nakx
+          do ik=1,naky
+             do is=1,nspec
+                tpar2=tpar(ig,it,ik,is) &
+                     & - dens(ig,it,ik,is)*mom_coeff_npara(it,ik,is)
+                tper2=tper(ig,it,ik,is) &
+                     & - dens(ig,it,ik,is)*mom_coeff_nperp(it,ik,is)
+
+                a=mom_coeff_tperp(it,ik,is)
+                b=mom_coeff_tpara(it,ik,is)
+
+                tpar(ig,it,ik,is)=(   tpar2-a*tper2)/(1.-a*b)
+                tper(ig,it,ik,is)=(-b*tpar2+  tper2)/(1.-a*b)
+             end do
+          end do
+       end do
+    end do
+
+    do is=1,nspec
+       dens(:,:,:,is)=dens(:,:,:,is)*spec(is)%dens
+       upar(:,:,:,is)=upar(:,:,:,is)*spec(is)%stm
+       tpar(:,:,:,is)=tpar(:,:,:,is)*spec(is)%temp
+       tper(:,:,:,is)=tper(:,:,:,is)*spec(is)%temp
+    end do
+
+    if(present(jpar)) then
+       jpar(:,:,:)=cmplx(0.,0.)
+       do is=1,nspec
+          jpar(:,:,:)=jpar(:,:,:)+spec(is)%z*spec(is)%dens*upar(:,:,:,is)
+       end do
+    endif
+  end subroutine getmoms_notgc
 
   subroutine init_fieldeq
     use dist_fn_arrays, only: aj0, aj1, vperp2, kperp2
@@ -6523,6 +6653,112 @@ contains
     favg_x = 0.5*(fl+fr)
 
   end function favg_x
+
+  subroutine init_mom_coeff
+    use gs2_layouts, only: g_lo
+    use species, only: nspec, spec
+    use kt_grids, only: nakx => ntheta0, naky
+    use theta_grid, only: ntgrid
+    use dist_fn_arrays, only: aj0,aj1,vperp2,kperp2
+    use dist_fn_arrays, only: vpa, vperp2
+    use le_grids, only: integrate_moment
+    integer :: i
+    integer :: isgn, iglo
+    integer :: it,ik,is
+    complex, allocatable :: coeff0(:,:,:,:)
+    complex, allocatable :: gtmp(:,:,:)
+    real, allocatable :: wgt(:)
+    logical, parameter :: analytical = .false.
+    logical, save :: initialized=.false.
+    real :: bsq
+    
+    if(initialized) return
+
+    if(.not.allocated(mom_coeff)) &
+         & allocate(mom_coeff(nakx,naky,nspec,ncnt_mom_coeff))
+    if(.not.allocated(mom_coeff_npara)) &
+         & allocate(mom_coeff_npara(nakx,naky,nspec))
+    if(.not.allocated(mom_coeff_nperp)) &
+         & allocate(mom_coeff_nperp(nakx,naky,nspec))
+    if(.not.allocated(mom_coeff_tpara)) &
+         & allocate(mom_coeff_tpara(nakx,naky,nspec))
+    if(.not.allocated(mom_coeff_tperp)) &
+         & allocate(mom_coeff_tperp(nakx,naky,nspec))
+    if(.not.allocated(mom_shift_para)) &
+         & allocate(mom_shift_para(nakx,naky,nspec))
+    if(.not.allocated(mom_shift_perp)) &
+         & allocate(mom_shift_perp(nakx,naky,nspec))
+
+    mom_coeff(:,:,:,:)=0.
+    mom_coeff_npara(:,:,:)=0. ; mom_coeff_nperp(:,:,:)=0.
+    mom_coeff_tpara(:,:,:)=0. ; mom_coeff_tperp(:,:,:)=0.
+    mom_shift_para(:,:,:)=0.  ; mom_shift_perp(:,:,:)=0.
+
+    allocate(wgt(-ntgrid:ntgrid))
+    allocate(coeff0(-ntgrid:ntgrid,nakx,naky,nspec))
+    allocate(gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    wgt(:)=0.
+    coeff0(:,:,:,:)=cmplx(0.,0.)
+    gtmp(:,:,:)=cmplx(0.,0.)
+
+    if (analytical) then
+       do it=1,nakx
+          do ik=1,naky
+             do is=1,nspec
+                bsq=.25*spec(is)%smz**2*kperp2(0,it,ik)
+                mom_coeff(it,ik,is,1) = exp(-bsq)
+                mom_coeff(it,ik,is,2) = exp(-bsq) *.5
+                mom_coeff(it,ik,is,3) = exp(-bsq) *(1.-bsq)
+                mom_coeff(it,ik,is,4) = exp(-bsq) *.75
+                mom_coeff(it,ik,is,5) = exp(-bsq) *(1.-bsq)*.5
+                mom_coeff(it,ik,is,6) = exp(-bsq) *.5
+                mom_coeff(it,ik,is,7) = exp(-bsq) *.25
+                mom_coeff(it,ik,is,8) = exp(-bsq) *(1.-.5*bsq)
+             end do
+          end do
+       end do
+    else
+       do i = 1, ncnt_mom_coeff
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             do isgn = 1,2
+                if(i==1) wgt(:)=aj0(:,iglo)
+                if(i==2) wgt(:)=aj0(:,iglo)*vpa(:,isgn,iglo)**2
+                if(i==3) wgt(:)=aj0(:,iglo)*vperp2(:,iglo)
+                if(i==4) wgt(:)=aj0(:,iglo)*vpa(:,isgn,iglo)**4
+                if(i==5) wgt(:)=aj0(:,iglo)*vpa(:,isgn,iglo)**2*vperp2(:,iglo)
+                if(i==6) wgt(:)=vperp2(:,iglo)*aj1(:,iglo)
+                if(i==7) wgt(:)=vperp2(:,iglo)*aj1(:,iglo)*vpa(:,isgn,iglo)**2
+                if(i==8) wgt(:)=vperp2(:,iglo)*aj1(:,iglo)*vperp2(:,iglo)
+                gtmp(-ntgrid:ntgrid,isgn,iglo) = wgt(-ntgrid:ntgrid)*cmplx(1.,0.)
+             end do
+          end do
+          call integrate_moment(gtmp,coeff0,1)
+          where(real(coeff0(0,1:nakx,1:naky,1:nspec)) == 0.)
+             mom_coeff(1:nakx,1:naky,1:nspec,i)=1.
+          elsewhere
+             mom_coeff(1:nakx,1:naky,1:nspec,i)= &
+                  & coeff0(0,1:nakx,1:naky,1:nspec)
+          end where
+       end do
+    endif
+
+    mom_shift_para(:,:,:)=mom_coeff(:,:,:,2)/mom_coeff(:,:,:,1)
+    mom_shift_perp(:,:,:)=mom_coeff(:,:,:,3)/mom_coeff(:,:,:,1)
+
+    mom_coeff_npara(:,:,:)=2.*mom_coeff(:,:,:,2)/mom_coeff(:,:,:,1)
+    mom_coeff_nperp(:,:,:)=2.*mom_coeff(:,:,:,6)/mom_coeff(:,:,:,1)
+
+    mom_coeff_tperp(:,:,:)= &
+         & (mom_coeff(:,:,:,5)-mom_shift_perp(:,:,:)*mom_coeff(:,:,:,2)) / &
+         & (mom_coeff(:,:,:,8)-mom_shift_perp(:,:,:)*mom_coeff(:,:,:,6))
+    mom_coeff_tpara(:,:,:)= &
+         & (mom_coeff(:,:,:,7)-mom_shift_para(:,:,:)*mom_coeff(:,:,:,6)) / &
+         & (mom_coeff(:,:,:,4)-mom_shift_para(:,:,:)*mom_coeff(:,:,:,2))
+
+    deallocate(gtmp,coeff0,wgt)
+    
+    initialized=.true.
+  end subroutine init_mom_coeff
 
 end module dist_fn
 
