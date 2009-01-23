@@ -27,6 +27,7 @@ module gs2_diagnostics
   logical :: write_dmix, write_kperpnorm, write_phitot, write_epartot
   logical :: write_eigenfunc, write_final_fields, write_final_antot
   logical :: write_final_moments, write_avg_moments, write_stress
+  logical :: write_full_moments_notgc
   logical :: write_fcheck, write_final_epar, write_kpar
   logical :: write_vortcheck, write_fieldcheck
   logical :: write_fieldline_avg_phi, write_hrate, write_lorentzian
@@ -43,6 +44,7 @@ module gs2_diagnostics
   logical, parameter :: write_density_velocity=.false.
   logical :: write_jext=.false.
 !<GGH
+  logical :: omg_conv_test
 
   integer :: nperiod_output
   integer :: nwrite, igomega, nmovie
@@ -175,7 +177,10 @@ contains
     call broadcast (write_Epolar)
     call broadcast (write_lorentzian)
     call broadcast (write_eigenfunc)
-    
+
+    call broadcast (write_full_moments_notgc)
+    call broadcast (omg_conv_test)
+
     nmovie_tot = nstep/nmovie
 
 ! initialize weights for less accurate integrals used
@@ -220,7 +225,8 @@ contains
 
     call init_gs2_io (write_nl_flux, write_omega, write_stress, &
          write_fieldline_avg_phi, write_hrate, write_final_antot, &
-         write_eigenfunc, make_movie, nmovie_tot, write_verr)
+         write_eigenfunc, make_movie, nmovie_tot, write_verr, &
+         write_full_moments_notgc)
     
     if (write_cerr) then
        if (collision_model_switch == 1 .or. collision_model_switch == 5) then
@@ -369,11 +375,13 @@ contains
          write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, write_stress, &
+         write_full_moments_notgc, &
          dump_neoclassical_flux, dump_check1, dump_check2, &
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
-         save_for_restart
+         save_for_restart, &
+         omg_conv_test
 
     if (proc0) then
        print_line = .true.
@@ -411,6 +419,7 @@ contains
        write_final_moments = .false.
        write_stress = .false.
        write_avg_moments = .false.
+       write_full_moments_notgc = .false.
        write_final_fields = .false.
        write_final_antot = .false.
        write_final_epar = .false.
@@ -438,6 +447,7 @@ contains
        use_shmem_for_xfields = .true.
        nperiod_output = nperiod - nperiod_guard
        save_for_restart = .false.
+       omg_conv_test = .true.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
 !       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
        if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
@@ -475,7 +485,8 @@ contains
        write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux &
             .or. gs2_flux_adjust
        dump_any = dump_neoclassical_flux .or. dump_check1  .or. dump_fields_periodically &
-            .or. dump_check2 .or. make_movie .or. print_summary
+            .or. dump_check2 .or. make_movie .or. print_summary &
+            .or. write_full_moments_notgc
 
        nperiod_output = min(nperiod,nperiod_output)
        ntg_out = ntheta/2 + (nperiod_output-1)*ntheta
@@ -795,7 +806,7 @@ contains
        allocate (upar(-ntgrid:ntgrid,ntheta0,naky,nspec))
        allocate (tpar(-ntgrid:ntgrid,ntheta0,naky,nspec))
        allocate (tperp(-ntgrid:ntgrid,ntheta0,naky,nspec))
-       call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp)
+       call getmoms (ntot, density, upar, tpar, tperp)
 
        if (proc0) then
           if (write_ascii) then
@@ -1274,13 +1285,15 @@ contains
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
+    use dist_fn, only: getmoms_notgc
     use collisions, only: ncheck, vnmult, vary_vnew
 !    use collisions, only: ntot_diff, upar_diff, uperp_diff, ttot_diff
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
-    use gs2_time, only: update_time, user_time
+    use gs2_time, only: user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
+    use gs2_io, only: nc_loop_fullmom
     use gs2_io, only: nc_loop_stress, nc_loop_vres
     use gs2_io, only: nc_loop_movie
     use gs2_layouts, only: yxf_lo
@@ -1382,8 +1395,6 @@ if (debug) write(6,*) "loop_diagnostics: proc0 done called get_omegaavg"
     call prof_leaving ("loop_diagnostics")
 if (debug) write(6,*) "loop_diagnostics: call update_time"
 
-    call update_time
-
     if (make_movie .and. mod(istep,nmovie)==0) then
        t = user_time
        ! EAB 09/17/03 -- modify dump_fields_periodically to print out inverse fft of fields in x,y
@@ -1392,7 +1403,7 @@ if (debug) write(6,*) "loop_diagnostics: call update_time"
        nny = yxf_lo%ny
        if (fphi > epsilon(0.0)) then
           allocate (yxphi(nnx,nny,-ntgrid:ntgrid))
-          call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp)
+          call getmoms (ntot, density, upar, tpar, tperp)
 !          call transform2 (ntot, yxphi, nny, nnx)
           call transform2 (phinew, yxphi, nny, nnx)
        end if
@@ -2067,9 +2078,9 @@ if (debug) write(6,*) "loop_diagnostics: -2"
     call broadcast (write_avg_moments)
     if (write_avg_moments) then
 
-       call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp)
+       call getmoms (ntot, density, upar, tpar, tperp)
 
-       if (test_conserve) call gettotmoms (phinew, ntot, upartot, uperptot, ttot)
+       if (test_conserve) call gettotmoms (ntot, upartot, uperptot, ttot)
 
        if (proc0) then
           allocate (dl_over_b(-ntg_out:ntg_out))
@@ -2123,6 +2134,18 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 
        end if
     end if
+
+    ! RN> output not guiding center moments in x-y plane
+    if (write_full_moments_notgc) then !RN
+       call getmoms_notgc(density,upar,tpar,tperp,ntot)
+       if(proc0) then
+          call nc_loop_fullmom(nout,t, &
+               & ntot(igomega,:,:,:),density(igomega,:,:,:), &
+               & upar(igomega,:,:,:), &
+               & tpar(igomega,:,:,:),tperp(igomega,:,:,:) )
+       endif
+    endif
+    ! <RN
 
     if (write_neoclassical_flux .and. neoflux .and. proc0) then
        do is=1,nspec
@@ -2343,7 +2366,7 @@ if (debug) write(6,*) "loop_diagnostics: done"
     use kt_grids, only: naky, ntheta0
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use gs2_time, only: code_dt
-    use constants
+    use constants, only: zi
     implicit none
     integer, intent (in) :: istep
     logical, intent (in out) :: exit
@@ -2365,13 +2388,13 @@ if (debug) write(6,*) "get_omeaavg: start"
             = log((phinew(j,:,:) + aparnew(j,:,:) + bparnew(j,:,:)) &
                   /(phi(j,:,:)   + apar(j,:,:)    + bpar(j,:,:)))*zi/code_dt
     end where
-
     omegaavg = sum(omegahist/real(navg),dim=1)
 if (debug) write(6,*) "get_omegaavg: omegaavg=",omegaavg
 
     if (istep > navg) then
        domega = spread(omegaavg,1,navg) - omegahist
-       if (all(sqrt(sum(abs(domega)**2/real(navg),dim=1)) &
+       if (omg_conv_test .and. &
+            all(sqrt(sum(abs(domega)**2/real(navg),dim=1)) &
             < min(abs(omegaavg),1.0)*omegatol)) &
        then
           if (write_ascii) write (out_unit, "('*** omega converged')")

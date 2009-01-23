@@ -16,6 +16,7 @@ module gs2_io
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
   public :: nc_loop_stress, nc_loop_vres
   public :: nc_loop_movie
+  public :: nc_loop_fullmom
 
   logical, parameter :: serial_io = .true.
 # ifdef NETCDF
@@ -89,6 +90,10 @@ module gs2_io
   integer :: hk_delfs2_id, hk_hs2_id, hk_phis2_id
   integer :: hk_hypervisc_id, hk_hyperres_id, hk_collisions_id
   integer :: hk_gradients_id, hk_hypercoll_id, hk_heating_id, hk_imp_colls_id
+
+  integer, dimension (5) :: mom_dim
+  integer :: ntot0_id, density0_id, upar0_id, tpar0_id, tperp0_id
+
 # endif
   real :: zero
   
@@ -98,7 +103,8 @@ contains
 
   subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
       write_phiavg, write_hrate, write_final_antot, write_eigenfunc, &
-      make_movie, nmovie_tot, write_verr)
+      make_movie, nmovie_tot, write_verr, &
+      write_full_moments_notgc)
 !David has made some changes to this subroutine (may 2005) now should 
 !be able to do movies for linear box runs as well as nonlinear box runs.
 
@@ -120,6 +126,7 @@ contains
     logical, intent(in) :: write_nl_flux, write_omega, write_stress
     logical, intent(in) :: write_phiavg, write_hrate, make_movie
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
+    logical, intent(in) :: write_full_moments_notgc
     integer :: nmovie_tot
 # ifdef NETCDF
     logical :: accelerated
@@ -192,7 +199,8 @@ contains
     if (proc0) then
        call define_dims (nmovie_tot)
        call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
-            write_hrate, write_final_antot, write_eigenfunc, write_verr)
+            write_hrate, write_final_antot, write_eigenfunc, write_verr, &
+            write_full_moments_notgc)
        call nc_grids
        call nc_species
        call nc_geo
@@ -405,7 +413,8 @@ contains
   end subroutine save_input
 
   subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
-       write_hrate, write_final_antot, write_eigenfunc, write_verr)
+       write_hrate, write_final_antot, write_eigenfunc, write_verr, &
+       write_full_moments_notgc)
 
     use mp, only: nproc
     use species, only: nspec
@@ -423,6 +432,7 @@ contains
     logical, intent(in) :: write_nl_flux, write_omega, write_stress
     logical, intent(in) :: write_phiavg, write_hrate, write_final_antot
     logical, intent(in) :: write_eigenfunc, write_verr
+    logical, intent(in) :: write_full_moments_notgc
 # ifdef NETCDF
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
@@ -519,6 +529,12 @@ contains
     loop_phi_dim (1) = ri_dim
     loop_phi_dim (2) = nakx_dim
     loop_phi_dim (3) = time_dim
+
+    mom_dim(1) = ri_dim
+    mom_dim(2) = nakx_dim
+    mom_dim(3) = naky_dim
+    mom_dim(4) = nspec_dim
+    mom_dim(5) = time_dim
 
     status = nf90_put_att (ncid, NF90_GLOBAL, 'title', 'GS2 Simulation Data')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, NF90_GLOBAL, att='title')
@@ -1099,6 +1115,21 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, hk_heating_id, att='long_name')
     end if
 
+    ! RN> not guiding center moments
+    if (write_full_moments_notgc) then
+       status = nf90_def_var (ncid, 'ntot0', netcdf_real, mom_dim, ntot0_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='ntot0')
+       status = nf90_def_var (ncid, 'density0', netcdf_real, mom_dim, density0_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='density0')
+       status = nf90_def_var (ncid, 'upar0', netcdf_real, mom_dim, upar0_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='upar0')
+       status = nf90_def_var (ncid, 'tpar0', netcdf_real, mom_dim, tpar0_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='tpar0')
+       status = nf90_def_var (ncid, 'tperp0', netcdf_real, mom_dim, tperp0_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='tperp0')
+    endif
+    ! <RN
+
 !    status = nf90_put_att (ncid, phtot_id, 'long_name', 'Field amplitude')
 
     status = nf90_def_var (ncid, 'input_file', NF90_CHAR, nin_dim, input_id)
@@ -1176,9 +1207,11 @@ contains
           status = nf90_def_var (ncid_movie, 'bpar_by_xmode', netcdf_real, xmode_dim, bpar_by_xmode_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_by_xmode')
        end if
+
        status = nf90_enddef (ncid_movie)  ! out of definition mode
        if (status /= NF90_NOERR) call netcdf_error (status)
     endif
+
 # endif
   end subroutine define_vars
 
@@ -2037,6 +2070,60 @@ contains
     end if
 # endif
   end subroutine nc_loop
+
+  ! RN> output full not guiding center moments 
+  subroutine nc_loop_fullmom (nout, time, &
+       & ntot0, density0, upar0, tpar0, tperp0)
+    use kt_grids, only: naky, nakx => ntheta0
+    use species, only: nspec
+    use convert, only: c2r
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var, nf90_sync
+    use netcdf_utils, only: netcdf_error
+# endif
+    implicit none
+
+    integer, intent (in) :: nout
+    real, intent (in) :: time
+    complex, intent(in) :: ntot0(:,:,:), density0(:,:,:), upar0(:,:,:)
+    complex, intent(in) :: tpar0(:,:,:), tperp0(:,:,:)
+# ifdef NETCDF
+    real, dimension (2, nakx, naky, nspec) :: ri3
+    integer, dimension (5) :: startmom, countmom
+    integer :: status, it, ik, is
+
+    status = nf90_put_var (ncid, time_id, time, start=(/nout/))
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, time_id)
+
+    startmom(1) = 1;    countmom(1)=2
+    startmom(2) = 1;    countmom(2)=nakx
+    startmom(3) = 1;    countmom(3)=naky
+    startmom(4) = 1;    countmom(4)=nspec
+    startmom(5) = nout; countmom(5)=1
+
+    call c2r (ntot0, ri3)
+    status = nf90_put_var (ncid, ntot0_id, ri3, start=startmom, count=countmom)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, ntot0_id)
+    call c2r (density0, ri3)
+    status = nf90_put_var (ncid, density0_id, ri3, start=startmom, count=countmom)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, density0_id)
+    call c2r (upar0, ri3)
+    status = nf90_put_var (ncid, upar0_id, ri3, start=startmom, count=countmom)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, upar0_id)
+    call c2r (tpar0, ri3)
+    status = nf90_put_var (ncid, tpar0_id, ri3, start=startmom, count=countmom)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, tpar0_id)
+    call c2r (tperp0, ri3)
+    status = nf90_put_var (ncid, tperp0_id, ri3, start=startmom, count=countmom)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, tperp0_id)
+
+    if (mod(nout, 10) == 0) then
+       status = nf90_sync (ncid)
+       if (status /= NF90_NOERR) call netcdf_error (status)
+    end if
+# endif
+  end subroutine nc_loop_fullmom
+  ! <RN
 
   ! added by EAB on 03/05/04
   subroutine nc_loop_movie (nout_movie, time, yxphi, yxapar, yxbpar)
