@@ -29,6 +29,7 @@ module collisions
   logical :: heating
   logical :: hyper_colls
   logical :: diffuse_energy
+  logical :: ei_coll_only
 
   integer, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
   integer, parameter :: collision_model_krook = 2
@@ -168,7 +169,8 @@ contains
          adjust, const_v, cfac, hypermult, diffuse_energy, vnfac, &
          etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, &
          test_mom_conserve, conserve_moments, lorentz_scheme, ediff_scheme, &
-         resistivity, conservative
+         resistivity, conservative, &
+         ei_coll_only
     integer :: ierr, in_file
     logical :: exist
 
@@ -199,6 +201,7 @@ contains
        vary_vnew = .false.
        const_v = .false.
        heating = .false.
+       ei_coll_only = .false.
        in_file = input_unit_exist ("collisions_knobs", exist)
 !       if (exist) read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
        if (exist) read (unit=in_file, nml=collisions_knobs)
@@ -243,7 +246,7 @@ contains
     call broadcast (ediff_switch)
     call broadcast (heating)
     call broadcast (adjust)
-
+    call broadcast (ei_coll_only)
   end subroutine read_parameters
 
   subroutine init_arrays
@@ -1079,6 +1082,14 @@ contains
                       delvnew(ik,ie,is) = vnew_s(ik,ie,is)-vnew_D(ik,ie,is)
                    end if
                 end if
+                if (ei_coll_only) then
+                   vnew(ik,ie,is) = spec(is)%vnewk/e(ie,is)**1.5 &
+                        *zeff*0.5*tunits(ik)
+                   vnew_s(ik,ie,is)=0.
+                   vnew_D(ik,ie,is)=0.
+                   vnew_E(ik,ie,is)=0.
+                   delvnew(ik,ie,is)=0.
+                endif
              end do
           end do
        else
@@ -1107,6 +1118,13 @@ contains
                       delvnew(ik,ie,is) = vnew_s(ik,ie,is)-vnew_D(ik,ie,is)
                    end if
                 end if
+                if (ei_coll_only) then
+                   vnew(ik,ie,is) = 0.
+                   vnew_s(ik,ie,is)=0.
+                   vnew_D(ik,ie,is)=0.
+                   vnew_E(ik,ie,is)=0.
+                   delvnew(ik,ie,is)=0.
+                endif
              end do
           end do
        end if
