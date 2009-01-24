@@ -72,6 +72,7 @@ gs2_mod = \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
+	 gs2_layouts_type.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
 	 gs2_time.o \
@@ -223,6 +224,8 @@ et.o: \
 	 geometry.o 
 fft_work.o: \
 	 constants.o 
+fft_work_fftw.o: \
+	 constants.o 
 fields.o: \
 	 antenna.o \
 	 constants.o \
@@ -266,6 +269,8 @@ fields_test.o: \
 	 dist_fn_arrays.o \
 	 fields_arrays.o 
 file_utils.o: \
+	 command_line.o 
+file_utils_gnu.o: \
 	 command_line.o 
 geometry.o: \
 	 deq.o \
@@ -372,7 +377,9 @@ gs2_io_hdf5.o: \
 	 theta_grid.o 
 gs2_layouts.o: \
 	 file_utils.o \
+	 gs2_layouts_type.o \
 	 mp.o 
+gs2_layouts_type.o: 
 gs2_reinit.o: \
 	 antenna.o \
 	 collisions.o \
@@ -399,6 +406,16 @@ gs2_save.o: \
 	 mp.o \
 	 netcdf_utils.o \
 	 theta_grid.o 
+gs2_save_fast.o: \
+	 antenna_data.o \
+	 constants.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 mp.o \
+	 netcdf_utils.o \
+	 theta_grid.o 
 gs2_save_hdf5.o: \
 	 fields_arrays.o \
 	 file_utils.o \
@@ -408,6 +425,14 @@ gs2_save_hdf5.o: \
 	 theta_grid.o 
 gs2_time.o: 
 gs2_transforms.o: \
+	 fft_work.o \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 mp.o \
+	 prof.o \
+	 redistribute.o \
+	 theta_grid.o 
+gs2_transforms_fftw.o: \
 	 fft_work.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
@@ -480,8 +505,12 @@ leq.o: \
 	 spl.o 
 mds.o: \
 	 constants.o 
+mds_io_stub.o: \
+	 constants.o 
 mdslib.o: 
 mp.o: \
+	 constants.o 
+mp_mpi_r8.o: \
 	 constants.o 
 netcdf_utils.o: \
 	 constants.o \
@@ -513,6 +542,8 @@ radstub.o:
 ran.o: 
 redistribute.o: \
 	 job_manage.o \
+	 mp.o 
+redistribute_mpi.o: \
 	 mp.o 
 redistribute_shnew.o: \
 	 mp.o 

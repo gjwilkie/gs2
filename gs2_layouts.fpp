@@ -1,4 +1,14 @@
+# include "define.inc"
+
 module gs2_layouts
+
+! TT: What are gint_layout_type and geint_layout_type?
+
+! TT>
+  use gs2_layouts_type, only: g_layout_type, lz_layout_type, e_layout_type
+  use gs2_layouts_type, only: le_layout_type
+! <TT
+
   implicit none
   private
 
@@ -6,7 +16,10 @@ module gs2_layouts
   public :: is_kx_local
   
   public :: init_dist_fn_layouts, init_gs2_layouts
-  public :: g_lo, g_layout_type
+! TT>
+!  public :: g_lo, g_layout_type
+  public :: g_lo
+! <TT
   public :: gint_lo, gint_layout_type
   public :: geint_lo, geint_layout_type
 
@@ -18,12 +31,18 @@ module gs2_layouts
   public :: mj, ij, dj
 
   public :: init_lorentz_layouts
-  public :: lz_lo, lz_layout_type
+! TT>
+!  public :: lz_lo, lz_layout_type
+  public :: lz_lo
+! <TT
   public :: gidx2lzidx
   public :: gidx2gintidx, gintidx2geidx
 
   public :: init_ediffuse_layouts
-  public :: e_lo, e_layout_type
+! TT>
+!  public :: e_lo, e_layout_type
+  public :: e_lo
+! <TT
 
   public :: init_x_transform_layouts, init_y_transform_layouts
   public :: xxf_lo, xxf_layout_type, yxf_lo, yxf_layout_type
@@ -41,11 +60,13 @@ module gs2_layouts
   logical :: local_field_solve, accel_lxyes, lambda_local
   character (len=5) :: layout
 
-  type :: g_layout_type
-     integer :: iproc
-     integer :: naky, ntheta0, nlambda, negrid, nspec
-     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
-  end type g_layout_type
+! TT>
+!!$  type :: g_layout_type
+!!$     integer :: iproc
+!!$     integer :: naky, ntheta0, nlambda, negrid, nspec
+!!$     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
+!!$  end type g_layout_type
+! <TT
 
   type :: gint_layout_type
      integer :: iproc
@@ -62,6 +83,9 @@ module gs2_layouts
   type (g_layout_type) :: g_lo
   type (gint_layout_type) :: gint_lo
   type (geint_layout_type) :: geint_lo
+! TT>
+  type (le_layout_type) :: le_lo  ! new type
+! <TT
 
   type :: f_layout_type
      integer :: iproc
@@ -84,20 +108,24 @@ module gs2_layouts
   integer, dimension(:), allocatable :: ij, mj
   integer, dimension(:,:), allocatable :: dj
 
-  type :: lz_layout_type
-     integer :: iproc
-     integer :: ntgrid, naky, ntheta0, negrid, nspec, ng2
-     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize, gsize
-     integer :: llim_group, ulim_group, igroup, ngroup, nprocset, iset, nset, groupblocksize
-  end type lz_layout_type
+! TT>
+!!$  type :: lz_layout_type
+!!$     integer :: iproc
+!!$     integer :: ntgrid, naky, ntheta0, negrid, nspec, ng2
+!!$     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize, gsize
+!!$     integer :: llim_group, ulim_group, igroup, ngroup, nprocset, iset, nset, groupblocksize
+!!$  end type lz_layout_type
+! <TT
 
   type (lz_layout_type) :: lz_lo
 
-  type :: e_layout_type
-     integer :: iproc
-     integer :: ntgrid, naky, ntheta0, nlambda, nspec, nsign
-     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
-  end type e_layout_type
+! TT>
+!!$  type :: e_layout_type
+!!$     integer :: iproc
+!!$     integer :: ntgrid, naky, ntheta0, nlambda, nspec, nsign
+!!$     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
+!!$  end type e_layout_type
+! <TT
 
   type (e_layout_type) :: e_lo
 
@@ -161,6 +189,9 @@ module gs2_layouts
   interface ig_idx
      module procedure ig_idx_lz
      module procedure ig_idx_e
+! TT>
+     module procedure ig_idx_le
+! <TT
      module procedure ig_idx_xxf
      module procedure ig_idx_yxf
      module procedure ig_idx_f
@@ -173,6 +204,9 @@ module gs2_layouts
      module procedure ik_idx_jf
      module procedure ik_idx_lz
      module procedure ik_idx_e
+! TT>
+     module procedure ik_idx_le
+! <TT
      module procedure ik_idx_xxf
      module procedure ik_idx_accel
      module procedure ik_idx_accelx
@@ -185,6 +219,9 @@ module gs2_layouts
      module procedure it_idx_jf
      module procedure it_idx_lz
      module procedure it_idx_e
+! TT>
+     module procedure it_idx_le
+! <TT
      module procedure it_idx_yxf
      module procedure it_idx_accel
      module procedure it_idx_accelx
@@ -213,6 +250,9 @@ module gs2_layouts
      module procedure is_idx_geint
      module procedure is_idx_lz
      module procedure is_idx_e
+! TT>
+     module procedure is_idx_le
+! <TT
      module procedure is_idx_xxf
      module procedure is_idx_yxf
      module procedure is_idx_accelx
@@ -231,6 +271,9 @@ module gs2_layouts
      module procedure proc_id_jf
      module procedure proc_id_lz
      module procedure proc_id_e
+! TT>
+     module procedure proc_id_le
+! <TT
      module procedure proc_id_xxf
      module procedure proc_id_yxf
      module procedure proc_id_accelx
@@ -244,6 +287,9 @@ module gs2_layouts
      module procedure idx_jf
      module procedure idx_lz
      module procedure idx_e
+! TT>
+     module procedure idx_le
+! <TT
      module procedure idx_xxf
      module procedure idx_yxf
      module procedure idx_accelx
@@ -257,6 +303,9 @@ module gs2_layouts
      module procedure idx_local_jf,     ig_local_jf
      module procedure idx_local_lz,     ig_local_lz
      module procedure idx_local_e,      ig_local_e
+! TT>
+     module procedure idx_local_le,      ig_local_le
+! <TT
      module procedure idx_local_xxf,    ig_local_xxf
      module procedure idx_local_yxf,    ig_local_yxf
      module procedure idx_local_accelx, ig_local_accelx
@@ -472,9 +521,23 @@ contains
   subroutine init_dist_fn_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
     use mp, only: iproc, nproc
+! TT>
+    use file_utils, only: error_unit
+! <TT
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     logical, save :: initialized = .false.
+! TT>
+# ifdef USE_C_INDEX
+    integer :: ierr
+    interface
+       function init_indices_glo_c (layout)
+         integer :: init_indices_glo_c
+         character(*) :: layout
+       end function init_indices_glo_c
+    end interface
+# endif
+! <TT
 
     if (initialized) return
     initialized = .true.
@@ -517,6 +580,14 @@ contains
          = min(geint_lo%ulim_world, geint_lo%llim_proc + geint_lo%blocksize -1)
     geint_lo%ulim_alloc = max(geint_lo%llim_proc, geint_lo%ulim_proc)
     
+! TT>
+# ifdef USE_C_INDEX
+    ierr = init_indices_glo_c (layout)
+    if (ierr /= 0) &
+         & write (error_unit(),*) 'ERROR: layout not found: ', trim(layout)
+# endif
+! <TT
+
   end subroutine init_dist_fn_layouts
 
   subroutine is_kx_local(negrid, nspec, nlambda, naky, ntheta0, kx_local)  
@@ -623,33 +694,71 @@ contains
 
   end subroutine is_kx_local
 
+! TT>
+# ifdef USE_C_INDEX
+  function is_idx_g (lo, i)
+# else
   elemental function is_idx_g (lo, i)
+# endif
+! <TT
     implicit none
     integer :: is_idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       is_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid/lo%nlambda, lo%nspec)
-    case ('yxles')
-       is_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%nlambda/lo%negrid, lo%nspec)
-    case ('lexys')
-       is_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%negrid/lo%ntheta0/lo%naky, lo%nspec)
-    case ('lxyes')
-       is_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
-    case ('lyxes')
-       is_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
-    end select
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function is_idx_g_c (lo,num)
+         use gs2_layouts_type, only: g_layout_type
+         integer :: is_idx_g_c
+         type (g_layout_type) :: lo
+         integer :: num
+       end function is_idx_g_c
+    end interface
+    is_idx_g = is_idx_g_c (lo,i)
+# else
+!!$    select case (layout)
+!!$    case ('yxels')
+!!$       is_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid/lo%nlambda, lo%nspec)
+!!$    case ('yxles')
+!!$       is_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%nlambda/lo%negrid, lo%nspec)
+!!$    case ('lexys')
+!!$       is_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%negrid/lo%ntheta0/lo%naky, lo%nspec)
+!!$    case ('lxyes')
+!!$       is_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
+!!$    case ('lyxes')
+!!$       is_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+!!$    end select
+    ! TT: the order of the division doesn't matter, so no need for branching
+    is_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid/lo%nlambda, lo%nspec)
+# endif
+! <TT
 
   end function is_idx_g
 
+! TT>
+# ifdef USE_C_INDEX
+  function il_idx_g (lo, i)
+# else
   elemental function il_idx_g (lo, i)
+# endif
+! <TT
     implicit none
     integer :: il_idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function il_idx_g_c (lo,num)
+         use gs2_layouts_type, only: g_layout_type
+         integer :: il_idx_g_c
+         type (g_layout_type) :: lo
+         integer :: num
+       end function il_idx_g_c
+    end interface
+    il_idx_g = il_idx_g_c (lo,i)
+# else
     select case (layout)
     case ('yxels')
        il_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nlambda)
@@ -662,15 +771,34 @@ contains
     case ('lyxes')
        il_idx_g = 1 + mod(i - lo%llim_world, lo%nlambda)
     end select
+# endif
+! <TT
 
   end function il_idx_g
 
+! TT>
+# ifdef USE_C_INDEX
+  function ie_idx_g (lo, i)
+# else
   elemental function ie_idx_g (lo, i)
+# endif
+! <TT
     implicit none
     integer :: ie_idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function ie_idx_g_c (lo,num)
+         use gs2_layouts_type, only: g_layout_type
+         integer :: ie_idx_g_c
+         type (g_layout_type) :: lo
+         integer :: num
+       end function ie_idx_g_c
+    end interface
+    ie_idx_g = ie_idx_g_c (lo,i)
+# else
     select case (layout)
     case ('yxels')
        ie_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
@@ -683,15 +811,35 @@ contains
     case ('lyxes')
        ie_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky/lo%ntheta0, lo%negrid)
     end select
+# endif
+! <TT
 
   end function ie_idx_g
 
+! TT>
+# ifdef USE_C_INDEX
+  function it_idx_g (lo, i)
+# else
   elemental function it_idx_g (lo, i)
+# endif
+! <TT
     implicit none
     integer :: it_idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: i
     
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function it_idx_g_c (lo,num)
+         use gs2_layouts_type, only: g_layout_type
+         integer :: it_idx_g_c
+         type (g_layout_type) :: lo
+         integer :: num
+       end function it_idx_g_c
+    end interface
+    it_idx_g = it_idx_g_c (lo,i)
+# else
     select case (layout)
     case ('yxels')
        it_idx_g = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
@@ -704,15 +852,34 @@ contains
     case ('lyxes')
        it_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky, lo%ntheta0)
     end select
+# endif
+! <TT
 
   end function it_idx_g
 
+! TT>
+# ifdef USE_C_INDEX
+  function ik_idx_g (lo, i)
+# else
   elemental function ik_idx_g (lo, i)
+# endif
+! <TT
     implicit none
     integer :: ik_idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function ik_idx_g_c (lo,num)
+         use gs2_layouts_type, only: g_layout_type
+         integer :: ik_idx_g_c
+         type (g_layout_type) :: lo
+         integer :: num
+       end function ik_idx_g_c
+    end interface
+    ik_idx_g = ik_idx_g_c (lo,i)
+# else
     select case (layout)
     case ('yxels')
        ik_idx_g = 1 + mod(i - lo%llim_world, lo%naky)
@@ -725,6 +892,8 @@ contains
     case ('lyxes')
        ik_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda, lo%naky)
     end select
+# endif
+! <TT
 
   end function ik_idx_g
 
@@ -736,12 +905,29 @@ contains
     proc_id_g = i/lo%blocksize
   end function proc_id_g
 
+! TT>
+# ifdef USE_C_INDEX
+  function idx_g (lo, ik, it, il, ie, is)
+# else
   elemental function idx_g (lo, ik, it, il, ie, is)
+# endif
+! <TT
     implicit none
     integer :: idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: ik, it, il, ie, is
-    
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function idx_g_c (lo,ik,it,il,ie,is)
+         use gs2_layouts_type, only: g_layout_type
+         integer :: idx_g_c
+         type (g_layout_type) :: lo
+         integer :: ik,it,il,ie,is
+       end function idx_g_c
+    end interface
+    idx_g = idx_g_c (lo, ik, it, il, ie, is)
+# else
     select case (layout)
     case ('yxels')
        idx_g = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(il-1 + lo%nlambda*(is-1))))
@@ -754,9 +940,18 @@ contains
     case ('lyxes')
        idx_g = il-1 + lo%nlambda*(ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1))))
     end select
+# endif
+! <TT
+
   end function idx_g
 
+! TT>
+# ifdef USE_C_INDEX
+  function idx_local_g (lo, ik, it, il, ie, is)
+# else
   elemental function idx_local_g (lo, ik, it, il, ie, is)
+# endif
+! <TT
     implicit none
     logical :: idx_local_g
     type (g_layout_type), intent (in) :: lo
@@ -1254,6 +1449,209 @@ contains
     ig_local_jf = lo%iproc == proc_id(lo, ig)
   end function ig_local_jf
 
+! TT>
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Lorentz-Ediffuse layouts
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine init_le_layouts (ntgrid, naky, ntheta0, nspec)
+    use mp, only: iproc, nproc
+    use file_utils, only: error_unit
+    implicit none
+    integer, intent (in) :: ntgrid, naky, ntheta0, nspec
+    logical, save :: initialized = .false.
+# ifdef USE_C_INDEX
+    integer :: ierr
+    interface
+       function init_indices_lelo_c (layout)
+         integer :: init_indices_lelo_c
+         character(*) :: layout
+       end function init_indices_lelo_c
+    end interface
+# endif
+
+    if (initialized) return
+    initialized = .true.
+    
+    le_lo%iproc = iproc
+    le_lo%ntgrid = ntgrid
+    le_lo%ntheta0 = ntheta0
+    le_lo%naky = naky
+    le_lo%nspec = nspec
+    le_lo%llim_world = 0
+    le_lo%ulim_world = (2*ntgrid+1) * naky * ntheta0 * nspec - 1
+    le_lo%blocksize = le_lo%ulim_world / nproc + 1
+    le_lo%llim_proc = le_lo%blocksize * iproc
+    le_lo%ulim_proc &
+         = min(le_lo%ulim_world, le_lo%llim_proc + le_lo%blocksize - 1)
+    le_lo%ulim_alloc = max(le_lo%llim_proc, le_lo%ulim_proc)
+# ifdef USE_C_INDEX
+    ierr = init_indices_lelo_c (layout)
+    if (ierr /= 0) &
+         & write (error_unit(),*) 'ERROR: layout not found: ', trim(layout)
+# endif
+  end subroutine init_le_layouts
+
+  elemental function is_idx_le (lo, i)
+    implicit none
+    integer :: is_idx_le
+    type (le_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+    ! TT: the order of the division doesn't matter, so no need for branching
+    is_idx_le = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0, lo%nspec)
+  end function is_idx_le
+
+# ifdef USE_C_INDEX
+  function it_idx_le (lo, i)
+# else
+  elemental function it_idx_le (lo, i)
+# endif
+    implicit none
+    integer :: it_idx_le
+    type (le_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+# ifdef USE_C_INDEX
+    interface
+       function it_idx_le_c (lo,num)
+         use gs2_layouts_type, only: le_layout_type
+         integer :: it_idx_le_c
+         type (le_layout_type) :: lo
+         integer :: num
+       end function it_idx_le_c
+    end interface
+    it_idx_le = it_idx_le_c (lo,i)
+# else
+    select case (layout)
+    case ('yxels')
+       it_idx_le = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky, lo%ntheta0)
+    case ('yxles')
+       it_idx_le = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky, lo%ntheta0)
+    case ('lexys')
+       it_idx_le = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%ntheta0)
+    case ('lxyes')
+       it_idx_le = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%ntheta0)
+    case ('lyxes')
+       it_idx_le = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky, lo%ntheta0)
+    end select
+# endif
+  end function it_idx_le
+
+# ifdef USE_C_INDEX
+  function ik_idx_le (lo, i)
+# else
+  elemental function ik_idx_le (lo, i)
+# endif
+    implicit none
+    integer :: ik_idx_le
+    type (le_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+# ifdef USE_C_INDEX
+    interface
+       function ik_idx_le_c (lo,num)
+         use gs2_layouts_type, only: le_layout_type
+         integer :: ik_idx_le_c
+         type (le_layout_type) :: lo
+         integer :: num
+       end function ik_idx_le_c
+    end interface
+    ik_idx_le = ik_idx_le_c (lo,i)
+# else
+    select case (layout)
+    case ('yxels')
+       ik_idx_le = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%naky)
+    case ('yxles')
+       ik_idx_le = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%naky)
+    case ('lexys')
+       ik_idx_le = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0, lo%naky)
+    case ('lxyes')
+       ik_idx_le = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0, lo%naky)
+    case ('lyxes')
+       ik_idx_le = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%naky)
+    end select
+# endif
+  end function ik_idx_le
+
+  elemental function ig_idx_le (lo, i)
+    implicit none
+    integer :: ig_idx_le
+    type (le_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+    ig_idx_le = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+  end function ig_idx_le
+
+# ifdef USE_C_INDEX
+  function idx_le (lo, ig, ik, it, is)
+# else
+  elemental function idx_le (lo, ig, ik, it, is)
+# endif
+    implicit none
+    integer :: idx_le
+    type (le_layout_type), intent (in) :: lo
+    integer, intent (in) :: ig, ik, it, is
+# ifdef USE_C_INDEX
+    interface
+       function idx_le_c (lo, ig, ik, it, is)
+         use gs2_layouts_type, only: le_layout_type
+         integer :: idx_le_c
+         type (le_layout_type) :: lo
+         integer :: ig, ik, it, is
+       end function idx_le_c
+    end interface
+    idx_le = idx_le_c (lo, ig, ik, it, is)
+# else
+    select case (layout)
+    case ('yxels')
+       idx_le = ig+lo%ntgrid + (2*lo%ntgrid+1)*(ik-1 &
+            + lo%naky*(it-1 + lo%ntheta0*(is-1)))
+    case ('yxles')
+       idx_le = ig+lo%ntgrid + (2*lo%ntgrid+1)*(ik-1 &
+            + lo%naky*(it-1 + lo%ntheta0*(is-1)))
+    case ('lexys')
+       idx_le = ig+lo%ntgrid + (2*lo%ntgrid+1)*(it-1 &
+            + lo%ntheta0*(ik-1 + lo%naky*(is-1)))
+    case ('lxyes')
+       idx_le = ig+lo%ntgrid + (2*lo%ntgrid+1)*(it-1 &
+            + lo%ntheta0*(ik-1 + lo%naky*(is-1)))
+    case ('lyxes')
+       idx_le = ig+lo%ntgrid + (2*lo%ntgrid+1)*(ik-1 &
+            + lo%naky*(it-1 + lo%ntheta0*(is-1)))
+    end select
+# endif
+  end function idx_le
+
+  elemental function proc_id_le (lo, i)
+    implicit none
+    integer :: proc_id_le
+    type (le_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    proc_id_le = i / lo%blocksize
+
+  end function proc_id_le
+
+# ifdef USE_C_INDEX
+  function idx_local_le (lo, ig, ik, it, is)
+# else
+  elemental function idx_local_le (lo, ig, ik, it, is)
+# endif
+    implicit none
+    logical :: idx_local_le
+    type (le_layout_type), intent (in) :: lo
+    integer, intent (in) :: ig, ik, it, is
+
+    idx_local_le = idx_local(lo, idx(lo, ig, ik, it, is))
+  end function idx_local_le
+
+  elemental function ig_local_le (lo, ig)
+    implicit none
+    logical :: ig_local_le
+    type (le_layout_type), intent (in) :: lo
+    integer, intent (in) :: ig
+
+    ig_local_le = lo%iproc == proc_id(lo, ig)
+  end function ig_local_le
+! <TT
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Energy scattering layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1261,9 +1659,23 @@ contains
   subroutine init_ediffuse_layouts &
        (ntgrid, naky, ntheta0, nlambda, nspec)
     use mp, only: iproc, nproc
+! TT>
+    use file_utils, only: error_unit
+! <TT
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, nspec
     logical, save :: initialized = .false.
+! TT>
+# ifdef USE_C_INDEX
+    integer :: ierr
+    interface
+       function init_indices_elo_c (layout)
+         integer :: init_indices_elo_c
+         character(*) :: layout
+       end function init_indices_elo_c
+    end interface
+# endif
+! <TT
 
     if (initialized) return
     initialized = .true.
@@ -1283,7 +1695,279 @@ contains
          = min(e_lo%ulim_world, e_lo%llim_proc + e_lo%blocksize - 1)
     e_lo%ulim_alloc = max(e_lo%llim_proc, e_lo%ulim_proc)
 
+! TT>
+# ifdef USE_C_INDEX
+    ierr = init_indices_elo_c (layout)
+    if (ierr /= 0) &
+         & write (error_unit(),*) 'ERROR: layout not found: ', trim(layout)
+# endif
+! <TT
+
   end subroutine init_ediffuse_layouts
+
+! TT>
+# ifdef USE_C_INDEX
+  function is_idx_e (lo, i)
+# else
+  elemental function is_idx_e (lo, i)
+# endif
+! <TT
+    implicit none
+    integer :: is_idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function is_idx_e_c (lo,num)
+         use gs2_layouts_type, only: e_layout_type
+         integer :: is_idx_e_c
+         type (e_layout_type) :: lo
+         integer :: num
+       end function is_idx_e_c
+    end interface
+    is_idx_e = is_idx_e_c (lo,i)
+# else
+!!$    select case (layout)
+!!$    case ('yxels')
+!!$       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0/lo%nlambda, lo%nspec)
+!!$    case ('yxles')
+!!$       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0/lo%nlambda, lo%nspec)
+!!$    case ('lexys')
+!!$       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0/lo%naky, lo%nspec)
+!!$    case ('lxyes')
+!!$       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0/lo%naky, lo%nspec)
+!!$    case ('lyxes')
+!!$       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%naky/lo%ntheta0, lo%nspec)
+!!$    end select
+    ! TT: the order of the division doesn't matter, so no need for branching
+    is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0/lo%nlambda, lo%nspec)
+# endif
+! <TT
+
+  end function is_idx_e
+
+! TT>
+# ifdef USE_C_INDEX
+  function il_idx_e (lo, i)
+# else
+  elemental function il_idx_e (lo, i)
+# endif
+! <TT
+    implicit none
+    integer :: il_idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function il_idx_e_c (lo,num)
+         use gs2_layouts_type, only: e_layout_type
+         integer :: il_idx_e_c
+         type (e_layout_type) :: lo
+         integer :: num
+       end function il_idx_e_c
+    end interface
+    il_idx_e = il_idx_e_c (lo,i)
+# else
+    select case (layout)
+    case ('yxels')
+       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0, lo%nlambda)
+    case ('yxles')
+       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0, lo%nlambda)
+    case ('lexys')
+       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('lxyes')
+       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('lyxes')
+       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    end select
+# endif
+! <TT
+
+  end function il_idx_e
+
+! TT>
+# ifdef USE_C_INDEX
+  function it_idx_e (lo, i)
+# else
+  elemental function it_idx_e (lo, i)
+# endif
+! <TT
+    implicit none
+    integer :: it_idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function it_idx_e_c (lo,num)
+         use gs2_layouts_type, only: e_layout_type
+         integer :: it_idx_e_c
+         type (e_layout_type) :: lo
+         integer :: num
+       end function it_idx_e_c
+    end interface
+    it_idx_e = it_idx_e_c (lo,i)
+# else
+    select case (layout)
+    case ('yxels')
+       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky, lo%ntheta0)
+    case ('yxles')
+       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky, lo%ntheta0)
+    case ('lexys')
+       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%ntheta0)
+    case ('lxyes')
+       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%ntheta0)
+    case ('lyxes')
+       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%naky, lo%ntheta0)
+    end select
+# endif
+! <TT
+
+  end function it_idx_e
+
+! TT>
+# ifdef USE_C_INDEX
+  function ik_idx_e (lo, i)
+# else
+  elemental function ik_idx_e (lo, i)
+# endif
+! <TT
+    implicit none
+    integer :: ik_idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function ik_idx_e_c (lo,num)
+         use gs2_layouts_type, only: e_layout_type
+         integer :: ik_idx_e_c
+         type (e_layout_type) :: lo
+         integer :: num
+       end function ik_idx_e_c
+    end interface
+    ik_idx_e = ik_idx_e_c (lo,i)
+# else
+    select case (layout)
+    case ('yxels')
+       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%naky)
+    case ('yxles')
+       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%naky)
+    case ('lexys')
+       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0, lo%naky)
+    case ('lxyes')
+       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0, lo%naky)
+    case ('lyxes')
+       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%naky)
+    end select
+# endif
+! <TT
+
+  end function ik_idx_e
+
+  elemental function ig_idx_e (lo, i)
+    implicit none
+    integer :: ig_idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+! TT>
+!!$    select case (layout)
+!!$    case ('yxels')
+!!$       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+!!$    case ('yxles')
+!!$       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+!!$    case ('lexys')
+!!$       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+!!$    case ('lxyes')
+!!$       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+!!$    case ('lyxes')
+!!$       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+!!$    end select
+! TT: No need for branch
+    ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+! <TT
+  end function ig_idx_e
+
+! TT>
+# ifdef USE_C_INDEX
+  function idx_e (lo, ig, isign, ik, it, il, is)
+# else
+  elemental function idx_e (lo, ig, isign, ik, it, il, is)
+# endif
+! <TT
+    implicit none
+    integer :: idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: ig, isign, ik, it, il, is
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function idx_e_c (lo,ig,isign,ik,it,il,is)
+         use gs2_layouts_type, only: e_layout_type
+         integer :: idx_e_c
+         type (e_layout_type) :: lo
+         integer :: ig,isign,ik,it,il,is
+       end function idx_e_c
+    end interface
+    idx_e = idx_e_c (lo, ig, isign, ik, it, il, is)
+# else
+    select case (layout)
+    case ('yxels')
+       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(ik-1 &
+            + lo%naky*(it-1 + lo%ntheta0*(il-1 + lo%nlambda*(is-1)))))
+    case ('yxles')
+       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(ik-1 &
+            + lo%naky*(it-1 + lo%ntheta0*(il-1 + lo%nlambda*(is-1)))))
+    case ('lexys')
+       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(il-1 &
+            + lo%nlambda*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1)))))
+    case ('lxyes')
+       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(il-1 &
+            + lo%nlambda*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1)))))
+    case ('lyxes')
+       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(il-1 &
+            + lo%nlambda*(ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1)))))
+    end select
+# endif
+! <TT
+
+  end function idx_e
+
+  elemental function proc_id_e (lo, i)
+    implicit none
+    integer :: proc_id_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    proc_id_e = i/lo%blocksize
+
+  end function proc_id_e
+
+! TT>
+# ifdef USE_C_INDEX
+  function idx_local_e (lo, ig, isign, ik, it, il, is)
+# else
+  elemental function idx_local_e (lo, ig, isign, ik, it, il, is)
+# endif
+! <TT
+    implicit none
+    logical :: idx_local_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: ig, isign, ik, it, il, is
+
+    idx_local_e = idx_local(lo, idx(lo, ig, isign, ik, it, il, is))
+  end function idx_local_e
+
+  elemental function ig_local_e (lo, ig)
+    implicit none
+    logical :: ig_local_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: ig
+
+    ig_local_e = lo%iproc == proc_id(lo, ig)
+  end function ig_local_e
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Lorentz layouts
@@ -1292,10 +1976,24 @@ contains
   subroutine init_lorentz_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
     use mp, only: iproc, nproc
+! TT>
+    use file_utils, only: error_unit
+! <TT
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2
     integer :: ngroup, nprocset
     logical, save :: initialized = .false.
+! TT>
+# ifdef USE_C_INDEX
+    integer :: ierr
+    interface
+       function init_indices_lzlo_c (layout)
+         integer :: init_indices_lzlo_c
+         character(*) :: layout
+       end function init_indices_lzlo_c
+    end interface
+# endif
+! <TT
 
     if (initialized) return
     initialized = .true.
@@ -1345,35 +2043,82 @@ contains
        lz_lo%ulim_alloc = max(lz_lo%llim_proc, lz_lo%ulim_proc)
     end if
 
+! TT>
+# ifdef USE_C_INDEX
+    ierr = init_indices_lzlo_c (layout)
+    if (ierr /= 0) &
+         & write (error_unit(),*) 'ERROR: layout not found: ', trim(layout)
+# endif
+! <TT
+
   end subroutine init_lorentz_layouts
 
+! TT>
+# ifdef USE_C_INDEX
+  function is_idx_lz (lo, i)
+# else
   elemental function is_idx_lz (lo, i)
+# endif
+! <TT
     implicit none
     integer :: is_idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
-    case ('yxles')
-       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
-    case ('lexys')
-       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%negrid/lo%ntheta0/lo%naky, lo%nspec)
-    case ('lxyes')
-       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
-    case ('lyxes')
-       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
-    end select
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function is_idx_lz_c (lo,num)
+         use gs2_layouts_type, only: lz_layout_type
+         integer :: is_idx_lz_c
+         type (lz_layout_type) :: lo
+         integer :: num
+       end function is_idx_lz_c
+    end interface
+    is_idx_lz = is_idx_lz_c (lo, i)
+# else
+!!$    select case (layout)
+!!$    case ('yxels')
+!!$       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+!!$    case ('yxles')
+!!$       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+!!$    case ('lexys')
+!!$       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%negrid/lo%ntheta0/lo%naky, lo%nspec)
+!!$    case ('lxyes')
+!!$       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
+!!$    case ('lyxes')
+!!$       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+!!$    end select
+    ! TT: the order of the division doesn't matter, so no need for branching
+    is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+# endif
+! <TT
 
   end function is_idx_lz
 
+! TT>
+# ifdef USE_C_INDEX
+  function ie_idx_lz (lo, i)
+# else
   elemental function ie_idx_lz (lo, i)
+# endif
+! <TT
     implicit none
     integer :: ie_idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
 
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function ie_idx_lz_c (lo,num)
+         use gs2_layouts_type, only: lz_layout_type
+         integer :: ie_idx_lz_c
+         type (lz_layout_type) :: lo
+         integer :: num
+       end function ie_idx_lz_c
+    end interface
+    ie_idx_lz = ie_idx_lz_c (lo, i)
+# else
     select case (layout)
     case ('yxels')
        ie_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0, lo%negrid)
@@ -1386,14 +2131,34 @@ contains
     case ('lyxes')
        ie_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0, lo%negrid)
     end select
+# endif
+! <TT
+
   end function ie_idx_lz
 
+! TT>
+# ifdef USE_C_INDEX
+  function it_idx_lz (lo, i)
+# else
   elemental function it_idx_lz (lo, i)
+# endif
+! <TT
     implicit none
     integer :: it_idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function it_idx_lz_c (lo,num)
+         use gs2_layouts_type, only: lz_layout_type
+         integer :: it_idx_lz_c
+         type (lz_layout_type) :: lo
+         integer :: num
+       end function it_idx_lz_c
+    end interface
+    it_idx_lz = it_idx_lz_c (lo, i)
+# else
     select case (layout)
     case ('yxels')
        it_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky, lo%ntheta0)
@@ -1406,14 +2171,34 @@ contains
     case ('lyxes')
        it_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky, lo%ntheta0)
     end select
+# endif
+! <TT
+
   end function it_idx_lz
 
+! TT>
+# ifdef USE_C_INDEX
+  function ik_idx_lz (lo, i)
+# else
   elemental function ik_idx_lz (lo, i)
+# endif
+! <TT
     implicit none
     integer :: ik_idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function ik_idx_lz_c (lo,num)
+         use gs2_layouts_type, only: lz_layout_type
+         integer :: ik_idx_lz_c
+         type (lz_layout_type) :: lo
+         integer :: num
+       end function ik_idx_lz_c
+    end interface
+    ik_idx_lz = ik_idx_lz_c (lo, i)
+# else
     select case (layout)
     case ('yxels')
        ik_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%naky)
@@ -1426,6 +2211,9 @@ contains
     case ('lyxes')
        ik_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%naky)
     end select
+# endif
+! <TT
+
   end function ik_idx_lz
 
   elemental function ig_idx_lz (lo, i)
@@ -1433,27 +2221,47 @@ contains
     integer :: ig_idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
-    case ('yxles')
-       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
-    case ('lexys')
-       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
-    case ('lxyes')
-       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
-    case ('lyxes')
-       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
-    end select
+! TT>
+!!$    select case (layout)
+!!$    case ('yxels')
+!!$       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+!!$    case ('yxles')
+!!$       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+!!$    case ('lexys')
+!!$       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+!!$    case ('lxyes')
+!!$       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+!!$    case ('lyxes')
+!!$       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+!!$    end select
+    ! TT: No need for branch
+    ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+! <TT
   end function ig_idx_lz
 
+! TT>
+# ifdef USE_C_INDEX
+  function idx_lz (lo, ig, ik, it, ie, is)
+# else
   elemental function idx_lz (lo, ig, ik, it, ie, is)
+# endif
+! <TT
     implicit none
     integer :: idx_lz
     type (lz_layout_type), intent (in) :: lo
     integer, intent (in) :: ig, ik, it, ie, is
-
+! TT>
+# ifdef USE_C_INDEX
+    interface
+       function idx_lz_c (lo,ig,ik,it,ie,is)
+         use gs2_layouts_type, only: lz_layout_type
+         integer :: idx_lz_c
+         type (lz_layout_type) :: lo
+         integer :: ig,ik,it,ie,is
+       end function idx_lz_c
+    end interface
+    idx_lz = idx_lz_c (lo, ig, ik, it, ie, is)
+# else
     select case (layout)
     case ('yxels')
        idx_lz = ig+lo%ntgrid + (2*lo%ntgrid+1)*(ik-1 + lo%naky*(it-1 &
@@ -1471,6 +2279,8 @@ contains
        idx_lz = ig+lo%ntgrid + (2*lo%ntgrid+1)*(ik-1 + lo%naky*(it-1 &
             + lo%ntheta0*(ie-1 + lo%negrid*(is-1))))
     end select
+# endif
+! <TT
 
   end function idx_lz
 
@@ -1488,7 +2298,13 @@ contains
 
   end function proc_id_lz
 
+! TT>
+# ifdef USE_C_INDEX
+  function idx_local_lz (lo, ig, ik, it, ie, is)
+# else
   elemental function idx_local_lz (lo, ig, ik, it, ie, is)
+# endif
+! <TT
     implicit none
     logical :: idx_local_lz
     type (lz_layout_type), intent (in) :: lo
@@ -1505,160 +2321,6 @@ contains
 
     ig_local_lz = lo%iproc == proc_id(lo, ig)
   end function ig_local_lz
-
-  elemental function is_idx_e (lo, i)
-    implicit none
-    integer :: is_idx_e
-    type (e_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0/lo%nlambda, lo%nspec)
-    case ('yxles')
-       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0/lo%nlambda, lo%nspec)
-    case ('lexys')
-       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0/lo%naky, lo%nspec)
-    case ('lxyes')
-       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0/lo%naky, lo%nspec)
-    case ('lyxes')
-       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%naky/lo%ntheta0, lo%nspec)
-    end select
-  end function is_idx_e
-
-  elemental function il_idx_e (lo, i)
-    implicit none
-    integer :: il_idx_e
-    type (e_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0, lo%nlambda)
-    case ('yxles')
-       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky/lo%ntheta0, lo%nlambda)
-    case ('lexys')
-       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
-    case ('lxyes')
-       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
-    case ('lyxes')
-       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
-    end select
-  end function il_idx_e
-
-  elemental function it_idx_e (lo, i)
-    implicit none
-    integer :: it_idx_e
-    type (e_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky, lo%ntheta0)
-    case ('yxles')
-       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%naky, lo%ntheta0)
-    case ('lexys')
-       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%ntheta0)
-    case ('lxyes')
-       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%ntheta0)
-    case ('lyxes')
-       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%naky, lo%ntheta0)
-    end select
-  end function it_idx_e
-
-  elemental function ik_idx_e (lo, i)
-    implicit none
-    integer :: ik_idx_e
-    type (e_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%naky)
-    case ('yxles')
-       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%naky)
-    case ('lexys')
-       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0, lo%naky)
-    case ('lxyes')
-       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0, lo%naky)
-    case ('lyxes')
-       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%naky)
-    end select
-  end function ik_idx_e
-
-  elemental function ig_idx_e (lo, i)
-    implicit none
-    integer :: ig_idx_e
-    type (e_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
-    case ('yxles')
-       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
-    case ('lexys')
-       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
-    case ('lxyes')
-       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
-    case ('lyxes')
-       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
-    end select
-  end function ig_idx_e
-
-  elemental function idx_e (lo, ig, isign, ik, it, il, is)
-    implicit none
-    integer :: idx_e
-    type (e_layout_type), intent (in) :: lo
-    integer, intent (in) :: ig, isign, ik, it, il, is
-
-    select case (layout)
-    case ('yxels')
-       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(ik-1 &
-            + lo%naky*(it-1 + lo%ntheta0*(il-1 + lo%nlambda*(is-1)))))
-    case ('yxles')
-       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(ik-1 &
-            + lo%naky*(it-1 + lo%ntheta0*(il-1 + lo%nlambda*(is-1)))))
-    case ('lexys')
-       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(il-1 &
-            + lo%nlambda*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1)))))
-    case ('lxyes')
-       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(il-1 &
-            + lo%nlambda*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1)))))
-    case ('lyxes')
-       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(il-1 &
-            + lo%nlambda*(ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1)))))
-    end select
-
-  end function idx_e
-
-  elemental function proc_id_e (lo, i)
-    implicit none
-    integer :: proc_id_e
-    type (e_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    proc_id_e = i/lo%blocksize
-
-  end function proc_id_e
-
-  elemental function idx_local_e (lo, ig, isign, ik, it, il, is)
-    implicit none
-    logical :: idx_local_e
-    type (e_layout_type), intent (in) :: lo
-    integer, intent (in) :: ig, isign, ik, it, il, is
-
-    idx_local_e = idx_local(lo, idx(lo, ig, isign, ik, it, il, is))
-  end function idx_local_e
-
-  elemental function ig_local_e (lo, ig)
-    implicit none
-    logical :: ig_local_e
-    type (e_layout_type), intent (in) :: lo
-    integer, intent (in) :: ig
-
-    ig_local_e = lo%iproc == proc_id(lo, ig)
-  end function ig_local_e
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! X-space layouts
@@ -1742,18 +2404,20 @@ contains
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
 
-    select case (layout)
-    case ('yxels')
-       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%negrid/lo%nlambda, lo%nspec)
-    case ('yxles')
-       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
-    case ('lexys')
-       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
-    case ('lxyes')
-       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
-    case ('lyxes')
-       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
-    end select
+!!$    select case (layout)
+!!$    case ('yxels')
+!!$       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%negrid/lo%nlambda, lo%nspec)
+!!$    case ('yxles')
+!!$       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+!!$    case ('lexys')
+!!$       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+!!$    case ('lxyes')
+!!$       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+!!$    case ('lyxes')
+!!$       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+!!$    end select
+    ! TT: the order of the division doesn't matter, so no need for branching
+    is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%negrid/lo%nlambda, lo%nspec)
 
   end function is_idx_xxf
 
@@ -2004,18 +2668,21 @@ contains
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
 
-    select case (layout)
-    case ('yxels')
-       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%negrid/lo%nlambda, lo%nspec)
-    case ('yxles')
-       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
-    case ('lexys')
-       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
-    case ('lxyes')
-       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
-    case ('lyxes')
-       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
-    end select
+!!$    select case (layout)
+!!$    case ('yxels')
+!!$       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%negrid/lo%nlambda, lo%nspec)
+!!$    case ('yxles')
+!!$       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+!!$    case ('lexys')
+!!$       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+!!$    case ('lxyes')
+!!$       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+!!$    case ('lyxes')
+!!$       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+!!$    end select
+    ! TT: the order of the division doesn't matter, so no need for branching
+    is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%negrid/lo%nlambda, lo%nspec)
+
   end function is_idx_yxf
 
   elemental function ie_idx_yxf (lo, i)
@@ -2375,8 +3042,14 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
+! TT>
+# ifdef USE_C_INDEX
+  subroutine gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, il, ilz)
+# else
   pure subroutine gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, &
                               il, ilz)
+# endif
+! <TT
     implicit none
     integer, intent (in) :: ig, isign
     type (g_layout_type), intent (in) :: g_lo
@@ -2415,7 +3088,13 @@ contains
          ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
   end subroutine gidx2lzidx
 
+! TT>
+# ifdef USE_C_INDEX
+  subroutine gidx2gintidx (g_lo, iglo, gint_lo, il, igint)
+# else
   elemental subroutine gidx2gintidx (g_lo, iglo, gint_lo, il, igint)
+# endif
+! <TT
     implicit none
     type (g_layout_type), intent (in) :: g_lo
     integer, intent (in) :: iglo
@@ -2442,7 +3121,13 @@ contains
 
   end subroutine gintidx2geidx
 
+! TT>
+# ifdef USE_C_INDEX
+  subroutine gidx2xxfidx (ig, isign, iglo, g_lo, xxf_lo, it, ixxf)
+# else
   elemental subroutine gidx2xxfidx (ig, isign, iglo, g_lo, xxf_lo, it, ixxf)
+# endif
+! <TT
     implicit none
     integer, intent (in) :: ig, isign, iglo
     type (g_layout_type), intent (in) :: g_lo
@@ -2458,7 +3143,13 @@ contains
          ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
   end subroutine gidx2xxfidx
 
+! TT>
+# ifdef USE_C_INDEX
+  subroutine xxfidx2gidx (it, ixxf, xxf_lo, g_lo, ig, isign, iglo)
+# else
   elemental subroutine xxfidx2gidx (it, ixxf, xxf_lo, g_lo, ig, isign, iglo)
+# endif
+! <TT
     implicit none
     integer, intent (in) :: it, ixxf
     type (xxf_layout_type), intent (in) :: xxf_lo

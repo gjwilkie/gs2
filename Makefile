@@ -334,6 +334,14 @@ include $(DEPEND)
 
 gs2_all: modules gs2 ingen rungridgen
 
+# TT>
+ifeq ($(PROJECT),gs2)
+ifdef USE_C_INDEX
+gs2_mod += gs2_layouts_indices.o
+endif
+endif
+# <TT
+
 gs2: $(gs2_mod) 
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
@@ -421,6 +429,12 @@ mp.o: mp.f90
 fft_work.o: fft_work.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $<
 
+# TT>
+gs2_layouts_indices.o: gs2_layouts_type.h
+gs2_layouts_type.h: gs2_layouts_type.f90
+	$(AWK) -f makehead.awk $^ > $@
+# <TT
+
 agk_layouts_indices.o: agk_layouts_type.h
 agk_layouts_type.h: agk_layouts_type.f90
 	$(AWK) -f makehead.awk $^ > $@
@@ -507,8 +521,12 @@ test_make:
 	@echo LIBS is $(LIBS)
 	@echo PLIBS is $(PLIBS)
 
+# TT>
+#unlink:
+#	-rm -f $(F90FROMFPP) agk_layouts_type.h
 unlink:
-	-rm -f $(F90FROMFPP) agk_layouts_type.h
+	-rm -f $(F90FROMFPP) agk_layouts_type.h gs2_layouts_h
+# <TT
 
 revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
