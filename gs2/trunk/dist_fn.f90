@@ -3045,7 +3045,7 @@ contains
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
          upar, tpar, tperp, ntot
 
-    integer :: ik, it, isgn, ie, is, iglo, ig
+    integer :: ik, it, isgn, ie, is, iglo
 
 ! returns moment integrals to PE 0
     call prof_entering ("getmoms", "dist_fn")
@@ -3057,7 +3057,7 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) &
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) &
                + (aj0(:,iglo)**2-1.0)*anon(ie,is) &
                * phinew(:,it,ik)*spec(is)%zt &
                + aj0(:,iglo)*aj1(:,iglo)*vperp2(:,iglo)*2.*anon(ie,is) &
@@ -3069,10 +3069,8 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-!             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
-             g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)
-          end do
+!          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)
+          g0(:,isgn,iglo) = gnew(:,isgn,iglo)
        end do
     end do
 
@@ -3093,10 +3091,8 @@ contains
 ! guiding center tperp
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
-          do ig = -ntgrid, ntgrid
-!             g0(ig,isgn,iglo) = vperp2(ig,iglo)*gnew(ig,isgn,iglo)*aj0(ig,iglo)
-             g0(ig,isgn,iglo) = vperp2(ig,iglo)*gnew(ig,isgn,iglo)
-          end do
+!          g0(:,isgn,iglo) = vperp2(:,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)
+          g0(:,isgn,iglo) = vperp2(:,iglo)*gnew(:,isgn,iglo)
        end do
     end do
 
@@ -3128,7 +3124,7 @@ contains
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, &
          upar, uperp, ttot
 
-    integer :: ik, it, isgn, ie, is, iglo, ig, il
+    integer :: ik, it, isgn, ie, is, iglo, il
 
 ! returns moment integrals to PE 0
     call prof_entering ("gettotmoms", "dist_fn")
@@ -3140,7 +3136,7 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) &
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) &
                + (aj0(:,iglo)**2-1.0)*anon(ie,is) &
                * phinew(:,it,ik)*spec(is)%zt &
                + aj0(:,iglo)*aj1(:,iglo)*vperp2(:,iglo)*2.*anon(ie,is) &
@@ -3154,9 +3150,7 @@ contains
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-             g0(ig,isgn,iglo) = g0(ig,isgn,iglo)*e(ie,is)
-          end do
+          g0(:,isgn,iglo) = g0(:,isgn,iglo)*e(ie,is)
        end do
     end do
 
@@ -3164,9 +3158,7 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-             g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,iglo)*gnew(ig,isgn,iglo)
-          end do
+          g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
        end do
     end do
 
@@ -3179,10 +3171,8 @@ contains
        ik = ik_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-             g0(ig,isgn,iglo) = aj1(ig,iglo)*e(ie,is)*al(il)*gnew(ig,isgn,iglo) &
-                  * spec(is)%smz * sqrt(kperp2(ig,it,ik) / bmag(ig))
-          end do
+          g0(:,isgn,iglo) = aj1(:,iglo)*e(ie,is)*al(il)*gnew(:,isgn,iglo) &
+               * spec(is)%smz * sqrt(kperp2(:,it,ik) / bmag(:))
        end do
     end do
 
@@ -3191,10 +3181,8 @@ contains
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-             g0(ig,isgn,iglo) = 0.75*sqrt(pi)*aj0(ig,iglo)*vpa(ig,isgn,iglo)*gnew(ig,isgn,iglo) &
-                  / e(ie,is)**1.5
-          end do
+          g0(:,isgn,iglo) = 0.75*sqrt(pi)*aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo) &
+               / e(ie,is)**1.5
        end do
     end do
     ! END TEMP FOR TESTING
@@ -3230,7 +3218,7 @@ contains
     integer :: isgn, iglo, is
 
     real :: a, b, tpar2, tper2
-    integer :: ig, it, ik
+    integer :: it, ik, ig
 
 ! returns moment integrals to PE 0
 
