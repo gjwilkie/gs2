@@ -8,9 +8,10 @@ PROJECT ?= gs2
 #
 #  Makefile written by Bill Dorland and Ryusuke Numata
 #
-#  LAST UPDATE: 12/11/08
+#  LAST UPDATE: 01/26/09
 #
 # * Changelogs
+#	01/26/09: USE_C_INDEX is imported to gs2 by TT
 #       12/11/08: add support for NAGWare and Lahey compilers
 #       10/28/08: some non-standard macros respect environment variables
 #       10/27/08: default commands for MPI and HDF5 are defined
@@ -248,7 +249,7 @@ $(warning Precision mismatch with NAG libarray)
 	endif
 endif
 ifndef PGPLOT_LIB
-	ifeq ($(findstring agk_fields_plot,$(MAKECMDGOALS)),agk_fields_plot)
+	ifeq ($(MAKECMDGOALS),agk_fields_plot)
 $(error PGPLOT_LIB is not defined)
 	endif
 endif
@@ -332,15 +333,12 @@ all: $(.DEFAULT_GOAL)
 
 include $(DEPEND)
 
-gs2_all: modules gs2 ingen rungridgen
-
-# TT>
-ifeq ($(PROJECT),gs2)
 ifdef USE_C_INDEX
+astrogk_mod += layouts_indices.o
 gs2_mod += layouts_indices.o
 endif
-endif
-# <TT
+
+gs2_all: modules gs2 ingen rungridgen
 
 gs2: $(gs2_mod) 
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
@@ -349,12 +347,6 @@ gs2.x: $(gs2_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 agk_all: agk
-
-ifeq ($(PROJECT),agk)
-ifdef USE_C_INDEX
-astrogk_mod += layouts_indices.o
-endif
-endif
 
 agk: $(astrogk_mod) 
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
@@ -429,14 +421,9 @@ mp.o: mp.f90
 fft_work.o: fft_work.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $<
 
-# TT>
 layouts_indices.o: layouts_type.h
 layouts_type.h: layouts_type.f90
 	$(AWK) -f makehead.awk $^ > $@
-#agk_layouts_indices.o: agk_layouts_type.h
-#agk_layouts_type.h: agk_layouts_type.f90
-#	$(AWK) -f makehead.awk $^ > $@
-# <TT
 
 ############################################################# MORE DIRECTIVES
 
@@ -520,12 +507,8 @@ test_make:
 	@echo LIBS is $(LIBS)
 	@echo PLIBS is $(PLIBS)
 
-# TT>
-#unlink:
-#	-rm -f $(F90FROMFPP) agk_layouts_type.h
 unlink:
 	-rm -f $(F90FROMFPP) layouts_type.h
-# <TT
 
 revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
