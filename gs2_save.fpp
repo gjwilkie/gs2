@@ -65,7 +65,7 @@ contains
 ! TT>
 !    use gs2_layouts, only: g_lo, g_layout_type
     use gs2_layouts, only: g_lo
-    use gs2_layouts_type, only: g_layout_type
+    use layouts_type, only: g_layout_type
 ! <TT
     use file_utils, only: error_unit
     implicit none
