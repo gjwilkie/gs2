@@ -1,7 +1,7 @@
-// This can be made by just replacing nakx by ntheta0 from agk_layouts_indices.c
-//   and agk by gs2 from agk_layouts_indices.c
+// This can be made by just replacing nakx by ntheta0
+//   from AstroGK's layouts_indices.c
 #include <string.h>
-#include "gs2_layouts_type.h"
+#include "layouts_type.h"
 
 int ik_idx_g_y     (struct g_layout_type*,int*);
 int ik_idx_g_lexy  (struct g_layout_type*,int*);

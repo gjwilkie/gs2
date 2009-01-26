@@ -5,8 +5,8 @@ module gs2_layouts
 ! TT: What are gint_layout_type and geint_layout_type?
 
 ! TT>
-  use gs2_layouts_type, only: g_layout_type, lz_layout_type, e_layout_type
-  use gs2_layouts_type, only: le_layout_type
+  use layouts_type, only: g_layout_type, lz_layout_type, e_layout_type
+  use layouts_type, only: le_layout_type
 ! <TT
 
   implicit none
@@ -709,7 +709,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function is_idx_g_c (lo,num)
-         use gs2_layouts_type, only: g_layout_type
+         use layouts_type, only: g_layout_type
          integer :: is_idx_g_c
          type (g_layout_type) :: lo
          integer :: num
@@ -751,7 +751,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function il_idx_g_c (lo,num)
-         use gs2_layouts_type, only: g_layout_type
+         use layouts_type, only: g_layout_type
          integer :: il_idx_g_c
          type (g_layout_type) :: lo
          integer :: num
@@ -791,7 +791,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function ie_idx_g_c (lo,num)
-         use gs2_layouts_type, only: g_layout_type
+         use layouts_type, only: g_layout_type
          integer :: ie_idx_g_c
          type (g_layout_type) :: lo
          integer :: num
@@ -832,7 +832,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function it_idx_g_c (lo,num)
-         use gs2_layouts_type, only: g_layout_type
+         use layouts_type, only: g_layout_type
          integer :: it_idx_g_c
          type (g_layout_type) :: lo
          integer :: num
@@ -872,7 +872,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function ik_idx_g_c (lo,num)
-         use gs2_layouts_type, only: g_layout_type
+         use layouts_type, only: g_layout_type
          integer :: ik_idx_g_c
          type (g_layout_type) :: lo
          integer :: num
@@ -920,7 +920,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function idx_g_c (lo,ik,it,il,ie,is)
-         use gs2_layouts_type, only: g_layout_type
+         use layouts_type, only: g_layout_type
          integer :: idx_g_c
          type (g_layout_type) :: lo
          integer :: ik,it,il,ie,is
@@ -1513,7 +1513,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function it_idx_le_c (lo,num)
-         use gs2_layouts_type, only: le_layout_type
+         use layouts_type, only: le_layout_type
          integer :: it_idx_le_c
          type (le_layout_type) :: lo
          integer :: num
@@ -1548,7 +1548,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function ik_idx_le_c (lo,num)
-         use gs2_layouts_type, only: le_layout_type
+         use layouts_type, only: le_layout_type
          integer :: ik_idx_le_c
          type (le_layout_type) :: lo
          integer :: num
@@ -1591,7 +1591,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function idx_le_c (lo, ig, ik, it, is)
-         use gs2_layouts_type, only: le_layout_type
+         use layouts_type, only: le_layout_type
          integer :: idx_le_c
          type (le_layout_type) :: lo
          integer :: ig, ik, it, is
@@ -1720,7 +1720,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function is_idx_e_c (lo,num)
-         use gs2_layouts_type, only: e_layout_type
+         use layouts_type, only: e_layout_type
          integer :: is_idx_e_c
          type (e_layout_type) :: lo
          integer :: num
@@ -1762,7 +1762,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function il_idx_e_c (lo,num)
-         use gs2_layouts_type, only: e_layout_type
+         use layouts_type, only: e_layout_type
          integer :: il_idx_e_c
          type (e_layout_type) :: lo
          integer :: num
@@ -1802,7 +1802,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function it_idx_e_c (lo,num)
-         use gs2_layouts_type, only: e_layout_type
+         use layouts_type, only: e_layout_type
          integer :: it_idx_e_c
          type (e_layout_type) :: lo
          integer :: num
@@ -1842,7 +1842,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function ik_idx_e_c (lo,num)
-         use gs2_layouts_type, only: e_layout_type
+         use layouts_type, only: e_layout_type
          integer :: ik_idx_e_c
          type (e_layout_type) :: lo
          integer :: num
@@ -1905,7 +1905,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function idx_e_c (lo,ig,isign,ik,it,il,is)
-         use gs2_layouts_type, only: e_layout_type
+         use layouts_type, only: e_layout_type
          integer :: idx_e_c
          type (e_layout_type) :: lo
          integer :: ig,isign,ik,it,il,is
@@ -2068,7 +2068,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function is_idx_lz_c (lo,num)
-         use gs2_layouts_type, only: lz_layout_type
+         use layouts_type, only: lz_layout_type
          integer :: is_idx_lz_c
          type (lz_layout_type) :: lo
          integer :: num
@@ -2111,7 +2111,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function ie_idx_lz_c (lo,num)
-         use gs2_layouts_type, only: lz_layout_type
+         use layouts_type, only: lz_layout_type
          integer :: ie_idx_lz_c
          type (lz_layout_type) :: lo
          integer :: num
@@ -2151,7 +2151,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function it_idx_lz_c (lo,num)
-         use gs2_layouts_type, only: lz_layout_type
+         use layouts_type, only: lz_layout_type
          integer :: it_idx_lz_c
          type (lz_layout_type) :: lo
          integer :: num
@@ -2191,7 +2191,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function ik_idx_lz_c (lo,num)
-         use gs2_layouts_type, only: lz_layout_type
+         use layouts_type, only: lz_layout_type
          integer :: ik_idx_lz_c
          type (lz_layout_type) :: lo
          integer :: num
@@ -2254,7 +2254,7 @@ contains
 # ifdef USE_C_INDEX
     interface
        function idx_lz_c (lo,ig,ik,it,ie,is)
-         use gs2_layouts_type, only: lz_layout_type
+         use layouts_type, only: lz_layout_type
          integer :: idx_lz_c
          type (lz_layout_type) :: lo
          integer :: ig,ik,it,ie,is
