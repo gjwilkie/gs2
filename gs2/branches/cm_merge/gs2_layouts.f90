@@ -640,6 +640,8 @@ contains
        is_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
     case ('lyxes')
        is_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+    case ('xyles')
+       is_idx_g = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky/lo%nlambda/lo%negrid, lo%nspec)
     end select
 
   end function is_idx_g
@@ -661,6 +663,8 @@ contains
        il_idx_g = 1 + mod(i - lo%llim_world, lo%nlambda)
     case ('lyxes')
        il_idx_g = 1 + mod(i - lo%llim_world, lo%nlambda)
+    case ('xyles')
+       il_idx_g = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%nlambda)
     end select
 
   end function il_idx_g
@@ -682,6 +686,9 @@ contains
        ie_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%ntheta0/lo%naky, lo%negrid)
     case ('lyxes')
        ie_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky/lo%ntheta0, lo%negrid)
+    case ('xyles')
+       ie_idx_g = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky/lo%nlambda, lo%negrid)
+
     end select
 
   end function ie_idx_g
@@ -703,6 +710,8 @@ contains
        it_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda, lo%ntheta0)
     case ('lyxes')
        it_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky, lo%ntheta0)
+    case ('xyles')
+       it_idx_g = 1 + mod(i - lo%llim_world, lo%ntheta0)
     end select
 
   end function it_idx_g
@@ -724,6 +733,8 @@ contains
        ik_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%ntheta0, lo%naky)
     case ('lyxes')
        ik_idx_g = 1 + mod((i - lo%llim_world)/lo%nlambda, lo%naky)
+    case ('xyles')
+       ik_idx_g = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
     end select
 
   end function ik_idx_g
@@ -753,6 +764,8 @@ contains
        idx_g = il-1 + lo%nlambda*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(ie-1 + lo%negrid*(is-1))))
     case ('lyxes')
        idx_g = il-1 + lo%nlambda*(ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1))))
+    case ('xyles')
+       idx_g = it-1 + lo%ntheta0*(ik-1 + lo%naky*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1))))
     end select
   end function idx_g
 
@@ -795,6 +808,8 @@ contains
        is_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
     case ('lyxes')
        is_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+    case ('xyles')
+       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
     end select
   end function is_idx_gint
 
@@ -815,6 +830,8 @@ contains
        ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%negrid)
     case ('lyxes')
        ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
+    case ('xyles')
+       ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%negrid)
     end select
 
   end function ie_idx_gint
@@ -836,6 +853,8 @@ contains
        it_idx_gint = 1 + mod((i - lo%llim_world), lo%ntheta0)
     case ('lyxes')
        it_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+    case ('xyles')
+       it_idx_gint = 1 + mod((i - lo%llim_world), lo%ntheta0)
     end select
   end function it_idx_gint
 
@@ -856,6 +875,8 @@ contains
        ik_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
     case ('lyxes')
        ik_idx_gint = 1 + mod((i - lo%llim_world), lo%naky)
+    case ('xyles')
+       ik_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
     end select
   end function ik_idx_gint
 
@@ -885,6 +906,8 @@ contains
        idx_gint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(ie-1 + lo%negrid*(is-1)))
     case ('lyxes')
        idx_gint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1)))
+    case ('xyles')
+       idx_gint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(ie-1 + lo%negrid*(is-1)))
     end select
   end function idx_gint
 
@@ -927,6 +950,8 @@ contains
        is_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%nspec)
     case ('lyxes')
        is_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%nspec)
+    case ('xyles')
+       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%nspec)
     end select
 
   end function is_idx_geint
@@ -948,6 +973,8 @@ contains
        it_idx_geint = 1 + mod(i - lo%llim_world, lo%ntheta0)
     case ('lyxes')
        it_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
+    case ('xyles')
+       it_idx_geint = 1 + mod(i - lo%llim_world, lo%ntheta0)
     end select
   end function it_idx_geint
 
@@ -968,6 +995,8 @@ contains
        ik_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
     case ('lyxes')
        ik_idx_geint = 1 + mod((i - lo%llim_world), lo%naky)
+    case ('xyles')
+       ik_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
     end select
   end function ik_idx_geint
 
@@ -997,6 +1026,8 @@ contains
        idx_geint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1))
     case ('lyxes')
        idx_geint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1))
+    case ('xyles')
+       idx_geint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1))
     end select
   end function idx_geint
 
@@ -1310,6 +1341,8 @@ contains
     lz_lo%llim_world = 0
     lz_lo%ulim_world = (2*ntgrid+1)*naky*ntheta0*negrid*nspec - 1
 
+    lambda_local = .false.
+
     if (layout == 'lxyes' .or. layout == 'lexys' .or. layout == 'lyxes') &
          call check_llocal (ntheta0, naky, nlambda, negrid, nspec)
 
@@ -1364,6 +1397,8 @@ contains
        is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
     case ('lyxes')
        is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
+    case ('xyles')
+       is_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
     end select
 
   end function is_idx_lz
@@ -1385,6 +1420,8 @@ contains
        ie_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0/lo%naky, lo%negrid)
     case ('lyxes')
        ie_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky/lo%ntheta0, lo%negrid)
+    case ('xyles')
+       ie_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0/lo%naky, lo%negrid)
     end select
   end function ie_idx_lz
 
@@ -1405,6 +1442,8 @@ contains
        it_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%ntheta0)
     case ('lyxes')
        it_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%naky, lo%ntheta0)
+    case ('xyles')
+       it_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%ntheta0)
     end select
   end function it_idx_lz
 
@@ -1425,6 +1464,8 @@ contains
        ik_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0, lo%naky)
     case ('lyxes')
        ik_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1), lo%naky)
+    case ('xyles')
+       ik_idx_lz = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%ntheta0, lo%naky)
     end select
   end function ik_idx_lz
 
@@ -1444,6 +1485,8 @@ contains
     case ('lxyes')
        ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
     case ('lyxes')
+       ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    case ('xyles')
        ig_idx_lz = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
     end select
   end function ig_idx_lz
@@ -1470,6 +1513,9 @@ contains
     case ('lyxes')
        idx_lz = ig+lo%ntgrid + (2*lo%ntgrid+1)*(ik-1 + lo%naky*(it-1 &
             + lo%ntheta0*(ie-1 + lo%negrid*(is-1))))
+    case ('xyles')
+       idx_lz = ig+lo%ntgrid + (2*lo%ntgrid+1)*(it-1 + lo%ntheta0*(ik-1 &
+            + lo%naky*(ie-1 + lo%negrid*(is-1))))
     end select
 
   end function idx_lz
@@ -1523,6 +1569,8 @@ contains
        is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0/lo%naky, lo%nspec)
     case ('lyxes')
        is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%naky/lo%ntheta0, lo%nspec)
+    case ('xyles')
+       is_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%ntheta0/lo%naky/lo%nlambda, lo%nspec)
     end select
   end function is_idx_e
 
@@ -1543,6 +1591,8 @@ contains
        il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
     case ('lyxes')
        il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('xyles')
+       il_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%ntheta0/lo%naky, lo%nlambda)
     end select
   end function il_idx_e
 
@@ -1563,6 +1613,8 @@ contains
        it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%ntheta0)
     case ('lyxes')
        it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%naky, lo%ntheta0)
+    case ('xyles')
+       it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%ntheta0)
     end select
   end function it_idx_e
 
@@ -1583,6 +1635,8 @@ contains
        ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%ntheta0, lo%naky)
     case ('lyxes')
        ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%naky)
+    case ('xyles')
+       ik_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%ntheta0, lo%naky)
     end select
   end function ik_idx_e
 
@@ -1602,6 +1656,8 @@ contains
     case ('lxyes')
        ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
     case ('lyxes')
+       ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
+    case ('xyles')
        ig_idx_e = -lo%ntgrid + mod(i - lo%llim_world, 2*lo%ntgrid + 1)
     end select
   end function ig_idx_e
@@ -1628,6 +1684,9 @@ contains
     case ('lyxes')
        idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(il-1 &
             + lo%nlambda*(ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1)))))
+    case ('xyles')
+       idx_e = ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 + lo%nsign*(it-1 &
+            + lo%ntheta0*(ik-1 + lo%naky*(il-1 + lo%nlambda*(is-1)))))
     end select
 
   end function idx_e
@@ -1753,6 +1812,8 @@ contains
        is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
     case ('lyxes')
        is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+    case ('xyles')
+       is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
     end select
 
   end function is_idx_xxf
@@ -1774,6 +1835,8 @@ contains
        ie_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
     case ('lyxes')
        ie_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+    case ('xyles')
+       ie_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
     end select
   end function ie_idx_xxf
 
@@ -1793,6 +1856,8 @@ contains
     case ('lxyes')
        il_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
     case ('lyxes')
+       il_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('xyles')
        il_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
     end select
   end function il_idx_xxf
@@ -1814,6 +1879,8 @@ contains
        isign_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1), lo%nsign)
     case ('lyxes')
        isign_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1), lo%nsign)
+    case ('xyles')
+       isign_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1), lo%nsign)
     end select
   end function isign_idx_xxf
 
@@ -1834,6 +1901,8 @@ contains
        ig_idx_xxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%naky, 2*lo%ntgrid + 1)
     case ('lyxes')
        ig_idx_xxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%naky, 2*lo%ntgrid + 1)
+    case ('xyles')
+       ig_idx_xxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%naky, 2*lo%ntgrid + 1)
     end select
   end function ig_idx_xxf
 
@@ -1853,6 +1922,8 @@ contains
     case ('lxyes')
        ik_idx_xxf = 1 + mod(i - lo%llim_world, lo%naky)
     case ('lyxes')
+       ik_idx_xxf = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('xyles')
        ik_idx_xxf = 1 + mod(i - lo%llim_world, lo%naky)
     end select
   end function ik_idx_xxf
@@ -1877,6 +1948,9 @@ contains
        idx_xxf = ik-1 + lo%naky*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
             + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
     case ('lyxes')
+       idx_xxf = ik-1 + lo%naky*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+    case ('xyles')
        idx_xxf = ik-1 + lo%naky*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
             + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
     end select
@@ -2015,6 +2089,8 @@ contains
        is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
     case ('lyxes')
        is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
+    case ('xyles')
+       is_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%negrid, lo%nspec)
     end select
   end function is_idx_yxf
 
@@ -2034,6 +2110,8 @@ contains
     case ('lxyes')
        ie_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
     case ('lyxes')
+       ie_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
+    case ('xyles')
        ie_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%negrid)
     end select
   end function ie_idx_yxf
@@ -2055,6 +2133,8 @@ contains
        il_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
     case ('lyxes')
        il_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
+    case ('xyles')
+       il_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid + 1)/lo%nsign, lo%nlambda)
     end select
   end function il_idx_yxf
 
@@ -2074,6 +2154,8 @@ contains
     case ('lxyes')
        isign_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid+1), lo%nsign)
     case ('lyxes')
+       isign_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid+1), lo%nsign)
+    case ('xyles')
        isign_idx_yxf = 1 + mod((i - lo%llim_world)/lo%nx/(2*lo%ntgrid+1), lo%nsign)
     end select
   end function isign_idx_yxf
@@ -2095,6 +2177,8 @@ contains
        ig_idx_yxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%nx, 2*lo%ntgrid + 1)
     case ('lyxes')
        ig_idx_yxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%nx, 2*lo%ntgrid + 1)
+    case ('xyles')
+       ig_idx_yxf = -lo%ntgrid + mod((i - lo%llim_world)/lo%nx, 2*lo%ntgrid + 1)
     end select
   end function ig_idx_yxf
 
@@ -2114,6 +2198,8 @@ contains
     case ('lxyes')
        it_idx_yxf = 1 + mod(i - lo%llim_world, lo%nx)
     case ('lyxes')
+       it_idx_yxf = 1 + mod(i - lo%llim_world, lo%nx)
+    case ('xyles')
        it_idx_yxf = 1 + mod(i - lo%llim_world, lo%nx)
     end select
   end function it_idx_yxf
@@ -2154,6 +2240,9 @@ contains
        idx_yxf = it-1 + lo%nx*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
             + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
     case ('lyxes')
+       idx_yxf = it-1 + lo%nx*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
+            + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
+    case ('xyles')
        idx_yxf = it-1 + lo%nx*(ig+lo%ntgrid + (2*lo%ntgrid+1)*(isign-1 &
             + lo%nsign*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))))
     end select
@@ -2530,6 +2619,8 @@ contains
        char = 'm'    ! mixed
     case ('lyxes')
        char = 'b'    ! big, since this layout makes sense mainly for big runs?
+    case ('xyles')
+       char = 'v'    !MR: is this correct??
     end select
 
   end subroutine pe_layout
