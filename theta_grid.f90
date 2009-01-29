@@ -383,11 +383,6 @@ contains
     use geometry, only: eikcoefs, itor, delrho, rhoc
     use geometry, only: vmom_eq, gen_eq, ppl_eq, transp_eq
     use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
-!CMR, 21/6/06:
-!CMR add use statements to avoid inappropriate calls to init_theta
-    use geometry, only: ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, local_eq, dfit_eq, gs2d_eq
-    use geometry, only: equal_arc, transp_eq
-!CMRend
     implicit none
     real :: rhoc_save
     logical, save :: initialized = .false.
