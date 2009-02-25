@@ -33,7 +33,7 @@ program gs2
 
 ! initialize message passing 
   call init_mp
-  call checktime(avail_cpu_time,exit) ! initialize
+  call checktime(avail_cpu_time,exit) ! initialize timer
 
 ! report # of processors being used
   if (proc0) then

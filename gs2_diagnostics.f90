@@ -121,8 +121,7 @@ contains
     implicit none
     logical, intent (in) :: list
     integer, intent (in) :: nstep
-    real :: denom
-    integer :: ik, it, nmovie_tot
+    integer :: nmovie_tot
 
     if (initialized) return
     initialized = .true.
@@ -251,7 +250,6 @@ contains
     implicit none
     logical, intent (in) :: list
     character(20) :: datestamp, timestamp, zone
-    integer :: ig, ik, it
 
     call read_parameters (list)
     if (proc0) then
@@ -351,7 +349,7 @@ contains
   end subroutine real_init
 
   subroutine read_parameters (list)
-    use file_utils, only: input_unit, run_name, input_unit_exist
+    use file_utils, only: input_unit, input_unit_exist
     use theta_grid, only: nperiod, ntheta
     use gs2_flux, only: gs2_flux_adjust
     use dist_fn, only: nperiod_guard
@@ -495,7 +493,7 @@ contains
 
   subroutine finish_gs2_diagnostics (istep)
     use file_utils, only: open_output_file, close_output_file, get_unused_unit
-    use mp, only: proc0, broadcast, nproc, iproc, sum_reduce, barrier
+    use mp, only: proc0, broadcast, nproc, iproc, sum_reduce
     use species, only: nspec, spec
     use run_parameters, only: fphi, fapar, fbpar, funits
     use theta_grid, only: ntgrid, theta, delthet, jacob, gradpar, nperiod
@@ -527,31 +525,24 @@ contains
     complex, dimension (:,:,:,:), allocatable :: fcheck_f
 !    complex, dimension (:,:,:), allocatable :: xphi, xapar, xbpar
     real, dimension (:), allocatable :: total
-    real, dimension (:,:,:), allocatable :: xphi, xapar, xbpar
+    real, dimension (:,:,:), allocatable :: xphi
     real, dimension (:,:,:), allocatable :: bxf, byf, vxf, vyf, bxfsavg, byfsavg
     real, dimension (:,:,:), allocatable :: bxfs, byfs, vxfs, vyfs, rvx, rvy, rx, ry
     complex, dimension (:,:,:), allocatable :: bx, by, vx, vy, vx2, vy2
     complex, dimension (:,:,:), allocatable :: phi2, apar2, bpar2, antot, antota, antotp, epar
     complex, dimension (:,:,:,:), allocatable :: ntot, density, upar, tpar, tperp
     real, dimension (:), allocatable :: dl_over_b
-    real, dimension (:,:,:), allocatable :: lamflux, enflux, tflux
-!    real, dimension (-ntgrid:ntgrid, nspec, 4) :: tflux
+    real, dimension (:,:,:), allocatable :: lamflux, enflux
     complex, dimension (ntheta0, naky) :: phi0
     real, dimension (ntheta0, naky) :: phi02
-    real, dimension (nspec) :: weights
     real, dimension (2*ntgrid) :: kpar
     real, dimension (:), allocatable :: xx4, yy4, dz
     real, dimension (:,:), allocatable :: bxs, bys, vxs, vys
     real, dimension (:,:), allocatable :: bxsavg, bysavg
     real, dimension (:), allocatable :: stemp, zx1, zxm, zy1, zyn, xx, yy
     real :: zxy11, zxym1, zxy1n, zxymn, L_x, L_y, rxt, ryt, bxt, byt
-    real :: geavg, glavg
     integer :: istatus, nnx, nny, nnx4, nny4, ulim, llim, iblock, i, g_unit
     logical :: last = .true.
-
-    real, dimension (:,:,:,:), allocatable :: errest_by_mode
-    integer, dimension (:,:), allocatable :: erridx
-    real, dimension (:,:), allocatable :: errest
 
     if (write_gyx) call write_fyx (phinew,bparnew,last)
     if (write_g) call write_f (last)
@@ -1310,7 +1301,6 @@ contains
     integer :: nout_movie = 1
     integer, intent (in) :: istep
     logical, intent (out) :: exit
-    logical :: accelerated
     real, dimension(:,:,:), allocatable :: yxphi, yxapar, yxbpar
     complex, dimension (ntheta0, naky) :: omega, omegaavg
 
@@ -1324,25 +1314,23 @@ contains
     real :: phi2, apar2, bpar2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode
     real, dimension (ntheta0, naky, nspec) :: ntot2_by_mode, ntot20_by_mode
-    real, dimension (:,:,:,:), allocatable :: errest_by_mode
+!    real, dimension (:,:,:,:), allocatable :: errest_by_mode
     integer, dimension (:,:), allocatable :: erridx
     real, dimension (:,:), allocatable :: errest
     real :: geavg, glavg, gtavg
     real :: dmix, dmix4, dmixx
     real :: t, denom
-    integer :: ig, ik, it, is, unit, il, i, j, nnx, nny, ifield, write_mod
-    complex :: phiavg, sourcefac
+    integer :: ig, ik, it, is, unit, i, j, nnx, nny, ifield, write_mod
+    complex :: sourcefac
+!    complex :: phiavg
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
          upar, tpar, tperp, upartot, uperptot, ttot
     complex, dimension (ntheta0, nspec) :: ntot00, density00, upar00, tpar00, tperp00
-    complex, dimension (ntheta0, nspec) :: upartot00, ttot00
     complex, dimension (ntheta0, nspec) :: rstress, ustress
     complex, dimension (ntheta0) :: phi00
-    complex, allocatable, dimension (:,:,:) :: phik2
     complex, save :: wtmp_new
     complex :: wtmp_old = 0.
     real, dimension (:), allocatable :: dl_over_b
-    real, dimension (2*ntgrid) :: kpar
     real, dimension (ntheta0, nspec) :: x_qmflux
     real, dimension (nspec) ::  heat_fluxes,  part_fluxes, mom_fluxes,  ntot2, ntot20
     real, dimension (nspec) :: mheat_fluxes, mpart_fluxes, mmom_fluxes
@@ -1356,8 +1344,6 @@ contains
     real, dimension(nspec) :: tprim_tot, fprim_tot
     character(200) :: filename
     logical :: last = .false.
-
-    complex, dimension (nspec) :: ntdiff, upadiff, upediff, ttdiff
 
     call prof_entering ("loop_diagnostics")
 
@@ -2615,7 +2601,7 @@ contains
     real, intent (out) :: axb
     real, dimension (:,:), intent (out) :: axb_by_mode
 
-    integer :: ig, ik, it
+    integer :: ik, it
     integer :: ng
     real, dimension (-ntg_out:ntg_out) :: wgt
     real :: anorm
