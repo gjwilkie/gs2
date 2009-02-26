@@ -735,7 +735,7 @@ contains
        end do
     end do
 
-    call integrate_moment (gtmp, dtmp) ! v0z0
+    call integrate_moment (gtmp, dtmp, all) ! v0z0
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Redefine z0 = z0 / (1 + v0z0)
