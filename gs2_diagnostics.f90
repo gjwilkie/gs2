@@ -1367,12 +1367,13 @@ contains
 
     exit = .false.
 
-    if (proc0) then
-if (debug) write(6,*) "loop_diagnostics: proc0 call get_omegaavg"
+    if (proc0 .and. (.not. nonlin) .and. write_omega) then
+! MR, 10/3/2009: avoid calling get_omegaavg in nonlinear calculations
+       if (debug) write(6,*) "loop_diagnostics: proc0 call get_omegaavg"
        call get_omegaavg (istep, exit, omegaavg, debug)
-if (debug) write(6,*) "loop_diagnostics: proc0 done called get_omegaavg"
+       if (debug) write(6,*) "loop_diagnostics: proc0 done called get_omegaavg"
+       call broadcast (exit)
     endif
-    call broadcast (exit)
 
     if (write_hrate) call heating (istep, h, hk)
 
