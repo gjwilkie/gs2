@@ -1278,7 +1278,6 @@ contains
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
     use dist_fn, only: getmoms_notgc
     use collisions, only: ncheck, vnmult, vary_vnew
-!    use collisions, only: ntot_diff, upar_diff, uperp_diff, ttot_diff
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
