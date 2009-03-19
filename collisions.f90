@@ -1671,7 +1671,15 @@ contains
     logical :: done = .false.
 
     if (done) return
-
+    
+!DD, March 2009: Nullify pointers on initialisation, so do not pass association
+!                test when not allocated. 
+!  Problem arose on Pascali compiler (York) with  to_list(ip)%third and fourth
+    do ip=0, (nproc-1)
+       nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
+    end do
+!<DD
+	
     call init_ediffuse_layouts &
          (ntgrid, naky, ntheta0, nlambda, nspec)
 
@@ -1750,6 +1758,7 @@ contains
     from_high(1) = ntgrid
     from_high(2) = 2
     from_high(3) = g_lo%ulim_alloc
+    
 
     call init_redist (ediffuse_map, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
@@ -2745,10 +2754,8 @@ contains
     from_high(1) = ntgrid
     from_high(2) = 2
     from_high(3) = g_lo%ulim_alloc
-
     call init_redist (lorentz_map, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
-
     call delete_list (to_list)
     call delete_list (from_list)
 

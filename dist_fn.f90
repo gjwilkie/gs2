@@ -1871,193 +1871,405 @@ contains
   subroutine exb_shear (g0, phi, apar, bpar)
 ! MR, 2007: modified Bill Dorland's version to include grids where kx grid
 !           is split over different processors
-
+! MR, March 2009: ExB shear now available on extended theta grid (ballooning)
+    
     use gs2_layouts, only: ik_idx, it_idx, g_lo, idx_local, idx  
-! MR no need for is_kx_local as kx's are parallelised
+    ! MR no need for is_kx_local as kx's are parallelised
+    use theta_grid, only: ntgrid, ntheta
     use file_utils, only: error_unit
     use theta_grid, only: ntgrid
-    use kt_grids, only: akx, aky, naky, ikx, ntheta0, box
+    use kt_grids, only: akx, aky, naky, ikx, ntheta0, box, theta0
     use le_grids, only: negrid, nlambda
     use species, only: nspec
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kx_shift
     use gs2_time, only: code_dt
     use mp, only: iproc, proc0, send, receive
-
+    
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
+    complex, dimension(:,:,:), allocatable :: temp 
     integer, dimension(:), allocatable, save :: ikx_indexed !, jump
     integer, dimension(1), save :: itmin
-    integer :: ik, it, ie, is, il, ig, isgn, to_iglo, from_iglo, to_iproc, from_iproc, ierr 
-    real :: dkx, gdt
+    real, save :: theta0_shift
+    integer :: ik, it, ie, is, il, ig, isgn, to_iglo, from_iglo, to_iproc, from_iproc, ierr, j 
+    real :: dkx, gdt, dtheta0
     logical :: exb_first = .true.
     logical :: kx_local
     complex , dimension(-ntgrid:ntgrid) :: z
-
-! If not in box configuration, return
-    if (.not. box) then
-       ierr = error_unit()
-       if (abs(g_exb) > epsilon(0.0)) &
-            write (ierr, &
-            fmt="('g_ExB set to zero unless box configuration is used.')")
-       g_exb = 0.
-       return
-    end if
+! MR, March 2009: remove ExB restriction to box grids
+    ! If not in box configuration, return
+    !    if (.not. box) then
+    !       ierr = error_unit()
+    !       if (abs(g_exb) > epsilon(0.0)) &
+    !            write (ierr, &
+    !            fmt="('g_ExB set to zero unless box configuration is used.')")
+    !       g_exb = 0.
+    !       return
+    !    end if
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! MR, 2007: Works for ALL layouts (for some layouts no communication needed.)
+! MR, 2007: Works for ALL layouts (some layouts need no communication)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Initialize kx_shift, jump, idx_indexed
+    ! Initialize kx_shift, jump, idx_indexed
     if (exb_first) then
        exb_first = .false.
-       allocate (jump(naky)) 
-       jump = 0
-       allocate (ikx_indexed(ntheta0))
-       itmin = minloc (ikx)
-
-       do it=itmin(1), ntheta0
-          ikx_indexed (it+1-itmin(1)) = it
-       end do
-
-       do it=1,itmin(1)-1
-          ikx_indexed (ntheta0 - itmin(1) + 1 + it)= it
-       end do
+       if (box) then
+          allocate (jump(naky)) 
+          jump = 0
+          allocate (ikx_indexed(ntheta0))
+          itmin = minloc (ikx)
+          
+          do it=itmin(1), ntheta0
+             ikx_indexed (it+1-itmin(1)) = it
+          end do
+          
+          do it=1,itmin(1)-1
+             ikx_indexed (ntheta0 - itmin(1) + 1 + it)= it
+          end do
+       else
+          theta0_shift =0.0
+       end if
     end if
-    dkx = akx(2)
     
-! BD: To do: Put the right timestep in here.
-! For now, approximate Greg's dt == 1/2 (t_(n+1) - t_(n-1))
-! with code_dt.  
-!
-! Note: at first time step, there is a difference of a factor of 2.
-!
-
+    
+    ! BD: To do: Put the right timestep in here.
+    ! For now, approximate Greg's dt == 1/2 (t_(n+1) - t_(n-1))
+    ! with code_dt.  
+    !
+    ! Note: at first time step, there is a difference of a factor of 2.
+    !
+    
     gdt = code_dt
-
+    
 ! kx_shift is a function of time.   Update it here:  
-
-    do ik=1, naky
-       kx_shift(ik) = kx_shift(ik) - aky(ik)*g_exb*gdt
-       jump(ik) = nint(kx_shift(ik)/dkx)
-       kx_shift(ik) = kx_shift(ik) - jump(ik)*dkx
-    end do       
 ! MR, 2007: kx_shift array gets saved in restart file
+    if (box) then
+       dkx = akx(2)
+       do ik=1, naky
+          kx_shift(ik) = kx_shift(ik) - aky(ik)*g_exb*gdt
+          jump(ik) = nint(kx_shift(ik)/dkx)
+          kx_shift(ik) = kx_shift(ik) - jump(ik)*dkx
+       end do
+    else
+! MR, March 2009: on extended theta grid theta0_shift tracks ExB shear
+       dtheta0 = theta0(2,1)
+       theta0_shift = theta0_shift - g_exb*gdt
+       j = nint(theta0_shift/dtheta0)
+       theta0_shift = theta0_shift - j*dtheta0
+    end if
 
-    do ik = naky, 2, -1
-       if (jump(ik) < 0) then
+    
+    if (.not. box) then
+! MR, March 2009: impact of ExB shear on extended theta grid computed here 
+       if (j < 0) then
+          allocate(temp(-ntgrid:ntgrid,abs(j),naky))
           if (fphi > epsilon(0.0)) then
-             do it = 1, ntheta0 + jump(ik)
-                phi(:,ikx_indexed(it),ik) = phi(:,ikx_indexed(it-jump(ik)),ik)
+             do it = 1, abs(j) 
+                temp(:,it,:) = phi(:,it,:)
              end do
-             do it = ntheta0 + jump(ik) + 1, ntheta0
-                phi(:,ikx_indexed(it),ik) = 0.
+             do it = 1, ntheta0 + j
+                phi(:,it,:) = phi(:,it-j,:)
+             end do
+             do it = ntheta0 + j + 1, ntheta0
+                phi(-ntgrid+ntheta:ntgrid,it ,:) = temp(-ntgrid:ntgrid-ntheta,it-j-ntheta0,:)
+                phi(-ntgrid:-ntgrid+ntheta-1,it,:) = 0.0
              end do
           end if
           if (fapar > epsilon(0.0)) then
-             do it = 1, ntheta0 + jump(ik)
-                apar(:,ikx_indexed(it),ik) = apar(:,ikx_indexed(it-jump(ik)),ik)
+             do it = 1, abs(j)
+                temp(:,it,:) = apar(:,it,:)
              end do
-             do it = ntheta0 + jump(ik) + 1, ntheta0
-                apar (:,ikx_indexed(it),ik) = 0.
+             do it = 1, ntheta0 + j
+                apar(:,it,:) = apar(:,it-j,:)
              end do
-          end if
-          if (fbpar > epsilon(0.0)) then 
-             do it = 1, ntheta0 + jump(ik)
-                bpar(:,ikx_indexed(it),ik) = bpar(:,ikx_indexed(it-jump(ik)),ik)
-             end do
-             do it = ntheta0 + jump(ik) + 1, ntheta0
-                bpar (:,ikx_indexed(it),ik) = 0.
-             end do
-          end if
-          do is=1,nspec
-             do ie=1,negrid
-                do il=1,nlambda
-                   do it = 1, ntheta0 + jump(ik)                        
-                      to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
-                      from_iglo = idx(g_lo, ik, ikx_indexed(it-jump(ik)), il, ie, is)
-                      if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
-                         g0(:,:,to_iglo) = g0(:,:,from_iglo)
-                      else if (idx_local(g_lo, from_iglo)) then
-                         to_iproc = to_iglo/g_lo%blocksize
-                         do isgn=1, 2
-                            call send(g0(:, isgn, from_iglo), to_iproc)
-                         enddo
-                      else if (idx_local(g_lo, to_iglo)) then
-                         from_iproc = from_iglo/g_lo%blocksize 
-                         do isgn=1, 2
-                            call receive(z, from_iproc)   
-                            g0(:,isgn,to_iglo) = z
-                         enddo
-                      endif
-                   enddo
-                   do it = ntheta0 + jump(ik) + 1, ntheta0                     
-                      to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
-                      if (idx_local (g_lo, to_iglo)) then
-                          g0(:,:,to_iglo) = 0.
-                      endif
-                   enddo
-                enddo
-             enddo
-          enddo
-       endif
-       if (jump(ik) > 0) then 
-          if (fphi > epsilon(0.0)) then
-             do it = ntheta0, 1+jump(ik), -1
-                phi(:,ikx_indexed(it),ik) = phi(:,ikx_indexed(it-jump(ik)),ik)
-             end do
-             do it = jump(ik), 1, -1
-                phi(:,ikx_indexed(it),ik) = 0.
-             end do
-          end if
-          if (fapar > epsilon(0.0)) then
-             do it = ntheta0, 1+jump(ik), -1
-                apar(:,ikx_indexed(it),ik) = apar(:,ikx_indexed(it-jump(ik)),ik)
-             end do
-             do it = jump(ik), 1, -1
-                apar(:,ikx_indexed(it),ik) = 0.
+             do it = ntheta0 + j + 1, ntheta0
+                apar(-ntgrid+ntheta:ntgrid,it ,:) = temp(-ntgrid:ntgrid-ntheta,it-j-ntheta0,:)
+                apar(-ntgrid:-ntgrid+ntheta-1,it,:) = 0.0
              end do
           end if
           if (fbpar > epsilon(0.0)) then
-             do it = ntheta0, 1+jump(ik), -1
-                bpar(:,ikx_indexed(it),ik) = bpar(:,ikx_indexed(it-jump(ik)),ik)
+             do it = 1, abs(j) 
+                temp(:,it,:) = bpar(:,it,:)
              end do
-             do it = jump(ik), 1, -1
-                bpar(:,ikx_indexed(it),ik) = 0.
+             do it = 1, ntheta0 + j
+                bpar(:,it,:) = bpar(:,it-j,:)
+             end do
+             do it = ntheta0 + j + 1, ntheta0
+                bpar(-ntgrid+ntheta:ntgrid,it ,:) = temp(-ntgrid:ntgrid-ntheta,it-j-ntheta0,:)
+                bpar(-ntgrid:-ntgrid+ntheta-1,it,:) = 0.0
              end do
           end if
-          do is=1,nspec
-             do ie=1,negrid
-                do il=1,nlambda
-                   do it = ntheta0, 1+jump(ik), -1
-                      to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
-                      from_iglo = idx(g_lo, ik, ikx_indexed(it-jump(ik)), il, ie, is)
-                      if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
-                         g0(:,:,to_iglo) = g0(:,:,from_iglo)
-                      else if (idx_local(g_lo, from_iglo)) then
-                         to_iproc = to_iglo/g_lo%blocksize
-                         do isgn=1, 2
-                            call send(g0(:, isgn, from_iglo), to_iproc)
-                         enddo
-                      else if (idx_local(g_lo, to_iglo)) then
-                         from_iproc = from_iglo/g_lo%blocksize 
-                         do isgn=1, 2
-                            call receive(z, from_iproc)   
-                            g0(:,isgn,to_iglo) = z
-                         enddo
-                      endif
-                   enddo
-                   do it = jump(ik), 1, -1
-                      to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
-                      if (idx_local (g_lo, to_iglo)) then
-                         g0(:,:,to_iglo) = 0.
-                      endif
+          deallocate (temp)
+          allocate(temp(-ntgrid:ntgrid,2,abs(j)))
+          do ik=1,naky
+             do is=1,nspec
+                do ie=1,negrid
+                   do il=1,nlambda
+                      do it = 1, abs(j)
+                         from_iglo = idx(g_lo, ik, it, il, ie, is)
+                         if (idx_local (g_lo, from_iglo)) then       
+                            temp(:,:,it) = g0(:,:,from_iglo)
+                         end if
+                      end do
+                      do it = 1, ntheta0 + j                        
+                         to_iglo = idx(g_lo, ik, it, il, ie, is)
+                         from_iglo = idx(g_lo, ik, it-j, il, ie, is)
+                         if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
+                            g0(:,:,to_iglo) = g0(:,:,from_iglo)
+                         else if (idx_local(g_lo, from_iglo)) then
+                            to_iproc = to_iglo/g_lo%blocksize
+                            do isgn=1, 2
+                               call send(g0(:, isgn, from_iglo), to_iproc)
+                            enddo
+                         else if (idx_local(g_lo, to_iglo)) then
+                            from_iproc = from_iglo/g_lo%blocksize 
+                            do isgn=1, 2
+                               call receive(z, from_iproc)   
+                               g0(:,isgn,to_iglo) = z
+                            enddo
+                         endif
+                      enddo
+                      do it = ntheta0 + j + 1, ntheta0                     
+                         to_iglo = idx(g_lo, ik, it, il, ie, is)
+                         from_iglo = idx(g_lo, ik, it-j-ntheta0, il, ie, is)
+                         if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
+                            g0(-ntgrid+ntheta:ntgrid,:,to_iglo) = temp(-ntgrid:ntgrid-ntheta,:,it-j-ntheta0)
+                            g0(-ntgrid:-ntgrid+ntheta-1,:,to_iglo) = 0.0
+                         else if (idx_local(g_lo, from_iglo)) then
+                            to_iproc = to_iglo/g_lo%blocksize
+                            do isgn = 1,2
+                               call send(temp(:, isgn, it-j-ntheta0), to_iproc)
+                            enddo
+                         else if (idx_local(g_lo, to_iglo)) then
+                            from_iproc = from_iglo/g_lo%blocksize 
+                            do isgn=1, 2
+                               call receive(z, from_iproc)   
+                               g0(-ntgrid+ntheta:ntgrid,isgn,to_iglo) = z(-ntgrid:ntgrid-ntheta)
+                               g0(-ntgrid:-ntgrid+ntheta-1,isgn,to_iglo) = 0.0
+                            enddo
+                         endif
+                      enddo
                    enddo
                 enddo
              enddo
           enddo
-       endif
-    enddo
+          deallocate (temp)
+       end if
+       
+       if (j > 0) then
+          allocate(temp(-ntgrid:ntgrid,j,naky))
+          if (fphi > epsilon(0.0)) then
+             do it = 1, j 
+                temp(:,it,:) = phi(:,ntheta0-j+it,:)
+             end do
+             do it = ntheta0, j+1, -1
+                phi(:,it,:) = phi(:,it-j,:)
+             end do
+             do it = 1, j
+                phi(-ntgrid:ntgrid-ntheta,it ,:) = temp(-ntgrid+ntheta:ntgrid,it,:)
+                phi(ntgrid-ntheta+1:ntgrid,it,:) = 0.0
+             end do
+          end if
+          if (fapar > epsilon(0.0)) then
+             do it = 1, j 
+                temp(:,it,:) = apar(:,ntheta0-j+it,:)
+             end do
+             do it = ntheta0, j+1, -1
+                apar(:,it,:) = apar(:,it-j,:)
+             end do
+             do it = 1, j
+                apar(-ntgrid:ntgrid-ntheta,it ,:) = temp(-ntgrid+ntheta:ntgrid,it,:)
+                apar(ntgrid-ntheta+1:ntgrid,it,:) = 0.0
+             end do
+          end if
+          if (fbpar > epsilon(0.0)) then
+             do it = 1, j 
+                temp(:,it,:) = bpar(:,ntheta0-j+it,:)
+             end do
+             do it = ntheta0, j+1, -1
+                bpar(:,it,:) = bpar(:,it-j,:)
+             end do
+             do it = 1, j
+                bpar(-ntgrid:ntgrid-ntheta,it ,:) = temp(-ntgrid+ntheta:ntgrid,it,:)
+                bpar(ntgrid-ntheta+1:ntgrid,it,:) = 0.0
+             end do
+          end if
+          deallocate (temp)
+          allocate(temp(-ntgrid:ntgrid,2,j))
+          do ik = 1,naky
+             do is=1,nspec
+                do ie=1,negrid
+                   do il=1,nlambda
+                      do it = 1, j
+                         from_iglo = idx(g_lo, ik, ntheta0-j+it, il, ie, is)
+                         if (idx_local (g_lo, from_iglo)) then       
+                            temp(:,:,it) = g0(:,:,from_iglo)
+                         end if
+                      end do
+                      do it = ntheta0, j+1, -1
+                         to_iglo = idx(g_lo, ik, it, il, ie, is)
+                         from_iglo = idx(g_lo, ik, it-j, il, ie, is)
+                         if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
+                            g0(:,:,to_iglo) = g0(:,:,from_iglo)
+                         else if (idx_local(g_lo, from_iglo)) then
+                            to_iproc = to_iglo/g_lo%blocksize
+                            do isgn=1, 2
+                               call send(g0(:, isgn, from_iglo), to_iproc)
+                            enddo
+                         else if (idx_local(g_lo, to_iglo)) then
+                            from_iproc = from_iglo/g_lo%blocksize 
+                            do isgn=1, 2
+                               call receive(z, from_iproc)   
+                               g0(:,isgn,to_iglo) = z
+                            enddo
+                         endif
+                      enddo
+                      do it = 1, j
+                         to_iglo = idx(g_lo, ik, it, il, ie, is)
+                         from_iglo = idx(g_lo, ik, ntheta0-j+it, il, ie, is)
+                         if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
+                            g0(-ntgrid:ntgrid-ntheta,:,to_iglo) = temp(-ntgrid+ntheta:ntgrid,:,it)
+                            g0(ntgrid-ntheta+1:ntgrid,:,to_iglo) = 0.0
+                         else if (idx_local(g_lo, from_iglo)) then
+                            to_iproc = to_iglo/g_lo%blocksize
+                            do isgn = 1,2
+                               call send(temp(:, isgn, it), to_iproc)
+                            enddo
+                         else if (idx_local(g_lo, to_iglo)) then
+                            from_iproc = from_iglo/g_lo%blocksize 
+                            do isgn=1, 2
+                               call receive(z, from_iproc)   
+                               g0(-ntgrid:ntgrid-ntheta,isgn,to_iglo) = z(-ntgrid+ntheta:ntgrid)
+                               g0(ntgrid-ntheta+1:ntgrid,isgn,to_iglo) = 0.0
+                            enddo
+                         endif
+                      enddo
+                   enddo
+                enddo
+             enddo
+          enddo
+          deallocate (temp)
+       end if
+    end if
+    
+    if (box) then
+       do ik = naky, 2, -1
+          if (jump(ik) < 0) then
+             if (fphi > epsilon(0.0)) then
+                do it = 1, ntheta0 + jump(ik)
+                   phi(:,ikx_indexed(it),ik) = phi(:,ikx_indexed(it-jump(ik)),ik)
+                end do
+                do it = ntheta0 + jump(ik) + 1, ntheta0
+                   phi(:,ikx_indexed(it),ik) = 0.
+                end do
+             end if
+             if (fapar > epsilon(0.0)) then
+                do it = 1, ntheta0 + jump(ik)
+                   apar(:,ikx_indexed(it),ik) = apar(:,ikx_indexed(it-jump(ik)),ik)
+                end do
+                do it = ntheta0 + jump(ik) + 1, ntheta0
+                   apar (:,ikx_indexed(it),ik) = 0.
+                end do
+             end if
+             if (fbpar > epsilon(0.0)) then 
+                do it = 1, ntheta0 + jump(ik)
+                   bpar(:,ikx_indexed(it),ik) = bpar(:,ikx_indexed(it-jump(ik)),ik)
+                end do
+                do it = ntheta0 + jump(ik) + 1, ntheta0
+                   bpar (:,ikx_indexed(it),ik) = 0.
+                end do
+             end if
+             do is=1,nspec
+                do ie=1,negrid
+                   do il=1,nlambda
+                      do it = 1, ntheta0 + jump(ik)                        
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+                         from_iglo = idx(g_lo, ik, ikx_indexed(it-jump(ik)), il, ie, is)
+                         if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
+                            g0(:,:,to_iglo) = g0(:,:,from_iglo)
+                         else if (idx_local(g_lo, from_iglo)) then
+                            to_iproc = to_iglo/g_lo%blocksize
+                            do isgn=1, 2
+                               call send(g0(:, isgn, from_iglo), to_iproc)
+                            enddo
+                         else if (idx_local(g_lo, to_iglo)) then
+                            from_iproc = from_iglo/g_lo%blocksize 
+                            do isgn=1, 2
+                               call receive(z, from_iproc)   
+                               g0(:,isgn,to_iglo) = z
+                            enddo
+                         endif
+                      enddo
+                      do it = ntheta0 + jump(ik) + 1, ntheta0                     
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+                         if (idx_local (g_lo, to_iglo)) then
+                            g0(:,:,to_iglo) = 0.
+                         endif
+                      enddo
+                   enddo
+                enddo
+             enddo
+          endif
+          if (jump(ik) > 0) then 
+             if (fphi > epsilon(0.0)) then
+                do it = ntheta0, 1+jump(ik), -1
+                   phi(:,ikx_indexed(it),ik) = phi(:,ikx_indexed(it-jump(ik)),ik)
+                end do
+                do it = jump(ik), 1, -1
+                   phi(:,ikx_indexed(it),ik) = 0.
+                end do
+             end if
+             if (fapar > epsilon(0.0)) then
+                do it = ntheta0, 1+jump(ik), -1
+                   apar(:,ikx_indexed(it),ik) = apar(:,ikx_indexed(it-jump(ik)),ik)
+                end do
+                do it = jump(ik), 1, -1
+                   apar(:,ikx_indexed(it),ik) = 0.
+                end do
+             end if
+             if (fbpar > epsilon(0.0)) then
+                do it = ntheta0, 1+jump(ik), -1
+                   bpar(:,ikx_indexed(it),ik) = bpar(:,ikx_indexed(it-jump(ik)),ik)
+                end do
+                do it = jump(ik), 1, -1
+                   bpar(:,ikx_indexed(it),ik) = 0.
+                end do
+             end if
+             do is=1,nspec
+                do ie=1,negrid
+                   do il=1,nlambda
+                      do it = ntheta0, 1+jump(ik), -1
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+                         from_iglo = idx(g_lo, ik, ikx_indexed(it-jump(ik)), il, ie, is)
+                         if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
+                            g0(:,:,to_iglo) = g0(:,:,from_iglo)
+                         else if (idx_local(g_lo, from_iglo)) then
+                            to_iproc = to_iglo/g_lo%blocksize
+                            do isgn=1, 2
+                               call send(g0(:, isgn, from_iglo), to_iproc)
+                            enddo
+                         else if (idx_local(g_lo, to_iglo)) then
+                            from_iproc = from_iglo/g_lo%blocksize 
+                            do isgn=1, 2
+                               call receive(z, from_iproc)   
+                               g0(:,isgn,to_iglo) = z
+                            enddo
+                         endif
+                      enddo
+                      do it = jump(ik), 1, -1
+                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+                         if (idx_local (g_lo, to_iglo)) then
+                            g0(:,:,to_iglo) = 0.
+                         endif
+                      enddo
+                   enddo
+                enddo
+             enddo
+          endif
+       enddo
+    end if
   end subroutine exb_shear
-
+     
   subroutine kill (g0, g1, phi, bpar)
     
     use gs2_layouts, only: ik_idx, it_idx
