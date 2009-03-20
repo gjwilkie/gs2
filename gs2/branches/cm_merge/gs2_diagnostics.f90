@@ -25,7 +25,7 @@ module gs2_diagnostics
   logical :: write_qmheat, write_pmflux, write_vmflux, write_gs, write_lpoly
   logical :: write_qbheat, write_pbflux, write_vbflux, write_g, write_gg, write_gyx
   logical :: write_dmix, write_kperpnorm, write_phitot, write_epartot
-  logical :: write_eigenfunc, write_final_fields, write_final_antot
+  logical :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
   logical :: write_final_moments, write_avg_moments, write_stress
   logical :: write_full_moments_notgc
   logical :: write_fcheck, write_final_epar, write_kpar
@@ -151,6 +151,7 @@ contains
     call broadcast (dump_neoclassical_flux)
     call broadcast (dump_check1)
     call broadcast (dump_check2)
+    call broadcast (write_fields)
     call broadcast (dump_fields_periodically)
     call broadcast (make_movie)
     call broadcast (dump_final_xfields)
@@ -226,7 +227,7 @@ contains
     call init_gs2_io (write_nl_flux, write_omega, write_stress, &
          write_fieldline_avg_phi, write_hrate, write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot, write_verr, &
-         write_full_moments_notgc)
+         write_fields, write_full_moments_notgc)
     
     if (write_cerr) then
        if (collision_model_switch == 1 .or. collision_model_switch == 5) then
@@ -369,7 +370,7 @@ contains
          write_qmheat, write_pmflux, write_vmflux, write_tavg, write_g, write_gg, &
          write_qbheat, write_pbflux, write_vbflux, write_hrate, write_lpoly, &
          write_dmix, write_kperpnorm, write_phitot, write_epartot, &
-         write_eigenfunc, write_final_fields, write_final_antot, &
+         write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
          write_fcheck, write_final_epar, write_final_moments, write_cerr, &
          write_vortcheck, write_fieldcheck, write_Epolar, write_verr, write_max_verr, &
          write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
@@ -419,6 +420,7 @@ contains
        write_final_moments = .false.
        write_stress = .false.
        write_avg_moments = .false.
+       write_fields = .false.
        write_full_moments_notgc = .false.
        write_final_fields = .false.
        write_final_antot = .false.
@@ -1295,7 +1297,7 @@ contains
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
     use gs2_io, only: nc_loop_fullmom
     use gs2_io, only: nc_loop_stress, nc_loop_vres
-    use gs2_io, only: nc_loop_movie
+    use gs2_io, only: nc_loop_movie, nc_write_fields
     use gs2_layouts, only: yxf_lo
     use gs2_transforms, only: init_transforms, transform2
     use le_grids, only: nlambda, ng2
@@ -1774,6 +1776,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 
     if (write_vortcheck) call vortcheck (phinew, bparnew)
     if (write_fieldcheck) call fieldcheck (phinew, aparnew, bparnew)
+    if (write_fields) call nc_write_fields (nout, phinew, aparnew, bparnew)  !MR
 
     call prof_leaving ("loop_diagnostics-1")
 

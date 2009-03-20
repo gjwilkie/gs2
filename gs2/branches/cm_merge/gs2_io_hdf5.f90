@@ -8,7 +8,7 @@ module gs2_io
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
   public :: nc_loop_stress
-  public :: nc_loop_movie
+  public :: nc_loop_movie, nc_write_fields
 
   logical, parameter :: serial_io = .true.
   integer :: ncid
@@ -71,7 +71,7 @@ module gs2_io
 contains
 
   subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
-      write_phiavg, write_hrate, make_movie, nmovie_tot)
+      write_phiavg, write_hrate, make_movie, nmovie_tot, write_fields)
 !David has made some changes to this subroutine (may 2005) now should be able to do movies for 
 !linear box runs as well as nonlinear box runs.
 
@@ -85,7 +85,7 @@ contains
     use le_grids, only: nlambda, negrid
     use species, only: nspec
 
-    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, make_movie
+    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, make_movie, write_fields
     logical :: accelerated
     character (300) :: filename, filename_movie
     integer :: ierr         ! 0 if initialization is successful
@@ -145,7 +145,7 @@ contains
 
     if (proc0) then
        call define_dims (nmovie_tot)
-       call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate)
+       call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, write_fields)
        call nc_grids
        call nc_species
        call nc_geo
@@ -302,14 +302,14 @@ contains
 
   end subroutine save_input
 
-  subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate)
+  subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, write_fields)
 
     use mp, only: nproc
     use species, only: nspec
     use kt_grids, only: naky, ntheta0, theta0
     use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod
-    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate
+    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, write_fields
 
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
@@ -549,14 +549,14 @@ contains
           status = netcdf_def_var (ncid, 'es_mom_by_k',  nf_double, 4, fluxk_dim, es_mom_by_k_id)
           status = netcdf_def_var (ncid, 'es_part_by_k', nf_double, 4, fluxk_dim, es_part_by_k_id)
        end if
+       if (write_fields) status = netcdf_def_var (ncid, 'phi_t', nf_double, 5, field_dim, phi_t_id)  !MR
        status = netcdf_def_var (ncid, 'phi_norm',     nf_double, 4, final_field_dim, phi_norm_id)
        status = netcdf_def_var (ncid, 'phi',          nf_double, 4, final_field_dim, phi_id)
        status = netcdf_put_att (ncid, phi_id, 'long_name', 'Electrostatic Potential')
        status = netcdf_put_att (ncid, phi_id, 'idl_name', '!7U!6')
        status = netcdf_put_att (ncid, phi_id, 'units', 'T/q rho/L')
        status = netcdf_def_var (ncid, 'antot',        nf_double, 4, final_field_dim, antot_id)
-       if (d_fields_per) &
-            status = netcdf_def_var (ncid, 'phi_t',        nf_double, 5, field_dim, phi_t_id)
+!       if (d_fields_per) status = netcdf_def_var (ncid, 'phi_t', nf_double, 5, field_dim, phi_t_id)
     end if
 
     if (fapar > zero) then
@@ -580,8 +580,7 @@ contains
        status = netcdf_def_var (ncid, 'apar_norm',      nf_double, 4, final_field_dim, apar_norm_id)
        status = netcdf_def_var (ncid, 'apar',           nf_double, 4, final_field_dim, apar_id)
        status = netcdf_def_var (ncid, 'antota',         nf_double, 4, final_field_dim, antota_id)
-       if (d_fields_per) &
-            status = netcdf_def_var (ncid, 'apar_t',  nf_double, 5, field_dim, apar_t_id)
+!       if (d_fields_per) status = netcdf_def_var (ncid, 'apar_t',  nf_double, 5, field_dim, apar_t_id)
        status = netcdf_put_att (ncid, apar2_by_mode_id, 'long_name', 'Apar squared')
        status = netcdf_put_att (ncid, apar_id, 'long_name', 'Parallel Magnetic Potential')      
        status = netcdf_put_att (ncid, apar_id, 'idl_name', '!6A!9!D#!N!6')      
@@ -609,8 +608,7 @@ contains
        status = netcdf_def_var (ncid, 'bpar_norm',      nf_double, 4, final_field_dim, bpar_norm_id)
        status = netcdf_def_var (ncid, 'bpar',           nf_double, 4, final_field_dim, bpar_id)
        status = netcdf_def_var (ncid, 'antotp',          nf_double, 4, final_field_dim, antotp_id)
-       if (d_fields_per) &
-            status = netcdf_def_var (ncid, 'bpar_t', nf_double, 5, field_dim, bpar_t_id)
+!       if (d_fields_per) status = netcdf_def_var (ncid, 'bpar_t', nf_double, 5, field_dim, bpar_t_id)
        status = netcdf_put_att (ncid, bpar2_by_mode_id, 'long_name', 'A_perp squared')
        status = netcdf_put_att (ncid, bpar_id, 'long_name', 'delta B Parallel')      
        status = netcdf_put_att (ncid, bpar_id, 'idl_name', '!6B!9!D#!N!6')          
@@ -799,6 +797,52 @@ contains
     end if
 
   end subroutine nc_final_fields
+
+!MR begin
+  subroutine nc_write_fields (nout, phinew, aparnew, bparnew)
+    use netcdf_mod, only: netcdf_put_var
+    use convert, only: c2r
+    use run_parameters, only: fphi, fapar, fbpar
+!    use fields_arrays, only: phi, apar, bpar
+!    use fields, only: phinew, aparnew, bparnew
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    
+    real, dimension (:,:,:), intent (in) :: phinew, aparnew, bparnew
+    integer, intent (in) :: nout
+
+    real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
+    integer, dimension (5) :: start5, count5
+    integer :: status
+
+    start5(1) = 1
+    start5(2) = 1
+    start5(3) = 1
+    start5(4) = 1
+    start5(5) = nout
+    
+    count5(1) = 2
+    count5(2) = ntheta0
+    count5(3) = naky
+    count5(4) = nspec
+    count5(5) = 1
+
+    if (fphi > zero) then
+       call c2r (phinew, ri3)
+       status = netcdf_put_vara(ncid, phi_t_id, start5, count5, ri3)
+    end if
+
+    if (fapar > zero) then
+       call c2r (aparnew, ri3)
+       status = netcdf_put_vara(ncid, apar_t_id, start5, count5, ri3)
+    end if
+
+    if (fbpar > zero) then
+       call c2r (bparnew, ri3)
+       status = netcdf_put_vara(ncid, bpar_t_id, start5, count5, ri3)
+    end if
+  end subroutine nc_write_fields
+!MR end
 
   subroutine nc_final_epar (epar)
 
