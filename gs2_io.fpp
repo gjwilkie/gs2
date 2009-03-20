@@ -15,7 +15,7 @@ module gs2_io
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
   public :: nc_loop_stress, nc_loop_vres
-  public :: nc_loop_movie
+  public :: nc_loop_movie, nc_write_fields
   public :: nc_loop_fullmom
 
   logical, parameter :: serial_io = .true.
@@ -103,7 +103,7 @@ contains
 
   subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
       write_phiavg, write_hrate, write_final_antot, write_eigenfunc, &
-      make_movie, nmovie_tot, write_verr, &
+      make_movie, nmovie_tot, write_verr, write_fields, &
       write_full_moments_notgc)
 !David has made some changes to this subroutine (may 2005) now should 
 !be able to do movies for linear box runs as well as nonlinear box runs.
@@ -124,7 +124,7 @@ contains
 !    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, make_movie
 !    logical :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_nl_flux, write_omega, write_stress
-    logical, intent(in) :: write_phiavg, write_hrate, make_movie
+    logical, intent(in) :: write_phiavg, write_hrate, make_movie, write_fields
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_full_moments_notgc
     integer :: nmovie_tot
@@ -200,7 +200,7 @@ contains
        call define_dims (nmovie_tot)
        call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
             write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-            write_full_moments_notgc)
+            write_fields, write_full_moments_notgc)
        call nc_grids
        call nc_species
        call nc_geo
@@ -414,7 +414,7 @@ contains
 
   subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
        write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-       write_full_moments_notgc)
+       write_fields, write_full_moments_notgc)
 
     use mp, only: nproc
     use species, only: nspec
@@ -431,7 +431,7 @@ contains
 !    logical :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_nl_flux, write_omega, write_stress
     logical, intent(in) :: write_phiavg, write_hrate, write_final_antot
-    logical, intent(in) :: write_eigenfunc, write_verr
+    logical, intent(in) :: write_eigenfunc, write_verr, write_fields
     logical, intent(in) :: write_full_moments_notgc
 # ifdef NETCDF
     character (5) :: ci
@@ -807,6 +807,10 @@ contains
           status = nf90_def_var (ncid, 'es_part_by_k', netcdf_real, fluxk_dim, es_part_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_by_k')
        end if
+       if (write_fields) then
+	  status = nf90_def_var (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)  !MR
+	  if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')		   
+       endif
        if (write_eigenfunc) then
           status = nf90_def_var (ncid, 'phi_norm',  netcdf_real, final_field_dim, phi_norm_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='phi_norm')
@@ -826,11 +830,11 @@ contains
           status = nf90_def_var (ncid, 'antot', netcdf_real, final_field_dim, antot_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='antot')
        endif
-       if (d_fields_per) then
-          status = nf90_def_var &
-               (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')
-       end if
+!       if (d_fields_per) then
+!          status = nf90_def_var &
+!               (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)
+!          if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')
+!       end if
     end if
 
     if (fapar > zero) then
@@ -1265,6 +1269,58 @@ contains
     end if
 # endif
   end subroutine nc_eigenfunc
+
+!MR begin
+  subroutine nc_write_fields (nout, phinew, aparnew, bparnew)
+!    use netcdf_mod, only: netcdf_put_var
+    use convert, only: c2r
+    use run_parameters, only: fphi, fapar, fbpar
+!    use fields_arrays, only: phi, apar, bpar
+!    use fields, only: phinew, aparnew, bparnew
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var
+# endif
+    complex, dimension (:,:,:), intent (in) :: phinew, aparnew, bparnew
+    integer, intent (in) :: nout
+!    real, dimension (2, 2*ntgrid+1, ntheta0, naky, 1) :: ri4
+    real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
+    integer, dimension (5) :: start5, count5
+    integer :: status
+# ifdef NETCDF
+    start5(1) = 1
+    start5(2) = 1
+    start5(3) = 1
+    start5(4) = 1
+    start5(5) = nout
+    
+    count5(1) = 2
+    count5(2) = 2*ntgrid+1
+    count5(3) = ntheta0
+    count5(4) = naky
+    count5(5) = 1
+
+    if (fphi > zero) then
+       call c2r (phinew, ri3)
+       status = nf90_put_var(ncid, phi_t_id, ri3, start=start5, count=count5)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_t_id)
+    end if
+
+    if (fapar > zero) then
+       call c2r (aparnew, ri3)
+       status = nf90_put_var(ncid, apar_t_id, ri3, start=start5, count=count5)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_t_id)
+    end if
+
+    if (fbpar > zero) then
+       call c2r (bparnew, ri3)
+       status = nf90_put_var(ncid, bpar_t_id, ri3, start=start5, count=count5)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_t_id)
+    end if
+# endif
+  end subroutine nc_write_fields
+!MR end
 
   subroutine nc_final_fields
 
