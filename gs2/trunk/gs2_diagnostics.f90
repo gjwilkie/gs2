@@ -44,7 +44,6 @@ module gs2_diagnostics
   logical, parameter :: write_density_velocity=.false.
   logical :: write_jext=.false.
 !<GGH
-  logical :: omg_conv_test
 
   integer :: nperiod_output
   integer :: nwrite, igomega, nmovie
@@ -178,7 +177,6 @@ contains
     call broadcast (write_eigenfunc)
 
     call broadcast (write_full_moments_notgc)
-    call broadcast (omg_conv_test)
 
     nmovie_tot = nstep/nmovie
 
@@ -378,8 +376,7 @@ contains
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
-         save_for_restart, &
-         omg_conv_test
+         save_for_restart
 
     if (proc0) then
        print_line = .true.
@@ -445,7 +442,6 @@ contains
        use_shmem_for_xfields = .true.
        nperiod_output = nperiod - nperiod_guard
        save_for_restart = .false.
-       omg_conv_test = .true.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
 !       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
        if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
@@ -2351,8 +2347,7 @@ contains
 
     if (istep > navg) then
        domega = spread(omegaavg,1,navg) - omegahist
-       if (omg_conv_test .and. &
-            all(sqrt(sum(abs(domega)**2/real(navg),dim=1)) &
+       if (all(sqrt(sum(abs(domega)**2/real(navg),dim=1)) &
             < min(abs(omegaavg),1.0)*omegatol)) &
        then
           if (write_ascii) write (out_unit, "('*** omega converged')")
