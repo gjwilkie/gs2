@@ -46,8 +46,11 @@ contains
 
     call init_theta_grid
     
-    call init_run_parameters
+!CMR,30/3/2009:
+! call init_init_g before init_run_parameters to read delt from restart file
+
     call init_init_g
+    call init_run_parameters
     call init_dist_fn
     call read_parameters
     call allocate_arrays

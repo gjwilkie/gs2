@@ -23,15 +23,22 @@ contains
     use kt_grids, only: init_kt_grids
     use gs2_layouts, only: init_gs2_layouts
     implicit none
+    logical:: debug=.false.
 
     if (initialized) return
     initialized = .true.
 
+    if (debug) write(6,*) "init_fields_implicit: gs2_layouts"
     call init_gs2_layouts
+    if (debug) write(6,*) "init_fields_implicit: theta_grid"
     call init_theta_grid
+    if (debug) write(6,*) "init_fields_implicit: kt_grids"
     call init_kt_grids
+    if (debug) write(6,*) "init_fields_implicit: read_parameters"
     call read_parameters
+    if (debug) write(6,*) "init_fields_implicit: response_matrix"
     call init_response_matrix
+    if (debug) write(6,*) "init_fields_implicit: antenna"
     call init_antenna
 
   end subroutine init_fields_implicit
