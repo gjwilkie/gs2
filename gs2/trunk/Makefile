@@ -3,6 +3,7 @@
 #  Makefile for the GS2/AstroGK Gyrokinetic Turbulence code 
 #  (requires GNU's gmake)
 #
+#PROJECT ?= trinity
 PROJECT ?= gs2
 #PROJECT ?= agk
 #
@@ -11,6 +12,7 @@ PROJECT ?= gs2
 #  LAST UPDATE: 01/26/09
 #
 # * Changelogs
+#	04/06/09: SYSTEM environment variable is replaced by GK_SYSTEM
 #	01/26/09: USE_C_INDEX is imported to gs2 by TT
 #       12/11/08: add support for NAGWare and Lahey compilers
 #       10/28/08: some non-standard macros respect environment variables
@@ -37,7 +39,7 @@ PROJECT ?= gs2
 # Standard Mac OS X with MacPorts
 # Franklin at NERSC and Jaguar at NCCS (Cray XT4 with PGI)
 # Bassi at NERSC (IBM Power 5 with IBM XL Fortran)
-# Ranger (... with Intel)
+# Ranger (Sun Constellation Linux Cluster with Intel)
 #
 # * Switches:
 #
@@ -148,14 +150,23 @@ endif
 ######################################################### PLATFORM DEPENDENCE
 
 # compile mode switches (DEBUG, TEST, PROF, OPT, STATIC, DBLE)
-# must be set before loading Makefile.$(SYSTEM) because they may affect
+# must be set before loading Makefile.$(GK_SYSTEM) because they may affect
 # compiler options.
-# However, Makefile.local may override some options set in Makefile.$(SYSTEM),
-# thus it is included before and after Makefile.$(SYSTEM)
+# However, Makefile.local may override some options set in Makefile.$(GK_SYSTEM),
+# thus it is included before and after Makefile.$(GK_SYSTEM)
 sinclude Makefile.local
 
 # include system-dependent make variables
-sinclude Makefile.$(SYSTEM)
+ifndef GK_SYSTEM
+	ifdef SYSTEM
+$(warning SYSTEM environment variable is obsolete)
+$(warning use GK_SYSTEM instead)
+	GK_SYSTEM = $(SYSTEM)
+	else
+$(error GK_SYSTEM is not set)
+	endif
+endif
+include Makefile.$(GK_SYSTEM)
 
 # include Makefile.local if exists
 sinclude Makefile.local
@@ -327,7 +338,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all gs2_all agk_all
+.PHONY: all trinity_all gs2_all agk_all
 
 all: $(.DEFAULT_GOAL)
 
@@ -337,6 +348,14 @@ ifdef USE_C_INDEX
 astrogk_mod += layouts_indices.o
 gs2_mod += layouts_indices.o
 endif
+
+trinity_all: modules trinity ingen rungridgen
+
+trinity: $(trinity_mod) 
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+trinity.x: $(trinity_mod) 
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 gs2_all: modules gs2 ingen rungridgen
 
@@ -368,6 +387,8 @@ slice_g: $(slice_g_mod)
 
 agk_fields_plot: $(agk_fields_plot_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(PLIBS)
+tearing_diag: $(tearing_diag_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 .PHONY: modules utils_all geo_all
 
@@ -442,6 +463,7 @@ distclean: unlink clean
 	-rm -f ball eiktest
 	-rm -f slice_g
 	-rm -f agk_fields_plot
+	-rm -f tearing_diag
 
 tar:
 	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
@@ -467,7 +489,7 @@ tar_exec:
 	@rm -rf $(TARDIR)
 
 test_make:
-	@echo SYSTEM is $(SYSTEM)
+	@echo GK_SYSTEM is $(GK_SYSTEM)
 	@echo .DEFAULT_GOAL is $(.DEFAULT_GOAL)
 	@echo VPATH is $(VPATH)
 	@echo CURDIR is $(CURDIR)

@@ -1,6 +1,7 @@
 This text explains how to make agk/gs2. (2008/05/05 RN)
 
 * Changelog
+2009/04/06 [RN]: SYSTEM environment variable is replaced by GK_SYSTEM
 2009/01/26 [TT]: Removed agk_ from layouts_* files due to C_INDEX port to gs2
 	   	 Removed tungsten from supported system as it has retired
 
@@ -9,12 +10,12 @@ This text explains how to make agk/gs2. (2008/05/05 RN)
 
 * Compile
 
-You must set two environment variables to compile agk/gs2: SYSTEM and MAKEFLAGS.
-Since system-specific settings are written in Makefiles/Makefile.$(SYSTEM),
+You must set two environment variables to compile agk/gs2: GK_SYSTEM and MAKEFLAGS.
+Since system-specific settings are written in Makefiles/Makefile.$(GK_SYSTEM),
 you should specify what system you are on. Officially supported common systems
 are franklin, bassi, jacquard (NERSC), ranger (TACC), and jaguar (ORNL).
 
-And, to load Makefile.$(SYSTEM) in Makefiles/ directory, you must tell "make" 
+And, to load Makefile.$(GK_SYSTEM) in Makefiles/ directory, you must tell "make" 
 command that you need to include some files in Makefiles/ directory. This can 
 be done by command line option
 
@@ -27,11 +28,11 @@ following,
 
 (tcsh)
  # setenv MAKEFLAGS -IMakefiles
- # setenv SYSTEM 'your system'
+ # setenv GK_SYSTEM 'your system'
 
 (bash)
  # export MAKEFLAGS=-IMakefiles
- # export SYSTEM='your system'
+ # export GK_SYSTEM='your system'
 
 For utils and geo directories in gs2, do as follows,
 
@@ -181,8 +182,8 @@ you may add the following line to your .emacs file:
 
 * Porting
 
-Users of a new system needs to prepare Makefile.$(SYSTEM) in Makefiles/
-directory. SYSTEM can be whatever you like, but we recommend to use hostname.
+Users of a new system needs to prepare Makefile.$(GK_SYSTEM) in Makefiles/
+directory. GK_SYSTEM can be whatever you like, but we recommend to use hostname.
 In this file, most simply, you just needs to set your compiler
 and to include your compiler's setting as written in Makefile.simple.
 If you want to get parallelized version, override FC by mpif90 etc after
