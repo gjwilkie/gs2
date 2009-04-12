@@ -1,18 +1,25 @@
 #################################################################### OVERVIEW
 #
-#  Makefile for the GS2/AstroGK Gyrokinetic Turbulence code 
+#  Makefile for Trinity (GS2) / AstroGK Gyrokinetic Turbulence code 
+#               rmhdper reduced MHD code
+#
 #  (requires GNU's gmake)
 #
 #PROJECT ?= trinity
 PROJECT ?= gs2
 #PROJECT ?= agk
+#PROJECT ?= rmhdper
 #
 #  Makefile written by Bill Dorland and Ryusuke Numata
 #
-#  LAST UPDATE: 01/26/09
+#  LAST UPDATE: 04/11/09
 #
 # * Changelogs
+#	04/11/09: * share the Makefile with rmhdper reduced MHD code
+#		  * include progject specific target definitions
+#		    Makefile.target_$(PROJECT)
 #	04/06/09: SYSTEM environment variable is replaced by GK_SYSTEM
+#	02/25/09: gs2 replaced by trinity (MAB)
 #	01/26/09: USE_C_INDEX is imported to gs2 by TT
 #       12/11/08: add support for NAGWare and Lahey compilers
 #       10/28/08: some non-standard macros respect environment variables
@@ -74,7 +81,7 @@ USE_NETCDF ?= new
 USE_HDF5 ?=
 # uses MDSplus (bin)
 USE_MDSPLUS ?=
-# Use function pointer in agk_layouts_indices.c (bin)
+# Use function pointer in layouts_indices.c (bin)
 # see also README.cpp
 USE_C_INDEX ?= 
 # Use Numerical Recipes local random number generator (bin)
@@ -175,6 +182,12 @@ sinclude Makefile.local
 
 UTILS=utils
 GEO=geo
+
+ifeq ($(PROJECT),rmhdper)
+	override USE_MPI =
+	override USE_FFT = fftw
+	override USE_HDF5 =
+endif
 
 ifeq ($(MAKECMDGOALS),depend)
 # must invoke full functionality when make depend
@@ -338,7 +351,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all trinity_all gs2_all agk_all
+.PHONY: all $(PROJECT)_all
 
 all: $(.DEFAULT_GOAL)
 
@@ -349,46 +362,7 @@ astrogk_mod += layouts_indices.o
 gs2_mod += layouts_indices.o
 endif
 
-trinity_all: modules trinity ingen rungridgen
-
-trinity: $(trinity_mod) 
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-trinity.x: $(trinity_mod) 
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-gs2_all: modules gs2 ingen rungridgen
-
-gs2: $(gs2_mod) 
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-gs2.x: $(gs2_mod) 
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-agk_all: agk
-
-agk: $(astrogk_mod) 
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-agk.x: $(astrogk_mod) 
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-ingen: $(ingen_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-rungridgen: $(rungridgen_mod)
-	$(LD) $(LDFLAGS) -o $@ $^
-
-regress: $(drive_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-slice_g: $(slice_g_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-agk_fields_plot: $(agk_fields_plot_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(PLIBS)
-tearing_diag: $(tearing_diag_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+sinclude Makefile.target_$(PROJECT)
 
 .PHONY: modules utils_all geo_all
 
@@ -456,14 +430,10 @@ depend:
 clean:
 	-rm -f *.o *.mod *.g90 *.h core */core
 
-distclean: unlink clean
-	-rm -f $(PROJECT)
+cleanlib:
 	-rm -f *.a
-	-rm -f ingen rungridgen regress
-	-rm -f ball eiktest
-	-rm -f slice_g
-	-rm -f agk_fields_plot
-	-rm -f tearing_diag
+
+distclean: unlink clean cleanlib
 
 tar:
 	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
