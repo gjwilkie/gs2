@@ -117,10 +117,12 @@ contains
   subroutine finish_gs2
 
     use antenna, only: finish_antenna
+    use collisions, only: finish_collisions
 
     implicit none
 
     call finish_antenna
+    call finish_collisions
 
   end subroutine finish_gs2
 

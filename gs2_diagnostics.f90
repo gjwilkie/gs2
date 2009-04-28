@@ -2051,26 +2051,34 @@ contains
           dl_over_b = delthet(-ntg_out:ntg_out)*jacob(-ntg_out:ntg_out)
           dl_over_b = dl_over_b / sum(dl_over_b)
 
-          do is = 1, nspec
-             do it = 1, ntheta0
-                ntot00(it, is)   = sum( ntot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                density00(it,is) = sum(density(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-!                upar00(it, is)   = sum( upar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                upar00(it, is)   = sum( upartot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-!                tpar00(it, is)   = sum( tpar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                tpar00(it, is)   = sum( ttot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-!                tperp00(it, is)  = sum(tperp(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                tperp00(it, is)  = sum(uperptot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-             end do
-          end do
-          
           if (test_conserve) then
+             do is = 1, nspec
+                do it = 1, ntheta0
+                   ntot00(it, is)   = sum( ntot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                   density00(it,is) = sum(density(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                   upar00(it, is)   = sum( upartot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                   tpar00(it, is)   = sum( ttot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                   tperp00(it, is)  = sum(uperptot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                end do
+             end do
              if (nspec == 1) then
-                write (out_unit, *) 'moms', t, real(ntot00(1,1)), aimag(upar00(1,1)), real(tperp00(1,1)), real(tpar00(1,1))
+                write (out_unit, *) 'moms', t, real(ntot00(1,1)), aimag(upar00(1,1)), real(tperp00(1,1)), &
+                     real(tpar00(1,1))
              else
-                write (out_unit, *) 'moms', t, real(ntot00(1,1)), real(ntot00(1,2)), aimag(upar00(1,1)), aimag(upar00(1,2)), &
-                     aimag(tperp00(1,1)), aimag(tperp00(1,2)), real(tpar00(1,1)), real(tpar00(1,2))
+                write (out_unit, *) 'moms', t, real(ntot00(1,1)), real(ntot00(1,2)), aimag(upar00(1,1)), &
+                     aimag(upar00(1,2)), aimag(tperp00(1,1)), aimag(tperp00(1,2)), real(tpar00(1,1)), &
+                     real(tpar00(1,2))
              end if
+          else
+             do is = 1, nspec
+                do it = 1, ntheta0
+                   ntot00(it, is)   = sum( ntot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                   density00(it,is) = sum(density(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                   upar00(it, is)   = sum( upar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                   tpar00(it, is)   = sum( tpar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                   tperp00(it, is)  = sum(tperp(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                end do
+             end do
           end if
 
           do it = 1, ntheta0

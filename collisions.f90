@@ -5,7 +5,7 @@ module collisions
 
   implicit none
 
-  public :: init_collisions
+  public :: init_collisions, finish_collisions
   public :: solfp1
   public :: reset_init
   public :: dtot, fdf, fdb, lorentz_map, vnmult, vnfac
@@ -79,7 +79,7 @@ module collisions
   ! (-ntgrid:ntgrid, -*- geint_layout -*-)
 
   ! for conservation of momentum and energy
-  complex, dimension (:,:,:,:), allocatable :: parfac, perpfac, efac
+!  complex, dimension (:,:,:,:), allocatable :: parfac, perpfac, efac
   ! (-ntgrid:ntgrid,ntheta0,naky,nspec)
 
   ! only for momentum conservation due to Lorentz operator (8.06)
@@ -110,6 +110,8 @@ module collisions
 
   logical :: hypermult
   logical :: initialized = .false.
+  logical :: ediffinit = .false.
+  logical :: lzinit = .false.
   logical :: accelerated_x = .false.
   logical :: accelerated_v = .false.
 
@@ -265,12 +267,13 @@ contains
     implicit none
 
     real, dimension (negrid,nspec) :: hee
-    logical :: first_time = .true.
+!    logical :: first_time = .true.
 
-    if (first_time) then
+!    if (first_time) then
+    if (.not. allocated(c_rate)) then
        allocate (c_rate(-ntgrid:ntgrid, ntheta0, naky, nspec, 3))
        c_rate = 0.
-       first_time = .false.
+!       first_time = .false.
     end if
 
     if (collision_model_switch == collision_model_none) return
@@ -320,7 +323,7 @@ contains
     
     implicit none
     
-    logical, save :: first = .true.
+!    logical, save :: first = .true.
     complex, dimension (1,1,1) :: dum1 = 0., dum2 = 0.
     complex, dimension (:,:,:), allocatable :: gtmp
     complex, dimension (:,:,:,:), allocatable :: duinv, dtmp
@@ -330,11 +333,12 @@ contains
 ! TO DO: 
 ! tunits not included anywhere yet
 
-    if (first) then
+!    if (first) then
+    if (.not. allocated(z0)) then
        allocate (z0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (w0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (s0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       first = .false.
+!       first = .false.
     end if
     
     allocate (gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -660,7 +664,7 @@ contains
 
     implicit none
 
-    logical, save :: first = .true.
+!    logical, save :: first = .true.
     complex, dimension (:,:,:), allocatable :: gtmp
     complex, dimension (:,:,:,:), allocatable :: duinv, dtmp
     real, dimension (:,:,:,:), allocatable :: vns
@@ -669,11 +673,12 @@ contains
 ! TO DO: 
 ! tunits not included anywhere yet
 
-    if (first) then
+!    if (first) then
+    if (.not. allocated(bz0)) then
        allocate (bz0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (bw0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (bs0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       first = .false.
+!       first = .false.
     end if
 
     allocate (gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -1341,12 +1346,12 @@ contains
     real :: fg, dtzet, sig, eta, delp, delm, del
     real :: capgl, capgr, slb1, ee, eea, eeb
 !    real :: erf ! this is needed for PGI: RN
-    logical :: first_time = .true.
+!    logical :: first_time = .true.
 
-    if (first_time) then
-       vnmult(2) = max(1.0, vnmult(2))
-       first_time = .false.
-    end if
+!    if (first_time) then
+!       vnmult(2) = max(1.0, vnmult(2))
+!       first_time = .false.
+!    end if
 
     call init_ediffuse_layouts &
          (ntgrid, naky, ntheta0, nlambda, nspec)
@@ -1369,6 +1374,7 @@ contains
        allocate (erc1   (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
        allocate (ebetaa (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
        allocate (eql    (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
+       vnmult(2) = max(1.0, vnmult(2))
     endif
 
     if (present(vnmult_target)) then
@@ -1684,9 +1690,9 @@ contains
     integer :: to_low
     integer :: ig, isign, iglo, ik, it, il, ie, is, ielo
     integer :: n, ip
-    logical :: done = .false.
+!    logical :: ediffinit = .false.
 
-    if (done) return
+    if (ediffinit) return
 
     call init_ediffuse_layouts &
          (ntgrid, naky, ntheta0, nlambda, nspec)
@@ -1773,7 +1779,7 @@ contains
     call delete_list (to_list)
     call delete_list (from_list)
 
-    done = .true.
+    ediffinit = .true.
 
   end subroutine init_ediffuse_redistribute
 
@@ -1802,14 +1808,14 @@ contains
     real :: slb0, slb1, slb2, slbl, slbr, vn, ee, vnh, vnc
     real :: wslb, eta, mu, capg, delp, delm, del, wll
     real :: eea, eeb
-    logical :: first_time = .true.
+!    logical :: first_time = .true.
 
     if (heating) allocate (dd(nlambda+1), hh(nlambda+1))
 
-    if (first_time) then
-       vnmult(1) = max(1.0, vnmult(1))
-       first_time = .false.
-    end if
+!    if (first_time) then
+!       vnmult(1) = max(1.0, vnmult(1))
+!       first_time = .false.
+!    end if
 
     call init_lorentz_layouts &
          (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
@@ -1828,6 +1834,7 @@ contains
           allocate (h1   (max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
           d1 = 0.0 ; h1 = 0.0
        end if
+       vnmult(1) = max(1.0, vnmult(1))
        if (conservative) then
           allocate (vpdiff(-ntgrid:ntgrid,2,nlambda))
           vpdiff = 0.0
@@ -2652,9 +2659,9 @@ contains
     integer :: ik, it, ie, is, je
 ! <TT
     integer :: n, ip
-    logical :: done = .false.
+!    logical :: done = .false.
 
-    if (done) return
+    if (lzinit) return
 
     call init_lorentz_layouts &
          (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
@@ -2768,7 +2775,7 @@ contains
     call delete_list (to_list)
     call delete_list (from_list)
 
-    done = .true.
+    lzinit = .true.
 
   end subroutine init_lorentz_redistribute
 
@@ -2795,8 +2802,6 @@ contains
 
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, upar, uperp, ttot
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntotnew, uparnew, uperpnew, ttotnew
-
-    logical :: first = .true.
 
     if (collision_model_switch == collision_model_none) return
 
@@ -3281,8 +3286,6 @@ contains
     complex :: fac, gwfb
     integer :: iglo, igint, ilz, ig, ik, il, is, je, it, ie
 
-    logical :: first = .true.
-    
     call prof_entering ("solfp_lorentz", "collisions")
 
     allocate (glz(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
@@ -3371,7 +3374,7 @@ contains
              glz(il,ilz) = ra1(il,ilz)*glz0(il-1) + rb1(il,ilz)*glz0(il) + rc1(il,ilz)*glz0(il+1)
           end do
        else
-          glz(:je-1,ilz) = glz0
+          glz(:je-1,ilz) = glz0(:je-1)
        end if
 
        glz(je:,ilz) = 0.0
@@ -3558,6 +3561,36 @@ contains
     initialized = .false.  
 
   end subroutine reset_init
+
+  subroutine finish_collisions
+
+    use dist_fn_arrays, only: c_rate
+
+    implicit none
+
+    vnmult = 0.0
+    accelerated_x = .false. ; accelerated_v = .false.
+    ediffinit = .false. ; lzinit = .false.
+    call reset_init
+
+    if (allocated(c_rate)) deallocate (c_rate)
+    if (allocated(z0)) deallocate (z0, w0, s0)
+    if (allocated(bz0)) deallocate (bz0, bw0, bs0)
+    if (allocated(vnew)) deallocate (vnew, vnew_s, vnew_D, vnew_E, delvnew)
+    if (allocated(vnewh)) deallocate (vnewh)
+    if (allocated(sq)) deallocate (sq)
+    if (allocated(g3int)) deallocate (g3int)
+    if (allocated(aintnorm)) deallocate (aintnorm)
+    if (allocated(vnewfe)) deallocate (vnewfe)
+    if (allocated(ec1)) deallocate (ec1, era1, erb1, erc1, ebetaa, eql)
+    if (allocated(c1)) then
+       deallocate (c1, ra1, rb1, rc1, betaa, ql)
+       if (heating) deallocate (d1, h1)
+    end if
+    if (allocated(vpdiff)) deallocate (vpdiff)
+    if (allocated(dtot)) deallocate (dtot, fdf, fdb)
+
+  end subroutine finish_collisions
 
 end module collisions
 
