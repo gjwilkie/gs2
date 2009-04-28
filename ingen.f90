@@ -71,7 +71,7 @@ program ingen
   real :: vncoef, absom, cfac_nu
   integer :: ivnew
   character (20) :: collision_model
-  logical :: conserve_number, conserve_momentum, use_shmem, hypercoll
+  logical :: conserve_number, conserve_momentum, hypercoll
   logical :: heating
   integer, parameter :: collision_model_lorentz = 1
   integer, parameter :: collision_model_krook = 2
@@ -463,7 +463,7 @@ program ingen
 
 ! collisions: 
   namelist /collisions_knobs/ collision_model, vncoef, absom, ivnew, &
-       conserve_number, conserve_momentum, use_shmem, hypercoll, cfac, heating
+       conserve_number, conserve_momentum, hypercoll, cfac, heating
 
 ! init_g:
   namelist /init_g_knobs/ ginit_option, width0, phiinit, k0, chop_side, &

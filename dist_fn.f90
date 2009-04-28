@@ -35,7 +35,7 @@ module dist_fn
   real :: t0, omega0, gamma0, thetas, source0
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
-  real :: D_kill, noise, cfac, wfb, g_exb
+  real :: D_kill, noise, wfb, g_exb
 
   integer :: adiabatic_option_switch!, heating_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -58,7 +58,7 @@ module dist_fn
        boundary_option_alternate_zero = 3, &
        boundary_option_linked = 4
   logical :: mult_imp, test, def_parity, even
-  logical :: save_n, save_u, save_Tpar, save_Tperp, flr
+  logical :: save_n
   logical :: accelerated_x = .false.
   logical :: accelerated_v = .false., kill_grid, h_kill
   logical :: neo = .false., neoflux
@@ -255,7 +255,7 @@ contains
     namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, &
          nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, flr, cfac, &
+         save_n, D_kill, noise, &
          kill_grid, h_kill, g_exb, neoflux
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
@@ -269,12 +269,7 @@ contains
     done = .true.
 
     if (proc0) then
-       cfac = 1.0
-       flr = .true.
        save_n = .true.
-       save_u = .true.
-       save_Tpar = .true.
-       save_Tperp = .true.
        boundary_option = 'default'
        adiabatic_option = 'default'
        poisfac = 0.0
@@ -334,13 +329,8 @@ contains
     if (proc0) call read_species_knobs
     neoflux = neoflux .or. source_option_switch == source_option_neo
 
-    call broadcast (cfac)
     call broadcast (kill_grid)
-    call broadcast (flr)
     call broadcast (save_n)
-    call broadcast (save_u)
-    call broadcast (save_Tpar)
-    call broadcast (save_Tperp)
     call broadcast (boundary_option_switch)
     call broadcast (adiabatic_option_switch)
 !    call broadcast (heating_option_switch)

@@ -1344,8 +1344,10 @@ contains
 
     exit = .false.
 
-    if (proc0) call get_omegaavg (istep, exit, omegaavg)
-    call broadcast (exit)
+    if (.not. nonlin) then
+       if (proc0) call get_omegaavg (istep, exit, omegaavg)
+       call broadcast (exit)
+    end if
 
     if (write_hrate) call heating (istep, h, hk)
 
