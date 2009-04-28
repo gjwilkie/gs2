@@ -18,17 +18,18 @@ module collisions
   private
 
   ! knobs
+!> only needed for krook
   real :: vncoef, absom
   integer :: ivnew
-  logical :: conserve_number, conserve_momentum, const_v, conserve_moments
-  logical :: conservative
-  logical :: test_mom_conserve, resistivity
+  logical :: conserve_number, conserve_momentum
+!<
+  logical :: const_v, conserve_moments
+  logical :: conservative, resistivity
   integer :: collision_model_switch
   integer :: lorentz_switch, ediff_switch
-  logical :: use_shmem, adjust
+  logical :: adjust
   logical :: heating
   logical :: hyper_colls
-  logical :: diffuse_energy
   logical :: ei_coll_only
 
   integer, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
@@ -164,19 +165,23 @@ contains
             text_option('compact', ediff_scheme_compact), &
             text_option('old', ediff_scheme_old) /)
     character(20) :: collision_model, lorentz_scheme, ediff_scheme
-    namelist /collisions_knobs/ collision_model, vncoef, absom, ivnew, &
-         conserve_number, conserve_momentum, use_shmem, heating, &
-         adjust, const_v, cfac, hypermult, diffuse_energy, vnfac, &
-         etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, &
-         test_mom_conserve, conserve_moments, lorentz_scheme, ediff_scheme, &
-         resistivity, conservative, &
-         ei_coll_only
+    namelist /collisions_knobs/ collision_model, conserve_moments, &
+         heating, adjust, const_v, cfac, hypermult, ei_coll_only, &
+         lorentz_scheme, ediff_scheme, resistivity, conservative, &
+! following only needed for adaptive collisionality
+         vnfac, etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, &
+! following only needed for krook
+         vncoef, absom, ivnew, conserve_number, conserve_momentum
     integer :: ierr, in_file
     logical :: exist
 
     if (proc0) then
+       collision_model = 'default'
+       conserve_moments = .true.  ! DEFAULT CHANGED TO REFLECT IMPROVED MOMENTUM AND ENERGY CONSERVATION 7/08
        hypermult = .false.
        cfac = 1.   ! DEFAULT CHANGED TO INCLUDE CLASSICAL DIFFUSION: APRIL 18, 2006
+!> following only used with adaptive collisionality
+       vary_vnew = .false.
        vnfac = 1.1
        vnslow = 0.9
        etol = 2.e-2
@@ -184,21 +189,19 @@ contains
        etola = 2.e-2
        ewindowa = 1.e-2
        ncheck = 100
+!<
        adjust = .true.
-       collision_model = 'default'
        lorentz_scheme = 'default'
        ediff_scheme = 'default'
+!> following only needed for krook
        vncoef = 0.6
        absom = 0.5
        ivnew = 0
        conserve_number = .true.
        conserve_momentum = .true.  ! DEFAULT CHANGED TO REFLECT IMPROVED MOMENTUM CONSERVATION, 8/06
-       conserve_moments = .true.  ! DEFAULT CHANGED TO REFLECT IMPROVED MOMENTUM AND ENERGY CONSERVATION 7/08
+!>
        conservative = .true.
-       resistivity = .false.
-       test_mom_conserve = .false.
-       diffuse_energy = .false.
-       vary_vnew = .false.
+       resistivity = .true.
        const_v = .false.
        heating = .false.
        ei_coll_only = .false.
@@ -222,6 +225,7 @@ contains
 
     call broadcast (hypermult)
     call broadcast (cfac)
+!> only need for adaptive collisionality
     call broadcast (vnfac)
     call broadcast (vnslow)
     call broadcast (vary_vnew)
@@ -230,16 +234,17 @@ contains
     call broadcast (etola)
     call broadcast (ewindowa)
     call broadcast (ncheck)
+!<
+!> only needed for krook
     call broadcast (vncoef)
     call broadcast (absom)
     call broadcast (ivnew)
     call broadcast (conserve_number)
     call broadcast (conserve_momentum)
+!<
     call broadcast (conservative)
     call broadcast (conserve_moments)
     call broadcast (resistivity)
-    call broadcast (test_mom_conserve)
-    call broadcast (diffuse_energy)
     call broadcast (const_v)
     call broadcast (collision_model_switch)
     call broadcast (lorentz_switch)
@@ -341,7 +346,7 @@ contains
     vns(:,:,:,2) = vnmult(1)*vnew_s
     vns(:,:,:,3) = 0.0
 
-    if (resistivity) then
+    if (resistivity .and. nspec > 1) then
        do is = 1, nspec
           if (spec(is)%type /= electron_species) cycle
           do ik = 1, naky
@@ -724,7 +729,6 @@ contains
 ! Now get v0z0
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -2820,7 +2824,7 @@ contains
        call solfp_ediffuse (g)
        if (conserve_moments) call conserve_diffuse (g, g1)
 
-       if (resistivity .and. beta > epsilon(0.0)) then
+       if (resistivity .and. beta > epsilon(0.0) .and. nspec > 1) then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              is = is_idx(g_lo,iglo)
              if (spec(is)%type /= electron_species) cycle
@@ -2844,7 +2848,7 @@ contains
 
     case (collision_model_lorentz,collision_model_lorentz_test)
 
-       if (resistivity .and. beta > epsilon(0.0)) then
+       if (resistivity .and. beta > epsilon(0.0) .and. nspec > 1) then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              is = is_idx(g_lo,iglo)
              if (spec(is)%type /= electron_species) cycle
@@ -3029,7 +3033,9 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
     use le_grids, only: e, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
-    
+
+    implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
     complex, dimension (:,:,:), allocatable :: gtmp
     complex, dimension (:,:,:,:), allocatable :: v0y0, v1y1, v2y2
@@ -3107,7 +3113,6 @@ contains
 ! Now get v2y2
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
@@ -3359,11 +3364,15 @@ contains
           glz0 = glz(:,ilz)
        end if
 
-       glz(1,ilz) = rb1(1,ilz)*glz0(1) + rc1(1,ilz)*glz0(2)
-       glz(je-1,ilz) = ra1(je-1,ilz)*glz0(je-2) + rb1(je-1,ilz)*glz0(je-1)
-       do il = 2, je-2
-          glz(il,ilz) = ra1(il,ilz)*glz0(il-1) + rb1(il,ilz)*glz0(il) + rc1(il,ilz)*glz0(il+1)
-       end do
+       if (lorentz_switch == lorentz_scheme_compact) then
+          glz(1,ilz) = rb1(1,ilz)*glz0(1) + rc1(1,ilz)*glz0(2)
+          glz(je-1,ilz) = ra1(je-1,ilz)*glz0(je-2) + rb1(je-1,ilz)*glz0(je-1)
+          do il = 2, je-2
+             glz(il,ilz) = ra1(il,ilz)*glz0(il-1) + rb1(il,ilz)*glz0(il) + rc1(il,ilz)*glz0(il+1)
+          end do
+       else
+          glz(:je-1,ilz) = glz0
+       end if
 
        glz(je:,ilz) = 0.0
 
@@ -3458,13 +3467,15 @@ contains
 
        if (spec(is)%vnewk < 2.0*epsilon(0.0) .or. forbid(ig,il)) cycle
 
-       ged0(1) = erb1(1,ielo)*ged(1,ielo) + erc1(1,ielo)*ged(2,ielo)
-       do ie = 2, negrid-1
-          ged0(ie) = era1(ie,ielo)*ged(ie-1,ielo) + erb1(ie,ielo)*ged(ie,ielo) + erc1(ie,ielo)*ged(ie+1,ielo)
-       end do
-       ged0(negrid) = era1(negrid,ielo)*ged(negrid-1,ielo) + erb1(negrid,ielo)*ged(negrid,ielo)
+       if (ediff_switch == ediff_scheme_compact) then
+          ged0(1) = erb1(1,ielo)*ged(1,ielo) + erc1(1,ielo)*ged(2,ielo)
+          do ie = 2, negrid-1
+             ged0(ie) = era1(ie,ielo)*ged(ie-1,ielo) + erb1(ie,ielo)*ged(ie,ielo) + erc1(ie,ielo)*ged(ie+1,ielo)
+          end do
+          ged0(negrid) = era1(negrid,ielo)*ged(negrid-1,ielo) + erb1(negrid,ielo)*ged(negrid,ielo)
 
-       ged(:,ielo) = ged0
+          ged(:,ielo) = ged0
+       end if
 
        delta(1) = ged(1,ielo)
        do ie = 1, negrid-1
