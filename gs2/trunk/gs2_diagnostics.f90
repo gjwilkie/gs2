@@ -100,6 +100,9 @@ module gs2_diagnostics
   ! (ntheta0,naky,nspec)
 
   integer :: ntg_out
+  integer :: nout = 1
+  integer :: nout_movie = 1
+  complex :: wtmp_old = 0.
 
 contains
 
@@ -110,7 +113,7 @@ contains
     use species, only: init_species, nspec
     use dist_fn, only: init_dist_fn
     use init_g, only: init_init_g
-    use gs2_flux, only: init_gs2_flux
+!    use gs2_flux, only: init_gs2_flux
     use gs2_io, only: init_gs2_io
     use gs2_heating, only: init_htype,init_dvtype
     use collisions, only: collision_model_switch, init_lorentz_error
@@ -131,7 +134,7 @@ contains
     call init_species
     call init_init_g
     call init_dist_fn
-    call init_gs2_flux
+!    call init_gs2_flux
 
     call real_init (list)
     call broadcast (navg)
@@ -349,7 +352,7 @@ contains
   subroutine read_parameters (list)
     use file_utils, only: input_unit, input_unit_exist
     use theta_grid, only: nperiod, ntheta
-    use gs2_flux, only: gs2_flux_adjust
+!    use gs2_flux, only: gs2_flux_adjust
     use dist_fn, only: nperiod_guard
     use kt_grids, only: box, nx, ny
     use mp, only: proc0
@@ -476,8 +479,8 @@ contains
             .or. write_fieldline_avg_phi           .or. write_neoclassical_flux &
             .or. write_flux_line                   .or. write_nl_flux .or. write_Epolar &
             .or. write_kpar   .or. write_hrate     .or. write_lorentzian  .or. write_gs
-       write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux &
-            .or. gs2_flux_adjust
+       write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux !&
+!            .or. gs2_flux_adjust
        dump_any = dump_neoclassical_flux .or. dump_check1  .or. dump_fields_periodically &
             .or. dump_check2 .or. make_movie .or. print_summary &
             .or. write_full_moments_notgc
@@ -514,6 +517,7 @@ contains
     use gs2_io, only: nc_final_moments, nc_finish
     use antenna, only: dump_ant_amp
     use splines, only: fitp_surf1, fitp_surf2
+    use gs2_heating, only: del_htype, del_dvtype
 !    use gs2_dist_io, only: write_dist
     implicit none
     integer, intent (in) :: istep
@@ -1255,7 +1259,30 @@ contains
           write (g_unit,1000) theta(i),Rplot(i),Zplot(i),aplot(i), &
                Rprime(i),Zprime(i),aprime(i)
        enddo
+       call close_output_file (g_unit)
     end if
+
+    if (write_hrate) then
+       call del_htype (h)
+       call del_htype (h_hist)
+       call del_htype (hk_hist)
+       call del_htype (hk)
+    end if
+    if (write_density_velocity) then
+       call del_dvtype (dv_hist)
+       call del_dvtype (dvk_hist)
+    end if
+    if (allocated(h_hist)) deallocate (h_hist, hk_hist, hk)
+    if (allocated(dv_hist)) deallocate (dv_hist, dvk_hist)
+    if (allocated(j_ext_hist)) deallocate (j_ext_hist)
+    if (allocated(omegahist)) deallocate (omegahist)
+    if (allocated(pflux)) deallocate (pflux, qheat, vflux, pmflux, qmheat, vmflux, &
+         pbflux, qbheat, vbflux, theta_pflux, theta_vflux, theta_qflux, theta_pmflux, &
+         theta_vmflux, theta_qmflux, theta_pbflux, theta_vbflux, theta_qbflux)
+    if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
+
+    wtmp_old = 0. ; nout = 1 ; nout_movie = 1
+    initialized = .false.
 
 1000  format(20(1x,1pg18.11))
   end subroutine finish_gs2_diagnostics
@@ -1287,13 +1314,14 @@ contains
     use le_grids, only: nlambda, ng2
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
-    use gs2_flux, only: check_flux
-    use gs2_heating, only: heating_diagnostics, init_htype, del_htype, &
+!    use gs2_flux, only: check_flux
+    use gs2_heating, only: heating_diagnostics, del_htype, &
          dens_vel_diagnostics,init_dvtype, del_dvtype
     use constants
+
     implicit none
-    integer :: nout = 1
-    integer :: nout_movie = 1
+!    integer :: nout = 1
+!    integer :: nout_movie = 1
     integer, intent (in) :: istep
     logical, intent (out) :: exit
     real, dimension(:,:,:), allocatable :: yxphi, yxapar, yxbpar
@@ -1324,7 +1352,7 @@ contains
     complex, dimension (ntheta0, nspec) :: rstress, ustress
     complex, dimension (ntheta0) :: phi00
     complex, save :: wtmp_new
-    complex :: wtmp_old = 0.
+!    complex :: wtmp_old = 0.
     real, dimension (:), allocatable :: dl_over_b
     real, dimension (ntheta0, nspec) :: x_qmflux
     real, dimension (nspec) ::  heat_fluxes,  part_fluxes, mom_fluxes,  ntot2, ntot20
@@ -1637,7 +1665,7 @@ contains
     end if
 
     i=istep/nwrite
-    call check_flux (i, t, heat_fluxes)
+!    call check_flux (i, t, heat_fluxes)
 ! Polar spectrum calculation----------------------------------------------
     if (write_Epolar .and. proc0) then
        ebinarray(:,:)=0.

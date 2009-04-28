@@ -6,7 +6,7 @@ module fields
 
   implicit none
 
-  public :: init_fields
+  public :: init_fields, finish_fields
   public :: advance
   public :: phinorm, kperp, fieldlineavgphi
   public :: phi, apar, bpar, phinew, aparnew, bparnew
@@ -115,9 +115,10 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     implicit none
-    logical :: alloc = .true.
+!    logical :: alloc = .true.
 
-    if (alloc) then
+!    if (alloc) then
+    if (.not. allocated(phi)) then
        allocate (     phi (-ntgrid:ntgrid,ntheta0,naky))
        allocate (    apar (-ntgrid:ntgrid,ntheta0,naky))
        allocate (   bpar (-ntgrid:ntgrid,ntheta0,naky))
@@ -140,7 +141,7 @@ contains
 !    phi_ext = 0.
     apar_ext = 0.
 
-    alloc = .false.
+!    alloc = .false.
   end subroutine allocate_arrays
 
   subroutine advance (istep)
@@ -260,5 +261,23 @@ contains
     end if
     told = tnew
   end subroutine timer
+
+  subroutine finish_fields
+
+    use fields_implicit, only: implicit_reset => reset_init
+    use fields_test, only: test_reset => reset_init
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use fields_arrays, only: phitmp, apartmp, bpartmp, apar_ext
+
+    implicit none
+
+    call reset_init
+    call implicit_reset
+    call test_reset
+
+    if (allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew, &
+         phitmp, apartmp, bpartmp, apar_ext)
+
+  end subroutine finish_fields
 
 end module fields

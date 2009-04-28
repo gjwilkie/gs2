@@ -254,6 +254,7 @@ contains
          close (unit=debug_unit)
       end if
       
+      deallocate (bmagspl)
       deallocate (thetastart)
       deallocate (bmagstart)
       deallocate (bmin,bmax,bextr,thetaextr,bprime)

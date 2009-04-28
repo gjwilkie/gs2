@@ -6,7 +6,7 @@ program gs2
 !  use mp, only: send, receive, barrier, job
   use file_utils, only: init_file_utils, finish_file_utils, run_name, list_name
   use fields, only: init_fields
-  use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
+  use gs2_diagnostics, only: init_gs2_diagnostics
   use gs2_diagnostics, only: nsave
   use run_parameters, only: nstep
   use run_parameters, only: fphi, fapar, fbpar
@@ -63,6 +63,7 @@ program gs2
   call init_fields
   call init_gs2_diagnostics (list, nstep)
   call init_tstart (tstart)   ! tstart is in user units 
+
   if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
   istep_end = nstep
 
@@ -71,6 +72,7 @@ program gs2
   do istep = 1, nstep
 
      call advance (istep)
+
      if (nsave > 0 .and. mod(istep, nsave) == 0) &
           call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
      
@@ -91,7 +93,7 @@ program gs2
   end do
   if (proc0) call write_dt
 
-  call finish_gs2_diagnostics (istep_end)
+  call finish_gs2 (istep_end)
   if (proc0) call finish_file_utils
   if (proc0) then
      call time_message(.false., .false., time_finish,'Finished run')
@@ -109,20 +111,27 @@ program gs2
        time_finish/60.,time_finish/time_total,time_total/60.
   endif
 
-  call finish_gs2
   call finish_mp
 
 contains
 
-  subroutine finish_gs2
+  subroutine finish_gs2 (istep_end)
 
     use antenna, only: finish_antenna
     use collisions, only: finish_collisions
+    use dist_fn, only: finish_dist_fn
+    use fields, only: finish_fields
+    use gs2_diagnostics, only: finish_gs2_diagnostics
 
     implicit none
 
+    integer, intent (in) :: istep_end
+
+    call finish_gs2_diagnostics (istep_end)
     call finish_antenna
     call finish_collisions
+    call finish_dist_fn
+    call finish_fields
 
   end subroutine finish_gs2
 
