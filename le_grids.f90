@@ -1508,6 +1508,9 @@ contains
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, idx, idx_local
     use mp, only: sum_reduce, proc0
+
+    ! TMP FOR TESTING -- MAB
+    use mp, only: barrier
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (0:,-ntgrid:,:,:,:), intent (out) :: tote, totl
@@ -1529,6 +1532,7 @@ contains
     if (first) then
        allocate(lpltmp(ng2,0:ng2-1))
        allocate(lpl(nlambda,0:ng2-1))
+
        if (vgrid) then
           lpesize = nesub
           allocate(lpe(negrid,0:lpesize-1)) ; lpe = 0.0
@@ -1629,8 +1633,21 @@ contains
     if (nproc > 1) then
        allocate (worke((2*ntgrid+1)*naky*ntheta0*nspec*lpesize)) ; worke = 0.
        allocate (workl((2*ntgrid+1)*naky*ntheta0*nspec*ng2)) ; workl = 0.
-       if (present(tott)) allocate (workt((2*ntgrid+1)*naky*ntheta0*nspec*(2*(nlambda-ng2)-1))) ; workt = 0.
+!       call barrier
+!       write (*,*) 'pre-allocworkt'
+!       call barrier
+
+       if (present(tott)) then
+          allocate (workt((2*ntgrid+1)*naky*ntheta0*nspec*(2*(nlambda-ng2)-1)))
+          workt = 0.
+       end if
+
        i = 0 ; j = 0 ; k = 0
+
+!       call barrier
+!       write (*,*) 'pre-do'
+!       call barrier
+
        do is = 1, nspec
           do ik = 1, naky
              do it = 1, ntheta0

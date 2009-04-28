@@ -25,7 +25,7 @@ module gs2_heating
   end interface
 
   interface del_htype
-     module procedure del_htype_0, del_htype_2
+     module procedure del_htype_0, del_htype_1, del_htype_2, del_htype_3
   end interface
 
   !GGH
@@ -38,7 +38,7 @@ module gs2_heating
   end interface
 
   interface del_dvtype
-     module procedure del_dvtype_0, del_dvtype_2
+     module procedure del_dvtype_0, del_dvtype_1, del_dvtype_2, del_dvtype_3
   end interface
 
   type :: heating_diagnostics
@@ -314,6 +314,29 @@ contains
 
   end subroutine del_htype_0
 
+  subroutine del_htype_1 (h)
+
+    type (heating_diagnostics), dimension(:) :: h
+    integer :: m, mmax
+    
+    mmax = size (h, 1)
+    
+    do m=1,mmax
+       deallocate (h(m) % delfs2)
+       deallocate (h(m) % hs2)
+       deallocate (h(m) % phis2)
+       deallocate (h(m) % hypervisc)
+       deallocate (h(m) % hyperres)
+       deallocate (h(m) % hypercoll)
+       deallocate (h(m) % collisions)
+       deallocate (h(m) % imp_colls)
+       deallocate (h(m) % gradients)
+       !       deallocate (h(m,n) % curvature)
+       deallocate (h(m) % heating)
+    end do
+
+  end subroutine del_htype_1
+
   subroutine del_htype_2 (h)
 
     type (heating_diagnostics), dimension(:,:) :: h
@@ -339,6 +362,35 @@ contains
     end do
 
   end subroutine del_htype_2
+
+  subroutine del_htype_3 (h)
+
+    type (heating_diagnostics), dimension(:,:,:) :: h
+    integer :: l, m, n, lmax, mmax, nmax
+
+    lmax = size(h, 1)
+    mmax = size(h, 2)
+    nmax = size(h, 3)
+
+    do n = 1, nmax
+       do m = 1, mmax
+          do l = 1, lmax    
+             deallocate (h(l,m,n) % delfs2)      
+             deallocate (h(l,m,n) % hs2)      
+             deallocate (h(l,m,n) % phis2)      
+             deallocate (h(l,m,n) % hypervisc)   
+             deallocate (h(l,m,n) % hyperres)    
+             deallocate (h(l,m,n) % hypercoll)  
+             deallocate (h(l,m,n) % collisions)  
+             deallocate (h(l,m,n) % imp_colls)  
+             deallocate (h(l,m,n) % gradients)   
+             !    deallocate (h(l,m,n) % curvature)   
+             deallocate (h(l,m,n) % heating)     
+          end do
+       end do 
+    end do
+
+  end subroutine del_htype_3
 
   subroutine avg_h (h, h_hist, istep, navg)
 
@@ -715,6 +767,20 @@ contains
 
   end subroutine del_dvtype_0
 !=============================================================================
+  subroutine del_dvtype_1 (dv)
+    type (dens_vel_diagnostics), dimension(:) :: dv
+    integer :: m, mmax
+
+    mmax = size (dv, 1)
+
+    do m=1,mmax
+       deallocate (dv(m) % dvpar)
+       deallocate (dv(m) % dvperp)
+       deallocate (dv(m) % dn)
+    end do
+
+  end subroutine del_dvtype_1
+!=============================================================================
  subroutine del_dvtype_2 (dv)
 
     type (dens_vel_diagnostics), dimension(:,:) :: dv
@@ -732,6 +798,27 @@ contains
     end do
 
   end subroutine del_dvtype_2
+!=============================================================================
+ subroutine del_dvtype_3 (dv)
+
+    type (dens_vel_diagnostics), dimension(:,:,:) :: dv
+    integer :: l, lmax, m, mmax, n, nmax
+    
+    lmax = size (dv, 1)
+    mmax = size (dv, 2)
+    nmax = size (dv, 3)
+    
+    do l=1,lmax
+       do n=1,nmax
+          do m=1,mmax
+             deallocate (dv(l,m,n) % dvpar)
+             deallocate (dv(l,m,n) % dvperp)
+             deallocate (dv(l,m,n) % dn)
+          end do
+       end do
+    end do
+
+  end subroutine del_dvtype_3
 !=============================================================================
   subroutine avg_dv (dv, dv_hist, istep, navg)
     use mp, only: proc0
