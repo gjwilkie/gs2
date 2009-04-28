@@ -7,14 +7,14 @@ module antenna_data
   complex, dimension(:), allocatable :: a_ant, b_ant
   ! (nk_stir)
   integer :: nk_stir
-  logical :: ant_on = .false.
+  logical :: ant_on = .false., initialized = .false.
 
 contains
 
   subroutine init_antenna_data (nk_stir_in)
 
     integer, intent (in) :: nk_stir_in
-    logical :: initialized = .false.
+!    logical :: initialized = .false.
 
 ! do not reallocate this array on this processor...
 
@@ -34,4 +34,15 @@ contains
     allocate (b_ant(nk_stir))
 
   end subroutine init_antenna_data
+
+  subroutine finish_antenna_data
+
+    implicit none
+
+    ant_on = .false.
+    deallocate (a_ant, b_ant)
+    initialized = .false.
+
+  end subroutine finish_antenna_data
+
 end module antenna_data
