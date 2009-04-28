@@ -40,7 +40,7 @@ contains
     implicit none
 
     ant_on = .false.
-    deallocate (a_ant, b_ant)
+    if (allocated(a_ant)) deallocate (a_ant, b_ant)
     initialized = .false.
 
   end subroutine finish_antenna_data
