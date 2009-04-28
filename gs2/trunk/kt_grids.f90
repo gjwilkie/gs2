@@ -411,7 +411,7 @@ end module kt_grids_xbox
 module kt_grids
   implicit none
 
-  public :: init_kt_grids, box
+  public :: init_kt_grids, box, finish_kt_grids
   public :: aky, theta0, akx, akr
   public :: aky_out, akx_out, akr_out
   public :: naky, ntheta0, nx, ny, reality
@@ -434,6 +434,7 @@ module kt_grids
   integer, parameter :: normopt_mtk = 1, normopt_bd = 2
   logical :: reality = .false.
   logical :: box = .false.
+  logical :: initialized = .false.
 
 contains
 
@@ -445,7 +446,7 @@ contains
     real, optional, intent (out) :: tnorm
     integer :: ik, it
     real :: tfac = 1.0
-    logical, save :: initialized = .false.
+!    logical, save :: initialized = .false.
 
     if (present(tnorm)) tnorm = tfac
 
@@ -633,6 +634,17 @@ contains
     end select
 
   end subroutine get_grids
+
+  subroutine finish_kt_grids
+
+    implicit none
+
+    if (allocated(aky)) deallocate (aky, aky_out, theta0, akx, akx_out, akr, akr_out, ikx, iky)
+
+    reality = .false. ; box = .false.
+    initialized = .false.
+
+  end subroutine finish_kt_grids
 
 end module kt_grids
 

@@ -122,6 +122,9 @@ contains
     use dist_fn, only: finish_dist_fn
     use fields, only: finish_fields
     use gs2_diagnostics, only: finish_gs2_diagnostics
+    use hyper, only: finish_hyper
+    use init_g, only: finish_init_g
+    use kt_grids, only: finish_kt_grids
 
     implicit none
 
@@ -132,6 +135,9 @@ contains
     call finish_collisions
     call finish_dist_fn
     call finish_fields
+    call finish_hyper
+    call finish_init_g
+    call finish_kt_grids
 
   end subroutine finish_gs2
 
