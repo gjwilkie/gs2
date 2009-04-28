@@ -7,7 +7,7 @@ module nonlinear_terms
 !
   implicit none
 
-  public :: init_nonlinear_terms
+  public :: init_nonlinear_terms, finish_nonlinear_terms
   public :: add_nonlinear_terms, finish_nl_terms
   public :: finish_init, reset_init, algorithm, nonlin, accelerated
 
@@ -120,10 +120,10 @@ contains
          C_par, C_perp, p_x, p_y, p_z, zip
     integer :: ierr, in_file
     logical :: exist
-    logical :: done = .false.
+!    logical :: done = .false.
 
-    if (done) return
-    done = .true.
+!    if (done) return
+!    done = .true.
 
     if (proc0) then
        nonlinear_mode = 'default'
@@ -547,6 +547,18 @@ contains
     initializing = .false.
 
   end subroutine finish_init
+
+  subroutine finish_nonlinear_terms
+
+    implicit none
+
+    if (allocated(aba)) deallocate (aba, agb, abracket)
+    if (allocated(ba)) deallocate (ba, gb, bracket)
+
+    nonlin = .false. ; alloc = .true. ; zip = .false. ; accelerated = .false.
+    initialized = .false. ; initializing = .true.
+
+  end subroutine finish_nonlinear_terms
 
 end module nonlinear_terms
 
