@@ -125,6 +125,10 @@ contains
     use hyper, only: finish_hyper
     use init_g, only: finish_init_g
     use kt_grids, only: finish_kt_grids
+    use le_grids, only: finish_le_grids
+    use nonlinear_terms, only: finish_nonlinear_terms
+    use run_parameters, only: finish_run_parameters
+    use species, only: finish_species
 
     implicit none
 
@@ -138,6 +142,10 @@ contains
     call finish_hyper
     call finish_init_g
     call finish_kt_grids
+    call finish_le_grids
+    call finish_nonlinear_terms
+    call finish_run_parameters
+    call finish_species
 
   end subroutine finish_gs2
 

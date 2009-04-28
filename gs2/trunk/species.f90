@@ -1,7 +1,7 @@
 module species
   implicit none
 
-  public :: init_species
+  public :: init_species, finish_species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
   public :: has_electron_species, has_slowing_down_species
@@ -33,11 +33,13 @@ module species
   integer :: nspec
   type (specie), dimension (:), allocatable :: spec
 
+  logical :: initialized = .false.
+
 contains
 
   subroutine init_species
     implicit none
-    logical, save :: initialized = .false.
+!    logical, save :: initialized = .false.
     if (initialized) return
     initialized = .true.
 
@@ -178,5 +180,15 @@ contains
     logical :: has_slowing_down_species
     has_slowing_down_species = any(spec%type == slowing_down_species)
   end function has_slowing_down_species
+
+  subroutine finish_species
+
+    implicit none
+
+    deallocate (spec)
+
+    initialized = .false.
+
+  end subroutine finish_species
 
 end module species

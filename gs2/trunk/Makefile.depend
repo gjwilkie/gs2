@@ -292,10 +292,15 @@ gs2.o: \
 	 gs2_reinit.o \
 	 gs2_save.o \
 	 gs2_time.o \
+	 hyper.o \
 	 init_g.o \
 	 job_manage.o \
+	 kt_grids.o \
+	 le_grids.o \
 	 mp.o \
-	 run_parameters.o 
+	 nonlinear_terms.o \
+	 run_parameters.o \
+	 species.o 
 gs2_diagnostics.o: \
 	 antenna.o \
 	 collisions.o \

@@ -1,7 +1,7 @@
 module run_parameters
   implicit none
 
-  public :: init_run_parameters
+  public :: init_run_parameters, finish_run_parameters
 
   public :: beta, zeff, tite, rhostar
   public :: fphi, fapar, fbpar
@@ -27,6 +27,7 @@ module run_parameters
   real :: k0
   integer :: delt_option_switch
   integer, parameter :: delt_option_hand = 1, delt_option_auto = 2
+  logical :: initialized = .false.
 
 contains
 
@@ -35,7 +36,7 @@ contains
     use gs2_time, only: init_delt, user2code
     
     implicit none
-    logical, save :: initialized = .false.
+!    logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
@@ -201,5 +202,15 @@ contains
     end if
 
   end subroutine adjust_time_norm
+
+  subroutine finish_run_parameters
+
+    implicit none
+
+    if (allocated(wunits)) deallocate (wunits, woutunits, tunits)
+
+    initialized = .false.
+
+  end subroutine finish_run_parameters
 
 end module run_parameters
