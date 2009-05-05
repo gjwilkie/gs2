@@ -45,7 +45,7 @@ module antenna
   logical, save :: initialized = .false.
 
   private
-  public :: init_antenna, dump_ant_amp, amplitude, finish_antenna
+  public :: init_antenna, dump_ant_amp, amplitude, finish_antenna, reset_init
   public :: antenna_w, antenna_apar, antenna_amplitudes, a_ext_data
 
 contains
@@ -416,6 +416,16 @@ contains
     end if
 
   end subroutine dump_ant_amp
+!=============================================================================
+
+! used when interfacing GS2 with Trinity -- MAB
+  subroutine reset_init
+
+    implicit none
+    
+    initialized = .false.
+
+  end subroutine reset_init
 !=============================================================================
 end module antenna
 

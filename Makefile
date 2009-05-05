@@ -93,6 +93,8 @@ USE_POSIX ?=
 USE_LOCAL_SPFUNC ?= 
 # Use nag libraray (spfunc,undefined)
 USE_NAGLIB ?= 
+# Make GS2 into a library which can be called by external programs
+MAKE_LIB ?=
 #
 # * Targets:
 #
@@ -277,6 +279,9 @@ ifndef PGPLOT_LIB
 $(error PGPLOT_LIB is not defined)
 	endif
 endif
+ifdef MAKE_LIB
+	CPPFLAGS += -DMAKE_LIB
+endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
 		$(IPM_LIB) $(NAG_LIB)
@@ -366,7 +371,11 @@ sinclude Makefile.target_$(PROJECT)
 
 .PHONY: modules utils_all geo_all
 
+ifdef MAKE_LIB
+modules: utils.a geo.a libgs2.a
+else
 modules: utils.a geo.a
+endif
 
 ### UTILS
 utils_all: utils.a mdslib.a
@@ -394,6 +403,25 @@ ball: $(ball_mod)
 
 eiktest: $(eiktest_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+# ifdef MAKE_LIB
+### LIBGS2
+libgs2_all: libgs2.a
+
+LIBGS2_OBJ = antenna.o antenna_data.o collisions.o command_line.o constants.o \
+	convert.o deq.o dist_fn.o dist_fn_arrays.o eeq.o fft_work.o fields.o fields_arrays.o \
+	fields_explicit.o fields_implicit.o fields_test.o file_utils.o geometry.o \
+	geq.o gridgen4mod.o gs2_diagnostics.o gs2_heating.o gs2_io.o gs2_layouts.o \
+	gs2_main.o gs2_reinit.o gs2_save.o gs2_time.o gs2_transforms.o hyper.o ideq.o \
+	init_g.o job_manage.o kt_grids.o layouts_type.o le_grids.o leq.o \
+	mds.o mdslib.o mp.o netcdf_utils.o nonlinear_terms.o peq.o prof.o radstub.o \
+	ran.o redistribute.o run_parameters.o species.o spfunc.o spl.o text_options.o \
+	theta_grid.o theta_grid_params.o vdimstub.o veq.o
+
+libgs2.a: $(LIBGS2_OBJ)
+	$(ARCH) $(ARCHFLAGS) $@ $^
+	$(RANLIB) $@
+# endif
 
 ############################################################### SPECIAL RULES
 
