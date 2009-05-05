@@ -5906,9 +5906,6 @@ contains
     use gs2_layouts, only: g_lo
     use mp, only: proc0, broadcast
 
-    ! TMP FOR TESTING -- MAB
-    use mp, only: barrier
-
     implicit none
 
     integer, intent (in) :: istep
@@ -5964,16 +5961,8 @@ contains
 ! perform legendre transform on dist. fn. to obtain coefficients
 ! used when expanding dist. fn. in legendre polynomials 
     if (allocated(gttran)) then
-    call barrier
-    write (*,*) 'gtranalloc'
-    call barrier
-
        call legendre_transform (g0, getran, gltran, istep, gttran)
     else
-!    call barrier
-!    write (*,*) 'pre-notalloc'
-!    call barrier
-
        call legendre_transform (g0, getran, gltran, istep)
     end if
 

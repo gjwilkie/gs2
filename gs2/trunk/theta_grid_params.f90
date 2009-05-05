@@ -1,7 +1,7 @@
 module theta_grid_params
   implicit none
 
-  public :: init_theta_grid_params
+  public :: init_theta_grid_params, init_trin_geo
 
   real, public :: rhoc, rmaj, r_geo, eps, epsl
   real, public :: qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri
@@ -9,6 +9,9 @@ module theta_grid_params
   integer, public :: ntheta, nperiod
 
   private
+
+  logical :: trin_flag = .false.
+  real :: rhoc_trin, qval_trin, shat_trin, rmaj_trin
 
 contains
 
@@ -19,6 +22,7 @@ contains
     if (initialized) return
     initialized = .true.
     call read_parameters
+    if (trin_flag) call reinit_theta_grid_params (rhoc_trin, qval_trin, shat_trin, rmaj_trin)
   end subroutine init_theta_grid_params
 
   subroutine read_parameters
@@ -54,5 +58,34 @@ contains
     if (kp > 0.) pk = 2.*kp
 
   end subroutine read_parameters
+
+  subroutine reinit_theta_grid_params (rhoc_in, qval_in, shat_in, rmaj_in)
+
+    implicit none
+
+    real, intent (in) :: rhoc_in, qval_in, shat_in, rmaj_in
+
+    rhoc = rhoc_in
+    qinp = qval_in
+    shat = shat_in
+    rmaj = rmaj_in
+    r_geo = rmaj_in
+
+  end subroutine reinit_theta_grid_params
+
+  subroutine init_trin_geo (rhoc_in, qval_in, shat_in, rmaj_in)
+
+    implicit none
+
+    real, intent (in) :: rhoc_in, qval_in, shat_in, rmaj_in
+
+    trin_flag = .true.
+
+    rhoc_trin = rhoc_in
+    qval_trin = qval_in
+    shat_trin = shat_in
+    rmaj_trin = rmaj_in
+
+  end subroutine init_trin_geo
 
 end module theta_grid_params
