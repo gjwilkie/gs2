@@ -35,7 +35,7 @@ module dist_fn
   real :: t0, omega0, gamma0, thetas, source0
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
-  real :: D_kill, noise, wfb, g_exb
+  real :: D_kill, noise, wfb, g_exb, omprimfac
 
   integer :: adiabatic_option_switch!, heating_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -287,7 +287,7 @@ contains
          nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          save_n, D_kill, noise, &
-         kill_grid, h_kill, g_exb, neoflux
+         kill_grid, h_kill, g_exb, neoflux, omprimfac
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
            thetas, phi_ext, source_option, a_ext, aky_star, akx_star
@@ -319,6 +319,7 @@ contains
        afilter = 0.0
        kfilter = 0.0
        g_exb = 0.0
+       omprimfac = 0.0
        h_kill = .true.
        D_kill = -10.0
        noise = -1.
@@ -381,6 +382,7 @@ contains
     call broadcast (D_kill)
     call broadcast (h_kill)
     call broadcast (g_exb)
+    call broadcast (omprimfac)
     call broadcast (noise)
     call broadcast (afilter)
     call broadcast (kfilter)
@@ -2505,6 +2507,9 @@ contains
 
     subroutine set_source
 
+      use species, only: spec
+      use theta_grid, only: bmag, drhodpsi, grho, Rplot
+
       complex :: apar_p, apar_m, phi_p, phi_m!, bpar_p !GGH added bpar_p
 !      real, dimension(:,:), allocatable, save :: ufac
       real :: bd, bdfac_p, bdfac_m
@@ -2536,16 +2541,20 @@ contains
          apar_m = aparnew(ig+1,it,ik)+aparnew(ig,it,ik) & 
               -apar(ig+1,it,ik)-apar(ig,it,ik)
  
+         ! omprimfac term (needed for flow shear) added May 7, 2009 -- MAB
          source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
               -zi*wdrift(ig,iglo)*phi_p*nfac) &
               + zi*(wstar(ik,ie,is) &
-              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is)) &
+              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+              - omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb &
+              * sqrt(Rplot(ig)**2 - (grho(ig)/(bmag(ig)*drhodpsi))**2) &
+              / (drhodpsi*spec(is)%stm)) &
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo)) 
       end do
-        
+
 ! add in nonlinear terms -- tfac normalizes the *amplitudes*.
       if (nonlin) then         
          tfac = 1./tnorm
