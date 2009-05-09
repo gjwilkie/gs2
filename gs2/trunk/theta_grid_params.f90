@@ -56,6 +56,9 @@ contains
     if (exist) read (unit=in_file, nml=theta_grid_parameters)
 
     if (kp > 0.) pk = 2.*kp
+    ! if eps is specified in input file and rhoc is not, then make
+    ! rhoc consistent with eps
+    if (abs(rhoc-0.5)<epsilon(0.) .and. abs(eps-0.3)>epsilon(0.)) rhoc = 2.*eps/epsl
 
   end subroutine read_parameters
 

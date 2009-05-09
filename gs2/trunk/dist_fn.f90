@@ -2508,7 +2508,8 @@ contains
     subroutine set_source
 
       use species, only: spec
-      use theta_grid, only: bmag, drhodpsi, grho, Rplot
+      use geometry, only: rhoc
+      use theta_grid, only: bmag, drhodpsi, grho, Rplot, qval
 
       complex :: apar_p, apar_m, phi_p, phi_m!, bpar_p !GGH added bpar_p
 !      real, dimension(:,:), allocatable, save :: ufac
@@ -2551,9 +2552,13 @@ contains
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
               - omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb &
               * sqrt(Rplot(ig)**2 - (grho(ig)/(bmag(ig)*drhodpsi))**2) &
-              / (drhodpsi*spec(is)%stm)) &
+!              / (drhodpsi*spec(is)%stm)) &
+              * qval / (rhoc*spec(is)%stm)) &
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo)) 
       end do
+
+      ! TMP FOR TESTING -- MAB
+!      write (*,*) 'q,r,drdpsi', qval, rhoc, drhodpsi, qval/rhoc
 
 ! add in nonlinear terms -- tfac normalizes the *amplitudes*.
       if (nonlin) then         
@@ -3091,7 +3096,7 @@ contains
     use fields_arrays, only: phinew, bparnew
 
     ! TEMP FOR TESTING -- MAB
-!    use le_grids, only: e
+    use le_grids, only: e
 
     implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
@@ -3114,8 +3119,11 @@ contains
                * phinew(:,it,ik)*spec(is)%zt &
                + aj0(:,iglo)*aj1(:,iglo)*vperp2(:,iglo)*2.*anon(ie,is) &
                * bparnew(:,it,ik)
+          ! TMP FOR TESTING -- MAB
+          g0(:,isgn,iglo) = aj0(:,iglo)
        end do
     end do
+
 
     call integrate_moment (g0, ntot)
 
@@ -3132,6 +3140,8 @@ contains
 ! guiding center upar
     g0 = vpa*gnew
 
+    ! TMP FOR TESTING -- MAB
+    g0 = vpa*g0
     call integrate_moment (g0, upar)
 
 ! guiding center tpar
@@ -3142,14 +3152,21 @@ contains
 
 ! guiding center tperp
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ! TMP FOR TESTING -- MAB
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+
        do isgn = 1, 2
 !          g0(:,isgn,iglo) = vperp2(:,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)
           g0(:,isgn,iglo) = vperp2(:,iglo)*gnew(:,isgn,iglo)
+          ! TMP FOR TESTING -- MAB
+          g0(:,isgn,iglo) = (e(ie,is)-1.5)*aj0(:,iglo)
        end do
     end do
 
     call integrate_moment (g0, tperp)
-    tperp = tperp - density
+    ! TMP FOR TESTING -- MAB
+!    tperp = tperp - density
 
     do is=1,nspec
        ntot(:,:,:,is)=ntot(:,:,:,is)*spec(is)%dens
