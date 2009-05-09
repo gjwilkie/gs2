@@ -816,20 +816,20 @@ contains
                    do it = 1, ntheta0
                       do ig = -ntg_out, ntg_out
                          ! TEMP FOR TESTING -- MAB
-!                         write (unit, *) &
-!                              real(ntot(ig,it,ik,is)/phi0(it,ik)), &
-!                              real(density(ig,it,ik,is)/phi0(it,ik)), &
-!                              real(upar(ig,it,ik,is)/phi0(it,ik)), &
-!                              real(tpar(ig,it,ik,is)/phi0(it,ik))
-                         write (unit, "(15(1x,e12.5))") &
-                              theta(ig), aky_out(ik), akx_out(it), &
-                              ntot(ig,it,ik,is)/phi0(it,ik), &
-                              density(ig,it,ik,is)/phi0(it,ik), &
-                              upar(ig,it,ik,is)/phi0(it,ik), &
-                              tpar(ig,it,ik,is)/phi0(it,ik), &
-                              tperp(ig,it,ik,is)/phi0(it,ik), &
-                              theta(ig) - theta0(it,ik), &
-                              real(is)
+                         write (unit, *) &
+                              real(ntot(ig,it,ik,is)/phi0(it,ik)), &
+                              real(upar(ig,it,ik,is)/phi0(it,ik)), &
+                              aimag(upar(ig,it,ik,is)/phi0(it,ik)), &
+                              real(tperp(ig,it,ik,is)/phi0(it,ik))
+!                         write (unit, "(15(1x,e12.5))") &
+!                              theta(ig), aky_out(ik), akx_out(it), &
+!                              ntot(ig,it,ik,is)/phi0(it,ik), &
+!                              density(ig,it,ik,is)/phi0(it,ik), &
+!                              upar(ig,it,ik,is)/phi0(it,ik), &
+!                              tpar(ig,it,ik,is)/phi0(it,ik), &
+!                              tperp(ig,it,ik,is)/phi0(it,ik), &
+!                              theta(ig) - theta0(it,ik), &
+!                              real(is)
                       end do
                       write (unit, "()")
                    end do

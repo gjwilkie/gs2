@@ -799,12 +799,14 @@ contains
 
   subroutine broadcast_results
     use mp, only: proc0, broadcast
+    use geometry, only: rhoc
     implicit none
 
     call broadcast (bmin)
     call broadcast (bmax)
     call broadcast (eps)
     call broadcast (kxfac)
+    call broadcast (rhoc)
     call broadcast (qval)
     call broadcast (ntheta)
     call broadcast (ntgrid)
