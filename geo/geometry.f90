@@ -831,8 +831,11 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
     qsf = qval
     dum=qfun(0.5)
     if(eqinit >= 1) eqinit=0
-      
-    if (nperiod ==1) call plotdata (rgrid, seik, grads, dpsidrho)
+! MAB, CMR, 6/5/2009:
+! remove unnecessary restriction to calling plotdata for nperiod=1
+! so that Rplot, Zplot etc can be made available elsewhere in GS2
+!    if (nperiod ==1) call plotdata (rgrid, seik, grads, dpsidrho)
+    call plotdata (rgrid, seik, grads, dpsidrho)
 
     call dealloc_local_arrays
 

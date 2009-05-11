@@ -36,7 +36,7 @@ module dist_fn
   real :: t0, omega0, gamma0, thetas, source0
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
-  real :: D_kill, noise, cfac, wfb, g_exb
+  real :: D_kill, noise, cfac, wfb, g_exb, omprimfac
 
   integer :: adiabatic_option_switch!, heating_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -257,7 +257,7 @@ contains
          tpdriftknob, nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, flr, cfac, &
-         kill_grid, h_kill, g_exb, neoflux
+         kill_grid, h_kill, g_exb, neoflux, omprimfac
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
            thetas, phi_ext, source_option, a_ext, aky_star, akx_star
@@ -295,6 +295,7 @@ contains
        afilter = 0.0
        kfilter = 0.0
        g_exb = 0.0
+       omprimfac = 0.0
        h_kill = .true.
        D_kill = -10.0
        noise = -1.
@@ -365,6 +366,7 @@ contains
     call broadcast (D_kill)
     call broadcast (h_kill)
     call broadcast (g_exb)
+    call broadcast (omprimfac)
     call broadcast (noise)
     call broadcast (afilter)
     call broadcast (kfilter)
@@ -2641,6 +2643,11 @@ contains
 
     subroutine set_source
 
+      use species, only: spec
+      use theta_grid, only: bmag, drhodpsi, grho, Rplot, qval
+      use geometry, only: rhoc
+      use mp, only: proc0
+
       complex :: apar_p, apar_m, phi_p, phi_m!, bpar_p !GGH added bpar_p
       real, dimension(:,:), allocatable, save :: ufac
       real :: bd, bdfac_p, bdfac_m
@@ -2670,16 +2677,21 @@ contains
          apar_p = apargavg(ig+1)+apargavg(ig)
          apar_m = aparnew(ig+1,it,ik)+aparnew(ig,it,ik) & 
               -apar(ig+1,it,ik)-apar(ig,it,ik)
- 
+!MAB, 6/5/2009:
+! added the omprimfac source term arising with equilibrium flow shear  
          source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
               -zi*wdrift(ig,iglo)*phi_p*nfac) &
               + zi*(wstar(ik,ie,is) &
-              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is)) &
+              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+              - omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb &
+              * sqrt(Rplot(ig)**2 - (grho(ig)/(bmag(ig)*drhodpsi))**2) &
+              * qval/(rhoc*spec(is)%stm)) &
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo)) 
       end do
+!      if (proc0 .and. first) write (6,fmt='(" Min,Max(RBphi)=",2e12.4)')  minval(sqrt((bmag*Rplot)**2 - (grho/drhodpsi)**2)), maxval(sqrt((bmag*Rplot)**2 - (grho/drhodpsi)**2))
         
 ! add in nonlinear terms -- tfac normalizes the *amplitudes*.
       if (nonlin) then         
