@@ -1874,12 +1874,13 @@ contains
 ! MR, 2007: modified Bill Dorland's version to include grids where kx grid
 !           is split over different processors
 ! MR, March 2009: ExB shear now available on extended theta grid (ballooning)
+! CMR, May 2009: 2pishat correction factor on extended theta grid (ballooning)
+!                so GEXB is same physical quantity in box and ballooning
     
     use gs2_layouts, only: ik_idx, it_idx, g_lo, idx_local, idx  
     ! MR no need for is_kx_local as kx's are parallelised
-    use theta_grid, only: ntgrid, ntheta
+    use theta_grid, only: ntgrid, ntheta, shat
     use file_utils, only: error_unit
-    use theta_grid, only: ntgrid
     use kt_grids, only: akx, aky, naky, ikx, ntheta0, box, theta0
     use le_grids, only: negrid, nlambda
     use species, only: nspec
@@ -1887,6 +1888,7 @@ contains
     use dist_fn_arrays, only: kx_shift
     use gs2_time, only: code_dt
     use mp, only: iproc, proc0, send, receive
+    use constants, only: twopi 
     
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
@@ -1954,8 +1956,9 @@ contains
        end do
     else
 ! MR, March 2009: on extended theta grid theta0_shift tracks ExB shear
+! CMR, May 2009: add 2pi shat factor so that: dtheta0/dt = -GEXB/(2pi shat)
        dtheta0 = theta0(2,1)
-       theta0_shift = theta0_shift - g_exb*gdt
+       theta0_shift = theta0_shift - g_exb*gdt/(twopi*shat)
        j = nint(theta0_shift/dtheta0)
        theta0_shift = theta0_shift - j*dtheta0
     end if
