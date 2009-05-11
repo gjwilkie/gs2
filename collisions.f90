@@ -1694,6 +1694,14 @@ contains
 
     if (ediffinit) return
 
+!DD, March 2009: Nullify pointers on initialisation, so do not pass association
+!                test when not allocated. 
+!  Problem arose on Pascali compiler (York) with  to_list(ip)%third and fourth
+    do ip=0, (nproc-1)
+       nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
+    end do
+!<DD
+
     call init_ediffuse_layouts &
          (ntgrid, naky, ntheta0, nlambda, nspec)
 
