@@ -237,7 +237,8 @@ contains
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, &
        qval, shape, gb_to_cv)
     use constants
-    use theta_grid_params, only: eps, epsl, shat_param => shat, pk, qinp, rhoc
+    use geometry, only: rhoc
+    use theta_grid_params, only: eps, epsl, shat_param => shat, pk, qinp!, rhoc_in => rhoc
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
     implicit none
     integer, intent (in) :: nperiod
@@ -277,6 +278,7 @@ contains
     end if
     kxfac = 1.0
     qval = epsl/pk
+    rhoc = 2.*eps/epsl
     select case (model_switch)
     case (model_salpha,model_alpha1,model_b2)
        cvdrift = epsl*(cos(theta) + (shat*theta-shift*sin(theta))*sin(theta))
