@@ -168,7 +168,8 @@ module theta_grid_salpha
 contains
 
   subroutine init_theta_grid_salpha
-    use theta_grid_params, only: init_theta_grid_params
+    use theta_grid_params, only: init_theta_grid_params, rhoc, eps, epsl
+    use geometry, only: rhoc_geo=>rhoc
     implicit none
     logical, save :: initialized = .false.
 
@@ -176,6 +177,10 @@ contains
     initialized = .false.
 
     call init_theta_grid_params
+! make rhoc consistent with eps, epsl, and insert this value into geometry 
+    rhoc = 2.*eps/epsl
+    rhoc_geo=rhoc
+
     call read_parameters
   end subroutine init_theta_grid_salpha
 
@@ -815,12 +820,14 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
 
   subroutine broadcast_results
     use mp, only: proc0, broadcast
+    use geometry, only: rhoc
     implicit none
 
     call broadcast (bmin)
     call broadcast (bmax)
     call broadcast (eps)
     call broadcast (kxfac)
+    call broadcast (rhoc)
     call broadcast (qval)
     call broadcast (ntheta)
     call broadcast (ntgrid)
