@@ -12,6 +12,10 @@ module gs2_time
   real :: code_dt_max, user_dt_max
   real :: code_dt_min, user_dt_min
 
+  ! added May 18, 2009 to take care of problems
+  ! in exb_shear calculation after change in time step size
+  real :: code_dt_old = 0.
+
 ! GGH points out that this initialization is not necessary (we think)
   real :: user_time = 0.
   real :: code_time = 0.
@@ -19,7 +23,7 @@ module gs2_time
 !  real :: dt
   real :: vtfac
 
-  public :: user_dt, code_dt, update_time
+  public :: user_dt, code_dt, update_time, code_dt_old
   public :: user_time, code_time, code_dt_max
   public :: save_dt_min, save_dt, save_dt_cfl, write_dt
   public :: init_tstart, init_delt
