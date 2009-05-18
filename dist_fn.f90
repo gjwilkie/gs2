@@ -1886,7 +1886,7 @@ contains
     use species, only: nspec
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kx_shift
-    use gs2_time, only: code_dt
+    use gs2_time, only: code_dt, code_dt_old
     use mp, only: iproc, proc0, send, receive
     use constants, only: twopi 
     
@@ -1942,8 +1942,12 @@ contains
     !
     ! Note: at first time step, there is a difference of a factor of 2.
     !
-    
-    gdt = code_dt
+ 
+    ! necessary to get factor of 2 right in first time step and
+    ! also to get things right after changing time step size
+    ! added May 18, 2009 -- MAB
+    gdt = 0.5*(code_dt + code_dt_old)
+!    gdt = code_dt
     
 ! kx_shift is a function of time.   Update it here:  
 ! MR, 2007: kx_shift array gets saved in restart file
