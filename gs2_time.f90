@@ -80,7 +80,8 @@ contains
   end subroutine init_delt
 
   subroutine update_time
-
+! MAB+CMR, 21/5/09: set code_dt_old to code_dt BEFORE any changes in timestep
+    code_dt_old = code_dt
     code_time = code_time + code_dt
     user_time = user_time + user_dt
 

@@ -24,7 +24,7 @@ contains
     use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
     use gs2_save, only: gs2_save_for_restart
     use dist_fn_arrays, only: gnew
-    use gs2_time, only: user_time, code_dt_min, code_dt_old
+    use gs2_time, only: user_time, code_dt_min
     use nonlinear_terms, only: nl_reset => reset_init
     use mp, only: proc0
     use file_utils, only: error_unit
@@ -52,8 +52,6 @@ contains
     end if
 
     if (code_dt/delt_adj <= code_dt_min) then
-       ! code_dt_old added May 18, 2009 -- MAB
-       code_dt_old = code_dt
        code_dt = code_dt_min  ! set it so restart is ok
        exit = .true.
        return
@@ -68,14 +66,10 @@ contains
 
 ! If timestep is too big, make it smaller
     if (code_dt > code_dt_cfl) then
-       ! code_dt_old added May 18, 2009 -- MAB
-       code_dt_old = code_dt
        code_dt = code_dt/delt_adj
 
 ! If timestep is too small, make it bigger
     else if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
-       ! code_dt_old added May 18, 2009 -- MAB
-       code_dt_old = code_dt
        code_dt = min(code_dt*delt_adj, dt0)
 
     endif
