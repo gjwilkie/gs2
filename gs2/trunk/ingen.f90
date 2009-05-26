@@ -295,9 +295,10 @@ program ingen
   character (20) :: norm_option
   
   integer :: ngauss, negrid, nesuper, nesub
-  real :: ecut, bouncefuzz
+  real :: ecut, vcut, bouncefuzz
   logical :: trapped_particles = .true.
   logical :: advanced_egrid = .true.
+  logical :: vgrid = .false.
 
 ! nonlinear_terms: 
   integer :: nonlinear_mode_switch
@@ -534,7 +535,8 @@ program ingen
 ! le_grids:
 
   namelist /le_grids_knobs/ ngauss, negrid, ecut, bouncefuzz, &
-       nesuper, nesub, test, trapped_particles, advanced_egrid
+       nesuper, nesub, test, trapped_particles, advanced_egrid, &
+       vgrid, vcut
 
 ! nonlinear_terms: 
   namelist /nonlinear_terms_knobs/ nonlinear_mode, flow_mode, cfl, &
@@ -1157,6 +1159,7 @@ contains
   subroutine get_namelists
 
     use theta_grid, only: init_theta_grid, nbset, shat_real => shat
+    use constants, only: pi
     logical :: list
     call init_file_utils (list, name="template")
 
@@ -4199,6 +4202,7 @@ contains
        else
           lx = ly * rtwist / (2.*pi*shat)
           write (report_unit, fmt="('At theta=0, the domain is ',f10.4,' rho in the x direction.')") lx
+          write (report_unit,*) ly, rtwist, jtwist, pi, shat
        end if
        
        write (report_unit, *) 
