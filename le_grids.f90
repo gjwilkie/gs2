@@ -1547,6 +1547,7 @@ contains
 !    real, dimension (:,:,:,:), allocatable, save :: lpt
 
 !    if (first) then
+
     if (.not. allocated(lpl)) then
        allocate(lpltmp(ng2,0:ng2-1))
        allocate(lpl(nlambda,0:ng2-1))
@@ -1594,7 +1595,8 @@ contains
                 ulim = sqrt(1.0-bmag(ig)/bmax)
                 call legendre_polynomials (-ulim,ulim,nodes,lpttmp)
                 lpt(ng2+1:jend(ig),0:2*(ntrap-1),ig,2) = lpttmp(1:ntrap,:)
-                lpt(ng2+1:jend(ig),0:2*(ntrap-1),ig,1) = lpttmp(2*ntrap-1:ntrap+1:-1,:)
+                lpt(ng2+1:jend(ig)-1,0:2*(ntrap-1),ig,1) = lpttmp(2*ntrap-1:ntrap+1:-1,:)
+!                lpt(ng2+1:jend(ig),0:2*(ntrap-1),ig,1) = lpttmp(2*ntrap-1:ntrap+1:-1,:)
 !                do ie = 0, 2*(ntrap-1)
 !                   do il = 1, 2*ntrap-1
 !                      if (proc0) write (*,*) 'lptrap', ig, ntrap, ulim, ie, il, nodes(il), lpttmp(il,ie)

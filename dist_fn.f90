@@ -35,7 +35,7 @@ module dist_fn
   real :: t0, omega0, gamma0, thetas, source0
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
-  real :: D_kill, noise, wfb, g_exb, omprimfac
+  real :: D_kill, noise, wfb, g_exb, omprimfac, btor_slab
 
   integer :: adiabatic_option_switch!, heating_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -115,6 +115,7 @@ module dist_fn
 
   ! exb shear
   integer, dimension(:), allocatable :: jump, ikx_indexed
+  real, dimension (:), allocatable :: itor_over_B
 
   ! kill
   real, dimension (:,:), allocatable :: aintnorm
@@ -287,7 +288,7 @@ contains
          nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          save_n, D_kill, noise, &
-         kill_grid, h_kill, g_exb, neoflux, omprimfac
+         kill_grid, h_kill, g_exb, neoflux, omprimfac, btor_slab
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
            thetas, phi_ext, source_option, a_ext, aky_star, akx_star
@@ -319,7 +320,8 @@ contains
        afilter = 0.0
        kfilter = 0.0
        g_exb = 0.0
-       omprimfac = 0.0
+       omprimfac = 1.0
+       btor_slab = 0.0
        h_kill = .true.
        D_kill = -10.0
        noise = -1.
@@ -383,6 +385,7 @@ contains
     call broadcast (h_kill)
     call broadcast (g_exb)
     call broadcast (omprimfac)
+    call broadcast (btor_slab)
     call broadcast (noise)
     call broadcast (afilter)
     call broadcast (kfilter)
@@ -1828,6 +1831,8 @@ contains
        else
           allocate (gnl_1(1,2,1), gnl_2(1,2,1), gnl_3(1,2,1))
        end if
+       allocate (itor_over_B(-ntgrid:ntgrid))
+       itor_over_B = 0.0
        if (boundary_option_switch == boundary_option_linked) then
           allocate (g_h(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           g_h = 0.
@@ -1881,13 +1886,14 @@ contains
 
     use gs2_layouts, only: ik_idx, it_idx, g_lo, is_kx_local, idx_local, idx
     use file_utils, only: error_unit
-    use theta_grid, only: ntgrid
+    use theta_grid, only: ntgrid, bmag, drhodpsi, grho, Rplot, qval
     use kt_grids, only: akx, aky, naky, ikx, ntheta0, box
     use le_grids, only: negrid, nlambda
     use species, only: nspec
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kx_shift
     use gs2_time, only: code_dt
+    use geometry, only: rhoc
 
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
@@ -1930,6 +1936,19 @@ contains
        allocate (kx_shift(naky), jump(naky))
        kx_shift = 0.
        jump = 0
+
+       if (abs(btor_slab) > epsilon(0.0)) then
+          ! for slab, itor_over_B is input parameter determined
+          ! by angle between B-field and toroidal flow
+          ! itor_over_B = (d(u_z)/dx) / (d(u_y)/dx) = Btor / Bpol
+          ! u = u0 (phihat) = x d(u0)/dx (phihat) = x d(uy)/dx (yhat + Btor/Bpol zhat)
+          ! g_exb = d(uy)/dx => d(uz)/dx = g_exb * Btor/Bpol = g_exb * itor_over_B
+          itor_over_B = btor_slab
+       else
+          ! note that the following is only valid in a torus!
+          ! itor_over_B = (q/rho) * Rmaj*Btor/(a*B)
+          itor_over_B = qval / rhoc * sqrt(Rplot**2 - (grho/(bmag*drhodpsi))**2)
+       end if
 
        allocate (ikx_indexed(ntheta0))
        itmin = minloc (ikx)
@@ -2508,8 +2527,8 @@ contains
     subroutine set_source
 
       use species, only: spec
-      use geometry, only: rhoc
-      use theta_grid, only: bmag, drhodpsi, grho, Rplot, qval
+!      use geometry, only: rhoc
+!      use theta_grid, only: bmag, drhodpsi, grho, Rplot, qval
 
       complex :: apar_p, apar_m, phi_p, phi_m!, bpar_p !GGH added bpar_p
 !      real, dimension(:,:), allocatable, save :: ufac
@@ -2550,15 +2569,10 @@ contains
               -zi*wdrift(ig,iglo)*phi_p*nfac) &
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              - omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb &
-              * sqrt(Rplot(ig)**2 - (grho(ig)/(bmag(ig)*drhodpsi))**2) &
-!              / (drhodpsi*spec(is)%stm)) &
-              * qval / (rhoc*spec(is)%stm)) &
+              - 2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
+!              * sqrt(Rplot(ig)**2 - (grho(ig)/(bmag(ig)*drhodpsi))**2) * qval / (rhoc*spec(is)%stm)) &
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo)) 
       end do
-
-      ! TMP FOR TESTING -- MAB
-!      write (*,*) 'q,r,drdpsi', qval, rhoc, drhodpsi, qval/rhoc
 
 ! add in nonlinear terms -- tfac normalizes the *amplitudes*.
       if (nonlin) then         
@@ -6879,7 +6893,7 @@ contains
     if (allocated(g)) deallocate (g, gnew, g0)
     if (allocated(gnl_1)) deallocate (gnl_1, gnl_2, gnl_3)
     if (allocated(g_h)) deallocate (g_h, save_h)
-    if (allocated(kx_shift)) deallocate (kx_shift, jump, ikx_indexed)
+    if (allocated(kx_shift)) deallocate (kx_shift, jump, ikx_indexed, itor_over_B)
     if (allocated(aintnorm)) deallocate (aintnorm)
     if (allocated(ufac)) deallocate (ufac)
     if (allocated(gridfac1)) deallocate (gridfac1, gamtot, gamtot1, gamtot2)

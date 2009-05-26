@@ -277,8 +277,13 @@ contains
        drhodpsi = 1.0
     end if
     kxfac = 1.0
-    qval = epsl/pk
-    rhoc = 2.*eps/epsl
+    if (epsl > epsilon(0.0)) then
+       qval = epsl/pk
+       rhoc = 2.*eps/epsl
+    else
+       qval = 1.
+       rhoc = 1.
+    end if
     select case (model_switch)
     case (model_salpha,model_alpha1,model_b2)
        cvdrift = epsl*(cos(theta) + (shat*theta-shift*sin(theta))*sin(theta))
