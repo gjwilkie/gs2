@@ -1308,7 +1308,8 @@ contains
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
-    use dist_fn, only: getmoms_notgc
+    use dist_fn, only: getmoms_notgc, g_adjust
+    use dist_fn_arrays, only: g
     use collisions, only: ncheck, vnmult, vary_vnew
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
@@ -1518,6 +1519,7 @@ contains
     end if
 
     if (write_any_fluxes) then
+       call g_adjust (g, phinew, bparnew, fphi, fbpar)
        call flux (phinew, aparnew, bparnew, &
              pflux,  qheat,  vflux, &
             pmflux, qmheat, vmflux, &
@@ -1525,6 +1527,7 @@ contains
        theta_pflux, theta_vflux, theta_qflux, &
        theta_pmflux, theta_vmflux, theta_qmflux, & 
        theta_pbflux, theta_vbflux, theta_qbflux)
+       call g_adjust (g, phinew, bparnew, -fphi, -fbpar)
 !       call flux (phinew, aparnew, bparnew, &
 !            pflux, qheat, qheat_par, qheat_perp, vflux, &
 !            pmflux, qmheat, qmheat_par, qmheat_perp, vmflux, &
