@@ -1,6 +1,9 @@
 This text explains how to make agk/gs2. (2008/05/05 RN)
 
 * Changelog
+2009/01/26 [TT]: Removed agk_ from layouts_* files due to C_INDEX port to gs2
+	   	 Removed tungsten from supported system as it has retired
+
 2008/07/01 [RN]: Add new switches, USE_LOCAL_SPFUNC, USE_NAGLIB to choose
 	   	 what special functions to use.
 
@@ -9,8 +12,7 @@ This text explains how to make agk/gs2. (2008/05/05 RN)
 You must set two environment variables to compile agk/gs2: SYSTEM and MAKEFLAGS.
 Since system-specific settings are written in Makefiles/Makefile.$(SYSTEM),
 you should specify what system you are on. Officially supported common systems
-are franklin, bassi, jacquard (NERSC), ranger (TACC), tungsten (NCSA),
-and jaguar (ORNL).
+are franklin, bassi, jacquard (NERSC), ranger (TACC), and jaguar (ORNL).
 
 And, to load Makefile.$(SYSTEM) in Makefiles/ directory, you must tell "make" 
 command that you need to include some files in Makefiles/ directory. This can 
@@ -139,9 +141,9 @@ NO_SIZEOF	_NONE_		This is for memory accounting.
 				implementation of size_of function instead
 				by specifying -DNO_SIZEOF.
 
-USE_C_INDEX	_NONE_		When invoked, function pointers in agk_layouts_
+USE_C_INDEX	_NONE_		When invoked, function pointers in layouts_
 				indices.c is used.  A little bit of performance
-				upgrade.  For agk_layouts_indices.c, there is
+				upgrade.  For layouts_indices.c, there is
 				another CFLAG '-DNO_UNDERSCORE' for the
 				resolution of Fortran-C linking problem.
 				The CFLAG '-DUNDERSCORE=2' can also be used

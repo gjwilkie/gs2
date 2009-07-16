@@ -334,6 +334,14 @@ include $(DEPEND)
 
 gs2_all: modules gs2 ingen rungridgen
 
+# TT>
+ifeq ($(PROJECT),gs2)
+ifdef USE_C_INDEX
+gs2_mod += layouts_indices.o
+endif
+endif
+# <TT
+
 gs2: $(gs2_mod) 
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
@@ -344,7 +352,7 @@ agk_all: agk
 
 ifeq ($(PROJECT),agk)
 ifdef USE_C_INDEX
-astrogk_mod += agk_layouts_indices.o
+astrogk_mod += layouts_indices.o
 endif
 endif
 
@@ -421,9 +429,14 @@ mp.o: mp.f90
 fft_work.o: fft_work.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $<
 
-agk_layouts_indices.o: agk_layouts_type.h
-agk_layouts_type.h: agk_layouts_type.f90
+# TT>
+layouts_indices.o: layouts_type.h
+layouts_type.h: layouts_type.f90
 	$(AWK) -f makehead.awk $^ > $@
+#agk_layouts_indices.o: agk_layouts_type.h
+#agk_layouts_type.h: agk_layouts_type.f90
+#	$(AWK) -f makehead.awk $^ > $@
+# <TT
 
 ############################################################# MORE DIRECTIVES
 
@@ -507,8 +520,12 @@ test_make:
 	@echo LIBS is $(LIBS)
 	@echo PLIBS is $(PLIBS)
 
+# TT>
+#unlink:
+#	-rm -f $(F90FROMFPP) agk_layouts_type.h
 unlink:
-	-rm -f $(F90FROMFPP) agk_layouts_type.h
+	-rm -f $(F90FROMFPP) layouts_type.h
+# <TT
 
 revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision

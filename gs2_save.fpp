@@ -65,7 +65,11 @@ contains
     use theta_grid, only: ntgrid
 ! Must include g_layout_type here to avoid obscure bomb while compiling
 ! gs2_diagnostics.f90 (which uses this module) with the Compaq F90 compiler:
-    use gs2_layouts, only: g_lo, g_layout_type
+! TT>
+!    use gs2_layouts, only: g_lo, g_layout_type
+    use gs2_layouts, only: g_lo
+    use layouts_type, only: g_layout_type
+! <TT
     use file_utils, only: error_unit
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g

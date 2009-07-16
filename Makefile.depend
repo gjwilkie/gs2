@@ -81,6 +81,7 @@ gs2_mod = \
 	 init_g.o \
 	 job_manage.o \
 	 kt_grids.o \
+	 layouts_type.o \
 	 le_grids.o \
 	 leq.o \
 	 mds.o \
@@ -372,6 +373,7 @@ gs2_io_hdf5.o: \
 	 theta_grid.o 
 gs2_layouts.o: \
 	 file_utils.o \
+	 layouts_type.o \
 	 mp.o 
 gs2_reinit.o: \
 	 antenna.o \
@@ -397,6 +399,7 @@ gs2_save.o: \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
+	 layouts_type.o \
 	 mp.o \
 	 netcdf_utils.o \
 	 theta_grid.o 
@@ -467,6 +470,7 @@ kt_grids.o: \
 	 mp.o \
 	 text_options.o \
 	 theta_grid.o 
+layouts_type.o: 
 le_grids.o: \
 	 constants.o \
 	 file_utils.o \
