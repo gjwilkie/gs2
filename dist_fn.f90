@@ -3279,9 +3279,6 @@ contains
     use collisions, only: g_adjust
     use fields_arrays, only: phinew, bparnew
 
-    ! TEMP FOR TESTING -- MAB
-!    use le_grids, only: e
-
     implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
          upar, tpar, tperp, ntot
