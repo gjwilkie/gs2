@@ -1,16 +1,25 @@
 #################################################################### OVERVIEW
 #
-#  Makefile for the GS2/AstroGK Gyrokinetic Turbulence code 
+#  Makefile for Trinity (GS2) / AstroGK Gyrokinetic Turbulence code 
+#               rmhdper reduced MHD code
+#
 #  (requires GNU's gmake)
 #
+#PROJECT ?= trinity
 PROJECT ?= gs2
 #PROJECT ?= agk
+#PROJECT ?= rmhdper
 #
 #  Makefile written by Bill Dorland and Ryusuke Numata
 #
-#  LAST UPDATE: 01/26/09
+#  LAST UPDATE: 04/11/09
 #
 # * Changelogs
+#	04/11/09: * share the Makefile with rmhdper reduced MHD code
+#		  * include progject specific target definitions
+#		    Makefile.target_$(PROJECT)
+#	04/06/09: SYSTEM environment variable is replaced by GK_SYSTEM
+#	02/25/09: gs2 replaced by trinity (MAB)
 #	01/26/09: USE_C_INDEX is imported to gs2 by TT
 #       12/11/08: add support for NAGWare and Lahey compilers
 #       10/28/08: some non-standard macros respect environment variables
@@ -37,7 +46,7 @@ PROJECT ?= gs2
 # Standard Mac OS X with MacPorts
 # Franklin at NERSC and Jaguar at NCCS (Cray XT4 with PGI)
 # Bassi at NERSC (IBM Power 5 with IBM XL Fortran)
-# Ranger (... with Intel)
+# Ranger (Sun Constellation Linux Cluster with Intel)
 #
 # * Switches:
 #
@@ -72,7 +81,7 @@ USE_NETCDF ?= new
 USE_HDF5 ?=
 # uses MDSplus (bin)
 USE_MDSPLUS ?=
-# Use function pointer in agk_layouts_indices.c (bin)
+# Use function pointer in layouts_indices.c (bin)
 # see also README.cpp
 USE_C_INDEX ?= 
 # Use Numerical Recipes local random number generator (bin)
@@ -148,14 +157,23 @@ endif
 ######################################################### PLATFORM DEPENDENCE
 
 # compile mode switches (DEBUG, TEST, PROF, OPT, STATIC, DBLE)
-# must be set before loading Makefile.$(SYSTEM) because they may affect
+# must be set before loading Makefile.$(GK_SYSTEM) because they may affect
 # compiler options.
-# However, Makefile.local may override some options set in Makefile.$(SYSTEM),
-# thus it is included before and after Makefile.$(SYSTEM)
+# However, Makefile.local may override some options set in Makefile.$(GK_SYSTEM),
+# thus it is included before and after Makefile.$(GK_SYSTEM)
 sinclude Makefile.local
 
 # include system-dependent make variables
-sinclude Makefile.$(SYSTEM)
+ifndef GK_SYSTEM
+	ifdef SYSTEM
+$(warning SYSTEM environment variable is obsolete)
+$(warning use GK_SYSTEM instead)
+	GK_SYSTEM = $(SYSTEM)
+	else
+$(error GK_SYSTEM is not set)
+	endif
+endif
+include Makefile.$(GK_SYSTEM)
 
 # include Makefile.local if exists
 sinclude Makefile.local
@@ -164,6 +182,12 @@ sinclude Makefile.local
 
 UTILS=utils
 GEO=geo
+
+ifeq ($(PROJECT),rmhdper)
+	override USE_MPI =
+	override USE_FFT = fftw
+	override USE_HDF5 =
+endif
 
 ifeq ($(MAKECMDGOALS),depend)
 # must invoke full functionality when make depend
@@ -327,7 +351,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all gs2_all agk_all
+.PHONY: all $(PROJECT)_all
 
 all: $(.DEFAULT_GOAL)
 
@@ -338,36 +362,7 @@ astrogk_mod += layouts_indices.o
 gs2_mod += layouts_indices.o
 endif
 
-gs2_all: modules gs2 ingen rungridgen
-
-gs2: $(gs2_mod) 
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-gs2.x: $(gs2_mod) 
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-agk_all: agk
-
-agk: $(astrogk_mod) 
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-agk.x: $(astrogk_mod) 
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-ingen: $(ingen_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-rungridgen: $(rungridgen_mod)
-	$(LD) $(LDFLAGS) -o $@ $^
-
-regress: $(drive_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-slice_g: $(slice_g_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-agk_fields_plot: $(agk_fields_plot_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(PLIBS)
+sinclude Makefile.target_$(PROJECT)
 
 .PHONY: modules utils_all geo_all
 
@@ -435,13 +430,10 @@ depend:
 clean:
 	-rm -f *.o *.mod *.g90 *.h core */core
 
-distclean: unlink clean
-	-rm -f $(PROJECT)
+cleanlib:
 	-rm -f *.a
-	-rm -f ingen rungridgen regress
-	-rm -f ball eiktest
-	-rm -f slice_g
-	-rm -f agk_fields_plot
+
+distclean: unlink clean cleanlib
 
 tar:
 	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
@@ -467,7 +459,7 @@ tar_exec:
 	@rm -rf $(TARDIR)
 
 test_make:
-	@echo SYSTEM is $(SYSTEM)
+	@echo GK_SYSTEM is $(GK_SYSTEM)
 	@echo .DEFAULT_GOAL is $(.DEFAULT_GOAL)
 	@echo VPATH is $(VPATH)
 	@echo CURDIR is $(CURDIR)
