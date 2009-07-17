@@ -3270,9 +3270,7 @@ contains
        ie = ie_idx(g_lo,iglo) ; is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
        do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
-          end do
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)
        end do
     end do
 
@@ -3294,9 +3292,7 @@ contains
 ! CMR: tperp....       why no factor of 2 as in tpar?
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
-          do ig = -ntgrid, ntgrid
-             g0(ig,isgn,iglo) = vperp2(ig,iglo)*gnew(ig,isgn,iglo)*aj0(ig,iglo)
-          end do
+          g0(:,isgn,iglo) = vperp2(:,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)
        end do
     end do
     call integrate_moment (g0, tperp)
@@ -3313,9 +3309,7 @@ contains
        ie = ie_idx(g_lo,iglo) ; is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
        do isgn = 1, 2
-          do ig=-ntgrid, ntgrid
-             g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo) - anon(ie,is)*phinew(ig,it,ik)*spec(is)%zt
-          end do
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) - anon(ie,is)*phinew(:,it,ik)*spec(is)%zt
        end do
     end do
 
