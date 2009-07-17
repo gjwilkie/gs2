@@ -186,10 +186,11 @@ contains
   subroutine init_egrid (negrid)
     
     integer, intent (in) :: negrid
-    logical :: first = .true.
+!    logical :: first = .true.
 
-    if (first) then
-       first = .false.
+!    if (first) then
+!       first = .false.
+    if (.not. allocated(zeroes)) then
        allocate (zeroes(negrid-1)) ; zeroes = 0.
     end if
 
@@ -459,7 +460,7 @@ module le_grids
 
   implicit none
 
-  public :: init_le_grids
+  public :: init_le_grids, finish_le_grids
   public :: integrate, lintegrate, integrate_species
   public :: pintegrate, pe_integrate, integrate_stress
   public :: e, anon, al, delal, jend, forbid, dele, wl, w
@@ -476,6 +477,11 @@ module le_grids
   real, dimension (:,:), allocatable, save :: werr, wlerr, xloc ! mbmark
   real, dimension (:,:,:), allocatable, save :: wlterr
   real, dimension (:,:,:,:), allocatable, save :: lgrnge
+  real, dimension (:,:,:), allocatable, save :: wlmod
+  real, dimension (:,:,:), allocatable, save :: wtmod
+  real, dimension (:,:), allocatable, save :: wmod
+  real, dimension (:,:), allocatable, save :: lpe, lpl
+  real, dimension (:,:,:,:), allocatable, save :: lpt
 
   real, dimension (:,:), allocatable :: e, w, anon, dele ! (negrid,nspec)
   real, dimension (:,:), allocatable :: orbit_avg
@@ -503,6 +509,12 @@ module le_grids
   logical :: new_trap_int = .false.
   logical :: vgrid = .false.
 
+  logical :: intinit = .false.
+  logical :: slintinit = .false.
+  logical :: lintinit = .false.
+  logical :: eintinit = .false.
+  logical :: initialized = .false.
+
   integer :: testfac = 1
   integer :: nmax = 500
   integer :: nterp = 100
@@ -521,7 +533,7 @@ contains
     use gs2_layouts, only: init_gs2_layouts
     implicit none
     logical, intent (out) :: accelerated_x, accelerated_v
-    logical, save :: initialized = .false.
+!    logical, save :: initialized = .false.
     integer :: il, ie
 
     if (initialized) return
@@ -708,12 +720,14 @@ contains
     integer :: ig, igint, igeint
     integer :: lint_ulim, geint2g_ulim, eint_ulim, ulim
     character (1) :: char
-    logical :: first = .true.
+!    logical :: first = .true.
 
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
 
-    if (first) then
-       first = .false.
+!    if (first) then
+!       first = .false.
+    if (.not. intinit) then
+       intinit = .true.
        call pe_layout (char)
        if (char == 'x') then
           accel_x = mod(ntheta0*naky*nspec, nproc) == 0
@@ -735,10 +749,13 @@ contains
     implicit none
     integer :: ig, igint, igeint
     integer :: lint_ulim, geint2g_ulim, eint_ulim, ulim
-    logical :: initialized = .false.
+!    logical :: initialized = .false.
 
-    if (initialized) return
-    initialized = .true.
+!    if (initialized) return
+!    initialized = .true.
+    
+    if (slintinit) return
+    slintinit = .true.
 
     call init_lintegrate 
     call init_eintegrate
@@ -890,6 +907,7 @@ contains
     end do
 
     deallocate(modzeroes,werrtmp,lmodzeroes,wlerrtmp)
+    eflag = .false.
 
   end subroutine init_weights
 
@@ -1024,6 +1042,8 @@ contains
           wgts(iw) = wgts(iw) + omprod(ix)*gwgts(ix)
        end do
     end do
+
+    deallocate (gnodes, gwgts, omprod)
        
   end subroutine get_intrvl_weights
 
@@ -1291,7 +1311,7 @@ contains
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:), intent (out) :: total
 ! total = total(theta, kx, ky)
-    complex, dimension (:,:), allocatable :: geint
+!    complex, dimension (:,:), allocatable :: geint
     complex, dimension (:), allocatable :: work
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i
@@ -1436,7 +1456,7 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (out) :: total
     integer, intent (in) :: istep
 
-    complex, dimension (:,:), allocatable :: geint
+!    complex, dimension (:,:), allocatable :: geint
     complex, dimension (:), allocatable :: work
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i
@@ -1519,16 +1539,18 @@ contains
     real :: fac, ulim
     integer :: is, il, ie, ik, it, iglo, ig, i, j, im, ntrap, k
     integer, save :: lpesize
-    logical :: first = .true.
+!    logical :: first = .true.
 
     real, dimension (:), allocatable :: nodes
     real, dimension (:,:), allocatable :: lpltmp, lpttmp
-    real, dimension (:,:), allocatable, save :: lpe, lpl
-    real, dimension (:,:,:,:), allocatable, save :: lpt
+!    real, dimension (:,:), allocatable, save :: lpe, lpl
+!    real, dimension (:,:,:,:), allocatable, save :: lpt
 
-    if (first) then
+!    if (first) then
+    if (.not. allocated(lpl)) then
        allocate(lpltmp(ng2,0:ng2-1))
        allocate(lpl(nlambda,0:ng2-1))
+
        if (vgrid) then
           lpesize = nesub
           allocate(lpe(negrid,0:lpesize-1)) ; lpe = 0.0
@@ -1589,7 +1611,7 @@ contains
        end if
 
        deallocate (lpltmp)
-       first = .false.
+!       first = .false.
     end if
 
     ! carry out legendre transform to get coefficients of
@@ -1629,8 +1651,14 @@ contains
     if (nproc > 1) then
        allocate (worke((2*ntgrid+1)*naky*ntheta0*nspec*lpesize)) ; worke = 0.
        allocate (workl((2*ntgrid+1)*naky*ntheta0*nspec*ng2)) ; workl = 0.
-       if (present(tott)) allocate (workt((2*ntgrid+1)*naky*ntheta0*nspec*(2*(nlambda-ng2)-1))) ; workt = 0.
+
+       if (present(tott)) then
+          allocate (workt((2*ntgrid+1)*naky*ntheta0*nspec*(2*(nlambda-ng2)-1)))
+          workt = 0.
+       end if
+
        i = 0 ; j = 0 ; k = 0
+
        do is = 1, nspec
           do ik = 1, naky
              do it = 1, ntheta0
@@ -1908,12 +1936,13 @@ contains
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     complex, dimension (:), allocatable :: work
-    real, dimension (:,:,:), allocatable, save :: wlmod
+!    real, dimension (:,:,:), allocatable, save :: wlmod
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i, ipt
-    logical, save :: first = .true.
+!    logical, save :: first = .true.
 
-    if (first) then
+!    if (first) then
+    if (.not. allocated (wlmod)) then
        if (proc0) then
           allocate (wlmod(-ntgrid:ntgrid,nlambda,ng2))
           wlmod = 0.0
@@ -1939,7 +1968,7 @@ contains
           end do
        end do
        
-       first = .false.
+!       first = .false.
     end if
 
     do ipt=1,ng2
@@ -1994,15 +2023,16 @@ contains
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     complex, dimension (:), allocatable :: work
-    real, dimension (:,:,:), allocatable, save :: wtmod
+!    real, dimension (:,:,:), allocatable, save :: wtmod
 !    real, dimension (:,:), allocatable, save :: ypts2
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i, ipt, ntrap
-    logical, save :: first = .true.
+!    logical, save :: first = .true.
 
     ntrap = nlambda - ng2
 
-    if (first) then
+!    if (first) then
+    if (.not. allocated(wtmod)) then
        if (proc0) then
           allocate (wtmod(-ntgrid:ntgrid,nlambda,ntrap))
           do ipt=1,ntrap
@@ -2025,7 +2055,7 @@ contains
 !       allocate(ypts2(-ntgrid:ntgrid,nlambda))
 !       ypts2 = 0.0
 
-       first = .false.
+!       first = .false.
     end if
 
     total = 0.
@@ -2089,12 +2119,13 @@ contains
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     complex, dimension (:), allocatable :: work
-    real, dimension (:,:), allocatable, save :: wmod
+!    real, dimension (:,:), allocatable, save :: wmod
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i, ipt
-    logical, save :: first = .true.
+!    logical, save :: first = .true.
 
-    if (first) then
+!    if (first) then
+    if (.not. allocated(wmod)) then
        if (proc0) then
           allocate (wmod(negrid,wdim))
           wmod = 0.0
@@ -2110,7 +2141,7 @@ contains
           call broadcast (wmod(:,ie))
        end do
 
-       first = .false.
+!       first = .false.
     end if
 
     do ipt=1,wdim
@@ -3182,6 +3213,8 @@ contains
 
     call init_orbit_average
 
+    eflag = .false.
+
   end subroutine lgridset
 
   subroutine lagrange_coefs (ig, nodes, lfac, xloc)
@@ -3442,10 +3475,13 @@ contains
 !    integer, dimension (2) :: to_gint_low, from_lambda_low, to_lhigh, from_lhigh
     integer :: iglo, isign, ig, ip, n
     integer :: ilam, il, igint
-    logical :: done = .false.
+!    logical :: done = .false.
 
-    if (done) return
-    done = .true.
+!    if (done) return
+!    done = .true.
+
+    if (lintinit) return
+    lintinit = .true.
 
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
          
@@ -3552,10 +3588,12 @@ contains
     complex, dimension (:,:), allocatable :: work
 
     integer :: igint, il, ig
-    logical :: first = .true.
+!    logical :: first = .true.
 
-    if (first) call init_slow_integrals
-    first = .false.
+!    if (first) call init_slow_integrals
+!    first = .false.
+    
+    call init_slow_integrals
 
     allocate (glam (-ntgrid:ntgrid, 2, max(2*nlambda,2*ng2+1), &
          gint_lo%llim_proc:gint_lo%ulim_alloc))
@@ -3598,10 +3636,13 @@ contains
     integer, dimension (3) :: to_low, to_high
     integer :: ig, ip, n, ie
     integer :: igint, igeint
-    logical :: done = .false.
+!    logical :: done = .false.
 
-    if (done) return
-    done = .true.
+!    if (done) return
+!    done = .true.
+    
+    if (eintinit) return
+    eintinit = .true.
 
     ! count number of elements to be redistributed to/from each processor
     nn_to = 0
@@ -3701,6 +3742,37 @@ contains
     deallocate (work)
 
   end subroutine eintegrate
+
+  subroutine finish_le_grids
+
+    use egrid, only: zeroes
+
+    implicit none
+
+    if (allocated(zeroes)) deallocate (zeroes)
+    if (allocated(e)) deallocate (e, dele, al, wl, jend, forbid, orbit_avg, xx, lgrnge, xloc)
+    if (allocated(integration_work)) deallocate (integration_work)
+    if (allocated(wlerr)) deallocate (wlerr)
+    if (allocated(werr)) deallocate (werr)
+    if (allocated(wlterr)) deallocate (wlterr)
+    if (allocated(w)) deallocate (w)
+    if (allocated(anon)) deallocate (anon)
+    if (allocated(delal)) deallocate (delal)
+    if (allocated(lpl)) deallocate (lpl, lpe)
+    if (allocated(lpt)) deallocate (lpt)
+    if (allocated(wlmod)) deallocate (wlmod)
+    if (allocated(wmod)) deallocate (wmod)
+    if (allocated(wtmod)) deallocate (wtmod)
+
+    accel_x = .false. ; accel_v = .false.
+    test = .false. ; trapped_particles = .true. ; advanced_egrid = .true.
+    new_trap_int = .false. ; vgrid = .false.
+
+    intinit = .false. ; slintinit = .false. ; lintinit = .false. ; eintinit = .false.
+
+    initialized = .false.
+
+  end subroutine finish_le_grids
 
 end module le_grids
 

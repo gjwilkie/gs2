@@ -1,7 +1,7 @@
 module dist_fn
   use redistribute, only: redist_type
   implicit none
-  public :: init_dist_fn
+  public :: init_dist_fn, finish_dist_fn
   public :: timeadv, get_stress, exb_shear
   public :: getfieldeq, getan, getfieldexp, getmoms, gettotmoms
   public :: flux, neoclassical_flux, lambda_flux
@@ -31,7 +31,6 @@ module dist_fn
   complex, dimension (:), allocatable :: fexp ! (nspec)
   real, dimension (:), allocatable :: bkdiff  ! (nspec)
   integer, dimension (:), allocatable :: bd_exp ! nspec
-  integer, dimension (:), allocatable :: jump   !MR
   real :: gridfac, apfac, driftknob, tpdriftknob, poisfac
   real :: t0, omega0, gamma0, thetas, source0
   real :: phi_ext, afilter, kfilter, a_ext
@@ -65,6 +64,7 @@ module dist_fn
   logical :: neo = .false., neoflux
   integer :: nfac = 1
   integer :: nperiod_guard
+  logical :: increase = .true., decrease = .false.
   
 !! k_parallel filter items
 !  real, dimension(:), allocatable :: work, tablekp
@@ -110,8 +110,27 @@ module dist_fn
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   ! momentum conservation
-  complex, dimension (:,:), allocatable :: g3int
-  real, dimension (:,:,:), allocatable :: sq
+!  complex, dimension (:,:), allocatable :: g3int
+!  real, dimension (:,:,:), allocatable :: sq
+
+  ! exb shear
+  integer, dimension(:), allocatable :: jump, ikx_indexed
+
+  ! kill
+  real, dimension (:,:), allocatable :: aintnorm
+  
+  ! set_source
+  real, dimension(:,:), allocatable :: ufac
+
+  ! getfieldeq1
+  real, allocatable, dimension(:,:) :: fl_avg, awgt
+  ! getfieldeq2
+  real, allocatable, dimension(:,:) :: fl_avg2, awgt2
+  real, allocatable, dimension(:) :: bfac
+  real, allocatable, dimension(:,:,:) :: f1, f2, f3, f4, kp2
+
+  ! get_verr
+  real, dimension (:,:), allocatable :: kmax
 
   ! connected bc
 
@@ -140,6 +159,15 @@ module dist_fn
 
   logical :: initialized = .false.
   logical :: initializing = .true.
+  logical :: readinit = .false.
+  logical :: bessinit = .false.
+  logical :: kp2init = .false.
+  logical :: connectinit = .false.
+  logical :: feqinit = .false.
+  logical :: lpolinit = .false.
+  logical :: fyxinit = .false.
+  logical :: cerrinit = .false.
+  logical :: mominit = .false.
 
   real, allocatable :: mom_coeff(:,:,:,:)
   real, allocatable :: mom_coeff_npara(:,:,:), mom_coeff_nperp(:,:,:)
@@ -162,6 +190,7 @@ contains
     use hyper, only: init_hyper
     implicit none
 
+!    write (*,*) 'entering init_dist_fn'
     if (initialized) return
     initialized = .true.
 
@@ -201,6 +230,7 @@ contains
     call init_hyper
 
     call init_mom_coeff
+!    write (*,*) 'exiting init_dist_fn'
   end subroutine init_dist_fn
 
   subroutine read_parameters
@@ -264,10 +294,10 @@ contains
     integer :: ierr, is, in_file
     logical :: exist
     real :: bd
-    logical :: done = .false.
+!    logical :: done = .false.
 
-    if (done) return
-    done = .true.
+    if (readinit) return
+    readinit = .true.
 
     if (proc0) then
        save_n = .true.
@@ -455,13 +485,14 @@ contains
     implicit none
     integer :: ig, ik, it, il, ie, is
     integer :: iglo
-    logical :: alloc = .true.
+!    logical :: alloc = .true.
 !CMR
     logical :: debug = .false.
 !CMR
 
 ! find totally trapped particles 
-    if (alloc) allocate (ittp(-ntgrid:ntgrid))
+!    if (alloc) allocate (ittp(-ntgrid:ntgrid))
+    if (.not. allocated(ittp)) allocate (ittp(-ntgrid:ntgrid))
     ittp = 0
     do ig = -ntgrid+1, ntgrid-1
        if (jend(ig) > 0 .and. jend(ig) <= nlambda) then
@@ -473,15 +504,24 @@ contains
        end if
     end do
 
-    if (alloc) allocate (wdrift(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-    if (alloc) allocate (wdriftttp(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
+!    if (alloc) allocate (wdrift(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+!    if (alloc) allocate (wdriftttp(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
+    if (.not. allocated(wdrift)) then
+       allocate (wdrift(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (wdriftttp(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
+       if (neoflux) then
+          allocate (wdrift_neo(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+          allocate (wdriftttp_neo(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
+          wdrift_neo = 0.  ; wdriftttp_neo = 0.
+       end if
+    end if
     wdrift = 0.  ; wdriftttp = 0.
 !>MAB    
-    if ((neoflux) .and. alloc) then
-       allocate (wdrift_neo(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (wdriftttp_neo(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
-       wdrift_neo = 0.  ; wdriftttp_neo = 0.
-    end if
+!    if ((neoflux) .and. alloc) then
+!       allocate (wdrift_neo(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+!       allocate (wdriftttp_neo(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
+!       wdrift_neo = 0.  ; wdriftttp_neo = 0.
+!    end if
 !<MAB
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -546,7 +586,7 @@ contains
        end do
     end do
 
-    alloc = .false.
+!    alloc = .false.
 !CMR
     if (debug) write(6,*) 'init_wdrift: driftknob, tpdriftknob=',driftknob,tpdriftknob
 
@@ -696,10 +736,13 @@ contains
     integer :: ig, ik, it, il, ie, is
     integer :: iglo
     real :: arg
-    logical :: done = .false.
+!    logical :: done = .false.
 
-    if (done) return
-    done = .true.
+!    if (done) return
+!    done = .true.
+
+    if (bessinit) return
+    bessinit = .true.
 
     call init_kperp2
 
@@ -732,10 +775,13 @@ contains
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
     implicit none
     integer :: ik, it
-    logical :: done = .false.
+!    logical :: done = .false.
 
-    if (done) return
-    done = .true.
+!    if (done) return
+!    done = .true.
+
+    if (kp2init) return
+    kp2init = .true.
 
     allocate (kperp2(-ntgrid:ntgrid,ntheta0,naky))
     do ik = 1, naky
@@ -894,10 +940,12 @@ contains
     integer :: ng
     integer, dimension(naky*ntheta0) :: n_k
 
-    logical :: done = .false.
+!    logical :: done = .false.
 
-    if (done) return
-    done = .true.
+!    if (done) return
+!    done = .true.
+    if (connectinit) return
+    connectinit = .true.
 
     ng = ntheta/2 + (nperiod-1)*ntheta
 
@@ -1792,9 +1840,10 @@ contains
     use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
     implicit none
-    logical :: alloc = .true.
+!    logical :: alloc = .true.
 
-    if (alloc) then
+!    if (alloc) then
+    if (.not. allocated(g)) then
        allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
 !       allocate (gold (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -1821,7 +1870,7 @@ contains
 
     g = 0. ; gnew = 0. ; g0 = 0. !; gold = 0.
 
-    alloc = .false.
+!    alloc = .false.
   end subroutine allocate_arrays
 
   subroutine timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, mode)
@@ -1883,12 +1932,11 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
     complex, dimension(:,:,:), allocatable :: temp 
-    integer, dimension(:), allocatable, save :: ikx_indexed !, jump
     integer, dimension(1), save :: itmin
     real, save :: theta0_shift
     integer :: ik, it, ie, is, il, ig, isgn, to_iglo, from_iglo, to_iproc, from_iproc, ierr, j 
     real :: dkx, gdt, dtheta0
-    logical :: exb_first = .true.
+!    logical :: exb_first = .true.
     logical :: kx_local
     complex , dimension(-ntgrid:ntgrid) :: z
 ! MR, March 2009: remove ExB restriction to box grids
@@ -1905,8 +1953,9 @@ contains
 ! MR, 2007: Works for ALL layouts (some layouts need no communication)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! Initialize kx_shift, jump, idx_indexed
-    if (exb_first) then
-       exb_first = .false.
+!    if (exb_first) then
+    if (.not. allocated(kx_shift)) then
+!       exb_first = .false.
        if (box) then
           allocate (jump(naky)) 
           jump = 0
@@ -2285,9 +2334,9 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     complex, dimension (:,:), allocatable :: g0eint, g1eint
     
-    real, dimension (:,:), allocatable, save :: aintnorm
+!    real, dimension (:,:), allocatable, save :: aintnorm
     integer :: iglo, ik, it, ige
-    logical :: diff_first = .true.
+!    logical :: diff_first = .true.
     real :: chi_int ! chi_int needs to be calculated before it can be used.
 
     if (D_kill < 0.) return
@@ -2301,8 +2350,9 @@ contains
        allocate (g0eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
        allocate (g1eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
 
-       if (diff_first) then
-          diff_first = .false.
+!       if (diff_first) then
+       if (.not. allocated (aintnorm)) then
+!          diff_first = .false.
           allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
           aintnorm = 0. ; g1 = 1.0
           call integrate (g1, g1eint)
@@ -2647,13 +2697,14 @@ contains
       use mp, only: proc0
 
       complex :: apar_p, apar_m, phi_p, phi_m!, bpar_p !GGH added bpar_p
-      real, dimension(:,:), allocatable, save :: ufac
+!      real, dimension(:,:), allocatable, save :: ufac
       real :: bd, bdfac_p, bdfac_m
       integer :: i_e, i_s
-      logical :: first = .true.
+!      logical :: first = .true.
 
-      if (first) then
-         first = .false.
+!      if (first) then
+      if (.not. allocated(ufac)) then
+!         first = .false.
          allocate (ufac(negrid, nspec))
          do i_e = 1, negrid
             do i_s = 1, nspec
@@ -3538,10 +3589,13 @@ contains
     integer :: ik, it, ie, is
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: tot
     real, dimension (nspec) :: wgt
-    logical :: done = .false.
+!    logical :: done = .false.
 
-    if (done) return
-    done = .true.
+!    if (done) return
+!    done = .true.
+
+    if (feqinit) return
+    feqinit = .true.
 
     allocate (gridfac1(-ntgrid:ntgrid,ntheta0,naky))
     gridfac1 = 1.0
@@ -3635,17 +3689,19 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
     complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
-    real, allocatable, dimension(:,:), save :: fl_avg, awgt
+!    real, allocatable, dimension(:,:), save :: fl_avg, awgt
     integer :: ik, it
-    logical :: first = .true.
+!    logical :: first = .true.
     
-    if (first) allocate (fl_avg(ntheta0, naky))
+!    if (first) allocate (fl_avg(ntheta0, naky))
+    if (.not. allocated(fl_avg)) allocate (fl_avg(ntheta0, naky))
     fl_avg = 0.
 
     if (.not. has_electron_species(spec)) then
        if (adiabatic_option_switch == adiabatic_option_noJ) then
           
-          if (first) then 
+!          if (first) then 
+          if (.not. allocated(awgt)) then 
              allocate (awgt(ntheta0, naky))
              awgt = 0.
              do ik = 1, naky
@@ -3666,7 +3722,8 @@ contains
 
        if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
           
-          if (first) then 
+!          if (first) then 
+          if (.not. allocated(awgt)) then
              allocate (awgt(ntheta0, naky))
              awgt = 0.
              do ik = 1, naky
@@ -3716,7 +3773,7 @@ contains
        fieldeqp = fieldeqp + bpar*gridfac1
     end if
 
-    first = .false.
+!    first = .false.
 
   end subroutine getfieldeq1
 
@@ -3766,18 +3823,19 @@ contains
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
-    real, allocatable, dimension(:,:,:), save :: f1, f2, f3, f4, kp2
-    real, allocatable, dimension(:,:), save :: fl_avg, awgt
-    real, allocatable, dimension(:), save :: bfac
+!    real, allocatable, dimension(:,:,:), save :: f1, f2, f3, f4, kp2
+!    real, allocatable, dimension(:,:), save :: fl_avg, awgt
+!    real, allocatable, dimension(:), save :: bfac
     real :: f5
     integer :: ig, ik, it
-    logical :: first = .true.
+!    logical :: first = .true.
     
     
-    if (first) then
+!    if (first) then
+    if (.not. allocated(fl_avg2)) then
 ! prepare for field-line-average term: 
-       allocate (fl_avg(ntheta0, naky))
-       fl_avg = 0.
+       allocate (fl_avg2(ntheta0, naky))
+       fl_avg2 = 0.
 ! prepare for field solves: 
        allocate (bfac(-ntgrid:ntgrid))
        allocate (f1(-ntgrid:ntgrid,ntheta0,naky))
@@ -3811,40 +3869,42 @@ contains
        
        if (adiabatic_option_switch == adiabatic_option_noJ) then
 
-          if (first) then 
-             allocate (awgt(ntheta0, naky))
-             awgt = 0.
+!          if (first) then 
+          if (.not. allocated(awgt2)) then
+             allocate (awgt2(ntheta0, naky))
+             awgt2 = 0.
              do ik = 1, naky
                 do it = 1, ntheta0
                    if (aky(ik) > epsilon(0.0)) cycle
-                   awgt(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
+                   awgt2(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
                 end do
              end do
           endif
           
           do ik = 1, naky
              do it = 1, ntheta0
-                fl_avg(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
+                fl_avg2(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
              end do
           end do
        end if
 
        if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
 
-          if (first) then 
-             allocate (awgt(ntheta0, naky))
-             awgt = 0.
+!          if (first) then 
+          if (.not. allocated(awgt2)) then
+             allocate (awgt2(ntheta0, naky))
+             awgt2 = 0.
              do ik = 1, naky
                 do it = 1, ntheta0
                    if (aky(ik) > epsilon(0.0)) cycle
-                   awgt(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
+                   awgt2(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
                 end do
              end do
           endif
           
           do ik = 1, naky
              do it = 1, ntheta0
-                fl_avg(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
+                fl_avg2(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
              end do
           end do
        end if
@@ -3854,14 +3914,14 @@ contains
 ! main loop: 
     do ik = 1, naky
        do it = 1, ntheta0
-          phi(:,it,ik) = fphi*(antot(:,it,ik)*f1(:,it,ik) + fl_avg(it,ik)*f1(:,it,ik) &
+          phi(:,it,ik) = fphi*(antot(:,it,ik)*f1(:,it,ik) + fl_avg2(it,ik)*f1(:,it,ik) &
                + antotp(:,it,ik)*f2(:,it,ik))
           bpar(:,it,ik) = fbpar*antotp(:,it,ik)*f3(:,it,ik) + phi(:,it,ik)*f4(:,it,ik)
           apar(:,it,ik) = fapar*antota(:,it,ik)/kp2(:,it,ik)
        end do
     end do
 
-    first = .false.
+!    first = .false.
 
   end subroutine getfieldeq2
 
@@ -4612,6 +4672,7 @@ contains
        end do
     end if
 
+    if (proc0) deallocate (wgt)
     deallocate (tot)
   end subroutine get_dens_vel
 !=============================================================================
@@ -4659,7 +4720,8 @@ contains
        end do
     enddo
 
-    deallocate (wgt,j_extz)
+    if (proc0) deallocate (wgt)
+    deallocate (j_extz)
 
   end subroutine get_jext
 !<GGH
@@ -5508,7 +5570,7 @@ contains
        end do
     end if
 
-    deallocate (dnorm, anorm)
+    deallocate (dnorm, anorm, total)
   end subroutine neoclassical_flux
 
   subroutine fieldcheck (phi, apar, bpar)
@@ -5563,6 +5625,7 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use run_parameters, only: fphi, fbpar
     use gs2_time, only: code_dt
+    use mp, only: proc0
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     real, dimension (nspec) :: wgt
@@ -5613,16 +5676,18 @@ contains
     wgt = spec%dens*spec%z
     call integrate_species (g0, wgt, apchk(:,:,:,2))
 
-    call open_output_file (unit, ".vortcheck")
-    do ik = 1, naky
-       do it = 1, ntheta0
-          write (unit,*) 'aky=',aky(ik), ' theta0=',theta0(it,ik)
-          do ig = -ntgrid, ntgrid
-             write (unit,*) apchk(ig,it,ik,1), apchk(ig,it,ik,2)
+    if (proc0) then
+       call open_output_file (unit, ".vortcheck")
+       do ik = 1, naky
+          do it = 1, ntheta0
+             write (unit,*) 'aky=',aky(ik), ' theta0=',theta0(it,ik)
+             do ig = -ntgrid, ntgrid
+                write (unit,*) apchk(ig,it,ik,1), apchk(ig,it,ik,2)
+             end do
           end do
        end do
-    end do
-    call close_output_file (unit)
+       call close_output_file (unit)
+    end if
     deallocate (apchk)
   end subroutine vortcheck
 
@@ -5687,7 +5752,7 @@ contains
     real, dimension (:), allocatable :: wgt
     real, dimension (:), allocatable :: errtmp
     integer, dimension (:), allocatable :: idxtmp
-    real, dimension (:,:), allocatable, save :: kmax
+!    real, dimension (:,:), allocatable, save :: kmax
     complex, dimension (:,:,:), allocatable :: phi_app, apar_app
     complex, dimension (:,:,:,:), allocatable :: phi_e, phi_l, phi_t
     complex, dimension (:,:,:,:), allocatable :: apar_e, apar_l, apar_t
@@ -5695,17 +5760,18 @@ contains
     real :: errcut_phi, errcut_apar
     real :: vnmult_target
 
-    logical :: increase = .true., decrease = .false., first = .true.
+!    logical :: increase = .true., decrease = .false., first = .true.
     logical :: trap_flag
 
     allocate(wgt(nspec))
     allocate(errtmp(2))
     allocate(idxtmp(3))
 
-    if (first) then
-       call broadcast (wdim)
-       first = .false.
-    end if
+!    if (first) then
+    if (.not. allocated(kmax)) call broadcast (wdim)
+!       call broadcast (wdim)
+!       first = .false.
+!    end if
 
     if (fphi > epsilon(0.0)) then
        allocate(phi_app(-ntgrid:ntgrid,ntheta0,naky))
@@ -5962,18 +6028,18 @@ contains
 
   end subroutine get_verr
 
-  subroutine get_vnewk (vnm, vnm_target, increase)
+  subroutine get_vnewk (vnm, vnm_target, incr)
 
     use collisions, only: vnfac, vnslow
     use mp, only: proc0
 
     implicit none
 
-    logical, intent (in) :: increase
+    logical, intent (in) :: incr
     real, intent (in) :: vnm
     real, intent (out) :: vnm_target
 
-    if (increase) then
+    if (incr) then
        vnm_target = vnm * vnfac
     else 
 !       vnmult_target =  vnmult * ((1.0-1.0/vnslow)/vnfac + 1.0/vnslow)
@@ -5982,7 +6048,7 @@ contains
 
   end subroutine get_vnewk
 
-  subroutine estimate_error (app1, app2, kmax, errcut, errest, erridx, trap)
+  subroutine estimate_error (app1, app2, kmax_local, errcut, errest, erridx, trap)
 
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
@@ -5992,7 +6058,7 @@ contains
 
     complex, dimension (-ntgrid:,:,:), intent (in) :: app1
     complex, dimension (-ntgrid:,:,:,:), intent (in) :: app2
-    real, dimension (:,:), intent (in) :: kmax
+    real, dimension (:,:), intent (in) :: kmax_local
     real, intent (in) :: errcut
     logical, intent (in), optional :: trap
     real, dimension (:), intent (out) :: errest
@@ -6003,7 +6069,7 @@ contains
     real :: gdsum, gdmax, gpavg, gnsum, gsmax, gpsum, gptmp
 
     igmax = 0; ikmax = 0; itmax = 0
-    gdsum = 0.0; gdmax = 0.0; gpavg = 0.0; gnsum = 0.0; gsmax = 0.0
+    gdsum = 0.0; gdmax = 0.0; gpavg = 0.0; gnsum = 0.0; gsmax = 1.0
     do ik = 1, naky
        do it = 1, ntheta0
           do ig=-ntgrid,ntgrid
@@ -6020,12 +6086,13 @@ contains
 
                    do ipt=1,end_idx
                       
-                      gptmp = kmax(it,ik)*cabs(app1(ig,it,ik) - app2(ig,it,ik,ipt))
+                      gptmp = kmax_local(it,ik)*cabs(app1(ig,it,ik) - app2(ig,it,ik,ipt))
                       gpsum = gpsum + gptmp
                       gpcnt = gpcnt + 1
                       
                    end do
                    
+!                   write (*,*) 'gpsum, gpcnt', ig, it, ik, gpsum, gpcnt
                    gpavg = gpsum/gpcnt
                    
                    if (gpavg > gdmax) then
@@ -6033,11 +6100,11 @@ contains
                       ikmax = ik
                       itmax = it
                       gdmax = gpavg
-                      gsmax = kmax(it,ik)*cabs(app1(ig,it,ik))
+                      gsmax = kmax_local(it,ik)*cabs(app1(ig,it,ik))
                    end if
                    
                    gnsum = gnsum + gpavg
-                   gdsum = gdsum + kmax(it,ik)*cabs(app1(ig,it,ik))
+                   gdsum = gdsum + kmax_local(it,ik)*cabs(app1(ig,it,ik))
 
 !                end if
              end if
@@ -6045,6 +6112,7 @@ contains
        end do
     end do
        
+!    write (*,*) 'gdmax, gsmax', gdmax, gsmax, gnsum, gdsum
     gdmax = gdmax/gsmax
        
     erridx(1) = igmax
@@ -6065,6 +6133,11 @@ contains
     use run_parameters, only: fphi, fbpar
     use gs2_layouts, only: g_lo
     use mp, only: proc0, broadcast
+
+    ! TMP FOR TESTING -- MAB
+    use mp, only: barrier
+
+    implicit none
 
     integer, intent (in) :: istep
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
@@ -6119,8 +6192,16 @@ contains
 ! perform legendre transform on dist. fn. to obtain coefficients
 ! used when expanding dist. fn. in legendre polynomials 
     if (allocated(gttran)) then
+    call barrier
+    write (*,*) 'gtranalloc'
+    call barrier
+
        call legendre_transform (g0, getran, gltran, istep, gttran)
     else
+!    call barrier
+!    write (*,*) 'pre-notalloc'
+!    call barrier
+
        call legendre_transform (g0, getran, gltran, istep)
     end if
 
@@ -6207,15 +6288,17 @@ contains
 
     complex, dimension (:,:,:,:,:), allocatable :: lpoly
     integer :: iglo, isgn, ix, ig, tsize
-    logical, save :: first = .true.
+!    logical, save :: first = .true.
     integer, save :: interp_unit
 
     allocate(lpoly(-ntgrid:ntgrid,ntheta0,naky,negrid,2*nterp-1))
 
     if (proc0) then
-       if (first) then 
+!       if (first) then 
+       if (.not. lpolinit) then
           call open_output_file (interp_unit, ".interp")
-          first = .false.
+          lpolinit = .true.
+!          first = .false.
        end if
     end if
 
@@ -6268,16 +6351,17 @@ contains
     integer, save :: unit
     real :: vpa, vpe
     complex, dimension(2) :: gtmp
-    logical :: first = .true.
+!    logical :: first = .true.
     logical, intent(in)  :: last 
 
     real, dimension (:), allocatable, save :: xpts, ypts
 
-    if (.not. allocated(xpts)) allocate(xpts(negrid))
-    if (.not. allocated(ypts)) allocate(ypts(nlambda))
+    if (.not. allocated(xpts)) then
+       allocate(xpts(negrid))
+       allocate(ypts(nlambda))
 
     ! should really just get rid of xpts and ypts
-    if (first) then
+!    if (first) then
        xpts(1:negrid-1) = zeroes
        xpts(negrid) = x0
 !       xpts = 0.0
@@ -6286,13 +6370,13 @@ contains
        do il=1,nlambda
           if (1.0-al(il)*bmag(0) .gt. 0.0) ypts(il) = sqrt(1.0-al(il)*bmag(0))
        end do
-    end if
+!    end if
 
-    if (proc0) then
-       if (first) then 
+       if (proc0) then
+!       if (first) then 
           call open_output_file (unit, ".dist")
           write(unit, *) negrid*nlambda
-          first = .false.
+!          first = .false.
        end if
     endif
 
@@ -6351,7 +6435,7 @@ contains
     real :: gp0, gp0zf
     integer :: ig, it, ik, il, ie, is, iyxlo, isign, ia, iaclo, iglo, acc
     integer, save :: unit
-    logical :: first = .true.
+!    logical :: first = .true.
 
     if (accelerated) then
        allocate (agrs(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))          
@@ -6364,7 +6448,8 @@ contains
        grs = 0.0; gzf = 0.0; gp0 = 0.0; gp0zf = 0.0
     end if
 
-    if (first) then
+!    if (first) then
+    if (.not. fyxinit) then
        if (proc0) then
           acc = 0
           call open_output_file (unit,".yxdist")
@@ -6372,8 +6457,8 @@ contains
           write(unit,*) 2*negrid*nlambda, bmag(0), acc
        end if
 
-       first = .false.
-
+!       first = .false.
+       fyxinit = .true.
     end if
 
     call g_adjust (gnew, phi, bpar, fphi, fbpar)
@@ -6502,7 +6587,7 @@ contains
     integer, save :: unit
     complex, dimension (:), allocatable :: ltmp, ftmp
     complex, dimension (:,:), allocatable :: lcoll, fdcoll, glze
-    logical :: first = .true.
+!    logical :: first = .true.
     real :: etmp, emax, etot, eavg, edenom, ltmax
     real :: time
 
@@ -6514,9 +6599,11 @@ contains
     lcoll = 0.0; fdcoll = 0.0; glze = 0.0; ltmp = 0.0; ftmp = 0.0
     etmp = 0.0; emax = 0.0; etot = 0.0; eavg = 0.0; edenom = 1.0; ltmax = 1.0
 
-    if (first .and. proc0) then
+!    if (first .and. proc0) then
+    if (.not.cerrinit .and. proc0) then
        call open_output_file (unit,".cres")
-       first = .false.
+!       first = .false.
+       cerrinit = .true.
     end if
 
 ! convert gnew from g to h
@@ -6696,7 +6783,7 @@ contains
        end if
     end if
 
-    deallocate (lcoll, fdcoll, glze)
+    deallocate (lcoll, fdcoll, glze, ltmp, ftmp)
     
   end subroutine collision_error
 
@@ -6877,10 +6964,12 @@ contains
     complex, allocatable :: gtmp(:,:,:)
     real, allocatable :: wgt(:)
     logical, parameter :: analytical = .false.
-    logical, save :: initialized=.false.
+!    logical, save :: initialized=.false.
     real :: bsq
     
-    if(initialized) return
+!    if (initialized) return
+    if (mominit) return
+    mominit = .true.
 
     if(.not.allocated(mom_coeff)) &
          & allocate(mom_coeff(nakx,naky,nspec,ncnt_mom_coeff))
@@ -6965,8 +7054,60 @@ contains
 
     deallocate(gtmp,coeff0,wgt)
     
-    initialized=.true.
+!    initialized=.true.
   end subroutine init_mom_coeff
+
+  subroutine finish_dist_fn
+
+    use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
+    use dist_fn_arrays, only: aj0, aj1, kperp2
+    use dist_fn_arrays, only: g, gnew, kx_shift
+
+    implicit none
+
+    accelerated_x = .false. ; accelerated_v = .false.
+    neo = .false. ; nfac = 1
+    no_comm = .false.
+    readinit = .false. ; bessinit = .false. ; kp2init = .false. ; connectinit = .false.
+    feqinit = .false. ; lpolinit = .false. ; fyxinit = .false. ; cerrinit = .false. ; mominit = .false.
+    increase = .true. ; decrease = .false.
+
+    call reset_init
+
+    if (allocated(fexp)) deallocate (fexp, bkdiff, bd_exp)
+    if (allocated(ittp)) then
+       deallocate (ittp, wdrift, wdriftttp)
+       if (neoflux) deallocate (wdrift_neo, wdriftttp_neo)
+    end if
+    if (allocated(vpa)) deallocate (vpa, vpac, vperp2, vpar)
+    if (allocated(wstar)) deallocate (wstar)
+    if (allocated(aj0)) deallocate (aj0, aj1)
+    if (allocated(kperp2)) deallocate (kperp2)
+    if (allocated(a)) deallocate (a, b, r, ainv)
+    if (allocated(l_links)) deallocate (l_links, r_links, n_links)
+    if (allocated(M_class)) deallocate (M_class, N_class)
+    if (allocated(itleft)) deallocate (itleft, itright)
+    if (allocated(connections)) deallocate (connections)
+    if (allocated(g_adj)) deallocate (g_adj)
+    if (allocated(g)) deallocate (g, gnew, g0)
+    if (allocated(gnl_1)) deallocate (gnl_1, gnl_2, gnl_3)
+    if (allocated(g_h)) deallocate (g_h, save_h)
+    if (allocated(kx_shift)) deallocate (kx_shift, jump, ikx_indexed)
+    if (allocated(aintnorm)) deallocate (aintnorm)
+    if (allocated(ufac)) deallocate (ufac)
+    if (allocated(gridfac1)) deallocate (gridfac1, gamtot, gamtot1, gamtot2)
+    if (allocated(gamtot3)) deallocate (gamtot3)
+    if (allocated(fl_avg)) deallocate (fl_avg)
+    if (allocated(awgt)) deallocate (awgt)
+    if (allocated(fl_avg2)) deallocate (fl_avg2, bfac, f1, f2, f3, f4, kp2)
+    if (allocated(awgt2)) deallocate (awgt2)
+    if (allocated(kmax)) deallocate (kmax)
+    if (allocated(mom_coeff)) deallocate (mom_coeff, mom_coeff_npara, mom_coeff_nperp, &
+         mom_coeff_tpara, mom_coeff_tperp, mom_shift_para, mom_shift_perp)
+
+    ! gc_from_left, gc_from_right, links_p, links_h, wfb_p, wfb_h
+
+  end subroutine finish_dist_fn
 
 end module dist_fn
 

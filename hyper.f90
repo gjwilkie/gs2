@@ -6,7 +6,7 @@ module hyper
   
   implicit none
   private
-  public :: init_hyper, hyper_diff, D_res
+  public :: init_hyper, finish_hyper, hyper_diff, D_res
   public :: D_v, D_eta, nexp
 
 ! D_v, D_eta are hyper coefficients, normalized correctly 
@@ -25,6 +25,7 @@ module hyper
   logical :: hyper_on = .false.
   logical :: gridnorm
 
+  real, dimension (:,:), allocatable, save :: aintnorm
   real, dimension (:,:), allocatable, save :: D_res
   ! (it, ik)
 
@@ -220,13 +221,14 @@ contains
   subroutine allocate_arrays
     use kt_grids, only: ntheta0, naky
     implicit none
-    logical :: alloc = .true.
+!    logical :: alloc = .true.
 
-    if (alloc) then
+!    if (alloc) then
+    if (.not. allocated(D_res)) then
        allocate (D_res(ntheta0, naky)) 
     endif
     D_res = 0.
-    alloc = .false.
+!    alloc = .false.
 
   end subroutine allocate_arrays
 
@@ -244,8 +246,8 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     complex, dimension (:,:), allocatable :: g0eint, g1eint
-    real, dimension (:,:), allocatable, save :: aintnorm
-    logical :: first = .true.
+!    real, dimension (:,:), allocatable, save :: aintnorm
+!    logical :: first = .true.
     logical :: conserve_number = .false.
     logical :: conserve_inth = .true.
 
@@ -274,13 +276,13 @@ contains
     if (.not. hyper_on) return
     if (D_hypervisc < 0.) return
 
-
     if (conserve_number) then ! get initial particle number
        allocate (g0eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
        allocate (g1eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
 
-       if (first) then
-          first = .false.
+!       if (first) then
+!          first = .false.
+       if (.not. allocated(aintnorm)) then
           allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
           aintnorm = 0. ; g1 = 1.0
           call integrate (g1, g1eint)
@@ -454,5 +456,15 @@ contains
     end do
   end subroutine g_adjust
 
+  subroutine finish_hyper
+
+    implicit none
+
+    hyper_on = .false.
+    initialized = .false.
+    if (allocated(D_res)) deallocate (D_res)
+    if (allocated(aintnorm)) deallocate (aintnorm)
+
+  end subroutine finish_hyper
 
 end module hyper
