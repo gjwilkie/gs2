@@ -382,7 +382,7 @@ contains
        end do
     end do
     
-    call integrate_moment (gtmp, dtmp) ! v0z0
+    call integrate_moment (gtmp, dtmp, all) ! v0z0
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Redefine z0 = z0 / (1 + v0z0)
@@ -416,9 +416,22 @@ contains
        all = 1
        call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
     else
-       do is = 1, nspec
-          duinv(:,:,:,is) = vnmult(1)*spec(is)%vnewk*sqrt(2./pi)
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          ik = ik_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          do isgn = 1, 2
+             gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,iglo)**2
+          end do
        end do
+
+       all = 1
+       call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
+
+!       do is = 1, nspec
+!          duinv(:,:,:,is) = vnmult(1)*spec(is)%vnewk*sqrt(2./pi)
+!       end do
     end if
 
     where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
@@ -441,7 +454,8 @@ contains
              s0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpdiff(:,isgn,il)*sqrt(e(ie,is)) &
                   * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
           else
-             s0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
+!             s0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
+             s0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
                   * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
           end if
        end do
@@ -524,7 +538,8 @@ contains
                   * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
                   / bmag
           else
-             w0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*e(ie,is)*al(il)*aj1(:,iglo) &
+!             w0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*e(ie,is)*al(il)*aj1(:,iglo) &
+             w0(:,isgn,iglo) = -vns(ik,ie,is,1)*e(ie,is)*al(il)*aj1(:,iglo) &
                   * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
                   / bmag
           end if
@@ -666,23 +681,23 @@ contains
     vns(:,:,:,2) = vnmult(2)*vnew_s
 
     ! first obtain 1/du
-    if (conservative) then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          ie = ie_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          do isgn = 1, 2
-             gtmp(:,isgn,iglo) = e(ie,is)*vnmult(2)*vnew_E(ik,ie,is)
-          end do
+!    if (conservative) then
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          gtmp(:,isgn,iglo) = e(ie,is)*vnmult(2)*vnew_E(ik,ie,is)
        end do
+    end do
        
-       all = 1
-       call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
-    else
-       do is = 1, nspec
-          duinv(:,:,:,is) = vnmult(2)*spec(is)%vnewk*sqrt(2./pi)
-       end do
-    end if
+    all = 1
+    call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
+!    else
+!       do is = 1, nspec
+!          duinv(:,:,:,is) = vnmult(2)*spec(is)%vnewk*sqrt(2./pi)
+!       end do
+!    end if
 
     where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
                                         ! duinv=0 iff vnew=0 so ok to keep duinv=0.
@@ -699,7 +714,7 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u0 = -nu_E E dt J0 f_0 / du
-          bz0(:,isgn,iglo) = -code_dt*vnmult(2)*vnew_E(ik,ie,is) &
+           bz0(:,isgn,iglo) = -code_dt*vnmult(2)*vnew_E(ik,ie,is) &
                * aj0(:,iglo)*duinv(:,it,ik,is)
        end do
     end do
@@ -721,7 +736,7 @@ contains
        end do
     end do
 
-    call integrate_moment (gtmp, dtmp) ! v0z0
+    call integrate_moment (gtmp, dtmp, all) ! v0z0
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Redefine z0 = z0 / (1 + v0z0)
@@ -740,25 +755,25 @@ contains
     ! redefine dq = du (for momentum-conserving terms)
     ! du == int (E nu_s f_0);  du = du(z, kx, ky, s)
     ! duinv = 1/du
-    if (conservative) then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          ie = ie_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          do isgn = 1, 2
-             gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,iglo)**2
+!    if (conservative) then
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,iglo)**2
 !             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*e(ie,is)
 
-          end do
        end do
+    end do
        
-       all = 1
-       call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
-    else
-       do is = 1, nspec
-          duinv(:,:,:,is) = vnmult(2)*spec(is)%vnewk*sqrt(2./pi)
-       end do
-    end if
+    all = 1
+    call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
+!    else
+!       do is = 1, nspec
+!          duinv(:,:,:,is) = vnmult(2)*spec(is)%vnewk*sqrt(2./pi)
+!       end do
+!    end if
 
     where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
                                         ! duinv=0 iff vnew=0 so ok to keep duinv=0.
@@ -775,13 +790,13 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u1 = -3 nu_s vpa dt J0 f_0 / du
-          if (conservative) then
-             bs0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
-                  * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
-          else
-             bs0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
-                  * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
-          end if
+!          if (conservative) then
+          bs0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
+               * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
+!          else
+!             bs0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
+!                  * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
+!          end if
        end do
     end do
 
@@ -855,15 +870,15 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u0 = -3 dt J1 vperp vus a f0 / du
-          if (conservative) then
-             bw0(:,isgn,iglo) = -vns(ik,ie,is,1)*e(ie,is)*al(il)*aj1(:,iglo) &
-                  * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
-                  / bmag
-          else
-             bw0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*e(ie,is)*al(il)*aj1(:,iglo) &
-                  * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
-                  / bmag
-          end if
+!          if (conservative) then
+          bw0(:,isgn,iglo) = -vns(ik,ie,is,1)*e(ie,is)*al(il)*aj1(:,iglo) &
+               * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
+               / bmag
+!          else
+!             bw0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*e(ie,is)*al(il)*aj1(:,iglo) &
+!                  * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
+!                  / bmag
+!          end if
        end do
     end do
 

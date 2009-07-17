@@ -37,7 +37,7 @@ program gs2
 ! initialize message passing 
 if (debug) write(6,*) "gs2: call init_mp"
   call init_mp
-  call checktime(avail_cpu_time,exit) ! initialize
+  call checktime(avail_cpu_time,exit) ! initialize timer
 
 ! report # of processors being used
   if (proc0) then
