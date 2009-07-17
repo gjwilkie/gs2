@@ -241,7 +241,8 @@ contains
 
   end subroutine reset_gs2
 
-  subroutine gs2_trin_init (rhoc, qval, shat, aspr, ntspec, dens, temp, fprim, tprim, nu)
+  subroutine gs2_trin_init (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, &
+	ntspec, dens, temp, fprim, tprim, nu)
 
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo
@@ -249,11 +250,11 @@ contains
     implicit none
 
     integer, intent (in) :: ntspec
-    real, intent (in) :: rhoc, qval, shat, aspr, dens, fprim
+    real, intent (in) :: rhoc, qval, shat, aspr, kap, kappri, tri, tripri, dens, fprim
     real, dimension (:), intent (in) :: temp, tprim, nu
 
     call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
-    call init_trin_geo (rhoc, qval, shat, aspr)
+    call init_trin_geo (rhoc, qval, shat, aspr, kap, kappri, tri, tripri)
     
   end subroutine gs2_trin_init
 

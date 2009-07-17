@@ -1927,7 +1927,6 @@ contains
     use dist_fn_arrays, only: kx_shift
     use gs2_time, only: code_dt, code_dt_old
     use mp, only: iproc, proc0, send, receive
-    use constants, only: twopi 
     
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
@@ -1936,7 +1935,7 @@ contains
     real, save :: theta0_shift
     integer :: ik, it, ie, is, il, ig, isgn, to_iglo, from_iglo, to_iproc, from_iproc, ierr, j 
     real :: dkx, gdt, dtheta0
-!    logical :: exb_first = .true.
+    logical :: exb_first = .true.
     logical :: kx_local
     complex , dimension(-ntgrid:ntgrid) :: z
 ! MR, March 2009: remove ExB restriction to box grids
@@ -1953,9 +1952,8 @@ contains
 ! MR, 2007: Works for ALL layouts (some layouts need no communication)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! Initialize kx_shift, jump, idx_indexed
-!    if (exb_first) then
-    if (.not. allocated(kx_shift)) then
-!       exb_first = .false.
+    if (exb_first) then
+       exb_first = .false.
        if (box) then
           allocate (jump(naky)) 
           jump = 0
@@ -1986,7 +1984,6 @@ contains
     ! also to get things right after changing time step size
     ! added May 18, 2009 -- MAB
     gdt = 0.5*(code_dt + code_dt_old)
-!    gdt = code_dt
     
 ! kx_shift is a function of time.   Update it here:  
 ! MR, 2007: kx_shift array gets saved in restart file
@@ -1999,7 +1996,6 @@ contains
        end do
     else
 ! MR, March 2009: on extended theta grid theta0_shift tracks ExB shear
-! CMR, May 2009: add 2pi shat factor so that: dtheta0/dt = -GEXB/(2pi shat)
 ! CMR, 25 May 2009: fix 2pi error so that: dtheta0/dt = -GEXB/shat
        dtheta0 = theta0(2,1)
        theta0_shift = theta0_shift - g_exb*gdt/shat
