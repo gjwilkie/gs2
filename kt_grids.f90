@@ -245,7 +245,7 @@ contains
     ny = 0
 !    jtwist = 1
     ! default jtwist -- MAB
-    jtwist = int(2.0*pi*shat + 0.5)
+    jtwist = max(int(2.0*pi*shat + 0.5),1)
     rtwist = 0.0
     x0 = 0.
     in_file = input_unit_exist("kt_grids_box_parameters", exist)
