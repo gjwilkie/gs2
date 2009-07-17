@@ -45,7 +45,7 @@ module antenna
   logical, save :: initialized = .false.
 
   private
-  public :: init_antenna, dump_ant_amp, amplitude, reset_init
+  public :: init_antenna, dump_ant_amp, amplitude, finish_antenna
   public :: antenna_w, antenna_apar, antenna_amplitudes, a_ext_data
 
 contains
@@ -200,6 +200,20 @@ contains
        
   end subroutine read_parameters
 !=============================================================================
+  subroutine finish_antenna
+
+    use antenna_data, only: finish_antenna_data
+
+    implicit none
+
+    call finish_antenna_data
+    if (allocated(w_stir)) deallocate (w_stir)
+    if (allocated(kx_stir)) deallocate (kx_stir, ky_stir, kz_stir, trav)
+    if (allocated(apar_new)) deallocate (apar_new, apar_old)
+    initialized = .false.
+
+  end subroutine finish_antenna
+!=============================================================================
   subroutine antenna_amplitudes (apar)
 
     use mp
@@ -215,16 +229,17 @@ contains
     complex :: force_a, force_b
     real :: dt, sigma, time, amp
     integer :: i, it, ik
-    logical, save :: first = .true.
+!    logical, save :: first = .true.
 
     apar=0.
 
     if (no_driver) return
 
-    if (first) then
+!    if (first) then
+    if (.not. allocated(apar_new)) then
        allocate (apar_new(-ntgrid:ntgrid,ntheta0,naky)) ; apar_new = 0.
        allocate (apar_old(-ntgrid:ntgrid,ntheta0,naky)) 
-       first = .false.
+!       first = .false.
     end if
 
     apar_old = apar_new
@@ -401,16 +416,6 @@ contains
     end if
 
   end subroutine dump_ant_amp
-!=============================================================================
-
-! used when interfacing GS2 with Trinity -- MAB
-  subroutine reset_init
-
-    implicit none
-    
-    initialized = .false.
-
-  end subroutine reset_init
 !=============================================================================
 end module antenna
 

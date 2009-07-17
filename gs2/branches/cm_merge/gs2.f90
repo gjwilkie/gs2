@@ -121,7 +121,20 @@ if (debug) write(6,*) "gs2: reset_time_step"
        time_finish/60.,time_finish/time_total,time_total/60.
   endif
 
+  call finish_gs2
   call finish_mp
+
+contains
+
+  subroutine finish_gs2
+
+    use antenna, only: finish_antenna
+
+    implicit none
+
+    call finish_antenna
+
+  end subroutine finish_gs2
 
 !!$contains
 !!$
