@@ -320,7 +320,7 @@ contains
        afilter = 0.0
        kfilter = 0.0
        g_exb = 0.0
-       omprimfac = 0.0
+       omprimfac = 1.0
        h_kill = .true.
        D_kill = -10.0
        noise = -1.
@@ -2731,7 +2731,7 @@ contains
               -zi*wdrift(ig,iglo)*phi_p*nfac) &
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              - omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb &
+              - 2.0*g_exb*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik) &
               * sqrt(Rplot(ig)**2 - (grho(ig)/(bmag(ig)*drhodpsi))**2) &
               * qval/(rhoc*spec(is)%stm)) &
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo)) 
