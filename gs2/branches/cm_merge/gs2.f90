@@ -6,7 +6,7 @@ program gs2
 !  use mp, only: send, receive, barrier, job
   use file_utils, only: init_file_utils, finish_file_utils, run_name, list_name
   use fields, only: init_fields
-  use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
+  use gs2_diagnostics, only: init_gs2_diagnostics
   use gs2_diagnostics, only: nsave
   use run_parameters, only: nstep
   use run_parameters, only: fphi, fapar, fbpar
@@ -70,6 +70,7 @@ if (debug) write(6,*) "gs2: call init_diagnostics"
   call init_gs2_diagnostics (list, nstep)
 if (debug) write(6,*) "gs2: call init_tstart"
   call init_tstart (tstart)   ! tstart is in user units 
+
   if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
   istep_end = nstep
 if (debug) write(6,*) "gs2: start istep loop"
@@ -80,6 +81,7 @@ if (debug) write(6,*) "gs2: start istep loop"
 if (debug) write(6,*) "gs2: istep =",istep
 
      call advance (istep)
+
      if (nsave > 0 .and. mod(istep, nsave) == 0) &
           call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
      
@@ -103,7 +105,7 @@ if (debug) write(6,*) "gs2: reset_time_step"
   end do
   if (proc0) call write_dt
 
-  call finish_gs2_diagnostics (istep_end)
+  call finish_gs2 (istep_end)
   if (proc0) call finish_file_utils
   if (proc0) then
      call time_message(.false., .false., time_finish,'Finished run')
@@ -121,18 +123,41 @@ if (debug) write(6,*) "gs2: reset_time_step"
        time_finish/60.,time_finish/time_total,time_total/60.
   endif
 
-  call finish_gs2
   call finish_mp
 
 contains
 
-  subroutine finish_gs2
+  subroutine finish_gs2 (istep_end)
 
     use antenna, only: finish_antenna
+    use collisions, only: finish_collisions
+    use dist_fn, only: finish_dist_fn
+    use fields, only: finish_fields
+    use gs2_diagnostics, only: finish_gs2_diagnostics
+    use hyper, only: finish_hyper
+    use init_g, only: finish_init_g
+    use kt_grids, only: finish_kt_grids
+    use le_grids, only: finish_le_grids
+    use nonlinear_terms, only: finish_nonlinear_terms
+    use run_parameters, only: finish_run_parameters
+    use species, only: finish_species
 
     implicit none
 
+    integer, intent (in) :: istep_end
+
+    call finish_gs2_diagnostics (istep_end)
     call finish_antenna
+    call finish_collisions
+    call finish_dist_fn
+    call finish_fields
+    call finish_hyper
+    call finish_init_g
+    call finish_kt_grids
+    call finish_le_grids
+    call finish_nonlinear_terms
+    call finish_run_parameters
+    call finish_species
 
   end subroutine finish_gs2
 

@@ -2,7 +2,7 @@ module init_g
   implicit none
 
   public :: ginit
-  public :: init_init_g
+  public :: init_init_g, finish_init_g
   public :: width0
   public :: tstart
   public :: reset_init
@@ -54,6 +54,7 @@ module init_g
   ! <RN
   
   logical :: debug = .false.
+  logical :: initialized = .false.
 
 contains
 
@@ -62,7 +63,7 @@ contains
     use gs2_layouts, only: init_gs2_layouts
     use mp, only: proc0, broadcast
     implicit none
-    logical, save :: initialized = .false.
+!    logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
@@ -2383,6 +2384,7 @@ contains
        deallocate(densxy,uparxy,tparxy,tperxy)
        deallocate(phixy,aparxy,bparxy)
        deallocate(jparxy)
+       deallocate(by,byxy)
     endif
 
   contains
@@ -2617,5 +2619,13 @@ contains
     call init_vnm (vnm, istatus)
 
   end subroutine init_vnmult
+
+  subroutine finish_init_g
+
+    implicit none
+
+    initialized = .false.
+
+  end subroutine finish_init_g
 
 end module init_g
