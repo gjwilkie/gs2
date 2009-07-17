@@ -1899,16 +1899,6 @@ contains
              vpdiff(ig,2,:) = -vpdiff(ig,1,:)
           
           end do
-          ! TMP FOR TESTING -- MAB
-!          if (proc0) then
-!             do ig = -ntgrid, ntgrid
-!                do il = 1, nlambda
-!                   write (*,401) 'vpdiff', real(il), real(ig), al(il), bmag(ig), wl(ig,il), sqrt(max(0.0,1.0-al(il)*bmag(ig))), vpdiff(ig,1,il), vpdiff(ig,2,il) 
-!                end do
-!             end do
-!          end if
-
-!401       format (a8,8(1x,1pg18.11))
 
        end if
     end if
@@ -1987,16 +1977,6 @@ contains
 !          
 !          vpdiff(ig,2,:) = -vpdiff(ig,1,:)
 !          
-!
-!          ! TMP FOR TESTING -- MAB
-!          if (proc0) then
-!             do ig = -ntgrid, ntgrid
-!                do il = 1, nlambda
-!!                   write (*,*) 'vpdiff', vpdiff(ig,1,il), vpdiff(ig,2,il) 
-!                end do
-!             end do
-!          end if
-
 !       end if
 
        select case (lorentz_switch)
