@@ -71,6 +71,7 @@ gs2_mod = \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
+	 gs2_main.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
 	 gs2_time.o \
@@ -282,25 +283,7 @@ geq.o: \
 gridgen4mod.o: \
 	 spl.o 
 gs2.o: \
-	 antenna.o \
-	 collisions.o \
-	 dist_fn.o \
-	 dist_fn_arrays.o \
-	 fields.o \
-	 file_utils.o \
-	 gs2_diagnostics.o \
-	 gs2_reinit.o \
-	 gs2_save.o \
-	 gs2_time.o \
-	 hyper.o \
-	 init_g.o \
-	 job_manage.o \
-	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
-	 nonlinear_terms.o \
-	 run_parameters.o \
-	 species.o 
+	 gs2_main.o 
 gs2_diagnostics.o: \
 	 antenna.o \
 	 collisions.o \
@@ -379,6 +362,26 @@ gs2_layouts.o: \
 	 file_utils.o \
 	 layouts_type.o \
 	 mp.o 
+gs2_main.o: \
+	 antenna.o \
+	 collisions.o \
+	 dist_fn.o \
+	 dist_fn_arrays.o \
+	 fields.o \
+	 file_utils.o \
+	 gs2_diagnostics.o \
+	 gs2_reinit.o \
+	 gs2_save.o \
+	 gs2_time.o \
+	 hyper.o \
+	 init_g.o \
+	 job_manage.o \
+	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
+	 nonlinear_terms.o \
+	 run_parameters.o \
+	 species.o 
 gs2_reinit.o: \
 	 antenna.o \
 	 collisions.o \

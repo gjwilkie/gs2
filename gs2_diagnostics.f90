@@ -11,6 +11,8 @@ module gs2_diagnostics
   public :: init_gs2_diagnostics
   public :: finish_gs2_diagnostics
   public :: loop_diagnostics
+  public :: reset_init
+  public :: pflux_avg, qflux_avg, heat_avg, start_time
 
   interface get_vol_average
      module procedure get_vol_average_one, get_vol_average_all
@@ -98,6 +100,9 @@ module gs2_diagnostics
   real, dimension (:,:,:), allocatable :: theta_qflux, theta_qmflux, theta_qbflux
 
   ! (ntheta0,naky,nspec)
+
+  real :: start_time = 0.0
+  real, dimension (:), allocatable :: pflux_avg, qflux_avg, heat_avg
 
   integer :: ntg_out
   integer :: nout = 1
@@ -236,6 +241,9 @@ contains
           write_cerr = .false.
        end if
     end if
+
+    allocate (pflux_avg(nspec), qflux_avg(nspec), heat_avg(nspec))
+    pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0
 
   end subroutine init_gs2_diagnostics
  
@@ -1282,6 +1290,7 @@ contains
          pbflux, qbheat, vbflux, theta_pflux, theta_vflux, theta_qflux, theta_pmflux, &
          theta_vmflux, theta_qmflux, theta_pbflux, theta_vbflux, theta_qbflux)
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
+    if (allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg)
 
     wtmp_old = 0. ; nout = 1 ; nout_movie = 1
     initialized = .false.
@@ -1367,12 +1376,16 @@ contains
 !    real, dimension (:), allocatable :: phi_by_k, apar_by_k, bpar_by_k
     real :: hflux_tot, zflux_tot, vflux_tot
     real, dimension(nspec) :: tprim_tot, fprim_tot
+    real, save :: t_old = 0.
     character(200) :: filename
     logical :: last = .false.
     logical,optional:: debopt
     logical:: debug=.false.
 
     if (present(debopt)) debug=debopt
+
+    part_fluxes = 0.0 ; mpart_fluxes = 0.0 ; bpart_fluxes = 0.0
+    heat_fluxes = 0.0 ; mheat_fluxes = 0.0 ; bheat_fluxes = 0.0
 
     call prof_entering ("loop_diagnostics")
 
@@ -1529,6 +1542,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 !            pflux, qheat, qheat_par, qheat_perp, vflux, &
 !            pmflux, qmheat, qmheat_par, qmheat_perp, vmflux, &
 !            pbflux, qbheat, qbheat_par, qbheat_perp, vbflux)
+
        if (proc0) then
           if (fphi > epsilon(0.0)) then
              do is = 1, nspec
@@ -1615,8 +1629,16 @@ if (debug) write(6,*) "loop_diagnostics: -1"
                 call get_volume_average (vbflux(:,:,is), bmom_fluxes(is))
              end do
           end if
+          pflux_avg = pflux_avg + (part_fluxes + mpart_fluxes + bpart_fluxes)*(t-t_old)
+          qflux_avg = qflux_avg + (heat_fluxes + mheat_fluxes + bheat_fluxes)*(t-t_old)
+          if (write_hrate) heat_avg = heat_avg + h%imp_colls*(t-t_old)
+          t_old = t
        end if
     end if
+
+    call broadcast (pflux_avg)
+    call broadcast (qflux_avg)
+    if (write_hrate) call broadcast (heat_avg)
 
     fluxfac = 0.5
     fluxfac(1) = 1.0
@@ -2756,5 +2778,16 @@ if (debug) write(6,*) "get_omegaavg: done"
     end do
 
   end subroutine get_surf_average
+
+  subroutine reset_init
+
+    use gs2_time, only: user_time
+
+    implicit none
+
+    start_time = user_time
+    pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0
+
+  end subroutine reset_init
 
 end module gs2_diagnostics

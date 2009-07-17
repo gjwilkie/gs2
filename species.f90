@@ -1,7 +1,7 @@
 module species
   implicit none
 
-  public :: init_species, finish_species
+  public :: init_species, finish_species, reinit_species, init_trin_species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
   public :: has_electron_species, has_slowing_down_species
@@ -33,17 +33,25 @@ module species
   integer :: nspec
   type (specie), dimension (:), allocatable :: spec
 
+  integer :: ntspec_trin
+  real :: dens_trin, fprim_trin
+  real, dimension (:), allocatable :: temp_trin, tprim_trin, nu_trin
+
   logical :: initialized = .false.
 
 contains
 
   subroutine init_species
+    use mp, only: trin_flag
     implicit none
 !    logical, save :: initialized = .false.
+
     if (initialized) return
     initialized = .true.
 
     call read_parameters
+    if (trin_flag) call reinit_species (ntspec_trin, dens_trin, &
+         temp_trin, fprim_trin, tprim_trin, nu_trin)
   end subroutine init_species
 
   subroutine read_parameters
@@ -190,5 +198,86 @@ contains
     initialized = .false.
 
   end subroutine finish_species
+
+  subroutine reinit_species (ntspec, dens, temp, fprim, tprim, nu)
+
+    use mp, only: broadcast, proc0
+
+    implicit none
+
+    integer, intent (in) :: ntspec
+    real, intent (in) :: dens, fprim
+    real, dimension (:), intent (in) :: temp, tprim, nu
+
+    integer :: is
+
+    if (proc0) then
+
+       nspec = ntspec
+
+       do is = 1, nspec
+          ! want to use density and temperature profiles from transport solver
+          ! normalized to reference species (which is taken to be the first species,
+          ! for now.  perhaps more sophisticated method of choosing ref species can be
+          ! included later.)
+          spec(is)%dens  = dens/dens  ! awaiting generalization to ni/=ne
+          spec(is)%temp  = temp(is)/temp(1)
+          spec(is)%fprim = fprim
+          spec(is)%tprim = tprim(is)
+          spec(is)%vnewk = nu(is)
+
+          spec(is)%stm = sqrt(spec(is)%temp/spec(is)%mass)
+          spec(is)%zstm = spec(is)%z/sqrt(spec(is)%temp*spec(is)%mass)
+          spec(is)%tz = spec(is)%temp/spec(is)%z
+          spec(is)%zt = spec(is)%z/spec(is)%temp
+          spec(is)%smz = abs(sqrt(spec(is)%temp*spec(is)%mass)/spec(is)%z)
+
+!          write (*,100) 'reinit_species', rhoc_ms, spec(is)%temp, spec(is)%fprim, &
+!               spec(is)%tprim, spec(is)%vnewk, real(is)
+       end do
+
+    end if
+
+!100 format (a15,9(1x,1pg18.11))
+
+    call broadcast (nspec)
+
+    do is = 1, nspec
+       call broadcast (spec(is)%dens)
+       call broadcast (spec(is)%temp)
+       call broadcast (spec(is)%fprim)
+       call broadcast (spec(is)%tprim)
+       call broadcast (spec(is)%vnewk)
+       call broadcast (spec(is)%stm)
+       call broadcast (spec(is)%zstm)
+       call broadcast (spec(is)%tz)
+       call broadcast (spec(is)%zt)
+       call broadcast (spec(is)%smz)
+    end do
+
+  end subroutine reinit_species
+
+  subroutine init_trin_species (ntspec_in, dens_in, temp_in, fprim_in, tprim_in, nu_in)
+
+    implicit none
+
+    integer, intent (in) :: ntspec_in
+    real, intent (in) :: dens_in, fprim_in
+    real, dimension (:), intent (in) :: temp_in, tprim_in, nu_in
+
+    if (.not. allocated(temp_trin)) then
+       allocate (temp_trin(size(temp_in)))
+       allocate (tprim_trin(size(tprim_in)))
+       allocate (nu_trin(size(nu_in)))
+    end if
+
+    ntspec_trin = ntspec_in
+    dens_trin = dens_in
+    temp_trin = temp_in
+    fprim_trin = fprim_in
+    tprim_trin = tprim_in
+    nu_trin = nu_in
+
+  end subroutine init_trin_species
 
 end module species
