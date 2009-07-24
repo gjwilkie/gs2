@@ -177,6 +177,7 @@ contains
     initialized = .false.
 
     call init_theta_grid_params
+! MAB -- SUGGEST ELIMINATING THE FOLLOWING RHOC CALCULATIONS
 ! make rhoc consistent with eps, epsl, and insert this value into geometry 
     rhoc = 2.*eps/epsl
     rhoc_geo=rhoc
@@ -283,8 +284,12 @@ contains
     kxfac = 1.0
     if (epsl > epsilon(0.0)) then
        qval = epsl/pk
+! MAB -- SUGGEST THE FOLLOWING:
+!       rhoc = 2.*eps/epsl
     else
        qval = 1.
+! MAB -- SUGGEST THE FOLLOWING:
+!       rhoc = 1.
     end if
     select case (model_switch)
     case (model_salpha,model_alpha1,model_b2)
