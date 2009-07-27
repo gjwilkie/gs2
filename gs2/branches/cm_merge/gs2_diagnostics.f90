@@ -1392,7 +1392,7 @@ contains
 
     exit = .false.
 
-    if ((.not. nonlin) .and. write_omega) then
+    if (.not. nonlin ) then
 ! MR, 10/3/2009: avoid calling get_omegaavg in nonlinear calculations
        if (proc0) then
           if (debug) write(6,*) "loop_diagnostics: proc0 call get_omegaavg"
