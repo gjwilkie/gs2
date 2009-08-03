@@ -7,6 +7,9 @@ contains
 # endif
 
   subroutine run_gs2 (mpi_comm, filename, pflux, qflux, heat, dvdrho, grho)
+    ! <<wkdoc initialize the mpi communicator (init_mp) wkdoc>>
+    ! <<wkdoc initialize the inputs and outputs, checking whether we are
+    ! doing a [[Trinity]] run or a list of runs wkdoc>>
     use job_manage, only: checkstop, job_fork, checktime
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
