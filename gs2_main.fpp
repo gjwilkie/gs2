@@ -7,9 +7,6 @@ contains
 # endif
 
   subroutine run_gs2 (mpi_comm, filename, pflux, qflux, heat, dvdrho, grho)
-    ! <<wkdoc initialize the mpi communicator (init_mp) wkdoc>>
-    ! <<wkdoc initialize the inputs and outputs, checking whether we are
-    ! doing a [[Trinity]] run or a list of runs wkdoc>>
     use job_manage, only: checkstop, job_fork, checktime
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
@@ -48,7 +45,7 @@ contains
     
     if (first_time) then
 
-       ! initialize message passing 
+       ! <<wkdoc initialize message passing wkdoc>>
        if (present(mpi_comm)) then
           call init_mp (mpi_comm)
        else
@@ -64,6 +61,8 @@ contains
              write(*,*) 'Running on ',nproc,' processors'
           end if
           write (*,*) 
+          ! <<wkdoc initialize the inputs and outputs, checking whether we are
+          ! doing a [[Trinity]] run or a list of runs wkdoc>>
           ! figure out run name or get list of jobs
           if (present(filename)) then
              call init_file_utils (list, trin_run=.true., name=filename)
@@ -74,7 +73,7 @@ contains
 
        call broadcast (list)
     
-       ! if given a list of jobs, fork
+       ! <<wkdoc if given a list of jobs, fork wkdoc>>
        if (list) call job_fork
     
        if (proc0) then
