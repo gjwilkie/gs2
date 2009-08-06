@@ -97,6 +97,7 @@ module gs2_diagnostics
   real, dimension (:,:,:), allocatable :: pbflux, vbflux
   real, dimension (:,:),   allocatable :: theta_pflux, theta_pmflux, theta_pbflux
   real, dimension (:,:),   allocatable :: theta_vflux, theta_vmflux, theta_vbflux
+  real, dimension (:,:),   allocatable :: theta_vflux_par, theta_vflux_perp
   real, dimension (:,:,:), allocatable :: theta_qflux, theta_qmflux, theta_qbflux
 
   ! (ntheta0,naky,nspec)
@@ -348,6 +349,8 @@ contains
        
     allocate (theta_pflux (-ntgrid:ntgrid, nspec)) ; theta_pflux = 0.
     allocate (theta_vflux (-ntgrid:ntgrid, nspec)) ; theta_vflux = 0.
+    allocate (theta_vflux_par (-ntgrid:ntgrid, nspec)) ; theta_vflux_par = 0.
+    allocate (theta_vflux_perp (-ntgrid:ntgrid, nspec)) ; theta_vflux_perp = 0.
     allocate (theta_qflux (-ntgrid:ntgrid, nspec, 3)) ; theta_qflux = 0.
     
     allocate (theta_pmflux (-ntgrid:ntgrid, nspec)) ; theta_pmflux = 0.
@@ -1289,7 +1292,8 @@ contains
     if (allocated(j_ext_hist)) deallocate (j_ext_hist)
     if (allocated(omegahist)) deallocate (omegahist)
     if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
-         pbflux, qbheat, vbflux, theta_pflux, theta_vflux, theta_qflux, theta_pmflux, &
+         pbflux, qbheat, vbflux, theta_pflux, theta_vflux, theta_vflux_par, theta_vflux_perp, &
+         theta_qflux, theta_pmflux, &
          theta_vmflux, theta_qmflux, theta_pbflux, theta_vbflux, theta_qbflux)
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
     if (allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg)
@@ -1540,7 +1544,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
              pflux,  qheat,  vflux, vflux_par, vflux_perp, &
             pmflux, qmheat, vmflux,  &
             pbflux, qbheat, vbflux, &
-       theta_pflux, theta_vflux, theta_qflux, &
+       theta_pflux, theta_vflux, theta_vflux_par, theta_vflux_perp, theta_qflux, &
        theta_pmflux, theta_vmflux, theta_qmflux, & 
        theta_pbflux, theta_vbflux, theta_qbflux)
        call g_adjust (g, phinew, bparnew, -fphi, -fbpar)
@@ -1589,6 +1593,10 @@ if (debug) write(6,*) "loop_diagnostics: -1"
                 call get_volume_average (vflux_perp(:,:,is), perpmom_fluxes(is))
 
                 theta_vflux(:,is) = theta_vflux(:,is)*funits &
+                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
+                theta_vflux_par(:,is) = theta_vflux(:,is)*funits &
+                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
+                theta_vflux_perp(:,is) = theta_vflux(:,is)*funits &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
 
              end do
@@ -1970,6 +1978,11 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                      & ' part fluxes: ', 5(1x,e10.4))") &
                      t, phi2, part_fluxes(1:min(nspec,5))
+                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
+                     & ' mom fluxes: ', 5(1x,e10.4),' parmom fluxes: ', 5(1x,e10.4), &
+                     & ' perpmom fluxes: ', 5(1x,e10.4))") &
+                     t, phi2, mom_fluxes(1:min(nspec,5)), parmom_fluxes(1:min(nspec,5)), &
+                     perpmom_fluxes(1:min(nspec,5))
              end if
              hflux_tot = sum(heat_fluxes)
              vflux_tot = sum(mom_fluxes)
