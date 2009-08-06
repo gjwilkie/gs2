@@ -92,7 +92,7 @@ module gs2_diagnostics
   real, dimension (:,:,:,:), allocatable :: qbheat !, qbheat_par, qbheat_perp
   ! (ntheta0,naky,nspec,3)
 
-  real, dimension (:,:,:), allocatable ::  pflux,  vflux
+  real, dimension (:,:,:), allocatable ::  pflux,  vflux, vflux_par, vflux_perp
   real, dimension (:,:,:), allocatable :: pmflux, vmflux
   real, dimension (:,:,:), allocatable :: pbflux, vbflux
   real, dimension (:,:),   allocatable :: theta_pflux, theta_pmflux, theta_pbflux
@@ -333,6 +333,8 @@ contains
 !       allocate (qheat_par  (ntheta0,naky,nspec))
 !       allocate (qheat_perp (ntheta0,naky,nspec))
     allocate (vflux (ntheta0,naky,nspec)) ; vflux = 0.
+    allocate (vflux_par (ntheta0,naky,nspec)) ; vflux_par = 0.
+    allocate (vflux_perp (ntheta0,naky,nspec)) ; vflux_perp = 0.
     allocate (pmflux(ntheta0,naky,nspec)) ; pmflux = 0.
     allocate (qmheat(ntheta0,naky,nspec,3)) ; qmheat = 0.
 !       allocate (qmheat_par (ntheta0,naky,nspec))
@@ -1286,7 +1288,7 @@ contains
     if (allocated(dv_hist)) deallocate (dv_hist, dvk_hist)
     if (allocated(j_ext_hist)) deallocate (j_ext_hist)
     if (allocated(omegahist)) deallocate (omegahist)
-    if (allocated(pflux)) deallocate (pflux, qheat, vflux, pmflux, qmheat, vmflux, &
+    if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
          pbflux, qbheat, vbflux, theta_pflux, theta_vflux, theta_qflux, theta_pmflux, &
          theta_vmflux, theta_qmflux, theta_pbflux, theta_vbflux, theta_qbflux)
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
@@ -1367,7 +1369,8 @@ contains
 !    complex :: wtmp_old = 0.
     real, dimension (:), allocatable :: dl_over_b
     real, dimension (ntheta0, nspec) :: x_qmflux
-    real, dimension (nspec) ::  heat_fluxes,  part_fluxes, mom_fluxes,  ntot2, ntot20
+    real, dimension (nspec) :: ntot2, ntot20
+    real, dimension (nspec) ::  heat_fluxes,  part_fluxes, mom_fluxes, parmom_fluxes, perpmom_fluxes
     real, dimension (nspec) :: mheat_fluxes, mpart_fluxes, mmom_fluxes
     real, dimension (nspec) :: bheat_fluxes, bpart_fluxes, bmom_fluxes
     real, dimension (nspec) ::  heat_par,  heat_perp
@@ -1534,8 +1537,8 @@ if (debug) write(6,*) "loop_diagnostics: -1"
     if (write_any_fluxes) then
        call g_adjust (g, phinew, bparnew, fphi, fbpar)
        call flux (phinew, aparnew, bparnew, &
-             pflux,  qheat,  vflux, &
-            pmflux, qmheat, vmflux, &
+             pflux,  qheat,  vflux, vflux_par, vflux_perp, &
+            pmflux, qmheat, vmflux,  &
             pbflux, qbheat, vbflux, &
        theta_pflux, theta_vflux, theta_qflux, &
        theta_pmflux, theta_vmflux, theta_qmflux, & 
@@ -1578,6 +1581,12 @@ if (debug) write(6,*) "loop_diagnostics: -1"
                 vflux(:,:,is) = vflux(:,:,is)*funits &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vflux(:,:,is), mom_fluxes(is))
+                vflux_par(:,:,is) = vflux_par(:,:,is)*funits &
+                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
+                call get_volume_average (vflux_par(:,:,is), parmom_fluxes(is))
+                vflux_perp(:,:,is) = vflux_perp(:,:,is)*funits &
+                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
+                call get_volume_average (vflux_perp(:,:,is), perpmom_fluxes(is))
 
                 theta_vflux(:,is) = theta_vflux(:,is)*funits &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm

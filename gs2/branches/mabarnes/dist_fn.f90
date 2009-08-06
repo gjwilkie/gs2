@@ -4131,7 +4131,7 @@ contains
 !       pmflux, qmflux, qmflux_par, qmflux_perp, vmflux, &
 !       pbflux, qbflux, qbflux_par, qbflux_perp, vbflux, anorm)
   subroutine flux (phi, apar, bpar, &
-        pflux,  qflux,  vflux, &
+        pflux,  qflux,  vflux, vflux_par, vflux_perp, &
        pmflux, qmflux, vmflux, &
        pbflux, qbflux, vbflux, &
        theta_pflux, theta_vflux, theta_qflux, &
@@ -4155,7 +4155,7 @@ contains
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     real, dimension (:,:,:), intent (out) :: pflux, pmflux, pbflux
-    real, dimension (:,:,:), intent (out) :: vflux, vmflux, vbflux
+    real, dimension (:,:,:), intent (out) :: vflux, vmflux, vbflux, vflux_par, vflux_perp
     real, dimension (:,:,:,:), intent (out) :: qflux, qmflux, qbflux
     real, dimension (-ntgrid:,:), intent (out) :: theta_pflux, theta_pmflux, theta_pbflux
     real, dimension (-ntgrid:,:), intent (out) :: theta_vflux, theta_vmflux, theta_vbflux
@@ -4170,7 +4170,7 @@ contains
     allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
 
     if (proc0) then
-       pflux = 0.0;   qflux = 0.0;   vflux = 0.0
+       pflux = 0.0;   qflux = 0.0;   vflux = 0.0 ; vflux_par = 0.0 ; vflux_perp = 0.0
        pmflux = 0.0;  qmflux = 0.0;  vmflux = 0.0
        pbflux = 0.0;  qbflux = 0.0;  vbflux = 0.0
        theta_pflux = 0.0  ; theta_pmflux = 0.0  ; theta_pbflux = 0.0
@@ -4220,6 +4220,14 @@ contains
        end do
        call get_flux (phi, qflux(:,:,:,3), theta_qflux(:,:,3), dnorm)
 
+       do isgn = 1, 2
+          g0(:,isgn,:) = gnew(:,isgn,:)*aj0*vpac(:,isgn,:)
+       end do
+       call get_flux (phi, vflux_par, theta_vflux_vpar, dnorm)
+       do isgn = 1, 2
+          g0(:,isgn,:) = gnew(:,isgn,:)*aj1*2.0*vperp2*spec(is)%tz
+       end do
+       call get_flux (phi, vflux, theta_vflux, dnorm)
        do isgn = 1, 2
           g0(:,isgn,:) = gnew(:,isgn,:)*aj0*vpac(:,isgn,:)
        end do
