@@ -38,7 +38,8 @@ program ingen
 
   integer :: nlambda
   integer :: in_file, i, ierr, unit, is, report_unit, iunit, ncut
-  logical :: exist, shat_is_known = .true., scan, stdin
+!  logical :: exist, shat_is_known = .true., scan, stdin
+  logical :: exist, scan, stdin
   logical :: has_electrons = .false.
 
   integer, dimension (18), parameter :: nesub_ok = (/ &
@@ -408,7 +409,7 @@ program ingen
 
   logical :: layouts_write = .false.
   logical :: driver_write = .false.
-  logical :: stir_write = .false.
+!  logical :: stir_write = .false.
   logical :: collisions_write = .false.
   logical :: init_g_write = .false.
   logical :: dist_fn_write = .false.
@@ -427,7 +428,7 @@ program ingen
   logical :: nonlinear_write = .false.
   logical :: parameters_write = .false.
   logical :: species_write = .false.
-  logical :: species_parameters_write = .false.
+!  logical :: species_parameters_write = .false.
   logical :: theta_parameters_write = .false.
   logical :: theta_gridgen_write = .false.
   logical :: theta_salpha_write = .false.
@@ -617,9 +618,11 @@ contains
     integer :: sel, nbeta, j, ise
     real :: beta_low, beta_high, dbeta, beta_save
     real :: fapar_save, faperp_save, pri, pe, alpi, tpe_save, ptot, alp, dbdr
-    real :: alt, aln, fac, beta_prime_save, bishop_save, beta_prime
+!    real :: alt, aln, fac, beta_prime_save, bishop_save, beta_prime
+    real :: alt, aln, fac, beta_prime_save, bishop_save
     real, dimension (:), allocatable :: tp_save, fp_save
-    character (500) :: tag, tag1, tag2
+!    character (500) :: tag, tag1, tag2
+    character (500) :: tag1, tag2
     logical :: first = .true.
 
     if (first) then
@@ -1161,7 +1164,7 @@ contains
        
     end select
 
-10  format (a) 
+!10  format (a) 
 
   end subroutine interactive
 
@@ -1923,8 +1926,8 @@ if (debug) write(6,*) 'get_namelists: returning'
     character (*), intent (in), optional :: tag1, tag2
 
     character (100) :: line
-    integer :: th, h, t, u
-    integer :: i, j
+    integer :: h, t, u
+    integer :: i
     character (4) :: suffix
     character(20) :: datestamp, timestamp, zone
     
@@ -2795,8 +2798,10 @@ if (debug) write(6,*) 'get_namelists: returning'
      bakdif_out = bakdif
    end subroutine fill_species_knobs
 
-   subroutine check(veq, geq, eeq, peq, leq, deq, ideq, report_unit)
-     logical, intent(in) :: veq, geq, eeq, peq, leq, deq, ideq
+!   subroutine check(veq, geq, eeq, peq, leq, deq, ideq, report_unit)
+!     logical, intent(in) :: veq, geq, eeq, peq, leq, deq, ideq
+   subroutine check(veq, geq, eeq, peq, leq, deq, report_unit)
+     logical, intent(in) :: veq, geq, eeq, peq, leq, deq
      integer, intent (in) :: report_unit
 
      if(veq .and. geq) then
@@ -2979,7 +2984,8 @@ if (debug) write(6,*) 'get_namelists: returning'
      character (20) :: datestamp, timestamp, zone
      character (200) :: line
      logical :: coll_on = .false., le_ok = .true.
-     integer :: ntgrid, j, nmesh, npe
+!     integer :: ntgrid, j, nmesh, npe
+     integer :: ntgrid, j, nmesh
      integer, dimension(4) :: pfacs
 
      call get_unused_unit (report_unit)
@@ -3403,7 +3409,8 @@ if (debug) write(6,*) 'get_namelists: returning'
 
      case (eqopt_eik)
 
-        call check (vmom_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq, idfit_eq, report_unit)
+!        call check (vmom_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq, idfit_eq, report_unit)
+        call check (vmom_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq, report_unit)
         write (report_unit, *)
         if (local_eq .and. iflux == 0) then
            write (report_unit, fmt="('A local equilibrium model has been selected.')")
@@ -3616,7 +3623,7 @@ if (debug) write(6,*) 'get_namelists: returning'
               write (report_unit, fmt="('You have set bishop=7.')")
               write (report_unit, fmt="('The value of s_hat will be found from the equilibrium file.')") 
               write (report_unit, fmt="('The value of dp/drho found from the equilibrium file will be multiplied by',f10.4)") &
-	           dp_mult
+                   dp_mult
            case default
 
               write (report_unit, *) 
@@ -4963,7 +4970,8 @@ if (debug) write(6,*) 'get_namelists: returning'
     if (write_eigenfunc) then
        if (write_ascii) then
           write (report_unit, fmt="('write_eigenfunc = T:       Normalized Phi(theta) written to ',a)") &
-	& 	trim(run_name)//'.eigenfunc'
+!               & 	trim(run_name)//'.eigenfunc'
+               trim(run_name)//'.eigenfunc'
        end if
        write (report_unit, fmt="('write_eigenfunc = T:       Normalized Phi(theta) written to ',a)") trim(run_name)//'.out.nc'
     end if

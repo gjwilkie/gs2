@@ -42,7 +42,7 @@ contains
     real, intent (out), optional :: dvdrho, grho
 
     real :: time_init = 0., time_advance = 0., time_finish = 0., time_total
-    integer :: istep = 0, unit, istatus, istep_end
+    integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
     logical :: first_time = .true.
     character (500), target :: cbuff
@@ -246,7 +246,7 @@ contains
   end subroutine reset_gs2
 
   subroutine gs2_trin_init (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, &
-	ntspec, dens, temp, fprim, tprim, nu)
+  	     ntspec, dens, temp, fprim, tprim, nu)
 
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo

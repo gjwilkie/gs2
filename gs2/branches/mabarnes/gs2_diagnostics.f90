@@ -803,7 +803,7 @@ contains
           call close_output_file (unit)
        end if
     end if
-
+    
     call broadcast (write_final_moments)
     if (write_final_moments) then
 
@@ -1317,7 +1317,7 @@ contains
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
     use dist_fn, only: getmoms_notgc, g_adjust
-    use dist_fn_arrays, only: g
+    use dist_fn_arrays, only: g, gnew
     use collisions, only: ncheck, vnmult, vary_vnew
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
@@ -2064,13 +2064,11 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 !                     ' omega/(vt/a)=', real(omega(it,ik)*woutunits(ik)), &
 !                     aimag(omega(it,ik)*woutunits(ik))
                 if (write_omega) write (out_unit,&
-                         fmt='(" omega= (",1pe12.4,",",1pe12.4,")",t45,&
-                          "omega/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
+                         fmt='(" omega= (",1pe12.4,",",1pe12.4,")",t45,"omega/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
                      omega(it,ik), omega(it,ik)*woutunits(ik)
                 if (write_omavg) write (out_unit,&
-                         fmt='(" omavg= (",1pe12.4,",",1pe12.4,")",t45,&
-                               "omavg/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
-                     omegaavg(it,ik), omegaavg(it,ik)*woutunits(ik)
+                         fmt='(" omavg= (",1pe12.4,",",1pe12.4,")",t45,"omavg/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
+                         omegaavg(it,ik), omegaavg(it,ik)*woutunits(ik)
 !                if (write_omavg) write (out_unit, *) &
 !                     'omavg=', omegaavg(it,ik), &
 !                     ' omavg/(vt/a)=', real(omegaavg(it,ik)*woutunits(ik)), &
@@ -2491,7 +2489,7 @@ if (debug) write(6,*) "get_omegaavg: done"
 !    real, dimension(:,:), allocatable :: kp_by_mode
     integer, dimension(:), allocatable :: num, nbin
     real, dimension(:), allocatable :: kp
-1    real, dimension(:), allocatable :: kpavg_lim
+    real, dimension(:), allocatable :: kpavg_lim
     real :: kpmax,dkp
     integer :: nkperp                           !Total possible number of kperps
     integer :: ik, it, i,j,inbx !,nkx,nky

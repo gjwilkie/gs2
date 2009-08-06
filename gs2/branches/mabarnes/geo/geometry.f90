@@ -427,6 +427,10 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
           call periodic_copy(ltheta, Ltot)
        endif
     endif 
+    do i = -ntgrid, ntgrid
+       write (*,*) 'rmajor1', rmajor(i)
+    end do
+
 !     compute  coordinate gradients
 
 if (debug) write(6,*) "eikcoefs: call thetagrad"
@@ -838,6 +842,12 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 !    if (nperiod ==1) call plotdata (rgrid, seik, grads, dpsidrho)
     call plotdata (rgrid, seik, grads, dpsidrho)
 
+    rmajor_geo = rmajor
+    bpol_geo = bpolmag
+    do i = -ntgrid, ntgrid
+       write (*,*) bpolmag(i), bpol_geo(i)
+    end do
+
     call dealloc_local_arrays
 
 ! Generate metric tensor elements to compare with Xanthopoulos and Jenko    
@@ -863,9 +873,7 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 !
 !    end if
 
-    rmajor_geo = rmajor
-    bpol_geo = bpolmag
-    
+
 contains
 
   subroutine alloc_local_arrays(n)
@@ -892,11 +900,11 @@ contains
          rgrid1     (-n:n), &
          rgrid2     (-n:n), &
          Bpolmag    (-n:n), &
-         bpol_geo    (-n:n), &
+         bpol_geo   (-n:n), &
          Bmod       (-n:n), &
          dSdl       (-n:n), &
          rmajor     (-n:n), &
-         rmajor_geo     (-n:n), &
+         rmajor_geo (-n:n), &
          ans        (-n:n), &
          ds         (-n:n), &
          arcl       (-n:n))
