@@ -4152,7 +4152,7 @@ contains
     use mp, only: proc0
     use run_parameters, only: woutunits, fphi, fapar, fbpar
     use constants, only: zi
-    use geometry, only: rmajor, bpolmag
+    use geometry, only: rmajor_geo, bpol_geo
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     real, dimension (:,:,:), intent (out) :: pflux, pmflux, pbflux

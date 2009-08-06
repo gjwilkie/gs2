@@ -43,7 +43,7 @@ module geometry
   logical :: in_nt, writelots, equal_arc, dfit_eq, mds, idfit_eq, gs2d_eq
   logical :: transp_eq, Xanthopoulos
 
-  real, dimension (:), allocatable :: bpolmag
+  real, dimension (:), allocatable :: bpol_geo, rmajor_geo
   
   integer :: bishop
 
@@ -184,8 +184,7 @@ contains
     real, allocatable, dimension(:)   :: dsdthet, dsdthet1, dsdthet2, grho1
     real, allocatable, dimension(:)   :: gdsdum1, gdsdum2, gdsdum3
     real, allocatable, dimension(:)   :: th_bish, Rpol, ltheta
-!    real, allocatable, dimension(:)   :: rgrid, rgrid1, rgrid2, Bpolmag, Bmod, dSdl
-    real, allocatable, dimension(:)   :: rgrid, rgrid1, rgrid2, Bmod, dSdl
+    real, allocatable, dimension(:)   :: rgrid, rgrid1, rgrid2, Bpolmag, Bmod, dSdl
     real, allocatable, dimension(:)   :: rmajor, ans, ds, arcl
     real, allocatable, dimension(:,:) :: thgrad, rpgrad, crpgrad, grads
     real, allocatable, dimension(:,:) :: bvector, gradrptot, gradstot
@@ -863,6 +862,9 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 !       g22_X = 
 !
 !    end if
+
+    rmajor_geo = rmajor
+    bpol_geo = bpolmag
     
 contains
 
@@ -890,9 +892,11 @@ contains
          rgrid1     (-n:n), &
          rgrid2     (-n:n), &
          Bpolmag    (-n:n), &
+         bpol_geo    (-n:n), &
          Bmod       (-n:n), &
          dSdl       (-n:n), &
          rmajor     (-n:n), &
+         rmajor_geo     (-n:n), &
          ans        (-n:n), &
          ds         (-n:n), &
          arcl       (-n:n))
@@ -929,7 +933,7 @@ contains
          rgrid     , &
          rgrid1    , &
          rgrid2    , &
-!         Bpolmag   , &
+         Bpolmag   , &
          Bmod      , &
          dSdl      , &
          rmajor    , &
