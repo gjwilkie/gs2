@@ -42,7 +42,8 @@ module geometry
   logical :: gen_eq, vmom_eq, efit_eq, ppl_eq, local_eq
   logical :: in_nt, writelots, equal_arc, dfit_eq, mds, idfit_eq, gs2d_eq
   logical :: transp_eq, Xanthopoulos
-  
+
+  real, dimension (:), allocatable :: bpolmag
   
   integer :: bishop
 
@@ -183,7 +184,8 @@ contains
     real, allocatable, dimension(:)   :: dsdthet, dsdthet1, dsdthet2, grho1
     real, allocatable, dimension(:)   :: gdsdum1, gdsdum2, gdsdum3
     real, allocatable, dimension(:)   :: th_bish, Rpol, ltheta
-    real, allocatable, dimension(:)   :: rgrid, rgrid1, rgrid2, Bpolmag, Bmod, dSdl
+!    real, allocatable, dimension(:)   :: rgrid, rgrid1, rgrid2, Bpolmag, Bmod, dSdl
+    real, allocatable, dimension(:)   :: rgrid, rgrid1, rgrid2, Bmod, dSdl
     real, allocatable, dimension(:)   :: rmajor, ans, ds, arcl
     real, allocatable, dimension(:,:) :: thgrad, rpgrad, crpgrad, grads
     real, allocatable, dimension(:,:) :: bvector, gradrptot, gradstot
@@ -927,7 +929,7 @@ contains
          rgrid     , &
          rgrid1    , &
          rgrid2    , &
-         Bpolmag   , &
+!         Bpolmag   , &
          Bmod      , &
          dSdl      , &
          rmajor    , &
