@@ -4145,10 +4145,10 @@ contains
 !
     use species, only: spec
     use theta_grid, only: ntgrid, bmag, gradpar, grho, delthet, drhodpsi
-    use kt_grids, only: naky, ntheta0
+    use kt_grids, only: naky, ntheta0, akx
     use le_grids, only: e
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
-    use gs2_layouts, only: g_lo, ie_idx, is_idx
+    use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx
     use mp, only: proc0
     use run_parameters, only: woutunits, fphi, fapar, fbpar
     use constants, only: zi
@@ -4166,7 +4166,7 @@ contains
 !    real, dimension (:,:,:), intent (out) :: qflux_perp, qmflux_perp, qbflux_perp
     real, dimension (:,:,:), allocatable :: dnorm
     real :: anorm
-    integer :: it, ik, is, isgn
+    integer :: it, ik, is, isgn, ig
     integer :: iglo
 
     allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
@@ -4224,7 +4224,9 @@ contains
        call get_flux (phi, qflux(:,:,:,3), theta_qflux(:,:,3), dnorm)
 
        do isgn = 1, 2
-          g0(:,isgn,:) = gnew(:,isgn,:)*aj0*vpac(:,isgn,:)*rmajor*sqrt(1.0-bpolmag**2/bmag**2)
+          do ig = -ntgrid, ntgrid
+             g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)*rmajor_geo(ig)*sqrt(1.0-bpol_geo(ig)**2/bmag(ig)**2)
+          end do
        end do
        call get_flux (phi, vflux_par, theta_vflux_par, dnorm)
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -4234,6 +4236,7 @@ contains
              g0(:,isgn,iglo) = zi*akx(it)*grho*gnew(:,isgn,iglo)*aj1(:,iglo) &
                   *2.0*vperp2(:,iglo)*spec(is)%smz/(bmag**2*drhodpsi)
           end do
+       end do
        call get_flux (phi, vflux_perp, theta_vflux_perp, dnorm)
        vflux = vflux_par + vflux_perp
 
