@@ -9,6 +9,7 @@ module legendre
 
   private
 
+
 contains
 
   subroutine nrgauleg (x1, x2, x, w)!, eps)
@@ -472,6 +473,11 @@ module le_grids
   public :: eint_error, lint_error, trap_error, integrate_test, wdim
 
   private
+
+  interface integrate_moment
+     module procedure integrate_moment_c34
+     module procedure integrate_moment_lec
+  end interface
 
   real, dimension (:), allocatable :: xx ! (ng2)
   real, dimension (:,:), allocatable, save :: werr, wlerr, xloc ! mbmark
@@ -1850,7 +1856,8 @@ contains
 
   end subroutine lagrange_interp
 
-  subroutine integrate_moment (g, total, all)
+!  subroutine integrate_moment (g, total, all)
+  subroutine integrate_moment_c34 (g, total, all)
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
 ! is over all velocity space
@@ -1924,7 +1931,42 @@ contains
        deallocate (work)
     end if
 
-  end subroutine integrate_moment
+  end subroutine integrate_moment_c34
+
+  subroutine integrate_moment_lec (lo, g, total)
+
+    use theta_grid, only: ntgrid
+    use layouts_type, only: le_layout_type
+    use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
+    type (le_layout_type), intent (in) :: lo
+    complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
+    integer :: ixi, nxi, ie, il, ile, is, it, ik, ig
+    real :: fac
+
+    nxi = max(2*nlambda-1,2*ng2)
+    total = 0.0
+    do ile = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ile)
+       it = it_idx (lo,ile)
+       ik = ik_idx (lo,ile)
+       is = is_idx (lo,ile)
+       do ie=1, negrid
+          do ixi=1, nxi
+             il = min(ixi, nxi+1-ixi)
+             fac = w(ie,is) * wl(ig,il)
+             total(ig,it,ik,is) = total(ig,it,ik,is) + fac * g(ixi,ie,ile)
+          end do
+       end do
+    end do
+
+    ! No need for communication since all velocity grid points are together
+    ! and each prcessor does not touch the unset place
+    ! They actually don't need to keep all 4D array
+    ! Do we stay in le_layout for total?
+    ! --- ile contains necessary and sufficient information for (ig,it,ik,is)
+
+  end subroutine integrate_moment_lec
 
   subroutine lint_error (g, weights, total)
     use theta_grid, only: ntgrid, bmag, bmax

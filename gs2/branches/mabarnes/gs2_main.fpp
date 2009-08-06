@@ -7,6 +7,10 @@ contains
 # endif
 
   subroutine run_gs2 (mpi_comm, filename, pflux, qflux, heat, dvdrho, grho)
+
+    ! main subroutine in which gs2 is initialized, equations are advanced,
+    ! and the program is finalized
+
     use job_manage, only: checkstop, job_fork, checktime
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils

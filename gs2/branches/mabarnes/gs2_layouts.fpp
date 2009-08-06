@@ -44,6 +44,12 @@ module gs2_layouts
   public :: e_lo
 ! <TT
 
+! MAB>
+! ported le_lo from agk
+  public :: init_le_layouts
+  public :: le_lo
+! <MAB
+
   public :: init_x_transform_layouts, init_y_transform_layouts
   public :: xxf_lo, xxf_layout_type, yxf_lo, yxf_layout_type
   public :: gidx2xxfidx, xxfidx2yxfidx, yxfidx2xxfidx, xxfidx2gidx
