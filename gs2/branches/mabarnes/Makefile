@@ -95,8 +95,6 @@ USE_LOCAL_SPFUNC ?=
 USE_NAGLIB ?= 
 # Make GS2 into a library which can be called by external programs
 MAKE_LIB ?=
-# Allow use of le_layouts
-USE_LE_LAYOUT ?=
 #
 # * Targets:
 #
@@ -174,7 +172,8 @@ $(warning SYSTEM environment variable is obsolete)
 $(warning use GK_SYSTEM instead)
 	GK_SYSTEM = $(SYSTEM)
 	else
-$(error GK_SYSTEM is not set)
+#$(error GK_SYSTEM is not set)
+		GK_SYSTEM = mac
 	endif
 endif
 include Makefile.$(GK_SYSTEM)
@@ -283,10 +282,6 @@ $(error PGPLOT_LIB is not defined)
 endif
 ifdef MAKE_LIB
 	CPPFLAGS += -DMAKE_LIB
-endif
-
-ifdef USE_LE_LAYOUT
-	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \

@@ -1539,15 +1539,15 @@ if (debug) write(6,*) "loop_diagnostics: -1"
     end if
 
     if (write_any_fluxes) then
-       call g_adjust (g, phinew, bparnew, fphi, fbpar)
+       call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
        call flux (phinew, aparnew, bparnew, &
-             pflux,  qheat,  vflux, vflux_par, vflux_perp, &
+            pflux,  qheat,  vflux, vflux_par, vflux_perp, &
             pmflux, qmheat, vmflux,  &
             pbflux, qbheat, vbflux, &
-       theta_pflux, theta_vflux, theta_vflux_par, theta_vflux_perp, theta_qflux, &
-       theta_pmflux, theta_vmflux, theta_qmflux, & 
-       theta_pbflux, theta_vbflux, theta_qbflux)
-       call g_adjust (g, phinew, bparnew, -fphi, -fbpar)
+            theta_pflux, theta_vflux, theta_vflux_par, theta_vflux_perp, theta_qflux, &
+            theta_pmflux, theta_vmflux, theta_qmflux, & 
+            theta_pbflux, theta_vbflux, theta_qbflux)
+       call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
 !       call flux (phinew, aparnew, bparnew, &
 !            pflux, qheat, qheat_par, qheat_perp, vflux, &
 !            pmflux, qmheat, qmheat_par, qmheat_perp, vmflux, &
@@ -1594,9 +1594,9 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 
                 theta_vflux(:,is) = theta_vflux(:,is)*funits &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
-                theta_vflux_par(:,is) = theta_vflux(:,is)*funits &
+                theta_vflux_par(:,is) = theta_vflux_par(:,is)*funits &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
-                theta_vflux_perp(:,is) = theta_vflux(:,is)*funits &
+                theta_vflux_perp(:,is) = theta_vflux_perp(:,is)*funits &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
 
              end do

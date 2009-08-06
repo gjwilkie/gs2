@@ -4131,7 +4131,7 @@ contains
 !       pmflux, qmflux, qmflux_par, qmflux_perp, vmflux, &
 !       pbflux, qbflux, qbflux_par, qbflux_perp, vbflux, anorm)
   subroutine flux (phi, apar, bpar, &
-        pflux,  qflux,  vflux, vflux_par, vflux_perp, &
+       pflux,  qflux,  vflux, vflux_par, vflux_perp, &
        pmflux, qmflux, vmflux, &
        pbflux, qbflux, vbflux, &
        theta_pflux, theta_vflux, theta_vflux_par, theta_vflux_perp, theta_qflux, &
@@ -4225,6 +4225,7 @@ contains
 
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
+             write (*,*) 'geometry', rmajor_geo(ig), bpol_geo(ig), sqrt(bmag(ig)**2-bpol_geo(ig))
              g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)*rmajor_geo(ig)*sqrt(1.0-bpol_geo(ig)**2/bmag(ig)**2)
           end do
        end do
@@ -4239,6 +4240,7 @@ contains
        end do
        call get_flux (phi, vflux_perp, theta_vflux_perp, dnorm)
        vflux = vflux_par + vflux_perp
+       theta_vflux = theta_vflux_par + theta_vflux_perp
 
     else
        pflux = 0.
