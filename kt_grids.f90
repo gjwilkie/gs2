@@ -346,68 +346,6 @@ contains
 
 end module kt_grids_box
 
-module kt_grids_xbox
-  implicit none
-
-  public :: init_kt_grids_xbox, xbox_get_sizes, xbox_get_grids
-
-  private
-
-  integer :: ntheta0_private, nx_private
-  real :: lx, aky_private
-
-contains
-
-  subroutine init_kt_grids_xbox
-    use file_utils, only: input_unit, input_unit_exist
-    implicit none
-    integer :: ntheta0, nx
-    integer :: in_file
-    logical :: exist
-    real :: aky
-    namelist /kt_grids_xbox_parameters/ ntheta0, lx, aky, nx
-
-    ntheta0 = 1
-    lx = 1.0
-    aky = 0.2
-    nx = 0
-    in_file = input_unit_exist ("kt_grids_xbox_parameters", exist)
-    if (exist) read (unit=input_unit("kt_grids_xbox_parameters"), &
-         nml=kt_grids_xbox_parameters)
-    ntheta0_private = ntheta0
-    aky_private = aky
-    nx_private = nx
-  end subroutine init_kt_grids_xbox
-
-  subroutine xbox_get_sizes (naky, ntheta0, nx, ny)
-    implicit none
-    integer, intent (out) :: naky, ntheta0, nx, ny
-    naky = 1
-    ntheta0 = ntheta0_private
-    nx = nx_private
-    ny = 0
-  end subroutine xbox_get_sizes
-
-  subroutine xbox_get_grids (aky, theta0, akx)
-    use theta_grid, only: shat
-    use constants
-    implicit none
-    real, dimension (:), intent (out) :: aky
-    real, dimension (:,:), intent (out) :: theta0
-    real, dimension (:), intent (out) :: akx
-    integer :: i, ntheta0
-
-    aky(1) = aky_private
-
-    ntheta0 = size(akx)
-    akx(:(ntheta0+1)/2) = (/ (real(2*(i-1))*pi/lx, i=1,(ntheta0+1)/2) /)
-    akx((ntheta0+1)/2+1:) &
-         = (/ (real(2*(i-ntheta0-1))*pi/lx, i=(ntheta0+1)/2+1,ntheta0) /)
-    theta0(:,1) = akx(:)/(aky(1)*shat)
-  end subroutine xbox_get_grids
-
-end module kt_grids_xbox
-
 module kt_grids
   implicit none
 
@@ -430,7 +368,7 @@ module kt_grids
   ! internal variables
   integer :: gridopt_switch, normopt_switch
   integer, parameter :: gridopt_single = 1, gridopt_range = 2, &
-       gridopt_specified = 3, gridopt_box = 4, gridopt_xbox = 5
+       gridopt_specified = 3, gridopt_box = 4
   integer, parameter :: normopt_mtk = 1, normopt_bd = 2
   logical :: reality = .false.
   logical :: box = .false.
@@ -515,14 +453,13 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
     implicit none
-    type (text_option), dimension (7), parameter :: gridopts = &
+    type (text_option), dimension (6), parameter :: gridopts = &
          (/ text_option('default', gridopt_single), &
             text_option('single', gridopt_single), &
             text_option('range', gridopt_range), &
             text_option('specified', gridopt_specified), &
             text_option('box', gridopt_box), &
-            text_option('nonlinear', gridopt_box), &
-            text_option('xbox', gridopt_xbox) /)
+            text_option('nonlinear', gridopt_box/)
     character(20) :: grid_option
     ! 'default' 'specified': specify grid in namelists
 
@@ -580,7 +517,6 @@ contains
     use kt_grids_range, only: init_kt_grids_range, range_get_sizes
     use kt_grids_specified, only: init_kt_grids_specified, specified_get_sizes
     use kt_grids_box, only: init_kt_grids_box, box_get_sizes
-    use kt_grids_xbox, only: init_kt_grids_xbox, xbox_get_sizes
     implicit none
     select case (gridopt_switch)
     case (gridopt_single)
@@ -597,9 +533,6 @@ contains
        call box_get_sizes (naky, ntheta0, nx, ny, nkpolar)
        reality = .true.
        box = .true.
-    case (gridopt_xbox)
-       call init_kt_grids_xbox
-       call xbox_get_sizes (naky, ntheta0, nx, ny)
     end select
   end subroutine get_sizes
 
@@ -608,7 +541,6 @@ contains
     use kt_grids_range, only: range_get_grids
     use kt_grids_specified, only: specified_get_grids
     use kt_grids_box, only: box_get_grids
-    use kt_grids_xbox, only: xbox_get_grids
     implicit none
     select case (gridopt_switch)
     case (gridopt_single)
@@ -620,8 +552,6 @@ contains
     case (gridopt_box)
 !       call box_get_grids (aky, theta0, akx, akpolar)
        call box_get_grids (aky, theta0, akx, ikx, iky)
-    case (gridopt_xbox)
-       call xbox_get_grids (aky, theta0, akx)
     end select
 
     select case (normopt_switch)

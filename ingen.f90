@@ -272,15 +272,14 @@ program ingen
   real :: aky_min, aky_max, theta0_min, theta0_max, lx, ly, x0, y0, rtwist
   real :: y0_internal
   integer, parameter :: gridopt_single = 1, gridopt_range = 2, &
-       gridopt_specified = 3, gridopt_box = 4, gridopt_xbox = 5
-  type (text_option), dimension (7), parameter :: gridopts = &
+       gridopt_specified = 3, gridopt_box = 4
+  type (text_option), dimension (6), parameter :: gridopts = &
        (/ text_option('default', gridopt_single), &
        text_option('single', gridopt_single), &
        text_option('range', gridopt_range), &
        text_option('specified', gridopt_specified), &
        text_option('box', gridopt_box), &
-       text_option('nonlinear', gridopt_box), &
-       text_option('xbox', gridopt_xbox) /)
+       text_option('nonlinear', gridopt_box\)
   character (20) :: grid_option
 
   integer, parameter :: normopt_mtk = 1, normopt_bd = 2
@@ -420,7 +419,6 @@ program ingen
   logical :: kt_single_write = .false.
   logical :: kt_specified_write = .false.
   logical :: kt_box_write = .false.
-  logical :: kt_xbox_write = .false.
   logical :: kt_write = .false.
   logical :: le_write = .false.
   logical :: nonlinear_write = .false.
@@ -526,8 +524,6 @@ program ingen
 
   namelist /kt_grids_box_parameters/ naky, ntheta0, ly, nx, ny, jtwist, &
        y0, x0, rtwist
-
-  namelist /kt_grids_xbox_parameters/ ntheta0, lx, aky, nx
 
   namelist /kt_grids_knobs/ grid_option, norm_option
 
@@ -1471,18 +1467,6 @@ contains
        if (ntheta0 == 0) ntheta0 = 2*((nx-1)/3) + 1
        if (rtwist == 0.) rtwist = real(jtwist)
 
-    case (gridopt_xbox)
-       ntheta0 = 1
-       lx = 1.0
-       aky = 0.2
-       nx = 0
-       in_file=input_unit_exist("kt_grids_xbox_parameters",exist)
-       if (exist) then
-          read (unit=input_unit("kt_grids_xbox_parameters"), &
-               nml=kt_grids_xbox_parameters)
-          kt_xbox_write = .true.
-       end if
-
     end select
 
     ! le_grids:
@@ -2397,9 +2381,6 @@ contains
        case (gridopt_box)
           write (unit, fmt="(' grid_option = ',a)") '"box"'
 
-       case (gridopt_xbox)
-          write (unit, fmt="(' grid_option = ',a)") '"xbox"'
-
        end select
 
        select case (normopt_switch)
@@ -2477,15 +2458,6 @@ contains
        write (unit, fmt="(' /')")
     end if
 
-
-    if (kt_xbox_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "kt_grids_xbox_parameters"
-       write (unit, fmt="(' nx = ',i4)") nx
-       write (unit, fmt="(' ny = ',i4)") ny
-       write (unit, fmt="(' Lx = ',e16.10)") lx
-       write (unit, fmt="(' /')")
-    end if
 
     if (nonlinear_write .and. nonlinear_mode_switch == nonlinear_mode_on) then
        write (unit, *)
@@ -4203,15 +4175,6 @@ contains
        ntheta0 = 2*((nx-1)/3)+1
        write (report_unit, fmt="('After de-aliasing, there will be ',i4,'  ky >= 0 modes and ',i4,' kx modes.')") naky, ntheta0
        write (report_unit, fmt="('The modes with ky < 0 are determined by the reality condition.')")
-
-    case (gridopt_xbox)
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('You selected grid_option=xbox in kt_grids_knobs')")
-          write (report_unit, fmt="('The xbox option is not working.')")
-          write (report_unit, fmt="('THIS IS AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
 
     end select
 
