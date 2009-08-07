@@ -59,7 +59,6 @@ gs2_mod = \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
-	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -254,7 +253,6 @@ fields.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
-	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -266,12 +264,6 @@ fields.o: \
 	 text_options.o \
 	 theta_grid.o 
 fields_arrays.o: 
-fields_explicit.o: \
-	 back_dist_fn.o \
-	 dist_fn_arrays.o \
-	 fields_arrays.o \
-	 kt_grids.o \
-	 theta_grid.o 
 fields_implicit.o: \
 	 antenna.o \
 	 back_dist_fn.o \
@@ -393,7 +385,6 @@ gs2_main.o: \
 	 collisions.o \
 	 dist_fn_arrays.o \
 	 fields.o \
-	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -418,7 +409,6 @@ gs2_reinit.o: \
 	 collisions.o \
 	 dist_fn_arrays.o \
 	 fields.o \
-	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \

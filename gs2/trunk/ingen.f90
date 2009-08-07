@@ -211,11 +211,10 @@ program ingen
 ! fields: 
   character (20) :: field_option
   integer :: fieldopt_switch
-  integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_explicit = 3
-  type (text_option), dimension (4), parameter :: fieldopts = &
+  integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2
+  type (text_option), dimension (3), parameter :: fieldopts = &
        (/ text_option('default', fieldopt_implicit), &
        text_option('implicit', fieldopt_implicit), &
-       text_option('explicit', fieldopt_explicit), &
        text_option('test', fieldopt_test) /)
 
 ! gs2_diagnostics: 
@@ -2261,8 +2260,6 @@ contains
        select case (fieldopt_switch)
        case (fieldopt_implicit)
           write (unit, fmt="(' field_option = ',a)") '"implicit"'
-       case (fieldopt_explicit)
-          write (unit, fmt="(' field_option = ',a)") '"explicit"'
        case (fieldopt_test)
           write (unit, fmt="(' field_option = ',a)") '"test"'
        end select
@@ -3663,13 +3660,6 @@ contains
     select case (fieldopt_switch)
     case (fieldopt_implicit)
        write (report_unit, fmt="('The field equations will be advanced in time implicitly.')")
-    case (fieldopt_explicit)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The field equations will be advanced in time explicitly.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
     case (fieldopt_test)
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
