@@ -410,7 +410,7 @@ libgs2_all: libgs2.a
 
 LIBGS2_OBJ = antenna.o antenna_data.o collisions.o command_line.o constants.o \
 	convert.o deq.o dist_fn.o dist_fn_arrays.o eeq.o fft_work.o fields.o fields_arrays.o \
-	fields_explicit.o fields_implicit.o fields_test.o file_utils.o geometry.o \
+	fields_implicit.o fields_test.o file_utils.o geometry.o \
 	geq.o gridgen4mod.o gs2_diagnostics.o gs2_heating.o gs2_io.o gs2_layouts.o \
 	gs2_main.o gs2_reinit.o gs2_save.o gs2_time.o gs2_transforms.o hyper.o ideq.o \
 	init_g.o job_manage.o kt_grids.o layouts_type.o le_grids.o leq.o \
