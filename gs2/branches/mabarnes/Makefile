@@ -95,6 +95,8 @@ USE_LOCAL_SPFUNC ?=
 USE_NAGLIB ?= 
 # Make GS2 into a library which can be called by external programs
 MAKE_LIB ?=
+# Use le_layout for collision operator
+USE_LE_LAYOUT ?=
 #
 # * Targets:
 #
@@ -282,6 +284,9 @@ $(error PGPLOT_LIB is not defined)
 endif
 ifdef MAKE_LIB
 	CPPFLAGS += -DMAKE_LIB
+endif
+ifdef USE_LE_LAYOUT
+	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \

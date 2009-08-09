@@ -736,8 +736,8 @@ contains
              do il=1,nlambda
                 write (unit=unit, fmt=*) al(il), lamflux(il,is,2), is, &
                      sum(lamflux(1:il,is,2)*delal(1:il)), &
-	             lamflux(il,is,3), sum(lamflux(1:il,is,3)*delal(1:il)), &
-	             lamflux(il,is,4), sum(lamflux(1:il,is,4)*delal(1:il))
+                     lamflux(il,is,3), sum(lamflux(1:il,is,3)*delal(1:il)), &
+                     lamflux(il,is,4), sum(lamflux(1:il,is,4)*delal(1:il))
              end do
              write (unit=unit, fmt=*) 
           end do
@@ -745,7 +745,7 @@ contains
        end if
        deallocate (lamflux)
     end if
-
+    
     if (write_eavg) then
        allocate (enflux(negrid, nspec, 4))
        call e_flux (phinew, enflux)
@@ -770,8 +770,8 @@ contains
                 write (unit=unit, &
                      fmt="(2(1x,e10.4),i3,5(1x,e10.4))") e(ie,is), enflux(ie,is,2), is, &
                      sum(enflux(1:ie,is,2)*dele(1:ie,is)), &
-	             enflux(ie,is,3), sum(enflux(1:ie,is,3)*dele(1:ie,is)), &
-	             enflux(ie,is,4), sum(enflux(1:ie,is,4)*dele(1:ie,is))
+                     enflux(ie,is,3), sum(enflux(1:ie,is,3)*dele(1:ie,is)), &
+                     enflux(ie,is,4), sum(enflux(1:ie,is,4)*dele(1:ie,is))
              end do
              write (unit=unit, fmt=*) 
           end do
@@ -796,7 +796,7 @@ contains
              do ig = -ntgrid,ntgrid
                 write (unit=unit, &
                      fmt="(2(1x,e10.4),i3,5(1x,e10.4))") theta(ig), theta_qflux(ig,is,1), is, &
-	             theta_qflux(ig,is,2), theta_qflux(ig,is,3)
+                     theta_qflux(ig,is,2), theta_qflux(ig,is,3)
              end do
              write (unit=unit, fmt=*) 
           end do
@@ -1839,7 +1839,8 @@ if (debug) write(6,*) "loop_diagnostics: -2"
     call kperp (ntg_out, akperp)
 
     if (write_neoclassical_flux .or. dump_neoclassical_flux .and. neoflux) then
-       call neoclassical_flux (pfluxneo, qfluxneo, phinew, bparnew)
+!       call neoclassical_flux (pfluxneo, qfluxneo, phinew, bparnew)
+       call neoclassical_flux (pfluxneo, qfluxneo)
     end if
 
     if (proc0 .and. write_any) then
@@ -2386,7 +2387,8 @@ if (debug) write(6,*) "loop_diagnostics: done"
     type (dens_vel_diagnostics), dimension(:,:) :: dvk
 
     !Call routine to calculate density and velocity perturbations
-    call get_dens_vel(dv, dvk, phi, apar, bpar, phinew, aparnew, bparnew)    
+!    call get_dens_vel(dv, dvk, phi, apar, bpar, phinew, aparnew, bparnew)    
+    call get_dens_vel(dv, dvk, phi, bpar, phinew, bparnew)
     
     !Do averages with a history variable
     call avg_dv(dv, dv_hist, istep, navg)

@@ -892,7 +892,8 @@ contains
     implicit none
     complex, dimension (ntheta0,naky) :: phi
     integer :: iglo
-    integer :: ig, ik, it, il, is, j, j1
+!    integer :: ig, ik, it, il, is, j, j1
+    integer :: ik, it, il, is, j, j1
     real, dimension(nx) :: lx_pr, a_pr
     complex,dimension(nx) :: ff_pr
     real:: L, dx_pr
@@ -1305,9 +1306,10 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     use ran
     implicit none
-    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
+!    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
     integer :: iglo, istatus
-    integer :: ig, ik, it, is, il, ierr
+!    integer :: ig, ik, it, is, il, ierr
+    integer :: ik, it, ierr
     logical :: many = .true.
     
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
@@ -1447,7 +1449,8 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac
     integer :: iglo
-    integer :: ig, ik, it, il, is, j
+!    integer :: ig, ik, it, il, is, j
+    integer :: ig, ik, it, il, is
     
     phi = 0.
     odd = 0.
@@ -1518,7 +1521,8 @@ contains
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     integer :: iglo
-    integer :: ig, ik, it, il, is
+!    integer :: ig, ik, it, il, is
+    integer :: ik, it, il, is
     real :: phase
     
     phi = 0.
@@ -1661,7 +1665,8 @@ contains
     use constants
     implicit none
     integer :: iglo
-    integer :: it, il, ie, is
+!    integer :: it, il, ie, is
+    integer :: il, ie, is
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        il = il_idx(g_lo,iglo)
@@ -1778,7 +1783,8 @@ contains
     use file_utils, only: error_unit, get_unused_unit
     implicit none
     integer :: iglo
-    integer :: ig, ik, it, is, is2
+!    integer :: ig, ik, it, is, is2
+    integer :: ig, ik, it, is
     integer :: i,j
 
     ! nkxyz and ukxyz determine profiles in kx-ky plane
@@ -2537,7 +2543,8 @@ contains
     logical :: many = .true.
     real :: a, b
     integer :: iglo
-    integer :: ig, ik, it, il, is
+!    integer :: ig, ik, it, il, is
+    integer :: ik, it, il, is
 
     do it = 1, ntheta0
        do ik = 1, naky

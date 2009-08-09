@@ -125,7 +125,7 @@ contains
   subroutine allocate_arrays_3d
     implicit none
     integer :: unit, ntor
-    character(200) :: line
+!    character(200) :: line
 
     call get_unused_unit(unit)
     open (unit=unit, file=trim(source), status="old")
@@ -176,7 +176,7 @@ contains
     implicit none
     integer :: unit
     integer :: i
-    real :: discard
+!    real :: discard
     character(200) :: line
 
     call get_unused_unit(unit)
@@ -386,7 +386,7 @@ contains
     implicit none
     integer :: unit
     integer :: i
-    real, allocatable, dimension (:) :: bmaginaux, bmagsmaux, tmp
+!    real, allocatable, dimension (:) :: bmaginaux, bmagsmaux, tmp
     real, allocatable, dimension (:) :: thetagridout
     real, allocatable, dimension (:) :: gbdriftout, gradparout, grhoout
     real, allocatable, dimension (:) :: cvdriftout, gds2out, bmaggridout
@@ -396,8 +396,9 @@ contains
     real, allocatable, dimension (:) :: Zplotout, Zprimeout
     real, allocatable, dimension (:) :: aplotout, aprimeout
 !    real, external :: fitp_curvp2
-    real :: th, bmin
-    integer :: ierr
+!    real :: th, bmin
+    real :: bmin
+!    integer :: ierr
     integer, dimension (1) :: minloca
 
     call open_output_file (unit, ".input.out")

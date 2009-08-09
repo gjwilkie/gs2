@@ -1,8 +1,8 @@
 # ifndef MAKE_LIB
 module gs2_main
-
+  
   public :: run_gs2, finish_gs2, reset_gs2
-
+  
 contains
 # endif
 
@@ -56,7 +56,7 @@ contains
           call init_mp
        end if
        call checktime(avail_cpu_time,exit) ! initialize timer
-
+       
        ! report # of processors being used
        if (proc0) then
           if (nproc == 1) then
@@ -72,24 +72,24 @@ contains
              call init_file_utils (list, name="gs")
           end if
        end if
-
+       
        call broadcast (list)
-    
+       
        ! if given a list of jobs, fork
        if (list) call job_fork
-    
+       
        if (proc0) then
           call time_message(.false., .false., time_init,' Initialization')
           cbuff = trim(run_name)
        end if
-    
+       
        call broadcast (cbuff)
        if (.not. proc0) run_name => cbuff
-    
+       
        call init_fields
        call init_gs2_diagnostics (list, nstep)
        call init_tstart (tstart)   ! tstart is in user units 
-
+       
        if (present(dvdrho)) then
           if (proc0) then
              dvdrho = dvdrhon
@@ -98,15 +98,15 @@ contains
           call broadcast (dvdrho)
           call broadcast (grho)
        end if
-    
+       
        if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
-
+       
        first_time = .false.
-
+       
     end if
-
+    
     istep_end = nstep
-
+    
     call loop_diagnostics(0,exit)
     
     do istep = 1, nstep
@@ -132,7 +132,7 @@ contains
        end if
     end do
     if (proc0) call write_dt
-
+    
     if (present(pflux)) then
        pflux = pflux_avg/(user_time-start_time)
        qflux = qflux_avg/(user_time-start_time)
@@ -141,7 +141,7 @@ contains
        call finish_gs2_diagnostics (istep_end)
        call finish_gs2
     end if
-
+    
     if (proc0) then
        call time_message(.false., .false., time_finish,'Finished run')
        time_total=time_init+time_advance+time_nc+time_reinit+time_finish
@@ -159,11 +159,11 @@ contains
     endif
     
     if (.not. present(mpi_comm)) call finish_mp
-
+    
   end subroutine run_gs2
-
+  
   subroutine finish_gs2
-
+    
     use antenna, only: finish_antenna
     use collisions, only: finish_collisions
     use dist_fn, only: finish_dist_fn
@@ -246,7 +246,7 @@ contains
   end subroutine reset_gs2
 
   subroutine gs2_trin_init (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, &
-  	     ntspec, dens, temp, fprim, tprim, nu)
+       ntspec, dens, temp, fprim, tprim, nu)
 
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo

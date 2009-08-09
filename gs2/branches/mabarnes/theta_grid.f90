@@ -400,7 +400,7 @@ contains
     real :: rhoc_save
     logical, save :: initialized = .false.
 !CMR nov04: adding following debug switch
-    logical :: debug=.true.
+    logical :: debug=.false.
 !CMR
 
 

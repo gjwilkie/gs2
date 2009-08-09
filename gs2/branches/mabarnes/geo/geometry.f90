@@ -427,9 +427,6 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
           call periodic_copy(ltheta, Ltot)
        endif
     endif 
-    do i = -ntgrid, ntgrid
-       write (*,*) 'rmajor1', rmajor(i)
-    end do
 
 !     compute  coordinate gradients
 
@@ -844,9 +841,6 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 
     rmajor_geo = rmajor
     bpol_geo = bpolmag
-    do i = -ntgrid, ntgrid
-       write (*,*) bpolmag(i), bpol_geo(i)
-    end do
 
     call dealloc_local_arrays
 
@@ -900,14 +894,17 @@ contains
          rgrid1     (-n:n), &
          rgrid2     (-n:n), &
          Bpolmag    (-n:n), &
-         bpol_geo   (-n:n), &
          Bmod       (-n:n), &
          dSdl       (-n:n), &
          rmajor     (-n:n), &
-         rmajor_geo (-n:n), &
          ans        (-n:n), &
          ds         (-n:n), &
          arcl       (-n:n))
+
+    if (.not. allocated(rmajor_geo)) then
+       allocate (rmajor_geo(-n:n))
+       allocate (bpol_geo(-n:n))
+    end if
 
     allocate(thgrad (-n:n,2), &
          rpgrad     (-n:n,2), &

@@ -1933,10 +1933,11 @@ contains
     complex, dimension(:,:,:), allocatable :: temp 
     integer, dimension(1), save :: itmin
     real, save :: theta0_shift
-    integer :: ik, it, ie, is, il, ig, isgn, to_iglo, from_iglo, to_iproc, from_iproc, ierr, j 
+!    integer :: ik, it, ie, is, il, ig, isgn, to_iglo, from_iglo, to_iproc, from_iproc, ierr, j 
+    integer :: ik, it, ie, is, il, isgn, to_iglo, from_iglo, to_iproc, from_iproc, j 
     real :: dkx, gdt, dtheta0
     logical :: exb_first = .true.
-    logical :: kx_local
+!    logical :: kx_local
     complex , dimension(-ntgrid:ntgrid) :: z
 ! MR, March 2009: remove ExB restriction to box grids
     ! If not in box configuration, return
@@ -4225,8 +4226,12 @@ contains
 
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
-             write (*,*) 'geometry', rmajor_geo(ig), bpol_geo(ig), sqrt(bmag(ig)**2-bpol_geo(ig))
-             g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)*rmajor_geo(ig)*sqrt(1.0-bpol_geo(ig)**2/bmag(ig)**2)
+!             write (*,*) 'geometry', rmajor_geo(ig), bpol_geo(ig), sqrt(bmag(ig)**2-bpol_geo(ig))
+             if (allocated(rmajor_geo)) then
+                g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)*rmajor_geo(ig)*sqrt(1.0-bpol_geo(ig)**2/bmag(ig)**2)
+             else
+                g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)
+             end if
           end do
        end do
        call get_flux (phi, vflux_par, theta_vflux_par, dnorm)
@@ -4417,7 +4422,8 @@ contains
 !=============================================================================
 ! Density: Calculate Density perturbations
 !=============================================================================
-  subroutine get_dens_vel (dv, dvk, phi, apar, bpar, phinew, aparnew, bparnew)
+!  subroutine get_dens_vel (dv, dvk, phi, apar, bpar, phinew, aparnew, bparnew)
+  subroutine get_dens_vel (dv, dvk, phi, bpar, phinew, bparnew)
     use constants, only: pi
     use dist_fn_arrays, only: aj0, aj1, vpar, vperp2, g, gnew
     use gs2_heating, only: dens_vel_diagnostics
@@ -4433,7 +4439,8 @@ contains
     !Passed
     type (dens_vel_diagnostics) :: dv
     type (dens_vel_diagnostics), dimension(:,:) :: dvk
-    complex, dimension (-ntgrid:,:,:) :: phi, apar, bpar, phinew, aparnew, bparnew
+!    complex, dimension (-ntgrid:,:,:) :: phi, apar, bpar, phinew, aparnew, bparnew
+    complex, dimension (-ntgrid:,:,:) :: phi, bpar, phinew, bparnew
     !Local 
     integer :: isgn, iglo, ig, is, ik, it            !Indices
     complex :: j0phi                                 !J_0 q phi/T 
@@ -5468,7 +5475,8 @@ contains
 
   end subroutine get_stress
 
-  subroutine neoclassical_flux (pflux, qflux, phi, bpar)
+!  subroutine neoclassical_flux (pflux, qflux, phi, bpar)
+  subroutine neoclassical_flux (pflux, qflux)
     use species, only: nspec, spec
     use theta_grid, only: ntgrid, gradpar, bmag, delthet
     use kt_grids, only: naky, ntheta0, akx
@@ -5482,7 +5490,7 @@ contains
     use constants
     implicit none
     complex, dimension (:,:,:), intent (out) :: pflux, qflux
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
+!    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     complex, dimension (:,:,:), allocatable :: anorm
     complex, dimension (:,:,:,:), allocatable :: total
     real, dimension (:,:,:), allocatable :: dnorm
@@ -5908,16 +5916,19 @@ contains
        end do
        errcut_phi = errcut_phi/100
        
-       call estimate_error (phi_app, phi_e, kmax, errcut_phi, errtmp, idxtmp)
+!       call estimate_error (phi_app, phi_e, kmax, errcut_phi, errtmp, idxtmp)
+       call estimate_error (phi_app, phi_e, kmax, errtmp, idxtmp)
        errest(1,:) = errtmp
        erridx(1,:) = idxtmp
        
-       call estimate_error (phi_app, phi_l, kmax, errcut_phi, errtmp, idxtmp)
+!       call estimate_error (phi_app, phi_l, kmax, errcut_phi, errtmp, idxtmp)
+       call estimate_error (phi_app, phi_l, kmax, errtmp, idxtmp)
        errest(2,:) = errtmp
        erridx(2,:) = idxtmp
 
        if (nlambda > ng2 .and. new_trap_int) then       
-          call estimate_error (phi_app, phi_t, kmax, errcut_phi, errtmp, idxtmp, trap_flag)
+!          call estimate_error (phi_app, phi_t, kmax, errcut_phi, errtmp, idxtmp, trap_flag)
+          call estimate_error (phi_app, phi_t, kmax, errtmp, idxtmp, trap_flag)
           errest(3,:) = errtmp
           erridx(3,:) = idxtmp
           deallocate (phi_t)
@@ -5932,11 +5943,13 @@ contains
        end do
        errcut_apar = errcut_apar/100
        
-       call estimate_error (apar_app, apar_e, kmax, errcut_apar, errtmp, idxtmp)
+!       call estimate_error (apar_app, apar_e, kmax, errcut_apar, errtmp, idxtmp)
+       call estimate_error (apar_app, apar_e, kmax, errtmp, idxtmp)
        errest(4,:) = errtmp
        erridx(4,:) = idxtmp
        
-       call estimate_error (apar_app, apar_l, kmax, errcut_apar, errtmp, idxtmp)
+!       call estimate_error (apar_app, apar_l, kmax, errcut_apar, errtmp, idxtmp)
+       call estimate_error (apar_app, apar_l, kmax, errtmp, idxtmp)
        errest(5,:) = errtmp
        erridx(5,:) = idxtmp
     end if
@@ -6058,7 +6071,8 @@ contains
 
   end subroutine get_vnewk
 
-  subroutine estimate_error (app1, app2, kmax_local, errcut, errest, erridx, trap)
+!  subroutine estimate_error (app1, app2, kmax_local, errcut, errest, erridx, trap)
+  subroutine estimate_error (app1, app2, kmax_local, errest, erridx, trap)
 
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
@@ -6069,7 +6083,7 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: app1
     complex, dimension (-ntgrid:,:,:,:), intent (in) :: app2
     real, dimension (:,:), intent (in) :: kmax_local
-    real, intent (in) :: errcut
+!    real, intent (in) :: errcut
     logical, intent (in), optional :: trap
     real, dimension (:), intent (out) :: errest
     integer, dimension (:), intent (out) :: erridx
