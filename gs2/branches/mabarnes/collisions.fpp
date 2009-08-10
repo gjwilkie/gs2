@@ -3351,9 +3351,17 @@ contains
        gle(:,:,ile) = gle(:,:,ile) - v0y0(ig,it,ik,is)*bz0le(:,:,ile)
     end do
 
+    ! TMP FOR TESTING -- MAB
+!    do ile = le_lo%llim_proc, le_lo%ulim_proc
+!       do ie = 1, negrid
+!          do ixi = 1, nxi
+!             write (*,*) 'bz0le', bz0le(ixi,ie,ile), gle(ixi,ie,ile)
+!          end do
+!       end do
+!    end do
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v1y1
-
 
     do is = 1, nspec
        do ie = 1, negrid
@@ -3363,7 +3371,7 @@ contains
              do ig = -ntgrid, ntgrid
                 if (.not. forbid(ig,il)) &
                      vpadelnu(ig,ixi,ie,is) = sign(isgn, nlambda-ixi) &
-                     * vnmult(2)*delvnew(1,ie,is)/tunits(1) * sqrt( (1.0-al(il)*bmag(ig))*e(ie,is) )
+                     * vnmult(2)*delvnew(1,ie,is)/tunits(1) * sqrt(max(0.0,(1.0-al(il)*bmag(ig))*e(ie,is) ))
              end do
           end do
        end do
@@ -3375,6 +3383,15 @@ contains
        ik = ik_idx(le_lo,ile)
        gtmp (:,:,ile) = vpadelnu(ig,:,:,is) * tunits(ik) * aj0le(:,:,ile) * gle(:,:,ile)
     end do
+
+    ! TMP FOR TESTING -- MAB
+!    do ile = le_lo%llim_proc, le_lo%ulim_proc
+!       do ie = 1, negrid
+!          do ixi = 1, nxi
+!             write (*,*) 'gtmpv1y1', aj0le(ixi,ie,ile), gle(ixi,ie,ile)
+!          end do
+!       end do
+!    end do
     
     call integrate_moment (le_lo, gtmp, v1y1)    ! v1y1
 
@@ -3435,7 +3452,25 @@ contains
        gle(:,:,ile) = gle(:,:,ile) - bw0le(:,:,ile) * v2y2(ig,it,ik,is)
     end do
 
+    ! TMP FOR TESTING -- MAB
+!    do ile = le_lo%llim_proc, le_lo%ulim_proc
+!       do ie = 1, negrid
+!          do ixi = 1, nxi
+!             write (*,*) 'bw0le', gle(ixi,ie,ile)
+!          end do
+!       end do
+!    end do
+
     call scatter (g2le, gle, g)
+
+    ! TMP FOR TESTING -- MAB
+!    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!       do ig = -ntgrid, ntgrid
+!       	  do isgn = 1,2
+!             write (*,*) 'gg', g(ig,isgn,iglo)
+!          end do
+!       end do
+!    end do
 
     deallocate (vpadelnu)
 
