@@ -48,12 +48,12 @@ eiktest_mod = \
 gs2_mod = \
 	 antenna.o \
 	 antenna_data.o \
-	 back_dist_fn.o \
 	 collisions.o \
 	 command_line.o \
 	 constants.o \
 	 convert.o \
 	 deq.o \
+	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
 	 fft_work.o \
@@ -165,30 +165,6 @@ antenna.o: \
 	 species.o \
 	 theta_grid.o 
 antenna_data.o: 
-back_dist_fn.o: \
-	 antenna.o \
-	 collisions.o \
-	 constants.o \
-	 dist_fn_arrays.o \
-	 fields_arrays.o \
-	 file_utils.o \
-	 geometry.o \
-	 gs2_heating.o \
-	 gs2_layouts.o \
-	 gs2_time.o \
-	 gs2_transforms.o \
-	 hyper.o \
-	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
-	 nonlinear_terms.o \
-	 prof.o \
-	 redistribute.o \
-	 run_parameters.o \
-	 species.o \
-	 spfunc.o \
-	 text_options.o \
-	 theta_grid.o 
 ball.o: \
 	 geometry.o 
 collisions.o: \
@@ -249,8 +225,8 @@ fft_work.o: \
 	 constants.o 
 fields.o: \
 	 antenna.o \
-	 back_dist_fn.o \
 	 constants.o \
+	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
@@ -266,7 +242,7 @@ fields.o: \
 fields_arrays.o: 
 fields_implicit.o: \
 	 antenna.o \
-	 back_dist_fn.o \
+	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 file_utils.o \
@@ -279,7 +255,7 @@ fields_implicit.o: \
 	 run_parameters.o \
 	 theta_grid.o 
 fields_test.o: \
-	 back_dist_fn.o \
+	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o 
 file_utils.o: \
@@ -303,9 +279,9 @@ gs2.o: \
 	 gs2_main.o 
 gs2_diagnostics.o: \
 	 antenna.o \
-	 back_dist_fn.o \
 	 collisions.o \
 	 constants.o \
+	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
 	 fields_arrays.o \
@@ -336,7 +312,7 @@ gs2_dist_io_hdf.o: \
 	 species.o \
 	 theta_grid.o 
 gs2_flux.o: \
-	 back_dist_fn.o \
+	 dist_fn.o \
 	 file_utils.o \
 	 mp.o \
 	 regression.o \
@@ -381,8 +357,8 @@ gs2_layouts.o: \
 	 mp.o 
 gs2_main.o: \
 	 antenna.o \
-	 back_dist_fn.o \
 	 collisions.o \
+	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
 	 fields_implicit.o \
@@ -405,8 +381,8 @@ gs2_main.o: \
 	 theta_grid_params.o 
 gs2_reinit.o: \
 	 antenna.o \
-	 back_dist_fn.o \
 	 collisions.o \
+	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
 	 fields_implicit.o \
@@ -468,8 +444,8 @@ ingen.o: \
 	 text_options.o \
 	 theta_grid.o 
 init_g.o: \
-	 back_dist_fn.o \
 	 constants.o \
+	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 file_utils.o \

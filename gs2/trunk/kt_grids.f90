@@ -459,7 +459,7 @@ contains
             text_option('range', gridopt_range), &
             text_option('specified', gridopt_specified), &
             text_option('box', gridopt_box), &
-            text_option('nonlinear', gridopt_box/)
+            text_option('nonlinear', gridopt_box) /)
     character(20) :: grid_option
     ! 'default' 'specified': specify grid in namelists
 
