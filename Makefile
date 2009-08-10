@@ -95,6 +95,8 @@ USE_LOCAL_SPFUNC ?=
 USE_NAGLIB ?= 
 # Make GS2 into a library which can be called by external programs
 MAKE_LIB ?=
+# Use le_layout for collision operator
+USE_LE_LAYOUT ?=
 #
 # * Targets:
 #
@@ -172,7 +174,8 @@ $(warning SYSTEM environment variable is obsolete)
 $(warning use GK_SYSTEM instead)
 	GK_SYSTEM = $(SYSTEM)
 	else
-$(error GK_SYSTEM is not set)
+#$(error GK_SYSTEM is not set)
+		GK_SYSTEM = mac
 	endif
 endif
 include Makefile.$(GK_SYSTEM)
@@ -281,6 +284,9 @@ $(error PGPLOT_LIB is not defined)
 endif
 ifdef MAKE_LIB
 	CPPFLAGS += -DMAKE_LIB
+endif
+ifdef USE_LE_LAYOUT
+	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
@@ -410,7 +416,7 @@ libgs2_all: libgs2.a
 
 LIBGS2_OBJ = antenna.o antenna_data.o collisions.o command_line.o constants.o \
 	convert.o deq.o dist_fn.o dist_fn_arrays.o eeq.o fft_work.o fields.o fields_arrays.o \
-	fields_implicit.o fields_test.o file_utils.o geometry.o \
+	fields_explicit.o fields_implicit.o fields_test.o file_utils.o geometry.o \
 	geq.o gridgen4mod.o gs2_diagnostics.o gs2_heating.o gs2_io.o gs2_layouts.o \
 	gs2_main.o gs2_reinit.o gs2_save.o gs2_time.o gs2_transforms.o hyper.o ideq.o \
 	init_g.o job_manage.o kt_grids.o layouts_type.o le_grids.o leq.o \

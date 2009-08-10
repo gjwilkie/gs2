@@ -279,7 +279,7 @@ program ingen
        text_option('range', gridopt_range), &
        text_option('specified', gridopt_specified), &
        text_option('box', gridopt_box), &
-       text_option('nonlinear', gridopt_box\)
+       text_option('nonlinear', gridopt_box) /)
   character (20) :: grid_option
 
   integer, parameter :: normopt_mtk = 1, normopt_bd = 2
