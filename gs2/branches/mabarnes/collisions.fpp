@@ -1987,10 +1987,14 @@ contains
        ik = ik_idx(le_lo,ile)
        it = it_idx(le_lo,ile)
        is = is_idx(le_lo,ile)
-
+       je = jend(ig)
+       if (je <= ng2+1) then
+          te2 = 2*ng2
+       else
+          te2 = 2*je-1
+       end if
        do ie = 1, negrid
 
-          ! test get_lorentz_matrix -- MAB
           call get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
 
           c1le(:,ie,ile) = cc
@@ -2001,13 +2005,13 @@ contains
 
           qle(1,ie,ile) = 0.0
           betaale(1,ie,ile) = 1.0/bb(1)
-          do il = 1, nxi-1
+          do il = 1, te2-1
              qle(il+1,ie,ile) = aa(il+1) * betaale(il,ie,ile)
              betaale(il+1,ie,ile) = 1.0 / ( bb(il+1) - qle(il+1,ie,ile) &
                   * c1le(il,ie,ile) )
           end do
-          qle(nxi+1,ie,ile) = 0.0
-          betaale(nxi+1,ie,ile) = 0.0
+          qle(te2+1,ie,ile) = 0.0
+          betaale(te2+1,ie,ile) = 0.0
 
        end do
     end do
@@ -2038,6 +2042,12 @@ contains
        it = it_idx(lz_lo,ilz)
        ie = ie_idx(lz_lo,ilz)
        ig = ig_idx(lz_lo,ilz)
+       je = jend(ig)
+       if (je <= ng2+1) then
+          te2 = 2*ng2
+       else
+          te2 = 2*je-1
+       end if
        ! tested get_lorentz_matrix -- MAB
        call get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
        c1(:,ilz) = cc
@@ -2047,15 +2057,20 @@ contains
        end if
 
        betaa(1,ilz) = 1.0/bb(1)
-       do il = 1, nxi-1
+       do il = 1, te2-1
           ql(il+1,ilz) = aa(il+1)*betaa(il,ilz)
           betaa(il+1,ilz) = 1.0/(bb(il+1)-ql(il+1,ilz)*c1(il,ilz))
        end do
 
        ql(1,ilz) = 0.0
-       ql(nxi+1:,ilz) = 0.0
-       c1(nxi+1:,ilz) = 0.0
-       betaa(nxi+1:,ilz) = 0.0
+       ql(te2+1:,ilz) = 0.0
+       c1(te2+1:,ilz) = 0.0
+       betaa(te2+1:,ilz) = 0.0
+
+       ! TMP FOR TESTING -- MAB
+!       do il = 1, te2
+!          write (*,*) 'ql,c1,betaa', ql(il,ilz), c1(il,ilz), betaa(il,ilz), il, ilz
+!       end do
 
     end do
 
@@ -2270,7 +2285,7 @@ contains
        dd(te+1:te2) = dd(teh:1:-1)
        hh(te+1:te2) = hh(teh:1:-1)
     end if
-       
+
   end subroutine get_lorentz_matrix
 
   subroutine init_lorentz_error
@@ -3264,7 +3279,7 @@ contains
     use le_grids, only: e, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
 # ifdef USE_LE_LAYOUT
-    use le_grids, only: nlambda, ng2
+    use le_grids, only: nlambda, ng2, forbid
     use gs2_layouts, only: le_lo, ig_idx
     use redistribute, only: scatter
     use theta_grid, only: bmag
@@ -3293,7 +3308,7 @@ contains
     nxi = max(2*nlambda-1,2*ng2)
 
     allocate (gtmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-    allocate (vpadelnu(-ntgrid:ntgrid, nxi+1, negrid+1, nspec))
+    allocate (vpadelnu(-ntgrid:ntgrid, nxi+1, negrid+1, nspec)) ; vpadelnu = 0.0
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! First get v0y0
@@ -3301,12 +3316,29 @@ contains
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        is = is_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
+       
+       ! TMP FOR TESTING -- MAB
+       ig = ig_idx(le_lo,ile)
+       
        do ie=1, negrid
           gtmp(:,ie,ile) = vnmult(2)*vnew_E(ik,ie,is)*aj0le(:,ie,ile)*gle(:,ie,ile)
+! 	  ! TMP FOR TESTING -- MAB
+!           do ixi = 1, nxi
+!              write (*,*) 'gtmp', gtmp(ixi,ie,ile), vnmult(2)*vnew_E(ik,ie,is), aj0le(ixi,ie,ile), gle(ixi,ie,ile), ig, ixi, ie
+!           end do
        end do
     end do
 
     call integrate_moment (le_lo, gtmp, v0y0)    ! v0y0
+
+    ! TMP FOR TESTING -- MAB
+!     do ile = le_lo%llim_proc, le_lo%ulim_proc
+!        is = is_idx(le_lo,ile)
+!        ik = ik_idx(le_lo,ile)
+!        it = it_idx(le_lo,ile)
+!        ig = ig_idx(le_lo,ile)
+!        write (*,*) 'v0y0', v0y0(ig,it,ik,is)
+!     end do
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Get y1 = y0 - v0y0 * z0 / (1 + v0z0)
@@ -3329,7 +3361,9 @@ contains
              il = min(ixi, nxi+1-ixi)
              isgn = 1
              do ig = -ntgrid, ntgrid
-                vpadelnu(ig,ixi,ie,is) = sign(isgn, nlambda-ixi) * vnmult(2)*delvnew(1,ie,is)/tunits(1) * sqrt( (1.0-al(il)*bmag(ig))*e(ie,is) )
+                if (.not. forbid(ig,il)) &
+                     vpadelnu(ig,ixi,ie,is) = sign(isgn, nlambda-ixi) &
+                     * vnmult(2)*delvnew(1,ie,is)/tunits(1) * sqrt( (1.0-al(il)*bmag(ig))*e(ie,is) )
              end do
           end do
        end do
@@ -3343,6 +3377,15 @@ contains
     end do
     
     call integrate_moment (le_lo, gtmp, v1y1)    ! v1y1
+
+    ! TMP FOR TESTING -- MAB
+!     do ile = le_lo%llim_proc, le_lo%ulim_proc
+!        is = is_idx(le_lo,ile)
+!        ik = ik_idx(le_lo,ile)
+!        it = it_idx(le_lo,ile)
+!        ig = ig_idx(le_lo,ile)
+!        write (*,*) 'v1y1', v1y1(ig,it,ik,is)
+!     end do
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Get y2 = y1 - v1y1 * s1 / (1 + v1s1)
@@ -3371,6 +3414,15 @@ contains
     end do
 
     call integrate_moment (le_lo, gtmp, v2y2)    ! v2y2
+
+    ! TMP FOR TESTING -- MAB
+!     do ile = le_lo%llim_proc, le_lo%ulim_proc
+!        is = is_idx(le_lo,ile)
+!        ik = ik_idx(le_lo,ile)
+!        it = it_idx(le_lo,ile)
+!        ig = ig_idx(le_lo,ile)
+!        write (*,*) 'v2y2', v2y2(ig,it,ik,is)
+!     end do
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Finally get x = y2 - v2y2 * w2 / (1 + v2w2)
@@ -3618,7 +3670,7 @@ contains
     use redistribute, only: gather, scatter
 # ifdef USE_LE_LAYOUT
     use gs2_layouts, only: le_lo
-    use le_grids, only: negrid
+    use le_grids, only: negrid, jend
 # else
     use gs2_layouts, only: lz_lo
 # endif
@@ -3646,9 +3698,29 @@ contains
 
 # ifdef USE_LE_LAYOUT
 
+    ! TMP FOR TESTING -- MAB
+!     do ig = -ntgrid, ntgrid
+!        do isgn = 1,2
+!            do iglo=g_lo%llim_proc, g_lo%ulim_proc
+!        	      ie = ie_idx(g_lo,iglo)
+!        	      il = il_idx(g_lo,iglo)
+!        	      write (*,*) 'gg0', g(ig,isgn,iglo), ig, ie, il, isgn
+!     	   end do
+!        end do
+!     end do
+
     if (collision_model_switch == collision_model_lorentz &
          .or. collision_model_switch == collision_model_lorentz_test) &
          call gather (g2le, g, gle)
+
+    ! TMP FOR TESTING -- MAB
+!     do ile=le_lo%llim_proc, le_lo%ulim_proc
+!        do ie = 1, negrid
+!           do ixi = 1, nxi
+!              write (*,*) 'gle0', gle(ixi,ie,ile), ig, ie, ixi
+!           end do
+!        end do
+!     end do
 
     allocate (gle0(max(2*nlambda,2*ng2+1)))
 
@@ -3776,6 +3848,7 @@ contains
 
     call gather (lorentz_map, g, glz)
 
+
     if (heating .and. present(diagnostics)) then
        do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
           ig = ig_idx(lz_lo,ilz)
@@ -3833,6 +3906,11 @@ contains
           je = 2*ng2+1
        end if
 
+       ! TMP FOR TESTING -- MAB
+!       do il = 1, je-1
+!          write (*,*) 'glz1', glz(il,ilz), il, ilz
+!       end do
+
        ! deal with special case of wfb
        if (jend(ig) == ng2+1) then
           ! if wfb, remove vpa = 0 point (which has wgt of zero)
@@ -3846,6 +3924,11 @@ contains
 
        glz(:je-1,ilz) = glz0(:je-1)
        glz(je:,ilz) = 0.0
+
+       ! TMP FOR TESTING -- MAB
+!       do il = 1, je-1
+!          write (*,*) 'glz2', glz(il,ilz), c1(il,ilz), ql(il,ilz), betaa(il,ilz), il, ilz
+!       end do
 
        ! right and left sweeps for tridiagonal solve:
 
@@ -3880,6 +3963,11 @@ contains
 !       if (jend(ig) /= 0) glz(je,ilz) = glz(jend(ig),ilz)
        if (jend(ig) /= 0) glz(2*jend(ig),ilz) = glz(jend(ig),ilz)
 
+       ! TMP FOR TESTING -- MAB
+!       do il = 1, je-1
+!          write (*,*) 'glz3', glz(il,ilz), il, ilz
+!       end do
+
     end do
 
 !    call check_glz ('end', glz)
@@ -3905,7 +3993,7 @@ contains
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
 # ifdef USE_LE_LAYOUT
-    use le_grids, only: nlambda
+    use le_grids, only: nlambda, jend
     use gs2_layouts, only: le_lo
 # endif
 
@@ -3930,9 +4018,31 @@ contains
 
 # ifdef USE_LE_LAYOUT
 
+    ! TMP FOR TESTING -- MAB
+!     do ig = -ntgrid, ntgrid
+!        do isgn = 1,2
+!            do iglo=g_lo%llim_proc, g_lo%ulim_proc
+!        	      ie = ie_idx(g_lo,iglo)
+!        	      il = il_idx(g_lo,iglo)
+!        	      write (*,*) 'gg0', g(ig,isgn,iglo), ig, ie, il, isgn, jend(ig)
+!     	   end do
+!        end do
+!     end do
+
     call gather (g2le, g, gle)
 
     nxi = max(2*nlambda-1, 2*ng2)
+
+    ! TMP FOR TESTING -- MAB
+!     do ile=le_lo%llim_proc, le_lo%ulim_proc
+!     ig = ig_idx(le_lo,ile)
+!        do ie = 1, negrid
+!           do ixi = 1, nxi
+!              write (*,*) 'gle0', gle(ixi,ie,ile), ig, ie, ixi, jend(ig)
+!           end do
+!        end do
+!     end do
+
     ! solve for ged row by row
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        is = is_idx(le_lo,ile)
@@ -3961,6 +4071,15 @@ contains
          .and. .not. conserve_moments) then
        call scatter (g2le, gle, g)
     end if
+
+    ! TMP FOR TESTING -- MAB
+!     do ile=le_lo%llim_proc, le_lo%ulim_proc
+!        do ie = 1, negrid
+!           do ixi = 1, nxi
+!              write (*,*) 'gle1', gle(ixi,ie,ile), ig, ie, ixi
+!           end do
+!        end do
+!     end do
 
 # else
 
