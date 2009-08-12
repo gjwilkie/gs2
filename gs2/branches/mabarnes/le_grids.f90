@@ -1940,7 +1940,8 @@ contains
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
     type (le_layout_type), intent (in) :: lo
     complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
-    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
+!    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
+    complex, dimension (lo%llim_proc:), intent (out) :: total
     integer :: ixi, nxi, ie, il, ile, is, it, ik, ig
     real :: fac
 
@@ -1955,7 +1956,8 @@ contains
           do ixi=1, nxi
              il = min(ixi, nxi+1-ixi)
              fac = w(ie,is) * wl(ig,il)
-             total(ig,it,ik,is) = total(ig,it,ik,is) + fac * g(ixi,ie,ile)
+!             total(ig,it,ik,is) = total(ig,it,ik,is) + fac * g(ixi,ie,ile)
+             total(ile) = total(ile) + fac * g(ixi,ie,ile)
           end do
        end do
     end do
