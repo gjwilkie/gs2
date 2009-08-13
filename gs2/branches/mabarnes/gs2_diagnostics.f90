@@ -1980,10 +1980,14 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                      & ' part fluxes: ', 5(1x,e10.4))") &
                      t, phi2, part_fluxes(1:min(nspec,5))
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' mom fluxes: ', 5(1x,e10.4),' parmom fluxes: ', 5(1x,e10.4), &
+                     & ' mom fluxes: ', 5(1x,e10.4))") &
+                     t, phi2, mom_fluxes(1:min(nspec,5))
+                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
+                     & ' parmom fluxes: ', 5(1x,e10.4))") &
+                     t, phi2, parmom_fluxes(1:min(nspec,5))
+                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                      & ' perpmom fluxes: ', 5(1x,e10.4))") &
-                     t, phi2, mom_fluxes(1:min(nspec,5)), parmom_fluxes(1:min(nspec,5)), &
-                     perpmom_fluxes(1:min(nspec,5))
+                     t, phi2, perpmom_fluxes(1:min(nspec,5))
              end if
              hflux_tot = sum(heat_fluxes)
              vflux_tot = sum(mom_fluxes)

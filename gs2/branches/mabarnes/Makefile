@@ -174,8 +174,7 @@ $(warning SYSTEM environment variable is obsolete)
 $(warning use GK_SYSTEM instead)
 	GK_SYSTEM = $(SYSTEM)
 	else
-#$(error GK_SYSTEM is not set)
-		GK_SYSTEM = mac
+$(error GK_SYSTEM is not set)
 	endif
 endif
 include Makefile.$(GK_SYSTEM)
