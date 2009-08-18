@@ -11,7 +11,7 @@ module theta_grid_params
   private
 
   logical :: trin_flag = .false.
-  real :: rhoc_trin, qval_trin, shat_trin, rmaj_trin
+  real :: rhoc_trin, qval_trin, shat_trin, rmaj_trin, shift_trin
   real :: kappa_trin, kappri_trin, tri_trin, tripri_trin
 
 contains
@@ -24,7 +24,7 @@ contains
     initialized = .true.
     call read_parameters
     if (trin_flag) call reinit_theta_grid_params (rhoc_trin, qval_trin, &
-         shat_trin, rmaj_trin, kappa_trin, kappri_trin, tri_trin, tripri_trin)
+         shat_trin, rmaj_trin, kappa_trin, kappri_trin, tri_trin, tripri_trin, shift_trin)
   end subroutine init_theta_grid_params
 
   subroutine read_parameters
@@ -62,12 +62,12 @@ contains
   end subroutine read_parameters
 
   subroutine reinit_theta_grid_params (rhoc_in, qval_in, shat_in, rmaj_in, &
-       kappa_in, kappri_in, tri_in, tripri_in)
+       kappa_in, kappri_in, tri_in, tripri_in, shift_in)
 
     implicit none
 
     real, intent (in) :: rhoc_in, qval_in, shat_in, rmaj_in, kappa_in, tri_in
-    real, intent (in) :: kappri_in, tripri_in
+    real, intent (in) :: kappri_in, tripri_in, shift_in
 
     rhoc = rhoc_in
     qinp = qval_in
@@ -78,16 +78,17 @@ contains
     akappri = kappri_in
     tri = tri_in
     tripri = tripri_in
+    shift = shift_in
 
   end subroutine reinit_theta_grid_params
 
   subroutine init_trin_geo (rhoc_in, qval_in, shat_in, rmaj_in, &
-       kappa_in, kappri_in, tri_in, tripri_in)
+       kappa_in, kappri_in, tri_in, tripri_in, shift_in)
 
     implicit none
 
     real, intent (in) :: rhoc_in, qval_in, shat_in, rmaj_in, kappa_in, tri_in
-    real, intent (in) :: kappri_in, tripri_in
+    real, intent (in) :: kappri_in, tripri_in, shift_in
 
     trin_flag = .true.
 
@@ -99,6 +100,7 @@ contains
     kappri_trin = kappri_in
     tri_trin = tri_in
     tripri_trin = tripri_in
+    shift_trin = shift_in
 
   end subroutine init_trin_geo
 

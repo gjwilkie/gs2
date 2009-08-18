@@ -245,7 +245,7 @@ contains
 
   end subroutine reset_gs2
 
-  subroutine gs2_trin_init (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, &
+  subroutine gs2_trin_init (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift, &
        ntspec, dens, temp, fprim, tprim, nu)
 
     use species, only: init_trin_species
@@ -254,11 +254,11 @@ contains
     implicit none
 
     integer, intent (in) :: ntspec
-    real, intent (in) :: rhoc, qval, shat, aspr, kap, kappri, tri, tripri, dens, fprim
+    real, intent (in) :: rhoc, qval, shat, aspr, kap, kappri, tri, tripri, dens, fprim, shift
     real, dimension (:), intent (in) :: temp, tprim, nu
 
     call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
-    call init_trin_geo (rhoc, qval, shat, aspr, kap, kappri, tri, tripri)
+    call init_trin_geo (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift)
     
   end subroutine gs2_trin_init
 
