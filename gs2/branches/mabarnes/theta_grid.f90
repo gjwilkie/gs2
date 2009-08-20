@@ -558,6 +558,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done"
     use theta_grid_params, only: shift_in => shift
     use theta_grid_params, only: akappa_in => akappa, akappri_in => akappri
     use theta_grid_params, only: tri_in => tri, tripri_in => tripri
+    use theta_grid_params, only: betaprim_in => betaprim
     implicit none
     integer :: in_file
     logical :: exist
@@ -580,6 +581,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done"
     akappri = akappri_in
     tri = tri_in
     tripri = tripri_in
+    beta_prime_input = betaprim_in
 
     itor = 1
     iflux = 0

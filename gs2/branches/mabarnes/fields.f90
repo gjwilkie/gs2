@@ -43,7 +43,7 @@ contains
 
     if (initialized) return
     initialized = .true.
-
+    
     call init_theta_grid
     
 !CMR,30/3/2009:

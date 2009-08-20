@@ -5,6 +5,7 @@ module theta_grid_params
 
   real, public :: rhoc, rmaj, r_geo, eps, epsl
   real, public :: qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri
+  real, public :: betaprim
 
   integer, public :: ntheta, nperiod
 
@@ -12,7 +13,7 @@ module theta_grid_params
 
   logical :: trin_flag = .false.
   real :: rhoc_trin, qval_trin, shat_trin, rmaj_trin, shift_trin
-  real :: kappa_trin, kappri_trin, tri_trin, tripri_trin
+  real :: kappa_trin, kappri_trin, tri_trin, tripri_trin, betaprim_trin
 
 contains
 
@@ -24,7 +25,8 @@ contains
     initialized = .true.
     call read_parameters
     if (trin_flag) call reinit_theta_grid_params (rhoc_trin, qval_trin, &
-         shat_trin, rmaj_trin, kappa_trin, kappri_trin, tri_trin, tripri_trin, shift_trin)
+         shat_trin, rmaj_trin, kappa_trin, kappri_trin, tri_trin, tripri_trin, &
+         shift_trin, betaprim_trin)
   end subroutine init_theta_grid_params
 
   subroutine read_parameters
@@ -62,12 +64,12 @@ contains
   end subroutine read_parameters
 
   subroutine reinit_theta_grid_params (rhoc_in, qval_in, shat_in, rmaj_in, &
-       kappa_in, kappri_in, tri_in, tripri_in, shift_in)
+       kappa_in, kappri_in, tri_in, tripri_in, shift_in, betaprim_in)
 
     implicit none
 
     real, intent (in) :: rhoc_in, qval_in, shat_in, rmaj_in, kappa_in, tri_in
-    real, intent (in) :: kappri_in, tripri_in, shift_in
+    real, intent (in) :: kappri_in, tripri_in, shift_in, betaprim_in
 
     rhoc = rhoc_in
     qinp = qval_in
@@ -79,16 +81,17 @@ contains
     tri = tri_in
     tripri = tripri_in
     shift = shift_in
+    betaprim = betaprim_in
 
   end subroutine reinit_theta_grid_params
 
   subroutine init_trin_geo (rhoc_in, qval_in, shat_in, rmaj_in, &
-       kappa_in, kappri_in, tri_in, tripri_in, shift_in)
+       kappa_in, kappri_in, tri_in, tripri_in, shift_in, betaprim_in)
 
     implicit none
 
     real, intent (in) :: rhoc_in, qval_in, shat_in, rmaj_in, kappa_in, tri_in
-    real, intent (in) :: kappri_in, tripri_in, shift_in
+    real, intent (in) :: kappri_in, tripri_in, shift_in, betaprim_in
 
     trin_flag = .true.
 
@@ -101,6 +104,7 @@ contains
     tri_trin = tri_in
     tripri_trin = tripri_in
     shift_trin = shift_in
+    betaprim_trin = betaprim_in
 
   end subroutine init_trin_geo
 
