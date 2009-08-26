@@ -1,0 +1,8 @@
+# Culham makefile
+COMPILER = intel
+include Makefile.$(COMPILER)
+FC = mpif90
+FFT_INC=-I/usr/local/intellibs/include
+FFT_LIB=-lrfftw -lfftw
+NETCDF_INC=$(FFT_INC)
+NETCDF_LIB=-lnetcdf

@@ -1,0 +1,31 @@
+# Compiler: GNU gfortran/gcc
+
+FC = gfortran
+CC = gcc
+F90FLAGS += -ffree-line-length-none -fno-backslash
+CPPFLAGS += -DFCOMPILER=_GFORTRAN_ -DNO_SIZEOF
+
+ifdef DBLE
+	F90FLAGS += -fdefault-real-8
+endif
+
+ifdef STATIC
+	LDFLAGS += -static
+endif
+
+ifdef DEBUG
+	F90FLAGS += -g -Wall -fimplicit-none -fbounds-check
+	F90OPTFLAGS =
+	CFLAGS += -g -Wall -fbounds-check
+	COPTFLAGS =
+else
+	ifdef OPT
+		F90OPTFLAGS += -O3
+		COPTFLAGS += -O3
+	endif
+
+	ifeq ($(findstring gprof,$(PROF)),gprof)
+		F90FLAGS += -pg
+		CFLAGS += -pg
+	endif
+endif

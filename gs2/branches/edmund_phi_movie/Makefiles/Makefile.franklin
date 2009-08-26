@@ -1,0 +1,55 @@
+# Host: franklin at NERSC (Cray XT4)
+
+COMPILER=pgi
+ifdef FFTW_DIR
+	USE_FFT = fftw
+else
+	override USE_FFT =
+endif
+ifdef NETCDF
+	USE_NETCDF = new
+else
+	override USE_NETCDF =
+endif
+ifdef HDF5
+	USE_HDF5 = on
+else
+	override USE_HDF5 =
+endif
+ifdef PGPLOT_DIR
+	PGPLOT_LIB = -lpgplot -L$$PGPLOT_DIR
+endif
+ifeq ($(findstring ipm,$(PROF)),ipm)
+	STATIC=on
+	ifdef IPM
+		IPM_LIB = $(IPM)
+	else
+$(warning IPM module is not loaded)
+	endif
+endif
+
+include Makefile.XT4
+
+include Makefile.$(COMPILER)
+
+FC=ftn
+CC=cc
+ifdef USE_MPI
+	MPIFC = ftn
+	MPICC = cc
+endif
+
+ifeq ($(USE_FFT),fftw)
+	FFT_INC = $$FFTW_INCLUDE_OPTS
+	ifdef DBLE
+		FFT_LIB = $$FFTW_POST_LINK_OPTS -ldfftw -ldrfftw
+	else
+		FFT_LIB = $$FFTW_POST_LINK_OPTS -lsfftw -lsrfftw
+	endif
+endif
+
+ifdef USE_NETCDF
+	NETCDF_INC = -I$$NETCDF_DIR/include
+	NETCDF_LIB = -L$$NETCDF_DIR/lib -lnetcdf
+endif
+

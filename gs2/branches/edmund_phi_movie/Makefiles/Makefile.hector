@@ -1,0 +1,28 @@
+# Host: hector (Cray XT4)
+
+#NETCDF_DIR = /home/u10/u10/joachim/Netcdf
+NETCDF_DIR = 
+COMPILER=pgi
+
+include Makefile.XT4
+
+include Makefile.$(COMPILER)
+
+FC=ftn
+MPIFC=ftn
+CC=cc
+$(FC=$FC)
+ifeq ($(USE_FFT),fftw)
+	ifdef DBLE
+		FFT_LIB = -ldfftw -ldrfftw
+	else
+		FFT_LIB = -lsfftw -lsrfftw
+	endif
+endif
+
+NETCDF_INC = -I$(NETCDF_DIR)/include
+NETCDF_LIB = -L$(NETCDF_DIR)/lib -lnetcdf
+
+
+
+
