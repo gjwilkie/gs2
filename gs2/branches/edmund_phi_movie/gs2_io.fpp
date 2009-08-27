@@ -92,7 +92,7 @@ module gs2_io
   integer :: hk_gradients_id, hk_hypercoll_id, hk_heating_id, hk_imp_colls_id
   integer, dimension (5) :: mom_dim
   integer :: ntot0_id, density0_id, upar0_id, tpar0_id, tperp0_id
-  logical :: d_fields_per ! Should the fields be written out every nwrite?
+  logical :: write_apar_t, write_phi_t, write_bpar_t ! Should the fields be written out every nwrite?
 
 # endif
   real :: zero
@@ -104,7 +104,8 @@ contains
   subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
       write_phiavg, write_hrate, write_final_antot, write_eigenfunc, &
       make_movie, nmovie_tot, write_verr, &
-      write_full_moments_notgc, write_fields_over_time) 
+      write_full_moments_notgc, write_phi_over_time, write_apar_over_time, &
+      write_bpar_over_time) 
 
     !write_fields_over_time added by EGH 08/2009
 !David has made some changes to this subroutine (may 2005) now should 
@@ -128,7 +129,9 @@ contains
     logical, intent(in) :: write_nl_flux, write_omega, write_stress
     logical, intent(in) :: write_phiavg, write_hrate, make_movie
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
-    logical, intent(in) :: write_full_moments_notgc, write_fields_over_time
+    logical, intent(in) :: write_full_moments_notgc, write_phi_over_time
+    logical, intent(in) :: write_apar_over_time,  write_bpar_over_time
+
     integer :: nmovie_tot
 # ifdef NETCDF
     logical :: accelerated
@@ -136,7 +139,11 @@ contains
 !    integer :: ierr         ! 0 if initialization is successful
     integer :: status
 
-    d_fields_per = write_fields_over_time
+    !EGH
+    write_phi_t = write_phi_over_time
+    write_apar_t = write_apar_over_time
+    write_bpar_t = write_bpar_over_time
+
 
     zero = epsilon(0.0)
 !    ierr = 0
@@ -840,7 +847,7 @@ contains
           status = nf90_def_var (ncid, 'antot', netcdf_real, final_field_dim, antot_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='antot')
        endif
-       if (d_fields_per) then
+       if (write_phi_t) then
           status = nf90_def_var &
                (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')
@@ -904,9 +911,11 @@ contains
           status = nf90_def_var (ncid, 'antota', netcdf_real, final_field_dim, antota_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='antota')
        endif
-       if (d_fields_per) then
+       if (write_apar_t) then
           status = nf90_def_var (ncid, 'apar_t', netcdf_real, field_dim, apar_t_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_t')
+          status = nf90_put_att (ncid, apar_t_id, 'long_name', 'Parallel Magnetic Potential over Time')
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_t_id, att='long_name')
        end if
        status = nf90_put_att (ncid, apar2_by_mode_id, 'long_name', 'Apar squared')
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar2_by_mode_id, att='long_name')
@@ -961,9 +970,11 @@ contains
           status = nf90_def_var (ncid, 'antotp', netcdf_real, final_field_dim, antotp_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='antotp')
        endif
-       if (d_fields_per) then
+       if (write_bpar_t) then
           status = nf90_def_var (ncid, 'bpar_t', netcdf_real, field_dim, bpar_t_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_t')
+          status = nf90_put_att (ncid, bpar_t_id, 'long_name', 'delta B Parallel over time')
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_t_id, att='long_name')
        end if
 
        status = nf90_put_att (ncid, bpar2_by_mode_id, 'long_name', 'A_perp squared')
@@ -1811,7 +1822,7 @@ contains
     use theta_grid, only: ntgrid
     use species, only: nspec
     use convert, only: c2r
-    use fields_arrays, only: phi
+    use fields_arrays, only: phi, apar, bpar
 
 !    use nf90_mod, only: nf90_put_var1, nf90_put_vara
 # ifdef NETCDF
@@ -1917,12 +1928,29 @@ contains
 
     if (fphi > zero) then
 
-	if(d_fields_per) then
+
+	!<wkdoc> Write fields at the current timestep, if [[write_phi_over_time]], [[write_apar_over_time]], [[write_bpar_over_time]] are set in the input file</wkdoc>
+	if(write_phi_t) then
           call c2r (phi, ri3)
           !ri_phi_t(:,:,:,:,1) = ri3(:,:,:,:)
 	  status = nf90_put_var (ncid, phi_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id)
 	end if
+
+	if(write_apar_t) then
+          call c2r (apar, ri3)
+          !ri_apar_t(:,:,:,:,1) = ri3(:,:,:,:)
+	  status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id)
+	end if
+
+	if(write_bpar_t) then
+          call c2r (bpar, ri3)
+          !ri_bpar_t(:,:,:,:,1) = ri3(:,:,:,:)
+	  status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id)
+	end if
+
 
        if (ntheta0 > 1) then
           do it = 1, ntheta0
