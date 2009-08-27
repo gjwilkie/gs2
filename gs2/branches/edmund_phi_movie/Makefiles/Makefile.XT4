@@ -1,4 +1,0 @@
-# System: Cray XT4 with Linux
-
-F90FLAGS += -target=linux
-CFLAGS += -target=linux
