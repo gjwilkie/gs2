@@ -90,9 +90,9 @@ module gs2_io
   integer :: hk_delfs2_id, hk_hs2_id, hk_phis2_id
   integer :: hk_hypervisc_id, hk_hyperres_id, hk_collisions_id
   integer :: hk_gradients_id, hk_hypercoll_id, hk_heating_id, hk_imp_colls_id
-
   integer, dimension (5) :: mom_dim
   integer :: ntot0_id, density0_id, upar0_id, tpar0_id, tperp0_id
+  logical :: write_apar_t, write_phi_t, write_bpar_t ! Should the fields be written out every nwrite?
 
 # endif
   real :: zero
@@ -104,7 +104,10 @@ contains
   subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
       write_phiavg, write_hrate, write_final_antot, write_eigenfunc, &
       make_movie, nmovie_tot, write_verr, &
-      write_full_moments_notgc)
+      write_full_moments_notgc, write_phi_over_time, write_apar_over_time, &
+      write_bpar_over_time) 
+
+    !write_fields_over_time added by EGH 08/2009
 !David has made some changes to this subroutine (may 2005) now should 
 !be able to do movies for linear box runs as well as nonlinear box runs.
 
@@ -126,13 +129,20 @@ contains
     logical, intent(in) :: write_nl_flux, write_omega, write_stress
     logical, intent(in) :: write_phiavg, write_hrate, make_movie
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
-    logical, intent(in) :: write_full_moments_notgc
+    logical, intent(in) :: write_full_moments_notgc, write_phi_over_time
+    logical, intent(in) :: write_apar_over_time,  write_bpar_over_time
+
     integer :: nmovie_tot
 # ifdef NETCDF
     logical :: accelerated
     character (300) :: filename, filename_movie
 !    integer :: ierr         ! 0 if initialization is successful
     integer :: status
+
+    !EGH
+    write_phi_t = write_phi_over_time
+    write_apar_t = write_apar_over_time
+    write_bpar_t = write_bpar_over_time
 
 
     zero = epsilon(0.0)
@@ -226,6 +236,8 @@ contains
 # ifdef NETCDF
     integer :: status
 
+
+    !<wkdoc> Associate the grid variables, e.g. ky, kx, with their size, e.g. naky, ntheta0 (= nakx) , and a variable which is later used to store these sizes in the NetCDF file, e.g. naky_dim, nakx_dim </wkdoc>
     status = nf90_def_dim (ncid, 'ky', naky, naky_dim)
     if (status /= NF90_NOERR) call netcdf_error (status, dim='ky')
     status = nf90_def_dim (ncid, 'kx', ntheta0, nakx_dim)
@@ -254,6 +266,7 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, dim='nheat')
 
     ! added by EAB 03/05/04 for GS2 movies
+    ! <wkdoc> If make_movie = .true., define some extra dimensions for movie output; x with dimension yxf_lo%nx; y with dimension yxf_lo%ny, and tm, (i.e. time) with dimension nmovie_tot = nstep/nmovie </wkdoc>
     if (my_make_movie) then
        nx=yxf_lo%nx
        ny=yxf_lo%ny
@@ -292,6 +305,7 @@ contains
     real, dimension(:), allocatable :: x, y
     integer :: ik, it
 
+    !<wkdoc> Store the size of the grid dimensions (as defined in def_dims), in the NetCDF file </wkdoc>
     status = nf90_put_var (ncid, nttot_id, 2*ntgrid+1)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, nttot_id)
     status = nf90_put_var (ncid, naky_id, naky)
@@ -350,6 +364,8 @@ contains
        if (status /= NF90_NOERR) &
             call netcdf_error (status, ncid_movie, th_id)
        deallocate(x)
+
+
        deallocate(y)
     endif
 # endif
@@ -384,6 +400,7 @@ contains
   end subroutine nc_finish
 
   subroutine save_input
+    !<wkdoc> Save the input file in the NetCDF file </wkdoc>
 # ifdef NETCDF    
     use file_utils, only: num_input_lines, get_input_unit
 !    use netcdf_mod
@@ -436,7 +453,7 @@ contains
 # ifdef NETCDF
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
-    logical :: d_fields_per = .false.
+    !logical :: d_fields_per = .false. - unnecessary - now set in input file
     logical :: d_neo = .false.
     
     integer :: status
@@ -536,6 +553,8 @@ contains
     mom_dim(4) = nspec_dim
     mom_dim(5) = time_dim
 
+
+    !<wkdoc> Write some useful general information into the NetCDF file </wkdoc>
     status = nf90_put_att (ncid, NF90_GLOBAL, 'title', 'GS2 Simulation Data')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, NF90_GLOBAL, att='title')
     status = nf90_put_att (ncid, NF90_GLOBAL, 'Conventions', &
@@ -546,6 +565,7 @@ contains
     timestamp(:) = ' '
     timezone(:) = ' '
     call date_and_time (datestamp, timestamp, timezone)
+
     
     status = nf90_def_var (ncid, 'code_info', NF90_CHAR, char10_dim, code_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='code_info')
@@ -606,6 +626,7 @@ contains
          'should be clear from the context in which they appear below.')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, code_id, att=ci)
 
+    !<wkdoc> Write lots of input variables into the NetCDF file </wkdoc>
     status = nf90_def_var (ncid, 'nproc', NF90_INT, nproc_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='nproc')
     status = nf90_put_att (ncid, nproc_id, 'long_name', 'Number of processors')
@@ -826,10 +847,12 @@ contains
           status = nf90_def_var (ncid, 'antot', netcdf_real, final_field_dim, antot_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='antot')
        endif
-       if (d_fields_per) then
+       if (write_phi_t) then
           status = nf90_def_var &
                (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')
+          status = nf90_put_att (ncid, phi_t_id, 'long_name', 'Electrostatic Potential over time')
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_t_id, att='long_name')
        end if
     end if
 
@@ -888,9 +911,11 @@ contains
           status = nf90_def_var (ncid, 'antota', netcdf_real, final_field_dim, antota_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='antota')
        endif
-       if (d_fields_per) then
+       if (write_apar_t) then
           status = nf90_def_var (ncid, 'apar_t', netcdf_real, field_dim, apar_t_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_t')
+          status = nf90_put_att (ncid, apar_t_id, 'long_name', 'Parallel Magnetic Potential over Time')
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_t_id, att='long_name')
        end if
        status = nf90_put_att (ncid, apar2_by_mode_id, 'long_name', 'Apar squared')
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar2_by_mode_id, att='long_name')
@@ -945,9 +970,11 @@ contains
           status = nf90_def_var (ncid, 'antotp', netcdf_real, final_field_dim, antotp_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='antotp')
        endif
-       if (d_fields_per) then
+       if (write_bpar_t) then
           status = nf90_def_var (ncid, 'bpar_t', netcdf_real, field_dim, bpar_t_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_t')
+          status = nf90_put_att (ncid, bpar_t_id, 'long_name', 'delta B Parallel over time')
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_t_id, att='long_name')
        end if
 
        status = nf90_put_att (ncid, bpar2_by_mode_id, 'long_name', 'A_perp squared')
@@ -1150,7 +1177,7 @@ contains
        xmode_dim (3) = nth_dim
        xmode_dim (4) = time_movie_dim
        status = nf90_put_att (ncid_movie, NF90_GLOBAL, 'title', 'GS2 Simulation x,y,theta Data for Movies')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, NF90_GLOBAL, att='tittle')
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, NF90_GLOBAL, att='title')
        status = nf90_put_att (ncid_movie, NF90_GLOBAL, 'Conventions', &
             'http://gs2.sourceforge.net')
        if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, NF90_GLOBAL, att='Conventions')
@@ -1792,8 +1819,11 @@ contains
     use gs2_heating, only: heating_diagnostics, hk_repack
     use run_parameters, only: fphi, fapar, fbpar
     use kt_grids, only: naky, ntheta0
+    use theta_grid, only: ntgrid
     use species, only: nspec
     use convert, only: c2r
+    use fields_arrays, only: phi, apar, bpar
+
 !    use nf90_mod, only: nf90_put_var1, nf90_put_vara
 # ifdef NETCDF
     use netcdf, only: nf90_put_var, nf90_sync
@@ -1817,6 +1847,28 @@ contains
     integer, dimension (3) :: start, count, starth, counth
     integer, dimension (2) :: startx, countx, starty, county, starts, counts
     integer :: status, it, ik
+
+
+    !Added by EGH ; for writing phi_t, the whole potential vs time
+    real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
+    real, dimension (2, 2*ntgrid+1, ntheta0, naky, 1) :: ri_phi_t
+    integer, dimension (5) :: start5, count5
+
+    start5(1) = 1
+    start5(2) = 1
+    start5(3) = 1
+    start5(4) = 1
+    start5(5) = nout
+  
+    count5(1) = 2
+    count5(2) = 2*ntgrid+1
+    count5(3) = ntheta0
+    count5(4) = naky
+    count5(5) = 1
+  
+    !End EGH
+
+
 
     status = nf90_put_var (ncid, time_id, time, start=(/ nout /))
 
@@ -1875,6 +1927,30 @@ contains
     counth(3) = 1
 
     if (fphi > zero) then
+
+
+	!<wkdoc> Write fields at the current timestep, if [[write_phi_over_time]], [[write_apar_over_time]], [[write_bpar_over_time]] are set in the input file</wkdoc>
+	if(write_phi_t) then
+          call c2r (phi, ri3)
+          !ri_phi_t(:,:,:,:,1) = ri3(:,:,:,:)
+	  status = nf90_put_var (ncid, phi_t_id, ri3, start=start5, count=count5)
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id)
+	end if
+
+	if(write_apar_t) then
+          call c2r (apar, ri3)
+          !ri_apar_t(:,:,:,:,1) = ri3(:,:,:,:)
+	  status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id)
+	end if
+
+	if(write_bpar_t) then
+          call c2r (bpar, ri3)
+          !ri_bpar_t(:,:,:,:,1) = ri3(:,:,:,:)
+	  status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id)
+	end if
+
 
        if (ntheta0 > 1) then
           do it = 1, ntheta0

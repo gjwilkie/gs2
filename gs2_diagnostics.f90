@@ -42,6 +42,7 @@ module gs2_diagnostics
   logical :: use_shmem_for_xfields
   logical :: save_for_restart
   logical :: test_conserve
+  logical :: write_phi_over_time, write_apar_over_time, write_bpar_over_time !EGH
 !>GGH
   logical, parameter :: write_density_velocity=.false.
   logical :: write_jext=.false.
@@ -112,6 +113,9 @@ module gs2_diagnostics
 contains
 
   subroutine init_gs2_diagnostics (list, nstep)
+    !<wkdoc> Define NetCDF vars, call real_init, which calls read_parameters; broadcast all the different write flags. </wkdoc>
+
+
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids, ntheta0, naky
     use run_parameters, only: init_run_parameters
@@ -185,6 +189,9 @@ contains
     call broadcast (write_eigenfunc)
 
     call broadcast (write_full_moments_notgc)
+    call broadcast (write_phi_over_time)
+    call broadcast (write_apar_over_time)
+    call broadcast (write_bpar_over_time)
 
     nmovie_tot = nstep/nmovie
 
@@ -231,7 +238,7 @@ contains
     call init_gs2_io (write_nl_flux, write_omega, write_stress, &
          write_fieldline_avg_phi, write_hrate, write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot, write_verr, &
-         write_full_moments_notgc)
+         write_full_moments_notgc, write_phi_over_time, write_apar_over_time, write_bpar_over_time)
     
     if (write_cerr) then
        if (collision_model_switch == 1 .or. collision_model_switch == 5) then
@@ -260,7 +267,10 @@ contains
     logical, intent (in) :: list
     character(20) :: datestamp, timestamp, zone
 
+    !<wkdoc> Call read parameters </wkdoc>
     call read_parameters (list)
+
+    !<wkdoc> Open the various ascii output files (depending on the write flags) </wkdoc>
     if (proc0) then
        if (write_ascii) then
           call open_output_file (out_unit, ".out")
@@ -327,6 +337,8 @@ contains
        omegahist = 0.0
     end if
 
+
+    !<wkdoc> Allocate arrays for storing the various fluxes which the diagnostics will output </wkdoc>
     allocate (pflux (ntheta0,naky,nspec)) ; pflux = 0.
     allocate (qheat (ntheta0,naky,nspec,3)) ; qheat = 0.
 !       allocate (qheat_par  (ntheta0,naky,nspec))
@@ -387,9 +399,11 @@ contains
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
-         save_for_restart
+         save_for_restart, &
+         write_phi_over_time, write_apar_over_time, write_bpar_over_time
 
     if (proc0) then
+	!<wkdoc> Set defaults for the gs2_diagnostics_knobs</wkdoc>		
        print_line = .true.
        print_old_units = .false.
        print_flux_line = .false.
@@ -453,7 +467,13 @@ contains
        use_shmem_for_xfields = .true.
        nperiod_output = nperiod - nperiod_guard
        save_for_restart = .false.
+       write_phi_over_time = .false.
+       write_bpar_over_time = .false.
+       write_apar_over_time = .false.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
+
+	!<wkdoc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </wkdoc>
+
 !       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
        if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
 
