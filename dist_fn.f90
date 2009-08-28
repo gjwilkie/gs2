@@ -1974,8 +1974,26 @@ contains
 
     gdt = code_dt
 
-! kx_shift is a function of time.   Update it here:
+  !<wkdoc>Do the velocity shear remapping: </wkdoc>
+   !<wkdoc>* With the velocity shear in the equation, the mode naturally moves along the field line in time, in order to 'keep up with the Bessel functions', which are moving, due a time varying kx in the mode.</wkdoc>
+   !<wkdoc>* However, an alternative way to have velocity shear it to keep the Bessel functions fixed on the grid, and forcibly move the mode away along the field line (which is done by, and is equivalent to, forcibly shifting the mode in kx). </wkdoc>
+   !<wkdoc>* So in a hand-waving way, instead of the Bessel functions moving away from the peak of the mode, and it having to move to catch up, the Bessel functions are fixed, and phi is being moved away from them, and it is having to move just to stay in the same place </wkdoc>
+   ! <wkdoc>* Thus, in order to be absolutely unstable (as opposed to convectively unstable), the mode has to 
+   ! keep growing at theta0, the central point of the Bessel functions, faster than it keeps getting shoved 
+   ! away from that point </wkdoc>
+        ! <wkdoc>** In more detail what this is saying is that the value of kx that each mesh point of e.g. 
+        ! phi corresponds to (lets call it kx_meshpoint) is changing in time. </wkdoc>
+        ! <wkdoc>** So after a while, the value of phi that is stored on each mesh point, is not the value of phi at kx_meshpoint; it is the value of phi at kx_phi = kx_meshpoint minus [[kx_shift]], the change in the value of kx_meshpoint.  </wkdoc>
+        ! <wkdoc>** When that change, [[kx_shift]], is greater than an integer number of [[dkx]], it is now possible to move phi to a set of mesh points where kx_meshpoint is closer to kx_phi. </wkdoc>
 
+
+  !<wkdoc>* So kx_shift = kx_meshpoint - kx_phi  is a function of time.   Update kx_shift here. </wkdoc>
+  !<wkdoc>** kx_shift = kx_shift(time of last remapping) - k_y g_exb (time since last remapping)</wkdoc>
+  !<wkdoc>* The procedure is, work out how much kx_shift has changed since the last remapping, work out how many shifts of phi ([[jumps]]) that corresponds to, do the remapping and then store the remainder of kx_shift </wkdoc>
+		
+  !<wkdoc>* The number of jumps, [[jump]], is set equal to the 
+  ! nearest integer number of dkxs to <math>k_y g_{e \times b} t </math>
+  ! and the remainder is kept in the [[kx_shift]] array</wkdoc>
     do ik=1, naky
        kx_shift(ik) = kx_shift(ik) - aky(ik)*g_exb*gdt
        jump(ik) = nint(kx_shift(ik)/dkx)
@@ -1983,6 +2001,9 @@ contains
     end do
 
 ! BD: To do: Should save kx_shift array in restart file
+
+
+    !<wkdoc>* Now shift all the fields by [[jump]], the number of jumps </wkdoc>
 
     do ik = naky, 2, -1
 !       if (jump(ik) == 0) exit
