@@ -22,7 +22,7 @@ module init_g
        ginitopt_nl6 = 22, ginitopt_nl7 = 23, ginitopt_gs = 24, ginitopt_recon = 25, &
        ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28, &
        ginitopt_recon3 = 29
-  real :: width0, dphiinit, phiinit, imfac, refac, zf_init
+  real :: width0, dphiinit, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
   real :: den1, upar1, tpar1, tperp1
   real :: den2, upar2, tpar2, tperp2
@@ -61,7 +61,7 @@ contains
   subroutine init_init_g
     use gs2_save, only: init_save
     use gs2_layouts, only: init_gs2_layouts
-    use mp, only: proc0, broadcast
+    use mp, only: proc0, broadcast, job
     implicit none
 !    logical, save :: initialized = .false.
 
@@ -77,6 +77,10 @@ contains
     if(restart_dir(len_trim(restart_dir):) /= "/") &
          restart_dir=trim(restart_dir)//"/"
     restart_file=trim(restart_dir)//trim(restart_file)
+
+    ! MAB - allows for ensemble averaging of multiple flux tube calculations
+    ! job=0 if not doing multiple flux tube calculations, so phiinit unaffected
+    phiinit = phiinit * (job*phifrac+1.0)
 
     call broadcast (ginitopt_switch)
     call broadcast (width0)
@@ -95,6 +99,7 @@ contains
     call broadcast (tpar2)
     call broadcast (tperp2)
     call broadcast (phiinit)
+    call broadcast (phifrac)
     call broadcast (dphiinit)
     call broadcast (zf_init)
     call broadcast (apar0)
@@ -282,7 +287,7 @@ contains
          phiinit0, a0, b0, null_phi, null_bpar, null_apar, adj_spec, &
          eq_type, prof_width, eq_mode_u, eq_mode_n, &
          input_check_recon, nkxy_pt, ukxy_pt, &
-         ikkk, ittt
+         ikkk, ittt, phifrac
 
     integer :: ierr, in_file
     logical :: exist
@@ -317,6 +322,7 @@ contains
     ikk(2) = 2
     itt(1) = 1
     itt(2) = 2
+    phifrac = 0.1
 
     ! >RN
     ikkk(1) = 1 ; ikkk(2) = 2 ; ikkk(3) = 2

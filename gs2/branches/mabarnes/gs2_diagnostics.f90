@@ -2819,4 +2819,36 @@ if (debug) write(6,*) "get_omegaavg: done"
 
   end subroutine reset_init
 
+  subroutine ensemble_average (nensembles, time_int)
+    use mp, only: scope, allprocs, group_to_all, broadcast
+    use gs2_time, only: user_time
+    use species, only: nspec
+    implicit none
+    integer, intent (in) :: nensembles
+    real, intent (out) :: time_int
+    integer :: is
+    real, dimension (nensembles) :: dt_global
+    real, dimension (nensembles,nspec) :: pflx_global, qflx_global, heat_global
+    time_int=user_time-start_time
+    call scope (allprocs)
+    call group_to_all (time_int, dt_global, nensembles)
+    call broadcast (dt_global)
+    time_int = sum(dt_global)
+    call group_to_all (pflux_avg, pflx_global, nensembles)
+    call group_to_all (qflux_avg, qflx_global, nensembles)
+    do is = 1, nspec
+       call broadcast (pflx_global(:,is))
+       call broadcast (qflx_global(:,is))
+       pflux_avg = sum(pflx_global(:,is))
+       qflux_avg = sum(qflx_global(:,is))
+    end do
+    if (write_hrate) then
+       call group_to_all (heat_avg, heat_global, nensembles)
+       do is = 1, nspec
+          call broadcast (heat_global(:,is))
+          heat_avg = sum(heat_global(:,is))
+       end do
+    end if
+  end subroutine ensemble_average
+
 end module gs2_diagnostics

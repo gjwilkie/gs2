@@ -6,7 +6,7 @@ module gs2_main
 contains
 # endif
 
-  subroutine run_gs2 (mpi_comm, filename, pflux, qflux, heat, dvdrho, grho)
+  subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, grho)
 
     ! main subroutine in which gs2 is initialized, equations are advanced,
     ! and the program is finalized
@@ -23,7 +23,7 @@ contains
     use fields, only: advance
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
-    use gs2_diagnostics, only: loop_diagnostics
+    use gs2_diagnostics, only: loop_diagnostics, ensemble_average
     use gs2_reinit, only: reset_time_step, check_time_step
     use gs2_reinit, only: time_message, time_nc, time_reinit
     use gs2_time, only: update_time
@@ -36,12 +36,13 @@ contains
 
     implicit none
 
-    integer, intent (in), optional :: mpi_comm
+    integer, intent (in), optional :: mpi_comm, nensembles
     character (*), intent (in), optional :: filename
     real, dimension (:), intent (out), optional :: pflux, qflux, heat
     real, intent (out), optional :: dvdrho, grho
 
     real :: time_init = 0., time_advance = 0., time_finish = 0., time_total
+    real :: time_interval
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
     logical :: first_time = .true.
@@ -67,7 +68,7 @@ contains
           write (*,*) 
           ! figure out run name or get list of jobs
           if (present(filename)) then
-             call init_file_utils (list, trin_run=.true., name=filename)
+             call init_file_utils (list, trin_run=.true., name=filename, n_ensembles=nensembles)
           else
              call init_file_utils (list, name="gs")
           end if
@@ -76,8 +77,12 @@ contains
        call broadcast (list)
        
        ! if given a list of jobs, fork
-       if (list) call job_fork
-       
+       if (list) then
+          call job_fork
+       else if (present(nensembles)) then
+          if (nensembles > 1) call job_fork (n_ensembles=nensembles)
+       end if
+
        if (proc0) then
           call time_message(.false., .false., time_init,' Initialization')
           cbuff = trim(run_name)
@@ -132,11 +137,17 @@ contains
        end if
     end do
     if (proc0) call write_dt
-    
+
+    time_interval = user_time-start_time
+
+    if (present(nensembles)) then
+       if (nensembles > 1) call ensemble_average (nensembles, time_interval)
+    end if
+
     if (present(pflux)) then
-       pflux = pflux_avg/(user_time-start_time)
-       qflux = qflux_avg/(user_time-start_time)
-       heat = heat_avg/(user_time-start_time)
+       pflux = pflux_avg/time_interval
+       qflux = qflux_avg/time_interval
+       heat = heat_avg/time_interval
     else
        call finish_gs2_diagnostics (istep_end)
        call finish_gs2
