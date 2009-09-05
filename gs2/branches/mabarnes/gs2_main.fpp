@@ -12,7 +12,7 @@ contains
     ! and the program is finalized
 
     use job_manage, only: checkstop, job_fork, checktime
-    use mp, only: init_mp, finish_mp, proc0, nproc, broadcast
+    use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
@@ -107,7 +107,11 @@ contains
        if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
        
        first_time = .false.
-       
+
+    else if (present(nensembles)) then
+       if (nensembles > 1) then
+          call scope (subprocs)
+       end if
     end if
     
     istep_end = nstep
@@ -206,7 +210,7 @@ contains
 
   end subroutine finish_gs2
 
-  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, nu)
+  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, nu, nensembles)
 
     use dist_fn, only: d_reset => reset_init
     use collisions, only: vnmult, c_reset => reset_init
@@ -223,15 +227,17 @@ contains
     use gs2_time, only: code_dt, user_dt, save_dt, user_time
     use run_parameters, only: fphi, fapar, fbpar
     use antenna, only: a_reset => reset_init
-    use mp, only: proc0
+    use mp, only: proc0, scope, subprocs, allprocs
 
     implicit none
 
-    integer, intent (in) :: ntspec
+    integer, intent (in) :: ntspec, nensembles
     real, intent (in) :: dens, fprim
     real, dimension (:), intent (in) :: temp, tprim, nu
 
     integer :: istatus
+
+    if (nensembles > 1) call scope (subprocs)
 
     call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
     gnew = 0.
@@ -253,6 +259,8 @@ contains
 
     call reinit_species (ntspec, dens, temp, fprim, tprim, nu)
     call init_fields
+
+    if (nensembles > 1) call scope (allprocs)
 
   end subroutine reset_gs2
 

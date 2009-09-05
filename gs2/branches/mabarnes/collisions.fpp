@@ -3432,11 +3432,10 @@ contains
 !                     * vns(1,ie,is) * sqrt(max(0.0,(1.0-al(il)*bmag(ig))*e(ie,is) ))
 !             end do
 !          end do
-          vpadelnu(:,:,ie,is) = vns(1,ie,is) * sqrt(vpatmp*e(ie,is))
+          vpadelnu(:,:nxi,ie,is) = vns(1,ie,is) * sqrt(vpatmp*e(ie,is))
        end do
     end do
 
-    ! TMP FOR TESTING -- MAB
 !    call system_clock (count=t4)
 !    t4tot = t4tot + real(t4-t3)/tr
 
