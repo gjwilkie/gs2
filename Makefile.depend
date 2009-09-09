@@ -67,6 +67,7 @@ gs2_mod = \
 	 gridgen4mod.o \
 	 gs2.o \
 	 gs2_diagnostics.o \
+	 gs2_dist_io.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -75,6 +76,7 @@ gs2_mod = \
 	 gs2_save.o \
 	 gs2_time.o \
 	 gs2_transforms.o \
+	 hdf_wrapper.o \
 	 hyper.o \
 	 ideq.o \
 	 init_g.o \
@@ -151,6 +153,14 @@ rungridgen_mod = \
 	 gridgen4mod.o \
 	 rungridgen.o \
 	 spl.o 
+
+slice_g_mod = \
+	 command_line.o \
+	 constants.o \
+	 convert.o \
+	 file_utils.o \
+	 hdf_wrapper.o \
+	 slice_g.o 
 
 antenna.o: \
 	 antenna_data.o \
@@ -286,12 +296,14 @@ gs2_diagnostics.o: \
 	 fields.o \
 	 fields_arrays.o \
 	 file_utils.o \
+	 gs2_dist_io.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_save.o \
 	 gs2_time.o \
 	 gs2_transforms.o \
+	 hdf_wrapper.o \
 	 init_g.o \
 	 kt_grids.o \
 	 le_grids.o \
@@ -301,6 +313,23 @@ gs2_diagnostics.o: \
 	 run_parameters.o \
 	 species.o \
 	 spl.o \
+	 theta_grid.o 
+gs2_dist_io.o: \
+	 collisions.o \
+	 convert.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 gs2_layouts.o \
+	 gs2_time.o \
+	 gs2_transforms.o \
+	 hdf_params.inc \
+	 hdf_wrapper.o \
+	 job_manage.o \
+	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
+	 run_parameters.o \
+	 species.o \
 	 theta_grid.o 
 gs2_dist_io_hdf.o: \
 	 file_utils.o \
@@ -421,6 +450,10 @@ gs2_transforms.o: \
 	 prof.o \
 	 redistribute.o \
 	 theta_grid.o 
+hdf_wrapper.o: \
+	 constants.o \
+	 convert.o \
+	 file_utils.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -538,6 +571,12 @@ rungridgen.o: \
 	 file_utils.o \
 	 gridgen4mod.o \
 	 spl.o 
+slice_g.o: \
+	 command_line.o \
+	 convert.o \
+	 file_utils.o \
+	 hdf_params.inc \
+	 hdf_wrapper.o 
 species.o: \
 	 file_utils.o \
 	 mp.o \

@@ -304,7 +304,7 @@ module gs2_layouts
      module procedure idx_local_lz,     ig_local_lz
      module procedure idx_local_e,      ig_local_e
 ! TT>
-     module procedure idx_local_le,      ig_local_le
+     module procedure idx_local_le,     ig_local_le
 ! <TT
      module procedure idx_local_xxf,    ig_local_xxf
      module procedure idx_local_yxf,    ig_local_yxf

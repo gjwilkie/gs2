@@ -728,14 +728,14 @@ contains
     end if
 
     if (fbpar > epsilon(0.)) then
-# ifdef NETCDF == _OLD_
+# if NETCDF == _OLD_
        istatus = nf90_inq_varid (ncid, "aperp_r", bparr_id)
 # else
        istatus = nf90_inq_varid (ncid, "bpar_r", bparr_id)
 # endif
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='bpar_r')
 
-# ifdef NETCDF == _OLD_       
+# if NETCDF == _OLD_       
        istatus = nf90_inq_varid (ncid, "aperp_i", bpari_id)
 # else
        istatus = nf90_inq_varid (ncid, "bpar_i", bpari_id)
@@ -894,7 +894,7 @@ contains
     if (proc0) then
        if (.not.initialized) then
 
-# ifdef NETCDF == _OLD_
+# if NETCDF == _OLD_
           file_proc=trim(trim(restart_file)//'.0000')
 # else
           file_proc=trim(trim(restart_file)//'.00000')
