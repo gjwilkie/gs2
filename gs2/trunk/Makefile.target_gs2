@@ -15,6 +15,9 @@ rungridgen: $(rungridgen_mod)
 regress: $(drive_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+slice_g: $(slice_g_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 distclean:
 	-rm -f gs2 gs2.x
 	-rm -f ingen rungridgen regress

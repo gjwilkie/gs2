@@ -14,6 +14,7 @@ module collisions
   public :: init_lorentz, init_ediffuse
   public :: init_lorentz_conserve, init_diffuse_conserve
   public :: init_lorentz_error, collision_model_switch
+  public :: g_adjust ! used in hdf output
 
   private
 

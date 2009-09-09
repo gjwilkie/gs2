@@ -128,6 +128,7 @@ contains
     use collisions, only: collision_model_switch, init_lorentz_error
     use mp, only: broadcast, proc0
     use le_grids, only: init_weights
+    use hdf_wrapper, only: hdf_init
 
     implicit none
     logical, intent (in) :: list
@@ -250,6 +251,12 @@ contains
 
     allocate (pflux_avg(nspec), qflux_avg(nspec), heat_avg(nspec))
     pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0
+
+    call hdf_init (stop=.false.,dbl=.false.)
+    ! TT: when dbl is false, the code uses single precision for the hdf file.
+    ! make dbl=.true. if you want double precision output.
+    ! hdf library takes care of single-to-double (or vice versa) conversion,
+    ! and it's faster than writing. :TT
 
   end subroutine init_gs2_diagnostics
  
@@ -547,6 +554,8 @@ contains
     use splines, only: fitp_surf1, fitp_surf2
     use gs2_heating, only: del_htype, del_dvtype
 !    use gs2_dist_io, only: write_dist
+    use gs2_dist_io, only: hdf_finish_dist
+    use hdf_wrapper, only: hdf_finish
     implicit none
     integer, intent (in) :: istep
     integer :: ig, ik, it, il, ie, is, unit, ierr
@@ -1313,6 +1322,9 @@ contains
     wtmp_old = 0. ; nout = 1 ; nout_movie = 1
     initialized = .false.
 
+    if (write_gg) call hdf_finish_dist
+    call hdf_finish
+
 1000  format(20(1x,1pg18.11))
   end subroutine finish_gs2_diagnostics
 
@@ -1329,7 +1341,7 @@ contains
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
     use dist_fn, only: getmoms_notgc, g_adjust
-    use dist_fn_arrays, only: g
+    use dist_fn_arrays, only: g, gnew
     use collisions, only: ncheck, vnmult, vary_vnew
     use mp, only: proc0, broadcast, iproc
     use file_utils, only: get_unused_unit, flush_output_file
@@ -1348,6 +1360,7 @@ contains
     use gs2_heating, only: heating_diagnostics, del_htype, &
          dens_vel_diagnostics,init_dvtype, del_dvtype
     use constants
+    use gs2_dist_io, only: hdf_write_dist
 
     implicit none
 !    integer :: nout = 1
@@ -2274,6 +2287,8 @@ contains
 ! Deallocate variable for Jexternal
     if (write_jext) deallocate(j_ext)
 !<GGH
+
+    if (write_gg .and. mod(istep,nmovie)==0) call hdf_write_dist (gnew)
 
     call prof_leaving ("loop_diagnostics-2")
 
