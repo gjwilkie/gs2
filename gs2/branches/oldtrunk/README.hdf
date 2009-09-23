@@ -1,0 +1,83 @@
+Written by Tomo Tatsuno (5/6/08).
+
+This README file briefly describes the hdf distribution function output.
+
+This feature works very effectively.  The file of about 3GB is written in
+millisecs on Franklin.  Probably compute node passes data and continues
+calculation while storage server takes care of the actual writing...
+
+There is a flag
+
+  write_gg [false]
+
+in diagnostics namelist which controls this feature.  [false] means this flag
+is set .false. by default.  When it is set .true., the code will write out the
+distribution function output to the file
+
+  (runname)_dist_(num).hdf
+
+where (runname) is the run name and (num) is a three-digit integer representing
+the time sequence of the files.  Each file contains a single snapshot of the
+field and distribution function with time in code unit.  Since each file can be
+huge there is an upper limit of 999 files at a time.  One cannot write more
+distribution function files than this in a single run.  Isn't it large enough?
+
+The number of output files is controlled by the integer
+
+  nmovie [1000]
+
+in diagnostics.  As before, [1000] is the default value.
+
+In addition there are two private logical flags.
+
+  export_complex [true]
+
+If true, the code writes out the Fourier-space distribution function.  Namely,
+the variable g as it is in the code.  If set false, the module makes FFT and
+brings distribution function to the real space.
+
+  dbl [false]
+
+This flag determines the kind of real number output.  If set true, the code
+writes double precision (8 bytes) real number and the corresponding complex
+(16 bytes), only if the code runs in double precision (-r8 option etc, default).
+Remember that the file size and the write-to-file time also become double.
+
+We might want these two flags to be in the namelist in the future.
+
+Now we describe about the tool slice_g.  Slice_g takes any distribution
+function file, I believe, made by the above module and analyze the layout and
+Fourier or real space output.  Slice_g is invoked as
+
+  > slice_g <dist_fn file> [it] [ik] [ig]
+
+and gives a slice of distribution function to the standard output.  <dist_fn
+file> is a mandatory argument, but the rest is optional.  If not specified,
+the default values (it,ik,ig)=(1,1,0) are used.  Optional arguments are
+understood as you specified from the first one.  So if you want the output
+of it=1 and ik=11, you should type
+
+  > slice_g <dist_fn file> 1 11
+
+not like
+
+  > slice_g <dist_fn file> ik=11
+
+or
+
+  > slice_g <dist_fn file> 11
+
+The latter will output it=11 and ik=1 without knowing you wanted ik=11.
+
+Slice_g reads the layout, energy and lambda grid point from (runname)_grids.hdf
+file, so the grid file must be placed in the same directory with dist_fn file.
+
+In the source code, there is a flag
+
+  write_vplane [true]
+
+which determines format of the distribution function output.  If true, the
+output is written in vpar-vperp plane, while if false, it is written in
+energy-lambda plane.  Default is true.
+
+To do:  add some performance data here --- your cooperation is appreciated.
