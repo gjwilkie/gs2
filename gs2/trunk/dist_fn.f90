@@ -725,7 +725,7 @@ contains
   subroutine init_bessel
     use dist_fn_arrays, only: aj0, aj1, aj2, kperp2
     use species, only: spec
-    use theta_grid, only: ntgrid, bmag, gds2, gds21, gds22, shat
+    use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
     use le_grids, only: e, al
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
@@ -762,7 +762,7 @@ contains
           aj0(ig,iglo) = j0(arg)
 ! CMR 17/1/06: BEWARE, j1 returns and aj1 stores J_1(x)/x (NOT J_1(x)), 
           aj1(ig,iglo) = j1(arg)
-          aj2(ig,iglo) = 2.0d0*aj1(ig,iglo)-aj0(ig,iglo)
+          aj2(ig,iglo) = 2.0*aj1(ig,iglo)-aj0(ig,iglo)
        end do
     end do
 
@@ -996,6 +996,7 @@ contains
              .and. itl + ntheta0 + 1 <= ntheta0) then
              itleft(ik,it) = itl + ntheta0 + 1
           else
+             ! for periodic, need to change below -- MAB/BD
              ! j' = j + delta j not included in simulation, so can't connect -- MAB
              itleft(ik,it) = -1
           end if
@@ -1007,6 +1008,7 @@ contains
              .and. itr + ntheta0 + 1 <= ntheta0) then
              itright(ik,it) = itr + ntheta0 + 1
           else
+             ! for periodic, need to change below -- MAB/BD
              itright(ik,it) = -1
           end if
        end do
@@ -4146,14 +4148,15 @@ contains
 !
     use species, only: spec
     use theta_grid, only: ntgrid, bmag, gradpar, grho, delthet, drhodpsi
-    use kt_grids, only: naky, ntheta0, akx
+    use theta_grid, only: qval, shat, gds2, gds21
+    use kt_grids, only: naky, ntheta0, akx, theta0, aky
     use le_grids, only: e
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
-    use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx
+    use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use mp, only: proc0
-    use run_parameters, only: woutunits, fphi, fapar, fbpar
+    use run_parameters, only: woutunits, fphi, fapar, fbpar, funits
     use constants, only: zi
-    use geometry, only: rmajor_geo, bpol_geo
+    use geometry, only: rmajor_geo, bpol_geo, rhoc
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     real, dimension (:,:,:), intent (out) :: pflux, pmflux, pbflux
@@ -4237,10 +4240,13 @@ contains
        call get_flux (phi, vflux_par, theta_vflux_par, dnorm)
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           it = it_idx(g_lo,iglo)
+          ik = ik_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
-             g0(:,isgn,iglo) = zi*akx(it)*grho*gnew(:,isgn,iglo)*aj1(:,iglo) &
-                  *2.0*vperp2(:,iglo)*spec(is)%smz/(bmag**2*drhodpsi)
+             g0(:,isgn,iglo) = funits*zi*aky(ik)*gnew(:,isgn,iglo)*aj1(:,iglo) &
+                  *rhoc*(gds2+theta0(it,ik)*gds21)*vperp2(:,iglo)*spec(is)%smz/(qval*shat*bmag**2)
+!             g0(:,isgn,iglo) = zi*akx(it)*grho*gnew(:,isgn,iglo)*aj1(:,iglo) &
+!                  *2.0*vperp2(:,iglo)*spec(is)%smz/(bmag**2*drhodpsi)
           end do
        end do
        call get_flux (phi, vflux_perp, theta_vflux_perp, dnorm)
