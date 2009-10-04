@@ -1582,21 +1582,21 @@ if (debug) write(6,*) "loop_diagnostics: -1"
                 theta_pflux(:,is) = theta_pflux(:,is)*funits &
                      *spec(is)%dens
                 
-                vflux(:,:,is) = vflux(:,:,is)*funits &
-                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
+                vflux(:,:,is) = vflux(:,:,is)*funits**2 &
+                     *spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
                 call get_volume_average (vflux(:,:,is), mom_fluxes(is))
-                vflux_par(:,:,is) = vflux_par(:,:,is)*funits &
-                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
+                vflux_par(:,:,is) = vflux_par(:,:,is)*funits**2 &
+                     *spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
                 call get_volume_average (vflux_par(:,:,is), parmom_fluxes(is))
-                vflux_perp(:,:,is) = vflux_perp(:,:,is)*funits &
+                vflux_perp(:,:,is) = vflux_perp(:,:,is)*funits**2 &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vflux_perp(:,:,is), perpmom_fluxes(is))
 
-                theta_vflux(:,is) = theta_vflux(:,is)*funits &
+                theta_vflux(:,is) = theta_vflux(:,is)*funits**2 &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
-                theta_vflux_par(:,is) = theta_vflux_par(:,is)*funits &
+                theta_vflux_par(:,is) = theta_vflux_par(:,is)*funits**2 &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
-                theta_vflux_perp(:,is) = theta_vflux_perp(:,is)*funits &
+                theta_vflux_perp(:,is) = theta_vflux_perp(:,is)*funits**2 &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
 
              end do
