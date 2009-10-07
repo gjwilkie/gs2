@@ -4148,7 +4148,7 @@ contains
 !
     use species, only: spec
     use theta_grid, only: ntgrid, bmag, gradpar, grho, delthet, drhodpsi
-    use theta_grid, only: qval, shat, gds2, gds21
+    use theta_grid, only: qval, shat, gds21, gds22
     use kt_grids, only: naky, ntheta0, akx, theta0, aky
     use le_grids, only: e
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
@@ -4244,7 +4244,7 @@ contains
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) = funits*zi*aky(ik)*gnew(:,isgn,iglo)*aj1(:,iglo) &
-                  *rhoc*(gds2+theta0(it,ik)*gds21)*vperp2(:,iglo)*spec(is)%smz/(qval*shat*bmag**2)
+                  *rhoc*(gds21+theta0(it,ik)*gds22)*vperp2(:,iglo)*spec(is)%smz/(qval*shat*bmag**2)
 !             g0(:,isgn,iglo) = zi*akx(it)*grho*gnew(:,isgn,iglo)*aj1(:,iglo) &
 !                  *2.0*vperp2(:,iglo)*spec(is)%smz/(bmag**2*drhodpsi)
           end do
