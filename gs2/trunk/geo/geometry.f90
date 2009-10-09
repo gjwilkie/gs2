@@ -814,8 +814,9 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
        grho2(i)=grho(i)**2*jacob(i)
     enddo
 !> MAB -- needed for Trinity
-    call integrate(abs(grho)*jacob, theta, ans, nth)
-    grhoavg=2.*pi*(ans(nth)-ans(-nth))
+!    call integrate(abs(grho)*jacob, theta, ans, nth)
+!    grhoavg=2.*pi*(ans(nth)-ans(-nth))
+    grhoavg=surfarea/dvdrhon
 !< MAB
 !    call integrate(grho2, theta, ans, nth)
 !    grho2n=2.*pi*(ans(nth)-ans(-nth))
