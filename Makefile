@@ -175,6 +175,7 @@ $(warning use GK_SYSTEM instead)
 	GK_SYSTEM = $(SYSTEM)
 	else
 $(error GK_SYSTEM is not set)
+#	GK_SYSTEM=mac
 	endif
 endif
 include Makefile.$(GK_SYSTEM)
