@@ -13,6 +13,7 @@ module gs2_diagnostics
   public :: init_gs2_diagnostics
   public :: finish_gs2_diagnostics
   public :: loop_diagnostics
+  public :: ensemble_average
   public :: reset_init
   public :: pflux_avg, qflux_avg, heat_avg, start_time
 
