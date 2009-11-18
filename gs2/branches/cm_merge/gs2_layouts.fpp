@@ -44,6 +44,12 @@ module gs2_layouts
   public :: e_lo
 ! <TT
 
+! MAB>
+! ported le_lo from agk
+  public :: init_le_layouts
+  public :: le_lo
+! <MAB
+
   public :: init_x_transform_layouts, init_y_transform_layouts
   public :: xxf_lo, xxf_layout_type, yxf_lo, yxf_layout_type
   public :: gidx2xxfidx, xxfidx2yxfidx, yxfidx2xxfidx, xxfidx2gidx
@@ -602,7 +608,7 @@ contains
 
     kx_local = .true.
 
-    allocate (facs(max(nspec,negrid,naky,nlambda)/2+1,3))
+    allocate (facs(max(nspec,negrid,naky,nlambda)/2+1,4))
 
     select case (layout)
 
@@ -686,6 +692,29 @@ contains
           if (nproc == facs(i,2)*nspec) goto 100
        end do
 
+    case ('xyles')
+
+       call factors (nspec,   nsfacs, facs(:,1))
+       call factors (negrid,  nefacs, facs(:,2))
+       call factors (nlambda, nlfacs, facs(:,3))
+       call factors (naky, nyfacs, facs(:,4))
+
+       do i=1,nsfacs-1
+          if (nproc == facs(i,1)) goto 100
+       end do
+       
+       do i=1,nefacs-1
+          if (nproc == facs(i,2)*nspec) goto 100
+       end do
+
+       do i=1,nlfacs-1
+          if (nproc == facs(i,3)*negrid*nspec) goto 100
+       end do
+          
+       do i=1,nyfacs-1
+          if (nproc == facs(i,4)*nlambda*negrid*nspec) goto 100
+       end do
+          
     end select
 
     kx_local = .false.    
@@ -1858,7 +1887,7 @@ contains
        it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda, lo%ntheta0)
     case ('lyxes')
        it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign/lo%nlambda/lo%naky, lo%ntheta0)
-    case ('xyels')
+    case ('xyles')
        it_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1)/lo%nsign, lo%ntheta0)
     end select
 # endif
@@ -3305,7 +3334,9 @@ contains
     case ('lyxes')
        char = 'b'    ! big, since this layout makes sense mainly for big runs?
     case ('xyles')
-       char = 'v'    !MR: is this correct??
+!CMR: set char="?", char only acts if set to "v", to force use of accel layout.
+!                   NO accel layouts have been implemented for "xyles"
+       char = '?'    
     end select
 
   end subroutine pe_layout
