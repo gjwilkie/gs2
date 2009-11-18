@@ -3,11 +3,13 @@
 ! of the supercells.
 
 module gs2_diagnostics
-
   use gs2_heating, only: heating_diagnostics,dens_vel_diagnostics
 
   implicit none
 
+  private
+
+  public :: read_parameters
   public :: init_gs2_diagnostics
   public :: finish_gs2_diagnostics
   public :: loop_diagnostics
@@ -18,38 +20,63 @@ module gs2_diagnostics
      module procedure get_vol_average_one, get_vol_average_all
   end interface
 
-  ! knobs
-  real :: omegatol, omegatinst
-  logical :: print_line, print_old_units, print_flux_line, print_summary
-  logical :: write_line, write_flux_line, write_phi, write_apar, write_bpar, write_aperp
-  logical :: write_omega, write_omavg, write_ascii, write_lamavg, write_eavg
-  logical :: write_qheat, write_pflux, write_vflux, write_tavg
-  logical :: write_qmheat, write_pmflux, write_vmflux, write_gs, write_lpoly
-  logical :: write_qbheat, write_pbflux, write_vbflux, write_g, write_gg, write_gyx
-  logical :: write_dmix, write_kperpnorm, write_phitot, write_epartot
-  logical :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
-  logical :: write_final_moments, write_avg_moments, write_stress
-  logical :: write_full_moments_notgc
-  logical :: write_fcheck, write_final_epar, write_kpar
-  logical :: write_vortcheck, write_fieldcheck
-  logical :: write_fieldline_avg_phi, write_hrate, write_lorentzian
-  logical :: write_neoclassical_flux, write_nl_flux, write_Epolar
-  logical :: write_verr, write_cerr, write_max_verr
-  logical :: exit_when_converged
-  logical :: dump_neoclassical_flux, dump_check1, dump_check2
-  logical :: dump_fields_periodically, make_movie
-  logical :: dump_final_xfields
-  logical :: use_shmem_for_xfields
-  logical :: save_for_restart
-  logical :: test_conserve
+
+!CMR, 17/11/2009:   read_parameters and nml gs2_diagnostics_knobs now public
+!                   so ingen can USE instead of copy them!
+!
+  public :: gs2_diagnostics_knobs
+  namelist /gs2_diagnostics_knobs/ print_line, print_old_units, print_flux_line, &
+         write_line, write_flux_line, write_phi, write_apar, write_bpar, write_aperp, &
+         write_omega, write_omavg, write_ascii, write_kpar, write_lamavg, &
+         write_qheat, write_pflux, write_vflux, write_eavg, write_gs, write_gyx, &
+         write_qmheat, write_pmflux, write_vmflux, write_tavg, write_g, write_gg, &
+         write_qbheat, write_pbflux, write_vbflux, write_hrate, write_lpoly, &
+         write_dmix, write_kperpnorm, write_phitot, write_epartot, &
+         write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
+         write_fcheck, write_final_epar, write_final_moments, write_cerr, &
+         write_vortcheck, write_fieldcheck, write_Epolar, write_verr, write_max_verr, &
+         write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
+         nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
+         exit_when_converged, write_avg_moments, write_stress, &
+         write_full_moments_notgc, &
+         dump_neoclassical_flux, dump_check1, dump_check2, &
+         dump_fields_periodically, make_movie, &
+         dump_final_xfields, use_shmem_for_xfields, &
+         nperiod_output, test_conserve, &
+         save_for_restart
+  real,public :: omegatol, omegatinst
+  logical,public :: print_line, print_old_units, print_flux_line
+  logical,public :: print_summary, write_line, write_flux_line, write_phi
+  logical,public :: write_apar, write_bpar, write_aperp
+  logical,public :: write_omega, write_omavg, write_ascii, write_lamavg
+  logical,public :: write_eavg, write_qheat, write_pflux, write_vflux
+  logical,public :: write_tavg, write_qmheat, write_pmflux, write_vmflux
+  logical,public :: write_gs, write_lpoly, write_qbheat
+  logical,public :: write_pbflux, write_vbflux, write_g, write_gg, write_gyx
+  logical,public ::write_dmix, write_kperpnorm, write_phitot, write_epartot
+  logical,public :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
+  logical,public :: write_final_moments, write_avg_moments, write_stress
+  logical,public :: write_full_moments_notgc
+  logical,public :: write_fcheck, write_final_epar, write_kpar
+  logical,public :: write_vortcheck, write_fieldcheck
+  logical,public :: write_fieldline_avg_phi, write_hrate, write_lorentzian
+  logical,public :: write_neoclassical_flux, write_nl_flux, write_Epolar
+  logical,public :: write_verr, write_cerr, write_max_verr
+  logical,public :: exit_when_converged
+  logical,public :: dump_neoclassical_flux, dump_check1, dump_check2
+  logical,public :: dump_fields_periodically, make_movie
+  logical,public :: dump_final_xfields
+  logical,public :: use_shmem_for_xfields
+  logical,public :: save_for_restart
+  logical,public :: test_conserve
+  integer,public :: nwrite, igomega, nmovie
+  integer,public :: navg, nsave
+  integer,public :: nperiod_output
+
 !>GGH
   logical, parameter :: write_density_velocity=.false.
   logical :: write_jext=.false.
 !<GGH
-
-  integer :: nperiod_output
-  integer :: nwrite, igomega, nmovie
-  integer :: navg, nsave
 
   ! internal
   logical :: write_any, write_any_fluxes, dump_any
@@ -364,6 +391,9 @@ contains
   end subroutine real_init
 
   subroutine read_parameters (list)
+!CMR, 17/11/2009:   namelist gs2_diagnostics_knobs made public
+!                   so that ingen can just USE it instead of copying it!
+!
     use file_utils, only: input_unit, input_unit_exist
     use theta_grid, only: nperiod, ntheta
 !    use gs2_flux, only: gs2_flux_adjust
@@ -374,26 +404,6 @@ contains
     integer :: in_file
     logical, intent (in) :: list
     logical :: exist
-    namelist /gs2_diagnostics_knobs/ &
-         print_line, print_old_units, print_flux_line, &
-         write_line, write_flux_line, write_phi, write_apar, write_bpar, write_aperp, &
-         write_omega, write_omavg, write_ascii, write_kpar, write_lamavg, &
-         write_qheat, write_pflux, write_vflux, write_eavg, write_gs, write_gyx, &
-         write_qmheat, write_pmflux, write_vmflux, write_tavg, write_g, write_gg, &
-         write_qbheat, write_pbflux, write_vbflux, write_hrate, write_lpoly, &
-         write_dmix, write_kperpnorm, write_phitot, write_epartot, &
-         write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
-         write_fcheck, write_final_epar, write_final_moments, write_cerr, &
-         write_vortcheck, write_fieldcheck, write_Epolar, write_verr, write_max_verr, &
-         write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
-         nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
-         exit_when_converged, write_avg_moments, write_stress, &
-         write_full_moments_notgc, &
-         dump_neoclassical_flux, dump_check1, dump_check2, &
-         dump_fields_periodically, make_movie, &
-         dump_final_xfields, use_shmem_for_xfields, &
-         nperiod_output, test_conserve, &
-         save_for_restart
 
     if (proc0) then
        print_line = .true.
