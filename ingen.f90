@@ -26,6 +26,11 @@ program ingen
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+!CMR, 17/11/2009: use gs2_diagnostics module to picks up public variables
+!                 and routines to reduces maintenance of ingen.
+!                 Should replicate this for other modules in future.
+!
+use gs2_diagnostics,gs2diag_read_parameters=>read_parameters
 
   use mp, only: init_mp, finish_mp
   use constants 
@@ -37,8 +42,8 @@ program ingen
   integer :: interactive_record, interactive_input
 
   integer :: nlambda
-  integer :: in_file, i, ierr, unit, is, report_unit, iunit, ncut
-  logical :: exist, shat_is_known = .true., scan, stdin
+  integer :: in_file, i, ierr, unit, is, report_unit, iunit, ncut, npmax
+  logical :: exist, scan, stdin
   logical :: has_electrons = .false.
 
   integer, dimension (18), parameter :: nesub_ok = (/ &
@@ -218,32 +223,6 @@ program ingen
        text_option('explicit', fieldopt_explicit), &
        text_option('test', fieldopt_test) /)
 
-! gs2_diagnostics: 
-  logical :: print_line, print_old_units, print_flux_line
-  logical :: write_line, write_flux_line, write_phi, write_apar, write_aperp
-  logical :: write_omega, write_omavg, write_ascii, write_lamavg
-  logical :: write_qheat, write_pflux, write_vflux, write_eavg
-  logical :: write_qmheat, write_pmflux, write_vmflux, write_tavg
-  logical :: write_qbheat, write_pbflux, write_vbflux, write_gs
-  logical :: write_dmix, write_kperpnorm, write_phitot, write_epartot
-  logical :: write_eigenfunc, write_final_fields, write_final_antot
-  logical :: write_final_moments, write_avg_moments
-  logical :: write_fcheck, write_final_epar, write_kpar
-  logical :: write_intcheck, write_vortcheck, write_fieldcheck
-  logical :: write_fieldline_avg_phi, write_hrate, write_lorentzian
-  logical :: write_neoclassical_flux, write_nl_flux, write_Epolar
-  logical :: exit_when_converged
-  logical :: dump_neoclassical_flux, dump_check1, dump_check2
-  logical :: dump_fields_periodically, make_movie
-  logical :: dump_final_xfields
-  logical :: use_shmem_for_xfields
-  logical :: save_for_restart
-
-  integer :: nwrite, igomega, nmovie
-  integer :: navg, nperiod_output, nsave
-
-  real :: omegatol, omegatinst
-
 ! gs2_reinit: 
   real :: delt_adj, delt_minimum
 
@@ -408,7 +387,6 @@ program ingen
 
   logical :: layouts_write = .false.
   logical :: driver_write = .false.
-  logical :: stir_write = .false.
   logical :: collisions_write = .false.
   logical :: init_g_write = .false.
   logical :: dist_fn_write = .false.
@@ -427,7 +405,6 @@ program ingen
   logical :: nonlinear_write = .false.
   logical :: parameters_write = .false.
   logical :: species_write = .false.
-  logical :: species_parameters_write = .false.
   logical :: theta_parameters_write = .false.
   logical :: theta_gridgen_write = .false.
   logical :: theta_salpha_write = .false.
@@ -487,27 +464,6 @@ program ingen
 
 ! fields: 
   namelist /fields_knobs/ field_option
-
-! gs2_diagnostics: 
-  namelist /gs2_diagnostics_knobs/ &
-       print_line, print_old_units, print_flux_line, &
-       write_line, write_flux_line, write_phi, write_apar, write_aperp, &
-       write_omega, write_omavg, write_ascii, write_lamavg, write_tavg, &
-       write_qheat, write_pflux, write_vflux, write_kpar, &
-       write_qmheat, write_pmflux, write_vmflux, write_eavg, &
-       write_qbheat, write_pbflux, write_vbflux, write_hrate, write_lorentzian, &
-       write_dmix, write_kperpnorm, write_phitot, write_epartot, &
-       write_eigenfunc, write_final_fields, write_final_antot, &
-       write_fcheck, write_final_epar, write_final_moments, &
-       write_intcheck, write_vortcheck, write_fieldcheck, write_Epolar, &
-       write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
-       nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, &
-       exit_when_converged, write_avg_moments, &
-       dump_neoclassical_flux, dump_check1, dump_check2, &
-       dump_fields_periodically, make_movie, &
-       dump_final_xfields, use_shmem_for_xfields, &
-       nperiod_output, &
-       save_for_restart, write_gs
 
 ! gs2_reinit: 
   namelist /reinit_knobs/ delt_adj, delt_minimum
@@ -574,7 +530,7 @@ program ingen
 
   namelist /theta_grid_knobs/ equilibrium_option, gb_to_cv
 
-  namelist /ingen_knobs/ ncut, scan, stdin
+  namelist /ingen_knobs/ ncut, scan, stdin, npmax
 
 !CMR
   logical:: debug=.false.
@@ -617,9 +573,9 @@ contains
     integer :: sel, nbeta, j, ise
     real :: beta_low, beta_high, dbeta, beta_save
     real :: fapar_save, faperp_save, pri, pe, alpi, tpe_save, ptot, alp, dbdr
-    real :: alt, aln, fac, beta_prime_save, bishop_save, beta_prime
+    real :: alt, aln, fac, beta_prime_save, bishop_save
     real, dimension (:), allocatable :: tp_save, fp_save
-    character (500) :: tag, tag1, tag2
+    character (500) :: tag1, tag2
     logical :: first = .true.
 
     if (first) then
@@ -1161,8 +1117,6 @@ contains
        
     end select
 
-10  format (a) 
-
   end subroutine interactive
 
   subroutine get_namelists
@@ -1175,6 +1129,7 @@ contains
     call init_file_utils (list, name="template")
 if (debug) write(6,*) 'get_namelists: called init_file_utils'
     ncut= 100000
+    npmax=10000
     scan = .false.
     stdin = .true.
     pythonin = "."//trim(run_name)//".pythonin"
@@ -1852,67 +1807,11 @@ if (debug) write(6,*) 'get_namelists: called init_theta_grid'
     
 
     ! gs2_diagnostics
-    print_line = .true.
-    print_old_units = .false.
-    print_flux_line = .false.
-    write_line = .true.
-    write_flux_line = .true.
-    write_phi = .true.
-    write_kpar = .false.
-    write_apar = .true.
-    write_aperp = .true.
-    write_omega = .false.
-    write_ascii = .true.
-    write_hrate = .false.
-    write_Epolar = .false.
-    write_gs = .false.
-    write_lorentzian = .false.
-    write_tavg = .false.
-    write_lamavg = .false.
-    write_eavg = .false.
-    write_omavg = .false.
-    write_dmix = .false.
-    write_kperpnorm = .false.
-    write_phitot = .true.
-    write_epartot = .false.
-    write_fieldline_avg_phi = .false.
-    write_neoclassical_flux = .false.
-    write_nl_flux = .false.
-    write_eigenfunc = .false.
-    write_final_moments = .false.
-    write_avg_moments = .false.
-    write_final_fields = .false.
-    write_final_antot = .false.
-    write_final_epar = .false.
-    write_fcheck = .false.
-    write_intcheck = .false.
-    write_vortcheck = .false.
-    write_fieldcheck = .false.
-    nsave = -1
-    nwrite = 100
-    nmovie = 1000
-    navg = 100
-    nperiod_output = 1
-    omegatol = 1e-3
-    omegatinst = 1.0
-    igomega = 0
-    exit_when_converged = .true.
-    dump_neoclassical_flux = .false.
-    dump_check1 = .false.
-    dump_check2 = .false.
-    dump_fields_periodically = .false.
-    make_movie = .false.
-    dump_final_xfields = .false.
-    use_shmem_for_xfields = .true.
-    save_for_restart = .false.
-    in_file = input_unit_exist("gs2_diagnostics_knobs", exist)
-    if (exist) then
-       read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
-       diagnostics_write = .true.
-    end if
 
-    if (.not. save_for_restart) nsave = -1
-    nperiod_output = max(nperiod, 1)
+! CMR 18/11/2009:  reduce duplication by calling gs2diag_read_parameters 
+!
+   call gs2diag_read_parameters(.false.)
+
 if (debug) write(6,*) 'get_namelists: returning'
 
   end subroutine get_namelists
@@ -1923,8 +1822,8 @@ if (debug) write(6,*) 'get_namelists: returning'
     character (*), intent (in), optional :: tag1, tag2
 
     character (100) :: line
-    integer :: th, h, t, u
-    integer :: i, j
+    integer :: h, t, u
+    integer :: i
     character (4) :: suffix
     character(20) :: datestamp, timestamp, zone
     
@@ -2348,7 +2247,6 @@ if (debug) write(6,*) 'get_namelists: returning'
        write (unit, fmt="(' write_lamavg = ',L1)") write_lamavg
        write (unit, fmt="(' write_eavg = ',L1)") write_eavg
        if (write_fcheck) write (unit, fmt="(' write_fcheck = ',L1)") write_fcheck
-       if (write_intcheck) write (unit, fmt="(' write_intcheck = ',L1)") write_intcheck
        if (write_vortcheck) write (unit, fmt="(' write_vortcheck = ',L1)") write_vortcheck
        if (write_fieldcheck) write (unit, fmt="(' write_fieldcheck = ',L1)") write_fieldcheck
        if (write_fieldline_avg_phi) &
@@ -2979,7 +2877,7 @@ if (debug) write(6,*) 'get_namelists: returning'
      character (20) :: datestamp, timestamp, zone
      character (200) :: line
      logical :: coll_on = .false., le_ok = .true.
-     integer :: ntgrid, j, nmesh, npe
+     integer :: ntgrid, j, nmesh
      integer, dimension(4) :: pfacs
 
      call get_unused_unit (report_unit)
@@ -3615,8 +3513,7 @@ if (debug) write(6,*) 'get_namelists: returning'
               write (report_unit, *) 
               write (report_unit, fmt="('You have set bishop=7.')")
               write (report_unit, fmt="('The value of s_hat will be found from the equilibrium file.')") 
-              write (report_unit, fmt="('The value of dp/drho found from the equilibrium file will be multiplied by',f10.4)") &
-	           dp_mult
+              write (report_unit, fmt="('The value of dp/drho found from the equilibrium file will be multiplied by',f10.4)") dp_mult
            case default
 
               write (report_unit, *) 
@@ -4962,8 +4859,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
     if (write_eigenfunc) then
        if (write_ascii) then
-          write (report_unit, fmt="('write_eigenfunc = T:       Normalized Phi(theta) written to ',a)") &
-	& 	trim(run_name)//'.eigenfunc'
+          write (report_unit, fmt="('write_eigenfunc = T:       Normalized Phi(theta) written to ',a)") trim(run_name)//'.eigenfunc'
        end if
        write (report_unit, fmt="('write_eigenfunc = T:       Normalized Phi(theta) written to ',a)") trim(run_name)//'.out.nc'
     end if
@@ -5025,15 +4921,6 @@ if (debug) write(6,*) 'get_namelists: returning'
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, fmt="('write_fcheck = T:               Turns on obscure diagnostics.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
-    if (write_intcheck) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('write_intcheck = T:              Turns on obscure diagnostics.')")
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, *) 
@@ -5139,34 +5026,50 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer :: nefacs, nlfacs, nkyfacs, nkxfacs, nspfacs
     integer, dimension(:,:), allocatable :: facs
     integer :: npe
+    real :: time
 
+    write (report_unit, fmt="('Layout = ',a5)") layout 
     if (nonlinear_mode_switch == nonlinear_mode_on) then
        select case (layout)
        case ('lexys')
 
           write (report_unit, *) 
           write (report_unit, fmt="('Recommended numbers of processors, time on T3E')") 
-          allocate (facs(max(nspec,naky,ntheta0)/2+1,3))
+          allocate (facs(max(nspec,naky,ntheta0)/2+1,5))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (naky, nkyfacs, facs(:,2))
           call factors (ntheta0, nkxfacs, facs(:,3))
-          do i=1,nspfacs-1
+          call factors (negrid, nefacs, facs(:,4))
+          call factors (nlambda, nlfacs, facs(:,5))
+          do i=1,nspfacs
              npe = facs(i,1)
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, 40.*nmesh/1.e7/npe**0.85
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'s'
           end do
-          do i=1,nkyfacs-1
+          do i=2,nkyfacs
              npe = facs(i,2)*nspec
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, 40.*nmesh/1.e7/npe**0.85
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
           end do
-          do i=1,nkxfacs
+          do i=2,nkxfacs
              npe = facs(i,3)*naky*nspec
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, 40.*nmesh/1.e7/npe**0.85
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step  (',a,')')") npe, time,'x'
+          end do
+          do i=2,nefacs
+             npe = facs(i,4)*ntheta0*naky*nspec
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step  (',a,')')") npe, time,'e'
+          end do
+          do i=2,nlfacs
+             npe = facs(i,5)*negrid*ntheta0*naky*nspec
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step  (',a,')')") npe, time,'l'
           end do
           deallocate (facs)
 
@@ -5174,36 +5077,43 @@ if (debug) write(6,*) 'get_namelists: returning'
 
           write (report_unit, *) 
           write (report_unit, fmt="('Recommended numbers of processors, time on SP2')") 
-          allocate (facs(max(nspec,negrid,naky,ntheta0)/2+1,4))
+          allocate (facs(max(nspec,negrid,naky,ntheta0)/2+1,5))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (negrid, nefacs, facs(:,2))
           call factors (naky, nkyfacs, facs(:,3))
           call factors (ntheta0, nkxfacs, facs(:,4))
+          call factors (nlambda, nlfacs, facs(:,5))
 !          faclin = 3.5*(real(nmesh))**1.1/1.e7/5.
           fac = 3.5*(real(nmesh))**1.1/1.e7
-          do i=1,nspfacs-1
+          do i=1,nspfacs
              npe = facs(i,1)
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, fac/npe**0.95
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'s'
           end do
-          do i=1,nefacs-1
+          do i=2,nefacs
              npe = facs(i,2)*nspec
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, fac/npe**0.95
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'e'
           end do
-          do i=1,nkyfacs-1
+          do i=2,nkyfacs
              npe = facs(i,3)*negrid*nspec
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, fac/npe**0.95
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
           end do
-          do i=1,nkxfacs
+          do i=2,nkxfacs
              npe = facs(i,4)*naky*negrid*nspec
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, fac/npe**0.95
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'x'
+          end do
+          do i=2,nlfacs
+             npe = facs(i,5)*naky*ntheta0*negrid*nspec 
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'l'
           end do
           deallocate (facs)
 
@@ -5212,28 +5122,42 @@ if (debug) write(6,*) 'get_namelists: returning'
           write (report_unit, *) 
           write (report_unit, fmt="('Recommended numbers of processors:')") 
 
-          allocate (facs(max(nspec,negrid,nlambda)/2+1,3))
+          allocate (facs(max(nspec,negrid,nlambda)/2+1,5))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (nlambda, nlfacs, facs(:,2))
           call factors (negrid, nefacs, facs(:,3))
+          call factors (ntheta0, nkxfacs, facs(:,4))
+          call factors (naky, nkyfacs, facs(:,5))
           fac = 3.5*(real(nmesh))**1.1/1.e7
-          do i=1,nspfacs-1
+          do i=1,nspfacs
              npe = facs(i,1)
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, fac/npe**0.95
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'s'
           end do
-          do i=1,nlfacs-1
+          do i=2,nlfacs
              npe = facs(i,2)*nspec
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, fac/npe**0.95
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'l'
           end do
-          do i=1,nefacs
+          do i=2,nefacs
              npe = facs(i,3)*nlambda*nspec
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, fac/npe**0.95
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'e'
+          end do
+          do i=2,nkxfacs
+             npe = facs(i,4)*negrid*nlambda*nspec
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'x'
+          end do
+          do i=2,nkyfacs
+             npe = facs(i,5)*nkxfacs*negrid*nlambda*nspec
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
           end do
           deallocate (facs)
 
@@ -5242,28 +5166,88 @@ if (debug) write(6,*) 'get_namelists: returning'
           write (report_unit, *) 
           write (report_unit, fmt="('Recommended numbers of processors:')") 
 
-          allocate (facs(max(nspec,negrid,nlambda)/2+1,3))
+          allocate (facs(max(nspec,negrid,nlambda)/2+1,5))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (negrid, nefacs, facs(:,2))
           call factors (nlambda, nlfacs, facs(:,3))
+          call factors (ntheta0, nkxfacs, facs(:,4))
+          call factors (naky, nkyfacs, facs(:,5))
           fac = 3.5*(real(nmesh))**1.1/1.e7
-          do i=1,nspfacs-1
+          do i=1,nspfacs
              npe = facs(i,1)
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, fac/npe**0.95
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'s'
           end do
-          do i=1,nefacs-1
+          do i=2,nefacs
              npe = facs(i,2)*nspec
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, fac/npe**0.95
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'e'
           end do
-          do i=1,nlfacs
+          do i=2,nlfacs
              npe = facs(i,3)*negrid*nspec
-             if (nmesh/npe > ncut) write &
-                  & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
-                  & npe, fac/npe**0.95
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'l'
+          end do
+          do i=2,nkxfacs
+             npe = facs(i,4)*nlambda*negrid*nspec
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'x'
+          end do
+          do i=2,nkyfacs
+             npe = facs(i,5)*nkxfacs*nlambda*negrid*nspec
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
+          end do
+          deallocate (facs)
+
+       case ('xyles')
+!CMR, 11/11/2009: add processor recommendations for xyles layout
+!            NB added recommendations that also parallelise in y and x, 
+!                          which may be unwise!
+          write (report_unit, *) 
+          write (report_unit, fmt="('Recommended numbers of processors:')") 
+
+          allocate (facs(max(nspec,negrid,nlambda,naky,ntheta0)/2+1,5))
+          call factors (nspec, nspfacs, facs(:,1))
+          call factors (negrid, nefacs, facs(:,2))
+          call factors (nlambda, nlfacs, facs(:,3))
+          call factors (naky, nkyfacs, facs(:,4))
+          call factors (ntheta0, nkxfacs, facs(:,5))
+          fac = 3.5*(real(nmesh))**1.1/1.e7
+          do i=1,nspfacs
+             npe = facs(i,1)
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'s'
+          end do
+          do i=2,nefacs
+             npe = facs(i,2)*nspec
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'e'
+          end do
+          do i=2,nlfacs
+             npe = facs(i,3)*negrid*nspec
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'l'
+          end do
+          do i=2,nkyfacs
+             npe = facs(i,4)*nlambda*negrid*nspec
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
+          end do
+          do i=2,nkxfacs
+             npe = facs(i,5)*naky*nlambda*negrid*nspec
+             if (npe .gt. npmax) exit
+             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
+             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'x'
           end do
           deallocate (facs)
 
@@ -5276,7 +5260,7 @@ if (debug) write(6,*) 'get_namelists: returning'
        case (gridopt_single)
 
           select case (layout)
-          case ('lexys', 'yxles', 'lxyes')
+          case ('lexys', 'yxles', 'lxyes', 'xyles')
              allocate (facs(max(negrid,nspec,nlambda)/2+1,3))
              call factors (nspec, nspfacs, facs(:,1))
              call factors (negrid, nefacs, facs(:,2))
@@ -5405,6 +5389,36 @@ if (debug) write(6,*) 'get_namelists: returning'
              do i=1,nkyfacs
                 npe = facs(i,5)*ntheta0*nlambda*negrid*nspec
                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+             end do
+             deallocate (facs)
+
+          case ('xyles')
+
+             allocate (facs(max(nspec,naky,ntheta0,negrid,nlambda)/2+1,5))
+             call factors (nspec, nspfacs, facs(:,1))
+             call factors (negrid, nefacs, facs(:,2))
+             call factors (nlambda, nlfacs, facs(:,3))
+             call factors (naky, nkyfacs, facs(:,4))
+             call factors (ntheta0, nkxfacs, facs(:,5))
+             do i=1,nspfacs-1
+                npe = facs(i,1)
+                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
+             end do
+             do i=1,nefacs-1
+                npe = facs(i,2)*nspec
+                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
+             end do
+             do i=1,nlfacs-1
+                npe = facs(i,3)*negrid*nspec
+                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
+             end do
+             do i=1,nkyfacs-1
+                npe = facs(i,4)*nlambda*negrid*nspec
+                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
+             end do
+             do i=1,nkxfacs
+                npe = facs(i,5)*ntheta0*nlambda*negrid*nspec
+                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
              end do
              deallocate (facs)
 
@@ -5652,4 +5666,3 @@ if (debug) write(6,*) 'get_namelists: returning'
   end subroutine num_runs
 
 end program ingen
-
