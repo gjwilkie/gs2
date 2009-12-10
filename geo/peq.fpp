@@ -150,7 +150,7 @@ contains
 !       call ncvgt1 (ncid, id, start, iwork, ifail)
 !       i_sym = iwork
        istatus = nf90_inq_varid (ncid, 'nxy', id)
-       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='nxy')
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='nxy')
        istatus = nf90_get_var (ncid, id, i_sym, start=(/ 8 /))
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
@@ -197,7 +197,7 @@ contains
 !       call ncvgt (ncid, id, start, cnt, workr, ifail)
 !       eqpsi = workr(1:nr)    !*1.e-8
        istatus = nf90_inq_varid (ncid, 'psivec', id)
-       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='psivec')
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='psivec')
        istatus = nf90_get_var (ncid, id, eqpsi, count=(/ nr /))
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
@@ -205,7 +205,7 @@ contains
 !       call ncvgt (ncid, id, start, cnt, workr, ifail)
 !       fp = workr(1:nr)
        istatus = nf90_inq_varid (ncid, 'fvec', id)
-       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='fvec')
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='fvec')
        istatus = nf90_get_var (ncid, id, fp, count=(/ nr /))
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
@@ -213,7 +213,7 @@ contains
 !       call ncvgt (ncid, id, start, cnt, workr, ifail)       
 !       pressure = workr(1:nr)
        istatus = nf90_inq_varid (ncid, 'pvec', id)
-       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='pvec')
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='pvec')
        istatus = nf90_get_var (ncid, id, eqpsi, count=(/ nr /))
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
@@ -243,7 +243,7 @@ contains
 !       id = ncvid (ncid, 'x', ifail)
 !       call ncvgt (ncid, id, start, cnt, work, ifail)
        istatus = nf90_inq_varid (ncid, 'x', id)
-       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='x')
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='x')
        istatus = nf90_get_var (ncid, id, work, count=(/ nz1*nz2 /))
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
@@ -262,7 +262,7 @@ contains
 !       id = ncvid (ncid, 'z', ifail)
 !       call ncvgt (ncid, id, start, cnt, work, ifail)
        istatus = nf90_inq_varid (ncid, 'z', id)
-       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='z')
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='z')
        istatus = nf90_get_var (ncid, id, work, count=(/ nz1, nz2 /))
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
@@ -415,9 +415,9 @@ contains
 
 !    id = ncvid (ncid, 'ns', ifail)
 !    call ncvgt1 (ncid, id, 1, nr, ifail)
-    istatus = nf90_inq_dimid (ncid, 'ns', id)
-    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='ns')
-    istatus = nf90_inquire_dimension (ncid, id, len=nr)
+    istatus = nf90_inq_varid (ncid, 'ns', id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='ns')
+    istatus = nf90_get_var (ncid, id, nr)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
     
 !     netcdf read scalar: nt
@@ -426,9 +426,9 @@ contains
 
 !    id = ncvid (ncid, 'nt1', ifail)
 !    call ncvgt1 (ncid, id, 1, nt, ifail)
-    istatus = nf90_inq_dimid (ncid, 'nt1', id)
-    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='nt1')
-    istatus = nf90_inquire_dimension (ncid, id, len=nt)
+    istatus = nf90_inq_varid (ncid, 'nt1', id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='nt1')
+    istatus = nf90_get_var (ncid, id, nt)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
     
 !    id = ncdid (ncid, 'dim_00050', ifail)
@@ -472,7 +472,7 @@ contains
 !    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
 !    rho_b = workr(1:nr)
     istatus = nf90_inq_varid (ncid, 'rho', id)
-    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='rho')
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='rho')
     istatus = nf90_get_var (ncid, id, rho_b)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
@@ -480,7 +480,7 @@ contains
 !    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
 !    eqpsi = abs(workr(1:nr))
     istatus = nf90_inq_varid (ncid, 'psi', id)
-    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='psi')
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='psi')
     istatus = nf90_get_var (ncid, id, eqpsi)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
     eqpsi(1:nr) = abs(eqpsi(1:nr))
@@ -494,7 +494,7 @@ contains
 !    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
 !    fp = abs(workr(1:nr))
     istatus = nf90_inq_varid (ncid, 'g', id)
-    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='g')
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='g')
     istatus = nf90_get_var (ncid, id, fp)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
     fp(1:nr) = abs(fp(1:nr))
@@ -504,7 +504,7 @@ contains
 !    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
 !    qsf = abs(workr(1:nr))
     istatus = nf90_inq_varid (ncid, 'q', id)
-    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='q')
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='q')
     istatus = nf90_get_var (ncid, id, qsf)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
     qsf(1:nr) = abs(qsf(1:nr))
@@ -513,7 +513,7 @@ contains
 !    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)       
 !    pressure = workr(1:nr)
     istatus = nf90_inq_varid (ncid, 'p', id)
-    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='p')
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='p')
     istatus = nf90_get_var (ncid, id, pressure)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
@@ -537,7 +537,7 @@ contains
 !    id = ncvid (ncid, 'R', ifail)
 !    call ncvgt (ncid, id, start, cnt, work, ifail)
     istatus = nf90_inq_varid (ncid, 'R', id)
-    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='R')
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='R')
     istatus = nf90_get_var (ncid, id, work)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
@@ -552,7 +552,7 @@ contains
 !    id = ncvid (ncid, 'Z', ifail)
 !    call ncvgt (ncid, id, start, cnt, work, ifail)
     istatus = nf90_inq_varid (ncid, 'Z', id)
-    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='Z')
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='Z')
     istatus = nf90_get_var (ncid, id, work)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
 
