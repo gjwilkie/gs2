@@ -135,6 +135,7 @@ ARCH 		= ar
 ARCHFLAGS 	= cr
 RANLIB		= ranlib
 AWK 		= awk
+PERL		= perl
 
 # These macros are used for the suffix problem of absoft
 F90FLAGS_SFX0 =
@@ -178,7 +179,6 @@ $(warning use GK_SYSTEM instead)
 	GK_SYSTEM = $(SYSTEM)
 	else
 $(error GK_SYSTEM is not set)
-#	GK_SYSTEM=mac
 	endif
 endif
 include Makefile.$(GK_SYSTEM)
@@ -321,8 +321,7 @@ ifdef SUBDIR
 	VPATH +=:..
 endif
 DEPEND=Makefile.depend
-PERL_CMD=perl
-DEPEND_CMD=$(PERL_CMD) fortdep
+DEPEND_CMD=$(PERL) fortdep
 
 # most common include and library directories
 DEFAULT_INC_LIST = . $(UTILS) $(GEO) .. ../$(UTILS) ../$(GEO)
