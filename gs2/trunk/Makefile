@@ -1,6 +1,7 @@
 #################################################################### OVERVIEW
 #
 #  Makefile for Trinity (GS2) / AstroGK Gyrokinetic Turbulence code 
+#               GSP Gyrokinetic PIC code
 #               rmhdper reduced MHD code
 #
 #  (requires GNU's gmake)
@@ -8,13 +9,15 @@
 #PROJECT ?= trinity
 PROJECT ?= gs2
 #PROJECT ?= agk
+#PROJECT ?= gsp
 #PROJECT ?= rmhdper
 #
 #  Makefile written by Bill Dorland and Ryusuke Numata
 #
-#  LAST UPDATE: 04/11/09
+#  LAST UPDATE: 10/12/09
 #
 # * Changelogs
+#	10/12/09: share the Makefile with gsp gyrokinetic PIC code
 #	04/11/09: * share the Makefile with rmhdper reduced MHD code
 #		  * include progject specific target definitions
 #		    Makefile.target_$(PROJECT)
@@ -374,60 +377,6 @@ gs2_mod += layouts_indices.o
 endif
 
 sinclude Makefile.target_$(PROJECT)
-
-.PHONY: modules utils_all geo_all
-
-ifdef MAKE_LIB
-modules: utils.a geo.a libgs2.a
-else
-modules: utils.a geo.a
-endif
-
-### UTILS
-utils_all: utils.a mdslib.a
-
-UTIL_OBJ = spl.o mds.o constants.o file_utils.o netcdf_utils.o
-utils.a: $(UTIL_OBJ)
-	$(ARCH) $(ARCHFLAGS) $@ $^
-	$(RANLIB) $@
-
-mdslib.a: mdslib.o
-	$(ARCH) $(ARCHFLAGS) $@ $^
-	$(RANLIB) $@
-
-### GEO
-geo_all: geo.a eiktest ball
-
-GEO_OBJ = geometry.o geq.o veq.o eeq.o peq.o leq.o deq.o ideq.o \
-	radstub.o vdimstub.o mdslib.o
-geo.a: $(GEO_OBJ)
-	$(ARCH) $(ARCHFLAGS) $@ $^
-	$(RANLIB) $@
-
-ball: $(ball_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-eiktest: $(eiktest_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-# ifdef MAKE_LIB
-### LIBGS2
-libgs2_all: libgs2.a
-
-LIBGS2_OBJ = antenna.o antenna_data.o collisions.o command_line.o constants.o \
-	convert.o deq.o dist_fn.o dist_fn_arrays.o eeq.o fft_work.o fields.o fields_arrays.o \
-	fields_explicit.o fields_implicit.o fields_test.o file_utils.o geometry.o \
-	geq.o gridgen4mod.o gs2_diagnostics.o gs2_heating.o gs2_io.o gs2_layouts.o \
-	gs2_main.o gs2_reinit.o gs2_save.o gs2_time.o gs2_transforms.o hyper.o ideq.o \
-	init_g.o job_manage.o kt_grids.o layouts_type.o le_grids.o leq.o \
-	mds.o mdslib.o mp.o netcdf_utils.o nonlinear_terms.o peq.o prof.o radstub.o \
-	ran.o redistribute.o run_parameters.o species.o spfunc.o spl.o text_options.o \
-	theta_grid.o theta_grid_params.o vdimstub.o veq.o
-
-libgs2.a: $(LIBGS2_OBJ)
-	$(ARCH) $(ARCHFLAGS) $@ $^
-	$(RANLIB) $@
-# endif
 
 ############################################################### SPECIAL RULES
 
