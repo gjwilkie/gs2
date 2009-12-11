@@ -253,10 +253,18 @@ if (debug) write(6,*) "eikcoefs: iflux=",iflux
           if (gs2d_eq) efit_eq = .true.
           if(vmom_eq) then
              call vmomin(      psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-             call tdef(nthg, ntheta_returned)
+             if(present(ntheta_returned)) then
+                call tdef(nthg, ntheta_returned)
+             else
+                call tdef(nthg)
+             endif
           else if(gen_eq) then
              call eqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-             call tdef(nthg, ntheta_returned)
+             if(present(ntheta_returned)) then
+                call tdef(nthg, ntheta_returned)
+             else
+                call tdef(nthg)
+             endif
 !CMR+SSAAR: moved following if clause ahead of ppl_eq to avoid ball problems 
           else if(transp_eq) then
 if (debug) write(6,fmt='("eikcoefs: transp_eq, eqfile=",a)') eqfile
@@ -264,12 +272,20 @@ if (debug) write(6,fmt='("eikcoefs: transp_eq, eqfile=",a)') eqfile
              call teqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
 if (debug) write(6,*) 'eikcoefs: transp_eq, called teqin'
 if (debug) write(6,fmt='("eikcoefs: teqin returns",1p5e10.2,i6,l,i6)') psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg
-             call tdef(nthg, ntheta_returned)
+             if(present(ntheta_returned)) then
+                call tdef(nthg, ntheta_returned)
+             else
+                call tdef(nthg)
+             endif
 if (debug) write(6,*) 'eikcoefs: transp_eq, called tdef'
 !CMRend
           else if(ppl_eq) then
              call peqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
-             call tdef(nthg,ntheta_returned)
+             if(present(ntheta_returned)) then
+                call tdef(nthg,ntheta_returned)
+             else
+                call tdef(nthg)
+             endif
           else if(efit_eq) then
              if(big <= 0) big = 8
              if (mds) then
@@ -286,7 +302,11 @@ if (debug) write(6,*) "eikcoefs: done gs2din  psi_0,psi_a, rmaj, B_T0, avgrmid="
              call dfitin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
           else if(idfit_eq) then
              call idfitin(eqfile, theta, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit) 
-             call tdef(nthg, ntheta_returned)
+             if(present(ntheta_returned)) then
+                call tdef(nthg, ntheta_returned)
+             else
+                call tdef(nthg)
+             endif
           endif
 if (debug) write(6,*) 'eikcoefs: iflux=',iflux
           if(iflux == 10) return
@@ -2568,7 +2588,11 @@ end subroutine geofax
   subroutine tdef(nthg, ntheta_returned)
     
     real :: pi
-    integer :: nthg, nthsave, i, ntheta_returned
+!RN>
+!    integer :: nthg, nthsave, i, ntheta_returned
+    integer :: nthg, nthsave, i
+    integer, intent(out), optional :: ntheta_returned
+!<RN
 !cmr Jun06: adding following debug switch
     logical :: debug=.false.
 !cmr
@@ -2583,8 +2607,12 @@ end subroutine geofax
     nth=nthg/2   ! correct, at least for geq
     if (debug) write(6,*) "tdef: nthg,nth=",nthg,nth
 !    write(*,*) 'old nth: ',nthsave,' new nth: ',nth
-    ntheta_returned=2*nth  ! guarantees even
-    ntheta = ntheta_returned
+!RN>
+!    ntheta_returned=2*nth  ! guarantees even
+!    ntheta = ntheta_returned
+    ntheta=2*nth  ! guarantees even
+    if(present(ntheta_returned)) ntheta_returned = ntheta
+!<RN
     ntgrid=(2*nperiod-1)*nth
     
     !     redefine theta grid used by the rest of the code.
