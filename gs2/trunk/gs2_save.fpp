@@ -80,7 +80,7 @@ contains
     logical, intent (in), optional :: exit_in
 # ifdef NETCDF
     character (306) :: file_proc
-    character (6) :: suffix
+    character (10) :: suffix
     integer :: i, n_elements, ierr
     logical :: exit
 
@@ -97,21 +97,8 @@ contains
        initialized = .true.
        file_proc = trim(restart_file)
        
-# if NETCDF == _OLD_
-       if (nproc >= 10000) then
-# else
-       if (nproc >= 100000) then
-# endif
-          ierr = error_unit()
-          if (proc0) write(ierr,*) 'Too many procs for i/o to work right!'
-       else
-# if NETCDF == _OLD_
-          write (suffix,'(a1,i4.4)') '.', iproc
-# else
-          write (suffix,'(a1,i5.5)') '.', iproc
-# endif
-          file_proc = trim(trim(file_proc)//adjustl(suffix))
-       endif
+       write (suffix,'(a1,i0)') '.', iproc
+       file_proc = trim(trim(file_proc)//adjustl(suffix))
        
        istatus = nf90_create (file_proc, NF90_CLOBBER, ncid)
        if (istatus /= NF90_NOERR) then
@@ -278,11 +265,7 @@ contains
           end if
 
           if (fbpar > epsilon(0.)) then
-# if NETCDF == _OLD_
-             istatus = nf90_def_var (ncid, "aperp_r", netcdf_real, &
-# else
              istatus = nf90_def_var (ncid, "bpar_r", netcdf_real, &
-# endif
                   (/ thetaid, kxid, kyid /), bparr_id)
              if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
@@ -290,11 +273,7 @@ contains
                 goto 1
              end if
 
-# if NETCDF == _OLD_             
-             istatus = nf90_def_var (ncid, "aperp_i", netcdf_real, &
-# else
              istatus = nf90_def_var (ncid, "bpar_i", netcdf_real, &
-# endif
                   (/ thetaid, kxid, kyid /), bpari_id)
              if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
@@ -457,12 +436,12 @@ contains
             call netcdf_error (istatus, message='nf90_sync error')
     end if
 
-# else /* not defined NETCDF */
+# else
 
     if (proc0) write (error_unit(),*) &
          'WARNING: gs2_save_for_restart is called without netcdf library'
 
-# endif /* ifdef NETCDF */
+# endif
 
   end subroutine gs2_save_for_restart
 
@@ -486,7 +465,7 @@ contains
     logical, intent (in) :: many
 # ifdef NETCDF
     character (306) :: file_proc
-    character (6) :: suffix
+    character (10) :: suffix
     integer :: i, n_elements, ierr
     real :: fac
 
@@ -497,20 +476,8 @@ contains
 !       initialized = .true.
        file_proc = trim(restart_file)
 
-# if NETCDF == _OLD_       
-       if (nproc >= 10000) then
-# else
-       if (nproc >= 100000) then
-# endif
-          if (proc0) write(*,*) 'Too many procs for i/o to work right!'
-       else
-# if NETCDF == _OLD_
-          write (suffix,'(a1,i4.4)') '.', iproc
-# else
-          write (suffix,'(a1,i5.5)') '.', iproc
-# endif
-          file_proc = trim(trim(file_proc)//adjustl(suffix))
-       endif
+       write (suffix,'(a1,i0)') '.', iproc
+       file_proc = trim(trim(file_proc)//adjustl(suffix))
        
        istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=file_proc)
@@ -571,21 +538,11 @@ contains
        end if
 
        if (fbpar > epsilon(0.)) then
-# if NETCDF == _OLD_
-          istatus = nf90_inq_varid (ncid, "aperp_r", bparr_id)
-          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='aperp_r')
-# else
           istatus = nf90_inq_varid (ncid, "bpar_r", bparr_id)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='bpar_r')
-# endif
 
-# if NETCDF == _OLD_          
-          istatus = nf90_inq_varid (ncid, "aperp_i", bpari_id)
-          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='aperp_i')
-# else
           istatus = nf90_inq_varid (ncid, "bpar_i", bpari_id)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='bpar_i')
-# endif
        end if
 
        if (allocated(kx_shift)) then   ! MR begin
@@ -677,12 +634,12 @@ contains
        write(ierr,*) "nf90_close error: ", nf90_strerror(istatus),' ',iproc
     end if
 
-# else /* not defined NETCDF */
+# else
     
     write (error_unit(),*) &
          'ERROR: gs2_restore_many is called without netcdf'
 
-# endif /* ifdef NETCDF */
+# endif
 
   end subroutine gs2_restore_many
 
@@ -764,18 +721,10 @@ contains
     end if
 
     if (fbpar > epsilon(0.)) then
-# ifdef NETCDF == _OLD_
-       istatus = nf90_inq_varid (ncid, "aperp_r", bparr_id)
-# else
        istatus = nf90_inq_varid (ncid, "bpar_r", bparr_id)
-# endif
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='bpar_r')
 
-# ifdef NETCDF == _OLD_       
-       istatus = nf90_inq_varid (ncid, "aperp_i", bpari_id)
-# else
        istatus = nf90_inq_varid (ncid, "bpar_i", bpari_id)
-# endif
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='bpar_i')
     end if
 
@@ -898,11 +847,7 @@ contains
 
        if (.not. initialized) then
 
-# if NETCDF == _OLD_
-          file_proc=trim(trim(restart_file)//'.0000')
-# else
-          file_proc=trim(trim(restart_file)//'.00000')
-# endif
+          file_proc=trim(trim(restart_file)//'.0')
 
           istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus,file=file_proc)
@@ -943,11 +888,7 @@ contains
     if (proc0) then
        if (.not.initialized) then
 
-# ifdef NETCDF == _OLD_
-          file_proc=trim(trim(restart_file)//'.0000')
-# else
-          file_proc=trim(trim(restart_file)//'.00000')
-# endif
+          file_proc=trim(trim(restart_file)//'.0')
 
           istatus = nf90_open (file_proc, 0, ncid)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=file_proc)
@@ -1002,11 +943,7 @@ contains
     if (proc0) then
        a_ant = 0. ; b_ant = 0.
 
-# if NETCDF == _OLD_
-       file_proc=trim(trim(restart_file)//'.0000')
-# else
-       file_proc=trim(trim(restart_file)//'.00000')
-# endif
+       file_proc=trim(trim(restart_file)//'.0')
        
        istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
        if (istatus /= NF90_NOERR) then
@@ -1085,11 +1022,7 @@ contains
        
        if (.not.initialized) then
 
-# if NETCDF == _OLD_
-          file_proc=trim(trim(restart_file)//'.0000')
-# else
-          file_proc=trim(trim(restart_file)//'.00000')
-# endif
+          file_proc=trim(trim(restart_file)//'.0')
 
           istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=file_proc)

@@ -17,6 +17,8 @@ PROJECT ?= gs2
 #  LAST UPDATE: 10/12/09
 #
 # * Changelogs
+#	12/17/09: make it explicit that the codes are written in
+#		  Fortran 95 Standard
 #	10/12/09: share the Makefile with gsp gyrokinetic PIC code
 #	04/11/09: * share the Makefile with rmhdper reduced MHD code
 #		  * include progject specific target definitions
@@ -34,6 +36,7 @@ PROJECT ?= gs2
 #	06/16/08: clean up unused statements related to PLATFORM_LINKS
 #
 # * Available Compilers (tested on limited hosts)
+#   (must be Fortran 95 Standard compliant)
 #
 # Intel ifort
 # GNU's gfortran and g95
@@ -78,8 +81,8 @@ USE_MPI ?= on
 USE_SHMEM ?=
 # which FFT library to use (fftw,undefined) 
 USE_FFT ?= fftw
-# uses netcdf library (new,old,undefined)
-USE_NETCDF ?= new
+# uses netcdf library (bin)
+USE_NETCDF ?= on
 # uses hdf5 library (bin)
 USE_HDF5 ?=
 # uses MDSplus (bin)
@@ -199,7 +202,7 @@ endif
 
 ifeq ($(MAKECMDGOALS),depend)
 # must invoke full functionality when make depend
-	MAKE += USE_HDF5=on USE_FFT=fftw USE_NETCDF=new USE_MPI=on \
+	MAKE += USE_HDF5=on USE_FFT=fftw USE_NETCDF=on USE_MPI=on \
 		USE_LOCAL_BESSEL=on
 endif
 
@@ -232,13 +235,8 @@ ifeq ($(USE_FFT),fftw)
 	FFT_LIB ?= -lfftw -lrfftw
 endif
 ifdef USE_NETCDF
-	ifeq ($(USE_NETCDF),new)
-		CPPFLAGS += -DNETCDF=_DEFAULT_
-	endif
-	ifeq ($(USE_NETCDF),old)
-		CPPFLAGS += -DNETCDF=_OLD_
-	endif
 	NETCDF_LIB ?= -lnetcdf
+	CPPFLAGS += -DNETCDF
 endif
 ifdef USE_HDF5
 	ifdef USE_MPI
