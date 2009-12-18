@@ -15,9 +15,6 @@
 # define _CRAY_ 22
 # define _SUN_ 23
 
-# define _NEW_ 31
-# define _OLD_ 32
-
 # define _FFTW_ 41
 
 # define _SPLOCAL_ 51

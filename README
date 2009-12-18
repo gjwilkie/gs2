@@ -1,6 +1,7 @@
 This text explains how to make agk/gs2. (2008/05/05 RN)
 
 * Changelog
+2009/12/18 [RN]: Removed USE_NETCDF=new,old
 2009/04/06 [RN]: SYSTEM environment variable is replaced by GK_SYSTEM
 2009/01/26 [TT]: Removed agk_ from layouts_* files due to C_INDEX port to gs2
 	   	 Removed tungsten from supported system as it has retired
@@ -63,7 +64,7 @@ Following is the full list of switches:
  USE_SHMEM (defined [undefined]): turns on SHMEM parallel communications 
                                   on SGI (not working yet)
  USE_FFT (fftw [fftw]): FFT library to use
- USE_NETCDF (new,old [new]): NETCDF library to use
+ USE_NETCDF (defined [defined]): uses NETCDF library or no
  USE_HDF5 (defined [undefined]): uses HDF5 library or no
  USE_MDSPLUS (defined [undefind]): uses MDSplus for geo (gs2 only)
  USE_C_INDEX (defined [undefined]): uses function pointer
@@ -108,7 +109,7 @@ variable	values		description
 
 FCOMPILER	_XL_		Fortran compiler choices
 		_GFORTRAN_      (replaces CL and FILE in the previous version)
-		_G95_
+		_G95_           (must be Fortran 95 Standard compliant)
 		_NAG_
 		_INTEL_
 		_PGI_
@@ -124,15 +125,14 @@ FFT		_NONE_		We can choose to not compile fftw.
 		_FFTW_		At the moment only fftw is the available 
 				fft option.
 
-HDF		_NONE_		No hdf5 subroutines compiled.
-				Use of -DHDF makes hdf work.
-
 MPI		_NONE_		No mpi subroutines compiled.
 				Use of -DMPI makes mpi work.
 
 NETCDF		_NONE_		No netcdf subroutines compiled.
-		_DEFAULT_	Uses f90 netcdf functions.
-		_OLD_		This should be used when one uses old data.
+				Use of -DNETCDF makes netcdf work.
+
+HDF		_NONE_		No hdf5 subroutines compiled.
+				Use of -DHDF makes hdf work.
 
 NO_SIZEOF	_NONE_		This is for memory accounting.
 				In most compilers, non-standard sizeof function
