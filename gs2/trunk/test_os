@@ -87,3 +87,4 @@ fi
 
 echo $WORKSTATION_TYPE
 # export WORKSTATION_TYPE
+
