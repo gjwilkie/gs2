@@ -8,8 +8,8 @@ contains
 
   subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, grho)
 
-    ! main subroutine in which gs2 is initialized, equations are advanced,
-    ! and the program is finalized
+    ! <wkdoc> Main subroutine in which gs2 is initialized, equations are advanced,
+    ! and the program is finalized </wkdoc>
 
     use job_manage, only: checkstop, job_fork, checktime
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
