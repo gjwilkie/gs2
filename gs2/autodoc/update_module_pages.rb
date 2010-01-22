@@ -4,11 +4,18 @@ require 'cgi'
 require 'fileutils'
 require 'pp'
 
+class String
+	attr_accessor :prefered_case
+	def correct_case
+		@prefered_case ||= :downcase
+		self.send(@prefered_case.to_sym)
+	end
+end
 
 class Autodoc
 	class ParsingError < StandardError
 	end
-	attr_accessor :code_website, :code_name, :code_description, :welcome_message, :produce_highlighted_source_code, :external_modules, :external_globals, :strict
+	attr_accessor :code_website, :code_name, :code_description, :welcome_message, :produce_highlighted_source_code, :external_modules, :external_globals, :strict, :ignore_files
 	attr_reader :function_references, :modules
 	def initialize(source_dir, html_dir, options={})
 		@source_dir, @html_dir = source_dir, html_dir
@@ -22,10 +29,11 @@ class Autodoc
 		@uses = {}
 		@external_modules = []
 		@external_globals = []
+		@ignore_files = []
 		@strict = false
 	end
-	def exclude?(file)
-		return (not File.file? file or ['Makefile', 'README', 'test_os'].include? file or file =~ /Makefile/ or ['.inc', '.svn', '.in'].include? File.extname(file) or file =~ /\~$/ or (false and FileTest.exist?(out_file) and  File.mtime(file) < File.mtime(out_file)))
+	def exclude?(file, subdir_with_slash)
+		return (@ignore_files.include? "#{subdir_with_slash}#{file}" or not File.file? file or ['Makefile', 'README'].include? file or file =~ /Makefile/ or ['.inc', '.svn', '.in'].include? File.extname(file) or file =~ /\~$/ or (false and FileTest.exist?(out_file) and  File.mtime(file) < File.mtime(out_file)))
 	end
 # 	def analyse_and_highlight_source_code
 # 		analyse_documentation
@@ -61,12 +69,14 @@ class Autodoc
 # 	end #analyse_and_highlight_source_code
 	FORTRAN_INTRINSIC = ["I", "ABORT", "ABS", "ACCESS", "ACHAR", "ACOS", "ACOSH", "ADJUSTL", "ADJUSTR", "AIMAG", "AINT", "ALARM", "ALL", "ALLOCATED", "AND", "ANINT", "ANY", "ASIN", "ASINH", "ASSOCIATED", "ATAN", "ATAN", "ATANH", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BIT", "BTEST", "C", "C", "C", "C", "C", "C", "CEILING", "CHAR", "CHDIR", "CHMOD", "CMPLX", "COMMAND", "COMPLEX", "CONJG", "COS", "COSH", "COUNT", "CPU", "CSHIFT", "CTIME", "DATE", "DBLE", "DCMPLX", "DFLOAT", "DIGITS", "DIM", "DOT", "DPROD", "DREAL", "DTIME", "EOSHIFT", "EPSILON", "ERF", "ERFC", "ERFC", "ETIME", "EXIT", "EXP", "EXPONENT", "FDATE", "FLOAT", "FGET", "FGETC", "FLOOR", "FLUSH", "FNUM", "FPUT", "FPUTC", "FRACTION", "FREE", "FSEEK", "FSTAT", "FTELL", "GAMMA", "GERROR", "GETARG", "GET", "GET", "GETCWD", "GETENV", "GET", "GETGID", "GETLOG", "GETPID", "GETUID", "GMTIME", "HOSTNM", "HUGE", "HYPOT", "IACHAR", "IAND", "IARGC", "IBCLR", "IBITS", "IBSET", "ICHAR", "IDATE", "IEOR", "IERRNO", "INDEX", "INT", "INT", "INT", "IOR", "IRAND", "IS", "IS", "ISATTY", "ISHFT", "ISHFTC", "ISNAN", "ITIME", "KILL", "KIND", "LBOUND", "LEADZ", "LEN", "LEN", "LGE", "LGT", "LINK", "LLE", "LLT", "LNBLNK", "LOC", "LOG", "LOG", "LOG", "LOGICAL", "LONG", "LSHIFT", "LSTAT", "LTIME", "MALLOC", "MATMUL", "MAX", "MAXEXPONENT", "MAXLOC", "MAXVAL", "MCLOCK", "MCLOCK", "MERGE", "MIN", "MINEXPONENT", "MINLOC", "MINVAL", "MOD", "MODULO", "MOVE", "MVBITS", "NEAREST", "NEW", "NINT", "NOT", "NULL", "OR", "PACK", "PERROR", "PRECISION", "PRESENT", "PRODUCT", "RADIX", "RAN", "RAND", "RANDOM", "RANDOM", "RANGE", "REAL", "RENAME", "REPEAT", "RESHAPE", "RRSPACING", "RSHIFT", "SCALE", "SCAN", "SECNDS", "SECOND", "SELECTED", "SELECTED", "SELECTED", "SET", "SHAPE", "SIGN", "SIGNAL", "SIN", "SINH", "SIZE", "SIZEOF", "SLEEP", "SNGL", "SPACING", "SPREAD", "SQRT", "SRAND", "STAT", "SUM", "SYMLNK", "SYSTEM", "SYSTEM", "TAN", "TANH", "TIME", "TIME", "TINY", "TRAILZ", "TRANSFER", "TRANSPOSE", "TRIM", "TTYNAM", "UBOUND", "UMASK", "UNLINK", "UNPACK", "VERIFY", "XOR"]
 	def highlight_source
+		puts
 		each_source_file do |file, subdir_with_slash|
 			@highlighted_files["#@html_dir/source/#{subdir_with_slash}#{file}.html"] =  highlight_file(file)
 		end
-		exit
+# 		exit
 	end
 	def highlight_file(file) 
+		puts "\033[1A\033[KHighlighting and hyperlinking: #{file}"
 		case File.extname(file)
 		when "fpp"
 			syntax = " -s=f90"
@@ -75,7 +85,7 @@ class Autodoc
 		end
 # 		return %x[highlight -H -a #{syntax} -i #{file}  --style lucretia --inline-css -K 12 -k Monaco -l].gsub(/(\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*subroutine\s*(?:\<\/span\>\s*)?(?:\<span[^>]*\>\s*)?)(\w+)(\s*.{40})/m){$2; @function_references[$2] = "#{out_file}\##$2"; %[#$1<a name="#$2"></a>#$2#$3]}
 		highlighted =  %x[highlight -H -a #{syntax} -i #{file}  --style greenlcd --inline-css -K 12 -k Monaco -l]
-		module_blocks = highlighted.scan(/.+?(?:\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*module(?:\s*\<\/span\>)?(?![^\n]*procedure)|\Z)/m)
+		module_blocks = highlighted.scan(/.+?(?:\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*module(?:\s*\<\/span\>)?(?![^\n]*procedure)|\Z)/im)
 # 		p module_blocks.size
 		highlighted = module_blocks.shift
 		module_blocks.each do |block|
@@ -87,17 +97,17 @@ class Autodoc
 # 			p 'hello'
 # 			
 # 			
-			module_name = block.scan(/\A\s*(\S+)/)[0][0]
+			module_name = block.scan(/\A\s*(\S+)/)[0][0].correct_case
 # 			p module_name
 
 			subroutine_blocks = block.scan(/.+?(?:\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*subroutine(?:\s*\<\/span\>)?(?:\s*\<span[^>]*\>)?|\Z)/m)
 			block = subroutine_blocks.shift
 			subroutine_blocks.each do |subblock|
 				(block += subblock; next) if subblock.length == 1 #The last character
-				subroutine_name = subblock.scan(/\A\s*(\w+)/)[0][0]
+				subroutine_name = subblock.scan(/\A\s*(\w+)/)[0][0].correct_case
 				(p subblock; exit) if subroutine_name =~ /span/
-				subblock.gsub!(/^[^!]*(call(?:(?:(?:\s*\<\/span\>\s*)?(?:\s*\<span[^>]*\>\s*)?)|(?:\s+)))(\w+)/m) do
-					before = $1; call_name = $2
+				subblock.gsub!(/^(?!.*\&quot)((?:[^!\n'])*call\s(?:(?:(?:\s*\<\/span\>\s*)?(?:\s*\<span[^>]*\>\s*)?)|(?:\s+)))(\w+)/im) do
+					before = $1; call_name = $2.correct_case
 					next if @external_globals.include? call_name 
 					used = nil
 					@uses[[module_name, subroutine_name]].each do |use_mod, use_subroutines|
@@ -109,7 +119,7 @@ class Autodoc
 					reference = (@function_references[used] or @function_references[[module_name, call_name]])
 					reference = "http://gcc.gnu.org/onlinedocs/gcc-4.4.3/gfortran/#{call_name.upcase}.html##{call_name.upcase}" if not reference and FORTRAN_INTRINSIC.include? call_name.upcase
 # 					'reference', reference
-					(p 'used', used, 'file', file, 'module_name', module_name, 'subname', subroutine_name, 'call_name', call_name; raise ParsingError) if @strict and not reference
+					(p 'before', before, 'used', used, 'file', file, 'module_name', module_name, 'subname', subroutine_name, 'call_name', call_name; raise ParsingError) if @strict and not reference
 					reference ? %[#{before}<a href= "#{reference}">#{call_name}</a>] : "#{before}#{call_name}"
 				end
 				block += subblock
@@ -128,12 +138,16 @@ class Autodoc
 	def write_documentation
 		analyse_source unless @analysed_source
 		highlight_source if @produce_highlighted_source_code
+		puts
 		@highlighted_files.each do |out_file, text|
+			puts "\033[1A\033[KWriting source html: #{File.basename(out_file)}"
 			puts out_file
 			File.open(out_file, 'w'){|write_file| write_file.puts text}
 		end
+		puts
 		Dir.chdir(@html_dir) do 
 			@modules.each do |module_name, data|
+				puts "\033[1A\033[KWriting doumentation: #{module_name}"
 				File.open("#{module_name}.html", 'w')do |file| 
 					mod = ModulePage.new(module_name, data, self)
 					file.puts mod
@@ -159,7 +173,7 @@ class Autodoc
 				Dir.entries(Dir.pwd).each do |file|	
 					subdir_with_slash = dir == "." ? "" : dir + "/"		
 # 					out_file = "#{sub_dir}#{file}.html"
-					(next) if exclude? file
+					(next) if exclude?(file, subdir_with_slash)
 					yield(file, subdir_with_slash)
 				end # Dir.entreis
 			end #Dir.chdir
@@ -171,18 +185,21 @@ class Autodoc
 	
 	def analyse_source
 		@analysed_source = true
+		puts
 		each_source_file do |file, subdir_with_slash|
+			puts "\033[1A\033[KAnalysing: #{subdir_with_slash}#{file}"
+
 			begin
 				text = File.read(file)
 # 				next unless text  =~ /\<wkdoc\>/
 			rescue
 				next
 			end
-			modules = text.scan(/(^\s*module\s*(?!procedure)(\S+).*?\s*end\s+module)/m)
+			modules = text.scan(/(^\s*module\s*(?!procedure)(\S+).*?\s*end\s+module)/im)
 # 					pp modules[0]
 			modules.each do |modtext, name|
-				(p file, name, modtext; raise Autodoc::ParsingError) if name =~ /procedure/
-				analyse_module(name, file, subdir_with_slash, modtext)
+				(p file, name, modtext; raise Autodoc::ParsingError) if name =~ /procedure/i
+				analyse_module(name.correct_case, file, subdir_with_slash, modtext)
 			end
 		end
 		File.open('uses.rb', 'w'){|file| file.puts @uses.pretty_inspect}
@@ -194,16 +211,16 @@ class Autodoc
 		@modules[modname][:file_name] = file
 		@modules[modname][:subroutines] = {}
 		if @produce_highlighted_source_code
-			interfaces = modtext.scan(/^\s*interface\s*(\w+)/)
+			interfaces = modtext.scan(/^\s*interface\s*(\w+)/i)
 			(p modname, file, interfaces; raise ParsingError) if (["interface", "contains"] - interfaces).size < 2
 			interfaces.flatten.each do |interface|
-				@function_references[[modname, interface]] = %[#{subdir_with_slash}#{file}.html##{modname}_#{interface}] 
+				@function_references[[modname, interface.correct_case]] = %[#{subdir_with_slash}#{file}.html##{modname}_#{interface.correct_case}] 
 			end
 		end
-		subroutine_blocks = modtext.split(/^\s*subroutine\s*/)
-		@modules[modname][:description] = subroutine_blocks[0].scan(/\<wkdoc\>(.*?)\<\/wkdoc\>/m).map{|match| match[0].gsub(/\n\s*\!/, '')}.join("\n")
+		subroutine_blocks = modtext.split(/^\s*subroutine\s*/i)
+		@modules[modname][:description] = subroutine_blocks[0].scan(/\<wkdoc\>(.*?)\<\/wkdoc\>/im).map{|match| match[0].gsub(/\n\s*\!/, '')}.join("\n")
 		subroutine_blocks.slice(1..(subroutine_blocks.size)).each do |block|
-			name = block.scan(/(\A\w+)/)[0][0]
+			name = block.scan(/(\A\w+)/)[0][0].correct_case
 # 						p block
 # 			puts "\n\n\n"
 			function_call = block.scan(/(\A.+(?:\&\s)?.+)/)[0][0].sub(/[\&\n]/, '')
@@ -213,11 +230,11 @@ class Autodoc
 				comment.gsub(/\n\s*\!/, '')
 			end
 # 			p 
-			use_statements = block.scan(/(^\s*use[^&\n\r]+(?:(?:\&\s+)?[^&\n\r]+)+)/)
+			use_statements = block.scan(/(^\s*use[^&\n\r]+(?:(?:\&\s+)?[^&\n\r]+)+)/i)
 # 			(p use_statements[0][0]; exit) if use_statements.find{|statements| statements[0] =~ /\&/} 
 			@uses[[modname, name]] = {}
 			use_statements.each do |statement_list|
-				words = statement_list[0].gsub(/\&/, '').scan(/\w+/)
+				words = statement_list[0].gsub(/\&/, '').scan(/\w+/).map{|w| w.correct_case}
 				words.delete("use"); words.delete("only")
 				use_mod = words.shift
 				use_subroutines = words
@@ -326,9 +343,9 @@ EOF
 			line
 		end
 		return <<EOF
-			#{@function_references[[modname, name]] ? %[<h2 class="title"><a href="source/#{@function_references[[modname, name]]}" name="#{name}">#{name}</a></h2>] : %[<h2 class="title">#{name}</h2>]} 
+			#{@function_references[[@module_name, name]] ? %[<h2 class="title"><a href="source/#{@function_references[[@module_name, name]]}" name="#{name}">#{name}</a></h2>] : %[<h2 class="title">#{name}</h2>]} 
 			
-		<div class="entry"><small>Call Prototype:</small> #{function_call} #{@function_references[[modname, name]] ? %[<small><a href="source/#{@function_references[[modname, name]]}">View Source</a></small>] : %[]} </div>
+		<div class="entry"><small>Call Prototype:</small> #{function_call} #{@function_references[[@module_name, name]] ? %[<small><a href="source/#{@function_references[[@module_name, name]]}">View Source</a></small>] : %[]} </div>
 			<ul>
 				#{lines.join("\n\t\t\t")}
 			</ul><br>
@@ -456,8 +473,9 @@ autodoccer.code_name = "GS2"
 autodoccer.code_website = "http://gyrokinetics.sourceforge.net"
 autodoccer.code_description = "GS2 is a gyrokinetic flux tube initial value turbulence code which can be used for fusion or astrophysical plasmas."
 autodoccer.strict = true
+autodoccer.ignore_files = ['test_os', 'utils/redistribute.f90']
 autodoccer.external_modules = ['hdf5']
-autodoccer.external_globals = ['fftw_f77_create_plan', 'rfftwnd_f77_create_plan', 'rfftw2d_f77_create_plan', 'rfftw_f77_destroy_plan']
+autodoccer.external_globals = ['fftw_f77_create_plan', 'rfftwnd_f77_create_plan', 'rfftw2d_f77_create_plan', 'rfftw_f77_destroy_plan', 'h5pcreate_f', 'h5pset_dxpl_mpio_f', 'h5pset_fapl_mpio_f', 'h5pclose_f', 'h5screate_simple_f', 'h5sselect_hyperslab_f','h5sclose_f', 'h5dwrite_f', 'h5dcreate_f', 'h5dclose_f', 'h5open_f', 'h5fcreate_f', 'h5fclose_f', 'h5close_f']
 
 # autodoccer.analyse_and_highlight_source_code
 autodoccer.produce_highlighted_source_code = true
