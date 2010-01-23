@@ -3,13 +3,13 @@
 require 'cgi'
 require 'fileutils'
 require 'pp'
-$parallel = false
-if $parallel
-	require 'parallelpipes.rb'
-	require 'rubygems'
-	require 'facter'
-	Facter.loadfacts
-end
+# $parallel = false
+# if $parallel
+# 	require 'parallelpipes.rb'
+# 	require 'rubygems'
+# 	require 'facter'
+# 	Facter.loadfacts
+# end
 
 $not_found = []
 class String
@@ -24,7 +24,7 @@ class Autodoc
 	class ParsingError < StandardError
 	end
 	SCRIPT_PATH = File.dirname(__FILE__)
-	attr_accessor :code_website, :code_name, :code_description, :welcome_message, :produce_highlighted_source_code, :external_modules, :external_globals, :strict, :ignore_files, :custom_tabs
+	attr_accessor :code_website, :code_name, :code_description, :welcome_message, :produce_highlighted_source_code, :external_modules, :external_globals, :strict, :ignore_files, :custom_tabs, :customize_documentation, :customize_highlighting
 	attr_reader :function_references, :modules, :uses 
 	def initialize(source_dir, html_dir, options={})
 		@source_dir, @html_dir = source_dir, html_dir
@@ -79,46 +79,54 @@ class Autodoc
 # 	end #analyse_and_highlight_source_code
 	FORTRAN_INTRINSIC = ["I", "ABORT", "ABS", "ACCESS", "ACHAR", "ACOS", "ACOSH", "ADJUSTL", "ADJUSTR", "AIMAG", "AINT", "ALARM", "ALL", "ALLOCATED", "AND", "ANINT", "ANY", "ASIN", "ASINH", "ASSOCIATED", "ATAN", "ATAN", "ATANH", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BIT", "BTEST", "C", "C", "C", "C", "C", "C", "CEILING", "CHAR", "CHDIR", "CHMOD", "CMPLX", "COMMAND", "COMPLEX", "CONJG", "COS", "COSH", "COUNT", "CPU", "CSHIFT", "CTIME", "DATE", "DBLE", "DCMPLX", "DFLOAT", "DIGITS", "DIM", "DOT", "DPROD", "DREAL", "DTIME", "EOSHIFT", "EPSILON", "ERF", "ERFC", "ERFC", "ETIME", "EXIT", "EXP", "EXPONENT", "FDATE", "FLOAT", "FGET", "FGETC", "FLOOR", "FLUSH", "FNUM", "FPUT", "FPUTC", "FRACTION", "FREE", "FSEEK", "FSTAT", "FTELL", "GAMMA", "GERROR", "GETARG", "GET", "GET", "GETCWD", "GETENV", "GET", "GETGID", "GETLOG", "GETPID", "GETUID", "GMTIME", "HOSTNM", "HUGE", "HYPOT", "IACHAR", "IAND", "IARGC", "IBCLR", "IBITS", "IBSET", "ICHAR", "IDATE", "IEOR", "IERRNO", "INDEX", "INT", "INT", "INT", "IOR", "IRAND", "IS", "IS", "ISATTY", "ISHFT", "ISHFTC", "ISNAN", "ITIME", "KILL", "KIND", "LBOUND", "LEADZ", "LEN", "LEN", "LGE", "LGT", "LINK", "LLE", "LLT", "LNBLNK", "LOC", "LOG", "LOG", "LOG", "LOGICAL", "LONG", "LSHIFT", "LSTAT", "LTIME", "MALLOC", "MATMUL", "MAX", "MAXEXPONENT", "MAXLOC", "MAXVAL", "MCLOCK", "MCLOCK", "MERGE", "MIN", "MINEXPONENT", "MINLOC", "MINVAL", "MOD", "MODULO", "MOVE", "MVBITS", "NEAREST", "NEW", "NINT", "NOT", "NULL", "OR", "PACK", "PERROR", "PRECISION", "PRESENT", "PRODUCT", "RADIX", "RAN", "RAND", "RANDOM", "RANDOM", "RANGE", "REAL", "RENAME", "REPEAT", "RESHAPE", "RRSPACING", "RSHIFT", "SCALE", "SCAN", "SECNDS", "SECOND", "SELECTED", "SELECTED", "SELECTED", "SET", "SHAPE", "SIGN", "SIGNAL", "SIN", "SINH", "SIZE", "SIZEOF", "SLEEP", "SNGL", "SPACING", "SPREAD", "SQRT", "SRAND", "STAT", "SUM", "SYMLNK", "SYSTEM", "SYSTEM", "TAN", "TANH", "TIME", "TIME", "TINY", "TRAILZ", "TRANSFER", "TRANSPOSE", "TRIM", "TTYNAM", "UBOUND", "UMASK", "UNLINK", "UNPACK", "VERIFY", "XOR"]
 	def highlight_source
+		@highlighted_source = true
+		analyse_source unless @analysed_source
+
 		puts
-		if $parallel
-			ppipe = PPipe.new(5, false, redirect: false)
-			ppipe.verbosity = 0
-			nprocs = Facter.processorcount.to_i + 1
-			pipes = ppipe.fork(nprocs) do
-				loop do
-					message = ppipe.w_recv(:instructions)
-					unless message == :finish
-# 						$stderr.puts message
-						Dir.chdir(message[1]){ppipe.i_send(message[0], highlight_file(message[2], message[3]), tp: 0)}
-					else 
-						break
-					end
+# 		if $parallel
+# 			ppipe = PPipe.new(5, false, redirect: false)
+# 			ppipe.verbosity = 0
+# 			nprocs = Facter.processorcount.to_i + 1
+# 			pipes = ppipe.fork(nprocs) do
+# 				loop do
+# 					message = ppipe.w_recv(:instructions)
+# 					unless message == :finish
+# # 						$stderr.puts message
+# 						Dir.chdir(message[1]){ppipe.i_send(message[0], highlight_file(message[2], message[3]), tp: 0)}
+# 					else 
+# 						break
+# 					end
+# 				end
+# 			end
+# 			ppipe.wait_till_assigned(*pipes)
+# 			i = 0
+# 			j = 0
+# 			outfiles = {}
+# 			each_source_file do |file, subdir_with_slash|
+# 				i = i%nprocs
+# 				ppipe.i_send(:instructions, [j, Dir.pwd, file, subdir_with_slash], tp: i + 1)
+# 				outfiles[j] = "source/#{subdir_with_slash}#{file}.html"
+# 				i+=1; j+=1
+# 			end
+# # 			sleep 10
+# 			outfiles.each do |id, name|
+# 				@highlighted_files[name] =  ppipe.w_recv(id)
+# 			end
+# # 			@highlighted_files.each{|file, message| message.join}
+# 			pipes.each{|no| ppipe.w_send(:instructions, :finish, tp: no)}
+# 			ppipe.finish
+# 			
+# 				
+# 		else
+			each_source_file do |file, subdir_with_slash|
+				if @customize_highlighting
+					highlighted =   @customize_highlighting.call(highlight_file(file, subdir_with_slash))
+				else
+					highlighted =  highlight_file(file, subdir_with_slash)
 				end
+				@highlighted_files["source/#{subdir_with_slash}#{file}.html"] = highlighted
 			end
-			ppipe.wait_till_assigned(*pipes)
-			i = 0
-			j = 0
-			outfiles = {}
-			each_source_file do |file, subdir_with_slash|
-				i = i%nprocs
-				ppipe.i_send(:instructions, [j, Dir.pwd, file, subdir_with_slash], tp: i + 1)
-				outfiles[j] = "source/#{subdir_with_slash}#{file}.html"
-				i+=1; j+=1
-			end
-# 			sleep 10
-			outfiles.each do |id, name|
-				@highlighted_files[name] =  ppipe.w_recv(id)
-			end
-# 			@highlighted_files.each{|file, message| message.join}
-			pipes.each{|no| ppipe.w_send(:instructions, :finish, tp: no)}
-			ppipe.finish
-			
-				
-		else
-			each_source_file do |file, subdir_with_slash|
-				@highlighted_files["source/#{subdir_with_slash}#{file}.html"] =  highlight_file(file, subdir_with_slash)
-			end
-		end
+# 		end
 		FileUtils.rm(@source_dir + '/highlight.css')
 		puts "\033[1A\033[KHighlighting and hyperlinking: done"
 
@@ -195,9 +203,9 @@ class Autodoc
 				end
 				block += subblock
 			end
-			block.gsub!(/(\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*subroutine\s*(?:\<\/span\>\s*)?(?:\<span[^>]*\>\s*)?)(\w+)(\s*.{40})/m){%[#$1<a name="#{module_name}_#$2">#$2</a>#$3]}
+			block.gsub!(/(\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*subroutine\s*(?:\<\/span\>\s*)?(?:\<span[^>]*\>\s*)?)(\w+)(\s*.{40})/m){%[#$1<a name="#{module_name}%#$2">#$2</a> (<a href="#{subdir_with_slash.length > 0 ? "../../" : "../"}#{module_name}.html##$2">Documentation</a>)#$3]}
 			block.gsub!(/(\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*interface\s*(?:\<\/span\>\s*)?(?:\<span[^>]*\>\s*)?)(\w+)(\s*.{40})/m){%[#$1<a name="#{module_name}_#$2">#$2</a>#$3]}
-			block.gsub!(/(\A\s*)(\S+)/){%[<a name="#$2">#$1#$2</a>]}
+			block.gsub!(/(\A\s*)(\S+)/){%[<a name="#$2">#$1#$2</a> (<a href="#{subdir_with_slash.length > 0 ? "../../" : "../"}#{module_name}.html">Documentation</a>)]}
 # 			puts block
 # 			puts "\n\n\n"
 			highlighted += block
@@ -217,8 +225,7 @@ class Autodoc
 			FileUtils.rm(@html_dir + '/styles.css')
 		end
 		FileUtils.cp_r(SCRIPT_PATH + '/images', @html_dir + '/images')
-		analyse_source unless @analysed_source
-		highlight_source if @produce_highlighted_source_code
+		highlight_source if @produce_highlighted_source_code and not @highlighted_source
 		puts
 		Dir.chdir(@html_dir) do 
 			FileUtils.makedirs('source')
@@ -233,7 +240,8 @@ class Autodoc
 			@modules.each do |module_name, data|
 				puts "\033[1A\033[KWriting doumentation: #{module_name}"
 				File.open("#{module_name}.html", 'w')do |file| 
-					mod = ModulePage.new(module_name, data, self)
+					mod = ModulePage.new(module_name, data, self).to_s
+					mod = @customize_documentation.call(mod) if @customize_documentation 
 					file.puts mod
 				end
 			end
@@ -277,7 +285,7 @@ class Autodoc
 
 			begin
 				text = File.read(file)
-# 				next unless text  =~ /\<wkdoc\>/
+# 				next unless text  =~ /\<doc\>/
 			rescue
 				next
 			end
@@ -307,7 +315,7 @@ class Autodoc
 		end
 # 		puts modtext
 		subroutine_blocks = modtext.split(/^\s*subroutine\s*/i)
-		@modules[modname][:description] = subroutine_blocks[0].scan(/\<wkdoc\>(.*?)\<\/wkdoc\>/im).map{|match| match[0].gsub(/\n\s*\!/, '')}.join("\n")
+		@modules[modname][:description] = subroutine_blocks[0].scan(/\<doc\>(.*?)\<\/doc\>/im).map{|match| match[0].gsub(/\n\s*\!/, '')}.join("\n")
 		subroutine_blocks.slice(1..(subroutine_blocks.size)).each do |block|
 			
 			name = block.scan(/(\A\w+)/)[0][0].correct_case
@@ -316,7 +324,7 @@ class Autodoc
 # 			puts "\n\n\n"
 			function_call = block.scan(/(\A.+(?:\&\s)?.+)/)[0][0].sub(/[\&\n]/, '')
 # 						function_call = block.scan(/(\A.*?(?:\(.*[\n]?.*\))?)/)[0][0].sub(/[\&\n]/, '')
-			comments = block.scan(/\<wkdoc\>(.*?)\<\/wkdoc\>/m).map{|match| match[0]}
+			comments = block.scan(/\<doc\>(.*?)\<\/doc\>/m).map{|match| match[0]}
 			comments = comments.map do |comment|
 				comment.gsub(/\n\s*\!/, '')
 			end
@@ -337,7 +345,7 @@ class Autodoc
 # 				p words; exit
 			end
 			@modules[modname][:subroutines][name] = [function_call, comments]
-			@function_references[[modname, name]] = %[#{subdir_with_slash}#{file}.html##{modname}_#{name}] if @produce_highlighted_source_code
+			@function_references[[modname, name]] = %[#{subdir_with_slash}#{file}.html##{modname}%#{name}] if @produce_highlighted_source_code
 			@documentation_references[[modname, name]] = %[#{modname}.html##{name}]
 		end
 # 		exit if modname == "splines"
@@ -461,7 +469,7 @@ EOF
 					use += "</li>"
 					uses.push use
 				end
-				use_string = %[<div class="entry">Uses:<ul>#{uses.join("\n")}</ul></div>]
+				use_string = %[<div class="notes">Uses:<ul>#{uses.join("\n")}</ul></div>]
 			end
 							
 							
@@ -469,11 +477,14 @@ EOF
 		return <<EOF
 			#{@function_references[[@module_name, name]] ? %[<h2 class="title"><a href="source/#{@function_references[[@module_name, name]]}" name="#{name}">#{name}</a></h2>] : %[<h2 class="title">#{name}</h2>]} 
 			
-		<div class="entry"><small>Call Prototype:</small> #{function_call} #{@function_references[[@module_name, name]] ? %[<small><a href="source/#{@function_references[[@module_name, name]]}">View Source</a></small>] : %[]} </div>
-			#{use_string}
-			<div class="entry"><ul>
+		<div class="notes"><small>Call Prototype:</small> #{function_call}</div>
+
+			<div class="bullets"><!--<small>Comments:</small>--><ul>
 				#{lines.join("\n\t\t\t")}
 			</ul></div>
+						#{use_string}
+			 #{@function_references[[@module_name, name]] ? %[<div class="notes"><small><a href="source/#{@function_references[[@module_name, name]]}">View Source</a></small></div>] : %[]} 
+			 <br>
 EOF
 		
 		end #subroutine_div
@@ -522,7 +533,7 @@ EOF
 		def welcome_message
 			return <<EOF
 			<h2 class="title">Welcome!</h2>
-			<p>#{@autodoccer.welcome_message}</p>
+			<div class="entry">#{@autodoccer.welcome_message}</div>
 			<div class="entry"><small> This documentation has been automatically generated from the #{@autodoccer.code_name} source code by Autodoc</small></div>
 EOF
 		end # def welcome_message
@@ -553,15 +564,15 @@ EOF
 			@autodoccer =  autodoccer
 			@modules = {}
 			@autodoccer.modules.each do |name, data|
-				@modules[name] = [data[:file_name], data[:description]]
+				@modules[name] = [data[:file_name], data[:description], data[:subdir_with_slash]]
 			end
 			 @function_references = autodoccer.function_references
 		end
-		def module_div(name, file_name, description)
+		def module_div(name, file_name, description, subdir_with_slash)
 # 			p file_name
 		return <<EOF
 <h2 class="title"><a href="#{name}.html" name="#{name}">#{name}</a></h2>
-		<div class="entry"><small>Source File:</small><a href = "source/#{file_name}.html"> #{file_name}</a></div>
+		<div class="entry"><small>Source File:</small><a href = "source/#{subdir_with_slash}#{file_name}.html"> #{file_name}</a></div>
 		<div class="entry">#{description}</div><br>
 EOF
 		
@@ -570,8 +581,8 @@ EOF
 		<<EOF
 	<!-- start content -->
 	<div id="content">
-#{@modules.inject("") do |str, (name, (file_name, description))|
-			str + module_div(name, file_name, description)
+#{@modules.inject("") do |str, (name, (file_name, description, subdir_with_slash))|
+			str + module_div(name, file_name, description, subdir_with_slash)
 end}
 	</div>
 	<!-- end content -->

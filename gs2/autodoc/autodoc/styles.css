@@ -233,6 +233,20 @@ padding: 10px;
 width: 690px;
 }
 
+#content .notes
+{
+padding-top: 10px;
+padding-left: 10px;
+width: 690px;
+}
+
+#content .bullets
+{
+padding-top: 10px;
+padding-left: 10px;
+width: 690px;
+}
+
 /* Sidebars */
 
 .sidebar {
