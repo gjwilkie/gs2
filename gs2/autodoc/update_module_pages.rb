@@ -3,6 +3,10 @@
 require 'cgi'
 require 'fileutils'
 require 'pp'
+$parallel = true
+if $parallel
+	require 'parallelpipes.rb'
+end
 
 class String
 	attr_accessor :prefered_case
@@ -33,7 +37,7 @@ class Autodoc
 		@strict = false
 	end
 	def exclude?(file, subdir_with_slash)
-		return (@ignore_files.include? "#{subdir_with_slash}#{file}" or not File.file? file or ['Makefile', 'README'].include? file or file =~ /Makefile/ or ['.inc', '.svn', '.in'].include? File.extname(file) or file =~ /\~$/ or (false and FileTest.exist?(out_file) and  File.mtime(file) < File.mtime(out_file)))
+		return (@ignore_files.include? "#{subdir_with_slash}#{file}" or not File.file? file or ['Makefile', 'README'].include? file or file =~ /Makefile/ or ['.inc', '.svn', '.in', '.o', '.a', '.mod'].include? File.extname(file) or file =~ /\~$/ or (false and FileTest.exist?(out_file) and  File.mtime(file) < File.mtime(out_file)) or (false and not File.read(file)  =~ /\<wkdoc\>/))
 	end
 # 	def analyse_and_highlight_source_code
 # 		analyse_documentation
@@ -70,8 +74,42 @@ class Autodoc
 	FORTRAN_INTRINSIC = ["I", "ABORT", "ABS", "ACCESS", "ACHAR", "ACOS", "ACOSH", "ADJUSTL", "ADJUSTR", "AIMAG", "AINT", "ALARM", "ALL", "ALLOCATED", "AND", "ANINT", "ANY", "ASIN", "ASINH", "ASSOCIATED", "ATAN", "ATAN", "ATANH", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BIT", "BTEST", "C", "C", "C", "C", "C", "C", "CEILING", "CHAR", "CHDIR", "CHMOD", "CMPLX", "COMMAND", "COMPLEX", "CONJG", "COS", "COSH", "COUNT", "CPU", "CSHIFT", "CTIME", "DATE", "DBLE", "DCMPLX", "DFLOAT", "DIGITS", "DIM", "DOT", "DPROD", "DREAL", "DTIME", "EOSHIFT", "EPSILON", "ERF", "ERFC", "ERFC", "ETIME", "EXIT", "EXP", "EXPONENT", "FDATE", "FLOAT", "FGET", "FGETC", "FLOOR", "FLUSH", "FNUM", "FPUT", "FPUTC", "FRACTION", "FREE", "FSEEK", "FSTAT", "FTELL", "GAMMA", "GERROR", "GETARG", "GET", "GET", "GETCWD", "GETENV", "GET", "GETGID", "GETLOG", "GETPID", "GETUID", "GMTIME", "HOSTNM", "HUGE", "HYPOT", "IACHAR", "IAND", "IARGC", "IBCLR", "IBITS", "IBSET", "ICHAR", "IDATE", "IEOR", "IERRNO", "INDEX", "INT", "INT", "INT", "IOR", "IRAND", "IS", "IS", "ISATTY", "ISHFT", "ISHFTC", "ISNAN", "ITIME", "KILL", "KIND", "LBOUND", "LEADZ", "LEN", "LEN", "LGE", "LGT", "LINK", "LLE", "LLT", "LNBLNK", "LOC", "LOG", "LOG", "LOG", "LOGICAL", "LONG", "LSHIFT", "LSTAT", "LTIME", "MALLOC", "MATMUL", "MAX", "MAXEXPONENT", "MAXLOC", "MAXVAL", "MCLOCK", "MCLOCK", "MERGE", "MIN", "MINEXPONENT", "MINLOC", "MINVAL", "MOD", "MODULO", "MOVE", "MVBITS", "NEAREST", "NEW", "NINT", "NOT", "NULL", "OR", "PACK", "PERROR", "PRECISION", "PRESENT", "PRODUCT", "RADIX", "RAN", "RAND", "RANDOM", "RANDOM", "RANGE", "REAL", "RENAME", "REPEAT", "RESHAPE", "RRSPACING", "RSHIFT", "SCALE", "SCAN", "SECNDS", "SECOND", "SELECTED", "SELECTED", "SELECTED", "SET", "SHAPE", "SIGN", "SIGNAL", "SIN", "SINH", "SIZE", "SIZEOF", "SLEEP", "SNGL", "SPACING", "SPREAD", "SQRT", "SRAND", "STAT", "SUM", "SYMLNK", "SYSTEM", "SYSTEM", "TAN", "TANH", "TIME", "TIME", "TINY", "TRAILZ", "TRANSFER", "TRANSPOSE", "TRIM", "TTYNAM", "UBOUND", "UMASK", "UNLINK", "UNPACK", "VERIFY", "XOR"]
 	def highlight_source
 		puts
-		each_source_file do |file, subdir_with_slash|
-			@highlighted_files["#@html_dir/source/#{subdir_with_slash}#{file}.html"] =  highlight_file(file)
+		if $parallel
+			ppipe = PPipe.new(5, false, redirect: false)
+			ppipe.verbosity = 0
+			pipes = ppipe.fork(4) do
+				loop do
+					message = ppipe.w_recv(:instructions)
+					unless message == :finish
+# 						$stderr.puts message
+						Dir.chdir(message[1]){ppipe.i_send(message[0], highlight_file(message[2]), tp: 0)}
+					else 
+						break
+					end
+				end
+			end
+			ppipe.wait_till_assigned(*pipes)
+			i = 0
+			j = 0
+			outfiles = {}
+			each_source_file do |file, subdir_with_slash|
+				i = i%4
+				ppipe.i_send(:instructions, [j, Dir.pwd, file], tp: i + 1)
+				outfiles[j] = "source/#{subdir_with_slash}#{file}.html"
+				i+=1; j+=1
+			end
+			outfiles.each do |id, name|
+				@highlighted_files[name] =  ppipe.w_recv(id)
+			end
+# 			@highlighted_files.each{|file, message| message.join}
+			pipes.each{|no| ppipe.w_send(:instructions, :finish, tp: no)}
+			ppipe.finish
+			
+				
+		else
+			each_source_file do |file, subdir_with_slash|
+				@highlighted_files["source/#{subdir_with_slash}#{file}.html"] =  highlight_file(file)
+			end
 		end
 # 		exit
 	end
@@ -84,7 +122,7 @@ class Autodoc
 			syntax = " "
 		end
 # 		return %x[highlight -H -a #{syntax} -i #{file}  --style lucretia --inline-css -K 12 -k Monaco -l].gsub(/(\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*subroutine\s*(?:\<\/span\>\s*)?(?:\<span[^>]*\>\s*)?)(\w+)(\s*.{40})/m){$2; @function_references[$2] = "#{out_file}\##$2"; %[#$1<a name="#$2"></a>#$2#$3]}
-		highlighted =  %x[highlight -H -a #{syntax} -i #{file}  --style greenlcd --inline-css -K 12 -k Monaco -l]
+		highlighted =  %x[highlight -H -a #{syntax} -i #{file}  --style lucretia --inline-css -K 12 -k Monaco -l]
 		module_blocks = highlighted.scan(/.+?(?:\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*module(?:\s*\<\/span\>)?(?![^\n]*procedure)|\Z)/im)
 # 		p module_blocks.size
 		highlighted = module_blocks.shift
@@ -124,11 +162,12 @@ class Autodoc
 				end
 				block += subblock
 			end
-			block.gsub!(/(\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*subroutine\s*(?:\<\/span\>\s*)?(?:\<span[^>]*\>\s*)?)(\w+)(\s*.{40})/m){%[#$1<a name="#$2"></a>#$2#$3]}
+			block.gsub!(/(\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*subroutine\s*(?:\<\/span\>\s*)?(?:\<span[^>]*\>\s*)?)(\w+)(\s*.{40})/m){%[#$1<a name="#{module_name}_#$2">#$2</a>#$3]}
 # 			puts block
 # 			puts "\n\n\n"
 			highlighted += block
 		end
+		highlighted
 # 		p @function_references
 # 		puts highlighted
 # 		exit
@@ -139,13 +178,15 @@ class Autodoc
 		analyse_source unless @analysed_source
 		highlight_source if @produce_highlighted_source_code
 		puts
-		@highlighted_files.each do |out_file, text|
-			puts "\033[1A\033[KWriting source html: #{File.basename(out_file)}"
-			puts out_file
-			File.open(out_file, 'w'){|write_file| write_file.puts text}
-		end
-		puts
 		Dir.chdir(@html_dir) do 
+			FileUtils.makedirs('source')
+			Dir.chdir('source'){@sub_directories.each{|dir| FileUtils.makedirs dir}}
+			@highlighted_files.each do |out_file, text|
+				puts "\033[1A\033[KWriting source html: #{File.basename(out_file)}"
+# 				puts out_file
+				File.open(out_file, 'w'){|write_file| write_file.puts text}
+			end
+			puts
 			@modules.each do |module_name, data|
 				puts "\033[1A\033[KWriting doumentation: #{module_name}"
 				File.open("#{module_name}.html", 'w')do |file| 
@@ -373,13 +414,15 @@ EOF
 EOF
 		end #def title_box
 		def subroutine_sidebar
+				
 				keys = @subroutines.keys
+# 				(p @module_name, @subroutines; exit) if keys.size == 0
 			<<EOF
 				<h2>Subroutines</h2>
 				<ul class="back_title">
-				#{keys.slice(1..keys.size).inject(%[\n\t\t\t<li class="top"><a href="##{keys[0]}">#{keys[0]}</a></li>]) do |str, name|
+				#{keys.size > 0 ? (keys.slice(1..keys.size).inject(%[\n\t\t\t<li class="top"><a href="##{keys[0]}">#{keys[0]}</a></li>]) do |str, name|
 					str + %[\n\t\t\t<li><a href="##{name}">#{name}</a></li>]
-				end}
+				end) : ""}
 				</ul>
 EOF
 		end #def subroutine_sidebar
@@ -473,7 +516,7 @@ autodoccer.code_name = "GS2"
 autodoccer.code_website = "http://gyrokinetics.sourceforge.net"
 autodoccer.code_description = "GS2 is a gyrokinetic flux tube initial value turbulence code which can be used for fusion or astrophysical plasmas."
 autodoccer.strict = true
-autodoccer.ignore_files = ['test_os', 'utils/redistribute.f90']
+autodoccer.ignore_files = ['test_os', 'utils/redistribute.f90', 'gs2', 'ingen', 'rungridgen', 'fortdep']
 autodoccer.external_modules = ['hdf5']
 autodoccer.external_globals = ['fftw_f77_create_plan', 'rfftwnd_f77_create_plan', 'rfftw2d_f77_create_plan', 'rfftw_f77_destroy_plan', 'h5pcreate_f', 'h5pset_dxpl_mpio_f', 'h5pset_fapl_mpio_f', 'h5pclose_f', 'h5screate_simple_f', 'h5sselect_hyperslab_f','h5sclose_f', 'h5dwrite_f', 'h5dcreate_f', 'h5dclose_f', 'h5open_f', 'h5fcreate_f', 'h5fclose_f', 'h5close_f']
 
