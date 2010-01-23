@@ -25,7 +25,7 @@ class Autodoc
 	end
 	SCRIPT_PATH = File.dirname(__FILE__)
 	attr_accessor :code_website, :code_name, :code_description, :welcome_message, :produce_highlighted_source_code, :external_modules, :external_globals, :strict, :ignore_files, :custom_tabs
-	attr_reader :function_references, :modules 
+	attr_reader :function_references, :modules, :uses 
 	def initialize(source_dir, html_dir, options={})
 		@source_dir, @html_dir = source_dir, html_dir
 		@function_references = {} #eval(File.read("function_references.rb"))
@@ -119,6 +119,7 @@ class Autodoc
 				@highlighted_files["source/#{subdir_with_slash}#{file}.html"] =  highlight_file(file, subdir_with_slash)
 			end
 		end
+		FileUtils.rm(@source_dir + '/highlight.css')
 		puts "\033[1A\033[KHighlighting and hyperlinking: done"
 
 # 		exit
@@ -209,11 +210,15 @@ class Autodoc
 # 		.gsub(/(call(?:(?:(?:\s*\<\/span\>\s*)?(?:\s*\<span[^>]*\>\s*)?)|(?:\s+)))(\w+)/m){@function_references[$2] ? %[#$1<a href= "#{@function_references[$2]}">#$2</a>] : "#$1#$2"} 
 	end
 	def write_documentation
+		FileUtils.makedirs(@html_dir)
+		begin
+			FileUtils.cp(SCRIPT_PATH + '/styles.css', @html_dir + '/styles.css')
+		rescue
+			FileUtils.rm(@html_dir + '/styles.css')
+		end
+		FileUtils.cp_r(SCRIPT_PATH + '/images', @html_dir + '/images')
 		analyse_source unless @analysed_source
 		highlight_source if @produce_highlighted_source_code
-		FileUtils.makedirs(@html_dir)
-		FileUtils.cp(SCRIPT_PATH + '/styles.css', @html_dir + '/styles.css')
-		FileUtils.cp(SCRIPT_PATH + '/images', @html_dir + '/images')
 		puts
 		Dir.chdir(@html_dir) do 
 			FileUtils.makedirs('source')
@@ -425,22 +430,50 @@ EOF
 			 @function_references = autodoccer.function_references
 		end
 		def subroutine_div(name, function_call, comments)
-		lines = comments.map do |comment|
-			line = "<li>#{comment}</li>"
-			@function_references.each do |(modname, name), reference|
-				next unless modname == name
-				line.gsub(/name/, 
-					%[<a href="#{reference}">name</a>])
+			lines = comments.map do |comment|
+				line = "<li>#{comment}</li>"
+				@function_references.each do |(modname, name), reference|
+					next unless modname == name
+					line.gsub(/name/, 
+						%[<a href="#{reference}">name</a>])
+				end
+				line
 			end
-			line
-		end
+			uses = []
+			use_string = ""
+			if @autodoccer.uses[[@module_name, name]] and @autodoccer.uses[[@module_name, name]].size > 0
+				@autodoccer.uses[[@module_name, name]].each do |usemod, words|
+					use = %[ <li> <a href="#{usemod}.html">#{usemod}</a>, ]
+					if words.size > 0
+						use += "<small>only: </small>"  + words.inject("") do |str, word|
+							usename, actual = word.split(/\s*\=\>\s*/)
+							(actual = usename; usename = nil) unless actual
+							str +=  %[name =&gt; ] if usename
+							if @autodoccer.modules[usemod] and @autodoccer.modules[usemod][:subroutines].keys.include? actual
+								str + %[ <a href="#{usemod}.html##{actual}">#{actual}</a>, ]
+							else
+								str + %[ #{actual}, ]
+							end
+						end
+					else
+						use += "<small>all</small>"
+					end
+					use += "</li>"
+					uses.push use
+				end
+				use_string = %[<div class="entry">Uses:<ul>#{uses.join("\n")}</ul></div>]
+			end
+							
+							
+							
 		return <<EOF
 			#{@function_references[[@module_name, name]] ? %[<h2 class="title"><a href="source/#{@function_references[[@module_name, name]]}" name="#{name}">#{name}</a></h2>] : %[<h2 class="title">#{name}</h2>]} 
 			
 		<div class="entry"><small>Call Prototype:</small> #{function_call} #{@function_references[[@module_name, name]] ? %[<small><a href="source/#{@function_references[[@module_name, name]]}">View Source</a></small>] : %[]} </div>
-			<ul>
+			#{use_string}
+			<div class="entry"><ul>
 				#{lines.join("\n\t\t\t")}
-			</ul><br>
+			</ul></div>
 EOF
 		
 		end #subroutine_div
