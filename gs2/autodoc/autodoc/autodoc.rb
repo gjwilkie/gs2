@@ -6,6 +6,9 @@ require 'pp'
 $parallel = false
 if $parallel
 	require 'parallelpipes.rb'
+	require 'rubygems'
+	require 'facter'
+	Facter.loadfacts
 end
 
 $not_found = []
@@ -20,8 +23,9 @@ end
 class Autodoc
 	class ParsingError < StandardError
 	end
-	attr_accessor :code_website, :code_name, :code_description, :welcome_message, :produce_highlighted_source_code, :external_modules, :external_globals, :strict, :ignore_files
-	attr_reader :function_references, :modules
+	SCRIPT_PATH = File.dirname(__FILE__)
+	attr_accessor :code_website, :code_name, :code_description, :welcome_message, :produce_highlighted_source_code, :external_modules, :external_globals, :strict, :ignore_files, :custom_tabs
+	attr_reader :function_references, :modules 
 	def initialize(source_dir, html_dir, options={})
 		@source_dir, @html_dir = source_dir, html_dir
 		@function_references = {} #eval(File.read("function_references.rb"))
@@ -32,6 +36,7 @@ class Autodoc
 		@title_prefix = (options[:title_prefix] or "Autodoc Documentation")
 		@modules = {}
 		@uses = {}
+		@custom_tabs = {}
 		@external_modules = []
 		@external_globals = []
 		@ignore_files = []
@@ -78,7 +83,8 @@ class Autodoc
 		if $parallel
 			ppipe = PPipe.new(5, false, redirect: false)
 			ppipe.verbosity = 0
-			pipes = ppipe.fork(4) do
+			nprocs = Facter.processorcount.to_i + 1
+			pipes = ppipe.fork(nprocs) do
 				loop do
 					message = ppipe.w_recv(:instructions)
 					unless message == :finish
@@ -94,11 +100,12 @@ class Autodoc
 			j = 0
 			outfiles = {}
 			each_source_file do |file, subdir_with_slash|
-				i = i%4
+				i = i%nprocs
 				ppipe.i_send(:instructions, [j, Dir.pwd, file, subdir_with_slash], tp: i + 1)
 				outfiles[j] = "source/#{subdir_with_slash}#{file}.html"
 				i+=1; j+=1
 			end
+# 			sleep 10
 			outfiles.each do |id, name|
 				@highlighted_files[name] =  ppipe.w_recv(id)
 			end
@@ -112,6 +119,8 @@ class Autodoc
 				@highlighted_files["source/#{subdir_with_slash}#{file}.html"] =  highlight_file(file, subdir_with_slash)
 			end
 		end
+		puts "\033[1A\033[KHighlighting and hyperlinking: done"
+
 # 		exit
 	end
 	def highlight_file(file, subdir_with_slash) 
@@ -187,6 +196,7 @@ class Autodoc
 			end
 			block.gsub!(/(\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*subroutine\s*(?:\<\/span\>\s*)?(?:\<span[^>]*\>\s*)?)(\w+)(\s*.{40})/m){%[#$1<a name="#{module_name}_#$2">#$2</a>#$3]}
 			block.gsub!(/(\d+\s*\<\/span\>\s*(?:\<span[^>]*\>)?\s*interface\s*(?:\<\/span\>\s*)?(?:\<span[^>]*\>\s*)?)(\w+)(\s*.{40})/m){%[#$1<a name="#{module_name}_#$2">#$2</a>#$3]}
+			block.gsub!(/(\A\s*)(\S+)/){%[<a name="#$2">#$1#$2</a>]}
 # 			puts block
 # 			puts "\n\n\n"
 			highlighted += block
@@ -201,6 +211,9 @@ class Autodoc
 	def write_documentation
 		analyse_source unless @analysed_source
 		highlight_source if @produce_highlighted_source_code
+		FileUtils.makedirs(@html_dir)
+		FileUtils.cp(SCRIPT_PATH + '/styles.css', @html_dir + '/styles.css')
+		FileUtils.cp(SCRIPT_PATH + '/images', @html_dir + '/images')
 		puts
 		Dir.chdir(@html_dir) do 
 			FileUtils.makedirs('source')
@@ -210,6 +223,7 @@ class Autodoc
 # 				puts out_file
 				File.open(out_file, 'w'){|write_file| write_file.puts text}
 			end
+			puts "\033[1A\033[KWriting source html: done"
 			puts
 			@modules.each do |module_name, data|
 				puts "\033[1A\033[KWriting doumentation: #{module_name}"
@@ -218,6 +232,8 @@ class Autodoc
 					file.puts mod
 				end
 			end
+			puts "\033[1A\033[KWriting doumentation: done"
+
 			File.open("index.html", 'w')do |file| 
 				index = IndexPage.new(self)
 				file.puts index
@@ -269,12 +285,14 @@ class Autodoc
 		end
 		File.open('uses.rb', 'w'){|file| file.puts @uses.pretty_inspect}
 		File.open('fr.rb', 'w'){|file| file.puts @function_references.pretty_inspect}
+		puts "\033[1A\033[KAnalysing: done"
 
 	end # analyse_source
 	def analyse_module(modname, file, subdir_with_slash, modtext)
 		@modules[modname] = {}
 		@modules[modname][:file_name] = file
 		@modules[modname][:subroutines] = {}
+		@modules[modname][:subdir_with_slash] = subdir_with_slash
 		if @produce_highlighted_source_code
 			interfaces = modtext.scan(/^\s*interface\s*(\w+)/i).flatten
 			(p modname, file, interfaces; raise ParsingError) if (["interface", "contains"] - interfaces).size < 2
@@ -326,7 +344,7 @@ class Autodoc
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
-<title>Metamorphosis Design Free Css Templates</title>
+<title>#{@autodoccer.code_name} Documentation</title>
 <meta name="keywords" content="" />
 <meta name="description" content="" />
 <link href="styles.css" rel="stylesheet" type="text/css" />
@@ -342,6 +360,9 @@ class Autodoc
 		<ul>
 			<li><a href="index.html">Home</a></li>
 			<li><a href="moduleindex.html">Modules</a></li>
+			#{@autodoccer.custom_tabs.inject("") do |str, (name, ref)|
+				str + %[<li><a href="#{ref}">#{name}</a></li>\n]
+			end}
 			<!--<li><a href="https://sourceforge.net/apps/mediawiki/gyrokinetics">Wiki</a></li>
 			<li><a href="#">About</a></li>
 			<li><a href="#">Contact</a></li>-->
@@ -382,7 +403,7 @@ EOF
 			%[<a href = "#{@autodoccer.code_website or "#"}">#{@autodoccer.code_name} Documentation</a>]
 		end
 		def module_sidebar
-				keys = @autodoccer.modules.keys
+				keys = @autodoccer.modules.keys.sort
 			<<EOF
 				<h2>Module Index</h2>
 				<ul class="back_title">
@@ -399,7 +420,7 @@ EOF
 	end # class page
 	class ModulePage < Page
 		def initialize(module_name, data, autodoccer)
-			@module_name, @module_file_name, @subroutines, @autodoccer = module_name, data[:file_name], data[:subroutines], autodoccer
+			@module_name, @module_file_name, @subdir_with_slash, @subroutines, @autodoccer = module_name, data[:file_name], data[:subdir_with_slash], data[:subroutines], autodoccer
 			@description = data[:description]
 			 @function_references = autodoccer.function_references
 		end
@@ -437,7 +458,7 @@ EOF
 		def title_box
 			<<EOF
 <div id="box">
-	<h1><a href="#">Module: #@module_name</a></h1>
+	<h1><a href="source/#@subdir_with_slash#{@module_file_name}.html##@module_name">Module: #@module_name</a></h1>
 <p>#{@description or "Brief description coming soon!"}</p><br>
 <div class="entry"><small>Last updated #{Time.now.to_s}</small></div>
 </div>
@@ -445,7 +466,7 @@ EOF
 		end #def title_box
 		def subroutine_sidebar
 				
-				keys = @subroutines.keys
+				keys = @subroutines.keys.sort
 # 				(p @module_name, @subroutines; exit) if keys.size == 0
 			<<EOF
 				<h2>Subroutines</h2>
@@ -540,26 +561,3 @@ EOF
 	end # class ModuleIndexPage
 
 end #class Autodoc
-
-autodoccer = Autodoc.new(Dir.pwd + '/../temp', Dir.pwd + '/documentation', {:sub_directories => ['utils', 'geo']})
-autodoccer.code_name = "GS2"
-autodoccer.code_website = "http://gyrokinetics.sourceforge.net"
-autodoccer.code_description = "GS2 is a gyrokinetic flux tube initial value turbulence code which can be used for fusion or astrophysical plasmas."
-autodoccer.strict = true
-autodoccer.ignore_files = ['test_os', 'utils/redistribute.f90', 'gs2', 'ingen', 'rungridgen', 'fortdep']
-autodoccer.external_modules = ['hdf5']
-autodoccer.external_globals = ['fftw_f77_create_plan', 'rfftwnd_f77_create_plan', 'rfftw2d_f77_create_plan', 'rfftw_f77_destroy_plan', 'h5pcreate_f', 'h5pset_dxpl_mpio_f', 'h5pset_fapl_mpio_f', 'h5pclose_f', 'h5screate_simple_f', 'h5sselect_hyperslab_f','h5sclose_f', 'h5dwrite_f', 'h5dcreate_f', 'h5screate_f', 'h5dclose_f', 'h5open_f', 'h5dopen_f', 'h5fcreate_f', 'h5fclose_f', 'h5close_f', 'pgctab', 'pgline', 'pgqls', 'pgqci', 'pgsls', 'pgsci', 'pgsvp', 'pgswin', 'pgbox', 'vtsymdef', 'vtbegin', 'vtend', 'mpi_initialized', 'mpi_init', 'mpi_comm_size', 'mpi_comm_rank', 'mpi_finalize', 'mpi_bcast', 'mpi_reduce', 'mpi_allreduce', 'mpi_barrier', 'mpi_send', 'mpi_ssend', 'mpi_recv', 'mpi_cart_create', 'mpi_cart_coords', 'mpi_cart_sub']
-
-# autodoccer.analyse_and_highlight_source_code
-autodoccer.produce_highlighted_source_code = true
-autodoccer.write_documentation
-# $not_found.uniq!
-# Dir.chdir('../temp') do
-# 	$not_found.each do |function|
-# # 		puts function
-# 		lines = `grep #{function} */* *`.split("\n")
-# # 		puts lines
-# 		puts lines.grep(Regexp.new("\\s#{Regexp.escape(function)}\\s")).grep(/^[^!]*(subroutine|interface)/)
-# 	end
-# end
-# p $not_found.sort
