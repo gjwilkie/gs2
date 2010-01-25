@@ -1,4 +1,4 @@
-require 'autodoc/autodoc.rb'
+require 'autodoc-fortran/trunk/autodoc.rb'
 
 # Get sourceforge username
 username = FileTest.exist?('username.txt') ? File.read('username.txt').chomp : (puts "Please enter your sourceforge username (you must have admin privileges for gyrokinetics. To avoid seeing this message please run 'echo <your username> > username.txt'"; STDIN.gets.chomp)
@@ -13,7 +13,7 @@ autodoccer.custom_tabs = {"Wiki" => "http://sourceforge.net/apps/mediawiki/gyrok
 autodoccer.ignore_files = ['test_os', 'utils/redistribute.f90', 'gs2', 'ingen', 'rungridgen', 'fortdep']
 autodoccer.welcome_message = %[<p>Welcome to the GS2 Documentation Home Page. This is the documentation that comes from comments made in the source code. For other help see the gyrokinetics <a href="http://sourceforge.net/apps/mediawiki/gyrokinetics">wiki</a> or the old <a href="http://gs2.sourceforge.net/">website</a>.</p>
 
-<p>To add to this documentation, just surround useful comments in the source code by &lt;doc&gt;&lt;/doc&gt; braces. Comments within a subroutine definition document that subroutine, and comments between the beginning of a module and the first subroutine document the module. Anything that is surrounded by double square brackets: [[name]] will link to the wiki page of the same name. See <a href="file_utils.html">file_utils</a> as an example of a documented module.</p> 
+<p>To add to this documentation, just surround useful comments in the source code by &lt;doc&gt;&lt;/doc&gt; braces. Comments within a subroutine or function definition document that subroutine or function, and comments between the beginning of a module and the first subroutine document the module. Anything that is surrounded by double square brackets: [[name]] will link to the wiki page of the same name. See <a href="file_utils.html">file_utils</a> as an example of a documented module.</p> 
 
 <p>To update this html (if you are impatient to see your new comments up here), install <a href = "http://www.andre-simon.de/zip/download.html">Highlight</a> then run &quot;ruby document_gs2.rb&quot  in the folder gyrokinetics/gs2/autodoc (requires <a href = "http://www.ruby-lang.org/en/downloads/">Ruby</a> version 1.9 or higher).<p>]
 ######################################
@@ -27,6 +27,7 @@ autodoccer.external_globals = ['fftw_f77_create_plan', 'rfftwnd_f77_create_plan'
 #######################################
 
 autodoccer.produce_highlighted_source_code = true
+autodoccer.document_fortran_intrinsic = false #true #Documents fortran instrinsic functions. Makes autodoc run more slowly.
 
 #######################################
 # This section links any [[name]] surrounded by double square brackets to the
@@ -46,7 +47,7 @@ autodoccer.write_documentation
 string = "rsync -av --delete gs2_documentation/  #{username},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/"
 
 puts string
-exec string
+# exec string
 
 
 
