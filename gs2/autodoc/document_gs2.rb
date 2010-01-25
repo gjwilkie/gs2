@@ -1,4 +1,4 @@
-require 'autodoc-fortran/trunk/autodoc.rb'
+require 'lib/autodoc.rb'
 
 # Get sourceforge username
 username = FileTest.exist?('username.txt') ? File.read('username.txt').chomp : (puts "Please enter your sourceforge username (you must have admin privileges for gyrokinetics. To avoid seeing this message please run 'echo <your username> > username.txt'"; STDIN.gets.chomp)
@@ -47,7 +47,7 @@ autodoccer.write_documentation
 string = "rsync -av --delete gs2_documentation/  #{username},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/"
 
 puts string
-# exec string
+exec string
 
 
 
