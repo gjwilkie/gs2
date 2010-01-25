@@ -1,11 +1,13 @@
-require 'lib/autodoc.rb'
+require 'trunk/lib/autodoc.rb'
 
 # Get sourceforge username
 username = FileTest.exist?('username.txt') ? File.read('username.txt').chomp : (puts "Please enter your sourceforge username (you must have admin privileges for gyrokinetics. To avoid seeing this message please run 'echo <your username> > username.txt'"; STDIN.gets.chomp)
 
 ######################################
 # Setup autodoccer
-autodoccer = Autodoc.new(Dir.pwd + '/../trunk', Dir.pwd + '/gs2_documentation', {:sub_directories => ['utils', 'geo']})
+autodoccer = Autodoc.new(Dir.pwd + '/../trunk', Dir.pwd + '/gs2_documentation')
+autodoccer.subdirectories = ['utils', 'geo']
+autodoccer.sourcefile_extensions = ['.f90', '.f95', '.fpp'] # Only here for show - these are actually the defaults anyway
 autodoccer.code_name = "GS2"
 autodoccer.code_website = "http://gyrokinetics.sourceforge.net"
 autodoccer.code_description = "GS2 is a gyrokinetic flux tube initial value turbulence code which can be used for fusion or astrophysical plasmas."
@@ -33,10 +35,10 @@ autodoccer.document_fortran_intrinsic = false #true #Documents fortran instrinsi
 # This section links any [[name]] surrounded by double square brackets to the
 # wiki article with the same name
 autodoccer.customize_documentation = Proc.new do |highlighted|
-	highlighted.gsub(/\[\[(\w+)\]\]/, '<a href="http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=\1">\1</a>')
+	highlighted.gsub(/\[\[([\w ]+)\]\]/, '<a href="http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=\1">\1</a>')
 end
 autodoccer.customize_highlighting = Proc.new do |highlighted|
-	highlighted.gsub(/\[\[((?:\s*\<\/span\>\s*)?)(\w+)((?:\s*\<span[^>]*\>\s*)?)\]\]/, '[[\1<a href="http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=\2">\2</a>\3]]')
+	highlighted.gsub(/\[\[((?:\s*\<\/span\>\s*)?)([\w ]+)((?:\s*\<span[^>]*\>\s*)?)\]\]/, '[[\1<a href="http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=\2">\2</a>\3]]')
 end
 #######################################
 

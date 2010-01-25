@@ -62,6 +62,11 @@ class Autodoc
 	attr_accessor :subdirectories 
 
 	
+	# Valid ourcefile extensions. Default is <tt>['.f90', '.f95', '.fpp']</tt>.
+	
+	attr_accessor :sourcefile_extensions 
+
+	
 	# An array of filenames which Autodoc should not document.
 	
 	attr_accessor :ignore_files 
@@ -114,12 +119,13 @@ class Autodoc
 		@files_to_highlight = {}
 		@ignore_files = []
 		@strict = false
+		@sourcefile_extensions = ['.f90', '.f95', '.fpp']
 	end
 	
 	# Conditions under which a source file will not be documented.
 	
 	def exclude?(file, subdir_with_slash) #:doc:
-		return (@ignore_files.include? "#{subdir_with_slash}#{file}" or not File.file? file or ['Makefile', 'README'].include? file or file =~ /Makefile/ or ['.inc', '.svn', '.in', '.o', '.a', '.mod'].include? File.extname(file) or file =~ /\~$/ or (false and FileTest.exist?(out_file) and  File.mtime(file) < File.mtime(out_file)) or (false and not File.read(file)  =~ /\<wkdoc\>/))
+		return ((@sourcefile_extensions.size > 0 and not @sourcefile_extensions.include? File.extname(file)) or   @ignore_files.include? "#{subdir_with_slash}#{file}" or not File.file? file or ['Makefile', 'README'].include? file or file =~ /Makefile/ or ['.inc', '.svn', '.in', '.o', '.a', '.mod'].include? File.extname(file) or file =~ /\~$/ or (false and FileTest.exist?(out_file) and  File.mtime(file) < File.mtime(out_file)) or (false and not File.read(file)  =~ /\<wkdoc\>/))
 	end
 	
 	private :exclude?
@@ -214,7 +220,7 @@ class Autodoc
 # 			p modname, @modules[modname]
 			#+ [['fortran_intrinsic', FORTRAN_INTRINSIC.map{|func| func.correct_case}]]
 # 			p modname
-			known_functions = ([[modname, (@modules[modname][:subroutines].keys or [])]] + (@uses[[modname, name]] or []).to_a)
+			known_functions = ([[modname, (@modules[modname][:subroutines].keys or [])]] + (@uses[[modname, name]] or []).to_a + (@uses[[modname, 'autodoc_module_outside']] or []).to_a)
 			known_functions += [['fortran_intrinsic', FORTRAN_INTRINSIC.map{|func| func.correct_case}]] if @document_fortran_intrinsic
 			
 			known_functions.each do |usemod, funcs|
@@ -353,6 +359,8 @@ class Autodoc
 	def each_subroutine_or_function(text, &block)
 		subroutine_blocks = (text).scan(/.+?(?:^\s*subroutine|^\s*(?:pure|integer)?\s*function|\Z)/im)
 		beginning = subroutine_blocks.shift; ending = subroutine_blocks.pop
+		beginning = yield(beginning, 'autodoc_module_outside')
+		ending = yield(ending, 'autodoc_module_outside') if ending
 		all = beginning
 		subroutine_blocks.each do |subtext|
 			name = subtext.scan(/\A\s*(\w+)/)[0][0].correct_case
@@ -435,18 +443,24 @@ class Autodoc
 # 		beginning = subroutine_blocks.shift; ending = subroutine_blocks.pop
 		
 		modtext, beginning, ending =  each_subroutine_or_function(modtext) do |block, name|
-			function_call = block.scan(/(\A.+(?:\&\s)?.+)/)[0][0].sub(/[\&\n]/, '')
-			documentation = docfolder + "#{modname}.html##{name}"
-			block.sub!(/(\A\s*)(\w+)/){"#$1#$2_AUTODOC_NAME_#{(modname +'%' + name).to_adoc}_AUTODOC_DOCUMENTATION_#{documentation.to_adoc}_AUTODOC_END"}
+			
+			unless name == 'autodoc_module_outside'
+				function_call = block.scan(/(\A.+(?:\&\s)?.+)/)[0][0].sub(/[\&\n]/, '') 
+				documentation = docfolder + "#{modname}.html##{name}"
+				block.sub!(/(\A\s*)(\w+)/){"#$1#$2_AUTODOC_NAME_#{(modname +'%' + name).to_adoc}_AUTODOC_DOCUMENTATION_#{documentation.to_adoc}_AUTODOC_END"}
 
-			comments = block.scan(/\<doc\>(.*?)\<\/doc\>/m).map{|match| match[0]}
-			comments = comments.map do |comment|
-				comment.gsub(/\n\s*\!/, '')
+				comments = block.scan(/\<doc\>(.*?)\<\/doc\>/m).map{|match| match[0]}
+				comments = comments.map do |comment|
+					comment.gsub(/\n\s*\!/, '')
+				end
+				@modules[modname][:subroutines][name] = [function_call, comments]
+				@function_references[[modname, name]] = %[#{subdir_with_slash}#{file}.html##{modname}%#{name}] if @produce_highlighted_source_code
+				@documentation_references[[modname, name]] = %[#{modname}.html##{name}]
 			end
 # 			p 
 			use_statements = block.scan(/(^\s*use[^&\n\r]+(?:(?:\&\s+)?[^&\n\r]+)+)/i)
 # 			(p use_statements[0][0]; exit) if use_statements.find{|statements| statements[0] =~ /\&/} 
-			@uses[[modname, name]] = {}
+			@uses[[modname, name]] ||= {}
 			use_statements.each do |statement_list|
 # 				(p statement_list; exit) if  statement_list.grep(/constants.*nc_loop_fullmom/m)[0]
 				words = statement_list[0].gsub(/\&/, '').scan(/\w+(?:\s*\=\>\s*)?\w+/).map{|w| w.correct_case}
@@ -459,9 +473,7 @@ class Autodoc
 				@uses[[modname, name]][use_mod].uniq!
 # 				p words; exit
 			end
-			@modules[modname][:subroutines][name] = [function_call, comments]
-			@function_references[[modname, name]] = %[#{subdir_with_slash}#{file}.html##{modname}%#{name}] if @produce_highlighted_source_code
-			@documentation_references[[modname, name]] = %[#{modname}.html##{name}]
+# 			(puts block; p name, @uses[[modname, name]]; exit) if modname == 'program gs2'
 			block
 # 			beginning += block
 		end
@@ -495,7 +507,7 @@ class Autodoc
 <div id="header">
  <div id="logo">
 	<h1>#{top_label}</h1>
-	<h2><a href="http://www.metamorphozis.com/" id="metamorph">Designed by Metamorphosis Design,</a></h2><h2><a href="http://autodoc.rubyforge.org/" id="metamorph">produced by Autodoc</a></h2>
+	<h2><a href="http://www.metamorphozis.com/" id="metamorph">Designed by Metamorphosis Design,</a></h2><h2><a href="http://autodoc-fortran.rubyforge.org/" id="metamorph">produced by Autodoc</a></h2>
 	</div>
 	<div id="menu">
 		<ul>
@@ -593,6 +605,31 @@ EOF
 			 @function_references = autodoccer.function_references
 		end
 		
+		def use_list(uses_hash)
+			return "" unless uses_hash and uses_hash.size > 0
+			uses = []
+			uses_hash.each do |usemod, words|
+				use = %[ <li> <a href="#{usemod}.html">#{usemod}</a>, ]
+				if words.size > 0
+					use += "<small>only: </small>"  + words.inject("") do |str, word|
+						usename, actual = word.split(/\s*\=\>\s*/)
+						(actual = usename; usename = nil) unless actual
+						str +=  %[name =&gt; ] if usename
+						if @autodoccer.modules[usemod] and @autodoccer.modules[usemod][:subroutines].keys.include? actual
+							str + %[ <a href="#{usemod}.html##{actual}">#{actual}</a>, ]
+						else
+							str + %[ #{actual}, ]
+						end
+					end
+				else
+					use += "<small>all</small>"
+				end
+				use += "</li>"
+				uses.push use
+			end
+			use_string = %[Uses:<ul>#{uses.join("\n")}</ul>]
+		end
+		
 		# Generates the documentation for each subroutine or function in the main section of the module page. This consists of any comments made by the user, as well as information about which other functions this subroutine or function uses, a link to the source HTML and the call prototype.
 		
 		def subroutine_div(name, function_call, comments)
@@ -605,30 +642,11 @@ EOF
 				end
 				line
 			end
-			uses = []
-			use_string = ""
-			if @autodoccer.uses[[@module_name, name]] and @autodoccer.uses[[@module_name, name]].size > 0
-				@autodoccer.uses[[@module_name, name]].each do |usemod, words|
-					use = %[ <li> <a href="#{usemod}.html">#{usemod}</a>, ]
-					if words.size > 0
-						use += "<small>only: </small>"  + words.inject("") do |str, word|
-							usename, actual = word.split(/\s*\=\>\s*/)
-							(actual = usename; usename = nil) unless actual
-							str +=  %[name =&gt; ] if usename
-							if @autodoccer.modules[usemod] and @autodoccer.modules[usemod][:subroutines].keys.include? actual
-								str + %[ <a href="#{usemod}.html##{actual}">#{actual}</a>, ]
-							else
-								str + %[ #{actual}, ]
-							end
-						end
-					else
-						use += "<small>all</small>"
-					end
-					use += "</li>"
-					uses.push use
-				end
-				use_string = %[<div class="notes">Uses:<ul>#{uses.join("\n")}</ul></div>]
-			end
+			
+# 			use_string = ""
+# 			if @autodoccer.uses[[@module_name, name]] and @autodoccer.uses[[@module_name, name]].size > 0
+# 				use_string += @autodoccer.uses[[@module_name, name]]
+# 			end
 							
 							
 							
@@ -640,7 +658,7 @@ EOF
 			<div class="bullets"><!--<small>Comments:</small>--><ul>
 				#{lines.join("\n\t\t\t")}
 			</ul></div>
-						#{use_string}
+			<div class="notes">#{use_list(@autodoccer.uses[[@module_name, name]])}</div>
 			 #{@function_references[[@module_name, name]] ? %[<div class="notes"><small><a href="source/#{@function_references[[@module_name, name]]}">View Source</a></small></div>] : %[]} 
 			 <br>
 EOF
@@ -654,7 +672,9 @@ EOF
 	<!-- start content -->
 	<div id="content">
 	<!--<h2 class="title">Contains</h2>-->
-	<div class = "entry">#{@subroutines.keys.sort.inject(""){|str, key| str += %[<a href="##{key}">#{key}</a>, ]; str}.chop.chop}</div><br>
+	<div class = "entry">#{@subroutines.keys.sort.inject(""){|str, key| str += %[<a href="##{key}">#{key}</a>, ]; str}.chop.chop}</div>
+	<div class = "entry">
+	#{use_list(@autodoccer.uses[[@module_name, 'autodoc_module_outside']])}</div><br>
 #{@subroutines.inject("") do |str, (name, (function_call, comments))|
 			str + subroutine_div(name, function_call, comments)
 end}
@@ -708,7 +728,7 @@ EOF
 			return <<EOF
 			<h2 class="title">Welcome!</h2>
 			<div class="entry">#{@autodoccer.welcome_message}</div>
-			<div class="entry"><small> This documentation has been automatically generated from the #{@autodoccer.code_name} source code by Autodoc</small></div>
+			<div class="entry"><small> This documentation has been automatically generated from the #{@autodoccer.code_name} source code by <a href="http://autodoc-fortran.rubyforge.org/">Autodoc</a></small></div>
 EOF
 		end # def welcome_message
 		def content
