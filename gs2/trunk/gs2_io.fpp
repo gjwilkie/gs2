@@ -226,6 +226,7 @@ contains
 # ifdef NETCDF
     integer :: status
 
+    !<doc> Associate the grid variables, e.g. ky, kx, with their size, e.g. naky, ntheta0 (= nakx) , and a variable which is later used to store these sizes in the NetCDF file, e.g. naky_dim, nakx_dim </doc>
     status = nf90_def_dim (ncid, 'ky', naky, naky_dim)
     if (status /= NF90_NOERR) call netcdf_error (status, dim='ky')
     status = nf90_def_dim (ncid, 'kx', ntheta0, nakx_dim)
@@ -254,6 +255,7 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, dim='nheat')
 
     ! added by EAB 03/05/04 for GS2 movies
+    ! <doc> If make_movie = .true., define some extra dimensions for movie output; x with dimension yxf_lo%nx; y with dimension yxf_lo%ny, and tm, (i.e. time) with dimension nmovie_tot = nstep/nmovie </doc>
     if (my_make_movie) then
        nx=yxf_lo%nx
        ny=yxf_lo%ny
@@ -292,6 +294,7 @@ contains
     real, dimension(:), allocatable :: x, y
     integer :: ik, it
 
+    !<doc> Store the size of the grid dimensions (as defined in def_dims), in the NetCDF file </doc>
     status = nf90_put_var (ncid, nttot_id, 2*ntgrid+1)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, nttot_id)
     status = nf90_put_var (ncid, naky_id, naky)
@@ -384,6 +387,7 @@ contains
   end subroutine nc_finish
 
   subroutine save_input
+    !<doc> Save the input file in the NetCDF file </doc>
 # ifdef NETCDF    
     use file_utils, only: num_input_lines, get_input_unit
 !    use netcdf_mod
@@ -536,6 +540,8 @@ contains
     mom_dim(4) = nspec_dim
     mom_dim(5) = time_dim
 
+    !<doc> Write some useful general information such as the website,
+    ! date and time into the NetCDF file </doc>
     status = nf90_put_att (ncid, NF90_GLOBAL, 'title', 'GS2 Simulation Data')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, NF90_GLOBAL, att='title')
     status = nf90_put_att (ncid, NF90_GLOBAL, 'Conventions', &
@@ -606,6 +612,8 @@ contains
          'should be clear from the context in which they appear below.')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, code_id, att=ci)
 
+    !<doc> Write lots of input variables (e.g. nproc, nkx, nky)
+    ! into the NetCDF file </doc>
     status = nf90_def_var (ncid, 'nproc', NF90_INT, nproc_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='nproc')
     status = nf90_put_att (ncid, nproc_id, 'long_name', 'Number of processors')

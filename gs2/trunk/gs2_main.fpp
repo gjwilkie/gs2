@@ -50,15 +50,15 @@ contains
     
     if (first_time) then
 
-       ! initialize message passing 
+       ! <doc> Initialize message passing </doc>
        if (present(mpi_comm)) then
           call init_mp (mpi_comm)
        else
           call init_mp
        end if
-       call checktime(avail_cpu_time,exit) ! initialize timer
+       call checktime(avail_cpu_time,exit) ! <doc> Initialize timer </doc>
        
-       ! report # of processors being used
+       ! <doc> Report # of processors being used </doc>
        if (proc0) then
           if (nproc == 1) then
              write(*,*) 'Running on ',nproc,' processor'
@@ -66,7 +66,9 @@ contains
              write(*,*) 'Running on ',nproc,' processors'
           end if
           write (*,*) 
-          ! figure out run name or get list of jobs
+          ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
+          !  whether we are doing a [[Trinity]] run or a list of runs </doc>
+          ! <doc> Figure out run name or get list of jobs </doc>
           if (present(filename)) then
              call init_file_utils (list, trin_run=.true., name=filename, n_ensembles=nensembles)
           else
@@ -76,7 +78,7 @@ contains
        
        call broadcast (list)
        
-       ! if given a list of jobs, fork
+       ! <doc> If given a list of jobs, fork </doc>
        if (list) then
           call job_fork
        else if (present(nensembles)) then
