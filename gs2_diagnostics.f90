@@ -141,6 +141,8 @@ module gs2_diagnostics
 contains
 
   subroutine init_gs2_diagnostics (list, nstep)
+   !<doc> Define NetCDF vars, call real_init, which calls read_parameters; broadcast all the different write flags. </doc>
+
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids, ntheta0, naky
     use run_parameters, only: init_run_parameters
@@ -290,7 +292,10 @@ contains
     logical, intent (in) :: list
     character(20) :: datestamp, timestamp, zone
 
+    !<doc> Call read_parameters </doc>
     call read_parameters (list)
+
+    !<doc> Open the various ascii output files (depending on the write flags) </doc>
     if (proc0) then
        if (write_ascii) then
           call open_output_file (out_unit, ".out")
@@ -357,6 +362,7 @@ contains
        omegahist = 0.0
     end if
 
+    !<doc> Allocate arrays for storing the various fluxes which the diagnostics will output </doc>
     allocate (pflux (ntheta0,naky,nspec)) ; pflux = 0.
     allocate (qheat (ntheta0,naky,nspec,3)) ; qheat = 0.
 !       allocate (qheat_par  (ntheta0,naky,nspec))
@@ -406,6 +412,7 @@ contains
     logical, intent (in) :: list
     logical :: exist
 
+    !<doc> Set defaults for the gs2_diagnostics_knobs</doc>		
     if (proc0) then
        print_line = .true.
        print_old_units = .false.
@@ -472,6 +479,9 @@ contains
        nperiod_output = nperiod - nperiod_guard
        save_for_restart = .false.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
+
+	!<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
+
 !       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
        if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
 
