@@ -5,10 +5,12 @@ require 'fileutils'
 require 'pp'
 $not_found = []
 class String
-	attr_accessor :prefered_case
+	@@preferred_case = :downcase
+	def self.preferred_case=(pref)
+		@@preferred_case = pref
+	end
 	def correct_case
-		@prefered_case ||= :downcase
-		self.send(@prefered_case.to_sym)
+		self.send(@@preferred_case.to_sym)
 	end
 	ADOCTOKENS = [['_ADOCDOT_', '.'], ['_ADOCFORWARDSLASH_', '/'], ['_ADOCPERCENT_', '%'], ['_ADOCHASH_', '#'], ['_ADOCCOLON_', ':'], ['_ADOCHYPHEN_', '-'], ['_ADOCSPACE_', ' ']]
 	def from_adoc
@@ -36,6 +38,8 @@ class Autodoc
 	
 	SCRIPT_PATH = File.dirname(__FILE__) # :nodoc:
 	
+	FORTRAN_TYPES = ['real', 'complex', 'integer', 'logical', 'character']
+
 
 	FORTRAN_INTRINSIC = ["I", "ABORT", "ABS", "ACCESS", "ACHAR", "ACOS", "ACOSH", "ADJUSTL", "ADJUSTR", "AIMAG", "AINT", "ALARM", "ALL", "ALLOCATED", "AND", "ANINT", "ANY", "ASIN", "ASINH", "ASSOCIATED", "ATAN", "ATAN", "ATANH", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BESSEL", "BIT", "BTEST", "C", "C", "C", "C", "C", "C", "CEILING", "CHAR", "CHDIR", "CHMOD", "CMPLX", "COMMAND", "COMPLEX", "CONJG", "COS", "COSH", "COUNT", "CPU", "CSHIFT", "CTIME", "DATE", "DBLE", "DCMPLX", "DFLOAT", "DIGITS", "DIM", "DOT", "DPROD", "DREAL", "DTIME", "EOSHIFT", "EPSILON", "ERF", "ERFC", "ERFC", "ETIME", "EXIT", "EXP", "EXPONENT", "FDATE", "FLOAT", "FGET", "FGETC", "FLOOR", "FLUSH", "FNUM", "FPUT", "FPUTC", "FRACTION", "FREE", "FSEEK", "FSTAT", "FTELL", "GAMMA", "GERROR", "GETARG", "GET", "GET", "GETCWD", "GETENV", "GET", "GETGID", "GETLOG", "GETPID", "GETUID", "GMTIME", "HOSTNM", "HUGE", "HYPOT", "IACHAR", "IAND", "IARGC", "IBCLR", "IBITS", "IBSET", "ICHAR", "IDATE", "IEOR", "IERRNO", "INDEX", "INT", "INT", "INT", "IOR", "IRAND", "IS", "IS", "ISATTY", "ISHFT", "ISHFTC", "ISNAN", "ITIME", "KILL", "KIND", "LBOUND", "LEADZ", "LEN", "LEN", "LGE", "LGT", "LINK", "LLE", "LLT", "LNBLNK", "LOC", "LOG", "LOG", "LOG", "LOGICAL", "LONG", "LSHIFT", "LSTAT", "LTIME", "MALLOC", "MATMUL", "MAX", "MAXEXPONENT", "MAXLOC", "MAXVAL", "MCLOCK", "MCLOCK", "MERGE", "MIN", "MINEXPONENT", "MINLOC", "MINVAL", "MOD", "MODULO", "MOVE", "MVBITS", "NEAREST", "NEW", "NINT", "NOT", "NULL", "OR", "PACK", "PERROR", "PRECISION", "PRESENT", "PRODUCT", "RADIX", "RAN", "RAND", "RANDOM", "RANDOM", "RANGE", "REAL", "RENAME", "REPEAT", "RESHAPE", "RRSPACING", "RSHIFT", "SCALE", "SCAN", "SECNDS", "SECOND", "SELECTED", "SELECTED", "SELECTED", "SET", "SHAPE", "SIGN", "SIGNAL", "SIN", "SINH", "SIZE", "SIZEOF", "SLEEP", "SNGL", "SPACING", "SPREAD", "SQRT", "SRAND", "STAT", "SUM", "SYMLNK", "SYSTEM", "SYSTEM", "TAN", "TANH", "TIME", "TIME", "TINY", "TRAILZ", "TRANSFER", "TRANSPOSE", "TRIM", "TTYNAM", "UBOUND", "UMASK", "UNLINK", "UNPACK", "VERIFY", "XOR"] # :nodoc:
 	
@@ -62,7 +66,7 @@ class Autodoc
 	attr_accessor :subdirectories 
 
 	
-	# Valid ourcefile extensions. Default is <tt>['.f90', '.f95', '.fpp']</tt>.
+	# Valid sourcefile extensions. Default is <tt>['.f90', '.f95', '.fpp']</tt>.
 	
 	attr_accessor :sourcefile_extensions 
 
@@ -107,7 +111,7 @@ class Autodoc
 			hash[['fortran_intrinsic', func.correct_case]] = "http://gcc.gnu.org/onlinedocs/gcc-4.4.3/gfortran/#{func.upcase}.html##{func.upcase}"
 			hash
 		end #eval(File.read("function_references.rb"))
-		@documentation_references = {}
+		@documentation_references = {}  #  @function_references.dup # Only identical to function references for the fortran intrinsic references
 		@out_pages = {}
 		@highlighted_files = {}
 		@subdirectories = [] #options[:sub_directories] ? options[:sub_directories] + ['.'] : ['.']
@@ -173,14 +177,14 @@ class Autodoc
 		FileUtils.makedirs('autodoc-temp')
 		File.open('autodoc-temp/' + file, 'w'){|file| file.puts text}
 		highlighted =  %x[highlight -H -a #{syntax} -i autodoc-temp/#{file}  --style kwrite --inline-css -K 12 -k Monaco -l]
-		highlighted.gsub!(/(\w+?_AUTODOC_END)/) do
+# # 		return highlighted
+		highlighted.gsub!(/(\W)(\w+?_AUTODOC_END)/) do
 # 				p $1
-			match = $1
+			beginning = $1; match = $2
 			token = match.scan(/(^\w+?)_AUTODOC/).flatten[0]
 			documentation = match.scan(/AUTODOC_DOCUMENTATION_(\w+?)_AUTODOC/).flatten[0]
 			name = match.scan(/AUTODOC_NAME_(\w+?)_AUTODOC/).flatten[0]
 # 				 if documentation
-# 				(p 'start', match, token, name, documentation) #if documentation
 			out = token
 			href = match.scan(/AUTODOC_HREF_(\w+?)_AUTODOC/).flatten[0]
 			if href 
@@ -194,7 +198,8 @@ class Autodoc
 				out += %[ (<a href="#{documentation.from_adoc}">Documentation</a>)]
 			end
 # 			puts match, out
-			out
+# 			(p 'start', file, subdir_with_slash, match, token, name, documentation, out) if token == "add_nonlinear_terms"
+			beginning + out
 		end
 
 		highlighted
@@ -238,6 +243,9 @@ class Autodoc
 						actual = func
 					end
 # 					p func
+					
+					#Here the source code is hyperlinked
+					
 					block.gsub!(Regexp.new("(\\W)#{func}(\\W)", Regexp::IGNORECASE)) do
 						reference = @function_references[[usemod, actual]]
 						beg = $1; en = $2
@@ -252,10 +260,26 @@ class Autodoc
 							%[#{beg}#{func}#{en}]
 						end
 					end
-				end
-			end
+					
+					# Here the documentation is hyperlinked
+					
+					if @modules[modname][:subroutines][name]
+						comments = ([(@modules[modname][:subroutines][name][:summary] or "")] + (@modules[modname][:subroutines][name][:comments] or []))
+						comments.each do |comment|
+							comment.gsub!(Regexp.new("(\\W)#{func}(\\W)", Regexp::IGNORECASE)) do
+								reference = @documentation_references[[usemod, actual]]
+								if reference
+									%[#$1<a href="#{reference}">#{func}</a>#$2]
+								else
+									%[#$1#{func}#$2]
+								end
+							end
+						end
+					end
+				end # funcs.each do |func|
+			end # known_functions.each do 
 			block
-		end[0]
+		end[0] #each_subroutine_or_function
 		
 	end
 	
@@ -287,14 +311,14 @@ class Autodoc
 			puts "\033[1A\033[KWriting source html: done"
 			puts
 			@modules.each do |module_name, data|
-				puts "\033[1A\033[KWriting doumentation: #{module_name}"
+				puts "\033[1A\033[KWriting documentation: #{module_name}"
 				File.open("#{module_name}.html", 'w')do |file| 
 					mod = ModulePage.new(module_name, data, self).to_s
 					mod = @customize_documentation.call(mod) if @customize_documentation 
 					file.puts mod
 				end
 			end
-			puts "\033[1A\033[KWriting doumentation: done"
+			puts "\033[1A\033[KWriting documentation: done"
 
 			File.open("index.html", 'w')do |file| 
 				index = IndexPage.new(self).to_s
@@ -335,7 +359,7 @@ class Autodoc
 	
 	# Divide the text of the source file into sections, each section corresponding to one module. Each section starts after the word module, and ends after the <tt>end module name</tt> statement. Each section is passed to the block which may analyse or edit the block and but must return it. 
 	#
-	# Returns a list of <tt>[edited source, begining, ending]</tt> where beginning and ending are the sections of code not in any module definition (and which were consequently not passed to the block).
+	# Returns a list of <tt>[edited source, beginning, ending]</tt> where beginning and ending are the sections of code not in any module definition (and which were consequently not passed to the block).
 	
 	def each_module(text, &block)
 		module_blocks = (text).scan(/.+?(?:^\s*module(?![^\n]*procedure)|^\s*program|\Z)/im)
@@ -356,8 +380,14 @@ class Autodoc
 	
 	# Exactly the same as Autodoc#each_module except that this function separates the text of a module into individual sections each corresponding to the definition of a subroutine or a function
 
+	TYPE_MATCH = "#{FORTRAN_TYPES.join('|')}|type\\s*\\(\\s*\\w+\\s*\\)"
+
+	SUBROUTINE_OR_FUNCTION_SPLIT = Regexp.new(".+?(?:^\\s*subroutine|^\\s*(?:#{TYPE_MATCH}|pure)?\\s*function|\\Z)", Regexp::MULTILINE | Regexp::IGNORECASE)
+	
 	def each_subroutine_or_function(text, &block)
-		subroutine_blocks = (text).scan(/.+?(?:^\s*subroutine|^\s*(?:pure|integer)?\s*function|\Z)/im)
+# 		p text
+# 		p SUBROUTINE_OR_FUNCTION_SPLIT
+		subroutine_blocks = (text).scan(SUBROUTINE_OR_FUNCTION_SPLIT)
 		beginning = subroutine_blocks.shift; ending = subroutine_blocks.pop
 		beginning = yield(beginning, 'autodoc_module_outside')
 		ending = yield(ending, 'autodoc_module_outside') if ending
@@ -397,6 +427,10 @@ class Autodoc
 
 		end
 		puts "\033[1A\033[KAnalysing: done"
+		File.open('uses.rb', 'w'){|file| file.puts @uses.pretty_inspect}
+		File.open('fr.rb', 'w'){|file| file.puts @function_references.pretty_inspect}
+		File.open('modules.rb', 'w'){|file| file.puts @modules.pretty_inspect}
+		@modules['globals'][:description] = "Globally available functions and subroutines"
 		puts
 		@files_to_highlight.each do |(file, subdir_with_slash), text|
 			puts "\033[1A\033[KHyperlinking: #{subdir_with_slash}#{file}"
@@ -411,15 +445,13 @@ class Autodoc
 				puts "\033[1A\033[KHyperlinking: done"
 	
 			
-		File.open('uses.rb', 'w'){|file| file.puts @uses.pretty_inspect}
-		File.open('fr.rb', 'w'){|file| file.puts @function_references.pretty_inspect}
-		@modules['globals'][:description] = "Globally available functions and subroutines"
+
 
 	end # analyse_source
 	
 	# Analyse the text of the module. Scan the module preamble for any documentation in closed in <tt><doc></doc></tt> braces. For each interface, subroutine or function the module defines add the correct reference to @function_references. For each subroutine and function, work out which other subroutine functions from other modules the current one uses and add that information to the variable @uses. For each subroutine and function, scanned for any documentation and add it to the <tt> @modules[module][:subroutines][subroutine]</tt> hash.
 	
-	
+
 	def analyse_module(modname, modtext, file, subdir_with_slash) # :doc:
 
 
@@ -427,6 +459,7 @@ class Autodoc
 		@modules[modname][:file_name] = file
 		@modules[modname][:subroutines] ||= {}
 		@modules[modname][:subdir_with_slash] = subdir_with_slash unless modname == 'globals'
+		@modules[modname][:autodoc_module_outside] ||= ""
 		docfolder = '../' + '../' * subdir_with_slash.scan(/\//).size
 		documentation = docfolder + "#{modname}.html"
 		modtext.sub!(/(\A\s*)(\w+)/){"#$1#$2_AUTODOC_NAME_#{modname.to_adoc}_AUTODOC_DOCUMENTATION_#{documentation.to_adoc}_AUTODOC_END"} unless modname == 'globals' 
@@ -434,30 +467,56 @@ class Autodoc
 			interfaces = modtext.scan(/^\s*interface[ \t]+(\w+)/i).flatten
 			(p modname, file, interfaces; raise ParsingError) if (["interface", "contains"] - interfaces).size < 2
 			interfaces.each do |interface|
-				@function_references[[modname, interface.correct_case]] = %[#{subdir_with_slash}#{file}.html##{modname}%#{interface.correct_case}] 
+				@function_references[[modname, interface.correct_case]] = %[#{subdir_with_slash}#{file}.html##{modname}_docsubref_#{interface.correct_case}] 
 			end
 		end
-		modtext.gsub!(/(^\s*interface[\t ]+)(\w+)/i){iname = modname + '%' + $2; "#$1#$2_AUTODOC_NAME_#{iname.to_adoc}_AUTODOC_END"}
+		modtext.gsub!(/(^\s*interface[\t ]+)(\w+)/i){iname = modname + '_docsubref_' + $2.correct_case; "#$1#$2_AUTODOC_NAME_#{iname.to_adoc}_AUTODOC_END"}
 # 		puts modtext
 # 		subroutine_blocks = modtext.scan(/.+?(?:^\s*subroutine(?![^\n]*procedure)|\Z)/im)
 # 		beginning = subroutine_blocks.shift; ending = subroutine_blocks.pop
 		
 		modtext, beginning, ending =  each_subroutine_or_function(modtext) do |block, name|
 			
-			unless name == 'autodoc_module_outside'
-				function_call = block.scan(/(\A.+(?:\&\s)?.+)/)[0][0].sub(/[\&\n]/, '') 
+			unless name == 'autodoc_module_outside' # I.e. the block must be inside a subroutine definition to have it's function_call and documentation analysed.
+				
+# 				function_call = block.scan(/(\A.+(?:\&\s)?.+)/)[0][0].sub(/[\&\n]/, '')
+				function_call = block.scan(/(\A\s*\w+\s*(?:\([^)]+\))?)/i).flatten[0].sub(/[\&\n]/, '')
+				
+				# Here we find out the types of the arguments
+				function_call.gsub!(/(\w+\s*)([,)])/) do
+					combrack = $2; arg = $1.sub(/\s+$/, ''); 
+# 					p term
+					type_declaration = Regexp.new("^\\s*(?:#{TYPE_MATCH})(?:.|(?:\\&\\s*\\n))*#{arg}", Regexp::IGNORECASE)
+# 					p type_declaration
+					line = (block + @modules[modname][:autodoc_module_outside]).scan(type_declaration).flatten[0]
+					(puts (block + @modules[modname][:autodoc_module_outside]), arg, "Error: No type declaration found for #{arg} in #{modname},#{name}"; raise ParsingError) unless line
+					type = line.scan(Regexp.new("#{TYPE_MATCH}", Regexp::IGNORECASE))[0]
+# 					puts block, arg, line unless type
+					type  = type.sub(/type\(/, '').sub(/\)/, '')
+					optional = line =~ /optional/ ? ", opt" : ""
+					dimension = line =~ /dimension\s*(\([^)]+\))/ ? ", dim " + CGI.escapeHTML($1) : ""  
+					%[<span class="type">#{type}#{dimension}#{optional}</span> #{arg}#{combrack}]
+				end
+				
+				# The documentation link for this subroutine
 				documentation = docfolder + "#{modname}.html##{name}"
-				block.sub!(/(\A\s*)(\w+)/){"#$1#$2_AUTODOC_NAME_#{(modname +'%' + name).to_adoc}_AUTODOC_DOCUMENTATION_#{documentation.to_adoc}_AUTODOC_END"}
-
-				comments = block.scan(/\<doc\>(.*?)\<\/doc\>/m).map{|match| match[0]}
+				block.sub!(/(\A\s*)(\w+)/){"#$1#$2_AUTODOC_NAME_#{(modname +'_docsubref_' + name).to_adoc}_AUTODOC_DOCUMENTATION_#{documentation.to_adoc}_AUTODOC_END"}
+				summary = block.scan(/\A\s*\w+\s*(?:\([^)]+\))?[\s!]*\<doc\>(.*?)\<\/doc\>/mi).flatten[0]
+				comments = block.scan(/\<doc\>(.*?)\<\/doc\>/mi).flatten #.map{|match| match[0]}
 				comments = comments.map do |comment|
 					comment.gsub(/\n\s*\!/, '')
 				end
-				@modules[modname][:subroutines][name] = [function_call, comments]
-				@function_references[[modname, name]] = %[#{subdir_with_slash}#{file}.html##{modname}%#{name}] if @produce_highlighted_source_code
+				if summary
+					summary.gsub!(/\n\s*\!/, '')
+					comments.shift
+				end
+				@modules[modname][:subroutines][name] = {function_call: function_call, comments: comments, summary: summary}
+				@function_references[[modname, name]] = %[#{subdir_with_slash}#{file}.html##{modname}_docsubref_#{name}] if @produce_highlighted_source_code
 				@documentation_references[[modname, name]] = %[#{modname}.html##{name}]
+			else
+				@modules[modname][:autodoc_module_outside] += block
 			end
-# 			p 
+# 			p block
 			use_statements = block.scan(/(^\s*use[^&\n\r]+(?:(?:\&\s+)?[^&\n\r]+)+)/i)
 # 			(p use_statements[0][0]; exit) if use_statements.find{|statements| statements[0] =~ /\&/} 
 			@uses[[modname, name]] ||= {}
@@ -627,19 +686,19 @@ EOF
 				use += "</li>"
 				uses.push use
 			end
-			use_string = %[Uses:<ul>#{uses.join("\n")}</ul>]
+			use_string = %[<p class="section">Uses:</p><p><ul>#{uses.join("\n")}</ul></p>]
 		end
 		
 		# Generates the documentation for each subroutine or function in the main section of the module page. This consists of any comments made by the user, as well as information about which other functions this subroutine or function uses, a link to the source HTML and the call prototype.
 		
-		def subroutine_div(name, function_call, comments)
-			lines = comments.map do |comment|
+		def subroutine_div(name, data)
+			lines = data[:comments].map do |comment|
 				line = "<li>#{comment}</li>"
-				@function_references.each do |(modname, name), reference|
-					next unless modname == name
-					line.gsub(/name/, 
-						%[<a href="#{reference}">name</a>])
-				end
+# 				@function_references.each do |(modname, name), reference|
+# 					next unless modname == name
+# 					line.gsub(/name/, 
+# 						%[<a href="#{reference}">name</a>])
+# 				end
 				line
 			end
 			
@@ -651,13 +710,14 @@ EOF
 							
 							
 		return <<EOF
-			#{@function_references[[@module_name, name]] ? %[<h2 class="title"><a href="source/#{@function_references[[@module_name, name]]}" name="#{name}">#{name}</a></h2>] : %[<h2 class="title">#{name}</h2>]} 
+			<h2 class="title">#{@function_references[[@module_name, name]] ? %[<a href="source/#{@function_references[[@module_name, name]]}" name="#{name}">#{name}</a>] : %[#{name}]} <small>(#{@module_name =~ /program/i ? @module_name : "module " + @module_name})</small> </h2> 
 			
-		<div class="notes"><small>Call Prototype:</small> #{function_call}</div>
-
-			<div class="bullets"><!--<small>Comments:</small>--><ul>
+		<div class="notes"><p class="section">Call Prototype:</p> <p>#{data[:function_call]}</p></div>
+			<div class = "entry"><p class="section">Summary:</p><p>#{data[:summary]}</p></div>
+			<!--<div class = "entry">Details:</div>-->
+			#{lines.size > 0 ? %[<div class="bullets"><p class="section">Details:</p><p><ul>
 				#{lines.join("\n\t\t\t")}
-			</ul></div>
+			</ul></p></div>] : ""}
 			<div class="notes">#{use_list(@autodoccer.uses[[@module_name, name]])}</div>
 			 #{@function_references[[@module_name, name]] ? %[<div class="notes"><small><a href="source/#{@function_references[[@module_name, name]]}">View Source</a></small></div>] : %[]} 
 			 <br>
@@ -675,8 +735,8 @@ EOF
 	<div class = "entry">#{@subroutines.keys.sort.inject(""){|str, key| str += %[<a href="##{key}">#{key}</a>, ]; str}.chop.chop}</div>
 	<div class = "entry">
 	#{use_list(@autodoccer.uses[[@module_name, 'autodoc_module_outside']])}</div><br>
-#{@subroutines.inject("") do |str, (name, (function_call, comments))|
-			str + subroutine_div(name, function_call, comments)
+#{@subroutines.inject("") do |str, (name, data)|
+			str + subroutine_div(name, data)
 end}
 	</div>
 	<!-- end content -->
@@ -792,6 +852,7 @@ EOF
 		<<EOF
 	<!-- start content -->
 	<div id="content">
+<div class = "entry">#{@modules.keys.sort.inject(""){|str, name|  str += %[<a href="##{name}">#{name}</a>, ] if (name =~ /program/i and is_program_index?) or (not name =~ /program/i and not is_program_index?); str}.chop.chop}</div>
 #{@modules.inject("") do |str, (name, (file_name, description, subdir_with_slash))|
 			if (name =~ /program/i and is_program_index?) or (not name =~ /program/i and not is_program_index?) 
 				str + module_div(name, file_name, description, subdir_with_slash)

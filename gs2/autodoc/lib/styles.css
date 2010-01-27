@@ -33,7 +33,7 @@ h1 {
 }
 
 h2 {
-	text-transform: uppercase;
+/* 	text-transform: uppercase; */
 	font-size: 1.1em;
 	font-weight: bold;
 	color: #449BC7;
@@ -235,6 +235,18 @@ color: #ffffff;
 {
 color: #ffffff;
 }
+
+#content .section
+{
+font-weight: bold;
+}
+
+#content .type
+{
+font-size: small;
+color: #449BC7;
+}
+
 
 #content .entry
 {

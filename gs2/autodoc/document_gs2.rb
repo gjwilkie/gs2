@@ -1,10 +1,11 @@
-require 'trunk/lib/autodoc.rb'
+require 'lib/autodoc.rb'
 
 # Get sourceforge username
 username = FileTest.exist?('username.txt') ? File.read('username.txt').chomp : (puts "Please enter your sourceforge username (you must have admin privileges for gyrokinetics. To avoid seeing this message please run 'echo <your username> > username.txt'"; STDIN.gets.chomp)
 
 ######################################
 # Setup autodoccer
+String.preferred_case = :downcase # could be :upcase, :capitalize
 autodoccer = Autodoc.new(Dir.pwd + '/../trunk', Dir.pwd + '/gs2_documentation')
 autodoccer.subdirectories = ['utils', 'geo']
 autodoccer.sourcefile_extensions = ['.f90', '.f95', '.fpp'] # Only here for show - these are actually the defaults anyway
@@ -12,10 +13,18 @@ autodoccer.code_name = "GS2"
 autodoccer.code_website = "http://gyrokinetics.sourceforge.net"
 autodoccer.code_description = "GS2 is a gyrokinetic flux tube initial value turbulence code which can be used for fusion or astrophysical plasmas."
 autodoccer.custom_tabs = {"Wiki" => "http://sourceforge.net/apps/mediawiki/gyrokinetics", "Old Website" => "http://gs2.sourceforge.net/"}
-autodoccer.ignore_files = ['test_os', 'utils/redistribute.f90', 'gs2', 'ingen', 'rungridgen', 'fortdep']
+autodoccer.ignore_files = ['test_os', 'utils/redistribute.f90', 'gs2', 'ingen', 'rungridgen', 'fortdep', 'gs2_io_hdf5.f90', 'gs2_dist_io_hdf.f90']
 autodoccer.welcome_message = %[<p>Welcome to the GS2 Documentation Home Page. This is the documentation that comes from comments made in the source code. For other help see the gyrokinetics <a href="http://sourceforge.net/apps/mediawiki/gyrokinetics">wiki</a> or the old <a href="http://gs2.sourceforge.net/">website</a>.</p>
 
-<p>To add to this documentation, just surround useful comments in the source code by &lt;doc&gt;&lt;/doc&gt; braces. Comments within a subroutine or function definition document that subroutine or function, and comments between the beginning of a module and the first subroutine document the module. Anything that is surrounded by double square brackets: [[name]] will link to the wiki page of the same name. See <a href="file_utils.html">file_utils</a> as an example of a documented module.</p> 
+<p>To add to this documentation, just surround useful comments in the source code by &lt;doc&gt;&lt;/doc&gt; braces. Note that:
+<ul>
+<li>A comment just below the beginning of a subroutine or function (i.e. below <small>&quot;subroutine/function name(args)&quot;</small>) and before any other code becomes the Summary section.</li>
+<li>Any other comments within a subroutine or function definition become part of the Details section.</li>
+<li> Comments between the beginning of a module and the first subroutine document the module.</li>
+<li>Anything that is surrounded by double square brackets: &#91;&#91;name&#93;&#93; will link to the wiki page of the same name.</li> 
+</ul>
+</p>
+<p>See <a href="file_utils.html">file_utils</a> as an example of a documented module.</p> 
 
 <p>To update this html (if you are impatient to see your new comments up here), install <a href = "http://www.andre-simon.de/zip/download.html">Highlight</a> then run &quot;ruby document_gs2.rb&quot  in the folder gyrokinetics/gs2/autodoc (requires <a href = "http://www.ruby-lang.org/en/downloads/">Ruby</a> version 1.9 or higher).<p>]
 ######################################
