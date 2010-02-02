@@ -7,12 +7,14 @@ module fields_implicit
   public :: init_phi_implicit
   public :: nidx
   public :: reset_init
+  public :: time_field
 
   private
 
   integer, save :: nfield
   logical :: initialized = .false.
   logical :: linked = .false.
+  real, save :: time_field(2)=0.
 
 contains
 
@@ -171,12 +173,15 @@ contains
     use fields_arrays, only: aminv
     use theta_grid, only: ntgrid
     use dist_fn, only: N_class
-    use mp, only: sum_allreduce
+    use mp, only: sum_allreduce, proc0
+    use job_manage, only: time_message
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (:,:,:), allocatable :: fl
     complex, dimension (:), allocatable :: u
     integer :: jflo, ik, it, nl, nr, i, m, n, dc
+
+    if (proc0) call time_message(.false.,time_field,' Field Solver')
 
     call prof_entering ("getfield", "fields_implicit")
     allocate (fl(nidx, ntheta0, naky))
@@ -214,6 +219,9 @@ contains
     deallocate (u)
 
     call prof_leaving ("getfield", "fields_implicit")
+
+    if (proc0) call time_message(.false.,time_field,' Field Solver')
+
   end subroutine getfield
 
   subroutine advance_implicit (istep)

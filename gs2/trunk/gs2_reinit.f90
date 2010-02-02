@@ -8,7 +8,7 @@ module gs2_reinit
 !  real :: delt_cushion = 1.5
   real :: delt_cushion
   real :: delt_minimum 
-  real, save :: time_nc = 0., time_reinit=0.
+  real, save :: time_reinit(2)=0.
 
 contains
 
@@ -30,6 +30,7 @@ contains
     use mp, only: proc0
     use file_utils, only: error_unit
     use antenna, only: dump_ant_amp
+    use job_manage, only: time_message
 
     logical :: exit
     integer :: istep 
@@ -57,6 +58,8 @@ contains
        exit = .true.
        return
     end if
+
+    if (proc0) call time_message(.true.,time_reinit,' Re-initialize')
 
     if (proc0) call dump_ant_amp
     call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
@@ -91,7 +94,8 @@ contains
 
 ! reinitialize
     call init_fields
-    if (proc0) call time_message(.true.,.false.,time_reinit,' Re-initialize')
+
+    if (proc0) call time_message(.true.,time_reinit,' Re-initialize')
 
     istep_last = istep
 
@@ -152,39 +156,6 @@ contains
     call save_dt_min (delt_minimum)
 
   end subroutine init_reinit
-
-  subroutine time_message(lprint,lavg,tsum,chmessage)
-
-    character(len=*), intent(in) :: chmessage
-    logical, intent(in) :: lprint,lavg
-    real, intent(in out) :: tsum
-    character (len=10) :: zdate, ztime, zzone
-    integer, dimension(8) :: ival
-    logical :: ilprint
-    real, save :: told=0., tnew=0., tavg=0.
-
-    call date_and_time (zdate, ztime, zzone, ival)
-    tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
-    ilprint=lprint
-! ignore the error in told from a change of day in the next test:
-    if (lavg .and. tnew-told < 1.2*tavg) ilprint=.false.
-    if (told <= 0.) then
-       ilprint=.false. ! first pass through this routine.
-    else
-       if (told > tnew) told=told-86400. ! evidently changed day
-       if (lavg) then
-! a single running average is maintained:
-          tavg=0.9*tavg+0.1*(tnew-told)
-       endif
-       tsum=tsum+tnew-told
-    endif
-    if (ilprint)  then
-       print *, chmessage,': ',tnew-told,' seconds'
-    end if
-    told = tnew
-
-  end subroutine time_message
-
 
 end module gs2_reinit
 

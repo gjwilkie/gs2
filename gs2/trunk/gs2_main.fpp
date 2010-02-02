@@ -11,7 +11,7 @@ contains
     ! <doc> Main subroutine in which gs2 is initialized, equations are advanced,
     ! and the program is finalized </doc>
 
-    use job_manage, only: checkstop, job_fork, checktime
+    use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields
@@ -25,7 +25,7 @@ contains
     use gs2_save, only: gs2_save_for_restart
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
     use gs2_reinit, only: reset_time_step, check_time_step
-    use gs2_reinit, only: time_message, time_nc, time_reinit
+    use gs2_reinit, only: time_reinit
     use gs2_time, only: update_time
     use gs2_time, only: write_dt, init_tstart
     use gs2_time, only: user_time, user_dt
@@ -33,6 +33,8 @@ contains
     use init_g, only: tstart
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
+    use redistribute, only: time_redist
+    use fields_implicit, only: time_field
 
     implicit none
 
@@ -41,7 +43,8 @@ contains
     real, dimension (:), intent (out), optional :: pflux, qflux, heat
     real, intent (out), optional :: dvdrho, grho
 
-    real :: time_init = 0., time_advance = 0., time_finish = 0., time_total
+    real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
+    real :: time_total(2) = 0.
     real :: time_interval
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
@@ -85,8 +88,10 @@ contains
           if (nensembles > 1) call job_fork (n_ensembles=nensembles)
        end if
 
+       if (proc0) call time_message(.false.,time_total,' Total')
+
        if (proc0) then
-          call time_message(.false., .false., time_init,' Initialization')
+          call time_message(.false., time_init,' Initialization')
           cbuff = trim(run_name)
        end if
        
@@ -106,7 +111,7 @@ contains
           call broadcast (grho)
        end if
        
-       if (proc0) call time_message(.false.,.false.,time_init,' Initialization')
+       if (proc0) call time_message(.false.,time_init,' Initialization')
        
        first_time = .false.
 
@@ -122,6 +127,7 @@ contains
     
     do istep = 1, nstep
        
+       if (proc0) call time_message(.false.,time_advance,' Advance time step')
        call advance (istep)
        
        if (nsave > 0 .and. mod(istep, nsave) == 0) &
@@ -130,7 +136,7 @@ contains
        call update_time
        call loop_diagnostics (istep, exit)
        call check_time_step (reset, exit)
-       if (proc0) call time_message(.false.,.true.,time_advance,' Advance time step')
+       if (proc0) call time_message(.false.,time_advance,' Advance time step')
        if (reset) call reset_time_step (istep, exit)
        
        if (mod(istep,5) == 0) call checkstop(exit)
@@ -142,6 +148,9 @@ contains
           exit
        end if
     end do
+
+    if (proc0) call time_message(.false.,time_finish,' Finished run')
+
     if (proc0) call write_dt
 
     time_interval = user_time-start_time
@@ -159,20 +168,25 @@ contains
        call finish_gs2
     end if
     
+    if (proc0) call time_message(.false.,time_finish,' Finished run')
+
+    if (proc0) call time_message(.false.,time_total,' Total')
+
     if (proc0) then
-       call time_message(.false., .false., time_finish,'Finished run')
-       time_total=time_init+time_advance+time_nc+time_reinit+time_finish
+
        print '(/,'' Initialization'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
             &'' Advance steps'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
-            &'' Write restart'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+            &''(redistribute'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
+            &''(field solve'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
             &'' Re-initialize'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
             &'' Finishing'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/,  &
             &'' total from timer is:'', 0pf9.2,'' min'',/)', &
-            time_init/60.,time_init/time_total, &
-            time_advance/60.,time_advance/time_total, &
-            time_nc/60.,time_nc/time_total, &
-            time_reinit/60.,time_reinit/time_total, &
-            time_finish/60.,time_finish/time_total,time_total/60.
+            time_init(1)/60.,time_init(1)/time_total(1), &
+            time_advance(1)/60.,time_advance(1)/time_total(1), &
+            time_redist(1)/60.,time_redist(1)/time_total(1), &
+            time_field(1)/60.,time_field(1)/time_total(1), &
+            time_reinit(1)/60.,time_reinit(1)/time_total(1), &
+            time_finish(1)/60.,time_finish(1)/time_total(1),time_total(1)/60.
     endif
     
     if (.not. present(mpi_comm)) call finish_mp

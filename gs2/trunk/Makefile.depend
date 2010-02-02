@@ -288,6 +288,7 @@ fields_implicit.o: \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 init_g.o \
+	 job_manage.o \
 	 kt_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
@@ -417,6 +418,7 @@ gs2_main.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
 	 theta_grid_params.o 
@@ -433,6 +435,7 @@ gs2_reinit.o: \
 	 gs2_save.o \
 	 gs2_time.o \
 	 init_g.o \
+	 job_manage.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o 
