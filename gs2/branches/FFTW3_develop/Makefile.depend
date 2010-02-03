@@ -465,9 +465,7 @@ gs2_transforms.o: \
 	 redistribute.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o \
-	 convert.o \
-	 file_utils.o 
+	 constants.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \

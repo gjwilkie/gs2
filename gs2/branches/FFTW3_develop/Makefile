@@ -234,6 +234,10 @@ ifeq ($(USE_FFT),fftw)
 	CPPFLAGS += -DFFT=_FFTW_
 	FFT_LIB ?= -lfftw -lrfftw
 endif
+ifeq ($(USE_FFT),fftw3)
+	CPPFLAGS += -DFFT=_FFTW3_
+	FFT_LIB ?= -lfftw -lrfftw
+endif
 ifdef USE_NETCDF
 	NETCDF_LIB ?= -lnetcdf
 	CPPFLAGS += -DNETCDF
