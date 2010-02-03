@@ -109,23 +109,55 @@ hrate_mod = \
 	 hrate.o 
 
 ingen_mod = \
+	 antenna.o \
+	 antenna_data.o \
+	 collisions.o \
 	 command_line.o \
 	 constants.o \
+	 convert.o \
 	 deq.o \
+	 dist_fn.o \
+	 dist_fn_arrays.o \
 	 eeq.o \
+	 fft_work.o \
+	 fields.o \
+	 fields_arrays.o \
+	 fields_explicit.o \
+	 fields_implicit.o \
+	 fields_test.o \
 	 file_utils.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
+	 gs2_diagnostics.o \
+	 gs2_heating.o \
+	 gs2_io.o \
+	 gs2_layouts.o \
+	 gs2_save.o \
+	 gs2_time.o \
+	 gs2_transforms.o \
+	 hyper.o \
 	 ideq.o \
 	 ingen.o \
+	 init_g.o \
+	 job_manage.o \
+	 kt_grids.o \
+	 layouts_type.o \
+	 le_grids.o \
 	 leq.o \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
 	 netcdf_utils.o \
+	 nonlinear_terms.o \
 	 peq.o \
+	 prof.o \
 	 radstub.o \
+	 ran.o \
+	 redistribute.o \
+	 run_parameters.o \
+	 species.o \
+	 spfunc.o \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
@@ -196,6 +228,7 @@ dist_fn.o: \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 file_utils.o \
+	 geometry.o \
 	 gs2_heating.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
@@ -368,7 +401,11 @@ gs2_main.o: \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
+	 fields_explicit.o \
+	 fields_implicit.o \
+	 fields_test.o \
 	 file_utils.o \
+	 geometry.o \
 	 gs2_diagnostics.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
@@ -381,7 +418,8 @@ gs2_main.o: \
 	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
-	 species.o 
+	 species.o \
+	 theta_grid_params.o 
 gs2_reinit.o: \
 	 antenna.o \
 	 collisions.o \
@@ -426,6 +464,10 @@ gs2_transforms.o: \
 	 prof.o \
 	 redistribute.o \
 	 theta_grid.o 
+hdf_wrapper.o: \
+	 constants.o \
+	 convert.o \
+	 file_utils.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -445,6 +487,7 @@ ideq.o: \
 ingen.o: \
 	 constants.o \
 	 file_utils.o \
+	 gs2_diagnostics.o \
 	 mp.o \
 	 text_options.o \
 	 theta_grid.o 
