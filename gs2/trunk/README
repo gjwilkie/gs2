@@ -123,7 +123,7 @@ FCOMPILER	_XL_		Fortran compiler choices
 
 FFT		_NONE_		We can choose to not compile fftw.
 		_FFTW_		At the moment only fftw is the available 
-				fft option.
+		_FFTW3_		fft option.
 
 MPI		_NONE_		No mpi subroutines compiled.
 				Use of -DMPI makes mpi work.

@@ -16,6 +16,7 @@
 # define _SUN_ 23
 
 # define _FFTW_ 41
+# define _FFTW3_ 42
 
 # define _SPLOCAL_ 51
 # define _SPNAG_ 52
