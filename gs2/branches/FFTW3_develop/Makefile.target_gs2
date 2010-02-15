@@ -79,3 +79,4 @@ distclean:
 	-rm -f gs2 gs2.x
 	-rm -f ingen rungridgen regress
 	-rm -f ball eiktest
+	-rm -f ffttester
