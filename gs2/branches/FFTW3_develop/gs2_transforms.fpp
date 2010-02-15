@@ -92,6 +92,8 @@ contains
     logical, save :: initialized = .false.
     character (1) :: char
     
+! CMR, 12/2/2010:  return correct status of "accelerated" even if already initialised
+    accelerated = accel
     if (initialized) return
     initialized = .true.
 
@@ -549,6 +551,8 @@ contains
     ag = 0.   
     idx = g_lo%llim_proc
     do k = accel_lo%llim_proc, accel_lo%ulim_proc
+! CMR: aidx is true for modes killed by the dealiasing mask
+! so following line removes ks in dealiasing region
        if (aidx(k)) cycle
        ag(:,:,k) = g(:,:,idx)
        idx = idx + 1

@@ -6,7 +6,7 @@ module gs2_main
 contains
 # endif
 
-  subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, grho)
+  subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, grho, nofinish)
 
     ! <doc> Main subroutine in which gs2 is initialized, equations are advanced,
     ! and the program is finalized </doc>
@@ -46,7 +46,16 @@ contains
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
     logical :: first_time = .true.
+    logical :: nofin= .false.
+    logical, optional, intent(in) :: nofinish
     character (500), target :: cbuff
+
+!
+!CMR, 12/2/2010: 
+!     add nofinish optional variable to avoid deallocations at end of simulation
+!     as may want to do post-processing
+!
+    if (present(nofinish)) nofin=nofinish
     
     if (first_time) then
 
@@ -61,9 +70,9 @@ contains
        ! <doc> Report # of processors being used </doc>
        if (proc0) then
           if (nproc == 1) then
-             write(*,*) 'Running on ',nproc,' processor'
+             if (.not. nofin) write(*,*) 'Running on ',nproc,' processor'
           else
-             write(*,*) 'Running on ',nproc,' processors'
+             if (.not. nofin) write(*,*) 'Running on ',nproc,' processors'
           end if
           write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
@@ -155,11 +164,11 @@ contains
        qflux = qflux_avg/time_interval
        heat = heat_avg/time_interval
     else
-       call finish_gs2_diagnostics (istep_end)
-       call finish_gs2
+       if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
+       if (.not.nofin) call finish_gs2
     end if
     
-    if (proc0) then
+    if (proc0 .and. .not. nofin) then
        call time_message(.false., .false., time_finish,'Finished run')
        time_total=time_init+time_advance+time_nc+time_reinit+time_finish
        print '(/,'' Initialization'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
@@ -175,7 +184,7 @@ contains
             time_finish/60.,time_finish/time_total,time_total/60.
     endif
     
-    if (.not. present(mpi_comm)) call finish_mp
+    if (.not. present(mpi_comm) .and. .not. nofin) call finish_mp
     
   end subroutine run_gs2
   

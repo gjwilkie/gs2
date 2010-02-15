@@ -1,4 +1,4 @@
-gs2_all: modules gs2 ingen rungridgen
+gs2_all: modules gs2 ingen rungridgen ffttester
 
 gs2: $(gs2_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
@@ -13,6 +13,9 @@ rungridgen: $(rungridgen_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 regress: $(drive_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+ffttester: $(ffttester_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 .PHONY: modules utils_all geo_all libgs2_all
