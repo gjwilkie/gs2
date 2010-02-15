@@ -2907,6 +2907,10 @@ contains
     case ('yxles')
        idx_accelx = ik-1 + lo%ny*(it-1 + lo%nx*(il-1 + &
             lo%nlambda*(ie-1 + lo%negrid*(is-1))))
+! CMR: 'xyles' possible if 2D accel FFTs handled x faster than y 
+!    case ('xyles')
+!       idx_accelx = it-1 + lo%nx*(ik-1 + lo%ny*(il-1 + &
+!            lo%nlambda*(ie-1 + lo%negrid*(is-1))))
     end select
   end function idx_accelx
 
@@ -3082,6 +3086,9 @@ contains
        ie_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nxny, lo%negrid)
     case ('yxles')
        ie_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nxny/lo%nlambda, lo%negrid)
+! CMR: 'xyles' possible if 2D accel FFTs handled x faster than y 
+!    case ('xyles')
+!       ie_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nxny/lo%nlambda, lo%negrid)
     end select
   end function ie_idx_accelx
 
@@ -3096,6 +3103,9 @@ contains
        il_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nxny/lo%negrid, lo%nlambda)
     case ('yxles')
        il_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nxny, lo%nlambda)
+! CMR: 'xyles' possible if 2D accel FFTs handled x faster than y 
+!   case ('xyles')
+!       il_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nxny, lo%nlambda)
     end select
   end function il_idx_accelx
 
@@ -3106,6 +3116,15 @@ contains
     integer, intent (in) :: i
 
     it_idx_accelx = 1 + mod((i - lo%llim_world)/lo%ny, lo%nx)
+!    select case (layout)
+!    case ('yxels')
+!       it_idx_accelx = 1 + mod((i - lo%llim_world)/lo%ny, lo%nx)
+!    case ('yxles')
+!       it_idx_accelx = 1 + mod((i - lo%llim_world)/lo%ny, lo%nx)
+! CMR: 'xyles' possible if 2D accel FFTs handled x faster than y 
+!    case ('xyles')
+!       it_idx_accelx = 1 + mod((i - lo%llim_world), lo%nx)
+!    end select
   end function it_idx_accelx
 
   elemental function ik_idx_accelx (lo, i)
@@ -3115,6 +3134,15 @@ contains
     integer, intent (in) :: i
 
     ik_idx_accelx = 1 + mod((i - lo%llim_world), lo%ny)
+!    select case (layout)
+!    case ('yxels')
+!       ik_idx_accelx = 1 + mod((i - lo%llim_world), lo%ny)
+!    case ('yxles')
+!       ik_idx_accelx = 1 + mod((i - lo%llim_world), lo%ny)
+! CMR: 'xyles' possible if 2D accel FFTs handled x faster than y 
+!    case ('xyles')
+!       ik_idx_accelx = 1 + mod((i - lo%llim_world)/lo%nx, lo%ny)
+!    end select
   end function ik_idx_accelx
 
   elemental function it_idx_accel (lo, i)
@@ -3123,6 +3151,15 @@ contains
     type (accel_layout_type), intent (in) :: lo
     integer, intent (in) :: i
     it_idx_accel = 1 + mod((i - lo%llim_world)/lo%ndky, lo%nx)
+!    select case (layout)
+!    case ('yxels')
+!       it_idx_accel = 1 + mod((i - lo%llim_world)/lo%ndky, lo%nx)
+!    case ('yxles')
+!       it_idx_accel = 1 + mod((i - lo%llim_world)/lo%ndky, lo%nx)
+! CMR: 'xyles' possible if 2D accel FFTs handled x faster than y 
+!    case ('xyles')
+!       it_idx_accel = 1 + mod((i - lo%llim_world), lo%nx)
+!    end select
   end function it_idx_accel
 
   elemental function ik_idx_accel (lo, i)
@@ -3131,6 +3168,15 @@ contains
     type (accel_layout_type), intent (in) :: lo
     integer, intent (in) :: i
     ik_idx_accel = 1 + mod(i - lo%llim_world, lo%ndky)
+!    select case (layout)
+!    case ('yxels')
+!       ik_idx_accel = 1 + mod(i - lo%llim_world, lo%ndky)
+!    case ('yxles')
+!       ik_idx_accel = 1 + mod(i - lo%llim_world, lo%ndky)
+! CMR: 'xyles' possible if 2D accel FFTs handled x faster than y 
+!    case ('xyles')
+!       ik_idx_accel = 1 + mod((i - lo%llim_world)/lo%nx, lo%ndky)
+!    end select
   end function ik_idx_accel
 
   elemental function dealiasing (lo, ia)
@@ -3334,8 +3380,10 @@ contains
     case ('lyxes')
        char = 'b'    ! big, since this layout makes sense mainly for big runs?
     case ('xyles')
-!CMR: set char="?", char only acts if set to "v", to force use of accel layout.
-!                   NO accel layouts have been implemented for "xyles"
+!CMR: set char="?"
+! char only acts if set to "v", to force use of accel layout.
+! accel layouts NOT implemented for "xyles", which assume throughout that 
+! y is fastest index, including in calls to 2D FFTs
        char = '?'    
     end select
 
