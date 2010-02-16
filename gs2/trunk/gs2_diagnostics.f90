@@ -2094,7 +2094,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 !                write (out_unit,*) "aky=",aky_out(ik)," theta0=",theta0(it,ik)
 
                 if (write_line) then
-                   write (out_unit, "('t= ',e16.10,' aky= ',f5.2, ' akx= ',f5.2, &
+                   write (out_unit, "('t= ',e16.10,' aky= ',1pe12.4, ' akx= ',1pe12.4, &
                         &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4)") &
                         t, aky_out(ik), akx_out(it), &
                         real( omega(it,ik)*woutunits(ik)), &
