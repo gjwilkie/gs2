@@ -33,4 +33,11 @@ module layouts_type
      integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
   end type le_layout_type
 
+  type :: p_layout_type
+     sequence
+     integer :: iproc
+     integer :: naky, nlambda, negrid, nspec
+     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
+  end type p_layout_type
+
 end module layouts_type
