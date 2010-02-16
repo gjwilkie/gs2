@@ -477,6 +477,7 @@ module le_grids
   interface integrate_moment
      module procedure integrate_moment_c34
      module procedure integrate_moment_lec
+     module procedure integrate_moment_r33
   end interface
 
   real, dimension (:), allocatable :: xx ! (ng2)
@@ -1932,6 +1933,74 @@ contains
     end if
 
   end subroutine integrate_moment_c34
+
+!  subroutine integrate_moment (g, total, all)
+  subroutine integrate_moment_r33 (g, total, all)
+! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
+! NOTE: Takes f = f(y, z, sigma, lambda, E, species) and returns int f, where the integral
+! is over all velocity space
+    use mp, only: nproc, iproc
+    use theta_grid, only: ntgrid
+    use species, only: nspec
+    use kt_grids, only: naky
+    use gs2_layouts, only: p_lo, is_idx, ik_idx, ie_idx, il_idx
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+    real, dimension (-ntgrid:,:,p_lo%llim_proc:), intent (in) :: g
+    real, dimension (-ntgrid:,:,:), intent (out) :: total
+    integer, optional, intent(in) :: all
+
+    real, dimension (:), allocatable :: work
+    real :: fac
+    integer :: is, il, ie, ik, it, iplo, ig, i
+
+    total = 0.
+    do iplo = p_lo%llim_proc, p_lo%ulim_proc
+       ik = ik_idx(p_lo,iplo)
+       ie = ie_idx(p_lo,iplo)
+       is = is_idx(p_lo,iplo)
+       il = il_idx(p_lo,iplo)
+       fac = w(ie,is)
+
+       do ig = -ntgrid, ntgrid
+          total(ig, ik, is) = total(ig, ik, is) + &
+               fac*wl(ig,il)*(g(ig,1,iplo)+g(ig,2,iplo))
+       end do
+    end do
+
+    if (nproc > 1) then
+       allocate (work((2*ntgrid+1)*naky*nspec)) ; work = 0.
+       i = 0
+       do is = 1, nspec
+          do ik = 1, naky
+             do ig = -ntgrid, ntgrid
+                i = i + 1
+                work(i) = total(ig, ik, is)
+             end do
+          end do
+       end do
+       
+       if (present(all)) then
+          call sum_allreduce (work)
+       else
+          call sum_reduce (work, 0)
+       end if
+
+       if (proc0 .or. present(all)) then
+          i = 0
+          do is = 1, nspec
+             do ik = 1, naky
+                do ig = -ntgrid, ntgrid
+                   i = i + 1
+                   total(ig, ik, is) = work(i)
+                end do
+             end do
+          end do
+       end if
+       deallocate (work)
+    end if
+
+  end subroutine integrate_moment_r33
 
   subroutine integrate_moment_lec (lo, g, total)
 

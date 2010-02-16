@@ -44,7 +44,7 @@ module gs2_diagnostics
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
-         save_for_restart
+         save_for_restart, write_parity
   real,public :: omegatol, omegatinst
   logical,public :: print_line, print_old_units, print_flux_line
   logical,public :: print_summary, write_line, write_flux_line, write_phi
@@ -56,7 +56,7 @@ module gs2_diagnostics
   logical,public :: write_pbflux, write_vbflux, write_g, write_gg, write_gyx
   logical,public ::write_dmix, write_kperpnorm, write_phitot, write_epartot
   logical,public :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
-  logical,public :: write_final_moments, write_avg_moments, write_stress
+  logical,public :: write_final_moments, write_avg_moments, write_stress, write_parity
   logical,public :: write_full_moments_notgc
   logical,public :: write_fcheck, write_final_epar, write_kpar
   logical,public :: write_vortcheck, write_fieldcheck
@@ -86,7 +86,7 @@ module gs2_diagnostics
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: dv_unit, jext_unit   !GGH Additions
   integer :: dump_neoclassical_flux_unit, dump_check1_unit, dump_check2_unit
-  integer :: res_unit, res_unit2
+  integer :: res_unit, res_unit2, parity_unit
 
   complex, dimension (:,:,:), allocatable :: omegahist
   ! (navg,ntheta0,naky)
@@ -313,6 +313,10 @@ contains
           if (write_max_verr) call open_output_file (res_unit2, ".vres2")
        end if
 
+       if (write_parity .and. write_ascii) then
+          call open_output_file (parity_unit, ".parity")
+       end if
+
        !GGH Density and velocity perturbations
        if (write_density_velocity .and. write_ascii) then
           call open_output_file (dv_unit, ".dv")
@@ -449,6 +453,7 @@ contains
        write_final_moments = .false.
        write_stress = .false.
        write_avg_moments = .false.
+       write_parity = .false.
        write_fields = .false.
        write_full_moments_notgc = .false.
        write_final_fields = .false.
@@ -589,6 +594,9 @@ contains
     phi0 = 1.
 
     if (proc0) then
+       if (write_ascii .and. write_parity) then
+          call close_output_file (parity_unit)
+       end if
        if (write_ascii .and. write_verr) then
           call close_output_file (res_unit)
           call close_output_file (lpc_unit)
@@ -1340,7 +1348,7 @@ contains
     use dist_fn, only: getmoms_notgc, g_adjust
     use dist_fn_arrays, only: g, gnew
     use collisions, only: ncheck, vnmult, vary_vnew
-    use mp, only: proc0, broadcast, iproc
+    use mp, only: proc0, broadcast, iproc, send, receive
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: user_time
@@ -1348,9 +1356,13 @@ contains
     use gs2_io, only: nc_loop_fullmom
     use gs2_io, only: nc_loop_stress, nc_loop_vres
     use gs2_io, only: nc_loop_movie, nc_write_fields
-    use gs2_layouts, only: yxf_lo
+    use gs2_layouts, only: yxf_lo, g_lo
+! MAB>
+    use gs2_layouts, only: init_parity_layouts, idx, idx_local, proc_id
+    use gs2_layouts, only: p_lo, ie_idx, is_idx, il_idx, it_idx, ik_idx
+! <MAB
     use gs2_transforms, only: init_transforms, transform2
-    use le_grids, only: nlambda, ng2
+    use le_grids, only: nlambda, ng2, integrate_moment, negrid
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
 !    use gs2_flux, only: check_flux
@@ -1379,6 +1391,13 @@ contains
 !    real, dimension (:,:,:,:), allocatable :: errest_by_mode
     integer, dimension (:,:), allocatable :: erridx
     real, dimension (:,:), allocatable :: errest
+!MAB> arrays needed for parity diagnostic
+    integer :: iplo, iglo, sgn2, isgn, il, ie
+    complex, dimension (:,:,:,:), allocatable :: gparity
+    real, dimension (:,:,:), allocatable :: gm, gp, gmint, gpint, gmavg, gpavg
+    real, dimension (:), allocatable :: gmtot, gptot, gtot
+    logical :: first = .true.
+!<MAB
     real :: geavg, glavg, gtavg
     real :: dmix, dmix4, dmixx
     real :: t, denom
@@ -2160,6 +2179,126 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        if (proc0) call nc_loop_stress(nout, rstress, ustress)
     end if
 
+    call broadcast (write_parity)
+    if (write_parity) then
+
+       ! initialize layouts for parity diagnostic
+       if (first) then
+          call init_parity_layouts (naky, nlambda, negrid, nspec)
+          first = .false.
+       end if
+
+       allocate (gparity(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
+       allocate (gm(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
+       allocate (gp(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
+       allocate (gmint(-ntgrid:ntgrid,naky,nspec))
+       allocate (gpint(-ntgrid:ntgrid,naky,nspec))
+       allocate (gmavg(ntheta0,naky,nspec))
+       allocate (gpavg(ntheta0,naky,nspec))
+       allocate (gmtot(nspec))
+       allocate (gptot(nspec))
+       allocate (gtot(nspec))
+
+!        ! TMP FOR TESTING -- MAB
+!        do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!           it = it_idx(g_lo,iglo)
+!           do isgn = 1, 2
+!              gnew(:,isgn,iglo) = vpa(:,isgn,iglo)**2*(sin(theta)*akx(it)+cos(theta)*akx(it)**2)
+! !             gnew(:,isgn,iglo) = vpa(:,isgn,iglo)*sin(theta)
+! !             gnew(:,isgn,iglo) = vpa(:,isgn,iglo)*cos(theta)
+! !             gnew(:,isgn,iglo) = vpa(:,isgn,iglo)*cos(theta)*akx(it)
+! !             gnew(:,isgn,iglo) = akx(it)
+!           end do
+!        end do
+
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             do iglo = g_lo%llim_world, g_lo%ulim_world
+                ik = ik_idx(g_lo,iglo)
+                ie = ie_idx(g_lo,iglo)
+                il = il_idx(g_lo,iglo)
+                is = is_idx(g_lo,iglo)
+                it = it_idx(g_lo,iglo)
+                ! count total index for given (ik,il,ie,is) combo (dependent on layout)
+                iplo = idx(p_lo,ik,il,ie,is)
+                ! check to see if value of g corresponding to iglo is on this processor
+                if (idx_local(g_lo,iglo)) then
+                   if (idx_local(p_lo,iplo)) then
+                      ! if g value corresponding to iplo should be on this processor, then get it
+                      gparity(ig,it,isgn,iplo) = gnew(ig,isgn,iglo)
+                   else
+                      ! otherwise, send g for this iplo value to correct processor
+                      call send (gnew(ig,isgn,iglo),proc_id(p_lo,iplo))
+                   end if
+                else if (idx_local(p_lo,iplo)) then
+                   ! if g for this iplo not on processor, receive it
+                   call receive (gparity(ig,it,isgn,iplo),proc_id(g_lo,iglo))
+                end if
+             end do
+          end do
+       end do
+       
+       do it = 1, ntheta0
+          ! have to treat kx=0 specially
+          if (it == 1) then
+             do isgn = 1, 2
+                sgn2 = mod(isgn,2)+1
+                do ig = -ntgrid, ntgrid
+                   gm(ig,isgn,:) = abs(gparity(ig,1,isgn,:)-gparity(-ig,1,sgn2,:))**2
+                   gp(ig,isgn,:) = abs(gparity(ig,1,isgn,:)+gparity(-ig,1,sgn2,:))**2
+                end do
+             end do
+          else
+             do isgn = 1, 2
+                sgn2 = mod(isgn,2)+1
+                do ig = -ntgrid, ntgrid
+                   ! calculate + and - parity states and take mod squared
+                   gm(ig,isgn,:) = abs(gparity(ig,it,isgn,:)-gparity(-ig,ntheta0-it+2,sgn2,:))**2
+                   gp(ig,isgn,:) = abs(gparity(ig,it,isgn,:)+gparity(-ig,ntheta0-it+2,sgn2,:))**2
+                end do
+             end do
+          end if
+          ! integrate out velocity dependence
+          call integrate_moment (gm,gmint,1)
+          call integrate_moment (gp,gpint,1)
+          ! average along field line
+          do is = 1, nspec
+             do ik = 1, naky
+                call get_fldline_avg (gmint(:,ik,is),gmavg(it,ik,is))
+                call get_fldline_avg (gpint(:,ik,is),gpavg(it,ik,is))
+             end do
+          end do
+       end do
+       ! average over perp plane
+       do is = 1, nspec
+          call get_volume_average (gmavg(:,:,is), gmtot(is))
+          call get_volume_average (gpavg(:,:,is), gptot(is))
+       end do
+
+       deallocate (gparity) ; allocate (gparity(-ntgrid:ntgrid,ntheta0,naky,nspec))
+       ! obtain normalization factor = int over phase space of |g|**2
+       call integrate_moment (gnew*conjg(gnew), gparity, 1)
+       do is = 1, nspec
+          do ik = 1, naky
+             do it = 1, ntheta0
+                call get_fldline_avg (real(gparity(:,it,ik,is)),gmavg(it,ik,is))
+             end do
+          end do
+          call get_volume_average (gmavg(:,:,is), gtot(is))
+       end do
+
+       ! normalize and take square root to complete RMS
+       where (gtot > epsilon(0.0))
+          gmtot = sqrt(gmtot/gtot) ; gptot = sqrt(gptot/gtot)
+       elsewhere
+          gmtot = sqrt(gmtot)
+       end where
+
+       if (proc0) write (parity_unit,*) t, gmtot, gptot, gtot
+
+       deallocate (gparity, gm, gp, gmint, gpint, gmavg, gpavg, gmtot, gptot, gtot)
+    end if
+
     call broadcast (test_conserve)
     call broadcast (write_avg_moments)
     if (write_avg_moments) then
@@ -2308,11 +2447,11 @@ if (debug) write(6,*) "loop_diagnostics: -2"
     end if
     
     nout = nout + 1
-    if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) &
-         call flush_output_file (out_unit, ".out")
-
-    if (write_ascii .and. write_verr .and. mod(nout, 10) == 0 .and. proc0) &
-         call flush_output_file (res_unit, ".vres")
+    if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) then
+       call flush_output_file (out_unit, ".out")
+       if (write_verr) call flush_output_file (res_unit, ".vres")
+       if (write_parity) call flush_output_file (parity_unit, ".parity")
+    end if
 
 !>GGH
     !Deallocate variables for density and velocity perturbations
@@ -2871,5 +3010,27 @@ if (debug) write(6,*) "get_omegaavg: done"
        end do
     end if
   end subroutine ensemble_average
+
+  subroutine get_fldline_avg (fld_in, fld_out)
+
+    use theta_grid, only: delthet, jacob
+
+    implicit none
+
+    real, dimension (:), allocatable :: dl_over_b
+
+    real, dimension (-ntg_out:), intent (in) :: fld_in
+    real, intent (out) :: fld_out
+
+    allocate (dl_over_b(-ntg_out:ntg_out))
+
+    dl_over_b = delthet(-ntg_out:ntg_out)*jacob(-ntg_out:ntg_out)
+    dl_over_b = dl_over_b / sum(dl_over_b)
+
+    fld_out = sum(fld_in*dl_over_b)
+
+    deallocate (dl_over_b)
+
+  end subroutine get_fldline_avg
 
 end module gs2_diagnostics
