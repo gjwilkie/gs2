@@ -13,7 +13,7 @@ module leq
   real :: beta_0
   
   type :: flux_surface
-     real :: R_center, R_geo, k, kp, d, dp, r, dr, delp, q, shat, pp
+     real :: R_center, R_geo, k, kp, d, dp, r, dr, delp, q, shat, pp, a, ap
      integer :: nt
   end type flux_surface
 
@@ -26,9 +26,9 @@ module leq
 
 contains
 
-  subroutine leqin(R0, Ra, k, kp, d, dp, r, dr, s, qq, qs, nt_used)
+  subroutine leqin(R0, Ra, k, kp, d, dp, r, dr, s, qq, qs, a, ap, nt_used)
         
-    real :: R0, Ra, k, kp, d, dp, r, dr, s, qq, qs
+    real :: R0, Ra, k, kp, d, dp, r, dr, s, qq, qs, a, ap
     integer :: nt_used
 
     surf%R_center = R0
@@ -40,6 +40,8 @@ contains
     surf%shat = qs
     surf%d = d
     surf%dp = dp
+    surf%a = a
+    surf%ap = ap
     surf%r = r
     surf%dr = dr
     surf%pp = 0.
@@ -416,6 +418,8 @@ contains
 
   function Rpos (r, theta)
    
+    use constants, only: pi
+
     real, intent (in) :: r, theta
     real :: Rpos
     real :: g, gp, dr
@@ -426,8 +430,8 @@ contains
 !    g = surf%delp/surf%r + surf%d * sin(theta)**2
 !    Rpos = surf%R_center*(1.+r*(cos(theta)-g)-g*dr)
 
-    g = cos(theta + surf%d * sin(theta))
-    gp = -sin(theta + surf%d * sin(theta))*surf%dp*sin(theta)
+    g = cos(theta + surf%d * sin(theta-0.5*pi*surf%a))
+    gp = -sin(theta + surf%d * sin(theta-0.5*pi*surf%a))*(surf%dp*sin(theta-0.5*surf%a)-surf%d*0.5*pi*surf%ap*cos(theta-0.5*pi*surf%a))
     
     Rpos = surf%R_center + surf%delp*dr + g*surf%r + (g+surf%r*gp)*dr
     

@@ -546,7 +546,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done"
     use geometry, only: s_hat_input
     use geometry, only: alpha_input, invLp_input, beta_prime_input, dp_mult
     use geometry, only: rmaj, r_geo
-    use geometry, only: shift, qinp, akappa, akappri, tri, tripri
+    use geometry, only: shift, qinp, akappa, akappri, tri, tripri, asym, asympri
     use geometry, only: delrho, rmin, rmax
     use geometry, only: ismooth, ak0, k1, k2
     use geometry, only: isym, in_nt, writelots
@@ -558,6 +558,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done"
     use theta_grid_params, only: shift_in => shift
     use theta_grid_params, only: akappa_in => akappa, akappri_in => akappri
     use theta_grid_params, only: tri_in => tri, tripri_in => tripri
+    use theta_grid_params, only: asym_in => asym, asympri_in => asympri
     use theta_grid_params, only: betaprim_in => betaprim
     implicit none
     integer :: in_file
@@ -581,6 +582,8 @@ if (debug) write(6,*) "init_theta_grid_eik: done"
     akappri = akappri_in
     tri = tri_in
     tripri = tripri_in
+    asym = asym_in
+    asympri = asympri_in
     beta_prime_input = betaprim_in
 
     itor = 1
