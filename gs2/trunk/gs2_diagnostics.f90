@@ -15,7 +15,7 @@ module gs2_diagnostics
   public :: loop_diagnostics
   public :: ensemble_average
   public :: reset_init
-  public :: pflux_avg, qflux_avg, heat_avg, start_time
+  public :: pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
 
   interface get_vol_average
      module procedure get_vol_average_one, get_vol_average_all
@@ -131,7 +131,7 @@ module gs2_diagnostics
   ! (ntheta0,naky,nspec)
 
   real :: start_time = 0.0
-  real, dimension (:), allocatable :: pflux_avg, qflux_avg, heat_avg
+  real, dimension (:), allocatable :: pflux_avg, qflux_avg, heat_avg, vflux_avg
 
   integer :: ntg_out
   integer :: nout = 1
@@ -273,8 +273,8 @@ contains
        end if
     end if
 
-    allocate (pflux_avg(nspec), qflux_avg(nspec), heat_avg(nspec))
-    pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0
+    allocate (pflux_avg(nspec), qflux_avg(nspec), heat_avg(nspec), vflux_avg(nspec))
+    pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
 
   end subroutine init_gs2_diagnostics
  
@@ -1325,7 +1325,7 @@ contains
          theta_qflux, theta_pmflux, &
          theta_vmflux, theta_qmflux, theta_pbflux, theta_vbflux, theta_qbflux)
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
-    if (allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg)
+    if (allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
 
     wtmp_old = 0. ; nout = 1 ; nout_movie = 1
     initialized = .false.
@@ -1691,6 +1691,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
           end if
           pflux_avg = pflux_avg + (part_fluxes + mpart_fluxes + bpart_fluxes)*(t-t_old)
           qflux_avg = qflux_avg + (heat_fluxes + mheat_fluxes + bheat_fluxes)*(t-t_old)
+          vflux_avg = vflux_avg + (mom_fluxes + mmom_fluxes + bmom_fluxes)*(t-t_old)
           if (write_hrate) heat_avg = heat_avg + h%imp_colls*(t-t_old)
           t_old = t
        end if
@@ -1698,6 +1699,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 
     call broadcast (pflux_avg)
     call broadcast (qflux_avg)
+    call broadcast (vflux_avg)
     if (write_hrate) call broadcast (heat_avg)
 
     fluxfac = 0.5
@@ -2014,14 +2016,14 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           if (fphi > epsilon(0.0)) then
              if (write_ascii) then
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' heat fluxes: ', 5(1x,e10.4))") &
-                     t, phi2, heat_fluxes(1:min(nspec,5))
+                     & ' heat fluxes: ', 5(1x,e10.4),' qflux_avg: ', 5(1x,e10.4))") &
+                     t, phi2, heat_fluxes(1:min(nspec,5)), qflux_avg(1:min(nspec,5))
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' part fluxes: ', 5(1x,e10.4))") &
-                     t, phi2, part_fluxes(1:min(nspec,5))
+                     & ' part fluxes: ', 5(1x,e10.4),' pflux_avg: ', 5(1x,e10.4))") &
+                     t, phi2, part_fluxes(1:min(nspec,5)), pflux_avg(1:min(nspec,5))
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' mom fluxes: ', 5(1x,e10.4))") &
-                     t, phi2, mom_fluxes(1:min(nspec,5))
+                     & ' mom fluxes: ', 5(1x,e10.4),' vflux_avg: ', 5(1x,e10.4))") &
+                     t, phi2, mom_fluxes(1:min(nspec,5)), vflux_avg(1:min(nspec,5))
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                      & ' parmom fluxes: ', 5(1x,e10.4))") &
                      t, phi2, parmom_fluxes(1:min(nspec,5))
@@ -2975,7 +2977,7 @@ if (debug) write(6,*) "get_omegaavg: done"
     implicit none
 
     start_time = user_time
-    pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0
+    pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
 
   end subroutine reset_init
 

@@ -16,7 +16,7 @@ module geometry
   real :: Rref_X, Bref_X
 
   real :: rhoc, rmaj, r_geo, shift, dbetadrho, kxfac
-  real :: qinp, shat, akappa, akappri, tri, tripri, dpressdrho
+  real :: qinp, shat, akappa, akappri, tri, tripri, dpressdrho, asym, asympri
   real :: delrho, rmin, rmax, qsf  
   
   real :: s_hat_input, p_prime_input, invLp_input, beta_prime_input, &
@@ -240,7 +240,7 @@ if (debug) write(6,*) "eikcoefs: call check"
     if(iflux /= 1 .and. iflux /= 10) then
        if(iflux == 2) call radial
        call leqin(rmaj, R_geo, akappa, akappri, tri, tripri, rhoc, delrho, shift, &
-            qinp, s_hat_input, ntgrid)
+            qinp, s_hat_input, asym, asympri, ntgrid)
        if(.not.allocated(gds22)) call alloc_module_arrays(ntgrid)
        call alloc_local_arrays(ntgrid)
     endif

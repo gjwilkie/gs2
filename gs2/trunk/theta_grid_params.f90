@@ -5,6 +5,7 @@ module theta_grid_params
 
   real, public :: rhoc, rmaj, r_geo, eps, epsl
   real, public :: qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri
+  real, public :: asym, asympri
   real, public :: betaprim
 
   integer, public :: ntheta, nperiod
@@ -38,7 +39,7 @@ contains
 
     namelist /theta_grid_parameters/ rhoc, rmaj, r_geo, eps, epsl, &
          qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri, &
-         ntheta, nperiod, kp
+         ntheta, nperiod, kp, asym, asympri
 
     rhoc = 0.5
     rmaj = 3.0
@@ -53,6 +54,8 @@ contains
     akappri = 0.0
     tri = 0.0
     tripri = 0.0
+    asym = 0.0
+    asympri = 0.0
     ntheta = 24
     nperiod = 2
     in_file = input_unit_exist("theta_grid_parameters", exist)
