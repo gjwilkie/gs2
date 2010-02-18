@@ -2017,13 +2017,13 @@ if (debug) write(6,*) "loop_diagnostics: -2"
              if (write_ascii) then
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                      & ' heat fluxes: ', 5(1x,e10.4),' qflux_avg: ', 5(1x,e10.4))") &
-                     t, phi2, heat_fluxes(1:min(nspec,5)), qflux_avg(1:min(nspec,5))
+                     t, phi2, heat_fluxes(1:min(nspec,5)), qflux_avg(1:min(nspec,5))/t
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                      & ' part fluxes: ', 5(1x,e10.4),' pflux_avg: ', 5(1x,e10.4))") &
-                     t, phi2, part_fluxes(1:min(nspec,5)), pflux_avg(1:min(nspec,5))
+                     t, phi2, part_fluxes(1:min(nspec,5)), pflux_avg(1:min(nspec,5))/t
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                      & ' mom fluxes: ', 5(1x,e10.4),' vflux_avg: ', 5(1x,e10.4))") &
-                     t, phi2, mom_fluxes(1:min(nspec,5)), vflux_avg(1:min(nspec,5))
+                     t, phi2, mom_fluxes(1:min(nspec,5)), vflux_avg(1:min(nspec,5))/t
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                      & ' parmom fluxes: ', 5(1x,e10.4))") &
                      t, phi2, parmom_fluxes(1:min(nspec,5))
@@ -2296,7 +2296,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           gmtot = sqrt(gmtot)
        end where
 
-       if (proc0) write (parity_unit,*) t, gmtot, gptot, gtot
+       if (proc0) write (parity_unit,"(4(1x,e12.5))") t, gmtot, gptot, gtot
 
        deallocate (gparity, gm, gp, gmint, gpint, gmavg, gpavg, gmtot, gptot, gtot)
     end if
