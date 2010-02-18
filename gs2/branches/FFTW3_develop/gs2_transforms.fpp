@@ -166,11 +166,9 @@ contains
        allocate (ag(-ntgrid:ntgrid,2,accel_lo%llim_proc:accel_lo%ulim_alloc))
        aidx = .true.
 
-       idx = g_lo%llim_proc
        do i = accel_lo%llim_proc, accel_lo%ulim_proc
           if (dealiasing(accel_lo, i)) cycle
           aidx(i) = .false.
-          idx = idx + 1
        end do
 
        do idx = 1, accel_lo%nia
@@ -178,8 +176,18 @@ contains
           iak(idx) = accel_lo%llim_proc  + (idx-1)*accel_lo%nxnky
        end do
 
+
+#if FFT == _FFTW_ 
+
        call init_crfftw (yf_fft,  1, accel_lo%ny, accel_lo%nx)
        call init_rcfftw (yb_fft, -1, accel_lo%ny, accel_lo%nx)
+
+#elif FFT == _FFTW3_
+
+       call init_crfftw (yf_fft,  1, accel_lo%ny, accel_lo%nx, accel_lo%ntgrid)
+       call init_rcfftw (yb_fft, -1, accel_lo%ny, accel_lo%nx, accel_lo%ntgrid)
+
+#endif
 
     else
        allocate (fft(yxf_lo%ny/2+1, yxf_lo%llim_proc:yxf_lo%ulim_alloc))
@@ -530,16 +538,70 @@ contains
 
   end subroutine inverse2_5d
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   subroutine transform2_5d_accel (g, axf, i)
     use gs2_layouts, only: g_lo, accel_lo, accelx_lo, ik_idx
     implicit none
     complex, dimension (:,:,g_lo%llim_proc:), intent (in out) :: g
+
 # ifdef FFT
+
     real, dimension (:,:,accelx_lo%llim_proc:), intent (out) :: axf
+
 # else
+
     real, dimension (:,:,accelx_lo%llim_proc:) :: axf
+
 # endif
+
+
     integer :: iglo, k, i, idx
+    integer :: itgrid, iduo
+    integer :: ntgrid
+
+    ntgrid = accel_lo%ntgrid
+
+    if ( .true. ) then
+       ! scale the g and copy into the anti-aliased array ag
+       ! zero out empty ag
+       ! touch each g and ag only once
+       idx = g_lo%llim_proc
+       do k = accel_lo%llim_proc, accel_lo%ulim_proc
+          ! zero out for large k
+          if (aidx(k)) then
+             ag(:,:,k) = 0.0
+          else
+           ! scaling only for k_y not the zero mode
+           if (ik_idx(g_lo, idx) .ne. 1) then
+            do iduo = 1, 2
+             do itgrid = 1, 2*ntgrid +1
+                g(itgrid, iduo, idx) &
+                     = 0.5 * g(itgrid, iduo, idx)
+                ag(itgrid - (ntgrid+1), iduo, k) &
+                     = g(itgrid, iduo, idx)
+             enddo
+            enddo
+           ! in case of k_y being zero: just copy
+           else
+            do iduo = 1, 2
+             do itgrid = 1, 2*ntgrid+1
+                ag(itgrid-(ntgrid+1), iduo, k) &
+                     = g(itgrid, iduo, idx)
+             enddo
+            enddo
+           endif
+           idx = idx + 1
+          endif
+       enddo
+
+       ! we might not have scaled all g
+       Do iglo = idx, g_lo%ulim_proc
+          if (ik_idx(g_lo, iglo) .ne. 1) then
+             g(:,:, iglo) = 0.5 * g(:,:,iglo)
+          endif
+       enddo
+    else
 
 ! scale ky /= 0 modes
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -558,6 +620,8 @@ contains
        idx = idx + 1
     end do
 
+    endif
+
 ! transform
     i = (2*accel_lo%ntgrid+1)*2
     idx = 1
@@ -566,12 +630,16 @@ contains
        call rfftwnd_f77_complex_to_real (yf_fft%plan, i, ag(:,:,k:), i, 1, &
             axf(:,:,ia(idx):), i, 1)
 # elif FFT == _FFTW3_
-    print *,"Fix routine transform2_5d_accel for FFTW3"
+       ! remember FFTW3 for c2r destroys the contents of ag
+       call dfftw_execute_dft_c2r (yf_fft%plan, ag(:, :, k:), &
+            axf(:, :, ia(idx):))
 # endif
        idx = idx + 1
     end do
 
   end subroutine transform2_5d_accel
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine inverse2_5d_accel (axf, g, i)
     use gs2_layouts, only: g_lo, accel_lo, accelx_lo, ik_idx
@@ -588,7 +656,8 @@ contains
        call rfftwnd_f77_real_to_complex (yb_fft%plan, i, axf(:,:,k:), i, 1, &
             ag(:,:,iak(idx):), i, 1)
 # elif FFT == _FFTW3_
-    print *,"Fix routine inverse2_5d for FFTW3"
+       call dfftw_execute_dft_r2c(yb_fft%plan, axf(:, :, k:), &
+            ag(:, :, iak(idx):))
 # endif
        idx = idx + 1
     end do
