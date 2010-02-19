@@ -184,12 +184,16 @@ contains
 
 #elif FFT == _FFTW3_
 
-       call init_crfftw (yf_fft,  1, accel_lo%ny, accel_lo%nx, accel_lo%ntgrid)
-       call init_rcfftw (yb_fft, -1, accel_lo%ny, accel_lo%nx, accel_lo%ntgrid)
+       call init_crfftw (yf_fft,  1, accel_lo%ny, accel_lo%nx, &
+            (2*accel_lo%ntgrid+1) * 2)
+       call init_rcfftw (yb_fft, -1, accel_lo%ny, accel_lo%nx, &
+            (2*accel_lo%ntgrid+1) * 2)
 
 #endif
 
+    
     else
+       ! non-accelerated
        allocate (fft(yxf_lo%ny/2+1, yxf_lo%llim_proc:yxf_lo%ulim_alloc))
        allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
 
@@ -697,8 +701,16 @@ contains
     nny = nny_in
     nnx = nnx_in
 
+#if FFT == _FFTW_    
+
     call init_crfftw (xf3d_cr,  1, nny, nnx)
     call init_rcfftw (xf3d_rc, -1, nny, nnx)
+
+#elif FFT == _FFTW3_
+
+    print *,"insert initialisation for FFTW3 in init_3d, gs2_transforms.fpp"
+
+#endif
 
   end subroutine init_3d
 
@@ -816,7 +828,16 @@ contains
     integer :: ik, it
     type (fft_type) :: xf2d
 
+#if FFT == _FFTW_
+
     call init_crfftw (xf2d, FFTW_BACKWARD, nny, nnx)
+
+#elif FFT == _FFTW3_
+
+    print *, &
+         "insert initialisation for FFTW3 in transform2_2d, gs2_transforms.fpp"
+
+#endif
 
     allocate (phix (nny, nnx))
     allocate (aphi (nny/2+1, nnx))
@@ -848,6 +869,7 @@ contains
 !    call delete_fft(xf2d)
   end subroutine transform2_2d
 
+
   subroutine inverse2_2d (phixf, phi, nny, nnx)
     use fft_work, only: FFTW_FORWARD, delete_fft, init_rcfftw
     use kt_grids, only: naky, nakx => ntheta0, aky
@@ -861,7 +883,16 @@ contains
     integer :: ik, it
     type (fft_type) :: xf2d
 
+#if FFT == _FFTW_
+
     call init_rcfftw (xf2d, FFTW_FORWARD, nny, nnx)
+
+#elif FFT == _FFTW3_
+
+    print *, &
+         "insert initialisation for FFTW3 in inverse2_2d, gs2_transforms.fpp"
+
+#endif    
 
     allocate (aphi (nny/2+1, nnx))
     allocate (phix (nny, nnx))
@@ -889,6 +920,8 @@ contains
 !RN> this statement causes error for lahey with DEBUG. I don't know why
 !    call delete_fft(xf2d)
   end subroutine inverse2_2d
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine transform2_4d (den, phixf, nny, nnx)
     use theta_grid, only: ntgrid
