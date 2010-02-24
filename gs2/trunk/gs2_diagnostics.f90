@@ -1394,8 +1394,8 @@ contains
 !MAB> arrays needed for parity diagnostic
     integer :: iplo, iglo, sgn2, isgn, il, ie
     complex, dimension (:,:,:,:), allocatable :: gparity
-    real, dimension (:,:,:), allocatable :: gm, gp, gmint, gpint, gmavg, gpavg
-    real, dimension (:), allocatable :: gmtot, gptot, gtot
+    real, dimension (:,:,:), allocatable :: gm, gp, gmnorm, gmint, gpint, gmnormint, gmavg, gpavg, gmnormavg
+    real, dimension (:), allocatable :: gmtot, gptot, gtot, gmnormtot
     logical :: first = .true.
 !<MAB
     real :: geavg, glavg, gtavg
@@ -2193,13 +2193,17 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        allocate (gparity(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
        allocate (gm(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
        allocate (gp(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
+       allocate (gmnorm(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
        allocate (gmint(-ntgrid:ntgrid,naky,nspec))
        allocate (gpint(-ntgrid:ntgrid,naky,nspec))
+       allocate (gmnormint(-ntgrid:ntgrid,naky,nspec))
        allocate (gmavg(ntheta0,naky,nspec))
        allocate (gpavg(ntheta0,naky,nspec))
+       allocate (gmnormavg(ntheta0,naky,nspec))
        allocate (gmtot(nspec))
        allocate (gptot(nspec))
        allocate (gtot(nspec))
+       allocate (gmnormtot(nspec))
 
 !        ! TMP FOR TESTING -- MAB
 !        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -2248,6 +2252,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                 do ig = -ntgrid, ntgrid
                    gm(ig,isgn,:) = abs(gparity(ig,1,isgn,:)-gparity(-ig,1,sgn2,:))**2
                    gp(ig,isgn,:) = abs(gparity(ig,1,isgn,:)+gparity(-ig,1,sgn2,:))**2
+                   gmnorm(ig,isgn,:) = gparity(-ig,1,sgn2,:)*conjg(gparity(-ig,1,sgn2,:))
                 end do
              end do
           else
@@ -2257,17 +2262,20 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                    ! calculate + and - parity states and take mod squared
                    gm(ig,isgn,:) = abs(gparity(ig,it,isgn,:)-gparity(-ig,ntheta0-it+2,sgn2,:))**2
                    gp(ig,isgn,:) = abs(gparity(ig,it,isgn,:)+gparity(-ig,ntheta0-it+2,sgn2,:))**2
+                   gmnorm(ig,isgn,:) = gparity(-ig,ntheta0-it+2,sgn2,:)*conjg(gparity(-ig,ntheta0-it+2,sgn2,:))
                 end do
              end do
           end if
           ! integrate out velocity dependence
           call integrate_moment (gm,gmint,1)
           call integrate_moment (gp,gpint,1)
+          call integrate_moment (gmnorm,gmnormint,1)
           ! average along field line
           do is = 1, nspec
              do ik = 1, naky
                 call get_fldline_avg (gmint(:,ik,is),gmavg(it,ik,is))
                 call get_fldline_avg (gpint(:,ik,is),gpavg(it,ik,is))
+                call get_fldline_avg (gmnormint(:,ik,is),gmnormavg(it,ik,is))
              end do
           end do
        end do
@@ -2275,6 +2283,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        do is = 1, nspec
           call get_volume_average (gmavg(:,:,is), gmtot(is))
           call get_volume_average (gpavg(:,:,is), gptot(is))
+          call get_volume_average (gmnormavg(:,:,is), gmnormtot(is))
        end do
 
        deallocate (gparity) ; allocate (gparity(-ntgrid:ntgrid,ntheta0,naky,nspec))
@@ -2290,13 +2299,13 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        end do
 
        ! normalize and take square root to complete RMS
-       where (gtot > epsilon(0.0))
-          gmtot = sqrt(gmtot/gtot) ; gptot = sqrt(gptot/gtot)
+       where (gtot+gmnormtot > epsilon(0.0))
+          gmtot = sqrt(gmtot/(gtot+gmnormtot)) ; gptot = sqrt(gptot/(gtot+gmnormtot))
        elsewhere
-          gmtot = sqrt(gmtot)
+          gmtot = sqrt(gmtot) ; gptot = sqrt(gptot)
        end where
 
-       if (proc0) write (parity_unit,"(4(1x,e12.5))") t, gmtot, gptot, gtot
+       if (proc0) write (parity_unit,"(4(1x,e12.5))") t, gmtot, gptot, gtot+gmnormtot
 
        deallocate (gparity, gm, gp, gmint, gpint, gmavg, gpavg, gmtot, gptot, gtot)
     end if
