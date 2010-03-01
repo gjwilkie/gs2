@@ -651,6 +651,10 @@ contains
     real, dimension (:,:,accelx_lo%llim_proc:), intent (in out) :: axf
     complex, dimension (:,:,g_lo%llim_proc:), intent (out) :: g
     integer :: iglo, i, idx, k
+    integer :: itgrid, iduo
+    integer :: ntgrid
+
+    ntgrid = accel_lo%ntgrid
 
 ! transform
     i = (2*accel_lo%ntgrid+1)*2
@@ -666,6 +670,40 @@ contains
        idx = idx + 1
     end do
 
+    if (.true.) then
+       idx = g_lo%llim_proc
+       do k = accel_lo%llim_proc, accel_lo%ulim_proc
+          ! ignore the large k (anti-alias)
+          if ( .not.aidx(k)) then
+           ! different scale factors depending on ky == 0
+           if (ik_idx(g_lo, idx) .ne. 1) then
+            do iduo = 1, 2 
+             do itgrid = 1, 2*ntgrid+1
+              g(itgrid, iduo, idx) &
+                   = 2.0 * yb_fft%scale * ag(itgrid-(ntgrid+1), iduo, k)
+             enddo
+            enddo
+           else
+            do iduo = 1, 2 
+             do itgrid = 1, 2*ntgrid+1
+              g(itgrid, iduo, idx) &
+                   = yb_fft%scale * ag(itgrid-(ntgrid+1), iduo, k)
+             enddo
+            enddo
+           endif
+           idx = idx + 1
+          endif
+       enddo
+
+       ! we might not have scaled all g
+       Do iglo = idx, g_lo%ulim_proc
+          if (ik_idx(g_lo, iglo) .ne. 1) then
+             g(:,:, iglo) = 2.0 * g(:,:,iglo)
+          endif
+       enddo
+    else
+
+
 ! dealias and scale
     idx = g_lo%llim_proc
     do k = accel_lo%llim_proc, accel_lo%ulim_proc
@@ -679,6 +717,8 @@ contains
        if (ik_idx(g_lo, iglo) == 1) cycle
        g(:,:,iglo) = g(:,:,iglo) * 2.0
     end do
+
+    endif
 
   end subroutine inverse2_5d_accel
 
