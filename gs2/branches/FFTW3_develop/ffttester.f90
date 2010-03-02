@@ -46,7 +46,8 @@ subroutine ffttest(jx,jy,debug)
   use theta_grid, only: ntgrid
   use kt_grids, only: akx, aky, naky, ikx, nx, ny, ntheta0, box, theta0
   use le_grids, only: negrid, nlambda
-  use mp, only: nproc
+  use mp, only: nproc, proc0
+  use mpi
   implicit none
   integer, intent(in):: jx,jy
   logical, optional, intent(in):: debug
@@ -55,8 +56,9 @@ subroutine ffttest(jx,jy,debug)
   integer:: isgn, ig, iglo, index
   logical:: accelerated
   logical,save:: alloc=.true.
-  logical:: printlots, fail
+  logical:: printlots, fail, anyfail
   logical, save :: first=.true. 
+  integer:: mpierr
 
   real, save, dimension (:,:), allocatable :: gr  ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
   real, save, dimension (:,:,:), allocatable :: gra  ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
@@ -182,7 +184,7 @@ subroutine ffttest(jx,jy,debug)
                exact=cos(jx*real(it-1)/real(accelx_lo%nx)*twopi) * cos(jy *real(ik-1)/real(accelx_lo%ny)*twopi)
                err=gra(ig,isgn,index)-exact
                if (err .gt. accelx_lo%nx*accelx_lo%ny*epsilon(err)) then
-                  write(6,fmt='("GS2FFT, exact, it, ik=",2e12.4,2I8)') gra(ig,isgn,index),exact,it,ik
+                  if (printlots) write(6,fmt='("ffttest: GS2FFT, exact, it, ik=",2e12.4,2I8)') gra(ig,isgn,index),exact,it,ik
                   fail=.true. 
                endif
             endif
@@ -196,7 +198,7 @@ subroutine ffttest(jx,jy,debug)
                exact=cos(jx*real(it-1)/real(yxf_lo%nx)*twopi) * cos(jy *real(ik-1)/real(yxf_lo%ny)*twopi)
                err=abs(gr(ik,index)-exact)
                if (err .gt. yxf_lo%nx*yxf_lo%ny*abs(epsilon(err))) then
-                  write(6,fmt='("GS2FFT, exact, it, ik=",2e12.4,2I8)') gr(ik,index),exact,it,ik
+                  if (printlots) write(6,fmt='("ffttest: GS2FFT, exact, it, ik=",2e12.4,2I8)') gr(ik,index),exact,it,ik
                   fail=.true. 
                endif
             endif
@@ -204,8 +206,10 @@ subroutine ffttest(jx,jy,debug)
       enddo
    end if
 
-   if (first) write(6,fmt='(7a8,a12)') "jx","jy","nx","ny","nproc","layout","accel","Pass/Fail"
-   if (fail) then
+   call mpi_reduce(fail,anyfail,1,MPI_LOGICAL,MPI_LOR,0,mpi_comm_world,mpierr)
+
+   if (first .and. proc0) write(6,fmt='(7a8,a12)') "jx","jy","nx","ny","nproc","layout","accel","Pass/Fail"
+   if (anyfail) then
       write(6,fmt='(5i8,a8,l8,a12)') jx,jy, nx, ny, nproc, layout, accelerated, "!!FAIL!!"
    else 
       write(6,fmt='(5i8,a8,l8,a12)') jx,jy, nx, ny, nproc, layout, accelerated, "PASS"
