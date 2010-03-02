@@ -2526,7 +2526,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        deallocate (gparity) ; allocate (gparity(-ntgrid:ntgrid,ntheta0,naky,nspec))
        ! obtain normalization factor = int over phase space of |g|**2
        call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
-       call integrate_moment (gnew*conjg(gnew), gparity, 1)
+       call integrate_moment (spread(aj0,2,2)*spread(aj0,2,2)*gnew*conjg(gnew), gparity, 1)
        call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
        do is = 1, nspec
           do ik = 1, naky
