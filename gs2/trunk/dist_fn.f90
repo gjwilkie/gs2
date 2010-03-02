@@ -4445,6 +4445,7 @@ contains
     deallocate (total)
 
   end subroutine get_flux
+
 !>GGH
 !=============================================================================
 ! Density: Calculate Density perturbations

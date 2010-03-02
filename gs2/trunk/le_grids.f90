@@ -471,6 +471,7 @@ module le_grids
   public :: xx, nterp, testfac, new_trap_int, ecut, vcut, vgrid
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
   public :: eint_error, lint_error, trap_error, integrate_test, wdim
+  public :: integrate_kysum ! MAB
 
   private
 
@@ -1952,7 +1953,7 @@ contains
 
     real, dimension (:), allocatable :: work
     real :: fac
-    integer :: is, il, ie, ik, it, iplo, ig, i
+    integer :: is, il, ie, ik, iplo, ig, i
 
     total = 0.
     do iplo = p_lo%llim_proc, p_lo%ulim_proc
@@ -1979,7 +1980,7 @@ contains
              end do
           end do
        end do
-       
+
        if (present(all)) then
           call sum_allreduce (work)
        else
@@ -2038,6 +2039,74 @@ contains
     ! --- ile contains necessary and sufficient information for (ig,it,ik,is)
 
   end subroutine integrate_moment_lec
+
+  subroutine integrate_kysum (g, ig, total, all)
+! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
+! NOTE: Takes f = f(y, lambda, E, species) and returns int sum_{ky} f, where the integral
+! is over energy and lambda (not sigma)
+    use constants, only: zi
+    use mp, only: nproc, iproc
+    use theta_grid, only: ntgrid
+    use species, only: nspec
+    use kt_grids, only: naky, ntheta0, aky
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx, p_lo
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+    complex, dimension (p_lo%llim_proc:), intent (in) :: g
+    integer, intent (in) :: ig
+    complex, dimension (:), intent (out) :: total
+    integer, optional, intent(in) :: all
+
+    complex, dimension (negrid,nlambda,nspec) :: gksum
+    complex, dimension (:), allocatable :: work
+    real :: fac
+    integer :: is, il, ie, ik, it, iplo, i
+
+    total = 0. ; gksum = 0.
+    do iplo = p_lo%llim_proc, p_lo%ulim_proc
+       ik = ik_idx(p_lo,iplo)
+       ie = ie_idx(p_lo,iplo)
+       is = is_idx(p_lo,iplo)
+       il = il_idx(p_lo,iplo)
+       gksum(ie,il,is) = gksum(ie,il,is) + real(aky(ik)*g(iplo)) + zi*aimag(aky(ik)*g(iplo))
+    end do
+    ! real part of gksum is | sum_{ky} ky * J0 * real[ ky*(conjg(phi+)*h- + conjg(phi-)*h+ ] |**2
+    ! imag part of gksum is | sum_{ky} ky * J0 * aimag[ ky*(conjg(phi+)*h- + conjg(phi-)*h+ ] |**2
+    gksum = real(gksum)**2 + zi*aimag(gksum)**2
+
+    do iplo = p_lo%llim_proc, p_lo%ulim_proc
+       ie = ie_idx(p_lo,iplo)
+       is = is_idx(p_lo,iplo)
+       il = il_idx(p_lo,iplo)
+       fac = w(ie,is)
+       total(is) = total(is) + fac*wl(ig,il)*gksum(ie,il,is)
+    end do
+
+    if (nproc > 1) then
+       allocate (work(nspec)) ; work = 0.
+       i = 0
+       do is = 1, nspec
+          i = i + 1
+          work(i) = total(is)
+       end do
+       
+       if (present(all)) then
+          call sum_allreduce (work)
+       else
+          call sum_reduce (work, 0)
+       end if
+
+       if (proc0 .or. present(all)) then
+          i = 0
+          do is = 1, nspec
+             i = i + 1
+             total(is) = work(i)
+          end do
+       end if
+       deallocate (work)
+    end if
+
+  end subroutine integrate_kysum
 
   subroutine lint_error (g, weights, total)
     use theta_grid, only: ntgrid, bmag, bmax
