@@ -1400,7 +1400,7 @@ contains
     complex, dimension (:,:,:), allocatable :: g0, gm, gp
     complex, dimension (:,:,:), allocatable :: g_kint, gm_kint, gp_kint
     complex, dimension (:,:), allocatable :: g_avg, gnorm_avg, phim
-    complex, dimension (:), allocatable :: g_all_tot, g_nokx_tot, g_nosig_tot
+    complex, dimension (:), allocatable :: g_all_tot, g_nokx_tot, g_nosig_tot, gtmp
     complex, dimension (:), allocatable :: gnorm_all_tot, gnorm_nokx_tot, gnorm_nosig_tot
     real, dimension (:,:,:), allocatable :: gmnorm, gmint, gpint, gmnormint, gmavg, gpavg, gmnormavg
     real, dimension (:), allocatable :: gmtot, gptot, gtot, gmnormtot
@@ -2219,7 +2219,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        allocate (phim(-ntgrid:ntgrid,naky))
        allocate (g_kint(-ntgrid:ntgrid,2,nspec), gm_kint(-ntgrid:ntgrid,2,nspec), gp_kint(-ntgrid:ntgrid,2,nspec))
        allocate (g_avg(ntheta0,nspec), gnorm_avg(ntheta0,nspec))
-       allocate (g_all_tot(nspec), g_nokx_tot(nspec), g_nosig_tot(nspec))
+       allocate (g_all_tot(nspec), g_nokx_tot(nspec), g_nosig_tot(nspec), gtmp(nspec))
        allocate (gnorm_all_tot(nspec), gnorm_nokx_tot(nspec), gnorm_nosig_tot(nspec))
 
         ! TMP FOR TESTING -- MAB
@@ -2545,14 +2545,14 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        end where
 
        where (real(gnorm_all_tot) > epsilon(0.0))
-          g_all_tot = sqrt(real(g_all_tot)/real(gnorm_all_tot))
+          gtmp = sqrt(real(g_all_tot)/real(gnorm_all_tot))
        elsewhere
-          g_all_tot = sqrt(real(g_all_tot))
+          gtmp = sqrt(real(g_all_tot))
        end where
        where (aimag(gnorm_all_tot) > epsilon(0.0))
-          g_all_tot = g_all_tot + zi*sqrt(aimag(g_all_tot)/aimag(gnorm_all_tot))
+          g_all_tot = gtmp + zi*sqrt(aimag(g_all_tot)/aimag(gnorm_all_tot))
        elsewhere
-          g_all_tot = g_all_tot + zi*sqrt(aimag(g_all_tot))
+          g_all_tot = gtmp + zi*sqrt(aimag(g_all_tot))
        end where
 
        ! normalize g(theta,vpa) +/- g(-theta,-vpa) terms
@@ -2563,14 +2563,14 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        end where
        
        where (real(gnorm_nokx_tot) > epsilon(0.0))
-          g_nokx_tot = sqrt(real(g_nokx_tot)/real(gnorm_nokx_tot))
+          gtmp = sqrt(real(g_nokx_tot)/real(gnorm_nokx_tot))
        elsewhere
-          g_nokx_tot = sqrt(real(g_nokx_tot))
+          gtmp = sqrt(real(g_nokx_tot))
        end where
        where (aimag(gnorm_nokx_tot) > epsilon(0.0))
-          g_nokx_tot = g_nokx_tot + zi*sqrt(aimag(g_nokx_tot)/aimag(gnorm_nokx_tot))
+          g_nokx_tot = gtmp + zi*sqrt(aimag(g_nokx_tot)/aimag(gnorm_nokx_tot))
        elsewhere
-          g_nokx_tot = g_nokx_tot + zi*sqrt(aimag(g_nokx_tot))
+          g_nokx_tot = gtmp + zi*sqrt(aimag(g_nokx_tot))
        end where
 
        ! normalize g(theta,kx) +/ g(-theta,-kx) terms
@@ -2581,14 +2581,14 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        end where
 
        where (real(gnorm_nosig_tot) > epsilon(0.0))
-          g_nosig_tot = sqrt(real(g_nosig_tot)/real(gnorm_nosig_tot))
+          gtmp = sqrt(real(g_nosig_tot)/real(gnorm_nosig_tot))
        elsewhere
-          g_nosig_tot = sqrt(real(g_nosig_tot))
+          gtmp = sqrt(real(g_nosig_tot))
        end where
        where (aimag(gnorm_nosig_tot) > epsilon(0.0))
-          g_nosig_tot = g_nosig_tot + zi*sqrt(aimag(g_nosig_tot)/aimag(gnorm_nosig_tot))
+          g_nosig_tot = gtmp + zi*sqrt(aimag(g_nosig_tot)/aimag(gnorm_nosig_tot))
        elsewhere
-          g_nosig_tot = g_nosig_tot + zi*sqrt(aimag(g_nosig_tot))
+          g_nosig_tot = gtmp + zi*sqrt(aimag(g_nosig_tot))
        end where
 
        if (proc0) write (parity_unit,"(19(1x,e12.5))") t, gmtot, gptot, real(g_all_tot), aimag(g_all_tot), &
@@ -2600,7 +2600,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        deallocate (gm_nokx_tot, gm_nosig_tot, gp_nokx_tot, gp_nosig_tot, gmnorm_nokx_tot, gmnorm_nosig_tot)
        deallocate (g_avg, gnorm_avg)
        deallocate (g_kint, gm_kint, gp_kint)
-       deallocate (g_all_tot, g_nokx_tot, g_nosig_tot)
+       deallocate (g_all_tot, g_nokx_tot, g_nosig_tot, gtmp)
        deallocate (gnorm_all_tot, gnorm_nokx_tot, gnorm_nosig_tot)
        deallocate (phim, gmx, gpx)
     end if
