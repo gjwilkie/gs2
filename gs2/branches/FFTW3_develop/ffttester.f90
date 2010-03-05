@@ -53,12 +53,9 @@ subroutine ffttest(jx,jy,debug)
   logical, optional, intent(in):: debug
 !  ik,is,ie,il,it are indices for ky, species, energy, lambda and kx respectively
   integer:: ik,is,ie,il,it,ia
-  integer:: isgn, ig, iglo, index
-  logical:: accelerated
-  logical,save:: alloc=.true.
-  logical:: printlots, fail, anyfail
-  logical, save :: first=.true. 
-  integer:: mpierr
+  integer:: isgn, ig, iglo, index, mpierr
+  logical:: accelerated, printlots, fail, anyfail
+  logical,save:: alloc=.true., first=.true. 
 
   real, save, dimension (:,:), allocatable :: gr  ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
   real, save, dimension (:,:,:), allocatable :: gra  ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
@@ -205,14 +202,20 @@ subroutine ffttest(jx,jy,debug)
          enddo
       enddo
    end if
-
    call mpi_reduce(fail,anyfail,1,MPI_LOGICAL,MPI_LOR,0,mpi_comm_world,mpierr)
+   if (mpierr .ne. MPI_SUCCESS) write(6,*) "ffttest: mpi_reduce gives mpierr=",mpierr
+!   call mpi_barrier(mpi_comm_world,mpierr)
+!   if (mpierr .ne. MPI_SUCCESS) write(6,*) "ffttest: mpi_barrier gives mpierr=",mpierr
 
    if (first .and. proc0) write(6,fmt='(7a8,a12)') "jx","jy","nx","ny","nproc","layout","accel","Pass/Fail"
-   if (anyfail) then
-      write(6,fmt='(5i8,a8,l8,a12)') jx,jy, nx, ny, nproc, layout, accelerated, "!!FAIL!!"
-   else 
-      write(6,fmt='(5i8,a8,l8,a12)') jx,jy, nx, ny, nproc, layout, accelerated, "PASS"
+
+
+   if (proc0) then
+      if (anyfail) then
+         write(6,fmt='(5i8,a8,l8,a12)') jx,jy, nx, ny, nproc, layout, accelerated, "!!FAIL!!"
+      else 
+         write(6,fmt='(5i8,a8,l8,a12)') jx,jy, nx, ny, nproc, layout, accelerated, "PASS"
+      endif
    endif
    first=.false.
 end
