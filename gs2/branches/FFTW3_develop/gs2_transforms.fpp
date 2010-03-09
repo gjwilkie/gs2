@@ -128,6 +128,8 @@ contains
     logical, save :: initialized = .false.
     character (1) :: char
 
+    integer :: nb_ffts
+
     if (initialized) return
     initialized = .true.
 
@@ -137,12 +139,33 @@ contains
        accel = .true.
     else
        call init_x_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
+
+# if FFT == _FFTW_
+
        call init_ccfftw (xf_fft,  1, xxf_lo%nx)
        call init_ccfftw (xb_fft, -1, xxf_lo%nx)
+
+# elif FFT == _FFTW3_
+
+       if (.not.allocated(xxf)) then
+          allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+       endif
+
+       ! number of ffts to be calculated
+       nb_ffts = xxf_lo%ulim_proc - xxf_lo%llim_proc + 1
+
+       call init_ccfftw (xf_fft,  1, xxf_lo%nx, nb_ffts, xxf)
+       call init_ccfftw (xb_fft, -1, xxf_lo%nx, nb_ffts, xxf)
+# endif
+
        xfft_initted = .true.
     end if
 
   end subroutine init_x_transform
+
+  
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 
   subroutine init_y_fft (ntgrid)
 
@@ -153,6 +176,8 @@ contains
 
     logical :: initialized = .false.
     integer :: idx, i
+
+    integer :: nb_ffts
 
     if (initialized) return
     initialized = .true.
@@ -195,15 +220,38 @@ contains
     else
        ! non-accelerated
        allocate (fft(yxf_lo%ny/2+1, yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-       allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+       if (.not.allocated(xxf))then
+          allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+       endif
 
        if (.not. xfft_initted) then
+
+# if FFT == _FFTW_
           call init_ccfftw (xf_fft,  1, xxf_lo%nx)
           call init_ccfftw (xb_fft, -1, xxf_lo%nx)
+# elif FFT == _FFTW3_
+          ! number of ffts to be calculated
+          nb_ffts = xxf_lo%ulim_proc - xxf_lo%llim_proc + 1
+          
+          call init_ccfftw (xf_fft,  1, xxf_lo%nx, nb_ffts, xxf)
+          call init_ccfftw (xb_fft, -1,  xxf_lo%nx, nb_ffts, xxf)
+          
+# endif
+          xfft_initted = .true.
        end if
 
+# if FFT == _FFTW_
        call init_crfftw (yf_fft,  1, yxf_lo%ny)
        call init_rcfftw (yb_fft, -1, yxf_lo%ny)
+#elif FFT == _FFTW3_
+       ! number of ffts to be calculated
+       nb_ffts = yxf_lo%ulim_proc - yxf_lo%llim_proc + 1
+
+       call init_crfftw (yf_fft,  1, yxf_lo%ny, nb_ffts)
+       call init_rcfftw (yb_fft, -1,  yxf_lo%ny, nb_ffts)
+
+#endif
+
     end if
 
   end subroutine init_y_fft
@@ -419,7 +467,7 @@ contains
 # if FFT == _FFTW_
     call fftw_f77 (xf_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
 # elif FFT == _FFTW3_
-    print *,"Fix routine transform_x5d for FFTW3"
+    call dfftw_execute(xf_fft%plan)
 # endif
     deallocate (aux)
 
@@ -441,13 +489,13 @@ contains
     i = xxf_lo%ulim_proc - xxf_lo%llim_proc + 1
 
     ! do ffts
-    allocate (aux(xb_fft%n))
 # if FFT == _FFTW_
+    allocate (aux(xb_fft%n))
     call fftw_f77 (xb_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
-# elif FFT == _FFTW3_
-    print *,"Fix routine inverse_x5d for FFTW3"
-# endif
     deallocate (aux)
+# elif FFT == _FFTW3_
+    call dfftw_execute(xb_fft%plan)
+# endif
 
     call scatter (g2x, xxf, g)
 
@@ -477,7 +525,8 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (yf_fft%plan, i, fft, 1, yxf_lo%ny/2+1, yxf, 1, yxf_lo%ny)
 # elif FFT == _FFTW3_
-    print *,"Fix routine transform_y5d for FFTW3"
+
+    call dfftw_execute_dft_c2r (yf_fft%plan, fft, yxf)
 # endif
 
     call prof_leaving ("transform_y5d", "gs2_transforms")
@@ -499,7 +548,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (yb_fft%plan, i, yxf, 1, yxf_lo%ny, fft, 1, yxf_lo%ny/2+1)
 # elif FFT == _FFTW3_
-    print *,"Fix routine inverse_y5d for FFTW3"
+    call dfftw_execute_dft_r2c (yb_fft%plan, yxf, fft)
 # endif
 
     call scatter (x2y, fft, xxf)
