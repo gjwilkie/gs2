@@ -152,6 +152,7 @@ margin: 0 auto;
 	font-style: italic;
 	font-size: 10px;
 	padding-right: 20px;
+	text-transform: uppercase;
 }
 
 
@@ -303,6 +304,7 @@ width: 690px;
 	color: #FFFFFF;
 	padding-left: 20px;
 	padding-top: 10px;
+	text-transform: lowercase;
 }
 
 #sidebar2 ul {

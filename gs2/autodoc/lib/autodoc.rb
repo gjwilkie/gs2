@@ -201,6 +201,7 @@ class Autodoc
 # 			(p 'start', file, subdir_with_slash, match, token, name, documentation, out) if token == "add_nonlinear_terms"
 			beginning + out
 		end
+		highlighted.gsub!(/AUTODOC_COMMENT/, '')
 
 		highlighted
 # 		p @function_references
@@ -381,12 +382,45 @@ class Autodoc
 	# Exactly the same as Autodoc#each_module except that this function separates the text of a module into individual sections each corresponding to the definition of a subroutine or a function
 
 	TYPE_MATCH = "#{FORTRAN_TYPES.join('|')}|type\\s*\\(\\s*\\w+\\s*\\)"
-
-	SUBROUTINE_OR_FUNCTION_SPLIT = Regexp.new(".+?(?:^\\s*subroutine|^\\s*(?:#{TYPE_MATCH}|pure)?\\s*function|\\Z)", Regexp::MULTILINE | Regexp::IGNORECASE)
+	
+	SUBROUTINE_OR_FUNCTION_DECLARATION = Regexp.new("(?:^\\s*subroutine|^\\s*(?:#{TYPE_MATCH}|pure)?\\s*function)", Regexp::MULTILINE | Regexp::IGNORECASE)
+	
+# 		SUBROUTINE_OR_FUNCTION_SPLIT = Regexp.new("(?:(?:^\\s+interface.*?^\\s+end\\s+interface)|.)+?(?:^\\s*subroutine|^\\s*(?:#{TYPE_MATCH}|pure)?\\s*function|\\Z)", Regexp::MULTILINE | Regexp::IGNORECASE)
+	
+	
+	SUBROUTINE_OR_FUNCTION_SPLIT = Regexp.new("(?:(?:^\\s+interface.*?^\\s+end\\s+interface)|.)+?(?:#{SUBROUTINE_OR_FUNCTION_DECLARATION}|\\Z)", Regexp::MULTILINE | Regexp::IGNORECASE)
 	
 	def each_subroutine_or_function(text, &block)
 # 		p text
 # 		p SUBROUTINE_OR_FUNCTION_SPLIT
+		#For now, replace identical subroutine declarations with different preprocessor declarations with the longest one and a note in the documentation.     
+		regex = Regexp.new("(?<maincall>(?<dec>#{SUBROUTINE_OR_FUNCTION_DECLARATION})\\s*(?<name>\\w+))(?<call1>\\s*\\([^)]+\\))?(?<middle>\\s.*?)#{SUBROUTINE_OR_FUNCTION_DECLARATION}\\s*\\k<name>(?<call2>\\s*\\([^)]+\\))?\\s", Regexp::MULTILINE | Regexp::IGNORECASE)
+# 		p regex
+		text = text.gsub(regex) do
+
+			match = $~
+# 			pp match
+			comment = nil
+			if match[:call1] and match[:call2]
+				if match[:call1].scan(/,/).size > match[:call2].scan(/,/).size
+					comment = 2
+				else
+					comment = 1
+				end
+			elsif match[:call1]
+				comment = 2
+			else
+				comment = 1
+			end
+			maincall = match[:maincall].sub(/\A[\s]+/, '')
+			(p maincall; exit) if maincall =~ /^\n/
+			%[\n#{comment == 1 ? "AUTODOC_COMMENT" : ""} #{maincall}#{match[:call1]}#{match[:middle]}\n#{comment == 2 ? "AUTODOC_COMMENT" : ""} #{maincall}#{match[:call2]}
+			
+			!<doc> Note that the call prototype varies according to compiler directives (<small>#{match[:call2]}</small> vs <small>#{match[:call1]}</small>) - see source code </doc>
+			]
+		end
+# 		puts text
+		                 
 		subroutine_blocks = (text).scan(SUBROUTINE_OR_FUNCTION_SPLIT)
 		beginning = subroutine_blocks.shift; ending = subroutine_blocks.pop
 		beginning = yield(beginning, 'autodoc_module_outside')
@@ -731,8 +765,10 @@ EOF
 		<<EOF
 	<!-- start content -->
 	<div id="content">
-	<!--<h2 class="title">Contains</h2>-->
-	<div class = "entry">#{@subroutines.keys.sort.inject(""){|str, key| str += %[<a href="##{key}">#{key}</a>, ]; str}.chop.chop}</div>
+	
+	<div class = "entry">
+	<p class="section">Contains:</p><br>
+	#{@subroutines.keys.sort.inject(""){|str, key| str += %[<a href="##{key}">#{key}</a>, ]; str}.chop.chop}</div>
 	<div class = "entry">
 	#{use_list(@autodoccer.uses[[@module_name, 'autodoc_module_outside']])}</div><br>
 #{@subroutines.inject("") do |str, (name, data)|
