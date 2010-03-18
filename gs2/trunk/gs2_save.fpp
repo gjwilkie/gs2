@@ -283,15 +283,20 @@ contains
           end if
        end if
 
-       if (allocated(kx_shift)) then   ! MR begin
-          istatus = nf90_def_var (ncid, "kx_shift", netcdf_real, &
-                  (/ kyid /), kx_shift_id)
-          if (istatus /= NF90_NOERR) then
-             ierr = error_unit()
-             write(ierr,*) "nf90_def_var kx_shift error: ", nf90_strerror(istatus)
-             goto 1
-          endif
-       endif   ! MR end 
+! remove allocated conditional because we want to be able to restart
+! using exb shear from a case which does not have exb shear (i.e.
+! we need kx_shift variable defined in netcdf file even if no exb
+! shear present in simulation) -- MAB + CMR
+!       if (allocated(kx_shift)) then   ! MR begin
+       istatus = nf90_def_var (ncid, "kx_shift", netcdf_real, &
+            (/ kyid /), kx_shi   ft_id)
+       if (istatus /= NF90_NOERR) then
+          ierr = error_unit()
+          write(ierr,*) "nf90_def_var kx_shift error: ", nf90_strerror(istatus)
+          goto 1
+       endif
+          
+!       endif   ! MR end 
        
        istatus = nf90_enddef (ncid)
        if (istatus /= NF90_NOERR) then
@@ -424,6 +429,11 @@ contains
     if (allocated(kx_shift)) then ! MR begin
        if (.not. allocated(stmp)) allocate (stmp(naky))   
        stmp = kx_shift
+       istatus = nf90_put_var (ncid, kx_shift_id, stmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kx_shift_id)
+    else
+       if (.not. allocated(stmp)) allocate (stmp(naky))
+       stmp = 0.
        istatus = nf90_put_var (ncid, kx_shift_id, stmp)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kx_shift_id)
     endif ! MR end
