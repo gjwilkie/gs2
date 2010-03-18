@@ -289,7 +289,7 @@ contains
 ! shear present in simulation) -- MAB + CMR
 !       if (allocated(kx_shift)) then   ! MR begin
        istatus = nf90_def_var (ncid, "kx_shift", netcdf_real, &
-            (/ kyid /), kx_shi   ft_id)
+            (/ kyid /), kx_shift_id)
        if (istatus /= NF90_NOERR) then
           ierr = error_unit()
           write(ierr,*) "nf90_def_var kx_shift error: ", nf90_strerror(istatus)
