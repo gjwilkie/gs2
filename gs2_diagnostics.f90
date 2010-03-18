@@ -2201,8 +2201,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        end if
 
        allocate (gparity(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
-       allocate (gmx(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
-       allocate (gpx(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
        allocate (g0(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
        allocate (gm(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
        allocate (gp(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
@@ -2368,6 +2366,9 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           gnorm_all_tot(is) = sum(gnorm_avg(:,is))
        end do
 
+       allocate (gmx(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
+       allocate (gpx(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
+
        ! now we want diagnostic of phase space average of
        ! |J0*(h(z,vpa) +/- h(-z,-vpa))|**2 / ( |J0*h(z,vpa)|**2 + |J0*h(-z,-vpa)|**2 )
        do it = 1, ntheta0
@@ -2412,6 +2413,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 
        ! sum over kx
        gp = sum(gpx,2)
+       deallocate (gpx)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
              call integrate_kysum (gp(ig,isgn,:),ig,g_kint(ig,isgn,:),1)
@@ -2423,6 +2425,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 
        ! get normalizing terms for above diagnostic
        gm = sum(gmx,2)
+       deallocate (gmx)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
              call integrate_kysum (gm(ig,isgn,:),ig,gm_kint(ig,isgn,:),1)
@@ -2596,13 +2599,17 @@ if (debug) write(6,*) "loop_diagnostics: -2"
             real(gnorm_nokx_tot), aimag(gnorm_nokx_tot), gm_nosig_tot, gp_nosig_tot, &
             real(g_nosig_tot), aimag(g_nosig_tot), real(gnorm_nosig_tot), aimag(gnorm_nosig_tot)
 
-       deallocate (gparity, gm, gp, gmint, gpint, gmavg, gpavg, gmtot, gptot, gtot)
-       deallocate (gm_nokx_tot, gm_nosig_tot, gp_nokx_tot, gp_nosig_tot, gmnorm_nokx_tot, gmnorm_nosig_tot)
+       deallocate (gparity, g0)
+       deallocate (gm, gp, gmnorm, gmint, gpint, gmnormint)
+       deallocate (gmavg, gpavg, gmnormavg)
+       deallocate (gmtot, gm_nokx_tot, gm_nosig_tot)
+       deallocate (gptot, gp_nokx_tot, gp_nosig_tot)
+       deallocate (gtot, gmnormtot, gmnorm_nokx_tot, gmnorm_nosig_tot)
        deallocate (g_avg, gnorm_avg)
        deallocate (g_kint, gm_kint, gp_kint)
        deallocate (g_all_tot, g_nokx_tot, g_nosig_tot, gtmp)
        deallocate (gnorm_all_tot, gnorm_nokx_tot, gnorm_nosig_tot)
-       deallocate (phim, gmx, gpx)
+       deallocate (phim)
     end if
 
     call broadcast (test_conserve)
