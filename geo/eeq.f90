@@ -159,7 +159,7 @@ contains
     data init /1/
     save init
 
-    logical:: debug =.false.
+    logical:: debug =.true.
     
 ! Need to generalize initialization condition if equilibrium changes
 
@@ -379,7 +379,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 ! Read the data
 
    read(5,1000) char, char, char, char, char, i, nw, nh
-   write(*,1000) char, char, char, char, char, i, nw, nh
+!   write(*,1000) char, char, char, char, char, i, nw, nh
 
     nwb = nw * big
     nhb = nh * big
@@ -388,8 +388,8 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
     read(5,2020) rwid, zhei, rcentr, rleft, xdum      
     read(5,2020) R_mag, Z_mag, psi_0, psi_a, bcentr
-    write(*,2020) rwid, zhei, rcentr, rleft, xdum      
-    write(*,2020) R_mag, Z_mag, psi_0, psi_a, bcentr
+!    write(*,2020) rwid, zhei, rcentr, rleft, xdum      
+!    write(*,2020) R_mag, Z_mag, psi_0, psi_a, bcentr
 
 !
 ! pbar is defined by
@@ -444,15 +444,19 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     deallocate(zp, temp)
 
     read(5,2020) (dummy(j) ,   j = 1, nw)
+    
+!    write(*,2020) (dummy(j) ,   j = 1, nw)
+!    write (*,*) 
     call inter_cspl(nw, spsi_bar, dummy, nwb, psi_bar, qsf)
 
     nw = nwb
     nh = nhb
-
-    read(5,2022) nbbbs, ndum
+    read (5, *) nbbbs, ndum
+    write (*,*) nbbbs, "asdf"
+!    read(5,2022) nbbbs, ndum
    allocate(rbbbs(nbbbs), zbbbs(nbbbs), thetab(nbbbs), r_bound(nbbbs))
     read(5,2020) (rbbbs(i), zbbbs(i) , i = 1, nbbbs)
-
+    write (*,*) (rbbbs(i), i=1,nbbbs)
 ! get r_boundary(theta)
 
     thetab = atan2 ((zbbbs-Z_mag), (rbbbs-R_mag))
@@ -1263,7 +1267,7 @@ if (debug) write(6,*) "efit_init: do i"
     if(n < nz) then
        write(*,*) 'nbbbs < nz -- very strange.  Stopping.'
        write(*,*) 'Look in eeq.f90.'
-       stop
+!       stop
     endif
 
     j = 0
