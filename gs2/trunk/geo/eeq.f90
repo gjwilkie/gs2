@@ -451,12 +451,11 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
     nw = nwb
     nh = nhb
-    read (5, *) nbbbs, ndum
-    write (*,*) nbbbs, "asdf"
-!    read(5,2022) nbbbs, ndum
+!    read (5, *) nbbbs, ndum
+    read(5,2022) nbbbs, ndum
    allocate(rbbbs(nbbbs), zbbbs(nbbbs), thetab(nbbbs), r_bound(nbbbs))
     read(5,2020) (rbbbs(i), zbbbs(i) , i = 1, nbbbs)
-    write (*,*) (rbbbs(i), i=1,nbbbs)
+!    write (*,*) (rbbbs(i), i=1,nbbbs)
 ! get r_boundary(theta)
 
     thetab = atan2 ((zbbbs-Z_mag), (rbbbs-R_mag))
