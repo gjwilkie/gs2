@@ -1,4 +1,7 @@
 module kt_grids_single
+! <doc> Set up values of kx and ky for linear runs that use a single k_perp mode.
+! </doc>
+
   implicit none
 
   public :: init_kt_grids_single, single_get_sizes, single_get_grids
@@ -55,6 +58,8 @@ contains
 end module kt_grids_single
 
 module kt_grids_range
+! <doc> Set up ranges of kx and ky for linear runs.
+! </doc>
   implicit none
 
   public :: init_kt_grids_range, range_get_sizes, range_get_grids
@@ -127,6 +132,8 @@ contains
 end module kt_grids_range
 
 module kt_grids_specified
+! <doc> Set up sets of (kx, ky) values for linear runs.
+! </doc>
   implicit none
 
   public :: init_kt_grids_specified, specified_get_sizes, specified_get_grids
@@ -209,6 +216,8 @@ contains
 end module kt_grids_specified
 
 module kt_grids_box
+! <doc> Set the perpendicular box size and resolution for linear or nonlinear runs.
+! </doc>
   implicit none
 
   public :: init_kt_grids_box, box_get_sizes, box_get_grids
@@ -347,6 +356,8 @@ contains
 end module kt_grids_box
 
 module kt_grids_xbox
+! <doc> Deprecated.
+! </doc>
   implicit none
 
   public :: init_kt_grids_xbox, xbox_get_sizes, xbox_get_grids
@@ -409,6 +420,10 @@ contains
 end module kt_grids_xbox
 
 module kt_grids
+!  <doc> Set up the perpendicular wavenumbers by calling the appropriate sub-modules.  Also, set the normalizing
+! length in the perpendicular directions, depending on whether the thermal velocity that appears in the gyroradius
+! expression contains a factor of square root of two or not.
+! </doc>
   implicit none
 
   public :: init_kt_grids, box, finish_kt_grids
