@@ -57,7 +57,8 @@ contains
 
     implicit none
 
-    call init_fields_implicit
+! BD:  Bug fix; found by Numata
+!    call init_fields_implicit
     ! MAB> new field init option ported from agk
     if (new_field_init) then
        call get_init_field (phinew, aparnew, bparnew)

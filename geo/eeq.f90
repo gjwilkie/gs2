@@ -438,10 +438,14 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
        do i = 1, nwb
           efit_psi(i,j) = fitp_surf2(efit_R(i), efit_Z(j), nw, nh, &
                sefit_R, sefit_Z, sefit_psi, nw, zp, 1.)
+!          write (9, *) efit_R(i), efit_Z(j), efit_psi(i,j)
        enddo
+!       write (9, *)
     enddo
       
     deallocate(zp, temp)
+
+
 
     read(5,2020) (dummy(j) ,   j = 1, nw)
     
