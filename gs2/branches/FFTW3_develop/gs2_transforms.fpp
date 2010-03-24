@@ -780,17 +780,22 @@ contains
 
   end subroutine inverse2_5d_accel
 
-  subroutine init_3d (nny_in, nnx_in)
+  subroutine init_3d (nny_in, nnx_in, how_many_in)
 
     use fft_work, only: init_crfftw, init_rcfftw, delete_fft
     logical :: initialized = .false.
-    integer :: nny_in, nnx_in
-    integer, save :: nnx, nny
+    integer :: nny_in, nnx_in, how_many_in
+    integer, save :: nnx, nny, how_many
 
     if (initialized) then
        if (nnx /= nnx_in .or. nny /= nny_in) then
           call delete_fft(xf3d_cr)
           call delete_fft(xf3d_rc)
+# if FFT == _FFTW3_
+       elseif ( how_many /= how_many_in) then
+          call delete_fft(xf3d_cr)
+          call delete_fft(xf3d_rc)
+# endif
        else
           return
        end if
@@ -798,6 +803,7 @@ contains
     initialized = .true.
     nny = nny_in
     nnx = nnx_in
+    how_many = how_many_in
 
 #if FFT == _FFTW_    
 
@@ -806,7 +812,8 @@ contains
 
 #elif FFT == _FFTW3_
 
-    print *,"insert initialisation for FFTW3 in init_3d, gs2_transforms.fpp"
+    call init_crfftw (xf3d_cr,  1, nny, nnx, how_many)
+    call init_rcfftw (xf3d_rc, -1, nny, nnx, how_many)
 
 #endif
 
@@ -826,7 +833,7 @@ contains
 
 ! scale, dealias and transpose
 
-    call init_3d (nny, nnx)
+    call init_3d (nny, nnx, 2*ntgrid+1)
 
     allocate (phix (-ntgrid:ntgrid, nny, nnx))
     allocate (aphi (-ntgrid:ntgrid, nny/2+1, nnx))
@@ -852,7 +859,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
 # elif FFT == _FFTW3_
-    print *,"Fix routine transform2_3d for FFTW3"
+    call dfftw_execute_dft_c2r (xf3d_cr%plan, aphi, phix)
 # endif
 
     do it=1,nnx
@@ -895,7 +902,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (xf3d_rc%plan, i, phix, i, 1, aphi, i, 1)
 # elif FFT == _FFTW3_
-    print *,"Fix routine inverse2_3d for FFTW3"
+    call dfftw_execute_dft_r2c (xf3d_rc%plan, phix, aphi)
 # endif
 
 ! dealias and scale
@@ -912,6 +919,8 @@ contains
     deallocate (aphi, phix)
 
   end subroutine inverse2_3d
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine transform2_2d (phi, phixf, nny, nnx)
     use fft_work, only: FFTW_BACKWARD, delete_fft, init_crfftw
@@ -932,8 +941,7 @@ contains
 
 #elif FFT == _FFTW3_
 
-    print *, &
-         "insert initialisation for FFTW3 in transform2_2d, gs2_transforms.fpp"
+    call init_crfftw (xf2d, FFTW_BACKWARD, nny, nnx, 1)
 
 #endif
 
@@ -957,7 +965,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf2d%plan, 1, aphi, 1, 1, phix, 1, 1)
 # elif FFT == _FFTW3_
-    print *,"Fix routine transform2_2d for FFTW3"
+    call dfftw_execute_dft_c2r (xf2d%plan, aphi, phix)
 # endif
 
     phixf(:,:)=transpose(phix(:,:))
@@ -987,8 +995,7 @@ contains
 
 #elif FFT == _FFTW3_
 
-    print *, &
-         "insert initialisation for FFTW3 in inverse2_2d, gs2_transforms.fpp"
+    call init_rcfftw (xf2d, FFTW_FORWARD, nny, nnx, 1)
 
 #endif    
 
@@ -1002,7 +1009,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (xf2d%plan, 1, phix, 1, 1, aphi, 1, 1)
 # elif FFT == _FFTW3_
-    print *,"Fix routine inverse2_2d for FFTW3"
+    call dfftw_execute_dft_r2c (xf2d%plan, phix, aphi)
 # endif
 
 ! scale, dealias and transpose
@@ -1035,7 +1042,7 @@ contains
 
 ! scale, dealias and transpose
 
-    call init_3d (nny, nnx)
+    call init_3d (nny, nnx, 2*ntgrid+1)
 
     allocate (phix (-ntgrid:ntgrid, nny, nnx))
     allocate (aphi (-ntgrid:ntgrid, nny/2+1, nnx))
@@ -1061,7 +1068,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
 # elif FFT == _FFTW3_
-    print *,"Fix routine transform2_4d for FFTW3"
+    call dfftw_execute_dft_c2r (xf3d_cr%plan, aphi, phix)
 # endif
 
     do it=1,nnx
