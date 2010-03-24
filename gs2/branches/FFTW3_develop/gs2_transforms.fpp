@@ -1,3 +1,8 @@
+! Modifications for using FFTW version 3:
+! (c) The Numerical Algorithms Group (NAG) Ltd, 2009 
+!                                 on behalf of the HECToR project
+
+
 # include "define.inc"
 
 module gs2_transforms
@@ -63,6 +68,10 @@ module gs2_transforms
   type (fft_type) :: xf3d_cr, xf3d_rc
 
   logical :: xfft_initted = .false.
+
+  ! a parameter to allow for simple switching of the fast copy
+  ! in the accelerated 2D transformation
+  logical,parameter :: fastcopy = .true.
 
 ! accel will be set to true if the v layout is used AND the number of
 ! PEs is such that each PE has a complete copy of the x,y space --
@@ -615,7 +624,7 @@ contains
 
     ntgrid = accel_lo%ntgrid
 
-    if ( .true. ) then
+    if ( fastcopy ) then
        ! scale the g and copy into the anti-aliased array ag
        ! zero out empty ag
        ! touch each g and ag only once
@@ -719,7 +728,7 @@ contains
        idx = idx + 1
     end do
 
-    if (.true.) then
+    if (fastcopy) then
        idx = g_lo%llim_proc
        do k = accel_lo%llim_proc, accel_lo%ulim_proc
           ! ignore the large k (anti-alias)
@@ -1067,29 +1076,34 @@ contains
 
   end subroutine transform2_4d
   
-  subroutine init_zf (ntgrid, nperiod)
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine init_zf (ntgrid, nperiod, howmany)
 
     use fft_work, only: init_z
     implicit none
-    integer, intent (in) :: ntgrid, nperiod
+    integer, intent (in) :: ntgrid, nperiod, howmany
     logical :: done = .false.
 
     if (done) return
     done = .true.
 
-    call init_z (zf_fft, 1, 2*ntgrid)
-
+    call init_z (zf_fft, 1, 2*ntgrid, howmany)
+    
   end subroutine init_zf
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
   subroutine kz_spectrum (an, an2, ntgrid, ntheta0, naky)
 
-    complex, dimension (:,:,:) :: an, an2
+    complex, dimension (:,:,:), intent(in)  :: an
+    complex, dimension (:,:,:), intent(out) :: an2
     integer, intent (in) :: ntheta0, naky, ntgrid
 
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)
 # elif FFT == _FFTW3_
-    print *,"Fix routine kz_spectrum for FFTW3"
+    call dfftw_execute(zf_fft%plan, an, an2)
 # endif
     an2 = conjg(an2)*an2
 
