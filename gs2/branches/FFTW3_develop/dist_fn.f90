@@ -806,8 +806,13 @@ contains
   subroutine init_par_filter
     use theta_grid, only: ntgrid, nperiod
     use gs2_transforms, only: init_zf
+    use kt_grids, only: naky, ntheta0
 
-    call init_zf (ntgrid, nperiod)
+    if ( naky*ntheta0 .eq. 0 ) then
+       print *,"WARNING: kt_grids used in init_par_filter before initialised?"
+    endif
+
+    call init_zf (ntgrid, nperiod, ntheta0*naky)
 
   end subroutine init_par_filter
 
