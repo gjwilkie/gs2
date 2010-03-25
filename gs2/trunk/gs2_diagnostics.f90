@@ -52,6 +52,7 @@ module gs2_diagnostics
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
          save_for_restart, write_parity
+! Why are these variables public?  This is not good.
   real,public :: omegatol, omegatinst
   logical,public :: print_line, print_old_units, print_flux_line
   logical,public :: print_summary, write_line, write_flux_line, write_phi
@@ -64,7 +65,7 @@ module gs2_diagnostics
   logical,public ::write_dmix, write_kperpnorm, write_phitot, write_epartot
   logical,public :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
   logical,public :: write_final_moments, write_avg_moments, write_stress, write_parity
-  logical,public :: write_full_moments_notgc
+  logical,public :: write_full_moments_notgc, write_cross_phase = .false.
   logical,public :: write_fcheck, write_final_epar, write_kpar
   logical,public :: write_vortcheck, write_fieldcheck
   logical,public :: write_fieldline_avg_phi, write_hrate, write_lorentzian
@@ -87,7 +88,7 @@ module gs2_diagnostics
 !<GGH
 
   ! internal
-  logical :: write_any, write_any_fluxes, dump_any, write_cross_phase = .false.
+  logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
@@ -1359,7 +1360,7 @@ contains
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
-    use dist_fn, only: getmoms_notgc, g_adjust, getemoms
+    use dist_fn, only: getmoms_notgc, g_adjust
     use dist_fn_arrays, only: g, gnew, aj0, vpa
     use collisions, only: ncheck, vnmult, vary_vnew
     use mp, only: proc0, broadcast, iproc, send, receive
@@ -3403,6 +3404,7 @@ if (debug) write(6,*) "get_omegaavg: done"
     use kt_grids, only: ntheta0, naky
     use theta_grid, only: ntgrid
     use dist_fn_arrays, only: gnew
+    use dist_fn, only: getemoms
     use mp, only: proc0
 
     implicit none
@@ -3427,12 +3429,12 @@ if (debug) write(6,*) "get_omegaavg: done"
           call get_vol_int (ntot(0,:,:,is), tperp(0,:,:,is), nTp, nTp_by_mode)
           call get_vol_average (ntot(0,:,:,is), ntot(0,:,:,is), n2, n2_by_mode)
           call get_vol_average (tperp(0,:,:,is), tperp(0,:,:,is), T2, T2_by_mode)
-          phase_theta = atan(aimag(ntp),real(ntp))/sqrt(n2*T2)
+          phase_theta = atan2(aimag(nTp),real(nTp))/sqrt(n2*T2)
           ! get integrated cross_phase 
           call get_vol_int (ntot(:,:,:,is), tperp(:,:,:,is), nTp, nTp_by_mode)
           call get_vol_average (ntot(:,:,:,is), ntot(:,:,:,is), n2, n2_by_mode)
           call get_vol_average (tperp(:,:,:,is), tperp(:,:,:,is), T2, T2_by_mode)
-          phase_tot = atan(aimag(ntp),real(ntp))/sqrt(n2*T2)
+          phase_tot = atan2(aimag(nTp),real(nTp))/sqrt(n2*T2)
        end if
     end do
 
