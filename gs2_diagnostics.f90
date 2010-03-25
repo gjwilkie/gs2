@@ -3408,7 +3408,7 @@ if (debug) write(6,*) "get_omegaavg: done"
     implicit none
     real, intent (out) :: phase_tot, phase_theta
     complex, dimension (:,:,:,:), allocatable :: ntot, tperp
-    complex, dimension (ntheta0, nakky) :: nTp_by_mode
+    complex, dimension (ntheta0, naky) :: nTp_by_mode
     complex :: nTp
     real, dimension (ntheta0, naky) :: n2_by_mode, T2_by_mode
     real :: n2, T2
