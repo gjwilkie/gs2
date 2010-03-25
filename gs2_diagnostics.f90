@@ -46,7 +46,7 @@ module gs2_diagnostics
          write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, write_stress, &
-         write_full_moments_notgc, &
+         write_full_moments_notgc, write_cross_phase, &
          dump_neoclassical_flux, dump_check1, dump_check2, &
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
