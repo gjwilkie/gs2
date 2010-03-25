@@ -21,6 +21,10 @@ module gs2_diagnostics
      module procedure get_vol_average_one, get_vol_average_all
   end interface
 
+  interface get_vol_int
+     module procedure get_vol_int_one, get_vol_int_all
+  end interface
+
   interface get_fldline_avg
      module procedure get_fldline_avg_r, get_fldline_avg_c
   end interface
@@ -83,11 +87,12 @@ module gs2_diagnostics
 !<GGH
 
   ! internal
-  logical :: write_any, write_any_fluxes, dump_any
+  logical :: write_any, write_any_fluxes, dump_any, write_cross_phase = .false.
   logical, private :: initialized = .false.
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: dv_unit, jext_unit   !GGH Additions
+  integer :: phase_unit
   integer :: dump_neoclassical_flux_unit, dump_check1_unit, dump_check2_unit
   integer :: res_unit, res_unit2, parity_unit
 
@@ -182,6 +187,7 @@ contains
     call broadcast (nsave)
     call broadcast (write_any)
     call broadcast (write_any_fluxes)
+    call broadcast (write_cross_phase)
     call broadcast (write_neoclassical_flux)
     call broadcast (write_nl_flux)
     call broadcast (write_omega)
@@ -301,10 +307,14 @@ contains
     !<doc> Open the various ascii output files (depending on the write flags) </doc>
     if (proc0) then
        if (write_ascii) then
-          call open_output_file (out_unit, ".out")
+          call open_output_file (out_unit, ".out")          
 !          if (write_kpar) call open_output_file (kp_unit, ".kp")
+       end if             
+
+       if (write_cross_phase .and. write_ascii) then
+          call open_output_file (phase_unit, ".phase")
        end if
-       
+
        if (write_hrate .and. write_ascii) then
           call open_output_file (heat_unit, ".heat")
           call open_output_file (heat_unit2, ".heat2")
@@ -606,6 +616,7 @@ contains
           if (write_max_verr) call close_output_file (res_unit2)
        end if
        if (write_ascii) call close_output_file (out_unit)
+       if (write_ascii .and. write_cross_phase) call close_output_file (phase_unit)
        if (write_ascii .and. write_hrate) call close_output_file (heat_unit)
        if (write_ascii .and. write_hrate) call close_output_file (heat_unit2)
        if (write_ascii .and. write_density_velocity) call close_output_file (dv_unit)
@@ -1337,7 +1348,7 @@ contains
   end subroutine finish_gs2_diagnostics
 
   subroutine loop_diagnostics (istep, exit, debopt)
-    use species, only: nspec, spec
+    use species, only: nspec, spec, has_electron_species
     use theta_grid, only: theta, ntgrid, delthet, jacob
     use theta_grid, only: gradpar, nperiod
     use kt_grids, only: naky, ntheta0, aky_out, theta0, akx_out, aky, akx
@@ -1348,7 +1359,7 @@ contains
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
-    use dist_fn, only: getmoms_notgc, g_adjust
+    use dist_fn, only: getmoms_notgc, g_adjust, getemoms
     use dist_fn_arrays, only: g, gnew, aj0, vpa
     use collisions, only: ncheck, vnmult, vary_vnew
     use mp, only: proc0, broadcast, iproc, send, receive
@@ -1394,6 +1405,7 @@ contains
 !    real, dimension (:,:,:,:), allocatable :: errest_by_mode
     integer, dimension (:,:), allocatable :: erridx
     real, dimension (:,:), allocatable :: errest
+    real :: phase_tot, phase_theta
 !MAB> arrays needed for parity diagnostic
     integer :: iplo, iglo, sgn2, isgn, il, ie
     complex, dimension (:,:,:,:), allocatable :: gparity, gmx, gpx
@@ -1431,6 +1443,7 @@ contains
     real, dimension (nspec) :: mheat_par, mheat_perp
     real, dimension (nspec) :: bheat_par, bheat_perp
     real, dimension (naky) :: fluxfac
+    real :: cross_phase_tot, cross_phase_theta
 !    real, dimension (:), allocatable :: phi_by_k, apar_by_k, bpar_by_k
     real :: hflux_tot, zflux_tot, vflux_tot
     real, dimension(nspec) :: tprim_tot, fprim_tot
@@ -1444,6 +1457,8 @@ contains
 
     part_fluxes = 0.0 ; mpart_fluxes = 0.0 ; bpart_fluxes = 0.0
     heat_fluxes = 0.0 ; mheat_fluxes = 0.0 ; bheat_fluxes = 0.0
+
+    cross_phase_tot = 0.0 ;  cross_phase_theta = 0.0
 
     call prof_entering ("loop_diagnostics")
 
@@ -1880,6 +1895,12 @@ if (debug) write(6,*) "loop_diagnostics: -1"
     if (write_vortcheck) call vortcheck (phinew, bparnew)
     if (write_fieldcheck) call fieldcheck (phinew, aparnew, bparnew)
     if (write_fields) call nc_write_fields (nout, phinew, aparnew, bparnew)  !MR
+
+    if (write_cross_phase .and. has_electron_species(spec)) then
+       call get_cross_phase (phase_tot, phase_theta)
+       write (unit=phase_unit, fmt="('t= ',e16.10,' phase_tot= ',e10.4,' phase_theta= ',e10.4)") &
+            & t, phase_tot, phase_theta
+    end if
 
     call prof_leaving ("loop_diagnostics-1")
 
@@ -3367,5 +3388,124 @@ if (debug) write(6,*) "get_omegaavg: done"
     deallocate (dl_over_b)
 
   end subroutine get_fldline_avg_c
+
+  subroutine get_cross_phase (phase_tot, phase_theta)
+
+! <doc> This is a highly simplified synthetic diagnostic which 
+! calculates the cross phase between the electron density and the 
+! perpendicular electron temperature for comparisons with DIII-D.  
+! Returns the value of the cross-phase at the outboard midplane and 
+! integrated over all v and x. We can generalize this routine to 
+! other fields at some point, but for now this is just a skeleton for 
+! a more realistic synthetic diagnostic. </doc>
+
+    use species, only: nspec, spec, electron_species
+    use kt_grids, only: ntheta0, naky
+    use theta_grid, only: ntgrid
+    use dist_fn_arrays, only: gnew
+    use mp, only: proc0
+
+    implicit none
+    real, intent (out) :: phase_tot, phase_theta
+    complex, dimension (:,:,:,:), allocatable :: ntot, tperp
+    complex, dimension (ntheta0, nakky) :: nTp_by_mode
+    complex :: nTp
+    real, dimension (ntheta0, naky) :: n2_by_mode, T2_by_mode
+    real :: n2, T2
+
+    integer :: it, ik, is, isgn, ig
+    integer :: iglo
+
+    allocate ( ntot(-ntgrid:ntgrid,ntheta0,naky,nspec))
+    allocate (tperp(-ntgrid:ntgrid,ntheta0,naky,nspec))
+
+    call getemoms (ntot, tperp)
+
+    do is = 1,nspec
+       if (spec(is)%type == electron_species) then
+          ! get cross_phase at outboard midplane
+          call get_vol_int (ntot(0,:,:,is), tperp(0,:,:,is), nTp, nTp_by_mode)
+          call get_vol_average (ntot(0,:,:,is), ntot(0,:,:,is), n2, n2_by_mode)
+          call get_vol_average (tperp(0,:,:,is), tperp(0,:,:,is), T2, T2_by_mode)
+          phase_theta = atan(aimag(ntp),real(ntp))/sqrt(n2*T2)
+          ! get integrated cross_phase 
+          call get_vol_int (ntot(:,:,:,is), tperp(:,:,:,is), nTp, nTp_by_mode)
+          call get_vol_average (ntot(:,:,:,is), ntot(:,:,:,is), n2, n2_by_mode)
+          call get_vol_average (tperp(:,:,:,is), tperp(:,:,:,is), T2, T2_by_mode)
+          phase_tot = atan(aimag(ntp),real(ntp))/sqrt(n2*T2)
+       end if
+    end do
+
+    deallocate (ntot, tperp)
+
+  end subroutine get_cross_phase
+
+  subroutine get_vol_int_all (a, b, axb, axb_by_mode)
+    use theta_grid, only: ntgrid, delthet, jacob
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: a, b
+    complex, intent (out) :: axb
+    complex, dimension (:,:), intent (out) :: axb_by_mode
+
+    integer :: ik, it
+    integer :: ng
+    real, dimension (-ntg_out:ntg_out) :: wgt
+    real :: anorm
+
+    ng = ntg_out
+    wgt = delthet(-ng:ng)*jacob(-ng:ng)
+    anorm = sum(wgt)
+
+    do ik = 1, naky
+       do it = 1, ntheta0
+          axb_by_mode(it,ik) &
+               = sum((conjg(a(-ng:ng,it,ik))*b(-ng:ng,it,ik))*wgt)/anorm
+       end do
+    end do
+
+    call get_volume_int (axb_by_mode, axb)
+  end subroutine get_vol_int_all
+
+  subroutine get_vol_int_one (a, b, axb, axb_by_mode)
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    complex, dimension (:,:), intent (in) :: a, b
+    complex, intent (out) :: axb
+    complex, dimension (:,:), intent (out) :: axb_by_mode
+
+    integer :: ik, it
+
+    do ik = 1, naky
+       do it = 1, ntheta0
+          axb_by_mode(it,ik) = conjg(a(it,ik))*b(it,ik)
+       end do
+    end do
+
+    call get_volume_int (axb_by_mode, axb)
+  end subroutine get_vol_int_one
+
+  subroutine get_volume_int (f, favg)
+    use mp, only: iproc
+    use kt_grids, only: naky, ntheta0, aky
+    implicit none
+    complex, dimension (:,:), intent (in) :: f
+    complex, intent (out) :: favg
+    real :: fac
+    integer :: ik, it
+
+! ky=0 modes have correct amplitudes; rest must be scaled
+! note contrast with scaling factors in FFT routines.
+
+    favg = 0.
+    do ik = 1, naky
+       fac = 0.5
+       if (aky(ik) == 0.) fac = 1.0
+       do it = 1, ntheta0
+          favg = favg + f(it, ik) * fac
+       end do
+    end do
+
+  end subroutine get_volume_int
 
 end module gs2_diagnostics

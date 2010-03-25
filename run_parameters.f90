@@ -3,7 +3,7 @@ module run_parameters
 
   public :: init_run_parameters, finish_run_parameters
 
-  public :: beta, zeff, tite, rhostar
+  public :: beta, zeff, tite
   public :: fphi, fapar, fbpar
 !  public :: delt, delt_max, wunits, woutunits, tunits, funits, tnorm
   public :: code_delt_max, wunits, woutunits, tunits, funits, tnorm
@@ -15,7 +15,7 @@ module run_parameters
 
   private
 
-  real :: beta, zeff, tite, rhostar
+  real :: beta, zeff, tite
   real :: fphi, fapar, fbpar, faperp
   real :: delt, code_delt_max, user_delt_max, funits, tnorm, margin
   real, dimension (:), allocatable :: wunits, woutunits, tunits
@@ -75,7 +75,7 @@ contains
 
     real :: teti  ! for back-compatibility
     logical :: exist
-    namelist /parameters/ beta, zeff, tite, rhostar, teti, k0
+    namelist /parameters/ beta, zeff, tite, teti, k0
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
          delt_option, margin, secondary, tertiary, faperp, harris, &
          avail_cpu_time
@@ -87,7 +87,6 @@ contains
        zeff = 1.0
        tite = 1.0
        teti = -100.0
-       rhostar = 0.1
        wstar_units = .false.
        eqzip = .false.
        secondary = .true.
@@ -146,7 +145,6 @@ contains
     call broadcast (beta)
     call broadcast (zeff)
     call broadcast (tite)
-    call broadcast (rhostar)
     call broadcast (fphi)
     call broadcast (fapar)
     call broadcast (fbpar)
