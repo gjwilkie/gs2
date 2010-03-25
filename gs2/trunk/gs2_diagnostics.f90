@@ -1406,7 +1406,6 @@ contains
 !    real, dimension (:,:,:,:), allocatable :: errest_by_mode
     integer, dimension (:,:), allocatable :: erridx
     real, dimension (:,:), allocatable :: errest
-    real :: phase_tot, phase_theta
 !MAB> arrays needed for parity diagnostic
     integer :: iplo, iglo, sgn2, isgn, il, ie
     complex, dimension (:,:,:,:), allocatable :: gparity, gmx, gpx
@@ -1444,7 +1443,7 @@ contains
     real, dimension (nspec) :: mheat_par, mheat_perp
     real, dimension (nspec) :: bheat_par, bheat_perp
     real, dimension (naky) :: fluxfac
-    real :: cross_phase_tot, cross_phase_theta
+    real :: phase_tot, phase_theta
 !    real, dimension (:), allocatable :: phi_by_k, apar_by_k, bpar_by_k
     real :: hflux_tot, zflux_tot, vflux_tot
     real, dimension(nspec) :: tprim_tot, fprim_tot
@@ -1459,7 +1458,7 @@ contains
     part_fluxes = 0.0 ; mpart_fluxes = 0.0 ; bpart_fluxes = 0.0
     heat_fluxes = 0.0 ; mheat_fluxes = 0.0 ; bheat_fluxes = 0.0
 
-    cross_phase_tot = 0.0 ;  cross_phase_theta = 0.0
+    phase_tot = 0.0 ;  phase_theta = 0.0
 
     call prof_entering ("loop_diagnostics")
 
