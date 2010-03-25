@@ -372,7 +372,6 @@ contains
   subroutine a_ext_data (A_ext_old, A_ext_new)
 !      this routine returns current and previous A_ext vectors
 
-    use run_parameters, only: beta, fapar
     use theta_grid, only: ntgrid
 
     complex, dimension (-ntgrid:,:,:) :: A_ext_old, A_ext_new
