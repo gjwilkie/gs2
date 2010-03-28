@@ -1898,7 +1898,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 
     if (write_cross_phase .and. has_electron_species(spec)) then
        call get_cross_phase (phase_tot, phase_theta)
-       write (unit=phase_unit, fmt="('t= ',e16.10,' phase_tot= ',e10.4,' phase_theta= ',e10.4)") &
+       if (proc0) write (unit=phase_unit, fmt="('t= ',e16.10,' phase_tot= ',e10.4,' phase_theta= ',e10.4)") &
             & t, phase_tot, phase_theta
     end if
 
