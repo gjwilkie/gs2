@@ -46,7 +46,7 @@ subroutine ffttest(jx,jy,debug)
   use theta_grid, only: ntgrid
   use kt_grids, only: akx, aky, naky, ikx, nx, ny, ntheta0, box, theta0
   use le_grids, only: negrid, nlambda
-  use mp, only: nproc, proc0
+  use mp, only: iproc, nproc, proc0, barrier
   use mpi
   implicit none
   integer, intent(in):: jx,jy
@@ -62,7 +62,7 @@ subroutine ffttest(jx,jy,debug)
   real:: exact, err
 
   printlots=.false. ; fail=.false.
-  if (present(debug)) printlots=debug
+!  if (present(debug)) printlots=debug
   g=0
   if (printlots) write(6,fmt='("nx=",i6,": ny=",i6,": ntheta0=",i6,": naky=",i6)') ,nx,ny,ntheta0,naky
   if (jy .ge. naky) then 
@@ -84,18 +84,25 @@ subroutine ffttest(jx,jy,debug)
 !
 ! CMR: factor 0.25 here to return FFT = cos(jx x) * cos(jy y)
 ! 
-            if (idx_local (g_lo, iglo)) then
+            if (idx_local(g_lo, iglo)) then
+if (printlots) write(6,fmt='("Processor,iglo,lower/upper bounds=",4i8)') iproc,iglo,lbound(g,3),ubound(g,3)
+if (printlots) write(6,fmt='("Processor, iglo, ik, it, il, ie, is= ",7i5)') iproc,iglo,ik,it,il,ie,is
+if (printlots) flush(6)
                g(:,:,iglo)=0.25*cmplx(1.0,0.0)
+if (printlots) write(6,fmt='("Processor ",i4," successful write")') iproc
+if (printlots) flush(6)
+
 ! CMR: if jx=0 and jy/=0 components of g must be doubled
                if (jx .eq.0) g(:,:,iglo)=2.0*g(:,:,iglo)
             endif
             if (jx .gt. 0) then
                it=ntheta0 +1 - jx
                iglo = idx(g_lo, ik, it, il, ie, is)
-               if (idx_local (g_lo, iglo)) then
+               if (idx_local(g_lo, iglo)) then
                   g(:,:,iglo)=0.25*cmplx(1.0,0.0)
                endif
             endif
+if (printlots) call barrier
          end do
       end do
    end do
