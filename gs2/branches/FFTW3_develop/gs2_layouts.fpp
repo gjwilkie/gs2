@@ -344,6 +344,12 @@ contains
     layout = 'lxyes'
     in_file=input_unit_exist("layouts_knobs", exist)
     if (exist) read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
+    if (layout.ne.'yxels' .and. layout.ne.'yxles' .and. layout.ne.'lexys'&
+    .and. layout.ne.'lxyes' .and. layout.ne.'lyxes' .and. layout.ne.'xyles') &
+    then
+       write(6,*) "gs2_layouts: read_parameters finds illegal layout=",layout," =>stop"
+       stop
+    endif
 
   end subroutine read_parameters
     
