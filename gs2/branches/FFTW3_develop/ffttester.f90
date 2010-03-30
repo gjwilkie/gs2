@@ -60,8 +60,11 @@ subroutine ffttest(jx,jy,debug)
   real, save, dimension (:,:), allocatable :: gr  ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
   real, save, dimension (:,:,:), allocatable :: gra  ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
   real:: exact, err
+  complex:: fexact
 
   printlots=.false. ; fail=.false.
+! Following line was causing segmentation faults on HECToR, so now commented out
+! as it is anyhow not necessary.
 !  if (present(debug)) printlots=debug
   g=0
   if (printlots) write(6,fmt='("nx=",i6,": ny=",i6,": ntheta0=",i6,": naky=",i6)') ,nx,ny,ntheta0,naky
@@ -211,19 +214,59 @@ if (printlots) call barrier
    end if
    call mpi_reduce(fail,anyfail,1,MPI_LOGICAL,MPI_LOR,0,mpi_comm_world,mpierr)
    if (mpierr .ne. MPI_SUCCESS) write(6,*) "ffttest: mpi_reduce gives mpierr=",mpierr
-!   call mpi_barrier(mpi_comm_world,mpierr)
-!   if (mpierr .ne. MPI_SUCCESS) write(6,*) "ffttest: mpi_barrier gives mpierr=",mpierr
 
-   if (first .and. proc0) write(6,fmt='(7a8,a12)') "jx","jy","nx","ny","nproc","layout","accel","Pass/Fail"
+   if (first .and. proc0) write(6,fmt='(8a8,a12)') "Dir","jx","jy","nx","ny","nproc","layout","accel","Pass/Fail"
 
 
    if (proc0) then
       if (anyfail) then
-         write(6,fmt='(5i8,a8,l8,a12)') jx,jy, nx, ny, nproc, layout, accelerated, "!!FAIL!!"
+         write(6,fmt='(a8,5i8,a8,l8,a12)') "c2r",jx,jy, nx, ny, nproc, layout, accelerated, "!!FAIL!!"
       else 
-         write(6,fmt='(5i8,a8,l8,a12)') jx,jy, nx, ny, nproc, layout, accelerated, "PASS"
+         write(6,fmt='(a8,5i8,a8,l8,a12)') "c2r",jx,jy, nx, ny, nproc, layout, accelerated, "PASS"
       endif
    endif
+
+! NOW check the INVERSE transform
+
+   if (accelerated) then
+      gra=0.5*gra
+      call inverse2 (gra, g, ia)
+   else
+      gr=0.5*gr
+      call inverse2 (gr, g)
+   end if
+
+! CHECK result at ONLY one point in (velocity,species,theta) space
+! at theta=0 along the field line
+
+   is=1 ; ie=1 ; il=1 ; isgn=1 ; ig=0 ; fail=.false.
+   do ik=1,g_lo%naky
+      do it=1,g_lo%ntheta0
+         fexact=cmplx(0.0,0.0)
+         if (it .eq. jx+1 .and. ik.eq.jy+1) fexact=0.25*cmplx(1.0,0.0)
+         if (it .eq. jx+1 .and. ik.eq.jy+1 .and. jx.eq.0) fexact=0.5*cmplx(1.0,0.0)
+         if (jx .gt. 0  .and. ik.eq.jy+1 .and. it .eq. g_lo%ntheta0+1-jx) fexact=0.25*cmplx(1.0,0.0)
+         iglo = idx(g_lo, ik, it, il, ie, is)
+         if (idx_local(g_lo, iglo)) then
+            err=abs(g(ig,isgn,iglo)-fexact)
+            if (err .gt. epsilon(err)) then
+               if (printlots) write(6,fmt='("ffttest: it, ik, g, fexact=",2I8,4e12.4)') it,ik,g(ig,isgn,iglo),fexact
+               fail=.true. 
+            endif
+         endif
+      enddo
+   enddo
+   call mpi_reduce(fail,anyfail,1,MPI_LOGICAL,MPI_LOR,0,mpi_comm_world,mpierr)
+   if (mpierr .ne. MPI_SUCCESS) write(6,*) "ffttest: mpi_reduce gives mpierr=",mpierr
+
+   if (proc0) then
+      if (anyfail) then
+         write(6,fmt='(a8,5i8,a8,l8,a12)') "r2c",jx,jy, nx, ny, nproc, layout, accelerated, "!!FAIL!!"
+      else 
+         write(6,fmt='(a8,5i8,a8,l8,a12)') "r2c",jx,jy, nx, ny, nproc, layout, accelerated, "PASS"
+      endif
+   endif
+
    first=.false.
 end
 
