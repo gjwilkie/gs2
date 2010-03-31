@@ -46,6 +46,7 @@ subroutine ffttest(jx,jy,debug)
   use theta_grid, only: ntgrid
   use kt_grids, only: akx, aky, naky, ikx, nx, ny, ntheta0, box, theta0
   use le_grids, only: negrid, nlambda
+  use le_grids, only: integrate_moment
   use mp, only: iproc, nproc, proc0, barrier
   use mpi
   implicit none
@@ -55,17 +56,26 @@ subroutine ffttest(jx,jy,debug)
   integer:: ik,is,ie,il,it,ia
   integer:: isgn, ig, iglo, index, mpierr
   logical:: accelerated, printlots, fail, anyfail
-  logical,save:: alloc=.true., first=.true. 
+  logical,save:: first=.true. 
 
   real, save, dimension (:,:), allocatable :: gr  ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
   real, save, dimension (:,:,:), allocatable :: gra  ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
   real:: exact, err
   complex:: fexact
 
-  printlots=.false. ; fail=.false.
+  complex, dimension (:,:,:,:), allocatable :: density,cdens
+  complex, dimension (:,:,:), allocatable :: d3d,c3d
+  real, dimension (:,:,:), allocatable :: rdens  
+  integer:: nnx,nny
+
+
+
+  printlots=.false. 
 ! Following line was causing segmentation faults on HECToR, so now commented out
 ! as it is anyhow not necessary.
 !  if (present(debug)) printlots=debug
+
+!CMR, 5-D FFTs
   g=0
   if (printlots) write(6,fmt='("nx=",i6,": ny=",i6,": ntheta0=",i6,": naky=",i6)') ,nx,ny,ntheta0,naky
   if (jy .ge. naky) then 
@@ -88,12 +98,12 @@ subroutine ffttest(jx,jy,debug)
 ! CMR: factor 0.25 here to return FFT = cos(jx x) * cos(jy y)
 ! 
             if (idx_local(g_lo, iglo)) then
-if (printlots) write(6,fmt='("Processor,iglo,lower/upper bounds=",4i8)') iproc,iglo,lbound(g,3),ubound(g,3)
-if (printlots) write(6,fmt='("Processor, iglo, ik, it, il, ie, is= ",7i5)') iproc,iglo,ik,it,il,ie,is
-if (printlots) flush(6)
+!if (printlots) write(6,fmt='("Processor,iglo,lower/upper bounds=",4i8)') iproc,iglo,lbound(g,3),ubound(g,3)
+!if (printlots) write(6,fmt='("Processor, iglo, ik, it, il, ie, is= ",7i5)') iproc,iglo,ik,it,il,ie,is
+!if (printlots) flush(6)
                g(:,:,iglo)=0.25*cmplx(1.0,0.0)
-if (printlots) write(6,fmt='("Processor ",i4," successful write")') iproc
-if (printlots) flush(6)
+!if (printlots) write(6,fmt='("Processor ",i4," successful write")') iproc
+!if (printlots) flush(6)
 
 ! CMR: if jx=0 and jy/=0 components of g must be doubled
                if (jx .eq.0) g(:,:,iglo)=2.0*g(:,:,iglo)
@@ -110,11 +120,9 @@ if (printlots) call barrier
       end do
    end do
 
-! Now initialise the FFT routines
-
-   call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
-
-   if (alloc) then
+   if (first) then
+! initialise FFT routines
+      call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
       if (accelerated) then
          if (printlots) then
             write(6,fmt='(2A20)') "accelx_lo","accel_lo"
@@ -163,13 +171,112 @@ if (printlots) call barrier
          allocate (gr(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
          gr=0.
       end if
-      alloc = .false.
    end if
 
+   if (first .and. proc0) write(6,fmt='(9a8,a12)') "Dim","Dir","jx","jy","nx","ny","nproc","layout","accel","Pass/Fail"
+
+! CMR, compute 3-D FFT
+   fail = .false.
+   allocate (d3d(-ntgrid:ntgrid,ntheta0,naky),c3d(-ntgrid:ntgrid,ntheta0,naky))
+   d3d=0.0
+   d3d(:,jx+1,jy+1)=0.25*cmplx(1.0,0.0)
+   if (jx .gt. 0) d3d(:,ntheta0+1-jx,jy+1)=0.25*cmplx(1.0,0.0)
+   if (jx .eq. 0) d3d=2.0*d3d
+
+   nnx=2*nx; nny=2*ny
+   allocate (rdens(nnx,nny,-ntgrid:ntgrid))
+   call transform2(d3d,rdens,nny,nnx)
+   call inverse2(rdens,c3d,nny,nnx)
+   rdens=2.0*rdens
+
+! CHECK results at theta=0 
+   ig=0
+   do ik=1,nny
+      do it=1,nnx
+         exact=cos(jx*real(it-1)/real(nnx)*twopi) * cos(jy *real(ik-1)/real(nny)*twopi)
+         err=abs(rdens(it,ik,ig)-exact)
+         if (err .gt. nnx*nny*abs(epsilon(err))) then
+            if (printlots) write(6,fmt='("ffttest: transform2_3d, exact, err, it, ik=",3e16.8,2I8)') rdens(it,ik,ig),exact,err,it,ik
+            fail=.true. 
+         endif
+      enddo
+   enddo
+   call mpi_reduce(fail,anyfail,1,MPI_LOGICAL,MPI_LOR,0,mpi_comm_world,mpierr)
+   if (mpierr .ne. MPI_SUCCESS) write(6,*) "ffttest: mpi_reduce gives mpierr=",mpierr
+   if (proc0) then
+      if (anyfail) then
+         write(6,fmt='(2a8,5i8,a8,l8,a12)') "3-D","c2r",jx,jy, nx, ny, nproc, layout, .false., "!!FAIL!!"
+      else 
+         write(6,fmt='(2a8,5i8,a8,l8,a12)') "3-D","c2r",jx,jy, nx, ny, nproc, layout, .false., "PASS"
+      endif
+   endif
+! check inverse
+   fail=.false.
+   do ik=1,naky
+      do it=1,ntheta0
+         err=abs(d3d(ig,it,ik)-c3d(ig,it,ik))
+         if (err .gt. nnx*nny*abs(epsilon(err))) then
+            if (printlots) write(6,fmt='("ffttest: inverse2_3d, exact, err, it, ik=",5e16.8,2I8)') c3d(ig,it,ik),d3d(ig,it,ik),err,it,ik
+            fail=.true. 
+         endif
+      enddo
+   enddo
+   call mpi_reduce(fail,anyfail,1,MPI_LOGICAL,MPI_LOR,0,mpi_comm_world,mpierr)
+   if (mpierr .ne. MPI_SUCCESS) write(6,*) "ffttest: mpi_reduce gives mpierr=",mpierr
+   if (proc0) then
+      if (anyfail) then
+         write(6,fmt='(2a8,5i8,a8,l8,a12)') "3-D","r2c",jx,jy, nx, ny, nproc, layout, .false., "!!FAIL!!"
+      else 
+         write(6,fmt='(2a8,5i8,a8,l8,a12)') "3-D","r2c",jx,jy, nx, ny, nproc, layout, .false., "PASS"
+      endif
+   endif
+
+   deallocate(d3d,rdens,c3d)
+
+
+! CMR, compute 4-D FFT
+   fail = .false.
+   allocate (density(-ntgrid:ntgrid,ntheta0,naky,nspec),cdens(-ntgrid:ntgrid,ntheta0,naky,nspec))
+   density=0.0
+   density(:,jx+1,jy+1,:)=0.25*cmplx(1.0,0.0)
+   if (jx .gt. 0) density(:,ntheta0+1-jx,jy+1,:)=0.25*cmplx(1.0,0.0)
+   if (jx .eq. 0) density=2.0*density
+
+   nnx=2*nx; nny=2*ny
+   allocate (rdens(nnx,nny,-ntgrid:ntgrid))
+   call transform2(density,rdens,nny,nnx)
+   rdens=2.0*rdens
+
+! CHECK results at theta=0 for 1st species
+   is=1 ; ig=0
+   do ik=1,nny
+      do it=1,nnx
+         exact=cos(jx*real(it-1)/real(nnx)*twopi) * cos(jy *real(ik-1)/real(nny)*twopi)
+         err=abs(rdens(it,ik,ig)-exact)
+         if (err .gt. nnx*nny*abs(epsilon(err))) then
+            if (printlots) write(6,fmt='("ffttest: transform2_4d, exact, err, it, ik=",3e16.8,2I8)') rdens(it,ik,ig),exact,err,it,ik
+            fail=.true. 
+         endif
+      enddo
+   enddo
+   call mpi_reduce(fail,anyfail,1,MPI_LOGICAL,MPI_LOR,0,mpi_comm_world,mpierr)
+   if (mpierr .ne. MPI_SUCCESS) write(6,*) "ffttest: mpi_reduce gives mpierr=",mpierr
+   if (proc0) then
+      if (anyfail) then
+         write(6,fmt='(2a8,5i8,a8,l8,a12)') "4-D","c2r",jx,jy, nx, ny, nproc, layout, .false., "!!FAIL!!"
+      else 
+         write(6,fmt='(2a8,5i8,a8,l8,a12)') "4-D","c2r",jx,jy, nx, ny, nproc, layout, .false., "PASS"
+      endif
+   endif
+   deallocate(density,rdens,cdens)
+
+! CMR, Now for 5-D FFTs
 ! CMR: Perform FFT from k space to real space
 !      NB multiply fftw result by 2 .... MUST CHECK
 !         presume due to normalisations in fftw complex->real
 ! 
+
+   fail=.false.
    if (accelerated) then
       call transform2 (g, gra, ia)
       gra=2.0*gra
@@ -215,14 +322,11 @@ if (printlots) call barrier
    call mpi_reduce(fail,anyfail,1,MPI_LOGICAL,MPI_LOR,0,mpi_comm_world,mpierr)
    if (mpierr .ne. MPI_SUCCESS) write(6,*) "ffttest: mpi_reduce gives mpierr=",mpierr
 
-   if (first .and. proc0) write(6,fmt='(8a8,a12)') "Dir","jx","jy","nx","ny","nproc","layout","accel","Pass/Fail"
-
-
    if (proc0) then
       if (anyfail) then
-         write(6,fmt='(a8,5i8,a8,l8,a12)') "c2r",jx,jy, nx, ny, nproc, layout, accelerated, "!!FAIL!!"
+         write(6,fmt='(2a8,5i8,a8,l8,a12)') "5-D","c2r",jx,jy, nx, ny, nproc, layout, accelerated, "!!FAIL!!"
       else 
-         write(6,fmt='(a8,5i8,a8,l8,a12)') "c2r",jx,jy, nx, ny, nproc, layout, accelerated, "PASS"
+         write(6,fmt='(2a8,5i8,a8,l8,a12)') "5-D","c2r",jx,jy, nx, ny, nproc, layout, accelerated, "PASS"
       endif
    endif
 
@@ -261,9 +365,9 @@ if (printlots) call barrier
 
    if (proc0) then
       if (anyfail) then
-         write(6,fmt='(a8,5i8,a8,l8,a12)') "r2c",jx,jy, nx, ny, nproc, layout, accelerated, "!!FAIL!!"
+         write(6,fmt='(2a8,5i8,a8,l8,a12)') "5-D","r2c",jx,jy, nx, ny, nproc, layout, accelerated, "!!FAIL!!"
       else 
-         write(6,fmt='(a8,5i8,a8,l8,a12)') "r2c",jx,jy, nx, ny, nproc, layout, accelerated, "PASS"
+         write(6,fmt='(2a8,5i8,a8,l8,a12)') "5-D","r2c",jx,jy, nx, ny, nproc, layout, accelerated, "PASS"
       endif
    endif
 
