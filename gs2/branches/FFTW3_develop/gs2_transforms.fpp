@@ -849,7 +849,8 @@ contains
        end do
        do it=(ntheta0+1)/2+1,ntheta0
           do ig=-ntgrid, ntgrid
-             aphi(ig,ik,it-ntheta0+nx) = phi(ig,it,ik)*fac
+!CMR, 30/3/2010: bug fix to replace nx by nnx on next line
+             aphi(ig,ik,it-ntheta0+nnx) = phi(ig,it,ik)*fac
           end do
        end do
     end do
@@ -875,6 +876,8 @@ contains
   end subroutine transform2_3d
   
   subroutine inverse2_3d (phixf, phi, nny, nnx)
+!CMR, 30/4/2010:  
+! Fixed up previously buggy handling of dealiasing.
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, aky
     implicit none
@@ -906,12 +909,23 @@ contains
 # endif
 
 ! dealias and scale
-    do it=1,ntheta0
+    do it=1,(ntheta0+1)/2
        do ik=1,naky
           fac = 2.0
           if (aky(ik) < epsilon(0.0)) fac = 1.0
           do ig=-ntgrid, ntgrid
              phi (ig,it,ik) = aphi (ig,ik,it)*fac*xf3d_rc%scale
+          end do
+       end do
+    end do
+
+!CMR, 30/4/2010:  fixed up previously buggy handling of dealiasing
+    do it=(ntheta0+1)/2+1,ntheta0
+       do ik=1,naky
+          fac = 2.0
+          if (aky(ik) < epsilon(0.0)) fac = 1.0
+          do ig=-ntgrid, ntgrid
+             phi (ig,it,ik) = aphi (ig,ik,it-ntheta0+nnx)*fac*xf3d_rc%scale
           end do
        end do
     end do
@@ -1029,6 +1043,9 @@ contains
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine transform2_4d (den, phixf, nny, nnx)
+!CMR, 30/3/2010: den input has 4th index being species, 
+!     but transform only operates for species=1
+!     anyone who uses this routine should be aware of/fix this!
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, nx, aky
     implicit none
@@ -1058,7 +1075,8 @@ contains
        end do
        do it=(ntheta0+1)/2+1,ntheta0
           do ig=-ntgrid, ntgrid
-             aphi(ig,ik,it-ntheta0+nx) = den(ig,it,ik,1)*fac
+!CMR, 30/3/2010: bug fix to replace nx by nnx on next line
+             aphi(ig,ik,it-ntheta0+nnx) = den(ig,it,ik,1)*fac
           end do
        end do
     end do
