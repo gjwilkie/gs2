@@ -71,9 +71,9 @@ subroutine ffttest(jx,jy,debug)
 
 
   printlots=.false. 
-! Following line was causing segmentation faults on HECToR, so now commented out
-! as it is anyhow not necessary.
-!  if (present(debug)) printlots=debug
+! Following line was causing seg faults, but the problem has disappeared 
+! (don't know why, but possibly due to fixing a memory leak?)
+  if (present(debug)) printlots=debug
 
 !CMR, 5-D FFTs
   g=0
@@ -119,7 +119,6 @@ if (printlots) call barrier
          end do
       end do
    end do
-
    if (first) then
 ! initialise FFT routines
       call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
