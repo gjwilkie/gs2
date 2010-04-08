@@ -1128,7 +1128,7 @@ contains
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)
 # elif FFT == _FFTW3_
-    call dfftw_execute(zf_fft%plan, an, an2)
+    call dfftw_execute_dft(zf_fft%plan, an, an2)
 # endif
     an2 = conjg(an2)*an2
 
