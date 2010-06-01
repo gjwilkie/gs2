@@ -4,7 +4,7 @@
 # and store it to $DEPFILE
 #
 # Written by "Ryusuke NUMATA" <rnumata@umd.edu>
-# 		http://www.glue.umd.edu/~rnumata/
+# 		http://terpconnect.umd.edu/~rnumata/
 #         in 5 April 2006
 #
 # $Id: fortdep 561 2008-05-08 22:39:39Z numata $
@@ -34,7 +34,7 @@ my $DEPFILE="Makefile.depend";
 
     &process_options(\%OPTION,\@PATH);
 
-    my %MSGTYPE = ( "debug" => 0, "warn" => 0, "info" => 0 );
+    my %MSGTYPE = ( "error" => -1, "debug" => 0, "warn" => 0, "info" => 0 );
     $MSGTYPE{'debug'} = 3 if ($OPTION{'verbose'} >= 3);
     $MSGTYPE{'warn'} = 2 if ($OPTION{'verbose'} >= 2);
     $MSGTYPE{'info'} = 1 if ($OPTION{'verbose'} >= 1);
@@ -82,6 +82,9 @@ my $DEPFILE="Makefile.depend";
 	my @req=keys %{$REQFILE{$key}};
 	&message($MSGTYPE{'debug'}," $key requires @req\n");
     }
+
+    # check circular dependencies
+    &check_circular(\%REQFILE,\%MSGTYPE);
 
     # need cleanup of preprocessed files
     &cleanprep(\%SOURCE,\%OPTION,\%MSGTYPE);
@@ -176,7 +179,7 @@ sub find_source{
 			$$source{$file}{'dir'} = $dir;
 			$$source{$file}{'type'}="prep";
 		    }
-		} elsif ( $file =~ /^[a-zA-Z].*\.(h|inc)$/ ) {
+		} elsif ( $file =~ /^[a-zA-Z].*\.(h|inc|finc)$/ ) {
 		    $$source{$file}{'dir'} = $dir;
 		    $$source{$file}{'type'}="incl";
 		}
@@ -207,11 +210,56 @@ sub get_fileinfo{
 
     FILELOOP : foreach my $file ( sort ( keys %$source ) ){
 	next FILELOOP if ( $$source{$file}{'type'} ne "fort" );
+
+	my @publist=();
+	my @prvlist=();
+	my $default_private=0;
+
+	my $cont_private=0;
+	my $cont_public=0;
+
 	open(FILE,"$$source{$file}{'dir'}/$file") ||
 	    die ("cannot open file: $$source{$file}{'dir'}/$file!");
 	SEARCH : while (<FILE>){
 	    my $line;
 	    chop($line=$_);
+
+	    # private
+	    if( $line =~ /^[\t\n ]*[Pp][Rr][Ii][Vv][Aa][Tt][Ee]/ || $cont_private==1 ){
+		my @tmplist = split;
+		$default_private=1 if ($#tmplist == 0);
+
+		foreach (@tmplist){
+		    s/,//;
+		    next if ( $_ eq "private" || $_ eq "::" || $_ eq "&" );
+		    @prvlist = (@prvlist,$_);
+		}
+		
+		if ( $line =~ /&$/ ){
+		    $cont_private=1;
+		} else {
+		    $cont_private=0;
+		}
+	    }
+
+	    # public
+	    if( $line =~ /^[\t\n ]*[Pp][Uu][Bb][Ll][Ii][Cc]/ || $cont_public==1 ){
+		my @tmplist=split;
+		$default_private=0 if ($#tmplist == 0);
+
+		foreach (@tmplist){ 
+		    s/,//;
+		    next if ( $_ eq "public" || $_ eq "::" || $_ eq "&" );
+		    @publist = (@publist,$_);
+		}
+
+		if ( $line =~ /&$/ ){
+		    $cont_public=1;
+		} else {
+		    $cont_public=0;
+		}
+	    }
+
 	    if( $line =~ /^[\t\n ]*[Ee][Nn][Dd] [Mm][Oo][Dd][Uu][Ll][Ee][\t\n ]/ ){
 		($dummy, $dummy, $modname)=split;
 		$modname =~ tr/[A-Z]/[a-z]/;
@@ -264,6 +312,30 @@ sub get_fileinfo{
 	    }
 	}
 	close(FILE);
+
+	pubcheck : foreach my $modprog ( keys %$fileinfo ){
+	    next pubcheck if ( 
+		$$fileinfo{$modprog}{'type'} eq "module"
+		|| 
+		$$fileinfo{$modprog}{'type'} eq "program"
+		);
+	    if ($$fileinfo{$modprog}{'name'} eq $file) {
+		if ($#publist >= 0) {
+		    foreach my $pub (@publist){
+			next pubcheck if ($pub eq $modprog);
+		    }
+		}
+		if ($#prvlist >= 0) {
+		    foreach my $prv (@prvlist){
+			if ($prv eq $modprog){
+			    delete $$fileinfo{$modprog};
+			    next pubcheck;
+			}
+		    }
+		}
+		delete $$fileinfo{$modprog} if ($default_private);
+	    }
+	}
     }
 
     return;
@@ -568,6 +640,23 @@ sub write_dependency{
     return;
 }
 
+sub check_circular{
+    
+    my ($reqfile,$msgtype) = @_;
+
+    foreach my $file ( keys %$reqfile ){
+	foreach my $dep ( keys %{$$reqfile{$file}} ){
+	    foreach my $depdep ( keys %{$$reqfile{$dep}} ){
+		if ($depdep eq $file){
+		    &message($$msgtype{'error'},"circular dependencies: $file - & $dep!\n");
+		    exit -1;
+		}
+	    }
+	}
+    }
+
+}
+
 sub uniq_array{
 #
 # remove duplication in a given list
@@ -605,12 +694,14 @@ sub message{
     if ( $flag == 3 ) { $msg_type = "Debug:: "; }
     elsif ( $flag == 2 ) { $msg_type = "Warning:: "; }
     elsif ( $flag == 1 ) { $msg_type = ""; }
+    elsif ( $flag == -1 ) { $msg_type = "Error:: "; }
 
-    if ($flag > 0) {
+    if ($flag != 0) {
 	for($i=0;$i<=$#msg;$i++){
 	    print "$msg_type$msg[$i]";
 	}
     }
+    exit $flag if ($flag < 0);
 
     return;
 }
