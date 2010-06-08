@@ -1,13 +1,14 @@
 program hrate
 
-  use command_line
+  use command_line, only: cl_getarg, cl_iargc
+
   real, dimension (:), allocatable :: time
   real, dimension(:,:), allocatable :: h_rate, hrateavg
   character (500) :: runname, c
   integer, dimension (1) :: max_loc, jlo, jhi
   integer :: i, imax, ierr
 
-  if (iargc() /= 0) then
+  if (cl_iargc() /= 0) then
      call cl_getarg (1, runname, 500, ierr)
   else
      write (*,*) 'runname = ?'

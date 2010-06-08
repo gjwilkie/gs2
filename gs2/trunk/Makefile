@@ -79,7 +79,7 @@ DBLE ?= on
 USE_MPI ?= on
 # turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?=
-# which FFT library to use (fftw,undefined) 
+# which FFT library to use (fftw,mkl_fftw,undefined) 
 USE_FFT ?= fftw
 # uses netcdf library (bin)
 USE_NETCDF ?= on
@@ -88,11 +88,11 @@ USE_HDF5 ?=
 # uses MDSplus (bin)
 USE_MDSPLUS ?=
 # Use function pointer in layouts_indices.c (bin)
-# see also README.cpp
+# see also README
 USE_C_INDEX ?= 
-# Use Numerical Recipes local random number generator (bin)
-# see also README.cpp
-USE_NR_RAN ?=
+# Use local random number generator (mt,undefined)
+# see also README
+USE_LOCAL_RAN ?=
 # Use posix for command_line (bin)
 USE_POSIX ?=
 # Use local special functions (bin)
@@ -203,7 +203,7 @@ endif
 ifeq ($(MAKECMDGOALS),depend)
 # must invoke full functionality when make depend
 	MAKE += USE_HDF5=on USE_FFT=fftw USE_NETCDF=on USE_MPI=on \
-		USE_LOCAL_BESSEL=on
+		USE_LOCAL_BESSEL=on USE_LOCAL_RAN=mt
 endif
 
 ifdef USE_SHMEM
@@ -234,6 +234,9 @@ ifeq ($(USE_FFT),fftw)
 	CPPFLAGS += -DFFT=_FFTW_
 	FFT_LIB ?= -lfftw -lrfftw
 endif
+ifeq ($(USE_FFT),mkl_fftw)
+	CPPFLAGS += -DFFT=_FFTW_
+endif
 ifdef USE_NETCDF
 	NETCDF_LIB ?= -lnetcdf
 	CPPFLAGS += -DNETCDF
@@ -251,8 +254,8 @@ endif
 ifdef USE_C_INDEX
 	CPPFLAGS += -DUSE_C_INDEX
 endif
-ifdef USE_NR_RAN
-	CPPFLAGS += -DUSE_NR_RAN
+ifeq ($(USE_LOCAL_RAN),mt)
+	CPPFLAGS += -DRANDOM=_RANMT_
 endif
 ifdef USE_POSIX
 	CPPFLAGS += -DPOSIX
@@ -461,8 +464,8 @@ test_make:
 	@echo  USE_HDF5 is $(USE_HDF5)
 	@echo  USE_MDSPLUS is $(USE_MDSPLUS)
 	@echo  USE_C_INDEX is $(USE_C_INDEX)
-	@echo  USE_NR_RAN is $(USE_NR_RAN)
 	@echo  USE_POSIX is $(USE_POSIX)
+	@echo  USE_LOCAL_RAN is $(USE_LOCAL_RAN)
 	@echo  USE_LOCAL_SPFUNC is $(USE_LOCAL_SPFUNC)
 	@echo  USE_NAGLIB is $(USE_NAGLIB)
 	@echo
@@ -484,3 +487,6 @@ unlink:
 
 revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
+
+TAGS:	*.f90 *.fpp */*.f90 */*.fpp
+	etags $^
