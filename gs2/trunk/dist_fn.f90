@@ -35,7 +35,7 @@ module dist_fn
   real :: t0, omega0, gamma0, thetas, source0
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
-  real :: D_kill, noise, wfb, g_exb, omprimfac, btor_slab
+  real :: D_kill, noise, wfb, g_exb, omprimfac, btor_slab, mach
 
   integer :: adiabatic_option_switch!, heating_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -85,6 +85,10 @@ module dist_fn
 
   real, dimension (:,:,:,:,:), allocatable :: wdriftttp_neo
   ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
+
+  real, dimension (:,:), allocatable :: wcoriolis
+  ! (-ntgrid:ntgrid, -g-layout-)
+
 !<MAB
 
   real, dimension (:,:,:), allocatable :: wstar
@@ -221,6 +225,7 @@ contains
     call allocate_arrays
     call init_vpar
     call init_wdrift
+    call init_wcoriolis
     call init_wstar
     call init_bessel
     call init_par_filter
@@ -288,7 +293,7 @@ contains
          tpdriftknob, nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          save_n, D_kill, noise, &
-         kill_grid, h_kill, g_exb, neoflux, omprimfac, btor_slab
+         kill_grid, h_kill, g_exb, neoflux, omprimfac, btor_slab, mach
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
            thetas, phi_ext, source_option, a_ext, aky_star, akx_star
@@ -321,6 +326,7 @@ contains
        afilter = 0.0
        kfilter = 0.0
        g_exb = 0.0
+       mach = 0.0
        omprimfac = 1.0
        btor_slab = 0.0
        h_kill = .true.
@@ -388,6 +394,7 @@ contains
     call broadcast (D_kill)
     call broadcast (h_kill)
     call broadcast (g_exb)
+    call broadcast (mach)
     call broadcast (omprimfac)
     call broadcast (btor_slab)
     call broadcast (noise)
@@ -637,6 +644,67 @@ contains
                       + gbdrift0(ig)*0.5*e(ie,is)*al(il)*bmag(ig)) &
                      *code_dt/2.0
   end function wdrift_func_neo
+
+  subroutine init_wcoriolis
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    implicit none
+    integer :: ig, ik, it, il, ie, is
+    integer :: iglo
+
+    if (.not. allocated(wcoriolis)) then
+       allocate (wcoriolis(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+       wcoriolis = 0.
+    end if
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       il=il_idx(g_lo,iglo)
+       ie=ie_idx(g_lo,iglo)
+       it=it_idx(g_lo,iglo)
+       ik=ik_idx(g_lo,iglo)
+       is=is_idx(g_lo,iglo)
+       do ig = -ntgrid, ntgrid
+          wcoriolis(ig,iglo) = wcoriolis_func(ig, il, ie, it, ik, is)
+       end do
+    end do
+
+! What about wcoriolis(ntgrid,iglo)?
+! This should be weighted by bakdif to be completely consistent
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do ig = -ntgrid, ntgrid-1
+          wcoriolis(ig,iglo) = 0.5*(wcoriolis(ig,iglo) + wcoriolis(ig+1,iglo))
+       end do
+    end do
+
+  end subroutine init_wcoriolis
+
+  function wcoriolis_func (ig, il, ie, it, ik, is)
+
+    use theta_grid, only: bmag, cdrift, cdrift0
+    use theta_grid, only: shat
+    use kt_grids, only: aky, theta0, akx
+    use le_grids, only: e, al
+    use run_parameters, only: wunits
+    use gs2_time, only: code_dt
+    use species, only: spec
+
+    implicit none
+
+    real :: wcoriolis_func
+    integer, intent (in) :: ig, ik, it, il, ie, is
+
+    if (aky(ik) == 0.0) then
+       ! check wunits(ik)...factor of 2? -- MAB
+       wcoriolis_func = -mach*sqrt(e(ie,is)*(1.0-al(il)*bmag(ig))) &
+            * cdrift0(ig) * code_dt * akx(it)/(shat*spec(is)%zstm)
+    else
+       ! check wunits(ik) -- MAB
+       wcoriolis_func = -mach*sqrt(e(ie,is)*(1.0-al(il)*bmag(ig))) &
+            * (cdrift(ig) + theta0(it,ik)*cdrift0(ig))*code_dt*wunits(ik)/spec(is)%zstm
+    end if
+
+  end function wcoriolis_func
+
 !< MAB
 
   subroutine init_vpar
@@ -838,7 +906,7 @@ contains
     implicit none
     integer :: iglo
     integer :: ig, ik, it, il, ie, is
-    real :: wd, wdttp, vp, bd
+    real :: wd, wdttp, vp, bd, wc
 
     if (.not.allocated(a)) then
        allocate (a(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -855,24 +923,30 @@ contains
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid-1
+          wc = wcoriolis(ig,iglo)*nfac  ! MAB
           wd = wdrift(ig,iglo)*nfac
           wdttp = wdriftttp(ig,it,ik,ie,is)*nfac
           vp = vpar(ig,1,iglo)
           bd = bkdiff(is)
 
+! should check sign of wc below to be sure -- MAB
           ainv(ig,iglo) &
                = 1.0/(1.0 + bd &
-               + (1.0-fexp(is))*spec(is)%tz*(zi*wd*(1.0+bd) + 2.0*vp))
+               + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0+bd) + 2.0*vp)) ! MAB
+!               + (1.0-fexp(is))*spec(is)%tz*(zi*wd*(1.0+bd) + 2.0*vp))
           r(ig,iglo) &
                = (1.0 - bd &
-               + (1.0-fexp(is))*spec(is)%tz*(zi*wd*(1.0-bd) - 2.0*vp)) &
+               + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0-bd) - 2.0*vp)) & ! MAB
+!               + (1.0-fexp(is))*spec(is)%tz*(zi*wd*(1.0-bd) - 2.0*vp)) &
                *ainv(ig,iglo)
           a(ig,iglo) &
                = 1.0 + bd &
-               + fexp(is)*spec(is)%tz*(-zi*wd*(1.0+bd) - 2.0*vp)
+               + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0+bd) - 2.0*vp) ! MAB
+!               + fexp(is)*spec(is)%tz*(-zi*wd*(1.0+bd) - 2.0*vp)
           b(ig,iglo) &
                = 1.0 - bd &
-               + fexp(is)*spec(is)%tz*(-zi*wd*(1.0-bd) + 2.0*vp)
+               + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0-bd) + 2.0*vp) ! MAB
+!               + fexp(is)*spec(is)%tz*(-zi*wd*(1.0-bd) + 2.0*vp)
           
           if (nlambda > ng2) then
              ! zero out forbidden regions
@@ -890,8 +964,10 @@ contains
              ! ???? mysterious mucking around with totally trapped particles
              ! part of multiple trapped particle algorithm
              if (il == ittp(ig)) then
-                ainv(ig,iglo) = 1.0/(1.0 + zi*(1.0-fexp(is))*spec(is)%tz*wdttp)
-                a(ig,iglo) = 1.0 - zi*fexp(is)*spec(is)%tz*wdttp
+                ainv(ig,iglo) = 1.0/(1.0 + zi*(1.0-fexp(is))*spec(is)%tz*(wdttp+wc)) ! MAB
+                a(ig,iglo) = 1.0 - zi*fexp(is)*spec(is)%tz*(wdttp+wc) ! MAB
+!                ainv(ig,iglo) = 1.0/(1.0 + zi*(1.0-fexp(is))*spec(is)%tz*wdttp)
+!                a(ig,iglo) = 1.0 - zi*fexp(is)*spec(is)%tz*wdttp
                 r(ig,iglo) = 0.0
              end if
           end if
@@ -2653,7 +2729,8 @@ contains
              if (il /= ittp(ig)) cycle
              source(ig) &
                   = g(ig,2,iglo)*a(ig,iglo) &
-                  - anon(ie,is)*zi*wdriftttp(ig,it,ik,ie,is)*phigavg(ig)*nfac &
+                  - anon(ie,is)*zi*(wdriftttp(ig,it,ik,ie,is)+wcoriolis(ig,iglo))*phigavg(ig)*nfac &
+!                  - anon(ie,is)*zi*wdriftttp(ig,it,ik,ie,is)*phigavg(ig)*nfac &
                   + zi*wstar(ik,ie,is)*phigavg(ig)
           end do
 
@@ -2753,7 +2830,8 @@ contains
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
-              -zi*wdrift(ig,iglo)*phi_p*nfac) &
+              -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac) &
+!              -zi*wdrift(ig,iglo)*phi_p*nfac) &
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
               -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
@@ -2885,6 +2963,8 @@ contains
     end if
 
     ! time advance vpar < 0 inhomogeneous part
+    ! r=ainv=0 if forbid(ig,il) or forbid(ig+1,il), so gnew=0 in forbidden
+    ! region and at upper bounce point
     do ig = ntgr-1, ntgl, -1
        gnew(ig,2,iglo) &
             = -gnew(ig+1,2,iglo)*r(ig,iglo) + ainv(ig,iglo)*source(ig,2)
@@ -2910,7 +2990,9 @@ contains
        do ig = ntgl, ntgr-1
           if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
              g2(ig,1) = g1(ig+1,2)
-             source(ig,1) = gnew(ig+1,2,iglo)
+             ! doesn't seem like this will be used because
+             ! ainv=0 if forbid(ig,il) or forbid(ig+1,il) -- MAB
+             source(ig,1) = gnew(ig+1,2,iglo)  
           end if
        end do
     end if
@@ -5833,6 +5915,7 @@ contains
     
     wdrift = 0.
     wdriftttp = 0.
+    wcoriolis = 0.
     if (neoflux) then
        wdrift_neo = 0.
        wdriftttp_neo = 0.
@@ -7208,6 +7291,7 @@ contains
        deallocate (ittp, wdrift, wdriftttp)
        if (neoflux) deallocate (wdrift_neo, wdriftttp_neo)
     end if
+    if (allocated(wcoriolis)) deallocate (wcoriolis)
     if (allocated(vpa)) deallocate (vpa, vpac, vperp2, vpar)
     if (allocated(wstar)) deallocate (wstar)
     if (allocated(aj0)) deallocate (aj0, aj1)

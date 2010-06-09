@@ -76,6 +76,7 @@ module gs2_io
   integer :: charge_id, mass_id, dens_id, temp_id, tprim_id, fprim_id
   integer :: uprim_id, uprim2_id, vnewk_id, spec_type_id
   integer :: bmag_id, gradpar_id, gbdrift_id, gbdrift0_id
+  integer :: cdrift_id, cdrift0_id
   integer :: cvdrift_id, cvdrift0_id, gds2_id, gds21_id, gds22_id
   integer :: grho_id, jacob_id, shat_id, eps_id, drhodpsi_id, q_id
   integer :: code_id, datestamp_id, timestamp_id, timezone_id
@@ -731,6 +732,10 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, var='cvdrift')
     status = nf90_def_var (ncid, 'cvdrift0', netcdf_real, nttot_dim, cvdrift0_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='cvdrift0')
+    status = nf90_def_var (ncid, 'cdrift', netcdf_real, nttot_dim, cdrift_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='cdrift')
+    status = nf90_def_var (ncid, 'cdrift0', netcdf_real, nttot_dim, cdrift0_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='cdrift0')
 
     status = nf90_def_var (ncid, 'gds2', netcdf_real, nttot_dim, gds2_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='gds2')
@@ -2280,7 +2285,7 @@ contains
 
     use theta_grid, only: bmag, gradpar, gbdrift, gbdrift0, &
          cvdrift, cvdrift0, gds2, gds21, gds22, grho, jacob, &
-         shat, drhodpsi, eps
+         shat, drhodpsi, eps, cdrift, cdrift0
 !    use nf90_mod, only: nf90_put_var
 # ifdef NETCDF
     use netcdf, only: nf90_put_var
@@ -2299,6 +2304,10 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, cvdrift_id)
     status = nf90_put_var (ncid, cvdrift0_id, cvdrift0)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, cvdrift0_id)
+    status = nf90_put_var (ncid, cdrift_id, cdrift)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, cdrift_id)
+    status = nf90_put_var (ncid, cdrift0_id, cdrift0)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, cdrift0_id)
     status = nf90_put_var (ncid, gds2_id, gds2)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, gds2_id)
     status = nf90_put_var (ncid, gds21_id, gds21)
