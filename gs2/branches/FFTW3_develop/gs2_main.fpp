@@ -49,6 +49,7 @@ contains
     logical :: nofin= .false.
     logical, optional, intent(in) :: nofinish
     character (500), target :: cbuff
+    logical :: debug = .false.
 
 !
 !CMR, 12/2/2010: 
@@ -101,8 +102,9 @@ contains
        
        call broadcast (cbuff)
        if (.not. proc0) run_name => cbuff
-       
+       if (debug) write(6,*) 'run_gs2:call init_fields'       
        call init_fields
+       if (debug) write(6,*) 'run_gs2:called init_fields'       
        call init_gs2_diagnostics (list, nstep)
        call init_tstart (tstart)   ! tstart is in user units 
        

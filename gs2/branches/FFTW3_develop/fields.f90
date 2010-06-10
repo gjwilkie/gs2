@@ -40,43 +40,59 @@ contains
     use antenna, only: init_antenna
     implicit none
     logical :: restarted
+    logical:: debug=.false.
 
     if (initialized) return
     initialized = .true.
     
+    if (debug) write(6,*) "init_fields: init_theta_grid"
     call init_theta_grid
     
 !CMR,30/3/2009:
 ! call init_init_g before init_run_parameters to read delt from restart file
 
+    if (debug) write(6,*) "init_fields: init_init_g"
     call init_init_g
+    if (debug) write(6,*) "init_fields: init_run_parameters"
     call init_run_parameters
+    if (debug) write(6,*) "init_fields: init_dist_fn"
     call init_dist_fn
+    if (debug) write(6,*) "init_fields: read_parameters"
     call read_parameters
+    if (debug) write(6,*) "init_fields: allocate_arrays"
     call allocate_arrays
 
     select case (fieldopt_switch)
     case (fieldopt_implicit)
+       if (debug) write(6,*) "init_fields: init_fields_implicit"
        call init_fields_implicit
     case (fieldopt_explicit)
+       if (debug) write(6,*) "init_fields: init_fields_explicit"
        call init_fields_explicit
     case (fieldopt_test)
+       if (debug) write(6,*) "init_fields: init_fields_test"
        call init_fields_test
     end select
 
 ! Turn on nonlinear terms.
+    if (debug) write(6,*) "init_fields: nl_finish_init"
     call nl_finish_init
 
+    if (debug) write(6,*) "init_fields: ginit"
     call ginit (restarted)
+    if (debug) write(6,*) "init_fields: init_antenna"
     call init_antenna
     if (restarted) return
 
     select case (fieldopt_switch)
     case (fieldopt_implicit)
+       if (debug) write(6,*) "init_fields: init_phi_implicit"
        call init_phi_implicit
     case (fieldopt_explicit)
+       if (debug) write(6,*) "init_fields: init_phi_explicit"
        call init_phi_explicit
     case (fieldopt_test)
+       if (debug) write(6,*) "init_fields: init_phi_test"
        call init_phi_test
     end select
     

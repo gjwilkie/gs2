@@ -58,15 +58,22 @@ contains
     use gs2_transforms, only: init_transforms
     implicit none
     logical :: dum1, dum2
+    logical :: debug=.true.
 
     if (initialized) return
     initialized = .true.
     
+    if (debug) write(6,*) "init_nonlinear_terms: init_gs2_layouts"
     call init_gs2_layouts
+    if (debug) write(6,*) "init_nonlinear_terms: init_theta_grid"
     call init_theta_grid
+    if (debug) write(6,*) "init_nonlinear_terms: init_kt_grids"
     call init_kt_grids
+    if (debug) write(6,*) "init_nonlinear_terms: init_le_grids"
     call init_le_grids (dum1, dum2)
+    if (debug) write(6,*) "init_nonlinear_terms: init_species"
     call init_species
+    if (debug) write(6,*) "init_nonlinear_terms: init_dist_fn_layouts"
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
 
     call read_parameters
@@ -76,9 +83,11 @@ contains
        nonlin = .true.
     end if
 
+    if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
     if (nonlinear_mode_switch /= nonlinear_mode_none) then
        call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
 
+       if (debug) write(6,*) "init_nonlinear_terms: allocations"
        if (alloc) then
           if (accelerated) then
              allocate (     aba(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
