@@ -408,7 +408,8 @@ layouts_type.h: layouts_type.f90
 .PHONY: depend clean distclean tar test_make
 
 depend:
-	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=0 $(VPATH)
+	@$(DEPEND_CMD) -m "$(MAKE)" -o -v=0 $(VPATH)
+#	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=0 $(VPATH)
 
 clean:
 	-rm -f *.o *.mod *.g90 *.h core */core
