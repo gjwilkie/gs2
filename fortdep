@@ -205,7 +205,6 @@ sub get_fileinfo{
 #  in \%msgtype: msgtypes
 #    
     my ($source,$fileinfo,$option,$msgtype) = @_;
-    my $dummy;
     my ($modname, $progname, $subname, $funcname);
 
     FILELOOP : foreach my $file ( sort ( keys %$source ) ){
@@ -213,29 +212,44 @@ sub get_fileinfo{
 
 	my @publist=();
 	my @prvlist=();
-	my $default_private=0;
+	my %default_private=();
 
 	my $cont_private=0;
 	my $cont_public=0;
+
+	my $current_module="";
+
+	my @modpublist=();
+	my @modprvlist=();
 
 	open(FILE,"$$source{$file}{'dir'}/$file") ||
 	    die ("cannot open file: $$source{$file}{'dir'}/$file!");
 	SEARCH : while (<FILE>){
 	    my $line;
 	    chop($line=$_);
+	    # remove trailing comments
+	    ($line, my @dummy)=split(/!/,$line);
+	    # lowercase
+	    $line=~tr/[A-Z]/[a-z]/;
+	    $_=$line; # this is necessary for split without arguments.
+	              # I don't want to replace split with split(' ',$line)
+	              # because this may give different result.
+	              # (note preceding white space etc.)
 
 	    # private
-	    if( $line =~ /^[\t\n ]*[Pp][Rr][Ii][Vv][Aa][Tt][Ee]/ || $cont_private==1 ){
-		my @tmplist = split;
-		$default_private=1 if ($#tmplist == 0);
-
+	    # detects if private is default
+	    $default_private{$current_module}=1 
+		if( $line =~ /^\s*private\s*$/ );
+	    # detects private elements
+	    if( $line =~ /^\s*private/ || $cont_private ){
+		# print "private = |$line|\n";
+		my @tmplist=split(/private|::|&|,|\s+/,$line);
 		foreach (@tmplist){
-		    s/,//;
-		    next if ( $_ eq "private" || $_ eq "::" || $_ eq "&" );
-		    @prvlist = (@prvlist,$_);
+		    my @tmplist2=split; # remove preceding space
+		    @prvlist=(@prvlist,@tmplist2);
 		}
-		
-		if ( $line =~ /&$/ ){
+
+		if ( $line =~ /&\s*$/ ){
 		    $cont_private=1;
 		} else {
 		    $cont_private=0;
@@ -243,69 +257,269 @@ sub get_fileinfo{
 	    }
 
 	    # public
-	    if( $line =~ /^[\t\n ]*[Pp][Uu][Bb][Ll][Ii][Cc]/ || $cont_public==1 ){
-		my @tmplist=split;
-		$default_private=0 if ($#tmplist == 0);
-
-		foreach (@tmplist){ 
-		    s/,//;
-		    next if ( $_ eq "public" || $_ eq "::" || $_ eq "&" );
-		    @publist = (@publist,$_);
+	    # detects if public is default
+	    $default_private{$current_module}=0
+		if( $line =~ /^\s*public\s*$/ );
+	    # detects public elements
+	    if( $line =~ /^\s*public/ || $cont_public ){
+		# print "public = |$line|\n";
+		my @tmplist=split(/public|::|&|,|\s+/,$line);
+		foreach (@tmplist){
+		    my @tmplist2=split; # remove preceding space
+		    @publist=(@publist,@tmplist2);
 		}
 
-		if ( $line =~ /&$/ ){
+		# detects continuation
+		if ( $line =~ /&\s*$/ ){
 		    $cont_public=1;
 		} else {
 		    $cont_public=0;
 		}
 	    }
 
-	    if( $line =~ /^[\t\n ]*[Ee][Nn][Dd] [Mm][Oo][Dd][Uu][Ll][Ee][\t\n ]/ ){
-		($dummy, $dummy, $modname)=split;
-		$modname =~ tr/[A-Z]/[a-z]/;
-		my $stat=1;
-		$stat=&warn_multifile($file,$modname,$fileinfo,$option,$msgtype)
-		    if ($$fileinfo{$modname}{'name'} ne "");
-		if($stat){
+	    # start module
+	    # this is used for module detection, and to determine 
+            # what module currently in
+	    # subroutines and functions may be associated with module
+	    if( $line =~ /^\s*module\s+/ ){
+		# print "module = |$line|\n";
+		(my $dummy, $modname)=split;
+		next if ( $modname eq "procedure" ); # skip if module procedure statement
+		$current_module = $modname;
+
+		# check if the module is already found.
+		my $stat = 1;
+		if ($$fileinfo{$modname}{'name'} ne ""){
+		    # modname already exists
+		    if ($$fileinfo{$modname}{'name'} eq $file){
+			# in the same file
+			$stat=0;
+		    } else {
+			# in different file
+			$stat = &warn_multifile
+			    ($file,$modname,$fileinfo,$option,$msgtype);
+		    }
+		}
+		if ($stat) {
 		    $$fileinfo{$modname}{'name'} = $file;
 		    $$fileinfo{$modname}{'type'} = "module";
 		}
 	    }
 
-	    if( $line =~ /^[\t\n ]*[Ee][Nn][Dd] [Pp][Rr][Oo][Gg][Rr][Aa][Mm][\t\n ]/ ){
-		($dummy, $dummy, $progname)=split;
-		$progname =~ tr/[A-Z]/[a-z]/;
-		my $stat=1;
-		$stat=&warn_multifile
-		    ($file,$progname,$fileinfo,$option,$msgtype)
-		    if ($$fileinfo{$progname}{'name'} ne "");
-		if($stat){
+	    # end module
+	    # this is also used for module detection
+	    # if module name is omitted, this cannot be used for detection.
+	    # but still necessary to detect end of current module
+	    if( $line =~ /^\s*end\s+module\s*/ ){
+		# print "end module = |$line|\n";
+		(my $dummy, my $dummy, $modname)=split;
+
+		# check if the module is already found.
+		my $stat = 0;
+		if ($modname ne ""){
+		    $stat=1;
+		    if ($$fileinfo{$modname}{'name'} ne ""){
+			# modname already exists
+			if ($$fileinfo{$modname}{'name'} eq $file){
+			    # in the same file
+			    $stat=0;
+			} else {
+			    # in different file
+			    $stat=&warn_multifile
+				($file,$modname,$fileinfo,$option,$msgtype);
+			}
+		    }
+		}
+		if ($stat) {
+		    $$fileinfo{$modname}{'name'} = $file;
+		    $$fileinfo{$modname}{'type'} = "module";
+		}
+
+		undef $current_module;
+		foreach (@publist) {
+		    push @modpublist,$_."::".$modname;
+		}
+		foreach (@prvlist) {
+		    push @modprvlist,$_."::".$modname;
+		}
+		undef @publist;
+		undef @prvlist;
+	    }
+
+	    # start program
+	    # this is used for program detection
+	    if( $line =~ /^\s*program\s+/ ){
+		# print "program = |$line|\n";
+
+		(my $dummy, $progname)=split;
+		
+		# check if the program is already found.
+		my $stat = 1;
+		if ($$fileinfo{$progname}{'name'} ne ""){
+		    # progname already exists
+		    if ($$fileinfo{$progname}{'name'} eq $file){
+			# in the same file
+			$stat=0;
+		    } else {
+			# in different file
+			$stat = &warn_multifile
+			    ($file,$progname,$fileinfo,$option,$msgtype);
+		    }
+		}
+		if ($stat) {
 		    $$fileinfo{$progname}{'name'} = $file;
 		    $$fileinfo{$progname}{'type'} = "program";
 		}
 	    }
 
-	    if( $line =~ /^[\t\n ]*[Ee][Nn][Dd] [Ss][uu][Bb][Rr][Oo][Uu][Tt][Ii][Nn][Ee][\t\n ]/ ){
-		($dummy, $dummy, $subname)=split;
-		$subname =~ tr/[A-Z]/[a-z]/;
-		my $stat=1;
-		$stat=&warn_multifile
-		    ($file,$subname,$fileinfo,$option,$msgtype)
-		    if ($$fileinfo{$subname}{'name'} ne "");
-		if($stat){
+	    # end program
+	    # this is also used for program detection
+	    # if program name is omitted, this fails
+	    if( $line =~ /^\s*end\s+program\s*/ ){
+		# print "end program = |$line|\n";
+		(my $dummy, my $dummy, $progname)=split;
+
+		# check if the program is already found.
+		my $stat = 0;
+		if ($progname ne ""){
+		    $stat=1;
+		    if ($$fileinfo{$progname}{'name'} ne ""){
+			# progname already exists
+			if ($$fileinfo{$progname}{'name'} eq $file){
+			    # in the same file
+			    $stat=0;
+			} else {
+			    $stat = &warn_multifile
+				($file,$progname,$fileinfo,$option,$msgtype);
+			}
+		    }
+		}
+		if ($stat) {
+		    $$fileinfo{$progname}{'name'} = $file;
+		    $$fileinfo{$progname}{'type'} = "program";
+		}
+	    }
+
+	    # start subroutine
+	    # this is used for subroutine detection
+	    if( $line =~ /^\s*subroutine\s+/ ){
+		# print "subroutine = |$line|\n";
+		(my $dummy, $subname)=split;
+		# remove arguments
+		my @tmplist=split(/\(/,$subname);
+		$subname=$tmplist[0];
+		$subname.="::".$current_module if ($current_module ne "");
+
+		# check if the subroutine is already found.
+		my $stat = 1;
+		if ($$fileinfo{$subname}{'name'} ne ""){
+		    # subname already exists
+		    if ($$fileinfo{$subname}{'name'} eq $file){
+			# in the same file
+			$stat=0;
+		    } else {
+			# in different file
+			$stat = &warn_multifile
+			    ($file,$subname,$fileinfo,$option,$msgtype)
+		    }
+		}
+		if ($stat) {
 		    $$fileinfo{$subname}{'name'} = $file;
 		    $$fileinfo{$subname}{'type'} = "subroutine";
 		}
 	    }
 
-	    if( $line =~ /^[\t\n ]*[Ee][Nn][Dd] [Ff][uu][Nn][Cc][Tt][Ii][Oo][Nn][\t\n ]/ ){
-		($dummy, $dummy, $funcname)=split;
-		$subname =~ tr/[A-Z]/[a-z]/;
-		my $stat=1;
-		$stat=&warn_multifile
-		    ($file,$funcname,$fileinfo,$option,$msgtype)
-		    if ($$fileinfo{$funcname}{'name'} ne "");
-		if($stat){
+	    # end subroutine
+	    # this is also used for subroutine detection
+	    # if subroutine name is omitted, this fails
+	    if( $line =~ /^\s*end\s+subroutine\s*/ ){
+		# print "end subroutine = |$line|\n";
+		(my $dummy, my $dummy, $subname)=split;
+		$subname.="::".$current_module if ($current_module ne "");
+
+		# check if the subroutine is already found.
+		my $stat = 0;
+		if ($subname ne ""){
+		    $stat=1;
+		    if ($$fileinfo{$subname}{'name'} ne ""){
+			# subname already exists
+			if ($$fileinfo{$subname}{'name'} eq $file){
+			    # in the same file
+			    $stat=0;
+			} else {	
+			    # in different file
+			    $stat = &warn_multifile
+				($file,$subname,$fileinfo,$option,$msgtype);
+			}
+		    }
+		}
+		if ($stat) {
+		    $$fileinfo{$subname}{'name'} = $file;
+		    $$fileinfo{$subname}{'type'} = "subroutine";
+		}
+	    }
+
+	    # start function
+	    # this is used for function detection
+	    if( $line =~ /^\s*(|!end|integer|real|double precision|integer|logical|other type)\s+function\s+/ ){
+		# print "function = |$line|\n";
+		my @tmplist=split;
+		# function name is next to 'function'
+		while (my $tmp=shift(@tmplist)){
+		    if ($tmp eq "function"){
+			$funcname = shift(@tmplist);
+			last;
+		    }
+		}
+		# remove arguments
+		my @tmplist=split(/\(/,$funcname);
+		$funcname=$tmplist[0];
+		$funcname.="::".$current_module if ($current_module ne "");
+
+		# check if the function is already found.
+		my $stat = 1;
+		if ($$fileinfo{$funcname}{'name'} ne ""){
+		    # funcname already exists
+		    if ($$fileinfo{$funcname}{'name'} eq $file){
+			# in the same file
+			$stat=0;
+		    } else {
+			# in different file
+			$stat = &warn_multifile
+			    ($file,$funcname,$fileinfo,$option,$msgtype) 
+		    }
+		}
+		if ($stat) {
+		    $$fileinfo{$funcname}{'name'} = $file;
+		    $$fileinfo{$funcname}{'type'} = "function";
+		}
+	    }
+
+	    # end function
+	    # this is also used for function detection
+	    # if function name is omitted, this fails
+	    if( $line =~ /^\s*end\s+function\s*/ ){
+		# print "end function = |$line|\n";
+		(my $dummy, my $dummy, $funcname)=split;
+		$funcname.="::".$current_module if ($current_module ne "");
+
+		# check if the function is already found.
+		my $stat = 0;
+		if ($funcname ne ""){
+		    $stat=1;
+		    if ($$fileinfo{$funcname}{'name'} ne ""){
+			# funcname already exists
+			if ($$fileinfo{$funcname}{'name'} eq $file){
+			    # in the same file
+			    $stat=0;
+			} else {
+			    # in different file
+			    $stat = &warn_multifile
+				($file,$funcname,$fileinfo,$option,$msgtype);
+			}
+		    }
+		}
+		if ($stat) {
 		    $$fileinfo{$funcname}{'name'} = $file;
 		    $$fileinfo{$funcname}{'type'} = "function";
 		}
@@ -320,24 +534,25 @@ sub get_fileinfo{
 		$$fileinfo{$modprog}{'type'} eq "program"
 		);
 	    if ($$fileinfo{$modprog}{'name'} eq $file) {
-		if ($#publist >= 0) {
-		    foreach my $pub (@publist){
+		if ($#modpublist >= 0) {
+		    foreach my $pub (@modpublist){
 			next pubcheck if ($pub eq $modprog);
 		    }
 		}
-		if ($#prvlist >= 0) {
-		    foreach my $prv (@prvlist){
+		if ($#modprvlist >= 0) {
+		    foreach my $prv (@modprvlist){
 			if ($prv eq $modprog){
 			    delete $$fileinfo{$modprog};
 			    next pubcheck;
 			}
 		    }
 		}
-		delete $$fileinfo{$modprog} if ($default_private);
+		(my $dummy, my $mod)=split(/::/,$modprog);
+		delete $$fileinfo{$modprog} if ($default_private{$mod});
 	    }
 	}
-    }
 
+    }
     return;
 }
 
@@ -391,7 +606,6 @@ sub get_dependency{
 #  in \%msgtype: msgtypes
 #   
     my ($source,$fileinfo,$reqfile,$sysfile,$option,$msgtype)=@_;
-    my $dummy;
     my ($moduse,$subuse,$incfile);
 
     FILELOOP : foreach my $file ( keys %$source ){
@@ -403,15 +617,22 @@ sub get_dependency{
 	SEARCH : while (<FILE>){
 	    my $line;
 	    chop($line=$_);
+	    # remove trailing comments
+	    my @tmplist=split(/!/,$line);
+	    $line=$tmplist[0];
+	    # lowercase
+	    $line=~tr/[A-Z]/[a-z]/;
+	    $_=$line; # see comments in get_fileinfo above.
 
 	    # use statement
-	    if( $line =~ /^[\t\n ]*[Uu][Ss][Ee][\t\n ]/ ){
-		($dummy, $moduse)=split;
+	    # this only detects module name
+	    # I don't check what public elements in the module are used.
+	    if( $line =~ /^\s*use\s+/ ){
+		(my $dummy, $moduse)=split;
 		# remove comma if exists (this happens when only is given)
 #		chop($moduse) if ( $moduse =~ /,$/ );
 		my @tmplist=split(/,/,$moduse);
 		$moduse=$tmplist[0];
-		$moduse=~tr/[A-Z]/[a-z]/;
 		
 		my $modfile = $$fileinfo{$moduse}{'name'};
 		# ignore if depend on itself
@@ -455,9 +676,9 @@ sub get_dependency{
 # 	    }
 
 	    # include statement
-	    if( $line =~ /^[\t\n ]*[Ii][Nn][Cc][Ll][Uu][Dd][Ee][\t\n ]/ ){
+	    if( $line =~ /^\s*include\s+/ ){
 		chop;
-		($dummy,my $incfile)=split;
+		(my $dummy, my $incfile)=split;
 		$incfile=~s/[\'\"]//g;  # remove quotation
 		my $match=0;
 		foreach (@$sysfile){ $match++ if ( $incfile eq $_ ); }
