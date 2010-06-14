@@ -665,6 +665,7 @@ contains
        is=is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
           wcoriolis(ig,iglo) = wcoriolis_func(ig, il, ie, it, ik, is)
+!          write (*,*) 'wcoriolis', ig, il, ie, it, ik, is, wcoriolis_func(ig,il,ie,it,ik,is)
        end do
     end do
 
@@ -675,6 +676,9 @@ contains
           wcoriolis(ig,iglo) = 0.5*(wcoriolis(ig,iglo) + wcoriolis(ig+1,iglo))
        end do
     end do
+
+    ! TMP UNTIL TESTED -- MAB
+    wcoriolis = 0.0
 
   end subroutine init_wcoriolis
 
