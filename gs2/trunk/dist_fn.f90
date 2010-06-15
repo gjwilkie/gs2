@@ -697,6 +697,8 @@ contains
     real :: wcoriolis_func
     integer, intent (in) :: ig, ik, it, il, ie, is
 
+!    write (*,*) 'cdrift', ig, cdrift(ig), theta0(it,ik), wunits(ik), sqrt(e(ie,is)*(1.0-al(il)*bmag(ig)))
+
     if (aky(ik) == 0.0) then
        ! check wunits(ik)...factor of 2? -- MAB
        wcoriolis_func = -mach*sqrt(e(ie,is)*(1.0-al(il)*bmag(ig))) &
@@ -4438,7 +4440,7 @@ contains
           ik = ik_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
-             g0(:,isgn,iglo) = funits*zi*aky(ik)*gnew(:,isgn,iglo)*aj1(:,iglo) &
+             g0(:,isgn,iglo) = -funits*zi*aky(ik)*gnew(:,isgn,iglo)*aj1(:,iglo) &
                   *rhoc*(gds21+theta0(it,ik)*gds22)*vperp2(:,iglo)*spec(is)%smz/(qval*shat*bmag**2)
 !             g0(:,isgn,iglo) = zi*akx(it)*grho*gnew(:,isgn,iglo)*aj1(:,iglo) &
 !                  *2.0*vperp2(:,iglo)*spec(is)%smz/(bmag**2*drhodpsi)

@@ -1363,6 +1363,7 @@ end subroutine eikcoefs
           itot=i+k*ntheta
           cdrift(itot)  = 2.*dpsidrho*gradstot(itot,2)/bmod(i)
           cdrift0(itot) = 2.*dpsidrho*gradrptot(itot,2)*dqdrp/bmod(i)
+!          write (*,*) 'cdrift', itot, cdrift(itot), cdrift0(itot)
        end do
     end do
 
