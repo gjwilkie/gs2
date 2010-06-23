@@ -7181,7 +7181,8 @@ contains
     complex, allocatable :: coeff0(:,:,:,:)
     complex, allocatable :: gtmp(:,:,:)
     real, allocatable :: wgt(:)
-    logical, parameter :: analytical = .false.
+!    logical, parameter :: analytical = .false.
+    logical, parameter :: analytical = .true.
 !    logical, save :: initialized=.false.
     real :: bsq
     
