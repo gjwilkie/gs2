@@ -1770,11 +1770,11 @@ contains
 
   subroutine ginit_recon3
     use mp, only: proc0
+    use mp, only: iproc
     use species, only: nspec, spec, has_electron_species
     use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, nakx => ntheta0, akx, reality
+    use kt_grids, only: naky, nakx => ntheta0, akx, aky, reality
     use kt_grids, only: nx,ny
-    use kt_grids_box, only: x0,y0
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
     use dist_fn_arrays, only: aj0,aj1,vperp2
     use dist_fn_arrays, only: kperp2
@@ -1975,7 +1975,8 @@ contains
        else
           if(debug.and.proc0) write(6,*) 'set equilibrium profile'
           allocate(nxy(nfx,ny),uxy(nfx,ny))
-          lx=2.*pi*x0; ly=2.*pi*y0
+!          lx=2.*pi*x0; ly=2.*pi*y0
+          lx=2.*pi/(akx(2)-akx(1)); ly=2.*pi/(aky(2)-aky(1))
           dx=lx/nfx
           ! if width is negative, it gives the ratio to the box size
           if(prof_width < 0. ) prof_width=-prof_width*lx
