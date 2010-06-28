@@ -2281,6 +2281,7 @@ contains
 
     ! now store the actual g in gnew
     gnew(:,:,:) = g(:,:,:)
+    call get_init_field(phi,apar,bpar)
 
 !!! check
     if(debug.and.proc0) write(6,*) 'check'

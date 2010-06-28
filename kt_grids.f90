@@ -221,7 +221,7 @@ module kt_grids_box
   implicit none
 
   public :: init_kt_grids_box, box_get_sizes, box_get_grids
-  public :: x0, y0
+  public :: x0, y0 !RN> Caution: these are not broadcasted!
 
   private
 

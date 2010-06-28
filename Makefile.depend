@@ -66,6 +66,7 @@ gs2_mod = \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
+	 gauss_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -130,6 +131,7 @@ ingen_mod = \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
+	 gauss_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -538,13 +540,13 @@ layouts_type.o:
 le_grids.o: \
 	 constants.o \
 	 file_utils.o \
+	 gauss_quad.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 layouts_type.o \
 	 mp.o \
 	 redistribute.o \
 	 species.o \
-	 spfunc.o \
 	 theta_grid.o 
 leq.o: \
 	 constants.o \
