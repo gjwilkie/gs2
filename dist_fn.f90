@@ -2827,6 +2827,7 @@ contains
       do ig = -ntgrid, ntgrid-1
          phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
          phi_m = phigavg(ig+1)-phigavg(ig)
+         ! RN> bdfac factors seem missing for apar_p
          apar_p = apargavg(ig+1)+apargavg(ig)
          apar_m = aparnew(ig+1,it,ik)+aparnew(ig,it,ik) & 
               -apar(ig+1,it,ik)-apar(ig,it,ik)
