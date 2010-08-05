@@ -1,0 +1,112 @@
+!-------------------LINEAR CYCLONE ITG CASE-----------------------
+! Widely used benchmark case.  Original study published
+! in Phys. Plasmas Vol. 7, p. 969 (Dimits et al.)
+! Can compare linear.out file with linear.test, which
+! is included in this directory.
+!-----------------------------------------------------------------
+
+&collisions_knobs
+ collision_model='none'
+/
+&theta_grid_parameters
+
+ ntheta= 16
+ nperiod= 3
+
+ eps = 0.18
+ epsl = 2.0
+ pk = 1.44
+ shat = 0.8
+
+/
+&parameters
+ beta = 0.0
+ zeff = 1.0
+/
+&theta_grid_eik_knobs
+/
+&fields_knobs
+ field_option='implicit'
+/
+&gs2_diagnostics_knobs
+ print_flux_line=F
+ write_nl_flux = F
+ print_line = T
+ write_line = T
+ write_phi = T
+ write_omega = T
+ write_final_fields = T
+ write_g = F
+ write_verr = F
+ nwrite=     50
+ navg=       50
+ omegatinst = 500.0
+ save_for_restart = .false.
+ omegatol = -1.0e-3
+/
+&le_grids_knobs
+ ngauss = 2
+ negrid = 16
+ vcut= 2.5
+ vgrid = T
+/
+&dist_fn_knobs
+ adiabatic_option="iphi00=2"
+ gridfac=   1.0
+ boundary_option="default"
+/
+
+&kt_grids_knobs
+ grid_option='single'
+ norm_option='t_over_m'
+/
+&kt_grids_single_parameters
+ aky = 0.3
+/
+&init_g_knobs
+ chop_side = F
+ phiinit=   1.e-3
+ restart_file = ""
+ ginit_option= "noise"
+/
+&knobs
+ fphi =   1.0
+ fapar =  0.0
+ faperp = 0.0
+ delt = 0.1
+ nstep = 500
+/
+&species_knobs
+ nspec=          1
+/
+&species_parameters_1
+ z=   1.0
+ mass=   1.0
+ dens=   1.0
+ temp=   1.0
+ tprim=  6.9
+ fprim=  2.2
+ uprim=  0.0
+ vnewk=  0.0
+ type='ion'
+/
+&dist_fn_species_knobs_1
+ fexpr= 0.5
+ fexpi= 0.0
+ bakdif= 0.0
+/
+&theta_grid_knobs
+ equilibrium_option='s-alpha'
+/
+&nonlinear_terms_knobs
+ nonlinear_mode='off'
+ cfl = 0.25
+/
+&reinit_knobs
+ delt_adj = 2.0
+ delt_minimum = 1.e-4
+/
+&layouts_knobs
+ layout = 'yxles'
+ local_field_solve = T
+/
