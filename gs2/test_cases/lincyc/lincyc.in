@@ -1,8 +1,5 @@
 !-------------------LINEAR CYCLONE ITG CASE-----------------------
-! Widely used benchmark case.  Original study published
-! in Phys. Plasmas Vol. 7, p. 969 (Dimits et al.)
-! Can compare linear.out file with linear.test, which
-! is included in this directory.
+! description= "Widely used benchmark case.  Original study published in Phys. Plasmas Vol. 7, p. 969 (Dimits et al.). Electrotatic, concentric circular flux surfaces. This is a linear run., Author: Michael Barnes"
 !-----------------------------------------------------------------
 
 &collisions_knobs
