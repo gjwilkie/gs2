@@ -753,6 +753,8 @@ contains
 !CMR : vpac is grid centered parallel velocity
 !CMR : vpar = q_s/sqrt{T_s m_s}*DELT/DTHETA * vpac |\gradpar(theta)| 
 !                                     where gradpar(theta) is centered
+!  ie  vpar = q_s/T_s  (v_||^GS2). \gradpar(theta)/DTHETA . DELT
+! 
 !CMR : confusions about vpac, vpar
 !      (i) surely vpac=0 at or beyond bounce points, so WHY set to +-1?
 !                                seems unphysical, so hope not used
@@ -775,6 +777,8 @@ contains
 
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+!CMR:
+! for vpar should we not use vpa and center product gradpar*vpa ? 
        vpar(-ntgrid:ntgrid-1,1,iglo) = &
             spec(is)%zstm*tunits(ik)*code_dt &
             *0.5/delthet(-ntgrid:ntgrid-1) &
@@ -2592,29 +2596,22 @@ contains
     is = is_idx(g_lo,iglo)
 
 ! CMR, Aug2010:
-! apargavg and phigavg can be combined to give the GK EM potential chi. 
-!                         chi = T_s/q_s phigavg - apargavg
-! Both quantities are decentred in time and evaluated on parallel 
-!                                                      grid points
-!
-! phigavg = q_s/T_s phi J0 + 2 vperp^2 bpar/bmag J1/Z
-!           contains the mapping from g to h
+! apargavg and phigavg combine to give the GK EM potential chi. 
+!                         chi = phigavg - apargavg
+! phigavg = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
 ! apargavg = sqrt(T_s/m_s) apar J0 vpa
-!           contains apar piece of EM GK potential chi
+! Both quantities are decentred in time and evaluated on || grid points
 !
-! Fix phigavg
-!         (i) divide bpar term by bmag
-!        (ii) multiply whole expression by spec(is)%zt
-!
-! Change apargavg:
-!        (i) multiply by vpa to avoid later temptations to 
-!                   interpolate a product (vpa apar) 
+! Mods:
+!        (i)  divide bpar term in phigavg by bmag
+!        (ii) multiply apargavg by vpa to avoid later temptation to 
+!             interpolate product (vpa apar) 
 !             as    0.5(vpa(i)+vpa(i+1)) 0.5(apar(i)+apar(i+1))
 
     phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
-                *aj0(:,iglo)*spec(is)%zt*fphi &
+                *aj0(:,iglo)*fphi &
              + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
-                *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)/bmag
+                *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)/bmag*spec(is)%tz
     apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
                 *aj0(:,iglo)*vpa(ig,isgn,iglo)*spec(is)%stm*fapar
 
@@ -2873,19 +2870,17 @@ contains
 !
       dapar=aparnew(:,it,ik)-apar(:,it,ik)
       do ig = -ntgrid, ntgrid-1
-! CMR
-! phigavg = q_s/T_s phi J0 + 2 vperp^2 bpar/bmag J1/Z
-!           contains the mapping from g to h
+! CMR, Aug2010:
+! apargavg and phigavg combine to give the GK EM potential chi. 
+!                         chi = phigavg - apargavg
+! phigavg = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
 ! apargavg = sqrt(T_s/m_s) apar J0 vpa
-!           contains apar piece of EM GK potential chi
-!                         chi = T_s/q_s phigavg - apargavg
 !
 ! phi_p = 2 phigavg                      .... (roughly!)
 ! phi_m = d/dtheta (phigavg)*DTHETA 
 ! apar_p ~ 2 apargavg  
 ! apar_m ~ 2 vpa d/dt (J0(Z) apar)*DELT
 ! => (phi_p - apar_p) ~ 2 chi   (where chi is GK EM perturbed potential)
-! vpar = q_s/sqrt{T_s m_s}  v_|| \gradpar(theta) DELT / (DTHETA) (centred) 
 !
          phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
          phi_m = phigavg(ig+1)-phigavg(ig)
@@ -2895,14 +2890,24 @@ contains
                 + aj0(ig,iglo)*dapar(ig)*vpa(ig,isgn,iglo)
 !MAB, 6/5/2009:
 ! added the omprimfac source term arising with equilibrium flow shear  
-!CMR source appears to contain following terms in physical terms
-!   -2v||.grad(q J0 phi/T + 2 vperp^2 bpar/bmag J1/Z).delt 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!CMR source appears to contain following physical terms
+!   -2q_s/T_s v||.grad(J0 phi + 2 vperp^2 bpar/bmag J1/Z T_s/q_s).delt 
 !   -2d/dt(q v|| J0 apar / T).delt
 !   +hyperviscosity
 !   -2 v_d.\grad_perp (q J0 phi/T + 2 vperp^2 bpar/bmag J1/Z).delt 
-!   -coriolis (ignore)
+!   -coriolis (ignore for now)
 !   2{\chi,f_{0s}}  (allowing for sheared flow which we can ignore)
-!   
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! CMR MADE FOLLOWING ASSUMPTIONS ABOUT GS2 VARIABLES
+!      ----------   look right for vpar and wdrift 
+! vpar = q_s/T_s  (v_||^GS2). \gradpar(theta)/DTHETA . DELT (centred) 
+! wdrift =    q_s/T_s  v_d.\grad_perp . DELT 
+! wcoriolis = q_s/T_s  v_C.\grad_perp . DELT 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
          source(ig) = anon(ie,is)*( &
               -2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
               -spec(is)%zstm*apar_m  &
@@ -2911,7 +2916,7 @@ contains
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
  -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
-              *(spec(is)%tz*phi_p - apar_p)
+              *(phi_p - apar_p)
       end do
         
 ! add in nonlinear terms -- tfac normalizes the *amplitudes*.
