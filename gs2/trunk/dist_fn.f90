@@ -701,11 +701,11 @@ contains
 
     if (aky(ik) == 0.0) then
        ! check wunits(ik)...factor of 2? -- MAB
-       wcoriolis_func = -mach*sqrt(e(ie,is)*(1.0-al(il)*bmag(ig))) &
+       wcoriolis_func = -mach*sqrt(max(e(ie,is)*(1.0-al(il)*bmag(ig)),0.0)) &
             * cdrift0(ig) * code_dt * akx(it)/(shat*spec(is)%zstm)
     else
        ! check wunits(ik) -- MAB
-       wcoriolis_func = -mach*sqrt(e(ie,is)*(1.0-al(il)*bmag(ig))) &
+       wcoriolis_func = -mach*sqrt(max(e(ie,is)*(1.0-al(il)*bmag(ig)),0.0)) &
             * (cdrift(ig) + theta0(it,ik)*cdrift0(ig))*code_dt*wunits(ik)/spec(is)%zstm
     end if
 
@@ -2963,7 +2963,7 @@ contains
 
     ! g2 is the initial condition for the homogeneous solution
     g2 = 0.0
-    ! initialize to 1.0 at upper bounce point
+    ! initialize to 1.0 at upper bounce point for vpar < 0
     ! (but not for wfb or ttp -- MAB)
     if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
        do ig=ntgl,ntgr-1
