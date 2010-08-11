@@ -2527,8 +2527,7 @@ contains
 
   subroutine g_adjust (g, phi, bpar, facphi, facbpar)
     use species, only: spec
-    use geometry, only: bmag
-    use theta_grid, only: ntgrid
+    use theta_grid, only: ntgrid, bmag
     use le_grids, only: anon
     use dist_fn_arrays, only: vperp2, aj0, aj1
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
@@ -2561,8 +2560,8 @@ contains
   subroutine get_source_term &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         isgn, iglo, sourcefac, source)
-    use dist_fn_arrays, only: aj0, aj1, vperp2, vpar, vpac, g, ittp
-    use theta_grid, only: ntgrid, theta
+    use dist_fn_arrays, only: aj0, aj1, vperp2, vpa, vpar, vpac, g, ittp
+    use theta_grid, only: ntgrid, theta, bmag
     use kt_grids, only: aky, theta0, akx
     use le_grids, only: nlambda, ng2, lmax, anon, e, negrid
     use species, only: spec, nspec
@@ -2910,7 +2909,7 @@ contains
               -2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
               -spec(is)%zstm*apar_m  &
               + D_res(it,ik)*apar_p) &
-              - zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac) &
+              - zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac &
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
  -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
