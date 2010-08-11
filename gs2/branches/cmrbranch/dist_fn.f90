@@ -758,15 +758,15 @@ contains
 !CMR : confusions about vpac, vpar
 !      (i) surely vpac=0 at or beyond bounce points, so WHY set to +-1?
 !                                seems unphysical, so hope not used
-!     (ii) why vpac(ntgrid:,iglo)=0, but no vpac(-ntgrid:,iglo)=0?  
-!                                           + same comment for vpar
-!    (iii) surely all should be appropriately weighted by bakdif? 
+!    (ii) should some of these things be weighted by bakdif? 
 
        where (1.0 - al1*0.5*(bmag(-ntgrid:ntgrid-1)+bmag(-ntgrid+1:ntgrid)) &
               < 0.0)
-!CMR ???
-          vpac(-ntgrid:ntgrid-1,1,iglo) = 1.0
-          vpac(-ntgrid:ntgrid-1,2,iglo) = -1.0
+!CMR:  previously had finite parallel velocity in forbidden region! 
+!      vpac(:,1,iglo)=1, vpac(:,2,iglo)=1
+!      setting to 0 seems to make more sense.... (being bold!)
+          vpac(-ntgrid:ntgrid-1,1,iglo) = 0.0
+          vpac(-ntgrid:ntgrid-1,2,iglo) = 0.0
        elsewhere
           vpac(-ntgrid:ntgrid-1,1,iglo) = &
               0.5*(vpa(-ntgrid:ntgrid-1,1,iglo) + vpa(-ntgrid+1:ntgrid,1,iglo))
@@ -777,8 +777,7 @@ contains
 
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-!CMR:
-! for vpar should we not use vpa and center product gradpar*vpa ? 
+
        vpar(-ntgrid:ntgrid-1,1,iglo) = &
             spec(is)%zstm*tunits(ik)*code_dt &
             *0.5/delthet(-ntgrid:ntgrid-1) &
@@ -2892,17 +2891,16 @@ contains
 ! added the omprimfac source term arising with equilibrium flow shear  
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!CMR source appears to contain following physical terms
+!CMR comments on variable source 
+!   source appears to contain following physical terms
 !   -2q_s/T_s v||.grad(J0 phi + 2 vperp^2 bpar/bmag J1/Z T_s/q_s).delt 
 !   -2d/dt(q v|| J0 apar / T).delt
 !   +hyperviscosity
 !   -2 v_d.\grad_perp (q J0 phi/T + 2 vperp^2 bpar/bmag J1/Z).delt 
 !   -coriolis (ignore for now)
 !   2{\chi,f_{0s}}  (allowing for sheared flow which we can ignore)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! CMR MADE FOLLOWING ASSUMPTIONS ABOUT GS2 VARIABLES
-!      ----------   look right for vpar and wdrift 
+!
+! ASSUMPTIONS ON GS2 VARIABLES
 ! vpar = q_s/T_s  (v_||^GS2). \gradpar(theta)/DTHETA . DELT (centred) 
 ! wdrift =    q_s/T_s  v_d.\grad_perp . DELT 
 ! wcoriolis = q_s/T_s  v_C.\grad_perp . DELT 
