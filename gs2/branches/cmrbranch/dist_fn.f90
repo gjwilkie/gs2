@@ -2852,6 +2852,8 @@ contains
       bdfac_p = 1.+bd*(3.-2.*real(isgn))
       bdfac_m = 1.-bd*(3.-2.*real(isgn))
 
+      dapar=aparnew(:,it,ik)-apar(:,it,ik)
+
       do ig = -ntgrid, ntgrid-1
 
 !CMR: 
@@ -2865,13 +2867,9 @@ contains
 !                              (RN also spotted this for apar_p)
 ! (2) source terms are factor 2 bigger than expected
 !
-!      dapar=aparnew(:,it,ik)-apar(:,it,ik)
-!   apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
-!                *aj0(:,iglo)*fapar
-!
 !  Some attempt at variable documentation:
 ! phigavg  = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
-! apargavg = apar J0 
+! apargavg = apar J0                        (decentered in t) 
 ! NB apargavg and phigavg combine to give the GK EM potential chi
 ! phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm = chi
 ! phi_p = 2 phigavg                      .... (roughly!)
@@ -2889,42 +2887,44 @@ contains
 !   -2 v_d.\grad_perp (q J0 phi/T + 2 vperp^2 bpar/bmag J1/Z).delt 
 !   -coriolis terms
 !   2{\chi,f_{0s}}  (allowing for sheared flow)
-!
-!!     apar_p = (apargavg(ig+1)*vpa(ig,isgn,iglo)+apargavg(ig)*vpa(ig+1,isgn,iglo))*spec(is)%stm
-!!         apar_m = aj0(ig+1,iglo)*dapar(ig+1)*vpa(ig+1,isgn,iglo) &
-!!                + aj0(ig,iglo)*dapar(ig)*vpa(ig,isgn,iglo)
-!     apar_m = 0.5*vpac(ig,isgn,iglo)*(aj0(ig+1,iglo)+ aj0(ig,iglo))*(dapar(ig+1)+dapar(ig))
-!
-!         source(ig) = anon(ie,is)*( &
-!              -2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
-!              -spec(is)%zstm*apar_m  &
-!              + D_res(it,ik)*apar_p/vpac(ig,isgn,iglo)/spec(is)%stm) &
-!              - zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac &
-!              + zi*(wstar(ik,ie,is) &
-!              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-! -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
-!              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
-
-
-
+!CMRend
 
          phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
          phi_m = phigavg(ig+1)-phigavg(ig)
          ! RN> bdfac factors seem missing for apar_p
          apar_p = apargavg(ig+1)+apargavg(ig)
-         apar_m = aparnew(ig+1,it,ik)+aparnew(ig,it,ik) & 
-              -apar(ig+1,it,ik)-apar(ig,it,ik)
+!!     apar_p = (apargavg(ig+1)*vpa(ig,isgn,iglo)+apargavg(ig)*vpa(ig+1,isgn,iglo))/vpac(ig,isgn,iglo)
+!         apar_m = aparnew(ig+1,it,ik)+aparnew(ig,it,ik) & 
+!              -apar(ig+1,it,ik)-apar(ig,it,ik)
+         apar_m = dapar(ig+1)+dapar(ig) 
+
+!!         apar_m = (aj0(ig+1,iglo)*dapar(ig+1)*vpa(ig+1,isgn,iglo) &
+!!                + aj0(ig,iglo)*dapar(ig)*vpa(ig,isgn,iglo))/ &
+!!                 (0.5*vpac(ig,isgn,iglo)*(aj0(ig+1,iglo)+ aj0(ig,iglo)))
+
+!
 !MAB, 6/5/2009:
 ! added the omprimfac source term arising with equilibrium flow shear  
-         source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
-              -spec(is)%zstm*vpac(ig,isgn,iglo) &
-              *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
-              + D_res(it,ik)*apar_p) &
-              -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac) &
+!
+         source(ig) = anon(ie,is)*( &
+              -2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
+              -spec(is)%zstm*vpac(ig,isgn,iglo)*&
+          (0.5*(aj0(ig+1,iglo)+aj0(ig,iglo))*apar_m + D_res(it,ik)*apar_p)&
+              - zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac) &
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
-              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo)) 
+ -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
+              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
+
+!         source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
+!              -spec(is)%zstm*vpac(ig,isgn,iglo) &
+!              *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
+!              + D_res(it,ik)*apar_p) &
+!              -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac) &
+!              + zi*(wstar(ik,ie,is) &
+!              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+!              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
+!              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo)) 
       end do
         
 ! add in nonlinear terms -- tfac normalizes the *amplitudes*.
