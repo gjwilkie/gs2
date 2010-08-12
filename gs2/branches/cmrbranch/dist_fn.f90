@@ -749,24 +749,24 @@ contains
        end where
 
 ! Where vpac /= 1, it could be weighted by bakdif for better consistency??
+!
 !CMR : vpa is parallel velocity at grid points
 !CMR : vpac is grid centered parallel velocity
 !CMR : vpar = q_s/sqrt{T_s m_s}*DELT/DTHETA * vpac |\gradpar(theta)| 
 !                                     where gradpar(theta) is centered
 !  ie  vpar = q_s/T_s  (v_||^GS2). \gradpar(theta)/DTHETA . DELT
 ! 
-!CMR : confusions about vpac, vpar
-!      (i) surely vpac=0 at or beyond bounce points, so WHY set to +-1?
-!                                seems unphysical, so hope not used
-!    (ii) should some of these things be weighted by bakdif? 
-
+!   comments on vpac, vpar
+!     (i) surely vpac=0 at or beyond bounce points, so WHY was it set to +-1?
+!                                seems unphysical!
+!    (ii) should some be weighted by bakdif?
+!CMR 
        where (1.0 - al1*0.5*(bmag(-ntgrid:ntgrid-1)+bmag(-ntgrid+1:ntgrid)) &
               < 0.0)
-!CMR:  previously had finite parallel velocity in forbidden region! 
-!      vpac(:,1,iglo)=1, vpac(:,2,iglo)=1
-!      setting to 0 seems to make more sense.... (being bold!)
           vpac(-ntgrid:ntgrid-1,1,iglo) = 0.0
           vpac(-ntgrid:ntgrid-1,2,iglo) = 0.0
+!          vpac(-ntgrid:ntgrid-1,1,iglo) = 1.0
+!          vpac(-ntgrid:ntgrid-1,2,iglo) = -1.0
        elsewhere
           vpac(-ntgrid:ntgrid-1,1,iglo) = &
               0.5*(vpa(-ntgrid:ntgrid-1,1,iglo) + vpa(-ntgrid+1:ntgrid,1,iglo))
@@ -777,7 +777,6 @@ contains
 
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-
        vpar(-ntgrid:ntgrid-1,1,iglo) = &
             spec(is)%zstm*tunits(ik)*code_dt &
             *0.5/delthet(-ntgrid:ntgrid-1) &
@@ -2545,8 +2544,9 @@ contains
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
-!CMR, August 2010:
+!CMR:
 !  added missing factor bmag, needed for inhomogeneous B
+!CMRend:
           adj = anon(ie,is)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
                   *bpar(ig,it,ik)/bmag(ig)*facbpar &
                + spec(is)%z*anon(ie,is)*phi(ig,it,ik)*aj0(ig,iglo) &
@@ -2593,25 +2593,23 @@ contains
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
 
-! CMR, Aug2010:
+!CMR:
 ! apargavg and phigavg combine to give the GK EM potential chi. 
-!                         chi = phigavg - apargavg
-! phigavg = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
-! apargavg = sqrt(T_s/m_s) apar J0 vpa
+!          chi = phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm
+! phigavg  = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
+! apargavg = apar J0 
 ! Both quantities are decentred in time and evaluated on || grid points
 !
-! Mods:
-!        (i)  divide bpar term in phigavg by bmag
-!        (ii) multiply apargavg by vpa to avoid later temptation to 
-!             interpolate product (vpa apar) 
-!             as    0.5(vpa(i)+vpa(i+1)) 0.5(apar(i)+apar(i+1))
+!CMRfix: Aug 2010
+!   (i)  divide bpar term in phigavg by bmag
+!CMRend
 
     phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
                 *aj0(:,iglo)*fphi &
              + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
                 *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)/bmag*spec(is)%tz
     apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
-                *aj0(:,iglo)*vpa(ig,isgn,iglo)*spec(is)%stm*fapar
+                *aj0(:,iglo)*fapar 
 
 ! source term in finite difference equations
     select case (source_option_switch)
@@ -2832,7 +2830,6 @@ contains
       use mp, only: proc0
 
       complex :: apar_p, apar_m, phi_p, phi_m!, bpar_p !GGH added bpar_p
-!      real, dimension(:,:), allocatable, save :: ufac
       real :: bd, bdfac_p, bdfac_m
       integer :: i_e, i_s
 
@@ -2851,69 +2848,83 @@ contains
 
 ! try fixing bkdiff dependence
       bd = bkdiff(1)
-
+!bd=0.0
       bdfac_p = 1.+bd*(3.-2.*real(isgn))
       bdfac_m = 1.-bd*(3.-2.*real(isgn))
 
-! CMR, Aug2010: 
-!CMR: modifications, only in linear part
-!    (1) more care interpolating products
-!    (2) fixed some factors of T_s/q_s
+      do ig = -ntgrid, ntgrid-1
+
+!CMR: 
+!  experimental modifications in linear part
+!    (1) interpolating products
+!    (2) factors of T_s/q_s
 !    (3) introduced new variable for better interpolation of dA/dt term 
 !          dapar = aparnew(:,it,ik)-apar(:,it,ik) = d/dt(apar) . DELT
-!CMR: concerns
+! CMR: concerns
 ! (1) no bakdif factors in phi_m, apar_p, apar_m, vpar !!! 
 !                              (RN also spotted this for apar_p)
-! (2) many terms in source are factor 2 bigger than expected
+! (2) source terms are factor 2 bigger than expected
 !
-      dapar=aparnew(:,it,ik)-apar(:,it,ik)
-      do ig = -ntgrid, ntgrid-1
-! CMR, Aug2010:
-! apargavg and phigavg combine to give the GK EM potential chi. 
-!                         chi = phigavg - apargavg
-! phigavg = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
-! apargavg = sqrt(T_s/m_s) apar J0 vpa
+!      dapar=aparnew(:,it,ik)-apar(:,it,ik)
+!   apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
+!                *aj0(:,iglo)*fapar
 !
+!  Some attempt at variable documentation:
+! phigavg  = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
+! apargavg = apar J0 
+! NB apargavg and phigavg combine to give the GK EM potential chi
+! phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm = chi
 ! phi_p = 2 phigavg                      .... (roughly!)
 ! phi_m = d/dtheta (phigavg)*DTHETA 
-! apar_p ~ 2 apargavg  
-! apar_m ~ 2 vpa d/dt (J0(Z) apar)*DELT
-! => (phi_p - apar_p) ~ 2 chi   (where chi is GK EM perturbed potential)
-!
-         phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
-         phi_m = phigavg(ig+1)-phigavg(ig)
-         ! RN> bdfac factors seem missing for apar_p
-         apar_p = apargavg(ig+1)+apargavg(ig)
-         apar_m = aj0(ig+1,iglo)*dapar(ig+1)*vpa(ig+1,isgn,iglo) &
-                + aj0(ig,iglo)*dapar(ig)*vpa(ig,isgn,iglo)
-!MAB, 6/5/2009:
-! added the omprimfac source term arising with equilibrium flow shear  
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!CMR comments on variable source 
-!   source appears to contain following physical terms
+! apar_p = 2 apargavg  
+! apar_m = 2 vpa d/dt (J0(Z) apar)*DELT
+! => phi_p - apar_p*vpa(:,isgn,iglo)*spec(is)%stm = 2 chi  .... (roughly!)  
+! vpar = q_s/T_s  (v_||^GS2). \gradpar(theta)/DTHETA . DELT (centred) 
+! wdrift =    q_s/T_s  v_d.\grad_perp . DELT 
+! wcoriolis = q_s/T_s  v_C.\grad_perp . DELT 
+! source     appears to contain following physical terms
 !   -2q_s/T_s v||.grad(J0 phi + 2 vperp^2 bpar/bmag J1/Z T_s/q_s).delt 
 !   -2d/dt(q v|| J0 apar / T).delt
 !   +hyperviscosity
 !   -2 v_d.\grad_perp (q J0 phi/T + 2 vperp^2 bpar/bmag J1/Z).delt 
-!   -coriolis (ignore for now)
-!   2{\chi,f_{0s}}  (allowing for sheared flow which we can ignore)
+!   -coriolis terms
+!   2{\chi,f_{0s}}  (allowing for sheared flow)
 !
-! ASSUMPTIONS ON GS2 VARIABLES
-! vpar = q_s/T_s  (v_||^GS2). \gradpar(theta)/DTHETA . DELT (centred) 
-! wdrift =    q_s/T_s  v_d.\grad_perp . DELT 
-! wcoriolis = q_s/T_s  v_C.\grad_perp . DELT 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!     apar_p = (apargavg(ig+1)*vpa(ig,isgn,iglo)+apargavg(ig)*vpa(ig+1,isgn,iglo))*spec(is)%stm
+!!         apar_m = aj0(ig+1,iglo)*dapar(ig+1)*vpa(ig+1,isgn,iglo) &
+!!                + aj0(ig,iglo)*dapar(ig)*vpa(ig,isgn,iglo)
+!     apar_m = 0.5*vpac(ig,isgn,iglo)*(aj0(ig+1,iglo)+ aj0(ig,iglo))*(dapar(ig+1)+dapar(ig))
+!
+!         source(ig) = anon(ie,is)*( &
+!              -2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
+!              -spec(is)%zstm*apar_m  &
+!              + D_res(it,ik)*apar_p/vpac(ig,isgn,iglo)/spec(is)%stm) &
+!              - zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac &
+!              + zi*(wstar(ik,ie,is) &
+!              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+! -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
+!              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
 
-         source(ig) = anon(ie,is)*( &
-              -2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
-              -spec(is)%zstm*apar_m  &
+
+
+
+         phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
+         phi_m = phigavg(ig+1)-phigavg(ig)
+         ! RN> bdfac factors seem missing for apar_p
+         apar_p = apargavg(ig+1)+apargavg(ig)
+         apar_m = aparnew(ig+1,it,ik)+aparnew(ig,it,ik) & 
+              -apar(ig+1,it,ik)-apar(ig,it,ik)
+!MAB, 6/5/2009:
+! added the omprimfac source term arising with equilibrium flow shear  
+         source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
+              -spec(is)%zstm*vpac(ig,isgn,iglo) &
+              *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
-              - zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac &
+              -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac) &
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
- -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
-              *(phi_p - apar_p)
+              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
+              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo)) 
       end do
         
 ! add in nonlinear terms -- tfac normalizes the *amplitudes*.
