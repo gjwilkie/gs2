@@ -938,21 +938,17 @@ contains
 ! should check sign of wc below to be sure -- MAB
           ainv(ig,iglo) &
                = 1.0/(1.0 + bd &
-               + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0+bd) + 2.0*vp)) ! MAB
-!               + (1.0-fexp(is))*spec(is)%tz*(zi*wd*(1.0+bd) + 2.0*vp))
+               + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0+bd) + 2.0*vp))
           r(ig,iglo) &
                = (1.0 - bd &
-               + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0-bd) - 2.0*vp)) & ! MAB
-!               + (1.0-fexp(is))*spec(is)%tz*(zi*wd*(1.0-bd) - 2.0*vp)) &
+               + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0-bd) - 2.0*vp)) &
                *ainv(ig,iglo)
           a(ig,iglo) &
                = 1.0 + bd &
-               + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0+bd) - 2.0*vp) ! MAB
-!               + fexp(is)*spec(is)%tz*(-zi*wd*(1.0+bd) - 2.0*vp)
+               + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0+bd) - 2.0*vp)
           b(ig,iglo) &
                = 1.0 - bd &
-               + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0-bd) + 2.0*vp) ! MAB
-!               + fexp(is)*spec(is)%tz*(-zi*wd*(1.0-bd) + 2.0*vp)
+               + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0-bd) + 2.0*vp)
           
           if (nlambda > ng2) then
              ! zero out forbidden regions
@@ -2005,7 +2001,7 @@ contains
 ! CMR, May 2009: 2pishat correction factor on extended theta grid (ballooning)
 !                so GEXB is same physical quantity in box and ballooning
     
-    use gs2_layouts, only: ik_idx, it_idx, g_lo, idx_local, idx  
+    use gs2_layouts, only: ik_idx, it_idx, g_lo, idx_local, idx, proc_id
     ! MR no need for is_kx_local as kx's are parallelised
     use theta_grid, only: ntgrid, ntheta, shat, bmag, drhodpsi, grho, Rplot, qval
     use file_utils, only: error_unit
@@ -2157,45 +2153,45 @@ contains
              do is=1,nspec
                 do ie=1,negrid
                    do il=1,nlambda
+
                       do it = 1, abs(j)
                          from_iglo = idx(g_lo, ik, it, il, ie, is)
-                         if (idx_local (g_lo, from_iglo)) then       
-                            temp(:,:,it) = g0(:,:,from_iglo)
-                         end if
+                         if (idx_local (g_lo, from_iglo)) temp(:,:,it) = g0(:,:,from_iglo)
                       end do
+
                       do it = 1, ntheta0 + j                        
-                         to_iglo = idx(g_lo, ik, it, il, ie, is)
+
+                           to_iglo = idx(g_lo, ik, it,   il, ie, is)
                          from_iglo = idx(g_lo, ik, it-j, il, ie, is)
+
                          if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
                             g0(:,:,to_iglo) = g0(:,:,from_iglo)
                          else if (idx_local(g_lo, from_iglo)) then
-                            to_iproc = to_iglo/g_lo%blocksize
-                            do isgn=1, 2
-                               call send(g0(:, isgn, from_iglo), to_iproc)
+                            do isgn = 1, 2
+                               call send(g0(:, isgn, from_iglo), proc_id (g_lo, to_iglo))
                             enddo
                          else if (idx_local(g_lo, to_iglo)) then
-                            from_iproc = from_iglo/g_lo%blocksize 
-                            do isgn=1, 2
-                               call receive(z, from_iproc)   
-                               g0(:,isgn,to_iglo) = z
+                            do isgn = 1, 2
+                               call receive(g0(:, isgn, to_iglo), proc_id (g_lo, from_iglo))
                             enddo
                          endif
                       enddo
+
                       do it = ntheta0 + j + 1, ntheta0                     
+
                          to_iglo = idx(g_lo, ik, it, il, ie, is)
                          from_iglo = idx(g_lo, ik, it-j-ntheta0, il, ie, is)
-                         if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
+
+                         if (idx_local(g_lo, to_iglo) .and. idx_local(g_lo, from_iglo)) then
                             g0(-ntgrid+ntheta:ntgrid,:,to_iglo) = temp(-ntgrid:ntgrid-ntheta,:,it-j-ntheta0)
                             g0(-ntgrid:-ntgrid+ntheta-1,:,to_iglo) = 0.0
                          else if (idx_local(g_lo, from_iglo)) then
-                            to_iproc = to_iglo/g_lo%blocksize
                             do isgn = 1,2
-                               call send(temp(:, isgn, it-j-ntheta0), to_iproc)
+                               call send(temp(:, isgn, it-j-ntheta0), proc_id (g_lo, to_iglo))
                             enddo
                          else if (idx_local(g_lo, to_iglo)) then
-                            from_iproc = from_iglo/g_lo%blocksize 
                             do isgn=1, 2
-                               call receive(z, from_iproc)   
+                               call receive(z, proc_id (g_lo, from_iglo))
                                g0(-ntgrid+ntheta:ntgrid,isgn,to_iglo) = z(-ntgrid:ntgrid-ntheta)
                                g0(-ntgrid:-ntgrid+ntheta-1,isgn,to_iglo) = 0.0
                             enddo
@@ -2252,45 +2248,45 @@ contains
              do is=1,nspec
                 do ie=1,negrid
                    do il=1,nlambda
+
                       do it = 1, j
                          from_iglo = idx(g_lo, ik, ntheta0-j+it, il, ie, is)
-                         if (idx_local (g_lo, from_iglo)) then       
-                            temp(:,:,it) = g0(:,:,from_iglo)
-                         end if
+                         if (idx_local (g_lo, from_iglo)) temp(:,:,it) = g0(:,:,from_iglo)
                       end do
+
                       do it = ntheta0, j+1, -1
-                         to_iglo = idx(g_lo, ik, it, il, ie, is)
+
+                           to_iglo = idx(g_lo, ik, it,   il, ie, is)
                          from_iglo = idx(g_lo, ik, it-j, il, ie, is)
-                         if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
+
+                         if (idx_local(g_lo, to_iglo) .and. idx_local(g_lo, from_iglo)) then
                             g0(:,:,to_iglo) = g0(:,:,from_iglo)
                          else if (idx_local(g_lo, from_iglo)) then
-                            to_iproc = to_iglo/g_lo%blocksize
-                            do isgn=1, 2
-                               call send(g0(:, isgn, from_iglo), to_iproc)
+                            do isgn = 1, 2
+                               call send(g0(:, isgn, from_iglo), proc_id (g_lo, to_iglo))
                             enddo
                          else if (idx_local(g_lo, to_iglo)) then
-                            from_iproc = from_iglo/g_lo%blocksize 
-                            do isgn=1, 2
-                               call receive(z, from_iproc)   
-                               g0(:,isgn,to_iglo) = z
+                            do isgn = 1, 2
+                               call receive(g0(:,isgn,to_iglo), proc_id (g_lo, from_iglo))
                             enddo
                          endif
                       enddo
+
                       do it = 1, j
-                         to_iglo = idx(g_lo, ik, it, il, ie, is)
+
+                           to_iglo = idx(g_lo, ik, it,           il, ie, is)
                          from_iglo = idx(g_lo, ik, ntheta0-j+it, il, ie, is)
+
                          if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
                             g0(-ntgrid:ntgrid-ntheta,:,to_iglo) = temp(-ntgrid+ntheta:ntgrid,:,it)
                             g0(ntgrid-ntheta+1:ntgrid,:,to_iglo) = 0.0
                          else if (idx_local(g_lo, from_iglo)) then
-                            to_iproc = to_iglo/g_lo%blocksize
-                            do isgn = 1,2
-                               call send(temp(:, isgn, it), to_iproc)
+                            do isgn = 1, 2
+                               call send(temp(:, isgn, it), proc_id (g_lo, to_iglo))
                             enddo
                          else if (idx_local(g_lo, to_iglo)) then
-                            from_iproc = from_iglo/g_lo%blocksize 
-                            do isgn=1, 2
-                               call receive(z, from_iproc)   
+                            do isgn = 1, 2
+                               call receive(z, proc_id (g_lo, from_iglo))
                                g0(-ntgrid:ntgrid-ntheta,isgn,to_iglo) = z(-ntgrid+ntheta:ntgrid)
                                g0(ntgrid-ntheta+1:ntgrid,isgn,to_iglo) = 0.0
                             enddo
@@ -2334,34 +2330,35 @@ contains
              do is=1,nspec
                 do ie=1,negrid
                    do il=1,nlambda
+
                       do it = 1, ntheta0 + jump(ik)                        
-                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+
+                           to_iglo = idx(g_lo, ik, ikx_indexed(it),          il, ie, is)
                          from_iglo = idx(g_lo, ik, ikx_indexed(it-jump(ik)), il, ie, is)
-                         if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
+
+                         if (idx_local(g_lo, to_iglo) .and. idx_local(g_lo, from_iglo)) then
                             g0(:,:,to_iglo) = g0(:,:,from_iglo)
                          else if (idx_local(g_lo, from_iglo)) then
-                            to_iproc = to_iglo/g_lo%blocksize
                             do isgn=1, 2
-                               call send(g0(:, isgn, from_iglo), to_iproc)
+                               call send (g0(:, isgn, from_iglo), proc_id (g_lo, to_iglo))
                             enddo
                          else if (idx_local(g_lo, to_iglo)) then
-                            from_iproc = from_iglo/g_lo%blocksize 
                             do isgn=1, 2
-                               call receive(z, from_iproc)   
-                               g0(:,isgn,to_iglo) = z
+                               call receive (g0(:, isgn, to_iglo), proc_id (g_lo, from_iglo))
                             enddo
                          endif
                       enddo
+
                       do it = ntheta0 + jump(ik) + 1, ntheta0                     
                          to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
-                         if (idx_local (g_lo, to_iglo)) then
-                            g0(:,:,to_iglo) = 0.
-                         endif
+                         if (idx_local (g_lo, to_iglo)) g0(:,:,to_iglo) = 0.
                       enddo
+
                    enddo
                 enddo
              enddo
           endif
+
           if (jump(ik) > 0) then 
              if (fphi > epsilon(0.0)) then
                 do it = ntheta0, 1+jump(ik), -1
@@ -2390,30 +2387,30 @@ contains
              do is=1,nspec
                 do ie=1,negrid
                    do il=1,nlambda
+
                       do it = ntheta0, 1+jump(ik), -1
-                         to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
+
+                           to_iglo = idx(g_lo, ik, ikx_indexed(it),          il, ie, is)
                          from_iglo = idx(g_lo, ik, ikx_indexed(it-jump(ik)), il, ie, is)
-                         if (idx_local(g_lo, to_iglo).and. idx_local(g_lo, from_iglo)) then
+
+                         if (idx_local(g_lo, to_iglo) .and. idx_local(g_lo, from_iglo)) then
                             g0(:,:,to_iglo) = g0(:,:,from_iglo)
                          else if (idx_local(g_lo, from_iglo)) then
-                            to_iproc = to_iglo/g_lo%blocksize
                             do isgn=1, 2
-                               call send(g0(:, isgn, from_iglo), to_iproc)
+                               call send(g0(:, isgn, from_iglo), proc_id(g_lo, to_iglo))
                             enddo
                          else if (idx_local(g_lo, to_iglo)) then
-                            from_iproc = from_iglo/g_lo%blocksize 
                             do isgn=1, 2
-                               call receive(z, from_iproc)   
-                               g0(:,isgn,to_iglo) = z
+                               call receive(g0(:, isgn, to_iglo), proc_id (g_lo, from_iglo))
                             enddo
                          endif
                       enddo
+
                       do it = jump(ik), 1, -1
                          to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
-                         if (idx_local (g_lo, to_iglo)) then
-                            g0(:,:,to_iglo) = 0.
-                         endif
+                         if (idx_local (g_lo, to_iglo)) g0(:,:,to_iglo) = 0.
                       enddo
+
                    enddo
                 enddo
              enddo
@@ -2975,8 +2972,7 @@ contains
     ! r=ainv=0 if forbid(ig,il) or forbid(ig+1,il), so gnew=0 in forbidden
     ! region and at upper bounce point
     do ig = ntgr-1, ntgl, -1
-       gnew(ig,2,iglo) &
-            = -gnew(ig+1,2,iglo)*r(ig,iglo) + ainv(ig,iglo)*source(ig,2)
+       gnew(ig,2,iglo) = -gnew(ig+1,2,iglo)*r(ig,iglo) + ainv(ig,iglo)*source(ig,2)
     end do
 
     if (kperiod_flag) then
@@ -3016,8 +3012,7 @@ contains
     ! time advance vpar > 0 inhomogeneous part
     if (il <= lmax) then
        do ig = ntgl, ntgr-1
-          gnew(ig+1,1,iglo) &
-               = -gnew(ig,1,iglo)*r(ig,iglo) + ainv(ig,iglo)*source(ig,1)
+          gnew(ig+1,1,iglo) = -gnew(ig,1,iglo)*r(ig,iglo) + ainv(ig,iglo)*source(ig,1)
        end do
     end if
 
