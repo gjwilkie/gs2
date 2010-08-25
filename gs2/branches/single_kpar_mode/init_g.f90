@@ -588,7 +588,7 @@ contains
 
   end subroutine ginit_noise
 
-	!<doc> Initialize with a single parallel mode. Only makes sense in a linear calculation. EGH </doc> 
+! 	!<doc> Initialize with a single parallel mode. Only makes sense in a linear calculation. k_parallel is specified with kpar_init or with ikpar_init when periodic boundary conditions are used. EGH </doc> 
 
   subroutine ginit_single_parallel_mode
     use species, only: spec, tracer_species
