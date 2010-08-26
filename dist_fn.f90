@@ -35,7 +35,7 @@ module dist_fn
   real :: t0, omega0, gamma0, thetas, source0
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
-  real :: D_kill, noise, wfb, g_exb, omprimfac, btor_slab, mach
+  real :: D_kill, noise, wfb, g_exb, omprimfac, btor_slab, mach, g_pvg, g_pvg_actual
 
   integer :: adiabatic_option_switch!, heating_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -293,7 +293,7 @@ contains
          tpdriftknob, nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          save_n, D_kill, noise, &
-         kill_grid, h_kill, g_exb, neoflux, omprimfac, btor_slab, mach
+         kill_grid, h_kill, g_exb, g_pvg, neoflux, omprimfac, btor_slab, mach
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
            thetas, phi_ext, source_option, a_ext, aky_star, akx_star
@@ -326,6 +326,7 @@ contains
        afilter = 0.0
        kfilter = 0.0
        g_exb = 0.0
+       g_pvg = 0.0
        mach = 0.0
        omprimfac = 1.0
        btor_slab = 0.0
@@ -372,6 +373,15 @@ contains
     if (proc0) call read_species_knobs
     neoflux = neoflux .or. source_option_switch == source_option_neo
 
+    ! <doc> g_pvg is only used when you want parallel flow shear but no perpendicular flow shear. If you want perpendicular flow shear but no parallel flow shear, set omprimfac to 0. If you want both, then have omprimfac=1, g_pvg=0. The relative strength of both is set by the angle of the magnetic field. In a torus this is set by the geometry. In a slab it is set by btor_slab</doc>
+
+    if (abs(g_exb) > epsilon(0.0)) then
+      g_pvg_actual = omprimfac * g_exb
+    else
+      g_pvg_actual = g_pvg
+    end if
+    
+
     call broadcast (kill_grid)
     call broadcast (save_n)
     call broadcast (boundary_option_switch)
@@ -394,6 +404,8 @@ contains
     call broadcast (D_kill)
     call broadcast (h_kill)
     call broadcast (g_exb)
+    call broadcast (g_pvg)
+    call broadcast (g_pvg_actual)
     call broadcast (mach)
     call broadcast (omprimfac)
     call broadcast (btor_slab)
@@ -411,6 +423,9 @@ contains
     call broadcast (even)
     call broadcast (wfb)
     call broadcast (neoflux)
+
+!     write (*,*) "g_pvg_actual is", g_pvg_actual
+
 
     if (source_option_switch == source_option_neo) nfac = 0
 
@@ -2830,6 +2845,8 @@ contains
               -apar(ig+1,it,ik)-apar(ig,it,ik)
 !MAB, 6/5/2009:
 ! added the omprimfac source term arising with equilibrium flow shear  
+!EGH, 25/8/2010
+! Modified omprimfac source term: replaced omprimfac*g_exb by g_pvg_actual. See above for more documentation
          source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
@@ -2838,7 +2855,7 @@ contains
 !              -zi*wdrift(ig,iglo)*phi_p*nfac) &
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
+              -2.0*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_pvg_actual*itor_over_B(ig)) &
 !              * sqrt(Rplot(ig)**2 - (grho(ig)/(bmag(ig)*drhodpsi))**2) * qval / (rhoc*spec(is)%stm)) & ! this line =  itor_over_B in a torus, but the above line allows a slab generalisation
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo)) 
       end do

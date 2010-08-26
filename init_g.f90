@@ -598,6 +598,8 @@ contains
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use ran
+    use mp, only: mp_abort
+!     use file_utils, only: error_unit
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
     real :: a, b
@@ -613,8 +615,8 @@ contains
 
     if (abs(shat) < 1.0e-05) then 
       if (ikpar_init+1 > ntgrid) then 
-        write (*,*) "Error: this value of k_parallel is too large. Increase ntheta or decrease ikpar_init."
-        exit
+        call mp_abort("Error: this value of k_parallel is too large. Increase ntheta or decrease ikpar_init.")
+!         stop 'Aborting...'
       end if
       kpar_init = ikpar_init
     end if
