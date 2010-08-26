@@ -66,6 +66,9 @@ contains
     real, dimension (ntheta+1) :: thetaold, thetanew
     real, dimension (ntheta+1) :: bmagold, bmagnew
     integer :: i
+    logical:: debug=.false.
+if (debug) write(6,*) 'gridgen_get_grids'
+
 
     ntheta_old = ntheta
     ntgrid_old = ntgrid
@@ -75,6 +78,7 @@ contains
     thetaold = theta(-ntheta/2:ntheta/2)
     bmagold = bmag(-ntheta/2:ntheta/2)
 
+if (debug) write(6,*) 'gridgen_get_grids: call gridgen4_2'
     call gridgen4_2 (1,ntheta_old+1,thetaold,bmagold, npadd, &
          alknob,epsknob,bpknob,extrknob,thetamax,deltaw,widthw,tension, &
          ntheta,nbset,thetanew,bmagnew,bset)
@@ -105,6 +109,7 @@ contains
        bmag(-ntheta/2-i*ntheta:ntheta/2-1-i*ntheta) = bmagnew(1:ntheta)
     end do
 
+if (debug) write(6,*) 'gridgen_get_grids: call regrid'
     call regrid (ntgrid_old, thetasave, gradpar, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gbdrift, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gbdrift0, ntgrid, theta)
@@ -123,6 +128,7 @@ contains
     call regrid (ntgrid_old, thetasave, Zprime, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, aprime, ntgrid, theta)
 
+if (debug) write(6,*) 'gridgen_get_grids: end'
   end subroutine gridgen_get_grids
 
   subroutine regrid (nold, x, y, nnew, xnew)
@@ -499,7 +505,8 @@ if (debug) write(6,*) "init_theta_grid_eik: done"
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     logical, intent (in) :: gb_to_cv
     integer :: i, ig
-
+    logical:: debug=.false.
+if (debug) write(6,*) 'eik_get_grids: ntgrid=',ntgrid
     do ig=-ntgrid,ntgrid
        theta(ig)    = theta_out(ig)
        gradpar(ig)  = gradpar_out(ig)
@@ -534,7 +541,9 @@ if (debug) write(6,*) "init_theta_grid_eik: done"
 !            gbdrift(ig), gbdrift(ig), gds2(ig)
 !    end do
 
+if (debug) write(6,*) 'eik_get_grids: call theta_grid_gridgen_init'
     call theta_grid_gridgen_init
+if (debug) write(6,*) 'eik_get_grids: call gridgen_get_grids'
     call gridgen_get_grids (nperiod, ntheta, ntgrid, nbset, &
          theta, bset, bmag, &
          gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
@@ -552,6 +561,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done"
 !            gbdrift(ig), gbdrift(ig), gds2(ig)
 !    end do
 
+if (debug) write(6,*) 'eik_get_grids: end'
   end subroutine eik_get_grids
 
   subroutine read_parameters
@@ -1080,8 +1090,10 @@ if (debug) write(6,*) 'get_sizes: done'
     use theta_grid_salpha, only: salpha_get_grids
     use theta_grid_file, only: file_get_grids
     implicit none
+    logical:: debug=.false.
     select case (eqopt_switch)
     case (eqopt_eik)
+if (debug) write(6,*) 'get_grids: call eik_get_grids'
        call eik_get_grids (nperiod, ntheta, ntgrid, nbset, &
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
@@ -1090,6 +1102,7 @@ if (debug) write(6,*) 'get_sizes: done'
             shat, drhodpsi, kxfac, qval, gb_to_cv)
        shape = 'torus   '
     case (eqopt_salpha)
+if (debug) write(6,*) 'get_grids: call salpha_get_grids'
        call salpha_get_grids (nperiod, ntheta, ntgrid, nbset, &
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
@@ -1097,6 +1110,7 @@ if (debug) write(6,*) 'get_sizes: done'
             Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
             shat, drhodpsi, kxfac, qval, shape, gb_to_cv)
     case (eqopt_file)
+if (debug) write(6,*) 'get_grids: call file_get_grids'
        call file_get_grids (nperiod, ntheta, ntgrid, nbset, &
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
