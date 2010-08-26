@@ -20,16 +20,27 @@ contains
     character(20) :: read, write, readwrite
     character(200) :: line
 
-    unit = 10
-    do
-       inquire (unit=unit, read=read, write=write, readwrite=readwrite)
-       if (read == "UNKNOWN" .and. write == "UNKNOWN" &
-            .and. readwrite == "UNKNOWN") &
-            then
+!CMR, August 2010:
+!   (i) add NO return values for inquire, needed for gfortran compiler
+!  (ii) terminate with error message if no free LUN found
+!CMRend
+
+    unit=0
+    do i = 10,100
+       inquire (unit=i,read=read,write=write,readwrite=readwrite)
+       if ( (read == "UNKNOWN" .or. read == "NO") .and. &
+            (write == "UNKNOWN" .or. write == "NO") .and. &
+            (readwrite == "UNKNOWN" .or. readwrite == "NO" ) &
+        ) then
+          unit=i
           exit
        end if
-       unit = unit + 1
     end do
+    if (unit .eq. 0) then
+       write(6,*) "gridgen4read:  no free LUN between 10,100 => force quit"
+       stop
+    endif
+
     open (unit=unit, file=filename, status="old")
     
     read (unit=unit, fmt="(a)") line
@@ -154,39 +165,53 @@ contains
     integer :: nthetaout, nlambdaout
     
     integer :: debug_unit
-    
+    logical :: debug=.false.    
     npi = n * twopi
 
+if (debug) write(6,*) "gridgen4_2: call gg4init"
     call gg4init
+if (debug) write(6,*) "gridgen4_2: call gg4debug"
     call gg4debug (nbmag, thetain, bmagin, "input grid")
 
 ! 1 Set up starting grid.
+if (debug) write(6,*) "gridgen4_2: call gg4start"
     call gg4start (n)
+if (debug) write(6,*) "gridgen4_2: call gg4debug"
     call gg4debug (nstart, thetastart, thetastart, "starting grid")
 
 ! 2 Collect all bounce points associated with starting grid.
+if (debug) write(6,*) "gridgen4_2: call gg4collect"
     call gg4collect
+if (debug) write(6,*) "gridgen4_2: call gg4debug"
     call gg4debug (nset, bmagset, bmagset, "bmagset")
+if (debug) write(6,*) "gridgen4_2: call gg4debugi"
     call gg4debugi (nsetset,thetasetset,ibmagsetset,icollsetset,"thetasetset")
 
 ! 3 Sort collected grids.
+if (debug) write(6,*) "gridgen4_2: call gg4sort"
     call gg4sort
 
 ! 4 Calculate spacing and resolution metrics.
+if (debug) write(6,*) "gridgen4_2: call gg4metrics"
     call gg4metrics
 
 ! 5 Remove sets until the number of points is small enough.
+if (debug) write(6,*) "gridgen4_2: call gg4metrics"
     call gg4remove
 
 ! 6 Build output grids.
+if (debug) write(6,*) "gridgen4_2: call gg4results"
     call gg4results (n)
+if (debug) write(6,*) "gridgen4_2: call gg4debug"
     call gg4debug (nthetaout, thetagrid, bmaggrid, "output grid")
+if (debug) write(6,*) "gridgen4_2: call gg4debugi"
     call gg4debug (nlambdaout, bset, bset, "output 1/lambda")
 
     ntheta = 2*(nthetaout/2)
     nbset = nlambdaout
 
 ! 7 Clean up.
+if (debug) write(6,*) "gridgen4_2: call gg4finish"
     call gg4finish
 
   contains
@@ -197,7 +222,7 @@ contains
       character(20) :: read, write, readwrite
       real, dimension (2*nbmag) :: tmp
       integer :: ierr, i
-      
+
       ierr = 0
       allocate (bmagspl(nbmag)) ; bmagspl = 0.
       call fitp_curvp1 (nbmag-1,thetain,bmagin,npi,bmagspl,tmp,tension,ierr)
@@ -211,6 +236,7 @@ contains
          case (3)
             print *, "X values are not strictly increasing"
          end select
+         write(6,*) 'gg4init: stopping with ierr=',ierr
          stop
       end if
 
@@ -220,16 +246,25 @@ contains
       nsetset = 0
 
       if (debug_output) then
-         debug_unit = 10
-         do
-            inquire (unit=debug_unit,read=read,write=write,readwrite=readwrite)
-            if (read == "UNKNOWN" .and. write == "UNKNOWN" &
-                 .and. readwrite == "UNKNOWN") &
-                 then
+         debug_unit=0
+!CMR, August 2010:
+!   (i) add NO return values for inquire, needed for gfortran compiler
+!  (ii) terminate with error message if no free LUN found
+!CMRend
+         do i = 10,100
+            inquire (unit=i,read=read,write=write,readwrite=readwrite)
+            if ( (read == "UNKNOWN" .or. read == "NO") .and. &
+                 (write == "UNKNOWN" .or. write == "NO") .and. &
+                 (readwrite == "UNKNOWN" .or. readwrite == "NO" ) &
+            ) then
+               debug_unit=i
                exit
             end if
-            debug_unit = debug_unit + 1
          end do
+         if (debug_unit .eq. 0) then
+            write(6,*) "gg4init:  no free LUN between 10,100 => force quit"
+            stop
+         endif
          open (unit=debug_unit, file="gridgen.200", status="unknown")
          write (unit=debug_unit, fmt=*) "nbmag=", nbmag
          write (unit=debug_unit, fmt=*) "thetain,bmagin="
@@ -245,6 +280,7 @@ contains
          write (unit=debug_unit, fmt=*) "tension=", tension
          write (unit=debug_unit, fmt=*) "ntheta,nlambda=", ntheta, nbset
       end if
+      if (debug) write(6,*) 'gg4init: end'
     end subroutine gg4init
 
     subroutine gg4finish
