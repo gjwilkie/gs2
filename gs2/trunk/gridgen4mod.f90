@@ -17,21 +17,19 @@ contains
     integer :: nthetain, nperiodin, ntgridin, nlambdain
     integer :: i
     integer :: unit
-    character(20) :: read, write, readwrite
+    logical :: od
     character(200) :: line
 
 !CMR, August 2010:
-!   (i) add NO return values for inquire, needed for gfortran compiler
+!  (i) modify inquire to use opened instead of read, write and readwrite
+!   needed for gfortran compiler: TT adopted same solution in file_utils
 !  (ii) terminate with error message if no free LUN found
 !CMRend
 
     unit=0
     do i = 10,100
-       inquire (unit=i,read=read,write=write,readwrite=readwrite)
-       if ( (read == "UNKNOWN" .or. read == "NO") .and. &
-            (write == "UNKNOWN" .or. write == "NO") .and. &
-            (readwrite == "UNKNOWN" .or. readwrite == "NO" ) &
-        ) then
+       inquire (unit=i,opened=od)
+       if ( .not. od ) then
           unit=i
           exit
        end if
@@ -219,7 +217,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
     subroutine gg4init
       use splines, only: fitp_curvp1
       implicit none
-      character(20) :: read, write, readwrite
+      logical :: od
       real, dimension (2*nbmag) :: tmp
       integer :: ierr, i
 
@@ -248,15 +246,13 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
       if (debug_output) then
          debug_unit=0
 !CMR, August 2010:
-!   (i) add NO return values for inquire, needed for gfortran compiler
+!  (i) modify inquire to use opened instead of read, write and readwrite
+!   needed for gfortran compiler: TT adopted same solution in file_utils
 !  (ii) terminate with error message if no free LUN found
 !CMRend
          do i = 10,100
-            inquire (unit=i,read=read,write=write,readwrite=readwrite)
-            if ( (read == "UNKNOWN" .or. read == "NO") .and. &
-                 (write == "UNKNOWN" .or. write == "NO") .and. &
-                 (readwrite == "UNKNOWN" .or. readwrite == "NO" ) &
-            ) then
+            inquire (unit=i,opened=od)
+            if ( .not. od ) then
                debug_unit=i
                exit
             end if
