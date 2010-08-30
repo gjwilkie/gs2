@@ -2,7 +2,7 @@ module dist_fn
   use redistribute, only: redist_type
   implicit none
   public :: init_dist_fn, finish_dist_fn
-  public :: timeadv, get_stress, exb_shear
+  public :: timeadv, get_stress, exb_shear, set_itor_over_B
   public :: getfieldeq, getan, getfieldexp, getmoms, gettotmoms, getemoms
   public :: flux, neoclassical_flux, lambda_flux
   public :: get_epar, e_flux, get_heat
@@ -2009,6 +2009,56 @@ contains
        
   end subroutine timeadv
 
+  ! <doc> Sets the quantity itor_over_B which sets the ratio of parallel and perpendicular velocity shear for use in the source term (see set_source). Moved it out of exb_shear as it needs to be called in the case where there is parallel but no perpendicular velocity shear (sometimes used in the slab). EGH</doc>
+
+  subroutine set_itor_over_B
+!       itor_over_B = qval / rhoc * sqrt(Rplot**2 - (grho/(bmag*drhodpsi))**2)
+!     use gs2_layouts, only: ik_idx, it_idx, g_lo, idx_local, idx, proc_id
+    ! MR no need for is_kx_local as kx's are parallelised
+    use theta_grid, only: ntgrid, ntheta, shat, bmag, drhodpsi, grho, Rplot, qval
+    use file_utils, only: error_unit
+!     use kt_grids, only: akx, aky, naky, ikx, ntheta0, box, theta0
+!     use le_grids, only: negrid, nlambda
+!     use species, only: nspec
+!     use run_parameters, only: fphi, fapar, fbpar
+!     use dist_fn_arrays, only: kx_shift
+!     use gs2_time, only: code_dt, code_dt_old
+    use geometry, only: rhoc
+!     use mp, only: iproc, proc0, send, receive
+    
+!     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
+!     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
+!     complex, dimension(:,:,:), allocatable :: temp 
+!     integer, dimension(1), save :: itmin
+!     real, save :: theta0_shift
+!    integer :: ik, it, ie, is, il, ig, isgn, to_iglo, from_iglo, to_iproc, from_iproc, ierr, j 
+!     integer :: ik, it, ie, is, il, isgn, to_iglo, from_iglo, to_iproc, from_iproc, j 
+!     real :: dkx, gdt, dtheta0
+!     logical :: exb_first = .true.
+!    logical :: kx_local
+!     complex , dimension(-ntgrid:ntgrid) :: z
+
+     !Calculate the parallel velocity shear drive factor itor_over_B (which effectively depends on the angle the field lines make with the flow)
+
+!       write (*,*) "btor_slab is", btor_slab
+       if (abs(btor_slab) > epsilon(0.0)) then
+          ! for slab, itor_over_B is input parameter determined
+          ! by angle between B-field and toroidal flow
+          ! itor_over_B = (d(u_z)/dx) / (d(u_y)/dx) = Btor / Bpol
+          ! u = u0 (phihat) = x d(u0)/dx (phihat) = x d(uy)/dx (yhat + Btor/Bpol zhat)
+          ! g_exb = d(uy)/dx => d(uz)/dx = g_exb * Btor/Bpol = g_exb * itor_over_B
+          
+          itor_over_B = btor_slab
+!           write (*,*) "itor_over_B initialized to ", itor_over_B 
+       else
+          ! note that the following is only valid in a torus!
+          ! itor_over_B = (q/rho) * Rmaj*Btor/(a*B)
+!           write (*,*) "itor_over_B initialized to torus"
+          itor_over_B = qval / rhoc * sqrt(Rplot**2 - (grho/(bmag*drhodpsi))**2)
+       end if
+
+  end subroutine set_itor_over_B
+
   subroutine exb_shear (g0, phi, apar, bpar)
 ! MR, 2007: modified Bill Dorland's version to include grids where kx grid
 !           is split over different processors
@@ -2041,20 +2091,24 @@ contains
 !    logical :: kx_local
     complex , dimension(-ntgrid:ntgrid) :: z
 
-     !Calculate the parallel velocity shear drive factor itor_over_B (which effectively depends on the angle the field lines make with the flow)
-
-       if (abs(btor_slab) > epsilon(0.0)) then
-          ! for slab, itor_over_B is input parameter determined
-          ! by angle between B-field and toroidal flow
-          ! itor_over_B = (d(u_z)/dx) / (d(u_y)/dx) = Btor / Bpol
-          ! u = u0 (phihat) = x d(u0)/dx (phihat) = x d(uy)/dx (yhat + Btor/Bpol zhat)
-          ! g_exb = d(uy)/dx => d(uz)/dx = g_exb * Btor/Bpol = g_exb * itor_over_B
-          itor_over_B = btor_slab
-       else
-          ! note that the following is only valid in a torus!
-          ! itor_over_B = (q/rho) * Rmaj*Btor/(a*B)
-          itor_over_B = qval / rhoc * sqrt(Rplot**2 - (grho/(bmag*drhodpsi))**2)
-       end if
+!      !Calculate the parallel velocity shear drive factor itor_over_B (which effectively depends on the angle the field lines make with the flow)
+! 
+! write (*,*) "btor_slab is", btor_slab
+!        if (abs(btor_slab) > epsilon(0.0)) then
+!           ! for slab, itor_over_B is input parameter determined
+!           ! by angle between B-field and toroidal flow
+!           ! itor_over_B = (d(u_z)/dx) / (d(u_y)/dx) = Btor / Bpol
+!           ! u = u0 (phihat) = x d(u0)/dx (phihat) = x d(uy)/dx (yhat + Btor/Bpol zhat)
+!           ! g_exb = d(uy)/dx => d(uz)/dx = g_exb * Btor/Bpol = g_exb * itor_over_B
+!           
+!           itor_over_B = btor_slab
+!           write (*,*) "itor_over_B initialized to ", itor_over_B 
+!        else
+!           ! note that the following is only valid in a torus!
+!           ! itor_over_B = (q/rho) * Rmaj*Btor/(a*B)
+!           write (*,*) "itor_over_B initialized to torus"
+!           itor_over_B = qval / rhoc * sqrt(Rplot**2 - (grho/(bmag*drhodpsi))**2)
+!        end if
 
 ! MR, March 2009: remove ExB restriction to box grids
     ! If not in box configuration, return
@@ -2835,6 +2889,9 @@ contains
 
       bdfac_p = 1.+bd*(3.-2.*real(isgn))
       bdfac_m = 1.-bd*(3.-2.*real(isgn))
+      
+!            write (*,*) "g_pvg_actual is", g_pvg_actual
+!       write (*,*) "g_pvg source actually is", -2.0*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_pvg_actual*itor_over_B(ig)) *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo)) 
 
       do ig = -ntgrid, ntgrid-1
          phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
@@ -2847,6 +2904,11 @@ contains
 ! added the omprimfac source term arising with equilibrium flow shear  
 !EGH, 25/8/2010
 ! Modified omprimfac source term: replaced omprimfac*g_exb by g_pvg_actual. See above for more documentation
+        source(ig) = -2.0*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_pvg_actual*itor_over_B(ig)
+        
+!          write (*,*) "g_pvg source actually is",  source(ig)
+!          write (*,*) "itor_over_B actually is",  itor_over_B(ig)
+         
          source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
