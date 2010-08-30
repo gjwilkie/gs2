@@ -229,7 +229,7 @@ contains
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
-    use dist_fn, only: timeadv, exb_shear
+    use dist_fn, only: timeadv, exb_shear, set_itor_over_B
     use dist_fn_arrays, only: g, gnew, kx_shift
     use nonlinear_terms, only: algorithm !, nonlin
     implicit none
@@ -243,6 +243,8 @@ contains
        !GGH NOTE: apar_ext is initialized in this call
        call antenna_amplitudes (apar_ext)
        
+       
+       call set_itor_over_B ! Used to be done by exb_shear. Sets the ratio of parallel and perpendicular v_shear
        if (allocated(kx_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
 
        g = gnew
