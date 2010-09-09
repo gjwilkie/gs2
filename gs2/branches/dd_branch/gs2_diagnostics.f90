@@ -52,6 +52,9 @@ module gs2_diagnostics
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
          save_for_restart, write_parity
+         !<DD 27-08-2010> Added save_distfn switch
+         save_distfn
+         !</DD>
 ! Why are these variables public?  This is not good.
   real,public :: omegatol, omegatinst
   logical,public :: print_line, print_old_units, print_flux_line
@@ -81,7 +84,9 @@ module gs2_diagnostics
   integer,public :: nwrite, igomega, nmovie
   integer,public :: navg, nsave
   integer,public :: nperiod_output
-
+  !<DD 27-08-2010> Added save_distfn switch
+  logical,public :: save_distfn
+  !</DD>
 !>GGH
   logical, parameter :: write_density_velocity=.false.
   logical :: write_jext=.false.
@@ -204,6 +209,9 @@ contains
     call broadcast (dump_final_xfields)
     call broadcast (use_shmem_for_xfields)
     call broadcast (save_for_restart)
+    !<DD 27-08-2010> Send setting to all procs
+    call broadcast (save_distfn)
+    !</DD>
     call broadcast (write_gs)
     call broadcast (write_g)
     call broadcast (write_gyx)
@@ -497,6 +505,9 @@ contains
        use_shmem_for_xfields = .true.
        nperiod_output = nperiod - nperiod_guard
        save_for_restart = .false.
+       !<DD 27-08-2010> Added save_distfn default
+       save_distfn=.false.
+       !</DD>
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
 
 	!<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
@@ -561,11 +572,18 @@ contains
     use dist_fn, only: e_flux
     use dist_fn, only: write_f, write_fyx
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
+    !<DD 03-09-2010> Added use of convert_g_to_dfn from distfn for use
+    !with gs2_save_distfn
+    USE dist_fn, ONLY: convert_g_to_dfn
+    !</DD>
     use collisions, only: vnmult
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
     use gs2_transforms, only: transform2, inverse2
     use gs2_save, only: gs2_save_for_restart
+    !<DD 27-08-2010> Added gs2_save: gs2_save_distfn
+    use gs2_save, only: gs2_save_distfn
+    !</DD>
     use constants
     use gs2_time, only: user_time, user_dt
     use gs2_io, only: nc_eigenfunc, nc_final_fields, nc_final_epar, nc_final_an
@@ -1022,6 +1040,24 @@ contains
        call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
             fphi, fapar, fbpar, .true.)
     end if
+
+    !<DD 27-08-2010> Added call to save distfn if set
+    !<DD 03-09-2010> Added initial call to convert_g_to_dfn(dist_fn.f90)
+    !to get actual distribution function first and second call to undo
+    !change after save
+    IF (save_distfn) THEN
+    	!Convert h to distribution function
+    	CALL convert_g_to_dfn(1)
+    	
+    	!Save dfn, fields and velocity grids to file
+       	CALL gs2_save_distfn (gnew, user_time, user_dt, vnmult, istatus, &
+          	fphi, fapar, fbpar, .true.)
+    	
+        !Convert distribution function back to h
+        CALL convert_g_to_dfn(-1)
+    END IF
+    !</DD>
+    !</DD>
 
     call nc_finish
 

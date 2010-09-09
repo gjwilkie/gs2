@@ -18,6 +18,10 @@ module dist_fn
   public :: get_init_field
   public :: g_adjust ! MAB (needed for Trinity)
 
+  !<DD 03-09-2010> Added routine convert_g_to_dfn for use
+  !with gs2_save_distfn
+  PUBLIC :: convert_g_to_dfn
+  !</DD>
   public :: gamtot,gamtot1,gamtot2
   public :: getmoms_notgc
   public :: mom_coeff, ncnt_mom_coeff
@@ -7327,6 +7331,61 @@ contains
 
   end subroutine finish_dist_fn
 
+!<DD 03-09-2010> Added subroutine convert_g_to_dfn
+!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+SUBROUTINE convert_g_to_dfn(dir)
+!CONVERT_G_TO_DFN(dist_fn.f90):Subroutine which takes the internally
+!used distribution function (h_s) and converts it to the actual
+!distribution function, g.
+
+!==============================================================================================
+!MODULE IMPORTS
+!==============================================================================================
+    USE dist_fn_arrays, ONLY: gnew                      !Distribution function
+    USE fields_arrays, ONLY: phinew, aparnew, bparnew   !Fields
+    USE run_parameters, ONLY: fphi, fapar, fbpar        !Field values
+!----------------------------------------------------------------------------------------------
+
+!==============================================================================================
+!VARIABLE DECLARATIONS
+!==============================================================================================
+    !No implicits
+    IMPLICIT NONE
+
+    !Interface variables
+    INTEGER, INTENT(IN) :: dir                          !Determines direction of transform
+
+    !Internal variables
+    REAL :: sig                                         !Sign multiplier
+    REAL :: sphi,sapar,sbpar                            !Passed to routines for fphi etc
+!----------------------------------------------------------------------------------------------
+
+!==============================================================================================
+!WORK SECTION
+!==============================================================================================
+
+    !Check which direction in which conversion is to occur
+    IF (dir.GT.0) THEN
+        sig=1.0
+    ELSE IF (dir.LT.0) THEN
+        sig=-1.0
+    ELSE
+        sig=0.0
+    END IF
+
+    !Create correctly weighted fphi etc. values
+    sphi=sig*fphi
+    sapar=sig*fapar
+    sbpar=sig*fbpar
+
+    !Use g_adjust(dist_fn.f90) to convert gnew by adding/subtracting factor
+    !based on EM fields and Bessel functions.
+    CALL g_adjust(gnew,phinew,bparnew,sphi,sbpar)
+
+!----------------------------------------------------------------------------------------------
+END SUBROUTINE convert_g_to_dfn
+!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+!</DD>
 end module dist_fn
 
 
