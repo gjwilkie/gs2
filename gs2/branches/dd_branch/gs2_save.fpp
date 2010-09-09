@@ -1,62 +1,53 @@
 # include "define.inc"
 
-MODULE gs2_save
+module gs2_save
 
-!==============================================================================================
-!MODULE IMPORTS
-!==============================================================================================
 # ifdef NETCDF
-!   use netcdf, only: NF90_FLOAT, NF90_DOUBLE
-    USE netcdf, ONLY: NF90_NOWRITE, NF90_CLOBBER, NF90_NOERR
-    USE netcdf, ONLY: nf90_create, nf90_open, nf90_sync, nf90_close
-    USE netcdf, ONLY: nf90_def_dim, nf90_def_var, nf90_enddef
-    USE netcdf, ONLY: nf90_put_var, nf90_get_var, nf90_strerror
-    USE netcdf, ONLY: nf90_inq_dimid, nf90_inquire_dimension
-    USE netcdf, ONLY: nf90_inq_varid, nf90_inquire_variable
-    USE netcdf_utils, ONLY: get_netcdf_code_precision
-    USE netcdf_utils, ONLY: check_netcdf_file_precision
-    USE netcdf_utils, ONLY: netcdf_error
-    USE netcdf_utils, ONLY: netcdf_real, kind_nf
+!  use netcdf, only: NF90_FLOAT, NF90_DOUBLE
+  use netcdf, only: NF90_NOWRITE, NF90_CLOBBER, NF90_NOERR
+  use netcdf, only: nf90_create, nf90_open, nf90_sync, nf90_close
+  use netcdf, only: nf90_def_dim, nf90_def_var, nf90_enddef
+  use netcdf, only: nf90_put_var, nf90_get_var, nf90_strerror
+  use netcdf, only: nf90_inq_dimid, nf90_inquire_dimension
+  use netcdf, only: nf90_inq_varid, nf90_inquire_variable
+  
+  use netcdf_utils, only: get_netcdf_code_precision
+  use netcdf_utils, only: check_netcdf_file_precision
+  use netcdf_utils, only: netcdf_error
+  use netcdf_utils, only: netcdf_real, kind_nf
 # endif
-!----------------------------------------------------------------------------------------------
 
-!==============================================================================================
-!VARIABLE DECLARATIONS
-!==============================================================================================
-    !No implicits
-    IMPLICIT NONE
+  implicit none
 
-    !Public access definitions
-    PUBLIC :: gs2_restore, gs2_save_for_restart
-    PUBLIC :: init_save, init_dt, init_tstart, init_ant_amp
-    PUBLIC :: init_vnm
-    !<DD 27-08-2010> Make save_distfn public
-    PUBLIC :: gs2_save_distfn
-    !</DD>
+  public :: gs2_restore, gs2_save_for_restart
+  public :: init_save, init_dt, init_tstart, init_ant_amp
+  public :: init_vnm
+  !<DD 27-08-2010> Make save_distfn public
+  PUBLIC :: gs2_save_distfn
+  !</DD>
+!# ifdef NETCDF
+!  public :: netcdf_real, kind_nf, get_netcdf_code_precision, netcdf_error
+!# endif
 
-    !Interface to restore routines
-    INTERFACE gs2_restore
-        MODULE PROCEDURE gs2_restore_many, gs2_restore_one
-    END INTERFACE
-
-    !Internal variables
-    PRIVATE
-
-    CHARACTER (300), SAVE :: restart_file
+  interface gs2_restore
+     module procedure gs2_restore_many, gs2_restore_one
+  end interface
+  
+  private
+  character (300), save :: restart_file
 
 # ifdef NETCDF
-    !Arrays used for temporaries
-    REAL, ALLOCATABLE, DIMENSION(:,:,:) :: tmpr, tmpi, ftmpr, ftmpi
-    REAL, ALLOCATABLE, DIMENSION(:) :: stmp  ! MR: tmp var for kx_shift
-    REAL, ALLOCATABLE, DIMENSION(:) :: atmp
-
-    !Netcdf identifiers
-    INTEGER (KIND_NF) :: ncid, thetaid, signid, gloid, kyid, kxid, nk_stir_dim
-    INTEGER (KIND_NF) :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
-    INTEGER (KIND_NF) :: kx_shift_id   ! MR: added to save kx_shift variable
-    INTEGER (KIND_NF) :: t0id, gr_id, gi_id, vnm1id, vnm2id, delt0id
-    INTEGER (KIND_NF) :: a_antr_id, b_antr_id, a_anti_id, b_anti_id
-    !<DD 29-08-2010> Netcdf id defintions for energy and lambda dimensions/variables
+  real, allocatable, dimension(:,:,:) :: tmpr, tmpi, ftmpr, ftmpi
+  real, allocatable, dimension(:) :: stmp  ! MR: tmp var for kx_shift
+  real, allocatable, dimension(:) :: atmp
+!  integer, parameter :: kind_nf = kind (NF90_NOERR)
+  integer (kind_nf) :: ncid, thetaid, signid, gloid, kyid, kxid, nk_stir_dim
+  integer (kind_nf) :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
+  integer (kind_nf) :: kx_shift_id   ! MR: added to save kx_shift variable
+  integer (kind_nf) :: t0id, gr_id, gi_id, vnm1id, vnm2id, delt0id
+  integer (kind_nf) :: a_antr_id, b_antr_id, a_anti_id, b_anti_id
+!  integer (kind_nf) :: netcdf_real=0
+  !<DD 29-08-2010> Netcdf id defintions for energy and lambda dimensions/variables
     INTEGER (KIND_NF) :: egridid,lgridid
     INTEGER (KIND_NF) :: energy_id, lambda_id
     !</DD>
@@ -67,1798 +58,1020 @@ MODULE gs2_save
     INTEGER (KIND_NF) :: vpa_id, vperp2_id
     !</DD>
 
-    !Switches
-    LOGICAL :: initialized = .false.
-    !<DD 04-09-2010> Added initialized_dfn switch to determine if distfn file
+  logical :: initialized = .false.
+  !<DD 04-09-2010> Added initialized_dfn switch to determine if distfn file
     !has been initialized
     LOGICAL :: initialized_dfn = .false.
     !</DD>
-    LOGICAL :: test = .false.
+logical :: test = .false.
 # endif
-!----------------------------------------------------------------------------------------------
 
- CONTAINS
+contains
 
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-SUBROUTINE gs2_save_for_restart &
-    (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in)
-!GS2_SAVE_FOR_RESTART(gs2_save.fpp): Subroutine to save internally used
-!distribution function(h) and EM fields (as well as a couple of other
-!variable) to a restart file (1 for each processor).
-
-!==============================================================================================
-!MODULE IMPORTS
-!==============================================================================================
+  subroutine gs2_save_for_restart &
+       (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in)
+!MR, 2007: save kx_shift array in restart file if allocated    
 # ifdef NETCDF
-    USE constants, ONLY: kind_rs, kind_rd, pi
-    USE fields_arrays, ONLY: phinew, aparnew, bparnew
-    USE dist_fn_arrays, ONLY: kx_shift  !MR
-    USE kt_grids, ONLY: naky, ntheta0
-    USE antenna_data, ONLY: nk_stir, a_ant, b_ant, ant_on
-# endif
-    USE mp, ONLY: nproc, iproc, proc0
-    USE theta_grid, ONLY: ntgrid
+    use constants, only: kind_rs, kind_rd, pi
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use dist_fn_arrays, only: kx_shift  !MR
+    use kt_grids, only: naky, ntheta0
+    use antenna_data, only: nk_stir, a_ant, b_ant, ant_on
+# endif    
+    use mp, only: nproc, iproc, proc0
+    use theta_grid, only: ntgrid
 ! Must include g_layout_type here to avoid obscure bomb while compiling
 ! gs2_diagnostics.f90 (which uses this module) with the Compaq F90 compiler:
 ! TT>
-    USE gs2_layouts, ONLY: g_lo
-    USE layouts_type, ONLY: g_layout_type
+!    use gs2_layouts, only: g_lo, g_layout_type
+    use gs2_layouts, only: g_lo
+    use layouts_type, only: g_layout_type
 ! <TT
-    USE file_utils, ONLY: error_unit
-!----------------------------------------------------------------------------------------------
-
-!==============================================================================================
-!VARIABLE DECLARATIONS
-!==============================================================================================
-    !No implicits
-    IMPLICIT NONE
-
-    !Interface variables
-    COMPLEX, DIMENSION (-ntgrid:,:,g_lo%llim_proc:), INTENT (IN) :: g
-    REAL, INTENT (IN) :: t0, delt0
-    REAL, DIMENSION (2), INTENT (IN) :: vnm
-    REAL, INTENT (IN) :: fphi, fapar, fbpar
-    INTEGER, INTENT (OUT) :: istatus
-    LOGICAL, INTENT (IN), OPTIONAL :: exit_in
-
+    use file_utils, only: error_unit
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    real, intent (in) :: t0, delt0
+    real, dimension (2), intent (in) :: vnm
+    real, intent (in) :: fphi, fapar, fbpar
+    integer, intent (out) :: istatus
+    logical, intent (in), optional :: exit_in
 # ifdef NETCDF
-    !Local variables
-    CHARACTER (306) :: file_proc
-    CHARACTER (10) :: suffix
-    INTEGER :: i, n_elements, ierr
-    LOGICAL :: exit
-!----------------------------------------------------------------------------------------------
+    character (306) :: file_proc
+    character (10) :: suffix
+    integer :: i, n_elements, ierr
+    logical :: exit
 
-!==============================================================================================
-!START OF WORK SECTION
-!==============================================================================================
-    !Decide what to do with file at end of routine
-    IF (PRESENT(exit_in)) THEN
+    if (present(exit_in)) then
        exit = exit_in
-    ELSE
+    else
        exit = .false.
-    END IF
+    end if
 
-    !Get the number of elements for this processor
     n_elements = g_lo%ulim_proc-g_lo%llim_proc+1
+    if (n_elements <= 0) return
 
-    !If no elements then nothing to write so escape routine
-    IF (n_elements <= 0) RETURN
+    if (.not.initialized) then
+       initialized = .true.
+       file_proc = trim(restart_file)
+       
+       write (suffix,'(a1,i0)') '.', iproc
+       file_proc = trim(trim(file_proc)//adjustl(suffix))
+       
+       istatus = nf90_create (file_proc, NF90_CLOBBER, ncid)
+       if (istatus /= NF90_NOERR) then
+          ierr = error_unit()
+          write(ierr,*) "nf90_create error: ", nf90_strerror(istatus)
+          goto 1
+       end if
+       
+       if (n_elements > 0) then
+          istatus = nf90_def_dim (ncid, "theta", 2*ntgrid+1, thetaid)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_dim theta error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+          
+          istatus = nf90_def_dim (ncid, "sign", 2, signid)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_dim sign error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+          
+          istatus = nf90_def_dim (ncid, "glo", n_elements, gloid)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_dim glo error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+          
+          istatus = nf90_def_dim (ncid, "aky", naky, kyid)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_dim aky error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+          
+          istatus = nf90_def_dim (ncid, "akx", ntheta0, kxid)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_dim akx error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+       end if
+       
+       if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
 
-    !#####################
-    !#File initialisation#
-    !#####################
-    !If file not initialised then create file, define dimensions and variables
-    IF (.not.initialized) THEN
-        !Don't perform initialisation twice
-        initialized = .true.
-
-        !Define file prefix
-        file_proc = TRIM(restart_file)
-
-        !Define file suffix (.procnum)
-        WRITE (suffix,'(a1,i0)') '.', iproc
-
-        !Define full file name
-        file_proc = TRIM(TRIM(file_proc)//ADJUSTL(suffix))
-
-        !Create file
-        istatus = nf90_create (file_proc, NF90_CLOBBER, ncid)
-
-        !Check file was created successfully
-        IF (istatus /= NF90_NOERR) THEN
-            ierr = error_unit()
-            WRITE(ierr,*) "nf90_create error: ", nf90_strerror(istatus)
-            GOTO 1
-        END IF
-
-        !###################
-        !#Define dimensions#
-        !###################
-        !<note> this if statement shouldn't be needed due to earlier check which
-        !results in subroutine exit if n_elements <=0 </note>
-        IF (n_elements > 0) THEN
-            !Define theta dimension
-            istatus = nf90_def_dim (ncid, "theta", 2*ntgrid+1, thetaid)
-
-            !Check dimension created successfully
-            IF (istatus /= NF90_NOERR) THEN
+       istatus = nf90_def_var (ncid, "t0", netcdf_real, t0id)
+       if (istatus /= NF90_NOERR) then
+          ierr = error_unit()
+          write(ierr,*) "nf90_def_var t0 error: ", nf90_strerror(istatus)
+          goto 1
+       end if
+       
+       istatus = nf90_def_var (ncid, "delt0", netcdf_real, delt0id)
+       if (istatus /= NF90_NOERR) then
+          ierr = error_unit()
+          write(ierr,*) "nf90_def_var delt0 error: ", nf90_strerror(istatus)
+          goto 1
+       end if
+       
+       istatus = nf90_def_var (ncid, "vnm1", netcdf_real, vnm1id)
+       if (istatus /= NF90_NOERR) then
+          ierr = error_unit()
+          write(ierr,*) "nf90_def_var vnm(1) error: ", nf90_strerror(istatus)
+          goto 1
+       end if
+       
+       istatus = nf90_def_var (ncid, "vnm2", netcdf_real, vnm2id)
+       if (istatus /= NF90_NOERR) then
+          ierr = error_unit()
+          write(ierr,*) "nf90_def_var vnm(2) error: ", nf90_strerror(istatus)
+          goto 1
+       end if
+       
+       if (ant_on) then
+          istatus = nf90_def_dim (ncid, "nk_stir", nk_stir, nk_stir_dim)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_dim nk_stir error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+          
+          istatus = nf90_def_var (ncid, "a_ant_r", netcdf_real, nk_stir_dim, a_antr_id)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_var a_ant_r error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+          
+          istatus = nf90_def_var (ncid, "a_ant_i", netcdf_real, nk_stir_dim, a_anti_id)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_var a_ant_i error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+          
+          istatus = nf90_def_var (ncid, "b_ant_r", netcdf_real, nk_stir_dim, b_antr_id)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_var b_ant_r error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+          
+          istatus = nf90_def_var (ncid, "b_ant_i", netcdf_real, nk_stir_dim, b_anti_id)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_var b_ant_i error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+       end if
+       
+       if (n_elements > 0) then
+          istatus = nf90_def_var (ncid, "gr", netcdf_real, &
+               (/ thetaid, signid, gloid /), gr_id)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_var g error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+          
+          istatus = nf90_def_var (ncid, "gi", netcdf_real, &
+               (/ thetaid, signid, gloid /), gi_id)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_def_var g error: ", nf90_strerror(istatus)
+             goto 1
+          end if
+          
+          if (fphi > epsilon(0.)) then
+             istatus = nf90_def_var (ncid, "phi_r", netcdf_real, &
+                  (/ thetaid, kxid, kyid /), phir_id)
+             if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_dim theta error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
-
-            !Define sign dimension (sign of v_par)
-            istatus = nf90_def_dim (ncid, "sign", 2, signid)
-
-            !Check dimension created successfully
-            IF (istatus /= NF90_NOERR) THEN
+                write(ierr,*) "nf90_def_var phi error: ", nf90_strerror(istatus)
+                goto 1
+             end if
+             
+             istatus = nf90_def_var (ncid, "phi_i", netcdf_real, &
+                  (/ thetaid, kxid, kyid /), phii_id)
+             if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_dim sign error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
+                write(ierr,*) "nf90_def_var phi error: ", nf90_strerror(istatus)
+                goto 1
+             end if
+          end if
 
-            !Define glo dimension (corresponds to layout grid i.e. kx,ky,lambda,energy,species mapped to 1d array)
-            istatus = nf90_def_dim (ncid, "glo", n_elements, gloid)
-
-            !Check dimension created successfully
-            IF (istatus /= NF90_NOERR) THEN
+          if (fapar > epsilon(0.)) then
+             istatus = nf90_def_var (ncid, "apar_r", netcdf_real, &
+                  (/ thetaid, kxid, kyid /), aparr_id)
+             if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_dim glo error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
-
-            !Define aky dimension (number of ky modes)
-            istatus = nf90_def_dim (ncid, "aky", naky, kyid)
-
-            !Check dimension created successfully
-            IF (istatus /= NF90_NOERR) THEN
+                write(ierr,*) "nf90_def_var apar error: ", nf90_strerror(istatus)
+                goto 1
+             end if
+             
+             istatus = nf90_def_var (ncid, "apar_i", netcdf_real, &
+                  (/ thetaid, kxid, kyid /), apari_id)
+             if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_dim aky error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
+                write(ierr,*) "nf90_def_var apar error: ", nf90_strerror(istatus)
+                goto 1
+             end if
+          end if
 
-            !Define akx dimension (number of kx modes)
-            istatus = nf90_def_dim (ncid, "akx", ntheta0, kxid)
-
-            !Check dimension created successfully
-            IF (istatus /= NF90_NOERR) THEN
+          if (fbpar > epsilon(0.)) then
+             istatus = nf90_def_var (ncid, "bpar_r", netcdf_real, &
+                  (/ thetaid, kxid, kyid /), bparr_id)
+             if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_dim akx error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
-        END IF !End of IF (n_elements > 0) THEN
+                write(ierr,*) "nf90_def_var bparr error: ", nf90_strerror(istatus)
+                goto 1
+             end if
 
-        !###################
-        !#Define variables #
-        !###################
-
-        !Get real variable data type specifier for netcdf routines
-        IF (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
-
-        !Define t0 variable (user time)
-        istatus = nf90_def_var (ncid, "t0", netcdf_real, t0id)
-
-        !Check variable created successfully
-        IF (istatus /= NF90_NOERR) THEN
-            ierr = error_unit()
-            WRITE(ierr,*) "nf90_def_var t0 error: ", nf90_strerror(istatus)
-            GOTO 1
-        END IF
-
-        !Define delt0 variable (time step)
-        istatus = nf90_def_var (ncid, "delt0", netcdf_real, delt0id)
-
-        !Check variable created successfully
-        IF (istatus /= NF90_NOERR) THEN
-            ierr = error_unit()
-            WRITE(ierr,*) "nf90_def_var delt0 error: ", nf90_strerror(istatus)
-            GOTO 1
-        END IF
-
-        !Define vnm1 variable (??)
-        istatus = nf90_def_var (ncid, "vnm1", netcdf_real, vnm1id)
-
-        !Check variable created successfully
-        IF (istatus /= NF90_NOERR) THEN
-            ierr = error_unit()
-            WRITE(ierr,*) "nf90_def_var vnm(1) error: ", nf90_strerror(istatus)
-            GOTO 1
-        END IF
-
-        !Define vnm2 variable (??)
-        istatus = nf90_def_var (ncid, "vnm2", netcdf_real, vnm2id)
-
-        !Check variable created successfully
-        IF (istatus /= NF90_NOERR) THEN
-            ierr = error_unit()
-            WRITE(ierr,*) "nf90_def_var vnm(2) error: ", nf90_strerror(istatus)
-            GOTO 1
-        END IF
-
-        !Create antenna related variables if ant_on is true
-        IF (ant_on) THEN
-            istatus = nf90_def_dim (ncid, "nk_stir", nk_stir, nk_stir_dim)
-            IF (istatus /= NF90_NOERR) THEN
+             istatus = nf90_def_var (ncid, "bpar_i", netcdf_real, &
+                  (/ thetaid, kxid, kyid /), bpari_id)
+             if (istatus /= NF90_NOERR) then
                 ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_dim nk_stir error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
+                write(ierr,*) "nf90_def_var bpari error: ", nf90_strerror(istatus)
+                goto 1
+             end if
+          end if
+       end if
 
-            istatus = nf90_def_var (ncid, "a_ant_r", netcdf_real, nk_stir_dim, a_antr_id)
-            IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_var a_ant_r error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
-
-            istatus = nf90_def_var (ncid, "a_ant_i", netcdf_real, nk_stir_dim, a_anti_id)
-            IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_var a_ant_i error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
-
-            istatus = nf90_def_var (ncid, "b_ant_r", netcdf_real, nk_stir_dim, b_antr_id)
-            IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_var b_ant_r error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
-
-            istatus = nf90_def_var (ncid, "b_ant_i", netcdf_real, nk_stir_dim, b_anti_id)
-            IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_var b_ant_i error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
-        END IF
-
-        !<note> this if statement shouldn't be needed due to earlier check which
-        !results in subroutine exit if n_elements <=0 </note>
-        IF (n_elements > 0) THEN
-            !Define gr variable (real component of g)
-            istatus = nf90_def_var (ncid, "gr", netcdf_real, &
-                (/ thetaid, signid, gloid /), gr_id)
-
-            !Check variable created successfully
-            IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_var g error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
-
-            !Define gi variable (imaginary component of gi)
-            istatus = nf90_def_var (ncid, "gi", netcdf_real, &
-                (/ thetaid, signid, gloid /), gi_id)
-
-            !Check variable created successfully
-            IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_var g error: ", nf90_strerror(istatus)
-                GOTO 1
-            END IF
-
-            !If there are finite electrostatic potential perturbations
-            !then write them to file
-            IF (fphi > epsilon(0.)) THEN
-                !Define phi_r variable (real component of \phi)
-                istatus = nf90_def_var (ncid, "phi_r", netcdf_real, &
-                    (/ thetaid, kxid, kyid /), phir_id)
-
-                !Check variable created successfully
-                IF (istatus /= NF90_NOERR) THEN
-                    ierr = error_unit()
-                    WRITE(ierr,*) "nf90_def_var phi error: ", nf90_strerror(istatus)
-                    GOTO 1
-                END IF
-
-                !Define phi_i variable (imaginary component of \phi)
-                istatus = nf90_def_var (ncid, "phi_i", netcdf_real, &
-                    (/ thetaid, kxid, kyid /), phii_id)
-
-                 !Check variable created successfully
-                IF (istatus /= NF90_NOERR) THEN
-                    ierr = error_unit()
-                    WRITE(ierr,*) "nf90_def_var phi error: ", nf90_strerror(istatus)
-                    GOTO 1
-                END IF
-            END IF
-
-            !If there are finite parallel magnetic potential perturbations
-            !then write them to file
-            IF (fapar > epsilon(0.)) THEN
-                !Define apar_r variable (real component A_\parallel)
-                istatus = nf90_def_var (ncid, "apar_r", netcdf_real, &
-                    (/ thetaid, kxid, kyid /), aparr_id)
-
-                !Check variable created successfully
-                IF (istatus /= NF90_NOERR) THEN
-                    ierr = error_unit()
-                    WRITE(ierr,*) "nf90_def_var apar error: ", nf90_strerror(istatus)
-                    GOTO 1
-                END IF
-
-                !Define apar_i variable (imaginary component A_\parallel)
-                istatus = nf90_def_var (ncid, "apar_i", netcdf_real, &
-                    (/ thetaid, kxid, kyid /), apari_id)
-
-                !Check variable created successfully
-                IF (istatus /= NF90_NOERR) THEN
-                    ierr = error_unit()
-                    WRITE(ierr,*) "nf90_def_var apar error: ", nf90_strerror(istatus)
-                    GOTO 1
-                END IF
-            END IF
-
-            !If there are finite perpendicular magnetic potential perturbations
-            !then write them to file
-            IF (fbpar > epsilon(0.)) THEN
-                !Define bpar_r variable (real component B_\parallel)
-                istatus = nf90_def_var (ncid, "bpar_r", netcdf_real, &
-                    (/ thetaid, kxid, kyid /), bparr_id)
-
-                !Check variable created successfully
-                IF (istatus /= NF90_NOERR) THEN
-                    ierr = error_unit()
-                    WRITE(ierr,*) "nf90_def_var bparr error: ", nf90_strerror(istatus)
-                    GOTO 1
-                END IF
-
-                !Define bpar_i variable (imaginary component B_\parallel)
-                istatus = nf90_def_var (ncid, "bpar_i", netcdf_real, &
-                    (/ thetaid, kxid, kyid /), bpari_id)
-
-                !Check variable created successfully
-                IF (istatus /= NF90_NOERR) THEN
-                    ierr = error_unit()
-                    WRITE(ierr,*) "nf90_def_var bpari error: ", nf90_strerror(istatus)
-                    GOTO 1
-                END IF
-            END IF
-        END IF !End of IF (n_elements > 0) THEN
-
-        !Define kx_shift variable (gives shift in kx due to flow shear)
-        istatus = nf90_def_var (ncid, "kx_shift", netcdf_real, &
+! remove allocated conditional because we want to be able to restart
+! using exb shear from a case which does not have exb shear (i.e.
+! we need kx_shift variable defined in netcdf file even if no exb
+! shear present in simulation) -- MAB + CMR
+!       if (allocated(kx_shift)) then   ! MR begin
+       istatus = nf90_def_var (ncid, "kx_shift", netcdf_real, &
             (/ kyid /), kx_shift_id)
+       if (istatus /= NF90_NOERR) then
+          ierr = error_unit()
+          write(ierr,*) "nf90_def_var kx_shift error: ", nf90_strerror(istatus)
+          goto 1
+       endif
+          
+!       endif   ! MR end 
+       
+       istatus = nf90_enddef (ncid)
+       if (istatus /= NF90_NOERR) then
+          ierr = error_unit()
+          write (ierr,*) "nf90_enddef error: ", nf90_strerror(istatus)
+          goto 1
+       end if
+    end if
 
-        !Check variable created correctly
-        IF (istatus /= NF90_NOERR) THEN
-            ierr = error_unit()
-            WRITE(ierr,*) "nf90_def_var kx_shift error: ", nf90_strerror(istatus)
-            GOTO 1
-        END IF
-
-        !######################
-        !#End definition stage#
-        !######################
-
-        !End definition stage of file
-        istatus = nf90_enddef (ncid)
-
-        !Check end was successful
-        IF (istatus /= NF90_NOERR) THEN
-            ierr = error_unit()
-            WRITE (ierr,*) "nf90_enddef error: ", nf90_strerror(istatus)
-            GOTO 1
-        END IF
-    END IF !End of IF (.not. initialized) THEN
-
-    !#################
-    !#File population#
-    !#################
-
-    !#################
-    !#Store variables#
-    !#################
-
-    !Store delt0
     istatus = nf90_put_var (ncid, delt0id, delt0)
-
-    !Check store was successful
-    IF (istatus /= NF90_NOERR) THEN
-        ierr = error_unit()
-        WRITE (ierr,*) "nf90_put_var delt0 error: ", nf90_strerror(istatus)
-        GOTO 1
-    END IF
-
-    !Store t0
+    if (istatus /= NF90_NOERR) then
+       ierr = error_unit()
+       write (ierr,*) "nf90_put_var delt0 error: ", nf90_strerror(istatus)
+       goto 1
+    end if
+ 
     istatus = nf90_put_var (ncid, t0id, t0)
-
-    !Check store was successful
-    IF (istatus /= NF90_NOERR) THEN
-        ierr = error_unit()
-        WRITE (ierr,*) "nf90_put_var t0 error: ", nf90_strerror(istatus)
-        GOTO 1
-    END IF
-
-    !Store vnm(1)
+    if (istatus /= NF90_NOERR) then
+       ierr = error_unit()
+       write (ierr,*) "nf90_put_var t0 error: ", nf90_strerror(istatus)
+       goto 1
+    end if
+ 
     istatus = nf90_put_var (ncid, vnm1id, vnm(1))
-
-    !Check store was successful
-    IF (istatus /= NF90_NOERR) THEN
-        ierr = error_unit()
-        WRITE (ierr,*) "nf90_put_var vnm(1) error: ", nf90_strerror(istatus)
-        GOTO 1
-    END IF
-
-    !Store vnm(2)
+    if (istatus /= NF90_NOERR) then
+       ierr = error_unit()
+       write (ierr,*) "nf90_put_var vnm(1) error: ", nf90_strerror(istatus)
+       goto 1
+    end if
+ 
     istatus = nf90_put_var (ncid, vnm2id, vnm(2))
+    if (istatus /= NF90_NOERR) then
+       ierr = error_unit()
+       write (ierr,*) "nf90_put_var vnm(2) error: ", nf90_strerror(istatus)
+       goto 1
+    end if
 
-    !Check store was successful
-    IF (istatus /= NF90_NOERR) THEN
-        ierr = error_unit()
-        WRITE (ierr,*) "nf90_put_var vnm(2) error: ", nf90_strerror(istatus)
-        GOTO 1
-    END IF
-
-    !Escape point in case of netcdf error at any point
-1   CONTINUE
-
-    !If an error has been encountered then close the file and exit routine
-    IF (istatus /= NF90_NOERR) THEN
+1   continue
+    if (istatus /= NF90_NOERR) then
        i = nf90_close (ncid)
-       RETURN
-    END IF
+       return
+    end if
 
-    !<note> this if statement shouldn't be needed due to earlier check which
-    !results in subroutine exit if n_elements <=0 </note>
-    IF (n_elements > 0) THEN
+    if (n_elements > 0) then
 
-        !Fill antenna variables if ant_on set
-        IF (ant_on) THEN
-            IF (.not. ALLOCATED(atmp)) ALLOCATE (atmp(nk_stir))
-            atmp = REAL(a_ant)
-            istatus = nf90_put_var (ncid, a_antr_id, atmp)
+       if (ant_on) then
 
-            IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE (ierr,*) "nf90_put_var a_antr error: ", &
-                    nf90_strerror(istatus), ' ', iproc
-            END IF
+          if (.not. allocated(atmp)) allocate (atmp(nk_stir))
+          atmp = real(a_ant)
+          istatus = nf90_put_var (ncid, a_antr_id, atmp)
 
-            atmp = AIMAG(a_ant)
-            istatus = nf90_put_var (ncid, a_anti_id, atmp)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write (ierr,*) "nf90_put_var a_antr error: ", &
+                  nf90_strerror(istatus), ' ', iproc
+          end if
 
-            IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE (ierr,*) "nf90_put_var a_anti error: ", &
-                    nf90_strerror(istatus), ' ', iproc
-            END IF
+          atmp = aimag(a_ant)
+          istatus = nf90_put_var (ncid, a_anti_id, atmp)
 
-            atmp = REAL(b_ant)
-            istatus = nf90_put_var (ncid, b_antr_id, atmp)
-            IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE (ierr,*) "nf90_put_var b_antr error: ", &
-                    nf90_strerror(istatus), ' ', iproc
-            END IF
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write (ierr,*) "nf90_put_var a_anti error: ", &
+                  nf90_strerror(istatus), ' ', iproc
+          end if
 
-            atmp = AIMAG(b_ant)
-            istatus = nf90_put_var (ncid, b_anti_id, atmp)
-            IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE (ierr,*) "nf90_put_var b_anti error: ", &
-                    nf90_strerror(istatus), ' ', iproc
-            END IF
+          atmp = real(b_ant)
+          istatus = nf90_put_var (ncid, b_antr_id, atmp)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write (ierr,*) "nf90_put_var b_antr error: ", &
+                  nf90_strerror(istatus), ' ', iproc
+          end if
 
-            DEALLOCATE (atmp)
-        END IF
+          atmp = aimag(b_ant)
+          istatus = nf90_put_var (ncid, b_anti_id, atmp)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write (ierr,*) "nf90_put_var b_anti error: ", &
+                  nf90_strerror(istatus), ' ', iproc
+          end if
+          deallocate (atmp)
+       end if
 
-        !Allocate array to hold components of g individually
-        IF (.not. ALLOCATED(tmpr)) &
-            ALLOCATE (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       if (.not. allocated(tmpr)) &
+            allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
 
-        !Make temporary copy of the real component of g
-        tmpr = REAL(g)
+       tmpr = real(g)
+       istatus = nf90_put_var (ncid, gr_id, tmpr)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gr_id)
+       
+       tmpr = aimag(g)
+       istatus = nf90_put_var (ncid, gi_id, tmpr)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gi_id)
+       
+       if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
+       if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))
 
-        !Store variable real(g)
-        istatus = nf90_put_var (ncid, gr_id, tmpr)
+       if (fphi > epsilon(0.)) then
+          ftmpr = real(phinew)
+          istatus = nf90_put_var (ncid, phir_id, ftmpr)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, phir_id)
+          
+          ftmpi = aimag(phinew)
+          istatus = nf90_put_var (ncid, phii_id, ftmpi)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, phii_id)
+       end if
 
-        !Check store was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, gr_id)
+       if (fapar > epsilon(0.)) then
+          ftmpr = real(aparnew)
+          istatus = nf90_put_var (ncid, aparr_id, ftmpr)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, aparr_id)
+          
+          ftmpi = aimag(aparnew)
+          istatus = nf90_put_var (ncid, apari_id, ftmpi)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, apari_id)
+       end if
 
-        !Make temporary copy of the imaginary component of g
-        tmpr = AIMAG(g)
+       if (fbpar > epsilon(0.)) then
+          ftmpr = real(bparnew)
+          istatus = nf90_put_var (ncid, bparr_id, ftmpr)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, bparr_id)
+          
+          ftmpi = aimag(bparnew)
+          istatus = nf90_put_var (ncid, bpari_id, ftmpi)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, bpari_id)
+       end if
+    end if
 
-        !Store variable aimag(g)
-        istatus = nf90_put_var (ncid, gi_id, tmpr)
+    if (allocated(kx_shift)) then ! MR begin
+       if (.not. allocated(stmp)) allocate (stmp(naky))   
+       stmp = kx_shift
+       istatus = nf90_put_var (ncid, kx_shift_id, stmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kx_shift_id)
+    else
+       if (.not. allocated(stmp)) allocate (stmp(naky))
+       stmp = 0.
+       istatus = nf90_put_var (ncid, kx_shift_id, stmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kx_shift_id)
+    endif ! MR end
 
-        !Check store was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, gi_id)
-
-        !Allocate arrays to hold components of fields individually
-        IF (.not. ALLOCATED(ftmpr)) ALLOCATE (ftmpr(2*ntgrid+1,ntheta0,naky))
-        IF (.not. ALLOCATED(ftmpi)) ALLOCATE (ftmpi(2*ntgrid+1,ntheta0,naky))
-
-        !If finite electrostatic potential perturbation then write \phi
-        IF (fphi > epsilon(0.)) THEN
-            !Nake temporary copy of real(\phi)
-            ftmpr = REAL(phinew)
-
-            !Store variable real(\phi)
-            istatus = nf90_put_var (ncid, phir_id, ftmpr)
-
-            !Check store was successful
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, phir_id)
-
-            !Make temporary copy of imaginary(\phi)
-            ftmpi = AIMAG(phinew)
-
-            !Store variable aimag(\phi)
-            istatus = nf90_put_var (ncid, phii_id, ftmpi)
-
-            !Check store was successful
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, phii_id)
-        END IF
-
-        !If finite parallel magnetic potential perturbations then write A_\parallel
-        IF (fapar > epsilon(0.)) THEN
-            !Make temporary copy of real(A_\parallel)
-            ftmpr = REAL(aparnew)
-
-            !Store variable real(A_\parallel)
-            istatus = nf90_put_var (ncid, aparr_id, ftmpr)
-
-            !Check store was successful
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, aparr_id)
-
-            !Make temporary copy of imaginary(A_\parallel)
-            ftmpi = AIMAG(aparnew)
-
-            !Store variable imaginary(A_\parallel)
-            istatus = nf90_put_var (ncid, apari_id, ftmpi)
-
-            !Check store was successful
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, apari_id)
-        END IF
-
-        !If finite perpendicular magnetic potential perturbations then write B_\parallel
-        IF (fbpar > epsilon(0.)) THEN
-            !Make temporary copy of real(B_\parallel)
-            ftmpr = REAL(bparnew)
-
-            !Store variable real(B_\parallel)
-            istatus = nf90_put_var (ncid, bparr_id, ftmpr)
-
-            !Check store was successful
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, bparr_id)
-
-            !Make temporary copy of imaginary(B_\parallel)
-            ftmpi = AIMAG(bparnew)
-
-            !Store variable imaginary(B_\parallel)
-            istatus = nf90_put_var (ncid, bpari_id, ftmpi)
-
-            !Check store was successful
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, bpari_id)
-        END IF
-    END IF !End of IF (n_elements > 0) THEN
-
-    !If kx_shift is allocated then output kx otherwise output zeros
-    IF (allocated(kx_shift)) THEN ! MR begin
-        !Make temporary array to hold kx_shift if allocated, zeros if not
-        IF (.not. ALLOCATED(stmp)) ALLOCATE (stmp(naky))
-
-        !Fill in output array
-        stmp = kx_shift
-
-        !Store variable
-        istatus = nf90_put_var (ncid, kx_shift_id, stmp)
-
-        !Check store was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, kx_shift_id)
-    ELSE
-        !Make temporary array to hold kx_shift if allocated, zeros if not
-        IF (.not. ALLOCATED(stmp)) ALLOCATE (stmp(naky))
-
-        !Fill in output array
-        stmp = 0.
-
-        !Store variable
-        istatus = nf90_put_var (ncid, kx_shift_id, stmp)
-
-        !Check store was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, kx_shift_id)
-    END IF ! MR end
-
-    !If exit_in flag set then close the file, if not then sync the file
-    IF (exit) THEN
-        !Close file
-        i = nf90_close (ncid)
-    ELSE
-        !Sync file
-        i = nf90_sync (ncid)
-
-        !Check sync was successful
-        IF (i /= NF90_NOERR) &
-            CALL netcdf_error (istatus, message='nf90_sync error')
-    END IF
+    if (exit) then
+       i = nf90_close (ncid)
+    else
+       i = nf90_sync (ncid)
+       if (i /= NF90_NOERR) &
+            call netcdf_error (istatus, message='nf90_sync error')
+    end if
 
 # else
-    !Statement to display if try to save distfn without netcdf available
-    IF (proc0) WRITE (error_unit(),*) &
-        'WARNING: gs2_save_for_restart is called without netcdf library'
+
+    if (proc0) write (error_unit(),*) &
+         'WARNING: gs2_save_for_restart is called without netcdf library'
 
 # endif
-!----------------------------------------------------------------------------------------------
-END SUBROUTINE gs2_save_for_restart
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
+  end subroutine gs2_save_for_restart
 
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-SUBROUTINE gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, many)
-!GS2_RESTORE_MANY(gs2_save.fpp): Subroutine to restore distribution
-!function, EM fields and a couple of other variables from a restart
-!file on each processor.
-!==============================================================================================
-!MODULE IMPORTS
-!==============================================================================================
+  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, many)
 !MR, 2007: restore kx_shift array if already allocated
 # ifdef NETCDF
-    USE mp, ONLY: proc0, iproc, nproc
-    USE fields_arrays, ONLY: phinew, aparnew, bparnew
-    USE fields_arrays, ONLY: phi, apar, bpar
-    USE dist_fn_arrays, ONLY: kx_shift   ! MR
-    USE kt_grids, ONLY: naky, ntheta0
+    use mp, only: proc0, iproc, nproc
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use fields_arrays, only: phi, apar, bpar
+    use dist_fn_arrays, only: kx_shift   ! MR
+    use kt_grids, only: naky, ntheta0
 # endif
-    USE theta_grid, ONLY: ntgrid
-    USE gs2_layouts, ONLY: g_lo
-    USE file_utils, ONLY: error_unit
-!----------------------------------------------------------------------------------------------
-
-!==============================================================================================
-!VARIABLE DECLARATIONS
-!==============================================================================================
-    !No implicits
-    IMPLICIT NONE
-
-    !Interface variables
-    COMPLEX, DIMENSION (-ntgrid:,:,g_lo%llim_proc:), INTENT (OUT) :: g
-    REAL, INTENT (IN) :: scale
-    INTEGER, INTENT (OUT) :: istatus
-    REAL, INTENT (IN) :: fphi, fapar, fbpar
-    LOGICAL, INTENT (IN) :: many
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo
+    use file_utils, only: error_unit
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
+    real, intent (in) :: scale
+    integer, intent (out) :: istatus
+    real, intent (in) :: fphi, fapar, fbpar
+    logical, intent (in) :: many
 # ifdef NETCDF
+    character (306) :: file_proc
+    character (10) :: suffix
+    integer :: i, n_elements, ierr
+    real :: fac
 
-    !Internal variables
-    CHARACTER (306) :: file_proc
-    CHARACTER (10) :: suffix
-    INTEGER :: i, n_elements, ierr
-    REAL :: fac
-!----------------------------------------------------------------------------------------------
-
-!==============================================================================================
-!WORK SECTION
-!==============================================================================================
-
-    !Get number of elements on this processor
     n_elements = g_lo%ulim_proc-g_lo%llim_proc+1
-
-    !If no elements then nothing to read so escape routine
-    IF (n_elements <= 0) RETURN
-
-    !Check that the file has not been initialised already
-    IF (.not.initialized) THEN
-        !######################
-        !#File Initialisations#
-        !######################
-
-        !Set initialised state to True so only do section once
+    if (n_elements <= 0) return
+    
+    if (.not.initialized) then
 !       initialized = .true.
+       file_proc = trim(restart_file)
 
-        !Get file prefix
-        file_proc = TRIM(restart_file)
+       write (suffix,'(a1,i0)') '.', iproc
+       file_proc = trim(trim(file_proc)//adjustl(suffix))
+       
+       istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=file_proc)
+       
+       ! check precision
+       if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
+       call check_netcdf_file_precision (ncid)
 
-        !Define file suffix (*.iproc)
-        WRITE (suffix,'(a1,i0)') '.', iproc
+       istatus = nf90_inq_dimid (ncid, "theta", thetaid)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='theta')
+       
+       istatus = nf90_inq_dimid (ncid, "sign", signid)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='sign')
+       
+       istatus = nf90_inq_dimid (ncid, "glo", gloid)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='glo')
+       
+       istatus = nf90_inq_dimid (ncid, "aky", kyid)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='aky')
+       
+       istatus = nf90_inq_dimid (ncid, "akx", kxid)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='akx')
+       
+       istatus = nf90_inquire_dimension (ncid, thetaid, len=i)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=thetaid)
+       if (i /= 2*ntgrid + 1) write(*,*) 'Restart error: ntgrid=? ',i,' : ',ntgrid,' : ',iproc
+       
+       istatus = nf90_inquire_dimension (ncid, signid, len=i)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=signid)
+       if (i /= 2) write(*,*) 'Restart error: sign=? ',i,' : ',iproc
+       
+       istatus = nf90_inquire_dimension (ncid, gloid, len=i)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=gloid)
+       if (i /= g_lo%ulim_proc-g_lo%llim_proc+1) write(*,*) 'Restart error: glo=? ',i,' : ',iproc
+       
+       istatus = nf90_inquire_dimension (ncid, kyid, len=i)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=kyid)
+       if (i /= naky) write(*,*) 'Restart error: naky=? ',i,' : ',naky,' : ',iproc
+       
+       istatus = nf90_inquire_dimension (ncid, kxid, len=i)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=kxid)
+       if (i /= ntheta0) write(*,*) 'Restart error: ntheta0=? ',i,' : ',ntheta0,' : ',iproc
+       
+       if (fphi > epsilon(0.)) then
+          istatus = nf90_inq_varid (ncid, "phi_r", phir_id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='phi_r')
+          
+          istatus = nf90_inq_varid (ncid, "phi_i", phii_id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='phi_i')
+       end if
 
-        !Define full file name
-        file_proc = TRIM(TRIM(file_proc)//ADJUSTL(suffix))
+       if (fapar > epsilon(0.)) then
+          istatus = nf90_inq_varid (ncid, "apar_r", aparr_id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='apar_r')
+          
+          istatus = nf90_inq_varid (ncid, "apar_i", apari_id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='apar_i')
+       end if
 
-        !Open specified file for reading
-        istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
+       if (fbpar > epsilon(0.)) then
+          istatus = nf90_inq_varid (ncid, "bpar_r", bparr_id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='bpar_r')
 
-        !Check open was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, file=file_proc)
+          istatus = nf90_inq_varid (ncid, "bpar_i", bpari_id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='bpar_i')
+       end if
 
-        !Load netcdf precision variable if not done already
-        IF (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
+       if (allocated(kx_shift)) then   ! MR begin
+          istatus = nf90_inq_varid (ncid, "kx_shift", kx_shift_id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='kx_shift')
+       endif   ! MR end
 
-        !Call check_netcdf_file_precision
-        !   Opens file and tries to read a variable 't0' (typically representing time?)
-        !   Then checks preicision of data in file and compares this to precision currently
-        !   being used in the code.
-        !   If these don't match then will print a warning to screen
-        CALL check_netcdf_file_precision (ncid)
+       istatus = nf90_inq_varid (ncid, "gr", gr_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='gr')
+       
+       istatus = nf90_inq_varid (ncid, "gi", gi_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='gi')
+    end if
+    
+    if (.not. allocated(tmpr)) &
+         allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    if (.not. allocated(tmpi)) &
+         allocate (tmpi(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
 
-        !######################
-        !#Obtain dimension ids#
-        !######################
-
-        !Obtain id for dimension theta
-        istatus = nf90_inq_dimid (ncid, "theta", thetaid)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, dim='theta')
-
-        !Obtain id for dimension sign
-        istatus = nf90_inq_dimid (ncid, "sign", signid)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, dim='sign')
-
-        !Obtain id for dimension glo
-        istatus = nf90_inq_dimid (ncid, "glo", gloid)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, dim='glo')
-
-        !Obtain id for dimension aky
-        istatus = nf90_inq_dimid (ncid, "aky", kyid)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, dim='aky')
-
-        !Obtain id for dimension akx
-        istatus = nf90_inq_dimid (ncid, "akx", kxid)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, dim='akx')
-
-        !#######################
-        !#Obtain dimension info#
-        !#######################
-
-        !Get information about dimension
-        istatus = nf90_inquire_dimension (ncid, thetaid, len=i)
-
-        !Check information retrieved successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, dimid=thetaid)
-
-        !Perform consistency check
-        IF (i /= 2*ntgrid + 1) WRITE(*,*) 'Restart error: ntgrid=? ',i,' : ',ntgrid,' : ',iproc
-
-        !Get information about dimension
-        istatus = nf90_inquire_dimension (ncid, signid, len=i)
-
-        !Check information retrieved successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, dimid=signid)
-
-        !Perform consistency check
-        IF (i /= 2) WRITE(*,*) 'Restart error: sign=? ',i,' : ',iproc
-
-        !Get information about dimension
-        istatus = nf90_inquire_dimension (ncid, gloid, len=i)
-
-        !Check information retrieved successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, dimid=gloid)
-
-        !Perform consistency check
-        IF (i /= g_lo%ulim_proc-g_lo%llim_proc+1) WRITE(*,*) 'Restart error: glo=? ',i,' : ',iproc
-
-        !Get information about dimension
-        istatus = nf90_inquire_dimension (ncid, kyid, len=i)
-
-        !Check information retrieved successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, dimid=kyid)
-
-        !Perform consistency check
-        IF (i /= naky) WRITE(*,*) 'Restart error: naky=? ',i,' : ',naky,' : ',iproc
-
-        !Get information about dimension
-        istatus = nf90_inquire_dimension (ncid, kxid, len=i)
-
-        !Check information retrieved successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, dimid=kxid)
-
-        !Perform consistency check
-        IF (i /= ntheta0) WRITE(*,*) 'Restart error: ntheta0=? ',i,' : ',ntheta0,' : ',iproc
-
-        !#####################
-        !#Obtain variable ids#
-        !#####################
-
-        !If finite electrostatic potential read in phi
-        IF (fphi > epsilon(0.)) THEN
-            !Get variable id
-            istatus = nf90_inq_varid (ncid, "phi_r", phir_id)
-
-            !Check id obtained successfully
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='phi_r')
-
-            !Get variable id
-            istatus = nf90_inq_varid (ncid, "phi_i", phii_id)
-
-            !Check id obtained successfully
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='phi_i')
-        END IF
-
-        !If finite parallel magnetic potential read in apar
-        IF (fapar > epsilon(0.)) THEN
-            !Get variable id
-            istatus = nf90_inq_varid (ncid, "apar_r", aparr_id)
-
-            !Check id obtained successfully
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='apar_r')
-
-            !Get variable id
-            istatus = nf90_inq_varid (ncid, "apar_i", apari_id)
-
-            !Check id obtained successfully
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='apar_i')
-        END IF
-
-        !If finite perpendicular magnetic potential read in bpar
-        IF (fbpar > epsilon(0.)) THEN
-            !Get variable id
-            istatus = nf90_inq_varid (ncid, "bpar_r", bparr_id)
-
-            !Check id obtained successfully
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='bpar_r')
-
-            !Get variable id
-            istatus = nf90_inq_varid (ncid, "bpar_i", bpari_id)
-
-            !Check id obtained successfully
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='bpar_i')
-        END IF
-
-        !Get kx_shift id if kx_shift allocated (i.e. if this is a flow shear run)
-        IF (allocated(kx_shift)) THEN   ! MR begin
-            !Get variable id
-            istatus = nf90_inq_varid (ncid, "kx_shift", kx_shift_id)
-
-            !Check id obtained successfully
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='kx_shift')
-        END IF   ! MR end
-
-        !Get variable id
-        istatus = nf90_inq_varid (ncid, "gr", gr_id)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='gr')
-
-        !Get variable id
-        istatus = nf90_inq_varid (ncid, "gi", gi_id)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='gi')
-    END IF !End of IF (.not.initialized) THEN
-
-    !###################
-    !#Read in variables#
-    !###################
-
-    !Allocate temporary arrays to hold dist fn data
-    IF (.not. ALLOCATED(tmpr)) &
-         ALLOCATE (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
-    IF (.not. ALLOCATED(tmpi)) &
-         ALLOCATE (tmpi(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
-
-    !Intitialise temporary arrays to 0
     tmpr = 0.; tmpi = 0.
-
-    !Get real component of distfn
     istatus = nf90_get_var (ncid, gr_id, tmpr)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gr_id)
 
-    !Check read was successful
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, gr_id)
-
-    !Get imaginary component of distfn
     istatus = nf90_get_var (ncid, gi_id, tmpi)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gi_id)
 
-    !Check read was successful
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, gi_id)
+    g = cmplx(tmpr, tmpi)
 
-    !Recombine components to form complex distribution function
-    g = CMPLX(tmpr, tmpi)
+    if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
+    if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))
 
-    !Read in kx_shift if this is allocated
-    IF (allocated(kx_shift)) THEN   ! MR begin
-        !Allocate temporary array if needed
-        IF (.not. ALLOCATED(stmp)) ALLOCATE (stmp(naky))   ! MR
+    if (allocated(kx_shift)) then   ! MR begin
+       if (.not. allocated(stmp)) allocate (stmp(naky))   ! MR 
+       istatus = nf90_get_var (ncid, kx_shift_id, stmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kx_shift_id)
+       kx_shift = stmp
+    endif   ! MR end
 
-        !Read in kx_shift
-        istatus = nf90_get_var (ncid, kx_shift_id, stmp)
+    if (fphi > epsilon(0.)) then
+       istatus = nf90_get_var (ncid, phir_id, ftmpr)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, phir_id)
+       
+       istatus = nf90_get_var (ncid, phii_id, ftmpi)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, phii_id)
+       
+       phi = 0.
+       phinew = cmplx(ftmpr, ftmpi)
+    end if
 
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, kx_shift_id)
+    if (fapar > epsilon(0.)) then
+       istatus = nf90_get_var (ncid, aparr_id, ftmpr)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, aparr_id)
+       
+       istatus = nf90_get_var (ncid, apari_id, ftmpi)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, apari_id)
+       
+       apar = 0.
+       aparnew = cmplx(ftmpr, ftmpi)
+    end if
 
-        !Update kx_shift variable with data from file
-        kx_shift = stmp
-    END IF   ! MR end
+    if (fbpar > epsilon(0.)) then
+       istatus = nf90_get_var (ncid, bparr_id, ftmpr)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, bparr_id)
+       
+       istatus = nf90_get_var (ncid, bpari_id, ftmpi)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, bpari_id)
+       
+       bpar = 0.
+       bparnew = cmplx(ftmpr, ftmpi)
+    end if
 
-    !Allocate temporary arrays to hold field data
-    IF (.not. ALLOCATED(ftmpr)) ALLOCATE (ftmpr(2*ntgrid+1,ntheta0,naky))
-    IF (.not. ALLOCATED(ftmpi)) ALLOCATE (ftmpi(2*ntgrid+1,ntheta0,naky))
+    if (scale > 0.) then
+       g = g*scale
+       phinew = phinew*scale
+       aparnew = aparnew*scale
+       bparnew = bparnew*scale
+    else
+       fac = - scale/(maxval(abs(phinew)))
+       g = g*fac
+       phinew = phinew*fac
+       aparnew = aparnew*fac
+       bparnew = bparnew*fac
+    end if
 
-    !If finite electrostatic potential read in phi
-    IF (fphi > epsilon(0.)) THEN
-        !Read in real component of phi
-        istatus = nf90_get_var (ncid, phir_id, ftmpr)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, phir_id)
-
-        !Read in imaginary component of phi
-        istatus = nf90_get_var (ncid, phii_id, ftmpi)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, phii_id)
-
-        !Initialise phi
-        phi = 0.
-
-        !Recombine components to create complex phi
-        phinew = CMPLX(ftmpr, ftmpi)
-    END IF
-
-    !If finite parallel magnetic potential read in apar
-    IF (fapar > epsilon(0.)) THEN
-        !Read in real component of apar
-        istatus = nf90_get_var (ncid, aparr_id, ftmpr)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, aparr_id)
-
-        !Read in imaginary component of apar
-        istatus = nf90_get_var (ncid, apari_id, ftmpi)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, apari_id)
-
-        !Initialise apar
-        apar = 0.
-
-        !Recombine components to create complex apar
-        aparnew = CMPLX(ftmpr, ftmpi)
-    END IF
-
-    !If finite perpendicular magnetic potential read in bpar
-    IF (fbpar > epsilon(0.)) THEN
-        !Read in real component of bpar
-        istatus = nf90_get_var (ncid, bparr_id, ftmpr)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, bparr_id)
-
-        !Read in imaginary component of bpar
-        istatus = nf90_get_var (ncid, bpari_id, ftmpi)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, bpari_id)
-
-        !Initialise bpar
-        bpar = 0.
-
-        !Recombine components to form complex bpar
-        bparnew = CMPLX(ftmpr, ftmpi)
-    END IF
-
-    !Scale fields if required
-    IF (scale > 0.) THEN
-        g = g*scale
-        phinew = phinew*scale
-        aparnew = aparnew*scale
-        bparnew = bparnew*scale
-    ELSE
-        fac = - scale/(MAXVAL(ABS(phinew)))
-        g = g*fac
-        phinew = phinew*fac
-        aparnew = aparnew*fac
-        bparnew = bparnew*fac
-    END IF
-
-    !######################
-    !#Final file functions#
-    !######################
     ! RN 2008/05/23: this was commented out. why?
-    !Close file
 !    istatus = nf90_close (ncid)
-
-    !Check close was successful
-    IF (istatus /= NF90_NOERR) THEN
-        ierr = error_unit()
-        WRITE(ierr,*) "nf90_close error: ", nf90_strerror(istatus),' ',iproc
-    END IF
+    if (istatus /= NF90_NOERR) then
+       ierr = error_unit()
+       write(ierr,*) "nf90_close error: ", nf90_strerror(istatus),' ',iproc
+    end if
 
 # else
-    !Warning message to display if try to call subroutine without netcdf libraries
-    WRITE (error_unit(),*) &
-        'ERROR: gs2_restore_many is called without netcdf'
+    
+    write (error_unit(),*) &
+         'ERROR: gs2_restore_many is called without netcdf'
+
 # endif
-!----------------------------------------------------------------------------------------------
 
-END SUBROUTINE gs2_restore_many
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
+  end subroutine gs2_restore_many
 
 ! RN 2008/05/23:
 !  This can be removed. restore_many seems to work for single proc.
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-SUBROUTINE gs2_restore_one (g, scale, istatus, fphi, fapar, fbpar)
-!GS2_RESTORE_ONE(gs2_save.fpp): Subroutine to restore distribution
-!function, EM fields and a couple of other variables on one proc.
-!Almost identical to GS2_RESTORE_MANY and can probably be replaced
-!by this routine.
-!==============================================================================================
-!MODULE IMPORTS
-!==============================================================================================
+  subroutine gs2_restore_one (g, scale, istatus, fphi, fapar, fbpar)
 !MR, 2007: restore kx_shift array if allocated
 # ifdef NETCDF
-    USE mp, ONLY: proc0, iproc, nproc
-    USE fields_arrays, ONLY: phinew, aparnew, bparnew
-    USE fields_arrays, ONLY: phi, apar, bpar
-    USE dist_fn_arrays, ONLY: kx_shift   ! MR
-    USE kt_grids, ONLY: naky, ntheta0
+    use mp, only: proc0, iproc, nproc
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use fields_arrays, only: phi, apar, bpar
+    use dist_fn_arrays, only: kx_shift   ! MR
+    use kt_grids, only: naky, ntheta0
 # endif
-    USE theta_grid, ONLY: ntgrid
-    USE gs2_layouts, ONLY: g_lo
-    USE file_utils, ONLY: error_unit
-!----------------------------------------------------------------------------------------------
-
-!==============================================================================================
-!VARIABLE DECLARATIONS
-!==============================================================================================
-    !No implicits
-    IMPLICIT NONE
-
-    !Interface variables
-    COMPLEX, DIMENSION (-ntgrid:,:,g_lo%llim_proc:), INTENT (OUT) :: g
-    REAL, INTENT (IN) :: scale
-    INTEGER, INTENT (OUT) :: istatus
-    REAL, INTENT (IN) :: fphi, fapar, fbpar
-
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo
+    use file_utils, only: error_unit
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
+    real, intent (in) :: scale
+    integer, intent (out) :: istatus
+    real, intent (in) :: fphi, fapar, fbpar
 # ifdef NETCDF
-    !Internal variables
-    INTEGER :: n_elements, ierr, i
-!----------------------------------------------------------------------------------------------
+    integer :: n_elements, ierr
+    integer :: i
 
-!==============================================================================================
-!WORK SECTION
-!==============================================================================================
+    istatus = nf90_open (trim(restart_file), NF90_NOWRITE, ncid)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=restart_file)
 
-    !######################
-    !#File Initialisations#
-    !######################
-
-    !Open specified file for reading
-    istatus = nf90_open (TRIM(restart_file), NF90_NOWRITE, ncid)
-
-    !Check open was successful
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, file=restart_file)
-
-    !######################
-    !#Obtain dimension ids#
-    !######################
-
-    !Obtain id for dimension theta
     istatus = nf90_inq_dimid (ncid, "theta", thetaid)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='theta')
 
-    !Check id obtained successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, dim='theta')
-
-    !Obtain id for dimension sign
     istatus = nf90_inq_dimid (ncid, "sign", signid)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='sign')
 
-    !Check id obtained successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, dim='sign')
-
-    !Obtain id for dimension glo
     istatus = nf90_inq_dimid (ncid, "glo", gloid)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='glo')
 
-    !Check id obtained successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, dim='glo')
-
-    !Obtain id for dimension aky
     istatus = nf90_inq_dimid (ncid, "aky", kyid)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='aky')
 
-    !Check id obtained successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, dim='aky')
-
-    !Obtain id for dimension akx
     istatus = nf90_inq_dimid (ncid, "akx", kxid)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='akx')
 
-    !Check id obtained successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, dim='akx')
-
-    !#######################
-    !#Obtain dimension info#
-    !#######################
-
-    !Get information about dimension
     istatus = nf90_inquire_dimension (ncid, thetaid, len=i)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=thetaid)
+    if (i /= 2*ntgrid + 1) write(*,*) 'Restart error: ntgrid=? ',i,' : ',ntgrid,' : ',iproc
 
-    !Check information retrieved successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, dimid=thetaid)
-
-    !Perform consistency check
-    IF (i /= 2*ntgrid + 1) WRITE(*,*) 'Restart error: ntgrid=? ',i,' : ',ntgrid,' : ',iproc
-
-    !Get information about dimension
     istatus = nf90_inquire_dimension (ncid, signid, len=i)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, signid)
+    if (i /= 2) write(*,*) 'Restart error: sign=? ',i,' : ',iproc
 
-    !Check information retrieved successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, signid)
-
-    !Perform consistency check
-    IF (i /= 2) WRITE(*,*) 'Restart error: sign=? ',i,' : ',iproc
-
-    !Get information about dimension
     istatus = nf90_inquire_dimension (ncid, gloid, len=i)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gloid)
+    if (i /= g_lo%ulim_world-g_lo%llim_world+1) write(*,*) 'Restart error: glo=? ',i,' : ',iproc
 
-    !Check information retrieved successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, gloid)
-
-    !Perform consistency check
-    IF (i /= g_lo%ulim_world-g_lo%llim_world+1) WRITE(*,*) 'Restart error: glo=? ',i,' : ',iproc
-
-    !Get information about dimension
     istatus = nf90_inquire_dimension (ncid, kyid, len=i)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kyid)
+    if (i /= naky) write(*,*) 'Restart error: naky=? ',i,' : ',naky,' : ',iproc
 
-    !Check information retrieved successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, kyid)
-
-    !Perform consistency check
-    IF (i /= naky) WRITE(*,*) 'Restart error: naky=? ',i,' : ',naky,' : ',iproc
-
-    !Get information about dimension
     istatus = nf90_inquire_dimension (ncid, kxid, len=i)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kxid)
+    if (i /= ntheta0) write(*,*) 'Restart error: ntheta0=? ',i,' : ',ntheta0,' : ',iproc
 
-    !Check information retrieved successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, kxid)
+    if (fphi > epsilon(0.)) then
+       istatus = nf90_inq_varid (ncid, "phi_r", phir_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='phi_r')
+       
+       istatus = nf90_inq_varid (ncid, "phi_i", phii_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='phi_i')
+    end if
 
-    !Perform consistency check
-    IF (i /= ntheta0) WRITE(*,*) 'Restart error: ntheta0=? ',i,' : ',ntheta0,' : ',iproc
+    if (fapar > epsilon(0.)) then
+       istatus = nf90_inq_varid (ncid, "apar_r", aparr_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='apar_r')
+       
+       istatus = nf90_inq_varid (ncid, "apar_i", apari_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='apar_i')
+    end if
 
-    !#####################
-    !#Obtain variable ids#
-    !#####################
+    if (fbpar > epsilon(0.)) then
+       istatus = nf90_inq_varid (ncid, "bpar_r", bparr_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='bpar_r')
 
-    !If finite electrostatic potential read in phi
-    IF (fphi > epsilon(0.)) THEN
-        !Get variable id
-        istatus = nf90_inq_varid (ncid, "phi_r", phir_id)
+       istatus = nf90_inq_varid (ncid, "bpar_i", bpari_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='bpar_i')
+    end if
 
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='phi_r')
+    if (allocated(kx_shift)) then   ! MR begin
+       istatus = nf90_inq_varid (ncid, "kx_shift", kx_shift_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='kx_shift')
+    endif   ! MR end
 
-        !Get variable id
-        istatus = nf90_inq_varid (ncid, "phi_i", phii_id)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='phi_i')
-    END IF
-
-    !If finite parallel magnetic potential read in apar
-    IF (fapar > epsilon(0.)) THEN
-        !Get variable id
-        istatus = nf90_inq_varid (ncid, "apar_r", aparr_id)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='apar_r')
-
-        !Get variable id
-        istatus = nf90_inq_varid (ncid, "apar_i", apari_id)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='apar_i')
-    END IF
-
-    !If finite perpendicular magnetic potential read in bpar
-    IF (fbpar > epsilon(0.)) THEN
-        !Get variable id
-        istatus = nf90_inq_varid (ncid, "bpar_r", bparr_id)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='bpar_r')
-
-        !Get variable id
-        istatus = nf90_inq_varid (ncid, "bpar_i", bpari_id)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='bpar_i')
-    END IF
-
-    !Get kx_shift id if kx_shift allocated (i.e. if this is a flow shear run)
-    IF (allocated(kx_shift)) THEN   ! MR begin
-        !Get variable id
-        istatus = nf90_inq_varid (ncid, "kx_shift", kx_shift_id)
-
-        !Check id obtained successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='kx_shift')
-    END IF   ! MR end
-
-    !Get variable id
     istatus = nf90_inq_varid (ncid, "gr", gr_id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='gr')
 
-    !Check id obtained successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='gr')
-
-    !Get variable id
     istatus = nf90_inq_varid (ncid, "gi", gi_id)
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='gi')
 
-    !Check id obtained successfully
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='gi')
-
-    !Define number of elements
     n_elements = g_lo%ulim_proc - g_lo%llim_proc + 1
 
-    !If number of elements not > 0 then processor has nothing to read
-    !so exit subroutine
-    IF (n_elements <= 0) THEN
-        phinew = 0.
-        aparnew = 0.
-        bparnew = 0.
-        RETURN
-    END IF
+    if (n_elements <= 0) then
+       phinew = 0.
+       aparnew = 0.
+       bparnew = 0.
+       return
+    endif
 
-    !###################
-    !#Read in variables#
-    !###################
+    if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1, 2, n_elements))    
+    if (.not. allocated(tmpi)) allocate (tmpi(2*ntgrid+1, 2, n_elements))
 
-    !Allocate temporary arrays to hold dist fn data
-    IF (.not. ALLOCATED(tmpr)) ALLOCATE (tmpr(2*ntgrid+1, 2, n_elements))
-    IF (.not. ALLOCATED(tmpi)) ALLOCATE (tmpi(2*ntgrid+1, 2, n_elements))
-
-    !Intitialise temporary arrays to 0
     tmpr = 0.;  tmpi = 0.
-
-    !Get real component of distfn
     istatus = nf90_get_var (ncid, gr_id, tmpr, &
-        start=(/ 1, 1, g_lo%llim_proc /), &
-        count=(/ 2*ntgrid + 1, 2, n_elements /))
-
-    !Check read was successful
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, gr_id)
-
-    !Get imaginary component of distfn
+         start=(/ 1, 1, g_lo%llim_proc /), &
+         count=(/ 2*ntgrid + 1, 2, n_elements /))
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gr_id)
+    
     istatus = nf90_get_var (ncid, gi_id, tmpi, &
-        start=(/ 1, 1, g_lo%llim_proc /), &
-        count=(/ 2*ntgrid + 1, 2, n_elements /))
+         start=(/ 1, 1, g_lo%llim_proc /), &
+         count=(/ 2*ntgrid + 1, 2, n_elements /))
+    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gi_id)
 
-    !Check read was successful
-    IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, gi_id)
+    g = cmplx(tmpr, tmpi)*scale
 
-    !Recombine components to form complex distribution function
-    g = CMPLX(tmpr, tmpi)*scale
+    if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
+    if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))
 
-    !Read in kx_shift if this is allocated
-    IF (allocated(kx_shift)) THEN   ! MR begin
-        !Allocate temporary array if needed
-        IF (.not. ALLOCATED(stmp)) ALLOCATE (stmp(naky))   ! MR
+    if (allocated(kx_shift)) then   ! MR begin
+       if (.not. allocated(stmp)) allocate (stmp(naky))   ! MR
+       istatus = nf90_get_var (ncid, kx_shift_id, stmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kx_shift_id)
+       kx_shift = stmp
+    endif   ! MR end
 
-        !Read in kx_shift
-        istatus = nf90_get_var (ncid, kx_shift_id, stmp)
 
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, kx_shift_id)
+    if (fphi > epsilon(0.)) then
+       istatus = nf90_get_var (ncid, phir_id, ftmpr)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, phir_id)
+       
+       istatus = nf90_get_var (ncid, phii_id, ftmpi)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, phii_id)
+       
+       phi = 0.
+       phinew = cmplx(ftmpr, ftmpi)*scale
+    end if
 
-        !Update kx_shift variable with data from file
-        kx_shift = stmp
-    END IF   ! MR end
+    if (fapar > epsilon(0.)) then
+       istatus = nf90_get_var (ncid, aparr_id, ftmpr)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, aparr_id)
+       
+       istatus = nf90_get_var (ncid, apari_id, ftmpi)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, apari_id)
+       
+       apar = 0.
+       aparnew = cmplx(ftmpr, ftmpi)*scale
+    end if
 
-    !Allocate temporary arrays to hold field data
-    IF (.not. ALLOCATED(ftmpr)) ALLOCATE (ftmpr(2*ntgrid+1,ntheta0,naky))
-    IF (.not. ALLOCATED(ftmpi)) ALLOCATE (ftmpi(2*ntgrid+1,ntheta0,naky))
-
-    !If finite electrostatic potential read in phi
-    IF (fphi > epsilon(0.)) THEN
-        !Read in real component of phi
-        istatus = nf90_get_var (ncid, phir_id, ftmpr)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, phir_id)
-
-        !Read in imaginary component of phi
-        istatus = nf90_get_var (ncid, phii_id, ftmpi)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, phii_id)
-
-        !Initialise phi
-        phi = 0.
-
-        !Recombine components to create complex phi
-        phinew = CMPLX(ftmpr, ftmpi)*scale
-    END IF
-
-    !If finite parallel magnetic potential read in apar
-    IF (fapar > epsilon(0.)) THEN
-        !Read in real component of bpar
-        istatus = nf90_get_var (ncid, aparr_id, ftmpr)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, aparr_id)
-
-        !Read in imaginary component of apar
-        istatus = nf90_get_var (ncid, apari_id, ftmpi)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, apari_id)
-
-        !Initialise apar
-        apar = 0.
-
-        !Recombine components to create complex apar
-        aparnew = CMPLX(ftmpr, ftmpi)*scale
-    END IF
-
-    !If finite perpendicular magnetic potential read in bpar
-    IF (fbpar > epsilon(0.)) THEN
-        !Read in real component of bpar
-        istatus = nf90_get_var (ncid, bparr_id, ftmpr)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, bparr_id)
-
-        !Read in imaginary component of bpar
-        istatus = nf90_get_var (ncid, bpari_id, ftmpi)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, bpari_id)
-
-        !Initialise bpar
-        bpar = 0.
-
-        !Recombine components to form complex bpar
-        bparnew = CMPLX(ftmpr, ftmpi)*scale
-    END IF
-
-    !######################
-    !#Final file functions#
-    !######################
+    if (fbpar > epsilon(0.)) then
+       istatus = nf90_get_var (ncid, bparr_id, ftmpr)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, bparr_id)
+       
+       istatus = nf90_get_var (ncid, bpari_id, ftmpi)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, bpari_id)
+       
+       bpar = 0.
+       bparnew = cmplx(ftmpr, ftmpi)*scale
+    end if
 
     ! RN 2008/05/23: this was commented out. why?
-    !Close file
-!    istatus = nf90_close (ncid)
-
-    !Check close was successful
-    IF (istatus /= NF90_NOERR) THEN
-        ierr = error_unit()
-        WRITE(ierr,*) "nf90_close error: ", nf90_strerror(istatus),' ',iproc
-    END IF
+!    istatus = nf90_close (ncid)       
+    if (istatus /= NF90_NOERR) then
+       ierr = error_unit()
+       write(ierr,*) "nf90_close error: ", nf90_strerror(istatus),' ',iproc
+    end if
 
 # else
-    !Warning message to display if try to call subroutine without netcdf libraries
-    WRITE (error_unit(),*) &
-        'ERROR: gs2_restore_one is called without netcdf'
+
+    write (error_unit(),*) &
+         'ERROR: gs2_restore_one is called without netcdf'
+
 # endif
-!----------------------------------------------------------------------------------------------
 
-END SUBROUTINE gs2_restore_one
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  end subroutine gs2_restore_one
 
-
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-SUBROUTINE init_save (file)
-!INIT_SAVE(gs2_save): Subroutine to set the restart_file variable used
-!to define the output files prefix
-
-!==============================================================================================
-!VARIABLE DECLARATIONS
-!==============================================================================================
-    !Interface variables
-    CHARACTER(300), INTENT (IN) :: file
-!----------------------------------------------------------------------------------------------
-
-!==============================================================================================
-!WORK SECTION
-!==============================================================================================
-
-    !Update internal variable with passed arguement
+  subroutine init_save (file)
+    character(300), intent (in) :: file
+    
     restart_file = file
-!----------------------------------------------------------------------------------------------
 
-END SUBROUTINE init_save
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  end subroutine init_save
 
-
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-SUBROUTINE init_dt (delt0, istatus)
-!INIT_DT(gs2_save.fpp): Subroutine to read in the time step
-!from a restart file. Runs on proc0 only and then broadcasts
-!result to all other procs
-!==============================================================================================
-!MODULE IMPORTS
-!==============================================================================================
-# ifdef NETCDF
-    USE mp, ONLY: nproc, proc0, broadcast
-    USE file_utils, ONLY: error_unit
-# endif
-!----------------------------------------------------------------------------------------------
-
-!==============================================================================================
-!VARIABLE DECLARATIONS
-!==============================================================================================
-    !No implicits
-    IMPLICIT NONE
-
-    !Interface variables
-    REAL, INTENT (IN OUT) :: delt0
-    INTEGER, INTENT (OUT) :: istatus
+  subroutine init_dt (delt0, istatus)
 
 # ifdef NETCDF
-    !Internal variables
-    CHARACTER (306) :: file_proc
-!----------------------------------------------------------------------------------------------
-
-!==============================================================================================
-!WORK SECTION
-!==============================================================================================
-    !If on master processor perform below else don't do anything
-    IF (proc0) THEN
-        !If file not initialised
-        IF (.not. initialized) THEN
-
-            !Define restart file name (for proc0)
-            file_proc=TRIM(TRIM(restart_file)//'.0')
-
-            !Open restart file
-            istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
-
-            !Check open was successful
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus,file=file_proc)
-
-            !Get id for variable 'delt0'
-            istatus = nf90_inq_varid (ncid, "delt0", delt0id)
-
-            !Check id retrieved successfully
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='delt0')
-        END IF
-
-        !Read in variable delt0
-        istatus = nf90_get_var (ncid, delt0id, delt0)
-
-        !Check delt0 was successfully read
-        IF (istatus /= NF90_NOERR) THEN
-            CALL netcdf_error (istatus, ncid, delt0id, message=' in init_dt')
-            delt0 = -1.
-        END IF
-
-        !If file not initialised (i.e. if first section was performed) close file (assume there is no error so far)
-        IF (.not.initialized) istatus = nf90_close (ncid)
-    END IF
-
-    !Send error status to all procs
-    CALL broadcast (istatus)
-
-    !Send delt0 to all procs
-    CALL broadcast (delt0)
-
+    use mp, only: nproc, proc0, broadcast
+    use file_utils, only: error_unit
 # endif
-!----------------------------------------------------------------------------------------------
-
-END SUBROUTINE init_dt
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-SUBROUTINE init_vnm (vnm, istatus)
-!INIT_VNM(gs2_save.fpp): Subroutine to read in vnm[1|2]
-!from a restart file. Runs on proc0 only and then broadcasts
-!result to all other procs
-!==============================================================================================
-!MODULE IMPORTS
-!==============================================================================================
+    implicit none
+    real, intent (in out) :: delt0
+    integer, intent (out) :: istatus
 # ifdef NETCDF
-    USE mp, ONLY: nproc, proc0, broadcast
-    USE file_utils, ONLY: error_unit
+    character (306) :: file_proc
+
+    if (proc0) then
+
+       if (.not. initialized) then
+
+          file_proc=trim(trim(restart_file)//'.0')
+
+          istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus,file=file_proc)
+
+          istatus = nf90_inq_varid (ncid, "delt0", delt0id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='delt0')
+       end if
+
+       istatus = nf90_get_var (ncid, delt0id, delt0)
+
+       if (istatus /= NF90_NOERR) then
+          call netcdf_error (istatus, ncid, delt0id, message=' in init_dt')
+          delt0 = -1.
+       endif           
+
+       if (.not.initialized) istatus = nf90_close (ncid)
+    endif
+
+    call broadcast (istatus)
+    call broadcast (delt0)
+
 # endif
-!----------------------------------------------------------------------------------------------
 
-!==============================================================================================
-!VARIABLE DECLARATIONS
-!==============================================================================================
-    !No implicits
-    IMPLICIT NONE
+  end subroutine init_dt
 
-    !Interface variables
-    REAL, DIMENSION(2), INTENT (IN OUT) :: vnm
-    INTEGER, INTENT (OUT) :: istatus
+  subroutine init_vnm (vnm, istatus)
 
 # ifdef NETCDF
-    !Internal variables
-    CHARACTER (306) :: file_proc
-!----------------------------------------------------------------------------------------------
+    use mp, only: nproc, proc0, broadcast
+    use file_utils, only: error_unit
+# endif
+    implicit none
+    real, dimension(2), intent (in out) :: vnm
+    integer, intent (out) :: istatus
+# ifdef NETCDF
+    character (306) :: file_proc
 
-!==============================================================================================
-!WORK SECTION
-!==============================================================================================
-    !If on master processor perform below else don't do anything
-    IF (proc0) THEN
-        !If file not initialised
-        IF (.not.initialized) THEN
-            !Define restart file name (for proc0)
-            file_proc=TRIM(TRIM(restart_file)//'.0')
+    if (proc0) then
+       if (.not.initialized) then
 
-            !Open restart file
-            istatus = nf90_open (file_proc, 0, ncid)
+          file_proc=trim(trim(restart_file)//'.0')
 
-            !Check open was successful
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, file=file_proc)
+          istatus = nf90_open (file_proc, 0, ncid)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=file_proc)
 
-            !Get id for variable 'vnm1'
-            istatus = nf90_inq_varid (ncid, "vnm1", vnm1id)
+          istatus = nf90_inq_varid (ncid, "vnm1", vnm1id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='vnm1')
 
-            !Check id retrieved successfully
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='vnm1')
+          istatus = nf90_inq_varid (ncid, "vnm2", vnm2id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='vnm2')
+       end if
 
-            !Get id for variable 'vnm2'
-            istatus = nf90_inq_varid (ncid, "vnm2", vnm2id)
+       istatus = nf90_get_var (ncid, vnm1id, vnm(1))
 
-            !Check id retrieved successfully
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='vnm2')
-        END IF
+       if (istatus /= NF90_NOERR) then
+          call netcdf_error (istatus, ncid, vnm1id, message=' in init_vnm')
+          vnm(1) = 0.
+       endif           
 
-        !Read in variable vnm1
-        istatus = nf90_get_var (ncid, vnm1id, vnm(1))
+       istatus = nf90_get_var (ncid, vnm2id, vnm(2))
 
-        !Check vnm1 was successfully read
-        IF (istatus /= NF90_NOERR) THEN
-            CALL netcdf_error (istatus, ncid, vnm1id, message=' in init_vnm')
-            vnm(1) = 0.
-        END IF
+       if (istatus /= NF90_NOERR) then
+          call netcdf_error (istatus, ncid, vnm2id, message=' in init_vnm')
+          vnm(2) = 0.
+       endif           
 
-        !Read in variable vnm2
-        istatus = nf90_get_var (ncid, vnm2id, vnm(2))
+       if (.not. initialized) istatus = nf90_close (ncid)
+    endif
 
-        !Check vnm2 was successfully read
-        IF (istatus /= NF90_NOERR) THEN
-            CALL netcdf_error (istatus, ncid, vnm2id, message=' in init_vnm')
-            vnm(2) = 0.
-        END IF
-
-        !If file not initialised (i.e. if first section was performed) close file (assume there is no error so far)
-        IF (.not. initialized) istatus = nf90_close (ncid)
-    END IF
-
-    !Send error status to all procs
-    CALL broadcast (istatus)
-
-    !Send delt0 to all procs
-    CALL broadcast (vnm)
+    call broadcast (istatus)
+    call broadcast (vnm)
 
 # endif
-!----------------------------------------------------------------------------------------------
 
-END SUBROUTINE init_vnm
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  end subroutine init_vnm
 
 ! This routine gets a_ant and b_ant for proc 0 only!!
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-SUBROUTINE init_ant_amp (a_ant, b_ant, nk_stir, istatus)
-!INIT_ANT_AMP(gs2_save.fpp): Subroutine to read in the antenna
-!setting from a restart file. Runs on proc0 only and then
-!broadcasts result to all other procs
-!==============================================================================================
-!MODULE IMPORTS
-!==============================================================================================
+  subroutine init_ant_amp (a_ant, b_ant, nk_stir, istatus)
+
 # ifdef NETCDF
-    USE file_utils, ONLY: error_unit
-    USE constants, ONLY: zi
+    use file_utils, only: error_unit
+    use constants, only: zi
 # endif
-    USE mp, ONLY: proc0
-!----------------------------------------------------------------------------------------------
-
-!==============================================================================================
-!VARIABLE DECLARATIONS
-!==============================================================================================
-    !No implicits
-    IMPLICIT NONE
-
-    !Interface variables
-    COMPLEX, DIMENSION(:), INTENT (IN OUT) :: a_ant, b_ant
-    INTEGER, INTENT (IN) :: nk_stir
-    INTEGER, INTENT (OUT) :: istatus
-
+    use mp, only: proc0
+    implicit none
+    complex, dimension(:), intent (in out) :: a_ant, b_ant
+    integer, intent (in) :: nk_stir
+    integer, intent (out) :: istatus
 # ifdef NETCDF
-    !Internal variables
-    CHARACTER (306) :: file_proc
-    INTEGER :: ierr, i
-!----------------------------------------------------------------------------------------------
+    character (306) :: file_proc
+    integer :: ierr, i
 
-!==============================================================================================
-!WORK SECTION
-!==============================================================================================
-    !If on master processor perform below else don't do anything
-    IF (proc0) THEN
-        !Initialise a_and and b_ant
-        a_ant = 0. ; b_ant = 0.
+    if (proc0) then
+       a_ant = 0. ; b_ant = 0.
 
-        !Define restart file name (for proc0)
-        file_proc=TRIM(TRIM(restart_file)//'.0')
+       file_proc=trim(trim(restart_file)//'.0')
+       
+       istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
+       if (istatus /= NF90_NOERR) then
+          ierr = error_unit()
+          write(ierr,*) "nf90_open in init_ant_amp error: ", nf90_strerror(istatus) 
+          write(ierr,*) "If you did not intend for this to be a restarted run with an external antenna,"
+          write(ierr,*) "you may ignore the error message above."
+          return
+       endif
 
-        !Open restart file
-        istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
+       istatus = nf90_inq_dimid (ncid, "nk_stir", nk_stir_dim)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='nk_stir')
 
-        !Check open was successful
-        IF (istatus /= NF90_NOERR) THEN
-            ierr = error_unit()
-            WRITE(ierr,*) "nf90_open in init_ant_amp error: ", nf90_strerror(istatus)
-            WRITE(ierr,*) "If you did not intend for this to be a restarted run with an external antenna,"
-            WRITE(ierr,*) "you may ignore the error message above."
-            RETURN
-        END IF
+       istatus = nf90_inquire_dimension (ncid, nk_stir_dim, len=i)
+       if (istatus /= NF90_NOERR) &
+            call netcdf_error (istatus, ncid, dimid=nk_stir_dim)
+       if (i /= nk_stir) write(*,*) 'Restart error: nk_stir=? ',i,' : ',nk_stir
 
-        !Get id for dimension 'nk_stir'
-        istatus = nf90_inq_dimid (ncid, "nk_stir", nk_stir_dim)
+       istatus = nf90_inq_varid (ncid, "a_ant_r", a_antr_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='a_ant_r')
 
-        !Check id retrieved successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, dim='nk_stir')
+       istatus = nf90_inq_varid (ncid, "a_ant_i", a_anti_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='a_ant_i')
 
-        !Get information about dimension
-        istatus = nf90_inquire_dimension (ncid, nk_stir_dim, len=i)
+       istatus = nf90_inq_varid (ncid, "b_ant_r", b_antr_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='b_ant_r')
 
-        !Check information retrieved successfully
-        IF (istatus /= NF90_NOERR) &
-            CALL netcdf_error (istatus, ncid, dimid=nk_stir_dim)
+       istatus = nf90_inq_varid (ncid, "b_ant_i", b_anti_id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='b_ant_i')
 
-        !Perform a consistency check
-        IF (i /= nk_stir) WRITE(*,*) 'Restart error: nk_stir=? ',i,' : ',nk_stir
+       if (.not. allocated(atmp)) allocate (atmp(nk_stir))
+       atmp = 0.
 
-        !Get id for variable 'a_ant_r'
-        istatus = nf90_inq_varid (ncid, "a_ant_r", a_antr_id)
+       istatus = nf90_get_var (ncid, a_antr_id, atmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, a_antr_id)
+       a_ant = atmp
 
-        !Check id retrieved successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='a_ant_r')
+       istatus = nf90_get_var (ncid, a_anti_id, atmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, a_anti_id)
+       a_ant = a_ant + zi * atmp
 
-        !Get id for variable 'a_ant_i'
-        istatus = nf90_inq_varid (ncid, "a_ant_i", a_anti_id)
+       istatus = nf90_get_var (ncid, b_antr_id, atmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, b_antr_id)
+       b_ant = atmp
 
-        !Check id retrieved successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='a_ant_i')
+       istatus = nf90_get_var (ncid, b_anti_id, atmp)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, b_anti_id)
+       b_ant = b_ant + zi * atmp
 
-        !Get id for variable 'b_ant_r'
-        istatus = nf90_inq_varid (ncid, "b_ant_r", b_antr_id)
-
-        !Check id retrieved successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='b_ant_r')
-
-        !Get id for variable 'b_ant_i'
-        istatus = nf90_inq_varid (ncid, "b_ant_i", b_anti_id)
-
-        !Check id retrieved successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='b_ant_i')
-
-        !If temporary array not allocated allocate it
-        IF (.not. ALLOCATED(atmp)) ALLOCATE (atmp(nk_stir))
-
-        !Initialise temporary array
-        atmp = 0.
-
-        !Read variable into atmp
-        istatus = nf90_get_var (ncid, a_antr_id, atmp)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, a_antr_id)
-
-        !Put real component into array
-        a_ant = atmp
-
-        !Read variable into atmp
-        istatus = nf90_get_var (ncid, a_anti_id, atmp)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, a_anti_id)
-
-        !Update array with complex component
-        a_ant = a_ant + zi * atmp
-
-        !Read variable into atmp
-        istatus = nf90_get_var (ncid, b_antr_id, atmp)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, b_antr_id)
-
-        !Put real component into array
-        b_ant = atmp
-
-        !Read variable into atmp
-        istatus = nf90_get_var (ncid, b_anti_id, atmp)
-
-        !Check read was successful
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, b_anti_id)
-
-        !Update array with complex component
-        b_ant = b_ant + zi * atmp
-
-        !Deallocate temp array
-        DEALLOCATE (atmp)
-
-        !Close restart file (assume there are no errors)
-        istatus = nf90_close (ncid)
-
-    END IF
+       deallocate (atmp)
+       istatus = nf90_close (ncid)       
+    endif
 
 # else
-    !If no netcdf set error status to 2 (on proc0 only)
-    IF (proc0) istatus = 2
+
+    if (proc0) istatus = 2
 
 # endif
-!----------------------------------------------------------------------------------------------
 
-END SUBROUTINE init_ant_amp
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+  end subroutine init_ant_amp
 
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-SUBROUTINE init_tstart (tstart, istatus)
-!INIT_TSTART(gs2_save.fpp): Subroutine to read in t0, the current
-!simulation time, from a restart file. Runs on proc0 only and
-!then broadcasts result to all other procs
-!==============================================================================================
-!MODULE IMPORTS
-!==============================================================================================
-# ifdef NETCDF
-    USE mp, ONLY: nproc, proc0, broadcast
-    USE file_utils, ONLY: error_unit
-# endif
-!----------------------------------------------------------------------------------------------
-
-!==============================================================================================
-!VARIABLE DEFINITIONS
-!==============================================================================================
-    !No implicits
-    IMPLICIT NONE
-
-    !Interface variables
-    REAL, INTENT (IN OUT) :: tstart
-    INTEGER, INTENT (OUT) :: istatus
+  subroutine init_tstart (tstart, istatus)
 
 # ifdef NETCDF
-    !Internal variables
-    CHARACTER (306) :: file_proc
-    INTEGER :: ierr
-!----------------------------------------------------------------------------------------------
+    use mp, only: nproc, proc0, broadcast
+    use file_utils, only: error_unit
+# endif
+    implicit none
+    real, intent (in out) :: tstart
+    integer, intent (out) :: istatus
+# ifdef NETCDF
+    character (306) :: file_proc
+    integer :: ierr
 
-!==============================================================================================
-!WORK SECTION
-!==============================================================================================
-    !If on master processor perform below else don't do anything
-    IF (proc0) THEN
-        !If file not initialised
-        IF (.not.initialized) THEN
-            !Define restart file name (for proc0)
-            file_proc=TRIM(TRIM(restart_file)//'.0')
+    if (proc0) then
+       
+       if (.not.initialized) then
 
-            !Open restart file
-            istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
+          file_proc=trim(trim(restart_file)//'.0')
 
-            !Check open was successful
-            IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, file=file_proc)
-        END IF
+          istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=file_proc)
+       end if
 
-        !Get id for variable 't0'
-        istatus = nf90_inq_varid (ncid, "t0", t0id)
+       istatus = nf90_inq_varid (ncid, "t0", t0id)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='t0')
 
-        !Check id retrieved successfully
-        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, var='t0')
+       istatus = nf90_get_var (ncid, t0id, tstart)
+       if (istatus /= NF90_NOERR) then
+          call netcdf_error (istatus, ncid, t0id, message=' in init_tstart')
+          tstart = -1.
+       end if           
+       if (.not.initialized) istatus = nf90_close (ncid)
+    endif
 
-        !Read in variable t0
-        istatus = nf90_get_var (ncid, t0id, tstart)
-
-        !Check variable successfully read
-        IF (istatus /= NF90_NOERR) THEN
-            CALL netcdf_error (istatus, ncid, t0id, message=' in init_tstart')
-            tstart = -1.
-        END IF
-
-        !If file not initialised (i.e. if first section was performed) close file (assume there is no error so far)
-        IF (.not.initialized) istatus = nf90_close (ncid)
-    END IF
-
-    !Broadcast istatus to all procs
-    CALL broadcast (istatus)
-
-    !Broadcast tstart to all procs
-    CALL broadcast (tstart)
+    call broadcast (istatus)
+    call broadcast (tstart)
 
 # endif
-!----------------------------------------------------------------------------------------------
 
-END SUBROUTINE init_tstart
-!@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
+  end subroutine init_tstart
 !!$
 !!$# ifdef NETCDF
 !!$  function get_netcdf_code_precision () result (code_real)
@@ -2707,5 +1920,4 @@ SUBROUTINE gs2_save_distfn &
 
 END SUBROUTINE gs2_save_distfn
 !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-END MODULE gs2_save
+end module gs2_save
