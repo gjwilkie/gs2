@@ -51,7 +51,7 @@ module gs2_diagnostics
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
-         save_for_restart, write_parity
+         save_for_restart, write_parity, &
          !<DD 27-08-2010> Added save_distfn switch
          save_distfn
          !</DD>
@@ -209,7 +209,7 @@ contains
     call broadcast (dump_final_xfields)
     call broadcast (use_shmem_for_xfields)
     call broadcast (save_for_restart)
-    !<DD 27-08-2010> Send setting to all procs
+    !<DD 27-08-2010>
     call broadcast (save_distfn)
     !</DD>
     call broadcast (write_gs)
@@ -572,10 +572,11 @@ contains
     use dist_fn, only: e_flux
     use dist_fn, only: write_f, write_fyx
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
-    !<DD 03-09-2010> Added use of convert_g_to_dfn from distfn for use
+    !<DD 03-09-2010> Added use of g_adjust from distfn for use
     !with gs2_save_distfn
-    USE dist_fn, ONLY: convert_g_to_dfn
+    USE dist_fn, ONLY: g_adjust
     !</DD>
+     
     use collisions, only: vnmult
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
@@ -1040,25 +1041,24 @@ contains
        call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
             fphi, fapar, fbpar, .true.)
     end if
-
+    
     !<DD 27-08-2010> Added call to save distfn if set
     !<DD 03-09-2010> Added initial call to convert_g_to_dfn(dist_fn.f90)
     !to get actual distribution function first and second call to undo
     !change after save
     IF (save_distfn) THEN
     	!Convert h to distribution function
-    	CALL convert_g_to_dfn(1)
+    	CALL g_adjust(gnew,phinew,bparnew,fphi,fbpar)
     	
     	!Save dfn, fields and velocity grids to file
        	CALL gs2_save_distfn (gnew, user_time, user_dt, vnmult, istatus, &
           	fphi, fapar, fbpar, .true.)
     	
         !Convert distribution function back to h
-        CALL convert_g_to_dfn(-1)
+        CALL g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
     END IF
     !</DD>
     !</DD>
-
     call nc_finish
 
     if (proc0) call dump_ant_amp
