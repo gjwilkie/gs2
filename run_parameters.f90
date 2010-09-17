@@ -231,11 +231,21 @@ contains
     use mp, only: proc0
     use kt_grids, only: aky
     implicit none
-
+!CMR: Sep 2010
+! Attempt to understand time normalisation variables, which are arrays(naky)
+!    TUNITS: DT(KY)=TUNITS(KY).CODE_DT
+!            This is a generally very useful variable to store ky dependent 
+!            timestep in the code time normalisation.
+!            Used to multiply ky indeoendent source terms on RHS of GKE.
+!    WUNITS: WUNITS(KY)=AKY(KY)*TUNITS(KY)/2
+!            Auxiliary variable.  Used to save compute operations when 
+!            evaluating source terms on RHS of GKE that are proportional to ky.
+!            (why need factor 1/2?)
+!    WOUTUNITS: convert output frequencies to appear in USER v_t normalisation
+!    FUNITS: convert output fluxes to appear in USER v_t normalisation        
+!CMRend
     if (wstar_units) then
-       funits = 1.0
        wunits = 1.0
-       woutunits = aky/sqrt(2.0)
        where (aky /= 0.0)
           tunits = 2.0/aky
        elsewhere
@@ -247,13 +257,16 @@ contains
           print *, &
                "WARNING: wstar_units=.true. and aky=0.0: garbage results"
        end if
+!CMR: Sep 2010
+!  Changes to allow wstar_units to be used consistently with either 
+!  v_t normalisation option.   (Wasn't quite right before)
+!CMRend
     else
        tunits = 1.0
        wunits = aky/2.0
-       funits = tnorm
-       woutunits = tnorm
     end if
-
+    funits = tnorm
+    woutunits = tnorm/tunits
   end subroutine adjust_time_norm
 
   subroutine finish_run_parameters

@@ -1354,7 +1354,7 @@ contains
     use theta_grid, only: gradpar, nperiod
     use kt_grids, only: naky, ntheta0, aky_out, theta0, akx_out, aky, akx
     use kt_grids, only: nkpolar !, akpolar, akpolar_out
-    use run_parameters, only: woutunits, funits, fapar, fphi, fbpar
+    use run_parameters, only: woutunits, funits, tunits, fapar, fphi, fbpar
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
@@ -2143,10 +2143,10 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 !                     aimag(omega(it,ik)*woutunits(ik))
                 if (write_omega) write (out_unit,&
                          fmt='(" omega= (",1pe12.4,",",1pe12.4,")",t45,"omega/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
-                     omega(it,ik), omega(it,ik)*woutunits(ik)
+                     omega(it,ik)/tunits(ik), omega(it,ik)*woutunits(ik)
                 if (write_omavg) write (out_unit,&
                          fmt='(" omavg= (",1pe12.4,",",1pe12.4,")",t45,"omavg/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
-                         omegaavg(it,ik), omegaavg(it,ik)*woutunits(ik)
+                         omegaavg(it,ik)/tunits(ik), omegaavg(it,ik)*woutunits(ik)
 !                if (write_omavg) write (out_unit, *) &
 !                     'omavg=', omegaavg(it,ik), &
 !                     ' omavg/(vt/a)=', real(omegaavg(it,ik)*woutunits(ik)), &
