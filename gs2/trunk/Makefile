@@ -17,6 +17,7 @@ PROJECT ?= gs2
 #  LAST UPDATE: 10/12/09
 #
 # * Changelogs
+# 26/09/10: added targets doc_depend and doc to make doxygen documentation. EGH.
 #	12/17/09: make it explicit that the codes are written in
 #		  Fortran 95 Standard
 #	10/12/09: share the Makefile with gsp gyrokinetic PIC code
@@ -370,6 +371,7 @@ endif
 all: $(.DEFAULT_GOAL)
 
 include $(DEPEND)
+include Makefile.doc_depend
 
 ifdef USE_C_INDEX
 astrogk_mod += layouts_indices.o
@@ -409,6 +411,18 @@ layouts_type.h: layouts_type.f90
 
 depend:
 	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=0 $(VPATH)
+
+#doc_depend:
+	#echo "documentation_depend = \\" > Makefile.doc_depend
+	#find | grep .fpp$$ | sed s/\.fpp/\.f90\ \\\\/ | sed s/\.\\//\\t/ >> Makefile.doc_depend
+#
+doc: $(F90FROMFPP)
+	doxygen ../doxygen/gs2 
+	-rm -f $(F90FROMFPP)
+
+sync_doc: 
+	rsync -av --delete ../doxygen/doc/html/	${USER},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/
+
 
 clean:
 	-rm -f *.o *.mod *.g90 *.h core */core
