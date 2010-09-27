@@ -51,7 +51,9 @@ module gs2_diagnostics
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
-         save_for_restart, write_parity
+         save_for_restart, write_parity, &
+         write_phi_over_time, write_apar_over_time, write_bpar_over_time
+
 ! Why are these variables public?  This is not good.
   real,public :: omegatol, omegatinst
   logical,public :: print_line, print_old_units, print_flux_line
@@ -82,6 +84,7 @@ module gs2_diagnostics
   integer,public :: navg, nsave
   integer,public :: nperiod_output
 
+  logical,public :: write_phi_over_time, write_apar_over_time, write_bpar_over_time !EGH
 !>GGH
   logical, parameter :: write_density_velocity=.false.
   logical :: write_jext=.false.
@@ -148,10 +151,8 @@ module gs2_diagnostics
   complex :: wtmp_old = 0.
 
 contains
-
+  !> Define NetCDF vars, call real_init, which calls read_parameters; broadcast all the different write flags. 
   subroutine init_gs2_diagnostics (list, nstep)
-   !<doc> Define NetCDF vars, call real_init, which calls read_parameters; broadcast all the different write flags. </doc>
-
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids, ntheta0, naky
     use run_parameters, only: init_run_parameters
@@ -227,6 +228,9 @@ contains
     call broadcast (write_eigenfunc)
 
     call broadcast (write_full_moments_notgc)
+    call broadcast (write_phi_over_time)
+    call broadcast (write_apar_over_time)
+    call broadcast (write_bpar_over_time)
 
     nmovie_tot = nstep/nmovie
 
@@ -273,7 +277,8 @@ contains
     call init_gs2_io (write_nl_flux, write_omega, write_stress, &
          write_fieldline_avg_phi, write_hrate, write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot, write_verr, &
-         write_fields, write_full_moments_notgc)
+         write_fields, write_full_moments_notgc, & 
+         write_phi_over_time, write_apar_over_time, write_bpar_over_time)
     
     if (write_cerr) then
        if (collision_model_switch == 1 .or. collision_model_switch == 5) then
@@ -304,7 +309,6 @@ contains
 
     !<doc> Call read_parameters </doc>
     call read_parameters (list)
-
     !<doc> Open the various ascii output files (depending on the write flags) </doc>
     if (proc0) then
        if (write_ascii) then
@@ -429,9 +433,9 @@ contains
     integer :: in_file
     logical, intent (in) :: list
     logical :: exist
-
     !<doc> Set defaults for the gs2_diagnostics_knobs</doc>		
     if (proc0) then
+	!<wkdoc> Set defaults for the gs2_diagnostics_knobs</wkdoc>		
        print_line = .true.
        print_old_units = .false.
        print_flux_line = .false.
@@ -497,10 +501,12 @@ contains
        use_shmem_for_xfields = .true.
        nperiod_output = nperiod - nperiod_guard
        save_for_restart = .false.
+       write_phi_over_time = .false.
+       write_bpar_over_time = .false.
+       write_apar_over_time = .false.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
 
 	!<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
-
 !       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
        if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
 
