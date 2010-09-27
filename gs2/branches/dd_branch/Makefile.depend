@@ -461,8 +461,10 @@ gs2_save.o: \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 layouts_type.o \
+	 le_grids.o \
 	 mp.o \
 	 netcdf_utils.o \
+	 species.o \
 	 theta_grid.o 
 gs2_save_hdf5.o: \
 	 fields_arrays.o \
