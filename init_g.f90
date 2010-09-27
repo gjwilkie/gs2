@@ -135,6 +135,9 @@ contains
     call broadcast (input_check_recon)
     call broadcast (nkxy_pt)
     call broadcast (ukxy_pt)
+    
+    call broadcast (ikpar_init)
+    call broadcast (kpar_init)
     ! <RN
     call init_save (restart_file)
 
