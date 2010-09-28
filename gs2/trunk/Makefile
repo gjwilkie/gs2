@@ -371,7 +371,7 @@ endif
 all: $(.DEFAULT_GOAL)
 
 include $(DEPEND)
-include Makefile.doc_depend
+#include Makefile.doc_depend
 
 ifdef USE_C_INDEX
 astrogk_mod += layouts_indices.o

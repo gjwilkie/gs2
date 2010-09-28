@@ -99,23 +99,20 @@ module kt_grids_range
 
   private
 
-  integer :: naky_private, ntheta0_private
+  integer :: naky, ntheta0
   real :: aky_min, aky_max, theta0_min, theta0_max
-!CMR: 
-!add akx_min,max for periodic finite kx ballooning space runs with shat=0
-!CMRend
+!CMR: add akx_min,max for periodic finite kx ballooning space runs with shat=0
   real :: akx_min, akx_max
+    namelist /kt_grids_range_parameters/ naky, ntheta0, &
+         aky_min, aky_max, theta0_min, theta0_max, akx_min, akx_max
 
 contains
 
   subroutine init_kt_grids_range
     use file_utils, only: input_unit, input_unit_exist
     implicit none
-    integer :: naky, ntheta0
     integer :: in_file
     logical :: exist
-    namelist /kt_grids_range_parameters/ naky, ntheta0, &
-         aky_min, aky_max, theta0_min, theta0_max, akx_min, akx_max
 
     naky = 1
     ntheta0 = 1
@@ -128,15 +125,11 @@ contains
     in_file = input_unit_exist ("kt_grids_range_parameters", exist)
     if (exist) read (unit=input_unit("kt_grids_range_parameters"), &
          nml=kt_grids_range_parameters)
-    naky_private = naky
-    ntheta0_private = ntheta0
   end subroutine init_kt_grids_range
 
   subroutine wnml_kt_grids_range(unit)
    implicit none
-   integer:: unit, ntheta0, naky
-     naky=naky_private
-     ntheta0=ntheta0_private
+   integer:: unit
      write (unit, *)
      write (unit, fmt="(' &',a)") "kt_grids_range_parameters"
      write (unit, fmt="(' naky = ',i3)") naky
@@ -145,14 +138,16 @@ contains
      write (unit, fmt="(' ntheta0 = ',i3)") ntheta0
      write (unit, fmt="(' theta0_min = ',e16.10)") theta0_min
      write (unit, fmt="(' theta0_max = ',e16.10)") theta0_max
+     write (unit, fmt="(' akx_min = ',e16.10)") akx_min
+     write (unit, fmt="(' akx_max = ',e16.10)") akx_max
      write (unit, fmt="(' /')")
   end subroutine wnml_kt_grids_range
 
-  subroutine range_get_sizes (naky, ntheta0, nx, ny)
+  subroutine range_get_sizes (naky_x, ntheta0_x, nx, ny)
     implicit none
-    integer, intent (out) :: naky, ntheta0, nx, ny
-    naky = naky_private
-    ntheta0 = ntheta0_private
+    integer, intent (out) :: naky_x, ntheta0_x, nx, ny
+    naky_x = naky
+    ntheta0_x = ntheta0
     nx = 0
     ny = 0
   end subroutine range_get_sizes
@@ -165,14 +160,20 @@ contains
     real, dimension (:), intent (out) :: akx
     real :: dkx
     real :: daky, dtheta0
-    integer :: i, j, naky, ntheta0
+    integer :: i, j
 
-    naky = size(aky)
-    ntheta0 = size(akx)
+    if ( size(aky) .ne. naky) then
+       write(6,*) 'range_get_grids: size(aky) /= naky'
+       stop
+    endif
+    if ( size(akx) .ne. ntheta0) then
+       write(6,*) 'range_get_grids: size(akx) /= ntheta0'
+       stop
+    endif
 
     daky = 0.0
     if (naky > 1) daky = (aky_max - aky_min)/real(naky - 1)
-    aky = (/ (aky_min + daky*real(i), i=0,naky_private-1) /)
+    aky = (/ (aky_min + daky*real(i), i=0,naky-1) /)
 
 !CMR:
 ! set default theta0 to 0
@@ -185,7 +186,7 @@ contains
 
        do j = 1, naky
           theta0(:,j) &
-               = (/ (theta0_min + dtheta0*real(i), i=0,ntheta0_private-1) /)
+               = (/ (theta0_min + dtheta0*real(i), i=0,ntheta0-1) /)
        end do
        akx = theta0(:,1) * shat * aky(1)
     else
@@ -193,33 +194,48 @@ contains
 !new code for periodic finite kx ballooning space runs with shat=0
        dkx = 0.0
        if (ntheta0 > 1) dkx = (akx_max - akx_min)/real(ntheta0 - 1)
-       akx = (/ (akx_min + dkx*real(i), i=0,ntheta0_private-1) /)
+       akx = (/ (akx_min + dkx*real(i), i=0,ntheta0-1) /)
     endif
   end subroutine range_get_grids
 
   subroutine check_kt_grids_range(report_unit)
+    use constants, only: twopi
+    use theta_grid, only: shat
     implicit none
     integer:: report_unit
-    real :: daky, dtheta0
+    real :: daky, dtheta0, dakx
     integer:: i,j
 
        write (report_unit, *) 
        write (report_unit, fmt="('A range of k_perps will be evolved.')")
        write (report_unit, *) 
-       write (report_unit, fmt="('There are ',i3,' values of ky rho and ',i3,' values of theta0:')") naky_private, ntheta0_private
+       write (report_unit, fmt="('There are ',i3,' values of ky rho and ',i3,' values of theta0/kx rho:')") naky, ntheta0
        write (report_unit, *) 
           
        daky = 0.0
-       if (naky_private > 1) daky = (aky_max - aky_min)/real(naky_private - 1)
+       if (naky > 1) daky = (aky_max - aky_min)/real(naky - 1)
        dtheta0 = 0.0
-       if (ntheta0_private > 1) dtheta0 = (theta0_max - theta0_min)/real(ntheta0_private - 1)
+       if (ntheta0 > 1) dtheta0 = (theta0_max - theta0_min)/real(ntheta0 - 1)
+       dakx = 0.0
+       if (ntheta0 > 1) dakx = (akx_max - akx_min)/real(ntheta0 - 1)
 
-       do j = 0, naky_private-1
-          do i = 0, ntheta0_private-1
-             write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4)") &
-                  aky_min + daky*real(j), theta0_min + dtheta0*real(i)
+       do j = 0, naky-1
+          do i = 0, ntheta0-1
+             write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4,' kx rho = ',e10.4)") &
+                  aky_min + daky*real(j), theta0_min + dtheta0*real(i), akx_min + dakx*real(i)
           end do
        end do
+!CMR, add some !!!error checking!!! for ballooning space runs for shat/=0 
+! using flow shear: check that the constraints on theta0 grid are satisfied!
+       if (shat .ne. 0) then
+         if (abs(twopi-theta0_max+theta0_min-dtheta0) .gt. 1.0e-3*dtheta0) then
+             write (report_unit, *) 
+             write (report_unit, fmt="('check_kt_grids_range: inappropriate theta0 grid')")
+             write (report_unit, fmt="('In ballooning space with sheared flow, 2pi-theta0_max+theta0_min =',e10.4,' must be set equal to dtheta = ',e10.4)") twopi-theta0_max+theta0_min, dtheta0
+             write (report_unit, fmt="('THIS ERROR will corrupt any results.')")
+         endif
+       endif
+
    end subroutine check_kt_grids_range
 
 end module kt_grids_range
