@@ -26,12 +26,12 @@ program ingen
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-!CMR, 17/11/2009: use gs2_diagnostics module to picks up public variables
+!CMR, 17/11/2009: use gs2_diagnostics module to pick up public variables
 !                 and routines to reduces maintenance of ingen.
 !                 Should replicate this for other modules in future.
 !
-use gs2_diagnostics,gs2diag_read_parameters=>read_parameters
-
+  use gs2_diagnostics,gs2diag_read_parameters=>read_parameters
+  use kt_grids, only: init_kt_grids
   use mp, only: init_mp, finish_mp
   use constants 
   use file_utils
@@ -244,35 +244,7 @@ use gs2_diagnostics,gs2diag_read_parameters=>read_parameters
   logical :: hyper_on = .false.
   logical :: gridnorm
 
-! kt_grids:
-  real, dimension (:), allocatable :: aky_tmp, theta0_tmp, akx_tmp
-  real :: aky, theta0, akx
-  integer :: naky, ntheta0, nx, ny, jtwist
-  integer :: gridopt_switch, normopt_switch
-  real :: aky_min, aky_max, theta0_min, theta0_max, lx, ly, x0, y0, rtwist
-  real :: y0_internal
-  integer, parameter :: gridopt_single = 1, gridopt_range = 2, &
-       gridopt_specified = 3, gridopt_box = 4, gridopt_xbox = 5
-  type (text_option), dimension (7), parameter :: gridopts = &
-       (/ text_option('default', gridopt_single), &
-       text_option('single', gridopt_single), &
-       text_option('range', gridopt_range), &
-       text_option('specified', gridopt_specified), &
-       text_option('box', gridopt_box), &
-       text_option('nonlinear', gridopt_box), &
-       text_option('xbox', gridopt_xbox) /)
-  character (20) :: grid_option
-
-  integer, parameter :: normopt_mtk = 1, normopt_bd = 2
-  type (text_option), dimension(6), parameter :: normopts = &
-       (/ text_option('default', normopt_mtk), &
-       text_option('with_root_2', normopt_mtk), &
-       text_option('mtk', normopt_mtk), &
-       text_option('no_root_2', normopt_bd), &
-       text_option('bd', normopt_bd), &
-       text_option('t_over_m', normopt_bd) /)
-  character (20) :: norm_option
-  
+! le_grids
   integer :: ngauss, negrid, nesuper, nesub
   real :: ecut, vcut, bouncefuzz
   logical :: trapped_particles = .true.
@@ -395,12 +367,6 @@ use gs2_diagnostics,gs2diag_read_parameters=>read_parameters
   logical :: diagnostics_write = .false.
   logical :: reinit_write = .false.
   logical :: hyper_write = .false.
-  logical :: kt_range_write = .false.
-  logical :: kt_single_write = .false.
-  logical :: kt_specified_write = .false.
-  logical :: kt_box_write = .false.
-  logical :: kt_xbox_write = .false.
-  logical :: kt_write = .false.
   logical :: le_write = .false.
   logical :: nonlinear_write = .false.
   logical :: parameters_write = .false.
@@ -473,21 +439,6 @@ use gs2_diagnostics,gs2diag_read_parameters=>read_parameters
        isotropic_shear, D_hyperres, D_hypervisc, omega_osc, D_hyper, gridnorm
 
 ! kt_grids:
-  namelist /kt_grids_single_parameters/ aky, theta0, akx
-
-  namelist /kt_grids_range_parameters/ naky, ntheta0, &
-       aky_min, aky_max, theta0_min, theta0_max
-
-  namelist /kt_grids_specified_parameters/ naky, ntheta0, nx, ny
-
-  namelist /kt_grids_specified_element/ aky, theta0, akx
-
-  namelist /kt_grids_box_parameters/ naky, ntheta0, ly, nx, ny, jtwist, &
-       y0, x0, rtwist
-
-  namelist /kt_grids_xbox_parameters/ ntheta0, lx, aky, nx
-
-  namelist /kt_grids_knobs/ grid_option, norm_option
 
 ! le_grids:
 
@@ -1342,122 +1293,7 @@ if (debug) write(6,*) 'get_namelists: hyper'
     end select
 
 if (debug) write(6,*) 'get_namelists: kt_grids'
-    ! kt_grids:
-    norm_option = 'default'
-    grid_option = 'default'
-    in_file=input_unit_exist("kt_grids_knobs",exist)
-    if (exist) then
-       read (unit=input_unit("kt_grids_knobs"), nml=kt_grids_knobs)
-       kt_write = .true.
-    end if
-    
-    ierr = error_unit()
-    call get_option_value &
-         (grid_option, gridopts, gridopt_switch, &
-         ierr, "grid_option in kt_grids_knobs")
-
-    ierr = error_unit()
-    call get_option_value &
-         (norm_option, normopts, normopt_switch, &
-         ierr, "norm_option in kt_grids_knobs")
-
-    select case (gridopt_switch) 
-    case (gridopt_single) 
-       aky = 0.4
-       theta0 = 0.0
-       akx = 0.0
-       in_file=input_unit_exist("kt_grids_single_parameters",exist)
-       if (exist) then
-          read (unit=input_unit("kt_grids_single_parameters"), &
-               nml=kt_grids_single_parameters)
-          kt_single_write = .true.
-       end if
-       naky = 1
-       ntheta0 = 1
-       
-    case (gridopt_range)
-       
-       naky = 1
-       ntheta0 = 1
-       aky_min = 0.0
-       aky_max = 0.0
-       theta0_min = 0.0
-       theta0_max = 0.0
-       in_file=input_unit_exist("kt_grids_range_parameters",exist)
-       if (exist) then
-          read (unit=input_unit("kt_grids_range_parameters"), &
-               nml=kt_grids_range_parameters)
-          kt_range_write = .true.
-       end if
-
-    case (gridopt_specified) 
-       naky = 1
-       ntheta0 = 1
-       nx = 0
-       ny = 0
-       in_file=input_unit_exist("kt_grids_specified_parameters",exist)
-       if (exist) then
-          read (unit=input_unit("kt_grids_specified_parameters"), &
-               nml=kt_grids_specified_parameters)
-          kt_specified_write = .true.
-       end if
-
-       allocate (aky_tmp(max(naky,ntheta0)))
-       allocate (theta0_tmp(max(naky,ntheta0)))
-       allocate (akx_tmp(max(naky,ntheta0)))
-
-       do i = 1, max(naky,ntheta0)
-          aky = 0.4
-          theta0 = 0.0
-          akx = 0.0
-          call get_indexed_namelist_unit (unit, "kt_grids_specified_element", i)
-          read (unit=unit, nml=kt_grids_specified_element)
-          close (unit)
-          aky_tmp(i) = aky
-          theta0_tmp(i) = theta0
-          akx_tmp(i) = akx
-       end do
-          
-    case (gridopt_box)
-       naky = 0
-       ntheta0 = 0
-       ly = 0.0
-       x0 = 0.
-       y0 = 2.0
-       nx = 0
-       ny = 0
-       jtwist = 1
-       rtwist = 0.0
-       in_file=input_unit_exist("kt_grids_box_parameters",exist)
-       if (exist) then
-          read (unit=input_unit("kt_grids_box_parameters"), &
-               nml=kt_grids_box_parameters)
-          kt_box_write = .true.
-       end if
-       y0_internal = y0
-       if (y0 < 0) then
-          y0_internal = -1./y0_internal
-       else
-          y0_internal = y0_internal
-       end if
-       if (ly == 0.) ly = 2.0*pi*y0_internal
-       if (naky == 0) naky = (ny-1)/3 + 1
-       if (ntheta0 == 0) ntheta0 = 2*((nx-1)/3) + 1
-       if (rtwist == 0.) rtwist = real(jtwist)
-
-    case (gridopt_xbox)
-       ntheta0 = 1
-       lx = 1.0
-       aky = 0.2
-       nx = 0
-       in_file=input_unit_exist("kt_grids_xbox_parameters",exist)
-       if (exist) then
-          read (unit=input_unit("kt_grids_xbox_parameters"), &
-               nml=kt_grids_xbox_parameters)
-          kt_xbox_write = .true.
-       end if
-
-    end select
+    call init_kt_grids
 
 if (debug) write(6,*) 'get_namelists: le_grids'
     ! le_grids:
@@ -1817,7 +1653,7 @@ if (debug) write(6,*) 'get_namelists: returning'
   end subroutine get_namelists
 
   subroutine write_namelists (jr, tag1, tag2)
-
+    use kt_grids, only: wnml_kt
     integer, intent (in), optional :: jr
     character (*), intent (in), optional :: tag1, tag2
 
@@ -2319,41 +2155,7 @@ if (debug) write(6,*) 'get_namelists: returning'
        end if
     end if
 
-    if (kt_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "kt_grids_knobs"
-
-       select case (gridopt_switch)
-          
-       case (gridopt_single)
-          write (unit, fmt="(' grid_option = ',a)") '"single"'
-
-       case (gridopt_range)
-          write (unit, fmt="(' grid_option = ',a)") '"range"'
-
-       case (gridopt_specified)
-          write (unit, fmt="(' grid_option = ',a)") '"specified"'
-
-       case (gridopt_box)
-          write (unit, fmt="(' grid_option = ',a)") '"box"'
-
-       case (gridopt_xbox)
-          write (unit, fmt="(' grid_option = ',a)") '"xbox"'
-
-       end select
-
-       select case (normopt_switch)
-          
-       case (normopt_mtk)
-          write (unit, fmt="(' norm_option = ',a)") '"with_root_2"'
-
-       case (normopt_bd)
-          write (unit, fmt="(' norm_option = ',a)") '"no_root_2"'
-
-       end select
-
-       write (unit, fmt="(' /')")
-    end if
+    call wnml_kt(unit)
     
     if (le_write) then
        write (unit, *)
@@ -2367,63 +2169,6 @@ if (debug) write(6,*) 'get_namelists: returning'
        end if
        write (unit, fmt="(' ngauss = ',i4)") ngauss
        write (unit, fmt="(' ecut = ',e16.10)") ecut
-       write (unit, fmt="(' /')")
-    end if
-
-
-    if (kt_single_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "kt_grids_single_parameters"
-       write (unit, fmt="(' aky = ',e16.10)") aky
-       write (unit, fmt="(' theta0 = ',e16.10)") theta0
-       write (unit, fmt="(' /')")
-    end if
-
-    if (kt_range_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "kt_grids_range_parameters"
-       write (unit, fmt="(' naky = ',i3)") naky
-       write (unit, fmt="(' aky_min = ',e16.10)") aky_min
-       write (unit, fmt="(' aky_max = ',e16.10)") aky_max
-       write (unit, fmt="(' ntheta0 = ',i3)") ntheta0
-       write (unit, fmt="(' theta0_min = ',e16.10)") theta0_min
-       write (unit, fmt="(' theta0_max = ',e16.10)") theta0_max
-       write (unit, fmt="(' /')")
-    end if
-
-    if (kt_specified_write) then
-       write(unit, kt_grids_specified_parameters)
-       do i=1,max(naky,ntheta0)
-          write (unit, *)
-          write (line, *) i
-          write (unit, fmt="(' &',a)") &
-               & trim("kt_grids_specified_element_"//trim(adjustl(line)))
-          write (unit, fmt="(' aky = ',e13.6,' theta0 = ',e13.6,'  /')") aky_tmp(i), theta0_tmp(i)
-          write (unit, fmt="(' /')")
-       end do
-    end if
-
-    if (kt_box_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "kt_grids_box_parameters"
-       write (unit, fmt="(' nx = ',i4)") nx
-       write (unit, fmt="(' ny = ',i4)") ny
-       write (unit, fmt="(' Ly = ',e16.10)") ly
-       if (jtwist /= 1) then
-          write (unit, fmt="(' rtwist = ',e16.10)") rtwist
-       else
-          write (unit, fmt="(' jtwist = ',i4)") jtwist
-       end if
-       write (unit, fmt="(' /')")
-    end if
-
-
-    if (kt_xbox_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "kt_grids_xbox_parameters"
-       write (unit, fmt="(' nx = ',i4)") nx
-       write (unit, fmt="(' ny = ',i4)") ny
-       write (unit, fmt="(' Lx = ',e16.10)") lx
        write (unit, fmt="(' /')")
     end if
 
@@ -2873,6 +2618,9 @@ if (debug) write(6,*) 'get_namelists: returning'
    subroutine report
 
      use theta_grid, only: nbset, ntgrid_real => ntgrid
+     use kt_grids, only: check_kt_grids, grid_option, gridopt_switch
+     use kt_grids, only: gridopt_box, naky, ntheta0, nx, ny
+
      implicit none
      real :: zeff_calc, charge, aln, alne, ne, ee, alp, ptot, qsf, dbdr, arat, daky, dtheta0
      real :: kxfac, drhodpsi
@@ -4074,110 +3822,9 @@ if (debug) write(6,*) 'get_namelists: returning'
     write (report_unit, fmt="('------------------------------------------------------------')")
     write (report_unit, *) 
 
-    select case (gridopt_switch) 
-    case (gridopt_single) 
-       write (report_unit, *) 
-       write (report_unit, fmt="('A single k_perp will be evolved, with: ')")
-       write (report_unit, *) 
-       write (report_unit, fmt="('ky rho = ',f10.4)") aky
-       write (report_unit, fmt="('theta0 = ',f10.4)") theta0
-       if (akx /= 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('The value of akx in the kt_grids_single_parameters namelist is ignored.')") 
-          write (report_unit, fmt="('You have set akx to a non-zero value.')") 
-          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-
-    case (gridopt_range)
-       write (report_unit, *) 
-       write (report_unit, fmt="('A range of k_perps will be evolved.')")
-       write (report_unit, *) 
-       write (report_unit, fmt="('There are ',i3,' values of ky rho and ',i3,' values of theta0:')") naky, ntheta0
-       write (report_unit, *) 
-          
-       daky = 0.0
-       if (naky > 1) daky = (aky_max - aky_min)/real(naky - 1)
-       dtheta0 = 0.0
-       if (ntheta0 > 1) dtheta0 = (theta0_max - theta0_min)/real(ntheta0 - 1)
-
-       do j = 0, naky-1
-          do i = 0, ntheta0-1
-             write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4)") &
-                  aky_min + daky*real(j), theta0_min + dtheta0*real(i)
-          end do
-       end do
-
-    case (gridopt_specified) 
-
-       write (report_unit, *) 
-       i = max (naky, ntheta0)
-       write (report_unit, fmt="('A set of ',i3,' k_perps will be evolved.')") i
-       write (report_unit, *) 
-       do i=1, max(naky,ntheta0)
-          write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4)") &
-               aky_tmp(i), theta0_tmp(i)
-       end do
-
-    case (gridopt_box)
-
-       if (y0_internal /= 2.) then
-          if (abs(2.*pi*y0_internal - ly) > epsilon(0.)) then
-             write (report_unit, *) 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('You cannot specify both ly and y0.')")
-             write (report_unit, fmt="('THIS IS AN ERROR.')") 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
-          end if
-       end if
-
-       write (report_unit, *) 
-       write (report_unit, fmt="('A rectangular simulation domain has been selected.')")
-       write (report_unit, *) 
-       write (report_unit, fmt="('The domain is ',f10.4,' rho in the y direction.')") ly
-
-       if (abs(shat) <= 1.e-5) then
-          if (x0 == 0.) then
-             if (rtwist > 0) then
-                write (report_unit, fmt="('At theta=0, the domain has Lx = ',f10.5)") abs(rtwist)*ly
-             else
-                write (report_unit, fmt="('At theta=0, the domain has Lx = ',f10.5)") ly/abs(rtwist)
-             end if
-          else
-             if (x0 > 0) then
-                write (report_unit, fmt="('At theta=0, the domain has Lx = ',f10.5)") 2.*pi*x0
-             else
-                write (report_unit, fmt="('At theta=0, the domain has Lx = ',f10.5)") -2.*pi/x0
-             end if
-          end if
-       else
-          lx = ly * rtwist / (2.*pi*shat)
-          write (report_unit, fmt="('At theta=0, the domain is ',f10.4,' rho in the x direction.')") lx
-          write (report_unit,*) ly, rtwist, jtwist, pi, shat
-       end if
-       
-       write (report_unit, *) 
-       write (report_unit, fmt="('The nonlinear terms will be evaluated on a grid with ',&
-            & i4,' points in x and ',i4,' points in y.')") nx, ny
-       write (report_unit, *) 
-       naky = (ny-1)/3+1
-       ntheta0 = 2*((nx-1)/3)+1
-       write (report_unit, fmt="('After de-aliasing, there will be ',i4,'  ky >= 0 modes and ',i4,' kx modes.')") naky, ntheta0
-       write (report_unit, fmt="('The modes with ky < 0 are determined by the reality condition.')")
-
-    case (gridopt_xbox)
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('You selected grid_option=xbox in kt_grids_knobs')")
-          write (report_unit, fmt="('The xbox option is not working.')")
-          write (report_unit, fmt="('THIS IS AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-
-    end select
+! CMR, 24/9/2010:
+! use check_kt_grids
+    call check_kt_grids(report_unit)
 
     write (report_unit, *) 
     write (report_unit, fmt="('------------------------------------------------------------')")
@@ -5023,6 +4670,8 @@ if (debug) write(6,*) 'get_namelists: returning'
 
   subroutine nprocs (nmesh)
 
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box, gridopt_xbox
+    use kt_grids, only: naky, ntheta0
     implicit none
     real :: fac
     integer, intent (in) :: nmesh

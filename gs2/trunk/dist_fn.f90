@@ -2100,7 +2100,7 @@ contains
     else
 ! MR, March 2009: on extended theta grid theta0_shift tracks ExB shear
 ! CMR, 25 May 2009: fix 2pi error so that: dtheta0/dt = -GEXB/shat
-       dtheta0 = theta0(2,1)
+       dtheta0 = theta0(2,1)-theta0(1,1)
        theta0_shift = theta0_shift - g_exb*gdt/shat
        j = nint(theta0_shift/dtheta0)
        theta0_shift = theta0_shift - j*dtheta0
