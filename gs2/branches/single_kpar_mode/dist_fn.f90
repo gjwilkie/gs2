@@ -373,7 +373,11 @@ contains
     if (proc0) call read_species_knobs
     neoflux = neoflux .or. source_option_switch == source_option_neo
 
-    ! <doc> g_pvg is only used when you want parallel flow shear but no perpendicular flow shear. If you want perpendicular flow shear but no parallel flow shear, set omprimfac to 0. If you want both, then have omprimfac=1, g_pvg=0. The relative strength of both is set by the angle of the magnetic field. In a torus this is set by the geometry. In a slab it is set by btor_slab</doc>
+    ! g_pvg is only used when you want parallel flow shear but no perpendicular flow shear. 
+    ! If you want perpendicular flow shear but no parallel flow shear, set omprimfac to 0. 
+    ! If you want both, then have omprimfac=1, g_pvg=0. The relative strength of both is 
+    ! set by the angle of the magnetic field. In a torus this is set by the geometry. 
+    ! In a slab it is set by btor_slab
 
     if (abs(g_exb) > epsilon(0.0)) then
       g_pvg_actual = omprimfac * g_exb
@@ -2009,7 +2013,12 @@ contains
        
   end subroutine timeadv
 
-  ! <doc> Sets the quantity itor_over_B which sets the ratio of parallel and perpendicular velocity shear for use in the source term (see set_source). Moved it out of exb_shear as it needs to be called in the case where there is parallel but no perpendicular velocity shear (sometimes used in the slab). EGH</doc>
+  !> Sets the quantity itor_over_B which sets the ratio of parallel and perpendicular velocity shear 
+  !! for use in the source term (see set_source). 
+  !! 
+  !! NB: Moved it out of exb_shear as it needs to be called 
+  !! in the case where there is parallel but no perpendicular velocity shear 
+  !! (sometimes used in the slab). EGH
 
   subroutine set_itor_over_B
 !       itor_over_B = qval / rhoc * sqrt(Rplot**2 - (grho/(bmag*drhodpsi))**2)
