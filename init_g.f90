@@ -33,7 +33,10 @@ module init_g
   integer, dimension(2) :: ikk, itt
   integer, dimension(3) :: ikkk,ittt
 
-  ! <doc> These are used for the function ginit_single_parallel_mode, and specify the kparallel to initialize. In the case of  zero magnetic shear, of course, the box is periodic in the parallel direction, and so only harmonics of the box size (i.e. ikpar_init) are allowed  EGH</doc>
+  ! These are used for the function ginit_single_parallel_mode, and specify the
+  !  kparallel to initialize. In the case of  zero magnetic shear, of course, the box 
+  ! is periodic in the parallel direction, and so only harmonics of the box size 
+  ! (i.e. ikpar_init) are allowed  EGH</doc>
 
   integer :: ikpar_init
   real :: kpar_init
