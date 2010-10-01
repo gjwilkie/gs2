@@ -2057,7 +2057,7 @@ contains
     ! Initialize kx_shift, jump, idx_indexed
     if (exb_first) then
        exb_first = .false.
-       if (box) then
+       if (box .or. shat .eq. 0.0) then
           allocate (jump(naky)) 
           jump = 0
           allocate (ikx_indexed(ntheta0))
@@ -2090,7 +2090,7 @@ contains
     
 ! kx_shift is a function of time.   Update it here:  
 ! MR, 2007: kx_shift array gets saved in restart file
-    if (box) then
+    if ( box .or. shat .eq. 0.0 ) then
        dkx = akx(2)
        do ik=1, naky
           kx_shift(ik) = kx_shift(ik) - aky(ik)*g_exb*gdt
@@ -2107,8 +2107,9 @@ contains
     end if
 
     
-    if (.not. box) then
-! MR, March 2009: impact of ExB shear on extended theta grid computed here 
+    if (.not. box .and. shat .ne. 0.0 ) then
+! MR, March 2009: impact of ExB shear on extended theta grid computed here
+!                 for finite shat 
        if (j < 0) then
           allocate(temp(-ntgrid:ntgrid,abs(j),naky))
           if (fphi > epsilon(0.0)) then
@@ -2300,7 +2301,7 @@ contains
        end if
     end if
     
-    if (box) then
+    if (box .or. shat .eq. 0.0) then
        do ik = naky, 2, -1
           if (jump(ik) < 0) then
              if (fphi > epsilon(0.0)) then
@@ -7313,7 +7314,8 @@ contains
     if (allocated(g)) deallocate (g, gnew, g0)
     if (allocated(gnl_1)) deallocate (gnl_1, gnl_2, gnl_3)
     if (allocated(g_h)) deallocate (g_h, save_h)
-    if (allocated(kx_shift)) deallocate (kx_shift, jump, ikx_indexed, itor_over_B)
+    if (allocated(kx_shift)) deallocate (kx_shift, itor_over_B)
+    if (allocated(jump)) deallocate (jump, ikx_indexed)
     if (allocated(aintnorm)) deallocate (aintnorm)
     if (allocated(ufac)) deallocate (ufac)
     if (allocated(gridfac1)) deallocate (gridfac1, gamtot, gamtot1, gamtot2)
