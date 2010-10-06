@@ -228,11 +228,11 @@ contains
 !CMR, add some !!!error checking!!! for ballooning space runs for shat/=0 
 ! using flow shear: check that the constraints on theta0 grid are satisfied!
        if (shat .ne. 0) then
-         if (abs(twopi-theta0_max+theta0_min-dtheta0) .gt. 1.0e-3*dtheta0) then
+         if (abs(mod(twopi-theta0_max+theta0_min,twopi)-dtheta0) .gt. 1.0e-3*dtheta0) then
              write (report_unit, *) 
+             write (report_unit, fmt="('IF using perp ExB flow shear in BALLOONING SPACE there is a ERROR that will corrupt results.')")
              write (report_unit, fmt="('check_kt_grids_range: inappropriate theta0 grid')")
              write (report_unit, fmt="('In ballooning space with sheared flow, 2pi-theta0_max+theta0_min =',e10.4,' must be set equal to dtheta = ',e10.4)") twopi-theta0_max+theta0_min, dtheta0
-             write (report_unit, fmt="('THIS ERROR will corrupt any results.')")
          endif
        endif
 
