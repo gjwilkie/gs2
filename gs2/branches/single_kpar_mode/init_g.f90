@@ -8,6 +8,7 @@ module init_g
   public :: reset_init
   public :: init_vnmult
   public :: new_field_init
+  private :: single_initial_kx
   private
 
   ! knobs
@@ -21,7 +22,8 @@ module init_g
        ginitopt_nl5 = 19, ginitopt_alf = 20, ginitopt_kpar = 21, &
        ginitopt_nl6 = 22, ginitopt_nl7 = 23, ginitopt_gs = 24, ginitopt_recon = 25, &
        ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28, &
-       ginitopt_recon3 = 29, ginitopt_zonal_only = 30, ginitopt_single_parallel_mode = 31
+       ginitopt_recon3 = 29, ginitopt_zonal_only = 30, ginitopt_single_parallel_mode = 31, &
+       ginitopt_all_modes_equal = 32
   real :: width0, dphiinit, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
   real :: den1, upar1, tpar1, tperp1
@@ -40,6 +42,10 @@ module init_g
 
   integer :: ikpar_init
   real :: kpar_init
+
+  !>  This is used  in linear runs with flow shear  in order to track the
+  !! evolution of a single Lagrangian mode.
+  integer :: ikx_init
 
   ! RN> for recon3
   real :: phiinit0 ! amplitude of equilibrium
@@ -140,6 +146,7 @@ contains
     call broadcast (ukxy_pt)
     
     call broadcast (ikpar_init)
+    call broadcast (ikx_init)
     call broadcast (kpar_init)
     ! <RN
     call init_save (restart_file)
@@ -163,6 +170,8 @@ contains
        call ginit_noise
     case (ginitopt_single_parallel_mode)
        call ginit_single_parallel_mode
+    case (ginitopt_all_modes_equal)
+       call ginit_all_modes_equal
     case (ginitopt_kpar)
        call ginit_kpar
     case (ginitopt_gs)
@@ -264,7 +273,7 @@ contains
     use text_options, only: text_option, get_option_value
     implicit none
 
-    type (text_option), dimension (31), parameter :: ginitopts = &
+    type (text_option), dimension (32), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
             text_option('test1', ginitopt_test1), &
@@ -295,7 +304,8 @@ contains
             text_option('recon', ginitopt_recon), &
             text_option('recon3', ginitopt_recon3), &
             text_option('zonal_only', ginitopt_zonal_only), &
-            text_option('single_parallel_mode', ginitopt_single_parallel_mode) &
+            text_option('single_parallel_mode', ginitopt_single_parallel_mode), &
+            text_option('all_modes_equal', ginitopt_all_modes_equal) &
             /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
@@ -307,7 +317,8 @@ contains
          phiinit0, a0, b0, null_phi, null_bpar, null_apar, adj_spec, &
          eq_type, prof_width, eq_mode_u, eq_mode_n, &
          input_check_recon, nkxy_pt, ukxy_pt, &
-         ikkk, ittt, phifrac, ikpar_init, kpar_init
+         ikkk, ittt, phifrac, ikpar_init, kpar_init, &
+         ikx_init
 
     integer :: ierr, in_file
     logical :: exist
@@ -364,6 +375,7 @@ contains
 
     ikpar_init = 0
     kpar_init = 0.0
+    ikx_init = -1
 
     ! <RN
     restart_file = trim(run_name)//".nc"
@@ -425,6 +437,8 @@ contains
     gnew = g
   end subroutine ginit_default
 
+  !> Initialise with only the kparallel = 0 mode.
+  
   subroutine ginit_kz0
     use species, only: spec
     use theta_grid, only: ntgrid 
@@ -526,6 +540,43 @@ contains
 !    gnew = g
 !  end subroutine ginit_noise
   
+  subroutine single_initial_kx(phi)
+    use species, only: spec, tracer_species
+    use theta_grid, only: ntgrid 
+    use kt_grids, only: naky, ntheta0, aky, reality
+    use le_grids, only: forbid
+    use dist_fn_arrays, only: g, gnew
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use ran
+    use mp, only: mp_abort
+    implicit none
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky), intent(inout) :: phi
+    real :: a, b
+    integer :: iglo
+    integer :: ig, ik, it, il, is, nn
+
+    if (ikx_init  < 1 .or. ikx_init > ntheta0) call mp_abort("The subroutine single_initial_kx should only be called when 0 < ikx_init < ntheta0")
+
+    do it = 1, ntheta0
+       do ik = 1, naky
+        if (it .ne. ikx_init) then 
+          do ig = -ntgrid, ntgrid
+             a = 0.0
+             b = 0.0 
+!             phi(:,it,ik) = cmplx(a,b)
+             phi(ig,it,ik) = cmplx(a,b)
+           end do
+         end if
+       end do
+    end do
+  end subroutine single_initial_kx
+
+
+
+  !> Initialise the distribution function with random noise. This is the default
+  !! initialisation option. Each different mode is given a random amplitude
+  !! between zero and one.
+
   subroutine ginit_noise
     use species, only: spec, tracer_species
     use theta_grid, only: ntgrid 
@@ -539,6 +590,7 @@ contains
     real :: a, b
     integer :: iglo
     integer :: ig, ik, it, il, is, nn
+    !integer :: itstart, itend
 
     phit = 0.
     do it=2,ntheta0/2+1
@@ -548,7 +600,11 @@ contains
     end do
 
 ! keep old (it, ik) loop order to get old results exactly: 
-    do it = 1, ntheta0
+
+  !write (*,*) "ikx_init is", ikx_init
+
+
+     do it = 1, ntheta0
        do ik = 1, naky
           do ig = -ntgrid, ntgrid
              a = ranf()-0.5
@@ -565,6 +621,9 @@ contains
           end if
        end do
     end do
+
+
+    if (ikx_init  > 0) call single_initial_kx(phi)
 
     if (naky > 1 .and. aky(1) == 0.0) then
        phi(:,:,1) = phi(:,:,1)*zf_init
@@ -594,7 +653,9 @@ contains
 
   end subroutine ginit_noise
 
-! 	!<doc> Initialize with a single parallel mode. Only makes sense in a linear calculation. k_parallel is specified with kpar_init or with ikpar_init when periodic boundary conditions are used. EGH </doc> 
+ 	!> Initialize with a single parallel mode. Only makes sense in a linear 
+  !! calculation. k_parallel is specified with kpar_init or with ikpar_init 
+  !! when periodic boundary conditions are used. 
 
   subroutine ginit_single_parallel_mode
     use species, only: spec, tracer_species
@@ -654,6 +715,10 @@ contains
     if (naky > 1 .and. aky(1) == 0.0) then
        phi(:,:,1) = phi(:,:,1)*zf_init
     end if
+
+
+    if (ikx_init  > 0) call single_initial_kx(phi)
+
     !<doc> reality condition for ky = 0 component: </doc>
     if (reality) then
        do it = 1, ntheta0/2
@@ -678,6 +743,100 @@ contains
     gnew = g
 
   end subroutine ginit_single_parallel_mode
+
+ 	!> Initialize with every parallel and perpendicular mode having equal amplitude. 
+  !! Only makes sense in a linear calculation. k_parallel is specified with kpar_init 
+  !! or with ikpar_init when periodic boundary conditions are used. EGH 
+
+  subroutine ginit_all_modes_equal
+    use species, only: spec, tracer_species
+    use theta_grid, only: ntgrid, shat, theta, ntheta 
+    use kt_grids, only: naky, ntheta0, aky, reality
+    use le_grids, only: forbid
+    use dist_fn_arrays, only: g, gnew
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use ran
+    use mp, only: mp_abort
+!     use file_utils, only: error_unit
+    implicit none
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
+    real :: a, b
+    integer :: iglo
+    integer :: ig, ik, it, il, is, nn, ikpar
+
+    phit = 0.
+    do it=2,ntheta0/2+1
+       nn = it-1
+! extra factor of 4 to reduce the high k wiggles for now
+       phit (:, it, 1) = (-1)**nn*exp(-8.*(real(nn)/ntheta0)**2)
+    end do
+
+    !if (abs(shat) < 1.0e-05) then 
+      !if (ikpar_init+1 > ntgrid) then 
+        !call mp_abort("Error: this value of k_parallel is too large. Increase ntheta or decrease ikpar_init.")
+!!         stop 'Aborting...'
+      !end if
+      !kpar_init = ikpar_init
+    !end if
+
+
+    do it = 1, ntheta0
+       do ik = 1, naky
+          do ig = -ntgrid, ntgrid
+              ! Set the field to cos(kpar*theta) for all kpar, where we remember that the gridpoints are not necessarily evenly spaced in the parallel direction, so we use theta(ig)</doc>
+            a = 0.0 
+            b = 0.0
+            do ikpar = 0, ntheta - 1 
+              a = a + cos(ikpar * theta(ig)) 
+              b = b + cos(ikpar * theta(ig))
+            end do
+
+!              a = ranf()-0.5
+!              b = ranf()-0.5
+!             phi(:,it,ik) = cmplx(a,b)
+             phi(ig,it,ik) = cmplx(a,b)
+           end do
+          if (chop_side) then
+             if (left) then
+                phi(:-1,it,ik) = 0.0
+             else
+                phi(1:,it,ik) = 0.0
+             end if
+          end if
+       end do
+    end do
+
+    if (naky > 1 .and. aky(1) == 0.0) then
+       phi(:,:,1) = phi(:,:,1)*zf_init
+    end if
+
+
+    if (ikx_init  > 0) call single_initial_kx(phi)
+
+    !<doc> reality condition for ky = 0 component: </doc>
+    if (reality) then
+       do it = 1, ntheta0/2
+          phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
+          phit(:,it+(ntheta0+1)/2,1) = conjg(phit(:,(ntheta0+1)/2+1-it,1))
+       enddo
+    end if
+       
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       if (spec(is)%type == tracer_species) then          
+          g(:,1,iglo) =-phit(:,it,ik)*spec(is)%z*phiinit
+       else
+          g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit
+       end if
+       where (forbid(:,il)) g(:,1,iglo) = 0.0
+       g(:,2,iglo) = g(:,1,iglo)
+    end do
+    gnew = g
+
+  end subroutine ginit_all_modes_equal
 
   
   subroutine ginit_nl
