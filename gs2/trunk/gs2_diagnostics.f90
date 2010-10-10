@@ -1354,7 +1354,7 @@ contains
     use theta_grid, only: gradpar, nperiod
     use kt_grids, only: naky, ntheta0, aky_out, theta0, akx_out, aky, akx
     use kt_grids, only: nkpolar !, akpolar, akpolar_out
-    use run_parameters, only: woutunits, funits, tunits, fapar, fphi, fbpar
+    use run_parameters, only: woutunits, funits, tunits, fapar, fphi, fbpar, eqzip
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
@@ -1464,7 +1464,7 @@ contains
 
     exit = .false.
 
-    if (.not. nonlin ) then
+    if (eqzip .or. .not. nonlin) then
 ! MR, 10/3/2009: avoid calling get_omegaavg in nonlinear calculations
        if (proc0) then
           if (debug) write(6,*) "loop_diagnostics: proc0 call get_omegaavg"
