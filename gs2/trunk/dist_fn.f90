@@ -1949,7 +1949,7 @@ contains
           allocate (save_h(2,g_lo%llim_proc:g_lo%ulim_alloc))
           save_h = .false.
        endif
-       if (abs(g_exb*g_exbfac) < epsilon(0.)) then           ! MR 
+       if (abs(g_exb*g_exbfac) > epsilon(0.)) then           ! MR 
           if (box .or. shat .eq. 0.0) then
              allocate (kx_shift(naky))
              kx_shift = 0.
