@@ -693,8 +693,14 @@ contains
        do ik = 1, naky
           do ig = -ntgrid, ntgrid
               !<doc> Set the field to cos(kpar_init*theta), where we remember that the gridpoints are not necessarily evenly spaced in the parallel direction, so we use theta(ig)</doc>
-            a = cos(kpar_init * theta(ig)) 
-            b = cos(kpar_init * theta(ig))
+               !reality for ky=0 means we must use -kpar for kx < 0
+              !if (naky == 1 .and. it > (ntheta0+1)/2) then
+                !a = cos(-kpar_init * theta(ig)) 
+                !b = sin(-kpar_init * theta(ig))
+              !else
+                a = cos(kpar_init * theta(ig)) 
+                b = sin(kpar_init * theta(ig))
+              !end if
               
 
 !              a = ranf()-0.5
@@ -788,7 +794,9 @@ contains
             b = 0.0
             do ikpar = 0, ntheta - 1 
               a = a + cos(ikpar * theta(ig)) 
-              b = b + cos(ikpar * theta(ig))
+              ! we want to include the positive and negative wave numbers in
+              ! equal measure, which of course means a real sine wave.
+              b = 0.0 !b + cos(ikpar * theta(ig))
             end do
 
 !              a = ranf()-0.5
