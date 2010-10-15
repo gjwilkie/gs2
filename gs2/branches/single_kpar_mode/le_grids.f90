@@ -1363,6 +1363,18 @@ contains
 !    deallocate(xpt)
   end subroutine integrate_test
 
+  !> This subroutine is used to decompose velocity space into Legendre
+  !! polynomial coefficients. This is useful when trying to understand structure
+  !! in velocity space. The parameters are as follows:
+  !! - g: the distribution function
+  !! - tote:  the distribution function decomposed into Legendre polynomials in
+  !! energy space and averaged over pitch angle.
+  !! - totl:  The distribution function decomposed into Legendre polynomials in
+  !! pitch angle space and averaged over energy.
+  !! - istep:  The current time step.
+  !! - tott:  the distribution function decomposed in some way connected with
+  !! trapped particles–anyone know the answer??
+
   subroutine legendre_transform (g, tote, totl, istep, tott)
     
     use egrid, only: zeroes, x0
