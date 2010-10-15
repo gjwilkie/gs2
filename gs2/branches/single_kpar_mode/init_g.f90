@@ -543,7 +543,7 @@ contains
   subroutine single_initial_kx(phi)
     use species, only: spec, tracer_species
     use theta_grid, only: ntgrid 
-    use kt_grids, only: naky, ntheta0, aky, reality
+    use kt_grids, only: naky, ntheta0, aky, reality, akx
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
@@ -555,19 +555,22 @@ contains
     integer :: iglo
     integer :: ig, ik, it, il, is, nn
 
-    if (ikx_init  < 1 .or. ikx_init > ntheta0) call mp_abort("The subroutine single_initial_kx should only be called when 0 < ikx_init < ntheta0")
+    if (ikx_init  < 2 .or. ikx_init > (ntheta0+1)/2) then
+      call mp_abort("The subroutine single_initial_kx should only be called when 1 < ikx_init < (ntheta0+1)/2")
+    end if
 
     do it = 1, ntheta0
-       do ik = 1, naky
-        if (it .ne. ikx_init) then 
-          do ig = -ntgrid, ntgrid
-             a = 0.0
-             b = 0.0 
-!             phi(:,it,ik) = cmplx(a,b)
-             phi(ig,it,ik) = cmplx(a,b)
-           end do
-         end if
-       end do
+      if (it .ne. ikx_init) then 
+        !write (*,*) "zeroing out kx_index: ", it, "at kx: ", akx(it)
+         do ik = 1, naky
+            do ig = -ntgrid, ntgrid
+               a = 0.0
+               b = 0.0 
+  !             phi(:,it,ik) = cmplx(a,b)
+               phi(ig,it,ik) = cmplx(a,b)
+             end do
+         end do
+       end if
     end do
   end subroutine single_initial_kx
 
