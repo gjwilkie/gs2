@@ -44,7 +44,7 @@ module gs2_save
   integer (kind_nf) :: t0id, gr_id, gi_id, vnm1id, vnm2id, delt0id
   integer (kind_nf) :: a_antr_id, b_antr_id, a_anti_id, b_anti_id
 !<DD> Added for saving distribution function
-  INTEGER (KIND_NF) :: egridid,lgridid
+  INTEGER (KIND_NF) :: egridid,lgridid, vpa_id, vperp2_id
   INTEGER (KIND_NF) :: energy_id, lambda_id
   INTEGER (KIND_NF) :: nspecid, spec_id
   LOGICAL :: initialized_dfn= .false.
