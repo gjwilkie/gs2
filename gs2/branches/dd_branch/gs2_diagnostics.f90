@@ -51,7 +51,8 @@ module gs2_diagnostics
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
-         save_for_restart, write_parity
+         save_for_restart, write_parity &
+         save_distfn !<DD> Added for saving distribution function
 ! Why are these variables public?  This is not good.
   real,public :: omegatol, omegatinst
   logical,public :: print_line, print_old_units, print_flux_line
@@ -77,6 +78,7 @@ module gs2_diagnostics
   logical,public :: dump_final_xfields
   logical,public :: use_shmem_for_xfields
   logical,public :: save_for_restart
+  logical,public :: save_distfn !<DD> Added for saving distribution function
   logical,public :: test_conserve
   integer,public :: nwrite, igomega, nmovie
   integer,public :: navg, nsave
@@ -204,6 +206,7 @@ contains
     call broadcast (dump_final_xfields)
     call broadcast (use_shmem_for_xfields)
     call broadcast (save_for_restart)
+    call broadcast (save_distfn) !<DD> Added for saving distribution function
     call broadcast (write_gs)
     call broadcast (write_g)
     call broadcast (write_gyx)
@@ -497,6 +500,7 @@ contains
        use_shmem_for_xfields = .true.
        nperiod_output = nperiod - nperiod_guard
        save_for_restart = .false.
+       save_distfn = .false. !<DD> Added for saving distribution function
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
 
 	!<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
@@ -561,6 +565,7 @@ contains
     use dist_fn, only: e_flux
     use dist_fn, only: write_f, write_fyx
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
+    use dist_fn, only: g_adjust
     use collisions, only: vnmult
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
@@ -1023,6 +1028,21 @@ contains
             fphi, fapar, fbpar, .true.)
     end if
 
+    !<DD> Added for saving distribution function
+    IF (save_distfn) THEN
+    	!Convert h to distribution function
+    	CALL g_adjust(gnew,phinew,bparnew,fphi,fbpar)
+    	
+    	!Save dfn, fields and velocity grids to file
+       	CALL gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
+          	fphi, fapar, fbpar, .true.,.true.)
+    	
+        !Convert distribution function back to h
+        CALL g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
+    END IF
+
+    !</DD> Added for saving distribution function
+    
     call nc_finish
 
     if (proc0) call dump_ant_amp
