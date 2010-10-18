@@ -51,8 +51,7 @@ module gs2_diagnostics
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
-         save_for_restart, write_parity &
-         save_distfn !<DD> Added for saving distribution function
+         save_for_restart, write_parity, save_distfn !<DD> Added for saving distribution function
 ! Why are these variables public?  This is not good.
   real,public :: omegatol, omegatinst
   logical,public :: print_line, print_old_units, print_flux_line
