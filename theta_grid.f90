@@ -810,7 +810,8 @@ module theta_grid
   public :: init_theta_grid
   public :: theta, theta2, delthet, delthet2
   public :: bset
-  public :: bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0
+  public :: bmag, gradpar, itor_over_B 
+  public :: gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0
   public :: gds2, gds21, gds22, kxfac, qval
   public :: grho
   public :: bmin, bmax, eps, shat, drhodpsi, jacob
@@ -823,6 +824,7 @@ module theta_grid
   real, dimension (:), allocatable :: theta, theta2, delthet, delthet2
   real, dimension (:), allocatable :: bset
   real, dimension (:), allocatable :: bmag, gradpar
+  real, dimension (:), allocatable :: itor_over_B
   real, dimension (:), allocatable :: gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0
   real, dimension (:), allocatable :: gds2, gds21, gds22
   real, dimension (:), allocatable :: grho, jacob
@@ -892,6 +894,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast (delthet2)
     call broadcast (bset)
     call broadcast (bmag)
+    call broadcast (itor_over_B)
     call broadcast (gradpar)
     call broadcast (gbdrift)
     call broadcast (gbdrift0)
@@ -951,6 +954,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     allocate (bset(nbset))
     allocate (bmag(-ntgrid:ntgrid))
     allocate (gradpar(-ntgrid:ntgrid))
+    allocate (itor_over_B(-ntgrid:ntgrid))
     allocate (gbdrift(-ntgrid:ntgrid))
     allocate (gbdrift0(-ntgrid:ntgrid))
     allocate (cvdrift(-ntgrid:ntgrid))
@@ -995,6 +999,9 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
 
        eik_save = gradpar(-ntgrid:ntgrid); deallocate (gradpar)
        allocate (gradpar(-ntgrid:ntgrid)); gradpar = eik_save
+
+       eik_save = itor_over_B(-ntgrid:ntgrid); deallocate (itor_over_B)
+       allocate (itor_over_B(-ntgrid:ntgrid)); itor_over_B = eik_save
 
        eik_save = gbdrift(-ntgrid:ntgrid); deallocate (gbdrift)
        allocate (gbdrift(-ntgrid:ntgrid)); gbdrift = eik_save
@@ -1089,6 +1096,7 @@ if (debug) write(6,*) 'get_sizes: done'
     use theta_grid_eik, only: eik_get_grids
     use theta_grid_salpha, only: salpha_get_grids
     use theta_grid_file, only: file_get_grids
+    use geometry, only: rhoc
     implicit none
     logical:: debug=.false.
     select case (eqopt_switch)
@@ -1121,6 +1129,13 @@ if (debug) write(6,*) 'get_grids: call file_get_grids'
     end select
     kxfac = abs(kxfac)
     qval = abs(qval)
+!CMR, 19/10/10: moved MAB's definition of geometry quantity itor_over_B from 
+!               dist_fn.f90 to here.
+! Calculate the parallel velocity shear drive factor itor_over_B (which effectively depends on the angle the field lines make with the flow)
+! note that the following is only valid in a torus!
+! itor_over_B = (q/rho) * Rmaj*Btor/(a*B)
+   itor_over_B = qval / rhoc * sqrt(Rplot**2 - (grho/(bmag*drhodpsi))**2)
   end subroutine get_grids
 
 end module theta_grid
+  
