@@ -119,7 +119,6 @@ module dist_fn
 
   ! exb shear
   integer, dimension(:), allocatable :: jump, ikx_indexed
-  real, dimension (:), allocatable :: itor_over_B
 
   ! kill
   real, dimension (:,:), allocatable :: aintnorm
@@ -193,6 +192,7 @@ contains
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
     use nonlinear_terms, only: init_nonlinear_terms
     use hyper, only: init_hyper
+    use theta_grid, only: itor_over_B
     implicit none
 
 !    write (*,*) 'entering init_dist_fn'
@@ -205,6 +205,14 @@ contains
     call init_kt_grids
     call init_le_grids (accelerated_x, accelerated_v)
     call read_parameters
+!CMR, 19/10/10:
+! Override itor_over_B, if "dist_fn_knobs" parameter btor_slab ne 0
+! Not ideal to set geometry quantity here, but its historical! 
+    if (abs(btor_slab) > epsilon(0.0)) itor_over_B = btor_slab
+! Done for slab, where itor_over_B is determined by angle between B-field 
+! and toroidal flow: itor_over_B = (d(u_z)/dx) / (d(u_y)/dx) = Btor / Bpol
+! u = u0 (phihat) = x d(u0)/dx (phihat) = x d(uy)/dx (yhat + Btor/Bpol zhat)
+! g_exb = d(uy)/dx => d(uz)/dx = g_exb * Btor/Bpol = g_exb * itor_over_B
 
     if (test) then
        if (proc0) then
@@ -1941,8 +1949,6 @@ contains
        else
           allocate (gnl_1(1,2,1), gnl_2(1,2,1), gnl_3(1,2,1))
        end if
-       allocate (itor_over_B(-ntgrid:ntgrid))
-       itor_over_B = 0.0
        if (boundary_option_switch == boundary_option_linked) then
           allocate (g_h(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           g_h = 0.
@@ -2014,7 +2020,7 @@ contains
     use gs2_layouts, only: ik_idx, it_idx, g_lo, idx_local, idx, proc_id
     use run_parameters, only: tunits
     ! MR no need for is_kx_local as kx's are parallelised
-    use theta_grid, only: ntgrid, ntheta, shat, bmag, drhodpsi, grho, Rplot, qval
+    use theta_grid, only: ntgrid, ntheta, shat
     use file_utils, only: error_unit
     use kt_grids, only: akx, aky, naky, ikx, ntheta0, box, theta0
     use le_grids, only: negrid, nlambda
@@ -2022,7 +2028,6 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kx_shift, theta0_shift
     use gs2_time, only: code_dt, code_dt_old
-    use geometry, only: rhoc
     use mp, only: iproc, proc0, send, receive
     use constants, only: twopi    
 
@@ -2040,21 +2045,6 @@ contains
     logical, save :: exb_first = .true.
 !    logical :: kx_local
     complex , dimension(-ntgrid:ntgrid) :: z
-
-     !Calculate the parallel velocity shear drive factor itor_over_B (which effectively depends on the angle the field lines make with the flow)
-
-       if (abs(btor_slab) > epsilon(0.0)) then
-          ! for slab, itor_over_B is input parameter determined
-          ! by angle between B-field and toroidal flow
-          ! itor_over_B = (d(u_z)/dx) / (d(u_y)/dx) = Btor / Bpol
-          ! u = u0 (phihat) = x d(u0)/dx (phihat) = x d(uy)/dx (yhat + Btor/Bpol zhat)
-          ! g_exb = d(uy)/dx => d(uz)/dx = g_exb * Btor/Bpol = g_exb * itor_over_B
-          itor_over_B = btor_slab
-       else
-          ! note that the following is only valid in a torus!
-          ! itor_over_B = (q/rho) * Rmaj*Btor/(a*B)
-          itor_over_B = qval / rhoc * sqrt(Rplot**2 - (grho/(bmag*drhodpsi))**2)
-       end if
 
        ierr = error_unit()
 
@@ -2794,8 +2784,7 @@ contains
     subroutine set_source
 
       use species, only: spec
-      use theta_grid, only: bmag, drhodpsi, grho, Rplot, qval
-      use geometry, only: rhoc
+      use theta_grid, only: itor_over_B
       use mp, only: proc0
 
       complex :: apar_p, apar_m, phi_p, phi_m!, bpar_p !GGH added bpar_p
@@ -7315,7 +7304,7 @@ contains
     if (allocated(g)) deallocate (g, gnew, g0)
     if (allocated(gnl_1)) deallocate (gnl_1, gnl_2, gnl_3)
     if (allocated(g_h)) deallocate (g_h, save_h)
-    if (allocated(kx_shift)) deallocate (kx_shift, itor_over_B)
+    if (allocated(kx_shift)) deallocate (kx_shift)
     if (allocated(jump)) deallocate (jump)
     if (allocated(ikx_indexed)) deallocate (ikx_indexed)
     if (allocated(aintnorm)) deallocate (aintnorm)
