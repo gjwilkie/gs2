@@ -83,9 +83,9 @@ contains
 ! <TT
     use file_utils, only: error_unit
     !<DD> Added for saving distribution function
-    USE LE_GRIDS, ONLY: e,al,negrid,nlambda
-    USE SPECIES, ONLY: nspec
-    USE DIST_FN_ARRAYS, ONLY: vpa,vperp2
+    use le_grids, only: e,al,negrid,nlambda
+    use species, only: nspec
+    use dist_fn_arrays, only: vpa,vperp2
     !</DD> Added for saving distribution function
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
