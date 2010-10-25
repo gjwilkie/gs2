@@ -138,8 +138,6 @@ contains
        END IF
        !</DD> Added for saving distribution function
        
-
-       write (suffix,'(a1,i0)') '.', iproc
        file_proc = trim(trim(file_proc)//adjustl(suffix))
        
        istatus = nf90_create (file_proc, NF90_CLOBBER, ncid)
