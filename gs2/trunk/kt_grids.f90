@@ -518,7 +518,8 @@ contains
     use constants, only: pi
     implicit none
     integer:: report_unit
-    real :: lx, naky, ntheta0, nx, ny, shat
+    real :: lx, shat
+    integer :: nx, ny, naky, ntheta0
 
     naky=naky_private
     ntheta0=ntheta0_private
