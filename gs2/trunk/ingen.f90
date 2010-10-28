@@ -138,6 +138,7 @@ program ingen
   real :: den2, upar2, tpar2, tperp2
   real :: tstart, scale, apar0, dphiinit
   logical :: chop_side, left
+  character (len=150) :: restart_dir
   character(300) :: restart_file
   integer, dimension(2) :: ikk, itt
 
@@ -411,7 +412,7 @@ program ingen
 
 ! init_g:
   namelist /init_g_knobs/ ginit_option, width0, phiinit, k0, chop_side, &
-       restart_file, left, ikk, itt, scale, tstart, zf_init, &
+       restart_file, restart_dir, left, ikk, itt, scale, tstart, zf_init, &
        den0, upar0, tpar0, tperp0, imfac, refac, even, &
        den1, upar1, tpar1, tperp1, &
        den2, upar2, tpar2, tperp2, dphiinit, apar0
