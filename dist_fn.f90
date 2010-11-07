@@ -1356,6 +1356,10 @@ contains
        from_low (2) = 1
        from_low (3) = g_lo%llim_proc
        
+       from_high(1) = ntgrid
+       from_high(2) = 2
+       from_high(3) = g_lo%ulim_alloc
+
        to_low (1) = 1
        to_low (2) = 1 
        to_low (3) = g_lo%llim_proc
@@ -1363,10 +1367,6 @@ contains
        to_high(1) = n_links_max
        to_high(2) = 2
        to_high(3) = g_lo%ulim_alloc
-
-       from_high(1) = ntgrid
-       from_high(2) = 2
-       from_high(3) = g_lo%ulim_alloc
 
        call init_fill (links_p, 'c', to_low, to_high, to, &
             from_low, from_high, from)
@@ -1493,6 +1493,10 @@ contains
        from_low (2) = 1
        from_low (3) = g_lo%llim_proc
        
+       from_high(1) = ntgrid
+       from_high(2) = 2
+       from_high(3) = g_lo%ulim_alloc
+
        to_low (1) = 1
        to_low (2) = 1 
        to_low (3) = g_lo%llim_proc
@@ -1501,17 +1505,13 @@ contains
        to_high(2) = 2
        to_high(3) = g_lo%ulim_alloc
 
-       from_high(1) = ntgrid
-       from_high(2) = 2
-       from_high(3) = g_lo%ulim_alloc
-
        call init_fill (wfb_p, 'c', to_low, to_high, to, from_low, from_high, from)
        
        call delete_list (from)
        call delete_list (to)
        
 ! n_links_max is typically 2 * number of cells in largest supercell
-       allocate (g_adj(n_links_max, 2, g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (g_adj (n_links_max, 2, g_lo%llim_proc:g_lo%ulim_alloc))
 
 ! now set up links_h:
 ! excluding wfb
@@ -1644,6 +1644,10 @@ contains
        from_low (2) = 1
        from_low (3) = g_lo%llim_proc
        
+       from_high(1) = ntgrid
+       from_high(2) = 2
+       from_high(3) = g_lo%ulim_alloc
+
        to_low (1) = 1
        to_low (2) = 1 
        to_low (3) = g_lo%llim_proc
@@ -1651,10 +1655,6 @@ contains
        to_high(1) = n_links_max
        to_high(2) = 2
        to_high(3) = g_lo%ulim_alloc
-
-       from_high(1) = ntgrid
-       from_high(2) = 2
-       from_high(3) = g_lo%ulim_alloc
 
        call init_fill (links_h, 'c', to_low, to_high, to, &
             from_low, from_high, from)
@@ -1782,6 +1782,10 @@ contains
        from_low (2) = 1
        from_low (3) = g_lo%llim_proc
        
+       from_high(1) = ntgrid
+       from_high(2) = 2
+       from_high(3) = g_lo%ulim_alloc
+
        to_low (1) = 1
        to_low (2) = 1 
        to_low (3) = g_lo%llim_proc
@@ -1789,10 +1793,6 @@ contains
        to_high(1) = n_links_max
        to_high(2) = 2
        to_high(3) = g_lo%ulim_alloc
-
-       from_high(1) = ntgrid
-       from_high(2) = 2
-       from_high(3) = g_lo%ulim_alloc
 
        call init_fill (wfb_h, 'c', to_low, to_high, to, from_low, from_high, from)
        
@@ -3155,6 +3155,8 @@ contains
     if (no_comm) then
        ! nothing
     else       
+! bug fix, community effort.  11/1/10
+       g_adj = 0.
        call fill (links_p, gnew, g_adj)
        call fill (links_h, g_h, g_adj)
        call fill (wfb_p, gnew, g_adj)
