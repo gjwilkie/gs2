@@ -2,7 +2,16 @@
 GS2 TRUNK STATUS - please see NOTES at end
 ----------------
 
-current: unknown (as of r1191) [gregcolyer]
+r1430:   fixes r1426 bug below [gregcolyer: on behalf of colinmroach]
+
+r1429  )
+thru   ) flow shear broken, runs as if zero [gregcolyer: on behalf of colinmroach]
+r1426  )
+
+r1425  ) don't work on HECToR XT6 with Trinity at same revision [gregcolyer]
+r1424  )
+
+r1330:   OK? [gregcolyer: this revision recommended for HECToR by mabarnes, 8 Oct 2010]
 
 r1069  )
 thru   ) broken? [gregcolyer: MAST runs for Trinity, Dec 2009]

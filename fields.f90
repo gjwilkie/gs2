@@ -2,6 +2,9 @@ module fields
   use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
   use fields_arrays, only: phitmp, apartmp, bpartmp
   use fields_arrays, only: phitmp1, apartmp1, bpartmp1
+!+PJK
+  use fields_arrays, only: phiold, aparold, bparold
+!-PJK
   use fields_arrays, only: phi_ext, apar_ext
 
   implicit none
@@ -20,8 +23,9 @@ module fields
   end interface
 
   ! knobs
-  integer :: fieldopt_switch
-  integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_explicit = 3
+  !+PJK Added public attribute to fieldopt variables
+  integer, public :: fieldopt_switch
+  integer, public, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_explicit = 3
 
   logical :: initialized = .false.
 
@@ -128,6 +132,11 @@ contains
        allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (bparnew (-ntgrid:ntgrid,ntheta0,naky))
+!+PJK
+       allocate ( phiold (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (aparold (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (bparold (-ntgrid:ntgrid,ntheta0,naky))
+!-PJK
        allocate (  phitmp (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( apartmp (-ntgrid:ntgrid,ntheta0,naky))
        allocate (bpartmp (-ntgrid:ntgrid,ntheta0,naky))
@@ -140,6 +149,9 @@ contains
     phi = 0.; phinew = 0.; phitmp = 0. 
     apar = 0.; aparnew = 0.; apartmp = 0. 
     bpar = 0.; bparnew = 0.; bpartmp = 0.
+!+PJK
+    phiold = 0.; aparold = 0.; bparold = 0.
+!-PJK
 !    phitmp1 = 0. ; apartmp1 = 0. ; bpartmp1 = 0.
 !    phi_ext = 0.
     apar_ext = 0.
@@ -280,7 +292,9 @@ contains
 
     if (allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew, &
          phitmp, apartmp, bpartmp, apar_ext)
-
+!+PJK
+    if (allocated(phiold)) deallocate (phiold, aparold, bparold)
+!-PJK
   end subroutine finish_fields
 
 end module fields

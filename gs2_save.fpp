@@ -43,6 +43,12 @@ module gs2_save
   integer (kind_nf) :: kx_shift_id   ! MR: added to save kx_shift variable
   integer (kind_nf) :: t0id, gr_id, gi_id, vnm1id, vnm2id, delt0id
   integer (kind_nf) :: a_antr_id, b_antr_id, a_anti_id, b_anti_id
+!<DD> Added for saving distribution function
+  INTEGER (KIND_NF) :: egridid,lgridid, vpa_id, vperp2_id
+  INTEGER (KIND_NF) :: energy_id, lambda_id
+  INTEGER (KIND_NF) :: nspecid, spec_id
+  LOGICAL :: initialized_dfn= .false.
+!</DD> Added for saving distribution function
 !  integer (kind_nf) :: netcdf_real=0
 
   logical :: initialized = .false.
@@ -52,7 +58,12 @@ module gs2_save
 contains
 
   subroutine gs2_save_for_restart &
-       (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in)
+       (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in,distfn)
+!<DD 18-10-2010> Added flag distfn to gs2_save_for_restart
+!If present then will save to "rootname.nc.dfn.proc" and will
+!include extra information including velocity and energy grids
+!</DD>
+ 
 !MR, 2007: save kx_shift array in restart file if allocated    
 # ifdef NETCDF
     use constants, only: kind_rs, kind_rd, pi
@@ -71,6 +82,11 @@ contains
     use layouts_type, only: g_layout_type
 ! <TT
     use file_utils, only: error_unit
+    !<DD> Added for saving distribution function
+    use le_grids, only: e,al,negrid,nlambda
+    use species, only: nspec
+    use dist_fn_arrays, only: vpa,vperp2
+    !</DD> Added for saving distribution function
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
@@ -78,12 +94,13 @@ contains
     real, intent (in) :: fphi, fapar, fbpar
     integer, intent (out) :: istatus
     logical, intent (in), optional :: exit_in
+    LOGICAL, INTENT (in), optional :: distfn !<DD> Added for saving distribution function
 # ifdef NETCDF
     character (306) :: file_proc
     character (10) :: suffix
     integer :: i, n_elements, ierr
     logical :: exit
-
+    logical :: local_init !<DD> Added for saving distribution function
     if (present(exit_in)) then
        exit = exit_in
     else
@@ -93,11 +110,34 @@ contains
     n_elements = g_lo%ulim_proc-g_lo%llim_proc+1
     if (n_elements <= 0) return
 
-    if (.not.initialized) then
-       initialized = .true.
+    !<DD> Added for saving distribution function
+    IF (PRESENT(distfn)) THEN
+    	local_init=initialized_dfn
+    ELSE
+    	local_init=initialized
+    END IF
+    !</DD> Added for saving distribution function
+    
+    if (.not.local_init) then
+
+       !<DD> Added for saving distribution function
+       IF (PRESENT(distfn)) THEN
+        	initialized_dfn=.true.
+       ELSE
+    		initialized = .true.
+       END IF
+       !</DD> Added for saving distribution function
+       
        file_proc = trim(restart_file)
        
-       write (suffix,'(a1,i0)') '.', iproc
+       !<DD> Added for saving distribution function
+       IF (PRESENT(distfn)) THEN
+        	WRITE (suffix,'(a5,i0)') '.dfn.', iproc	
+       ELSE
+            WRITE (suffix,'(a1,i0)') '.', iproc
+       END IF
+       !</DD> Added for saving distribution function
+       
        file_proc = trim(trim(file_proc)//adjustl(suffix))
        
        istatus = nf90_create (file_proc, NF90_CLOBBER, ncid)
@@ -144,6 +184,46 @@ contains
           end if
        end if
        
+       !<DD> Added for saving distribution function
+       	IF (PRESENT(distfn)) THEN
+           		!<DD 29-08-2010> Define energy and lambda dimensions
+
+	            !Define negrid dimension (number of energy grid points)
+	            istatus = nf90_def_dim (ncid, "negrid", negrid, egridid)
+	
+	            !Check dimension created successfully
+	            IF (istatus /= NF90_NOERR) THEN
+	                ierr = error_unit()
+	                WRITE(ierr,*) "nf90_def_dim negrid error: ", nf90_strerror(istatus)
+	                GOTO 1
+	            END IF
+	
+	            !Define nlambda dimension (number of pitch angles)
+	            istatus = nf90_def_dim (ncid, "nlambda", nlambda, lgridid)
+	
+	            !Check dimension created successfully
+	            IF (istatus /= NF90_NOERR) THEN
+	                ierr = error_unit()
+	                WRITE(ierr,*) "nf90_def_dim nlambda error: ", nf90_strerror(istatus)
+	                GOTO 1
+	            END IF
+	            !</DD>
+	
+	            !<DD 01-09-2010> Define species dimension
+	
+	            !Define nspec dimension (number of species)
+	            istatus = nf90_def_dim (ncid, "nspec", nspec, nspecid)
+	
+	            !Check dimension created successfully
+	            IF (istatus /= NF90_NOERR) THEN
+	                ierr = error_unit()
+	                WRITE(ierr,*) "nf90_def_dim nspec error: ", nf90_strerror(istatus)
+	                GOTO 1
+	            END IF
+	            !</DD>
+	        END IF 
+       !</DD> Added for saving distribution function
+
        if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
 
        istatus = nf90_def_var (ncid, "t0", netcdf_real, t0id)
@@ -281,6 +361,70 @@ contains
                 goto 1
              end if
           end if
+
+          !<DD> Added for saving distribution function
+           IF (PRESENT(distfn)) THEN
+	          	!<DD 29-08-2010> Define energy and lambda variables
+	            !Define energy variable (energy for each species)
+	            istatus = nf90_def_var (ncid, "energy", netcdf_real, &
+	                (/ egridid, nspecid /), energy_id)
+	
+	            !Check variable created successfully
+	            IF (istatus /= NF90_NOERR) THEN
+	                ierr = error_unit()
+	                WRITE(ierr,*) "nf90_def_var energy error: ", nf90_strerror(istatus)
+	                GOTO 1
+	            END IF
+	
+	            !Define lambda variable (pitch angles)
+	            istatus = nf90_def_var (ncid, "lambda", netcdf_real, &
+	                (/ lgridid /), lambda_id)
+	
+	            !Check variable created successfully
+	            IF (istatus /= NF90_NOERR) THEN
+	                ierr = error_unit()
+	                WRITE(ierr,*) "nf90_def_var lambda error: ", nf90_strerror(istatus)
+	                GOTO 1
+	            END IF
+	            !</DD>
+	
+	            !<DD 01-09-2010> define species variable
+	            !Define species variable
+	            istatus = nf90_def_var (ncid, "species", netcdf_real, &
+	                (/ nspecid /), spec_id)
+	            !Check variable created successfully
+	            IF (istatus /= NF90_NOERR) THEN
+	                ierr = error_unit()
+	                WRITE(ierr,*) "nf90_def_var species error: ",nf90_strerror(istatus)
+	                GOTO 1
+	            END IF
+	            !</DD>
+	
+	            !<DD 02-09-2010> Define velocity variables
+	            !Define vpa variable
+	            istatus = nf90_def_var (ncid, "vpa", netcdf_real, &
+	                (/ thetaid, signid, gloid /), vpa_id)
+	
+	            !Check variable created successfully
+	            IF (istatus /= NF90_NOERR) THEN
+	                ierr = error_unit()
+	                WRITE(ierr,*) "nf90_def_var vpa error: ",nf90_strerror(istatus)
+	                GOTO 1
+	            END IF
+	
+	            !Define vperp2 variable
+	            istatus = nf90_def_var (ncid, "vperp2", netcdf_real, &
+	                (/ thetaid, gloid /), vperp2_id)
+	
+	            !Check variable created successfully
+	            IF (istatus /= NF90_NOERR) THEN
+	                ierr = error_unit()
+	                WRITE(ierr,*) "nf90_def_var vperp2 error: ",nf90_strerror(istatus)
+	                GOTO 1
+	            END IF
+	            !</DD>
+            END IF
+            !</DD> Added for saving distribution function
        end if
 
 ! remove allocated conditional because we want to be able to restart
@@ -392,6 +536,40 @@ contains
        istatus = nf90_put_var (ncid, gi_id, tmpr)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gi_id)
        
+       !<DD> Added for saving distribution function
+       IF (PRESENT(distfn)) THEN
+        	!<DD 29-08-2010> Fill energy and lambda information
+
+	        !Store variable energy
+	        istatus = nf90_put_var (ncid, energy_id, e(:,1:nspec))
+	
+	        !Check store was successful
+	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, energy_id)
+	
+	        !Store variable lambda
+	        istatus = nf90_put_var (ncid, lambda_id, al)
+	
+	        !Check store was successful
+	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, lambda_id)
+	        !</DD>
+	
+	        !<DD 02-09-2010> Fill velocity variables
+	
+	        !Store variable vpa
+	        istatus = nf90_put_var (ncid, vpa_id, vpa)
+	
+	        !Check store was successful
+	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vpa_id)
+	
+	        !Store variable vperp2
+	        istatus = nf90_put_var (ncid, vperp2_id, vperp2)
+	
+	        !Check store was successful
+	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vperp2_id)
+	        !</DD>
+       END IF
+       !</DD> Added for saving distribution function
+
        if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
        if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))
 

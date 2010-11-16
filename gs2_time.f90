@@ -73,7 +73,12 @@ contains
 !
 ! 
     vtfac = tnorm
-    
+!CMR:
+! vtfac = sqrt(2) if user chooses norm_option  v_t=sqrt(T/m)
+!       OR  1     if user chooses norm_option  v_t=sqrt(2T/m)
+! user_dt = delt: taken from input file in USER's time normalisation
+! code_dt = delt*vtfac: timestep in GS2 MUST use v_t=sqrt(2T/m) normalisation
+!CMRend
     user_dt = delt
     code_dt = delt * vtfac
 

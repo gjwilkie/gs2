@@ -51,7 +51,7 @@ module gs2_diagnostics
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
-         save_for_restart, write_parity
+         save_for_restart, write_parity, save_distfn !<DD> Added for saving distribution function
 ! Why are these variables public?  This is not good.
   real,public :: omegatol, omegatinst
   logical,public :: print_line, print_old_units, print_flux_line
@@ -77,6 +77,7 @@ module gs2_diagnostics
   logical,public :: dump_final_xfields
   logical,public :: use_shmem_for_xfields
   logical,public :: save_for_restart
+  logical,public :: save_distfn !<DD> Added for saving distribution function
   logical,public :: test_conserve
   integer,public :: nwrite, igomega, nmovie
   integer,public :: navg, nsave
@@ -204,6 +205,7 @@ contains
     call broadcast (dump_final_xfields)
     call broadcast (use_shmem_for_xfields)
     call broadcast (save_for_restart)
+    call broadcast (save_distfn) !<DD> Added for saving distribution function
     call broadcast (write_gs)
     call broadcast (write_g)
     call broadcast (write_gyx)
@@ -497,6 +499,7 @@ contains
        use_shmem_for_xfields = .true.
        nperiod_output = nperiod - nperiod_guard
        save_for_restart = .false.
+       save_distfn = .false. !<DD> Added for saving distribution function
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
 
 	!<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
@@ -561,6 +564,7 @@ contains
     use dist_fn, only: e_flux
     use dist_fn, only: write_f, write_fyx
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
+    use dist_fn, only: g_adjust
     use collisions, only: vnmult
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
@@ -867,20 +871,20 @@ contains
                    do it = 1, ntheta0
                       do ig = -ntg_out, ntg_out
                          ! TEMP FOR TESTING -- MAB
-                         write (unit, *) &
-                              real(ntot(ig,it,ik,is)/phi0(it,ik)), &
-                              real(upar(ig,it,ik,is)/phi0(it,ik)), &
-                              aimag(upar(ig,it,ik,is)/phi0(it,ik)), &
-                              real(tperp(ig,it,ik,is)/phi0(it,ik))
-!                         write (unit, "(15(1x,e12.5))") &
-!                              theta(ig), aky_out(ik), akx_out(it), &
-!                              ntot(ig,it,ik,is)/phi0(it,ik), &
-!                              density(ig,it,ik,is)/phi0(it,ik), &
-!                              upar(ig,it,ik,is)/phi0(it,ik), &
-!                              tpar(ig,it,ik,is)/phi0(it,ik), &
-!                              tperp(ig,it,ik,is)/phi0(it,ik), &
-!                              theta(ig) - theta0(it,ik), &
-!                              real(is)
+!                         write (unit, *) &
+!                              real(ntot(ig,it,ik,is)/phi0(it,ik)), &
+!                              real(upar(ig,it,ik,is)/phi0(it,ik)), &
+!                              aimag(upar(ig,it,ik,is)/phi0(it,ik)), &
+!                              real(tperp(ig,it,ik,is)/phi0(it,ik))
+                         write (unit, "(15(1x,e12.5))") &
+                              theta(ig), aky_out(ik), akx_out(it), &
+                              ntot(ig,it,ik,is)/phi0(it,ik), &
+                              density(ig,it,ik,is)/phi0(it,ik), &
+                              upar(ig,it,ik,is)/phi0(it,ik), &
+                              tpar(ig,it,ik,is)/phi0(it,ik), &
+                              tperp(ig,it,ik,is)/phi0(it,ik), &
+                              theta(ig) - theta0(it,ik), &
+                              real(is)
                       end do
                       write (unit, "()")
                    end do
@@ -1023,6 +1027,21 @@ contains
             fphi, fapar, fbpar, .true.)
     end if
 
+    !<DD> Added for saving distribution function
+    IF (save_distfn) THEN
+    	!Convert h to distribution function
+    	CALL g_adjust(gnew,phinew,bparnew,fphi,fbpar)
+    	
+    	!Save dfn, fields and velocity grids to file
+       	CALL gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
+          	fphi, fapar, fbpar, .true.,.true.)
+    	
+        !Convert distribution function back to h
+        CALL g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
+    END IF
+
+    !</DD> Added for saving distribution function
+    
     call nc_finish
 
     if (proc0) call dump_ant_amp
@@ -1354,7 +1373,7 @@ contains
     use theta_grid, only: gradpar, nperiod
     use kt_grids, only: naky, ntheta0, aky_out, theta0, akx_out, aky, akx
     use kt_grids, only: nkpolar !, akpolar, akpolar_out
-    use run_parameters, only: woutunits, funits, fapar, fphi, fbpar
+    use run_parameters, only: woutunits, funits, tunits, fapar, fphi, fbpar, eqzip
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
@@ -1464,7 +1483,7 @@ contains
 
     exit = .false.
 
-    if (.not. nonlin ) then
+    if (eqzip .or. .not. nonlin) then
 ! MR, 10/3/2009: avoid calling get_omegaavg in nonlinear calculations
        if (proc0) then
           if (debug) write(6,*) "loop_diagnostics: proc0 call get_omegaavg"
@@ -2143,10 +2162,10 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 !                     aimag(omega(it,ik)*woutunits(ik))
                 if (write_omega) write (out_unit,&
                          fmt='(" omega= (",1pe12.4,",",1pe12.4,")",t45,"omega/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
-                     omega(it,ik), omega(it,ik)*woutunits(ik)
+                     omega(it,ik)/tunits(ik), omega(it,ik)*woutunits(ik)
                 if (write_omavg) write (out_unit,&
                          fmt='(" omavg= (",1pe12.4,",",1pe12.4,")",t45,"omavg/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
-                         omegaavg(it,ik), omegaavg(it,ik)*woutunits(ik)
+                         omegaavg(it,ik)/tunits(ik), omegaavg(it,ik)*woutunits(ik)
 !                if (write_omavg) write (out_unit, *) &
 !                     'omavg=', omegaavg(it,ik), &
 !                     ' omavg/(vt/a)=', real(omegaavg(it,ik)*woutunits(ik)), &

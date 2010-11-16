@@ -230,7 +230,7 @@ contains
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
     use dist_fn, only: timeadv, exb_shear
-    use dist_fn_arrays, only: g, gnew, kx_shift
+    use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
     use nonlinear_terms, only: algorithm !, nonlin
     implicit none
     integer :: diagnostics = 1
@@ -243,7 +243,7 @@ contains
        !GGH NOTE: apar_ext is initialized in this call
        call antenna_amplitudes (apar_ext)
        
-       if (allocated(kx_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
+       if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
 
        g = gnew
        phi = phinew !*nphi

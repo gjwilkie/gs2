@@ -1,167 +1,3 @@
-module legendre
-
-! Taken from Numerical Recipes, incorporated here by Tomo Tatsuno
-! Aug, 2005
-
-  implicit none
-
-  public :: nrgauleg, nrgaulag
-
-  private
-
-
-contains
-
-  subroutine nrgauleg (x1, x2, x, w)!, eps)
-
-    use constants, only: pi => dpi
-    use file_utils, only: error_unit
-    real, intent(in) :: x1, x2
-    real, dimension(:), intent(out) :: x, w
-    real  :: eps
-
-    integer :: its, j, m, n, ierr
-    integer, parameter :: maxit=100
-    double precision :: xl, xm
-    double precision, dimension((size(x)+1)/2) :: p1, p2, p3, pp, z, z1
-    logical, dimension((size(x)+1)/2) :: unfinished
-
-! TT> too severe for Jaguar (10/16/08)
-!    eps = epsilon(xm)
-    eps = epsilon(xm)*2.0
-! <TT
-    
-    n = size(x)
-    m = (n+1)/2
-
-    xm = real(0.5,kind(xm)) * (x1+x2)   ! middle of the section
-    xl = real(0.5,kind(xl)) * (x2-x1)   ! signed half length of the section
-    z = (/ (cos(pi*(j-0.25)/(n+0.5)), j=1,m) /)
-    unfinished = .true.
-
-    do its=1, maxit
-       where(unfinished)
-          p1 = real(1.0,kind(p1(1)))
-          p2 = real(0.0,kind(p2(1)))
-       end where
-       do j=1, n
-          where (unfinished)
-             p3 = p2
-             p2 = p1
-             p1 = ((2*j-1) * z * p2 - (j-1) * p3) / j
-          end where
-       end do
-! p1 now contains the desired legendre polynomials.
-       where (unfinished)
-          pp = n * (z * p1 - p2) / (z**2 - 1.0)
-          z1 = z
-          z = z1 - p1 / pp
-          unfinished = (abs(z-z1) > eps)
-       end where
-       if (.not. any(unfinished)) exit
-    end do
-
-    if (its == maxit+1) then
-       ierr = error_unit()
-       write (ierr,*) 'ERROR: too many iterations in nrgauleg'
-! TT> more message for failure (10/16/08)
-       do j=1, m
-          if (unfinished(j)) &
-               write (ierr,*) j, ': z= ', z(j), ' z1= ', z1(j)
-       end do
-! TT: commented out
-!       stop
-! <TT
-    end if
-    x(1:m) = xm - xl * z
-    x(n:n-m+1:-1) = xm + xl * z
-    w(1:m) = 2.0 * abs(xl) / ((1.0 - z**2) * pp**2)
-    w(n:n-m+1:-1) = w(1:m)
-
-  end subroutine nrgauleg
-
-  subroutine nrgaulag (x, w, alf)
-
-    use spfunc, only: lgamma
-    use constants, only: pi => dpi
-
-    implicit none
-
-    real, intent(in) :: alf
-    real, dimension(:), intent(out) :: x, w
-    double precision, parameter :: eps = 3.0e-13
-
-    integer :: its, j, n
-    integer, parameter :: maxit=10
-    real :: anu
-    real, parameter :: c1=9.084064e-01, c2=5.214976e-02
-    real, parameter :: c3=2.579930e-03, c4=3.986126e-03
-    real, dimension(size(x)) :: rhs, r2, r3, theta
-    double precision, dimension(size(x)) :: p1, p2, p3, pp, z, z1
-    logical, dimension(size(x)) :: unfinished
-!    double precision :: pi
-
-    n = size(x)
-!    pi = asin(real(1.0,kind(pi)))*2.0
-    anu = 4.0*n+2.0*alf+2.0
-    rhs = arth(4*n-1,-4,n)*pi/anu
-    r3 = rhs**(1.0/3.0)
-    r2 = r3**2
-    theta = r3*(c1 + r2*(c2 + r2*(c3 + r2*c4)))
-    z = anu*cos(theta)**2
-    unfinished = .true.
-
-    do its=1, maxit
-       where(unfinished)
-          p1 = real(1.0,kind(p1(1)))
-          p2 = real(0.0,kind(p2(1)))
-       end where
-       do j=1, n
-          where (unfinished)
-             p3 = p2
-             p2 = p1
-             p1 = ((2.0d0*j-1.0d0+alf-z)*p2 - (j-1.0d0+alf)*p3) / j
-          end where
-       end do
-! p1 now contains the desired laguerre polynomials.
-       where (unfinished)
-          pp = (n*p1-(n+alf)*p2)/z
-          z1 = z
-          z = z1 - p1/pp
-          unfinished = (abs(z-z1) > eps*z)
-       end where
-       if (.not. any(unfinished)) exit
-    end do
-
-    if (its == maxit+1) then
-       print*, 'too many iterations in nrgaulag'
-       stop
-    end if
-    x = z
-! TT>
-!    w = -exp(gammln(alf+n)-gammln(real(n)))/(pp*n*p2)
-    w = -exp(lgamma(alf+n)-lgamma(real(n)))/(pp*n*p2)
-! <TT
-
-  contains
-
-    function arth (first, increment, n)
-      implicit none
-      integer, intent (in) :: first, increment, n
-      integer, dimension (n) :: arth
-      integer :: k, k2, temp
-      if (n <= 0) write (*,*) "ERROR IN ARTH: NESUPER MUST BE GREATER THAN ZERO"
-
-      arth(1) = first
-      do k=2,n
-         arth(k) = arth(k-1) + increment
-      end do
-    end function arth
-
-  end subroutine nrgaulag
-  
-end module legendre
-
 module egrid
 
 ! By Tomo Tatsuno, Aug 2005
@@ -199,7 +35,7 @@ contains
 
   subroutine setegrid (Ecut, negrid, epts, wgts)
 
-    use legendre, only: nrgauleg
+    use gauss_quad, only: get_legendre_grids_from_cheb
     implicit none
     
     integer, intent (in) :: negrid
@@ -219,7 +55,7 @@ contains
     
     x0 = xgrid(ecut)      ! function xgrid_s (single element)
     
-    call nrgauleg(0., x0, zeroes, wgts(1:np))
+    call get_legendre_grids_from_cheb (0., x0, zeroes, wgts(1:np))
     
     do ie=1,np
        epts(ie) = energy(zeroes(ie), Ecut)
@@ -241,7 +77,7 @@ contains
   subroutine setvgrid (vcut, negrid, epts, wgts, nesub)
 
     use constants, only: pi => dpi
-    use legendre, only: nrgauleg, nrgaulag
+    use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
 
     implicit none
     
@@ -253,7 +89,7 @@ contains
     call init_egrid (negrid)
     
     ! get grid points in v up to vcut (epts is not E yet)
-    call nrgauleg (0., vcut, epts(:nesub), wgts(:nesub))
+    call get_legendre_grids_from_cheb (0., vcut, epts(:nesub), wgts(:nesub))
 
     ! change from v to E
     epts(:nesub) = epts(:nesub)**2
@@ -264,7 +100,7 @@ contains
     if (negrid > nesub) then
 
        ! get grid points in y = E - vcut**2 (epts not E yet)
-       call nrgaulag (epts(nesub+1:), wgts(nesub+1:), 0.0)
+       call get_laguerre_grids (epts(nesub+1:), wgts(nesub+1:))
 
        ! change from y to E
        epts(nesub+1:) = epts(nesub+1:) + vcut**2
@@ -1022,7 +858,7 @@ contains
   end subroutine get_weights
 
   subroutine get_intrvl_weights (llim, ulim, nodes, wgts)
-    use legendre, only: nrgauleg
+    use gauss_quad, only: get_legendre_grids_from_cheb
     
     implicit none
     
@@ -1037,8 +873,8 @@ contains
 
     allocate (gnodes(size(nodes)/2+1), gwgts(size(wgts)/2+1), omprod(size(nodes)/2+1))
     
-    call nrgauleg(llim, ulim, gnodes, gwgts)
-    
+    call get_legendre_grids_from_cheb (llim, ulim, gnodes, gwgts)
+
     do iw=1,size(wgts)
        omprod = 1.0
        
@@ -2413,7 +2249,6 @@ contains
 
   subroutine egridset
     use species, only: nspec, spec, slowing_down_species
-    use legendre, only: nrgauleg
     use constants
     use egrid, only: setegrid, setvgrid
     implicit none
@@ -3012,8 +2847,6 @@ contains
 
     else if (.not. advanced_egrid) then
 
-!       call nrgauleg (0., 1.0, esub, wsub, eps**1.5)
-
        select case (nesub)
        case (1)  
           esub = esub1
@@ -3167,10 +3000,8 @@ contains
 
   subroutine lgridset
 
-! Modified to use nrgauleg routine, Tomo Tatsuno, Aug 2005
-
     use theta_grid, only: ntgrid, bmag, bmax, eps, ntheta
-    use legendre, only: nrgauleg
+    use gauss_quad, only: get_legendre_grids_from_cheb
     use constants
     use file_utils, only: open_output_file, close_output_file
 
@@ -3193,7 +3024,7 @@ contains
 
     allocate (xx(2*ngauss))
 
-    call nrgauleg(1., 0., xx, wx)
+    call get_legendre_grids_from_cheb (1., 0., xx, wx)
 
     wl = 0.0
 

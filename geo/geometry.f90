@@ -8,7 +8,8 @@ module geometry
 
   real, allocatable, dimension(:) :: grho, theta, bmag, gradpar, &
        cvdrift, cvdrift0, gbdrift, gbdrift0, gds2, gds21, gds22, jacob, &
-       Rplot, Zplot, Rprime, Zprime, aplot, aprime, Uk1, Uk2
+       Rplot, Zplot, Rprime, Zprime, aplot, aprime, Uk1, Uk2, &
+       cdrift, cdrift0, gds23, gds24 ! MAB
   
   real, allocatable, dimension(:) :: J_X, B_X, g11_X, g12_X, g22_X, &
        K1_X, K2_X, gradpar_X
@@ -141,9 +142,13 @@ module geometry
 !!!     cvdrift0 :: part of total curvature drift operator proportional to theta_0
 !!!     gbdrift  :: coefficient of mu/Omega b_hat x (grad B).grad operator
 !!!     gbdrift0 :: part of total grad B drift operator proportional to theta_0
+!!!     cdrift :: part of coriolis drift operator independent of theta_0
+!!!     cdrift0 :: part of coriolis drift operator proportional to theta_0
 !!!     gds2 :: part of grad_perp**2 operator independent of theta_0
 !!!     gds21 :: part of grad_perp**2 operator proportional to theta_0
 !!!     gds22 :: part of grad_perp**2 operator proportional to theta_0**2
+!!!     gds23 :: part of v_E . grad theta operator independent of theta_0
+!!!     gds24 :: part of v_E . grad theta operator proportional to theta_0
 !!!     jacob :: Jacobian
 !!!     
 !!!  Use: 
@@ -183,11 +188,13 @@ contains
     real, allocatable, dimension(:)   :: smodel, dsdrp, grho2, seik, seik1, seik2
     real, allocatable, dimension(:)   :: dsdthet, dsdthet1, dsdthet2, grho1
     real, allocatable, dimension(:)   :: gdsdum1, gdsdum2, gdsdum3
+    real, allocatable, dimension(:)   :: gdsdum4, gdsdum5  ! MAB
     real, allocatable, dimension(:)   :: th_bish, Rpol, ltheta
     real, allocatable, dimension(:)   :: rgrid, rgrid1, rgrid2, Bpolmag, Bmod, dSdl
     real, allocatable, dimension(:)   :: rmajor, ans, ds, arcl
     real, allocatable, dimension(:,:) :: thgrad, rpgrad, crpgrad, grads
     real, allocatable, dimension(:,:) :: bvector, gradrptot, gradstot
+    real, allocatable, dimension(:,:) :: gradthtot ! MAB
 
     real, allocatable, dimension(:) :: a_bish, b_bish, c_bish
     real, allocatable, dimension(:) :: da_bish, db_bish, dc_bish, trip
@@ -701,6 +708,7 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 !
 !     compute gradient of S
     
+! MAB -- I think this is really gradient of alpha
        dqdrp=dqdrho*drhodrp
        do k=-nperiod+1,nperiod-1
           do j=1,2
@@ -712,6 +720,8 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
           enddo
        enddo    
     endif
+
+
 
     if(writelots) then
        write(11,*) 'i,theta,grads1,2=  '
@@ -771,6 +781,30 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
     endif
 
     if(isym == 1) call sym(bmag, 0, ntgrid)
+
+! MAB> new geometry terms gds23 and gds24 added because v_E . grad theta
+! is needed to simulate low-flow gk equation
+! v_E . grad theta = i*ky*phi*(rho_{r}*v_{t,r}/a**2)*(gds23 + gsd24*theta0)
+! <MAB
+
+    ! grad theta in (R,Z,phi) coordinates
+    ! since ballooning, theta goes from -ntheta*nperiod -> ntheta*nperiod,
+    ! but grad theta is periodic in theta
+    do k=-nperiod+1,nperiod-1
+       do i=-nth,nth
+          itot=i+k*ntheta
+          gradthtot(itot,1)=thgrad(i,1)
+          gradthtot(itot,2)=thgrad(i,2)
+          gradthtot(itot,3)=0.
+       enddo
+    enddo
+
+    ! calculate grad rho dot grad theta
+    call dottgridf(gradrptot, gradthtot, gdsdum4)
+    ! calculate grad alpha dot grad theta
+    call dottgridf(gradstot, gradthtot, gdsdum5)
+    gds23 = (gdsdum4*gds2 - gdsdum5*gds21/dqdrp)/bmag**2
+    gds24 = (gdsdum4*gds21 - gdsdum5*gds22/dqdrp)/bmag**2
 
 !     compute the gradparallel coefficient 
     if (dfit_eq) then
@@ -846,6 +880,9 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
        call sym(gds2, 0, ntgrid)
        call sym(gds21, 1, ntgrid)
        call sym(gds22, 0, ntgrid)
+! not sure abou the following yet -- MAB
+!       call sym(gds23, 0, ntgrid)
+!       call sym(gds24, 1, ntgrid)
     endif
 
     write(25,*) rhoc, f_trap(bmag(-nth:nth))
@@ -908,6 +945,8 @@ contains
          gdsdum1    (-n:n), &
          gdsdum2    (-n:n), &
          gdsdum3    (-n:n), &
+         gdsdum4    (-n:n), &  ! MAB
+         gdsdum5    (-n:n), &  ! MAB
          th_bish    (-n:n), &
          Rpol       (-n:n), &
          ltheta     (-n:n), &
@@ -934,7 +973,8 @@ contains
 
     allocate(bvector(-n:n,3), &
          gradrptot  (-n:n,3), &
-         gradstot   (-n:n,3))
+         gradstot   (-n:n,3), &
+         gradthtot  (-n:n,3))  ! MAB
 
   end subroutine alloc_local_arrays
 
@@ -953,6 +993,8 @@ contains
          gdsdum1   , &
          gdsdum2   , &
          gdsdum3   , &
+         gdsdum4   , &  ! MAB
+         gdsdum5   , &  ! MAB
          th_bish   , &
          Rpol      , &
          ltheta    , &
@@ -974,7 +1016,8 @@ contains
 
     deallocate(bvector, &
          gradrptot , &
-         gradstot    )
+         gradstot  , &
+         gradthtot )  ! MAB
 
   end subroutine dealloc_local_arrays
 
@@ -1313,11 +1356,23 @@ end subroutine eikcoefs
        enddo
     endif
 
+    ! coriolis drift term is -2*vpa*om_phi/Omega * (bhat x (zhat x bhat)) . grad (g+q<phi>F_0/T)
+    ! here we terms for 2/Omega * (bhat x (zhat x bhat)) . grad
+    do k=-nperiod+1,nperiod-1
+       do i=-nth,nth
+          itot=i+k*ntheta
+          cdrift(itot)  = 2.*dpsidrho*gradstot(itot,2)/bmod(i)
+          cdrift0(itot) = 2.*dpsidrho*gradrptot(itot,2)*dqdrp/bmod(i)
+!          write (*,*) 'cdrift', itot, cdrift(itot), cdrift0(itot)
+       end do
+    end do
+
     if(isym == 1) then
        call sym(gbdrift, 0, ntgrid)
        call sym(cvdrift, 0, ntgrid)
        call sym(gbdrift0, 1, ntgrid)
        call sym(cvdrift0, 1, ntgrid)
+! should maybe add in cdrift and cdrift0 here -- MAB
     endif
 
   end subroutine drift
@@ -2663,9 +2718,13 @@ end subroutine geofax
          cvdrift0   (-n:n), &
          gbdrift    (-n:n), &
          gbdrift0   (-n:n), &
+         cdrift    (-n:n), &
+         cdrift0    (-n:n), &
          gds2       (-n:n), &
          gds21      (-n:n), &
          gds22      (-n:n), &
+         gds23      (-n:n), &  ! MAB
+         gds24      (-n:n), &  ! MAB
          jacob      (-n:n), &
          Rplot      (-n:n), &
          Zplot      (-n:n), &

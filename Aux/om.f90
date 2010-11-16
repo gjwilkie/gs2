@@ -1,6 +1,7 @@
 program om
 
-  use command_line
+  use command_line, only: cl_getarg, cl_iargc
+
   real, dimension(:), allocatable :: w, A
   character (500) :: runname, c
   integer, dimension (1) :: max_loc, jlo, jhi
@@ -8,7 +9,7 @@ program om
   complex :: omega
   real :: wr, wi
 
-  if (iargc() /= 0) then
+  if (cl_iargc() /= 0) then
      call cl_getarg (1, runname, 500, ierr)
   else
      write (*,*) 'runname = ?'

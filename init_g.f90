@@ -21,7 +21,7 @@ module init_g
        ginitopt_nl5 = 19, ginitopt_alf = 20, ginitopt_kpar = 21, &
        ginitopt_nl6 = 22, ginitopt_nl7 = 23, ginitopt_gs = 24, ginitopt_recon = 25, &
        ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28, &
-       ginitopt_recon3 = 29
+       ginitopt_recon3 = 29, ginitopt_zonal_only = 30
   real :: width0, dphiinit, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
   real :: den1, upar1, tpar1, tperp1
@@ -228,6 +228,11 @@ contains
        call init_tstart (tstart, istatus)
        restarted = .true.
        scale = 1.
+    case (ginitopt_zonal_only)
+       call ginit_restart_zonal_only
+       call init_tstart (tstart, istatus)
+       restarted = .true.
+       scale = 1.
     case (ginitopt_smallflat)
        call ginit_restart_smallflat
        call init_tstart (tstart, istatus)
@@ -246,7 +251,7 @@ contains
     use text_options, only: text_option, get_option_value
     implicit none
 
-    type (text_option), dimension (29), parameter :: ginitopts = &
+    type (text_option), dimension (30), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
             text_option('test1', ginitopt_test1), &
@@ -275,7 +280,8 @@ contains
             text_option('smallflat', ginitopt_smallflat), &
             text_option('harris', ginitopt_harris), &
             text_option('recon', ginitopt_recon), &
-            text_option('recon3', ginitopt_recon3) &
+            text_option('recon3', ginitopt_recon3), &
+            text_option('zonal_only', ginitopt_zonal_only) &
             /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
@@ -1770,11 +1776,11 @@ contains
 
   subroutine ginit_recon3
     use mp, only: proc0
+    use mp, only: iproc
     use species, only: nspec, spec, has_electron_species
     use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, nakx => ntheta0, akx, reality
+    use kt_grids, only: naky, nakx => ntheta0, akx, aky, reality
     use kt_grids, only: nx,ny
-    use kt_grids_box, only: x0,y0
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
     use dist_fn_arrays, only: aj0,aj1,vperp2
     use dist_fn_arrays, only: kperp2
@@ -1975,7 +1981,8 @@ contains
        else
           if(debug.and.proc0) write(6,*) 'set equilibrium profile'
           allocate(nxy(nfx,ny),uxy(nfx,ny))
-          lx=2.*pi*x0; ly=2.*pi*y0
+!          lx=2.*pi*x0; ly=2.*pi*y0
+          lx=2.*pi/(akx(2)-akx(1)); ly=2.*pi/(aky(2)-aky(1))
           dx=lx/nfx
           ! if width is negative, it gives the ratio to the box size
           if(prof_width < 0. ) prof_width=-prof_width*lx
@@ -2280,6 +2287,7 @@ contains
 
     ! now store the actual g in gnew
     gnew(:,:,:) = g(:,:,:)
+    call get_init_field(phi,apar,bpar)
 
 !!! check
     if(debug.and.proc0) write(6,*) 'check'
@@ -2591,6 +2599,84 @@ contains
     gnew = g 
 
   end subroutine ginit_restart_smallflat
+
+
+	!<doc> This subroutine removes all turbulence except the zonal flow (ky = 0) component upon 
+	!restarting. It can be selected by setting the input parameter ginit to "zonal_only". The size of the zonal flows can be adjusted using the input parameter zf_init. Author EGH</doc> 
+
+  subroutine ginit_restart_zonal_only
+
+    use gs2_save, only: gs2_restore
+    use mp, only: proc0
+    use file_utils, only: error_unit
+    use species, only: spec
+    use theta_grid, only: ntgrid 
+    use kt_grids, only: naky, ntheta0, aky, reality
+    use le_grids, only: forbid
+    use dist_fn_arrays, only: g, gnew
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use run_parameters, only: fphi, fapar, fbpar
+    use ran
+
+    implicit none
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
+    integer :: istatus, ierr
+    logical :: many = .true.
+    real :: a, b
+    integer :: iglo
+!    integer :: ig, ik, it, il, is
+    integer :: ik, it, il, is
+
+		! <doc> Load phi and g from the restart file
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    if (istatus /= 0) then
+       ierr = error_unit()
+       if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
+       g = 0.
+    end if
+!     g = g + gnew
+!     gnew = g 
+
+		phi = fphi
+
+
+		!<doc> Set all non-zonal components of phi to 0</doc>
+    do it = 1, ntheta0
+       do ik = 2, naky ! Starting at 2 is the crucial bit!!
+          phi(:,it,ik) = cmplx(0.0,0.0)
+       end do
+    end do
+
+	! <doc>Allow adjustment of the size of the zonal flows via the input parameter zf_init</doc>
+     phi(:,:,1) = phi(:,:,1)*zf_init
+
+
+		!<doc> Apply reality condition for k_theta = 0 component</doc>
+    if (reality) then
+       do it = 1, ntheta0/2
+          phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
+       enddo
+    end if
+
+		!<doc> Set non-zonal components of g to zero using phi</doc>
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+				if (ik > 1) then
+					g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit
+					where (forbid(:,il)) g(:,1,iglo) = 0.0
+					g(:,2,iglo) = g(:,1,iglo)
+				end if
+    end do
+    gnew = g
+
+
+
+  end subroutine ginit_restart_zonal_only
+
 
   subroutine reset_init
 
