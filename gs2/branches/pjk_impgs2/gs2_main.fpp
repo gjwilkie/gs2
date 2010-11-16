@@ -6,10 +6,16 @@ module gs2_main
 contains
 # endif
 
-  subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, grho, nofinish)
 
-    ! <doc> Main subroutine in which gs2 is initialized, equations are advanced,
-    ! and the program is finalized </doc>
+  !> This is the main subroutine in which gs2 is initialized, equations are advanced,
+  !!   and the program is finalized.
+  !! \section Structure 
+  !! \section arguments Arguments
+  !! All arguments are optional and are not used for gs2. 
+  !! (EGH - used for Trinity?)
+
+
+  subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, grho, nofinish)
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
@@ -78,7 +84,8 @@ contains
           end if
           write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
-          !  whether we are doing a [[Trinity]] run or a list of runs </doc>
+          !  whether we are doing a [[Trinity]] run or a list of runs. </doc>
+          ! <doc>If it is a [[Trinity]] run then [[filename]] (the name of the input file?) is passed to  init_file_utils</doc>
           ! <doc> Figure out run name or get list of jobs </doc>
           if (present(filename)) then
              call init_file_utils (list, trin_run=.true., name=filename, n_ensembles=nensembles)

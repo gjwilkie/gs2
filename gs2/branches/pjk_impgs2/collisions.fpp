@@ -2885,6 +2885,7 @@ contains
     use le_grids, only: e, integrate_moment
     use species, only: nspec, spec, electron_species
     use dist_fn_arrays, only: c_rate, vpa, kperp2, aj0
+    use run_parameters, only: ieqzip
 
     use constants
 
@@ -2949,7 +2950,8 @@ contains
              ik = ik_idx(g_lo,iglo)
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
-                g(ig,:,iglo) = g(ig,:,iglo) + vnmult(1)*spec(is)%vnewk*code_dt &
+                g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
+                     vnmult(1)*spec(is)%vnewk*code_dt &
                      * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
                      / (beta*spec(is)%stm*e(ie,is)**1.5)
                 ! probably need 1/(spec(is_ion)%z*spec(is_ion)%dens) above
@@ -2989,7 +2991,8 @@ contains
              ik = ik_idx(g_lo,iglo)
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
-                g(ig,:,iglo) = g(ig,:,iglo) + vnmult(1)*spec(is)%vnewk*code_dt &
+                g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
+                     vnmult(1)*spec(is)%vnewk*code_dt &
                      * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
                      / (beta*spec(is)%stm*e(ie,is)**1.5)
              end do
@@ -3045,6 +3048,7 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
     use le_grids, only: e, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
+    use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
     use le_grids, only: nlambda, negrid, e, al, ng2
     use gs2_layouts, only: le_lo, ig_idx
@@ -3115,7 +3119,9 @@ contains
 !        end do
 
        do ile = le_lo%llim_proc, le_lo%ulim_proc
-          gle(:,:,ile) = gle(:,:,ile) - z0le(:,:,ile) * v0y0(ile)
+          it = it_idx(le_lo,ile)
+          ik = ik_idx(le_lo,ile)
+          gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)* z0le(:,:,ile) * v0y0(ile)
        end do
 
     end if
@@ -3167,7 +3173,9 @@ contains
 !     end do
 
     do ile = le_lo%llim_proc, le_lo%ulim_proc
-       gle(:,:,ile) = gle(:,:,ile) - s0le(:,:,ile) * v1y1(ile)
+       it = it_idx(le_lo,ile)
+       ik = ik_idx(le_lo,ile)
+       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*s0le(:,:,ile) * v1y1(ile)
     end do
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -3197,7 +3205,9 @@ contains
 !        gle(:,:,ile) = gle(:,:,ile) - w0le(:,:,ile) * v2y2(ig,it,ik,is)
 !     end do
     do ile = le_lo%llim_proc, le_lo%ulim_proc
-       gle(:,:,ile) = gle(:,:,ile) - w0le(:,:,ile) * v2y2(ile)
+       it = it_idx(le_lo,ile)
+       ik = ik_idx(le_lo,ile)
+       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*w0le(:,:,ile) * v2y2(ile)
     end do
 
     deallocate (vpanud, v0y0, v1y1, v2y2)
@@ -3232,7 +3242,7 @@ contains
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g1(:,isgn,iglo) = g(:,isgn,iglo) - v0y0(:,it,ik,is) &
+          g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
                * z0(:,isgn,iglo)
        end do
     end do
@@ -3267,7 +3277,7 @@ contains
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g1(:,isgn,iglo) = g1(:,isgn,iglo) - v1y1(:,it,ik,is) &
+          g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v1y1(:,it,ik,is) &
                * s0(:,isgn,iglo)
        end do
     end do
@@ -3298,7 +3308,7 @@ contains
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g(:,isgn,iglo) = g1(:,isgn,iglo) - v2y2(:,it,ik,is) &
+          g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v2y2(:,it,ik,is) &
                * w0(:,isgn,iglo)
        end do
     end do
@@ -3321,6 +3331,7 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
     use le_grids, only: e, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
+    use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
     use le_grids, only: nlambda, ng2, forbid
     use gs2_layouts, only: le_lo, ig_idx
@@ -3401,7 +3412,9 @@ contains
 !        gle(:,:,ile) = gle(:,:,ile) - v0y0(ig,it,ik,is)*bz0le(:,:,ile)
 !     end do
     do ile = le_lo%llim_proc, le_lo%ulim_proc
-       gle(:,:,ile) = gle(:,:,ile) - v0y0(ile)*bz0le(:,:,ile)
+       it = it_idx(le_lo,ile)
+       ik = ik_idx(le_lo,ile)
+       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*v0y0(ile)*bz0le(:,:,ile)
     end do
 
     ! TMP FOR TESTING -- MAB
@@ -3463,7 +3476,9 @@ contains
 !        gle(:,:,ile) = gle(:,:,ile) - bs0le(:,:,ile) * v1y1(ig,it,ik,is)
 !     end do
     do ile = le_lo%llim_proc, le_lo%ulim_proc
-       gle(:,:,ile) = gle(:,:,ile) - bs0le(:,:,ile) * v1y1(ile)
+       it = it_idx(le_lo,ile)
+       ik = ik_idx(le_lo,ile)
+       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*bs0le(:,:,ile) * v1y1(ile)
     end do
 
     ! TMP FOR TESTING -- MAB
@@ -3508,7 +3523,9 @@ contains
 !        gle(:,:,ile) = gle(:,:,ile) - bw0le(:,:,ile) * v2y2(ig,it,ik,is)
 !     end do
     do ile = le_lo%llim_proc, le_lo%ulim_proc
-       gle(:,:,ile) = gle(:,:,ile) - bw0le(:,:,ile) * v2y2(ile)
+       it = it_idx(le_lo,ile)
+       ik = ik_idx(le_lo,ile)
+       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*bw0le(:,:,ile) * v2y2(ile)
     end do
 
     ! TMP FOR TESTING -- MAB
@@ -3558,7 +3575,7 @@ contains
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g1(:,isgn,iglo) = g(:,isgn,iglo) - v0y0(:,it,ik,is) &
+          g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
                * bz0(:,isgn,iglo)
        end do
     end do
@@ -3587,7 +3604,7 @@ contains
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g1(:,isgn,iglo) = g1(:,isgn,iglo) - v1y1(:,it,ik,is) &
+          g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v1y1(:,it,ik,is) &
                * bs0(:,isgn,iglo)
        end do
     end do
@@ -3617,7 +3634,7 @@ contains
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g(:,isgn,iglo) = g1(:,isgn,iglo) - v2y2(:,it,ik,is) &
+          g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v2y2(:,it,ik,is) &
                * bw0(:,isgn,iglo)
        end do
     end do
@@ -3756,6 +3773,7 @@ contains
     use gs2_layouts, only: ig_idx, ik_idx, il_idx, is_idx, it_idx, ie_idx
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
+    use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
     use gs2_layouts, only: le_lo
     use le_grids, only: negrid, jend
@@ -3842,6 +3860,7 @@ contains
        is = is_idx(le_lo,ile)
 
        if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
+       if (ieqzip(it_idx(le_lo,ile),ik_idx(le_lo,ile))==0) cycle
 
        je = jend(ig)
 
@@ -3965,6 +3984,7 @@ contains
        is = is_idx(lz_lo,ilz)
 
        if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
+       if (ieqzip(it_idx(lz_lo,ilz),ik_idx(lz_lo,ilz))==0) cycle
 
        je = jend(ig)
 
@@ -4045,13 +4065,14 @@ contains
     use gs2_layouts, only: ig_idx, il_idx, is_idx, e_lo, g_lo
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
+    use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
     use le_grids, only: nlambda, jend
     use gs2_layouts, only: le_lo
 # endif
 
     ! TEMP FOR TESTING -- MAB
-    use gs2_layouts, only: ik_idx, ie_idx, il_idx
+    use gs2_layouts, only: ik_idx, ie_idx, il_idx, it_idx
     use gs2_time, only: code_dt
     use le_grids, only: e
 
@@ -4079,6 +4100,7 @@ contains
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        is = is_idx(le_lo,ile)
        if (spec(is)%vnewk < 2.0*epsilon(0.0)) cycle
+       if (ieqzip(it_idx(le_lo,ile),ik_idx(le_lo,ile))==0) cycle
        ig = ig_idx(le_lo,ile)
        do ixi = 1, nxi
           il = min(ixi, nxi+1-ixi)
@@ -4118,6 +4140,7 @@ contains
        il = il_idx(e_lo,ielo)
 
        if (spec(is)%vnewk < 2.0*epsilon(0.0) .or. forbid(ig,il)) cycle
+       if (ieqzip(it_idx(e_lo,ielo),ik_idx(e_lo,ielo))==0) cycle
 
        delta(1) = ged(1,ielo)
        do ie = 1, negrid-1

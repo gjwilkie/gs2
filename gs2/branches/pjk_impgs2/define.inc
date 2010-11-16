@@ -23,3 +23,5 @@
 
 # define _NAGDBLE_ 61
 # define _NAGSNGL_ 62
+
+# define _RANMT_ 71
