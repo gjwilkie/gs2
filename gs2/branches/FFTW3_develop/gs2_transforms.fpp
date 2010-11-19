@@ -69,10 +69,6 @@ module gs2_transforms
 
   logical :: xfft_initted = .false.
 
-  ! a parameter to allow for simple switching of the fast copy
-  ! in the accelerated 2D transformation
-  logical,parameter :: fastcopy = .true.
-
 ! accel will be set to true if the v layout is used AND the number of
 ! PEs is such that each PE has a complete copy of the x,y space --
 ! in that case, no communication is needed to evaluate the nonlinear
@@ -624,67 +620,47 @@ contains
 
     ntgrid = accel_lo%ntgrid
 
-    if ( fastcopy ) then
-       ! scale the g and copy into the anti-aliased array ag
-       ! zero out empty ag
-       ! touch each g and ag only once
-       idx = g_lo%llim_proc
-       do k = accel_lo%llim_proc, accel_lo%ulim_proc
-          ! zero out for large k
-          if (aidx(k)) then
-             ag(:,:,k) = 0.0
-          else
-           ! scaling only for k_y not the zero mode
-           if (ik_idx(g_lo, idx) .ne. 1) then
-            do iduo = 1, 2
-             do itgrid = 1, 2*ntgrid +1
-                g(itgrid, iduo, idx) &
-                     = 0.5 * g(itgrid, iduo, idx)
-                ag(itgrid - (ntgrid+1), iduo, k) &
-                     = g(itgrid, iduo, idx)
-             enddo
-            enddo
-           ! in case of k_y being zero: just copy
-           else
-            do iduo = 1, 2
-             do itgrid = 1, 2*ntgrid+1
-                ag(itgrid-(ntgrid+1), iduo, k) &
-                     = g(itgrid, iduo, idx)
-             enddo
-            enddo
-           endif
-           idx = idx + 1
-          endif
-       enddo
-
-       ! we might not have scaled all g
-       Do iglo = idx, g_lo%ulim_proc
-          if (ik_idx(g_lo, iglo) .ne. 1) then
-             g(:,:, iglo) = 0.5 * g(:,:,iglo)
-          endif
-       enddo
-    else
-
-! scale ky /= 0 modes
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       if (ik_idx(g_lo, iglo) == 1) cycle   ! there is a mod call in this statement
-       g(:,:,iglo) = g(:,:,iglo) / 2.0
-    end do
-
-! dealias
-    ag = 0.   
+    ! scale the g and copy into the anti-aliased array ag
+    ! zero out empty ag
+    ! touch each g and ag only once
     idx = g_lo%llim_proc
     do k = accel_lo%llim_proc, accel_lo%ulim_proc
-! CMR: aidx is true for modes killed by the dealiasing mask
-! so following line removes ks in dealiasing region
-       if (aidx(k)) cycle
-       ag(:,:,k) = g(:,:,idx)
-       idx = idx + 1
-    end do
+       ! zero out for large k
+       if (aidx(k)) then
+          ag(:,:,k) = 0.0
+       else
+          ! scaling only for k_y not the zero mode
+          if (ik_idx(g_lo, idx) .ne. 1) then
+             do iduo = 1, 2
+                do itgrid = 1, 2*ntgrid +1
+                   g(itgrid, iduo, idx) &
+                        = 0.5 * g(itgrid, iduo, idx)
+                   ag(itgrid - (ntgrid+1), iduo, k) &
+                        = g(itgrid, iduo, idx)
+                enddo
+             enddo
+             ! in case of k_y being zero: just copy
+          else
+             do iduo = 1, 2
+                do itgrid = 1, 2*ntgrid+1
+                   ag(itgrid-(ntgrid+1), iduo, k) &
+                        = g(itgrid, iduo, idx)
+                enddo
+             enddo
+          endif
+          idx = idx + 1
+       endif
+    enddo
 
-    endif
-
-! transform
+    ! we might not have scaled all g
+    Do iglo = idx, g_lo%ulim_proc
+       if (ik_idx(g_lo, iglo) .ne. 1) then
+          g(:,:, iglo) = 0.5 * g(:,:,iglo)
+       endif
+    enddo
+       
+       
+    ! transform
     i = (2*accel_lo%ntgrid+1)*2
     idx = 1
     do k = accel_lo%llim_proc, accel_lo%ulim_proc, accel_lo%nxnky
@@ -728,55 +704,36 @@ contains
        idx = idx + 1
     end do
 
-    if (fastcopy) then
-       idx = g_lo%llim_proc
-       do k = accel_lo%llim_proc, accel_lo%ulim_proc
-          ! ignore the large k (anti-alias)
-          if ( .not.aidx(k)) then
-           ! different scale factors depending on ky == 0
-           if (ik_idx(g_lo, idx) .ne. 1) then
-            do iduo = 1, 2 
-             do itgrid = 1, 2*ntgrid+1
-              g(itgrid, iduo, idx) &
-                   = 2.0 * yb_fft%scale * ag(itgrid-(ntgrid+1), iduo, k)
-             enddo
-            enddo
-           else
-            do iduo = 1, 2 
-             do itgrid = 1, 2*ntgrid+1
-              g(itgrid, iduo, idx) &
-                   = yb_fft%scale * ag(itgrid-(ntgrid+1), iduo, k)
-             enddo
-            enddo
-           endif
-           idx = idx + 1
-          endif
-       enddo
-
-       ! we might not have scaled all g
-       Do iglo = idx, g_lo%ulim_proc
-          if (ik_idx(g_lo, iglo) .ne. 1) then
-             g(:,:, iglo) = 2.0 * g(:,:,iglo)
-          endif
-       enddo
-    else
-
-
-! dealias and scale
     idx = g_lo%llim_proc
     do k = accel_lo%llim_proc, accel_lo%ulim_proc
-       if (aidx(k)) cycle
-       g(:,:,idx) = ag(:,:,k) * yb_fft%scale
-       idx = idx + 1
-    end do
-
-! scale
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       if (ik_idx(g_lo, iglo) == 1) cycle
-       g(:,:,iglo) = g(:,:,iglo) * 2.0
-    end do
-
-    endif
+       ! ignore the large k (anti-alias)
+       if ( .not.aidx(k)) then
+          ! different scale factors depending on ky == 0
+          if (ik_idx(g_lo, idx) .ne. 1) then
+             do iduo = 1, 2 
+                do itgrid = 1, 2*ntgrid+1
+                   g(itgrid, iduo, idx) &
+                        = 2.0 * yb_fft%scale * ag(itgrid-(ntgrid+1), iduo, k)
+                enddo
+             enddo
+          else
+             do iduo = 1, 2 
+                do itgrid = 1, 2*ntgrid+1
+                   g(itgrid, iduo, idx) &
+                        = yb_fft%scale * ag(itgrid-(ntgrid+1), iduo, k)
+                enddo
+             enddo
+          endif
+          idx = idx + 1
+       endif
+    enddo
+    
+    ! we might not have scaled all g
+    Do iglo = idx, g_lo%ulim_proc
+       if (ik_idx(g_lo, iglo) .ne. 1) then
+          g(:,:, iglo) = 2.0 * g(:,:,iglo)
+       endif
+    enddo
 
   end subroutine inverse2_5d_accel
 

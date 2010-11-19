@@ -58,7 +58,7 @@ contains
     use gs2_transforms, only: init_transforms
     implicit none
     logical :: dum1, dum2
-    logical :: debug=.true.
+    logical, parameter :: debug=.false.
 
     if (initialized) return
     initialized = .true.
