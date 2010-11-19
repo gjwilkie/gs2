@@ -8,6 +8,7 @@ module gs2_layouts
   use layouts_type, only: g_layout_type, lz_layout_type, e_layout_type
   use layouts_type, only: le_layout_type
 ! <TT
+  use layouts_type, only: p_layout_type
 
   implicit none
   private
@@ -16,12 +17,14 @@ module gs2_layouts
   public :: is_kx_local
   
   public :: init_dist_fn_layouts, init_gs2_layouts
+  public :: init_parity_layouts ! MAB
 ! TT>
 !  public :: g_lo, g_layout_type
   public :: g_lo
 ! <TT
   public :: gint_lo, gint_layout_type
   public :: geint_lo, geint_layout_type
+  public :: p_lo
 
   public :: init_fields_layouts
   public :: f_lo, f_layout_type
@@ -92,6 +95,7 @@ module gs2_layouts
 ! TT>
   type (le_layout_type) :: le_lo  ! new type
 ! <TT
+  type (p_layout_type) :: p_lo
 
   type :: f_layout_type
      integer :: iproc
@@ -216,6 +220,7 @@ module gs2_layouts
      module procedure ik_idx_xxf
      module procedure ik_idx_accel
      module procedure ik_idx_accelx
+     module procedure ik_idx_parity
   end interface
 
   interface it_idx
@@ -239,6 +244,7 @@ module gs2_layouts
      module procedure il_idx_xxf
      module procedure il_idx_yxf
      module procedure il_idx_accelx
+     module procedure il_idx_parity
   end interface
 
   interface ie_idx
@@ -248,6 +254,7 @@ module gs2_layouts
      module procedure ie_idx_xxf
      module procedure ie_idx_yxf
      module procedure ie_idx_accelx
+     module procedure ie_idx_parity
   end interface
 
   interface is_idx
@@ -262,6 +269,7 @@ module gs2_layouts
      module procedure is_idx_xxf
      module procedure is_idx_yxf
      module procedure is_idx_accelx
+     module procedure is_idx_parity
   end interface
 
   interface isign_idx
@@ -283,6 +291,7 @@ module gs2_layouts
      module procedure proc_id_xxf
      module procedure proc_id_yxf
      module procedure proc_id_accelx
+     module procedure proc_id_parity
   end interface
 
   interface idx
@@ -299,6 +308,7 @@ module gs2_layouts
      module procedure idx_xxf
      module procedure idx_yxf
      module procedure idx_accelx
+     module procedure idx_parity
   end interface
 
   interface idx_local
@@ -315,6 +325,7 @@ module gs2_layouts
      module procedure idx_local_xxf,    ig_local_xxf
      module procedure idx_local_yxf,    ig_local_yxf
      module procedure idx_local_accelx, ig_local_accelx
+     module procedure idx_local_parity, ig_local_parity
   end interface
 
 contains
@@ -2411,6 +2422,166 @@ contains
 
     ig_local_lz = lo%iproc == proc_id(lo, ig)
   end function ig_local_lz
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! layouts for parity diagnostic 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine init_parity_layouts &
+       (naky, nlambda, negrid, nspec)
+    use mp, only: iproc, nproc
+    implicit none
+    integer, intent (in) :: naky, nlambda, negrid, nspec
+    logical, save :: initialized = .false.
+
+    if (initialized) return
+    initialized = .true.
+    
+    p_lo%iproc = iproc
+    p_lo%naky = naky
+    p_lo%nlambda = nlambda
+    p_lo%negrid = negrid
+    p_lo%nspec = nspec
+    p_lo%llim_world = 0
+    p_lo%ulim_world = naky*negrid*nlambda*nspec - 1
+    p_lo%blocksize = p_lo%ulim_world/nproc + 1
+    p_lo%llim_proc = p_lo%blocksize*iproc
+    p_lo%ulim_proc = min(p_lo%ulim_world, p_lo%llim_proc + p_lo%blocksize - 1)
+    p_lo%ulim_alloc = max(p_lo%llim_proc, p_lo%ulim_proc)
+
+  end subroutine init_parity_layouts
+
+  elemental function idx_parity (lo, ik, il, ie, is)
+    implicit none
+    integer :: idx_parity
+    type (p_layout_type), intent (in) :: lo
+    integer, intent (in) :: ik, il, ie, is
+    select case (layout)
+    case ('yxels')
+       idx_parity = ik-1 + lo%naky*(ie-1 + lo%negrid*(il-1 + lo%nlambda*(is-1)))
+    case ('yxles')
+       idx_parity = ik-1 + lo%naky*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))
+    case ('lexys')
+       idx_parity = il-1 + lo%nlambda*(ie-1 + lo%negrid*(ik-1 + lo%naky*(is-1)))
+    case ('lxyes')
+       idx_parity = il-1 + lo%nlambda*(ik-1 + lo%naky*(ie-1 + lo%negrid*(is-1)))
+    case ('lyxes')
+       idx_parity = il-1 + lo%nlambda*(ik-1 + lo%naky*(ie-1 + lo%negrid*(is-1)))
+    case ('xyles')
+       idx_parity = ik-1 + lo%naky*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1)))
+    end select
+  end function idx_parity
+
+  elemental function idx_local_parity (lo, ik, il, ie, is)
+    implicit none
+    logical :: idx_local_parity
+    type (p_layout_type), intent (in) :: lo
+    integer, intent (in) :: ik, il, ie, is
+
+    idx_local_parity = idx_local(lo, idx(lo, ik, il, ie, is))
+  end function idx_local_parity
+
+  elemental function ig_local_parity (lo, ip)
+    implicit none
+    logical :: ig_local_parity
+    type (p_layout_type), intent (in) :: lo
+    integer, intent (in) :: ip
+
+    ig_local_parity = lo%iproc == proc_id(lo, ip)
+  end function ig_local_parity
+
+  elemental function proc_id_parity (lo, i)
+    implicit none
+    integer :: proc_id_parity
+    type (p_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+    proc_id_parity = i/lo%blocksize
+  end function proc_id_parity
+
+  elemental function ik_idx_parity (lo, i)
+    implicit none
+    integer :: ik_idx_parity
+    type (p_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+    select case (layout)
+    case ('yxels')
+       ik_idx_parity = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('yxles')
+       ik_idx_parity = 1 + mod(i - lo%llim_world, lo%naky)
+    case ('lexys')
+       ik_idx_parity = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%negrid, lo%naky)
+    case ('lxyes')
+       ik_idx_parity = 1 + mod((i - lo%llim_world)/lo%nlambda, lo%naky)
+    case ('lyxes')
+       ik_idx_parity = 1 + mod((i - lo%llim_world)/lo%nlambda, lo%naky)
+    case ('xyles')
+       ik_idx_parity = 1 + mod(i - lo%llim_world, lo%naky)
+    end select
+
+  end function ik_idx_parity
+
+  elemental function is_idx_parity (lo, i)
+    
+    implicit none
+
+    integer :: is_idx_parity
+    type (p_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+    
+    ! TT: the order of the division doesn't matter, so no need for branching
+    is_idx_parity = 1 + mod((i - lo%llim_world)/lo%naky/lo%negrid/lo%nlambda, lo%nspec)
+
+  end function is_idx_parity
+
+  elemental function il_idx_parity (lo, i)
+
+    implicit none
+
+    integer :: il_idx_parity
+    type (p_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    select case (layout)
+    case ('yxels')
+       il_idx_parity = 1 + mod((i - lo%llim_world)/lo%naky/lo%negrid, lo%nlambda)
+    case ('yxles')
+       il_idx_parity = 1 + mod((i - lo%llim_world)/lo%naky, lo%nlambda)
+    case ('lexys')
+       il_idx_parity = 1 + mod(i - lo%llim_world, lo%nlambda)
+    case ('lxyes')
+       il_idx_parity = 1 + mod(i - lo%llim_world, lo%nlambda)
+    case ('lyxes')
+       il_idx_parity = 1 + mod(i - lo%llim_world, lo%nlambda)
+    case ('xyles')
+       il_idx_parity = 1 + mod((i - lo%llim_world)/lo%naky, lo%nlambda)
+    end select
+
+  end function il_idx_parity
+
+  elemental function ie_idx_parity (lo, i)
+
+    implicit none
+
+    integer :: ie_idx_parity
+    type (p_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    select case (layout)
+    case ('yxels')
+       ie_idx_parity = 1 + mod((i - lo%llim_world)/lo%naky, lo%negrid)
+    case ('yxles')
+       ie_idx_parity = 1 + mod((i - lo%llim_world)/lo%naky/lo%nlambda, lo%negrid)
+    case ('lexys')
+       ie_idx_parity = 1 + mod((i - lo%llim_world)/lo%nlambda, lo%negrid)
+    case ('lxyes')
+       ie_idx_parity = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky, lo%negrid)
+    case ('lyxes')
+       ie_idx_parity = 1 + mod((i - lo%llim_world)/lo%nlambda/lo%naky, lo%negrid)
+    case ('xyles')
+       ie_idx_parity = 1 + mod((i - lo%llim_world)/lo%naky/lo%nlambda, lo%negrid)
+    end select
+
+  end function ie_idx_parity
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! X-space layouts

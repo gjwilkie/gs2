@@ -1,6 +1,7 @@
 program kp
 
-  use command_line
+  use command_line, only: cl_getarg, cl_iargc
+
   real, dimension(:,:,:), allocatable :: vx2, vy2
   real, dimension (:), allocatable :: kpar, kx, ky, vp2
   character (500) :: runname, c
@@ -10,7 +11,7 @@ program kp
   real :: wr, wi
   integer :: ntheta0, naky, nkpar
 
-  if (iargc() /= 0) then
+  if (cl_iargc() /= 0) then
      call cl_getarg (1, runname, 500, ierr)
   else
      write (*,*) 'runname = ?'

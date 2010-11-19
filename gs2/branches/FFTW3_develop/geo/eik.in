@@ -1,34 +1,30 @@
 
  &stuff
- bishop=4
+ bishop=1
 
  beta_prime_input = -0.
  s_hat_input = 0.8
 
+! -------------------------------------
  nperiod=1
- ntheta = 8
- rhoc = 0.2
+ ntheta = 64
+ rhoc = 0.8
+
+ irho = 1  ! flux label definition
+
+! -------------------------------------
+
+ iflux = 1
  itor = 1
- irho = 2
- iflux = 0
  
- R_geo = 3.0
- Rmaj =  3.0
- akappa = 1.0
- akappri = 0.
- tri = 0.0
- tripri = 0.
- shift = 0.0
- qinp = 1.4
- 
- local_eq = .true.
+ local_eq = .false.
  transp_eq = F
- efit_eq = .f.
+ efit_eq = .t.
  gs2d_eq = .false.
- delrho=1.e-3
- eqfile='psipqgRZ_51976c41_6000.nc'
+ delrho=1.e-2
+ eqfile='test8_efit.dat'
  isym=0, 
- rmin=0.001 
+ rmin=0.01 
  equal_arc=.true.
  writelots=.t.
  ismooth=0 

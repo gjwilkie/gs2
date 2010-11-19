@@ -25,6 +25,9 @@ drive_mod = \
 	 drive.o \
 	 regression.o 
 
+ediff_mod = \
+	 ediff.o 
+
 eiktest_mod = \
 	 command_line.o \
 	 constants.o \
@@ -122,6 +125,7 @@ gs2_mod = \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
+	 gauss_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -146,6 +150,7 @@ gs2_mod = \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
@@ -185,6 +190,7 @@ ingen_mod = \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
+	 gauss_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -207,6 +213,7 @@ ingen_mod = \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
@@ -307,6 +314,7 @@ dist_fn.o: \
 dist_fn_arrays.o: 
 drive.o: \
 	 regression.o 
+ediff.o: 
 eeq.o: \
 	 mds.o \
 	 mdslib.o \
@@ -314,7 +322,8 @@ eeq.o: \
 et.o: \
 	 geometry.o 
 fft_work.o: \
-	 constants.o 
+	 constants.o \
+	 mp.o 
 ffttester.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
@@ -359,6 +368,7 @@ fields_implicit.o: \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 init_g.o \
+	 job_manage.o \
 	 kt_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
@@ -371,6 +381,10 @@ fields_test.o: \
 	 fields_arrays.o 
 file_utils.o: \
 	 command_line.o 
+gauss_quad.o: \
+	 constants.o \
+	 file_utils.o \
+	 mp.o 
 geometry.o: \
 	 deq.o \
 	 eeq.o \
@@ -488,6 +502,7 @@ gs2_main.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
 	 theta_grid_params.o 
@@ -504,6 +519,7 @@ gs2_reinit.o: \
 	 gs2_save.o \
 	 gs2_time.o \
 	 init_g.o \
+	 job_manage.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o 
@@ -516,6 +532,7 @@ gs2_save.o: \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 layouts_type.o \
+	 le_grids.o \
 	 mp.o \
 	 netcdf_utils.o \
 	 theta_grid.o 
@@ -595,21 +612,24 @@ layouts_type.o:
 le_grids.o: \
 	 constants.o \
 	 file_utils.o \
+	 gauss_quad.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 layouts_type.o \
 	 mp.o \
 	 redistribute.o \
 	 species.o \
-	 spfunc.o \
 	 theta_grid.o 
 leq.o: \
+	 constants.o \
 	 spl.o 
 mds.o: \
 	 constants.o 
 mdslib.o: 
 mp.o: \
-	 constants.o 
+	 constants.o \
+	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -637,7 +657,8 @@ pgplot_utils.o: \
 	 constants.o 
 prof.o: 
 radstub.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 redistribute.o: \
 	 job_manage.o \
 	 mp.o 

@@ -96,7 +96,8 @@ contains
     
     logical, save :: initialized = .false.
     character (1) :: char
-    
+! CMR, 12/2/2010:  return correct status of "accelerated" even if already initialised
+    accelerated = accel
 ! CMR, 12/2/2010:  return correct status of "accelerated" even if already initialised
     accelerated = accel
     if (initialized) return
@@ -625,7 +626,8 @@ contains
     ! touch each g and ag only once
     idx = g_lo%llim_proc
     do k = accel_lo%llim_proc, accel_lo%ulim_proc
-       ! zero out for large k
+! CMR: aidx is true for modes killed by the dealiasing mask
+! so following line removes ks in dealiasing region
        if (aidx(k)) then
           ag(:,:,k) = 0.0
        else

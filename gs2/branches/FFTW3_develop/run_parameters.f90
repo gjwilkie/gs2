@@ -3,19 +3,20 @@ module run_parameters
 
   public :: init_run_parameters, finish_run_parameters
 
-  public :: beta, zeff, tite, rhostar
+  public :: beta, zeff, tite
   public :: fphi, fapar, fbpar
 !  public :: delt, delt_max, wunits, woutunits, tunits, funits, tnorm
   public :: code_delt_max, wunits, woutunits, tunits, funits, tnorm
   public :: nstep, wstar_units, eqzip, margin
   public :: secondary, tertiary, harris
+  public :: ieqzip
   public :: k0
   public :: vnm_init
   public :: avail_cpu_time
 
   private
 
-  real :: beta, zeff, tite, rhostar
+  real :: beta, zeff, tite
   real :: fphi, fapar, fbpar, faperp
   real :: delt, code_delt_max, user_delt_max, funits, tnorm, margin
   real, dimension (:), allocatable :: wunits, woutunits, tunits
@@ -29,10 +30,18 @@ module run_parameters
   integer, parameter :: delt_option_hand = 1, delt_option_auto = 2
   logical :: initialized = .false.
 
+  integer, allocatable :: ieqzip(:,:)
+  integer :: eqzip_option_switch
+  integer, parameter :: &
+       eqzip_option_none = 1, &
+       eqzip_option_secondary = 2, &
+       eqzip_option_tertiary = 3, &
+       eqzip_option_equilibrium = 4
+
 contains
 
   subroutine init_run_parameters
-    use kt_grids, only: init_kt_grids, naky
+    use kt_grids, only: init_kt_grids, naky, nakx => ntheta0
     use gs2_time, only: init_delt, user2code
     
     implicit none
@@ -56,6 +65,20 @@ contains
 ! omega_* normalization of time: 
     call adjust_time_norm
 
+    if(.not.allocated(ieqzip)) allocate(ieqzip(nakx,naky))
+    ieqzip(1:nakx,1:naky)=1
+    select case (eqzip_option_switch)
+    case (eqzip_option_secondary)
+       ! suppress evolution of secondary mode
+       ieqzip(1,2) = 0
+    case (eqzip_option_tertiary)
+       ! suppress evolution of tertiary mode
+       ieqzip(2,1) = 0
+       ieqzip(nakx,1) = 0
+    case (eqzip_option_equilibrium)
+       ! suppress evolution of 1D equilibrium (x dependent)
+       ieqzip(1:nakx,1) = 0
+    end select
   end subroutine init_run_parameters
 
   subroutine read_parameters
@@ -64,6 +87,12 @@ contains
     use gs2_save, only: init_dt, init_vnm
     use text_options, only: text_option, get_option_value
     implicit none
+    type (text_option), dimension (4), parameter :: eqzipopts = &
+         (/ text_option('none', eqzip_option_none), &
+            text_option('secondary', eqzip_option_secondary), &
+            text_option('tertiary', eqzip_option_tertiary), &
+            text_option('equilibrium', eqzip_option_equilibrium) /)
+    character (len=20) :: eqzip_option
     type (text_option), dimension (3), parameter :: deltopts = &
          (/ text_option('default', delt_option_hand), &
             text_option('set_by_hand', delt_option_hand), &
@@ -75,10 +104,10 @@ contains
 
     real :: teti  ! for back-compatibility
     logical :: exist
-    namelist /parameters/ beta, zeff, tite, rhostar, teti, k0
+    namelist /parameters/ beta, zeff, tite, teti, k0
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
          delt_option, margin, secondary, tertiary, faperp, harris, &
-         avail_cpu_time
+         avail_cpu_time, eqzip_option
 
     if (proc0) then
        fbpar = -1.0
@@ -87,8 +116,8 @@ contains
        zeff = 1.0
        tite = 1.0
        teti = -100.0
-       rhostar = 0.1
        wstar_units = .false.
+       eqzip_option = 'none'
        eqzip = .false.
        secondary = .true.
        tertiary = .false.
@@ -139,6 +168,30 @@ contains
        call get_option_value &
             (delt_option, deltopts, delt_option_switch, ierr, &
             "delt_option in knobs")
+
+       call get_option_value ( &
+            eqzip_option, eqzipopts, eqzip_option_switch, error_unit(), &
+            "eqzip_option in knobs")
+
+!!$       ! eqzip_option replaces eqzip, secondary, tertiary, harris
+!!$       if (eqzip .and. eqzip_option_switch == eqzip_option_none) then
+!!$          if (harris) then
+!!$             eqzip_option_switch = eqzip_option_equilibrium
+!!$             write(error_unit(),*) 'eqzip_option is set to equilibrium'
+!!$          else
+!!$             if (tertiary) then
+!!$                eqzip_option_switch = eqzip_option_tertiary
+!!$                write(error_unit(),*) 'eqzip_option is set to tertiary'
+!!$             else
+!!$                eqzip_option_switch = eqzip_option_secondary
+!!$                write(error_unit(),*) 'eqzip_option is set to secondary'
+!!$             end if
+!!$          end if
+!!$       else if (eqzip .and. eqzip_option_switch /= eqzip_option_none) then
+!!$          write(error_unit(),*) 'eqzip, secondary, tertiary, harris are ignored'
+!!$          write(error_unit(),*) 'because eqzip_option exists'
+!!$       end if
+
     end if
 
     call broadcast (delt_option_switch)
@@ -146,7 +199,6 @@ contains
     call broadcast (beta)
     call broadcast (zeff)
     call broadcast (tite)
-    call broadcast (rhostar)
     call broadcast (fphi)
     call broadcast (fapar)
     call broadcast (fbpar)
@@ -159,7 +211,8 @@ contains
     call broadcast (margin)
     call broadcast (k0)
     call broadcast (avail_cpu_time)
-
+    call broadcast (eqzip_option_switch)
+    
     user_delt_max = delt
 
     delt_saved = delt
@@ -178,11 +231,21 @@ contains
     use mp, only: proc0
     use kt_grids, only: aky
     implicit none
-
+!CMR: Sep 2010
+! Attempt to understand time normalisation variables, which are arrays(naky)
+!    TUNITS: DT(KY)=TUNITS(KY).CODE_DT
+!            This is a generally very useful variable to store ky dependent 
+!            timestep in the code time normalisation.
+!            Used to multiply ky indeoendent source terms on RHS of GKE.
+!    WUNITS: WUNITS(KY)=AKY(KY)*TUNITS(KY)/2
+!            Auxiliary variable.  Used to save compute operations when 
+!            evaluating source terms on RHS of GKE that are proportional to ky.
+!            (why need factor 1/2?)
+!    WOUTUNITS: convert output frequencies to appear in USER v_t normalisation
+!    FUNITS: convert output fluxes to appear in USER v_t normalisation        
+!CMRend
     if (wstar_units) then
-       funits = 1.0
        wunits = 1.0
-       woutunits = aky/sqrt(2.0)
        where (aky /= 0.0)
           tunits = 2.0/aky
        elsewhere
@@ -194,13 +257,16 @@ contains
           print *, &
                "WARNING: wstar_units=.true. and aky=0.0: garbage results"
        end if
+!CMR: Sep 2010
+!  Changes to allow wstar_units to be used consistently with either 
+!  v_t normalisation option.   (Wasn't quite right before)
+!CMRend
     else
        tunits = 1.0
        wunits = aky/2.0
-       funits = tnorm
-       woutunits = tnorm
     end if
-
+    funits = tnorm
+    woutunits = tnorm/tunits
   end subroutine adjust_time_norm
 
   subroutine finish_run_parameters

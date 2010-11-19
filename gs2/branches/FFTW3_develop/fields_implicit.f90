@@ -7,12 +7,14 @@ module fields_implicit
   public :: init_phi_implicit
   public :: nidx
   public :: reset_init
+  public :: time_field
 
   private
 
   integer, save :: nfield
   logical :: initialized = .false.
   logical :: linked = .false.
+  real, save :: time_field(2)=0.
 
 contains
 
@@ -55,7 +57,8 @@ contains
 
     implicit none
 
-    call init_fields_implicit
+! BD:  Bug fix; found by Numata
+!    call init_fields_implicit
     ! MAB> new field init option ported from agk
     if (new_field_init) then
        call get_init_field (phinew, aparnew, bparnew)
@@ -171,12 +174,15 @@ contains
     use fields_arrays, only: aminv
     use theta_grid, only: ntgrid
     use dist_fn, only: N_class
-    use mp, only: sum_allreduce
+    use mp, only: sum_allreduce, proc0
+    use job_manage, only: time_message
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (:,:,:), allocatable :: fl
     complex, dimension (:), allocatable :: u
     integer :: jflo, ik, it, nl, nr, i, m, n, dc
+
+    if (proc0) call time_message(.false.,time_field,' Field Solver')
 
     call prof_entering ("getfield", "fields_implicit")
     allocate (fl(nidx, ntheta0, naky))
@@ -214,6 +220,9 @@ contains
     deallocate (u)
 
     call prof_leaving ("getfield", "fields_implicit")
+
+    if (proc0) call time_message(.false.,time_field,' Field Solver')
+
   end subroutine getfield
 
   subroutine advance_implicit (istep)
@@ -221,7 +230,7 @@ contains
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
     use dist_fn, only: timeadv, exb_shear
-    use dist_fn_arrays, only: g, gnew, kx_shift
+    use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
     use nonlinear_terms, only: algorithm !, nonlin
     implicit none
     integer :: diagnostics = 1
@@ -234,7 +243,7 @@ contains
        !GGH NOTE: apar_ext is initialized in this call
        call antenna_amplitudes (apar_ext)
        
-       if (allocated(kx_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
+       if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
 
        g = gnew
        phi = phinew !*nphi
