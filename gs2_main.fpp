@@ -180,6 +180,7 @@ contains
        if (.not.nofin) call finish_gs2
     end if
     
+
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
     if (proc0) call time_message(.false.,time_total,' Total')

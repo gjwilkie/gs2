@@ -1,3 +1,8 @@
+! Modifications for using FFTW version 3:
+! (c) The Numerical Algorithms Group (NAG) Ltd, 2009 
+!                                 on behalf of the HECToR project
+
+
 # include "define.inc"
 
 module gs2_transforms
@@ -93,6 +98,8 @@ contains
     character (1) :: char
 ! CMR, 12/2/2010:  return correct status of "accelerated" even if already initialised
     accelerated = accel
+! CMR, 12/2/2010:  return correct status of "accelerated" even if already initialised
+    accelerated = accel
     if (initialized) return
     initialized = .true.
 
@@ -127,6 +134,8 @@ contains
     logical, save :: initialized = .false.
     character (1) :: char
 
+    integer :: nb_ffts
+
     if (initialized) return
     initialized = .true.
 
@@ -136,12 +145,33 @@ contains
        accel = .true.
     else
        call init_x_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
+
+# if FFT == _FFTW_
+
        call init_ccfftw (xf_fft,  1, xxf_lo%nx)
        call init_ccfftw (xb_fft, -1, xxf_lo%nx)
+
+# elif FFT == _FFTW3_
+
+       if (.not.allocated(xxf)) then
+          allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+       endif
+
+       ! number of ffts to be calculated
+       nb_ffts = xxf_lo%ulim_proc - xxf_lo%llim_proc + 1
+
+       call init_ccfftw (xf_fft,  1, xxf_lo%nx, nb_ffts, xxf)
+       call init_ccfftw (xb_fft, -1, xxf_lo%nx, nb_ffts, xxf)
+# endif
+
        xfft_initted = .true.
     end if
 
   end subroutine init_x_transform
+
+  
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 
   subroutine init_y_fft (ntgrid)
 
@@ -152,6 +182,8 @@ contains
 
     logical :: initialized = .false.
     integer :: idx, i
+
+    integer :: nb_ffts
 
     if (initialized) return
     initialized = .true.
@@ -165,11 +197,9 @@ contains
        allocate (ag(-ntgrid:ntgrid,2,accel_lo%llim_proc:accel_lo%ulim_alloc))
        aidx = .true.
 
-       idx = g_lo%llim_proc
        do i = accel_lo%llim_proc, accel_lo%ulim_proc
           if (dealiasing(accel_lo, i)) cycle
           aidx(i) = .false.
-          idx = idx + 1
        end do
 
        do idx = 1, accel_lo%nia
@@ -177,20 +207,57 @@ contains
           iak(idx) = accel_lo%llim_proc  + (idx-1)*accel_lo%nxnky
        end do
 
+
+#if FFT == _FFTW_ 
+
        call init_crfftw (yf_fft,  1, accel_lo%ny, accel_lo%nx)
        call init_rcfftw (yb_fft, -1, accel_lo%ny, accel_lo%nx)
 
+#elif FFT == _FFTW3_
+
+       call init_crfftw (yf_fft,  1, accel_lo%ny, accel_lo%nx, &
+            (2*accel_lo%ntgrid+1) * 2)
+       call init_rcfftw (yb_fft, -1, accel_lo%ny, accel_lo%nx, &
+            (2*accel_lo%ntgrid+1) * 2)
+
+#endif
+
+    
     else
+       ! non-accelerated
        allocate (fft(yxf_lo%ny/2+1, yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-       allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+       if (.not.allocated(xxf))then
+          allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+       endif
 
        if (.not. xfft_initted) then
+
+# if FFT == _FFTW_
           call init_ccfftw (xf_fft,  1, xxf_lo%nx)
           call init_ccfftw (xb_fft, -1, xxf_lo%nx)
+# elif FFT == _FFTW3_
+          ! number of ffts to be calculated
+          nb_ffts = xxf_lo%ulim_proc - xxf_lo%llim_proc + 1
+          
+          call init_ccfftw (xf_fft,  1, xxf_lo%nx, nb_ffts, xxf)
+          call init_ccfftw (xb_fft, -1,  xxf_lo%nx, nb_ffts, xxf)
+          
+# endif
+          xfft_initted = .true.
        end if
 
+# if FFT == _FFTW_
        call init_crfftw (yf_fft,  1, yxf_lo%ny)
        call init_rcfftw (yb_fft, -1, yxf_lo%ny)
+#elif FFT == _FFTW3_
+       ! number of ffts to be calculated
+       nb_ffts = yxf_lo%ulim_proc - yxf_lo%llim_proc + 1
+
+       call init_crfftw (yf_fft,  1, yxf_lo%ny, nb_ffts)
+       call init_rcfftw (yb_fft, -1,  yxf_lo%ny, nb_ffts)
+
+#endif
+
     end if
 
   end subroutine init_y_fft
@@ -405,6 +472,8 @@ contains
     allocate (aux(xf_fft%n))
 # if FFT == _FFTW_
     call fftw_f77 (xf_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
+# elif FFT == _FFTW3_
+    call dfftw_execute(xf_fft%plan)
 # endif
     deallocate (aux)
 
@@ -426,11 +495,13 @@ contains
     i = xxf_lo%ulim_proc - xxf_lo%llim_proc + 1
 
     ! do ffts
-    allocate (aux(xb_fft%n))
 # if FFT == _FFTW_
+    allocate (aux(xb_fft%n))
     call fftw_f77 (xb_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
-# endif
     deallocate (aux)
+# elif FFT == _FFTW3_
+    call dfftw_execute(xb_fft%plan)
+# endif
 
     call scatter (g2x, xxf, g)
 
@@ -459,6 +530,9 @@ contains
     i = yxf_lo%ulim_proc - yxf_lo%llim_proc + 1
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (yf_fft%plan, i, fft, 1, yxf_lo%ny/2+1, yxf, 1, yxf_lo%ny)
+# elif FFT == _FFTW3_
+
+    call dfftw_execute_dft_c2r (yf_fft%plan, fft, yxf)
 # endif
 
     call prof_leaving ("transform_y5d", "gs2_transforms")
@@ -479,6 +553,8 @@ contains
     i = yxf_lo%ulim_proc - yxf_lo%llim_proc + 1
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (yb_fft%plan, i, yxf, 1, yxf_lo%ny, fft, 1, yxf_lo%ny/2+1)
+# elif FFT == _FFTW3_
+    call dfftw_execute_dft_r2c (yb_fft%plan, yxf, fft)
 # endif
 
     call scatter (x2y, fft, xxf)
@@ -521,46 +597,89 @@ contains
 
   end subroutine inverse2_5d
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   subroutine transform2_5d_accel (g, axf, i)
     use gs2_layouts, only: g_lo, accel_lo, accelx_lo, ik_idx
     implicit none
     complex, dimension (:,:,g_lo%llim_proc:), intent (in out) :: g
+
 # ifdef FFT
+
     real, dimension (:,:,accelx_lo%llim_proc:), intent (out) :: axf
+
 # else
+
     real, dimension (:,:,accelx_lo%llim_proc:) :: axf
+
 # endif
+
+
     integer :: iglo, k, i, idx
+    integer :: itgrid, iduo
+    integer :: ntgrid
 
-! scale ky /= 0 modes
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       if (ik_idx(g_lo, iglo) == 1) cycle   ! there is a mod call in this statement
-       g(:,:,iglo) = g(:,:,iglo) / 2.0
-    end do
+    ntgrid = accel_lo%ntgrid
 
-! dealias
-    ag = 0.   
+    ! scale the g and copy into the anti-aliased array ag
+    ! zero out empty ag
+    ! touch each g and ag only once
     idx = g_lo%llim_proc
     do k = accel_lo%llim_proc, accel_lo%ulim_proc
 ! CMR: aidx is true for modes killed by the dealiasing mask
 ! so following line removes ks in dealiasing region
-       if (aidx(k)) cycle
-       ag(:,:,k) = g(:,:,idx)
-       idx = idx + 1
-    end do
+       if (aidx(k)) then
+          ag(:,:,k) = 0.0
+       else
+          ! scaling only for k_y not the zero mode
+          if (ik_idx(g_lo, idx) .ne. 1) then
+             do iduo = 1, 2
+                do itgrid = 1, 2*ntgrid +1
+                   g(itgrid, iduo, idx) &
+                        = 0.5 * g(itgrid, iduo, idx)
+                   ag(itgrid - (ntgrid+1), iduo, k) &
+                        = g(itgrid, iduo, idx)
+                enddo
+             enddo
+             ! in case of k_y being zero: just copy
+          else
+             do iduo = 1, 2
+                do itgrid = 1, 2*ntgrid+1
+                   ag(itgrid-(ntgrid+1), iduo, k) &
+                        = g(itgrid, iduo, idx)
+                enddo
+             enddo
+          endif
+          idx = idx + 1
+       endif
+    enddo
 
-! transform
+    ! we might not have scaled all g
+    Do iglo = idx, g_lo%ulim_proc
+       if (ik_idx(g_lo, iglo) .ne. 1) then
+          g(:,:, iglo) = 0.5 * g(:,:,iglo)
+       endif
+    enddo
+       
+       
+    ! transform
     i = (2*accel_lo%ntgrid+1)*2
     idx = 1
     do k = accel_lo%llim_proc, accel_lo%ulim_proc, accel_lo%nxnky
 # if FFT == _FFTW_
        call rfftwnd_f77_complex_to_real (yf_fft%plan, i, ag(:,:,k:), i, 1, &
             axf(:,:,ia(idx):), i, 1)
+# elif FFT == _FFTW3_
+       ! remember FFTW3 for c2r destroys the contents of ag
+       call dfftw_execute_dft_c2r (yf_fft%plan, ag(:, :, k:), &
+            axf(:, :, ia(idx):))
 # endif
        idx = idx + 1
     end do
 
   end subroutine transform2_5d_accel
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine inverse2_5d_accel (axf, g, i)
     use gs2_layouts, only: g_lo, accel_lo, accelx_lo, ik_idx
@@ -568,6 +687,10 @@ contains
     real, dimension (:,:,accelx_lo%llim_proc:), intent (in out) :: axf
     complex, dimension (:,:,g_lo%llim_proc:), intent (out) :: g
     integer :: iglo, i, idx, k
+    integer :: itgrid, iduo
+    integer :: ntgrid
+
+    ntgrid = accel_lo%ntgrid
 
 ! transform
     i = (2*accel_lo%ntgrid+1)*2
@@ -576,37 +699,62 @@ contains
 # if FFT == _FFTW_
        call rfftwnd_f77_real_to_complex (yb_fft%plan, i, axf(:,:,k:), i, 1, &
             ag(:,:,iak(idx):), i, 1)
+# elif FFT == _FFTW3_
+       call dfftw_execute_dft_r2c(yb_fft%plan, axf(:, :, k:), &
+            ag(:, :, iak(idx):))
 # endif
        idx = idx + 1
     end do
 
-! dealias and scale
     idx = g_lo%llim_proc
     do k = accel_lo%llim_proc, accel_lo%ulim_proc
-       if (aidx(k)) cycle
-       g(:,:,idx) = ag(:,:,k) * yb_fft%scale
-       idx = idx + 1
-    end do
-
-! scale
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       if (ik_idx(g_lo, iglo) == 1) cycle
-       g(:,:,iglo) = g(:,:,iglo) * 2.0
-    end do
+       ! ignore the large k (anti-alias)
+       if ( .not.aidx(k)) then
+          ! different scale factors depending on ky == 0
+          if (ik_idx(g_lo, idx) .ne. 1) then
+             do iduo = 1, 2 
+                do itgrid = 1, 2*ntgrid+1
+                   g(itgrid, iduo, idx) &
+                        = 2.0 * yb_fft%scale * ag(itgrid-(ntgrid+1), iduo, k)
+                enddo
+             enddo
+          else
+             do iduo = 1, 2 
+                do itgrid = 1, 2*ntgrid+1
+                   g(itgrid, iduo, idx) &
+                        = yb_fft%scale * ag(itgrid-(ntgrid+1), iduo, k)
+                enddo
+             enddo
+          endif
+          idx = idx + 1
+       endif
+    enddo
+    
+    ! we might not have scaled all g
+    Do iglo = idx, g_lo%ulim_proc
+       if (ik_idx(g_lo, iglo) .ne. 1) then
+          g(:,:, iglo) = 2.0 * g(:,:,iglo)
+       endif
+    enddo
 
   end subroutine inverse2_5d_accel
 
-  subroutine init_3d (nny_in, nnx_in)
+  subroutine init_3d (nny_in, nnx_in, how_many_in)
 
     use fft_work, only: init_crfftw, init_rcfftw, delete_fft
     logical :: initialized = .false.
-    integer :: nny_in, nnx_in
-    integer, save :: nnx, nny
+    integer :: nny_in, nnx_in, how_many_in
+    integer, save :: nnx, nny, how_many
 
     if (initialized) then
        if (nnx /= nnx_in .or. nny /= nny_in) then
           call delete_fft(xf3d_cr)
           call delete_fft(xf3d_rc)
+# if FFT == _FFTW3_
+       elseif ( how_many /= how_many_in) then
+          call delete_fft(xf3d_cr)
+          call delete_fft(xf3d_rc)
+# endif
        else
           return
        end if
@@ -614,9 +762,19 @@ contains
     initialized = .true.
     nny = nny_in
     nnx = nnx_in
+    how_many = how_many_in
+
+#if FFT == _FFTW_    
 
     call init_crfftw (xf3d_cr,  1, nny, nnx)
     call init_rcfftw (xf3d_rc, -1, nny, nnx)
+
+#elif FFT == _FFTW3_
+
+    call init_crfftw (xf3d_cr,  1, nny, nnx, how_many)
+    call init_rcfftw (xf3d_rc, -1, nny, nnx, how_many)
+
+#endif
 
   end subroutine init_3d
 
@@ -634,7 +792,7 @@ contains
 
 ! scale, dealias and transpose
 
-    call init_3d (nny, nnx)
+    call init_3d (nny, nnx, 2*ntgrid+1)
 
     allocate (phix (-ntgrid:ntgrid, nny, nnx))
     allocate (aphi (-ntgrid:ntgrid, nny/2+1, nnx))
@@ -650,7 +808,8 @@ contains
        end do
        do it=(ntheta0+1)/2+1,ntheta0
           do ig=-ntgrid, ntgrid
-             aphi(ig,ik,it-ntheta0+nx) = phi(ig,it,ik)*fac
+!CMR, 30/3/2010: bug fix to replace nx by nnx on next line
+             aphi(ig,ik,it-ntheta0+nnx) = phi(ig,it,ik)*fac
           end do
        end do
     end do
@@ -659,6 +818,8 @@ contains
     i = 2*ntgrid+1
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
+# elif FFT == _FFTW3_
+    call dfftw_execute_dft_c2r (xf3d_cr%plan, aphi, phix)
 # endif
 
     do it=1,nnx
@@ -674,6 +835,8 @@ contains
   end subroutine transform2_3d
   
   subroutine inverse2_3d (phixf, phi, nny, nnx)
+!CMR, 30/4/2010:  
+! Fixed up previously buggy handling of dealiasing.
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, aky
     implicit none
@@ -700,10 +863,12 @@ contains
     i = 2*ntgrid+1
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (xf3d_rc%plan, i, phix, i, 1, aphi, i, 1)
+# elif FFT == _FFTW3_
+    call dfftw_execute_dft_r2c (xf3d_rc%plan, phix, aphi)
 # endif
 
 ! dealias and scale
-    do it=1,ntheta0
+    do it=1,(ntheta0+1)/2
        do ik=1,naky
           fac = 2.0
           if (aky(ik) < epsilon(0.0)) fac = 1.0
@@ -713,9 +878,22 @@ contains
        end do
     end do
 
+!CMR, 30/4/2010:  fixed up previously buggy handling of dealiasing
+    do it=(ntheta0+1)/2+1,ntheta0
+       do ik=1,naky
+          fac = 2.0
+          if (aky(ik) < epsilon(0.0)) fac = 1.0
+          do ig=-ntgrid, ntgrid
+             phi (ig,it,ik) = aphi (ig,ik,it-ntheta0+nnx)*fac*xf3d_rc%scale
+          end do
+       end do
+    end do
+
     deallocate (aphi, phix)
 
   end subroutine inverse2_3d
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine transform2_2d (phi, phixf, nny, nnx)
     use fft_work, only: FFTW_BACKWARD, delete_fft, init_crfftw
@@ -730,7 +908,15 @@ contains
     integer :: ik, it
     type (fft_type) :: xf2d
 
+#if FFT == _FFTW_
+
     call init_crfftw (xf2d, FFTW_BACKWARD, nny, nnx)
+
+#elif FFT == _FFTW3_
+
+    call init_crfftw (xf2d, FFTW_BACKWARD, nny, nnx, 1)
+
+#endif
 
     allocate (phix (nny, nnx))
     allocate (aphi (nny/2+1, nnx))
@@ -751,6 +937,8 @@ contains
 ! transform
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf2d%plan, 1, aphi, 1, 1, phix, 1, 1)
+# elif FFT == _FFTW3_
+    call dfftw_execute_dft_c2r (xf2d%plan, aphi, phix)
 # endif
 
     phixf(:,:)=transpose(phix(:,:))
@@ -759,6 +947,7 @@ contains
 !RN> this statement causes error for lahey with DEBUG. I don't know why
 !    call delete_fft(xf2d)
   end subroutine transform2_2d
+
 
   subroutine inverse2_2d (phixf, phi, nny, nnx)
     use fft_work, only: FFTW_FORWARD, delete_fft, init_rcfftw
@@ -773,7 +962,15 @@ contains
     integer :: ik, it
     type (fft_type) :: xf2d
 
+#if FFT == _FFTW_
+
     call init_rcfftw (xf2d, FFTW_FORWARD, nny, nnx)
+
+#elif FFT == _FFTW3_
+
+    call init_rcfftw (xf2d, FFTW_FORWARD, nny, nnx, 1)
+
+#endif    
 
     allocate (aphi (nny/2+1, nnx))
     allocate (phix (nny, nnx))
@@ -784,6 +981,8 @@ contains
 ! transform
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (xf2d%plan, 1, phix, 1, 1, aphi, 1, 1)
+# elif FFT == _FFTW3_
+    call dfftw_execute_dft_r2c (xf2d%plan, phix, aphi)
 # endif
 
 ! scale, dealias and transpose
@@ -800,7 +999,12 @@ contains
 !    call delete_fft(xf2d)
   end subroutine inverse2_2d
 
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   subroutine transform2_4d (den, phixf, nny, nnx)
+!CMR, 30/3/2010: den input has 4th index being species, 
+!     but transform only operates for species=1
+!     anyone who uses this routine should be aware of/fix this!
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, nx, aky
     implicit none
@@ -814,7 +1018,7 @@ contains
 
 ! scale, dealias and transpose
 
-    call init_3d (nny, nnx)
+    call init_3d (nny, nnx, 2*ntgrid+1)
 
     allocate (phix (-ntgrid:ntgrid, nny, nnx))
     allocate (aphi (-ntgrid:ntgrid, nny/2+1, nnx))
@@ -830,7 +1034,8 @@ contains
        end do
        do it=(ntheta0+1)/2+1,ntheta0
           do ig=-ntgrid, ntgrid
-             aphi(ig,ik,it-ntheta0+nx) = den(ig,it,ik,1)*fac
+!CMR, 30/3/2010: bug fix to replace nx by nnx on next line
+             aphi(ig,ik,it-ntheta0+nnx) = den(ig,it,ik,1)*fac
           end do
        end do
     end do
@@ -839,6 +1044,8 @@ contains
     i = 2*ntgrid+1
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
+# elif FFT == _FFTW3_
+    call dfftw_execute_dft_c2r (xf3d_cr%plan, aphi, phix)
 # endif
 
     do it=1,nnx
@@ -853,27 +1060,34 @@ contains
 
   end subroutine transform2_4d
   
-  subroutine init_zf (ntgrid, nperiod)
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine init_zf (ntgrid, nperiod, howmany)
 
     use fft_work, only: init_z
     implicit none
-    integer, intent (in) :: ntgrid, nperiod
+    integer, intent (in) :: ntgrid, nperiod, howmany
     logical :: done = .false.
 
     if (done) return
     done = .true.
 
-    call init_z (zf_fft, 1, 2*ntgrid)
-
+    call init_z (zf_fft, 1, 2*ntgrid, howmany)
+    
   end subroutine init_zf
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
   subroutine kz_spectrum (an, an2, ntgrid, ntheta0, naky)
 
-    complex, dimension (:,:,:) :: an, an2
+    complex, dimension (:,:,:), intent(in)  :: an
+    complex, dimension (:,:,:), intent(out) :: an2
     integer, intent (in) :: ntheta0, naky, ntgrid
 
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)
+# elif FFT == _FFTW3_
+    call dfftw_execute_dft(zf_fft%plan, an, an2)
 # endif
     an2 = conjg(an2)*an2
 

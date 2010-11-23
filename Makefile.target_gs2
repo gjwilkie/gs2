@@ -15,6 +15,9 @@ rungridgen: $(rungridgen_mod)
 regress: $(drive_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+ffttester: $(ffttester_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 .PHONY: modules utils_all geo_all libgs2_all
 
 ifdef MAKE_LIB
@@ -76,3 +79,4 @@ distclean:
 	-rm -f gs2 gs2.x
 	-rm -f ingen rungridgen regress
 	-rm -f ball eiktest
+	-rm -f ffttester
