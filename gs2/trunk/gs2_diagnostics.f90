@@ -1751,8 +1751,8 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 
     if (proc0) then
        if (print_flux_line) then
-          write (unit=*, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-               & ' heat fluxes: ', 5(1x,e10.4))") &
+          write (unit=*, fmt="('t= ',e16.10,' <phi**2>= ',e12.6, &
+               & ' heat fluxes: ', 5(1x,e12.6))") &
                t, phi2, heat_fluxes(1:min(nspec,5))
           if (fapar > epsilon(0.0)) then
              write (unit=*, fmt="('t= ',e16.10,' <apar**2>= ',e10.4, &

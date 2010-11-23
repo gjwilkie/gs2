@@ -194,16 +194,24 @@ contains
     use hyper, only: init_hyper
     use theta_grid, only: itor_over_B
     implicit none
+    logical:: debug=.false.
+
 
 !    write (*,*) 'entering init_dist_fn'
     if (initialized) return
     initialized = .true.
 
+    if (debug) write(6,*) "init_dist_fn: init_gs2_layouts"
     call init_gs2_layouts
+    if (debug) write(6,*) "init_dist_fn: init_species"
     call init_species
+    if (debug) write(6,*) "init_dist_fn: init_theta_grid"
     call init_theta_grid
+    if (debug) write(6,*) "init_dist_fn: init_kt_grids"
     call init_kt_grids
+    if (debug) write(6,*) "init_dist_fn: init_le_grids"
     call init_le_grids (accelerated_x, accelerated_v)
+    if (debug) write(6,*) "init_dist_fn: read_parameters"
     call read_parameters
 !CMR, 19/10/10:
 ! Override itor_over_B, if "dist_fn_knobs" parameter btor_slab ne 0
@@ -226,23 +234,38 @@ contains
        stop
     end if
 
+    if (debug) write(6,*) "init_dist_fn: run_parameters"
     call init_run_parameters
+    if (debug) write(6,*) "init_dist_fn: kperp2"
     call init_kperp2
+    if (debug) write(6,*) "init_dist_fn: dist_fn_layouts"
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    if (debug) write(6,*) "init_dist_fn: nonlinear_terms"
     call init_nonlinear_terms 
+    if (debug) write(6,*) "init_dist_fn: allocate_arrays"
     call allocate_arrays
+    if (debug) write(6,*) "init_dist_fn: init_vpar"
     call init_vpar
+    if (debug) write(6,*) "init_dist_fn: init_wdrift"
     call init_wdrift
+    if (debug) write(6,*) "init_dist_fn: init_wcoriolis"
     call init_wcoriolis
+    if (debug) write(6,*) "init_dist_fn: init_wstar"
     call init_wstar
+    if (debug) write(6,*) "init_dist_fn: init_bessel"
     call init_bessel
+    if (debug) write(6,*) "init_dist_fn: init_par_filter"
     call init_par_filter
 !    call init_vnmult (vnmult)
+    if (debug) write(6,*) "init_dist_fn: init_collisions"
     call init_collisions ! needs to be after init_run_parameters
+    if (debug) write(6,*) "init_dist_fn: init_invert_rhs"
     call init_invert_rhs
+    if (debug) write(6,*) "init_dist_fn: init_fieldeq"
     call init_fieldeq
+    if (debug) write(6,*) "init_dist_fn: init_hyper"
     call init_hyper
-
+    if (debug) write(6,*) "init_dist_fn: init_mom_coeff"
     call init_mom_coeff
 !    write (*,*) 'exiting init_dist_fn'
   end subroutine init_dist_fn
@@ -890,8 +913,13 @@ contains
   subroutine init_par_filter
     use theta_grid, only: ntgrid, nperiod
     use gs2_transforms, only: init_zf
+    use kt_grids, only: naky, ntheta0
 
-    call init_zf (ntgrid, nperiod)
+    if ( naky*ntheta0 .eq. 0 ) then
+       print *,"WARNING: kt_grids used in init_par_filter before initialised?"
+    endif
+
+    call init_zf (ntgrid, nperiod, ntheta0*naky)
 
   end subroutine init_par_filter
 
