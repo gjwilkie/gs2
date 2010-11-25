@@ -147,7 +147,7 @@ program ingen
   real, dimension (:), allocatable :: bkdiff  ! (nspec)
   integer, dimension (:), allocatable :: bd_exp ! nspec
   real :: gridfac, apfac, driftknob, tpdriftknob, poisfac
-  real :: kfilter, afilter, D_kill, noise, g_exb, g_exbfac, omprimfac
+  real :: kfilter, afilter, D_kill, noise, g_exb, g_exbfac, omprimfac, btor_slab
   real :: t0, omega0, gamma0, source0, thetas, phi_ext, a_ext
   real :: akx_star, aky_star, cfac_df
   integer :: nperiod_guard 
@@ -419,7 +419,7 @@ program ingen
 
 ! dist_fn:
   namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, &
-       driftknob, tpdriftknob, g_exb, g_exbfac, omprimfac, &
+       driftknob, tpdriftknob, g_exb, g_exbfac, omprimfac, btor_slab,&
        nperiod_guard, poisfac, adiabatic_option, cfac, &
        kfilter, afilter, mult_imp, test, def_parity, even, &
        save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, heating_option
