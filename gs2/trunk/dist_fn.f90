@@ -2527,7 +2527,7 @@ contains
 
   subroutine g_adjust (g, phi, bpar, facphi, facbpar)
     use species, only: spec
-    use theta_grid, only: ntgrid
+    use theta_grid, only: ntgrid, bmag
     use le_grids, only: anon
     use dist_fn_arrays, only: vperp2, aj0, aj1
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
@@ -2545,8 +2545,11 @@ contains
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
-          adj = anon(ie,is)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
-                  *bpar(ig,it,ik)*facbpar &
+!CMR:
+!  added missing factor bmag, needed for inhomogeneous B
+!CMRend:
+           adj = anon(ie,is)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
+                  *bpar(ig,it,ik)/bmag(ig)*facbpar &
                + spec(is)%z*anon(ie,is)*phi(ig,it,ik)*aj0(ig,iglo) &
                   /spec(is)%temp*facphi
           g(ig,1,iglo) = g(ig,1,iglo) + adj
@@ -2559,7 +2562,7 @@ contains
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         isgn, iglo, sourcefac, source)
     use dist_fn_arrays, only: aj0, aj1, vperp2, vpar, vpac, g, ittp
-    use theta_grid, only: ntgrid, theta
+    use theta_grid, only: ntgrid, theta, bmag
     use kt_grids, only: aky, theta0, akx
     use le_grids, only: nlambda, ng2, lmax, anon, e, negrid
     use species, only: spec, nspec
@@ -2591,10 +2594,14 @@ contains
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
 
+!CMRfix: Nov 2010
+!   (i)  divide bpar term in phigavg by bmag
+!CMRend
+
     phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
                 *aj0(:,iglo)*fphi &
              + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
-                *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
+                *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)/bmag*spec(is)%tz
     apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
                 *aj0(:,iglo)*fapar
 
