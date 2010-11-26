@@ -2849,6 +2849,13 @@ contains
               -apar(ig+1,it,ik)-apar(ig,it,ik)
 !MAB, 6/5/2009:
 ! added the omprimfac source term arising with equilibrium flow shear  
+!CMR, 26/11/2010:
+! Useful to understand that all source terms propto aky are specified here 
+! using Tref=mref vtref^2. See 
+! [note by BD and MK on "Microinstabilities in Axisymmetric Configurations"].
+! This is converted to  the standard internal gs2 normalisation, 
+! Tref=(1/2) mref vtref^2, by wunits, which contains a crucial factor 1/2.
+!
          source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
@@ -2857,7 +2864,7 @@ contains
 !              -zi*wdrift(ig,iglo)*phi_p*nfac) &
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
+              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
 !              * sqrt(Rplot(ig)**2 - (grho(ig)/(bmag(ig)*drhodpsi))**2) * qval / (rhoc*spec(is)%stm)) & ! this line =  itor_over_B in a torus, but the above line allows a slab generalisation
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo)) 
       end do

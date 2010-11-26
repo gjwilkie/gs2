@@ -67,6 +67,7 @@ ffttester_mod = \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
+	 gauss_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -150,7 +151,6 @@ gs2_mod = \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
@@ -213,7 +213,6 @@ ingen_mod = \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
@@ -535,6 +534,7 @@ gs2_save.o: \
 	 le_grids.o \
 	 mp.o \
 	 netcdf_utils.o \
+	 species.o \
 	 theta_grid.o 
 gs2_save_hdf5.o: \
 	 fields_arrays.o \
@@ -576,6 +576,7 @@ ingen.o: \
 	 constants.o \
 	 file_utils.o \
 	 gs2_diagnostics.o \
+	 kt_grids.o \
 	 mp.o \
 	 text_options.o \
 	 theta_grid.o 
@@ -629,7 +630,6 @@ mdslib.o:
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -657,8 +657,7 @@ pgplot_utils.o: \
 	 constants.o 
 prof.o: 
 radstub.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 redistribute.o: \
 	 job_manage.o \
 	 mp.o 

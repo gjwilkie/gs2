@@ -240,7 +240,13 @@ contains
 !    WUNITS: WUNITS(KY)=AKY(KY)*TUNITS(KY)/2
 !            Auxiliary variable.  Used to save compute operations when 
 !            evaluating source terms on RHS of GKE that are proportional to ky.
-!            (why need factor 1/2?)
+!            !! The Mysterious factor 1/2 Explained !!
+!            The factor of 1/2 arises because those source terms were first
+!            specified using the normalisation Tref=mref vtref^2 
+![old note by BD and MK on "Microinstabilities in Axisymmetric Configurations"]
+!            Nowadays, internally gs2 uses Tref=(1/2) mref vtref^2 everywhere.
+!            WUNITS restores the consistency of the normalisations in gs2.
+! [R Numata et al, "AstroGK: Astrophysical gyrokinetics code", JCP, 2010].
 !    WOUTUNITS: convert output frequencies to appear in USER v_t normalisation
 !    FUNITS: convert output fluxes to appear in USER v_t normalisation        
 !CMRend
