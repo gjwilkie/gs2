@@ -278,7 +278,7 @@ if (debug) write(6,fmt='("eikcoefs: transp_eq, eqfile=",a)') eqfile
              ppl_eq = .true.
              call teqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
 if (debug) write(6,*) 'eikcoefs: transp_eq, called teqin'
-if (debug) write(6,fmt='("eikcoefs: teqin returns",1p5e10.2,i6,l,i6)') psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg
+if (debug) write(6,fmt='("eikcoefs: teqin returns",1p5e10.2,i6,l2,i6)') psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg
              if(present(ntheta_returned)) then
                 call tdef(nthg, ntheta_returned)
              else

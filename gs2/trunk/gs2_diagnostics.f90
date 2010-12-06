@@ -33,25 +33,6 @@ module gs2_diagnostics
 !                   so ingen can USE instead of copy them!
 !
   public :: gs2_diagnostics_knobs
-  namelist /gs2_diagnostics_knobs/ print_line, print_old_units, print_flux_line, &
-         write_line, write_flux_line, write_phi, write_apar, write_bpar, write_aperp, &
-         write_omega, write_omavg, write_ascii, write_kpar, write_lamavg, &
-         write_qheat, write_pflux, write_vflux, write_eavg, write_gs, write_gyx, &
-         write_qmheat, write_pmflux, write_vmflux, write_tavg, write_g, write_gg, &
-         write_qbheat, write_pbflux, write_vbflux, write_hrate, write_lpoly, &
-         write_dmix, write_kperpnorm, write_phitot, write_epartot, &
-         write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
-         write_fcheck, write_final_epar, write_final_moments, write_cerr, &
-         write_vortcheck, write_fieldcheck, write_Epolar, write_verr, write_max_verr, &
-         write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
-         nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
-         exit_when_converged, write_avg_moments, write_stress, &
-         write_full_moments_notgc, write_cross_phase, &
-         dump_neoclassical_flux, dump_check1, dump_check2, &
-         dump_fields_periodically, make_movie, &
-         dump_final_xfields, use_shmem_for_xfields, &
-         nperiod_output, test_conserve, &
-         save_for_restart, write_parity, save_distfn !<DD> Added for saving distribution function
 ! Why are these variables public?  This is not good.
   real,public :: omegatol, omegatinst
   logical,public :: print_line, print_old_units, print_flux_line
@@ -91,6 +72,26 @@ module gs2_diagnostics
   ! internal
   logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
+
+  namelist /gs2_diagnostics_knobs/ print_line, print_old_units, print_flux_line, &
+         write_line, write_flux_line, write_phi, write_apar, write_bpar, write_aperp, &
+         write_omega, write_omavg, write_ascii, write_kpar, write_lamavg, &
+         write_qheat, write_pflux, write_vflux, write_eavg, write_gs, write_gyx, &
+         write_qmheat, write_pmflux, write_vmflux, write_tavg, write_g, write_gg, &
+         write_qbheat, write_pbflux, write_vbflux, write_hrate, write_lpoly, &
+         write_dmix, write_kperpnorm, write_phitot, write_epartot, &
+         write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
+         write_fcheck, write_final_epar, write_final_moments, write_cerr, &
+         write_vortcheck, write_fieldcheck, write_Epolar, write_verr, write_max_verr, &
+         write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
+         nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
+         exit_when_converged, write_avg_moments, write_stress, &
+         write_full_moments_notgc, write_cross_phase, &
+         dump_neoclassical_flux, dump_check1, dump_check2, &
+         dump_fields_periodically, make_movie, &
+         dump_final_xfields, use_shmem_for_xfields, &
+         nperiod_output, test_conserve, &
+         save_for_restart, write_parity, save_distfn !<DD> Added for saving distribution function
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: dv_unit, jext_unit   !GGH Additions
