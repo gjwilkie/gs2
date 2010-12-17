@@ -32,4 +32,9 @@ module dist_fn_arrays
   complex, dimension (:,:,:,:,:), allocatable :: c_rate
   ! (-ntgrid:ntgrid,ntheta0,naky,nspecies,2) replicated
 
+  ! v-dependent factors in low-flow terms
+  real, dimension (:,:,:), allocatable :: vparterm, wdfac, wstarfac
+  real, dimension (:,:,:), allocatable :: hneoc
+  ! (-ntgrid:ntgrid,2, -g-layout-)
+
 end module dist_fn_arrays

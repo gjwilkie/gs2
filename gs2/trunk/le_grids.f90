@@ -307,7 +307,7 @@ module le_grids
   public :: xx, nterp, testfac, new_trap_int, ecut, vcut, vgrid
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
   public :: eint_error, lint_error, trap_error, integrate_test, wdim
-  public :: integrate_kysum ! MAB
+  public :: integrate_kysum, integrate_volume ! MAB
 
   private
 
@@ -3757,6 +3757,88 @@ contains
     deallocate (work)
 
   end subroutine eintegrate
+
+  subroutine integrate_volume (g, total, all)
+! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
+! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
+! is over x-y space
+    use mp, only: nproc, iproc
+    use theta_grid, only: ntgrid
+    use kt_grids, only: aky
+    use species, only: nspec
+    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,:,:,:), intent (out) :: total
+    integer, optional, intent(in) :: all
+
+    complex, dimension (:), allocatable :: work
+    real :: fac
+    integer :: is, il, ie, ik, it, iglo, ig, i, isgn
+
+    total = 0.
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       if (aky(ik) == 0.) then
+          fac = 1.0
+       else
+          fac = 0.5
+       end if
+
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             total(ig, il, ie, isgn, is) = total(ig, il, ie, isgn, is) + &
+                  fac*g(ig,isgn,iglo)
+          end do
+       end do
+    end do
+
+    if (nproc > 1) then
+       allocate (work((2*ntgrid+1)*nlambda*negrid*nspec*2)) ; work = 0.
+       i = 0
+       do is = 1, nspec
+          do isgn = 1, 2
+             do ie = 1, negrid
+                do il = 1, nlambda
+                   do ig = -ntgrid, ntgrid
+                      i = i + 1
+                      work(i) = total(ig, il, ie, isgn, is)
+                   end do
+                end do
+             end do
+          end do
+       end do
+
+       if (present(all)) then
+          call sum_allreduce (work)
+       else
+          call sum_reduce (work, 0)
+       end if
+
+       if (proc0 .or. present(all)) then
+          i = 0
+          do is = 1, nspec
+             do isgn = 1, 2
+                do ie = 1, negrid
+                   do il = 1, nlambda
+                      do ig = -ntgrid, ntgrid
+                         i = i + 1
+                         total(ig, il, ie, isgn, is) = work(i)
+                      end do
+                   end do
+                end do
+             end do
+          end do
+       end if
+       deallocate (work)
+    end if
+
+  end subroutine integrate_volume
 
   subroutine finish_le_grids
 

@@ -785,9 +785,11 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 ! MAB> new geometry terms gds23 and gds24 added because v_E . grad theta
 ! is needed to simulate low-flow gk equation
 ! v_E . grad theta = i*ky*phi*(rho_{r}*v_{t,r}/a**2)*(gds23 + gsd24*theta0)
+! calculation of gds23 and gds24 assumes rp=rho, which is not necessarily true
+! for numerical equilibria
 ! <MAB
 
-    ! grad theta in (R,Z,phi) coordinates
+    ! gradthtot is grad theta
     ! since ballooning, theta goes from -ntheta*nperiod -> ntheta*nperiod,
     ! but grad theta is periodic in theta
     do k=-nperiod+1,nperiod-1

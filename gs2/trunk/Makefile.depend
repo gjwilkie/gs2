@@ -88,6 +88,7 @@ ffttester_mod = \
 	 layouts_type.o \
 	 le_grids.o \
 	 leq.o \
+	 lowflow.o \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
@@ -148,6 +149,7 @@ gs2_mod = \
 	 layouts_type.o \
 	 le_grids.o \
 	 leq.o \
+	 lowflow.o \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
@@ -210,6 +212,7 @@ ingen_mod = \
 	 layouts_type.o \
 	 le_grids.o \
 	 leq.o \
+	 lowflow.o \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
@@ -301,6 +304,7 @@ dist_fn.o: \
 	 hyper.o \
 	 kt_grids.o \
 	 le_grids.o \
+	 lowflow.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 prof.o \
@@ -553,9 +557,7 @@ gs2_transforms.o: \
 	 redistribute.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o \
-	 convert.o \
-	 file_utils.o 
+	 constants.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -623,6 +625,10 @@ le_grids.o: \
 	 theta_grid.o 
 leq.o: \
 	 constants.o \
+	 spl.o 
+lowflow.o: \
+	 file_utils.o \
+	 mp.o \
 	 spl.o 
 mds.o: \
 	 constants.o 
