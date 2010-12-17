@@ -132,6 +132,7 @@ module gs2_diagnostics
   ! (ntheta0,naky,nspec,3)
 
   real, dimension (:,:,:), allocatable ::  pflux,  vflux, vflux_par, vflux_perp
+  real, dimension (:,:,:), allocatable :: vflux0, vflux1  ! low flow correction to turbulent momentum flux
   real, dimension (:,:,:), allocatable :: pmflux, vmflux
   real, dimension (:,:,:), allocatable :: pbflux, vbflux
   real, dimension (:,:),   allocatable :: theta_pflux, theta_pmflux, theta_pbflux
@@ -391,6 +392,8 @@ contains
     allocate (vflux (ntheta0,naky,nspec)) ; vflux = 0.
     allocate (vflux_par (ntheta0,naky,nspec)) ; vflux_par = 0.
     allocate (vflux_perp (ntheta0,naky,nspec)) ; vflux_perp = 0.
+    allocate (vflux0 (ntheta0,naky,nspec)) ; vflux0 = 0.
+    allocate (vflux1 (ntheta0,naky,nspec)) ; vflux1 = 0.
     allocate (pmflux(ntheta0,naky,nspec)) ; pmflux = 0.
     allocate (qmheat(ntheta0,naky,nspec,3)) ; qmheat = 0.
 !       allocate (qmheat_par (ntheta0,naky,nspec))
@@ -1357,7 +1360,7 @@ contains
     if (allocated(omegahist)) deallocate (omegahist)
     if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
          pbflux, qbheat, vbflux, theta_pflux, theta_vflux, theta_vflux_par, theta_vflux_perp, &
-         theta_qflux, theta_pmflux, &
+         theta_qflux, theta_pmflux, vflux0, vflux1, &
          theta_vmflux, theta_qmflux, theta_pbflux, theta_vbflux, theta_qbflux)
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
     if (allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
@@ -1380,7 +1383,7 @@ contains
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
-    use dist_fn, only: getmoms_notgc, g_adjust
+    use dist_fn, only: getmoms_notgc, g_adjust, include_lowflow, lf_flux
     use dist_fn_arrays, only: g, gnew, aj0, vpa
     use collisions, only: ncheck, vnmult, vary_vnew
     use mp, only: proc0, broadcast, iproc, send, receive
@@ -1457,6 +1460,7 @@ contains
     real, dimension (ntheta0, nspec) :: x_qmflux
     real, dimension (nspec) :: ntot2, ntot20
     real, dimension (nspec) ::  heat_fluxes,  part_fluxes, mom_fluxes, parmom_fluxes, perpmom_fluxes
+    real, dimension (nspec) :: lfmom_fluxes, vflux1_avg  ! low-flow correction to turbulent momentum fluxes
     real, dimension (nspec) :: mheat_fluxes, mpart_fluxes, mmom_fluxes
     real, dimension (nspec) :: bheat_fluxes, bpart_fluxes, bmom_fluxes
     real, dimension (nspec) ::  heat_par,  heat_perp
@@ -1632,6 +1636,8 @@ if (debug) write(6,*) "loop_diagnostics: -1"
             theta_pflux, theta_vflux, theta_vflux_par, theta_vflux_perp, theta_qflux, &
             theta_pmflux, theta_vmflux, theta_qmflux, & 
             theta_pbflux, theta_vbflux, theta_qbflux)
+       ! lowflow terms only implemented in electrostatic limit at present
+       if (include_lowflow) call lf_flux (phinew, vflux0, vflux1)
        call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
 !       call flux (phinew, aparnew, bparnew, &
 !            pflux, qheat, qheat_par, qheat_perp, vflux, &
@@ -1676,6 +1682,17 @@ if (debug) write(6,*) "loop_diagnostics: -1"
                 vflux_perp(:,:,is) = vflux_perp(:,:,is)*funits**2 &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vflux_perp(:,:,is), perpmom_fluxes(is))
+
+                if (include_lowflow) then
+                   vflux0(:,:,is) = vflux0(:,:,is)*funits**2 &
+                        *spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
+                   call get_volume_average (vflux0(:,:,is), lfmom_fluxes(is))
+                   vflux1(:,:,is) = vflux1(:,:,is)*funits**2 &
+                        *spec(is)%dens*spec(is)%mass*spec(is)%temp/spec(is)%z
+                   call get_volume_average (vflux1(:,:,is), vflux1_avg(is))
+! TMP UNTIL VFLUX0 IS TESTED
+!                   mom_fluxes = mom_fluxes + lfmom_fluxes
+                end if
 
                 theta_vflux(:,is) = theta_vflux(:,is)*funits**2 &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
@@ -2081,6 +2098,11 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                      & ' perpmom fluxes: ', 5(1x,e10.4))") &
                      t, phi2, perpmom_fluxes(1:min(nspec,5))
+                if (include_lowflow) then
+                   write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
+                        & ' lfmom fluxes: ', 5(1x,e10.4),' lfvflx1: ', 5(1x,e10.4))") &
+                        t, phi2, lfmom_fluxes(1:min(nspec,5)), vflux1_avg(1:min(nspec,5))
+                end if
              end if
              hflux_tot = sum(heat_fluxes)
              vflux_tot = sum(mom_fluxes)
@@ -2803,7 +2825,10 @@ if (debug) write(6,*) "loop_diagnostics: -2"
     nout = nout + 1
     if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) then
        call flush_output_file (out_unit, ".out")
-       if (write_verr) call flush_output_file (res_unit, ".vres")
+       if (write_verr) then
+          call flush_output_file (res_unit, ".vres")
+          call flush_output_file (lpc_unit, ".lpc")
+       end if
        if (write_parity) call flush_output_file (parity_unit, ".parity")
     end if
 

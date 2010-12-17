@@ -78,7 +78,7 @@ module gs2_io
   integer :: bmag_id, gradpar_id, gbdrift_id, gbdrift0_id
   integer :: cdrift_id, cdrift0_id
   integer :: cvdrift_id, cvdrift0_id, gds2_id, gds21_id, gds22_id
-  integer :: grho_id, jacob_id, shat_id, eps_id, drhodpsi_id, q_id
+  integer :: grho_id, jacob_id, shat_id, eps_id, drhodpsi_id, q_id, surfarea_id
   integer :: code_id, datestamp_id, timestamp_id, timezone_id
   integer :: h_energy_id, h_energy_dot_id, h_antenna_id
   integer :: h_eapar_id, h_ebpar_id
@@ -747,6 +747,8 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, var='grho')
     status = nf90_def_var (ncid, 'jacob', netcdf_real, nttot_dim, jacob_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='jacob')
+!    status = nf90_def_var (ncid, 'surfarea', netcdf_real, nttot_dim, surfarea_id)
+!    if (status /= NF90_NOERR) call netcdf_error (status, var='surfarea')
 
     status = nf90_def_var (ncid, 'q', netcdf_real, q_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='q')
@@ -2285,7 +2287,7 @@ contains
 
     use theta_grid, only: bmag, gradpar, gbdrift, gbdrift0, &
          cvdrift, cvdrift0, gds2, gds21, gds22, grho, jacob, &
-         shat, drhodpsi, eps, cdrift, cdrift0
+         shat, drhodpsi, eps, cdrift, cdrift0!, surfarea
 !    use nf90_mod, only: nf90_put_var
 # ifdef NETCDF
     use netcdf, only: nf90_put_var
@@ -2318,6 +2320,8 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, grho_id)
     status = nf90_put_var (ncid, jacob_id, jacob)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, jacob_id)
+!    status = nf90_put_var (ncid, surfarea_id, surfarea)
+!    if (status /= NF90_NOERR) call netcdf_error (status, ncid, surfarea_id)
 
     status = nf90_put_var (ncid, shat_id, shat)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, shat_id)
