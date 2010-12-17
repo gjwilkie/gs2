@@ -7611,7 +7611,7 @@ contains
                *tmp5(-ntgrid:ntgrid-1,il,ie,2,is)*code_dt
           wstarfac(ntgrid,:,:) = 0.0
 
-          wstarfac(:,isgn,iglo) = wstarfac(:,isgn,iglo) + tmp4(:,il,ie,isgn,is)*code_dt*wunits(ik)
+          wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + tmp4(:,il,ie,:,is)*code_dt*wunits(ik)
 
           ! no code_dt in wdfac because it multiplies wdrift, which has code_dt in it
           wdfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/e(ie,is)**1.5 &
