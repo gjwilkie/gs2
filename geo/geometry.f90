@@ -855,7 +855,7 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
     call integrate(ds, theta, ans, nth)
     surfarea=2.*pi*(ans(nth)-ans(-nth))
 !    write(*,*) 'surface area= ',surfarea,' avgrmid**2'
-
+    if (writelots) write (11,*) 'surfarea=', surfarea
     
 
 !     compute dV/drhon = 2 pi Int(J dtheta)
