@@ -21,7 +21,7 @@ module init_g
        ginitopt_nl5 = 19, ginitopt_alf = 20, ginitopt_kpar = 21, &
        ginitopt_nl6 = 22, ginitopt_nl7 = 23, ginitopt_gs = 24, ginitopt_recon = 25, &
        ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28, &
-       ginitopt_recon3 = 29, ginitopt_zonal_only = 30
+       ginitopt_recon3 = 29, ginitopt_zonal_only = 30, ginitopt_ot = 31
   real :: width0, dphiinit, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
   real :: den1, upar1, tpar1, tperp1
@@ -32,6 +32,7 @@ module init_g
   character (len=150) :: restart_dir
   integer, dimension(2) :: ikk, itt
   integer, dimension(3) :: ikkk,ittt
+  complex, dimension (6) :: phiamp, aparamp
 
   ! RN> for recon3
   real :: phiinit0 ! amplitude of equilibrium
@@ -112,6 +113,8 @@ contains
     call broadcast (itt) 
     call broadcast (ikkk)
     call broadcast (ittt) 
+    call broadcast (phiamp)
+    call broadcast (aparamp)
     call broadcast (scale)
     call broadcast (new_field_init)
 
@@ -243,6 +246,8 @@ contains
        scale = 1.
     case (ginitopt_recon3)
        call ginit_recon3
+    case (ginitopt_ot)
+       call ginit_ot
     end select
   end subroutine ginit
 
@@ -251,7 +256,7 @@ contains
     use text_options, only: text_option, get_option_value
     implicit none
 
-    type (text_option), dimension (30), parameter :: ginitopts = &
+    type (text_option), dimension (31), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
             text_option('test1', ginitopt_test1), &
@@ -281,7 +286,8 @@ contains
             text_option('harris', ginitopt_harris), &
             text_option('recon', ginitopt_recon), &
             text_option('recon3', ginitopt_recon3), &
-            text_option('zonal_only', ginitopt_zonal_only) &
+            text_option('zonal_only', ginitopt_zonal_only), &
+            text_option('ot', ginitopt_ot) &
             /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
@@ -293,7 +299,7 @@ contains
          phiinit0, a0, b0, null_phi, null_bpar, null_apar, adj_spec, &
          eq_type, prof_width, eq_mode_u, eq_mode_n, &
          input_check_recon, nkxy_pt, ukxy_pt, &
-         ikkk, ittt, phifrac
+         ikkk, ittt, phiamp, aparamp, phifrac
 
     integer :: ierr, in_file
     logical :: exist
@@ -333,6 +339,8 @@ contains
     ! >RN
     ikkk(1) = 1 ; ikkk(2) = 2 ; ikkk(3) = 2
     ittt(1) = 1 ; ittt(2) = 2 ; ittt(3) = 2
+    phiamp(1:6) = cmplx(0.0,0.0)
+    aparamp(1:6) = cmplx(0.0,0.0)
     phiinit0 = 0.
     a0 = 0.
     b0 = 0.
@@ -1447,6 +1455,104 @@ contains
     gnew = g
 
   end subroutine ginit_nl7
+
+  ! Orszag-Tang 2D vortex problem
+  subroutine ginit_ot
+    use species, only: spec
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, nakx => ntheta0, reality
+    use dist_fn_arrays, only: g, gnew, vpa, kperp2
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use constants, only: pi
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use dist_fn, only: get_init_field
+    implicit none
+    integer :: iglo, ik, it, is, i
+    real :: fac
+    complex, dimension (-ntgrid:ntgrid,nakx,naky) :: phi, jpar !! local !!
+    real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
+
+    !! phi, jpar are local !!
+    phi = 0.0 ; jpar = 0.0
+!!$    phi(:,1,2) = phiinit * cmplx(2.0, 0.0)  ! 2 cos(y)
+!!$    phi(:,2,1) = phiinit * cmplx(1.0, 0.0)  ! 2 cos(x)
+!!$    jpar(:,1,2) = apar0 * cmplx(2.0, 0.0) ! 2 cos(y)
+!!$    jpar(:,3,1) = apar0 * cmplx(2.0, 0.0) ! 4 cos(2x)
+    do i=1, 3
+       it = ittt(i)
+       ik = ikkk(i)
+       phi(:,it,ik) = phiamp(i)
+       jpar(:,it,ik) = aparamp(i) * kperp2(:,it,ik)
+    end do
+
+! reality condition for ky = 0 component:
+    if (reality) then
+       do it = 1, nakx/2
+          phi(:,it+(nakx+1)/2,1) = conjg(phi(:,(nakx+1)/2+1-it,1))
+          jpar(:,it+(nakx+1)/2,1) = conjg(jpar(:,(nakx+1)/2+1-it,1))
+       end do
+    end if
+
+    dfac     = den0
+    ufac     = upar0
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+
+       g(:,1,iglo) = &
+            ( dfac*spec(is)%dens0                * phi(:,it,ik) &
+            + 2.*ufac* vpa(:,1,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+
+       g(:,2,iglo) = &
+            ( dfac*spec(is)%dens0                * phi(:,it,ik) &
+            + 2.*ufac* vpa(:,2,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+
+    end do
+
+    gnew = g
+
+    ! normalize
+    call get_init_field (phinew, aparnew, bparnew)
+    do i=1, 3
+       it = ittt(i)
+       ik = ikkk(i)
+       if (abs(phiamp(i)) > epsilon(0.0)) then
+          fac = phiamp(i) / phinew(0,it,ik)
+          phi(:,it,ik) = phi(:,it,ik) * fac
+       end if
+       if (abs(aparamp(i)) > epsilon(0.0)) then
+          fac = aparamp(i) / aparnew(0,it,ik)
+          jpar(:,it,ik) = jpar(:,it,ik) * fac
+       end if
+    end do
+
+    ! redefine g
+    if (reality) then
+       do it = 1, nakx/2
+          phi(:,it+(nakx+1)/2,1) = conjg(phi(:,(nakx+1)/2+1-it,1))
+          jpar(:,it+(nakx+1)/2,1) = conjg(jpar(:,(nakx+1)/2+1-it,1))
+       end do
+    end if
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+
+       g(:,1,iglo) = &
+            ( dfac*spec(is)%dens0                * phi(:,it,ik) &
+            + 2.*ufac* vpa(:,1,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+
+       g(:,2,iglo) = &
+            ( dfac*spec(is)%dens0                * phi(:,it,ik) &
+            + 2.*ufac* vpa(:,2,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+
+    end do
+
+    gnew = g
+
+  end subroutine ginit_ot
 
   subroutine ginit_kpar
     use species, only: spec, has_electron_species
