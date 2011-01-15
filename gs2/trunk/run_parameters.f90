@@ -236,7 +236,7 @@ contains
 !    TUNITS: DT(KY)=TUNITS(KY).CODE_DT
 !            This is a generally very useful variable to store ky dependent 
 !            timestep in the code time normalisation.
-!            Used to multiply ky indeoendent source terms on RHS of GKE.
+!            Used to multiply ky independent source terms on RHS of GKE.
 !    WUNITS: WUNITS(KY)=AKY(KY)*TUNITS(KY)/2
 !            Auxiliary variable.  Used to save compute operations when 
 !            evaluating source terms on RHS of GKE that are proportional to ky.
