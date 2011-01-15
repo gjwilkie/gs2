@@ -36,6 +36,7 @@ module init_g
 
   ! RN> for recon3
   real :: phiinit0 ! amplitude of equilibrium
+  real :: phiinit_rand ! amplitude of random perturbation
   real :: a0,b0 ! amplitude of equilibrium Apara or By 
   ! if b0 /= 0, u0 is rescaled to give this By amplitude by overriding a0
   ! if a0 /= 0, u0 is rescaled to give this Apara amplitude
@@ -120,6 +121,7 @@ contains
 
     ! RN>
     call broadcast (phiinit0)
+    call broadcast (phiinit_rand)
     call broadcast (a0)
     call broadcast (b0)
     call broadcast (null_phi)
@@ -296,7 +298,8 @@ contains
          den1, upar1, tpar1, tperp1, &
          den2, upar2, tpar2, tperp2, dphiinit, apar0, &
          new_field_init, &
-         phiinit0, a0, b0, null_phi, null_bpar, null_apar, adj_spec, &
+         phiinit0, phiinit_rand, a0, b0, &
+         null_phi, null_bpar, null_apar, adj_spec, &
          eq_type, prof_width, eq_mode_u, eq_mode_n, &
          input_check_recon, nkxy_pt, ukxy_pt, &
          ikkk, ittt, phiamp, aparamp, phifrac
@@ -342,6 +345,7 @@ contains
     phiamp(1:6) = cmplx(0.0,0.0)
     aparamp(1:6) = cmplx(0.0,0.0)
     phiinit0 = 0.
+    phiinit_rand = 0.
     a0 = 0.
     b0 = 0.
     null_phi = .false.
@@ -1899,6 +1903,7 @@ contains
     use dist_fn, only: gamtot, gamtot1, gamtot2
     use constants, only: pi, zi
     use file_utils, only: error_unit, get_unused_unit
+    use ran, only: ranf
     implicit none
     integer :: iglo
 !    integer :: ig, ik, it, is, is2
@@ -1955,6 +1960,8 @@ contains
     integer :: unit
     real :: xmax, bymax, xa, xl1, xl2
     real :: fmin, fmax
+    
+    real :: a,b
 
     if(debug.and.proc0) write(6,*) 'Initialization recon3'
 
@@ -2169,6 +2176,16 @@ contains
           end do
        end do
     endif
+
+    if (phiinit_rand /= 0.) then
+       do it = 1, nakx
+          do ik = 1, naky
+             a = ranf()-0.5
+             b = ranf()-0.5
+             ukxyz(:,it,ik) = ukxyz(:,it,ik) + phiinit_rand*cmplx(a,b)
+          end do
+       end do
+    end if
 
 !!! reality condition for k_theta = 0 component:
     if(debug.and.proc0) write(6,*) 'set reality condition'
