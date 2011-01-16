@@ -690,7 +690,6 @@ contains
     end if
   end function wcurv_func
 
-
   function wdrift_func_neo (ig, il, ie, is)
     use theta_grid, only: bmag, gbdrift, gbdrift0, cvdrift, cvdrift0
     use theta_grid, only: shat
@@ -2795,6 +2794,7 @@ contains
                   - anon(ie,is)*zi*(wdriftttp(ig,it,ik,ie,is)*hneoc(ig,2,iglo)+wcoriolis(ig,iglo))*phigavg(ig) &
 !                  - anon(ie,is)*zi*wdriftttp(ig,it,ik,ie,is)*phigavg(ig)*nfac &
                   + zi*wstar(ik,ie,is)*hneoc(ig,2,iglo)*phigavg(ig)
+!                  + zi*wstar(ik,ie,is)*phigavg(ig)
           end do
 
           if (source_option_switch == source_option_phiext_full .and.  &
@@ -2899,15 +2899,11 @@ contains
 ! Tref=(1/2) mref vtref^2, by wunits, which contains a crucial factor 1/2.
 !
 
-!         source(ig) = anon(ie,is)*((-2.0*vpar(ig,isgn,iglo)*hneoc(ig,isgn,iglo) &
-!              +vpardhdec(ig,isgn,iglo))*phi_m &
          source(ig) = anon(ie,is)*(vparterm(ig,isgn,iglo)*phi_m &
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
               -zi*wdfac(ig,isgn,iglo)*phi_p) &
-!              -zi*(wdrift(ig,iglo)*(hneoc(ig,isgn,iglo)+wdfac(ig,isgn,iglo))+wcurv(ig,iglo)*cdfac(ig,isgn,iglo)+wcoriolis(ig,iglo))*phi_p) &
-!              + zi*(wstar(ik,ie,is)*hneoc(ig,isgn,iglo) - vegradhc(ig,isgn,iglo) & 
               + zi*(wstarfac(ig,isgn,iglo) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
               -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
@@ -7553,8 +7549,8 @@ contains
        allocate (wdfac(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (hneoc(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (wstarfac(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       vparterm = 0. ; wdfac = 0. ; hneoc = 1. ; wstarfac = 0.
     end if
+    vparterm = 0. ; wdfac = 0. ; hneoc = 1. ; wstarfac = 0.
 
     if (include_lowflow) then
        allocate (tmp1(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
@@ -7565,7 +7561,7 @@ contains
        allocate (tmp6(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
        
        call get_lowflow_terms (theta, al, e, bmag, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
-
+       
        if (proc0) then
           call open_output_file (neo_unit,".neo")
           do isgn = 1, 2
@@ -7637,7 +7633,7 @@ contains
 
        end do
 
-       deallocate (vpadhdec, dhdec, dhdxic, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
+       deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
     end if
 
     vparterm = -2.0*vpar*hneoc + vparterm
@@ -7651,7 +7647,7 @@ contains
        wstarfac(:,:,iglo) = wstar(ik,ie,is)*hneoc(:,:,iglo) - wstarfac(:,:,iglo)
     end do
 
-    deallocate (cdfac)
+    deallocate (vpadhdec,dhdec,dhdxic,cdfac)
 
   end subroutine init_lowflow
 
