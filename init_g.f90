@@ -1946,7 +1946,8 @@ contains
 
     ! real space profile to be Fourier transformed
     real :: xx,dx,lx,ly
-    integer, parameter :: nfx=2**10
+    integer, parameter :: nfxp=2**10
+    integer :: nfx=nfxp
     real, allocatable :: nxy(:,:),uxy(:,:)
     real, allocatable :: phixy(:,:,:),aparxy(:,:,:),bparxy(:,:,:)
     real, allocatable :: jparxy(:,:,:)
@@ -1964,6 +1965,8 @@ contains
     real :: a,b
 
     if(debug.and.proc0) write(6,*) 'Initialization recon3'
+
+    if (nfxp < nx) nfx=nx
 
 !!! adjust input parameters to kill initial field if wanted
     if(debug.and.proc0) write(6,*) 'check parameters'
