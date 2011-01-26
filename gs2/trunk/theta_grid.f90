@@ -1168,7 +1168,12 @@ if (debug) write(6,*) 'get_grids: call file_get_grids'
 ! note that the following is only valid in a torus!
 ! itor_over_B = (q/rho) * Rmaj*Btor/(a*B)
     IoB = sqrt(Rplot**2 - (grho/(bmag*drhodpsi))**2)
-    itor_over_B = qval / rhoc * IoB
+    ! RN> 2011/1/25
+    !     I encountered the case where rhoc = 0., which causes a fatal problem.
+    !     I guess someone has to check rhoc initialization.
+    !     here, I just tried to avoid the problem. I don't know at all about what itor_over_B is.
+    itor_over_B=0.
+    if (rhoc /= 0.) itor_over_B = qval / rhoc * IoB
   end subroutine get_grids
 
 end module theta_grid
