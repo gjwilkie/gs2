@@ -2,10 +2,11 @@ module theta_grid_params
   implicit none
 
   public :: init_theta_grid_params, init_trin_geo
+  public :: wnml_theta_grid_params
 
   real, public :: rhoc, rmaj, r_geo, eps, epsl
   real, public :: qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri
-  real, public :: asym, asympri
+  real, public :: asym, asympri, btor_slab
   real, public :: betaprim
 
   integer, public :: ntheta, nperiod
@@ -15,6 +16,7 @@ module theta_grid_params
   logical :: trin_flag = .false.
   real :: rhoc_trin, qval_trin, shat_trin, rmaj_trin, shift_trin
   real :: kappa_trin, kappri_trin, tri_trin, tripri_trin, betaprim_trin
+  real :: kp = -1.
 
 contains
 
@@ -33,13 +35,14 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, input_unit_exist
     implicit none
-    real :: kp = -1.
     integer :: in_file
     logical :: exist
-
+!CMR,2/2/2011: add btor_slab
+! btor_slab = btor/bpol defines direction of a flow relative to B in slab 
+! geometry, where flow is by definition in the toroidal direction.
     namelist /theta_grid_parameters/ rhoc, rmaj, r_geo, eps, epsl, &
          qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri, &
-         ntheta, nperiod, kp, asym, asympri
+         ntheta, nperiod, kp, asym, asympri, btor_slab
 
     rhoc = 0.5
     rmaj = 3.0
@@ -56,6 +59,7 @@ contains
     tripri = 0.0
     asym = 0.0
     asympri = 0.0
+    btor_slab = 0.0
     ntheta = 24
     nperiod = 2
     in_file = input_unit_exist("theta_grid_parameters", exist)
@@ -65,6 +69,34 @@ contains
     if (kp > 0.) pk = 2.*kp
 
   end subroutine read_parameters
+
+  subroutine wnml_theta_grid_params(unit)
+   implicit none
+   integer:: unit
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "theta_grid_parameters"
+       write (unit, fmt="(' ntheta =  ',i4)") ntheta
+       write (unit, fmt="(' nperiod = ',i4)") nperiod
+       write (unit, fmt="(' rhoc =    ',f7.4)") rhoc
+       write (unit, fmt="(' Rmaj =    ',f7.4)") rmaj
+       write (unit, fmt="(' R_geo =   ',f7.4)") r_geo
+       write (unit, fmt="(' eps =     ',f7.4)") eps
+       write (unit, fmt="(' epsl =    ',f7.4)") epsl
+       write (unit, fmt="(' qinp =    ',f7.4)") qinp
+       write (unit, fmt="(' shat =    ',f7.4)") shat
+       write (unit, fmt="(' alpmhd =  ',f7.4)") alpmhd
+       write (unit, fmt="(' pk =      ',f7.4)") pk
+       write (unit, fmt="(' kp =      ',f7.4)") kp
+       write (unit, fmt="(' shift =   ',f7.4)") shift
+       write (unit, fmt="(' akappa =  ',f7.4)") akappa
+       write (unit, fmt="(' akappri = ',f7.4)") akappri
+       write (unit, fmt="(' tri =     ',f7.4)") tri
+       write (unit, fmt="(' tripri =  ',f7.4)") tripri
+       write (unit, fmt="(' asym =     ',f7.4)") asym
+       write (unit, fmt="(' asympri =  ',f7.4)") asympri
+       write (unit, fmt="(' btor_slab =',f7.4)") btor_slab
+       write (unit, fmt="(' /')")
+  end subroutine wnml_theta_grid_params
 
   subroutine reinit_theta_grid_params (rhoc_in, qval_in, shat_in, rmaj_in, &
        kappa_in, kappri_in, tri_in, tripri_in, shift_in, betaprim_in)

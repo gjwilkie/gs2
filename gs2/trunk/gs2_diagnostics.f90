@@ -12,6 +12,8 @@ module gs2_diagnostics
   public :: read_parameters
   public :: init_gs2_diagnostics
   public :: finish_gs2_diagnostics
+  public :: check_gs2_diagnostics
+  public :: wnml_gs2_diagnostics
   public :: loop_diagnostics
   public :: ensemble_average
   public :: reset_init
@@ -151,6 +153,365 @@ module gs2_diagnostics
   complex :: wtmp_old = 0.
 
 contains
+
+   subroutine wnml_gs2_diagnostics(unit)
+   implicit none
+   integer :: unit
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "gs2_diagnostics_knobs"
+       write (unit, fmt="(' save_for_restart = ',L1)") save_for_restart
+       write (unit, fmt="(' print_line = ',L1)") print_line 
+       write (unit, fmt="(' write_line = ',L1)") write_line
+       write (unit, fmt="(' print_flux_line = ',L1)") print_flux_line
+       write (unit, fmt="(' write_flux_line = ',L1)") write_flux_line
+       write (unit, fmt="(' nmovie = ',i6)") nmovie
+       write (unit, fmt="(' nwrite = ',i6)") nwrite
+       write (unit, fmt="(' nsave = ',i6)") nsave
+       write (unit, fmt="(' navg = ',i6)") navg
+       write (unit, fmt="(' omegatol = ',e16.10)") omegatol
+       write (unit, fmt="(' omegatinst = ',e16.10)") omegatinst
+! should be legal -- not checked yet
+       if (igomega /= 0) write (unit, fmt="(' igomega = ',i6)") igomega  
+!       if (nperiod_output /= nperiod) &
+!            write (unit, fmt="(' nperiod_output = ',i3)") nperiod_output
+       
+       write (unit, fmt="(' print_old_units = ',L1)") print_old_units
+       if (write_ascii) then
+          write (unit, fmt="(' write_ascii = ',L1)") write_ascii
+          write (unit, fmt="(' write_omega = ',L1)") write_omega
+          write (unit, fmt="(' write_omavg = ',L1)") write_omavg
+          write (unit, fmt="(' write_dmix = ',L1)") write_dmix
+          write (unit, fmt="(' write_kperpnorm = ',L1)") write_kperpnorm
+       end if
+       if (write_Epolar) &
+            write (unit, fmt="(' write_Epolar = ',L1)") write_Epolar
+       write (unit, fmt="(' write_hrate = ',L1)") write_hrate
+       write (unit, fmt="(' write_lorentzian = ',L1)") write_lorentzian
+       write (unit, fmt="(' write_eigenfunc = ',L1)") write_eigenfunc
+       write (unit, fmt="(' write_final_fields = ',L1)") write_final_fields
+       write (unit, fmt="(' write_final_epar = ',L1)") write_final_epar
+       write (unit, fmt="(' write_final_moments = ',L1)") write_final_moments
+       write (unit, fmt="(' write_final_antot = ',L1)") write_final_antot
+       write (unit, fmt="(' write_tavg = ',L1)") write_tavg
+       write (unit, fmt="(' write_lamavg = ',L1)") write_lamavg
+       write (unit, fmt="(' write_eavg = ',L1)") write_eavg
+       if (write_fcheck) write (unit, fmt="(' write_fcheck = ',L1)") write_fcheck
+       if (write_vortcheck) write (unit, fmt="(' write_vortcheck = ',L1)") write_vortcheck
+       if (write_fieldcheck) write (unit, fmt="(' write_fieldcheck = ',L1)") write_fieldcheck
+       if (write_fieldline_avg_phi) &
+            write (unit, fmt="(' write_fieldline_avg_phi = ',L1)") write_fieldline_avg_phi
+       if (write_neoclassical_flux) &
+            write (unit, fmt="(' write_neoclassical_flux = ',L1)") write_neoclassical_flux
+       write (unit, fmt="(' write_nl_flux = ',L1)") write_nl_flux
+       write (unit, fmt="(' exit_when_converged = ',L1)") exit_when_converged
+       if (write_avg_moments) write (unit, fmt="(' write_avg_moments = ',L1)") write_avg_moments
+       if (dump_neoclassical_flux) &
+            write (unit, fmt="(' dump_neoclassical_flux = ',L1)") dump_neoclassical_flux
+       if (dump_check1) write (unit, fmt="(' dump_check1 = ',L1)") dump_check1
+       if (dump_check2) write (unit, fmt="(' dump_check2 = ',L1)") dump_check2
+       if (dump_fields_periodically) &
+            write (unit, fmt="(' dump_fields_periodically = ',L1)") dump_fields_periodically
+       if (make_movie) &
+            write (unit, fmt="(' make_movie = ',L1)") make_movie
+       if (dump_final_xfields) &
+            write (unit, fmt="(' dump_final_xfields = ',L1)") dump_final_xfields
+
+       write (unit, fmt="(' /')")       
+   end subroutine wnml_gs2_diagnostics
+
+   subroutine check_gs2_diagnostics(report_unit)
+   use file_utils, only: run_name
+   use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_on
+   use dist_fn, only : def_parity, even 
+   use kt_grids, only : gridopt_switch, gridopt_box
+   use init_g, only : restart_file
+   implicit none
+   integer :: report_unit
+    write (report_unit, *) 
+    write (report_unit, fmt="('------------------------------------------------------------')")
+    write (report_unit, *) 
+    write (report_unit, fmt="('Diagnostic control section.')")
+
+    if (print_line) then
+       write (report_unit, fmt="('print_line = T:            Estimated frequencies &
+          & output to the screen every ',i4,' steps.')") nwrite
+    else
+       ! nothing
+    end if
+
+    if (write_line) then
+       if (write_ascii) then
+          write (report_unit, fmt="('write_line = T:            Estimated frequencies output to ',a,' every ',i4,' steps.')") &
+               & trim(run_name)//'.out',  nwrite
+       end if
+       write (report_unit, fmt="('write_line = T:            Estimated frequencies output to ',a,' every ',i4,' steps.')") &
+            & trim(run_name)//'.out.nc',  nwrite
+    else
+       ! nothing
+    end if
+
+    if (print_flux_line) then
+       write (report_unit, fmt="('print_flux_line = T:       Instantaneous fluxes output to screen every ', &
+             & i4,' steps.')") nwrite
+    else
+       ! nothing
+    end if
+
+    if (write_flux_line) then
+       if (write_ascii) then
+          write (report_unit, fmt="('write_flux_line = T:       Instantaneous fluxes output to ',a,' every ',i4,' steps.')") &
+               & trim(run_name)//'.out',  nwrite
+       end if
+       write (report_unit, fmt="('write_flux_line = T:       Instantaneous fluxes output to ',a,' every ',i4,' steps.')") &
+            & trim(run_name)//'.out.nc',  nwrite
+    else
+       ! nothing
+    end if
+
+    if (print_old_units) then
+       write (report_unit, fmt="('print_old_units = T:       Frequencies on screen in 1/omega_* units, omega_*=(cT/eB)*ky/L_ref.')")
+    end if
+
+    if (.not. write_phi) then
+       write (report_unit, fmt="('write_phi = F:             Ignored.')")
+    end if
+
+    if (.not. write_apar) then
+       write (report_unit, fmt="('write_apar = F:            Ignored.')")
+    end if
+
+    if (.not. write_phi) then
+       write (report_unit, fmt="('write_aperp = F:           Ignored.')")
+    end if
+
+    if (write_omega) then
+       if (write_ascii) then
+          write (report_unit, fmt="('write_omega = T:           Instantaneous frequencies written to ',a)") trim(run_name)//'.out'
+       else
+          write (report_unit, fmt="('write_omega = T:           No effect.')")
+       end if
+       write (report_unit, fmt="('                           Frequencies calculated at igomega = ',i4)") igomega
+       if (def_parity .and. .not. even) then
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('   You probably want igomega /= 0 for odd parity modes.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+    end if
+
+    if (write_omavg) then
+       if (write_ascii) then
+          write (report_unit, fmt="('write_omavg = T:           Time-averaged frequencies written to ',a)") trim(run_name)//'.out'
+          write (report_unit, fmt="('                           Averages taken over ',i4,' timesteps.')") navg
+       else
+          write (report_unit, fmt="('write_omavg = T:           No effect.')")
+       end if
+    end if
+
+    if (write_ascii) then
+       write (report_unit, fmt="('write_ascii = T:           Write some data to ',a)") trim(run_name)//'.out'
+    end if
+
+    if (write_lamavg) then
+       write (report_unit, fmt="('write_lamavg = T:          Write particle flux vs. lambda to ',a)") trim(run_name)//'.lam'
+       write (report_unit, fmt="('write_lamavg = T:          Write energy flux vs. lambda to ',a)") trim(run_name)//'.lame'
+    end if
+
+    if (write_tavg) then
+       write (report_unit, fmt="('write_tavg = T:            Write particle flux vs. theta to ',a)") trim(run_name)//'.theta'
+       write (report_unit, fmt="('write_tavg = T:          Write energy flux vs. thetaa to ',a)") trim(run_name)//'.thetae'
+    end if
+
+    if (write_eavg) then
+       write (report_unit, &
+         & fmt="('write_eavg = T:            Write particle flux vs. energy to ',a)") trim(run_name)//'.energy'
+       write (report_unit, &
+         & fmt="('write_eavg = T:            Write energy flux vs. energy to ',a)") trim(run_name)//'.energye'
+    end if
+
+    if (write_dmix) then
+       if (write_ascii) then
+          write (report_unit, fmt="('write_dmix = T:            Write D_ML ',a)") trim(run_name)//'.out'
+       else
+          write (report_unit, fmt="('write_dmix = T:            Ignored if write_ascii = F')")
+       end if
+    end if
+
+    if (write_kperpnorm) then
+       write (report_unit, fmt="('write_kperpnorm = T:       Ignored.')")
+    end if
+
+    if (write_phitot) then
+       write (report_unit, fmt="('write_phitot = T:          Ignored.')")
+    end if
+       
+    if (write_epartot) then
+       write (report_unit, fmt="('write_epartot = T:         Ignored.')")
+    end if
+
+    if (write_fieldline_avg_phi) then
+       write (report_unit, fmt="('write_fieldline_avg_phi = T: Ignored.')")
+       write (report_unit, fmt="('    Perhaps you want write_avg_moments = T')")
+    end if
+
+    if (write_eigenfunc) then
+       if (write_ascii) then
+          write (report_unit, fmt="('write_eigenfunc = T:       Normalized Phi(theta) written to ',a)") trim(run_name)//'.eigenfunc'
+       end if
+       write (report_unit, fmt="('write_eigenfunc = T:       Normalized Phi(theta) written to ',a)") trim(run_name)//'.out.nc'
+    end if
+
+    if (write_final_fields) then
+       if (write_ascii) then
+          write (report_unit, fmt="('write_final_fields = T:    Phi(theta), etc. written to ',a)") trim(run_name)//'.fields'
+       end if
+       write (report_unit, fmt="('write_final_fields = T:    Phi(theta), etc. written to ',a)") trim(run_name)//'.out.nc'
+    end if
+
+    if (write_final_antot) then
+       if (write_ascii) then
+          write (report_unit, fmt="('write_final_antot = T:          Sources for Maxwell eqns. written to ',a)") &
+          	& trim(run_name)//'.antot'
+       end if
+       write (report_unit, fmt="('write_final_antot = T:          Sources for Maxwell eqns. written to ',a)") &
+	& trim(run_name)//'.out.nc'
+    end if
+
+    if (write_final_moments) then
+       if (write_ascii) then
+          write (report_unit, fmt="('write_final_moments = T:   Low-order moments of g written to ',a)") &
+               & trim(run_name)//'.moments'
+          write (report_unit, fmt="('write_final_moments = T:   int dl/B average of low-order moments of g written to ',a)") &
+               & trim(run_name)//'.amoments'
+       end if
+       write (report_unit, fmt="('write_final_moments = T:   Low-order moments of g written to ',a)") &
+            & trim(run_name)//'.out.nc'
+       write (report_unit, fmt="('write_final_moments = T:   int dl/B average of low-order moments of g written to ',a)") &
+            & trim(run_name)//'.out.nc'
+    end if
+
+    if (write_avg_moments) then
+       if (gridopt_switch /= gridopt_box) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('write_avg_moments = T:          Ignored unless grid_option=box')")
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+       else
+          if (write_ascii) then
+             write (report_unit, fmt="('write_avg_moments = T:     Flux surface averaged low-order moments of g written to ',a)") &
+                  & trim(run_name)//'.moments'
+          end if
+          write (report_unit, fmt="('write_avg_moments = T:     Flux surface averaged low-order moments of g written to ',a)") &
+               & trim(run_name)//'.out.nc'
+       end if
+    end if
+
+    if (write_final_epar) then
+       if (write_ascii) then
+          write (report_unit, fmt="('write_final_epar = T:      E_parallel(theta) written to ',a)") trim(run_name)//'.epar'
+       end if
+       write (report_unit, fmt="('write_final_epar = T:      E_parallel(theta) written to ',a)") trim(run_name)//'.out.nc'
+    end if
+
+    if (write_fcheck) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('write_fcheck = T:               Turns on obscure diagnostics.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (write_vortcheck) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('write_vortcheck = T:              Turns on obscure diagnostics.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (write_fieldcheck) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('write_fieldcheck = T:              Turns on obscure diagnostics.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (write_neoclassical_flux) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('write_neoclassical_flux = T:               Turns on neoclassical flux calc, &
+           & but result not written.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('    Perhaps you want dump_neoclassical_flux = T.')")
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (write_nl_flux) then
+       if (write_ascii) then
+          write (report_unit, fmt="('write_nl_flux = T:         Phi**2(kx, ky) written to ',a)") trim(run_name)//'.out'
+       end if
+    else
+       write (report_unit, fmt="('write_nl_flux = F:         Phi**2(kx, ky) NOT written to ',a)") trim(run_name)//'.out'
+    end if
+
+    if (dump_neoclassical_flux) then
+       write (report_unit, fmt="('dump_neoclassical_flux = T: Neoclassical fluxes written to ',a)") 'dump.neoflux'
+       write (report_unit, fmt="('This option requires an expert user.')") 
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+    end if
+
+    if (dump_check1) then
+       write (report_unit, fmt="('dump_check1 = T:          Field-line avg of Phi written to ',a)") 'dump.check1'
+       write (report_unit, fmt="('This option is usually used for Rosenbluth-Hinton calculations.')") 
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+    end if
+
+    if (dump_check2) then
+       write (report_unit, fmt="('dump_check2 = T:           Apar(kx, ky, igomega) written to ',a)") trim(run_name)//'.dc2'
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+    end if
+
+    if (dump_fields_periodically) then
+       write (report_unit, fmt="('dump_fields_periodically = T:          Phi, Apar, Bpar written to ',a)") 'dump.fields.t=(time)'
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.  IT IS EXPENSIVE.')") 
+    end if
+
+    if (dump_final_xfields) then
+       write (report_unit, fmt="('dump_final_xfields is not longer maintained')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+    end if
+
+    if (save_for_restart) then
+       write (report_unit, fmt="('save_for_restart = T:      Restart files written to ',a)") trim(restart_file)//'.(PE)'
+    else
+       if (nonlinear_mode_switch == nonlinear_mode_on) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('save_for_restart = F:              This run cannot be continued.')")
+          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+    end if
+
+    if (write_pflux) write (report_unit, fmt="('write_pflux = T:           Ignored.')")
+    if (write_vflux) write (report_unit, fmt="('write_vflux = T:           Ignored.')")
+    if (write_qheat) write (report_unit, fmt="('write_qheat = T:           Ignored.')")
+    if (write_pmflux) write (report_unit, fmt="('write_pmflux = T:          Ignored.')")
+    if (write_vmflux) write (report_unit, fmt="('write_vmflux = T:          Ignored.')")
+    if (write_qmheat) write (report_unit, fmt="('write_qmheat = T:          Ignored.')")
+    if (write_pbflux) write (report_unit, fmt="('write_pbflux = T:          Ignored.')")
+    if (write_vbflux) write (report_unit, fmt="('write_vbflux = T:          Ignored.')")
+    if (write_qbheat) write (report_unit, fmt="('write_qbheat = T:          Ignored.')")    
+
+  end subroutine check_gs2_diagnostics
+
 
   subroutine init_gs2_diagnostics (list, nstep)
    !<doc> Define NetCDF vars, call real_init, which calls read_parameters; broadcast all the different write flags. </doc>

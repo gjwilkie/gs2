@@ -2,6 +2,7 @@ module species
   implicit none
 
   public :: init_species, finish_species, reinit_species, init_trin_species
+  public :: wnml_species, check_species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
   public :: has_electron_species, has_slowing_down_species
@@ -40,6 +41,150 @@ module species
   logical :: initialized = .false.
 
 contains
+
+  subroutine check_species(report_unit,alne,dbetadrho_spec)
+  use run_parameters, only: beta, tite
+  implicit none
+  integer :: report_unit
+  real :: dbetadrho_spec
+  integer :: is
+  real :: aln, alne, alp, charge, ee, ne, ptot, zeff_calc
+     write (report_unit, fmt="('Number of species: ',i3)") nspec
+     zeff_calc = 0.
+     charge = 0.
+     aln = 0.
+     alne = 0.
+     alp = 0.
+     ptot = 0.
+     do is=1, nspec
+        write (report_unit, *) 
+        write (report_unit, fmt="('  Species ',i3)") is
+        if (spec(is)%type == 1) write (report_unit, fmt="('    Type:             Ion')")
+        if (spec(is)%type == 2) write (report_unit, fmt="('    Type:             Electron')")
+        if (spec(is)%type == 3) write (report_unit, fmt="('    Type:             Slowing-down')")
+        write (report_unit, fmt="('    Charge:         ',f7.3)") spec(is)%z
+        write (report_unit, fmt="('    Mass:             ',es10.4)") spec(is)%mass
+        write (report_unit, fmt="('    Density:        ',f7.3)") spec(is)%dens
+        write (report_unit, fmt="('    Temperature:    ',f7.3)") spec(is)%temp
+        write (report_unit, fmt="('    Collisionality:   ',es10.4)") spec(is)%vnewk
+        write (report_unit, fmt="('    Normalized Inverse Gradient Scale Lengths:')")
+        write (report_unit, fmt="('      Temperature:  ',f7.3)") spec(is)%tprim
+        write (report_unit, fmt="('      Density:      ',f7.3)") spec(is)%fprim
+        write (report_unit, fmt="('      Parallel v:   ',f7.3)") spec(is)%uprim
+!        write (report_unit, fmt="('    Ignore this:')")
+!        write (report_unit, fmt="('    D_0: ',es10.4)") spec(is)%dens0
+        if (spec(is)%type /= 2) then
+           zeff_calc = zeff_calc + spec(is)%dens*spec(is)%z**2
+           charge = charge + spec(is)%dens*spec(is)%z
+           aln = aln + spec(is)%dens*spec(is)%z*spec(is)%fprim
+        else
+           alne = alne + spec(is)%dens*spec(is)%z*spec(is)%fprim
+           ne = spec(is)%dens
+           ee = spec(is)%z
+        end if
+        alp = alp + spec(is)%dens * spec(is)%temp *(spec(is)%fprim + spec(is)%tprim)
+        ptot = ptot + spec(is)%dens * spec(is)%temp
+     end do
+
+     if (.not. has_electron_species(spec)) then
+        ptot = ptot + 1./tite   ! electron contribution to pressure
+        alp = alp + aln/tite    ! assuming charge neutrality, electron contribution to alp
+     end if
+
+     alp = alp / ptot
+
+     write (report_unit, *) 
+     write (report_unit, fmt="('------------------------------------------------------------')")
+
+     write (report_unit, fmt="('Calculated Z_eff: ',f7.3)") zeff_calc
+
+     if (has_electron_species(spec)) then
+        if (abs(charge+ne*ee) > 1.e-2) then
+           if (charge+ne*ee < 0.) then
+              write (report_unit, *) 
+              write (report_unit, fmt="('################# WARNING #######################')")
+              write (report_unit, fmt="('You are neglecting an ion species.')")
+              write (report_unit, fmt="('This species has a charge fraction of ',f7.3)") abs(charge+ne*ee)
+              write (report_unit, &
+                   & fmt="('and a normalized inverse density gradient scale length of ',f7.3)") &
+                   (aln+alne)/(charge+ne*ee)
+              write (report_unit, fmt="('################# WARNING #######################')")
+           else
+              write (report_unit, *) 
+              write (report_unit, fmt="('################# WARNING #######################')")
+              write (report_unit, fmt="('There is an excess ion charge fraction of ',f7.3)") abs(charge+ne*ee)
+              write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+              write (report_unit, fmt="('################# WARNING #######################')")
+           end if
+        else
+           if (abs(aln+alne) > 1.e-2) then
+              write (report_unit, *) 
+              write (report_unit, fmt="('################# WARNING #######################')")
+              write (report_unit, fmt="('The density gradients are inconsistent.')")
+              write (report_unit, fmt="('################# WARNING #######################')")
+           end if
+        end if
+     else
+        if (charge > 1.01) then
+           write (report_unit, *) 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('There is an excess ion charge fraction of ',f7.3)") charge-1.
+           write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+           write (report_unit, fmt="('################# WARNING #######################')")
+        end if
+        if (charge < 0.99) then
+           write (report_unit, *) 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('You are neglecting an ion species.')")
+           write (report_unit, fmt="('This species has a charge fraction of ',f7.3)") abs(charge-1.)
+           write (report_unit, fmt="('################# WARNING #######################')")
+        end if
+     end if
+
+     write (report_unit, *) 
+     write (report_unit, fmt="('------------------------------------------------------------')")
+
+     write (report_unit, *) 
+     write (report_unit, fmt="('GS2 beta parameter = ',f9.4)") beta
+     write (report_unit, fmt="('Total beta = ',f9.4)") beta*ptot
+     write (report_unit, *) 
+     write (report_unit, fmt="('The total normalized inverse pressure gradient scale length is ',f10.4)") alp
+     dbetadrho_spec = -beta*ptot*alp
+     write (report_unit, fmt="('corresponding to d beta / d rho = ',f10.4)") dbetadrho_spec
+  end subroutine check_species
+
+  subroutine wnml_species(unit)
+  implicit none
+  integer :: unit, i
+  character (100) :: line
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "species_knobs"
+       write (unit, fmt="(' nspec = ',i2)") nspec
+       write (unit, fmt="(' /')")
+
+       do i=1,nspec
+          write (unit, *)
+          write (line, *) i
+          write (unit, fmt="(' &',a)") &
+               & trim("species_parameters_"//trim(adjustl(line)))
+          write (unit, fmt="(' z = ',e13.6)") spec(i)%z
+          write (unit, fmt="(' mass = ',e13.6)") spec(i)%mass
+          write (unit, fmt="(' dens = ',e13.6)") spec(i)%dens
+          write (unit, fmt="(' temp = ',e13.6)") spec(i)%temp
+          write (unit, fmt="(' tprim = ',e13.6)") spec(i)%tprim
+          write (unit, fmt="(' fprim = ',e13.6)") spec(i)%fprim
+          write (unit, fmt="(' uprim = ',e13.6)") spec(i)%uprim
+          if (spec(i)%uprim2 /= 0.) write (unit, fmt="(' uprim2 = ',e13.6)") spec(i)%uprim2
+          write (unit, fmt="(' vnewk = ',e13.6)") spec(i)%vnewk
+          if (spec(i)%type == ion_species) &
+               write (unit, fmt="(a)") ' type = "ion" /'
+          if (spec(i)%type == electron_species) &
+               write (unit, fmt="(a)") ' type = "electron"  /'
+          if (spec(i)%type == slowing_down_species) &
+               write (unit, fmt="(a)") ' type = "fast"  /'
+          write (unit, fmt="(' dens0 = ',e13.6)") spec(i)%dens0
+       end do
+  end subroutine wnml_species
 
   subroutine init_species
     use mp, only: trin_flag

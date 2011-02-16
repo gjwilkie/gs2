@@ -2,7 +2,7 @@ module init_g
   implicit none
 
   public :: ginit
-  public :: init_init_g, finish_init_g
+  public :: init_init_g, finish_init_g, wnml_init_g, check_init_g
   public :: width0
   public :: tstart
   public :: reset_init
@@ -28,7 +28,7 @@ module init_g
   real :: den2, upar2, tpar2, tperp2
   real :: tstart, scale, apar0
   logical :: chop_side, left, even, new_field_init
-  character(300) :: restart_file
+  character(300), public :: restart_file
   character (len=150) :: restart_dir
   integer, dimension(2) :: ikk, itt
   integer, dimension(3) :: ikkk,ittt
@@ -59,6 +59,511 @@ module init_g
   logical :: initialized = .false.
 
 contains
+
+  subroutine wnml_init_g(unit)
+  use run_parameters, only: k0
+  implicit none
+  integer :: unit
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "init_g_knobs"
+       select case (ginitopt_switch)
+
+       case (ginitopt_default)
+          write (unit, fmt="(' ginit_option = ',a)") '"default"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' width0 = ',e16.10)") width0
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_noise)
+          write (unit, fmt="(' ginit_option = ',a)") '"noise"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' zf_init = ',e16.10)") zf_init
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_test1)
+          write (unit, fmt="(' ginit_option = ',a)") '"test1"'
+
+       case (ginitopt_xi)
+          write (unit, fmt="(' ginit_option = ',a)") '"xi"'
+          write (unit, fmt="(' width0 = ',e16.10)") width0
+
+       case (ginitopt_xi2)
+          write (unit, fmt="(' ginit_option = ',a)") '"xi2"'
+          write (unit, fmt="(' width0 = ',e16.10)") width0
+
+       case (ginitopt_zero)
+          write (unit, fmt="(' ginit_option = ',a)") '"zero"'
+
+       case (ginitopt_test3)
+          write (unit, fmt="(' ginit_option = ',a)") '"test3"'
+
+       case (ginitopt_convect)
+          write (unit, fmt="(' ginit_option = ',a)") '"convect"'
+          write (unit, fmt="(' k0 = ',e16.10)") k0
+
+       case (ginitopt_rh)
+          write (unit, fmt="(' ginit_option = ',a)") '"rh"'
+
+       case (ginitopt_restart_many)
+          write (unit, fmt="(' ginit_option = ',a)") '"many"'
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+
+       case (ginitopt_restart_small)
+          write (unit, fmt="(' ginit_option = ',a)") '"small"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' zf_init = ',e16.10)") zf_init
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+
+       case (ginitopt_restart_file)
+          write (unit, fmt="(' ginit_option = ',a)") '"file"'
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+
+       case (ginitopt_continue)
+          write (unit, fmt="(' ginit_option = ',a)") '"cont"'
+
+       case (ginitopt_kz0)
+          write (unit, fmt="(' ginit_option = ',a)") '"kz0"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_nl)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_nl2)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl2"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_nl3)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl3"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' width0 = ',e16.10)") width0
+          write (unit, fmt="(' refac = ',e16.10)") refac
+          write (unit, fmt="(' imfac = ',e16.10)") imfac
+          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+          write (unit, fmt="(' den0 = ',e16.10)") den0
+          write (unit, fmt="(' den1 = ',e16.10)") den1
+          write (unit, fmt="(' den2 = ',e16.10)") den2
+          write (unit, fmt="(' upar0 = ',e16.10)") upar0
+          write (unit, fmt="(' upar1 = ',e16.10)") upar1
+          write (unit, fmt="(' upar2 = ',e16.10)") upar2
+          write (unit, fmt="(' tpar0 = ',e16.10)") tpar0
+          write (unit, fmt="(' tpar1 = ',e16.10)") tpar1
+          write (unit, fmt="(' tperp0 = ',e16.10)") tperp0
+          write (unit, fmt="(' tperp1 = ',e16.10)") tperp1
+          write (unit, fmt="(' tperp2 = ',e16.10)") tperp2
+
+       case (ginitopt_nl4)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl4"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_nl5)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl5"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_nl6)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl6"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+
+       case (ginitopt_alf)
+          write (unit, fmt="(' ginit_option = ',a)") '"alf"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+
+       case (ginitopt_gs)
+          write (unit, fmt="(' ginit_option = ',a)") '"gs"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' refac = ',e16.10)") refac
+          write (unit, fmt="(' imfac = ',e16.10)") imfac
+          write (unit, fmt="(' den1 = ',e16.10)") den1
+          write (unit, fmt="(' upar1 = ',e16.10)") upar1
+          write (unit, fmt="(' tpar1 = ',e16.10)") tpar1
+          write (unit, fmt="(' tperp1 = ',e16.10)") tperp1
+
+
+       case (ginitopt_kpar)
+          write (unit, fmt="(' ginit_option = ',a)") '"kpar"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' width0 = ',e16.10)") width0
+          write (unit, fmt="(' refac = ',e16.10)") refac
+          write (unit, fmt="(' imfac = ',e16.10)") imfac
+          write (unit, fmt="(' den0 = ',e16.10)") den0
+          write (unit, fmt="(' den1 = ',e16.10)") den1
+          write (unit, fmt="(' den2 = ',e16.10)") den2
+          write (unit, fmt="(' upar0 = ',e16.10)") upar0
+          write (unit, fmt="(' upar1 = ',e16.10)") upar1
+          write (unit, fmt="(' upar2 = ',e16.10)") upar2
+          write (unit, fmt="(' tpar0 = ',e16.10)") tpar0
+          write (unit, fmt="(' tpar1 = ',e16.10)") tpar1
+          write (unit, fmt="(' tperp0 = ',e16.10)") tperp0
+          write (unit, fmt="(' tperp1 = ',e16.10)") tperp1
+          write (unit, fmt="(' tperp2 = ',e16.10)") tperp2
+
+       end select
+       write (unit, fmt="(' /')")
+  end subroutine wnml_init_g
+
+ 
+  subroutine check_init_g(report_unit)
+  use run_parameters, only : delt_option_switch, delt_option_auto
+  use species, only : spec, has_electron_species
+  implicit none
+  integer :: report_unit
+    select case (ginitopt_switch)
+    case (ginitopt_default)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('  Amplitude:        ',f10.4)") phiinit
+       write (report_unit, fmt="('  Width in theta:   ',f10.4)") width0
+       if (chop_side) then
+          write (report_unit, fmt="('  Parity:   none')") 
+       else
+          write (report_unit, fmt="('  Parity:   even')") 
+       end if
+
+    case (ginitopt_kz0)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('  Amplitude:        ',f10.4)") phiinit
+       write (report_unit, fmt="('  Constant along field line',f10.4)") width0
+       if (chop_side) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('  Parity:   none')") 
+          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+          write (report_unit, fmt="('Remedy: set chop_side = .false. in init_g_knobs.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+
+    case (ginitopt_noise)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('  Amplitude:        ',f10.4)") phiinit
+       write (report_unit, fmt="('  Noise along field line.')") 
+       if (zf_init /= 1.) then
+          write (report_unit, fmt="('  Zonal flows adjusted by factor of zf_init = ',f10.4)") zf_init
+       end if
+
+    case (ginitopt_kpar)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('  Amplitude:             ',f10.4)") phiinit
+       write (report_unit, fmt="('  Real part multiplier:  ',f10.4)") refac
+       write (report_unit, fmt="('  Imag part multiplier:  ',f10.4)") imfac
+       if (width0 > 0.) then
+          write (report_unit, fmt="('  Gaussian envelope in theta with width:  ',f10.4)") width0
+       end if
+       if (chop_side) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('  Parity:   none')") 
+          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+          write (report_unit, fmt="('Remedy: set chop_side = .false. in init_g_knobs.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+       if (den0 > epsilon(0.0) .or. den1 > epsilon(0.0) .or. den2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial density perturbation of the form:')")
+          write (report_unit, fmt="('den0   + den1 * cos(theta) + den2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with den0 =',f7.4,' den1 = ',f7.4,' den2 = ',f7.4)") den0, den1, den2
+       end if
+       if (upar0 > epsilon(0.0) .or. upar1 > epsilon(0.0) .or. upar2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial parallel velocity perturbation of the form:')")
+          write (report_unit, fmt="('upar0   + upar1 * cos(theta) + upar2 * cos(2.*theta)')")
+          write (report_unit, fmt="('90 degrees out of phase with other perturbations.')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with upar0 =',f7.4,' upar1 = ',f7.4,' upar2 = ',f7.4)") upar0, upar1, upar2
+       end if
+       if (tpar0 > epsilon(0.0) .or. tpar1 > epsilon(0.0) .or. tpar2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial Tpar perturbation of the form:')")
+          write (report_unit, fmt="('tpar0   + tpar1 * cos(theta) + tpar2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with tpar0 =',f7.4,' tpar1 = ',f7.4,' tpar2 = ',f7.4)") tpar0, tpar1, tpar2
+       end if
+       if (tperp0 > epsilon(0.0) .or. tperp1 > epsilon(0.0) .or. tperp2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial Tperp perturbation of the form:')")
+          write (report_unit, fmt="('tperp0   + tperp1 * cos(theta) + tperp2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with tperp0 =',f7.4,' tperp1 = ',f7.4,' tperp2 = ',f7.4)") tperp0, tperp1, tperp2
+       end if
+       if (has_electron_species(spec)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Field line average of g_electron subtracted off.')")
+       end if
+
+    case (ginitopt_gs)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('  Randomly phased kpar=1 sines and cosines')") 
+       write (report_unit, fmt="('  in density, upar, tpar, or tperp.')") 
+       write (report_unit, fmt="('  Real part amplitude:  ',f10.4)") refac*phiinit
+       write (report_unit, fmt="('  Imag part amplitude:  ',f10.4)") imfac*phiinit
+       if (abs( den1)  > epsilon(0.0)) write (report_unit, fmt="('  Density amplitude:  ',f10.4)") den1
+       if (abs( upar1) > epsilon(0.0)) write (report_unit, fmt="('  Upar amplitude:  ',f10.4)") upar1
+       if (abs( tpar1) > epsilon(0.0)) write (report_unit, fmt="('  Tpar amplitude:  ',f10.4)") tpar1
+       if (abs(tperp1) > epsilon(0.0)) write (report_unit, fmt="('  Tperp amplitude:  ',f10.4)") tperp1
+
+    case (ginitopt_nl)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('At most two k_perps excited, with amplitude = ',f10.4)") phiinit
+       write (report_unit, fmt="(' First k_perp has ik = ',i3,' it = ',i3)") ikk(1), itt(1)
+       write (report_unit, fmt="('Second k_perp has ik = ',i3,' it = ',i3)") ikk(2), itt(2)
+       if (chop_side) then
+          write (report_unit, fmt="('  Parity:   none')") 
+       else
+          write (report_unit, fmt="('  Parity:   even')") 
+       end if
+       write (report_unit, fmt="('Reality condition is enforced.')")
+       
+    case (ginitopt_nl2)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('At most two k_perps excited, with amplitude = ',f10.4)") phiinit
+       write (report_unit, fmt="(' First k_perp has ik = ',i3,' it = ',i3)") ikk(1), itt(1)
+       write (report_unit, fmt="('Second k_perp has ik = ',i3,' it = ',i3)") ikk(2), itt(2)
+       if (chop_side) then
+          write (report_unit, fmt="('  Parity:   none')") 
+       else
+          write (report_unit, fmt="('  Parity:   even')") 
+       end if
+       write (report_unit, fmt="('Reality condition is enforced.')")
+       write (report_unit, fmt="('g perturbation proportional to (1+v_parallel)*sin(theta)')")
+
+    case (ginitopt_nl3)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('At most two k_perps excited, with amplitude = ',f10.4)") phiinit
+       write (report_unit, fmt="(' First k_perp has ik = ',i3,' it = ',i3)") ikk(1), itt(1)
+       write (report_unit, fmt="('Second k_perp has ik = ',i3,' it = ',i3)") ikk(2), itt(2)
+       write (report_unit, fmt="('  Real part multiplied by:  ',f10.4)") refac
+       write (report_unit, fmt="('  Imag part multiplied by:  ',f10.4)") imfac
+       if (width0 > 0.) then
+          write (report_unit, fmt="('  Gaussian envelope in theta with width:  ',f10.4)") width0
+       end if
+       if (chop_side) then
+          write (report_unit, fmt="('  Parity:   none')") 
+       else
+          write (report_unit, fmt="('  Parity:   even')") 
+       end if
+       write (report_unit, fmt="('Reality condition is enforced.')")
+       if (den0 > epsilon(0.0) .or. den1 > epsilon(0.0) .or. den2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial density perturbation of the form:')")
+          write (report_unit, fmt="('den0   + den1 * cos(theta) + den2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with den0 =',f7.4,' den1 = ',f7.4,' den2 = ',f7.4)") den0, den1, den2
+       end if
+       if (upar0 > epsilon(0.0) .or. upar1 > epsilon(0.0) .or. upar2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial parallel velocity perturbation of the form:')")
+          write (report_unit, fmt="('upar0   + upar1 * cos(theta) + upar2 * cos(2.*theta)')")
+          write (report_unit, fmt="('90 degrees out of phase with other perturbations.')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with upar0 =',f7.4,' upar1 = ',f7.4,' upar2 = ',f7.4)") upar0, upar1, upar2
+       end if
+       if (tpar0 > epsilon(0.0) .or. tpar1 > epsilon(0.0) .or. tpar2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial Tpar perturbation of the form:')")
+          write (report_unit, fmt="('tpar0   + tpar1 * cos(theta) + tpar2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with tpar0 =',f7.4,' tpar1 = ',f7.4,' tpar2 = ',f7.4)") tpar0, tpar1, tpar2
+       end if
+       if (tperp0 > epsilon(0.0) .or. tperp1 > epsilon(0.0) .or. tperp2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial Tperp perturbation of the form:')")
+          write (report_unit, fmt="('tperp0   + tperp1 * cos(theta) + tperp2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with tperp0 =',f7.4,' tperp1 = ',f7.4,' tperp2 = ',f7.4)") tperp0, tperp1, tperp2
+       end if
+       
+    case (ginitopt_nl4)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Under development for study of secondary instabilities.')")
+       write (report_unit, fmt="('Scale factor:   ',f10.4)") scale
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_nl5)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Under development for study of secondary instabilities.')")
+       write (report_unit, fmt="('Scale factor:   ',f10.4)") scale
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_nl6)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Change amplitude of a particular mode.')")
+       write (report_unit, fmt="('Scale factor:   ',f10.4)") scale
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_test1)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Maxwellian with sin(kr * theta)/(i*kr), amplitude = ',f10.4)") phiinit
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_xi)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Perturbation proportional to pitch angle.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_xi2)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Perturbation proportional to function of pitch angle.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_rh)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Maxwellian perturbation in ik=1 mode.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_alf)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Ion dist fn proportional to v_parallel * sin(theta).')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_zero)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Distribution function = 0.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_test3)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_convect)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_restart_file)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Restart from a single NetCDF restart file.')") 
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_restart_many)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('Each PE restarts from its own NetCDF restart file.')") 
+
+    case (ginitopt_restart_small)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('Each PE restarts from its own NetCDF restart file.')") 
+       write (report_unit, fmt="('with amplitudes scaled by factor of scale = ',f10.4)") scale
+       write (report_unit, fmt="('Noise added with amplitude = ',f10.4)") phiinit
+
+    case (ginitopt_continue)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    end select
+
+    if (ginitopt_switch == ginitopt_restart_many) then
+       if (delt_option_switch == delt_option_auto) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('This run is a continuation of a previous run.')") 
+          write (report_unit, fmt="('The time step at the beginning of this run')") 
+          write (report_unit, fmt="('will be taken from the end of the previous run.')") 
+       else
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('This run is a continuation of a previous run.')") 
+          write (report_unit, fmt="('The time step is being set by hand.')") 
+          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+          write (report_unit, fmt="('You probably want to set delt_option to be check_restart in the knobs namelist.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+    end if
+
+    if (delt_option_switch == delt_option_auto) then
+       if (ginitopt_switch /= ginitopt_restart_many) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('This is not a normal continuation run.')") 
+          write (report_unit, fmt="('You probably want to set delt_option to be default in the knobs namelist.')") 
+          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+    end if
+  end subroutine check_init_g
 
   subroutine init_init_g
     use gs2_save, only: init_save

@@ -14,11 +14,11 @@ module nonlinear_terms
   private
 
   ! knobs
-  integer :: nonlinear_mode_switch
+  integer, public :: nonlinear_mode_switch
   integer :: flow_mode_switch
 
-  integer, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
-  integer, parameter :: flow_mode_off = 1, flow_mode_on = 2
+  integer, public, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
+  integer, public, parameter :: flow_mode_off = 1, flow_mode_on = 2
 
   !complex, dimension(:,:), allocatable :: phi_avg, apar_avg, bpar_avg  
 

@@ -59,7 +59,8 @@ module dist_fn
        boundary_option_self_periodic = 2, &
        boundary_option_alternate_zero = 3, &
        boundary_option_linked = 4
-  logical :: mult_imp, test, def_parity, even
+  logical, public :: def_parity, even
+  logical :: mult_imp, test
   logical :: save_n
   logical :: accelerated_x = .false.
   logical :: accelerated_v = .false., kill_grid, h_kill
