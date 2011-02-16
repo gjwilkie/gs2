@@ -2,11 +2,11 @@ module run_parameters
   implicit none
 
   public :: init_run_parameters, finish_run_parameters
-
+  public :: check_run_parameters, wnml_run_parameters
   public :: beta, zeff, tite
   public :: fphi, fapar, fbpar
 !  public :: delt, delt_max, wunits, woutunits, tunits, funits, tnorm
-  public :: code_delt_max, wunits, woutunits, tunits, funits, tnorm
+  public :: delt, code_delt_max, wunits, woutunits, tunits, funits, tnorm
   public :: nstep, wstar_units, eqzip, margin
   public :: secondary, tertiary, harris
   public :: ieqzip
@@ -26,8 +26,8 @@ module run_parameters
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
   real :: k0
-  integer :: delt_option_switch
-  integer, parameter :: delt_option_hand = 1, delt_option_auto = 2
+  integer, public :: delt_option_switch
+  integer, public, parameter :: delt_option_hand = 1, delt_option_auto = 2
   logical :: initialized = .false.
 
   integer, allocatable :: ieqzip(:,:)
@@ -39,6 +39,104 @@ module run_parameters
        eqzip_option_equilibrium = 4
 
 contains
+
+  subroutine check_run_parameters(report_unit)
+  implicit none
+  integer :: report_unit
+    if (fphi /= 1.) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('fphi in the knobs namelist = ',e10.4)") fphi
+       write (report_unit, fmt="('fphi is a scale factor of all instances of Phi (the electrostatic potential).')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (fapar == 0.) then
+       write (report_unit, fmt="('A_parallel will not be included in the calculation.')")
+    end if
+    if (fapar == 1.) then
+       write (report_unit, fmt="('A_parallel will be included in the calculation.')")
+    end if
+    if (fapar /= 0. .and. fapar /= 1.) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('fapar in the knobs namelist = ',e10.4)") fapar
+       write (report_unit, fmt="('fapar is a scale factor of all instances of A_parallel (the parallel vector potential).')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (fbpar == 0.) then
+       write (report_unit, fmt="('B_parallel will not be included in the calculation.')")
+    end if
+    if (fbpar == 1.) then
+       write (report_unit, fmt="('B_parallel will be included in the calculation.')")
+    end if
+    if (fbpar /= 0. .and. fbpar /= 1.) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('fbpar in the knobs namelist = ',e10.4)") fbpar
+       write (report_unit, fmt="('fbpar is a scale factor of all instances of B_parallel &
+           & (the perturbed parallel magnetic field).')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (eqzip) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('eqzip = T in the knobs namelist.')")
+       write (report_unit, fmt="('This freezes some modes in time for a secondary stability analysis.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+       if (secondary) write (report_unit, fmt="('Mode with kx = 0, ky = ky_min fixed in time')")
+       if (tertiary)  write (report_unit, fmt="('Mode with ky = 0, kx = kx_min fixed in time')")
+    end if
+  end subroutine check_run_parameters
+
+  subroutine wnml_run_parameters(unit)
+  use species, only: spec, has_electron_species 
+  implicit none
+  integer :: unit
+
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "parameters"
+       write (unit, fmt="(' beta = ',e16.10)") beta       ! if zero, fapar, fbpar should be zero
+!CMR, 10/2/2011: following line was only executed if collisions are on:
+!     removed this test as printing seems harmless as its tricky to know now ! 
+       write (unit, fmt="(' zeff = ',e16.10)") zeff
+       if (.not. has_electron_species(spec))  write (unit, fmt="(' tite = ',e16.10)") tite
+!CMR, 10/2/2011: zip not in this namelist, so removing it!
+!       if (zip) write (unit, fmt="(' zip = ',L1)") zip
+       write (unit, fmt="(' /')")
+
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "knobs"
+       write (unit, fmt="(' fphi   = ',f6.3)") fphi
+       write (unit, fmt="(' fapar  = ',f6.3)") fapar
+       write (unit, fmt="(' fbpar = ',f6.3)") fbpar
+       write (unit, fmt="(' delt = ',e16.10)") delt
+       write (unit, fmt="(' nstep = ',i8)") nstep
+       write (unit, fmt="(' wstar_units = ',L1)") wstar_units
+       if (eqzip) then
+          write (unit, fmt="(' eqzip = ',L1)") eqzip
+          write (unit, fmt="(' secondary = ',L1)") secondary
+          write (unit, fmt="(' tertiary = ',L1)") tertiary
+       end if
+       write (unit, fmt="(' margin = ',e16.10)") margin
+       select case (delt_option_switch)
+       case (delt_option_auto)
+          write (unit, fmt="(' delt_option = ',a)") '"check_restart"'
+       case (delt_option_hand)
+          ! nothing
+       end select
+       write (unit, fmt="(' /')")
+  end subroutine wnml_run_parameters
 
   subroutine init_run_parameters
     use kt_grids, only: init_kt_grids, naky, nakx => ntheta0

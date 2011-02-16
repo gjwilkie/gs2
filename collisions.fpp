@@ -37,7 +37,7 @@ module collisions
 
   integer, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
   integer, parameter :: collision_model_krook = 2
-  integer, parameter :: collision_model_none = 3
+  integer, public, parameter :: collision_model_none = 3
   integer, parameter :: collision_model_krook_test = 4
   integer, parameter :: collision_model_lorentz_test = 5 ! if this changes, check gs2_diagnostics
   integer, parameter :: collision_model_full = 6
