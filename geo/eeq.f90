@@ -159,7 +159,7 @@ contains
     data init /1/
     save init
 
-    logical:: debug =.true.
+    logical:: debug =.false.
     
 ! Need to generalize initialization condition if equilibrium changes
 

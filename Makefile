@@ -489,6 +489,8 @@ test_make:
 	@echo  USE_LOCAL_RAN is $(USE_LOCAL_RAN)
 	@echo  USE_LOCAL_SPFUNC is $(USE_LOCAL_SPFUNC)
 	@echo  USE_NAGLIB is $(USE_NAGLIB)
+	@echo  DEFAULT_LIB is $(DEFAULT_LIB)
+	@echo  MPI_LIB is $(MPI_LIB)
 	@echo
 	@echo FC is $(FC)
 	@echo F90FLAGS is $(F90FLAGS)
