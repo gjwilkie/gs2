@@ -42,13 +42,12 @@ module species
 
 contains
 
-  subroutine check_species(report_unit,alne,dbetadrho_spec)
-  use run_parameters, only: beta, tite
+  subroutine check_species(report_unit,beta,tite,alne,dbetadrho_spec)
   implicit none
   integer :: report_unit
-  real :: dbetadrho_spec
+  real :: beta, tite, alne, dbetadrho_spec
   integer :: is
-  real :: aln, alne, alp, charge, ee, ne, ptot, zeff_calc
+  real :: aln, alp, charge, ee, ne, ptot, zeff_calc
      write (report_unit, fmt="('Number of species: ',i3)") nspec
      zeff_calc = 0.
      charge = 0.
