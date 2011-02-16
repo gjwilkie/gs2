@@ -3220,6 +3220,15 @@ contains
 
     end if
 
+    do il = 1, ng2
+       do ig = -ntgrid, ntgrid
+          forbid(ig,il) = 1.0 - al(il)*bmag(ig) < -bouncefuzz
+          if (forbid(ig,il)) then 
+            call stop_message("Fatal error: supposedly passing particle was trapped, in legridset, in le_grids.f90")
+end if
+       end do
+    end do
+
     do il = ng2+1, nlambda
        do ig = -ntgrid, ntgrid
           forbid(ig,il) = 1.0 - al(il)*bmag(ig) < -bouncefuzz
@@ -3324,6 +3333,22 @@ contains
     call finish_mp
     stop
   end subroutine stop_invalid
+
+  subroutine stop_message (message)
+!JAB: print an error message and end program
+    use file_utils, only: error_unit
+    use mp, only: proc0, finish_mp
+    implicit none
+    character(*), intent (in) :: message
+    integer :: ierr
+
+    if (proc0) then
+       ierr = error_unit()
+       write (unit=ierr, fmt='(a)') message
+    end if
+    call finish_mp
+    stop
+  end subroutine stop_message
 
   subroutine fcheck (g, f)
     use species, only: nspec

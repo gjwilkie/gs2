@@ -531,7 +531,7 @@ contains
     use species, only: nspec
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: negrid, ng2, nlambda, al, jend
+    use le_grids, only: negrid, ng2, nlambda, al, jend, forbid
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use dist_fn_arrays, only: ittp
     implicit none
@@ -545,14 +545,26 @@ contains
 ! find totally trapped particles 
 !    if (alloc) allocate (ittp(-ntgrid:ntgrid))
     if (.not. allocated(ittp)) allocate (ittp(-ntgrid:ntgrid))
-    ittp = 0
+!    ittp = 0
+     ittp = nlambda+1
     do ig = -ntgrid+1, ntgrid-1
-       if (jend(ig) > 0 .and. jend(ig) <= nlambda) then
-          if (1.0-al(jend(ig))*bmag(ig+1) < 2.0*epsilon(0.0) &
-               .and. 1.0-al(jend(ig))*bmag(ig-1) < 2.0*epsilon(0.0)) &
-          then
-             ittp(ig) = jend(ig)
-          end if
+!       if (jend(ig) > 0 .and. jend(ig) <= nlambda) then
+!          if (1.0-al(jend(ig))*bmag(ig+1) < 2.0*epsilon(0.0) &
+!               .and. 1.0-al(jend(ig))*bmag(ig-1) < 2.0*epsilon(0.0)) &
+!          then
+!             ittp(ig) = jend(ig)
+!          end if
+!       end if
+
+! all pitch angles greater than or equal to ittp are totally trapped or forbidden
+
+       if (nlambda > ng2) then
+          do il = ng2+1, nlambda
+             if (forbid(ig-1,il) .and. forbid(ig+1, il) .and. .not. forbid(ig, il)) then
+                ittp(ig) = il
+                exit
+             end if
+          end do
        end if
     end do
 
@@ -610,7 +622,10 @@ contains
              do it = 1, ntheta0
 ! moved this loop inside. 4.10.99
                 do ig = -ntgrid, ntgrid
-                   if (ittp(ig) == 0) cycle
+                   if (ittp(ig) == nlambda+1) cycle
+                   do il = ittp(ig), nlambda
+                      if (forbid(ig, il)) exit
+!GWH+JAB: should this be calculated only at ittp? or for each totally trapped pitch angle? (Orig logic: there was only one totally trapped pitch angle; now multiple ttp are allowed.
                    wdriftttp(ig,it,ik,ie,is) &
                         = wdrift_func(ig,ittp(ig),ie,it,ik,is)*tpdriftknob
 !CMR:  totally trapped particle drifts also scaled by tpdriftknob 
@@ -620,6 +635,7 @@ contains
                            = wdrift_func_neo(ig,ittp(ig),ie,is)*driftknob
                    end if
 !< MAB
+                end do
                 end do
              end do
           end do
@@ -1036,7 +1052,7 @@ contains
              
              ! ???? mysterious mucking around with totally trapped particles
              ! part of multiple trapped particle algorithm
-             if (il == ittp(ig)) then
+             if (il >= ittp(ig) .and. .not. forbid(ig, il)) then
                 ainv(ig,iglo) = 1.0/(1.0 + zi*(1.0-fexp(is))*spec(is)%tz*(wdttp+wc)) ! MAB
                 a(ig,iglo) = 1.0 - zi*fexp(is)*spec(is)%tz*(wdttp+wc) ! MAB
 !                ainv(ig,iglo) = 1.0/(1.0 + zi*(1.0-fexp(is))*spec(is)%tz*wdttp)
@@ -2598,7 +2614,7 @@ contains
     use dist_fn_arrays, only: vparterm, wdfac, wstarfac
     use theta_grid, only: ntgrid, theta, bmag
     use kt_grids, only: aky, theta0, akx
-    use le_grids, only: nlambda, ng2, lmax, anon, e, negrid
+    use le_grids, only: nlambda, ng2, lmax, anon, e, negrid, forbid
     use species, only: spec, nspec
     use run_parameters, only: fphi, fapar, fbpar, wunits, tunits
     use gs2_time, only: code_dt
@@ -2789,7 +2805,7 @@ contains
         source_option_switch == source_option_test1) then
        if (nlambda > ng2 .and. isgn == 2) then
           do ig = -ntgrid, ntgrid
-             if (il /= ittp(ig)) cycle
+             if (il < ittp(ig)) cycle
              source(ig) &
                   = g(ig,2,iglo)*a(ig,iglo) &
                   - anon(ie,is)*zi*(wdriftttp(ig,it,ik,ie,is)*hneoc(ig,2,iglo)+wcoriolis(ig,iglo))*phigavg(ig) &
@@ -2801,7 +2817,7 @@ contains
           if (source_option_switch == source_option_phiext_full .and.  &
                aky(ik) < epsilon(0.0)) then
              do ig = -ntgrid, ntgrid
-                if (il /= ittp(ig)) cycle             
+                if (il < ittp(ig)) cycle             
                 source(ig) = source(ig) - zi*anon(ie,is)* &
                      wdriftttp(ig,it,ik,ie,is)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
              end do
@@ -2810,7 +2826,7 @@ contains
           if (source_option_switch == source_option_neo .and.  &
                aky(ik) < epsilon(0.0)) then
              do ig = -ntgrid, ntgrid
-                if (il /= ittp(ig)) cycle             
+                if (il < ittp(ig)) cycle             
                 source(ig) = source(ig) - anon(ie,is)* &
                      wdriftttp_neo(ig,it,ik,ie,is)*2.0*sourcefac &
                      *(spec(is)%fprim+spec(is)%tprim*(e(ie,is)-1.5))*spec(is)%tz
@@ -2825,18 +2841,18 @@ contains
                 ! nothing
              case (1)
                 do ig = -ntgrid, ntgrid
-                   if (il /= ittp(ig)) cycle
+                   if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
                 end do
              case (2) 
                 do ig = -ntgrid, ntgrid
-                   if (il /= ittp(ig)) cycle
+                   if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*tfac*( &
                         1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
                 end do                   
              case default
                 do ig = -ntgrid, ntgrid
-                   if (il /= ittp(ig)) cycle
+                   if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*tfac*( &
                           (23./12.)*gnl_1(ig,isgn,iglo) &
                         - (4./3.)  *gnl_2(ig,isgn,iglo) &
@@ -3031,7 +3047,9 @@ contains
     g2 = 0.0
     ! initialize to 1.0 at upper bounce point for vpar < 0
     ! (but not for wfb or ttp)
-    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
+!JAB: include wfb (ng2+1)
+!orig:    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
+    if (nlambda > ng2 .and. il >= ng2+1 .and. il <= lmax) then
        do ig=ntgl,ntgr-1
           if (forbid(ig+1,il).and..not.forbid(ig,il)) g2(ig,2) = 1.0
        end do
@@ -3059,7 +3077,10 @@ contains
        end do
     end if
 
-    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
+! GWH & JAB: see if this fixes a numerical instability, related to close-to-wfb:
+!il<=lmax seems redundant
+    if (nlambda > ng2 .and. il >= ng2+1 .and. il <= lmax) then
+!    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
        ! match boundary conditions at lower bounce point
        do ig = ntgl, ntgr-1
           if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
@@ -3087,7 +3108,7 @@ contains
 
     ! balancing totally trapped particles
     do ig = ntgl, ntgr
-       if (il == ittp(ig)) then
+       if (il >= ittp(ig)) then
           if (forbid(ig,il)) then
              gnew(ig,1,iglo) = 0.0
           else
@@ -3135,11 +3156,13 @@ contains
 
     end if
 
-    ! add correct amount of homogeneous solution for trapped particles
-    if (il >= ng2+2 .and. il <= lmax) then
+    ! add correct amount of homogeneous solution for trapped particles to satisfy boundary conditions
+!JAB include wfb (ng2+1)
+ !orig   if (il >= ng2+2 .and. il <= lmax) then
+    if (il >= ng2+1 .and. il <= lmax) then
        beta1 = 0.0
        do ig = ntgr-1, ntgl, -1
-          if (ittp(ig) == il) cycle
+          if (ittp(ig) <= il) cycle
           if (forbid(ig,il)) then
              beta1 = 0.0
           else if (forbid(ig+1,il)) then
