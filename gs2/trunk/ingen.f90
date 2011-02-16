@@ -1689,7 +1689,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
    subroutine report
      use run_parameters, only: check_run_parameters
-     use run_parameters, only: delt, fapar, fbpar, fphi, margin, nstep, wstar_units
+     use run_parameters, only: beta, tite, delt, fapar, fbpar, fphi, margin, nstep, wstar_units
      use gs2_diagnostics, only: check_gs2_diagnostics
      use gs2_diagnostics, only: dump_fields_periodically, save_for_restart, nsave, make_movie, nmovie, exit_when_converged, nwrite, omegatol
       use species, only: check_species, spec, nspec, has_electron_species
@@ -1883,7 +1883,7 @@ if (debug) write(6,*) 'get_namelists: returning'
      write (report_unit, fmt="('------------------------------------------------------------')")
      write (report_unit, *) 
 
-     call check_species(report_unit,alne,dbetadrho_spec)
+     call check_species(report_unit,beta,tite,alne,dbetadrho_spec)
 
      write (report_unit, *) 
      write (report_unit, fmt="('------------------------------------------------------------')")
