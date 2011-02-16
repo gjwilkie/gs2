@@ -376,7 +376,8 @@ contains
           il = il_idx(g_lo, iglo)
 ! Totally trapped particles get no bakdif 
           do ig = -ntgrid, ntgrid-1
-             if (il == ittp(ig)) cycle
+!JAB & GWH: orig if (il == ittp(ig)) cycle 
+             if (il >= ittp(ig)) cycle
              g1(ig,1,iglo) = (1.+bd)*g1(ig+1,1,iglo) + (1.-bd)*g1(ig,1,iglo)
              g1(ig,2,iglo) = (1.-bd)*g1(ig+1,2,iglo) + (1.+bd)*g1(ig,2,iglo)
           end do
