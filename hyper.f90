@@ -7,6 +7,7 @@ module hyper
   implicit none
   private
   public :: init_hyper, finish_hyper, hyper_diff, D_res
+  public :: read_parameters, wnml_hyper, check_hyper
   public :: D_v, D_eta, nexp
 
 ! D_v, D_eta are hyper coefficients, normalized correctly 
@@ -21,6 +22,7 @@ module hyper
        hyper_option_visc = 2, &
        hyper_option_res  = 3, &
        hyper_option_both = 4
+  character(9) :: hyper_option
   logical :: const_amp, include_kpar, isotropic_shear
   logical :: hyper_on = .false.
   logical :: gridnorm
@@ -32,6 +34,207 @@ module hyper
   logical :: initialized = .false.
 
 contains
+
+  subroutine check_hyper(report_unit)
+  implicit none
+  integer :: report_unit
+    select case (hyper_option_switch)
+    case (hyper_option_none)
+       if (D_hyperres > 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperresistivity.  &
+	       &D_hyperres ignored.')") trim(hyper_option)
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          D_hyperres = -10.
+       end if
+       if (D_hypervisc > 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperviscosity.  &
+               &D_hypervisc ignored.')") trim(hyper_option)
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          D_hypervisc = -10.
+       endif
+
+    case (hyper_option_visc)
+       hyper_on = .true.
+       if (D_hyperres > 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperresistivity.  &
+            &D_hyperres ignored.')") trim(hyper_option)
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          D_hyperres = -10.
+       end if
+       if (D_hypervisc < 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperviscosity but &
+               &D_hypervisc < 0.')") trim(hyper_option)
+          write (report_unit, fmt="('No hyperviscosity used.')")
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          hyper_on = .false.
+       endif
+
+    case (hyper_option_res)
+       hyper_on = .true.
+       if (D_hyperres < 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperresistivity but D_hyperres < 0.')") trim(hyper_option)
+          write(report_unit, fmt="('No hyperresistivity used.')")
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          hyper_on = .false.
+       end if
+       if (D_hypervisc > 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperviscosity.  D_hypervisc ignored.')") trim(hyper_option)
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          D_hypervisc = -10.
+       endif
+
+    case (hyper_option_both)
+       hyper_on = .true.
+       if (D_hyperres < 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperresistivity but D_hyperres < 0.')") trim(hyper_option)
+          write (report_unit, fmt="('No hyperresistivity used.')")
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+       if (D_hypervisc < 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperviscosity but D_hypervisc < 0.')") trim(hyper_option)
+          write (report_unit, fmt="('No hyperviscosity used.')")
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       endif
+       if (D_hypervisc < 0. .and. D_hyperres < 0.) hyper_on = .false.
+
+    end select
+
+    if (hyper_on) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('------------------------------------------------------------')")
+       write (report_unit, *) 
+
+       select case (hyper_option_switch)
+
+          case (hyper_option_visc)
+
+          write (report_unit, *) 
+          write (report_unit, fmt="('Hyperviscosity included without hyperresistivity.')")
+          if (const_amp) then
+             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hypervisc
+          else
+             write (report_unit, fmt="('The damping coefficent is ',e10.4)") D_hypervisc
+             write (report_unit, fmt="('The damping rate is proportional to the RMS amplitude of the turbulence.')")
+          end if
+          if (isotropic_shear) then
+             write (report_unit, fmt="('The hyperviscosity is isotropic in the perpendicular plane.')")
+             write (report_unit, fmt="('This is appropriate for MHD-like calculations.')")
+          else
+             write (report_unit, fmt="('The hyperviscosity is anisotropic in the perpendicular plane.')")
+             write (report_unit, fmt="('This is appropriate for drift-type calculations.')")
+             write (report_unit, fmt="('omega_osc = ',e10.4)") omega_osc
+          end if
+          
+       case (hyper_option_res)
+
+          write (report_unit, *) 
+          write (report_unit, fmt="('Hyperresistivity included without hyperviscosity.')")
+          if (const_amp) then
+             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
+          else
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, *) 
+          end if
+          if (isotropic_shear) then
+             write (report_unit, fmt="('The hyperresistivity is isotropic in the perpendicular plane.')")
+             write (report_unit, fmt="('This is appropriate for MHD-like calculations.')")
+          else
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, fmt="('isotropic_shear = .false. is not implemented for hyperresistivity.')")
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, *) 
+          end if
+
+       case (hyper_option_both)
+          
+          write (report_unit, *) 
+          write (report_unit, fmt="('Hyperresistivity and hyperviscosity included.')")
+          if (const_amp) then
+             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
+          else
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
+             write (report_unit, fmt="('THIS IS AN ERROR.')")
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, *) 
+          end if
+          if (isotropic_shear) then
+             write (report_unit, fmt="('The damping is isotropic in the perpendicular plane.')")
+             write (report_unit, fmt="('This is appropriate for MHD-like calculations.')")
+          else
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, fmt="('isotropic_shear = .false. is not implemented for hyperresistivity.')")
+             write (report_unit, fmt="('THIS IS AN ERROR.')")
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, *) 
+          end if
+       end select
+    end if
+  end subroutine check_hyper
+
+  subroutine wnml_hyper(unit)
+    implicit none
+    integer :: unit          
+          if (.not. hyper_on) return
+          write (unit, *)
+          write (unit, fmt="(' &',a)") "hyper_knobs"
+
+          select case (hyper_option_switch)
+             
+          case (hyper_option_visc) 
+             write (unit, fmt="(' hyper_option = ',a)") '"visc_only"'
+             write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
+             
+          case (hyper_option_res) 
+             write (unit, fmt="(' hyper_option = ',a)") '"res_only"'
+             write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
+             
+          case (hyper_option_both) 
+             write (unit, fmt="(' hyper_option = ',a)") '"both"'
+             if (D_hyperres == D_hypervisc) then
+                write (unit, fmt="(' D_hyper = ',e16.10)") D_hyper
+             else
+                write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
+                write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
+             end if
+          end select
+
+!          write (unit, fmt="(' include_kpar = ',L1)") include_kpar
+
+          write (unit, fmt="(' const_amp = ',L1)") const_amp
+          write (unit, fmt="(' isotropic_shear = ',L1)") isotropic_shear
+          if (.not. isotropic_shear) &
+               write (unit, fmt="(' omega_osc = ',e16.10)") omega_osc
+
+          write (unit, fmt="(' gridnorm = ',L1)") gridnorm
+          write (unit, fmt="(' /')")
+  end subroutine wnml_hyper
 
   subroutine init_hyper
 
@@ -97,7 +300,6 @@ contains
             text_option('visc_only', hyper_option_visc), &
             text_option('res_only', hyper_option_res), &
             text_option('both', hyper_option_both) /)
-    character(9) :: hyper_option
     integer :: ierr, in_file
     logical :: exist
     

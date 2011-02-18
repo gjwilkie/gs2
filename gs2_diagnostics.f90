@@ -31,10 +31,9 @@ module gs2_diagnostics
      module procedure get_fldline_avg_r, get_fldline_avg_c
   end interface
 
-!CMR, 17/11/2009:   read_parameters and nml gs2_diagnostics_knobs now public
-!                   so ingen can USE instead of copy them!
+!CMR, 17/11/2009:   read_parameters now public so ingen can USE instead of copy
 !
-  public :: gs2_diagnostics_knobs
+
 ! Why are these variables public?  This is not good.
   real,public :: omegatol, omegatinst
   logical,public :: print_line, print_old_units, print_flux_line
@@ -151,12 +150,14 @@ module gs2_diagnostics
   integer :: nout = 1
   integer :: nout_movie = 1
   complex :: wtmp_old = 0.
+  logical :: exist
 
 contains
 
    subroutine wnml_gs2_diagnostics(unit)
    implicit none
    integer :: unit
+       if (.not.exist) return
        write (unit, *)
        write (unit, fmt="(' &',a)") "gs2_diagnostics_knobs"
        write (unit, fmt="(' save_for_restart = ',L1)") save_for_restart
@@ -795,7 +796,6 @@ contains
     implicit none
     integer :: in_file
     logical, intent (in) :: list
-    logical :: exist
 
     !<doc> Set defaults for the gs2_diagnostics_knobs</doc>		
     if (proc0) then

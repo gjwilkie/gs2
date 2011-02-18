@@ -298,6 +298,7 @@ module le_grids
   implicit none
 
   public :: init_le_grids, finish_le_grids
+  public :: read_parameters, wnml_le_grids, check_le_grids, leok_le_grids
   public :: integrate, lintegrate, integrate_species
   public :: pintegrate, pe_integrate, integrate_stress
   public :: e, anon, al, delal, jend, forbid, dele, wl, w
@@ -339,6 +340,7 @@ module le_grids
   integer :: geint2g_lo, geint2g_hi
   complex, dimension (:,:), allocatable :: integration_work
   ! (-ntgrid:ntgrid, -*- processor-dependent -*-)
+  logical :: exist
 
  ! knobs
   integer :: ngauss, negrid, nesuper, nesub
@@ -368,6 +370,164 @@ module le_grids
   type (redist_type), save :: lambda_map, gint_map, eint_map
 
 contains
+
+  logical function leok_le_grids(report_unit)
+    implicit none
+    integer :: report_unit
+    integer, dimension (18), parameter :: nesub_ok = (/ &
+       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 20, 24, &
+       32, 48, 64 /)
+    
+    integer, dimension (12), parameter :: nesuper_ok = (/ &
+       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15 /)
+
+    integer, dimension (15), parameter :: ngauss_ok = (/ &
+       1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48 /)
+
+     leok_le_grids=.true.
+     if (.not. advanced_egrid) then
+        if (.not. any(nesub_ok == nesub)) then
+           write (report_unit, *) 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('You have selected nesub = ',i3)") nesub
+           write (report_unit, fmt="('This value is not allowed.')")
+           write (report_unit, fmt="('THIS IS AN ERROR.')")
+           write (report_unit, fmt="&
+                &('The allowed values are: 1-10, 12, 14, 16, 20, 24, 32, 48, or 64.')")
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, *) 
+           leok_le_grids = .false.
+        end if
+        if (.not. any(nesuper_ok == nesuper)) then
+           write (report_unit, *) 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('You have selected nesuper = ',i3)") nesuper
+           write (report_unit, fmt="('This value is not allowed.')")
+           write (report_unit, fmt="('THIS IS AN ERROR.')")
+           write (report_unit, fmt="('The allowed values are: 1-10, 12, or 15.')")
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, *) 
+           leok_le_grids = .false.
+        end if
+     else
+        if (.not. any(ngauss_ok == ngauss)) then
+           write (report_unit, *) 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('You have selected ngauss = ',i3)") ngauss
+           write (report_unit, fmt="('This value is not allowed.')")
+           write (report_unit, fmt="('THIS IS AN ERROR.')")
+           write (report_unit, fmt="&
+             &('The allowed values are: 1-6, 8, 10, 12, 16, 20, 24, 32, 40, or 48.')")
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, *) 
+           leok_le_grids = .false.
+        end if
+     end if
+  end function leok_le_grids
+
+  subroutine check_le_grids(report_unit,le_ok)
+    implicit none
+    integer :: report_unit
+    logical, intent(out) :: le_ok
+    integer, dimension (18), parameter :: nesub_ok = (/ &
+       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 20, 24, &
+       32, 48, 64 /)
+    
+    integer, dimension (12), parameter :: nesuper_ok = (/ &
+       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15 /)
+
+    integer, dimension (15), parameter :: ngauss_ok = (/ &
+       1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48 /)
+
+     le_ok=.true.
+     if (.not. advanced_egrid) then
+        if (.not. any(nesub_ok == nesub)) then
+           write (report_unit, *) 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('You have selected nesub = ',i3)") nesub
+           write (report_unit, fmt="('This value is not allowed.')")
+           write (report_unit, fmt="('THIS IS AN ERROR.')")
+           write (report_unit, fmt="&
+                &('The allowed values are: 1-10, 12, 14, 16, 20, 24, 32, 48, or 64.')")
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, *) 
+           le_ok = .false.
+        end if
+        if (.not. any(nesuper_ok == nesuper)) then
+           write (report_unit, *) 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('You have selected nesuper = ',i3)") nesuper
+           write (report_unit, fmt="('This value is not allowed.')")
+           write (report_unit, fmt="('THIS IS AN ERROR.')")
+           write (report_unit, fmt="('The allowed values are: 1-10, 12, or 15.')")
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, *) 
+           le_ok = .false.
+        end if
+     else
+        if (ecut <= 4.0) then
+           write (report_unit, *) 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('You have selected necut = ',f7.3)") ecut
+           write (report_unit, fmt="('With the advanced energy grid, this is small.')")
+           write (report_unit, fmt="('THIS IS A PROBABLY AN ERROR.')")
+           write (report_unit, fmt="('Recommended values are negrid = 16, ecut = 6.0')")
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, *) 
+        end if
+        if (.not. any(ngauss_ok == ngauss)) then
+           write (report_unit, *) 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('You have selected ngauss = ',i3)") ngauss
+           write (report_unit, fmt="('This value is not allowed.')")
+           write (report_unit, fmt="('THIS IS AN ERROR.')")
+           write (report_unit, fmt="&
+             &('The allowed values are: 1-6, 8, 10, 12, 16, 20, 24, 32, 40, or 48.')")
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, *) 
+           le_ok = .false.
+        end if
+     end if
+
+     write (report_unit, *) 
+     write (report_unit, fmt="('Number of lambdas: ',i3)") nlambda
+     write (report_unit, fmt="('Number of energies: ',i3)") negrid
+     write (report_unit, *) 
+
+     write (report_unit, fmt="&
+         &('Integrals over energy are broken into two regions, 0:Ecut and Ecut:infinity.')")
+     write (report_unit, fmt="('Ecut = ',f8.4)") ecut
+     write (report_unit, *) 
+
+    if (test) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Test = T in the le_grids_knobs namelist will stop the run before ')")
+       write (report_unit, fmt="('any significant calculation is done.')")
+       write (report_unit, fmt="('The lambda and energy grids will be written to the screen, and the run will stop.')")
+       write (report_unit, fmt="('THIS MAY BE AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+  end subroutine check_le_grids
+
+  subroutine wnml_le_grids(unit)
+    implicit none
+    integer :: unit
+    if (.not. exist) return
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "le_grids_knobs"
+       write (unit, fmt="(' advanced_egrid = ',L1)") advanced_egrid
+       if (advanced_egrid) then
+          write (unit, fmt="(' negrid = ',i4)") negrid
+       else
+          write (unit, fmt="(' nesub = ',i4)") nesub
+          write (unit, fmt="(' nesuper = ',i4)") nesuper
+       end if
+       write (unit, fmt="(' ngauss = ',i4)") ngauss
+       write (unit, fmt="(' ecut = ',e16.10)") ecut
+       write (unit, fmt="(' /')")
+  end subroutine wnml_le_grids
 
   subroutine init_le_grids (accelerated_x, accelerated_v)
     use mp, only: proc0, finish_mp
@@ -497,7 +657,6 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist
     implicit none
     integer :: ierr, in_file
-    logical :: exist
     namelist /le_grids_knobs/ ngauss, negrid, ecut, bouncefuzz, &
          nesuper, nesub, test, trapped_particles, advanced_egrid, &
          testfac, nmax, wgt_fac, new_trap_int, nterp, vcut, vgrid

@@ -35,210 +35,9 @@ program ingen
   character (100) :: pythonin
   integer :: interactive_record, interactive_input
 
-  integer :: nlambda
   integer :: in_file, i, ierr, unit, is, report_unit, iunit, ncut, npmax
   logical :: exist, scan, stdin
-
-  integer, dimension (18), parameter :: nesub_ok = (/ &
-       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 20, 24, &
-       32, 48, 64 /)
-    
-  integer, dimension (12), parameter :: nesuper_ok = (/ &
-       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15 /)
-
-  integer, dimension (15), parameter :: ngauss_ok = (/ &
-       1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48 /)
-
-! gs2_layouts:
-  character (len=5) :: layout
-  logical :: local_field_solve
-
-! antenna: 
-  complex :: w_antenna, a, b
-  real :: amplitude, t0_driver, w_dot
-  integer :: nk_stir, kx, ky, kz
-  logical :: write_antenna, no_driver = .false., ant_off = .false., travel
-  complex, dimension (:), allocatable :: a_ant, b_ant
-  integer, dimension (:), allocatable :: kx_stir, ky_stir, kz_stir
-  logical, dimension (:), allocatable :: trav
-
-  real :: cfac
-
-! collisions: 
-  integer :: collision_model_switch
-  real :: vncoef, absom, cfac_nu
-  integer :: ivnew
-  character (20) :: collision_model
-  logical :: conserve_number, conserve_momentum, hypercoll, const_v
-  logical :: heating
-  integer, parameter :: collision_model_lorentz = 1
-  integer, parameter :: collision_model_krook = 2
-  integer, parameter :: collision_model_none = 3
-  integer, parameter :: collision_model_krook_test = 4
-  integer, parameter :: collision_model_lorentz_test = 5
-  type (text_option), dimension (7), parameter :: coll_modelopts = &
-       (/ text_option('default', collision_model_lorentz), &
-       text_option('lorentz', collision_model_lorentz), &
-       text_option('krook', collision_model_krook), &
-       text_option('krook-test', collision_model_krook_test), &
-       text_option('lorentz-test', collision_model_lorentz_test), &
-       text_option('none', collision_model_none), &
-       text_option('collisionless', collision_model_none) /)
-
-! dist_fn:
-  complex, dimension (:), allocatable :: fexp ! (nspec)
-  real, dimension (:), allocatable :: bkdiff  ! (nspec)
-  integer, dimension (:), allocatable :: bd_exp ! nspec
-  real :: gridfac, apfac, driftknob, tpdriftknob, poisfac
-  real :: kfilter, afilter, D_kill, noise, g_exb, g_exbfac, omprimfac, btor_slab
-  real :: t0, omega0, gamma0, source0, thetas, k0, phi_ext, a_ext
-  real :: akx_star, aky_star, cfac_df
-  integer :: nperiod_guard 
-  logical :: mult_imp, test, def_parity, even, save_n, save_u, save_Tpar
-  logical :: save_Tperp, test_df
-  character (20) :: source_option
-  character (20) :: boundary_option
-  character (30) :: adiabatic_option
-  character (20) :: heating_option
-  integer :: adiabatic_option_switch, heating_option_switch
-  integer, parameter :: adiabatic_option_default = 1, &
-       adiabatic_option_zero = 2, &
-       adiabatic_option_fieldlineavg = 3, &
-       adiabatic_option_yavg = 4, &
-       adiabatic_option_noJ = 5
-  integer :: source_option_switch
-  integer, parameter :: source_option_full = 1, &
-       source_option_zero = 2, source_option_sine = 3, &
-       source_option_test1 = 4, source_option_phiext_full = 5, &
-       source_option_test2_full = 6, source_option_cosine = 7, &
-       source_option_convect_full = 8
-  integer :: boundary_option_switch
-  integer, parameter :: boundary_option_zero = 1, &
-       boundary_option_self_periodic = 2, &
-       boundary_option_alternate_zero = 3, &
-       boundary_option_linked = 4
-  integer, parameter :: heating_option_hammett = 1, &
-       heating_option_cowley = 2
-
-  type (text_option), dimension (9), parameter :: sourceopts = &
-       (/ text_option('default', source_option_full), &
-       text_option('full', source_option_full), &
-       text_option('zero', source_option_zero), &
-       text_option('sine', source_option_sine), &
-       text_option('cosine', source_option_cosine), &
-       text_option('test1', source_option_test1), &
-       text_option('phiext_full', source_option_phiext_full), &
-       text_option('test2_full', source_option_test2_full), &
-       text_option('convect_full', source_option_convect_full) /)
-
-  type (text_option), dimension (8), parameter :: boundaryopts = &
-       (/ text_option('default', boundary_option_zero), &
-       text_option('zero', boundary_option_zero), &
-       text_option('unconnected', boundary_option_zero), &
-       text_option('self-periodic', boundary_option_self_periodic), &
-       text_option('periodic', boundary_option_self_periodic), &
-       text_option('kperiod=1', boundary_option_self_periodic), &
-       text_option('linked', boundary_option_linked), &
-       text_option('alternate-zero', boundary_option_alternate_zero) /)
-
-  type (text_option), dimension (8), parameter :: adiabaticopts = &
-       (/ text_option('default', adiabatic_option_default), &
-       text_option('no-field-line-average-term', adiabatic_option_default), &
-       text_option('field-line-average-term', adiabatic_option_fieldlineavg), &
-       ! eventually add in iphi00 = 0 option:
-       text_option('iphi00=0', adiabatic_option_default), &
-       text_option('iphi00=1', adiabatic_option_default), &
-       text_option('iphi00=2', adiabatic_option_fieldlineavg), &
-       text_option('iphi00=3', adiabatic_option_yavg), &
-       text_option('dimits', adiabatic_option_noJ) /)
-
-    type (text_option), dimension (3), parameter :: heatingopts = &
-         (/ text_option('default', heating_option_cowley), &
-            text_option('Hammett', heating_option_hammett), &
-            text_option('Cowley',  heating_option_cowley) /)
-
-! fields: 
-  character (20) :: field_option
-  integer :: fieldopt_switch
-  integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_explicit = 3
-  type (text_option), dimension (4), parameter :: fieldopts = &
-       (/ text_option('default', fieldopt_implicit), &
-       text_option('implicit', fieldopt_implicit), &
-       text_option('explicit', fieldopt_explicit), &
-       text_option('test', fieldopt_test) /)
-
-! gs2_reinit: 
-  real :: delt_adj, delt_minimum
-
-! hyper: 
-  character (9) :: hyper_option
-  logical :: const_amp, include_kpar, isotropic_shear
-  real :: D_hypervisc, D_hyperres, omega_osc, D_hyper
-  integer :: hyper_option_switch
-  integer, parameter :: hyper_option_none = 1, &
-       hyper_option_visc = 2, &
-       hyper_option_res  = 3, &
-       hyper_option_both = 4
-  type (text_option), dimension(5), parameter :: hyperopts = &
-       (/ text_option('default', hyper_option_none), &
-       text_option('none', hyper_option_none), &
-       text_option('visc_only', hyper_option_visc), &
-       text_option('res_only', hyper_option_res), &
-       text_option('both', hyper_option_both) /)
-  logical :: hyper_on = .false.
-  logical :: gridnorm
-
-! le_grids
-  integer :: ngauss, negrid, nesuper, nesub
-  real :: ecut, vcut, bouncefuzz
-  logical :: trapped_particles = .true.
-  logical :: advanced_egrid = .true.
-  logical :: vgrid = .false.
-
-! nonlinear_terms: 
-  integer :: nonlinear_mode_switch
-  integer :: flow_mode_switch
-  integer, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
-  integer, parameter :: flow_mode_off = 1, flow_mode_on = 2
-  type (text_option), dimension (4), parameter :: nonlinearopts = &
-       (/ text_option('default', nonlinear_mode_none), &
-       text_option('none', nonlinear_mode_none), &
-       text_option('off', nonlinear_mode_none), &
-       text_option('on', nonlinear_mode_on) /)
-  character (20) :: nonlinear_mode
-  type (text_option), dimension (3), parameter :: flowopts = &
-       (/ text_option('default', flow_mode_off), &
-       text_option('off', flow_mode_off), &
-       text_option('on', flow_mode_on) /)
-  character (20) :: flow_mode
-  real :: cfl, c_par, C_perp, p_x, p_y, p_z
-  logical :: zip
-
-
-  logical :: test_le
-  logical :: layouts_write = .false.
-  logical :: driver_write = .false.
-  logical :: collisions_write = .false.
-  logical :: init_g_write = .false.
-  logical :: dist_fn_write = .false.
-  logical :: source_write = .false.
-  logical :: fields_write = .false.
-  logical :: diagnostics_write = .false.
-  logical :: reinit_write = .false.
-  logical :: hyper_write = .false.
-  logical :: le_write = .false.
-  logical :: nonlinear_write = .false.
-  logical :: run_parameters_write = .false.
-  logical :: species_write = .false.
-  logical :: theta_parameters_write = .false.
-  logical :: theta_gridgen_write = .false.
-  logical :: theta_salpha_write = .false.
-  logical :: theta_eik_write = .false.
-  logical :: theta_file_write = .false.
-  logical :: theta_write = .false.
-
-  integer :: iostat
-  real :: tmpfac
+  logical :: coll_on = .false.
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -255,49 +54,6 @@ program ingen
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-! gs2_layouts:
-  namelist /layouts_knobs/ layout, local_field_solve
-
-! antenna: 
-  namelist /driver/ amplitude, w_antenna, nk_stir, write_antenna, ant_off, w_dot, t0
-  namelist /stir/ kx, ky, kz, travel, a, b
-
-! collisions: 
-  namelist /collisions_knobs/ collision_model, vncoef, absom, ivnew, &
-       conserve_number, conserve_momentum, hypercoll, cfac, heating
-
-! dist_fn:
-  namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, &
-       driftknob, tpdriftknob, g_exb, g_exbfac, omprimfac, btor_slab,&
-       nperiod_guard, poisfac, adiabatic_option, cfac, &
-       kfilter, afilter, mult_imp, test, def_parity, even, &
-       save_n, save_u, save_Tpar, save_Tperp, D_kill, noise, heating_option
-  
-  namelist /source_knobs/ t0, omega0, gamma0, source0, &
-       thetas, k0, phi_ext, source_option, a_ext, aky_star, akx_star
-
-!  namelist /dist_fn_species_knobs/ fexpr, fexpi, bakdif, bd_exp
-
-! fields: 
-  namelist /fields_knobs/ field_option
-
-! gs2_reinit: 
-  namelist /reinit_knobs/ delt_adj, delt_minimum
-
-! hyper: 
-  namelist /hyper_knobs/ hyper_option, const_amp, include_kpar, &
-       isotropic_shear, D_hyperres, D_hypervisc, omega_osc, D_hyper, gridnorm
-
-! le_grids:
-
-  namelist /le_grids_knobs/ ngauss, negrid, ecut, bouncefuzz, &
-       nesuper, nesub, test, trapped_particles, advanced_egrid, &
-       vgrid, vcut
-
-! nonlinear_terms: 
-  namelist /nonlinear_terms_knobs/ nonlinear_mode, flow_mode, cfl, &
-       C_par, C_perp, p_x, p_y, p_z, zip
 
   namelist /ingen_knobs/ ncut, scan, stdin, npmax
 
@@ -901,18 +657,30 @@ contains
 !                 More object oriented strategy, easier maintenance of ingen.f90 
 !                 which is gradually shrinking.!                  
 !
+    use antenna, only: init_antenna
+    use collisions, only: coll_read_parameters=>read_parameters
+    use collisions, only: collision_model_switch, collision_model_none
+    use fields, only : fields_read_parameters=>read_parameters
+    use hyper, only : hyper_read_parameters=>read_parameters
+    use species,only : spec, nspec
+    use gs2_layouts, only: init_gs2_layouts
+    use gs2_reinit, only: init_reinit
+    use dist_fn, only: dist_fn_read_parameters=>read_parameters
+    use nonlinear_terms, only: nonlinear_terms_read_parameters=>read_parameters
     use run_parameters, only: init_run_parameters
     use init_g, only: init_init_g
     use species, only: init_species, nspec
     use gs2_diagnostics,only: gs2diag_read_parameters=>read_parameters
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
+    use le_grids, only: init_le_grids
     use theta_grid, only: init_theta_grid, nbset, shat_real => shat
     use theta_grid_params, only: shat
     use constants, only: pi
-    logical :: list
-!CMR
+    implicit none
+    logical :: list, accelx=.false., accelv=.false.
     logical:: debug=.false.
+    integer :: is
     call init_file_utils (list, name="template")
 if (debug) write(6,*) 'get_namelists: called init_file_utils'
     ncut= 100000
@@ -933,318 +701,49 @@ if (debug) write(6,*) 'get_namelists: if (scan), scan=',scan
     end if 
 
 if (debug) write(6,*) 'get_namelists: layouts'
-    local_field_solve = .false.
-!    layout = 'lexys'
-    layout = 'lxyes'
-    in_file=input_unit_exist("layouts_knobs", exist)
-    if (exist) then
-       read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
-       layouts_write = .true.
-    end if
+    call init_gs2_layouts
+    call init_antenna
 
-    ! antenna: 
-    w_antenna = (1., 0.0)
-    t0 = -1.
-    w_dot = 0.
-    amplitude = 0.
-    nk_stir = 1
-    ant_off = .false.
-
-    write_antenna = .false.
-    in_file=input_unit_exist("driver",exist)
-    if (exist .and. .not. ant_off) then
-       read (unit=input_unit("driver"), nml=driver)
-
-       allocate (kx_stir(nk_stir))
-       allocate (ky_stir(nk_stir))
-       allocate (kz_stir(nk_stir))
-       allocate (a_ant(nk_stir))
-       allocate (b_ant(nk_stir))
-       allocate (trav(nk_stir))
-
-       do i=1,nk_stir
-          call get_indexed_namelist_unit (in_file, "stir", i)
-          kx=1
-          ky=1
-          kz=1
-          a=0.
-          b=0.
-          travel = .true.
-          read (unit=in_file, nml=stir)
-          close(unit=in_file)
-          kx_stir(i) = kx 
-          ky_stir(i) = ky
-          kz_stir(i) = kz
-          trav(i) = travel
-          if (a == 0.0 .and. b == 0.0) then
-             a_ant(i) = amplitude*cmplx(1.,1.)/2. 
-             b_ant(i) = amplitude*cmplx(1.,1.)/2.
-          else 
-             a_ant(i) = a
-             b_ant(i) = b
-          end if
-       end do
-       driver_write = .true.       
-    else
-       no_driver = .true.
-    end if
-
-    t0_driver = t0
+    ! run_parameters:
+    call init_run_parameters
 
 if (debug) write(6,*) 'get_namelists: collisions'
-    ! collisions: 
-    collision_model = 'default'
-    tmpfac = cfac
-    cfac = 0.
-    vncoef = 0.6
-    absom = 0.5
-    ivnew = 0
-    conserve_number = .true.
-    conserve_momentum = .true.
-    hypercoll = .false.
-    heating = .false.
-    in_file=input_unit_exist("collisions_knobs",exist)
-    if (exist) then
-       read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
-       collisions_write = .true.
-    end if
-
-    ierr = error_unit()
-    call get_option_value &
-         (collision_model, coll_modelopts, collision_model_switch, &
-         ierr, "collision_model in collisions_knobs")
-
-    cfac_nu = cfac
-    cfac = tmpfac
+    call coll_read_parameters
 
 if (debug) write(6,*) 'get_namelists: init_g'
     call init_init_g
 
-    ! fields
-    field_option="default"
-    in_file = input_unit_exist("fields_knobs", exist)
-    if (exist) then
-       read (unit=input_unit("fields_knobs"), nml=fields_knobs)
-       fields_write = .true.
-    end if
-
-    ierr = error_unit()
-    call get_option_value &
-         (field_option, fieldopts, fieldopt_switch, &
-         ierr, "field_option in fields_knobs")
+if (debug) write(6,*) 'get_namelists: fields'
+    call fields_read_parameters
     
 if (debug) write(6,*) 'get_namelists: gs2_reinit'
-    ! gs2_reinit:
-    delt_adj = 2.0
-    delt_minimum = 1.e-5
-    in_file = input_unit_exist("reinit_knobs",exist)
-    if(exist) then
-       read (unit=in_file, nml=reinit_knobs)
-       reinit_write = .true.
-    end if
+    call init_reinit
 
 if (debug) write(6,*) 'get_namelists: hyper'
-    ! hyper:
-    const_amp = .false.
-    include_kpar = .false.
-    isotropic_shear = .true.
-    D_hyperres = -10.
-    D_hypervisc = -10.
-    D_hyper = -10.
-    hyper_option = 'default'
-    omega_osc = 0.4
-    gridnorm = .true.
-    in_file=input_unit_exist("hyper_knobs",exist)
-    if (exist) then
-       read (unit=input_unit("hyper_knobs"), nml=hyper_knobs)
-       hyper_write = .true.
-    endif
-
-    ierr = error_unit()
-    call get_option_value &
-         (hyper_option, hyperopts, hyper_option_switch, &
-         ierr, "hyper_option in hyper_knobs")
-
-    select case (hyper_option_switch)
-
-       case (hyper_option_none)
-          if (D_hyperres > 0.)  D_hyperres = -10.
-          if (D_hypervisc > 0.) D_hypervisc = -10.
-
-       case (hyper_option_visc)
-          if (D_hyperres > 0.) D_hyperres = -10.
-
-       case (hyper_option_res)
-          if (D_hypervisc > 0.) D_hypervisc = -10.
-
-       case (hyper_option_both)
-          
-          if (D_hyper >= 0.) then
-             D_hyperres  = D_hyper
-             D_hypervisc = D_hyper
-          end if
-
-    end select
+    call hyper_read_parameters
 
 if (debug) write(6,*) 'get_namelists: kt_grids'
     call init_kt_grids
 
 if (debug) write(6,*) 'get_namelists: le_grids'
-    ! le_grids:
-    nesub = 8
-    nesuper = 2
-    ngauss = 5
-    negrid = -10
-    ecut = 6.0
-    bouncefuzz = 1e-5
-    test = .false.
-    in_file=input_unit_exist("le_grids_knobs", exist)
-    if (exist) then
-       read (unit=input_unit("le_grids_knobs"), nml=le_grids_knobs)
-       le_write = .true.
-    end if
-    test_le = test
-
-    ! user can choose not to set negrid (preferred for old algorithm)
-    if (negrid == -10) then
-       negrid = nesub + nesuper
-    else  ! If user chose negrid, assume nesuper makes sense and check nesub
-       if (.not. advanced_egrid) then
-          if (negrid - nesuper /= nesub) then
-             ! Report problem to error file, and continue, using nesuper and negrid
-             ! (Note that nesub is not used anywhere else.)
-             nesub = negrid - nesuper
-             ierr = error_unit()
-             write (unit=ierr, fmt='("Forcing nesub = ",i5)') nesub
-          endif
-       endif
-    endif
+    call init_le_grids(accelx, accelv)
 
 if (debug) write(6,*) 'get_namelists: nonlinear terms'
-    ! nonlinear_terms:
-    nonlinear_mode = 'default'
-    flow_mode = 'default'
-    cfl = 0.1
-    C_par = 0.1
-    C_perp = 0.1
-    p_x = 6.0
-    p_y = 6.0
-    p_z = 6.0
-
-    in_file=input_unit_exist("nonlinear_terms_knobs",exist)
-    if(exist) then
-       read (unit=in_file,nml=nonlinear_terms_knobs)
-       nonlinear_write = .true.
-    end if
-
-    ierr = error_unit()
-    call get_option_value &
-         (nonlinear_mode, nonlinearopts, nonlinear_mode_switch, &
-         ierr, "nonlinear_mode in nonlinear_terms_knobs")
-    call get_option_value &
-         (flow_mode, flowopts, flow_mode_switch, &
-         ierr, "flow_mode in nonlinear_terms_knobs")
-
-    ! run_parameters:
-    call init_run_parameters
-    run_parameters_write = .true.
-
+    call nonlinear_terms_read_parameters
 
 if (debug) write(6,*) 'get_namelists: init_species'
     call init_species
+
+    do is=1, nspec
+        coll_on = spec(is)%vnewk > epsilon(0.0) .or. coll_on
+    end do
+    coll_on = coll_on .and. (collision_model_switch /= collision_model_none)
 
 !CMR, 2/2/2011:  reduce much duplication by calling init_theta_grid
 if (debug) write(6,*) 'get_namelists: call init_theta_grid'
     call init_theta_grid
 
-    ! dist_fn
-    save_n = .true.
-    save_u = .true.
-    save_Tpar = .true.
-    save_Tperp = .true.
-    boundary_option = 'default'
-    adiabatic_option = 'default'
-    heating_option = 'default'
-    poisfac = 0.0
-    gridfac = 5e4
-    apfac = 1.0
-    driftknob = 1.0
-    tpdriftknob = -9.9e9
-    t0 = 100.0
-    source0 = 1.0
-    omega0 = 0.0
-    gamma0 = 0.0
-    thetas = 1.0
-    aky_star = 0.0
-    akx_star = 0.0
-    phi_ext = 0.0
-    a_ext = 0.0
-    afilter = 0.0
-    kfilter = 0.0
-    g_exb = 0.0
-    omprimfac=1.0
-    g_exbfac = 1.0
-    D_kill = -10.0
-    noise = -1.
-    mult_imp = .false.
-    test = .false.
-    def_parity = .false.
-    even = .true.
-    source_option = 'default'
-    nperiod_guard = 0
-    tmpfac = cfac
-    cfac = 1.0
-
-if (debug) write(6,*) 'get_namelists: dist_fn_knobs'
-    in_file= input_unit_exist("dist_fn_knobs", exist)
-    if (exist) then
-       read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
-       if (tpdriftknob == -9.9e9) tpdriftknob=driftknob
-       dist_fn_write = .true.
-    end if
-
-    cfac_df = cfac
-    cfac = tmpfac
-    test_df = test
-
-    in_file= input_unit_exist("source_knobs", exist)
-    if (exist) then
-       read (unit=input_unit("source_knobs"), nml=source_knobs)
-       source_write = .true.
-    end if
-
-    allocate (fexp(nspec), bkdiff(nspec), bd_exp(nspec))
-
-    do is = 1, nspec
-       fexp(is) = (0.4, 0.)
-       bkdiff(is) = 0.
-       bd_exp(is) = 0
-       call get_indexed_namelist_unit (unit, "dist_fn_species_knobs", is)
-       call fill_species_knobs (unit, fexp(is), bkdiff(is), bd_exp(is))
-       close (unit=unit)
-    end do
-
-    shat = shat_real
-
-    if(abs(shat) <=  1.e-5) boundary_option = 'periodic'
-
-    ierr = error_unit()
-    call get_option_value &
-         (boundary_option, boundaryopts, boundary_option_switch, &
-         ierr, "boundary_option in dist_fn_knobs")
-    
-    call get_option_value &
-         (heating_option, heatingopts, heating_option_switch, &
-         ierr, "heating_option in dist_fn_knobs")
-    
-    call get_option_value &
-         (source_option, sourceopts, source_option_switch, &
-         ierr, "source_option in source_knobs")
-    call get_option_value &
-         (adiabatic_option, adiabaticopts, adiabatic_option_switch, &
-         ierr, "adiabatic_option in dist_fn_knobs")
-    
-
+    call dist_fn_read_parameters
     ! gs2_diagnostics
 
 ! CMR 18/11/2009:  reduce duplication by calling gs2diag_read_parameters 
@@ -1256,20 +755,27 @@ if (debug) write(6,*) 'get_namelists: returning'
   end subroutine get_namelists
 
   subroutine write_namelists (jr, tag1, tag2)
+    use antenna, only: wnml_antenna
+    use collisions, only: wnml_collisions
+    use dist_fn, only: wnml_dist_fn, wnml_dist_fn_species 
+    use fields, only: wnml_fields
+    use gs2_reinit, only: wnml_gs2_reinit
+    use gs2_layouts, only: wnml_gs2_layouts
     use gs2_diagnostics, only: wnml_gs2_diagnostics
-    use run_parameters, only: wnml_run_parameters
-    use species, only: wnml_species, nspec, spec, has_electron_species
-    use theta_grid_params, only: wnml_theta_grid_params
-    use theta_grid_gridgen, only: wnml_theta_grid_gridgen
-    use theta_grid_salpha, only : wnml_theta_grid_salpha
-    use theta_grid_eik, only : wnml_theta_grid_eik
-    use theta_grid_file, only : wnml_theta_grid_file
+    use hyper, only: wnml_hyper
     use init_g, only : wnml_init_g
     use kt_grids, only: wnml_kt
+    use le_grids, only: wnml_le_grids
+    use nonlinear_terms, only: nonlin, wnml_nonlinear_terms
+    use run_parameters, only: wnml_run_parameters
+    use species, only: wnml_species, nspec, spec, has_electron_species
+    use theta_grid, only: wnml_theta_grid
+    use theta_grid_params, only: wnml_theta_grid_params
+
     integer, intent (in), optional :: jr
     character (*), intent (in), optional :: tag1, tag2
+    logical :: electrons
 
-    character (100) :: line
     integer :: h, t, u
     integer :: i
     character (4) :: suffix
@@ -1305,338 +811,31 @@ if (debug) write(6,*) 'get_namelists: returning'
        write (unit, *) '*****************************************************'
     end if
 
-    if (layouts_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "layouts_knobs"
-       write (unit, fmt="(' layout = ',a)") '"'//trim(layout)//'"'
-       write (unit, fmt="(' local_field_solve = ',L1)") local_field_solve
-       write (unit, fmt="(' /')")
-    end if
-
-    if (collisions_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "collisions_knobs"
-       select case (collision_model_switch)
-       case (collision_model_lorentz)
-          write (unit, fmt="(' collision_model = ',a)") '"lorentz"'
-          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
-          if (hypercoll) write (unit, fmt="(' hypercoll = ',L1)") hypercoll
-       case (collision_model_lorentz_test)
-          write (unit, fmt="(' collision_model = ',a)") '"lorentz-test"'
-          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
-       case (collision_model_krook)
-          write (unit, fmt="(' collision_model = ',a)") '"krook"'
-          write (unit, fmt="(' conserve_number = ',L1)") conserve_number
-          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
-          write (unit, fmt="(' vncoef = ',f5.3)") vncoef
-       case (collision_model_krook_test)
-          write (unit, fmt="(' collision_model = ',a)") '"krook-test"'
-          write (unit, fmt="(' conserve_number = ',L1)") conserve_number
-          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
-       case (collision_model_none)
-          write (unit, fmt="(' collision_model = ',a)") '"collisionless"'
-       end select
-       write (unit, fmt="(' cfac = ',f5.3)") cfac_nu
-       write (unit, fmt="(' heating = ',L1)") heating
-       write (unit, fmt="(' cfac = ',f5.3)") cfac
-       write (unit, fmt="(' /')")
-    end if
-
-    if (init_g_write) call wnml_init_g(unit)
-
-    if (dist_fn_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "dist_fn_knobs"
-
-       select case (boundary_option_switch)
-
-       case (boundary_option_zero)
-          write (unit, fmt="(' boundary_option = ',a)") '"default"'
-
-       case (boundary_option_self_periodic)
-          write (unit, fmt="(' boundary_option = ',a)") '"periodic"'
-
-       case (boundary_option_linked)
-          write (unit, fmt="(' boundary_option = ',a)") '"linked"'
-
-       case (boundary_option_alternate_zero)
-          write (unit, fmt="(' boundary_option = ',a)") '"alternate-zero"'
-
-       end select
-
-       write (unit, fmt="(' gridfac = ',e16.10)") gridfac
-
-       if (.not. has_electron_species(spec)) then
-          select case (adiabatic_option_switch)
-             
-          case (adiabatic_option_default)
-             write (unit, *)
-             write (unit, fmt="(' adiabatic_option = ',a)") &
-                  & '"no-field-line-average-term"'
-             
-          case (adiabatic_option_fieldlineavg)
-             write (unit, fmt="(' adiabatic_option = ',a)") '"field-line-average-term"'
-             
-          case (adiabatic_option_yavg)
-             write (unit, fmt="(' adiabatic_option = ',a)") '"iphi00=3"'
-             
-          case (adiabatic_option_noJ)
-             write (unit, fmt="(' adiabatic_option = ',a)") '"dimits"'
-             
-          end select
-       end if
-
-       if (apfac /= 1.) write (unit, fmt="(' apfac = ',e16.10)") apfac
-       if (driftknob /= 1.) write (unit, fmt="(' driftknob = ',e16.10)") driftknob
-       if (tpdriftknob /= 1.) write (unit, fmt="(' tpdriftknob = ',e16.10)") tpdriftknob
-       if (poisfac /= 0.) write (unit, fmt="(' poisfac = ',e16.10)") poisfac
-       if (kfilter /= 0.) write (unit, fmt="(' kfilter = ',e16.10)") kfilter
-       if (afilter /= 0.) write (unit, fmt="(' afilter = ',e16.10)") afilter
-       if (nperiod_guard /= 0) &
-            write (unit, fmt="(' nperiod_guard = ',i2)") nperiod_guard
-       if (mult_imp) write (unit, fmt="(' mult_imp = ',L1)") mult_imp
-       if (test) write (unit, fmt="(' test = ',L1)") test
-       if (def_parity) then
-          write (unit, fmt="(' def_parity = ',L1)") def_parity
-          if (even) write (unit, fmt="(' even = ',L1)") even
-       end if
-       if (D_kill > 0.) then
-          write (unit, fmt="(' D_kill = ',e16.10)") D_kill
-          write (unit, fmt="(' save_n = ',L1)") save_n
-          write (unit, fmt="(' save_u = ',L1)") save_u
-          write (unit, fmt="(' save_Tpar = ',L1)") save_Tpar
-          write (unit, fmt="(' save_Tperp = ',L1)") save_Tperp
-       end if
-       if (noise > 0.) write (unit, fmt="(' noise = ',e16.10)") noise
-       if (cfac_df < 1.) write (unit, fmt="(' cfac = ',e16.10)") cfac_df
-       write (unit, fmt="(' /')")
-    end if
-
-    if (source_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "source_knobs"
-       select case (source_option_switch)
-
-       case (source_option_full)
-          write (unit, fmt="(' source_option = ',a)") '"full"'
-
-       case(source_option_phiext_full)
-          write (unit, fmt="(' course_option = ',a)") '"phiext_full"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-          write (unit, fmt="(' phi_ext = ',e16.10)") phi_ext
-       
-       case(source_option_test2_full)
-          write (unit, fmt="(' course_option = ',a)") '"test2_full"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-          write (unit, fmt="(' thetas = ',e16.10)") thetas
-
-       case(source_option_convect_full)
-          write (unit, fmt="(' course_option = ',a)") '"convect_full"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-          write (unit, fmt="(' k0 = ',e16.10)") k0
-
-       case (source_option_zero)
-          write (unit, fmt="(' course_option = ',a)") '"zero"'
-
-       case (source_option_cosine)
-          write (unit, fmt="(' course_option = ',a)") '"cosine"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-
-       case (source_option_sine)
-          write (unit, fmt="(' course_option = ',a)") '"sine"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-
-       case (source_option_test1)
-          write (unit, fmt="(' course_option = ',a)") '"test1"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-
-       end select
-       write (unit, fmt="(' /')")
-    end if
-
-    if (fields_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "fields_knobs"
-       select case (fieldopt_switch)
-       case (fieldopt_implicit)
-          write (unit, fmt="(' field_option = ',a)") '"implicit"'
-       case (fieldopt_explicit)
-          write (unit, fmt="(' field_option = ',a)") '"explicit"'
-       case (fieldopt_test)
-          write (unit, fmt="(' field_option = ',a)") '"test"'
-       end select
-       write (unit, fmt="(' /')")
-    end if
-
-    if (diagnostics_write) call wnml_gs2_diagnostics(unit)
-
-
-    if (nonlinear_mode_switch == nonlinear_mode_on) then
-       if (reinit_write) then
-          write (unit, *)
-          write (unit, fmt="(' &',a)") "reinit_knobs"
-          write (unit, fmt="(' delt_adj = ',e16.10)") delt_adj
-          write (unit, fmt="(' delt_minimum = ',e16.10)") delt_minimum
-          write (unit, fmt="(' /')")       
-       end if
-    end if
-
-
-    if (hyper_option_switch /= hyper_option_none) then
-       if (hyper_write) then
-          
-          write (unit, *)
-          write (unit, fmt="(' &',a)") "hyper_knobs"
-
-          select case (hyper_option_switch)
-             
-          case (hyper_option_visc) 
-             write (unit, fmt="(' hyper_option = ',a)") '"visc_only"'
-             write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
-             
-          case (hyper_option_res) 
-             write (unit, fmt="(' hyper_option = ',a)") '"res_only"'
-             write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
-             
-          case (hyper_option_both) 
-             write (unit, fmt="(' hyper_option = ',a)") '"both"'
-             if (D_hyperres == D_hypervisc) then
-                write (unit, fmt="(' D_hyper = ',e16.10)") D_hyper
-             else
-                write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
-                write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
-             end if
-          end select
-
-!          write (unit, fmt="(' include_kpar = ',L1)") include_kpar
-
-          write (unit, fmt="(' const_amp = ',L1)") const_amp
-          write (unit, fmt="(' isotropic_shear = ',L1)") isotropic_shear
-          if (.not. isotropic_shear) &
-               write (unit, fmt="(' omega_osc = ',e16.10)") omega_osc
-
-          write (unit, fmt="(' gridnorm = ',L1)") gridnorm
-          write (unit, fmt="(' /')")
-       end if
-    end if
-
+    call wnml_gs2_layouts(unit)
+    call wnml_collisions(unit)
+    call wnml_init_g(unit)
+    call wnml_dist_fn(unit)
+    call wnml_fields(unit)
+    call wnml_gs2_diagnostics(unit)
+    if (nonlin) call wnml_gs2_reinit(unit)
+    call wnml_hyper(unit)
     call wnml_kt(unit)
-    
-    if (le_write) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "le_grids_knobs"
-       write (unit, fmt="(' advanced_egrid = ',L1)") advanced_egrid
-       if (advanced_egrid) then
-          write (unit, fmt="(' negrid = ',i4)") negrid
-       else
-          write (unit, fmt="(' nesub = ',i4)") nesub
-          write (unit, fmt="(' nesuper = ',i4)") nesuper
-       end if
-       write (unit, fmt="(' ngauss = ',i4)") ngauss
-       write (unit, fmt="(' ecut = ',e16.10)") ecut
-       write (unit, fmt="(' /')")
-    end if
+    call wnml_le_grids(unit)
+    call wnml_nonlinear_terms(unit)
+    electrons=has_electron_species(spec)
+    call wnml_run_parameters(unit,electrons,coll_on)
+    call wnml_species(unit)
+    call wnml_dist_fn_species(unit)
 
-    if (nonlinear_write .and. nonlinear_mode_switch == nonlinear_mode_on) then
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "nonlinear_terms_knobs"
-       write (unit, fmt="(' nonlinear_mode = ',a)") '"on"'
-       write (unit, fmt="(' cfl = ',e16.10)") cfl
-       if (zip) write (unit, fmt="(' zip = ',L1)") zip
-       write (unit, fmt="(' /')")
-    end if
+    call wnml_theta_grid_params(unit)
+    call wnml_theta_grid(unit)
 
-    if (run_parameters_write) call wnml_run_parameters(unit)
+    call wnml_antenna(unit)
 
-    if (species_write) call wnml_species(unit)
-    do i=1,nspec
-       write (unit, *)
-       write (line, *) i
-       write (unit, fmt="(' &',a)") &
-            & trim("dist_fn_species_knobs_"//trim(adjustl(line)))
-       write (unit, fmt="(' fexpr = ',e13.6)") real(fexp(i))
-       write (unit, fmt="(' bakdif = ',e13.6)") bkdiff(i)
-       write (unit, fmt="(' bd_exp = ',i6,'  /')") bd_exp(i)
-    end do
-
-    if (theta_write) call wnml_theta_grid(unit)
-
-    if (theta_parameters_write) call wnml_theta_grid_params(unit)
-
-    if (theta_gridgen_write) call wnml_theta_grid_gridgen(unit)
-
-    if (theta_salpha_write) call wnml_theta_grid_salpha(unit)
-
-    if (theta_eik_write) call wnml_theta_grid_eik(unit)
-
-    if (theta_file_write) call wnml_theta_grid_file(unit)
-
-    if (driver_write) then 
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "driver"
-       write (unit, fmt="(' ant_off = ',L1)") ant_off
-       write (unit, fmt="(' write_antenna = ',L1)") write_antenna
-       write (unit, fmt="(' amplitude = ',e16.10)") amplitude
-       write (unit, fmt="(' w_antenna = (',e16.10,', ',e16.10,')')") w_antenna
-       write (unit, fmt="(' w_dot = ',e16.10)") w_dot
-       write (unit, fmt="(' t0 = ',e16.10)") t0_driver
-       write (unit, fmt="(' nk_stir = ',i3)") nk_stir
-       write (unit, fmt="(' /')")
-
-        do i=1,nk_stir
-           write (unit, *)
-           write (line, *) i
-           write(unit, fmt="(' &',a)") trim("stir_"//trim(adjustl(line)))
-           write(unit, fmt="(' kx = ',i2,' ky = ',i2,' kz = ',i2)") &
-                kx_stir(i), ky_stir(i), kz_stir(i)
-           write(unit, fmt="(' travel = ',L1)") trav(i)
-           write(unit, fmt="(' a = (',e19.13,',',e19.13,')')") a_ant(i)
-           write(unit, fmt="(' b = (',e19.13,',',e19.13,') /')") b_ant(i)
-        end do
-     end if
-
-     write(unit, fmt=*)
-     close (unit)
+    write(unit, fmt=*)
+    close (unit)
 
    end subroutine write_namelists
-
-   subroutine fill_species_knobs (unit, fexp_out, bakdif_out, bd_exp_out)
-     implicit none
-     integer, intent (in) :: unit
-     complex, intent (in out) :: fexp_out
-     real, intent (in out) :: bakdif_out
-     integer, intent (in out) :: bd_exp_out
-     integer :: bd_exp, iostat
-     real :: fexpr, fexpi, bakdif
-     namelist /dist_fn_species_knobs/ fexpr, fexpi, bakdif, bd_exp
-
-     fexpr = real(fexp_out)
-     fexpi = aimag(fexp_out)
-     bakdif = bakdif_out
-     bd_exp = bd_exp_out
-     read (unit=unit, nml=dist_fn_species_knobs, iostat=iostat)
-     fexp_out = cmplx(fexpr,fexpi)
-     bd_exp_out = bd_exp
-     bakdif_out = bakdif
-   end subroutine fill_species_knobs
 
    subroutine factors (n, j, div)
      integer, intent (in) :: n
@@ -1688,26 +887,37 @@ if (debug) write(6,*) 'get_namelists: returning'
    end subroutine pfactors
 
    subroutine report
-     use run_parameters, only: check_run_parameters
-     use run_parameters, only: beta, tite, delt, fapar, fbpar, fphi, margin, nstep, wstar_units
+     use antenna, only: check_antenna
+     use collisions, only: check_collisions
+     use dist_fn, only: check_dist_fn
+     use fields, only: check_fields
      use gs2_diagnostics, only: check_gs2_diagnostics
-     use gs2_diagnostics, only: dump_fields_periodically, save_for_restart, nsave, make_movie, nmovie, exit_when_converged, nwrite, omegatol
-      use species, only: check_species, spec, nspec, has_electron_species
-      use init_g, only: check_init_g
-      use theta_grid, only: check_theta_grid
+     use gs2_diagnostics, only: dump_fields_periodically, save_for_restart
+     use gs2_diagnostics, only: nsave, make_movie, nmovie, exit_when_converged, nwrite, omegatol
+     use gs2_reinit, only: delt_adj
+     use gs2_time, only: code_dt, user_dt, code_dt_min
+     use hyper, only: check_hyper
+     use init_g, only: check_init_g
+     use kt_grids, only: check_kt_grids, grid_option, gridopt_switch
+     use kt_grids, only: gridopt_box, naky, ntheta0, nx, ny
+     use le_grids, only: leok_le_grids, check_le_grids, negrid, nlambda
+     use nonlinear_terms, only: nonlin, cfl, check_nonlinear_terms
+     use run_parameters, only: check_run_parameters
+     use run_parameters, only: beta, tite, margin, code_delt_max
+     use run_parameters, only: nstep, wstar_units
+     use species, only: check_species, spec, nspec, has_electron_species
+     use theta_grid, only: check_theta_grid
      use theta_grid, only: gb_to_cv, nbset, ntgrid_real => ntgrid
      use theta_grid_params, only: nperiod, ntheta, eps, epsl, rmaj, r_geo
      use theta_grid_params, only: pk, qinp, rhoc, shift, shat
      use theta_grid_params, only: akappa, akappri, tri, tripri
-     use kt_grids, only: check_kt_grids, grid_option, gridopt_switch
-     use kt_grids, only: gridopt_box, naky, ntheta0, nx, ny
 
      implicit none
      real :: alne, dbetadrho_spec
      real :: kxfac, drhodpsi
      character (20) :: datestamp, timestamp, zone
      character (200) :: line
-     logical :: coll_on = .false., le_ok = .true.
+     logical :: le_ok = .true.
      integer :: ntgrid, j, nmesh
      integer, dimension(4) :: pfacs
 
@@ -1725,75 +935,14 @@ if (debug) write(6,*) 'get_namelists: returning'
           &  ' Time: ',a,':',a,1x,a)") datestamp(5:6), &
           &  datestamp(7:8), datestamp(1:4), timestamp(1:2), timestamp(3:4), trim(zone)
 
-     write (report_unit, *) 
-     write (report_unit, fmt="('------------------------------------------------------------')")
-     write (report_unit, *) 
+     write (report_unit, fmt="(/'------------------------------------------------------------'/)")
 
-     if (.not. advanced_egrid) then
-        if (.not. any(nesub_ok == nesub)) then
-           write (report_unit, *) 
-           write (report_unit, fmt="('################# WARNING #######################')")
-           write (report_unit, fmt="('You have selected nesub = ',i3)") nesub
-           write (report_unit, fmt="('This value is not allowed.')")
-           write (report_unit, fmt="('THIS IS AN ERROR.')")
-           write (report_unit, fmt="&
-                &('The allowed values are: 1-10, 12, 14, 16, 20, 24, 32, 48, or 64.')")
-           write (report_unit, fmt="('################# WARNING #######################')")
-           write (report_unit, *) 
-           le_ok = .false.
-        end if
-        if (.not. any(nesuper_ok == nesuper)) then
-           write (report_unit, *) 
-           write (report_unit, fmt="('################# WARNING #######################')")
-           write (report_unit, fmt="('You have selected nesuper = ',i3)") nesuper
-           write (report_unit, fmt="('This value is not allowed.')")
-           write (report_unit, fmt="('THIS IS AN ERROR.')")
-           write (report_unit, fmt="('The allowed values are: 1-10, 12, or 15.')")
-           write (report_unit, fmt="('################# WARNING #######################')")
-           write (report_unit, *) 
-           le_ok = .false.
-        end if
-     else
-        if (ecut <= 4.0) then
-           write (report_unit, *) 
-           write (report_unit, fmt="('################# WARNING #######################')")
-           write (report_unit, fmt="('You have selected necut = ',f7.3)") ecut
-           write (report_unit, fmt="('With the advanced energy grid, this is small.')")
-           write (report_unit, fmt="('THIS IS A PROBABLY AN ERROR.')")
-           write (report_unit, fmt="('Recommended values are negrid = 16, ecut = 6.0')")
-           write (report_unit, fmt="('################# WARNING #######################')")
-           write (report_unit, *) 
-        end if
-     end if
-
-     if (.not. any(ngauss_ok == ngauss)) then
-        write (report_unit, *) 
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write (report_unit, fmt="('You have selected ngauss = ',i3)") ngauss
-        write (report_unit, fmt="('This value is not allowed.')")
-        write (report_unit, fmt="('THIS IS AN ERROR.')")
-        write (report_unit, fmt="&
-             &('The allowed values are: 1-6, 8, 10, 12, 16, 20, 24, 32, 40, or 48.')")
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write (report_unit, *) 
-        le_ok = .false.
-     end if
-
+     le_ok=leok_le_grids(report_unit)
+     
      if (le_ok) then
-        if (.not. advanced_egrid) negrid = nesub + nesuper
-        if (eps < epsilon(0.0)) trapped_particles = .false.
-        if (trapped_particles) then
-           nlambda = 2*ngauss + nbset
-        else
-           nlambda = 2*ngauss
-        end if
-
-        write (report_unit, *) 
-        write (report_unit, fmt="('Number of lambdas: ',i3)") nlambda
-        write (report_unit, *) 
 
         ntgrid = ntgrid_real
-        if (nonlinear_mode_switch == nonlinear_mode_on) then
+        if (nonlin) then
            if (gridopt_switch /= gridopt_box) then
               write (report_unit, *) 
               write (report_unit, fmt="('################# WARNING #######################')")
@@ -1890,69 +1039,20 @@ if (debug) write(6,*) 'get_namelists: returning'
      write (report_unit, *) 
      call check_theta_grid(report_unit,alne,dbetadrho_spec)
 
-     write (report_unit, *) 
-     write (report_unit, fmt="('------------------------------------------------------------')")
-     write (report_unit, *) 
+     write (report_unit, fmt="(/'------------------------------------------------------------'/)")
 
-     do is=1, nspec
-        coll_on = spec(is)%vnewk > epsilon(0.0) .or. coll_on
-     end do
-
-     if (coll_on) then
-        select case (collision_model_switch)
-        case (collision_model_lorentz,collision_model_lorentz_test)
-           write (report_unit, fmt="('A Lorentz collision operator has been selected.')")
-           if (cfac > 0) write (report_unit, fmt="('This has both terms of Lorentz collision operator (cfac=1.0)')")
-           if (cfac == 0) write (report_unit, fmt="('This is only a partial Lorentz collision operator (cfac=0.0)')")
-           if (const_v) write (report_unit, fmt="('This is an energy independent Lorentz collision operator (const_v=true)')")  
- !          if (hypercoll) call init_hyper_lorentz
-       case (collision_model_krook,collision_model_krook_test)
-          write (report_unit, fmt="('A Krook collision operator has been selected.')")
-       end select
-    else
+     if (coll_on) then 
+        call check_collisions(report_unit) 
+     else
        write (report_unit, fmt="('All collisionality parameters (vnewk) are zero.')")
        write (report_unit, fmt="('No collision operator will be used.')")
-    end if
+     end if
        
     write (report_unit, *) 
     write (report_unit, fmt="('------------------------------------------------------------')")
     write (report_unit, *) 
+    call check_fields(report_unit) 
 
-    select case (fieldopt_switch)
-    case (fieldopt_implicit)
-       write (report_unit, fmt="('The field equations will be advanced in time implicitly.')")
-    case (fieldopt_explicit)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The field equations will be advanced in time explicitly.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    case (fieldopt_test)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The field equations will only be tested.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end select
-
-! 
-! implicitness parameters
-!
-    do is = 1, nspec
-       if (aimag(fexp(is)) /= 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('Species ',i2,' has fexpi = ',e10.4)") is, aimag(fexp(is))
-          write (report_unit, fmt="('THIS IS AN ERROR')")
-          write (report_unit, fmt="('fexpi should be zero for all species.')")
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-
-       write (report_unit, fmt="('Species ',i2,' has fexpr = ', e10.4)") is, real(fexp(is))
-    end do
     
     write (report_unit, *) 
     write (report_unit, fmt="('------------------------------------------------------------')")
@@ -1964,50 +1064,14 @@ if (debug) write(6,*) 'get_namelists: returning'
     write (report_unit, fmt="('------------------------------------------------------------')")
     write (report_unit, *) 
 
-    if (nonlinear_mode_switch == nonlinear_mode_on) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('This is a nonlinear simulation.')")
-       write (report_unit, *) 
-       if (wstar_units) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('Nonlinear runs require wstar_units = .false. in the knobs namelist.')") 
-          write (report_unit, fmt="('THIS IS AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-       if (gridopt_switch /= gridopt_box) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('Nonlinear runs must be carried out in a box.')") 
-          write (report_unit, fmt="('Set grid_option to box in the kt_grids_knobs namelist.')") 
-          write (report_unit, fmt="('THIS IS AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-
-       write (report_unit, fmt="('The minimum delt = ',e10.4)") delt_minimum
-       write (report_unit, fmt="('The maximum delt = ',e10.4)") delt
-       write (report_unit, fmt="('The maximum delt < ',f10.4,' * min(Delta_perp/v_perp.')") cfl
-       write (report_unit, fmt="('When the time step needs to be changed, it is adjusted by a factor of ',f10.4)") delt_adj
-       write (report_unit, fmt="('The number of time steps nstep = ',i7)") nstep
-       write (report_unit, fmt="('If running in batch mode on the NERSC T3E, the run will stop when ', &
-            & f6.4,' % of the time remains.')") 100.*margin
-
-       if (nperiod > 1) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('Nonlinear runs usually have nperiod = 1.')") 
-          write (report_unit, fmt="('THIS MAY BE AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-
+    call check_nonlinear_terms(report_unit,delt_adj)
+    if (nonlin) then
     else
        write (report_unit, *) 
        write (report_unit, fmt="('This is a linear calculation.')")
        write (report_unit, *)        
-       write (report_unit, fmt="('The time step (delta t) = ',e10.4)") delt
+       write (report_unit, fmt="('The time step (code_dt) = ',e10.4)") code_dt
+       write (report_unit, fmt="('The time step (user_dt) = ',e10.4)") user_dt
        write (report_unit, fmt="('The maximum number of time steps is ',i7)") nstep
        if (exit_when_converged) then
           write (report_unit, fmt="('When the frequencies for each k have converged, the run will stop.')")
@@ -2042,15 +1106,6 @@ if (debug) write(6,*) 'get_namelists: returning'
        write (report_unit, *) 
     end if
     
-    if (flow_mode_switch == flow_mode_on) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('flow_mode=on is not allowed.  Flow mode is buggy.')") 
-       write (report_unit, fmt="('THIS IS AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
     write (report_unit, *) 
     write (report_unit, fmt="('------------------------------------------------------------')")
     write (report_unit, *) 
@@ -2061,501 +1116,21 @@ if (debug) write(6,*) 'get_namelists: returning'
     write (report_unit, fmt="('------------------------------------------------------------')")
     write (report_unit, *) 
 
-    if (gridfac /= 1.) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('You selected gridfac = ',e10.4,' in dist_fn_knobs.')") gridfac
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('The normal choice is gridfac = 1.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
+    call check_dist_fn(report_unit)
 
-    if (apfac /= 1.) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('You selected apfac = ',e10.4,' in dist_fn_knobs.')") apfac
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('The normal choice is apfac = 1.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
+    write (report_unit, *) 
+    write (report_unit, fmt="('------------------------------------------------------------')")
+    write (report_unit, *) 
 
-    if (driftknob /= 1.) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('You selected driftknob = ',e10.4,' in dist_fn_knobs.')") driftknob
-       write (report_unit, fmt="('THIS IS EITHER AN ERROR, or you are DELIBERATELY SCALING THE DRIFTS.')") 
-       write (report_unit, fmt="('The normal choice is driftknob = 1.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
+    call check_antenna(report_unit)
 
-    if (tpdriftknob /= 1.) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('You selected tpdriftknob = ',e10.4,' in dist_fn_knobs.')") tpdriftknob
-       write (report_unit, fmt="('THIS IS EITHER AN ERROR, or you are DELIBERATELY SCALING THE TRAPPED PARTICLE DRIFTS (either via driftknob or via tpdriftknob).')") 
-       write (report_unit, fmt="('The normal choice is tpdriftknob = 1.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
+    call check_hyper(report_unit)
 
-    select case (boundary_option_switch)
-    case (boundary_option_linked)
-       write (report_unit, *) 
-       if (gridopt_switch /= gridopt_box) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('Linked boundary conditions require a box for a simulation domain.')")
-          write (report_unit, fmt="('You have grid_option = ',a)") trim(grid_option)
-          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       else
-          write (report_unit, *) 
-          write (report_unit, fmt="('Linked (twist and shift) boundary conditions will be used.')")
-          write (report_unit, *) 
-       end if
-    case (boundary_option_self_periodic)
-       write (report_unit, *) 
-       write (report_unit, fmt="('Periodic boundary conditions will be used.')")
-       write (report_unit, fmt="('(No twist and shift.)')")
-       write (report_unit, *) 
-    case default
-       write (report_unit, *) 
-       write (report_unit, fmt="('Outgoing boundary conditions will be used.')")
-       write (report_unit, *) 
-    end select
-
-    if (.not. has_electron_species(spec)) then
-       select case (adiabatic_option_switch)
-          case (adiabatic_option_default)
-             write (report_unit, *) 
-             write (report_unit, fmt="('The adiabatic electron response is of the form:')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('             ne = Phi')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('This is appropriate for an ETG simulation,')") 
-             write (report_unit, fmt="('where the role of ions and electrons in GS2 is switched.')")
-             write (report_unit, *) 
+    write (report_unit, fmt="(/'------------------------------------------------------------'/)")
     
-          case (adiabatic_option_fieldlineavg)
-             write (report_unit, *) 
-             write (report_unit, fmt="('The adiabatic electron response is of the form:')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('             ne = Phi - <Phi>')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('The angle brackets denote a proper field line average.')") 
-             write (report_unit, fmt="('This is appropriate for an ITG simulation.')") 
-             write (report_unit, *) 
-             
-          case (adiabatic_option_yavg)
-             write (report_unit, *) 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('The adiabatic electron response is of the form:')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('             ne = Phi - <Phi>_y')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('The angle brackets denote an average over y only.')") 
-             write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-             write (report_unit, fmt="('Perhaps you want field-line-average-term for adiabatic_option.')") 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
+    call check_le_grids(report_unit,le_ok)
 
-          case (adiabatic_option_noJ)
-             write (report_unit, *) 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('The adiabatic electron response is of the form:')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('             ne = Phi - <Phi>')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('The angle brackets denote a field-line average, but without the proper Jacobian factors.')") 
-             write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-             write (report_unit, fmt="('Perhaps you want field-line-average-term for adiabatic_option.')") 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
-          end select
-       end if
-
-       if (poisfac /= 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('Quasineutrality is not enforced.  The ratio (lambda_Debye/rho)**2 = ',e10.4)") poisfac
-          write (report_unit, *) 
-       end if
-          
-       if (mult_imp .and. nonlinear_mode_switch == nonlinear_mode_on) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('For nonlinear runs, all species must use the same values of fexpr and bakdif')")
-          write (report_unit, fmt="('in the dist_fn_species_knobs_x namelists.')")
-          write (report_unit, fmt="('THIS IS AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-
-       if (test_df) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('Test = T in the dist_fn_knobs namelist will stop the run before ')")
-          write (report_unit, fmt="('any significant calculation is done, and will result in several ')")
-          write (report_unit, fmt="('variables that determine array sizes to be written to the screen.')")
-          write (report_unit, fmt="('THIS MAY BE AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-
-       if (def_parity .and. nonlinear_mode_switch == nonlinear_mode_on) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('Choosing a definite parity for a nonlinear run has never been tested.')")
-          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-
-       if (def_parity) then
-          if (even) then
-             write (report_unit, fmt="('Only eigenmodes of even parity will be included.')")
-          else
-             write (report_unit, fmt="('Only eigenmodes of odd parity will be included.')")
-          end if
-       end if
-
-       if (D_kill > 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('D_kill > 0 probably does not work correctly.')")
-          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-
-    write (report_unit, *) 
-    write (report_unit, fmt="('------------------------------------------------------------')")
-    write (report_unit, *) 
-    write (report_unit, fmt="('The ExB parameter is ',f7.4)") g_exb
-    write (report_unit, fmt="('Perp shear terms will be multiplied by factor',f7.4)") g_exbfac
-    write (report_unit, fmt="('Parallel shear term will be multiplied by factor',f7.4)") omprimfac
-
-    write (report_unit, *) 
-    write (report_unit, fmt="('------------------------------------------------------------')")
-    write (report_unit, *) 
-
-    select case (source_option_switch)
-       
-    case (source_option_full)
-       write (report_unit, *) 
-       write (report_unit, fmt="('The standard GK equation will be solved.')")
-       write (report_unit, *) 
-       
-    case(source_option_phiext_full)
-       write (report_unit, *) 
-       write (report_unit, fmt="('The standard GK equation will be solved,')")
-       write (report_unit, fmt="('with an additional source proportional to Phi*F_0')")
-       write (report_unit, fmt="('Together with phi_ext = -1., this is the usual way to &
-             & calculate the Rosenbluth-Hinton response.')")
-       write (report_unit, *) 
-
-    case(source_option_test2_full)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The standard GK equation will be solved,')")
-       write (report_unit, fmt="('with additional developmental sources, determined by ')")
-       write (report_unit, fmt="('source_option=test2_full in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case(source_option_convect_full)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The standard GK equation will be solved,')")
-       write (report_unit, fmt="('with additional developmental sources, determined by ')")
-       write (report_unit, fmt="('source_option=convect_full in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_zero)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=zero in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_sine)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=sine in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_test1)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=test1 in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_cosine)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=cosine in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    end select
-
-    if (a_ext /= 0.0) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The variable a_ext in the source_knobs namelist does nothing.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
-    if (akx_star /= 0.0) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The variable akx_star in the source_knobs namelist does nothing.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
-    if (aky_star /= 0.0) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The variable aky_star in the source_knobs namelist does nothing.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
-    write (report_unit, *) 
-    write (report_unit, fmt="('------------------------------------------------------------')")
-    write (report_unit, *) 
-
-    if (no_driver) then
-       ! nothing
-    else
-       if (amplitude == 0.0) then 
-          write (report_unit, *) 
-          write (report_unit, fmt="('No Langevin antenna included.')")
-          write (report_unit, *) 
-       else
-          write (report_unit, *) 
-          write (report_unit, fmt="('A Langevin antenna is included, with characteristics:')")
-          write (report_unit, *) 
-          write (report_unit, fmt="('Frequency:  (',e10.4,', ',e10.4,')')") w_antenna
-          write (report_unit, fmt="('Number of independent k values: ',i3)") nk_stir
-          if (write_antenna) then
-             write (report_unit, *) 
-             write (report_unit, fmt="('Antenna data will be written to ',a)") trim(run_name)//'.antenna'
-             write (report_unit, *) 
-          end if
-          write (report_unit, fmt="('k values:')")
-          do i=1,nk_stir
-             if (trav(i)) then
-                write (report_unit, fmt="('Travelling wave:')")
-                write (report_unit, fmt="('   kx = ',i2,'    ky = ',i2,'    kz = ',i2)") &
-                     & kx_stir(i), ky_stir(i), kz_stir(i)
-             else
-                write (report_unit, fmt="('Standing wave:')")
-                write (report_unit, fmt="('   kx = ',i2,'    ky = ',i2,'    kz = ',i2)") &
-                     & kx_stir(i), ky_stir(i), kz_stir(i)
-             end if
-          end do
-       end if
-    end if
-
-    select case (hyper_option_switch)
-    case (hyper_option_none)
-       if (D_hyperres > 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperresistivity.  &
-	       &D_hyperres ignored.')") trim(hyper_option)
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-          D_hyperres = -10.
-       end if
-       if (D_hypervisc > 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperviscosity.  &
-               &D_hypervisc ignored.')") trim(hyper_option)
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-          D_hypervisc = -10.
-       endif
-
-    case (hyper_option_visc)
-       hyper_on = .true.
-       if (D_hyperres > 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperresistivity.  &
-            &D_hyperres ignored.')") trim(hyper_option)
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-          D_hyperres = -10.
-       end if
-       if (D_hypervisc < 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperviscosity but &
-               &D_hypervisc < 0.')") trim(hyper_option)
-          write (report_unit, fmt="('No hyperviscosity used.')")
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-          hyper_on = .false.
-       endif
-
-    case (hyper_option_res)
-       hyper_on = .true.
-       if (D_hyperres < 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperresistivity but D_hyperres < 0.')") trim(hyper_option)
-          write(report_unit, fmt="('No hyperresistivity used.')")
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-          hyper_on = .false.
-       end if
-       if (D_hypervisc > 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperviscosity.  D_hypervisc ignored.')") trim(hyper_option)
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-          D_hypervisc = -10.
-       endif
-
-    case (hyper_option_both)
-       hyper_on = .true.
-       if (D_hyperres < 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperresistivity but D_hyperres < 0.')") trim(hyper_option)
-          write (report_unit, fmt="('No hyperresistivity used.')")
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-       if (D_hypervisc < 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperviscosity but D_hypervisc < 0.')") trim(hyper_option)
-          write (report_unit, fmt="('No hyperviscosity used.')")
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       endif
-       if (D_hypervisc < 0. .and. D_hyperres < 0.) hyper_on = .false.
-
-    end select
-
-    if (hyper_on) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('------------------------------------------------------------')")
-       write (report_unit, *) 
-
-       select case (hyper_option_switch)
-
-          case (hyper_option_visc)
-
-          write (report_unit, *) 
-          write (report_unit, fmt="('Hyperviscosity included without hyperresistivity.')")
-          if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hypervisc
-          else
-             write (report_unit, fmt="('The damping coefficent is ',e10.4)") D_hypervisc
-             write (report_unit, fmt="('The damping rate is proportional to the RMS amplitude of the turbulence.')")
-          end if
-          if (isotropic_shear) then
-             write (report_unit, fmt="('The hyperviscosity is isotropic in the perpendicular plane.')")
-             write (report_unit, fmt="('This is appropriate for MHD-like calculations.')")
-          else
-             write (report_unit, fmt="('The hyperviscosity is anisotropic in the perpendicular plane.')")
-             write (report_unit, fmt="('This is appropriate for drift-type calculations.')")
-             write (report_unit, fmt="('omega_osc = ',e10.4)") omega_osc
-          end if
-          
-       case (hyper_option_res)
-
-          write (report_unit, *) 
-          write (report_unit, fmt="('Hyperresistivity included without hyperviscosity.')")
-          if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
-          else
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
-          end if
-          if (isotropic_shear) then
-             write (report_unit, fmt="('The hyperresistivity is isotropic in the perpendicular plane.')")
-             write (report_unit, fmt="('This is appropriate for MHD-like calculations.')")
-          else
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('isotropic_shear = .false. is not implemented for hyperresistivity.')")
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
-          end if
-
-       case (hyper_option_both)
-          
-          write (report_unit, *) 
-          write (report_unit, fmt="('Hyperresistivity and hyperviscosity included.')")
-          if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
-          else
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
-             write (report_unit, fmt="('THIS IS AN ERROR.')")
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
-          end if
-          if (isotropic_shear) then
-             write (report_unit, fmt="('The damping is isotropic in the perpendicular plane.')")
-             write (report_unit, fmt="('This is appropriate for MHD-like calculations.')")
-          else
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('isotropic_shear = .false. is not implemented for hyperresistivity.')")
-             write (report_unit, fmt="('THIS IS AN ERROR.')")
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
-          end if
-       end select
-    end if
-
-    write (report_unit, *) 
-    write (report_unit, fmt="('------------------------------------------------------------')")
-    write (report_unit, *) 
-    write (report_unit, fmt="&
-         &('Integrals over energy are broken into two regions, 0:Ecut and Ecut:infinity.')")
-    write (report_unit, fmt="('Ecut = ',f8.4)") ecut
-    write (report_unit, fmt="('There are ',i3,' total energy grid points.')") negrid
-    if (test_le) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('Test = T in the le_grids_knobs namelist will stop the run before ')")
-       write (report_unit, fmt="('any significant calculation is done.')")
-       write (report_unit, fmt="('The lambda and energy grids will be written to the screen, and the run will stop.')")
-       write (report_unit, fmt="('THIS MAY BE AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-    
-    write (report_unit, *) 
-    write (report_unit, fmt="('------------------------------------------------------------')")
-    write (report_unit, *) 
+    write (report_unit, fmt="(/'------------------------------------------------------------'/)")
     call check_run_parameters(report_unit)
 
 ! diagnostic controls:
@@ -2566,10 +1141,12 @@ if (debug) write(6,*) 'get_namelists: returning'
   end subroutine report
 
   subroutine nprocs (nmesh)
-
+    use nonlinear_terms, only : nonlin
     use species, only : nspec
     use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box, gridopt_xbox
     use kt_grids, only: naky, ntheta0
+    use le_grids, only: negrid, nlambda
+    use gs2_layouts, only: layout
     implicit none
     real :: fac
     integer, intent (in) :: nmesh
@@ -2579,7 +1156,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     real :: time
 
     write (report_unit, fmt="('Layout = ',a5)") layout 
-    if (nonlinear_mode_switch == nonlinear_mode_on) then
+    if (nonlin) then
        select case (layout)
        case ('lexys')
 

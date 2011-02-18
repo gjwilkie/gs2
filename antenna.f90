@@ -46,10 +46,74 @@ module antenna
 
   private
   public :: init_antenna, dump_ant_amp, amplitude, finish_antenna, reset_init
+  public :: wnml_antenna, check_antenna
   public :: antenna_w, antenna_apar, antenna_amplitudes, a_ext_data
 
 contains
 !=============================================================================
+  subroutine check_antenna(report_unit)
+  use file_utils, only: run_name
+  implicit none
+  integer :: report_unit, i
+       if (no_driver) return
+       if (amplitude == 0.0) then 
+          write (report_unit, *) 
+          write (report_unit, fmt="('No Langevin antenna included.')")
+          write (report_unit, *) 
+       else
+          write (report_unit, *) 
+          write (report_unit, fmt="('A Langevin antenna is included, with characteristics:')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('Frequency:  (',e10.4,', ',e10.4,')')") w_antenna
+          write (report_unit, fmt="('Number of independent k values: ',i3)") nk_stir
+          if (write_antenna) then
+             write (report_unit, *) 
+             write (report_unit, fmt="('Antenna data will be written to ',a)") trim(run_name)//'.antenna'
+             write (report_unit, *) 
+          end if
+          write (report_unit, fmt="('k values:')")
+          do i=1,nk_stir
+             if (trav(i)) then
+                write (report_unit, fmt="('Travelling wave:')")
+                write (report_unit, fmt="('   kx = ',i2,'    ky = ',i2,'    kz = ',i2)") &
+                     & kx_stir(i), ky_stir(i), kz_stir(i)
+             else
+                write (report_unit, fmt="('Standing wave:')")
+                write (report_unit, fmt="('   kx = ',i2,'    ky = ',i2,'    kz = ',i2)") &
+                     & kx_stir(i), ky_stir(i), kz_stir(i)
+             end if
+          end do
+       end if
+  end subroutine check_antenna
+
+  subroutine wnml_antenna(unit)
+    implicit none
+    integer :: unit, i
+    character (100) :: line
+    if (no_driver) return
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "driver"
+       write (unit, fmt="(' ant_off = ',L1)") ant_off
+       write (unit, fmt="(' write_antenna = ',L1)") write_antenna
+       write (unit, fmt="(' amplitude = ',e16.10)") amplitude
+       write (unit, fmt="(' w_antenna = (',e16.10,', ',e16.10,')')") w_antenna
+       write (unit, fmt="(' w_dot = ',e16.10)") w_dot
+       write (unit, fmt="(' t0 = ',e16.10)") t0
+       write (unit, fmt="(' nk_stir = ',i3)") nk_stir
+       write (unit, fmt="(' /')")
+
+        do i=1,nk_stir
+           write (unit, *)
+           write (line, *) i
+           write(unit, fmt="(' &',a)") trim("stir_"//trim(adjustl(line)))
+           write(unit, fmt="(' kx = ',i2,' ky = ',i2,' kz = ',i2)") &
+                kx_stir(i), ky_stir(i), kz_stir(i)
+           write(unit, fmt="(' travel = ',L1)") trav(i)
+           write(unit, fmt="(' a = (',e19.13,',',e19.13,')')") a_ant(i)
+           write(unit, fmt="(' b = (',e19.13,',',e19.13,') /')") b_ant(i)
+        end do
+  end subroutine wnml_antenna
+
   subroutine init_antenna
     use mp, only: proc0
     use species, only: spec, nspec, init_species

@@ -7,6 +7,7 @@ module collisions
   implicit none
 
   public :: init_collisions, finish_collisions
+  public :: read_parameters, wnml_collisions, check_collisions
   public :: solfp1
   public :: reset_init
   public :: dtot, fdf, fdb, lorentz_map, vnmult, vnfac
@@ -131,8 +132,57 @@ module collisions
   logical :: lzinit = .false., leinit = .false.
   logical :: accelerated_x = .false.
   logical :: accelerated_v = .false.
+  logical :: exist
 
 contains
+
+  subroutine check_collisions(report_unit)
+  implicit none
+  integer :: report_unit
+        select case (collision_model_switch)
+        case (collision_model_lorentz,collision_model_lorentz_test)
+           write (report_unit, fmt="('A Lorentz collision operator has been selected.')")
+           if (cfac > 0) write (report_unit, fmt="('This has both terms of the Lorentz collision operator: cfac=',e12.4)") cfac
+           if (cfac == 0) write (report_unit, fmt="('This is only a partial Lorentz collision operator (cfac=0.0)')")
+           if (const_v) write (report_unit, fmt="('This is an energy independent Lorentz collision operator (const_v=true)')")  
+ !          if (hypercoll) call init_hyper_lorentz
+       case (collision_model_krook,collision_model_krook_test)
+          write (report_unit, fmt="('A Krook collision operator has been selected.')")
+        case (collision_model_full)
+           write (report_unit, fmt="('Full GS2 collision operator has been selected.')")
+       end select
+  end subroutine check_collisions
+
+  subroutine wnml_collisions(unit)
+  implicit none
+  integer :: unit
+     if (.not.exist) return
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "collisions_knobs"
+       select case (collision_model_switch)
+       case (collision_model_lorentz)
+          write (unit, fmt="(' collision_model = ',a)") '"lorentz"'
+          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
+          if (hypermult) write (unit, fmt="(' hypermult = ',L1)") hypermult
+       case (collision_model_lorentz_test)
+          write (unit, fmt="(' collision_model = ',a)") '"lorentz-test"'
+          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
+       case (collision_model_krook)
+          write (unit, fmt="(' collision_model = ',a)") '"krook"'
+          write (unit, fmt="(' conserve_number = ',L1)") conserve_number
+          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
+          write (unit, fmt="(' vncoef = ',f5.3)") vncoef
+       case (collision_model_krook_test)
+          write (unit, fmt="(' collision_model = ',a)") '"krook-test"'
+          write (unit, fmt="(' conserve_number = ',L1)") conserve_number
+          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
+       case (collision_model_none)
+          write (unit, fmt="(' collision_model = ',a)") '"collisionless"'
+       end select
+       write (unit, fmt="(' cfac = ',f5.3)") cfac
+       write (unit, fmt="(' heating = ',L1)") heating
+       write (unit, fmt="(' /')")
+  end subroutine wnml_collisions
 
   subroutine init_collisions
     use species, only: init_species, nspec, spec
@@ -146,7 +196,6 @@ contains
 
     if (initialized) return
     initialized = .true.
-
     call init_gs2_layouts
     call init_species
 
@@ -193,7 +242,6 @@ contains
 ! following only needed for krook
          vncoef, absom, ivnew, conserve_number, conserve_momentum
     integer :: ierr, in_file
-    logical :: exist
 
     if (proc0) then
        collision_model = 'default'

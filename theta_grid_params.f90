@@ -17,6 +17,7 @@ module theta_grid_params
   real :: rhoc_trin, qval_trin, shat_trin, rmaj_trin, shift_trin
   real :: kappa_trin, kappri_trin, tri_trin, tripri_trin, betaprim_trin
   real :: kp = -1.
+  logical :: exist
 
 contains
 
@@ -36,7 +37,6 @@ contains
     use file_utils, only: input_unit, input_unit_exist
     implicit none
     integer :: in_file
-    logical :: exist
 !CMR,2/2/2011: add btor_slab
 ! btor_slab = btor/bpol defines direction of a flow relative to B in slab 
 ! geometry, where flow is by definition in the toroidal direction.
@@ -73,6 +73,7 @@ contains
   subroutine wnml_theta_grid_params(unit)
    implicit none
    integer:: unit
+       if (.not.exist) return
        write (unit, *)
        write (unit, fmt="(' &',a)") "theta_grid_parameters"
        write (unit, fmt="(' ntheta =  ',i4)") ntheta

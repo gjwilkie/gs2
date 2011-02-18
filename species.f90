@@ -39,6 +39,7 @@ module species
   real, dimension (:), allocatable :: temp_trin, tprim_trin, nu_trin
 
   logical :: initialized = .false.
+  logical :: exist
 
 contains
 
@@ -156,6 +157,7 @@ contains
   implicit none
   integer :: unit, i
   character (100) :: line
+     if (.not. exist) return
        write (unit, *)
        write (unit, fmt="(' &',a)") "species_knobs"
        write (unit, fmt="(' nspec = ',i2)") nspec
@@ -213,7 +215,6 @@ contains
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
          tperp0, tpar0
     integer :: ierr, in_file
-    logical :: exist
 
     type (text_option), dimension (9), parameter :: typeopts = &
          (/ text_option('default', ion_species), &
