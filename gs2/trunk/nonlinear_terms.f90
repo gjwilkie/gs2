@@ -8,8 +8,10 @@ module nonlinear_terms
   implicit none
 
   public :: init_nonlinear_terms, finish_nonlinear_terms
+  public :: read_parameters, wnml_nonlinear_terms, check_nonlinear_terms
   public :: add_nonlinear_terms, finish_nl_terms
   public :: finish_init, reset_init, algorithm, nonlin, accelerated
+  public :: cfl
 
   private
 
@@ -44,9 +46,83 @@ module nonlinear_terms
   logical :: alloc = .true.
   logical :: zip = .false.
   logical :: accelerated = .false.
+
+  logical :: exist
   
 contains
   
+  subroutine check_nonlinear_terms(report_unit,delt_adj)
+    use gs2_time, only: code_dt_min
+    use kt_grids, only: box
+    use run_parameters, only: margin, code_delt_max, nstep, wstar_units
+    use theta_grid, only: nperiod
+    implicit none
+    integer :: report_unit
+    real :: delt_adj
+    if (nonlin) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('This is a nonlinear simulation.')")
+       write (report_unit, *) 
+       if (wstar_units) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('Nonlinear runs require wstar_units = .false. in the knobs namelist.')") 
+          write (report_unit, fmt="('THIS IS AN ERROR.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+       if ( .not. box) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('Nonlinear runs must be carried out in a box.')") 
+          write (report_unit, fmt="('Set grid_option to box in the kt_grids_knobs namelist.')") 
+          write (report_unit, fmt="('THIS IS AN ERROR.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+
+       if (nperiod > 1) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('Nonlinear runs usually have nperiod = 1.')") 
+          write (report_unit, fmt="('THIS MAY BE AN ERROR.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+
+       if (flow_mode_switch == flow_mode_on) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('flow_mode=on is not allowed.  Flow mode is buggy.')") 
+          write (report_unit, fmt="('THIS IS AN ERROR.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+       write (report_unit, fmt="('The minimum delt ( code_dt_min ) = ',e10.4)") code_dt_min
+       write (report_unit, fmt="('The maximum delt (code_delt_max) = ',e10.4)") code_delt_max
+       write (report_unit, fmt="('The maximum delt < ',f10.4,' * min(Delta_perp/v_perp). (cfl)')") cfl
+       write (report_unit, fmt="('When the time step needs to be changed, it is adjusted by a factor of ',f10.4)") delt_adj
+       write (report_unit, fmt="('The number of time steps nstep = ',i7)") nstep
+       write (report_unit, fmt="('If running in batch mode on the NERSC T3E, the run will stop when ', &
+            & f6.4,' % of the time remains.')") 100.*margin
+    endif
+  end subroutine check_nonlinear_terms
+
+
+  subroutine wnml_nonlinear_terms(unit)
+  implicit none
+  integer :: unit
+    if (.not. exist) return
+    if (nonlinear_mode_switch == nonlinear_mode_on) then
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "nonlinear_terms_knobs"
+       write (unit, fmt="(' nonlinear_mode = ',a)") '"on"'
+       write (unit, fmt="(' cfl = ',e16.10)") cfl
+       if (zip) write (unit, fmt="(' zip = ',L1)") zip
+       write (unit, fmt="(' /')")
+    endif
+  end subroutine wnml_nonlinear_terms
+
   subroutine init_nonlinear_terms 
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0, nx, ny, akx, aky
@@ -77,11 +153,6 @@ contains
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
 
     call read_parameters
-
-    if (nonlinear_mode_switch == nonlinear_mode_on)  then
-       algorithm = 1 
-       nonlin = .true.
-    end if
 
     if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
     if (nonlinear_mode_switch /= nonlinear_mode_none) then
@@ -128,7 +199,6 @@ contains
     namelist /nonlinear_terms_knobs/ nonlinear_mode, flow_mode, cfl, &
          C_par, C_perp, p_x, p_y, p_z, zip
     integer :: ierr, in_file
-    logical :: exist
 !    logical :: done = .false.
 
 !    if (done) return
@@ -170,6 +240,11 @@ contains
        if (proc0) write(*,*) 'Forcing flow_mode = off'
        flow_mode_switch = flow_mode_off
     endif
+
+    if (nonlinear_mode_switch == nonlinear_mode_on)  then
+       algorithm = 1 
+       nonlin = .true.
+    end if
 
   end subroutine read_parameters
 

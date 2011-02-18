@@ -92,6 +92,7 @@ ffttester_mod = \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
@@ -153,6 +154,7 @@ gs2_mod = \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
@@ -200,6 +202,7 @@ ingen_mod = \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
+	 gs2_reinit.o \
 	 gs2_save.o \
 	 gs2_time.o \
 	 gs2_transforms.o \
@@ -216,6 +219,7 @@ ingen_mod = \
 	 mds.o \
 	 mdslib.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
@@ -557,7 +561,9 @@ gs2_transforms.o: \
 	 redistribute.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o 
+	 constants.o \
+	 convert.o \
+	 file_utils.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -575,6 +581,29 @@ hyper.o: \
 ideq.o: \
 	 spl.o 
 ingen.o: \
+	 antenna.o \
+	 collisions.o \
+	 constants.o \
+	 dist_fn.o \
+	 fields.o \
+	 file_utils.o \
+	 geometry.o \
+	 gs2_diagnostics.o \
+	 gs2_layouts.o \
+	 gs2_reinit.o \
+	 gs2_time.o \
+	 hyper.o \
+	 init_g.o \
+	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
+	 nonlinear_terms.o \
+	 run_parameters.o \
+	 species.o \
+	 text_options.o \
+	 theta_grid.o \
+	 theta_grid_params.o 
+ingen1504.o: \
 	 constants.o \
 	 file_utils.o \
 	 gs2_diagnostics.o \
@@ -582,6 +611,15 @@ ingen.o: \
 	 mp.o \
 	 text_options.o \
 	 theta_grid.o 
+ingencmr.o: \
+	 constants.o \
+	 file_utils.o \
+	 gs2_diagnostics.o \
+	 kt_grids.o \
+	 mp.o \
+	 text_options.o \
+	 theta_grid.o \
+	 theta_grid_params.o 
 init_g.o: \
 	 constants.o \
 	 dist_fn.o \
@@ -636,6 +674,7 @@ mdslib.o:
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -663,7 +702,8 @@ pgplot_utils.o: \
 	 constants.o 
 prof.o: 
 radstub.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 redistribute.o: \
 	 job_manage.o \
 	 mp.o 

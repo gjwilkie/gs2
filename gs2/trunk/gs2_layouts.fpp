@@ -17,6 +17,7 @@ module gs2_layouts
   public :: is_kx_local
   
   public :: init_dist_fn_layouts, init_gs2_layouts
+  public :: wnml_gs2_layouts
   public :: init_parity_layouts ! MAB
 ! TT>
 !  public :: g_lo, g_layout_type
@@ -68,6 +69,7 @@ module gs2_layouts
 
   logical :: local_field_solve, accel_lxyes, lambda_local
   character (len=5) :: layout
+  logical :: exist
 
 ! TT>
 !!$  type :: g_layout_type
@@ -329,6 +331,16 @@ module gs2_layouts
   end interface
 
 contains
+  subroutine wnml_gs2_layouts(unit)
+    implicit none
+    integer :: unit
+    if (.not. exist) return
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "layouts_knobs"
+       write (unit, fmt="(' layout = ',a)") '"'//trim(layout)//'"'
+       write (unit, fmt="(' local_field_solve = ',L1)") local_field_solve
+       write (unit, fmt="(' /')")
+  end subroutine wnml_gs2_layouts
 
   subroutine init_gs2_layouts
     
@@ -348,7 +360,6 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
     implicit none
     integer :: in_file
-    logical :: exist
     namelist /layouts_knobs/ layout, local_field_solve
 
     local_field_solve = .false.

@@ -6,7 +6,7 @@ module run_parameters
   public :: beta, zeff, tite
   public :: fphi, fapar, fbpar
 !  public :: delt, delt_max, wunits, woutunits, tunits, funits, tnorm
-  public :: delt, code_delt_max, wunits, woutunits, tunits, funits, tnorm
+  public :: code_delt_max, wunits, woutunits, tunits, funits, tnorm
   public :: nstep, wstar_units, eqzip, margin
   public :: secondary, tertiary, harris
   public :: ieqzip
@@ -29,6 +29,7 @@ module run_parameters
   integer, public :: delt_option_switch
   integer, public, parameter :: delt_option_hand = 1, delt_option_auto = 2
   logical :: initialized = .false.
+  logical :: rpexist, knexist
 
   integer, allocatable :: ieqzip(:,:)
   integer :: eqzip_option_switch
@@ -99,22 +100,21 @@ contains
     end if
   end subroutine check_run_parameters
 
-  subroutine wnml_run_parameters(unit)
-  use species, only: spec, has_electron_species 
+  subroutine wnml_run_parameters(unit,electrons,collisions)
   implicit none
   integer :: unit
-
+  logical :: electrons, collisions
+     if (rpexist) then
        write (unit, *)
        write (unit, fmt="(' &',a)") "parameters"
        write (unit, fmt="(' beta = ',e16.10)") beta       ! if zero, fapar, fbpar should be zero
-!CMR, 10/2/2011: following line was only executed if collisions are on:
-!     removed this test as printing seems harmless as its tricky to know now ! 
-       write (unit, fmt="(' zeff = ',e16.10)") zeff
-       if (.not. has_electron_species(spec))  write (unit, fmt="(' tite = ',e16.10)") tite
+       if (collisions) write (unit, fmt="(' zeff = ',e16.10)") zeff
+       if (.not. electrons)  write (unit, fmt="(' tite = ',e16.10)") tite
 !CMR, 10/2/2011: zip not in this namelist, so removing it!
 !       if (zip) write (unit, fmt="(' zip = ',L1)") zip
        write (unit, fmt="(' /')")
-
+     endif
+     if (knexist) then
        write (unit, *)
        write (unit, fmt="(' &',a)") "knobs"
        write (unit, fmt="(' fphi   = ',f6.3)") fphi
@@ -136,6 +136,7 @@ contains
           ! nothing
        end select
        write (unit, fmt="(' /')")
+     endif
   end subroutine wnml_run_parameters
 
   subroutine init_run_parameters
@@ -201,7 +202,6 @@ contains
     real, dimension (2) :: vnm_saved
 
     real :: teti  ! for back-compatibility
-    logical :: exist
     namelist /parameters/ beta, zeff, tite, teti, k0
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
          delt_option, margin, secondary, tertiary, faperp, harris, &
@@ -225,13 +225,13 @@ contains
        margin = 0.05
        avail_cpu_time = 1.e10
 
-       in_file = input_unit_exist("parameters", exist)
-!       if (exist) read (unit=input_unit("parameters"), nml=parameters)
-       if (exist) read (unit=in_file,nml=parameters)
+       in_file = input_unit_exist("parameters", rpexist)
+!       if (rpexist) read (unit=input_unit("parameters"), nml=parameters)
+       if (rpexist) read (unit=in_file,nml=parameters)
 
-       in_file = input_unit_exist("knobs", exist)
-!       if (exist) read (unit=input_unit("knobs"), nml=knobs)
-       if (exist) read (unit=in_file, nml=knobs)
+       in_file = input_unit_exist("knobs", knexist)
+!       if (knexist) read (unit=input_unit("knobs"), nml=knobs)
+       if (knexist) read (unit=in_file, nml=knobs)
 
        if (teti /= -100.0) tite = teti
 

@@ -57,6 +57,7 @@ module init_g
   
   logical :: debug = .false.
   logical :: initialized = .false.
+  logical :: exist
 
 contains
 
@@ -64,6 +65,7 @@ contains
   use run_parameters, only: k0
   implicit none
   integer :: unit
+       if (.not.exist) return
        write (unit, *)
        write (unit, fmt="(' &',a)") "init_g_knobs"
        select case (ginitopt_switch)
@@ -574,7 +576,6 @@ contains
 
     if (initialized) return
     initialized = .true.
-
     call init_gs2_layouts
 
     if (proc0) call read_parameters
@@ -810,7 +811,6 @@ contains
          ikkk, ittt, phiamp, aparamp, phifrac
 
     integer :: ierr, in_file
-    logical :: exist
 
     tstart = 0.
     scale = 1.0

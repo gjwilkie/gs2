@@ -7,6 +7,7 @@ module fields
   implicit none
 
   public :: init_fields, finish_fields
+  public :: read_parameters, wnml_fields, check_fields
   public :: advance
   public :: phinorm, kperp, fieldlineavgphi
   public :: phi, apar, bpar, phinew, aparnew, bparnew
@@ -24,10 +25,54 @@ module fields
   integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_explicit = 3
 
   logical :: initialized = .false.
+  logical :: exist
 
 contains
 
+  subroutine check_fields(report_unit)
+  implicit none
+  integer :: report_unit
+    select case (fieldopt_switch)
+    case (fieldopt_implicit)
+       write (report_unit, fmt="('The field equations will be advanced in time implicitly.')")
+    case (fieldopt_explicit)
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('The field equations will be advanced in time explicitly.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    case (fieldopt_test)
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('The field equations will only be tested.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end select
+  end subroutine check_fields
+
+
+  subroutine wnml_fields(unit)
+  implicit none
+  integer :: unit
+     if (.not. exist) return 
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "fields_knobs"
+       select case (fieldopt_switch)
+       case (fieldopt_implicit)
+          write (unit, fmt="(' field_option = ',a)") '"implicit"'
+       case (fieldopt_explicit)
+          write (unit, fmt="(' field_option = ',a)") '"explicit"'
+       case (fieldopt_test)
+          write (unit, fmt="(' field_option = ',a)") '"test"'
+       end select
+       write (unit, fmt="(' /')")
+  end subroutine wnml_fields
+
   subroutine init_fields
+!CMR,18/2/2011:
+! add optional logical arg "noalloc" to avoid array allocations in ingen
     use mp, only: proc0
     use theta_grid, only: init_theta_grid
     use run_parameters, only: init_run_parameters
@@ -111,7 +156,6 @@ contains
     character(20) :: field_option
     namelist /fields_knobs/ field_option
     integer :: ierr, in_file
-    logical :: exist
 
     if (proc0) then
        field_option = 'default'

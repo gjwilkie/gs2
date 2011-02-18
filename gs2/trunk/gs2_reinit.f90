@@ -3,6 +3,7 @@ module gs2_reinit
 
   public :: reset_time_step
   public :: check_time_step
+  public :: init_reinit, wnml_gs2_reinit
 
   real :: delt_adj, dt0
 !  real :: delt_cushion = 1.5
@@ -11,6 +12,15 @@ module gs2_reinit
   real, save :: time_reinit(2)=0.
 
 contains
+  subroutine wnml_gs2_reinit(unit)
+    implicit none
+    integer :: unit
+          write (unit, *)
+          write (unit, fmt="(' &',a)") "reinit_knobs"
+          write (unit, fmt="(' delt_adj = ',e16.10)") delt_adj
+          write (unit, fmt="(' delt_minimum = ',e16.10)") delt_minimum
+          write (unit, fmt="(' /')")       
+  end subroutine wnml_gs2_reinit
 
   subroutine reset_time_step (istep, exit)
 

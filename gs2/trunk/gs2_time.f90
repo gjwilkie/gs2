@@ -9,7 +9,6 @@ module gs2_time
   real :: user_dt_cfl = -1.
   real :: code_dt_cfl = -1.
 
-  real :: code_dt_max, user_dt_max
   real :: code_dt_min, user_dt_min
 
   ! added May 18, 2009 to take care of problems
@@ -24,7 +23,7 @@ module gs2_time
   real :: vtfac
 
   public :: user_dt, code_dt, update_time, code_dt_old
-  public :: user_time, code_time, code_dt_max
+  public :: user_time, code_time
   public :: save_dt_min, save_dt, save_dt_cfl, write_dt
   public :: init_tstart, init_delt
   public :: code_dt_cfl, code_dt_min, user2code
