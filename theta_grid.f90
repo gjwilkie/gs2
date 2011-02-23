@@ -1376,13 +1376,15 @@ contains
     close (unit=unit)
   end subroutine file_get_sizes
 
-  subroutine file_get_grids (theta, bset, &
+  subroutine file_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, &
        bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
        gds2, gds21, gds22, gds23, gds24, grho, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
        shat, drhodpsi, kxfac, qval, gb_to_cv)
     use file_utils, only: get_unused_unit
     implicit none
+    integer, intent (in) :: nperiod
+    integer, intent (in out) :: ntheta, ntgrid, nbset
     real, dimension (-ntgrid:ntgrid), intent (out) :: theta
     real, dimension (nbset), intent (out) :: bset
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
@@ -1881,7 +1883,7 @@ if (debug) write(6,*) 'get_grids: call salpha_get_grids'
             shat, drhodpsi, kxfac, qval, shape, gb_to_cv)
     case (eqopt_file)
 if (debug) write(6,*) 'get_grids: call file_get_grids'
-       call file_get_grids (theta, bset, bmag, &
+       call file_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gds2, gds21, gds22, gds23, gds24, grho, &
             Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
