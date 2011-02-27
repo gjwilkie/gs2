@@ -309,6 +309,7 @@ module le_grids
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
   public :: eint_error, lint_error, trap_error, integrate_test, wdim
   public :: integrate_kysum, integrate_volume ! MAB
+  public :: get_flux_vs_theta_vs_vpa
 
   private
 
@@ -316,6 +317,16 @@ module le_grids
      module procedure integrate_moment_c34
      module procedure integrate_moment_lec
      module procedure integrate_moment_r33
+  end interface
+
+  interface integrate_volume
+     module procedure integrate_volume_c
+     module procedure integrate_volume_r
+  end interface
+
+  interface get_hermite_polynomials
+     module procedure get_hermite_polynomials_1d
+     module procedure get_hermite_polynomials_4d
   end interface
 
   real, dimension (:), allocatable :: xx ! (ng2)
@@ -3942,7 +3953,7 @@ end if
 
   end subroutine eintegrate
 
-  subroutine integrate_volume (g, total, all)
+  subroutine integrate_volume_c (g, total, all)
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
 ! is over x-y space
@@ -4022,7 +4033,247 @@ end if
        deallocate (work)
     end if
 
-  end subroutine integrate_volume
+  end subroutine integrate_volume_c
+
+  subroutine integrate_volume_r (g, total, all)
+! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
+! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
+! is over x-y space
+    use mp, only: nproc, iproc
+    use theta_grid, only: ntgrid
+    use kt_grids, only: aky
+    use species, only: nspec
+    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+    real, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    real, dimension (-ntgrid:,:,:,:,:), intent (out) :: total
+    integer, optional, intent(in) :: all
+
+    real, dimension (:), allocatable :: work
+    real :: fac
+    integer :: is, il, ie, ik, it, iglo, ig, i, isgn
+
+    total = 0.
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       if (aky(ik) == 0.) then
+          fac = 1.0
+       else
+          fac = 0.5
+       end if
+
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             total(ig, il, ie, isgn, is) = total(ig, il, ie, isgn, is) + &
+                  fac*g(ig,isgn,iglo)
+          end do
+       end do
+    end do
+
+    if (nproc > 1) then
+       allocate (work((2*ntgrid+1)*nlambda*negrid*nspec*2)) ; work = 0.
+       i = 0
+       do is = 1, nspec
+          do isgn = 1, 2
+             do ie = 1, negrid
+                do il = 1, nlambda
+                   do ig = -ntgrid, ntgrid
+                      i = i + 1
+                      work(i) = total(ig, il, ie, isgn, is)
+                   end do
+                end do
+             end do
+          end do
+       end do
+
+       if (present(all)) then
+          call sum_allreduce (work)
+       else
+          call sum_reduce (work, 0)
+       end if
+
+       if (proc0 .or. present(all)) then
+          i = 0
+          do is = 1, nspec
+             do isgn = 1, 2
+                do ie = 1, negrid
+                   do il = 1, nlambda
+                      do ig = -ntgrid, ntgrid
+                         i = i + 1
+                         total(ig, il, ie, isgn, is) = work(i)
+                      end do
+                   end do
+                end do
+             end do
+          end do
+       end if
+       deallocate (work)
+    end if
+
+  end subroutine integrate_volume_r
+
+  ! calculates and returns toroidal momentum flux as a function
+  ! of vpar and theta
+  subroutine get_flux_vs_theta_vs_vpa (f, vflx)
+
+    use constants, only: pi
+    use theta_grid, only: ntgrid, bmag
+    use species, only: nspec
+
+    implicit none
+
+    real, dimension (-ntgrid:,:,:,:,:), intent (in) :: f
+    real, dimension (-ntgrid:,:,:), intent (out) :: vflx
+
+    real, dimension (:,:,:), allocatable :: favg
+    real, dimension (:), allocatable, save :: vpa1d
+    real, dimension (:,:), allocatable, save :: hermp1d
+    real, dimension (:,:,:,:), allocatable, save :: vpapts
+    real, dimension (:,:,:,:,:), allocatable, save :: hermp
+
+    real :: fac
+    integer :: is, il, ie, ig, isgn, iv
+    integer :: norder
+
+    norder = min(negrid, nlambda)/2
+
+    allocate (favg(-ntgrid:ntgrid,nspec,0:norder-1))
+
+    if (.not. allocated(vpapts)) then
+       allocate (vpa1d(negrid*nlambda))
+       allocate (hermp1d(negrid*nlambda,0:norder-1))
+       allocate (vpapts(-ntgrid:ntgrid,nlambda,negrid,2))
+       allocate (hermp(-ntgrid:ntgrid,nlambda,negrid,2,0:norder-1))
+       vpapts = 0.0 ; hermp = 0.0 ; vpa1d = 0.0 ; hermp1d = 0.0
+
+       do ie = 1, negrid
+          do il = 1, nlambda
+             do ig = -ntgrid, ntgrid
+                vpapts(ig,il,ie,1) = sqrt(e(ie,1)*max(0.0, 1.0-al(il)*bmag(ig)))
+                vpapts(ig,il,ie,2) = -vpapts(ig,il,ie,1)
+             end do
+          end do
+       end do
+
+       do iv = 1, negrid*nlambda
+          vpa1d(iv) = sqrt(e(negrid,1))*(1. - 2.*(iv-1)/real(negrid*nlambda-1))
+       end do
+
+       call get_hermite_polynomials (vpa1d, hermp1d)
+       call get_hermite_polynomials (vpapts, hermp)
+    end if
+
+    favg = 0.
+    do is = 1, nspec
+       do ie = 1, negrid
+          fac = w(ie,is)
+          do il = 1, nlambda
+             do ig = -ntgrid, ntgrid
+                favg(ig,is,:) = favg(ig,is,:) &
+                     +fac*wl(ig,il)*(hermp(ig,il,ie,1,:)*f(ig,il,ie,1,is) &
+                     +hermp(ig,il,ie,2,:)*f(ig,il,ie,2,is))
+             end do
+          end do
+       end do
+    end do
+
+    do is = 1, nspec
+       do iv = 1, negrid*nlambda
+          do ig = -ntgrid, ntgrid
+             vflx(ig,iv,is) = sum(favg(ig,is,:)*hermp1d(iv,:))*exp(-vpa1d(iv)**2)
+          end do
+       end do
+    end do
+
+    deallocate (favg)
+    
+  end subroutine get_flux_vs_theta_vs_vpa
+
+  subroutine get_hermite_polynomials_4d (xptsdum, hpdum)
+
+    ! this subroutine returns Gn = Hn / sqrt(2^n n!) / pi^(1/4),
+    ! where Hn are the hermite polynomials
+    ! i.e. int dx Gm * Gn exp(-x^2) = 1
+
+    use constants, only: pi
+    use theta_grid, only: ntgrid
+
+    implicit none
+
+    real, dimension (-ntgrid:,:,:,:), intent (in)   :: xptsdum
+    real, dimension (-ntgrid:,:,:,:,0:), intent (out) :: hpdum
+
+    integer :: j
+    double precision, dimension (:,:,:,:), allocatable :: hp1, hp2, hp3
+
+    hpdum = 0.0
+
+    allocate (hp1(-ntgrid:ntgrid,nlambda,negrid,2))
+    allocate (hp2(-ntgrid:ntgrid,nlambda,negrid,2))
+    allocate (hp3(-ntgrid:ntgrid,nlambda,negrid,2))
+
+    hp1 = real(1.0,kind(hp1(0,1,1,1)))
+    hp2 = real(0.0,kind(hp2(0,1,1,1)))
+
+    hpdum(:,:,:,:,0) = 1.0
+
+    do j=1, size(hpdum,5)-1
+       hp3 = hp2
+       hp2 = hp1
+       hp1 = sqrt(2./j)*xptsdum*hp2 - sqrt(real(j-1)/j)*hp3
+       hpdum(:,:,:,:,j) = hp1
+    end do
+
+    hpdum = hpdum/pi**(0.25)
+
+    deallocate (hp1,hp2,hp3)
+
+  end subroutine get_hermite_polynomials_4d
+
+  subroutine get_hermite_polynomials_1d (xptsdum, hpdum)
+
+    ! this subroutine returns Gn = Hn / sqrt(2^n n!) / pi^(1/4),
+    ! where Hn are the hermite polynomials
+    ! i.e. int dx Gm * Gn exp(-x^2) = 1
+
+    use constants, only: pi
+
+    implicit none
+
+    real, dimension (:), intent (in)   :: xptsdum
+    real, dimension (:,0:), intent (out) :: hpdum
+
+    integer :: j
+    double precision, dimension (:), allocatable :: hp1, hp2, hp3
+
+    hpdum = 0.0
+
+    allocate (hp1(size(xptsdum)))
+    allocate (hp2(size(xptsdum)))
+    allocate (hp3(size(xptsdum)))
+
+    hp1 = real(1.0,kind(hp1(1)))
+    hp2 = real(0.0,kind(hp2(1)))
+
+    hpdum(:,0) = 1.0
+
+    do j=1, size(hpdum,2)-1
+       hp3 = hp2
+       hp2 = hp1
+       hp1 = sqrt(2./j)*xptsdum*hp2 - sqrt(real(j-1)/j)*hp3
+       hpdum(:,j) = hp1
+    end do
+
+    hpdum = hpdum/pi**(0.25)
+
+    deallocate (hp1,hp2,hp3)
+
+  end subroutine get_hermite_polynomials_1d
 
   subroutine finish_le_grids
 

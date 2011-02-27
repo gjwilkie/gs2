@@ -16,7 +16,7 @@ module gs2_io
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
   public :: nc_loop_stress, nc_loop_vres
   public :: nc_loop_movie, nc_write_fields
-  public :: nc_loop_fullmom
+  public :: nc_loop_fullmom, nc_loop_sym
 
   logical, parameter :: serial_io = .true.
 # ifdef NETCDF
@@ -27,11 +27,11 @@ module gs2_io
 !  integer :: naky_dim, nakx_dim, nttot_dim, negrid_dim, nlambda_dim, nspec_dim, ncoord_dim, ncoordt_dim
 !  integer :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim, nheat_dim
   integer (kind_nf) :: naky_dim, nakx_dim, nttot_dim, negrid_dim, nlambda_dim, nspec_dim, ncoord_dim, ncoordt_dim
-  integer (kind_nf) :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim, nheat_dim
+  integer (kind_nf) :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim, nheat_dim, vpa_dim
   
   integer, dimension (6) :: lp_dim
   integer, dimension (5) :: field_dim, final_mom_dim, heatk_dim, err_dim
-  integer, dimension (4) :: omega_dim, fluxk_dim, final_field_dim, loop_mom_dim
+  integer, dimension (4) :: omega_dim, fluxk_dim, final_field_dim, loop_mom_dim, sym_dim
   integer, dimension (3) :: fluxx_dim
   integer, dimension (3) :: mode_dim, phase_dim, loop_phi_dim, heat_dim
   integer, dimension (2) :: kx_dim, ky_dim, om_dim, flux_dim, nin_dim, fmode_dim
@@ -46,6 +46,7 @@ module gs2_io
   integer :: code_id_movie
 
   integer :: nakx_id, naky_id, nttot_id, akx_id, aky_id, theta_id, nspec_id
+  integer :: negrid_id, nlambda_id, egrid_id, lambda_id
   integer :: time_id, phi2_id, apar2_id, bpar2_id, theta0_id, nproc_id, nmesh_id
   integer :: phi2_by_mode_id, apar2_by_mode_id, bpar2_by_mode_id, errest_by_mode_id, lpcoef_by_mode_id
   integer :: phtot_id, dmix_id, kperpnorm_id
@@ -61,6 +62,7 @@ module gs2_io
   integer :: bpar_heat_par_id, bpar_heat_perp_id
   integer :: hflux_tot_id, zflux_tot_id, vflux_tot_id
   integer :: es_heat_by_k_id, es_mom_by_k_id, es_part_by_k_id
+  integer :: es_mom_sym_id
   integer :: apar_heat_by_k_id, apar_mom_by_k_id, apar_part_by_k_id
   integer :: apar_heat_by_x_id
   integer :: bpar_heat_by_k_id, bpar_mom_by_k_id, bpar_part_by_k_id
@@ -105,7 +107,7 @@ contains
   subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
       write_phiavg, write_hrate, write_final_antot, write_eigenfunc, &
       make_movie, nmovie_tot, write_verr, write_fields, &
-      write_full_moments_notgc)
+      write_full_moments_notgc, write_sym)
 !David has made some changes to this subroutine (may 2005) now should 
 !be able to do movies for linear box runs as well as nonlinear box runs.
 
@@ -127,7 +129,7 @@ contains
     logical, intent(in) :: write_nl_flux, write_omega, write_stress
     logical, intent(in) :: write_phiavg, write_hrate, make_movie, write_fields
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
-    logical, intent(in) :: write_full_moments_notgc
+    logical, intent(in) :: write_full_moments_notgc, write_sym
     integer :: nmovie_tot
 # ifdef NETCDF
     logical :: accelerated
@@ -201,7 +203,7 @@ contains
        call define_dims (nmovie_tot)
        call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
             write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-            write_fields, write_full_moments_notgc)
+            write_fields, write_full_moments_notgc, write_sym)
        call nc_grids
        call nc_species
        call nc_geo
@@ -254,6 +256,8 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, dim='ri')
     status = nf90_def_dim (ncid, 'nheat', 7, nheat_dim)
     if (status /= NF90_NOERR) call netcdf_error (status, dim='nheat')
+    status = nf90_def_dim (ncid, 'vpa', negrid*nlambda, vpa_dim)
+    if (status /= NF90_NOERR) call netcdf_error (status, dim='vpa')
 
     ! added by EAB 03/05/04 for GS2 movies
     ! <doc> If make_movie = .true., define some extra dimensions for movie output; x with dimension yxf_lo%nx; y with dimension yxf_lo%ny, and tm, (i.e. time) with dimension nmovie_tot = nstep/nmovie </doc>
@@ -282,7 +286,7 @@ contains
     use kt_grids, only: naky, ntheta0, theta0, akx_out, aky_out, nx, ny
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
-    use le_grids, only: negrid, nlambda
+    use le_grids, only: negrid, nlambda, e, al
     use nonlinear_terms, only: nonlin
 # ifdef NETCDF
 !    use netcdf_mod
@@ -304,6 +308,10 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, nakx_id)
     status = nf90_put_var (ncid, nspec_id, nspec)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, nspec_id)
+    status = nf90_put_var (ncid, negrid_id, negrid)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, negrid_id)
+    status = nf90_put_var (ncid, nlambda_id, nlambda)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, nlambda_id)
 
     status = nf90_put_var (ncid, akx_id, akx_out)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, akx_id)
@@ -313,6 +321,10 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, theta_id)
     status = nf90_put_var (ncid, theta0_id, theta0)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, theta0_id)
+    status = nf90_put_var (ncid, egrid_id, e(:,1))
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, egrid_id)
+    status = nf90_put_var (ncid, lambda_id, al)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, lambda_id)
 
     if (nonlin) then
        nmesh = (2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec
@@ -419,7 +431,7 @@ contains
 
   subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
        write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-       write_fields, write_full_moments_notgc)
+       write_fields, write_full_moments_notgc, write_sym)
 
     use mp, only: nproc
     use species, only: nspec
@@ -437,7 +449,7 @@ contains
     logical, intent(in) :: write_nl_flux, write_omega, write_stress
     logical, intent(in) :: write_phiavg, write_hrate, write_final_antot
     logical, intent(in) :: write_eigenfunc, write_verr, write_fields
-    logical, intent(in) :: write_full_moments_notgc
+    logical, intent(in) :: write_full_moments_notgc, write_sym
 # ifdef NETCDF
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
@@ -541,6 +553,11 @@ contains
     mom_dim(4) = nspec_dim
     mom_dim(5) = time_dim
 
+    sym_dim(1) = nttot_dim
+    sym_dim(2) = vpa_dim
+    sym_dim(3) = nspec_dim
+    sym_dim(4) = time_dim
+
     !<doc> Write some useful general information such as the website,
     ! date and time into the NetCDF file </doc>
     status = nf90_put_att (ncid, NF90_GLOBAL, 'title', 'GS2 Simulation Data')
@@ -633,6 +650,10 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, var='ntheta_tot')
     status = nf90_def_var (ncid, 'nspecies', NF90_INT, nspec_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='nspecies')
+    status = nf90_def_var (ncid, 'nenergy', NF90_INT, negrid_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='nenergy')
+    status = nf90_def_var (ncid, 'nlambda', NF90_INT, nlambda_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='nlambda')
 
     status = nf90_def_var (ncid, 't', netcdf_real, time_dim, time_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='t')
@@ -711,6 +732,11 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, var='ky')
     status = nf90_put_att (ncid, aky_id, 'long_name', 'ky rho')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, aky_id, att='long_name')
+
+    status = nf90_def_var (ncid, 'egrid', netcdf_real, negrid_dim, egrid_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='egrid')
+    status = nf90_def_var (ncid, 'lambda', netcdf_real, nlambda_dim, lambda_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='lambda')
 
     status = nf90_def_var (ncid, 'theta', netcdf_real, nttot_dim, theta_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='theta')
@@ -821,6 +847,10 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom_by_k')
           status = nf90_def_var (ncid, 'es_part_by_k', netcdf_real, fluxk_dim, es_part_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_by_k')
+       end if
+       if (write_sym) then
+          status = nf90_def_var (ncid, 'es_mom_sym',  netcdf_real, sym_dim, es_mom_sym_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom_sym')
        end if
        if (write_fields) then
 	  status = nf90_def_var (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)  !MR
@@ -1853,6 +1883,39 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, vflux_tot_id)
 # endif
   end subroutine nc_vflux
+
+  subroutine nc_loop_sym (nout, vflx_sym)
+
+    use species, only: nspec
+    use run_parameters, only: fphi
+    use le_grids, only: negrid, nlambda
+    use theta_grid, only: ntgrid
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var
+# endif
+    integer, intent (in) :: nout
+    real, dimension (-ntgrid:,:,:), intent (in) :: vflx_sym
+# ifdef NETCDF
+    integer, dimension (4) :: start, count
+    integer :: status
+
+    start(1) = 1
+    start(2) = 1
+    start(3) = 1
+    start(4) = nout
+    
+    count(1) = 2*ntgrid+1
+    count(2) = nlambda*negrid
+    count(3) = nspec
+    count(4) = 1
+
+    if (fphi > zero) then
+       status = nf90_put_var (ncid, es_mom_sym_id, vflx_sym, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_mom_sym_id)
+    end if
+
+# endif
+  end subroutine nc_loop_sym
 
   subroutine nc_loop (nout, time, fluxfac, &
        phi0,   phi2,   phi2_by_mode, &! phiavg, &
