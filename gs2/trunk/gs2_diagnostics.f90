@@ -2518,7 +2518,8 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 !               heat_perp, mheat_perp, bheat_perp, &
 !               heat_fluxes, mheat_fluxes, bheat_fluxes, hflux_tot)
              call nc_vflux (nout, vflux, vmflux, vbflux, &
-                  mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot)
+                  mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot, &
+                  vflux_par, vflux_perp, vflux0, vflux1)
              call nc_pflux (nout, pflux, pmflux, pbflux, &
                   part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
           end if

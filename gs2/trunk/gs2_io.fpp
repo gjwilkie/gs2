@@ -62,6 +62,7 @@ module gs2_io
   integer :: bpar_heat_par_id, bpar_heat_perp_id
   integer :: hflux_tot_id, zflux_tot_id, vflux_tot_id
   integer :: es_heat_by_k_id, es_mom_by_k_id, es_part_by_k_id
+  integer :: es_parmom_by_k_id, es_perpmom_by_k_id, es_mom0_by_k_id, es_mom1_by_k_id
   integer :: es_mom_sym_id
   integer :: apar_heat_by_k_id, apar_mom_by_k_id, apar_part_by_k_id
   integer :: apar_heat_by_x_id
@@ -847,6 +848,14 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom_by_k')
           status = nf90_def_var (ncid, 'es_part_by_k', netcdf_real, fluxk_dim, es_part_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_by_k')
+          status = nf90_def_var (ncid, 'es_parmom_by_k', netcdf_real, fluxk_dim, es_parmom_by_k_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_parmom_by_k')
+          status = nf90_def_var (ncid, 'es_perpmom_by_k', netcdf_real, fluxk_dim, es_perpmom_by_k_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_perpmom_by_k')
+          status = nf90_def_var (ncid, 'es_mom0_by_k', netcdf_real, fluxk_dim, es_mom0_by_k_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom0_by_k')
+          status = nf90_def_var (ncid, 'es_mom1_by_k', netcdf_real, fluxk_dim, es_mom1_by_k_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom1_by_k')
        end if
        if (write_sym) then
           status = nf90_def_var (ncid, 'es_mom_sym',  netcdf_real, sym_dim, es_mom_sym_id)
@@ -1824,7 +1833,8 @@ contains
   end subroutine nc_pflux
 
   subroutine nc_vflux (nout, vflux, vmflux, vbflux, &
-       mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot)
+       mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot, &
+       vflux_par, vflux_perp, vflux0, vflux1)
 
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -1835,6 +1845,8 @@ contains
 # endif
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: vflux, vmflux, vbflux
+    real, dimension (:,:,:), intent (in) :: vflux_par, vflux_perp
+    real, dimension (:,:,:), intent (in) :: vflux0, vflux1
     real, dimension(:), intent (in) :: mom_fluxes, mmom_fluxes, bmom_fluxes
     real, intent (in) :: vflux_tot
 # ifdef NETCDF
@@ -1863,6 +1875,14 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_mom_flux_id)
        status = nf90_put_var (ncid, es_mom_by_k_id, vflux, start=start4, count=count4)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_mom_by_k_id)
+       status = nf90_put_var (ncid, es_parmom_by_k_id, vflux_par, start=start4, count=count4)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_parmom_by_k_id)
+       status = nf90_put_var (ncid, es_perpmom_by_k_id, vflux_perp, start=start4, count=count4)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_perpmom_by_k_id)
+       status = nf90_put_var (ncid, es_mom0_by_k_id, vflux0, start=start4, count=count4)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_mom0_by_k_id)
+       status = nf90_put_var (ncid, es_mom1_by_k_id, vflux1, start=start4, count=count4)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_mom1_by_k_id)
     end if
 
     if (fapar > zero) then
