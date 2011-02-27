@@ -61,6 +61,7 @@ module gs2_diagnostics
   logical,public :: save_for_restart
   logical,public :: save_distfn !<DD> Added for saving distribution function
   logical,public :: test_conserve
+  logical,public :: write_symmetry
   integer,public :: nwrite, igomega, nmovie
   integer,public :: navg, nsave
   integer,public :: nperiod_output
@@ -92,7 +93,7 @@ module gs2_diagnostics
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
-         save_for_restart, write_parity, save_distfn !<DD> Added for saving distribution function
+         save_for_restart, write_parity, write_symmetry, save_distfn !<DD> Added for saving distribution function
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: dv_unit, jext_unit   !GGH Additions
@@ -639,7 +640,7 @@ contains
     call init_gs2_io (write_nl_flux, write_omega, write_stress, &
          write_fieldline_avg_phi, write_hrate, write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot, write_verr, &
-         write_fields, write_full_moments_notgc)
+         write_fields, write_full_moments_notgc, write_symmetry)
     
     if (write_cerr) then
        if (collision_model_switch == 1 .or. collision_model_switch == 5) then
@@ -835,6 +836,7 @@ contains
        write_stress = .false.
        write_avg_moments = .false.
        write_parity = .false.
+       write_symmetry = .false.
        write_fields = .false.
        write_full_moments_notgc = .false.
        write_final_fields = .false.
@@ -1745,6 +1747,7 @@ contains
     use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
     use dist_fn, only: getmoms_notgc, g_adjust, include_lowflow, lf_flux
+    use dist_fn, only: flux_vs_theta_vs_vpa
     use dist_fn_arrays, only: g, gnew, aj0, vpa
     use collisions, only: ncheck, vnmult, vary_vnew
     use mp, only: proc0, broadcast, iproc, send, receive
@@ -1752,7 +1755,7 @@ contains
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
-    use gs2_io, only: nc_loop_fullmom
+    use gs2_io, only: nc_loop_fullmom, nc_loop_sym
     use gs2_io, only: nc_loop_stress, nc_loop_vres
     use gs2_io, only: nc_loop_movie, nc_write_fields
     use gs2_layouts, only: yxf_lo, g_lo
@@ -1792,6 +1795,7 @@ contains
     real, dimension (:,:), allocatable :: errest
 !MAB> arrays needed for parity diagnostic
     integer :: iplo, iglo, sgn2, isgn, il, ie
+    real, dimension (:,:,:), allocatable :: vflx_sym
     complex, dimension (:,:,:,:), allocatable :: gparity, gmx, gpx
     complex, dimension (:,:,:), allocatable :: g0, gm, gp
     complex, dimension (:,:,:), allocatable :: g_kint, gm_kint, gp_kint
@@ -2614,6 +2618,14 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        call get_stress (rstress, ustress)
        if (proc0) call nc_loop_stress(nout, rstress, ustress)
     end if
+
+     call broadcast (write_symmetry)
+     if (write_symmetry) then
+        allocate (vflx_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
+        call flux_vs_theta_vs_vpa (vflx_sym)
+        if (proc0) call nc_loop_sym (nout, vflx_sym)
+        deallocate (vflx_sym)
+     end if
 
     call broadcast (write_parity)
     if (write_parity) then

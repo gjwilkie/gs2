@@ -18,6 +18,7 @@ module dist_fn
   public :: neoflux, include_lowflow
   public :: get_init_field
   public :: g_adjust ! MAB (needed for Trinity)
+  public :: flux_vs_theta_vs_vpa
 
   public :: gamtot,gamtot1,gamtot2
   public :: getmoms_notgc
@@ -5301,6 +5302,65 @@ subroutine check_dist_fn(report_unit)
     deallocate (total)
 
   end subroutine get_lfflux
+
+  subroutine flux_vs_theta_vs_vpa (vflx)
+
+    use constants, only: zi
+    use dist_fn_arrays, only: gnew, vperp2, aj1, aj0, vpac
+    use fields_arrays, only: phinew
+    use gs2_layouts, only: g_lo
+    use gs2_layouts, only: it_idx, ik_idx, is_idx
+    use geometry, only: rmajor_geo, rhoc, bpol_geo
+    use run_parameters, only: funits
+    use theta_grid, only: ntgrid, bmag, gds21, gds22, qval, shat
+    use kt_grids, only: aky, theta0
+    use le_grids, only: integrate_volume, nlambda, negrid
+    use le_grids, only: get_flux_vs_theta_vs_vpa
+    use species, only: spec, nspec
+
+    implicit none
+
+    real, dimension (-ntgrid:,:,:), intent (out) :: vflx
+    
+    integer :: all = 1
+    integer :: iglo, isgn, ig, it, ik, is
+
+    real, dimension (:,:,:), allocatable :: g0r
+    real, dimension (:,:,:,:,:), allocatable :: gavg
+
+    allocate (g0r(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate (gavg(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             ! rmajor_geo should always be allocated at this point.  this is just a safety precaution.
+             if (allocated(rmajor_geo)) then
+                g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,iglo) &
+                     *rmajor_geo(ig)*sqrt(1.0-bpol_geo(ig)**2/bmag(ig)**2) &
+                     -funits*zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
+                     *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,iglo)*spec(is)%smz/(qval*shat*bmag(ig)**2)
+             else
+                ! assume B_phi / B = 1
+                g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,iglo) &
+                     -funits*zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
+                     *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,iglo)*spec(is)%smz/(qval*shat*bmag(ig)**2)
+             end if
+             g0r(ig,isgn,iglo) = aimag(g0(ig,isgn,iglo)*conjg(phinew(ig,it,ik)))*aky(ik)
+          end do
+       end do
+    end do
+    
+    call integrate_volume (g0r, gavg, all)
+    call get_flux_vs_theta_vs_vpa (gavg, vflx)
+
+    deallocate (gavg)
+    deallocate (g0r)
+
+  end subroutine flux_vs_theta_vs_vpa
 
 !>GGH
 !=============================================================================
