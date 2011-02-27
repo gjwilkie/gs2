@@ -74,6 +74,7 @@ module gs2_io
   integer :: ntot_id, density_id, upar_id, tpar_id, tperp_id
   integer :: rstress_id, ustress_id
   integer :: ntot2_id, ntot2_by_mode_id, ntot20_id, ntot20_by_mode_id
+  integer :: tpar2_by_mode_id, tperp2_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
   integer :: qflux_neo_by_k_id, pflux_neo_by_k_id, input_id
   integer :: charge_id, mass_id, dens_id, temp_id, tprim_id, fprim_id
@@ -1064,6 +1065,10 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, var='ntot2')
     status = nf90_def_var (ncid, 'ntot2_by_mode', netcdf_real, fluxk_dim, ntot2_by_mode_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='ntot2_by_mode')
+    status = nf90_def_var (ncid, 'tpar2_by_mode', netcdf_real, fluxk_dim, tpar2_by_mode_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='tpar2_by_mode')
+    status = nf90_def_var (ncid, 'tperp2_by_mode', netcdf_real, fluxk_dim, tperp2_by_mode_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='tperp2_by_mode')
 
     status = nf90_def_var (ncid, 'ntot20', netcdf_real, flux_dim,  ntot20_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='ntot20')
@@ -1554,7 +1559,7 @@ contains
   end subroutine nc_loop_vres
 
   subroutine nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, ntot20_by_mode, &
-       phi00, ntot00, density00, upar00, tpar00, tperp00)
+       phi00, ntot00, density00, upar00, tpar00, tperp00, tpar2_by_mode, tperp2_by_mode)
 
 !    use nf90_mod, only: nf90_put_vara
     use convert, only: c2r
@@ -1567,6 +1572,7 @@ contains
     integer, intent (in) :: nout
     real, dimension (:), intent (in) :: ntot2, ntot20
     real, dimension (:,:,:), intent (in) :: ntot2_by_mode, ntot20_by_mode
+    real, dimension (:,:,:), intent (in) :: tpar2_by_mode, tperp2_by_mode
     complex, dimension (:), intent (in) :: phi00
     complex, dimension (:,:), intent (in) :: ntot00, density00, upar00, tpar00, tperp00
 # ifdef NETCDF
@@ -1615,6 +1621,10 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, ntot2_id)
     status = nf90_put_var (ncid, ntot2_by_mode_id, ntot2_by_mode, start=start4, count=count4)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, ntot2_by_mode_id)
+    status = nf90_put_var (ncid, tpar2_by_mode_id, tpar2_by_mode, start=start4, count=count4)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, tpar2_by_mode_id)
+    status = nf90_put_var (ncid, tperp2_by_mode_id, tperp2_by_mode, start=start4, count=count4)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, tperp2_by_mode_id)
 
     status = nf90_put_var (ncid, ntot20_id, ntot20, start=start, count=count)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, ntot20_id)

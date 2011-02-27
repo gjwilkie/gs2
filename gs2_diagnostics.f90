@@ -1790,6 +1790,7 @@ contains
     real :: phi2, apar2, bpar2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode
     real, dimension (ntheta0, naky, nspec) :: ntot2_by_mode, ntot20_by_mode
+    real, dimension (ntheta0, naky, nspec) :: tpar2_by_mode, tperp2_by_mode
 !    real, dimension (:,:,:,:), allocatable :: errest_by_mode
     integer, dimension (:,:), allocatable :: erridx
     real, dimension (:,:), allocatable :: errest
@@ -1823,7 +1824,7 @@ contains
 !    complex :: wtmp_old = 0.
     real, dimension (:), allocatable :: dl_over_b
     real, dimension (ntheta0, nspec) :: x_qmflux
-    real, dimension (nspec) :: ntot2, ntot20
+    real, dimension (nspec) :: ntot2, ntot20, tpar2, tperp2
     real, dimension (nspec) ::  heat_fluxes,  part_fluxes, mom_fluxes, parmom_fluxes, perpmom_fluxes
     real, dimension (nspec) :: lfmom_fluxes, vflux1_avg  ! low-flow correction to turbulent momentum fluxes
     real, dimension (nspec) :: mheat_fluxes, mpart_fluxes, mmom_fluxes
@@ -3102,6 +3103,10 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           do is = 1, nspec
              call get_vol_average (ntot(:,:,:,is), ntot(:,:,:,is), &
                   ntot2(is), ntot2_by_mode(:,:,is))
+             call get_vol_average (tpar(:,:,:,is), tpar(:,:,:,is), &
+                  tpar2(is), tpar2_by_mode(:,:,is))
+             call get_vol_average (tperp(:,:,:,is), tperp(:,:,:,is), &
+                  tperp2(is), tperp2_by_mode(:,:,is))
           end do
 
           do is = 1, nspec
@@ -3113,7 +3118,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 
           call nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, &
                ntot20_by_mode, phi00, ntot00, density00, upar00, &
-               tpar00, tperp00)
+               tpar00, tperp00, tpar2_by_mode, tperp2_by_mode)
 
        end if
     end if
