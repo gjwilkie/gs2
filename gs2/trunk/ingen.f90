@@ -956,6 +956,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
            write (report_unit, fmt="('nmesh=(2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec')")
            nmesh = (2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec
+           write (report_unit, fmt="('Number of meshpoints:    ',i12)") nmesh
 
  !
  ! check that nx, ny have no large prime factors
@@ -1012,17 +1013,17 @@ if (debug) write(6,*) 'get_namelists: returning'
         else
            write (report_unit, fmt="('nmesh=(2*ntgrid+1)*2*nlambda*negrid*ntheta0*naky*nspec')")
            nmesh = (2*ntgrid+1)*2*nlambda*negrid*ntheta0*naky*nspec
+           write (report_unit, fmt="('Number of meshpoints:    ',i12)") nmesh
         end if
 
-        write (report_unit, fmt="('ntgrid :    ',i12)") ntgrid
-        write (report_unit, fmt="('nlambda:    ',i12)") nlambda
-        write (report_unit, fmt="('negrid :    ',i12)") negrid
-        write (report_unit, fmt="('ntheta0:    ',i12)") ntheta0
-        write (report_unit, fmt="('naky   :    ',i12)") naky
-        write (report_unit, fmt="('ny     :    ',i12)") ny
-        write (report_unit, fmt="('nx     :    ',i12)") nx
-        write (report_unit, fmt="('nspec  :    ',i12)") nspec
-        write (report_unit, fmt="('Number of meshpoints:    ',i12)") nmesh
+        write (report_unit, fmt="(T12,' ntgrid=',i12)") ntgrid
+        write (report_unit, fmt="(T12,'nlambda=',i12)") nlambda
+        write (report_unit, fmt="(T12,' negrid=',i12)") negrid
+        write (report_unit, fmt="(T12,'ntheta0=',i12)") ntheta0
+        write (report_unit, fmt="(T12,'     nx=',i12)") nx
+        write (report_unit, fmt="(T12,'   naky=',i12)") naky
+        write (report_unit, fmt="(T12,'     ny=',i12)") ny
+        write (report_unit, fmt="(T12,'  nspec=',i12,/)") nspec
 
         call nprocs (nmesh)
 
@@ -1155,7 +1156,8 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer :: npe
     real :: time
 
-    write (report_unit, fmt="('Layout = ',a5)") layout 
+    write (report_unit, fmt="('Layout = ',a5,/)") layout 
+    write (report_unit, fmt="('Recommended #proc up to:'i8)") npmax 
     if (nonlin) then
        select case (layout)
        case ('lexys')
@@ -1281,7 +1283,7 @@ if (debug) write(6,*) 'get_namelists: returning'
              write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'x'
           end do
           do i=2,nkyfacs
-             npe = facs(i,5)*nkxfacs*negrid*nlambda*nspec
+             npe = facs(i,5)*ntheta0*negrid*nlambda*nspec
              if (npe .gt. npmax) exit
              time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
              write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
@@ -1325,7 +1327,7 @@ if (debug) write(6,*) 'get_namelists: returning'
              write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'x'
           end do
           do i=2,nkyfacs
-             npe = facs(i,5)*nkxfacs*nlambda*negrid*nspec
+             npe = facs(i,5)*ntheta0*nlambda*negrid*nspec
              if (npe .gt. npmax) exit
              time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
              write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
