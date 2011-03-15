@@ -464,6 +464,9 @@ contains
 
     ! intent statement in gather actually makes this next line non-standard: 
     xxf = 0.
+!CMR, 7/3/2011: gather pulls appropriate pieces of g onto this processor for
+!    local Fourier transform in x, and may also pad with zeros for dealiasing
+!
     call gather (g2x, g, xxf)
 
     ! do ffts

@@ -2563,7 +2563,7 @@ subroutine check_dist_fn(report_unit)
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kx_shift, theta0_shift
     use gs2_time, only: code_dt, code_dt_old
-    use mp, only: iproc, proc0, send, receive
+    use mp, only: iproc, proc0, send, receive, mp_abort
     use constants, only: twopi    
 
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
@@ -2580,6 +2580,7 @@ subroutine check_dist_fn(report_unit)
     logical, save :: exb_first = .true.
 !    logical :: kx_local
     complex , dimension(-ntgrid:ntgrid) :: z
+    character(130) :: str
 
        ierr = error_unit()
 
@@ -2667,8 +2668,9 @@ subroutine check_dist_fn(report_unit)
           j=jump(ik)
           if (j .eq. 0) cycle     
           if (abs(j) .ge. ntheta0) then
-              write(ierr,*) "exb_shear: jump(ik)=",j," for ik=",ik," is too large: reduce timestep"
-               stop
+              write(str,fmt='("in exb_shear: jump(ik)=",i4," > ntheta0 =",i4," for ik=",i4". => reduce timestep or increase ntheta0")') j,ik,ntheta0
+              write(ierr,*) str
+              call mp_abort(str)
           endif 
           allocate(temp2(-ntgrid:ntgrid,abs(j)),temp(-ntgrid:ntgrid,2,abs(j)))
           iit=ntheta0+1-abs(j) ; iib=abs(j)
