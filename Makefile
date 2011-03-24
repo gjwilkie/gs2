@@ -468,6 +468,8 @@ test_make:
 	@echo VPATH is $(VPATH)
 	@echo CURDIR is $(CURDIR)
 	@echo TOPDIR is $(TOPDIR)
+	@echo NETCDF_DIR is $(NETCDF_DIR)
+	@echo FFTW_DIR is $(FFTW_DIR)
 	@echo
 	@echo Compile mode:
 	@echo  DEBUG is $(DEBUG)
