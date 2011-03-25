@@ -16,7 +16,7 @@ module gs2_io
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
   public :: nc_loop_stress, nc_loop_vres
   public :: nc_loop_movie, nc_write_fields
-  public :: nc_loop_fullmom, nc_loop_sym
+  public :: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
 
   logical, parameter :: serial_io = .true.
 # ifdef NETCDF
@@ -28,16 +28,20 @@ module gs2_io
 !  integer :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim, nheat_dim
   integer (kind_nf) :: naky_dim, nakx_dim, nttot_dim, negrid_dim, nlambda_dim, nspec_dim, ncoord_dim, ncoordt_dim
   integer (kind_nf) :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim, nheat_dim, vpa_dim
-  
+!  integer (kind_nf) :: nttotext_dim, nakxext_dim, time_big_dim
+  integer (kind_nf) :: nttotext_dim, time_big_dim
+
   integer, dimension (6) :: lp_dim
   integer, dimension (5) :: field_dim, final_mom_dim, heatk_dim, err_dim
+  integer, dimension (5) :: phi_corr_dim
   integer, dimension (4) :: omega_dim, fluxk_dim, final_field_dim, loop_mom_dim, sym_dim
+  integer, dimension (4) :: phi2_extend_dim, phi_corr_2pi_dim
   integer, dimension (3) :: fluxx_dim
   integer, dimension (3) :: mode_dim, phase_dim, loop_phi_dim, heat_dim
   integer, dimension (2) :: kx_dim, ky_dim, om_dim, flux_dim, nin_dim, fmode_dim
 
   ! added by EAB 03/05/04 for movies
-  logical :: my_make_movie
+  logical :: my_make_movie, io_write_corr_extend
   integer :: ncid_movie
   integer :: nx_dim, ny_dim, nth_dim, time_movie_dim
   integer, dimension (4) :: xmode_dim
@@ -63,7 +67,7 @@ module gs2_io
   integer :: hflux_tot_id, zflux_tot_id, vflux_tot_id
   integer :: es_heat_by_k_id, es_mom_by_k_id, es_part_by_k_id
   integer :: es_parmom_by_k_id, es_perpmom_by_k_id, es_mom0_by_k_id, es_mom1_by_k_id
-  integer :: es_mom_sym_id
+  integer :: es_mom_sym_id, phi_corr_id, phi2_extend_id, phi_corr_2pi_id
   integer :: apar_heat_by_k_id, apar_mom_by_k_id, apar_part_by_k_id
   integer :: apar_heat_by_x_id
   integer :: bpar_heat_by_k_id, bpar_mom_by_k_id, bpar_part_by_k_id
@@ -109,7 +113,8 @@ contains
   subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
       write_phiavg, write_hrate, write_final_antot, write_eigenfunc, &
       make_movie, nmovie_tot, write_verr, write_fields, &
-      write_full_moments_notgc, write_sym)
+      write_full_moments_notgc, write_sym, write_correlation, nwrite_big_tot, &
+      write_correlation_extend)
 !David has made some changes to this subroutine (may 2005) now should 
 !be able to do movies for linear box runs as well as nonlinear box runs.
 
@@ -131,8 +136,9 @@ contains
     logical, intent(in) :: write_nl_flux, write_omega, write_stress
     logical, intent(in) :: write_phiavg, write_hrate, make_movie, write_fields
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
-    logical, intent(in) :: write_full_moments_notgc, write_sym
-    integer :: nmovie_tot
+    logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
+    logical, intent(in) :: write_correlation_extend
+    integer, intent (in) :: nmovie_tot, nwrite_big_tot
 # ifdef NETCDF
     logical :: accelerated
     character (300) :: filename, filename_movie
@@ -173,6 +179,7 @@ contains
 
     ! added by EAB 03/2004 for making movie netcdf files
     my_make_movie = make_movie
+    io_write_corr_extend = write_correlation_extend
     if (my_make_movie) then
     !perhaps put a call to init_y_transform
 !    call init_y_transform_layouts  
@@ -202,10 +209,11 @@ contains
     endif
 # endif
     if (proc0) then
-       call define_dims (nmovie_tot)
+       call define_dims (nmovie_tot, nwrite_big_tot)
        call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
             write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-            write_fields, write_full_moments_notgc, write_sym)
+            write_fields, write_full_moments_notgc, write_sym, write_correlation, &
+            write_correlation_extend)
        call nc_grids
        call nc_species
        call nc_geo
@@ -213,10 +221,10 @@ contains
 
   end subroutine init_gs2_io
 
-  subroutine define_dims (nmovie_tot)
+  subroutine define_dims (nmovie_tot, nwrite_big_tot)
 
     use file_utils, only: num_input_lines
-    use kt_grids, only: naky, ntheta0,nx,ny
+    use kt_grids, only: naky, ntheta0,nx,ny, jtwist_out
     use gs2_layouts, only: yxf_lo    
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, negrid
@@ -227,7 +235,7 @@ contains
     use netcdf, only: nf90_def_dim
 # endif
 
-    integer, intent (in) :: nmovie_tot
+    integer, intent (in) :: nmovie_tot, nwrite_big_tot
 # ifdef NETCDF
     integer :: status
 
@@ -260,6 +268,12 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, dim='nheat')
     status = nf90_def_dim (ncid, 'vpa', negrid*nlambda, vpa_dim)
     if (status /= NF90_NOERR) call netcdf_error (status, dim='vpa')
+    if (io_write_corr_extend) then
+       status = nf90_def_dim (ncid, 'theta_ext', (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1), nttotext_dim)
+       if (status /= NF90_NOERR) call netcdf_error (status, dim='theta_ext')
+       status = nf90_def_dim (ncid, 'tb', nwrite_big_tot, time_big_dim)
+       if (status /= NF90_NOERR) call netcdf_error (status, dim='tb')
+    end if
 
     ! added by EAB 03/05/04 for GS2 movies
     ! <doc> If make_movie = .true., define some extra dimensions for movie output; x with dimension yxf_lo%nx; y with dimension yxf_lo%ny, and tm, (i.e. time) with dimension nmovie_tot = nstep/nmovie </doc>
@@ -279,6 +293,10 @@ contains
        status = nf90_def_dim (ncid_movie, 'tm', nmovie_tot, time_movie_dim)
        if (status /= NF90_NOERR) call netcdf_error (status, dim='tm')
     endif
+    ! define time_movie_dim for use in other diagnostics that shouldn't be written
+    ! out often
+!    status = nf90_def_dim (ncid_movie, 'tm', nmovie_tot, time_movie_dim)
+!    if (status /= NF90_NOERR) call netcdf_error (status, dim='tm')
 # endif
   end subroutine define_dims
 
@@ -433,7 +451,8 @@ contains
 
   subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
        write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-       write_fields, write_full_moments_notgc, write_sym)
+       write_fields, write_full_moments_notgc, write_sym, write_correlation, &
+       write_correlation_extend)
 
     use mp, only: nproc
     use species, only: nspec
@@ -451,7 +470,8 @@ contains
     logical, intent(in) :: write_nl_flux, write_omega, write_stress
     logical, intent(in) :: write_phiavg, write_hrate, write_final_antot
     logical, intent(in) :: write_eigenfunc, write_verr, write_fields
-    logical, intent(in) :: write_full_moments_notgc, write_sym
+    logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
+    logical, intent(in) :: write_correlation_extend
 # ifdef NETCDF
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
@@ -559,6 +579,24 @@ contains
     sym_dim(2) = vpa_dim
     sym_dim(3) = nspec_dim
     sym_dim(4) = time_dim
+
+    if (io_write_corr_extend) then
+       phi2_extend_dim(1) = nttotext_dim
+       phi2_extend_dim(2) = nakx_dim
+       phi2_extend_dim(3) = naky_dim
+       phi2_extend_dim(4) = time_big_dim
+
+       phi_corr_dim(1) = ri_dim
+       phi_corr_dim(2) = nttotext_dim
+       phi_corr_dim(3) = nakx_dim
+       phi_corr_dim(4) = naky_dim
+       phi_corr_dim(5) = time_big_dim
+    end if
+
+    phi_corr_2pi_dim(1) = ri_dim
+    phi_corr_2pi_dim(2) = nttot_dim
+    phi_corr_2pi_dim(3) = naky_dim
+    phi_corr_2pi_dim(4) = time_dim
 
     !<doc> Write some useful general information such as the website,
     ! date and time into the NetCDF file </doc>
@@ -861,6 +899,16 @@ contains
        if (write_sym) then
           status = nf90_def_var (ncid, 'es_mom_sym',  netcdf_real, sym_dim, es_mom_sym_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom_sym')
+       end if
+       if (write_correlation) then
+          status = nf90_def_var (ncid, 'phi_corr_2pi',  netcdf_real, phi_corr_2pi_dim, phi_corr_2pi_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='phi_corr_2pi')
+       end if
+       if (write_correlation_extend) then
+          status = nf90_def_var (ncid, 'phi_corr',  netcdf_real, phi_corr_dim, phi_corr_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='phi_corr')
+          status = nf90_def_var (ncid, 'phi2_extend',  netcdf_real, phi2_extend_dim, phi2_extend_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='phi2_extend')
        end if
        if (write_fields) then
 	  status = nf90_def_var (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)  !MR
@@ -1946,6 +1994,94 @@ contains
 
 # endif
   end subroutine nc_loop_sym
+
+  subroutine nc_loop_corr (nout,phi_2pi_corr)
+
+    use convert, only: c2r
+    use run_parameters, only: fphi
+    use kt_grids, only: ntheta0, naky, jtwist_out
+    use theta_grid, only: ntgrid
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var
+# endif
+    integer, intent (in) :: nout
+    complex, dimension (-ntgrid:,:), intent (in) :: phi_2pi_corr
+# ifdef NETCDF
+    integer, dimension (4) :: start4, count4
+    integer :: status
+
+    real, dimension (2, size(phi_2pi_corr,1), size(phi_2pi_corr,2)) :: ri2
+
+    start4(1) = 1
+    start4(2) = 1
+    start4(3) = 1
+    start4(4) = nout
+
+    count4(1) = 2
+    count4(2) = 2*ntgrid+1
+    count4(3) = naky
+    count4(4) = 1
+
+    if (fphi > zero) then
+       call c2r (phi_2pi_corr, ri2)
+       status = nf90_put_var (ncid, phi_corr_2pi_id, ri2, start=start4, count=count4)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_corr_2pi_id)
+    end if
+
+# endif
+  end subroutine nc_loop_corr
+
+  subroutine nc_loop_corr_extend (nout_big,phi_corr,phi2_extend)
+
+    use convert, only: c2r
+    use run_parameters, only: fphi
+    use kt_grids, only: ntheta0, naky, jtwist_out
+    use theta_grid, only: ntgrid
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var
+# endif
+    integer, intent (in) :: nout_big
+    real, dimension (:,:,:), intent (in) :: phi2_extend
+    complex, dimension (:,:,:), intent (in) :: phi_corr
+# ifdef NETCDF
+    integer, dimension (4) :: start4, count4
+    integer, dimension (5) :: start5, count5
+    integer :: status
+
+    real, dimension (2, size(phi_corr,1), size(phi_corr,2), size(phi_corr,3)) :: ri3
+
+    start4(1) = 1
+    start4(2) = 1
+    start4(3) = 1
+    start4(4) = nout_big
+    
+    count4(1) = (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1)
+    count4(2) = ntheta0
+    count4(3) = naky
+    count4(4) = 1
+
+    start5(1) = 1
+    start5(2) = 1
+    start5(3) = 1
+    start5(4) = 1
+    start5(5) = nout_big
+
+    count5(1) = 2
+    count5(2) = (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1)
+    count5(3) = ntheta0
+    count5(4) = naky
+    count5(5) = 1
+
+    if (fphi > zero) then
+       call c2r (phi_corr, ri3)
+       status = nf90_put_var (ncid, phi_corr_id, ri3, start=start5, count=count5)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_corr_id)
+       status = nf90_put_var (ncid, phi2_extend_id, phi2_extend, start=start4, count=count4)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi2_extend_id)
+    end if
+
+# endif
+  end subroutine nc_loop_corr_extend
 
   subroutine nc_loop (nout, time, fluxfac, &
        phi0,   phi2,   phi2_by_mode, &! phiavg, &

@@ -192,8 +192,9 @@ contains
     real, allocatable, dimension(:)   :: th_bish, Rpol, ltheta
     real, allocatable, dimension(:)   :: rgrid, rgrid1, rgrid2, Bpolmag, Bmod, dSdl
     real, allocatable, dimension(:)   :: rmajor, ans, ds, arcl
+    real, allocatable, dimension(:)   :: Zoftheta, dZdl
     real, allocatable, dimension(:,:) :: thgrad, rpgrad, crpgrad, grads
-    real, allocatable, dimension(:,:) :: bvector, gradrptot, gradstot
+    real, allocatable, dimension(:,:) :: bvector, gradrptot, gradstot, gradztot
     real, allocatable, dimension(:,:) :: gradthtot ! MAB
 
     real, allocatable, dimension(:) :: a_bish, b_bish, c_bish
@@ -431,8 +432,12 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
 !     compute gradient of rp
     char='P'
 
+    ! note that rpgrad is given in (R,Z,phi) coordinates if bishop=0
+    ! and (rho,l,phi) coordinates if bishop>0
+    ! also, rpgrad is grad psi if iflux=1 and grad rho if iflux=0 -- MAB
     if(bishop == 0) then
        call  grad(rgrid, theta, rpgrad, char, dum, nth, ntgrid)
+       crpgrad = rpgrad
     else
        call bgrad(rgrid, theta, rpgrad, char, dum, nth, ntgrid)
     endif
@@ -441,6 +446,8 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
        call loftheta(rgrid, theta, ltheta)
        call grad(rgrid, theta, crpgrad, char, dum, nth, ntgrid)
        call th_bishop(crpgrad, th_bish, nth)
+       ! note that Bpolmag and Bmod are recalculated later if using
+       ! Miller (local) equilibrium
        call B_pol(rgrid, theta, crpgrad, Bpolmag, nth)
        call B_mod(rgrid, theta, Bpolmag, Bmod, nth)
        call R_pol(theta, th_bish, ltheta, Rpol, nth)
@@ -454,6 +461,15 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
           call periodic_copy(ltheta, Ltot)
        endif
     endif 
+
+!     compute |grad rho|:
+    do k=-nperiod+1,nperiod-1
+       do i=-nth,nth
+          itot=i+k*ntheta
+          grho(itot)=sqrt(rpgrad(i,1)**2+rpgrad(i,2)**2)*abs(drhodrp)
+       enddo
+    enddo
+    if(isym == 1) call sym(grho, 0, ntgrid)
 
 !     compute  coordinate gradients
 
@@ -657,8 +673,23 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
        call gradl(ltheta, seik, dSdl, 2*pi*qval, nth)
        if(nperiod > 1) call periodic_copy(dSdl, 0.)
 
+       ! here the coordinates are rho and l
        grads(:,1) = a_bish*di_new + b_bish*dp_new + c_bish*2
        grads(:,2) = dSdl
+
+       ! obtain Z(theta)
+       call Ztgrid(rgrid, theta, Zoftheta)
+       if(nperiod > 1) call periodic_copy(Zoftheta, 0.)
+       ! calculate dZ/dl
+       call gradl(ltheta, Zoftheta, dZdl, 0., nth)
+       if(nperiod > 1) call periodic_copy(dZdl, 0.)
+
+       ! gradztot(:,1) is grad Z . rhohat
+       gradztot(:,1) = crpgrad(:,2)/grho
+       ! gradztot(:,2) is grad Z . lhat
+       gradztot(:,2) = dZdl
+       ! gradztot(:,3) is grad Z . phihat
+       gradztot(:,3) = 0.0
 
     else
 
@@ -708,7 +739,8 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 !
 !     compute gradient of S
     
-! MAB -- I think this is really gradient of alpha
+       ! this is really gradient of alpha
+       ! note that coordinates are R and Z (not rho and l, as in bishop case)
        dqdrp=dqdrho*drhodrp
        do k=-nperiod+1,nperiod-1
           do j=1,2
@@ -719,9 +751,13 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
              enddo
           enddo
        enddo    
+       ! gradztot(:,1) is grad Z . Rhat
+       gradztot(:,1) = 0.
+       ! gradztot(:,2) is grad Z . Zhat
+       gradztot(:,2) = 1.
+       ! gradztot(:,3) is grad Z . phihat
+       gradztot(:,3) = 0.
     endif
-
-
 
     if(writelots) then
        write(11,*) 'i,theta,grads1,2=  '
@@ -754,8 +790,8 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 !     compute magnetic field
     call bvectortgrid(rgrid, theta, nth, rpgrad, dpsidrp, bvector)
      
-!     compute curvature and grad b drift terms
-    call drift(rgrid, rp, bvector, gradstot, gradrptot, &
+!     compute curvature, grad b, and coriolis drift terms
+    call drift(rgrid, rp, bvector, gradstot, gradrptot, gradztot, &
          dqdrp, dpsidrho, drhodrp, Bmod, Bpolmag, Rpol, th_bish, ltheta)
      
 !     compute the magnetic field along theta
@@ -827,16 +863,6 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
        call arclength (ntheta, nperiod, gradpar, arcl)
        theta = arcl
     endif
-
-!     compute |grad rho|:
-    do k=-nperiod+1,nperiod-1
-       do i=-nth,nth
-          itot=i+k*ntheta
-          grho(itot)=sqrt(rpgrad(i,1)**2+rpgrad(i,2)**2)*abs(drhodrp)
-       enddo
-    enddo
-    if(isym == 1) call sym(grho, 0, ntgrid)
-
 
 !     compute grad rho*Jacobian of the transformation to the new coordinates: 
 !     Axisymmetry assumed to get this (nu indep. of phi):
@@ -961,7 +987,9 @@ contains
          rmajor     (-n:n), &
          ans        (-n:n), &
          ds         (-n:n), &
-         arcl       (-n:n))
+         arcl       (-n:n), &
+         Zoftheta   (-n:n), &
+         dZdl       (-n:n))
 
     if (.not. allocated(rmajor_geo)) then
        allocate (rmajor_geo(-n:n))
@@ -976,6 +1004,7 @@ contains
     allocate(bvector(-n:n,3), &
          gradrptot  (-n:n,3), &
          gradstot   (-n:n,3), &
+         gradztot   (-n:n,3), &
          gradthtot  (-n:n,3))  ! MAB
 
   end subroutine alloc_local_arrays
@@ -1009,7 +1038,9 @@ contains
          rmajor    , &
          ans       , &
          ds        , &
-         arcl      )
+         arcl      , &
+         Zoftheta  , &
+         dZdl)
 
     deallocate(thgrad, &
          rpgrad    , &
@@ -1019,6 +1050,7 @@ contains
     deallocate(bvector, &
          gradrptot , &
          gradstot  , &
+         gradztot  , &
          gradthtot )  ! MAB
 
   end subroutine dealloc_local_arrays
@@ -1259,17 +1291,17 @@ end subroutine eikcoefs
   end function invRfun
 
   subroutine drift(rgrid, rp, bvector, gradstot,  &
-       gradrptot, dqdrp, dpsidrho, drhodrp, Bmod, &
+       gradrptot, gradztot, dqdrp, dpsidrho, drhodrp, Bmod, &
        Bpolmag, Rpol, th_bish, ltheta)
 
     real, dimension (-ntgrid:), intent (in) :: rgrid, Bmod, Bpolmag, Rpol, th_bish, ltheta
-    real, dimension (-ntgrid:, :), intent (in) :: bvector, gradstot, gradrptot
+    real, dimension (-ntgrid:, :), intent (in) :: bvector, gradstot, gradrptot, gradztot
     real, intent (in) :: rp, dqdrp, dpsidrho, drhodrp
 
     real, dimension (-ntgrid:ntgrid, 3) :: bgradtot, pgradtot, &
          dummy, dummy1, curve
     real, dimension (-ntgrid:ntgrid, 2) :: pgrad, igrad, bgrad1
-    real, dimension (-ntgrid:ntgrid) :: gbdrift1, gbdrift2, cvdrift1, cvdrift2
+    real, dimension (-ntgrid:ntgrid) :: gbdrift1, gbdrift2, cvdrift1, cvdrift2, cdrift1, cdrift2
     real, dimension (2*ntgrid + 1) :: dumdum1, dumdum2
 
     real :: dum
@@ -1347,6 +1379,8 @@ end subroutine eikcoefs
        call crosstgrid(bvector,curve,dummy)
        call dottgrid(dummy,gradstot,cvdrift1)
        call dottgrid(dummy,gradrptot,cvdrift2)
+       ! factor of 2 appears below because will later multiply
+       ! by wunits, which has a factor of 1/2 built-in
        do k=-nperiod+1,nperiod-1
           do i=-nth,nth
              itot=i+k*ntheta
@@ -1359,13 +1393,23 @@ end subroutine eikcoefs
     endif
 
     ! coriolis drift term is -2*vpa*om_phi/Omega * (bhat x (zhat x bhat)) . grad (g+q<phi>F_0/T)
-    ! here we terms for 2/Omega * (bhat x (zhat x bhat)) . grad
+    ! here we calculate 2*(zhat . grad (alpha+q*theta0))/(B/Bref)
+
+    ! this is the Zhat . grad(alpha) part of Zhat . grad(S)
+    ! note that a factor of k_y = (n0/a) (drho/dpsiN) has been factored out
+    call dottgrid(gradztot,gradstot,cdrift1)
+    ! this is the Zhat . grad(q) part of Zhat . grad(S)
+    ! note that a factor of k_y * theta0 has been factored out
+    call dottgrid(gradztot,gradrptot,cdrift2)
+
+    ! factor of 4 (instead of 2) below because will later mutliply
+    ! by wunits, which has a built-in factor of 1/2
     do k=-nperiod+1,nperiod-1
        do i=-nth,nth
           itot=i+k*ntheta
-          cdrift(itot)  = 2.*dpsidrho*gradstot(itot,2)/bmod(i)
-          cdrift0(itot) = 2.*dpsidrho*gradrptot(itot,2)*dqdrp/bmod(i)
-!          write (*,*) 'cdrift', itot, cdrift(itot), cdrift0(itot)
+          ! cdrift0 is part of coriolis drift dependent on theta0
+          cdrift(itot)  = -4.*dpsidrho*cdrift1(itot)/bmod(i)
+          cdrift0(itot) = -4.*dpsidrho*cdrift2(itot)*dqdrp/bmod(i)
        end do
     end do
 
@@ -1747,6 +1791,19 @@ end subroutine eikcoefs
     
     return
   end subroutine rmajortgrid
+
+  subroutine Ztgrid(rgrid, theta, Zoftheta)
+
+    real, dimension(-ntgrid:), intent(in) :: rgrid, theta
+    real, dimension(-ntgrid:), intent(out) :: Zoftheta
+    integer :: i
+
+    do i=-nth,nth
+       Zoftheta(i)=Zpos(rgrid(i),theta(i))
+    enddo
+    
+    return
+  end subroutine Ztgrid
 
   function qfun(pbar)
     use geq, only: geq_qfun => qfun, geq_init_q => initialize_q

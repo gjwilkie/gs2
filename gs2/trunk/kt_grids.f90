@@ -363,7 +363,7 @@ module kt_grids_box
   public :: init_kt_grids_box, box_get_sizes, box_get_grids
   public :: check_kt_grids_box
   public :: wnml_kt_grids_box
-  public :: x0, y0 !RN> Caution: these are not broadcasted!
+  public :: x0, y0, jtwist !RN> Caution: these are not broadcasted!
 
   private
 
@@ -657,6 +657,7 @@ module kt_grids
 ! length in the perpendicular directions, depending on whether the thermal velocity that appears in the gyroradius
 ! expression contains a factor of square root of two or not.
 ! </doc>
+  use kt_grids_box, only: jtwist
   implicit none
 
   public :: init_kt_grids, box, finish_kt_grids, check_kt_grids, wnml_kt
@@ -664,12 +665,12 @@ module kt_grids
   public :: aky_out, akx_out, akr_out
   public :: naky, ntheta0, nx, ny, reality
   public :: nkpolar 
-  public :: ikx, iky
+  public :: ikx, iky, jtwist_out
   public :: gridopt_switch, grid_option, norm_option
   public :: gridopt_single, gridopt_range, gridopt_specified, gridopt_box, gridopt_xbox
   private
 
-  integer :: naky, ntheta0, nx, ny, nkpolar
+  integer :: naky, ntheta0, nx, ny, nkpolar, jtwist_out
   integer, dimension(:), allocatable :: ikx, iky
   character(20) :: grid_option, norm_option
   namelist /kt_grids_knobs/ grid_option, norm_option
@@ -719,6 +720,7 @@ contains
        case (normopt_bd)
           tfac = sqrt(2.)
        end select
+       jtwist_out = jtwist
     end if
 
     call broadcast (tfac)
@@ -737,6 +739,7 @@ contains
     call broadcast (aky)
     call broadcast (akx)
     call broadcast (ikx)
+    call broadcast (jtwist_out)
     do ik = 1, naky
        call broadcast (theta0(:,ik))
     end do

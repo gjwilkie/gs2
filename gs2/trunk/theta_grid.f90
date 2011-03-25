@@ -65,7 +65,6 @@ contains
   subroutine gridgen_get_grids (nperiod, ntheta, ntgrid, nbset, &
        theta, bset, bmag, gradpar, gbdrift, gbdrift0, cvdrift, &
        cvdrift0, cdrift, cdrift0, gds2, gds21, gds22, gds23, gds24, grho, &
-!       cvdrift0, gds2, gds21, gds22, grho, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime)
     use gridgen4mod
     use constants
@@ -76,7 +75,6 @@ contains
     real, dimension (nbset), intent (in out) :: bset
     real, dimension (-ntgrid:ntgrid), intent (in out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
-!         bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
          gds2, gds21, gds22, gds23, gds24, grho, &
          Rplot, Zplot, Rprime, Zprime, aplot, aprime
     integer :: ntheta_old, ntgrid_old, nbset_old
@@ -133,8 +131,8 @@ if (debug) write(6,*) 'gridgen_get_grids: call regrid'
     call regrid (ntgrid_old, thetasave, gbdrift0, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, cvdrift, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, cvdrift0, ntgrid, theta)
-    call regrid (ntgrid_old, thetasave, cdrift, ntgrid, theta) ! MAB
-    call regrid (ntgrid_old, thetasave, cdrift0, ntgrid, theta) ! MAB
+    call regrid (ntgrid_old, thetasave, cdrift, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, cdrift0, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gds2, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gds21, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gds22, ntgrid, theta)
@@ -453,7 +451,6 @@ contains
 
   subroutine salpha_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, &
        bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
-!       bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
        gds2, gds21, gds22, gds23, gds24, grho, &       
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, &
        qval, shape, gb_to_cv)
@@ -467,7 +464,6 @@ contains
     real, dimension (nbset), intent (out) :: bset
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
-!         bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
          gds2, gds21, gds22, gds23, gds24, grho, &
          Rplot, Zplot, Rprime, Zprime, aplot, aprime
     real, intent (out) :: shat, drhodpsi, kxfac, qval
@@ -587,9 +583,9 @@ contains
     end select
     gradpar = pk/2.0
 
-    ! TMP UNTIL WORK OUT FORM FOR S-ALPHA -- MAB
-    ! set coriolis drift to zero
-    cdrift = 0. ; cdrift0 = 0.
+    ! not sure about factor of epsl below...
+    cdrift = 2.*epsl*(cos(theta)+shat*theta*sin(theta))
+    cdrift0 = -2.*epsl*shat*sin(theta)
 
     if (model_switch /= model_alpha1) then
        bset = bmag(-ntheta/2:0)
@@ -598,7 +594,6 @@ contains
        call gridgen_get_grids (nperiod, ntheta, ntgrid, nbset, &
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
-!            gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
             gds2, gds21, gds22, gds23, gds24, grho, &
             Rplot, Zplot, Rprime, Zprime, aplot, aprime)
     end if
@@ -1115,7 +1110,6 @@ if (debug) write(6,*) "init_theta_grid_eik: done"
     real, dimension (nbset), intent (out) :: bset
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
-!         bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, &
          gds2, gds21, gds22, gds23, gds24, grho, &
          Rplot, Zplot, Rprime, Zprime, aplot, aprime
     real, intent (out) :: shat, drhodpsi, kxfac, qval
@@ -1166,7 +1160,6 @@ if (debug) write(6,*) 'eik_get_grids: call gridgen_get_grids'
          theta, bset, bmag, &
          gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gds2, gds21, gds22, gds23, gds24, &
-!         gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, gds2, gds21, gds22, &
          grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime)
     shat = s_hat_new
     drhodpsi = drhodpsin
