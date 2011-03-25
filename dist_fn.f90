@@ -92,8 +92,8 @@ module dist_fn
   real, dimension (:,:,:,:,:), allocatable :: wdriftttp_neo
   ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
 
-  real, dimension (:,:), allocatable :: wcoriolis
-  ! (-ntgrid:ntgrid, -g-layout-)
+  real, dimension (:,:,:), allocatable :: wcoriolis
+  ! (-ntgrid:ntgrid, 2, -g-layout-)
 
 !<MAB
 
@@ -104,8 +104,8 @@ module dist_fn
   real, dimension (:,:,:), allocatable :: gamtot, gamtot1, gamtot2, gamtot3
   ! (-ntgrid:ntgrid,ntheta0,naky) replicated
 
-  complex, dimension (:,:), allocatable :: a, b, r, ainv
-  ! (-ntgrid:ntgrid, -g-layout-)
+  complex, dimension (:,:,:), allocatable :: a, b, r, ainv
+  ! (-ntgrid:ntgrid, 2, -g-layout-)
 
   real, dimension (:,:,:), allocatable :: gridfac1
   ! (-ntgrid:ntgrid,ntheta0,naky)
@@ -1129,6 +1129,7 @@ subroutine check_dist_fn(report_unit)
     real :: wdrift_func
     integer, intent (in) :: ig, ik, it, il, ie, is
 
+    ! note that wunits=aky/2 (for wstar_units=F)
     if (aky(ik) == 0.0) then
        wdrift_func = akx(it)/shat &
                     *(cvdrift0(ig)*e(ie,is)*(1.0 - al(il)*bmag(ig)) &
@@ -1190,7 +1191,7 @@ subroutine check_dist_fn(report_unit)
     integer :: iglo
 
     if (.not. allocated(wcoriolis)) then
-       allocate (wcoriolis(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (wcoriolis(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        wcoriolis = 0.
     end if
 
@@ -1201,7 +1202,7 @@ subroutine check_dist_fn(report_unit)
        ik=ik_idx(g_lo,iglo)
        is=is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
-          wcoriolis(ig,iglo) = wcoriolis_func(ig, il, ie, it, ik, is)
+          wcoriolis(ig,1,iglo) = wcoriolis_func(ig, il, ie, it, ik, is)
 !          write (*,*) 'wcoriolis', ig, il, ie, it, ik, is, wcoriolis_func(ig,il,ie,it,ik,is)
        end do
     end do
@@ -1210,12 +1211,14 @@ subroutine check_dist_fn(report_unit)
 ! This should be weighted by bakdif to be completely consistent
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do ig = -ntgrid, ntgrid-1
-          wcoriolis(ig,iglo) = 0.5*(wcoriolis(ig,iglo) + wcoriolis(ig+1,iglo))
+          wcoriolis(ig,1,iglo) = 0.5*(wcoriolis(ig,1,iglo) + wcoriolis(ig+1,1,iglo))
        end do
     end do
 
+    wcoriolis(:,2,:) = -wcoriolis(:,1,:)
+
     ! TMP UNTIL TESTED -- MAB
-    wcoriolis = 0.0
+!    wcoriolis = 0.0
 
   end subroutine init_wcoriolis
 
@@ -1237,13 +1240,11 @@ subroutine check_dist_fn(report_unit)
 !    write (*,*) 'cdrift', ig, cdrift(ig), theta0(it,ik), wunits(ik), sqrt(e(ie,is)*(1.0-al(il)*bmag(ig)))
 
     if (aky(ik) == 0.0) then
-       ! check wunits(ik)...factor of 2? -- MAB
-       wcoriolis_func = -mach*sqrt(max(e(ie,is)*(1.0-al(il)*bmag(ig)),0.0)) &
-            * cdrift0(ig) * code_dt * akx(it)/(shat*spec(is)%zstm)
+       wcoriolis_func = mach*sqrt(max(e(ie,is)*(1.0-al(il)*bmag(ig)),0.0)) &
+            * cdrift0(ig) * code_dt * akx(it)/(2.*shat)
     else
-       ! check wunits(ik) -- MAB
-       wcoriolis_func = -mach*sqrt(max(e(ie,is)*(1.0-al(il)*bmag(ig)),0.0)) &
-            * (cdrift(ig) + theta0(it,ik)*cdrift0(ig))*code_dt*wunits(ik)/spec(is)%zstm
+       wcoriolis_func = mach*sqrt(max(e(ie,is)*(1.0-al(il)*bmag(ig)),0.0)) &
+            * (cdrift(ig) + theta0(it,ik)*cdrift0(ig))*code_dt*wunits(ik)
     end if
 
   end function wcoriolis_func
@@ -1453,14 +1454,14 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     implicit none
     integer :: iglo
-    integer :: ig, ik, it, il, ie, is
+    integer :: ig, ik, it, il, ie, is, isgn
     real :: wd, wdttp, vp, bd, wc
 
     if (.not.allocated(a)) then
-       allocate (a(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (b(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (r(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (ainv(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (a(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (b(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (r(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (ainv(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     endif
     a = 0. ; b = 0. ; r = 0. ; ainv = 0.
     
@@ -1470,54 +1471,55 @@ subroutine check_dist_fn(report_unit)
        il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       do ig = -ntgrid, ntgrid-1
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid-1
 !          wc = wcoriolis(ig,iglo)*nfac
 !          wd = wdrift(ig,iglo)*nfac
 !          wdttp = wdriftttp(ig,it,ik,ie,is)*nfac
-          wc = wcoriolis(ig,iglo)
-          wd = wdrift(ig,iglo)
-          wdttp = wdriftttp(ig,it,ik,ie,is)
-          vp = vpar(ig,1,iglo)
-          bd = bkdiff(is)
+             wc = wcoriolis(ig,isgn,iglo)/spec(is)%stm
+             wd = wdrift(ig,iglo)
+             wdttp = wdriftttp(ig,it,ik,ie,is)
+             ! use positive vpar because we will be flipping sign of d/dz
+             ! when doing parallel field solve for -vpar
+             vp = vpar(ig,1,iglo)
+             bd = bkdiff(is)
 
-! should check sign of wc below to be sure -- MAB
-          ainv(ig,iglo) &
-               = 1.0/(1.0 + bd &
-               + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0+bd) + 2.0*vp))
-          r(ig,iglo) &
-               = (1.0 - bd &
-               + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0-bd) - 2.0*vp)) &
-               *ainv(ig,iglo)
-          a(ig,iglo) &
-               = 1.0 + bd &
-               + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0+bd) - 2.0*vp)
-          b(ig,iglo) &
-               = 1.0 - bd &
-               + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0-bd) + 2.0*vp)
+             ainv(ig,isgn,iglo) &
+                  = 1.0/(1.0 + bd &
+                  + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0+bd) + 2.0*vp))
+             r(ig,isgn,iglo) &
+                  = (1.0 - bd &
+                  + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0-bd) - 2.0*vp)) &
+                  *ainv(ig,isgn,iglo)
+             a(ig,isgn,iglo) &
+                  = 1.0 + bd &
+                  + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0+bd) - 2.0*vp)
+             b(ig,isgn,iglo) &
+                  = 1.0 - bd &
+                  + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0-bd) + 2.0*vp)
           
-          if (nlambda > ng2) then
-             ! zero out forbidden regions
-             if (forbid(ig,il) .or. forbid(ig+1,il)) then
-                r(ig,iglo) = 0.0
-                ainv(ig,iglo) = 0.0
-             end if
+             if (nlambda > ng2) then
+                ! zero out forbidden regions
+                if (forbid(ig,il) .or. forbid(ig+1,il)) then
+                   r(ig,isgn,iglo) = 0.0
+                   ainv(ig,isgn,iglo) = 0.0
+                end if
              
-             ! ???? mysterious mucking around at lower bounce point
-             ! part of multiple trapped particle algorithm
-             if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
-                ainv(ig,iglo) = 1.0 + ainv(ig,iglo)
-             end if
+                ! ???? mysterious mucking around at lower bounce point
+                ! part of multiple trapped particle algorithm
+                if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
+                   ainv(ig,isgn,iglo) = 1.0 + ainv(ig,isgn,iglo)
+                end if
              
-             ! ???? mysterious mucking around with totally trapped particles
-             ! part of multiple trapped particle algorithm
-             if (il >= ittp(ig) .and. .not. forbid(ig, il)) then
-                ainv(ig,iglo) = 1.0/(1.0 + zi*(1.0-fexp(is))*spec(is)%tz*(wdttp+wc)) ! MAB
-                a(ig,iglo) = 1.0 - zi*fexp(is)*spec(is)%tz*(wdttp+wc) ! MAB
-!                ainv(ig,iglo) = 1.0/(1.0 + zi*(1.0-fexp(is))*spec(is)%tz*wdttp)
-!                a(ig,iglo) = 1.0 - zi*fexp(is)*spec(is)%tz*wdttp
-                r(ig,iglo) = 0.0
+                ! ???? mysterious mucking around with totally trapped particles
+                ! part of multiple trapped particle algorithm
+                if (il >= ittp(ig) .and. .not. forbid(ig, il)) then
+                   ainv(ig,isgn,iglo) = 1.0/(1.0 + zi*(1.0-fexp(is))*spec(is)%tz*wdttp)
+                   a(ig,isgn,iglo) = 1.0 - zi*fexp(is)*spec(is)%tz*wdttp
+                   r(ig,isgn,iglo) = 0.0
+                end if
              end if
-          end if
+          end do
        end do
     end do
 
@@ -3242,12 +3244,12 @@ subroutine check_dist_fn(report_unit)
        if (isgn == 1) then
           do ig = -ntgrid, ntgrid-1
              source(ig) = source(ig) &
-                  + b(ig,iglo)*g(ig,1,iglo) + a(ig,iglo)*g(ig+1,1,iglo)
+                  + b(ig,1,iglo)*g(ig,1,iglo) + a(ig,1,iglo)*g(ig+1,1,iglo)
           end do
        else
           do ig = -ntgrid, ntgrid-1
              source(ig) = source(ig) &
-                  + a(ig,iglo)*g(ig,2,iglo) + b(ig,iglo)*g(ig+1,2,iglo)
+                  + a(ig,2,iglo)*g(ig,2,iglo) + b(ig,2,iglo)*g(ig+1,2,iglo)
           end do
        end if
     end if
@@ -3267,11 +3269,10 @@ subroutine check_dist_fn(report_unit)
           do ig = -ntgrid, ntgrid
              if (il < ittp(ig)) cycle
              source(ig) &
-                  = g(ig,2,iglo)*a(ig,iglo) &
-                  - anon(ie,is)*zi*(wdriftttp(ig,it,ik,ie,is)*hneoc(ig,2,iglo)+wcoriolis(ig,iglo))*phigavg(ig) &
-!                  - anon(ie,is)*zi*wdriftttp(ig,it,ik,ie,is)*phigavg(ig)*nfac &
+                  = g(ig,2,iglo)*a(ig,2,iglo) &
+                  ! does wdriftttp need to be changed to wdfac here?
+                  - anon(ie,is)*zi*(wdriftttp(ig,it,ik,ie,is)*hneoc(ig,2,iglo)+wcoriolis(ig,2,iglo))*phigavg(ig) &
                   + zi*wstar(ik,ie,is)*hneoc(ig,2,iglo)*phigavg(ig)
-!                  + zi*wstar(ik,ie,is)*phigavg(ig)
           end do
 
           if (source_option_switch == source_option_phiext_full .and.  &
@@ -3519,7 +3520,7 @@ subroutine check_dist_fn(report_unit)
     ! r=ainv=0 if forbid(ig,il) or forbid(ig+1,il), so gnew=0 in forbidden
     ! region and at upper bounce point
     do ig = ntgr-1, ntgl, -1
-       gnew(ig,2,iglo) = -gnew(ig+1,2,iglo)*r(ig,iglo) + ainv(ig,iglo)*source(ig,2)
+       gnew(ig,2,iglo) = -gnew(ig+1,2,iglo)*r(ig,2,iglo) + ainv(ig,2,iglo)*source(ig,2)
     end do
 
     if (kperiod_flag) then
@@ -3533,7 +3534,7 @@ subroutine check_dist_fn(report_unit)
     ! time advance vpar < 0 homogeneous part
     if (il >= ilmin) then
        do ig = ntgr-1, ntgl, -1
-          g1(ig,2) = -g1(ig+1,2)*r(ig,iglo) + g2(ig,2)
+          g1(ig,2) = -g1(ig+1,2)*r(ig,2,iglo) + g2(ig,2)
        end do
     end if
 
@@ -3562,7 +3563,7 @@ subroutine check_dist_fn(report_unit)
     ! time advance vpar > 0 inhomogeneous part
     if (il <= lmax) then
        do ig = ntgl, ntgr-1
-          gnew(ig+1,1,iglo) = -gnew(ig,1,iglo)*r(ig,iglo) + ainv(ig,iglo)*source(ig,1)
+          gnew(ig+1,1,iglo) = -gnew(ig,1,iglo)*r(ig,1,iglo) + ainv(ig,1,iglo)*source(ig,1)
        end do
     end if
 
@@ -3580,7 +3581,7 @@ subroutine check_dist_fn(report_unit)
     ! time advance vpar > 0 homogeneous part
     if (il >= ilmin) then
        do ig = ntgl, ntgr-1
-          g1(ig+1,1) = -g1(ig,1)*r(ig,iglo) + g2(ig,1)
+          g1(ig+1,1) = -g1(ig,1)*r(ig,1,iglo) + g2(ig,1)
        end do
     end if
 
@@ -8181,12 +8182,13 @@ subroutine check_dist_fn(report_unit)
 
     vparterm = -2.0*vpar*hneoc + vparterm
     wdfac = wdfac + hneoc
-    wdfac(:,1,:) = wdfac(:,1,:)*wdrift + cdfac(:,1,:)*wcurv
-    wdfac(:,2,:) = wdfac(:,2,:)*wdrift + cdfac(:,2,:)*wcurv
+
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       wdfac(:,1,iglo) = wdfac(:,1,iglo)*wdrift(:,iglo) + cdfac(:,1,iglo)*wcurv(:,iglo) + wcoriolis(:,1,iglo)/spec(is)%stm
+       wdfac(:,2,iglo) = wdfac(:,2,iglo)*wdrift(:,iglo) + cdfac(:,2,iglo)*wcurv(:,iglo) + wcoriolis(:,2,iglo)/spec(is)%stm
        wstarfac(:,:,iglo) = wstar(ik,ie,is)*hneoc(:,:,iglo) - wstarfac(:,:,iglo)
     end do
 

@@ -122,6 +122,8 @@ contains
 !      write(*,*) nr, nt
 !      stop
 
+! below is actually grad(rho) instead of grad(psi),
+! and 'cartesian' refers to (R,Z) coordinates -- MAB
 ! grad(psi) in cartesian form 
     call eqdcart(dpm, dpcart)
 ! grad(psi) in Bishop form 

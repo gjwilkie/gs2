@@ -61,9 +61,9 @@ module gs2_diagnostics
   logical,public :: save_for_restart
   logical,public :: save_distfn !<DD> Added for saving distribution function
   logical,public :: test_conserve
-  logical,public :: write_symmetry
+  logical,public :: write_symmetry, write_correlation_extend, write_correlation
   integer,public :: nwrite, igomega, nmovie
-  integer,public :: navg, nsave
+  integer,public :: navg, nsave, nwrite_mult
   integer,public :: nperiod_output
 
 !>GGH
@@ -93,7 +93,8 @@ module gs2_diagnostics
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
-         save_for_restart, write_parity, write_symmetry, save_distfn !<DD> Added for saving distribution function
+         save_for_restart, write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
+         write_correlation_extend, nwrite_mult, write_correlation
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: dv_unit, jext_unit   !GGH Additions
@@ -147,9 +148,10 @@ module gs2_diagnostics
   real :: start_time = 0.0
   real, dimension (:), allocatable :: pflux_avg, qflux_avg, heat_avg, vflux_avg
 
-  integer :: ntg_out
+  integer :: ntg_out, ntg_extend, nth0_extend
   integer :: nout = 1
   integer :: nout_movie = 1
+  integer :: nout_big = 1
   complex :: wtmp_old = 0.
   logical :: exist
 
@@ -167,6 +169,7 @@ contains
        write (unit, fmt="(' print_flux_line = ',L1)") print_flux_line
        write (unit, fmt="(' write_flux_line = ',L1)") write_flux_line
        write (unit, fmt="(' nmovie = ',i6)") nmovie
+       write (unit, fmt="(' nwrite_mult = ',i6)") nwrite_mult
        write (unit, fmt="(' nwrite = ',i6)") nwrite
        write (unit, fmt="(' nsave = ',i6)") nsave
        write (unit, fmt="(' navg = ',i6)") navg
@@ -534,7 +537,7 @@ contains
     implicit none
     logical, intent (in) :: list
     integer, intent (in) :: nstep
-    integer :: nmovie_tot
+    integer :: nmovie_tot, nwrite_big_tot
 
     if (initialized) return
     initialized = .true.
@@ -551,6 +554,7 @@ contains
     call broadcast (navg)
     call broadcast (nwrite)
     call broadcast (nmovie)
+    call broadcast (nwrite_mult)
     call broadcast (nsave)
     call broadcast (write_any)
     call broadcast (write_any_fluxes)
@@ -596,6 +600,7 @@ contains
     call broadcast (write_full_moments_notgc)
 
     nmovie_tot = nstep/nmovie
+    nwrite_big_tot = nstep/(nwrite*nwrite_mult)-nstep/4/(nwrite*nwrite_mult)
 
 ! initialize weights for less accurate integrals used
 ! to provide an error estimate for v-space integrals (energy and untrapped)
@@ -640,7 +645,8 @@ contains
     call init_gs2_io (write_nl_flux, write_omega, write_stress, &
          write_fieldline_avg_phi, write_hrate, write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot, write_verr, &
-         write_fields, write_full_moments_notgc, write_symmetry)
+         write_fields, write_full_moments_notgc, write_symmetry, &
+         write_correlation, nwrite_big_tot, write_correlation_extend)
     
     if (write_cerr) then
        if (collision_model_switch == 1 .or. collision_model_switch == 5) then
@@ -837,6 +843,8 @@ contains
        write_avg_moments = .false.
        write_parity = .false.
        write_symmetry = .false.
+       write_correlation_extend = .false.
+       write_correlation = .false.
        write_fields = .false.
        write_full_moments_notgc = .false.
        write_final_fields = .false.
@@ -851,6 +859,7 @@ contains
        test_conserve = .false.
        nwrite = 100
        nmovie = 1000
+       nwrite_mult = 10
        navg = 100
        nsave = -1
        omegatol = 1e-3
@@ -1728,7 +1737,7 @@ contains
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
     if (allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
 
-    wtmp_old = 0. ; nout = 1 ; nout_movie = 1
+    wtmp_old = 0. ; nout = 1 ; nout_movie = 1 ; nout_big = 1
     initialized = .false.
 
 1000  format(20(1x,1pg18.11))
@@ -1739,8 +1748,9 @@ contains
     use theta_grid, only: theta, ntgrid, delthet, jacob
     use theta_grid, only: gradpar, nperiod
     use kt_grids, only: naky, ntheta0, aky_out, theta0, akx_out, aky, akx
-    use kt_grids, only: nkpolar !, akpolar, akpolar_out
+    use kt_grids, only: nkpolar, jtwist_out !, akpolar, akpolar_out
     use run_parameters, only: woutunits, funits, tunits, fapar, fphi, fbpar, eqzip
+    use run_parameters, only: nstep
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
@@ -1755,7 +1765,7 @@ contains
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
-    use gs2_io, only: nc_loop_fullmom, nc_loop_sym
+    use gs2_io, only: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
     use gs2_io, only: nc_loop_stress, nc_loop_vres
     use gs2_io, only: nc_loop_movie, nc_write_fields
     use gs2_layouts, only: yxf_lo, g_lo
@@ -1808,6 +1818,14 @@ contains
     real, dimension (:), allocatable :: gm_nokx_tot, gp_nokx_tot, gmnorm_nokx_tot
     real, dimension (:), allocatable :: gm_nosig_tot, gp_nosig_tot, gmnorm_nosig_tot
     logical :: first = .true.
+    ! arrays needed for parallel autocorrelation diagnostic
+    real, save :: tcorr0 = 0.0
+    real, dimension (:,:,:), allocatable :: phi2_extend
+    complex, dimension (:,:,:), allocatable :: phi_corr
+    complex, dimension (:,:), allocatable :: phi_corr_2pi
+    real, dimension (:,:,:), allocatable, save :: phiextend_sum
+    complex, dimension (:,:,:), allocatable, save :: phicorr_sum
+    complex, dimension (:,:), allocatable, save :: phicorr_2pi_sum
 !<MAB
     real :: geavg, glavg, gtavg
     real :: dmix, dmix4, dmixx
@@ -2121,7 +2139,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
           qflux_avg = qflux_avg + (heat_fluxes + mheat_fluxes + bheat_fluxes)*(t-t_old)
           vflux_avg = vflux_avg + (mom_fluxes + mmom_fluxes + bmom_fluxes)*(t-t_old)
           if (write_hrate) heat_avg = heat_avg + h%imp_colls*(t-t_old)
-          t_old = t
+!          t_old = t
        end if
     end if
 
@@ -2621,13 +2639,42 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        if (proc0) call nc_loop_stress(nout, rstress, ustress)
     end if
 
-     call broadcast (write_symmetry)
-     if (write_symmetry) then
-        allocate (vflx_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
-        call flux_vs_theta_vs_vpa (vflx_sym)
-        if (proc0) call nc_loop_sym (nout, vflx_sym)
-        deallocate (vflx_sym)
-     end if
+    call broadcast (write_symmetry)
+    if (write_symmetry) then
+       allocate (vflx_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
+       call flux_vs_theta_vs_vpa (vflx_sym)
+       if (proc0) call nc_loop_sym (nout, vflx_sym)
+       deallocate (vflx_sym)
+    end if
+
+    call broadcast (write_correlation)
+    if (write_correlation) then
+       allocate (phi_corr_2pi(-ntgrid:ntgrid,naky))
+       call correlation (phi_corr_2pi)
+       if (proc0) call nc_loop_corr (nout,phi_corr_2pi)
+       deallocate (phi_corr_2pi)
+    end if
+
+    call broadcast (write_correlation_extend)
+    if (write_correlation_extend .and. istep > nstep/4) then
+       if (.not. allocated(phicorr_sum)) then
+          ntg_extend = (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1)
+          nth0_extend = min(ntheta0,jtwist_out*(naky-1))
+          allocate (phicorr_sum(ntg_extend,ntheta0,naky)) ; phicorr_sum = 0.0
+          allocate (phiextend_sum(ntg_extend,ntheta0,naky)) ; phiextend_sum = 0.0
+          tcorr0 = t_old
+       end if
+       allocate (phi_corr(ntg_extend,ntheta0,naky))
+       allocate (phi2_extend(ntg_extend,ntheta0,naky))
+       call correlation_extend (phi_corr, phi2_extend)
+       phicorr_sum = phicorr_sum + phi_corr*(t-t_old)
+       phiextend_sum = phiextend_sum + phi2_extend*(t-t_old)
+       if (proc0 .and. mod(istep,nwrite_mult*nwrite)==0) then
+          call nc_loop_corr_extend (nout_big, phicorr_sum/(t-tcorr0), phiextend_sum/(t-tcorr0))
+          nout_big = nout_big + 1
+       end if
+       deallocate (phi_corr, phi2_extend)
+    end if
 
     call broadcast (write_parity)
     if (write_parity) then
@@ -3222,6 +3269,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
     if (write_jext) deallocate(j_ext)
 !<GGH
 
+    t_old = t
     call prof_leaving ("loop_diagnostics-2")
 
 if (debug) write(6,*) "loop_diagnostics: done"
@@ -3932,5 +3980,155 @@ if (debug) write(6,*) "get_omegaavg: done"
     end do
 
   end subroutine get_volume_int
+
+!  subroutine autocorrelation (cfnc,phi2extend,cfnc_2pi)
+  subroutine correlation_extend (cfnc,phi2extend)
+
+    use constants, only: pi
+    use fields_arrays, only: phinew
+    use theta_grid, only: ntgrid, theta, jacob, delthet
+    use kt_grids, only: theta0, ntheta0, naky, jtwist_out
+
+    implicit none
+
+    real, dimension (:,:,:), intent (out) :: phi2extend
+    complex, dimension (:,:,:), intent (out) :: cfnc
+
+    integer :: ig, it, ik, im, igmod
+    integer :: itshift, nconnect, offset
+    real :: fac
+
+    real, dimension (:), allocatable :: dl_over_b
+    complex, dimension (:,:,:), allocatable :: phiextend
+    complex, dimension (:,:), allocatable :: phir
+!    real, dimension (:), allocatable :: phisum
+
+    allocate (dl_over_b(2*ntgrid+1))
+    dl_over_b = delthet*jacob
+
+!    allocate (theta_extend(ntg_extend)) ; theta_extend = 0.0
+!    do ig = 1, (ntheta0-1)/jtwist_out+1
+!       theta_extend((ig-1)*(2*ntgrid+1)+1:ig*(2*ntgrid+1)) = pi+theta+(ig-1)*2.*pi
+!    end do
+!    theta_extend = theta_extend - theta_extend(size(theta_extend))/2.
+
+    allocate (phiextend(ntg_extend,ntheta0,naky)) ; phiextend = 0.0
+    allocate (phir(-ntgrid:ntgrid,ntheta0))
+!    allocate (phisum(naky))
+
+!    phisum = 0.0 ; cfnc_2pi = 0.0
+!     do ik = 1, naky
+!        if (ik==1) then
+!           fac = 1.0
+!        else
+!           fac = 0.5
+!        end if
+!        ! integrate over x
+!        do it = 1, ntheta0
+!           do ig = -ntgrid, ntgrid
+!              cfnc_2pi(ig,ik) = cfnc_2pi(ig,ik) + phinew(0,it,ik)*conjg(phinew(ig,it,ik))*fac
+!           end do
+! !          phisum(ik) = phisum(ik) + phinew(0,it,ik)*conjg(0,it,ik)*fac
+!        end do
+! !       cfnc_2pi(:,ik) = cfnc_2pi(:,ik)/phisum(ik)
+!     end do
+
+    cfnc = 0.0 ; phiextend = 0.0
+    offset = ((ntheta0-1)/jtwist_out)*(2*ntgrid+1)/2
+    do ig = -ntgrid, ntgrid
+       call reorder_kx (phinew(ig,:,1), phir(ig,:))
+    end do
+    phiextend(offset+1:offset+(2*ntgrid+1),:,1) = phir
+    do it = 1, ntheta0
+       do im = 1, 2*ntgrid+1
+          do ig = im+offset, offset+(2*ntgrid+1)
+             igmod = mod(ig-offset-1,2*ntgrid+1)+1
+             cfnc(im,it,1) = cfnc(im,it,1) &
+                  + phiextend(ig,it,1)*conjg(phiextend(ig-im+1,it,1)) &
+                  * dl_over_b(igmod)
+          end do
+       end do
+       cfnc(:,it,1) = cfnc(:,it,1) / cfnc(1,it,1)
+    end do
+
+    do ik = 2, naky
+       do ig = -ntgrid, ntgrid
+          call reorder_kx (phinew(ig,:,ik), phir(ig,:))
+       end do
+       ! shift in kx due to parallel boundary condition
+       ! also the number of independent theta0s
+       itshift = jtwist_out*(ik-1)
+       do it = 1, min(itshift,ntheta0)
+          ! number of connections between kx's
+          nconnect = (ntheta0-it)/itshift
+          ! shift of theta index to account for fact that not all ky's
+          ! have same length in extended theta
+          offset = (2*ntgrid+1)*((ntheta0-1)/jtwist_out-nconnect)/2
+          do ig = 1, nconnect+1
+             phiextend(offset+(ig-1)*(2*ntgrid+1)+1:offset+ig*(2*ntgrid+1),it,ik) &
+                     = phir(:,ntheta0-it-(ig-1)*itshift+1)
+          end do
+          do im = 1, (2*ntgrid+1)*(nconnect+1)
+             do ig = im+offset, offset+(2*ntgrid+1)*(nconnect+1)
+                igmod = mod(ig-offset-1,2*ntgrid+1)+1
+                cfnc(im,it,ik) = cfnc(im,it,ik) &
+                     + phiextend(ig,it,ik)*conjg(phiextend(ig-im+1,it,ik)) &
+                     * dl_over_b(igmod)
+             end do
+          end do
+          cfnc(:,it,ik) = cfnc(:,it,ik) / cfnc(1,it,ik)
+       end do
+    end do
+    
+    phi2extend = phiextend*conjg(phiextend)
+
+!    deallocate (dl_over_b, phir, phiextend, phisum)
+    deallocate (dl_over_b, phir, phiextend)
+
+  end subroutine correlation_extend
+
+  subroutine correlation (cfnc_2pi)
+
+    use kt_grids, only: naky, ntheta0
+    use theta_grid, only: ntgrid
+    use fields_arrays, only: phinew
+
+    implicit none
+
+    complex, dimension (-ntgrid:,:), intent (out) :: cfnc_2pi
+
+    integer :: ik, it, ig
+    real :: fac
+
+    cfnc_2pi = 0.0
+
+    do ik = 1, naky
+       if (ik==1) then
+          fac = 1.0
+       else
+          fac = 0.5
+       end if
+       do it = 1, ntheta0
+          do ig = -ntgrid, ntgrid
+             cfnc_2pi(ig,ik) = cfnc_2pi(ig,ik) + phinew(0,it,ik)*conjg(phinew(ig,it,ik))*fac
+          end do
+       end do
+    end do
+
+  end subroutine correlation
+
+  subroutine reorder_kx (unord, ord)
+
+    use kt_grids, only: ntheta0
+
+    implicit none
+
+    complex, dimension (:), intent (in) :: unord
+    complex, dimension (:), intent (out) :: ord
+
+    ord(:ntheta0/2) = unord(ntheta0/2+2:)
+    ord(ntheta0/2+1:) = unord(:ntheta0/2+1)
+
+  end subroutine reorder_kx
 
 end module gs2_diagnostics
