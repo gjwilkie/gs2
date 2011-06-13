@@ -58,12 +58,13 @@ module gs2_save
 contains
 
   subroutine gs2_save_for_restart &
-       (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in,distfn)
+       (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in, distfn, fileopt)
 !<DD 18-10-2010> Added flag distfn to gs2_save_for_restart
 !If present then will save to "rootname.nc.dfn.proc" and will
 !include extra information including velocity and energy grids
 !</DD>
- 
+!CMR, 5/4/2011: Add optional parameter fileopt to add to output filename
+
 !MR, 2007: save kx_shift array in restart file if allocated    
 # ifdef NETCDF
     use constants, only: kind_rs, kind_rd, pi
@@ -95,6 +96,7 @@ contains
     integer, intent (out) :: istatus
     logical, intent (in), optional :: exit_in
     LOGICAL, INTENT (in), optional :: distfn !<DD> Added for saving distribution function
+    character (20), INTENT (in), optional :: fileopt
 # ifdef NETCDF
     character (306) :: file_proc
     character (10) :: suffix
@@ -130,6 +132,12 @@ contains
        
        file_proc = trim(restart_file)
        
+!CMR, 5/4/2011: Add optional piece of filename
+       IF (PRESENT(fileopt)) THEN
+        	file_proc=trim(file_proc)//trim(fileopt)
+       END IF
+!CMRend 
+
        !<DD> Added for saving distribution function
        IF (PRESENT(distfn)) THEN
         	WRITE (suffix,'(a5,i0)') '.dfn.', iproc	
