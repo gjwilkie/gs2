@@ -411,10 +411,20 @@ contains
     ! get local indices of elements distributed to/from other processors
     nn_to = 0
     nn_from = 0
+!
+!CMR: loop over all xxf indices, find corresponding yxf indices
+!
     do ixxf = xxf_lo%llim_world, xxf_lo%ulim_world
        do it = 1, yxf_lo%nx
+!
+!CMR obtain corresponding yxf indices
+!
           call xxfidx2yxfidx (it, ixxf, xxf_lo, yxf_lo, ik, iyxf)
           if (idx_local(xxf_lo,ixxf)) then
+!CMR: if xxf index local, set:
+!         ip = corresponding yxf processor
+!        from_list%first,second arrays = it,ixxf  (ie xxf indices)
+!     later will send from_list to proc ip
              ip = proc_id(yxf_lo,iyxf)
              n = nn_from(ip) + 1
              nn_from(ip) = n
@@ -422,6 +432,9 @@ contains
              from_list(ip)%second(n) = ixxf
           end if
           if (idx_local(yxf_lo,iyxf)) then
+!CMR: if yxf index local, set ip to corresponding xxf processor
+!     set to_list%first,second arrays = ik,iyxf  (ie yxf indices)
+!     will receive to_list from ip
              ip = proc_id(xxf_lo,ixxf)
              n = nn_to(ip) + 1
              nn_to(ip) = n
