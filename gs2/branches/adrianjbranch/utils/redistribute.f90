@@ -169,6 +169,15 @@ contains
        r%from_low(j) = from_low(j)
     enddo
 
+    do j = 1, size(from_high)
+       r%from_high(j) = from_high(j)
+    enddo
+
+    do j = 1, size(to_high)
+       r%to_high(j) = to_high(j)
+    enddo
+
+
     do ip = 0, nproc - 1
        if (associated(from_list(ip)%first)) then
 
