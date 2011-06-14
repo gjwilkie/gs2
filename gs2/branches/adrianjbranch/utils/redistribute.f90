@@ -999,7 +999,7 @@ contains
                         r%to_low(2):), intent (in out) :: to_here
 
     integer :: i,k,t2,t1,f3,f2,f1,fhigh,thigh,f2max
-    real :: tempnaky
+    real :: nakyrecip
     real :: time_new_loop(2)
 
     time_new_loop(1) = 0.
@@ -1008,7 +1008,13 @@ contains
     call time_message(.false.,time_new_loop,' New Loop')
 
     i = 1
-    tempnaky = naky
+    ! We want to be able to divide by naky with floating point 
+    ! arithmetic so we need to convert naky to a float (hence
+    ! the need for nakyrecip).  Also, to remove the necessity 
+    ! to have a division in the body of the loop below we are 
+    ! calculating the reciprocal of naky so that instead of 
+    ! dividing by naky we can multiply  by 1/naky.
+    nakyrecip = 1/naky
     do while(i .le. r%from(iproc)%nn)
        f2 = r%from(iproc)%l(i)
        f3 = r%from(iproc)%m(i)
@@ -1017,7 +1023,7 @@ contains
        do while (f2 .le. f2max)
           f1 = r%from(iproc)%k(i)
           t2 = r%to(iproc)%l(i)
-          thigh = ceiling(((xxf_lo%ulim_proc+1) - t2)/tempnaky)
+          thigh = ceiling(((xxf_lo%ulim_proc+1) - t2)*nakyrecip)
           thigh = thigh + (f1-1)
           fhigh = min(thigh,r%from_high(1))
           do k = f1,fhigh
@@ -1236,7 +1242,7 @@ contains
                         r%from_low(3):), intent (in out) :: to_here
 
     integer :: i,j,k,t2,t1,f3,f2,f1,fhigh,thigh,jmax
-    real :: tempnaky
+    real :: nakyrecip
     real :: time_new_loop(2)
 
     time_new_loop(1) = 0.
@@ -1245,7 +1251,13 @@ contains
     call time_message(.false.,time_new_loop,' New Loop')
 
     i = 1
-    tempnaky = naky
+    ! We want to be able to divide by naky with floating point 
+    ! arithmetic so we need to convert naky to a float (hence
+    ! the need for nakyrecip).  Also, to remove the necessity 
+    ! to have a division in the body of the loop below we are 
+    ! calculating the reciprocal of naky so that instead of 
+    ! dividing by naky we can multiply  by 1/naky.
+    nakyrecip = 1/naky
     do while(i .le. r%to(iproc)%nn)
        f2 = r%from(iproc)%l(i)
        f3 = r%from(iproc)%m(i)
@@ -1255,7 +1267,7 @@ contains
        do while (j .le. jmax)
        	  f1 = r%from(iproc)%k(i)
           t2 = r%to(iproc)%l(i)
-          thigh = ceiling(((xxf_lo%ulim_proc+1) - t2)/tempnaky)
+          thigh = ceiling(((xxf_lo%ulim_proc+1) - t2)*nakyrecip)
 	  fhigh = min((f1-1)+thigh,r%from_high(1))
        	  do k = f1,fhigh
 	     i = i + 1
