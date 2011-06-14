@@ -561,8 +561,8 @@ contains
 ! AJ, June 2011:
 !  Modified LOCAL COPY part of c_redist_22 routine, as used by GS2 to 
 !  transform xxf data type to yxf data type.
-!  Here we REDUCE indirect addressing, to reduce load on cache,
-!    by EXPLOITING understanding of xxf and yxf data types in GS2.
+!  Here we REDUCE indirect addressing and cache load by EXPLOITING 
+!  understanding of xxf and yxf data types in GS2.
 ! 
 
     use mp, only: iproc
@@ -780,6 +780,16 @@ contains
 
 
   subroutine c_redist_22_inv_new_copy (r, from_here, to_here)
+!=====================================================================
+!AJ, June 2011: New code from DCSE project on GS2 Indirect Addressing
+!=====================================================================
+!
+! AJ, June 2011:
+!  Modified LOCAL COPY part of c_redist_22_inv routine, used by GS2 to 
+!  transform yxf data type back to xxf data type.
+!  Here we REDUCE indirect addressing and cache load by EXPLOITING 
+!  understanding of xxf and yxf data types in GS2.
+! 
 
     use mp, only: iproc
     use gs2_layouts, only: yxf_lo
@@ -792,7 +802,7 @@ contains
     complex, dimension (r%from_low(1):, &
                         r%from_low(2):), intent (in out) :: to_here
 
-    integer :: i,j,k,t2,t1,f2,f1,fhigh,thigh
+    integer :: i,ik,it,itmin,itmax,it_nlocal,ixxf,iyxf
     real :: time_new_loop(2)
 
     time_new_loop(1) = 0.
@@ -802,16 +812,18 @@ contains
     call time_message(.false.,time_new_loop,' New Loop')
 
     i = 1
+!AJ Loop over all local copies from THIS proc (iproc) to THIS proc
     do while (i .le. r%to(iproc)%nn)
-       f1 = r%from(iproc)%k(i)
-       f2 = r%from(iproc)%l(i)
-       t1 = r%to(iproc)%k(i)
-       t2 = r%to(iproc)%l(i)
-       thigh = (yxf_lo%ulim_proc+1) - t2
-       fhigh = min((f1-1)+thigh,yxf_lo%nx)
-       do k = f1,fhigh
-          to_here(k,f2) = from_here(t1,t2)
-	  t2 = t2 + 1
+       itmin = r%from(iproc)%k(i)
+       ixxf = r%from(iproc)%l(i)
+       ik = r%to(iproc)%k(i)
+       iyxf = r%to(iproc)%l(i)
+!AJ: it_nlocal is max #it-indices that can be accommodated on iproc
+       it_nlocal = (yxf_lo%ulim_proc+1) - iyxf
+       itmax = min((itmin-1)+it_nlocal,yxf_lo%nx)
+       do it = itmin,itmax
+          to_here(it,ixxf) = from_here(ik,iyxf)
+	    iyxf = iyxf + 1
           i = i + 1
        end do
     end do
