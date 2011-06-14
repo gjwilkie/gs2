@@ -517,7 +517,10 @@ contains
 
 
     integer :: i
-    real :: time_old_loop(2) = 0.
+    real :: time_old_loop(2)
+
+    time_old_loop(1) = 0.
+    time_old_loop(2) = 0.
 
     call time_message(.false.,time_old_loop,' Old Loop')
 
@@ -564,7 +567,11 @@ contains
                         r%to_low(2):), intent (in out) :: to_here
 
     integer :: i,j,k,t2,t1,f2,f1,fhigh,thigh
-    real :: time_new_loop(2) = 0.
+    real :: time_new_loop(2)
+
+    time_new_loop(1) = 0.
+    time_new_loop(2) = 0.
+
 
     call time_message(.false.,time_new_loop,' New Loop')
 
@@ -606,7 +613,10 @@ contains
 
     integer :: i, idp, ipto, ipfrom, iadp
     integer :: rank, ierror
-    real :: time_rest_loop(2) = 0.
+    real :: time_rest_loop(2)
+
+    time_rest_loop(1) = 0.
+    time_rest_loop(2) = 0.
 
     call time_message(.false.,time_rest_loop,' Rest Loop')
     ! redistribute to idpth next processor from idpth preceding processor
@@ -683,8 +693,6 @@ contains
 
     integer :: i, idp, ipto, ipfrom, iadp
     integer :: j,k,t2,t1,f2,f1,fhigh,thigh
-    real :: time_old_loop(2) = 0., time_new_loop(2) = 0.
-    real :: time_rest_loop(2) = 0.
 
     allocate(to_here_temp(lbound(to_here,1):ubound(to_here,1),&
                           lbound(to_here,2):ubound(to_here,2)))
@@ -738,7 +746,10 @@ contains
 
 
     integer :: i
-    real :: time_old_loop(2) = 0.
+    real :: time_old_loop(2)
+
+    time_old_loop(1) = 0.
+    time_old_loop(2) = 0.
 
     call time_message(.false.,time_old_loop,' Old Loop')
 
@@ -771,7 +782,11 @@ contains
                         r%from_low(2):), intent (in out) :: to_here
 
     integer :: i,j,k,t2,t1,f2,f1,fhigh,thigh
-    real :: time_new_loop(2) = 0.
+    real :: time_new_loop(2)
+
+    time_new_loop(1) = 0.
+    time_new_loop(2) = 0.
+
 
     call time_message(.false.,time_new_loop,' New Loop')
 
@@ -812,7 +827,11 @@ contains
 
 
     integer :: i, idp, ipto, ipfrom, iadp
-    real :: time_rest_loop(2) = 0.
+    real :: time_rest_loop(2)
+
+    time_rest_loop(1) = 0.
+    time_rest_loop(2) = 0.
+
 
     call time_message(.false.,time_rest_loop,' Rest Loop')
     ! redistribute to idpth next processor from idpth preceding processor
@@ -941,7 +960,11 @@ contains
                         r%to_low(2):), intent (in out) :: to_here
 
     integer :: i
-    real :: time_old_loop(2) = 0.
+    real :: time_old_loop(2)
+
+    time_old_loop(1) = 0.
+    time_old_loop(2) = 0.
+
 
     call time_message(.false.,time_old_loop,' Old Loop')
     do i = 1, r%from(iproc)%nn
@@ -977,8 +1000,10 @@ contains
 
     integer :: i,k,t2,t1,f3,f2,f1,fhigh,thigh,f2max
     real :: tempnaky
-    real :: time_new_loop(2) = 0.
+    real :: time_new_loop(2)
 
+    time_new_loop(1) = 0.
+    time_new_loop(2) = 0.
 
     call time_message(.false.,time_new_loop,' New Loop')
 
@@ -1031,7 +1056,10 @@ contains
                         r%to_low(2):), intent (in out) :: to_here
 
     integer :: i, idp, ipto, ipfrom, iadp
-    real :: time_rest_loop(2) = 0.
+    real :: time_rest_loop(2)
+
+    time_rest_loop(1) = 0.
+    time_rest_loop(2) = 0.
 
 
     call time_message(.false.,time_rest_loop,' Rest Loop')
@@ -1171,8 +1199,10 @@ contains
 
 
     integer :: i
-    real :: time_old_loop(2) = 0.
+    real :: time_old_loop(2)
 
+    time_old_loop(1) = 0.
+    time_old_loop(2) = 0.
 
     call time_message(.false.,time_old_loop,' Old Loop')
     do i = 1, r%to(iproc)%nn
@@ -1207,7 +1237,10 @@ contains
 
     integer :: i,j,k,t2,t1,f3,f2,f1,fhigh,thigh,jmax
     real :: tempnaky
-    real :: time_new_loop(2) = 0.
+    real :: time_new_loop(2)
+
+    time_new_loop(1) = 0.
+    time_new_loop(2) = 0.
 
     call time_message(.false.,time_new_loop,' New Loop')
 
@@ -1260,8 +1293,10 @@ contains
 
 
     integer :: i, idp, ipto, ipfrom, iadp
-    real :: time_rest_loop(2) = 0.
+    real :: time_rest_loop(2)
 
+    time_rest_loop(1) = 0.
+    time_rest_loop(2) = 0.
 
     call time_message(.false.,time_rest_loop,' Rest Loop')
     ! redistribute to idpth next processor from idpth preceding processor
