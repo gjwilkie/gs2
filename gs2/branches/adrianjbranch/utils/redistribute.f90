@@ -1037,7 +1037,8 @@ contains
     ! to have a division in the body of the loop below we are 
     ! calculating the reciprocal of naky so that instead of 
     ! dividing by naky we can multiply  by 1/naky.
-    nakyrecip = 1/naky
+    nakyrecip = naky
+    nakyrecip = 1/nakyrecip
     do while(i .le. r%from(iproc)%nn)
        f2 = r%from(iproc)%l(i)
        f3 = r%from(iproc)%m(i)
@@ -1280,7 +1281,8 @@ contains
     ! to have a division in the body of the loop below we are 
     ! calculating the reciprocal of naky so that instead of 
     ! dividing by naky we can multiply  by 1/naky.
-    nakyrecip = 1/naky
+    nakyrecip = naky
+    nakyrecip = 1/nakyrecip
     do while(i .le. r%to(iproc)%nn)
        f2 = r%from(iproc)%l(i)
        f3 = r%from(iproc)%m(i)
