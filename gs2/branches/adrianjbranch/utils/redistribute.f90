@@ -21,6 +21,10 @@ module redistribute
 ! TT>
   public :: report_map_property, measure_gather, measure_scatter
   public :: gather_count, scatter_count, time_redist
+  public :: c_22_new_loop, c_22_old_loop, c_22_rest_loop
+  public :: c_inv_22_new_loop, c_inv_22_old_loop, c_inv_22_rest_loop
+  public :: c_32_old_loop, c_32_new_loop, c_32_rest_loop
+  public ::c_inv_32_old_loop, c_inv_32_new_loop, c_inv_32_rest_loop
 ! <TT
 
   public :: init_redist, gather, scatter
@@ -60,6 +64,10 @@ module redistribute
 
   integer :: gather_count=0, scatter_count=0
   real, save :: time_redist(2)=0.
+  real, save :: c_22_new_loop=0.,c_22_old_loop=0.,c_22_rest_loop=0.
+  real, save ::c_inv_22_new_loop=0.,c_inv_22_old_loop=0.,c_inv_22_rest_loop=0.
+  real, save :: c_32_new_loop=0.,c_32_old_loop=0.,c_32_rest_loop=0.
+  real, save :: c_inv_32_new_loop=0.,c_inv_32_old_loop=0.,c_inv_32_rest_loop=0.
 ! <TT
 
   interface fill
@@ -80,7 +88,7 @@ module redistribute
   ! TT: want to add map name, from_layout and to_layout
   type :: redist_type
      private
-     integer, dimension (4) :: to_low, from_low
+     integer, dimension (4) :: to_low, from_low, to_high, from_high
      type (index_map), dimension (:), pointer :: to   => null()
      type (index_map), dimension (:), pointer :: from => null()
      complex, dimension (:), pointer :: complex_buff  => null()
@@ -431,7 +439,8 @@ contains
 
   subroutine c_redist_22 (r, from_here, to_here)
 
-    use mp, only: iproc, nproc, send, receive
+    use mp, only: iproc
+
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%from_low(1):, &
@@ -440,7 +449,68 @@ contains
     complex, dimension (r%to_low(1):, &
                         r%to_low(2):), intent (in out) :: to_here
 
-    integer :: i, idp, ipto, ipfrom, iadp
+    complex, dimension (:,:), allocatable :: to_here_temp
+
+    integer :: i
+
+    allocate(to_here_temp(lbound(to_here,1):ubound(to_here,1),&
+                          lbound(to_here,2):ubound(to_here,2)))
+
+    ! redistribute from local processor to local processor
+
+    ! c_redist_22_old_copy is the original local copy functionality
+    call c_redist_22_old_copy(r, from_here, to_here)
+
+    ! c_redist_22_new_copy is the new local copy functionality where 
+    ! indirect addressing has largely been removed
+    call c_redist_22_new_copy(r, from_here, to_here)
+
+    ! The code below is used to check that the new copy produces the 
+    ! same results as the old copy (validation).  The if statement is
+    ! used to turn it on or off.  if(iproc .ne. -1) turns it on and
+    ! if(iproc .eq. -1) turns it off.  If you turn it on you also
+    ! need to modify the call to c_redist_22_new_copy to change
+    ! to_here to to_here_temp
+    if(iproc .eq. -1) then
+
+       do i = 1, r%from(iproc)%nn
+          if(to_here(r%to(iproc)%k(i),&
+               r%to(iproc)%l(i)) .ne. &
+               to_here_temp(r%to(iproc)%k(i), &
+               r%to(iproc)%l(i))) then
+             write(*,*) 'mismatch c_redist_22 iproc:',iproc,'i',i
+             stop
+          end if
+       end do
+       
+    end if
+    
+    deallocate(to_here_temp)
+
+    ! c_redist_22_mpi_copy contains all the remote to local 
+    ! copy functionality
+    call c_redist_22_mpi_copy(r, from_here, to_here)
+
+
+  end subroutine c_redist_22
+
+  subroutine c_redist_22_old_copy (r, from_here, to_here)
+
+    use mp, only: iproc
+    use job_manage, only: time_message
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+
+    integer :: i
+    real :: time_old_loop(2) = 0.
+
+    call time_message(.false.,time_old_loop,' Old Loop')
 
 !CMR 
 ! In the GS2 standard FFT situation this routine maps 
@@ -458,12 +528,78 @@ contains
 ! This do loop, in GS2 standard FFT situation, corresponds to:
 !    to_here(ik,iyxf)=from_here(it,ixxf)
 !
-       to_here(r%to(iproc)%k(i), & 
-               r%to(iproc)%l(i)) & 
+       to_here(r%to(iproc)%k(i), &
+               r%to(iproc)%l(i)) &
                = from_here(r%from(iproc)%k(i), &
                            r%from(iproc)%l(i))
     end do
 
+    call time_message(.false.,time_old_loop,' Old Loop')
+
+    c_22_old_loop = c_22_old_loop + time_old_loop(1)
+
+
+  end subroutine c_redist_22_old_copy
+
+  subroutine c_redist_22_new_copy (r, from_here, to_here)
+
+    use mp, only: iproc
+    use job_manage, only: time_message
+    use gs2_layouts, only: yxf_lo
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+    integer :: i,j,k,t2,t1,f2,f1,fhigh,thigh
+    real :: time_new_loop(2) = 0.
+
+    call time_message(.false.,time_new_loop,' New Loop')
+
+    i = 1
+    do while (i .le. r%from(iproc)%nn)
+       f1 = r%from(iproc)%k(i)
+       f2 = r%from(iproc)%l(i)
+       t1 = r%to(iproc)%k(i)
+       t2 = r%to(iproc)%l(i)
+       thigh = (yxf_lo%ulim_proc+1) - t2
+       fhigh = min((f1-1)+thigh,yxf_lo%nx)
+       do k = f1,fhigh
+          to_here(t1,t2) = from_here(k,f2)
+	  t2 = t2 + 1
+          i = i + 1
+       end do
+    end do
+
+    call time_message(.false.,time_new_loop,' New Loop')
+
+    c_22_new_loop = c_22_new_loop + time_new_loop(1)
+
+
+  end subroutine c_redist_22_new_copy
+
+
+  subroutine c_redist_22_mpi_copy (r, from_here, to_here)
+
+    use mp, only: iproc, nproc, send, receive
+    use mpi
+    use job_manage, only: time_message
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+    integer :: i, idp, ipto, ipfrom, iadp
+    integer :: rank, ierror
+    real :: time_rest_loop(2) = 0.
+
+    call time_message(.false.,time_rest_loop,' Rest Loop')
     ! redistribute to idpth next processor from idpth preceding processor
     ! or redistribute from idpth preceding processor to idpth next processor
     ! to avoid deadlocks
@@ -513,12 +649,18 @@ contains
           end if
        end if
     end do
+    call time_message(.false.,time_rest_loop,' Rest Loop')
 
-  end subroutine c_redist_22
+    c_22_rest_loop = c_22_rest_loop + time_rest_loop(1)
+
+  end subroutine c_redist_22_mpi_copy
+
 
   subroutine c_redist_22_inv (r, from_here, to_here)
 
     use mp, only: iproc, nproc, send, receive
+    use gs2_layouts, only: yxf_lo
+    use job_manage, only: time_message
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%to_low(1):, &
@@ -527,9 +669,70 @@ contains
     complex, dimension (r%from_low(1):, &
                         r%from_low(2):), intent (in out) :: to_here
 
+    integer, dimension (r%from(iproc)%nn,4) :: old_index, new_index
+    complex, dimension (:,:), allocatable :: to_here_temp
+
     integer :: i, idp, ipto, ipfrom, iadp
+    integer :: j,k,t2,t1,f2,f1,fhigh,thigh
+    real :: time_old_loop(2) = 0., time_new_loop(2) = 0.
+    real :: time_rest_loop(2) = 0.
+
+    allocate(to_here_temp(lbound(to_here,1):ubound(to_here,1),&
+                          lbound(to_here,2):ubound(to_here,2)))
 
     ! redistribute from local processor to local processor
+
+    ! c_redist_22_inv_old_copy is the original local copy functionality
+    call c_redist_22_inv_old_copy(r, from_here, to_here)
+
+    ! c_redist_22_inv_new_copy is the new local copy functionality where 
+    ! indirect addressing has largely been removed
+    call c_redist_22_inv_new_copy(r, from_here, to_here)
+
+    ! The code below is used to check that the new copy produces the 
+    ! same results as the old copy (validation).  The if statement is
+    ! used to turn it on or off.  if(iproc .ne. -1) turns it on and
+    ! if(iproc .eq. -1) turns it off.  If you turn this on your 
+    ! also need to modify the call to c_redist_22_inv_new_copy to 
+    ! replace to_here with to_here_temp
+    if(iproc .eq. -1) then
+       do i = 1, r%to(iproc)%nn
+          if(to_here(r%from(iproc)%k(i), &
+               r%from(iproc)%l(i)) .ne. &
+               to_here_temp(r%from(iproc)%k(i), &
+               r%from(iproc)%l(i))) then
+             write(*,*) 'mismatch c_redist_22_inv iproc:',iproc,'i',i
+             stop
+          end if
+       end do
+    end if
+
+    deallocate(to_here_temp)
+
+    ! c_redist_22_inv_mpi_copy contains all the remote to local 
+    ! copy functionality
+    call c_redist_22_inv_mpi_copy(r, from_here, to_here)
+
+  end subroutine c_redist_22_inv
+
+  subroutine c_redist_22_inv_old_copy (r, from_here, to_here)
+
+    use mp, only: iproc
+    use job_manage, only: time_message
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):), intent (in out) :: to_here
+
+
+    integer :: i
+    real :: time_old_loop(2) = 0.
+
+    call time_message(.false.,time_old_loop,' Old Loop')
+
     do i = 1, r%to(iproc)%nn
        to_here(r%from(iproc)%k(i), &
                r%from(iproc)%l(i)) &
@@ -537,6 +740,72 @@ contains
                            r%to(iproc)%l(i))
     end do
 
+    call time_message(.false.,time_old_loop,' Old Loop')
+
+    c_inv_22_old_loop = c_inv_22_old_loop + time_old_loop(1)
+
+
+  end subroutine c_redist_22_inv_old_copy
+
+
+  subroutine c_redist_22_inv_new_copy (r, from_here, to_here)
+
+    use mp, only: iproc
+    use gs2_layouts, only: yxf_lo
+    use job_manage, only: time_message
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):), intent (in out) :: to_here
+
+    integer :: i,j,k,t2,t1,f2,f1,fhigh,thigh
+    real :: time_new_loop(2) = 0.
+
+    call time_message(.false.,time_new_loop,' New Loop')
+
+    i = 1
+    do while (i .le. r%to(iproc)%nn)
+       f1 = r%from(iproc)%k(i)
+       f2 = r%from(iproc)%l(i)
+       t1 = r%to(iproc)%k(i)
+       t2 = r%to(iproc)%l(i)
+       thigh = (yxf_lo%ulim_proc+1) - t2
+       fhigh = min((f1-1)+thigh,yxf_lo%nx)
+       do k = f1,fhigh
+          to_here(k,f2) = from_here(t1,t2)
+	  t2 = t2 + 1
+          i = i + 1
+       end do
+    end do
+
+    call time_message(.false.,time_new_loop,' New Loop')
+
+    c_inv_22_new_loop = c_inv_22_new_loop + time_new_loop(1)
+
+
+  end subroutine c_redist_22_inv_new_copy
+
+
+  subroutine c_redist_22_inv_mpi_copy (r, from_here, to_here)
+
+    use mp, only: iproc, nproc, send, receive
+    use job_manage, only: time_message
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):), intent (in out) :: to_here
+
+
+    integer :: i, idp, ipto, ipfrom, iadp
+    real :: time_rest_loop(2) = 0.
+
+    call time_message(.false.,time_rest_loop,' Rest Loop')
     ! redistribute to idpth next processor from idpth preceding processor
     ! or redistribute from idpth preceding processor to idpth next processor
     ! to avoid deadlocks
@@ -587,12 +856,162 @@ contains
 
        end if
     end do
+    call time_message(.false.,time_rest_loop,' Rest Loop')
 
-  end subroutine c_redist_22_inv
+    c_inv_22_rest_loop = c_inv_22_rest_loop + time_rest_loop(1)
+
+  end subroutine c_redist_22_inv_mpi_copy
+
 
   subroutine c_redist_32 (r, from_here, to_here)
 
+    use mp, only: iproc
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):, &
+                        r%from_low(3):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+    complex, dimension (:,:), allocatable :: to_here_temp
+
+    integer :: i
+
+    allocate(to_here_temp(lbound(to_here,1):ubound(to_here,1), &
+                          lbound(to_here,2):ubound(to_here,2)))
+
+    ! redistribute from local processor to local processor
+
+    ! c_redist_32_old_copy is the original local copy functionality
+    call c_redist_32_old_copy(r, from_here, to_here)
+
+    ! c_redist_22_inv_new_copy is the new local copy functionality where 
+    ! indirect addressing has largely been removed
+    call c_redist_32_new_copy(r, from_here, to_here)
+
+    ! The code below is used to check that the new copy produces the 
+    ! same results as the old copy (validation).  The if statement is
+    ! used to turn it on or off.  if(iproc .ne. -1) turns it on and
+    ! if(iproc .eq. -1) turns it off.  If you turn this on your 
+    ! also need to modify the call to c_redist_32_new_copy to 
+    ! replace to_here with to_here_temp
+    if(iproc .eq. -1) then
+       do i = 1, r%from(iproc)%nn
+          if(to_here(r%to(iproc)%k(i),&
+               r%to(iproc)%l(i)) .ne. &
+               to_here_temp(r%to(iproc)%k(i), &
+               r%to(iproc)%l(i))) then
+             write(*,*) 'mismatch c_redist_32 iproc:',iproc,'i',i          
+             stop
+          end if
+       end do
+    end if
+    
+    deallocate(to_here_temp)
+
+    ! c_redist_32_mpi_copy contains all the remote to local 
+    ! copy functionality
+    call c_redist_32_mpi_copy(r, from_here, to_here)
+
+  end subroutine c_redist_32
+
+
+  subroutine c_redist_32_old_copy(r, from_here, to_here)
+
+    use mp, only: iproc
+    use job_manage, only: time_message
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):, &
+                        r%from_low(3):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+    integer :: i
+    real :: time_old_loop(2) = 0.
+
+    call time_message(.false.,time_old_loop,' Old Loop')
+    do i = 1, r%from(iproc)%nn
+       to_here(r%to(iproc)%k(i),&
+               r%to(iproc)%l(i)) &
+               = from_here(r%from(iproc)%k(i), &
+                           r%from(iproc)%l(i), &
+                           r%from(iproc)%m(i))
+    end do
+
+    call time_message(.false.,time_old_loop,' Old Loop')
+
+    c_32_old_loop = c_32_old_loop + time_old_loop(1)
+
+
+  end subroutine c_redist_32_old_copy
+
+
+  subroutine c_redist_32_new_copy(r, from_here, to_here)
+
+    use mp, only: iproc
+    use job_manage, only: time_message
+    use gs2_layouts, only: xxf_lo
+    use kt_grids, only: naky
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):, &
+                        r%from_low(3):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+    integer :: i,k,t2,t1,f3,f2,f1,fhigh,thigh,f2max
+    real :: tempnaky
+    real :: time_new_loop(2) = 0.
+
+
+    call time_message(.false.,time_new_loop,' New Loop')
+
+    i = 1
+    tempnaky = naky
+    do while(i .le. r%from(iproc)%nn)
+       f2 = r%from(iproc)%l(i)
+       f3 = r%from(iproc)%m(i)
+       t1 = r%to(iproc)%k(i)
+       f2max = r%from_high(2)
+       do while (f2 .le. f2max)
+          f1 = r%from(iproc)%k(i)
+          t2 = r%to(iproc)%l(i)
+          thigh = ceiling(((xxf_lo%ulim_proc+1) - t2)/tempnaky)
+          thigh = thigh + (f1-1)
+          fhigh = min(thigh,r%from_high(1))
+          do k = f1,fhigh
+             to_here(t1,t2) = from_here(k,f2,f3)
+             t2 = t2 + naky
+             i = i + 1
+          end do
+          if(thigh .gt. r%from_high(1)) then
+             f2 = f2 + 1
+          else
+             f2 = f2max + 1
+          end if
+       end do
+    end do
+
+    call time_message(.false.,time_new_loop,' New Loop')
+
+    c_32_new_loop = c_32_new_loop + time_new_loop(1)
+
+
+  end subroutine c_redist_32_new_copy
+
+
+  subroutine c_redist_32_mpi_copy(r, from_here, to_here)
+
     use mp, only: iproc, nproc, send, receive
+    use mpi
+    use job_manage, only: time_message
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%from_low(1):, &
@@ -603,16 +1022,10 @@ contains
                         r%to_low(2):), intent (in out) :: to_here
 
     integer :: i, idp, ipto, ipfrom, iadp
+    real :: time_rest_loop(2) = 0.
 
-    ! redistribute from local processor to local processor
-    do i = 1, r%from(iproc)%nn
-       to_here(r%to(iproc)%k(i),&
-               r%to(iproc)%l(i)) &
-               = from_here(r%from(iproc)%k(i), &
-                           r%from(iproc)%l(i), &
-                           r%from(iproc)%m(i))
-    end do
 
+    call time_message(.false.,time_rest_loop,' Rest Loop')
     ! redistribute to idpth next processor from idpth preceding processor
     ! or redistribute from idpth preceding processor to idpth next processor
     ! to avoid deadlocks
@@ -664,12 +1077,18 @@ contains
           end if
        end if
     end do
+    call time_message(.false.,time_rest_loop,' Rest Loop')
 
-  end subroutine c_redist_32
+    c_32_rest_loop = c_32_rest_loop + time_rest_loop(1)
+
+
+  end subroutine c_redist_32_mpi_copy
+
 
   subroutine c_redist_32_inv (r, from_here, to_here)
 
-    use mp, only: iproc, nproc, send, receive
+    use mp, only: iproc
+
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%to_low(1):, &
@@ -679,9 +1098,74 @@ contains
                         r%from_low(2):, &
                         r%from_low(3):), intent (in out) :: to_here
 
-    integer :: i, idp, ipto, ipfrom, iadp
+    complex, dimension(:,:,:), allocatable :: to_here_temp
+
+    integer :: i
+
+    allocate(to_here_temp(lbound(to_here,1):ubound(to_here,1), &
+                          lbound(to_here,2):ubound(to_here,2), &
+                          lbound(to_here,3):ubound(to_here,3)))
+
+
 
     ! redistribute from local processor to local processor
+
+    ! c_redist_32_inv_old_copy is the original local copy functionality
+    call c_redist_32_inv_old_copy(r, from_here, to_here)
+
+    ! c_redist_22_inv_new_copy is the new local copy functionality where 
+    ! indirect addressing has largely been removed
+    call c_redist_32_inv_new_copy(r, from_here, to_here)
+
+    ! The code below is used to check that the new copy produces the 
+    ! same results as the old copy (validation).  The if statement is
+    ! used to turn it on or off.  if(iproc .ne. -1) turns it on and
+    ! if(iproc .eq. -1) turns it off.  If you turn this on your 
+    ! also need to modify the call to c_redist_32_inv_new_copy to 
+    ! replace to_here with to_here_temp
+    if(iproc .eq. -1) then
+       do i = 1, r%to(iproc)%nn
+          if(to_here(r%from(iproc)%k(i),&
+               r%from(iproc)%l(i),&
+               r%from(iproc)%m(i)) .ne. &
+               to_here_temp(r%from(iproc)%k(i), &
+               r%from(iproc)%l(i),&
+               r%from(iproc)%m(i))) then
+             write(*,*) 'mismatch c_redist_32_inv iproc:',iproc,'i',i
+             stop
+          end if
+       end do
+    end if
+
+    deallocate(to_here_temp)
+
+    ! c_redist_32_inv_mpi_copy contains all the remote to local 
+    ! copy functionality
+    call c_redist_32_inv_mpi_copy(r, from_here, to_here)
+
+
+  end subroutine c_redist_32_inv
+
+  subroutine c_redist_32_inv_old_copy(r, from_here, to_here)
+
+    use mp, only: iproc
+    use job_manage, only: time_message
+
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):, &
+                        r%from_low(3):), intent (in out) :: to_here
+
+
+    integer :: i
+    real :: time_old_loop(2) = 0.
+
+
+    call time_message(.false.,time_old_loop,' Old Loop')
     do i = 1, r%to(iproc)%nn
        to_here(r%from(iproc)%k(i), &
                r%from(iproc)%l(i), &
@@ -690,6 +1174,87 @@ contains
                            r%to(iproc)%l(i))
     end do
 
+    call time_message(.false.,time_old_loop,' Old Loop')
+
+    c_inv_32_old_loop = c_inv_32_old_loop + time_old_loop(1)
+
+  end subroutine c_redist_32_inv_old_copy
+
+  subroutine c_redist_32_inv_new_copy(r, from_here, to_here)
+
+    use mp, only: iproc
+    use gs2_layouts, only: xxf_lo
+    use kt_grids, only: naky
+    use job_manage, only: time_message
+
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):, &
+                        r%from_low(3):), intent (in out) :: to_here
+
+    integer :: i,j,k,t2,t1,f3,f2,f1,fhigh,thigh,jmax
+    real :: tempnaky
+    real :: time_new_loop(2) = 0.
+
+    call time_message(.false.,time_new_loop,' New Loop')
+
+    i = 1
+    tempnaky = naky
+    do while(i .le. r%to(iproc)%nn)
+       f2 = r%from(iproc)%l(i)
+       f3 = r%from(iproc)%m(i)
+       t1 = r%to(iproc)%k(i)
+       j = f2
+       jmax = r%from_high(2)
+       do while (j .le. jmax)
+       	  f1 = r%from(iproc)%k(i)
+          t2 = r%to(iproc)%l(i)
+          thigh = ceiling(((xxf_lo%ulim_proc+1) - t2)/tempnaky)
+	  fhigh = min((f1-1)+thigh,r%from_high(1))
+       	  do k = f1,fhigh
+	     i = i + 1
+             to_here(k,j,f3) = from_here(t1,t2)
+	     t2 = t2 + naky
+	  end do
+          if(((f1-1)+thigh) .gt. r%from_high(1)) then
+             j = j + 1
+          else
+             j = jmax + 1
+          end if
+       end do
+    end do
+
+    call time_message(.false.,time_new_loop,' New Loop')
+
+    c_inv_32_new_loop = c_inv_32_new_loop + time_new_loop(1)
+
+
+  end subroutine c_redist_32_inv_new_copy
+
+  subroutine c_redist_32_inv_mpi_copy(r, from_here, to_here)
+
+    use mp, only: iproc, nproc, send, receive
+    use job_manage, only: time_message
+
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):, &
+                        r%from_low(3):), intent (in out) :: to_here
+
+
+    integer :: i, idp, ipto, ipfrom, iadp
+    real :: time_rest_loop(2) = 0.
+
+
+    call time_message(.false.,time_rest_loop,' Rest Loop')
     ! redistribute to idpth next processor from idpth preceding processor
     ! or redistribute from idpth preceding processor to idpth next processor
     ! to avoid deadlocks
@@ -742,8 +1307,13 @@ contains
 
        end if
     end do
+    call time_message(.false.,time_rest_loop,' Rest Loop')
 
-  end subroutine c_redist_32_inv
+    c_inv_32_rest_loop = c_inv_32_rest_loop + time_rest_loop(1)
+
+  end subroutine c_redist_32_inv_mpi_copy
+
+
 
   subroutine c_redist_42 (r, from_here, to_here)
 

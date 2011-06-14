@@ -19,6 +19,7 @@ contains
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
+    use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
@@ -40,6 +41,12 @@ contains
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
+    use redistribute, only: c_22_new_loop, c_22_old_loop, c_22_rest_loop
+    use redistribute, only: c_inv_22_new_loop, c_inv_22_old_loop
+    use redistribute, only: c_inv_22_rest_loop, c_32_rest_loop
+    use redistribute, only: c_32_new_loop, c_32_old_loop
+    use redistribute, only: c_inv_32_new_loop, c_inv_32_old_loop
+    use redistribute, only: c_inv_32_rest_loop
     use fields_implicit, only: time_field
     implicit none
 
@@ -51,6 +58,20 @@ contains
     real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
     real :: time_total(2) = 0.
     real :: time_interval
+    real :: c_22_new_loop_min,c_22_new_loop_max,c_22_new_loop_av
+    real :: c_22_old_loop_min,c_22_old_loop_max,c_22_old_loop_av
+    real :: c_22_rest_loop_min,c_22_rest_loop_max,c_22_rest_loop_av
+    real :: c_inv_22_new_loop_min,c_inv_22_new_loop_max,c_inv_22_new_loop_av
+    real :: c_inv_22_old_loop_min,c_inv_22_old_loop_max,c_inv_22_old_loop_av
+    real :: c_inv_22_rest_loop_min,c_inv_22_rest_loop_max,c_inv_22_rest_loop_av
+    real :: c_32_new_loop_min,c_32_new_loop_max,c_32_new_loop_av
+    real :: c_32_old_loop_min,c_32_old_loop_max,c_32_old_loop_av
+    real :: c_32_rest_loop_min,c_32_rest_loop_max,c_32_rest_loop_av
+    real :: c_inv_32_new_loop_min,c_inv_32_new_loop_max,c_inv_32_new_loop_av
+    real :: c_inv_32_old_loop_min,c_inv_32_old_loop_max,c_inv_32_old_loop_av
+    real :: c_inv_32_rest_loop_min,c_inv_32_rest_loop_max,c_inv_32_rest_loop_av
+
+
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
     logical :: first_time = .true.
@@ -180,6 +201,139 @@ contains
        if (.not.nofin) call finish_gs2
     end if
     
+    c_22_old_loop_max = c_22_old_loop
+    call max_reduce(c_22_old_loop_max,0)
+    c_22_old_loop_min = c_22_old_loop
+    call min_reduce(c_22_old_loop_min,0)
+    c_22_old_loop_av = c_22_old_loop
+    call sum_reduce(c_22_old_loop_av,0)
+    c_22_old_loop_av = c_22_old_loop_av/nproc
+
+    c_22_new_loop_max = c_22_new_loop
+    call max_reduce(c_22_new_loop_max,0)
+    c_22_new_loop_min = c_22_new_loop
+    call min_reduce(c_22_new_loop_min,0)
+    c_22_new_loop_av = c_22_new_loop
+    call sum_reduce(c_22_new_loop_av,0)
+    c_22_new_loop_av = c_22_new_loop_av/nproc
+
+    c_22_rest_loop_max = c_22_rest_loop
+    call max_reduce(c_22_rest_loop_max,0)
+    c_22_rest_loop_min = c_22_rest_loop
+    call min_reduce(c_22_rest_loop_min,0)
+    c_22_rest_loop_av = c_22_rest_loop
+    call sum_reduce(c_22_rest_loop_av,0)
+    c_22_rest_loop_av = c_22_rest_loop_av/nproc
+
+    c_inv_22_old_loop_max = c_inv_22_old_loop
+    call max_reduce(c_inv_22_old_loop_max,0)
+    c_inv_22_old_loop_min = c_inv_22_old_loop
+    call min_reduce(c_inv_22_old_loop_min,0)
+    c_inv_22_old_loop_av = c_inv_22_old_loop
+    call sum_reduce(c_inv_22_old_loop_av,0)
+    c_inv_22_old_loop_av = c_inv_22_old_loop_av/nproc
+
+    c_inv_22_new_loop_max = c_inv_22_new_loop
+    call max_reduce(c_inv_22_new_loop_max,0)
+    c_inv_22_new_loop_min = c_inv_22_new_loop
+    call min_reduce(c_inv_22_new_loop_min,0)
+    c_inv_22_new_loop_av = c_inv_22_new_loop
+    call sum_reduce(c_inv_22_new_loop_av,0)
+    c_inv_22_new_loop_av = c_inv_22_new_loop_av/nproc
+
+    c_inv_22_rest_loop_max = c_inv_22_rest_loop
+    call max_reduce(c_inv_22_rest_loop_max,0)
+    c_inv_22_rest_loop_min = c_inv_22_rest_loop
+    call min_reduce(c_inv_22_rest_loop_min,0)
+    c_inv_22_rest_loop_av = c_inv_22_rest_loop
+    call sum_reduce(c_inv_22_rest_loop_av,0)
+    c_inv_22_rest_loop_av = c_inv_22_rest_loop_av/nproc
+
+    c_32_old_loop_max = c_32_old_loop
+    call max_reduce(c_32_old_loop_max,0)
+    c_32_old_loop_min = c_32_old_loop
+    call min_reduce(c_32_old_loop_min,0)
+    c_32_old_loop_av = c_32_old_loop
+    call sum_reduce(c_32_old_loop_av,0)
+    c_32_old_loop_av = c_32_old_loop_av/nproc
+
+    c_32_new_loop_max = c_32_new_loop
+    call max_reduce(c_32_new_loop_max,0)
+    c_32_new_loop_min = c_32_new_loop
+    call min_reduce(c_32_new_loop_min,0)
+    c_32_new_loop_av = c_32_new_loop
+    call sum_reduce(c_32_new_loop_av,0)
+    c_32_new_loop_av = c_32_new_loop_av/nproc
+
+    c_32_rest_loop_max = c_32_rest_loop
+    call max_reduce(c_32_rest_loop_max,0)
+    c_32_rest_loop_min = c_32_rest_loop
+    call min_reduce(c_32_rest_loop_min,0)
+    c_32_rest_loop_av = c_32_rest_loop
+    call sum_reduce(c_32_rest_loop_av,0)
+    c_32_rest_loop_av = c_32_rest_loop_av/nproc
+
+    c_inv_32_old_loop_max = c_inv_32_old_loop
+    call max_reduce(c_inv_32_old_loop_max,0)
+    c_inv_32_old_loop_min = c_inv_32_old_loop
+    call min_reduce(c_inv_32_old_loop_min,0)
+    c_inv_32_old_loop_av = c_inv_32_old_loop
+    call sum_reduce(c_inv_32_old_loop_av,0)
+    c_inv_32_old_loop_av = c_inv_32_old_loop_av/nproc
+
+    c_inv_32_new_loop_max = c_inv_32_new_loop
+    call max_reduce(c_inv_32_new_loop_max,0)
+    c_inv_32_new_loop_min = c_inv_32_new_loop
+    call min_reduce(c_inv_32_new_loop_min,0)
+    c_inv_32_new_loop_av = c_inv_32_new_loop
+    call sum_reduce(c_inv_32_new_loop_av,0)
+    c_inv_32_new_loop_av = c_inv_32_new_loop_av/nproc
+
+    c_inv_32_rest_loop_max = c_inv_32_rest_loop
+    call max_reduce(c_inv_32_rest_loop_max,0)
+    c_inv_32_rest_loop_min = c_inv_32_rest_loop
+    call min_reduce(c_inv_32_rest_loop_min,0)
+    c_inv_32_rest_loop_av = c_inv_32_rest_loop
+    call sum_reduce(c_inv_32_rest_loop_av,0)
+    c_inv_32_rest_loop_av = c_inv_32_rest_loop_av/nproc
+
+    if (proc0) then
+        write(*,*) 'c_22 Old loop: Min,Max,Average',&
+    	c_22_old_loop_min,c_22_old_loop_max,c_22_old_loop_av
+        write(*,*) 'c_22 New loop: Min,Max,Average',&
+    	c_22_new_loop_min,c_22_new_loop_max,c_22_new_loop_av
+        write(*,*) 'c_22 Rest loop: Min,Max,Average',&
+    	c_22_rest_loop_min,c_22_rest_loop_max,c_22_rest_loop_av
+        write(*,*) 'c_inv_22 Old loop: Min,Max,Average',&
+    	c_inv_22_old_loop_min,c_inv_22_old_loop_max,c_inv_22_old_loop_av
+        write(*,*) 'c_inv_22 New loop: Min,Max,Average',&
+    	c_inv_22_new_loop_min,c_inv_22_new_loop_max,c_inv_22_new_loop_av
+        write(*,*) 'c_inv_22 Rest loop: Min,Max,Average',&
+    	c_inv_22_rest_loop_min,c_inv_22_rest_loop_max,c_inv_22_rest_loop_av
+        write(*,*) 'c_32 Old loop: Min,Max,Average',&
+    	c_32_old_loop_min,c_32_old_loop_max,c_32_old_loop_av
+        write(*,*) 'c_32 New loop: Min,Max,Average',&
+    	c_32_new_loop_min,c_32_new_loop_max,c_32_new_loop_av
+        write(*,*) 'c_32 Rest loop: Min,Max,Average',&
+    	c_32_rest_loop_min,c_32_rest_loop_max,c_32_rest_loop_av
+        write(*,*) 'c_inv_32 Old loop: Min,Max,Average',&
+    	c_inv_32_old_loop_min,c_inv_32_old_loop_max,c_inv_32_old_loop_av
+        write(*,*) 'c_inv_32 New loop: Min,Max,Average',&
+    	c_inv_32_new_loop_min,c_inv_32_new_loop_max,c_inv_32_new_loop_av
+        write(*,*) 'c_inv_32 Rest loop: Min,Max,Average',&
+    	c_inv_32_rest_loop_min,c_inv_32_rest_loop_max,c_inv_32_rest_loop_av
+    end if
+
+!    if (proc0) write(*,*) 'c_22 Old loop',c_22_old_loop,&
+!    'c_22 New Loop',c_22_new_loop,'c_22 Rest Loop',c_22_rest_loop
+!    if (proc0) write(*,*) 'c_inv_22 Old loop',c_inv_22_old_loop,&
+!    'c_inv_22 New Loop',c_inv_22_new_loop,'c_inv_22 Rest Loop',&
+!    c_inv_22_rest_loop
+!    if (proc0) write(*,*) 'c_32 Old loop',c_32_old_loop,&
+!    'c_32 New Loop',c_32_new_loop,'c_32 Rest Loop',c_32_rest_loop
+!    if (proc0) write(*,*) 'c_inv_32 Old loop',c_inv_32_old_loop,&
+!    'c_inv_32 New Loop',c_inv_32_new_loop,'c_inv_32 Rest Loop',&
+!    c_inv_32_rest_loop
 
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
