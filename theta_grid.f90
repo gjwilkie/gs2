@@ -1053,9 +1053,9 @@ if (debug) write(6,*) "init_theta_grid_eik: call read_parameters, ntheta=",nthet
     rhoc_save = rhoc
     if (itor == 0) rhoc = 1.5*delrho
 !    print *, 'itor= ',itor, ' rhoc= ',rhoc, 'rhoc_save = ',rhoc_save
-if (debug) write(6,*) "init_theta_grid_eik: call eikcoefs"
+if (debug) write(6,*) "init_theta_grid_eik: call eikcoefs, ntheta=",ntheta
     call eikcoefs (ntheta)
-if (debug) write(6,*) "init_theta_grid_eik: done"
+if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
 
 !    write (*,*) 'init_theta_grid_eik: ntheta = ',ntheta
 

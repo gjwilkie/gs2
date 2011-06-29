@@ -575,7 +575,7 @@ contains
 ! regularly include the point at theta=0.  
 
 ! find aminor
-    aminor = 0.5*(R_psi(nr,nt/2)-R_psi(nr,1))
+    aminor = 0.5*abs(R_psi(nr,nt/2)-R_psi(nr,1))
 
 ! find R_geo
     R_geo = 0.5*(R_psi(nr,nt/2)+R_psi(nr,1))
@@ -621,6 +621,7 @@ contains
     f_N = B_T0*avgrmid
     fp=fp/f_N
 
+!CMR 28/6/2011: why divide the number of theta points by two here?
     nthg=nt/2
 
     transp = .true.
@@ -1253,7 +1254,7 @@ contains
     type (spline), save :: spl
 
     if(init_diameter) then
-       diam(:) = R_psi(:,nt/2) - R_psi(:,1)
+       diam(:) = abs(R_psi(:,nt/2) - R_psi(:,1))
        call new_spline(nr, eqpsi, diam, spl)
        init_diameter = .false.
     endif
