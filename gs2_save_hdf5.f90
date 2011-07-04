@@ -308,6 +308,8 @@ contains
 
   end subroutine gs2_save_for_restart
 
+  !<doc> Restore the fields and distribution function from a set of restart files. </doc>
+
   subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, many)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
@@ -338,6 +340,8 @@ contains
        initialized = .true.
        file_proc = trim(restart_file)
        
+       ! <doc> Work out which file is needed for this processor </doc>
+
        if (nproc >= 10000) then
           if (proc0) write(*,*) 'Too many procs for i/o to work right!'
        else
@@ -348,6 +352,8 @@ contains
           suffix = '.'//achar(48+th)//achar(48+h)//achar(48+t)//achar(48+u)
           file_proc = trim(trim(file_proc)//suffix)
        endif
+
+       ! <doc> Check if all the correct variables are present in the NetCDF File </doc>
        
        istatus = nf_open (file_proc, nf_write, ncid)
        if (istatus /= 0) then
@@ -478,6 +484,8 @@ contains
     if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
     if (.not. allocated(tmpi)) allocate (tmpi(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
 
+     ! <doc> Restore the distribution function. </doc>
+
     tmpr = 0.; tmpi = 0.
     istatus = nf_get_var_double (ncid, gr_id, tmpr)
     if (istatus /= 0) then
@@ -495,6 +503,8 @@ contains
 
     if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
     if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))
+
+    ! <doc> Restore phi if fphi > epsilon, apar if fapar > epsilon, etc. </doc>
 
     if (fphi > epsilon(0.)) then
        istatus = nf_get_var_double (ncid, phir_id, ftmpr)
