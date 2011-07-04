@@ -1,3 +1,6 @@
+!> This module contains the subroutines which set the initial value of the
+!! fields and the distribution function.
+
 module init_g
   implicit none
 
@@ -695,7 +698,7 @@ contains
     do it = 1, ntheta0
        do ik = 1, naky
           do ig = -ntgrid, ntgrid
-              !<doc> Set the field to cos(kpar_init*theta), where we remember that the gridpoints are not necessarily evenly spaced in the parallel direction, so we use theta(ig)</doc>
+              !Set the field to cos(kpar_init*theta), where we remember that the gridpoints are not necessarily evenly spaced in the parallel direction, so we use theta(ig).
                !reality for ky=0 means we must use -kpar for kx < 0
               !if (naky == 1 .and. it > (ntheta0+1)/2) then
                 !a = cos(-kpar_init * theta(ig)) 
@@ -2875,8 +2878,10 @@ contains
   end subroutine ginit_restart_smallflat
 
 
-	!<doc> This subroutine removes all turbulence except the zonal flow (ky = 0) component upon 
-	!restarting. It can be selected by setting the input parameter ginit to "zonal_only". The size of the zonal flows can be adjusted using the input parameter zf_init. Author EGH</doc> 
+	!> Restart but remove all turbulence except the zonal flow (ky = 0) component upon 
+	!! restarting. It can be selected by setting the input parameter ginit to "zonal_only". 
+  !! The size of the zonal flows can be adjusted using the input parameter zf_init. 
+  ! Author EGH
 
   subroutine ginit_restart_zonal_only
 
@@ -2909,7 +2914,7 @@ contains
 !     end if 
        
 
-		! <doc> Load phi and g from the restart file
+		!  Load phi and g from the restart file
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
@@ -2918,25 +2923,25 @@ contains
     end if
 		write (*,*) "Initialised g"
 
-		!<doc> Set all non-zonal components of phi to 0</doc>
+		! Set all non-zonal components of phi to 0
     do it = 1, ntheta0
        do ik = 2, naky ! Starting at 2 is the crucial bit!!
           phinew(:,it,ik) = cmplx(0.0,0.0)
        end do
     end do
 
-	! <doc>Allow adjustment of the size of the zonal flows via the input parameter zf_init</doc>
+	! Allow adjustment of the size of the zonal flows via the input parameter zf_init
      phinew(:,:,1) = phinew(:,:,1)*zf_init
 
 
-		!<doc> Apply reality condition for k_theta = 0 component</doc>
-!     if (reality) then
+		!Apply reality condition for k_theta = 0 component!
+    !if (reality) then
 !        do it = 1, ntheta0/2
 !           phinew(:,it+(ntheta0+1)/2,1) = conjg(phinew(:,(ntheta0+1)/2+1-it,1))
 !        enddo
 !     end if
 
-		!<doc> Set non-zonal components of g to zero using phi</doc>
+		!Set non-zonal components of g to zero using phi
 
 		write(*,*) "Zeroing g"
 
@@ -2952,7 +2957,7 @@ contains
 				end if
     end do
 
-    ! <doc> If phiinit > 0, add some noise</doc>
+    ! If phiinit > 0, add some noise
     if (phiinit >  epsilon(0.0)) then 
      call ginit_noise
      g = g + gnew
