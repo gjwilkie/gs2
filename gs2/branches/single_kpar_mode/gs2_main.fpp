@@ -6,12 +6,16 @@ module gs2_main
 contains
 # endif
 
-  subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, grho, nofinish)
 
-    ! <doc> Main subroutine in which [[gs2]] is initialized, equations are advanced,
-    ! and the program is finalized. 
-    ! All arguments are optional and are not used for [[gs2]]. 
-    ! (EGH - used for [[Trinity]]?) </doc>
+  !> This is the main subroutine in which gs2 is initialized, equations are advanced,
+  !!   and the program is finalized.
+  !! \section Structure 
+  !! \section arguments Arguments
+  !! All arguments are optional and are not used for gs2. 
+  !! (EGH - used for Trinity?)
+
+
+  subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, grho, nofinish)
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
