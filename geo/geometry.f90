@@ -36,6 +36,7 @@ module geometry
   real, dimension(3) :: rpval
   real :: rpmin, rpmax, ak0
   real :: s_hat_new
+  real :: beta_prime_new
 
   integer :: isym, ismooth, k1, k2, big
   integer :: eqinit = 1
@@ -634,6 +635,7 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
           s_hat_new = s_hat
           dp_new = dp * dp_mult
           di_new = (s_hat_new/tmp -2*c_b -dp_new*b_b) / a_b
+          beta_prime_new=2.*dp_new/drhodpsi
           write(11,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
           if(writelots) write(*,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
        case (8)
