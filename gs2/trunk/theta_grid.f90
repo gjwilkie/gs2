@@ -659,7 +659,8 @@ contains
 
   subroutine check_theta_grid_eik(report_unit,dbetadrho)
      use theta_grid_params, only: akappa, akappri, tri, tripri, eps
-     use geometry, only: alpha_input, beta_prime_input, invLp_input, s_hat_input, shat
+     use geometry, only: alpha_input, beta_prime_input, beta_prime_new, invLp_input
+     use geometry, only: s_hat_input, s_hat_new, shat
      use geometry, only: dp_mult
      use geometry, only: rhoc, rmaj, r_geo, qinp
      use geometry, only: bishop, iflux, irho
@@ -878,7 +879,19 @@ contains
               write (report_unit, *) 
               write (report_unit, fmt="('You have set bishop=7.')")
               write (report_unit, fmt="('The value of s_hat will be found from the equilibrium file.')") 
+              write (report_unit, fmt="('The magnetic shear s_hat = ',f7.4)") s_hat_new
               write (report_unit, fmt="('The value of dp/drho found from the equilibrium file will be multiplied by',f10.4)") dp_mult
+              write (report_unit, fmt="('to give beta gradient d beta / d rho = ',f8.4)") beta_prime_new
+
+              if (abs(beta_prime_new - dbetadrho) > 1.e-2) then
+                 write (report_unit, *) 
+                 write (report_unit, fmt="('################# WARNING #######################')")
+                 write (report_unit, fmt="('beta_prime_new is not consistent with beta and Lp.')")
+                 write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+                 write (report_unit, fmt="('################# WARNING #######################')")
+                 write (report_unit, *) 
+              end if
+
            case default
 
               write (report_unit, *) 
