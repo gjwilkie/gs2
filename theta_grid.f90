@@ -838,7 +838,7 @@ contains
                  write (report_unit, fmt="('################# WARNING #######################')")
                  write (report_unit, *) 
               end if
-              if (abs(beta_prime_input - dbetadrho) > 1.e-2) then
+              if (abs(beta_prime_input - dbetadrho) > 1.e-2*abs(dbetadrho)) then
                  write (report_unit, *) 
                  write (report_unit, fmt="('################# WARNING #######################')")
                  write (report_unit, fmt="('beta_prime_input is not consistent with beta and Lp.')")
@@ -883,7 +883,7 @@ contains
               write (report_unit, fmt="('The value of dp/drho found from the equilibrium file will be multiplied by',f10.4)") dp_mult
               write (report_unit, fmt="('to give beta gradient d beta / d rho = ',f8.4)") beta_prime_new
 
-              if (abs(beta_prime_new - dbetadrho) > 1.e-2) then
+              if (abs(beta_prime_new - dbetadrho) > 1.e-2*abs(dbetadrho)) then
                  write (report_unit, *) 
                  write (report_unit, fmt="('################# WARNING #######################')")
                  write (report_unit, fmt="('beta_prime_new is not consistent with beta and Lp.')")
