@@ -383,7 +383,7 @@ contains
     read (neo_unit,*) nenergy_neo
     read (neo_unit,*) nxi_neo
     read (neo_unit,*) ntheta_neo
-    allocate (theta_neo(ntheta_neo))
+    if (.not. allocated(theta_neo)) allocate (theta_neo(ntheta_neo))
     do ig = 1, ntheta_neo
        read (neo_unit,*) theta_neo (ig)
     end do
@@ -399,8 +399,8 @@ contains
 
     allocate (tmp(ntheta_neo*(nxi_neo+1)*nenergy_neo*nspec_neo*nrad_neo))
     allocate (neo_coefs(ntheta_neo), dum(ntheta), neo_phi(ntheta_neo))
-    allocate (coefs(nrad_neo,ntheta,0:nxi_neo,0:nenergy_neo-1,nspec_neo))
-    allocate (phineo(nrad_neo,ntheta))
+    if (.not. allocated(coefs)) allocate (coefs(nrad_neo,ntheta,0:nxi_neo,0:nenergy_neo-1,nspec_neo))
+    if (.not. allocated(phineo)) allocate (phineo(nrad_neo,ntheta))
 
     ! read in H1^{nc} (adiabatic piece of F1^{nc}) from neo's f.out file
     open (unit=neo_unit, file='neo_f.out', status="old", action="read")
