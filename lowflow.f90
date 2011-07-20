@@ -388,7 +388,7 @@ contains
        read (neo_unit,*) theta_neo (ig)
     end do
     read (neo_unit,*) nrad_neo
-    allocate (rad_neo(nrad_neo))
+    if (.not. allocated(rad_neo)) allocate (rad_neo(nrad_neo))
     do ir = 1, nrad_neo
        read (neo_unit,*) rad_neo(ir)
     end do
