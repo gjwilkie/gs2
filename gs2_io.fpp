@@ -313,7 +313,7 @@ contains
   subroutine nc_grids
 
     use theta_grid, only: ntgrid, theta, eps, ntheta
-    use kt_grids, only: naky, ntheta0, theta0, akx_out, aky_out, nx, ny
+    use kt_grids, only: naky, ntheta0, theta0, akx, aky, nx, ny
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
     use le_grids, only: negrid, nlambda, e, al
@@ -343,9 +343,9 @@ contains
     status = nf90_put_var (ncid, nlambda_id, nlambda)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, nlambda_id)
 
-    status = nf90_put_var (ncid, akx_id, akx_out)
+    status = nf90_put_var (ncid, akx_id, akx)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, akx_id)
-    status = nf90_put_var (ncid, aky_id, aky_out)
+    status = nf90_put_var (ncid, aky_id, aky)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, aky_id)
     status = nf90_put_var (ncid, theta_id, theta)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, theta_id)
@@ -371,10 +371,10 @@ contains
        allocate(x(yxf_lo%nx))
        allocate(y(yxf_lo%ny))
        do it = 1, yxf_lo%nx 
-          x(it) = 2.0*pi/akx_out(2)*(-0.5+ real(it-1)/real(yxf_lo%nx))
+          x(it) = 2.0*pi/akx(2)*(-0.5+ real(it-1)/real(yxf_lo%nx))
        end do
        do ik = 1, yxf_lo%ny
-          y(ik) = 2.0*pi/aky_out(2)*(-0.5+ real(ik-1)/real(yxf_lo%ny))
+          y(ik) = 2.0*pi/aky(2)*(-0.5+ real(ik-1)/real(yxf_lo%ny))
        end do
        
        status = nf90_put_var (ncid_movie, nx_id, yxf_lo%nx)

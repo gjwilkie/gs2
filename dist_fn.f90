@@ -2954,7 +2954,7 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: ik_idx, it_idx
     use kt_grids, only: akx, aky
     use theta_grid, only: ntgrid
-    use run_parameters, only: fphi, fbpar, tnorm
+    use run_parameters, only: fphi, fbpar
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: kperp2
     use le_grids, only: integrate, geint2g, lintegrate, nlambda, al, gint2g
@@ -3002,18 +3002,18 @@ subroutine check_dist_fn(report_unit)
           ik = ik_idx(g_lo, iglo)
           it = it_idx(g_lo, iglo)
           g1(:,1,iglo) = g0(:,1,iglo) &
-               * exp(-0.5*(akx(it)**2 + aky(ik)**2) * D_kill * code_dt / tnorm)
+               * exp(-0.5*(akx(it)**2 + aky(ik)**2) * D_kill * code_dt)
           g1(:,2,iglo) = g0(:,2,iglo) &
-               * exp(-0.5*(akx(it)**2 + aky(ik)**2) * D_kill * code_dt / tnorm)
+               * exp(-0.5*(akx(it)**2 + aky(ik)**2) * D_kill * code_dt)
        end do
     else       
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo, iglo)
           it = it_idx(g_lo, iglo)
           g1(:,1,iglo) = g0(:,1,iglo) &
-               * exp(-0.5*kperp2(:,it,ik) * D_kill * code_dt / tnorm)
+               * exp(-0.5*kperp2(:,it,ik) * D_kill * code_dt)
           g1(:,2,iglo) = g0(:,2,iglo) &
-               * exp(-0.5*kperp2(:,it,ik) * D_kill * code_dt / tnorm)
+               * exp(-0.5*kperp2(:,it,ik) * D_kill * code_dt)
        end do
     end if
 
@@ -3081,7 +3081,6 @@ subroutine check_dist_fn(report_unit)
     use run_parameters, only: fphi, fapar, fbpar, wunits, tunits
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
-    use run_parameters, only: tnorm
     use nonlinear_terms, only: nonlin
     use hyper, only: D_res
     use constants
@@ -3093,7 +3092,6 @@ subroutine check_dist_fn(report_unit)
     integer, intent (in) :: isgn, iglo
     complex, intent (in) :: sourcefac
     complex, dimension (-ntgrid:), intent (out) :: source
-    real :: tfac
 
     integer :: ig, ik, it, il, ie, is
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg!, bpargavg !GGH added bpargavg
@@ -3294,27 +3292,26 @@ subroutine check_dist_fn(report_unit)
              end do
           endif
 
-! add in nonlinear terms -- tfac normalizes the *amplitudes*.
+! add in nonlinear terms 
           if (nonlin) then         
-             tfac = 1./tnorm
              select case (istep)
              case (0)
                 ! nothing
              case (1)
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
+                   source(ig) = source(ig) + 0.5*code_dt*gnl_1(ig,isgn,iglo)
                 end do
              case (2) 
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+                   source(ig) = source(ig) + 0.5*code_dt*( &
                         1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
                 end do                   
              case default
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+                   source(ig) = source(ig) + 0.5*code_dt*( &
                           (23./12.)*gnl_1(ig,isgn,iglo) &
                         - (4./3.)  *gnl_2(ig,isgn,iglo) &
                         + (5./12.) *gnl_3(ig,isgn,iglo))
@@ -3390,24 +3387,23 @@ subroutine check_dist_fn(report_unit)
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
       end do
         
-! add in nonlinear terms -- tfac normalizes the *amplitudes*.
+! add in nonlinear terms 
       if (nonlin) then         
-         tfac = 1./tnorm
          select case (istep)
          case (0)
             ! nothing
          case (1)
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
+               source(ig) = source(ig) + 0.5*code_dt*gnl_1(ig,isgn,iglo)
             end do
          case (2) 
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+               source(ig) = source(ig) + 0.5*code_dt*( &
                     1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
             end do
          case default
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+               source(ig) = source(ig) + 0.5*code_dt*( &
                       (23./12.)*gnl_1(ig,isgn,iglo) &
                     - (4./3.)  *gnl_2(ig,isgn,iglo) &
                     + (5./12.) *gnl_3(ig,isgn,iglo))
@@ -4904,7 +4900,7 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use mp, only: proc0
-    use run_parameters, only: woutunits, fphi, fapar, fbpar, funits
+    use run_parameters, only: woutunits, fphi, fapar, fbpar
     use constants, only: zi
     use geometry, only: rmajor_geo, bpol_geo, rhoc
     implicit none
@@ -4993,10 +4989,7 @@ subroutine check_dist_fn(report_unit)
           ik = ik_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
-! CMR: strange to see funits appear on next line?
-!      surely funits is fully handled in gs2_diagnostics
-!      so danger of double counting here. 
-             g0(:,isgn,iglo) = -funits*zi*aky(ik)*gnew(:,isgn,iglo)*aj1(:,iglo) &
+             g0(:,isgn,iglo) = -zi*aky(ik)*gnew(:,isgn,iglo)*aj1(:,iglo) &
                   *rhoc*(gds21+theta0(it,ik)*gds22)*vperp2(:,iglo)*spec(is)%smz/(qval*shat*bmag**2)
 !             g0(:,isgn,iglo) = zi*akx(it)*grho*gnew(:,isgn,iglo)*aj1(:,iglo) &
 !                  *2.0*vperp2(:,iglo)*spec(is)%smz/(bmag**2*drhodpsi)
@@ -5188,7 +5181,7 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use mp, only: proc0
-    use run_parameters, only: woutunits, fphi, fapar, fbpar, funits
+    use run_parameters, only: woutunits, fphi, fapar, fbpar
     use constants, only: zi
     use geometry, only: rmajor_geo, bpol_geo, rhoc
     implicit none
@@ -5314,7 +5307,6 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: it_idx, ik_idx, is_idx
     use geometry, only: rmajor_geo, rhoc, bpol_geo
-    use run_parameters, only: funits
     use theta_grid, only: ntgrid, bmag, gds21, gds22, qval, shat
     use kt_grids, only: aky, theta0
     use le_grids, only: integrate_volume, nlambda, negrid
@@ -5344,12 +5336,12 @@ subroutine check_dist_fn(report_unit)
              if (allocated(rmajor_geo)) then
                 g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,iglo) &
                      *rmajor_geo(ig)*sqrt(1.0-bpol_geo(ig)**2/bmag(ig)**2) &
-                     -funits*zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
+                     -zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
                      *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,iglo)*spec(is)%smz/(qval*shat*bmag(ig)**2)
              else
                 ! assume B_phi / B = 1
                 g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,iglo) &
-                     -funits*zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
+                     -zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
                      *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,iglo)*spec(is)%smz/(qval*shat*bmag(ig)**2)
              end if
              g0r(ig,isgn,iglo) = aimag(g0(ig,isgn,iglo)*conjg(phinew(ig,it,ik)))*aky(ik)
@@ -5700,7 +5692,7 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: integrate_moment
     use species, only: spec, nspec,has_electron_species
     use theta_grid, only: jacob, delthet, ntgrid
-    use run_parameters, only: fphi, fapar, fbpar, tunits, beta, tnorm, tite
+    use run_parameters, only: fphi, fapar, fbpar, tunits, beta, tite
     use gs2_time, only: code_dt
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_apar, a_ext_data
