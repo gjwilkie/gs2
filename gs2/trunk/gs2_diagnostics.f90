@@ -35,7 +35,7 @@ module gs2_diagnostics
 !
 ! Why are these variables public?  This is not good.
   real,public :: omegatol, omegatinst
-  logical,public :: print_line, print_old_units, print_flux_line
+  logical,public :: print_line, print_flux_line
   logical,public :: print_summary, write_line, write_flux_line, write_phi
   logical,public :: write_apar, write_bpar, write_aperp
   logical,public :: write_omega, write_omavg, write_ascii, write_lamavg
@@ -75,7 +75,7 @@ module gs2_diagnostics
   logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
 
-  namelist /gs2_diagnostics_knobs/ print_line, print_old_units, print_flux_line, &
+  namelist /gs2_diagnostics_knobs/ print_line, print_flux_line, &
          write_line, write_flux_line, write_phi, write_apar, write_bpar, write_aperp, &
          write_omega, write_omavg, write_ascii, write_kpar, write_lamavg, &
          write_qheat, write_pflux, write_vflux, write_eavg, write_gs, write_gyx, &
@@ -181,7 +181,6 @@ contains
 !       if (nperiod_output /= nperiod) &
 !            write (unit, fmt="(' nperiod_output = ',i3)") nperiod_output
        
-       write (unit, fmt="(' print_old_units = ',L1)") print_old_units
        if (write_ascii) then
           write (unit, fmt="(' write_ascii = ',L1)") write_ascii
           write (unit, fmt="(' write_omega = ',L1)") write_omega
@@ -272,10 +271,6 @@ contains
             & trim(run_name)//'.out.nc',  nwrite
     else
        ! nothing
-    end if
-
-    if (print_old_units) then
-       write (report_unit, fmt="('print_old_units = T:       Frequencies on screen in 1/omega_* units, omega_*=(cT/eB)*ky/L_ref.')")
     end if
 
     if (.not. write_phi) then
@@ -669,7 +664,7 @@ contains
     use run_parameters, only: fapar
     use file_utils, only: open_output_file, get_unused_unit
     use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, aky_out, akx_out
+    use kt_grids, only: naky, ntheta0, aky, akx
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
     use mp, only: proc0
@@ -809,7 +804,6 @@ contains
     if (proc0) then
 	!<wkdoc> Set defaults for the gs2_diagnostics_knobs</wkdoc>		
        print_line = .true.
-       print_old_units = .false.
        print_flux_line = .false.
        write_line = .true.
        write_flux_line = .true.
@@ -932,11 +926,11 @@ contains
     use file_utils, only: open_output_file, close_output_file, get_unused_unit
     use mp, only: proc0, broadcast, nproc, iproc, sum_reduce
     use species, only: nspec, spec
-    use run_parameters, only: fphi, fapar, fbpar, funits
+    use run_parameters, only: fphi, fapar, fbpar
     use theta_grid, only: ntgrid, theta, delthet, jacob, gradpar, nperiod
     use theta_grid, only: Rplot, Zplot, aplot, Rprime, Zprime, aprime
     use theta_grid, only: drhodpsi, qval, shape
-    use kt_grids, only: naky, ntheta0, theta0, nx, ny, aky_out, akx_out, aky, akx
+    use kt_grids, only: naky, ntheta0, theta0, nx, ny, akx, aky
     use le_grids, only: nlambda, negrid, fcheck, al, delal
     use le_grids, only: e, dele
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
@@ -1032,7 +1026,7 @@ contains
                 do it = 1, ntheta0
                    do ig = -ntg_out, ntg_out
                       write (unit, "(9(1x,e12.5))") &
-                           theta(ig), theta0(it,ik), aky_out(ik), &
+                           theta(ig), theta0(it,ik), aky(ik), &
                              phi(ig,it,ik)/phi0(it,ik), &
                             apar(ig,it,ik)/phi0(it,ik), &
                            bpar(ig,it,ik)/phi0(it,ik)
@@ -1055,10 +1049,10 @@ contains
                 do it = 1, ntheta0
                    do ig = -ntg_out, ntg_out
                       write (unit, "(15(1x,e12.5))") &
-!                           theta(ig), theta0(it,ik), aky_out(ik), &
-                           theta(ig), aky_out(ik), akx_out(it), &
-                             phi(ig,it,ik), &
-                            apar(ig,it,ik), &
+!                           theta(ig), theta0(it,ik), aky(ik), &
+                           theta(ig), aky(ik), akx(it), &
+                           phi(ig,it,ik), &
+                           apar(ig,it,ik), &
                            bpar(ig,it,ik), &
                            theta(ig) - theta0(it,ik), &
                            cabs(phi(ig,it,ik))
@@ -1096,14 +1090,14 @@ contains
              do it = 1, ntheta0
                 do ig = ntgrid+1,2*ntgrid
                    write (unit, "(9(1x,e12.5))") &
-                        kpar(ig), aky_out(ik), akx_out(it), &
+                        kpar(ig), aky(ik), akx(it), &
                         phi2(ig-ntgrid-1,it,ik), &
                         apar2(ig-ntgrid-1,it,ik), &
                         bpar2(ig-ntgrid-1,it,ik)                        
                 end do
                 do ig = 1, ntgrid
                    write (unit, "(9(1x,e12.5))") &
-                        kpar(ig), aky_out(ik), akx_out(it), &
+                        kpar(ig), aky(ik), akx(it), &
                         phi2(ig-ntgrid-1,it,ik), &
                         apar2(ig-ntgrid-1,it,ik), &
                         bpar2(ig-ntgrid-1,it,ik)
@@ -1125,8 +1119,8 @@ contains
                 do it = 1, ntheta0
                    do ig = -ntg_out, ntg_out-1
                       write (unit, "(6(1x,e12.5))") &
-!                           theta(ig), theta0(it,ik), aky_out(ik), &
-                           theta(ig), aky_out(ik), akx_out(it), &
+!                           theta(ig), theta0(it,ik), aky(ik), &
+                           theta(ig), aky(ik), akx(it), &
                            epar(ig,it,ik), &
                            theta(ig) - theta0(it,ik)
                    end do
@@ -1147,7 +1141,7 @@ contains
 
           call open_output_file (unit, ".lam")
           do is = 1,nspec
-             lamflux(:,is,1) = lamflux(:,is,1)*funits*spec(is)%dens
+             lamflux(:,is,1) = lamflux(:,is,1)*spec(is)%dens
              do il=1,nlambda
                 write (unit=unit, fmt=*) al(il), lamflux(il,is,1), is, &
                      sum(lamflux(1:il,is,1)*delal(1:il))
@@ -1158,9 +1152,9 @@ contains
 
           call open_output_file (unit, ".lame")
           do is = 1,nspec
-             lamflux(:,is,2) = lamflux(:,is,2)*funits*spec(is)%dens*spec(is)%temp
-             lamflux(:,is,3) = lamflux(:,is,3)*funits*spec(is)%dens*spec(is)%temp
-             lamflux(:,is,4) = lamflux(:,is,4)*funits*spec(is)%dens*spec(is)%temp
+             lamflux(:,is,2) = lamflux(:,is,2)*spec(is)%dens*spec(is)%temp
+             lamflux(:,is,3) = lamflux(:,is,3)*spec(is)%dens*spec(is)%temp
+             lamflux(:,is,4) = lamflux(:,is,4)*spec(is)%dens*spec(is)%temp
              do il=1,nlambda
                 write (unit=unit, fmt=*) al(il), lamflux(il,is,2), is, &
                      sum(lamflux(1:il,is,2)*delal(1:il)), &
@@ -1180,7 +1174,7 @@ contains
        if (proc0) then
           call open_output_file (unit, ".energy")
           do is = 1,nspec
-             enflux(:,is,1) = enflux(:,is,1)*funits*spec(is)%dens
+             enflux(:,is,1) = enflux(:,is,1)*spec(is)%dens
              do ie=1,negrid
                 write (unit=unit, fmt=*) e(ie,is), enflux(ie,is,1),is, &
                      sum(enflux(1:ie,is,1)*dele(1:ie,is))
@@ -1191,9 +1185,9 @@ contains
 
           call open_output_file (unit, ".energye")
           do is = 1,nspec
-             enflux(:,is,2) = enflux(:,is,2)*funits*spec(is)%dens*spec(is)%temp
-             enflux(:,is,3) = enflux(:,is,3)*funits*spec(is)%dens*spec(is)%temp
-             enflux(:,is,4) = enflux(:,is,4)*funits*spec(is)%dens*spec(is)%temp
+             enflux(:,is,2) = enflux(:,is,2)*spec(is)%dens*spec(is)%temp
+             enflux(:,is,3) = enflux(:,is,3)*spec(is)%dens*spec(is)%temp
+             enflux(:,is,4) = enflux(:,is,4)*spec(is)%dens*spec(is)%temp
              do ie=1,negrid
                 write (unit=unit, &
                      fmt="(2(1x,e10.4),i3,5(1x,e10.4))") e(ie,is), enflux(ie,is,2), is, &
@@ -1257,7 +1251,7 @@ contains
 !                              aimag(upar(ig,it,ik,is)/phi0(it,ik)), &
 !                              real(tperp(ig,it,ik,is)/phi0(it,ik))
                          write (unit, "(15(1x,e12.5))") &
-                              theta(ig), aky_out(ik), akx_out(it), &
+                              theta(ig), aky(ik), akx(it), &
                               ntot(ig,it,ik,is)/phi0(it,ik), &
                               density(ig,it,ik,is)/phi0(it,ik), &
                               upar(ig,it,ik,is)/phi0(it,ik), &
@@ -1283,7 +1277,7 @@ contains
                    do it = 1, ntheta0
                       do ig = -ntg_out, ntg_out
                          write (unit, "(15(1x,e12.5))") &
-                              theta(ig), aky_out(ik), akx_out(it), &
+                              theta(ig), aky(ik), akx(it), &
                               real(ntot(ig,it,ik,is)*conjg(ntot(ig,it,ik,is)))/phi02(it,ik), &
                               real(density(ig,it,ik,is)*conjg(density(ig,it,ik,is)))/phi02(it,ik), &
                               real(upar(ig,it,ik,is)*conjg(upar(ig,it,ik,is)))/phi02(it,ik), &
@@ -1310,7 +1304,7 @@ contains
              
              do is  = 1, nspec
                 do it = 2, ntheta0/2+1
-                   write (unit, "(i2,14(1x,e10.3))") spec(is)%type, akx_out(it), &
+                   write (unit, "(i2,14(1x,e10.3))") spec(is)%type, akx(it), &
                         sum(phinew(-ntg_out:ntg_out,it,1)*dl_over_b), &
                         sum(ntot(-ntg_out:ntg_out,it,1,is)*dl_over_b), &
                         sum(density(-ntg_out:ntg_out,it,1,is)*dl_over_b), &
@@ -1339,7 +1333,7 @@ contains
                 do it = 1, ntheta0
                    do ig = -ntg_out, ntg_out
                       write (unit, "(10(1x,e12.5))") &
-                           theta(ig), theta0(it,ik), aky_out(ik), &
+                           theta(ig), theta0(it,ik), aky(ik), &
                            antot(ig,it,ik), &
                            antota(ig,it,ik), &
                            antotp(ig,it,ik), &
@@ -1368,7 +1362,7 @@ contains
              do ik = 1, nny
                 do it = 1, nnx
                    write (unit, "(15(1x,e12.5))") &
-                        2.0*pi/akx_out(2)*real(it-1-nnx/2)/real(nnx), &
+                        2.0*pi/akx(2)*real(it-1-nnx/2)/real(nnx), &
                         2.0*pi/aky(2)*real(ik-1)/real(nny), &
                         theta(ig), &
                         xphi(it,ik,ig)
@@ -1391,7 +1385,7 @@ contains
                 do ik = 1, naky
                    do it = 1, ntheta0
                       write (unit, "(20(1x,e12.6))") 0.5*(al(il) + al(il-1)), &
-                           aky_out(ik), akx_out(it), fcheck_f(il,it,ik,is), &
+                           aky(ik), akx(it), fcheck_f(il,it,ik,is), &
                            sum((al(2:il)-al(1:il-1))*fcheck_f(2:il,it,ik,is))
                    end do
                 end do
@@ -1686,13 +1680,13 @@ contains
              do it = 1, ntheta0
                 do ig = ntgrid+1,2*ntgrid
                    write (unit, "(9(1x,e12.5))") &
-                        kpar(ig), aky_out(ik), akx_out(it), &
+                        kpar(ig), aky(ik), akx(it), &
                         real(vx2(ig-ntgrid-1,it,ik)), &
                         real(vy2(ig-ntgrid-1,it,ik))
                 end do
                 do ig = 1, ntgrid
                    write (unit, "(9(1x,e12.5))") &
-                        kpar(ig), aky_out(ik), akx_out(it), &
+                        kpar(ig), aky(ik), akx(it), &
                         real(vx2(ig-ntgrid-1,it,ik)), &
                         real(vy2(ig-ntgrid-1,it,ik))
                 end do
@@ -1751,9 +1745,9 @@ contains
     use species, only: nspec, spec, has_electron_species
     use theta_grid, only: theta, ntgrid, delthet, jacob
     use theta_grid, only: gradpar, nperiod
-    use kt_grids, only: naky, ntheta0, aky_out, theta0, akx_out, aky, akx
-    use kt_grids, only: nkpolar, jtwist_out !, akpolar, akpolar_out
-    use run_parameters, only: woutunits, funits, tunits, fapar, fphi, fbpar, eqzip
+    use kt_grids, only: naky, ntheta0, theta0, aky, akx
+    use kt_grids, only: nkpolar, jtwist_out !, akpolar
+    use run_parameters, only: woutunits, tunits, fapar, fphi, fbpar, eqzip
     use run_parameters, only: nstep
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
@@ -2035,106 +2029,104 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        if (proc0) then
           if (fphi > epsilon(0.0)) then
              do is = 1, nspec
-                qheat(:,:,is,1) = qheat(:,:,is,1)*funits &
+                qheat(:,:,is,1) = qheat(:,:,is,1) &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qheat(:,:,is,1), heat_fluxes(is))
 
-                qheat(:,:,is,2) = qheat(:,:,is,2)*funits &
+                qheat(:,:,is,2) = qheat(:,:,is,2) &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qheat(:,:,is,2), heat_par(is))
 
-                qheat(:,:,is,3) = qheat(:,:,is,3)*funits &
+                qheat(:,:,is,3) = qheat(:,:,is,3) &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qheat(:,:,is,3), heat_perp(is))
                 
-                theta_qflux(:,is,1) = theta_qflux(:,is,1)*funits &
+                theta_qflux(:,is,1) = theta_qflux(:,is,1) &
                      *spec(is)%dens*spec(is)%temp
-                theta_qflux(:,is,2) = theta_qflux(:,is,2)*funits &
+                theta_qflux(:,is,2) = theta_qflux(:,is,2) &
                      *spec(is)%dens*spec(is)%temp
-                theta_qflux(:,is,3) = theta_qflux(:,is,3)*funits &
+                theta_qflux(:,is,3) = theta_qflux(:,is,3) &
                      *spec(is)%dens*spec(is)%temp
 
-                pflux(:,:,is) = pflux(:,:,is)*funits &
-                     *spec(is)%dens
+                pflux(:,:,is) = pflux(:,:,is)*spec(is)%dens
                 call get_volume_average (pflux(:,:,is), part_fluxes(is))
 
-                theta_pflux(:,is) = theta_pflux(:,is)*funits &
-                     *spec(is)%dens
+                theta_pflux(:,is) = theta_pflux(:,is)*spec(is)%dens
                 
-                vflux(:,:,is) = vflux(:,:,is)*funits**2 &
+                vflux(:,:,is) = vflux(:,:,is) &
                      *spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
                 call get_volume_average (vflux(:,:,is), mom_fluxes(is))
-                vflux_par(:,:,is) = vflux_par(:,:,is)*funits**2 &
+                vflux_par(:,:,is) = vflux_par(:,:,is) &
                      *spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
                 call get_volume_average (vflux_par(:,:,is), parmom_fluxes(is))
-                vflux_perp(:,:,is) = vflux_perp(:,:,is)*funits**2 &
+                vflux_perp(:,:,is) = vflux_perp(:,:,is) &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vflux_perp(:,:,is), perpmom_fluxes(is))
 
                 if (include_lowflow) then
-                   vflux0(:,:,is) = vflux0(:,:,is)*funits**2 &
+                   vflux0(:,:,is) = vflux0(:,:,is) &
                         *spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
                    call get_volume_average (vflux0(:,:,is), lfmom_fluxes(is))
-                   vflux1(:,:,is) = vflux1(:,:,is)*funits**2 &
+                   vflux1(:,:,is) = vflux1(:,:,is) &
                         *spec(is)%dens*spec(is)%mass*spec(is)%temp/spec(is)%z
                    call get_volume_average (vflux1(:,:,is), vflux1_avg(is))
 ! TMP UNTIL VFLUX0 IS TESTED
 !                   mom_fluxes = mom_fluxes + lfmom_fluxes
                 end if
 
-                theta_vflux(:,is) = theta_vflux(:,is)*funits**2 &
+                theta_vflux(:,is) = theta_vflux(:,is) &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
-                theta_vflux_par(:,is) = theta_vflux_par(:,is)*funits**2 &
+                theta_vflux_par(:,is) = theta_vflux_par(:,is) &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
-                theta_vflux_perp(:,is) = theta_vflux_perp(:,is)*funits**2 &
+                theta_vflux_perp(:,is) = theta_vflux_perp(:,is) &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
 
              end do
           end if
           if (fapar > epsilon(0.0)) then
              do is = 1, nspec
-                qmheat(:,:,is,1)=qmheat(:,:,is,1)*funits &
+                qmheat(:,:,is,1)=qmheat(:,:,is,1) &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qmheat(:,:,is,1), mheat_fluxes(is))
 
                 call get_surf_average (qmheat(:,:,is,1), x_qmflux(:,is))
 
-                qmheat(:,:,is,2)=qmheat(:,:,is,2)*funits &
+                qmheat(:,:,is,2)=qmheat(:,:,is,2) &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qmheat(:,:,is,2), mheat_par(is))
 
-                qmheat(:,:,is,3)=qmheat(:,:,is,3)*funits &
+                qmheat(:,:,is,3)=qmheat(:,:,is,3) &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qmheat(:,:,is,3), mheat_perp(is))
                 
-                pmflux(:,:,is)=pmflux(:,:,is)*funits &
+                pmflux(:,:,is)=pmflux(:,:,is) &
                      *spec(is)%dens
                 call get_volume_average (pmflux(:,:,is), mpart_fluxes(is))
 
-                vmflux(:,:,is)=vmflux(:,:,is)*funits &
+                vmflux(:,:,is)=vmflux(:,:,is) &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vmflux(:,:,is), mmom_fluxes(is))
              end do
           end if
           if (fbpar > epsilon(0.0)) then
              do is = 1, nspec
-                qbheat(:,:,is,1)=qbheat(:,:,is,1)*funits &
+                qbheat(:,:,is,1)=qbheat(:,:,is,1) &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qbheat(:,:,is,1), bheat_fluxes(is))
 
-                qbheat(:,:,is,2)=qbheat(:,:,is,2)*funits &
+                qbheat(:,:,is,2)=qbheat(:,:,is,2) &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qbheat(:,:,is,2), bheat_par(is))
 
-                qbheat(:,:,is,3)=qbheat(:,:,is,3)*funits &
+                qbheat(:,:,is,3)=qbheat(:,:,is,3) &
                      *spec(is)%dens*spec(is)%temp
                 call get_volume_average (qbheat(:,:,is,3), bheat_perp(is))
                 
-                pbflux(:,:,is)=pbflux(:,:,is)*funits &
+                pbflux(:,:,is)=pbflux(:,:,is) &
                      *spec(is)%dens
                 call get_volume_average (pbflux(:,:,is), bpart_fluxes(is))
 
-                vbflux(:,:,is)=vbflux(:,:,is)*funits &
+                vbflux(:,:,is)=vbflux(:,:,is) &
                      *spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vbflux(:,:,is), bmom_fluxes(is))
              end do
@@ -2172,41 +2164,26 @@ if (debug) write(6,*) "loop_diagnostics: -1"
           end if
        end if
        if (print_line) then
-          if (print_old_units) then
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   write (unit=*, fmt="('aky=',f5.2, ' th0=',f5.2, &
-                          &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e10.4)") &
-                        aky_out(ik), theta0(it,ik), &
-                        real (omega(it,ik)), &
-                        aimag(omega(it,ik)), &
-                        real( omegaavg(it,ik)), &
-                        aimag(omegaavg(it,ik)), &
-                        phitot(it,ik)
-                end do
-             end do
-          else
-             do ik = 1, naky
-                do it = 1, ntheta0
+          do ik = 1, naky
+             do it = 1, ntheta0
 !                   write (unit=*, fmt="('aky=',f5.2, ' th0=',f7.2, &
 !                          &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e10.4)") &
-!                        aky_out(ik), theta0(it,ik), &
+!                        aky(ik), theta0(it,ik), &
 !                        real( omega(it,ik)*woutunits(ik)), &
 !                        aimag(omega(it,ik)*woutunits(ik)), &
 !                        real( omegaavg(it,ik)*woutunits(ik)), &
 !                        aimag(omegaavg(it,ik)*woutunits(ik)), &
 !                        phitot(it,ik)
-                   write (unit=*, fmt="('ky=',f7.4, ' kx=',f7.4, &
-                          &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e8.2)") &
-                        aky_out(ik), akx_out(it), &
-                        real( omega(it,ik)*woutunits(ik)), &
-                        aimag(omega(it,ik)*woutunits(ik)), &
-                        real( omegaavg(it,ik)*woutunits(ik)), &
-                        aimag(omegaavg(it,ik)*woutunits(ik)), &
-                        phitot(it,ik)
-                end do
+                write (unit=*, fmt="('ky=',f7.4, ' kx=',f7.4, &
+                     &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e8.2)") &
+                     aky(ik), akx(it), &
+                     real( omega(it,ik)*woutunits(ik)), &
+                     aimag(omega(it,ik)*woutunits(ik)), &
+                     real( omegaavg(it,ik)*woutunits(ik)), &
+                     aimag(omegaavg(it,ik)*woutunits(ik)), &
+                     phitot(it,ik)
              end do
-          end if
+          end do
           write (*,*) 
        end if
     end if
@@ -2555,12 +2532,12 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        if (write_ascii) then
           do ik = 1, naky
              do it = 1, ntheta0
-!                write (out_unit,*) "aky=",aky_out(ik)," theta0=",theta0(it,ik)
+!                write (out_unit,*) "aky=",aky(ik)," theta0=",theta0(it,ik)
 
                 if (write_line) then
                    write (out_unit, "('t= ',e16.10,' aky= ',1pe12.4, ' akx= ',1pe12.4, &
                         &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4)") &
-                        t, aky_out(ik), akx_out(it), &
+                        t, aky(ik), akx(it), &
                         real( omega(it,ik)*woutunits(ik)), &
                         aimag(omega(it,ik)*woutunits(ik)), &
                         real( omegaavg(it,ik)*woutunits(ik)), &
@@ -2600,8 +2577,8 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        do ik = 1, naky
           do it = 1, ntheta0
              if (write_kperpnorm) then
-                if (aky_out(ik) /= 0.0) then
-                   write (out_unit, *) 'kperpnorm=',akperp(it,ik)/aky_out(ik)
+                if (aky(ik) /= 0.0) then
+                   write (out_unit, *) 'kperpnorm=',akperp(it,ik)/aky(ik)
                 else
 ! huh? 
                    write (out_unit, *) 'kperpnorm*aky=',akperp(it,ik)
@@ -2618,18 +2595,18 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                 if (write_ascii) then
 !                   write (out_unit,"('ik,it,aky,akx,<phi**2>,t: ', &
 !                        & 2i5,4(1x,e12.6))") &
-!                        ik, it, aky_out(ik), akx_out(it), phi2_by_mode(it,ik), t
+!                        ik, it, aky(ik), akx(it), phi2_by_mode(it,ik), t
 !                   write (out_unit,"('ik,it,aky,akx,<apar**2>,t: ', &
 !                        & 2i5,4(1x,e12.6))") &
-!                        ik, it, aky_out(ik), akx_out(it), apar2_by_mode(it,ik), t
+!                        ik, it, aky(ik), akx(it), apar2_by_mode(it,ik), t
                 end if
 !                if (ntheta0 > 1 .and. ik == 1) then
 !                   write (out_unit, "('it,akx,<phi**2>,t: ',i5,3(1x,e12.6))") &
-!                        it, akx_out(it), sum(phi2_by_mode(it,:)*fluxfac(:)), t
+!                        it, akx(it), sum(phi2_by_mode(it,:)*fluxfac(:)), t
 !                end if
 !                if (naky > 1 .and. it == 1) then
 !                   write (out_unit, "('ik,aky,<phi**2>,t: ',i5,3(1x,e12.6))") &
-!                        ik, aky_out(ik), sum(phi2_by_mode(:,ik))*fluxfac(ik), t
+!                        ik, aky(ik), sum(phi2_by_mode(:,ik))*fluxfac(ik), t
 !                end if
              end if
           end do
@@ -3208,7 +3185,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
              if (dump_neoclassical_flux .and. neoflux) then
                 do is = 1, nspec
                    write (dump_neoclassical_flux_unit, "(20(1x,e12.5))") &
-                        t, aky_out(ik), akx_out(it), real(is), pfluxneo(it,ik,is), &
+                        t, aky(ik), akx(it), real(is), pfluxneo(it,ik,is), &
                         qfluxneo(it,ik,is), &
                         pfluxneo(it,ik,is)/sourcefac, &
                         qfluxneo(it,ik,is)/sourcefac
@@ -3217,7 +3194,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
              if (dump_check1) then
                 denom=sum(delthet(-ntg_out:ntg_out-1)*jacob(-ntg_out:ntg_out-1))
                 write (dump_check1_unit, "(20(1x,e12.5))") &
-                     t, aky_out(ik), akx_out(it), &
+                     t, aky(ik), akx(it), &
                      sum(phinew(-ntg_out:ntg_out-1,it,ik) &
                      *delthet(-ntg_out:ntg_out-1) &
                          *jacob(-ntg_out:ntg_out-1))/denom, &
@@ -3228,7 +3205,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
              end if
              if (dump_check2) then
                 write (dump_check2_unit, "(5(1x,e12.5))") &
-                     t, aky_out(ik), akx_out(it), aparnew(igomega,it,ik)
+                     t, aky(ik), akx(it), aparnew(igomega,it,ik)
              end if
           end do
        end do
@@ -3242,9 +3219,9 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           do it = 1, ntheta0
              do ig = -ntg_out, ntg_out
                 write (unit=unit, fmt="(20(1x,e12.5))") &
-                     theta(ig), aky_out(ik), theta0(it,ik), &
+                     theta(ig), aky(ik), theta0(it,ik), &
                      phinew(ig,it,ik), aparnew(ig,it,ik), &
-                     bparnew(ig,it,ik), t, akx_out(it)
+                     bparnew(ig,it,ik), t, akx(it)
              end do
              write (unit, "()")
           end do
@@ -3287,10 +3264,9 @@ if (debug) write(6,*) "loop_diagnostics: done"
     use species, only: nspec, spec
     use kt_grids, only: naky, ntheta0, aky, akx
     use theta_grid, only: ntgrid, delthet, jacob
-    use run_parameters, only: funits
     use nonlinear_terms, only: nonlin
     use dist_fn_arrays, only: c_rate
-    use gs2_heating, only: heating_diagnostics, avg_h, avg_hk, htimesx, zero_htype
+    use gs2_heating, only: heating_diagnostics, avg_h, avg_hk, zero_htype
     implicit none
     integer, intent (in) :: istep
     type (heating_diagnostics) :: h
@@ -3338,9 +3314,6 @@ if (debug) write(6,*) "loop_diagnostics: done"
     end if
 
     call get_heat (h, hk, phi, apar, bpar, phinew, aparnew, bparnew)    
-
-    call htimesx (h, funits)
-    call htimesx (hk, funits)
 
     call avg_h(h, h_hist, istep, navg)
     call avg_hk(hk, hk_hist, istep, navg)

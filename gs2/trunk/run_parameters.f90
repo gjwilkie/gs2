@@ -5,8 +5,8 @@ module run_parameters
   public :: check_run_parameters, wnml_run_parameters
   public :: beta, zeff, tite
   public :: fphi, fapar, fbpar
-!  public :: delt, delt_max, wunits, woutunits, tunits, funits, tnorm
-  public :: code_delt_max, wunits, woutunits, tunits, funits, tnorm
+!  public :: delt, delt_max, wunits, woutunits, tunits
+  public :: code_delt_max, wunits, woutunits, tunits
   public :: nstep, wstar_units, eqzip, margin
   public :: secondary, tertiary, harris
   public :: ieqzip
@@ -18,7 +18,7 @@ module run_parameters
 
   real :: beta, zeff, tite
   real :: fphi, fapar, fbpar, faperp
-  real :: delt, code_delt_max, user_delt_max, funits, tnorm, margin
+  real :: delt, code_delt_max, user_delt_max, margin
   real, dimension (:), allocatable :: wunits, woutunits, tunits
   real, dimension (2) :: vnm_init
   real :: avail_cpu_time
@@ -151,11 +151,9 @@ contains
 
     call read_parameters
 
-    call init_kt_grids (tnorm)
-    call init_delt (delt, tnorm)
+    call init_kt_grids
+    call init_delt (delt)
     call user2code (user_delt_max, code_delt_max)
-
-!    delt = delt * tnorm
 
     allocate (wunits(naky))
     allocate (woutunits(naky))
@@ -341,12 +339,7 @@ contains
 !            !! The Mysterious factor 1/2 Explained !!
 !            The factor of 1/2 arises because those source terms were first
 !            specified using the normalisation Tref=mref vtref^2 
-![old note by BD and MK on "Microinstabilities in Axisymmetric Configurations"]
-!            Nowadays, internally gs2 uses Tref=(1/2) mref vtref^2 everywhere.
-!            WUNITS restores the consistency of the normalisations in gs2.
 ! [R Numata et al, "AstroGK: Astrophysical gyrokinetics code", JCP, 2010].
-!    WOUTUNITS: convert output frequencies to appear in USER v_t normalisation
-!    FUNITS: convert output fluxes to appear in USER v_t normalisation        
 !CMRend
     if (wstar_units) then
        wunits = 1.0
@@ -362,15 +355,13 @@ contains
                "WARNING: wstar_units=.true. and aky=0.0: garbage results"
        end if
 !CMR: Sep 2010
-!  Changes to allow wstar_units to be used consistently with either 
-!  v_t normalisation option.   (Wasn't quite right before)
+!  Changes to allow wstar_units to be used
 !CMRend
     else
        tunits = 1.0
        wunits = aky/2.0
     end if
-    funits = tnorm
-    woutunits = tnorm/tunits
+    woutunits = 1.0/tunits
   end subroutine adjust_time_norm
 
   subroutine finish_run_parameters

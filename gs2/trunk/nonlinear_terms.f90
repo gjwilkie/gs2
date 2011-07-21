@@ -128,7 +128,6 @@ contains
     use kt_grids, only: init_kt_grids, naky, ntheta0, nx, ny, akx, aky
     use le_grids, only: init_le_grids, nlambda, negrid
     use species, only: init_species, nspec
-    use run_parameters, only: tnorm
     use gs2_layouts, only: init_dist_fn_layouts, yxf_lo, accelx_lo
     use gs2_layouts, only: init_gs2_layouts
     use gs2_transforms, only: init_transforms
@@ -174,8 +173,8 @@ contains
           alloc = .false.
        end if
 
-       cfly = aky(naky)/cfl*0.5/tnorm
-       cflx = akx((ntheta0+1)/2)/cfl*0.5/tnorm
+       cfly = aky(naky)/cfl*0.5
+       cflx = akx((ntheta0+1)/2)/cfl*0.5
     end if
 
   end subroutine init_nonlinear_terms

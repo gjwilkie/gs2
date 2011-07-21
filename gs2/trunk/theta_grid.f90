@@ -82,7 +82,7 @@ contains
     real, dimension (ntheta+1) :: thetaold, thetanew
     real, dimension (ntheta+1) :: bmagold, bmagnew
     integer :: i
-    logical:: debug=.false.
+    logical:: debug=.true.
 if (debug) write(6,*) 'gridgen_get_grids'
 
 
@@ -206,184 +206,184 @@ contains
  !
  ! Find q, r/R, R/a
  !
-        if (epsl > 0.) then
-           arat = 2. / epsl
-
-           if (epsl == 2.0) then
-              write (report_unit, &
-                   & fmt="('Scale lengths are normalized to the major radius, R')")
-           else
-              write (report_unit, fmt="('The aspect ratio R/a = ',f7.4)") arat
-              if (alne == 1.0) then
-                 write (report_unit, &
-                      & fmt="('Scale lengths are normalized to the density scale length, Ln')")
-              end if
-           end if
-           qsf = epsl/pk
-           write (report_unit, fmt="('The safety factor q =      ',f7.4)") qsf
-           write (report_unit, fmt="('The magnetic shear s_hat = ',f7.4)") shat
-           if (abs(shat) <= 1.e-5) then
-              write (report_unit, fmt="('This is effectively zero; periodic boundary conditions are assumed.')")
-           end if
-           write (report_unit, fmt="('and epsilon == r/R = ',f7.4)") eps
-           write (report_unit, *) 
-           if (eps > epsilon(0.0)) then
-              write (report_unit, fmt="('Trapped particles are included.')")
-           else
-              write (report_unit, fmt="('Trapped particles are neglected.')")
-           end if
-           write (report_unit, *) 
-
-           if (shift > -epsilon(0.0)) then
-              write (report_unit, fmt="('The s-alpha alpha parameter is ',f7.4)") shift
-!CMR 10/11/06: correct sign of dbeta/drho in s-alpha
-              write (report_unit, fmt="('corresponding to d beta / d rho = ',f10.4)") -shift/arat/qsf**2
-!CMR 10/11/06: correct sign of dbeta/drho in s-alpha in this check
-              if (abs(dbetadrho + shift/arat/qsf**2) > 1.e-2) then
-                 write (report_unit, *) 
-                 write (report_unit, fmt="('################# WARNING #######################')")
-                 write (report_unit, fmt="('This is inconsistent with beta and the pressure gradient.')") 
-                 write (report_unit, fmt="('################# WARNING #######################')")
-              end if
-           else
-              write (report_unit, *) 
-              write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, fmt="('The s-alpha alpha parameter is less that zero.')") 
-              write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-              write (report_unit, fmt="('################# WARNING #######################')")
-           end if
-
-        else
-           arat = 1.
+     if (epsl > 0.) then
+        arat = 2. / epsl
+        
+        if (epsl == 2.0) then
            write (report_unit, &
-                & fmt="('The radius of curvature is infinite.  This is a slab calculation.')")
+                & fmt="('Scale lengths are normalized to the major radius, R')")
+        else
+           write (report_unit, fmt="('The aspect ratio R/a = ',f7.4)") arat
+           if (alne == 1.0) then
+              write (report_unit, &
+                   & fmt="('Scale lengths are normalized to the density scale length, Ln')")
+           end if
         end if
-
+        qsf = epsl/pk
+        write (report_unit, fmt="('The safety factor q =      ',f7.4)") qsf
+        write (report_unit, fmt="('The magnetic shear s_hat = ',f7.4)") shat
+        if (abs(shat) <= 1.e-5) then
+           write (report_unit, fmt="('This is effectively zero; periodic boundary conditions are assumed.')")
+        end if
+        write (report_unit, fmt="('and epsilon == r/R = ',f7.4)") eps
         write (report_unit, *) 
-        select case (model_switch)
-
-        case (model_salpha,model_b2,model_eps)
-           if (epsl > 0.) then
-              write (report_unit, fmt="('An s-alpha model equilibrium has been selected.')")
-              write (report_unit, fmt="('The curvature and grad-B drifts are equal.')")
+        if (eps > epsilon(0.0)) then
+           write (report_unit, fmt="('Trapped particles are included.')")
+        else
+           write (report_unit, fmt="('Trapped particles are neglected.')")
+        end if
+        write (report_unit, *) 
+        
+        if (shift > -epsilon(0.0)) then
+           write (report_unit, fmt="('The s-alpha alpha parameter is ',f7.4)") shift
+           !CMR 10/11/06: correct sign of dbeta/drho in s-alpha
+           write (report_unit, fmt="('corresponding to d beta / d rho = ',f10.4)") -shift/arat/qsf**2
+           !CMR 10/11/06: correct sign of dbeta/drho in s-alpha in this check
+           if (abs(dbetadrho + shift/arat/qsf**2) > 1.e-2) then
               write (report_unit, *) 
-              if (model_switch /= model_eps) then
-                 write (report_unit, fmt="('For theta0 = 0, each is of the form')")
-                 write (report_unit, *) 
-                 write (report_unit, fmt="('  epsl*(cos(theta) + (shat*theta-shift*sin(theta))*sin(theta))')")
-                 write (report_unit, *) 
-              else
-                 write (report_unit, fmt="('For theta0 = 0, each is of the form')")
-                 write (report_unit, *) 
-                 write (report_unit, fmt="('  epsl*(cos(theta) - eps + (shat*theta-shift*sin(theta))*sin(theta))')")
-                 write (report_unit, *) 
-              end if
-              write (report_unit, fmt="('For finite theta0, there is also a term')")
-              write (report_unit, *) 
-              write (report_unit, fmt="('  -epsl*shat*sin(theta)*theta0')")
-              write (report_unit, *)
+              write (report_unit, fmt="('################# WARNING #######################')")
+              write (report_unit, fmt="('This is inconsistent with beta and the pressure gradient.')") 
+              write (report_unit, fmt="('################# WARNING #######################')")
            end if
+        else
            write (report_unit, *) 
-           write (report_unit, fmt="('For theta0 = 0, |(grad S)**2| is of the form')")
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('The s-alpha alpha parameter is less that zero.')") 
+           write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+           write (report_unit, fmt="('################# WARNING #######################')")
+        end if
+        
+     else
+        arat = 1.
+        write (report_unit, &
+             & fmt="('The radius of curvature is infinite.  This is a slab calculation.')")
+     end if
+     
+     write (report_unit, *) 
+     select case (model_switch)
+        
+     case (model_salpha,model_b2,model_eps)
+        if (epsl > 0.) then
+           write (report_unit, fmt="('An s-alpha model equilibrium has been selected.')")
+           write (report_unit, fmt="('The curvature and grad-B drifts are equal.')")
            write (report_unit, *) 
-           write (report_unit, fmt="('  1.0 + (shat*theta-shift*sin(theta))**2')")
-           write (report_unit, *) 
+           if (model_switch /= model_eps) then
+              write (report_unit, fmt="('For theta0 = 0, each is of the form')")
+              write (report_unit, *) 
+              write (report_unit, fmt="('  epsl*(cos(theta) + (shat*theta-shift*sin(theta))*sin(theta))')")
+              write (report_unit, *) 
+           else
+              write (report_unit, fmt="('For theta0 = 0, each is of the form')")
+              write (report_unit, *) 
+              write (report_unit, fmt="('  epsl*(cos(theta) - eps + (shat*theta-shift*sin(theta))*sin(theta))')")
+              write (report_unit, *) 
+           end if
            write (report_unit, fmt="('For finite theta0, there is also a term')")
            write (report_unit, *) 
-           write (report_unit, fmt="('  -shat*(shat*theta - shift*sin(theta))*theta0')")
+           write (report_unit, fmt="('  -epsl*shat*sin(theta)*theta0')")
+           write (report_unit, *)
+        end if
+        write (report_unit, *) 
+        write (report_unit, fmt="('For theta0 = 0, |(grad S)**2| is of the form')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('  1.0 + (shat*theta-shift*sin(theta))**2')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('For finite theta0, there is also a term')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('  -shat*(shat*theta - shift*sin(theta))*theta0')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('and finally, the term')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('  shat**2 * theta0**2')")
+        write (report_unit, *) 
+        if (model_switch == model_eps) then
            write (report_unit, *) 
-           write (report_unit, fmt="('and finally, the term')")
+           write (report_unit, fmt="(' This model differs from the normal s-alpha model')") 
+           write (report_unit, fmt="(' only in the curv and grad_B drifts.')")
+        end if
+        if (model_switch == model_b2) then
            write (report_unit, *) 
-           write (report_unit, fmt="('  shat**2 * theta0**2')")
-           write (report_unit, *) 
-           if (model_switch == model_eps) then
-              write (report_unit, *) 
-              write (report_unit, fmt="(' This model differs from the normal s-alpha model')") 
-              write (report_unit, fmt="(' only in the curv and grad_B drifts.')")
-           end if
-           if (model_switch == model_b2) then
-              write (report_unit, *) 
-              write (report_unit, fmt="(' This model differs from the normal s-alpha model')") 
-              write (report_unit, fmt="(' by an additional factor of 1/B(theta)**2 (not shown above)')")
-              write (report_unit, fmt="(' in the curv and grad_B drifts.')")
-           end if
-        case (model_ccurv)
-           write (report_unit, fmt="('Constant curvature is assumed.')")
-           write (report_unit, fmt="('The grad-B and curvature drifts are each = ',f10.4)") epsl
-           write (report_unit, *) 
-           write (report_unit, fmt="('For theta0 = 0, |(grad S)**2| is of the form')")
-           write (report_unit, *) 
-           write (report_unit, fmt="('  1.0 + (shat*theta-shift*sin(theta))**2')")
-           write (report_unit, *) 
-           write (report_unit, fmt="('For finite theta0, there is also a term')")
-           write (report_unit, *) 
-           write (report_unit, fmt="('  -shat*shat*theta*theta0')")
-           write (report_unit, *) 
-           write (report_unit, fmt="('and finally, the term')")
-           write (report_unit, *) 
-           write (report_unit, fmt="('  shat**2 * theta0**2')")
-           write (report_unit, *) 
-        case (model_nocurve)
-           write (report_unit, fmt="('Zero curvature is assumed.')")
-           write (report_unit, *) 
-           write (report_unit, fmt="('For theta0 = 0, |(grad S)**2| is of the form')")
-           write (report_unit, *) 
-           write (report_unit, fmt="('  1.0 + (shat*theta)**2')")
-           write (report_unit, *) 
-           write (report_unit, fmt="('For finite theta0, there is also a term')")
-           write (report_unit, *) 
-           write (report_unit, fmt="('  -shat*shat*theta*theta0')")
-           write (report_unit, *) 
-           write (report_unit, fmt="('and finally, the term')")
-           write (report_unit, *) 
-           write (report_unit, fmt="('  shat**2 * theta0**2')")
-           write (report_unit, *) 
-        end select
-  end subroutine check_theta_grid_salpha
-
-  subroutine wnml_theta_grid_salpha(unit)
+           write (report_unit, fmt="(' This model differs from the normal s-alpha model')") 
+           write (report_unit, fmt="(' by an additional factor of 1/B(theta)**2 (not shown above)')")
+           write (report_unit, fmt="(' in the curv and grad_B drifts.')")
+        end if
+     case (model_ccurv)
+        write (report_unit, fmt="('Constant curvature is assumed.')")
+        write (report_unit, fmt="('The grad-B and curvature drifts are each = ',f10.4)") epsl
+        write (report_unit, *) 
+        write (report_unit, fmt="('For theta0 = 0, |(grad S)**2| is of the form')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('  1.0 + (shat*theta-shift*sin(theta))**2')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('For finite theta0, there is also a term')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('  -shat*shat*theta*theta0')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('and finally, the term')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('  shat**2 * theta0**2')")
+        write (report_unit, *) 
+     case (model_nocurve)
+        write (report_unit, fmt="('Zero curvature is assumed.')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('For theta0 = 0, |(grad S)**2| is of the form')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('  1.0 + (shat*theta)**2')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('For finite theta0, there is also a term')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('  -shat*shat*theta*theta0')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('and finally, the term')")
+        write (report_unit, *) 
+        write (report_unit, fmt="('  shat**2 * theta0**2')")
+        write (report_unit, *) 
+     end select
+   end subroutine check_theta_grid_salpha
+   
+   subroutine wnml_theta_grid_salpha(unit)
      implicit none
      integer :: unit
      if (.not. exist) return
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "theta_grid_salpha_knobs"
-       write (unit, fmt="(' alpmhdfac = ',e16.10)") alpmhdfac
-       write (unit, fmt="(' alpha1 =    ',e16.10)") alpha1
+     write (unit, *)
+     write (unit, fmt="(' &',a)") "theta_grid_salpha_knobs"
+     write (unit, fmt="(' alpmhdfac = ',e16.10)") alpmhdfac
+     write (unit, fmt="(' alpha1 =    ',e16.10)") alpha1
+     
+     select case (model_switch)
+        
+     case (model_salpha)
+        write (unit, fmt="(a)") ' model_option = "s-alpha"'
+        
+     case (model_alpha1)
+        write (unit, fmt="(a)") ' model_option = "alpha1"'
+        
+     case (model_eps)
+        write (unit, fmt="(a)") ' model_option = "rogers"'
+        
+     case (model_b2)
+        write (unit, fmt="(a)") ' model_option = "b2"'
+        
+     case (model_normal_only)
+        write (unit, fmt="(a)") ' model_option = "normal_only"'
+        
+     case (model_ccurv)
+        write (unit, fmt="(a)") ' model_option = "const-curv"'
+        
+     case (model_nocurve)
+        write (unit, fmt="(a)") ' model_option = "no-curvature"'
+        
+     end select
+     write (unit, fmt="(' /')")
+   end subroutine wnml_theta_grid_salpha
+   
+   subroutine init_theta_grid_salpha
+     use theta_grid_params, only: init_theta_grid_params, rhoc, eps, epsl
+     use geometry, only: rhoc_geo=>rhoc
+     implicit none
+     logical, save :: initialized = .false.
 
-       select case (model_switch)
-
-       case (model_salpha)
-          write (unit, fmt="(a)") ' model_option = "s-alpha"'
-          
-       case (model_alpha1)
-          write (unit, fmt="(a)") ' model_option = "alpha1"'
-
-       case (model_eps)
-          write (unit, fmt="(a)") ' model_option = "rogers"'
-          
-       case (model_b2)
-          write (unit, fmt="(a)") ' model_option = "b2"'
-          
-       case (model_normal_only)
-          write (unit, fmt="(a)") ' model_option = "normal_only"'
-
-       case (model_ccurv)
-          write (unit, fmt="(a)") ' model_option = "const-curv"'
-
-       case (model_nocurve)
-          write (unit, fmt="(a)") ' model_option = "no-curvature"'
-          
-       end select
-       write (unit, fmt="(' /')")
-  end subroutine wnml_theta_grid_salpha
-
-  subroutine init_theta_grid_salpha
-    use theta_grid_params, only: init_theta_grid_params, rhoc, eps, epsl
-    use geometry, only: rhoc_geo=>rhoc
-    implicit none
-    logical, save :: initialized = .false.
-
-    if (initialized) return
+     if (initialized) return
     initialized = .false.
 
     call init_theta_grid_params
@@ -472,6 +472,8 @@ contains
     integer :: i
 
     theta = (/ (real(i)*2.0*pi/real(ntheta), i=-ntgrid,ntgrid) /)
+
+    write (*,*) 'salpha_get_grids, ntgrid = ',ntgrid
 
 ! BD: dummy response for graphics in s-alpha mode until I have time to fix this:
     Rplot = 1.  ; Rprime = 0.
@@ -1040,7 +1042,7 @@ contains
     real :: rhoc_save
     logical, save :: initialized = .false.
 !CMR nov04: adding following debug switch
-    logical :: debug=.false.
+    logical :: debug=.true.
 !CMR
 
     if (initialized) return
@@ -1128,7 +1130,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     logical, intent (in) :: gb_to_cv
     integer :: i, ig
-    logical:: debug=.false.
+    logical:: debug=.true.
 if (debug) write(6,*) 'eik_get_grids: ntgrid=',ntgrid
     do ig=-ntgrid,ntgrid
        theta(ig)    = theta_out(ig)
@@ -1596,7 +1598,7 @@ contains
     implicit none
     logical, save :: initialized = .false.
     integer :: i
-    logical :: debug=.false.
+    logical :: debug=.true.
     if (initialized) return
     initialized = .true.
 
@@ -1807,6 +1809,8 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
        allocate (aplot(-ntgrid:ntgrid)); aplot = eik_save
     end if
 
+    write (*,*) size(bmag), ntgrid
+
     bmax = maxval(bmag)
     bmin = minval(bmag)
 ! ?? check Krook collision operator coding which is only place eps is used
@@ -1834,7 +1838,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     use theta_grid_file, only: ntheta_file=>ntheta, nperiod_file=>nperiod
     use theta_grid_file, only: nbset_file=>nbset
     implicit none
-    logical:: debug=.false.
+    logical:: debug=.true.
 if (debug) write(6,*) 'get_sizes: eqopt_switch=',eqopt_switch
     select case (eqopt_switch)
     case (eqopt_eik)
@@ -1868,7 +1872,7 @@ if (debug) write(6,*) 'get_sizes: done'
     use theta_grid_params, only: eps, btor_slab
     use geometry, only: rhoc
     implicit none
-    logical:: debug=.false.
+    logical:: debug=.true.
     select case (eqopt_switch)
     case (eqopt_eik)
 if (debug) write(6,*) 'get_grids: call eik_get_grids'

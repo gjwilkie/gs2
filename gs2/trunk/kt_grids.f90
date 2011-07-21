@@ -653,38 +653,33 @@ contains
 end module kt_grids_xbox
 
 module kt_grids
-!  <doc> Set up the perpendicular wavenumbers by calling the appropriate sub-modules.  Also, set the normalizing
-! length in the perpendicular directions, depending on whether the thermal velocity that appears in the gyroradius
-! expression contains a factor of square root of two or not.
+!  <doc> Set up the perpendicular wavenumbers by calling the appropriate sub-modules. 
 ! </doc>
   use kt_grids_box, only: jtwist
   implicit none
 
   public :: init_kt_grids, box, finish_kt_grids, check_kt_grids, wnml_kt
-  public :: aky, theta0, akx, akr
-  public :: aky_out, akx_out, akr_out
+ public :: aky, theta0, akx, akr
   public :: naky, ntheta0, nx, ny, reality
   public :: nkpolar 
   public :: ikx, iky, jtwist_out
-  public :: gridopt_switch, grid_option, norm_option
+  public :: gridopt_switch, grid_option
   public :: gridopt_single, gridopt_range, gridopt_specified, gridopt_box, gridopt_xbox
   private
 
   integer :: naky, ntheta0, nx, ny, nkpolar, jtwist_out
   integer, dimension(:), allocatable :: ikx, iky
-  character(20) :: grid_option, norm_option
-  namelist /kt_grids_knobs/ grid_option, norm_option
-  real, dimension (:), allocatable :: aky, aky_out
+  character(20) :: grid_option
+  namelist /kt_grids_knobs/ grid_option
+  real, dimension (:), allocatable :: aky, akx
   real, dimension (:,:), allocatable :: theta0
-  real, dimension (:), allocatable :: akx, akx_out
-  real, dimension (:,:), allocatable :: akr, akr_out
-!  real, dimension (:), allocatable :: akpolar, akpolar_out
+  real, dimension (:,:), allocatable :: akr
+!  real, dimension (:), allocatable :: akpolar
 
   ! internal variables
-  integer :: gridopt_switch, normopt_switch
+  integer :: gridopt_switch
   integer, parameter :: gridopt_single = 1, gridopt_range = 2, &
        gridopt_specified = 3, gridopt_box = 4, gridopt_xbox = 5
-  integer, parameter :: normopt_mtk = 1, normopt_bd = 2
   logical :: reality = .false.
   logical :: box = .false.
   logical :: initialized = .false.
@@ -692,17 +687,13 @@ module kt_grids
 
 contains
 
-  subroutine init_kt_grids (tnorm)
+  subroutine init_kt_grids
     use theta_grid, only: init_theta_grid, shat, gds22
     use mp, only: proc0, broadcast
     implicit none
 
-    real, optional, intent (out) :: tnorm
     integer :: ik, it
-    real :: tfac = 1.0
 !    logical, save :: initialized = .false.
-
-    if (present(tnorm)) tnorm = tfac
 
     if (initialized) return
     initialized = .true.
@@ -714,17 +705,8 @@ contains
        call read_parameters
        call get_sizes
 
-       select case (normopt_switch)
-       case (normopt_mtk)
-          tfac = 1.
-       case (normopt_bd)
-          tfac = sqrt(2.)
-       end select
        jtwist_out = jtwist
     end if
-
-    call broadcast (tfac)
-    if (present(tnorm)) tnorm = tfac
 
     call broadcast (reality)
     call broadcast (box)
@@ -753,19 +735,6 @@ contains
        akr = 1.
     end if
 
-    select case (normopt_switch)
-    case (normopt_mtk)
-       akr_out = akr
-       akx_out = akx
-       aky_out = aky
-!       if (nkpolar > 0) akpolar_out = akpolar
-    case (normopt_bd)
-       akr_out = akr / sqrt(2.)
-       akx_out = akx / sqrt(2.)
-       aky_out = aky / sqrt(2.)
-!       if (nkpolar > 0) akpolar_out = akpolar / sqrt(2.)
-    end select
-
   end subroutine init_kt_grids
 
   subroutine read_parameters
@@ -781,16 +750,8 @@ contains
             text_option('nonlinear', gridopt_box), &
             text_option('xbox', gridopt_xbox) /)
     ! 'default' 'specified': specify grid in namelists
-    type (text_option), dimension(6), parameter :: normopts = &
-         (/ text_option('default', normopt_mtk), &
-            text_option('with_root_2', normopt_mtk), &
-            text_option('mtk', normopt_mtk), &
-            text_option('no_root_2', normopt_bd), &
-            text_option('bd', normopt_bd), &
-            text_option('t_over_m', normopt_bd) /)
     integer :: ierr, in_file
 
-    norm_option = 'default'
     grid_option = 'default'
     in_file = input_unit_exist ("kt_grids_knobs", nml_exist)
 !    if (exist) read (unit=input_unit("kt_grids_knobs"), nml=kt_grids_knobs)
@@ -800,11 +761,6 @@ contains
     call get_option_value &
          (grid_option, gridopts, gridopt_switch, &
          ierr, "grid_option in kt_grids_knobs")
-
-    ierr = error_unit()
-    call get_option_value &
-         (norm_option, normopts, normopt_switch, &
-         ierr, "norm_option in kt_grids_knobs")
 
   end subroutine read_parameters
 
@@ -833,14 +789,6 @@ contains
        write (unit, fmt="(' grid_option = ',a)") '"xbox"'
     end select
 
-    select case (normopt_switch)             
-    case (normopt_mtk)
-       write (unit, fmt="(' norm_option = ',a)") '"with_root_2"'
-    case (normopt_bd)
-       write (unit, fmt="(' norm_option = ',a)") '"no_root_2"'
-    end select
-    write (unit, fmt="(' /')")
-
     select case (gridopt_switch)          
     case (gridopt_single)
        call wnml_kt_grids_single(unit)
@@ -859,19 +807,15 @@ contains
   subroutine allocate_arrays
     use theta_grid, only: ntgrid
     implicit none
-    allocate (aky(naky))
-    allocate (aky_out(naky))
-    allocate (theta0(ntheta0,naky))
     allocate (akx(ntheta0))
-    allocate (akx_out(ntheta0))
+    allocate (aky(naky))
+    allocate (theta0(ntheta0,naky))
     allocate (akr(-ntgrid:ntgrid,ntheta0))
-    allocate (akr_out(-ntgrid:ntgrid,ntheta0))
 
     allocate (ikx(ntheta0))
     allocate (iky(naky))
 
-!    if (nkpolar > 0) &
-!         allocate (akpolar(nkpolar), akpolar_out(nkpolar))
+!    if (nkpolar > 0)  allocate (akpolar(nkpolar))
   end subroutine allocate_arrays
 
   subroutine get_sizes
@@ -923,22 +867,13 @@ contains
        call xbox_get_grids (aky, theta0, akx)
     end select
 
-    select case (normopt_switch)
-    case (normopt_mtk)
-       ! nothing -- this is how the original code is designed
-    case (normopt_bd)
-       aky = aky * sqrt(2.)
-       akx = akx * sqrt(2.)
-!       if (nkpolar > 0) akpolar = akpolar * sqrt(2.)
-    end select
-
   end subroutine get_grids
 
   subroutine finish_kt_grids
 
     implicit none
 
-    if (allocated(aky)) deallocate (aky, aky_out, theta0, akx, akx_out, akr, akr_out, ikx, iky)
+    if (allocated(aky)) deallocate (akx, aky, theta0, akr, ikx, iky)
 
     reality = .false. ; box = .false.
     initialized = .false.
