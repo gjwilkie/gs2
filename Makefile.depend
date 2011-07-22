@@ -12,14 +12,10 @@ ball_mod = \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
-	 mds.o \
-	 mdslib.o \
 	 netcdf_utils.o \
 	 peq.o \
-	 radstub.o \
-	 spl.o \
-	 vdimstub.o \
-	 veq.o 
+	 spl.o
+
 
 drive_mod = \
 	 drive.o \
@@ -39,14 +35,9 @@ eiktest_mod = \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
-	 mds.o \
-	 mdslib.o \
 	 netcdf_utils.o \
 	 peq.o \
-	 radstub.o \
-	 spl.o \
-	 vdimstub.o \
-	 veq.o 
+	 spl.o
 
 ffttester_mod = \
 	 antenna.o \
@@ -88,14 +79,11 @@ ffttester_mod = \
 	 le_grids.o \
 	 leq.o \
 	 lowflow.o \
-	 mds.o \
-	 mdslib.o \
 	 mp.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
 	 prof.o \
-	 radstub.o \
 	 ran.o \
 	 redistribute.o \
 	 run_parameters.o \
@@ -104,9 +92,7 @@ ffttester_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o \
-	 vdimstub.o \
-	 veq.o 
+	 theta_grid_params.o
 
 gs2_mod = \
 	 antenna.o \
@@ -148,14 +134,11 @@ gs2_mod = \
 	 le_grids.o \
 	 leq.o \
 	 lowflow.o \
-	 mds.o \
-	 mdslib.o \
 	 mp.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
 	 prof.o \
-	 radstub.o \
 	 ran.o \
 	 redistribute.o \
 	 run_parameters.o \
@@ -164,9 +147,7 @@ gs2_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o \
-	 vdimstub.o \
-	 veq.o 
+	 theta_grid_params.o
 
 hrate_mod = \
 	 command_line.o \
@@ -211,14 +192,11 @@ ingen_mod = \
 	 le_grids.o \
 	 leq.o \
 	 lowflow.o \
-	 mds.o \
-	 mdslib.o \
 	 mp.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
 	 prof.o \
-	 radstub.o \
 	 ran.o \
 	 redistribute.o \
 	 run_parameters.o \
@@ -227,9 +205,7 @@ ingen_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o \
-	 vdimstub.o \
-	 veq.o 
+	 theta_grid_params.o 
 
 kp_mod = \
 	 command_line.o \
@@ -317,8 +293,6 @@ drive.o: \
 	 regression.o 
 ediff.o: 
 eeq.o: \
-	 mds.o \
-	 mdslib.o \
 	 spl.o 
 et.o: \
 	 geometry.o 
@@ -385,9 +359,8 @@ geometry.o: \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
-	 peq.o \
-	 radstub.o \
-	 veq.o 
+	 peq.o
+
 geq.o: \
 	 constants.o \
 	 netcdf_utils.o \
@@ -636,9 +609,6 @@ lowflow.o: \
 	 file_utils.o \
 	 mp.o \
 	 spl.o 
-mds.o: \
-	 constants.o 
-mdslib.o: 
 mp.o: \
 	 constants.o \
 	 file_utils.o 
@@ -668,7 +638,6 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-radstub.o: 
 ran.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -711,7 +680,4 @@ theta_grid.o: \
 	 theta_grid_params.o 
 theta_grid_params.o: \
 	 file_utils.o 
-vdimstub.o: 
-veq.o: \
-	 spl.o \
-	 vdimstub.o 
+

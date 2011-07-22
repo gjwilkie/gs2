@@ -618,7 +618,7 @@ contains
   use geometry, only: delrho, dp_mult, rmin, rmax, ak0
   use geometry, only: bishop, iflux, irho, itor, isym, ismooth
   use geometry, only: eqfile
-  use geometry, only: idfit_eq, vmom_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq
+  use geometry, only: idfit_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq
   use geometry, only: gs2d_eq, transp_eq, writelots, equal_arc
   implicit none
   integer :: unit
@@ -631,7 +631,6 @@ contains
        write (unit, fmt="(' ppl_eq =   ',L1)") ppl_eq
        write (unit, fmt="(' efit_eq =  ',L1)") efit_eq
        write (unit, fmt="(' gen_eq =   ',L1)") gen_eq
-       write (unit, fmt="(' vmom_eq =  ',L1)") vmom_eq
        write (unit, fmt="(' dfit_eq =  ',L1)") dfit_eq
 !       write (unit, fmt="(' idfit_eq = ',L1)") idfit_eq
        write (unit, fmt="(' local_eq =  ',L1)") local_eq
@@ -665,7 +664,7 @@ contains
      use geometry, only: rhoc, rmaj, r_geo, qinp
      use geometry, only: bishop, iflux, irho
      use geometry, only: eqfile
-     use geometry, only: idfit_eq, vmom_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq
+     use geometry, only: idfit_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq
      implicit none
      integer :: report_unit
      real :: dbetadrho
@@ -778,11 +777,6 @@ contains
            if (gen_eq) then
               write (report_unit, *) 
               write (report_unit, fmt="('Equilibrium information obtained from NetCDF file:')")
-              write (report_unit, fmt="(a)") trim(eqfile)
-           end if
-           if (vmom_eq) then
-              write (report_unit, *) 
-              write (report_unit, fmt="('Equilibrium information obtained from file:')")
               write (report_unit, fmt="(a)") trim(eqfile)
            end if
            if (ppl_eq) then
@@ -906,49 +900,9 @@ contains
   end subroutine check_theta_grid_eik
 
   subroutine checklogic_theta_grid_eik(report_unit)
-     use geometry, only: veq=>vmom_eq, geq=>gen_eq, eeq=>efit_eq, peq=>ppl_eq
+     use geometry, only: geq=>gen_eq, eeq=>efit_eq, peq=>ppl_eq
      use geometry, only: leq=>local_eq, deq=>dfit_eq
      integer, intent (in) :: report_unit
-
-     if(veq .and. geq) then
-        write (report_unit, *) 
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write(report_unit,fmt="('Choosing vmom_eq = .true. AND gen_eq = .true. is not permitted.')")
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write (report_unit, *) 
-     endif                      
-
-     if(veq .and. deq) then     
-        write (report_unit, *) 
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write(report_unit,fmt="('Choosing vmom_eq = .true. AND dfit_eq = .true. is not permitted.')")
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write (report_unit, *) 
-     endif                      
-
-     if(veq .and. eeq) then     
-        write (report_unit, *) 
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write(report_unit,fmt="('Choosing vmom_eq = .true. AND efit_eq = .true. is not permitted.')")
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write (report_unit, *) 
-     endif                      
-
-     if(veq .and. leq) then     
-        write (report_unit, *) 
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write(report_unit,fmt="('Choosing vmom_eq = .true. AND local_eq = .true. is not permitted.')")
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write (report_unit, *) 
-     endif                      
-
-     if(veq .and. peq) then     
-        write (report_unit, *) 
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write(report_unit,fmt="('Choosing vmom_eq = .true. AND ppl_eq = .true. is not permitted.')")
-        write (report_unit, fmt="('################# WARNING #######################')")
-        write (report_unit, *) 
-     endif                      
 
      if(geq .and. deq) then     
         write (report_unit, *) 
@@ -1034,7 +988,7 @@ contains
   subroutine init_theta_grid_eik
     use geometry, only: init_theta, nperiod_geo => nperiod
     use geometry, only: eikcoefs, itor, delrho, rhoc
-    use geometry, only: vmom_eq, gen_eq, ppl_eq, transp_eq
+    use geometry, only: gen_eq, ppl_eq, transp_eq
     use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
     implicit none
     real :: rhoc_save
@@ -1056,7 +1010,7 @@ if (debug) write(6,*) "init_theta_grid_eik: call read_parameters, ntheta=",nthet
     call read_parameters
 !CMR replace call init_theta(ntheta) with following condition 
 !    to avoid inappropriate calls to init_theta (as in geo/et.f90)
-    if(.not. vmom_eq .and. .not. gen_eq .and. .not. ppl_eq .and. &
+    if(.not. gen_eq .and. .not. ppl_eq .and. &
        .not. transp_eq ) then 
        if (debug) write(6,*) "init_theta_grid_eik: call init_theta, ntheta=",ntheta
        call init_theta (ntheta)
@@ -1193,7 +1147,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
     use geometry, only: nperiod
     use geometry, only: rhoc
     use geometry, only: itor, iflux, irho
-    use geometry, only: ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, local_eq, dfit_eq, gs2d_eq
+    use geometry, only: ppl_eq, gen_eq, efit_eq, eqfile, local_eq, dfit_eq, gs2d_eq
     use geometry, only: equal_arc, transp_eq, idfit_eq
     use geometry, only: bishop
     use geometry, only: s_hat_input
@@ -1217,7 +1171,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
     integer :: in_file
 
     namelist /theta_grid_eik_knobs/ itor, iflux, irho, &
-         ppl_eq, gen_eq, vmom_eq, efit_eq, eqfile, dfit_eq, &
+         ppl_eq, gen_eq, efit_eq, eqfile, dfit_eq, &
          equal_arc, bishop, local_eq, idfit_eq, gs2d_eq, transp_eq, &
          s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
          delrho, rmin, rmax, ismooth, ak0, k1, k2, isym, writelots

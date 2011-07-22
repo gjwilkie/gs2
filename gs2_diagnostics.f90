@@ -1538,7 +1538,7 @@ contains
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, write_f, write_fyx
     use dist_fn, only: omega0, gamma0, getmoms, par_spectrum, gettotmoms
-    use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
+    use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn, only: getmoms_notgc, g_adjust, include_lowflow, lf_flux
     use dist_fn, only: flux_vs_theta_vs_vpa
     use dist_fn_arrays, only: g, gnew, aj0, vpa

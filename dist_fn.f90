@@ -14,7 +14,7 @@ module dist_fn
   public :: init_kperp2
   public :: get_dens_vel, get_jext !GGH
   public :: get_verr, get_gtran, write_fyx, collision_error
-  public :: neoflux, include_lowflow
+  public :: include_lowflow
   public :: get_init_field
   public :: g_adjust ! MAB (needed for Trinity)
   public :: flux_vs_theta_vs_vpa
@@ -61,8 +61,6 @@ module dist_fn
   logical :: mult_imp, test
   logical :: accelerated_x = .false.
   logical :: accelerated_v = .false.
-  logical :: neo = .false., neoflux
-  integer :: nfac = 1
   integer :: nperiod_guard
   logical :: increase = .true., decrease = .false.
   
@@ -80,12 +78,6 @@ module dist_fn
   ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
 
 !>MAB
-  real, dimension (:,:), allocatable :: wdrift_neo
-  ! (-ntgrid:ntgrid, -g-layout-)
-
-  real, dimension (:,:,:,:,:), allocatable :: wdriftttp_neo
-  ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
-
   real, dimension (:,:,:), allocatable :: wcoriolis
   ! (-ntgrid:ntgrid, 2, -g-layout-)
 
@@ -648,8 +640,7 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, &
          tpdriftknob, nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         include_lowflow, &
-         g_exb, g_exbfac, neoflux, omprimfac, btor_slab, mach, rhostar
+         include_lowflow, g_exb, g_exbfac, omprimfac, btor_slab, mach, rhostar
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
            thetas, phi_ext, source_option, a_ext, aky_star, akx_star
@@ -690,7 +681,6 @@ subroutine check_dist_fn(report_unit)
        test = .false.
        def_parity = .false.
        even = .true.
-       neoflux = .false.
        source_option = 'default'
        include_lowflow = .false. ! MAB
        in_file = input_unit_exist("dist_fn_knobs", dfexist)
@@ -758,7 +748,6 @@ subroutine check_dist_fn(report_unit)
     call broadcast (def_parity)
     call broadcast (even)
     call broadcast (wfb)
-    call broadcast (neoflux)
     call broadcast (include_lowflow)    
     call broadcast (rhostar)
 
@@ -892,11 +881,6 @@ subroutine check_dist_fn(report_unit)
        allocate (wdrift(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (wdriftttp(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
        allocate (wcurv(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-       if (neoflux) then
-          allocate (wdrift_neo(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-          allocate (wdriftttp_neo(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
-          wdrift_neo = 0.  ; wdriftttp_neo = 0.
-       end if
     end if
     wdrift = 0.  ; wdriftttp = 0.
     wcurv = 0.
@@ -922,15 +906,9 @@ subroutine check_dist_fn(report_unit)
 !CMR:  multiply passing particle drift by driftknob
           endif
 !CMRend
-!> MAB
-          if (neoflux) then
-             wdrift_neo(ig,iglo) = wdrift_func_neo(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo))
-          end if
-!< MAB
        end do
     end do
     wdriftttp = 0.0
-    if (neoflux) wdriftttp_neo = 0.0
     do is = 1, nspec
        do ie = 1, negrid
           do ik = 1, naky
@@ -944,12 +922,6 @@ subroutine check_dist_fn(report_unit)
                    wdriftttp(ig,it,ik,ie,is) &
                         = wdrift_func(ig,ittp(ig),ie,it,ik)*tpdriftknob
 !CMR:  totally trapped particle drifts also scaled by tpdriftknob 
-!> MAB
-                   if (neoflux) then
-                      wdriftttp_neo(ig,it,ik,ie,is) &
-                           = wdrift_func_neo(ig,ittp(ig),ie)*driftknob
-                   end if
-!< MAB
                 end do
                 end do
              end do
@@ -964,8 +936,6 @@ subroutine check_dist_fn(report_unit)
           wdrift(ig,iglo) = 0.5*(wdrift(ig,iglo) + wdrift(ig+1,iglo))
           wcurv(ig,iglo) = 0.5*(wcurv(ig,iglo) + wcurv(ig+1,iglo))
 !CMRend
-! MAB
-          if (neoflux) wdrift_neo(ig,iglo) = 0.5*(wdrift_neo(ig,iglo) + wdrift_neo(ig+1,iglo))*driftknob
        end do
     end do
 
@@ -1021,23 +991,6 @@ subroutine check_dist_fn(report_unit)
             *code_dt*wunits(ik)
     end if
   end function wcurv_func
-
-  function wdrift_func_neo (ig, il, ie)
-    use theta_grid, only: bmag, gbdrift, gbdrift0, cvdrift, cvdrift0
-    use theta_grid, only: shat
-    use kt_grids, only: aky, theta0, akx
-    use le_grids, only: energy, al
-    use run_parameters, only: wunits
-    use gs2_time, only: code_dt
-    implicit none
-    real :: wdrift_func_neo
-    integer, intent (in) :: ig, il, ie
-
-    wdrift_func_neo = 1./shat &
-                    *(cvdrift0(ig)*energy(ie)*(1.0 - al(il)*bmag(ig)) &
-                      + gbdrift0(ig)*0.5*energy(ie)*al(il)*bmag(ig)) &
-                     *code_dt/2.0
-  end function wdrift_func_neo
 
   subroutine init_wcoriolis
     use theta_grid, only: ntgrid
@@ -1328,9 +1281,6 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid-1
-!          wc = wcoriolis(ig,iglo)*nfac
-!          wd = wdrift(ig,iglo)*nfac
-!          wdttp = wdriftttp(ig,it,ik,ie,is)*nfac
              wc = wcoriolis(ig,isgn,iglo)/spec(is)%stm
              wd = wdrift(ig,iglo)
              wdttp = wdriftttp(ig,it,ik,ie,is)
@@ -3814,7 +3764,6 @@ subroutine check_dist_fn(report_unit)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g0(:,isgn,iglo) = g0(:,isgn,iglo)*energy(ie)
        end do
@@ -5868,10 +5817,6 @@ subroutine check_dist_fn(report_unit)
     wdrift = 0.
     wdriftttp = 0.
     wcoriolis = 0.
-    if (neoflux) then
-       wdrift_neo = 0.
-       wdriftttp_neo = 0.
-    end if
     a = 0.
     b = 0.
     r = 0.
@@ -6419,7 +6364,7 @@ subroutine check_dist_fn(report_unit)
     use run_parameters, only: fphi, fbpar
     use gs2_layouts, only: g_lo
     use mp, only: proc0
-    use le_grids, only: nterp, negrid, lagrange_interp, xloc, testfac
+    use le_grids, only: nterp, negrid, lagrange_interp, xloc
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
 
@@ -7210,7 +7155,6 @@ subroutine check_dist_fn(report_unit)
     implicit none
 
     accelerated_x = .false. ; accelerated_v = .false.
-    neo = .false. ; nfac = 1
     no_comm = .false.
     readinit = .false. ; bessinit = .false. ; kp2init = .false. ; connectinit = .false.
     feqinit = .false. ; lpolinit = .false. ; fyxinit = .false. ; cerrinit = .false. ; mominit = .false.
@@ -7219,10 +7163,7 @@ subroutine check_dist_fn(report_unit)
     call reset_init
 
     if (allocated(fexp)) deallocate (fexp, bkdiff, bd_exp)
-    if (allocated(ittp)) then
-       deallocate (ittp, wdrift, wdriftttp)
-       if (neoflux) deallocate (wdrift_neo, wdriftttp_neo)
-    end if
+    if (allocated(ittp)) deallocate (ittp, wdrift, wdriftttp)
     if (allocated(wcoriolis)) deallocate (wcoriolis)
     if (allocated(vpa)) deallocate (vpa, vpac, vperp2, vpar)
     if (allocated(wstar)) deallocate (wstar)

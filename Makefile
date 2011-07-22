@@ -86,8 +86,6 @@ USE_FFT ?= fftw
 USE_NETCDF ?= on
 # uses hdf5 library (bin)
 USE_HDF5 ?=
-# uses MDSplus (bin)
-USE_MDSPLUS ?=
 # Use function pointer in layouts_indices.c (bin)
 # see also README
 USE_C_INDEX ?= 
@@ -485,7 +483,6 @@ test_make:
 	@echo  USE_FFT is $(USE_FFT)
 	@echo  USE_NETCDF is $(USE_NETCDF)
 	@echo  USE_HDF5 is $(USE_HDF5)
-	@echo  USE_MDSPLUS is $(USE_MDSPLUS)
 	@echo  USE_C_INDEX is $(USE_C_INDEX)
 	@echo  USE_POSIX is $(USE_POSIX)
 	@echo  USE_LOCAL_RAN is $(USE_LOCAL_RAN)
