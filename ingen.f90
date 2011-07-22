@@ -900,7 +900,8 @@ if (debug) write(6,*) 'get_namelists: returning'
      use init_g, only: check_init_g
      use kt_grids, only: check_kt_grids, grid_option, gridopt_switch
      use kt_grids, only: gridopt_box, naky, ntheta0, nx, ny
-     use le_grids, only: leok_le_grids, check_le_grids, negrid, nlambda
+!     use le_grids, only: leok_le_grids, check_le_grids
+     use le_grids, only: negrid, nlambda
      use nonlinear_terms, only: nonlin, cfl, check_nonlinear_terms
      use run_parameters, only: check_run_parameters
      use run_parameters, only: beta, tite, margin, code_delt_max
@@ -937,7 +938,8 @@ if (debug) write(6,*) 'get_namelists: returning'
 
      write (report_unit, fmt="(/'------------------------------------------------------------'/)")
 
-     le_ok=leok_le_grids(report_unit)
+!     le_ok=leok_le_grids(report_unit)
+     le_ok = .true.  ! temporary fix until leok_le_grids is restored to the distibution.  BD (sorry about that)
      
      if (le_ok) then
 
@@ -1132,9 +1134,11 @@ if (debug) write(6,*) 'get_namelists: returning'
 
     call check_hyper(report_unit)
 
-    write (report_unit, fmt="(/'------------------------------------------------------------'/)")
-    
-    call check_le_grids(report_unit,le_ok)
+! BD broke this accidentally and will fix it.  July 22, 2011
+!
+!    write (report_unit, fmt="(/'------------------------------------------------------------'/)")
+!
+!    call check_le_grids(report_unit,le_ok)   
 
     write (report_unit, fmt="(/'------------------------------------------------------------'/)")
     call check_run_parameters(report_unit)
@@ -1150,7 +1154,7 @@ if (debug) write(6,*) 'get_namelists: returning'
   subroutine nprocs_xxf(nmesh)
     use nonlinear_terms, only : nonlin
     use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box, gridopt_xbox
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
     use kt_grids, only: naky, ntheta0
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
@@ -1251,7 +1255,7 @@ if (debug) write(6,*) 'get_namelists: returning'
   subroutine nprocs_yxf(nmesh)
     use nonlinear_terms, only : nonlin
     use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box, gridopt_xbox
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
     use kt_grids, only: naky, ntheta0, nx
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
@@ -1341,7 +1345,7 @@ if (debug) write(6,*) 'get_namelists: returning'
              if (npe .gt. npmax) exit
              write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'tg'
           end do
-          do i=2,nkyfacs
+          do i=2,nkxfacs
              npe = facs(i,6)*nspec*nlambda*negrid*2*(2*ntgrid+1)
              if (npe .gt. npmax) exit
              write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'x'
@@ -1353,7 +1357,7 @@ if (debug) write(6,*) 'get_namelists: returning'
   subroutine nprocs (nmesh)
     use nonlinear_terms, only : nonlin
     use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box, gridopt_xbox
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
     use kt_grids, only: naky, ntheta0
     use le_grids, only: negrid, nlambda
     use gs2_layouts, only: layout
