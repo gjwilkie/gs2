@@ -245,7 +245,6 @@ contains
     use collisions, only: vnmult, c_reset => reset_init
     use fields, only: init_fields, f_reset => reset_init
     use fields_implicit, only: fi_reset => reset_init
-    use fields_explicit, only: fe_reset => reset_init
     use fields_test, only: ft_reset => reset_init
     use init_g, only: g_reset => reset_init
     use nonlinear_terms, only: nl_reset => reset_init
@@ -277,7 +276,6 @@ contains
     call c_reset
     call f_reset
     call fi_reset
-    call fe_reset
     call ft_reset
 !    if (.not. ql_flag) call g_reset
     call g_reset

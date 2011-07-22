@@ -1813,16 +1813,13 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        if (proc0) then
           if (fphi > epsilon(0.0)) then
              do is = 1, nspec
-                qheat(:,:,is,1) = qheat(:,:,is,1) &
-                     *spec(is)%dens*spec(is)%temp
+                qheat(:,:,is,1) = qheat(:,:,is,1) * spec(is)%dens*spec(is)%temp
                 call get_volume_average (qheat(:,:,is,1), heat_fluxes(is))
 
-                qheat(:,:,is,2) = qheat(:,:,is,2) &
-                     *spec(is)%dens*spec(is)%temp
+                qheat(:,:,is,2) = qheat(:,:,is,2) * spec(is)%dens*spec(is)%temp
                 call get_volume_average (qheat(:,:,is,2), heat_par(is))
 
-                qheat(:,:,is,3) = qheat(:,:,is,3) &
-                     *spec(is)%dens*spec(is)%temp
+                qheat(:,:,is,3) = qheat(:,:,is,3) * spec(is)%dens*spec(is)%temp
                 call get_volume_average (qheat(:,:,is,3), heat_perp(is))
                 
                 theta_qflux(:,is,1) = theta_qflux(:,is,1) &
@@ -1832,86 +1829,72 @@ if (debug) write(6,*) "loop_diagnostics: -1"
                 theta_qflux(:,is,3) = theta_qflux(:,is,3) &
                      *spec(is)%dens*spec(is)%temp
 
-                pflux(:,:,is) = pflux(:,:,is)*spec(is)%dens
+                pflux(:,:,is) = pflux(:,:,is) * spec(is)%dens
                 call get_volume_average (pflux(:,:,is), part_fluxes(is))
 
                 theta_pflux(:,is) = theta_pflux(:,is)*spec(is)%dens
                 
-                vflux(:,:,is) = vflux(:,:,is) &
-                     *spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
+                vflux(:,:,is) = vflux(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
                 call get_volume_average (vflux(:,:,is), mom_fluxes(is))
-                vflux_par(:,:,is) = vflux_par(:,:,is) &
-                     *spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
+
+                vflux_par(:,:,is) = vflux_par(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
                 call get_volume_average (vflux_par(:,:,is), parmom_fluxes(is))
-                vflux_perp(:,:,is) = vflux_perp(:,:,is) &
-                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
+
+                vflux_perp(:,:,is) = vflux_perp(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vflux_perp(:,:,is), perpmom_fluxes(is))
 
                 if (include_lowflow) then
-                   vflux0(:,:,is) = vflux0(:,:,is) &
-                        *spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
+                   vflux0(:,:,is) = vflux0(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
                    call get_volume_average (vflux0(:,:,is), lfmom_fluxes(is))
-                   vflux1(:,:,is) = vflux1(:,:,is) &
-                        *spec(is)%dens*spec(is)%mass*spec(is)%temp/spec(is)%z
+
+                   vflux1(:,:,is) = vflux1(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%temp/spec(is)%z
                    call get_volume_average (vflux1(:,:,is), vflux1_avg(is))
+
 ! TMP UNTIL VFLUX0 IS TESTED
 !                   mom_fluxes = mom_fluxes + lfmom_fluxes
                 end if
 
-                theta_vflux(:,is) = theta_vflux(:,is) &
-                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
-                theta_vflux_par(:,is) = theta_vflux_par(:,is) &
-                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
-                theta_vflux_perp(:,is) = theta_vflux_perp(:,is) &
-                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
+                theta_vflux(:,is) = theta_vflux(:,is)         * spec(is)%dens*spec(is)%mass*spec(is)%stm
+                theta_vflux_par(:,is) = theta_vflux_par(:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
+                theta_vflux_perp(:,is) = theta_vflux_perp(:,is)*spec(is)%dens*spec(is)%mass*spec(is)%stm
 
              end do
           end if
           if (fapar > epsilon(0.0)) then
              do is = 1, nspec
-                qmheat(:,:,is,1)=qmheat(:,:,is,1) &
-                     *spec(is)%dens*spec(is)%temp
+                qmheat(:,:,is,1)=qmheat(:,:,is,1) * spec(is)%dens*spec(is)%temp
                 call get_volume_average (qmheat(:,:,is,1), mheat_fluxes(is))
 
                 call get_surf_average (qmheat(:,:,is,1), x_qmflux(:,is))
 
-                qmheat(:,:,is,2)=qmheat(:,:,is,2) &
-                     *spec(is)%dens*spec(is)%temp
+                qmheat(:,:,is,2)=qmheat(:,:,is,2) * spec(is)%dens*spec(is)%temp
                 call get_volume_average (qmheat(:,:,is,2), mheat_par(is))
 
-                qmheat(:,:,is,3)=qmheat(:,:,is,3) &
-                     *spec(is)%dens*spec(is)%temp
+                qmheat(:,:,is,3)=qmheat(:,:,is,3) * spec(is)%dens*spec(is)%temp
                 call get_volume_average (qmheat(:,:,is,3), mheat_perp(is))
                 
-                pmflux(:,:,is)=pmflux(:,:,is) &
-                     *spec(is)%dens
+                pmflux(:,:,is)=pmflux(:,:,is) * spec(is)%dens
                 call get_volume_average (pmflux(:,:,is), mpart_fluxes(is))
 
-                vmflux(:,:,is)=vmflux(:,:,is) &
-                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
+                vmflux(:,:,is)=vmflux(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vmflux(:,:,is), mmom_fluxes(is))
              end do
           end if
           if (fbpar > epsilon(0.0)) then
              do is = 1, nspec
-                qbheat(:,:,is,1)=qbheat(:,:,is,1) &
-                     *spec(is)%dens*spec(is)%temp
+                qbheat(:,:,is,1)=qbheat(:,:,is,1) * spec(is)%dens*spec(is)%temp
                 call get_volume_average (qbheat(:,:,is,1), bheat_fluxes(is))
 
-                qbheat(:,:,is,2)=qbheat(:,:,is,2) &
-                     *spec(is)%dens*spec(is)%temp
+                qbheat(:,:,is,2)=qbheat(:,:,is,2) * spec(is)%dens*spec(is)%temp
                 call get_volume_average (qbheat(:,:,is,2), bheat_par(is))
 
-                qbheat(:,:,is,3)=qbheat(:,:,is,3) &
-                     *spec(is)%dens*spec(is)%temp
+                qbheat(:,:,is,3)=qbheat(:,:,is,3) * spec(is)%dens*spec(is)%temp
                 call get_volume_average (qbheat(:,:,is,3), bheat_perp(is))
                 
-                pbflux(:,:,is)=pbflux(:,:,is) &
-                     *spec(is)%dens
+                pbflux(:,:,is)=pbflux(:,:,is) * spec(is)%dens
                 call get_volume_average (pbflux(:,:,is), bpart_fluxes(is))
 
-                vbflux(:,:,is)=vbflux(:,:,is) &
-                     *spec(is)%dens*spec(is)%mass*spec(is)%stm
+                vbflux(:,:,is)=vbflux(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vbflux(:,:,is), bmom_fluxes(is))
              end do
           end if

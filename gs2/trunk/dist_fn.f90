@@ -4,7 +4,7 @@ module dist_fn
   public :: init_dist_fn, finish_dist_fn
   public :: read_parameters, wnml_dist_fn, wnml_dist_fn_species, check_dist_fn
   public :: timeadv, exb_shear
-  public :: getfieldeq, getan, getfieldexp, getmoms, gettotmoms, getemoms
+  public :: getfieldeq, getan, getmoms, gettotmoms, getemoms
   public :: flux, lf_flux
   public :: get_epar, get_heat
   public :: t0, omega0, gamma0, thetas, nperiod_guard, source0
@@ -4443,23 +4443,6 @@ subroutine check_dist_fn(report_unit)
 
     deallocate (antot, antota, antotp)
   end subroutine getfieldeq
-  
-  subroutine getfieldexp (phi, apar, bpar)
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-    implicit none
-    complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
-    complex, dimension (:,:,:), allocatable :: antot, antota, antotp
-
-    allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
-    allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
-    allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
-
-    call getan (antot, antota, antotp)
-    call getfieldeq2 (phi, apar, bpar, antot, antota, antotp)
-
-    deallocate (antot, antota, antotp)
-  end subroutine getfieldexp
   
   subroutine getfieldeq2 (phi, apar, bpar, antot, antota, antotp)
     use dist_fn_arrays, only: kperp2

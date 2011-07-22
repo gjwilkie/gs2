@@ -55,7 +55,7 @@ module gs2_io
   integer :: hrateavg_id, hrate_by_k_id
   integer :: ntot2_id, ntot2_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
-  integer :: qflux_neo_by_k_id, pflux_neo_by_k_id, input_id
+  integer :: input_id
   integer :: charge_id, mass_id, dens_id, temp_id, tprim_id, fprim_id
   integer :: uprim_id, uprim2_id, vnewk_id, spec_type_id
   integer :: bmag_id, gradpar_id, gbdrift_id, gbdrift0_id
@@ -313,7 +313,6 @@ contains
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
     logical :: d_fields_per = .false.
-    logical :: d_neo = .false.
     
     integer :: status
 
@@ -633,12 +632,6 @@ contains
        status = netcdf_def_var (ncid, 'hflux_tot', nf_double, 1, time_dim, hflux_tot_id)
        status = netcdf_def_var (ncid, 'vflux_tot', nf_double, 1, time_dim, vflux_tot_id)
        status = netcdf_def_var (ncid, 'zflux_tot', nf_double, 1, time_dim, zflux_tot_id)
-    end if
-
-    if (d_neo) then
-       status = netcdf_def_var (ncid, 'qflux_neo_by_k', nf_double, 4, fluxk_dim, qflux_neo_by_k_id)
-       status = netcdf_def_var (ncid, 'pflux_neo_by_k', nf_double, 4, fluxk_dim, pflux_neo_by_k_id)
-       status = netcdf_def_var (ncid, 'sourcefac', nf_double, 2, om_dim, sourcefac_id)
     end if
 
     status = netcdf_def_var (ncid, 'epar',  nf_double, 4, final_field_dim, epar_id)

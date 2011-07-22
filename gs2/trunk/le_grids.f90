@@ -115,7 +115,7 @@ module le_grids
   real, dimension (:,:), allocatable, save :: lpe, lpl
   real, dimension (:,:,:,:), allocatable, save :: lpt
 
-  real, dimension (:), allocatable :: energy, w, anon, dele ! (negrid,nspec)
+  real, dimension (:), allocatable :: energy, w, anon, dele ! (negrid)
   real, dimension (:), allocatable :: al, delal ! (nlambda)
   real, dimension (:,:), allocatable :: wl ! (nlambda,-ntgrid:ntgrid)
   integer, dimension (:), allocatable :: jend ! (-ntgrid:ntgrid)
