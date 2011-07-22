@@ -302,14 +302,14 @@ contains
 
   end subroutine save_input
 
-  subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, write_fields)
+  subroutine define_vars (write_nl_flux, write_omega, write_phiavg, write_hrate, write_fields)
 
     use mp, only: nproc
     use species, only: nspec
     use kt_grids, only: naky, ntheta0, theta0
     use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod
-    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, write_fields
+    logical :: write_nl_flux, write_omega, write_phiavg, write_hrate, write_fields
 
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
@@ -662,11 +662,6 @@ contains
     status = netcdf_def_var (ncid, 'tpar00',    nf_double, 4, loop_mom_dim, tpar00_id)
     status = netcdf_def_var (ncid, 'tperp00',   nf_double, 4, loop_mom_dim, tperp00_id)
     
-    if (write_stress) then
-       status = netcdf_def_var (ncid, 'rstress',    nf_double, 4, loop_mom_dim, rstress_id)
-       status = netcdf_def_var (ncid, 'ustress',    nf_double, 4, loop_mom_dim, ustress_id)
-    end if
-
     if (write_hrate) then
        status = netcdf_def_var (ncid, 'hrate_tot',  nf_double, 3, heat_dim, hrateavg_id)
        status = netcdf_def_var (ncid, 'hrate_by_k', nf_double, 5, heatk_dim, hrate_by_k_id)
@@ -889,39 +884,6 @@ contains
     status = netcdf_put_var(ncid, tperp_id, ri4)
 
   end subroutine nc_final_moments
-
-  subroutine nc_loop_stress (nout, rstress, ustress)
-
-    use netcdf_mod, only: netcdf_put_vara
-    use convert, only: c2r
-
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-    use species, only: nspec
-
-    integer, intent (in) :: nout
-    complex, dimension (:,:), intent (in) :: rstress, ustress
-    real, dimension (2, ntheta0, nspec) :: ri2
-    integer, dimension (4) :: start, count
-    integer :: status
-
-    start(1) = 1
-    start(2) = 1
-    start(3) = 1
-    start(4) = nout
-    
-    count(1) = 2
-    count(2) = ntheta0
-    count(3) = nspec
-    count(4) = 1
-
-    call c2r (rstress, ri2)
-    status = netcdf_put_vara(ncid, rstress_id, start, count, ri2)
-
-    call c2r (ustress, ri2)
-    status = netcdf_put_vara(ncid, ustress_id, start, count, ri2)
-
-  end subroutine nc_loop_stress
 
   subroutine nc_loop_moments (nout, ntot2, ntot2_by_mode, &
        phi00, ntot00, density00, upar00, tpar00, tperp00)
