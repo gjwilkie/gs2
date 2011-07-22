@@ -14,7 +14,7 @@ module gs2_io
   public :: init_gs2_io, nc_eigenfunc, nc_final_fields, nc_final_epar
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
-  public :: nc_loop_stress, nc_loop_vres
+  public :: nc_loop_vres
   public :: nc_loop_movie, nc_write_fields
   public :: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
 
@@ -76,7 +76,6 @@ module gs2_io
   integer :: phi_id, apar_id, bpar_id, epar_id
   integer :: antot_id, antota_id, antotp_id
   integer :: ntot_id, density_id, upar_id, tpar_id, tperp_id
-  integer :: rstress_id, ustress_id
   integer :: ntot2_id, ntot2_by_mode_id, ntot20_id, ntot20_by_mode_id
   integer :: tpar2_by_mode_id, tperp2_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
@@ -110,7 +109,7 @@ module gs2_io
   
 contains
 
-  subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
+  subroutine init_gs2_io (write_nl_flux, write_omega, &
       write_phiavg, write_hrate, write_final_antot, write_eigenfunc, &
       make_movie, nmovie_tot, write_verr, write_fields, &
       write_full_moments_notgc, write_sym, write_correlation, nwrite_big_tot, &
@@ -134,9 +133,9 @@ contains
     use netcdf, only: NF90_CLOBBER, nf90_create
     use netcdf_utils, only: get_netcdf_code_precision, netcdf_real
 # endif
-!    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, make_movie
+!    logical :: write_nl_flux, write_omega, write_phiavg, write_hrate, make_movie
 !    logical :: write_final_antot, write_eigenfunc, write_verr
-    logical, intent(in) :: write_nl_flux, write_omega, write_stress
+    logical, intent(in) :: write_nl_flux, write_omega
     logical, intent(in) :: write_phiavg, write_hrate, make_movie, write_fields
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
@@ -220,7 +219,7 @@ contains
 # endif
     if (proc0) then
        call define_dims (nmovie_tot, nwrite_big_tot)
-       call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
+       call define_vars (write_nl_flux, write_omega, write_phiavg, &
             write_hrate, write_final_antot, write_eigenfunc, write_verr, &
             write_fields, write_full_moments_notgc, write_sym, write_correlation, &
             write_correlation_extend)
@@ -316,7 +315,7 @@ contains
     use kt_grids, only: naky, ntheta0, theta0, akx, aky, nx, ny
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
-    use le_grids, only: negrid, nlambda, e, al
+    use le_grids, only: negrid, nlambda, energy, al
     use nonlinear_terms, only: nonlin
 # ifdef NETCDF
 !    use netcdf_mod
@@ -351,7 +350,7 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, theta_id)
     status = nf90_put_var (ncid, theta0_id, theta0)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, theta0_id)
-    status = nf90_put_var (ncid, egrid_id, e(:,1))
+    status = nf90_put_var (ncid, egrid_id, energy(:))
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, egrid_id)
     status = nf90_put_var (ncid, lambda_id, al)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, lambda_id)
@@ -461,7 +460,7 @@ contains
 # endif
   end subroutine save_input
 
-  subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, &
+  subroutine define_vars (write_nl_flux, write_omega, write_phiavg, &
        write_hrate, write_final_antot, write_eigenfunc, write_verr, &
        write_fields, write_full_moments_notgc, write_sym, write_correlation, &
        write_correlation_extend)
@@ -477,9 +476,9 @@ contains
     use netcdf_utils, only: netcdf_real
 # endif
 !    use netcdf_mod
-!    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate
+!    logical :: write_nl_flux, write_omega, write_phiavg, write_hrate
 !    logical :: write_final_antot, write_eigenfunc, write_verr
-    logical, intent(in) :: write_nl_flux, write_omega, write_stress
+    logical, intent(in) :: write_nl_flux, write_omega
     logical, intent(in) :: write_phiavg, write_hrate, write_final_antot
     logical, intent(in) :: write_eigenfunc, write_verr, write_fields
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
@@ -1168,13 +1167,6 @@ contains
     status = nf90_def_var (ncid, 'tperp00', netcdf_real, loop_mom_dim, tperp00_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='tperp00')
     
-    if (write_stress) then
-       status = nf90_def_var (ncid, 'rstress', netcdf_real, loop_mom_dim, rstress_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='rstress')
-       status = nf90_def_var (ncid, 'ustress', netcdf_real, loop_mom_dim, ustress_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='ustress')
-    end if
-
     if (write_hrate) then
        status = nf90_def_var (ncid, 'h_energy', netcdf_real, time_dim, h_energy_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='h_energy')
@@ -1539,43 +1531,6 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, tperp_id)
 # endif
   end subroutine nc_final_moments
-
-  subroutine nc_loop_stress (nout, rstress, ustress)
-
-!    use nf90_mod, only: nf90_put_vara
-    use convert, only: c2r
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-    use species, only: nspec
-# ifdef NETCDF
-    use netcdf, only: nf90_put_var
-# endif
-    integer, intent (in) :: nout
-    complex, dimension (:,:), intent (in) :: rstress, ustress
-# ifdef NETCDF
-    real, dimension (2, ntheta0, nspec) :: ri2
-    integer, dimension (4) :: start, count
-    integer :: status
-
-    start(1) = 1
-    start(2) = 1
-    start(3) = 1
-    start(4) = nout
-    
-    count(1) = 2
-    count(2) = ntheta0
-    count(3) = nspec
-    count(4) = 1
-
-    call c2r (rstress, ri2)
-    status = nf90_put_var (ncid, rstress_id, ri2, start=start, count=count)
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, nttot_id)
-
-    call c2r (ustress, ri2)
-    status = nf90_put_var (ncid, ustress_id, ri2, start=start, count=count)
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, ustress_id)
-# endif
-  end subroutine nc_loop_stress
 
   subroutine nc_loop_vres (nout, errest_by_mode, lpcoef_by_mode)
 

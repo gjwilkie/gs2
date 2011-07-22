@@ -38,22 +38,21 @@ module gs2_diagnostics
   logical,public :: print_line, print_flux_line
   logical,public :: print_summary, write_line, write_flux_line, write_phi
   logical,public :: write_apar, write_bpar, write_aperp
-  logical,public :: write_omega, write_omavg, write_ascii, write_lamavg
+  logical,public :: write_omega, write_omavg, write_ascii
   logical,public :: write_eavg, write_qheat, write_pflux, write_vflux
   logical,public :: write_tavg, write_qmheat, write_pmflux, write_vmflux
   logical,public :: write_gs, write_lpoly, write_qbheat
   logical,public :: write_pbflux, write_vbflux, write_g, write_gg, write_gyx
   logical,public ::write_dmix, write_kperpnorm, write_phitot, write_epartot
   logical,public :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
-  logical,public :: write_final_moments, write_avg_moments, write_stress, write_parity
+  logical,public :: write_final_moments, write_avg_moments, write_parity
   logical,public :: write_full_moments_notgc, write_cross_phase = .false.
-  logical,public :: write_fcheck, write_final_epar, write_kpar
-  logical,public :: write_vortcheck, write_fieldcheck
+  logical,public :: write_final_epar, write_kpar
   logical,public :: write_fieldline_avg_phi, write_hrate, write_lorentzian
-  logical,public :: write_neoclassical_flux, write_nl_flux, write_Epolar
+  logical,public :: write_nl_flux, write_Epolar
   logical,public :: write_verr, write_cerr, write_max_verr
   logical,public :: exit_when_converged
-  logical,public :: dump_neoclassical_flux, dump_check1, dump_check2
+  logical,public :: dump_check1, dump_check2
   logical,public :: dump_fields_periodically, make_movie
   logical,public :: dump_final_xfields
   logical,public :: use_shmem_for_xfields
@@ -77,19 +76,19 @@ module gs2_diagnostics
 
   namelist /gs2_diagnostics_knobs/ print_line, print_flux_line, &
          write_line, write_flux_line, write_phi, write_apar, write_bpar, write_aperp, &
-         write_omega, write_omavg, write_ascii, write_kpar, write_lamavg, &
+         write_omega, write_omavg, write_ascii, write_kpar, &
          write_qheat, write_pflux, write_vflux, write_eavg, write_gs, write_gyx, &
          write_qmheat, write_pmflux, write_vmflux, write_tavg, write_g, write_gg, &
          write_qbheat, write_pbflux, write_vbflux, write_hrate, write_lpoly, &
          write_dmix, write_kperpnorm, write_phitot, write_epartot, &
          write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
-         write_fcheck, write_final_epar, write_final_moments, write_cerr, &
-         write_vortcheck, write_fieldcheck, write_Epolar, write_verr, write_max_verr, &
-         write_fieldline_avg_phi, write_neoclassical_flux, write_nl_flux, &
+         write_final_epar, write_final_moments, write_cerr, &
+         write_Epolar, write_verr, write_max_verr, &
+         write_fieldline_avg_phi, write_nl_flux, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
-         exit_when_converged, write_avg_moments, write_stress, &
+         exit_when_converged, write_avg_moments, &
          write_full_moments_notgc, write_cross_phase, &
-         dump_neoclassical_flux, dump_check1, dump_check2, &
+         dump_check1, dump_check2, &
          dump_fields_periodically, make_movie, &
          dump_final_xfields, use_shmem_for_xfields, &
          nperiod_output, test_conserve, &
@@ -100,7 +99,7 @@ module gs2_diagnostics
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: dv_unit, jext_unit   !GGH Additions
   integer :: phase_unit
-  integer :: dump_neoclassical_flux_unit, dump_check1_unit, dump_check2_unit
+  integer :: dump_check1_unit, dump_check2_unit
   integer :: res_unit, res_unit2, parity_unit
 
   complex, dimension (:,:,:), allocatable :: omegahist
@@ -198,20 +197,12 @@ contains
        write (unit, fmt="(' write_final_moments = ',L1)") write_final_moments
        write (unit, fmt="(' write_final_antot = ',L1)") write_final_antot
        write (unit, fmt="(' write_tavg = ',L1)") write_tavg
-       write (unit, fmt="(' write_lamavg = ',L1)") write_lamavg
-       write (unit, fmt="(' write_eavg = ',L1)") write_eavg
-       if (write_fcheck) write (unit, fmt="(' write_fcheck = ',L1)") write_fcheck
-       if (write_vortcheck) write (unit, fmt="(' write_vortcheck = ',L1)") write_vortcheck
-       if (write_fieldcheck) write (unit, fmt="(' write_fieldcheck = ',L1)") write_fieldcheck
+
        if (write_fieldline_avg_phi) &
             write (unit, fmt="(' write_fieldline_avg_phi = ',L1)") write_fieldline_avg_phi
-       if (write_neoclassical_flux) &
-            write (unit, fmt="(' write_neoclassical_flux = ',L1)") write_neoclassical_flux
        write (unit, fmt="(' write_nl_flux = ',L1)") write_nl_flux
        write (unit, fmt="(' exit_when_converged = ',L1)") exit_when_converged
        if (write_avg_moments) write (unit, fmt="(' write_avg_moments = ',L1)") write_avg_moments
-       if (dump_neoclassical_flux) &
-            write (unit, fmt="(' dump_neoclassical_flux = ',L1)") dump_neoclassical_flux
        if (dump_check1) write (unit, fmt="(' dump_check1 = ',L1)") dump_check1
        if (dump_check2) write (unit, fmt="(' dump_check2 = ',L1)") dump_check2
        if (dump_fields_periodically) &
@@ -313,23 +304,6 @@ contains
        write (report_unit, fmt="('write_ascii = T:           Write some data to ',a)") trim(run_name)//'.out'
     end if
 
-    if (write_lamavg) then
-       write (report_unit, fmt="('write_lamavg = T:          Write particle flux vs. lambda to ',a)") trim(run_name)//'.lam'
-       write (report_unit, fmt="('write_lamavg = T:          Write energy flux vs. lambda to ',a)") trim(run_name)//'.lame'
-    end if
-
-    if (write_tavg) then
-       write (report_unit, fmt="('write_tavg = T:            Write particle flux vs. theta to ',a)") trim(run_name)//'.theta'
-       write (report_unit, fmt="('write_tavg = T:          Write energy flux vs. thetaa to ',a)") trim(run_name)//'.thetae'
-    end if
-
-    if (write_eavg) then
-       write (report_unit, &
-         & fmt="('write_eavg = T:            Write particle flux vs. energy to ',a)") trim(run_name)//'.energy'
-       write (report_unit, &
-         & fmt="('write_eavg = T:            Write energy flux vs. energy to ',a)") trim(run_name)//'.energye'
-    end if
-
     if (write_dmix) then
        if (write_ascii) then
           write (report_unit, fmt="('write_dmix = T:            Write D_ML ',a)") trim(run_name)//'.out'
@@ -415,56 +389,12 @@ contains
        write (report_unit, fmt="('write_final_epar = T:      E_parallel(theta) written to ',a)") trim(run_name)//'.out.nc'
     end if
 
-    if (write_fcheck) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('write_fcheck = T:               Turns on obscure diagnostics.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
-    if (write_vortcheck) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('write_vortcheck = T:              Turns on obscure diagnostics.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
-    if (write_fieldcheck) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('write_fieldcheck = T:              Turns on obscure diagnostics.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
-    if (write_neoclassical_flux) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('write_neoclassical_flux = T:               Turns on neoclassical flux calc, &
-           & but result not written.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('    Perhaps you want dump_neoclassical_flux = T.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
     if (write_nl_flux) then
        if (write_ascii) then
           write (report_unit, fmt="('write_nl_flux = T:         Phi**2(kx, ky) written to ',a)") trim(run_name)//'.out'
        end if
     else
        write (report_unit, fmt="('write_nl_flux = F:         Phi**2(kx, ky) NOT written to ',a)") trim(run_name)//'.out'
-    end if
-
-    if (dump_neoclassical_flux) then
-       write (report_unit, fmt="('dump_neoclassical_flux = T: Neoclassical fluxes written to ',a)") 'dump.neoflux'
-       write (report_unit, fmt="('This option requires an expert user.')") 
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
     end if
 
     if (dump_check1) then
@@ -553,13 +483,10 @@ contains
     call broadcast (write_any)
     call broadcast (write_any_fluxes)
     call broadcast (write_cross_phase)
-    call broadcast (write_neoclassical_flux)
     call broadcast (write_nl_flux)
     call broadcast (write_omega)
     call broadcast (write_fieldline_avg_phi)
-    call broadcast (write_fcheck)
     call broadcast (dump_any)
-    call broadcast (dump_neoclassical_flux)
     call broadcast (dump_check1)
     call broadcast (dump_check2)
     call broadcast (write_fields)
@@ -573,19 +500,13 @@ contains
     call broadcast (write_g)
     call broadcast (write_gyx)
     call broadcast (write_gg)
-    call broadcast (write_stress)
     call broadcast (write_final_antot)
     call broadcast (write_verr)
     call broadcast (write_max_verr)
     call broadcast (write_lpoly)
     call broadcast (write_cerr)
 
-    call broadcast (write_vortcheck)
-    call broadcast (write_fieldcheck)
     call broadcast (ntg_out)
-    call broadcast (write_lamavg)
-    call broadcast (write_eavg)
-    call broadcast (write_tavg)
     call broadcast (write_hrate)
     call broadcast (write_Epolar)
     call broadcast (write_lorentzian)
@@ -639,7 +560,7 @@ contains
 !       allocate (hratehist(nspec, 7, 0:navg-1));  hratehist = 0.0
 !       allocate (hkratehist(ntheta0, naky, nspec, 7, 0:navg-1));  hkratehist = 0.0
 
-    call init_gs2_io (write_nl_flux, write_omega, write_stress, &
+    call init_gs2_io (write_nl_flux, write_omega, &
          write_fieldline_avg_phi, write_hrate, write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot, write_verr, &
          write_fields, write_full_moments_notgc, write_symmetry, &
@@ -720,12 +641,6 @@ contains
           call open_output_file (polar_avg_unit, ".kspec_avg")
        end if
 
-       if (dump_neoclassical_flux) then
-          call get_unused_unit (dump_neoclassical_flux_unit)
-          open (unit=dump_neoclassical_flux_unit, file="dump.neoflux", &
-               status="unknown")
-       end if
-       
        if (dump_check1) then
           call get_unused_unit (dump_check1_unit)
           open (unit=dump_check1_unit, file="dump.check1", status="unknown")
@@ -822,20 +737,15 @@ contains
        write_bpar = .true.
        write_omega = .false.
        write_ascii = .true.
-       write_eavg = .false.
-       write_tavg = .false.
-       write_lamavg = .false.
        write_omavg = .false.
        write_dmix = .false.
        write_kperpnorm = .false.
        write_phitot = .true.
        write_epartot = .false.
        write_fieldline_avg_phi = .false.
-       write_neoclassical_flux = .false.
        write_nl_flux = .false.
        write_eigenfunc = .false.
        write_final_moments = .false.
-       write_stress = .false.
        write_avg_moments = .false.
        write_parity = .false.
        write_symmetry = .false.
@@ -846,9 +756,6 @@ contains
        write_final_fields = .false.
        write_final_antot = .false.
        write_final_epar = .false.
-       write_fcheck = .false.
-       write_vortcheck = .false.
-       write_fieldcheck = .false.
        write_verr = .false.
        write_max_verr = .false.
        write_cerr = .false.
@@ -862,7 +769,6 @@ contains
        omegatinst = 1.0
        igomega = 0
        exit_when_converged = .true.
-       dump_neoclassical_flux = .false.
        dump_check1 = .false.
        dump_check2 = .false.
        dump_fields_periodically = .false.
@@ -895,7 +801,6 @@ contains
 ! changed temporarily for testing -- MAB
 !       write_avg_moments = write_avg_moments .and. box
        write_avg_moments = write_avg_moments
-       write_stress = write_stress .and. box
 
 ! Only calculate polar integrals in box layout
        write_Epolar = write_Epolar .and. box
@@ -903,19 +808,17 @@ contains
 ! Disable polar integrals if nx /= ny
        if (nx /= ny) write_Epolar = .false.
 
-!       write_avg_moments = write_avg_moments .or. write_neoclassical_flux
-
        write_any = write_line .or. write_phi       .or. write_apar &
             .or. write_bpar  .or. write_omega     .or. write_omavg &
             .or. write_dmix   .or. write_kperpnorm .or. write_phitot &
-            .or. write_fieldline_avg_phi           .or. write_neoclassical_flux &
+            .or. write_fieldline_avg_phi            &
             .or. write_flux_line                   .or. write_nl_flux .or. write_Epolar &
             .or. write_kpar   .or. write_hrate     .or. write_lorentzian  .or. write_gs
        write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux !&
 !            .or. gs2_flux_adjust
-       dump_any = dump_neoclassical_flux .or. dump_check1  .or. dump_fields_periodically &
-            .or. dump_check2 .or. make_movie .or. print_summary &
-            .or. write_full_moments_notgc
+       dump_any = dump_check1  .or. dump_fields_periodically &
+            .or.  dump_check2 .or. make_movie .or. print_summary &
+            .or.  write_full_moments_notgc
 
        nperiod_output = min(nperiod,nperiod_output)
        ntg_out = ntheta/2 + (nperiod_output-1)*ntheta
@@ -931,11 +834,8 @@ contains
     use theta_grid, only: Rplot, Zplot, aplot, Rprime, Zprime, aprime
     use theta_grid, only: drhodpsi, qval, shape
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, akx, aky
-    use le_grids, only: nlambda, negrid, fcheck, al, delal
-    use le_grids, only: e, dele
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
-    use dist_fn, only: getan, get_epar, getmoms, par_spectrum, lambda_flux
-    use dist_fn, only: e_flux
+    use dist_fn, only: getan, get_epar, getmoms, par_spectrum
     use dist_fn, only: write_f, write_fyx
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn, only: g_adjust
@@ -965,7 +865,6 @@ contains
     complex, dimension (:,:,:), allocatable :: phi2, apar2, bpar2, antot, antota, antotp, epar
     complex, dimension (:,:,:,:), allocatable :: ntot, density, upar, tpar, tperp
     real, dimension (:), allocatable :: dl_over_b
-    real, dimension (:,:,:), allocatable :: lamflux, enflux
     complex, dimension (ntheta0, naky) :: phi0
     real, dimension (ntheta0, naky) :: phi02
     real, dimension (2*ntgrid) :: kpar
@@ -1004,7 +903,6 @@ contains
           call close_output_file (polar_raw_unit)
           call close_output_file (polar_avg_unit)
        endif
-       if (dump_neoclassical_flux) close (dump_neoclassical_flux_unit)
 
        if (dump_check1) close (dump_check1_unit)
        if (dump_check2) call close_output_file (dump_check2_unit)
@@ -1133,99 +1031,7 @@ contains
           deallocate (epar)
        end if
     end if
-
-    if (write_lamavg) then
-       allocate (lamflux(nlambda, nspec, 4)) ; lamflux = 0.
-       call lambda_flux (phinew, lamflux)
-       if (proc0) then
-
-          call open_output_file (unit, ".lam")
-          do is = 1,nspec
-             lamflux(:,is,1) = lamflux(:,is,1)*spec(is)%dens
-             do il=1,nlambda
-                write (unit=unit, fmt=*) al(il), lamflux(il,is,1), is, &
-                     sum(lamflux(1:il,is,1)*delal(1:il))
-             end do
-             write (unit=unit, fmt=*) 
-          end do
-          call close_output_file (unit)
-
-          call open_output_file (unit, ".lame")
-          do is = 1,nspec
-             lamflux(:,is,2) = lamflux(:,is,2)*spec(is)%dens*spec(is)%temp
-             lamflux(:,is,3) = lamflux(:,is,3)*spec(is)%dens*spec(is)%temp
-             lamflux(:,is,4) = lamflux(:,is,4)*spec(is)%dens*spec(is)%temp
-             do il=1,nlambda
-                write (unit=unit, fmt=*) al(il), lamflux(il,is,2), is, &
-                     sum(lamflux(1:il,is,2)*delal(1:il)), &
-                     lamflux(il,is,3), sum(lamflux(1:il,is,3)*delal(1:il)), &
-                     lamflux(il,is,4), sum(lamflux(1:il,is,4)*delal(1:il))
-             end do
-             write (unit=unit, fmt=*) 
-          end do
-          call close_output_file (unit)
-       end if
-       deallocate (lamflux)
-    end if
-    
-    if (write_eavg) then
-       allocate (enflux(negrid, nspec, 4))
-       call e_flux (phinew, enflux)
-       if (proc0) then
-          call open_output_file (unit, ".energy")
-          do is = 1,nspec
-             enflux(:,is,1) = enflux(:,is,1)*spec(is)%dens
-             do ie=1,negrid
-                write (unit=unit, fmt=*) e(ie,is), enflux(ie,is,1),is, &
-                     sum(enflux(1:ie,is,1)*dele(1:ie,is))
-             end do
-             write (unit=unit, fmt=*) 
-          end do
-          call close_output_file (unit)
-
-          call open_output_file (unit, ".energye")
-          do is = 1,nspec
-             enflux(:,is,2) = enflux(:,is,2)*spec(is)%dens*spec(is)%temp
-             enflux(:,is,3) = enflux(:,is,3)*spec(is)%dens*spec(is)%temp
-             enflux(:,is,4) = enflux(:,is,4)*spec(is)%dens*spec(is)%temp
-             do ie=1,negrid
-                write (unit=unit, &
-                     fmt="(2(1x,e10.4),i3,5(1x,e10.4))") e(ie,is), enflux(ie,is,2), is, &
-                     sum(enflux(1:ie,is,2)*dele(1:ie,is)), &
-                     enflux(ie,is,3), sum(enflux(1:ie,is,3)*dele(1:ie,is)), &
-                     enflux(ie,is,4), sum(enflux(1:ie,is,4)*dele(1:ie,is))
-             end do
-             write (unit=unit, fmt=*) 
-          end do
-          call close_output_file (unit)
-       end if
-       deallocate (enflux)
-    end if
-
-    if (write_tavg) then
-       if (proc0) then
-          call open_output_file (unit, ".theta")
-          do is = 1,nspec
-             do ig = -ntgrid, ntgrid
-                write (unit=unit, fmt=*) theta(ig), theta_pflux(ig,is), is
-             end do
-             write (unit=unit, fmt=*) 
-          end do
-          call close_output_file (unit)
-
-          call open_output_file (unit, ".thetae")
-          do is=1,nspec
-             do ig = -ntgrid,ntgrid
-                write (unit=unit, &
-                     fmt="(2(1x,e10.4),i3,5(1x,e10.4))") theta(ig), theta_qflux(ig,is,1), is, &
-                     theta_qflux(ig,is,2), theta_qflux(ig,is,3)
-             end do
-             write (unit=unit, fmt=*) 
-          end do
-          call close_output_file (unit)
-       end if
-    end if
-    
+   
     call broadcast (write_final_moments)
     if (write_final_moments) then
 
@@ -1373,27 +1179,6 @@ contains
           close (unit=unit)
        end if
        deallocate (xphi)
-    end if
-
-    if (write_fcheck) then
-       allocate (fcheck_f(nlambda,ntheta0,naky,nspec))
-       call fcheck (g, fcheck_f)
-       if (proc0) then
-          call open_output_file (unit, ".fcheck")
-          do il = 2, nlambda
-             do is = 1, nspec
-                do ik = 1, naky
-                   do it = 1, ntheta0
-                      write (unit, "(20(1x,e12.6))") 0.5*(al(il) + al(il-1)), &
-                           aky(ik), akx(it), fcheck_f(il,it,ik,is), &
-                           sum((al(2:il)-al(1:il-1))*fcheck_f(2:il,it,ik,is))
-                   end do
-                end do
-             end do
-          end do
-          call close_output_file (unit)
-       end if
-       deallocate (fcheck_f)
     end if
 
     if (save_for_restart) then
@@ -1751,8 +1536,8 @@ contains
     use run_parameters, only: nstep
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
-    use dist_fn, only: flux, vortcheck, fieldcheck, get_stress, write_f, write_fyx
-    use dist_fn, only: neoclassical_flux, omega0, gamma0, getmoms, par_spectrum, gettotmoms
+    use dist_fn, only: flux, write_f, write_fyx
+    use dist_fn, only: omega0, gamma0, getmoms, par_spectrum, gettotmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error, neoflux
     use dist_fn, only: getmoms_notgc, g_adjust, include_lowflow, lf_flux
     use dist_fn, only: flux_vs_theta_vs_vpa
@@ -1764,7 +1549,7 @@ contains
     use gs2_time, only: user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
     use gs2_io, only: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
-    use gs2_io, only: nc_loop_stress, nc_loop_vres
+    use gs2_io, only: nc_loop_vres
     use gs2_io, only: nc_loop_movie, nc_write_fields
     use gs2_layouts, only: yxf_lo, g_lo
 ! MAB>
@@ -1834,7 +1619,6 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
          upar, tpar, tperp, upartot, uperptot, ttot
     complex, dimension (ntheta0, nspec) :: ntot00, density00, upar00, tpar00, tperp00
-    complex, dimension (ntheta0, nspec) :: rstress, ustress
     complex, dimension (ntheta0) :: phi00
     complex, save :: wtmp_new
 !    complex :: wtmp_old = 0.
@@ -2294,8 +2078,6 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 
     end if !END Polar spectrum calculation----------------------------------
 
-    if (write_vortcheck) call vortcheck (phinew, bparnew)
-    if (write_fieldcheck) call fieldcheck (phinew, aparnew, bparnew)
     if (write_fields) call nc_write_fields (nout, phinew, aparnew, bparnew)  !MR
 
     if (write_cross_phase .and. has_electron_species(spec)) then
@@ -2312,11 +2094,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
     call prof_entering ("loop_diagnostics-2")
 
     call kperp (ntg_out, akperp)
-
-    if (write_neoclassical_flux .or. dump_neoclassical_flux .and. neoflux) then
-!       call neoclassical_flux (pfluxneo, qfluxneo, phinew, bparnew)
-       call neoclassical_flux (pfluxneo, qfluxneo)
-    end if
 
     if (proc0 .and. write_any) then
        if (write_ascii) write (unit=out_unit, fmt=*) 'time=', t
@@ -2614,11 +2391,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
     end if
 
     if (write_cerr) call collision_error(phinew,bparnew,last)
-
-    if (write_stress) then
-       call get_stress (rstress, ustress)
-       if (proc0) call nc_loop_stress(nout, rstress, ustress)
-    end if
 
     call broadcast (write_symmetry)
     if (write_symmetry) then
@@ -3161,19 +2933,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                & tpar(igomega,:,:,:),tperp(igomega,:,:,:) )
        endif
     endif
-    ! <RN
-
-    if (write_neoclassical_flux .and. neoflux .and. proc0) then
-       do is=1,nspec
-          tprim_tot(is) = spec(is)%tprim-0.333*aimag(tpar00(1,is))-0.6667*aimag(tperp00(1,is))
-          fprim_tot(is) = spec(is)%fprim-aimag(density00(1,is))
-          write (out_unit, "('t= ',e12.6,' is= ',i2,' pfluxneo= ',e12.6,' nprim_tot= ',e12.6,' tprim_tot= ',e12.6)") &
-               t, is, real(pfluxneo(1,1,is)), fprim_tot(is), tprim_tot(is)
-          write (out_unit, "('t= ',e12.6,' is= ',i2,' qfluxneo= ',e12.6,' tprim_tot= ',3(1x,e12.6))") &
-               t, is, real(qfluxneo(1,1,is)), tprim_tot(is), -0.333*aimag(tpar00(1,is)), -0.6667*aimag(tperp00(1,is))
-       end do
-    end if
-
 
     if (proc0 .and. dump_any) then
 !
@@ -3182,15 +2941,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        do ik = 1, naky
           do it = 1, ntheta0
 !             it = 2
-             if (dump_neoclassical_flux .and. neoflux) then
-                do is = 1, nspec
-                   write (dump_neoclassical_flux_unit, "(20(1x,e12.5))") &
-                        t, aky(ik), akx(it), real(is), pfluxneo(it,ik,is), &
-                        qfluxneo(it,ik,is), &
-                        pfluxneo(it,ik,is)/sourcefac, &
-                        qfluxneo(it,ik,is)/sourcefac
-                end do
-             end if
              if (dump_check1) then
                 denom=sum(delthet(-ntg_out:ntg_out-1)*jacob(-ntg_out:ntg_out-1))
                 write (dump_check1_unit, "(20(1x,e12.5))") &

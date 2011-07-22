@@ -18,7 +18,7 @@ contains
     
     real, dimension (:), intent (in) :: theta, bmag
     real, dimension (:), intent (in) ::  al
-    real, dimension (:,:), intent (in) :: energy
+    real, dimension (:), intent (in) :: energy
     real, dimension (:,:,:,:,:), intent (out) :: dHdec, dHdxic, dHdrc, dHdthc, vpadHdEc, hneoc
     
     integer :: il, ie, is, ns, nc, nl, nr, ig, ixi, ir, ir_loc
@@ -32,7 +32,7 @@ contains
     
     ntheta = size(theta)
     nlambda = size(al)
-    nenergy = size(energy,1)
+    nenergy = size(energy)
     nxi = 2*nlambda-1
 
     allocate (xi(ntheta,nxi), forbid(ntheta,nxi))
@@ -79,8 +79,8 @@ contains
     end do
     
     do ie = 1, nenergy
-       call chebyshev (zfnc(energy(ie,1),emax), chebyp1(ie,:), 1)
-       call chebyshev (zfnc(energy(ie,1),emax), chebyp2(ie,:), 2)
+       call chebyshev (zfnc(energy(ie),emax), chebyp1(ie,:), 1)
+       call chebyshev (zfnc(energy(ie),emax), chebyp2(ie,:), 2)
     end do
     
     do ir = 1, nr
@@ -89,8 +89,8 @@ contains
              ! get_H returns hneo = F_1 / F_0
              call get_H (coefs(ir,ig,:,:,is), legp(ig,:,:), chebyp1, hneo(ir,ig,:,:,is), phineo(ir,ig))
              call get_dHdxi (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1, xi(ig,:), dHdxi(ig,:,:,is))
-             call get_dHdE (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1, chebyp2, energy(:,1), emax, dHdE(ig,:,:,is))
-!             call get_dHdE (hneo(ig,ig,:,:,is),energy(:,1),dHdE(ig,:,:,is))
+             call get_dHdE (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1, chebyp2, energy(:), emax, dHdE(ig,:,:,is))
+!             call get_dHdE (hneo(ig,ig,:,:,is),energy(:),dHdE(ig,:,:,is))
           end do
        end do
     end do
@@ -110,8 +110,8 @@ contains
     do ie = 1, nenergy
        do ixi = 1, nxi
           do ig = 1, ntheta
-             vpadHdE(ig,ixi,ie,:) = sqrt(energy(ie,1))*xi(ig,ixi)*dHdE(ig,ixi,ie,:) &
-                  + (1.-xi(ig,ixi)**2)*dHdxi(ig,ixi,ie,:)/(2.*sqrt(energy(ie,1)))
+             vpadHdE(ig,ixi,ie,:) = sqrt(energy(ie))*xi(ig,ixi)*dHdE(ig,ixi,ie,:) &
+                  + (1.-xi(ig,ixi)**2)*dHdxi(ig,ixi,ie,:)/(2.*sqrt(energy(ie)))
           end do
        end do
     end do

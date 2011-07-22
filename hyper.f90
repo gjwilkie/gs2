@@ -27,7 +27,6 @@ module hyper
   logical :: hyper_on = .false.
   logical :: gridnorm
 
-  real, dimension (:,:), allocatable, save :: aintnorm
   real, dimension (:,:), allocatable, save :: D_res
   ! (it, ik)
 
@@ -433,27 +432,21 @@ contains
 
   end subroutine allocate_arrays
 
-  subroutine hyper_diff (g0, g1, phi, bpar)
+  subroutine hyper_diff (g0, phi, bpar)
 
     use mp, only: proc0
     use gs2_layouts, only: ik_idx, it_idx, is_idx
     use theta_grid, only: ntgrid
     use run_parameters, only: fphi, fbpar
     use gs2_time, only: code_dt
-    use gs2_layouts, only: g_lo, geint_lo, gint_lo
+    use gs2_layouts, only: g_lo
     use kt_grids, only: aky, akx, naky, ntheta0
-    use le_grids, only: integrate, geint2g
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-    complex, dimension (:,:), allocatable :: g0eint, g1eint
-!    real, dimension (:,:), allocatable, save :: aintnorm
-!    logical :: first = .true.
-    logical :: conserve_number = .false.
-    logical :: conserve_inth = .true.
 
-    real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, &
-         shear_rate_z, shear_rate_z_nz
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
+
+    real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, shear_rate_z, shear_rate_z_nz
 
     integer :: iglo, ik, it, ige
     integer :: ncall = 0 ! variables declared with value are automatically saved
@@ -477,47 +470,11 @@ contains
     if (.not. hyper_on) return
     if (D_hypervisc < 0.) return
 
-    if (conserve_number) then ! get initial particle number
-       allocate (g0eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-       allocate (g1eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-
-!       if (first) then
-!          first = .false.
-       if (.not. allocated(aintnorm)) then
-          allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-          aintnorm = 0. ; g1 = 1.0
-          call integrate (g1, g1eint)
-          do ige = geint_lo%llim_proc, geint_lo%ulim_proc
-             aintnorm(:,ige) = 1.0/real(g1eint(:,ige))
-          end do
-       end if
-
-       if (conserve_inth) call g_adjust (g0, phi, bpar, fphi, fbpar)
-       call integrate (g0, g0eint)
-       if (conserve_inth) call g_adjust (g0, phi, bpar, -fphi, -fbpar)
-
-    end if
-
     if(isotropic_shear) then
        call iso_shear
     else
        call aniso_shear
     end if
-
-    if (conserve_number) then ! restore particle number
-       if (conserve_inth) call g_adjust (g1, phi, bpar, fphi, fbpar)
-       call integrate (g1, g1eint)
-       if (conserve_inth) call g_adjust (g1, phi, bpar, -fphi, -fbpar)
-       do ige = geint_lo%llim_proc, geint_lo%ulim_proc
-          g0eint(:,ige) = (g0eint(:,ige) - g1eint(:,ige)) &
-               *aintnorm(:,ige)
-       end do
-       call geint2g (g0eint, g0)
-       g0 = g0 + g1
-       deallocate (g0eint, g1eint)
-    else
-       g0 = g1
-    endif
 
   contains
 
@@ -572,19 +529,19 @@ contains
          
          if(aky(ik) == 0.) then
             
-            g1(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt &
+            g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt &
                  * ( shear_rate_z_nz(:) *  akx(it) ** 4 / akx4_max )))
             
-            g1(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt & 
+            g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt & 
                  * ( shear_rate_z_nz(:) *  akx(it) ** 4 / akx4_max )))
             
          else
             
-            g1(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt & 
+            g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt & 
                  * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max & 
                  + shear_rate_z(:) * akx(it) ** 4/ akx4_max * aky(ik) / aky_max )))
             
-            g1(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt &
+            g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt &
                  * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max & 
                  + shear_rate_z(:) * akx(it) ** 4 / akx4_max * aky(ik) / aky_max )))
             
@@ -617,10 +574,10 @@ contains
          ik = ik_idx(g_lo, iglo)
          it = it_idx(g_lo, iglo)
          
-         g1(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt &
+         g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt &
               * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
          
-         g1(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt &
+         g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt &
               * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
       end do
       
@@ -647,9 +604,9 @@ contains
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
-          adj = anon(ie,is)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
+          adj = anon(ie)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
                   *bpar(ig,it,ik)*facbpar &
-               + spec(is)%z*anon(ie,is)*phi(ig,it,ik)*aj0(ig,iglo) &
+               + spec(is)%z*anon(ie)*phi(ig,it,ik)*aj0(ig,iglo) &
                   /spec(is)%temp*facphi
           g(ig,1,iglo) = g(ig,1,iglo) + adj
           g(ig,2,iglo) = g(ig,2,iglo) + adj
@@ -664,7 +621,6 @@ contains
     hyper_on = .false.
     initialized = .false.
     if (allocated(D_res)) deallocate (D_res)
-    if (allocated(aintnorm)) deallocate (aintnorm)
 
   end subroutine finish_hyper
 
