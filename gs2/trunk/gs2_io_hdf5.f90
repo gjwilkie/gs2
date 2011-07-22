@@ -7,7 +7,6 @@ module gs2_io
   public :: init_gs2_io, nc_eigenfunc, nc_final_fields, nc_final_epar
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
-  public :: nc_loop_stress
   public :: nc_loop_movie, nc_write_fields
 
   logical, parameter :: serial_io = .true.
@@ -53,7 +52,7 @@ module gs2_io
   integer :: phi_id, apar_id, bpar_id, epar_id
   integer :: antot_id, antota_id, antotp_id
   integer :: ntot_id, density_id, upar_id, tpar_id, tperp_id
-  integer :: rstress_id, ustress_id, hrateavg_id, hrate_by_k_id
+  integer :: hrateavg_id, hrate_by_k_id
   integer :: ntot2_id, ntot2_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
   integer :: qflux_neo_by_k_id, pflux_neo_by_k_id, input_id
@@ -70,7 +69,7 @@ module gs2_io
   
 contains
 
-  subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
+  subroutine init_gs2_io (write_nl_flux, write_omega, &
       write_phiavg, write_hrate, make_movie, nmovie_tot, write_fields)
 !David has made some changes to this subroutine (may 2005) now should be able to do movies for 
 !linear box runs as well as nonlinear box runs.
@@ -85,7 +84,7 @@ contains
     use le_grids, only: nlambda, negrid
     use species, only: nspec
 
-    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, make_movie, write_fields
+    logical :: write_nl_flux, write_omega, write_phiavg, write_hrate, make_movie, write_fields
     logical :: accelerated
     character (300) :: filename, filename_movie
     integer :: ierr         ! 0 if initialization is successful
@@ -145,7 +144,7 @@ contains
 
     if (proc0) then
        call define_dims (nmovie_tot)
-       call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, write_fields)
+       call define_vars (write_nl_flux, write_omega, write_phiavg, write_hrate, write_fields)
        call nc_grids
        call nc_species
        call nc_geo
