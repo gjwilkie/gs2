@@ -56,7 +56,7 @@ module gs2_io
   integer :: phtot_id, dmix_id, kperpnorm_id
   integer :: phi2_by_kx_id, apar2_by_kx_id, bpar2_by_kx_id
   integer :: phi2_by_ky_id, apar2_by_ky_id, bpar2_by_ky_id
-  integer :: phi0_id, apar0_id, bpar0_id, sourcefac_id
+  integer :: phi0_id, apar0_id, bpar0_id
   integer :: omega_id, omegaavg_id, phase_id, phiavg_id
   integer :: es_heat_flux_id, es_mom_flux_id, es_part_flux_id
   integer :: es_heat_par_id, es_heat_perp_id
@@ -79,7 +79,7 @@ module gs2_io
   integer :: ntot2_id, ntot2_by_mode_id, ntot20_id, ntot20_by_mode_id
   integer :: tpar2_by_mode_id, tperp2_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
-  integer :: qflux_neo_by_k_id, pflux_neo_by_k_id, input_id
+  integer :: input_id
   integer :: charge_id, mass_id, dens_id, temp_id, tprim_id, fprim_id
   integer :: uprim_id, uprim2_id, vnewk_id, spec_type_id
   integer :: bmag_id, gradpar_id, gbdrift_id, gbdrift0_id
@@ -487,7 +487,6 @@ contains
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
     !logical :: d_fields_per = .false. - unnecessary - now set in input file
-    logical :: d_neo = .false.
     
     integer :: status
 
@@ -1111,15 +1110,6 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, var='vflux_tot')
        status = nf90_def_var (ncid, 'zflux_tot', netcdf_real, time_dim, zflux_tot_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='zflux_tot')
-    end if
-
-    if (d_neo) then
-       status = nf90_def_var (ncid, 'qflux_neo_by_k', netcdf_real, fluxk_dim, qflux_neo_by_k_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='qflux_neo_by_k')
-       status = nf90_def_var (ncid, 'pflux_neo_by_k', netcdf_real, fluxk_dim, pflux_neo_by_k_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='pflux_neo_by_k')
-       status = nf90_def_var (ncid, 'sourcefac', netcdf_real, om_dim, sourcefac_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='sourcefac')
     end if
 
     status = nf90_def_var (ncid, 'epar', netcdf_real, final_field_dim, epar_id)
