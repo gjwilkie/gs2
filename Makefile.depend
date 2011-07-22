@@ -63,7 +63,6 @@ ffttester_mod = \
 	 ffttester.o \
 	 fields.o \
 	 fields_arrays.o \
-	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -123,7 +122,6 @@ gs2_mod = \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
-	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -188,7 +186,6 @@ ingen_mod = \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
-	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -346,7 +343,6 @@ fields.o: \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
-	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -358,12 +354,6 @@ fields.o: \
 	 text_options.o \
 	 theta_grid.o 
 fields_arrays.o: 
-fields_explicit.o: \
-	 dist_fn.o \
-	 dist_fn_arrays.o \
-	 fields_arrays.o \
-	 kt_grids.o \
-	 theta_grid.o 
 fields_implicit.o: \
 	 antenna.o \
 	 dist_fn.o \
@@ -490,7 +480,6 @@ gs2_main.o: \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
-	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -516,7 +505,6 @@ gs2_reinit.o: \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
-	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
