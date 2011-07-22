@@ -132,7 +132,7 @@ contains
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     implicit none
-    type (text_option), dimension (4), parameter :: fieldopts = &
+    type (text_option), dimension (3), parameter :: fieldopts = &
          (/ text_option('default', fieldopt_implicit), &
             text_option('implicit', fieldopt_implicit), &
             text_option('test', fieldopt_test) /)

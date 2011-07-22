@@ -473,8 +473,6 @@ contains
 
     theta = (/ (real(i)*2.0*pi/real(ntheta), i=-ntgrid,ntgrid) /)
 
-    write (*,*) 'salpha_get_grids, ntgrid = ',ntgrid
-
 ! BD: dummy response for graphics in s-alpha mode until I have time to fix this:
     Rplot = 1.  ; Rprime = 0.
     Zplot = 1.  ; Zprime = 0.
@@ -1808,8 +1806,6 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
        eik_save = aplot(-ntgrid:ntgrid); deallocate (aplot)
        allocate (aplot(-ntgrid:ntgrid)); aplot = eik_save
     end if
-
-    write (*,*) size(bmag), ntgrid
 
     bmax = maxval(bmag)
     bmin = minval(bmag)
