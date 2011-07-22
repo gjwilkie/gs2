@@ -350,7 +350,7 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, theta_id)
     status = nf90_put_var (ncid, theta0_id, theta0)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, theta0_id)
-    status = nf90_put_var (ncid, egrid_id, energy(:))
+    status = nf90_put_var (ncid, egrid_id, energy)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, egrid_id)
     status = nf90_put_var (ncid, lambda_id, al)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, lambda_id)

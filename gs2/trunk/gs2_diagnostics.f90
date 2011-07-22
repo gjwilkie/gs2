@@ -451,7 +451,6 @@ contains
     use species, only: init_species, nspec
     use dist_fn, only: init_dist_fn
     use init_g, only: init_init_g
-!    use gs2_flux, only: init_gs2_flux
     use gs2_io, only: init_gs2_io
     use gs2_heating, only: init_htype,init_dvtype
     use collisions, only: collision_model_switch, init_lorentz_error
@@ -472,7 +471,6 @@ contains
     call init_species
     call init_init_g
     call init_dist_fn
-!    call init_gs2_flux
 
     call real_init (list)
     call broadcast (navg)
@@ -708,7 +706,6 @@ contains
 !
     use file_utils, only: input_unit, input_unit_exist
     use theta_grid, only: nperiod, ntheta
-!    use gs2_flux, only: gs2_flux_adjust
     use dist_fn, only: nperiod_guard
     use kt_grids, only: box, nx, ny
     use mp, only: proc0
@@ -814,8 +811,7 @@ contains
             .or. write_fieldline_avg_phi            &
             .or. write_flux_line                   .or. write_nl_flux .or. write_Epolar &
             .or. write_kpar   .or. write_hrate     .or. write_lorentzian  .or. write_gs
-       write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux !&
-!            .or. gs2_flux_adjust
+       write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux 
        dump_any = dump_check1  .or. dump_fields_periodically &
             .or.  dump_check2 .or. make_movie .or. print_summary &
             .or.  write_full_moments_notgc
@@ -1560,7 +1556,6 @@ contains
     use le_grids, only: nlambda, ng2, integrate_moment, negrid, integrate_kysum
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
-!    use gs2_flux, only: check_flux
     use gs2_heating, only: heating_diagnostics, del_htype, &
          dens_vel_diagnostics,init_dvtype, del_dvtype
     use constants
@@ -1956,7 +1951,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
     end if
 
     i=istep/nwrite
-!    call check_flux (i, t, heat_fluxes)
+
 ! Polar spectrum calculation----------------------------------------------
     if (write_Epolar .and. proc0) then
        ebinarray(:,:)=0.

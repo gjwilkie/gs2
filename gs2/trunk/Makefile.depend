@@ -403,13 +403,6 @@ gs2_dist_io_hdf.o: \
 	 mp.o \
 	 species.o \
 	 theta_grid.o 
-gs2_flux.o: \
-	 dist_fn.o \
-	 file_utils.o \
-	 mp.o \
-	 regression.o \
-	 species.o \
-	 text_options.o 
 gs2_heating.o: \
 	 mp.o \
 	 species.o 
@@ -641,8 +634,6 @@ prof.o:
 ran.o: 
 redistribute.o: \
 	 job_manage.o \
-	 mp.o 
-redistribute_shnew.o: \
 	 mp.o 
 regress.o: \
 	 regression.o 
