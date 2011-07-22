@@ -84,9 +84,9 @@ contains
 ! <TT
     use file_utils, only: error_unit
     !<DD> Added for saving distribution function
-    use le_grids, only: e,al,negrid,nlambda
+    use le_grids, only: energy, al, negrid, nlambda
     use species, only: nspec
-    use dist_fn_arrays, only: vpa,vperp2
+    use dist_fn_arrays, only: vpa, vperp2
     !</DD> Added for saving distribution function
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
@@ -373,9 +373,8 @@ contains
           !<DD> Added for saving distribution function
            IF (PRESENT(distfn)) THEN
 	          	!<DD 29-08-2010> Define energy and lambda variables
-	            !Define energy variable (energy for each species)
-	            istatus = nf90_def_var (ncid, "energy", netcdf_real, &
-	                (/ egridid, nspecid /), energy_id)
+	            !Define energy variable 
+	            istatus = nf90_def_var (ncid, "energy", netcdf_real, (/ egridid /), energy_id)
 	
 	            !Check variable created successfully
 	            IF (istatus /= NF90_NOERR) THEN
@@ -549,7 +548,7 @@ contains
         	!<DD 29-08-2010> Fill energy and lambda information
 
 	        !Store variable energy
-	        istatus = nf90_put_var (ncid, energy_id, e(:,1:nspec))
+	        istatus = nf90_put_var (ncid, energy_id, energy)
 	
 	        !Check store was successful
 	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, energy_id)

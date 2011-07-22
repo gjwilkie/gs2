@@ -2481,7 +2481,7 @@ contains
     use species, only: spec
     use theta_grid, only: ntgrid, theta
     use kt_grids, only: naky, ntheta0, akr
-    use le_grids, only: e, forbid
+    use le_grids, only: energy, forbid
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use constants
@@ -2504,7 +2504,7 @@ contains
        il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit*exp(-e(ie,is))
+       g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit*exp(-energy(ie))
        where (forbid(:,il)) g(:,1,iglo) = 0.0
        g(:,2,iglo) = g(:,1,iglo)
     end do
@@ -2564,7 +2564,7 @@ contains
   end subroutine ginit_xi2
 
   subroutine ginit_rh
-    use le_grids, only: forbid, e
+    use le_grids, only: forbid, energy
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, it_idx, il_idx, ie_idx, is_idx
     use constants
@@ -2577,7 +2577,7 @@ contains
        il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       g(:,1,iglo) = exp(-e(ie,is))
+       g(:,1,iglo) = exp(-energy(ie))
        where (forbid(:,il)) g(:,1,iglo) = 0.0
        g(:,2,iglo) = g(:,1,iglo)
     end do
