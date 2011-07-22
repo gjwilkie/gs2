@@ -36,7 +36,7 @@ module dist_fn
   real :: t0, omega0, gamma0, thetas, source0
   real :: phi_ext, afilter, kfilter, a_ext
   real :: aky_star, akx_star
-  real :: D_kill, noise, wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
+  real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
   real :: rhostar ! MAB
   logical :: include_lowflow ! MAB
   logical :: dfexist, skexist
@@ -50,11 +50,7 @@ module dist_fn
 !  integer, parameter ::  heating_option_cowley = 1
   integer :: source_option_switch
   integer, parameter :: source_option_full = 1, &
-       source_option_zero = 2, source_option_sine = 3, &
-       source_option_test1 = 4, source_option_phiext_full = 5, &
-       source_option_test2_full = 6, source_option_cosine = 7, &
-       source_option_convect_full = 8, source_option_hm_force = 9, &
-       source_option_neo = 10
+       source_option_phiext_full = 5
   
   integer :: boundary_option_switch
   integer, parameter :: boundary_option_zero = 1, &
@@ -63,9 +59,8 @@ module dist_fn
        boundary_option_linked = 4
   logical, public :: def_parity, even
   logical :: mult_imp, test
-  logical :: save_n
   logical :: accelerated_x = .false.
-  logical :: accelerated_v = .false., kill_grid, h_kill
+  logical :: accelerated_v = .false.
   logical :: neo = .false., neoflux
   integer :: nfac = 1
   integer :: nperiod_guard
@@ -125,9 +120,6 @@ module dist_fn
   ! exb shear
   integer, dimension(:), allocatable :: jump, ikx_indexed
 
-  ! kill
-  real, dimension (:,:), allocatable :: aintnorm
-  
   ! set_source
   real, dimension(:,:), allocatable :: ufac
 
@@ -354,15 +346,6 @@ subroutine check_dist_fn(report_unit)
           end if
        end if
 
-       if (D_kill > 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('D_kill > 0 probably does not work correctly.')")
-          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-
     write (report_unit, *) 
     write (report_unit, fmt="('------------------------------------------------------------')")
     write (report_unit, *) 
@@ -389,62 +372,6 @@ subroutine check_dist_fn(report_unit)
        write (report_unit, fmt="('with an additional source proportional to Phi*F_0')")
        write (report_unit, fmt="('Together with phi_ext = -1., this is the usual way to &
              & calculate the Rosenbluth-Hinton response.')")
-       write (report_unit, *) 
-
-    case(source_option_test2_full)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The standard GK equation will be solved,')")
-       write (report_unit, fmt="('with additional developmental sources, determined by ')")
-       write (report_unit, fmt="('source_option=test2_full in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case(source_option_convect_full)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The standard GK equation will be solved,')")
-       write (report_unit, fmt="('with additional developmental sources, determined by ')")
-       write (report_unit, fmt="('source_option=convect_full in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_zero)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=zero in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_sine)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=sine in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_test1)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=test1 in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_cosine)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=cosine in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, *) 
 
     end select
@@ -552,12 +479,6 @@ subroutine check_dist_fn(report_unit)
           write (unit, fmt="(' def_parity = ',L1)") def_parity
           if (even) write (unit, fmt="(' even = ',L1)") even
        end if
-       if (D_kill > 0.) then
-          write (unit, fmt="(' D_kill = ',e16.10)") D_kill
-          write (unit, fmt="(' save_n = ',L1)") save_n
-
-       end if
-       if (noise > 0.) write (unit, fmt="(' noise = ',e16.10)") noise
        write (unit, fmt="(' /')")
     endif
     if (skexist) then
@@ -576,45 +497,6 @@ subroutine check_dist_fn(report_unit)
           write (unit, fmt="(' t0 = ',e16.10)") t0
           write (unit, fmt="(' phi_ext = ',e16.10)") phi_ext
        
-       case(source_option_test2_full)
-          write (unit, fmt="(' course_option = ',a)") '"test2_full"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-          write (unit, fmt="(' thetas = ',e16.10)") thetas
-
-       case(source_option_convect_full)
-          write (unit, fmt="(' course_option = ',a)") '"convect_full"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-
-       case (source_option_zero)
-          write (unit, fmt="(' course_option = ',a)") '"zero"'
-
-       case (source_option_cosine)
-          write (unit, fmt="(' course_option = ',a)") '"cosine"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-
-       case (source_option_sine)
-          write (unit, fmt="(' course_option = ',a)") '"sine"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-
-       case (source_option_test1)
-          write (unit, fmt="(' course_option = ',a)") '"test1"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-
        end select
        write (unit, fmt="(' /')")
     endif
@@ -728,18 +610,10 @@ subroutine check_dist_fn(report_unit)
     use mp, only: proc0, broadcast
     use theta_grid, only: itor_over_B
     implicit none
-    type (text_option), dimension (11), parameter :: sourceopts = &
+    type (text_option), dimension (3), parameter :: sourceopts = &
          (/ text_option('default', source_option_full), &
             text_option('full', source_option_full), &
-            text_option('zero', source_option_zero), &
-            text_option('sine', source_option_sine), &
-            text_option('cosine', source_option_cosine), &
-            text_option('test1', source_option_test1), &
-            text_option('hm', source_option_hm_force), &
-            text_option('phiext_full', source_option_phiext_full), &
-            text_option('test2_full', source_option_test2_full), &
-            text_option('convect_full', source_option_convect_full), &
-            text_option('neo', source_option_neo) /)
+            text_option('phiext_full', source_option_phiext_full) /)
     character(20) :: source_option
 
     type (text_option), dimension (8), parameter :: boundaryopts = &
@@ -774,7 +648,7 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, &
          tpdriftknob, nperiod_guard, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         save_n, D_kill, noise, kill_grid, h_kill, include_lowflow, &
+         include_lowflow, &
          g_exb, g_exbfac, neoflux, omprimfac, btor_slab, mach, rhostar
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, &
@@ -787,7 +661,6 @@ subroutine check_dist_fn(report_unit)
     readinit = .true.
 
     if (proc0) then
-       save_n = .true.
        boundary_option = 'default'
        adiabatic_option = 'default'
        poisfac = 0.0
@@ -811,9 +684,6 @@ subroutine check_dist_fn(report_unit)
        mach = 0.0
        omprimfac = 1.0
        btor_slab = 0.0
-       h_kill = .true.
-       D_kill = -10.0
-       noise = -1.
        wfb = 1.
        rhostar = 3.e-3
        mult_imp = .false.
@@ -822,7 +692,6 @@ subroutine check_dist_fn(report_unit)
        even = .true.
        neoflux = .false.
        source_option = 'default'
-       kill_grid = .false.
        include_lowflow = .false. ! MAB
        in_file = input_unit_exist("dist_fn_knobs", dfexist)
 !       if (dfexist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
@@ -854,10 +723,7 @@ subroutine check_dist_fn(report_unit)
     end if
     if (.not.allocated(fexp)) allocate (fexp(nspec), bkdiff(nspec), bd_exp(nspec))
     if (proc0) call read_species_knobs
-    neoflux = neoflux .or. source_option_switch == source_option_neo
 
-    call broadcast (kill_grid)
-    call broadcast (save_n)
     call broadcast (boundary_option_switch)
     call broadcast (adiabatic_option_switch)
 !    call broadcast (heating_option_switch)
@@ -875,14 +741,11 @@ subroutine check_dist_fn(report_unit)
     call broadcast (akx_star)
     call broadcast (phi_ext)
     call broadcast (a_ext)
-    call broadcast (D_kill)
-    call broadcast (h_kill)
     call broadcast (g_exb)
     call broadcast (g_exbfac)
     call broadcast (mach)
     call broadcast (omprimfac)
     call broadcast (btor_slab)
-    call broadcast (noise)
     call broadcast (afilter)
     call broadcast (kfilter)
     call broadcast (source_option_switch)
@@ -898,8 +761,6 @@ subroutine check_dist_fn(report_unit)
     call broadcast (neoflux)
     call broadcast (include_lowflow)    
     call broadcast (rhostar)
-
-    if (source_option_switch == source_option_neo) nfac = 0
 
     if (mult_imp) then
        ! nothing -- fine for linear runs, but not implemented nonlinearly
@@ -3049,96 +2910,6 @@ subroutine check_dist_fn(report_unit)
           source = 0.0
        end if
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Solve self-consistent terms + include external i omega_d * F_0
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case(source_option_neo)
-       if (il <= lmax) then
-          call set_source
-          if (aky(ik) < epsilon(0.0)) then
-             source(:ntgrid-1) = source(:ntgrid-1) &
-                  - anon(ie)*wdrift_neo(:ntgrid-1,iglo)*2.0*sourcefac &
-                  *(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))*spec(is)%tz
-          end if
-       else
-          source = 0.0
-       end if
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Solve self-consistent terms + include external i omega_d Phi * F_0
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case(source_option_hm_force)
-       if (il <= lmax) then
-          call set_source
-          if (istep > 0 .and. aky(int(aky_star)) == aky(ik) .and. akx(int(akx_star)) == akx(it)) &
-               source(:ntgrid-1) = source(:ntgrid-1) - zi*phi_ext*sourcefac
-       else 
-          source = 0.0
-       end if
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Solve self-consistent terms + include external <Phi> * F_0 * other stuff
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case(source_option_test2_full)
-       if (il <= lmax) then
-          call set_source
-       else
-          source = 0.0
-       end if
-       if (aky(ik) == 0.0 .and. istep > 0) then
-          source(:ntgrid-1) = source(:ntgrid-1) &
-               + tunits(ik)*code_dt &
-               *(aj0(:ntgrid-1,iglo)**2 + aj0(-ntgrid+1:,iglo)**2) &
-               *(energy(ie)-1.5)*sourcefac &
-               *exp(-(theta(:ntgrid-1)/thetas)**2)
-       end if
-       
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Solve self-consistent terms for ky=0, something else for ky /= 0
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case(source_option_convect_full)
-       if (il <= lmax) then
-          call set_source
-       else
-          source = 0.0
-       end if
-       if (aky(ik) /= 0.0 .and. istep > 0) then
-          source(:ntgrid-1) = sourcefac &
-               *exp(cmplx((theta(:ntgrid-1)-theta0(it,ik))**2, &
-               k0*theta(:ntgrid-1)))
-       end if       
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Include no source term
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case (source_option_zero)
-       source = 0.0
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! S = sin(theta)*f(omega)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case (source_option_sine)
-       source(:ntgrid-1) = tunits(ik)*code_dt &
-            *(sin(theta(:ntgrid-1)) + sin(theta(-ntgrid+1:))) &
-            *sourcefac
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! S = -i*omega_d*f(omega)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case (source_option_test1)
-       do ig = -ntgrid, ntgrid-1
-          source(ig) = -zi*(wdrift_func(ig,il,ie,it,ik) &
-               + wdrift_func(ig+1,il,ie,it,ik)) &
-               *sourcefac
-       end do
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! S = cos(theta)*f(omega)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case (source_option_cosine)
-       source(:ntgrid-1) = tunits(ik)*code_dt &
-            *(cos(theta(:ntgrid-1)) + cos(theta(-ntgrid+1:))) &
-            *sourcefac
     end select
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -3164,11 +2935,7 @@ subroutine check_dist_fn(report_unit)
 ! special source term for totally trapped particles
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     if (source_option_switch == source_option_full .or. &
-        source_option_switch == source_option_phiext_full .or. &
-        source_option_switch == source_option_neo .or. &
-        source_option_switch == source_option_hm_force .or. &
-        source_option_switch == source_option_test2_full .or. &
-        source_option_switch == source_option_test1) then
+        source_option_switch == source_option_phiext_full) then
        if (nlambda > ng2 .and. isgn == 2) then
           do ig = -ntgrid, ntgrid
              if (il < ittp(ig)) cycle
@@ -3185,16 +2952,6 @@ subroutine check_dist_fn(report_unit)
                 if (il < ittp(ig)) cycle             
                 source(ig) = source(ig) - zi*anon(ie)* &
                      wdriftttp(ig,it,ik,ie,is)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
-             end do
-          endif
-
-          if (source_option_switch == source_option_neo .and.  &
-               aky(ik) < epsilon(0.0)) then
-             do ig = -ntgrid, ntgrid
-                if (il < ittp(ig)) cycle             
-                source(ig) = source(ig) - anon(ie)* &
-                     wdriftttp_neo(ig,it,ik,ie,is)*2.0*sourcefac &
-                     *(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))*spec(is)%tz
              end do
           endif
 
@@ -7483,7 +7240,6 @@ subroutine check_dist_fn(report_unit)
     if (allocated(kx_shift)) deallocate (kx_shift)
     if (allocated(jump)) deallocate (jump)
     if (allocated(ikx_indexed)) deallocate (ikx_indexed)
-    if (allocated(aintnorm)) deallocate (aintnorm)
     if (allocated(ufac)) deallocate (ufac)
     if (allocated(gridfac1)) deallocate (gridfac1, gamtot, gamtot1, gamtot2)
     if (allocated(gamtot3)) deallocate (gamtot3)
