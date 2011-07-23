@@ -34,11 +34,11 @@ module geometry
   real :: grhoavg  ! needed for Trinity -- MAB
 
   real, dimension(3) :: rpval
-  real :: rpmin, rpmax, ak0
+  real :: rpmin, rpmax
   real :: s_hat_new
   real :: beta_prime_new
 
-  integer :: isym, ismooth, k1, k2, big
+  integer :: isym, big
   integer :: eqinit = 1
   
   logical :: gen_eq, efit_eq, ppl_eq, local_eq
@@ -124,9 +124,6 @@ module geometry
 !!!     delrho :: numerical parameter.  Should be "small enough".  Typically 0.001 ok.
 !!!     rmin :: minimum minor radius at which items are evaluated
 !!!     rmax :: should be equal to unity 
-!!!     
-!!!     ismooth :: 1 or more -> smooth resulting coefficients.  Rarely used.
-!!!     ak0, k1, k2 :: smoothing parameters.  Rarely used.
 !!!     
 !!!     isym :: 1 -> assume up-down symmetric equilibrium.
 !!!     in_nt :: .true. if running inside of nt.
@@ -788,11 +785,6 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 !     compute the magnetic field along theta
 !    call  bmagtgrid(rgrid, bmagtg)    
 
-    if(ismooth >= 1) then
-       call smoothie(2*nth+1, Bmod(-nth:nth), Bmod(-nth:nth), k1, k2, ak0)
-       Bmod(nth)=Bmod(-nth)
-    endif
-
     if(itor /= 0) then
 !       call periodic_copy(bmagtg, 0.) 
 !       bmag = bmagtg
@@ -1182,11 +1174,6 @@ end subroutine eikcoefs
        bmagtg(i)=bmagfun(rgrid(i),theta(i))
     enddo
 
-    if(ismooth >= 1) then
-       call smoothie(2*nth+1,bmagtg(-nth:nth),bmagtg(-nth:nth),k1,k2,ak0)
-       bmagtg(nth)=bmagtg(-nth)
-    endif
-
   end subroutine bmagtgrid
       
   real function bmagfun(r, thet)
@@ -1313,18 +1300,6 @@ end subroutine eikcoefs
           call grad(rgrid, theta, bgrad1, char, dum, nth, ntgrid)
        endif
 
-       if(ismooth >= 2) then
-          do i=-nth,nth
-             dumdum1(nth+i+1)=bgrad1(i,1)
-             dumdum2(nth+i+1)=bgrad1(i,2)
-          enddo
-          call smoothie(ndum,dumdum1(1:ndum),dumdum1(1:ndum),k1,k2,ak0)
-          call smoothie(ndum,dumdum2(1:ndum),dumdum2(1:ndum),k1,k2,ak0)
-          do i=-nth,nth
-             bgrad1(i,1)=dumdum1(i+nth+1)
-             bgrad1(i,2)=dumdum2(i+nth+1)
-          enddo
-       endif
        do i=-nth,nth
           bgradtot(i,1)=bgrad1(i,1)
           bgradtot(i,2)=bgrad1(i,2)
@@ -2270,87 +2245,6 @@ end subroutine geofax
 1000 format(1x,11e16.9)
     
   end function bmodfun
-
-  subroutine smoothie(n, a, b, jmax1, jmax2, f1)
-
-! only works for periodic functions s.t. a(1)=a(n)
-
-    integer :: n, jmax1, jmax2, i, j
-    real, dimension(n) :: a, b, c, d, e
-    real :: f1, dmax
-
-!
-! get weighting function for diffusion coefficient
-    
-    d(1)=a(2)-a(n-1)
-    do i=2,n-1
-       d(i)=a(i+1)-a(i-1)
-    enddo
-    d(n)=a(2)-a(n-1)
-    
-    do j=1,jmax1/2
-       c(1)=(d(n-1)+d(1)+d(2))/3.
-       do i=2,n
-          c(i)=(d(i-1)+d(i)+d(i+1))/3.
-       enddo
-       c(n)=c(1)
-       do i=1,n
-          d(i)=c(i)
-       enddo
-    enddo
-    
-    do j=1,jmax1/2
-       c(1)=abs(d(n-1)+d(1)+d(2))/3.
-       do i=2,n
-          c(i)=abs(d(i-1)+d(i)+d(i+1))/3.
-       enddo
-       c(n)=c(1)
-       do i=1,n
-          d(i)=c(i)
-       enddo
-    enddo
-    
-    dmax=0.
-    do i=1,n
-!         write(*,*) d(i)
-       d(i)=1.0/d(i)**f1
-       dmax=max(dmax,d(i))
-       e(i)=d(i)
-    enddo
-!      write(*,*) 'dmax ',dmax
-
-    do j=1,jmax1/2
-       c(1)=e(1)+0.25*d(1)/dmax*(e(2)-2*e(1)+e(n-1))
-       do i=2,n-1
-          c(i)=e(i)+0.25*d(i)/dmax*(e(i+1)-2.*e(i)+e(i-1))
-       enddo
-       c(n)=c(1)
-       do i=1,n
-          e(i)=c(i)
-       enddo
-    enddo
-    
-    do i=1,n
-       d(i)=e(i)
-    enddo
-
-!      do i=1,n
-!         write(*,*) d(i)/dmax
-!      enddo
-!      write(*,*) 
-    
-    do j=1,jmax2
-       c(1)=b(1)+0.25*d(1)/dmax*(b(2)-2*b(1)+b(n-1))
-       do i=2,n-1
-          c(i)=b(i)+0.25*d(i)/dmax*(b(i+1)-2.*b(i)+b(i-1))
-       enddo
-       c(n)=c(1)
-       do i=1,n
-          b(i)=c(i)
-       enddo
-    enddo
-    
-  end subroutine smoothie
 
   subroutine arclength (ntheta, nperiod, gpar, arcl)
 

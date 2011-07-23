@@ -506,6 +506,7 @@ contains
        gds2 = 1.0 + (shat*theta-shift*sin(theta))**2
        gds21 = -shat*(shat*theta - shift*sin(theta))
        gds22 = shat*shat
+       ! BD: What are gds23 and gds24?  Who put this here?
        ! BELOW LINE IS TEMPORARY UNTIL CORRECT EXPRESSIONS CALCULATED
        gds23 = 0. ; gds24 = 0.
        grho = 1.0
@@ -615,8 +616,8 @@ contains
 
   subroutine wnml_theta_grid_eik(unit)
   use geometry, only: alpha_input, beta_prime_input, invLp_input, s_hat_input
-  use geometry, only: delrho, dp_mult, rmin, rmax, ak0
-  use geometry, only: bishop, iflux, irho, itor, isym, ismooth
+  use geometry, only: delrho, dp_mult, rmin, rmax
+  use geometry, only: bishop, iflux, irho, itor, isym
   use geometry, only: eqfile
   use geometry, only: idfit_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq
   use geometry, only: gs2d_eq, transp_eq, writelots, equal_arc
@@ -646,12 +647,8 @@ contains
        write (unit, fmt="(' delrho =  ',e13.6)") delrho
        write (unit, fmt="(' rmin =  ',e13.6)") rmin
        write (unit, fmt="(' rmax =  ',e13.6)") rmax
-       write (unit, fmt="(' ismooth =  ',i1)") ismooth
        write (unit, fmt="(' isym =  ',i1)") isym
        write (unit, fmt="(' writelots =  ',L1)") writelots
-       write (unit, fmt="(' ak0 =  ',e13.5)") ak0
-!       write (unit, fmt="(' k1 =  ',e13.5)") k1
-!       write (unit, fmt="(' k2 =  ',e13.5)") k2
        write (unit, fmt="(' eqfile = ',a)") '"'//trim(eqfile)//'"'
        write (unit, fmt="(' /')")
   end subroutine wnml_theta_grid_eik
@@ -1155,7 +1152,6 @@ if (debug) write(6,*) 'eik_get_grids: end'
     use geometry, only: rmaj, r_geo
     use geometry, only: shift, qinp, akappa, akappri, tri, tripri, asym, asympri
     use geometry, only: delrho, rmin, rmax
-    use geometry, only: ismooth, ak0, k1, k2
     use geometry, only: isym, in_nt, writelots
     use theta_grid_params, only: nperiod_in => nperiod
     use theta_grid_params, only: rhoc_in => rhoc
@@ -1174,7 +1170,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
          ppl_eq, gen_eq, efit_eq, eqfile, dfit_eq, &
          equal_arc, bishop, local_eq, idfit_eq, gs2d_eq, transp_eq, &
          s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
-         delrho, rmin, rmax, ismooth, ak0, k1, k2, isym, writelots
+         delrho, rmin, rmax, isym, writelots
 
     nperiod = nperiod_in  
     rhoc = rhoc_in
@@ -1201,7 +1197,6 @@ if (debug) write(6,*) 'eik_get_grids: end'
     delrho = 1e-3
     rmin = 1e-3
     rmax = 1.0
-    ismooth = 0
     isym = 0
     in_nt = .false.
     writelots = .false.
@@ -1561,8 +1556,6 @@ if (debug) write(6,*) "init_theta_grid: call get_sizes"
        call get_sizes
 if (debug) write(6,*) "init_theta_grid: call allocate_arrays"
        call allocate_arrays
-if (debug) write(6,*) "init_theta_grid: call get_grids"
-       call get_grids
 if (debug) write(6,*) "init_theta_grid: call finish_init"
        call finish_init
     end if

@@ -5,8 +5,8 @@ module lowflow
   public :: get_lowflow_terms
 
   real, dimension (:,:,:,:,:), allocatable :: coefs
-  real, dimension (:), allocatable :: rad_neo, theta_neo
   real, dimension (:,:), allocatable :: phineo
+  real, dimension (:), allocatable :: rad_neo, theta_neo
 
 contains
   
@@ -21,13 +21,15 @@ contains
     real, dimension (:), intent (in) :: energy
     real, dimension (:,:,:,:,:), intent (out) :: dHdec, dHdxic, dHdrc, dHdthc, vpadHdEc, hneoc
     
+    real, dimension (:,:,:,:,:), allocatable :: hneo
+    real, dimension (:,:,:,:), allocatable :: dHdxi, dHdE, vpadHdE, dHdr, dHdth
+    real, dimension (:,:,:), allocatable :: legp
+    real, dimension (:,:), allocatable :: xi, chebyp1, chebyp2
+    real :: emax
+
     integer :: il, ie, is, ns, nc, nl, nr, ig, ixi, ir, ir_loc
     integer :: ntheta, nlambda, nenergy, nxi
-    real :: emax
-    real, dimension (:,:), allocatable :: xi, chebyp1, chebyp2
-    real, dimension (:,:,:), allocatable :: legp
-    real, dimension (:,:,:,:), allocatable :: dHdxi, dHdE, vpadHdE, dHdr, dHdth
-    real, dimension (:,:,:,:,:), allocatable :: hneo
+
     logical, dimension (:,:), allocatable :: forbid
     
     ntheta = size(theta)
@@ -67,8 +69,10 @@ contains
     allocate (chebyp1(nenergy,0:nc-1), chebyp2(nenergy,0:nc-1))
     allocate (legp(ntheta,nxi,0:nl+1))
     allocate (hneo(nr,ntheta,nxi,nenergy,ns))
-    allocate (dHdr(ntheta,nxi,nenergy,ns), dHdth(ntheta,nxi,nenergy,ns))
-    allocate (dHdxi(ntheta,nxi,nenergy,ns), dHdE(ntheta,nxi,nenergy,ns))
+    allocate (   dHdr(ntheta,nxi,nenergy,ns))
+    allocate (  dHdth(ntheta,nxi,nenergy,ns))
+    allocate (  dHdxi(ntheta,nxi,nenergy,ns))
+    allocate (   dHdE(ntheta,nxi,nenergy,ns))
     allocate (vpadHdE(ntheta,nxi,nenergy,ns))
     
     legp = 0.0
@@ -83,8 +87,9 @@ contains
        call chebyshev (zfnc(energy(ie),emax), chebyp2(ie,:), 2)
     end do
     
-    do ir = 1, nr
-       do is = 1, ns
+! BD:  Switched order of first two loops for efficiency.  MAB should double-check for correctness
+    do is = 1, ns
+       do ir = 1, nr
           do ig = 1, ntheta
              ! get_H returns hneo = F_1 / F_0
              call get_H (coefs(ir,ig,:,:,is), legp(ig,:,:), chebyp1, hneo(ir,ig,:,:,is), phineo(ir,ig))

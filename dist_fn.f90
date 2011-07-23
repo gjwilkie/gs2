@@ -2801,7 +2801,6 @@ subroutine check_dist_fn(report_unit)
     use nonlinear_terms, only: nonlin
     use hyper, only: D_res
     use constants
-    use run_parameters, only: k0
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew

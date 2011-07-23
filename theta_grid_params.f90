@@ -63,7 +63,6 @@ contains
     ntheta = 24
     nperiod = 2
     in_file = input_unit_exist("theta_grid_parameters", exist)
-!    if (exist) read (unit=input_unit("theta_grid_parameters"), nml=theta_grid_parameters)
     if (exist) read (unit=in_file, nml=theta_grid_parameters)
 
     if (kp > 0.) pk = 2.*kp

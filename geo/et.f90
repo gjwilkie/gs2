@@ -22,7 +22,7 @@ program eiktest
   namelist/stuff/ntheta,nperiod,rmaj,akappri,akappa,shift,equal_arc, &
        rhoc,rmin,rmax,itor,qinp,iflux,delrho,tri,bishop, &
        irho,isym,tripri,vmom_eq,efit_eq,dfit_eq,writelots,R_geo, &
-       gen_eq, ppl_eq, eqfile,ismooth,ak0,k1,k2,local_eq,idfit_eq,&
+       gen_eq, ppl_eq, eqfile, local_eq, idfit_eq,&
        s_hat_input,p_prime_input,invLp_input,beta_prime_input, &
        diffscheme,nbeta,beta_p1,beta_p2,alpha_input,big, &
        beta_prime_times, beta_prime_over, fast, profile_fac, &
@@ -73,11 +73,6 @@ program eiktest
   irho = 2 ;      isym = 0
 
   delrho = 0.01
-
-  ismooth = 0
-  ak0 = 1.
-  k1 = -30
-  k2 = -15
 
   eqinit = 1       ! Mike K. codes do not have this variable.
 
