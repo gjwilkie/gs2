@@ -1556,6 +1556,8 @@ if (debug) write(6,*) "init_theta_grid: call get_sizes"
        call get_sizes
 if (debug) write(6,*) "init_theta_grid: call allocate_arrays"
        call allocate_arrays
+if (debug) write(6,*) "init_theta_grid: call get_grids"
+       call get_grids
 if (debug) write(6,*) "init_theta_grid: call finish_init"
        call finish_init
     end if
