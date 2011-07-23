@@ -16,7 +16,7 @@ module init_g
 
   ! knobs
   integer :: ginitopt_switch
-  integer, parameter :: ginitopt_default = 1, ginitopt_test1 = 2, &
+  integer, parameter :: ginitopt_default = 1,  &
        ginitopt_xi = 3, ginitopt_xi2 = 4, ginitopt_rh = 5, ginitopt_zero = 6, &
        ginitopt_test3 = 7, ginitopt_convect = 8, ginitopt_restart_file = 9, &
        ginitopt_noise = 10, ginitopt_restart_many = 11, ginitopt_continue = 12, &
@@ -102,9 +102,6 @@ contains
           write (unit, fmt="(' zf_init = ',e16.10)") zf_init
           write (unit, fmt="(' chop_side = ',L1)") chop_side
           if (chop_side) write (unit, fmt="(' left = ',L1)") left
-
-       case (ginitopt_test1)
-          write (unit, fmt="(' ginit_option = ',a)") '"test1"'
 
        case (ginitopt_xi)
           write (unit, fmt="(' ginit_option = ',a)") '"xi"'
@@ -456,15 +453,6 @@ contains
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, *) 
 
-    case (ginitopt_test1)
-       write (report_unit, fmt="('Initial conditions:')")
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('Maxwellian with sin(kr * theta)/(i*kr), amplitude = ',f10.4)") phiinit
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
     case (ginitopt_xi)
        write (report_unit, fmt="('Initial conditions:')")
        write (report_unit, *) 
@@ -735,8 +723,6 @@ contains
        scale = 1.
     case (ginitopt_nl7)
        call ginit_nl7
-    case (ginitopt_test1)
-       call ginit_test1
     case (ginitopt_xi)
        call ginit_xi
     case (ginitopt_xi2)
@@ -791,10 +777,9 @@ contains
     use text_options, only: text_option, get_option_value
     implicit none
 
-    type (text_option), dimension (33), parameter :: ginitopts = &
+    type (text_option), dimension (32), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
-            text_option('test1', ginitopt_test1), &
             text_option('xi', ginitopt_xi), &
             text_option('xi2', ginitopt_xi2), &
             text_option('zero', ginitopt_zero), &
@@ -2476,40 +2461,6 @@ contains
 
     gnew = g
   end subroutine ginit_gs
-
-  subroutine ginit_test1
-    use species, only: spec
-    use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, akr
-    use le_grids, only: energy, forbid
-    use dist_fn_arrays, only: g, gnew
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
-    use constants
-    implicit none
-    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
-    integer :: iglo
-    integer :: ig, ik, it, il, ie, is
-
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             phi(ig,it,ik) = sin(akr(ig,it)*theta(ig))/(akr(ig,it))*zi
-          end do
-       end do
-    end do
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit*exp(-energy(ie))
-       where (forbid(:,il)) g(:,1,iglo) = 0.0
-       g(:,2,iglo) = g(:,1,iglo)
-    end do
-    gnew = g
-  end subroutine ginit_test1
 
   subroutine ginit_xi
     use theta_grid, only: ntgrid, theta, bmag

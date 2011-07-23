@@ -421,14 +421,11 @@ contains
   subroutine allocate_arrays
     use kt_grids, only: ntheta0, naky
     implicit none
-!    logical :: alloc = .true.
 
-!    if (alloc) then
     if (.not. allocated(D_res)) then
        allocate (D_res(ntheta0, naky)) 
     endif
     D_res = 0.
-!    alloc = .false.
 
   end subroutine allocate_arrays
 
