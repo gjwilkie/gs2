@@ -4352,7 +4352,8 @@ subroutine check_dist_fn(report_unit)
     use mp, only: proc0
     use run_parameters, only: woutunits, fphi, fapar, fbpar
     use constants, only: zi
-    use geometry, only: rmajor_geo, bpol_geo, rhoc
+    use geometry, only: rhoc
+    use theta_grid, only: Rplot, Bpol
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     real, dimension (:,:,:), intent (out) :: pflux, pmflux, pbflux
@@ -4425,12 +4426,7 @@ subroutine check_dist_fn(report_unit)
 
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
-!             write (*,*) 'geometry', rmajor_geo(ig), bpol_geo(ig), sqrt(bmag(ig)**2-bpol_geo(ig))
-             if (allocated(rmajor_geo)) then
-                g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)*rmajor_geo(ig)*sqrt(1.0-bpol_geo(ig)**2/bmag(ig)**2)
-             else
-                g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)
-             end if
+             g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)*Rplot(ig)*sqrt(1.0-Bpol(ig)**2/bmag(ig)**2)
           end do
        end do
        call get_flux (phi, vflux_par, theta_vflux_par, dnorm)
@@ -4632,7 +4628,7 @@ subroutine check_dist_fn(report_unit)
     use mp, only: proc0
     use run_parameters, only: woutunits, fphi, fapar, fbpar
     use constants, only: zi
-    use geometry, only: rmajor_geo, bpol_geo, rhoc
+    use geometry, only: rhoc
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
     real, dimension (:,:,:), intent (out) :: vflx0, vflx1
@@ -4755,8 +4751,9 @@ subroutine check_dist_fn(report_unit)
     use fields_arrays, only: phinew
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: it_idx, ik_idx, is_idx
-    use geometry, only: rmajor_geo, rhoc, bpol_geo
+    use geometry, only: rhoc
     use theta_grid, only: ntgrid, bmag, gds21, gds22, qval, shat
+    use theta_grid, only: Rplot, Bpol
     use kt_grids, only: aky, theta0
     use le_grids, only: integrate_volume, nlambda, negrid
     use le_grids, only: get_flux_vs_theta_vs_vpa
@@ -4781,18 +4778,10 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
-             ! rmajor_geo should always be allocated at this point.  this is just a safety precaution.
-             if (allocated(rmajor_geo)) then
-                g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,iglo) &
-                     *rmajor_geo(ig)*sqrt(1.0-bpol_geo(ig)**2/bmag(ig)**2) &
-                     -zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
-                     *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,iglo)*spec(is)%smz/(qval*shat*bmag(ig)**2)
-             else
-                ! assume B_phi / B = 1
-                g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,iglo) &
-                     -zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
-                     *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,iglo)*spec(is)%smz/(qval*shat*bmag(ig)**2)
-             end if
+             g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,iglo) &
+                  *Rplot(ig)*sqrt(1.0-Bpol(ig)**2/bmag(ig)**2) &
+                  -zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
+                  *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,iglo)*spec(is)%smz/(qval*shat*bmag(ig)**2)
              g0r(ig,isgn,iglo) = aimag(g0(ig,isgn,iglo)*conjg(phinew(ig,it,ik)))*aky(ik)
           end do
        end do

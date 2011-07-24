@@ -9,7 +9,7 @@ module geometry
   real, allocatable, dimension(:) :: grho, theta, bmag, gradpar, &
        cvdrift, cvdrift0, gbdrift, gbdrift0, gds2, gds21, gds22, jacob, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, Uk1, Uk2, &
-       cdrift, cdrift0, gds23, gds24 ! MAB
+       cdrift, cdrift0, gds23, gds24, Bpol ! MAB
   
   real, allocatable, dimension(:) :: J_X, B_X, g11_X, g12_X, g22_X, &
        K1_X, K2_X, gradpar_X
@@ -45,8 +45,6 @@ module geometry
   logical :: in_nt, writelots, equal_arc, dfit_eq, idfit_eq, gs2d_eq
   logical :: transp_eq, Xanthopoulos
 
-  real, dimension (:), allocatable :: bpol_geo, rmajor_geo
-  
   integer :: bishop
 
   public :: beta_a_fun, eikcoefs, geofax, iofrho, pbarofrho, &
@@ -908,8 +906,7 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 !    if (nperiod ==1) call plotdata (rgrid, seik, grads, dpsidrho)
     call plotdata (rgrid, seik, grads, dpsidrho)
 
-    rmajor_geo = rmajor
-    bpol_geo = bpolmag
+    Bpol = bpolmag
 
     call dealloc_local_arrays
 
@@ -973,11 +970,6 @@ contains
          arcl       (-n:n), &
          Zoftheta   (-n:n), &
          dZdl       (-n:n))
-
-    if (.not. allocated(rmajor_geo)) then
-       allocate (rmajor_geo(-n:n))
-       allocate (bpol_geo(-n:n))
-    end if
 
     allocate(thgrad (-n:n,2), &
          rpgrad     (-n:n,2), &
@@ -2628,7 +2620,8 @@ end subroutine geofax
          Zprime     (-n:n), &
          aprime     (-n:n), &
          Uk1        (-n:n), &
-         Uk2        (-n:n))
+         Uk2        (-n:n), &
+         Bpol       (-n:n))
     if (debug) write(6,*) "alloc_module_arrays: done"
   end subroutine alloc_module_arrays
 
