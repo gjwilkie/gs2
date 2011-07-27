@@ -9,7 +9,7 @@ module geometry
   real, allocatable, dimension(:) :: grho, theta, bmag, gradpar, &
        cvdrift, cvdrift0, gbdrift, gbdrift0, gds2, gds21, gds22, jacob, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, Uk1, Uk2, &
-       cdrift, cdrift0, gds23, gds24, Bpol ! MAB
+       cdrift, cdrift0, gds23, gds24, gds24_noq, gbdrift_th, cvdrift_th, Bpol ! MAB
   
   real, allocatable, dimension(:) :: J_X, B_X, g11_X, g12_X, g22_X, &
        K1_X, K2_X, gradpar_X
@@ -137,6 +137,8 @@ module geometry
 !!!     cvdrift0 :: part of total curvature drift operator proportional to theta_0
 !!!     gbdrift  :: coefficient of mu/Omega b_hat x (grad B).grad operator
 !!!     gbdrift0 :: part of total grad B drift operator proportional to theta_0
+!!!     gbdrift_th :: grad B drift . grad theta
+!!!     cvdrift_th :: curvature drift . grad theta
 !!!     cdrift :: part of coriolis drift operator independent of theta_0
 !!!     cdrift0 :: part of coriolis drift operator proportional to theta_0
 !!!     gds2 :: part of grad_perp**2 operator independent of theta_0
@@ -144,6 +146,7 @@ module geometry
 !!!     gds22 :: part of grad_perp**2 operator proportional to theta_0**2
 !!!     gds23 :: part of v_E . grad theta operator independent of theta_0
 !!!     gds24 :: part of v_E . grad theta operator proportional to theta_0
+!!!     gds24_noq :: gds24/dqdrp
 !!!     jacob :: Jacobian
 !!!     
 !!!  Use: 
@@ -772,32 +775,6 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
     gds2  = gdsdum1            *dpsidrho**2
     gds21 = gdsdum2*dqdrp      *dpsidrho**2
     gds22 = gdsdum3*dqdrp*dqdrp*dpsidrho**2
-     
-!     compute magnetic field
-    call bvectortgrid(rgrid, theta, nth, rpgrad, dpsidrp, bvector)
-     
-!     compute curvature, grad b, and coriolis drift terms
-    call drift(rgrid, rp, bvector, gradstot, gradrptot, gradztot, &
-         dqdrp, dpsidrho, drhodrp, Bmod, Bpolmag, Rpol, th_bish, ltheta)
-     
-!     compute the magnetic field along theta
-!    call  bmagtgrid(rgrid, bmagtg)    
-
-    if(itor /= 0) then
-!       call periodic_copy(bmagtg, 0.) 
-!       bmag = bmagtg
-       if(nperiod > 1 ) call periodic_copy(Bmod, 0.) 
-       bmag = Bmod
-    else
-       do k= -nperiod+1,nperiod-1
-          do i=-nth,nth
-             itot= i+k*ntheta
-             bmag(itot)= 1./(1.+rgrid(i)*cos(theta(i))/rmaj)
-          enddo
-       enddo
-    endif
-
-    if(isym == 1) call sym(bmag, 0, ntgrid)
 
 ! MAB> new geometry terms gds23 and gds24 added because v_E . grad theta
 ! is needed to simulate low-flow gk equation
@@ -822,8 +799,36 @@ if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
     call dottgridf(gradrptot, gradthtot, gdsdum4)
     ! calculate grad alpha dot grad theta
     call dottgridf(gradstot, gradthtot, gdsdum5)
-    gds23 = (gdsdum4*gds2 - gdsdum5*gds21/dqdrp)/bmag**2
-    gds24 = (gdsdum4*gds21 - gdsdum5*gds22/dqdrp)/bmag**2
+    gds23 = (gdsdum4*gds2 - gdsdum5*gdsdum2*dpsidrho**2)/bmod**2
+    gds24_noq = (gdsdum4*gdsdum2 - gdsdum5*gdsdum3)*(dpsidrho/bmod)**2
+    gds24 = gds24_noq*dqdrp
+    gds24_noq = gds24_noq*qval/rhoc
+
+!     compute magnetic field
+    call bvectortgrid(rgrid, theta, nth, rpgrad, dpsidrp, bvector)
+     
+!     compute curvature, grad b, and coriolis drift terms
+    call drift(rgrid, rp, bvector, gradstot, gradrptot, gradztot, gradthtot, &
+         dqdrp, dpsidrho, drhodrp, Bmod, Bpolmag, Rpol, th_bish, ltheta)
+     
+!     compute the magnetic field along theta
+!    call  bmagtgrid(rgrid, bmagtg)    
+
+    if(itor /= 0) then
+!       call periodic_copy(bmagtg, 0.) 
+!       bmag = bmagtg
+       if(nperiod > 1 ) call periodic_copy(Bmod, 0.) 
+       bmag = Bmod
+    else
+       do k= -nperiod+1,nperiod-1
+          do i=-nth,nth
+             itot= i+k*ntheta
+             bmag(itot)= 1./(1.+rgrid(i)*cos(theta(i))/rmaj)
+          enddo
+       enddo
+    endif
+
+    if(isym == 1) call sym(bmag, 0, ntgrid)
 
 !     compute the gradparallel coefficient 
     if (dfit_eq) then
@@ -1255,17 +1260,18 @@ end subroutine eikcoefs
   end function invRfun
 
   subroutine drift(rgrid, rp, bvector, gradstot,  &
-       gradrptot, gradztot, dqdrp, dpsidrho, drhodrp, Bmod, &
+       gradrptot, gradztot, gradthtot, dqdrp, dpsidrho, drhodrp, Bmod, &
        Bpolmag, Rpol, th_bish, ltheta)
 
     real, dimension (-ntgrid:), intent (in) :: rgrid, Bmod, Bpolmag, Rpol, th_bish, ltheta
-    real, dimension (-ntgrid:, :), intent (in) :: bvector, gradstot, gradrptot, gradztot
+    real, dimension (-ntgrid:, :), intent (in) :: bvector, gradstot, gradrptot, gradztot, gradthtot
     real, intent (in) :: rp, dqdrp, dpsidrho, drhodrp
 
     real, dimension (-ntgrid:ntgrid, 3) :: bgradtot, pgradtot, &
          dummy, dummy1, curve
     real, dimension (-ntgrid:ntgrid, 2) :: pgrad, igrad, bgrad1
     real, dimension (-ntgrid:ntgrid) :: gbdrift1, gbdrift2, cvdrift1, cvdrift2, cdrift1, cdrift2
+    real, dimension (-ntgrid:ntgrid) :: gbdrift3, cvdrift3
     real, dimension (2*ntgrid + 1) :: dumdum1, dumdum2
 
     real :: dum
@@ -1328,9 +1334,11 @@ end subroutine eikcoefs
        call crosstgrid(bvector,bgradtot,dummy1)
        call dottgrid(dummy1,gradstot,gbdrift1)
        call dottgrid(dummy1,gradrptot,gbdrift2)
+       call dottgrid(dummy1,gradthtot,gbdrift3)
        call crosstgrid(bvector,curve,dummy)
        call dottgrid(dummy,gradstot,cvdrift1)
        call dottgrid(dummy,gradrptot,cvdrift2)
+       call dottgrid(dummy,gradthtot,cvdrift3)
        ! factor of 2 appears below because will later multiply
        ! by wunits, which has a factor of 1/2 built-in
        do k=-nperiod+1,nperiod-1
@@ -1340,6 +1348,9 @@ end subroutine eikcoefs
              gbdrift0(itot)=2.*dpsidrho*gbdrift2(itot)*dqdrp/bmod(i)**3
              cvdrift(itot) =2.*dpsidrho*cvdrift1(itot)/bmod(i)**2
              cvdrift0(itot)=2.*dpsidrho*cvdrift2(itot)*dqdrp/bmod(i)**2
+             ! below are (v_M . grad theta) terms
+             gbdrift_th(itot)=gbdrift3(itot)/bmod(i)**3
+             cvdrift_th(itot)=cvdrift3(itot)/bmod(i)**2 
           enddo
        enddo
     endif
@@ -1370,7 +1381,7 @@ end subroutine eikcoefs
        call sym(cvdrift, 0, ntgrid)
        call sym(gbdrift0, 1, ntgrid)
        call sym(cvdrift0, 1, ntgrid)
-! should maybe add in cdrift and cdrift0 here -- MAB
+! should maybe add in cdrift, cdrift0, gbdrift_th, and cvdrift_th here -- MAB
     endif
 
   end subroutine drift
@@ -2607,11 +2618,14 @@ end subroutine geofax
          gbdrift0   (-n:n), &
          cdrift    (-n:n), &
          cdrift0    (-n:n), &
+         gbdrift_th (-n:n), &
+         cvdrift_th (-n:n), &
          gds2       (-n:n), &
          gds21      (-n:n), &
          gds22      (-n:n), &
          gds23      (-n:n), &  ! MAB
          gds24      (-n:n), &  ! MAB
+         gds24_noq  (-n:n), &  ! MAB
          jacob      (-n:n), &
          Rplot      (-n:n), &
          Zplot      (-n:n), &
