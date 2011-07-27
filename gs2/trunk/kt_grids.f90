@@ -491,7 +491,7 @@ contains
     if (shat /= 0.) then
        do i = 1, ntheta0
           theta0(i,1) = 0.0
-          theta0(i,2:) = - akx(i)/(aky(2:)*shat)
+          theta0(i,2:) = akx(i)/(aky(2:)*shat)
        end do
     else
        do i = 1, ntheta0

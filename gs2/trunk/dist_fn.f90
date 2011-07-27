@@ -1358,7 +1358,7 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: ng2, nlambda
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use gs2_layouts, only: idx, proc_id
-    use mp, only: iproc, nproc, max_allreduce
+    use mp, only: iproc, nproc, max_allreduce, proc0
     use constants
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
@@ -1385,11 +1385,14 @@ subroutine check_dist_fn(report_unit)
     ! jshift0 corresponds to J (not delta j) from Beer thesis (unsure about +0.1) -- MAB
     if (naky > 1 .and. ntheta0 > 1) then
        jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,2)-theta0(1,2)) + 0.1)
+!       if (proc0) write (*,*) 'init_connected_bc: ',theta0(2,2), theta0(1,2), jshift0
     else if (naky == 1 .and. ntheta0 > 1 .and. aky(1) /= 0.0) then
        jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,1)-theta0(1,1)) + 0.1)
     else
        jshift0 = 1
     end if
+    
+!    if (proc0) write (*,*) 'init_connected_bc: jshift0 = ',jshift0
 
     allocate (itleft(naky,ntheta0), itright(naky,ntheta0))
     itleft(1,:) = -1
@@ -1421,6 +1424,8 @@ subroutine check_dist_fn(report_unit)
              itl = it0 + (ik-1)*jshift0
              itr = it0 - (ik-1)*jshift0
           end if
+
+!          if (ik>1 .and. proc0) write(*,*) 'init_connected_bc: itl, itr = ',itl, itr
 
           ! remap to usual GS2 indices -- MAB
           if (itl >= 0 .and. itl < (ntheta0+1)/2) then
@@ -2154,6 +2159,7 @@ subroutine check_dist_fn(report_unit)
           do ik = 1, naky
              n_k(k) = 1 + l_links(ik, it) + r_links(ik, it)
              k = k + 1
+!             if (proc0) write (*,*) 'init_connected_bc: ',ik, it, l_links(ik, it), r_links(ik, it)
           end do
        end do
 

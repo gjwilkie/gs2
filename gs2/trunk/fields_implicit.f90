@@ -287,7 +287,7 @@ contains
   end subroutine reset_init
 
   subroutine init_response_matrix
-    use mp, only: barrier
+    use mp, only: barrier, proc0
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
