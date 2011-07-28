@@ -57,7 +57,7 @@ module gs2_io
   integer :: phi2_by_kx_id, apar2_by_kx_id, bpar2_by_kx_id
   integer :: phi2_by_ky_id, apar2_by_ky_id, bpar2_by_ky_id
   integer :: phi0_id, apar0_id, bpar0_id
-  integer :: omega_id, omegaavg_id, phase_id, phiavg_id
+  integer :: omega_id, omegaavg_id, phase_id
   integer :: es_heat_flux_id, es_mom_flux_id, es_part_flux_id
   integer :: es_heat_par_id, es_heat_perp_id
   integer :: apar_heat_flux_id, apar_mom_flux_id, apar_part_flux_id
@@ -110,7 +110,7 @@ module gs2_io
 contains
 
   subroutine init_gs2_io (write_nl_flux, write_omega, &
-      write_phiavg, write_hrate, write_final_antot, write_eigenfunc, &
+      write_hrate, write_final_antot, write_eigenfunc, &
       make_movie, nmovie_tot, write_verr, write_fields, &
       write_full_moments_notgc, write_sym, write_correlation, nwrite_big_tot, &
       write_correlation_extend, & 
@@ -133,10 +133,10 @@ contains
     use netcdf, only: NF90_CLOBBER, nf90_create
     use netcdf_utils, only: get_netcdf_code_precision, netcdf_real
 # endif
-!    logical :: write_nl_flux, write_omega, write_phiavg, write_hrate, make_movie
+!    logical :: write_nl_flux, write_omega, write_hrate, make_movie
 !    logical :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_nl_flux, write_omega
-    logical, intent(in) :: write_phiavg, write_hrate, make_movie, write_fields
+    logical, intent(in) :: write_hrate, make_movie, write_fields
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
     logical, intent(in) :: write_correlation_extend
@@ -219,7 +219,7 @@ contains
 # endif
     if (proc0) then
        call define_dims (nmovie_tot, nwrite_big_tot)
-       call define_vars (write_nl_flux, write_omega, write_phiavg, &
+       call define_vars (write_nl_flux, write_omega, &
             write_hrate, write_final_antot, write_eigenfunc, write_verr, &
             write_fields, write_full_moments_notgc, write_sym, write_correlation, &
             write_correlation_extend)
@@ -460,7 +460,7 @@ contains
 # endif
   end subroutine save_input
 
-  subroutine define_vars (write_nl_flux, write_omega, write_phiavg, &
+  subroutine define_vars (write_nl_flux, write_omega, &
        write_hrate, write_final_antot, write_eigenfunc, write_verr, &
        write_fields, write_full_moments_notgc, write_sym, write_correlation, &
        write_correlation_extend)
@@ -476,10 +476,10 @@ contains
     use netcdf_utils, only: netcdf_real
 # endif
 !    use netcdf_mod
-!    logical :: write_nl_flux, write_omega, write_phiavg, write_hrate
+!    logical :: write_nl_flux, write_omega, write_hrate
 !    logical :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_nl_flux, write_omega
-    logical, intent(in) :: write_phiavg, write_hrate, write_final_antot
+    logical, intent(in) :: write_hrate, write_final_antot
     logical, intent(in) :: write_eigenfunc, write_verr, write_fields
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
     logical, intent(in) :: write_correlation_extend
@@ -877,10 +877,7 @@ contains
 
        status = nf90_def_var (ncid, 'phi0', netcdf_real, omega_dim, phi0_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='phi0')
-       if (write_phiavg) then
-          status = nf90_def_var (ncid, 'phiavg', netcdf_real, omega_dim, phiavg_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='phiavg')
-       endif
+
        if (write_nl_flux) then
           status = nf90_def_var (ncid, 'es_heat_par',  netcdf_real, flux_dim, es_heat_par_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_heat_par')
@@ -2048,7 +2045,7 @@ contains
   end subroutine nc_loop_corr_extend
 
   subroutine nc_loop (nout, time, fluxfac, &
-       phi0,   phi2,   phi2_by_mode, &! phiavg, &
+       phi0,   phi2,   phi2_by_mode, &
        apar0,  apar2,  apar2_by_mode, &
        bpar0, bpar2, bpar2_by_mode, &
        h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
@@ -2069,7 +2066,7 @@ contains
     integer, intent (in) :: nout
     real, intent (in) :: time, phi2, apar2, bpar2
     real, dimension (:), intent (in) :: fluxfac, woutunits
-    complex, dimension(:,:), intent (in) :: phi0, apar0, bpar0, omega, omegaavg !, phiavg
+    complex, dimension(:,:), intent (in) :: phi0, apar0, bpar0, omega, omegaavg
     real, dimension(:,:), intent (in) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode, phitot
     type(heating_diagnostics), intent (in) :: h
     type(heating_diagnostics), dimension(:,:), intent (in) :: hk
@@ -2208,9 +2205,6 @@ contains
        call c2r (phi0, ri2) 
        status = nf90_put_var (ncid, phi0_id, ri2, start=start0, count=count0)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi0_id)
-!       call c2r (phiavg, ri2) 
-!       status = nf90_put_var (ncid, phiavg_id, ri2, start=start0, count=count0)
-!       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phiavg_id)
        status = nf90_put_var (ncid, phi2_by_mode_id, phi2_by_mode, start=start, count=count)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi2_by_mode_id)
        status = nf90_put_var (ncid, phi2_id, phi2, start=(/nout/))
