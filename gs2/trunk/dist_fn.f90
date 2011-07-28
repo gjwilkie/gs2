@@ -18,7 +18,7 @@ module dist_fn
   public :: M_class, N_class, i_class, par_spectrum
   public :: l_links, r_links, itright, itleft, boundary
   public :: init_kperp2
-  public :: get_dens_vel, get_jext !GGH
+  public :: get_jext !GGH
   public :: get_verr, get_gtran, write_fyx, collision_error
   public :: include_lowflow
   public :: get_init_field
@@ -4443,7 +4443,7 @@ subroutine check_dist_fn(report_unit)
                   *drhodpsi*IoB**2*rhostar
           end do
        end do
-       call get_flux (phi, vflx1, dum, dnorm)
+       call get_flux (phi, vflx1, dnorm)
 
 !        do isgn = 1, 2
 !           do ig = -ntgrid, ntgrid

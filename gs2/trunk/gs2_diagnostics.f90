@@ -560,7 +560,6 @@ contains
 !
     use file_utils, only: input_unit, input_unit_exist
     use theta_grid, only: nperiod, ntheta
-    use dist_fn, only: nperiod_guard
     use kt_grids, only: box, nx, ny
     use mp, only: proc0
     implicit none
