@@ -579,6 +579,7 @@ contains
     use gs2_layouts, only: init_gs2_layouts
     use mp, only: proc0, broadcast, job
     implicit none
+    integer :: ind_slash
 !    logical, save :: initialized = .false.
 
     if (initialized) return
@@ -591,7 +592,15 @@ contains
     ! append trailing slash if not exists
     if(restart_dir(len_trim(restart_dir):) /= "/") &
          restart_dir=trim(restart_dir)//"/"
-    restart_file=trim(restart_dir)//trim(restart_file)
+!Determine if restart file contains "/" if so split on this point to give DIR//FILE
+    !so restart files are created in DIR//restart_dir//FILE
+    ind_slash=index(restart_file,"/",.True.)
+    if (ind_slash.EQ.0) then !No slash present
+       restart_file=trim(restart_dir)//trim(restart_file)
+    else !Slash present
+       restart_file=trim(restart_file(1:ind_slash))//trim(restart_dir)//trim(restart_file(ind_slash+1:))
+    endif
+
 
     ! MAB - allows for ensemble averaging of multiple flux tube calculations
     ! job=0 if not doing multiple flux tube calculations, so phiinit unaffected
