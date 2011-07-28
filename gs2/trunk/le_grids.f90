@@ -81,9 +81,9 @@ module le_grids
   public :: energy, anon, al, delal, jend, forbid, dele, wl, w
   public :: negrid, nlambda, ng2, lmax, integrate_moment, nesub
   public :: xloc
-  public :: xx, nterp, testfac, new_trap_int, vcut
+  public :: xx, nterp, new_trap_int, vcut
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
-  public :: eint_error, lint_error, trap_error, integrate_test, wdim
+  public :: eint_error, lint_error, trap_error, wdim
   public :: integrate_kysum, integrate_volume ! MAB
   public :: get_flux_vs_theta_vs_vpa
 
@@ -145,7 +145,6 @@ module le_grids
   logical :: eintinit = .false.
   logical :: initialized = .false.
 
-  integer :: testfac = 1
   integer :: nmax = 500
   integer :: nterp = 100
 
@@ -231,7 +230,6 @@ contains
     call broadcast (ng2)
     call broadcast (lmax)
     call broadcast (test)
-    call broadcast (testfac)
     call broadcast (nmax)
     call broadcast (trapped_particles)
     call broadcast (wgt_fac)
@@ -287,7 +285,7 @@ contains
     integer :: ierr, in_file
     namelist /le_grids_knobs/ ngauss, negrid, bouncefuzz, &
          nesuper, nesub, test, trapped_particles, &
-         testfac, nmax, wgt_fac, new_trap_int, nterp, vcut
+         nmax, wgt_fac, new_trap_int, nterp, vcut
 
     nesub = 8
     nesuper = 2
@@ -296,7 +294,6 @@ contains
     vcut = 4.0
     bouncefuzz = 1e-5
     in_file=input_unit_exist("le_grids_knobs", exist)
-!    if (exist) read (unit=input_unit("le_grids_knobs"), nml=le_grids_knobs)
     if (exist) read (unit=in_file, nml=le_grids_knobs)
 
 ! user can choose not to set negrid (preferred for old scheme)
@@ -606,70 +603,6 @@ contains
     deallocate (work)
 
   end subroutine integrate_species
-
-  subroutine integrate_test (g, weights, total, istep)
-
-    use theta_grid, only: ntgrid, bmag
-    use species, only: nspec
-    use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: g_lo, idx, idx_local
-    use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
-    use mp, only: sum_allreduce
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
-    real, dimension (:), intent (in) :: weights
-    complex, dimension (-ntgrid:,:,:), intent (out) :: total
-    integer, intent (in) :: istep
-
-
-    complex, dimension (:), allocatable :: work
-    real :: fac
-    integer :: is, il, ie, ik, it, iglo, ig, i
-
-    real, dimension (:,:), allocatable :: ypt
-
-    allocate(ypt(-ntgrid:ntgrid,nlambda))
-    ypt = 0.0
-
-    total = 0.
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       fac = weights(is)*w(ie)
-
-       total(:, it, ik) = total(:, it, ik) + fac*wl(:,il)
-    end do
-
-    allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             work(i) = total(ig, it, ik)
-          end do
-       end do
-    end do
-    
-    call sum_allreduce (work) 
-
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             total(ig, it, ik) = work(i)
-          end do
-       end do
-    end do
-    deallocate (work)
-
-    deallocate(ypt)
-
-  end subroutine integrate_test
 
   subroutine legendre_transform (g, tote, totl, istep, tott)
     
