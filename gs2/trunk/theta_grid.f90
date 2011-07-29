@@ -479,7 +479,11 @@ contains
     theta = (/ (real(i)*2.0*pi/real(ntheta), i=-ntgrid,ntgrid) /)
 
 ! BD: dummy response for graphics in s-alpha mode until I have time to fix this:
-    Rplot = 2./epsl*(1.+eps*cos(theta))  ; Rprime = 0.
+    if (abs(epsl) > epsilon(0.)) then
+       Rplot = 2./epsl*(1.+eps*cos(theta))  ; Rprime = 0.
+    else
+       Rplot = 1. ; Rprime = 0.
+    end if
     Zplot = 1.  ; Zprime = 0.
     aplot = 1.  ; aprime = 0.
 
@@ -495,9 +499,8 @@ contains
     end if
 
     shat = shat_param
-!    drhodpsi = qinp/rhoc
     if (eps > epsilon(0.0)) then
-       drhodpsi = epsl/pk/eps
+       drhodpsi = 0.5*epsl**2/(pk*eps)
     else
        drhodpsi = 1.0
     end if
