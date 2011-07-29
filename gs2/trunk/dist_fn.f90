@@ -10,7 +10,7 @@ module dist_fn
   public :: init_dist_fn, finish_dist_fn
   public :: read_parameters, wnml_dist_fn, wnml_dist_fn_species, check_dist_fn
   public :: timeadv, exb_shear
-  public :: getfieldeq, getan, getmoms, gettotmoms, getemoms
+  public :: getfieldeq, getan, getmoms, getemoms
   public :: flux, lf_flux
   public :: get_epar, get_heat
   public :: t0, omega0, gamma0, source0
@@ -2728,13 +2728,11 @@ subroutine check_dist_fn(report_unit)
        it = it_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+! BD:  bpar == delta B_parallel / B_0(theta) so no extra factor of 
+! 1/bmag is needed here.
        do ig = -ntgrid, ntgrid
-! BD:  Is this factor of bmag really supposed to be here?  Need to check. 7/2011
-!CMR:
-!  added missing factor bmag, needed for inhomogeneous B
-!CMRend:
            adj = anon(ie)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
-                  *bpar(ig,it,ik)/bmag(ig)*facbpar &
+                  *bpar(ig,it,ik)*facbpar &
                + spec(is)%z*anon(ie)*phi(ig,it,ik)*aj0(ig,iglo) &
                   /spec(is)%temp*facphi
           g(ig,1,iglo) = g(ig,1,iglo) + adj
@@ -2776,16 +2774,10 @@ subroutine check_dist_fn(report_unit)
     il = il_idx(g_lo,iglo)
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
-
-! BD:  Again, I do not recall the need for this factor of bmag.  7/2011
-!CMRfix: Nov 2010
-!   (i)  divide bpar term in phigavg by bmag
-!CMRend
-
     phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
                 *aj0(:,iglo)*fphi &
              + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
-                *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)/bmag*spec(is)%tz
+                *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
     apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
                 *aj0(:,iglo)*fapar
 
@@ -3683,94 +3675,6 @@ subroutine check_dist_fn(report_unit)
     call prof_leaving ("getemoms", "dist_fn")
   end subroutine getemoms
   
-  subroutine gettotmoms (ntot, upar, uperp, ttot)
-    use dist_fn_arrays, only: vpa, vperp2, aj0, gnew, aj1, kperp2
-    use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx, il_idx
-    use species, only: nspec, spec
-    use theta_grid, only: ntgrid, bmag
-    use le_grids, only: integrate_moment, anon, energy, al
-    use prof, only: prof_entering, prof_leaving
-    use run_parameters, only: fphi, fbpar
-    use constants, only: pi
-    use fields_arrays, only: phinew, bparnew
-    implicit none
-    complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, &
-         upar, uperp, ttot
-
-    integer :: ik, it, isgn, ie, is, iglo, il
-
-! returns moment integrals to PE 0
-    call prof_entering ("gettotmoms", "dist_fn")
-
-! total density
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) &
-               + (aj0(:,iglo)**2-1.0)*anon(ie) &
-               * phinew(:,it,ik)*spec(is)%zt &
-               + aj0(:,iglo)*aj1(:,iglo)*vperp2(:,iglo)*2.*anon(ie) &
-               * bparnew(:,it,ik)
-       end do
-    end do
-
-    call integrate_moment (g0, ntot)
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ie = ie_idx(g_lo,iglo)
-       do isgn = 1, 2
-          g0(:,isgn,iglo) = g0(:,isgn,iglo)*energy(ie)
-       end do
-    end do
-
-    call integrate_moment (g0, ttot)
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
-       end do
-    end do
-
-    call integrate_moment (g0, upar)
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ik = ik_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       do isgn = 1, 2
-          g0(:,isgn,iglo) = aj1(:,iglo)*energy(ie)*al(il)*gnew(:,isgn,iglo) &
-               * spec(is)%smz * sqrt(kperp2(:,it,ik) / bmag(:))
-       end do
-    end do
-
-    ! TEMP FOR TESTING -- MAB
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
-          g0(:,isgn,iglo) = 0.75*sqrt(pi)*aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo) &
-               / energy(ie)**1.5
-       end do
-    end do
-    ! END TEMP FOR TESTING
-
-    call integrate_moment (g0, uperp)
-
-    do is=1,nspec
-       ntot(:,:,:,is)=ntot(:,:,:,is)*spec(is)%dens
-       upar(:,:,:,is)=upar(:,:,:,is)*spec(is)%stm
-       uperp(:,:,:,is)=uperp(:,:,:,is)*spec(is)%stm
-       ttot(:,:,:,is)=ttot(:,:,:,is)*spec(is)%temp
-    end do
-
-    call prof_leaving ("gettotmoms", "dist_fn")
-  end subroutine gettotmoms
-
   ! moment at not guiding center coordinate
   subroutine getmoms_notgc (dens, upar, tpar, tper, ntot, jpar)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
@@ -4049,11 +3953,8 @@ subroutine check_dist_fn(report_unit)
     if (fapar > epsilon(0.0)) then
        fieldeqa = antota - kperp2*gridfac1*apar
     end if
-
-! CMR has added factors of 1/bmag here and there.  My recollection is that 
-! all such terms are taken care of here by the 1/B**2 factor.  BD  7/2011
-! Need to check the derivation and talk with Colin.
-
+! bpar == delta B_parallel / B_0(theta) b/c of the factor of 1/bmag(theta)**2
+! in the following
     if (fbpar > epsilon(0.0)) then
        fieldeqp = (antotp+bpar*gamtot2+0.5*phi*gamtot1)*beta*apfac
        do ik = 1, naky

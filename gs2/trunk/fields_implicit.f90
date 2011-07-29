@@ -57,8 +57,6 @@ contains
 
     implicit none
 
-! BD:  Bug fix; found by Numata
-!    call init_fields_implicit
     ! MAB> new field init option ported from agk
     if (new_field_init) then
        call get_init_field (phinew, aparnew, bparnew)
@@ -231,40 +229,32 @@ contains
     use antenna, only: antenna_amplitudes
     use dist_fn, only: timeadv, exb_shear
     use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
-    use nonlinear_terms, only: algorithm !, nonlin
     implicit none
     integer :: diagnostics = 1
-!    integer :: nphi = 0
     integer, intent (in) :: istep
 
 
-    if (algorithm == 1) then
-
-       !GGH NOTE: apar_ext is initialized in this call
-       call antenna_amplitudes (apar_ext)
+    !GGH NOTE: apar_ext is initialized in this call
+    call antenna_amplitudes (apar_ext)
        
-       if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
-
-       g = gnew
-       phi = phinew !*nphi
-       apar = aparnew 
-       bpar = bparnew       
-
-!       call exb_shear (g, phi, apar, bpar)
-       
-       call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-       aparnew = aparnew + apar_ext 
-
-       call getfield (phinew, aparnew, bparnew)
-
-       phinew   = (phinew   + phi)!*nphi
-       aparnew  = aparnew  + apar
-       bparnew = bparnew + bpar
-                 
-       call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
-
-    end if
-
+    if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
+    
+    g = gnew
+    phi = phinew
+    apar = aparnew 
+    bpar = bparnew       
+    
+    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+    aparnew = aparnew + apar_ext 
+    
+    call getfield (phinew, aparnew, bparnew)
+    
+    phinew   = phinew  + phi
+    aparnew  = aparnew + apar
+    bparnew  = bparnew + bpar
+    
+    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
+    
   end subroutine advance_implicit
 
   subroutine reset_init

@@ -52,7 +52,6 @@ module gs2_diagnostics
   logical, public :: dump_fields_periodically, make_movie
   logical, public :: save_for_restart
   logical, public :: save_distfn !<DD> Added for saving distribution function
-  logical, public :: test_conserve
   logical, public :: write_symmetry, write_correlation_extend, write_correlation
   integer, public :: nwrite, igomega, nmovie
   integer, public :: navg, nsave, nwrite_mult
@@ -78,7 +77,6 @@ module gs2_diagnostics
          write_full_moments_notgc, write_cross_phase, &
          dump_check1, dump_check2, &
          dump_fields_periodically, make_movie, &
-         test_conserve, &
          save_for_restart, write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time
@@ -599,7 +597,6 @@ contains
        write_verr = .false.
        write_max_verr = .false.
        write_cerr = .false.
-       test_conserve = .false.
        nwrite = 100
        nmovie = 1000
        nwrite_mult = 10
@@ -1319,7 +1316,7 @@ contains
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, write_f, write_fyx
-    use dist_fn, only: omega0, gamma0, getmoms, par_spectrum, gettotmoms
+    use dist_fn, only: omega0, gamma0, getmoms, par_spectrum
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn, only: getmoms_notgc, g_adjust, include_lowflow, lf_flux
     use dist_fn, only: flux_vs_theta_vs_vpa
@@ -2442,13 +2439,10 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        deallocate (phim)
     end if
 
-    call broadcast (test_conserve)
     call broadcast (write_avg_moments)
     if (write_avg_moments) then
 
        call getmoms (ntot, density, upar, tpar, tperp)
-
-       if (test_conserve) call gettotmoms (ntot, upartot, uperptot, ttot)
 
        if (proc0) then
           allocate (dl_over_b(-ntg_out:ntg_out))
@@ -2456,35 +2450,15 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           dl_over_b = delthet(-ntg_out:ntg_out)*jacob(-ntg_out:ntg_out)
           dl_over_b = dl_over_b / sum(dl_over_b)
 
-          if (test_conserve) then
-             do is = 1, nspec
-                do it = 1, ntheta0
-                   ntot00(it, is)   = sum( ntot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                   density00(it,is) = sum(density(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                   upar00(it, is)   = sum( upartot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                   tpar00(it, is)   = sum( ttot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                   tperp00(it, is)  = sum(uperptot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                end do
+          do is = 1, nspec
+             do it = 1, ntheta0
+                ntot00(it, is)   = sum( ntot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                density00(it,is) = sum(density(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                upar00(it, is)   = sum( upar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                tpar00(it, is)   = sum( tpar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
+                tperp00(it, is)  = sum(tperp(-ntg_out:ntg_out,it,1,is)*dl_over_b)
              end do
-             if (nspec == 1) then
-                write (out_unit, *) 'moms', t, real(ntot00(1,1)), aimag(upar00(1,1)), real(tperp00(1,1)), &
-                     real(tpar00(1,1))
-             else
-                write (out_unit, *) 'moms', t, real(ntot00(1,1)), real(ntot00(1,2)), aimag(upar00(1,1)), &
-                     aimag(upar00(1,2)), aimag(tperp00(1,1)), aimag(tperp00(1,2)), real(tpar00(1,1)), &
-                     real(tpar00(1,2))
-             end if
-          else
-             do is = 1, nspec
-                do it = 1, ntheta0
-                   ntot00(it, is)   = sum( ntot(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                   density00(it,is) = sum(density(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                   upar00(it, is)   = sum( upar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                   tpar00(it, is)   = sum( tpar(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                   tperp00(it, is)  = sum(tperp(-ntg_out:ntg_out,it,1,is)*dl_over_b)
-                end do
-             end do
-          end if
+          end do
 
           do it = 1, ntheta0
              phi00(it)   = sum( phinew(-ntg_out:ntg_out,it,1)*dl_over_b)
