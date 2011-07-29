@@ -615,7 +615,6 @@ subroutine check_dist_fn(report_unit)
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
     real :: bd
-!    logical :: done = .false.
 
     if (readinit) return
     readinit = .true.
@@ -1108,10 +1107,6 @@ subroutine check_dist_fn(report_unit)
     integer :: ig, ik, it, il, ie, is
     integer :: iglo
     real :: arg
-!    logical :: done = .false.
-
-!    if (done) return
-!    done = .true.
 
     if (bessinit) return
     bessinit = .true.
@@ -1147,10 +1142,6 @@ subroutine check_dist_fn(report_unit)
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
     implicit none
     integer :: ik, it
-!    logical :: done = .false.
-
-!    if (done) return
-!    done = .true.
 
     if (kp2init) return
     kp2init = .true.
@@ -1322,21 +1313,17 @@ subroutine check_dist_fn(report_unit)
     integer :: ng
     integer, dimension(naky*ntheta0) :: n_k
 
-!    logical :: done = .false.
-
-!    if (done) return
-!    done = .true.
     if (connectinit) return
     connectinit = .true.
 
     ng = ntheta/2 + (nperiod-1)*ntheta
 
-    ! jshift0 corresponds to J (not delta j) from Beer thesis (unsure about +0.1) -- MAB
+    ! jshift0 corresponds to J (not delta j) from Beer thesis (unsure about +0.01) -- MAB
     if (naky > 1 .and. ntheta0 > 1) then
-       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,2)-theta0(1,2)) + 0.1)
+       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,2)-theta0(1,2)) + 0.01)
 !       if (proc0) write (*,*) 'init_connected_bc: ',theta0(2,2), theta0(1,2), jshift0
     else if (naky == 1 .and. ntheta0 > 1 .and. aky(1) /= 0.0) then
-       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,1)-theta0(1,1)) + 0.1)
+       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,1)-theta0(1,1)) + 0.01)
     else
        jshift0 = 1
     end if
@@ -1362,8 +1349,6 @@ subroutine check_dist_fn(report_unit)
                 itl = it0 + jshift0
                 itr = it0 - jshift0
              else
-!                itl = ntheta0
-!                itr = ntheta0
                 itl = it0
                 itr = it0
              end if
@@ -2765,7 +2750,7 @@ subroutine check_dist_fn(report_unit)
     complex, dimension (-ntgrid:), intent (out) :: source
 
     integer :: ig, ik, it, il, ie, is
-    complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg!, bpargavg !GGH added bpargavg
+    complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
 
 !    call timer (0, 'get_source_term')
 
@@ -3049,49 +3034,42 @@ subroutine check_dist_fn(report_unit)
 
     if (kperiod_flag) then
        if (il <= ng2+1) then
-          g1(ntgl,1) = 1.0
-          g1(ntgr,2) = 1.0
+          g1(-ntgrid,1) = 1.0
+          g1( ntgrid,2) = 1.0
        end if
     end if
-!!!
+
     if (il == ng2+1) then
-!! changed 4.13.08 -- MAB
-!!       g1(ntgl,1) = wfb  ! wfb should be unity here; variable is for testing
-!! reverted 5.9.08 -- MAB
-       g1(ntgl,1) = wfb  ! wfb should be unity here; variable is for testing
-       g1(ntgr,2) = wfb  ! wfb should be unity here; variable is for testing
+       g1(-ntgrid,1) = wfb  ! wfb should be unity here; variable is for testing
+       g1( ntgrid,2) = wfb  ! wfb should be unity here; variable is for testing
     end if
 
     ! g2 is the initial condition for the homogeneous solution
     g2 = 0.0
     ! initialize to 1.0 at upper bounce point for vpar < 0
     ! (but not for wfb or ttp)
-!JAB: include wfb (ng2+1)
-!orig:    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
+    !JAB: include wfb (ng2+1)
+    !orig:    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
     if (nlambda > ng2 .and. il >= ng2+1 .and. il <= lmax) then
-       do ig=ntgl,ntgr-1
+       do ig=-ntgrid,ntgrid-1
           if (forbid(ig+1,il).and..not.forbid(ig,il)) g2(ig,2) = 1.0
        end do
     end if
 
     ! time advance vpar < 0 inhomogeneous part
-    ! r=ainv=0 if forbid(ig,il) or forbid(ig+1,il), so gnew=0 in forbidden
-    ! region and at upper bounce point
-    do ig = ntgr-1, ntgl, -1
+    do ig = ntgrid-1, -ntgrid, -1
        gnew(ig,2,iglo) = -gnew(ig+1,2,iglo)*r(ig,2,iglo) + ainv(ig,2,iglo)*source(ig,2)
     end do
 
     if (kperiod_flag) then
        ilmin = 1
     else
-
-!!!       ilmin = ng2 + 2
-       ilmin = ng2 + 1
+       ilmin = ng2 + 1              !!! ilmin = ng2 + 2
     end if
 
     ! time advance vpar < 0 homogeneous part
     if (il >= ilmin) then
-       do ig = ntgr-1, ntgl, -1
+       do ig = ntgrid-1, -ntgrid, -1
           g1(ig,2) = -g1(ig+1,2)*r(ig,2,iglo) + g2(ig,2)
        end do
     end if
@@ -3101,32 +3079,24 @@ subroutine check_dist_fn(report_unit)
     if (nlambda > ng2 .and. il >= ng2+1 .and. il <= lmax) then
 !    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
        ! match boundary conditions at lower bounce point
-       do ig = ntgl, ntgr-1
+       do ig = -ntgrid, ntgrid-1
           if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
              g2(ig,1) = g1(ig+1,2)
-             ! doesn't seem like this will be used because
-             ! ainv=0 if forbid(ig,il) or forbid(ig+1,il) -- MAB
              source(ig,1) = gnew(ig+1,2,iglo)  
           end if
        end do
     end if
 
-!! removed 5.9.08 -- MAB
-!! added 4.13.08 to treat wfb as trapped at ends but not in middle wells -- MAB
-!    if (.not. kperiod_flag .and. il == ng2+1) then
-!       g1(ntgl,1) = g1(ntgl,2)
-!       gnew(ntgl,1,iglo) = gnew(ntgl,2,iglo)
-!    end if
-       
     ! time advance vpar > 0 inhomogeneous part
     if (il <= lmax) then
-       do ig = ntgl, ntgr-1
+       do ig = -ntgrid, ntgrid-1
           gnew(ig+1,1,iglo) = -gnew(ig,1,iglo)*r(ig,1,iglo) + ainv(ig,1,iglo)*source(ig,1)
        end do
     end if
 
+    ! BD: Are there ever totally trapped particles at ig = ntgrid? 
     ! balancing totally trapped particles
-    do ig = ntgl, ntgr
+    do ig = -ntgrid, ntgrid
        if (il >= ittp(ig)) then
           if (forbid(ig,il)) then
              gnew(ig,1,iglo) = 0.0
@@ -3138,14 +3108,10 @@ subroutine check_dist_fn(report_unit)
 
     ! time advance vpar > 0 homogeneous part
     if (il >= ilmin) then
-       do ig = ntgl, ntgr-1
+       do ig = -ntgrid, ntgrid-1
           g1(ig+1,1) = -g1(ig,1)*r(ig,1,iglo) + g2(ig,1)
        end do
     end if
-
-! case of linked .and. WFB has problem, particularly when nu > 0, dt << 1
-! wfb solution below fails with real links.  need to balance this properly
-! this has been fixed I believe (should double check)
 
     if (boundary_option_switch == boundary_option_linked) then
        if (speriod_flag .and. il <= ng2+1) then
@@ -3164,11 +3130,6 @@ subroutine check_dist_fn(report_unit)
        ! add correct amount of homogeneous solution now
        if (kperiod_flag .and. il <= ng2+1) then
           call self_periodic
-!! changed 4.13.08 -- MAB
-!!!
-!!       else if (il == ng2 + 1) then
-!!         call self_periodic
-!! reverted 5.9.08 -- MAB
        else if (il == ng2 + 1) then
           call self_periodic
        end if
@@ -3192,16 +3153,6 @@ subroutine check_dist_fn(report_unit)
        end do
     end if
 
-!! removed 5.9.08 to regain consistency with linked case -- MAB
-!! added 4.13.08 to treat wfb as trapped between ends but not middle wells -- MAB
-!    if (.not.kperiod_flag .and. il == ng2+1) then
-!       beta1 = (gnew(ntgr,1,iglo) - gnew(ntgr,2,iglo))/(1.0 - g1(ntgr,1))
-!       do ig = ntgr, ntgl, -1
-!          gnew(ig,1,iglo) = gnew(ig,1,iglo) + beta1*g1(ig,1)
-!          gnew(ig,2,iglo) = gnew(ig,2,iglo) + beta1*g1(ig,2)
-!       end do
-!    end if
-
     if (def_parity) then
        if (even) then
           gnew(ntgl:-1,1,iglo) = gnew( ntgr:1:-1,2,iglo)
@@ -3217,17 +3168,6 @@ subroutine check_dist_fn(report_unit)
        gnew(:,1,iglo) = 0.0
        gnew(:,2,iglo) = 0.0
     end where
-
-!    if (istep == 1) then
-!       write(*,*) kperiod_flag
-!       if (ik == 2 .and. it == 1) then
-!          do ig = -ntgrid, ntgrid
-!             write(*,fmt="(5(1x,e10.4),4(1x,i5))") theta(ig), &
-!                  gnew(ig,1,iglo), gnew(ig,2,iglo), il, ie, ik, it
-!          end do
-!          write(*,*) 
-!       end if
-!    end if
 
     call prof_leaving ("invert_rhs_1", "dist_fn")
 
@@ -3271,11 +3211,9 @@ subroutine check_dist_fn(report_unit)
             istep, iglo, sourcefac)
     end do
 
-!!    if (no_comm .or. istep == 0) then
     if (no_comm) then
        ! nothing
     else       
-! bug fix, community effort.  11/1/10
        g_adj = 0.
        call fill (links_p, gnew, g_adj)
        call fill (links_h, g_h, g_adj)
@@ -3804,10 +3742,6 @@ subroutine check_dist_fn(report_unit)
     integer :: ik, it, ie, is
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: tot
     real, dimension (nspec) :: wgt
-!    logical :: done = .false.
-
-!    if (done) return
-!    done = .true.
 
     if (feqinit) return
     feqinit = .true.
