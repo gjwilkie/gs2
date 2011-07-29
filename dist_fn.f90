@@ -554,6 +554,9 @@ subroutine check_dist_fn(report_unit)
     if (debug) write(6,*) "init_dist_fn: init_collisions"
     call init_collisions ! needs to be after init_run_parameters
 
+    if (debug) write(6,*) "init_dist_fn: init_lowflow"
+    call init_lowflow ! needs to be before init_invert_rhs
+
     if (debug) write(6,*) "init_dist_fn: init_invert_rhs"
     call init_invert_rhs
 
@@ -563,12 +566,9 @@ subroutine check_dist_fn(report_unit)
     if (debug) write(6,*) "init_dist_fn: init_hyper"
     call init_hyper
 
-    if (debug) write(6,*) "init_dist_fn: init_lowflow"
-    call init_lowflow
-
     if (debug) write(6,*) "init_dist_fn: init_mom_coeff"
     call init_mom_coeff
-!    write (*,*) 'exiting init_dist_fn'
+
   end subroutine init_dist_fn
 
   subroutine read_parameters
@@ -1021,7 +1021,6 @@ subroutine check_dist_fn(report_unit)
     integer :: iglo, ik, is
     real :: al1, e1
     
-
     if (.not.allocated(vpa)) then
        allocate (vpa    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (vpac   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -6571,11 +6570,14 @@ subroutine check_dist_fn(report_unit)
 
   subroutine init_lowflow
 
+    use constants, only: zi
     use dist_fn_arrays, only: vparterm, wdfac, vpac
     use dist_fn_arrays, only: wstarfac, hneoc, vpar
     use species, only: spec, nspec
+    use geometry, only: rhoc
     use theta_grid, only: theta, ntgrid, delthet, gradpar, bmag
-    use theta_grid, only: gds23, gds24
+    use theta_grid, only: gds23, gds24, gds24_noq, cvdrift_th, gbdrift_th
+    use theta_grid, only: drhodpsi, qval
     use le_grids, only: energy, al, negrid, nlambda, forbid
     use kt_grids, only: theta0
     use gs2_time, only: code_dt, user_dt
@@ -6659,9 +6661,18 @@ subroutine check_dist_fn(report_unit)
                *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
 !               *dhdthc(-ntgrid:ntgrid-1,2,iglo)*code_dt
                *tmp5(-ntgrid:ntgrid-1,il,ie,2,is)*code_dt
-          wstarfac(ntgrid,:,:) = 0.0
 
           wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + tmp4(:,il,ie,:,is)*code_dt*wunits(ik)
+
+          ! this is the contribution from v_E^par . grad F0
+          wstarfac(-ntgrid:ntgrid-1,1,iglo) = wstarfac(-ntgrid:ntgrid-1,1,iglo) &
+               - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+               *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+          wstarfac(-ntgrid:ntgrid-1,2,iglo) = wstarfac(-ntgrid:ntgrid-1,2,iglo) &
+               - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+               *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+
+          wstarfac(ntgrid,:,iglo) = 0.0
 
           ! no code_dt in wdfac because it multiplies wdrift, which has code_dt in it
           wdfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/energy(ie)**1.5 &
@@ -6673,7 +6684,7 @@ subroutine check_dist_fn(report_unit)
           ! no code_dt in cdfac because it multiples wcurv, which has code_dt in it
           cdfac(-ntgrid:ntgrid-1,1,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/sqrt(energy(ie))
           cdfac(-ntgrid:ntgrid-1,2,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/sqrt(energy(ie))
-          cdfac(ntgrid,:,:) = 0.0
+          cdfac(ntgrid,:,iglo) = 0.0
 
           vparterm(-ntgrid:ntgrid-1,1,iglo) = spec(is)%zstm*tunits(ik)*code_dt &
                /delthet(-ntgrid:ntgrid-1) &
@@ -6683,7 +6694,16 @@ subroutine check_dist_fn(report_unit)
                /delthet(-ntgrid:ntgrid-1) &
                * (abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid))) &
                * vpadhdec(-ntgrid:ntgrid-1,2,iglo)
-          vparterm(ntgrid,:,:) = 0.0
+          vparterm(ntgrid,:,iglo) = 0.0
+
+          vpar(-ntgrid:ntgrid-1,1,iglo) = vpar(-ntgrid:ntgrid-1,1,iglo) + &
+               0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
+               *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,1,iglo)**2 &
+               + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,1,iglo)**2))
+          vpar(-ntgrid:ntgrid-1,2,iglo) = vpar(-ntgrid:ntgrid-1,2,iglo) + &
+               0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
+               *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,2,iglo)**2 &
+               + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,2,iglo)**2))
 
        end do
 
