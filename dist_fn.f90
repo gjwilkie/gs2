@@ -1250,8 +1250,9 @@ subroutine check_dist_fn(report_unit)
                    ainv(ig,isgn,iglo) = 0.0
                 end if
              
-                ! ???? mysterious mucking around at lower bounce point
-                ! part of multiple trapped particle algorithm
+! CMR: set ainv=1 at lower bounce points for trapped particles
+!      part of multiple trapped particle algorithm
+!      NB not applicable to ttp or wfb!
                 if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
                    ainv(ig,isgn,iglo) = 1.0 + ainv(ig,isgn,iglo)
                 end if
@@ -3044,19 +3045,29 @@ subroutine check_dist_fn(report_unit)
        g1( ntgrid,2) = wfb  ! wfb should be unity here; variable is for testing
     end if
 
-    ! g2 is the initial condition for the homogeneous solution
+!CMR
+! g2 is the initial boundary condition for the homogeneous solution
+!      g2=1.0 at upper bounce point for vpar < 0
+!      -- g2 = 0 everywhere for wfb as forbid always false
+!                => why did JAB: include wfb (il=ng2+1) in g2 init loop ?
+!      -- g2 = 0 for ttp too 
+! NB lmax=nlambda-1 with trapped particles, and ttp is at il=nlambda
+
     g2 = 0.0
-    ! initialize to 1.0 at upper bounce point for vpar < 0
-    ! (but not for wfb or ttp)
-    !JAB: include wfb (ng2+1)
-    !orig:    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
     if (nlambda > ng2 .and. il >= ng2+1 .and. il <= lmax) then
+!CMR, surely ng2+2 was right?
        do ig=-ntgrid,ntgrid-1
           if (forbid(ig+1,il).and..not.forbid(ig,il)) g2(ig,2) = 1.0
        end do
     end if
 
-    ! time advance vpar < 0 inhomogeneous part
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! time advance vpar < 0  !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! inhomogeneous part: gnew
+! r=ainv=0 if forbid(ig,il) or forbid(ig+1,il), so gnew=0 in forbidden
+! region and at upper bounce point
     do ig = ntgrid-1, -ntgrid, -1
        gnew(ig,2,iglo) = -gnew(ig+1,2,iglo)*r(ig,2,iglo) + ainv(ig,2,iglo)*source(ig,2)
     end do
@@ -3067,21 +3078,31 @@ subroutine check_dist_fn(report_unit)
        ilmin = ng2 + 1              !!! ilmin = ng2 + 2
     end if
 
-    ! time advance vpar < 0 homogeneous part
+! time advance vpar < 0 homogeneous part: g1
     if (il >= ilmin) then
        do ig = ntgrid-1, -ntgrid, -1
           g1(ig,2) = -g1(ig+1,2)*r(ig,2,iglo) + g2(ig,2)
        end do
     end if
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! time advance vpar > 0   !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! First set BCs for trapped particles at lower bounce point
+    ! (excluding wfb and ttp)
+
 ! GWH & JAB: see if this fixes a numerical instability, related to close-to-wfb:
 !il<=lmax seems redundant
+!CMR, 1/8/2011:  Not sure wfb is included in following loop
     if (nlambda > ng2 .and. il >= ng2+1 .and. il <= lmax) then
 !    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
        ! match boundary conditions at lower bounce point
        do ig = -ntgrid, ntgrid-1
           if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
              g2(ig,1) = g1(ig+1,2)
+!CMR: init_invert_rhs  sets ainv=1 at lower bounce point for trapped 
+!     source below ensures gnew(lb,1,iglo)=gnew(lb,2,iglo)
+!     where lb is the lower bounce point.
              source(ig,1) = gnew(ig+1,2,iglo)  
           end if
        end do
@@ -3145,6 +3166,7 @@ subroutine check_dist_fn(report_unit)
           if (ittp(ig) <= il) cycle
           if (forbid(ig,il)) then
              beta1 = 0.0
+             cycle !CMR: to avoid pointless arithmetic later in loop
           else if (forbid(ig+1,il)) then
              beta1 = (gnew(ig,1,iglo) - gnew(ig,2,iglo))/(1.0 - g1(ig,1))
           end if
@@ -3174,7 +3196,10 @@ subroutine check_dist_fn(report_unit)
   contains
 
     subroutine self_periodic
-
+!CMR: sets sum of homogeneous and inhomogeneous solutions to give a result
+!     gnew(ntgr,2) = gnew(ntgl,2)
+!     gnew(ntgr,1) = gnew(ntgl,1) 
+! ie periodic bcs at the ends of the flux tube.
       if (g1(ntgr,1) /= 1.) then
          beta1 = (gnew(ntgr,1,iglo) - gnew(ntgl,1,iglo))/(1.0 - g1(ntgr,1))
          gnew(:,1,iglo) = gnew(:,1,iglo) + beta1*g1(:,1)
@@ -3924,6 +3949,7 @@ subroutine check_dist_fn(report_unit)
   
 ! MAB> ported from agk
 ! TT> Given initial distribution function this obtains consistent fields
+!CMR, 1/8/2011> corrections below for inhomogeneous bmag
   subroutine get_init_field (phi, apar, bpar)
     ! inverts the field equations:
     !   gamtot * phi - gamtot1 * bpar = antot
@@ -3931,7 +3957,7 @@ subroutine check_dist_fn(report_unit)
     !   beta/2 * gamtot1 * phi + (beta * gamtot2 + 1) * bpar = - beta * antotp
     ! I haven't made any check for use_Bpar=T case.
     use run_parameters, only: beta, fphi, fapar, fbpar
-    use theta_grid, only: ntgrid
+    use theta_grid, only: ntgrid, bmag
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
     use dist_fn_arrays, only: aj0, vpa, kperp2
@@ -3940,16 +3966,20 @@ subroutine check_dist_fn(report_unit)
     real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: denominator
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: antot, antota, antotp
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: numerator
+    real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: bmagsp
 
     phi=0. ; apar=0. ; bpar=0.
     antot=0.0 ; antota=0.0 ; antotp=0.0
+!CMR, 1/8/2011:  bmagsp is 3D array containing bmag
+    bmagsp=spread(spread(bmag,2,ntheta0),3,naky)
     call getan (antot, antota, antotp)
 
     ! get phi
     if (fphi > epsilon(0.0)) then
 
-       numerator = (beta * gamtot2 + 1.0) * antot - (beta * gamtot1) * antotp
-       denominator = (beta * gamtot2 + 1.0) * gamtot + (beta/2.0) * gamtot1 * gamtot1
+!CMR, 1/8/2011:  bmag corrections here: 
+       numerator = (beta * gamtot2 + bmagsp**2) * antot - (beta * gamtot1) * antotp
+       denominator = (beta * gamtot2 + bmagsp**2) * gamtot + (beta/2.0) * gamtot1 * gamtot1
 
        where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
           phi = 0.0
@@ -3970,10 +4000,9 @@ subroutine check_dist_fn(report_unit)
 
     ! get bpar
     if (fbpar > epsilon(0.0)) then
-
+!CMR>  bmag corrections here
        numerator = - (beta * gamtot) * antotp - (beta/2.0) * gamtot1 * antot
-       ! following line is actually same with the denom for phi
-       denominator = gamtot * (beta * gamtot2 + 1.0) + (beta/2.0) * gamtot1 * gamtot1
+       denominator = gamtot * (beta * gamtot2 + bmagsp**2) + (beta/2.0) * gamtot1 * gamtot1
 
        where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
           bpar = 0.0
