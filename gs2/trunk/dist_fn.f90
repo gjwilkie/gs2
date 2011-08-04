@@ -1042,6 +1042,19 @@ subroutine check_dist_fn(report_unit)
        end where
 
 ! Where vpac /= 1, it could be weighted by bakdif for better consistency??
+!CMR, 4/8/2011:
+!CMR : vpa is parallel velocity at grid points
+!CMR : vpac is grid centered parallel velocity
+!CMR : vpar = q_s/sqrt{T_s m_s}*DELT/DTHETA * vpac |\gradpar(theta)| 
+!                                     where gradpar(theta) is centered
+!  ie  vpar = q_s/T_s  (v_||^GS2). \gradpar(theta)/DTHETA . DELT
+! 
+!   comments on vpac, vpar
+!     (i) surely vpac=0 at or beyond bounce points, so WHY was it set to +-1?
+!                                seems unphysical!
+!    (ii) should some be weighted by bakdif?
+!CMR 
+
        where (1.0 - al1*0.5*(bmag(-ntgrid:ntgrid-1)+bmag(-ntgrid+1:ntgrid)) &
               < 0.0)
           vpac(-ntgrid:ntgrid-1,1,iglo) = 1.0
@@ -2760,6 +2773,13 @@ subroutine check_dist_fn(report_unit)
     il = il_idx(g_lo,iglo)
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
+!CMR, 4/8/2011
+! apargavg and phigavg combine to give the GK EM potential chi. 
+!          chi = phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm
+! phigavg  = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
+! apargavg = apar J0 
+! Both quantities are decentred in time and evaluated on || grid points
+!
     phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
                 *aj0(:,iglo)*fphi &
              + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
@@ -2905,6 +2925,39 @@ subroutine check_dist_fn(report_unit)
 
 
       do ig = -ntgrid, ntgrid-1
+!CMR, 4/8/2011:
+! Some concerns, may be red herrings !
+! (1) no bakdif factors in phi_m, apar_p, apar_m, vpar !!! 
+!                        (RN also spotted this for apar_p)
+! (2) source terms are factor 2 bigger than expected
+! (3) can interpolations of products be improved? 
+! (4) check factors of T_s/q_s
+!
+!  Attempt at variable documentation:
+! phigavg  = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
+! apargavg = apar J0                        (decentered in t) 
+! NB apargavg and phigavg combine to give the GK EM potential chi
+! phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm = chi
+! phi_p = 2 phigavg                      .... (roughly!)
+! phi_m = d/dtheta (phigavg)*DTHETA 
+! apar_p = 2 apargavg  
+! apar_m = 2 vpa d/dt (J0(Z) apar)*DELT
+! => phi_p - apar_p*vpa(:,isgn,iglo)*spec(is)%stm = 2 chi  .... (roughly!)  
+! vparterm = -2.0*vpar (IN ABSENCE OF LOWFLOW TERMS)
+! wdfac = wdrift + wcoriolis/spec(is)%stm (IN ABSENCE OF LOWFLOW TERMS)
+! wstarfac = wstar  (IN ABSENCE OF LOWFLOW TERMS)
+! vpar = q_s/T_s  (v_||^GS2). \gradpar(theta)/DTHETA . DELT (centred) 
+! wdrift =    q_s/T_s  v_d.\grad_perp . DELT 
+! wcoriolis = q_s/T_s  v_C.\grad_perp . DELT 
+! source     appears to contain following physical terms
+!   -2q_s/T_s v||.grad(J0 phi + 2 vperp^2 bpar/bmag J1/Z T_s/q_s).delt 
+!   -2d/dt(q v|| J0 apar / T).delt
+!   +hyperviscosity
+!   -2 v_d.\grad_perp (q J0 phi/T + 2 vperp^2 bpar/bmag J1/Z).delt 
+!   -coriolis terms
+!   2{\chi,f_{0s}}  (allowing for sheared flow)
+!CMRend
+
          phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
          phi_m = phigavg(ig+1)-phigavg(ig)
          ! RN> bdfac factors seem missing for apar_p
@@ -2920,6 +2973,7 @@ subroutine check_dist_fn(report_unit)
 ! [note by BD and MK on "Microinstabilities in Axisymmetric Configurations"].
 ! This is converted to  the standard internal gs2 normalisation, 
 ! Tref=(1/2) mref vtref^2, by wunits, which contains a crucial factor 1/2.
+! (Would be less confusing if always used same Tref!)
 !
 
          source(ig) = anon(ie)*(vparterm(ig,isgn,iglo)*phi_m &
