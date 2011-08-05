@@ -658,7 +658,7 @@ contains
     use dist_fn, only: getan, get_epar, getmoms, par_spectrum
     use dist_fn, only: write_f, write_fyx
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
-    use dist_fn, only: g_adjust
+    use dist_fn_arrays, only: g_adjust
     use collisions, only: vnmult
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
@@ -1318,9 +1318,9 @@ contains
     use dist_fn, only: flux, write_f, write_fyx
     use dist_fn, only: omega0, gamma0, getmoms, par_spectrum
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
-    use dist_fn, only: getmoms_notgc, g_adjust, include_lowflow, lf_flux
+    use dist_fn, only: getmoms_notgc, include_lowflow, lf_flux
     use dist_fn, only: flux_vs_theta_vs_vpa
-    use dist_fn_arrays, only: g, gnew, aj0, vpa
+    use dist_fn_arrays, only: g, gnew, aj0, vpa, g_adjust
     use collisions, only: ncheck, vnmult, vary_vnew
     use mp, only: proc0, broadcast, iproc, send, receive
     use file_utils, only: get_unused_unit, flush_output_file
