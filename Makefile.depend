@@ -14,8 +14,7 @@ ball_mod = \
 	 leq.o \
 	 netcdf_utils.o \
 	 peq.o \
-	 spl.o
-
+	 spl.o 
 
 drive_mod = \
 	 drive.o \
@@ -37,7 +36,7 @@ eiktest_mod = \
 	 leq.o \
 	 netcdf_utils.o \
 	 peq.o \
-	 spl.o
+	 spl.o 
 
 ffttester_mod = \
 	 antenna.o \
@@ -80,6 +79,7 @@ ffttester_mod = \
 	 leq.o \
 	 lowflow.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
@@ -92,7 +92,7 @@ ffttester_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o
+	 theta_grid_params.o 
 
 gs2_mod = \
 	 antenna.o \
@@ -135,6 +135,7 @@ gs2_mod = \
 	 leq.o \
 	 lowflow.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
@@ -147,7 +148,7 @@ gs2_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o
+	 theta_grid_params.o 
 
 hrate_mod = \
 	 command_line.o \
@@ -193,6 +194,7 @@ ingen_mod = \
 	 leq.o \
 	 lowflow.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 peq.o \
@@ -226,6 +228,9 @@ rungridgen_mod = \
 	 gridgen4mod.o \
 	 rungridgen.o \
 	 spl.o 
+
+t_mod = \
+	 t.o 
 
 antenna.o: \
 	 antenna_data.o \
@@ -288,7 +293,11 @@ dist_fn.o: \
 	 spfunc.o \
 	 text_options.o \
 	 theta_grid.o 
-dist_fn_arrays.o: 
+dist_fn_arrays.o: \
+	 gs2_layouts.o \
+	 le_grids.o \
+	 species.o \
+	 theta_grid.o 
 drive.o: \
 	 regression.o 
 ediff.o: 
@@ -339,7 +348,6 @@ fields_implicit.o: \
 	 job_manage.o \
 	 kt_grids.o \
 	 mp.o \
-	 nonlinear_terms.o \
 	 prof.o \
 	 run_parameters.o \
 	 theta_grid.o 
@@ -359,8 +367,7 @@ geometry.o: \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
-	 peq.o
-
+	 peq.o 
 geq.o: \
 	 constants.o \
 	 netcdf_utils.o \
@@ -518,15 +525,12 @@ hdf_wrapper.o: \
 hrate.o: \
 	 command_line.o 
 hyper.o: \
-	 dist_fn_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 kt_grids.o \
-	 le_grids.o \
 	 mp.o \
 	 run_parameters.o \
-	 species.o \
 	 text_options.o \
 	 theta_grid.o 
 ideq.o: \
@@ -602,9 +606,12 @@ lowflow.o: \
 	 file_utils.o \
 	 mp.o \
 	 spl.o 
+mds.o: \
+	 constants.o 
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -631,7 +638,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 redistribute.o: \
 	 job_manage.o \
 	 mp.o 
@@ -657,6 +665,7 @@ species.o: \
 spfunc.o: \
 	 constants.o 
 spl.o: 
+t.o: 
 test_layouts.o: \
 	 mp.o 
 text_options.o: 
@@ -671,4 +680,3 @@ theta_grid.o: \
 	 theta_grid_params.o 
 theta_grid_params.o: \
 	 file_utils.o 
-

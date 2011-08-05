@@ -581,36 +581,6 @@ contains
     end subroutine iso_shear
   end subroutine hyper_diff
 
-  subroutine g_adjust (g, phi, bpar, facphi, facbpar)
-    use species, only: spec
-    use theta_grid, only: ntgrid
-    use le_grids, only: anon
-    use dist_fn_arrays, only: vperp2, aj0, aj1
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-    real, intent (in) :: facphi, facbpar
-
-    integer :: iglo, ig, ik, it, ie, is
-    complex :: adj
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do ig = -ntgrid, ntgrid
-          adj = anon(ie)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
-                  *bpar(ig,it,ik)*facbpar &
-               + spec(is)%z*anon(ie)*phi(ig,it,ik)*aj0(ig,iglo) &
-                  /spec(is)%temp*facphi
-          g(ig,1,iglo) = g(ig,1,iglo) + adj
-          g(ig,2,iglo) = g(ig,2,iglo) + adj
-       end do
-    end do
-  end subroutine g_adjust
-
   subroutine finish_hyper
 
     implicit none

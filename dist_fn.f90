@@ -22,7 +22,6 @@ module dist_fn
   public :: get_verr, get_gtran, write_fyx, collision_error
   public :: include_lowflow
   public :: get_init_field
-  public :: g_adjust ! MAB (needed for Trinity)
   public :: flux_vs_theta_vs_vpa
 
   public :: gamtot,gamtot1,gamtot2
@@ -2708,38 +2707,6 @@ subroutine check_dist_fn(report_unit)
     end if
   end subroutine exb_shear
      
-  subroutine g_adjust (g, phi, bpar, facphi, facbpar)
-    use species, only: spec
-    use theta_grid, only: ntgrid, bmag
-    use le_grids, only: anon
-    use dist_fn_arrays, only: vperp2, aj0, aj1
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-    real, intent (in) :: facphi, facbpar
-
-    integer :: iglo, ig, ik, it, ie, is
-    complex :: adj
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-! BD:  bpar == delta B_parallel / B_0(theta) so no extra factor of 
-! 1/bmag is needed here.
-       do ig = -ntgrid, ntgrid
-           adj = anon(ie)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
-                  *bpar(ig,it,ik)*facbpar &
-               + spec(is)%z*anon(ie)*phi(ig,it,ik)*aj0(ig,iglo) &
-                  /spec(is)%temp*facphi
-          g(ig,1,iglo) = g(ig,1,iglo) + adj
-          g(ig,2,iglo) = g(ig,2,iglo) + adj
-       end do
-    end do
-  end subroutine g_adjust
-
   subroutine get_source_term &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         isgn, iglo, sourcefac, source)
@@ -3512,8 +3479,8 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: integrate_moment, anon
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
-    use collisions, only: g_adjust
     use fields_arrays, only: phinew, bparnew
+    use dist_fn_arrays, only: g_adjust
 
     implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
@@ -3612,8 +3579,8 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: integrate_moment, anon
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
-    use collisions, only: g_adjust
     use fields_arrays, only: phinew, bparnew
+    use dist_fn_arrays, only: g_adjust
 
     implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: tperp, ntot
@@ -4533,6 +4500,8 @@ subroutine check_dist_fn(report_unit)
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_apar, a_ext_data
     use hyper, only: D_v, D_eta, nexp
+    use dist_fn_arrays, only: g_adjust
+
     implicit none
     type (heating_diagnostics) :: h
     type (heating_diagnostics), dimension(:,:) :: hk
@@ -5234,6 +5203,7 @@ subroutine check_dist_fn(report_unit)
     use collisions, only: etol, ewindow, etola, ewindowa
     use collisions, only: vnmult, vary_vnew
     use nonlinear_terms, only: nonlin
+    use dist_fn_arrays, only: g_adjust
 
     ! TEMP FOR TESTING -- MAB
 !    use gs2_layouts, only: il_idx
@@ -5530,6 +5500,7 @@ subroutine check_dist_fn(report_unit)
     use run_parameters, only: fphi, fbpar
     use gs2_layouts, only: g_lo
     use mp, only: proc0, broadcast
+    use dist_fn_arrays, only: g_adjust
 
     implicit none
 
@@ -5659,6 +5630,7 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: nterp, negrid, lagrange_interp, xloc
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
+    use dist_fn_arrays, only: g_adjust
 
     implicit none
 
@@ -5805,6 +5777,7 @@ subroutine check_dist_fn(report_unit)
     use nonlinear_terms, only: accelerated
     use gs2_transforms, only: transform2, init_transforms
     use run_parameters, only: fphi, fbpar
+    use dist_fn_arrays, only: g_adjust
 
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     logical, intent (in) :: last
@@ -5957,6 +5930,7 @@ subroutine check_dist_fn(report_unit)
     use redistribute, only: gather, scatter
     use file_utils, only: open_output_file, close_output_file
     use gs2_time, only: user_time
+    use dist_fn_arrays, only: g_adjust
     implicit none
 
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
