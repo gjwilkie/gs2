@@ -76,6 +76,7 @@ module gs2_io
   integer :: phi_id, apar_id, bpar_id, epar_id
   integer :: antot_id, antota_id, antotp_id
   integer :: ntot_id, density_id, upar_id, tpar_id, tperp_id
+  integer :: qparflux_id, pperpj1_id, qpperpj1_id
   integer :: ntot2_id, ntot2_by_mode_id, ntot20_id, ntot20_by_mode_id
   integer :: tpar2_by_mode_id, tperp2_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
@@ -1140,6 +1141,12 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, var='tpar')
     status = nf90_def_var (ncid, 'tperp', netcdf_real, final_mom_dim, tperp_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='tperp')
+    status = nf90_def_var (ncid, 'qparflux', netcdf_real, final_mom_dim, qparflux_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='qparflux')
+    status = nf90_def_var (ncid, 'pperpj1', netcdf_real, final_mom_dim, pperpj1_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='pperpj1')
+    status = nf90_def_var (ncid, 'qpperpj1', netcdf_real, final_mom_dim, qpperpj1_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='qpperpj1')
 
     status = nf90_def_var (ncid, 'phi00', netcdf_real, loop_phi_dim, phi00_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='phi00')
@@ -1482,7 +1489,7 @@ contains
 # endif
   end subroutine nc_final_epar
 
-  subroutine nc_final_moments (ntot, density, upar, tpar, tperp)
+  subroutine nc_final_moments (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
 
 !    use nf90_mod, only: nf90_put_var
     use convert, only: c2r
@@ -1493,6 +1500,7 @@ contains
     use netcdf, only: nf90_put_var
 # endif
     complex, dimension (:,:,:,:), intent (in) :: ntot, density, upar, tpar, tperp
+    complex, dimension (:,:,:,:), intent (in) :: qparflux, pperpj1, qpperpj1
 # ifdef NETCDF
     real, dimension (2, 2*ntgrid+1, ntheta0, naky, nspec) :: ri4
     integer :: status
@@ -1516,6 +1524,19 @@ contains
     call c2r (tperp, ri4)
     status = nf90_put_var (ncid, tperp_id, ri4)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, tperp_id)
+
+    call c2r (qparflux, ri4)
+    status = nf90_put_var (ncid, qparflux_id, ri4)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, qparflux_id)
+
+    call c2r (pperpj1, ri4)
+    status = nf90_put_var (ncid, pperpj1_id, ri4)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, pperpj1_id)
+
+    call c2r (qpperpj1, ri4)
+    status = nf90_put_var (ncid, qpperpj1_id, ri4)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, qpperpj1_id)
+
 # endif
   end subroutine nc_final_moments
 

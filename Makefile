@@ -80,7 +80,7 @@ DBLE ?= on
 USE_MPI ?= on
 # turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?=
-# which FFT library to use (fftw,mkl_fftw,undefined) 
+# which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
 USE_FFT ?= fftw
 # uses netcdf library (bin)
 USE_NETCDF ?= on
