@@ -684,6 +684,7 @@ contains
     complex, dimension (:,:,:), allocatable :: bx, by, vx, vy, vx2, vy2
     complex, dimension (:,:,:), allocatable :: phi2, apar2, bpar2, antot, antota, antotp, epar
     complex, dimension (:,:,:,:), allocatable :: ntot, density, upar, tpar, tperp
+    complex, dimension (:,:,:,:), allocatable :: qparflux, pperpj1, qpperpj1
     real, dimension (:), allocatable :: dl_over_b
     complex, dimension (ntheta0, naky) :: phi0
     real, dimension (ntheta0, naky) :: phi02
@@ -852,7 +853,10 @@ contains
        allocate (upar(-ntgrid:ntgrid,ntheta0,naky,nspec))
        allocate (tpar(-ntgrid:ntgrid,ntheta0,naky,nspec))
        allocate (tperp(-ntgrid:ntgrid,ntheta0,naky,nspec))
-       call getmoms (ntot, density, upar, tpar, tperp)
+       allocate (qparflux(-ntgrid:ntgrid,ntheta0,naky,nspec))
+       allocate (pperpj1(-ntgrid:ntgrid,ntheta0,naky,nspec))
+       allocate (qpperpj1(-ntgrid:ntgrid,ntheta0,naky,nspec))
+       call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
 
        if (proc0) then
           if (write_ascii) then
@@ -884,7 +888,7 @@ contains
              end do
              call close_output_file (unit)          
           end if
-          call nc_final_moments (ntot, density, upar, tpar, tperp)
+          call nc_final_moments (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
 
           if (write_ascii) then
              call open_output_file (unit, ".mom2")
@@ -935,7 +939,7 @@ contains
              call close_output_file (unit)          
           end if
        end if
-       deallocate (ntot, density, upar, tpar, tperp)
+       deallocate (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
     end if
 
     if (write_final_antot) then
@@ -1391,7 +1395,7 @@ contains
     complex :: sourcefac
 !    complex :: phiavg
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
-         upar, tpar, tperp, upartot, uperptot, ttot
+         upar, tpar, tperp, qparflux, pperpj1, qpperpj1, upartot, uperptot, ttot
     complex, dimension (ntheta0, nspec) :: ntot00, density00, upar00, tpar00, tperp00
     complex, dimension (ntheta0) :: phi00
     complex, save :: wtmp_new
@@ -1459,7 +1463,7 @@ if (debug) write(6,*) "loop_diagnostics: call update_time"
        nny = yxf_lo%ny
        if (fphi > epsilon(0.0)) then
           allocate (yxphi(nnx,nny,-ntgrid:ntgrid))
-          call getmoms (ntot, density, upar, tpar, tperp)
+          call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
 !          call transform2 (ntot, yxphi, nny, nnx)
           call transform2 (phinew, yxphi, nny, nnx)
        end if
@@ -2442,7 +2446,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
     call broadcast (write_avg_moments)
     if (write_avg_moments) then
 
-       call getmoms (ntot, density, upar, tpar, tperp)
+       call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
 
        if (proc0) then
           allocate (dl_over_b(-ntg_out:ntg_out))

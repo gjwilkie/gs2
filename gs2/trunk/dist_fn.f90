@@ -3471,12 +3471,12 @@ subroutine check_dist_fn(report_unit)
     call prof_leaving ("getan", "dist_fn")
   end subroutine getan
 
-  subroutine getmoms (ntot, density, upar, tpar, tperp)
+  subroutine getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
-    use le_grids, only: integrate_moment, anon
+    use le_grids, only: integrate_moment, anon, energy
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
     use fields_arrays, only: phinew, bparnew
@@ -3484,7 +3484,7 @@ subroutine check_dist_fn(report_unit)
 
     implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
-         upar, tpar, tperp, ntot
+         upar, tpar, tperp, ntot, qparflux, pperpj1, qpperpj1
 
     integer :: ik, it, isgn, ie, is, iglo
 
@@ -3516,21 +3516,24 @@ subroutine check_dist_fn(report_unit)
     end do
 
 ! CMR: density is the nonadiabatic piece of perturbed density
+! NB normalised wrt equ'm density for species s: n_s n_ref  
+!    ie multiply by (n_s n_ref) to get abs density pert'n
     call integrate_moment (g0, density)
 
 ! DJA/CMR: upar and tpar moments 
 ! (nb adiabatic part of <delta f> does not contribute to upar, tpar or tperp)
+! NB UPAR is normalised to vt_s = sqrt(T_s/m_s) vt_ref
+!    ie multiply by spec(is)%stm * vt_ref to get abs upar
+
     g0 = vpa*g0
     call integrate_moment (g0, upar)
 
-! CMR: why the factor 2 in 2.*vpa*g0? 
     g0 = 2.*vpa*g0
     call integrate_moment (g0, tpar)
 ! tpar transiently stores ppar, nonadiabatic perturbed par pressure 
+!    (ppar will be normalised by n_s T_s n_ref T_ref ) 
 !                         ppar = tpar + density, and so:
     tpar = tpar - density
-
-! CMR: tperp....       why no factor of 2 as in tpar?
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
           g0(:,isgn,iglo) = vperp2(:,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)
@@ -3540,6 +3543,38 @@ subroutine check_dist_fn(report_unit)
 ! tperp transiently stores pperp, nonadiabatic perturbed perp pressure
 !                          pperp = tperp + density, and so:
     tperp = tperp - density
+! NB TPAR, and TPERP are normalised by T_s T_ref
+!    ie multiply by T_s T_ref to get abs TPAR, TPERP
+
+! Now compute QPARFLUX
+! NB QPARFLUX is normalised to n_s n_ref T_s T_ref v_ts
+!    ie multiply by (n_s T_s spec(is)%stm) n_ref T_ref vt_ref to get abs qparflux
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do isgn = 1, 2
+          g0(:,isgn,iglo) = vpa(:,isgn,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)*energy(ie_idx(g_lo,iglo))
+       end do
+    end do 
+    call integrate_moment (g0, qparflux)
+   
+! Now compute PPERPJ1, a modified p_perp which gives particle flux from Bpar
+! NB PPERPJ1 is normalised to (n_s T_s/q_s)  n_ref T_ref/q_ref 
+!    ie multiply by (n_s spec(is)%tz) n_ref T_ref/q_ref to get abs PPERPJ1
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          g0(:,isgn,iglo) &
+               = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz
+       end do
+    end do
+    call integrate_moment (g0, pperpj1)
+
+! Now compute QPPERPJ1, a modified p_perp*energy which gives heat flux from Bpar
+! NB QPPERPJ1 is normalised to (n_s T_s^2/q_s)  n_ref  T_ref^2/q_ref
+!    ie multiply by (n_s T_s spec(is)%tz) n_ref T_ref^2/q_ref to get abs QPPERPJ1
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo))
+    end do
+    call integrate_moment (g0, qpperpj1)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! now include the adiabatic part of <delta f>
@@ -3557,12 +3592,16 @@ subroutine check_dist_fn(report_unit)
 ! total perturbed density
     call integrate_moment (g0, ntot)
 
+!CMR, now multiply by species dependent normalisations to leave only reference normalisations
     do is=1,nspec
        ntot(:,:,:,is)=ntot(:,:,:,is)*spec(is)%dens
        density(:,:,:,is)=density(:,:,:,is)*spec(is)%dens
        upar(:,:,:,is)=upar(:,:,:,is)*spec(is)%stm
        tpar(:,:,:,is)=tpar(:,:,:,is)*spec(is)%temp
        tperp(:,:,:,is)=tperp(:,:,:,is)*spec(is)%temp
+       qparflux(:,:,:,is)=qparflux(:,:,:,is)*spec(is)%dens*spec(is)%temp*spec(is)%stm
+       pperpj1(:,:,:,is)=pperpj1(:,:,:,is)*spec(is)%dens*spec(is)%tz
+       qpperpj1(:,:,:,is)=qpperpj1(:,:,:,is)*spec(is)%dens*spec(is)%temp*spec(is)%tz
     end do
 
 ! return gnew to its initial state, the variable evolved in GS2

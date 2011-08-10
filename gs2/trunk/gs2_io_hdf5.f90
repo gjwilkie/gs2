@@ -52,6 +52,7 @@ module gs2_io
   integer :: phi_id, apar_id, bpar_id, epar_id
   integer :: antot_id, antota_id, antotp_id
   integer :: ntot_id, density_id, upar_id, tpar_id, tperp_id
+  integer :: qparflux_id, pperpj1_id, qpperpj1_id
   integer :: hrateavg_id, hrate_by_k_id
   integer :: ntot2_id, ntot2_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
@@ -646,6 +647,9 @@ contains
     status = netcdf_def_var (ncid, 'upar',    nf_double, 5, final_mom_dim, upar_id)
     status = netcdf_def_var (ncid, 'tpar',    nf_double, 5, final_mom_dim, tpar_id)
     status = netcdf_def_var (ncid, 'tperp',   nf_double, 5, final_mom_dim, tperp_id)
+    status = netcdf_def_var (ncid, 'qparflux',   nf_double, 5, final_mom_dim, qparflux_id)
+    status = netcdf_def_var (ncid, 'pperpj1',   nf_double, 5, final_mom_dim, pperpj1_id)
+    status = netcdf_def_var (ncid, 'qpperpj1',   nf_double, 5, final_mom_dim, qpperpj1_id)
 
     status = netcdf_def_var (ncid, 'phi00',     nf_double, 3, loop_phi_dim, phi00_id)
     status = netcdf_def_var (ncid, 'ntot00',    nf_double, 4, loop_mom_dim, ntot00_id)
@@ -847,7 +851,7 @@ contains
 
   end subroutine nc_final_epar
 
-  subroutine nc_final_moments (ntot, density, upar, tpar, tperp)
+  subroutine nc_final_moments (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
 
     use netcdf_mod, only: netcdf_put_var
     use convert, only: c2r
@@ -874,6 +878,15 @@ contains
 
     call c2r (tperp, ri4)
     status = netcdf_put_var(ncid, tperp_id, ri4)
+
+    call c2r (qparflux, ri4)
+    status = netcdf_put_var(ncid, qparflux_id, ri4)
+
+    call c2r (pperpj1, ri4)
+    status = netcdf_put_var(ncid, pperpj1_id, ri4)
+
+    call c2r (qpperpj1, ri4)
+    status = netcdf_put_var(ncid, qpperpj1_id, ri4)
 
   end subroutine nc_final_moments
 
