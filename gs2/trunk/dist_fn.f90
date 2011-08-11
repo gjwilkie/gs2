@@ -2265,6 +2265,16 @@ subroutine check_dist_fn(report_unit)
 !    alloc = .false.
   end subroutine allocate_arrays
 
+  !> This function calculates the distribution function at the next timestep. 
+  !! It calculates both the inhomogenous part, gnew, due to the sources
+  !! (principly the drive terms and the nonlinear term)
+  !! and the homogenous part, g1. The actual evolution of the dist func
+  !! is done in the subroutine invert_rhs. 
+  !!
+  !! After solving for the new dist funcs, this routine calls hyper_diff, which
+  !! adds hyper diffusion if present, and solfp1, from the collisions module,
+  !! which adds collisions if present.
+
   subroutine timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, mode)
 
     use theta_grid, only: ntgrid
