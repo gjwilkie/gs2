@@ -511,7 +511,7 @@ contains
     enddo
 
     write (unit=unit, fmt=*) 'ntgrid nperiod ntheta drhodpsi rmaj shat kxfac q'
-    write (unit=unit, fmt=*) ntgrid, nperiodout, ntheta, drhodpsi, rmaj, shat, kxfac, qval
+    write (unit=unit, "(3i4,5(1x,g19.10))") ntgrid, nperiodout, ntheta, drhodpsi, rmaj, shat, kxfac, qval
 
     write (unit=unit, fmt=*) 'gbdrift gradpar grho tgrid'
     do i = -ntgrid,ntgrid
