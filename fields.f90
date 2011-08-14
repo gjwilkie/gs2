@@ -22,6 +22,7 @@ module fields
 
   ! knobs
   integer :: fieldopt_switch
+  logical :: remove_zonal_flows_switch
   integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2
 
   logical :: initialized = .false.
@@ -137,11 +138,12 @@ contains
             text_option('implicit', fieldopt_implicit), &
             text_option('test', fieldopt_test) /)
     character(20) :: field_option
-    namelist /fields_knobs/ field_option
+    namelist /fields_knobs/ field_option, remove_zonal_flows_switch
     integer :: ierr, in_file
 
     if (proc0) then
        field_option = 'default'
+       remove_zonal_flows_switch = .false.
 
        in_file = input_unit_exist ("fields_knobs", exist)
 !       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
@@ -155,6 +157,7 @@ contains
     end if
 
     call broadcast (fieldopt_switch)
+    call broadcast (remove_zonal_flows_switch)
   end subroutine read_parameters
 
   subroutine allocate_arrays
@@ -198,7 +201,7 @@ contains
 
     select case (fieldopt_switch)
     case (fieldopt_implicit)
-       call advance_implicit (istep)
+       call advance_implicit (istep, remove_zonal_flows_switch)
     case (fieldopt_test)
        call advance_test (istep)
     end select
@@ -282,6 +285,29 @@ contains
     phiavg = 0.
     write(*,*) 'error in fields'
   end subroutine fieldlineavgphi_tot
+
+
+  !!> This generates a flux surface average of phi. 
+
+  !subroutine flux_surface_average_phi (phi_in, phi_average)
+    !use theta_grid, only: ntgrid, drhodpsi, gradpar, bmag, delthet
+    !use kt_grids, only: ntheta0, naky
+
+    !implicit none
+    !complex, intent (in) :: phi_in
+    !complex, intent (out) :: phi_average
+    !complex, dimension(-ntgrid:ntgrid,1:ntheta0,1:naky) :: phi_fieldline_avg
+    !integer it, ig
+
+    !call fieldline_average_phi(phi_in, phi_fieldline_avg)
+    !do it = 1,ntheta0
+      !do ig = -ntgrid,ntgrid
+        !phi_average(ig, it, :) = sum(phi_fieldline_avg(ig, it, :))/real(naky)
+      !end do
+    !end do
+
+  !end subroutine fieldline_average_phi
+
 
   subroutine reset_init
 
