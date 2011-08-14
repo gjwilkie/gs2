@@ -223,7 +223,7 @@ contains
 
   end subroutine getfield
 
-  subroutine advance_implicit (istep)
+  subroutine advance_implicit (istep, remove_zonal_flows_switch)
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
@@ -232,6 +232,7 @@ contains
     implicit none
     integer :: diagnostics = 1
     integer, intent (in) :: istep
+    logical, intent (in) :: remove_zonal_flows_switch
 
 
     !GGH NOTE: apar_ext is initialized in this call
@@ -252,10 +253,69 @@ contains
     phinew   = phinew  + phi
     aparnew  = aparnew + apar
     bparnew  = bparnew + bpar
+
+    if (remove_zonal_flows_switch) call remove_zonal_flows
     
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
     
   end subroutine advance_implicit
+
+  subroutine remove_zonal_flows
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use theta_grid, only: ntgrid
+    use kt_grids, only: ntheta0, naky
+    
+    complex, dimension(:,:,:), allocatable :: phi_avg
+
+    allocate(phi_avg(-ntgrid:ntgrid,ntheta0,naky)) 
+    phi_avg = 0.
+    ! fieldline_average_phi will calculate the field line average of phinew and 
+    ! put it into phi_avg, but only for ik = 1 (the last parameter of the call)
+    call fieldline_average_phi(phinew, phi_avg, 1)
+    phinew = phinew - phi_avg
+    deallocate(phi_avg)
+  end subroutine remove_zonal_flows
+
+  !> This generates a field line average of phi_in and writes it to 
+  !! phi_average. If ik_only is supplied, it will only calculate the
+  !! field line average for that ky, leaving the rest of phi_avg unchanged.
+  
+  ! It replaces the routines fieldlineavgphi_loc and fieldlineavgphi_tot,
+  ! in fields.f90, which I  think are defunct, as phi is always on every processor.
+
+  subroutine fieldline_average_phi (phi_in, phi_average, ik_only)
+    use theta_grid, only: ntgrid, drhodpsi, gradpar, bmag, delthet
+    use kt_grids, only: ntheta0, naky
+
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi_in
+    complex, dimension (-ntgrid:,:,:), intent (out) :: phi_average
+    integer, intent (in), optional :: ik_only
+    real, dimension (-ntgrid:ntgrid) :: jac
+    !complex, dimension (-ntgrid:ntgrid) :: phi_avg_line
+    complex :: phi_avg_line
+    integer it, ik, ik_only_actual
+    ik_only_actual = -1
+    if (present(ik_only)) ik_only_actual = ik_only
+
+    jac = 1.0/abs(drhodpsi*gradpar*bmag)
+    if (ik_only_actual .gt. 0) then
+      do it = 1,ntheta0
+         phi_avg_line = sum(phi_in(-ntgrid:ntgrid,it,ik_only_actual)* &
+            jac(-ntgrid:ntgrid)*delthet(-ntgrid:ntgrid))/ &
+            sum(delthet(-ntgrid:ntgrid)*jac(-ntgrid:ntgrid))
+           phi_average(:, it, ik_only_actual) = phi_avg_line
+      end do
+    else
+      do it = 1,ntheta0
+        do ik = 1,naky
+          phi_average(:, it, ik) = sum(phi_in(-ntgrid:ntgrid,it,ik)*jac*delthet)/sum(delthet*jac)
+        end do
+      end do
+    end if
+
+  end subroutine fieldline_average_phi
+
 
   subroutine reset_init
 
