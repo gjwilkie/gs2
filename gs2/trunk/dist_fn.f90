@@ -3534,14 +3534,15 @@ subroutine check_dist_fn(report_unit)
 ! (nb adiabatic part of <delta f> does not contribute to upar, tpar or tperp)
 ! NB UPAR is normalised to vt_s = sqrt(T_s/m_s) vt_ref
 !    ie multiply by spec(is)%stm * vt_ref to get abs upar
-
     g0 = vpa*g0
     call integrate_moment (g0, upar)
 
     g0 = 2.*vpa*g0
     call integrate_moment (g0, tpar)
 ! tpar transiently stores ppar, nonadiabatic perturbed par pressure 
-!    (ppar will be normalised by n_s T_s n_ref T_ref ) 
+!      vpa normalised to: sqrt(2 T_s T_ref/m_s m_ref)
+!  including factor 2 in g0 product ensures 
+!     ppar normalised to: n_s T_s n_ref T_ref 
 !                         ppar = tpar + density, and so:
     tpar = tpar - density
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
