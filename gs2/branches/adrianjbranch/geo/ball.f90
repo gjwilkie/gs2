@@ -16,7 +16,7 @@ program ball
   namelist/stuff/ntheta,nperiod,rmaj,akappri,akappa,shift,equal_arc, &
        rhoc,rmin,rmax,itor,qinp,iflux,delrho,tri,bishop, &
        irho,isym,tripri,vmom_eq,writelots,R_geo, &
-       gen_eq,efit_eq,local_eq,eqfile,ismooth,ak0,k1,k2,&
+       gen_eq,efit_eq,local_eq,eqfile,&
        s_hat_input,p_prime_input,invLp_input,ppl_eq, &
        diffscheme,nbeta,beta_p1,beta_p2,beta_prime_input,alpha_input, &
        beta_prime_times, beta_prime_over, big, gs2d_eq, transp_eq, &
@@ -51,11 +51,6 @@ program ball
   irho = 2 ;      isym = 0
 
   delrho = 0.01
-
-  ismooth = 0
-  ak0 = 1.
-  k1 = -30
-  k2 = -15
 
   eqinit = 1       ! Mike K. codes do not have this variable.
 

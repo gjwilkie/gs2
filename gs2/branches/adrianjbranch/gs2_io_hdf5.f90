@@ -7,7 +7,6 @@ module gs2_io
   public :: init_gs2_io, nc_eigenfunc, nc_final_fields, nc_final_epar
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
-  public :: nc_loop_stress
   public :: nc_loop_movie, nc_write_fields
 
   logical, parameter :: serial_io = .true.
@@ -53,10 +52,11 @@ module gs2_io
   integer :: phi_id, apar_id, bpar_id, epar_id
   integer :: antot_id, antota_id, antotp_id
   integer :: ntot_id, density_id, upar_id, tpar_id, tperp_id
-  integer :: rstress_id, ustress_id, hrateavg_id, hrate_by_k_id
+  integer :: qparflux_id, pperpj1_id, qpperpj1_id
+  integer :: hrateavg_id, hrate_by_k_id
   integer :: ntot2_id, ntot2_by_mode_id
   integer :: phi00_id, ntot00_id, density00_id, upar00_id, tpar00_id, tperp00_id
-  integer :: qflux_neo_by_k_id, pflux_neo_by_k_id, input_id
+  integer :: input_id
   integer :: charge_id, mass_id, dens_id, temp_id, tprim_id, fprim_id
   integer :: uprim_id, uprim2_id, vnewk_id, spec_type_id
   integer :: bmag_id, gradpar_id, gbdrift_id, gbdrift0_id
@@ -70,7 +70,7 @@ module gs2_io
   
 contains
 
-  subroutine init_gs2_io (write_nl_flux, write_omega, write_stress, &
+  subroutine init_gs2_io (write_nl_flux, write_omega, &
       write_phiavg, write_hrate, make_movie, nmovie_tot, write_fields)
 !David has made some changes to this subroutine (may 2005) now should be able to do movies for 
 !linear box runs as well as nonlinear box runs.
@@ -85,7 +85,7 @@ contains
     use le_grids, only: nlambda, negrid
     use species, only: nspec
 
-    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, make_movie, write_fields
+    logical :: write_nl_flux, write_omega, write_phiavg, write_hrate, make_movie, write_fields
     logical :: accelerated
     character (300) :: filename, filename_movie
     integer :: ierr         ! 0 if initialization is successful
@@ -145,7 +145,7 @@ contains
 
     if (proc0) then
        call define_dims (nmovie_tot)
-       call define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, write_fields)
+       call define_vars (write_nl_flux, write_omega, write_phiavg, write_hrate, write_fields)
        call nc_grids
        call nc_species
        call nc_geo
@@ -204,7 +204,7 @@ contains
   subroutine nc_grids
 
     use theta_grid, only: ntgrid, theta, eps, ntheta
-    use kt_grids, only: naky, ntheta0, theta0, akx_out, aky_out, nx, ny
+    use kt_grids, only: naky, ntheta0, theta0, akx, aky, nx, ny
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
     use le_grids, only: negrid, nlambda
@@ -224,8 +224,8 @@ contains
     status = netcdf_put_var (ncid, nakx_id, ntheta0)
     status = netcdf_put_var (ncid, nspec_id, nspec)
 
-    status = netcdf_put_var (ncid, akx_id, akx_out)
-    status = netcdf_put_var (ncid, aky_id, aky_out)
+    status = netcdf_put_var (ncid, akx_id, akx)
+    status = netcdf_put_var (ncid, aky_id, aky)
     status = netcdf_put_var (ncid, theta_id, theta)
     status = netcdf_put_var (ncid, theta0_id, theta0)
 
@@ -243,10 +243,10 @@ contains
        allocate(x(yxf_lo%nx))
        allocate(y(yxf_lo%ny))
        do it = 1, yxf_lo%nx 
-          x(it) = 2.0*pi/akx_out(2)*(-0.5+ real(it-1)/real(yxf_lo%nx))
+          x(it) = 2.0*pi/akx(2)*(-0.5+ real(it-1)/real(yxf_lo%nx))
        end do
        do ik = 1, yxf_lo%ny
-          y(ik) = 2.0*pi/aky_out(2)*(-0.5+ real(ik-1)/real(yxf_lo%ny))
+          y(ik) = 2.0*pi/aky(2)*(-0.5+ real(ik-1)/real(yxf_lo%ny))
        end do
        
        status = netcdf_put_var (ncid_movie, nx_id, yxf_lo%nx)
@@ -302,19 +302,18 @@ contains
 
   end subroutine save_input
 
-  subroutine define_vars (write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, write_fields)
+  subroutine define_vars (write_nl_flux, write_omega, write_phiavg, write_hrate, write_fields)
 
     use mp, only: nproc
     use species, only: nspec
     use kt_grids, only: naky, ntheta0, theta0
     use run_parameters, only: fphi, fapar, fbpar
     use netcdf_mod
-    logical :: write_nl_flux, write_omega, write_stress, write_phiavg, write_hrate, write_fields
+    logical :: write_nl_flux, write_omega, write_phiavg, write_hrate, write_fields
 
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone
     logical :: d_fields_per = .false.
-    logical :: d_neo = .false.
     
     integer :: status
 
@@ -636,12 +635,6 @@ contains
        status = netcdf_def_var (ncid, 'zflux_tot', nf_double, 1, time_dim, zflux_tot_id)
     end if
 
-    if (d_neo) then
-       status = netcdf_def_var (ncid, 'qflux_neo_by_k', nf_double, 4, fluxk_dim, qflux_neo_by_k_id)
-       status = netcdf_def_var (ncid, 'pflux_neo_by_k', nf_double, 4, fluxk_dim, pflux_neo_by_k_id)
-       status = netcdf_def_var (ncid, 'sourcefac', nf_double, 2, om_dim, sourcefac_id)
-    end if
-
     status = netcdf_def_var (ncid, 'epar',  nf_double, 4, final_field_dim, epar_id)
 
 !    <phi>
@@ -654,6 +647,9 @@ contains
     status = netcdf_def_var (ncid, 'upar',    nf_double, 5, final_mom_dim, upar_id)
     status = netcdf_def_var (ncid, 'tpar',    nf_double, 5, final_mom_dim, tpar_id)
     status = netcdf_def_var (ncid, 'tperp',   nf_double, 5, final_mom_dim, tperp_id)
+    status = netcdf_def_var (ncid, 'qparflux',   nf_double, 5, final_mom_dim, qparflux_id)
+    status = netcdf_def_var (ncid, 'pperpj1',   nf_double, 5, final_mom_dim, pperpj1_id)
+    status = netcdf_def_var (ncid, 'qpperpj1',   nf_double, 5, final_mom_dim, qpperpj1_id)
 
     status = netcdf_def_var (ncid, 'phi00',     nf_double, 3, loop_phi_dim, phi00_id)
     status = netcdf_def_var (ncid, 'ntot00',    nf_double, 4, loop_mom_dim, ntot00_id)
@@ -662,11 +658,6 @@ contains
     status = netcdf_def_var (ncid, 'tpar00',    nf_double, 4, loop_mom_dim, tpar00_id)
     status = netcdf_def_var (ncid, 'tperp00',   nf_double, 4, loop_mom_dim, tperp00_id)
     
-    if (write_stress) then
-       status = netcdf_def_var (ncid, 'rstress',    nf_double, 4, loop_mom_dim, rstress_id)
-       status = netcdf_def_var (ncid, 'ustress',    nf_double, 4, loop_mom_dim, ustress_id)
-    end if
-
     if (write_hrate) then
        status = netcdf_def_var (ncid, 'hrate_tot',  nf_double, 3, heat_dim, hrateavg_id)
        status = netcdf_def_var (ncid, 'hrate_by_k', nf_double, 5, heatk_dim, hrate_by_k_id)
@@ -860,7 +851,7 @@ contains
 
   end subroutine nc_final_epar
 
-  subroutine nc_final_moments (ntot, density, upar, tpar, tperp)
+  subroutine nc_final_moments (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
 
     use netcdf_mod, only: netcdf_put_var
     use convert, only: c2r
@@ -888,40 +879,16 @@ contains
     call c2r (tperp, ri4)
     status = netcdf_put_var(ncid, tperp_id, ri4)
 
+    call c2r (qparflux, ri4)
+    status = netcdf_put_var(ncid, qparflux_id, ri4)
+
+    call c2r (pperpj1, ri4)
+    status = netcdf_put_var(ncid, pperpj1_id, ri4)
+
+    call c2r (qpperpj1, ri4)
+    status = netcdf_put_var(ncid, qpperpj1_id, ri4)
+
   end subroutine nc_final_moments
-
-  subroutine nc_loop_stress (nout, rstress, ustress)
-
-    use netcdf_mod, only: netcdf_put_vara
-    use convert, only: c2r
-
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-    use species, only: nspec
-
-    integer, intent (in) :: nout
-    complex, dimension (:,:), intent (in) :: rstress, ustress
-    real, dimension (2, ntheta0, nspec) :: ri2
-    integer, dimension (4) :: start, count
-    integer :: status
-
-    start(1) = 1
-    start(2) = 1
-    start(3) = 1
-    start(4) = nout
-    
-    count(1) = 2
-    count(2) = ntheta0
-    count(3) = nspec
-    count(4) = 1
-
-    call c2r (rstress, ri2)
-    status = netcdf_put_vara(ncid, rstress_id, start, count, ri2)
-
-    call c2r (ustress, ri2)
-    status = netcdf_put_vara(ncid, ustress_id, start, count, ri2)
-
-  end subroutine nc_loop_stress
 
   subroutine nc_loop_moments (nout, ntot2, ntot2_by_mode, &
        phi00, ntot00, density00, upar00, tpar00, tperp00)

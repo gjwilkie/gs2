@@ -1,23 +1,27 @@
+! Notes from BD, 7/2011:
+!
+! Need to extend the verr tools to include delta B_parallel integrals
+! There are new factors of 1/B here and there which I do not understand.  
+!
+
 module dist_fn
   use redistribute, only: redist_type
   implicit none
   public :: init_dist_fn, finish_dist_fn
   public :: read_parameters, wnml_dist_fn, wnml_dist_fn_species, check_dist_fn
-  public :: timeadv, get_stress, exb_shear
-  public :: getfieldeq, getan, getfieldexp, getmoms, gettotmoms, getemoms
-  public :: flux, neoclassical_flux, lambda_flux, lf_flux
-  public :: get_epar, e_flux, get_heat
-  public :: vortcheck, fieldcheck
-  public :: t0, omega0, gamma0, thetas, nperiod_guard, source0
+  public :: timeadv, exb_shear
+  public :: getfieldeq, getan, getmoms, getemoms
+  public :: flux, lf_flux
+  public :: get_epar, get_heat
+  public :: t0, omega0, gamma0, source0
   public :: reset_init, write_f, reset_physics, write_poly
   public :: M_class, N_class, i_class, par_spectrum
   public :: l_links, r_links, itright, itleft, boundary
   public :: init_kperp2
-  public :: get_dens_vel, get_jext !GGH
+  public :: get_jext !GGH
   public :: get_verr, get_gtran, write_fyx, collision_error
-  public :: neoflux, include_lowflow
+  public :: include_lowflow
   public :: get_init_field
-  public :: g_adjust ! MAB (needed for Trinity)
   public :: flux_vs_theta_vs_vpa
 
   public :: gamtot,gamtot1,gamtot2
@@ -34,28 +38,22 @@ module dist_fn
   real, dimension (:), allocatable :: bkdiff  ! (nspec)
   integer, dimension (:), allocatable :: bd_exp ! nspec
   real :: gridfac, apfac, driftknob, tpdriftknob, poisfac
-  real :: t0, omega0, gamma0, thetas, source0
-  real :: phi_ext, afilter, kfilter, a_ext
-  real :: aky_star, akx_star
-  real :: D_kill, noise, wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
+  real :: t0, omega0, gamma0, source0
+  real :: phi_ext, afilter, kfilter
+  real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
   real :: rhostar ! MAB
   logical :: include_lowflow ! MAB
   logical :: dfexist, skexist
 
-  integer :: adiabatic_option_switch!, heating_option_switch
+  integer :: adiabatic_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
        adiabatic_option_zero = 2, &
        adiabatic_option_fieldlineavg = 3, &
-       adiabatic_option_yavg = 4, &
-       adiabatic_option_noJ = 5
-!  integer, parameter ::  heating_option_cowley = 1
+       adiabatic_option_yavg = 4
+
   integer :: source_option_switch
   integer, parameter :: source_option_full = 1, &
-       source_option_zero = 2, source_option_sine = 3, &
-       source_option_test1 = 4, source_option_phiext_full = 5, &
-       source_option_test2_full = 6, source_option_cosine = 7, &
-       source_option_convect_full = 8, source_option_hm_force = 9, &
-       source_option_neo = 10
+       source_option_phiext_full = 5
   
   integer :: boundary_option_switch
   integer, parameter :: boundary_option_zero = 1, &
@@ -64,12 +62,8 @@ module dist_fn
        boundary_option_linked = 4
   logical, public :: def_parity, even
   logical :: mult_imp, test
-  logical :: save_n
   logical :: accelerated_x = .false.
-  logical :: accelerated_v = .false., kill_grid, h_kill
-  logical :: neo = .false., neoflux
-  integer :: nfac = 1
-  integer :: nperiod_guard
+  logical :: accelerated_v = .false.
   logical :: increase = .true., decrease = .false.
   
 !! k_parallel filter items
@@ -86,12 +80,6 @@ module dist_fn
   ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
 
 !>MAB
-  real, dimension (:,:), allocatable :: wdrift_neo
-  ! (-ntgrid:ntgrid, -g-layout-)
-
-  real, dimension (:,:,:,:,:), allocatable :: wdriftttp_neo
-  ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
-
   real, dimension (:,:,:), allocatable :: wcoriolis
   ! (-ntgrid:ntgrid, 2, -g-layout-)
 
@@ -126,18 +114,11 @@ module dist_fn
   ! exb shear
   integer, dimension(:), allocatable :: jump, ikx_indexed
 
-  ! kill
-  real, dimension (:,:), allocatable :: aintnorm
-  
   ! set_source
   real, dimension(:,:), allocatable :: ufac
 
   ! getfieldeq1
   real, allocatable, dimension(:,:) :: fl_avg, awgt
-  ! getfieldeq2
-  real, allocatable, dimension(:,:) :: fl_avg2, awgt2
-  real, allocatable, dimension(:) :: bfac
-  real, allocatable, dimension(:,:,:) :: f1, f2, f3, f4, kp2
 
   ! get_verr
   real, dimension (:,:), allocatable :: kmax
@@ -295,19 +276,6 @@ subroutine check_dist_fn(report_unit)
              write (report_unit, fmt="('Perhaps you want field-line-average-term for adiabatic_option.')") 
              write (report_unit, fmt="('################# WARNING #######################')")
              write (report_unit, *) 
-
-          case (adiabatic_option_noJ)
-             write (report_unit, *) 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('The adiabatic electron response is of the form:')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('             ne = Phi - <Phi>')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('The angle brackets denote a field-line average, but without the proper Jacobian factors.')") 
-             write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-             write (report_unit, fmt="('Perhaps you want field-line-average-term for adiabatic_option.')") 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
           end select
        end if
 
@@ -355,15 +323,6 @@ subroutine check_dist_fn(report_unit)
           end if
        end if
 
-       if (D_kill > 0.) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('D_kill > 0 probably does not work correctly.')")
-          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-
     write (report_unit, *) 
     write (report_unit, fmt="('------------------------------------------------------------')")
     write (report_unit, *) 
@@ -392,87 +351,7 @@ subroutine check_dist_fn(report_unit)
              & calculate the Rosenbluth-Hinton response.')")
        write (report_unit, *) 
 
-    case(source_option_test2_full)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The standard GK equation will be solved,')")
-       write (report_unit, fmt="('with additional developmental sources, determined by ')")
-       write (report_unit, fmt="('source_option=test2_full in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case(source_option_convect_full)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The standard GK equation will be solved,')")
-       write (report_unit, fmt="('with additional developmental sources, determined by ')")
-       write (report_unit, fmt="('source_option=convect_full in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_zero)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=zero in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_sine)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=sine in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_test1)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=test1 in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-    case (source_option_cosine)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The GK distribution function will be advanced non-self-consistently.')")
-       write (report_unit, fmt="('source_option=cosine in the source_knobs namelist.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
     end select
-
-    if (a_ext /= 0.0) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The variable a_ext in the source_knobs namelist does nothing.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
-    if (akx_star /= 0.0) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The variable akx_star in the source_knobs namelist does nothing.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
-
-    if (aky_star /= 0.0) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The variable aky_star in the source_knobs namelist does nothing.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
 
 ! 
 ! implicitness parameters
@@ -533,9 +412,6 @@ subroutine check_dist_fn(report_unit)
           case (adiabatic_option_yavg)
              write (unit, fmt="(' adiabatic_option = ',a)") '"iphi00=3"'
              
-          case (adiabatic_option_noJ)
-             write (unit, fmt="(' adiabatic_option = ',a)") '"dimits"'
-             
           end select
        end if
 
@@ -545,20 +421,12 @@ subroutine check_dist_fn(report_unit)
        if (poisfac /= 0.) write (unit, fmt="(' poisfac = ',e16.10)") poisfac
        if (kfilter /= 0.) write (unit, fmt="(' kfilter = ',e16.10)") kfilter
        if (afilter /= 0.) write (unit, fmt="(' afilter = ',e16.10)") afilter
-       if (nperiod_guard /= 0) &
-            write (unit, fmt="(' nperiod_guard = ',i2)") nperiod_guard
        if (mult_imp) write (unit, fmt="(' mult_imp = ',L1)") mult_imp
        if (test) write (unit, fmt="(' test = ',L1)") test
        if (def_parity) then
           write (unit, fmt="(' def_parity = ',L1)") def_parity
           if (even) write (unit, fmt="(' even = ',L1)") even
        end if
-       if (D_kill > 0.) then
-          write (unit, fmt="(' D_kill = ',e16.10)") D_kill
-          write (unit, fmt="(' save_n = ',L1)") save_n
-
-       end if
-       if (noise > 0.) write (unit, fmt="(' noise = ',e16.10)") noise
        write (unit, fmt="(' /')")
     endif
     if (skexist) then
@@ -570,52 +438,13 @@ subroutine check_dist_fn(report_unit)
           write (unit, fmt="(' source_option = ',a)") '"full"'
 
        case(source_option_phiext_full)
-          write (unit, fmt="(' course_option = ',a)") '"phiext_full"'
+          write (unit, fmt="(' source_option = ',a)") '"phiext_full"'
           write (unit, fmt="(' source0 = ',e16.10)") source0
           write (unit, fmt="(' omega0 = ',e16.10)") omega0
           write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
           write (unit, fmt="(' t0 = ',e16.10)") t0
           write (unit, fmt="(' phi_ext = ',e16.10)") phi_ext
        
-       case(source_option_test2_full)
-          write (unit, fmt="(' course_option = ',a)") '"test2_full"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-          write (unit, fmt="(' thetas = ',e16.10)") thetas
-
-       case(source_option_convect_full)
-          write (unit, fmt="(' course_option = ',a)") '"convect_full"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-
-       case (source_option_zero)
-          write (unit, fmt="(' course_option = ',a)") '"zero"'
-
-       case (source_option_cosine)
-          write (unit, fmt="(' course_option = ',a)") '"cosine"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-
-       case (source_option_sine)
-          write (unit, fmt="(' course_option = ',a)") '"sine"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-
-       case (source_option_test1)
-          write (unit, fmt="(' course_option = ',a)") '"test1"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-
        end select
        write (unit, fmt="(' /')")
     endif
@@ -653,21 +482,25 @@ subroutine check_dist_fn(report_unit)
     implicit none
     logical:: debug=.false.
 
-
 !    write (*,*) 'entering init_dist_fn'
     if (initialized) return
     initialized = .true.
 
     if (debug) write(6,*) "init_dist_fn: init_gs2_layouts"
     call init_gs2_layouts
+
     if (debug) write(6,*) "init_dist_fn: init_species"
     call init_species
+
     if (debug) write(6,*) "init_dist_fn: init_theta_grid"
     call init_theta_grid
+
     if (debug) write(6,*) "init_dist_fn: init_kt_grids"
     call init_kt_grids
+
     if (debug) write(6,*) "init_dist_fn: init_le_grids"
     call init_le_grids (accelerated_x, accelerated_v)
+
     if (debug) write(6,*) "init_dist_fn: read_parameters"
     call read_parameters
 
@@ -685,40 +518,56 @@ subroutine check_dist_fn(report_unit)
 
     if (debug) write(6,*) "init_dist_fn: run_parameters"
     call init_run_parameters
+
     if (debug) write(6,*) "init_dist_fn: kperp2"
     call init_kperp2
+
     if (debug) write(6,*) "init_dist_fn: dist_fn_layouts"
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+
     if (debug) write(6,*) "init_dist_fn: nonlinear_terms"
     call init_nonlinear_terms 
+
     if (debug) write(6,*) "init_dist_fn: allocate_arrays"
     call allocate_arrays
+
     if (debug) write(6,*) "init_dist_fn: init_vpar"
     call init_vpar
+
     if (debug) write(6,*) "init_dist_fn: init_wdrift"
     call init_wdrift
+
     if (debug) write(6,*) "init_dist_fn: init_wcoriolis"
     call init_wcoriolis
+
     if (debug) write(6,*) "init_dist_fn: init_wstar"
     call init_wstar
+
     if (debug) write(6,*) "init_dist_fn: init_bessel"
     call init_bessel
+
     if (debug) write(6,*) "init_dist_fn: init_par_filter"
     call init_par_filter
+
 !    call init_vnmult (vnmult)
     if (debug) write(6,*) "init_dist_fn: init_collisions"
     call init_collisions ! needs to be after init_run_parameters
+
+    if (debug) write(6,*) "init_dist_fn: init_lowflow"
+    call init_lowflow ! needs to be before init_invert_rhs
+
     if (debug) write(6,*) "init_dist_fn: init_invert_rhs"
     call init_invert_rhs
+
     if (debug) write(6,*) "init_dist_fn: init_fieldeq"
     call init_fieldeq
+
     if (debug) write(6,*) "init_dist_fn: init_hyper"
     call init_hyper
-    if (debug) write(6,*) "init_dist_fn: init_lowflow"
-    call init_lowflow
+
     if (debug) write(6,*) "init_dist_fn: init_mom_coeff"
     call init_mom_coeff
-!    write (*,*) 'exiting init_dist_fn'
+
   end subroutine init_dist_fn
 
   subroutine read_parameters
@@ -729,18 +578,10 @@ subroutine check_dist_fn(report_unit)
     use mp, only: proc0, broadcast
     use theta_grid, only: itor_over_B
     implicit none
-    type (text_option), dimension (11), parameter :: sourceopts = &
+    type (text_option), dimension (3), parameter :: sourceopts = &
          (/ text_option('default', source_option_full), &
             text_option('full', source_option_full), &
-            text_option('zero', source_option_zero), &
-            text_option('sine', source_option_sine), &
-            text_option('cosine', source_option_cosine), &
-            text_option('test1', source_option_test1), &
-            text_option('hm', source_option_hm_force), &
-            text_option('phiext_full', source_option_phiext_full), &
-            text_option('test2_full', source_option_test2_full), &
-            text_option('convect_full', source_option_convect_full), &
-            text_option('neo', source_option_neo) /)
+            text_option('phiext_full', source_option_phiext_full) /)
     character(20) :: source_option
 
     type (text_option), dimension (8), parameter :: boundaryopts = &
@@ -754,13 +595,7 @@ subroutine check_dist_fn(report_unit)
             text_option('alternate-zero', boundary_option_alternate_zero) /)
     character(20) :: boundary_option
 
-!    type (text_option), dimension (3), parameter :: heatingopts = &
-!         (/ text_option('default', heating_option_qdh), &
-!            text_option('qdh', heating_option_qdh), &
-!            text_option('Cowley',  heating_option_cowley) /)
-!    character(20) :: heating_option
-
-    type (text_option), dimension (8), parameter :: adiabaticopts = &
+    type (text_option), dimension (7), parameter :: adiabaticopts = &
          (/ text_option('default', adiabatic_option_default), &
             text_option('no-field-line-average-term', adiabatic_option_default), &
             text_option('field-line-average-term', adiabatic_option_fieldlineavg), &
@@ -768,27 +603,22 @@ subroutine check_dist_fn(report_unit)
             text_option('iphi00=0', adiabatic_option_default), &
             text_option('iphi00=1', adiabatic_option_default), &
             text_option('iphi00=2', adiabatic_option_fieldlineavg), &
-            text_option('iphi00=3', adiabatic_option_yavg), &
-            text_option('dimits', adiabatic_option_noJ) /)
+            text_option('iphi00=3', adiabatic_option_yavg)/)
     character(30) :: adiabatic_option
             
     namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, &
-         tpdriftknob, nperiod_guard, poisfac, adiabatic_option, &
+         tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         save_n, D_kill, noise, kill_grid, h_kill, include_lowflow, &
-         g_exb, g_exbfac, neoflux, omprimfac, btor_slab, mach, rhostar
+         include_lowflow, g_exb, g_exbfac, omprimfac, btor_slab, mach, rhostar
     
-    namelist /source_knobs/ t0, omega0, gamma0, source0, &
-           thetas, phi_ext, source_option, a_ext, aky_star, akx_star
+    namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
     real :: bd
-!    logical :: done = .false.
 
     if (readinit) return
     readinit = .true.
 
     if (proc0) then
-       save_n = .true.
        boundary_option = 'default'
        adiabatic_option = 'default'
        poisfac = 0.0
@@ -800,11 +630,7 @@ subroutine check_dist_fn(report_unit)
        source0 = 1.0
        omega0 = 0.0
        gamma0 = 0.0
-       thetas = 1.0
-       aky_star = 0.0
-       akx_star = 0.0
        phi_ext = 0.0
-       a_ext = 0.0
        afilter = 0.0
        kfilter = 0.0
        g_exb = 0.0
@@ -812,18 +638,13 @@ subroutine check_dist_fn(report_unit)
        mach = 0.0
        omprimfac = 1.0
        btor_slab = 0.0
-       h_kill = .true.
-       D_kill = -10.0
-       noise = -1.
        wfb = 1.
        rhostar = 3.e-3
        mult_imp = .false.
        test = .false.
        def_parity = .false.
        even = .true.
-       neoflux = .false.
        source_option = 'default'
-       kill_grid = .false.
        include_lowflow = .false. ! MAB
        in_file = input_unit_exist("dist_fn_knobs", dfexist)
 !       if (dfexist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
@@ -847,21 +668,13 @@ subroutine check_dist_fn(report_unit)
        call get_option_value &
             (adiabatic_option, adiabaticopts, adiabatic_option_switch, &
             ierr, "adiabatic_option in dist_fn_knobs")
-!       call get_option_value &
-!            (heating_option, heatingopts, heating_option_switch, &
-!            ierr, "heating_option in dist_fn_knobs")
 
-       nperiod_guard = 0
     end if
     if (.not.allocated(fexp)) allocate (fexp(nspec), bkdiff(nspec), bd_exp(nspec))
     if (proc0) call read_species_knobs
-    neoflux = neoflux .or. source_option_switch == source_option_neo
 
-    call broadcast (kill_grid)
-    call broadcast (save_n)
     call broadcast (boundary_option_switch)
     call broadcast (adiabatic_option_switch)
-!    call broadcast (heating_option_switch)
     call broadcast (gridfac)
     call broadcast (poisfac)
     call broadcast (apfac)
@@ -871,36 +684,25 @@ subroutine check_dist_fn(report_unit)
     call broadcast (source0)
     call broadcast (omega0)
     call broadcast (gamma0)
-    call broadcast (thetas)
-    call broadcast (aky_star)
-    call broadcast (akx_star)
     call broadcast (phi_ext)
-    call broadcast (a_ext)
-    call broadcast (D_kill)
-    call broadcast (h_kill)
     call broadcast (g_exb)
     call broadcast (g_exbfac)
     call broadcast (mach)
     call broadcast (omprimfac)
     call broadcast (btor_slab)
-    call broadcast (noise)
     call broadcast (afilter)
     call broadcast (kfilter)
     call broadcast (source_option_switch)
     call broadcast (fexp)
     call broadcast (bkdiff)
     call broadcast (bd_exp)
-    call broadcast (nperiod_guard)
     call broadcast (mult_imp)
     call broadcast (test)
     call broadcast (def_parity)
     call broadcast (even)
     call broadcast (wfb)
-    call broadcast (neoflux)
     call broadcast (include_lowflow)    
     call broadcast (rhostar)
-
-    if (source_option_switch == source_option_neo) nfac = 0
 
     if (mult_imp) then
        ! nothing -- fine for linear runs, but not implemented nonlinearly
@@ -990,7 +792,7 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use le_grids, only: negrid, ng2, nlambda, al, jend, forbid
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx
     use dist_fn_arrays, only: ittp
     implicit none
     integer :: ig, ik, it, il, ie, is
@@ -1032,11 +834,6 @@ subroutine check_dist_fn(report_unit)
        allocate (wdrift(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (wdriftttp(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
        allocate (wcurv(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-       if (neoflux) then
-          allocate (wdrift_neo(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-          allocate (wdriftttp_neo(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
-          wdrift_neo = 0.  ; wdriftttp_neo = 0.
-       end if
     end if
     wdrift = 0.  ; wdriftttp = 0.
     wcurv = 0.
@@ -1048,8 +845,7 @@ subroutine check_dist_fn(report_unit)
           if ( jend(ig) > 0 .and. jend(ig) <= nlambda .and. il >= ng2+1 .and. il <= jend(ig)) then
              wdrift(ig,iglo) &
                   = wdrift_func(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), &
-                  it_idx(g_lo,iglo), ik_idx(g_lo,iglo), &
-                  is_idx(g_lo,iglo))*tpdriftknob
+                  it_idx(g_lo,iglo), ik_idx(g_lo,iglo))*tpdriftknob
              wcurv(ig,iglo) &
                   = wcurv_func(ig, it_idx(g_lo,iglo), ik_idx(g_lo,iglo))*tpdriftknob
 !CMR:  multiply trapped particle drift by tpdriftknob 
@@ -1057,23 +853,15 @@ subroutine check_dist_fn(report_unit)
           else
              wdrift(ig,iglo) &
                   = wdrift_func(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), &
-                  it_idx(g_lo,iglo), ik_idx(g_lo,iglo), &
-                  is_idx(g_lo,iglo))*driftknob
+                  it_idx(g_lo,iglo), ik_idx(g_lo,iglo))*driftknob
              wcurv(ig,iglo) &
                   = wcurv_func(ig, it_idx(g_lo,iglo), ik_idx(g_lo,iglo))*driftknob
 !CMR:  multiply passing particle drift by driftknob
           endif
 !CMRend
-!> MAB
-          if (neoflux) then
-             wdrift_neo(ig,iglo) &
-                  = wdrift_func_neo(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
-          end if
-!< MAB
        end do
     end do
     wdriftttp = 0.0
-    if (neoflux) wdriftttp_neo = 0.0
     do is = 1, nspec
        do ie = 1, negrid
           do ik = 1, naky
@@ -1084,16 +872,10 @@ subroutine check_dist_fn(report_unit)
                    do il = ittp(ig), nlambda
                       if (forbid(ig, il)) exit
 !GWH+JAB: should this be calculated only at ittp? or for each totally trapped pitch angle? (Orig logic: there was only one totally trapped pitch angle; now multiple ttp are allowed.
-                   wdriftttp(ig,it,ik,ie,is) &
-                        = wdrift_func(ig,ittp(ig),ie,it,ik,is)*tpdriftknob
+                      wdriftttp(ig,it,ik,ie,is) &
+                           = wdrift_func(ig,ittp(ig),ie,it,ik)*tpdriftknob
 !CMR:  totally trapped particle drifts also scaled by tpdriftknob 
-!> MAB
-                   if (neoflux) then
-                      wdriftttp_neo(ig,it,ik,ie,is) &
-                           = wdrift_func_neo(ig,ittp(ig),ie,is)*driftknob
-                   end if
-!< MAB
-                end do
+                   end do
                 end do
              end do
           end do
@@ -1103,12 +885,8 @@ subroutine check_dist_fn(report_unit)
 ! This should be weighted by bakdif to be completely consistent
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do ig = -ntgrid, ntgrid-1
-!CMR, 13/3/2007: remove driftknob factor as this is now accounted for above
           wdrift(ig,iglo) = 0.5*(wdrift(ig,iglo) + wdrift(ig+1,iglo))
-          wcurv(ig,iglo) = 0.5*(wcurv(ig,iglo) + wcurv(ig+1,iglo))
-!CMRend
-! MAB
-          if (neoflux) wdrift_neo(ig,iglo) = 0.5*(wdrift_neo(ig,iglo) + wdrift_neo(ig+1,iglo))*driftknob
+          wcurv(ig,iglo) =  0.5*(wcurv(ig,iglo) + wcurv(ig+1,iglo))
        end do
     end do
 
@@ -1118,38 +896,36 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine init_wdrift
 
-  function wdrift_func (ig, il, ie, it, ik, is)
+  function wdrift_func (ig, il, ie, it, ik)
     use theta_grid, only: bmag, gbdrift, gbdrift0, cvdrift, cvdrift0
     use theta_grid, only: shat
     use kt_grids, only: aky, theta0, akx
-    use le_grids, only: e, al
+    use le_grids, only: energy, al
     use run_parameters, only: wunits
     use gs2_time, only: code_dt
     implicit none
     real :: wdrift_func
-    integer, intent (in) :: ig, ik, it, il, ie, is
+    integer, intent (in) :: ig, ik, it, il, ie
 
     ! note that wunits=aky/2 (for wstar_units=F)
     if (aky(ik) == 0.0) then
        wdrift_func = akx(it)/shat &
-                    *(cvdrift0(ig)*e(ie,is)*(1.0 - al(il)*bmag(ig)) &
-                      + gbdrift0(ig)*0.5*e(ie,is)*al(il)*bmag(ig)) &
+                    *(cvdrift0(ig)*energy(ie)*(1.0 - al(il)*bmag(ig)) &
+                      + gbdrift0(ig)*0.5*energy(ie)*al(il)*bmag(ig)) &
                      *code_dt/2.0
     else
        wdrift_func = ((cvdrift(ig) + theta0(it,ik)*cvdrift0(ig)) &
-                        *e(ie,is)*(1.0 - al(il)*bmag(ig)) &
+                        *energy(ie)*(1.0 - al(il)*bmag(ig)) &
                       + (gbdrift(ig) + theta0(it,ik)*gbdrift0(ig)) &
-                        *0.5*e(ie,is)*al(il)*bmag(ig)) &
+                        *0.5*energy(ie)*al(il)*bmag(ig)) &
                      *code_dt*wunits(ik)
     end if
   end function wdrift_func
 
 !> MAB
   function wcurv_func (ig, it, ik)
-    use theta_grid, only: bmag, cvdrift, cvdrift0
-    use theta_grid, only: shat
+    use theta_grid, only: cvdrift, cvdrift0, shat
     use kt_grids, only: aky, theta0, akx
-    use le_grids, only: e, al
     use run_parameters, only: wunits
     use gs2_time, only: code_dt
     implicit none
@@ -1158,36 +934,18 @@ subroutine check_dist_fn(report_unit)
 
     if (aky(ik) == 0.0) then
        wcurv_func = akx(it)/shat &
-            *cvdrift0(ig) &
-            *code_dt/2.0
+            * cvdrift0(ig) * code_dt/2.0
     else
        wcurv_func = (cvdrift(ig) + theta0(it,ik)*cvdrift0(ig)) &
             *code_dt*wunits(ik)
     end if
   end function wcurv_func
 
-  function wdrift_func_neo (ig, il, ie, is)
-    use theta_grid, only: bmag, gbdrift, gbdrift0, cvdrift, cvdrift0
-    use theta_grid, only: shat
-    use kt_grids, only: aky, theta0, akx
-    use le_grids, only: e, al
-    use run_parameters, only: wunits
-    use gs2_time, only: code_dt
-    implicit none
-    real :: wdrift_func_neo
-    integer, intent (in) :: ig, il, ie, is
-
-    wdrift_func_neo = 1./shat &
-                    *(cvdrift0(ig)*e(ie,is)*(1.0 - al(il)*bmag(ig)) &
-                      + gbdrift0(ig)*0.5*e(ie,is)*al(il)*bmag(ig)) &
-                     *code_dt/2.0
-  end function wdrift_func_neo
-
   subroutine init_wcoriolis
     use theta_grid, only: ntgrid
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx
     implicit none
-    integer :: ig, ik, it, il, ie, is
+    integer :: ig, ik, it, il, ie
     integer :: iglo
 
     if (.not. allocated(wcoriolis)) then
@@ -1200,10 +958,9 @@ subroutine check_dist_fn(report_unit)
        ie=ie_idx(g_lo,iglo)
        it=it_idx(g_lo,iglo)
        ik=ik_idx(g_lo,iglo)
-       is=is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
-          wcoriolis(ig,1,iglo) = wcoriolis_func(ig, il, ie, it, ik, is)
-!          write (*,*) 'wcoriolis', ig, il, ie, it, ik, is, wcoriolis_func(ig,il,ie,it,ik,is)
+          wcoriolis(ig,1,iglo) = wcoriolis_func(ig, il, ie, it, ik)
+!          write (*,*) 'wcoriolis', ig, il, ie, it, ik, wcoriolis_func(ig,il,ie,it,ik)
        end do
     end do
 
@@ -1222,12 +979,11 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine init_wcoriolis
 
-  function wcoriolis_func (ig, il, ie, it, ik, is)
+  function wcoriolis_func (ig, il, ie, it, ik)
 
-    use theta_grid, only: bmag, cdrift, cdrift0
-    use theta_grid, only: shat
+    use theta_grid, only: bmag, cdrift, cdrift0, shat
     use kt_grids, only: aky, theta0, akx
-    use le_grids, only: e, al
+    use le_grids, only: energy, al
     use run_parameters, only: wunits
     use gs2_time, only: code_dt
     use species, only: spec
@@ -1235,15 +991,15 @@ subroutine check_dist_fn(report_unit)
     implicit none
 
     real :: wcoriolis_func
-    integer, intent (in) :: ig, ik, it, il, ie, is
+    integer, intent (in) :: ig, ik, it, il, ie
 
-!    write (*,*) 'cdrift', ig, cdrift(ig), theta0(it,ik), wunits(ik), sqrt(e(ie,is)*(1.0-al(il)*bmag(ig)))
+!    write (*,*) 'cdrift', ig, cdrift(ig), theta0(it,ik), wunits(ik), sqrt(energy(ie)*(1.0-al(il)*bmag(ig)))
 
     if (aky(ik) == 0.0) then
-       wcoriolis_func = mach*sqrt(max(e(ie,is)*(1.0-al(il)*bmag(ig)),0.0)) &
+       wcoriolis_func = mach*sqrt(max(energy(ie)*(1.0-al(il)*bmag(ig)),0.0)) &
             * cdrift0(ig) * code_dt * akx(it)/(2.*shat)
     else
-       wcoriolis_func = mach*sqrt(max(e(ie,is)*(1.0-al(il)*bmag(ig)),0.0)) &
+       wcoriolis_func = mach*sqrt(max(energy(ie)*(1.0-al(il)*bmag(ig)),0.0)) &
             * (cdrift(ig) + theta0(it,ik)*cdrift0(ig))*code_dt*wunits(ik)
     end if
 
@@ -1255,7 +1011,7 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: vpa, vpar, vpac, vperp2
     use species, only: spec
     use theta_grid, only: ntgrid, delthet, bmag, gradpar
-    use le_grids, only: e, al
+    use le_grids, only: energy, al
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx
@@ -1263,7 +1019,6 @@ subroutine check_dist_fn(report_unit)
     integer :: iglo, ik, is
     real :: al1, e1
     
-
     if (.not.allocated(vpa)) then
        allocate (vpa    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (vpac   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -1274,7 +1029,7 @@ subroutine check_dist_fn(report_unit)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        al1 = al(il_idx(g_lo,iglo))
-       e1 = e(ie_idx(g_lo,iglo),is_idx(g_lo,iglo))
+       e1 = energy(ie_idx(g_lo,iglo))
 
        vpa(:,1,iglo) = sqrt(e1*max(0.0, 1.0 - al1*bmag))
        vpa(:,2,iglo) = - vpa(:,1,iglo)
@@ -1286,6 +1041,19 @@ subroutine check_dist_fn(report_unit)
        end where
 
 ! Where vpac /= 1, it could be weighted by bakdif for better consistency??
+!CMR, 4/8/2011:
+!CMR : vpa is parallel velocity at grid points (normalised to v_ts)
+!CMR : vpac is grid centered parallel velocity
+!CMR : vpar = q_s/sqrt{T_s m_s}*DELT/DTHETA * vpac |\gradpar(theta)| 
+!                                     where gradpar(theta) is centered
+!  ie  vpar = q_s/sqrt{T_s m_s} (v_||^GS2). \gradpar(theta)/DTHETA . DELT
+! 
+!   comments on vpac, vpar
+!     (i) surely vpac=0 at or beyond bounce points, so WHY was it set to +-1?
+!                                seems unphysical!
+!    (ii) should some be weighted by bakdif?
+!CMR 
+
        where (1.0 - al1*0.5*(bmag(-ntgrid:ntgrid-1)+bmag(-ntgrid+1:ntgrid)) &
               < 0.0)
           vpac(-ntgrid:ntgrid-1,1,iglo) = 1.0
@@ -1318,7 +1086,7 @@ subroutine check_dist_fn(report_unit)
   subroutine init_wstar
     use species, only: nspec, spec
     use kt_grids, only: naky
-    use le_grids, only: negrid, e
+    use le_grids, only: negrid, energy
     use run_parameters, only: wunits
     use gs2_time, only: code_dt
 
@@ -1331,7 +1099,7 @@ subroutine check_dist_fn(report_unit)
        do ie = 1, negrid
           do ik = 1, naky
              wstar(ik,ie,is) = code_dt*wunits(ik) &
-                  *(spec(is)%fprim+spec(is)%tprim*(e(ie,is)-1.5))
+                  *(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
           end do
        end do
     end do
@@ -1342,7 +1110,7 @@ subroutine check_dist_fn(report_unit)
     use species, only: spec
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
-    use le_grids, only: e, al
+    use le_grids, only: energy, al
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use spfunc, only: j0, j1
 
@@ -1351,10 +1119,6 @@ subroutine check_dist_fn(report_unit)
     integer :: ig, ik, it, il, ie, is
     integer :: iglo
     real :: arg
-!    logical :: done = .false.
-
-!    if (done) return
-!    done = .true.
 
     if (bessinit) return
     bessinit = .true.
@@ -1373,7 +1137,7 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
-          arg = spec(is)%smz*sqrt(e(ie,is)*al(il)/bmag(ig)*kperp2(ig,it,ik))
+          arg = spec(is)%smz*sqrt(energy(ie)*al(il)/bmag(ig)*kperp2(ig,it,ik))
           aj0(ig,iglo) = j0(arg)
 ! CMR 17/1/06: BEWARE, j1 returns and aj1 stores J_1(x)/x (NOT J_1(x)), 
           aj1(ig,iglo) = j1(arg)
@@ -1390,10 +1154,6 @@ subroutine check_dist_fn(report_unit)
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
     implicit none
     integer :: ik, it
-!    logical :: done = .false.
-
-!    if (done) return
-!    done = .true.
 
     if (kp2init) return
     kp2init = .true.
@@ -1473,9 +1233,6 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid-1
-!          wc = wcoriolis(ig,iglo)*nfac
-!          wd = wdrift(ig,iglo)*nfac
-!          wdttp = wdriftttp(ig,it,ik,ie,is)*nfac
              wc = wcoriolis(ig,isgn,iglo)/spec(is)%stm
              wd = wdrift(ig,iglo)
              wdttp = wdriftttp(ig,it,ik,ie,is)
@@ -1505,8 +1262,9 @@ subroutine check_dist_fn(report_unit)
                    ainv(ig,isgn,iglo) = 0.0
                 end if
              
-                ! ???? mysterious mucking around at lower bounce point
-                ! part of multiple trapped particle algorithm
+! CMR: set ainv=1 at lower bounce points for trapped particles
+!      part of multiple trapped particle algorithm
+!      NB not applicable to ttp or wfb!
                 if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
                    ainv(ig,isgn,iglo) = 1.0 + ainv(ig,isgn,iglo)
                 end if
@@ -1553,7 +1311,7 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: ng2, nlambda
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use gs2_layouts, only: idx, proc_id
-    use mp, only: iproc, nproc, max_allreduce
+    use mp, only: iproc, nproc, max_allreduce, proc0
     use constants
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
@@ -1568,23 +1326,22 @@ subroutine check_dist_fn(report_unit)
     integer :: ng
     integer, dimension(naky*ntheta0) :: n_k
 
-!    logical :: done = .false.
-
-!    if (done) return
-!    done = .true.
     if (connectinit) return
     connectinit = .true.
 
     ng = ntheta/2 + (nperiod-1)*ntheta
 
-    ! jshift0 corresponds to J (not delta j) from Beer thesis (unsure about +0.1) -- MAB
+    ! jshift0 corresponds to J (not delta j) from Beer thesis (unsure about +0.01) -- MAB
     if (naky > 1 .and. ntheta0 > 1) then
-       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,2)-theta0(1,2)) + 0.1)
+       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,2)-theta0(1,2)) + 0.01)
+!       if (proc0) write (*,*) 'init_connected_bc: ',theta0(2,2), theta0(1,2), jshift0
     else if (naky == 1 .and. ntheta0 > 1 .and. aky(1) /= 0.0) then
-       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,1)-theta0(1,1)) + 0.1)
+       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,1)-theta0(1,1)) + 0.01)
     else
        jshift0 = 1
     end if
+    
+!    if (proc0) write (*,*) 'init_connected_bc: jshift0 = ',jshift0
 
     allocate (itleft(naky,ntheta0), itright(naky,ntheta0))
     itleft(1,:) = -1
@@ -1605,8 +1362,6 @@ subroutine check_dist_fn(report_unit)
                 itl = it0 + jshift0
                 itr = it0 - jshift0
              else
-!                itl = ntheta0
-!                itr = ntheta0
                 itl = it0
                 itr = it0
              end if
@@ -1616,6 +1371,8 @@ subroutine check_dist_fn(report_unit)
              itl = it0 + (ik-1)*jshift0
              itr = it0 - (ik-1)*jshift0
           end if
+
+!          if (ik>1 .and. proc0) write(*,*) 'init_connected_bc: itl, itr = ',itl, itr
 
           ! remap to usual GS2 indices -- MAB
           if (itl >= 0 .and. itl < (ntheta0+1)/2) then
@@ -2349,6 +2106,7 @@ subroutine check_dist_fn(report_unit)
           do ik = 1, naky
              n_k(k) = 1 + l_links(ik, it) + r_links(ik, it)
              k = k + 1
+!             if (proc0) write (*,*) 'init_connected_bc: ',ik, it, l_links(ik, it), r_links(ik, it)
           end do
        end do
 
@@ -2476,7 +2234,6 @@ subroutine check_dist_fn(report_unit)
     if (.not. allocated(g)) then
        allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-!       allocate (gold (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        if (nonlin) then
           allocate (gnl_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -2508,6 +2265,16 @@ subroutine check_dist_fn(report_unit)
 !    alloc = .false.
   end subroutine allocate_arrays
 
+  !> This function calculates the distribution function at the next timestep. 
+  !! It calculates both the inhomogenous part, gnew, due to the sources
+  !! (principly the drive terms and the nonlinear term)
+  !! and the homogenous part, g1. The actual evolution of the dist func
+  !! is done in the subroutine invert_rhs. 
+  !!
+  !! After solving for the new dist funcs, this routine calls hyper_diff, which
+  !! adds hyper diffusion if present, and solfp1, from the collisions module,
+  !! which adds collisions if present.
+
   subroutine timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, mode)
 
     use theta_grid, only: ntgrid
@@ -2528,8 +2295,7 @@ subroutine check_dist_fn(report_unit)
     call add_nonlinear_terms (gnl_1, gnl_2, gnl_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
     call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-    call hyper_diff (gnew, g0, phinew, bparnew)
-    call kill (gnew, g0, phinew, bparnew)
+    call hyper_diff (gnew, phinew, bparnew)
     call solfp1 (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)   !! BUGS IN SOLFP1 B/C phi, phinew misused?
                                                                                   !! bug comment above addressed (probably) -- MAB
     if (def_parity) then
@@ -2544,6 +2310,19 @@ subroutine check_dist_fn(report_unit)
        
   end subroutine timeadv
 
+! communication initializations for exb_shear should be done once and 
+! redistribute routines should be used  BD
+!
+!  subroutine init_exb_shear
+!
+!    use redistribute, only: index_list_type, delete_list
+!    implicit none
+!    type (index_list_type), dimension(0:nproc-1) :: to, from
+!    integer, dimension (0:nproc-1) :: nn_from, nn_to
+!    integer, dimension (3) :: to_low, from_low, to_high, from_high
+!
+!  end subroutine init_exb_shear
+
   subroutine exb_shear (g0, phi, apar, bpar)
 ! MR, 2007: modified Bill Dorland's version to include grids where kx grid
 !           is split over different processors
@@ -2554,9 +2333,9 @@ subroutine check_dist_fn(report_unit)
 ! CMR, Oct 2010: add save statements to prevent potentially large and memory 
 !                killing array allocations!
     
+    use mp, only: iproc, proc0, send, receive, mp_abort
     use gs2_layouts, only: ik_idx, it_idx, g_lo, idx_local, idx, proc_id
     use run_parameters, only: tunits
-    ! MR no need for is_kx_local as kx's are parallelised
     use theta_grid, only: ntgrid, ntheta, shat
     use file_utils, only: error_unit
     use kt_grids, only: akx, aky, naky, ikx, ntheta0, box, theta0
@@ -2565,7 +2344,6 @@ subroutine check_dist_fn(report_unit)
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kx_shift, theta0_shift
     use gs2_time, only: code_dt, code_dt_old
-    use mp, only: iproc, proc0, send, receive, mp_abort
     use constants, only: twopi    
 
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
@@ -2580,22 +2358,12 @@ subroutine check_dist_fn(report_unit)
     real, save :: dkx, dtheta0
     real :: gdt
     logical, save :: exb_first = .true.
-!    logical :: kx_local
     complex , dimension(-ntgrid:ntgrid) :: z
     character(130) :: str
 
-       ierr = error_unit()
+    ierr = error_unit()
 
 ! MR, March 2009: remove ExB restriction to box grids
-    ! If not in box configuration, return
-    !    if (.not. box) then
-    !       ierr = error_unit()
-    !       if (abs(g_exb) > epsilon(0.0)) &
-    !            write (ierr, &
-    !            fmt="('g_ExB set to zero unless box configuration is used.')")
-    !       g_exb = 0.
-    !       return
-    !    end if
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! MR, 2007: Works for ALL layouts (some layouts need no communication)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2949,126 +2717,6 @@ subroutine check_dist_fn(report_unit)
     end if
   end subroutine exb_shear
      
-  subroutine kill (g0, g1, phi, bpar)
-    
-    use gs2_layouts, only: ik_idx, it_idx
-    use kt_grids, only: akx, aky
-    use theta_grid, only: ntgrid
-    use run_parameters, only: fphi, fbpar, tnorm
-    use gs2_time, only: code_dt
-    use dist_fn_arrays, only: kperp2
-    use le_grids, only: integrate, geint2g, lintegrate, nlambda, al, gint2g
-    use gs2_layouts, only: g_lo, geint_lo, gint_lo
-    use constants
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-    complex, dimension (:,:), allocatable :: g0eint, g1eint
-    
-!    real, dimension (:,:), allocatable, save :: aintnorm
-    integer :: iglo, ik, it, ige
-!    logical :: diff_first = .true.
-    real :: chi_int ! chi_int needs to be calculated before it can be used.
-
-    if (D_kill < 0.) return
-
-    if (noise > 0.) then
-       chi_int = 1.  ! placeholder
-       D_kill = 0.5*sqrt(pi/2.)*noise*chi_int
-    end if
-
-    if (save_n) then
-       allocate (g0eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-       allocate (g1eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-
-!       if (diff_first) then
-       if (.not. allocated (aintnorm)) then
-!          diff_first = .false.
-          allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-          aintnorm = 0. ; g1 = 1.0
-          call integrate (g1, g1eint)
-          do ige = geint_lo%llim_proc, geint_lo%ulim_proc
-             aintnorm(:,ige) = 1.0/real(g1eint(:,ige))
-          end do
-       end if
-! get initial particle number
-       call integrate (g0, g0eint)
-    end if
-
-    if (h_kill) call g_adjust (g0, phi, bpar, fphi, fbpar)
-
-! kill higher moments of f
-    if (kill_grid) then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo, iglo)
-          it = it_idx(g_lo, iglo)
-          g1(:,1,iglo) = g0(:,1,iglo) &
-               * exp(-0.5*(akx(it)**2 + aky(ik)**2) * D_kill * code_dt / tnorm)
-          g1(:,2,iglo) = g0(:,2,iglo) &
-               * exp(-0.5*(akx(it)**2 + aky(ik)**2) * D_kill * code_dt / tnorm)
-       end do
-    else       
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo, iglo)
-          it = it_idx(g_lo, iglo)
-          g1(:,1,iglo) = g0(:,1,iglo) &
-               * exp(-0.5*kperp2(:,it,ik) * D_kill * code_dt / tnorm)
-          g1(:,2,iglo) = g0(:,2,iglo) &
-               * exp(-0.5*kperp2(:,it,ik) * D_kill * code_dt / tnorm)
-       end do
-    end if
-
-    if (h_kill) call g_adjust (g1, phi, bpar, -fphi, -fbpar)
-
-! restore particle number
-    if (save_n) then
-       call integrate (g1, g1eint)
-       do ige = geint_lo%llim_proc, geint_lo%ulim_proc
-          g0eint(:,ige) = (g0eint(:,ige) - g1eint(:,ige)) &
-               *aintnorm(:,ige)
-       end do
-       call geint2g (g0eint, g0)
-       g0 = g0 + g1
-    else
-       g0 = g1
-    endif
-
-    if (save_n) deallocate (g0eint, g1eint)
-
-  end subroutine kill
-
-  subroutine g_adjust (g, phi, bpar, facphi, facbpar)
-    use species, only: spec
-    use theta_grid, only: ntgrid, bmag
-    use le_grids, only: anon
-    use dist_fn_arrays, only: vperp2, aj0, aj1
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-    real, intent (in) :: facphi, facbpar
-
-    integer :: iglo, ig, ik, it, ie, is
-    complex :: adj
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do ig = -ntgrid, ntgrid
-!CMR:
-!  added missing factor bmag, needed for inhomogeneous B
-!CMRend:
-           adj = anon(ie,is)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
-                  *bpar(ig,it,ik)/bmag(ig)*facbpar &
-               + spec(is)%z*anon(ie,is)*phi(ig,it,ik)*aj0(ig,iglo) &
-                  /spec(is)%temp*facphi
-          g(ig,1,iglo) = g(ig,1,iglo) + adj
-          g(ig,2,iglo) = g(ig,2,iglo) + adj
-       end do
-    end do
-  end subroutine g_adjust
-
   subroutine get_source_term &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         isgn, iglo, sourcefac, source)
@@ -3076,16 +2724,14 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: vparterm, wdfac, wstarfac
     use theta_grid, only: ntgrid, theta, bmag
     use kt_grids, only: aky, theta0, akx
-    use le_grids, only: nlambda, ng2, lmax, anon, e, negrid, forbid
+    use le_grids, only: nlambda, ng2, lmax, anon, energy, negrid, forbid
     use species, only: spec, nspec
     use run_parameters, only: fphi, fapar, fbpar, wunits, tunits
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
-    use run_parameters, only: tnorm
     use nonlinear_terms, only: nonlin
     use hyper, only: D_res
     use constants
-    use run_parameters, only: k0
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
@@ -3093,10 +2739,9 @@ subroutine check_dist_fn(report_unit)
     integer, intent (in) :: isgn, iglo
     complex, intent (in) :: sourcefac
     complex, dimension (-ntgrid:), intent (out) :: source
-    real :: tfac
 
     integer :: ig, ik, it, il, ie, is
-    complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg!, bpargavg !GGH added bpargavg
+    complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
 
 !    call timer (0, 'get_source_term')
 
@@ -3105,15 +2750,17 @@ subroutine check_dist_fn(report_unit)
     il = il_idx(g_lo,iglo)
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
-
-!CMRfix: Nov 2010
-!   (i)  divide bpar term in phigavg by bmag
-!CMRend
-
+!CMR, 4/8/2011
+! apargavg and phigavg combine to give the GK EM potential chi. 
+!          chi = phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm
+! phigavg  = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
+! apargavg = apar J0 
+! Both quantities are decentred in time and evaluated on || grid points
+!
     phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
                 *aj0(:,iglo)*fphi &
              + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
-                *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)/bmag*spec(is)%tz
+                *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
     apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
                 *aj0(:,iglo)*fapar
 
@@ -3138,103 +2785,13 @@ subroutine check_dist_fn(report_unit)
           call set_source
           if (aky(ik) < epsilon(0.0)) then
              source(:ntgrid-1) = source(:ntgrid-1) &
-                  - zi*anon(ie,is)*wdrift(:ntgrid-1,iglo) &
+                  - zi*anon(ie)*wdrift(:ntgrid-1,iglo) &
                   *2.0*phi_ext*sourcefac*aj0(:ntgrid-1,iglo)
           end if
        else
           source = 0.0
        end if
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Solve self-consistent terms + include external i omega_d * F_0
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case(source_option_neo)
-       if (il <= lmax) then
-          call set_source
-          if (aky(ik) < epsilon(0.0)) then
-             source(:ntgrid-1) = source(:ntgrid-1) &
-                  - anon(ie,is)*wdrift_neo(:ntgrid-1,iglo)*2.0*sourcefac &
-                  *(spec(is)%fprim+spec(is)%tprim*(e(ie,is)-1.5))*spec(is)%tz
-          end if
-       else
-          source = 0.0
-       end if
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Solve self-consistent terms + include external i omega_d Phi * F_0
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case(source_option_hm_force)
-       if (il <= lmax) then
-          call set_source
-          if (istep > 0 .and. aky(int(aky_star)) == aky(ik) .and. akx(int(akx_star)) == akx(it)) &
-               source(:ntgrid-1) = source(:ntgrid-1) - zi*phi_ext*sourcefac
-       else 
-          source = 0.0
-       end if
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Solve self-consistent terms + include external <Phi> * F_0 * other stuff
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case(source_option_test2_full)
-       if (il <= lmax) then
-          call set_source
-       else
-          source = 0.0
-       end if
-       if (aky(ik) == 0.0 .and. istep > 0) then
-          source(:ntgrid-1) = source(:ntgrid-1) &
-               + tunits(ik)*code_dt &
-               *(aj0(:ntgrid-1,iglo)**2 + aj0(-ntgrid+1:,iglo)**2) &
-               *(e(ie,is)-1.5)*sourcefac &
-               *exp(-(theta(:ntgrid-1)/thetas)**2)
-       end if
-       
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Solve self-consistent terms for ky=0, something else for ky /= 0
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case(source_option_convect_full)
-       if (il <= lmax) then
-          call set_source
-       else
-          source = 0.0
-       end if
-       if (aky(ik) /= 0.0 .and. istep > 0) then
-          source(:ntgrid-1) = sourcefac &
-               *exp(cmplx((theta(:ntgrid-1)-theta0(it,ik))**2, &
-               k0*theta(:ntgrid-1)))
-       end if       
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Include no source term
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case (source_option_zero)
-       source = 0.0
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! S = sin(theta)*f(omega)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case (source_option_sine)
-       source(:ntgrid-1) = tunits(ik)*code_dt &
-            *(sin(theta(:ntgrid-1)) + sin(theta(-ntgrid+1:))) &
-            *sourcefac
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! S = -i*omega_d*f(omega)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case (source_option_test1)
-       do ig = -ntgrid, ntgrid-1
-          source(ig) = -zi*(wdrift_func(ig,il,ie,it,ik,is) &
-               + wdrift_func(ig+1,il,ie,it,ik,is)) &
-               *sourcefac
-       end do
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! S = cos(theta)*f(omega)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    case (source_option_cosine)
-       source(:ntgrid-1) = tunits(ik)*code_dt &
-            *(cos(theta(:ntgrid-1)) + cos(theta(-ntgrid+1:))) &
-            *sourcefac
     end select
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -3254,24 +2811,20 @@ subroutine check_dist_fn(report_unit)
        end if
     end if
 
-    source(ntgrid) = source(-ntgrid)
+    source(ntgrid) = source(-ntgrid)  ! is this necessary?  BD
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! special source term for totally trapped particles
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     if (source_option_switch == source_option_full .or. &
-        source_option_switch == source_option_phiext_full .or. &
-        source_option_switch == source_option_neo .or. &
-        source_option_switch == source_option_hm_force .or. &
-        source_option_switch == source_option_test2_full .or. &
-        source_option_switch == source_option_test1) then
+        source_option_switch == source_option_phiext_full) then
        if (nlambda > ng2 .and. isgn == 2) then
           do ig = -ntgrid, ntgrid
              if (il < ittp(ig)) cycle
              source(ig) &
                   = g(ig,2,iglo)*a(ig,2,iglo) &
                   ! does wdriftttp need to be changed to wdfac here?
-                  - anon(ie,is)*zi*(wdriftttp(ig,it,ik,ie,is)*hneoc(ig,2,iglo)+wcoriolis(ig,2,iglo))*phigavg(ig) &
+                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is)*hneoc(ig,2,iglo)+wcoriolis(ig,2,iglo))*phigavg(ig) &
                   + zi*wstar(ik,ie,is)*hneoc(ig,2,iglo)*phigavg(ig)
           end do
 
@@ -3279,42 +2832,31 @@ subroutine check_dist_fn(report_unit)
                aky(ik) < epsilon(0.0)) then
              do ig = -ntgrid, ntgrid
                 if (il < ittp(ig)) cycle             
-                source(ig) = source(ig) - zi*anon(ie,is)* &
+                source(ig) = source(ig) - zi*anon(ie)* &
                      wdriftttp(ig,it,ik,ie,is)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
              end do
           endif
 
-          if (source_option_switch == source_option_neo .and.  &
-               aky(ik) < epsilon(0.0)) then
-             do ig = -ntgrid, ntgrid
-                if (il < ittp(ig)) cycle             
-                source(ig) = source(ig) - anon(ie,is)* &
-                     wdriftttp_neo(ig,it,ik,ie,is)*2.0*sourcefac &
-                     *(spec(is)%fprim+spec(is)%tprim*(e(ie,is)-1.5))*spec(is)%tz
-             end do
-          endif
-
-! add in nonlinear terms -- tfac normalizes the *amplitudes*.
+! add in nonlinear terms 
           if (nonlin) then         
-             tfac = 1./tnorm
              select case (istep)
              case (0)
                 ! nothing
              case (1)
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
+                   source(ig) = source(ig) + 0.5*code_dt*gnl_1(ig,isgn,iglo)
                 end do
              case (2) 
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+                   source(ig) = source(ig) + 0.5*code_dt*( &
                         1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
                 end do                   
              case default
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+                   source(ig) = source(ig) + 0.5*code_dt*( &
                           (23./12.)*gnl_1(ig,isgn,iglo) &
                         - (4./3.)  *gnl_2(ig,isgn,iglo) &
                         + (5./12.) *gnl_3(ig,isgn,iglo))
@@ -3347,7 +2889,7 @@ subroutine check_dist_fn(report_unit)
          do i_e = 1, negrid
             do i_s = 1, nspec
                ufac(i_e, i_s) = (2.0*spec(i_s)%uprim &
-                    + spec(i_s)%uprim2*e(i_e,i_s)**(1.5)*sqrt(pi)/4.0)
+                    + spec(i_s)%uprim2*energy(i_e)**(1.5)*sqrt(pi)/4.0)
             end do
          end do
       endif
@@ -3360,6 +2902,39 @@ subroutine check_dist_fn(report_unit)
 
 
       do ig = -ntgrid, ntgrid-1
+!CMR, 4/8/2011:
+! Some concerns, may be red herrings !
+! (1) no bakdif factors in phi_m, apar_p, apar_m, vpar !!! 
+!                        (RN also spotted this for apar_p)
+! (2) can interpolations of products be improved? 
+!
+!  Attempt at variable documentation:
+! phigavg  = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
+! apargavg = apar J0                        (decentered in t) 
+! NB apargavg and phigavg combine to give the GK EM potential chi
+! chi = phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm
+! phi_p = 2 phigavg                      .... (roughly!)
+! phi_m = d/dtheta (phigavg)*DTHETA 
+! apar_p = 2 apargavg  
+! apar_m = 2 vpa d/dt (J0(Z) apar)*DELT
+! => phi_p - apar_p*vpa(:,isgn,iglo)*spec(is)%stm = 2 chi  .... (roughly!)  
+! vparterm = -2.0*vpar (IN ABSENCE OF LOWFLOW TERMS)
+! wdfac = wdrift + wcoriolis/spec(is)%stm (IN ABSENCE OF LOWFLOW TERMS)
+! wstarfac = wstar  (IN ABSENCE OF LOWFLOW TERMS)
+! vpar = q_s/sqrt{T_s m_s} (v_||^GS2). \gradpar(theta)/DTHETA . DELT (centred)
+! wdrift =    q_s/T_s  v_d.\grad_perp . DELT 
+! wcoriolis = q_s/T_s  v_C.\grad_perp . DELT 
+!
+! Definition of source:= 2*code_dt*RHS of GKE
+! source     appears to contain following physical terms
+!   -2q_s/T_s v||.grad(J0 phi + 2 vperp^2 bpar/bmag J1/Z T_s/q_s).delt 
+!   -2d/dt(q v|| J0 apar / T).delt
+!   +hyperviscosity
+!   -2 v_d.\grad_perp (q J0 phi/T + 2 vperp^2 bpar/bmag J1/Z).delt 
+!   -coriolis terms
+!   2{\chi,f_{0s}}.delt  (allowing for sheared flow)
+!CMRend
+
          phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
          phi_m = phigavg(ig+1)-phigavg(ig)
          ! RN> bdfac factors seem missing for apar_p
@@ -3375,13 +2950,14 @@ subroutine check_dist_fn(report_unit)
 ! [note by BD and MK on "Microinstabilities in Axisymmetric Configurations"].
 ! This is converted to  the standard internal gs2 normalisation, 
 ! Tref=(1/2) mref vtref^2, by wunits, which contains a crucial factor 1/2.
+! (Would be less confusing if always used same Tref!)
 !
 
-         source(ig) = anon(ie,is)*(vparterm(ig,isgn,iglo)*phi_m &
-              -spec(is)%zstm*vpac(ig,isgn,iglo) &
-              *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
-              + D_res(it,ik)*apar_p) &
-              -zi*wdfac(ig,isgn,iglo)*phi_p) &
+         source(ig) = anon(ie)*(vparterm(ig,isgn,iglo)*phi_m &
+                                -spec(is)%zstm*vpac(ig,isgn,iglo) &
+                     *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
+                                + D_res(it,ik)*apar_p) &
+                                 -zi*wdfac(ig,isgn,iglo)*phi_p) &
               + zi*(wstarfac(ig,isgn,iglo) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
               -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
@@ -3390,24 +2966,23 @@ subroutine check_dist_fn(report_unit)
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
       end do
         
-! add in nonlinear terms -- tfac normalizes the *amplitudes*.
+! add in nonlinear terms 
       if (nonlin) then         
-         tfac = 1./tnorm
          select case (istep)
          case (0)
             ! nothing
          case (1)
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
+               source(ig) = source(ig) + 0.5*code_dt*gnl_1(ig,isgn,iglo)
             end do
          case (2) 
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+               source(ig) = source(ig) + 0.5*code_dt*( &
                     1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
             end do
          case default
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+               source(ig) = source(ig) + 0.5*code_dt*( &
                       (23./12.)*gnl_1(ig,isgn,iglo) &
                     - (4./3.)  *gnl_2(ig,isgn,iglo) &
                     + (5./12.) *gnl_3(ig,isgn,iglo))
@@ -3491,84 +3066,89 @@ subroutine check_dist_fn(report_unit)
 
     if (kperiod_flag) then
        if (il <= ng2+1) then
-          g1(ntgl,1) = 1.0
-          g1(ntgr,2) = 1.0
+          g1(-ntgrid,1) = 1.0
+          g1( ntgrid,2) = 1.0
        end if
     end if
-!!!
+
     if (il == ng2+1) then
-!! changed 4.13.08 -- MAB
-!!       g1(ntgl,1) = wfb  ! wfb should be unity here; variable is for testing
-!! reverted 5.9.08 -- MAB
-       g1(ntgl,1) = wfb  ! wfb should be unity here; variable is for testing
-       g1(ntgr,2) = wfb  ! wfb should be unity here; variable is for testing
+       g1(-ntgrid,1) = wfb  ! wfb should be unity here; variable is for testing
+       g1( ntgrid,2) = wfb  ! wfb should be unity here; variable is for testing
     end if
 
-    ! g2 is the initial condition for the homogeneous solution
+!CMR
+! g2 is the initial boundary condition for the homogeneous solution
+!      g2=1.0 at upper bounce point for vpar < 0
+!      -- g2 = 0 everywhere for wfb as forbid always false
+!                => why did JAB: include wfb (il=ng2+1) in g2 init loop ?
+!      -- g2 = 0 for ttp too 
+! NB lmax=nlambda-1 with trapped particles, and ttp is at il=nlambda
+
     g2 = 0.0
-    ! initialize to 1.0 at upper bounce point for vpar < 0
-    ! (but not for wfb or ttp)
-!JAB: include wfb (ng2+1)
-!orig:    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
     if (nlambda > ng2 .and. il >= ng2+1 .and. il <= lmax) then
-       do ig=ntgl,ntgr-1
+!CMR, surely ng2+2 was right?
+       do ig=-ntgrid,ntgrid-1
           if (forbid(ig+1,il).and..not.forbid(ig,il)) g2(ig,2) = 1.0
        end do
     end if
 
-    ! time advance vpar < 0 inhomogeneous part
-    ! r=ainv=0 if forbid(ig,il) or forbid(ig+1,il), so gnew=0 in forbidden
-    ! region and at upper bounce point
-    do ig = ntgr-1, ntgl, -1
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! time advance vpar < 0  !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! inhomogeneous part: gnew
+! r=ainv=0 if forbid(ig,il) or forbid(ig+1,il), so gnew=0 in forbidden
+! region and at upper bounce point
+    do ig = ntgrid-1, -ntgrid, -1
        gnew(ig,2,iglo) = -gnew(ig+1,2,iglo)*r(ig,2,iglo) + ainv(ig,2,iglo)*source(ig,2)
     end do
 
     if (kperiod_flag) then
        ilmin = 1
     else
-
-!!!       ilmin = ng2 + 2
-       ilmin = ng2 + 1
+       ilmin = ng2 + 1              !!! ilmin = ng2 + 2
     end if
 
-    ! time advance vpar < 0 homogeneous part
+! time advance vpar < 0 homogeneous part: g1
     if (il >= ilmin) then
-       do ig = ntgr-1, ntgl, -1
+       do ig = ntgrid-1, -ntgrid, -1
           g1(ig,2) = -g1(ig+1,2)*r(ig,2,iglo) + g2(ig,2)
        end do
     end if
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! time advance vpar > 0   !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! First set BCs for trapped particles at lower bounce point
+    ! (excluding wfb and ttp)
+
 ! GWH & JAB: see if this fixes a numerical instability, related to close-to-wfb:
 !il<=lmax seems redundant
+!CMR, 1/8/2011:  Not sure wfb is included in following loop
     if (nlambda > ng2 .and. il >= ng2+1 .and. il <= lmax) then
 !    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
        ! match boundary conditions at lower bounce point
-       do ig = ntgl, ntgr-1
+       do ig = -ntgrid, ntgrid-1
           if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
              g2(ig,1) = g1(ig+1,2)
-             ! doesn't seem like this will be used because
-             ! ainv=0 if forbid(ig,il) or forbid(ig+1,il) -- MAB
+!CMR: init_invert_rhs  sets ainv=1 at lower bounce point for trapped 
+!     source below ensures gnew(lb,1,iglo)=gnew(lb,2,iglo)
+!     where lb is the lower bounce point.
              source(ig,1) = gnew(ig+1,2,iglo)  
           end if
        end do
     end if
 
-!! removed 5.9.08 -- MAB
-!! added 4.13.08 to treat wfb as trapped at ends but not in middle wells -- MAB
-!    if (.not. kperiod_flag .and. il == ng2+1) then
-!       g1(ntgl,1) = g1(ntgl,2)
-!       gnew(ntgl,1,iglo) = gnew(ntgl,2,iglo)
-!    end if
-       
     ! time advance vpar > 0 inhomogeneous part
     if (il <= lmax) then
-       do ig = ntgl, ntgr-1
+       do ig = -ntgrid, ntgrid-1
           gnew(ig+1,1,iglo) = -gnew(ig,1,iglo)*r(ig,1,iglo) + ainv(ig,1,iglo)*source(ig,1)
        end do
     end if
 
+    ! BD: Are there ever totally trapped particles at ig = ntgrid? 
     ! balancing totally trapped particles
-    do ig = ntgl, ntgr
+    do ig = -ntgrid, ntgrid
        if (il >= ittp(ig)) then
           if (forbid(ig,il)) then
              gnew(ig,1,iglo) = 0.0
@@ -3580,14 +3160,10 @@ subroutine check_dist_fn(report_unit)
 
     ! time advance vpar > 0 homogeneous part
     if (il >= ilmin) then
-       do ig = ntgl, ntgr-1
+       do ig = -ntgrid, ntgrid-1
           g1(ig+1,1) = -g1(ig,1)*r(ig,1,iglo) + g2(ig,1)
        end do
     end if
-
-! case of linked .and. WFB has problem, particularly when nu > 0, dt << 1
-! wfb solution below fails with real links.  need to balance this properly
-! this has been fixed I believe (should double check)
 
     if (boundary_option_switch == boundary_option_linked) then
        if (speriod_flag .and. il <= ng2+1) then
@@ -3606,11 +3182,6 @@ subroutine check_dist_fn(report_unit)
        ! add correct amount of homogeneous solution now
        if (kperiod_flag .and. il <= ng2+1) then
           call self_periodic
-!! changed 4.13.08 -- MAB
-!!!
-!!       else if (il == ng2 + 1) then
-!!         call self_periodic
-!! reverted 5.9.08 -- MAB
        else if (il == ng2 + 1) then
           call self_periodic
        end if
@@ -3626,6 +3197,7 @@ subroutine check_dist_fn(report_unit)
           if (ittp(ig) <= il) cycle
           if (forbid(ig,il)) then
              beta1 = 0.0
+             cycle !CMR: to avoid pointless arithmetic later in loop
           else if (forbid(ig+1,il)) then
              beta1 = (gnew(ig,1,iglo) - gnew(ig,2,iglo))/(1.0 - g1(ig,1))
           end if
@@ -3633,16 +3205,6 @@ subroutine check_dist_fn(report_unit)
           gnew(ig,2,iglo) = gnew(ig,2,iglo) + beta1*g1(ig,2)
        end do
     end if
-
-!! removed 5.9.08 to regain consistency with linked case -- MAB
-!! added 4.13.08 to treat wfb as trapped between ends but not middle wells -- MAB
-!    if (.not.kperiod_flag .and. il == ng2+1) then
-!       beta1 = (gnew(ntgr,1,iglo) - gnew(ntgr,2,iglo))/(1.0 - g1(ntgr,1))
-!       do ig = ntgr, ntgl, -1
-!          gnew(ig,1,iglo) = gnew(ig,1,iglo) + beta1*g1(ig,1)
-!          gnew(ig,2,iglo) = gnew(ig,2,iglo) + beta1*g1(ig,2)
-!       end do
-!    end if
 
     if (def_parity) then
        if (even) then
@@ -3660,23 +3222,15 @@ subroutine check_dist_fn(report_unit)
        gnew(:,2,iglo) = 0.0
     end where
 
-!    if (istep == 1) then
-!       write(*,*) kperiod_flag
-!       if (ik == 2 .and. it == 1) then
-!          do ig = -ntgrid, ntgrid
-!             write(*,fmt="(5(1x,e10.4),4(1x,i5))") theta(ig), &
-!                  gnew(ig,1,iglo), gnew(ig,2,iglo), il, ie, ik, it
-!          end do
-!          write(*,*) 
-!       end if
-!    end if
-
     call prof_leaving ("invert_rhs_1", "dist_fn")
 
   contains
 
     subroutine self_periodic
-
+!CMR: sets sum of homogeneous and inhomogeneous solutions to give a result
+!     gnew(ntgr,2) = gnew(ntgl,2)
+!     gnew(ntgr,1) = gnew(ntgl,1) 
+! ie periodic bcs at the ends of the flux tube.
       if (g1(ntgr,1) /= 1.) then
          beta1 = (gnew(ntgr,1,iglo) - gnew(ntgl,1,iglo))/(1.0 - g1(ntgr,1))
          gnew(:,1,iglo) = gnew(:,1,iglo) + beta1*g1(:,1)
@@ -3713,11 +3267,9 @@ subroutine check_dist_fn(report_unit)
             istep, iglo, sourcefac)
     end do
 
-!!    if (no_comm .or. istep == 0) then
     if (no_comm) then
        ! nothing
     else       
-! bug fix, community effort.  11/1/10
        g_adj = 0.
        call fill (links_p, gnew, g_adj)
        call fill (links_h, g_h, g_adj)
@@ -3929,20 +3481,20 @@ subroutine check_dist_fn(report_unit)
     call prof_leaving ("getan", "dist_fn")
   end subroutine getan
 
-  subroutine getmoms (ntot, density, upar, tpar, tperp)
+  subroutine getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
-    use le_grids, only: integrate_moment, anon
+    use le_grids, only: integrate_moment, anon, energy
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
-    use collisions, only: g_adjust
     use fields_arrays, only: phinew, bparnew
+    use dist_fn_arrays, only: g_adjust
 
     implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
-         upar, tpar, tperp, ntot
+         upar, tpar, tperp, ntot, qparflux, pperpj1, qpperpj1
 
     integer :: ik, it, isgn, ie, is, iglo
 
@@ -3974,21 +3526,25 @@ subroutine check_dist_fn(report_unit)
     end do
 
 ! CMR: density is the nonadiabatic piece of perturbed density
+! NB normalised wrt equ'm density for species s: n_s n_ref  
+!    ie multiply by (n_s n_ref) to get abs density pert'n
     call integrate_moment (g0, density)
 
 ! DJA/CMR: upar and tpar moments 
 ! (nb adiabatic part of <delta f> does not contribute to upar, tpar or tperp)
+! NB UPAR is normalised to vt_s = sqrt(T_s/m_s) vt_ref
+!    ie multiply by spec(is)%stm * vt_ref to get abs upar
     g0 = vpa*g0
     call integrate_moment (g0, upar)
 
-! CMR: why the factor 2 in 2.*vpa*g0? 
     g0 = 2.*vpa*g0
     call integrate_moment (g0, tpar)
 ! tpar transiently stores ppar, nonadiabatic perturbed par pressure 
+!      vpa normalised to: sqrt(2 T_s T_ref/m_s m_ref)
+!  including factor 2 in g0 product ensures 
+!     ppar normalised to: n_s T_s n_ref T_ref 
 !                         ppar = tpar + density, and so:
     tpar = tpar - density
-
-! CMR: tperp....       why no factor of 2 as in tpar?
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
           g0(:,isgn,iglo) = vperp2(:,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)
@@ -3998,6 +3554,38 @@ subroutine check_dist_fn(report_unit)
 ! tperp transiently stores pperp, nonadiabatic perturbed perp pressure
 !                          pperp = tperp + density, and so:
     tperp = tperp - density
+! NB TPAR, and TPERP are normalised by T_s T_ref
+!    ie multiply by T_s T_ref to get abs TPAR, TPERP
+
+! Now compute QPARFLUX
+! NB QPARFLUX is normalised to n_s n_ref T_s T_ref v_ts
+!    ie multiply by (n_s T_s spec(is)%stm) n_ref T_ref vt_ref to get abs qparflux
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do isgn = 1, 2
+          g0(:,isgn,iglo) = vpa(:,isgn,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)*energy(ie_idx(g_lo,iglo))
+       end do
+    end do 
+    call integrate_moment (g0, qparflux)
+   
+! Now compute PPERPJ1, a modified p_perp which gives particle flux from Bpar
+! NB PPERPJ1 is normalised to (n_s T_s/q_s)  n_ref T_ref/q_ref 
+!    ie multiply by (n_s spec(is)%tz) n_ref T_ref/q_ref to get abs PPERPJ1
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          g0(:,isgn,iglo) &
+               = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz
+       end do
+    end do
+    call integrate_moment (g0, pperpj1)
+
+! Now compute QPPERPJ1, a modified p_perp*energy which gives heat flux from Bpar
+! NB QPPERPJ1 is normalised to (n_s T_s^2/q_s)  n_ref  T_ref^2/q_ref
+!    ie multiply by (n_s T_s spec(is)%tz) n_ref T_ref^2/q_ref to get abs QPPERPJ1
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo))
+    end do
+    call integrate_moment (g0, qpperpj1)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! now include the adiabatic part of <delta f>
@@ -4008,19 +3596,23 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo) ; is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) - anon(ie,is)*phinew(:,it,ik)*spec(is)%zt
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) - anon(ie)*phinew(:,it,ik)*spec(is)%zt
        end do
     end do
 
 ! total perturbed density
     call integrate_moment (g0, ntot)
 
+!CMR, now multiply by species dependent normalisations to leave only reference normalisations
     do is=1,nspec
        ntot(:,:,:,is)=ntot(:,:,:,is)*spec(is)%dens
        density(:,:,:,is)=density(:,:,:,is)*spec(is)%dens
        upar(:,:,:,is)=upar(:,:,:,is)*spec(is)%stm
        tpar(:,:,:,is)=tpar(:,:,:,is)*spec(is)%temp
        tperp(:,:,:,is)=tperp(:,:,:,is)*spec(is)%temp
+       qparflux(:,:,:,is)=qparflux(:,:,:,is)*spec(is)%dens*spec(is)%temp*spec(is)%stm
+       pperpj1(:,:,:,is)=pperpj1(:,:,:,is)*spec(is)%dens*spec(is)%tz
+       qpperpj1(:,:,:,is)=qpperpj1(:,:,:,is)*spec(is)%dens*spec(is)%temp*spec(is)%tz
     end do
 
 ! return gnew to its initial state, the variable evolved in GS2
@@ -4037,8 +3629,8 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: integrate_moment, anon
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
-    use collisions, only: g_adjust
     use fields_arrays, only: phinew, bparnew
+    use dist_fn_arrays, only: g_adjust
 
     implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: tperp, ntot
@@ -4083,7 +3675,7 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo) ; is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) - anon(ie,is)*phinew(:,it,ik)*spec(is)%zt
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) - anon(ie)*phinew(:,it,ik)*spec(is)%zt
        end do
     end do
 
@@ -4095,7 +3687,7 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo) ; is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)*vperp2(:,iglo) - anon(ie,is)*phinew(:,it,ik)*spec(is)%zt*vperp2(:,iglo)
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)*vperp2(:,iglo) - anon(ie)*phinew(:,it,ik)*spec(is)%zt*vperp2(:,iglo)
        end do
     end do
 
@@ -4117,95 +3709,6 @@ subroutine check_dist_fn(report_unit)
     call prof_leaving ("getemoms", "dist_fn")
   end subroutine getemoms
   
-  subroutine gettotmoms (ntot, upar, uperp, ttot)
-    use dist_fn_arrays, only: vpa, vperp2, aj0, gnew, aj1, kperp2
-    use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx, il_idx
-    use species, only: nspec, spec
-    use theta_grid, only: ntgrid, bmag
-    use le_grids, only: integrate_moment, anon, e, al
-    use prof, only: prof_entering, prof_leaving
-    use run_parameters, only: fphi, fbpar
-    use constants, only: pi
-    use fields_arrays, only: phinew, bparnew
-    implicit none
-    complex, dimension (-ntgrid:,:,:,:), intent (out) :: ntot, &
-         upar, uperp, ttot
-
-    integer :: ik, it, isgn, ie, is, iglo, il
-
-! returns moment integrals to PE 0
-    call prof_entering ("gettotmoms", "dist_fn")
-
-! total density
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) &
-               + (aj0(:,iglo)**2-1.0)*anon(ie,is) &
-               * phinew(:,it,ik)*spec(is)%zt &
-               + aj0(:,iglo)*aj1(:,iglo)*vperp2(:,iglo)*2.*anon(ie,is) &
-               * bparnew(:,it,ik)
-       end do
-    end do
-
-    call integrate_moment (g0, ntot)
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
-          g0(:,isgn,iglo) = g0(:,isgn,iglo)*e(ie,is)
-       end do
-    end do
-
-    call integrate_moment (g0, ttot)
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
-       end do
-    end do
-
-    call integrate_moment (g0, upar)
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ik = ik_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       do isgn = 1, 2
-          g0(:,isgn,iglo) = aj1(:,iglo)*e(ie,is)*al(il)*gnew(:,isgn,iglo) &
-               * spec(is)%smz * sqrt(kperp2(:,it,ik) / bmag(:))
-       end do
-    end do
-
-    ! TEMP FOR TESTING -- MAB
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
-          g0(:,isgn,iglo) = 0.75*sqrt(pi)*aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo) &
-               / e(ie,is)**1.5
-       end do
-    end do
-    ! END TEMP FOR TESTING
-
-    call integrate_moment (g0, uperp)
-
-    do is=1,nspec
-       ntot(:,:,:,is)=ntot(:,:,:,is)*spec(is)%dens
-       upar(:,:,:,is)=upar(:,:,:,is)*spec(is)%stm
-       uperp(:,:,:,is)=uperp(:,:,:,is)*spec(is)%stm
-       ttot(:,:,:,is)=ttot(:,:,:,is)*spec(is)%temp
-    end do
-
-    call prof_leaving ("gettotmoms", "dist_fn")
-  end subroutine gettotmoms
-
   ! moment at not guiding center coordinate
   subroutine getmoms_notgc (dens, upar, tpar, tper, ntot, jpar)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
@@ -4335,10 +3838,6 @@ subroutine check_dist_fn(report_unit)
     integer :: ik, it, ie, is
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: tot
     real, dimension (nspec) :: wgt
-!    logical :: done = .false.
-
-!    if (done) return
-!    done = .true.
 
     if (feqinit) return
     feqinit = .true.
@@ -4367,8 +3866,7 @@ subroutine check_dist_fn(report_unit)
     allocate (gamtot(-ntgrid:ntgrid,ntheta0,naky))
     allocate (gamtot1(-ntgrid:ntgrid,ntheta0,naky))
     allocate (gamtot2(-ntgrid:ntgrid,ntheta0,naky))
-    if (adiabatic_option_switch == adiabatic_option_fieldlineavg .or. &	
-         adiabatic_option_switch == adiabatic_option_noJ) then	
+    if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then	
        allocate (gamtot3(-ntgrid:ntgrid,ntheta0,naky))
     endif
     
@@ -4376,7 +3874,7 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = (1.0 - aj0(:,iglo)**2)*anon(ie,is)
+          g0(:,isgn,iglo) = (1.0 - aj0(:,iglo)**2)*anon(ie)
        end do
     end do
     wgt = spec%z*spec%z*spec%dens/spec%temp
@@ -4388,7 +3886,7 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g0(:,isgn,iglo) = aj0(:,iglo)*aj1(:,iglo) &
-               *2.0*vperp2(:,iglo)*anon(ie,is)
+               *2.0*vperp2(:,iglo)*anon(ie)
        end do
     end do
     wgt = spec%z*spec%dens
@@ -4399,7 +3897,7 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj1(:,iglo)**2*2.0*vperp2(:,iglo)**2*anon(ie,is)
+          g0(:,isgn,iglo) = aj1(:,iglo)**2*2.0*vperp2(:,iglo)**2*anon(ie)
        end do
     end do
     wgt = spec%temp*spec%dens
@@ -4412,8 +3910,7 @@ subroutine check_dist_fn(report_unit)
           do ik = 1, naky
              if (aky(ik) > epsilon(0.0)) gamtot(:,:,ik) = gamtot(:,:,ik) + tite
           end do
-       elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg .or. &
-            adiabatic_option_switch == adiabatic_option_noJ) then
+       elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
           gamtot  = gamtot + tite
           gamtot3 = (gamtot-tite) / gamtot
           where (gamtot3 < 2.*epsilon(0.0)) gamtot3 = 1.0
@@ -4435,7 +3932,7 @@ subroutine check_dist_fn(report_unit)
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
     complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
-!    real, allocatable, dimension(:,:), save :: fl_avg, awgt
+
     integer :: ik, it
 !    logical :: first = .true.
     
@@ -4444,28 +3941,6 @@ subroutine check_dist_fn(report_unit)
     fl_avg = 0.
 
     if (.not. has_electron_species(spec)) then
-       if (adiabatic_option_switch == adiabatic_option_noJ) then
-          
-!          if (first) then 
-          if (.not. allocated(awgt)) then 
-             allocate (awgt(ntheta0, naky))
-             awgt = 0.
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   if (aky(ik) > epsilon(0.0)) cycle
-                   awgt(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
-                end do
-             end do
-          endif
-          
-          do ik = 1, naky
-             do it = 1, ntheta0
-                fl_avg(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
-             end do
-          end do
-          
-       end if
-
        if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
           
 !          if (first) then 
@@ -4508,7 +3983,8 @@ subroutine check_dist_fn(report_unit)
     if (fapar > epsilon(0.0)) then
        fieldeqa = antota - kperp2*gridfac1*apar
     end if
-
+! bpar == delta B_parallel / B_0(theta) b/c of the factor of 1/bmag(theta)**2
+! in the following
     if (fbpar > epsilon(0.0)) then
        fieldeqp = (antotp+bpar*gamtot2+0.5*phi*gamtot1)*beta*apfac
        do ik = 1, naky
@@ -4542,281 +4018,9 @@ subroutine check_dist_fn(report_unit)
     deallocate (antot, antota, antotp)
   end subroutine getfieldeq
   
-  subroutine getfieldexp (phi, apar, bpar)
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-    implicit none
-    complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
-    complex, dimension (:,:,:), allocatable :: antot, antota, antotp
-
-    allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
-    allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
-    allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
-
-    call getan (antot, antota, antotp)
-    call getfieldeq2 (phi, apar, bpar, antot, antota, antotp)
-
-    deallocate (antot, antota, antotp)
-  end subroutine getfieldexp
-  
-  subroutine getfieldeq2 (phi, apar, bpar, antot, antota, antotp)
-    use dist_fn_arrays, only: kperp2
-    use theta_grid, only: ntgrid, bmag, delthet, jacob
-    use kt_grids, only: naky, ntheta0, aky
-    use run_parameters, only: fphi, fapar, fbpar
-    use run_parameters, only: beta, tite
-    use species, only: spec, has_electron_species
-    implicit none
-    complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
-    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
-!    real, allocatable, dimension(:,:,:), save :: f1, f2, f3, f4, kp2
-!    real, allocatable, dimension(:,:), save :: fl_avg, awgt
-!    real, allocatable, dimension(:), save :: bfac
-    real :: f5
-    integer :: ig, ik, it
-!    logical :: first = .true.
-    
-    
-!    if (first) then
-    if (.not. allocated(fl_avg2)) then
-! prepare for field-line-average term: 
-       allocate (fl_avg2(ntheta0, naky))
-       fl_avg2 = 0.
-! prepare for field solves: 
-       allocate (bfac(-ntgrid:ntgrid))
-       allocate (f1(-ntgrid:ntgrid,ntheta0,naky))
-       allocate (f2(-ntgrid:ntgrid,ntheta0,naky))
-       allocate (f3(-ntgrid:ntgrid,ntheta0,naky))
-       allocate (f4(-ntgrid:ntgrid,ntheta0,naky))
-       allocate (kp2(-ntgrid:ntgrid,ntheta0,naky))
-       bfac = beta*apfac/bmag**2
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                f5 = 1. + 0.5*bfac(ig)*gamtot1(ig,it,ik)**2 &
-                     / (1.+bfac(ig)*gamtot2(ig,it,ik))
-                f1(ig,it,ik) = 1.0 / gamtot(ig,it,ik) / f5
-                f3(ig,it,ik) = -bfac(ig) / (1.0 + bfac(ig)*gamtot2(ig,it,ik))
-                f2(ig,it,ik) = gamtot1(ig,it,ik)*f3(ig,it,ik) / f5
-                f4(ig,it,ik) = gamtot1(ig,it,ik)*f3(ig,it,ik) * 0.5
-             end do
-          end do
-       end do
-
-! Avoid dividing by zero for the kx=0, ky=0 mode:
-       kp2 = kperp2
-       where (kp2 == 0.) 
-          kp2 = 1.0
-       end where
-
-    endif
-
-    if (.not. has_electron_species(spec)) then
-       
-       if (adiabatic_option_switch == adiabatic_option_noJ) then
-
-!          if (first) then 
-          if (.not. allocated(awgt2)) then
-             allocate (awgt2(ntheta0, naky))
-             awgt2 = 0.
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   if (aky(ik) > epsilon(0.0)) cycle
-                   awgt2(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
-                end do
-             end do
-          endif
-          
-          do ik = 1, naky
-             do it = 1, ntheta0
-                fl_avg2(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
-             end do
-          end do
-       end if
-
-       if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
-
-!          if (first) then 
-          if (.not. allocated(awgt2)) then
-             allocate (awgt2(ntheta0, naky))
-             awgt2 = 0.
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   if (aky(ik) > epsilon(0.0)) cycle
-                   awgt2(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
-                end do
-             end do
-          endif
-          
-          do ik = 1, naky
-             do it = 1, ntheta0
-                fl_avg2(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
-             end do
-          end do
-       end if
-
-    end if
-
-! main loop: 
-    do ik = 1, naky
-       do it = 1, ntheta0
-          phi(:,it,ik) = fphi*(antot(:,it,ik)*f1(:,it,ik) + fl_avg2(it,ik)*f1(:,it,ik) &
-               + antotp(:,it,ik)*f2(:,it,ik))
-          bpar(:,it,ik) = fbpar*antotp(:,it,ik)*f3(:,it,ik) + phi(:,it,ik)*f4(:,it,ik)
-          apar(:,it,ik) = fapar*antota(:,it,ik)/kp2(:,it,ik)
-       end do
-    end do
-
-!    first = .false.
-
-  end subroutine getfieldeq2
-
-! replaced by bessel function implementation of RN and TT (in utils/spfunc.fpp)
-!  elemental function j0 (x)
-!! A&S, p. 369, 9.4
-!! CMR: 17/1/06, correct b(2) (typo?)
-!    implicit none
-!    real, intent (in) :: x
-!    real :: j0
-!    real, parameter, dimension (7) :: a = &
-!         (/ 1.0000000, -2.2499997, 1.2656208, -0.3163866, &
-!            0.0444479, -0.0039444, 0.0002100 /)
-!    real, parameter, dimension (7) :: b = &
-!         (/  0.79788456, -0.00000077, -0.00552740, -0.00009512, &
-!             0.00137237, -0.00072805,  0.00014476 /)
-!    real, parameter, dimension (7) :: c = &
-!         (/ -0.78539816, -0.04166397, -0.00003954,  0.00262573, &
-!            -0.00054125, -0.00029333,  0.00013558 /)
-!    real :: y
-!
-!    if (x <= 3.0) then
-!       y = (x/3.0)**2
-!       j0 = a(1)+y*(a(2)+y*(a(3)+y*(a(4)+y*(a(5)+y*(a(6)+y*a(7))))))
-!    else
-!       y = 3.0/x
-!       j0 = (b(1)+y*(b(2)+y*(b(3)+y*(b(4)+y*(b(5)+y*(b(6)+y*b(7))))))) &
-!            *cos(x+c(1)+y*(c(2)+y*(c(3)+y*(c(4)+y*(c(5)+y*(c(6)+y*c(7))))))) &
-!            /sqrt(x)
-!    end if
-!  end function j0
-!
-!  elemental function j1 (x)
-!! A&S, p. 370, 9.4 j1 = 1/x J_1(x)
-!! CMR: 17/1/06, correct the sign of b(7), (typo?)
-!! CMR: 17/1/06, NB this function returns j1 = J_1(x)/x and NOT J_1(x) 
-!    implicit none
-!    real, intent (in) :: x
-!    real :: j1
-!    real, parameter, dimension (7) :: a = &
-!         (/  0.50000000, -0.56249985,  0.21093573, -0.03954289, &
-!             0.00443319, -0.00031761,  0.00001109 /)
-!!CMR, 17/1/06:  corrected b elements: previously b(7) had wrong sign
-!    real, parameter, dimension (7) :: b = &
-!         (/  0.79788456,  0.00000156,  0.01659667,  0.00017105, &
-!            -0.00249511,  0.00113653, -0.00020033 /)
-!    real, parameter, dimension (7) :: c = &
-!         (/ -2.35619449,  0.12499612,  0.00005650,  -0.00637879, &
-!             0.00074348,  0.00079824, -0.00029166 /)
-!    real :: y
-!
-!    if (x <= 3.0) then
-!       y = (x/3.0)**2
-!       j1 = a(1)+y*(a(2)+y*(a(3)+y*(a(4)+y*(a(5)+y*(a(6)+y*a(7))))))
-!    else
-!       y = 3.0/x
-!       j1 = (b(1)+y*(b(2)+y*(b(3)+y*(b(4)+y*(b(5)+y*(b(6)+y*b(7))))))) &
-!            *cos(x+c(1)+y*(c(2)+y*(c(3)+y*(c(4)+y*(c(5)+y*(c(6)+y*c(7))))))) &
-!            /x**1.5
-!    end if
-!  end function j1
-
-  subroutine lambda_flux (phi, lamflux)
-
-    use le_grids, only: pintegrate, e
-    use theta_grid, only: ntgrid
-    use dist_fn_arrays, only: aj0, g, vpa, vperp2
-    use run_parameters, only: fphi
-    use gs2_layouts, only: is_idx, ie_idx, g_lo
-    implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
-    real, dimension (:,:,:), intent (out) :: lamflux
-    real :: etmp
-    integer :: isgn, iglo
-
-    if (fphi > epsilon(0.)) then
-       do iglo=g_lo%llim_proc, g_lo%ulim_proc
-          do isgn = 1, 2
-             g0(:,isgn,iglo) = g(:,isgn,iglo)*aj0(:,iglo)
-          end do
-       end do
-       call pintegrate (g0, phi, lamflux(:,:,1))
-       
-       do iglo=g_lo%llim_proc, g_lo%ulim_proc
-          etmp = e(ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
-          g0(:,1,iglo) = g0(:,1,iglo)*etmp
-          g0(:,2,iglo) = g0(:,2,iglo)*etmp
-       end do
-       call pintegrate (g0, phi, lamflux(:,:,2))
-       
-       do iglo=g_lo%llim_proc, g_lo%ulim_proc
-          do isgn = 1, 2
-             g0(:,isgn,iglo) = g(:,isgn,iglo)*2.*vpa(:,isgn,iglo)**2*aj0(:,iglo)
-          end do
-       end do
-       call pintegrate (g0, phi, lamflux(:,:,3))
-       
-       do iglo=g_lo%llim_proc, g_lo%ulim_proc
-          do isgn = 1, 2
-             g0(:,isgn,iglo) = g(:,isgn,iglo)*vperp2(:,iglo)*aj0(:,iglo)
-          end do
-       end do
-       call pintegrate (g0, phi, lamflux(:,:,4))
-    else
-       lamflux = 0.
-    end if
-
-  end subroutine lambda_flux
-      
-  subroutine e_flux (phi, enflux)
-
-    use le_grids, only: pe_integrate, e
-    use theta_grid, only: ntgrid
-    use dist_fn_arrays, only: aj0, g, vpa, vperp2
-    use run_parameters, only: fphi
-    use gs2_layouts, only: is_idx, ie_idx, g_lo
-    implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
-    real, dimension (:,:,:) :: enflux
-    integer :: isgn, iglo
-
-    if (fphi > epsilon(0.)) then
-       do isgn = 1, 2
-          g0(:,isgn,:) = g(:,isgn,:)*aj0
-       end do
-       call pe_integrate (g0, phi, enflux(:,:,1))
-       
-       do iglo=g_lo%llim_proc, g_lo%ulim_proc
-          g0(:,:,iglo) = g0(:,:,iglo)*e(ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
-       end do
-       call pe_integrate (g0, phi, enflux(:,:,2))
-       
-       do isgn = 1, 2
-          g0(:,isgn,:) = g(:,isgn,:)*2.*vpa(:,isgn,:)**2*aj0
-       end do
-       call pe_integrate (g0, phi, enflux(:,:,3))
-       
-       do isgn = 1, 2
-          g0(:,isgn,:) = g(:,isgn,:)*vperp2*aj0
-       end do
-       call pe_integrate (g0, phi, enflux(:,:,4))
-    else
-       enflux = 0.
-    end if
-
-  end subroutine e_flux
-
 ! MAB> ported from agk
 ! TT> Given initial distribution function this obtains consistent fields
+!CMR, 1/8/2011> corrections below for inhomogeneous bmag
   subroutine get_init_field (phi, apar, bpar)
     ! inverts the field equations:
     !   gamtot * phi - gamtot1 * bpar = antot
@@ -4824,7 +4028,7 @@ subroutine check_dist_fn(report_unit)
     !   beta/2 * gamtot1 * phi + (beta * gamtot2 + 1) * bpar = - beta * antotp
     ! I haven't made any check for use_Bpar=T case.
     use run_parameters, only: beta, fphi, fapar, fbpar
-    use theta_grid, only: ntgrid
+    use theta_grid, only: ntgrid, bmag
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
     use dist_fn_arrays, only: aj0, vpa, kperp2
@@ -4833,17 +4037,21 @@ subroutine check_dist_fn(report_unit)
     real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: denominator
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: antot, antota, antotp
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: numerator
+    real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: bmagsp
 
     phi=0. ; apar=0. ; bpar=0.
     antot=0.0 ; antota=0.0 ; antotp=0.0
+!CMR, 1/8/2011:  bmagsp is 3D array containing bmag
+    bmagsp=spread(spread(bmag,2,ntheta0),3,naky)
     call getan (antot, antota, antotp)
 
     ! get phi
     if (fphi > epsilon(0.0)) then
-       numerator = (beta * gamtot2 + 1.0) * antot &
-            & - (beta * gamtot1) * antotp
-       denominator = (beta * gamtot2 + 1.0) * gamtot &
-            & + (beta/2.0) * gamtot1 * gamtot1
+
+!CMR, 1/8/2011:  bmag corrections here: 
+       numerator = (beta * gamtot2 + bmagsp**2) * antot - (beta * gamtot1) * antotp
+       denominator = (beta * gamtot2 + bmagsp**2) * gamtot + (beta/2.0) * gamtot1 * gamtot1
+
        where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
           phi = 0.0
        elsewhere
@@ -4863,11 +4071,10 @@ subroutine check_dist_fn(report_unit)
 
     ! get bpar
     if (fbpar > epsilon(0.0)) then
-       numerator = - (beta * gamtot) * antotp &
-            & - (beta/2.0) * gamtot1 * antot
-       ! following line is actually same with the denom for phi
-       denominator = gamtot * (beta * gamtot2 + 1.0) &
-            & + (beta/2.0) * gamtot1 * gamtot1
+!CMR>  bmag corrections here
+       numerator = - (beta * gamtot) * antotp - (beta/2.0) * gamtot1 * antot
+       denominator = gamtot * (beta * gamtot2 + bmagsp**2) + (beta/2.0) * gamtot1 * gamtot1
+
        where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
           bpar = 0.0
        elsewhere
@@ -4876,50 +4083,35 @@ subroutine check_dist_fn(report_unit)
     end if
 
   end subroutine get_init_field
-! <TT
-! <MAB     
  
-!  subroutine flux (phi, apar, bpar, &
-!       pflux, qflux, qflux_par, qflux_perp, vflux, &
-!       pmflux, qmflux, qmflux_par, qmflux_perp, vmflux, &
-!       pbflux, qbflux, qbflux_par, qbflux_perp, vbflux, anorm)
   subroutine flux (phi, apar, bpar, &
        pflux,  qflux,  vflux, vflux_par, vflux_perp, &
        pmflux, qmflux, vmflux, &
-       pbflux, qbflux, vbflux, &
-       theta_pflux, theta_vflux, theta_vflux_par, theta_vflux_perp, theta_qflux, &
-       theta_pmflux, theta_vmflux, theta_qmflux, & 
-       theta_pbflux, theta_vbflux, theta_qbflux)
+       pbflux, qbflux, vbflux)
+
 !CMR, 15/1/08: 
 !  Implemented Clemente Angioni's fix for fluxes by replacing g with gnew 
 !  so fields and distribution function are evaluated self-consistently in time.
-!  This fixed unphysical oscillations in non-ambipolar particle fluxes for 
-!  Clemente Angioni.
+!  This fixed unphysical oscillations in non-ambipolar particle fluxes 
 !
     use species, only: spec
     use theta_grid, only: ntgrid, bmag, gradpar, grho, delthet, drhodpsi
     use theta_grid, only: qval, shat, gds21, gds22
     use kt_grids, only: naky, ntheta0, akx, theta0, aky
-    use le_grids, only: e
+    use le_grids, only: energy
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use mp, only: proc0
-    use run_parameters, only: woutunits, fphi, fapar, fbpar, funits
+    use run_parameters, only: woutunits, fphi, fapar, fbpar
     use constants, only: zi
-    use geometry, only: rmajor_geo, bpol_geo, rhoc
+    use geometry, only: rhoc
+    use theta_grid, only: Rplot, Bpol
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     real, dimension (:,:,:), intent (out) :: pflux, pmflux, pbflux
     real, dimension (:,:,:), intent (out) :: vflux, vmflux, vbflux, vflux_par, vflux_perp
     real, dimension (:,:,:,:), intent (out) :: qflux, qmflux, qbflux
-    real, dimension (-ntgrid:,:), intent (out) :: theta_pflux, theta_pmflux, theta_pbflux
-    real, dimension (-ntgrid:,:), intent (out) :: theta_vflux, theta_vmflux, theta_vbflux
-    real, dimension (-ntgrid:,:), intent (out) :: theta_vflux_perp, theta_vflux_par
-    real, dimension (-ntgrid:,:,:), intent (out) :: theta_qflux, theta_qmflux, theta_qbflux
-!    real, dimension (:,:,:), intent (out) :: qflux_par, qmflux_par, qbflux_par
-!    real, dimension (:,:,:), intent (out) :: qflux_perp, qmflux_perp, qbflux_perp
     real, dimension (:,:,:), allocatable :: dnorm
-    real :: anorm
     integer :: it, ik, is, isgn, ig
     integer :: iglo
 
@@ -4929,82 +4121,54 @@ subroutine check_dist_fn(report_unit)
        pflux = 0.0;   qflux = 0.0;   vflux = 0.0 ; vflux_par = 0.0 ; vflux_perp = 0.0
        pmflux = 0.0;  qmflux = 0.0;  vmflux = 0.0
        pbflux = 0.0;  qbflux = 0.0;  vbflux = 0.0
-       theta_pflux = 0.0  ; theta_pmflux = 0.0  ; theta_pbflux = 0.0
-       theta_vflux = 0.0  ; theta_vmflux = 0.0  ; theta_vbflux = 0.0
-       theta_vflux_par = 0.0  ; theta_vflux_perp = 0.0
-       theta_qflux = 0.0  ; theta_qmflux = 0.0  ; theta_qbflux = 0.0
-    end if
-
-    if (adiabatic_option_switch == adiabatic_option_noJ) then
-       dnorm = 1.
-    else
-       do ik = 1, naky
-          do it = 1, ntheta0
-! BD bug fix.  actually done in summer sometime, but in main source 2.2.04
-!             dnorm(:,it,ik) = grho/bmag/gradpar
-             dnorm(:,it,ik) = 1./bmag/gradpar
-          end do
-       end do
     end if
 
     do ik = 1, naky
        do it = 1, ntheta0
-          dnorm(:,it,ik) = dnorm(:,it,ik)*delthet*woutunits(ik)/sqrt(2.0)
+          dnorm(:,it,ik) = delthet/bmag/gradpar*woutunits(ik)
        end do
     end do
-    
-! weird definition was here.  changed 7.13.01
-    anorm = sum(dnorm*(abs(phi)**2 + abs(apar)**2))
 
     if (fphi > epsilon(0.0)) then
        do isgn = 1, 2
           g0(:,isgn,:) = gnew(:,isgn,:)*aj0
        end do
-       call get_flux (phi, pflux, theta_pflux, dnorm)
+       call get_flux (phi, pflux, dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          g0(:,:,iglo) = g0(:,:,iglo)*e(ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
+          g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo))
        end do
-       call get_flux (phi, qflux(:,:,:,1), theta_qflux(:,:,1), dnorm)
+       call get_flux (phi, qflux(:,:,:,1), dnorm)
 
        do isgn = 1, 2
           g0(:,isgn,:) = gnew(:,isgn,:)*2.*vpa(:,isgn,:)**2*aj0
        end do
-       call get_flux (phi, qflux(:,:,:,2), theta_qflux(:,:,2), dnorm)
+       call get_flux (phi, qflux(:,:,:,2), dnorm)
 
        do isgn = 1, 2
           g0(:,isgn,:) = gnew(:,isgn,:)*vperp2*aj0
        end do
-       call get_flux (phi, qflux(:,:,:,3), theta_qflux(:,:,3), dnorm)
+       call get_flux (phi, qflux(:,:,:,3), dnorm)
 
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
-!             write (*,*) 'geometry', rmajor_geo(ig), bpol_geo(ig), sqrt(bmag(ig)**2-bpol_geo(ig))
-             if (allocated(rmajor_geo)) then
-                g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)*rmajor_geo(ig)*sqrt(1.0-bpol_geo(ig)**2/bmag(ig)**2)
-             else
-                g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)
-             end if
+             g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)*Rplot(ig)*sqrt(1.0-Bpol(ig)**2/bmag(ig)**2)
           end do
        end do
-       call get_flux (phi, vflux_par, theta_vflux_par, dnorm)
+       call get_flux (phi, vflux_par, dnorm)
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
-! CMR: strange to see funits appear on next line?
-!      surely funits is fully handled in gs2_diagnostics
-!      so danger of double counting here. 
-             g0(:,isgn,iglo) = -funits*zi*aky(ik)*gnew(:,isgn,iglo)*aj1(:,iglo) &
+             g0(:,isgn,iglo) = -zi*aky(ik)*gnew(:,isgn,iglo)*aj1(:,iglo) &
                   *rhoc*(gds21+theta0(it,ik)*gds22)*vperp2(:,iglo)*spec(is)%smz/(qval*shat*bmag**2)
 !             g0(:,isgn,iglo) = zi*akx(it)*grho*gnew(:,isgn,iglo)*aj1(:,iglo) &
 !                  *2.0*vperp2(:,iglo)*spec(is)%smz/(bmag**2*drhodpsi)
           end do
        end do
-       call get_flux (phi, vflux_perp, theta_vflux_perp, dnorm)
+       call get_flux (phi, vflux_perp, dnorm)
        vflux = vflux_par + vflux_perp
-       theta_vflux = theta_vflux_par + theta_vflux_perp
 
     else
        pflux = 0.
@@ -5022,12 +4186,12 @@ subroutine check_dist_fn(report_unit)
                   = -gnew(:,isgn,iglo)*aj0(:,iglo)*spec(is)%stm*vpa(:,isgn,iglo)
           end do
        end do
-       call get_flux (apar, pmflux, theta_pmflux, dnorm)
+       call get_flux (apar, pmflux, dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          g0(:,:,iglo) = g0(:,:,iglo)*e(ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
+          g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo))
        end do
-       call get_flux (apar, qmflux(:,:,:,1), theta_qmflux(:,:,1), dnorm)
+       call get_flux (apar, qmflux(:,:,:,1), dnorm)
        
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -5037,7 +4201,7 @@ subroutine check_dist_fn(report_unit)
                   *2.*vpa(:,isgn,iglo)**2
           end do
        end do
-       call get_flux (apar, qmflux(:,:,:,2), theta_qmflux(:,:,2), dnorm)
+       call get_flux (apar, qmflux(:,:,:,2), dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -5047,7 +4211,7 @@ subroutine check_dist_fn(report_unit)
                   *vperp2(:,iglo)
           end do
        end do
-       call get_flux (apar, qmflux(:,:,:,3), theta_qmflux(:,:,3), dnorm)
+       call get_flux (apar, qmflux(:,:,:,3), dnorm)
        
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -5057,7 +4221,7 @@ subroutine check_dist_fn(report_unit)
                   *vpa(:,isgn,iglo)*vpac(:,isgn,iglo)
           end do
        end do
-       call get_flux (apar, vmflux, theta_vmflux, dnorm)
+       call get_flux (apar, vmflux, dnorm)
     else
        pmflux = 0.
        qmflux = 0.
@@ -5074,12 +4238,12 @@ subroutine check_dist_fn(report_unit)
                   = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz
           end do
        end do
-       call get_flux (bpar, pbflux, theta_pbflux, dnorm)
+       call get_flux (bpar, pbflux, dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          g0(:,:,iglo) = g0(:,:,iglo)*e(ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
+          g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo))
        end do
-       call get_flux (bpar, qbflux(:,:,:,1), theta_qbflux(:,:,1), dnorm)
+       call get_flux (bpar, qbflux(:,:,:,1), dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -5089,7 +4253,7 @@ subroutine check_dist_fn(report_unit)
                     *2.*vpa(:,isgn,iglo)**2
           end do
        end do
-       call get_flux (bpar, qbflux(:,:,:,2), theta_qbflux(:,:,2), dnorm)
+       call get_flux (bpar, qbflux(:,:,:,2), dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -5099,7 +4263,7 @@ subroutine check_dist_fn(report_unit)
                     *vperp2(:,iglo)
           end do
        end do
-       call get_flux (bpar, qbflux(:,:,:,3), theta_qbflux(:,:,3), dnorm)
+       call get_flux (bpar, qbflux(:,:,:,3), dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
@@ -5109,7 +4273,7 @@ subroutine check_dist_fn(report_unit)
                   *spec(is)%tz*vpac(:,isgn,iglo)
           end do
        end do
-       call get_flux (bpar, vbflux, theta_vbflux, dnorm)
+       call get_flux (bpar, vbflux, dnorm)
     else
        pbflux = 0.
        qbflux = 0.
@@ -5121,17 +4285,15 @@ subroutine check_dist_fn(report_unit)
     deallocate (dnorm)
   end subroutine flux
 
-  subroutine get_flux (fld, flx, theta_flx, dnorm)
-    use theta_grid, only: ntgrid, delthet
+  subroutine get_flux (fld, flx, dnorm)
+    use theta_grid, only: ntgrid, delthet, grho
     use kt_grids, only: ntheta0, aky, naky
     use le_grids, only: integrate_moment
-    use theta_grid, only: grho
     use species, only: nspec
     use mp, only: proc0
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
     real, dimension (:,:,:), intent (in out) :: flx
-    real, dimension (-ntgrid:,:), intent (in out) :: theta_flx
     real, dimension (-ntgrid:,:,:) :: dnorm
     complex, dimension (:,:,:,:), allocatable :: total
     real :: wgt
@@ -5150,28 +4312,7 @@ subroutine check_dist_fn(report_unit)
              end do
           end do
        end do
-
-       ! factors of 0.5, kxfac, included 8.16.00
-       ! flx = flx*0.5*kxfac 
-       ! factor of kxfac was wrong!  Fixed 2.2.04 BD
        flx = flx*0.5
-
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                ! delthet(ntgrid) = 0.0 => theta_flx(ntgrid,is) => inf
-!                do ig = -ntgrid, ntgrid
-                do ig = -ntgrid, ntgrid-1
-                   wgt = sum(dnorm(:,it,ik)*grho)*delthet(ig)
-                   theta_flx(ig,is) = theta_flx(ig,is) + &
-                        aimag(total(ig,it,ik,is)*conjg(fld(ig,it,ik)) &
-                        *dnorm(ig,it,ik)*aky(ik))/wgt
-                end do
-             end do
-          end do
-       end do
-
-       theta_flx = theta_flx*0.5
     end if
 
     deallocate (total)
@@ -5184,20 +4325,18 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: ntgrid, bmag, gradpar, grho, delthet
     use theta_grid, only: qval, shat, gds21, gds22, drhodpsi, IoB
     use kt_grids, only: naky, ntheta0, akx, theta0, aky
-    use le_grids, only: e
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use mp, only: proc0
-    use run_parameters, only: woutunits, fphi, fapar, fbpar, funits
+    use run_parameters, only: woutunits, fphi, fapar, fbpar
     use constants, only: zi
-    use geometry, only: rmajor_geo, bpol_geo, rhoc
+    use geometry, only: rhoc
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
     real, dimension (:,:,:), intent (out) :: vflx0, vflx1
     real, dimension (:,:), allocatable :: dum
     real, dimension (:,:,:), allocatable :: dnorm
     complex, dimension (:,:,:), allocatable :: dphi
-    real :: anorm
     integer :: it, ik, is, isgn, ig
     integer :: iglo
 
@@ -5209,23 +4348,11 @@ subroutine check_dist_fn(report_unit)
        vflx0 = 0.0 ; vflx1 = 0.0 ; dum = 0.0
     end if
 
-    if (adiabatic_option_switch == adiabatic_option_noJ) then
-       dnorm = 1.
-    else
-       do ik = 1, naky
-          do it = 1, ntheta0
-             dnorm(:,it,ik) = 1./bmag/gradpar
-          end do
-       end do
-    end if
-
     do ik = 1, naky
        do it = 1, ntheta0
-          dnorm(:,it,ik) = dnorm(:,it,ik)*delthet*woutunits(ik)/sqrt(2.0)
+          dnorm(:,it,ik) = delthet/bmag/gradpar*woutunits(ik)
        end do
     end do
-    
-    anorm = sum(dnorm*abs(phi))
 
     do ig = -ntgrid, ntgrid-1
        dphi(ig,:,:) = (phi(ig+1,:,:)-phi(ig,:,:))/delthet(ig)
@@ -5250,7 +4377,7 @@ subroutine check_dist_fn(report_unit)
                   *drhodpsi*IoB**2*rhostar
           end do
        end do
-       call get_flux (phi, vflx1, dum, dnorm)
+       call get_flux (phi, vflx1, dnorm)
 
 !        do isgn = 1, 2
 !           do ig = -ntgrid, ntgrid
@@ -5261,7 +4388,7 @@ subroutine check_dist_fn(report_unit)
 !              end if
 !           end do
 !        end do
-!        call get_flux (phi, vflux_par, theta_vflux_par, dnorm)
+!        call get_flux (phi, vflux_par, dnorm)
     else
        vflx0 = 0. ; vflx1 = 0.
     end if
@@ -5313,9 +4440,9 @@ subroutine check_dist_fn(report_unit)
     use fields_arrays, only: phinew
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: it_idx, ik_idx, is_idx
-    use geometry, only: rmajor_geo, rhoc, bpol_geo
-    use run_parameters, only: funits
+    use geometry, only: rhoc
     use theta_grid, only: ntgrid, bmag, gds21, gds22, qval, shat
+    use theta_grid, only: Rplot, Bpol
     use kt_grids, only: aky, theta0
     use le_grids, only: integrate_volume, nlambda, negrid
     use le_grids, only: get_flux_vs_theta_vs_vpa
@@ -5340,18 +4467,10 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
-             ! rmajor_geo should always be allocated at this point.  this is just a safety precaution.
-             if (allocated(rmajor_geo)) then
-                g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,iglo) &
-                     *rmajor_geo(ig)*sqrt(1.0-bpol_geo(ig)**2/bmag(ig)**2) &
-                     -funits*zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
-                     *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,iglo)*spec(is)%smz/(qval*shat*bmag(ig)**2)
-             else
-                ! assume B_phi / B = 1
-                g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,iglo) &
-                     -funits*zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
-                     *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,iglo)*spec(is)%smz/(qval*shat*bmag(ig)**2)
-             end if
+             g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,iglo) &
+                  *Rplot(ig)*sqrt(1.0-Bpol(ig)**2/bmag(ig)**2) &
+                  -zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
+                  *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,iglo)*spec(is)%smz/(qval*shat*bmag(ig)**2)
              g0r(ig,isgn,iglo) = aimag(g0(ig,isgn,iglo)*conjg(phinew(ig,it,ik)))*aky(ik)
           end do
        end do
@@ -5365,280 +4484,6 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine flux_vs_theta_vs_vpa
 
-!>GGH
-!=============================================================================
-! Density: Calculate Density perturbations
-!=============================================================================
-!  subroutine get_dens_vel (dv, dvk, phi, apar, bpar, phinew, aparnew, bparnew)
-  subroutine get_dens_vel (dv, dvk, phi, bpar, phinew, bparnew)
-    use constants, only: pi
-    use dist_fn_arrays, only: aj0, aj1, vpar, vperp2, g, gnew
-    use gs2_heating, only: dens_vel_diagnostics
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
-    use kt_grids, only: ntheta0, naky,aky
-    use le_grids, only: integrate_moment
-    use mp, only: proc0
-    use nonlinear_terms, only: nonlin
-    use run_parameters, only: fphi, fbpar
-    use species, only: spec,nspec
-    use theta_grid, only: jacob, delthet, ntgrid
-    implicit none
-    !Passed
-    type (dens_vel_diagnostics) :: dv
-    type (dens_vel_diagnostics), dimension(:,:) :: dvk
-!    complex, dimension (-ntgrid:,:,:) :: phi, apar, bpar, phinew, aparnew, bparnew
-    complex, dimension (-ntgrid:,:,:) :: phi, bpar, phinew, bparnew
-    !Local 
-    integer :: isgn, iglo, ig, is, ik, it            !Indices
-    complex :: j0phi                                 !J_0 q phi/T 
-    complex :: j1bpar                               !2 J_1 v_perp^2 A_perp
-    complex :: hvpar                                 !Dist Func h v_par
-    complex :: hvperp                                !Dist Func h v_perp
-    complex :: hh                                    !Dist Func h 
-    complex, dimension(:,:,:,:), allocatable :: tot  !Integrated DF
-    real :: fac2                                     !Factor
-    real, dimension (:), allocatable :: wgt
-
-    !Allocate tot variable for each calculation
-    allocate (tot(-ntgrid:ntgrid, ntheta0, naky, nspec))
-
-    !Set up weighting factors for z-sums on proc0
-    if (proc0) then
-       allocate (wgt(-ntgrid:ntgrid))
-       wgt = 0.
-       do ig=-ntgrid,ntgrid-1
-          wgt(ig) = delthet(ig)*jacob(ig)
-       end do
-       wgt = wgt/sum(wgt)         
-    endif
-
-    !Parallel velocity perturbation--------------------------------------------
-    !Loop through and constuct time and z-centered integrands
-    do iglo=g_lo%llim_proc, g_lo%ulim_proc
-       is = is_idx(g_lo, iglo)
-       it = it_idx(g_lo, iglo)
-       ik = ik_idx(g_lo, iglo)
-       do isgn=1,2
-          do ig=-ntgrid, ntgrid-1
-             !Construct time and space centered v_par h
-             !NOTE: h=g + J_0 q phi/T + 2 J_1 v_perp^2  A_perp
-             j0phi   = aj0(ig,iglo)*phi(ig,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig,iglo)*2.0*vperp2(ig,iglo)*bpar(ig,it,ik)
-             
-             hvpar = vpar(ig,isgn,iglo)*( &
-                  g(ig,isgn,iglo) + j0phi*fphi + j1bpar*fbpar)
-             
-             j0phi   = aj0(ig+1,iglo)*phi(ig+1,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig+1,iglo)*2.0*vperp2(ig+1,iglo)*bpar(ig+1,it,ik)
-             
-             hvpar = hvpar +  vpar(ig+1,isgn,iglo)*( &
-                  g(ig+1,isgn,iglo) + j0phi*fphi + j1bpar*fbpar)
-             
-             j0phi   = aj0(ig,iglo)*phinew(ig,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig,iglo)*2.0*vperp2(ig,iglo)*bparnew(ig,it,ik)
-             
-             hvpar = hvpar + vpar(ig,isgn,iglo)*( &
-                  gnew(ig,isgn,iglo) + j0phi*fphi + j1bpar*fbpar)
-             
-             j0phi   = aj0(ig+1,iglo)*phinew(ig+1,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig+1,iglo)*2.0*vperp2(ig+1,iglo)*bparnew(ig+1,it,ik)
-             
-             hvpar = hvpar + vpar(ig+1,isgn,iglo)*( &
-                  gnew(ig+1,isgn,iglo) + j0phi*fphi + j1bpar*fbpar)
-             
-             hvpar = 0.25 * hvpar 
-
-             g0(ig,isgn,iglo) = spec(is)%dens*hvpar
-
-          end do
-       end do
-    end do
-
-    !Integrate over velocity
-    call integrate_moment (g0, tot)
-    
-    !Sum over theta (z-direction) to get perpendicular Fourier components only
-    if (proc0) then
-       do ik = 1, naky
-          !GGH QUES: What is fac2 all about?
-          fac2 = 0.5
-          if (aky(ik) < epsilon(0.0)) fac2 = 1.0
-          do it = 1, ntheta0
-             !Skip mean value (k=0) components
-             if (nonlin .and. it == 1 .and. ik == 1) cycle
-             do is = 1, nspec
-                do ig = -ntgrid, ntgrid-1
-                   dvk(it,ik)%dvpar(is) = dvk(it,ik)%dvpar(is) &
-                        + real(tot(ig,it,ik,is))*wgt(ig)*fac2
-                end do
-                dv % dvpar(is) = dv%dvpar(is) + dvk(it,ik)%dvpar(is)
-             end do
-          end do
-       end do
-    end if
-
-    !Perpendicular velocity perturbation---------------------------------------
-    !Loop through and constuct time and z-centered integrands
-    !Non-adiabatic part
-    do iglo=g_lo%llim_proc, g_lo%ulim_proc
-       is = is_idx(g_lo, iglo)
-       it = it_idx(g_lo, iglo)
-       ik = ik_idx(g_lo, iglo)
-       do isgn=1,2
-          do ig=-ntgrid, ntgrid-1
-             !Construct time and space centered v_par h
-             !NOTE: h=g + J_0 q phi/T + 2 J_1 v_perp^2  A_perp
-             j0phi   = aj0(ig,iglo)*phi(ig,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig,iglo)*2.0*vperp2(ig,iglo)*bpar(ig,it,ik)
-             
-             hvperp = sqrt(vperp2(ig,iglo))*( &
-                  g(ig,isgn,iglo) + j0phi*fphi + j1bpar*fbpar)
-             
-             j0phi   = aj0(ig+1,iglo)*phi(ig+1,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig+1,iglo)*2.0*vperp2(ig+1,iglo)*bpar(ig+1,it,ik)
-             
-             hvperp = hvperp +  sqrt(vperp2(ig+1,iglo))*( &
-                  g(ig+1,isgn,iglo) + j0phi*fphi + j1bpar*fbpar)
-             
-             j0phi   = aj0(ig,iglo)*phinew(ig,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig,iglo)*2.0*vperp2(ig,iglo)*bparnew(ig,it,ik)
-             
-             hvperp = hvperp + sqrt(vperp2(ig,iglo))*( &
-                  gnew(ig,isgn,iglo) + j0phi*fphi + j1bpar*fbpar)
-             
-             j0phi   = aj0(ig+1,iglo)*phinew(ig+1,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig+1,iglo)*2.0*vperp2(ig+1,iglo)*bparnew(ig+1,it,ik)
-             
-             hvperp = hvperp + sqrt(vperp2(ig+1,iglo))*( &
-                  gnew(ig+1,isgn,iglo) + j0phi*fphi + j1bpar*fbpar)
-             
-             hvperp = 0.25 * hvperp 
-
-             g0(ig,isgn,iglo) = spec(is)%dens*hvperp
-
-          end do
-       end do
-    end do
-
-    !Integrate over velocity
-    call integrate_moment (g0, tot)
-    
-    !Add in adiabatic part 
-    do iglo=g_lo%llim_proc, g_lo%ulim_proc
-       is = is_idx(g_lo, iglo)
-       it = it_idx(g_lo, iglo)
-       ik = ik_idx(g_lo, iglo)
-       do ig= -ntgrid, ntgrid-1
-          !Time and z-center J_0 Phi
-          j0phi= 0.25*spec(is)%zt* &
-               ( aj0(ig,iglo)  *(phi(ig,it,ik)  + phinew(ig,it,ik)  ) + &
-                 aj0(ig+1,iglo)*(phi(ig+1,it,ik)+ phinew(ig+1,it,ik)) )
-
-          tot(ig,it,ik,is)=tot(ig,it,ik,is)+ sqrt(pi/2.)*spec(is)%stm* &
-               spec(is)%dens*(1.-j0phi)               
-       enddo
-    enddo
-
-    !Sum over theta (z-direction) to get perpendicular Fourier components only
-    if (proc0) then
-       do ik = 1, naky
-          fac2 = 0.5
-          if (aky(ik) < epsilon(0.0)) fac2 = 1.0
-           do it = 1, ntheta0
-             !Skip mean value (k=0) components
-             if (nonlin .and. it == 1 .and. ik == 1) cycle
-             do is = 1, nspec
-                do ig = -ntgrid, ntgrid-1
-                   dvk(it,ik)%dvperp(is) = dvk(it,ik)%dvperp(is) &
-                        + real(tot(ig,it,ik,is))*wgt(ig)*fac2
-                end do
-                dv % dvperp(is) = dv%dvperp(is) + dvk(it,ik)%dvperp(is)
-             end do
-          end do
-       end do
-    end if
-    !Density perturbation------------------------------------------------------
-    !Loop through and constuct time and z-centered integrands
-    !Non-adiabatic part
-    do iglo=g_lo%llim_proc, g_lo%ulim_proc
-       is = is_idx(g_lo, iglo)
-       it = it_idx(g_lo, iglo)
-       ik = ik_idx(g_lo, iglo)
-       do isgn=1,2
-          do ig=-ntgrid, ntgrid-1
-             !Construct time and space centered v_par h
-             !NOTE: h=g + J_0 q phi/T + 2 J_1 v_perp^2  A_perp
-             j0phi   = aj0(ig,iglo)*phi(ig,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig,iglo)*2.0*vperp2(ig,iglo)*bpar(ig,it,ik)
-             
-             hh = g(ig,isgn,iglo) + j0phi*fphi + j1bpar*fbpar
-             
-             j0phi   = aj0(ig+1,iglo)*phi(ig+1,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig+1,iglo)*2.0*vperp2(ig+1,iglo)*bpar(ig+1,it,ik)
-             
-             hh = hh +  &
-                  g(ig+1,isgn,iglo) + j0phi*fphi + j1bpar*fbpar
-             
-             j0phi   = aj0(ig,iglo)*phinew(ig,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig,iglo)*2.0*vperp2(ig,iglo)*bparnew(ig,it,ik)
-             
-             hh = hh + &
-                  gnew(ig,isgn,iglo) + j0phi*fphi + j1bpar*fbpar
-             
-             j0phi   = aj0(ig+1,iglo)*phinew(ig+1,it,ik)*spec(is)%zt
-             j1bpar = aj1(ig+1,iglo)*2.0*vperp2(ig+1,iglo)*bparnew(ig+1,it,ik)
-             
-             hh = hh +  &
-                  gnew(ig+1,isgn,iglo) + j0phi*fphi + j1bpar*fbpar
-             
-             hh = 0.25 * hh 
-
-             g0(ig,isgn,iglo) = spec(is)%dens*hh
-
-          end do
-       end do
-    end do
-
-    !Integrate over velocity
-    call integrate_moment (g0, tot)
-    
-    !Add in adiabatic part 
-    do iglo=g_lo%llim_proc, g_lo%ulim_proc
-       is = is_idx(g_lo, iglo)
-       it = it_idx(g_lo, iglo)
-       ik = ik_idx(g_lo, iglo)
-       do ig= -ntgrid, ntgrid-1
-          !Time and z-center J_0 Phi
-          j0phi= 0.25*spec(is)%zt* &
-               ( aj0(ig,iglo)  *(phi(ig,it,ik)  + phinew(ig,it,ik)  ) + &
-                 aj0(ig+1,iglo)*(phi(ig+1,it,ik)+ phinew(ig+1,it,ik)) )
-
-          tot(ig,it,ik,is)=tot(ig,it,ik,is) - spec(is)%dens*j0phi              
-       enddo
-    enddo
-
-    !Sum over theta (z-direction) to get perpendicular Fourier components only
-    if (proc0) then
-       do ik = 1, naky
-          fac2 = 0.5
-          if (aky(ik) < epsilon(0.0)) fac2 = 1.0
-          do it = 1, ntheta0
-             !Skip mean value (k=0) components
-             if (nonlin .and. it == 1 .and. ik == 1) cycle
-             do is = 1, nspec
-                do ig = -ntgrid, ntgrid-1
-                   dvk(it,ik)%dn(is) = dvk(it,ik)%dn(is) &
-                        + real(tot(ig,it,ik,is))*wgt(ig)*fac2
-                end do
-                dv % dn(is) = dv%dn(is) + dvk(it,ik)%dn(is)
-             end do
-          end do
-       end do
-    end if
-
-    if (proc0) deallocate (wgt)
-    deallocate (tot)
-  end subroutine get_dens_vel
 !=============================================================================
 ! Density: Calculate Density perturbations
 !=============================================================================
@@ -5700,11 +4545,13 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: integrate_moment
     use species, only: spec, nspec,has_electron_species
     use theta_grid, only: jacob, delthet, ntgrid
-    use run_parameters, only: fphi, fapar, fbpar, tunits, beta, tnorm, tite
+    use run_parameters, only: fphi, fapar, fbpar, tunits, beta, tite
     use gs2_time, only: code_dt
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_apar, a_ext_data
     use hyper, only: D_v, D_eta, nexp
+    use dist_fn_arrays, only: g_adjust
+
     implicit none
     type (heating_diagnostics) :: h
     type (heating_diagnostics), dimension(:,:) :: hk
@@ -5815,7 +4662,6 @@ subroutine check_dist_fn(report_unit)
 !       allocate (epar (-ntgrid:ntgrid, ntheta0, naky)) ; epar = 0.
        allocate (j_ext(-ntgrid:ntgrid, ntheta0, naky)) ; j_ext = 0.
        call antenna_apar (kperp2, j_ext)       
-!       call get_epar (phi, apar, phinew, aparnew, epar)
        
        if (beta > epsilon(0.)) then
           do ik=1,naky
@@ -6365,296 +5211,6 @@ subroutine check_dist_fn(report_unit)
     call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
 
   end subroutine get_heat
-!==============================================================================
-
-  subroutine get_stress (rstress, ustress)
-
-    use mp, only: proc0
-    use kt_grids, only: ntheta0, akx
-    use dist_fn_arrays, only: vpa
-    use gs2_layouts, only: g_lo, is_idx, il_idx, ie_idx
-    use le_grids, only: integrate, orbit_avg, integrate_stress, ng2
-    use species, only: spec, nspec
-    use theta_grid, only: drhodpsi, bmag, ntgrid
-    use constants, only: zi
-    implicit none
-    complex, dimension (:,:) :: rstress, ustress
-    real, dimension(nspec) :: wgt
-    real :: fac1, fac2
-    integer :: isgn, ie, is, il, iglo, ig, it
-
-    wgt = spec%z*spec%dens
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       is=is_idx(g_lo, iglo)
-       do isgn=1,2
-          do ig=-ntgrid,ntgrid
-             g0(ig,isgn,iglo) = gnl_1(ig,isgn,iglo)*wgt(is)
-          end do
-       end do
-    end do
-
-    call integrate_stress (g0, rstress)
-
-    if (proc0) then
-       do is=1,nspec
-          do it = 2, ntheta0
-             rstress(it, is) = rstress (it, is) / (zi*akx(it))
-          end do
-       end do
-    end if
-
-    wgt = spec%mass*spec%dens
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       il=il_idx(g_lo, iglo)
-       if (il > ng2) cycle
-       is=is_idx(g_lo, iglo)
-       ie=ie_idx(g_lo, iglo)
-       
-       do ig=-ntgrid,ntgrid
-          fac1=(vpa(ig,1,iglo)/bmag(ig)-orbit_avg(il,ie))*drhodpsi
-          fac2=(vpa(ig,2,iglo)/bmag(ig)+orbit_avg(il,ie))*drhodpsi
-          g0(ig,1,iglo) = gnl_1(ig,1,iglo)*fac1
-          g0(ig,2,iglo) = gnl_1(ig,2,iglo)*fac2
-       end do
-    end do
-
-    call integrate_stress (g0, ustress)
-
-  end subroutine get_stress
-
-!  subroutine neoclassical_flux (pflux, qflux, phi, bpar)
-  subroutine neoclassical_flux (pflux, qflux)
-    use species, only: nspec, spec
-    use theta_grid, only: ntgrid, gradpar, bmag, delthet
-    use kt_grids, only: naky, ntheta0, akx
-    use le_grids, only: e, integrate, integrate_moment
-    use dist_fn_arrays, only: g
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
-    use gs2_layouts, only: idx, proc_id, idx_local
-    use mp, only: proc0, send, receive, broadcast
-    use run_parameters, only: woutunits
-    use gs2_time, only: code_dt
-    use constants
-    implicit none
-    complex, dimension (:,:,:), intent (out) :: pflux, qflux
-!    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-    complex, dimension (:,:,:), allocatable :: anorm
-    complex, dimension (:,:,:,:), allocatable :: total
-    real, dimension (:,:,:), allocatable :: dnorm
-    integer :: ig, ik, it, ie, is, ng
-    integer :: iglo
-    real :: kx2
-
-    allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
-    allocate (anorm (ntheta0,naky,nspec))
-    allocate (total(-ntgrid:ntgrid,ntheta0,naky,nspec))
-    ng = ntgrid
-
-    if (proc0) then
-       pflux = 0.0
-       qflux = 0.0
-    end if
-
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             dnorm(ig,it,ik) = 1.0/gradpar(ig)/bmag(ig)*woutunits(ik)/sqrt(2.0)
-! following form used to check against analytic result for velocity-independent collision freq.
-!             dnorm(ig,it,ik) = 1.0/(bmag(ig)*woutunits(ik)*sqrt(2.0)*2.0*pi)
-          end do
-       end do
-    end do
-    dnorm(-ntgrid,:,:) = 0.5*dnorm(-ntgrid,:,:)
-    dnorm( ntgrid,:,:) = 0.5*dnorm( ntgrid,:,:)
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       g0(:,1,iglo) = dnorm(:,it,ik)
-       g0(:,2,iglo) = dnorm(:,it,ik)
-    end do
-
-    call integrate_moment (g0, total)
-    if (proc0) then
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                anorm(it,ik,is) = sum(total(-ng:ng-1,it,ik,is)*delthet(-ng:ng-1))
-             end do
-          end do
-       end do
-    end if
-
-!    call g_adjust(g,phi,bpar,fphi,fbpar)
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       if (abs(akx(it)) < epsilon(0.0)) then
-          kx2 = 1.
-       else
-!MAB          kx2 = akx(it)**2
-          kx2 = akx(it)
-       end if
-       g0(:,1,iglo) = dnorm(:,it,ik)*wdrift_neo(:,iglo)*g(:,1,iglo)/code_dt*spec(is)%tz
-       g0(:,2,iglo) = dnorm(:,it,ik)*wdrift_neo(:,iglo)*g(:,2,iglo)/code_dt*spec(is)%tz
-    end do
-
-!    call g_adjust(g,phi,bpar,-fphi,-fbpar)
-
-    call integrate_moment (g0, total)
-    if (proc0) then
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                pflux(it,ik,is) &
-!                     = sum(total(-ng:ng-1,it,ik,is)*delthet(-ng:ng-1))/anorm(it,ik,is)
-                     = sum(total(-ng:ng-1,it,ik,is))/sum(dnorm(-ng:ng-1,it,ik))
-             end do
-          end do
-       end do
-    end if
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       g0(:,:,iglo) = g0(:,:,iglo)*e(ie,is)
-    end do
-
-    call integrate_moment (g0, total)
-    if (proc0) then
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                qflux(it,ik,is) &
-!                     = sum(total(-ng:ng-1,it,ik,is)*delthet(-ng:ng-1))/anorm(it,ik,is)
-                     = sum(total(-ng:ng-1,it,ik,is))/sum(dnorm(-ng:ng-1,it,ik))
-             end do
-          end do
-       end do
-    end if
-
-    deallocate (dnorm, anorm, total)
-  end subroutine neoclassical_flux
-
-  subroutine fieldcheck (phi, apar, bpar)
-    use file_utils, only: open_output_file, close_output_file
-    use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, aky, ntheta0, theta0
-    use dist_fn_arrays, only: kperp2
-    use mp, only: proc0
-    implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
-    complex, dimension (:,:,:), allocatable :: fieldeq, fieldeqa, fieldeqp
-    integer :: ig, ik, it, unit
-
-    allocate (fieldeq (-ntgrid:ntgrid,ntheta0,naky))
-    allocate (fieldeqa(-ntgrid:ntgrid,ntheta0,naky))
-    allocate (fieldeqp(-ntgrid:ntgrid,ntheta0,naky))
-    call getfieldeq (phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
-
-    if (proc0) then
-       call open_output_file (unit, ".fieldcheck")
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-!                write (unit,*) "j,theta,ik,aky,it,theta0 ", &
-!                     ig, theta(ig), ik, aky(ik), it, theta0(it,ik)
-!                write (unit,"(8(1pe12.5,1x))") phi(ig,it,ik),fieldeq(ig,it,ik),&
-!                     gamtot(ig,it,ik),kperp2(ig,it,ik)
-!                write (unit,"(8(1pe12.5,1x))") &
-!                     kperp2(ig,it,ik)*gridfac1(ig,it,ik)*apar(ig,it,ik), &
-!                     fieldeqa(ig,it,ik), gamtot1(ig,it,ik), kperp2(ig,it,ik)
-!                write (unit,"(8(1pe12.5,1x))") &
-!                     gridfac1(ig,it,ik)*bpar(ig,it,ik), fieldeqp(ig,it,ik), &
-!                     gamtot2(ig,it,ik), kperp2(ig,it,ik)
-                write (unit,"(8(1pe12.5,1x))") &
-                     gamtot(ig,it,ik), gamtot1(ig,it,ik), gamtot2(ig,it,ik), &
-                     kperp2(ig,it,ik)
-             end do
-          end do
-       end do
-       call close_output_file (unit)
-     end if
-     deallocate (fieldeq, fieldeqa, fieldeqp)
-  end subroutine fieldcheck
-
-  subroutine vortcheck (phi, bpar)
-    use file_utils, only: open_output_file, close_output_file
-    use species, only: nspec, spec
-    use theta_grid, only: ntgrid, bmag, gbdrift, gbdrift0, cvdrift, cvdrift0
-    use le_grids, only: e, al, anon, integrate_species
-    use kt_grids, only: naky, aky, ntheta0, theta0
-    use dist_fn_arrays, only: aj0, aj1, vperp2, gnew
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
-    use run_parameters, only: fphi, fbpar
-    use gs2_time, only: code_dt
-    use mp, only: proc0
-    implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-    real, dimension (nspec) :: wgt
-    complex, dimension (:,:,:,:), allocatable :: apchk
-    integer :: iglo, ig, ik, it, il, ie, is
-    real :: temp, z
-    real, dimension (-ntgrid:ntgrid) :: vplus, cvtot, gbtot, delwd
-    integer :: unit
-    
-    allocate (apchk (-ntgrid:ntgrid,ntheta0,naky,2))
-    apchk = 0.0
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-
-       temp = spec(is)%temp
-       z = spec(is)%z
-       vplus = e(ie,is)*al(il)*bmag
-       cvtot = cvdrift + theta0(it,ik)*cvdrift0
-       gbtot = gbdrift + theta0(it,ik)*gbdrift0
-       delwd = temp/z*code_dt*(gbtot-cvtot)*vplus/2.0
-
-       g0(:,1,iglo) &
-         = (gnew(:,1,iglo) &
-            +anon(ie,is)*2.0*vperp2(:,iglo)*aj1(:,iglo)*fbpar*bpar(:,it,ik) &
-            +fphi*z*anon(ie,is)*phi(:,it,ik)*aj0(:,iglo)/temp) &
-          *delwd
-    end do
-    wgt = spec%dens*spec%z
-    call integrate_species (g0, wgt, apchk(:,:,:,1))
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-
-       temp = spec(is)%temp
-       z = spec(is)%z
-
-       g0(:,1,iglo) = bpar(:,it,ik)*fbpar*vperp2(:,iglo)*temp/z
-    end do
-    wgt = spec%dens*spec%z
-    call integrate_species (g0, wgt, apchk(:,:,:,2))
-
-    if (proc0) then
-       call open_output_file (unit, ".vortcheck")
-       do ik = 1, naky
-          do it = 1, ntheta0
-             write (unit,*) 'aky=',aky(ik), ' theta0=',theta0(it,ik)
-             do ig = -ntgrid, ntgrid
-                write (unit,*) apchk(ig,it,ik,1), apchk(ig,it,ik,2)
-             end do
-          end do
-       end do
-       call close_output_file (unit)
-    end if
-    deallocate (apchk)
-  end subroutine vortcheck
 
   subroutine reset_init
 
@@ -6665,10 +5221,6 @@ subroutine check_dist_fn(report_unit)
     wdrift = 0.
     wdriftttp = 0.
     wcoriolis = 0.
-    if (neoflux) then
-       wdrift_neo = 0.
-       wdriftttp_neo = 0.
-    end if
     a = 0.
     b = 0.
     r = 0.
@@ -6688,7 +5240,7 @@ subroutine check_dist_fn(report_unit)
   subroutine get_verr (errest, erridx, phi, bpar)
      
     use mp, only: proc0, broadcast
-    use le_grids, only: integrate_test, integrate_species
+    use le_grids, only: integrate_species
     use le_grids, only: eint_error, trap_error, lint_error, wdim
     use le_grids, only: ng2, nlambda, negrid, new_trap_int, jend
     use theta_grid, only: ntgrid
@@ -6701,6 +5253,7 @@ subroutine check_dist_fn(report_unit)
     use collisions, only: etol, ewindow, etola, ewindowa
     use collisions, only: vnmult, vary_vnew
     use nonlinear_terms, only: nonlin
+    use dist_fn_arrays, only: g_adjust
 
     ! TEMP FOR TESTING -- MAB
 !    use gs2_layouts, only: il_idx
@@ -6715,15 +5268,12 @@ subroutine check_dist_fn(report_unit)
     real, dimension (:,:), intent (out) :: errest
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
 
-    real, dimension (:), allocatable :: wgt
-    real, dimension (:), allocatable :: errtmp
-    integer, dimension (:), allocatable :: idxtmp
-!    real, dimension (:,:), allocatable, save :: kmax
     complex, dimension (:,:,:), allocatable :: phi_app, apar_app
     complex, dimension (:,:,:,:), allocatable :: phi_e, phi_l, phi_t
     complex, dimension (:,:,:,:), allocatable :: apar_e, apar_l, apar_t
+    real, dimension (:), allocatable :: wgt, errtmp
+    integer, dimension (:), allocatable :: idxtmp
 
-    real :: errcut_phi, errcut_apar
     real :: vnmult_target
 
 !    logical :: increase = .true., decrease = .false., first = .true.
@@ -6733,11 +5283,7 @@ subroutine check_dist_fn(report_unit)
     allocate(errtmp(2))
     allocate(idxtmp(3))
 
-!    if (first) then
-    if (.not. allocated(kmax)) call broadcast (wdim)
-!       call broadcast (wdim)
-!       first = .false.
-!    end if
+    if (.not. allocated(kmax)) call broadcast (wdim)  ! Odd-looking statement.  BD
 
     if (fphi > epsilon(0.0)) then
        allocate(phi_app(-ntgrid:ntgrid,ntheta0,naky))
@@ -6774,7 +5320,6 @@ subroutine check_dist_fn(report_unit)
        wgt = spec%z*spec%dens
 
        call integrate_species (g0, wgt, phi_app)
-!       call integrate_test (g0, wgt, phi_app, istep)  ! only around for testing
 
 ! integrates dist fn of each species over v-space
 ! after dropping an energy grid point and returns
@@ -6814,8 +5359,6 @@ subroutine check_dist_fn(report_unit)
        wgt = 2.0*beta*spec%z*spec%dens*sqrt(spec%temp/spec%mass)
        call integrate_species (g0, wgt, apar_app)
 
-!    call integrate_test (g0, wgt, apar_app, istep)  ! only around for testing
-
        call eint_error (g0, wgt, apar_e)
        call lint_error (g0, wgt, apar_l)
        if (nlambda > ng2 .and. new_trap_int) then
@@ -6844,25 +5387,16 @@ subroutine check_dist_fn(report_unit)
     erridx = 0
     
     if (fphi > epsilon(0.0)) then
-       errcut_phi = 0.0
-       
-       do ig = -ntgrid, ntgrid
-          errcut_phi = max(errcut_phi, maxval(cabs(phi_app(ig,:,:))*kmax))
-       end do
-       errcut_phi = errcut_phi/100
-       
-!       call estimate_error (phi_app, phi_e, kmax, errcut_phi, errtmp, idxtmp)
+
        call estimate_error (phi_app, phi_e, kmax, errtmp, idxtmp)
        errest(1,:) = errtmp
        erridx(1,:) = idxtmp
        
-!       call estimate_error (phi_app, phi_l, kmax, errcut_phi, errtmp, idxtmp)
        call estimate_error (phi_app, phi_l, kmax, errtmp, idxtmp)
        errest(2,:) = errtmp
        erridx(2,:) = idxtmp
 
        if (nlambda > ng2 .and. new_trap_int) then       
-!          call estimate_error (phi_app, phi_t, kmax, errcut_phi, errtmp, idxtmp, trap_flag)
           call estimate_error (phi_app, phi_t, kmax, errtmp, idxtmp, trap_flag)
           errest(3,:) = errtmp
           erridx(3,:) = idxtmp
@@ -6872,26 +5406,15 @@ subroutine check_dist_fn(report_unit)
     end if
     
     if (fapar > epsilon(0.0)) then
-       errcut_apar = 0.0
-       do ig = -ntgrid, ntgrid
-          errcut_apar = max(errcut_apar, maxval(cabs(apar_app(ig,:,:))*kmax))
-       end do
-       errcut_apar = errcut_apar/100
-       
-!       call estimate_error (apar_app, apar_e, kmax, errcut_apar, errtmp, idxtmp)
+
        call estimate_error (apar_app, apar_e, kmax, errtmp, idxtmp)
        errest(4,:) = errtmp
        erridx(4,:) = idxtmp
-       
-!       call estimate_error (apar_app, apar_l, kmax, errcut_apar, errtmp, idxtmp)
+
        call estimate_error (apar_app, apar_l, kmax, errtmp, idxtmp)
        errest(5,:) = errtmp
        erridx(5,:) = idxtmp
     end if
-
-! sets gediff (gldiff) equal to the minimum difference between the various
-! less-accurate integral approximations for g0 and the best estimate
-! for g0 resulting from gaussian quadrature
 
     if (vary_vnew) then
        vnmult_target = vnmult(2)
@@ -6905,66 +5428,7 @@ subroutine check_dist_fn(report_unit)
        call init_ediffuse (vnmult_target)
        call init_diffuse_conserve
     end if
-    
-! sets gtdiff equal to the minimum difference between the various
-! less-accurate integral approximations for g0 and the best estimate
-! for g0 (which has one more gridpt than the less-accurate integrals)
-
-! gstapp(ig,it,ik,ipt) = 0.0 if ipt > jend(ig)-ng2
-
-!    if (nlambda > ng2 .and. new_trap_int) then
-!       igmax = 0; ikmax = 0; itmax = 0
-!       gdsum = 0.0; gnsum = 0.0; gdmax = 0.0; gpavg = 0.0; gsmax = 0.0
-!       do ik=1,naky
-!          do it=1,ntheta0
-!             do ig=-ntgrid,ntgrid
-!                if (jend(ig) > ng2+1) then
-!                   gpsum = 0.0; gpcnt = 0
-!                   if (kmax(it,ik)*cabs(phi_app(ig,it,ik)) > errcut_phi .and. &
-!                        kmax(it,ik)*cabs(phi_app(ig,it,ik)) > 10*epsilon(0.0)) then
-!                      do ipt=1,jend(ig)-ng2
-!                         
-!                         gptmp = kmax(it,ik)*cabs(phi_app(ig,it,ik) - phi_t(ig,it,ik,ipt))
-!                         
-!                         gpsum = gpsum + gptmp
-!                         gpcnt = gpcnt + 1
-!                         
-!                      end do
-!                      
-!                      gpavg = gpsum/gpcnt
-!                      
-!                      if (gpavg > gdmax) then
-!                         igmax = ig
-!                         ikmax = ik
-!                         itmax = it
-!                         gdmax = gpavg
-!                         gsmax = kmax(it,ik)*cabs(phi_app(ig,it,ik))
-!                      end if
-!                      
-!                      gnsum = gnsum + gpavg
-!                      gdsum = gdsum + kmax(it,ik)*cabs(phi_app(ig,it,ik))
-!                   end if
-!                end if
-!             end do
-!          end do
-!       end do
-!       
-!       gdmax = gdmax/gsmax
-!       
-!       erridx(3,1) = igmax
-!       erridx(3,2) = ikmax
-!       erridx(3,3) = itmax
-!       errest(3,1) = gdmax
-!       errest(3,2) = gnsum/gdsum
-!       
-!       deallocate(phi_t)
-!       trap_flag = .true.
-!    else
-!       erridx(3,:) = 0
-!       errest(3,:) = 0.0
-!       trap_flag = .false.
-!    end if
-    
+       
     if (vary_vnew) then
        vnmult_target = vnmult(1)
        
@@ -7006,7 +5470,6 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine get_vnewk
 
-!  subroutine estimate_error (app1, app2, kmax_local, errcut, errest, erridx, trap)
   subroutine estimate_error (app1, app2, kmax_local, errest, erridx, trap)
 
     use kt_grids, only: naky, ntheta0
@@ -7018,7 +5481,6 @@ subroutine check_dist_fn(report_unit)
     complex, dimension (-ntgrid:,:,:), intent (in) :: app1
     complex, dimension (-ntgrid:,:,:,:), intent (in) :: app2
     real, dimension (:,:), intent (in) :: kmax_local
-!    real, intent (in) :: errcut
     logical, intent (in), optional :: trap
     real, dimension (:), intent (out) :: errest
     integer, dimension (:), intent (out) :: erridx
@@ -7034,8 +5496,6 @@ subroutine check_dist_fn(report_unit)
           do ig=-ntgrid,ntgrid
              if (.not.present(trap) .or. jend(ig) > ng2+1) then
                 gpcnt = 0; gpsum = 0.0
-!                if ((kmax(it,ik)*cabs(app1(ig,it,ik)) > errcut) .and. &
-!                     (kmax(it,ik)*cabs(app1(ig,it,ik)) > 10*epsilon(0.0))) then
 
                    if (present(trap)) then
                       end_idx = jend(ig)-ng2
@@ -7082,7 +5542,7 @@ subroutine check_dist_fn(report_unit)
 
   subroutine get_gtran (geavg, glavg, gtavg, phi, bpar, istep)
 
-    use le_grids, only: legendre_transform, negrid, nlambda, ng2, vgrid, nesub, jend
+    use le_grids, only: legendre_transform, negrid, nlambda, ng2, nesub, jend
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
@@ -7090,6 +5550,7 @@ subroutine check_dist_fn(report_unit)
     use run_parameters, only: fphi, fbpar
     use gs2_layouts, only: g_lo
     use mp, only: proc0, broadcast
+    use dist_fn_arrays, only: g_adjust
 
     implicit none
 
@@ -7103,15 +5564,9 @@ subroutine check_dist_fn(report_unit)
     real :: genorm, gemax, genum, gedenom
     real :: glnorm, glmax, glnum, gldenom
     real :: gtnorm, gtmax, gtnum, gtdenom
-    integer :: ig, it, ik, is, ie, il, iglo, isgn, gesize
+    integer :: ig, it, ik, is, ie, il, iglo, isgn
 
-    if (vgrid) then
-       gesize = nesub
-    else
-       gesize = negrid-1
-    end if
-
-    allocate(gne2(0:gesize-1))
+    allocate(gne2(0:nesub-1))
     allocate(gnl2(0:ng2-1))
 
     genorm = 0.0 ; glnorm = 0.0
@@ -7121,7 +5576,7 @@ subroutine check_dist_fn(report_unit)
     glnum = 0.0 ; gldenom = 0.0
     gtnum = 0.0 ; gtdenom = 0.0
 
-    allocate(getran(0:gesize-1,-ntgrid:ntgrid,ntheta0,naky,nspec))
+    allocate(getran(0:nesub-1,-ntgrid:ntgrid,ntheta0,naky,nspec))
     allocate(gltran(0:ng2-1,-ntgrid:ntgrid,ntheta0,naky,nspec))
  
     getran = 0.0; gltran = 0.0
@@ -7159,17 +5614,17 @@ subroutine check_dist_fn(report_unit)
           do ik=1,naky
              do it=1,ntheta0
                 do ig=-ntgrid,ntgrid
-                   do ie=0,gesize-1
+                   do ie=0,nesub-1
                       gne2(ie) = real(getran(ie,ig,it,ik,is)*conjg(getran(ie,ig,it,ik,is)))
                    end do
                    do il=0,ng2-1
                       gnl2(il) = real(gltran(il,ig,it,ik,is)*conjg(gltran(il,ig,it,ik,is)))
                    end do
                    genorm = maxval(gne2)
-                   if (gesize < 3) then
+                   if (nesub < 3) then
                       gemax = gne2(size(gne2)-1)
                    else
-                      gemax = maxval(gne2(gesize-3:gesize-1))
+                      gemax = maxval(gne2(nesub-3:nesub-1))
                    end if
                    glnorm = maxval(gnl2)
                    glmax = maxval(gnl2(ng2-3:ng2-1))
@@ -7222,9 +5677,10 @@ subroutine check_dist_fn(report_unit)
     use run_parameters, only: fphi, fbpar
     use gs2_layouts, only: g_lo
     use mp, only: proc0
-    use le_grids, only: nterp, negrid, lagrange_interp, xloc, testfac
+    use le_grids, only: nterp, negrid, lagrange_interp, xloc
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
+    use dist_fn_arrays, only: g_adjust
 
     implicit none
 
@@ -7286,7 +5742,7 @@ subroutine check_dist_fn(report_unit)
     use file_utils, only: open_output_file, close_output_file, get_unused_unit
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx, ie_idx
     use gs2_layouts, only: idx_local, proc_id
-    use le_grids, only: al, e, forbid, negrid, nlambda
+    use le_grids, only: al, energy, forbid, negrid, nlambda
     use egrid, only: zeroes, x0
     use theta_grid, only: bmax, bmag
     use gs2_time, only: user_time
@@ -7345,9 +5801,9 @@ subroutine check_dist_fn(report_unit)
        endif
        if (proc0) then
           if (.not. forbid(ig,il)) then
-             vpa = sqrt(e(ie,is)*max(0.0, 1.0-al(il)*bmag(ig)))
-             vpe = sqrt(e(ie,is)*al(il)*bmag(ig))
-             write (unit, "(8(1x,e12.6))") vpa, vpe, e(ie,is), al(il), &
+             vpa = sqrt(energy(ie)*max(0.0, 1.0-al(il)*bmag(ig)))
+             vpe = sqrt(energy(ie)*al(il)*bmag(ig))
+             write (unit, "(8(1x,e12.6))") vpa, vpe, energy(ie), al(il), &
                   xpts(ie), ypts(il), real(gtmp(1)), real(gtmp(2))
           end if
        end if
@@ -7363,7 +5819,7 @@ subroutine check_dist_fn(report_unit)
     use file_utils, only: open_output_file, close_output_file, flush_output_file
     use gs2_layouts, only: il_idx, ig_idx, ik_idx, it_idx, is_idx, isign_idx, ie_idx
     use gs2_layouts, only: idx_local, proc_id, yxf_lo, accelx_lo, g_lo
-    use le_grids, only: al, e, forbid, negrid, nlambda
+    use le_grids, only: al, energy, forbid, negrid, nlambda
     use kt_grids, only: naky, ntheta0, nx, ny
     use theta_grid, only: bmag, ntgrid
     use species, only: nspec
@@ -7371,6 +5827,7 @@ subroutine check_dist_fn(report_unit)
     use nonlinear_terms, only: accelerated
     use gs2_transforms, only: transform2, init_transforms
     use run_parameters, only: fphi, fbpar
+    use dist_fn_arrays, only: g_adjust
 
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     logical, intent (in) :: last
@@ -7456,7 +5913,7 @@ subroutine check_dist_fn(report_unit)
                 end if
                 
                 if (proc0) then
-                   write (unit, "(6(1x,e12.6))") e(ie,is), al(il), &
+                   write (unit, "(6(1x,e12.6))") energy(ie), al(il), &
                         agp0(1), agp0(2), agp0zf(1), agp0zf(2)
                 end if
              end if
@@ -7491,7 +5948,7 @@ subroutine check_dist_fn(report_unit)
                 end if
                 
                 if (proc0) then
-                   write (unit, "(4(1x,e12.6),i8)") e(ie,is), al(il), &
+                   write (unit, "(4(1x,e12.6),i8)") energy(ie), al(il), &
                         gp0, gp0zf, isign
                 end if
              end if
@@ -7523,6 +5980,7 @@ subroutine check_dist_fn(report_unit)
     use redistribute, only: gather, scatter
     use file_utils, only: open_output_file, close_output_file
     use gs2_time, only: user_time
+    use dist_fn_arrays, only: g_adjust
     implicit none
 
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
@@ -8013,7 +6471,6 @@ subroutine check_dist_fn(report_unit)
     implicit none
 
     accelerated_x = .false. ; accelerated_v = .false.
-    neo = .false. ; nfac = 1
     no_comm = .false.
     readinit = .false. ; bessinit = .false. ; kp2init = .false. ; connectinit = .false.
     feqinit = .false. ; lpolinit = .false. ; fyxinit = .false. ; cerrinit = .false. ; mominit = .false.
@@ -8022,10 +6479,7 @@ subroutine check_dist_fn(report_unit)
     call reset_init
 
     if (allocated(fexp)) deallocate (fexp, bkdiff, bd_exp)
-    if (allocated(ittp)) then
-       deallocate (ittp, wdrift, wdriftttp)
-       if (neoflux) deallocate (wdrift_neo, wdriftttp_neo)
-    end if
+    if (allocated(ittp)) deallocate (ittp, wdrift, wdriftttp)
     if (allocated(wcoriolis)) deallocate (wcoriolis)
     if (allocated(vpa)) deallocate (vpa, vpac, vperp2, vpar)
     if (allocated(wstar)) deallocate (wstar)
@@ -8043,14 +6497,11 @@ subroutine check_dist_fn(report_unit)
     if (allocated(kx_shift)) deallocate (kx_shift)
     if (allocated(jump)) deallocate (jump)
     if (allocated(ikx_indexed)) deallocate (ikx_indexed)
-    if (allocated(aintnorm)) deallocate (aintnorm)
     if (allocated(ufac)) deallocate (ufac)
     if (allocated(gridfac1)) deallocate (gridfac1, gamtot, gamtot1, gamtot2)
     if (allocated(gamtot3)) deallocate (gamtot3)
     if (allocated(fl_avg)) deallocate (fl_avg)
     if (allocated(awgt)) deallocate (awgt)
-    if (allocated(fl_avg2)) deallocate (fl_avg2, bfac, f1, f2, f3, f4, kp2)
-    if (allocated(awgt2)) deallocate (awgt2)
     if (allocated(kmax)) deallocate (kmax)
     if (allocated(mom_coeff)) deallocate (mom_coeff, mom_coeff_npara, mom_coeff_nperp, &
          mom_coeff_tpara, mom_coeff_tperp, mom_shift_para, mom_shift_perp)
@@ -8061,12 +6512,15 @@ subroutine check_dist_fn(report_unit)
 
   subroutine init_lowflow
 
+    use constants, only: zi
     use dist_fn_arrays, only: vparterm, wdfac, vpac
     use dist_fn_arrays, only: wstarfac, hneoc, vpar
     use species, only: spec, nspec
+    use geometry, only: rhoc
     use theta_grid, only: theta, ntgrid, delthet, gradpar, bmag
-    use theta_grid, only: gds23, gds24
-    use le_grids, only: e, al, negrid, nlambda, forbid
+    use theta_grid, only: gds23, gds24, gds24_noq, cvdrift_th, gbdrift_th
+    use theta_grid, only: drhodpsi, qval
+    use le_grids, only: energy, al, negrid, nlambda, forbid
     use kt_grids, only: theta0
     use gs2_time, only: code_dt, user_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx, it_idx
@@ -8104,7 +6558,7 @@ subroutine check_dist_fn(report_unit)
        allocate (tmp5(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
        allocate (tmp6(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
        
-       call get_lowflow_terms (theta, al, e, bmag, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
+       call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
        
        if (proc0) then
           call open_output_file (neo_unit,".neo")
@@ -8112,8 +6566,8 @@ subroutine check_dist_fn(report_unit)
              do il = 1, nlambda
                 do ie = 1, negrid
                    if (.not. forbid(0,il)) then
-                      write (neo_unit,'(10e12.4)') sign(sqrt(e(ie,1)*(1.-al(il)*bmag(0))),1.5-real(isgn)), sqrt(e(ie,1)*al(il)*bmag(0)), &
-                           e(ie,1), sign(al(il)*bmag(0),1.5-real(isgn)), &
+                      write (neo_unit,'(10e12.4)') sign(sqrt(energy(ie)*(1.-al(il)*bmag(0))),1.5-real(isgn)), sqrt(energy(ie)*al(il)*bmag(0)), &
+                           energy(ie), sign(al(il)*bmag(0),1.5-real(isgn)), &
                            tmp1(0,il,ie,isgn,1), tmp2(0,il,ie,isgn,1), tmp3(0,il,ie,isgn,1), &
                            tmp4(0,il,ie,isgn,1), tmp5(0,il,ie,isgn,1), tmp6(0,il,ie,isgn,1)
                    end if
@@ -8149,21 +6603,30 @@ subroutine check_dist_fn(report_unit)
                *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
 !               *dhdthc(-ntgrid:ntgrid-1,2,iglo)*code_dt
                *tmp5(-ntgrid:ntgrid-1,il,ie,2,is)*code_dt
-          wstarfac(ntgrid,:,:) = 0.0
 
           wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + tmp4(:,il,ie,:,is)*code_dt*wunits(ik)
 
+          ! this is the contribution from v_E^par . grad F0
+          wstarfac(-ntgrid:ntgrid-1,1,iglo) = wstarfac(-ntgrid:ntgrid-1,1,iglo) &
+               - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+               *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+          wstarfac(-ntgrid:ntgrid-1,2,iglo) = wstarfac(-ntgrid:ntgrid-1,2,iglo) &
+               - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+               *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+
+          wstarfac(ntgrid,:,iglo) = 0.0
+
           ! no code_dt in wdfac because it multiplies wdrift, which has code_dt in it
-          wdfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/e(ie,is)**1.5 &
+          wdfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/energy(ie)**1.5 &
                - dhdec(-ntgrid:ntgrid-1,1,iglo)
-          wdfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/e(ie,is)**1.5 &
+          wdfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/energy(ie)**1.5 &
                - dhdec(-ntgrid:ntgrid-1,2,iglo)
           wdfac(ntgrid,:,:) = 0.0
 
           ! no code_dt in cdfac because it multiples wcurv, which has code_dt in it
-          cdfac(-ntgrid:ntgrid-1,1,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/sqrt(e(ie,is))
-          cdfac(-ntgrid:ntgrid-1,2,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/sqrt(e(ie,is))
-          cdfac(ntgrid,:,:) = 0.0
+          cdfac(-ntgrid:ntgrid-1,1,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/sqrt(energy(ie))
+          cdfac(-ntgrid:ntgrid-1,2,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/sqrt(energy(ie))
+          cdfac(ntgrid,:,iglo) = 0.0
 
           vparterm(-ntgrid:ntgrid-1,1,iglo) = spec(is)%zstm*tunits(ik)*code_dt &
                /delthet(-ntgrid:ntgrid-1) &
@@ -8173,7 +6636,16 @@ subroutine check_dist_fn(report_unit)
                /delthet(-ntgrid:ntgrid-1) &
                * (abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid))) &
                * vpadhdec(-ntgrid:ntgrid-1,2,iglo)
-          vparterm(ntgrid,:,:) = 0.0
+          vparterm(ntgrid,:,iglo) = 0.0
+
+          vpar(-ntgrid:ntgrid-1,1,iglo) = vpar(-ntgrid:ntgrid-1,1,iglo) + &
+               0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
+               *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,1,iglo)**2 &
+               + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,1,iglo)**2))
+          vpar(-ntgrid:ntgrid-1,2,iglo) = vpar(-ntgrid:ntgrid-1,2,iglo) + &
+               0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
+               *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,2,iglo)**2 &
+               + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,2,iglo)**2))
 
        end do
 
@@ -8197,75 +6669,3 @@ subroutine check_dist_fn(report_unit)
   end subroutine init_lowflow
 
 end module dist_fn
-
-
-!             chidot = 0.5*(aj0(ig,iglo)+aj0(ig+1,iglo))* &
-!                  (phidot(ig,it,ik)-spec(is)%stm*vpa(ig,isgn,iglo)*apardot(ig,it,ik)) &
-!                  +2.0*vperp2(ig,iglo)*spec(is)%tz*bpardot(ig,it,ik)*aj1(ig,iglo)
-
-!             chidot = aj0(ig,iglo)* &
-!                  (phidot(ig,it,ik)-spec(is)%stm*vpa(ig,isgn,iglo)*apardot(ig,it,ik)) &
-!                  +2.0*vperp2(ig,iglo)*spec(is)%tz*bpardot(ig,it,ik)*aj1(ig,iglo)
-
-!             chidot = aj0(ig,iglo)*spec(is)%stm*vpa(ig,isgn,iglo)*apardot(ig,it,ik) &
-!                   +aj1(ig,iglo)*2.0*vperp2(ig,iglo)*spec(is)%tz*bpardot(ig,it,ik)
-
-
-!    case (heating_option_qdh)
-!       
-!       allocate ( apardot(-ntgrid:ntgrid, ntheta0, naky))
-!
-!       do ik=1,naky
-!          !GGH: Get correct time interval for the chosen ky value
-!          dtinv = 1./(code_dt*tunits(ik))
-!          do it=1,ntheta0
-!             do ig=-ntgrid,ntgrid-1
-!                apardot(ig,it,ik) = 0.5*fapar*(aparnew(ig+1,it,ik)+aparnew(ig,it,ik) - &
-!                     (apar(ig+1,it,ik)+apar(ig,it,ik)))*dtinv
-!             end do
-!          end do
-!       end do
-!
-!! GGH Loop through s,x,y,sgn,z and determine heating calculation
-!       do iglo=g_lo%llim_proc, g_lo%ulim_proc
-!          is = is_idx(g_lo, iglo)
-!          it = it_idx(g_lo, iglo)
-!          ik = ik_idx(g_lo, iglo)
-!! GGH If nonlinear run, do not do this for mean values (kx=ky=0)
-!          if (nonlin .and. it == 1 .and. ik == 1) cycle
-!
-!          dtinv = 1./(code_dt*tunits(ik))
-!          do isgn=1,2
-!             do ig=-ntgrid, ntgrid-1
-!
-!                !GGH NOTE: Why is the following not averaging vperp2 for ig, ig+1
-!                !      and current and new times?
-!                !BD: vperp2 is a coordinate, constant in time.  spatial variation, 
-!                !      we could look into
-!                pstar = 0.25*(fphi*aj0(ig,iglo)*(phi(ig,it,ik)+phi(ig+1,it,ik) &
-!                     + phinew(ig,it,ik)+phinew(ig+1,it,ik)) &
-!                     + fbpar*aj1(ig,iglo)*2.0*vperp2(ig,iglo) &
-!                     * (bpar(ig,it,ik)+bpar(ig+1,it,ik) &
-!                     + bparnew(ig,it,ik)+bparnew(ig+1,it,ik))*spec(is)%tz)
-!
-!                gdot = 0.5*(gnew(ig+1,isgn,iglo)+gnew(ig,isgn,iglo) - &
-!                           (g   (ig+1,isgn,iglo)+g   (ig,isgn,iglo)))*dtinv
-!             
-!                fac = 0.25*(g   (ig,isgn,iglo) + g   (ig+1,isgn,iglo) &
-!                          + gnew(ig,isgn,iglo) + gnew(ig+1,isgn,iglo))
-!
-!                g0(ig,isgn,iglo) = - spec(is)%z*(conjg(fac)* &
-!                     aj0(ig,iglo)*vpac(ig,isgn,iglo)*spec(is)%stm*apardot(ig,it,ik)*fapar &
-!                     + conjg(pstar)*gdot) - conjg(fac)*gdot*spec(is)%temp
-!!
-!! The above is equivalent to what we actually derived except for the g*gdot term:
-!!                g0(ig,isgn,iglo) = spec(is)%z*(conjg(fac)*chidot &
-!!                     - conjg(pstar)*gdot - conjg(fac)*pstardot)
-!!
-!             end do
-!          end do
-!       end do
-!
-!       deallocate (apardot)
-!
-!

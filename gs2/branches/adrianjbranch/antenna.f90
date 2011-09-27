@@ -285,7 +285,6 @@ contains
     use gs2_time, only: code_dt, code_time
     use kt_grids, only: naky, ntheta0, reality
     use theta_grid, only: theta, ntgrid, gradpar
-    use run_parameters, only: tnorm
     use ran
     use constants
 
@@ -319,7 +318,7 @@ contains
 
 ! GGH fixed a bug with the frequency sweeping here.  11.17.05
     do i = 1, nk_stir
-       w_stir(i) = gradpar(0)*abs(kz_stir(i))*sqrt(1./beta_s) * wtmp * tnorm
+       w_stir(i) = gradpar(0)*abs(kz_stir(i))*sqrt(1./beta_s) * wtmp
     end do
 
     apar = 0.

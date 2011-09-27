@@ -2,6 +2,22 @@
 GS2 TRUNK STATUS - please see NOTES at end
 ----------------
 
+r1571:   Completes cleanup by Dorland.  Removed lots of obsolete features
+         comprising a few thousand lines of code.  Some changes required 
+         for some old namelists to work.  The most important changes were:
+
+         *  Removed the option to define vt == sqrt(T/m) b/c it was costing 
+            people too much time to understand and track down associated
+            errors.  From now on, vt == sqrt(2 T / m).  
+
+      	 *  Removed the option to use old energy grids.  Only option now 
+            is to use the grid that Michael and Tomo worked out.  Was
+            selected by "vgrid= .true." in the past and is now automatic.
+            This is a change of the default behavior.  The variable 'ecut'
+            should not appear in the input file.  Specify vcut instead.
+            For the most part, vcut = sqrt(ecut) for backwards compatibility.
+
+
 r1430:   fixes r1426 bug below [gregcolyer: on behalf of colinmroach]
 
 r1429  )

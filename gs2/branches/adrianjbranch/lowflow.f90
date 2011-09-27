@@ -5,8 +5,8 @@ module lowflow
   public :: get_lowflow_terms
 
   real, dimension (:,:,:,:,:), allocatable :: coefs
-  real, dimension (:), allocatable :: rad_neo, theta_neo
   real, dimension (:,:), allocatable :: phineo
+  real, dimension (:), allocatable :: rad_neo, theta_neo
 
 contains
   
@@ -18,21 +18,23 @@ contains
     
     real, dimension (:), intent (in) :: theta, bmag
     real, dimension (:), intent (in) ::  al
-    real, dimension (:,:), intent (in) :: energy
+    real, dimension (:), intent (in) :: energy
     real, dimension (:,:,:,:,:), intent (out) :: dHdec, dHdxic, dHdrc, dHdthc, vpadHdEc, hneoc
     
+    real, dimension (:,:,:,:,:), allocatable :: hneo
+    real, dimension (:,:,:,:), allocatable :: dHdxi, dHdE, vpadHdE, dHdr, dHdth
+    real, dimension (:,:,:), allocatable :: legp
+    real, dimension (:,:), allocatable :: xi, chebyp1, chebyp2
+    real :: emax
+
     integer :: il, ie, is, ns, nc, nl, nr, ig, ixi, ir, ir_loc
     integer :: ntheta, nlambda, nenergy, nxi
-    real :: emax
-    real, dimension (:,:), allocatable :: xi, chebyp1, chebyp2
-    real, dimension (:,:,:), allocatable :: legp
-    real, dimension (:,:,:,:), allocatable :: dHdxi, dHdE, vpadHdE, dHdr, dHdth
-    real, dimension (:,:,:,:,:), allocatable :: hneo
+
     logical, dimension (:,:), allocatable :: forbid
     
     ntheta = size(theta)
     nlambda = size(al)
-    nenergy = size(energy,1)
+    nenergy = size(energy)
     nxi = 2*nlambda-1
 
     allocate (xi(ntheta,nxi), forbid(ntheta,nxi))
@@ -67,8 +69,10 @@ contains
     allocate (chebyp1(nenergy,0:nc-1), chebyp2(nenergy,0:nc-1))
     allocate (legp(ntheta,nxi,0:nl+1))
     allocate (hneo(nr,ntheta,nxi,nenergy,ns))
-    allocate (dHdr(ntheta,nxi,nenergy,ns), dHdth(ntheta,nxi,nenergy,ns))
-    allocate (dHdxi(ntheta,nxi,nenergy,ns), dHdE(ntheta,nxi,nenergy,ns))
+    allocate (   dHdr(ntheta,nxi,nenergy,ns))
+    allocate (  dHdth(ntheta,nxi,nenergy,ns))
+    allocate (  dHdxi(ntheta,nxi,nenergy,ns))
+    allocate (   dHdE(ntheta,nxi,nenergy,ns))
     allocate (vpadHdE(ntheta,nxi,nenergy,ns))
     
     legp = 0.0
@@ -79,18 +83,19 @@ contains
     end do
     
     do ie = 1, nenergy
-       call chebyshev (zfnc(energy(ie,1),emax), chebyp1(ie,:), 1)
-       call chebyshev (zfnc(energy(ie,1),emax), chebyp2(ie,:), 2)
+       call chebyshev (zfnc(energy(ie),emax), chebyp1(ie,:), 1)
+       call chebyshev (zfnc(energy(ie),emax), chebyp2(ie,:), 2)
     end do
     
-    do ir = 1, nr
-       do is = 1, ns
+! BD:  Switched order of first two loops for efficiency.  MAB should double-check for correctness
+    do is = 1, ns
+       do ir = 1, nr
           do ig = 1, ntheta
              ! get_H returns hneo = F_1 / F_0
              call get_H (coefs(ir,ig,:,:,is), legp(ig,:,:), chebyp1, hneo(ir,ig,:,:,is), phineo(ir,ig))
              call get_dHdxi (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1, xi(ig,:), dHdxi(ig,:,:,is))
-             call get_dHdE (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1, chebyp2, energy(:,1), emax, dHdE(ig,:,:,is))
-!             call get_dHdE (hneo(ig,ig,:,:,is),energy(:,1),dHdE(ig,:,:,is))
+             call get_dHdE (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1, chebyp2, energy(:), emax, dHdE(ig,:,:,is))
+!             call get_dHdE (hneo(ig,ig,:,:,is),energy(:),dHdE(ig,:,:,is))
           end do
        end do
     end do
@@ -110,8 +115,8 @@ contains
     do ie = 1, nenergy
        do ixi = 1, nxi
           do ig = 1, ntheta
-             vpadHdE(ig,ixi,ie,:) = sqrt(energy(ie,1))*xi(ig,ixi)*dHdE(ig,ixi,ie,:) &
-                  + (1.-xi(ig,ixi)**2)*dHdxi(ig,ixi,ie,:)/(2.*sqrt(energy(ie,1)))
+             vpadHdE(ig,ixi,ie,:) = sqrt(energy(ie))*xi(ig,ixi)*dHdE(ig,ixi,ie,:) &
+                  + (1.-xi(ig,ixi)**2)*dHdxi(ig,ixi,ie,:)/(2.*sqrt(energy(ie)))
           end do
        end do
     end do
@@ -383,12 +388,12 @@ contains
     read (neo_unit,*) nenergy_neo
     read (neo_unit,*) nxi_neo
     read (neo_unit,*) ntheta_neo
-    allocate (theta_neo(ntheta_neo))
+    if (.not. allocated(theta_neo)) allocate (theta_neo(ntheta_neo))
     do ig = 1, ntheta_neo
        read (neo_unit,*) theta_neo (ig)
     end do
     read (neo_unit,*) nrad_neo
-    allocate (rad_neo(nrad_neo))
+    if (.not. allocated(rad_neo)) allocate (rad_neo(nrad_neo))
     do ir = 1, nrad_neo
        read (neo_unit,*) rad_neo(ir)
     end do
@@ -399,8 +404,8 @@ contains
 
     allocate (tmp(ntheta_neo*(nxi_neo+1)*nenergy_neo*nspec_neo*nrad_neo))
     allocate (neo_coefs(ntheta_neo), dum(ntheta), neo_phi(ntheta_neo))
-    allocate (coefs(nrad_neo,ntheta,0:nxi_neo,0:nenergy_neo-1,nspec_neo))
-    allocate (phineo(nrad_neo,ntheta))
+    if (.not. allocated(coefs)) allocate (coefs(nrad_neo,ntheta,0:nxi_neo,0:nenergy_neo-1,nspec_neo))
+    if (.not. allocated(phineo)) allocate (phineo(nrad_neo,ntheta))
 
     ! read in H1^{nc} (adiabatic piece of F1^{nc}) from neo's f.out file
     open (unit=neo_unit, file='neo_f.out', status="old", action="read")

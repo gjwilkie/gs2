@@ -21,22 +21,16 @@ contains
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
-    use fields, only: init_fields
+    use fields, only: init_fields, advance
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, start_time
-    use run_parameters, only: nstep
-    use run_parameters, only: fphi, fapar, fbpar
-    use run_parameters, only: avail_cpu_time
-    use fields, only: advance
+    use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
-    use gs2_reinit, only: reset_time_step, check_time_step
-    use gs2_reinit, only: time_reinit
-    use gs2_time, only: update_time
-    use gs2_time, only: write_dt, init_tstart
-    use gs2_time, only: user_time, user_dt
-    use gs2_time, only: code_time
+    use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
+    use gs2_time, only: update_time, write_dt, init_tstart
+    use gs2_time, only: user_time, user_dt, code_time
     use init_g, only: tstart
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
@@ -418,7 +412,6 @@ contains
     use collisions, only: vnmult, c_reset => reset_init
     use fields, only: init_fields, f_reset => reset_init
     use fields_implicit, only: fi_reset => reset_init
-    use fields_explicit, only: fe_reset => reset_init
     use fields_test, only: ft_reset => reset_init
     use init_g, only: g_reset => reset_init
     use nonlinear_terms, only: nl_reset => reset_init
@@ -450,7 +443,6 @@ contains
     call c_reset
     call f_reset
     call fi_reset
-    call fe_reset
     call ft_reset
 !    if (.not. ql_flag) call g_reset
     call g_reset

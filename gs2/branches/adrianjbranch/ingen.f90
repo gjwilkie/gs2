@@ -674,8 +674,7 @@ contains
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use le_grids, only: init_le_grids
-    use theta_grid, only: init_theta_grid, nbset, shat_real => shat
-    use theta_grid_params, only: shat
+    use theta_grid, only: init_theta_grid, nbset, ntgrid
     use constants, only: pi
     implicit none
     logical :: list, accelx=.false., accelv=.false.
@@ -740,8 +739,9 @@ if (debug) write(6,*) 'get_namelists: init_species'
     coll_on = coll_on .and. (collision_model_switch /= collision_model_none)
 
 !CMR, 2/2/2011:  reduce much duplication by calling init_theta_grid
-if (debug) write(6,*) 'get_namelists: call init_theta_grid'
+if (debug) write(6,*) 'get_namelists: call init_theta_grid, ntgrid=',ntgrid
     call init_theta_grid
+if (debug) write(6,*) 'get_namelists: done init_theta_grid, ntgrid=',ntgrid
 
     call dist_fn_read_parameters
     ! gs2_diagnostics
@@ -900,14 +900,15 @@ if (debug) write(6,*) 'get_namelists: returning'
      use init_g, only: check_init_g
      use kt_grids, only: check_kt_grids, grid_option, gridopt_switch
      use kt_grids, only: gridopt_box, naky, ntheta0, nx, ny
-     use le_grids, only: leok_le_grids, check_le_grids, negrid, nlambda
+!     use le_grids, only: leok_le_grids, check_le_grids
+     use le_grids, only: negrid, nlambda
      use nonlinear_terms, only: nonlin, cfl, check_nonlinear_terms
      use run_parameters, only: check_run_parameters
      use run_parameters, only: beta, tite, margin, code_delt_max
      use run_parameters, only: nstep, wstar_units
      use species, only: check_species, spec, nspec, has_electron_species
      use theta_grid, only: check_theta_grid
-     use theta_grid, only: gb_to_cv, nbset, ntgrid_real => ntgrid
+     use theta_grid, only: gb_to_cv, nbset, ntgrid
      use theta_grid_params, only: nperiod, ntheta, eps, epsl, rmaj, r_geo
      use theta_grid_params, only: pk, qinp, rhoc, shift, shat
      use theta_grid_params, only: akappa, akappri, tri, tripri
@@ -918,7 +919,7 @@ if (debug) write(6,*) 'get_namelists: returning'
      character (20) :: datestamp, timestamp, zone
      character (200) :: line
      logical :: le_ok = .true.
-     integer :: ntgrid, j, nmesh
+     integer :: j, nmesh
      integer, dimension(4) :: pfacs
 
      call get_unused_unit (report_unit)
@@ -937,11 +938,11 @@ if (debug) write(6,*) 'get_namelists: returning'
 
      write (report_unit, fmt="(/'------------------------------------------------------------'/)")
 
-     le_ok=leok_le_grids(report_unit)
+!     le_ok=leok_le_grids(report_unit)
+     le_ok = .true.  ! temporary fix until leok_le_grids is restored to the distibution.  BD (sorry about that)
      
      if (le_ok) then
 
-        ntgrid = ntgrid_real
         if (nonlin) then
            if (gridopt_switch /= gridopt_box) then
               write (report_unit, *) 
@@ -1013,10 +1014,11 @@ if (debug) write(6,*) 'get_namelists: returning'
         else
            write (report_unit, fmt="('nmesh=(2*ntgrid+1)*2*nlambda*negrid*ntheta0*naky*nspec')")
            nmesh = (2*ntgrid+1)*2*nlambda*negrid*ntheta0*naky*nspec
-           write (report_unit, fmt="('Number of meshpoints:    ',i12)") nmesh
+           write (report_unit, fmt="('Number of meshpoints:    ',i14)") nmesh
         end if
 
         write (report_unit, fmt="(T12,' ntgrid=',i12)") ntgrid
+        write (report_unit, fmt="(T9,'2*ntgrid+1=',i12)") 2*ntgrid+1
         write (report_unit, fmt="(T12,'nlambda=',i12)") nlambda
         write (report_unit, fmt="(T12,' negrid=',i12)") negrid
         write (report_unit, fmt="(T12,'ntheta0=',i12)") ntheta0
@@ -1026,6 +1028,11 @@ if (debug) write(6,*) 'get_namelists: returning'
         write (report_unit, fmt="(T12,'  nspec=',i12,/)") nspec
 
         call nprocs (nmesh)
+        if (nonlin) then
+           write (report_unit, fmt="(/'Nonlinear run => consider #proc sweetspots for xxf+yxf objects!')") 
+           call nprocs_xxf(nmesh)
+           call nprocs_yxf(nmesh)
+        endif
 
      end if
 
@@ -1127,9 +1134,11 @@ if (debug) write(6,*) 'get_namelists: returning'
 
     call check_hyper(report_unit)
 
-    write (report_unit, fmt="(/'------------------------------------------------------------'/)")
-    
-    call check_le_grids(report_unit,le_ok)
+! BD broke this accidentally and will fix it.  July 22, 2011
+!
+!    write (report_unit, fmt="(/'------------------------------------------------------------'/)")
+!
+!    call check_le_grids(report_unit,le_ok)   
 
     write (report_unit, fmt="(/'------------------------------------------------------------'/)")
     call check_run_parameters(report_unit)
@@ -1141,10 +1150,214 @@ if (debug) write(6,*) 'get_namelists: returning'
 
   end subroutine report
 
+
+  subroutine nprocs_xxf(nmesh)
+    use nonlinear_terms, only : nonlin
+    use species, only : nspec
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+    use kt_grids, only: naky, ntheta0
+    use le_grids, only: negrid, nlambda
+    use theta_grid, only: ntgrid
+
+    use gs2_layouts, only: layout
+    implicit none
+    real :: fac
+    integer, intent (in) :: nmesh
+    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    integer, dimension(:,:), allocatable :: facs
+    integer :: npe
+    real :: time
+
+    if (.not.nonlin) return
+    write (report_unit, fmt="('xxf sweetspot #proc up to:'i8)") npmax 
+    select case (layout)
+    case ('lexys','lxyes','lyxes','yxles','xyles')
+          allocate (facs(max(nspec,negrid,nlambda,2,2*ntgrid+1,naky)/2+1,6))
+          call factors (nspec, nspfacs, facs(:,1))
+          call factors (negrid, nefacs, facs(:,2))
+          call factors (nlambda, nlfacs, facs(:,3))
+          call factors (2, nsgfacs, facs(:,4))
+          call factors (2*ntgrid+1, ntgfacs, facs(:,5))
+          call factors (naky, nkyfacs, facs(:,6))
+          do i=1,nspfacs
+             npe = facs(i,1)
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'s'
+          end do
+          do i=2,nefacs
+             npe = facs(i,2)*nspec
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'e'
+          end do
+          do i=2,nlfacs
+             npe = facs(i,3)*nspec*negrid
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'l'
+          end do
+          do i=2,nsgfacs
+             npe = facs(i,4)*nspec*negrid*nlambda
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a3,')')") npe,'sgn'
+          end do
+          do i=2,ntgfacs
+             npe = facs(i,5)*nspec*negrid*nlambda*2
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'tg'
+          end do
+          do i=2,nkyfacs
+             npe = facs(i,6)*nspec*negrid*nlambda*2*(2*ntgrid+1)
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'y'
+          end do
+          deallocate (facs)
+       case ('yxels')
+          allocate (facs(max(nspec,nlambda,negrid,2,2*ntgrid+1,naky)/2+1,6))
+          call factors (nspec, nspfacs, facs(:,1))
+          call factors (nlambda, nlfacs, facs(:,2))
+          call factors (negrid, nefacs, facs(:,3))
+          call factors (2, nsgfacs, facs(:,4))
+          call factors (2*ntgrid+1, ntgfacs, facs(:,5))
+          call factors (naky, nkyfacs, facs(:,6))
+          do i=1,nspfacs
+             npe = facs(i,1)
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'s'
+          end do
+          do i=2,nlfacs
+             npe = facs(i,2)*nspec
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'l'
+          end do
+          do i=2,nefacs
+             npe = facs(i,3)*nspec*nlambda
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'e'
+          end do
+          do i=2,nsgfacs
+             npe = facs(i,4)*nspec*nlambda*negrid
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a3,')')") npe,'sgn'
+          end do
+          do i=2,ntgfacs
+             npe = facs(i,5)*nspec*nlambda*negrid*2
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'tg'
+          end do
+          do i=2,nkyfacs
+             npe = facs(i,6)*nspec*nlambda*negrid*2*(2*ntgrid+1)
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'y'
+          end do
+          deallocate (facs)
+       end select
+  end subroutine nprocs_xxf
+
+  subroutine nprocs_yxf(nmesh)
+    use nonlinear_terms, only : nonlin
+    use species, only : nspec
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+    use kt_grids, only: naky, ntheta0, nx
+    use le_grids, only: negrid, nlambda
+    use theta_grid, only: ntgrid
+
+    use gs2_layouts, only: layout
+    implicit none
+    real :: fac
+    integer, intent (in) :: nmesh
+    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    integer, dimension(:,:), allocatable :: facs
+    integer :: npe
+    real :: time
+
+    if (.not.nonlin) return
+    write (report_unit, fmt="('yxf sweetspot #proc up to:'i8)") npmax 
+
+    select case (layout)
+    case ('lexys','lxyes','lyxes','yxles','xyles')
+          allocate (facs(max(nspec,negrid,nlambda,2,2*ntgrid+1,nx)/2+1,6))
+          call factors (nspec, nspfacs, facs(:,1))
+          call factors (negrid, nefacs, facs(:,2))
+          call factors (nlambda, nlfacs, facs(:,3))
+          call factors (2, nsgfacs, facs(:,4))
+          call factors (2*ntgrid+1, ntgfacs, facs(:,5))
+          call factors (nx, nkxfacs, facs(:,6))
+          do i=1,nspfacs
+             npe = facs(i,1)
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'s'
+          end do
+          do i=2,nefacs
+             npe = facs(i,2)*nspec
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'e'
+          end do
+          do i=2,nlfacs
+             npe = facs(i,3)*nspec*negrid
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'l'
+          end do
+          do i=2,nsgfacs
+             npe = facs(i,4)*nspec*negrid*nlambda
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a3,')')") npe,'sgn'
+          end do
+          do i=2,ntgfacs
+             npe = facs(i,5)*nspec*negrid*nlambda*2
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'tg'
+          end do
+          do i=2,nkxfacs
+             npe = facs(i,6)*nspec*negrid*nlambda*2*(2*ntgrid+1)
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'x'
+          end do
+          deallocate (facs)
+       case ('yxels')
+          allocate (facs(max(nspec,nlambda,negrid,2,2*ntgrid+1,nx)/2+1,6))
+          call factors (nspec, nspfacs, facs(:,1))
+          call factors (nlambda, nlfacs, facs(:,2))
+          call factors (negrid, nefacs, facs(:,3))
+          call factors (2, nsgfacs, facs(:,4))
+          call factors (2*ntgrid+1, ntgfacs, facs(:,5))
+          call factors (nx, nkxfacs, facs(:,6))
+          do i=1,nspfacs
+             npe = facs(i,1)
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'s'
+          end do
+          do i=2,nlfacs
+             npe = facs(i,2)*nspec
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'l'
+          end do
+          do i=2,nefacs
+             npe = facs(i,3)*nspec*nlambda
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'e'
+          end do
+          do i=2,nsgfacs
+             npe = facs(i,4)*nspec*nlambda*negrid
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a3,')')") npe,'sgn'
+          end do
+          do i=2,ntgfacs
+             npe = facs(i,5)*nspec*nlambda*negrid*2
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'tg'
+          end do
+          do i=2,nkxfacs
+             npe = facs(i,6)*nspec*nlambda*negrid*2*(2*ntgrid+1)
+             if (npe .gt. npmax) exit
+             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'x'
+          end do
+          deallocate (facs)
+       end select
+  end subroutine nprocs_yxf
+
   subroutine nprocs (nmesh)
     use nonlinear_terms, only : nonlin
     use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box, gridopt_xbox
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
     use kt_grids, only: naky, ntheta0
     use le_grids, only: negrid, nlambda
     use gs2_layouts, only: layout

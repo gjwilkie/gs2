@@ -80,14 +80,12 @@ DBLE ?= on
 USE_MPI ?= on
 # turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?=
-# which FFT library to use (fftw,mkl_fftw,undefined) 
+# which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
 USE_FFT ?= fftw
 # uses netcdf library (bin)
 USE_NETCDF ?= on
 # uses hdf5 library (bin)
 USE_HDF5 ?=
-# uses MDSplus (bin)
-USE_MDSPLUS ?=
 # Use function pointer in layouts_indices.c (bin)
 # see also README
 USE_C_INDEX ?= 
@@ -446,7 +444,7 @@ tar:
 ### setting tar_exec local $(TARLIST*) variables
 # expand wildcards listed $(TARLIST_wild) in ( $(TARLIST_dir) + . )
 # directories and add them into TARLIST
-tar_exec: TARLIST = test_os makehead.awk fortdep AstroGK.in
+tar_exec: TARLIST = makehead.awk fortdep AstroGK.in
 tar_exec: TARLIST_dir = Makefiles utils geo Aux
 tar_exec: TARLIST_wild = *.f90 *.fpp *.inc *.c Makefile Makefile.* README README.*
 tar_exec: TARLIST += $(foreach dir,. $(TARLIST_dir),$(wildcard $(addprefix $(dir)/,$(TARLIST_wild))))
@@ -485,7 +483,6 @@ test_make:
 	@echo  USE_FFT is $(USE_FFT)
 	@echo  USE_NETCDF is $(USE_NETCDF)
 	@echo  USE_HDF5 is $(USE_HDF5)
-	@echo  USE_MDSPLUS is $(USE_MDSPLUS)
 	@echo  USE_C_INDEX is $(USE_C_INDEX)
 	@echo  USE_POSIX is $(USE_POSIX)
 	@echo  USE_LOCAL_RAN is $(USE_LOCAL_RAN)

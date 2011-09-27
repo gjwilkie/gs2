@@ -22,7 +22,8 @@ module fields
 
   ! knobs
   integer :: fieldopt_switch
-  integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_explicit = 3
+  logical :: remove_zonal_flows_switch
+  integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2
 
   logical :: initialized = .false.
   logical :: exist
@@ -35,13 +36,6 @@ contains
     select case (fieldopt_switch)
     case (fieldopt_implicit)
        write (report_unit, fmt="('The field equations will be advanced in time implicitly.')")
-    case (fieldopt_explicit)
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('The field equations will be advanced in time explicitly.')")
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
     case (fieldopt_test)
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -62,8 +56,6 @@ contains
        select case (fieldopt_switch)
        case (fieldopt_implicit)
           write (unit, fmt="(' field_option = ',a)") '"implicit"'
-       case (fieldopt_explicit)
-          write (unit, fmt="(' field_option = ',a)") '"explicit"'
        case (fieldopt_test)
           write (unit, fmt="(' field_option = ',a)") '"test"'
        end select
@@ -79,7 +71,6 @@ contains
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
     use fields_implicit, only: init_fields_implicit, init_phi_implicit
-    use fields_explicit, only: init_fields_explicit, init_phi_explicit
     use fields_test, only: init_fields_test, init_phi_test
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
@@ -111,9 +102,6 @@ contains
     case (fieldopt_implicit)
        if (debug) write(6,*) "init_fields: init_fields_implicit"
        call init_fields_implicit
-    case (fieldopt_explicit)
-       if (debug) write(6,*) "init_fields: init_fields_explicit"
-       call init_fields_explicit
     case (fieldopt_test)
        if (debug) write(6,*) "init_fields: init_fields_test"
        call init_fields_test
@@ -133,9 +121,6 @@ contains
     case (fieldopt_implicit)
        if (debug) write(6,*) "init_fields: init_phi_implicit"
        call init_phi_implicit
-    case (fieldopt_explicit)
-       if (debug) write(6,*) "init_fields: init_phi_explicit"
-       call init_phi_explicit
     case (fieldopt_test)
        if (debug) write(6,*) "init_fields: init_phi_test"
        call init_phi_test
@@ -148,17 +133,17 @@ contains
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     implicit none
-    type (text_option), dimension (4), parameter :: fieldopts = &
+    type (text_option), dimension (3), parameter :: fieldopts = &
          (/ text_option('default', fieldopt_implicit), &
             text_option('implicit', fieldopt_implicit), &
-            text_option('explicit', fieldopt_explicit), &
             text_option('test', fieldopt_test) /)
     character(20) :: field_option
-    namelist /fields_knobs/ field_option
+    namelist /fields_knobs/ field_option, remove_zonal_flows_switch
     integer :: ierr, in_file
 
     if (proc0) then
        field_option = 'default'
+       remove_zonal_flows_switch = .false.
 
        in_file = input_unit_exist ("fields_knobs", exist)
 !       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
@@ -172,6 +157,7 @@ contains
     end if
 
     call broadcast (fieldopt_switch)
+    call broadcast (remove_zonal_flows_switch)
   end subroutine read_parameters
 
   subroutine allocate_arrays
@@ -209,16 +195,13 @@ contains
 
   subroutine advance (istep)
     use fields_implicit, only: advance_implicit
-    use fields_explicit, only: advance_explicit
     use fields_test, only: advance_test
     implicit none
     integer, intent (in) :: istep
 
     select case (fieldopt_switch)
     case (fieldopt_implicit)
-       call advance_implicit (istep)
-    case (fieldopt_explicit)
-       call advance_explicit (istep)
+       call advance_implicit (istep, remove_zonal_flows_switch)
     case (fieldopt_test)
        call advance_test (istep)
     end select
@@ -302,6 +285,29 @@ contains
     phiavg = 0.
     write(*,*) 'error in fields'
   end subroutine fieldlineavgphi_tot
+
+
+  !!> This generates a flux surface average of phi. 
+
+  !subroutine flux_surface_average_phi (phi_in, phi_average)
+    !use theta_grid, only: ntgrid, drhodpsi, gradpar, bmag, delthet
+    !use kt_grids, only: ntheta0, naky
+
+    !implicit none
+    !complex, intent (in) :: phi_in
+    !complex, intent (out) :: phi_average
+    !complex, dimension(-ntgrid:ntgrid,1:ntheta0,1:naky) :: phi_fieldline_avg
+    !integer it, ig
+
+    !call fieldline_average_phi(phi_in, phi_fieldline_avg)
+    !do it = 1,ntheta0
+      !do ig = -ntgrid,ntgrid
+        !phi_average(ig, it, :) = sum(phi_fieldline_avg(ig, it, :))/real(naky)
+      !end do
+    !end do
+
+  !end subroutine fieldline_average_phi
+
 
   subroutine reset_init
 

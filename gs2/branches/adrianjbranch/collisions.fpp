@@ -16,16 +16,11 @@ module collisions
   public :: init_lorentz, init_ediffuse
   public :: init_lorentz_conserve, init_diffuse_conserve
   public :: init_lorentz_error, collision_model_switch
-  public :: g_adjust ! CMR this routine would be better placed in dist_fn.f90
 
   private
 
   ! knobs
-!> only needed for krook
-  real :: vncoef, absom
-  integer :: ivnew
-  logical :: conserve_number, conserve_momentum
-!<
+
   logical :: const_v, conserve_moments
   logical :: conservative, resistivity
   integer :: collision_model_switch
@@ -37,9 +32,7 @@ module collisions
   logical :: test
 
   integer, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
-  integer, parameter :: collision_model_krook = 2
   integer, public, parameter :: collision_model_none = 3
-  integer, parameter :: collision_model_krook_test = 4
   integer, parameter :: collision_model_lorentz_test = 5 ! if this changes, check gs2_diagnostics
   integer, parameter :: collision_model_full = 6
   integer, parameter :: collision_model_ediffuse = 7
@@ -75,14 +68,6 @@ module collisions
   real, dimension (:,:,:,:), allocatable :: vnewh
   ! (-ntgrid:ntgrid,ntheta0,naky,nspec) replicated
 
-  ! only for krook
-  real, dimension (:), allocatable :: vnewfe
-  ! (-*- g_layout -*-)
-
-  ! only for krook
-  real, dimension (:,:), allocatable :: aintnorm
-  ! (-ntgrid:ntgrid, -*- geint_layout -*-)
-
   ! for conservation of momentum and energy
 !  complex, dimension (:,:,:,:), allocatable :: parfac, perpfac, efac
   ! (-ntgrid:ntgrid,ntheta0,naky,nspec)
@@ -117,11 +102,6 @@ module collisions
   real, dimension (:,:), allocatable :: ec1, ebetaa, eql
 # endif
 
-
-  ! momentum conservation
-  complex, dimension (:,:), allocatable :: g3int
-  ! (-ntgrid:ntgrid, -*- gint_layout -*-)
-
   type (redist_type), save :: lorentz_map
   type (redist_type), save :: ediffuse_map
   type (redist_type), save :: g2le
@@ -146,8 +126,6 @@ contains
            if (cfac == 0) write (report_unit, fmt="('This is only a partial Lorentz collision operator (cfac=0.0)')")
            if (const_v) write (report_unit, fmt="('This is an energy independent Lorentz collision operator (const_v=true)')")  
  !          if (hypercoll) call init_hyper_lorentz
-       case (collision_model_krook,collision_model_krook_test)
-          write (report_unit, fmt="('A Krook collision operator has been selected.')")
         case (collision_model_full)
            write (report_unit, fmt="('Full GS2 collision operator has been selected.')")
        end select
@@ -162,20 +140,9 @@ contains
        select case (collision_model_switch)
        case (collision_model_lorentz)
           write (unit, fmt="(' collision_model = ',a)") '"lorentz"'
-          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
           if (hypermult) write (unit, fmt="(' hypermult = ',L1)") hypermult
        case (collision_model_lorentz_test)
           write (unit, fmt="(' collision_model = ',a)") '"lorentz-test"'
-          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
-       case (collision_model_krook)
-          write (unit, fmt="(' collision_model = ',a)") '"krook"'
-          write (unit, fmt="(' conserve_number = ',L1)") conserve_number
-          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
-          write (unit, fmt="(' vncoef = ',f5.3)") vncoef
-       case (collision_model_krook_test)
-          write (unit, fmt="(' collision_model = ',a)") '"krook-test"'
-          write (unit, fmt="(' conserve_number = ',L1)") conserve_number
-          write (unit, fmt="(' conserve_momentum = ',L1)") conserve_momentum
        case (collision_model_none)
           write (unit, fmt="(' collision_model = ',a)") '"collisionless"'
        end select
@@ -218,12 +185,10 @@ contains
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     implicit none
-    type (text_option), dimension (8), parameter :: modelopts = &
+    type (text_option), dimension (6), parameter :: modelopts = &
          (/ text_option('default', collision_model_full), &
             text_option('lorentz', collision_model_lorentz), &
             text_option('ediffuse', collision_model_ediffuse), &
-            text_option('krook', collision_model_krook), &
-            text_option('krook-test', collision_model_krook_test), &
             text_option('lorentz-test', collision_model_lorentz_test), &
             text_option('none', collision_model_none), &
             text_option('collisionless', collision_model_none) /)
@@ -238,9 +203,7 @@ contains
          heating, adjust, const_v, cfac, hypermult, ei_coll_only, &
          lorentz_scheme, ediff_scheme, resistivity, conservative, test, &
 ! following only needed for adaptive collisionality
-         vnfac, etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, &
-! following only needed for krook
-         vncoef, absom, ivnew, conserve_number, conserve_momentum
+         vnfac, etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa
     integer :: ierr, in_file
 
     if (proc0) then
@@ -261,13 +224,6 @@ contains
        adjust = .true.
        lorentz_scheme = 'default'
        ediff_scheme = 'default'
-!> following only needed for krook
-       vncoef = 0.6
-       absom = 0.5
-       ivnew = 0
-       conserve_number = .true.
-       conserve_momentum = .true.  ! DEFAULT CHANGED TO REFLECT IMPROVED MOMENTUM CONSERVATION, 8/06
-!>
        conservative = .true.
        resistivity = .true.
        const_v = .false.
@@ -303,13 +259,6 @@ contains
     call broadcast (etola)
     call broadcast (ewindowa)
     call broadcast (ncheck)
-!<
-!> only needed for krook
-    call broadcast (vncoef)
-    call broadcast (absom)
-    call broadcast (ivnew)
-    call broadcast (conserve_number)
-    call broadcast (conserve_momentum)
 !<
     call broadcast (conservative)
     call broadcast (conserve_moments)
@@ -374,7 +323,7 @@ contains
 
     implicit none
 
-    real, dimension (negrid,nspec) :: hee
+    real, dimension (negrid) :: hee
 
     if (.not. allocated(c_rate)) then
        allocate (c_rate(-ntgrid:ntgrid, ntheta0, naky, nspec, 3))
@@ -388,8 +337,6 @@ contains
        collision_model_switch = collision_model_none
        return
     end if
-    if (conserve_momentum .and. &
-         collision_model_switch == collision_model_krook) call init_g3int
 
     select case (collision_model_switch)
     case (collision_model_full)
@@ -405,8 +352,6 @@ contains
     case (collision_model_ediffuse)
        call init_ediffuse
        if (conserve_moments) call init_diffuse_conserve
-    case (collision_model_krook,collision_model_krook_test)
-       call init_krook (hee)
     end select
 
   end subroutine init_arrays
@@ -420,7 +365,7 @@ contains
     use species, only: nspec, spec, electron_species
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid, bmag
-    use le_grids, only: e, al, integrate_moment, negrid
+    use le_grids, only: energy, al, integrate_moment, negrid
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
     use run_parameters, only: tunits
@@ -466,7 +411,7 @@ contains
        do is = 1, nspec
           if (spec(is)%type /= electron_species) cycle
           do ik = 1, naky
-             vns(ik,:,is,3) = vnmult(1)*spec(is)%vnewk*tunits(ik)/e(:,is)**1.5
+             vns(ik,:,is,3) = vnmult(1)*spec(is)%vnewk*tunits(ik)/energy**1.5
           end do
        end do
     end if
@@ -483,7 +428,7 @@ contains
           ! u0 = -2 nu_D^{ei} vpa J0 dt f0
           if (conservative) then
              z0(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpdiff(:,isgn,il) &
-                  * sqrt(e(ie,is))*aj0(:,iglo)
+                  * sqrt(energy(ie))*aj0(:,iglo)
           else
              z0(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpa(:,isgn,iglo)*aj0(:,iglo)
           end if
@@ -528,8 +473,8 @@ contains
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
              gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
-                  * vpdiff(:,isgn,il)*sqrt(e(ie,is))
-!             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*e(ie,is)
+                  * vpdiff(:,isgn,il)*sqrt(energy(ie))
+!             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*energy(ie)
           end do
        end do
 
@@ -571,7 +516,7 @@ contains
        do isgn = 1, 2
           ! u1 = -3 nu_s vpa dt J0 f_0 / du
           if (conservative) then
-             s0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpdiff(:,isgn,il)*sqrt(e(ie,is)) &
+             s0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpdiff(:,isgn,il)*sqrt(energy(ie)) &
                   * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
           else
 !             s0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
@@ -619,7 +564,7 @@ contains
        do isgn = 1, 2
           ! v1 = nu_D vpa J0
           if (conservative) then
-             gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*sqrt(e(ie,is))*vpdiff(:,isgn,il) &
+             gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*sqrt(energy(ie))*vpdiff(:,isgn,il) &
                   * aj0(:,iglo)*s0(:,isgn,iglo)
           else
              gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,iglo)*aj0(:,iglo) &
@@ -654,12 +599,12 @@ contains
        do isgn = 1, 2
           ! u2 = -3 dt J1 vperp vus a f0 / du
           if (conservative) then
-             w0(:,isgn,iglo) = -vns(ik,ie,is,1)*e(ie,is)*al(il)*aj1(:,iglo) &
+             w0(:,isgn,iglo) = -vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
                   * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
                   / bmag
           else
-!             w0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*e(ie,is)*al(il)*aj1(:,iglo) &
-             w0(:,isgn,iglo) = -vns(ik,ie,is,1)*e(ie,is)*al(il)*aj1(:,iglo) &
+!             w0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*energy(ie)*al(il)*aj1(:,iglo) &
+             w0(:,isgn,iglo) = -vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
                   * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
                   / bmag
           end if
@@ -703,7 +648,7 @@ contains
        do isgn = 1, 2
           ! v1 = nud vpa J0 f0
           if (conservative) then
-             gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*sqrt(e(ie,is))*vpdiff(:,isgn,il) &
+             gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*sqrt(energy(ie))*vpdiff(:,isgn,il) &
                   * aj0(:,iglo)*w0(:,isgn,iglo)
           else
              gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,iglo)*aj0(:,iglo) &
@@ -736,7 +681,7 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v2 = nud vperp J1 f0 
-          gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*e(ie,is)*al(il)*aj1(:,iglo) &
+          gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
                * w0(:,isgn,iglo)
        end do
     end do
@@ -812,7 +757,7 @@ contains
     use species, only: nspec, spec
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid, bmag
-    use le_grids, only: e, al, integrate_moment, negrid
+    use le_grids, only: energy, al, integrate_moment, negrid
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
     use run_parameters, only: tunits
@@ -861,7 +806,7 @@ contains
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          gtmp(:,isgn,iglo) = e(ie,is)*vnmult(2)*vnew_E(ik,ie,is)
+          gtmp(:,isgn,iglo) = energy(ie)*vnmult(2)*vnew_E(ik,ie,is)
        end do
     end do
        
@@ -935,7 +880,7 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,iglo)**2
-!             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*e(ie,is)
+!             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*energy(ie)
 
        end do
     end do
@@ -1043,15 +988,9 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u0 = -3 dt J1 vperp vus a f0 / du
-!          if (conservative) then
-          bw0(:,isgn,iglo) = -vns(ik,ie,is,1)*e(ie,is)*al(il)*aj1(:,iglo) &
+          bw0(:,isgn,iglo) = -vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
                * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
                / bmag
-!          else
-!             bw0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*e(ie,is)*al(il)*aj1(:,iglo) &
-!                  * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
-!                  / bmag
-!          end if
        end do
     end do
 
@@ -1123,7 +1062,7 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v2 = (nus-nud) vperp J1 f0 
-          gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*e(ie,is)*al(il)*aj1(:,iglo) &
+          gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
                   * bw0(:,isgn,iglo)
        end do
     end do
@@ -1177,7 +1116,7 @@ contains
 
   subroutine init_vnew (hee)
     use species, only: nspec, spec, electron_species, has_electron_species
-    use le_grids, only: negrid, e, w
+    use le_grids, only: negrid, energy, w
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use run_parameters, only: zeff, tunits
@@ -1185,84 +1124,36 @@ contains
     use constants
     use spfunc, only: erf => erf_ext
 
-    real, dimension (:,:), intent (out) :: hee
-    real,dimension (negrid,nspec)::heevth, hsg, hsgvth
+    real, dimension (:), intent (out) :: hee
+    real,dimension (negrid)::heevth, hsg, hsgvth
     integer :: ik, ie, is, it, ig
     real :: v, k4max
     real :: vl, vr, dv2l, dv2r
 !    real :: erf ! this is needed for PGI: RN
 
 
-    do is = 1, nspec
-       do ie = 1, negrid
-!          v = sqrt(e(ie,is))
-!          hee(ie,is) = 1.0/sqrt(pi)/v*exp(-e(ie,is)) &  ! hee is vnew_D from MAB notes
-!               + (1.0 - 0.5/e(ie,is)) &
-!               *(1.0 - 1.0/(1.0          + v &          ! this line on is erf(v)
-!               *(0.0705230784 + v &
-!               *(0.0422820123 + v &
-!               *(0.0092705272 + v &
-!               *(0.0001520143 + v &
-!               *(0.0002765672 + v &
-!               *(0.0000430638)))))))**16)
-          hee(ie,is) = exp(-e(ie,is))/sqrt(pi*e(ie,is)) &
-               + (1.0 - 0.5/e(ie,is))*erf(sqrt(e(ie,is)))
+    do ie = 1, negrid
+       hee(ie) = exp(-energy(ie))/sqrt(pi*energy(ie)) &
+            + (1.0 - 0.5/energy(ie))*erf(sqrt(energy(ie)))
 
 !>MAB
 ! hsg is the G of Hirshman and Sigmar
 ! added to allow for momentum conservation with energy diffusion
-!          hsg(ie,is) = -1.0/sqrt(pi)/v*exp(-e(ie,is)) &
-!               + 0.5/e(ie,is) &
-!               *(1.0 - 1.0/(1.0 + v &  ! this line on is erf(v)
-!               *(0.0705230784 + v &
-!               *(0.0422820123 + v &
-!               *(0.0092705272 + v &
-!               *(0.0001520143 + v &
-!               *(0.0002765672 + v &
-!               *(0.0000430638)))))))**16)
-          hsg(ie,is) = hsg_func(sqrt(e(ie,is)))
+       hsg(ie) = hsg_func(sqrt(energy(ie)))
 !<MAB
-       end do
     end do
 
 !heevth is hee but using only thermal velocity (energy independent)
 
-    do is = 1, nspec
-       do ie = 1, negrid
-!          v = 1           
-!          heevth(ie,is) = 1.0/sqrt(pi)/v*exp(-v**2) &
-!               + (1.0 - 0.5/v**2) &
-!               *(1.0 - 1.0/(1.0          + v &
-!               *(0.0705230784 + v &
-!               *(0.0422820123 + v &
-!               *(0.0092705272 + v &
-!               *(0.0001520143 + v &
-!               *(0.0002765672 + v &
-!               *(0.0000430638)))))))**16)
-          heevth(ie,is) = exp(-1.0)/sqrt(pi) &
-               + 0.5*erf(1.0)
+    do ie = 1, negrid
+       heevth(ie) = exp(-1.0)/sqrt(pi) + 0.5*erf(1.0)
 
 !>MAB
 ! hsg is the G of Helander and Sigmar
 ! added to allow for momentum conservation with energy diffusion
-!          hsgvth(ie,is) = -1.0/sqrt(pi)/v*exp(-v**2) &
-!               + 0.5/v**2 &
-!               *(1.0 - 1.0/(1.0 + v &
-!               *(0.0705230784 + v &
-!               *(0.0422820123 + v &
-!               *(0.0092705272 + v &
-!               *(0.0001520143 + v &
-!               *(0.0002765672 + v &
-!               *(0.0000430638)))))))**16)
-          hsgvth(ie,is) = hsg_func(1.0)
+       hsgvth(ie) = hsg_func(1.0)
 !<MAB
-       end do
     end do                                                                  
-
-!    do is = 1, nspec
-!       if (spec(is) % nustar < 0.)
-!
-!    end do
 
     if(.not.allocated(vnew)) then
        allocate (vnew(naky,negrid,nspec))
@@ -1279,31 +1170,31 @@ contains
              do ik = 1, naky
                 if (const_v) then
                    vnew(ik,ie,is) = spec(is)%vnewk &
-                        *(zeff+heevth(ie,is))*0.5*tunits(ik)                   
+                        *(zeff+heevth(ie))*0.5*tunits(ik)                   
                    vnew_s(ik,ie,is) = spec(is)%vnewk &
-                        *hsgvth(ie,is)*4.0*tunits(ik)
+                        *hsgvth(ie)*4.0*tunits(ik)
                    vnew_D(ik,ie,is) = spec(is)%vnewk &
-                        *heevth(ie,is)*tunits(ik)                   
+                        *heevth(ie)*tunits(ik)                   
                    if (.not. conservative) then
                       vnew_E(ik,ie,is) = vnew_s(ik,ie,is)*1.5 &
                            - 2.0*vnew_D(ik,ie,is)
                       delvnew(ik,ie,is) = vnew_s(ik,ie,is)-vnew_D(ik,ie,is)
                    end if
                 else
-                   vnew(ik,ie,is) = spec(is)%vnewk/e(ie,is)**1.5 &
-                        *(zeff + hee(ie,is))*0.5*tunits(ik)
-                   vnew_s(ik,ie,is) = spec(is)%vnewk/sqrt(e(ie,is)) &
-                        *hsg(ie,is)*4.0*tunits(ik)
-                   vnew_D(ik,ie,is) = spec(is)%vnewk/e(ie,is)**1.5 &
-                        *hee(ie,is)*tunits(ik)
+                   vnew(ik,ie,is) = spec(is)%vnewk/energy(ie)**1.5 &
+                        *(zeff + hee(ie))*0.5*tunits(ik)
+                   vnew_s(ik,ie,is) = spec(is)%vnewk/sqrt(energy(ie)) &
+                        *hsg(ie)*4.0*tunits(ik)
+                   vnew_D(ik,ie,is) = spec(is)%vnewk/energy(ie)**1.5 &
+                        *hee(ie)*tunits(ik)
                    if (.not. conservative) then
-                      vnew_E(ik,ie,is) = e(ie,is)*(vnew_s(ik,ie,is)*(2.0-0.5/e(ie,is)) &
+                      vnew_E(ik,ie,is) = energy(ie)*(vnew_s(ik,ie,is)*(2.0-0.5/energy(ie)) &
                            - 2.0*vnew_D(ik,ie,is))
                       delvnew(ik,ie,is) = vnew_s(ik,ie,is)-vnew_D(ik,ie,is)
                    end if
                 end if
                 if (ei_coll_only) then
-                   vnew(ik,ie,is) = spec(is)%vnewk/e(ie,is)**1.5 &
+                   vnew(ik,ie,is) = spec(is)%vnewk/energy(ie)**1.5 &
                         *zeff*0.5*tunits(ik)
                    vnew_s(ik,ie,is)=0.
                    vnew_D(ik,ie,is)=0.
@@ -1317,9 +1208,9 @@ contains
              do ik = 1, naky
                 if (const_v) then
                    vnew(ik,ie,is) = spec(is)%vnewk &
-                        *heevth(ie,is)*0.5*tunits(ik)
+                        *heevth(ie)*0.5*tunits(ik)
                    vnew_s(ik,ie,is) = spec(is)%vnewk &
-                        *hsgvth(ie,is)*4.0*tunits(ik)
+                        *hsgvth(ie)*4.0*tunits(ik)
                    vnew_D(ik,ie,is) = 2.0*vnew(ik,ie,is)
                    if (.not. conservative) then
                       vnew_E(ik,ie,is) = vnew_s(ik,ie,is)*1.5 &
@@ -1327,13 +1218,13 @@ contains
                       delvnew(ik,ie,is) = vnew_s(ik,ie,is)-vnew_D(ik,ie,is)
                    end if
                 else
-                   vnew(ik,ie,is) = spec(is)%vnewk/e(ie,is)**1.5 &
-                        *hee(ie,is)*0.5*tunits(ik)
-                   vnew_s(ik,ie,is) = spec(is)%vnewk/sqrt(e(ie,is)) &
-                        *hsg(ie,is)*4.0*tunits(ik)
+                   vnew(ik,ie,is) = spec(is)%vnewk/energy(ie)**1.5 &
+                        *hee(ie)*0.5*tunits(ik)
+                   vnew_s(ik,ie,is) = spec(is)%vnewk/sqrt(energy(ie)) &
+                        *hsg(ie)*4.0*tunits(ik)
                    vnew_D(ik,ie,is) = 2.0*vnew(ik,ie,is)
                    if (.not. conservative) then
-                      vnew_E(ik,ie,is) = e(ie,is)*(vnew_s(ik,ie,is)*(2.0-0.5/e(ie,is)) &
+                      vnew_E(ik,ie,is) = energy(ie)*(vnew_s(ik,ie,is)*(2.0-0.5/energy(ie)) &
                            - 2.0*vnew_D(ik,ie,is))
                       delvnew(ik,ie,is) = vnew_s(ik,ie,is)-vnew_D(ik,ie,is)
                    end if
@@ -1352,34 +1243,34 @@ contains
        if (conservative) then
 
           do ie = 2, negrid-1
-             vr = 0.5*(sqrt(e(ie+1,is)) + sqrt(e(ie,is)))
-             vl = 0.5*(sqrt(e(ie,is)) + sqrt(e(ie-1,is)))
-             dv2r = (e(ie+1,is) - e(ie,is)) / (sqrt(e(ie+1,is)) - sqrt(e(ie,is)))
-             dv2l = (e(ie,is) - e(ie-1,is)) / (sqrt(e(ie,is)) - sqrt(e(ie-1,is)))
+             vr = 0.5*(sqrt(energy(ie+1)) + sqrt(energy(ie)))
+             vl = 0.5*(sqrt(energy(ie  )) + sqrt(energy(ie-1)))
+             dv2r = (energy(ie+1) - energy(ie)) / (sqrt(energy(ie+1)) - sqrt(energy(ie)))
+             dv2l = (energy(ie) - energy(ie-1)) / (sqrt(energy(ie)) - sqrt(energy(ie-1)))
           
              vnew_E(:,ie,is) = spec(is)%vnewk*tunits*(vl*exp(-vl**2)*dv2l*hsg_func(vl) &
-                  - vr*exp(-vr**2)*dv2r*hsg_func(vr)) / (sqrt(pi)*w(ie,is))
+                  - vr*exp(-vr**2)*dv2r*hsg_func(vr)) / (sqrt(pi)*w(ie))
              delvnew(:,ie,is) = spec(is)%vnewk*tunits*(vl*exp(-vl**2)*hsg_func(vl) &
-                     - vr*exp(-vr**2)*hsg_func(vr)) / (sqrt(pi*e(ie,is))*w(ie,is))
+                     - vr*exp(-vr**2)*hsg_func(vr)) / (sqrt(pi*energy(ie))*w(ie))
           end do
 
           ! boundary at v = 0
-          vr = 0.5*(sqrt(e(2,is)) + sqrt(e(1,is)))
-          dv2r = (e(2,is) - e(1,is)) / (sqrt(e(2,is)) - sqrt(e(1,is)))
+          vr = 0.5*(sqrt(energy(2)) + sqrt(energy(1)))
+          dv2r = (energy(2) - energy(1)) / (sqrt(energy(2)) - sqrt(energy(1)))
 
           vnew_E(:,1,is) = -spec(is)%vnewk*tunits*vr*exp(-vr**2)*hsg_func(vr)*dv2r &
-               / (sqrt(pi)*w(1,is))
+               / (sqrt(pi)*w(1))
           delvnew(:,1,is) = -spec(is)%vnewk*tunits*vr*exp(-vr**2)*hsg_func(vr) &
-               / (sqrt(pi*e(1,is))*w(1,is))
+               / (sqrt(pi*energy(1))*w(1))
 
           ! boundary at v -> infinity
-          vl = 0.5*(sqrt(e(negrid,is)) + sqrt(e(negrid-1,is)))
-          dv2l = (e(negrid,is) - e(negrid-1,is)) / (sqrt(e(negrid,is)) - sqrt(e(negrid-1,is)))
+          vl = 0.5*(sqrt(energy(negrid)) + sqrt(energy(negrid-1)))
+          dv2l = (energy(negrid) - energy(negrid-1)) / (sqrt(energy(negrid)) - sqrt(energy(negrid-1)))
 
           vnew_E(:,negrid,is) = spec(is)%vnewk*tunits*vl*exp(-vl**2)*hsg_func(vl)*dv2l &
-               / (sqrt(pi)*w(negrid,is))
+               / (sqrt(pi)*w(negrid))
           delvnew(:,negrid,is) = spec(is)%vnewk*tunits*vl*exp(-vl**2)*hsg_func(vl) &
-               / (sqrt(pi*e(negrid,is))*w(negrid,is))
+               / (sqrt(pi*energy(negrid))*w(negrid))
 
        end if
 
@@ -1419,110 +1310,14 @@ contains
 
   end function hsg_func
 
-  subroutine init_g3int
-    use theta_grid, only: ntgrid, bmag
-    use le_grids, only: nlambda, al, lintegrate
-    use gs2_layouts, only: g_lo, gint_lo, il_idx
-    implicit none
-    complex, dimension (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc) :: g
-    real :: x
-    integer :: il, ig, iglo
-
-    if (.not. allocated(sq)) allocate (sq(-ntgrid:ntgrid,nlambda,2))
-    do il = 1, nlambda
-       do ig = -ntgrid, ntgrid
-          x = sqrt(max(0.0, 1.0 - al(il)*bmag(ig)))
-          sq(ig,il,1) =  x
-          sq(ig,il,2) = -x
-       end do
-    end do
-
-    if (.not.allocated(g3int)) &
-         allocate (g3int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
-    g3int = 0.
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       x = al(il_idx(g_lo,iglo))
-       g(:,1,iglo) = max(0.0, 1.0 - x*bmag(:))
-       g(:,2,iglo) = max(0.0, 1.0 - x*bmag(:))
-    end do
-    call lintegrate (g, g3int)
-  end subroutine init_g3int
-
-  subroutine init_krook (hee)
-    use species, only: spec, electron_species, ion_species
-    use theta_grid, only: ntgrid, eps
-    use le_grids, only: integrate, ng2, al, e
-    use gs2_layouts, only: g_lo, geint_lo, ik_idx, il_idx, ie_idx, is_idx
-    use run_parameters, only: zeff, tunits
-    use gs2_time, only: code_dt
-    implicit none
-    real, dimension (:,:), intent (in) :: hee
-    complex, dimension (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc) :: g
-    complex, dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) &
-         :: geint
-    integer :: iglo, ik, il, ie, is, ige
-    real :: zeff1, vep, vhat, delta00
-
-    if (.not.allocated(aintnorm)) &
-         allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-    aintnorm = 0. ; g = 1.0
-    call integrate (g, geint)
-
-    do ige = geint_lo%llim_proc, geint_lo%ulim_proc
-       aintnorm(:,ige) = 1.0/real(geint(:,ige))
-    end do
-
-    if (.not.allocated(vnewfe)) allocate (vnewfe(g_lo%llim_proc:g_lo%ulim_alloc))
-    vnewfe = 0.
-
-    if (collision_model_switch == collision_model_krook_test) then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          vnewfe(iglo) = abs(spec(is)%vnewk)*tunits(ik)*code_dt
-       end do
-    else
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
-          ie = ie_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-
-          if (spec(is)%type == electron_species &
-               .or. spec(is)%type == ion_species) &
-          then
-             zeff1 = zeff
-          else
-             zeff1 = 0.0
-          end if
-
-          vep = abs(spec(is)%vnewk)*tunits(ik)
-          vhat = sqrt(e(ie,is))
-          if (ivnew > 0) then
-             delta00 = absom/((vep + 2.0*epsilon(0.0))*zeff)
-             if (ivnew >= 2) delta00 = (delta00*eps/37.2)**.333333333
-             vnewfe(iglo) = code_dt*vep*eps*(zeff1 + hee(ie,is)) &
-                  /(vhat**3*((1.0-eps-al(il))**2 + 1e-8)) &
-                  *(.111*delta00+1.31)/(11.79*delta00+1.0)
-          else
-             vnewfe(iglo) = 0.00941/((1.0 - eps - al(il))**2 + 1e-8)
-             if (il > ng2) vnewfe(iglo) = vnewfe(iglo) + vncoef/eps**2
-             vnewfe(iglo) = vnewfe(iglo)*code_dt*vep*eps &
-                  *(zeff1 + hee(ie,is))/vhat**3
-          end if
-       end do
-    end if
-  end subroutine init_krook
-
   subroutine init_ediffuse (vnmult_target)
     use constants, only: pi
     use species, only: nspec, spec
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, negrid, ng2, e, ecut, integrate_moment, al, w
-    use le_grids, only: vgrid, forbid
-    use egrid, only: zeroes, x0, energy
+    use le_grids, only: nlambda, negrid, ng2
+    use le_grids, only: forbid
+    use egrid, only: zeroes, x0
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
 # ifdef USE_LE_LAYOUT
@@ -1560,13 +1355,6 @@ contains
 
     if (present(vnmult_target)) then
        vnmult(2) = max (vnmult_target, 1.0)
-    end if
-
-    if (.not. vgrid) then
-       do ie = 2, negrid
-          xel = (xe(ie-1)+xe(ie))*0.5
-          el(ie) = energy(xel,ecut)
-       end do
     end if
 
 # ifdef USE_LE_LAYOUT
@@ -1643,7 +1431,7 @@ contains
     use species, only: spec
     use run_parameters, only: tunits
     use theta_grid, only: bmag
-    use le_grids, only: al, negrid, w, vgrid
+    use le_grids, only: al, negrid, w
     use spfunc, only: erf => erf_ext
     use constants, only: pi
     use dist_fn_arrays, only: kperp2
@@ -1674,28 +1462,23 @@ contains
           
           xel = (xe0 + xe1)*0.5
           xer = (xe1 + xe2)*0.5
-          
-          if (vgrid) then
-             capgr = 2.0*exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/(xer*sqrt(pi))
-             capgl = 2.0*exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/(xel*sqrt(pi))
-          else
-             capgr = 8.0*xer*sqrt(el(ie+1))*exp(-2.0*el(ie+1))/pi
-             capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
-          end if
+         
+          capgr = 2.0*exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/(xer*sqrt(pi))
+          capgl = 2.0*exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/(xel*sqrt(pi))
           
           ee = 0.125*(1.-slb1**2)*vnew_s(ik,ie,is) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
           
           ! coefficients for tridiagonal matrix:
-          cc(ie) = -0.25*vn*code_dt*capgr/(w(ie,is)*(xe2 - xe1))
-          aa(ie) = -0.25*vn*code_dt*capgl/(w(ie,is)*(xe1 - xe0))
+          cc(ie) = -0.25*vn*code_dt*capgr/(w(ie)*(xe2 - xe1))
+          aa(ie) = -0.25*vn*code_dt*capgl/(w(ie)*(xe1 - xe0))
           bb(ie) = 1.0 - (aa(ie) + cc(ie)) + ee*code_dt
           
              ! coefficients for entropy heating calculation
 !             if (heating) then
-!                dd(ie) =vnc*(0.25*capgr/(w(ie,is)*(xe2-xe1)) + ee)
-!                hh(ie) =vnh*(0.25*capgr/(w(ie,is)*(xe2-xe1)) + ee)
+!                dd(ie) =vnc*(0.25*capgr/(w(ie)*(xe2-xe1)) + ee)
+!                hh(ie) =vnh*(0.25*capgr/(w(ie)*(xe2-xe1)) + ee)
 !             end if
        end do
 
@@ -1705,23 +1488,19 @@ contains
        
        xer = (xe1 + xe2)*0.5
        
-       if (vgrid) then
-          capgr = 2.0*exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer/sqrt(pi)
-       else
-          capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
-       end if
+       capgr = 2.0*exp(-xer**2)*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer/sqrt(pi)
        
        ee = 0.125*(1.-slb1**2)*vnew_s(ik,1,is) &
             / (bmag(ig)*spec(is)%zstm)**2 &
             * kperp2(ig,it,ik)*cfac
        
-       cc(1) = -0.25*vn*code_dt*capgr/(w(1,is)*(xe2 - xe1))
+       cc(1) = -0.25*vn*code_dt*capgr/(w(1)*(xe2 - xe1))
        aa(1) = 0.0
        bb(1) = 1.0 - cc(1) + ee*code_dt
        
 !          if (heating) then
-!             dd(1) =vnc*(0.25*capgr/(w(1,is)*(xe2-xe1)) + ee)
-!             hh(1) =vnh*(0.25*capgr/(w(1,is)*(xe2-xe1)) + ee)
+!             dd(1) =vnc*(0.25*capgr/(w(1)*(xe2-xe1)) + ee)
+!             hh(1) =vnh*(0.25*capgr/(w(1)*(xe2-xe1)) + ee)
 !          end if
 
        ! boundary at v = infinity
@@ -1730,18 +1509,14 @@ contains
        
        xel = (xe1 + xe0)*0.5
        
-       if (vgrid) then
-          capgl = 2.0*exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel/sqrt(pi)
-       else
-          capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
-       end if
-       
+       capgl = 2.0*exp(-xel**2)*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel/sqrt(pi)
+
        ee = 0.125*(1.-slb1**2)*vnew_s(ik,negrid,is) &
             / (bmag(ig)*spec(is)%zstm)**2 &
             * kperp2(ig,it,ik)*cfac
        
        cc(negrid) = 0.0
-       aa(negrid) = -0.25*vn*code_dt*capgl/(w(negrid,is)*(xe1 - xe0))
+       aa(negrid) = -0.25*vn*code_dt*capgl/(w(negrid)*(xe1 - xe0))
        bb(negrid) = 1.0 - aa(negrid) + ee*code_dt
        
 !          if (heating) then
@@ -1761,13 +1536,8 @@ contains
           xel = (xe0 + xe1)*0.5
           xer = (xe1 + xe2)*0.5
           
-          if (vgrid) then
-             capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
-             capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
-          else
-             capgr = 8.0*xer*sqrt(el(ie+1))*exp(-2.0*el(ie+1))/pi
-             capgl = 8.0*xel*sqrt(el(ie))*exp(-2.0*el(ie))/pi
-          end if
+          capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
+          capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
           
           ee = 0.125*(1.-slb1**2)*vnew_s(ik,ie,is) &
                / (bmag(ig)*spec(is)%zstm)**2 &
@@ -1780,8 +1550,8 @@ contains
           
           ! coefficients for entropy heating calculation
 !             if (heating) then
-!                dd(ie) =vnc*(0.25*capgr/(w(ie,is)*(xe2-xe1)) + ee)
-!                hh(ie) =vnh*(0.25*capgr/(w(ie,is)*(xe2-xe1)) + ee)
+!                dd(ie) =vnc*(0.25*capgr/(w(ie)*(xe2-xe1)) + ee)
+!                hh(ie) =vnh*(0.25*capgr/(w(ie)*(xe2-xe1)) + ee)
 !             end if
        end do
 
@@ -1791,11 +1561,7 @@ contains
        
        xer = (xe1 + xe2)*0.5
        
-       if (vgrid) then
-          capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
-       else
-          capgr = 8.0*xer*sqrt(el(2))*exp(-2.0*el(2))/pi
-       end if
+       capgr = 0.5*exp(xe1**2-xer**2)/xe1**2*(erf(xer)-2.*xer*exp(-xer**2)/sqrt(pi))/xer
        
        ee = 0.125*(1.-slb1**2)*vnew_s(ik,1,is) &
             / (bmag(ig)*spec(is)%zstm)**2 &
@@ -1806,8 +1572,8 @@ contains
        bb(1) = 1.0 - cc(1) + ee*code_dt
        
 !          if (heating) then
-!             dd(1) =vnc*(0.25*capgr/(w(1,is)*(xe2-xe1)) + ee)
-!             hh(1) =vnh*(0.25*capgr/(w(1,is)*(xe2-xe1)) + ee)
+!             dd(1) =vnc*(0.25*capgr/(w(1)*(xe2-xe1)) + ee)
+!             hh(1) =vnh*(0.25*capgr/(w(1)*(xe2-xe1)) + ee)
 !          end if
 
        ! boundary at xe = 1
@@ -1816,11 +1582,7 @@ contains
        
        xel = (xe1 + xe0)*0.5
        
-       if (vgrid) then
-          capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
-       else
-          capgl = 8.0*xel*sqrt(el(negrid))*exp(-2.0*el(negrid))/pi
-       end if
+       capgl = 0.5*exp(xe1**2-xel**2)/xe1**2*(erf(xel)-2.*xel*exp(-xel**2)/sqrt(pi))/xel
        
        ee = 0.125*(1.-slb1**2)*vnew_s(ik,negrid,is) &
             / (bmag(ig)*spec(is)%zstm)**2 &
@@ -1971,7 +1733,7 @@ contains
     use species, only: nspec, spec
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, negrid, al, jend, ng2, e, wl
+    use le_grids, only: nlambda, negrid, al, jend, ng2, energy, wl
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: kperp2
@@ -2126,7 +1888,7 @@ contains
   subroutine get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
 
     use species, only: spec
-    use le_grids, only: nlambda, al, e, ng2
+    use le_grids, only: nlambda, al, energy, ng2
     use le_grids, only: wl, jend, al
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: kperp2
@@ -2181,7 +1943,7 @@ contains
           slbl = (slb1 + slb0)*0.5  ! xi(j-1/2)
           slbr = (slb1 + slb2)*0.5  ! xi(j+1/2)
           
-          ee = 0.5*e(ie,is)*(1+slb1**2) &
+          ee = 0.5*energy(ie)*(1+slb1**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
           
@@ -2203,7 +1965,7 @@ contains
        
        slbr = (slb1 + slb2)*0.5
        
-       ee = 0.5*e(ie,is)*(1+slb1**2) &
+       ee = 0.5*energy(ie)*(1+slb1**2) &
             / (bmag(ig)*spec(is)%zstm)**2 &
             * kperp2(ig,it,ik)*cfac
        
@@ -2230,7 +1992,7 @@ contains
        slbl = (slb1 + slb0)*0.5
        slbr = (slb1 + slb2)*0.5
        
-       ee = 0.5*e(ie,is)*(1+slb1**2) &
+       ee = 0.5*energy(ie)*(1+slb1**2) &
             / (bmag(ig)*spec(is)%zstm)**2 &
             * kperp2(ig,it,ik)*cfac
        
@@ -2253,7 +2015,7 @@ contains
           slbl = (slb1 + slb0)*0.5  ! xi(j-1/2)
           slbr = (slb1 + slb2)*0.5  ! xi(j+1/2)
           
-          ee = 0.5*e(ie,is)*(1+slb1**2) &
+          ee = 0.5*energy(ie)*(1+slb1**2) &
                / (bmag(ig)*spec(is)%zstm)**2 &
                * kperp2(ig,it,ik)*cfac
           
@@ -2277,7 +2039,7 @@ contains
        slbl = (slb1 + slb0)*0.5
        slbr = (slb1 + slb2)*0.5
        
-       ee = 0.5*e(ie,is)*(1+slb1**2) &
+       ee = 0.5*energy(ie)*(1+slb1**2) &
             / (bmag(ig)*spec(is)%zstm)**2 &
             * kperp2(ig,it,ik)*cfac
        
@@ -2304,7 +2066,7 @@ contains
        slbl = (slb1 + slb0)*0.5
        slbr = (slb1 + slb2)*0.5
        
-       ee = 0.5*e(ie,is)*(1+slb1**2) &
+       ee = 0.5*energy(ie)*(1+slb1**2) &
             / (bmag(ig)*spec(is)%zstm)**2 &
             * kperp2(ig,it,ik)*cfac
        
@@ -2322,7 +2084,7 @@ contains
     ! assuming symmetry in xi, fill in the rest of the arrays.
     aa(te+1:te2) = cc(teh:1:-1)
     bb(te+1:te2) = bb(teh:1:-1)
-    cc(te+1:te2) =aa(teh:1:-1)
+    cc(te+1:te2) = aa(teh:1:-1)
        
     if (heating) then
        dd(te+1:te2) = dd(teh:1:-1)
@@ -2823,17 +2585,11 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-!       do isign = 1, 2
        do ig = -ntgrid, ntgrid
           ile = idx (le_lo, ig, ik, it, is)
-          if (idx_local(g_lo,iglo)) &
-!               nn_from(proc_id(le_lo,ile)) = nn_from(proc_id(le_lo,ile)) + 1
-               nn_from(proc_id(le_lo,ile)) = nn_from(proc_id(le_lo,ile)) + 2
-          if (idx_local(le_lo,ile)) &
-!               nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
-               nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 2
+          if (idx_local(g_lo,iglo)) nn_from(proc_id(le_lo,ile)) = nn_from(proc_id(le_lo,ile)) + 2
+          if (idx_local(le_lo,ile)) nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 2
        end do
-!       end do
     end do
 
     do ip = 0, nproc-1
@@ -2913,8 +2669,7 @@ contains
     ! TT: It may be good to avoid bank conflict.
     to_high(3) = le_lo%ulim_alloc
 
-    call init_redist (g2le, 'c', to_low, to_high, to_list, &
-         from_low, from_high, from_list)
+    call init_redist (g2le, 'c', to_low, to_high, to_list, from_low, from_high, from_list)
 
     call delete_list (to_list)
     call delete_list (from_list)
@@ -2930,9 +2685,9 @@ contains
     use run_parameters, only: fphi, fbpar
     use gs2_time, only: code_dt
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: e, integrate_moment
+    use le_grids, only: energy, integrate_moment
     use species, only: nspec, spec, electron_species
-    use dist_fn_arrays, only: c_rate, vpa, kperp2, aj0
+    use dist_fn_arrays, only: c_rate, vpa, kperp2, aj0, g_adjust
     use run_parameters, only: ieqzip
 
     use constants
@@ -3001,7 +2756,7 @@ contains
                 g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
                      vnmult(1)*spec(is)%vnewk*code_dt &
                      * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
-                     / (beta*spec(is)%stm*e(ie,is)**1.5)
+                     / (beta*spec(is)%stm*energy(ie)**1.5)
                 ! probably need 1/(spec(is_ion)%z*spec(is_ion)%dens) above
              end do
           end do
@@ -3042,7 +2797,7 @@ contains
                 g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
                      vnmult(1)*spec(is)%vnewk*code_dt &
                      * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
-                     / (beta*spec(is)%stm*e(ie,is)**1.5)
+                     / (beta*spec(is)%stm*energy(ie)**1.5)
              end do
           end do
        end if
@@ -3060,8 +2815,6 @@ contains
        call solfp_ediffuse (g)
        if (conserve_moments) call conserve_diffuse (g, g1)
 
-    case (collision_model_krook,collision_model_krook_test)
-       call solfp_krook (g, g1)
     end select
     
     if (heating .and. present(diagnostics)) then
@@ -3094,11 +2847,11 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
-    use le_grids, only: e, al, integrate_moment, negrid
+    use le_grids, only: energy, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
-    use le_grids, only: nlambda, negrid, e, al, ng2
+    use le_grids, only: nlambda, ng2
     use gs2_layouts, only: le_lo, ig_idx
     use redistribute, only: scatter
     use run_parameters, only: tunits
@@ -3145,7 +2898,7 @@ contains
           do ie = 1, negrid
              do ixi = 1, nxi
                 il = min(ixi, nxi+1-ixi)
-                vpanud(:,ixi,ie,is) = sign(isgn, nlambda-ixi)*sqrt((1.0-al(il)*bmag)*e(ie,is))
+                vpanud(:,ixi,ie,is) = sign(isgn, nlambda-ixi)*sqrt((1.0-al(il)*bmag)*energy(ie))
              end do
           end do
        end do
@@ -3156,15 +2909,6 @@ contains
           gtmp(:,:,ile) = vpanud(ig,:,:,is) * aj0le(:,:,ile) * gle(:,:,ile)
        end do
        call integrate_moment (le_lo, gtmp, v0y0)    ! v0y0
-
-       ! add part of ion-drag term
-!        do ile = le_lo%llim_proc, le_lo%ulim_proc
-!           ig = ig_idx(le_lo,ile)
-!           ik = ik_idx(le_lo,ile)
-!           it = it_idx(le_lo,ile)
-!           is = is_idx(le_lo,ile)
-!           gle(:,:,ile) = gle(:,:,ile) - z0le(:,:,ile) * v0y0(ig,it,ik,is)
-!        end do
 
        do ile = le_lo%llim_proc, le_lo%ulim_proc
           it = it_idx(le_lo,ile)
@@ -3183,7 +2927,7 @@ contains
              do ixi = 1, nxi
                 il = min(ixi, nxi+1-ixi)
                 isgn = 2 - il/ixi
-                vpanud(:,ixi,ie,is) = vpdiff(:,isgn,il) * sqrt(e(ie,is)) * vnmult(1)*vnew_D(1,ie,is)/tunits(1)
+                vpanud(:,ixi,ie,is) = vpdiff(:,isgn,il) * sqrt(energy(ie)) * vnmult(1)*vnew_D(1,ie,is)/tunits(1)
              end do
           end do
        end do
@@ -3193,7 +2937,7 @@ contains
           do ie = 1, negrid
              do ixi = 1, nxi
                 il = min(ixi, nxi+1-ixi)
-                vpanud(:,ixi,ie,is) = sign(isgn, nlambda-ixi)*sqrt((1.0-al(il)*bmag)*e(ie,is))*vnmult(1)*vnew_D(1,ie,is)/tunits(1)
+                vpanud(:,ixi,ie,is) = sign(isgn, nlambda-ixi)*sqrt((1.0-al(il)*bmag)*energy(ie))*vnmult(1)*vnew_D(1,ie,is)/tunits(1)
              end do
           end do
        end do
@@ -3212,14 +2956,6 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Get y2 = y1 - v1y1 * s1 / (1 + v1s1)
 
-!     do ile = le_lo%llim_proc, le_lo%ulim_proc
-!        it = it_idx(le_lo,ile)
-!        ik = ik_idx(le_lo,ile)
-!        ig = ig_idx(le_lo,ile)
-!        is = is_idx(le_lo,ile)
-!        gle(:,:,ile) = gle(:,:,ile) - s0le(:,:,ile) * v1y1(ig,it,ik,is)
-!     end do
-
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
@@ -3236,7 +2972,7 @@ contains
           il = min(ixi, nxi+1-ixi)
           ! aj1vp2 = 2 * J1(arg)/arg * vperp^2
           gtmp(ixi,:negrid,ile) = vnmult(1) * vnew_D(ik,:negrid,is) * aj1le(ixi,:negrid,ile) &
-               * e(:,is) * al(il) * gle(ixi,:negrid,ile)
+               * energy(:) * al(il) * gle(ixi,:negrid,ile)
        end do
     end do
 
@@ -3245,13 +2981,6 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Finally get x = y2 - v2y2 * w2 / (1 + v2w2)
 
-!     do ile = le_lo%llim_proc, le_lo%ulim_proc
-!        it = it_idx(le_lo,ile)
-!        ik = ik_idx(le_lo,ile)
-!        ig = ig_idx(le_lo,ile)
-!        is = is_idx(le_lo,ile)
-!        gle(:,:,ile) = gle(:,:,ile) - w0le(:,:,ile) * v2y2(ig,it,ik,is)
-!     end do
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
@@ -3306,7 +3035,7 @@ contains
        do isgn = 1, 2
           ! v1 = nud vpa J0 f0
           if (conservative) then
-             gtmp(:,isgn,iglo) = vns(ik,ie,is)*sqrt(e(ie,is))*vpdiff(:,isgn,il) &
+             gtmp(:,isgn,iglo) = vns(ik,ie,is)*sqrt(energy(ie))*vpdiff(:,isgn,il) &
                   * aj0(:,iglo)*g1(:,isgn,iglo)
           else
              gtmp(:,isgn,iglo) = vns(ik,ie,is)*vpa(:,isgn,iglo)*aj0(:,iglo) &
@@ -3341,7 +3070,7 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v2 = nud vperp J1 f0
-          gtmp(:,isgn,iglo) = vns(ik,ie,is)*e(ie,is)*al(il)*aj1(:,iglo) &
+          gtmp(:,isgn,iglo) = vns(ik,ie,is)*energy(ie)*al(il)*aj1(:,iglo) &
                * g1(:,isgn,iglo)
        end do
     end do
@@ -3377,7 +3106,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
-    use le_grids, only: e, al, integrate_moment, negrid
+    use le_grids, only: energy, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
@@ -3452,22 +3181,11 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Get y1 = y0 - v0y0 * z0 / (1 + v0z0)
 
-!     do ile = le_lo%llim_proc, le_lo%ulim_proc
-!        ig = ig_idx(le_lo,ile)
-!        it = it_idx(le_lo,ile)
-!        ik = ik_idx(le_lo,ile)
-!        is = is_idx(le_lo,ile)
-!        gle(:,:,ile) = gle(:,:,ile) - v0y0(ig,it,ik,is)*bz0le(:,:,ile)
-!     end do
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
        gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*v0y0(ile)*bz0le(:,:,ile)
     end do
-
-    ! TMP FOR TESTING -- MAB
-!    call system_clock (count=t3)
-!    t3tot = t3tot + real(t3-t1)/tr
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v1y1
@@ -3484,16 +3202,7 @@ contains
 
     do is = 1, nspec
        do ie = 1, negrid
-!          do ixi = 1, nxi
-!             il = min(ixi, nxi+1-ixi)
-!             isgn = 1
-!             do ig = -ntgrid, ntgrid
-!                if (.not. forbid(ig,il)) &
-!                     vpadelnu(ig,ixi,ie,is) = sign(isgn, nlambda-ixi) &
-!                     * vns(1,ie,is) * sqrt(max(0.0,(1.0-al(il)*bmag(ig))*e(ie,is) ))
-!             end do
-!          end do
-          vpadelnu(:,:nxi,ie,is) = vns(1,ie,is) * sqrt(vpatmp*e(ie,is))
+          vpadelnu(:,:nxi,ie,is) = vns(1,ie,is) * sqrt(vpatmp*energy(ie))
        end do
     end do
 
@@ -3516,13 +3225,6 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Get y2 = y1 - v1y1 * s1 / (1 + v1s1)
 
-!     do ile = le_lo%llim_proc, le_lo%ulim_proc
-!        it = it_idx(le_lo,ile)
-!        ik = ik_idx(le_lo,ile)
-!        ig = ig_idx(le_lo,ile)
-!        is = is_idx(le_lo,ile)
-!        gle(:,:,ile) = gle(:,:,ile) - bs0le(:,:,ile) * v1y1(ig,it,ik,is)
-!     end do
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
@@ -3536,8 +3238,10 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v2y2
 
-    do ik = 1, naky
-       vns(ik,:,:) = delvnew(ik,:,:)*e
+    do is = 1, nspec
+       do ik = 1, naky
+          vns(ik,:,is) = delvnew(ik,:,is)*energy 
+       end do
     end do
 
     do ile = le_lo%llim_proc, le_lo%ulim_proc
@@ -3546,8 +3250,6 @@ contains
        do ie=1, negrid
           do ixi = 1, nxi
              il = min(ixi, nxi+1-ixi)
-!             gtmp(ixi,ie,ile) = delvnew(ik,ie,is) &
-!                  * e(ie,is)*al(il)*aj1le(ixi,ie,ile) * gle(ixi,ie,ile)
              gtmp(ixi,ie,ile) = vns(ik,ie,is) &
                   * al(il)*aj1le(ixi,ie,ile) * gle(ixi,ie,ile)
           end do
@@ -3563,13 +3265,6 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Finally get x = y2 - v2y2 * w2 / (1 + v2w2)
 
-!     do ile = le_lo%llim_proc, le_lo%ulim_proc
-!        it = it_idx(le_lo,ile)
-!        ik = ik_idx(le_lo,ile)
-!        ig = ig_idx(le_lo,ile)
-!        is = is_idx(le_lo,ile)
-!        gle(:,:,ile) = gle(:,:,ile) - bw0le(:,:,ile) * v2y2(ig,it,ik,is)
-!     end do
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
@@ -3667,7 +3362,7 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v2 = (nus-nud) vperp J1 f0
-          gtmp(:,isgn,iglo) = vns(ik,ie,is)*e(ie,is)*al(il)*aj1(:,iglo) &
+          gtmp(:,isgn,iglo) = vns(ik,ie,is)*energy(ie)*al(il)*aj1(:,iglo) &
                * g1(:,isgn,iglo)
        end do
     end do
@@ -3695,128 +3390,10 @@ contains
 
   end subroutine conserve_diffuse
 
-  subroutine g_adjust (g, phi, bpar, facphi, facbpar)
-    use species, only: spec
-    use theta_grid, only: ntgrid
-    use le_grids, only: anon
-    use dist_fn_arrays, only: vperp2, aj0, aj1
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-    real, intent (in) :: facphi, facbpar
-
-    integer :: iglo, ig, ik, it, ie, is
-    complex :: adj
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do ig = -ntgrid, ntgrid
-          adj = anon(ie,is)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
-                  *bpar(ig,it,ik)*facbpar &
-               + spec(is)%z*anon(ie,is)*phi(ig,it,ik)*aj0(ig,iglo) &
-                  /spec(is)%temp*facphi
-          g(ig,1,iglo) = g(ig,1,iglo) + adj
-          g(ig,2,iglo) = g(ig,2,iglo) + adj
-       end do
-    end do
-  end subroutine g_adjust
-
-  subroutine solfp_krook (g, g1)
-    use species, only: spec, electron_species
-    use theta_grid, only: ntgrid
-    use le_grids, only: integrate, lintegrate, geint2g, gint2g
-    use gs2_layouts, only: g_lo, gint_lo, geint_lo
-    use gs2_layouts, only: ik_idx, il_idx, it_idx, is_idx
-    use prof, only: prof_entering, prof_leaving
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
-
-    complex, dimension (-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc) &
-         :: g0eint, g1eint
-    complex, dimension (-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc) &
-         :: g1int, g2int
-    integer :: iglo, igint, igeint, ig, ik, it, il, is
-
-    call prof_entering ("solfp_krook", "collisions")
-
-    if (conserve_momentum) then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
-             g1(:,:,iglo) = 0.0
-          else
-             g1(:,:,iglo) = g(:,:,iglo)*sq(:,il,:)
-          end if
-       end do
-       call lintegrate (g1, g1int)
-    end if
-
-    if (conserve_number) call integrate (g, g0eint)
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       do ig = -ntgrid, ntgrid
-          g1(ig,1,iglo) = g(ig,1,iglo)/(1.0 + vnewfe(iglo))
-          g1(ig,2,iglo) = g(ig,2,iglo)/(1.0 + vnewfe(iglo))
-       end do
-    end do
-
-    if (conserve_number) then
-       call integrate (g1, g1eint)
-       do igeint = geint_lo%llim_proc, geint_lo%ulim_proc
-          g0eint(:,igeint) = (g0eint(:,igeint) - g1eint(:,igeint)) &
-               *aintnorm(:,igeint)
-       end do
-       call geint2g (g0eint, g)
-       g = g1 + g
-    else
-       g = g1
-    end if
-
-    if (conserve_momentum) then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
-             g1(:,:,iglo) = 0.0
-          else
-             g1(:,:,iglo) = g(:,:,iglo)*sq(:,il,:)
-          end if
-       end do
-       call lintegrate (g1, g2int)
-
-       do igint = gint_lo%llim_proc, gint_lo%ulim_proc
-          g1int(:,igint) = (g1int(:,igint) - g2int(:,igint))/g3int(:,igint)
-       end do
-       call gint2g (g1int, g1)
-
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
-          else if (spec(is)%type == electron_species) then
-          else
-             g(:,:,iglo) = g(:,:,iglo) + sq(:,il,:)*g1(:,:,iglo)
-          end if
-       end do
-    end if
-
-    call prof_leaving ("solfp_krook", "collisions")
-  end subroutine solfp_krook
-
   subroutine solfp_lorentz (g, gc, gh, diagnostics, init)
     use species, only: spec, electron_species
     use theta_grid, only: ntgrid, bmag
-    use le_grids, only: nlambda, jend, lintegrate, ng2, al
+    use le_grids, only: nlambda, jend, ng2, al
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: ig_idx, ik_idx, il_idx, is_idx, it_idx, ie_idx
     use prof, only: prof_entering, prof_leaving
@@ -3824,7 +3401,7 @@ contains
     use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
     use gs2_layouts, only: le_lo
-    use le_grids, only: negrid, jend
+    use le_grids, only: negrid
 # else
     use gs2_layouts, only: lz_lo
 # endif
@@ -4122,7 +3699,6 @@ contains
     ! TEMP FOR TESTING -- MAB
     use gs2_layouts, only: ik_idx, ie_idx, il_idx, it_idx
     use gs2_time, only: code_dt
-    use le_grids, only: e
 
     implicit none
 
@@ -4435,9 +4011,6 @@ contains
     if (allocated(vnew)) deallocate (vnew, vnew_s, vnew_D, vnew_E, delvnew)
     if (allocated(vnewh)) deallocate (vnewh)
     if (allocated(sq)) deallocate (sq)
-    if (allocated(g3int)) deallocate (g3int)
-    if (allocated(aintnorm)) deallocate (aintnorm)
-    if (allocated(vnewfe)) deallocate (vnewfe)
 
 # ifdef USE_LE_LAYOUT
     if (allocated(c1le)) then
@@ -4460,54 +4033,4 @@ contains
   end subroutine finish_collisions
 
 end module collisions
-
-! OLD MOMENTUM CONSERVATION CODING
-!    if (conserve_momentum) then
-!       allocate (g1int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
-!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!          ik = ik_idx(g_lo,iglo)
-!          il = il_idx(g_lo,iglo)
-!          is = is_idx(g_lo,iglo)
-!          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
-!             g1(:,:,iglo) = 0.0
-!          else
-!             g1(:,:,iglo) = g(:,:,iglo)*sq(:,il,:)
-!          end if
-!       end do
-!       call lintegrate (g1, g1int)
-!    end if
-
-! ...
-
-!    if (conserve_momentum) then
-!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!          ik = ik_idx(g_lo,iglo)
-!          il = il_idx(g_lo,iglo)
-!          is = is_idx(g_lo,iglo)
-!          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
-!             g1(:,:,iglo) = 0.0
-!          else
-!             g1(:,:,iglo) = g(:,:,iglo)*sq(:,il,:)
-!          end if
-!       end do
-!       allocate (g2int(-ntgrid:ntgrid,gint_lo%llim_proc:gint_lo%ulim_alloc))
-!       call lintegrate (g1, g2int)
-!
-!       do igint = gint_lo%llim_proc, gint_lo%ulim_proc
-!          g1int(:,igint) = (g1int(:,igint) - g2int(:,igint))/g3int(:,igint)
-!       end do
-!       call gint2g (g1int, g1)
-!       deallocate (g1int, g2int)
-!
-!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!          ik = ik_idx(g_lo,iglo)
-!          il = il_idx(g_lo,iglo)
-!          is = is_idx(g_lo,iglo)
-!          if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) then
-!          else if (spec(is)%type == electron_species) then
-!          else
-!             g(:,:,iglo) = g(:,:,iglo) + sq(:,il,:)*g1(:,:,iglo)
-!          end if
-!       end do
-!    end if
 
