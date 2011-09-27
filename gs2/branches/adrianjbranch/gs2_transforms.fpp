@@ -265,7 +265,7 @@ contains
   subroutine init_x_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
     use gs2_layouts, only: init_x_transform_layouts
     use gs2_layouts, only: g_lo, xxf_lo, gidx2xxfidx, proc_id, idx_local
-    use mp, only: nproc
+    use mp, only: nproc, proc0
     use redistribute, only: index_list_type, init_redist, delete_list
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
@@ -312,6 +312,10 @@ contains
        end if
     end do
 
+    if(proc0) then
+       write(*,*) 'g_lo%blocksize',g_lo%blocksize,&
+                  'xxf_lo%blocksize',xxf_lo%blocksize
+    end if
 
     ! get local indices of elements distributed to/from other processors
     nn_to = 0

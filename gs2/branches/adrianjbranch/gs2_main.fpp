@@ -45,9 +45,12 @@ contains
     use redistribute, only: c_inv_22_new_loop, c_inv_22_old_loop
     use redistribute, only: c_inv_22_rest_loop, c_32_rest_loop
     use redistribute, only: c_32_new_loop, c_32_old_loop
+    use redistribute, only: c_32_new_opt_loop
     use redistribute, only: c_inv_32_new_loop, c_inv_32_old_loop
     use redistribute, only: c_inv_32_rest_loop
+    use redistribute, only: c_inv_32_new_opt_loop
     use fields_implicit, only: time_field
+    use gs2_layouts, only: layout
     implicit none
 
     integer, intent (in), optional :: mpi_comm, nensembles
@@ -65,12 +68,13 @@ contains
     real :: c_inv_22_old_loop_min,c_inv_22_old_loop_max,c_inv_22_old_loop_av
     real :: c_inv_22_rest_loop_min,c_inv_22_rest_loop_max,c_inv_22_rest_loop_av
     real :: c_32_new_loop_min,c_32_new_loop_max,c_32_new_loop_av
+    real :: c_32_new_opt_loop_min,c_32_new_opt_loop_max,c_32_new_opt_loop_av
     real :: c_32_old_loop_min,c_32_old_loop_max,c_32_old_loop_av
     real :: c_32_rest_loop_min,c_32_rest_loop_max,c_32_rest_loop_av
     real :: c_inv_32_new_loop_min,c_inv_32_new_loop_max,c_inv_32_new_loop_av
     real :: c_inv_32_old_loop_min,c_inv_32_old_loop_max,c_inv_32_old_loop_av
     real :: c_inv_32_rest_loop_min,c_inv_32_rest_loop_max,c_inv_32_rest_loop_av
-
+    real :: c_inv_32_new_opt_loop_min,c_inv_32_new_opt_loop_max,c_inv_32_new_opt_loop_av
 
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
@@ -99,9 +103,13 @@ contains
        ! <doc> Report # of processors being used </doc>
        if (proc0) then
           if (nproc == 1) then
-             if (.not. nofin) write(*,*) 'Running on ',nproc,' processor'
-          else
-             if (.not. nofin) write(*,*) 'Running on ',nproc,' processors'
+             if (.not. nofin) then
+	        write(*,*) 'Running on ',nproc,' processor'
+	     end if 
+         else
+             if (.not. nofin) then
+	        write(*,*) 'Running on ',nproc,' processors'
+	     end if	  
           end if
           write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
@@ -159,6 +167,8 @@ contains
     
     call loop_diagnostics(0,exit)
     
+    if (proc0) write(*,*) 'layout',layout
+
     do istep = 1, nstep
        
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
@@ -265,6 +275,14 @@ contains
     call sum_reduce(c_32_new_loop_av,0)
     c_32_new_loop_av = c_32_new_loop_av/nproc
 
+    c_32_new_opt_loop_max = c_32_new_opt_loop
+    call max_reduce(c_32_new_opt_loop_max,0)
+    c_32_new_opt_loop_min = c_32_new_opt_loop
+    call min_reduce(c_32_new_opt_loop_min,0)
+    c_32_new_opt_loop_av = c_32_new_opt_loop
+    call sum_reduce(c_32_new_opt_loop_av,0)
+    c_32_new_opt_loop_av = c_32_new_opt_loop_av/nproc
+
     c_32_rest_loop_max = c_32_rest_loop
     call max_reduce(c_32_rest_loop_max,0)
     c_32_rest_loop_min = c_32_rest_loop
@@ -288,6 +306,14 @@ contains
     c_inv_32_new_loop_av = c_inv_32_new_loop
     call sum_reduce(c_inv_32_new_loop_av,0)
     c_inv_32_new_loop_av = c_inv_32_new_loop_av/nproc
+
+    c_inv_32_new_opt_loop_max = c_inv_32_new_opt_loop
+    call max_reduce(c_inv_32_new_opt_loop_max,0)
+    c_inv_32_new_opt_loop_min = c_inv_32_new_opt_loop
+    call min_reduce(c_inv_32_new_opt_loop_min,0)
+    c_inv_32_new_opt_loop_av = c_inv_32_new_opt_loop
+    call sum_reduce(c_inv_32_new_opt_loop_av,0)
+    c_inv_32_new_opt_loop_av = c_inv_32_new_opt_loop_av/nproc
 
     c_inv_32_rest_loop_max = c_inv_32_rest_loop
     call max_reduce(c_inv_32_rest_loop_max,0)
@@ -314,26 +340,19 @@ contains
     	c_32_old_loop_min,c_32_old_loop_max,c_32_old_loop_av
         write(*,*) 'c_32 New loop: Min,Max,Average',&
     	c_32_new_loop_min,c_32_new_loop_max,c_32_new_loop_av
+        write(*,*) 'c_32 New Opt loop: Min,Max,Average',&
+    	c_32_new_opt_loop_min,c_32_new_opt_loop_max,c_32_new_opt_loop_av
         write(*,*) 'c_32 Rest loop: Min,Max,Average',&
     	c_32_rest_loop_min,c_32_rest_loop_max,c_32_rest_loop_av
         write(*,*) 'c_inv_32 Old loop: Min,Max,Average',&
     	c_inv_32_old_loop_min,c_inv_32_old_loop_max,c_inv_32_old_loop_av
         write(*,*) 'c_inv_32 New loop: Min,Max,Average',&
     	c_inv_32_new_loop_min,c_inv_32_new_loop_max,c_inv_32_new_loop_av
+        write(*,*) 'c_inv_32 New Opt loop: Min,Max,Average',&
+    	c_inv_32_new_opt_loop_min,c_inv_32_new_opt_loop_max,c_inv_32_new_opt_loop_av
         write(*,*) 'c_inv_32 Rest loop: Min,Max,Average',&
     	c_inv_32_rest_loop_min,c_inv_32_rest_loop_max,c_inv_32_rest_loop_av
     end if
-
-!    if (proc0) write(*,*) 'c_22 Old loop',c_22_old_loop,&
-!    'c_22 New Loop',c_22_new_loop,'c_22 Rest Loop',c_22_rest_loop
-!    if (proc0) write(*,*) 'c_inv_22 Old loop',c_inv_22_old_loop,&
-!    'c_inv_22 New Loop',c_inv_22_new_loop,'c_inv_22 Rest Loop',&
-!    c_inv_22_rest_loop
-!    if (proc0) write(*,*) 'c_32 Old loop',c_32_old_loop,&
-!    'c_32 New Loop',c_32_new_loop,'c_32 Rest Loop',c_32_rest_loop
-!    if (proc0) write(*,*) 'c_inv_32 Old loop',c_inv_32_old_loop,&
-!    'c_inv_32 New Loop',c_inv_32_new_loop,'c_inv_32 Rest Loop',&
-!    c_inv_32_rest_loop
 
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
