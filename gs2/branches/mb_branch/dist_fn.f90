@@ -20,7 +20,6 @@ module dist_fn
   public :: init_kperp2
   public :: get_jext !GGH
   public :: get_verr, get_gtran, write_fyx, collision_error
-  public :: include_lowflow
   public :: get_init_field
   public :: flux_vs_theta_vs_vpa
 
@@ -41,8 +40,6 @@ module dist_fn
   real :: t0, omega0, gamma0, source0
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
-  real :: rhostar ! MAB
-  logical :: include_lowflow ! MAB
   logical :: dfexist, skexist
 
   integer :: adiabatic_option_switch
@@ -79,11 +76,11 @@ module dist_fn
   real, dimension (:,:,:,:,:), allocatable :: wdriftttp
   ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
 
-!>MAB
   real, dimension (:,:,:), allocatable :: wcoriolis
   ! (-ntgrid:ntgrid, 2, -g-layout-)
 
-!<MAB
+  real, dimension (:,:,:), allocatable :: wstar_neo
+  ! (-ntgrid:ntgrid,ntheta0,naky)
 
   real, dimension (:,:,:), allocatable :: wstar
   ! (naky,negrid,nspec) replicated
@@ -104,7 +101,8 @@ module dist_fn
   complex, dimension (:,:,:), allocatable :: g_adj
   ! (N(links), 2, -g-layout-)
 
-  complex, dimension (:,:,:), allocatable, save :: gnl_1, gnl_2, gnl_3
+!  complex, dimension (:,:,:), allocatable, save :: gnl_1, gnl_2, gnl_3
+  complex, dimension (:,:,:), allocatable, save :: gexp_1, gexp_2, gexp_3
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   ! momentum conservation
@@ -122,6 +120,9 @@ module dist_fn
 
   ! get_verr
   real, dimension (:,:), allocatable :: kmax
+
+  ! low-flow
+!  type (redist_type), save :: ediffuse_map
 
   ! connected bc
 
@@ -159,6 +160,7 @@ module dist_fn
   logical :: fyxinit = .false.
   logical :: cerrinit = .false.
   logical :: mominit = .false.
+  logical :: ediffinit = .false.
 
   real, allocatable :: mom_coeff(:,:,:,:)
   real, allocatable :: mom_coeff_npara(:,:,:), mom_coeff_nperp(:,:,:)
@@ -609,7 +611,8 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, &
          tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         include_lowflow, g_exb, g_exbfac, omprimfac, btor_slab, mach, rhostar
+         g_exb, g_exbfac, omprimfac, btor_slab, mach
+!         include_lowflow, g_exb, g_exbfac, omprimfac, btor_slab, mach, rhostar
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -639,13 +642,13 @@ subroutine check_dist_fn(report_unit)
        omprimfac = 1.0
        btor_slab = 0.0
        wfb = 1.
-       rhostar = 3.e-3
+!       rhostar = 3.e-3
        mult_imp = .false.
        test = .false.
        def_parity = .false.
        even = .true.
        source_option = 'default'
-       include_lowflow = .false. ! MAB
+!       include_lowflow = .false. ! MAB
        in_file = input_unit_exist("dist_fn_knobs", dfexist)
 !       if (dfexist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
        if (dfexist) read (unit=in_file, nml=dist_fn_knobs)
@@ -701,8 +704,8 @@ subroutine check_dist_fn(report_unit)
     call broadcast (def_parity)
     call broadcast (even)
     call broadcast (wfb)
-    call broadcast (include_lowflow)    
-    call broadcast (rhostar)
+!    call broadcast (include_lowflow)    
+!    call broadcast (rhostar)
 
     if (mult_imp) then
        ! nothing -- fine for linear runs, but not implemented nonlinearly
@@ -776,6 +779,9 @@ subroutine check_dist_fn(report_unit)
     integer :: bd_exp
     real :: fexpr, fexpi, bakdif
     namelist /dist_fn_species_knobs/ fexpr, fexpi, bakdif, bd_exp
+
+    ! note: g at spacial cell 'center' defined as g_{i+1}*(1+bakdif)/2 + g_{i}*(1-bakdif)/2
+    ! note: g at temporal cell 'center' defined as g^{n+1}*(1-fexp) + g^{n}*fexp
 
     fexpr = real(fexp_out)
     fexpi = aimag(fexp_out)
@@ -960,7 +966,6 @@ subroutine check_dist_fn(report_unit)
        ik=ik_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
           wcoriolis(ig,1,iglo) = wcoriolis_func(ig, il, ie, it, ik)
-!          write (*,*) 'wcoriolis', ig, il, ie, it, ik, wcoriolis_func(ig,il,ie,it,ik)
        end do
     end do
 
@@ -973,9 +978,6 @@ subroutine check_dist_fn(report_unit)
     end do
 
     wcoriolis(:,2,:) = -wcoriolis(:,1,:)
-
-    ! TMP UNTIL TESTED -- MAB
-!    wcoriolis = 0.0
 
   end subroutine init_wcoriolis
 
@@ -992,8 +994,6 @@ subroutine check_dist_fn(report_unit)
 
     real :: wcoriolis_func
     integer, intent (in) :: ig, ik, it, il, ie
-
-!    write (*,*) 'cdrift', ig, cdrift(ig), theta0(it,ik), wunits(ik), sqrt(energy(ie)*(1.0-al(il)*bmag(ig)))
 
     if (aky(ik) == 0.0) then
        wcoriolis_func = mach*sqrt(max(energy(ie)*(1.0-al(il)*bmag(ig)),0.0)) &
@@ -1215,7 +1215,7 @@ subroutine check_dist_fn(report_unit)
     implicit none
     integer :: iglo
     integer :: ig, ik, it, il, ie, is, isgn
-    real :: wd, wdttp, vp, bd, wc
+    real :: wd, wdttp, vp, bd, wc, ws
 
     if (.not.allocated(a)) then
        allocate (a(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -1235,25 +1235,31 @@ subroutine check_dist_fn(report_unit)
           do ig = -ntgrid, ntgrid-1
              wc = wcoriolis(ig,isgn,iglo)/spec(is)%stm
              wd = wdrift(ig,iglo)
+             ! ws term corresponds to v_E^{neoclassical} . grad g
+             ws = wstar_neo(ig,it,ik)*spec(is)%zt
              wdttp = wdriftttp(ig,it,ik,ie,is)
              ! use positive vpar because we will be flipping sign of d/dz
              ! when doing parallel field solve for -vpar
+             ! also, note that vpar is (vpa bhat + v_{magnetic}) . grad theta / delthet
+             ! if include_lowflow = T
              vp = vpar(ig,1,iglo)
              bd = bkdiff(is)
 
+             ! 1/(coefficient of gnew_{i+1})
              ainv(ig,isgn,iglo) &
                   = 1.0/(1.0 + bd &
-                  + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0+bd) + 2.0*vp))
+                  + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc+ws)*(1.0+bd) + 2.0*vp))
+             ! coefficient of gnew_{i}
              r(ig,isgn,iglo) &
                   = (1.0 - bd &
-                  + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0-bd) - 2.0*vp)) &
+                  + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc+ws)*(1.0-bd) - 2.0*vp)) &
                   *ainv(ig,isgn,iglo)
              a(ig,isgn,iglo) &
                   = 1.0 + bd &
-                  + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0+bd) - 2.0*vp)
+                  + fexp(is)*spec(is)%tz*(-zi*(wd+wc+ws)*(1.0+bd) - 2.0*vp)
              b(ig,isgn,iglo) &
                   = 1.0 - bd &
-                  + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0-bd) + 2.0*vp)
+                  + fexp(is)*spec(is)%tz*(-zi*(wd+wc+ws)*(1.0-bd) + 2.0*vp)
           
              if (nlambda > ng2) then
                 ! zero out forbidden regions
@@ -2227,6 +2233,7 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: kx_shift, theta0_shift   ! MR
     use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
+    use run_parameters, only: include_lowflow
     implicit none
 !    logical :: alloc = .true.
 
@@ -2235,13 +2242,21 @@ subroutine check_dist_fn(report_unit)
        allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       if (nonlin) then
-          allocate (gnl_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          allocate (gnl_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          allocate (gnl_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          gnl_1 = 0. ; gnl_2 = 0. ; gnl_3 = 0.
+!       if (nonlin) then
+!          allocate (gnl_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+!          allocate (gnl_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+!          allocate (gnl_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+!          gnl_1 = 0. ; gnl_2 = 0. ; gnl_3 = 0.
+!       else
+!          allocate (gnl_1(1,2,1), gnl_2(1,2,1), gnl_3(1,2,1))
+!       end if
+       if (nonlin .or. include_lowflow) then
+          allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          allocate (gexp_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          allocate (gexp_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          gexp_1 = 0. ; gexp_2 = 0. ; gexp_3 = 0.
        else
-          allocate (gnl_1(1,2,1), gnl_2(1,2,1), gnl_3(1,2,1))
+          allocate (gexp_1(1,2,1), gexp_2(1,2,1), gexp_3(1,2,1))
        end if
        if (boundary_option_switch == boundary_option_linked) then
           allocate (g_h(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -2280,7 +2295,8 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: ntgrid
     use collisions, only: solfp1
     use dist_fn_arrays, only: gnew, g, gold
-    use nonlinear_terms, only: add_nonlinear_terms
+!    use nonlinear_terms, only: add_nonlinear_terms
+    use nonlinear_terms, only: add_explicit_terms
     use hyper, only: hyper_diff
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
@@ -2292,7 +2308,12 @@ subroutine check_dist_fn(report_unit)
     modep = 0
     if (present(mode)) modep = mode
 
-    call add_nonlinear_terms (gnl_1, gnl_2, gnl_3, &
+! changed to explicit from nonlinear to allow generalization that
+! is currently useful for low-flow terms and will likely later
+! be useful if going to explicit version -- MAB
+!    call add_nonlinear_terms (gnl_1, gnl_2, gnl_3, &
+!         phi, apar, bpar, istep, bkdiff(1), fexp(1))
+    call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
     call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
     call hyper_diff (gnew, phinew, bparnew)
@@ -2727,6 +2748,7 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: nlambda, ng2, lmax, anon, energy, negrid, forbid
     use species, only: spec, nspec
     use run_parameters, only: fphi, fapar, fbpar, wunits, tunits
+    use run_parameters, only: include_lowflow
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use nonlinear_terms, only: nonlin
@@ -2828,7 +2850,7 @@ subroutine check_dist_fn(report_unit)
                   + zi*wstar(ik,ie,is)*hneoc(ig,2,iglo)*phigavg(ig)
           end do
 
-          if (source_option_switch == source_option_phiext_full .and.  &
+          if (source_option_switch == source_option_phiext_full .and. &
                aky(ik) < epsilon(0.0)) then
              do ig = -ntgrid, ntgrid
                 if (il < ittp(ig)) cycle             
@@ -2837,29 +2859,34 @@ subroutine check_dist_fn(report_unit)
              end do
           endif
 
-! add in nonlinear terms 
-          if (nonlin) then         
+          ! add in explicit (nonlinear and some low-flow) terms 
+          if (nonlin .or. include_lowflow) then
              select case (istep)
              case (0)
                 ! nothing
              case (1)
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*gnl_1(ig,isgn,iglo)
+!                   source(ig) = source(ig) + 0.5*code_dt*gnl_1(ig,isgn,iglo)
+                   source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
                 end do
              case (2) 
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*( &
-                        1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
+                        1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
+!                        1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
                 end do                   
              case default
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*( &
-                          (23./12.)*gnl_1(ig,isgn,iglo) &
-                        - (4./3.)  *gnl_2(ig,isgn,iglo) &
-                        + (5./12.) *gnl_3(ig,isgn,iglo))
+                        (23./12.)*gexp_1(ig,isgn,iglo) &
+                        - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                        + (5./12.) *gexp_3(ig,isgn,iglo))
+!                          (23./12.)*gnl_1(ig,isgn,iglo) &
+!                        - (4./3.)  *gnl_2(ig,isgn,iglo) &
+!                        + (5./12.) *gnl_3(ig,isgn,iglo))
                 end do
              end select
           end if
@@ -2875,6 +2902,7 @@ subroutine check_dist_fn(report_unit)
       use species, only: spec
       use theta_grid, only: itor_over_B
       use mp, only: proc0
+      use run_parameters, only: include_lowflow
 
       complex :: apar_p, apar_m, phi_p, phi_m!, bpar_p !GGH added bpar_p
 !      real, dimension(:,:), allocatable, save :: ufac
@@ -2954,10 +2982,10 @@ subroutine check_dist_fn(report_unit)
 !
 
          source(ig) = anon(ie)*(vparterm(ig,isgn,iglo)*phi_m &
-                                -spec(is)%zstm*vpac(ig,isgn,iglo) &
-                     *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
-                                + D_res(it,ik)*apar_p) &
-                                 -zi*wdfac(ig,isgn,iglo)*phi_p) &
+              -spec(is)%zstm*vpac(ig,isgn,iglo) &
+              *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
+              + D_res(it,ik)*apar_p) &
+              - zi*wdfac(ig,isgn,iglo)*phi_p) &
               + zi*(wstarfac(ig,isgn,iglo) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
               -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
@@ -2967,25 +2995,31 @@ subroutine check_dist_fn(report_unit)
       end do
         
 ! add in nonlinear terms 
-      if (nonlin) then         
+!      if (nonlin) then 
+      if (nonlin .or. include_lowflow) then
          select case (istep)
          case (0)
             ! nothing
          case (1)
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*gnl_1(ig,isgn,iglo)
+!               source(ig) = source(ig) + 0.5*code_dt*gnl_1(ig,isgn,iglo)
+               source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
             end do
          case (2) 
             do ig = -ntgrid, ntgrid-1
                source(ig) = source(ig) + 0.5*code_dt*( &
-                    1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
+                    1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
+!                    1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
             end do
          case default
             do ig = -ntgrid, ntgrid-1
                source(ig) = source(ig) + 0.5*code_dt*( &
-                      (23./12.)*gnl_1(ig,isgn,iglo) &
-                    - (4./3.)  *gnl_2(ig,isgn,iglo) &
-                    + (5./12.) *gnl_3(ig,isgn,iglo))
+                    (23./12.)*gexp_1(ig,isgn,iglo) &
+                    - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                    + (5./12.) *gexp_3(ig,isgn,iglo))
+!                      (23./12.)*gnl_1(ig,isgn,iglo) &
+!                    - (4./3.)  *gnl_2(ig,isgn,iglo) &
+!                    + (5./12.) *gnl_3(ig,isgn,iglo))
             end do
          end select
       end if
@@ -4328,7 +4362,7 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use mp, only: proc0
-    use run_parameters, only: woutunits, fphi, fapar, fbpar
+    use run_parameters, only: woutunits, fphi, fapar, fbpar, rhostar
     use constants, only: zi
     use geometry, only: rhoc
     implicit none
@@ -5252,7 +5286,6 @@ subroutine check_dist_fn(report_unit)
     use collisions, only: init_lorentz, init_ediffuse, init_lorentz_conserve, init_diffuse_conserve
     use collisions, only: etol, ewindow, etola, ewindowa
     use collisions, only: vnmult, vary_vnew
-    use nonlinear_terms, only: nonlin
     use dist_fn_arrays, only: g_adjust
 
     ! TEMP FOR TESTING -- MAB
@@ -6492,7 +6525,8 @@ subroutine check_dist_fn(report_unit)
     if (allocated(connections)) deallocate (connections)
     if (allocated(g_adj)) deallocate (g_adj)
     if (allocated(g)) deallocate (g, gnew, g0)
-    if (allocated(gnl_1)) deallocate (gnl_1, gnl_2, gnl_3)
+!    if (allocated(gnl_1)) deallocate (gnl_1, gnl_2, gnl_3)
+    if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
     if (allocated(g_h)) deallocate (g_h, save_h)
     if (allocated(kx_shift)) deallocate (kx_shift)
     if (allocated(jump)) deallocate (jump)
@@ -6519,12 +6553,12 @@ subroutine check_dist_fn(report_unit)
     use geometry, only: rhoc
     use theta_grid, only: theta, ntgrid, delthet, gradpar, bmag
     use theta_grid, only: gds23, gds24, gds24_noq, cvdrift_th, gbdrift_th
-    use theta_grid, only: drhodpsi, qval
+    use theta_grid, only: drhodpsi, qval, shat
     use le_grids, only: energy, al, negrid, nlambda, forbid
-    use kt_grids, only: theta0
+    use kt_grids, only: theta0, ntheta0, naky
     use gs2_time, only: code_dt, user_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx, it_idx
-    use run_parameters, only: tunits, wunits
+    use run_parameters, only: tunits, wunits, include_lowflow, rhostar
     use lowflow, only: get_lowflow_terms
     use file_utils, only: open_output_file, close_output_file
     use mp, only: proc0
@@ -6535,6 +6569,7 @@ subroutine check_dist_fn(report_unit)
     integer :: it, ik, il, ie, is, isgn, iglo
     real, dimension (:,:,:,:,:), allocatable :: tmp1, tmp2, tmp3, tmp4, tmp5, tmp6
     real, dimension (:,:,:), allocatable :: vpadhdec, dhdec, dhdxic, cdfac
+    real, dimension (:), allocatable :: tmp7, tmp8
 
     allocate (vpadhdec (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (dhdec (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -6547,8 +6582,9 @@ subroutine check_dist_fn(report_unit)
        allocate (wdfac(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (hneoc(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (wstarfac(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (wstar_neo(-ntgrid:ntgrid,ntheta0,naky))
     end if
-    vparterm = 0. ; wdfac = 0. ; hneoc = 1. ; wstarfac = 0.
+    vparterm = 0. ; wdfac = 0. ; hneoc = 1. ; wstarfac = 0. ; wstar_neo = 0.
 
     if (include_lowflow) then
        allocate (tmp1(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
@@ -6557,8 +6593,9 @@ subroutine check_dist_fn(report_unit)
        allocate (tmp4(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
        allocate (tmp5(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
        allocate (tmp6(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
+       allocate (tmp7(-ntgrid:ntgrid), tmp8(-ntgrid:ntgrid))
        
-       call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
+       call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8)
        
        if (proc0) then
           call open_output_file (neo_unit,".neo")
@@ -6566,10 +6603,11 @@ subroutine check_dist_fn(report_unit)
              do il = 1, nlambda
                 do ie = 1, negrid
                    if (.not. forbid(0,il)) then
-                      write (neo_unit,'(10e12.4)') sign(sqrt(energy(ie)*(1.-al(il)*bmag(0))),1.5-real(isgn)), sqrt(energy(ie)*al(il)*bmag(0)), &
+                      write (neo_unit,'(12e12.4)') sign(sqrt(energy(ie)*(1.-al(il)*bmag(0))),1.5-real(isgn)), sqrt(energy(ie)*al(il)*bmag(0)), &
                            energy(ie), sign(al(il)*bmag(0),1.5-real(isgn)), &
                            tmp1(0,il,ie,isgn,1), tmp2(0,il,ie,isgn,1), tmp3(0,il,ie,isgn,1), &
-                           tmp4(0,il,ie,isgn,1), tmp5(0,il,ie,isgn,1), tmp6(0,il,ie,isgn,1)
+                           tmp4(0,il,ie,isgn,1), tmp5(0,il,ie,isgn,1), tmp6(0,il,ie,isgn,1), &
+                           tmp7(0), tmp8(0)
                    end if
                 end do
                 write (neo_unit,*)
@@ -6588,31 +6626,29 @@ subroutine check_dist_fn(report_unit)
              dhdec(:,isgn,iglo) = tmp1(:,il,ie,isgn,is)
              dhdxic(:,isgn,iglo) = tmp2(:,il,ie,isgn,is)
              vpadhdec(:,isgn,iglo) = tmp3(:,il,ie,isgn,is)
-!             dhdrc(:,isgn,iglo) = tmp4(:,il,ie,isgn,is)*code_dt*wunits(ik)
-!             dhdthc(:,isgn,iglo) = tmp5(:,il,ie,isgn,is)
              hneoc(:,isgn,iglo) = 1.0+tmp6(:,il,ie,isgn,is)
           end do
 
           ! get cell-centered (in theta) values
 
+          ! this is the contribution from v_E . grad F1
           wstarfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*wunits(ik) &
                *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
-!               *dhdthc(-ntgrid:ntgrid-1,1,iglo)*code_dt
                *tmp5(-ntgrid:ntgrid-1,il,ie,1,is)*code_dt
           wstarfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*wunits(ik) &
                *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
-!               *dhdthc(-ntgrid:ntgrid-1,2,iglo)*code_dt
                *tmp5(-ntgrid:ntgrid-1,il,ie,2,is)*code_dt
 
           wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + tmp4(:,il,ie,:,is)*code_dt*wunits(ik)
 
-          ! this is the contribution from v_E^par . grad F0
-          wstarfac(-ntgrid:ntgrid-1,1,iglo) = wstarfac(-ntgrid:ntgrid-1,1,iglo) &
-               - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
-               *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
-          wstarfac(-ntgrid:ntgrid-1,2,iglo) = wstarfac(-ntgrid:ntgrid-1,2,iglo) &
-               - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
-               *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+! TMP FOR TESTING -- MAB -- LOWFLOW TEST
+!          ! this is the contribution from v_E^par . grad F0
+!           wstarfac(-ntgrid:ntgrid-1,1,iglo) = wstarfac(-ntgrid:ntgrid-1,1,iglo) &
+!                - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+!                *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+!           wstarfac(-ntgrid:ntgrid-1,2,iglo) = wstarfac(-ntgrid:ntgrid-1,2,iglo) &
+!                - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+!                *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
 
           wstarfac(ntgrid,:,iglo) = 0.0
 
@@ -6628,6 +6664,10 @@ subroutine check_dist_fn(report_unit)
           cdfac(-ntgrid:ntgrid-1,2,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/sqrt(energy(ie))
           cdfac(ntgrid,:,iglo) = 0.0
 
+          ! vparterm is Z_s * e * vpa . grad phi^{tb} d(F1/F0)/dE
+          ! note there will be a correction to this added below
+          ! because actual term appearing in GKE ~ (1/F0) * d(F1)/dE
+          ! also note that vpadhdec is vpa*d(F1/F0)/dE at fixed mu (not xi)
           vparterm(-ntgrid:ntgrid-1,1,iglo) = spec(is)%zstm*tunits(ik)*code_dt &
                /delthet(-ntgrid:ntgrid-1) &
                * (abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid))) &
@@ -6638,29 +6678,44 @@ subroutine check_dist_fn(report_unit)
                * vpadhdec(-ntgrid:ntgrid-1,2,iglo)
           vparterm(ntgrid,:,iglo) = 0.0
 
-          vpar(-ntgrid:ntgrid-1,1,iglo) = vpar(-ntgrid:ntgrid-1,1,iglo) + &
-               0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
-               *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,1,iglo)**2 &
-               + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,1,iglo)**2))
-          vpar(-ntgrid:ntgrid-1,2,iglo) = vpar(-ntgrid:ntgrid-1,2,iglo) + &
-               0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
-               *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,2,iglo)**2 &
-               + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,2,iglo)**2))
+! TMP FOR TESTING -- MAB -- LOWFLOW TEST
+!           ! this is (vpa + v_{magnetic}) . grad theta / delthet
+!           vpar(-ntgrid:ntgrid-1,1,iglo) = vpar(-ntgrid:ntgrid-1,1,iglo) + &
+!                0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
+!                *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,1,iglo)**2 &
+!                + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,1,iglo)**2))
+!           vpar(-ntgrid:ntgrid-1,2,iglo) = vpar(-ntgrid:ntgrid-1,2,iglo) + &
+!                0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
+!                *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,2,iglo)**2 &
+!                + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,2,iglo)**2))
 
+          ! this is v_E^{nc} . grad_{perp} g contribution
+          wstar_neo(-ntgrid:ntgrid-1,it,ik) = -code_dt*wunits(ik)*(tmp7(-ntgrid:ntgrid-1) &
+               + 0.5*tmp8(-ntgrid:ntgrid-1)*(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid) &
+               + theta0(it,ik)*shat*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid))))
+          wstar_neo(ntgrid,it,ik) = 0.0
+          
        end do
 
-       deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
+       deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8)
     end if
 
+    ! vparterm is -2*vpar*(1+Hneo) - Ze*(vpa . grad phi^{tb})*(dHneo/dE)
+    ! note that vpar has contribution from v_{magnetic} . grad theta in it
     vparterm = -2.0*vpar*hneoc + vparterm
+    ! hneoc takes care of usual wdrift term and F_1 correction
     wdfac = wdfac + hneoc
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       wdfac(:,1,iglo) = wdfac(:,1,iglo)*wdrift(:,iglo) + cdfac(:,1,iglo)*wcurv(:,iglo) + wcoriolis(:,1,iglo)/spec(is)%stm
-       wdfac(:,2,iglo) = wdfac(:,2,iglo)*wdrift(:,iglo) + cdfac(:,2,iglo)*wcurv(:,iglo) + wcoriolis(:,2,iglo)/spec(is)%stm
+       wdfac(:,1,iglo) = wdfac(:,1,iglo)*wdrift(:,iglo) &
+            + cdfac(:,1,iglo)*wcurv(:,iglo) + wcoriolis(:,1,iglo)/spec(is)%stm
+       wdfac(:,2,iglo) = wdfac(:,2,iglo)*wdrift(:,iglo) &
+            + cdfac(:,2,iglo)*wcurv(:,iglo) + wcoriolis(:,2,iglo)/spec(is)%stm
+       ! multiplication by hneo is necessary here because NEO's dist fn is
+       ! normalized by F0(r) instead of F0 at center of simulation domain
        wstarfac(:,:,iglo) = wstar(ik,ie,is)*hneoc(:,:,iglo) - wstarfac(:,:,iglo)
     end do
 

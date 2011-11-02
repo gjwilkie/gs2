@@ -27,7 +27,7 @@ module init_g
        ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28, &
        ginitopt_recon3 = 29, ginitopt_ot = 30, &
        ginitopt_zonal_only = 31, ginitopt_single_parallel_mode = 32, &
-       ginitopt_all_modes_equal = 33
+       ginitopt_all_modes_equal = 33, ginitopt_lftest = 34
 
   real :: width0, dphiinit, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
@@ -601,7 +601,6 @@ contains
        restart_file=trim(restart_file(1:ind_slash))//trim(restart_dir)//trim(restart_file(ind_slash+1:))
     endif
 
-
     ! MAB - allows for ensemble averaging of multiple flux tube calculations
     ! job=0 if not doing multiple flux tube calculations, so phiinit unaffected
     phiinit = phiinit * (job*phifrac+1.0)
@@ -778,6 +777,8 @@ contains
        call ginit_recon3
     case (ginitopt_ot)
        call ginit_ot
+    case (ginitopt_lftest)
+       call ginit_lftest
     end select
   end subroutine ginit
 
@@ -786,7 +787,7 @@ contains
     use text_options, only: text_option, get_option_value
     implicit none
 
-    type (text_option), dimension (32), parameter :: ginitopts = &
+    type (text_option), dimension (33), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
             text_option('xi', ginitopt_xi), &
@@ -818,7 +819,8 @@ contains
             text_option('ot', ginitopt_ot), &
             text_option('zonal_only', ginitopt_zonal_only), &
             text_option('single_parallel_mode', ginitopt_single_parallel_mode), &
-            text_option('all_modes_equal', ginitopt_all_modes_equal) &
+            text_option('all_modes_equal', ginitopt_all_modes_equal), &
+            text_option('lftest', ginitopt_lftest) &
             /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
@@ -3561,6 +3563,41 @@ contains
 
   end subroutine ginit_restart_zonal_only
 
+  subroutine ginit_lftest
+
+    use kt_grids, only: aky, theta0
+    use le_grids, only: forbid
+    use dist_fn_arrays, only: g, gnew, vpa
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx, ie_idx
+    use constants, only: zi
+    use theta_grid, only: shat, bmag, Itor_over_B, ntgrid
+    use le_grids, only: energy
+    use species, only: spec
+
+    implicit none
+
+    integer :: iglo
+    integer :: ik, it, is, il, ie, ig
+    
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+
+       g(:,1,iglo) = phiinit*exp(-zi/spec(is)%zstm*aky(ik)*theta0(it,ik)*shat*Itor_over_B*vpa(:,1,iglo)) &
+            * exp(energy(ie))
+       where (forbid(:,il)) g(:,1,iglo) = 0.0
+
+       g(:,2,iglo) = phiinit*exp(-zi/spec(is)%zstm*aky(ik)*theta0(it,ik)*shat*Itor_over_B*vpa(:,2,iglo)) &
+            * exp(energy(ie))
+       where (forbid(:,il)) g(:,2,iglo) = 0.0
+
+    end do
+
+    gnew = g
+  end subroutine ginit_lftest
 
 
 

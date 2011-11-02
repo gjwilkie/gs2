@@ -593,7 +593,8 @@ contains
     ! MB: gds23 and gds24 are geometrical factors appearing at next order in gk eqn
     ! MB: NEED TO INCLUDE SHIFT IN BELOW EXPRESSIONS
     gds23 = -0.5*epsl*shat*theta*(1.+2.*eps*cos(theta))/eps
-    gds24_noq = 0.5*epsl*(1.+2.*eps*cos(theta))/eps
+!    gds24_noq = 0.5*epsl*(1.+2.*eps*cos(theta))/eps
+    gds24_noq = 0.5*epsl*(1.+eps*cos(theta))/eps
     gds24 = shat*gds24_noq
 
     ! MB: NEED TO INCLUDE SHIFT BELOW
@@ -1897,7 +1898,7 @@ if (debug) write(6,*) 'get_grids: call file_get_grids'
 ! cleaner equivalent alternative to using btor_slab in "dist_fn_knobs", and 
 ! sets geometric paramater itor_over_B in one place for ALL geometries.
 !
-    if (eqopt_switch .eq. eqopt_salpha .and. eps .eq. 0. ) then
+    if (eqopt_switch .eq. eqopt_salpha .and. eps .eq. 0) then
        itor_over_B = btor_slab
     else
 !CMR, 19/10/10: moved MAB's definition of geometry quantity itor_over_B from 
@@ -1911,7 +1912,7 @@ if (debug) write(6,*) 'get_grids: call file_get_grids'
     !                this dropping parallel sheared flow source term in GKE
     !                itor_over_B=0 is safer than itor_over_B=NaN!
        if (rhoc /= 0.) itor_over_B = qval / rhoc * IoB
-     endif
+    endif
   end subroutine get_grids
 
 end module theta_grid
