@@ -2,15 +2,17 @@ module lowflow
   
   implicit none
 
-  public :: get_lowflow_terms
+  public :: get_lowflow_terms, dphidth
 
+  real, dimension (:), allocatable :: dphidth
   real, dimension (:,:,:,:,:), allocatable :: coefs
   real, dimension (:,:), allocatable :: phineo
   real, dimension (:), allocatable :: rad_neo, theta_neo
 
 contains
   
-  subroutine get_lowflow_terms (theta, al, energy, bmag, dHdEc, dHdxic, vpadHdEc, dHdrc, dHdthc, hneoc)
+  subroutine get_lowflow_terms (theta, al, energy, bmag, dHdEc, dHdxic, vpadHdEc, dHdrc, &
+       dHdthc, hneoc, dphidrc, dphidthc)
     
     use mp, only: proc0
 
@@ -19,12 +21,14 @@ contains
     real, dimension (:), intent (in) :: theta, bmag
     real, dimension (:), intent (in) ::  al
     real, dimension (:), intent (in) :: energy
-    real, dimension (:,:,:,:,:), intent (out) :: dHdec, dHdxic, dHdrc, dHdthc, vpadHdEc, hneoc
+    real, dimension (:,:,:,:,:), intent (out) :: dHdEc, dHdxic, dHdrc, dHdthc, vpadHdEc, hneoc
+    real, dimension (:), intent (out) :: dphidthc, dphidrc
     
     real, dimension (:,:,:,:,:), allocatable :: hneo
     real, dimension (:,:,:,:), allocatable :: dHdxi, dHdE, vpadHdE, dHdr, dHdth
     real, dimension (:,:,:), allocatable :: legp
     real, dimension (:,:), allocatable :: xi, chebyp1, chebyp2
+    real, dimension (:), allocatable :: dphidr
     real :: emax
 
     integer :: il, ie, is, ns, nc, nl, nr, ig, ixi, ir, ir_loc
@@ -57,7 +61,7 @@ contains
     ! taken from neo
     call read_neocoefs (theta, ns, nc, nl, nr, ir_loc)
 
-    ! TMP FOR TESTING -- MAB
+    ! FOR TESTING -- MAB
 !    coefs = 0.0
 !    coefs(:,:,1,0,:) = 0.6 ; coefs(:,:,3,0,:) = 0.4
 !    coefs(:,0,1,:) = 1.0
@@ -74,7 +78,9 @@ contains
     allocate (  dHdxi(ntheta,nxi,nenergy,ns))
     allocate (   dHdE(ntheta,nxi,nenergy,ns))
     allocate (vpadHdE(ntheta,nxi,nenergy,ns))
-    
+    allocate (dphidr(ntheta))
+    if (.not. allocated(dphidth)) allocate (dphidth(ntheta))
+
     legp = 0.0
     do ixi = 1, nxi
        do ig = 1, ntheta
@@ -100,6 +106,7 @@ contains
        end do
     end do
 
+    ! get dH/dtheta and dH/dr
     do is = 1, ns
        do ie = 1, nenergy
           do ixi = 1, nxi
@@ -110,6 +117,15 @@ contains
           end do
        end do
     end do
+
+    ! get dphi/dtheta and dphi/dr
+    call get_dHdth (phineo(ir_loc,:), theta, dphidth)
+    do ig = 1, ntheta
+       call get_dHdr (phineo(:,ig), rad_neo, ir_loc, dphidr(ig))
+    end do
+
+    dphidrc(1:ntheta-1) = 0.5*(dphidr(1:ntheta-1) + dphidr(2:ntheta))
+    dphidthc(1:ntheta-1) = 0.5*(dphidth(1:ntheta-1) + dphidth(2:ntheta))
 
     ! vpadHdE is the derivative of F1/F0 with respect to energy at fixed mu (not xi)
     do ie = 1, nenergy
@@ -154,9 +170,11 @@ contains
     end do
     dHdrc(ntheta,:,:,:,:) = 0.0 ; dHdthc(ntheta,:,:,:,:) = 0.0 ; vpadHdEc(ntheta,:,:,:,:) = 0.0
     dHdEc(ntheta,:,:,:,:) = 0.0 ; dHdxic(ntheta,:,:,:,:) = 0.0 ; hneoc(ntheta,:,:,:,:) = 0.0
+    dphidrc(ntheta) = 0.0 ; dphidthc(ntheta) = 0.0
 
     deallocate (xi, chebyp1, chebyp2, legp, coefs, dHdr, dHdth, dHdxi, dHdE, vpadHdE, hneo, forbid)
-    
+    deallocate (dphidr)
+
   end subroutine get_lowflow_terms
   
   function zfnc (enrgy, enrgymax)
