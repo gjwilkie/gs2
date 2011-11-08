@@ -17,14 +17,19 @@ module dist_fn
   public :: neoflux
   public :: get_init_field
   public :: g_adjust ! MAB (needed for Trinity)
-
   public :: gamtot,gamtot1,gamtot2
   public :: getmoms_notgc
   public :: mom_coeff, ncnt_mom_coeff
   public :: mom_coeff_npara, mom_coeff_nperp
   public :: mom_coeff_tpara, mom_coeff_tperp
   public :: mom_shift_para, mom_shift_perp
-
+!+PJK
+  public :: bkdiff
+  public :: get_source_term  !  temp...
+  public :: g_adjust_exp, get_source_term_exp
+  public :: gnl_1, gnl_2, gnl_3, def_parity, even
+  public :: wdrift, wstar, wcoriolis
+!-PJK
   private
 
   ! knobs
@@ -758,6 +763,18 @@ contains
        end where
 
 ! Where vpac /= 1, it could be weighted by bakdif for better consistency??
+!
+!CMR : vpa is parallel velocity at grid points
+!CMR : vpac is grid centered parallel velocity
+!CMR : vpar = q_s/sqrt{T_s m_s}*DELT/DTHETA * vpac |\gradpar(theta)| 
+!                                     where gradpar(theta) is centered
+!  ie  vpar = q_s/T_s  (v_||^GS2). \gradpar(theta)/DTHETA . DELT
+! 
+!   comments on vpac, vpar
+!     (i) surely vpac=0 at or beyond bounce points, so WHY was it set to +-1?
+!                                seems unphysical!
+!    (ii) should some be weighted by bakdif?
+!CMR 
        where (1.0 - al1*0.5*(bmag(-ntgrid:ntgrid-1)+bmag(-ntgrid+1:ntgrid)) &
               < 0.0)
           vpac(-ntgrid:ntgrid-1,1,iglo) = 1.0
@@ -931,7 +948,7 @@ contains
        allocate (ainv(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
     endif
     a = 0. ; b = 0. ; r = 0. ; ainv = 0.
-    
+       
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
@@ -945,6 +962,8 @@ contains
           vp = vpar(ig,1,iglo)
           bd = bkdiff(is)
 
+!+PJK  Hopefully fexp(is) = 1, bkdiff(is) = 0.0 if explicit...
+!-PJK  Circular makefile references prevent this to be enforced!
 ! should check sign of wc below to be sure -- MAB
           ainv(ig,iglo) &
                = 1.0/(1.0 + bd &
@@ -2533,7 +2552,41 @@ contains
        end do
     end do
   end subroutine g_adjust
+!+PJK
+  subroutine g_adjust_exp (g, apar, fapar)
 
+    !  Convert GS2's g to Wayne Arter's 'i', if fapar = 1,
+    !  or i to g if fapar = -1
+
+    use species, only: spec
+    use theta_grid, only: ntgrid
+    use le_grids, only: anon
+    use dist_fn_arrays, only: vpa, aj0
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
+    complex, dimension (-ntgrid:,:,:), intent (in) :: apar
+    real, intent (in) :: fapar
+
+    integer :: iglo, ig, ik, it, ie, is, isgn
+    complex :: adj
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do ig = -ntgrid, ntgrid
+          do isgn = 1,2
+             adj = (-fapar) * &
+                  anon(ie,is)*spec(is)%z*vpa(ie,isgn,is)*aj0(ig,iglo)*apar(ig,it,ik) &
+                  /spec(is)%temp
+             g(ig,isgn,iglo) = g(ig,isgn,iglo) + adj
+          end do
+       end do
+    end do
+  end subroutine g_adjust_exp
+!-PJK
   subroutine get_source_term &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         isgn, iglo, sourcefac, source)
@@ -2570,12 +2623,19 @@ contains
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
 
+!CMR:
+! apargavg and phigavg combine to give the GK EM potential chi. 
+!          chi = phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm
+! phigavg  = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
+! apargavg = apar J0 
+! Both quantities are decentred in time and evaluated on || grid points
+!
     phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
-                *aj0(:,iglo)*fphi &
-             + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
-                *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
+         *aj0(:,iglo)*fphi &
+         + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
+         *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
     apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
-                *aj0(:,iglo)*fapar
+         *aj0(:,iglo)*fapar
 
 ! source term in finite difference equations
     select case (source_option_switch)
@@ -2700,6 +2760,8 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Do matrix multiplications
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!+PJK Comment this section out if running pjk_advance() in fields_explicit.f90
     if (il <= lmax) then
        if (isgn == 1) then
           do ig = -ntgrid, ntgrid-1
@@ -2713,7 +2775,7 @@ contains
           end do
        end if
     end if
-
+!-PJK
     source(ntgrid) = source(-ntgrid)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2820,6 +2882,32 @@ contains
 
 
       do ig = -ntgrid, ntgrid-1
+! CMR: concerns
+! (1) no bakdif factors in phi_m, apar_p, apar_m, vpar !!! 
+!                              (RN also spotted this for apar_p)
+! (2) source terms are factor 2 bigger than expected
+!
+!  Some attempt at variable documentation:
+! phigavg  = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
+! apargavg = apar J0                        (decentered in t) 
+! NB apargavg and phigavg combine to give the GK EM potential chi
+! phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm = chi
+! phi_p = 2 phigavg                      .... (roughly!)
+! phi_m = d/dtheta (phigavg)*DTHETA 
+! apar_p = 2 apargavg  
+! apar_m = 2 vpa d/dt (J0(Z) apar)*DELT
+! => phi_p - apar_p*vpa(:,isgn,iglo)*spec(is)%stm = 2 chi  .... (roughly!)  
+! vpar = q_s/T_s  (v_||^GS2). \gradpar(theta)/DTHETA . DELT (centred) 
+! wdrift =    q_s/T_s  v_d.\grad_perp . DELT 
+! wcoriolis = q_s/T_s  v_C.\grad_perp . DELT 
+! source     appears to contain following physical terms
+!   -2q_s/T_s v||.grad(J0 phi + 2 vperp^2 bpar/bmag J1/Z T_s/q_s).delt 
+!   -2d/dt(q v|| J0 apar / T).delt
+!   +hyperviscosity
+!   -2 v_d.\grad_perp (q J0 phi/T + 2 vperp^2 bpar/bmag J1/Z).delt 
+!   -coriolis terms
+!   2{\chi,f_{0s}}  (allowing for sheared flow)
+!CMRend
          phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
          phi_m = phigavg(ig+1)-phigavg(ig)
          ! RN> bdfac factors seem missing for apar_p
@@ -2871,6 +2959,226 @@ contains
 
   end subroutine get_source_term
 
+  subroutine get_source_term_exp (phi, apar, bpar, istep, isgn, iglo, fluxfn, source)
+
+    use dist_fn_arrays, only: aj0, aj1, vperp2, vpa, vpar, vpac, g, ittp
+    use theta_grid, only: ntgrid, theta
+    use kt_grids, only: aky, theta0, akx
+    use le_grids, only: nlambda, ng2, lmax, anon, e, negrid
+    use species, only: spec, nspec
+    use run_parameters, only: fphi, fapar, fbpar, wunits, tunits
+    use gs2_time, only: code_dt
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use run_parameters, only: tnorm
+    use nonlinear_terms, only: nonlin
+    use hyper, only: D_res
+    use constants
+    use run_parameters, only: k0
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    integer, intent (in) :: istep
+    integer, intent (in) :: isgn, iglo
+    complex, dimension (-ntgrid:), intent (out) :: fluxfn
+    complex, dimension (-ntgrid:), intent (out) :: source
+    real :: tfac
+
+    integer :: ig, ik, it, il, ie, is
+    complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
+
+!    call timer (0, 'get_source_term_exp')
+
+    ik = ik_idx(g_lo,iglo)
+    it = it_idx(g_lo,iglo)
+    il = il_idx(g_lo,iglo)
+    ie = ie_idx(g_lo,iglo)
+    is = is_idx(g_lo,iglo)
+
+    phigavg = phi(:,it,ik)*aj0(:,iglo)*fphi &
+         + bpar(:,it,ik)*aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
+    apargavg = apar(:,it,ik)*aj0(:,iglo)*fapar
+
+    !  Source term in finite difference equations
+
+    select case (source_option_switch)
+
+    !  Default choice: solve self-consistent equations
+
+    case (source_option_full)
+       if (il <= lmax) then
+          call set_source
+       else
+          fluxfn = 0.0
+          source = 0.0
+       end if
+
+    case (source_option_zero)
+       fluxfn = 0.0
+       source = 0.0
+
+    case default
+       write(*,*) 'Invalid source_option_switch for explicit solver...'
+       stop
+
+    end select
+
+    !  Periodic boundary condition (as done in original get_source_term)
+
+    fluxfn(ntgrid) = fluxfn(-ntgrid)
+    source(ntgrid) = source(-ntgrid)
+
+!    !  Zero boundary condition
+!
+!    fluxfn(ntgrid) = 0.0
+!    source(ntgrid) = 0.0
+
+    !  Special source term for totally trapped particles
+    !  Needs working on when these particles are included, i.e. g is g, not i...
+
+    if (source_option_switch == source_option_full) then
+
+       if (nlambda > ng2 .and. isgn == 2) then
+          do ig = -ntgrid, ntgrid
+             if (il /= ittp(ig)) cycle
+             source(ig) &
+                  = g(ig,2,iglo)*a(ig,iglo) &
+                  - anon(ie,is)*zi*(wdriftttp(ig,it,ik,ie,is)+wcoriolis(ig,iglo))*phigavg(ig)*nfac &
+                  + zi*wstar(ik,ie,is)*phigavg(ig)
+          end do
+
+          !  Add in nonlinear terms -- tfac normalizes the *amplitudes*.
+
+          if (nonlin) then         
+             tfac = 1./tnorm
+             select case (istep)
+             case (0)
+                ! nothing
+             case (1)
+                do ig = -ntgrid, ntgrid
+                   if (il /= ittp(ig)) cycle
+                   source(ig) = source(ig) + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
+                end do
+             case (2) 
+                do ig = -ntgrid, ntgrid
+                   if (il /= ittp(ig)) cycle
+                   source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+                        1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
+                end do
+             case default
+                do ig = -ntgrid, ntgrid
+                   if (il /= ittp(ig)) cycle
+                   source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+                          (23./12.)*gnl_1(ig,isgn,iglo) &
+                        - (4./3.)  *gnl_2(ig,isgn,iglo) &
+                        + (5./12.) *gnl_3(ig,isgn,iglo))
+                end do
+             end select
+          end if
+
+       end if
+
+    end if
+
+!    call timer (1, 'get_source_term_exp')
+  contains
+
+    subroutine set_source
+
+      use species, only: spec
+      use theta_grid, only: itor_over_B
+      use mp, only: proc0
+
+      complex :: apar_p, apar_m, phi_p, phi_m
+      real :: bd, bdfac_p, bdfac_m
+      integer :: i_e, i_s
+
+      if (.not. allocated(ufac)) then
+         allocate (ufac(negrid, nspec))
+         do i_e = 1, negrid
+            do i_s = 1, nspec
+               ufac(i_e, i_s) = (2.0*spec(i_s)%uprim &
+                    + spec(i_s)%uprim2*e(i_e,i_s)**(1.5)*sqrt(pi)/4.0)
+            end do
+         end do
+      endif
+
+      !  Enforce bd=0 for explicit solver case
+
+      !bd = 0.0  !  not bkdiff(1)
+      bd = bkdiff(1)
+
+      bdfac_p = 1.+bd*(3.-2.*real(isgn))
+      bdfac_m = 1.-bd*(3.-2.*real(isgn))
+
+
+      do ig = -ntgrid, ntgrid-1
+         phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
+!+PJK 13/09/11 phi_m = phigavg(ig+1)-phigavg(ig)
+         phi_m = 0.0  !  removes CMR's term II
+!-PJK 13/09/11
+         apar_p = apargavg(ig+1)+apargavg(ig)  !  need to check when fapar /= 0
+         apar_m = 0.0  !  removes CMR's term I
+
+         !  Flux function required by the explicit DG scheme
+
+         fluxfn(ig) = (phigavg(ig) - apargavg(ig)*vpa(ig,isgn,iglo)*spec(is)%stm) &
+              / spec(is)%tz
+
+!MAB, 6/5/2009:
+! added the omprimfac source term arising with equilibrium flow shear  
+
+!+PJK 13/09/11 Original...
+!         source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
+!              -spec(is)%zstm*vpac(ig,isgn,iglo) &
+!              *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
+!              + D_res(it,ik)*apar_p) &
+!              -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac) &
+!              + zi*(wstar(ik,ie,is) &
+!              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+!              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
+!              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
+!+PJK 13/09/11 New...
+         source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
+              -spec(is)%zstm*vpac(ig,isgn,iglo) &
+              *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
+              + D_res(it,ik)*apar_p) &
+              -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))* & !  phi_p*nfac) replaced by...
+              (phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))*nfac) & ! this line (CHECK)
+              + zi*(wstar(ik,ie,is) &
+              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
+              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
+      end do
+        
+      !  Add in nonlinear terms -- tfac normalizes the *amplitudes*.
+
+      if (nonlin) then         
+         tfac = 1./tnorm
+         select case (istep)
+         case (0)
+            ! nothing
+         case (1)
+            do ig = -ntgrid, ntgrid-1
+               source(ig) = source(ig) + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
+            end do
+         case (2) 
+            do ig = -ntgrid, ntgrid-1
+               source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+                    1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
+            end do
+         case default
+            do ig = -ntgrid, ntgrid-1
+               source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+                      (23./12.)*gnl_1(ig,isgn,iglo) &
+                    - (4./3.)  *gnl_2(ig,isgn,iglo) &
+                    + (5./12.) *gnl_3(ig,isgn,iglo))
+            end do
+         end select
+      end if
+
+    end subroutine set_source
+
+  end subroutine get_source_term_exp
+
   subroutine invert_rhs_1 &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         iglo, sourcefac)
@@ -2904,7 +3212,9 @@ contains
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
 
-    if(ieqzip(it_idx(g_lo,iglo),ik_idx(g_lo,iglo))==0) return
+    !  Immediately return for certain specific cases
+
+    if (ieqzip(it_idx(g_lo,iglo),ik_idx(g_lo,iglo))==0) return
     if (eqzip) then
        if (secondary .and. ik == 2 .and. it == 1) return ! do not evolve primary mode
        if (tertiary .and. ik == 1) then
@@ -2936,10 +3246,17 @@ contains
 
     kperiod_flag = kperiod_flag .or. aky(ik) == 0.0
 
+    !  Redundant change of variable name... perhaps useful in the future for
+    !  parallelising in the theta direction?
+
     ntgl = -ntgrid
     ntgr =  ntgrid
 
-! ng2+1 is WFB
+    !  Pitch angle (lambda) grid point (ng2+1) is at the trapped/passing boundary,
+    !  on which a particle's orbit is known as the World's Fattest Banana, or WFB.
+    !  It traverses the whole of the poloidal cross-section from theta = -pi to +pi
+    !  (which is at the inboard midplane), but reverses direction at these points,
+    !  i.e. the tips of its banana orbit touch at theta = +/- pi.
 
     if (kperiod_flag) then
        if (il <= ng2+1) then
@@ -2947,21 +3264,24 @@ contains
           g1(ntgr,2) = 1.0
        end if
     end if
-!!!
+
     if (il == ng2+1) then
-!! changed 4.13.08 -- MAB
-!!       g1(ntgl,1) = wfb  ! wfb should be unity here; variable is for testing
-!! reverted 5.9.08 -- MAB
        g1(ntgl,1) = wfb  ! wfb should be unity here; variable is for testing
        g1(ntgr,2) = wfb  ! wfb should be unity here; variable is for testing
     end if
 
-    ! g2 is the initial condition for the homogeneous solution
+    ! g2 is the initial condition for the homogeneous solution (i.e. zero source)
     g2 = 0.0
+
     ! initialize to 1.0 at upper bounce point for vpar < 0
     ! (but not for wfb or ttp -- MAB)
+    !  g2 is set to 1.0 only at a single ig point, the upper bounce point
+    !
+    !  (nlambda > ng2) == .true. means 'There ARE trapped particles'
+    !  (il >= ng2+2 .and. il <= lmax) == .true.
+    !     means 'This is a trapped particle orbit'
     if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
-       do ig=ntgl,ntgr-1
+       do ig = ntgl,ntgr-1
           if (forbid(ig+1,il).and..not.forbid(ig,il)) g2(ig,2) = 1.0
        end do
     end if
@@ -3307,7 +3627,9 @@ contains
     call prof_leaving ("invert_rhs", "dist_fn")
   end subroutine invert_rhs
 
-  subroutine getan (antot, antota, antotp)
+!+PJK  subroutine getan (antot, antota, antotp)
+subroutine getan (antot, antota, antotp, g, antota2)
+!-PJK
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
     use dist_fn_arrays, only: kperp2
     use species, only: nspec, spec
@@ -3317,20 +3639,35 @@ contains
     use prof, only: prof_entering, prof_leaving
     use gs2_layouts, only: g_lo
     implicit none
+!+PJK
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), optional, intent (in) :: g
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), optional, intent (out) :: antota2
+    complex, dimension (:,:,:), allocatable :: gtemp
+!-PJK
     complex, dimension (-ntgrid:,:,:), intent (out) :: antot, antota, antotp
     real, dimension (nspec) :: wgt
 
     integer :: isgn, iglo, ig
 
     call prof_entering ("getan", "dist_fn")
-
+!+PJK
+    allocate(gtemp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    if (present(g)) then
+       gtemp = g
+    else
+       gtemp = gnew
+    end if
+    if (present(antota2)) antota2 = 0.
+!-PJK
     antot=0. ; antota=0. ; antotp=0.
 
     if (fphi > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
+!+PJK                g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*gtemp(ig,isgn,iglo)
+!-PJK
              end do
           end do
        end do
@@ -3347,7 +3684,9 @@ contains
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,iglo)*gnew(ig,isgn,iglo)
+!+PJK                g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,iglo)*gnew(ig,isgn,iglo)
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,iglo)*gtemp(ig,isgn,iglo)
+!-PJK
              end do
           end do
        end do
@@ -3357,12 +3696,31 @@ contains
 !    if (kfilter > epsilon(0.0)) call par_filter(antota)
 
     end if
+!+PJK
+    if (present(antota2)) then
+       !  New code to evaluate additional denominator for apar, if Wayne's 'i'
+       !  was used in the call to getan instead of 'g'
+       if (fapar > epsilon(0.0)) then
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             do isgn = 1, 2
+                do ig=-ntgrid, ntgrid
+                   g0(ig,isgn,iglo) = (aj0(ig,iglo)*vpa(ig,isgn,iglo))**2
+                end do
+             end do
+          end do
 
+          wgt = 2.0*beta*spec%dens*spec%z*spec%z/spec%mass
+          call integrate_species (g0, wgt, antota2)
+       end if
+    end if
+!-PJK
     if (fbpar > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
-                g0(ig,isgn,iglo) = aj1(ig,iglo)*vperp2(ig,iglo)*gnew(ig,isgn,iglo)
+!+PJK                g0(ig,isgn,iglo) = aj1(ig,iglo)*vperp2(ig,iglo)*gnew(ig,isgn,iglo)
+                g0(ig,isgn,iglo) = aj1(ig,iglo)*vperp2(ig,iglo)*gtemp(ig,isgn,iglo)
+!-PJK
              end do
           end do
        end do
@@ -3371,6 +3729,9 @@ contains
 !    if (kfilter > epsilon(0.0)) call par_filter(antotp)
 
     end if
+!+PJK
+    deallocate (gtemp)
+!-PJK
     call prof_leaving ("getan", "dist_fn")
   end subroutine getan
 
@@ -3971,11 +4332,14 @@ contains
   subroutine getfieldeq (phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
+!+PJK
+!    use dist_fn_arrays, only: gnew
+!    use gs2_layouts, only: g_lo
+!-PJK
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
     complex, dimension (:,:,:), allocatable :: antot, antota, antotp
-
     allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
     allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
     allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
@@ -3987,24 +4351,40 @@ contains
     deallocate (antot, antota, antotp)
   end subroutine getfieldeq
   
-  subroutine getfieldexp (phi, apar, bpar)
+  subroutine getfieldexp (g, phi, apar, bpar, g_or_i)
+    !+PJK New input arguments g, g_or_i
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     implicit none
+!+PJK
+    complex, dimension (-ntgrid:,:,:), intent (in) :: g
+    character(len=1), intent(in) :: g_or_i
+!-PJK
     complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
     complex, dimension (:,:,:), allocatable :: antot, antota, antotp
-
+!+PJK
+    complex, dimension (:,:,:), allocatable :: antota2
+    allocate (antota2(-ntgrid:ntgrid,ntheta0,naky))
+!-PJK
     allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
     allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
     allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
 
-    call getan (antot, antota, antotp)
-    call getfieldeq2 (phi, apar, bpar, antot, antota, antotp)
+!+PJK    call getan (antot, antota, antotp)
+    if (g_or_i == 'g') then
+       antota2 = 0.0
+       call getan (antot, antota, antotp, g=g)
+    else
+       call getan (antot, antota, antotp, g=g, antota2=antota2)
+    end if
+    call getfieldeq2 (phi, apar, bpar, antot, antota, antota2, antotp)
+!-PJK    call getfieldeq2 (phi, apar, bpar, antot, antota, antotp)
 
     deallocate (antot, antota, antotp)
   end subroutine getfieldexp
-  
+!+PJK
   subroutine getfieldeq2_orig (phi, apar, bpar, antot, antota, antotp)
+!-PJK
     use dist_fn_arrays, only: kperp2
     use theta_grid, only: ntgrid, bmag, delthet, jacob
     use kt_grids, only: naky, ntheta0, aky
@@ -4115,8 +4495,8 @@ contains
 !    first = .false.
 
   end subroutine getfieldeq2_orig
-
-  subroutine getfieldeq2 (phi, apar, bpar, antot, antota, antotp)
+!+PJK
+  subroutine getfieldeq2 (phi, apar, bpar, antot, antota, antota2, antotp)
 
     !  Routine to evaluate the field equations for phi, apar and bpar
     !  explicitly from the species summed velocity integrals derived
@@ -4144,7 +4524,7 @@ contains
     !  Arguments
 
     complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
-    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
+    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antota2, antotp
 
     !  Local variables
 
@@ -4301,7 +4681,9 @@ contains
        do ik = 1, naky
           do it = 1, ntheta0
 
-             denominator = kperp2(:,it,ik)
+             !  antota2 is the new term required if we used Wayne's 'i' instead
+             !  of 'g' in the call to getan
+             denominator = kperp2(:,it,ik) + antota2(:,it,ik)
 
              where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
                 apar(:,it,ik) = 0.0
@@ -4315,7 +4697,7 @@ contains
     end if
 
   end subroutine getfieldeq2
-
+!-PJK
 ! replaced by bessel function implementation of RN and TT (in utils/spfunc.fpp)
 !  elemental function j0 (x)
 !! A&S, p. 369, 9.4
