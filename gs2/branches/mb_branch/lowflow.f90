@@ -79,7 +79,7 @@ contains
     allocate (   dHdE(ntheta,nxi,nenergy,ns))
     allocate (vpadHdE(ntheta,nxi,nenergy,ns))
     allocate (dphidr(ntheta))
-    if (.not. allocated(dphidth)) allocate (dphidth(ntheta))
+!    if (.not. allocated(dphidth)) allocate (dphidth(ntheta))
 
     legp = 0.0
     do ixi = 1, nxi
@@ -118,8 +118,8 @@ contains
        end do
     end do
 
-    ! get dphi/dtheta and dphi/dr
-    call get_dHdth (phineo(ir_loc,:), theta, dphidth)
+    ! get dphi/dr
+!    call get_dHdth (phineo(ir_loc,:), theta, dphidth)
     do ig = 1, ntheta
        call get_dHdr (phineo(:,ig), rad_neo, ir_loc, dphidr(ig))
     end do
@@ -332,23 +332,6 @@ contains
     
   end subroutine get_dHdE
 
-!   subroutine get_dHdE (h, x, dH)
-    
-!     implicit none
-
-!     real, dimension (:,:), intent (in) :: h
-!     real, dimension (:), intent (in) :: x
-!     real, dimension (:,:), intent (out) :: dH
-
-!     integer :: ix
-    
-!     do ix = 1, size(dH,2)-1
-!        dH(:,ix) = (h(:,ix+1)-h(:,ix))/(x(ix+1)-x(ix))
-!     end do
-!     dH(:,size(dH,2)) = dH(:,size(dH,2)-1)
-
-!   end subroutine get_dHdE
-
   subroutine get_dHdr (h, rad, ir, dh)
 
     implicit none
@@ -375,6 +358,7 @@ contains
     do ig = 2, nth-1
        dh(ig) = (h(ig+1)-h(ig-1))/(th(ig+1)-th(ig-1))
     end do
+    ! note that H_neo is periodic in theta
     dh(1) = (h(2)-h(nth))/(2.*(th(2)-th(1)))
     dh(nth) = (h(1)-h(nth-1))/(2.*(th(nth)-th(nth-1)))
 
@@ -394,7 +378,7 @@ contains
     integer :: is, ik, ij, ig, ir, idx, ntheta, ntheta_neo
     integer :: neo_unit = 101
    
-    real, dimension (:), allocatable :: tmp, neo_coefs, dum, neo_phi
+    real, dimension (:), allocatable :: tmp, neo_coefs, dum, neo_phi, dneo_phi
 
     ntheta = size(theta)
 
@@ -421,9 +405,11 @@ contains
     ir_neo = 2
 
     allocate (tmp(ntheta_neo*(nxi_neo+1)*nenergy_neo*nspec_neo*nrad_neo))
-    allocate (neo_coefs(ntheta_neo), dum(ntheta), neo_phi(ntheta_neo))
+    allocate (neo_coefs(ntheta_neo), neo_phi(ntheta_neo), dneo_phi(ntheta_neo))
+    allocate (dum(ntheta))
     if (.not. allocated(coefs)) allocate (coefs(nrad_neo,ntheta,0:nxi_neo,0:nenergy_neo-1,nspec_neo))
     if (.not. allocated(phineo)) allocate (phineo(nrad_neo,ntheta))
+    if (.not. allocated(dphidth)) allocate (dphidth(ntheta))
 
     ! read in H1^{nc} (adiabatic piece of F1^{nc}) from neo's f.out file
     open (unit=neo_unit, file='neo_f.out', status="old", action="read")
@@ -462,13 +448,20 @@ contains
           neo_phi(ig) = tmp(idx)
           idx = idx+1
        end do
-       ! need to interpolate coefficients from neo's theta grid to gs2's
+
+       ! need to interpolate phi and dphi/dtheta from neo's theta grid to gs2's
        call lf_spline (theta_neo, neo_phi, theta, phineo(ir,:), dum)
+
+       ! at central radius, calculate dphi/dth and interpolate onto gs2 grid
+       if (ir == 2) then
+          call get_dHdth (neo_phi, theta_neo, dneo_phi)
+          call lf_spline (theta_neo, dneo_phi, theta, dphidth, dum)
+       end if
     end do
 
     close (neo_unit)
 
-    deallocate (tmp, neo_coefs, theta_neo, neo_phi, dum)
+    deallocate (tmp, neo_coefs, theta_neo, neo_phi, dneo_phi, dum)
 
   end subroutine read_neocoefs
 
