@@ -13,7 +13,7 @@ module run_parameters
   public :: k0
   public :: vnm_init
   public :: avail_cpu_time
-  public :: include_lowflow, rhostar
+  public :: include_lowflow, rhostar, neo_test
 
   private
 
@@ -32,7 +32,7 @@ module run_parameters
   logical :: initialized = .false.
   logical :: rpexist, knexist
   real :: rhostar
-  logical :: include_lowflow
+  logical :: include_lowflow, neo_test
 
   integer, allocatable :: ieqzip(:,:)
   integer :: eqzip_option_switch
@@ -206,7 +206,7 @@ contains
     namelist /parameters/ beta, zeff, tite, teti, k0, rhostar
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
          delt_option, margin, secondary, tertiary, faperp, harris, &
-         avail_cpu_time, eqzip_option, include_lowflow, rhostar
+         avail_cpu_time, eqzip_option, include_lowflow, rhostar, neo_test
 
     if (proc0) then
        fbpar = -1.0
@@ -217,6 +217,7 @@ contains
        teti = -100.0
        rhostar = 3.e-3
        include_lowflow = .false.
+       neo_test = .false.
        wstar_units = .false.
        eqzip_option = 'none'
        eqzip = .false.
@@ -315,6 +316,7 @@ contains
     call broadcast (eqzip_option_switch)
     call broadcast (include_lowflow)
     call broadcast (rhostar)
+    call broadcast (neo_test)
 
     user_delt_max = delt
 

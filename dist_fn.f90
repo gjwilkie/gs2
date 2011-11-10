@@ -6558,7 +6558,7 @@ subroutine check_dist_fn(report_unit)
     use kt_grids, only: theta0, ntheta0, naky
     use gs2_time, only: code_dt, user_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx, it_idx
-    use run_parameters, only: tunits, wunits, include_lowflow, rhostar
+    use run_parameters, only: tunits, wunits, include_lowflow, rhostar, neo_test
     use lowflow, only: get_lowflow_terms
     use file_utils, only: open_output_file, close_output_file
     use mp, only: proc0
@@ -6566,10 +6566,10 @@ subroutine check_dist_fn(report_unit)
     implicit none
 
     integer :: neo_unit
-    integer :: it, ik, il, ie, is, isgn, iglo
+    integer :: it, ik, il, ie, is, isgn, iglo, ig
     real, dimension (:,:,:,:,:), allocatable :: tmp1, tmp2, tmp3, tmp4, tmp5, tmp6
     real, dimension (:,:,:), allocatable :: vpadhdec, dhdec, dhdxic, cdfac
-    real, dimension (:), allocatable :: tmp7, tmp8
+    real, dimension (:), allocatable :: tmp7, tmp8, tmp9
 
     allocate (vpadhdec (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (dhdec (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -6593,28 +6593,40 @@ subroutine check_dist_fn(report_unit)
        allocate (tmp4(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
        allocate (tmp5(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
        allocate (tmp6(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-       allocate (tmp7(-ntgrid:ntgrid), tmp8(-ntgrid:ntgrid))
+       allocate (tmp7(-ntgrid:ntgrid), tmp8(-ntgrid:ntgrid), tmp9(-ntgrid:ntgrid))
        
-       call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8)
+       call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9)
        
        if (proc0) then
-          call open_output_file (neo_unit,".neo")
+          call open_output_file (neo_unit,".neodist")
+          write (neo_unit,*) "# all quantities given at theta=0 for species 1"
+          write (neo_unit,*) "# 1) vpa, 2) vpe, 3) energy, 4) vpa/v, 5) dH/dE, 6) dH/dxi, 7) vpa*dH/dE, 8) dH/dr, 9) dH/dtheta, 10) H"
           do isgn = 1, 2
              do il = 1, nlambda
                 do ie = 1, negrid
                    if (.not. forbid(0,il)) then
-                      write (neo_unit,'(12e12.4)') sign(sqrt(energy(ie)*(1.-al(il)*bmag(0))),1.5-real(isgn)), sqrt(energy(ie)*al(il)*bmag(0)), &
-                           energy(ie), sign(al(il)*bmag(0),1.5-real(isgn)), &
+                      write (neo_unit,'(10e12.4)') sign(sqrt(energy(ie)*(1.-al(il)*bmag(0))),1.5-real(isgn)), &
+                           sqrt(1.0-al(il)*bmag(0)), energy(ie), sign(al(il)*bmag(0),1.5-real(isgn)), &
                            tmp1(0,il,ie,isgn,1), tmp2(0,il,ie,isgn,1), tmp3(0,il,ie,isgn,1), &
-                           tmp4(0,il,ie,isgn,1), tmp5(0,il,ie,isgn,1), tmp6(0,il,ie,isgn,1), &
-                           tmp7(0), tmp8(0)
+                           tmp4(0,il,ie,isgn,1), tmp5(0,il,ie,isgn,1), tmp6(0,il,ie,isgn,1)
                    end if
                 end do
                 write (neo_unit,*)
              end do
           end do
           call close_output_file (neo_unit)
+
+          call open_output_file (neo_unit,".neophi")
+          write (neo_unit,*) "# 1) theta, 2) dphi/dtheta, 3) dphi/dr, 4) phi"
+          do ig = -ntgrid, ntgrid
+             write (neo_unit,'(4e14.5)') theta(ig), tmp7(ig), tmp8(ig), tmp9(ig)
+          end do
+          call close_output_file (neo_unit)
        end if
+
+       ! if set neo_test flag to .true. in input file, GS2 exits after writing out
+       ! neoclassical quantities of interest
+       if (neo_test) stop
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
