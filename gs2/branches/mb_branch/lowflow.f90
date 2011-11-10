@@ -16,7 +16,7 @@ contains
     
     use mp, only: proc0
     use le_grids, only: w, wl
-    use theta_grid, only: delthet, jacob
+    use theta_grid, only: delthet, jacob, ntgrid
     use file_utils, only: open_output_file, close_output_file
 
     implicit none
@@ -84,7 +84,6 @@ contains
     allocate (   dHdE(ntheta,nxi,nenergy,ns))
     allocate (vpadHdE(ntheta,nxi,nenergy,ns))
     allocate (dphidr(ntheta))
-    allocate (qpar(ns))
     allocate (dl_over_b(ntheta))
 !    if (.not. allocated(dphidth)) allocate (dphidth(ntheta))
 
@@ -132,7 +131,9 @@ contains
     end do
 
     dphidrc(1:ntheta-1) = 0.5*(dphidr(1:ntheta-1) + dphidr(2:ntheta))
+    dphidrc(ntheta) = dphidrc(1)
     dphidthc(1:ntheta-1) = 0.5*(dphidth(1:ntheta-1) + dphidth(2:ntheta))
+    dphidthc(ntheta) = dphidth(1)
 
     phi_neo = phineo(ir_loc,:)
 
@@ -189,8 +190,9 @@ contains
     qpar = 0.
     do ie = 1, nenergy
        do ixi = 1, nxi
+          il = min(ixi, nxi+1-ixi)
           do ig = 1, ntheta
-             qpar = qpar + hneo(ir_loc,ig,ixi,ie,:)*xi(ig,ixi)*energy(ie)**1.5*w(ie)*wl(ig,il)*dl_over_b(ig)
+             qpar = qpar + hneo(ir_loc,ig,ixi,ie,:)*xi(ig,ixi)*energy(ie)**1.5*w(ie)*wl(-ntgrid+ig-1,il)*dl_over_b(ig)
           end do
        end do
     end do
@@ -213,7 +215,7 @@ contains
     close (neo_unit)
 
     call open_output_file (neo_unit,".neotransp")
-    write (neo_unit,*) "# 1) rad, 2) spec, 3) pflx, 4) qflx, 5) qparflx, 6) vflx, 7) upar1, 8) <phi**2>, 9) bootstrap"
+    write (neo_unit,fmt='(a110)') "# 1) rad,    2) spec, 3) pflx,    4) qflx,    5) vflx   , 6) qparflx, 7) upar1   , 8) <phi**2>, 9) bootstrap"
     do is = 1, ns
        write (neo_unit,fmt='(e14.5,i4,7e14.5)') radius, is, pflx(is), qflx(is), vflx(is), qpar(is), upar1(is), &
             phi2, jboot
