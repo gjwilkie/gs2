@@ -12,9 +12,12 @@ module lowflow
 contains
   
   subroutine get_lowflow_terms (theta, al, energy, bmag, dHdEc, dHdxic, vpadHdEc, dHdrc, &
-       dHdthc, hneoc, dphidrc, dphidthc)
+       dHdthc, hneoc, dphidrc, dphidthc, phi_neo)
     
     use mp, only: proc0
+    use le_grids, only: w, wl
+    use theta_grid, only: delthet, jacob
+    use file_utils, only: open_output_file, close_output_file
 
     implicit none
     
@@ -22,17 +25,19 @@ contains
     real, dimension (:), intent (in) ::  al
     real, dimension (:), intent (in) :: energy
     real, dimension (:,:,:,:,:), intent (out) :: dHdEc, dHdxic, dHdrc, dHdthc, vpadHdEc, hneoc
-    real, dimension (:), intent (out) :: dphidthc, dphidrc
-    
+    real, dimension (:), intent (out) :: dphidthc, dphidrc, phi_neo
+
     real, dimension (:,:,:,:,:), allocatable :: hneo
     real, dimension (:,:,:,:), allocatable :: dHdxi, dHdE, vpadHdE, dHdr, dHdth
     real, dimension (:,:,:), allocatable :: legp
     real, dimension (:,:), allocatable :: xi, chebyp1, chebyp2
-    real, dimension (:), allocatable :: dphidr
-    real :: emax
+    real, dimension (:), allocatable :: dphidr, dl_over_b, transport
+    real, dimension (:), allocatable :: pflx, qflx, vflx, qpar, upar1
+    real :: emax, radius, jboot, phi2, vtor, upar0
 
     integer :: il, ie, is, ns, nc, nl, nr, ig, ixi, ir, ir_loc
     integer :: ntheta, nlambda, nenergy, nxi
+    integer :: neo_unit
 
     logical, dimension (:,:), allocatable :: forbid
     
@@ -79,6 +84,8 @@ contains
     allocate (   dHdE(ntheta,nxi,nenergy,ns))
     allocate (vpadHdE(ntheta,nxi,nenergy,ns))
     allocate (dphidr(ntheta))
+    allocate (qpar(ns))
+    allocate (dl_over_b(ntheta))
 !    if (.not. allocated(dphidth)) allocate (dphidth(ntheta))
 
     legp = 0.0
@@ -127,6 +134,8 @@ contains
     dphidrc(1:ntheta-1) = 0.5*(dphidr(1:ntheta-1) + dphidr(2:ntheta))
     dphidthc(1:ntheta-1) = 0.5*(dphidth(1:ntheta-1) + dphidth(2:ntheta))
 
+    phi_neo = phineo(ir_loc,:)
+
     ! vpadHdE is the derivative of F1/F0 with respect to energy at fixed mu (not xi)
     do ie = 1, nenergy
        do ixi = 1, nxi
@@ -172,8 +181,48 @@ contains
     dHdEc(ntheta,:,:,:,:) = 0.0 ; dHdxic(ntheta,:,:,:,:) = 0.0 ; hneoc(ntheta,:,:,:,:) = 0.0
     dphidrc(ntheta) = 0.0 ; dphidthc(ntheta) = 0.0
 
+    dl_over_b = delthet*jacob
+    dl_over_b = dl_over_b/sum(dl_over_b)
+
+    ! get parallel heat flux (int d3v vpa * v^2 * F1^{nc})
+    allocate (pflx(ns), qflx(ns), vflx(ns), upar1(ns), qpar(ns))
+    qpar = 0.
+    do ie = 1, nenergy
+       do ixi = 1, nxi
+          do ig = 1, ntheta
+             qpar = qpar + hneo(ir_loc,ig,ixi,ie,:)*xi(ig,ixi)*energy(ie)**1.5*w(ie)*wl(ig,il)*dl_over_b(ig)
+          end do
+       end do
+    end do
+
+    allocate (transport(5+ns*8))
+
+    open (unit=neo_unit, file='neo_transport.out', status='old', action='read')
+    read (neo_unit,*) transport
+    radius = transport(1)
+    phi2 = transport(2)
+    jboot = transport(3)
+    vtor = transport(4)
+    upar0 = transport(5)
+    do is = 1, ns
+       pflx(is) = transport(5+(is-1)*8+1)
+       qflx(is) = transport(5+(is-1)*8+2)
+       vflx(is) = transport(5+(is-1)*8+3)
+       upar1(is) = transport(5+(is-1)*8+4)
+    end do
+    close (neo_unit)
+
+    call open_output_file (neo_unit,".neotransp")
+    write (neo_unit,*) "# 1) rad, 2) spec, 3) pflx, 4) qflx, 5) qparflx, 6) vflx, 7) upar1, 8) <phi**2>, 9) bootstrap"
+    do is = 1, ns
+       write (neo_unit,fmt='(e14.5,i4,7e14.5)') radius, is, pflx(is), qflx(is), vflx(is), qpar(is), upar1(is), &
+            phi2, jboot
+    end do
+    call close_output_file (neo_unit)
+
     deallocate (xi, chebyp1, chebyp2, legp, coefs, dHdr, dHdth, dHdxi, dHdE, vpadHdE, hneo, forbid)
-    deallocate (dphidr)
+    deallocate (dphidr, dl_over_b, transport)
+    deallocate (pflx, qflx, vflx, upar1, qpar)
 
   end subroutine get_lowflow_terms
   
