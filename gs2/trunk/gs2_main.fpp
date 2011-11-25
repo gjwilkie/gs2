@@ -1,4 +1,11 @@
 # ifndef MAKE_LIB
+
+!> This module contains the functions gs2_main::run_gs2, gs2_main::finish_gs2 and gs2_main::reset_gs2, whose
+!! purpose should be reasonably obvious. These functions were originally part of
+!! program GS2, but have now been moved to this module so that GS2 itself can be
+!! called as a library by, for example, Trinity. All the program GS2 does is
+!! include this module and call run_gs2.
+
 module gs2_main
   
   public :: run_gs2, finish_gs2, reset_gs2
@@ -9,7 +16,22 @@ contains
 
   !> This is the main subroutine in which gs2 is initialized, equations are advanced,
   !!   and the program is finalized.
-  !! \section Structure 
+  !! \section Basic Structure 
+  !!  This subroutine broadly falls into 3 sections: 
+  !! -# Initialisation -  allocate arrays, calculate the response matrix etc.
+  !! -# Running -  a loop which runs for run_parameters::nstep time steps, unless the code
+  !!  is prematurely halted either through an error, reaching the available 
+  !!  time limit or manually  (by using the command $ touch run_name.stop).
+  !! -# Finishing up:  writing out results, deallocating arrays.
+  !! \section Details
+  !! -# Initialisation
+  !!  - Initialize message passing 
+  !!  - Initialize timer 
+  !!  - Report numer of processors being used 
+  !!  - If it is a Trinity run then filename (the name of the input file) 
+  !!  is passed to  init_file_utils
+  !!  - Otherwise, figure out run name or get list of jobs 
+  !!  - If given a list of jobs, fork  
   !! \section arguments Arguments
   !! All arguments are optional and are not used for gs2. 
   !! (EGH - used for Trinity?)

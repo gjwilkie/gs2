@@ -18,6 +18,11 @@
 !! a chart showing which other subroutines  call the subroutine and which are
 !! called by it.
 !!
+!! \section starting Starting Out
+!!
+!!  If you want to start at the beginning and work out what GS2 does, start at
+!! gs2.f90, and use the call graphs to follow the algorithm.
+!!
 !! \section update Updating this documentation.
 !! \subsection incode Updating Source Code Comments
 !! This documentation is generated from commments added to the source code; to
@@ -34,7 +39,7 @@
 !! 
 !!  <tt> make doc sync_doc USER=[sourceforge user name]</tt>
 
-!> Main Program which calls the run_gs2 subroutine. Used when running GS2
+!> Main Program which calls the gs2_main::run_gs2 subroutine. Used when running GS2
 !! standalone, as opposed as a library for Trinity.
 
 program gs2
