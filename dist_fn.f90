@@ -3,6 +3,13 @@
 ! Need to extend the verr tools to include delta B_parallel integrals
 ! There are new factors of 1/B here and there which I do not understand.  
 !
+!>The principal function of this module is to evolve the distribution function, 
+!!that is, to advance the discrete gyrokinetic equation. 
+!!This involves calculating the source and dealing with the complexities 
+!!of the parallel boundary conditions. 
+!!In addition it contains a routine for implementing perpendicular
+!!velocity shear and calculating the right-hand side of the field 
+!!equation, as well as a host of other functions.
 
 module dist_fn
   use redistribute, only: redist_type
@@ -1332,6 +1339,10 @@ subroutine check_dist_fn(report_unit)
     ng = ntheta/2 + (nperiod-1)*ntheta
 
     ! jshift0 corresponds to J (not delta j) from Beer thesis (unsure about +0.01) -- MAB
+    ! delta j is the number of akxs (i.e. theta0s) 'skipped' when connecting one 
+    ! parallel segment to the next to satisfy the twist and shift
+    ! boundary conditions. delta j = (ik - 1) * jshift0 . EGH
+
     if (naky > 1 .and. ntheta0 > 1) then
        jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,2)-theta0(1,2)) + 0.01)
 !       if (proc0) write (*,*) 'init_connected_bc: ',theta0(2,2), theta0(1,2), jshift0
@@ -1344,7 +1355,7 @@ subroutine check_dist_fn(report_unit)
 !    if (proc0) write (*,*) 'init_connected_bc: jshift0 = ',jshift0
 
     allocate (itleft(naky,ntheta0), itright(naky,ntheta0))
-    itleft(1,:) = -1
+    itleft(1,:) = -1 ! No connected segments when ky = 0. EGH
     itright(1,:) = -1
     do ik = 1, naky
        do it = 1, ntheta0
@@ -1534,6 +1545,7 @@ subroutine check_dist_fn(report_unit)
        do iglo = g_lo%llim_world, g_lo%ulim_world
 
           il = il_idx(g_lo,iglo)
+          ! Exclude trapped particles (inc wfb)
           if (nlambda > ng2 .and. il >= ng2+1) cycle
 
           ip = proc_id(g_lo,iglo)

@@ -1,3 +1,7 @@
+!> A container for the arrays that are used to store the distribution function among other things.
+!!  These need to be accessible at a lower dependency level than the dist_fn module itself.
+!! These arrays are allocated in the function dist_fn::allocate_arrays. 
+
 module dist_fn_arrays
 
   public :: g, gnew, gold, kx_shift, theta0_shift, vpa, vpac
