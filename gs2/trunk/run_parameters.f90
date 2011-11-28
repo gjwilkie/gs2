@@ -7,19 +7,6 @@ module run_parameters
   public :: init_run_parameters, finish_run_parameters
   public :: check_run_parameters, wnml_run_parameters
 
-  ! <CRDOC beta: CodeRunner generated doc for beta: edit on the wiki!>
-  !>
-  !!-In general, \f$\beta\f$ is the ratio of kinetic to magnetic energy.  In GS2, the parameter \f$\beta\f$ affects only the dynamics, not the equilibrium.  
-  !!  - For electromagnetic runs, the contribution of each species to the total parallel current is weighted by a factor of \f$w_s = 2 \beta Z_s n_s \sqrt{T_s/m_s}\f$.
-  !!  - For electromagnetic runs that include \f$\delta B_\parallel\f$, this field is proportional to \f$\beta\f$.
-  !!  - The contribution of \f$(\delta B)^2\f$ to the total gyrokinetic energy is inversely proportional to this input parameter.
-  !!  - If an antenna is set up to drive Alfven waves, then \f$\beta\f$ is used to calculate the Alfven frequency.  
-  !!  - For some collision operator models, \f$\beta\f$ is used to calculate the resistivity.  
-  !!  - For some rarely-used initial conditions, \f$\beta\f$ appears explicitly. 
-  !!  - Important:  \f$\beta\f$ is <b>not</b> automatically set to be consistent with the value of \f$\beta\f$ used to calculate properties of a given magnetic equilibrium.  The user is responsible for choosing the gradients, densities, and temperatures of all species to be consistent with the values of \f$\beta\f$ and \f$\beta'\f$ which appear here and elsewhere.
-  !!
-  !! NB, this is automatically generated documentation for an input parameter... see also the wiki page!
-! </CRDOC beta>
 
   public :: beta
   public :: zeff, tite
