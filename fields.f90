@@ -93,6 +93,8 @@ contains
     call init_run_parameters
     if (debug) write(6,*) "init_fields: init_dist_fn"
     call init_dist_fn
+    !if (debug) write(6,*) "init_fields: init_parameter_scan"
+    !call init_parameter_scan
     if (debug) write(6,*) "init_fields: read_parameters"
     call read_parameters
     if (debug) write(6,*) "init_fields: allocate_arrays"
