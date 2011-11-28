@@ -57,6 +57,7 @@ contains
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
     use fields_implicit, only: time_field
+    use parameter_scan, only: update_scan_parameter_value
     implicit none
 
     integer, intent (in), optional :: mpi_comm, nensembles
@@ -164,6 +165,7 @@ contains
        call update_time
        call loop_diagnostics (istep, exit)
        call check_time_step (reset, exit)
+       call update_scan_parameter_value(istep, reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
        if (reset) call reset_time_step (istep, exit)
        

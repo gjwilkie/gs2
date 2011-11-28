@@ -53,6 +53,7 @@ module gs2_io
   integer :: nakx_id, naky_id, nttot_id, akx_id, aky_id, theta_id, nspec_id
   integer :: negrid_id, nlambda_id, egrid_id, lambda_id
   integer :: time_id, phi2_id, apar2_id, bpar2_id, theta0_id, nproc_id, nmesh_id
+  integer :: current_scan_parameter_value_id
   integer :: phi2_by_mode_id, apar2_by_mode_id, bpar2_by_mode_id, errest_by_mode_id, lpcoef_by_mode_id
   integer :: phtot_id, dmix_id, kperpnorm_id
   integer :: phi2_by_kx_id, apar2_by_kx_id, bpar2_by_kx_id
@@ -474,6 +475,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0, theta0
     use run_parameters, only: fphi, fapar, fbpar
+    use parameter_scan_arrays, only: write_scan_parameter
 # ifdef NETCDF
     use netcdf, only: NF90_CHAR, NF90_INT, NF90_GLOBAL
     use netcdf, only: nf90_def_var, nf90_put_att, nf90_enddef, nf90_put_var
@@ -858,6 +860,23 @@ contains
 !       if (status /= NF90_NOERR) call netcdf_error (status, var='errest_by_mode')
 !       status = nf90_def_var (ncid, 'lpcoef_by_mode', netcdf_real, lp_dim, lpcoef_by_mode_id)
 !       if (status /= NF90_NOERR) call netcdf_error (status, var='lpcoef_by_mode')
+    end if
+
+    if (write_scan_parameter) then
+     status = nf90_def_var (ncid, &
+                            'scan_parameter_value', &
+                            netcdf_real, &
+                            time_dim, &
+                            current_scan_parameter_value_id)
+     if (status /= NF90_NOERR) call netcdf_error (status, &
+                            var='scan_parameter_value')
+     status = nf90_put_att (ncid, &
+                      current_scan_parameter_value_id, &
+                      'long_name', &
+                      'The current value of the scan parameter')
+     if (status /= NF90_NOERR) &
+          call netcdf_error (status, &
+              ncid, current_scan_parameter_value_id, att='long_name')
     end if
 
     if (fphi > zero) then
@@ -2132,6 +2151,8 @@ contains
     use species, only: nspec
     use convert, only: c2r
     use fields_arrays, only: phi, apar, bpar
+    use parameter_scan_arrays, only: write_scan_parameter,&
+                                     current_scan_parameter_value
 
 !    use nf90_mod, only: nf90_put_var1, nf90_put_vara
 # ifdef NETCDF
@@ -2442,6 +2463,15 @@ contains
        status = nf90_put_var (ncid, omegaavg_id, ri2, start=start0, count=count0)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, omegaavg_id)
     end if
+
+    if (write_scan_parameter) then
+       status = nf90_put_var (ncid, &
+                              current_scan_parameter_value_id, &
+                              current_scan_parameter_value, &
+                              start=(/nout/))
+       if (status /= NF90_NOERR) &
+       call netcdf_error (status, ncid, current_scan_parameter_value_id)
+     end if
 
 !    status = nf90_put_var (ncid, phtot_id, phitot, start=start, count=count)
 !    if (status /= NF90_NOERR) call netcdf_error (status, ncid, phtot_id)

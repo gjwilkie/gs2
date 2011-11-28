@@ -32,6 +32,7 @@ module gs2_io
   integer :: nakx_id, naky_id, nttot_id, akx_id, aky_id, theta_id, nspec_id
   integer :: time_id, phi2_id, apar2_id, bpar2_id, theta0_id, nproc_id, nmesh_id
   integer :: phi2_by_mode_id, apar2_by_mode_id, bpar2_by_mode_id, anorm_id
+  integer :: current_scan_parameter_value_id
   integer :: phtot_id, dmix_id, kperpnorm_id
   integer :: phi2_by_kx_id, apar2_by_kx_id, bpar2_by_kx_id
   integer :: phi2_by_ky_id, apar2_by_ky_id, bpar2_by_ky_id
@@ -308,6 +309,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0, theta0
     use run_parameters, only: fphi, fapar, fbpar
+    use parameter_scan_arrays, only: write_scan_parameter
     use netcdf_mod
     logical :: write_nl_flux, write_omega, write_phiavg, write_hrate, write_fields
 
@@ -525,6 +527,16 @@ contains
 
     status = netcdf_def_var (ncid, 'drhodpsi', nf_double, 0, 0, drhodpsi_id)
     status = netcdf_put_att (ncid, drhodpsi_id, 'long_name', 'drho/dPsi')
+
+    if (write_scan_parameter) then
+       status = netcdf_def_var (ncid, 'scan_parameter_value', &
+                                nf_double, 1, time_dim, &
+                                current_scan_parameter_value_id)
+       status = netcdf_put_att (ncid, &
+                         current_scan_parameter_value_id, &
+                        'long_name',&
+                      'The current value of the scan parameter')
+     end if
 
     if (fphi > zero) then
        status = netcdf_def_var (ncid, 'phi2',         nf_double, 1, time_dim, phi2_id)
@@ -1175,6 +1187,8 @@ contains
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use convert, only: c2r
+    use parameter_scan_arrays, only: write_scan_parameter,&
+                                     current_scan_parameter_value
 
     integer, intent (in) :: nout
     real, intent (in) :: time, phi2, apar2, bpar2
@@ -1351,6 +1365,12 @@ contains
        status = netcdf_put_vara(ncid, omegaavg_id, start0, count0, ri2)
     end if
 
+    if (write_scan_parameter) then
+       status = netcdf_put_var1(ncid, &
+                                current_scan_parameter_value_id, &
+                                nout, &
+                                current_scan_parameter_value)
+    end if
 !    status = netcdf_put_vara(ncid, phtot_id, start, count, phitot)
     
     if (mod(nout, 10) == 0) status = nf_sync (ncid)

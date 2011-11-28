@@ -32,6 +32,12 @@
 !!
 !! DO NOT add comments in between ifdef/endif preprocessor blocks. Such
 !! comments will probably be ignored.
+!!
+!! DO NOT  add documentation for variables which also happen to be
+!! input parameters. Your changes will be ignored in favour of the
+!! automatically generated input parameter documentation. To edit 
+!! this input parameter documentation, please go to the wiki page: 
+!! http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=Gs2_Input_Parameters. 
 !! \subsection gen Updating this Documentation
 !!
 !! - Install doxygen: http://www.stack.nl/~dimitri/doxygen/

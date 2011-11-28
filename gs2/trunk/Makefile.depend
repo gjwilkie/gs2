@@ -82,6 +82,8 @@ ffttester_mod = \
 	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 parameter_scan.o \
+	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
 	 ran.o \
@@ -138,6 +140,8 @@ gs2_mod = \
 	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 parameter_scan.o \
+	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
 	 ran.o \
@@ -197,6 +201,7 @@ ingen_mod = \
 	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
 	 ran.o \
@@ -228,9 +233,6 @@ rungridgen_mod = \
 	 gridgen4mod.o \
 	 rungridgen.o \
 	 spl.o 
-
-t_mod = \
-	 t.o 
 
 antenna.o: \
 	 antenna_data.o \
@@ -396,6 +398,7 @@ gs2_diagnostics.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 parameter_scan_arrays.o \
 	 prof.o \
 	 run_parameters.o \
 	 species.o \
@@ -426,6 +429,7 @@ gs2_io.o: \
 	 mp.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 parameter_scan_arrays.o \
 	 run_parameters.o \
 	 species.o \
 	 theta_grid.o 
@@ -440,6 +444,7 @@ gs2_io_hdf5.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 parameter_scan_arrays.o \
 	 run_parameters.o \
 	 species.o \
 	 theta_grid.o 
@@ -468,6 +473,7 @@ gs2_main.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 parameter_scan.o \
 	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
@@ -500,6 +506,7 @@ gs2_save.o: \
 	 le_grids.o \
 	 mp.o \
 	 netcdf_utils.o \
+	 parameter_scan_arrays.o \
 	 species.o \
 	 theta_grid.o 
 gs2_save_hdf5.o: \
@@ -508,6 +515,7 @@ gs2_save_hdf5.o: \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 mp.o \
+	 parameter_scan_arrays.o \
 	 theta_grid.o 
 gs2_time.o: 
 gs2_transforms.o: \
@@ -631,6 +639,18 @@ nonlinear_terms.o: \
 	 theta_grid.o 
 om.o: \
 	 command_line.o 
+parameter_scan.o: \
+	 dist_fn.o \
+	 file_utils.o \
+	 gs2_diagnostics.o \
+	 gs2_save.o \
+	 gs2_time.o \
+	 mp.o \
+	 parameter_scan_arrays.o \
+	 run_parameters.o \
+	 species.o \
+	 text_options.o 
+parameter_scan_arrays.o: 
 peq.o: \
 	 constants.o \
 	 netcdf_utils.o \
@@ -665,7 +685,6 @@ species.o: \
 spfunc.o: \
 	 constants.o 
 spl.o: 
-t.o: 
 test_layouts.o: \
 	 mp.o 
 text_options.o: 

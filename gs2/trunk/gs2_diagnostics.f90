@@ -1349,6 +1349,10 @@ contains
     use antenna, only: antenna_w
     use gs2_heating, only: heating_diagnostics, del_htype
     use constants
+    use parameter_scan_arrays, only: scan_hflux => hflux_tot 
+    use parameter_scan_arrays, only: scan_momflux => momflux_tot 
+    use parameter_scan_arrays, only: scan_phi2_tot => phi2_tot 
+    use parameter_scan_arrays, only: scan_nout => nout
 
     implicit none
 !    integer :: nout = 1
@@ -1916,6 +1920,8 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                   heat_par, mheat_par, bheat_par, &
                   heat_perp, mheat_perp, bheat_perp, &
                   heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
+                  ! Update the target array in parameter_scan_arrays
+                  scan_hflux(nout) = hflux_tot
 !          call nc_qflux (nout, qheat, qmheat, qbheat, &
 !               heat_par, mheat_par, bheat_par, &
 !               heat_perp, mheat_perp, bheat_perp, &
@@ -1923,6 +1929,8 @@ if (debug) write(6,*) "loop_diagnostics: -2"
              call nc_vflux (nout, vflux, vmflux, vbflux, &
                   mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot, &
                   vflux_par, vflux_perp, vflux0, vflux1)
+                  ! Update the target array in parameter_scan_arrays
+                  scan_momflux(nout) = vflux_tot
              call nc_pflux (nout, pflux, pmflux, pbflux, &
                   part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
           end if
@@ -1931,6 +1939,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                aparnew(igomega,:,:), apar2, apar2_by_mode, &
                bparnew(igomega,:,:), bpar2, bpar2_by_mode, &
                h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
+               scan_phi2_tot(nout) = phi2
        end if
        if (write_ascii) then
           do ik = 1, naky
@@ -1990,6 +1999,10 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           end do
        end do
     end if
+
+    call broadcast(scan_hflux)
+    call broadcast(scan_momflux)
+    call broadcast(scan_phi2_tot)
 
     if (write_cerr) call collision_error(phinew,bparnew,last)
 
@@ -2557,7 +2570,12 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        close (unit=unit)
     end if
     
+    ! Update the counter in parameter_scan_arrays
+    scan_nout = nout
+
     nout = nout + 1
+
+
     if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) then
        call flush_output_file (out_unit, ".out")
        if (write_verr) then

@@ -16,7 +16,7 @@ module dist_fn
   implicit none
   public :: init_dist_fn, finish_dist_fn
   public :: read_parameters, wnml_dist_fn, wnml_dist_fn_species, check_dist_fn
-  public :: timeadv, exb_shear
+  public :: timeadv, exb_shear, g_exb
   public :: getfieldeq, getan, getmoms, getemoms
   public :: flux, lf_flux
   public :: get_epar, get_heat
