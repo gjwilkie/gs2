@@ -4136,6 +4136,7 @@ subroutine getan (antot, antota, antotp, g, antota2)
     use le_grids, only: anon, integrate_species
     use gs2_layouts, only: g_lo, ie_idx, is_idx
     use run_parameters, only: tite
+    use run_parameters, only: fphi, fapar, fbpar
     implicit none
     integer :: iglo, isgn
     integer :: ik, it, ie, is
@@ -4223,6 +4224,10 @@ subroutine getan (antot, antota, antotp, g, antota2)
           gamtot  = gamtot + tite
           gamtot3 = (gamtot-tite) / gamtot
           where (gamtot3 < 2.*epsilon(0.0)) gamtot3 = 1.0
+          if (fapar .or. fbpar) then
+             write(6,*) 'init_fieldeq: WARNING!!! adiabatic_option inconsistent with including delta B !!!'
+             write(6,*) 'init_fieldeq: continuing, but be wary of your results!'
+          endif
        else
           gamtot = gamtot + tite 
        endif
@@ -4505,7 +4510,6 @@ subroutine getan (antot, antota, antotp, g, antota2)
     !  Used by the explicit solver only, i.e.
     !  fieldopt_switch == fieldopt_explicit
     !
-    !  Code will abort if has_electron_species() is .false.
     !
     !  Refs: (1) Gyrokinetic and Maxwell Field Equations in GS2, C M Roach,
     !            T&M/PKNIGHT/HLST/014
@@ -4528,10 +4532,6 @@ subroutine getan (antot, antota, antotp, g, antota2)
 
     !  Local variables
 
-!    real, allocatable, dimension(:,:,:), save :: f1, f2, f3, f4, kp2
-!    real, allocatable, dimension(:,:), save :: fl_avg, awgt
-!    real, allocatable, dimension(:), save :: bfac
-!    real :: f5
     integer :: ik, it
     real, dimension (-ntgrid:ntgrid) :: denominator
     complex, dimension (-ntgrid:ntgrid) :: numerator
@@ -4539,90 +4539,39 @@ subroutine getan (antot, antota, antotp, g, antota2)
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-!    if (.not. allocated(fl_avg2)) then
-!! prepare for field-line-average term: 
-!       allocate (fl_avg2(ntheta0, naky))
-!       fl_avg2 = 0.
-!! prepare for field solves: 
-!       allocate (bfac(-ntgrid:ntgrid))
-!       allocate (f1(-ntgrid:ntgrid,ntheta0,naky))
-!       allocate (f2(-ntgrid:ntgrid,ntheta0,naky))
-!       allocate (f3(-ntgrid:ntgrid,ntheta0,naky))
-!       allocate (f4(-ntgrid:ntgrid,ntheta0,naky))
-!       allocate (kp2(-ntgrid:ntgrid,ntheta0,naky))
-!       bfac = beta*apfac/bmag**2
-!       do ik = 1, naky
-!          do it = 1, ntheta0
-!             do ig = -ntgrid, ntgrid
-!                f5 = 1. + 0.5*bfac(ig)*gamtot1(ig,it,ik)**2 &
-!                     / (1.+bfac(ig)*gamtot2(ig,it,ik))
-!                f1(ig,it,ik) = 1.0 / gamtot(ig,it,ik) / f5
-!                f3(ig,it,ik) = -bfac(ig) / (1.0 + bfac(ig)*gamtot2(ig,it,ik))
-!                f2(ig,it,ik) = gamtot1(ig,it,ik)*f3(ig,it,ik) / f5
-!                f4(ig,it,ik) = gamtot1(ig,it,ik)*f3(ig,it,ik) * 0.5
-!             end do
-!          end do
-!       end do
-
-!! Avoid dividing by zero for the kx=0, ky=0 mode:
-!       kp2 = kperp2
-!       where (kp2 == 0.) 
-!          kp2 = 1.0
-!       end where
-
-!    endif
-
     if (.not. has_electron_species(spec)) then
-       
-       write(*,*) 'Explicit solver aborting (getfieldeq2):'
-       write(*,*) '  - adiabatic case not accounted for yet...'
-       stop
-
-!       if (adiabatic_option_switch == adiabatic_option_noJ) then
-!          if (.not. allocated(awgt2)) then
-!             allocate (awgt2(ntheta0, naky))
-!             awgt2 = 0.
-!             do ik = 1, naky
-!                do it = 1, ntheta0
-!                   if (aky(ik) > epsilon(0.0)) cycle
-!                   awgt2(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
-!                end do
-!             end do
-!          endif
-!          do ik = 1, naky
-!             do it = 1, ntheta0
-!                fl_avg2(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
-!             end do
-!          end do
-!       end if
-
-!       if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
-!          if (.not. allocated(awgt2)) then
-!             allocate (awgt2(ntheta0, naky))
-!             awgt2 = 0.
-!             do ik = 1, naky
-!                do it = 1, ntheta0
-!                   if (aky(ik) > epsilon(0.0)) cycle
-!                   awgt2(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
-!                end do
-!             end do
-!          endif
-!          do ik = 1, naky
-!             do it = 1, ntheta0
-!                fl_avg2(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
-!             end do
-!          end do
-!       end if
-    end if
-
-!    do ik = 1, naky
-!       do it = 1, ntheta0
-!          phi(:,it,ik) = fphi*(antot(:,it,ik)*f1(:,it,ik) + fl_avg2(it,ik)*f1(:,it,ik) &
-!               + antotp(:,it,ik)*f2(:,it,ik))
-!          bpar(:,it,ik) = fbpar*antotp(:,it,ik)*f3(:,it,ik) + phi(:,it,ik)*f4(:,it,ik)
-!          apar(:,it,ik) = fapar*antota(:,it,ik)/kp2(:,it,ik)
-!       end do
-!    end do
+       if ((adiabatic_option_switch == adiabatic_option_noJ .or. adiabatic_option_switch == adiabatic_option_fieldlineavg) ) then
+! prepare for field-line-average term, fl_avg2: 
+          if (.not. allocated(awgt2)) then
+             allocate (awgt2(ntheta0, naky))
+             awgt2 = 0.
+             do ik = 1, naky
+                do it = 1, ntheta0
+                   if (aky(ik) > epsilon(0.0)) cycle
+                   if (adiabatic_option_switch == adiabatic_option_noJ) then
+                      awgt2(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
+                   elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg)
+                      awgt2(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
+                   endif
+                end do
+             end do
+          endif
+          if (.not. allocated(fl_avg2)) then
+             allocate (fl_avg2(ntheta0, naky))
+          endif
+          fl_avg2=0.
+          do ik = 1, naky
+             do it = 1, ntheta0
+                if (aky(ik) > epsilon(0.0)) cycle
+                if (adiabatic_option_switch == adiabatic_option_noJ) then
+                   fl_avg2(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
+                elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg)
+                   fl_avg2(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
+                endif
+             end do
+          end do
+       endif
+    endif
 
     !  Perturbed electrostatic potential, phi
     !  Equation 17, ref.1
@@ -4635,6 +4584,9 @@ subroutine getan (antot, antota, antotp, g, antota2)
 
              numerator = (1.0 + bob2*gamtot2(:,it,ik))*antot(:,it,ik) &
                   - bob2*antotp(:,it,ik)*gamtot1(:,it,ik)
+             if (allocated(fl_avg2)) then
+                numerator=numerator+fl_avg2(it,ik)*(1.0 + bob2*gamtot2(:,it,ik))
+             endif
              denominator = (1.0 + bob2*gamtot2(:,it,ik))*gamtot(:,it,ik) &
                   + 0.5*bob2*gamtot1(:,it,ik)*gamtot1(:,it,ik)
 
