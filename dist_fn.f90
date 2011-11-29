@@ -4224,7 +4224,7 @@ subroutine getan (antot, antota, antotp, g, antota2)
           gamtot  = gamtot + tite
           gamtot3 = (gamtot-tite) / gamtot
           where (gamtot3 < 2.*epsilon(0.0)) gamtot3 = 1.0
-          if (fapar .or. fbpar) then
+          if ( (fapar /= 0.0) .or. (fbpar /= 0.0) ) then
              write(6,*) 'init_fieldeq: WARNING!!! adiabatic_option inconsistent with including delta B !!!'
              write(6,*) 'init_fieldeq: continuing, but be wary of your results!'
           endif
@@ -4550,7 +4550,7 @@ subroutine getan (antot, antota, antotp, g, antota2)
                    if (aky(ik) > epsilon(0.0)) cycle
                    if (adiabatic_option_switch == adiabatic_option_noJ) then
                       awgt2(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
-                   elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg)
+                   elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
                       awgt2(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
                    endif
                 end do
@@ -4565,7 +4565,7 @@ subroutine getan (antot, antota, antotp, g, antota2)
                 if (aky(ik) > epsilon(0.0)) cycle
                 if (adiabatic_option_switch == adiabatic_option_noJ) then
                    fl_avg2(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
-                elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg)
+                elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
                    fl_avg2(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
                 endif
              end do
