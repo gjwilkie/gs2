@@ -8,6 +8,7 @@ module fields_implicit
   public :: nidx
   public :: reset_init
   public :: time_field
+  public :: set_scan_parameter
 
   private
 
@@ -24,8 +25,10 @@ contains
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use gs2_layouts, only: init_gs2_layouts
+    use parameter_scan_arrays, only: run_scan
     implicit none
     logical:: debug=.false.
+    logical :: dummy
 
     if (initialized) return
     initialized = .true.
@@ -38,12 +41,42 @@ contains
     call init_kt_grids
     if (debug) write(6,*) "init_fields_implicit: read_parameters"
     call read_parameters
+    if (debug .and. run_scan) &
+        write(6,*) "init_fields_implicit: set_scan_parameter"
+        ! Must be done before resp. m.
+        if (run_scan) call set_scan_parameter(dummy)
     if (debug) write(6,*) "init_fields_implicit: response_matrix"
     call init_response_matrix
     if (debug) write(6,*) "init_fields_implicit: antenna"
     call init_antenna
 
   end subroutine init_fields_implicit
+
+  
+  subroutine set_scan_parameter(reset)
+    !use parameter_scan_arrays, only: current_scan_parameter_value
+    !use parameter_scan_arrays, only: scan_parameter_switch
+    !use parameter_scan_arrays, only: scan_parameter_tprim
+    !use parameter_scan_arrays, only: scan_parameter_g_exb
+    use parameter_scan_arrays
+    use species, only: spec 
+    use dist_fn, only: g_exb
+    use mp, only: proc0
+    logical, intent (inout) :: reset
+     
+    select case (scan_parameter_switch)
+    case (scan_parameter_tprim)
+       spec(scan_spec)%tprim = current_scan_parameter_value
+       if (proc0) write (*,*) &
+         "Set scan parameter tprim_1 to ", spec(scan_spec)%tprim
+       reset = .true.
+    case (scan_parameter_g_exb)
+       g_exb = current_scan_parameter_value
+       if (proc0) write (*,*) &
+         "Set scan parameter g_exb to ", g_exb
+       reset = .false.
+    end select
+  end subroutine set_scan_parameter
 
   subroutine read_parameters
   end subroutine read_parameters
