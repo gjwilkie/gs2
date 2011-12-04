@@ -55,7 +55,7 @@ module gs2_save
 
   logical :: initialized = .false.
   logical :: test = .false.
-  logical :: include_parameter_scan = .false.
+  logical :: include_parameter_scan = .true.
 # endif
 
 contains
