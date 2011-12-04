@@ -350,8 +350,10 @@ fields_implicit.o: \
 	 job_manage.o \
 	 kt_grids.o \
 	 mp.o \
+	 parameter_scan_arrays.o \
 	 prof.o \
 	 run_parameters.o \
+	 species.o \
 	 theta_grid.o 
 fields_test.o: \
 	 dist_fn.o \
@@ -640,7 +642,7 @@ nonlinear_terms.o: \
 om.o: \
 	 command_line.o 
 parameter_scan.o: \
-	 dist_fn.o \
+	 fields_implicit.o \
 	 file_utils.o \
 	 gs2_diagnostics.o \
 	 gs2_save.o \
@@ -648,7 +650,6 @@ parameter_scan.o: \
 	 mp.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
-	 species.o \
 	 text_options.o 
 parameter_scan_arrays.o: 
 peq.o: \

@@ -10,25 +10,22 @@
 
 module parameter_scan
 
-  !use parameter_scan_arrays, only: current_scan_parameter_value
   use parameter_scan_arrays
 
   public :: init_parameter_scan
   public :: update_scan_parameter_value
   public :: scan_restarted
+  public :: allocate_target_arrays
 
 
 
 
   private
 
-  integer :: scan_parameter_switch, &
-             target_parameter_switch, &
+  integer :: target_parameter_switch, &
              scan_type_switch, &
              increment_condition_switch
 
-  integer, parameter :: scan_parameter_tprim = 1, &
-                        scan_parameter_g_exb = 2
 
   integer, parameter :: scan_type_none = 1, &
                         scan_type_range = 2, &
@@ -43,17 +40,17 @@ module parameter_scan
                         increment_condition_delta_t = 2, &
                         increment_condition_saturated = 3
 
-  real :: parameter_start_value, parameter_end_value, parameter_increment
-  integer :: n_timesteps_initial, n_timesteps_increment
-  integer :: species_scan_index
-  real :: delta_t_initial, delta_t_increment
-  real :: target_value
+  real :: par_start, par_end, par_inc
+  integer :: nstep_init, nstep_inc
+  real :: delta_t_init, delta_t_inc
+  real :: target_val
   logical :: scan_restarted
 
 
 contains
   subroutine init_parameter_scan
     use gs2_save, only: restore_current_scan_parameter_value 
+    use init_g, only: init_init_g
     logical, save :: initialized = .false.
     write (*,*) "initializing parameter_scan"
 
@@ -66,22 +63,23 @@ contains
     select case (scan_type_switch) 
     case (scan_type_none)
       write_scan_parameter = .false.
+      run_scan = .false.
       return
     case (scan_type_target)
-      call allocate_target_arrays
+      !call allocate_target_arrays
     case (scan_type_root_finding)
-      call allocate_target_arrays
+      !call allocate_target_arrays
     end select
       
     write_scan_parameter = .true.
+    run_scan = .true.
 
     ! scan_restarted is set manually 
-    if (scan_restarted) call &
-      restore_current_scan_parameter_value(current_scan_parameter_value)
+    if (scan_restarted) then
+      call init_init_g ! To get restart file name
+      call restore_current_scan_parameter_value(current_scan_parameter_value)
+    end if
    
-    ! To set the initial value of the actual parameter being varied:
-    call increment_scan_parameter(0.0)
-
     write (*,*) "initialized parameter_scan"
 
   end subroutine init_parameter_scan
@@ -98,6 +96,14 @@ contains
 
     !if (.not. write_flux_line) &
      !call mp_abort("write_flux_line must be set to true for target mode")
+
+    !select case (scan_type_switch) 
+    !case (scan_type_none)
+      !return
+    !case (scan_type_range)
+      !return
+    !end select
+
     select case (target_parameter_switch)
     case (target_parameter_hflux_tot)
       if (.not. write_nl_flux) &
@@ -136,42 +142,39 @@ contains
     case (scan_type_range)
       call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       if (.not. increment_condition_satisfied) return
-      increment = parameter_increment
+      increment = par_inc
       if ((increment .gt. 0.0 &
-         .and. current_scan_parameter_value + increment .gt. parameter_end_value) &
+         .and. current_scan_parameter_value + increment .gt. par_end) &
          .or. (increment .lt. 0.0 &
-         .and. current_scan_parameter_value + increment .lt. parameter_end_value)) &
+         .and. current_scan_parameter_value + increment .lt. par_end)) &
          then
          exit = .true.
          return
        end if
-       call increment_scan_parameter(increment)
-       reset = .true.
+       call increment_scan_parameter(increment, reset)
      case (scan_type_target)
       !call mp_abort("scan_type_target not implemented yet!")
       call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       if (.not. increment_condition_satisfied) return
-      increment = parameter_increment
+      increment = par_inc
       call check_target_reached(target_reached)
       if (target_reached) then
         exit = .true.
         return
       end if
-      call increment_scan_parameter(increment)
-      reset = .true.
+      call increment_scan_parameter(increment, reset)
     case (scan_type_root_finding)
       call mp_abort("scan_type_root_finding not implemented yet!")
       !call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       !if (.not. increment_condition_satisfied) return
-      !increment = parameter_increment
+      !increment = par_inc
       !call check_target_reached(target_reached)
       !if (target_reached) then
         !exit = .true.
         !return
       !end if
       !call get_root_finding_increment(increment)
-      !call increment_scan_parameter(increment)
-      !reset = .true.
+      !call increment_scan_parameter(increment, reset)
     end select
   end subroutine update_scan_parameter_value
 
@@ -199,27 +202,20 @@ contains
       return
     end if
 
-    if ((last_value .lt. target_value .and. &
-          current_value .gt. target_value) .or. &
-          (last_value .gt. target_value .and. &
-          current_value .lt. target_value)) &
+    if ((last_value .lt. target_val .and. &
+          current_value .gt. target_val) .or. &
+          (last_value .gt. target_val .and. &
+          current_value .lt. target_val)) &
              target_reached = .true.
 
   end subroutine check_target_reached
 
-  subroutine increment_scan_parameter(increment)
-    use species, only: spec 
-    use dist_fn, only: g_exb
+  subroutine increment_scan_parameter(increment, reset)
+    use fields_implicit, only: set_scan_parameter
     real, intent (in) :: increment
-     
+    logical, intent (inout) :: reset
     current_scan_parameter_value = current_scan_parameter_value + increment
-    select case (scan_parameter_switch)
-    case (scan_parameter_tprim)
-       spec(species_scan_index)%tprim = current_scan_parameter_value
-       write (*,*) "tprim_1 is ", spec(species_scan_index)%tprim
-    case (scan_parameter_g_exb)
-       g_exb = current_scan_parameter_value
-    end select
+    call set_scan_parameter(reset)
   end subroutine increment_scan_parameter
      
 
@@ -227,7 +223,7 @@ contains
 
   subroutine check_increment_condition_satisfied(istep, increment_condition_satisfied)
     use gs2_time, only: user_time
-    use mp, only : mp_abort
+    use mp, only : mp_abort, proc0
     logical, intent (out) :: increment_condition_satisfied
     integer, intent (in) :: istep
     logical, save :: first = .true.
@@ -236,31 +232,32 @@ contains
 
     select case (increment_condition_switch)
     case (increment_condition_n_timesteps)
-      if (istep .lt. n_timesteps_initial) then
+      if (istep .lt. nstep_init) then
         last_timestep = istep
         increment_condition_satisfied = .false.
         return
       end if 
-      if ((istep - last_timestep) .gt. n_timesteps_increment) then
+      if ((istep - last_timestep) .gt. nstep_inc) then
         last_timestep = istep
         increment_condition_satisfied = .true.
+        if (proc0) write (*,*) 'Updating parameter at ', user_time 
         return
       end if
     case (increment_condition_delta_t)
-      if (user_time .lt. delta_t_initial) then
+      if (user_time .lt. delta_t_init) then
         last_time = user_time
         increment_condition_satisfied = .false.
         return
       end if 
-      if ((user_time - last_time) .gt. delta_t_increment) then
-        write (*,*) 'Updating parameter at ', user_time 
+      if ((user_time - last_time) .gt. delta_t_inc) then
         last_time = user_time
         increment_condition_satisfied = .true.
+        if (proc0) write (*,*) 'Updating parameter at ', user_time 
         return
       end if
     case (increment_condition_saturated)
       call mp_abort("increment_condition_saturated not implemented yet!")
-      !if (istep .lt. n_timesteps_initial) then
+      !if (istep .lt. nstep_init) then
         !last_timestep = istep
         !increment_condition_satisfied = .false.
         !return
@@ -287,7 +284,7 @@ contains
     type (text_option), dimension (2), parameter :: scan_parameter_opts = &
          (/ text_option('tprim', scan_parameter_tprim), &
             text_option('g_exb', scan_parameter_g_exb) /)
-    character(20) :: scan_parameter
+    character(20) :: scan_par
     type (text_option), dimension (4), parameter :: scan_type_opts = &
          (/ text_option('none', scan_type_none), &
             text_option('range', scan_type_range), &
@@ -298,44 +295,44 @@ contains
          (/ text_option('hflux_tot', target_parameter_hflux_tot), &
             text_option('momflux_tot', target_parameter_momflux_tot), &
             text_option('phi2_tot', target_parameter_phi2_tot) /)
-    character(20) :: target_parameter
+    character(20) :: target_par
     type (text_option), dimension (3), parameter :: increment_condition_opts = &
          (/ text_option('n_timesteps', increment_condition_n_timesteps), &
             text_option('delta_t', increment_condition_delta_t), &
             text_option('saturated', increment_condition_saturated) /)
-    character(20) :: increment_condition 
+    character(20) :: inc_con 
     namelist /parameter_scan_knobs/ &
             scan_type, &
-            scan_parameter, &
-            target_parameter,& 
-            parameter_start_value, &
-            parameter_end_value, &
-            parameter_increment, &
-            increment_condition, &
-            n_timesteps_initial, &
-            n_timesteps_increment, &
-            delta_t_initial, &
-            delta_t_increment, &
-            species_scan_index, &
+            scan_par, &
+            target_par,& 
+            par_start, &
+            par_end, &
+            par_inc, &
+            inc_con, &
+            nstep_init, &
+            nstep_inc, &
+            delta_t_init, &
+            delta_t_inc, &
+            scan_spec, &
             scan_restarted, &
-            target_value
+            target_val
 
     integer :: ierr, in_file
     logical :: exist
 
     if (proc0) then
-       scan_parameter = 'tprim'
+       scan_par = 'tprim'
        scan_type = 'none'
-       target_parameter = 'hflux_tot'
-       parameter_start_value = 0.0
-       parameter_end_value = 0.0
-       parameter_increment = 0.0
-       target_value = 0.0
-       n_timesteps_initial = 0
-       n_timesteps_increment = 0
-       delta_t_initial = 0.0
-       delta_t_increment = 0.0
-       species_scan_index = 1
+       target_par = 'hflux_tot'
+       par_start = 0.0
+       par_end = 0.0
+       par_inc = 0.0
+       target_val = 0.0
+       nstep_init = 0
+       nstep_inc = 0
+       delta_t_init = 0.0
+       delta_t_inc = 0.0
+       scan_spec = 1
        scan_restarted = .false.
 
        in_file = input_unit_exist ("parameter_scan_knobs", exist)
@@ -343,36 +340,37 @@ contains
 
        ierr = error_unit()
        call get_option_value &
-            (scan_parameter, scan_parameter_opts, scan_parameter_switch, &
-            ierr, "scan_parameter in parameter_scan_knobs")
+            (scan_par, scan_parameter_opts, scan_parameter_switch, &
+            ierr, "scan_par in parameter_scan_knobs")
        call get_option_value &
             (scan_type, scan_type_opts, scan_type_switch, &
             ierr, "scan_type in parameter_scan_knobs")
        call get_option_value &
-            (target_parameter, target_parameter_opts, target_parameter_switch, &
-            ierr, "target_parameter in parameter_scan_knobs")
+            (target_par, target_parameter_opts, target_parameter_switch, &
+            ierr, "target_par in parameter_scan_knobs")
        call get_option_value &
-            (increment_condition, increment_condition_opts, &
+            (inc_con, increment_condition_opts, &
             increment_condition_switch, &
-            ierr, "increment_condition in parameter_scan_knobs")
+            ierr, "inc_con in parameter_scan_knobs")
 
     end if
 
     call broadcast (scan_parameter_switch)
     call broadcast (scan_type_switch)
     call broadcast (target_parameter_switch)
-    call broadcast (parameter_start_value)
-    call broadcast (parameter_end_value)
-    call broadcast (parameter_increment)
+    call broadcast (par_start)
+    call broadcast (par_end)
+    call broadcast (par_inc)
     call broadcast (increment_condition_switch)
-    call broadcast (n_timesteps_initial)
-    call broadcast (n_timesteps_increment)
-    call broadcast (delta_t_initial)
-    call broadcast (delta_t_increment)
-    call broadcast (species_scan_index)
-    call broadcast (target_value)
+    call broadcast (nstep_init)
+    call broadcast (nstep_inc)
+    call broadcast (delta_t_init)
+    call broadcast (delta_t_inc)
+    call broadcast (scan_spec)
+    call broadcast (target_val)
+    call broadcast (scan_restarted)
 
-    if (.not. scan_restarted) current_scan_parameter_value = parameter_start_value
+    if (.not. scan_restarted) current_scan_parameter_value = par_start
 
   end subroutine read_parameters
 end module parameter_scan

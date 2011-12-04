@@ -44,6 +44,7 @@ contains
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields, advance
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
+    use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, start_time
     use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time
     use dist_fn_arrays, only: gnew
@@ -128,8 +129,10 @@ contains
        
        call broadcast (cbuff)
        if (.not. proc0) run_name => cbuff
+       call init_parameter_scan
        call init_fields
        call init_gs2_diagnostics (list, nstep)
+       call allocate_target_arrays ! must be after init_gs2_diagnostics
        call init_tstart (tstart)   ! tstart is in user units 
        
        if (present(dvdrho)) then
