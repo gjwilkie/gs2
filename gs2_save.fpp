@@ -113,11 +113,11 @@ contains
        exit = .false.
     end if
 
-    if (proc0) then
-      write (*,*) "Starting save_for_restart in ", restart_file
-      write (*,*) "List restart files"
-      call system("echo 'start' >> filelist.txt; ls nc/* >> filelist.txt;  ")
-    end if
+!    if (proc0) then
+!      write (*,*) "Starting save_for_restart in ", restart_file
+!      write (*,*) "List restart files"
+!      call system("echo 'start' >> filelist.txt; ls nc/* >> filelist.txt;  ")
+!    end if
 
     n_elements = g_lo%ulim_proc-g_lo%llim_proc+1
     if (n_elements <= 0) return
@@ -473,11 +473,11 @@ contains
           
 !       endif   ! MR end 
         
-    if (proc0) then
-      write (*,*) "Finished definitions"
-      write (*,*) "List restart files"
-      call system("echo 'defs' >> filelist.txt; ls nc/* >> filelist.txt;  ")
-    end if
+!    if (proc0) then
+!      write (*,*) "Finished definitions"
+!      write (*,*) "List restart files"
+!      call system("echo 'defs' >> filelist.txt; ls nc/* >> filelist.txt;  ")
+!    end if
        
        istatus = nf90_enddef (ncid)
        if (istatus /= NF90_NOERR) then

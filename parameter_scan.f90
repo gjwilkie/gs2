@@ -13,11 +13,13 @@ module parameter_scan
   use parameter_scan_arrays
 
   public :: init_parameter_scan
+  public :: finish_parameter_scan
   public :: update_scan_parameter_value
-  public :: scan_restarted
   public :: allocate_target_arrays
 
 
+  logical :: scan_restarted
+  public :: scan_restarted
 
 
   private
@@ -44,15 +46,17 @@ module parameter_scan
   integer :: nstep_init, nstep_inc
   real :: delta_t_init, delta_t_inc
   real :: target_val
-  logical :: scan_restarted
+  integer :: scan_output_file
+  real :: current_target_value = 0.0
 
 
 contains
   subroutine init_parameter_scan
     use gs2_save, only: restore_current_scan_parameter_value 
     use init_g, only: init_init_g
+    use file_utils, only: open_output_file
     logical, save :: initialized = .false.
-    write (*,*) "initializing parameter_scan"
+    !write (*,*) "initializing parameter_scan"
 
     if (initialized) return
     initialized = .true.
@@ -70,6 +74,9 @@ contains
     case (scan_type_root_finding)
       !call allocate_target_arrays
     end select
+
+
+    call open_output_file(scan_output_file, ".par_scan")
       
     write_scan_parameter = .true.
     run_scan = .true.
@@ -80,7 +87,7 @@ contains
       call restore_current_scan_parameter_value(current_scan_parameter_value)
     end if
    
-    write (*,*) "initialized parameter_scan"
+    !write (*,*) "initialized parameter_scan"
 
   end subroutine init_parameter_scan
 
@@ -104,6 +111,11 @@ contains
       !return
     !end select
 
+     allocate(hflux_tot(nstep/nwrite))
+     allocate(momflux_tot(nstep/nwrite))
+     allocate(phi2_tot(nstep/nwrite))
+    if (scan_type_switch == scan_type_none) return
+
     select case (target_parameter_switch)
     case (target_parameter_hflux_tot)
       if (.not. write_nl_flux) &
@@ -112,21 +124,21 @@ contains
       if (.not. write_nl_flux) &
        call mp_abort("write_nl_flux must be set to true for momflux target mode")
      end select 
-     write (*,*) "allocating target arrays ", nwrite, ",", nstep 
-     allocate(hflux_tot(nstep/nwrite))
-     allocate(momflux_tot(nstep/nwrite))
-     allocate(phi2_tot(nstep/nwrite))
+     !write (*,*) "allocating target arrays ", nwrite, ",", nstep 
   end subroutine allocate_target_arrays
 
 
   subroutine finish_parameter_scan
+    use file_utils, only: close_output_file
     if (allocated(hflux_tot)) deallocate(hflux_tot)
     if (allocated(momflux_tot)) deallocate(momflux_tot)
     if (allocated(phi2_tot)) deallocate(phi2_tot)
+    call close_output_file(scan_output_file)
   end subroutine finish_parameter_scan
   
   subroutine update_scan_parameter_value(istep, reset, exit)
     use mp, only : mp_abort
+    use gs2_time, only: user_time
     logical, intent (inout) :: exit, reset
     integer, intent (in) :: istep
     real :: increment
@@ -140,6 +152,8 @@ contains
     case (scan_type_none)
       return
     case (scan_type_range)
+      write (scan_output_file, fmt="('time=  ',e10.4,'  parameter=  ',e10.4)") &
+          user_time, current_scan_parameter_value
       call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       if (.not. increment_condition_satisfied) return
       increment = par_inc
@@ -149,63 +163,68 @@ contains
          .and. current_scan_parameter_value + increment .lt. par_end)) &
          then
          exit = .true.
-         return
+       else  
+          call increment_scan_parameter(increment, reset)
        end if
-       call increment_scan_parameter(increment, reset)
      case (scan_type_target)
-      !call mp_abort("scan_type_target not implemented yet!")
+      write (scan_output_file, &
+        fmt="('time=  ',e10.4,'  parameter=  ',e10.4,'  target=  ',e10.4)") &
+          user_time, current_scan_parameter_value, current_target_value 
       call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       if (.not. increment_condition_satisfied) return
       increment = par_inc
       call check_target_reached(target_reached)
       if (target_reached) then
         exit = .true.
-        return
+      else
+        call increment_scan_parameter(increment, reset)
       end if
-      call increment_scan_parameter(increment, reset)
     case (scan_type_root_finding)
       call mp_abort("scan_type_root_finding not implemented yet!")
+      !write (scan_output_file, &
+        !fmt="(time=  e10.4  parameter=  e10.4  target=  e10.4)") &
+          !user_time, current_scan_parameter_value, current_target_value 
       !call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       !if (.not. increment_condition_satisfied) return
       !increment = par_inc
       !call check_target_reached(target_reached)
       !if (target_reached) then
         !exit = .true.
-        !return
+      !else
+        !call get_root_finding_increment(increment)
+        !call increment_scan_parameter(increment, reset)
       !end if
-      !call get_root_finding_increment(increment)
-      !call increment_scan_parameter(increment, reset)
     end select
+    if (exit) write (scan_output_file, *) "Parameter scan is complete...."
   end subroutine update_scan_parameter_value
 
   subroutine check_target_reached(target_reached)
     logical, intent (out) :: target_reached
     logical, save :: first = .true.
     real, save :: last_value = 0.0
-    real, save :: current_value = 0.0
    
     target_reached = .false.
     
-    last_value = current_value
+    last_value = current_target_value
     select case (target_parameter_switch)
     case (target_parameter_hflux_tot)
-      current_value = hflux_tot(nout)
+      current_target_value = hflux_tot(nout)
     case (target_parameter_momflux_tot)
-      current_value = momflux_tot(nout)
+      current_target_value = momflux_tot(nout)
     case (target_parameter_phi2_tot)
-      current_value = phi2_tot(nout)
+      current_target_value = phi2_tot(nout)
     end select
 
     if (first) then
-      last_value = current_value
+      last_value = current_target_value
       first = .false.
       return
     end if
 
     if ((last_value .lt. target_val .and. &
-          current_value .gt. target_val) .or. &
+          current_target_value .gt. target_val) .or. &
           (last_value .gt. target_val .and. &
-          current_value .lt. target_val)) &
+          current_target_value .lt. target_val)) &
              target_reached = .true.
 
   end subroutine check_target_reached
@@ -218,9 +237,6 @@ contains
     call set_scan_parameter(reset)
   end subroutine increment_scan_parameter
      
-
-
-
   subroutine check_increment_condition_satisfied(istep, increment_condition_satisfied)
     use gs2_time, only: user_time
     use mp, only : mp_abort, proc0
