@@ -238,6 +238,7 @@ contains
     use init_g, only: finish_init_g
     use kt_grids, only: finish_kt_grids
     use le_grids, only: finish_le_grids
+    use parameter_scan, only: finish_parameter_scan
     use mp, only: proc0
     use nonlinear_terms, only: finish_nonlinear_terms
     use run_parameters, only: finish_run_parameters
@@ -256,6 +257,7 @@ contains
     call finish_nonlinear_terms
     call finish_run_parameters
     call finish_species
+    call finish_parameter_scan
     if (proc0) call finish_file_utils
 
   end subroutine finish_gs2
