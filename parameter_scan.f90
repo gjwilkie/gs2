@@ -111,9 +111,9 @@ contains
       !return
     !end select
 
-     allocate(hflux_tot(nstep/nwrite))
-     allocate(momflux_tot(nstep/nwrite))
-     allocate(phi2_tot(nstep/nwrite))
+     allocate(hflux_tot(nstep/nwrite+1))
+     allocate(momflux_tot(nstep/nwrite+1))
+     allocate(phi2_tot(nstep/nwrite+1))
     if (scan_type_switch == scan_type_none) return
 
     select case (target_parameter_switch)
