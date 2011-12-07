@@ -101,24 +101,24 @@ module kt_grids_box
    !> Experts only.
  real :: rtwist
 end module kt_grids_box
-module kt_grids_specified
+module kt_grids_single
 
 
    !> ky rho
  real :: aky
-end module kt_grids_specified
-module kt_grids_specified
+end module kt_grids_single
+module kt_grids_single
 
 
    !>  theta_0
  real :: theta0
-end module kt_grids_specified
-module kt_grids_specified
+end module kt_grids_single
+module kt_grids_single
 
 
    !> kx rho (but set theta_0 instead.)
  real :: akx
-end module kt_grids_specified
+end module kt_grids_single
 module kt_grids_specified
 
 
@@ -688,12 +688,6 @@ end module theta_grid_gridgen
 module run_parameters
 
 
-   !>Number of timesteps that will be taken, unless the code stops for some (usually user-specified) reason.
- integer :: nstep
-end module run_parameters
-module run_parameters
-
-
    !>Default = .false.   Do not evolve certain \f$k\f$ modes in time.  Set this to true only if you know what you are doing. True only for secondary/tertiary instability calculations.
  logical :: eqzip
 end module run_parameters
@@ -1221,15 +1215,107 @@ module kt_grids_specified
    !>Number of theta0 values. Total number of modes evolved = max(naky, ntheta0). Also set up the appropriate number of kt_grids_specified_element_i namelists.
  integer :: ntheta0
 end module kt_grids_specified
-module kt_grids_specified
+module kt_grids_single
 
 
    !> ky rho
  real :: aky
-end module kt_grids_specified
-module kt_grids_specified
+end module kt_grids_single
+module kt_grids_single
 
 
    !>  theta_0
  real :: theta0
-end module kt_grids_specified
+end module kt_grids_single
+module parameter_scan
+
+
+   !>Specifies the way that the parameter scan is conducted. Possible values are:
+  !!  -  'none' -- do not conduct a parameter scan (default)
+  !!  -  'range' --  vary parameter in constant increments between 2 values: par_start and par_end. The step size is given by par_inc.
+  !!  -  'target' --  start with the parameter at par_start, and then change the parameter by par_inc until the target parameter has reached the target value
+  !!  -  'root_finding' -- the same as target, but the increment is changed intelligently using a Newton-like method.
+ character :: scan_type
+end module parameter_scan
+module parameter_scan
+
+
+   !>Specify the parameter to be varied.  If the parameter pertains to a species, the scan_spec must be specified as well.
+ character :: scan_par
+end module parameter_scan
+module parameter_scan
+
+
+   !>If the scan is being run in 'target' or 'root_finding' mode, specifies the target parameter. 
+  !!  - Possible values are 'hflux_tot', 'momflux_tot', 'phi2_tot'.
+ character :: target_par
+end module parameter_scan
+module parameter_scan
+
+
+   !>Specifies the starting value for the parameter scan.
+ real :: par_start
+end module parameter_scan
+module parameter_scan
+
+
+   !>If the scan is being run in 'range' mode, specifies the value of the parameter that will be reached.
+ real :: par_end
+end module parameter_scan
+module parameter_scan
+
+
+   !>If the parameter scan is being run in 'range' or 'target' modes, specifies the amount by which the parameter is varied at one go.
+ real :: par_inc
+end module parameter_scan
+module parameter_scan
+
+
+   !>Specifies the condition for incrementing the parameter. Possible values are:
+  !!  -  'n_timesteps' -- change the parameter after a given number of time steps
+  !!  -  'delta_t' -- change the parameter after an elapsed time
+  !!  -  'saturated' -- change the parameter after the simulation has reached a saturated state (determined using the target parameter) at the current value of the parameter
+ character :: inc_con
+end module parameter_scan
+module parameter_scan
+
+
+   !>When the increment condition is 'n_timesteps' or 'saturated',  the parameter will not be changed until nstep_init have elapsed from the beginning of the simulation. Note that if the simulation is restarted, this parameter will measure from the restart.
+ integer :: nstep_init
+end module parameter_scan
+module parameter_scan
+
+
+   !>When the increment condition is 'n_timesteps', the parameter will be changed every nstep_inc.
+ integer :: nstep_inc
+end module parameter_scan
+module parameter_scan
+
+
+   !>When the increment condition is 'delta_t', the parameter will not be changed until delta_t_init time has elapsed from the beginning of the simulation. Note, that if the simulation is restarted, this parameter will measure from beginning of original simulation.
+ real :: delta_t_init
+end module parameter_scan
+module parameter_scan
+
+
+   !>When the increment condition is 'delta_t', the parameter will be changed every time delta_t time has elapsed.
+ real :: delta_t_inc
+end module parameter_scan
+module parameter_scan
+
+
+   !>When parameter pertains to a species, specifies the index of the species.
+ integer :: scan_spec
+end module parameter_scan
+module parameter_scan
+
+
+   !>Must be set to true if the current value of the scan parameter must be read from the restart files.  Otherwise, the scan will start from the beginning.
+ logical :: scan_restarted
+end module parameter_scan
+module parameter_scan
+
+
+   !>If the scan is being run in 'target' or 'root_finding'  mode, specifies the value to be targeted. The scan will complete when this target value is reached.
+ real :: target_val
+end module parameter_scan
