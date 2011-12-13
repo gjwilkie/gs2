@@ -259,7 +259,7 @@ contains
        end if
        
        if (include_parameter_scan) then
-        if (proc0) write (*,*) "Starting current_scan_parameter_value def"
+        !if (proc0) write (*,*) "Starting current_scan_parameter_value def"
          istatus = nf90_def_var (ncid, &
                                  "current_scan_parameter_value", &
                                  netcdf_real, &
@@ -269,7 +269,7 @@ contains
             write(ierr,*) "nf90_def_var current_scan_parameter_value error: ", nf90_strerror(istatus)
             goto 1
          end if
-         if (proc0) write (*,*) "Finishing current_scan_parameter_value def"
+         !if (proc0) write (*,*) "Finishing current_scan_parameter_value def"
        end if
 
        istatus = nf90_def_var (ncid, "vnm1", netcdf_real, vnm1id)
@@ -503,7 +503,7 @@ contains
     end if
 
     if (include_parameter_scan) then
-      if (proc0) write (*,*) "Starting current_scan_parameter_value write"
+      !if (proc0) write (*,*) "Starting current_scan_parameter_value write"
       ! <EGH see parameter_scan.f90
       istatus = nf90_put_var (ncid, &
                               current_scan_parameter_value_id, &
@@ -513,7 +513,7 @@ contains
          write (ierr,*) "nf90_put_var current_scan_parameter_value error: ", nf90_strerror(istatus)
          goto 1
       end if
-      if (proc0) write (*,*) "Finishing current_scan_parameter_value write"
+      !if (proc0) write (*,*) "Finishing current_scan_parameter_value write"
       ! EGH>
     end if
  
@@ -677,7 +677,7 @@ contains
             call netcdf_error (istatus, message='nf90_sync error')
     end if
 
-    if (proc0) write (*,*) "Finishing save_for_restart"
+    !if (proc0) write (*,*) "Finishing save_for_restart"
 
 # else
 

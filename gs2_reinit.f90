@@ -10,6 +10,7 @@ module gs2_reinit
   real :: delt_cushion
   real :: delt_minimum 
   real, save :: time_reinit(2)=0.
+  logical :: abort_rapid_time_step_change
 
 contains
   subroutine wnml_gs2_reinit(unit)
@@ -56,7 +57,7 @@ contains
        nconsec=0
     endif
 
-    if (nconsec .gt. 4) then
+    if (nconsec .gt. 4 .and. abort_rapid_time_step_change) then
        exit = .true.
        if (proc0) write(error_unit(), *) 'Time step changing rapidly.  Abort run.'
        return
@@ -145,13 +146,15 @@ contains
     use gs2_time, only: save_dt_min
     integer in_file
     logical exist
-    namelist /reinit_knobs/ delt_adj, delt_minimum, delt_cushion
+    namelist /reinit_knobs/ delt_adj, delt_minimum, delt_cushion, &
+                            abort_rapid_time_step_change
     
     if (proc0) then
        dt0 = code_delt_max
        delt_adj = 2.0
        delt_minimum = 1.e-5
        delt_cushion = 1.5
+       abort_rapid_time_step_change = .true.
        in_file = input_unit_exist("reinit_knobs",exist)
        if(exist) read (unit=in_file, nml=reinit_knobs)
     endif
@@ -160,6 +163,7 @@ contains
     call broadcast (delt_adj)
     call broadcast (delt_minimum)
     call broadcast (delt_cushion)
+    call broadcast (abort_rapid_time_step_change)
 
     call save_dt_min (delt_minimum)
 
