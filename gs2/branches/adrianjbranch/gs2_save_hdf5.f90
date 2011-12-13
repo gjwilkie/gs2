@@ -3,6 +3,7 @@ module gs2_save
   implicit none
 
   public :: gs2_restore, gs2_save_for_restart
+  public :: restore_current_scan_parameter_value
   public :: init_save, init_dt, init_tstart
 
   interface gs2_restore
@@ -16,6 +17,7 @@ module gs2_save
   integer :: ncid, thetaid, signid, gloid, kyid, kxid
   integer :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
   integer :: delt0id, t0id, gr_id, gi_id
+  integer (kind_nf) :: current_scan_parameter_value_id
 
   logical :: initialized = .false.
 
@@ -30,6 +32,7 @@ contains
     use fields_arrays, only: phinew, aparnew, bparnew
     use kt_grids, only: naky, ntheta0
     use file_utils, only: error_unit
+    use parameter_scan_arrays, only: current_scan_parameter_value
     implicit none
     character (305) :: file_proc
     character (5) :: suffix
@@ -126,6 +129,17 @@ contains
           write(ierr,*) "nf_def_var delt0 error: ", nf_strerror(istatus)
           goto 1
        end if
+
+       istatus = nf_def_var (ncid, &
+                               "current_scan_parameter_value", &
+                               NF_DOUBLE, 0, 0, &
+                               current_scan_parameter_value_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf90_def_var current_scan_parameter_value error: ", nf_strerror(istatus)
+          goto 1
+       end if
+
        
        if (n_elements > 0) then
           istatus = nf_def_var (ncid, "gr", NF_DOUBLE, 3, &
@@ -221,6 +235,14 @@ contains
     if (istatus /= 0) then
        ierr = error_unit()
        write(ierr,*) "nf_put_var_double delt0 error: ", nf_strerror(istatus)
+       goto 1
+    end if
+    istatus = nf_put_var_double (ncid, &
+                            current_scan_parameter_value_id, &
+                            current_scan_parameter_value)
+    if (istatus /= 0) then
+       ierr = error_unit()
+       write (ierr,*) "nf90_put_var current_scan_parameter_value error: ", nf_strerror(istatus)
        goto 1
     end if
  
@@ -819,6 +841,54 @@ contains
     restart_file = file
 
   end subroutine init_save
+
+  subroutine restore_current_scan_parameter_value(current_scan_parameter_value)
+# ifdef NETCDF
+    use mp, only: nproc, proc0, broadcast
+    use file_utils, only: error_unit
+# endif
+    implicit none
+    integer :: istatus
+    real, intent (out) :: current_scan_parameter_value
+# ifdef NETCDF
+    character (306) :: file_proc
+
+    if (proc0) then
+
+       if (.not. initialized) then
+
+        file_proc=trim(trim(restart_file)//'.0000')
+
+         istatus = nf_open (file_proc, 0, ncid)
+         if (istatus /= 0) then
+            ierr = error_unit()
+            write(ierr,*) "nf_open in init_dt error: ", nf_strerror(istatus) 
+         endif
+          istatus = nf_inq_varid (ncid, &
+                              "current_scan_parameter_value", &
+                              current_scan_parameter_value_id)
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_inq_varid for current_scan_parameter_value_id in restore_current_scan_parameter_value: ", nf_strerror(istatus) 
+       endif
+
+         istatus = nf_get_var_double (ncid, &
+                                 current_scan_parameter_value_id, &
+                                 current_scan_parameter_value)
+
+       if (istatus /= 0) then
+          ierr = error_unit()
+          write(ierr,*) "nf_get_var_double current_scan_parameter_value error: ", nf_strerror(istatus) 
+         endif           
+        
+         if (.not.initialized) istatus = nf_close(ncid)
+    endif
+
+    !call broadcast (istatus)
+    call broadcast (current_scan_parameter_value)
+
+# endif
+   end subroutine restore_current_scan_parameter_value
 
   subroutine init_dt (delt0, istatus)
 

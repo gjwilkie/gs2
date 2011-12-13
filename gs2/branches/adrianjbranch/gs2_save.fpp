@@ -20,6 +20,7 @@ module gs2_save
   implicit none
 
   public :: gs2_restore, gs2_save_for_restart
+  public :: restore_current_scan_parameter_value
   public :: init_save, init_dt, init_tstart, init_ant_amp
   public :: init_vnm
 !# ifdef NETCDF
@@ -42,6 +43,7 @@ module gs2_save
   integer (kind_nf) :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
   integer (kind_nf) :: kx_shift_id   ! MR: added to save kx_shift variable
   integer (kind_nf) :: t0id, gr_id, gi_id, vnm1id, vnm2id, delt0id
+  integer (kind_nf) :: current_scan_parameter_value_id
   integer (kind_nf) :: a_antr_id, b_antr_id, a_anti_id, b_anti_id
 !<DD> Added for saving distribution function
   INTEGER (KIND_NF) :: egridid,lgridid, vpa_id, vperp2_id
@@ -53,6 +55,7 @@ module gs2_save
 
   logical :: initialized = .false.
   logical :: test = .false.
+  logical :: include_parameter_scan = .true.
 # endif
 
 contains
@@ -88,6 +91,7 @@ contains
     use species, only: nspec
     use dist_fn_arrays, only: vpa, vperp2
     !</DD> Added for saving distribution function
+    use parameter_scan_arrays, only: current_scan_parameter_value
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
@@ -108,6 +112,12 @@ contains
     else
        exit = .false.
     end if
+
+!    if (proc0) then
+!      write (*,*) "Starting save_for_restart in ", restart_file
+!      write (*,*) "List restart files"
+!      call system("echo 'start' >> filelist.txt; ls nc/* >> filelist.txt;  ")
+!    end if
 
     n_elements = g_lo%ulim_proc-g_lo%llim_proc+1
     if (n_elements <= 0) return
@@ -248,6 +258,20 @@ contains
           goto 1
        end if
        
+       if (include_parameter_scan) then
+        if (proc0) write (*,*) "Starting current_scan_parameter_value def"
+         istatus = nf90_def_var (ncid, &
+                                 "current_scan_parameter_value", &
+                                 netcdf_real, &
+                                 current_scan_parameter_value_id)
+         if (istatus /= NF90_NOERR) then
+            ierr = error_unit()
+            write(ierr,*) "nf90_def_var current_scan_parameter_value error: ", nf90_strerror(istatus)
+            goto 1
+         end if
+         if (proc0) write (*,*) "Finishing current_scan_parameter_value def"
+       end if
+
        istatus = nf90_def_var (ncid, "vnm1", netcdf_real, vnm1id)
        if (istatus /= NF90_NOERR) then
           ierr = error_unit()
@@ -448,6 +472,12 @@ contains
        endif
           
 !       endif   ! MR end 
+        
+!    if (proc0) then
+!      write (*,*) "Finished definitions"
+!      write (*,*) "List restart files"
+!      call system("echo 'defs' >> filelist.txt; ls nc/* >> filelist.txt;  ")
+!    end if
        
        istatus = nf90_enddef (ncid)
        if (istatus /= NF90_NOERR) then
@@ -463,12 +493,28 @@ contains
        write (ierr,*) "nf90_put_var delt0 error: ", nf90_strerror(istatus)
        goto 1
     end if
+
  
     istatus = nf90_put_var (ncid, t0id, t0)
     if (istatus /= NF90_NOERR) then
        ierr = error_unit()
        write (ierr,*) "nf90_put_var t0 error: ", nf90_strerror(istatus)
        goto 1
+    end if
+
+    if (include_parameter_scan) then
+      if (proc0) write (*,*) "Starting current_scan_parameter_value write"
+      ! <EGH see parameter_scan.f90
+      istatus = nf90_put_var (ncid, &
+                              current_scan_parameter_value_id, &
+                              current_scan_parameter_value)
+      if (istatus /= NF90_NOERR) then
+         ierr = error_unit()
+         write (ierr,*) "nf90_put_var current_scan_parameter_value error: ", nf90_strerror(istatus)
+         goto 1
+      end if
+      if (proc0) write (*,*) "Finishing current_scan_parameter_value write"
+      ! EGH>
     end if
  
     istatus = nf90_put_var (ncid, vnm1id, vnm(1))
@@ -630,6 +676,8 @@ contains
        if (i /= NF90_NOERR) &
             call netcdf_error (istatus, message='nf90_sync error')
     end if
+
+    if (proc0) write (*,*) "Finishing save_for_restart"
 
 # else
 
@@ -934,6 +982,7 @@ contains
     istatus = nf90_inq_varid (ncid, "gi", gi_id)
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='gi')
 
+
     n_elements = g_lo%ulim_proc - g_lo%llim_proc + 1
 
     if (n_elements <= 0) then
@@ -956,6 +1005,7 @@ contains
          start=(/ 1, 1, g_lo%llim_proc /), &
          count=(/ 2*ntgrid + 1, 2, n_elements /))
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gi_id)
+
 
     g = cmplx(tmpr, tmpi)*scale
 
@@ -1020,11 +1070,69 @@ contains
   end subroutine gs2_restore_one
 
   subroutine init_save (file)
+    use mp, only: proc0
     character(300), intent (in) :: file
+
     
     restart_file = file
+    if(proc0) write (*,*) "Set restart_file"
 
   end subroutine init_save
+
+  subroutine restore_current_scan_parameter_value(current_scan_parameter_value)
+# ifdef NETCDF
+    use mp, only: nproc, proc0, broadcast, iproc
+    use file_utils, only: error_unit
+# endif
+    implicit none
+    integer :: istatus, current_scan_parameter_value_id_local
+    integer :: ncid_local
+    real, intent (out) :: current_scan_parameter_value
+# ifdef NETCDF
+    character (306) :: file_proc
+    character (10) :: suffix
+    if (.not. include_parameter_scan) return
+
+    if (proc0) then
+
+          write (*,*) "Starting restore_current_scan_parameter_value"
+      !if (.not. initialized) then
+
+          file_proc = trim(restart_file)
+
+          write (suffix,'(a1,i0)') '.', iproc
+          file_proc = trim(trim(file_proc)//adjustl(suffix))
+
+          istatus = nf90_open (file_proc, NF90_NOWRITE, ncid_local)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus,file=file_proc)
+          istatus = nf90_inq_varid (ncid_local, &
+                              "current_scan_parameter_value", &
+                              current_scan_parameter_value_id_local)
+           if (istatus /= NF90_NOERR) call netcdf_error (istatus,&
+                                    var='current_scan_parameter_value_id')
+         end if
+
+         istatus = nf90_get_var (ncid_local, &
+                                 current_scan_parameter_value_id_local, &
+                                 current_scan_parameter_value)
+
+         if (istatus /= NF90_NOERR) then
+            call netcdf_error (istatus, ncid_local,&
+                 current_scan_parameter_value_id_local)
+
+
+          write (*,*) "Retrieved current_scan_parameter_value"
+      !   endif           
+        
+      !   if (.not.initialized) istatus = nf90_close (ncid_local)
+    endif
+
+    !call broadcast (istatus)
+    call broadcast (current_scan_parameter_value)
+          write (*,*) "Finishing restore_current_scan_parameter_value"
+
+# endif
+   end subroutine restore_current_scan_parameter_value
 
   subroutine init_dt (delt0, istatus)
 

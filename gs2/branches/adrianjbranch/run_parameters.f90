@@ -1,9 +1,15 @@
+!> This module is basically a store for the input parameters that are specified in the namelists \a knobs and \a parameters. In general, the names of the public variables in this module are the same as the name of the input parameter they correspond to.
+ 
+
 module run_parameters
   implicit none
 
   public :: init_run_parameters, finish_run_parameters
   public :: check_run_parameters, wnml_run_parameters
-  public :: beta, zeff, tite
+
+
+  public :: beta
+  public :: zeff, tite
   public :: fphi, fapar, fbpar
 !  public :: delt, delt_max, wunits, woutunits, tunits
   public :: code_delt_max, wunits, woutunits, tunits

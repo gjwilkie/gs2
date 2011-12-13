@@ -415,7 +415,9 @@ layouts_type.h: layouts_type.f90
 .PHONY: depend clean distclean tar test_make
 
 depend:
+	mv input_parameters_documentation.f90 input_parameters_documentation.f90.hidden
 	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=0 $(VPATH)
+	mv input_parameters_documentation.f90.hidden input_parameters_documentation.f90
 
 #doc_depend:
 	#echo "documentation_depend = \\" > Makefile.doc_depend
@@ -428,6 +430,10 @@ doc: $(F90FROMFPP)
 sync_doc: 
 	rsync -av --delete ../doxygen/doc/html/	${USER},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/
 
+sync_input_doc:
+	curl 'http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=GS2_Input_Parameters&action=edit' | sed 's/&amp;/\&/g' | sed 's/&quot;/"/g' | sed 's/&gt;/>/g' | sed 's/&lt;/</g'  | sed 's/&nbsp;/ /g' > wiki_in.tmp
+	coderunner cc read_mediawiki_documentation wiki_in.tmp -C gs2
+	coderunner cc write_mediawiki_documentation > wiki_out.txt -C gs2
 
 clean:
 	-rm -f *.o *.mod *.g90 *.h core */core

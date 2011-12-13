@@ -42,6 +42,7 @@ module gs2_diagnostics
   logical, public :: write_g, write_gg, write_gyx
   logical, public :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
   logical, public :: write_final_moments, write_avg_moments, write_parity
+  logical, public :: write_moments
   logical, public :: write_full_moments_notgc, write_cross_phase = .false.
   logical, public :: write_final_epar, write_kpar
   logical, public :: write_hrate, write_lorentzian
@@ -70,7 +71,7 @@ module gs2_diagnostics
          write_omega, write_omavg, write_ascii, write_kpar, &
          write_gs, write_gyx, write_g, write_gg, write_hrate, write_lpoly, &
          write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
-         write_final_epar, write_final_moments, write_cerr, &
+         write_final_epar, write_moments, write_final_moments, write_cerr, &
          write_verr, write_max_verr, write_nl_flux, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, &
@@ -384,6 +385,7 @@ contains
     call broadcast (dump_check1)
     call broadcast (dump_check2)
     call broadcast (write_fields)
+    call broadcast (write_moments)
     call broadcast (dump_fields_periodically)
     call broadcast (make_movie)
     call broadcast (save_for_restart)
@@ -439,7 +441,8 @@ contains
     call init_gs2_io (write_nl_flux, write_omega, &
          write_hrate, write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot, write_verr, &
-         write_fields, write_full_moments_notgc, write_symmetry, &
+         write_fields, write_moments, write_full_moments_notgc, &
+         write_symmetry, &
          write_correlation, nwrite_big_tot, write_correlation_extend, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time)
     
@@ -583,6 +586,7 @@ contains
        write_omavg = .false.
        write_nl_flux = .false.
        write_eigenfunc = .false.
+       write_moments = .false.
        write_final_moments = .false.
        write_avg_moments = .false.
        write_parity = .false.
@@ -1333,7 +1337,7 @@ contains
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
     use gs2_io, only: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
     use gs2_io, only: nc_loop_vres
-    use gs2_io, only: nc_loop_movie, nc_write_fields
+    use gs2_io, only: nc_loop_movie, nc_write_fields, nc_write_moments
     use gs2_layouts, only: yxf_lo, g_lo
 ! MAB>
     use gs2_layouts, only: init_parity_layouts, idx, idx_local, proc_id
@@ -1345,6 +1349,10 @@ contains
     use antenna, only: antenna_w
     use gs2_heating, only: heating_diagnostics, del_htype
     use constants
+    use parameter_scan_arrays, only: scan_hflux => hflux_tot 
+    use parameter_scan_arrays, only: scan_momflux => momflux_tot 
+    use parameter_scan_arrays, only: scan_phi2_tot => phi2_tot 
+    use parameter_scan_arrays, only: scan_nout => nout
 
     implicit none
 !    integer :: nout = 1
@@ -1706,6 +1714,10 @@ if (debug) write(6,*) "loop_diagnostics: -1"
     i=istep/nwrite
 
     if (write_fields) call nc_write_fields (nout, phinew, aparnew, bparnew)  !MR
+    if (write_moments) then !CMR
+       call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+       call nc_write_moments(nout, ntot)
+    endif
 
     if (write_cross_phase .and. has_electron_species(spec)) then
        call get_cross_phase (phase_tot, phase_theta)
@@ -1908,6 +1920,8 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                   heat_par, mheat_par, bheat_par, &
                   heat_perp, mheat_perp, bheat_perp, &
                   heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
+                  ! Update the target array in parameter_scan_arrays
+                  scan_hflux(nout) = hflux_tot
 !          call nc_qflux (nout, qheat, qmheat, qbheat, &
 !               heat_par, mheat_par, bheat_par, &
 !               heat_perp, mheat_perp, bheat_perp, &
@@ -1915,6 +1929,8 @@ if (debug) write(6,*) "loop_diagnostics: -2"
              call nc_vflux (nout, vflux, vmflux, vbflux, &
                   mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot, &
                   vflux_par, vflux_perp, vflux0, vflux1)
+                  ! Update the target array in parameter_scan_arrays
+                  scan_momflux(nout) = vflux_tot
              call nc_pflux (nout, pflux, pmflux, pbflux, &
                   part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
           end if
@@ -1923,6 +1939,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                aparnew(igomega,:,:), apar2, apar2_by_mode, &
                bparnew(igomega,:,:), bpar2, bpar2_by_mode, &
                h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
+               scan_phi2_tot(nout) = phi2
        end if
        if (write_ascii) then
           do ik = 1, naky
@@ -1982,6 +1999,10 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           end do
        end do
     end if
+
+    call broadcast(scan_hflux)
+    call broadcast(scan_momflux)
+    call broadcast(scan_phi2_tot)
 
     if (write_cerr) call collision_error(phinew,bparnew,last)
 
@@ -2549,7 +2570,12 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        close (unit=unit)
     end if
     
+    ! Update the counter in parameter_scan_arrays
+    scan_nout = nout
+
     nout = nout + 1
+
+
     if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) then
        call flush_output_file (out_unit, ".out")
        if (write_verr) then

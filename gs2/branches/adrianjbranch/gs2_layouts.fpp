@@ -67,7 +67,8 @@ module gs2_layouts
   public :: im_idx, in_idx, ij_idx, ifield_idx
   public :: idx, proc_id, idx_local
 
-  logical :: local_field_solve, accel_lxyes, lambda_local
+  logical :: local_field_solve, accel_lxyes, lambda_local, unbalanced_xxf, unbalanced_yxf, unbalanced_g
+  integer :: max_unbalanced_xxf, max_unbalanced_yxf, max_unbalanced_g
   character (len=5) :: layout
   logical :: exist
 
@@ -143,18 +144,22 @@ module gs2_layouts
 
   type :: xxf_layout_type
      integer :: iproc
-     integer :: ntgrid, nsign, naky, ntheta0, nx, nadd, negrid, nlambda, nspec
+     integer :: ntgrid, nsign, naky, ntheta0, nx, nadd, negrid, nlambda, nspec, ntgridtotal
      integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize, gsize
      integer :: llim_group, ulim_group, igroup, ngroup, nprocset, iset, nset, groupblocksize
+     integer :: small_block_size, small_blocks_maximum, small_blocks_total_procs, large_block_size
+     integer :: small_block_balance_factor, large_block_balance_factor
   end type xxf_layout_type
 
   type (xxf_layout_type) :: xxf_lo
 
   type :: yxf_layout_type
      integer :: iproc
-     integer :: ntgrid, nsign, naky, ny, ntheta0, nx, negrid, nlambda, nspec
+     integer :: ntgrid, nsign, naky, ny, ntheta0, nx, negrid, nlambda, nspec, ntgridtotal
      integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize, gsize
      integer :: llim_group, ulim_group, igroup, ngroup, nprocset, iset, nset, groupblocksize
+     integer :: small_block_size, small_blocks_maximum, small_blocks_total_procs, large_block_size
+     integer :: small_block_balance_factor, large_block_balance_factor
   end type yxf_layout_type
 
   type (yxf_layout_type) :: yxf_lo
@@ -360,9 +365,15 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
     implicit none
     integer :: in_file
-    namelist /layouts_knobs/ layout, local_field_solve
+    namelist /layouts_knobs/ layout, local_field_solve, unbalanced_g, max_unbalanced_g, unbalanced_xxf, max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf
 
     local_field_solve = .false.
+    unbalanced_g = .false.
+    unbalanced_xxf = .false.
+    unbalanced_yxf = .false.
+    max_unbalanced_g = 0
+    max_unbalanced_xxf = 0
+    max_unbalanced_yxf = 0
     layout = 'lxyes'
     in_file=input_unit_exist("layouts_knobs", exist)
     if (exist) read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
@@ -381,6 +392,12 @@ contains
 
     call broadcast (layout)
     call broadcast (local_field_solve)
+    call broadcast (unbalanced_g)
+    call broadcast (unbalanced_xxf)
+    call broadcast (unbalanced_yxf)
+    call broadcast (max_unbalanced_g)
+    call broadcast (max_unbalanced_xxf)
+    call broadcast (max_unbalanced_yxf)
 
   end subroutine broadcast_results
 
@@ -554,12 +571,14 @@ contains
 
   subroutine init_dist_fn_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
-    use mp, only: iproc, nproc
+    use mp, only: iproc, nproc, proc0
 ! TT>
     use file_utils, only: error_unit
 ! <TT
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
+    integer :: numsmall, numlarge, level_proc_num, i, j, k, m, unbalanced_amount, tempblocksize
+    real :: unbalanced_amount_temp
     logical, save :: initialized = .false.
 ! TT>
 # ifdef USE_C_INDEX
@@ -584,10 +603,294 @@ contains
     g_lo%nspec = nspec
     g_lo%llim_world = 0
     g_lo%ulim_world = naky*ntheta0*negrid*nlambda*nspec - 1
-    g_lo%blocksize = g_lo%ulim_world/nproc + 1
-    g_lo%llim_proc = g_lo%blocksize*iproc
-    g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
-    g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
+
+    if(unbalanced_g) then
+       
+       g_lo%blocksize = g_lo%ulim_world/nproc + 1
+       g_lo%small_block_balance_factor = 1
+       g_lo%large_block_balance_factor = 1                                                        
+       
+       level_proc_num = nproc
+       
+       select case(layout)
+       case('yxels')
+          k = g_lo%nspec
+       case('yxles')
+          k = g_lo%nspec
+       case('lexys')
+          k = g_lo%nspec
+       case('lxyes')
+          k = g_lo%nspec
+       case('lyxes')
+          k = g_lo%nspec
+       case('xyles')
+          k = g_lo%nspec
+       end select
+       
+       call calculate_block_breakdown(k, i, m, j, level_proc_num)
+       
+       if(j .eq. 0) then
+          
+          if(m .eq. 0) then
+             level_proc_num = level_proc_num/k
+             k = 1
+          end if
+          
+          select case(layout)
+          case('yxels')
+             k = g_lo%nlambda * k
+          case('yxles')
+             k = g_lo%negrid * k
+          case('lexys')
+             k = g_lo%naky * k
+          case('lxyes')
+             k = g_lo%negrid * k
+          case('lyxes')
+             k = g_lo%negrid * k
+          case('xyles')
+             k = g_lo%negrid * k
+          end select
+          
+          call calculate_block_breakdown(k, i, m, j, level_proc_num)
+          
+          if(j .eq. 0) then
+             
+             if(m .eq. 0) then
+                level_proc_num = level_proc_num/k
+                k = 1
+             end if
+             
+             select case(layout)
+             case('yxels')
+                k = g_lo%negrid * k
+             case('yxles')
+                k = g_lo%nlambda * k
+             case('lexys')
+                k = g_lo%ntheta0 * k
+             case('lxyes')
+                k = g_lo%naky * k
+             case('lyxes')
+                k = g_lo%ntheta0 * k
+             case('xyles')
+                k = g_lo%nlambda * k
+             end select
+             
+             call calculate_block_breakdown(k, i, m, j, level_proc_num)
+             
+             if(j .eq. 0) then
+                
+                if(m .eq. 0) then
+                   level_proc_num = level_proc_num/k
+                   k = 1
+                end if
+                
+                select case(layout)
+                case('yxels')
+                   k = g_lo%ntheta0 * k
+                case('yxles')
+                   k = g_lo%ntheta0 * k
+                case('lexys')
+                   k = g_lo%negrid * k
+                case('lxyes')
+                   k = g_lo%ntheta0* k
+                case('lyxes')
+                   k = g_lo%naky * k
+                case('xyles')
+                   k = g_lo%naky * k
+                end select
+                
+                call calculate_block_breakdown(k, i, m, j, level_proc_num)
+                
+                if(j .eq. 0) then
+                   
+                   if(m .eq. 0) then
+                      level_proc_num = level_proc_num/k
+                      k = 1
+                   end if
+                   
+                   select case(layout)
+                   case('yxels')
+                      k = g_lo%naky * k
+                   case('yxles')
+                      k = g_lo%naky * k
+                   case('lexys')
+                      k = g_lo%nlambda * k
+                   case('lxyes')
+                      k = g_lo%nlambda* k
+                   case('lyxes')
+                      k = g_lo%nlambda * k
+                   case('xyles')
+                      k = g_lo%ntheta0 * k
+                   end select
+                   
+                   call calculate_block_breakdown(k, i, m, j, level_proc_num)
+                   
+                   if(i .ne. 0) then
+                      
+                      call calculate_unbalanced_decomposition(k, g_lo%small_block_balance_factor, g_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                      call calculate_block_size(iproc, numsmall, numlarge, g_lo%small_block_balance_factor, g_lo%large_block_balance_factor, nproc, &
+                           1, g_lo%blocksize, g_lo%small_block_size, g_lo%large_block_size, g_lo%small_blocks_maximum, g_lo%small_blocks_total_procs)
+                      
+                   end if
+                   
+                else
+                   
+                   if(i .ne. 0) then
+                      
+ 	              select case(layout)
+                      case('yxels')
+                         tempblocksize = g_lo%naky
+                      case('yxles')
+                         tempblocksize = g_lo%naky
+	              case('lexys')
+                         tempblocksize = g_lo%nlambda
+                      case('lxyes')
+                         tempblocksize = g_lo%nlambda
+                      case('lyxes')
+                         tempblocksize = g_lo%nlambda
+	              case('xyles')
+                         tempblocksize = g_lo%ntheta0
+	              end select
+
+                      call calculate_unbalanced_decomposition(k, g_lo%small_block_balance_factor, g_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)                         
+                      call calculate_block_size(iproc, numsmall, numlarge, g_lo%small_block_balance_factor, g_lo%large_block_balance_factor, nproc, &
+                           tempblocksize, g_lo%blocksize, g_lo%small_block_size, g_lo%large_block_size, g_lo%small_blocks_maximum, g_lo%small_blocks_total_procs)
+                         
+                   end if
+                      
+                end if
+                   
+                
+             else
+                
+                if(i .ne. 0) then
+                   
+                   select case(layout)
+                   case('yxels')
+                      tempblocksize = g_lo%naky*g_lo%ntheta0
+                   case('yxles')
+                      tempblocksize = g_lo%naky*g_lo%ntheta0
+                   case('lexys')
+                      tempblocksize = g_lo%nlambda*g_lo%negrid
+                   case('lxyes')
+                      tempblocksize = g_lo%nlambda*g_lo%ntheta0
+                   case('lyxes')
+                      tempblocksize = g_lo%nlambda*g_lo%naky
+                   case('xyles')
+                      tempblocksize = g_lo%ntheta0*g_lo%naky
+                   end select
+                   
+                   call calculate_unbalanced_decomposition(k, g_lo%small_block_balance_factor, g_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                   call calculate_block_size(iproc, numsmall, numlarge, g_lo%small_block_balance_factor, g_lo%large_block_balance_factor, nproc, &
+                        tempblocksize, g_lo%blocksize, g_lo%small_block_size, g_lo%large_block_size, g_lo%small_blocks_maximum, g_lo%small_blocks_total_procs)
+                   
+                end if
+                
+             end if
+             
+          else
+             
+             if(i .ne. 0) then
+                
+                select case(layout)
+                case('yxels')
+                   tempblocksize = g_lo%naky*g_lo%ntheta0*g_lo%negrid
+                case('yxles')
+                   tempblocksize = g_lo%naky*g_lo%ntheta0*g_lo%nlambda
+                case('lexys')
+                   tempblocksize = g_lo%nlambda*g_lo%negrid*g_lo%ntheta0
+                case('lxyes')
+                   tempblocksize = g_lo%nlambda*g_lo%ntheta0*g_lo%naky
+                case('lyxes')
+                   tempblocksize = g_lo%nlambda*g_lo%naky*g_lo%ntheta0
+                case('xyles')
+                   tempblocksize = g_lo%ntheta0*g_lo%naky*g_lo%nlambda
+                end select
+                
+                call calculate_unbalanced_decomposition(k, g_lo%small_block_balance_factor, g_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                
+                call calculate_block_size(iproc, numsmall, numlarge, g_lo%small_block_balance_factor, g_lo%large_block_balance_factor, nproc, &
+                     tempblocksize, g_lo%blocksize, g_lo%small_block_size, g_lo%large_block_size,  g_lo%small_blocks_maximum, g_lo%small_blocks_total_procs)
+                
+             end if
+             
+          end if
+          
+       else
+          
+          if(i .ne. 0) then
+             
+             select case(layout)
+             case('yxels')
+                tempblocksize = g_lo%naky*g_lo%ntheta0*g_lo%negrid*g_lo%nlambda
+             case('yxles')
+                tempblocksize = g_lo%naky*g_lo%ntheta0*g_lo%nlambda*g_lo%negrid
+             case('lexys')
+                tempblocksize = g_lo%nlambda*g_lo%negrid*g_lo%ntheta0*g_lo%naky
+             case('lxyes')
+                tempblocksize = g_lo%nlambda*g_lo%ntheta0*g_lo%naky*g_lo%negrid
+             case('lyxes')
+                tempblocksize = g_lo%nlambda*g_lo%naky*g_lo%ntheta0*g_lo%negrid
+             case('xyles')
+                tempblocksize = g_lo%ntheta0*g_lo%naky*g_lo%nlambda*g_lo%negrid
+             end select
+             
+             
+             call calculate_unbalanced_decomposition(k, g_lo%small_block_balance_factor, g_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+             call calculate_block_size(iproc, numsmall, numlarge, g_lo%small_block_balance_factor, g_lo%large_block_balance_factor, nproc, &
+                  tempblocksize, g_lo%blocksize, g_lo%small_block_size, g_lo%large_block_size, g_lo%small_blocks_maximum, g_lo%small_blocks_total_procs)
+             
+          end if
+          
+       end if
+       
+       
+       if(g_lo%large_block_balance_factor .eq. 1 .and. g_lo%small_block_balance_factor .eq. 1) then
+          
+          unbalanced_amount = 0
+          
+       else 
+          
+          unbalanced_amount_temp = real(g_lo%large_block_balance_factor)/real(g_lo%small_block_balance_factor)
+          unbalanced_amount_temp = unbalanced_amount_temp - 1
+          unbalanced_amount = int(ceiling(100 * unbalanced_amount_temp))
+          
+       end if
+       
+       if (unbalanced_amount .gt. max_unbalanced_g .or. unbalanced_amount .eq. 0) then
+          if(proc0) then          
+             write(*,*) 'Not using unbalanced decomposition for g_lo as unbalanced percentage is',unbalanced_amount
+	  end if
+          unbalanced_g = .false.
+          
+       else
+          
+          if(iproc .lt. g_lo%small_blocks_total_procs) then
+             g_lo%llim_proc = iproc*g_lo%small_block_size
+          else
+             g_lo%llim_proc = g_lo%small_blocks_maximum + (iproc - g_lo%small_blocks_total_procs) * g_lo%large_block_size
+          end if
+          g_lo%ulim_proc = g_lo%llim_proc + g_lo%blocksize - 1
+          g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
+          
+          if(proc0) then	
+             write(*,*) 'Using unbalanced decomposition for g_lo.  Unbalanced percent',unbalanced_amount
+          end if
+          
+          
+       end if
+       
+    end if
+    
+    if (.not. unbalanced_g) then
+      
+       g_lo%blocksize = g_lo%ulim_world/nproc + 1
+       g_lo%llim_proc = g_lo%blocksize*iproc
+       g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
+       g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
+       
+    end if
+
     
     gint_lo%iproc = iproc
     gint_lo%naky = naky
@@ -967,7 +1270,19 @@ contains
     integer :: proc_id_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    proc_id_g = i/lo%blocksize
+    integer :: tempi
+
+    if (unbalanced_g) then
+       tempi = i
+       if(tempi .lt. lo%small_blocks_maximum) then
+          proc_id_g = tempi / lo%small_block_size
+       else
+          tempi = tempi - lo%small_blocks_maximum
+          proc_id_g = lo%small_blocks_total_procs + tempi / lo%large_block_size
+       end if
+    else
+       proc_id_g = i/lo%blocksize
+    end if
   end function proc_id_g
 
 ! TT>
@@ -2600,17 +2915,20 @@ contains
 
   subroutine init_x_transform_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
-    use mp, only: iproc, nproc
+    use mp, only: iproc, nproc, proc0
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
     logical, save :: initialized = .false.
     integer :: nprocset, ngroup, ip, nblock
+    integer :: numsmall, numlarge, level_proc_num, i, j, k, m, unbalanced_amount
+    real :: unbalanced_amount_temp
 
     if (initialized) return
     initialized = .true.
 
     xxf_lo%iproc = iproc
     xxf_lo%ntgrid = ntgrid
+    xxf_lo%ntgridtotal = (2*ntgrid+1)
     xxf_lo%nsign = 2
     xxf_lo%naky = naky
     xxf_lo%ntheta0 = ntheta0
@@ -2652,11 +2970,206 @@ contains
        xxf_lo%ulim_alloc = max(xxf_lo%llim_proc, xxf_lo%ulim_proc)
 
     else
-       xxf_lo%blocksize = xxf_lo%ulim_world/nproc + 1
-       xxf_lo%llim_proc = xxf_lo%blocksize*iproc
-       xxf_lo%ulim_proc &
-            = min(xxf_lo%ulim_world, xxf_lo%llim_proc + xxf_lo%blocksize - 1)
-       xxf_lo%ulim_alloc = max(xxf_lo%llim_proc, xxf_lo%ulim_proc)
+       if (unbalanced_xxf) then
+
+          xxf_lo%blocksize = xxf_lo%ulim_world/nproc + 1
+          xxf_lo%small_block_balance_factor = 1
+          xxf_lo%large_block_balance_factor = 1                                                        
+
+          level_proc_num = nproc
+
+          k = xxf_lo%nspec
+
+          call calculate_block_breakdown(k, i, m, j, level_proc_num)
+
+          if(j .eq. 0) then
+             
+             if(m .eq. 0) then
+                level_proc_num = level_proc_num/k
+                k = 1
+             end if
+             
+             select case(layout)
+             case ('yxels')
+                k = xxf_lo%nlambda * k
+             case default
+                k = xxf_lo%negrid * k
+             end select
+             call calculate_block_breakdown(k, i, m, j, level_proc_num)
+             
+             if(j .eq. 0) then
+                
+                if(m .eq. 0) then
+                   level_proc_num = level_proc_num/k
+                   k = 1
+                end if
+                
+                select case(layout)
+                case ('yxels')
+                   k = xxf_lo%negrid * k
+                case default
+                   k = xxf_lo%nlambda * k
+                end select
+                
+                call calculate_block_breakdown(k, i, m, j, level_proc_num)
+                
+                if(j .eq. 0) then
+                   
+                   if(m .eq. 0) then
+                      level_proc_num = level_proc_num/k
+                      k = 1
+                   end if
+             
+                   k = xxf_lo%nsign * k
+                   call calculate_block_breakdown(k, i, m, j, level_proc_num)
+                   
+                   if(j .eq. 0) then
+                      
+                      if(m .eq. 0) then
+                         level_proc_num = level_proc_num/k
+                         k = 1
+                      end if
+                      
+                      k = xxf_lo%ntgridtotal * k
+                      call calculate_block_breakdown(k, i, m, j, level_proc_num)
+                      
+                      if(j .eq. 0) then
+                         
+                         if(m .eq. 0) then
+                            level_proc_num = level_proc_num/k
+                            k = 1
+                         end if
+                         
+                         k = xxf_lo%naky * k
+                         call calculate_block_breakdown(k, i, m, j, level_proc_num)
+                         
+                         if(i .ne. 0) then
+                            
+                            call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                            call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                                 1, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%small_blocks_maximum, xxf_lo%small_blocks_total_procs)
+                                                        
+                         end if
+                         
+                      else
+                         
+                         if(i .ne. 0) then
+                            
+                            call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)     
+                            call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                                 xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%small_blocks_maximum, xxf_lo%small_blocks_total_procs)
+                                                        
+                         end if
+                         
+                      end if
+                      
+                   else
+                      
+                      if(i .ne. 0) then
+                         
+                         call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)                         
+                         call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                              xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%small_blocks_maximum, &
+                              xxf_lo%small_blocks_total_procs)
+                         
+                      end if
+                      
+                   end if
+                   
+                   
+                else
+                   
+                   if(i .ne. 0) then
+                      
+                      call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                      call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                           xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%small_blocks_maximum, &
+                           xxf_lo%small_blocks_total_procs)
+                      
+                   end if
+                   
+                end if
+                
+             else
+                
+                if(i .ne. 0) then
+                                                        
+                   call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                   
+                   select case(layout)
+                   case('yxels')
+                      call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                           xxf_lo%negrid*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, &
+                           xxf_lo%small_blocks_maximum, xxf_lo%small_blocks_total_procs)
+                   case default
+                      call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                           xxf_lo%nlambda*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, &
+                           xxf_lo%small_blocks_maximum, xxf_lo%small_blocks_total_procs)
+                   end select                   
+                   
+                end if
+                
+             end if
+             
+          else
+             
+             if(i .ne. 0) then
+                                
+                call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                     xxf_lo%negrid*xxf_lo%nlambda*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, &
+                     xxf_lo%large_block_size, xxf_lo%small_blocks_maximum, xxf_lo%small_blocks_total_procs)
+                
+             end if
+             
+          end if
+          
+          
+	  if(xxf_lo%large_block_balance_factor .eq. 1 .and. xxf_lo%small_block_balance_factor .eq. 1) then
+
+             unbalanced_amount = 0
+
+	  else 
+
+             unbalanced_amount_temp = real(xxf_lo%large_block_balance_factor)/real(xxf_lo%small_block_balance_factor)
+             unbalanced_amount_temp = unbalanced_amount_temp - 1
+             unbalanced_amount = int(ceiling(100 * unbalanced_amount_temp))
+
+          end if          
+
+          if (unbalanced_amount .gt. max_unbalanced_xxf .or. unbalanced_amount .eq. 0) then
+             
+             unbalanced_xxf = .false.
+
+          else
+
+             if(iproc .lt. xxf_lo%small_blocks_total_procs) then
+                xxf_lo%llim_proc = iproc*xxf_lo%small_block_size
+             else
+                xxf_lo%llim_proc = xxf_lo%small_blocks_maximum + (iproc - xxf_lo%small_blocks_total_procs) * xxf_lo%large_block_size
+             end if
+             xxf_lo%ulim_proc = xxf_lo%llim_proc + xxf_lo%blocksize - 1
+	     xxf_lo%ulim_alloc = max(xxf_lo%llim_proc, xxf_lo%ulim_proc)
+             
+	     if(proc0) then	
+	        write(*,*) 'Using unbalanced decomposition for xxf.  Unbalanced percent',unbalanced_amount
+	     end if
+
+
+          end if
+          
+       end if
+
+       if (.not. unbalanced_xxf) then
+
+          xxf_lo%blocksize = xxf_lo%ulim_world/nproc + 1
+          xxf_lo%llim_proc = xxf_lo%blocksize*iproc
+          xxf_lo%ulim_proc &
+               = min(xxf_lo%ulim_world, xxf_lo%llim_proc + xxf_lo%blocksize - 1)
+          xxf_lo%ulim_alloc = max(xxf_lo%llim_proc, xxf_lo%ulim_proc)
+
+       end if
+
     end if
 
 !    call barrier
@@ -2669,6 +3182,63 @@ contains
 !    end do
 
   end subroutine init_x_transform_layouts
+
+  subroutine calculate_block_breakdown (k, i, m, j, level_proc_num)
+    implicit none
+   
+    integer, intent(in) :: k, level_proc_num
+    integer, intent(out) :: i, m, j
+
+    i = mod(k, level_proc_num)
+    m = mod(level_proc_num, k)
+    j = k/level_proc_num
+
+  end subroutine calculate_block_breakdown
+
+
+  subroutine calculate_unbalanced_decomposition(k, j, i, numsmall, numlarge, localprocs)
+
+    implicit none
+
+    integer, intent(in) :: k, localprocs
+    integer, intent(out) :: i, j, numlarge, numsmall
+
+    numlarge = mod(k,localprocs)
+    j  = k/localprocs
+    j = j
+    i = j + 1  
+    numsmall = localprocs - numlarge
+
+  end subroutine calculate_unbalanced_decomposition
+
+
+  subroutine calculate_block_size(iproc, numsmall, numlarge, smalldecomp, largedecomp, nproc, sizeblock, blocksize, smallblocksize, largeblocksize, small_max, small_proc_max)
+
+    implicit none
+
+    integer, intent(in) :: iproc, numsmall, numlarge, smalldecomp, largedecomp, nproc, sizeblock
+    integer, intent(out) :: blocksize, smallblocksize, largeblocksize, small_max, small_proc_max
+    integer :: procdecomp
+    real :: rnumsmall, rnumlarge
+
+    rnumsmall = numsmall
+    rnumlarge = numlarge
+
+    procdecomp = (rnumsmall / (rnumsmall + rnumlarge)) * nproc
+
+    smallblocksize = sizeblock * smalldecomp
+    largeblocksize = sizeblock * largedecomp
+    small_max = procdecomp * smallblocksize
+    small_proc_max = procdecomp
+
+    if(iproc .lt. procdecomp) then
+       blocksize = smallblocksize
+    else
+       blocksize = largeblocksize
+    end if
+
+  end subroutine calculate_block_size
+
 
   elemental function is_idx_xxf (lo, i)
     implicit none
@@ -2836,11 +3406,22 @@ contains
     integer :: proc_id_xxf
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
+    integer :: tempi
 
     if (accel_lxyes) then
        proc_id_xxf = (i/lo%gsize)*lo%nprocset + mod(i, lo%gsize)/lo%nset
     else
-       proc_id_xxf = i/lo%blocksize
+       if (unbalanced_xxf) then
+          tempi = i
+          if(tempi .lt. lo%small_blocks_maximum) then
+             proc_id_xxf = tempi / lo%small_block_size
+          else
+             tempi = tempi - lo%small_blocks_maximum
+             proc_id_xxf = lo%small_blocks_total_procs + tempi / lo%large_block_size
+          end if
+       else
+          proc_id_xxf = i/lo%blocksize
+       end if
     end if
 
   end function proc_id_xxf
@@ -2877,12 +3458,14 @@ contains
 
   subroutine init_y_transform_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
-    use mp, only: iproc, nproc
+    use mp, only: iproc, nproc, proc0
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
     logical, save :: initialized = .false.
     integer :: nnx, nny, ngroup, nprocset, nblock
+    integer :: numsmall, numlarge, level_proc_num, i, j, k, m, unbalanced_amount
+    real :: unbalanced_amount_temp
 
     if (initialized) return
     initialized = .true.
@@ -2900,6 +3483,7 @@ contains
 
     yxf_lo%iproc = iproc
     yxf_lo%ntgrid = ntgrid
+    yxf_lo%ntgridtotal = (2*ntgrid+1)
     yxf_lo%nsign = 2
     yxf_lo%naky = naky
     yxf_lo%ny = nny
@@ -2938,12 +3522,208 @@ contains
        yxf_lo%ulim_alloc = max(yxf_lo%llim_proc, yxf_lo%ulim_proc)
 
     else
-       yxf_lo%blocksize = yxf_lo%ulim_world/nproc + 1
-       yxf_lo%llim_proc = yxf_lo%blocksize*iproc
-       yxf_lo%ulim_proc &
-            = min(yxf_lo%ulim_world, yxf_lo%llim_proc + yxf_lo%blocksize - 1)
-       yxf_lo%ulim_alloc = max(yxf_lo%llim_proc, yxf_lo%ulim_proc)
+
+       if (unbalanced_yxf) then
+
+          yxf_lo%blocksize = yxf_lo%ulim_world/nproc + 1
+          yxf_lo%small_block_balance_factor = 1
+          yxf_lo%large_block_balance_factor = 1                                                        
+
+          level_proc_num = nproc
+
+          k = yxf_lo%nspec
+
+          call calculate_block_breakdown(k, i, m, j, level_proc_num)
+
+          if(j .eq. 0) then
+             
+             if(m .eq. 0) then
+                level_proc_num = level_proc_num/k
+                k = 1
+             end if
+             
+             select case(layout)
+             case ('yxels')
+                k = yxf_lo%nlambda * k
+             case default
+                k = yxf_lo%negrid * k
+             end select
+             call calculate_block_breakdown(k, i, m, j, level_proc_num)
+             
+             if(j .eq. 0) then
+                
+                if(m .eq. 0) then
+                   level_proc_num = level_proc_num/k
+                   k = 1
+                end if
+                
+                select case(layout)
+                case ('yxels')
+                   k = yxf_lo%negrid * k
+                case default
+                   k = yxf_lo%nlambda * k
+                end select
+                
+                call calculate_block_breakdown(k, i, m, j, level_proc_num)
+                
+                if(j .eq. 0) then
+                   
+                   if(m .eq. 0) then
+                      level_proc_num = level_proc_num/k
+                      k = 1
+                   end if
+             
+                   k = yxf_lo%nsign * k
+                   call calculate_block_breakdown(k, i, m, j, level_proc_num)
+                   
+                   if(j .eq. 0) then
+                      
+                      if(m .eq. 0) then
+                         level_proc_num = level_proc_num/k
+                         k = 1
+                      end if
+                      
+                      k = yxf_lo%ntgridtotal * k
+                      call calculate_block_breakdown(k, i, m, j, level_proc_num)
+                      
+                      if(j .eq. 0) then
+                         
+                         if(m .eq. 0) then
+                            level_proc_num = level_proc_num/k
+                            k = 1
+                         end if
+                         
+                         k = yxf_lo%nx * k
+                         call calculate_block_breakdown(k, i, m, j, level_proc_num)
+                         
+                         if(i .ne. 0) then
+                            
+                            call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                            call calculate_block_size(iproc, numsmall, numlarge, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                                 1, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%small_blocks_maximum, yxf_lo%small_blocks_total_procs)
+                                                        
+                         end if
+                         
+                      else
+                         
+                         if(i .ne. 0) then
+                            
+                            call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)     
+                            call calculate_block_size(iproc, numsmall, numlarge, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                                 yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%small_blocks_maximum, yxf_lo%small_blocks_total_procs)
+                                                        
+                         end if
+                         
+                      end if
+                      
+                   else
+                      
+                      if(i .ne. 0) then
+                         
+                         call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)                         
+                         call calculate_block_size(iproc, numsmall, numlarge, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                              yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%small_blocks_maximum, &
+                              yxf_lo%small_blocks_total_procs)
+                         
+                      end if
+                      
+                   end if
+                   
+                   
+                else
+                   
+                   if(i .ne. 0) then
+                      
+                      call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                      call calculate_block_size(iproc, numsmall, numlarge, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                           yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%small_blocks_maximum, &
+                           yxf_lo%small_blocks_total_procs)
+                      
+                   end if
+                   
+                end if
+                
+             else
+                
+                if(i .ne. 0) then
+                                                        
+                   call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                   
+                   select case(layout)
+                   case('yxels')
+                      call calculate_block_size(iproc, numsmall, numlarge, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                           yxf_lo%negrid*yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, &
+                           yxf_lo%small_blocks_maximum, yxf_lo%small_blocks_total_procs)
+                   case default
+                      call calculate_block_size(iproc, numsmall, numlarge, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                           yxf_lo%nlambda*yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, &
+                           yxf_lo%small_blocks_maximum, yxf_lo%small_blocks_total_procs)
+                   end select                   
+                   
+                end if
+                
+             end if
+             
+          else
+             
+             if(i .ne. 0) then
+                                
+                call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                call calculate_block_size(iproc, numsmall, numlarge, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                     yxf_lo%negrid*yxf_lo%nlambda*yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, &
+                     yxf_lo%large_block_size, yxf_lo%small_blocks_maximum, yxf_lo%small_blocks_total_procs)
+                
+             end if
+             
+          end if
+          
+          
+	  if(yxf_lo%large_block_balance_factor .eq. 1 .and. yxf_lo%small_block_balance_factor .eq. 1) then
+
+             unbalanced_amount = 0
+
+	  else 
+
+             unbalanced_amount_temp = real(yxf_lo%large_block_balance_factor)/real(yxf_lo%small_block_balance_factor)
+             unbalanced_amount_temp = unbalanced_amount_temp - 1
+             unbalanced_amount = int(ceiling(100 * unbalanced_amount_temp))
+
+          end if          
+
+          if (unbalanced_amount .gt. max_unbalanced_yxf .or. unbalanced_amount .eq. 0) then
+             
+             unbalanced_yxf = .false.
+
+          else
+
+             if(iproc .lt. yxf_lo%small_blocks_total_procs) then
+                yxf_lo%llim_proc = iproc*yxf_lo%small_block_size
+             else
+                yxf_lo%llim_proc = yxf_lo%small_blocks_maximum + (iproc - yxf_lo%small_blocks_total_procs) * yxf_lo%large_block_size
+             end if
+             yxf_lo%ulim_proc = yxf_lo%llim_proc + yxf_lo%blocksize - 1
+	     yxf_lo%ulim_alloc = max(yxf_lo%llim_proc, yxf_lo%ulim_proc)
+             
+	     if(proc0) then	
+	        write(*,*) 'Using unbalanced decomposition for yxf.  Unbalanced percent',unbalanced_amount
+	     end if
+
+          end if
+          
+       end if
+       
+       if (.not. unbalanced_yxf) then
+          
+          yxf_lo%blocksize = yxf_lo%ulim_world/nproc + 1
+          yxf_lo%llim_proc = yxf_lo%blocksize*iproc
+          yxf_lo%ulim_proc &
+               = min(yxf_lo%ulim_world, yxf_lo%llim_proc + yxf_lo%blocksize - 1)
+          yxf_lo%ulim_alloc = max(yxf_lo%llim_proc, yxf_lo%ulim_proc)
+       
+       end if
+
     end if
+
 
   end subroutine init_y_transform_layouts
 
@@ -3145,11 +3925,22 @@ contains
     integer :: proc_id_yxf
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
+    integer :: tempi
 
     if (accel_lxyes) then
        proc_id_yxf = (i/lo%gsize)*lo%nprocset + mod(i, lo%gsize)/lo%nset
     else
-       proc_id_yxf = i/lo%blocksize
+       if (unbalanced_yxf) then
+          tempi = i
+          if(tempi .lt. lo%small_blocks_maximum) then
+             proc_id_yxf = tempi / lo%small_block_size
+          else
+             tempi = tempi - lo%small_blocks_maximum
+             proc_id_yxf = lo%small_blocks_total_procs + tempi / lo%large_block_size
+          end if
+       else
+          proc_id_yxf = i/lo%blocksize
+       end if
     end if
   end function proc_id_yxf
 

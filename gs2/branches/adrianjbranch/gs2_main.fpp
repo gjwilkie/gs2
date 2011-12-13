@@ -1,4 +1,11 @@
 # ifndef MAKE_LIB
+
+!> This module contains the functions gs2_main::run_gs2, gs2_main::finish_gs2 and gs2_main::reset_gs2, whose
+!! purpose should be reasonably obvious. These functions were originally part of
+!! program GS2, but have now been moved to this module so that GS2 itself can be
+!! called as a library by, for example, Trinity. All the program GS2 does is
+!! include this module and call run_gs2.
+
 module gs2_main
   
   public :: run_gs2, finish_gs2, reset_gs2
@@ -9,7 +16,22 @@ contains
 
   !> This is the main subroutine in which gs2 is initialized, equations are advanced,
   !!   and the program is finalized.
-  !! \section Structure 
+  !! \section Basic Structure 
+  !!  This subroutine broadly falls into 3 sections: 
+  !! -# Initialisation -  allocate arrays, calculate the response matrix etc.
+  !! -# Running -  a loop which runs for run_parameters::nstep time steps, unless the code
+  !!  is prematurely halted either through an error, reaching the available 
+  !!  time limit or manually  (by using the command $ touch run_name.stop).
+  !! -# Finishing up:  writing out results, deallocating arrays.
+  !! \section Details
+  !! -# Initialisation
+  !!  - Initialize message passing 
+  !!  - Initialize timer 
+  !!  - Report numer of processors being used 
+  !!  - If it is a Trinity run then filename (the name of the input file) 
+  !!  is passed to  init_file_utils
+  !!  - Otherwise, figure out run name or get list of jobs 
+  !!  - If given a list of jobs, fork  
   !! \section arguments Arguments
   !! All arguments are optional and are not used for gs2. 
   !! (EGH - used for Trinity?)
@@ -23,6 +45,7 @@ contains
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields, advance
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
+    use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, start_time
     use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time
     use dist_fn_arrays, only: gnew
@@ -45,6 +68,7 @@ contains
     use redistribute, only: c_inv_32_new_opt_loop
     use fields_implicit, only: time_field
     use gs2_layouts, only: layout
+    use parameter_scan, only: update_scan_parameter_value
     implicit none
 
     integer, intent (in), optional :: mpi_comm, nensembles
@@ -134,8 +158,10 @@ contains
        
        call broadcast (cbuff)
        if (.not. proc0) run_name => cbuff
+       call init_parameter_scan
        call init_fields
        call init_gs2_diagnostics (list, nstep)
+       call allocate_target_arrays ! must be after init_gs2_diagnostics
        call init_tstart (tstart)   ! tstart is in user units 
        
        if (present(dvdrho)) then
@@ -173,6 +199,7 @@ contains
        call update_time
        call loop_diagnostics (istep, exit)
        call check_time_step (reset, exit)
+       call update_scan_parameter_value(istep, reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
        if (reset) call reset_time_step (istep, exit)
        
@@ -384,6 +411,7 @@ contains
     use init_g, only: finish_init_g
     use kt_grids, only: finish_kt_grids
     use le_grids, only: finish_le_grids
+    use parameter_scan, only: finish_parameter_scan
     use mp, only: proc0
     use nonlinear_terms, only: finish_nonlinear_terms
     use run_parameters, only: finish_run_parameters
@@ -402,6 +430,7 @@ contains
     call finish_nonlinear_terms
     call finish_run_parameters
     call finish_species
+    call finish_parameter_scan
     if (proc0) call finish_file_utils
 
   end subroutine finish_gs2

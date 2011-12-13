@@ -450,7 +450,7 @@ contains
 
   subroutine c_redist_22 (r, from_here, to_here)
 
-    use mp, only: iproc
+    use mp, only: iproc, barrier
 
     type (redist_type), intent (in out) :: r
 
@@ -470,11 +470,11 @@ contains
     ! redistribute from local processor to local processor
 
     ! c_redist_22_old_copy is the original local copy functionality
-    !call c_redist_22_old_copy(r, from_here, to_here)
+    call c_redist_22_old_copy(r, from_here, to_here)
 
     ! c_redist_22_new_copy is the new local copy functionality where 
     ! indirect addressing has largely been removed
-    call c_redist_22_new_copy(r, from_here, to_here)
+    !call c_redist_22_new_copy(r, from_here, to_here)
 
     ! The code below is used to check that the new copy produces the 
     ! same results as the old copy (validation).  The if statement is
@@ -500,8 +500,9 @@ contains
 
     ! c_redist_22_mpi_copy contains all the remote to local 
     ! copy functionality
+    call barrier()
     call c_redist_22_mpi_copy(r, from_here, to_here)
-
+    call barrier()
 
   end subroutine c_redist_22
 
@@ -698,7 +699,7 @@ contains
 
   subroutine c_redist_22_inv (r, from_here, to_here)
 
-    use mp, only: iproc, nproc, send, receive
+    use mp, only: iproc, barrier
     use gs2_layouts, only: yxf_lo
     use job_manage, only: time_message
     type (redist_type), intent (in out) :: r
@@ -721,11 +722,11 @@ contains
     ! redistribute from local processor to local processor
 
     ! c_redist_22_inv_old_copy is the original local copy functionality
-    !call c_redist_22_inv_old_copy(r, from_here, to_here)
+    call c_redist_22_inv_old_copy(r, from_here, to_here)
 
     ! c_redist_22_inv_new_copy is the new local copy functionality where 
     ! indirect addressing has largely been removed
-    call c_redist_22_inv_new_copy(r, from_here, to_here)
+    !call c_redist_22_inv_new_copy(r, from_here, to_here)
 
     ! The code below is used to check that the new copy produces the 
     ! same results as the old copy (validation).  The if statement is
@@ -749,7 +750,9 @@ contains
 
     ! c_redist_22_inv_mpi_copy contains all the remote to local 
     ! copy functionality
+    call barrier()
     call c_redist_22_inv_mpi_copy(r, from_here, to_here)
+    call barrier()
 
   end subroutine c_redist_22_inv
 
@@ -926,7 +929,7 @@ contains
 
   subroutine c_redist_32 (r, from_here, to_here)
 
-    use mp, only: iproc
+    use mp, only: iproc, barrier
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%from_low(1):, &
@@ -945,14 +948,14 @@ contains
 
     ! redistribute from local processor to local processor
 
-    call c_redist_32_new_opt_copy(r, from_here, to_here_temp)
+    !call c_redist_32_new_opt_copy(r, from_here, to_here_temp)
 
     ! c_redist_32_old_copy is the original local copy functionality
     call c_redist_32_old_copy(r, from_here, to_here)
 
     ! c_redist_32_new_copy is the new local copy functionality where 
     ! indirect addressing has largely been removed
-    call c_redist_32_new_copy(r, from_here, to_here)
+    !call c_redist_32_new_copy(r, from_here, to_here)
 
 
     ! The code below is used to check that the new copy produces the 
@@ -961,7 +964,7 @@ contains
     ! if(iproc .eq. -1) turns it off.  If you turn this on your 
     ! also need to modify the call to c_redist_32_new_copy to 
     ! replace to_here with to_here_temp
-    if(iproc .ne. -1) then
+    if(iproc .eq. -1) then
        do i = 1, r%from(iproc)%nn
           if(to_here(r%to(iproc)%k(i),&
                r%to(iproc)%l(i)) .ne. &
@@ -977,7 +980,9 @@ contains
 
     ! c_redist_32_mpi_copy contains all the remote to local 
     ! copy functionality
+    call barrier()
     call c_redist_32_mpi_copy(r, from_here, to_here)
+    call barrier()
 
   end subroutine c_redist_32
 
@@ -1073,11 +1078,11 @@ contains
     ! dividing by naky we can multiply  by 1/naky.
     nakyrecip = naky
     nakyrecip = 1/nakyrecip
+    f2max = r%from_high(2)
     do while(i .le. r%from(iproc)%nn)
        f2 = r%from(iproc)%l(i)
        f3 = r%from(iproc)%m(i)
        t1 = r%to(iproc)%k(i)
-       f2max = r%from_high(2)
        do while (f2 .le. f2max)
           f1 = r%from(iproc)%k(i)
           t2 = r%to(iproc)%l(i)
@@ -1404,7 +1409,7 @@ contains
 
   subroutine c_redist_32_inv (r, from_here, to_here)
 
-    use mp, only: iproc
+    use mp, only: iproc, barrier
 
     type (redist_type), intent (in out) :: r
 
@@ -1430,11 +1435,11 @@ contains
     !call c_redist_32_inv_new_opt_copy(r, from_here, to_here_temp)
 
     ! c_redist_32_inv_old_copy is the original local copy functionality
-    !call c_redist_32_inv_old_copy(r, from_here, to_here)
+    call c_redist_32_inv_old_copy(r, from_here, to_here)
 
     ! c_redist_22_inv_new_copy is the new local copy functionality where 
     ! indirect addressing has largely been removed
-    call c_redist_32_inv_new_copy(r, from_here, to_here)
+    !call c_redist_32_inv_new_copy(r, from_here, to_here)
 
     ! The code below is used to check that the new copy produces the 
     ! same results as the old copy (validation).  The if statement is
@@ -1460,8 +1465,9 @@ contains
 
     ! c_redist_32_inv_mpi_copy contains all the remote to local 
     ! copy functionality
+    call barrier()
     call c_redist_32_inv_mpi_copy(r, from_here, to_here)
-
+    call barrier()
 
   end subroutine c_redist_32_inv
 
@@ -1535,11 +1541,11 @@ contains
     ! dividing by naky we can multiply  by 1/naky.
     nakyrecip = naky
     nakyrecip = 1/nakyrecip
+    jmax = r%from_high(2)
     do while(i .le. r%to(iproc)%nn)
        j = r%from(iproc)%l(i)
        f3 = r%from(iproc)%m(i)
        t1 = r%to(iproc)%k(i)
-       jmax = r%from_high(2)
        do while (j .le. jmax)
        	  f1 = r%from(iproc)%k(i)
           t2 = r%to(iproc)%l(i)
