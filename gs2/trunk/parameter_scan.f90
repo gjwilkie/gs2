@@ -340,6 +340,7 @@ contains
        scan_par = 'tprim'
        scan_type = 'none'
        target_par = 'hflux_tot'
+       inc_con = 'delta_t'
        par_start = 0.0
        par_end = 0.0
        par_inc = 0.0
