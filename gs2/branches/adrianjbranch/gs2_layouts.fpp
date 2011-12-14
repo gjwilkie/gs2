@@ -2912,7 +2912,6 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! X-space layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
   subroutine init_x_transform_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
     use mp, only: iproc, nproc, proc0
@@ -2970,31 +2969,97 @@ contains
        xxf_lo%ulim_alloc = max(xxf_lo%llim_proc, xxf_lo%ulim_proc)
 
     else
+       ! AJ November 2011
+       ! unbalanced_xxf is a variable initialised in the input file
+       ! which if set to .true. will enable the code below to
+       ! investigate whether an unbalanced decomposition can be
+       ! constructed.  Whether the unbalanced decomposition is used
+       ! or not is also dependent on the variable max_unbalanced_xxf
+       ! which is also set in the input file and defines the maximum
+       ! amount of imbalance permitted.
+       ! The code that constructs the unbalance decomposition works
+       ! through the different indicies that are used in the xxf_lo
+       ! to construct the full xxf_lo data space, namely:
+       ! naky*(2*ntgrid+1)*nsign*nlambda*negrid*nspec
+       ! Note: We precalculate 2*ntgrid+1 as ntgridtotal.
        if (unbalanced_xxf) then
 
+		  ! AJ November 2011
+		  ! The xxf_lo%blocksize is initialised to the value that
+		  ! is used if this unbalanced code is not used (the
+		  ! original code).
           xxf_lo%blocksize = xxf_lo%ulim_world/nproc + 1
           xxf_lo%small_block_balance_factor = 1
           xxf_lo%large_block_balance_factor = 1                                                        
 
+		  ! Initialise the number of processors/cores used in the
+		  ! decomposition as the total number available.
           level_proc_num = nproc
 
+		  ! The first factor to be considered is xxf_lo%nspec (number
+		  ! of species).
           k = xxf_lo%nspec
 
+		  ! Calculate the factors of xxf_lo%nspec and the number of
+		  ! processors/cores we have left from the decomposition.
+		  ! Further details of i, m, and j are provided in the
+		  ! comments for the subroutine calculate_block_breakdown
+		  ! but briefly described i is the remainder left from k/level_proc_num,
+		  ! m is the remainder of level_proc_num/k and j is the integer
+		  ! result of k/level_proc_num.
           call calculate_block_breakdown(k, i, m, j, level_proc_num)
 
+		  ! If j = 0 this means that level_proc_num is larger than k
+		  ! the factor we are looking to divide so we have reached the
+		  ! point where we can't divide anymore and can now build the
+		  ! decomposition.
           if(j .eq. 0) then
              
+             ! If we have got to this point then k is larger than the
+             ! number of processes we have so we can try and split it
+             ! up over the processes.
+             ! If m = 0 then we know that k exactly divides into the
+             ! number of processes we have at this point.  This means
+             ! we can eliminate this factor from the decomposition
+             ! and reduce the number of processes we have available
+             ! by that factor.   Therefore we divide the number
+             ! of processes we have by k and set the factor we need
+             ! to decompose to 1.
+             ! If m does not equal zero then we keep the current number
+             ! of processes and pass the factor (k) on to the next
+             ! level of the decomposition.
              if(m .eq. 0) then
                 level_proc_num = level_proc_num/k
                 k = 1
              end if
              
+             ! For the xxf decomposition the next factor to be used
+             ! depends on the layout chosen.  If it is the yxels
+             ! decompsoition then the next factor is nlambda, otherwise
+             ! it is negrid.
+             ! Multiple the previous factor by the next factor to be
+             ! be used.  If the previous factor divided exactly by the
+             ! processes available then k will be 1 so we will only be
+             ! considering this factor.
              select case(layout)
              case ('yxels')
                 k = xxf_lo%nlambda * k
              case default
                 k = xxf_lo%negrid * k
              end select
+
+             ! The next code follows the pattern described above
+             ! moving through all the other factor, i.e.:
+             ! for yxels: negrid*nsign*ntgridtotal*naky
+             ! and for the other layouts: nlambda*nsign*ntgridtotal*naky
+             ! until it gets to a point where j = 0 (i.e. level_proc_num
+             ! is greater than the factors being decomposed), or we
+             ! have run out of factors to be decomposed.
+             ! Once either of those points is reached then the
+             ! code moves on to calculate the blocksizes in the
+             ! else clauses of this code below.
+             ! This part of the code is commented in the first occurence
+             ! of "if(i .ne. 0) then" below.
              call calculate_block_breakdown(k, i, m, j, level_proc_num)
              
              if(j .eq. 0) then
@@ -3043,9 +3108,25 @@ contains
                          k = xxf_lo%naky * k
                          call calculate_block_breakdown(k, i, m, j, level_proc_num)
                          
+                         ! At this point we have run out of factors to
+                         ! decompose.  Now we check whether i is not
+                         ! equal to 0.  If i is equal to 0 (remember that
+                         ! i is the remainder left when k/level_proc_num)
+                         ! then this is not an unbalanced decomposition so
+                         ! we do not have to calculate the unbalanced decompostion.
+                         ! If i is not equal to 0 then k cannot be exactly divided
+                         ! by level_proc_num.  This means we cannot evenly divide
+                         ! the decomposition over the processes we have available so
+                         ! we need to find a way to create a different decomposition.
                          if(i .ne. 0) then
                             
+                            ! Calculate the least unbalanced split of k over level_proc_num and also
+                            ! how what factor of processes are assigned to each block size.
                             call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                            ! Calculate the actual block sizes using the factors calculated above and the remaining data space to be
+                            ! decomposed.  In this instance we are at the lowest level of the decomposition so there is nothing left to decompose
+                            ! so the remaining data space is 1.  For other levels of the decomposition this 1 is replaced by the part
+                            ! of the data space that has not been split up yet.
                             call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
                                  1, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%small_blocks_maximum, xxf_lo%small_blocks_total_procs)
                                                         
@@ -3056,6 +3137,8 @@ contains
                          if(i .ne. 0) then
                             
                             call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)     
+                            ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
+                            ! naky for this level of the decomposition.
                             call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
                                  xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%small_blocks_maximum, xxf_lo%small_blocks_total_procs)
                                                         
@@ -3068,6 +3151,8 @@ contains
                       if(i .ne. 0) then
                          
                          call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)                         
+                         ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
+                         ! naky,ntgridtotal for this level of the decomposition.
                          call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
                               xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%small_blocks_maximum, &
                               xxf_lo%small_blocks_total_procs)
@@ -3082,6 +3167,8 @@ contains
                    if(i .ne. 0) then
                       
                       call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                      ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
+                      ! naky,ntgridtotal,nsign for this level of the decomposition.
                       call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
                            xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%small_blocks_maximum, &
                            xxf_lo%small_blocks_total_procs)
@@ -3098,10 +3185,14 @@ contains
                    
                    select case(layout)
                    case('yxels')
+                      ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
+                      ! naky,ntgridtotal,nsign,negrid for this layout and level of the decomposition.
                       call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
                            xxf_lo%negrid*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, &
                            xxf_lo%small_blocks_maximum, xxf_lo%small_blocks_total_procs)
                    case default
+                      ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
+                      ! naky,ntgridtotal,nsign,nlambda for these layouts and this level of the decomposition.
                       call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
                            xxf_lo%nlambda*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, &
                            xxf_lo%small_blocks_maximum, xxf_lo%small_blocks_total_procs)
@@ -3116,6 +3207,8 @@ contains
              if(i .ne. 0) then
                                 
                 call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, numsmall, numlarge, level_proc_num)
+                ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
+                ! naky,ntgridtotal,nsign,nlambda,negrid for this level of the decomposition.
                 call calculate_block_size(iproc, numsmall, numlarge, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
                      xxf_lo%negrid*xxf_lo%nlambda*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, &
                      xxf_lo%large_block_size, xxf_lo%small_blocks_maximum, xxf_lo%small_blocks_total_procs)
@@ -3125,31 +3218,57 @@ contains
           end if
           
           
+      ! If the decomposition has calculated that the large block and small blocks are equal then
+      ! we don't have an unbalanced decomposition so set the unbalanced_amount to 0.
+      ! large_block_balance_factor and small_block_balance_factor are initialised to 1 at
+      ! the start of this decomposition code so if they haven't been changed we already
+      ! have a balanced decomposition.
 	  if(xxf_lo%large_block_balance_factor .eq. 1 .and. xxf_lo%small_block_balance_factor .eq. 1) then
 
              unbalanced_amount = 0
 
 	  else 
 
+			 ! If there is an unbalanced decomposition work out the percentage of
+			 ! difference between the two blocks.  This is used to ensure that
+			 ! we don't create decompositions that have significant differences
+			 ! between the two block sizes which would impact the amount of
+			 ! computation the different groups of processes have to perform.
              unbalanced_amount_temp = real(xxf_lo%large_block_balance_factor)/real(xxf_lo%small_block_balance_factor)
              unbalanced_amount_temp = unbalanced_amount_temp - 1
              unbalanced_amount = int(ceiling(100 * unbalanced_amount_temp))
 
           end if          
 
+		  ! If we calculate that there is not an unbalanced decomposition or that the
+		  ! amount of unbalance is larger than a integer the user sets in the input file
+		  ! called: max_unbalanced_xxf ; then do not use the unbalanced decomposition.
           if (unbalanced_amount .gt. max_unbalanced_xxf .or. unbalanced_amount .eq. 0) then
              
              unbalanced_xxf = .false.
 
           else
 
+			 ! At this point we have constructed an unbalanced decomposition
+			 ! which is within the parameters the user has specified.  Now
+			 ! we calculate the lower and upper limits of the block that
+			 ! this specific process has.
+			 ! If the process is one of the processes that has the small
+			 ! block then it is straight forward to calculate the starting
+			 ! point for this processes block (i.e. llim) as it is simply
+			 ! the small block size multiplied by this processes id.
              if(iproc .lt. xxf_lo%small_blocks_total_procs) then
                 xxf_lo%llim_proc = iproc*xxf_lo%small_block_size
              else
+             	! If the process is one which has the large block then
+             	! calculate the llim for this process by working out
+             	! how much of the data space all the small blocks take and
+       	        ! then calculating size of the large blocks preceding this
+       	        ! process.  Adding these two together gives the llim for this process
                 xxf_lo%llim_proc = xxf_lo%small_blocks_maximum + (iproc - xxf_lo%small_blocks_total_procs) * xxf_lo%large_block_size
              end if
              xxf_lo%ulim_proc = xxf_lo%llim_proc + xxf_lo%blocksize - 1
-	     xxf_lo%ulim_alloc = max(xxf_lo%llim_proc, xxf_lo%ulim_proc)
+	         xxf_lo%ulim_alloc = max(xxf_lo%llim_proc, xxf_lo%ulim_proc)
              
 	     if(proc0) then	
 	        write(*,*) 'Using unbalanced decomposition for xxf.  Unbalanced percent',unbalanced_amount
@@ -3160,6 +3279,10 @@ contains
           
        end if
 
+	   ! If we are not using the unbalanced code, either because the
+	   ! user has chosen not to do this in the code or because the
+	   ! calculated imbalance was too large then use the original
+	   ! decomposition.
        if (.not. unbalanced_xxf) then
 
           xxf_lo%blocksize = xxf_lo%ulim_world/nproc + 1
@@ -3184,6 +3307,35 @@ contains
   end subroutine init_x_transform_layouts
 
   subroutine calculate_block_breakdown (k, i, m, j, level_proc_num)
+  !====================================================================
+  ! AJ, November 2011: New code from DCSE project
+  ! This subroutine (calculate_block_breakdown) is used in the code
+  ! to create unbalanced xxf and yxf layouts to address MPI
+  ! communication overheads in the redistribution of data for the
+  ! FFTs used in the nonlinear calculations to move from Fourier
+  ! space to real space and back again.
+  !
+  ! The routine calculates the factor k divided by a provided number
+  ! of processors/cores and returns it in integer j.  As j is an
+  ! integer the number returned will be more than zero if k is larger
+  ! than level_proc_num and zero if k is smaller than level_proc_num.
+  !
+  ! The integer i that is returned is the remained when k is divided
+  ! by level_proc_num.  This is used in the unbalanced decomposition
+  ! code to work out whether the factor divides exactly by the number
+  ! of procs  (in level_proc_num).  If it does then it is not an
+  ! unbalanced decomposition (so the original decomposition can be
+  ! used.
+  !
+  ! The integer m which is returned by this subroutine is the remainder
+  ! of level_proc_num divided by k.  This is used in the unbalanced
+  ! decomposition code to work out if the factor k exactly divides
+  ! the number of processors/cores in level_proc_num.  If it does
+  ! (i.e. m is zero) then the decomposition code can perform this
+  ! division and move on to the next factor.  If it does not then
+  ! the code keeps the factor k and multiplies it by the next factor
+  ! and checks that one (and so on).
+  !====================================================================
     implicit none
    
     integer, intent(in) :: k, level_proc_num
@@ -3197,15 +3349,61 @@ contains
 
 
   subroutine calculate_unbalanced_decomposition(k, j, i, numsmall, numlarge, localprocs)
-
+  !====================================================================
+  ! AJ, November 2011: New code from DCSE project
+  ! This subroutine (calculate_unbalanced_decomposition) is used in the code
+  ! to create unbalanced xxf and yxf layouts to address MPI
+  ! communication overheads in the redistribution of data for the
+  ! FFTs used in the nonlinear calculations to move from Fourier
+  ! space to real space and back again.
+  !
+  ! k is an integer input which is the factor that needs to be decomposed
+  ! across the number of processes (the input integer localprocs)
+  ! that we have at this point in the decomposition.
+  !
+  ! When this subroutine is called k is larger than
+  ! localprocs (this is enforced through the if and else statements
+  ! in the code that calls this routine).  It is also only called when
+  ! localprocs does not completely/equally divide k (so k/localprocs
+  ! will not given a round number).
+  !
+  ! The subroutine returns four integers; i, j, numlarge, and numsmall
+  !
+  ! j is calculated as the integer division of k/localprocs.  As this
+  ! is an integer division the result is rounded down (remembering
+  ! that k/localprocs will not be an equal division).  j is used by the
+  ! small block factor (the relative size of the small block).
+  !
+  ! i is the large block factor.  As j is the rounded down division,
+  ! i = j + 1.  This gives two different block sizes (when these are
+  ! later calculated).
+  !
+  ! numlarge is used to work out how many processes will use the large
+  ! block size in the decomposition.
+  !
+  ! numsmall is used to work out how many processes will use the small
+  ! block size in the decomposition.
+  !
+  !====================================================================
     implicit none
 
     integer, intent(in) :: k, localprocs
     integer, intent(out) :: i, j, numlarge, numsmall
 
+	! To calculate the number of processes to give the large block size
+	! we work out the remainder left from dividing the input factor
+	! but the processes we have left.  This remainder is proportionate
+	! to the difference in the two block sizes.  For example, if k = 62
+	! and localprocs = 3 the code will work out i to be 21 and j to be
+	! 20, although k/localprocs is actually equal to 20 and 2/3.
+	! The code will also work out numlarge to be 2 and numsmall to
+	! be 1, so of the total processes in the simulatino 1/3 will have
+	! the small block and 2/3 the large block.  This maps to the 2/3
+	! in the actual division as opposed to the integer division (i.e
+	! the factor we have removed and replaced with small and large
+	! sizes, so replacing 20 2/3 by 1/3 x 20 and 2/3 * 21.
     numlarge = mod(k,localprocs)
     j  = k/localprocs
-    j = j
     i = j + 1  
     numsmall = localprocs - numlarge
 
@@ -3213,7 +3411,56 @@ contains
 
 
   subroutine calculate_block_size(iproc, numsmall, numlarge, smalldecomp, largedecomp, nproc, sizeblock, blocksize, smallblocksize, largeblocksize, small_max, small_proc_max)
-
+  !====================================================================
+  ! AJ, November 2011: New code from DCSE project
+  ! This subroutine (calculate_block_size) is used in the code
+  ! to create unbalanced xxf and yxf layouts to address MPI
+  ! communication overheads in the redistribution of data for the
+  ! FFTs used in the nonlinear calculations to move from Fourier
+  ! space to real space and back again.
+  !
+  ! Input iproc is this processes MPI id.
+  !
+  ! Input numsmall is the number of processes that will use the small
+  ! block size (calculated in subroutine
+  ! calculate_unbalanced_decomposition).
+  !
+  ! Input numlarge is the number of processes that will use the large
+  ! block size (calculated in suboutine
+  ! calcuate_unbalanced_decomposition).
+  !
+  ! Input smalldecomp is the small_block_balance_factor of the
+  ! decomposition (calculated in subroutine
+  ! calculate_unbalanced_decomposition where it is referred to as j.
+  !
+  ! Input largedecomp is the large_block_balance_factor of the
+  ! decomposition (calculated in subroutine
+  ! calculate_unbalanced_decomposition where it is referred to as i.
+  !
+  ! Input nproc is the total number of MPI processes that this program
+  ! is using.
+  !
+  ! Input sizeblock is the factor that needs to be split over the
+  ! cores/processors we have (i.e. everything that has not yet been
+  ! decomposed).
+  !
+  ! Output blocksize is the blocksize assigned to this actual process
+  ! (to be used throughout the code of the decompositions).
+  !
+  ! Output smallblocksize is the small block size.
+  !
+  ! Output largeblocksize is the large block size.
+  !
+  ! Output smallmax is the total size of the data in the small blocks
+  ! (the number of processes using the small blocks multiplied by the
+  ! size of the small block).  It is used to calculate the llim of the
+  ! block for this process.
+  !
+  ! Output small_proc_max is the maximum number of processes that
+  ! will use the small block size.  It is used in the calculation of the
+  ! llim of this process.
+  !
+  !====================================================================
     implicit none
 
     integer, intent(in) :: iproc, numsmall, numlarge, smalldecomp, largedecomp, nproc, sizeblock
@@ -3221,16 +3468,30 @@ contains
     integer :: procdecomp
     real :: rnumsmall, rnumlarge
 
+	! Here the integer numsmall and numlarge are converted to reals for some real arithmetic below.
     rnumsmall = numsmall
     rnumlarge = numlarge
 
+	! procdecomp is the limit of the processes to use the small blocksize (i.e. the
+	! factor of nprocs that will use the small blocksize.
     procdecomp = (rnumsmall / (rnumsmall + rnumlarge)) * nproc
 
+	! Small blocksize is simply calculated by taking the factors left to be
+	! distributed and multiplying it by the small_block_balance_factor.
     smallblocksize = sizeblock * smalldecomp
+    ! Likewise large blocksize is the factors multiplied by the
+    ! large _block_balance_factor.
     largeblocksize = sizeblock * largedecomp
+    ! small_max is the total size of the data points in the small blocks
+    ! (i.e. the small blocksize multipled by the total number of small
+    ! blocks).
     small_max = procdecomp * smallblocksize
+    ! small_proc_max is simply the maximum number of processes that
+    ! use the small blocks.
     small_proc_max = procdecomp
 
+	! Set this processes blocksize depending if it is to use the smallblock
+	! or large block.
     if(iproc .lt. procdecomp) then
        blocksize = smallblocksize
     else
@@ -3522,7 +3783,23 @@ contains
        yxf_lo%ulim_alloc = max(yxf_lo%llim_proc, yxf_lo%ulim_proc)
 
     else
-
+       ! AJ November 2011
+       ! unbalanced_yxf is a variable initialised in the input file
+       ! which if set to .true. will enable the code below to
+       ! investigate whether an unbalanced decomposition can be
+       ! constructed.  Whether the unbalanced decomposition is used
+       ! or not is also dependent on the variable max_unbalanced_yxf
+       ! which is also set in the input file and defines the maximum
+       ! amount of imbalance permitted.
+       ! The code that constructs the unbalance decomposition works
+       ! through the different indicies that are used in the yxf_lo
+       ! to construct the full xxf_lo data space, namely:
+       ! nxx*(2*ntgrid+1)*nsign*nlambda*negrid*nspec
+       ! Note: We precalculate 2*ntgrid+1 as ntgridtotal.
+       ! This functionality is the same as the functionality in
+       ! init_x_transform_layouts which is extensively commented.
+       ! Please see init_x_transform_layouts for more details on the 
+       ! functionality below.
        if (unbalanced_yxf) then
 
           yxf_lo%blocksize = yxf_lo%ulim_world/nproc + 1
