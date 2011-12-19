@@ -1075,7 +1075,7 @@ contains
 
     
     restart_file = file
-    if(proc0) write (*,*) "Set restart_file"
+!    if(proc0) write (*,*) "Set restart_file"
 
   end subroutine init_save
 
