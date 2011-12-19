@@ -517,10 +517,11 @@ contains
     shat=shat_real
 
     if (y0 /= 2.) then
-       if (abs(2.*pi*y0 - ly) > epsilon(0.)) then
+       if (abs(2.0*pi*y0 - ly) > 1.0e-7) then
           write (report_unit, *) 
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, fmt="('You cannot specify both ly and y0.')")
+          write (report_unit, fmt="(' ly=',e12.4,'  2.0*pi*y0=',2e12.4)") ly
           write (report_unit, fmt="('THIS IS AN ERROR.')") 
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, *) 
