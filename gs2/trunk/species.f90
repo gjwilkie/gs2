@@ -35,8 +35,7 @@ module species
   type (specie), dimension (:), allocatable :: spec
 
   integer :: ntspec_trin
-  real :: dens_trin, fprim_trin
-  real, dimension (:), allocatable :: temp_trin, tprim_trin, nu_trin
+  real, dimension (:), allocatable :: dens_trin, temp_trin, fprim_trin, tprim_trin, nu_trin
 
   logical :: initialized = .false.
   logical :: exist
@@ -351,8 +350,7 @@ contains
     implicit none
 
     integer, intent (in) :: ntspec
-    real, intent (in) :: dens, fprim
-    real, dimension (:), intent (in) :: temp, tprim, nu
+    real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
 
     integer :: is
 
@@ -365,9 +363,9 @@ contains
           ! normalized to reference species (which is taken to be the first species,
           ! for now.  perhaps more sophisticated method of choosing ref species can be
           ! included later.)
-          spec(is)%dens  = dens/dens  ! awaiting generalization to ni/=ne
+          spec(is)%dens  = dens(is)/dens(1)
           spec(is)%temp  = temp(is)/temp(1)
-          spec(is)%fprim = fprim
+          spec(is)%fprim = fprim(is)
           spec(is)%tprim = tprim(is)
           spec(is)%vnewk = nu(is)
 
@@ -407,10 +405,11 @@ contains
     implicit none
 
     integer, intent (in) :: ntspec_in
-    real, intent (in) :: dens_in, fprim_in
-    real, dimension (:), intent (in) :: temp_in, tprim_in, nu_in
+    real, dimension (:), intent (in) :: dens_in, fprim_in, temp_in, tprim_in, nu_in
 
     if (.not. allocated(temp_trin)) then
+       allocate (dens_trin(size(dens_in)))
+       allocate (fprim_trin(size(fprim_in)))
        allocate (temp_trin(size(temp_in)))
        allocate (tprim_trin(size(tprim_in)))
        allocate (nu_trin(size(nu_in)))

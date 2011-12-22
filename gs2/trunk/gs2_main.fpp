@@ -283,8 +283,7 @@ contains
     implicit none
 
     integer, intent (in) :: ntspec, nensembles
-    real, intent (in) :: dens, fprim
-    real, dimension (:), intent (in) :: temp, tprim, nu
+    real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
 
     integer :: istatus
 
@@ -323,9 +322,9 @@ contains
     implicit none
 
     integer, intent (in) :: ntspec
-    real, intent (in) :: rhoc, qval, shat, aspr, kap, kappri, tri, tripri, dens, fprim, shift
+    real, intent (in) :: rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift
     real, intent (in) :: betaprim
-    real, dimension (:), intent (in) :: temp, tprim, nu
+    real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
     logical, intent (in) :: use_gs2_geo
 
     call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
