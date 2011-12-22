@@ -66,6 +66,7 @@ contains
     if (code_dt/delt_adj <= code_dt_min) then
        code_dt = code_dt_min  ! set it so restart is ok
        exit = .true.
+       if (proc0) write(error_unit(), *) 'Time step wants to fall below delt_min.  Abort run.'
        return
     end if
 
