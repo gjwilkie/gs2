@@ -2860,6 +2860,7 @@ if (debug) write(6,*) "get_omegaavg: done"
     do is = 1, nspec
        call broadcast (pflx_global(:,is))
        call broadcast (qflx_global(:,is))
+       call broadcast (vflx_global(:,is))
        pflux_avg = sum(pflx_global(:,is))
        qflux_avg = sum(qflx_global(:,is))
        vflux_avg = sum(vflx_global(:,is))
