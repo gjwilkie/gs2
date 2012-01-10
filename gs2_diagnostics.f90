@@ -1921,7 +1921,9 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                   heat_perp, mheat_perp, bheat_perp, &
                   heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
                   ! Update the target array in parameter_scan_arrays
-                  scan_hflux(nout) = hflux_tot
+! below line gives out-of-bounds array for runs inside trinity
+!                  scan_hflux(nout) = hflux_tot
+                  scan_hflux(mod(nout-1,nstep/nwrite+1)+1) = hflux_tot
 !          call nc_qflux (nout, qheat, qmheat, qbheat, &
 !               heat_par, mheat_par, bheat_par, &
 !               heat_perp, mheat_perp, bheat_perp, &
@@ -1930,7 +1932,9 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                   mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot, &
                   vflux_par, vflux_perp, vflux0, vflux1)
                   ! Update the target array in parameter_scan_arrays
-                  scan_momflux(nout) = vflux_tot
+! below line gives out-of-bounds array for runs inside trinity
+!                  scan_momflux(nout) = vflux_tot
+                  scan_momflux(mod(nout-1,nstep/nwrite+1)+1) = vflux_tot
              call nc_pflux (nout, pflux, pmflux, pbflux, &
                   part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
           end if
@@ -1939,7 +1943,9 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                aparnew(igomega,:,:), apar2, apar2_by_mode, &
                bparnew(igomega,:,:), bpar2, bpar2_by_mode, &
                h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
-               scan_phi2_tot(nout) = phi2
+! below line gives out-of-bounds array for runs inside trinity
+!               scan_phi2_tot(nout) = phi2
+               scan_phi2_tot(mod(nout-1,nstep/nwrite+1)+1) = phi2
        end if
        if (write_ascii) then
           do ik = 1, naky
