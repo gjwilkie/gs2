@@ -23,7 +23,7 @@ contains
           write (unit, fmt="(' /')")       
   end subroutine wnml_gs2_reinit
 
-  subroutine reset_time_step (istep, exit)
+  subroutine reset_time_step (istep, exit, job_id)
 
     use collisions, only: c_reset => reset_init, vnmult
     use dist_fn, only: d_reset => reset_init
@@ -47,6 +47,7 @@ contains
     integer, save :: istep_last = -1 ! allow adjustment on first time step
     integer :: istatus
     integer, save :: nconsec=0
+    integer, intent (in), optional :: job_id
 
 ! save fields and distribution function
 
@@ -70,7 +71,7 @@ contains
        return
     end if
 
-    if (proc0) call time_message(.true.,time_reinit,' Re-initialize')
+    if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
 
     if (proc0) call dump_ant_amp
     call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
@@ -91,7 +92,7 @@ contains
     
     call save_dt (code_dt)
 
-    if (proc0) write(*,*) 'Changing time step to ', user_dt
+    if (proc0 .and. .not. present(job_id)) write(*,*) 'Changing time step to ', user_dt
     
 ! prepare to reinitialize inversion matrix, etc.
     call d_reset
@@ -105,7 +106,7 @@ contains
 ! reinitialize
     call init_fields
 
-    if (proc0) call time_message(.true.,time_reinit,' Re-initialize')
+    if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
 
     istep_last = istep
 
