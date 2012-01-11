@@ -38,7 +38,7 @@ contains
 
 
 !subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, vflux, heat, dvdrho, grho, nofinish)
-subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, grho, nofinish)
+subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, dvdrho, grho, nofinish)
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
@@ -62,7 +62,7 @@ subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, 
     use parameter_scan, only: update_scan_parameter_value
     implicit none
 
-    integer, intent (in), optional :: mpi_comm, nensembles
+    integer, intent (in), optional :: mpi_comm, job_id, nensembles
     character (*), intent (in), optional :: filename
     real, dimension (:), intent (out), optional :: pflux, qflux, heat
 !    real, intent (out), optional :: dvdrho, grho, vflux
@@ -172,8 +172,15 @@ subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, 
        call check_time_step (reset, exit)
        call update_scan_parameter_value(istep, reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
-       if (reset) call reset_time_step (istep, exit)
-       
+       if (reset) then
+          ! if called within trinity, do not dump info to screen
+          if (present(job_id)) then
+             call reset_time_step (istep, exit, job_id)
+          else       
+             call reset_time_step (istep, exit)
+          end if
+       end if
+
        if (mod(istep,5) == 0) call checkstop(exit)
        
        call checktime(avail_cpu_time,exit)
@@ -186,7 +193,7 @@ subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, 
 
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
-    if (proc0) call write_dt
+    if (proc0 .and. .not. present(job_id)) call write_dt
 
     time_interval = user_time-start_time
 
@@ -208,23 +215,29 @@ subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, 
 
     if (proc0) call time_message(.false.,time_total,' Total')
 
-    if (proc0 .and. .not. nofin) then
+    if (proc0) then
+       if (present(job_id)) then
+          print '(/,'' Job ID:'', i4,'' Total from timer is:'', 0pf9.2,'' min'',/)', &
+               job_id+1, time_total(1)/60.
+       else if (.not. nofin) then
+!    if (proc0 .and. .not. nofin) then
 
-       print '(/,'' Initialization'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
-            &'' Advance steps'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
-            &''(redistribute'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
-            &''(field solve'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
-            &'' Re-initialize'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
-            &'' Finishing'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/,  &
-            &'' total from timer is:'', 0pf9.2,'' min'',/)', &
-            time_init(1)/60.,time_init(1)/time_total(1), &
-            time_advance(1)/60.,time_advance(1)/time_total(1), &
-            time_redist(1)/60.,time_redist(1)/time_total(1), &
-            time_field(1)/60.,time_field(1)/time_total(1), &
-            time_reinit(1)/60.,time_reinit(1)/time_total(1), &
-            time_finish(1)/60.,time_finish(1)/time_total(1),time_total(1)/60.
-    endif
-    
+          print '(/,'' Initialization'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+               &'' Advance steps'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+               &''(redistribute'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
+               &''(field solve'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
+               &'' Re-initialize'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+               &'' Finishing'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/,  &
+               &'' total from timer is:'', 0pf9.2,'' min'',/)', &
+               time_init(1)/60.,time_init(1)/time_total(1), &
+               time_advance(1)/60.,time_advance(1)/time_total(1), &
+               time_redist(1)/60.,time_redist(1)/time_total(1), &
+               time_field(1)/60.,time_field(1)/time_total(1), &
+               time_reinit(1)/60.,time_reinit(1)/time_total(1), &
+               time_finish(1)/60.,time_finish(1)/time_total(1),time_total(1)/60.
+       endif
+    end if
+
     if (.not. present(mpi_comm) .and. .not. nofin) call finish_mp
     
   end subroutine run_gs2
