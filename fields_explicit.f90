@@ -397,8 +397,8 @@ contains
 
     !  Runge-Kutta loop
 
-    call pjk_advance(g,gnew1,gnew2,phi,apar,bpar,v,wd,istep,p,mz,time,dt)
-!    call rk_advance2(g,gnew1,gnew2,phi,apar,bpar,v,wd,istep,p,mz,time,dt)
+!    call pjk_advance(g,gnew1,gnew2,phi,apar,bpar,v,wd,istep,p,mz,time,dt)
+    call rk_advance2(g,gnew1,gnew2,phi,apar,bpar,v,wd,istep,p,mz,time,dt)
 
     dtnew = alpha*dt*sqrt(eps*dt/maxval(abs(gnew1-gnew2)))
 
@@ -727,14 +727,14 @@ contains
     call dydt_dg(t,h,y,dy_modal,p,mz,v,wd,fluxfn,src,lb1,ub1,lb3,ub3)
     k(1,:,:,:) = dy_modal
 
-    !  Euler advance (modal space)
-    ymodal = y
-    call nodal2modal(ymodal,mz,p,lb1,ub1,1,2,lb3,ub3)
-    ynew1_modal = ymodal + h * dy_modal
-    ynew1 = ynew1_modal
-    call modal2nodal(ynew1,mz,p,lb1,ub1,1,2,lb3,ub3)
-    ynew2 = ynew1
-    return
+!    !  Euler advance (modal space)
+!    ymodal = y
+!    call nodal2modal(ymodal,mz,p,lb1,ub1,1,2,lb3,ub3)
+!    ynew1_modal = ymodal + h * dy_modal
+!    ynew1 = ynew1_modal
+!    call modal2nodal(ynew1,mz,p,lb1,ub1,1,2,lb3,ub3)
+!    ynew2 = ynew1
+!    return
 
 !    !  Euler advance (nodal space)
 !    dy = dy_modal
