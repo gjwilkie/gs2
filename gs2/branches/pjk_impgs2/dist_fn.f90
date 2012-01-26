@@ -4224,7 +4224,7 @@ subroutine getan (antot, antota, antotp, g, antota2)
           gamtot  = gamtot + tite
           gamtot3 = (gamtot-tite) / gamtot
           where (gamtot3 < 2.*epsilon(0.0)) gamtot3 = 1.0
-          if ( (fapar /= 0.0) .or. (fbpar /= 0.0) ) then
+          if ( (fapar > epsilon(0.0)) .or. (fbpar > epsilon(0.0)) ) then
              write(6,*) 'init_fieldeq: WARNING!!! adiabatic_option inconsistent with including delta B !!!'
              write(6,*) 'init_fieldeq: continuing, but be wary of your results!'
           endif
@@ -4387,119 +4387,6 @@ subroutine getan (antot, antota, antotp, g, antota2)
 
     deallocate (antot, antota, antotp)
   end subroutine getfieldexp
-!+PJK
-  subroutine getfieldeq2_orig (phi, apar, bpar, antot, antota, antotp)
-!-PJK
-    use dist_fn_arrays, only: kperp2
-    use theta_grid, only: ntgrid, bmag, delthet, jacob
-    use kt_grids, only: naky, ntheta0, aky
-    use run_parameters, only: fphi, fapar, fbpar
-    use run_parameters, only: beta, tite
-    use species, only: spec, has_electron_species
-    implicit none
-    complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
-    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
-!    real, allocatable, dimension(:,:,:), save :: f1, f2, f3, f4, kp2
-!    real, allocatable, dimension(:,:), save :: fl_avg, awgt
-!    real, allocatable, dimension(:), save :: bfac
-    real :: f5
-    integer :: ig, ik, it
-!    logical :: first = .true.
-    
-    
-!    if (first) then
-    if (.not. allocated(fl_avg2)) then
-! prepare for field-line-average term: 
-       allocate (fl_avg2(ntheta0, naky))
-       fl_avg2 = 0.
-! prepare for field solves: 
-       allocate (bfac(-ntgrid:ntgrid))
-       allocate (f1(-ntgrid:ntgrid,ntheta0,naky))
-       allocate (f2(-ntgrid:ntgrid,ntheta0,naky))
-       allocate (f3(-ntgrid:ntgrid,ntheta0,naky))
-       allocate (f4(-ntgrid:ntgrid,ntheta0,naky))
-       allocate (kp2(-ntgrid:ntgrid,ntheta0,naky))
-       bfac = beta*apfac/bmag**2
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                f5 = 1. + 0.5*bfac(ig)*gamtot1(ig,it,ik)**2 &
-                     / (1.+bfac(ig)*gamtot2(ig,it,ik))
-                f1(ig,it,ik) = 1.0 / gamtot(ig,it,ik) / f5
-                f3(ig,it,ik) = -bfac(ig) / (1.0 + bfac(ig)*gamtot2(ig,it,ik))
-                f2(ig,it,ik) = gamtot1(ig,it,ik)*f3(ig,it,ik) / f5
-                f4(ig,it,ik) = gamtot1(ig,it,ik)*f3(ig,it,ik) * 0.5
-             end do
-          end do
-       end do
-
-! Avoid dividing by zero for the kx=0, ky=0 mode:
-       kp2 = kperp2
-       where (kp2 == 0.) 
-          kp2 = 1.0
-       end where
-
-    endif
-
-    if (.not. has_electron_species(spec)) then
-       
-       if (adiabatic_option_switch == adiabatic_option_noJ) then
-
-!          if (first) then 
-          if (.not. allocated(awgt2)) then
-             allocate (awgt2(ntheta0, naky))
-             awgt2 = 0.
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   if (aky(ik) > epsilon(0.0)) cycle
-                   awgt2(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
-                end do
-             end do
-          endif
-          
-          do ik = 1, naky
-             do it = 1, ntheta0
-                fl_avg2(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
-             end do
-          end do
-       end if
-
-       if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
-
-!          if (first) then 
-          if (.not. allocated(awgt2)) then
-             allocate (awgt2(ntheta0, naky))
-             awgt2 = 0.
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   if (aky(ik) > epsilon(0.0)) cycle
-                   awgt2(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
-                end do
-             end do
-          endif
-          
-          do ik = 1, naky
-             do it = 1, ntheta0
-                fl_avg2(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
-             end do
-          end do
-       end if
-
-    end if
-
-! main loop: 
-    do ik = 1, naky
-       do it = 1, ntheta0
-          phi(:,it,ik) = fphi*(antot(:,it,ik)*f1(:,it,ik) + fl_avg2(it,ik)*f1(:,it,ik) &
-               + antotp(:,it,ik)*f2(:,it,ik))
-          bpar(:,it,ik) = fbpar*antotp(:,it,ik)*f3(:,it,ik) + phi(:,it,ik)*f4(:,it,ik)
-          apar(:,it,ik) = fapar*antota(:,it,ik)/kp2(:,it,ik)
-       end do
-    end do
-
-!    first = .false.
-
-  end subroutine getfieldeq2_orig
 !+PJK
   subroutine getfieldeq2 (phi, apar, bpar, antot, antota, antota2, antotp)
 
@@ -7863,7 +7750,9 @@ subroutine getan (antot, antota, antotp, g, antota2)
     if (allocated(gamtot3)) deallocate (gamtot3)
     if (allocated(fl_avg)) deallocate (fl_avg)
     if (allocated(awgt)) deallocate (awgt)
-    if (allocated(fl_avg2)) deallocate (fl_avg2, bfac, f1, f2, f3, f4, kp2)
+!+PJK    if (allocated(fl_avg2)) deallocate (fl_avg2, bfac, f1, f2, f3, f4, kp2)
+    if (allocated(fl_avg2)) deallocate (fl_avg2)
+!-PJK
     if (allocated(awgt2)) deallocate (awgt2)
     if (allocated(kmax)) deallocate (kmax)
     if (allocated(mom_coeff)) deallocate (mom_coeff, mom_coeff_npara, mom_coeff_nperp, &
