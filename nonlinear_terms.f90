@@ -268,8 +268,9 @@ contains
 !!! NEED TO DO SOMETHING HERE...  BD GGH
        dt_cfl = 1.e8
        call save_dt_cfl (dt_cfl)
-       if (include_lowflow .and. istep /= 0) &
-            call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+! TMP FOR TESTING -- MAB
+!       if (include_lowflow .and. istep /= 0) &
+!            call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
     case (nonlinear_mode_on)
 !       if (istep /= 0) call add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
        if (istep /= 0) call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
@@ -335,7 +336,8 @@ contains
        end if
 
        ! if including lowflow terms, add in the explicit ones at grid points
-       if (include_lowflow) call add_lf (g1)
+! TMP FOR TESTING -- MAB
+!       if (include_lowflow) call add_lf (g1)
 
     endif
 
