@@ -6570,6 +6570,8 @@ subroutine check_dist_fn(report_unit)
        allocate (tmp5(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
        allocate (tmp6(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
        
+       ! tmp1 is dH^{neo}/dE, tmp2 is dH^{neo}/dxi, tmp3 is vpa*dH^{neo}/dE,
+       ! tmp4 is dH^{neo}/dr, tmp5 is dH^{neo}/dtheta, tmp6 is H^{neo}
        call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
        
        if (proc0) then
@@ -6600,22 +6602,22 @@ subroutine check_dist_fn(report_unit)
              dhdec(:,isgn,iglo) = tmp1(:,il,ie,isgn,is)
              dhdxic(:,isgn,iglo) = tmp2(:,il,ie,isgn,is)
              vpadhdec(:,isgn,iglo) = tmp3(:,il,ie,isgn,is)
-!             dhdrc(:,isgn,iglo) = tmp4(:,il,ie,isgn,is)*code_dt*wunits(ik)
-!             dhdthc(:,isgn,iglo) = tmp5(:,il,ie,isgn,is)
              hneoc(:,isgn,iglo) = 1.0+tmp6(:,il,ie,isgn,is)
           end do
 
           ! get cell-centered (in theta) values
 
+          ! this is the contribution from dH^{neo}/dtheta (part of v_E dot grad H^{neo})
+          ! takes care of part of Eq. 60 in MAB's GS2 notes
           wstarfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*wunits(ik) &
                *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
-!               *dhdthc(-ntgrid:ntgrid-1,1,iglo)*code_dt
                *tmp5(-ntgrid:ntgrid-1,il,ie,1,is)*code_dt
           wstarfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*wunits(ik) &
                *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
-!               *dhdthc(-ntgrid:ntgrid-1,2,iglo)*code_dt
                *tmp5(-ntgrid:ntgrid-1,il,ie,2,is)*code_dt
 
+          ! this is the contribution from dH^{neo}/dr (part of v_E dot grad H^{neo})
+          ! takes care of part of Eq. 60 in MAB's GS2 notes
           wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + tmp4(:,il,ie,:,is)*code_dt*wunits(ik)
 
           ! this is the contribution from v_E^par . grad F0
@@ -6628,18 +6630,23 @@ subroutine check_dist_fn(report_unit)
 
           wstarfac(ntgrid,:,iglo) = 0.0
 
+          ! wdfac takes care of the gbdrift part of Eq. 60 of MAB's GS2 notes, as well
+          ! as part of the curvature drift term of Eq. 54.  the other part of 
+          ! the curvature drift term of Eq. 54 is dealt with by cdfac below.
           ! no code_dt in wdfac because it multiplies wdrift, which has code_dt in it
           wdfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/energy(ie)**1.5 &
                - dhdec(-ntgrid:ntgrid-1,1,iglo)
           wdfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/energy(ie)**1.5 &
                - dhdec(-ntgrid:ntgrid-1,2,iglo)
           wdfac(ntgrid,:,:) = 0.0
-
-          ! no code_dt in cdfac because it multiples wcurv, which has code_dt in it
+          
+          ! takes care of part of curvature drift term in Eq. 54 of MAB's GS2 notes.
+          ! no code_dt in cdfac because it multiples wcurv, which has code_dt in it.
           cdfac(-ntgrid:ntgrid-1,1,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/sqrt(energy(ie))
           cdfac(-ntgrid:ntgrid-1,2,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/sqrt(energy(ie))
           cdfac(ntgrid,:,iglo) = 0.0
 
+          ! this is the first term multiplying dF_1/dE in Eq. 42 of MAB's GS2 notes
           vparterm(-ntgrid:ntgrid-1,1,iglo) = spec(is)%zstm*tunits(ik)*code_dt &
                /delthet(-ntgrid:ntgrid-1) &
                * (abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid))) &
@@ -6650,6 +6657,9 @@ subroutine check_dist_fn(report_unit)
                * vpadhdec(-ntgrid:ntgrid-1,2,iglo)
           vparterm(ntgrid,:,iglo) = 0.0
 
+          ! redefine vpar from vpa bhat dot grad theta to
+          ! vpa bhat dot grad theta + v_Magnetic dot grad theta
+          ! this accounts for the terms in Sec. 5.1 of MAB's GS2 notes
           vpar(-ntgrid:ntgrid-1,1,iglo) = vpar(-ntgrid:ntgrid-1,1,iglo) + &
                0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
                *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,1,iglo)**2 &
@@ -6664,7 +6674,14 @@ subroutine check_dist_fn(report_unit)
        deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
     end if
 
+    ! hneoc = 1 + H^{neo} below accounts for usual parallel streaming source term,
+    ! as well as first of three terms multiplying F_1 in Eq. 42 of MAB's GS2 notes
     vparterm = -2.0*vpar*hneoc + vparterm
+
+    ! hneoc below accounts for usual v_magnetic source term, 
+    ! as well as second of three terms multiplying F_1 in Eq. 42 of MAB's GS2 notes
+    ! wdfac on RHS deals with grad-B drift part of Eq. 60, as well as part of 
+    ! curvature drift term in Eq. 54
     wdfac = wdfac + hneoc
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -6673,6 +6690,8 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo,iglo)
        wdfac(:,1,iglo) = wdfac(:,1,iglo)*wdrift(:,iglo) + cdfac(:,1,iglo)*wcurv(:,iglo) + wcoriolis(:,1,iglo)/spec(is)%stm
        wdfac(:,2,iglo) = wdfac(:,2,iglo)*wdrift(:,iglo) + cdfac(:,2,iglo)*wcurv(:,iglo) + wcoriolis(:,2,iglo)/spec(is)%stm
+       ! hneoc below accounts for usual wstar term, as well as last of three terms
+       ! multiplying F_1 in Eq. 42 of MAB'S GS2 notes
        wstarfac(:,:,iglo) = wstar(ik,ie,is)*hneoc(:,:,iglo) - wstarfac(:,:,iglo)
     end do
 
