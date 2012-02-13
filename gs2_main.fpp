@@ -36,11 +36,17 @@ contains
     use gs2_time, only: write_dt, init_tstart
     use gs2_time, only: user_time, user_dt
     use gs2_time, only: code_time
+!+PJK
+    use gs2_time, only: save_dt
+!-PJK
     use init_g, only: tstart
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
     use fields_implicit, only: time_field
+!+PJK
+    use fields_explicit, only: adaptive_dt_reset, adaptive_dt_new
+!-PJK
     implicit none
 
     integer, intent (in), optional :: mpi_comm, nensembles
@@ -149,8 +155,14 @@ contains
        call loop_diagnostics (istep, exit)
        call check_time_step (reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
-       if (reset) call reset_time_step (istep, exit)
-       
+!+PJK  if (reset) call reset_time_step (istep, exit)
+       if (adaptive_dt_reset) then
+          call save_dt(adaptive_dt_new)
+          call reset_time_step (istep, exit)
+       else
+          if (reset) call reset_time_step (istep, exit)
+       end if
+!-PJK       
        if (mod(istep,5) == 0) call checkstop(exit)
        
        call checktime(avail_cpu_time,exit)
