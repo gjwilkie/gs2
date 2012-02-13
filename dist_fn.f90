@@ -612,7 +612,6 @@ subroutine check_dist_fn(report_unit)
          tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          g_exb, g_exbfac, omprimfac, btor_slab, mach
-!         include_lowflow, g_exb, g_exbfac, omprimfac, btor_slab, mach, rhostar
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -642,13 +641,11 @@ subroutine check_dist_fn(report_unit)
        omprimfac = 1.0
        btor_slab = 0.0
        wfb = 1.
-!       rhostar = 3.e-3
        mult_imp = .false.
        test = .false.
        def_parity = .false.
        even = .true.
        source_option = 'default'
-!       include_lowflow = .false. ! MAB
        in_file = input_unit_exist("dist_fn_knobs", dfexist)
 !       if (dfexist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
        if (dfexist) read (unit=in_file, nml=dist_fn_knobs)
@@ -704,8 +701,6 @@ subroutine check_dist_fn(report_unit)
     call broadcast (def_parity)
     call broadcast (even)
     call broadcast (wfb)
-!    call broadcast (include_lowflow)    
-!    call broadcast (rhostar)
 
     if (mult_imp) then
        ! nothing -- fine for linear runs, but not implemented nonlinearly
@@ -2250,13 +2245,16 @@ subroutine check_dist_fn(report_unit)
 !       else
 !          allocate (gnl_1(1,2,1), gnl_2(1,2,1), gnl_3(1,2,1))
 !       end if
-       if (nonlin .or. include_lowflow) then
+       ! TMP FOR TESTING -- MAB
+!       if (nonlin .or. include_lowflow) then
+       if (nonlin) then
           allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           allocate (gexp_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           allocate (gexp_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           gexp_1 = 0. ; gexp_2 = 0. ; gexp_3 = 0.
        else
           allocate (gexp_1(1,2,1), gexp_2(1,2,1), gexp_3(1,2,1))
+          gexp_1 = 0. ; gexp_2 = 0. ; gexp_3 = 0.
        end if
        if (boundary_option_switch == boundary_option_linked) then
           allocate (g_h(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -2860,7 +2858,9 @@ subroutine check_dist_fn(report_unit)
           endif
 
           ! add in explicit (nonlinear and some low-flow) terms 
-          if (nonlin .or. include_lowflow) then
+! TMP FOR TESTING -- MAB
+!          if (nonlin .or. include_lowflow) then
+          if (nonlin) then
              select case (istep)
              case (0)
                 ! nothing
@@ -2995,8 +2995,9 @@ subroutine check_dist_fn(report_unit)
       end do
         
 ! add in nonlinear terms 
-!      if (nonlin) then 
-      if (nonlin .or. include_lowflow) then
+! TMP FOR TESTING -- MAB
+      if (nonlin) then 
+!      if (nonlin .or. include_lowflow) then
          select case (istep)
          case (0)
             ! nothing
@@ -6565,11 +6566,15 @@ subroutine check_dist_fn(report_unit)
 
     implicit none
 
-    integer :: neo_unit
+    integer, save :: neo_unit, neophi_unit
+    logical, save :: initialized = .false.
     integer :: it, ik, il, ie, is, isgn, iglo, ig
     real, dimension (:,:,:,:,:), allocatable :: tmp1, tmp2, tmp3, tmp4, tmp5, tmp6
     real, dimension (:,:,:), allocatable :: vpadhdec, dhdec, dhdxic, cdfac
     real, dimension (:), allocatable :: tmp7, tmp8, tmp9
+
+    if (initialized) return
+    initialized = .true.
 
     allocate (vpadhdec (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (dhdec (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -6616,12 +6621,12 @@ subroutine check_dist_fn(report_unit)
           end do
           call close_output_file (neo_unit)
 
-          call open_output_file (neo_unit,".neophi")
-          write (neo_unit,*) "# 1) theta, 2) dphi/dr, 3) dphi/dtheta, 4) phi"
+          call open_output_file (neophi_unit,".neophi")
+          write (neophi_unit,*) "# 1) theta, 2) dphi/dr, 3) dphi/dtheta, 4) phi"
           do ig = -ntgrid, ntgrid
-             write (neo_unit,'(4e14.5)') theta(ig), tmp7(ig), tmp8(ig), tmp9(ig)
+             write (neophi_unit,'(4e14.5)') theta(ig), tmp7(ig), tmp8(ig), tmp9(ig)
           end do
-          call close_output_file (neo_unit)
+          call close_output_file (neophi_unit)
        end if
 
        ! if set neo_test flag to .true. in input file, GS2 exits after writing out
@@ -6701,15 +6706,16 @@ subroutine check_dist_fn(report_unit)
 !                *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,2,iglo)**2 &
 !                + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,2,iglo)**2))
 
-          ! this is v_E^{nc} . grad_{perp} g contribution
-          wstar_neo(-ntgrid:ntgrid-1,it,ik) = -code_dt*wunits(ik)*(tmp7(-ntgrid:ntgrid-1) &
-               + 0.5*tmp8(-ntgrid:ntgrid-1)*(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid) &
-               + theta0(it,ik)*shat*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid))))
-          wstar_neo(ntgrid,it,ik) = 0.0
+! TMP FOR TESTING -- MAB -- STILL TESTING!
+!           ! this is v_E^{nc} . grad_{perp} g contribution
+!           wstar_neo(-ntgrid:ntgrid-1,it,ik) = -code_dt*wunits(ik)*(tmp7(-ntgrid:ntgrid-1) &
+!                + 0.5*tmp8(-ntgrid:ntgrid-1)*(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid) &
+!                + theta0(it,ik)*shat*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid))))
+!           wstar_neo(ntgrid,it,ik) = 0.0
           
        end do
 
-       deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8)
+       deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9)
     end if
 
     ! vparterm is -2*vpar*(1+Hneo) - Ze*(vpa . grad phi^{tb})*(dHneo/dE)
