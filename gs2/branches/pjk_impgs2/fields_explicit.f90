@@ -204,7 +204,9 @@ module fields_explicit
   public :: advance_explicit
   public :: init_phi_explicit
   public :: reset_init
-
+!+PJK
+  public :: adaptive_dt, adaptive_dt_reset, adaptive_dt_new
+!-PJK
   private
 
   interface nodal2modal
@@ -218,6 +220,11 @@ module fields_explicit
   end interface modal2nodal
 
   logical :: initialized = .false.
+!+PJK
+  logical :: adaptive_dt = .true.  !  switch for adaptive timestep algorithm
+  logical :: adaptive_dt_reset = .false.
+  real :: adaptive_dt_new
+!-PJK
 
 contains
 
@@ -258,6 +265,7 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine advance_explicit (istep)
+
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: phitmp, apartmp, bpartmp
     use fields_arrays, only: phitmp1, apartmp1, bpartmp1
@@ -269,7 +277,7 @@ contains
     use dist_fn_arrays, only: gwork, aj0
     use fields_arrays, only: phiold, aparold, bparold
     use gs2_layouts, only: g_lo, ik_idx, is_idx
-    use gs2_time, only: code_time, code_dt
+    use gs2_time, only: save_dt, code_time, code_dt
     use hyper, only: hyper_diff
     use nonlinear_terms, only: add_nonlinear_terms
     use run_parameters, only: tunits, fphi, fapar, fbpar
@@ -280,6 +288,7 @@ contains
     implicit none
     integer, intent (in) :: istep
 !+PJK
+
     real :: time, dt, dtnew, alpha = 0.9, eps = 1.0e-5, rcushion = 0.3
     integer :: ig, ie, mz, p = 3, isgn, iglo, ik, ileft, ip, is
     integer :: modep
@@ -287,74 +296,53 @@ contains
     complex, allocatable, dimension (:,:,:) :: gnew1, gnew2
     real, allocatable, dimension (:,:,:) :: v
     real, allocatable, dimension (:,:) :: wd
+
+    !  Adaptive timestep variables
+
+    real, save :: epsmach = 1.0E-15, epsr = 1.0E-6, epsa = 1.0E-6 ! both from 1.0E-6
+    real, save :: ffac = 0.9 ! = (1.0 - eps1) in write-up
+    real, save :: dt0,dtmin,dtmax,epsrmin,epsbig,g3dn,g23n, dtmax_damped = 10.0
+    real, save :: reps,epsar,zfacu,zfacut,zfacd,zfacdt,zrsord
+    real, save :: rs,zhf,zdt
+    integer, save :: nfacup = 5, nfacdn = 10, first_call = 1
+    logical, save :: lfail = .false., ldummy
+
+    !  Initialise adaptive timestep stuff
+
+    if (adaptive_dt) then
+       if (first_call == 1) then
+          epsrmin = 1.0E-12 + 2.0*epsmach
+          epsbig = 33.0*epsmach
+          epsr = max(epsrmin,epsr)
+          reps = 2.0/epsr
+          epsar = 2.0*epsa/epsr
+          zfacu = real(nfacup)
+          zfacut = (ffac/zfacu)**p
+          zfacd = 1.0/nfacdn
+          zfacdt = (ffac/zfacd)**p
+          zrsord = 1.0/p
+
+          dt0 = code_dt
+          dtmin = epsbig*dt0
+       end if
+    end if
 !-PJK
 
-!    gold = g ; phitmp1 = phi ; apartmp1 = apar ; bpartmp1 = bpar
+    gold = g! ; phitmp1 = phi ; apartmp1 = apar ; bpartmp1 = bpar
 
 !+PJK Following two lines are present in advance_implicit...
 !    call antenna_amplitudes (apar_ext)
 !    if (allocated(kx_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
 !-PJK
 
-    !goto 10  !  Simple adaptive scheme
-    goto 20  !  DG/RK scheme
-
     !  Original code... 'Simple Explicit'
-    g = gnew ; phi = phinew ; apar = aparnew ; bpar = bparnew
-    call getfieldexp (gnew, phinew, aparnew, bparnew, 'g')
-    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, -1)
+    !g = gnew ; phi = phinew ; apar = aparnew ; bpar = bparnew
+    !call getfieldexp (gnew, phinew, aparnew, bparnew, 'g')
+    !call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, -1)
+    !g = gnew
+    !gold = gnew ; phiold = phinew ; aparold = aparnew ; bparold = bparnew
+    !goto 100
 
-    g = gnew
-    gold = gnew ; phiold = phinew ; aparold = aparnew ; bparold = bparnew
-    goto 100
-
-10  continue
-    adaptive_dt: do
-
-       !  It is not clear where these four variables are used within the code,
-       !  but they have to be set here, otherwise there is no convergence.
-       g = gold ; phi = phiold ; apar = aparold ; bpar = bparold
-
-       !  Given gnew as input, calculate fields
-       call getfieldexp (gnew, phinew, aparnew, bparnew, 'g')
-       !  Given old and new fields, calculate updated g, =gnew
-       call timeadv (phiold, aparold, bparold, phinew, aparnew, bparnew, istep, -1)
-
-       gwork = gnew ! to be compared with gnew after second timeadv to determine new dt
-
-       !  Calculate fields using this 1st order guess for gnew
-       call getfieldexp (gwork, phitmp, apartmp, bpartmp, 'g')
-
-       !  Refine the guess for the fields and recalculate gnew
-       phinew  = 0.5*(phinew + phitmp)
-       aparnew = 0.5*(aparnew + apartmp)
-       bparnew = 0.5*(bparnew + bpartmp)
-       call timeadv (phiold, aparold, bparold, phinew, aparnew, bparnew, istep, -1)
-
-       !  Modify the timestep according to how well the 1st order and 2nd order
-       !  estimates for gnew agree
-
-       dtnew = 0.9 * code_dt * sqrt( 1.0E-2 * maxval(abs(gnew)) / maxval(abs(gnew-gwork)) )
-
-       if ( abs(dtnew/code_dt - 1.0) < 0.3 ) then
-          code_dt = dtnew ! don't forget user_dt
-          write(*,*) 'dt changed to ',code_dt
-          exit adaptive_dt
-       else
-          code_dt = dtnew
-          write(*,*) 'dt changed to ',code_dt,' - restarting timestep'
-       end if
-
-    end do adaptive_dt
-
-    !  For now, set gold = g, although this should only be done if we
-    !  are happy with the convergence (so this is temporary coding)
-
-    g = gnew
-    gold = gnew ; phiold = phinew ; aparold = aparnew ; bparold = bparnew
-    goto 100
-
-20  continue
     !  Discontinuous Galerkin + Runge-Kutta, adaptive timestep method
 
     !  mz is the number of finite elements,
@@ -395,49 +383,82 @@ contains
 
     call g_adjust_exp (g, apar, fapar)  !  convert g to i
 
+    !  On first call only, approximate the 'best' choice for the
+    !  initial time step
+
+    if (adaptive_dt) then
+       adaptive_dt_reset = .false.
+       if (first_call == 1) then
+          call adaptive_dt0(g,phi,apar,bpar,v,wd,istep,p,mz,time, &
+               dt0,dt,dtmin,dtmax,epsr,epsa)
+          if (dt /= code_dt) then
+             adaptive_dt_reset = .true.
+             adaptive_dt_new = dt
+          end if
+          first_call = 0
+       end if
+    end if
+
     !  Runge-Kutta loop
 
 !    call pjk_advance(g,gnew1,gnew2,phi,apar,bpar,v,wd,istep,p,mz,time,dt)
     call rk_advance2(g,gnew1,gnew2,phi,apar,bpar,v,wd,istep,p,mz,time,dt)
 
-    dtnew = alpha*dt*sqrt(eps*dt/maxval(abs(gnew1-gnew2)))
+    !  Adaptive timestep algorithm
+    !  This will need to be converted to parallel operation
 
-    !  Simple adaptive scheme
+    if (adaptive_dt) then
 
-!    write(*,*) '...',dt,dtnew,maxval(abs(gnew1-gnew2))
-!    if (dtnew > (1.0+rcushion)*dt) then
-!       write(*,*) 'higher...'
-!       dtnew = (1.0+rcushion)*dt
-!    else if (dtnew < dt) then
-!       write(*,*) 'lower...'
-!       dtnew = (1.0-rcushion)*dt
-!    else
-!       dtnew = dt
-!    end if
-!    write(11,*) time,dt
+       g3dn = maxval(abs(gnew2-gnew1))  !  actual diff between 2nd and 3rd order
+       g23n = maxval(abs(g)) + maxval(abs(gnew2)) + epsar  !  reps * max allowed diff
+       rs = reps*g3dn/g23n
 
-    !  Original adaptive scheme
+       !write(*,*) '    |g2|, |g3| = ',maxval(abs(gnew1)),maxval(abs(gnew2))
+       !write(*,*) 'diff, max diff = ',g3dn,g23n/reps,rs
 
-    !if ((ncycles < 50).and.(abs(dtnew/dt - 1.0) >= rcushion)) then
-    !   write(*,*) '   dt = ',dt,dtnew,maxval(abs(gnew1-gnew2))
-    !   t = treset
-    !   dt = dtnew
-    !   ncycles = ncycles+1
-    !   ! RESTART TIMESTEP cycle
-    !end if
-    !ncycles = 0
+       if (rs <= 1.0) then
+          !  Step succeeded, but if possible increase timestep for next step
 
-    !  Force dtnew within bounds
+          zhf = min(ffac/rs**zrsord, zfacu)
+          if (lfail) then
+             zhf = 1.0
+             dtmax_damped = min(dtmax_damped,dt)
+          end if
+          zdt = max(zhf*dt,dtmin)
+          !zdt = min(zdt,dtmax_damped)  !  Uncomment for 'damped' dt
+          dt = zdt
+          gnew = gnew1
+          lfail = .false.
+          !write(*,*) 'Success: old dt, new dt = ',code_dt, dt
 
-    !dtnew = max(5.0D-3,dtnew)
-    !dtnew = min(dtnew,0.1*dx/abs(v))
+       else
+          !  Step failed, reduce timestep
 
-    !  Fix timestep...
-    !dtnew = dt
-!    dt = dtnew
-!    code_dt = dt
+          zhf = max(ffac/rs**zrsord, zfacd)
+          zdt = zhf*dt
+          dt = zdt
 
-    gnew = gnew1
+          !  Try again unless timestep too small
+          if (dt <= dtmin) then
+             write(*,*) 'Adaptive timestep too small... stopping!'
+             stop
+          end if
+          gnew = gold
+          lfail = .true.
+          !write(*,*) 'Failure: old dt, new dt = ',code_dt, dt
+
+       end if
+
+       !  If necessary, force time-step change in main program
+
+       if (dt /= code_dt) then
+          adaptive_dt_reset = .true.
+          adaptive_dt_new = dt
+       end if
+
+    else
+       gnew = gnew1
+    end if
 
     !  Evaluate fields at new timestep
 
@@ -651,6 +672,78 @@ contains
     end do
 
   end subroutine modal2nodal_real3d
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine adaptive_dt0(y,phi,apar,bpar,v,wd,istep,p,mz,t,dt0,dt,dtmin,dtmax,epsr,epsa)
+
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo
+    use kt_grids, only: naky, ntheta0
+
+    implicit none
+
+    !  Arguments
+
+    complex, dimension(-ntgrid:ntgrid,1:2,g_lo%llim_proc:g_lo%ulim_alloc), &
+         intent(in) :: y  !  g_old (actually i_old)
+    complex, dimension(-ntgrid:ntgrid,ntheta0,naky), &
+         intent(in) :: phi, apar, bpar  !  fields
+    real, dimension(-ntgrid:ntgrid,1:2,g_lo%llim_proc:g_lo%ulim_alloc), &
+         intent(in) :: v
+    real, dimension(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc), &
+         intent(in) :: wd
+    integer, intent(in) :: istep
+    integer, intent(in) :: p   !  order of the spatial Legendre fit
+    integer, intent(in) :: mz  !  number of finite elements
+    real, intent(in) :: t  !  code_time
+    real, intent(in) :: dt0  !  code_dt
+    real, intent(out) :: dt  !  'best' choice for initial timestep
+    real, intent(in) :: dtmin !  minimum allowed timestep
+    real, intent(out) :: dtmax !  estimate of maximum allowed timestep
+    real, intent(in) :: epsr  !  relative tolerance level
+    real, intent(in) :: epsa  !  absolute tolerance level
+
+    !  Local variables
+
+    integer :: ix, i, j, ie, ik, iglo
+    integer :: lb1, ub1, lb2, ub2, lb3, ub3
+    real :: gdotn,gn,epst
+    complex, allocatable, dimension(:,:,:) :: fluxfn
+    complex, allocatable, dimension(:,:,:) :: src
+    complex, allocatable, dimension(:,:,:) :: dy
+
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    lb1 = -ntgrid ; ub1 = ntgrid
+    lb2 = 1 ; ub2 = 2
+    lb3 = g_lo%llim_proc ; ub3 = g_lo%ulim_alloc
+
+    allocate(fluxfn(lb1:ub1,lb2:ub2,lb3:ub3))
+    allocate(src(lb1:ub1,lb2:ub2,lb3:ub3))
+    allocate(dy(lb1:ub1,lb2:ub2,lb3:ub3))
+
+    !  Evaluate the source terms
+
+    call fluxfn_dg(dt0,phi,apar,bpar,istep,fluxfn,src)  !  All nodal
+
+    !  Calculate dg/dt using the Discontinuous Galerkin scheme
+
+    call dydt_dg(t,dt0,y,dy,p,mz,v,wd,fluxfn,src,lb1,ub1,lb3,ub3)
+
+    call modal2nodal(dy,mz,p,lb1,ub1,1,2,lb3,ub3)
+
+    gdotn = maxval(abs(dy))
+    gn = maxval(abs(y))
+
+    epst = epsr*gn + epsa
+
+    dtmax = (epst/gdotn)**(1.0/p)
+
+    dt = min(dt0,dtmax)
+    dt = max(dt,dtmin)
+
+  end subroutine adaptive_dt0
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

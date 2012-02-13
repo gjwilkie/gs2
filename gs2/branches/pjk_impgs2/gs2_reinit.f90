@@ -19,6 +19,9 @@ contains
     use fields, only: f_reset => reset_init, init_fields
     use fields_implicit, only: fi_reset => reset_init
     use fields_explicit, only: fe_reset => reset_init
+!+PJK
+    use fields_explicit, only: adaptive_dt
+!-PJK
     use fields_test, only: ft_reset => reset_init
     use init_g, only: g_reset => reset_init
     use run_parameters, only: fphi, fapar, fbpar
@@ -47,7 +50,9 @@ contains
        nconsec=0
     endif
 
-    if (nconsec .gt. 4) then
+!+PJK    if (nconsec .gt. 4) then
+    if ( (.not.adaptive_dt).and.(nconsec .gt. 4) ) then
+!-PJK
        exit = .true.
        if (proc0) write(error_unit(), *) 'Time step changing rapidly.  Abort run.'
        return
@@ -73,7 +78,10 @@ contains
        code_dt = code_dt/delt_adj
 
 ! If timestep is too small, make it bigger
-    else if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
+!+PJK    else if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
+    else if ( (.not.adaptive_dt).and. &
+         (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) ) then
+!-PJK
        code_dt = min(code_dt*delt_adj, dt0)
 
     endif
