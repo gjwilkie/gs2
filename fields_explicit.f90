@@ -284,6 +284,7 @@ contains
     use theta_grid, only: ntgrid
     use species, only: spec
     use dist_fn, only: wdrift, wcoriolis
+    use mp, only: max_allreduce
 !-PJK
     implicit none
     integer, intent (in) :: istep
@@ -304,6 +305,7 @@ contains
     real, save :: dt0,dtmin,dtmax,epsrmin,epsbig,g3dn,g23n, dtmax_damped = 10.0
     real, save :: reps,epsar,zfacu,zfacut,zfacd,zfacdt,zrsord
     real, save :: rs,zhf,zdt
+    real :: gomax,gnmax
     integer, save :: nfacup = 5, nfacdn = 10, first_call = 1
     logical, save :: lfail = .false., ldummy
 
@@ -405,12 +407,17 @@ contains
     call rk_advance2(g,gnew1,gnew2,phi,apar,bpar,v,wd,istep,p,mz,time,dt)
 
     !  Adaptive timestep algorithm
-    !  This will need to be converted to parallel operation
 
     if (adaptive_dt) then
 
-       g3dn = maxval(abs(gnew2-gnew1))  !  actual diff between 2nd and 3rd order
-       g23n = maxval(abs(g)) + maxval(abs(gnew2)) + epsar  !  reps * max allowed diff
+       !  Actual difference between 2nd and 3rd order estimates
+       g3dn = maxval(abs(gnew2-gnew1)) ; call max_allreduce(g3dn)
+
+       gomax = maxval(abs(g)) ; call max_allreduce(gomax)
+       gnmax = maxval(abs(gnew2)) ; call max_allreduce(gnmax)
+
+       !  (reps *) Maximum allowed difference between 2nd and 3rd order estimates
+       g23n = gomax + gnmax + epsar
        rs = reps*g3dn/g23n
 
        !write(*,*) '    |g2|, |g3| = ',maxval(abs(gnew1)),maxval(abs(gnew2))
@@ -680,6 +687,7 @@ contains
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use kt_grids, only: naky, ntheta0
+    use mp, only: max_allreduce
 
     implicit none
 
@@ -733,8 +741,8 @@ contains
 
     call modal2nodal(dy,mz,p,lb1,ub1,1,2,lb3,ub3)
 
-    gdotn = maxval(abs(dy))
-    gn = maxval(abs(y))
+    gdotn = maxval(abs(dy)) ; call max_allreduce(gdotn)
+    gn = maxval(abs(y)) ; call max_allreduce(gn)
 
     epst = epsr*gn + epsa
 
