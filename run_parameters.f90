@@ -6,10 +6,7 @@ module run_parameters
 
   public :: init_run_parameters, finish_run_parameters
   public :: check_run_parameters, wnml_run_parameters
-
-
-  public :: beta
-  public :: zeff, tite
+  public :: beta, zeff, tite
   public :: fphi, fapar, fbpar
 !  public :: delt, delt_max, wunits, woutunits, tunits
   public :: code_delt_max, wunits, woutunits, tunits
@@ -19,6 +16,7 @@ module run_parameters
   public :: k0
   public :: vnm_init
   public :: avail_cpu_time
+  public :: include_lowflow, rhostar, neo_test
 
   private
 
@@ -36,6 +34,8 @@ module run_parameters
   integer, public, parameter :: delt_option_hand = 1, delt_option_auto = 2
   logical :: initialized = .false.
   logical :: rpexist, knexist
+  real :: rhostar
+  logical :: include_lowflow, neo_test
 
   integer, allocatable :: ieqzip(:,:)
   integer :: eqzip_option_switch
@@ -206,10 +206,10 @@ contains
     real, dimension (2) :: vnm_saved
 
     real :: teti  ! for back-compatibility
-    namelist /parameters/ beta, zeff, tite, teti, k0
+    namelist /parameters/ beta, zeff, tite, teti, k0, rhostar
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
          delt_option, margin, secondary, tertiary, faperp, harris, &
-         avail_cpu_time, eqzip_option
+         avail_cpu_time, eqzip_option, include_lowflow, neo_test
 
     if (proc0) then
        fbpar = -1.0
@@ -218,6 +218,9 @@ contains
        zeff = 1.0
        tite = 1.0
        teti = -100.0
+       rhostar = 3.e-3
+       include_lowflow = .false.
+       neo_test = .false.
        wstar_units = .false.
        eqzip_option = 'none'
        eqzip = .false.
@@ -314,7 +317,10 @@ contains
     call broadcast (k0)
     call broadcast (avail_cpu_time)
     call broadcast (eqzip_option_switch)
-    
+    call broadcast (include_lowflow)
+    call broadcast (rhostar)
+    call broadcast (neo_test)
+
     user_delt_max = delt
 
     delt_saved = delt
