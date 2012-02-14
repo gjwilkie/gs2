@@ -1320,13 +1320,13 @@ contains
     use kt_grids, only: naky, ntheta0, theta0, aky, akx
     use kt_grids, only: nkpolar, jtwist_out !, akpolar
     use run_parameters, only: woutunits, tunits, fapar, fphi, fbpar, eqzip
-    use run_parameters, only: nstep
+    use run_parameters, only: nstep, include_lowflow
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, write_f, write_fyx
     use dist_fn, only: omega0, gamma0, getmoms, par_spectrum
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
-    use dist_fn, only: getmoms_notgc, include_lowflow, lf_flux
+    use dist_fn, only: getmoms_notgc, lf_flux
     use dist_fn, only: flux_vs_theta_vs_vpa
     use dist_fn_arrays, only: g, gnew, aj0, vpa, g_adjust
     use collisions, only: ncheck, vnmult, vary_vnew
@@ -2077,24 +2077,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        allocate (g_avg(ntheta0,nspec), gnorm_avg(ntheta0,nspec))
        allocate (g_all_tot(nspec), g_nokx_tot(nspec), g_nosig_tot(nspec), gtmp(nspec))
        allocate (gnorm_all_tot(nspec), gnorm_nokx_tot(nspec), gnorm_nosig_tot(nspec))
-
-        ! TMP FOR TESTING -- MAB
-!        do ik = 1, naky
-!           do it = 1, ntheta0
-!              phinew(:,it,ik) = sin(theta)**2
-!           end do
-!        end do
-!         do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!            ik = ik_idx(g_lo,iglo)
-!            it = it_idx(g_lo,iglo)
-!            do isgn = 1, 2
-! !              gnew(:,isgn,iglo) = vpa(:,isgn,iglo)**2*(sin(theta)*akx(it)+cos(theta)*akx(it)**2)
-! !              gnew(:,isgn,iglo) = sin(theta)*vpa(:,isgn,iglo)
-! ! !             gnew(:,isgn,iglo) = vpa(:,isgn,iglo)*cos(theta)
-! ! !             gnew(:,isgn,iglo) = vpa(:,isgn,iglo)*cos(theta)*akx(it)
-! ! !             gnew(:,isgn,iglo) = akx(it)
-!            end do
-!         end do
 
        ! convert from g to h
        call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
