@@ -6636,12 +6636,21 @@ subroutine check_dist_fn(report_unit)
           wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + tmp4(:,il,ie,:,is)*code_dt*wunits(ik)
 
           ! this is the contribution from v_E^par . grad F0
-          wstarfac(-ntgrid:ntgrid-1,1,iglo) = wstarfac(-ntgrid:ntgrid-1,1,iglo) &
-               - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
-               *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
-          wstarfac(-ntgrid:ntgrid-1,2,iglo) = wstarfac(-ntgrid:ntgrid-1,2,iglo) &
-               - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
-               *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+           wstarfac(-ntgrid:ntgrid-1,1,iglo) = wstarfac(-ntgrid:ntgrid-1,1,iglo) &
+                - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+                *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+           wstarfac(-ntgrid:ntgrid-1,2,iglo) = wstarfac(-ntgrid:ntgrid-1,2,iglo) &
+                - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+                *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+
+          ! this is the contribution from the last term of the 2nd line of Eq. 43 in 
+          ! MAB's GS2 notes (arises because the NEO dist. fn. is given at v/vt, and
+          ! the vt varies radially, so v_E . grad F1 must take this into account)
+          ! note: for now, this is taken care of by multiplying the vt normalization
+          ! of Chebyshev polynomial argument by appropriate temperature factor
+          ! when constructing neoclassical distribution function (see lowflow.f90)
+!          wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + code_dt*wunits(ik) &
+!               *spec(is)%tprim*energy(ie)*dhdec(:,:,iglo)
 
           wstarfac(ntgrid,:,iglo) = 0.0
 
@@ -6723,5 +6732,63 @@ subroutine check_dist_fn(report_unit)
     deallocate (vpadhdec,dhdec,dhdxic,cdfac)
 
   end subroutine init_lowflow
+
+  ! subroutine used for testing
+  ! takes as input an array using g_lo and
+  ! writes it to a .distmp output file
+  subroutine write_mpdist (dist)
+
+    use mp, only: proc0, send, receive
+    use file_utils, only: open_output_file, close_output_file
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use gs2_layouts, only: ie_idx, il_idx, idx_local, proc_id
+    use theta_grid, only: ntgrid, bmag, theta
+    use le_grids, only: forbid, energy, al
+
+    implicit none
+
+!    complex, dimension (-ntgrid:,:,g_lo%llim_proc:) :: dist
+    real, dimension (-ntgrid:,:,g_lo%llim_proc:) :: dist
+
+    integer :: iglo, ik, it, is, ie, il, ig
+    integer, save :: unit
+    logical :: first = .true.
+    real :: vpa1
+!    complex, dimension (2) :: gtmp
+    real, dimension (2) :: gtmp
+
+     if (first) then
+        if (proc0) call open_output_file (unit, ".distmp")
+        do iglo=g_lo%llim_world, g_lo%ulim_world
+           ik = ik_idx(g_lo, iglo)
+           it = it_idx(g_lo, iglo)
+           is = is_idx(g_lo, iglo)
+           ie = ie_idx(g_lo, iglo)
+           il = il_idx(g_lo, iglo)
+           do ig = -ntgrid, ntgrid
+              if (idx_local (g_lo, ik, it, il, ie, is)) then
+                 if (proc0) then
+                    gtmp = dist(ig,:,iglo)
+                 else
+                    call send (dist(ig,:,iglo), 0)
+                 end if
+              else if (proc0) then
+                 call receive (gtmp, proc_id(g_lo, iglo))
+              end if
+              if (proc0) then
+                 if (.not. forbid(ig,il)) then
+                    vpa1 = sqrt(energy(ie)*max(0.0,1.0-al(il)*bmag(ig)))
+!                    write (unit,'(6e14.5)') vpa1, energy(ie), &
+!                         real(gtmp(1)), aimag(gtmp(1)), real(gtmp(2)), aimag(gtmp(2))
+                    write (unit,'(5e14.5)') theta(ig), vpa1, energy(ie), gtmp(1), gtmp(2)
+                 end if
+              end if
+           end do
+        end do
+        if (proc0) call close_output_file (unit)
+        first = .false.
+     end if
+
+   end subroutine write_mpdist
 
 end module dist_fn
