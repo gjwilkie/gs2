@@ -18,6 +18,7 @@ contains
     use le_grids, only: w, wl
     use theta_grid, only: delthet, jacob, ntgrid
     use file_utils, only: open_output_file, close_output_file, get_unused_unit
+    use species, only: spec
 
     implicit none
     
@@ -30,10 +31,13 @@ contains
     real, dimension (:,:,:,:,:), allocatable :: hneo
     real, dimension (:,:,:,:), allocatable :: dHdxi, dHdE, vpadHdE, dHdr, dHdth
     real, dimension (:,:,:), allocatable :: legp
-    real, dimension (:,:), allocatable :: xi, chebyp1, chebyp2
+!    real, dimension (:,:), allocatable :: xi, chebyp1, chebyp2
+    real, dimension (:,:), allocatable :: xi, emax
+    real, dimension (:,:,:,:), allocatable :: chebyp1, chebyp2
     real, dimension (:), allocatable :: dphidr, dl_over_b, transport
     real, dimension (:), allocatable :: pflx, qflx, vflx, qpar, upar1
-    real :: emax, radius, jboot, phi2, vtor, upar0
+!    real :: emax, radius, jboot, phi2, vtor, upar0
+    real :: radius, jboot, phi2, vtor, upar0
 
     integer :: il, ie, is, ns, nc, nl, nr, ig, ixi, ir, ir_loc
     integer :: ntheta, nlambda, nenergy, nxi
@@ -75,11 +79,8 @@ contains
 !    coefs(:,:,1,0,:) = 0.6 ; coefs(:,:,3,0,:) = 0.4
 !    coefs(:,0,1,:) = 1.0
     
-    ! better to be taken from neo
-    if (proc0) write (*,*) '# make sure ENERGY_MAX=16.0 in NEO INPUT file'
-    emax = 16.0
-    
-    allocate (chebyp1(nenergy,0:nc-1), chebyp2(nenergy,0:nc-1))
+!    allocate (chebyp1(nenergy,0:nc-1), chebyp2(nenergy,0:nc-1))
+    allocate (chebyp1(nr,nenergy,0:nc-1,ns), chebyp2(nr,nenergy,0:nc-1,ns))
     allocate (legp(ntheta,nxi,0:nl+1))
     allocate (hneo(nr,ntheta,nxi,nenergy,ns))
     allocate (   dHdr(ntheta,nxi,nenergy,ns))
@@ -89,6 +90,21 @@ contains
     allocate (vpadHdE(ntheta,nxi,nenergy,ns))
     allocate (dphidr(ntheta))
     allocate (dl_over_b(ntheta))
+    allocate (emax(nr,ns))
+    
+    ! better to be taken from neo
+    if (proc0) write (*,*) '# make sure ENERGY_MAX=16.0 in NEO INPUT file'
+!    emax = 16.0
+    ! emax is ENERGY_MAX (from NEO input file) times v_{ts}^2
+    ! v_{ts} is a function of radius, so we need to convert emax
+    ! to its equivalent value using v_{ts} from the center radius.
+    ! this is necessary because we will be taking radial derivatives of 
+    ! the distribution function with v fixed, not v/v_t(r) fixed.
+    do is = 1, ns
+       emax(2,is) = 16.0 ! this is EMAX for center grid point
+       emax(1,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(1)-rad_neo(2)))
+       emax(3,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(3)-rad_neo(2)))
+    end do
 
     legp = 0.0
     do ixi = 1, nxi
@@ -97,21 +113,27 @@ contains
        end do
     end do
     
-    do ie = 1, nenergy
-       call chebyshev (zfnc(energy(ie),emax), chebyp1(ie,:), 1)
-       call chebyshev (zfnc(energy(ie),emax), chebyp2(ie,:), 2)
+    do is = 1, ns
+       do ie = 1, nenergy
+          do ir = 1, nr
+!       call chebyshev (zfnc(energy(ie),emax), chebyp1(ie,:), 1)
+!       call chebyshev (zfnc(energy(ie),emax), chebyp2(ie,:), 2)
+             call chebyshev (zfnc(energy(ie),emax(ir,is)), chebyp1(ir,ie,:,is), 1)
+             call chebyshev (zfnc(energy(ie),emax(ir,is)), chebyp2(ir,ie,:,is), 2)
+          end do
+       end do
     end do
     
 ! BD:  Switched order of first two loops for efficiency.  MAB should double-check for correctness
     do is = 1, ns
-       do ir = 1, nr
-          do ig = 1, ntheta
+       do ig = 1, ntheta
+          do ir = 1, nr
              ! get_H returns hneo = F_1 / F_0
-             call get_H (coefs(ir,ig,:,:,is), legp(ig,:,:), chebyp1, hneo(ir,ig,:,:,is), phineo(ir,ig))
-             call get_dHdxi (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1, xi(ig,:), dHdxi(ig,:,:,is))
-             call get_dHdE (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1, chebyp2, energy(:), emax, dHdE(ig,:,:,is))
-!             call get_dHdE (hneo(ig,ig,:,:,is),energy(:),dHdE(ig,:,:,is))
+             call get_H (coefs(ir,ig,:,:,is), legp(ig,:,:), chebyp1(ir,:,:,is), hneo(ir,ig,:,:,is), phineo(ir,ig))
           end do
+          call get_dHdxi (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), xi(ig,:), dHdxi(ig,:,:,is))
+          call get_dHdE (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), chebyp2(ir_loc,:,:,is), &
+               energy(:), emax(ir_loc,is), dHdE(ig,:,:,is))
        end do
     end do
 
@@ -227,7 +249,7 @@ contains
        call close_output_file (neot_unit)
     end if
     
-    deallocate (xi, chebyp1, chebyp2, legp, coefs, dHdr, dHdth, dHdxi, dHdE, vpadHdE, hneo, forbid)
+    deallocate (xi, emax, chebyp1, chebyp2, legp, coefs, dHdr, dHdth, dHdxi, dHdE, vpadHdE, hneo, forbid)
     deallocate (dphidr, dl_over_b, transport)
     deallocate (pflx, qflx, vflx, upar1, qpar)
 
@@ -473,7 +495,7 @@ contains
     ir_neo = 2
 
     allocate (tmp(ntheta_neo*(nxi_neo+1)*nenergy_neo*nspec_neo*nrad_neo))
-    allocate (neo_coefs(ntheta_neo), dum(ntheta), neo_phi(ntheta_neo))
+    allocate (neo_coefs(ntheta_neo), neo_phi(ntheta_neo), dneo_phi(ntheta_neo))
     allocate (dum(ntheta))
     if (.not. allocated(coefs)) allocate (coefs(nrad_neo,ntheta,0:nxi_neo,0:nenergy_neo-1,nspec_neo))
     if (.not. allocated(phineo)) allocate (phineo(nrad_neo,ntheta))
