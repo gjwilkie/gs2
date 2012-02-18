@@ -67,7 +67,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     real, dimension (:), intent (out), optional :: pflux, qflux, heat
 !    real, intent (out), optional :: dvdrho, grho, vflux
     real, intent (out), optional :: dvdrho, grho
-    logical, intent (in), optional :: nofinish
 
     real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
     real :: time_total(2) = 0.
@@ -76,6 +75,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     logical :: exit, reset, list
     logical :: first_time = .true.
     logical :: nofin= .false.
+    logical, optional, intent(in) :: nofinish
     character (500), target :: cbuff
 
 !
@@ -217,7 +217,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
 
     if (proc0) then
        if (present(job_id)) then
-          print '(/,'' Job ID:'', i4,'', total from timer is:'', 0pf9.2,'' min'',/)', &
+          print '(/,'' Job ID:'', i4,'' Total from timer is:'', 0pf9.2,'' min'',/)', &
                job_id+1, time_total(1)/60.
        else if (.not. nofin) then
 !    if (proc0 .and. .not. nofin) then
