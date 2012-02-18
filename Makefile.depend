@@ -614,10 +614,8 @@ leq.o: \
 	 spl.o 
 lowflow.o: \
 	 file_utils.o \
-	 le_grids.o \
 	 mp.o \
-	 spl.o \
-	 theta_grid.o 
+	 spl.o 
 mds.o: \
 	 constants.o 
 mp.o: \
@@ -649,7 +647,6 @@ parameter_scan.o: \
 	 gs2_diagnostics.o \
 	 gs2_save.o \
 	 gs2_time.o \
-	 init_g.o \
 	 mp.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
