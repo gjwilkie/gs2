@@ -314,23 +314,6 @@ contains
     
   end subroutine get_dHdE
 
-!   subroutine get_dHdE (h, x, dH)
-    
-!     implicit none
-
-!     real, dimension (:,:), intent (in) :: h
-!     real, dimension (:), intent (in) :: x
-!     real, dimension (:,:), intent (out) :: dH
-
-!     integer :: ix
-    
-!     do ix = 1, size(dH,2)-1
-!        dH(:,ix) = (h(:,ix+1)-h(:,ix))/(x(ix+1)-x(ix))
-!     end do
-!     dH(:,size(dH,2)) = dH(:,size(dH,2)-1)
-
-!   end subroutine get_dHdE
-
   subroutine get_dHdr (h, rad, ir, dh)
 
     implicit none

@@ -27,7 +27,6 @@ module dist_fn
   public :: init_kperp2
   public :: get_jext !GGH
   public :: get_verr, get_gtran, write_fyx, collision_error
-  public :: include_lowflow
   public :: get_init_field
   public :: flux_vs_theta_vs_vpa
 
@@ -48,8 +47,6 @@ module dist_fn
   real :: t0, omega0, gamma0, source0
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
-  real :: rhostar ! MAB
-  logical :: include_lowflow ! MAB
   logical :: dfexist, skexist
 
   integer :: adiabatic_option_switch
@@ -616,7 +613,7 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, &
          tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         include_lowflow, g_exb, g_exbfac, omprimfac, btor_slab, mach, rhostar
+         g_exb, g_exbfac, omprimfac, btor_slab, mach
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -646,13 +643,11 @@ subroutine check_dist_fn(report_unit)
        omprimfac = 1.0
        btor_slab = 0.0
        wfb = 1.
-       rhostar = 3.e-3
        mult_imp = .false.
        test = .false.
        def_parity = .false.
        even = .true.
        source_option = 'default'
-       include_lowflow = .false. ! MAB
        in_file = input_unit_exist("dist_fn_knobs", dfexist)
 !       if (dfexist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
        if (dfexist) read (unit=in_file, nml=dist_fn_knobs)
@@ -708,8 +703,6 @@ subroutine check_dist_fn(report_unit)
     call broadcast (def_parity)
     call broadcast (even)
     call broadcast (wfb)
-    call broadcast (include_lowflow)    
-    call broadcast (rhostar)
 
     if (mult_imp) then
        ! nothing -- fine for linear runs, but not implemented nonlinearly
@@ -1245,6 +1238,8 @@ subroutine check_dist_fn(report_unit)
              wdttp = wdriftttp(ig,it,ik,ie,is)
              ! use positive vpar because we will be flipping sign of d/dz
              ! when doing parallel field solve for -vpar
+             ! also, note that vpar is (vpa bhat + v_{magnetic}) . grad theta / delthet
+             ! if include_lowflow = T
              vp = vpar(ig,1,iglo)
              bd = bkdiff(is)
 
@@ -2840,7 +2835,7 @@ subroutine check_dist_fn(report_unit)
                   + zi*wstar(ik,ie,is)*hneoc(ig,2,iglo)*phigavg(ig)
           end do
 
-          if (source_option_switch == source_option_phiext_full .and.  &
+          if (source_option_switch == source_option_phiext_full .and. &
                aky(ik) < epsilon(0.0)) then
              do ig = -ntgrid, ntgrid
                 if (il < ittp(ig)) cycle             
@@ -2966,10 +2961,10 @@ subroutine check_dist_fn(report_unit)
 !
 
          source(ig) = anon(ie)*(vparterm(ig,isgn,iglo)*phi_m &
-                                -spec(is)%zstm*vpac(ig,isgn,iglo) &
-                     *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
-                                + D_res(it,ik)*apar_p) &
-                                 -zi*wdfac(ig,isgn,iglo)*phi_p) &
+              -spec(is)%zstm*vpac(ig,isgn,iglo) &
+              *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
+              + D_res(it,ik)*apar_p) &
+              -zi*wdfac(ig,isgn,iglo)*phi_p) &
               + zi*(wstarfac(ig,isgn,iglo) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
               -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
@@ -4340,7 +4335,7 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use mp, only: proc0
-    use run_parameters, only: woutunits, fphi, fapar, fbpar
+    use run_parameters, only: woutunits, fphi, fapar, fbpar, rhostar
     use constants, only: zi
     use geometry, only: rhoc
     implicit none
@@ -5264,7 +5259,6 @@ subroutine check_dist_fn(report_unit)
     use collisions, only: init_lorentz, init_ediffuse, init_lorentz_conserve, init_diffuse_conserve
     use collisions, only: etol, ewindow, etola, ewindowa
     use collisions, only: vnmult, vary_vnew
-    use nonlinear_terms, only: nonlin
     use dist_fn_arrays, only: g_adjust
 
     ! TEMP FOR TESTING -- MAB
@@ -6536,7 +6530,7 @@ subroutine check_dist_fn(report_unit)
     use kt_grids, only: theta0
     use gs2_time, only: code_dt, user_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx, it_idx
-    use run_parameters, only: tunits, wunits
+    use run_parameters, only: tunits, wunits, include_lowflow, rhostar, neo_test
     use lowflow, only: get_lowflow_terms
     use file_utils, only: open_output_file, close_output_file
     use mp, only: proc0
@@ -6688,8 +6682,10 @@ subroutine check_dist_fn(report_unit)
        ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       wdfac(:,1,iglo) = wdfac(:,1,iglo)*wdrift(:,iglo) + cdfac(:,1,iglo)*wcurv(:,iglo) + wcoriolis(:,1,iglo)/spec(is)%stm
-       wdfac(:,2,iglo) = wdfac(:,2,iglo)*wdrift(:,iglo) + cdfac(:,2,iglo)*wcurv(:,iglo) + wcoriolis(:,2,iglo)/spec(is)%stm
+       wdfac(:,1,iglo) = wdfac(:,1,iglo)*wdrift(:,iglo) &
+            + cdfac(:,1,iglo)*wcurv(:,iglo) + wcoriolis(:,1,iglo)/spec(is)%stm
+       wdfac(:,2,iglo) = wdfac(:,2,iglo)*wdrift(:,iglo) &
+            + cdfac(:,2,iglo)*wcurv(:,iglo) + wcoriolis(:,2,iglo)/spec(is)%stm
        ! hneoc below accounts for usual wstar term, as well as last of three terms
        ! multiplying F_1 in Eq. 42 of MAB'S GS2 notes
        wstarfac(:,:,iglo) = wstar(ik,ie,is)*hneoc(:,:,iglo) - wstarfac(:,:,iglo)
