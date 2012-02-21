@@ -2,15 +2,17 @@ module lowflow
   
   implicit none
 
-  public :: get_lowflow_terms
+  public :: get_lowflow_terms, dphidth
 
+  real, dimension (:), allocatable :: dphidth
   real, dimension (:,:,:,:,:), allocatable :: coefs
   real, dimension (:,:), allocatable :: phineo
   real, dimension (:), allocatable :: rad_neo, theta_neo
 
 contains
   
-  subroutine get_lowflow_terms (theta, al, energy, bmag, dHdEc, dHdxic, vpadHdEc, dHdrc, dHdthc, hneoc)
+  subroutine get_lowflow_terms (theta, al, energy, bmag, dHdEc, dHdxic, vpadHdEc, dHdrc, &
+       dHdthc, hneoc, dphidrc, dphidthc, phi_neo)
     
     use mp, only: proc0
 
@@ -20,18 +22,24 @@ contains
     real, dimension (:), intent (in) ::  al
     real, dimension (:), intent (in) :: energy
     real, dimension (:,:,:,:,:), intent (out) :: dHdec, dHdxic, dHdrc, dHdthc, vpadHdEc, hneoc
-    
+    real, dimension (:), intent (out) :: dphidthc, dphidrc, phi_neo
+
     real, dimension (:,:,:,:,:), allocatable :: hneo
     real, dimension (:,:,:,:), allocatable :: dHdxi, dHdE, vpadHdE, dHdr, dHdth
     real, dimension (:,:,:), allocatable :: legp
     real, dimension (:,:), allocatable :: xi, chebyp1, chebyp2
+    real, dimension (:), allocatable :: dphidr
     real :: emax
 
     integer :: il, ie, is, ns, nc, nl, nr, ig, ixi, ir, ir_loc
     integer :: ntheta, nlambda, nenergy, nxi
 
+    logical, save :: initialized = .false.
     logical, dimension (:,:), allocatable :: forbid
     
+    if (initialized) return
+    initialized = .true.
+
     ntheta = size(theta)
     nlambda = size(al)
     nenergy = size(energy)
@@ -74,6 +82,7 @@ contains
     allocate (  dHdxi(ntheta,nxi,nenergy,ns))
     allocate (   dHdE(ntheta,nxi,nenergy,ns))
     allocate (vpadHdE(ntheta,nxi,nenergy,ns))
+    allocate (dphidr(ntheta))
     
     legp = 0.0
     do ixi = 1, nxi
@@ -100,6 +109,7 @@ contains
        end do
     end do
 
+    ! get dH/dtheta and dH/dr
     do is = 1, ns
        do ie = 1, nenergy
           do ixi = 1, nxi
@@ -110,6 +120,18 @@ contains
           end do
        end do
     end do
+
+    ! get dphi/dr
+    do ig = 1, ntheta
+       call get_dHdr (phineo(:,ig), rad_neo, ir_loc, dphidr(ig))
+    end do
+
+    dphidrc(1:ntheta-1) = 0.5*(dphidr(1:ntheta-1) + dphidr(2:ntheta))
+    dphidrc(ntheta) = dphidrc(1)
+    dphidthc(1:ntheta-1) = 0.5*(dphidth(1:ntheta-1) + dphidth(2:ntheta))
+    dphidthc(ntheta) = dphidth(1)
+
+    phi_neo = phineo(ir_loc,:)
 
     ! vpadHdE is the derivative of F1/F0 with respect to energy at fixed mu (not xi)
     do ie = 1, nenergy
@@ -154,8 +176,10 @@ contains
     end do
     dHdrc(ntheta,:,:,:,:) = 0.0 ; dHdthc(ntheta,:,:,:,:) = 0.0 ; vpadHdEc(ntheta,:,:,:,:) = 0.0
     dHdEc(ntheta,:,:,:,:) = 0.0 ; dHdxic(ntheta,:,:,:,:) = 0.0 ; hneoc(ntheta,:,:,:,:) = 0.0
+    dphidrc(ntheta) = 0.0 ; dphidthc(ntheta) = 0.0
 
     deallocate (xi, chebyp1, chebyp2, legp, coefs, dHdr, dHdth, dHdxi, dHdE, vpadHdE, hneo, forbid)
+    deallocate (dphidr)
     
   end subroutine get_lowflow_terms
   
@@ -340,6 +364,7 @@ contains
     do ig = 2, nth-1
        dh(ig) = (h(ig+1)-h(ig-1))/(th(ig+1)-th(ig-1))
     end do
+    ! note that H_neo is periodic in theta
     dh(1) = (h(2)-h(nth))/(2.*(th(2)-th(1)))
     dh(nth) = (h(1)-h(nth-1))/(2.*(th(nth)-th(nth-1)))
 
@@ -359,7 +384,7 @@ contains
     integer :: is, ik, ij, ig, ir, idx, ntheta, ntheta_neo
     integer :: neo_unit = 101
    
-    real, dimension (:), allocatable :: tmp, neo_coefs, dum, neo_phi
+    real, dimension (:), allocatable :: tmp, neo_coefs, dum, neo_phi, dneo_phi
 
     ntheta = size(theta)
 
@@ -386,9 +411,11 @@ contains
     ir_neo = 2
 
     allocate (tmp(ntheta_neo*(nxi_neo+1)*nenergy_neo*nspec_neo*nrad_neo))
-    allocate (neo_coefs(ntheta_neo), dum(ntheta), neo_phi(ntheta_neo))
+    allocate (neo_coefs(ntheta_neo), neo_phi(ntheta_neo), dneo_phi(ntheta_neo))
+    allocate (dum(ntheta))
     if (.not. allocated(coefs)) allocate (coefs(nrad_neo,ntheta,0:nxi_neo,0:nenergy_neo-1,nspec_neo))
     if (.not. allocated(phineo)) allocate (phineo(nrad_neo,ntheta))
+    if (.not. allocated(dphidth)) allocate (dphidth(ntheta))
 
     ! read in H1^{nc} (adiabatic piece of F1^{nc}) from neo's f.out file
     open (unit=neo_unit, file='neo_f.out', status="old", action="read")
@@ -427,13 +454,20 @@ contains
           neo_phi(ig) = tmp(idx)
           idx = idx+1
        end do
+
        ! need to interpolate coefficients from neo's theta grid to gs2's
        call lf_spline (theta_neo, neo_phi, theta, phineo(ir,:), dum)
+
+       ! at central radius, calculate dphi/dth and interpolate onto gs2 grid
+       if (ir == 2) then
+          call get_dHdth (neo_phi, theta_neo, dneo_phi)
+          call lf_spline (theta_neo, dneo_phi, theta, dphidth, dum)
+       end if
     end do
 
     close (neo_unit)
 
-    deallocate (tmp, neo_coefs, theta_neo, neo_phi, dum)
+    deallocate (tmp, neo_coefs, theta_neo, neo_phi, dneo_phi, dum)
 
   end subroutine read_neocoefs
 
