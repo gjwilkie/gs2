@@ -2959,7 +2959,6 @@ subroutine check_dist_fn(report_unit)
 ! Tref=(1/2) mref vtref^2, by wunits, which contains a crucial factor 1/2.
 ! (Would be less confusing if always used same Tref!)
 !
-
          source(ig) = anon(ie)*(vparterm(ig,isgn,iglo)*phi_m &
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
@@ -6537,10 +6536,11 @@ subroutine check_dist_fn(report_unit)
 
     implicit none
 
-    integer :: neo_unit
-    integer :: it, ik, il, ie, is, isgn, iglo
+    integer, save :: neo_unit, neophi_unit
+    integer :: it, ik, il, ie, is, isgn, iglo, ig
     real, dimension (:,:,:,:,:), allocatable :: tmp1, tmp2, tmp3, tmp4, tmp5, tmp6
     real, dimension (:,:,:), allocatable :: vpadhdec, dhdec, dhdxic, cdfac
+    real, dimension (:), allocatable :: tmp7, tmp8, tmp9
 
     allocate (vpadhdec (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (dhdec (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -6563,10 +6563,13 @@ subroutine check_dist_fn(report_unit)
        allocate (tmp4(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
        allocate (tmp5(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
        allocate (tmp6(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-       
+       allocate (tmp7(-ntgrid:ntgrid), tmp8(-ntgrid:ntgrid), tmp9(-ntgrid:ntgrid))
+
        ! tmp1 is dH^{neo}/dE, tmp2 is dH^{neo}/dxi, tmp3 is vpa*dH^{neo}/dE,
        ! tmp4 is dH^{neo}/dr, tmp5 is dH^{neo}/dtheta, tmp6 is H^{neo}
-       call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
+       ! tmp7 is phi^{neo}/dr, tmp8 is dphi^{neo}/dtheta, and tmp9 phi^{neo}
+       call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, &
+            tmp5, tmp6, tmp7, tmp8, tmp9)
        
        if (proc0) then
           call open_output_file (neo_unit,".neo")
@@ -6641,6 +6644,10 @@ subroutine check_dist_fn(report_unit)
           cdfac(ntgrid,:,iglo) = 0.0
 
           ! this is the first term multiplying dF_1/dE in Eq. 42 of MAB's GS2 notes
+          ! i.e. Z_s * e * vpa . grad phi^{tb} d(F1/F0)/dE
+          ! note there will be a correction to this added below
+          ! because actual term appearing in GKE ~ (1/F0) * d(F1)/dE
+          ! also note that vpadhdec is vpa*d(F1/F0)/dE at fixed mu (not xi)
           vparterm(-ntgrid:ntgrid-1,1,iglo) = spec(is)%zstm*tunits(ik)*code_dt &
                /delthet(-ntgrid:ntgrid-1) &
                * (abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid))) &
@@ -6665,9 +6672,11 @@ subroutine check_dist_fn(report_unit)
 
        end do
 
-       deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
+       deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9)
     end if
 
+    ! vparterm is -2*vpar*(1+H^{neo}) - Ze*(vpa . grad phi^{tb})*(dH^{neo}/dE)
+    ! note that vpar has contribution from v_{magnetic} . grad theta in it
     ! hneoc = 1 + H^{neo} below accounts for usual parallel streaming source term,
     ! as well as first of three terms multiplying F_1 in Eq. 42 of MAB's GS2 notes
     vparterm = -2.0*vpar*hneoc + vparterm
@@ -6688,6 +6697,8 @@ subroutine check_dist_fn(report_unit)
             + cdfac(:,2,iglo)*wcurv(:,iglo) + wcoriolis(:,2,iglo)/spec(is)%stm
        ! hneoc below accounts for usual wstar term, as well as last of three terms
        ! multiplying F_1 in Eq. 42 of MAB'S GS2 notes
+       ! note that hneo is necessary here because NEO's dist fn is
+       ! normalized by F0(r) instead of F0 at center of simulation domain as in GS2
        wstarfac(:,:,iglo) = wstar(ik,ie,is)*hneoc(:,:,iglo) - wstarfac(:,:,iglo)
     end do
 
