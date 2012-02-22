@@ -6572,13 +6572,17 @@ subroutine check_dist_fn(report_unit)
             tmp5, tmp6, tmp7, tmp8, tmp9)
        
        if (proc0) then
-          call open_output_file (neo_unit,".neo")
+          call open_output_file (neo_unit,".neodist")
+          write (neo_unit,*) "# all quantities given at theta=0 for species 1"
+          write (neo_unit,fmt='(10a12)') "# 1) vpa", "2) vpe", "3) energy", "4) vpa/v", &
+               "5) dH/dE", "6) dH/dxi", "7) vpa*dH/dE", "8) dH/dr", "9) dH/dtheta", "10) H"
           do isgn = 1, 2
              do il = 1, nlambda
                 do ie = 1, negrid
                    if (.not. forbid(0,il)) then
-                      write (neo_unit,'(10e12.4)') sign(sqrt(energy(ie)*(1.-al(il)*bmag(0))),1.5-real(isgn)), sqrt(energy(ie)*al(il)*bmag(0)), &
-                           energy(ie), sign(al(il)*bmag(0),1.5-real(isgn)), &
+                      write (neo_unit,'(10e12.4)') sign(sqrt(energy(ie)*(1.-al(il)*bmag(0))),1.5-real(isgn)), &
+                           sqrt(energy(ie)*al(il)*bmag(0)), energy(ie), &
+                           sign(sqrt(1.-al(il)*bmag(0)),1.5-real(isgn)), &
                            tmp1(0,il,ie,isgn,1), tmp2(0,il,ie,isgn,1), tmp3(0,il,ie,isgn,1), &
                            tmp4(0,il,ie,isgn,1), tmp5(0,il,ie,isgn,1), tmp6(0,il,ie,isgn,1)
                    end if
@@ -6587,7 +6591,18 @@ subroutine check_dist_fn(report_unit)
              end do
           end do
           call close_output_file (neo_unit)
+
+          call open_output_file (neophi_unit,".neophi")
+          write (neophi_unit,*) "# 1) theta, 2) dphi/dr, 3) dphi/dtheta, 4) phi"
+          do ig = -ntgrid, ntgrid
+             write (neophi_unit,'(4e14.5)') theta(ig), tmp7(ig), tmp8(ig), tmp9(ig)
+          end do
+          call close_output_file (neophi_unit)
        end if
+
+       ! if set neo_test flag to .true. in input file, GS2 exits after writing out
+       ! neoclassical quantities of interest
+       if (neo_test) stop
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)

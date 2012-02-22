@@ -217,7 +217,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
 
     if (proc0) then
        if (present(job_id)) then
-          print '(/,'' Job ID:'', i4,'' Total from timer is:'', 0pf9.2,'' min'',/)', &
+          print '(/,'' Job ID:'', i4,'', total from timer is:'', 0pf9.2,'' min'',/)', &
                job_id+1, time_total(1)/60.
        else if (.not. nofin) then
 !    if (proc0 .and. .not. nofin) then
