@@ -79,6 +79,7 @@ ffttester_mod = \
 	 leq.o \
 	 lowflow.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -136,6 +137,7 @@ gs2_mod = \
 	 leq.o \
 	 lowflow.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -196,6 +198,7 @@ ingen_mod = \
 	 leq.o \
 	 lowflow.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -613,6 +616,7 @@ lowflow.o: \
 	 file_utils.o \
 	 le_grids.o \
 	 mp.o \
+	 species.o \
 	 spl.o \
 	 theta_grid.o 
 mds.o: \
@@ -620,6 +624,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -658,7 +663,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 redistribute.o: \
 	 job_manage.o \
 	 mp.o 
