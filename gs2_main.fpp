@@ -44,6 +44,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields, advance
+    use species, only: ions, electrons, impurity
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
@@ -202,10 +203,24 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     end if
 
     if (present(pflux)) then
-       pflux = pflux_avg/time_interval
-       qflux = qflux_avg/time_interval
-       heat = heat_avg/time_interval
+       if (size(pflux) > 1) then
+          pflux(1) = pflux_avg(ions)/time_interval
+          qflux(1) = qflux_avg(ions)/time_interval
+          heat(1) = heat_avg(ions)/time_interval
+          pflux(2) = pflux_avg(electrons)/time_interval
+          qflux(2) = qflux_avg(electrons)/time_interval
+          heat(2) = heat_avg(electrons)/time_interval
+          if (size(pflux) > 2) then
+             pflux(3) = pflux_avg(impurity)/time_interval
+             qflux(3) = qflux_avg(impurity)/time_interval
+             heat(3) = heat_avg(impurity)/time_interval
+          end if
 !       vflux = vflux_avg(1)/time_interval
+       else
+          pflux = pflux_avg/time_interval
+          qflux = qflux_avg/time_interval
+          heat = heat_avg/time_interval
+       end if
     else
        if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
        if (.not.nofin) call finish_gs2
