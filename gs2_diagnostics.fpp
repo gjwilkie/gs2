@@ -1320,7 +1320,8 @@ contains
     use kt_grids, only: naky, ntheta0, theta0, aky, akx
     use kt_grids, only: nkpolar, jtwist_out !, akpolar
     use run_parameters, only: woutunits, tunits, fapar, fphi, fbpar, eqzip
-    use run_parameters, only: nstep, include_lowflow
+!    use run_parameters, only: nstep, include_lowflow
+    use run_parameters, only: nstep
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, write_f, write_fyx
@@ -1576,8 +1577,10 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        call flux (phinew, aparnew, bparnew, &
             pflux,  qheat,  vflux, vflux_par, vflux_perp, &
             pmflux, qmheat, vmflux, pbflux, qbheat, vbflux)
+#ifdef LOWFLOW
        ! lowflow terms only implemented in electrostatic limit at present
-       if (include_lowflow) call lf_flux (phinew, vflux0, vflux1)
+       call lf_flux (phinew, vflux0, vflux1)
+#endif
        call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
 
        if (proc0) then
@@ -1604,16 +1607,16 @@ if (debug) write(6,*) "loop_diagnostics: -1"
                 vflux_perp(:,:,is) = vflux_perp(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vflux_perp(:,:,is), perpmom_fluxes(is))
 
-                if (include_lowflow) then
-                   vflux0(:,:,is) = vflux0(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
-                   call get_volume_average (vflux0(:,:,is), lfmom_fluxes(is))
+#ifdef LOWFLOW
+                vflux0(:,:,is) = vflux0(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
+                call get_volume_average (vflux0(:,:,is), lfmom_fluxes(is))
 
-                   vflux1(:,:,is) = vflux1(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%temp/spec(is)%z
-                   call get_volume_average (vflux1(:,:,is), vflux1_avg(is))
+                vflux1(:,:,is) = vflux1(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%temp/spec(is)%z
+                call get_volume_average (vflux1(:,:,is), vflux1_avg(is))
 
 ! TMP UNTIL VFLUX0 IS TESTED
 !                   mom_fluxes = mom_fluxes + lfmom_fluxes
-                end if
+#endif
              end do
           end if
           if (fapar > epsilon(0.0)) then
@@ -1870,11 +1873,11 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                      & ' perpmom fluxes: ', 5(1x,e10.4))") &
                      t, phi2, perpmom_fluxes(1:min(nspec,5))
-                if (include_lowflow) then
+#ifdef LOWFLOW
                    write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                         & ' lfmom fluxes: ', 5(1x,e10.4),' lfvflx1: ', 5(1x,e10.4))") &
                         t, phi2, lfmom_fluxes(1:min(nspec,5)), vflux1_avg(1:min(nspec,5))
-                end if
+#endif
              end if
              hflux_tot = sum(heat_fluxes)
              vflux_tot = sum(mom_fluxes)

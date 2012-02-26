@@ -77,14 +77,20 @@ module dist_fn
 
   ! internal arrays
 
-  real, dimension (:,:), allocatable :: wdrift, wcurv
-  ! (-ntgrid:ntgrid, -g-layout-)
+!  real, dimension (:,:), allocatable :: wdrift, wcurv
+!  ! (-ntgrid:ntgrid, -g-layout-)
 
-  real, dimension (:,:,:,:,:), allocatable :: wdriftttp
+#ifdef LOWFLOW
+  real, dimension (:,:), allocatable :: wcurv
+#endif
+
+!  real, dimension (:,:,:,:,:), allocatable :: wdriftttp
+  real, dimension (:,:,:,:,:,:), allocatable :: wdriftttp
   ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
 
 !>MAB
-  real, dimension (:,:,:), allocatable :: wcoriolis
+!  real, dimension (:,:,:), allocatable :: wcoriolis
+  real, dimension (:,:,:), allocatable :: wdrift
   ! (-ntgrid:ntgrid, 2, -g-layout-)
 
 !<MAB
@@ -541,8 +547,8 @@ subroutine check_dist_fn(report_unit)
     if (debug) write(6,*) "init_dist_fn: init_wdrift"
     call init_wdrift
 
-    if (debug) write(6,*) "init_dist_fn: init_wcoriolis"
-    call init_wcoriolis
+!    if (debug) write(6,*) "init_dist_fn: init_wcoriolis"
+!    call init_wcoriolis
 
     if (debug) write(6,*) "init_dist_fn: init_wstar"
     call init_wstar
@@ -557,8 +563,10 @@ subroutine check_dist_fn(report_unit)
     if (debug) write(6,*) "init_dist_fn: init_collisions"
     call init_collisions ! needs to be after init_run_parameters
 
+#ifdef LOWFLOW
     if (debug) write(6,*) "init_dist_fn: init_lowflow"
     call init_lowflow ! needs to be before init_invert_rhs
+#endif
 
     if (debug) write(6,*) "init_dist_fn: init_invert_rhs"
     call init_invert_rhs
@@ -792,7 +800,7 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use le_grids, only: negrid, ng2, nlambda, al, jend, forbid
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use dist_fn_arrays, only: ittp
     implicit none
     integer :: ig, ik, it, il, ie, is
@@ -828,37 +836,44 @@ subroutine check_dist_fn(report_unit)
        end if
     end do
 
-!    if (alloc) allocate (wdrift(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-!    if (alloc) allocate (wdriftttp(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
     if (.not. allocated(wdrift)) then
-       allocate (wdrift(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (wdriftttp(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec))
-       allocate (wcurv(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+       ! allocate wdrift with sign(vpa) dependence because will contain 
+       ! Coriolis as well as magnetic drifts
+       allocate (wdrift(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (wdriftttp(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec,2))
     end if
     wdrift = 0.  ; wdriftttp = 0.
+#ifdef LOWFLOW
+    if (.not. allocated(wcurv)) allocate (wcurv(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
     wcurv = 0.
+#endif
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do ig = -ntgrid, ntgrid
 !CMR, 13/3/2007:     isolate passing and trapped particle drift knobs
           il=il_idx(g_lo,iglo)
+          ie=ie_idx(g_lo,iglo)
+          it=it_idx(g_lo,iglo)
+          ik=ik_idx(g_lo,iglo)
+          is=is_idx(g_lo,iglo)
           if ( jend(ig) > 0 .and. jend(ig) <= nlambda .and. il >= ng2+1 .and. il <= jend(ig)) then
-             wdrift(ig,iglo) &
-                  = wdrift_func(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), &
-                  it_idx(g_lo,iglo), ik_idx(g_lo,iglo))*tpdriftknob
-             wcurv(ig,iglo) &
-                  = wcurv_func(ig, it_idx(g_lo,iglo), ik_idx(g_lo,iglo))*tpdriftknob
+             wdrift(ig,1,iglo) = wdrift_func(ig, il, ie, it, ik)*tpdriftknob
+#ifdef LOWFLOW
+             wcurv(ig,iglo) = wcurv_func(ig, it, ik)*tpdriftknob
+#endif
 !CMR:  multiply trapped particle drift by tpdriftknob 
 !CMR:               (tpdriftknob defaults to driftknob if not supplied)
           else
-             wdrift(ig,iglo) &
-                  = wdrift_func(ig, il_idx(g_lo,iglo), ie_idx(g_lo,iglo), &
-                  it_idx(g_lo,iglo), ik_idx(g_lo,iglo))*driftknob
-             wcurv(ig,iglo) &
-                  = wcurv_func(ig, it_idx(g_lo,iglo), ik_idx(g_lo,iglo))*driftknob
+             wdrift(ig,1,iglo) = wdrift_func(ig, il, ie, it, ik)*driftknob
+#ifdef LOWFLOW
+             wcurv(ig,iglo) = wcurv_func(ig, it, ik)*driftknob
+#endif
 !CMR:  multiply passing particle drift by driftknob
           endif
 !CMRend
+          ! add Coriolis drift to magnetic drifts
+          wdrift(ig,2,iglo) = wdrift(ig,1,iglo) - wcoriolis_func(ig,il,ie,it,ik,is)
+          wdrift(ig,1,iglo) = wdrift(ig,1,iglo) + wcoriolis_func(ig,il,ie,it,ik,is)
        end do
     end do
     wdriftttp = 0.0
@@ -872,9 +887,14 @@ subroutine check_dist_fn(report_unit)
                    do il = ittp(ig), nlambda
                       if (forbid(ig, il)) exit
 !GWH+JAB: should this be calculated only at ittp? or for each totally trapped pitch angle? (Orig logic: there was only one totally trapped pitch angle; now multiple ttp are allowed.
-                      wdriftttp(ig,it,ik,ie,is) &
+                      wdriftttp(ig,it,ik,ie,is,1) &
                            = wdrift_func(ig,ittp(ig),ie,it,ik)*tpdriftknob
 !CMR:  totally trapped particle drifts also scaled by tpdriftknob 
+                      ! add Coriolis drift to magnetic drifts
+                      wdriftttp(ig,it,ik,ie,is,2) = wdriftttp(ig,it,ik,ie,is,1) &
+                           - wcoriolis_func(ig,il,ie,it,ik,is)
+                      wdriftttp(ig,it,ik,ie,is,1) = wdriftttp(ig,it,ik,ie,is,1) &
+                           + wcoriolis_func(ig,il,ie,it,ik,is)
                    end do
                 end do
              end do
@@ -885,8 +905,10 @@ subroutine check_dist_fn(report_unit)
 ! This should be weighted by bakdif to be completely consistent
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do ig = -ntgrid, ntgrid-1
-          wdrift(ig,iglo) = 0.5*(wdrift(ig,iglo) + wdrift(ig+1,iglo))
+          wdrift(ig,:,iglo) = 0.5*(wdrift(ig,:,iglo) + wdrift(ig+1,:,iglo))
+#ifdef LOWFLOW
           wcurv(ig,iglo) =  0.5*(wcurv(ig,iglo) + wcurv(ig+1,iglo))
+#endif
        end do
     end do
 
@@ -922,7 +944,7 @@ subroutine check_dist_fn(report_unit)
     end if
   end function wdrift_func
 
-!> MAB
+#ifdef LOWFLOW
   function wcurv_func (ig, it, ik)
     use theta_grid, only: cvdrift, cvdrift0, shat
     use kt_grids, only: aky, theta0, akx
@@ -940,46 +962,44 @@ subroutine check_dist_fn(report_unit)
             *code_dt*wunits(ik)
     end if
   end function wcurv_func
+#endif
 
-  subroutine init_wcoriolis
-    use theta_grid, only: ntgrid
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx
-    implicit none
-    integer :: ig, ik, it, il, ie
-    integer :: iglo
+!   subroutine init_wcoriolis
+!     use theta_grid, only: ntgrid
+!     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx
+!     implicit none
+!     integer :: ig, ik, it, il, ie
+!     integer :: iglo
 
-    if (.not. allocated(wcoriolis)) then
-       allocate (wcoriolis(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       wcoriolis = 0.
-    end if
+! !    if (.not. allocated(wcoriolis)) then
+! !       allocate (wcoriolis(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+! !       wcoriolis = 0.
+! !    end if
 
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       il=il_idx(g_lo,iglo)
-       ie=ie_idx(g_lo,iglo)
-       it=it_idx(g_lo,iglo)
-       ik=ik_idx(g_lo,iglo)
-       do ig = -ntgrid, ntgrid
-          wcoriolis(ig,1,iglo) = wcoriolis_func(ig, il, ie, it, ik)
-!          write (*,*) 'wcoriolis', ig, il, ie, it, ik, wcoriolis_func(ig,il,ie,it,ik)
-       end do
-    end do
+!     ! add Coriolis drift to magnetic drifts
+!     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!        il=il_idx(g_lo,iglo)
+!        ie=ie_idx(g_lo,iglo)
+!        it=it_idx(g_lo,iglo)
+!        ik=ik_idx(g_lo,iglo)
+!        do ig = -ntgrid, ntgrid
+!           wdrift(ig,1,iglo) = wdrift(ig,1,iglo) + wcoriolis_func(ig, il, ie, it, ik)
+!           wdrift(ig,2,iglo) = wdrift(ig,2,iglo) - wcoriolis_func(ig, il, ie, it, ik)
+! !          write (*,*) 'wcoriolis', ig, il, ie, it, ik, wcoriolis_func(ig,il,ie,it,ik)
+!        end do
+!     end do
 
-! What about wcoriolis(ntgrid,iglo)?
-! This should be weighted by bakdif to be completely consistent
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       do ig = -ntgrid, ntgrid-1
-          wcoriolis(ig,1,iglo) = 0.5*(wcoriolis(ig,1,iglo) + wcoriolis(ig+1,1,iglo))
-       end do
-    end do
+! ! What about wcoriolis(ntgrid,iglo)?
+! ! This should be weighted by bakdif to be completely consistent
+!     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!        do ig = -ntgrid, ntgrid-1
+!           wdrift(ig,:,iglo) = 0.5*(wdrift(ig,:,iglo) + wdrift(ig+1,:,iglo))
+!        end do
+!     end do
 
-    wcoriolis(:,2,:) = -wcoriolis(:,1,:)
+!   end subroutine init_wcoriolis
 
-    ! TMP UNTIL TESTED -- MAB
-!    wcoriolis = 0.0
-
-  end subroutine init_wcoriolis
-
-  function wcoriolis_func (ig, il, ie, it, ik)
+  function wcoriolis_func (ig, il, ie, it, ik, is)
 
     use theta_grid, only: bmag, cdrift, cdrift0, shat
     use kt_grids, only: aky, theta0, akx
@@ -991,21 +1011,19 @@ subroutine check_dist_fn(report_unit)
     implicit none
 
     real :: wcoriolis_func
-    integer, intent (in) :: ig, ik, it, il, ie
+    integer, intent (in) :: ig, ik, it, il, ie, is
 
 !    write (*,*) 'cdrift', ig, cdrift(ig), theta0(it,ik), wunits(ik), sqrt(energy(ie)*(1.0-al(il)*bmag(ig)))
 
     if (aky(ik) == 0.0) then
        wcoriolis_func = mach*sqrt(max(energy(ie)*(1.0-al(il)*bmag(ig)),0.0)) &
-            * cdrift0(ig) * code_dt * akx(it)/(2.*shat)
+            * cdrift0(ig) * code_dt * akx(it)/(2.*shat*spec(is)%stm)
     else
        wcoriolis_func = mach*sqrt(max(energy(ie)*(1.0-al(il)*bmag(ig)),0.0)) &
-            * (cdrift(ig) + theta0(it,ik)*cdrift0(ig))*code_dt*wunits(ik)
+            * (cdrift(ig) + theta0(it,ik)*cdrift0(ig))*code_dt*wunits(ik)/spec(is)%stm
     end if
 
   end function wcoriolis_func
-
-!< MAB
 
   subroutine init_vpar
     use dist_fn_arrays, only: vpa, vpar, vpac, vperp2
@@ -1233,29 +1251,33 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid-1
-             wc = wcoriolis(ig,isgn,iglo)/spec(is)%stm
-             wd = wdrift(ig,iglo)
-             wdttp = wdriftttp(ig,it,ik,ie,is)
+!             wc = wcoriolis(ig,isgn,iglo)/spec(is)%stm
+             wd = wdrift(ig,isgn,iglo)
+             wdttp = wdriftttp(ig,it,ik,ie,is,isgn)
              ! use positive vpar because we will be flipping sign of d/dz
              ! when doing parallel field solve for -vpar
              ! also, note that vpar is (vpa bhat + v_{magnetic}) . grad theta / delthet
-             ! if include_lowflow = T
+             ! if compile with LOWFLOW defined
              vp = vpar(ig,1,iglo)
              bd = bkdiff(is)
 
              ainv(ig,isgn,iglo) &
                   = 1.0/(1.0 + bd &
-                  + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0+bd) + 2.0*vp))
+!                  + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0+bd) + 2.0*vp))
+                  + (1.0-fexp(is))*spec(is)%tz*(zi*wd*(1.0+bd) + 2.0*vp))
              r(ig,isgn,iglo) &
                   = (1.0 - bd &
-                  + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0-bd) - 2.0*vp)) &
+!                  + (1.0-fexp(is))*spec(is)%tz*(zi*(wd+wc)*(1.0-bd) - 2.0*vp)) &
+                  + (1.0-fexp(is))*spec(is)%tz*(zi*wd*(1.0-bd) - 2.0*vp)) &
                   *ainv(ig,isgn,iglo)
              a(ig,isgn,iglo) &
                   = 1.0 + bd &
+!                  + fexp(is)*spec(is)%tz*(-zi*wd*(1.0+bd) - 2.0*vp)
                   + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0+bd) - 2.0*vp)
              b(ig,isgn,iglo) &
                   = 1.0 - bd &
-                  + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0-bd) + 2.0*vp)
+!                  + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0-bd) + 2.0*vp)
+                  + fexp(is)*spec(is)%tz*(-zi*wd*(1.0-bd) + 2.0*vp)
           
              if (nlambda > ng2) then
                 ! zero out forbidden regions
@@ -2727,8 +2749,10 @@ subroutine check_dist_fn(report_unit)
   subroutine get_source_term &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         isgn, iglo, sourcefac, source)
-    use dist_fn_arrays, only: aj0, aj1, vperp2, vpar, vpac, g, ittp, hneoc
-    use dist_fn_arrays, only: vparterm, wdfac, wstarfac
+#ifdef LOWFLOW
+    use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac
+#endif
+    use dist_fn_arrays, only: aj0, aj1, vperp2, vpar, vpac, g, ittp
     use theta_grid, only: ntgrid, theta, bmag
     use kt_grids, only: aky, theta0, akx
     use le_grids, only: nlambda, ng2, lmax, anon, energy, negrid, forbid
@@ -2792,7 +2816,7 @@ subroutine check_dist_fn(report_unit)
           call set_source
           if (aky(ik) < epsilon(0.0)) then
              source(:ntgrid-1) = source(:ntgrid-1) &
-                  - zi*anon(ie)*wdrift(:ntgrid-1,iglo) &
+                  - zi*anon(ie)*wdrift(:ntgrid-1,isgn,iglo) &
                   *2.0*phi_ext*sourcefac*aj0(:ntgrid-1,iglo)
           end if
        else
@@ -2831,8 +2855,15 @@ subroutine check_dist_fn(report_unit)
              source(ig) &
                   = g(ig,2,iglo)*a(ig,2,iglo) &
                   ! does wdriftttp need to be changed to wdfac here?
-                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is)*hneoc(ig,2,iglo)+wcoriolis(ig,2,iglo))*phigavg(ig) &
+#ifdef LOWFLOW
+!                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is)*hneoc(ig,2,iglo)+wcoriolis(ig,2,iglo))*phigavg(ig) &
+                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is,2)*hneoc(ig,2,iglo))*phigavg(ig) &
                   + zi*wstar(ik,ie,is)*hneoc(ig,2,iglo)*phigavg(ig)
+#else
+!                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is)+wcoriolis(ig,2,iglo))*phigavg(ig) &
+                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is,2))*phigavg(ig) &
+                  + zi*wstar(ik,ie,is)*phigavg(ig)
+#endif             
           end do
 
           if (source_option_switch == source_option_phiext_full .and. &
@@ -2840,7 +2871,7 @@ subroutine check_dist_fn(report_unit)
              do ig = -ntgrid, ntgrid
                 if (il < ittp(ig)) cycle             
                 source(ig) = source(ig) - zi*anon(ie)* &
-                     wdriftttp(ig,it,ik,ie,is)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
+                     wdriftttp(ig,it,ik,ie,is,isgn)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
              end do
           endif
 
@@ -2959,6 +2990,7 @@ subroutine check_dist_fn(report_unit)
 ! Tref=(1/2) mref vtref^2, by wunits, which contains a crucial factor 1/2.
 ! (Would be less confusing if always used same Tref!)
 !
+#ifdef LOWFLOW
          source(ig) = anon(ie)*(vparterm(ig,isgn,iglo)*phi_m &
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
@@ -2967,9 +2999,18 @@ subroutine check_dist_fn(report_unit)
               + zi*(wstarfac(ig,isgn,iglo) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
               -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
-! next line = itor_over_B in torus, but above line allows slab generalization
-!              * sqrt(Rplot(ig)**2 - (grho(ig)/(bmag(ig)*drhodpsi))**2) * qval / (rhoc*spec(is)%stm)) &
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
+#else
+         source(ig) = anon(ie)*(-2.0*vpar(ig,isgn,iglo)*phi_m &
+              -spec(is)%zstm*vpac(ig,isgn,iglo) &
+              *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
+              + D_res(it,ik)*apar_p) &
+              -zi*wdrift(ig,isgn,iglo)*phi_p) &
+              + zi*(wstar(ik,ie,is) &
+              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
+              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
+#endif
       end do
         
 ! add in nonlinear terms 
@@ -4545,7 +4586,10 @@ subroutine check_dist_fn(report_unit)
     use mp, only: proc0, iproc
     use constants, only: pi, zi
     use kt_grids, only: ntheta0, naky, aky, akx
-    use dist_fn_arrays, only: vpa, vpac, aj0, aj1, vperp2, g, gnew, kperp2, hneoc
+#ifdef LOWFLOW
+    use dist_fn_arrays, only: hneoc
+#endif
+    use dist_fn_arrays, only: vpa, vpac, aj0, aj1, vperp2, g, gnew, kperp2
     use gs2_heating, only: heating_diagnostics
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, ie_idx
     use le_grids, only: integrate_moment
@@ -4907,7 +4951,11 @@ subroutine check_dist_fn(report_unit)
                           gnew(ig  ,isgn,iglo), &
                           gnew(ig+1,isgn,iglo))
 
+#ifdef LOWFLOW
              g0(ig,isgn,iglo) = zi * wstar(ik,ie,is)*hneoc(ig,isgn,iglo)/code_dt * conjg(havg)*chi &
+#else
+             g0(ig,isgn,iglo) = zi * wstar(ik,ie,is)/code_dt * conjg(havg)*chi &
+#endif
                   * spec(is)%dens
             
           end do
@@ -5226,7 +5274,7 @@ subroutine check_dist_fn(report_unit)
     
     wdrift = 0.
     wdriftttp = 0.
-    wcoriolis = 0.
+!    wcoriolis = 0.
     a = 0.
     b = 0.
     r = 0.
@@ -6485,7 +6533,7 @@ subroutine check_dist_fn(report_unit)
 
     if (allocated(fexp)) deallocate (fexp, bkdiff, bd_exp)
     if (allocated(ittp)) deallocate (ittp, wdrift, wdriftttp)
-    if (allocated(wcoriolis)) deallocate (wcoriolis)
+!    if (allocated(wcoriolis)) deallocate (wcoriolis)
     if (allocated(vpa)) deallocate (vpa, vpac, vperp2, vpar)
     if (allocated(wstar)) deallocate (wstar)
     if (allocated(aj0)) deallocate (aj0, aj1)
@@ -6515,6 +6563,7 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine finish_dist_fn
 
+#ifdef LOWFLOW
   subroutine init_lowflow
 
     use constants, only: zi
@@ -6529,7 +6578,8 @@ subroutine check_dist_fn(report_unit)
     use kt_grids, only: theta0
     use gs2_time, only: code_dt, user_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx, it_idx
-    use run_parameters, only: tunits, wunits, include_lowflow, rhostar, neo_test
+!    use run_parameters, only: tunits, wunits, include_lowflow, rhostar, neo_test
+    use run_parameters, only: tunits, wunits, rhostar, neo_test
     use lowflow, only: get_lowflow_terms
     use file_utils, only: open_output_file, close_output_file
     use mp, only: proc0
@@ -6556,169 +6606,170 @@ subroutine check_dist_fn(report_unit)
     end if
     vparterm = 0. ; wdfac = 0. ; hneoc = 1. ; wstarfac = 0.
 
-    if (include_lowflow) then
-       allocate (tmp1(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-       allocate (tmp2(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-       allocate (tmp3(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-       allocate (tmp4(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-       allocate (tmp5(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-       allocate (tmp6(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-       allocate (tmp7(-ntgrid:ntgrid), tmp8(-ntgrid:ntgrid), tmp9(-ntgrid:ntgrid))
+!    if (include_lowflow) then
+    allocate (tmp1(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
+    allocate (tmp2(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
+    allocate (tmp3(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
+    allocate (tmp4(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
+    allocate (tmp5(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
+    allocate (tmp6(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
+    allocate (tmp7(-ntgrid:ntgrid), tmp8(-ntgrid:ntgrid), tmp9(-ntgrid:ntgrid))
 
-       ! tmp1 is dH^{neo}/dE, tmp2 is dH^{neo}/dxi, tmp3 is vpa*dH^{neo}/dE,
-       ! tmp4 is dH^{neo}/dr, tmp5 is dH^{neo}/dtheta, tmp6 is H^{neo}
-       ! tmp7 is phi^{neo}/dr, tmp8 is dphi^{neo}/dtheta, and tmp9 phi^{neo}
-       call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, &
-            tmp5, tmp6, tmp7, tmp8, tmp9)
-       
-       if (proc0) then
-          call open_output_file (neo_unit,".neodist")
-          write (neo_unit,*) "# all quantities given at theta=0 for species 1"
-          write (neo_unit,fmt='(10a12)') "# 1) vpa", "2) vpe", "3) energy", "4) vpa/v", &
-               "5) dH/dE", "6) dH/dxi", "7) vpa*dH/dE", "8) dH/dr", "9) dH/dtheta", "10) H"
-          do isgn = 1, 2
-             do il = 1, nlambda
-                do ie = 1, negrid
-                   if (.not. forbid(0,il)) then
-                      write (neo_unit,'(10e12.4)') sign(sqrt(energy(ie)*(1.-al(il)*bmag(0))),1.5-real(isgn)), &
-                           sqrt(energy(ie)*al(il)*bmag(0)), energy(ie), &
-                           sign(sqrt(1.-al(il)*bmag(0)),1.5-real(isgn)), &
-                           tmp1(0,il,ie,isgn,1), tmp2(0,il,ie,isgn,1), tmp3(0,il,ie,isgn,1), &
-                           tmp4(0,il,ie,isgn,1), tmp5(0,il,ie,isgn,1), tmp6(0,il,ie,isgn,1)
-                   end if
-                end do
-                write (neo_unit,*)
+    ! tmp1 is dH^{neo}/dE, tmp2 is dH^{neo}/dxi, tmp3 is vpa*dH^{neo}/dE,
+    ! tmp4 is dH^{neo}/dr, tmp5 is dH^{neo}/dtheta, tmp6 is H^{neo}
+    ! tmp7 is phi^{neo}/dr, tmp8 is dphi^{neo}/dtheta, and tmp9 phi^{neo}
+    call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, &
+         tmp5, tmp6, tmp7, tmp8, tmp9)
+    
+    if (proc0) then
+       call open_output_file (neo_unit,".neodist")
+       write (neo_unit,*) "# all quantities given at theta=0 for species 1"
+       write (neo_unit,fmt='(10a12)') "# 1) vpa", "2) vpe", "3) energy", "4) vpa/v", &
+            "5) dH/dE", "6) dH/dxi", "7) vpa*dH/dE", "8) dH/dr", "9) dH/dtheta", "10) H"
+       do isgn = 1, 2
+          do il = 1, nlambda
+             do ie = 1, negrid
+                if (.not. forbid(0,il)) then
+                   write (neo_unit,'(10e12.4)') sign(sqrt(energy(ie)*(1.-al(il)*bmag(0))),1.5-real(isgn)), &
+                        sqrt(energy(ie)*al(il)*bmag(0)), energy(ie), &
+                        sign(sqrt(1.-al(il)*bmag(0)),1.5-real(isgn)), &
+                        tmp1(0,il,ie,isgn,1), tmp2(0,il,ie,isgn,1), tmp3(0,il,ie,isgn,1), &
+                        tmp4(0,il,ie,isgn,1), tmp5(0,il,ie,isgn,1), tmp6(0,il,ie,isgn,1)
+                end if
              end do
+             write (neo_unit,*)
           end do
-          call close_output_file (neo_unit)
-
-          call open_output_file (neophi_unit,".neophi")
-          write (neophi_unit,*) "# 1) theta, 2) dphi/dr, 3) dphi/dtheta, 4) phi"
-          do ig = -ntgrid, ntgrid
-             write (neophi_unit,'(4e14.5)') theta(ig), tmp7(ig), tmp8(ig), tmp9(ig)
-          end do
-          call close_output_file (neophi_unit)
-       end if
-
-       ! if set neo_test flag to .true. in input file, GS2 exits after writing out
-       ! neoclassical quantities of interest
-       if (neo_test) stop
-
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          it = it_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
-          ie = ie_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          do isgn = 1,2
-             dhdec(:,isgn,iglo) = tmp1(:,il,ie,isgn,is)
-             dhdxic(:,isgn,iglo) = tmp2(:,il,ie,isgn,is)
-             vpadhdec(:,isgn,iglo) = tmp3(:,il,ie,isgn,is)
-             hneoc(:,isgn,iglo) = 1.0+tmp6(:,il,ie,isgn,is)
-          end do
-
-          ! get cell-centered (in theta) values
-
-          ! this is the contribution from dH^{neo}/dtheta (part of v_E dot grad H^{neo})
-          ! takes care of part of Eq. 60 in MAB's GS2 notes
-          wstarfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*wunits(ik) &
-               *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
-               *tmp5(-ntgrid:ntgrid-1,il,ie,1,is)*code_dt
-          wstarfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*wunits(ik) &
-               *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
-               *tmp5(-ntgrid:ntgrid-1,il,ie,2,is)*code_dt
-
-          ! this is the contribution from dH^{neo}/dr (part of v_E dot grad H^{neo})
-          ! takes care of part of Eq. 60 in MAB's GS2 notes
-          wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + tmp4(:,il,ie,:,is)*code_dt*wunits(ik)
-
-          ! this is the contribution from v_E^par . grad F0
-          wstarfac(-ntgrid:ntgrid-1,1,iglo) = wstarfac(-ntgrid:ntgrid-1,1,iglo) &
-               - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
-               *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
-          wstarfac(-ntgrid:ntgrid-1,2,iglo) = wstarfac(-ntgrid:ntgrid-1,2,iglo) &
-               - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
-               *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
-
-          ! this is the contribution from the last term of the 2nd line of Eq. 43 in 
-          ! MAB's GS2 notes (arises because the NEO dist. fn. is given at v/vt, and
-          ! the vt varies radially, so v_E . grad F1 must take this into account)
-          ! note: for now, this is taken care of by multiplying the vt normalization
-          ! of Chebyshev polynomial argument by appropriate temperature factor
-          ! when constructing neoclassical distribution function (see lowflow.f90)
-!          wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + code_dt*wunits(ik) &
-!               *spec(is)%tprim*energy(ie)*dhdec(:,:,iglo)
-
-          wstarfac(ntgrid,:,iglo) = 0.0
-
-          ! wdfac takes care of the gbdrift part of Eq. 60 of MAB's GS2 notes, as well
-          ! as part of the curvature drift term of Eq. 54.  the other part of 
-          ! the curvature drift term of Eq. 54 is dealt with by cdfac below.
-          ! no code_dt in wdfac because it multiplies wdrift, which has code_dt in it
-          wdfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/energy(ie)**1.5 &
-               - dhdec(-ntgrid:ntgrid-1,1,iglo)
-          wdfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/energy(ie)**1.5 &
-               - dhdec(-ntgrid:ntgrid-1,2,iglo)
-          wdfac(ntgrid,:,:) = 0.0
-          
-          ! takes care of part of curvature drift term in Eq. 54 of MAB's GS2 notes.
-          ! no code_dt in cdfac because it multiples wcurv, which has code_dt in it.
-          cdfac(-ntgrid:ntgrid-1,1,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/sqrt(energy(ie))
-          cdfac(-ntgrid:ntgrid-1,2,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/sqrt(energy(ie))
-          cdfac(ntgrid,:,iglo) = 0.0
-
-          ! this is the first term multiplying dF_1/dE in Eq. 42 of MAB's GS2 notes
-          ! i.e. Z_s * e * vpa . grad phi^{tb} d(F1/F0)/dE
-          ! note there will be a correction to this added below
-          ! because actual term appearing in GKE ~ (1/F0) * d(F1)/dE
-          ! also note that vpadhdec is vpa*d(F1/F0)/dE at fixed mu (not xi)
-          vparterm(-ntgrid:ntgrid-1,1,iglo) = spec(is)%zstm*tunits(ik)*code_dt &
-               /delthet(-ntgrid:ntgrid-1) &
-               * (abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid))) &
-               * vpadhdec(-ntgrid:ntgrid-1,1,iglo)
-          vparterm(-ntgrid:ntgrid-1,2,iglo) = spec(is)%zstm*tunits(ik)*code_dt &
-               /delthet(-ntgrid:ntgrid-1) &
-               * (abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid))) &
-               * vpadhdec(-ntgrid:ntgrid-1,2,iglo)
-          vparterm(ntgrid,:,iglo) = 0.0
-
-          ! redefine vpar from vpa bhat dot grad theta to
-          ! vpa bhat dot grad theta + v_Magnetic dot grad theta
-          ! this accounts for the terms in Sec. 5.1 of MAB's GS2 notes
-          vpar(-ntgrid:ntgrid-1,1,iglo) = vpar(-ntgrid:ntgrid-1,1,iglo) + &
-               0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
-               *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,1,iglo)**2 &
-               + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,1,iglo)**2))
-          vpar(-ntgrid:ntgrid-1,2,iglo) = vpar(-ntgrid:ntgrid-1,2,iglo) + &
-               0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
-               *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,2,iglo)**2 &
-               + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,2,iglo)**2))
-
        end do
-
-       deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9)
+       call close_output_file (neo_unit)
+       
+       call open_output_file (neophi_unit,".neophi")
+       write (neophi_unit,*) "# 1) theta, 2) dphi/dr, 3) dphi/dtheta, 4) phi"
+       do ig = -ntgrid, ntgrid
+          write (neophi_unit,'(4e14.5)') theta(ig), tmp7(ig), tmp8(ig), tmp9(ig)
+       end do
+       call close_output_file (neophi_unit)
     end if
-
+    
+    ! if set neo_test flag to .true. in input file, GS2 exits after writing out
+    ! neoclassical quantities of interest
+    if (neo_test) stop
+    
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1,2
+          dhdec(:,isgn,iglo) = tmp1(:,il,ie,isgn,is)
+          dhdxic(:,isgn,iglo) = tmp2(:,il,ie,isgn,is)
+          vpadhdec(:,isgn,iglo) = tmp3(:,il,ie,isgn,is)
+          hneoc(:,isgn,iglo) = 1.0+tmp6(:,il,ie,isgn,is)
+       end do
+       
+       ! get cell-centered (in theta) values
+       
+       ! this is the contribution from dH^{neo}/dtheta (part of v_E dot grad H^{neo})
+       ! takes care of part of Eq. 60 in MAB's GS2 notes
+       wstarfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*wunits(ik) &
+            *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
+            *tmp5(-ntgrid:ntgrid-1,il,ie,1,is)*code_dt
+       wstarfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*wunits(ik) &
+            *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
+            *tmp5(-ntgrid:ntgrid-1,il,ie,2,is)*code_dt
+       
+       ! this is the contribution from dH^{neo}/dr (part of v_E dot grad H^{neo})
+       ! takes care of part of Eq. 60 in MAB's GS2 notes
+       wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + tmp4(:,il,ie,:,is)*code_dt*wunits(ik)
+       
+       ! this is the contribution from v_E^par . grad F0
+       wstarfac(-ntgrid:ntgrid-1,1,iglo) = wstarfac(-ntgrid:ntgrid-1,1,iglo) &
+            - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+            *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+       wstarfac(-ntgrid:ntgrid-1,2,iglo) = wstarfac(-ntgrid:ntgrid-1,2,iglo) &
+            - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+            *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+       
+       ! this is the contribution from the last term of the 2nd line of Eq. 43 in 
+       ! MAB's GS2 notes (arises because the NEO dist. fn. is given at v/vt, and
+       ! the vt varies radially, so v_E . grad F1 must take this into account)
+       ! note: for now, this is taken care of by multiplying the vt normalization
+       ! of Chebyshev polynomial argument by appropriate temperature factor
+       ! when constructing neoclassical distribution function (see lowflow.f90)
+       !          wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + code_dt*wunits(ik) &
+       !               *spec(is)%tprim*energy(ie)*dhdec(:,:,iglo)
+       
+       wstarfac(ntgrid,:,iglo) = 0.0
+       
+       ! wdfac takes care of the gbdrift part of Eq. 60 of MAB's GS2 notes, as well
+       ! as part of the curvature drift term of Eq. 54.  the other part of 
+       ! the curvature drift term of Eq. 54 is dealt with by cdfac below.
+       ! no code_dt in wdfac because it multiplies wdrift, which has code_dt in it
+       wdfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/energy(ie)**1.5 &
+            - dhdec(-ntgrid:ntgrid-1,1,iglo)
+       wdfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/energy(ie)**1.5 &
+            - dhdec(-ntgrid:ntgrid-1,2,iglo)
+       wdfac(ntgrid,:,:) = 0.0
+       
+       ! takes care of part of curvature drift term in Eq. 54 of MAB's GS2 notes.
+       ! no code_dt in cdfac because it multiples wcurv, which has code_dt in it.
+       cdfac(-ntgrid:ntgrid-1,1,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/sqrt(energy(ie))
+       cdfac(-ntgrid:ntgrid-1,2,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/sqrt(energy(ie))
+       cdfac(ntgrid,:,iglo) = 0.0
+       
+       ! this is the first term multiplying dF_1/dE in Eq. 42 of MAB's GS2 notes
+       ! i.e. Z_s * e * vpa . grad phi^{tb} d(F1/F0)/dE
+       ! note there will be a correction to this added below
+       ! because actual term appearing in GKE ~ (1/F0) * d(F1)/dE
+       ! also note that vpadhdec is vpa*d(F1/F0)/dE at fixed mu (not xi)
+       vparterm(-ntgrid:ntgrid-1,1,iglo) = spec(is)%zstm*tunits(ik)*code_dt &
+            /delthet(-ntgrid:ntgrid-1) &
+            * (abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid))) &
+            * vpadhdec(-ntgrid:ntgrid-1,1,iglo)
+       vparterm(-ntgrid:ntgrid-1,2,iglo) = spec(is)%zstm*tunits(ik)*code_dt &
+            /delthet(-ntgrid:ntgrid-1) &
+            * (abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid))) &
+            * vpadhdec(-ntgrid:ntgrid-1,2,iglo)
+       vparterm(ntgrid,:,iglo) = 0.0
+       
+       ! redefine vpar from vpa bhat dot grad theta to
+       ! vpa bhat dot grad theta + v_Magnetic dot grad theta
+       ! this accounts for the terms in Sec. 5.1 of MAB's GS2 notes
+       vpar(-ntgrid:ntgrid-1,1,iglo) = vpar(-ntgrid:ntgrid-1,1,iglo) + &
+            0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
+            *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,1,iglo)**2 &
+            + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,1,iglo)**2))
+       vpar(-ntgrid:ntgrid-1,2,iglo) = vpar(-ntgrid:ntgrid-1,2,iglo) + &
+            0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
+            *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,2,iglo)**2 &
+            + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,2,iglo)**2))
+       
+    end do
+    
+    deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9)
+ 
     ! vparterm is -2*vpar*(1+H^{neo}) - Ze*(vpa . grad phi^{tb})*(dH^{neo}/dE)
     ! note that vpar has contribution from v_{magnetic} . grad theta in it
     ! hneoc = 1 + H^{neo} below accounts for usual parallel streaming source term,
     ! as well as first of three terms multiplying F_1 in Eq. 42 of MAB's GS2 notes
     vparterm = -2.0*vpar*hneoc + vparterm
-
+    
     ! hneoc below accounts for usual v_magnetic source term, 
     ! as well as second of three terms multiplying F_1 in Eq. 42 of MAB's GS2 notes
     ! wdfac on RHS deals with grad-B drift part of Eq. 60, as well as part of 
     ! curvature drift term in Eq. 54
     wdfac = wdfac + hneoc
-
+    
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       wdfac(:,1,iglo) = wdfac(:,1,iglo)*wdrift(:,iglo) &
-            + cdfac(:,1,iglo)*wcurv(:,iglo) + wcoriolis(:,1,iglo)/spec(is)%stm
-       wdfac(:,2,iglo) = wdfac(:,2,iglo)*wdrift(:,iglo) &
-            + cdfac(:,2,iglo)*wcurv(:,iglo) + wcoriolis(:,2,iglo)/spec(is)%stm
+       wdfac(:,1,iglo) = wdfac(:,1,iglo)*wdrift(:,1,iglo) &
+!            + cdfac(:,1,iglo)*wcurv(:,iglo) + wcoriolis(:,1,iglo)/spec(is)%stm
+            + cdfac(:,1,iglo)*wcurv(:,iglo)
+       wdfac(:,2,iglo) = wdfac(:,2,iglo)*wdrift(:,2,iglo) &
+!            + cdfac(:,2,iglo)*wcurv(:,iglo) + wcoriolis(:,2,iglo)/spec(is)%stm
+            + cdfac(:,2,iglo)*wcurv(:,iglo)
        ! hneoc below accounts for usual wstar term, as well as last of three terms
        ! multiplying F_1 in Eq. 42 of MAB'S GS2 notes
        ! note that hneo is necessary here because NEO's dist fn is
@@ -6729,6 +6780,7 @@ subroutine check_dist_fn(report_unit)
     deallocate (vpadhdec,dhdec,dhdxic,cdfac)
 
   end subroutine init_lowflow
+#endif
 
   ! subroutine used for testing
   ! takes as input an array using g_lo and
