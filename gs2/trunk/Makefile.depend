@@ -77,7 +77,6 @@ ffttester_mod = \
 	 layouts_type.o \
 	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -135,7 +134,6 @@ gs2_mod = \
 	 layouts_type.o \
 	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -196,7 +194,6 @@ ingen_mod = \
 	 layouts_type.o \
 	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -285,7 +282,6 @@ dist_fn.o: \
 	 hyper.o \
 	 kt_grids.o \
 	 le_grids.o \
-	 lowflow.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 prof.o \

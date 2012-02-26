@@ -7,8 +7,11 @@ module dist_fn_arrays
   public :: g, gnew, gold, kx_shift, theta0_shift, vpa, vpac
   public :: vperp2, vpar, ittp, aj0, aj1, aj2, aj0f, aj1f
   public :: apar_ext, kperp2, c_rate
-  public :: vparterm, wdfac, wstarfac, hneoc
-  public :: g_adjust 
+  public :: g_adjust
+#ifdef LOWFLOW
+  public :: hneoc, vparterm, wdfac, wstarfac
+#endif
+
 
   ! dist fn
   complex, dimension (:,:,:), allocatable :: g, gnew, gold
@@ -42,10 +45,11 @@ module dist_fn_arrays
   complex, dimension (:,:,:,:,:), allocatable :: c_rate
   ! (-ntgrid:ntgrid,ntheta0,naky,nspecies,2) replicated
 
+#ifdef LOWFLOW
   ! v-dependent factors in low-flow terms
-  real, dimension (:,:,:), allocatable :: vparterm, wdfac, wstarfac
-  real, dimension (:,:,:), allocatable :: hneoc
+  real, dimension (:,:,:), allocatable :: hneoc, vparterm, wdfac, wstarfac
   ! (-ntgrid:ntgrid,2, -g-layout-)
+#endif
 
   private
 contains

@@ -100,6 +100,8 @@ USE_LOCAL_SPFUNC ?=
 USE_NAGLIB ?= 
 # Make GS2 into a library which can be called by external programs
 MAKE_LIB ?=
+# Include higher-order terms in GK equation arising from low-flow physics
+LOWFLOW ?=
 # Use le_layout for collision operator
 USE_LE_LAYOUT ?=
 #
@@ -294,6 +296,9 @@ $(error PGPLOT_LIB is not defined)
 endif
 ifdef MAKE_LIB
 	CPPFLAGS += -DMAKE_LIB
+endif
+ifdef LOWFLOW
+	CPPFLAGS += -DLOWFLOW
 endif
 ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
