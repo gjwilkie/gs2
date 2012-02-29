@@ -9,7 +9,8 @@ module nonlinear_terms
 
   public :: init_nonlinear_terms, finish_nonlinear_terms
   public :: read_parameters, wnml_nonlinear_terms, check_nonlinear_terms
-  public :: add_nonlinear_terms, finish_nl_terms
+!  public :: add_nonlinear_terms, finish_nl_terms
+  public :: add_explicit_terms, finish_nl_terms
   public :: finish_init, reset_init, algorithm, nonlin, accelerated
   public :: cfl
 
@@ -247,7 +248,8 @@ contains
 
   end subroutine read_parameters
 
-  subroutine add_nonlinear_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+!  subroutine add_nonlinear_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+  subroutine add_explicit_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_time, only: save_dt_cfl
@@ -258,46 +260,52 @@ contains
     real, intent (in) :: bd
     complex, intent (in) :: fexp
     real :: dt_cfl
+    logical, save :: nl = .true.
 
     select case (nonlinear_mode_switch)
     case (nonlinear_mode_none)
 !!! NEED TO DO SOMETHING HERE...  BD GGH
        dt_cfl = 1.e8
        call save_dt_cfl (dt_cfl)
+#ifdef LOWFLOW
+       if (istep /=0) &
+            call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+#endif
     case (nonlinear_mode_on)
-       if (istep /= 0) call add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+!       if (istep /= 0) call add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+       if (istep /= 0) call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
     end select
-  end subroutine add_nonlinear_terms
+!  end subroutine add_nonlinear_terms
+  end subroutine add_explicit_terms
 
-  subroutine add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
-    use mp, only: max_allreduce, proc0
-    use theta_grid, only: ntgrid, kxfac
+  subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
+
+    use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use gs2_layouts, only: accelx_lo, yxf_lo
-    use dist_fn_arrays, only: g, ittp
-    use species, only: spec
-    use gs2_transforms, only: transform2, inverse2
+    use dist_fn_arrays, only: g
     use run_parameters, only: fapar, fbpar, fphi
-    use kt_grids, only: aky, akx
-    use le_grids, only: forbid
     use gs2_time, only: save_dt_cfl
-    use constants, only: zi
+
     implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
     complex, intent (in) :: fexp
+    logical, intent (in), optional :: nl
+
     integer :: istep_last = 0
     integer :: i, j, k
+    integer :: iglo, ik, it, is, ig, il, ia, isgn
     real :: max_vel, zero
     real :: dt_cfl
 
-    integer :: iglo, ik, it, is, ig, il, ia, isgn
-    
     if (initializing) then
-       dt_cfl = 1.e8
-       call save_dt_cfl (dt_cfl)
+       if (present(nl)) then
+          dt_cfl = 1.e8
+          call save_dt_cfl (dt_cfl)
+       end if
        return
     endif
 
@@ -311,158 +319,22 @@ contains
        g3 = g2
        g2 = g1
 
-       if (fphi > zero) then
-          call load_kx_phi
-       else
-          g1 = 0.
-       end if
-
-       if (fbpar > zero) call load_kx_bpar
-       if (fapar  > zero) call load_kx_apar
-
-       if (accelerated) then
-          call transform2 (g1, aba, ia)
-       else
-          call transform2 (g1, ba)
-       end if
-
-       if (fphi > zero) then
-          call load_ky_phi
-       else
-          g1 = 0.
-       end if
-       if (fbpar > zero) call load_ky_bpar
-
-! more generally, there should probably be a factor of anon...
-
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          ik = ik_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          do isgn = 1, 2
-             do ig = -ntgrid, ntgrid
-                g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*aky(ik)*g(ig,isgn,iglo)
-             end do
-          end do
-       end do
-
-       if (accelerated) then
-          call transform2 (g1, agb, ia)
-       else
-          call transform2 (g1, gb)
-       end if
-
-       if (accelerated) then
-          max_vel = 0.
-          do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
-             do j = 1, 2
-                do i = 1, 2*ntgrid+1
-                   abracket(i,j,k) = aba(i,j,k)*agb(i,j,k)*kxfac
-                   max_vel = max(max_vel, abs(aba(i,j,k)))
-                end do
-             end do
-          end do
-          max_vel = max_vel * cfly
-!          max_vel = maxval(abs(aba)*cfly)
-       else
-          max_vel = 0.
-          do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
-             do i = 1, yxf_lo%ny
-                bracket(i,j) = ba(i,j)*gb(i,j)*kxfac
-                max_vel = max(max_vel,abs(ba(i,j)))
-             end do
-          end do
-          max_vel = max_vel*cfly
-!          max_vel = maxval(abs(ba)*cfly)
-       endif
-
-       if (fphi > zero) then
-          call load_ky_phi
-       else
-          g1 = 0.
-       end if
-
-       if (fbpar > zero) call load_ky_bpar
-       if (fapar  > zero) call load_ky_apar
-
-       if (accelerated) then
-          call transform2 (g1, aba, ia)
-       else
-          call transform2 (g1, ba)
-       end if
-
-       if (fphi > zero) then
-          call load_kx_phi
-       else
-          g1 = 0.
-       end if
-
-       if (fbpar > zero) call load_kx_bpar
-
-! more generally, there should probably be a factor of anon...
-
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          it = it_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          do isgn = 1, 2
-             do ig = -ntgrid, ntgrid
-                g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*akx(it)*g(ig,isgn,iglo)
-             end do
-          end do
-       end do
-
-       if (accelerated) then
-          call transform2 (g1, agb, ia)
-       else
-          call transform2 (g1, gb)
-       end if
-
-       if (accelerated) then
-          do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
-             do j = 1, 2
-                do i = 1, 2*ntgrid+1
-                   abracket(i,j,k) = abracket(i,j,k) - aba(i,j,k)*agb(i,j,k)*kxfac
-                   max_vel = max(max_vel, abs(aba(i,j,k))*cflx)
-                end do
-             end do
-          end do
-       else
-          do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
-             do i = 1, yxf_lo%ny
-                bracket(i,j) = bracket(i,j) - ba(i,j)*gb(i,j)*kxfac
-                max_vel = max(max_vel,abs(ba(i,j))*cflx)
-             end do
-          end do
-       end if
-
-       call max_allreduce(max_vel)
-
-       dt_cfl = 1./max_vel
-       call save_dt_cfl (dt_cfl)
-       
-       if (accelerated) then
-          call inverse2 (abracket, g1, ia)
-       else
-          call inverse2 (bracket, g1)
-       end if
+       ! if running nonlinearly, then compute the nonlinear term at grid points
+       ! and store it in g1
+       if (present(nl)) then
+          call add_nl (g1, phi, apar, bpar)
           
-! factor of one-half appears elsewhere
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          il = il_idx(g_lo, iglo)
-! Totally trapped particles get no bakdif 
-          do ig = -ntgrid, ntgrid-1
-!JAB & GWH: orig if (il == ittp(ig)) cycle 
-             if (il >= ittp(ig)) cycle
-             g1(ig,1,iglo) = (1.+bd)*g1(ig+1,1,iglo) + (1.-bd)*g1(ig,1,iglo)
-             g1(ig,2,iglo) = (1.-bd)*g1(ig+1,2,iglo) + (1.+bd)*g1(ig,2,iglo)
-          end do
-! zero out spurious g1 outside trapped boundary
-          where (forbid(:,il))
-             g1(:,1,iglo) = 0.0
-             g1(:,2,iglo) = 0.0
-          end where
-       end do
+          ! takes g1 at grid points and returns 2*g1 at cell centers
+          call center (g1)
+       else
+          g1 = 0.
+       end if
 
-    endif
+#ifdef LOWFLOW
+       ! do something
+#endif
+
+    end if
 
     if (zip) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -482,6 +354,200 @@ contains
      
     istep_last = istep
 
+  contains
+
+    ! subroutine 'center' takes input array evaluated at theta grid points
+    ! and overwrites it with array evaluated at cell centers
+    ! note that there is an extra factor of 2 in output array
+    subroutine center (gtmp)
+
+      use dist_fn_arrays, only: ittp
+      use gs2_layouts, only: g_lo, il_idx
+      use theta_grid, only: ntgrid
+      use le_grids, only: forbid
+
+      implicit none
+
+      integer :: iglo, il, ig
+      complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: gtmp
+
+      ! factor of one-half appears elsewhere
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          il = il_idx(g_lo, iglo)
+          ! Totally trapped particles get no bakdif 
+          do ig = -ntgrid, ntgrid-1
+             !JAB & GWH: orig if (il == ittp(ig)) cycle 
+             if (il >= ittp(ig)) cycle
+             gtmp(ig,1,iglo) = (1.+bd)*gtmp(ig+1,1,iglo) + (1.-bd)*gtmp(ig,1,iglo)
+             gtmp(ig,2,iglo) = (1.-bd)*gtmp(ig+1,2,iglo) + (1.+bd)*gtmp(ig,2,iglo)
+          end do
+          ! zero out spurious gtmp outside trapped boundary
+          where (forbid(:,il))
+             gtmp(:,1,iglo) = 0.0
+             gtmp(:,2,iglo) = 0.0
+          end where
+       end do
+
+    end subroutine center
+
+  end subroutine add_explicit
+
+  subroutine add_nl (g1, phi, apar, bpar)
+    use mp, only: max_allreduce, proc0
+    use theta_grid, only: ntgrid, kxfac
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: accelx_lo, yxf_lo
+    use dist_fn_arrays, only: g, ittp
+    use species, only: spec
+    use gs2_transforms, only: transform2, inverse2
+    use run_parameters, only: fapar, fbpar, fphi
+    use kt_grids, only: aky, akx
+    use le_grids, only: forbid
+    use gs2_time, only: save_dt_cfl
+    use constants, only: zi
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    integer :: i, j, k
+    real :: max_vel, zero
+    real :: dt_cfl
+
+    integer :: iglo, ik, it, is, ig, il, ia, isgn
+    
+    if (fphi > zero) then
+       call load_kx_phi
+    else
+       g1 = 0.
+    end if
+
+    if (fbpar > zero) call load_kx_bpar
+    if (fapar  > zero) call load_kx_apar
+
+    if (accelerated) then
+       call transform2 (g1, aba, ia)
+    else
+       call transform2 (g1, ba)
+    end if
+    
+    if (fphi > zero) then
+       call load_ky_phi
+    else
+       g1 = 0.
+    end if
+    if (fbpar > zero) call load_ky_bpar
+    
+    ! more generally, there should probably be a factor of anon...
+    
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*aky(ik)*g(ig,isgn,iglo)
+          end do
+       end do
+    end do
+    
+    if (accelerated) then
+       call transform2 (g1, agb, ia)
+    else
+       call transform2 (g1, gb)
+    end if
+    
+    if (accelerated) then
+       max_vel = 0.
+       do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
+          do j = 1, 2
+             do i = 1, 2*ntgrid+1
+                abracket(i,j,k) = aba(i,j,k)*agb(i,j,k)*kxfac
+                max_vel = max(max_vel, abs(aba(i,j,k)))
+             end do
+          end do
+       end do
+       max_vel = max_vel * cfly
+!       max_vel = maxval(abs(aba)*cfly)
+    else
+       max_vel = 0.
+       do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
+          do i = 1, yxf_lo%ny
+             bracket(i,j) = ba(i,j)*gb(i,j)*kxfac
+             max_vel = max(max_vel,abs(ba(i,j)))
+          end do
+       end do
+       max_vel = max_vel*cfly
+!       max_vel = maxval(abs(ba)*cfly)
+    endif
+
+    if (fphi > zero) then
+       call load_ky_phi
+    else
+       g1 = 0.
+    end if
+    
+    if (fbpar > zero) call load_ky_bpar
+    if (fapar  > zero) call load_ky_apar
+    
+    if (accelerated) then
+       call transform2 (g1, aba, ia)
+    else
+       call transform2 (g1, ba)
+    end if
+    
+    if (fphi > zero) then
+       call load_kx_phi
+    else
+       g1 = 0.
+    end if
+    
+    if (fbpar > zero) call load_kx_bpar
+    
+    ! more generally, there should probably be a factor of anon...
+    
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       it = it_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*akx(it)*g(ig,isgn,iglo)
+          end do
+       end do
+    end do
+    
+    if (accelerated) then
+       call transform2 (g1, agb, ia)
+    else
+       call transform2 (g1, gb)
+    end if
+    
+    if (accelerated) then
+       do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
+          do j = 1, 2
+             do i = 1, 2*ntgrid+1
+                abracket(i,j,k) = abracket(i,j,k) - aba(i,j,k)*agb(i,j,k)*kxfac
+                max_vel = max(max_vel, abs(aba(i,j,k))*cflx)
+             end do
+          end do
+       end do
+    else
+       do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
+          do i = 1, yxf_lo%ny
+             bracket(i,j) = bracket(i,j) - ba(i,j)*gb(i,j)*kxfac
+             max_vel = max(max_vel,abs(ba(i,j))*cflx)
+          end do
+       end do
+    end if
+    
+    call max_allreduce(max_vel)
+    
+    dt_cfl = 1./max_vel
+    call save_dt_cfl (dt_cfl)
+    
+    if (accelerated) then
+       call inverse2 (abracket, g1, ia)
+    else
+       call inverse2 (bracket, g1)
+    end if
+    
   contains
 
     subroutine load_kx_phi
