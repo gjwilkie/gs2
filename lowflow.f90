@@ -528,6 +528,7 @@ contains
 
     if (proc0) then
        ! read in phi1^{nc} from neo's phi.out file
+       call get_unused_unit (neophi_unit)
        open (unit=neophi_unit, file='neo_phi.out', status="old", action="read")
 
        read (neophi_unit,*) tmp

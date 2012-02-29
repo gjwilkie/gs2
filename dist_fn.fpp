@@ -114,7 +114,8 @@ module dist_fn
   complex, dimension (:,:,:), allocatable :: g_adj
   ! (N(links), 2, -g-layout-)
 
-  complex, dimension (:,:,:), allocatable, save :: gnl_1, gnl_2, gnl_3
+!  complex, dimension (:,:,:), allocatable, save :: gnl_1, gnl_2, gnl_3
+  complex, dimension (:,:,:), allocatable, save :: gexp_1, gexp_2, gexp_3
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   ! momentum conservation
@@ -2264,14 +2265,21 @@ subroutine check_dist_fn(report_unit)
        allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+#ifdef LOWFLOW
+       allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (gexp_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (gexp_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       gexp_1 = 0. ; gexp_2 = 0. ; gexp_3 = 0.
+#else
        if (nonlin) then
-          allocate (gnl_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          allocate (gnl_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          allocate (gnl_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          gnl_1 = 0. ; gnl_2 = 0. ; gnl_3 = 0.
+          allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          allocate (gexp_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          allocate (gexp_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          gexp_1 = 0. ; gexp_2 = 0. ; gexp_3 = 0.
        else
-          allocate (gnl_1(1,2,1), gnl_2(1,2,1), gnl_3(1,2,1))
+          allocate (gexp_1(1,2,1), gexp_2(1,2,1), gexp_3(1,2,1))
        end if
+#endif
        if (boundary_option_switch == boundary_option_linked) then
           allocate (g_h(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           g_h = 0.
@@ -2309,7 +2317,8 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: ntgrid
     use collisions, only: solfp1
     use dist_fn_arrays, only: gnew, g, gold
-    use nonlinear_terms, only: add_nonlinear_terms
+!    use nonlinear_terms, only: add_nonlinear_terms
+    use nonlinear_terms, only: add_explicit_terms
     use hyper, only: hyper_diff
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
@@ -2321,7 +2330,8 @@ subroutine check_dist_fn(report_unit)
     modep = 0
     if (present(mode)) modep = mode
 
-    call add_nonlinear_terms (gnl_1, gnl_2, gnl_3, &
+!    call add_nonlinear_terms (gnl_1, gnl_2, gnl_3, &
+    call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
     call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
     call hyper_diff (gnew, phinew, bparnew)
@@ -2875,6 +2885,31 @@ subroutine check_dist_fn(report_unit)
              end do
           endif
 
+#ifdef LOWFLOW
+          select case (istep)
+          case (0)
+             ! nothing
+          case (1)
+             do ig = -ntgrid, ntgrid
+                if (il < ittp(ig)) cycle
+                source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
+             end do
+          case (2) 
+             do ig = -ntgrid, ntgrid
+                if (il < ittp(ig)) cycle
+                source(ig) = source(ig) + 0.5*code_dt*( &
+                     1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
+             end do
+          case default
+             do ig = -ntgrid, ntgrid
+                if (il < ittp(ig)) cycle
+                source(ig) = source(ig) + 0.5*code_dt*( &
+                     (23./12.)*gexp_1(ig,isgn,iglo) &
+                     - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                     + (5./12.) *gexp_3(ig,isgn,iglo))
+             end do
+          end select
+#else
 ! add in nonlinear terms 
           if (nonlin) then         
              select case (istep)
@@ -2883,24 +2918,25 @@ subroutine check_dist_fn(report_unit)
              case (1)
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*gnl_1(ig,isgn,iglo)
+                   source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
                 end do
              case (2) 
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*( &
-                        1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
+                        1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
                 end do                   
              case default
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*( &
-                          (23./12.)*gnl_1(ig,isgn,iglo) &
-                        - (4./3.)  *gnl_2(ig,isgn,iglo) &
-                        + (5./12.) *gnl_3(ig,isgn,iglo))
+                          (23./12.)*gexp_1(ig,isgn,iglo) &
+                        - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                        + (5./12.) *gexp_3(ig,isgn,iglo))
                 end do
              end select
           end if
+#endif
 
        end if
     end if
@@ -3013,6 +3049,28 @@ subroutine check_dist_fn(report_unit)
 #endif
       end do
         
+#ifdef LOWFLOW
+      select case (istep)
+      case (0)
+         ! nothing
+      case (1)
+         do ig = -ntgrid, ntgrid-1
+            source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
+         end do
+      case (2) 
+         do ig = -ntgrid, ntgrid-1
+            source(ig) = source(ig) + 0.5*code_dt*( &
+                 1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
+         end do
+      case default
+         do ig = -ntgrid, ntgrid-1
+            source(ig) = source(ig) + 0.5*code_dt*( &
+                 (23./12.)*gexp_1(ig,isgn,iglo) &
+                 - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                 + (5./12.) *gexp_3(ig,isgn,iglo))
+         end do
+      end select
+#else
 ! add in nonlinear terms 
       if (nonlin) then         
          select case (istep)
@@ -3020,22 +3078,23 @@ subroutine check_dist_fn(report_unit)
             ! nothing
          case (1)
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*gnl_1(ig,isgn,iglo)
+               source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
             end do
          case (2) 
             do ig = -ntgrid, ntgrid-1
                source(ig) = source(ig) + 0.5*code_dt*( &
-                    1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
+                    1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
             end do
          case default
             do ig = -ntgrid, ntgrid-1
                source(ig) = source(ig) + 0.5*code_dt*( &
-                      (23./12.)*gnl_1(ig,isgn,iglo) &
-                    - (4./3.)  *gnl_2(ig,isgn,iglo) &
-                    + (5./12.) *gnl_3(ig,isgn,iglo))
+                      (23./12.)*gexp_1(ig,isgn,iglo) &
+                    - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                    + (5./12.) *gexp_3(ig,isgn,iglo))
             end do
          end select
       end if
+#endif
 
     end subroutine set_source
 
@@ -6545,7 +6604,7 @@ subroutine check_dist_fn(report_unit)
     if (allocated(connections)) deallocate (connections)
     if (allocated(g_adj)) deallocate (g_adj)
     if (allocated(g)) deallocate (g, gnew, g0)
-    if (allocated(gnl_1)) deallocate (gnl_1, gnl_2, gnl_3)
+    if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
     if (allocated(g_h)) deallocate (g_h, save_h)
     if (allocated(kx_shift)) deallocate (kx_shift)
     if (allocated(jump)) deallocate (jump)
