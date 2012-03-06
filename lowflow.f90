@@ -6,7 +6,8 @@ module lowflow
 
   real, dimension (:), allocatable :: dphidth
   real, dimension (:,:,:,:,:), allocatable :: coefs
-  real, dimension (:,:), allocatable :: phineo
+  real, dimension (:,:), allocatable :: phineo, dcoefsdr
+  real, dimension (:,:,:), allocatable :: dcoefsdth
   real, dimension (:), allocatable :: rad_neo, theta_neo
 
 contains
@@ -31,9 +32,9 @@ contains
     real, dimension (:,:,:,:,:), allocatable :: hneo
     real, dimension (:,:,:,:), allocatable :: dHdxi, dHdE, vpadHdE, dHdr, dHdth
     real, dimension (:,:,:), allocatable :: legp
-    real, dimension (:,:), allocatable :: xi, emax
+    real, dimension (:,:), allocatable :: xi, emax, dphidr
     real, dimension (:,:,:,:), allocatable :: chebyp1, chebyp2
-    real, dimension (:), allocatable :: dphidr, dl_over_b, transport
+    real, dimension (:), allocatable :: dl_over_b, transport
     real, dimension (:), allocatable :: pflx, qflx, vflx, qpar, upar1
     real :: radius, jboot, phi2, vtor, upar0
 
@@ -68,14 +69,16 @@ contains
        end do
     end do
 
-    ! ns is nspec, nc is nenergy, nl is nlambda
+    ! ns is nspec, nc is nenergy, nl is nlambda,
+    ! nr is number of radii
     ! taken from neo
     call read_neocoefs (theta, ns, nc, nl, nr, ir_loc)
 
     ! TMP FOR TESTING -- MAB
 !    coefs = 0.0
+!    coefs(:,:,0,0,:) = 1.0
 !    coefs(:,:,1,0,:) = 0.6 ; coefs(:,:,3,0,:) = 0.4
-!    coefs(:,0,1,:) = 1.0
+!    coefs(:,:,1,0,:) = 1.0
     
     allocate (chebyp1(nr,nenergy,0:nc-1,ns), chebyp2(nr,nenergy,0:nc-1,ns))
     allocate (legp(ntheta,nxi,0:nl+1))
@@ -85,7 +88,7 @@ contains
     allocate (  dHdxi(ntheta,nxi,nenergy,ns))
     allocate (   dHdE(ntheta,nxi,nenergy,ns))
     allocate (vpadHdE(ntheta,nxi,nenergy,ns))
-    allocate (dphidr(ntheta))
+    allocate (dphidr(ntheta,ns))
     allocate (dl_over_b(ntheta))
     allocate (emax(nr,ns))
 
@@ -118,13 +121,52 @@ contains
           end do
        end do
     end do
-    
+
+    ! get dphi/dr at GS2 radius (center of 3 NEO radii)
+    ! note that radgrad takes derivative of e*phi/Tref,
+    ! not the derivative of Z_s*e*phi/T_s
+    ! which is why the other piece is added in after (i.e. the T(r))
+    do ig = 1, ntheta
+       call get_radgrad (phineo(:,ig), rad_neo, ir_loc, dphidr(ig,1))
+       do is = 1, ns
+          dphidr(ig,is) = spec(is)%zt*(dphidr(ig,1)+phineo(ir_loc,ig)*spec(is)%tprim)
+       end do
+    end do
+
+    ! get radial derivative of F_1/F_0 at fixed (xi,E)
+    ! note that F_1/F_0 = H_1/F_0 - Z_s * e * Phi / T_s
+    do is = 1, ns
+       do ig = 1, ntheta
+          do ie = 0, nc-1
+             do ixi = 0, nl
+                ! get radial derivative of spectral coefficients of H_1/H_0
+                call get_radgrad (coefs(:,ig,ixi,ie,is), rad_neo, ir_loc, dcoefsdr(ixi,ie))
+             end do
+          end do
+          call get_gradH (dcoefsdr, dphidr(ig,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), dHdr(ig,:,:,is))
+       end do
+    end do
+
+    ! get theta derivative of F_1/F_0 at fixed (xi,E)
+    do is = 1, ns
+       do ie = 0, nc-1
+          do ixi = 0, nl
+             ! get theta derivative of spectral coefficients of F_1/F_0
+             call get_thgrad (coefs(ir_loc,:,ixi,ie,is), theta, dcoefsdth(:,ixi,ie))
+          end do
+       end do
+       do ig = 1, ntheta
+          call get_gradH (dcoefsdth(ig,:,:), dphidth(ig)*spec(is)%zt, legp(ig,:,:), chebyp1(ir_loc,:,:,is), dHdth(ig,:,:,is))
+       end do
+    end do
+
     do is = 1, ns
        do ig = 1, ntheta
           do ir = 1, nr
              ! get_H returns hneo = F_1 / F_0
-             call get_H (coefs(ir,ig,:,:,is), legp(ig,:,:), chebyp1(ir,:,:,is), hneo(ir,ig,:,:,is), phineo(ir,ig))
+             call get_H (coefs(ir,ig,:,:,is), legp(ig,:,:), chebyp1(ir,:,:,is), hneo(ir,ig,:,:,is), phineo(ir,ig), ig, ntheta, ir, is, xi)
           end do
+          ! get dH/dxi at fixed E and dH/dE at fixed xi
           call get_dHdxi (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), xi(ig,:), dHdxi(ig,:,:,is))
           call get_dHdE (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), chebyp2(ir_loc,:,:,is), &
                energy(:), emax(ir_loc,is), dHdE(ig,:,:,is))
@@ -132,23 +174,19 @@ contains
     end do
 
     ! get dH/dtheta and dH/dr
-    do is = 1, ns
-       do ie = 1, nenergy
-          do ixi = 1, nxi
-             do ig = 1, ntheta
-                call get_dHdr (hneo(:,ig,ixi,ie,is), rad_neo, ir_loc, dHdr(ig,ixi,ie,is))
-             end do
-             call get_dHdth (hneo(ir_loc,:,ixi,ie,is), theta, dHdth(:,ixi,ie,is))
-          end do
-       end do
-    end do
+!     do is = 1, ns
+!        do ie = 1, nenergy
+!           do ixi = 1, nxi
+!              do ig = 1, ntheta
+!                 call get_dHdr (hneo(:,ig,ixi,ie,is), rad_neo, ir_loc, dHdr(ig,ixi,ie,is))
+!              end do
+!              call get_dHdth (hneo(ir_loc,:,ixi,ie,is), theta, dHdth(:,ixi,ie,is))
+!           end do
+!        end do
+!     end do
 
-    ! get dphi/dr
-    do ig = 1, ntheta
-       call get_dHdr (phineo(:,ig), rad_neo, ir_loc, dphidr(ig))
-    end do
-
-    dphidrc(1:ntheta-1) = 0.5*(dphidr(1:ntheta-1) + dphidr(2:ntheta))
+    ! this is actually dphi/dr - phi*d(ln T)/dr, where phi = e*Phi/Tref
+    dphidrc(1:ntheta-1) = 0.5*(dphidr(1:ntheta-1,1) + dphidr(2:ntheta,1))/spec(1)%zt
     dphidrc(ntheta) = dphidrc(1)
     dphidthc(1:ntheta-1) = 0.5*(dphidth(1:ntheta-1) + dphidth(2:ntheta))
     dphidthc(ntheta) = dphidth(1)
@@ -200,10 +238,33 @@ contains
     dHdEc(ntheta,:,:,:,:) = 0.0 ; dHdxic(ntheta,:,:,:,:) = 0.0 ; hneoc(ntheta,:,:,:,:) = 0.0
     dphidrc(ntheta) = 0.0 ; dphidthc(ntheta) = 0.0
 
+    ! TMP FOR TESTING -- MAB
+!     if (proc0) then
+!        do ixi = 1, nxi
+!           do ig = 1, ntheta-1
+!              if (.not.forbid(ig,il)) &
+!                   write (*,fmt='(a7,4e14.5)') 'hneo', theta(ig), xi(ig,ixi), hneo(ir_loc,ig,ixi,nenergy/2,1), &
+!                   0.5*(hneo(ir_loc,ig,ixi,nenergy/2,1)+hneo(ir_loc,ig+1,ixi,nenergy/2,1))
+!           end do
+!           write (*,*)
+!        end do
+!     end if
+
+    ! TMP FOR TESTING -- MAB
+!     if (proc0) then
+!        do il = 1, nlambda
+!           do ig = 1, ntheta-1
+!              if (.not.forbid(ig,il)) &
+!                   write (*,fmt='(a7,5e14.5)') 'hneoc', theta(ig), 0.5*(xi(ig,2*nlambda-il)+xi(ig+1,2*nlambda-il)), 0.5*(xi(ig,il)+xi(ig+1,il)), hneoc(ig,il,nenergy/2,1,1), legp(ig,il,1)
+!           end do
+!           write (*,*)
+!        end do
+!     end if
+
     dl_over_b = delthet*jacob
     dl_over_b = dl_over_b/sum(dl_over_b)
 
-    ! get parallel heat flux (int d3v vpa * v^2 * F1^{nc})                                                                                                                  
+    ! get parallel heat flux (int d3v vpa * v^2 * F1^{nc})
     allocate (pflx(ns), qflx(ns), vflx(ns), upar1(ns), qpar(ns))
     qpar = 0.
     do ie = 1, nenergy
@@ -308,7 +369,12 @@ contains
     
   end subroutine legendre
   
-  subroutine get_H (gjk, legdre, chebyshv, h, phi)
+  subroutine get_H (gjk, legdre, chebyshv, h, phi, ig, nth, ir, is, xi)
+
+    use species, only: spec
+
+    ! TMP FOR TESTING -- MAB
+!    use mp, only: proc0
 
     implicit none
 
@@ -316,6 +382,8 @@ contains
     real, dimension (:,0:), intent (in) :: legdre, chebyshv
     real, intent (in) :: phi
     real, dimension (:,:), intent (out) :: h
+    integer, intent (in) :: ig, nth, ir, is
+    real, dimension (:,:), intent (in) :: xi
 
     integer :: ix, ij, ik
 
@@ -329,20 +397,29 @@ contains
        end do
     end do
 
-    ! F_1 = H_1 - Phi_1
-    h = h - phi
+    ! F_1s = H_1s - Z_s*e*Phi_1/T_s
+    ! want Z_s*e*Phi/T_s, but phi from neo is e*Phi/Tnorm
+    ! at center (GS2) radius, this is a simple multiply by Z_s * Tref/Ts
+    h = h - spec(is)%zt*phi
 
-!     do ik = 0, size(gjk,2)-1
-!        do ij = 0, size(gjk,1)-1
-!           write (*,*) 'chebyshv', ij, ik, gjk(ij,ik)
+!     if (ig==(nth-1)/2+1 .and. ir==2 .and. is==1 .and. proc0) then
+!        do ik = 0, size(gjk,2)-1
+!           do ij = 0, size(gjk,1)-1
+!              write (*,fmt='(a13,2i4,e14.5)') 'ij, ik, gjk', ij, ik, gjk(ij,ik)
+!           end do
+!           write (*,*)
 !        end do
-!     end do
 
-!    do ij = 1, size(h,2)
-!       do ix = 1, size(h,1)
-!          write (*,*) 'hneo, ix, ie', ix, ij, h(ix,ij)
-!       end do
-!    end do
+!        do ix = 1, size(h,1)
+!           write (*,fmt='(a12,i4,e14.5)') 'ix, legdre', xi(ig,ix), legdre(ix,1)
+!        end do
+!        write (*,*)
+    
+!        do ix = 1, size(h,1)
+!           write (*,*) 'hneo, ix, ie', xi(ig,ix), h(ix,size(h,2)/2)
+!        end do
+!        write (*,*)
+!     end if
 
   end subroutine get_H
 
@@ -360,6 +437,8 @@ contains
     
     dH = 0.0
     
+    ! calculate dH/dxi = sum_{j,k} g_{j,k} * T_{k}(z) * d(P_{j}(xi))/d(xi), where z=2*sqrt(E/EMAX)-1
+    ! note that dP_{j}/dxi = (j+1)*(P_{j+1} - xi*P_{j})/(xi^2-1)
     do ix = 1, size(x)
        do ik = 0, size(gjk,2)-1
           do ij = 0, size(gjk,1)-1
@@ -386,6 +465,9 @@ contains
     
     dH = 0.0
     
+    ! dH/dE at fixed xi is sum_{j,k} c_{j,k}*P_j(xi)*d(T_{n}(z))/dz / sqrt(E*EMAX)
+    ! z=2*sqrt(E/EMAX)-1
+    ! note that d(T_{k})/dz = k*U_{k-1}, where U_k is the Chebyshev polynomial of the 2nd kind
     do ix = 1, size(x)
        do ik = 0, size(gjk,2)-1
           if (ik==0) then
@@ -405,19 +487,20 @@ contains
     
   end subroutine get_dHdE
 
-  subroutine get_dHdr (h, rad, ir, dh)
+  ! returns radial derivative at center of 3 points
+  subroutine get_radgrad (h, rad, ir, dh)
 
     implicit none
-
+    
     real, dimension (:), intent (in) :: h, rad
     integer, intent (in) :: ir
     real, intent (out) :: dh
-
+    
     dh = (h(ir+1)-h(ir-1))/(rad(ir+1)-rad(ir-1))
+    
+  end subroutine get_radgrad
 
-  end subroutine get_dHdr
-
-  subroutine get_dHdth (h, th, dh)
+  subroutine get_thgrad (h, th, dh)
 
     implicit none
 
@@ -435,7 +518,36 @@ contains
     dh(1) = (h(2)-h(nth))/(2.*(th(2)-th(1)))
     dh(nth) = (h(1)-h(nth-1))/(2.*(th(nth)-th(nth-1)))
 
-  end subroutine get_dHdth
+  end subroutine get_thgrad
+
+  subroutine get_gradH (dgjk, dphi, legdre, chebyshv, dH)
+    
+    implicit none
+    
+    real, dimension (0:,0:), intent (in) :: dgjk
+    real, intent (in) :: dphi
+    real, dimension (:,0:), intent (in) :: legdre
+    real, dimension (:,0:), intent (in) :: chebyshv
+    real, dimension (:,:), intent (out) :: dH
+    
+    integer :: ij, ik, ix
+    
+    dH = 0.0
+    
+    ! calculate dH/drho or dH/dtheta at fixed (xi,E) as sum_{j,k} d(g_{j,k})/drho * T_{k}(z) * P_{j}(xi)
+    ! similarly for dH/dtheta
+    ! where z=2*sqrt(E/EMAX)-1
+    do ix = 1, size(legdre,1)
+       do ik = 0, size(dgjk,2)-1
+          do ij = 0, size(dgjk,1)-1
+             dH(ix,:) = dH(ix,:) + chebyshv(:,ik)*legdre(ix,ij)*dgjk(ij,ik)
+          end do
+       end do
+    end do
+
+    dH = dH - dphi
+
+  end subroutine get_gradH
 
   subroutine read_neocoefs (theta, nspec_neo, nenergy_neo, nxi_neo, nrad_neo, ir_neo)
 
@@ -495,6 +607,10 @@ contains
     if (.not. allocated(coefs)) allocate (coefs(nrad_neo,ntheta,0:nxi_neo,0:nenergy_neo-1,nspec_neo))
     if (.not. allocated(phineo)) allocate (phineo(nrad_neo,ntheta))
     if (.not. allocated(dphidth)) allocate (dphidth(ntheta))
+    if (.not. allocated(dcoefsdr)) then
+       allocate (dcoefsdr(0:nxi_neo,0:nenergy_neo-1)) ; dcoefsdr = 0.
+       allocate (dcoefsdth(ntheta,0:nxi_neo,0:nenergy_neo-1)) ; dcoefsdth = 0.
+    end if
 
     if (proc0) then
        ! read in H1^{nc} (adiabatic piece of F1^{nc}) from neo's f.out file
@@ -545,11 +661,11 @@ contains
 
           ! at central radius, calculate dphi/dth and interpolate onto gs2 grid
           if (ir == 2) then
-             call get_dHdth (neo_phi, theta_neo, dneo_phi)
+             call get_thgrad (neo_phi, theta_neo, dneo_phi)
              call lf_spline (theta_neo, dneo_phi, theta, dphidth, dum)
           end if
        end do
-
+       
        close (neophi_unit)
 
     end if
@@ -567,6 +683,9 @@ contains
           end do
        end do
     end do
+
+    ! TMP FOR TESTING -- MAB
+!    phineo = 0. ; dphidth = 0.
 
     deallocate (tmp, neo_coefs, theta_neo, neo_phi, dneo_phi, dum)
 

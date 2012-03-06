@@ -88,12 +88,8 @@ module dist_fn
   real, dimension (:,:,:,:,:,:), allocatable :: wdriftttp
   ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
 
-!>MAB
-!  real, dimension (:,:,:), allocatable :: wcoriolis
   real, dimension (:,:,:), allocatable :: wdrift
   ! (-ntgrid:ntgrid, 2, -g-layout-)
-
-!<MAB
 
   real, dimension (:,:,:), allocatable :: wstar
   ! (naky,negrid,nspec) replicated
@@ -2760,7 +2756,7 @@ subroutine check_dist_fn(report_unit)
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         isgn, iglo, sourcefac, source)
 #ifdef LOWFLOW
-    use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac
+    use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
 #endif
     use dist_fn_arrays, only: aj0, aj1, vperp2, vpar, vpac, g, ittp
     use theta_grid, only: ntgrid, theta, bmag
@@ -2864,13 +2860,11 @@ subroutine check_dist_fn(report_unit)
              if (il < ittp(ig)) cycle
              source(ig) &
                   = g(ig,2,iglo)*a(ig,2,iglo) &
-                  ! does wdriftttp need to be changed to wdfac here?
 #ifdef LOWFLOW
-!                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is)*hneoc(ig,2,iglo)+wcoriolis(ig,2,iglo))*phigavg(ig) &
-                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is,2)*hneoc(ig,2,iglo))*phigavg(ig) &
+!                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is,2)*hneoc(ig,2,iglo))*phigavg(ig) &
+                  - anon(ie)*zi*(wdttpfac(ig,it,ik,ie,is,2)*hneoc(ig,2,iglo))*phigavg(ig) &
                   + zi*wstar(ik,ie,is)*hneoc(ig,2,iglo)*phigavg(ig)
 #else
-!                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is)+wcoriolis(ig,2,iglo))*phigavg(ig) &
                   - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is,2))*phigavg(ig) &
                   + zi*wstar(ik,ie,is)*phigavg(ig)
 #endif             
@@ -2881,7 +2875,11 @@ subroutine check_dist_fn(report_unit)
              do ig = -ntgrid, ntgrid
                 if (il < ittp(ig)) cycle             
                 source(ig) = source(ig) - zi*anon(ie)* &
+#ifdef LOWFLOW
+                     wdttpfac(ig,it,ik,ie,is,isgn)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
+#else
                      wdriftttp(ig,it,ik,ie,is,isgn)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
+#endif
              end do
           endif
 
@@ -6626,7 +6624,7 @@ subroutine check_dist_fn(report_unit)
   subroutine init_lowflow
 
     use constants, only: zi
-    use dist_fn_arrays, only: vparterm, wdfac, vpac
+    use dist_fn_arrays, only: vparterm, wdfac, vpac, wdttpfac
     use dist_fn_arrays, only: wstarfac, hneoc, vpar
     use species, only: spec, nspec
     use geometry, only: rhoc
@@ -6634,10 +6632,9 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: gds23, gds24, gds24_noq, cvdrift_th, gbdrift_th
     use theta_grid, only: drhodpsi, qval
     use le_grids, only: energy, al, negrid, nlambda, forbid
-    use kt_grids, only: theta0
+    use kt_grids, only: theta0, ntheta0, naky
     use gs2_time, only: code_dt, user_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx, it_idx
-!    use run_parameters, only: tunits, wunits, include_lowflow, rhostar, neo_test
     use run_parameters, only: tunits, wunits, rhostar, neo_test
     use lowflow, only: get_lowflow_terms
     use file_utils, only: open_output_file, close_output_file
@@ -6662,17 +6659,18 @@ subroutine check_dist_fn(report_unit)
        allocate (wdfac(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (hneoc(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (wstarfac(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (wdttpfac(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec,2))
     end if
-    vparterm = 0. ; wdfac = 0. ; hneoc = 1. ; wstarfac = 0.
+    vparterm = 0. ; wdfac = 0. ; hneoc = 1. ; wstarfac = 0. ; wdttpfac = 0.
 
-!    if (include_lowflow) then
-    allocate (tmp1(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-    allocate (tmp2(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-    allocate (tmp3(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-    allocate (tmp4(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-    allocate (tmp5(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
-    allocate (tmp6(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
+    allocate (tmp1(-ntgrid:ntgrid,nlambda,negrid,2,nspec)) ; tmp1 = 0.
+    allocate (tmp2(-ntgrid:ntgrid,nlambda,negrid,2,nspec)) ; tmp2 = 0.
+    allocate (tmp3(-ntgrid:ntgrid,nlambda,negrid,2,nspec)) ; tmp3 = 0.
+    allocate (tmp4(-ntgrid:ntgrid,nlambda,negrid,2,nspec)) ; tmp4 = 0.
+    allocate (tmp5(-ntgrid:ntgrid,nlambda,negrid,2,nspec)) ; tmp5 = 0.
+    allocate (tmp6(-ntgrid:ntgrid,nlambda,negrid,2,nspec)) ; tmp6 = 0.
     allocate (tmp7(-ntgrid:ntgrid), tmp8(-ntgrid:ntgrid), tmp9(-ntgrid:ntgrid))
+    tmp7 = 0. ; tmp8 = 0. ; tmp9 = 0.
 
     ! tmp1 is dH^{neo}/dE, tmp2 is dH^{neo}/dxi, tmp3 is vpa*dH^{neo}/dE,
     ! tmp4 is dH^{neo}/dr, tmp5 is dH^{neo}/dtheta, tmp6 is H^{neo}
@@ -6728,7 +6726,7 @@ subroutine check_dist_fn(report_unit)
        
        ! get cell-centered (in theta) values
        
-       ! this is the contribution from dH^{neo}/dtheta (part of v_E dot grad H^{neo})
+       ! this is the contribution from dH^{neo}/dtheta (part of v_E dot grad F^{neo})
        ! takes care of part of Eq. 60 in MAB's GS2 notes
        wstarfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*wunits(ik) &
             *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
@@ -6737,17 +6735,18 @@ subroutine check_dist_fn(report_unit)
             *(gds23(-ntgrid:ntgrid-1)+gds23(-ntgrid+1:ntgrid)+theta0(it,ik)*(gds24(-ntgrid:ntgrid-1)+gds24(-ntgrid+1:ntgrid))) &
             *tmp5(-ntgrid:ntgrid-1,il,ie,2,is)*code_dt
        
-       ! this is the contribution from dH^{neo}/dr (part of v_E dot grad H^{neo})
+       ! this is the contribution from dH^{neo}/dr (part of v_E dot grad F^{neo})
        ! takes care of part of Eq. 60 in MAB's GS2 notes
        wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + tmp4(:,il,ie,:,is)*code_dt*wunits(ik)
        
        ! this is the contribution from v_E^par . grad F0
-       wstarfac(-ntgrid:ntgrid-1,1,iglo) = wstarfac(-ntgrid:ntgrid-1,1,iglo) &
-            - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
-            *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
-       wstarfac(-ntgrid:ntgrid-1,2,iglo) = wstarfac(-ntgrid:ntgrid-1,2,iglo) &
-            - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
-            *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+       ! TMP FOR TESTING -- MAB
+!        wstarfac(-ntgrid:ntgrid-1,1,iglo) = wstarfac(-ntgrid:ntgrid-1,1,iglo) &
+!             - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+!             *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+!        wstarfac(-ntgrid:ntgrid-1,2,iglo) = wstarfac(-ntgrid:ntgrid-1,2,iglo) &
+!             - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
+!             *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
        
        ! this is the contribution from the last term of the 2nd line of Eq. 43 in 
        ! MAB's GS2 notes (arises because the NEO dist. fn. is given at v/vt, and
@@ -6768,8 +6767,8 @@ subroutine check_dist_fn(report_unit)
             - dhdec(-ntgrid:ntgrid-1,1,iglo)
        wdfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/energy(ie)**1.5 &
             - dhdec(-ntgrid:ntgrid-1,2,iglo)
-       wdfac(ntgrid,:,:) = 0.0
-       
+       wdfac(ntgrid,:,iglo) = 0.0
+
        ! takes care of part of curvature drift term in Eq. 54 of MAB's GS2 notes.
        ! no code_dt in cdfac because it multiples wcurv, which has code_dt in it.
        cdfac(-ntgrid:ntgrid-1,1,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/sqrt(energy(ie))
@@ -6794,17 +6793,21 @@ subroutine check_dist_fn(report_unit)
        ! redefine vpar from vpa bhat dot grad theta to
        ! vpa bhat dot grad theta + v_Magnetic dot grad theta
        ! this accounts for the terms in Sec. 5.1 of MAB's GS2 notes
-       vpar(-ntgrid:ntgrid-1,1,iglo) = vpar(-ntgrid:ntgrid-1,1,iglo) + &
-            0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
-            *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,1,iglo)**2 &
-            + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,1,iglo)**2))
-       vpar(-ntgrid:ntgrid-1,2,iglo) = vpar(-ntgrid:ntgrid-1,2,iglo) + &
-            0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
-            *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,2,iglo)**2 &
-            + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,2,iglo)**2))
+       ! TMP FOR TESTING -- MAB
+!         vpar(-ntgrid:ntgrid-1,1,iglo) = vpar(-ntgrid:ntgrid-1,1,iglo) + &
+!              0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
+!              *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,1,iglo)**2 &
+!              + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,1,iglo)**2))
+!         vpar(-ntgrid:ntgrid-1,2,iglo) = vpar(-ntgrid:ntgrid-1,2,iglo) + &
+!              0.5*rhostar*tunits(ik)*code_dt/delthet(-ntgrid:ntgrid-1) &
+!              *(cvdrift_th(-ntgrid:ntgrid-1)*vpac(-ntgrid:ntgrid-1,2,iglo)**2 &
+!              + gbdrift_th(-ntgrid:ntgrid-1)*0.5*(energy(ie)-vpac(-ntgrid:ntgrid-1,2,iglo)**2))
        
     end do
     
+    ! TMP FOR TESTING -- MAB
+!    wdfac = 0. ; cdfac = 0. ; hneoc = 1. ; wstarfac = 0. ; wdttpfac = 0.
+
     deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9)
  
     ! vparterm is -2*vpar*(1+H^{neo}) - Ze*(vpa . grad phi^{tb})*(dH^{neo}/dE)
@@ -6820,14 +6823,17 @@ subroutine check_dist_fn(report_unit)
     wdfac = wdfac + hneoc
     
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        wdfac(:,1,iglo) = wdfac(:,1,iglo)*wdrift(:,1,iglo) &
-!            + cdfac(:,1,iglo)*wcurv(:,iglo) + wcoriolis(:,1,iglo)/spec(is)%stm
             + cdfac(:,1,iglo)*wcurv(:,iglo)
        wdfac(:,2,iglo) = wdfac(:,2,iglo)*wdrift(:,2,iglo) &
-!            + cdfac(:,2,iglo)*wcurv(:,iglo) + wcoriolis(:,2,iglo)/spec(is)%stm
+            + cdfac(:,2,iglo)*wcurv(:,iglo)
+       wdttpfac(:,it,ik,ie,is,1) = wdfac(:,1,iglo)*wdriftttp(:,it,ik,ie,is,1) &
+            + cdfac(:,1,iglo)*wcurv(:,iglo)
+       wdttpfac(:,it,ik,ie,is,2) = wdfac(:,2,iglo)*wdriftttp(:,it,ik,ie,is,2) &
             + cdfac(:,2,iglo)*wcurv(:,iglo)
        ! hneoc below accounts for usual wstar term, as well as last of three terms
        ! multiplying F_1 in Eq. 42 of MAB'S GS2 notes

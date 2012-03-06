@@ -9,7 +9,7 @@ module dist_fn_arrays
   public :: apar_ext, kperp2, c_rate
   public :: g_adjust
 #ifdef LOWFLOW
-  public :: hneoc, vparterm, wdfac, wstarfac
+  public :: hneoc, vparterm, wdfac, wstarfac, wdttpfac
 #endif
 
 
@@ -49,6 +49,8 @@ module dist_fn_arrays
   ! v-dependent factors in low-flow terms
   real, dimension (:,:,:), allocatable :: hneoc, vparterm, wdfac, wstarfac
   ! (-ntgrid:ntgrid,2, -g-layout-)
+  real, dimension (:,:,:,:,:,:), allocatable :: wdttpfac
+  ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspecies,2)
 #endif
 
   private
