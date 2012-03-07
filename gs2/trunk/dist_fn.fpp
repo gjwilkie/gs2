@@ -1269,8 +1269,8 @@ subroutine check_dist_fn(report_unit)
                   *ainv(ig,isgn,iglo)
              a(ig,isgn,iglo) &
                   = 1.0 + bd &
-!                  + fexp(is)*spec(is)%tz*(-zi*wd*(1.0+bd) - 2.0*vp)
-                  + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0+bd) - 2.0*vp)
+                  + fexp(is)*spec(is)%tz*(-zi*wd*(1.0+bd) - 2.0*vp)
+!                  + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0+bd) - 2.0*vp)
              b(ig,isgn,iglo) &
                   = 1.0 - bd &
 !                  + fexp(is)*spec(is)%tz*(-zi*(wd+wc)*(1.0-bd) + 2.0*vp)
