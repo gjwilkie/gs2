@@ -45,15 +45,16 @@ contains
     logical, save :: initialized = .false.
     logical, dimension (:,:), allocatable :: forbid
     
-    if (initialized) return
-    initialized = .true.
+!    if (initialized) return
+!    initialized = .true.
 
     ntheta = size(theta)
     nlambda = size(al)
     nenergy = size(energy)
     nxi = 2*nlambda-1
 
-    allocate (xi(ntheta,nxi), forbid(ntheta,nxi))
+    if (.not. allocated(xi)) allocate (xi(ntheta,nxi))
+    if (.not. allocated(forbid)) allocate(forbid(ntheta,nxi))
     forbid = .false. ; xi = 0.0
 
     ! get xi=vpar/v from lambda=(mu/E)*Bnorm
@@ -80,17 +81,17 @@ contains
 !    coefs(:,:,1,0,:) = 0.6 ; coefs(:,:,3,0,:) = 0.4
 !    coefs(:,:,1,0,:) = 1.0
     
-    allocate (chebyp1(nr,nenergy,0:nc-1,ns), chebyp2(nr,nenergy,0:nc-1,ns))
-    allocate (legp(ntheta,nxi,0:nl+1))
-    allocate (hneo(nr,ntheta,nxi,nenergy,ns))
-    allocate (   dHdr(ntheta,nxi,nenergy,ns))
-    allocate (  dHdth(ntheta,nxi,nenergy,ns))
-    allocate (  dHdxi(ntheta,nxi,nenergy,ns))
-    allocate (   dHdE(ntheta,nxi,nenergy,ns))
-    allocate (vpadHdE(ntheta,nxi,nenergy,ns))
-    allocate (dphidr(ntheta,ns))
-    allocate (dl_over_b(ntheta))
-    allocate (emax(nr,ns))
+    if (.not. allocated(chebyp1)) allocate (chebyp1(nr,nenergy,0:nc-1,ns), chebyp2(nr,nenergy,0:nc-1,ns))
+    if (.not. allocated(legp)) allocate (legp(ntheta,nxi,0:nl+1))
+    if (.not. allocated(hneo)) allocate (hneo(nr,ntheta,nxi,nenergy,ns))
+    if (.not. allocated(dHdr)) allocate (   dHdr(ntheta,nxi,nenergy,ns))
+    if (.not. allocated(dHdth)) allocate (  dHdth(ntheta,nxi,nenergy,ns))
+    if (.not. allocated(dHdxi)) allocate (  dHdxi(ntheta,nxi,nenergy,ns))
+    if (.not. allocated(dHdE)) allocate (   dHdE(ntheta,nxi,nenergy,ns))
+    if (.not. allocated(vpadHdE)) allocate (vpadHdE(ntheta,nxi,nenergy,ns))
+    if (.not. allocated (dphidr)) allocate (dphidr(ntheta,ns))
+    if (.not. allocated (dl_over_b)) allocate (dl_over_b(ntheta))
+    if (.not. allocated (emax)) allocate (emax(nr,ns))
 
     ! better to be taken from neo
     if (proc0) write (*,*) '# make sure ENERGY_MAX=16.0 in NEO INPUT file'
@@ -265,7 +266,7 @@ contains
     dl_over_b = dl_over_b/sum(dl_over_b)
 
     ! get parallel heat flux (int d3v vpa * v^2 * F1^{nc})
-    allocate (pflx(ns), qflx(ns), vflx(ns), upar1(ns), qpar(ns))
+    if (.not. allocated(pflx)) allocate (pflx(ns), qflx(ns), vflx(ns), upar1(ns), qpar(ns))
     qpar = 0.
     do ie = 1, nenergy
        do ixi = 1, nxi
@@ -277,7 +278,7 @@ contains
        end do
     end do
 
-    allocate (transport(5+ns*8))
+    if (.not. allocated(transport)) allocate (transport(5+ns*8))
 
     if (proc0) then
        call get_unused_unit (neo_unit)
@@ -601,9 +602,9 @@ contains
     ! for now, set ir_neo by hand, but best to derive it from neo output in future
     ir_neo = 2
 
-    allocate (tmp(ntheta_neo*(nxi_neo+1)*nenergy_neo*nspec_neo*nrad_neo))
-    allocate (neo_coefs(ntheta_neo), neo_phi(ntheta_neo), dneo_phi(ntheta_neo))
-    allocate (dum(ntheta))
+    if (.not. allocated(tmp)) allocate (tmp(ntheta_neo*(nxi_neo+1)*nenergy_neo*nspec_neo*nrad_neo))
+    if (.not. allocated(neo_coefs)) allocate (neo_coefs(ntheta_neo), neo_phi(ntheta_neo), dneo_phi(ntheta_neo))
+    if (.not. allocated(dum)) allocate (dum(ntheta))
     if (.not. allocated(coefs)) allocate (coefs(nrad_neo,ntheta,0:nxi_neo,0:nenergy_neo-1,nspec_neo))
     if (.not. allocated(phineo)) allocate (phineo(nrad_neo,ntheta))
     if (.not. allocated(dphidth)) allocate (dphidth(ntheta))
@@ -640,7 +641,7 @@ contains
 
     deallocate (tmp)
 
-    allocate (tmp(ntheta_neo*nrad_neo))
+    if (.not. allocated(tmp)) allocate (tmp(ntheta_neo*nrad_neo))
 
     if (proc0) then
        ! read in phi1^{nc} from neo's phi.out file
