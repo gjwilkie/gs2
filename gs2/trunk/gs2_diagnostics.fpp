@@ -671,7 +671,7 @@ contains
     use gs2_transforms, only: transform2, inverse2
     use gs2_save, only: gs2_save_for_restart
     use constants
-    use gs2_time, only: user_time, user_dt
+    use gs2_time, only: user_time, user_dt, code_dt
     use gs2_io, only: nc_eigenfunc, nc_final_fields, nc_final_epar, nc_final_an
     use gs2_io, only: nc_final_moments, nc_finish
     use antenna, only: dump_ant_amp
