@@ -854,18 +854,16 @@ contains
        end if
    
        if (write_final_db) then  ! definition here assumes we are not using wstar_units
-          db = 0
+          db = 0.
           do ik = 1, naky
              do it = 1, ntheta0
                 dbfac(it,ik) = 1./sum(delthet/bmag/gradpar)/maxval(cabs(phinew(:,it,ik)),1) &
                      * cabs(log(aparnew(1,it,ik)/apar(1,it,ik)))/code_dt
                 ig = -ntg_out
-                db(ig, it, ik) = 0.5*aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)*dbfac(it,ik)
+                db(ig, it, ik) = aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)*dbfac(it,ik)
                 do ig = -ntg_out+1, ntg_out-1
                    db(ig, it, ik) = db(ig-1, it, ik) + aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)*dbfac(it,ik)
                 end do
-                ig = ntg_out
-                db(ig, it, ik) = db(ig-1, it, ik) + 0.5*aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)*dbfac(it,ik)
              end do
           end do
 
@@ -875,7 +873,7 @@ contains
              call open_output_file (unit, ".db")
              do ik = 1, naky
                 do it = 1, ntheta0
-                   do ig = -ntg_out, ntg_out
+                   do ig = -ntg_out, ntg_out-1
                       write (unit, "(5(1x,e12.5))") &
                            theta(ig), aky(ik), akx(it), real(db(ig, it,ik)), aimag(db(ig, it, ik))
                    end do
