@@ -692,7 +692,7 @@ contains
     complex, dimension (:,:,:,:), allocatable :: ntot, density, upar, tpar, tperp
     complex, dimension (:,:,:,:), allocatable :: qparflux, pperpj1, qpperpj1
     real, dimension (:), allocatable :: dl_over_b
-    complex, dimension (ntheta0, naky) :: phi0
+    complex, dimension (ntheta0, naky) :: phi0, dbfac
     complex, dimension (-ntgrid:ntgrid, ntheta0, naky) :: db
     real, dimension (ntheta0, naky) :: phi02
     real, dimension (2*ntgrid) :: kpar
@@ -875,9 +875,9 @@ contains
              call open_output_file (unit, ".db")
              do ik = 1, naky
                 do it = 1, ntheta0
-                   do ig = -ntg_out, ntg_out-1
-                      write (unit, "(4(1x,e12.5))") &
-                           theta(ig), aky(ik), akx(it), db(ig, it,ik)
+                   do ig = -ntg_out, ntg_out
+                      write (unit, "(5(1x,e12.5))") &
+                           theta(ig), aky(ik), akx(it), real(db(ig, it,ik)), aimag(db(ig, it, ik))
                    end do
                    write (unit, "()")
                 end do
