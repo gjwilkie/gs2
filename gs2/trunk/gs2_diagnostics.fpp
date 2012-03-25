@@ -693,7 +693,8 @@ contains
     complex, dimension (:,:,:,:), allocatable :: qparflux, pperpj1, qpperpj1
     real, dimension (:), allocatable :: dl_over_b
     complex, dimension (ntheta0, naky) :: phi0
-    real, dimension (ntheta0, naky) :: phi02, db
+    real, dimension (-ntgrid:ntgrid, ntheta0, naky) :: db
+    real, dimension (ntheta0, naky) :: phi02
     real, dimension (2*ntgrid) :: kpar
     real, dimension (:), allocatable :: xx4, yy4, dz
     real, dimension (:,:), allocatable :: bxs, bys, vxs, vys
@@ -856,7 +857,8 @@ contains
           
           do ik = 1, naky
              do it = 1, ntheta0
-                db(it, ik) = cabs(sum(aparnew(:,it,ik)*delthet(:)/bmag(:)/gradpar(:)))/ &
+                do ig = -ntg_out, ntg_out-1
+                   db(ig, it, ik) = db(ig, it, ik) + cabs(aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)) / &
                                  sum(delthet/bmag/gradpar)/maxval(cabs(phinew(:,it,ik)),1) &
                                 * cabs(log(aparnew(1,it,ik)/apar(1,it,ik)))/code_dt
              end do
@@ -868,8 +870,9 @@ contains
              call open_output_file (unit, ".db")
              do ik = 1, naky
                 do it = 1, ntheta0
-                   write (unit, "(3(1x,e12.5))") &
-                        aky(ik), akx(it), db(it,ik)
+                   do ig = -ntg_out, ntg_out-1
+                   write (unit, "(4(1x,e12.5))") &
+                        theta(ig), aky(ik), akx(it), db(ig, it,ik)
                 end do
                 write (unit, "()")
              end do
