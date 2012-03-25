@@ -42,7 +42,7 @@ module gs2_diagnostics
   logical, public :: write_g, write_gg, write_gyx
   logical, public :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
   logical, public :: write_final_moments, write_avg_moments, write_parity
-  logical, public :: write_moments
+  logical, public :: write_moments, write_final_db
   logical, public :: write_full_moments_notgc, write_cross_phase = .false.
   logical, public :: write_final_epar, write_kpar
   logical, public :: write_hrate, write_lorentzian
@@ -72,7 +72,7 @@ module gs2_diagnostics
          write_gs, write_gyx, write_g, write_gg, write_hrate, write_lpoly, &
          write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
          write_final_epar, write_moments, write_final_moments, write_cerr, &
-         write_verr, write_max_verr, write_nl_flux, &
+         write_verr, write_max_verr, write_nl_flux, write_final_db, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, &
          write_full_moments_notgc, write_cross_phase, &
@@ -150,6 +150,7 @@ contains
        write (unit, fmt="(' write_eigenfunc = ',L1)") write_eigenfunc
        write (unit, fmt="(' write_final_fields = ',L1)") write_final_fields
        write (unit, fmt="(' write_final_epar = ',L1)") write_final_epar
+       write (unit, fmt="(' write_final_db = ',L1)") write_final_db
        write (unit, fmt="(' write_final_moments = ',L1)") write_final_moments
        write (unit, fmt="(' write_final_antot = ',L1)") write_final_antot
        write (unit, fmt="(' write_nl_flux = ',L1)") write_nl_flux
@@ -598,6 +599,7 @@ contains
        write_final_fields = .false.
        write_final_antot = .false.
        write_final_epar = .false.
+       write_final_db = .false.
        write_verr = .false.
        write_max_verr = .false.
        write_cerr = .false.
@@ -691,7 +693,7 @@ contains
     complex, dimension (:,:,:,:), allocatable :: qparflux, pperpj1, qpperpj1
     real, dimension (:), allocatable :: dl_over_b
     complex, dimension (ntheta0, naky) :: phi0
-    real, dimension (ntheta0, naky) :: phi02
+    real, dimension (ntheta0, naky) :: phi02, db
     real, dimension (2*ntgrid) :: kpar
     real, dimension (:), allocatable :: xx4, yy4, dz
     real, dimension (:,:), allocatable :: bxs, bys, vxs, vys
@@ -849,6 +851,35 @@ contains
        end if
     end if
    
+       if (write_final_db) then  ! definition here assumes we are not using wstar_units
+          
+          do ik = 1, naky
+             do it = 1, ntheta0
+                phimax = max(cabs(phinew(:,it,ik)))
+                db(it, ik) = cabs(sum(aparnew(:,it,ik)*delthet(:)/bmag(:)/gradpar(:)) / 
+                                 sum(delthet/bmag/gradpar))/max(cabs(phinew(:,it,ik)))
+             end do
+          end do
+
+          db = db * cabs(omega)
+
+          if (write_ascii) then
+             call open_output_file (unit, ".db")
+             do ik = 1, naky
+                do it = 1, ntheta0
+                      write (unit, "(3(1x,e12.5))") &
+                           aky(ik), akx(it), db(it,ik)
+                   end do
+                   write (unit, "()")
+                end do
+             end do
+             call close_output_file (unit)
+          end if
+          call nc_final_epar (epar  )
+          deallocate (epar)
+       end if
+    end if
+
     call broadcast (write_final_moments)
     if (write_final_moments) then
 
