@@ -855,7 +855,8 @@ contains
           do ik = 1, naky
              do it = 1, ntheta0
                 db(it, ik) = cabs(sum(aparnew(:,it,ik)*delthet(:)/bmag(:)/gradpar(:)))/ &
-                                 sum(delthet/bmag/gradpar)/maxval(cabs(phinew(:,it,ik)),1)
+                                 sum(delthet/bmag/gradpar)/maxval(cabs(phinew(:,it,ik)),1) &
+                                * cabs(log(aparnew(1,it,ik)/apar(1,it,ik)))/code_dt
              end do
           end do
 
