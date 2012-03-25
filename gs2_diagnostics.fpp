@@ -662,7 +662,7 @@ contains
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, akx, aky
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn, only: getan, get_epar, getmoms, par_spectrum
-    use dist_fn, only: write_f, write_fyx
+    use dist_fn, only: write_f, write_fyx, def_parity, even
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn_arrays, only: g_adjust
     use collisions, only: vnmult
@@ -732,6 +732,8 @@ contains
        if (write_eigenfunc) then
           if (write_ascii) call open_output_file (unit, ".eigenfunc")
           phi0 = phi(0,:,:)
+
+          if (def_parity .and. fapar > 0 .and. (.not. even)) phi0 = apar(0, :, :)
 
           where (abs(phi0) < 10.0*epsilon(0.0)) 
              phi0 = phi(1,:,:)/(theta(1)-theta(0))
