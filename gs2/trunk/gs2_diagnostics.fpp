@@ -849,7 +849,6 @@ contains
           call nc_final_epar (epar  )
           deallocate (epar)
        end if
-    end if
    
        if (write_final_db) then  ! definition here assumes we are not using wstar_units
           
@@ -861,7 +860,7 @@ contains
              end do
           end do
 
-          db = db * cabs(omega)
+!          db = db * cabs(omega)
 
           if (write_ascii) then
              call open_output_file (unit, ".db")
