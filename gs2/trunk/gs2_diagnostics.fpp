@@ -861,6 +861,7 @@ contains
                    db(ig, it, ik) = db(ig, it, ik) + cabs(aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)) / &
                                  sum(delthet/bmag/gradpar)/maxval(cabs(phinew(:,it,ik)),1) &
                                 * cabs(log(aparnew(1,it,ik)/apar(1,it,ik)))/code_dt
+                end do
              end do
           end do
 
