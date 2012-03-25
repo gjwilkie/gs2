@@ -871,10 +871,11 @@ contains
              do ik = 1, naky
                 do it = 1, ntheta0
                    do ig = -ntg_out, ntg_out-1
-                   write (unit, "(4(1x,e12.5))") &
-                        theta(ig), aky(ik), akx(it), db(ig, it,ik)
+                      write (unit, "(4(1x,e12.5))") &
+                           theta(ig), aky(ik), akx(it), db(ig, it,ik)
+                   end do
+                   write (unit, "()")
                 end do
-                write (unit, "()")
              end do
              call close_output_file (unit)
           end if
