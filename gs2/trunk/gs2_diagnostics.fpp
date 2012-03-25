@@ -693,7 +693,7 @@ contains
     complex, dimension (:,:,:,:), allocatable :: qparflux, pperpj1, qpperpj1
     real, dimension (:), allocatable :: dl_over_b
     complex, dimension (ntheta0, naky) :: phi0
-    real, dimension (-ntgrid:ntgrid, ntheta0, naky) :: db
+    complex, dimension (-ntgrid:ntgrid, ntheta0, naky) :: db
     real, dimension (ntheta0, naky) :: phi02
     real, dimension (2*ntgrid) :: kpar
     real, dimension (:), allocatable :: xx4, yy4, dz
@@ -857,11 +857,15 @@ contains
           db = 0
           do ik = 1, naky
              do it = 1, ntheta0
-                do ig = -ntg_out, ntg_out-1
-                   db(ig, it, ik) = db(ig, it, ik) + cabs(aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)) / &
-                                 sum(delthet/bmag/gradpar)/maxval(cabs(phinew(:,it,ik)),1) &
-                                * cabs(log(aparnew(1,it,ik)/apar(1,it,ik)))/code_dt
+                dbfac(it,ik) = 1./sum(delthet/bmag/gradpar)/maxval(cabs(phinew(:,it,ik)),1) &
+                     * cabs(log(aparnew(1,it,ik)/apar(1,it,ik)))/code_dt
+                ig = -ntg_out
+                db(ig, it, ik) = 0.5*aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)*dbfac(it,ik)
+                do ig = -ntg_out+1, ntg_out-1
+                   db(ig, it, ik) = db(ig-1, it, ik) + aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)*dbfac(it,ik)
                 end do
+                ig = ntg_out
+                db(ig, it, ik) = db(ig-1, it, ik) + 0.5*aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)*dbfac(it,ik)
              end do
           end do
 
