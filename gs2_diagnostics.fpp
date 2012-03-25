@@ -656,7 +656,7 @@ contains
     use mp, only: proc0, broadcast, nproc, iproc, sum_reduce
     use species, only: nspec, spec
     use run_parameters, only: fphi, fapar, fbpar
-    use theta_grid, only: ntgrid, theta, delthet, jacob, gradpar, nperiod
+    use theta_grid, only: ntgrid, theta, delthet, jacob, gradpar, nperiod, bmag
     use theta_grid, only: Rplot, Zplot, aplot, Rprime, Zprime, aprime
     use theta_grid, only: drhodpsi, qval, shape
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, akx, aky
@@ -867,16 +867,13 @@ contains
              call open_output_file (unit, ".db")
              do ik = 1, naky
                 do it = 1, ntheta0
-                      write (unit, "(3(1x,e12.5))") &
-                           aky(ik), akx(it), db(it,ik)
-                   end do
-                   write (unit, "()")
+                   write (unit, "(3(1x,e12.5))") &
+                        aky(ik), akx(it), db(it,ik)
                 end do
+                write (unit, "()")
              end do
              call close_output_file (unit)
           end if
-          call nc_final_epar (epar  )
-          deallocate (epar)
        end if
     end if
 
