@@ -854,7 +854,7 @@ contains
        end if
    
        if (write_final_db) then  ! definition here assumes we are not using wstar_units
-          
+          db = 0
           do ik = 1, naky
              do it = 1, ntheta0
                 do ig = -ntg_out, ntg_out-1
