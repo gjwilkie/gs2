@@ -857,7 +857,7 @@ contains
              do it = 1, ntheta0
                 phimax = max(cabs(phinew(:,it,ik)))
                 db(it, ik) = cabs(sum(aparnew(:,it,ik)*delthet(:)/bmag(:)/gradpar(:)))/ 
-                                 sum(delthet/bmag/gradpar))/max(cabs(phinew(:,it,ik)))
+                                 sum(delthet/bmag/gradpar)/max(cabs(phinew(:,it,ik)))
              end do
           end do
 
