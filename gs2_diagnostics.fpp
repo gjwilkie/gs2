@@ -854,9 +854,8 @@ contains
           
           do ik = 1, naky
              do it = 1, ntheta0
-                phimax = max(cabs(phinew(:,it,ik)))
                 db(it, ik) = cabs(sum(aparnew(:,it,ik)*delthet(:)/bmag(:)/gradpar(:)))/ &
-                                 sum(delthet/bmag/gradpar)/max(cabs(phinew(:,it,ik)))
+                                 sum(delthet/bmag/gradpar)/maxval(cabs(phinew(:,it,ik)),1)
              end do
           end do
 
