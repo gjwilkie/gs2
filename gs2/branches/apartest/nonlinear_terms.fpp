@@ -283,7 +283,7 @@ contains
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use dist_fn_arrays, only: g
-    use run_parameters, only: fapar, fbpar, fphi
+    use run_parameters, only: fbpar, fphi
     use gs2_time, only: save_dt_cfl
 
     implicit none

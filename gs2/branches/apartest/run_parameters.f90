@@ -10,6 +10,7 @@ module run_parameters
 
   public :: beta, zeff, tite
   public :: fphi, fapar, fbpar
+  public :: calculate_apar
 !  public :: delt, delt_max, wunits, woutunits, tunits
   public :: code_delt_max, wunits, woutunits, tunits
   public :: nstep, wstar_units, eqzip, margin
@@ -39,7 +40,7 @@ module run_parameters
   logical :: rpexist, knexist
   real :: rhostar
 !  logical :: include_lowflow, neo_test
-  logical :: neo_test
+  logical :: neo_test, calculate_apar
 
   integer, allocatable :: ieqzip(:,:)
   integer :: eqzip_option_switch
@@ -325,6 +326,12 @@ contains
 !    call broadcast (include_lowflow)
     call broadcast (rhostar)
     call broadcast (neo_test)
+
+    ! note that this could be switched to .true. in init_collisions
+    ! if resistivity is set to .true.
+    ! this is necessary because the e-i friction term in the collision
+    ! operator needs Apar, even if beta -> 0
+    calculate_apar = (fapar > epsilon(0.0))
     
     user_delt_max = delt
 

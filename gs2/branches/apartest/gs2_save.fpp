@@ -61,7 +61,8 @@ module gs2_save
 contains
 
   subroutine gs2_save_for_restart &
-       (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in, distfn, fileopt)
+!       (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in, distfn, fileopt)
+       (g, t0, delt0, vnm, istatus, fphi, calculate_apar, fbpar, exit_in, distfn, fileopt)
 !<DD 18-10-2010> Added flag distfn to gs2_save_for_restart
 !If present then will save to "rootname.nc.dfn.proc" and will
 !include extra information including velocity and energy grids
@@ -96,7 +97,9 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
     real, dimension (2), intent (in) :: vnm
-    real, intent (in) :: fphi, fapar, fbpar
+!    real, intent (in) :: fphi, fapar, fbpar
+    real, intent (in) :: fphi, fbpar
+    logical, intent (in) :: calculate_apar
     integer, intent (out) :: istatus
     logical, intent (in), optional :: exit_in
     LOGICAL, INTENT (in), optional :: distfn !<DD> Added for saving distribution function
@@ -358,7 +361,8 @@ contains
              end if
           end if
 
-          if (fapar > epsilon(0.)) then
+!          if (fapar > epsilon(0.)) then
+          if (calculate_apar) then
              istatus = nf90_def_var (ncid, "apar_r", netcdf_real, &
                   (/ thetaid, kxid, kyid /), aparr_id)
              if (istatus /= NF90_NOERR) then
@@ -636,7 +640,8 @@ contains
           if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, phii_id)
        end if
 
-       if (fapar > epsilon(0.)) then
+!       if (fapar > epsilon(0.)) then
+       if (calculate_apar) then
           ftmpr = real(aparnew)
           istatus = nf90_put_var (ncid, aparr_id, ftmpr)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, aparr_id)
@@ -688,7 +693,8 @@ contains
 
   end subroutine gs2_save_for_restart
 
-  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, many)
+!  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, many)
+  subroutine gs2_restore_many (g, scale, istatus, fphi, calculate_apar, fbpar, many)
 !MR, 2007: restore kx_shift array if already allocated
 # ifdef NETCDF
     use mp, only: proc0, iproc, nproc
@@ -704,8 +710,9 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
-    real, intent (in) :: fphi, fapar, fbpar
-    logical, intent (in) :: many
+!    real, intent (in) :: fphi, fapar, fbpar
+    real, intent (in) :: fphi, fbpar
+    logical, intent (in) :: calculate_apar, many
 # ifdef NETCDF
     character (306) :: file_proc
     character (10) :: suffix
@@ -772,7 +779,8 @@ contains
           if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='phi_i')
        end if
 
-       if (fapar > epsilon(0.)) then
+!       if (fapar > epsilon(0.)) then
+       if (calculate_apar) then
           istatus = nf90_inq_varid (ncid, "apar_r", aparr_id)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='apar_r')
           
@@ -835,7 +843,8 @@ contains
        phinew = cmplx(ftmpr, ftmpi)
     end if
 
-    if (fapar > epsilon(0.)) then
+!    if (fapar > epsilon(0.)) then
+    if (calculate_apar) then
        istatus = nf90_get_var (ncid, aparr_id, ftmpr)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, aparr_id)
        
@@ -888,7 +897,8 @@ contains
 
 ! RN 2008/05/23:
 !  This can be removed. restore_many seems to work for single proc.
-  subroutine gs2_restore_one (g, scale, istatus, fphi, fapar, fbpar)
+!  subroutine gs2_restore_one (g, scale, istatus, fphi, fapar, fbpar)
+  subroutine gs2_restore_one (g, scale, istatus, fphi, calculate_apar, fbpar)
 !MR, 2007: restore kx_shift array if allocated
 # ifdef NETCDF
     use mp, only: proc0, iproc, nproc
@@ -904,7 +914,9 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
-    real, intent (in) :: fphi, fapar, fbpar
+!    real, intent (in) :: fphi, fapar, fbpar
+    real, intent (in) :: fphi, fbpar
+    logical, intent (in) :: calculate_apar
 # ifdef NETCDF
     integer :: n_elements, ierr
     integer :: i
@@ -955,7 +967,8 @@ contains
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='phi_i')
     end if
 
-    if (fapar > epsilon(0.)) then
+!    if (fapar > epsilon(0.)) then
+    if (calculate_apar) then
        istatus = nf90_inq_varid (ncid, "apar_r", aparr_id)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='apar_r')
        
@@ -1031,7 +1044,8 @@ contains
        phinew = cmplx(ftmpr, ftmpi)*scale
     end if
 
-    if (fapar > epsilon(0.)) then
+!    if (fapar > epsilon(0.)) then
+    if (calculate_apar) then
        istatus = nf90_get_var (ncid, aparr_id, ftmpr)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, aparr_id)
        

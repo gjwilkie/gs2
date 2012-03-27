@@ -106,7 +106,8 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use dist_fn, only: getfieldeq
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use prof, only: prof_entering, prof_leaving
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
@@ -130,7 +131,8 @@ contains
        fl(istart:ifin,:,:) = fieldeq
     end if
 
-    if (fapar > epsilon(0.0)) then
+!    if (fapar > epsilon(0.0)) then
+    if (calculate_apar) then
        istart = ifin + 1
        ifin = (istart-1) + 2*ntgrid+1
        fl(istart:ifin,:,:) = fieldeqa
@@ -151,7 +153,8 @@ contains
     use fields_arrays, only: phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use gs2_layouts, only: jf_lo, ij_idx
     use prof, only: prof_entering, prof_leaving
     implicit none
@@ -173,7 +176,8 @@ contains
        end do
     endif
 
-    if (fapar > epsilon(0.0)) then
+!    if (fapar > epsilon(0.0)) then
+    if (calculate_apar) then
        ifield = ifield + 1
        do ik = 1, naky
           do it = 1, ntheta0
@@ -376,7 +380,8 @@ contains
     use kt_grids, only: naky, ntheta0
     use dist_fn_arrays, only: g
     use dist_fn, only: M_class, N_class, i_class
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use gs2_layouts, only: init_fields_layouts, f_lo
     use gs2_layouts, only: init_jfields_layouts
     use prof, only: prof_entering, prof_leaving
@@ -389,7 +394,8 @@ contains
 
     nfield = 0
     if (fphi > epsilon(0.0)) nfield = nfield + 1
-    if (fapar > epsilon(0.0)) nfield = nfield + 1
+!    if (fapar > epsilon(0.0)) nfield = nfield + 1
+    if (calculate_apar) nfield = nfield + 1
     if (fbpar > epsilon(0.0)) nfield = nfield + 1
     nidx = (2*ntgrid+1)*nfield
 
@@ -441,7 +447,8 @@ contains
                 phinew = 0.0
              end if
              
-             if (fapar > epsilon(0.0)) then
+!             if (fapar > epsilon(0.0)) then
+             if (calculate_apar) then
                 ifield = ifield + 1
                 if (endpoint) then
                    do m = 1, M_class(i)
@@ -495,7 +502,8 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use dist_fn, only: getfieldeq, timeadv, M_class, N_class
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use gs2_layouts, only: f_lo, idx, idx_local
     use prof, only: prof_entering, prof_leaving
     implicit none
@@ -533,7 +541,8 @@ contains
                 am(istart:ifin:nfield,iflo) = fieldeq(:,it,ik) 
              end if
              
-             if (fapar > epsilon(0.0)) then
+!             if (fapar > epsilon(0.0)) then
+             if (calculate_apar) then
                 ifin = istart + nidx
                 istart = istart + 1
                 am(istart:ifin:nfield,iflo) = fieldeqa(:,it,ik)
