@@ -190,6 +190,9 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
+    use run_parameters, only: calculate_apar
+    use species, only: nspec
+
     implicit none
     type (text_option), dimension (6), parameter :: modelopts = &
          (/ text_option('default', collision_model_full), &
@@ -277,6 +280,15 @@ contains
     call broadcast (test)
     call broadcast (adjust)
     call broadcast (ei_coll_only)
+
+    select case (collision_model_switch)
+    case (collision_model_full,collision_model_lorentz,collision_model_lorentz_test)
+       if (resistivity .and. nspec > 1) then   ! If nspec == 1 then (for electrons, i.e. an AI simulation) we want to set upari == 0 and evaluate neither term
+         calculate_apar = .true.
+       end if
+    end select
+    !call broadcast (calculate_apar)
+
   end subroutine read_parameters
 
   subroutine init_map
@@ -361,6 +373,8 @@ contains
     end select
 
   end subroutine init_arrays
+
+
 
   subroutine init_lorentz_conserve
 
@@ -2751,7 +2765,8 @@ contains
 !       call system_clock (count=t2)
 !       t2tot = t2tot + real(t2-t1)/tr
 
-       if (resistivity .and. beta > epsilon(0.0) .and. nspec > 1) then
+!       if (resistivity .and. beta > epsilon(0.0) .and. nspec > 1) then
+       if (resistivity .and. nspec > 1) then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              is = is_idx(g_lo,iglo)
              if (spec(is)%type /= electron_species) cycle
@@ -2792,7 +2807,8 @@ contains
 
     case (collision_model_lorentz,collision_model_lorentz_test)
 
-       if (resistivity .and. beta > epsilon(0.0) .and. nspec > 1) then
+!       if (resistivity .and. beta > epsilon(0.0) .and. nspec > 1) then
+       if (resistivity .and. nspec > 1) then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              is = is_idx(g_lo,iglo)
              if (spec(is)%type /= electron_species) cycle
