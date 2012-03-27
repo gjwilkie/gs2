@@ -332,6 +332,8 @@ contains
     ! this is necessary because the e-i friction term in the collision
     ! operator needs Apar, even if beta -> 0
     calculate_apar = (fapar > epsilon(0.0))
+
+    !call broadcast (calculate_apar)
     
     user_delt_max = delt
 
