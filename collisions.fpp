@@ -445,8 +445,8 @@ contains
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          ! u0 = -2 nu_D^{ei} vpa J0 dt f0
-          if (conservative) then
+          ! u0 = -2 nu_D^{ei} vpa J0 dt f0  !! u_2 term in (A2) & Table I of Barnes PoP 16 072107?
+          if (conservative) then  !! (How is conservative related to conserve_moments?)
              z0(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpdiff(:,isgn,il) &
                   * sqrt(energy(ie))*aj0(:,iglo)
           else
@@ -596,7 +596,7 @@ contains
     call integrate_moment (gtmp, dtmp, all)    ! v1s0
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Redefine s0 = s0 / (1 + v0s0)
+! Redefine s0 = s0 / (1 + v0s0)  !! should say v1s0?
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -2900,6 +2900,7 @@ contains
 
 
 # ifdef USE_LE_LAYOUT
+!! resistivity condition only with this layout? See below
 
     allocate (v0y0(le_lo%llim_proc:le_lo%ulim_alloc))
     allocate (v1y1(le_lo%llim_proc:le_lo%ulim_alloc))
@@ -2910,6 +2911,7 @@ contains
     allocate (gtmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc)) ; gtmp = 0.0
     allocate (vpanud(-ntgrid:ntgrid, nxi+1, negrid+1, nspec)) ; vpanud = 0.0
 
+!! This condition may be redundant, if z0le is only nonzero for electrons with (resistivity .and. nspec > 1)
     if (resistivity) then
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
