@@ -31,7 +31,8 @@ contains
     use fields_implicit, only: fi_reset => reset_init
     use fields_test, only: ft_reset => reset_init
     use init_g, only: g_reset => reset_init
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
     use gs2_save, only: gs2_save_for_restart
     use dist_fn_arrays, only: gnew
@@ -74,7 +75,8 @@ contains
     if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
 
     if (proc0) call dump_ant_amp
-    call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+!    call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+    call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, calculate_apar, fbpar)
 
     gnew = 0.
 

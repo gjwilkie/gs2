@@ -23,7 +23,8 @@ module gs2_save
 
 contains
 
-  subroutine gs2_save_for_restart (g, t0, delt0, istatus, fphi, fapar, fbpar, exit_in)
+!  subroutine gs2_save_for_restart (g, t0, delt0, istatus, fphi, fapar, fbpar, exit_in)
+  subroutine gs2_save_for_restart (g, t0, delt0, istatus, fphi, calculate_apar, fbpar, exit_in)
     use theta_grid, only: ntgrid
 ! Must include g_layout_type here to avoid obscure bomb while compiling
 ! gs2_diagnostics.f90 (which uses this module) with the Compaq F90 compiler:
@@ -38,7 +39,9 @@ contains
     character (5) :: suffix
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
-    real, intent (in) :: fphi, fapar, fbpar
+!    real, intent (in) :: fphi, fapar, fbpar
+    real, intent (in) :: fphi, fbpar
+    logical, intent (in) :: calculate_apar
     integer, intent (out) :: istatus
     logical, intent (in), optional :: exit_in
     include 'netcdf.inc'
@@ -176,7 +179,8 @@ contains
              end if
           end if
 
-          if (fapar > epsilon(0.)) then
+!          if (fapar > epsilon(0.)) then
+          if (calculate_apar) then
              istatus = nf_def_var (ncid, "apar_r", NF_DOUBLE, 3, &
                   (/ thetaid, kyid, kxid /), aparr_id)
              if (istatus /= 0) then
@@ -289,7 +293,8 @@ contains
           end if
        end if
 
-       if (fapar > epsilon(0.)) then
+!       if (fapar > epsilon(0.)) then
+       if (calculate_apar) then
           ftmpr = real(aparnew)
           istatus = nf_put_var_double (ncid, aparr_id, ftmpr)
           if (istatus /= 0) then
@@ -332,7 +337,8 @@ contains
 
   !<doc> Restore the fields and distribution function from a set of restart files. </doc>
 
-  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, many)
+!  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, many)
+  subroutine gs2_restore_many (g, scale, istatus, fphi, calculate_apar, fbpar, many)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use mp, only: proc0, iproc, nproc
@@ -346,8 +352,9 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
-    real, intent (in) :: fphi, fapar, fbpar
-    logical, intent (in) :: many
+!    real, intent (in) :: fphi, fapar, fbpar
+    real, intent (in) :: fphi, fbpar
+    logical, intent (in) :: many, calculate_apar
     include 'netcdf.inc'
     integer :: n_elements
     double precision :: tmp1
@@ -462,7 +469,8 @@ contains
           end if
        end if
 
-       if (fapar > epsilon(0.)) then
+!       if (fapar > epsilon(0.)) then
+       if (calculate_apar) then
           istatus = nf_inq_varid (ncid, "apar_r", aparr_id)
           if (istatus /= 0) then
              ierr = error_unit()
@@ -545,7 +553,8 @@ contains
        phinew = cmplx(ftmpr, ftmpi)
     end if
 
-    if (fapar > epsilon(0.)) then
+!    if (fapar > epsilon(0.)) then
+    if (calculate_apar) then
        istatus = nf_get_var_double (ncid, aparr_id, ftmpr)
        if (istatus /= 0) then
           ierr = error_unit()
@@ -600,7 +609,8 @@ contains
 
   end subroutine gs2_restore_many
 
-  subroutine gs2_restore_one (g, scale, istatus, fphi, fapar, fbpar) 
+!  subroutine gs2_restore_one (g, scale, istatus, fphi, fapar, fbpar) 
+  subroutine gs2_restore_one (g, scale, istatus, fphi, calculate_apar, fbpar) 
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use mp, only: proc0, iproc, nproc
@@ -612,7 +622,9 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
-    real, intent (in) :: fphi, fapar, fbpar
+!    real, intent (in) :: fphi, fapar, fbpar
+    real, intent (in) :: fphi, fbpar
+    logical, intent (in) :: calculate_apar
     include 'netcdf.inc'
     integer :: n_elements, ierr
     double precision :: tmp1
@@ -703,7 +715,8 @@ contains
        end if
     end if
 
-    if (fapar > epsilon(0.)) then
+!    if (fapar > epsilon(0.)) then
+    if (calculate_apar) then
        istatus = nf_inq_varid (ncid, "apar_r", aparr_id)
        if (istatus /= 0) then
           ierr = error_unit()
@@ -793,7 +806,8 @@ contains
        phinew = cmplx(ftmpr, ftmpi)*scale
     end if
 
-    if (fapar > epsilon(0.)) then
+!    if (fapar > epsilon(0.)) then
+    if (calculate_apar) then
        istatus = nf_get_var_double (ncid, aparr_id, ftmpr)
        if (istatus /= 0) then
           ierr = error_unit()

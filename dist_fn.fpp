@@ -2376,7 +2376,8 @@ subroutine check_dist_fn(report_unit)
     use kt_grids, only: akx, aky, naky, ikx, ntheta0, box, theta0
     use le_grids, only: negrid, nlambda
     use species, only: nspec
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use dist_fn_arrays, only: kx_shift, theta0_shift
     use gs2_time, only: code_dt, code_dt_old
     use constants, only: twopi    
@@ -2498,7 +2499,8 @@ subroutine check_dist_fn(report_unit)
                 phi(iright+1:ntgrid,:iib,:) = 0.0
              endif
           endif
-          if (fapar > epsilon(0.0)) then
+!          if (fapar > epsilon(0.0)) then
+          if (calculate_apar > epsilon(0.0)) then
              if (j < 0) then
                 temp2 = apar(:,:iib,ik)
                 do i=1,iit-1
@@ -2644,7 +2646,8 @@ subroutine check_dist_fn(report_unit)
                    phi(:,ikx_indexed(it),ik) = 0.
                 end do
              end if
-             if (fapar > epsilon(0.0)) then
+!             if (fapar > epsilon(0.0)) then
+             if (calculate_apar) then
                 do it = 1, ntheta0 + jump(ik)
                    apar(:,ikx_indexed(it),ik) = apar(:,ikx_indexed(it-jump(ik)),ik)
                 end do
@@ -2701,7 +2704,8 @@ subroutine check_dist_fn(report_unit)
                    phi(:,ikx_indexed(it),ik) = 0.
                 end do
              end if
-             if (fapar > epsilon(0.0)) then
+!             if (fapar > epsilon(0.0)) then
+             if (calculate_apar) then
                 do it = ntheta0, 1+jump(ik), -1
                    apar(:,ikx_indexed(it),ik) = apar(:,ikx_indexed(it-jump(ik)),ik)
                 end do
@@ -3524,7 +3528,8 @@ subroutine check_dist_fn(report_unit)
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use le_grids, only: integrate_species
-    use run_parameters, only: beta, fphi, fapar, fbpar
+!    use run_parameters, only: beta, fphi, fapar, fbpar
+    use run_parameters, only: beta, fphi, calculate_apar, fbpar
     use prof, only: prof_entering, prof_leaving
     use gs2_layouts, only: g_lo
     implicit none
@@ -3554,7 +3559,8 @@ subroutine check_dist_fn(report_unit)
 
     end if
 
-    if (fapar > epsilon(0.0)) then
+!    if (fapar > epsilon(0.0)) then
+    if (calculate_apar) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
@@ -4029,7 +4035,8 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: kperp2
     use theta_grid, only: ntgrid, bmag, delthet, jacob
     use kt_grids, only: naky, ntheta0, aky
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use run_parameters, only: beta, tite
     use species, only: spec, has_electron_species
     implicit none
@@ -4084,7 +4091,8 @@ subroutine check_dist_fn(report_unit)
        end if
     end if
 
-    if (fapar > epsilon(0.0)) then
+!    if (fapar > epsilon(0.0)) then
+    if (calculate_apar) then
        fieldeqa = antota - kperp2*gridfac1*apar
     end if
 ! bpar == delta B_parallel / B_0(theta) b/c of the factor of 1/bmag(theta)**2
@@ -4131,7 +4139,8 @@ subroutine check_dist_fn(report_unit)
     !   kperp2 * apar = antota
     !   beta/2 * gamtot1 * phi + (beta * gamtot2 + 1) * bpar = - beta * antotp
     ! I haven't made any check for use_Bpar=T case.
-    use run_parameters, only: beta, fphi, fapar, fbpar
+!    use run_parameters, only: beta, fphi, fapar, fbpar
+    use run_parameters, only: beta, fphi, calculate_apar, fbpar
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
@@ -4164,7 +4173,8 @@ subroutine check_dist_fn(report_unit)
     end if
 
     ! get apar
-    if (fapar > epsilon(0.0)) then
+!    if (fapar > epsilon(0.0)) then
+    if (calculate_apar) then
        denominator = kperp2
        where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
           apar = 0.0
@@ -4206,7 +4216,8 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use mp, only: proc0
-    use run_parameters, only: woutunits, fphi, fapar, fbpar
+!    use run_parameters, only: woutunits, fphi, fapar, fbpar
+    use run_parameters, only: woutunits, fphi, calculate_apar, fbpar
     use constants, only: zi
     use geometry, only: rhoc
     use theta_grid, only: Rplot, Bpol
@@ -4282,7 +4293,8 @@ subroutine check_dist_fn(report_unit)
        vflux = 0.
     end if
 
-    if (fapar > epsilon(0.0)) then
+!    if (fapar > epsilon(0.0)) then
+    if (calculate_apar) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
@@ -4432,7 +4444,7 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use mp, only: proc0
-    use run_parameters, only: woutunits, fphi, fapar, fbpar, rhostar
+    use run_parameters, only: woutunits, fphi, fbpar, rhostar
     use constants, only: zi
     use geometry, only: rhoc
     implicit none
@@ -5358,7 +5370,8 @@ subroutine check_dist_fn(report_unit)
     use kt_grids, only: ntheta0, naky, aky, akx
     use species, only: nspec, spec
     use dist_fn_arrays, only: gnew, aj0, vpa
-    use run_parameters, only: fphi, fapar, fbpar, beta
+!    use run_parameters, only: fphi, fapar, fbpar, beta
+    use run_parameters, only: fphi, calculate_apar, fbpar, beta
     use gs2_layouts, only: g_lo
     use collisions, only: init_lorentz, init_ediffuse, init_lorentz_conserve, init_diffuse_conserve
     use collisions, only: etol, ewindow, etola, ewindowa
@@ -5401,7 +5414,8 @@ subroutine check_dist_fn(report_unit)
        allocate(phi_l(-ntgrid:ntgrid,ntheta0,naky,ng2))
     end if
 
-    if (fapar > epsilon(0.0)) then
+!    if (fapar > epsilon(0.0)) then
+    if (calculate_apar) then
        allocate(apar_app(-ntgrid:ntgrid,ntheta0,naky))
        allocate(apar_e(-ntgrid:ntgrid,ntheta0,naky,wdim))
        allocate(apar_l(-ntgrid:ntgrid,ntheta0,naky,ng2))
@@ -5456,7 +5470,8 @@ subroutine check_dist_fn(report_unit)
 
     end if
 
-    if (fapar > epsilon(0.0)) then
+!    if (fapar > epsilon(0.0)) then
+    if (calculate_apar) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
@@ -5515,7 +5530,8 @@ subroutine check_dist_fn(report_unit)
 
     end if
     
-    if (fapar > epsilon(0.0)) then
+!    if (fapar > epsilon(0.0)) then
+    if (calculate_apar) then
 
        call estimate_error (apar_app, apar_e, kmax, errtmp, idxtmp)
        errest(4,:) = errtmp
@@ -5556,7 +5572,8 @@ subroutine check_dist_fn(report_unit)
     
     deallocate (wgt, errtmp, idxtmp)
     if (fphi > epsilon(0.0)) deallocate(phi_app, phi_e, phi_l)
-    if (fapar > epsilon(0.0)) deallocate(apar_app, apar_e, apar_l)
+!    if (fapar > epsilon(0.0)) deallocate(apar_app, apar_e, apar_l)
+    if (calculate_apar) deallocate(apar_app, apar_e, apar_l)
 
   end subroutine get_verr
 

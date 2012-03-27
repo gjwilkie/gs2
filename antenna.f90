@@ -397,14 +397,16 @@ contains
 !      this routine returns space-centered (kperp**2 * A_ext) at the current time
 
     use kt_grids, only: naky, ntheta0
-    use run_parameters, only: beta, fapar
+!    use run_parameters, only: beta, fapar
+    use run_parameters, only: beta, calculate_apar
     use theta_grid, only: ntgrid
 
     complex, dimension (-ntgrid:,:,:) :: j_ext
     real, dimension (-ntgrid:,:,:) :: kperp2
     integer :: ik, it, ig
 
-    if (fapar > epsilon(0.0)) then
+!    if (fapar > epsilon(0.0)) then
+    if (calculate_apar) then
 
        if (.not. allocated(apar_new)) return
        

@@ -1793,7 +1793,8 @@ contains
     use fields_arrays, only: phinew, aparnew, bparnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use constants
     use ran
     implicit none
@@ -1803,7 +1804,8 @@ contains
     integer :: ig, ik, it, il, is, j
     logical :: many = .true.
     
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+!    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, calculate_apar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -1911,7 +1913,8 @@ contains
     use fields_arrays, only: phinew, aparnew, bparnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use ran
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
@@ -1919,7 +1922,8 @@ contains
     integer :: ig, ik, it, is, il, ierr
     logical :: many = .true.
     
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+!    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, calculate_apar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -2013,7 +2017,8 @@ contains
     use fields_arrays, only: phinew, aparnew, bparnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use ran
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
@@ -2021,7 +2026,8 @@ contains
     integer :: ig, ik, it, is, il, ierr
     logical :: many = .true.
     
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+!    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, calculate_apar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -2104,7 +2110,8 @@ contains
     use fields_arrays, only: phinew, aparnew, bparnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use ran
     implicit none
 !    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
@@ -2113,7 +2120,8 @@ contains
     integer :: ik, it, ierr
     logical :: many = .true.
     
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+!    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, calculate_apar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -3348,11 +3356,13 @@ contains
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     implicit none
     integer :: istatus, ierr
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
+!    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
+    call gs2_restore (g, scale, istatus, fphi, calculate_apar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -3367,12 +3377,14 @@ contains
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     implicit none
     integer :: istatus, ierr
     logical :: many = .true.
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+!    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, calculate_apar, fbpar, many)
 
     if (istatus /= 0) then
        ierr = error_unit()
@@ -3388,14 +3400,16 @@ contains
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     implicit none
     integer :: istatus, ierr
     logical :: many = .true.
 
     call ginit_noise
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+!    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, calculate_apar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -3417,7 +3431,8 @@ contains
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use ran
 
     implicit none
@@ -3458,7 +3473,8 @@ contains
     end do
     gnew = g
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+!    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, calculate_apar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -3488,7 +3504,8 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use fields_arrays, only: phinew, aparnew, bparnew
     use fields_arrays, only: phi, apar, bpar
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use ran
 
     implicit none
@@ -3507,7 +3524,8 @@ contains
        
 
 		!  Load phi and g from the restart file
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+!    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, calculate_apar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)

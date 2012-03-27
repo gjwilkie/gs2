@@ -48,7 +48,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
-    use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time
+!    use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time
+    use run_parameters, only: nstep, fphi, calculate_apar, fbpar, avail_cpu_time
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
@@ -167,7 +168,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
        call advance (istep)
        
        if (nsave > 0 .and. mod(istep, nsave) == 0) &
-            call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+!            call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+            call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, calculate_apar, fbpar)
        call update_time
        call loop_diagnostics (istep, exit)
        call check_time_step (reset, exit)
@@ -307,7 +309,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     use species, only: reinit_species
     use dist_fn_arrays, only: gnew
     use gs2_time, only: code_dt, user_dt, save_dt, user_time
-    use run_parameters, only: fphi, fapar, fbpar
+!    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, calculate_apar, fbpar
     use antenna, only: a_reset => reset_init
     use mp, only: proc0, scope, subprocs, allprocs
 
@@ -324,7 +327,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
 
     if (nensembles > 1) call scope (subprocs)
 
-    call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+!    call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+    call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, calculate_apar, fbpar)
     gnew = 0.
 
     call save_dt (code_dt)

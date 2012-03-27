@@ -655,7 +655,7 @@ contains
     use file_utils, only: open_output_file, close_output_file, get_unused_unit
     use mp, only: proc0, broadcast, nproc, iproc, sum_reduce
     use species, only: nspec, spec
-    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, fapar, fbpar, calculate_apar
     use theta_grid, only: ntgrid, theta, delthet, jacob, gradpar, nperiod, bmag
     use theta_grid, only: Rplot, Zplot, aplot, Rprime, Zprime, aprime
     use theta_grid, only: drhodpsi, qval, shape
@@ -1013,7 +1013,8 @@ contains
 
     if (save_for_restart) then
        call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
-            fphi, fapar, fbpar, .true.)
+!            fphi, fapar, fbpar, .true.)
+            fphi, calculate_apar, fbpar, .true.)
     end if
 
     !<DD> Added for saving distribution function
@@ -1023,7 +1024,8 @@ contains
     	
     	!Save dfn, fields and velocity grids to file
        	CALL gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
-          	fphi, fapar, fbpar, .true.,.true.)
+!          	fphi, fapar, fbpar, .true.,.true.)
+          	fphi, calculate_apar, fbpar, .true.,.true.)
     	
         !Convert distribution function back to h
         CALL g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
@@ -1357,7 +1359,7 @@ contains
     use kt_grids, only: nkpolar, jtwist_out !, akpolar
     use run_parameters, only: woutunits, tunits, fapar, fphi, fbpar, eqzip
 !    use run_parameters, only: nstep, include_lowflow
-    use run_parameters, only: nstep
+    use run_parameters, only: nstep, calculate_apar
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, write_f, write_fyx
@@ -1596,7 +1598,8 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        sourcefac = exp(-zi*omega0*t+gamma0*t)
        call phinorm (phitot)
        call get_vol_average (phinew, phinew, phi2, phi2_by_mode)
-       if (fapar > epsilon(0.0)) then
+!       if (fapar > epsilon(0.0)) then
+       if (calculate_apar) then
           call get_vol_average (aparnew, aparnew, apar2, apar2_by_mode)
           apar2 = apar2
           apar2_by_mode = apar2_by_mode
