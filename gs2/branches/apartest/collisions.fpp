@@ -1185,7 +1185,9 @@ contains
     if(.not.allocated(vnewh)) allocate (vnewh(-ntgrid:ntgrid,ntheta0,naky,nspec))
 
     do is = 1, nspec
-       if (spec(is)%type == electron_species) then
+!       if (spec(is)%type == electron_species) then
+! Changed to use electron operator for single-species case (always labelled ions). For real ions with AE, must set zeff = 0.0
+       if (spec(is)%type == electron_species .or. nspec == 1) then
           do ie = 1, negrid
              do ik = 1, naky
                 if (const_v) then
