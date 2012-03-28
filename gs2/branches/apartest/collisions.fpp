@@ -190,7 +190,7 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
-    use run_parameters, only: calculate_apar
+    use run_parameters, only: calculate_apar, beta
     use species, only: nspec
 
     implicit none
@@ -285,6 +285,7 @@ contains
     case (collision_model_full,collision_model_lorentz,collision_model_lorentz_test)
        if (resistivity .and. nspec > 1) then   ! If nspec == 1 then (for electrons, i.e. an AI simulation) we set upar_i to zero, evaluating neither upar_e nor Apar terms
          calculate_apar = .true.
+         if (.not. abs(beta) > epsilon(0.0)) beta = 1.0  ! ensure non-zero
        end if
     end select
     !call broadcast (calculate_apar)
