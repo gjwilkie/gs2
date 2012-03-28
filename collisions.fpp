@@ -283,7 +283,7 @@ contains
 
     select case (collision_model_switch)
     case (collision_model_full,collision_model_lorentz,collision_model_lorentz_test)
-       if (resistivity .and. nspec > 1) then   ! If nspec == 1 then (for electrons, i.e. an AI simulation) we want to set upari == 0 and evaluate neither term
+       if (resistivity .and. nspec > 1) then   ! If nspec == 1 then (for electrons, i.e. an AI simulation) we set upar_i to zero, evaluating neither upar_e nor Apar terms
          calculate_apar = .true.
        end if
     end select
@@ -1186,7 +1186,8 @@ contains
 
     do is = 1, nspec
 !       if (spec(is)%type == electron_species) then
-! Changed to use electron operator for single-species case (always labelled ions). For real ions with AE, must set zeff = 0.0
+! Changed to use electron operator for single-species case (which is always labelled ions). For real single-species ions, MUST SET zeff = 0.0
+! IMPROVE THIS FOR BACKWARDS COMPATIBILITY, PERHAPS BY DETECTING ADIABATIC CLOSURE TYPE, OR BY A NEW FLAG
        if (spec(is)%type == electron_species .or. nspec == 1) then
           do ie = 1, negrid
              do ik = 1, naky
