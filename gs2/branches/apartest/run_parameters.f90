@@ -40,7 +40,7 @@ module run_parameters
   logical :: rpexist, knexist
   real :: rhostar
 !  logical :: include_lowflow, neo_test
-  logical :: neo_test, calculate_apar
+  logical :: neo_test, calculate_apar = .false.
 
   integer, allocatable :: ieqzip(:,:)
   integer :: eqzip_option_switch
