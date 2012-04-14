@@ -23,6 +23,7 @@ program eiktest
        rhoc,rmin,rmax,itor,qinp,iflux,delrho,tri,bishop, &
        irho,isym,tripri,efit_eq,dfit_eq,writelots,R_geo, &
        gen_eq, ppl_eq, eqfile, local_eq, idfit_eq,&
+       chs_eq,&
        s_hat_input,p_prime_input,invLp_input,beta_prime_input, &
        diffscheme,nbeta,beta_p1,beta_p2,alpha_input,big, &
        beta_prime_times, beta_prime_over, fast, profile_fac, &
@@ -34,6 +35,7 @@ program eiktest
 
   gen_eq = .false.
   ppl_eq = .false.
+  chs_eq = .false.
   idfit_eq = .false.
   dfit_eq = .false.
   efit_eq = .false.
@@ -111,10 +113,12 @@ program eiktest
   if(iflux.ne.1) then
      if(gen_eq) write(*,*) 'Forcing gen_eq to be false'
      if(ppl_eq) write(*,*) 'Forcing ppl_eq to be false'
+     if(chs_eq) write(*,*) 'Forcing chs_eq to be false'
      if(transp_eq) write(*,*) 'Forcing transp_eq to be false'
      if(gen_eq .or. ppl_eq .or. transp_eq) write(*,*) 'because iflux.ne.1'
      gen_eq=.false.
      ppl_eq=.false.
+     chs_eq = .false.
   endif
   
   open(unit=21,file='eik.out',status='unknown')
@@ -127,7 +131,7 @@ program eiktest
 !     compute the theta grid
 
   if((.not. gen_eq) &
-       .and. (.not. transp_eq) .and. (.not. ppl_eq)) &
+       .and. (.not. transp_eq) .and. (.not. ppl_eq) .and. (.not. chs_eq)) &
        call init_theta(ntheta)
   
   call eikcoefs
@@ -198,6 +202,11 @@ program eiktest
 
   write(11,*) 'dV/drhon= ',dvdrhon
   if (.not. dipole) then
+     write (11,*)
+     write (11,*) 'The following q and shat values'
+     write (11,*) 'were calculated directly'
+     write (11,*) 'from the equilibrium.'
+     write (11,*) 'They should match the ones above' !EGH
      q=qfun(0.)
      write(11,*) 'q_0= ',q
      q=qfun(pbarofrho(rhoc))

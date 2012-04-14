@@ -42,6 +42,10 @@ module geometry
   integer :: eqinit = 1
   
   logical :: gen_eq, efit_eq, ppl_eq, local_eq
+
+  ! CHEASE equilbrium. EGH.
+  logical :: chs_eq
+
   logical :: in_nt, writelots, equal_arc, dfit_eq, idfit_eq, gs2d_eq
   logical :: transp_eq, Xanthopoulos
 
@@ -51,6 +55,8 @@ module geometry
        qfun, rpofrho, rcenter, init_theta, nth_get, f_trap  !procedures
 
   integer, private :: ntgrid, nth, ntheta
+  !logical :: debug = .true.
+  logical :: debug = .false.
 
   character*80 :: eqfile
 
@@ -64,10 +70,11 @@ module geometry
 !!!     iflux :: chooses mode of operation.  
 !!!              case (0)  :: no equilibrium.  Miller parameterization of local equilibrium
 !!!                           iflux = 0 forces local_eq = .true. and irho = 2
-!!!              case (1)  :: use numerical equilibrium.  4 choices:
+!!!              case (1)  :: use numerical equilibrium.  5 choices:
 !!!                 ppl_eq = .true. :: use PPL style NetCDF equilibrium (Menard)
 !!!                 transp_eq = .true. :: use TRXPL style NetCDF equilibrium (Menard)
 !!!                 gen_eq = .true. :: use GA style NetCDF equilibrium (TOQ)
+!!!                 chs_eq = .true. ::  Use CHEASE generated equilibrium
 !!!     -------------------> [note: if either of the above == .true., 
 !!!                          set eqfile = input file name]
 !!!                 efit_eq = .true. :: use EFIT  equilibrium
@@ -167,6 +174,10 @@ contains
   subroutine eikcoefs (ntheta_returned)
     
     use  geq, only: eqin, geq_init
+    
+    ! CHEASE EQUILIBRIUM  EGH
+    use  ceq, only: ceqin, ceq_init 
+    
     use  peq, only: peqin => eqin, teqin, peq_init
     use  eeq, only: efitin, efit_init, gs2din
 !cmr    use  eeq, only: efitin, eeq_init => efit_init, gs2din
@@ -176,7 +187,9 @@ contains
 
     implicit none
 !cmr nov04: adding following debug switch
-    logical :: debug=.false.
+    !logical :: debug=.false.
+! EGH gave debug switch module scope Apr12
+    !logical :: debug=.true.
 !cmr
     integer, optional, intent (out) :: ntheta_returned
 
@@ -229,9 +242,11 @@ if (debug) write(6,*) "eikcoefs: local_eq=",local_eq
     endif
 
 if (debug) write(6,*) "eikcoefs: call check"
-    call check(gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq, idfit_eq) 
+    call check(gen_eq, efit_eq, ppl_eq, &
+         local_eq, dfit_eq, idfit_eq, chs_eq) 
 
-    if(.not. gen_eq .and. .not. ppl_eq .and. .not. transp_eq &
+    if(.not. gen_eq .and. .not. ppl_eq &
+    .and. .not. transp_eq .and. .not. chs_eq &
          .and. .not. allocated(theta)) then
        write(*,*) 'You should call init_theta to specify the '
        write(*,*) 'number of theta grid points per 2 pi '
@@ -284,6 +299,14 @@ if (debug) write(6,*) 'eikcoefs: transp_eq, called tdef'
              else
                 call tdef(nthg)
              endif
+          else if(chs_eq) then
+             call ceqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
+             if(present(ntheta_returned)) then
+                call tdef(nthg,ntheta_returned)
+             else
+                call tdef(nthg)
+             endif
+   !if (debug) write (*,*) 
           else if(efit_eq) then
              if(big <= 0) big = 8
 
@@ -403,16 +426,17 @@ if (debug) write(6,*) "eikcoefs: find rgrid"
 ! should test whether this is a new equilibrium
 !
 
- if (debug) write(11,*) 'eikcoefs: various logs', gen_eq, ppl_eq, efit_eq, dfit_eq, idfit_eq
+ if (debug) write(11,*) 'eikcoefs: various logs', gen_eq, ppl_eq, chs_eq, efit_eq, dfit_eq, idfit_eq
 
-    if(gen_eq)   call geq_init
-    if(ppl_eq)   call peq_init
+    if(gen_eq)    call geq_init
+    if(ppl_eq)    call peq_init
+    if(chs_eq)    call ceq_init
 if (debug) write(6,*) "eikcoefs: call eeq_init"
 !    if(efit_eq)  call eeq_init
-    if(efit_eq)  call efit_init
+    if(efit_eq)   call efit_init
 if (debug) write(6,*) "eikcoefs: done eeq_init"
-    if(dfit_eq)  call deq_init
-    if(idfit_eq) call ideq_init
+    if(dfit_eq)   call deq_init
+    if(idfit_eq)  call ideq_init
 
 if (debug) write(6,*) "eikcoefs: call rmajortgrid"
     call rmajortgrid(rgrid, theta, rmajor)
@@ -461,13 +485,17 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
 
 !     compute  coordinate gradients
 
-if (debug) write(6,*) "eikcoefs: call thetagrad"
+    if (debug) write(6,*) "eikcoefs: call thetagrad"
 
     call thetagrad(rgrid,thgrad)
+
+    if (debug) write(6,*) "eikcoefs: done thetagrad"
      
 !     compute eikonal S
     if(iflux == 0 .or. iflux == 2) qval=qfun(pbarofrho(rho))
+    if (debug) write(6,*) "eikcoefs: call eikonal"
     call eikonal(rgrid, rpgrad, thgrad, qval, seik, dsdthet, dpsidrp)
+    if (debug) write(6,*) "eikcoefs: done eikonal"
     if(writelots) write(11,*) 'q= ',qval
 	
     if(iflux == 0 .or. iflux == 2) then
@@ -533,12 +561,18 @@ if (debug) write(6,*) "eikcoefs: call thetagrad"
        if(iflux == 0 .or. iflux == 2) trip = trip * dpsidrp
 
 !CMR, June06
+if (debug) write(6,*) "eikcoefs:  gradients"
+if (debug) write(6,*) 'drhodpsi', drhodpsi
+if (debug) write(6,*) 'bi', bi
+if (debug) write(6,*) 'rmajor', rmajor(:)
+if (debug) write(6,*) 'Bpolmag', Bpolmag(:)
 if (debug) write(6,*) rpgrad(-nth:nth,1)
 if (debug) write(6,*) rpgrad(-nth:nth,2)
 if (debug) write(6,*) thgrad(-nth:nth,1)
 if (debug) write(6,*) thgrad(-nth:nth,2)
 if (debug) write(6,*) 1.0d0/trip(-nth:nth)
 if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
+if (debug) write(6,*) "eikcoefs: end gradients"
 !CMRend
 
 
@@ -1196,6 +1230,7 @@ end subroutine eikcoefs
 
     use  geq, only: geq_R => Rpos
     use  peq, only: peq_R => Rpos
+    use  ceq, only: ceq_R => Rpos
     use  leq, only: leq_R => Rpos
     use  eeq, only: eeq_R => Rpos
     use  deq, only: deq_R => Rpos
@@ -1206,6 +1241,7 @@ end subroutine eikcoefs
 
     if(gen_eq)  Rpos = geq_R (r, thet)       
     if(ppl_eq)  Rpos = peq_R (r, thet)       
+    if(chs_eq)  Rpos = ceq_R (r, thet)       
     if(efit_eq) Rpos = eeq_R (r, thet)
     if(dfit_eq) Rpos = deq_R (r, thet)
     if(idfit_eq)Rpos = ideq_R (r, thet)
@@ -1217,6 +1253,7 @@ end subroutine eikcoefs
 
     use  geq, only: geq_Z => Zpos
     use  peq, only: peq_Z => Zpos
+    use  ceq, only: ceq_Z => Zpos
     use  leq, only: leq_Z => Zpos
     use  eeq, only: eeq_Z => Zpos
     use  deq, only: deq_Z => Zpos
@@ -1227,6 +1264,7 @@ end subroutine eikcoefs
 
     if(gen_eq)  Zpos =  geq_Z (r, thet)       
     if(ppl_eq)  Zpos =  peq_Z (r, thet)       
+    if(chs_eq)  Zpos =  ceq_Z (r, thet)       
     if(efit_eq) Zpos =  eeq_Z (r, thet)
     if(dfit_eq) Zpos =  deq_Z (r, thet)
     if(idfit_eq)Zpos = ideq_Z (r, thet)
@@ -1238,6 +1276,7 @@ end subroutine eikcoefs
 
     use  geq, only: geq_invR => invR
     use  peq, only: peq_invR => invR
+    use  ceq, only: ceq_invR => invR
     use  leq, only: leq_invR => invR
     use  eeq, only: eeq_invR => invR
     use  deq, only: deq_invR => invR
@@ -1251,6 +1290,7 @@ end subroutine eikcoefs
     else
        if(gen_eq)  invRfun =  geq_invR (r, thet)
        if(ppl_eq)  invRfun =  peq_invR (r, thet)
+       if(chs_eq)  invRfun =  ceq_invR (r, thet)
        if(efit_eq) invRfun =  eeq_invR (r, thet)
        if(dfit_eq) invRfun =  deq_invR (r, thet)
        if(idfit_eq)invRfun = ideq_invR (r, thet)
@@ -1489,6 +1529,7 @@ end subroutine eikcoefs
 
     use geq, only: geq_diameter => diameter, geq_init_diameter => initialize_diameter
     use peq, only: peq_diameter => diameter, peq_init_diameter => initialize_diameter
+    use ceq, only: ceq_diameter => diameter, ceq_init_diameter => initialize_diameter
     use ideq,only: ideq_diameter => diameter, ideq_init_diameter => initialize_diameter
     use eeq, only: bound
     
@@ -1510,11 +1551,13 @@ end subroutine eikcoefs
        if (gen_eq)  i=geq_init_diameter(initd)
        if (idfit_eq)i=ideq_init_diameter(initd)
        if (ppl_eq)  i=peq_init_diameter(initd)
+       if (chs_eq)  i=ceq_init_diameter(initd)
        initd=0
          
        if(gen_eq)  diameter = geq_diameter(rp)
        if(idfit_eq)diameter = ideq_diameter(rp)
        if(ppl_eq)  diameter = peq_diameter(rp)
+       if(chs_eq)  diameter = ceq_diameter(rp)
        if(efit_eq) diameter = rfun(rp, 0., bound(0.)) + rfun(rp, pi, bound(pi))
     endif
       
@@ -1579,6 +1622,16 @@ end subroutine eikcoefs
        fval=rho*rhofun(b)
        call root(rhofun, fval, a, b, xerrbi, xerrsec, nsolv, ier, soln)
     endif
+    !<EGH
+     if (debug) then 
+       write (*,*) "Values in root: "
+       write (*,*) 'rho:  ', rho
+       write (*,*) 'fval: ', fval
+       write (*,*) 'soln: ', soln
+       write (*,*) 'rpmin: ', rpmin
+       write (*,*) 'rpmax: ', rpmax
+     end if
+    !EGH>
     rpofrho=soln
     if(ier > 0) write(11,*) 'error in rpofrho,rho=',rho
 
@@ -1603,6 +1656,7 @@ end subroutine eikcoefs
 
     use geq, only: geq_btori => btori , geq_init_btori => initialize_btori
     use peq, only: peq_btori => btori , ppl_init_btori => initialize_btori
+    use ceq, only: ceq_btori => btori , chs_init_btori => initialize_btori
     use eeq, only: eeq_btori => btori, efit_init_btori => initialize_btori
     use leq, only: leq_btori => btori
 
@@ -1627,6 +1681,9 @@ end subroutine eikcoefs
        if (gen_eq) then
           i=geq_init_btori(initb)
           f=geq_btori(pbar)
+       elseif (chs_eq) then
+          i=chs_init_btori(initb)
+          f=ceq_btori(pbar)
        elseif (ppl_eq) then
           i=ppl_init_btori(initb)
           f=peq_btori(pbar)
@@ -1656,6 +1713,7 @@ end subroutine eikcoefs
 
     use geq, only: geq_dbtori => dbtori , geq_init_dbtori => initialize_dbtori
     use peq, only: peq_dbtori => dbtori , ppl_init_dbtori => initialize_dbtori
+    use ceq, only: ceq_dbtori => dbtori , chs_init_dbtori => initialize_dbtori
     use leq, only: leq_dbtori => dbtori
     use eeq, only: eeq_dbtori => dbtori, efit_init_dbtori => initialize_dbtori
 
@@ -1677,6 +1735,10 @@ end subroutine eikcoefs
 
           i=ppl_init_dbtori(initdb)    ;  f=peq_dbtori(pbar)
 
+       elseif (chs_eq) then
+
+          i=chs_init_dbtori(initdb)    ;  f=ceq_dbtori(pbar)
+
        elseif (efit_eq) then        
 
           i = efit_init_dbtori(initdb) ; f=eeq_dbtori(pbar)
@@ -1697,6 +1759,7 @@ end subroutine eikcoefs
   function iofrho(rho)
     use geq, only: geq_iofpbar => btori
     use peq, only: peq_iofpbar => btori
+    use ceq, only: ceq_iofpbar => btori
     use eeq, only: eeq_iofpbar => btori
     use leq, only: leq_i => btori
     
@@ -1705,6 +1768,7 @@ end subroutine eikcoefs
             
     if (gen_eq) iofrho = geq_iofpbar(pbarofrho(rho))
     if (ppl_eq) iofrho = peq_iofpbar(pbarofrho(rho))
+    if (chs_eq) iofrho = ceq_iofpbar(pbarofrho(rho))
     if(efit_eq) iofrho = eeq_iofpbar(pbarofrho(rho))
     if(dfit_eq) iofrho = 0.
     if(local_eq) iofrho = leq_i(rho)
@@ -1757,6 +1821,7 @@ end subroutine eikcoefs
   function qfun(pbar)
     use geq, only: geq_qfun => qfun, geq_init_q => initialize_q
     use peq, only: peq_qfun => qfun, ppl_init_q => initialize_q
+    use ceq, only: ceq_qfun => qfun, chs_init_q => initialize_q
     use eeq, only: eeq_qfun => qfun, efit_init_q => initialize_q
     use leq, only: leq_qfun => qfun
 
@@ -1781,6 +1846,9 @@ end subroutine eikcoefs
     elseif (ppl_eq) then
        i = ppl_init_q(initq)
        qfun = peq_qfun(pbar)
+    elseif (chs_eq) then
+       i = chs_init_q(initq)
+       qfun = ceq_qfun(pbar)
     elseif (efit_eq) then
        i = efit_init_q(initq)
        qfun = eeq_qfun(pbar)
@@ -1796,6 +1864,7 @@ end subroutine eikcoefs
 
     use  geq, only: geq_pfun => pfun, geq_init_pressure => initialize_pressure
     use  peq, only: peq_pfun => pfun, ppl_init_pressure => initialize_pressure
+    use  ceq, only: ceq_pfun => pfun, chs_init_pressure => initialize_pressure
     use  eeq, only: eeq_pfun => pfun, efit_init_pressure => initialize_pressure
     use  deq, only: deq_pfun => pfun, dfit_init_pressure => initialize_pressure
     use ideq, only: ideq_pfun => pfun, idfit_init_pressure => initialize_pressure
@@ -1822,6 +1891,9 @@ end subroutine eikcoefs
     elseif (ppl_eq) then
        i=ppl_init_pressure(initp)
        pfun = peq_pfun(pbar)
+    elseif (chs_eq) then
+       i=chs_init_pressure(initp)
+       pfun = ceq_pfun(pbar)
     elseif (efit_eq) then
        i = efit_init_pressure(initp)
        pfun = eeq_pfun(pbar)
@@ -1841,6 +1913,7 @@ end subroutine eikcoefs
 
     use  geq, only: geq_dpfun => dpfun, geq_init_dpressure => initialize_dpressure
     use  peq, only: peq_dpfun => dpfun, ppl_init_dpressure => initialize_dpressure
+    use  ceq, only: ceq_dpfun => dpfun, chs_init_dpressure => initialize_dpressure
     use  eeq, only: eeq_dpfun => dpfun, efit_init_dpressure => initialize_dpressure
     use  deq, only: deq_dpfun => dpfun, dfit_init_dpressure => initialize_dpressure
     use ideq, only: ideq_dpfun => dpfun, idfit_init_dpressure => initialize_dpressure
@@ -1864,6 +1937,7 @@ end subroutine eikcoefs
     
     if(gen_eq)  i = geq_init_dpressure(initdp)
     if(ppl_eq)  i = ppl_init_dpressure(initdp)
+    if(chs_eq)  i = chs_init_dpressure(initdp)
     if(efit_eq) i = efit_init_dpressure(initdp)
     if(dfit_eq) i = dfit_init_dpressure(initdp)
     if(idfit_eq)i = idfit_init_dpressure(initdp)
@@ -1871,6 +1945,7 @@ end subroutine eikcoefs
           
     if(gen_eq)   dpfun = geq_dpfun(pbar)
     if(ppl_eq)   dpfun = peq_dpfun(pbar)
+    if(chs_eq)   dpfun = ceq_dpfun(pbar)
     if(efit_eq)  dpfun = eeq_dpfun(pbar)
     if(dfit_eq)  dpfun = deq_dpfun(pbar)
     if(idfit_eq) dpfun = ideq_dpfun(pbar)
@@ -1881,6 +1956,7 @@ end subroutine eikcoefs
     
     use  geq, only: geq_beta => betafun,  geq_init_beta => initialize_beta
     use  peq, only: peq_beta => betafun,  ppl_init_beta => initialize_beta
+    use  ceq, only: ceq_beta => betafun,  chs_init_beta => initialize_beta
     use  eeq, only: eeq_beta => betafun, efit_init_beta => initialize_beta
     use  deq, only: deq_beta => betafun, dfit_init_beta => initialize_beta
     use ideq, only: ideq_beta => betafun, idfit_init_beta => initialize_beta
@@ -1908,6 +1984,9 @@ end subroutine eikcoefs
     elseif (ppl_eq) then
        i = ppl_init_beta(initbeta)
        f = peq_beta(pbar)
+    elseif (chs_eq) then
+       i = chs_init_beta(initbeta)
+       f = ceq_beta(pbar)
     elseif(efit_eq) then
        i = efit_init_beta(initbeta)
        f = eeq_beta(pbar)
@@ -2047,6 +2126,7 @@ end subroutine eikcoefs
 
     use  geq, only: geq_psi => psi,  geq_init_psi => initialize_psi
     use  peq, only: peq_psi => psi,  ppl_init_psi => initialize_psi
+    use  ceq, only: ceq_psi => psi,  chs_init_psi => initialize_psi
     use  eeq, only: eeq_psi => psi, efit_init_psi => initialize_psi
     use  deq, only: deq_psi => psi, dfit_init_psi => initialize_psi
     use ideq, only: ideq_psi => psi, idfit_init_psi => initialize_psi
@@ -2076,6 +2156,9 @@ end subroutine eikcoefs
     elseif (ppl_eq) then
        i = ppl_init_psi(init)
        psi = peq_psi(r, thet)       
+    elseif (chs_eq) then
+       i = chs_init_psi(init)
+       psi = ceq_psi(r, thet)       
     else if(efit_eq) then
        i = efit_init_psi(init)
        psi = eeq_psi(r, thet)
@@ -2185,6 +2268,7 @@ end subroutine geofax
 
     use geq, only: geq_rcenter => rcenter, geq_init_rc => initialize_rcenter
     use peq, only: peq_rcenter => rcenter, peq_init_rc => initialize_rcenter
+    use ceq, only: ceq_rcenter => rcenter, ceq_init_rc => initialize_rcenter
     use eeq, only: bound, eeq_init_rc => initialize_bound
     use leq, only: leq_rcenter => rcenter
     use ideq, only: ideq_rcenter => rcenter, ideq_init_rc => initialize_rcenter
@@ -2200,6 +2284,7 @@ end subroutine geofax
 
     if (gen_eq)  i = geq_init_rc(init_rc) 
     if (ppl_eq)  i = peq_init_rc(init_rc) 
+    if (chs_eq)  i = ceq_init_rc(init_rc) 
     if (efit_eq) i = eeq_init_rc(init_rc)
     if (idfit_eq)i = ideq_init_rc(init_rc)
     init_rc = 0
@@ -2208,6 +2293,7 @@ end subroutine geofax
     if(gen_eq)   rcenter = geq_rcenter(rp) 
     if(idfit_eq) rcenter = ideq_rcenter(rp) 
     if(ppl_eq)   rcenter = peq_rcenter(rp) 
+    if(chs_eq)   rcenter = ceq_rcenter(rp) 
 
     if(efit_eq)  rcenter = rmaj + 0.5*(rfun(rp, 0., bound(0.))-rfun(rp,pi,bound(pi)))
     if(local_eq) rcenter = leq_rcenter(rp)
@@ -2547,7 +2633,7 @@ end subroutine geofax
     integer, intent(out), optional :: ntheta_returned
 !<RN
 !cmr Jun06: adding following debug switch
-    logical :: debug=.false.
+    !logical :: debug=.false.
 !cmr
 !    logical :: first = .true.
     
@@ -2710,9 +2796,16 @@ end subroutine geofax
 
   end subroutine bishop_gradB
 
-  subroutine check(geq, eeq, peq, leq, deq, ideq)
-    logical, intent(in) :: geq, eeq, peq, leq, deq, ideq
+  subroutine check(geq, eeq, peq, leq, deq, ideq, ceq)
+    logical, intent(in) :: geq, eeq, peq, leq, deq, ideq, ceq
     
+    if (ceq .and. (geq .or. eeq .or. peq .or.  leq .or. deq .or. ideq)) then
+      write (*,*) 'Choosing chs_eq = .true. and any of gen_eq, dfit_eq, &
+      & efit_eq, ppl_eq, iflux = 0 is not permitted'
+       write(*,*) 'Stopping.'
+       stop
+    endif
+
     if(geq .and. deq) then
        write(*,*) 'Choosing gen_eq = .true. AND dfit_eq = .true. is not permitted.'
        write(*,*) 'Stopping.'
@@ -2779,6 +2872,7 @@ end subroutine geofax
      
      use  geq, only:  geq_gradient => gradient
      use  peq, only:  peq_gradient => gradient
+     use  ceq, only:  ceq_gradient => gradient
      use  eeq, only:  eeq_gradient => gradient
      use  deq, only:  deq_gradient => gradient
      use ideq, only: ideq_gradient => gradient
@@ -2792,6 +2886,7 @@ end subroutine geofax
 
      if(gen_eq)   call  geq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(ppl_eq)   call  peq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(chs_eq)   call  ceq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(efit_eq)  call  eeq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(dfit_eq)  call  deq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(idfit_eq) call ideq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
@@ -2803,6 +2898,7 @@ end subroutine geofax
      
      use  geq, only:  geq_bgradient => bgradient
      use  peq, only:  peq_bgradient => bgradient
+     use  ceq, only:  ceq_bgradient => bgradient
      use  eeq, only:  eeq_bgradient => bgradient
      use  deq, only:  deq_bgradient => bgradient
      use ideq, only: ideq_bgradient => bgradient
@@ -2816,6 +2912,7 @@ end subroutine geofax
 
      if(gen_eq)   call  geq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(ppl_eq)   call  peq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(chs_eq)   call  ceq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(efit_eq)  call  eeq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(dfit_eq)  call  deq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(idfit_eq) call ideq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
@@ -3004,12 +3101,14 @@ end subroutine geofax
 
     use geq, only: geq_Hahm_Burrell => Hahm_Burrell
     use peq, only: peq_Hahm_Burrell => Hahm_Burrell
+    use ceq, only: ceq_Hahm_Burrell => Hahm_Burrell
 
     integer i
     real a
 
     if(gen_eq) call geq_Hahm_Burrell(i, a)
     if(ppl_eq) call peq_Hahm_Burrell(i, a)
+    if(chs_eq) call ceq_Hahm_Burrell(i, a)
 
 
   end subroutine Hahm_Burrell
