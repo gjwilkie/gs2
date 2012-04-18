@@ -6,11 +6,11 @@
 #
 #  (requires GNU's gmake)
 #
-#PROJECT ?= trinity
-PROJECT ?= gs2
-#PROJECT ?= agk
-#PROJECT ?= gsp
-#PROJECT ?= rmhdper
+#GK_PROJECT ?= trinity
+GK_PROJECT ?= gs2
+#GK_PROJECT ?= agk
+#GK_PROJECT ?= gsp
+#GK_PROJECT ?= rmhdper
 #
 #  Makefile written by Bill Dorland and Ryusuke Numata
 #
@@ -23,7 +23,7 @@ PROJECT ?= gs2
 #	10/12/09: share the Makefile with gsp gyrokinetic PIC code
 #	04/11/09: * share the Makefile with rmhdper reduced MHD code
 #		  * include progject specific target definitions
-#		    Makefile.target_$(PROJECT)
+#		    Makefile.target_$(GK_PROJECT)
 #	04/06/09: SYSTEM environment variable is replaced by GK_SYSTEM
 #	02/25/09: gs2 replaced by trinity (MAB)
 #	01/26/09: USE_C_INDEX is imported to gs2 by TT
@@ -195,7 +195,7 @@ sinclude Makefile.local
 UTILS=utils
 GEO=geo
 
-ifeq ($(PROJECT),rmhdper)
+ifeq ($(GK_PROJECT),rmhdper)
 	override USE_MPI =
 	override USE_FFT = fftw
 	override USE_HDF5 =
@@ -312,7 +312,7 @@ F90FLAGS+= $(F90OPTFLAGS) \
 CFLAGS += $(COPTFLAGS)
 
 DATE=$(shell date +%y%m%d)
-TARDIR=$(PROJECT)_$(DATE)
+TARDIR=$(GK_PROJECT)_$(DATE)
 TOPDIR=$(CURDIR)
 ifeq ($(notdir $(CURDIR)), $(UTILS))
 	TOPDIR=$(subst /$(UTILS),,$(CURDIR))
@@ -368,7 +368,7 @@ F90FROMFPP = $(patsubst %.fpp,%.f90,$(notdir $(wildcard *.fpp */*.fpp)))
 
 # .DEFAULT_GOAL works for GNU make 3.81 (or higher)
 # For 3.80 or less, see all target
-.DEFAULT_GOAL := $(PROJECT)_all
+.DEFAULT_GOAL := $(GK_PROJECT)_all
 ifeq ($(notdir $(CURDIR)),utils)
 	.DEFAULT_GOAL := utils_all
 endif
@@ -376,7 +376,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(PROJECT)_all
+.PHONY: all $(GK_PROJECT)_all
 
 all: $(.DEFAULT_GOAL)
 
@@ -388,23 +388,23 @@ astrogk_mod += layouts_indices.o
 gs2_mod += layouts_indices.o
 endif
 
-sinclude Makefile.target_$(PROJECT)
+sinclude Makefile.target_$(GK_PROJECT)
 
 ############################################################### SPECIAL RULES
 
 # comment this out to keep intermediate .f90 files
 #.PRECIOUS: $(F90FROMFPP)
 
-.INTERMEDIATE: $(PROJECT)_transforms.f90 $(PROJECT)_io.f90 $(PROJECT)_save.f90 \
+.INTERMEDIATE: $(GK_PROJECT)_transforms.f90 $(GK_PROJECT)_io.f90 $(GK_PROJECT)_save.f90 \
 		mp.f90 fft_work.f90
 
 # These are special rules for the suffix problem of absoft
 # (not tested)
-$(PROJECT)_transforms.o: $(PROJECT)_transforms.f90
+$(GK_PROJECT)_transforms.o: $(GK_PROJECT)_transforms.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $<
-$(PROJECT)_io.o: $(PROJECT)_io.f90
+$(GK_PROJECT)_io.o: $(GK_PROJECT)_io.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
-$(PROJECT)_save.o: $(PROJECT)_save.f90
+$(GK_PROJECT)_save.o: $(GK_PROJECT)_save.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
 mp.o: mp.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX1) -c $<
