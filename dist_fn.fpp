@@ -47,7 +47,7 @@ module dist_fn
   real :: t0, omega0, gamma0, source0
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
-  logical :: dfexist, skexist
+  logical :: dfexist, skexist, nonad_zero
 
   integer :: adiabatic_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -246,8 +246,18 @@ subroutine check_dist_fn(report_unit)
     case default
        write (report_unit, *) 
        write (report_unit, fmt="('Outgoing boundary conditions will be used.')")
-       write (report_unit, *) 
     end select
+
+    write (report_unit, fmt="('Parallel bc for passing particles at ends of the domain is:')")
+    if (nonad_zero) then
+       write (report_unit, fmt="(T20,'g_wesson = g_krt = 0')")
+       write (report_unit, fmt="('ie NO incoming particles in the nonadiabatic piece of delta(f)')") 
+    else
+       write (report_unit, fmt="(T20,'g_gs2 = 0')")
+       write (report_unit, fmt="('NB this ONLY gives NO incoming particles in the nonadiabatic piece of delta(f)')")
+       write (report_unit, fmt="(T20,'if phi and bpar are zero at the ends of the domain')") 
+    endif
+    write (report_unit, *) 
 
     if (.not. has_electron_species(spec)) then
        select case (adiabatic_option_switch)
@@ -403,6 +413,7 @@ subroutine check_dist_fn(report_unit)
 
        end select
 
+       write (unit, fmt="(' nonad_zero = ',L1)") nonad_zero
        write (unit, fmt="(' gridfac = ',e16.10)") gridfac
 
        if (.not. has_electron_species(spec)) then
@@ -615,8 +626,8 @@ subroutine check_dist_fn(report_unit)
             text_option('iphi00=3', adiabatic_option_yavg)/)
     character(30) :: adiabatic_option
             
-    namelist /dist_fn_knobs/ boundary_option, gridfac, apfac, driftknob, &
-         tpdriftknob, poisfac, adiabatic_option, &
+    namelist /dist_fn_knobs/ boundary_option, nonad_zero, gridfac, apfac, &
+         driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          g_exb, g_exbfac, omprimfac, btor_slab, mach
     
@@ -629,6 +640,7 @@ subroutine check_dist_fn(report_unit)
 
     if (proc0) then
        boundary_option = 'default'
+       nonad_zero = .false.
        adiabatic_option = 'default'
        poisfac = 0.0
        gridfac = 1.0  ! used to be 5.e4
@@ -681,6 +693,7 @@ subroutine check_dist_fn(report_unit)
     if (proc0) call read_species_knobs
 
     call broadcast (boundary_option_switch)
+    call broadcast (nonad_zero)
     call broadcast (adiabatic_option_switch)
     call broadcast (gridfac)
     call broadcast (poisfac)
@@ -3101,14 +3114,15 @@ subroutine check_dist_fn(report_unit)
   subroutine invert_rhs_1 &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         iglo, sourcefac)
-    use dist_fn_arrays, only: gnew, ittp
+    use dist_fn_arrays, only: gnew, ittp, vperp2, aj1, aj0
     use run_parameters, only: eqzip, secondary, tertiary, harris
     use theta_grid, only: ntgrid
-    use le_grids, only: nlambda, ng2, lmax, forbid
+    use le_grids, only: nlambda, ng2, lmax, forbid, anon
     use kt_grids, only: aky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use prof, only: prof_entering, prof_leaving
-    use run_parameters, only: ieqzip
+    use run_parameters, only: fapar, fbpar, fphi, ieqzip
+    use species, only: spec
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
@@ -3120,6 +3134,7 @@ subroutine check_dist_fn(report_unit)
     integer :: ilmin
     complex :: beta1
     complex, dimension (-ntgrid:ntgrid,2) :: source, g1, g2
+    complex :: adjleft, adjright
     logical :: kperiod_flag, speriod_flag
     integer :: ntgl, ntgr
 
@@ -3148,8 +3163,41 @@ subroutine check_dist_fn(report_unit)
     ! gnew is the inhomogeneous solution
     gnew(:,:,iglo) = 0.0
 
+!CMR, 18/4/2012:
+! What follows is a selectable improved parallel bc for passing particles.
+!                                            (prompted by Greg Hammett)
+! Original bc is: g_gs2 = gnew = 0 at ends of domain:
+!   ONLY implies zero incoming particles in nonadiabatic delta f if phi=bpar=0
+! Here ensure ZERO incoming particles in nonadiabatic delta f at domain ends
+!  (exploits code used in subroutine g_adjust to transform g_wesson to g_gs2)
+    if ( nonad_zero ) then 
+       if (il <= ng2+1) then
+          adjleft = anon(ie)*2.0*vperp2(-ntgrid,iglo)*aj1(-ntgrid,iglo) &
+                  *bpar(-ntgrid,it,ik)*fbpar &
+               + spec(is)%z*anon(ie)*phi(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
+                  /spec(is)%temp*fphi
+          gnew(-ntgrid,1,iglo) = gnew(-ntgrid,1,iglo) - adjleft
+          adjright = anon(ie)*2.0*vperp2(ntgrid,iglo)*aj1(ntgrid,iglo) &
+                  *bpar(ntgrid,it,ik)*fbpar &
+               + spec(is)%z*anon(ie)*phi(ntgrid,it,ik)*aj0(ntgrid,iglo) &
+                  /spec(is)%temp*fphi
+          gnew(ntgrid,2,iglo) = gnew(ntgrid,2,iglo) - adjright
+       endif
+    endif
+
     ! g1 is the homogeneous solution
     g1 = 0.0
+
+!CMR, 17/4/2012:
+!  kperiod_flag = T  iff one of following applies:   
+!                 boundary_option_self_periodic
+!     OR          boundary_option_linked
+!     OR          aky=0
+!  if kperiod_flag = T, compute homogeneous solution (g1) for passing.
+!        otherwise ONLY compute inhomogenous solution for passing particles.
+!
+!  speriod_flag = T  iff boundary_option_linked AND aky=0
+!  if speriod_flag = T, apply self-periodic bcs for passing and wfb.
 
     select case (boundary_option_switch)
     case (boundary_option_self_periodic)
@@ -3181,17 +3229,23 @@ subroutine check_dist_fn(report_unit)
     end if
 
 !CMR
-! g2 is the initial boundary condition for the homogeneous solution
-!      g2=1.0 at upper bounce point for vpar < 0
-!      -- g2 = 0 everywhere for wfb as forbid always false
-!                => why did JAB: include wfb (il=ng2+1) in g2 init loop ?
-!      -- g2 = 0 for ttp too 
-! NB lmax=nlambda-1 with trapped particles, and ttp is at il=nlambda
+! g2 simply stores trapped homogeneous boundary conditions at bounce points
+!     g2(iub,2) = 1.0        iub is UPPER bounce point, trapped bc for vpar < 0
+!     g2(ilb,1) = g1(ilb,2)  ilb is LOWER bounce point, trapped bc for vpar > 0
+! otherwise g2 is zero
+!      -- g2 = 0 for all passing particles
+!      -- g2 = 0 for wfb as forbid always false
+!      -- g2 = 0 for ttp too
+! g2 NOT used for totally trapped particles at il=nlambda 
+
+! NB with trapped particles lmax=nlambda-1, and ttp is at il=nlambda
 
     g2 = 0.0
     if (nlambda > ng2 .and. il >= ng2+1 .and. il <= lmax) then
-!CMR, surely ng2+2 was right?
+!CMR, surely il >= ng2+2 works, as forbid gives no bounce point for wfb?
+!      ... but does not matter
        do ig=-ntgrid,ntgrid-1
+!CMR: set g2=1 at UPPER bounce point for trapped (not ttp or wfb) at vpar<0
           if (forbid(ig+1,il).and..not.forbid(ig,il)) g2(ig,2) = 1.0
        end do
     end if
@@ -3214,6 +3268,10 @@ subroutine check_dist_fn(report_unit)
     end if
 
 ! time advance vpar < 0 homogeneous part: g1
+!CMR, 17/4/2012: computes homogeneous solutions for il > ilmin
+!                il > ilmin includes trapped particles
+!                AND passing particles IF kperiod_flag = T
+
     if (il >= ilmin) then
        do ig = ntgrid-1, -ntgrid, -1
           g1(ig,2) = -g1(ig+1,2)*r(ig,2,iglo) + g2(ig,2)
@@ -3227,14 +3285,18 @@ subroutine check_dist_fn(report_unit)
     ! (excluding wfb and ttp)
 
 ! GWH & JAB: see if this fixes a numerical instability, related to close-to-wfb:
-!il<=lmax seems redundant
-!CMR, 1/8/2011:  Not sure wfb is included in following loop
+!CMR, 17/4/2012:  il<=lmax excludes ttp 
+!CMR, 1/8/2011:  Not sure why wfb is included in following loop
     if (nlambda > ng2 .and. il >= ng2+1 .and. il <= lmax) then
 !    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
        ! match boundary conditions at lower bounce point
        do ig = -ntgrid, ntgrid-1
           if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
-             g2(ig,1) = g1(ig+1,2)
+!CMR, 17/4/2012: set g2=(ig+1,1) = g1(ig+1,2) where ig+1 is LOWER bounce point
+!     (previously g2 was set to 1 at ig just LEFT of lower bounce point
+!      but this was handled consistently in integration of g1)
+!  
+             g2(ig+1,1) = g1(ig+1,2)
 !CMR: init_invert_rhs  sets ainv=1 at lower bounce point for trapped 
 !     source below ensures gnew(lb,1,iglo)=gnew(lb,2,iglo)
 !     where lb is the lower bounce point.
@@ -3265,10 +3327,19 @@ subroutine check_dist_fn(report_unit)
     ! time advance vpar > 0 homogeneous part
     if (il >= ilmin) then
        do ig = -ntgrid, ntgrid-1
-          g1(ig+1,1) = -g1(ig,1)*r(ig,1,iglo) + g2(ig,1)
+!CMR, 17/4/2012:  use consistent homogeneous trapped solution (g2) at lbp
+          g1(ig+1,1) = -g1(ig,1)*r(ig,1,iglo) + g2(ig+1,1)
        end do
     end if
 
+!CMR, 17/4/2012:  
+! self_periodic bc applied as follows:
+! boundary_option_linked = T
+!      passing + wfb if aky=0
+!      isolated wfb (ie no linked domains) 
+! boundary_option_linked = F
+!      passing and wfb particles if boundary_option_self_periodic = T
+!      wfb 
     if (boundary_option_switch == boundary_option_linked) then
        if (speriod_flag .and. il <= ng2+1) then
           call self_periodic
