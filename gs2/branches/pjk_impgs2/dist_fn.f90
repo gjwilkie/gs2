@@ -2964,7 +2964,7 @@ contains
     use dist_fn_arrays, only: aj0, aj1, vperp2, vpa, vpar, vpac, g, ittp
     use theta_grid, only: ntgrid, theta
     use kt_grids, only: aky, theta0, akx
-    use le_grids, only: nlambda, ng2, lmax, anon, e, negrid
+    use le_grids, only: nlambda, ng2, lmax, anon, e, negrid, forbid
     use species, only: spec, nspec
     use run_parameters, only: fphi, fapar, fbpar, wunits, tunits
     use gs2_time, only: code_dt
@@ -3111,7 +3111,8 @@ contains
 
 
       do ig = -ntgrid, ntgrid-1
-         phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
+!+!+!+!+!+!         phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
+         phi_p = 2.0*phigavg(ig)
 !+PJK 13/09/11 phi_m = phigavg(ig+1)-phigavg(ig)
          phi_m = 0.0  !  removes CMR's term II
 !-PJK 13/09/11
@@ -3174,6 +3175,14 @@ contains
             end do
          end select
       end if
+!+PJK check this is correct...
+      !  Trapped particles: zero source and fluxfn
+      do ig = -ntgrid,ntgrid
+         if (forbid(ig,il)) then
+            source(ig) = 0.0
+            fluxfn(ig) = 0.0
+         end if
+      end do
 
     end subroutine set_source
 
@@ -3392,12 +3401,24 @@ contains
           if (forbid(ig,il)) then
              beta1 = 0.0
           else if (forbid(ig+1,il)) then
+             !  '1.0' is shorthand for g1(ig,2) here...
              beta1 = (gnew(ig,1,iglo) - gnew(ig,2,iglo))/(1.0 - g1(ig,1))
           end if
           gnew(ig,1,iglo) = gnew(ig,1,iglo) + beta1*g1(ig,1)
           gnew(ig,2,iglo) = gnew(ig,2,iglo) + beta1*g1(ig,2)
        end do
     end if
+!+PJK
+!write(*,*) 'Trapped particle tests...'
+!if (il == 17) then
+!   do ig = ntgl,ntgr-1
+!      if (.not.forbid(ig,il).and.forbid(ig+1,il)) then
+!         write(*,*) ig,forbid(ig,il)
+!         write(*,*) gnew(ig,1,iglo),gnew(ig,2,iglo)
+!      end if
+!   end do
+!end if
+!-PJK
 
 !! removed 5.9.08 to regain consistency with linked case -- MAB
 !! added 4.13.08 to treat wfb as trapped between ends but not middle wells -- MAB

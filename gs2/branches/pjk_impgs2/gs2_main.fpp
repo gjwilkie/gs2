@@ -45,7 +45,7 @@ contains
     use redistribute, only: time_redist
     use fields_implicit, only: time_field
 !+PJK
-    use fields_explicit, only: adaptive_dt_reset, adaptive_dt_new
+    use dg_scheme, only: adaptive_dt_reset, adaptive_dt_new
 !-PJK
     implicit none
 
