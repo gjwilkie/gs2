@@ -20,7 +20,7 @@ contains
     use fields_implicit, only: fi_reset => reset_init
     use fields_explicit, only: fe_reset => reset_init
 !+PJK
-    use fields_explicit, only: adaptive_dt
+    use dg_scheme, only: adaptive_dt
 !-PJK
     use fields_test, only: ft_reset => reset_init
     use init_g, only: g_reset => reset_init
