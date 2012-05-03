@@ -914,7 +914,6 @@ contains
     complex, allocatable, dimension(:,:,:) :: fluxfn
     complex, allocatable, dimension(:,:,:) :: src, smodal
 
-    !real, dimension(2,4) :: mat_p2p, mat_p2m
     real, dimension(3,6) :: mat_p3p, mat_p3m
 
     complex, dimension(2*p) :: ftemp
@@ -929,7 +928,7 @@ contains
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    !  local matrices for nodal to modal, and vice versa
+    !  Local matrices for nodal to modal, and vice versa
 
     n2m(0,0) = 0.375D0
     n2m(0,1) = 0.25D0
@@ -1019,15 +1018,6 @@ contains
     !  For speed, ought to store and use transpose...
 
     mgplusf_modal = 0.0
-
-!    !  Matrix, p=2, positive v
-!    mat_p2p = real(reshape( &
-!         source = (/ 1,-3, 1,-3, -1,3, -1,-3 /), &
-!         shape = (/ 2,4 /) ))
-!    !  Matrix, p=2, negative v
-!    mat_p2m = real(reshape( &
-!         source = (/ 1,3, -1,3, -1,-3, 1,3 /), &
-!         shape = (/ 2,4 /) ))
 
     !  Matrix, p=3, positive v
     mat_p3p = real(reshape( &

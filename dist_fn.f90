@@ -3111,12 +3111,16 @@ contains
 
 
       do ig = -ntgrid, ntgrid-1
-!+!+!+!+!+!         phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
+!+PJK 01/05/12 removed centre-differencing, which fixes an apparent grid offset error
+         !phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
          phi_p = 2.0*phigavg(ig)
+!-PJK 01/05/12
 !+PJK 13/09/11 phi_m = phigavg(ig+1)-phigavg(ig)
          phi_m = 0.0  !  removes CMR's term II
 !-PJK 13/09/11
-         apar_p = apargavg(ig+1)+apargavg(ig)  !  need to check when fapar /= 0
+!+PJK 02/05/12 removed centre-differencing, which fixes an apparent grid offset error
+         !apar_p = apargavg(ig+1)+apargavg(ig)
+         apar_p = 2.0*apargavg(ig)
          apar_m = 0.0  !  removes CMR's term I
 
          !  Flux function required by the explicit DG scheme
@@ -3142,7 +3146,7 @@ contains
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
-              -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))* & !  phi_p*nfac) replaced by...
+              -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))* & !  phi_p*nfac replaced by...
               (phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))*nfac) & ! this line (CHECK)
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
@@ -3411,10 +3415,11 @@ contains
 !+PJK
 !write(*,*) 'Trapped particle tests...'
 !if (il == 17) then
-!   do ig = ntgl,ntgr-1
-!      if (.not.forbid(ig,il).and.forbid(ig+1,il)) then
-!         write(*,*) ig,forbid(ig,il)
-!         write(*,*) gnew(ig,1,iglo),gnew(ig,2,iglo)
+!   !do ig = ntgl,ntgr-1
+!   do ig = -8,8,16
+!      !if (.not.forbid(ig,il).and.forbid(ig+1,il)) then
+!      if (.not.forbid(ig,il)) then
+!         write(*,*) ig,gnew(ig,1,iglo),gnew(ig,2,iglo)
 !      end if
 !   end do
 !end if
