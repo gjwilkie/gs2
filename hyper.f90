@@ -9,6 +9,7 @@ module hyper
   public :: init_hyper, finish_hyper, hyper_diff, D_res
   public :: read_parameters, wnml_hyper, check_hyper
   public :: D_v, D_eta, nexp
+  public :: hypervisc_filter
 
 ! D_v, D_eta are hyper coefficients, normalized correctly 
 ! i.e., either by unity or by 1/k_perp**2*nexp
@@ -29,6 +30,9 @@ module hyper
 
   real, dimension (:,:), allocatable, save :: D_res
   ! (it, ik)
+
+  real, dimension (:,:,:), allocatable, save :: hypervisc_filter
+  ! (-ntgrid:ntgrid, ntheta0, naky)
 
   logical :: initialized = .false.
 
@@ -419,12 +423,16 @@ contains
   end subroutine read_parameters
 
   subroutine allocate_arrays
+    use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     implicit none
 
     if (.not. allocated(D_res)) then
        allocate (D_res(ntheta0, naky)) 
     endif
+    if (.not. allocated(hypervisc_filter)) then
+       allocate (hypervisc_filter(-ntgrid:ntgrid,ntheta0,naky)) ; hypervisc_filter = 0.0
+    end if
     D_res = 0.
 
   end subroutine allocate_arrays
@@ -525,24 +533,16 @@ contains
          it = it_idx(g_lo, iglo)
          
          if(aky(ik) == 0.) then
-            
-            g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt &
-                 * ( shear_rate_z_nz(:) *  akx(it) ** 4 / akx4_max )))
-            
-            g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt & 
-                 * ( shear_rate_z_nz(:) *  akx(it) ** 4 / akx4_max )))
-            
+            hypervisc_filter(:,it,ik) = exp(- (D_hypervisc * code_dt &
+                 * ( shear_rate_z_nz(:) * akx(it) ** 4 / akx4_max )))
          else
-            
-            g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt & 
+            hypervisc_filter(:,it,ik) = exp(- ( D_hypervisc * code_dt & 
                  * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max & 
                  + shear_rate_z(:) * akx(it) ** 4/ akx4_max * aky(ik) / aky_max )))
-            
-            g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt &
-                 * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max & 
-                 + shear_rate_z(:) * akx(it) ** 4 / akx4_max * aky(ik) / aky_max )))
-            
          endif
+         
+         g0(:,1,iglo) = g0(:,1,iglo) * hypervisc_filter(:,it,ik)
+         g0(:,2,iglo) = g0(:,2,iglo) * hypervisc_filter(:,it,ik)
       end do
     
     end subroutine aniso_shear
@@ -570,15 +570,16 @@ contains
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
          it = it_idx(g_lo, iglo)
-         
-         g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt &
+
+         hypervisc_filter(:,it,ik) = exp(- ( D_hypervisc * code_dt &
               * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
          
-         g0(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt &
-              * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
+         g0(:,1,iglo) = g0(:,1,iglo) * hypervisc_filter(:,it,ik)
+         g0(:,2,iglo) = g0(:,2,iglo) * hypervisc_filter(:,it,ik)
       end do
       
     end subroutine iso_shear
+
   end subroutine hyper_diff
 
   subroutine finish_hyper
@@ -588,6 +589,7 @@ contains
     hyper_on = .false.
     initialized = .false.
     if (allocated(D_res)) deallocate (D_res)
+    if (allocated(hypervisc_filter)) deallocate (hypervisc_filter)
 
   end subroutine finish_hyper
 
