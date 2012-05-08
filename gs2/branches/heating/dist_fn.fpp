@@ -18,7 +18,7 @@ module dist_fn
   public :: read_parameters, wnml_dist_fn, wnml_dist_fn_species, check_dist_fn
   public :: timeadv, exb_shear, g_exb
   public :: getfieldeq, getan, getmoms, getemoms
-  public :: flux, lf_flux
+  public :: flux, lf_flux, eexchange
   public :: get_epar, get_heat
   public :: t0, omega0, gamma0, source0
   public :: reset_init, write_f, reset_physics, write_poly
@@ -4494,6 +4494,102 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine get_flux
 
+  subroutine eexchange (phi, exchange)
+
+    use mp, only: proc0
+    use constants, only: zi
+    use gs2_layouts, only: g_lo, il_idx, ie_idx, it_idx, ik_idx, is_idx
+    use gs2_time, only: code_dt
+    use dist_fn_arrays, only: gnew, aj0, vpa
+    use theta_grid, only: ntgrid, gradpar, delthet, bmag
+    use kt_grids, only: ntheta0, naky
+    use le_grids, only: integrate_moment
+    use run_parameters, only: woutunits, fphi
+    use species, only: spec, nspec
+    use nonlinear_terms, only: nonlin
+
+    implicit none
+
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
+    real, dimension (:,:,:), intent (out) :: exchange
+
+    integer :: ig, il, ie, it, ik, is, iglo, isgn
+    real :: wgt
+    real, dimension (:,:,:), allocatable :: dnorm
+    complex, dimension (:,:,:,:), allocatable :: total
+
+    allocate (dnorm(-ntgrid:ntgrid, ntheta0, naky))
+    allocate (total(-ntgrid:ntgrid, ntheta0, naky, nspec))
+
+    if (proc0) exchange = 0.0
+
+    do ik = 1, naky
+       do it = 1, ntheta0
+          dnorm(:,it,ik) = delthet/(bmag*gradpar)
+       end do
+    end do
+
+    if (fphi > epsilon(0.0)) then
+       g0 = 0.
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          ik = ik_idx(g_lo,iglo)          
+	  if (nonlin .and. it==1 .and. ik==1) cycle
+          do isgn = 1, 2
+             do ig = -ntgrid+1, ntgrid-1
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/(delthet(ig)+delthet(ig+1)) &
+                     * (gnew(ig+1,isgn,iglo)-gnew(ig-1,isgn,iglo))*spec(is)%stm)
+             end do
+             if (isgn == 1) then
+                ! g = 0 at ig = -ntgrid for vpa > 0
+                ig = -ntgrid
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig) &
+                     * gnew(ig+1,isgn,iglo)*spec(is)%stm)
+                ig = ntgrid
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig-1) &
+                     * (gnew(ig,isgn,iglo)-gnew(ig-1,isgn,iglo))*spec(is)%stm)
+             else
+                ! g = 0 at ig = ntgrid for vpa < 0
+                ig = ntgrid
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+                     * gnew(ig,isgn,iglo)*spec(is)%tz - vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig-1) &
+                     * gnew(ig-1,isgn,iglo)*spec(is)%stm)
+                ig = -ntgrid
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig) &
+                     * (gnew(ig+1,isgn,iglo)-gnew(ig,isgn,iglo))*spec(is)%stm)
+             end if
+          end do
+       end do
+
+       call integrate_moment (g0, total)
+
+       if (proc0) then
+          do is = 1, nspec
+             do ik = 1, naky
+                do it = 1, ntheta0
+                   if (nonlin .and. it==1 .and. ik==1) cycle
+                   wgt = sum(dnorm(:,it,ik))
+                   exchange(it,ik,is) = sum(real(total(:,it,ik,is)*conjg(phi(:,it,ik))) &
+                        *dnorm(:,it,ik))/wgt
+                end do
+             end do
+          end do
+!          exchange = exchange*0.5
+       end if
+
+    end if
+
+    deallocate (dnorm, total)
+
+  end subroutine eexchange
+
   subroutine lf_flux (phi, vflx0, vflx1)
 
     use species, only: spec, nspec
@@ -4727,7 +4823,7 @@ subroutine check_dist_fn(report_unit)
     use gs2_time, only: code_dt
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_apar, a_ext_data
-    use hyper, only: D_v, D_eta, nexp
+    use hyper, only: D_v, D_eta, nexp, hypervisc_filter
     use dist_fn_arrays, only: g_adjust
 
     implicit none
@@ -4744,6 +4840,7 @@ subroutine check_dist_fn(report_unit)
     complex :: phi_m, apar_m, bpar_m, hdot
     complex :: phi_avg, bpar_avg, bperp_m, bperp_avg
     complex :: de, denew
+    complex :: dgdt_hypervisc
     real, dimension (:), allocatable :: wgt
     real :: fac2, dtinv, akperp4
     integer :: isgn, iglo, ig, is, ik, it, ie
@@ -5138,10 +5235,15 @@ subroutine check_dist_fn(report_unit)
                                  aj1(ig  ,iglo)*2.0*bparnew(ig  ,it,ik)*vperp2(ig  ,iglo),  &
                                  aj1(ig+1,iglo)*2.0*bparnew(ig+1,it,ik)*vperp2(ig+1,iglo)) &
                                  *fbpar
+
+                dgdt_hypervisc = 0.5*((1.0-1./hypervisc_filter(ig,it,ik))*gnew(ig,isgn,iglo) &
+                     + (1.0-1./hypervisc_filter(ig+1,it,ik))*gnew(ig+1,isgn,iglo))/code_dt
+
 !Set g0 for hyperviscous heating
-                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp*D_v*akperp4* &
-                     ( conjg(havg)*havg - conjg(havg)*j0phiavg - &
-                     conjg(havg)*j1bparavg)
+!                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp*D_v*akperp4* &
+!                     ( conjg(havg)*havg - conjg(havg)*j0phiavg - &
+!                     conjg(havg)*j1bparavg)
+                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp*conjg(havg)*dgdt_hypervisc
 
              end do
           end do
@@ -6704,7 +6806,7 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: drhodpsi, qval
     use le_grids, only: energy, al, negrid, nlambda, forbid
     use kt_grids, only: theta0, ntheta0, naky
-    use gs2_time, only: code_dt, user_dt
+    use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx, it_idx
     use run_parameters, only: tunits, wunits, rhostar, neo_test
     use lowflow, only: get_lowflow_terms

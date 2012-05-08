@@ -60,7 +60,7 @@ module gs2_io
   integer :: phi2_by_ky_id, apar2_by_ky_id, bpar2_by_ky_id
   integer :: phi0_id, apar0_id, bpar0_id
   integer :: omega_id, omegaavg_id, phase_id
-  integer :: es_heat_flux_id, es_mom_flux_id, es_part_flux_id
+  integer :: es_heat_flux_id, es_mom_flux_id, es_part_flux_id, es_energy_exchange_id
   integer :: es_heat_par_id, es_heat_perp_id
   integer :: apar_heat_flux_id, apar_mom_flux_id, apar_part_flux_id
   integer :: apar_heat_par_id, apar_heat_perp_id
@@ -927,6 +927,8 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom_flux')
           status = nf90_def_var (ncid, 'es_part_flux', netcdf_real, flux_dim, es_part_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_flux')
+          status = nf90_def_var (ncid, 'es_energy_exchange', netcdf_real, flux_dim, es_energy_exchange_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_energy_exchange')
           status = nf90_def_var (ncid, 'es_heat_by_k', netcdf_real, fluxk_dim, es_heat_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_heat_by_k')
           status = nf90_def_var (ncid, 'es_mom_by_k',  netcdf_real, fluxk_dim, es_mom_by_k_id)
@@ -1805,7 +1807,8 @@ contains
   subroutine nc_qflux (nout, qheat, qmheat, qbheat, &
        heat_par,  mheat_par,  bheat_par, &
        heat_perp, mheat_perp, bheat_perp, &
-       heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
+       heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot, &
+       energy_exchange)
 
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -1819,6 +1822,7 @@ contains
     real, dimension (:), intent (in) :: heat_par, mheat_par, bheat_par
     real, dimension (:), intent (in) :: heat_perp, mheat_perp, bheat_perp
     real, dimension (:), intent (in) :: heat_fluxes, mheat_fluxes, bheat_fluxes
+    real, dimension (:), intent (in) :: energy_exchange
     real, dimension (:,:), intent (in) :: x_qmflux
     real, intent (in) :: hflux_tot
 # ifdef NETCDF
@@ -1860,6 +1864,8 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_heat_perp_id)
        status = nf90_put_var (ncid, es_heat_by_k_id, qheat, start=start4, count=count4)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_heat_by_k_id)
+       status = nf90_put_var (ncid, es_energy_exchange_id, energy_exchange, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_energy_exchange_id)
     end if
 
     if (fapar > zero) then
