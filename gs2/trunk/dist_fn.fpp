@@ -3001,7 +3001,7 @@ subroutine check_dist_fn(report_unit)
 ! phi_p = 2 phigavg                      .... (roughly!)
 ! phi_m = d/dtheta (phigavg)*DTHETA 
 ! apar_p = 2 apargavg  
-! apar_m = 2 vpa d/dt (J0(Z) apar)*DELT
+! apar_m = 2 d/dt (apar)*DELT  (gets multiplied later by J0 and vpa when included in source)
 ! => phi_p - apar_p*vpa(:,isgn,iglo)*spec(is)%stm = 2 chi  .... (roughly!)  
 ! vparterm = -2.0*vpar (IN ABSENCE OF LOWFLOW TERMS)
 ! wdfac = wdrift + wcoriolis/spec(is)%stm (IN ABSENCE OF LOWFLOW TERMS)
@@ -3173,13 +3173,13 @@ subroutine check_dist_fn(report_unit)
     if ( nonad_zero ) then 
        if (il <= ng2+1) then
           adjleft = anon(ie)*2.0*vperp2(-ntgrid,iglo)*aj1(-ntgrid,iglo) &
-                  *bpar(-ntgrid,it,ik)*fbpar &
-               + spec(is)%z*anon(ie)*phi(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
+                  *bparnew(-ntgrid,it,ik)*fbpar &
+               + spec(is)%z*anon(ie)*phinew(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
                   /spec(is)%temp*fphi
           gnew(-ntgrid,1,iglo) = gnew(-ntgrid,1,iglo) - adjleft
           adjright = anon(ie)*2.0*vperp2(ntgrid,iglo)*aj1(ntgrid,iglo) &
-                  *bpar(ntgrid,it,ik)*fbpar &
-               + spec(is)%z*anon(ie)*phi(ntgrid,it,ik)*aj0(ntgrid,iglo) &
+                  *bparnew(ntgrid,it,ik)*fbpar &
+               + spec(is)%z*anon(ie)*phinew(ntgrid,it,ik)*aj0(ntgrid,iglo) &
                   /spec(is)%temp*fphi
           gnew(ntgrid,2,iglo) = gnew(ntgrid,2,iglo) - adjright
        endif
