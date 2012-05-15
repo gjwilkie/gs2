@@ -879,8 +879,8 @@ contains
 
   subroutine dydt_dggs2(gmodal,t,dt,dgdt_modal)
 
-    use dist_fn, only: get_source_term_exp
-    use fields_arrays, only: phi, apar, bpar
+    use dist_fn, only: getfieldexp, get_source_term_exp
+    use fields_arrays, only: phitmp, apartmp, bpartmp
     use gs2_layouts, only: g_lo, ik_idx, il_idx
     use le_grids, only: nlambda, ng2, lmax, forbid
     use run_parameters, only: tunits
@@ -974,13 +974,17 @@ contains
     g = gmodal
     call modal2nodal(g,lb1,ub1,1,2,lb3,ub3)
 
+    !  Evaluate field equations
+
+    call getfieldexp(g,phitmp,apartmp,bpartmp,'i')
+
     !  Calculate source terms
 
     do iglo = lb3, ub3
        ik = ik_idx(g_lo,iglo)
 
        do isgn = 1,2
-          call get_source_term_exp(phi,apar,bpar,istep_dg,isgn,iglo, &
+          call get_source_term_exp(phitmp,apartmp,bpartmp,istep_dg,isgn,iglo, &
                fluxfn(:,isgn,iglo), src(:,isgn,iglo))
           !  src is actually (2.dt.S), therefore need to divide by dt
           src(:,isgn,iglo) = src(:,isgn,iglo)/(2.0*dt*tunits(ik))
