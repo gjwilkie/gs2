@@ -183,7 +183,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
              call reset_time_step (istep-istep_offset, exit)
           end if
        end if
-       if ((.NOT.(cfl_violated)) .OR. (.NOT.(repeat_cfl_step))) istep_offset=istep_offset+1
+       if (((cfl_violated)) .AND. ((repeat_cfl_step))) istep_offset=istep_offset+1
        
        if (mod(istep,5) == 0) call checkstop(exit)
        

@@ -148,7 +148,8 @@ contains
 
     if (initialized) return
     initialized = .true.
-    
+
+    cfl_violated=.FALSE.
     if (debug) write(6,*) "init_nonlinear_terms: init_gs2_layouts"
     call init_gs2_layouts
     if (debug) write(6,*) "init_nonlinear_terms: init_theta_grid"
