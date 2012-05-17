@@ -11,6 +11,8 @@ module gs2_reinit
   real :: delt_minimum 
   real, save :: time_reinit(2)=0.
   logical :: abort_rapid_time_step_change
+  logical :: strict_timechange !If true then when cfl condition is broken new time step becomes
+                               !code_dt_cfl/delt_adj rather than code_dt/delt_adj
 
 contains
   subroutine wnml_gs2_reinit(unit)
@@ -20,6 +22,7 @@ contains
           write (unit, fmt="(' &',a)") "reinit_knobs"
           write (unit, fmt="(' delt_adj = ',e16.10)") delt_adj
           write (unit, fmt="(' delt_minimum = ',e16.10)") delt_minimum
+          write (unit, fmt="(' strict_timechange = ',L1)") strict_timechange
           write (unit, fmt="(' /')")       
   end subroutine wnml_gs2_reinit
 
@@ -82,8 +85,11 @@ contains
 
 ! If timestep is too big, make it smaller
     if (code_dt > code_dt_cfl) then
-       code_dt = code_dt/delt_adj
-
+       if (strict_timechange) then
+          code_dt = code_dt_cfl/delt_adj
+       else
+          code_dt = code_dt/delt_adj
+       endif 
 ! If timestep is too small, make it bigger
     else if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
        code_dt = min(code_dt*delt_adj, dt0)
@@ -149,7 +155,7 @@ contains
     integer in_file
     logical exist
     namelist /reinit_knobs/ delt_adj, delt_minimum, delt_cushion, &
-                            abort_rapid_time_step_change
+                            abort_rapid_time_step_change,strict_timechange
     
     if (proc0) then
        dt0 = code_delt_max
@@ -157,6 +163,7 @@ contains
        delt_minimum = 1.e-5
        delt_cushion = 1.5
        abort_rapid_time_step_change = .true.
+       strict_timechange = .false.
        in_file = input_unit_exist("reinit_knobs",exist)
        if(exist) read (unit=in_file, nml=reinit_knobs)
     endif
@@ -166,6 +173,7 @@ contains
     call broadcast (delt_minimum)
     call broadcast (delt_cushion)
     call broadcast (abort_rapid_time_step_change)
+    call broadcast (strict_timechange)
 
     call save_dt_min (delt_minimum)
 

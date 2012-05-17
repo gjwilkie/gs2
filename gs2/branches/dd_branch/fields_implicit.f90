@@ -260,6 +260,7 @@ contains
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
+    use nonlinear_terms, only : cfl_violated,repeat_cfl_step
     use dist_fn, only: timeadv, exb_shear
     use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
     implicit none
@@ -279,18 +280,19 @@ contains
     bpar = bparnew       
     
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-    aparnew = aparnew + apar_ext 
+    if ((.NOT. (cfl_violated)) .OR. (.NOT. repeat_cfl_step)) then
+       aparnew = aparnew + apar_ext 
     
-    call getfield (phinew, aparnew, bparnew)
+       call getfield (phinew, aparnew, bparnew)
     
-    phinew   = phinew  + phi
-    aparnew  = aparnew + apar
-    bparnew  = bparnew + bpar
+       phinew   = phinew  + phi
+       aparnew  = aparnew + apar
+       bparnew  = bparnew + bpar
 
-    if (remove_zonal_flows_switch) call remove_zonal_flows
+       if (remove_zonal_flows_switch) call remove_zonal_flows
     
-    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
-    
+       call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
+    endif
   end subroutine advance_implicit
 
   subroutine remove_zonal_flows

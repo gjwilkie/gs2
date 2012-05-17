@@ -241,9 +241,6 @@ rungridgen_mod = \
 	 rungridgen.o \
 	 spl.o 
 
-test_mod = \
-	 read_chease.o 
-
 antenna.o: \
 	 antenna_data.o \
 	 constants.o \
@@ -363,6 +360,7 @@ fields_implicit.o: \
 	 job_manage.o \
 	 kt_grids.o \
 	 mp.o \
+	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
 	 prof.o \
 	 run_parameters.o \
@@ -543,9 +541,7 @@ gs2_transforms.o: \
 	 redistribute.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o \
-	 convert.o \
-	 file_utils.o 
+	 constants.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \

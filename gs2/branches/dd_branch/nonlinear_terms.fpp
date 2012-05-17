@@ -13,6 +13,9 @@ module nonlinear_terms
   public :: add_explicit_terms, finish_nl_terms
   public :: finish_init, reset_init, algorithm, nonlin, accelerated
   public :: cfl
+  logical, public :: cfl_violated
+  logical, public :: repeat_cfl_step   !If true then force code to repeat the timestep which caused
+                               !the cfl condition to be violated rather than carrying on from here
 
   private
 
@@ -52,7 +55,7 @@ module nonlinear_terms
   
 contains
   
-  subroutine check_nonlinear_terms(report_unit,delt_adj)
+  subroutine check_nonlinear_terms(report_unit,delt_adj,strict_timechange)
     use gs2_time, only: code_dt_min
     use kt_grids, only: box
     use run_parameters, only: margin, code_delt_max, nstep, wstar_units
@@ -60,6 +63,7 @@ contains
     implicit none
     integer :: report_unit
     real :: delt_adj
+    logical :: strict_timechange
     if (nonlin) then
        write (report_unit, *) 
        write (report_unit, fmt="('This is a nonlinear simulation.')")
@@ -103,6 +107,11 @@ contains
        write (report_unit, fmt="('The maximum delt (code_delt_max) = ',e10.4)") code_delt_max
        write (report_unit, fmt="('The maximum delt < ',f10.4,' * min(Delta_perp/v_perp). (cfl)')") cfl
        write (report_unit, fmt="('When the time step needs to be changed, it is adjusted by a factor of ',f10.4)") delt_adj
+       if (strict_timechange) then
+          write (report_unit, fmt="('When the time step is too large it is replaced by dt_cfl/delt_adj')")
+       else
+          write (report_unit, fmt="('When the time step is too large it is replaced by dt_code/delt_adj')")
+       end if
        write (report_unit, fmt="('The number of time steps nstep = ',i7)") nstep
        write (report_unit, fmt="('If running in batch mode on the NERSC T3E, the run will stop when ', &
             & f6.4,' % of the time remains.')") 100.*margin
@@ -119,6 +128,7 @@ contains
        write (unit, fmt="(' &',a)") "nonlinear_terms_knobs"
        write (unit, fmt="(' nonlinear_mode = ',a)") '"on"'
        write (unit, fmt="(' cfl = ',e16.10)") cfl
+       write (unit, fmt="(' repeat_cfl_step = ',L1)") repeat_cfl_step
        if (zip) write (unit, fmt="(' zip = ',L1)") zip
        write (unit, fmt="(' /')")
     endif
@@ -177,7 +187,6 @@ contains
        cfly = aky(naky)/cfl*0.5
        cflx = akx((ntheta0+1)/2)/cfl*0.5
     end if
-
   end subroutine init_nonlinear_terms
 
   subroutine read_parameters
@@ -197,7 +206,7 @@ contains
             text_option('on', flow_mode_on) /)
     character(20) :: flow_mode
     namelist /nonlinear_terms_knobs/ nonlinear_mode, flow_mode, cfl, &
-         C_par, C_perp, p_x, p_y, p_z, zip
+         C_par, C_perp, p_x, p_y, p_z, zip, repeat_cfl_step
     integer :: ierr, in_file
 !    logical :: done = .false.
 
@@ -213,7 +222,7 @@ contains
        p_x = 6.0
        p_y = 6.0
        p_z = 6.0
-
+       repeat_cfl_step=.FALSE.
        in_file=input_unit_exist("nonlinear_terms_knobs",exist)
        if(exist) read (unit=in_file,nml=nonlinear_terms_knobs)
 
@@ -235,7 +244,7 @@ contains
     call broadcast (p_y)
     call broadcast (p_z)
     call broadcast (zip)
-
+    call broadcast (repeat_cfl_step)
     if (flow_mode_switch == flow_mode_on) then
        if (proc0) write(*,*) 'Forcing flow_mode = off'
        flow_mode_switch = flow_mode_off
@@ -405,6 +414,10 @@ contains
     use le_grids, only: forbid
     use gs2_time, only: save_dt_cfl
     use constants, only: zi
+!<DD>
+    use gs2_time, only: code_dt_cfl, code_dt
+    use gs2_layouts, only: ig_idx,isign_idx,ie_idx
+!</DD>
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
@@ -413,7 +426,11 @@ contains
     real :: dt_cfl
 
     integer :: iglo, ik, it, is, ig, il, ia, isgn
-    
+!<DD>
+    integer :: imax, jmax, kmax
+    real    :: maxv
+!</DD>
+
     if (fphi > zero) then
        call load_kx_phi
     else
@@ -460,7 +477,16 @@ contains
           do j = 1, 2
              do i = 1, 2*ntgrid+1
                 abracket(i,j,k) = aba(i,j,k)*agb(i,j,k)*kxfac
-                max_vel = max(max_vel, abs(aba(i,j,k)))
+                !<DD>
+                maxv=abs(aba(i,j,k))
+                if (maxv .gt. max_vel) then
+                   max_vel=maxv
+                   imax=i
+                   jmax=j
+                   kmax=k
+                endif
+                !max_vel = max(max_vel, abs(aba(i,j,k)))
+                !</DD>
              end do
           end do
        end do
@@ -471,7 +497,15 @@ contains
        do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
           do i = 1, yxf_lo%ny
              bracket(i,j) = ba(i,j)*gb(i,j)*kxfac
-             max_vel = max(max_vel,abs(ba(i,j)))
+             !<DD>
+             maxv=abs(ba(i,j))
+             if (maxv .gt. max_vel) then
+                max_vel=maxv
+                imax=i
+                jmax=j
+             endif
+             !max_vel = max(max_vel,abs(ba(i,j)))
+             !</DD>
           end do
        end do
        max_vel = max_vel*cfly
@@ -524,23 +558,61 @@ contains
           do j = 1, 2
              do i = 1, 2*ntgrid+1
                 abracket(i,j,k) = abracket(i,j,k) - aba(i,j,k)*agb(i,j,k)*kxfac
-                max_vel = max(max_vel, abs(aba(i,j,k))*cflx)
+                !<DD>
+                maxv=abs(aba(i,j,k))*cflx
+                if (maxv .gt. max_vel) then
+                   max_vel=maxv
+                   imax=i
+                   jmax=j
+                   kmax=k
+                endif
+                !max_vel = max(max_vel, abs(aba(i,j,k))*cflx)
+                !</DD>
              end do
           end do
        end do
     else
        do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
           do i = 1, yxf_lo%ny
+             !<DD>
+             maxv=abs(ba(i,j))*cflx
+             if (maxv .gt. max_vel) then
+                max_vel=maxv
+                imax=i
+                jmax=j
+             endif
+             !max_vel = max(max_vel,abs(ba(i,j))*cflx)
+             !</DD>
              bracket(i,j) = bracket(i,j) - ba(i,j)*gb(i,j)*kxfac
-             max_vel = max(max_vel,abs(ba(i,j))*cflx)
           end do
        end do
     end if
-    
+    !<DD> Store local max vel
+    maxv=max_vel
+    !</DD>
     call max_allreduce(max_vel)
     
     dt_cfl = 1./max_vel
     call save_dt_cfl (dt_cfl)
+    !<DD> Print the warning message
+    if (code_dt > dt_cfl) then
+       cfl_violated=.TRUE.
+       if (maxv .EQ. max_vel) then !<DD> Processors with the maximum vel print warning
+          write(6,*) 'CFL condition maximally violated for the following indices:'
+          write(6,*) '   ig  : ',ig_idx(yxf_lo,jmax)
+          write(6,*) '   isgn: ',isign_idx(yxf_lo,jmax)
+          write(6,*) '   il  : ',il_idx(yxf_lo,jmax)
+          write(6,*) '   ie  : ',ie_idx(yxf_lo,jmax)
+          write(6,*) '   is  : ',is_idx(yxf_lo,jmax)
+          write(6,*) 'Current code_dt is : ',code_dt
+          write(6,*) 'New dt_cfl is      : ',dt_cfl
+          write(6,*) '(note dt_cfl=1/max_vel=cfl/(2*MAX[vel])*MAX[aky or akx])'
+          write(6,*) 'Note the CFL condition may also be violated at other indices, we only record the max violation.'
+       end if
+    else
+       cfl_violated=.FALSE.
+    end if
+    !</DD>
     
     if (accelerated) then
        call inverse2 (abracket, g1, ia)

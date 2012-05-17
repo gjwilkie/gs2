@@ -894,7 +894,7 @@ if (debug) write(6,*) 'get_namelists: returning'
      use gs2_diagnostics, only: check_gs2_diagnostics
      use gs2_diagnostics, only: dump_fields_periodically, save_for_restart
      use gs2_diagnostics, only: nsave, make_movie, nmovie, exit_when_converged, nwrite, omegatol
-     use gs2_reinit, only: delt_adj
+     use gs2_reinit, only: delt_adj,strict_timechange
      use gs2_time, only: code_dt, user_dt, code_dt_min
      use hyper, only: check_hyper
      use init_g, only: check_init_g
@@ -1072,7 +1072,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     write (report_unit, fmt="('------------------------------------------------------------')")
     write (report_unit, *) 
 
-    call check_nonlinear_terms(report_unit,delt_adj)
+    call check_nonlinear_terms(report_unit,delt_adj,strict_timechange)
     if (nonlin) then
     else
        write (report_unit, *) 

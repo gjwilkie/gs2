@@ -2327,7 +2327,7 @@ subroutine check_dist_fn(report_unit)
     use collisions, only: solfp1
     use dist_fn_arrays, only: gnew, g, gold
 !    use nonlinear_terms, only: add_nonlinear_terms
-    use nonlinear_terms, only: add_explicit_terms
+    use nonlinear_terms, only: add_explicit_terms, cfl_violated, repeat_cfl_step
     use hyper, only: hyper_diff
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
@@ -2342,20 +2342,21 @@ subroutine check_dist_fn(report_unit)
 !    call add_nonlinear_terms (gnl_1, gnl_2, gnl_3, &
     call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
-    call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-    call hyper_diff (gnew, phinew, bparnew)
-    call solfp1 (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)   !! BUGS IN SOLFP1 B/C phi, phinew misused?
+    if ((.NOT. (cfl_violated)) .OR. (.NOT. (repeat_cfl_step))) then
+       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+       call hyper_diff (gnew, phinew, bparnew)
+       call solfp1 (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)   !! BUGS IN SOLFP1 B/C phi, phinew misused?
                                                                                   !! bug comment above addressed (probably) -- MAB
-    if (def_parity) then
-       if (even) then
-          gnew(-ntgrid:-1, 1,:) = gnew( ntgrid: 1:-1,2,:)
-          gnew( 1: ntgrid, 1,:) = gnew(-1:-ntgrid:-1,2,:)
-       else
-          gnew( 1: ntgrid, 1,:) = -gnew(-1:-ntgrid:-1,2,:)
-          gnew(-ntgrid:-1, 1,:) = -gnew( ntgrid: 1:-1,2,:)
+       if (def_parity) then
+          if (even) then
+             gnew(-ntgrid:-1, 1,:) = gnew( ntgrid: 1:-1,2,:)
+             gnew( 1: ntgrid, 1,:) = gnew(-1:-ntgrid:-1,2,:)
+          else
+             gnew( 1: ntgrid, 1,:) = -gnew(-1:-ntgrid:-1,2,:)
+             gnew(-ntgrid:-1, 1,:) = -gnew( ntgrid: 1:-1,2,:)
+          end if
        end if
     end if
-       
   end subroutine timeadv
 
 ! communication initializations for exb_shear should be done once and 
@@ -3001,7 +3002,7 @@ subroutine check_dist_fn(report_unit)
 ! phi_p = 2 phigavg                      .... (roughly!)
 ! phi_m = d/dtheta (phigavg)*DTHETA 
 ! apar_p = 2 apargavg  
-! apar_m = 2 d/dt (apar)*DELT  (gets multiplied later by J0 and vpa when included in source)
+! apar_m = 2 vpa d/dt (J0(Z) apar)*DELT
 ! => phi_p - apar_p*vpa(:,isgn,iglo)*spec(is)%stm = 2 chi  .... (roughly!)  
 ! vparterm = -2.0*vpar (IN ABSENCE OF LOWFLOW TERMS)
 ! wdfac = wdrift + wcoriolis/spec(is)%stm (IN ABSENCE OF LOWFLOW TERMS)
@@ -3391,12 +3392,15 @@ subroutine check_dist_fn(report_unit)
        end if
     end if
 
+!<DD> 
+!The following zeroing out shouldn't effect anything as it's in the forbidden region
+!but should it be changed in the case where we use the new boundary conditions (g_wesson incoming =0)???
     ! zero out spurious gnew outside trapped boundary
     where (forbid(:,il))
        gnew(:,1,iglo) = 0.0
        gnew(:,2,iglo) = 0.0
     end where
-
+!</DD>
     call prof_leaving ("invert_rhs_1", "dist_fn")
 
   contains
@@ -3406,11 +3410,27 @@ subroutine check_dist_fn(report_unit)
 !     gnew(ntgr,2) = gnew(ntgl,2)
 !     gnew(ntgr,1) = gnew(ntgl,1) 
 ! ie periodic bcs at the ends of the flux tube.
+
+!<DD>
+!For gnew to be periodic we need
+!         gnew(ntgl,sign,iglo)=gnew(ntgr,sign,iglo)
+!If this is not satisfied then we can add in some of the homogeneous solution
+!to make it statisfied, i.e. we let
+!      gnew->gnew+beta*g1
+!Then periodicity says (dropping sign,iglo indices)
+!      gnew(ntgl)+beta*g1(ntgl)=gnew(ntgr)+beta*g1(ntgr)
+!so we can rearrange for beta:
+!      beta=[gnew(ntgr)-gnew(ntgl)]/[g1[ntgl]-g1[ntgr]]
+!This is only possible if g1 is not periodic (to avoid divide by zero)
+!</DD>
+
+      !Check solution which started at left and went to right
       if (g1(ntgr,1) /= 1.) then
          beta1 = (gnew(ntgr,1,iglo) - gnew(ntgl,1,iglo))/(1.0 - g1(ntgr,1))
          gnew(:,1,iglo) = gnew(:,1,iglo) + beta1*g1(:,1)
       end if
 
+      !Check solution which started at right and went to left
       if (g1(ntgl,2) /= 1.) then
          beta1 = (gnew(ntgl,2,iglo) - gnew(ntgr,2,iglo))/(1.0 - g1(ntgl,2))
          gnew(:,2,iglo) = gnew(:,2,iglo) + beta1*g1(:,2)

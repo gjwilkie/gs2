@@ -61,6 +61,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     use redistribute, only: time_redist
     use fields_implicit, only: time_field
     use parameter_scan, only: update_scan_parameter_value
+    use nonlinear_terms, only: cfl_violated, repeat_cfl_step
     implicit none
 
     integer, intent (in), optional :: mpi_comm, job_id, nensembles
@@ -72,7 +73,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
     real :: time_total(2) = 0.
     real :: time_interval
-    integer :: istep = 0, istatus, istep_end
+    integer :: istep = 0, istatus, istep_end, istep_offset
     logical :: exit, reset, list
     logical :: first_time = .true.
     logical :: nofin= .false.
@@ -161,33 +162,35 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     
     call loop_diagnostics(0,exit)
     
+    istep_offset=0
     do istep = 1, nstep
        
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
-       call advance (istep)
+       call advance (istep-istep_offset)
        
        if (nsave > 0 .and. mod(istep, nsave) == 0) &
             call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
-       call update_time
-       call loop_diagnostics (istep, exit)
+       if ((.NOT.(cfl_violated)) .OR. (.NOT.(repeat_cfl_step))) call update_time
+       if ((.NOT.(cfl_violated)) .OR. (.NOT.(repeat_cfl_step))) call loop_diagnostics (istep-istep_offset, exit)
        call check_time_step (reset, exit)
-       call update_scan_parameter_value(istep, reset, exit)
+       if ((.NOT.(cfl_violated)) .OR. (.NOT.(repeat_cfl_step))) call update_scan_parameter_value(istep-istep_offset, reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
        if (reset) then
           ! if called within trinity, do not dump info to screen
           if (present(job_id)) then
-             call reset_time_step (istep, exit, job_id)
+             call reset_time_step (istep-istep_offset, exit, job_id)
           else       
-             call reset_time_step (istep, exit)
+             call reset_time_step (istep-istep_offset, exit)
           end if
        end if
-
+       if ((.NOT.(cfl_violated)) .OR. (.NOT.(repeat_cfl_step))) istep_offset=istep_offset+1
+       
        if (mod(istep,5) == 0) call checkstop(exit)
        
        call checktime(avail_cpu_time,exit)
        
        if (exit) then
-          istep_end = istep
+          istep_end = istep-istep_offset
           exit
        end if
     end do
