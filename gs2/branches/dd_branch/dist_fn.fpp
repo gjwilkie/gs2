@@ -1,4 +1,5 @@
 ! Notes from BD, 7/2011:
+
 !
 ! Need to extend the verr tools to include delta B_parallel integrals
 ! There are new factors of 1/B here and there which I do not understand.  
@@ -1845,7 +1846,6 @@ subroutine check_dist_fn(report_unit)
        
 ! n_links_max is typically 2 * number of cells in largest supercell
        allocate (g_adj (n_links_max, 2, g_lo%llim_proc:g_lo%ulim_alloc))
-
 ! now set up links_h:
 ! excluding wfb
 
@@ -3173,16 +3173,20 @@ subroutine check_dist_fn(report_unit)
 !  (exploits code used in subroutine g_adjust to transform g_wesson to g_gs2)
     if ( nonad_zero ) then 
        if (il <= ng2+1) then
-          adjleft = anon(ie)*2.0*vperp2(-ntgrid,iglo)*aj1(-ntgrid,iglo) &
+          if (l_links(ik,it) .eq. 0) then 
+             adjleft = anon(ie)*2.0*vperp2(-ntgrid,iglo)*aj1(-ntgrid,iglo) &
                   *bparnew(-ntgrid,it,ik)*fbpar &
                + spec(is)%z*anon(ie)*phinew(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
                   /spec(is)%temp*fphi
-          gnew(-ntgrid,1,iglo) = gnew(-ntgrid,1,iglo) - adjleft
-          adjright = anon(ie)*2.0*vperp2(ntgrid,iglo)*aj1(ntgrid,iglo) &
+             gnew(-ntgrid,1,iglo) = gnew(-ntgrid,1,iglo) - adjleft
+          endif
+          if (r_links(ik,it) .eq. 0) then
+             adjright = anon(ie)*2.0*vperp2(ntgrid,iglo)*aj1(ntgrid,iglo) &
                   *bparnew(ntgrid,it,ik)*fbpar &
                + spec(is)%z*anon(ie)*phinew(ntgrid,it,ik)*aj0(ntgrid,iglo) &
                   /spec(is)%temp*fphi
-          gnew(ntgrid,2,iglo) = gnew(ntgrid,2,iglo) - adjright
+             gnew(ntgrid,2,iglo) = gnew(ntgrid,2,iglo) - adjright
+          endif
        endif
     endif
 
@@ -3544,6 +3548,7 @@ subroutine check_dist_fn(report_unit)
                       fac = fac * g_adj(n+1-j, 1, iglo)
                    end do
                    b0 = b0 + g_adj(i,1,iglo) * fac
+
                 end do
                 
                 gnew(:,1,iglo) = gnew(:,1,iglo) + b0*g_h(:,1,iglo)
