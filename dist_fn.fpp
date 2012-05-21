@@ -3172,16 +3172,24 @@ subroutine check_dist_fn(report_unit)
 !  (exploits code used in subroutine g_adjust to transform g_wesson to g_gs2)
     if ( nonad_zero ) then 
        if (il <= ng2+1) then
-          adjleft = anon(ie)*2.0*vperp2(-ntgrid,iglo)*aj1(-ntgrid,iglo) &
+          !This ensures that we only apply the new boundary condition to the leftmost
+          !cell for sign going from left to right
+          if (l_links(ik,it) .eq. 0) then
+             adjleft = anon(ie)*2.0*vperp2(-ntgrid,iglo)*aj1(-ntgrid,iglo) &
                   *bparnew(-ntgrid,it,ik)*fbpar &
-               + spec(is)%z*anon(ie)*phinew(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
+                  + spec(is)%z*anon(ie)*phinew(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
                   /spec(is)%temp*fphi
-          gnew(-ntgrid,1,iglo) = gnew(-ntgrid,1,iglo) - adjleft
-          adjright = anon(ie)*2.0*vperp2(ntgrid,iglo)*aj1(ntgrid,iglo) &
+             gnew(-ntgrid,1,iglo) = gnew(-ntgrid,1,iglo) - adjleft
+          end if
+          !This ensures that we only apply the new boundary condition to the rightmost
+          !cell for sign going from right to left
+          if (r_links(ik,it) .eq. 0) then
+             adjright = anon(ie)*2.0*vperp2(ntgrid,iglo)*aj1(ntgrid,iglo) &
                   *bparnew(ntgrid,it,ik)*fbpar &
-               + spec(is)%z*anon(ie)*phinew(ntgrid,it,ik)*aj0(ntgrid,iglo) &
+                  + spec(is)%z*anon(ie)*phinew(ntgrid,it,ik)*aj0(ntgrid,iglo) &
                   /spec(is)%temp*fphi
-          gnew(ntgrid,2,iglo) = gnew(ntgrid,2,iglo) - adjright
+             gnew(ntgrid,2,iglo) = gnew(ntgrid,2,iglo) - adjright
+         end if
        endif
     endif
 
