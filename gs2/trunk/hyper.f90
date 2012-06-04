@@ -23,7 +23,7 @@ module hyper
        hyper_option_res  = 3, &
        hyper_option_both = 4
   character(9) :: hyper_option
-  logical :: const_amp, include_kpar, isotropic_shear
+  logical :: const_amp, include_kpar, isotropic_shear, damp_zonal_only
   logical :: hyper_on = .false.
   logical :: gridnorm
 
@@ -302,12 +302,14 @@ contains
     logical :: exist
     
     namelist /hyper_knobs/ hyper_option, const_amp, include_kpar, &
-         isotropic_shear, D_hyperres, D_hypervisc, D_hyper, omega_osc, gridnorm, nexp
+         isotropic_shear, D_hyperres, D_hypervisc, D_hyper, omega_osc, gridnorm,&
+         nexp, damp_zonal_only
     
     if (proc0) then
        const_amp = .false.
        include_kpar = .false.
        isotropic_shear = .true.
+       damp_zonal_only = .false.
        nexp = 2
        D_hyperres = -10.
        D_hypervisc = -10.
@@ -407,6 +409,7 @@ contains
     call broadcast (const_amp)
     call broadcast (include_kpar)
     call broadcast (isotropic_shear)
+    call broadcast (damp_zonal_only)
     call broadcast (D_hyper)
     call broadcast (D_hyperres)
     call broadcast (D_hypervisc)
@@ -570,6 +573,7 @@ contains
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
          it = it_idx(g_lo, iglo)
+         if (damp_zonal_only .and. .not. aky(ik)==epsilon(0.0)) cycle
          
          g0(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt &
               * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
