@@ -136,17 +136,17 @@ contains
 
     ! get radial derivative of F_1/F_0 at fixed (xi,E)
     ! note that F_1/F_0 = H_1/F_0 - Z_s * e * Phi / T_s
-    do is = 1, ns
-       do ig = 1, ntheta
-          do ie = 0, nc-1
-             do ixi = 0, nl
-                ! get radial derivative of spectral coefficients of H_1/H_0
-                call get_radgrad (coefs(:,ig,ixi,ie,is), rad_neo, ir_loc, dcoefsdr(ixi,ie))
-             end do
-          end do
-          call get_gradH (dcoefsdr, dphidr(ig,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), dHdr(ig,:,:,is))
-       end do
-    end do
+!     do is = 1, ns
+!        do ig = 1, ntheta
+!           do ie = 0, nc-1
+!              do ixi = 0, nl
+!                 ! get radial derivative of spectral coefficients of H_1/H_0
+!                 call get_radgrad (coefs(:,ig,ixi,ie,is), rad_neo, ir_loc, dcoefsdr(ixi,ie))
+!              end do
+!           end do
+!           call get_gradH (dcoefsdr, dphidr(ig,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), dHdr(ig,:,:,is))
+!        end do
+!     end do
 
     ! get theta derivative of F_1/F_0 at fixed (xi,E)
     do is = 1, ns
@@ -171,6 +171,21 @@ contains
           call get_dHdxi (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), xi(ig,:), dHdxi(ig,:,:,is))
           call get_dHdE (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), chebyp2(ir_loc,:,:,is), &
                energy(:), emax(ir_loc,is), dHdE(ig,:,:,is))
+       end do
+    end do
+
+    ! get radial derivative of F_1/F_0 at fixed (xi,E)
+    ! note that F_1/F_0 = H_1/F_0 - Z_s * e * Phi / T_s
+    do is = 1, ns
+       do ig = 1, ntheta
+          do ie = 0, nc-1
+             do ixi = 0, nl
+                ! get radial derivative of spectral coefficients of H_1/H_0
+                call get_radgrad (coefs(:,ig,ixi,ie,is), rad_neo, ir_loc, dcoefsdr(ixi,ie))
+             end do
+          end do
+          call get_radgrad (hneo(:,ig,ixi,ie,is), rad_neo, dHdr(ig,ixi,ie,is))
+!          call get_gradH (dcoefsdr, dphidr(ig,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), dHdr(ig,:,:,is))
        end do
     end do
 
