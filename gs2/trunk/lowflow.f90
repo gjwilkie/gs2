@@ -184,7 +184,7 @@ contains
                 call get_radgrad (coefs(:,ig,ixi,ie,is), rad_neo, ir_loc, dcoefsdr(ixi,ie))
              end do
           end do
-          call get_radgrad (hneo(:,ig,ixi,ie,is), rad_neo, dHdr(ig,ixi,ie,is))
+          call get_radgrad (hneo(:,ig,ixi,ie,is), rad_neo, ir_loc, dHdr(ig,ixi,ie,is))
 !          call get_gradH (dcoefsdr, dphidr(ig,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), dHdr(ig,:,:,is))
        end do
     end do
