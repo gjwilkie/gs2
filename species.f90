@@ -121,7 +121,7 @@ contains
            if (abs(aln+alne) > 1.e-2) then
               write (report_unit, *) 
               write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, fmt="('The density gradients are inconsistent.')")
+              write (report_unit, fmt="('The density gradients are inconsistent'/' a/lni =',e12.4,' but alne =',e12.4)") aln, alne
               write (report_unit, fmt="('################# WARNING #######################')")
            end if
         end if
