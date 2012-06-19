@@ -1,5 +1,6 @@
 module fields
   use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+  use fields_arrays, only: phi_store, apar_store, bpar_store
   use fields_arrays, only: phitmp, apartmp, bpartmp
   use fields_arrays, only: phitmp1, apartmp1, bpartmp1
   use fields_arrays, only: phi_ext, apar_ext
@@ -184,6 +185,9 @@ contains
 !       allocate (bpartmp1(-ntgrid:ntgrid,ntheta0,naky))
 !       allocate ( phi_ext (-ntgrid:ntgrid,ntheta0,naky))
        allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (  phi_store (-ntgrid:ntgrid,ntheta0,naky))
+       allocate ( apar_store (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (bpar_store (-ntgrid:ntgrid,ntheta0,naky))
     endif
     phi = 0.; phinew = 0.; phitmp = 0. 
     apar = 0.; aparnew = 0.; apartmp = 0. 

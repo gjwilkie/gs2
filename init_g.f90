@@ -11,6 +11,13 @@ module init_g
   public :: reset_init
   public :: init_vnmult
   public :: new_field_init
+
+  public :: single_kpar
+  logical ::  single_kpar = .false.
+  
+  public :: force_single_kpar
+  logical :: force_single_kpar
+
   private :: single_initial_kx
   private
 
@@ -46,6 +53,7 @@ module init_g
   ! is periodic in the parallel direction, and so only harmonics of the box size 
   ! (i.e. ikpar_init) are allowed  EGH</doc>
 
+  public :: ikpar_init
   integer :: ikpar_init
   real :: kpar_init
 
@@ -659,6 +667,7 @@ contains
     call broadcast (ukxy_pt)
     
     call broadcast (ikpar_init)
+    call broadcast (force_single_kpar)
     call broadcast (ikx_init)
     call broadcast (kpar_init)
     ! <RN
@@ -832,7 +841,7 @@ contains
          eq_type, prof_width, eq_mode_u, eq_mode_n, &
          input_check_recon, nkxy_pt, ukxy_pt, &
          ikkk, ittt, phiamp, aparamp, phifrac, ikpar_init, kpar_init, &
-         ikx_init
+         ikx_init, force_single_kpar
 
 
     integer :: ierr, in_file
@@ -893,6 +902,7 @@ contains
     ikpar_init = 0
     kpar_init = 0.0
     ikx_init = -1
+    force_single_kpar = .false.
 
     ! <RN
     restart_file = trim(run_name)//".nc"
@@ -1192,6 +1202,7 @@ contains
     integer :: iglo
     integer :: ig, ik, it, il, is, nn
 
+    single_kpar = .true.
     phit = 0.
     do it=2,ntheta0/2+1
        nn = it-1

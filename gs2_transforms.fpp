@@ -17,6 +17,9 @@ module gs2_transforms
   public :: transform_x, transform_y, transform2
   public :: inverse_x, inverse_y, inverse2
 
+  public :: init_z_transforms, fft_z_forward_field, fft_z_backward_field ! EGH
+  !public :: fft_z_backward_complex_one, fft_z_forward_complex_one ! EGH
+
   private
 
   interface transform_x
@@ -66,6 +69,8 @@ module gs2_transforms
 
   type (fft_type) :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
   type (fft_type) :: xf3d_cr, xf3d_rc
+
+  type (fft_type) :: forward_z_field, backward_z_field !EGH
 
   logical :: xfft_initted = .false.
 
@@ -119,6 +124,7 @@ contains
     call init_x_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
 
     call init_y_fft (ntgrid)
+    call init_z_transforms(ntgrid, naky, ntgrid) 
 
     accelerated = accel
 
@@ -177,6 +183,20 @@ contains
   
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+
+  subroutine init_z_transforms(ntgrid, naky, ntheta0)
+    
+    integer, intent (in) :: ntgrid
+    integer, intent (in) :: ntheta0, naky
+    logical, save :: initialized = .false.
+
+    !if (initialized) return
+    !initialized = .true.
+
+    call init_forward_z_field(ntgrid, naky, ntheta0) ! EGH
+    call init_backward_z_field(ntgrid, naky, ntheta0) ! EGH
+
+  end subroutine init_z_transforms
 
   subroutine init_y_fft (ntgrid)
 
@@ -1143,6 +1163,105 @@ contains
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
+
+  !> Creates a plan (forward_z) for doing a forward transform of a field
+  !! along the z (i.e. theta) axis. EGH
+
+  subroutine init_forward_z_field (ntgrid, naky, ntheta0)
+
+    use fft_work, only: init_z, FFTW_FORWARD
+    implicit none
+    integer, intent (in) :: ntgrid
+    integer, intent (in) :: ntheta0, naky
+    logical,save :: done = .false.
+
+    if (done) return
+    done = .true.
+
+    call init_z (forward_z_field, FFTW_FORWARD, 2*ntgrid+1, naky*ntheta0)
+
+  end subroutine init_forward_z_field
+  
+  !> Creates a plan (backward_z) for doing a backward transform of a field
+  !! along the z (i.e. theta) axis. EGH
+  
+  subroutine init_backward_z_field (ntgrid, naky, ntheta0)
+
+    use fft_work, only: init_z, FFTW_BACKWARD
+    implicit none
+    integer, intent (in) :: ntgrid
+    integer, intent (in) :: ntheta0, naky
+    logical,save :: done = .false.
+
+    if (done) return
+    done = .true.
+
+    call init_z (backward_z_field, FFTW_BACKWARD, 2*ntgrid+1, naky*ntheta0)
+
+  end subroutine init_backward_z_field
+     
+!  !> Forward fourier transform a complex array in the z dirn
+!
+!  subroutine fft_z_forward_complex_one (array_in, array_out)
+!
+!    complex, dimension (:) :: array_in, array_out
+!
+!    ! call fftw_f77(plan, howmany, in, istride, idist, out, ostride, odist)
+!
+!# if FFT == _FFTW_
+!    call fftw_f77 (forward_z%plan, 1, array_in, 1, forward_z%n, array_out, 1, forward_z%n)
+!# endif
+!
+!  end subroutine fft_z_forward_complex_one
+!
+!  !> Backward fourier transform a complex array in the z dirn
+!
+!  subroutine fft_z_backward_complex_one (array_in, array_out)
+!
+!    complex, dimension (:) :: array_in, array_out
+!
+!    ! call fftw_f77(plan, howmany, in, istride, idist, out, ostride, odist)
+!
+!# if FFT == _FFTW_
+!    call fftw_f77 (backward_z%plan, 1, array_in, 1, backward_z%n, array_out, 1, backward_z%n)
+!# endif
+!
+!  end subroutine fft_z_backward_complex_one
+!
+  !> Forward fourier transform a field in the z direction. EGH
+
+  subroutine fft_z_forward_field (field_in, field_out, ntheta0, naky)
+
+    complex, dimension (:,:,:) :: field_in, field_out
+    integer, intent (in) :: ntheta0, naky
+
+    ! call fftw_f77(plan, howmany, in, istride, idist, out, ostride, odist)
+
+# if FFT == _FFTW_
+    call fftw_f77 (forward_z_field%plan, ntheta0*naky, field_in, 1, forward_z_field%n, field_out, 1, forward_z_field%n)
+# elif FFT == _FFTW3_
+    call dfftw_execute_dft(forward_z_field%plan, field_in, field_out)
+# endif
+
+  end subroutine fft_z_forward_field
+  
+  !> Backward fourier transform a field in the z direction. EGH
+
+  subroutine fft_z_backward_field (field_in, field_out, ntheta0, naky)
+
+    complex, dimension (:,:,:) :: field_in, field_out
+    integer, intent (in) :: ntheta0, naky
+
+    ! call fftw_f77(plan, howmany, in, istride, idist, out, ostride, odist)
+
+# if FFT == _FFTW_
+    call fftw_f77 (backward_z_field%plan, ntheta0*naky, field_in, 1, backward_z_field%n, field_out, 1, backward_z_field%n)
+# elif FFT == _FFTW3_
+    call dfftw_execute_dft(backward_z_field%plan, field_in, field_out)
+# endif
+
+  end subroutine fft_z_backward_field
+
   subroutine kz_spectrum (an, an2, ntgrid, ntheta0, naky)
 
     complex, dimension (:,:,:), intent(in)  :: an

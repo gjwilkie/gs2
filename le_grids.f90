@@ -173,22 +173,33 @@ contains
     use gs2_layouts, only: init_gs2_layouts
     implicit none
     logical, intent (out) :: accelerated_x, accelerated_v
+    logical :: debug = .true.
 !    logical, save :: initialized = .false.
     integer :: il, ie
+
+    !debug = debug .and. proc0
 
     if (initialized) return
     initialized = .true.
 
+    if (debug) write(6,*) "init_le_grids: init_gs2_layouts"
     call init_gs2_layouts
+    if (debug) write(6,*) "init_le_grids: init_species"
     call init_species
+    if (debug) write(6,*) "init_le_grids: init_theta_grid"
     call init_theta_grid
+    if (debug) write(6,*) "init_le_grids: init_kt_grids"
     call init_kt_grids
 
     if (proc0) then
+        if (debug) write(6,*) "init_le_grids: read_parameters"
        call read_parameters
+       if (debug) write(6,*) "init_le_grids: set_grids"
        call set_grids
     end if
+       if (debug) write(6,*) "init_le_grids: broadcast_results"
     call broadcast_results
+       if (debug) write(6,*) "init_le_grids: init_integrations"
     call init_integrations
 
     accelerated_x = accel_x
@@ -208,6 +219,7 @@ contains
        stop
     endif
     
+       if (debug) write(6,*) "init_le_grids: finished"
   end subroutine init_le_grids
 
   subroutine broadcast_results
@@ -217,9 +229,12 @@ contains
     use theta_grid, only: ntgrid
     implicit none
     integer :: il, is, ie, ipt, isgn, tsize
+    logical :: debug = .true.
+    debug = debug .and. proc0
 
     tsize = 2*nterp-1
 
+    if (debug) write(6,*) "entering le_grids: broadcast_results"
     call broadcast (ngauss)
     call broadcast (negrid)
     call broadcast (nesuper)
@@ -236,6 +251,7 @@ contains
     call broadcast (new_trap_int)
     call broadcast (nterp)
 
+        if (debug) write(6,*) "le_grids: broadcast_results: allocating arrays"
     if (.not. proc0) then
        allocate (energy(negrid), w(negrid), anon(negrid))
        allocate (dele(negrid))
@@ -247,11 +263,13 @@ contains
        allocate (lgrnge(-ntgrid:ntgrid,nlambda,tsize,2))
        allocate (xloc(-ntgrid:ntgrid,tsize))
     end if
+        if (debug) write(6,*) "le_grids: broadcast_results: allocated arrays"
 
     call init_egrid (negrid)
     call broadcast (xx)
     call broadcast (x0)
     call broadcast (zeroes)
+        if (debug) write(6,*) "le_grids: broadcast_results: 3"
 
     call broadcast (al)
     call broadcast (delal)
@@ -261,20 +279,25 @@ contains
     call broadcast (dele)
     call broadcast (w)
     call broadcast (anon)
+        if (debug) write(6,*) "le_grids: broadcast_results: 1"
 
     do il = 1, nlambda
        call broadcast (wl(:,il))
        call broadcast (forbid(:,il))
     end do
+        if (debug) write(6,*) "le_grids: broadcast_results: 2"
 
     do ipt = 1, tsize
        call broadcast (xloc(:,ipt))
+        !if (debug) write(6,*) "le_grids: broadcast_results: tsize ", ipt 
        do isgn=1,2
           do il=1, nlambda
+        !if (debug) write(6,*) "le_grids: broadcast_results: lambda ", il
              call broadcast (lgrnge(:,il,ipt,isgn))
           end do
        end do
     end do
+    if (debug) write(6,*) "leaving le_grids: broadcast_results"
 
   end subroutine broadcast_results
 

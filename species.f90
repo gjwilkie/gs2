@@ -204,13 +204,14 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, get_indexed_namelist_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
-    use mp, only: proc0, broadcast
+    use mp, only: proc0, broadcast, iproc
     implicit none
     real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h
     real :: tperp0, tpar0
     character(20) :: type
     integer :: unit
     integer :: is
+    logical :: debug = .true.
     namelist /species_knobs/ nspec
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
@@ -228,6 +229,7 @@ contains
             text_option('slowing-down', slowing_down_species), &
             text_option('trace', tracer_species) /)
 
+    if (debug) write(6,*) "species: read_parameters: entering", iproc
     if (proc0) then
        nspec = 2
        in_file = input_unit_exist("species_knobs", exist)
@@ -240,8 +242,10 @@ contains
           stop
        end if
     end if
+    if (debug) write(6,*) "species: read_parameters: broadcasting nspec", iproc
 
-    call broadcast (nspec)
+    call broadcast (1)
+    if (debug) write(6,*) "species: read_parameters: allocating", iproc
     allocate (spec(nspec))
 
     if (proc0) then
@@ -295,6 +299,7 @@ contains
        end do
     end if
 
+    if (debug) write(6,*) "species: read_parameters: broadcasting", iproc
     do is = 1, nspec
        call broadcast (spec(is)%z)
        call broadcast (spec(is)%mass)
@@ -319,6 +324,7 @@ contains
        call broadcast (spec(is)%smz)
        call broadcast (spec(is)%type)
     end do
+    if (debug) write(6,*) "species: read_parameters: leaving", iproc
   end subroutine read_parameters
 
   pure function has_electron_species (spec)

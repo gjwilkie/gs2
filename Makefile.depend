@@ -241,9 +241,6 @@ rungridgen_mod = \
 	 rungridgen.o \
 	 spl.o 
 
-test_mod = \
-	 read_chease.o 
-
 antenna.o: \
 	 antenna_data.o \
 	 constants.o \
@@ -359,6 +356,8 @@ fields_implicit.o: \
 	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
+	 gs2_time.o \
+	 gs2_transforms.o \
 	 init_g.o \
 	 job_manage.o \
 	 kt_grids.o \

@@ -10,12 +10,18 @@ module fields_implicit
   public :: time_field
   public :: set_scan_parameter
 
+  public :: n_recalc_response     
+    ! The number of steps between recalculating
+    ! the response matrix for the alternative flow shear implementation. EGH
+
   private
 
   integer, save :: nfield
   logical :: initialized = .false.
   logical :: linked = .false.
   real, save :: time_field(2)=0.
+  integer, save:: n_recalc_response = 1
+  integer, save :: g_exb_error_check_cycle = 0
 
 contains
 
@@ -256,12 +262,163 @@ contains
 
   end subroutine getfield
 
+  subroutine exb_shear (istep)
+    use dist_fn, only:  exb_shear_d => exb_shear, g_exb, g_exb_error_limit
+    use dist_fn, only:  g_exb_start_timestep, g_exb_start_time
+    use dist_fn, only:  init_bessel, init_fieldeq
+    use dist_fn_arrays, only: gnew, g_store
+    use dist_fn_arrays, only: theta0_shift, kx_shift
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use fields_arrays, only: phi, apar, bpar
+    use fields_arrays, only: phi_store, apar_store, bpar_store
+    use kt_grids, only: single, naky, ntheta0, akx
+    use kt_grids_single, only: single_akx => akx, calculate_kt_grids_single
+    use theta_grid, only: ntgrid, delthet, jacob
+    use gs2_time, only: code_time, code_dt, code_dt_old
+    use mp, only: proc0
+
+    integer, intent (in) :: istep
+    logical :: recalc_response
+    logical,save :: check_g_exb_error = .false.
+    complex, dimension(:, :, :), allocatable :: phi_temp, apar_temp, bpar_temp
+    real, dimension (-ntgrid:ntgrid-1) :: wgt
+    real, save :: wait_time = 0.
+    logical, save :: check_error = .false.
+    real :: phi_error, anorm, phitot, gdt
+    integer :: ik, it
+    !integer, parameter :: max_n = 1000 
+    integer :: max_n  
+    if (.not. single) then
+      if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear_d (gnew, phinew, aparnew, bparnew, istep)                             ! See Hammett & Loureiro, APS 2006
+      return
+    end if
+
+    if (abs(g_exb)<epsilon(0.0)) return
+  
+    
+    
+    gdt = 0.5*(code_dt + code_dt_old)
+
+    if (single) then
+      allocate(phi_temp(-ntgrid:ntgrid,ntheta0,naky))
+      allocate(apar_temp(-ntgrid:ntgrid,ntheta0,naky))
+      allocate(bpar_temp(-ntgrid:ntgrid,ntheta0,naky))
+      if (g_exb_start_timestep > 0) then 
+        if (istep < g_exb_start_timestep) then 
+          return
+        else if (g_exb_start_timestep == istep) then
+          wait_time = code_time
+        end if 
+      end if 
+      if (g_exb_start_time >= 0) then 
+        if (code_time < g_exb_start_time) then 
+          return
+        else if (wait_time .eq. 0.0) then
+          wait_time = code_time
+        end if 
+      end if
+
+      ! if g_exb_error_limit < 0, always recalc response matrices
+      if (g_exb_error_limit .lt. 0.0) g_exb_error_check_cycle = 2
+
+      if (g_exb_error_check_cycle .eq. 3) then ! test error
+        if (proc0) write (*,*) "Calculating Error"
+        ! phi_store was calculated without updating response matrix
+        phi_temp = phinew - phi_store
+        !phi_temp = phinew*conjg(phinew) - phi_store*conjg(phi_store)
+        phi_error = 0
+        wgt = delthet*jacob  
+        anorm = sum(wgt)
+        do ik = 1, naky
+           do it = 1, ntheta0
+              phitot =  sum( real(conjg(phinew(-ntgrid:ntgrid-1,it,ik)) &
+               * phinew(-ntgrid:ntgrid-1,it,ik)) * wgt ) / anorm   
+              phi_error = phi_error +  (sum( real(conjg(phi_temp(-ntgrid:ntgrid-1,it,ik)) &
+               * phi_temp(-ntgrid:ntgrid-1,it,ik)) * wgt ) / anorm) / phitot     
+              !phi_error = phi_error +  (sum( real(phi_temp(-ntgrid:ntgrid-1,it,ik)) &
+                !* wgt ) / anorm) / phitot     
+           end do
+        end do
+        if (proc0) write (*,*) "phi error with no recalc: ", phi_error
+
+        max_n = floor(1.0/abs(g_exb)/gdt) 
+
+        if (abs(phi_error) .lt. 1.0e-100) then
+          n_recalc_response = max_n 
+          ! Maximum number of timesteps without rechecking
+        else
+          n_recalc_response = floor((g_exb_error_limit / phi_error)**(1.0/3.0))
+        end if
+        if (n_recalc_response .eq. 0) n_recalc_response = 1
+        if (n_recalc_response .gt. max_n) n_recalc_response = max_n
+        if (proc0) write (*,*) "max_n: " , max_n
+        if (proc0) write (*,*) "n_recalc_response: ", n_recalc_response
+        g_exb_error_check_cycle = 0 ! Normal
+
+
+      end if
+
+      if (mod(istep, n_recalc_response) .eq. 0) then
+        recalc_response = .true.
+        if (proc0) write (*,*) "istep: ", istep, " recalc_response: ", recalc_response
+        if (proc0) write (*,*) "n_recalc_response", n_recalc_response 
+      else
+        recalc_response = .false.
+      end if
+      
+      if (recalc_response .and. g_exb_error_check_cycle .eq. 0) then
+        if (proc0) write (*,*) "Saving old arrays"
+        g_exb_error_check_cycle = 1 ! Calculate without recalculating response 
+        g_store = gnew
+        phi_store = phinew; apar_store = aparnew; bpar_store = bparnew
+        if (proc0) write (*,*) "Calling Error check step"
+        call advance_implicit(istep, .false.)
+        if (proc0) write (*,*) "Finished Error check step"
+        g_exb_error_check_cycle = 2 ! Calculate with response
+        gnew = g_store 
+        phi = phinew; apar = aparnew; bpar = bparnew
+        phinew = phi_store; aparnew = apar_store; bparnew = bpar_store
+        phi_store = phi; apar_store = apar; bpar_store = bpar
+        if (proc0) write (*,*) "Reassigned functions"
+      end if
+
+
+      if (recalc_response .and. g_exb_error_check_cycle == 2 ) then
+        if (proc0) write (*,*) "Resetting init"
+        g_store = gnew; phi_temp = phinew; apar_temp =  aparnew;
+        bpar_temp =  bparnew
+        call reset_init
+      end if
+      call calculate_kt_grids_single(g_exb, code_time - wait_time)
+      ! set akx in kt_grids equal to akx in kt_grids_single
+      akx = single_akx
+      call init_bessel
+      call init_fieldeq
+      if (recalc_response .and. g_exb_error_check_cycle .eq. 2  ) then
+        if (proc0) write (*,*) "Recalculating response"
+        call init_response_matrix
+        gnew = g_store; phinew = phi_temp; aparnew = apar_temp; bparnew =  bpar_temp
+        g_exb_error_check_cycle = 3 ! Test error 
+      end if
+
+      deallocate(phi_temp)
+      deallocate(apar_temp)
+      deallocate(bpar_temp)
+      return
+    end if  ! if (single) 
+
+
+
+  end subroutine exb_shear
+
+
   subroutine advance_implicit (istep, remove_zonal_flows_switch)
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
-    use dist_fn, only: timeadv, exb_shear
+    use dist_fn, only: timeadv
     use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
+    use init_g, only: single_kpar, force_single_kpar
     implicit none
     integer :: diagnostics = 1
     integer, intent (in) :: istep
@@ -271,7 +428,14 @@ contains
     !GGH NOTE: apar_ext is initialized in this call
     call antenna_amplitudes (apar_ext)
        
-    if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
+    call exb_shear  (istep) !EGH
+
+    if (single_kpar .and. force_single_kpar) call &
+        ensure_single_parallel_mode(istep)  
+
+
+
+ 
     
     g = gnew
     phi = phinew
@@ -292,6 +456,84 @@ contains
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
     
   end subroutine advance_implicit
+
+  !> Get rid of unwanted parallel modes which grow due to numerical
+  !! errors when initialised with only a single parallel mode. EGH
+
+  subroutine ensure_single_parallel_mode(istep)
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use dist_fn_arrays, only: gnew
+    use gs2_layouts, only: g_lo
+    use theta_grid, only: ntgrid
+    use kt_grids, only: ntheta0, naky
+    use init_g, only: ikpar_init, single_kpar
+    use mp, only: mp_abort, proc0
+    use gs2_transforms, only: init_z_transforms, fft_z_forward_field, fft_z_backward_field
+    !use agk_transforms, only: fft_z_forward_complex_one, &
+      !fft_z_backward_complex_one
+    use run_parameters, only: fphi, fapar, fbpar
+
+
+    complex, dimension(:,:,:), allocatable :: phi_trans
+    !complex, dimension(-ntgrid:ntgrid) :: g_trans, g_temp
+    real, dimension(:,:,:), allocatable :: phi2
+    real :: phi2_mag_before, phi2_mag_after 
+    integer, intent (in) :: istep
+    integer :: ikpar_box_order, ig, isgn, iglo
+    logical :: non_zero_other
+    !logical, save :: initialized_transforms = .false.
+
+
+    if (.not. single_kpar) then 
+       call mp_abort("The function ensure_single_parallel_mode should only &
+       & be called when the simulation is initialised with a single parallel mode")
+     end if
+
+    if (fapar > epsilon(0.0) .or. fbpar > epsilon(0.0)) &
+      call mp_abort("The function ensure_single_parallel_mode is not implemented &
+      & for apar and bpar yet, i.e. for electromagnetic runs. If you are getting &
+      & this message and you are running electrostatically, set fapar=0 and &
+      & fbpar=0")
+
+
+    !if (.not. initialized_transforms) call init_z_transforms(ntgrid)
+    !write (*,*) "About to call init"
+    call init_z_transforms(ntgrid, naky, ntheta0)
+    !write (*,*) "Called init"
+    !initialized_transforms = .true.
+
+
+    allocate(phi_trans(-ntgrid:ntgrid,1:ntheta0,1:naky)) 
+    allocate(phi2(-ntgrid:ntgrid,1:ntheta0,1:naky)) 
+    !write (*,*) "About to call forward"
+    call fft_z_forward_field(phinew, phi_trans, ntheta0, naky)
+    !write (*,*) "Called forward"
+    phi2 = real(phinew*conjg(phinew))
+    phi2_mag_before = sum(phi2(:,:,:))
+
+    if (ikpar_init < 0) then
+      ikpar_box_order = -ntgrid + (2 * ntgrid + 1 + ikpar_init)
+    else
+      ikpar_box_order = -ntgrid + ikpar_init
+    end if
+    do ig = -ntgrid, ntgrid
+      if (ig .ne. ikpar_box_order) phi_trans(ig, :, :) = 0.
+    end do
+    !write (*,*) "About to call backward"
+    call fft_z_backward_field(phi_trans, phinew, ntheta0, naky)
+    !write (*,*) "Called backward"
+    phinew = phinew / real(2 * ntgrid + 1) 
+    phi2 = real(phinew*conjg(phinew))
+    phi2_mag_after = sum(phi2(:,:,:))
+
+    !!phinew = phinew * sqrt(phi2_mag_before / phi2_mag_after)
+    !!write (*,*) "About to call deallocate"
+    deallocate(phi_trans)
+    !write (*,*) "Deallocated array 1"
+    deallocate(phi2)
+    !write (*,*) "Deallocated arrays"
+
+  end subroutine ensure_single_parallel_mode
 
   subroutine remove_zonal_flows
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew

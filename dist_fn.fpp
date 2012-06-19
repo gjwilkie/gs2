@@ -17,6 +17,9 @@ module dist_fn
   public :: init_dist_fn, finish_dist_fn
   public :: read_parameters, wnml_dist_fn, wnml_dist_fn_species, check_dist_fn
   public :: timeadv, exb_shear, g_exb
+  public :: g_exb_error_limit
+  public :: g_exb_start_timestep, g_exb_start_time
+  public :: init_bessel, init_fieldeq
   public :: getfieldeq, getan, getmoms, getemoms
   public :: flux, lf_flux
   public :: get_epar, get_heat
@@ -47,6 +50,8 @@ module dist_fn
   real :: t0, omega0, gamma0, source0
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
+  real :: g_exb_start_time, g_exb_error_limit
+  integer :: g_exb_start_timestep
   logical :: dfexist, skexist, nonad_zero
 
   integer :: adiabatic_option_switch
@@ -487,7 +492,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine wnml_dist_fn_species
 
   subroutine init_dist_fn
-    use mp, only: proc0, finish_mp
+    use mp, only: proc0, finish_mp, iproc
     use species, only: init_species, nspec
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0, akx, aky
@@ -498,7 +503,7 @@ subroutine check_dist_fn(report_unit)
     use nonlinear_terms, only: init_nonlinear_terms
     use hyper, only: init_hyper
     implicit none
-    logical:: debug=.false.
+    logical:: debug=.true.
 
 !    write (*,*) 'entering init_dist_fn'
     if (initialized) return
@@ -507,13 +512,13 @@ subroutine check_dist_fn(report_unit)
     if (debug) write(6,*) "init_dist_fn: init_gs2_layouts"
     call init_gs2_layouts
 
-    if (debug) write(6,*) "init_dist_fn: init_species"
+    if (debug) write(6,*) "init_dist_fn: init_species", iproc
     call init_species
 
-    if (debug) write(6,*) "init_dist_fn: init_theta_grid"
+    if (debug) write(6,*) "init_dist_fn: init_theta_grid", iproc
     call init_theta_grid
 
-    if (debug) write(6,*) "init_dist_fn: init_kt_grids"
+    if (debug) write(6,*) "init_dist_fn: init_kt_grids", iproc
     call init_kt_grids
 
     if (debug) write(6,*) "init_dist_fn: init_le_grids"
@@ -629,7 +634,8 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, nonad_zero, gridfac, apfac, &
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         g_exb, g_exbfac, omprimfac, btor_slab, mach
+         g_exb, g_exbfac, omprimfac, btor_slab, mach, &
+         g_exb_start_time, g_exb_start_timestep, g_exb_error_limit
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -656,6 +662,9 @@ subroutine check_dist_fn(report_unit)
        kfilter = 0.0
        g_exb = 0.0
        g_exbfac = 1.0
+       g_exb_error_limit = 0.0
+       g_exb_start_time = -1
+       g_exb_start_timestep = -1
        mach = 0.0
        omprimfac = 1.0
        btor_slab = 0.0
@@ -707,6 +716,9 @@ subroutine check_dist_fn(report_unit)
     call broadcast (phi_ext)
     call broadcast (g_exb)
     call broadcast (g_exbfac)
+    call broadcast (g_exb_start_timestep)
+    call broadcast (g_exb_start_time)
+    call broadcast (g_exb_error_limit)
     call broadcast (mach)
     call broadcast (omprimfac)
     call broadcast (btor_slab)
@@ -1138,6 +1150,7 @@ subroutine check_dist_fn(report_unit)
     use species, only: spec
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
+    use kt_grids, only: single
     use le_grids, only: energy, al
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use spfunc, only: j0, j1
@@ -1148,14 +1161,22 @@ subroutine check_dist_fn(report_unit)
     integer :: iglo
     real :: arg
 
-    if (bessinit) return
-    bessinit = .true.
 
     call init_kperp2
 
-    allocate (aj0(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-    allocate (aj1(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-    allocate (aj2(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+    if (.not. bessinit) then 
+      allocate (aj0(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+      allocate (aj1(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+      allocate (aj2(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+    end if
+
+
+    ! If single and g_exb is non zero, need to recalc the bessels every time
+    ! init_bessel is called EGH
+
+    if (bessinit .and. .not. (single .and. g_exb .ne. 0.0) ) return
+    !write (*,*) "kperp2 in  bessel function is ", kperp2(1,1)
+
     aj0 = 0. ; aj1 = 0. ; aj2=0.
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -1172,6 +1193,8 @@ subroutine check_dist_fn(report_unit)
           aj2(ig,iglo) = 2.0*aj1(ig,iglo)-aj0(ig,iglo)
        end do
     end do
+
+    bessinit = .true.
 
   end subroutine init_bessel
 
@@ -2262,7 +2285,7 @@ subroutine check_dist_fn(report_unit)
   subroutine allocate_arrays
     use kt_grids, only: naky, ntheta0, box
     use theta_grid, only: ntgrid, shat
-    use dist_fn_arrays, only: g, gnew, gold
+    use dist_fn_arrays, only: g, gnew, gold, g_store
     use dist_fn_arrays, only: kx_shift, theta0_shift   ! MR
     use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
@@ -2274,6 +2297,7 @@ subroutine check_dist_fn(report_unit)
        allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (g_store   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
 #ifdef LOWFLOW
        allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gexp_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -2371,7 +2395,7 @@ subroutine check_dist_fn(report_unit)
 !
 !  end subroutine init_exb_shear
 
-  subroutine exb_shear (g0, phi, apar, bpar)
+  subroutine exb_shear (g0, phi, apar, bpar, istep)
 ! MR, 2007: modified Bill Dorland's version to include grids where kx grid
 !           is split over different processors
 ! MR, March 2009: ExB shear now available on extended theta grid (ballooning)
@@ -2391,7 +2415,7 @@ subroutine check_dist_fn(report_unit)
     use species, only: nspec
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kx_shift, theta0_shift
-    use gs2_time, only: code_dt, code_dt_old
+    use gs2_time, only: code_dt, code_dt_old, code_time
     use constants, only: twopi    
 
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
@@ -2402,6 +2426,7 @@ subroutine check_dist_fn(report_unit)
     integer :: ierr, j 
     integer :: ik, it, ie, is, il, isgn, to_iglo, from_iglo, to_iproc, from_iproc
     integer:: iib, iit, ileft, iright, i
+    integer, intent(in) :: istep
 
     real, save :: dkx, dtheta0
     real :: gdt
@@ -2460,6 +2485,8 @@ subroutine check_dist_fn(report_unit)
     ! also to get things right after changing time step size
     ! added May 18, 2009 -- MAB
     gdt = 0.5*(code_dt + code_dt_old)
+    if (g_exb_start_timestep > istep) return
+    if (g_exb_start_time >= 0 .and. code_time < g_exb_start_time) return
     
 ! kx_shift is a function of time.   Update it here:  
 ! MR, 2007: kx_shift array gets saved in restart file
@@ -4012,7 +4039,7 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: aj0, aj1, vperp2, kperp2
     use species, only: nspec, spec, has_electron_species
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0, aky
+    use kt_grids, only: naky, ntheta0, aky, single
     use le_grids, only: anon, integrate_species
     use gs2_layouts, only: g_lo, ie_idx, is_idx
     use run_parameters, only: tite
@@ -4022,36 +4049,38 @@ subroutine check_dist_fn(report_unit)
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: tot
     real, dimension (nspec) :: wgt
 
-    if (feqinit) return
-    feqinit = .true.
+    if (feqinit .and. .not. (single .and. g_exb .ne. 0.0)) return
 
-    allocate (gridfac1(-ntgrid:ntgrid,ntheta0,naky))
-    gridfac1 = 1.0
-    select case (boundary_option_switch)
-    case (boundary_option_self_periodic)
-       ! nothing
-    case (boundary_option_linked)
-       do it = 1, ntheta0
-          do ik = 1, naky
-             if (aky(ik) == 0.0) cycle
-             if (itleft(ik,it) < 0) gridfac1(-ntgrid,it,ik) = gridfac
-             if (itright(ik,it) < 0) gridfac1(ntgrid,it,ik) = gridfac
-          end do
-       end do
-    case default
-       do ik = 1, naky
-          if (aky(ik) == 0.0) cycle
-          gridfac1(-ntgrid,:,ik) = gridfac
-          gridfac1(ntgrid,:,ik) = gridfac
-       end do
-    end select
+    if (.not. feqinit) then 
+      allocate (gridfac1(-ntgrid:ntgrid,ntheta0,naky))
+      gridfac1 = 1.0
+      select case (boundary_option_switch)
+      case (boundary_option_self_periodic)
+         ! nothing
+      case (boundary_option_linked)
+         do it = 1, ntheta0
+            do ik = 1, naky
+               if (aky(ik) == 0.0) cycle
+               if (itleft(ik,it) < 0) gridfac1(-ntgrid,it,ik) = gridfac
+               if (itright(ik,it) < 0) gridfac1(ntgrid,it,ik) = gridfac
+            end do
+         end do
+      case default
+         do ik = 1, naky
+            if (aky(ik) == 0.0) cycle
+            gridfac1(-ntgrid,:,ik) = gridfac
+            gridfac1(ntgrid,:,ik) = gridfac
+         end do
+      end select
 
-    allocate (gamtot(-ntgrid:ntgrid,ntheta0,naky))
-    allocate (gamtot1(-ntgrid:ntgrid,ntheta0,naky))
-    allocate (gamtot2(-ntgrid:ntgrid,ntheta0,naky))
-    if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then	
-       allocate (gamtot3(-ntgrid:ntgrid,ntheta0,naky))
-    endif
+      allocate (gamtot(-ntgrid:ntgrid,ntheta0,naky))
+      allocate (gamtot1(-ntgrid:ntgrid,ntheta0,naky))
+      allocate (gamtot2(-ntgrid:ntgrid,ntheta0,naky))
+      if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then	
+         allocate (gamtot3(-ntgrid:ntgrid,ntheta0,naky))
+      endif
+    end if
+
     
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ie = ie_idx(g_lo,iglo)
@@ -4101,6 +4130,7 @@ subroutine check_dist_fn(report_unit)
           gamtot = gamtot + tite 
        endif
     endif
+    feqinit = .true.
   end subroutine init_fieldeq
 
   subroutine getfieldeq1 (phi, apar, bpar, antot, antota, antotp, &
