@@ -5,6 +5,12 @@
 module dist_fn_arrays
 
   public :: g, gnew, gold, kx_shift, theta0_shift, vpa, vpac
+
+  !> Used to reinitialise the response matrix in the 
+  !! single mode exb function
+  ! EGH
+  public :: g_store
+
   public :: vperp2, vpar, ittp, aj0, aj1, aj2, aj0f, aj1f
   public :: apar_ext, kperp2, c_rate
   public :: g_adjust
@@ -14,7 +20,7 @@ module dist_fn_arrays
 
 
   ! dist fn
-  complex, dimension (:,:,:), allocatable :: g, gnew, gold
+  complex, dimension (:,:,:), allocatable :: g, gnew, gold, g_store
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   real, dimension(:), allocatable :: kx_shift, theta0_shift
