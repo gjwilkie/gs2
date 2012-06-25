@@ -6,6 +6,7 @@ module species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
   public :: has_electron_species, has_slowing_down_species
+  public :: ions, electrons, impurity
 
   type :: specie
      real :: z
@@ -34,9 +35,9 @@ module species
   integer :: nspec
   type (specie), dimension (:), allocatable :: spec
 
+  integer :: ions, electrons, impurity
   integer :: ntspec_trin
-  real :: dens_trin, fprim_trin
-  real, dimension (:), allocatable :: temp_trin, tprim_trin, nu_trin
+  real, dimension (:), allocatable :: dens_trin, temp_trin, fprim_trin, tprim_trin, nu_trin
 
   logical :: initialized = .false.
   logical :: exist
@@ -120,7 +121,7 @@ contains
            if (abs(aln+alne) > 1.e-2) then
               write (report_unit, *) 
               write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, fmt="('The density gradients are inconsistent.')")
+              write (report_unit, fmt="('The density gradients are inconsistent'/' a/lni =',e12.4,' but alne =',e12.4)") aln, alne
               write (report_unit, fmt="('################# WARNING #######################')")
            end if
         end if
@@ -351,26 +352,80 @@ contains
     implicit none
 
     integer, intent (in) :: ntspec
-    real, intent (in) :: dens, fprim
-    real, dimension (:), intent (in) :: temp, tprim, nu
+    real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
 
     integer :: is
+    logical, save :: first = .true.
+
+    if (first) then
+       if (nspec == 1) then
+          ions = 1
+          electrons = 0
+          impurity = 0
+       else
+          ! if 2 or more species in GS2 calculation, figure out which is main ion
+          ! and which is electron via mass (main ion mass assumed to be one)
+          do is = 1, nspec
+             if (abs(spec(is)%mass-1.0) <= epsilon(0.0)) then
+                ions = is
+             else if (spec(is)%mass < 0.3) then
+                ! for electrons, assuming electrons are at least a factor of 3 less massive
+                ! than main ion and other ions are no less than 30% the mass of the main ion
+                electrons = is
+             else if (spec(is)%mass > 1.0 + epsilon(0.0)) then
+                impurity = is
+             else
+                if (proc0) write (*,*) &
+                     "Error: TRINITY requires the main ions to have mass 1", &
+                     "and the secondary ions to be impurities (mass > 1)"
+                stop
+             end if
+          end do
+       end if
+       first = .false.
+    end if
 
     if (proc0) then
 
        nspec = ntspec
 
-       do is = 1, nspec
-          ! want to use density and temperature profiles from transport solver
-          ! normalized to reference species (which is taken to be the first species,
-          ! for now.  perhaps more sophisticated method of choosing ref species can be
-          ! included later.)
-          spec(is)%dens  = dens/dens  ! awaiting generalization to ni/=ne
-          spec(is)%temp  = temp(is)/temp(1)
-          spec(is)%fprim = fprim
-          spec(is)%tprim = tprim(is)
-          spec(is)%vnewk = nu(is)
+       ! TRINITY passes in species in following order: main ion, electron, impurity (if present)
 
+       ! for now, hardwire electron density to be reference density
+       ! main ion temperature is reference temperature
+       ! main ion mass is assumed to be the reference mass
+       
+       ! if only 1 species in the GS2 calculation, it is assumed to be main ion
+       ! and ion density = electron density
+       if (nspec == 1) then
+          spec(1)%dens = 1.0
+          spec(1)%temp = 1.0
+          spec(1)%fprim = fprim(1)
+          spec(1)%tprim = tprim(1)
+          spec(1)%vnewk = nu(1)
+       else
+          spec(ions)%dens = dens(1)/dens(2)
+          spec(ions)%temp = 1.0
+          spec(ions)%fprim = fprim(1)
+          spec(ions)%tprim = tprim(1)
+          spec(ions)%vnewk = nu(1)
+
+          spec(electrons)%dens = 1.0
+          spec(electrons)%temp = temp(2)/temp(1)
+          spec(electrons)%fprim = fprim(2)
+          spec(electrons)%tprim = tprim(2)
+          spec(electrons)%vnewk = nu(2)
+
+          if (nspec > 2) then
+             spec(impurity)%dens = dens(3)/dens(2)
+             spec(impurity)%temp = temp(3)/temp(1)
+             spec(impurity)%fprim = fprim(3)
+             spec(impurity)%tprim = tprim(3)
+             spec(impurity)%vnewk = nu(3)
+          end if
+       end if
+
+       do is = 1, nspec
           spec(is)%stm = sqrt(spec(is)%temp/spec(is)%mass)
           spec(is)%zstm = spec(is)%z/sqrt(spec(is)%temp*spec(is)%mass)
           spec(is)%tz = spec(is)%temp/spec(is)%z
@@ -407,10 +462,11 @@ contains
     implicit none
 
     integer, intent (in) :: ntspec_in
-    real, intent (in) :: dens_in, fprim_in
-    real, dimension (:), intent (in) :: temp_in, tprim_in, nu_in
+    real, dimension (:), intent (in) :: dens_in, fprim_in, temp_in, tprim_in, nu_in
 
     if (.not. allocated(temp_trin)) then
+       allocate (dens_trin(size(dens_in)))
+       allocate (fprim_trin(size(fprim_in)))
        allocate (temp_trin(size(temp_in)))
        allocate (tprim_trin(size(tprim_in)))
        allocate (nu_trin(size(nu_in)))

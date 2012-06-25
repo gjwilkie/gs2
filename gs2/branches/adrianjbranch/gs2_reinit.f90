@@ -10,6 +10,7 @@ module gs2_reinit
   real :: delt_cushion
   real :: delt_minimum 
   real, save :: time_reinit(2)=0.
+  logical :: abort_rapid_time_step_change
 
 contains
   subroutine wnml_gs2_reinit(unit)
@@ -22,7 +23,7 @@ contains
           write (unit, fmt="(' /')")       
   end subroutine wnml_gs2_reinit
 
-  subroutine reset_time_step (istep, exit)
+  subroutine reset_time_step (istep, exit, job_id)
 
     use collisions, only: c_reset => reset_init, vnmult
     use dist_fn, only: d_reset => reset_init
@@ -46,6 +47,7 @@ contains
     integer, save :: istep_last = -1 ! allow adjustment on first time step
     integer :: istatus
     integer, save :: nconsec=0
+    integer, intent (in), optional :: job_id
 
 ! save fields and distribution function
 
@@ -56,7 +58,7 @@ contains
        nconsec=0
     endif
 
-    if (nconsec .gt. 4) then
+    if (nconsec .gt. 4 .and. abort_rapid_time_step_change) then
        exit = .true.
        if (proc0) write(error_unit(), *) 'Time step changing rapidly.  Abort run.'
        return
@@ -65,10 +67,11 @@ contains
     if (code_dt/delt_adj <= code_dt_min) then
        code_dt = code_dt_min  ! set it so restart is ok
        exit = .true.
+       if (proc0) write(error_unit(), *) 'Time step wants to fall below delt_min.  Abort run.'
        return
     end if
 
-    if (proc0) call time_message(.true.,time_reinit,' Re-initialize')
+    if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
 
     if (proc0) call dump_ant_amp
     call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
@@ -89,7 +92,7 @@ contains
     
     call save_dt (code_dt)
 
-    if (proc0) write(*,*) 'Changing time step to ', user_dt
+    if (proc0 .and. .not. present(job_id)) write(*,*) 'Changing time step to ', user_dt
     
 ! prepare to reinitialize inversion matrix, etc.
     call d_reset
@@ -103,7 +106,7 @@ contains
 ! reinitialize
     call init_fields
 
-    if (proc0) call time_message(.true.,time_reinit,' Re-initialize')
+    if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
 
     istep_last = istep
 
@@ -145,13 +148,15 @@ contains
     use gs2_time, only: save_dt_min
     integer in_file
     logical exist
-    namelist /reinit_knobs/ delt_adj, delt_minimum, delt_cushion
+    namelist /reinit_knobs/ delt_adj, delt_minimum, delt_cushion, &
+                            abort_rapid_time_step_change
     
     if (proc0) then
        dt0 = code_delt_max
        delt_adj = 2.0
        delt_minimum = 1.e-5
        delt_cushion = 1.5
+       abort_rapid_time_step_change = .true.
        in_file = input_unit_exist("reinit_knobs",exist)
        if(exist) read (unit=in_file, nml=reinit_knobs)
     endif
@@ -160,6 +165,7 @@ contains
     call broadcast (delt_adj)
     call broadcast (delt_minimum)
     call broadcast (delt_cushion)
+    call broadcast (abort_rapid_time_step_change)
 
     call save_dt_min (delt_minimum)
 

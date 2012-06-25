@@ -3,6 +3,7 @@
 #
 ball_mod = \
 	 ball.o \
+	 ceq.o \
 	 command_line.o \
 	 constants.o \
 	 deq.o \
@@ -14,6 +15,7 @@ ball_mod = \
 	 leq.o \
 	 netcdf_utils.o \
 	 peq.o \
+	 read_chease.o \
 	 spl.o 
 
 drive_mod = \
@@ -24,6 +26,7 @@ ediff_mod = \
 	 ediff.o 
 
 eiktest_mod = \
+	 ceq.o \
 	 command_line.o \
 	 constants.o \
 	 deq.o \
@@ -36,11 +39,13 @@ eiktest_mod = \
 	 leq.o \
 	 netcdf_utils.o \
 	 peq.o \
+	 read_chease.o \
 	 spl.o 
 
 ffttester_mod = \
 	 antenna.o \
 	 antenna_data.o \
+	 ceq.o \
 	 collisions.o \
 	 command_line.o \
 	 constants.o \
@@ -77,7 +82,6 @@ ffttester_mod = \
 	 layouts_type.o \
 	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -87,6 +91,7 @@ ffttester_mod = \
 	 peq.o \
 	 prof.o \
 	 ran.o \
+	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
@@ -99,6 +104,7 @@ ffttester_mod = \
 gs2_mod = \
 	 antenna.o \
 	 antenna_data.o \
+	 ceq.o \
 	 collisions.o \
 	 command_line.o \
 	 constants.o \
@@ -135,7 +141,6 @@ gs2_mod = \
 	 layouts_type.o \
 	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -145,6 +150,7 @@ gs2_mod = \
 	 peq.o \
 	 prof.o \
 	 ran.o \
+	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
@@ -161,6 +167,7 @@ hrate_mod = \
 ingen_mod = \
 	 antenna.o \
 	 antenna_data.o \
+	 ceq.o \
 	 collisions.o \
 	 command_line.o \
 	 constants.o \
@@ -196,7 +203,6 @@ ingen_mod = \
 	 layouts_type.o \
 	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -205,6 +211,7 @@ ingen_mod = \
 	 peq.o \
 	 prof.o \
 	 ran.o \
+	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
@@ -234,6 +241,9 @@ rungridgen_mod = \
 	 rungridgen.o \
 	 spl.o 
 
+test_mod = \
+	 read_chease.o 
+
 antenna.o: \
 	 antenna_data.o \
 	 constants.o \
@@ -249,6 +259,10 @@ antenna.o: \
 antenna_data.o: 
 ball.o: \
 	 geometry.o 
+ceq.o: \
+	 constants.o \
+	 read_chease.o \
+	 spl.o 
 collisions.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
@@ -285,7 +299,6 @@ dist_fn.o: \
 	 hyper.o \
 	 kt_grids.o \
 	 le_grids.o \
-	 lowflow.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 prof.o \
@@ -366,6 +379,7 @@ gauss_quad.o: \
 	 file_utils.o \
 	 mp.o 
 geometry.o: \
+	 ceq.o \
 	 deq.o \
 	 eeq.o \
 	 geq.o \
@@ -614,8 +628,11 @@ leq.o: \
 	 spl.o 
 lowflow.o: \
 	 file_utils.o \
+	 le_grids.o \
 	 mp.o \
-	 spl.o 
+	 species.o \
+	 spl.o \
+	 theta_grid.o 
 mds.o: \
 	 constants.o 
 mp.o: \
@@ -647,6 +664,7 @@ parameter_scan.o: \
 	 gs2_diagnostics.o \
 	 gs2_save.o \
 	 gs2_time.o \
+	 init_g.o \
 	 mp.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
@@ -661,6 +679,7 @@ pgplot_utils.o: \
 prof.o: 
 ran.o: \
 	 mt19937.o 
+read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
 	 mp.o 

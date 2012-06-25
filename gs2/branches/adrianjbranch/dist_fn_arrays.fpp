@@ -7,8 +7,11 @@ module dist_fn_arrays
   public :: g, gnew, gold, kx_shift, theta0_shift, vpa, vpac
   public :: vperp2, vpar, ittp, aj0, aj1, aj2, aj0f, aj1f
   public :: apar_ext, kperp2, c_rate
-  public :: vparterm, wdfac, wstarfac, hneoc
-  public :: g_adjust 
+  public :: g_adjust
+#ifdef LOWFLOW
+  public :: hneoc, vparterm, wdfac, wstarfac, wdttpfac
+#endif
+
 
   ! dist fn
   complex, dimension (:,:,:), allocatable :: g, gnew, gold
@@ -42,15 +45,31 @@ module dist_fn_arrays
   complex, dimension (:,:,:,:,:), allocatable :: c_rate
   ! (-ntgrid:ntgrid,ntheta0,naky,nspecies,2) replicated
 
+#ifdef LOWFLOW
   ! v-dependent factors in low-flow terms
-  real, dimension (:,:,:), allocatable :: vparterm, wdfac, wstarfac
-  real, dimension (:,:,:), allocatable :: hneoc
+  real, dimension (:,:,:), allocatable :: hneoc, vparterm, wdfac, wstarfac
   ! (-ntgrid:ntgrid,2, -g-layout-)
+  real, dimension (:,:,:,:,:,:), allocatable :: wdttpfac
+  ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspecies,2)
+#endif
 
   private
 contains
 
   subroutine g_adjust (g, phi, bpar, facphi, facbpar)
+!CMR, 17/4/2012: 
+! g_adjust transforms between representations of perturbed dist'n func'n.
+!    <delta_f> = g_wesson J0(Z) - q phi/T F_m  where <> = gyroaverage
+!        g_gs2 = g_wesson - q phi/T J0(Z) F_m - m v_||^2/T B_||/B J1(Z)/Z F_m
+! For numerical convenience the GS2 variable g uses the form g_gs2.
+! g_wesson (see Wesson's book, Tokamaks) is often a more convenient form:
+!     e.g. for handling collisions, calculating v-space moments in real space.
+!
+! To transform gnew from g_gs2 to g_wesson form:
+!    call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
+! or transform from gnew from g_wesson to g_gs2 form:
+!    call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
+!
     use species, only: spec
     use theta_grid, only: ntgrid, bmag
     use le_grids, only: anon

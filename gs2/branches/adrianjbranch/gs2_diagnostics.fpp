@@ -42,7 +42,7 @@ module gs2_diagnostics
   logical, public :: write_g, write_gg, write_gyx
   logical, public :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
   logical, public :: write_final_moments, write_avg_moments, write_parity
-  logical, public :: write_moments
+  logical, public :: write_moments, write_final_db
   logical, public :: write_full_moments_notgc, write_cross_phase = .false.
   logical, public :: write_final_epar, write_kpar
   logical, public :: write_hrate, write_lorentzian
@@ -72,7 +72,7 @@ module gs2_diagnostics
          write_gs, write_gyx, write_g, write_gg, write_hrate, write_lpoly, &
          write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
          write_final_epar, write_moments, write_final_moments, write_cerr, &
-         write_verr, write_max_verr, write_nl_flux, &
+         write_verr, write_max_verr, write_nl_flux, write_final_db, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, &
          write_full_moments_notgc, write_cross_phase, &
@@ -150,6 +150,7 @@ contains
        write (unit, fmt="(' write_eigenfunc = ',L1)") write_eigenfunc
        write (unit, fmt="(' write_final_fields = ',L1)") write_final_fields
        write (unit, fmt="(' write_final_epar = ',L1)") write_final_epar
+       write (unit, fmt="(' write_final_db = ',L1)") write_final_db
        write (unit, fmt="(' write_final_moments = ',L1)") write_final_moments
        write (unit, fmt="(' write_final_antot = ',L1)") write_final_antot
        write (unit, fmt="(' write_nl_flux = ',L1)") write_nl_flux
@@ -598,6 +599,7 @@ contains
        write_final_fields = .false.
        write_final_antot = .false.
        write_final_epar = .false.
+       write_final_db = .false.
        write_verr = .false.
        write_max_verr = .false.
        write_cerr = .false.
@@ -654,13 +656,13 @@ contains
     use mp, only: proc0, broadcast, nproc, iproc, sum_reduce
     use species, only: nspec, spec
     use run_parameters, only: fphi, fapar, fbpar
-    use theta_grid, only: ntgrid, theta, delthet, jacob, gradpar, nperiod
+    use theta_grid, only: ntgrid, theta, delthet, jacob, gradpar, nperiod, bmag
     use theta_grid, only: Rplot, Zplot, aplot, Rprime, Zprime, aprime
     use theta_grid, only: drhodpsi, qval, shape
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, akx, aky
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn, only: getan, get_epar, getmoms, par_spectrum
-    use dist_fn, only: write_f, write_fyx
+    use dist_fn, only: write_f, write_fyx, def_parity, even
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn_arrays, only: g_adjust
     use collisions, only: vnmult
@@ -669,7 +671,7 @@ contains
     use gs2_transforms, only: transform2, inverse2
     use gs2_save, only: gs2_save_for_restart
     use constants
-    use gs2_time, only: user_time, user_dt
+    use gs2_time, only: user_time, user_dt, code_dt
     use gs2_io, only: nc_eigenfunc, nc_final_fields, nc_final_epar, nc_final_an
     use gs2_io, only: nc_final_moments, nc_finish
     use antenna, only: dump_ant_amp
@@ -690,7 +692,8 @@ contains
     complex, dimension (:,:,:,:), allocatable :: ntot, density, upar, tpar, tperp
     complex, dimension (:,:,:,:), allocatable :: qparflux, pperpj1, qpperpj1
     real, dimension (:), allocatable :: dl_over_b
-    complex, dimension (ntheta0, naky) :: phi0
+    complex, dimension (ntheta0, naky) :: phi0, dbfac
+    complex, dimension (-ntgrid:ntgrid, ntheta0, naky) :: db
     real, dimension (ntheta0, naky) :: phi02
     real, dimension (2*ntgrid) :: kpar
     real, dimension (:), allocatable :: xx4, yy4, dz
@@ -730,6 +733,8 @@ contains
        if (write_eigenfunc) then
           if (write_ascii) call open_output_file (unit, ".eigenfunc")
           phi0 = phi(0,:,:)
+
+          if (def_parity .and. fapar > 0 .and. (.not. even)) phi0 = apar(0, :, :)
 
           where (abs(phi0) < 10.0*epsilon(0.0)) 
              phi0 = phi(1,:,:)/(theta(1)-theta(0))
@@ -847,8 +852,39 @@ contains
           call nc_final_epar (epar  )
           deallocate (epar)
        end if
-    end if
    
+       if (write_final_db) then  ! definition here assumes we are not using wstar_units
+          db = 0.
+          do ik = 1, naky
+             do it = 1, ntheta0
+                dbfac(it,ik) = 1./sum(delthet/bmag/gradpar)/maxval(cabs(phinew(:,it,ik)),1) &
+                     * cabs(log(aparnew(1,it,ik)/apar(1,it,ik)))/code_dt
+                ig = -ntg_out
+                db(ig, it, ik) = aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)*dbfac(it,ik)
+                do ig = -ntg_out+1, ntg_out-1
+                   db(ig, it, ik) = db(ig-1, it, ik) + aparnew(ig,it,ik)*delthet(ig)/bmag(ig)/gradpar(ig)*dbfac(it,ik)
+                end do
+             end do
+          end do
+
+!          db = db * cabs(omega)
+
+          if (write_ascii) then
+             call open_output_file (unit, ".db")
+             do ik = 1, naky
+                do it = 1, ntheta0
+                   do ig = -ntg_out, ntg_out-1
+                      write (unit, "(5(1x,e12.5))") &
+                           theta(ig), aky(ik), akx(it), real(db(ig, it,ik)), aimag(db(ig, it, ik))
+                   end do
+                   write (unit, "()")
+                end do
+             end do
+             call close_output_file (unit)
+          end if
+       end if
+    end if
+
     call broadcast (write_final_moments)
     if (write_final_moments) then
 
@@ -1320,13 +1356,14 @@ contains
     use kt_grids, only: naky, ntheta0, theta0, aky, akx
     use kt_grids, only: nkpolar, jtwist_out !, akpolar
     use run_parameters, only: woutunits, tunits, fapar, fphi, fbpar, eqzip
+!    use run_parameters, only: nstep, include_lowflow
     use run_parameters, only: nstep
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, write_f, write_fyx
     use dist_fn, only: omega0, gamma0, getmoms, par_spectrum
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
-    use dist_fn, only: getmoms_notgc, include_lowflow, lf_flux
+    use dist_fn, only: getmoms_notgc, lf_flux
     use dist_fn, only: flux_vs_theta_vs_vpa
     use dist_fn_arrays, only: g, gnew, aj0, vpa, g_adjust
     use collisions, only: ncheck, vnmult, vary_vnew
@@ -1576,8 +1613,10 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        call flux (phinew, aparnew, bparnew, &
             pflux,  qheat,  vflux, vflux_par, vflux_perp, &
             pmflux, qmheat, vmflux, pbflux, qbheat, vbflux)
+#ifdef LOWFLOW
        ! lowflow terms only implemented in electrostatic limit at present
-       if (include_lowflow) call lf_flux (phinew, vflux0, vflux1)
+       call lf_flux (phinew, vflux0, vflux1)
+#endif
        call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
 
        if (proc0) then
@@ -1604,16 +1643,16 @@ if (debug) write(6,*) "loop_diagnostics: -1"
                 vflux_perp(:,:,is) = vflux_perp(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
                 call get_volume_average (vflux_perp(:,:,is), perpmom_fluxes(is))
 
-                if (include_lowflow) then
-                   vflux0(:,:,is) = vflux0(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
-                   call get_volume_average (vflux0(:,:,is), lfmom_fluxes(is))
+#ifdef LOWFLOW
+                vflux0(:,:,is) = vflux0(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
+                call get_volume_average (vflux0(:,:,is), lfmom_fluxes(is))
 
-                   vflux1(:,:,is) = vflux1(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%temp/spec(is)%z
-                   call get_volume_average (vflux1(:,:,is), vflux1_avg(is))
+                vflux1(:,:,is) = vflux1(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%temp/spec(is)%z
+                call get_volume_average (vflux1(:,:,is), vflux1_avg(is))
 
 ! TMP UNTIL VFLUX0 IS TESTED
 !                   mom_fluxes = mom_fluxes + lfmom_fluxes
-                end if
+#endif
              end do
           end if
           if (fapar > epsilon(0.0)) then
@@ -1870,11 +1909,11 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                      & ' perpmom fluxes: ', 5(1x,e10.4))") &
                      t, phi2, perpmom_fluxes(1:min(nspec,5))
-                if (include_lowflow) then
+#ifdef LOWFLOW
                    write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                         & ' lfmom fluxes: ', 5(1x,e10.4),' lfvflx1: ', 5(1x,e10.4))") &
                         t, phi2, lfmom_fluxes(1:min(nspec,5)), vflux1_avg(1:min(nspec,5))
-                end if
+#endif
              end if
              hflux_tot = sum(heat_fluxes)
              vflux_tot = sum(mom_fluxes)
@@ -1921,7 +1960,9 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                   heat_perp, mheat_perp, bheat_perp, &
                   heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
                   ! Update the target array in parameter_scan_arrays
-                  scan_hflux(nout) = hflux_tot
+! below line gives out-of-bounds array for runs inside trinity
+!                  scan_hflux(nout) = hflux_tot
+                  scan_hflux(mod(nout-1,nstep/nwrite+1)+1) = hflux_tot
 !          call nc_qflux (nout, qheat, qmheat, qbheat, &
 !               heat_par, mheat_par, bheat_par, &
 !               heat_perp, mheat_perp, bheat_perp, &
@@ -1930,7 +1971,9 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                   mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot, &
                   vflux_par, vflux_perp, vflux0, vflux1)
                   ! Update the target array in parameter_scan_arrays
-                  scan_momflux(nout) = vflux_tot
+! below line gives out-of-bounds array for runs inside trinity
+!                  scan_momflux(nout) = vflux_tot
+                  scan_momflux(mod(nout-1,nstep/nwrite+1)+1) = vflux_tot
              call nc_pflux (nout, pflux, pmflux, pbflux, &
                   part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
           end if
@@ -1939,7 +1982,9 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                aparnew(igomega,:,:), apar2, apar2_by_mode, &
                bparnew(igomega,:,:), bpar2, bpar2_by_mode, &
                h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
-               scan_phi2_tot(nout) = phi2
+! below line gives out-of-bounds array for runs inside trinity
+!               scan_phi2_tot(nout) = phi2
+               scan_phi2_tot(mod(nout-1,nstep/nwrite+1)+1) = phi2
        end if
        if (write_ascii) then
           do ik = 1, naky
@@ -2071,24 +2116,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        allocate (g_avg(ntheta0,nspec), gnorm_avg(ntheta0,nspec))
        allocate (g_all_tot(nspec), g_nokx_tot(nspec), g_nosig_tot(nspec), gtmp(nspec))
        allocate (gnorm_all_tot(nspec), gnorm_nokx_tot(nspec), gnorm_nosig_tot(nspec))
-
-        ! TMP FOR TESTING -- MAB
-!        do ik = 1, naky
-!           do it = 1, ntheta0
-!              phinew(:,it,ik) = sin(theta)**2
-!           end do
-!        end do
-!         do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!            ik = ik_idx(g_lo,iglo)
-!            it = it_idx(g_lo,iglo)
-!            do isgn = 1, 2
-! !              gnew(:,isgn,iglo) = vpa(:,isgn,iglo)**2*(sin(theta)*akx(it)+cos(theta)*akx(it)**2)
-! !              gnew(:,isgn,iglo) = sin(theta)*vpa(:,isgn,iglo)
-! ! !             gnew(:,isgn,iglo) = vpa(:,isgn,iglo)*cos(theta)
-! ! !             gnew(:,isgn,iglo) = vpa(:,isgn,iglo)*cos(theta)*akx(it)
-! ! !             gnew(:,isgn,iglo) = akx(it)
-!            end do
-!         end do
 
        ! convert from g to h
        call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
@@ -2848,7 +2875,7 @@ if (debug) write(6,*) "get_omegaavg: done"
     real, intent (out) :: time_int
     integer :: is
     real, dimension (nensembles) :: dt_global
-    real, dimension (nensembles,nspec) :: pflx_global, qflx_global, heat_global
+    real, dimension (nensembles,nspec) :: pflx_global, qflx_global, heat_global, vflx_global
     time_int=user_time-start_time
     call scope (allprocs)
     call group_to_all (time_int, dt_global, nensembles)
@@ -2856,11 +2883,14 @@ if (debug) write(6,*) "get_omegaavg: done"
     time_int = sum(dt_global)
     call group_to_all (pflux_avg, pflx_global, nensembles)
     call group_to_all (qflux_avg, qflx_global, nensembles)
+    call group_to_all (vflux_avg, vflx_global, nensembles)
     do is = 1, nspec
        call broadcast (pflx_global(:,is))
        call broadcast (qflx_global(:,is))
+       call broadcast (vflx_global(:,is))
        pflux_avg = sum(pflx_global(:,is))
        qflux_avg = sum(qflx_global(:,is))
+       vflux_avg = sum(vflx_global(:,is))
     end do
     if (write_hrate) then
        call group_to_all (heat_avg, heat_global, nensembles)

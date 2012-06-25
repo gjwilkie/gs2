@@ -546,6 +546,15 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     efit_dR = efit_R(2) - efit_R(1)
     efit_dZ = efit_Z(2) - efit_Z(1)
 
+    if (.true.) then
+      write (*,*) "Finished efitin... imported EFIT equilibrium"
+      write (*,*) 'Some important quantities:'
+      write (*,*) "aminor", aminor
+      write (*,*) 'R_mag', R_mag
+      write (*,*) 'B_T0', B_T0
+      write (*,*) 'beta', beta_0
+    end if
+
     1000 format(5(a10),i2,i4,i4)
     2020 format (5e16.9)
     2022 format (2i5)      

@@ -593,7 +593,7 @@ contains
     ! MB: gds23 and gds24 are geometrical factors appearing at next order in gk eqn
     ! MB: NEED TO INCLUDE SHIFT IN BELOW EXPRESSIONS
     gds23 = -0.5*epsl*shat*theta*(1.+2.*eps*cos(theta))/eps
-    gds24_noq = 0.5*epsl*(1.+2.*eps*cos(theta))/eps
+    gds24_noq = 0.5*epsl*(1.+eps*cos(theta))/eps
     gds24 = shat*gds24_noq
 
     ! MB: NEED TO INCLUDE SHIFT BELOW

@@ -90,6 +90,7 @@ module gs2_io
   integer :: cdrift_id, cdrift0_id
   integer :: cvdrift_id, cvdrift0_id, gds2_id, gds21_id, gds22_id
   integer :: grho_id, jacob_id, shat_id, eps_id, drhodpsi_id, q_id, surfarea_id
+  integer :: beta_id
   integer :: code_id, datestamp_id, timestamp_id, timezone_id
   integer :: h_energy_id, h_energy_dot_id, h_antenna_id
   integer :: h_eapar_id, h_ebpar_id
@@ -843,8 +844,14 @@ contains
 
     status = nf90_def_var (ncid, 'q', netcdf_real, q_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='q')
+    status = nf90_put_att (ncid, q_id, 'long_name', 'local safety factor')
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, q_id, att='long_name')
     status = nf90_def_var (ncid, 'eps', netcdf_real, eps_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='eps')
+    status = nf90_def_var (ncid, 'beta', netcdf_real, beta_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='beta')
+    status = nf90_put_att (ncid, beta_id, 'long_name', 'reference beta')
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, beta_id, att='long_name')
     status = nf90_def_var (ncid, 'shat', netcdf_real, shat_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='shat')
     status = nf90_put_att (ncid, shat_id, 'long_name', '(rho/q) dq/drho')
@@ -2628,7 +2635,9 @@ contains
 
     use theta_grid, only: bmag, gradpar, gbdrift, gbdrift0, &
          cvdrift, cvdrift0, gds2, gds21, gds22, grho, jacob, &
-         shat, drhodpsi, eps, cdrift, cdrift0!, surfarea
+         shat, drhodpsi, eps, cdrift, cdrift0, qval !, surfarea
+!CMR add qval and beta here too, as they are both useful
+    use run_parameters, only: beta
 !    use nf90_mod, only: nf90_put_var
 # ifdef NETCDF
     use netcdf, only: nf90_put_var
@@ -2664,14 +2673,14 @@ contains
 !    status = nf90_put_var (ncid, surfarea_id, surfarea)
 !    if (status /= NF90_NOERR) call netcdf_error (status, ncid, surfarea_id)
 
+    status = nf90_put_var (ncid, beta_id, beta)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, beta_id)
+    status = nf90_put_var (ncid, q_id, qval)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, q_id)
     status = nf90_put_var (ncid, shat_id, shat)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, shat_id)
     status = nf90_put_var (ncid, eps_id, eps)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, eps_id)
-!    status = nf90_put_var (ncid, q_id, eps)  ! find the q variable: qsf, q_val, or qinp?
-!    if (status /= NF90_NOERR) call netcdf_error (status, ncid, q_id)
-!    status = nf90_put_var (ncid, q_id, eps)  ! write both beta_prime variables with comment
-!    if (status /= NF90_NOERR) call netcdf_error (status, ncid, q_id)
     status = nf90_put_var (ncid, drhodpsi_id, drhodpsi)   
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, drhodpsi_id)
 # endif
