@@ -9,8 +9,6 @@ module layouts_type
      integer :: iproc
      integer :: naky, ntheta0, nlambda, negrid, nspec
      integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
-     integer :: small_block_size, small_blocks_maximum, small_blocks_total_procs, large_block_size
-     integer :: small_block_balance_factor, large_block_balance_factor
   end type g_layout_type
 
   type :: lz_layout_type
