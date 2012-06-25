@@ -450,7 +450,8 @@ contains
 
   subroutine c_redist_22 (r, from_here, to_here)
 
-    use mp, only: iproc, barrier
+    use mp, only: iproc
+    use gs2_layouts, only: opt_22_copy
 
     type (redist_type), intent (in out) :: r
 
@@ -468,13 +469,15 @@ contains
                           lbound(to_here,2):ubound(to_here,2)))
 
     ! redistribute from local processor to local processor
+    if(opt_22_copy) then
+       ! c_redist_22_new_copy is the new local copy functionality where 
+       ! indirect addressing has largely been removed
+       call c_redist_22_new_copy(r, from_here, to_here)
+    else
+       ! c_redist_22_old_copy is the original local copy functionality
+       call c_redist_22_old_copy(r, from_here, to_here)
+    end if
 
-    ! c_redist_22_old_copy is the original local copy functionality
-    call c_redist_22_old_copy(r, from_here, to_here)
-
-    ! c_redist_22_new_copy is the new local copy functionality where 
-    ! indirect addressing has largely been removed
-    !call c_redist_22_new_copy(r, from_here, to_here)
 
     ! The code below is used to check that the new copy produces the 
     ! same results as the old copy (validation).  The if statement is
@@ -500,9 +503,10 @@ contains
 
     ! c_redist_22_mpi_copy contains all the remote to local 
     ! copy functionality
-    call barrier()
     call c_redist_22_mpi_copy(r, from_here, to_here)
-    call barrier()
+!    call c_redist_22_mpi_opt_3_copy(r, from_here, to_here)
+!    call c_redist_22_mpi_opt_2_copy(r, from_here, to_here)
+!    call c_redist_22_mpi_opt_copy(r, from_here, to_here)
 
   end subroutine c_redist_22
 
@@ -521,7 +525,6 @@ contains
 
     integer :: i
     real :: time_old_loop(2)
-    integer, save :: outputtest = 1
 
     time_old_loop(1) = 0.
     time_old_loop(2) = 0.
@@ -544,23 +547,15 @@ contains
 ! This do loop, in GS2 standard FFT situation, corresponds to:
 !    to_here(ik,iyxf)=from_here(it,ixxf)
 !
-       if(iproc .eq. 120 .and. outputtest .eq. 0) then
-       write(*,*)  '_22',iproc,r%to(iproc)%k(i), &
-               r%to(iproc)%l(i), r%from(iproc)%k(i), &
-                           r%from(iproc)%l(i)
-       end if
        to_here(r%to(iproc)%k(i), &
                r%to(iproc)%l(i)) &
                = from_here(r%from(iproc)%k(i), &
                            r%from(iproc)%l(i))
     end do
 
-    outputtest = 1
-
     call time_message(.false.,time_old_loop,' Old Loop')
 
     c_22_old_loop = c_22_old_loop + time_old_loop(1)
-
 
   end subroutine c_redist_22_old_copy
 
@@ -575,7 +570,6 @@ contains
 !  Here we REDUCE indirect addressing and cache load by EXPLOITING 
 !  understanding of xxf and yxf data types in GS2.
 ! 
-
     use mp, only: iproc
     use job_manage, only: time_message
     use gs2_layouts, only: yxf_lo
@@ -619,7 +613,6 @@ contains
 
   end subroutine c_redist_22_new_copy
 
-
   subroutine c_redist_22_mpi_copy (r, from_here, to_here)
 
     use mp, only: iproc, nproc, send, receive
@@ -636,6 +629,13 @@ contains
     integer :: i, idp, ipto, ipfrom, iadp
     integer :: rank, ierror
     real :: time_rest_loop(2)
+
+    integer, save :: outputtext = 0
+
+    if(outputtext .eq. 0 .and. iproc .eq. 0) then
+       write(*,*) '22_mpi_copy'
+       outputtext = 1
+    end if
 
     time_rest_loop(1) = 0.
     time_rest_loop(2) = 0.
@@ -697,11 +697,375 @@ contains
   end subroutine c_redist_22_mpi_copy
 
 
+  subroutine c_redist_22_mpi_opt_copy (r, from_here, to_here)
+
+    use mp, only: iproc, nproc, send, receive
+    use mpi
+    use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx
+    use job_manage, only: time_message
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+    integer :: i, idp, ipto, ipfrom, iadp
+    integer :: rank, ierror
+    integer :: iyxfmax, it, ixxf, ik, iyxf, itmax, itmin, t1, t2, t2max
+    real :: time_rest_loop(2)
+
+    integer, save :: outputtext = 0
+
+    if(outputtext .eq. 0 .and. iproc .eq. 0) then
+       write(*,*) '22_mpi_opt_copy'
+       outputtext = 1
+    end if
+
+    time_rest_loop(1) = 0.
+    time_rest_loop(2) = 0.
+
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+    ! redistribute to idpth next processor from idpth preceding processor
+    ! or redistribute from idpth preceding processor to idpth next processor
+    ! to avoid deadlocks
+    do idp = 1, nproc-1
+       ipto = mod(iproc + idp, nproc)
+       ipfrom = mod(iproc + nproc - idp, nproc)
+       iadp = min(idp, nproc - idp)
+       ! avoid deadlock AND ensure mostly parallel resolution
+       if (mod(iproc/iadp,2) == 0) then
+          
+          if (r%from(ipto)%nn > 0) then
+             ! send to idpth next processor
+             i = 1
+             iyxfmax = (ipto+1)*yxf_lo%blocksize 
+             do while(i .le. r%from(ipto)%nn)
+                itmin = r%from(ipto)%k(i)
+                ixxf = r%from(ipto)%l(i)
+                call xxfidx2yxfidx(itmin, ixxf, xxf_lo, yxf_lo, ik, iyxf)
+                itmax = itmin + (iyxfmax - iyxf) - 1
+                itmax = min(itmax, yxf_lo%nx)
+                do it = itmin,itmax
+                   r%complex_buff(i) = from_here(it, ixxf)
+                   i = i + 1
+                end do
+             end do
+             
+             call send (r%complex_buff(1:r%from(ipto)%nn), ipto, idp)
+          end if
+       
+          ! receive from idpth preceding processor
+          if (r%to(ipfrom)%nn > 0) then
+             call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
+             
+             i = 1
+             t1 = r%to(ipfrom)%k(i)
+             t2 = r%to(ipfrom)%l(i)
+             iyxfmax = (iproc+1)*yxf_lo%blocksize 
+             do while (i .le. r%to(ipfrom)%nn)
+                t2max = mod(t2,yxf_lo%nx)
+                t2max = t2 + (yxf_lo%nx - t2max)
+                t2max = min(t2max,iyxfmax)
+                do while(t2 .lt. t2max)
+                   to_here(t1,t2) = r%complex_buff(i)
+                   t2 = t2 + 1
+                   i = i + 1
+                end do
+                t1 = r%to(ipfrom)%k(i)
+                t2 = r%to(ipfrom)%l(i)
+             end do
+             
+          end if
+       else
+          ! receive from idpth preceding processor
+          if (r%to(ipfrom)%nn > 0) then
+             call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
+
+             i = 1
+             t1 = r%to(ipfrom)%k(i)
+             t2 = r%to(ipfrom)%l(i)
+             iyxfmax = (iproc+1)*yxf_lo%blocksize 
+             do while (i .le. r%to(ipfrom)%nn)
+                t2max = mod(t2,yxf_lo%nx)
+                t2max = t2 + (yxf_lo%nx - t2max)
+                t2max = min(t2max,iyxfmax)
+                do while(t2 .lt. t2max)
+                   to_here(t1,t2) = r%complex_buff(i)
+                   t2 = t2 + 1
+                   i = i + 1
+                end do
+                t1 = r%to(ipfrom)%k(i)
+                t2 = r%to(ipfrom)%l(i)
+             end do
+             
+          end if
+
+          ! send to idpth next processor
+          if (r%from(ipto)%nn > 0) then
+
+             i = 1
+             iyxfmax = (ipto+1)*yxf_lo%blocksize 
+             do while(i .le. r%from(ipto)%nn)
+                itmin = r%from(ipto)%k(i)
+                ixxf = r%from(ipto)%l(i)
+                call xxfidx2yxfidx(itmin, ixxf, xxf_lo, yxf_lo, ik, iyxf)
+                itmax = itmin + (iyxfmax - iyxf) - 1
+                itmax = min(itmax, yxf_lo%nx)
+                do it = itmin,itmax
+                   r%complex_buff(i) = from_here(it, ixxf)
+                   i = i + 1
+                end do
+             end do
+             
+             call send (r%complex_buff(1:r%from(ipto)%nn), ipto, idp)
+          end if
+        end if
+    end do
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+
+    c_22_rest_loop = c_22_rest_loop + time_rest_loop(1)
+
+  end subroutine c_redist_22_mpi_opt_copy
+
+
+  subroutine c_redist_22_mpi_opt_2_copy (r, from_here, to_here)
+
+    use mp, only: iproc, nproc, send, receive, waitany
+    use mpi
+    use job_manage, only: time_message
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+  
+    complex, dimension (:,:), allocatable :: send_buff
+    complex, dimension (:,:), allocatable :: recv_buff 
+  
+    integer, dimension (2*nproc) :: requests
+    integer, dimension (MPI_STATUS_SIZE) :: status
+
+    integer :: i, idp, ipto, ipfrom
+    integer :: requestnum, currentrequest
+    integer :: rank, ierror
+    real :: time_rest_loop(2)
+
+    integer, save :: outputtext = 0
+
+    if(outputtext .eq. 0 .and. iproc .eq. 0) then
+       write(*,*) '22_mpi_opt_2_copy'
+       outputtext = 1
+    end if
+
+
+    time_rest_loop(1) = 0.
+    time_rest_loop(2) = 0.
+
+    requestnum = 0
+
+    allocate(send_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
+    allocate(recv_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
+    
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+
+
+    requests = MPI_REQUEST_NULL
+
+    ! Post the receives
+    do idp = 1, nproc - 1
+       ipfrom = mod(iproc + nproc - idp, nproc)
+       if (r%to(ipfrom)%nn > 0) then
+          call receive (recv_buff(1:r%to(ipfrom)%nn,idp), ipfrom, ipfrom, requests(idp))
+          requestnum = requestnum + 1
+       end if
+
+    end do
+
+    ! Start the nonblocking sends
+    do idp = 1, nproc - 1
+       ipto = mod(iproc + idp, nproc)
+        ! send 
+       if (r%from(ipto)%nn > 0) then
+          do i = 1, r%from(ipto)%nn
+             send_buff(i,idp) = from_here(r%from(ipto)%k(i), &
+                  r%from(ipto)%l(i))
+
+          end do
+          call send (send_buff(1:r%from(ipto)%nn,idp), ipto, iproc, requests(idp+nproc))
+          requestnum = requestnum + 1
+       end if
+       
+    end do
+
+    ! Now go through the outstanding requests (send and receives)
+    do idp = 1, requestnum
+ 
+       call waitany(2*nproc, requests, currentrequest, status)
+
+       if(currentrequest > nproc) then
+
+          ! send so don't need to do anything, just ensure the send has occured
+          ! probably should check the status is ok
+          
+       else
+       
+          ! receive 
+          ipfrom = mod(iproc + nproc - currentrequest, nproc)
+          do i = 1, r%to(ipfrom)%nn
+             to_here(r%to(ipfrom)%k(i), &
+                     r%to(ipfrom)%l(i)) &
+                  = recv_buff(i,currentrequest)
+          end do
+
+       end if
+    end do
+
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+
+    c_22_rest_loop = c_22_rest_loop + time_rest_loop(1)
+
+    deallocate(send_buff)
+    deallocate(recv_buff)
+
+  end subroutine c_redist_22_mpi_opt_2_copy
+
+
+  subroutine c_redist_22_mpi_opt_3_copy (r, from_here, to_here)
+
+    use mp, only: iproc, nproc, send, receive, waitany
+    use mpi
+    use job_manage, only: time_message
+    use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+  
+    complex, dimension (:,:), allocatable :: send_buff
+    complex, dimension (:,:), allocatable :: recv_buff 
+  
+    integer, dimension (2*nproc) :: requests
+    integer, dimension (MPI_STATUS_SIZE) :: status
+
+    integer :: i, idp, ipto, ipfrom
+    integer :: requestnum, currentrequest
+    integer :: iyxfmax, it, ixxf, ik, iyxf, itmax, itmin, t1, t2, t2max
+    integer :: rank, ierror
+    real :: time_rest_loop(2)
+
+    integer, save :: outputtext = 0
+
+    if(outputtext .eq. 0 .and. iproc .eq. 0) then
+       write(*,*) '22_mpi_opt_3_copy'
+       outputtext = 1
+    end if
+
+    time_rest_loop(1) = 0.
+    time_rest_loop(2) = 0.
+
+    requestnum = 0
+
+    allocate(send_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
+    allocate(recv_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
+    
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+
+
+    requests = MPI_REQUEST_NULL
+
+    ! Post the receives
+    do idp = 1, nproc - 1
+       ipfrom = mod(iproc + nproc - idp, nproc)
+       if (r%to(ipfrom)%nn > 0) then
+          call receive (recv_buff(1:r%to(ipfrom)%nn,idp), ipfrom, ipfrom, requests(idp))
+          requestnum = requestnum + 1
+       end if
+
+    end do
+
+    ! Start the nonblocking sends
+    do idp = 1, nproc - 1
+       ipto = mod(iproc + idp, nproc)
+        ! send 
+       if (r%from(ipto)%nn > 0) then
+          ! send to idpth next processor
+          i = 1
+          iyxfmax = (ipto+1)*yxf_lo%blocksize 
+          do while(i .le. r%from(ipto)%nn)
+             itmin = r%from(ipto)%k(i)
+             ixxf = r%from(ipto)%l(i)
+             call xxfidx2yxfidx(itmin, ixxf, xxf_lo, yxf_lo, ik, iyxf)
+             itmax = itmin + (iyxfmax - iyxf) - 1
+             itmax = min(itmax, yxf_lo%nx)
+             do it = itmin,itmax
+                send_buff(i,idp) = from_here(it, ixxf)
+                i = i + 1
+             end do
+          end do
+          
+          call send (send_buff(1:r%from(ipto)%nn,idp), ipto, iproc, requests(idp+nproc))
+          requestnum = requestnum + 1
+       end if
+       
+    end do
+
+    ! Now go through the outstanding requests (send and receives)
+    do idp = 1, requestnum
+ 
+       call waitany(2*nproc, requests, currentrequest, status)
+
+       if(currentrequest > nproc) then
+
+          ! send so don't need to do anything, just ensure the send has occured
+          ! probably should check the status is ok
+          
+       else
+       
+          ! receive 
+          ipfrom = mod(iproc + nproc - currentrequest, nproc)
+          i = 1
+          t1 = r%to(ipfrom)%k(i)
+          t2 = r%to(ipfrom)%l(i)
+          iyxfmax = (iproc+1)*yxf_lo%blocksize 
+          do while (i .le. r%to(ipfrom)%nn)
+             t2max = mod(t2,yxf_lo%nx)
+             t2max = t2 + (yxf_lo%nx - t2max)
+             t2max = min(t2max,iyxfmax)
+             do while(t2 .lt. t2max)
+                to_here(t1,t2) = recv_buff(i,currentrequest)
+                t2 = t2 + 1
+                i = i + 1
+             end do
+             t1 = r%to(ipfrom)%k(i)
+             t2 = r%to(ipfrom)%l(i)
+          end do
+          
+       end if
+    end do
+
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+
+    c_22_rest_loop = c_22_rest_loop + time_rest_loop(1)
+
+    deallocate(send_buff)
+    deallocate(recv_buff)
+
+  end subroutine c_redist_22_mpi_opt_3_copy
+
+
   subroutine c_redist_22_inv (r, from_here, to_here)
 
-    use mp, only: iproc, barrier
-    use gs2_layouts, only: yxf_lo
-    use job_manage, only: time_message
+    use mp, only: iproc
+    use gs2_layouts, only: opt_22_inv_copy
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%to_low(1):, &
@@ -720,13 +1084,14 @@ contains
                           lbound(to_here,2):ubound(to_here,2)))
 
     ! redistribute from local processor to local processor
-
-    ! c_redist_22_inv_old_copy is the original local copy functionality
-    call c_redist_22_inv_old_copy(r, from_here, to_here)
-
-    ! c_redist_22_inv_new_copy is the new local copy functionality where 
-    ! indirect addressing has largely been removed
-    !call c_redist_22_inv_new_copy(r, from_here, to_here)
+    if(opt_22_inv_copy) then
+       ! c_redist_22_inv_new_copy is the new local copy functionality where 
+       ! indirect addressing has largely been removed
+       call c_redist_22_inv_new_copy(r, from_here, to_here)
+    else
+       ! c_redist_22_inv_old_copy is the original local copy functionality
+       call c_redist_22_inv_old_copy(r, from_here, to_here)
+    end if
 
     ! The code below is used to check that the new copy produces the 
     ! same results as the old copy (validation).  The if statement is
@@ -750,9 +1115,7 @@ contains
 
     ! c_redist_22_inv_mpi_copy contains all the remote to local 
     ! copy functionality
-    call barrier()
     call c_redist_22_inv_mpi_copy(r, from_here, to_here)
-    call barrier()
 
   end subroutine c_redist_22_inv
 
@@ -777,7 +1140,22 @@ contains
 
     call time_message(.false.,time_old_loop,' Old Loop')
 
+!CMR 
+! In the GS2 standard FFT situation this routine maps 
+!         yxf(it,ixxf) to xxf(ik,iyxf) data type 
+!         where it is kx (or x) index, ik is ky (or y) index, 
+!         ixxf is (y,ig,isgn,"les") and iyxf is (x,ig,isgn,"les") 
+!
     do i = 1, r%to(iproc)%nn
+!
+! redistribute from local processor to local processor
+! NB r%from(iproc)%nn is #elements sent by THIS processor to THIS processor
+!    In this situation the data at (r%to(iproc)%k(i),r%to(iproc)%l(i)) 
+!    should come from (r%from(iproc)%k(i), r%from(iproc)%l(i)). 
+!
+! This do loop, in GS2 standard FFT situation, corresponds to:
+!    to_here(ik,iyxf)=from_here(it,ixxf)
+!
        to_here(r%from(iproc)%k(i), &
                r%from(iproc)%l(i)) &
                = from_here(r%to(iproc)%k(i), &
@@ -929,7 +1307,8 @@ contains
 
   subroutine c_redist_32 (r, from_here, to_here)
 
-    use mp, only: iproc, barrier
+    use mp, only: iproc
+    use gs2_layouts, only: new_opt_32_copy, opt_32_copy
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%from_low(1):, &
@@ -943,22 +1322,24 @@ contains
 
     integer :: i
 
+
     allocate(to_here_temp(lbound(to_here,1):ubound(to_here,1), &
                           lbound(to_here,2):ubound(to_here,2)))
 
     ! redistribute from local processor to local processor
 
-    !call c_redist_32_new_opt_copy(r, from_here, to_here_temp)
+    if(new_opt_32_copy) then
+       call c_redist_32_new_opt_copy(r, from_here, to_here)
+     else if(opt_32_copy) then
+       ! c_redist_32_new_copy is the new local copy functionality where 
+       ! indirect addressing has largely been removed
+       call c_redist_32_new_copy(r, from_here, to_here)
+    else
+       ! c_redist_32_old_copy is the original local copy functionality
+       call c_redist_32_old_copy(r, from_here, to_here)
+    end if
 
-    ! c_redist_32_old_copy is the original local copy functionality
-    call c_redist_32_old_copy(r, from_here, to_here)
-
-    ! c_redist_32_new_copy is the new local copy functionality where 
-    ! indirect addressing has largely been removed
-    !call c_redist_32_new_copy(r, from_here, to_here)
-
-
-    ! The code below is used to check that the new copy produces the 
+    ! The code below is used to check that the new copy produces the p
     ! same results as the old copy (validation).  The if statement is
     ! used to turn it on or off.  if(iproc .ne. -1) turns it on and
     ! if(iproc .eq. -1) turns it off.  If you turn this on your 
@@ -977,12 +1358,13 @@ contains
     end if
     
     deallocate(to_here_temp)
-
+    
     ! c_redist_32_mpi_copy contains all the remote to local 
     ! copy functionality
-    call barrier()
     call c_redist_32_mpi_copy(r, from_here, to_here)
-    call barrier()
+!    call c_redist_32_mpi_opt_copy(r, from_here, to_here)
+!    call c_redist_32_mpi_opt_2_copy(r, from_here, to_here)
+!    call c_redist_32_mpi_opt_3_copy(r, from_here, to_here)
 
   end subroutine c_redist_32
 
@@ -1003,37 +1385,19 @@ contains
 
     integer :: i
     real :: time_old_loop(2)
-    integer, save :: outputtest = 1
     character*20 :: filename
 
     time_old_loop(1) = 0.
     time_old_loop(2) = 0.
 
-    if(outputtest .eq. 0) then
-       write(filename,'(i5)') iproc
-       filename = trim(layout)//trim(filename)//'.out'
-       open(unit= 55 , file= filename)
-    end if
-
     call time_message(.false.,time_old_loop,' Old Loop')
     do i = 1, r%from(iproc)%nn
-       if(outputtest .eq. 0) then
-       write(55,900)  '_32',r%to(iproc)%k(i), &
-               r%to(iproc)%l(i), r%from(iproc)%k(i), &
-                           r%from(iproc)%l(i),r%from(iproc)%m(i)
-       end if
-
        to_here(r%to(iproc)%k(i),&
                r%to(iproc)%l(i)) &
                = from_here(r%from(iproc)%k(i), &
                            r%from(iproc)%l(i), &
                            r%from(iproc)%m(i))
     end do
-
-    if(outputtest .eq. 0) then
-       close(55)
-       outputtest = 1
-    end if
 
 900 format (A, I5, I8, I5, I5, I8)
     call time_message(.false.,time_old_loop,' Old Loop')
@@ -1060,7 +1424,6 @@ contains
                         r%to_low(2):), intent (in out) :: to_here
 
     integer :: i,k,t2,t1,f3,f2,f1,fhigh,thigh,f2max
-    integer, save :: outputtest =0
     real :: nakyrecip
     real :: time_new_loop(2)
 
@@ -1102,15 +1465,9 @@ contains
        end do
     end do
 
-    if(outputtest .eq. 0  .and. iproc .eq. 43) then
-       write(*,*) 'proc:',iproc,'new final i value:',i
-    end if
-
     call time_message(.false.,time_new_loop,' New Loop')
 
     c_32_new_loop = c_32_new_loop + time_new_loop(1)
-
-    outputtest = 1
 
   end subroutine c_redist_32_new_copy
 
@@ -1133,8 +1490,7 @@ contains
 
     integer :: i,j,k,t2,t1,f3,f2,f1
     integer :: f3max,f3maxmultiple,f3incr,innermax,iincrem,iglomax,t1test
-    integer :: t1upper,f3upper,innermaxmultiplier,iglolimit,outerf3limit,startf3
-    integer, save :: outputtest = 1
+    integer :: t1upper,f3upper,innermaxmultiplier,outerf3limit,startf3
     real :: innermaxrealvalue,tempnaky
     real :: time_new_loop(2)
     character*20 :: filename
@@ -1148,13 +1504,8 @@ contains
     f3upper = ubound(from_here,3)
 
     tempnaky = naky
-    innermaxmultiplier = ((iproc+1)*xxf_lo%blocksize)
-
-!    if(outputtest .eq. 2) then
-!       write(filename,'(i5)') iproc
-!       filename = trim(layout)//trim(filename)//'.out'
-!       open(unit= 55 , file= filename)
-!    end if
+!AJ    innermaxmultiplier = ((iproc+1)*xxf_lo%blocksize)
+    innermaxmultiplier = xxf_lo%ulim_proc+1
 
     select case (layout)
     case ('yxels')
@@ -1190,16 +1541,8 @@ contains
        t1 = r%to(iproc)%k(i)
        t2 = r%to(iproc)%l(i)
 
-! MOD
-!       iglolimit = ((f3/f3incr)+1)*f3incr
-!       do while(f3 .lt. iglolimit)
-
        outerf3limit = f3 + f3incr
        do while(f3 .lt. outerf3limit)
-
-!          if(iproc .eq. 799 .and. outputtest .eq. 0) then
-!             write(*,*) 'aa l1',t1,t2,f1,f2,f3
-!          end if
           
           ! iincrem counts how much I needs to be skipped at the end of the final inner loop
           ! The i loop below moves through the starting i's for these inner loop iterations
@@ -1219,13 +1562,6 @@ contains
              innermax = i + innermax
           end if
           
-          if(innermax .gt.r%from(iproc)%nn) then
-!             write(*,*) 'problem with innermax',iproc,innermax,innermaxrealvalue,ceiling(innermaxrealvalue),f1,ntgrid,i,r%from(iproc)%nn,f3,iglolimit
-             exit
-          end if
-          if(iproc .eq. 799 .and. outputtest .eq. 0) then
-             write(*,*) 'aa i',i,'innermax',innermax,'t2',t2,'innermaxrealvale',innermaxrealvalue,'ceiling',ceiling(innermaxrealvalue)
-          end if
           do while(i .le. innermax) 
              
              f1 = r%from(iproc)%k(i)
@@ -1237,25 +1573,8 @@ contains
              startf3 = f3
              f3max = ((f3/f3maxmultiple)+1)*f3maxmultiple
              f3max = min(f3max,iglomax)
-!             if(iproc .eq. 799 .and. outputtest .eq. 0) then
-!                write(*,*) 'aa inside i',i,'f3max',f3max,'iglomax',iglomax
-!             end if
              do while (f3 .lt. f3max)
-!                if(iproc .eq. 799 .and. outputtest .eq. 0) then
-!                   write(*,*) 'aa inner f3',f3,'iincrem',iincrem,'t2',t2
-!                   write(*,901) 'bb',t1,t2,f1,f2,f3
-!                end if
-!                if(t1 .gt. t1upper) then
-!                   write(*,*) 't1 out of bounds',iproc,t1,t1upper,t2,f1,f2,f3
-!                else if(f3 .gt. f3upper) then
-!                   write(*,*) 'f3 out of bounds',iproc,t1,t2,f1,f2,f3,f3upper
-!                else
-                   to_here(t1,t2) = from_here(f1,f2,f3)
-!                   if(outputtest .eq. 2) then
-!                      write(55,900)  '_32',t1,t2,f1,f2,f3 
-!                   end if
-                   
-!                end if
+                to_here(t1,t2) = from_here(f1,f2,f3)                   
                 f3 = f3 + f3incr
                 t1 = t1 + 1
                 if(t1 .eq. t1test) then
@@ -1266,12 +1585,9 @@ contains
              
              ! Increment the outermost inner loop (move forwards in the i loop one step)
              i = i + 1
-             
-!             if(iproc .eq. 799 .and.outputtest .eq. 0) then
-!                write(*,*) 'aa l2',t1,t2,f1,f2,f3
-!             end if
-             
+                          
           end do
+
           ! TODO Do this better
           if(i .lt. r%from(iproc)%nn .and. iincrem .lt. r%from(iproc)%nn) then
              ! The f1, f2 and t2 lookups are required to ensure that
@@ -1290,30 +1606,12 @@ contains
              f3 = outerf3limit
           end if
 
-          ! MOD
-          ! else
-          ! Require to break out of this f3 loop
-          ! TODO Check this is really required.
-          ! f3 = iglolimit
-          ! end if
-
-
        end do
        
        i = iincrem
        
     end do
     
-!    if(outputtest .eq. 2) then
-!      close(55)
-!       outputtest = 1
-!    end if
-
-!   if(outputtest .eq. 0 .and. iproc .eq. 799) then
-!       write(*,*) 'iproc:',iproc,'opt final i value:',i
-!       outputtest = 1
-!    end if
-
     call time_message(.false.,time_new_loop,' New Loop')
 
     c_32_new_opt_loop = c_32_new_opt_loop + time_new_loop(1)
@@ -1343,8 +1641,15 @@ contains
     integer :: i, idp, ipto, ipfrom, iadp
     real :: time_rest_loop(2)
 
+    integer, save :: outputtext = 0
+
     time_rest_loop(1) = 0.
     time_rest_loop(2) = 0.
+
+    if(outputtext .eq. 0 .and. iproc .eq. 0) then
+       write(*,*) '32_mpi_copy'
+       outputtext = 1
+    end if
 
 
     call time_message(.false.,time_rest_loop,' Rest Loop')
@@ -1406,11 +1711,434 @@ contains
 
   end subroutine c_redist_32_mpi_copy
 
+  subroutine c_redist_32_mpi_opt_copy(r, from_here, to_here)
+
+    use mp, only: iproc, nproc, send, receive
+    use mpi
+    use job_manage, only: time_message
+    use gs2_layouts, only: xxf_lo,yxf_lo,g_lo,gidx2xxfidx
+    use gs2_layouts, only: xxfidx2gidx
+    use kt_grids, only: naky
+    use theta_grid, only: ntgrid
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):, &
+                        r%from_low(3):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+    integer :: t2, t1, f3, f2, f1, f1limit, it, ixxf, ixxfmax, imax, t2max
+    integer :: ig, isign, iglo, t2limit, gmax, t2ixxfmax, ig_max, remt2max
+    integer :: ntgridmulti
+    real :: nakyrecip
+    integer :: i, idp, ipto, ipfrom, iadp
+    real :: time_rest_loop(2)
+    real :: f1limittemp, tempnaky
+
+    integer, save :: outputtext = 0
+
+    if(outputtext .eq. 0 .and. iproc .eq. 0) then
+       write(*,*) '32_mpi_opt_copy'
+       outputtext = 1
+    end if
+
+    time_rest_loop(1) = 0.
+    time_rest_loop(2) = 0.
+
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+    ! redistribute to idpth next processor from idpth preceding processor
+    ! or redistribute from idpth preceding processor to idpth next processor
+    ! to avoid deadlocks
+    do idp = 1, nproc-1
+       ipto = mod(iproc + idp, nproc)
+       ipfrom = mod(iproc + nproc - idp, nproc)
+       iadp = min(idp, nproc - idp)
+      ! avoid deadlock AND ensure mostly parallel resolution
+       if (mod(iproc/iadp,2) == 0) then
+
+          ! send to idpth next processor
+          if (r%from(ipto)%nn > 0) then
+
+             tempnaky = naky
+             i = 1
+             f1 = r%from(ipto)%k(i)
+             f2 = r%from(ipto)%l(i)
+             ixxfmax = ((ipto+1)*xxf_lo%blocksize)
+             do while(i .le. r%from(ipto)%nn)
+                f3 = r%from(ipto)%m(i)                  
+                call gidx2xxfidx(f1,f2,f3,g_lo,xxf_lo,it,ixxf)
+                f1limittemp = (ixxfmax-ixxf)/tempnaky
+                f1limittemp = ceiling(f1limittemp)
+                f1limit = f1limittemp - 1
+                imax = i + f1limit
+                do while(i .le. imax)
+                   r%complex_buff(i) = from_here(f1,f2,f3)
+                   f1 = f1 + 1
+                   i = i + 1
+                   if(f1 .gt. r%from_high(1) .and. f2 .lt. r%from_high(2)) then
+                      f2 = f2 + 1
+                      f1 = r%from(ipto)%k(i)
+                   else if(f1 .gt. r%from_high(1) .and. f2 .eq. r%from_high(2)) then
+                      exit
+                   end if
+                end do
+                f1 = r%from(ipto)%k(i)
+                f2 = r%from(ipto)%l(i)
+             end do
+             
+             call send (r%complex_buff(1:r%from(ipto)%nn), ipto, idp)
+          end if
+
+          ! receive from idpth preceding processor
+          if (r%to(ipfrom)%nn > 0) then
+             call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
+             
+             i = 1
+             ntgridmulti = (2*ntgrid)+1
+             ig_max =  naky*ntgridmulti
+             t1 = r%to(ipfrom)%k(i)
+             t2 = r%to(ipfrom)%l(i)
+             t2ixxfmax = (iproc+1)*xxf_lo%blocksize
+             do while (i .le. r%to(ipfrom)%nn)
+                remt2max = mod(t2,ig_max)
+                remt2max = ntgridmulti - ((remt2max*ntgridmulti)/ig_max)
+                t2max = t2 + (remt2max*naky)
+                t2max = min(t2max, t2ixxfmax)
+                do while(t2 .lt. t2max)
+                   to_here(t1,t2) = r%complex_buff(i)
+                   t2 = t2 + naky
+                   i = i + 1
+                end do
+                t1 = r%to(ipfrom)%k(i)
+                t2 = r%to(ipfrom)%l(i)
+             end do
+             
+          end if
+       else
+          ! receive from idpth preceding processor
+          if (r%to(ipfrom)%nn > 0) then
+             call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
+
+             i = 1
+             ntgridmulti = (2*ntgrid)+1
+             ig_max =  naky*ntgridmulti
+             t1 = r%to(ipfrom)%k(i)
+             t2 = r%to(ipfrom)%l(i)
+             t2ixxfmax = (iproc+1)*xxf_lo%blocksize
+             do while (i .le. r%to(ipfrom)%nn)
+                remt2max = mod(t2,ig_max)
+                remt2max = ntgridmulti - ((remt2max*ntgridmulti)/ig_max)
+                t2max = t2 + (remt2max*naky) 
+                t2max = min(t2max, t2ixxfmax)
+                do while(t2 .lt. t2max)
+                   to_here(t1,t2) = r%complex_buff(i)
+                   t2 = t2 + naky
+                   i = i + 1
+                end do
+                t1 = r%to(ipfrom)%k(i)
+                t2 = r%to(ipfrom)%l(i)
+             end do
+
+          end if
+
+          ! send to idpth next processor
+          if (r%from(ipto)%nn > 0) then
+
+             tempnaky = naky
+             i = 1
+             f1 = r%from(ipto)%k(i)
+             f2 = r%from(ipto)%l(i)
+             ixxfmax = ((ipto+1)*xxf_lo%blocksize)
+             do while(i .le. r%from(ipto)%nn)
+                f3 = r%from(ipto)%m(i)                  
+                call gidx2xxfidx(f1,f2,f3,g_lo,xxf_lo,it,ixxf)
+                f1limittemp = (ixxfmax-ixxf)/tempnaky
+                f1limittemp = ceiling(f1limittemp)
+                f1limit = f1limittemp - 1
+                imax = i + f1limit
+                do while(i .le. imax)
+                   r%complex_buff(i) = from_here(f1,f2,f3)
+                   f1 = f1 + 1
+                   i = i + 1
+                   if(f1 .gt. r%from_high(1) .and. f2 .lt. r%from_high(2)) then
+                      f2 = f2 + 1
+                      f1 = r%from(ipto)%k(i)
+                   else if(f1 .gt. r%from_high(1) .and. f2 .eq. r%from_high(2)) then
+                      exit
+                   end if
+                end do
+                f1 = r%from(ipto)%k(i)
+                f2 = r%from(ipto)%l(i)
+             end do
+
+             call send (r%complex_buff(1:r%from(ipto)%nn), ipto, idp)
+          end if
+       end if
+    end do
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+
+    c_32_rest_loop = c_32_rest_loop + time_rest_loop(1)
+
+  end subroutine c_redist_32_mpi_opt_copy
+
+  subroutine c_redist_32_mpi_opt_2_copy(r, from_here, to_here)
+
+    use mp, only: iproc, nproc, send, receive, waitany
+    use mpi
+    use job_manage, only: time_message
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):, &
+                        r%from_low(3):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+    complex, dimension (:,:), allocatable :: send_buff
+    complex, dimension (:,:), allocatable :: recv_buff 
+  
+    integer, dimension (2*nproc) :: requests
+    integer, dimension (MPI_STATUS_SIZE) :: status
+
+    integer :: i, idp, ipto, ipfrom, iadp
+    integer :: requestnum, currentrequest
+    real :: time_rest_loop(2)
+
+    integer, save :: outputtext = 0
+
+    if(outputtext .eq. 0 .and. iproc .eq. 0) then
+       write(*,*) '32_mpi_opt_2_copy'
+       outputtext = 1
+    end if
+
+    time_rest_loop(1) = 0.
+    time_rest_loop(2) = 0.
+
+    requestnum = 0
+
+    allocate(send_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
+    allocate(recv_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
+
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+
+    requests = MPI_REQUEST_NULL
+
+    ! Post the receives
+    do idp = 1, nproc - 1
+       ipfrom = mod(iproc + nproc - idp, nproc)
+       if (r%to(ipfrom)%nn > 0) then
+          call receive (recv_buff(1:r%to(ipfrom)%nn,idp), ipfrom, ipfrom, requests(idp))
+          requestnum = requestnum + 1
+       end if
+
+    end do
+
+    ! Start the nonblocking sends
+    do idp = 1, nproc - 1
+       ipto = mod(iproc + idp, nproc)
+        ! send 
+       if (r%from(ipto)%nn > 0) then
+          do i = 1, r%from(ipto)%nn
+             send_buff(i,idp) = from_here(r%from(ipto)%k(i), &
+                                          r%from(ipto)%l(i), &
+                                          r%from(ipto)%m(i))
+
+          end do
+          call send (send_buff(1:r%from(ipto)%nn,idp), ipto, iproc, requests(idp+nproc))
+          requestnum = requestnum + 1
+       end if
+       
+    end do
+
+    ! Now go through the outstanding requests (send and receives)
+    do idp = 1, requestnum
+ 
+       call waitany(2*nproc, requests, currentrequest, status)
+
+       if(currentrequest > nproc) then
+
+          ! send so don't need to do anything, just ensure the send has occured
+          ! probably should check the status is ok
+          
+       else
+       
+          ! receive 
+          ipfrom = mod(iproc + nproc - currentrequest, nproc)
+          do i = 1, r%to(ipfrom)%nn
+             to_here(r%to(ipfrom)%k(i), &
+                     r%to(ipfrom)%l(i)) &
+                  = recv_buff(i,currentrequest)
+          end do
+
+       end if
+    end do
+
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+
+    c_32_rest_loop = c_32_rest_loop + time_rest_loop(1)
+
+    deallocate(send_buff)
+    deallocate(recv_buff)
+
+  end subroutine c_redist_32_mpi_opt_2_copy
+
+
+  subroutine c_redist_32_mpi_opt_3_copy(r, from_here, to_here)
+
+    use mp, only: iproc, nproc, send, receive, waitany
+    use mpi
+    use job_manage, only: time_message
+    use gs2_layouts, only: xxf_lo,yxf_lo,g_lo,gidx2xxfidx
+    use gs2_layouts, only: xxfidx2gidx
+    use kt_grids, only: naky
+    use theta_grid, only: ntgrid
+    type (redist_type), intent (in out) :: r
+
+    complex, dimension (r%from_low(1):, &
+                        r%from_low(2):, &
+                        r%from_low(3):), intent (in) :: from_here
+
+    complex, dimension (r%to_low(1):, &
+                        r%to_low(2):), intent (in out) :: to_here
+
+    complex, dimension (:,:), allocatable :: send_buff
+    complex, dimension (:,:), allocatable :: recv_buff 
+  
+    integer, dimension (2*nproc) :: requests
+    integer, dimension (MPI_STATUS_SIZE) :: status
+
+    integer :: t2, t1, f3, f2, f1, f1limit, it, ixxf, ixxfmax, imax, t2max
+    integer :: ig, isign, iglo, t2limit, gmax, t2ixxfmax, ig_max, remt2max
+    integer :: ntgridmulti
+    real :: nakyrecip
+    integer :: i, idp, ipto, ipfrom, iadp
+    integer :: requestnum, currentrequest
+    real :: time_rest_loop(2)
+    real :: f1limittemp, tempnaky
+
+    integer, save :: outputtext = 0
+
+    if(outputtext .eq. 0 .and. iproc .eq. 0) then
+       write(*,*) '32_mpi_opt_3_copy'
+       outputtext = 1
+    end if
+
+
+    time_rest_loop(1) = 0.
+    time_rest_loop(2) = 0.
+
+    requestnum = 0
+
+    allocate(send_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
+    allocate(recv_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
+
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+
+    requests = MPI_REQUEST_NULL
+
+    ! Post the receives
+    do idp = 1, nproc - 1
+       ipfrom = mod(iproc + nproc - idp, nproc)
+       if (r%to(ipfrom)%nn > 0) then
+          call receive (recv_buff(1:r%to(ipfrom)%nn,idp), ipfrom, ipfrom, requests(idp))
+          requestnum = requestnum + 1
+       end if
+
+    end do
+
+    ! Start the nonblocking sends
+    do idp = 1, nproc - 1
+       ipto = mod(iproc + idp, nproc)
+        ! send 
+       if (r%from(ipto)%nn > 0) then
+             tempnaky = naky
+             i = 1
+             f1 = r%from(ipto)%k(i)
+             f2 = r%from(ipto)%l(i)
+             ixxfmax = ((ipto+1)*xxf_lo%blocksize)
+             do while(i .le. r%from(ipto)%nn)
+                f3 = r%from(ipto)%m(i)                  
+                call gidx2xxfidx(f1,f2,f3,g_lo,xxf_lo,it,ixxf)
+                f1limittemp = (ixxfmax-ixxf)/tempnaky
+                f1limittemp = ceiling(f1limittemp)
+                f1limit = f1limittemp - 1
+                imax = i + f1limit
+                do while(i .le. imax)
+                   send_buff(i,idp) = from_here(f1,f2,f3)
+                   f1 = f1 + 1
+                   i = i + 1
+                   if(f1 .gt. r%from_high(1) .and. f2 .lt. r%from_high(2)) then
+                      f2 = f2 + 1
+                      f1 = r%from(ipto)%k(i)
+                   else if(f1 .gt. r%from_high(1) .and. f2 .eq. r%from_high(2)) then
+                      exit
+                   end if
+                end do
+                f1 = r%from(ipto)%k(i)
+                f2 = r%from(ipto)%l(i)
+             end do
+
+          call send (send_buff(1:r%from(ipto)%nn,idp), ipto, iproc, requests(idp+nproc))
+          requestnum = requestnum + 1
+       end if
+       
+    end do
+
+    ! Now go through the outstanding requests (send and receives)
+    do idp = 1, requestnum
+ 
+       call waitany(2*nproc, requests, currentrequest, status)
+
+       if(currentrequest > nproc) then
+
+          ! send so don't need to do anything, just ensure the send has occured
+          ! probably should check the status is ok
+          
+       else
+       
+          ! receive 
+          ipfrom = mod(iproc + nproc - currentrequest, nproc)
+          i = 1
+          ntgridmulti = (2*ntgrid)+1
+          ig_max =  naky*ntgridmulti
+          t1 = r%to(ipfrom)%k(i)
+          t2 = r%to(ipfrom)%l(i)
+          t2ixxfmax = (iproc+1)*xxf_lo%blocksize
+          do while (i .le. r%to(ipfrom)%nn)
+             remt2max = mod(t2,ig_max)
+             remt2max = ntgridmulti - ((remt2max*ntgridmulti)/ig_max)
+             t2max = t2 + (remt2max*naky)
+             t2max = min(t2max, t2ixxfmax)
+             do while(t2 .lt. t2max)
+                to_here(t1,t2) = recv_buff(i,currentrequest)
+                t2 = t2 + naky
+                i = i + 1
+             end do
+             t1 = r%to(ipfrom)%k(i)
+             t2 = r%to(ipfrom)%l(i)
+          end do
+
+       end if
+    end do
+
+    call time_message(.false.,time_rest_loop,' Rest Loop')
+
+    c_32_rest_loop = c_32_rest_loop + time_rest_loop(1)
+
+    deallocate(send_buff)
+    deallocate(recv_buff)
+
+  end subroutine c_redist_32_mpi_opt_3_copy
+
+
 
   subroutine c_redist_32_inv (r, from_here, to_here)
 
-    use mp, only: iproc, barrier
-
+    use mp, only: iproc
+    use gs2_layouts, only: new_opt_32_inv_copy, opt_32_inv_copy
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%to_low(1):, &
@@ -1432,14 +2160,16 @@ contains
 
     ! redistribute from local processor to local processor
 
-    !call c_redist_32_inv_new_opt_copy(r, from_here, to_here_temp)
-
-    ! c_redist_32_inv_old_copy is the original local copy functionality
-    call c_redist_32_inv_old_copy(r, from_here, to_here)
-
-    ! c_redist_22_inv_new_copy is the new local copy functionality where 
-    ! indirect addressing has largely been removed
-    !call c_redist_32_inv_new_copy(r, from_here, to_here)
+    if(new_opt_32_inv_copy) then
+       call c_redist_32_inv_new_opt_copy(r, from_here, to_here_temp)
+    else if(opt_32_inv_copy) then
+       ! c_redist_32_inv_new_copy is the new local copy functionality where 
+       ! indirect addressing has largely been removed
+       call c_redist_32_inv_new_copy(r, from_here, to_here)       
+    else
+       ! c_redist_32_inv_old_copy is the original local copy functionality
+       call c_redist_32_inv_old_copy(r, from_here, to_here)
+    end if
 
     ! The code below is used to check that the new copy produces the 
     ! same results as the old copy (validation).  The if statement is
@@ -1462,12 +2192,9 @@ contains
     end if
 
     deallocate(to_here_temp)
-
     ! c_redist_32_inv_mpi_copy contains all the remote to local 
     ! copy functionality
-    call barrier()
     call c_redist_32_inv_mpi_copy(r, from_here, to_here)
-    call barrier()
 
   end subroutine c_redist_32_inv
 
@@ -1523,7 +2250,7 @@ contains
                         r%from_low(2):, &
                         r%from_low(3):), intent (in out) :: to_here
 
-    integer :: i,j,k,t2,t1,f3,f2,f1,fhigh,thigh,jmax
+    integer :: i,k,t2,t1,f3,f2,f1,fhigh,thigh,f2max
     real :: nakyrecip
     real :: time_new_loop(2)
 
@@ -1541,12 +2268,12 @@ contains
     ! dividing by naky we can multiply  by 1/naky.
     nakyrecip = naky
     nakyrecip = 1/nakyrecip
-    jmax = r%from_high(2)
+    f2max = r%from_high(2)
     do while(i .le. r%to(iproc)%nn)
-       j = r%from(iproc)%l(i)
+       f2 = r%from(iproc)%l(i)
        f3 = r%from(iproc)%m(i)
        t1 = r%to(iproc)%k(i)
-       do while (j .le. jmax)
+       do while (f2 .le. f2max)
        	  f1 = r%from(iproc)%k(i)
           t2 = r%to(iproc)%l(i)
           thigh = ceiling(((xxf_lo%ulim_proc+1) - t2)*nakyrecip)
@@ -1554,13 +2281,13 @@ contains
 	  fhigh = min(thigh,r%from_high(1))
        	  do k = f1,fhigh
 	     i = i + 1
-             to_here(k,j,f3) = from_here(t1,t2)
+             to_here(k,f2,f3) = from_here(t1,t2)
 	     t2 = t2 + naky
 	  end do
           if(thigh .gt. r%from_high(1)) then
-             j = j + 1
+             f2 = f2 + 1
           else
-             j = jmax + 1
+             f2 = f2max + 1
           end if
        end do
     end do
@@ -1591,8 +2318,7 @@ contains
 
     integer :: i,j,k,t2,t1,f3,f2,f1
     integer :: f3max,f3maxmultiple,f3incr,innermax,iincrem,iglomax,t1test
-    integer :: ik,il,ie,ig,is,ixxf,innermaxmultiplier
-    integer, save :: outputtest = 1
+    integer :: ik,il,ie,ig,is,ixxf,innermaxmultiplier,outerf3limit,startf3
     real :: innermaxrealvalue,tempnaky
     real :: time_new_loop(2)
 
@@ -1603,67 +2329,34 @@ contains
 
 
     tempnaky = naky
-    innermaxmultiplier = ((iproc+1)*xxf_lo%blocksize)
+!AJ    innermaxmultiplier = ((iproc+1)*xxf_lo%blocksize)
+    innermaxmultiplier = xxf_lo%ulim_proc+1
 
-    is = 1 + mod(f3/xxf_lo%naky/xxf_lo%ntheta0/xxf_lo%negrid/xxf_lo%nlambda,xxf_lo%nspec)
     select case (layout)
     case ('yxels')
-       f3maxmultiple = xxf_lo%naky
-       f3incr = 1
-!       ik = 1 + mod(f3,xxf_lo%naky)
-!       il = 1 + mod(f3/xxf_lo%naky/xxf_lo%ntheta0/xxf_lo%negrid, xxf_lo%nlambda)
-!       ie = 1 + mod(f3/xxf_lo%naky/xxf_lo%ntheta0, xxf_lo%negrid)
-       
-!       ixxf = ik-1 + xxf_lo%naky*(ig + xxf_lo%ntgrid + (2*xxf_lo%ntgrid+1)*(f2-1 + xxf_lo%nsign*(ie-1 &
-!            + xxf_lo%negrid*(il-1 + xxf_lo%nlambda*(is-1)))))
+       f3maxmultiple = xxf_lo%naky*xxf_lo%ntheta0
+       f3incr = xxf_lo%naky
     case ('yxles')
-       f3maxmultiple = xxf_lo%ntheta0
-       f3incr = 1
-!       ik = 1 + mod(f3, xxf_lo%naky)
-!       il = 1 + mod(f3/xxf_lo%naky/xxf_lo%ntheta0, xxf_lo%nlambda)
-!       ie = 1 + mod(f3/xxf_lo%naky/xxf_lo%ntheta0/xxf_lo%nlambda, xxf_lo%negrid)
-       
-!       ixxf = ik-1 + xxf_lo%naky*(ig + xxf_lo%ntgrid + (2*xxf_lo%ntgrid+1)*(f2-1 + xxf_lo%nsign*(il-1 &
-!            + xxf_lo%nlambda*(ie-1 + xxf_lo%negrid*(is-1)))))
+       f3maxmultiple = xxf_lo%naky*xxf_lo%ntheta0
+       f3incr = xxf_lo%naky
     case ('lexys')
-!       f3maxmultiple = 
-!       f3incr = 
-!       ik = 1 + mod(f3/xxf_lo%nlambda/xxf_lo%negrid/xxf_lo%ntheta0, xxf_lo%naky)
-!       il = 1 + mod(f3, xxf_lo%nlambda)
-!       ie = 1 + mod(f3/xxf_lo%nlambda, xxf_lo%negrid)
-             
-!       ixxf = ik-1 + xxf_lo%naky*(ig + xxf_lo%ntgrid + (2*xxf_lo%ntgrid+1)*(f2-1 + xxf_lo%nsign*(il-1 &
-!            + xxf_lo%nlambda*(ie-1 + xxf_lo%negrid*(is-1)))))
+       f3maxmultiple = xxf_lo%nlambda*xxf_lo%negrid*xxf_lo%ntheta0
+       f3incr = xxf_lo%nlambda*xxf_lo%negrid
     case ('lxyes')
-!       f3maxmultiple = 
-!      f3incr = 
-!       ik = 1 + mod(f3/xxf_lo%nlambda/xxf_lo%ntheta0, xxf_lo%naky)
-!       il = 1 + mod(f3, xxf_lo%nlambda)
-!       ie = 1 + mod(f3/xxf_lo%nlambda/xxf_lo%naky/xxf_lo%ntheta0, xxf_lo%negrid)
-       
-!       ixxf = ik-1 + xxf_lo%naky*(ig + xxf_lo%ntgrid + (2*xxf_lo%ntgrid+1)*(f2-1 + xxf_lo%nsign*(il-1 &
-!            + xxf_lo%nlambda*(ie-1 + xxf_lo%negrid*(is-1)))))
+       f3maxmultiple = xxf_lo%nlambda*xxf_lo%ntheta0
+       f3incr = xxf_lo%nlambda
     case ('lyxes')
-!       f3maxmultiple =
-!       f3incr = 
-!       ik = 1 + mod(f3/xxf_lo%nlambda, xxf_lo%naky)
-!       il = 1 + mod(f3, xxf_lo%nlambda)
-!       ie = 1 + mod(f3/xxf_lo%nlambda/xxf_lo%naky/xxf_lo%ntheta0, xxf_lo%negrid)
-       
-!       ixxf = ik-1 + xxf_lo%naky*(ig + xxf_lo%ntgrid + (2*xxf_lo%ntgrid+1)*(f2-1 + xxf_lo%nsign*(il-1 &
-!            + xxf_lo%nlambda*(ie-1 + xxf_lo%negrid*(is-1)))))
-       
+       f3maxmultiple = xxf_lo%nlambda*xxf_lo%naky*xxf_lo%ntheta0
+       f3incr = xxf_lo%nlambda*xxf_lo%naky
     case('xyles')
-       !f3max = ((f3/xxf_lo%ntheta0)+1)*xxf_lo%ntheta0
        f3maxmultiple = xxf_lo%ntheta0
        f3incr = 1
-    end select
-          
+    end select          
     
     i = 1
     iglomax = ((iproc+1)*g_lo%blocksize)
     t1test  = ((xxf_lo%ntheta0+1)/2)+1
-    do while(i .lt. r%to(iproc)%nn)
+    do while(i .le. r%to(iproc)%nn)
 
        ! Initial look up of values needed to calculate innermax
        ! and setup the first iteration of the loop below (do while i .le. innermax)
@@ -1673,57 +2366,76 @@ contains
        t1 = r%to(iproc)%k(i)
        t2 = r%to(iproc)%l(i)
 
-       ! iincrem counts how much I needs to be skipped at the end of the final inner loop
-       ! The i loop below moves through the starting i's for these inner loop iterations
-       ! but the innermost loop increments through further i's without actually moving i
-       ! so once we've finished the loop below we need to move i forward to skip all the 
-       ! elements we have just processed
-       iincrem = i
-
-       ! work out the size of the inner loops by working out how 
-       innermaxrealvalue = (innermaxmultiplier-t2)/tempnaky
-       innermax = ceiling(innermaxrealvalue)-1
-       if(f2 .eq. 2 .and. (f1+innermax) .gt. ntgrid) then
-          innermax = i + (ntgrid - f1)
-       else if((f2 .eq. 1 .and. innermax .gt. (((2*ntgrid)+1)+(ntgrid-f1)))) then
-          innermax = i + ((2*ntgrid)+1) + (ntgrid - f1)
-       else
-          innermax = i + innermax
-       end if
-
-       do while(i .le. innermax) 
-
-          f1 = r%from(iproc)%k(i)
-          f2 = r%from(iproc)%l(i)
-          f3 = r%from(iproc)%m(i)
-          t1 = r%to(iproc)%k(i)
-          t2 = r%to(iproc)%l(i)
-
-          f3max = ((f3/f3maxmultiple)+1)*f3maxmultiple
-	  f3max = min(f3max,iglomax)
-          do while (f3 .lt. f3max)
-             to_here(f1,f2,f3) = from_here(t1,t2)
-             f3 = f3 + f3incr
-             t1 = t1 + 1
-             if(t1 .eq. t1test) then
-                t1 = t1 - xxf_lo%ntheta0 + xxf_lo%nx
-             end if
-             iincrem = iincrem + 1
-          end do
+       outerf3limit = f3 + f3incr
+       do while(f3 .lt. outerf3limit)
           
-          ! Increment the outermost inner loop (move forwards in the i loop one step)
-          i = i + 1
+          ! iincrem counts how much I needs to be skipped at the end of the final inner loop
+          ! The i loop below moves through the starting i's for these inner loop iterations
+          ! but the innermost loop increments through further i's without actually moving i
+          ! so once we've finished the loop below we need to move i forward to skip all the 
+          ! elements we have just processed
+          iincrem = i
+          
+          ! work out the size of the inner loops body 
+          innermaxrealvalue = (innermaxmultiplier-t2)/tempnaky
+          innermax = ceiling(innermaxrealvalue)-1
+          if(f2 .eq. 2 .and. (f1+innermax) .gt. ntgrid) then
+             innermax = i + (ntgrid - f1)
+          else if((f2 .eq. 1 .and. innermax .gt. (((2*ntgrid)+1)+(ntgrid-f1)))) then
+             innermax = i + ((2*ntgrid)+1) + (ntgrid - f1)
+          else
+             innermax = i + innermax
+          end if
+          
+          do while(i .le. innermax) 
+             
+             f1 = r%from(iproc)%k(i)
+             f2 = r%from(iproc)%l(i)
+             f3 = r%from(iproc)%m(i)
+             t1 = r%to(iproc)%k(i)
+             t2 = r%to(iproc)%l(i)
+             
+             startf3 = f3
+             f3max = ((f3/f3maxmultiple)+1)*f3maxmultiple
+             f3max = min(f3max,iglomax)
+             do while (f3 .lt. f3max)
+                to_here(f1,f2,f3) = from_here(t1,t2)                
+                f3 = f3 + f3incr
+                t1 = t1 + 1
+                if(t1 .eq. t1test) then
+                   t1 = t1 - xxf_lo%ntheta0 + xxf_lo%nx
+                end if
+                iincrem = iincrem + 1
+             end do
+             
+             ! Increment the outermost inner loop (move forwards in the i loop one step)
+             i = i + 1
+                          
+          end do
+
+          ! TODO Do this better
+          if(i .lt. r%from(iproc)%nn .and. iincrem .lt. r%from(iproc)%nn) then
+             ! The f1, f2 and t2 lookups are required to ensure that
+             ! the calculation of innermax the next time round this loop
+             ! are correctly performed as we are now moving forward in the loop
+             ! It may be that it is better to re-order the initialisation of values 
+             ! so this happens at the beginning of the loop rather than at this point.
+             f1 = r%from(iproc)%k(i)
+             f2 = r%from(iproc)%l(i)
+             t2 = r%to(iproc)%l(i)          
+             ! Updated to ensure the f3 loop we are in is correctly setup as with the code 
+             ! above we are moving to a new i so we need to get the correct value of f3 for this i
+             f3 =  startf3 + 1
+          else
+             ! TODO This is a hack and should be removed
+             f3 = outerf3limit
+          end if
 
        end do
-
+       
        i = iincrem
-
+       
     end do
-
-!    if(outputtest .eq. 0 .and. iproc .eq. 77) then
-!       write(*,*) 'iproc:',iproc,'opt final i value:',i
-!       outputtest = 1
-!    end if
 
     call time_message(.false.,time_new_loop,' New Loop')
 
