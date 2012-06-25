@@ -31,6 +31,7 @@ module mp
   public :: nproc, iproc, proc0, job
   public :: send, ssend, receive
   public :: barrier
+  public :: waitany
 ! JH> new abort method
   public :: mp_abort
 ! <JH
@@ -169,10 +170,11 @@ module mp
 
      module procedure send_complex
      module procedure send_complex_array
+     module procedure nonblocking_send_complex_array
 
      module procedure send_logical
-     module procedure send_logical_array
-     
+     module procedure send_logical_array     
+
      module procedure send_character
   end interface
 
@@ -185,6 +187,7 @@ module mp
 
      module procedure receive_complex
      module procedure receive_complex_array
+     module procedure nonblocking_receive_complex_array
 
      module procedure receive_logical
      module procedure receive_logical_array
@@ -986,6 +989,24 @@ contains
 # endif
   end subroutine send_complex_array
 
+  subroutine nonblocking_send_complex_array (z, dest, tag, request)
+    implicit none
+    complex, dimension (:), intent (in) :: z
+    integer, intent (in) :: dest
+    integer, intent (in), optional :: tag
+    integer, intent (out) :: request
+# ifdef MPI
+    integer :: ierror
+    integer :: tagp
+    tagp = 0
+    if (present(tag)) tagp = tag
+    call mpi_isend (z, size(z), mpicmplx, dest, tagp, communicator, request, ierror)
+# else
+    call error ("send")
+# endif
+  end subroutine nonblocking_send_complex_array
+
+
   subroutine send_logical (f, dest, tag)
     implicit none
     logical, intent (in) :: f
@@ -1318,6 +1339,28 @@ contains
 # endif
   end subroutine receive_complex_array
 
+  subroutine nonblocking_receive_complex_array (z, src, tag, request)
+    implicit none
+# ifdef MPI
+    complex, dimension (:), intent (inout) :: z
+# else
+    complex, dimension (:) :: z
+# endif
+    integer, intent (in) :: src
+    integer, intent (in), optional :: tag
+    integer, intent (out) :: request
+# ifdef MPI
+    integer :: ierror
+    integer :: tagp
+    tagp = 0
+    if (present(tag)) tagp = tag
+    call mpi_irecv (z, size(z), mpicmplx, src, tagp, communicator, &
+        request, ierror)
+# else
+    call error ("receive")
+# endif
+  end subroutine nonblocking_receive_complex_array
+
   subroutine receive_logical (f, src, tag)
     implicit none
 # ifdef MPI
@@ -1383,6 +1426,20 @@ contains
     call error ("receive")
 # endif
   end subroutine receive_character
+
+  subroutine waitany (count, requests, requestindex, status)
+
+    integer, intent(in) :: count
+    integer, dimension(:), intent(inout) :: requests
+    integer, intent(out) :: requestindex
+    integer, dimension(MPI_STATUS_SIZE), intent(out) :: status
+
+    integer :: ierror
+
+    call mpi_waitany(count, requests, requestindex, status, ierror)
+
+
+  end subroutine waitany
 
   subroutine init_jobs (ncolumns, group0, ierr)
 
