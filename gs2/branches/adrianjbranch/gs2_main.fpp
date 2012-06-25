@@ -79,6 +79,8 @@ contains
     real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
     real :: time_total(2) = 0.
     real :: time_interval
+    real :: time_main_loop(2)
+    real :: time_main_loop_min,time_main_loop_max,time_main_loop_av
     real :: c_22_new_loop_min,c_22_new_loop_max,c_22_new_loop_av
     real :: c_22_old_loop_min,c_22_old_loop_max,c_22_old_loop_av
     real :: c_22_rest_loop_min,c_22_rest_loop_max,c_22_rest_loop_av
@@ -100,6 +102,9 @@ contains
     logical :: nofin= .false.
     logical, optional, intent(in) :: nofinish
     character (500), target :: cbuff
+
+    time_main_loop(1) = 0.
+    time_main_loop(2) = 0.
 
 !
 !CMR, 12/2/2010: 
@@ -189,13 +194,15 @@ contains
     
     if (proc0) write(*,*) 'layout',layout
 
+    call time_message(.false.,time_main_loop,' Main Loop')
+
     do istep = 1, nstep
        
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
        call advance (istep)
        
        if (nsave > 0 .and. mod(istep, nsave) == 0) &
-            call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+         !   call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
        call update_time
        call loop_diagnostics (istep, exit)
        call check_time_step (reset, exit)
@@ -212,6 +219,19 @@ contains
           exit
        end if
     end do
+
+    call time_message(.false.,time_main_loop,' Main Loop')
+
+    time_main_loop_max = time_main_loop(1)
+    call max_reduce(time_main_loop_max,0)
+    time_main_loop_min = time_main_loop(1)
+    call min_reduce(time_main_loop_min,0)
+    time_main_loop_av = time_main_loop(1)
+    call sum_reduce(time_main_loop_av,0)
+    time_main_loop_av = time_main_loop_av/nproc
+
+    if (proc0) write(*,*) 'Time Main Loop Max,Min,Av',time_main_loop_max, &
+    	       time_main_loop_min, time_main_loop_av
 
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
