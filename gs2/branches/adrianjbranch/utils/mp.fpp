@@ -1429,15 +1429,23 @@ contains
 
   subroutine waitany (count, requests, requestindex, status)
 
+    implicit none
     integer, intent(in) :: count
     integer, dimension(:), intent(inout) :: requests
     integer, intent(out) :: requestindex
+# ifdef MPI
     integer, dimension(MPI_STATUS_SIZE), intent(out) :: status
+# else
+    integer, dimension(1), intent(out) :: status
+# endif
 
+# ifdef MPI
     integer :: ierror
 
     call mpi_waitany(count, requests, requestindex, status, ierror)
-
+# else
+    call error ("waitany")
+# endif
 
   end subroutine waitany
 
