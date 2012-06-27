@@ -616,7 +616,6 @@ contains
   subroutine c_redist_22_mpi_copy (r, from_here, to_here)
 
     use mp, only: iproc, nproc, send, receive
-    use mpi
     use job_manage, only: time_message
     type (redist_type), intent (in out) :: r
 
@@ -700,7 +699,6 @@ contains
   subroutine c_redist_22_mpi_opt_copy (r, from_here, to_here)
 
     use mp, only: iproc, nproc, send, receive
-    use mpi
     use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx
     use job_manage, only: time_message
     type (redist_type), intent (in out) :: r
@@ -832,8 +830,7 @@ contains
 
   subroutine c_redist_22_mpi_opt_2_copy (r, from_here, to_here)
 
-    use mp, only: iproc, nproc, send, receive, waitany
-    use mpi
+    use mp, only: iproc, nproc, send, receive, waitany, mpi_status_size, mpi_request_null
     use job_manage, only: time_message
     type (redist_type), intent (in out) :: r
 
@@ -848,7 +845,7 @@ contains
     complex, dimension (:,:), allocatable :: recv_buff 
   
     integer, dimension (2*nproc) :: requests
-    integer, dimension (MPI_STATUS_SIZE) :: status
+    integer, dimension (mpi_status_size) :: status
 
     integer :: i, idp, ipto, ipfrom
     integer :: requestnum, currentrequest
@@ -873,8 +870,7 @@ contains
     
     call time_message(.false.,time_rest_loop,' Rest Loop')
 
-
-    requests = MPI_REQUEST_NULL
+    requests = mpi_request_null
 
     ! Post the receives
     do idp = 1, nproc - 1
@@ -937,8 +933,7 @@ contains
 
   subroutine c_redist_22_mpi_opt_3_copy (r, from_here, to_here)
 
-    use mp, only: iproc, nproc, send, receive, waitany
-    use mpi
+    use mp, only: iproc, nproc, send, receive, waitany, mpi_status_size, mpi_request_null
     use job_manage, only: time_message
     use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx
     type (redist_type), intent (in out) :: r
@@ -954,7 +949,7 @@ contains
     complex, dimension (:,:), allocatable :: recv_buff 
   
     integer, dimension (2*nproc) :: requests
-    integer, dimension (MPI_STATUS_SIZE) :: status
+    integer, dimension (mpi_status_size) :: status
 
     integer :: i, idp, ipto, ipfrom
     integer :: requestnum, currentrequest
@@ -979,8 +974,7 @@ contains
     
     call time_message(.false.,time_rest_loop,' Rest Loop')
 
-
-    requests = MPI_REQUEST_NULL
+    requests = mpi_request_null
 
     ! Post the receives
     do idp = 1, nproc - 1
@@ -1627,7 +1621,6 @@ contains
   subroutine c_redist_32_mpi_copy(r, from_here, to_here)
 
     use mp, only: iproc, nproc, send, receive
-    use mpi
     use job_manage, only: time_message
     type (redist_type), intent (in out) :: r
 
@@ -1714,7 +1707,6 @@ contains
   subroutine c_redist_32_mpi_opt_copy(r, from_here, to_here)
 
     use mp, only: iproc, nproc, send, receive
-    use mpi
     use job_manage, only: time_message
     use gs2_layouts, only: xxf_lo,yxf_lo,g_lo,gidx2xxfidx
     use gs2_layouts, only: xxfidx2gidx
@@ -1885,8 +1877,7 @@ contains
 
   subroutine c_redist_32_mpi_opt_2_copy(r, from_here, to_here)
 
-    use mp, only: iproc, nproc, send, receive, waitany
-    use mpi
+    use mp, only: iproc, nproc, send, receive, waitany, mpi_status_size, mpi_request_null
     use job_manage, only: time_message
     type (redist_type), intent (in out) :: r
 
@@ -1901,7 +1892,7 @@ contains
     complex, dimension (:,:), allocatable :: recv_buff 
   
     integer, dimension (2*nproc) :: requests
-    integer, dimension (MPI_STATUS_SIZE) :: status
+    integer, dimension (mpi_status_size) :: status
 
     integer :: i, idp, ipto, ipfrom, iadp
     integer :: requestnum, currentrequest
@@ -1924,7 +1915,7 @@ contains
 
     call time_message(.false.,time_rest_loop,' Rest Loop')
 
-    requests = MPI_REQUEST_NULL
+    requests = mpi_request_null
 
     ! Post the receives
     do idp = 1, nproc - 1
@@ -1988,8 +1979,7 @@ contains
 
   subroutine c_redist_32_mpi_opt_3_copy(r, from_here, to_here)
 
-    use mp, only: iproc, nproc, send, receive, waitany
-    use mpi
+    use mp, only: iproc, nproc, send, receive, waitany, mpi_status_size, mpi_request_null
     use job_manage, only: time_message
     use gs2_layouts, only: xxf_lo,yxf_lo,g_lo,gidx2xxfidx
     use gs2_layouts, only: xxfidx2gidx
@@ -2008,7 +1998,7 @@ contains
     complex, dimension (:,:), allocatable :: recv_buff 
   
     integer, dimension (2*nproc) :: requests
-    integer, dimension (MPI_STATUS_SIZE) :: status
+    integer, dimension (mpi_status_size) :: status
 
     integer :: t2, t1, f3, f2, f1, f1limit, it, ixxf, ixxfmax, imax, t2max
     integer :: ig, isign, iglo, t2limit, gmax, t2ixxfmax, ig_max, remt2max
@@ -2037,7 +2027,7 @@ contains
 
     call time_message(.false.,time_rest_loop,' Rest Loop')
 
-    requests = MPI_REQUEST_NULL
+    requests = mpi_request_null
 
     ! Post the receives
     do idp = 1, nproc - 1

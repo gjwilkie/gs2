@@ -55,7 +55,7 @@ module gs2_layouts
 ! <MAB
 
   public :: init_x_transform_layouts, init_y_transform_layouts
-  public :: calculate_unbalanced_x, calculate_unbalanced_y
+  public :: calculate_unbalanced_x, calculate_unbalanced_y, calculate_idle_processes
   public :: xxf_lo, xxf_layout_type, yxf_lo, yxf_layout_type
   public :: gidx2xxfidx, xxfidx2yxfidx, yxfidx2xxfidx, xxfidx2gidx
   public :: xxf_ky_is_zero
@@ -3289,6 +3289,64 @@ contains
     ulim_alloc = max(llim, ulim)
 
   end subroutine calculate_block_size
+
+  subroutine calculate_idle_processes(nprocs, idle_percentage)
+  !====================================================================
+  ! AJ, November 2011: New code from DCSE project
+  ! This subroutine (calculate_idle_processes) is used to calculate the 
+  ! difference between the number of processes used in the xxf and yxf
+  ! data layouts.  This is important as it can affect the amount of 
+  ! communication that the code has to undertake when moving between 
+  ! linear and non-linear calculations.  
+  !
+  ! This routine is used by ingen when it is suggesting optimal process
+  ! counts for users to flag up when suggested process counts will 
+  ! results in there being a significant difference in the processes 
+  ! used in the two layouts, and therefore a significant communication 
+  ! overhead moving between the two layouts.
+  !====================================================================
+
+    implicit none
+
+    integer, intent(in) :: nprocs
+    real, intent(out) :: idle_percentage
+    integer :: xxf_blocksize, yxf_blocksize
+    integer :: xxf_usedprocs, xxf_idleprocs
+    integer :: yxf_usedprocs, yxf_idleprocs
+    real :: delta_idle_procs
+
+    ! Ensure that the xxf_lo% and yxf_lo%data has been properly initialized as this 
+    ! routine relies on some data from those data structures.  If it has not 
+    ! then abort this routine.
+    if(.not. initialized_x_transform .and. .not. initialized_y_transform) then
+       write(*,*) 'X and/or Y transform data structures not initialized so calculate_idle_processes will not operate correctly'
+       write(*,*) 'Aborting subroutine calculate_idle_processes'
+       return
+    end if
+
+    if(nprocs .lt. 1) then
+       write(*,*) 'nprocs value in calculate_idle_processes subroutine is less than 1 which is incorrect.'
+       write(*,*) 'calculate_idle_processes aborting.'
+       return
+    end if
+
+    xxf_blocksize = xxf_lo%ulim_world/nprocs + 1
+    xxf_usedprocs = xxf_lo%ulim_world/real(xxf_blocksize)  
+    xxf_idleprocs = nprocs - xxf_usedprocs
+ 
+    yxf_blocksize = yxf_lo%ulim_world/nprocs + 1
+    yxf_usedprocs = yxf_lo%ulim_world/real(yxf_blocksize)
+    yxf_idleprocs = nprocs - yxf_usedprocs
+
+    delta_idle_procs = abs(yxf_idleprocs - xxf_idleprocs)
+ 
+    if ( delta_idle_procs .le. 1 ) then
+       idle_percentage = 0.5d0 * delta_idle_procs
+    else
+       idle_percentage = (1.0d0 - 1.0d0/(2.0d0 * delta_idle_procs))
+    end if
+
+  end subroutine calculate_idle_processes
 
 
   elemental function is_idx_xxf (lo, i)

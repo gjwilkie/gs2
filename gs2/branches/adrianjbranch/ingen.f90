@@ -1031,7 +1031,7 @@ if (debug) write(6,*) 'get_namelists: returning'
         if (nonlin) then
            write (report_unit, fmt="(/'Nonlinear run => consider #proc sweetspots for xxf+yxf objects!')") 
            call nprocs_xxf(nmesh)
-3           call nprocs_yxf(nmesh)
+           call nprocs_yxf(nmesh)
         endif
 
      end if
@@ -1368,8 +1368,6 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer :: nefacs, nlfacs, nkyfacs, nkxfacs, nspfacs
     integer, dimension(:,:), allocatable :: facs
     integer :: npe
-    integer :: percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount
-    logical :: use_unbalanced_xxf, use_unbalanced_yxf
     real :: time
 
     write (report_unit, fmt="('Layout = ',a5,/)") layout 
@@ -1378,10 +1376,14 @@ if (debug) write(6,*) 'get_namelists: returning'
 
        write (report_unit, *) 
 !       write (report_unit, fmt="('Recommended numbers of processors:')") 
-       write (report_unit, fmt="('--------------------------------------------------------------------------------------------------------------------------------')")
-       write (report_unit, fmt="('|   Number of    | Estimated time      | Dimension | Use unbalanced xxf | xxf unbalanced | Use unbalanced yxf | yxf unbalanced |')")
-       write (report_unit, fmt="('|   processes    | (seconds/time step) |   split   | T = true F = false |   amount (%)   | T = true F = false |   amount (%)   |')")
-       write (report_unit, fmt="('--------------------------------------------------------------------------------------------------------------------------------')")
+!       write (report_unit, fmt="('--------------------------------------------------------------------------------------------------------------------------------')")
+!       write (report_unit, fmt="('|   Number of    | Estimated time      | Dimension | Use unbalanced xxf | xxf unbalanced | Use unbalanced yxf | yxf unbalanced |')")
+!       write (report_unit, fmt="('|   processes    | (seconds/time step) |   split   | T = true F = false |   amount (%)   | T = true F = false |   amount (%)   |')")
+!       write (report_unit, fmt="('--------------------------------------------------------------------------------------------------------------------------------')")
+       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------------')")
+       write (report_unit, fmt="('|   Number of    | Dimension |   Use unbalanced   | Percentage of data | Use unbalanced xxf | xxf unbalanced | Use unbalanced yxf | yxf unbalanced |')")
+       write (report_unit, fmt="('|   processes    |   split   | T = true F = false |    to transfer     | T = true F = false |   amount (%)   | T = true F = false |   amount (%)   |')")
+       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------------')")
        
        
        call init_x_transform_layouts(ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
@@ -1400,42 +1402,27 @@ if (debug) write(6,*) 'get_namelists: returning'
           do i=1,nspfacs
              npe = facs(i,1)
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'s', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 's')
           end do
           do i=2,nkyfacs
              npe = facs(i,2)*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'y', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'y')
           end do
           do i=2,nkxfacs
              npe = facs(i,3)*naky*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'x', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'x')
           end do
           do i=2,nefacs
              npe = facs(i,4)*ntheta0*naky*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'e', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'e')
           end do
           do i=2,nlfacs
              npe = facs(i,5)*negrid*ntheta0*naky*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'l', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'l')
           end do
           deallocate (facs)
 
@@ -1453,42 +1440,27 @@ if (debug) write(6,*) 'get_namelists: returning'
           do i=1,nspfacs
              npe = facs(i,1)
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'s', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 's')
           end do
           do i=2,nefacs
              npe = facs(i,2)*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'e', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'e')
           end do
           do i=2,nkyfacs
              npe = facs(i,3)*negrid*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'y', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'y')
           end do
           do i=2,nkxfacs
              npe = facs(i,4)*naky*negrid*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'x', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'x')
           end do
           do i=2,nlfacs
              npe = facs(i,5)*naky*ntheta0*negrid*nspec 
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'l', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'l')
           end do
           deallocate (facs)
 
@@ -1504,42 +1476,27 @@ if (debug) write(6,*) 'get_namelists: returning'
           do i=1,nspfacs
              npe = facs(i,1)
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'s', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 's')
           end do
           do i=2,nlfacs
              npe = facs(i,2)*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'l', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'l')
           end do
           do i=2,nefacs
              npe = facs(i,3)*nlambda*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'e', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'e')
           end do
           do i=2,nkxfacs
              npe = facs(i,4)*negrid*nlambda*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'x', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'x')
           end do
           do i=2,nkyfacs
              npe = facs(i,5)*ntheta0*negrid*nlambda*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'y', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'y')
           end do
           deallocate (facs)
 
@@ -1555,43 +1512,27 @@ if (debug) write(6,*) 'get_namelists: returning'
           do i=1,nspfacs
              npe = facs(i,1)
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'s', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
-
+             call report_idle_procs(npe, 's')
           end do
           do i=2,nefacs
              npe = facs(i,2)*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'e', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'e')
           end do
           do i=2,nlfacs
              npe = facs(i,3)*negrid*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'l', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'l')
           end do
           do i=2,nkxfacs
              npe = facs(i,4)*nlambda*negrid*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'x', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'x')
           end do
           do i=2,nkyfacs
              npe = facs(i,5)*ntheta0*nlambda*negrid*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'y', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'y')
           end do
           deallocate (facs)
 
@@ -1610,48 +1551,33 @@ if (debug) write(6,*) 'get_namelists: returning'
           do i=1,nspfacs
              npe = facs(i,1)
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'s', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 's')
           end do
           do i=2,nefacs
              npe = facs(i,2)*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'e', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'e')
           end do
           do i=2,nlfacs
              npe = facs(i,3)*negrid*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'l', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'l')
           end do
           do i=2,nkyfacs
              npe = facs(i,4)*nlambda*negrid*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'y', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'y')
           end do
           do i=2,nkxfacs
              npe = facs(i,5)*naky*nlambda*negrid*nspec
              if (npe .gt. npmax) exit
-             call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('|     ',i8,'   |      ',1pe10.2,'     |     ',a,'     |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-                  npe, time,'x', use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+             call report_idle_procs(npe, 'x')
           end do
           deallocate (facs)
 
        end select
 
-       write (report_unit, fmt="('--------------------------------------------------------------------------------------------------------------------------------')")
+       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------------')")
        write (report_unit, *)
        write (report_unit, fmt="('To use the unbalanced functionality set unbalanced_xxf = .true. or unbalanced_yxf = .true. in the &layouts_knobs namelist in your GS2 ')")
        write (report_unit, fmt="('input file. You can also set the max_unbalanced_xxf and max_unbalanced_yxf flags in the same namelist in the input file to specify the')")
@@ -1905,6 +1831,65 @@ if (debug) write(6,*) 'get_namelists: returning'
     end if
     
   end subroutine get_unbalanced_suggestions
+
+  subroutine get_idle_processes(npe, idle_percentage, use_unbalanced)
+  !====================================================================================
+  ! AJ June 2012
+  ! This subroutine is used to return the idle processes from the xxf and yxf layouts.
+  ! Idle processes sometimes occur, dependent on the process count used, because 
+  ! the data domain does not evenly divide by the total number of processes available. 
+  ! These can cause high communications overheads for the non-linear calculations
+  ! for large numbers of processes so it is useful to print this data out in ingen
+  ! to let users know which process counts this can happen at for a given input file
+  ! We currently use an arbitrary cutoff of 10% difference in idle processes to 
+  ! suggest that the unbalanced decomposition functionality should be used to 
+  ! mitigate the impact of this difference. 
+  !====================================================================================
+    use gs2_layouts, only : calculate_idle_processes
+    implicit none
+
+    integer, intent(in) :: npe
+    real, intent(out) :: idle_percentage
+    logical, intent(out) :: use_unbalanced
+
+    call calculate_idle_processes(npe, idle_percentage)
+! This 0.1 represents the arbitrary 10% difference threshold discussed above.
+    if(idle_percentage .gt. 0.1) then
+       use_unbalanced = .true.
+    end if
+    idle_percentage = idle_percentage * 100
+
+  end subroutine get_idle_processes
+  
+  subroutine report_idle_procs(npe, distchar)
+!====================================================================================
+  ! AJ June 2012
+  ! This subroutine wraps up the output functionality for the code that creates the 
+  ! list of suggested process counts for the linear computation and checks whether 
+  ! those process counts work well for the non-linear calculations as well.
+  !====================================================================================
+  
+    implicit none
+
+    integer, intent(in) :: npe
+    character, intent(in) :: distchar
+    integer :: percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount
+    logical :: use_unbalanced_xxf, use_unbalanced_yxf, use_unbalanced
+    real :: idle_percentage
+
+    call get_idle_processes(npe, idle_percentage, use_unbalanced)
+    if(use_unbalanced) then
+       call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
+       write (report_unit, fmt="('|     ',i8,'   |     ',a,'     |         ',L,'         |         ',i3,'        |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
+            npe, distchar, use_unbalanced, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+    else
+       write (report_unit, fmt="('|     ',i8,'   |     ',a,'     |         ',L,'         |         ',i3,'        |                    |                |                    |                |')") & 
+            npe, distchar, use_unbalanced, INT(idle_percentage)
+    
+    end if
+    
+  end subroutine report_idle_procs
+
 
   subroutine tell (a, b, c)
     
