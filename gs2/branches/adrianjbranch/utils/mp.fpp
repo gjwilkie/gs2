@@ -43,7 +43,7 @@ module mp
   public :: init_jobs
   public :: communicator
   public :: mpi_info
-  public :: mpi_status_size, mpi_request_null
+  public :: local_mpi_status_size, local_mpi_request_null
 
 # ifdef MPI
 # ifdef MPIINC
@@ -64,8 +64,8 @@ module mp
 
   integer, parameter :: mpi_info = MPI_INFO_NULL
 
-  integer, parameter :: mpi_status_size = MPI_STATUS_SIZE
-  integer, parameter :: mpi_request_null = MPI_REQUEST_NULL
+  integer, parameter :: local_mpi_status_size = MPI_STATUS_SIZE
+  integer, parameter :: local_mpi_request_null = MPI_REQUEST_NULL
 
   integer :: job = 0
   integer (kind(MPI_REAL)) :: mpireal, mpicmplx
@@ -73,8 +73,8 @@ module mp
   integer, parameter :: nproc = 1, iproc = 0
   logical, parameter :: proc0 = .true.
 
-  integer, parameter :: mpi_status_size = 1
-  integer, parameter :: mpi_request_null = -1
+  integer, parameter :: local_mpi_status_size = 1
+  integer, parameter :: local_mpi_request_null = -1
 
   integer, parameter :: mpi_info = -1
   integer, parameter :: job = 0, communicator = -1

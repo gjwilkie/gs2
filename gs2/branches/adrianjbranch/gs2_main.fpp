@@ -60,14 +60,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
-    use redistribute, only: c_22_new_loop, c_22_old_loop, c_22_rest_loop
-    use redistribute, only: c_inv_22_new_loop, c_inv_22_old_loop
-    use redistribute, only: c_inv_22_rest_loop, c_32_rest_loop
-    use redistribute, only: c_32_new_loop, c_32_old_loop
-    use redistribute, only: c_32_new_opt_loop
-    use redistribute, only: c_inv_32_new_loop, c_inv_32_old_loop
-    use redistribute, only: c_inv_32_rest_loop
-    use redistribute, only: c_inv_32_new_opt_loop
     use fields_implicit, only: time_field
     use gs2_layouts, only: layout
     use parameter_scan, only: update_scan_parameter_value
@@ -84,20 +76,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     real :: time_interval
     real :: time_main_loop(2)
     real :: time_main_loop_min,time_main_loop_max,time_main_loop_av
-    real :: c_22_new_loop_min,c_22_new_loop_max,c_22_new_loop_av
-    real :: c_22_old_loop_min,c_22_old_loop_max,c_22_old_loop_av
-    real :: c_22_rest_loop_min,c_22_rest_loop_max,c_22_rest_loop_av
-    real :: c_inv_22_new_loop_min,c_inv_22_new_loop_max,c_inv_22_new_loop_av
-    real :: c_inv_22_old_loop_min,c_inv_22_old_loop_max,c_inv_22_old_loop_av
-    real :: c_inv_22_rest_loop_min,c_inv_22_rest_loop_max,c_inv_22_rest_loop_av
-    real :: c_32_new_loop_min,c_32_new_loop_max,c_32_new_loop_av
-    real :: c_32_new_opt_loop_min,c_32_new_opt_loop_max,c_32_new_opt_loop_av
-    real :: c_32_old_loop_min,c_32_old_loop_max,c_32_old_loop_av
-    real :: c_32_rest_loop_min,c_32_rest_loop_max,c_32_rest_loop_av
-    real :: c_inv_32_new_loop_min,c_inv_32_new_loop_max,c_inv_32_new_loop_av
-    real :: c_inv_32_old_loop_min,c_inv_32_old_loop_max,c_inv_32_old_loop_av
-    real :: c_inv_32_rest_loop_min,c_inv_32_rest_loop_max,c_inv_32_rest_loop_av
-    real :: c_inv_32_new_opt_loop_min,c_inv_32_new_opt_loop_max,c_inv_32_new_opt_loop_av
 
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
@@ -277,149 +255,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
        if (.not.nofin) call finish_gs2
     end if
     
-    c_22_old_loop_max = c_22_old_loop
-    call max_reduce(c_22_old_loop_max,0)
-    c_22_old_loop_min = c_22_old_loop
-    call min_reduce(c_22_old_loop_min,0)
-    c_22_old_loop_av = c_22_old_loop
-    call sum_reduce(c_22_old_loop_av,0)
-    c_22_old_loop_av = c_22_old_loop_av/nproc
-
-    c_22_new_loop_max = c_22_new_loop
-    call max_reduce(c_22_new_loop_max,0)
-    c_22_new_loop_min = c_22_new_loop
-    call min_reduce(c_22_new_loop_min,0)
-    c_22_new_loop_av = c_22_new_loop
-    call sum_reduce(c_22_new_loop_av,0)
-    c_22_new_loop_av = c_22_new_loop_av/nproc
-
-    c_22_rest_loop_max = c_22_rest_loop
-    call max_reduce(c_22_rest_loop_max,0)
-    c_22_rest_loop_min = c_22_rest_loop
-    call min_reduce(c_22_rest_loop_min,0)
-    c_22_rest_loop_av = c_22_rest_loop
-    call sum_reduce(c_22_rest_loop_av,0)
-    c_22_rest_loop_av = c_22_rest_loop_av/nproc
-
-    c_inv_22_old_loop_max = c_inv_22_old_loop
-    call max_reduce(c_inv_22_old_loop_max,0)
-    c_inv_22_old_loop_min = c_inv_22_old_loop
-    call min_reduce(c_inv_22_old_loop_min,0)
-    c_inv_22_old_loop_av = c_inv_22_old_loop
-    call sum_reduce(c_inv_22_old_loop_av,0)
-    c_inv_22_old_loop_av = c_inv_22_old_loop_av/nproc
-
-    c_inv_22_new_loop_max = c_inv_22_new_loop
-    call max_reduce(c_inv_22_new_loop_max,0)
-    c_inv_22_new_loop_min = c_inv_22_new_loop
-    call min_reduce(c_inv_22_new_loop_min,0)
-    c_inv_22_new_loop_av = c_inv_22_new_loop
-    call sum_reduce(c_inv_22_new_loop_av,0)
-    c_inv_22_new_loop_av = c_inv_22_new_loop_av/nproc
-
-    c_inv_22_rest_loop_max = c_inv_22_rest_loop
-    call max_reduce(c_inv_22_rest_loop_max,0)
-    c_inv_22_rest_loop_min = c_inv_22_rest_loop
-    call min_reduce(c_inv_22_rest_loop_min,0)
-    c_inv_22_rest_loop_av = c_inv_22_rest_loop
-    call sum_reduce(c_inv_22_rest_loop_av,0)
-    c_inv_22_rest_loop_av = c_inv_22_rest_loop_av/nproc
-
-    c_32_old_loop_max = c_32_old_loop
-    call max_reduce(c_32_old_loop_max,0)
-    c_32_old_loop_min = c_32_old_loop
-    call min_reduce(c_32_old_loop_min,0)
-    c_32_old_loop_av = c_32_old_loop
-    call sum_reduce(c_32_old_loop_av,0)
-    c_32_old_loop_av = c_32_old_loop_av/nproc
-
-    c_32_new_loop_max = c_32_new_loop
-    call max_reduce(c_32_new_loop_max,0)
-    c_32_new_loop_min = c_32_new_loop
-    call min_reduce(c_32_new_loop_min,0)
-    c_32_new_loop_av = c_32_new_loop
-    call sum_reduce(c_32_new_loop_av,0)
-    c_32_new_loop_av = c_32_new_loop_av/nproc
-
-    c_32_new_opt_loop_max = c_32_new_opt_loop
-    call max_reduce(c_32_new_opt_loop_max,0)
-    c_32_new_opt_loop_min = c_32_new_opt_loop
-    call min_reduce(c_32_new_opt_loop_min,0)
-    c_32_new_opt_loop_av = c_32_new_opt_loop
-    call sum_reduce(c_32_new_opt_loop_av,0)
-    c_32_new_opt_loop_av = c_32_new_opt_loop_av/nproc
-
-    c_32_rest_loop_max = c_32_rest_loop
-    call max_reduce(c_32_rest_loop_max,0)
-    c_32_rest_loop_min = c_32_rest_loop
-    call min_reduce(c_32_rest_loop_min,0)
-    c_32_rest_loop_av = c_32_rest_loop
-    call sum_reduce(c_32_rest_loop_av,0)
-    c_32_rest_loop_av = c_32_rest_loop_av/nproc
-
-    c_inv_32_old_loop_max = c_inv_32_old_loop
-    call max_reduce(c_inv_32_old_loop_max,0)
-    c_inv_32_old_loop_min = c_inv_32_old_loop
-    call min_reduce(c_inv_32_old_loop_min,0)
-    c_inv_32_old_loop_av = c_inv_32_old_loop
-    call sum_reduce(c_inv_32_old_loop_av,0)
-    c_inv_32_old_loop_av = c_inv_32_old_loop_av/nproc
-
-    c_inv_32_new_loop_max = c_inv_32_new_loop
-    call max_reduce(c_inv_32_new_loop_max,0)
-    c_inv_32_new_loop_min = c_inv_32_new_loop
-    call min_reduce(c_inv_32_new_loop_min,0)
-    c_inv_32_new_loop_av = c_inv_32_new_loop
-    call sum_reduce(c_inv_32_new_loop_av,0)
-    c_inv_32_new_loop_av = c_inv_32_new_loop_av/nproc
-
-    c_inv_32_new_opt_loop_max = c_inv_32_new_opt_loop
-    call max_reduce(c_inv_32_new_opt_loop_max,0)
-    c_inv_32_new_opt_loop_min = c_inv_32_new_opt_loop
-    call min_reduce(c_inv_32_new_opt_loop_min,0)
-    c_inv_32_new_opt_loop_av = c_inv_32_new_opt_loop
-    call sum_reduce(c_inv_32_new_opt_loop_av,0)
-    c_inv_32_new_opt_loop_av = c_inv_32_new_opt_loop_av/nproc
-
-    c_inv_32_rest_loop_max = c_inv_32_rest_loop
-    call max_reduce(c_inv_32_rest_loop_max,0)
-    c_inv_32_rest_loop_min = c_inv_32_rest_loop
-    call min_reduce(c_inv_32_rest_loop_min,0)
-    c_inv_32_rest_loop_av = c_inv_32_rest_loop
-    call sum_reduce(c_inv_32_rest_loop_av,0)
-    c_inv_32_rest_loop_av = c_inv_32_rest_loop_av/nproc
-
-    if (proc0) then
-        write(*,*) 'c_22 Old loop: Min,Max,Average',&
-    	c_22_old_loop_min,c_22_old_loop_max,c_22_old_loop_av
-        write(*,*) 'c_22 New loop: Min,Max,Average',&
-    	c_22_new_loop_min,c_22_new_loop_max,c_22_new_loop_av
-        write(*,*) 'c_22 Rest loop: Min,Max,Average',&
-    	c_22_rest_loop_min,c_22_rest_loop_max,c_22_rest_loop_av
-        write(*,*) 'c_inv_22 Old loop: Min,Max,Average',&
-    	c_inv_22_old_loop_min,c_inv_22_old_loop_max,c_inv_22_old_loop_av
-        write(*,*) 'c_inv_22 New loop: Min,Max,Average',&
-    	c_inv_22_new_loop_min,c_inv_22_new_loop_max,c_inv_22_new_loop_av
-        write(*,*) 'c_inv_22 Rest loop: Min,Max,Average',&
-    	c_inv_22_rest_loop_min,c_inv_22_rest_loop_max,c_inv_22_rest_loop_av
-        write(*,*) 'c_32 Old loop: Min,Max,Average',&
-    	c_32_old_loop_min,c_32_old_loop_max,c_32_old_loop_av
-        write(*,*) 'c_32 New loop: Min,Max,Average',&
-    	c_32_new_loop_min,c_32_new_loop_max,c_32_new_loop_av
-        write(*,*) 'c_32 New Opt loop: Min,Max,Average',&
-    	c_32_new_opt_loop_min,c_32_new_opt_loop_max,c_32_new_opt_loop_av
-        write(*,*) 'c_32 Rest loop: Min,Max,Average',&
-    	c_32_rest_loop_min,c_32_rest_loop_max,c_32_rest_loop_av
-        write(*,*) 'c_inv_32 Old loop: Min,Max,Average',&
-    	c_inv_32_old_loop_min,c_inv_32_old_loop_max,c_inv_32_old_loop_av
-        write(*,*) 'c_inv_32 New loop: Min,Max,Average',&
-    	c_inv_32_new_loop_min,c_inv_32_new_loop_max,c_inv_32_new_loop_av
-        write(*,*) 'c_inv_32 New Opt loop: Min,Max,Average',&
-    	c_inv_32_new_opt_loop_min,c_inv_32_new_opt_loop_max,c_inv_32_new_opt_loop_av
-        write(*,*) 'c_inv_32 Rest loop: Min,Max,Average',&
-    	c_inv_32_rest_loop_min,c_inv_32_rest_loop_max,c_inv_32_rest_loop_av
-    end if
-
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
     if (proc0) call time_message(.false.,time_total,' Total')
