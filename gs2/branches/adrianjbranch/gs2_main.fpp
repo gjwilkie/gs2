@@ -183,7 +183,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
        call advance (istep)
        
        if (nsave > 0 .and. mod(istep, nsave) == 0) &
-         !   call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+            call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
        call update_time
        call loop_diagnostics (istep, exit)
        call check_time_step (reset, exit)
