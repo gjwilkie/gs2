@@ -376,8 +376,7 @@ contains
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
          max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
-         opt_22_copy, opt_22_inv_copy, opt_32_copy, new_opt_32_copy, &
-         opt_32_inv_copy, new_opt_32_inv_copy
+         opt_22_copy, opt_22_inv_copy, opt_32_copy, opt_32_inv_copy
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
@@ -385,9 +384,7 @@ contains
     opt_22_copy = .false. 
     opt_22_inv_copy = .false. 
     opt_32_copy = .false. 
-    new_opt_32_copy = .false.
     opt_32_inv_copy = .false.
-    new_opt_32_inv_copy = .false.
     max_unbalanced_xxf = 0.0
     max_unbalanced_yxf = 0.0
     layout = 'lxyes'
@@ -435,9 +432,7 @@ contains
     call broadcast (opt_22_copy)
     call broadcast (opt_22_inv_copy)
     call broadcast (opt_32_copy)
-    call broadcast (new_opt_32_copy)
     call broadcast (opt_32_inv_copy)
-    call broadcast (new_opt_32_inv_copy)
 
   end subroutine broadcast_results
 
@@ -2746,7 +2741,8 @@ contains
        else
              
           if(proc0) then	
-             write(*,*) 'Using unbalanced decomposition for xxf.  Unbalanced fraction',unbalanced_amount
+             write(*, fmt="('Using unbalanced decomposition for xxf. '&
+             'Unbalanced fraction',F2.2)") unbalanced_amount
           end if
 
        end if
@@ -3681,7 +3677,8 @@ contains
        else
              
           if(proc0) then	
-             write(*,*) 'Using unbalanced decomposition for yxf.  Unbalanced fraction',unbalanced_amount
+             write(*, fmt="('Using unbalanced decomposition for yxf. '&
+             'Unbalanced fraction',F2.2)") unbalanced_amount
           end if
 
        end if

@@ -465,9 +465,6 @@ contains
     ! c_redist_22_mpi_copy contains all the remote to local 
     ! copy functionality
     call c_redist_22_mpi_copy(r, from_here, to_here)
-!    call c_redist_22_mpi_opt_3_copy(r, from_here, to_here)
-!    call c_redist_22_mpi_opt_2_copy(r, from_here, to_here)
-!    call c_redist_22_mpi_opt_copy(r, from_here, to_here)
 
   end subroutine c_redist_22
 
@@ -733,198 +730,6 @@ contains
   end subroutine c_redist_22_mpi_opt_copy
 
 
-  subroutine c_redist_22_mpi_opt_2_copy (r, from_here, to_here)
-
-    use mp, only: iproc, nproc, send, receive, waitany, local_mpi_status_size, local_mpi_request_null
-    use job_manage, only: time_message
-    type (redist_type), intent (in out) :: r
-
-    complex, dimension (r%from_low(1):, &
-                        r%from_low(2):), intent (in) :: from_here
-
-    complex, dimension (r%to_low(1):, &
-                        r%to_low(2):), intent (in out) :: to_here
-
-  
-    complex, dimension (:,:), allocatable :: send_buff
-    complex, dimension (:,:), allocatable :: recv_buff 
-  
-    integer, dimension (2*nproc) :: requests
-    integer, dimension (local_mpi_status_size) :: status
-
-    integer :: i, idp, ipto, ipfrom
-    integer :: requestnum, currentrequest
-    integer :: rank, ierror
-
-    requestnum = 0
-
-    allocate(send_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
-    allocate(recv_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
-
-    requests = local_mpi_request_null
-
-    ! Post the receives
-    do idp = 1, nproc - 1
-       ipfrom = mod(iproc + nproc - idp, nproc)
-       if (r%to(ipfrom)%nn > 0) then
-          call receive (recv_buff(1:r%to(ipfrom)%nn,idp), ipfrom, ipfrom, requests(idp))
-          requestnum = requestnum + 1
-       end if
-
-    end do
-
-    ! Start the nonblocking sends
-    do idp = 1, nproc - 1
-       ipto = mod(iproc + idp, nproc)
-        ! send 
-       if (r%from(ipto)%nn > 0) then
-          do i = 1, r%from(ipto)%nn
-             send_buff(i,idp) = from_here(r%from(ipto)%k(i), &
-                  r%from(ipto)%l(i))
-
-          end do
-          call send (send_buff(1:r%from(ipto)%nn,idp), ipto, iproc, requests(idp+nproc))
-          requestnum = requestnum + 1
-       end if
-       
-    end do
-
-    ! Now go through the outstanding requests (send and receives)
-    do idp = 1, requestnum
- 
-       call waitany(2*nproc, requests, currentrequest, status)
-
-       if(currentrequest > nproc) then
-
-          ! send so don't need to do anything, just ensure the send has occured
-          ! probably should check the status is ok
-          
-       else
-       
-          ! receive 
-          ipfrom = mod(iproc + nproc - currentrequest, nproc)
-          do i = 1, r%to(ipfrom)%nn
-             to_here(r%to(ipfrom)%k(i), &
-                     r%to(ipfrom)%l(i)) &
-                  = recv_buff(i,currentrequest)
-          end do
-
-       end if
-    end do
-
-    deallocate(send_buff)
-    deallocate(recv_buff)
-
-  end subroutine c_redist_22_mpi_opt_2_copy
-
-
-  subroutine c_redist_22_mpi_opt_3_copy (r, from_here, to_here)
-
-    use mp, only: iproc, nproc, send, receive, waitany, local_mpi_status_size, local_mpi_request_null
-    use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx
-    type (redist_type), intent (in out) :: r
-
-    complex, dimension (r%from_low(1):, &
-                        r%from_low(2):), intent (in) :: from_here
-
-    complex, dimension (r%to_low(1):, &
-                        r%to_low(2):), intent (in out) :: to_here
-
-  
-    complex, dimension (:,:), allocatable :: send_buff
-    complex, dimension (:,:), allocatable :: recv_buff 
-  
-    integer, dimension (2*nproc) :: requests
-    integer, dimension (local_mpi_status_size) :: status
-
-    integer :: i, idp, ipto, ipfrom
-    integer :: requestnum, currentrequest
-    integer :: iyxfmax, it, ixxf, ik, iyxf, itmax, itmin, t1, t2, t2max
-    integer :: rank, ierror
-
-    requestnum = 0
-
-    allocate(send_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
-    allocate(recv_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
-    
-    requests = local_mpi_request_null
-
-    ! Post the receives
-    do idp = 1, nproc - 1
-       ipfrom = mod(iproc + nproc - idp, nproc)
-       if (r%to(ipfrom)%nn > 0) then
-          call receive (recv_buff(1:r%to(ipfrom)%nn,idp), ipfrom, ipfrom, requests(idp))
-          requestnum = requestnum + 1
-       end if
-
-    end do
-
-    ! Start the nonblocking sends
-    do idp = 1, nproc - 1
-       ipto = mod(iproc + idp, nproc)
-        ! send 
-       if (r%from(ipto)%nn > 0) then
-          ! send to idpth next processor
-          i = 1
-          iyxfmax = (ipto+1)*yxf_lo%blocksize 
-          do while(i .le. r%from(ipto)%nn)
-             itmin = r%from(ipto)%k(i)
-             ixxf = r%from(ipto)%l(i)
-             call xxfidx2yxfidx(itmin, ixxf, xxf_lo, yxf_lo, ik, iyxf)
-             itmax = itmin + (iyxfmax - iyxf) - 1
-             itmax = min(itmax, yxf_lo%nx)
-             do it = itmin,itmax
-                send_buff(i,idp) = from_here(it, ixxf)
-                i = i + 1
-             end do
-          end do
-          
-          call send (send_buff(1:r%from(ipto)%nn,idp), ipto, iproc, requests(idp+nproc))
-          requestnum = requestnum + 1
-       end if
-       
-    end do
-
-    ! Now go through the outstanding requests (send and receives)
-    do idp = 1, requestnum
- 
-       call waitany(2*nproc, requests, currentrequest, status)
-
-       if(currentrequest > nproc) then
-
-          ! send so don't need to do anything, just ensure the send has occured
-          ! probably should check the status is ok
-          
-       else
-       
-          ! receive 
-          ipfrom = mod(iproc + nproc - currentrequest, nproc)
-          i = 1
-          t1 = r%to(ipfrom)%k(i)
-          t2 = r%to(ipfrom)%l(i)
-          iyxfmax = (iproc+1)*yxf_lo%blocksize 
-          do while (i .le. r%to(ipfrom)%nn)
-             t2max = mod(t2,yxf_lo%nx)
-             t2max = t2 + (yxf_lo%nx - t2max)
-             t2max = min(t2max,iyxfmax)
-             do while(t2 .lt. t2max)
-                to_here(t1,t2) = recv_buff(i,currentrequest)
-                t2 = t2 + 1
-                i = i + 1
-             end do
-             t1 = r%to(ipfrom)%k(i)
-             t2 = r%to(ipfrom)%l(i)
-          end do
-          
-       end if
-    end do
-
-    deallocate(send_buff)
-    deallocate(recv_buff)
-
-  end subroutine c_redist_22_mpi_opt_3_copy
-
-
   subroutine c_redist_22_inv (r, from_here, to_here)
 
     use mp, only: iproc
@@ -1111,6 +916,7 @@ contains
   subroutine c_redist_32 (r, from_here, to_here)
 
     use mp, only: iproc
+    use job_manage, only: time_message
     use gs2_layouts, only: new_opt_32_copy, opt_32_copy
     type (redist_type), intent (in out) :: r
 
@@ -1121,13 +927,37 @@ contains
     complex, dimension (r%to_low(1):, &
                         r%to_low(2):), intent (in out) :: to_here
 
+    integer, save :: optimised_choice = 0
+    real :: time_optimised_loop_1(2), time_optimised_loop_2(2)
+
     ! redistribute from local processor to local processor
-    if(new_opt_32_copy) then
-       call c_redist_32_new_opt_copy(r, from_here, to_here)
-     else if(opt_32_copy) then
-       ! c_redist_32_new_copy is the new local copy functionality where 
-       ! indirect addressing has largely been removed
-       call c_redist_32_new_copy(r, from_here, to_here)
+    if(opt_32_copy) then
+
+       ! These c_redist_32_*_copy routines are the new local copy 
+       ! functionality where indirect addressing has largely been removed
+       if(optimised_choice .eq. 0) then
+          call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
+          call c_redist_32_new_copy(r, from_here, to_here)
+          call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
+
+          call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
+          call c_redist_32_new_opt_copy(r, from_here, to_here)
+          call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
+          
+          if(time_optimised_loop_1(1) .gt. time_optimised_loop_2(1)) then
+             optimised_choice = 2
+          else
+             optimised_choice = 1
+          end if
+
+       else
+          if(optimised_choice .eq. 1) then
+             call c_redist_32_new_copy(r, from_here, to_here)
+          else
+             call c_redist_32_new_opt_copy(r, from_here, to_here)
+          end if
+       end if
+
     else
        ! c_redist_32_old_copy is the original local copy functionality
        call c_redist_32_old_copy(r, from_here, to_here)
@@ -1136,9 +966,6 @@ contains
     ! c_redist_32_mpi_copy contains all the remote to local 
     ! copy functionality
     call c_redist_32_mpi_copy(r, from_here, to_here)
-!    call c_redist_32_mpi_opt_copy(r, from_here, to_here)
-!    call c_redist_32_mpi_opt_2_copy(r, from_here, to_here)
-!    call c_redist_32_mpi_opt_3_copy(r, from_here, to_here)
 
   end subroutine c_redist_32
 
@@ -1424,377 +1251,11 @@ contains
 
   end subroutine c_redist_32_mpi_copy
 
-  subroutine c_redist_32_mpi_opt_copy(r, from_here, to_here)
-
-    use mp, only: iproc, nproc, send, receive
-    use gs2_layouts, only: xxf_lo,yxf_lo,g_lo,gidx2xxfidx
-    use gs2_layouts, only: xxfidx2gidx
-    use kt_grids, only: naky
-    use theta_grid, only: ntgrid
-    type (redist_type), intent (in out) :: r
-
-    complex, dimension (r%from_low(1):, &
-                        r%from_low(2):, &
-                        r%from_low(3):), intent (in) :: from_here
-
-    complex, dimension (r%to_low(1):, &
-                        r%to_low(2):), intent (in out) :: to_here
-
-    integer :: t2, t1, f3, f2, f1, f1limit, it, ixxf, ixxfmax, imax, t2max
-    integer :: ig, isign, iglo, t2limit, gmax, t2ixxfmax, ig_max, remt2max
-    integer :: ntgridmulti
-    real :: nakyrecip
-    integer :: i, idp, ipto, ipfrom, iadp
-    real :: f1limittemp, tempnaky
-
-    ! redistribute to idpth next processor from idpth preceding processor
-    ! or redistribute from idpth preceding processor to idpth next processor
-    ! to avoid deadlocks
-    do idp = 1, nproc-1
-       ipto = mod(iproc + idp, nproc)
-       ipfrom = mod(iproc + nproc - idp, nproc)
-       iadp = min(idp, nproc - idp)
-      ! avoid deadlock AND ensure mostly parallel resolution
-       if (mod(iproc/iadp,2) == 0) then
-
-          ! send to idpth next processor
-          if (r%from(ipto)%nn > 0) then
-
-             tempnaky = naky
-             i = 1
-             f1 = r%from(ipto)%k(i)
-             f2 = r%from(ipto)%l(i)
-             ixxfmax = ((ipto+1)*xxf_lo%blocksize)
-             do while(i .le. r%from(ipto)%nn)
-                f3 = r%from(ipto)%m(i)                  
-                call gidx2xxfidx(f1,f2,f3,g_lo,xxf_lo,it,ixxf)
-                f1limittemp = (ixxfmax-ixxf)/tempnaky
-                f1limittemp = ceiling(f1limittemp)
-                f1limit = f1limittemp - 1
-                imax = i + f1limit
-                do while(i .le. imax)
-                   r%complex_buff(i) = from_here(f1,f2,f3)
-                   f1 = f1 + 1
-                   i = i + 1
-                   if(f1 .gt. r%from_high(1) .and. f2 .lt. r%from_high(2)) then
-                      f2 = f2 + 1
-                      f1 = r%from(ipto)%k(i)
-                   else if(f1 .gt. r%from_high(1) .and. f2 .eq. r%from_high(2)) then
-                      exit
-                   end if
-                end do
-                f1 = r%from(ipto)%k(i)
-                f2 = r%from(ipto)%l(i)
-             end do
-             
-             call send (r%complex_buff(1:r%from(ipto)%nn), ipto, idp)
-          end if
-
-          ! receive from idpth preceding processor
-          if (r%to(ipfrom)%nn > 0) then
-             call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
-             
-             i = 1
-             ntgridmulti = (2*ntgrid)+1
-             ig_max =  naky*ntgridmulti
-             t1 = r%to(ipfrom)%k(i)
-             t2 = r%to(ipfrom)%l(i)
-             t2ixxfmax = (iproc+1)*xxf_lo%blocksize
-             do while (i .le. r%to(ipfrom)%nn)
-                remt2max = mod(t2,ig_max)
-                remt2max = ntgridmulti - ((remt2max*ntgridmulti)/ig_max)
-                t2max = t2 + (remt2max*naky)
-                t2max = min(t2max, t2ixxfmax)
-                do while(t2 .lt. t2max)
-                   to_here(t1,t2) = r%complex_buff(i)
-                   t2 = t2 + naky
-                   i = i + 1
-                end do
-                t1 = r%to(ipfrom)%k(i)
-                t2 = r%to(ipfrom)%l(i)
-             end do
-             
-          end if
-       else
-          ! receive from idpth preceding processor
-          if (r%to(ipfrom)%nn > 0) then
-             call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
-
-             i = 1
-             ntgridmulti = (2*ntgrid)+1
-             ig_max =  naky*ntgridmulti
-             t1 = r%to(ipfrom)%k(i)
-             t2 = r%to(ipfrom)%l(i)
-             t2ixxfmax = (iproc+1)*xxf_lo%blocksize
-             do while (i .le. r%to(ipfrom)%nn)
-                remt2max = mod(t2,ig_max)
-                remt2max = ntgridmulti - ((remt2max*ntgridmulti)/ig_max)
-                t2max = t2 + (remt2max*naky) 
-                t2max = min(t2max, t2ixxfmax)
-                do while(t2 .lt. t2max)
-                   to_here(t1,t2) = r%complex_buff(i)
-                   t2 = t2 + naky
-                   i = i + 1
-                end do
-                t1 = r%to(ipfrom)%k(i)
-                t2 = r%to(ipfrom)%l(i)
-             end do
-
-          end if
-
-          ! send to idpth next processor
-          if (r%from(ipto)%nn > 0) then
-
-             tempnaky = naky
-             i = 1
-             f1 = r%from(ipto)%k(i)
-             f2 = r%from(ipto)%l(i)
-             ixxfmax = ((ipto+1)*xxf_lo%blocksize)
-             do while(i .le. r%from(ipto)%nn)
-                f3 = r%from(ipto)%m(i)                  
-                call gidx2xxfidx(f1,f2,f3,g_lo,xxf_lo,it,ixxf)
-                f1limittemp = (ixxfmax-ixxf)/tempnaky
-                f1limittemp = ceiling(f1limittemp)
-                f1limit = f1limittemp - 1
-                imax = i + f1limit
-                do while(i .le. imax)
-                   r%complex_buff(i) = from_here(f1,f2,f3)
-                   f1 = f1 + 1
-                   i = i + 1
-                   if(f1 .gt. r%from_high(1) .and. f2 .lt. r%from_high(2)) then
-                      f2 = f2 + 1
-                      f1 = r%from(ipto)%k(i)
-                   else if(f1 .gt. r%from_high(1) .and. f2 .eq. r%from_high(2)) then
-                      exit
-                   end if
-                end do
-                f1 = r%from(ipto)%k(i)
-                f2 = r%from(ipto)%l(i)
-             end do
-
-             call send (r%complex_buff(1:r%from(ipto)%nn), ipto, idp)
-          end if
-       end if
-    end do
-
-  end subroutine c_redist_32_mpi_opt_copy
-
-  subroutine c_redist_32_mpi_opt_2_copy(r, from_here, to_here)
-
-    use mp, only: iproc, nproc, send, receive, waitany, local_mpi_status_size, local_mpi_request_null
-    type (redist_type), intent (in out) :: r
-
-    complex, dimension (r%from_low(1):, &
-                        r%from_low(2):, &
-                        r%from_low(3):), intent (in) :: from_here
-
-    complex, dimension (r%to_low(1):, &
-                        r%to_low(2):), intent (in out) :: to_here
-
-    complex, dimension (:,:), allocatable :: send_buff
-    complex, dimension (:,:), allocatable :: recv_buff 
-  
-    integer, dimension (2*nproc) :: requests
-    integer, dimension (local_mpi_status_size) :: status
-
-    integer :: i, idp, ipto, ipfrom, iadp
-    integer :: requestnum, currentrequest
-
-    requestnum = 0
-
-    allocate(send_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
-    allocate(recv_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
-
-    requests = local_mpi_request_null
-
-    ! Post the receives
-    do idp = 1, nproc - 1
-       ipfrom = mod(iproc + nproc - idp, nproc)
-       if (r%to(ipfrom)%nn > 0) then
-          call receive (recv_buff(1:r%to(ipfrom)%nn,idp), ipfrom, ipfrom, requests(idp))
-          requestnum = requestnum + 1
-       end if
-
-    end do
-
-    ! Start the nonblocking sends
-    do idp = 1, nproc - 1
-       ipto = mod(iproc + idp, nproc)
-        ! send 
-       if (r%from(ipto)%nn > 0) then
-          do i = 1, r%from(ipto)%nn
-             send_buff(i,idp) = from_here(r%from(ipto)%k(i), &
-                                          r%from(ipto)%l(i), &
-                                          r%from(ipto)%m(i))
-
-          end do
-          call send (send_buff(1:r%from(ipto)%nn,idp), ipto, iproc, requests(idp+nproc))
-          requestnum = requestnum + 1
-       end if
-       
-    end do
-
-    ! Now go through the outstanding requests (send and receives)
-    do idp = 1, requestnum
- 
-       call waitany(2*nproc, requests, currentrequest, status)
-
-       if(currentrequest > nproc) then
-
-          ! send so don't need to do anything, just ensure the send has occured
-          ! probably should check the status is ok
-          
-       else
-       
-          ! receive 
-          ipfrom = mod(iproc + nproc - currentrequest, nproc)
-          do i = 1, r%to(ipfrom)%nn
-             to_here(r%to(ipfrom)%k(i), &
-                     r%to(ipfrom)%l(i)) &
-                  = recv_buff(i,currentrequest)
-          end do
-
-       end if
-    end do
-
-    deallocate(send_buff)
-    deallocate(recv_buff)
-
-  end subroutine c_redist_32_mpi_opt_2_copy
-
-
-  subroutine c_redist_32_mpi_opt_3_copy(r, from_here, to_here)
-
-    use mp, only: iproc, nproc, send, receive, waitany, local_mpi_status_size, local_mpi_request_null
-    use gs2_layouts, only: xxf_lo,yxf_lo,g_lo,gidx2xxfidx
-    use gs2_layouts, only: xxfidx2gidx
-    use kt_grids, only: naky
-    use theta_grid, only: ntgrid
-    type (redist_type), intent (in out) :: r
-
-    complex, dimension (r%from_low(1):, &
-                        r%from_low(2):, &
-                        r%from_low(3):), intent (in) :: from_here
-
-    complex, dimension (r%to_low(1):, &
-                        r%to_low(2):), intent (in out) :: to_here
-
-    complex, dimension (:,:), allocatable :: send_buff
-    complex, dimension (:,:), allocatable :: recv_buff 
-  
-    integer, dimension (2*nproc) :: requests
-    integer, dimension (local_mpi_status_size) :: status
-
-    integer :: t2, t1, f3, f2, f1, f1limit, it, ixxf, ixxfmax, imax, t2max
-    integer :: ig, isign, iglo, t2limit, gmax, t2ixxfmax, ig_max, remt2max
-    integer :: ntgridmulti
-    real :: nakyrecip
-    integer :: i, idp, ipto, ipfrom, iadp
-    integer :: requestnum, currentrequest
-    real :: f1limittemp, tempnaky
-
-    requestnum = 0
-
-    allocate(send_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
-    allocate(recv_buff(lbound(r%complex_buff,1):ubound(r%complex_buff,1),1:nproc-1))
-
-    requests = local_mpi_request_null
-
-    ! Post the receives
-    do idp = 1, nproc - 1
-       ipfrom = mod(iproc + nproc - idp, nproc)
-       if (r%to(ipfrom)%nn > 0) then
-          call receive (recv_buff(1:r%to(ipfrom)%nn,idp), ipfrom, ipfrom, requests(idp))
-          requestnum = requestnum + 1
-       end if
-
-    end do
-
-    ! Start the nonblocking sends
-    do idp = 1, nproc - 1
-       ipto = mod(iproc + idp, nproc)
-        ! send 
-       if (r%from(ipto)%nn > 0) then
-             tempnaky = naky
-             i = 1
-             f1 = r%from(ipto)%k(i)
-             f2 = r%from(ipto)%l(i)
-             ixxfmax = ((ipto+1)*xxf_lo%blocksize)
-             do while(i .le. r%from(ipto)%nn)
-                f3 = r%from(ipto)%m(i)                  
-                call gidx2xxfidx(f1,f2,f3,g_lo,xxf_lo,it,ixxf)
-                f1limittemp = (ixxfmax-ixxf)/tempnaky
-                f1limittemp = ceiling(f1limittemp)
-                f1limit = f1limittemp - 1
-                imax = i + f1limit
-                do while(i .le. imax)
-                   send_buff(i,idp) = from_here(f1,f2,f3)
-                   f1 = f1 + 1
-                   i = i + 1
-                   if(f1 .gt. r%from_high(1) .and. f2 .lt. r%from_high(2)) then
-                      f2 = f2 + 1
-                      f1 = r%from(ipto)%k(i)
-                   else if(f1 .gt. r%from_high(1) .and. f2 .eq. r%from_high(2)) then
-                      exit
-                   end if
-                end do
-                f1 = r%from(ipto)%k(i)
-                f2 = r%from(ipto)%l(i)
-             end do
-
-          call send (send_buff(1:r%from(ipto)%nn,idp), ipto, iproc, requests(idp+nproc))
-          requestnum = requestnum + 1
-       end if
-       
-    end do
-
-    ! Now go through the outstanding requests (send and receives)
-    do idp = 1, requestnum
- 
-       call waitany(2*nproc, requests, currentrequest, status)
-
-       if(currentrequest > nproc) then
-
-          ! send so don't need to do anything, just ensure the send has occured
-          ! probably should check the status is ok
-          
-       else
-       
-          ! receive 
-          ipfrom = mod(iproc + nproc - currentrequest, nproc)
-          i = 1
-          ntgridmulti = (2*ntgrid)+1
-          ig_max =  naky*ntgridmulti
-          t1 = r%to(ipfrom)%k(i)
-          t2 = r%to(ipfrom)%l(i)
-          t2ixxfmax = (iproc+1)*xxf_lo%blocksize
-          do while (i .le. r%to(ipfrom)%nn)
-             remt2max = mod(t2,ig_max)
-             remt2max = ntgridmulti - ((remt2max*ntgridmulti)/ig_max)
-             t2max = t2 + (remt2max*naky)
-             t2max = min(t2max, t2ixxfmax)
-             do while(t2 .lt. t2max)
-                to_here(t1,t2) = recv_buff(i,currentrequest)
-                t2 = t2 + naky
-                i = i + 1
-             end do
-             t1 = r%to(ipfrom)%k(i)
-             t2 = r%to(ipfrom)%l(i)
-          end do
-
-       end if
-    end do
-
-    deallocate(send_buff)
-    deallocate(recv_buff)
-
-  end subroutine c_redist_32_mpi_opt_3_copy
-
-
 
   subroutine c_redist_32_inv (r, from_here, to_here)
 
     use mp, only: iproc
+    use job_manage, only: time_message
     use gs2_layouts, only: new_opt_32_inv_copy, opt_32_inv_copy
     type (redist_type), intent (in out) :: r
 
@@ -1805,18 +1266,40 @@ contains
                         r%from_low(2):, &
                         r%from_low(3):), intent (in out) :: to_here
 
+    integer, save :: optimised_choice = 0
+    real :: time_optimised_loop_1(2), time_optimised_loop_2(2)
+
     ! redistribute from local processor to local processor
-    if(new_opt_32_inv_copy) then
-       call c_redist_32_inv_new_opt_copy(r, from_here, to_here)
-    else if(opt_32_inv_copy) then
-       ! c_redist_32_inv_new_copy is the new local copy functionality where 
-       ! indirect addressing has largely been removed
-       call c_redist_32_inv_new_copy(r, from_here, to_here)       
+    if(opt_32_inv_copy) then
+       if(optimised_choice .eq. 0) then
+          call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
+          call c_redist_32_inv_new_copy(r, from_here, to_here)
+          call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
+
+          call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
+          call c_redist_32_inv_new_opt_copy(r, from_here, to_here)
+          call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
+          
+          if(time_optimised_loop_1(1) .gt. time_optimised_loop_2(1)) then
+             optimised_choice = 2
+          else
+             optimised_choice = 1
+          end if
+
+       else
+          if(optimised_choice .eq. 1) then
+             ! c_redist_32_inv_new_copy is the new local copy functionality where 
+             ! indirect addressing has largely been removed
+             call c_redist_32_inv_new_copy(r, from_here, to_here)       
+          else
+             call c_redist_32_inv_new_opt_copy(r, from_here, to_here)       
+          end if
+       end if
     else
        ! c_redist_32_inv_old_copy is the original local copy functionality
        call c_redist_32_inv_old_copy(r, from_here, to_here)
     end if
-
+       
     ! c_redist_32_inv_mpi_copy contains all the remote to local 
     ! copy functionality
     call c_redist_32_inv_mpi_copy(r, from_here, to_here)

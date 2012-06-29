@@ -683,7 +683,7 @@ contains
     call init_file_utils (list, name="template")
 if (debug) write(6,*) 'get_namelists: called init_file_utils'
     ncut= 100000
-    npmax=50000
+    npmax=100000
     scan = .false.
     stdin = .true.
     pythonin = "."//trim(run_name)//".pythonin"
@@ -1375,15 +1375,10 @@ if (debug) write(6,*) 'get_namelists: returning'
     if (nonlin) then
 
        write (report_unit, *) 
-!       write (report_unit, fmt="('Recommended numbers of processors:')") 
-!       write (report_unit, fmt="('--------------------------------------------------------------------------------------------------------------------------------')")
-!       write (report_unit, fmt="('|   Number of    | Estimated time      | Dimension | Use unbalanced xxf | xxf unbalanced | Use unbalanced yxf | yxf unbalanced |')")
-!       write (report_unit, fmt="('|   processes    | (seconds/time step) |   split   | T = true F = false |   amount (%)   | T = true F = false |   amount (%)   |')")
-!       write (report_unit, fmt="('--------------------------------------------------------------------------------------------------------------------------------')")
-       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------------')")
-       write (report_unit, fmt="('|   Number of    | Dimension |   Use unbalanced   | Percentage of data | Use unbalanced xxf | xxf unbalanced | Use unbalanced yxf | yxf unbalanced |')")
-       write (report_unit, fmt="('|   processes    |   split   | T = true F = false |    to transfer     | T = true F = false |   amount (%)   | T = true F = false |   amount (%)   |')")
-       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------------')")
+       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
+       write (report_unit, fmt="('|   Number of    | Dimension | Percentage data moved | Recommend unbalanced_xxf | xxf unbalanced | Recommend unbalanced_yxf | yxf unbalanced |')")
+       write (report_unit, fmt="('|   processes    |   split   | by MPI from xxf->yxf  |    T = true F = false    |   amount (%)   |    T = true F = false    |   amount (%)   |')")
+       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
        
        
        call init_x_transform_layouts(ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
@@ -1577,7 +1572,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
        end select
 
-       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------------')")
+       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
        write (report_unit, *)
        write (report_unit, fmt="('To use the unbalanced functionality set unbalanced_xxf = .true. or unbalanced_yxf = .true. in the &layouts_knobs namelist in your GS2 ')")
        write (report_unit, fmt="('input file. You can also set the max_unbalanced_xxf and max_unbalanced_yxf flags in the same namelist in the input file to specify the')")
@@ -1856,6 +1851,8 @@ if (debug) write(6,*) 'get_namelists: returning'
 ! This 0.1 represents the arbitrary 10% difference threshold discussed above.
     if(idle_percentage .gt. 0.1) then
        use_unbalanced = .true.
+    else
+       use_unbalanced = .false.
     end if
     idle_percentage = idle_percentage * 100
 
@@ -1880,11 +1877,11 @@ if (debug) write(6,*) 'get_namelists: returning'
     call get_idle_processes(npe, idle_percentage, use_unbalanced)
     if(use_unbalanced) then
        call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
-       write (report_unit, fmt="('|     ',i8,'   |     ',a,'     |         ',L,'         |         ',i3,'        |         ',L,'         |      ',i3,'       |         ',L,'         |      ',i3,'       |')") & 
-            npe, distchar, use_unbalanced, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+       write (report_unit, fmt="('|     ',i8,'   |     ',a,'     |          ',i3,'          |            ',L,'            |      ',i3,'       |            ',L,'            |      ',i3,'       |')") & 
+            npe, distchar, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
     else
-       write (report_unit, fmt="('|     ',i8,'   |     ',a,'     |         ',L,'         |         ',i3,'        |                    |                |                    |                |')") & 
-            npe, distchar, use_unbalanced, INT(idle_percentage)
+       write (report_unit, fmt="('|     ',i8,'   |     ',a,'     |          ',i3'          |                          |                |                          |                |')") & 
+            npe, distchar, INT(idle_percentage)
     
     end if
     
