@@ -59,7 +59,9 @@ module dist_fn
   integer :: source_option_switch
   integer, parameter :: source_option_full = 1, &
        source_option_phiext_full = 5
-  
+  !<DD> Add variable to specify a ky index for which gnew=0
+  integer :: zero_ky
+  !</DD>
   integer :: boundary_option_switch
   integer, parameter :: boundary_option_zero = 1, &
        boundary_option_self_periodic = 2, &
@@ -371,6 +373,14 @@ subroutine check_dist_fn(report_unit)
 
     end select
 
+!<DD> Warn about zero_ky
+    if (zero_ky.gt.0) then
+       write(report_unit,*)
+       write(report_unit, fmt="('Warning: g for the ky with index ',i0,' will be set to zero.')") zero_ky
+       write(report_unit,*)
+    endif
+!</DD>
+
 ! 
 ! implicitness parameters
 !
@@ -626,11 +636,12 @@ subroutine check_dist_fn(report_unit)
             text_option('iphi00=2', adiabatic_option_fieldlineavg), &
             text_option('iphi00=3', adiabatic_option_yavg)/)
     character(30) :: adiabatic_option
-            
+
+!<DD> Modified            
     namelist /dist_fn_knobs/ boundary_option, nonad_zero, gridfac, apfac, &
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         g_exb, g_exbfac, omprimfac, btor_slab, mach
+         g_exb, g_exbfac, omprimfac, btor_slab, mach, zero_ky
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -666,6 +677,9 @@ subroutine check_dist_fn(report_unit)
        def_parity = .false.
        even = .true.
        source_option = 'default'
+       !<DD> Default value
+       zero_ky=0
+       !</DD>
        in_file = input_unit_exist("dist_fn_knobs", dfexist)
 !       if (dfexist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
        if (dfexist) read (unit=in_file, nml=dist_fn_knobs)
@@ -722,7 +736,10 @@ subroutine check_dist_fn(report_unit)
     call broadcast (def_parity)
     call broadcast (even)
     call broadcast (wfb)
-
+    !<DD> Broadcast value
+    call broadcast (zero_ky)
+    !</DD>
+    
     if (mult_imp) then
        ! nothing -- fine for linear runs, but not implemented nonlinearly
     else
@@ -3146,6 +3163,13 @@ subroutine check_dist_fn(report_unit)
     il = il_idx(g_lo,iglo)
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
+    !<DD> Add option to set gnew for a single given ky to 0
+    if (ik.eq.zero_ky) then
+       gnew(:,:,iglo)=0.0d0
+       g_h(:,:,iglo)=0.0d0
+       return
+    endif
+    !</DD>
 
     if(ieqzip(it_idx(g_lo,iglo),ik_idx(g_lo,iglo))==0) return
     if (eqzip) then
