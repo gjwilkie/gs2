@@ -36,7 +36,9 @@ module collisions
   logical :: hyper_colls
   logical :: ei_coll_only
   logical :: test
-
+  !<DD> Do we use the collision fix or not.
+  logical :: CollFix
+  !</DD>
   integer, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
   integer, public, parameter :: collision_model_none = 3
   integer, parameter :: collision_model_lorentz_test = 5 ! if this changes, check gs2_diagnostics
@@ -209,7 +211,7 @@ contains
          heating, adjust, const_v, cfac, hypermult, ei_coll_only, &
          lorentz_scheme, ediff_scheme, resistivity, conservative, test, &
 ! following only needed for adaptive collisionality
-         vnfac, etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa
+         vnfac, etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, CollFix
     integer :: ierr, in_file
 
     if (proc0) then
@@ -227,6 +229,9 @@ contains
        ewindowa = 1.e-2
        ncheck = 100
 !<
+!<DD> Set default to not use collision "fix"
+       CollFix= .false.
+!</DD>
        adjust = .true.
        lorentz_scheme = 'default'
        ediff_scheme = 'default'
@@ -266,6 +271,9 @@ contains
     call broadcast (ewindowa)
     call broadcast (ncheck)
 !<
+!<DD> Broadcast CollFix
+    call broadcast (CollFix)
+!</DD>
     call broadcast (conservative)
     call broadcast (conserve_moments)
     call broadcast (resistivity)
@@ -1135,6 +1143,10 @@ contains
     integer :: ik, ie, is, it, ig
     real :: v, k4max
     real :: vl, vr, dv2l, dv2r
+!<DD> To make life easier use logical variable to hold species type logic
+    logical :: SpecLikeElec
+!</DD>
+
 !    real :: erf ! this is needed for PGI: RN
 
 
@@ -1171,7 +1183,17 @@ contains
     if(.not.allocated(vnewh)) allocate (vnewh(-ntgrid:ntgrid,ntheta0,naky,nspec))
 
     do is = 1, nspec
-       if (spec(is)%type == electron_species) then
+!<DD> Implementing modified form of Apartest branch hack/fix for KE+AI runs
+       if (CollFix) then
+         SpecLikeElec=(spec(is)%type == electron_species .or. (nspec == 1 .and. spec(is)%z .lt. 0.0d0))
+       else
+          SpecLikeElec=(spec(is)%type == electron_species)
+       endif
+!Original line
+!       if (spec(is)%type == electron_species) then
+!Modified line
+        if (SpecLikeElec) then
+!</DD>
           do ie = 1, negrid
              do ik = 1, naky
                 if (const_v) then
