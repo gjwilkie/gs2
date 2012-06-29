@@ -403,7 +403,7 @@ contains
   end subroutine add_explicit
 
   subroutine add_nl (g1, phi, apar, bpar)
-    use mp, only: max_allreduce, proc0
+    use mp, only: max_allreduce, proc0, iproc
     use theta_grid, only: ntgrid, kxfac
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use gs2_layouts, only: accelx_lo, yxf_lo
@@ -600,11 +600,15 @@ contains
        cfl_violated=.TRUE.
        if (maxv .EQ. max_vel) then !<DD> Processors with the maximum vel print warning
           write(6,*) 'CFL condition maximally violated for the following indices:'
-          write(6,*) '   ig  : ',ig_idx(yxf_lo,jmax)
-          write(6,*) '   isgn: ',isign_idx(yxf_lo,jmax)
-          write(6,*) '   il  : ',il_idx(yxf_lo,jmax)
-          write(6,*) '   ie  : ',ie_idx(yxf_lo,jmax)
-          write(6,*) '   is  : ',is_idx(yxf_lo,jmax)
+          write(6,*) '   ig    : ',ig_idx(yxf_lo,jmax)
+          write(6,*) '   isgn  : ',isign_idx(yxf_lo,jmax)
+          write(6,*) '   il    : ',il_idx(yxf_lo,jmax)
+          write(6,*) '   ie    : ',ie_idx(yxf_lo,jmax)
+          write(6,*) '   is    : ',is_idx(yxf_lo,jmax)
+          write(6,*) '   it    : ',it_idx(yxf_lo,jmax)
+          write(6,*) '   jmax  : ',jmax
+          write(6,*) '   imax  : ',imax
+          write(6,*) '   iproc : ',iproc
           write(6,*) 'Current code_dt is : ',code_dt
           write(6,*) 'New dt_cfl is      : ',dt_cfl
           write(6,*) '(note dt_cfl=1/max_vel=cfl/(2*MAX[vel])*MAX[aky or akx])'
