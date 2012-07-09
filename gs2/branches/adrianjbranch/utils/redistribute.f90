@@ -441,7 +441,7 @@ contains
   subroutine c_redist_22 (r, from_here, to_here)
 
     use mp, only: iproc
-    use gs2_layouts, only: opt_22_copy
+    use gs2_layouts, only: opt_local_copy
 
     type (redist_type), intent (in out) :: r
 
@@ -453,7 +453,12 @@ contains
 
 
     ! redistribute from local processor to local processor
-    if(opt_22_copy) then
+    ! The flag opt_local_copy is set by the user in the input 
+    ! file to specify whether optimised local copy routines are used.
+    ! These c_redist_22_new_copy routine is the new local copy 
+    ! functionality where indirect addressing has largely been removed.
+    ! c_redist_22_old_copy is the original local copy code.
+    if(opt_local_copy) then
        ! c_redist_22_new_copy is the new local copy functionality where 
        ! indirect addressing has largely been removed
        call c_redist_22_new_copy(r, from_here, to_here)
@@ -614,126 +619,10 @@ contains
   end subroutine c_redist_22_mpi_copy
 
 
-  subroutine c_redist_22_mpi_opt_copy (r, from_here, to_here)
-
-    use mp, only: iproc, nproc, send, receive
-    use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx
-    type (redist_type), intent (in out) :: r
-
-    complex, dimension (r%from_low(1):, &
-                        r%from_low(2):), intent (in) :: from_here
-
-    complex, dimension (r%to_low(1):, &
-                        r%to_low(2):), intent (in out) :: to_here
-
-    integer :: i, idp, ipto, ipfrom, iadp
-    integer :: rank, ierror
-    integer :: iyxfmax, it, ixxf, ik, iyxf, itmax, itmin, t1, t2, t2max
-
-    ! redistribute to idpth next processor from idpth preceding processor
-    ! or redistribute from idpth preceding processor to idpth next processor
-    ! to avoid deadlocks
-    do idp = 1, nproc-1
-       ipto = mod(iproc + idp, nproc)
-       ipfrom = mod(iproc + nproc - idp, nproc)
-       iadp = min(idp, nproc - idp)
-       ! avoid deadlock AND ensure mostly parallel resolution
-       if (mod(iproc/iadp,2) == 0) then
-          
-          if (r%from(ipto)%nn > 0) then
-             ! send to idpth next processor
-             i = 1
-             iyxfmax = (ipto+1)*yxf_lo%blocksize 
-             do while(i .le. r%from(ipto)%nn)
-                itmin = r%from(ipto)%k(i)
-                ixxf = r%from(ipto)%l(i)
-                call xxfidx2yxfidx(itmin, ixxf, xxf_lo, yxf_lo, ik, iyxf)
-                itmax = itmin + (iyxfmax - iyxf) - 1
-                itmax = min(itmax, yxf_lo%nx)
-                do it = itmin,itmax
-                   r%complex_buff(i) = from_here(it, ixxf)
-                   i = i + 1
-                end do
-             end do
-             
-             call send (r%complex_buff(1:r%from(ipto)%nn), ipto, idp)
-          end if
-       
-          ! receive from idpth preceding processor
-          if (r%to(ipfrom)%nn > 0) then
-             call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
-             
-             i = 1
-             t1 = r%to(ipfrom)%k(i)
-             t2 = r%to(ipfrom)%l(i)
-             iyxfmax = (iproc+1)*yxf_lo%blocksize 
-             do while (i .le. r%to(ipfrom)%nn)
-                t2max = mod(t2,yxf_lo%nx)
-                t2max = t2 + (yxf_lo%nx - t2max)
-                t2max = min(t2max,iyxfmax)
-                do while(t2 .lt. t2max)
-                   to_here(t1,t2) = r%complex_buff(i)
-                   t2 = t2 + 1
-                   i = i + 1
-                end do
-                t1 = r%to(ipfrom)%k(i)
-                t2 = r%to(ipfrom)%l(i)
-             end do
-             
-          end if
-       else
-          ! receive from idpth preceding processor
-          if (r%to(ipfrom)%nn > 0) then
-             call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
-
-             i = 1
-             t1 = r%to(ipfrom)%k(i)
-             t2 = r%to(ipfrom)%l(i)
-             iyxfmax = (iproc+1)*yxf_lo%blocksize 
-             do while (i .le. r%to(ipfrom)%nn)
-                t2max = mod(t2,yxf_lo%nx)
-                t2max = t2 + (yxf_lo%nx - t2max)
-                t2max = min(t2max,iyxfmax)
-                do while(t2 .lt. t2max)
-                   to_here(t1,t2) = r%complex_buff(i)
-                   t2 = t2 + 1
-                   i = i + 1
-                end do
-                t1 = r%to(ipfrom)%k(i)
-                t2 = r%to(ipfrom)%l(i)
-             end do
-             
-          end if
-
-          ! send to idpth next processor
-          if (r%from(ipto)%nn > 0) then
-
-             i = 1
-             iyxfmax = (ipto+1)*yxf_lo%blocksize 
-             do while(i .le. r%from(ipto)%nn)
-                itmin = r%from(ipto)%k(i)
-                ixxf = r%from(ipto)%l(i)
-                call xxfidx2yxfidx(itmin, ixxf, xxf_lo, yxf_lo, ik, iyxf)
-                itmax = itmin + (iyxfmax - iyxf) - 1
-                itmax = min(itmax, yxf_lo%nx)
-                do it = itmin,itmax
-                   r%complex_buff(i) = from_here(it, ixxf)
-                   i = i + 1
-                end do
-             end do
-             
-             call send (r%complex_buff(1:r%from(ipto)%nn), ipto, idp)
-          end if
-        end if
-    end do
-
-  end subroutine c_redist_22_mpi_opt_copy
-
-
   subroutine c_redist_22_inv (r, from_here, to_here)
 
     use mp, only: iproc
-    use gs2_layouts, only: opt_22_inv_copy
+    use gs2_layouts, only: opt_local_copy
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%to_low(1):, &
@@ -748,7 +637,7 @@ contains
     integer :: j,k,t2,t1,f2,f1,fhigh,thigh
 
     ! redistribute from local processor to local processor
-    if(opt_22_inv_copy) then
+    if(opt_local_copy) then
        ! c_redist_22_inv_new_copy is the new local copy functionality where 
        ! indirect addressing has largely been removed
        call c_redist_22_inv_new_copy(r, from_here, to_here)
@@ -812,7 +701,6 @@ contains
 !  Here we REDUCE indirect addressing and cache load by EXPLOITING 
 !  understanding of xxf and yxf data types in GS2.
 ! 
-
     use mp, only: iproc
     use gs2_layouts, only: yxf_lo
     type (redist_type), intent (in out) :: r
@@ -917,7 +805,7 @@ contains
 
     use mp, only: iproc
     use job_manage, only: time_message
-    use gs2_layouts, only: new_opt_32_copy, opt_32_copy
+    use gs2_layouts, only: opt_local_copy
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%from_low(1):, &
@@ -929,19 +817,30 @@ contains
 
     integer, save :: optimised_choice = 0
     real :: time_optimised_loop_1(2), time_optimised_loop_2(2)
+    integer :: i
 
     ! redistribute from local processor to local processor
-    if(opt_32_copy) then
-
-       ! These c_redist_32_*_copy routines are the new local copy 
-       ! functionality where indirect addressing has largely been removed
+    ! The flag opt_local_copy is set by the user in the input 
+    ! file to specify whether optimised local copy routines are used.
+    ! These c_redist_32_*_copy routines are the new local copy 
+    ! functionality where indirect addressing has largely been removed
+    ! There are two different versions of the optimised local copy 
+    ! functionality 
+    if(opt_local_copy) then
+       
        if(optimised_choice .eq. 0) then
-          call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
           call c_redist_32_new_copy(r, from_here, to_here)
           call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
+          do i= 1,3 
+             call c_redist_32_new_copy(r, from_here, to_here)
+          end do
+          call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
 
-          call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
           call c_redist_32_new_opt_copy(r, from_here, to_here)
+          call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
+          do i = 1,3
+             call c_redist_32_new_opt_copy(r, from_here, to_here)
+          end do
           call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
           
           if(time_optimised_loop_1(1) .gt. time_optimised_loop_2(1)) then
@@ -1256,7 +1155,7 @@ contains
 
     use mp, only: iproc
     use job_manage, only: time_message
-    use gs2_layouts, only: new_opt_32_inv_copy, opt_32_inv_copy
+    use gs2_layouts, only: opt_local_copy
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%to_low(1):, &
@@ -1268,18 +1167,25 @@ contains
 
     integer, save :: optimised_choice = 0
     real :: time_optimised_loop_1(2), time_optimised_loop_2(2)
+    integer :: i
 
     ! redistribute from local processor to local processor
-    if(opt_32_inv_copy) then
+    if(opt_local_copy) then
        if(optimised_choice .eq. 0) then
-          call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
           call c_redist_32_inv_new_copy(r, from_here, to_here)
           call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
+          do i= 1,3
+             call c_redist_32_inv_new_copy(r, from_here, to_here)
+          end do
+          call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
 
-          call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
           call c_redist_32_inv_new_opt_copy(r, from_here, to_here)
           call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
-          
+          do i = 1,3
+             call c_redist_32_inv_new_opt_copy(r, from_here, to_here)
+          end do
+          call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
+
           if(time_optimised_loop_1(1) .gt. time_optimised_loop_2(1)) then
              optimised_choice = 2
           else
