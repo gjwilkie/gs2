@@ -68,14 +68,12 @@ module gs2_layouts
   public :: im_idx, in_idx, ij_idx, ifield_idx
   public :: idx, proc_id, idx_local
 
-  public :: opt_22_copy, opt_22_inv_copy, opt_32_copy, new_opt_32_copy, opt_32_inv_copy
-  public :: new_opt_32_inv_copy
+  public :: opt_local_copy
 
   logical :: initialized_x_transform = .false.
   logical :: initialized_y_transform = .false.
 
-  logical :: opt_22_copy, opt_22_inv_copy, opt_32_copy, new_opt_32_copy, opt_32_inv_copy
-  logical :: new_opt_32_inv_copy
+  logical :: opt_local_copy
   logical :: local_field_solve, accel_lxyes, lambda_local, unbalanced_xxf, unbalanced_yxf
   real :: max_unbalanced_xxf, max_unbalanced_yxf
   character (len=5) :: layout
@@ -376,15 +374,12 @@ contains
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
          max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
-         opt_22_copy, opt_22_inv_copy, opt_32_copy, opt_32_inv_copy
+         opt_local_copy
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
     unbalanced_yxf = .false.
-    opt_22_copy = .false. 
-    opt_22_inv_copy = .false. 
-    opt_32_copy = .false. 
-    opt_32_inv_copy = .false.
+    opt_local_copy = .false. 
     max_unbalanced_xxf = 0.0
     max_unbalanced_yxf = 0.0
     layout = 'lxyes'
@@ -429,10 +424,7 @@ contains
     call broadcast (unbalanced_yxf)
     call broadcast (max_unbalanced_xxf)
     call broadcast (max_unbalanced_yxf)
-    call broadcast (opt_22_copy)
-    call broadcast (opt_22_inv_copy)
-    call broadcast (opt_32_copy)
-    call broadcast (opt_32_inv_copy)
+    call broadcast (opt_local_copy)
 
   end subroutine broadcast_results
 
@@ -2742,7 +2734,7 @@ contains
              
           if(proc0) then	
              write(*, fmt="('Using unbalanced decomposition for xxf. '&
-             'Unbalanced fraction',F2.2)") unbalanced_amount
+             'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 
        end if
@@ -3042,13 +3034,8 @@ contains
        ! we don't create decompositions that have significant differences
        ! between the two block sizes which would impact the amount of
        ! computation the different groups of processes have to perform.
-!       unbalanced_amount_temp = real(xxf_lo%large_block_balance_factor)/real(xxf_lo%small_block_balance_factor)
-!       unbalanced_amount_temp = unbalanced_amount_temp - 1
-!       unbalanced_amount = int(ceiling(100 * unbalanced_amount_temp))
-       unbalanced_amount = real(xxf_lo%large_block_balance_factor)/real(xxf_lo%small_block_balance_factor)
+       unbalanced_amount = real(xxf_lo%large_block_size)/real(xxf_lo%small_block_size)
        unbalanced_amount = unbalanced_amount - 1
-
-
        
     end if
     
@@ -3307,8 +3294,8 @@ contains
     integer, intent(in) :: nprocs
     real, intent(out) :: idle_percentage
     integer :: xxf_blocksize, yxf_blocksize
-    integer :: xxf_usedprocs, xxf_idleprocs
-    integer :: yxf_usedprocs, yxf_idleprocs
+    real :: xxf_usedprocs, xxf_idleprocs
+    real :: yxf_usedprocs, yxf_idleprocs
     real :: delta_idle_procs
 
     ! Ensure that the xxf_lo% and yxf_lo%data has been properly initialized as this 
@@ -3327,11 +3314,11 @@ contains
     end if
 
     xxf_blocksize = xxf_lo%ulim_world/nprocs + 1
-    xxf_usedprocs = xxf_lo%ulim_world/real(xxf_blocksize)  
+    xxf_usedprocs = (xxf_lo%ulim_world+1)/real(xxf_blocksize)  
     xxf_idleprocs = nprocs - xxf_usedprocs
  
     yxf_blocksize = yxf_lo%ulim_world/nprocs + 1
-    yxf_usedprocs = yxf_lo%ulim_world/real(yxf_blocksize)
+    yxf_usedprocs = (yxf_lo%ulim_world+1)/real(yxf_blocksize)
     yxf_idleprocs = nprocs - yxf_usedprocs
 
     delta_idle_procs = abs(yxf_idleprocs - xxf_idleprocs)
@@ -3642,6 +3629,7 @@ contains
             yxf_lo%llim_proc + yxf_lo%nset - 1)
        yxf_lo%ulim_alloc = max(yxf_lo%llim_proc, yxf_lo%ulim_proc)
 
+
     else
        ! AJ November 2011
        ! unbalanced_yxf is a variable initialised in the input file
@@ -3678,7 +3666,7 @@ contains
              
           if(proc0) then	
              write(*, fmt="('Using unbalanced decomposition for yxf. '&
-             'Unbalanced fraction',F2.2)") unbalanced_amount
+             'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 
        end if
@@ -3860,12 +3848,8 @@ contains
        
     else 
        
-!       unbalanced_amount_temp = real(yxf_lo%large_block_balance_factor)/real(yxf_lo%small_block_balance_factor)
-!       unbalanced_amount_temp = unbalanced_amount_temp - 1
-!       unbalanced_amount = int(ceiling(100 * unbalanced_amount_temp))
-       unbalanced_amount = real(yxf_lo%large_block_balance_factor)/real(yxf_lo%small_block_balance_factor)
+       unbalanced_amount = real(yxf_lo%large_block_size)/real(yxf_lo%small_block_size)
        unbalanced_amount = unbalanced_amount - 1
-
               
     end if
     
