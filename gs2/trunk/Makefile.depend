@@ -241,9 +241,6 @@ rungridgen_mod = \
 	 rungridgen.o \
 	 spl.o 
 
-test_mod = \
-	 read_chease.o 
-
 antenna.o: \
 	 antenna_data.o \
 	 constants.o \

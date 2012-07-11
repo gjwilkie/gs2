@@ -18,7 +18,7 @@ module dist_fn
   public :: read_parameters, wnml_dist_fn, wnml_dist_fn_species, check_dist_fn
   public :: timeadv, exb_shear, g_exb
   public :: getfieldeq, getan, getmoms, getemoms
-  public :: flux, lf_flux
+  public :: flux, lf_flux, eexchange
   public :: get_epar, get_heat
   public :: t0, omega0, gamma0, source0
   public :: reset_init, write_f, reset_physics, write_poly
@@ -47,7 +47,7 @@ module dist_fn
   real :: t0, omega0, gamma0, source0
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
-  logical :: dfexist, skexist, nonad_zero
+  logical :: dfexist, skexist, nonad_zero, lf_default
 
   integer :: adiabatic_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -629,7 +629,7 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, nonad_zero, gridfac, apfac, &
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         g_exb, g_exbfac, omprimfac, btor_slab, mach
+         g_exb, g_exbfac, omprimfac, btor_slab, mach, lf_default
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -664,6 +664,7 @@ subroutine check_dist_fn(report_unit)
        test = .false.
        def_parity = .false.
        even = .true.
+       lf_default = .true.
        source_option = 'default'
        in_file = input_unit_exist("dist_fn_knobs", dfexist)
 !       if (dfexist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
@@ -719,6 +720,7 @@ subroutine check_dist_fn(report_unit)
     call broadcast (mult_imp)
     call broadcast (test)
     call broadcast (def_parity)
+    call broadcast (lf_default)    
     call broadcast (even)
     call broadcast (wfb)
 
@@ -4502,6 +4504,102 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine get_flux
 
+  subroutine eexchange (phi, exchange)
+
+    use mp, only: proc0
+    use constants, only: zi
+    use gs2_layouts, only: g_lo, il_idx, ie_idx, it_idx, ik_idx, is_idx
+    use gs2_time, only: code_dt
+    use dist_fn_arrays, only: gnew, aj0, vpa
+    use theta_grid, only: ntgrid, gradpar, delthet, bmag
+    use kt_grids, only: ntheta0, naky
+    use le_grids, only: integrate_moment
+    use run_parameters, only: woutunits, fphi
+    use species, only: spec, nspec
+    use nonlinear_terms, only: nonlin
+
+    implicit none
+
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
+    real, dimension (:,:,:), intent (out) :: exchange
+
+    integer :: ig, il, ie, it, ik, is, iglo, isgn
+    real :: wgt
+    real, dimension (:,:,:), allocatable :: dnorm
+    complex, dimension (:,:,:,:), allocatable :: total
+
+    allocate (dnorm(-ntgrid:ntgrid, ntheta0, naky))
+    allocate (total(-ntgrid:ntgrid, ntheta0, naky, nspec))
+
+    if (proc0) exchange = 0.0
+
+    do ik = 1, naky
+       do it = 1, ntheta0
+          dnorm(:,it,ik) = delthet/(bmag*gradpar)
+       end do
+    end do
+
+    if (fphi > epsilon(0.0)) then
+       g0 = 0.
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          ik = ik_idx(g_lo,iglo)          
+	  if (nonlin .and. it==1 .and. ik==1) cycle
+          do isgn = 1, 2
+             do ig = -ntgrid+1, ntgrid-1
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/(delthet(ig)+delthet(ig+1)) &
+                     * (gnew(ig+1,isgn,iglo)-gnew(ig-1,isgn,iglo))*spec(is)%stm)
+             end do
+             if (isgn == 1) then
+                ! g = 0 at ig = -ntgrid for vpa > 0
+                ig = -ntgrid
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig) &
+                     * gnew(ig+1,isgn,iglo)*spec(is)%stm)
+                ig = ntgrid
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig-1) &
+                     * (gnew(ig,isgn,iglo)-gnew(ig-1,isgn,iglo))*spec(is)%stm)
+             else
+                ! g = 0 at ig = ntgrid for vpa < 0
+                ig = ntgrid
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+                     * gnew(ig,isgn,iglo)*spec(is)%tz - vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig-1) &
+                     * gnew(ig-1,isgn,iglo)*spec(is)%stm)
+                ig = -ntgrid
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig) &
+                     * (gnew(ig+1,isgn,iglo)-gnew(ig,isgn,iglo))*spec(is)%stm)
+             end if
+          end do
+       end do
+
+       call integrate_moment (g0, total)
+
+       if (proc0) then
+          do is = 1, nspec
+             do ik = 1, naky
+                do it = 1, ntheta0
+                   if (nonlin .and. it==1 .and. ik==1) cycle
+                   wgt = sum(dnorm(:,it,ik))
+                   exchange(it,ik,is) = sum(real(total(:,it,ik,is)*conjg(phi(:,it,ik))) &
+                        *dnorm(:,it,ik))/wgt
+                end do
+             end do
+          end do
+!          exchange = exchange*0.5
+       end if
+
+    end if
+
+    deallocate (dnorm, total)
+
+  end subroutine eexchange
+
   subroutine lf_flux (phi, vflx0, vflx1)
 
     use species, only: spec, nspec
@@ -4735,7 +4833,7 @@ subroutine check_dist_fn(report_unit)
     use gs2_time, only: code_dt
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_apar, a_ext_data
-    use hyper, only: D_v, D_eta, nexp
+    use hyper, only: D_v, D_eta, nexp, hypervisc_filter
     use dist_fn_arrays, only: g_adjust
 
     implicit none
@@ -4752,6 +4850,7 @@ subroutine check_dist_fn(report_unit)
     complex :: phi_m, apar_m, bpar_m, hdot
     complex :: phi_avg, bpar_avg, bperp_m, bperp_avg
     complex :: de, denew
+    complex :: dgdt_hypervisc
     real, dimension (:), allocatable :: wgt
     real :: fac2, dtinv, akperp4
     integer :: isgn, iglo, ig, is, ik, it, ie
@@ -5146,10 +5245,15 @@ subroutine check_dist_fn(report_unit)
                                  aj1(ig  ,iglo)*2.0*bparnew(ig  ,it,ik)*vperp2(ig  ,iglo),  &
                                  aj1(ig+1,iglo)*2.0*bparnew(ig+1,it,ik)*vperp2(ig+1,iglo)) &
                                  *fbpar
+
+                dgdt_hypervisc = 0.5*((1.0-1./hypervisc_filter(ig,it,ik))*gnew(ig,isgn,iglo) &
+                     + (1.0-1./hypervisc_filter(ig+1,it,ik))*gnew(ig+1,isgn,iglo))/code_dt
+
 !Set g0 for hyperviscous heating
-                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp*D_v*akperp4* &
-                     ( conjg(havg)*havg - conjg(havg)*j0phiavg - &
-                     conjg(havg)*j1bparavg)
+!                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp*D_v*akperp4* &
+!                     ( conjg(havg)*havg - conjg(havg)*j0phiavg - &
+!                     conjg(havg)*j1bparavg)
+                g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp*conjg(havg)*dgdt_hypervisc
 
              end do
           end do
@@ -6712,7 +6816,7 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: drhodpsi, qval
     use le_grids, only: energy, al, negrid, nlambda, forbid
     use kt_grids, only: theta0, ntheta0, naky
-    use gs2_time, only: code_dt, user_dt
+    use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx, it_idx
     use run_parameters, only: tunits, wunits, rhostar, neo_test
     use lowflow, only: get_lowflow_terms
@@ -6755,7 +6859,7 @@ subroutine check_dist_fn(report_unit)
     ! tmp4 is dH^{neo}/dr, tmp5 is dH^{neo}/dtheta, tmp6 is H^{neo}
     ! tmp7 is phi^{neo}/dr, tmp8 is dphi^{neo}/dtheta, and tmp9 phi^{neo}
     call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, &
-         tmp5, tmp6, tmp7, tmp8, tmp9)
+         tmp5, tmp6, tmp7, tmp8, tmp9, lf_default)
     
     if (proc0) then
        call open_output_file (neo_unit,".neodist")
@@ -6827,14 +6931,17 @@ subroutine check_dist_fn(report_unit)
 !             - 0.5*zi*rhostar*(gds24_noq(-ntgrid:ntgrid-1)+gds24_noq(-ntgrid+1:ntgrid)) &
 !             *drhodpsi*rhoc/qval*code_dt*(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
        
-       ! this is the contribution from the last term of the 2nd line of Eq. 43 in 
-       ! MAB's GS2 notes (arises because the NEO dist. fn. is given at v/vt, and
-       ! the vt varies radially, so v_E . grad F1 must take this into account)
-       ! note: for now, this is taken care of by multiplying the vt normalization
-       ! of Chebyshev polynomial argument by appropriate temperature factor
-       ! when constructing neoclassical distribution function (see lowflow.f90)
-       !          wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + code_dt*wunits(ik) &
-       !               *spec(is)%tprim*energy(ie)*dhdec(:,:,iglo)
+       if (.not. lf_default) then
+          ! this is the contribution from the last term of the 2nd line of Eq. 43 in 
+          ! MAB's GS2 notes (arises because the NEO dist. fn. is given at v/vt, and
+          ! the vt varies radially, so v_E . grad F1 must take this into account)
+          ! If lf_default is true this is taken care of by multiplying the vt normalization
+          ! of Chebyshev polynomial argument by appropriate temperature factor
+          ! when constructing neoclassical distribution function (see lowflow.f90).
+          ! Otherwise, the below line of code takes care of it.
+          wstarfac(:,:,iglo) = wstarfac(:,:,iglo) + code_dt*wunits(ik) &
+               *spec(is)%tprim*energy(ie)*dhdec(:,:,iglo)
+       end if
        
        wstarfac(ntgrid,:,iglo) = 0.0
        

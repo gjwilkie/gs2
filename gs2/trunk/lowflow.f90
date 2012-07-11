@@ -13,7 +13,7 @@ module lowflow
 contains
   
   subroutine get_lowflow_terms (theta, al, energy, bmag, dHdEc, dHdxic, vpadHdEc, dHdrc, &
-       dHdthc, hneoc, dphidrc, dphidthc, phi_neo)
+       dHdthc, hneoc, dphidrc, dphidthc, phi_neo, lf_default)
     
     use mp, only: proc0
     use le_grids, only: w, wl
@@ -28,6 +28,7 @@ contains
     real, dimension (:), intent (in) :: energy
     real, dimension (:,:,:,:,:), intent (out) :: dHdec, dHdxic, dHdrc, dHdthc, vpadHdEc, hneoc
     real, dimension (:), intent (out) :: dphidthc, dphidrc, phi_neo
+    logical, intent (in) :: lf_default
 
     real, dimension (:,:,:,:,:), allocatable :: hneo
     real, dimension (:,:,:,:), allocatable :: dHdxi, dHdE, vpadHdE, dHdr, dHdth
@@ -96,16 +97,25 @@ contains
     ! better to be taken from neo
     if (proc0) write (*,*) '# make sure ENERGY_MAX=16.0 in NEO INPUT file'
     ! emax is ENERGY_MAX (from NEO input file) times v_{ts}^2
-    ! v_{ts} is a function of radius, so we need to convert emax
-    ! to its equivalent value using v_{ts} from the center radius.
-    ! this is necessary because we will be taking radial derivatives of 
-    ! the distribution function with v fixed, not v/v_t(r) fixed.
-!    emax = 16.0
-    do is = 1, ns
-       emax(2,is) = 16.0 ! this is EMAX for center grid point
-       emax(1,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(1)-rad_neo(2)))
-       emax(3,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(3)-rad_neo(2)))
-    end do
+
+    ! two ways to deal with radial variation of temperature in 
+    ! NEO energy variable: 1st (lf_default) is to take it into
+    ! account when constructing distribution function, i.e. H(EGS2,r);
+    ! 2nd is to construct H(ENEO) and deal with it later by
+    ! including a temp gradient term in wstarfac in dist_fn.fpp
+    if (lf_default) then
+       ! v_{ts} is a function of radius, so we need to convert emax
+       ! to its equivalent value using v_{ts} from the center radius.
+       ! this is necessary because we will be taking radial derivatives of 
+       ! the distribution function with v fixed, not v/v_t(r) fixed.
+       do is = 1, ns
+          emax(2,is) = 16.0 ! this is EMAX for center grid point
+          emax(1,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(1)-rad_neo(2)))
+          emax(3,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(3)-rad_neo(2)))
+       end do
+    else
+       emax = 16.0       
+    end if
 
     ! get legendre polynomials on gs2 pitch-angle grid
     legp = 0.0
@@ -187,10 +197,12 @@ contains
     ! note that F_1/F_0 = H_1/F_0 - Z_s * e * Phi / T_s
     do is = 1, ns
        do ig = 1, ntheta
-          do ie = 0, nc-1
-             do ixi = 0, nl
+!          do ie = 0, nc-1
+!             do ixi = 0, nl
 !                ! get radial derivative of spectral coefficients of H_1/H_0
 !                call get_radgrad (coefs(:,ig,ixi,ie,is), rad_neo, ir_loc, dcoefsdr(ixi,ie))
+          do ie = 1, nenergy
+             do ixi = 1, nxi
                 call get_radgrad (hneo(:,ig,ixi,ie,is), rad_neo, ir_loc, dHdr(ig,ixi,ie,is))
              end do
           end do
