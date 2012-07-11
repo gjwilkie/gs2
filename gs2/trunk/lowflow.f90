@@ -107,6 +107,7 @@ contains
        emax(3,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(3)-rad_neo(2)))
     end do
 
+    ! get legendre polynomials on gs2 pitch-angle grid
     legp = 0.0
     do ixi = 1, nxi
        do ig = 1, ntheta
@@ -114,6 +115,8 @@ contains
        end do
     end do
 
+    ! get chebyshev polynomials of the first and second kinds on the gs2 energy grid
+    ! note the argument of the chebyshev polynomials is z = 2 * sqrt(energy/emax) - 1
     do is = 1, ns
        do ie = 1, nenergy
           do ir = 1, nr
@@ -129,7 +132,12 @@ contains
     ! which is why the other piece is added in after (i.e. the T(r))
     do ig = 1, ntheta
        call get_radgrad (phineo(:,ig), rad_neo, ir_loc, dphidr(ig,1))
-       do is = 1, ns
+       ! Count down so we can use dphidr(ig,1) without problems.
+       ! Note that we are neglecting the term prop. to dTref/dr, which is fine
+       ! as long as Tref in NEO is the same for all radii.
+       ! This will require a changing TEMP with radius if the species temperature
+       ! changes with radius.
+       do is = ns, 1, -1
           dphidr(ig,is) = spec(is)%zt*(dphidr(ig,1)+phineo(ir_loc,ig)*spec(is)%tprim)
        end do
     end do
@@ -156,6 +164,7 @@ contains
              call get_thgrad (coefs(ir_loc,:,ixi,ie,is), theta, dcoefsdth(:,ixi,ie))
           end do
        end do
+       ! note that dphidth is calculated in read_neocoefs
        do ig = 1, ntheta
           call get_gradH (dcoefsdth(ig,:,:), dphidth(ig)*spec(is)%zt, legp(ig,:,:), chebyp1(ir_loc,:,:,is), dHdth(ig,:,:,is))
        end do
@@ -180,11 +189,11 @@ contains
        do ig = 1, ntheta
           do ie = 0, nc-1
              do ixi = 0, nl
-                ! get radial derivative of spectral coefficients of H_1/H_0
-                call get_radgrad (coefs(:,ig,ixi,ie,is), rad_neo, ir_loc, dcoefsdr(ixi,ie))
+!                ! get radial derivative of spectral coefficients of H_1/H_0
+!                call get_radgrad (coefs(:,ig,ixi,ie,is), rad_neo, ir_loc, dcoefsdr(ixi,ie))
+                call get_radgrad (hneo(:,ig,ixi,ie,is), rad_neo, ir_loc, dHdr(ig,ixi,ie,is))
              end do
           end do
-          call get_radgrad (hneo(:,ig,ixi,ie,is), rad_neo, ir_loc, dHdr(ig,ixi,ie,is))
 !          call get_gradH (dcoefsdr, dphidr(ig,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), dHdr(ig,:,:,is))
        end do
     end do
@@ -340,6 +349,7 @@ contains
     
   end function zfnc
   
+  ! knd = 1 (2) for cheb polys of first (second) kind
   subroutine chebyshev (x, chebyp, knd)
     
     implicit none
@@ -416,6 +426,7 @@ contains
     ! F_1s = H_1s - Z_s*e*Phi_1/T_s
     ! want Z_s*e*Phi/T_s, but phi from neo is e*Phi/Tnorm
     ! at center (GS2) radius, this is a simple multiply by Z_s * Tref/Ts
+    ! note that this assumes the Tref used in NEO is the same as that used in GS2
     h = h - spec(is)%zt*phi
 
 !     if (ig==(nth-1)/2+1 .and. ir==2 .and. is==1 .and. proc0) then
