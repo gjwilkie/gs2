@@ -825,29 +825,29 @@ contains
     real :: time_optimised_loop_1(2), time_optimised_loop_2(2)
     integer :: i
 
-    ! redistribute from local processor to local processor
-    ! The flag opt_local_copy is set by the user in the input 
-    ! file to specify whether optimised local copy routines are used.
-    ! These c_redist_32_*_copy routines are the new local copy 
-    ! functionality where indirect addressing has largely been removed
-    ! There are two different versions of the optimised local copy 
-    ! functionality which are selected at runtime (providing 
-    ! opt_local_copy is true) through a performance measurement process 
-    ! documented below.
+!AJ redistribute from local processor to local processor
+!AJ The flag opt_local_copy is set by the user in the input 
+!AJ file to specify whether optimised local copy routines are used.
+!AJ These c_redist_32_*_copy routines are the new local copy 
+!AJ functionality where indirect addressing has largely been removed
+!AJ There are two different versions of the optimised local copy 
+!AJ functionality which are selected at runtime (providing 
+!AJ opt_local_copy is true) through a performance measurement process 
+!AJ documented below.
     if(opt_local_copy) then
        
-       !AJ Because there are two different optimised local copy routines 
-       !AJ which provide benefits for different process counts and use cases 
-       !AJ we use an auto-tuning method to select which routine to use.  This 
-       !AJ works by timing both of the optimised routines on the first run of 
-       !AJ this functionality and then using the quickest for the rests of the 
-       !AJ times this routine is called.  The optimised_choice varible is used 
-       !AJ to record the choice of routine (it is a SAVE variable so will maintain 
-       !AJ a value between calls to the routine), it is initialise to 0 when the 
-       !AJ code first runs.  We run each routine 4 times, only timing the last 
-       !AJ three runs to avoid any potential initialisation penalties.  We time 
-       !AJ three rather than one to deal ensure that we collect enough timing 
-       !AJ data.
+!AJ Because there are two different optimised local copy routines 
+!AJ which provide benefits for different process counts and use cases 
+!AJ we use an auto-tuning method to select which routine to use.  This 
+!AJ works by timing both of the optimised routines on the first run of 
+!AJ this functionality and then using the quickest for the rests of the 
+!AJ times this routine is called.  The optimised_choice varible is used 
+!AJ to record the choice of routine (it is a SAVE variable so will maintain 
+!AJ a value between calls to the routine), it is initialise to 0 when the 
+!AJ code first runs.  We run each routine 4 times, only timing the last 
+!AJ three runs to avoid any potential initialisation penalties.  We time 
+!AJ three rather than one to deal ensure that we collect enough timing 
+!AJ data.
        if(optimised_choice .eq. 0) then
           call c_redist_32_new_copy(r, from_here, to_here)
           call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
@@ -869,8 +869,8 @@ contains
              optimised_choice = 1
           end if
 
-       !AJ This else is encountered once the optimised auto-tuning choice has 
-       !AJ been calculated above.
+!AJ This else is encountered once the optimised auto-tuning choice has 
+!AJ been calculated above.
        else
           if(optimised_choice .eq. 1) then
              call c_redist_32_new_copy(r, from_here, to_here)
@@ -878,15 +878,15 @@ contains
              call c_redist_32_new_opt_copy(r, from_here, to_here)
           end if
        end if
-    !AJ This else is encountered when the optimised local copy functionality is 
-    !AJ not enabled.
+!AJ This else is encountered when the optimised local copy functionality is 
+!AJ not enabled.
     else
-       ! c_redist_32_old_copy is the original local copy functionality
+!AJ c_redist_32_old_copy is the original local copy functionality
        call c_redist_32_old_copy(r, from_here, to_here)
     end if
     
-    ! c_redist_32_mpi_copy contains all the remote to local 
-    ! copy functionality
+!AJ c_redist_32_mpi_copy contains all the remote to local 
+!AJ copy functionality
     call c_redist_32_mpi_copy(r, from_here, to_here)
 
   end subroutine c_redist_32
@@ -960,12 +960,12 @@ contains
     real :: nakyrecip
 
     i = 1
-    ! We want to be able to divide by naky with floating point 
-    ! arithmetic so we need to convert naky to a float (hence
-    ! the need for nakyrecip).  Also, to remove the necessity 
-    ! to have a division in the body of the loop below we are 
-    ! calculating the reciprocal of naky so that instead of 
-    ! dividing by naky we can multiply  by 1/naky.
+!AJ We want to be able to divide by naky with floating point 
+!AJ arithmetic so we need to convert naky to a float (hence
+!AJ the need for nakyrecip).  Also, to remove the necessity 
+!AJ to have a division in the body of the loop below we are 
+!AJ calculating the reciprocal of naky so that instead of 
+!AJ dividing by naky we can multiply  by 1/naky.
     nakyrecip = naky
     nakyrecip = 1/nakyrecip
     f2max = r%from_high(2)
@@ -1059,18 +1059,18 @@ contains
 
     integer :: i,j,k,t2,t1,f3,f2,f1
     integer :: f3max,f3maxmultiple,f3incr,innermax,iincrem,iglomax,t1test
-    integer :: t1upper,f3upper,innermaxmultiplier,outerf3limit,startf3
+    integer :: innermaxmultiplier,outerf3limit,startf3
     real :: innermaxrealvalue,tempnaky
 
-    t1upper = ubound(to_here,1)
-    f3upper = ubound(from_here,3)
-
+!AJ tempnaky is a real version (rather than integer version) of naky
+!AJ It is used to enable real arthimetic rather than integer arthimetic.
     tempnaky = naky
+!AJ innermaxmultiplier is the upper limit of the xxf data range owned by this process
     innermaxmultiplier = xxf_lo%ulim_proc+1
 
 !AJ This optimised new local copy functionality is reliant on the particular 
 !AJ layout used to work out how to increment through the f3 (iglo) indices.
-!AJ f3maxmultiple sets the upper bound 
+!AJ f3maxmultiple sets the upper bound of the f3 blocks we step through.
 !AJ f3incr sets the amount added to f3 at each step of the inner loops.
     select case (layout)
     case ('yxels')
@@ -1163,11 +1163,11 @@ contains
              t2 = r%to(iproc)%l(i)
 
 !AJ Record the initial f3 variable value for the inner loops for use in the bounds checking 
-!AJ at the end of the inner loos.             
+!AJ at the end of the inner loops.             
              startf3 = f3
 !AJ Calculate the size of the innermost loop by working out the maximum that f3 (iglo) 
 !AJ can go to for this process (using the f3maxmultiple as calculated previously that 
-!AJ effectively defines the f3 blocksize fo this process).
+!AJ effectively defines the f3 blocksize of this process).
              f3max = ((f3/f3maxmultiple)+1)*f3maxmultiple
 !AJ Ensure that the calculate f3max is not larger than the total iglo space this process
 !AJ owns.
@@ -1307,8 +1307,29 @@ contains
     real :: time_optimised_loop_1(2), time_optimised_loop_2(2)
     integer :: i
 
-    ! redistribute from local processor to local processor
+!AJ redistribute from local processor to local processor
+!AJ The flag opt_local_copy is set by the user in the input 
+!AJ file to specify whether optimised local copy routines are used.
+!AJ These c_redist_32_inv_*_copy routines are the new local copy 
+!AJ functionality where indirect addressing has largely been removed
+!AJ There are two different versions of the optimised local copy 
+!AJ functionality which are selected at runtime (providing 
+!AJ opt_local_copy is true) through a performance measurement process 
+!AJ documented below.
     if(opt_local_copy) then
+
+!AJ Because there are two different optimised local copy routines 
+!AJ which provide benefits for different process counts and use cases 
+!AJ we use an auto-tuning method to select which routine to use.  This 
+!AJ works by timing both of the optimised routines on the first run of 
+!AJ this functionality and then using the quickest for the rests of the 
+!AJ times this routine is called.  The optimised_choice varible is used 
+!AJ to record the choice of routine (it is a SAVE variable so will maintain 
+!AJ a value between calls to the routine), it is initialise to 0 when the 
+!AJ code first runs.  We run each routine 4 times, only timing the last 
+!AJ three runs to avoid any potential initialisation penalties.  We time 
+!AJ three rather than one to deal ensure that we collect enough timing 
+!AJ data.
        if(optimised_choice .eq. 0) then
           call c_redist_32_inv_new_copy(r, from_here, to_here)
           call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
@@ -1330,22 +1351,26 @@ contains
              optimised_choice = 1
           end if
 
+!AJ This else is encountered once the optimised auto-tuning choice has 
+!AJ been calculated above.
        else
           if(optimised_choice .eq. 1) then
-             ! c_redist_32_inv_new_copy is the new local copy functionality where 
-             ! indirect addressing has largely been removed
+!AJ c_redist_32_inv_new_copy is the new local copy functionality where 
+!AJ indirect addressing has largely been removed
              call c_redist_32_inv_new_copy(r, from_here, to_here)       
           else
              call c_redist_32_inv_new_opt_copy(r, from_here, to_here)       
           end if
        end if
+!AJ This else is encountered when the optimised local copy functionality is 
+!AJ not enabled.
     else
-       ! c_redist_32_inv_old_copy is the original local copy functionality
+!AJ c_redist_32_inv_old_copy is the original local copy functionality
        call c_redist_32_inv_old_copy(r, from_here, to_here)
     end if
        
-    ! c_redist_32_inv_mpi_copy contains all the remote to local 
-    ! copy functionality
+!AJ c_redist_32_inv_mpi_copy contains all the remote to local 
+!AJ copy functionality
     call c_redist_32_inv_mpi_copy(r, from_here, to_here)
 
   end subroutine c_redist_32_inv
@@ -1365,7 +1390,22 @@ contains
 
     integer :: i
 
+!CMR 
+! In the GS2 standard FFT situation this routine maps 
+!         xxf(it,ixxf) to g(ig, isgn, iglo) data type 
+!         where it is kx (or x) index, ixxf is (y,ig,isgn,"les") 
+!         and iglo is ("xyles") 
+
     do i = 1, r%to(iproc)%nn
+!
+! redistribute from local processor to local processor
+! NB r%to(iproc)%nn is #elements sent by THIS processor to THIS processor
+!    In this situation the data at (r%from(iproc)%k(i),r%from(iproc)%l(i),r%from(iproc)%m(i)) 
+!    should come from (r%to(iproc)%k(i),r%to(iproc)%l(i)). 
+!
+! This do loop, in GS2 standard FFT situation, corresponds to:
+!    to_here(ig,isgn,iglo)=from_here(it,ixxf)
+!
        to_here(r%from(iproc)%k(i), &
                r%from(iproc)%l(i), &
                r%from(iproc)%m(i)) &
@@ -1376,6 +1416,19 @@ contains
   end subroutine c_redist_32_inv_old_copy
 
   subroutine c_redist_32_inv_new_copy(r, from_here, to_here)
+!=====================================================================
+!AJ, June 2011: New code from DCSE project on GS2 Indirect Addressing
+!=====================================================================
+!
+! AJ, June 2011:
+!  Modified LOCAL COPY part of c_redist_32_inv routine, as used by GS2 to 
+!  transform xxf data type to g data type.
+!  Here we REDUCE indirect addressing and cache load by EXPLOITING 
+!  understanding of g and xxf data types in GS2.
+!  These c_redist_32_inv_* routines use exactly the same code created for 
+!  the c_redist_32_* functionality, the only difference is in the actual 
+!  data copy the to_here_ and from_here indices are swapped.
+!
 
     use mp, only: iproc
     use gs2_layouts, only: xxf_lo
@@ -1394,30 +1447,57 @@ contains
     real :: nakyrecip
 
     i = 1
-    ! We want to be able to divide by naky with floating point 
-    ! arithmetic so we need to convert naky to a float (hence
-    ! the need for nakyrecip).  Also, to remove the necessity 
-    ! to have a division in the body of the loop below we are 
-    ! calculating the reciprocal of naky so that instead of 
-    ! dividing by naky we can multiply  by 1/naky.
+!AJ We want to be able to divide by naky with floating point 
+!AJ arithmetic so we need to convert naky to a float (hence
+!AJ the need for nakyrecip).  Also, to remove the necessity 
+!AJ to have a division in the body of the loop below we are 
+!AJ calculating the reciprocal of naky so that instead of 
+!AJ dividing by naky we can multiply  by 1/naky.
     nakyrecip = naky
     nakyrecip = 1/nakyrecip
     f2max = r%from_high(2)
+!AJ Loop over all local copies from THIS proc (iproc) to THIS proc
     do while(i .le. r%to(iproc)%nn)
+!AJ Initialise the inner loop indices.  As the to_here array has 
+!AJ 3 indices (c_redist_32_inv goes from 2 indices to 3 indices in the
+!AJ copy) we need two inner loops to be able to move through all 
+!AJ the to_here and from_here indices.
+!AJ t1 (which equates to the it index) and f3 (which equates to iglo)
+!AJ do not change for the iterations of the inner loops.  f2 (isgn) 
+!AJ can only be 1 or 2 so the first inner loop is restricted to at 
+!AJ most 2 iterations.
        f2 = r%from(iproc)%l(i)
        f3 = r%from(iproc)%m(i)
        t1 = r%to(iproc)%k(i)
+!AJ Ensure that isgn (f2) is either 1 or 2.
        do while (f2 .le. f2max)
+!AJ Get initial value of f1 (which equates to ig) and t2 (which equates
+!AJ to ixxf).
        	  f1 = r%from(iproc)%k(i)
           t2 = r%to(iproc)%l(i)
+!AJ Work out the maximum value ixxf (t2) can have by calculating the range 
+!AJ of ixxf that this process owns.  We step through t2 by naky each iteration
+!AJ so the line below calculates thigh as the number of ixxf steps for these 
+!AJ inner loops of the operation owned by this process.
           thigh = ceiling(((xxf_lo%ulim_proc+1) - t2)*nakyrecip)
+!AJ from_here and to_here are calculated for c_redist_32 using ig, isgn, 
+!AJ and iglo.  The calculation of the maximum number if ixxf steps above can, 
+!AJ therefore, be used to also calculate the maximum number of ig setsp.  THis 
+!AJ is what the following line does.
           thigh = thigh + (f1-1)
+!AJ Finally check the actual number of inner loop steps by ensuring that the 
+!AJ computed maximum bound of ig is not beyond the actual allowed maximum value 
+!AJ in r%from_high(1).
 	  fhigh = min(thigh,r%from_high(1))
        	  do k = f1,fhigh
 	     i = i + 1
              to_here(k,f2,f3) = from_here(t1,t2)
 	     t2 = t2 + naky
 	  end do
+!AJ If at the end of the inner loop we still have theoretical iterations 
+!AJ left on ixxf (i.e. the calculated thigh is higher than the allowed 
+!AJ maximum of ig) then move to the next isgn.  If there aren't any 
+!AJ iterations left then exit the inner loops (the f2 loop).
           if(thigh .gt. r%from_high(1)) then
              f2 = f2 + 1
           else
@@ -1430,6 +1510,30 @@ contains
 
 
   subroutine c_redist_32_inv_new_opt_copy(r, from_here, to_here)
+!=====================================================================
+!AJ, June 2011: New code from DCSE project on GS2 Indirect Addressing
+!=====================================================================
+!
+! AJ, June 2011:
+!  Modified LOCAL COPY part of c_redist_32_inv routine, as used by GS2 to 
+!  transform xxf data type to g data type.
+!  Here we REDUCE indirect addressing and cache load by EXPLOITING 
+!  understanding of g and xxf data types in GS2.
+!  This functionality is different to c_redist_32_inv_new_copy because 
+!  that routine does not always provide optimsed performance 
+!  (due to the way memory reads and writes are performed, particularly 
+!  the use of a strided write which triggers a write allocate cache 
+!  miss).
+!  This new functionality moves through the loop indices in a different 
+!  order to the other optimised local copy, so instead of following the 
+!  original functionality by moving through the to_here and from_here loops
+!  using the i variable from i = 1 to to(iproc)%nn we start at i = 1 and 
+!  then skip through i's for a certain range, then move back to i = 2 and 
+!  follow the same process until all the i range has been processed.
+!  This routine uses the same functionality as teh c_redist_32_new_opt_copy
+!  routine, the only difference is in the actual copy the indices of the 
+!  from_here and to_here loops are swapped.
+!
 
     use mp, only: iproc
     use gs2_layouts, only: xxf_lo,g_lo,layout
@@ -1446,12 +1550,19 @@ contains
 
     integer :: i,j,k,t2,t1,f3,f2,f1
     integer :: f3max,f3maxmultiple,f3incr,innermax,iincrem,iglomax,t1test
-    integer :: ik,il,ie,ig,is,ixxf,innermaxmultiplier,outerf3limit,startf3
+    integer :: innermaxmultiplier,outerf3limit,startf3
     real :: innermaxrealvalue,tempnaky
 
+!AJ tempnaky is a real version (rather than integer version) of naky
+!AJ It is used to enable real arthimetic rather than integer arthimetic.
     tempnaky = naky
+!AJ innermaxmultiplier is the upper limit of the xxf data range owned by this process
     innermaxmultiplier = xxf_lo%ulim_proc+1
 
+!AJ This optimised new local copy functionality is reliant on the particular 
+!AJ layout used to work out how to increment through the f3 (iglo) indices.
+!AJ f3maxmultiple sets the upper bound of the f3 blocks we step through.
+!AJ f3incr sets the amount added to f3 at each step of the inner loops.
     select case (layout)
     case ('yxels')
        f3maxmultiple = xxf_lo%naky*xxf_lo%ntheta0
@@ -1474,85 +1585,123 @@ contains
     end select          
     
     i = 1
+!AJ iglomax is the maximum iglo (f3) owned by this process
     iglomax = ((iproc+1)*g_lo%blocksize)
+!AJ t1test is used handle the it (t1) index which has a 
+!AJ range 1 -> (xxf_lo%ntheta0+1)/2) and then 
+!AJ (it - xxf_lo%ntheta0 + xxf_lo%nx) -> xxf_lo%nx.  t1test is used to 
+!AJ identify when this change in range happens and enable the code to 
+!AJ compensate for it.
     t1test  = ((xxf_lo%ntheta0+1)/2)+1
+!AJ Loop over all local copies from THIS proc (iproc) to THIS proc
     do while(i .le. r%to(iproc)%nn)
 
-       ! Initial look up of values needed to calculate innermax
-       ! and setup the first iteration of the loop below (do while i .le. innermax)
+!AJ Initial look up of values needed to calculate innermax
+!AJ and setup the first iteration of the loop below (do while i .le. innermax)
        f1 = r%from(iproc)%k(i)
        f2 = r%from(iproc)%l(i)
        f3 = r%from(iproc)%m(i)
        t1 = r%to(iproc)%k(i)
        t2 = r%to(iproc)%l(i)
 
+!AJ outerf3limit calculates the number of f3 iterations that can be undertaken 
+!AJ before reaching the next f3 point.
        outerf3limit = f3 + f3incr
        do while(f3 .lt. outerf3limit)
           
-          ! iincrem counts how much I needs to be skipped at the end of the final inner loop
-          ! The i loop below moves through the starting i's for these inner loop iterations
-          ! but the innermost loop increments through further i's without actually moving i
-          ! so once we've finished the loop below we need to move i forward to skip all the 
-          ! elements we have just processed
+!AJ iincrem counts how much i needs to be skipped at the end of the final inner loop
+!AJ The i loop below moves through the starting i's for these inner loop iterations
+!AJ but the innermost loop increments through further i's without actually moving i
+!AJ so once we've finished the loop below we need to move i forward to skip all the 
+!AJ elements we have just processed.
           iincrem = i
           
-          ! work out the size of the inner loops body 
+!AJ work out the size of the inner loops body 
+!AJ innermax is the range of the t2 index (ixxf_ this process 
+!AJ owns. 
           innermaxrealvalue = (innermaxmultiplier-t2)/tempnaky
           innermax = ceiling(innermaxrealvalue)-1
-          if(f2 .eq. 2 .and. (f1+innermax) .gt. ntgrid) then
+!AJ If the isgn (f2) index is at maximum (2) and the ig (f1) index 
+!AJ will also be at maximum if we use the innermax value calculated above 
+!AJ (ig maximum is r%from_high(1) which currently is ntgrid in the code) 
+!AJ then limit innermax to the difference between ig and ntgrid (which is 
+!AJ ig max).
+          if(f2 .eq. 2 .and. (f1+innermax) .gt. r%from_high(1)) then
              innermax = i + (ntgrid - f1)
+!AJ If the isgn (f2) index is not at maximum, but the calculated innermax would 
+!AJ take the indexes beyond whaty is allowed for ig (which is the maximum of ig 
+!AJ multipled by each increment of ig) then restrict innermax to the maximum 
+!AJ number of allowed ig increments.
           else if((f2 .eq. 1 .and. innermax .gt. (((2*ntgrid)+1)+(ntgrid-f1)))) then
              innermax = i + ((2*ntgrid)+1) + (ntgrid - f1)
+!AJ If we have reached this else then the calculated innermax does not breach 
+!AJ any of the data limits it can be used for the number of iterations of the 
+!AJ inner loop. 
           else
              innermax = i + innermax
           end if
           
           do while(i .le. innermax) 
              
+!AJ Get the initial address variables.  There are potentially some extra data lookups 
+!AJ here so there may be scope to optimise this, although this has not been checked.
              f1 = r%from(iproc)%k(i)
              f2 = r%from(iproc)%l(i)
              f3 = r%from(iproc)%m(i)
              t1 = r%to(iproc)%k(i)
              t2 = r%to(iproc)%l(i)
              
+!AJ Record the initial f3 variable value for the inner loops for use in the bounds checking 
+!AJ at the end of the inner loops.             
              startf3 = f3
+!AJ Calculate the size of the innermost loop by working out the maximum that f3 (iglo) 
+!AJ can go to for this process (using the f3maxmultiple as calculated previously that 
+!AJ effectively defines the f3 blocksize of this process).
              f3max = ((f3/f3maxmultiple)+1)*f3maxmultiple
+!AJ Ensure that the calculate f3max is not larger than the total iglo space this process
+!AJ owns.
              f3max = min(f3max,iglomax)
              do while (f3 .lt. f3max)
                 to_here(f1,f2,f3) = from_here(t1,t2)                
                 f3 = f3 + f3incr
                 t1 = t1 + 1
+!AJ Deal with the issues with t1 (it) being a split range variable as described in the 
+!AJ comment for t1test.
                 if(t1 .eq. t1test) then
                    t1 = t1 - xxf_lo%ntheta0 + xxf_lo%nx
                 end if
                 iincrem = iincrem + 1
              end do
              
-             ! Increment the outermost inner loop (move forwards in the i loop one step)
+!AJ Increment the outermost inner loop (move forwards in the i loop one step)
              i = i + 1
                           
           end do
 
-          ! TODO Do this better
+!AJ Ensure that we have not finished the i loop altogether
           if(i .lt. r%from(iproc)%nn .and. iincrem .lt. r%from(iproc)%nn) then
-             ! The f1, f2 and t2 lookups are required to ensure that
-             ! the calculation of innermax the next time round this loop
-             ! are correctly performed as we are now moving forward in the loop
-             ! It may be that it is better to re-order the initialisation of values 
-             ! so this happens at the beginning of the loop rather than at this point.
+!AJ The f1, f2 and t2 lookups are required to ensure that
+!AJ the calculation of innermax the next time round this loop
+!AJ are correctly performed as we are now moving forward in the loop
+!AJ It may be that it is better to re-order the initialisation of values 
+!AJ so this happens at the beginning of the loop rather than at this point.
              f1 = r%from(iproc)%k(i)
              f2 = r%from(iproc)%l(i)
-             t2 = r%to(iproc)%l(i)          
-             ! Updated to ensure the f3 loop we are in is correctly setup as with the code 
-             ! above we are moving to a new i so we need to get the correct value of f3 for this i
+             t2 = r%to(iproc)%l(i)     
+!AJ Updated to ensure the f3 loop we are in is correctly setup as with the code 
+!AJ above we are moving to a new i so we need to get the correct value of f3 for this i     
              f3 =  startf3 + 1
           else
-             ! TODO This is a hack and should be removed
+!AJ If we have gone beyond the end of the i loop then force the exit of the inner loops.
+!AJ This should never happen as the loop functionality is designed to always perform the 
+!AJ correct number of iterations, so this check could be removed from the code.
              f3 = outerf3limit
           end if
 
        end do
-       
+   
+!AJ Once all the inner loops have been iterated move the i variable on to the next point 
+!AJ point to be considered.    
        i = iincrem
        
     end do
