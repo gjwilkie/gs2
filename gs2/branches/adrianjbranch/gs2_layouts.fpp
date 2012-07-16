@@ -619,7 +619,7 @@ contains
 
     if (initialized) return
     initialized = .true.
-    
+   
     g_lo%iproc = iproc
     g_lo%naky = naky
     g_lo%ntheta0 = ntheta0
@@ -3135,18 +3135,18 @@ contains
     integer, intent(in) :: k, localprocs
     integer, intent(out) :: i, j, numlarge, numsmall
 
-	! To calculate the number of processes to give the large block size
-	! we work out the remainder left from dividing the input factor
-	! but the processes we have left.  This remainder is proportionate
-	! to the difference in the two block sizes.  For example, if k = 62
-	! and localprocs = 3 the code will work out i to be 21 and j to be
-	! 20, although k/localprocs is actually equal to 20 and 2/3.
-	! The code will also work out numlarge to be 2 and numsmall to
-	! be 1, so of the total processes in the simulatino 1/3 will have
-	! the small block and 2/3 the large block.  This maps to the 2/3
-	! in the actual division as opposed to the integer division (i.e
-	! the factor we have removed and replaced with small and large
-	! sizes, so replacing 20 2/3 by 1/3 x 20 and 2/3 * 21.
+    ! To calculate the number of processes to give the large block size
+    ! we work out the remainder left from dividing the input factor
+    ! but the processes we have left.  This remainder is proportionate
+    ! to the difference in the two block sizes.  For example, if k = 62
+    ! and localprocs = 3 the code will work out i to be 21 and j to be
+    ! 20, although k/localprocs is actually equal to 20 and 2/3.
+    ! The code will also work out numlarge to be 2 and numsmall to
+    ! be 1, so of the total processes in the simulatino 1/3 will have
+    ! the small block and 2/3 the large block.  This maps to the 2/3
+    ! in the actual division as opposed to the integer division (i.e
+    ! the factor we have removed and replaced with small and large
+    ! sizes, so replacing 20 2/3 by 1/3 x 20 and 2/3 * 21.
     numlarge = mod(k,localprocs)
     j  = k/localprocs
     i = j + 1  
@@ -3313,16 +3313,36 @@ contains
        return
     end if
 
+    ! Calculate the standard xxf_blocksize
     xxf_blocksize = xxf_lo%ulim_world/nprocs + 1
+    ! Use the blocksize calculated above to calculate how many processes the
+    ! xxf space maps to using this block size
     xxf_usedprocs = (xxf_lo%ulim_world+1)/real(xxf_blocksize)  
+    ! Now work out how many processes do not have any xxf data space assigned
+    ! to them.  This is calculated using real arthimetic so it will also 
+    ! include partial data spaces (so for instance it will calculate where 
+    ! a process only has half a block assigned to it).
     xxf_idleprocs = nprocs - xxf_usedprocs
  
+    ! Calculate the standard yxf_blocksize
     yxf_blocksize = yxf_lo%ulim_world/nprocs + 1
+    ! Use the blocksize calculated above to calculate how many processes the
+    ! yxf space maps to using this block size    
     yxf_usedprocs = (yxf_lo%ulim_world+1)/real(yxf_blocksize)
+    ! Now work out how many processes do not have any yxf data space assigned
+    ! to them.  This is calculated using real arthimetic so it will also 
+    ! include partial data spaces (so for instance it will calculate where 
+    ! a process only has half a block assigned to it).
     yxf_idleprocs = nprocs - yxf_usedprocs
 
+    ! Calculate the difference between the idle processes in the yxf and xxf 
+    ! decompositions.  A high delta_idle_procs will cause high communication
+    ! costs in the transform routines.
     delta_idle_procs = abs(yxf_idleprocs - xxf_idleprocs)
  
+    ! Roughly calculate the percentage of data to be transferred in the
+    ! transform between the xxf and yxf data spaces using the delta_idle_procs
+    ! variable calculated above.
     if ( delta_idle_procs .le. 1 ) then
        idle_percentage = 0.5d0 * delta_idle_procs
     else
@@ -3499,37 +3519,67 @@ contains
     integer :: proc_id_xxf
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    integer :: block_offset, j, k, tempi
-
+    integer :: block_offset, offset_block_number, j, k, tempi
+    
     if (accel_lxyes) then
        proc_id_xxf = (i/lo%gsize)*lo%nprocset + mod(i, lo%gsize)/lo%nset
     else
-       ! AJ This code has been added to deal with the unbalanced decomposition functionality.
-       ! AJ If an unbalanced xxf decomposition is being used then the proc_id
-       ! AJ use a simple lo%blocksize as there will be two separate block
-       ! AJ sizes used so we have to work out 
+       !AJ This code has been added to deal with the unbalanced decomposition functionality.
+       !AJ If an unbalanced xxf decomposition is being used then the proc_id cannot
+       !AJ use a simple lo%blocksize as there will be two separate block
+       !AJ sizes used so we have to work out which block this i lives in and 
+       !AJ therefore which process it belongs to.
        if (unbalanced_xxf) then
-          block_offset = (i / lo%block_multiple)
+          !AJ block_offset works out how many groups of blocks this i point is
+          !AJ after (the small and large blocks used in the decomposition are
+          !AJ grouped together).
+          block_offset = (i / lo%block_multiple)          
+          !AJ j represents how many blocks are in each group of blocks
           j = lo%num_small + lo%num_large
+          !AJ offset_block_number is the number of blocks up to the start of the 
+          !AJ group of blocks we are considering.
+          offset_block_number = block_offset * j
+          !AJ tempi represents where this index is inside the group of blocks
+          !AJ this i point sits.
 	  tempi = i - (block_offset * lo%block_multiple)
-      	   do k=1,j
+          !AJ Work through each block in the group of blocks and see if this i 
+          !AJ is within that block.  If it is set the proc_id_xxf as this block 
+          !AJ owner.          
+           do k=1,j
              if(k .le. lo%num_small) then
+                !AJ TODO: The if-else construct used below could potentially be rationalised 
+                !AJ TODO: to a more efficient formula where:
+                !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%small_block_size
+                !AJ TODO: Although a method for selecting if tempi is in the small or large 
+                !AJ TODO: blocks would have to be provided.
 	        if(tempi .lt. lo%small_block_size) then
-	           proc_id_xxf = (block_offset * j) + (k - 1)
+                   !AJ (k -1) is the number of blocks that we have already considered 
+                   !AJ within this group of blocks we have selected. 
+	           proc_id_xxf =  offset_block_number + (k - 1)
 		   exit 
 	        else
+                   !AJ If the index is not in this block then reduce tempi by a small
+                   !AJ block size and move on to the next block.
 	           tempi = tempi - lo%small_block_size
 	        end if
 	     else
+                !AJ TODO: The if-else construct used below could potentially be rationalised 
+                !AJ TODO: to a more efficient formula where:
+                !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%large_block_size
+                !AJ TODO: Although a method for selecting if tempi is in the small or large 
+                !AJ TODO: blocks would have to be provided.
 	        if(tempi .lt. lo%large_block_size) then
-	           proc_id_xxf = (block_offset * j) + (k - 1)
+	           proc_id_xxf = offset_block_number + (k - 1)
 		   exit 
 	        else
+                   !AJ If the index is not in this block then reduce tempi by a large
+                   !AJ block size and move on to the next block.
 	           tempi = tempi - lo%large_block_size
 	        end if
 	     end if
           end do
        else
+          !AJ This code is called if the unbalanced decomposition is not being used.
           proc_id_xxf = i/lo%blocksize
        end if
     end if
@@ -4060,28 +4110,61 @@ contains
     integer :: proc_id_yxf
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    integer :: block_offset, j, k, tempi
+    integer :: block_offset, offset_block_number, j, k, tempi
 
     if (accel_lxyes) then
        proc_id_yxf = (i/lo%gsize)*lo%nprocset + mod(i, lo%gsize)/lo%nset
     else
+       !AJ This code has been added to deal with the unbalanced decomposition functionality.
+       !AJ If an unbalanced yxf decomposition is being used then the proc_id cannot
+       !AJ use a simple lo%blocksize as there will be two separate block
+       !AJ sizes used so we have to work out which block this i lives in and 
+       !AJ therefore which process it belongs to.
        if (unbalanced_yxf) then
+          !AJ block_offset works out how many groups of blocks this i point is
+          !AJ after (the small and large blocks used in the decomposition are
+          !AJ grouped together).
           block_offset = (i / lo%block_multiple)
+          !AJ j represents how many blocks are in each group of blocks
           j = lo%num_small + lo%num_large
+          !AJ offset_block_number is the number of blocks up to the start of the 
+          !AJ group of blocks we are considering.
+          offset_block_number = block_offset * j
+	  !AJ tempi represents where this index is inside the group of blocks
+          !AJ this i point sits.
 	  tempi = i - (block_offset * lo%block_multiple)
+          !AJ Work through each block in the group of blocks and see if this i 
+          !AJ is within that block.  If it is set the proc_id_xxf as this block 
+          !AJ owner.          
           do k=1,j
              if(k .le. lo%num_small) then
+                !AJ TODO: The if-else construct used below could potentially be rationalised 
+                !AJ TODO: to a more efficient formula where:
+                !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%small_block_size
+                !AJ TODO: Although a method for selecting if tempi is in the small or large 
+                !AJ TODO: blocks would have to be provided.
 	        if(tempi .lt. lo%small_block_size) then
-	           proc_id_yxf = (block_offset * j) + (k - 1)
+                   !AJ (k -1) is the number of blocks that we have already considered 
+                   !AJ within this group of blocks we have selected. 
+	           proc_id_yxf = offset_block_number + (k - 1)
 		   exit 
 	        else
+                   !AJ If the index is not in this block then reduce tempi by a small
+                   !AJ block size and move on to the next block.
 	           tempi = tempi - lo%small_block_size
 	        end if
 	     else
+                !AJ TODO: The if-else construct used below could potentially be rationalised 
+                !AJ TODO: to a more efficient formula where:
+                !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%large_block_size
+                !AJ TODO: Although a method for selecting if tempi is in the small or large 
+                !AJ TODO: blocks would have to be provided.
 	        if(tempi .lt. lo%large_block_size) then
 	           proc_id_yxf = (block_offset * j) + (k - 1)
 		   exit 
 	        else
+                   !AJ If the index is not in this block then reduce tempi by a large
+                   !AJ block size and move on to the next block.
 	           tempi = tempi - lo%large_block_size
 	        end if
 	     end if
