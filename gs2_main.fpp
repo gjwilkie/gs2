@@ -38,7 +38,9 @@ contains
 
 
 !subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, vflux, heat, dvdrho, grho, nofinish)
-subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, dvdrho, grho, nofinish)
+subroutine run_gs2 (mpi_comm=mpi_comm, job=job_id, gs2_infile=filename, &
+     nensembles=nensembles, pflx=pflux, qflx=qflux, heat=heat, dvdrho=dvdrho, grho=grho)
+!    nofinish)
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
@@ -76,7 +78,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     logical :: exit, reset, list
     logical :: first_time = .true.
     logical :: nofin= .false.
-    logical, optional, intent(in) :: nofinish
+!    logical, optional, intent(in) :: nofinish
     character (500), target :: cbuff
 
 !
@@ -84,7 +86,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
 !     add nofinish optional variable to avoid deallocations at end of simulation
 !     as may want to do post-processing
 !
-    if (present(nofinish)) nofin=nofinish
+!    if (present(nofinish)) nofin=nofinish
     
     if (first_time) then
 
