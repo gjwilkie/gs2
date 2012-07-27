@@ -38,9 +38,7 @@ contains
 
 
 !subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, vflux, heat, dvdrho, grho, nofinish)
-subroutine run_gs2 (mpi_comm=mpi_comm, job=job_id, gs2_infile=filename, &
-     nensembles=nensembles, pflx=pflux, qflx=qflux, heat=heat, dvdrho=dvdrho, grho=grho)
-!    nofinish)
+subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, dvdrho, grho)
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
