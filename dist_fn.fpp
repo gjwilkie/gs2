@@ -4510,8 +4510,8 @@ subroutine check_dist_fn(report_unit)
     use constants, only: zi
     use gs2_layouts, only: g_lo, il_idx, ie_idx, it_idx, ik_idx, is_idx
     use gs2_time, only: code_dt
-    use dist_fn_arrays, only: gnew, aj0, vpa
-    use theta_grid, only: ntgrid, gradpar, delthet, bmag
+    use dist_fn_arrays, only: gnew, aj0, vpac
+    use theta_grid, only: ntgrid, gradpar, delthet, bmag, jacob
     use kt_grids, only: ntheta0, naky
     use le_grids, only: integrate_moment
     use run_parameters, only: woutunits, fphi
@@ -4528,14 +4528,14 @@ subroutine check_dist_fn(report_unit)
     real, dimension (:,:,:), allocatable :: dnorm
     complex, dimension (:,:,:,:), allocatable :: total
 
-    allocate (dnorm(-ntgrid:ntgrid, ntheta0, naky))
-    allocate (total(-ntgrid:ntgrid, ntheta0, naky, nspec))
+    allocate (dnorm(-ntgrid:ntgrid, ntheta0, naky)) ; dnorm = 0.0
+    allocate (total(-ntgrid:ntgrid, ntheta0, naky, nspec)) ; total = 0.0
 
     if (proc0) exchange = 0.0
 
     do ik = 1, naky
        do it = 1, ntheta0
-          dnorm(:,it,ik) = delthet/(bmag*gradpar)
+          dnorm(:ntgrid-1,it,ik) = delthet(:ntgrid-1)*(jacob(-ntgrid+1:)+jacob(:ntgrid-1))*0.5
        end do
     end do
 
@@ -4549,32 +4549,44 @@ subroutine check_dist_fn(report_unit)
           ik = ik_idx(g_lo,iglo)          
 	  if (nonlin .and. it==1 .and. ik==1) cycle
           do isgn = 1, 2
-             do ig = -ntgrid+1, ntgrid-1
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
-                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/(delthet(ig)+delthet(ig+1)) &
-                     * (gnew(ig+1,isgn,iglo)-gnew(ig-1,isgn,iglo))*spec(is)%stm)
+             ! get v_magnetic piece of g0 at grid points instead of cell centers
+             do ig = -ntgrid, ntgrid
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig,il,ie,it,ik)/code_dt &
+                     * gnew(ig,isgn,iglo)*spec(is)%tz)
              end do
-             if (isgn == 1) then
-                ! g = 0 at ig = -ntgrid for vpa > 0
-                ig = -ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
-                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig) &
-                     * gnew(ig+1,isgn,iglo)*spec(is)%stm)
-                ig = ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
-                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig-1) &
-                     * (gnew(ig,isgn,iglo)-gnew(ig-1,isgn,iglo))*spec(is)%stm)
-             else
-                ! g = 0 at ig = ntgrid for vpa < 0
-                ig = ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
-                     * gnew(ig,isgn,iglo)*spec(is)%tz - vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig-1) &
-                     * gnew(ig-1,isgn,iglo)*spec(is)%stm)
-                ig = -ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
-                     * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig) &
-                     * (gnew(ig+1,isgn,iglo)-gnew(ig,isgn,iglo))*spec(is)%stm)
-             end if
+             ! get v_magnetic piece of g0 at cell centers and add in vpar piece at cell centers
+             do ig = -ntgrid, ntgrid-1
+                g0(ig,isgn,iglo) = 0.5*(g0(ig,isgn,iglo)+g0(ig+1,isgn,iglo)) &
+                     + 0.5*vpac(ig,isgn,iglo)*(gradpar(ig)+gradpar(ig+1))/delthet(ig) &
+                     * (gnew(ig+1,isgn,iglo)-gnew(ig,isgn,iglo))*spec(is)%stm
+             end do
+
+!              do ig = -ntgrid+1, ntgrid-1
+!                 g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+!                      * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/(delthet(ig)+delthet(ig+1)) &
+!                      * (gnew(ig+1,isgn,iglo)-gnew(ig-1,isgn,iglo))*spec(is)%stm)
+!              end do
+!              if (isgn == 1) then
+!                 ! g = 0 at ig = -ntgrid for vpa > 0
+!                 ig = -ntgrid
+!                 g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+!                      * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig) &
+!                      * gnew(ig+1,isgn,iglo)*spec(is)%stm)
+!                 ig = ntgrid
+!                 g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+!                      * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig-1) &
+!                      * (gnew(ig,isgn,iglo)-gnew(ig-1,isgn,iglo))*spec(is)%stm)
+!              else
+!                 ! g = 0 at ig = ntgrid for vpa < 0
+!                 ig = ntgrid
+!                 g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+!                      * gnew(ig,isgn,iglo)*spec(is)%tz - vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig-1) &
+!                      * gnew(ig-1,isgn,iglo)*spec(is)%stm)
+!                 ig = -ntgrid
+!                 g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
+!                      * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig) &
+!                      * (gnew(ig+1,isgn,iglo)-gnew(ig,isgn,iglo))*spec(is)%stm)
+!              end if
           end do
        end do
 
@@ -4591,7 +4603,6 @@ subroutine check_dist_fn(report_unit)
                 end do
              end do
           end do
-!          exchange = exchange*0.5
        end if
 
     end if
@@ -4920,7 +4931,9 @@ subroutine check_dist_fn(report_unit)
        allocate (wgt(-ntgrid:ntgrid))
        wgt = 0.
        do ig=-ntgrid,ntgrid-1
-          wgt(ig) = delthet(ig)*jacob(ig)
+!          wgt(ig) = delthet(ig)*jacob(ig)
+! delthet is cell-centered, but jacob is given on grid
+          wgt(ig) = delthet(ig)*(jacob(ig)+jacob(ig+1))*0.5
        end do
        wgt = wgt/sum(wgt)         
 
@@ -5226,7 +5239,7 @@ subroutine check_dist_fn(report_unit)
           it = it_idx(g_lo, iglo)
           ik = ik_idx(g_lo, iglo)
           if (nonlin .and. it == 1 .and. ik == 1) cycle
-          akperp4 = (aky(ik)**2 + akx(it)**2)**nexp
+!          akperp4 = (aky(ik)**2 + akx(it)**2)**nexp
            do isgn=1,2
              do ig=-ntgrid, ntgrid-1
                 
