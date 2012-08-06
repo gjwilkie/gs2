@@ -1200,16 +1200,16 @@ subroutine check_dist_fn(report_unit)
 
   subroutine init_kperp2
     use dist_fn_arrays, only: kperp2
+    use kt_grids, only: single
     use species, only: spec
     use theta_grid, only: ntgrid, gds2, gds21, gds22, shat
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
     implicit none
     integer :: ik, it
 
-    if (kp2init) return
-    kp2init = .true.
+    if (kp2init .and. .not. (single .and. g_exb .ne. 0.0) ) return
 
-    allocate (kperp2(-ntgrid:ntgrid,ntheta0,naky))
+    if (.not. kp2init) allocate (kperp2(-ntgrid:ntgrid,ntheta0,naky))
     do ik = 1, naky
        if (aky(ik) == 0.0) then
          do it = 1, ntheta0
@@ -1223,6 +1223,8 @@ subroutine check_dist_fn(report_unit)
           end do
        end if
     end do
+    write (*,*) "Calculated kperp... max: ", maxval(kperp2), "theta0: ", theta0
+    kp2init = .true.
 
   end subroutine init_kperp2
 

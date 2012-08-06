@@ -32,8 +32,11 @@ contains
   end subroutine init_kt_grids_single
 
   subroutine broadcast_akx_in
-    use mp, only: broadcast
+    use mp, only: broadcast, iproc
+    write (*,*) "Broadcasting akx_in ", akx_in, "... ", iproc
     call broadcast(akx_in)
+    call broadcast(aky)
+    write (*,*) "Broadcasted akx_in ", akx_in, "... ", iproc
   end subroutine broadcast_akx_in
 
   !> Assign actual values to kx. The value of kx may change in time if
@@ -42,9 +45,15 @@ contains
   !    EGH
   subroutine calculate_kt_grids_single(g_exb, shear_time)
     use mp, only: proc0
+    use theta_grid, only: shat
     real, intent(in) :: g_exb, shear_time
-    if (proc0) write(*,*) "Calculating kgrids"
     akx = akx_in + g_exb * aky * shear_time
+    if (proc0) write(*,*) "Calculating kgrids: akx=", akx
+    if (aky .eq. 0.0) then 
+      theta0 = 0.0
+    else
+      theta0 = akx / aky / shat
+    end if
   end subroutine calculate_kt_grids_single
 
   subroutine wnml_kt_grids_single(unit)
@@ -599,6 +608,7 @@ module kt_grids
   public :: gridopt_switch, grid_option
   public :: gridopt_single, gridopt_range, gridopt_specified, gridopt_box
   public :: single       ! true if running linearly for single mode.
+  public :: calculate_kt_grids
   private
 
   real, dimension (:,:), allocatable :: theta0
@@ -646,6 +656,7 @@ contains
     end if
 
     call broadcast (reality)
+    call broadcast (gridopt_switch)
     call broadcast (box)
     call broadcast (single)
     call broadcast (naky)
@@ -810,6 +821,22 @@ contains
     end select
 
   end subroutine check_kt_grids
+
+  !> Used to update kt grids for the single exb shear
+  !! implementation
+  subroutine calculate_kt_grids(g_exb, shear_time)
+    use kt_grids_single, only: calculate_kt_grids_single
+    use kt_grids_single, only: single_get_grids
+    use mp, only: mp_abort
+    real, intent(in) ::  g_exb, shear_time
+    select case (gridopt_switch) 
+    case (gridopt_single) 
+       call calculate_kt_grids_single (g_exb, shear_time)
+       call single_get_grids (aky, theta0, akx)
+     case default
+       call mp_abort("calculate_kt_grids should only be called for grid_option = 'single' ")
+     end select
+   end subroutine calculate_kt_grids 
 
 end module kt_grids
 

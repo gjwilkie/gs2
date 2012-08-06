@@ -244,7 +244,7 @@ contains
     end if
     if (debug) write(6,*) "species: read_parameters: broadcasting nspec", iproc
 
-    call broadcast (1)
+    call broadcast (nspec)
     if (debug) write(6,*) "species: read_parameters: allocating", iproc
     allocate (spec(nspec))
 
