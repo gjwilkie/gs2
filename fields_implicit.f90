@@ -265,17 +265,18 @@ contains
   subroutine exb_shear (istep)
     use dist_fn, only:  exb_shear_d => exb_shear, g_exb, g_exb_error_limit
     use dist_fn, only:  g_exb_start_timestep, g_exb_start_time
-    use dist_fn, only:  init_bessel, init_fieldeq
+    use dist_fn, only:  init_bessel, init_fieldeq, init_kperp2
     use dist_fn_arrays, only: gnew, g_store
     use dist_fn_arrays, only: theta0_shift, kx_shift
     use fields_arrays, only: phinew, aparnew, bparnew
     use fields_arrays, only: phi, apar, bpar
     use fields_arrays, only: phi_store, apar_store, bpar_store
     use kt_grids, only: single, naky, ntheta0, akx
-    use kt_grids_single, only: single_akx => akx, calculate_kt_grids_single
+    use kt_grids, only: theta0, aky 
+    use kt_grids, only: calculate_kt_grids
     use theta_grid, only: ntgrid, delthet, jacob
     use gs2_time, only: code_time, code_dt, code_dt_old
-    use mp, only: proc0
+    use mp, only: proc0, iproc
 
     integer, intent (in) :: istep
     logical :: recalc_response
@@ -327,7 +328,7 @@ contains
         phi_temp = phinew - phi_store
         !phi_temp = phinew*conjg(phinew) - phi_store*conjg(phi_store)
         phi_error = 0
-        wgt = delthet*jacob  
+        wgt = delthet(-ntgrid:ntgrid-1)*jacob(-ntgrid:ntgrid-1)  
         anorm = sum(wgt)
         do ik = 1, naky
            do it = 1, ntheta0
@@ -389,9 +390,13 @@ contains
         bpar_temp =  bparnew
         call reset_init
       end if
-      call calculate_kt_grids_single(g_exb, code_time - wait_time)
+      call calculate_kt_grids(g_exb, code_time - wait_time)
       ! set akx in kt_grids equal to akx in kt_grids_single
-      akx = single_akx
+      !akx = single_akx
+      write (*,*) "Calculated kx: ", akx, "theta0: ", theta0, "ky: ", aky, &
+      "...", iproc
+      
+      call init_kperp2
       call init_bessel
       call init_fieldeq
       if (recalc_response .and. g_exb_error_check_cycle .eq. 2  ) then
