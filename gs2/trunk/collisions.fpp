@@ -88,6 +88,7 @@ module collisions
   ! needed for momentum and energy conservation due to energy diffusion (3.08)
   complex, dimension(:,:,:), allocatable :: bs0, bw0, bz0
 # ifdef USE_LE_LAYOUT
+  real, dimension (:,:), allocatable :: vpatmp
   complex, dimension (:,:,:), allocatable :: bs0le, bw0le, bz0le
 # endif
 
@@ -111,6 +112,9 @@ module collisions
   type (redist_type), save :: lorentz_map
   type (redist_type), save :: ediffuse_map
   type (redist_type), save :: g2le
+
+  logical :: drag = .false.
+  logical :: heating_flag = .false.
 
   logical :: hypermult
   logical :: initialized = .false.
@@ -158,6 +162,7 @@ contains
   end subroutine wnml_collisions
 
   subroutine init_collisions
+
     use species, only: init_species, nspec, spec
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0
@@ -190,6 +195,8 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
+    use run_parameters, only: beta
+    use species, only: nspec
     implicit none
     type (text_option), dimension (6), parameter :: modelopts = &
          (/ text_option('default', collision_model_full), &
@@ -277,6 +284,8 @@ contains
     call broadcast (test)
     call broadcast (adjust)
     call broadcast (ei_coll_only)
+
+    drag = resistivity .and. (beta > epsilon(0.0)) .and. (nspec > 1)
   end subroutine read_parameters
 
   subroutine init_map
@@ -305,9 +314,17 @@ contains
     case (collision_model_lorentz,collision_model_lorentz_test)
        ! init_lorentz_layout is called in redistribute
        call init_lorentz_redistribute
+       if (test) then
+          if (proc0) print *, '=== Lorentz map property ==='
+          call report_map_property (lorentz_map)
+       end if
     case (collision_model_ediffuse)
        ! init_ediffuse_layout is called in redistribute
        call init_ediffuse_redistribute
+       if (test) then
+          if (proc0) print *, '=== Ediffuse map property ==='
+          call report_map_property (ediffuse_map)
+       end if
     end select
 # endif
     
@@ -365,7 +382,7 @@ contains
   subroutine init_lorentz_conserve
 
 ! Precompute three quantities needed for momentum and energy conservation:
-! z0, w0, s0
+! z0, w0, s0 (z0le, w0le, s0le if USE_LE_LAYOUT defined)
     
     use gs2_layouts, only: g_lo, ie_idx, is_idx, ik_idx, il_idx, it_idx
     use species, only: nspec, spec, electron_species
@@ -413,7 +430,7 @@ contains
     vns(:,:,:,2) = vnmult(1)*vnew_s
     vns(:,:,:,3) = 0.0
 
-    if (resistivity .and. nspec > 1) then
+    if (drag) then
        do is = 1, nspec
           if (spec(is)%type /= electron_species) cycle
           do ik = 1, naky
@@ -749,6 +766,11 @@ contains
     aj1le = aimag(ctmp)
 
     deallocate (ctmp, z_big)
+
+    ! get rid of z0, s0, w0 now that we've converted to z0le, s0le, w0le
+    if (allocated(s0)) deallocate(s0)
+    if (allocated(z0)) deallocate(z0)
+    if (allocated(w0)) deallocate(w0)
 
 # endif
     
@@ -1322,7 +1344,7 @@ contains
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use le_grids, only: nlambda, negrid, ng2
-    use le_grids, only: forbid
+    use le_grids, only: forbid, ixi_to_il, ixi_to_isgn
     use egrid, only: zeroes, x0
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
@@ -1384,7 +1406,7 @@ contains
        is = is_idx(le_lo, ile)
        ig = ig_idx(le_lo, ile)
        do ixi=1, nxi
-          il = min(ixi, nxi+1-ixi)
+          il = ixi_to_il(ig,ixi)
           if (forbid(ig,il)) cycle
           call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, el, xe)
           ec1le(ixi,:,ile) = cc
@@ -1812,7 +1834,6 @@ contains
        do ie = 1, negrid
 
           call get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
-
           c1le(:,ie,ile) = cc
           if (allocated(d1le)) then
              d1le(:,ie,ile) = dd
@@ -1864,7 +1885,7 @@ contains
        else
           te2 = 2*je-1
        end if
-       ! tested get_lorentz_matrix -- MAB
+
        call get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
        c1(:,ilz) = cc
        if (allocated(d1)) then
@@ -2577,7 +2598,7 @@ contains
     integer, dimension (3) :: to_high
     integer :: to_low
     integer :: ig, isign, iglo, il, ile
-    integer :: ik, it, ie, is
+    integer :: ik, it, ie, is, ixi
     integer :: n, ip, je
 
     if (leinit) return
@@ -2619,9 +2640,7 @@ contains
        it = it_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-!       il = il_idx(g_lo,iglo)
        do isign = 1, 2
-!          if (isign==2) il = 2*g_lo%nlambda+1 - il
           do ig = -ntgrid, ntgrid
              il = il_idx(g_lo,iglo)
              je = jend(ig)
@@ -2685,6 +2704,7 @@ contains
   end subroutine init_g2le_redistribute
 
   subroutine solfp1 (g, gold, g1, phi, apar, bpar, phinew, aparnew, bparnew, diagnostics)
+
     use gs2_layouts, only: g_lo, it_idx, ik_idx, ie_idx, is_idx
     use theta_grid, only: ntgrid
     use run_parameters, only: tunits, beta
@@ -2695,10 +2715,12 @@ contains
     use species, only: nspec, spec, electron_species
     use dist_fn_arrays, only: c_rate, vpa, kperp2, aj0, g_adjust
     use run_parameters, only: ieqzip
-
     use constants
+    ! TMP FOR TESTING -- MAB
+!    use mp, only: proc0
 
     implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, gold, g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar, phinew, aparnew, bparnew
     complex, dimension (:,:,:), allocatable :: gc1, gc2, gc3
@@ -2714,44 +2736,47 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntotnew, uparnew, uperpnew, ttotnew
 
     if (collision_model_switch == collision_model_none) return
+    heating_flag = heating .and. present(diagnostics)
 
-    if (heating .and. present(diagnostics)) then
+    if (adjust) then
+       call g_adjust (g, phinew, bparnew, fphi, fbpar)
+       call g_adjust (gold, phi, bpar, fphi, fbpar)
+    end if
+
+    if (heating_flag) then
        allocate (gc1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc)) ; gc1 = 0.
        allocate (gc2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc)) ; gc2 = 0.
        allocate (gc3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc)) ; gc3 = 0.
+       gc3 = g
     else
        allocate (gc1(1,1,1)) ; gc1 = 0.
        allocate (gc2(1,1,1)) ; gc2 = 0.
        allocate (gc3(1,1,1)) ; gc3 = 0.
     end if
-    
-    ! changed 28/07/08 -- MAB
-!    if (adjust) call g_adjust (g, phi, bpar, fphi, fbpar)
-    if (adjust) call g_adjust (g, phinew, bparnew, fphi, fbpar)
-    if (adjust) call g_adjust (gold, phi, bpar, fphi, fbpar)
-
-    ! added 11/05/08 -- MAB
-    if (heating .and. present(diagnostics)) gc3 = g
 
     select case (collision_model_switch)
     case (collision_model_full)
 
        ! TMP FOR TESTING -- MAB
-!       call system_clock (count=t0, count_rate=tr)
+!       if (proc0) call system_clock (count=t0, count_rate=tr)
 
        call solfp_ediffuse (g)
 
        ! TMP FOR TESTING -- MAB
-!       call system_clock (count=t1)
-!       t1tot = t1tot + real(t1-t0)/tr
+!       if (proc0) then
+!          call system_clock (count=t1)
+!          t1tot = t1tot + real(t1-t0)/tr
+!       end if
 
        if (conserve_moments) call conserve_diffuse (g, g1)
 
        ! TMP FOR TESTING -- MAB
-!       call system_clock (count=t2)
-!       t2tot = t2tot + real(t2-t1)/tr
+!       if (proc0) then
+!          call system_clock (count=t2)
+!          t2tot = t2tot + real(t2-t1)/tr
+!       end if
 
-       if (resistivity .and. beta > epsilon(0.0) .and. nspec > 1) then
+       if (drag) then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              is = is_idx(g_lo,iglo)
              if (spec(is)%type /= electron_species) cycle
@@ -2769,9 +2794,11 @@ contains
        end if
 
        ! TMP FOR TESTING -- MAB
-!       call system_clock (count=t3)
-!       t3tot = t3tot + real(t3-t2)/tr
-       
+!       if (proc0) then
+!          call system_clock (count=t3)
+!          t3tot = t3tot + real(t3-t2)/tr
+!       end if
+
        if (heating .and. present(diagnostics)) then
           call solfp_lorentz (g, gc1, gc2, diagnostics)
        else
@@ -2779,20 +2806,23 @@ contains
        end if
 
        ! TMP FOR TESTING -- MAB
-!       call system_clock (count=t4)
-!       t4tot = t4tot + real(t4-t3)/tr
+!       if (proc0) then
+!          call system_clock (count=t4)
+!          t4tot = t4tot + real(t4-t3)/tr
+!       end if
 
        if (conserve_moments) call conserve_lorentz (g, g1)
 
        ! TMP FOR TESTING -- MAB
-!       call system_clock (count=t5)
-!       t5tot = t5tot + real(t5-t4)/tr
-
-!       write (*,*) t1tot, t2tot, t3tot, t4tot, t5tot
+!       if (proc0) then
+!          call system_clock (count=t5)
+!          t5tot = t5tot + real(t5-t4)/tr
+!          write (*,'(a10,5e14.5)') 'solfp1: ', t1tot, t2tot, t3tot, t4tot, t5tot
+!       end if
 
     case (collision_model_lorentz,collision_model_lorentz_test)
 
-       if (resistivity .and. beta > epsilon(0.0) .and. nspec > 1) then
+       if (drag) then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              is = is_idx(g_lo,iglo)
              if (spec(is)%type /= electron_species) cycle
@@ -2823,15 +2853,14 @@ contains
 
     end select
     
-    if (heating .and. present(diagnostics)) then
-
+    if (heating_flag) then
        call integrate_moment (gc1, c_rate(:,:,:,:,1))
        deallocate (gc1)
 
        if (hyper_colls) call integrate_moment (gc2, c_rate(:,:,:,:,2))
        deallocate (gc2)
 
-! form (h_i+1 + h_i)/2 * C(h_i+1) and integrate.  
+       ! form (h_i+1 + h_i)/2 * C(h_i+1) and integrate.  
 
        gc3 = 0.5*conjg(g+gold)*(g-gc3)/code_dt
 
@@ -2840,11 +2869,11 @@ contains
        deallocate (gc3)
     end if
 
-    ! changed 28/07/08 -- MAB
-!    if (adjust) call g_adjust (g, phi, bpar, -fphi, -fbpar)
-    if (adjust) call g_adjust (g, phinew, bparnew, -fphi, -fbpar)
-    if (adjust) call g_adjust (gold, phi, bpar, -fphi, -fbpar)
-    
+    if (adjust) then
+       call g_adjust (g, phinew, bparnew, -fphi, -fbpar)
+       call g_adjust (gold, phi, bpar, -fphi, -fbpar)
+    end if
+
   end subroutine solfp1
 
   subroutine conserve_lorentz (g, g1)
@@ -2854,10 +2883,11 @@ contains
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
     use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: ixi_to_il, ixi_to_isgn
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
-    use le_grids, only: nlambda, ng2
+    use le_grids, only: nlambda, ng2, sgn
     use gs2_layouts, only: le_lo, ig_idx
     use redistribute, only: scatter
     use run_parameters, only: tunits
@@ -2894,27 +2924,35 @@ contains
     allocate (gtmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc)) ; gtmp = 0.0
     allocate (vpanud(-ntgrid:ntgrid, nxi+1, negrid+1, nspec)) ; vpanud = 0.0
 
-    if (resistivity) then
+!    if (resistivity) then
+    if (drag) then
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! First get v0y0
 
-       isgn = 1
+       ! initially define vpanud to be vpa
        do is = 1, nspec
           do ie = 1, negrid
              do ixi = 1, nxi
-                il = min(ixi, nxi+1-ixi)
-                vpanud(:,ixi,ie,is) = sign(isgn, nlambda-ixi)*sqrt((1.0-al(il)*bmag)*energy(ie))
+                do ig = -ntgrid, ntgrid
+                   il = ixi_to_il(ig,ixi)
+                   isgn = ixi_to_isgn(ig,ixi)
+                   vpanud(ig,ixi,ie,is) = sgn(isgn)*sqrt((1.0-al(il)*bmag(ig))*energy(ie))
+                end do
              end do
           end do
        end do
        
+       ! v0 = vpa J0 f0, y0 = gle
        do ile = le_lo%llim_proc, le_lo%ulim_proc
           is = is_idx(le_lo,ile)
           ig = ig_idx(le_lo,ile)
           gtmp(:,:,ile) = vpanud(ig,:,:,is) * aj0le(:,:,ile) * gle(:,:,ile)
        end do
        call integrate_moment (le_lo, gtmp, v0y0)    ! v0y0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Get y1 = y0 - v0y0 * z0 / (1 + v0z0)
 
        do ile = le_lo%llim_proc, le_lo%ulim_proc
           it = it_idx(le_lo,ile)
@@ -2927,28 +2965,34 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v1y1
 
+    ! redefine vpanud to be vpa * nu_D
     if (conservative) then
        do is = 1, nspec
           do ie = 1, negrid
              do ixi = 1, nxi
-                il = min(ixi, nxi+1-ixi)
-                isgn = 2 - il/ixi
-                vpanud(:,ixi,ie,is) = vpdiff(:,isgn,il) * sqrt(energy(ie)) * vnmult(1)*vnew_D(1,ie,is)/tunits(1)
+                do ig = -ntgrid, ntgrid
+                   il = ixi_to_il(ig,ixi)
+                   isgn = ixi_to_isgn(ig,ixi)
+                   vpanud(ig,ixi,ie,is) = vpdiff(ig,isgn,il) * sqrt(energy(ie)) * vnmult(1)*vnew_D(1,ie,is)/tunits(1)
+                end do
              end do
           end do
        end do
     else
-       isgn = 1
        do is = 1, nspec
           do ie = 1, negrid
              do ixi = 1, nxi
-                il = min(ixi, nxi+1-ixi)
-                vpanud(:,ixi,ie,is) = sign(isgn, nlambda-ixi)*sqrt((1.0-al(il)*bmag)*energy(ie))*vnmult(1)*vnew_D(1,ie,is)/tunits(1)
+                do ig = -ntgrid, ntgrid
+                   il = ixi_to_il(ig,ixi)
+                   isgn = ixi_to_isgn(ig,ixi)
+                   vpanud(ig,ixi,ie,is) = sgn(isgn)*sqrt((1.0-al(il)*bmag(ig))*energy(ie))*vnmult(1)*vnew_D(1,ie,is)/tunits(1)
+                end do
              end do
           end do
        end do
     end if
 
+    ! v1 = nud vpa J0 f0, y1 = gle
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        is = is_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
@@ -2974,8 +3018,9 @@ contains
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        is = is_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
+       ig = ig_idx(le_lo,ile)
        do ixi=1, nxi
-          il = min(ixi, nxi+1-ixi)
+          il = ixi_to_il(ig,ixi)
           ! aj1vp2 = 2 * J1(arg)/arg * vperp^2
           gtmp(ixi,:negrid,ile) = vnmult(1) * vnew_D(ik,:negrid,is) * aj1le(ixi,:negrid,ile) &
                * energy(:) * al(il) * gle(ixi,:negrid,ile)
@@ -3005,30 +3050,38 @@ contains
     allocate (vns(naky,negrid,nspec))
     vns = vnmult(1)*vnew_D
 
+    if (drag) then
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! First get v0y0
 
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       do isgn = 1, 2
-          ! v0 = vpa J0 f0
-          gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*g(:,isgn,iglo)
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          do isgn = 1, 2
+             ! v0 = vpa J0 f0, y0 = g
+             gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*g(:,isgn,iglo)
+          end do
        end do
-    end do
-
-    call integrate_moment (gtmp, v0y0, all)    ! v0y0
+       
+       call integrate_moment (gtmp, v0y0, all)    ! v0y0
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Get y1 = y0 - v0y0 * z0 / (1 + v0z0)
 
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       it = it_idx(g_lo,iglo)
-       ik = ik_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
-          g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
-               * z0(:,isgn,iglo)
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          it = it_idx(g_lo,iglo)
+          ik = ik_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          do isgn = 1, 2
+             g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
+                  * z0(:,isgn,iglo)
+          end do
        end do
-    end do
+
+    else
+
+       g1 = g
+
+    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v1y1
@@ -3039,7 +3092,7 @@ contains
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          ! v1 = nud vpa J0 f0
+          ! v1 = nud vpa J0 f0, y1 = g1
           if (conservative) then
              gtmp(:,isgn,iglo) = vns(ik,ie,is)*sqrt(energy(ie))*vpdiff(:,isgn,il) &
                   * aj0(:,iglo)*g1(:,isgn,iglo)
@@ -3113,14 +3166,17 @@ contains
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
     use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: ixi_to_il, ixi_to_isgn
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
-    use le_grids, only: nlambda, ng2, forbid
+    use le_grids, only: nlambda, ng2, forbid, sgn, speed
     use gs2_layouts, only: le_lo, ig_idx
     use redistribute, only: scatter
     use theta_grid, only: bmag
     use run_parameters, only: tunits
+    ! TMP FOR TESTING -- MAB
+!    use mp, only: proc0
 # endif
 
     implicit none
@@ -3134,7 +3190,6 @@ contains
 # ifdef USE_LE_LAYOUT
     integer :: ile, ixi, nxi
     real, dimension (:,:,:,:), allocatable :: vpadelnu
-    real, dimension (:,:), allocatable :: vpatmp
     complex, dimension (:), allocatable :: v0y0, v1y1, v2y2
 
     ! TMP FOR TESTING -- MAB
@@ -3156,7 +3211,18 @@ contains
     allocate (gtmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
     allocate (vpadelnu(-ntgrid:ntgrid, nxi+1, negrid+1, nspec)) ; vpadelnu = 0.0
     allocate (vns(naky,negrid,nspec))
-    allocate (vpatmp(-ntgrid:ntgrid,nxi)) ; vpatmp = 0.0
+
+    if (.not. allocated(vpatmp)) then
+       allocate(vpatmp(-ntgrid:ntgrid,nxi)) ; vpatmp = 0.0
+       do ixi = 1, nxi
+          do ig = -ntgrid, ntgrid
+             il = ixi_to_il(ig,ixi)
+             isgn = ixi_to_isgn(ig,ixi)
+             if (.not. forbid(ig,il)) &
+                  vpatmp(ig,ixi) = sgn(isgn)*sqrt(max(0.0,(1.0-al(il)*bmag(ig))))
+          end do
+       end do
+    end if
 
     vns = vnmult(2)*vnew_E
 
@@ -3164,7 +3230,7 @@ contains
 ! First get v0y0
     
     ! TMP FOR TESTING -- MAB
-!    call system_clock (count=t0, count_rate=tr)
+!    if (proc0) call system_clock (count=t0, count_rate=tr)
 
      do ile = le_lo%llim_proc, le_lo%ulim_proc
         is = is_idx(le_lo,ile)
@@ -3181,8 +3247,10 @@ contains
 !    call integrate_moment (le_lo, gle*aj0le, v0y0, vns)    ! v0y0
 
     ! TMP FOR TESTING -- MAB
-!    call system_clock (count=t1)
-!    t1tot = t1tot + real(t1-t0)/tr
+!    if (proc0) then
+!       call system_clock (count=t1)
+!       t1tot = t1tot + real(t1-t0)/tr
+!    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Get y1 = y0 - v0y0 * z0 / (1 + v0z0)
@@ -3197,23 +3265,24 @@ contains
 ! Now get v1y1
 
     vns(1,:,:) = vnmult(2)*delvnew(1,:,:)/tunits(1)
-    do ixi = 1, nxi
-       il = min(ixi, nxi+1-ixi)
-       isgn = 1
-       do ig = -ntgrid, ntgrid
-       	  if (.not. forbid(ig,il)) &
-               vpatmp(ig,ixi) = sign(isgn,nlambda-ixi)*sqrt(max(0.0,(1.0-al(il)*bmag(ig))))
-       end do
-    end do
+
+    ! TMP FOR TESTING -- MAB
+!    if (proc0) then
+!       call system_clock (count=t2)
+!       t2tot = t2tot + real(t2-t1)/tr
+!    end if
 
     do is = 1, nspec
        do ie = 1, negrid
-          vpadelnu(:,:nxi,ie,is) = vns(1,ie,is) * sqrt(vpatmp*energy(ie))
+          vpadelnu(:,:nxi,ie,is) = vns(1,ie,is) * vpatmp * speed(ie)
        end do
     end do
 
-!    call system_clock (count=t4)
-!    t4tot = t4tot + real(t4-t3)/tr
+    ! TMP FOR TESTING -- MAB
+!    if (proc0) then
+!       call system_clock (count=t3)
+!       t3tot = t3tot + real(t3-t2)/tr
+!    end if
 
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        is = is_idx(le_lo,ile)
@@ -3225,8 +3294,10 @@ contains
     call integrate_moment (le_lo, gtmp, v1y1)    ! v1y1
 
     ! TMP FOR TESTING -- MAB
-!    call system_clock (count=t6)
-!    t6tot = t6tot + real(t6-t4)/tr
+!    if (proc0) then
+!       call system_clock (count=t4)
+!       t4tot = t4tot + real(t4-t3)/tr
+!    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Get y2 = y1 - v1y1 * s1 / (1 + v1s1)
@@ -3238,8 +3309,10 @@ contains
     end do
 
     ! TMP FOR TESTING -- MAB
-!    call system_clock (count=t7)
-!    t7tot = t7tot + real(t7-t6)/tr
+!    if (proc0) then
+!       call system_clock (count=t5)
+!       t5tot = t5tot + real(t5-t4)/tr
+!    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v2y2
@@ -3253,9 +3326,10 @@ contains
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        is = is_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
+       ig = ig_idx(le_lo,ile)
        do ie=1, negrid
           do ixi = 1, nxi
-             il = min(ixi, nxi+1-ixi)
+             il = ixi_to_il(ig,ixi)
              gtmp(ixi,ie,ile) = vns(ik,ie,is) &
                   * al(il)*aj1le(ixi,ie,ile) * gle(ixi,ie,ile)
           end do
@@ -3265,8 +3339,10 @@ contains
     call integrate_moment (le_lo, gtmp, v2y2)    ! v2y2
 
     ! TMP FOR TESTING -- MAB
-!    call system_clock (count=t9)
-!    t9tot = t9tot + real(t9-t7)/tr
+!    if (proc0) then
+!       call system_clock (count=t6)
+!       t6tot = t6tot + real(t6-t5)/tr
+!    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Finally get x = y2 - v2y2 * w2 / (1 + v2w2)
@@ -3278,16 +3354,20 @@ contains
     end do
 
     ! TMP FOR TESTING -- MAB
-!    call system_clock (count=t10)
-!    t10tot = t10tot + real(t10-t9)/tr
+!    if (proc0) then
+!       call system_clock (count=t7)
+!       t7tot = t7tot + real(t7-t6)/tr
+!    end if
 
     if (collision_model_switch == collision_model_ediffuse) &
          call scatter (g2le, gle, g)
+ 
+    ! TMP FOR TESTING -- MAB
+!    if (proc0) then
+!       write (*,'(a20,7e14.5)') 'conserve_diffuse: ', t1tot, t2tot, t3tot, t4tot, t5tot, t6tot, t7tot
+!    end if
 
-!    write (*,*) 'conserve_diffuse', t1tot, t3tot, t4tot, t6tot, t7tot, t9tot, t10tot
-!    write (*,*)
-
-    deallocate (vpadelnu, vns, vpatmp, v0y0, v1y1, v2y2)
+    deallocate (vpadelnu, vns, v0y0, v1y1, v2y2)
 
 # else
 
@@ -3397,6 +3477,7 @@ contains
   end subroutine conserve_diffuse
 
   subroutine solfp_lorentz (g, gc, gh, diagnostics, init)
+
     use species, only: spec, electron_species
     use theta_grid, only: ntgrid, bmag
     use le_grids, only: nlambda, jend, ng2, al
@@ -3435,13 +3516,15 @@ contains
 
 # ifdef USE_LE_LAYOUT
 
+    allocate (gle0(nxi+1)) ; gle0 = 0.0
+
+    ! if energy diffusion operator has been applied, mapping
+    ! from g_lo to le_lo has already occurred. if not, do mapping.
     if (collision_model_switch == collision_model_lorentz &
          .or. collision_model_switch == collision_model_lorentz_test) &
          call gather (g2le, g, gle)
 
-    allocate (gle0(max(2*nlambda,2*ng2+1)))
-
-    if (heating .and. present(diagnostics)) then
+    if (heating_flag) then
        do ile = le_lo%llim_proc, le_lo%ulim_proc
           ig = ig_idx(le_lo,ile)
 
@@ -3468,10 +3551,11 @@ contains
           do ile = le_lo%llim_proc, le_lo%ulim_proc
              ig = ig_idx(le_lo,ile)
 
-             je = 2*jend(ig)          
+             je = 2*jend(ig)
              if (je == 0) then
                 je = 2*ng2 
              end if
+
              do ie = 1, negrid
                 do il = 1, je-1
                    fac = gle(il+1,ie,ile)-gle(il,ie,ile)
@@ -3483,7 +3567,7 @@ contains
        end if
     end if
 
-    ! solve for glz row by row
+    ! solve for gle row by row
     do ile = le_lo%llim_proc, le_lo%ulim_proc
 
        ig = ig_idx(le_lo,ile)
@@ -3551,23 +3635,21 @@ contains
     end if
 
     deallocate (gle0)
+    if (heating) deallocate (glec)
     
 # else
 
-    allocate (glz(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
-    allocate (glz0(max(2*nlambda,2*ng2+1)))
+    allocate (glz(nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
+    allocate (glz0(nxi+1))
     glz = 0.0 ; glz0 = 0.0
     if (heating) then
        allocate (glzc(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
        glzc = 0.0
     end if
 
-!    call check_g ('beg', g)
-
     call gather (lorentz_map, g, glz)
 
-
-    if (heating .and. present(diagnostics)) then
+    if (heating_flag) then
        do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
           ig = ig_idx(lz_lo,ilz)
 
@@ -3606,9 +3688,9 @@ contains
        end if
     end if
 
-!    call check_glz ('beg', glz)
     ! solve for glz row by row
     do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
+
        ie = ie_idx(lz_lo,ilz)
        ig = ig_idx(lz_lo,ilz)
        ik = ik_idx(lz_lo,ilz)
@@ -3674,11 +3756,7 @@ contains
 
     end do
 
-!    call check_glz ('end', glz)
-
     call scatter (lorentz_map, glz, g)
-
-!    call check_g ('end', g)
 
     deallocate (glz, glz0)
     if (heating) deallocate (glzc)
@@ -3693,7 +3771,8 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     use le_grids, only: negrid, integrate_moment, forbid, ng2
-    use gs2_layouts, only: ig_idx, il_idx, is_idx, e_lo, g_lo
+    use le_grids, only: ixi_to_il
+    use gs2_layouts, only: ig_idx, it_idx, ik_idx, il_idx, is_idx, e_lo, g_lo
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
     use run_parameters, only: ieqzip
@@ -3701,10 +3780,6 @@ contains
     use le_grids, only: nlambda, jend
     use gs2_layouts, only: le_lo
 # endif
-
-    ! TEMP FOR TESTING -- MAB
-    use gs2_layouts, only: ik_idx, ie_idx, il_idx, it_idx
-    use gs2_time, only: code_dt
 
     implicit none
 
@@ -3726,14 +3801,17 @@ contains
 
     nxi = max(2*nlambda-1, 2*ng2)
 
-    ! solve for ged row by row
+    ! solve for gle row by row
     do ile = le_lo%llim_proc, le_lo%ulim_proc
+
        is = is_idx(le_lo,ile)
+       ig = ig_idx(le_lo,ile)
+
        if (spec(is)%vnewk < 2.0*epsilon(0.0)) cycle
        if (ieqzip(it_idx(le_lo,ile),ik_idx(le_lo,ile))==0) cycle
-       ig = ig_idx(le_lo,ile)
+
        do ixi = 1, nxi
-          il = min(ixi, nxi+1-ixi)
+          il = ixi_to_il(ig,ixi)
           if (forbid(ig,il)) cycle
 
           delta(1) = gle(ixi,1,ile)
@@ -3758,13 +3836,13 @@ contains
 
 # else
 
-    allocate (ged(negrid+1,e_lo%llim_proc:e_lo%ulim_alloc))
-    ged = 0.0
+    allocate (ged(negrid+1,e_lo%llim_proc:e_lo%ulim_alloc)) ; ged = 0.0
 
     call gather (ediffuse_map, g, ged)
 
     ! solve for ged row by row
     do ielo = e_lo%llim_proc, e_lo%ulim_proc
+
        is = is_idx(e_lo,ielo)
        ig = ig_idx(e_lo,ielo)
        il = il_idx(e_lo,ielo)
@@ -3910,12 +3988,12 @@ contains
     use file_utils, only: error_unit
     use mp, only: finish_mp, iproc, nproc, proc0
     use theta_grid, only: ntgrid
-    use le_grids, only: nlambda, negrid
+    use le_grids, only: nlambda, negrid, jend, ixi_to_il, ixi_to_isgn
     use gs2_layouts, only: g_lo, le_lo
     use gs2_layouts, only: ig_idx, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use redistribute, only: gather, scatter, report_map_property
-    integer :: iglo, ile, ig, ik, it, il, ie, is, ierr
-    integer :: ip
+    integer :: iglo, ile, ig, isgn, ik, it, il, ie, is, ierr
+    integer :: ip, ixi, je
     complex, dimension (:,:,:), allocatable :: gtmp, letmp
 
     if (proc0) then
@@ -3939,26 +4017,26 @@ contains
        il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       gtmp(0,1,iglo) = rule(ik,it,il,ie,is)
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             gtmp(ig,isgn,iglo) = rule(ig,isgn,ik,it,il,ie,is)
+          end do
+       end do
     end do
     call gather (g2le, gtmp, letmp)
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        ig = ig_idx(le_lo,ile)
-! MAB>
-! following line changed to account for extra elements in gle layout
-! (i.e. il=2*nlambda+1 and ie=negrid+1)
-!       if (ig /= 0 .and. all(letmp(:,:,ile)==0.0)) cycle
-       if (ig /= 0 .and. all(letmp(:2*nlambda,:negrid,ile)==0.0)) cycle
-! <MAB
+       je = jend(ig)
        ik = ik_idx(le_lo,ile)
        it = it_idx(le_lo,ile)
        is = is_idx(le_lo,ile)
-       do il=1, nlambda
-          do ie=1, negrid
-             if (int(real(letmp(il,ie,ile))) /= rule(ik,it,il,ie,is)) &
-                  write (ierr,'(a,8i6)') 'ERROR: gather by g2le broken!', iproc
-          end do
+       do ixi = 1, 2*nlambda
+          isgn = ixi_to_isgn(ig,ixi)
+          il = ixi_to_il(ig,ixi)
+          if (int(real(letmp(ixi,ie,ile))) /= rule(ig,isgn,ik,it,il,ie,is)) &
+               write (ierr,'(a,8i6)') 'ERROR: gather by g2le broken!', iproc
        end do
+
     end do
     if (proc0) write (ierr,'(a)') 'g2le gather check done'
 
@@ -3971,22 +4049,27 @@ contains
        il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       if (gtmp(0,1,iglo) /= rule(ik,it,il,ie,is)) &
-            write (ierr,'(a,i6)') 'ERROR: scatter by g2le broken!', iproc
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             if (gtmp(ig,isgn,iglo) /= rule(ig,isgn,ik,it,il,ie,is)) &
+                  write (ierr,'(a,i6)') 'ERROR: scatter by g2le broken!', iproc
+          end do
+       end do
     end do
     if (proc0) write (ierr,'(a)') 'g2le scatter check done'
 
     deallocate (gtmp,letmp)
 
-!!$    call finish_mp
-!!$    stop
+!    call finish_mp
+!    stop
 
   contains
 
-    function rule (ik, it, il, ie, is)
-      integer, intent (in) :: ik, it, il, ie, is
+    function rule (ig, isgn, ik, it, il, ie, is)
+      integer, intent (in) :: ig, isgn, ik, it, il, ie, is
       integer :: rule
-      rule = ie + ik  ! make whatever you want
+      rule = ig + isgn + ik + it + il + ie + is  ! make whatever you want
+!      rule = isgn
     end function rule
 
   end subroutine check_g2le
@@ -4026,6 +4109,7 @@ contains
     if (allocated(ec1le)) deallocate (ec1le, ebetaale, eqle)
     if (allocated(gle)) deallocate (gle)
     if (allocated(glec)) deallocate (glec)
+    if (allocated(vpatmp)) deallocate (vpatmp)
 # else
     if (allocated(c1)) then
        deallocate (c1, betaa, ql)
