@@ -77,14 +77,14 @@ module le_grids
 
   public :: init_le_grids, finish_le_grids
   public :: read_parameters, wnml_le_grids
-  public :: integrate_species
+  public :: integrate_species, write_mpdist, write_mpdist_le
   public :: energy, anon, al, delal, jend, forbid, dele, wl, w
   public :: negrid, nlambda, ng2, lmax, integrate_moment, nesub
-  public :: xloc
+  public :: xloc, sgn, ixi_to_il, ixi_to_isgn, speed
   public :: xx, nterp, new_trap_int, vcut
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
   public :: eint_error, lint_error, trap_error, wdim
-  public :: integrate_kysum, integrate_volume ! MAB
+  public :: integrate_kysum, integrate_volume
   public :: get_flux_vs_theta_vs_vpa
 
   private
@@ -115,11 +115,14 @@ module le_grids
   real, dimension (:,:), allocatable, save :: lpe, lpl
   real, dimension (:,:,:,:), allocatable, save :: lpt
 
-  real, dimension (:), allocatable :: energy, w, anon, dele ! (negrid)
+  real, dimension (:), allocatable :: energy, w, anon, dele, speed ! (negrid)
   real, dimension (:), allocatable :: al, delal ! (nlambda)
   real, dimension (:,:), allocatable :: wl ! (nlambda,-ntgrid:ntgrid)
   integer, dimension (:), allocatable :: jend ! (-ntgrid:ntgrid)
   logical, dimension (:,:), allocatable :: forbid ! (-ntgrid:ntgrid,nlambda)
+
+  integer, dimension (:,:), allocatable :: ixi_to_il, ixi_to_isgn
+  integer, dimension (2) :: sgn
 
   integer :: wdim
   integer :: lint_lo, lint_hi, eint_lo, eint_hi
@@ -216,7 +219,7 @@ contains
     use egrid, only: zeroes, x0, init_egrid
     use theta_grid, only: ntgrid
     implicit none
-    integer :: il, is, ie, ipt, isgn, tsize
+    integer :: ig, il, is, ie, ipt, isgn, tsize
 
     tsize = 2*nterp-1
 
@@ -237,7 +240,7 @@ contains
     call broadcast (nterp)
 
     if (.not. proc0) then
-       allocate (energy(negrid), w(negrid), anon(negrid))
+       allocate (energy(negrid), w(negrid), anon(negrid), speed(negrid))
        allocate (dele(negrid))
        allocate (al(nlambda), delal(nlambda))
        allocate (wl(-ntgrid:ntgrid,nlambda))
@@ -246,6 +249,8 @@ contains
        allocate (xx(ng2))
        allocate (lgrnge(-ntgrid:ntgrid,nlambda,tsize,2))
        allocate (xloc(-ntgrid:ntgrid,tsize))
+       allocate (ixi_to_il(-ntgrid:ntgrid, 2*nlambda))
+       allocate (ixi_to_isgn(-ntgrid:ntgrid, 2*nlambda))
     end if
 
     call init_egrid (negrid)
@@ -258,6 +263,7 @@ contains
     call broadcast (jend)
  
     call broadcast (energy)
+    call broadcast (speed)
     call broadcast (dele)
     call broadcast (w)
     call broadcast (anon)
@@ -275,6 +281,12 @@ contains
           end do
        end do
     end do
+
+    do ig = -ntgrid, ntgrid
+       call broadcast (ixi_to_il(ig,:))
+       call broadcast (ixi_to_isgn(ig,:))
+    end do
+    call broadcast (sgn)
 
   end subroutine broadcast_results
 
@@ -1090,9 +1102,8 @@ contains
        is = is_idx (lo,ile)
        do ie=1, negrid
           do ixi=1, nxi
-             il = min(ixi, nxi+1-ixi)
+             il = ixi_to_il(ig,ixi)
              fac = w(ie) * wl(ig,il)
-!             total(ig,it,ik,is) = total(ig,it,ik,is) + fac * g(ixi,ie,ile)
              total(ile) = total(ile) + fac * g(ixi,ie,ile)
           end do
        end do
@@ -1445,10 +1456,11 @@ contains
     call init_theta_grid
     call init_species
 
-    allocate (energy(negrid), w(negrid), anon(negrid), dele(negrid))
+    allocate (energy(negrid), w(negrid), anon(negrid), dele(negrid), speed(negrid))
 
     call setvgrid (vcut, negrid, energy, w, nesub)
-
+    speed = sqrt(energy)
+    
     anon = 1.0
 
     tsize = 2*nterp-1
@@ -1522,7 +1534,10 @@ contains
     forbid = .false.
 
 !    if (eps <= epsilon(0.0)) return
-    if (.not. trapped_particles .or. eps <= epsilon(0.0)) return
+    if (.not. trapped_particles .or. eps <= epsilon(0.0)) then
+       call xigridset
+       return
+    end if
 
 ! pick integration method (new=high-order interp, old=finite difference)
     if (new_trap_int) then
@@ -1716,9 +1731,61 @@ contains
        end do
     end do
 
+    call xigridset
+
     eflag = .false.
 
   end subroutine lgridset
+
+  subroutine xigridset
+
+    use theta_grid, only: ntgrid
+
+    implicit none
+
+    integer :: ig, je, ixi
+
+    if (.not. allocated(ixi_to_il)) allocate (ixi_to_il(-ntgrid:ntgrid,2*nlambda))
+    if (.not. allocated(ixi_to_isgn)) allocate (ixi_to_isgn(-ntgrid:ntgrid,2*nlambda))
+
+    ! define array 'sgn' that returns sign of vpa associated with isgn=1,2
+    sgn(1) = 1
+    sgn(2) = -1
+
+    ! get mapping from ixi (which runs between 1 and 2*nlambda) and il (runs between 1 and nlambda)
+    do ig = -ntgrid, ntgrid
+       je = jend(ig)
+       ! if no trapped particles
+       if (je == 0) then
+          do ixi = 1, 2*nlambda
+             if (ixi > nlambda) then
+                ixi_to_isgn(ig,ixi) = 2
+                ixi_to_il(ig,ixi) = 2*nlambda - ixi + 1
+             else
+                ixi_to_isgn(ig,ixi) = 1
+                ixi_to_il(ig,ixi) = ixi
+             end if
+          end do
+       else
+          do ixi = 1, 2*nlambda
+             if (ixi >= nlambda + je + 1) then
+                ixi_to_isgn(ig,ixi) = 2
+                ixi_to_il(ig,ixi) = 2*nlambda + je + 1 - ixi
+             else if (ixi >= 2*je) then
+                ixi_to_isgn(ig,ixi) = 1
+                ixi_to_il(ig,ixi) = ixi - je
+             else if (ixi >= je) then
+                ixi_to_isgn(ig,ixi) = 2
+                ixi_to_il(ig,ixi) = 2*je - ixi
+             else
+                ixi_to_isgn(ig,ixi) = 1
+                ixi_to_il(ig,ixi) = ixi
+             end if
+          end do
+       end if
+    end do
+
+  end subroutine xigridset
 
   subroutine lagrange_coefs (ig, nodes, lfac, xloc)
     
@@ -2117,6 +2184,129 @@ contains
 
   end subroutine get_hermite_polynomials_1d
 
+  ! subroutine used for testing
+  ! takes as input an array using g_lo and
+  ! writes it to a .distmp output file
+  subroutine write_mpdist (dist, extension, last)
+
+    use mp, only: proc0, send, receive
+    use file_utils, only: open_output_file, close_output_file
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use gs2_layouts, only: ie_idx, il_idx, idx_local, proc_id
+    use theta_grid, only: ntgrid, bmag, theta
+
+    implicit none
+
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: dist
+!    real, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: dist
+    character (*), intent (in) :: extension
+    logical, intent (in), optional :: last
+
+    integer :: iglo, ik, it, is, ie, il, ig
+    integer, save :: unit
+    logical :: done = .false.
+    real :: vpa1
+    complex, dimension (2) :: gtmp
+!    real, dimension (2) :: gtmp
+
+     if (.not. done) then
+!        if (proc0) call open_output_file (unit, ".distmp")
+        if (proc0) call open_output_file (unit, trim(extension))
+        do iglo=g_lo%llim_world, g_lo%ulim_world
+           ik = ik_idx(g_lo, iglo)
+           it = it_idx(g_lo, iglo)
+           is = is_idx(g_lo, iglo)
+           ie = ie_idx(g_lo, iglo)
+           il = il_idx(g_lo, iglo)
+           do ig = -ntgrid, ntgrid
+              if (idx_local (g_lo, ik, it, il, ie, is)) then
+                 if (proc0) then
+                    gtmp = dist(ig,:,iglo)
+                 else
+                    call send (dist(ig,:,iglo), 0)
+                 end if
+              else if (proc0) then
+                 call receive (gtmp, proc_id(g_lo, iglo))
+              end if
+              if (proc0) then
+                 if (.not. forbid(ig,il)) then
+                    vpa1 = sqrt(energy(ie)*max(0.0,1.0-al(il)*bmag(ig)))
+                    write (unit,'(6e14.5)') vpa1, energy(ie), &
+                         real(gtmp(1)), aimag(gtmp(1)), real(gtmp(2)), aimag(gtmp(2))
+!                    write (unit,'(5e14.5)') theta(ig), vpa1, energy(ie), gtmp(1), gtmp(2)
+                 end if
+              end if
+           end do
+        end do
+        if (proc0) call close_output_file (unit)
+        if (present(last)) done = .true.
+     end if
+
+   end subroutine write_mpdist
+
+  ! subroutine used for testing
+  ! takes as input an array using le_lo and
+  ! writes it to a .distmp output file
+  subroutine write_mpdist_le (dist, extension, last)
+
+    use mp, only: proc0, send, receive
+    use file_utils, only: open_output_file, close_output_file
+    use gs2_layouts, only: le_lo, ig_idx, ik_idx, it_idx, is_idx
+    use gs2_layouts, only: idx_local, proc_id
+    use theta_grid, only: ntgrid, bmag, theta
+
+    implicit none
+
+    complex, dimension (:,:,le_lo%llim_proc:), intent (in) :: dist
+!    real, dimension (:,:,le_lo%llim_proc:), intent (in) :: dist
+    character (*), intent (in) :: extension
+    logical, intent (in), optional :: last
+
+    integer :: ile, ixi, nxi, ik, it, is, ie, il, ig, isgn
+    integer, save :: unit
+    logical :: done = .false.
+    real :: vpa1
+    complex :: gtmp
+!    real :: gtmp
+
+     if (.not. done) then
+        if (proc0) call open_output_file (unit, trim(extension))
+        nxi = max(2*nlambda-1, 2*ng2)
+        do ile=le_lo%llim_world, le_lo%ulim_world
+           ig = ig_idx(le_lo, ile)
+           ik = ik_idx(le_lo, ile)
+           it = it_idx(le_lo, ile)
+           is = is_idx(le_lo, ile)
+           do ie = 1, negrid
+              do ixi = 1, nxi
+                 il = ixi_to_il(ig,ixi)
+                 isgn = ixi_to_isgn(ig,ixi)
+                 if (idx_local (le_lo, ig, ik, it, is)) then
+                    if (proc0) then
+                       gtmp = dist(ixi,ie,ile)
+                    else
+                       call send (dist(ixi,ie,ile), 0)
+                    end if
+                 else if (proc0) then
+                    call receive (gtmp, proc_id(le_lo, ile))
+                 end if
+                 if (proc0) then
+                    if (.not. forbid(ig,il)) then
+                       vpa1 = sqrt(energy(ie)*max(0.0,1.0-al(il)*bmag(ig)))
+                       write (unit,'(4e14.5)') sgn(isgn)*vpa1, energy(ie), &
+                            real(gtmp), aimag(gtmp)
+!                    write (unit,'(5e14.5)') theta(ig), vpa1, energy(ie), gtmp(1), gtmp(2)
+                    end if
+                 end if
+              end do
+           end do
+        end do
+        if (proc0) call close_output_file (unit)
+        if (present(last)) done = .true.
+     end if
+
+   end subroutine write_mpdist_le
+
   subroutine finish_le_grids
 
     use egrid, only: zeroes
@@ -2137,6 +2327,8 @@ contains
     if (allocated(wlmod)) deallocate (wlmod)
     if (allocated(wmod)) deallocate (wmod)
     if (allocated(wtmod)) deallocate (wtmod)
+    if (allocated(ixi_to_il)) deallocate (ixi_to_il)
+    if (allocated(ixi_to_isgn)) deallocate (ixi_to_isgn)
 
     accel_x = .false. ; accel_v = .false.
     test = .false. ; trapped_particles = .true.
