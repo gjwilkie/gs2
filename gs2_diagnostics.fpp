@@ -1473,6 +1473,7 @@ contains
 
     part_fluxes = 0.0 ; mpart_fluxes = 0.0 ; bpart_fluxes = 0.0
     heat_fluxes = 0.0 ; mheat_fluxes = 0.0 ; bheat_fluxes = 0.0
+    mom_fluxes = 0.0 ; mmom_fluxes = 0.0 ; bmom_fluxes = 0.0
     energy_exchange = 0.0
 
     phase_tot = 0.0 ;  phase_theta = 0.0
@@ -1915,12 +1916,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                      & ' mom fluxes: ', 5(1x,e10.4),' vflux_avg: ', 5(1x,e10.4))") &
                      t, phi2, mom_fluxes(1:min(nspec,5)), vflux_avg(1:min(nspec,5))/t
-                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' parmom fluxes: ', 5(1x,e10.4))") &
-                     t, phi2, parmom_fluxes(1:min(nspec,5))
-                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' perpmom fluxes: ', 5(1x,e10.4))") &
-                     t, phi2, perpmom_fluxes(1:min(nspec,5))
+
 #ifdef LOWFLOW
                    write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
                         & ' lfmom fluxes: ', 5(1x,e10.4),' lfvflx1: ', 5(1x,e10.4))") &
