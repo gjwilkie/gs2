@@ -16,7 +16,7 @@ module collisions
   public :: read_parameters, wnml_collisions, check_collisions
   public :: solfp1
   public :: reset_init
-  public :: dtot, fdf, fdb, lorentz_map, vnmult, vnfac
+  public :: dtot, fdf, fdb, vnmult, vnfac
   public :: ncheck, vnslow, vary_vnew
   public :: etol, ewindow, etola, ewindowa
   public :: init_lorentz, init_ediffuse
@@ -109,10 +109,6 @@ module collisions
   real, dimension (:,:), allocatable :: ec1, ebetaa, eql
 # endif
 
-  type (redist_type), save :: lorentz_map
-  type (redist_type), save :: ediffuse_map
-  type (redist_type), save :: g2le
-
   logical :: drag = .false.
   logical :: heating_flag = .false.
 
@@ -166,11 +162,15 @@ contains
     use species, only: init_species, nspec, spec
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0
-    use le_grids, only: init_le_grids, nlambda, negrid 
+    use le_grids, only: init_le_grids, nlambda, negrid , init_map
     use run_parameters, only: init_run_parameters
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
 
     implicit none
+
+    logical :: use_lz_layout = .false.
+    logical :: use_e_layout = .false.
+    logical :: use_le_layout = .false.
 
     if (initialized) return
     initialized = .true.
@@ -186,7 +186,20 @@ contains
     call init_run_parameters
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
     call read_parameters
-    call init_map  ! ported from AGK July 24, 2009 -- MAB
+# ifdef USE_LE_LAYOUT
+    use_le_layout = .true.
+# else
+    select case (collision_model_switch)
+    case (collision_model_full)
+       use_lz_layout = .true.
+       use_e_layout = .true.
+    case (collision_model_lorentz,collision_model_lorentz_test)
+       use_lz_layout = .true.
+    case (collision_model_ediffuse)
+       use_e_layout = .true.
+    end select
+# endif
+    call init_map (use_lz_layout, use_e_layout, use_le_layout)
     call init_arrays
 
   end subroutine init_collisions
@@ -288,54 +301,6 @@ contains
     drag = resistivity .and. (beta > epsilon(0.0)) .and. (nspec > 1)
   end subroutine read_parameters
 
-  subroutine init_map
-
-    use mp, only: finish_mp, proc0
-    use redistribute, only: report_map_property
-
-# ifdef USE_LE_LAYOUT
-    call init_g2le_redistribute ! new map
-    if (test) call check_g2le
-# else
-    select case (collision_model_switch)
-    case (collision_model_full)
-       ! init_lorentz_layout is called in redistribute
-       call init_lorentz_redistribute
-       if (test) then
-          if (proc0) print *, '=== Lorentz map property ==='
-          call report_map_property (lorentz_map)
-       end if
-       ! init_ediffuse_layout is called in redistribute
-       call init_ediffuse_redistribute
-       if (test) then
-          if (proc0) print *, '=== Ediffuse map property ==='
-          call report_map_property (ediffuse_map)
-       end if
-    case (collision_model_lorentz,collision_model_lorentz_test)
-       ! init_lorentz_layout is called in redistribute
-       call init_lorentz_redistribute
-       if (test) then
-          if (proc0) print *, '=== Lorentz map property ==='
-          call report_map_property (lorentz_map)
-       end if
-    case (collision_model_ediffuse)
-       ! init_ediffuse_layout is called in redistribute
-       call init_ediffuse_redistribute
-       if (test) then
-          if (proc0) print *, '=== Ediffuse map property ==='
-          call report_map_property (ediffuse_map)
-       end if
-    end select
-# endif
-    
-    if (test) then
-       if (proc0) print *, 'init_map done'
-!!$    call finish_mp
-!!$    stop
-    end if
-
-  end subroutine init_map
-
   subroutine init_arrays
     use species, only: nspec
     use le_grids, only: negrid
@@ -394,7 +359,7 @@ contains
     use run_parameters, only: tunits
     use constants, only: pi
 # ifdef USE_LE_LAYOUT
-    use le_grids, only: nlambda, ng2
+    use le_grids, only: nlambda, ng2, g2le
     use gs2_layouts, only: le_lo
     use redistribute, only: gather
 # endif
@@ -791,7 +756,7 @@ contains
     use run_parameters, only: tunits
     use constants, only: pi
 # ifdef USE_LE_LAYOUT
-    use le_grids, only: nlambda, ng2
+    use le_grids, only: nlambda, ng2, g2le
     use gs2_layouts, only: le_lo
     use redistribute, only: gather
 # endif
@@ -1629,134 +1594,6 @@ contains
 
   end subroutine get_ediffuse_matrix
 
-  subroutine init_ediffuse_redistribute
-    use mp, only: nproc
-    use species, only: nspec
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, negrid, ng2
-    use gs2_layouts, only: init_ediffuse_layouts
-    use gs2_layouts, only: g_lo, e_lo, ie_idx, ik_idx, it_idx, il_idx, is_idx
-    use gs2_layouts, only: idx_local, proc_id, idx
-    use redistribute, only: index_list_type, init_redist, delete_list
-    implicit none
-    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
-    integer, dimension(0:nproc-1) :: nn_to, nn_from
-    integer, dimension(3) :: from_low, from_high
-    integer, dimension(2) :: to_high
-    integer :: to_low
-    integer :: ig, isign, iglo, ik, it, il, ie, is, ielo
-    integer :: n, ip
-!    logical :: ediffinit = .false.
-
-    if (ediffinit) return
-    
-!DD, March 2009: Nullify pointers on initialisation, so do not pass association
-!                test when not allocated. 
-!  Problem arose on Pascali compiler (York) with  to_list(ip)%third and fourth
-    do ip=0, (nproc-1)
-       nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
-    end do
-!<DD
-	
-!DD, March 2009: Nullify pointers on initialisation, so do not pass association
-!                test when not allocated. 
-!  Problem arose on Pascali compiler (York) with  to_list(ip)%third and fourth
-    do ip=0, (nproc-1)
-       nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
-    end do
-!<DD
-
-    call init_ediffuse_layouts &
-         (ntgrid, naky, ntheta0, nlambda, nspec)
-
-    ! count number of elements to be redistributed to/from each processor
-    nn_to = 0
-    nn_from = 0
-    do iglo = g_lo%llim_world, g_lo%ulim_world
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isign = 1, 2
-          do ig = -ntgrid, ntgrid
-             ielo = idx(e_lo,ig,isign,ik,it,il,is)
-             if (idx_local(g_lo,iglo)) &
-                  nn_from(proc_id(e_lo,ielo)) = nn_from(proc_id(e_lo,ielo)) + 1
-             if (idx_local(e_lo,ielo)) &
-                  nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
-          end do
-       end do
-    end do
-
-    do ip = 0, nproc-1
-       if (nn_from(ip) > 0) then
-          allocate (from_list(ip)%first(nn_from(ip)))
-          allocate (from_list(ip)%second(nn_from(ip)))
-          allocate (from_list(ip)%third(nn_from(ip)))
-       end if
-       if (nn_to(ip) > 0) then
-          allocate (to_list(ip)%first(nn_to(ip)))
-          allocate (to_list(ip)%second(nn_to(ip)))
-       end if
-    end do
-
-    ! get local indices of elements distributed to/from other processors
-    nn_to = 0
-    nn_from = 0
-    do iglo = g_lo%llim_world, g_lo%ulim_world
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       do isign = 1, 2
-          do ig = -ntgrid, ntgrid
-             ielo = idx(e_lo,ig,isign,ik,it,il,is)
-
-             if (idx_local(g_lo,iglo)) then
-                ip = proc_id(e_lo,ielo)
-                n = nn_from(ip) + 1
-                nn_from(ip) = n
-                from_list(ip)%first(n) = ig
-                from_list(ip)%second(n) = isign
-                from_list(ip)%third(n) = iglo
-             end if
-             if (idx_local(e_lo,ielo)) then
-                ip = proc_id(g_lo,iglo)
-                n = nn_to(ip) + 1
-                nn_to(ip) = n
-                to_list(ip)%first(n) = ie
-                to_list(ip)%second(n) = ielo
-             end if
-          end do
-       end do
-    end do
-
-    from_low (1) = -ntgrid
-    from_low (2) = 1
-    from_low (3) = g_lo%llim_proc
-
-    to_low = e_lo%llim_proc
-
-    to_high(1) = negrid+1
-    to_high(2) = e_lo%ulim_alloc
-
-    from_high(1) = ntgrid
-    from_high(2) = 2
-    from_high(3) = g_lo%ulim_alloc
-    
-
-    call init_redist (ediffuse_map, 'c', to_low, to_high, to_list, &
-         from_low, from_high, from_list)
-
-    call delete_list (to_list)
-    call delete_list (from_list)
-
-    ediffinit = .true.
-
-  end subroutine init_ediffuse_redistribute
-
   subroutine init_lorentz (vnmult_target)
     use species, only: nspec, spec
     use theta_grid, only: ntgrid, bmag
@@ -2436,273 +2273,6 @@ contains
     deallocate (slb, dprod, dlcoef, d2lcoef)
   end subroutine init_lorentz_error
 
-  subroutine init_lorentz_redistribute
-    use mp, only: nproc
-    use species, only: nspec
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, negrid, jend, ng2
-    use gs2_layouts, only: init_lorentz_layouts
-    use gs2_layouts, only: g_lo, lz_lo
-    use gs2_layouts, only: idx_local, proc_id
-! TT>
-!!$    use gs2_layouts, only: gidx2lzidx
-    use gs2_layouts, only: ik_idx, it_idx, ie_idx, is_idx, il_idx, idx
-! <TT
-    use redistribute, only: index_list_type, init_redist, delete_list
-    implicit none
-
-    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
-    integer, dimension(0:nproc-1) :: nn_to, nn_from
-    integer, dimension(3) :: from_low, from_high
-    integer, dimension(2) :: to_high
-    integer :: to_low
-    integer :: ig, isign, iglo, il, ilz
-! TT>
-    integer :: ik, it, ie, is, je
-! <TT
-    integer :: n, ip
-!    logical :: done = .false.
-
-    if (lzinit) return
-
-    call init_lorentz_layouts &
-         (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
-
-    ! count number of elements to be redistributed to/from each processor
-    nn_to = 0
-    nn_from = 0
-    do iglo = g_lo%llim_world, g_lo%ulim_world
-! TT> expansion of gidx2lzidx
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-! <TT
-       do isign = 1, 2
-          do ig = -ntgrid, ntgrid
-! TT>
-!!$             call gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, il, ilz)
-             ilz = idx(lz_lo, ig, ik, it, ie, is)
-! <TT
-             if (idx_local(g_lo,iglo)) &
-                  nn_from(proc_id(lz_lo,ilz)) = nn_from(proc_id(lz_lo,ilz)) + 1
-             if (idx_local(lz_lo,ilz)) &
-                  nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
-          end do
-       end do
-    end do
-
-    do ip = 0, nproc-1
-       if (nn_from(ip) > 0) then
-          allocate (from_list(ip)%first(nn_from(ip)))
-          allocate (from_list(ip)%second(nn_from(ip)))
-          allocate (from_list(ip)%third(nn_from(ip)))
-       end if
-       if (nn_to(ip) > 0) then
-          allocate (to_list(ip)%first(nn_to(ip)))
-          allocate (to_list(ip)%second(nn_to(ip)))
-       end if
-    end do
-
-    ! get local indices of elements distributed to/from other processors
-    nn_to = 0
-    nn_from = 0
-    do iglo = g_lo%llim_world, g_lo%ulim_world
-! TT> expansion of gidx2lzidx
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-! <TT
-       do isign = 1, 2
-          do ig = -ntgrid, ntgrid
-! TT>
-!!$             call gidx2lzidx (ig, isign, g_lo, iglo, lz_lo, ntgrid, jend, il, ilz)
-! TT: following just the inline expansion of gidx2lzidx except that
-! TT: the arguments of idx function is replaced by variables
-             je = jend(ig)
-             il = il_idx(g_lo,iglo)
-             if (je == 0) then
-                if (isign == 2) then
-                   il = 2*g_lo%nlambda+1 - il
-                end if
-             else
-                if (il == je) then
-                   if (isign == 1) il = 2*je  ! throw this info away
-                else if (il > je) then 
-                   if (isign == 1) il = il + je
-                   if (isign == 2) il = 2*g_lo%nlambda + 1 - il + je
-                else
-                   if (isign == 2) il = 2*je - il !+ 1
-                end if
-             end if
-             ilz = idx(lz_lo, ig, ik, it, ie, is)
-! <TT
-!             write(*,*) ig,':',isign,':',iglo,':',il,':',ilz
-             if (idx_local(g_lo,iglo)) then
-                ip = proc_id(lz_lo,ilz)
-                n = nn_from(ip) + 1
-                nn_from(ip) = n
-                from_list(ip)%first(n) = ig
-                from_list(ip)%second(n) = isign
-                from_list(ip)%third(n) = iglo
-             end if
-             if (idx_local(lz_lo,ilz)) then
-                ip = proc_id(g_lo,iglo)
-                n = nn_to(ip) + 1
-                nn_to(ip) = n
-                to_list(ip)%first(n) = il
-                to_list(ip)%second(n) = ilz
-             end if
-          end do
-       end do
-    end do
-
-    from_low (1) = -ntgrid
-    from_low (2) = 1
-    from_low (3) = g_lo%llim_proc
-
-    to_low = lz_lo%llim_proc
-
-    to_high(1) = max(2*nlambda, 2*ng2+1)
-    to_high(2) = lz_lo%ulim_alloc
-
-    from_high(1) = ntgrid
-    from_high(2) = 2
-    from_high(3) = g_lo%ulim_alloc
-    call init_redist (lorentz_map, 'c', to_low, to_high, to_list, &
-         from_low, from_high, from_list)
-    call delete_list (to_list)
-    call delete_list (from_list)
-
-    lzinit = .true.
-
-  end subroutine init_lorentz_redistribute
-
-  subroutine init_g2le_redistribute
-    use mp, only: nproc
-    use species, only: nspec
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, negrid, jend, ng2
-    use gs2_layouts, only: init_le_layouts
-    use gs2_layouts, only: g_lo, le_lo
-    use gs2_layouts, only: idx_local, proc_id
-    use gs2_layouts, only: ik_idx, it_idx, ie_idx, is_idx, il_idx, idx
-    use redistribute, only: index_list_type, init_redist, delete_list
-    implicit none
-    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
-    integer, dimension (0:nproc-1) :: nn_to, nn_from
-    integer, dimension (3) :: from_low, from_high
-    integer, dimension (3) :: to_high
-    integer :: to_low
-    integer :: ig, isign, iglo, il, ile
-    integer :: ik, it, ie, is, ixi
-    integer :: n, ip, je
-
-    if (leinit) return
-
-    call init_le_layouts (ntgrid, naky, ntheta0, nspec)
-
-    ! count number of elements to be redistributed to/from each processor
-    nn_to = 0
-    nn_from = 0
-    do iglo = g_lo%llim_world, g_lo%ulim_world
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do ig = -ntgrid, ntgrid
-          ile = idx (le_lo, ig, ik, it, is)
-          if (idx_local(g_lo,iglo)) nn_from(proc_id(le_lo,ile)) = nn_from(proc_id(le_lo,ile)) + 2
-          if (idx_local(le_lo,ile)) nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 2
-       end do
-    end do
-
-    do ip = 0, nproc-1
-       if (nn_from(ip) > 0) then
-          allocate (from_list(ip)%first (nn_from(ip)))
-          allocate (from_list(ip)%second(nn_from(ip)))
-          allocate (from_list(ip)%third (nn_from(ip)))
-       end if
-       if (nn_to(ip) > 0) then
-          allocate (to_list(ip)%first (nn_to(ip)))
-          allocate (to_list(ip)%second(nn_to(ip)))
-          allocate (to_list(ip)%third (nn_to(ip)))
-       end if
-    end do
-
-    ! get local indices of elements distributed to/from other processors
-    nn_to = 0
-    nn_from = 0
-    do iglo = g_lo%llim_world, g_lo%ulim_world
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isign = 1, 2
-          do ig = -ntgrid, ntgrid
-             il = il_idx(g_lo,iglo)
-             je = jend(ig)
-             if (je == 0) then
-                if (isign == 2) then
-                   il = 2*g_lo%nlambda+1 - il
-                end if
-             else
-                if (il == je) then
-                   if (isign == 1) il = 2*je  ! throw this info away
-                else if (il > je) then 
-                   if (isign == 1) il = il + je
-                   if (isign == 2) il = 2*g_lo%nlambda + 1 - il + je
-                else
-                   if (isign == 2) il = 2*je - il !+ 1
-                end if
-             end if
-             ile = idx (le_lo, ig, ik, it, is)
-             if (idx_local(g_lo,iglo)) then
-                ip = proc_id(le_lo,ile)
-                n = nn_from(ip) + 1
-                nn_from(ip) = n
-                from_list(ip)%first(n)  = ig
-                from_list(ip)%second(n) = isign
-                from_list(ip)%third(n)  = iglo
-             end if
-             if (idx_local(le_lo,ile)) then
-                ip = proc_id(g_lo,iglo)
-                n = nn_to(ip) + 1
-                nn_to(ip) = n
-                to_list(ip)%first(n)  = il
-                to_list(ip)%second(n) = ie
-                to_list(ip)%third(n)  = ile
-             end if
-          end do
-       end do
-    end do
-
-    from_low (1) = -ntgrid
-    from_low (2) = 1
-    from_low (3) = g_lo%llim_proc
-
-    from_high(1) = ntgrid
-    from_high(2) = 2
-    from_high(3) = g_lo%ulim_alloc
-
-    to_low = le_lo%llim_proc
-
-    to_high(1) = max(2*nlambda, 2*ng2+1)
-    to_high(2) = negrid + 1  ! TT: just followed convention with +1.
-    ! TT: It may be good to avoid bank conflict.
-    to_high(3) = le_lo%ulim_alloc
-
-    call init_redist (g2le, 'c', to_low, to_high, to_list, from_low, from_high, from_list)
-
-    call delete_list (to_list)
-    call delete_list (from_list)
-
-    leinit = .true.
-
-  end subroutine init_g2le_redistribute
-
   subroutine solfp1 (g, gold, g1, phi, apar, bpar, phinew, aparnew, bparnew, diagnostics)
 
     use gs2_layouts, only: g_lo, it_idx, ik_idx, ie_idx, is_idx
@@ -2887,7 +2457,7 @@ contains
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
-    use le_grids, only: nlambda, ng2, sgn
+    use le_grids, only: nlambda, ng2, sgn, g2le
     use gs2_layouts, only: le_lo, ig_idx
     use redistribute, only: scatter
     use run_parameters, only: tunits
@@ -3170,7 +2740,7 @@ contains
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
-    use le_grids, only: nlambda, ng2, forbid, sgn, speed
+    use le_grids, only: nlambda, ng2, forbid, sgn, speed, g2le
     use gs2_layouts, only: le_lo, ig_idx
     use redistribute, only: scatter
     use theta_grid, only: bmag
@@ -3480,7 +3050,7 @@ contains
 
     use species, only: spec, electron_species
     use theta_grid, only: ntgrid, bmag
-    use le_grids, only: nlambda, jend, ng2, al
+    use le_grids, only: nlambda, jend, ng2, al, lambda_map
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: ig_idx, ik_idx, il_idx, is_idx, it_idx, ie_idx
     use prof, only: prof_entering, prof_leaving
@@ -3488,7 +3058,7 @@ contains
     use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
     use gs2_layouts, only: le_lo
-    use le_grids, only: negrid
+    use le_grids, only: negrid, g2le
 # else
     use gs2_layouts, only: lz_lo
 # endif
@@ -3647,7 +3217,7 @@ contains
        glzc = 0.0
     end if
 
-    call gather (lorentz_map, g, glz)
+    call gather (lambda_map, g, glz)
 
     if (heating_flag) then
        do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
@@ -3668,7 +3238,7 @@ contains
              glzc(il,ilz) = conjg(fac)*fac*d1(il,ilz)  ! d1 accounts for hC(h) entropy
           end do
        end do
-       call scatter (lorentz_map, glzc, gc)
+       call scatter (lambda_map, glzc, gc)
 
        if (hyper_colls) then
           do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
@@ -3684,7 +3254,7 @@ contains
                 glzc(il,ilz) = conjg(fac)*fac*h1(il,ilz)  ! h1 accounts for hH(h) entropy
              end do
           end do
-          call scatter (lorentz_map, glzc, gh)
+          call scatter (lambda_map, glzc, gh)
        end if
     end if
 
@@ -3756,7 +3326,7 @@ contains
 
     end do
 
-    call scatter (lorentz_map, glz, g)
+    call scatter (lambda_map, glz, g)
 
     deallocate (glz, glz0)
     if (heating) deallocate (glzc)
@@ -3771,13 +3341,13 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     use le_grids, only: negrid, integrate_moment, forbid, ng2
-    use le_grids, only: ixi_to_il
+    use le_grids, only: ixi_to_il, energy_map
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, il_idx, is_idx, e_lo, g_lo
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
     use run_parameters, only: ieqzip
 # ifdef USE_LE_LAYOUT
-    use le_grids, only: nlambda, jend
+    use le_grids, only: nlambda, jend, g2le
     use gs2_layouts, only: le_lo
 # endif
 
@@ -3838,7 +3408,7 @@ contains
 
     allocate (ged(negrid+1,e_lo%llim_proc:e_lo%ulim_alloc)) ; ged = 0.0
 
-    call gather (ediffuse_map, g, ged)
+    call gather (energy_map, g, ged)
 
     ! solve for ged row by row
     do ielo = e_lo%llim_proc, e_lo%ulim_proc
@@ -3862,7 +3432,7 @@ contains
 
     end do
 
-    call scatter (ediffuse_map, ged, g)
+    call scatter (energy_map, ged, g)
 
     deallocate (ged)
 
@@ -3982,97 +3552,6 @@ contains
     end if
     
   end subroutine init_vpdiff
-
-  subroutine check_g2le
-
-    use file_utils, only: error_unit
-    use mp, only: finish_mp, iproc, nproc, proc0
-    use theta_grid, only: ntgrid
-    use le_grids, only: nlambda, negrid, jend, ixi_to_il, ixi_to_isgn
-    use gs2_layouts, only: g_lo, le_lo
-    use gs2_layouts, only: ig_idx, ik_idx, it_idx, il_idx, ie_idx, is_idx
-    use redistribute, only: gather, scatter, report_map_property
-    integer :: iglo, ile, ig, isgn, ik, it, il, ie, is, ierr
-    integer :: ip, ixi, je
-    complex, dimension (:,:,:), allocatable :: gtmp, letmp
-
-    if (proc0) then
-       ierr = error_unit()
-    else
-       ierr = 6
-    end if
-
-    ! report the map property
-    if (proc0) print *, '=== g2le map property ==='
-    call report_map_property (g2le)
-
-    allocate (gtmp(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
-    allocate (letmp(nlambda*2+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-
-    ! gather check
-    gtmp = 0.0
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
-          do ig = -ntgrid, ntgrid
-             gtmp(ig,isgn,iglo) = rule(ig,isgn,ik,it,il,ie,is)
-          end do
-       end do
-    end do
-    call gather (g2le, gtmp, letmp)
-    do ile = le_lo%llim_proc, le_lo%ulim_proc
-       ig = ig_idx(le_lo,ile)
-       je = jend(ig)
-       ik = ik_idx(le_lo,ile)
-       it = it_idx(le_lo,ile)
-       is = is_idx(le_lo,ile)
-       do ixi = 1, 2*nlambda
-          isgn = ixi_to_isgn(ig,ixi)
-          il = ixi_to_il(ig,ixi)
-          if (int(real(letmp(ixi,ie,ile))) /= rule(ig,isgn,ik,it,il,ie,is)) &
-               write (ierr,'(a,8i6)') 'ERROR: gather by g2le broken!', iproc
-       end do
-
-    end do
-    if (proc0) write (ierr,'(a)') 'g2le gather check done'
-
-    ! scatter check
-    gtmp = 0.0
-    call scatter (g2le, letmp, gtmp)
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
-          do ig = -ntgrid, ntgrid
-             if (gtmp(ig,isgn,iglo) /= rule(ig,isgn,ik,it,il,ie,is)) &
-                  write (ierr,'(a,i6)') 'ERROR: scatter by g2le broken!', iproc
-          end do
-       end do
-    end do
-    if (proc0) write (ierr,'(a)') 'g2le scatter check done'
-
-    deallocate (gtmp,letmp)
-
-!    call finish_mp
-!    stop
-
-  contains
-
-    function rule (ig, isgn, ik, it, il, ie, is)
-      integer, intent (in) :: ig, isgn, ik, it, il, ie, is
-      integer :: rule
-      rule = ig + isgn + ik + it + il + ie + is  ! make whatever you want
-!      rule = isgn
-    end function rule
-
-  end subroutine check_g2le
 
   subroutine reset_init
 !
