@@ -6276,13 +6276,13 @@ subroutine check_dist_fn(report_unit)
   subroutine collision_error (phi, bpar, last)
     
     use mp, only: proc0, send, receive, barrier
-    use le_grids, only: ng2, jend, nlambda, al, forbid
+    use le_grids, only: ng2, jend, nlambda, al, forbid, lambda_map
     use theta_grid, only: ntgrid, bmag
     use dist_fn_arrays, only: gnew, aj0
     use run_parameters, only: fphi, fbpar
     use gs2_layouts, only: g_lo, lz_lo, ig_idx, idx_local, proc_id
     use gs2_layouts, only: ik_idx, ie_idx, is_idx, it_idx, il_idx
-    use collisions, only: dtot, fdf, fdb, lorentz_map
+    use collisions, only: dtot, fdf, fdb
     use redistribute, only: gather, scatter
     use file_utils, only: open_output_file, close_output_file
     use gs2_time, only: user_time
@@ -6325,7 +6325,7 @@ subroutine check_dist_fn(report_unit)
     call g_adjust(gnew,phi,bpar,-fphi,-fbpar)
 
 ! map from g0(ig,isgn,iglo) to glze(il,ilz)
-    call gather (lorentz_map, g0, glze)
+    call gather (lambda_map, g0, glze)
 
 ! loop over ig, isign, ik, it, ie, is
     do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
@@ -7005,7 +7005,7 @@ subroutine check_dist_fn(report_unit)
     end do
     
     ! TMP FOR TESTING -- MAB
-!    wdfac = 0. ; cdfac = 0. ; hneoc = 1. ; wstarfac = 0. ; wdttpfac = 0.
+!    wdfac = 0. ; cdfac = 0. ; hneoc = 1. ; wstarfac = 0. ; wdttpfac = 0. ; vparterm = 0.
 
     deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9)
  
@@ -7045,63 +7045,5 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine init_lowflow
 #endif
-
-  ! subroutine used for testing
-  ! takes as input an array using g_lo and
-  ! writes it to a .distmp output file
-  subroutine write_mpdist (dist)
-
-    use mp, only: proc0, send, receive
-    use file_utils, only: open_output_file, close_output_file
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
-    use gs2_layouts, only: ie_idx, il_idx, idx_local, proc_id
-    use theta_grid, only: ntgrid, bmag, theta
-    use le_grids, only: forbid, energy, al
-
-    implicit none
-
-!    complex, dimension (-ntgrid:,:,g_lo%llim_proc:) :: dist
-    real, dimension (-ntgrid:,:,g_lo%llim_proc:) :: dist
-
-    integer :: iglo, ik, it, is, ie, il, ig
-    integer, save :: unit
-    logical :: first = .true.
-    real :: vpa1
-!    complex, dimension (2) :: gtmp
-    real, dimension (2) :: gtmp
-
-     if (first) then
-        if (proc0) call open_output_file (unit, ".distmp")
-        do iglo=g_lo%llim_world, g_lo%ulim_world
-           ik = ik_idx(g_lo, iglo)
-           it = it_idx(g_lo, iglo)
-           is = is_idx(g_lo, iglo)
-           ie = ie_idx(g_lo, iglo)
-           il = il_idx(g_lo, iglo)
-           do ig = -ntgrid, ntgrid
-              if (idx_local (g_lo, ik, it, il, ie, is)) then
-                 if (proc0) then
-                    gtmp = dist(ig,:,iglo)
-                 else
-                    call send (dist(ig,:,iglo), 0)
-                 end if
-              else if (proc0) then
-                 call receive (gtmp, proc_id(g_lo, iglo))
-              end if
-              if (proc0) then
-                 if (.not. forbid(ig,il)) then
-                    vpa1 = sqrt(energy(ie)*max(0.0,1.0-al(il)*bmag(ig)))
-!                    write (unit,'(6e14.5)') vpa1, energy(ie), &
-!                         real(gtmp(1)), aimag(gtmp(1)), real(gtmp(2)), aimag(gtmp(2))
-                    write (unit,'(5e14.5)') theta(ig), vpa1, energy(ie), gtmp(1), gtmp(2)
-                 end if
-              end if
-           end do
-        end do
-        if (proc0) call close_output_file (unit)
-        first = .false.
-     end if
-
-   end subroutine write_mpdist
 
 end module dist_fn
