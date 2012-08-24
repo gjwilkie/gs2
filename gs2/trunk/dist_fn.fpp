@@ -2326,7 +2326,8 @@ subroutine check_dist_fn(report_unit)
   subroutine timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, mode)
 
     use theta_grid, only: ntgrid
-    use collisions, only: solfp1
+!    use collisions, only: solfp1
+    use le_derivatives, only: vspace_derivatives
     use dist_fn_arrays, only: gnew, g, gold
 !    use nonlinear_terms, only: add_nonlinear_terms
     use nonlinear_terms, only: add_explicit_terms
@@ -2346,7 +2347,9 @@ subroutine check_dist_fn(report_unit)
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
     call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
     call hyper_diff (gnew, phinew, bparnew)
-    call solfp1 (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)   !! BUGS IN SOLFP1 B/C phi, phinew misused?
+    ! TMP FOR TESTING -- MAB
+    call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
+!    call solfp1 (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)   !! BUGS IN SOLFP1 B/C phi, phinew misused?
                                                                                   !! bug comment above addressed (probably) -- MAB
     if (def_parity) then
        if (even) then
@@ -3667,7 +3670,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine getan
 
   subroutine getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
-    use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
+    use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew, g_adjust
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
@@ -3675,7 +3678,6 @@ subroutine check_dist_fn(report_unit)
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
     use fields_arrays, only: phinew, bparnew
-    use dist_fn_arrays, only: g_adjust
 
     implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
@@ -3807,7 +3809,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine getmoms
 
   subroutine getemoms (ntot, tperp)
-    use dist_fn_arrays, only: vperp2, aj0, gnew
+    use dist_fn_arrays, only: vperp2, aj0, gnew, g_adjust
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
@@ -3815,7 +3817,6 @@ subroutine check_dist_fn(report_unit)
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
     use fields_arrays, only: phinew, bparnew
-    use dist_fn_arrays, only: g_adjust
 
     implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: tperp, ntot
@@ -4834,7 +4835,7 @@ subroutine check_dist_fn(report_unit)
 #ifdef LOWFLOW
     use dist_fn_arrays, only: hneoc
 #endif
-    use dist_fn_arrays, only: vpa, vpac, aj0, aj1, vperp2, g, gnew, kperp2
+    use dist_fn_arrays, only: vpa, vpac, aj0, aj1, vperp2, g, gnew, kperp2, g_adjust
     use gs2_heating, only: heating_diagnostics
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, ie_idx
     use le_grids, only: integrate_moment
@@ -4845,7 +4846,6 @@ subroutine check_dist_fn(report_unit)
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_apar, a_ext_data
     use hyper, only: D_v, D_eta, nexp, hypervisc_filter
-    use dist_fn_arrays, only: g_adjust
 
     implicit none
     type (heating_diagnostics) :: h
@@ -5553,13 +5553,12 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky, aky, akx
     use species, only: nspec, spec
-    use dist_fn_arrays, only: gnew, aj0, vpa
+    use dist_fn_arrays, only: gnew, aj0, vpa, g_adjust
     use run_parameters, only: fphi, fapar, fbpar, beta
     use gs2_layouts, only: g_lo
     use collisions, only: init_lorentz, init_ediffuse, init_lorentz_conserve, init_diffuse_conserve
     use collisions, only: etol, ewindow, etola, ewindowa
     use collisions, only: vnmult, vary_vnew
-    use dist_fn_arrays, only: g_adjust
 
     ! TEMP FOR TESTING -- MAB
 !    use gs2_layouts, only: il_idx
@@ -5852,11 +5851,10 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
-    use dist_fn_arrays, only: gnew, aj0
+    use dist_fn_arrays, only: gnew, aj0, g_adjust
     use run_parameters, only: fphi, fbpar
     use gs2_layouts, only: g_lo
     use mp, only: proc0, broadcast
-    use dist_fn_arrays, only: g_adjust
 
     implicit none
 
@@ -5979,14 +5977,13 @@ subroutine check_dist_fn(report_unit)
   subroutine write_poly (phi, bpar, last, istep)
 
     use file_utils, only: open_output_file, close_output_file
-    use dist_fn_arrays, only: gnew, aj0
+    use dist_fn_arrays, only: gnew, aj0, g_adjust
     use run_parameters, only: fphi, fbpar
     use gs2_layouts, only: g_lo
     use mp, only: proc0
     use le_grids, only: nterp, negrid, lagrange_interp, xloc
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
-    use dist_fn_arrays, only: g_adjust
 
     implicit none
 
@@ -6129,11 +6126,10 @@ subroutine check_dist_fn(report_unit)
     use kt_grids, only: naky, ntheta0, nx, ny
     use theta_grid, only: bmag, ntgrid
     use species, only: nspec
-    use dist_fn_arrays, only: gnew
+    use dist_fn_arrays, only: gnew, g_adjust
     use nonlinear_terms, only: accelerated
     use gs2_transforms, only: transform2, init_transforms
     use run_parameters, only: fphi, fbpar
-    use dist_fn_arrays, only: g_adjust
 
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     logical, intent (in) :: last
@@ -6278,7 +6274,7 @@ subroutine check_dist_fn(report_unit)
     use mp, only: proc0, send, receive, barrier
     use le_grids, only: ng2, jend, nlambda, al, forbid, lambda_map
     use theta_grid, only: ntgrid, bmag
-    use dist_fn_arrays, only: gnew, aj0
+    use dist_fn_arrays, only: gnew, aj0, g_adjust
     use run_parameters, only: fphi, fbpar
     use gs2_layouts, only: g_lo, lz_lo, ig_idx, idx_local, proc_id
     use gs2_layouts, only: ik_idx, ie_idx, is_idx, it_idx, il_idx
@@ -6286,7 +6282,6 @@ subroutine check_dist_fn(report_unit)
     use redistribute, only: gather, scatter
     use file_utils, only: open_output_file, close_output_file
     use gs2_time, only: user_time
-    use dist_fn_arrays, only: g_adjust
     implicit none
 
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
@@ -6907,6 +6902,14 @@ subroutine check_dist_fn(report_unit)
     ! neoclassical quantities of interest
     if (neo_test) stop
     
+    ! intialize mappings from g_lo to e_lo and lz_lo or to le_lo to facilitate
+    ! energy and lambda derivatives in parallel nonlinearity, etc.
+# ifdef USE_LE_LAYOUT
+    call init_map (use_lz_layout=.false., use_e_layout=.false., use_le_layout=.true.)
+# else
+    call init_map (use_lz_layout=.true., use_e_layout=.true., use_le_layout=.false.)
+# endif
+
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
@@ -7005,7 +7008,7 @@ subroutine check_dist_fn(report_unit)
     end do
     
     ! TMP FOR TESTING -- MAB
-!    wdfac = 0. ; cdfac = 0. ; hneoc = 1. ; wstarfac = 0. ; wdttpfac = 0. ; vparterm = 0.
+    wdfac = 0. ; cdfac = 0. ; hneoc = 1. ; wstarfac = 0. ; wdttpfac = 0. ; vparterm = 0.
 
     deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9)
  
