@@ -63,14 +63,21 @@ contains
        ! map data from g_layout to le_layout
        call gather (g2le, g, gle)
        
-       ! lowflow stuff goes here
-       
+# ifdef LOWFLOW
+       ! add lowflow stuff here
+
+       if (colls) then
+# endif
        ! update distribution function to take into account collisions
        if (present(diagnostics)) then
           call solfp1 (gle, diagnostics)
        else
           call solfp1 (gle)
        end if
+
+# ifdef LOWFLOW
+       end if
+# endif
 
        ! remap from le_layout to g_layout
        call scatter (g2le, gle, g)
