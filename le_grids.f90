@@ -79,7 +79,7 @@ module le_grids
   public :: read_parameters, wnml_le_grids
   public :: integrate_species, write_mpdist, write_mpdist_le
   public :: energy, anon, al, delal, jend, forbid, dele, wl, w
-  public :: negrid, nlambda, ng2, lmax, integrate_moment, nesub
+  public :: negrid, nlambda, ng2, nxi, lmax, integrate_moment, nesub
   public :: xloc, sgn, ixi_to_il, ixi_to_isgn, speed
   public :: xx, nterp, new_trap_int, vcut
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
@@ -136,7 +136,7 @@ module le_grids
   integer :: ngauss, negrid, nesuper, nesub
   real :: bouncefuzz, vcut
 
-  integer :: nlambda, ng2, lmax
+  integer :: nlambda, ng2, lmax, nxi
   logical :: accel_x = .false.
   logical :: accel_v = .false.
   logical :: test = .false.
@@ -237,6 +237,7 @@ contains
     call broadcast (nesub)
     call broadcast (vcut)
     call broadcast (bouncefuzz)
+    call broadcast (nxi)
     call broadcast (nlambda)
     call broadcast (ng2)
     call broadcast (lmax)
@@ -1098,10 +1099,9 @@ contains
     complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
 !    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     complex, dimension (lo%llim_proc:), intent (out) :: total
-    integer :: ixi, nxi, ie, il, ile, is, it, ik, ig
+    integer :: ixi, ie, il, ile, is, it, ik, ig
     real :: fac
 
-    nxi = max(2*nlambda-1,2*ng2)
     total = 0.0
     do ile = lo%llim_proc, lo%ulim_proc
        ig = ig_idx (lo,ile)
@@ -1485,6 +1485,7 @@ contains
        nlambda = ng2
        lmax = nlambda
     end if
+    nxi = max(2*nlambda-1, 2*ng2)
     allocate (al(nlambda), delal(nlambda))
     allocate (wl(-ntgrid:ntgrid,nlambda))
     allocate (jend(-ntgrid:ntgrid))
@@ -2192,14 +2193,14 @@ contains
 
   end subroutine get_hermite_polynomials_1d
 
-  subroutine init_map (use_lz_layout, use_e_layout, use_le_layout)
+  subroutine init_map (use_lz_layout, use_e_layout, use_le_layout, test)
 
     use mp, only: finish_mp, proc0
     use redistribute, only: report_map_property
 
     implicit none
 
-    logical, intent (in) :: use_lz_layout, use_e_layout, use_le_layout
+    logical, intent (in) :: use_lz_layout, use_e_layout, use_le_layout, test
 
     ! initialize maps from g_lo to lz_lo, e_lo, and/or le_lo
 
