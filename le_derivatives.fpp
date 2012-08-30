@@ -100,7 +100,7 @@ contains
 
 # ifndef LOWFLOW
     end if
-# ifndef LOWFLOW
+# endif LOWFLOW
 
 # else
 
