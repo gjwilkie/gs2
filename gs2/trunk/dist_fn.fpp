@@ -6822,7 +6822,7 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: theta, ntgrid, delthet, gradpar, bmag
     use theta_grid, only: gds23, gds24, gds24_noq, cvdrift_th, gbdrift_th
     use theta_grid, only: drhodpsi, qval
-    use le_grids, only: energy, al, negrid, nlambda, forbid
+    use le_grids, only: energy, al, negrid, nlambda, forbid, init_map
     use kt_grids, only: theta0, ntheta0, naky
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx, it_idx
@@ -6905,9 +6905,9 @@ subroutine check_dist_fn(report_unit)
     ! intialize mappings from g_lo to e_lo and lz_lo or to le_lo to facilitate
     ! energy and lambda derivatives in parallel nonlinearity, etc.
 # ifdef USE_LE_LAYOUT
-    call init_map (use_lz_layout=.false., use_e_layout=.false., use_le_layout=.true.)
+    call init_map (use_lz_layout=.false., use_e_layout=.false., use_le_layout=.true., test=.false.)
 # else
-    call init_map (use_lz_layout=.true., use_e_layout=.true., use_le_layout=.false.)
+    call init_map (use_lz_layout=.true., use_e_layout=.true., use_le_layout=.false., test=.false.)
 # endif
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
