@@ -1,4 +1,11 @@
 # ifndef MAKE_LIB
+
+!> This module contains the functions gs2_main::run_gs2, gs2_main::finish_gs2 and gs2_main::reset_gs2, whose
+!! purpose should be reasonably obvious. These functions were originally part of
+!! program GS2, but have now been moved to this module so that GS2 itself can be
+!! called as a library by, for example, Trinity. All the program GS2 does is
+!! include this module and call run_gs2.
+
 module gs2_main
   
   public :: run_gs2, finish_gs2, reset_gs2
@@ -9,43 +16,57 @@ contains
 
   !> This is the main subroutine in which gs2 is initialized, equations are advanced,
   !!   and the program is finalized.
-  !! \section Structure 
+  !! \section Basic Structure 
+  !!  This subroutine broadly falls into 3 sections: 
+  !! -# Initialisation -  allocate arrays, calculate the response matrix etc.
+  !! -# Running -  a loop which runs for run_parameters::nstep time steps, unless the code
+  !!  is prematurely halted either through an error, reaching the available 
+  !!  time limit or manually  (by using the command $ touch run_name.stop).
+  !! -# Finishing up:  writing out results, deallocating arrays.
+  !! \section Details
+  !! -# Initialisation
+  !!  - Initialize message passing 
+  !!  - Initialize timer 
+  !!  - Report numer of processors being used 
+  !!  - If it is a Trinity run then filename (the name of the input file) 
+  !!  is passed to  init_file_utils
+  !!  - Otherwise, figure out run name or get list of jobs 
+  !!  - If given a list of jobs, fork  
   !! \section arguments Arguments
   !! All arguments are optional and are not used for gs2. 
   !! (EGH - used for Trinity?)
 
 
-  subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, grho, nofinish)
+!subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, vflux, heat, dvdrho, grho, nofinish)
+subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, dvdrho, grho)
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
-    use fields, only: init_fields
+    use fields, only: init_fields, advance
+    use species, only: ions, electrons, impurity
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
-    use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, start_time
-    use run_parameters, only: nstep
-    use run_parameters, only: fphi, fapar, fbpar
-    use run_parameters, only: avail_cpu_time
-    use fields, only: advance
+    use parameter_scan, only: init_parameter_scan, allocate_target_arrays
+    use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time, save_many
+    use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
-    use gs2_reinit, only: reset_time_step, check_time_step
-    use gs2_reinit, only: time_reinit
-    use gs2_time, only: update_time
-    use gs2_time, only: write_dt, init_tstart
-    use gs2_time, only: user_time, user_dt
-    use gs2_time, only: code_time
+    use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
+    use gs2_time, only: update_time, write_dt, init_tstart
+    use gs2_time, only: user_time, user_dt, code_time
     use init_g, only: tstart
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
     use fields_implicit, only: time_field
+    use parameter_scan, only: update_scan_parameter_value
     implicit none
 
-    integer, intent (in), optional :: mpi_comm, nensembles
+    integer, intent (in), optional :: mpi_comm, job_id, nensembles
     character (*), intent (in), optional :: filename
     real, dimension (:), intent (out), optional :: pflux, qflux, heat
+!    real, intent (out), optional :: dvdrho, grho, vflux
     real, intent (out), optional :: dvdrho, grho
 
     real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
@@ -55,7 +76,7 @@ contains
     logical :: exit, reset, list
     logical :: first_time = .true.
     logical :: nofin= .false.
-    logical, optional, intent(in) :: nofinish
+!    logical, optional, intent(in) :: nofinish
     character (500), target :: cbuff
 
 !
@@ -63,7 +84,7 @@ contains
 !     add nofinish optional variable to avoid deallocations at end of simulation
 !     as may want to do post-processing
 !
-    if (present(nofinish)) nofin=nofinish
+!    if (present(nofinish)) nofin=nofinish
     
     if (first_time) then
 
@@ -111,8 +132,10 @@ contains
        
        call broadcast (cbuff)
        if (.not. proc0) run_name => cbuff
+       call init_parameter_scan
        call init_fields
        call init_gs2_diagnostics (list, nstep)
+       call allocate_target_arrays ! must be after init_gs2_diagnostics
        call init_tstart (tstart)   ! tstart is in user units 
        
        if (present(dvdrho)) then
@@ -144,13 +167,21 @@ contains
        call advance (istep)
        
        if (nsave > 0 .and. mod(istep, nsave) == 0) &
-            call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+            call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar, save_many = save_many)
        call update_time
        call loop_diagnostics (istep, exit)
        call check_time_step (reset, exit)
+       call update_scan_parameter_value(istep, reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
-       if (reset) call reset_time_step (istep, exit)
-       
+       if (reset) then
+          ! if called within trinity, do not dump info to screen
+          if (present(job_id)) then
+             call reset_time_step (istep, exit, job_id)
+          else       
+             call reset_time_step (istep, exit)
+          end if
+       end if
+
        if (mod(istep,5) == 0) call checkstop(exit)
        
        call checktime(avail_cpu_time,exit)
@@ -163,7 +194,7 @@ contains
 
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
-    if (proc0) call write_dt
+    if (proc0 .and. .not. present(job_id)) call write_dt
 
     time_interval = user_time-start_time
 
@@ -172,36 +203,56 @@ contains
     end if
 
     if (present(pflux)) then
-       pflux = pflux_avg/time_interval
-       qflux = qflux_avg/time_interval
-       heat = heat_avg/time_interval
+       if (size(pflux) > 1) then
+          pflux(1) = pflux_avg(ions)/time_interval
+          qflux(1) = qflux_avg(ions)/time_interval
+          heat(1) = heat_avg(ions)/time_interval
+          pflux(2) = pflux_avg(electrons)/time_interval
+          qflux(2) = qflux_avg(electrons)/time_interval
+          heat(2) = heat_avg(electrons)/time_interval
+          if (size(pflux) > 2) then
+             pflux(3) = pflux_avg(impurity)/time_interval
+             qflux(3) = qflux_avg(impurity)/time_interval
+             heat(3) = heat_avg(impurity)/time_interval
+          end if
+!       vflux = vflux_avg(1)/time_interval
+       else
+          pflux = pflux_avg/time_interval
+          qflux = qflux_avg/time_interval
+          heat = heat_avg/time_interval
+       end if
     else
        if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
        if (.not.nofin) call finish_gs2
     end if
     
-
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
     if (proc0) call time_message(.false.,time_total,' Total')
 
-    if (proc0 .and. .not. nofin) then
+    if (proc0) then
+       if (present(job_id)) then
+          print '(/,'' Job ID:'', i4,'', total from timer is:'', 0pf9.2,'' min'',/)', &
+               job_id+1, time_total(1)/60.
+       else if (.not. nofin) then
+!    if (proc0 .and. .not. nofin) then
 
-       print '(/,'' Initialization'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
-            &'' Advance steps'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
-            &''(redistribute'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
-            &''(field solve'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
-            &'' Re-initialize'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
-            &'' Finishing'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/,  &
-            &'' total from timer is:'', 0pf9.2,'' min'',/)', &
-            time_init(1)/60.,time_init(1)/time_total(1), &
-            time_advance(1)/60.,time_advance(1)/time_total(1), &
-            time_redist(1)/60.,time_redist(1)/time_total(1), &
-            time_field(1)/60.,time_field(1)/time_total(1), &
-            time_reinit(1)/60.,time_reinit(1)/time_total(1), &
-            time_finish(1)/60.,time_finish(1)/time_total(1),time_total(1)/60.
-    endif
-    
+          print '(/,'' Initialization'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+               &'' Advance steps'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+               &''(redistribute'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
+               &''(field solve'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
+               &'' Re-initialize'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+               &'' Finishing'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/,  &
+               &'' total from timer is:'', 0pf9.2,'' min'',/)', &
+               time_init(1)/60.,time_init(1)/time_total(1), &
+               time_advance(1)/60.,time_advance(1)/time_total(1), &
+               time_redist(1)/60.,time_redist(1)/time_total(1), &
+               time_field(1)/60.,time_field(1)/time_total(1), &
+               time_reinit(1)/60.,time_reinit(1)/time_total(1), &
+               time_finish(1)/60.,time_finish(1)/time_total(1),time_total(1)/60.
+       endif
+    end if
+
     if (.not. present(mpi_comm) .and. .not. nofin) call finish_mp
     
   end subroutine run_gs2
@@ -217,6 +268,7 @@ contains
     use init_g, only: finish_init_g
     use kt_grids, only: finish_kt_grids
     use le_grids, only: finish_le_grids
+    use parameter_scan, only: finish_parameter_scan
     use mp, only: proc0
     use nonlinear_terms, only: finish_nonlinear_terms
     use run_parameters, only: finish_run_parameters
@@ -235,17 +287,18 @@ contains
     call finish_nonlinear_terms
     call finish_run_parameters
     call finish_species
+    call finish_parameter_scan
     if (proc0) call finish_file_utils
 
   end subroutine finish_gs2
 
+!  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, nu, nensembles)
   subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, nu, nensembles)
 
     use dist_fn, only: d_reset => reset_init
     use collisions, only: vnmult, c_reset => reset_init
     use fields, only: init_fields, f_reset => reset_init
     use fields_implicit, only: fi_reset => reset_init
-    use fields_explicit, only: fe_reset => reset_init
     use fields_test, only: ft_reset => reset_init
     use init_g, only: g_reset => reset_init
     use nonlinear_terms, only: nl_reset => reset_init
@@ -261,10 +314,13 @@ contains
     implicit none
 
     integer, intent (in) :: ntspec, nensembles
-    real, intent (in) :: dens, fprim
-    real, dimension (:), intent (in) :: temp, tprim, nu
+!    real, intent (in) :: gexb
+    real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
 
     integer :: istatus
+
+    ! doing nothing with gexb for now, but in will need to when
+    ! using GS2 to evolve rotation profiles in TRINITY
 
     if (nensembles > 1) call scope (subprocs)
 
@@ -277,7 +333,6 @@ contains
     call c_reset
     call f_reset
     call fi_reset
-    call fe_reset
     call ft_reset
 !    if (.not. ql_flag) call g_reset
     call g_reset
@@ -294,7 +349,8 @@ contains
   end subroutine reset_gs2
 
   subroutine gs2_trin_init (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift, &
-       betaprim, ntspec, dens, temp, fprim, tprim, nu)
+!       betaprim, ntspec, dens, temp, fprim, tprim, gexb, nu, use_gs2_geo)
+       betaprim, ntspec, dens, temp, fprim, tprim, nu, use_gs2_geo)
 
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo
@@ -302,12 +358,17 @@ contains
     implicit none
 
     integer, intent (in) :: ntspec
-    real, intent (in) :: rhoc, qval, shat, aspr, kap, kappri, tri, tripri, dens, fprim, shift
+    real, intent (in) :: rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift
     real, intent (in) :: betaprim
-    real, dimension (:), intent (in) :: temp, tprim, nu
+!    real, intent (in) :: gexb
+    real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
+    logical, intent (in) :: use_gs2_geo
+
+    ! for now do nothing with gexb, but need to include later if want to use GS2
+    ! with TRINITY to evolve rotation profiles
 
     call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
-    call init_trin_geo (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift, betaprim)
+    if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift, betaprim)
     
   end subroutine gs2_trin_init
 

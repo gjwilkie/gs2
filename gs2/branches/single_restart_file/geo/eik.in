@@ -27,7 +27,6 @@
  rmin=0.01 
  equal_arc=.true.
  writelots=.t.
- ismooth=0 
 
  beta_p1 = 0.2
  beta_p2 = 3.0
@@ -72,7 +71,7 @@ The following rarely change:
 
 7. Set big = 1, iflux = 1  
 
-8. Set isym = 0, equal_arc = .false., ismooth = 0
+8. Set isym = 0, equal_arc = .false.
 
 
 Output to screen:  

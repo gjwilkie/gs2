@@ -1,24 +1,31 @@
+!> This module is basically a store for the input parameters that are specified in the namelists \a knobs and \a parameters. In general, the names of the public variables in this module are the same as the name of the input parameter they correspond to.
+ 
+
 module run_parameters
   implicit none
 
   public :: init_run_parameters, finish_run_parameters
+  public :: check_run_parameters, wnml_run_parameters
+
 
   public :: beta, zeff, tite
   public :: fphi, fapar, fbpar
-!  public :: delt, delt_max, wunits, woutunits, tunits, funits, tnorm
-  public :: code_delt_max, wunits, woutunits, tunits, funits, tnorm
+!  public :: delt, delt_max, wunits, woutunits, tunits
+  public :: code_delt_max, wunits, woutunits, tunits
   public :: nstep, wstar_units, eqzip, margin
   public :: secondary, tertiary, harris
   public :: ieqzip
   public :: k0
   public :: vnm_init
   public :: avail_cpu_time
+!  public :: include_lowflow, rhostar, neo_test
+  public :: rhostar, neo_test
 
   private
 
   real :: beta, zeff, tite
   real :: fphi, fapar, fbpar, faperp
-  real :: delt, code_delt_max, user_delt_max, funits, tnorm, margin
+  real :: delt, code_delt_max, user_delt_max, margin
   real, dimension (:), allocatable :: wunits, woutunits, tunits
   real, dimension (2) :: vnm_init
   real :: avail_cpu_time
@@ -26,9 +33,13 @@ module run_parameters
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
   real :: k0
-  integer :: delt_option_switch
-  integer, parameter :: delt_option_hand = 1, delt_option_auto = 2
+  integer, public :: delt_option_switch
+  integer, public, parameter :: delt_option_hand = 1, delt_option_auto = 2
   logical :: initialized = .false.
+  logical :: rpexist, knexist
+  real :: rhostar
+!  logical :: include_lowflow, neo_test
+  logical :: neo_test
 
   integer, allocatable :: ieqzip(:,:)
   integer :: eqzip_option_switch
@@ -39,6 +50,104 @@ module run_parameters
        eqzip_option_equilibrium = 4
 
 contains
+
+  subroutine check_run_parameters(report_unit)
+  implicit none
+  integer :: report_unit
+    if (fphi /= 1.) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('fphi in the knobs namelist = ',e10.4)") fphi
+       write (report_unit, fmt="('fphi is a scale factor of all instances of Phi (the electrostatic potential).')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (fapar == 0.) then
+       write (report_unit, fmt="('A_parallel will not be included in the calculation.')")
+    end if
+    if (fapar == 1.) then
+       write (report_unit, fmt="('A_parallel will be included in the calculation.')")
+    end if
+    if (fapar /= 0. .and. fapar /= 1.) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('fapar in the knobs namelist = ',e10.4)") fapar
+       write (report_unit, fmt="('fapar is a scale factor of all instances of A_parallel (the parallel vector potential).')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (fbpar == 0.) then
+       write (report_unit, fmt="('B_parallel will not be included in the calculation.')")
+    end if
+    if (fbpar == 1.) then
+       write (report_unit, fmt="('B_parallel will be included in the calculation.')")
+    end if
+    if (fbpar /= 0. .and. fbpar /= 1.) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('fbpar in the knobs namelist = ',e10.4)") fbpar
+       write (report_unit, fmt="('fbpar is a scale factor of all instances of B_parallel &
+           & (the perturbed parallel magnetic field).')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (eqzip) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('eqzip = T in the knobs namelist.')")
+       write (report_unit, fmt="('This freezes some modes in time for a secondary stability analysis.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+       if (secondary) write (report_unit, fmt="('Mode with kx = 0, ky = ky_min fixed in time')")
+       if (tertiary)  write (report_unit, fmt="('Mode with ky = 0, kx = kx_min fixed in time')")
+    end if
+  end subroutine check_run_parameters
+
+  subroutine wnml_run_parameters(unit,electrons,collisions)
+  implicit none
+  integer :: unit
+  logical :: electrons, collisions
+     if (rpexist) then
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "parameters"
+       write (unit, fmt="(' beta = ',e16.10)") beta       ! if zero, fapar, fbpar should be zero
+       if (collisions) write (unit, fmt="(' zeff = ',e16.10)") zeff
+       if (.not. electrons)  write (unit, fmt="(' tite = ',e16.10)") tite
+!CMR, 10/2/2011: zip not in this namelist, so removing it!
+!       if (zip) write (unit, fmt="(' zip = ',L1)") zip
+       write (unit, fmt="(' /')")
+     endif
+     if (knexist) then
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "knobs"
+       write (unit, fmt="(' fphi   = ',f6.3)") fphi
+       write (unit, fmt="(' fapar  = ',f6.3)") fapar
+       write (unit, fmt="(' fbpar = ',f6.3)") fbpar
+       write (unit, fmt="(' delt = ',e16.10)") delt
+       write (unit, fmt="(' nstep = ',i8)") nstep
+       write (unit, fmt="(' wstar_units = ',L1)") wstar_units
+       if (eqzip) then
+          write (unit, fmt="(' eqzip = ',L1)") eqzip
+          write (unit, fmt="(' secondary = ',L1)") secondary
+          write (unit, fmt="(' tertiary = ',L1)") tertiary
+       end if
+       write (unit, fmt="(' margin = ',e16.10)") margin
+       select case (delt_option_switch)
+       case (delt_option_auto)
+          write (unit, fmt="(' delt_option = ',a)") '"check_restart"'
+       case (delt_option_hand)
+          ! nothing
+       end select
+       write (unit, fmt="(' /')")
+     endif
+  end subroutine wnml_run_parameters
 
   subroutine init_run_parameters
     use kt_grids, only: init_kt_grids, naky, nakx => ntheta0
@@ -52,11 +161,9 @@ contains
 
     call read_parameters
 
-    call init_kt_grids (tnorm)
-    call init_delt (delt, tnorm)
+    call init_kt_grids
+    call init_delt (delt)
     call user2code (user_delt_max, code_delt_max)
-
-!    delt = delt * tnorm
 
     allocate (wunits(naky))
     allocate (woutunits(naky))
@@ -103,11 +210,11 @@ contains
     real, dimension (2) :: vnm_saved
 
     real :: teti  ! for back-compatibility
-    logical :: exist
-    namelist /parameters/ beta, zeff, tite, teti, k0
+    namelist /parameters/ beta, zeff, tite, teti, k0, rhostar
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
          delt_option, margin, secondary, tertiary, faperp, harris, &
-         avail_cpu_time, eqzip_option
+!         avail_cpu_time, eqzip_option, include_lowflow, neo_test
+         avail_cpu_time, eqzip_option, neo_test
 
     if (proc0) then
        fbpar = -1.0
@@ -116,6 +223,9 @@ contains
        zeff = 1.0
        tite = 1.0
        teti = -100.0
+       rhostar = 3.e-3
+!       include_lowflow = .false.
+       neo_test = .false.
        wstar_units = .false.
        eqzip_option = 'none'
        eqzip = .false.
@@ -127,13 +237,13 @@ contains
        margin = 0.05
        avail_cpu_time = 1.e10
 
-       in_file = input_unit_exist("parameters", exist)
-!       if (exist) read (unit=input_unit("parameters"), nml=parameters)
-       if (exist) read (unit=in_file,nml=parameters)
+       in_file = input_unit_exist("parameters", rpexist)
+!       if (rpexist) read (unit=input_unit("parameters"), nml=parameters)
+       if (rpexist) read (unit=in_file,nml=parameters)
 
-       in_file = input_unit_exist("knobs", exist)
-!       if (exist) read (unit=input_unit("knobs"), nml=knobs)
-       if (exist) read (unit=in_file, nml=knobs)
+       in_file = input_unit_exist("knobs", knexist)
+!       if (knexist) read (unit=input_unit("knobs"), nml=knobs)
+       if (knexist) read (unit=in_file, nml=knobs)
 
        if (teti /= -100.0) tite = teti
 
@@ -212,6 +322,9 @@ contains
     call broadcast (k0)
     call broadcast (avail_cpu_time)
     call broadcast (eqzip_option_switch)
+!    call broadcast (include_lowflow)
+    call broadcast (rhostar)
+    call broadcast (neo_test)
     
     user_delt_max = delt
 
@@ -236,19 +349,14 @@ contains
 !    TUNITS: DT(KY)=TUNITS(KY).CODE_DT
 !            This is a generally very useful variable to store ky dependent 
 !            timestep in the code time normalisation.
-!            Used to multiply ky indeoendent source terms on RHS of GKE.
+!            Used to multiply ky independent source terms on RHS of GKE.
 !    WUNITS: WUNITS(KY)=AKY(KY)*TUNITS(KY)/2
 !            Auxiliary variable.  Used to save compute operations when 
 !            evaluating source terms on RHS of GKE that are proportional to ky.
 !            !! The Mysterious factor 1/2 Explained !!
 !            The factor of 1/2 arises because those source terms were first
 !            specified using the normalisation Tref=mref vtref^2 
-![old note by BD and MK on "Microinstabilities in Axisymmetric Configurations"]
-!            Nowadays, internally gs2 uses Tref=(1/2) mref vtref^2 everywhere.
-!            WUNITS restores the consistency of the normalisations in gs2.
 ! [R Numata et al, "AstroGK: Astrophysical gyrokinetics code", JCP, 2010].
-!    WOUTUNITS: convert output frequencies to appear in USER v_t normalisation
-!    FUNITS: convert output fluxes to appear in USER v_t normalisation        
 !CMRend
     if (wstar_units) then
        wunits = 1.0
@@ -264,15 +372,13 @@ contains
                "WARNING: wstar_units=.true. and aky=0.0: garbage results"
        end if
 !CMR: Sep 2010
-!  Changes to allow wstar_units to be used consistently with either 
-!  v_t normalisation option.   (Wasn't quite right before)
+!  Changes to allow wstar_units to be used
 !CMRend
     else
        tunits = 1.0
        wunits = aky/2.0
     end if
-    funits = tnorm
-    woutunits = tnorm/tunits
+    woutunits = 1.0/tunits
   end subroutine adjust_time_norm
 
   subroutine finish_run_parameters

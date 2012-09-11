@@ -6,11 +6,11 @@
 #
 #  (requires GNU's gmake)
 #
-#PROJECT ?= trinity
-PROJECT ?= gs2
-#PROJECT ?= agk
-#PROJECT ?= gsp
-#PROJECT ?= rmhdper
+#GK_PROJECT ?= trinity
+GK_PROJECT ?= gs2
+#GK_PROJECT ?= agk
+#GK_PROJECT ?= gsp
+#GK_PROJECT ?= rmhdper
 #
 #  Makefile written by Bill Dorland and Ryusuke Numata
 #
@@ -23,7 +23,7 @@ PROJECT ?= gs2
 #	10/12/09: share the Makefile with gsp gyrokinetic PIC code
 #	04/11/09: * share the Makefile with rmhdper reduced MHD code
 #		  * include progject specific target definitions
-#		    Makefile.target_$(PROJECT)
+#		    Makefile.target_$(GK_PROJECT)
 #	04/06/09: SYSTEM environment variable is replaced by GK_SYSTEM
 #	02/25/09: gs2 replaced by trinity (MAB)
 #	01/26/09: USE_C_INDEX is imported to gs2 by TT
@@ -80,14 +80,12 @@ DBLE ?= on
 USE_MPI ?= on
 # turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?=
-# which FFT library to use (fftw,mkl_fftw,undefined) 
+# which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
 USE_FFT ?= fftw
 # uses netcdf library (bin)
 USE_NETCDF ?= on
 # uses hdf5 library (bin)
-USE_HDF5 ?=
-# uses MDSplus (bin)
-USE_MDSPLUS ?=
+USE_HDF5 ?= 
 # Use function pointer in layouts_indices.c (bin)
 # see also README
 USE_C_INDEX ?= 
@@ -102,6 +100,8 @@ USE_LOCAL_SPFUNC ?=
 USE_NAGLIB ?= 
 # Make GS2 into a library which can be called by external programs
 MAKE_LIB ?=
+# Include higher-order terms in GK equation arising from low-flow physics
+LOWFLOW ?=
 # Use le_layout for collision operator
 USE_LE_LAYOUT ?=
 #
@@ -195,7 +195,7 @@ sinclude Makefile.local
 UTILS=utils
 GEO=geo
 
-ifeq ($(PROJECT),rmhdper)
+ifeq ($(GK_PROJECT),rmhdper)
 	override USE_MPI =
 	override USE_FFT = fftw
 	override USE_HDF5 =
@@ -253,6 +253,7 @@ ifdef USE_HDF5
 	ifdef USE_MPI
 		FC = $(H5FC_par)
 		CC = $(H5CC_par)
+		CPPFLAGS += -DHDF5
 	else
 		FC = $(H5FC)
 		CC = $(H5CC)
@@ -297,6 +298,9 @@ endif
 ifdef MAKE_LIB
 	CPPFLAGS += -DMAKE_LIB
 endif
+ifdef LOWFLOW
+	CPPFLAGS += -DLOWFLOW
+endif
 ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
@@ -309,7 +313,7 @@ F90FLAGS+= $(F90OPTFLAGS) \
 CFLAGS += $(COPTFLAGS)
 
 DATE=$(shell date +%y%m%d)
-TARDIR=$(PROJECT)_$(DATE)
+TARDIR=$(GK_PROJECT)_$(DATE)
 TOPDIR=$(CURDIR)
 ifeq ($(notdir $(CURDIR)), $(UTILS))
 	TOPDIR=$(subst /$(UTILS),,$(CURDIR))
@@ -365,7 +369,7 @@ F90FROMFPP = $(patsubst %.fpp,%.f90,$(notdir $(wildcard *.fpp */*.fpp)))
 
 # .DEFAULT_GOAL works for GNU make 3.81 (or higher)
 # For 3.80 or less, see all target
-.DEFAULT_GOAL := $(PROJECT)_all
+.DEFAULT_GOAL := $(GK_PROJECT)_all
 ifeq ($(notdir $(CURDIR)),utils)
 	.DEFAULT_GOAL := utils_all
 endif
@@ -373,7 +377,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(PROJECT)_all
+.PHONY: all $(GK_PROJECT)_all
 
 all: $(.DEFAULT_GOAL)
 
@@ -385,23 +389,23 @@ astrogk_mod += layouts_indices.o
 gs2_mod += layouts_indices.o
 endif
 
-sinclude Makefile.target_$(PROJECT)
+sinclude Makefile.target_$(GK_PROJECT)
 
 ############################################################### SPECIAL RULES
 
 # comment this out to keep intermediate .f90 files
-#.PRECIOUS: $(F90FROMFPP)
+.PRECIOUS: $(F90FROMFPP)
 
-.INTERMEDIATE: $(PROJECT)_transforms.f90 $(PROJECT)_io.f90 $(PROJECT)_save.f90 \
+.INTERMEDIATE: $(GK_PROJECT)_transforms.f90 $(GK_PROJECT)_io.f90 $(GK_PROJECT)_save.f90 \
 		mp.f90 fft_work.f90
 
 # These are special rules for the suffix problem of absoft
 # (not tested)
-$(PROJECT)_transforms.o: $(PROJECT)_transforms.f90
+$(GK_PROJECT)_transforms.o: $(GK_PROJECT)_transforms.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX0) -c $<
-$(PROJECT)_io.o: $(PROJECT)_io.f90
+$(GK_PROJECT)_io.o: $(GK_PROJECT)_io.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
-$(PROJECT)_save.o: $(PROJECT)_save.f90
+$(GK_PROJECT)_save.o: $(GK_PROJECT)_save.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX2) -c $<
 mp.o: mp.f90
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFX1) -c $<
@@ -417,7 +421,9 @@ layouts_type.h: layouts_type.f90
 .PHONY: depend clean distclean tar test_make
 
 depend:
+	mv input_parameters_documentation.f90 input_parameters_documentation.f90.hidden
 	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=0 $(VPATH)
+	mv input_parameters_documentation.f90.hidden input_parameters_documentation.f90
 
 #doc_depend:
 	#echo "documentation_depend = \\" > Makefile.doc_depend
@@ -430,6 +436,11 @@ doc: $(F90FROMFPP)
 sync_doc: 
 	rsync -av --delete ../doxygen/doc/html/	${USER},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/
 
+sync_input_doc:
+	coderunner cc synchronise_variables . -C gs2
+	curl 'http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=GS2_Input_Parameters&action=edit' | sed 's/&amp;/\&/g' | sed 's/&quot;/"/g' | sed 's/&gt;/>/g' | sed 's/&lt;/</g'  | sed 's/&nbsp;/ /g' > wiki_in.tmp
+	coderunner cc read_mediawiki_documentation wiki_in.tmp -C gs2
+	coderunner cc write_mediawiki_documentation > wiki_out.txt -C gs2
 
 clean:
 	-rm -f *.o *.mod *.g90 *.h core */core
@@ -446,7 +457,7 @@ tar:
 ### setting tar_exec local $(TARLIST*) variables
 # expand wildcards listed $(TARLIST_wild) in ( $(TARLIST_dir) + . )
 # directories and add them into TARLIST
-tar_exec: TARLIST = test_os makehead.awk fortdep AstroGK.in
+tar_exec: TARLIST = makehead.awk fortdep AstroGK.in
 tar_exec: TARLIST_dir = Makefiles utils geo Aux
 tar_exec: TARLIST_wild = *.f90 *.fpp *.inc *.c Makefile Makefile.* README README.*
 tar_exec: TARLIST += $(foreach dir,. $(TARLIST_dir),$(wildcard $(addprefix $(dir)/,$(TARLIST_wild))))
@@ -468,6 +479,8 @@ test_make:
 	@echo VPATH is $(VPATH)
 	@echo CURDIR is $(CURDIR)
 	@echo TOPDIR is $(TOPDIR)
+	@echo NETCDF_DIR is $(NETCDF_DIR)
+	@echo FFTW_DIR is $(FFTW_DIR)
 	@echo
 	@echo Compile mode:
 	@echo  DEBUG is $(DEBUG)
@@ -483,12 +496,13 @@ test_make:
 	@echo  USE_FFT is $(USE_FFT)
 	@echo  USE_NETCDF is $(USE_NETCDF)
 	@echo  USE_HDF5 is $(USE_HDF5)
-	@echo  USE_MDSPLUS is $(USE_MDSPLUS)
 	@echo  USE_C_INDEX is $(USE_C_INDEX)
 	@echo  USE_POSIX is $(USE_POSIX)
 	@echo  USE_LOCAL_RAN is $(USE_LOCAL_RAN)
 	@echo  USE_LOCAL_SPFUNC is $(USE_LOCAL_SPFUNC)
 	@echo  USE_NAGLIB is $(USE_NAGLIB)
+	@echo  DEFAULT_LIB is $(DEFAULT_LIB)
+	@echo  MPI_LIB is $(MPI_LIB)
 	@echo
 	@echo FC is $(FC)
 	@echo F90FLAGS is $(F90FLAGS)

@@ -108,7 +108,7 @@ module eeq
   logical :: init_psi = .true.
 
   public :: efit_init, efitin, gradient, eqitem, bgradient
-  public :: mfitin, gs2din
+  public :: gs2din
 
   public :: invR
   public :: Rpos
@@ -159,7 +159,7 @@ contains
     data init /1/
     save init
 
-    logical:: debug =.true.
+    logical:: debug =.false.
     
 ! Need to generalize initialization condition if equilibrium changes
 
@@ -546,248 +546,20 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     efit_dR = efit_R(2) - efit_R(1)
     efit_dZ = efit_Z(2) - efit_Z(1)
 
+    if (.true.) then
+      write (*,*) "Finished efitin... imported EFIT equilibrium"
+      write (*,*) 'Some important quantities:'
+      write (*,*) "aminor", aminor
+      write (*,*) 'R_mag', R_mag
+      write (*,*) 'B_T0', B_T0
+      write (*,*) 'beta', beta_0
+    end if
+
     1000 format(5(a10),i2,i4,i4)
     2020 format (5e16.9)
     2022 format (2i5)      
 
   end subroutine efitin
-
-  subroutine mfitin(shotnum, tstar, psi_0, psi_a, rmaj, B_T, amin, initeq, big)
-
-!     This subroutine reads an EFIT output file containing 
-!     the axisymmetric magnetic field geometry on a rectangular 
-!     domain defined by the coordinates (R,Z).
-!
-!     efit_R     R grid
-!     efit_Z     Z grid
-!     fp    F on psibar grid
-!     efit_psi   psi on (R,Z) grid
-!     R_mag        major radius of the magnetic axis
-!     Z_mag        elevation of the magnetic axis
-!     rwid       total width of the domain
-!     rleft      position of leftmost point of domain
-!     zhei       total height of domain
-!
-    use splines, only: fitp_surf1, fitp_surf2, inter_cspl
-    use mdsio, only: mds_read
-    use mdslib, only: mdsopen, mdsconnect, mdsclose
-    implicit none
-
-    integer, intent (in) :: shotnum, initeq, big
-    real, intent (in) :: tstar
-    real, intent (out) :: psi_0, psi_a, rmaj, B_T, amin
-
-    real :: xdum, p_0, rwid, rleft, zhei, rcentr, bcentr
-    real, dimension(:), allocatable :: zp, temp, zx1, zxm, zy1, zyn
-    real :: zxy11, zxym1, zxy1n, zxymn
-
-    integer :: i, j, init, ndum, nhb, nwb, ierr
-    
-!    integer :: mdsopen, mdsconnect, boo
-    integer :: boo
-
-    data init /1/
-    save init
-    
-! Need to generalize initialization condition if equilibrium changes
-
-    if(initeq == 0) return
-    init=0
-    
-    boo = MdsConnect("alfa60.psfc.mit.edu"//char(0))
-    boo = MdsOpen("analysis"//char(0),shotnum)
-
-! Read the data
-    call mds_read("\analysis::efit_geqdsk.ssimag",psi_0)
-    call mds_read("\analysis::efit_geqdsk.ssibry",psi_a)
-
-    call mds_read("\analysis::efit_geqdsk.xdim",rwid)
-    call mds_read("\analysis::efit_geqdsk.zdim",zhei)
-    call mds_read("\analysis::efit_geqdsk.rzero",rcentr)
-    call mds_read("\analysis::efit_geqdsk.bcentr",bcentr)
-    call mds_read("\analysis::efit_geqdsk.rgrid[0]",rleft)
-
-    call mds_read("\analysis::efit_geqdsk.rmaxis",r_mag)
-    call mds_read("\analysis::efit_geqdsk.zmaxis",z_mag)
-
-    call mds_read("size(dim_of(\analysis::efit_geqdsk.psirz,0))",nw)
-    call mds_read("size(dim_of(\analysis::efit_geqdsk.psirz,1))",nh)
-    call mds_read("size(dim_of(\analysis::efit_geqdsk.psirz,2))",ntime)
-
-    nwb = nw * big
-    nhb = nh * big
-
-    call alloc_module_arrays(nwb, nwb, nhb, nw, nh, ntime)
-
-    do i=1,nw
-       spsi_bar(i) = float(i-1) / float(nw-1)
-       sefit_R(i) = rleft +rwid * float(i-1) / float(nw-1)
-    enddo
-
-    do j=1,nh
-       sefit_Z(j) = ((float(j-1) / float(nh-1) ) - 0.5)*zhei
-    enddo
-
-    do i=1,nwb
-       psi_bar(i) = float(i-1) / float(nwb-1)
-       efit_R(i) = rleft +rwid * float(i-1) / float(nwb-1)
-    enddo
-
-    do j=1,nhb
-       efit_Z(j) = ((float(j-1) / float(nhb-1) ) - 0.5)*zhei
-    enddo
-
-! need to figure out a value for ntstar
-    call mds_read("dim_of(\analysis::efit_geqdsk.psirz,2)",efit_t)
-
-    ntstar=1
-    do i=1,size(efit_t)
-       if(efit_t(i) > tstar) cycle
-       ntstar = i
-    end do
-!
-! pbar is defined by
-! pbar = (psi-psi_0)/(psi_a-psi_0)
-! fp and q are functions of pbar
-!
-    call mds_read("\analysis::efit_geqdsk.fpol",dum2)
-    dummy(:) = dum2(ntstar,:)
-    call inter_cspl(nw, spsi_bar, dummy, nwb, psi_bar, fp)
-
-    call mds_read("\analysis::efit_geqdsk.pres",dum2)
-    dummy(:) = dum2(ntstar,:)
-    call inter_cspl(nw, spsi_bar, dummy, nwb, psi_bar, pressure)
-
-    call mds_read("\analysis::efit_geqdsk.qpsi",dum2)
-    dummy(:) = dum2(ntstar,:)
-    call inter_cspl(nw, spsi_bar, dummy, nwb, psi_bar, qsf)
-
-    deallocate (dum2, spsi_bar)
-
-    call mds_read("\analysis::efit_geqdsk.psirz",dum3)
-    sefit_psi(:,:) = dum3(:,:,ntstar)
-    deallocate (dum3)
-
-    allocate(zp(3*nw*nh), temp(nw+2*nh))
-    allocate(zx1(nh), zxm(nh), zy1(nw), zyn(nw))
-
-    call fitp_surf1(nw, nh, sefit_R, sefit_Z, sefit_psi, &
-         nw, zx1, zxm, zy1, zyn, zxy11, zxym1, zxy1n, zxymn, &
-         255, zp, temp, 1., ierr)
-
-    do j = 1, nhb
-       do i = 1, nwb
-          efit_psi(i,j) = fitp_surf2(efit_R(i), efit_Z(j), nw, nh, &
-               sefit_R, sefit_Z, sefit_psi, nw, zp, 1.)
-       enddo
-    enddo
-      
-    deallocate(zp, temp, zx1, zxm, zy1, zyn, sefit_R, sefit_Z)
-
-    nw = nwb
-    nh = nhb
-
-    call mds_read("size(dim_of(\analysis::efit_g_eqdsk.rbbbs,1))",nbbbs)
-
-    allocate (dum2(ntime, nbbbs))
-
-    allocate(rbbbs(nbbbs), zbbbs(nbbbs), thetab(nbbbs), r_bound(nbbbs))
-    call mds_read("\analysis::efit_g_eqdsk.rbbbs",dum2)
-    rbbbs = dum2(ntstar,:)
-    call mds_read("\analysis::efit_g_eqdsk.zbbbs",dum2)
-    zbbbs = dum2(ntstar,:)
-    deallocate (dum2)
-
-    call mdsclose("analysis",shotnum)
-
-! get r_boundary(theta)
-
-    thetab = atan2 ((zbbbs-Z_mag), (rbbbs-R_mag))
-    r_bound = sqrt( (rbbbs - R_mag)**2 + (zbbbs - Z_mag)**2 )
-
-    call sort(thetab, r_bound, zbbbs, rbbbs)
-
-! Allow for duplicated points near +- pi:
-
-    if(thetab(1) == thetab(2)) then
-       thetab(1) = thetab(1) + 4.*acos(0.)
-       call sort(thetab, r_bound, zbbbs, rbbbs)
-    endif
-
-    if(thetab(nbbbs-1) == thetab(nbbbs)) then
-       thetab(nbbbs) = thetab(nbbbs) - 4.*acos(0.)
-       call sort(thetab, r_bound, zbbbs, rbbbs)
-    endif
-
-! It isn't likely that a duplicate point would exist near theta = 0, 
-! so I am not allowing this possibility for now.
-
-    do i=1,nbbbs-1
-       if(thetab(i) == thetab(i+1)) then
-!          write(*,*) 'Duplicates near theta = 0 not allowed.'
-!          write(*,*) i, i+1, ' Stopping.'
-!          stop
-! put in kluge for duplicate points, which happens near theta=0:
-          thetab(i+1) = thetab(i+1)+1.e-8
-       endif
-    enddo
-
-    call a_minor(rbbbs, zbbbs, Z_mag, amin)
-    aminor=amin
-
-    close(5)
-
-    deallocate (rbbbs, zbbbs)
-
-    r_bound = r_bound / aminor
-
-    R_mag = R_mag / aminor
-    Z_mag = Z_mag / aminor
-!    rleft = rleft / aminor
-!    rwid = rwid / aminor
-!    zhei = zhei / aminor
-    rcentr = rcentr / aminor
-    efit_R = efit_R / aminor
-    efit_Z = efit_Z / aminor
-    
-! should rmaj be R_mag or rcentr? use R_mag for now.  
-
-    rmaj = R_mag
-    B_T0 = abs(bcentr)
-    B_T = B_T0
-    psi_a = psi_a / (B_T0*aminor**2)
-    psi_0 = psi_0 / (B_T0*aminor**2)
-    psi_N = psi_a - psi_0
-    
-    p_0=pressure(1)
-!    do i=1,nw
-!       psi_bar(i) = float(i-1) / float(nw-1)
-!       efit_R(i) = rleft +rwid * float(i-1) / float(nw-1)
-!    enddo
-
-    fp = fp / (B_T0*aminor)
-
-! MKS: beta = 2 mu_0 p / B**2
-
-    beta = 8. * (2. * acos(0.)) * pressure * 1.e-7 / B_T0**2
-    beta_0 = beta(1)
-
-    pressure = pressure / p_0
-    
-    efit_psi = efit_psi / (B_T0*aminor**2)
-    
-!    do j=1,nh
-!       efit_Z(j) = ((float(j-1) / float(nh-1) ) - 0.5)*zhei
-!    enddo
-
-    efit_dR = efit_R(2) - efit_R(1)
-    efit_dZ = efit_Z(2) - efit_Z(1)
-
-    1000 format(5(a10),i2,i4,i4)
-    2020 format (5e16.9)
-    2022 format (2i5)      
-
-  end subroutine mfitin
 
   subroutine efit_init
 

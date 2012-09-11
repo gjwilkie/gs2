@@ -15,8 +15,9 @@ program ball
 
   namelist/stuff/ntheta,nperiod,rmaj,akappri,akappa,shift,equal_arc, &
        rhoc,rmin,rmax,itor,qinp,iflux,delrho,tri,bishop, &
-       irho,isym,tripri,vmom_eq,writelots,R_geo, &
-       gen_eq,efit_eq,local_eq,eqfile,ismooth,ak0,k1,k2,&
+       irho,isym,tripri,writelots,R_geo, &
+       gen_eq,efit_eq,local_eq,eqfile,&
+       chs_eq,& 
        s_hat_input,p_prime_input,invLp_input,ppl_eq, &
        diffscheme,nbeta,beta_p1,beta_p2,beta_prime_input,alpha_input, &
        beta_prime_times, beta_prime_over, big, gs2d_eq, transp_eq, &
@@ -52,11 +53,6 @@ program ball
 
   delrho = 0.01
 
-  ismooth = 0
-  ak0 = 1.
-  k1 = -30
-  k2 = -15
-
   eqinit = 1       ! Mike K. codes do not have this variable.
 
   diffscheme=0.33; nbeta = 1; beta_p1 = 0.; beta_p2 = 0.
@@ -77,14 +73,14 @@ program ball
 
   equal_arc = .false.   ! this should not be required
   
-  if(k1.lt.0) k1=(ntheta/abs(k1))**2
-  if(k2.lt.0) k2=(ntheta/abs(k2))**2
+  !if(k1.lt.0) k1=(ntheta/abs(k1))**2
+  !if(k2.lt.0) k2=(ntheta/abs(k2))**2
   
-  if(vmom_eq .and. gen_eq) then
-     write(*,*) 'Choose either vmom_eq or gen_eq, not both'               
-     write(*,*) 'Stopping'
-     stop
-  endif
+  !if(vmom_eq .and. gen_eq) then
+     !write(*,*) 'Choose either vmom_eq or gen_eq, not both'               
+     !write(*,*) 'Stopping'
+     !stop
+  !endif
   
 !
 ! Note that if iflux=1 then always choose itor=1
@@ -107,17 +103,17 @@ program ball
   endif
   
   if(iflux.ne.1) then
-     if(vmom_eq) write(*,*) 'Forcing vmom_eq to be false'
+     !if(vmom_eq) write(*,*) 'Forcing vmom_eq to be false'
      if(gen_eq) write(*,*) 'Forcing gen_eq to be false'
-     if(vmom_eq .or. gen_eq) write(*,*) 'because iflux.ne.1'
-     vmom_eq=.false.
+     if(gen_eq) write(*,*) 'because iflux.ne.1'
+     !vmom_eq=.false.
      gen_eq=.false.
   endif
   
 !     compute the theta grid
 
-  if((.not. vmom_eq) .and. (.not. gen_eq) .and. (.not. ppl_eq) &
-       .and. (.not. transp_eq)) then
+  if( (.not. gen_eq) .and. (.not. ppl_eq) &
+       .and. (.not. transp_eq) .and. (.not. chs_eq)) then
      call init_theta(ntheta)
      ntgrid = (2*nperiod - 1)*(ntheta/2)
      allocate(psi(-ntgrid:ntgrid))

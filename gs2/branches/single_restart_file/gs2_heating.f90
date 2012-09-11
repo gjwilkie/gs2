@@ -6,7 +6,7 @@ module gs2_heating
   public :: heating_diagnostics
   public :: init_htype, zero_htype, del_htype
   public :: avg_h, avg_hk
-  public :: hk_repack, htimesx
+  public :: hk_repack
   !GGH Density-velocity perturbations
   public :: dens_vel_diagnostics
   public :: init_dvtype, zero_dvtype, del_dvtype
@@ -14,10 +14,6 @@ module gs2_heating
    
   interface init_htype
      module procedure init_htype_0, init_htype_1, init_htype_2, init_htype_3
-  end interface
-
-  interface htimesx
-     module procedure htimesx_0, htimesx_2
   end interface
 
   interface zero_htype
@@ -890,65 +886,5 @@ contains
   end subroutine avg_dvk
 !>GGH
 !=============================================================================
-
-  subroutine htimesx_0 (h, funits)
-
-    type (heating_diagnostics) :: h
-    real, intent (in) :: funits
-    
-    h % delfs2     = h % delfs2 * funits
-    h % hs2        = h % hs2 * funits
-    h % phis2      = h % phis2 * funits
-    h % hypervisc  = h % hypervisc * funits
-    h % hyperres   = h % hyperres * funits
-    h % hypercoll  = h % hypercoll * funits
-    h % collisions = h % collisions * funits
-    h % imp_colls  = h % imp_colls * funits
-    h % gradients  = h % gradients * funits
-    h % heating    = h % heating * funits
-
-    h % energy     = h % energy * funits
-    h % energy_dot = h % energy_dot * funits
-    h % antenna    = h % antenna * funits
-    h % eapar      = h % eapar * funits
-    h % ebpar      = h % ebpar * funits
-
-  end subroutine htimesx_0
-
-  subroutine htimesx_2 (hk, funits)
-
-    type (heating_diagnostics), dimension(:,:) :: hk
-    real, intent (in) :: funits
-    integer :: nsp, i
-    integer :: m, mmax, n, nmax
-
-    nsp = size(hk(1,1)%hypervisc(:))
-    mmax = size(hk, 1)
-    nmax = size(hk, 2)
-
-    do n=1,nmax
-       do m=1,mmax
-          do i=1,nsp
-             hk(m,n) % delfs2(i)     = hk(m,n) % delfs2(i) * funits
-             hk(m,n) % hs2(i)        = hk(m,n) % hs2(i) * funits
-             hk(m,n) % phis2(i)      = hk(m,n) % phis2(i) * funits
-             hk(m,n) % hypervisc(i)  = hk(m,n) % hypervisc(i) * funits
-             hk(m,n) % hyperres(i)   = hk(m,n) % hyperres(i) * funits
-             hk(m,n) % hypercoll(i)  = hk(m,n) % hypercoll(i) * funits
-             hk(m,n) % collisions(i) = hk(m,n) % collisions(i) * funits
-             hk(m,n) % imp_colls(i)  = hk(m,n) % imp_colls(i) * funits
-             hk(m,n) % gradients(i)  = hk(m,n) % gradients(i) * funits
-             hk(m,n) % heating(i)    = hk(m,n) % heating(i) * funits
-          end do
-       end do
-    end do
-       
-    hk % energy     = hk % energy * funits
-    hk % energy_dot = hk % energy_dot * funits
-    hk % antenna    = hk % antenna * funits
-    hk % eapar      = hk % eapar * funits
-    hk % ebpar      = hk % ebpar * funits
-
-  end subroutine htimesx_2
 
 end module gs2_heating

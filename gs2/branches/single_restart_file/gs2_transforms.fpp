@@ -126,6 +126,11 @@ contains
 
   subroutine init_x_transform (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
 
+  !JH As of 7th December 2011 this routine is dead code and should be considered
+  !JH for removal from the source.  
+  !JH This functionality is presently implemented in subroutine init_y_fft 
+  !JH present later in this file.
+
     use mp, only: nproc
     use fft_work, only: init_ccfftw
     use gs2_layouts, only: xxf_lo, pe_layout
@@ -207,7 +212,7 @@ contains
           iak(idx) = accel_lo%llim_proc  + (idx-1)*accel_lo%nxnky
        end do
 
-
+       !JH FFTW plan creation for the accelerated 2d transforms
 #if FFT == _FFTW_ 
 
        call init_crfftw (yf_fft,  1, accel_lo%ny, accel_lo%nx)
@@ -232,12 +237,20 @@ contains
 
        if (.not. xfft_initted) then
 
+          !JH FFTW plan creation for transform x5d and inverse
 # if FFT == _FFTW_
           call init_ccfftw (xf_fft,  1, xxf_lo%nx)
           call init_ccfftw (xb_fft, -1, xxf_lo%nx)
 # elif FFT == _FFTW3_
           ! number of ffts to be calculated
-          nb_ffts = xxf_lo%ulim_proc - xxf_lo%llim_proc + 1
+          !JH 7th December 2011
+	  !JH xxf_lo%ulim_alloc is used here rather than xxf_lo%lulim_proc
+	  !JH because there are situations where xxf_lo%llim_proc is greater 
+	  !JH than xxf_lo%ulim_proc and that would create a negative number 
+	  !JH of FFTs to be calculated.  However, xxf_lo%ulim_alloc is set
+	  !JH to be xxf_lo%llim_proc in this situation, and that will give 
+	  !JH 1 FFT to be calculated which the code can correctly undertake.
+          nb_ffts = xxf_lo%ulim_alloc - xxf_lo%llim_proc + 1
           
           call init_ccfftw (xf_fft,  1, xxf_lo%nx, nb_ffts, xxf)
           call init_ccfftw (xb_fft, -1,  xxf_lo%nx, nb_ffts, xxf)
@@ -246,12 +259,20 @@ contains
           xfft_initted = .true.
        end if
 
+       !JH FFTW plan creation for transform y5d and inverse
 # if FFT == _FFTW_
        call init_crfftw (yf_fft,  1, yxf_lo%ny)
        call init_rcfftw (yb_fft, -1, yxf_lo%ny)
 #elif FFT == _FFTW3_
        ! number of ffts to be calculated
-       nb_ffts = yxf_lo%ulim_proc - yxf_lo%llim_proc + 1
+       !JH 7th December 2011
+       !JH yxf_lo%ulim_alloc is used here rather than yxf_lo%lulim_proc
+       !JH because there are situations where yxf_lo%llim_proc is greater 
+       !JH than yxf_lo%ulim_proc and that would create a negative number 
+       !JH of FFTs to be calculated.  However, yxf_lo%ulim_alloc is set
+       !JH to be yxf_lo%llim_proc in this situation, and that will give 
+       !JH 1 FFT to be calculated which the code can correctly undertake.
+       nb_ffts = yxf_lo%ulim_alloc - yxf_lo%llim_proc + 1
 
        call init_crfftw (yf_fft,  1, yxf_lo%ny, nb_ffts)
        call init_rcfftw (yb_fft, -1,  yxf_lo%ny, nb_ffts)
@@ -411,10 +432,20 @@ contains
     ! get local indices of elements distributed to/from other processors
     nn_to = 0
     nn_from = 0
+!
+!CMR: loop over all xxf indices, find corresponding yxf indices
+!
     do ixxf = xxf_lo%llim_world, xxf_lo%ulim_world
        do it = 1, yxf_lo%nx
+!
+!CMR obtain corresponding yxf indices
+!
           call xxfidx2yxfidx (it, ixxf, xxf_lo, yxf_lo, ik, iyxf)
           if (idx_local(xxf_lo,ixxf)) then
+!CMR: if xxf index local, set:
+!         ip = corresponding yxf processor
+!        from_list%first,second arrays = it,ixxf  (ie xxf indices)
+!     later will send from_list to proc ip
              ip = proc_id(yxf_lo,iyxf)
              n = nn_from(ip) + 1
              nn_from(ip) = n
@@ -422,6 +453,9 @@ contains
              from_list(ip)%second(n) = ixxf
           end if
           if (idx_local(yxf_lo,iyxf)) then
+!CMR: if yxf index local, set ip to corresponding xxf processor
+!     set to_list%first,second arrays = ik,iyxf  (ie yxf indices)
+!     will receive to_list from ip
              ip = proc_id(xxf_lo,ixxf)
              n = nn_to(ip) + 1
              nn_to(ip) = n
@@ -464,18 +498,28 @@ contains
 
     ! intent statement in gather actually makes this next line non-standard: 
     xxf = 0.
+!CMR, 7/3/2011: gather pulls appropriate pieces of g onto this processor for
+!    local Fourier transform in x, and may also pad with zeros for dealiasing
+!
     call gather (g2x, g, xxf)
 
     ! do ffts
-    i = xxf_lo%ulim_proc - xxf_lo%llim_proc + 1
+# if FFT == _FFTW_
+    !JH 7th December 2011
+    !JH xxf_lo%ulim_alloc is used here rather than xxf_lo%lulim_proc
+    !JH because there are situations where xxf_lo%llim_proc is greater 
+    !JH than xxf_lo%ulim_proc and that would create a negative number 
+    !JH of FFTs to be calculated.  However, xxf_lo%ulim_alloc is set
+    !JH to be xxf_lo%llim_proc in this situation, and that will give 
+    !JH 1 FFT to be calculated which the code can correctly undertake.
+    i = xxf_lo%ulim_alloc - xxf_lo%llim_proc + 1
 
     allocate (aux(xf_fft%n))
-# if FFT == _FFTW_
     call fftw_f77 (xf_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
+    deallocate (aux)
 # elif FFT == _FFTW3_
     call dfftw_execute(xf_fft%plan)
 # endif
-    deallocate (aux)
 
     call prof_leaving ("transform_x5d", "gs2_transforms")
   end subroutine transform_x5d
@@ -492,10 +536,17 @@ contains
 
     call prof_entering ("inverse_x5d", "gs2_transforms")
 
-    i = xxf_lo%ulim_proc - xxf_lo%llim_proc + 1
-
     ! do ffts
 # if FFT == _FFTW_
+    !JH 7th December 2011
+    !JH xxf_lo%ulim_alloc is used here rather than xxf_lo%lulim_proc
+    !JH because there are situations where xxf_lo%llim_proc is greater 
+    !JH than xxf_lo%ulim_proc and that would create a negative number 
+    !JH of FFTs to be calculated.  However, xxf_lo%ulim_alloc is set
+    !JH to be xxf_lo%llim_proc in this situation, and that will give 
+    !JH 1 FFT to be calculated which the code can correctly undertake.
+    i = xxf_lo%ulim_alloc - xxf_lo%llim_proc + 1
+
     allocate (aux(xb_fft%n))
     call fftw_f77 (xb_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
     deallocate (aux)
@@ -527,8 +578,15 @@ contains
     call gather (x2y, xxf, fft)
 
     ! do ffts
-    i = yxf_lo%ulim_proc - yxf_lo%llim_proc + 1
 # if FFT == _FFTW_
+    !JH 7th December 2011
+    !JH yxf_lo%ulim_alloc is used here rather than yxf_lo%lulim_proc
+    !JH because there are situations where yxf_lo%llim_proc is greater 
+    !JH than yxf_lo%ulim_proc and that would create a negative number 
+    !JH of FFTs to be calculated.  However, yxf_lo%ulim_alloc is set
+    !JH to be yxf_lo%llim_proc in this situation, and that will give 
+    !JH 1 FFT to be calculated which the code can correctly undertake.
+    i = yxf_lo%ulim_alloc - yxf_lo%llim_proc + 1
     call rfftwnd_f77_complex_to_real (yf_fft%plan, i, fft, 1, yxf_lo%ny/2+1, yxf, 1, yxf_lo%ny)
 # elif FFT == _FFTW3_
 
@@ -550,8 +608,15 @@ contains
     call prof_entering ("inverse_y5d", "gs2_transforms")
 
     ! do ffts
-    i = yxf_lo%ulim_proc - yxf_lo%llim_proc + 1
 # if FFT == _FFTW_
+    !JH 7th December 2011
+    !JH yxf_lo%ulim_alloc is used here rather than yxf_lo%lulim_proc
+    !JH because there are situations where yxf_lo%llim_proc is greater 
+    !JH than yxf_lo%ulim_proc and that would create a negative number 
+    !JH of FFTs to be calculated.  However, yxf_lo%ulim_alloc is set
+    !JH to be yxf_lo%llim_proc in this situation, and that will give 
+    !JH 1 FFT to be calculated which the code can correctly undertake.
+    i = yxf_lo%ulim_alloc - yxf_lo%llim_proc + 1
     call rfftwnd_f77_real_to_complex (yb_fft%plan, i, yxf, 1, yxf_lo%ny, fft, 1, yxf_lo%ny/2+1)
 # elif FFT == _FFTW3_
     call dfftw_execute_dft_r2c (yb_fft%plan, yxf, fft)

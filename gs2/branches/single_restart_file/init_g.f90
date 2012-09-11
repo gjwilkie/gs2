@@ -1,40 +1,61 @@
+!> This module contains the subroutines which set the initial value of the
+!! fields and the distribution function.
+
 module init_g
   implicit none
 
   public :: ginit
-  public :: init_init_g, finish_init_g
+  public :: init_init_g, finish_init_g, wnml_init_g, check_init_g
   public :: width0
   public :: tstart
   public :: reset_init
   public :: init_vnmult
   public :: new_field_init
+  private :: single_initial_kx
   private
 
   ! knobs
   integer :: ginitopt_switch
-  integer, parameter :: ginitopt_default = 1, ginitopt_test1 = 2, &
+  integer, parameter :: ginitopt_default = 1,  &
        ginitopt_xi = 3, ginitopt_xi2 = 4, ginitopt_rh = 5, ginitopt_zero = 6, &
-       ginitopt_test3 = 7, ginitopt_convect = 8, ginitopt_restart_file = 9, &
+       ginitopt_test3 = 7, ginitopt_convect = 8, ginitopt_restart_single = 9, &
        ginitopt_noise = 10, ginitopt_restart_many = 11, ginitopt_continue = 12, &
        ginitopt_nl = 13, ginitopt_kz0 = 14, ginitopt_restart_small = 15, &
        ginitopt_nl2 = 16, ginitopt_nl3 = 17, ginitopt_nl4 = 18, & 
        ginitopt_nl5 = 19, ginitopt_alf = 20, ginitopt_kpar = 21, &
        ginitopt_nl6 = 22, ginitopt_nl7 = 23, ginitopt_gs = 24, ginitopt_recon = 25, &
        ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28, &
-       ginitopt_recon3 = 29, ginitopt_zonal_only = 30
+       ginitopt_recon3 = 29, ginitopt_ot = 30, &
+       ginitopt_zonal_only = 31, ginitopt_single_parallel_mode = 32, &
+       ginitopt_all_modes_equal = 33
+
   real :: width0, dphiinit, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
   real :: den1, upar1, tpar1, tperp1
   real :: den2, upar2, tpar2, tperp2
   real :: tstart, scale, apar0
   logical :: chop_side, left, even, new_field_init
-  character(300) :: restart_file
+  character(300), public :: restart_file
   character (len=150) :: restart_dir
   integer, dimension(2) :: ikk, itt
   integer, dimension(3) :: ikkk,ittt
+  complex, dimension (6) :: phiamp, aparamp
+
+  ! These are used for the function ginit_single_parallel_mode, and specify the
+  !  kparallel to initialize. In the case of  zero magnetic shear, of course, the box 
+  ! is periodic in the parallel direction, and so only harmonics of the box size 
+  ! (i.e. ikpar_init) are allowed  EGH</doc>
+
+  integer :: ikpar_init
+  real :: kpar_init
+
+  !>  This is used  in linear runs with flow shear  in order to track the
+  !! evolution of a single Lagrangian mode.
+  integer :: ikx_init
 
   ! RN> for recon3
   real :: phiinit0 ! amplitude of equilibrium
+  real :: phiinit_rand ! amplitude of random perturbation
   real :: a0,b0 ! amplitude of equilibrium Apara or By 
   ! if b0 /= 0, u0 is rescaled to give this By amplitude by overriding a0
   ! if a0 /= 0, u0 is rescaled to give this Apara amplitude
@@ -55,19 +76,509 @@ module init_g
   
   logical :: debug = .false.
   logical :: initialized = .false.
+  logical :: exist
 
 contains
+
+  subroutine wnml_init_g(unit)
+  use run_parameters, only: k0
+  implicit none
+  integer :: unit
+       if (.not.exist) return
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "init_g_knobs"
+       select case (ginitopt_switch)
+
+       case (ginitopt_default)
+          write (unit, fmt="(' ginit_option = ',a)") '"default"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' width0 = ',e16.10)") width0
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_noise)
+          write (unit, fmt="(' ginit_option = ',a)") '"noise"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' zf_init = ',e16.10)") zf_init
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_xi)
+          write (unit, fmt="(' ginit_option = ',a)") '"xi"'
+          write (unit, fmt="(' width0 = ',e16.10)") width0
+
+       case (ginitopt_xi2)
+          write (unit, fmt="(' ginit_option = ',a)") '"xi2"'
+          write (unit, fmt="(' width0 = ',e16.10)") width0
+
+       case (ginitopt_zero)
+          write (unit, fmt="(' ginit_option = ',a)") '"zero"'
+
+       case (ginitopt_test3)
+          write (unit, fmt="(' ginit_option = ',a)") '"test3"'
+
+       case (ginitopt_convect)
+          write (unit, fmt="(' ginit_option = ',a)") '"convect"'
+          write (unit, fmt="(' k0 = ',e16.10)") k0
+
+       case (ginitopt_rh)
+          write (unit, fmt="(' ginit_option = ',a)") '"rh"'
+
+       case (ginitopt_restart_many)
+          write (unit, fmt="(' ginit_option = ',a)") '"many"'
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+
+       case (ginitopt_restart_small)
+          write (unit, fmt="(' ginit_option = ',a)") '"small"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' zf_init = ',e16.10)") zf_init
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+
+       case (ginitopt_restart_single)
+          write (unit, fmt="(' ginit_option = ',a)") '"file"'
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+
+       case (ginitopt_continue)
+          write (unit, fmt="(' ginit_option = ',a)") '"cont"'
+
+       case (ginitopt_kz0)
+          write (unit, fmt="(' ginit_option = ',a)") '"kz0"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_nl)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_nl2)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl2"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_nl3)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl3"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' width0 = ',e16.10)") width0
+          write (unit, fmt="(' refac = ',e16.10)") refac
+          write (unit, fmt="(' imfac = ',e16.10)") imfac
+          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+          write (unit, fmt="(' den0 = ',e16.10)") den0
+          write (unit, fmt="(' den1 = ',e16.10)") den1
+          write (unit, fmt="(' den2 = ',e16.10)") den2
+          write (unit, fmt="(' upar0 = ',e16.10)") upar0
+          write (unit, fmt="(' upar1 = ',e16.10)") upar1
+          write (unit, fmt="(' upar2 = ',e16.10)") upar2
+          write (unit, fmt="(' tpar0 = ',e16.10)") tpar0
+          write (unit, fmt="(' tpar1 = ',e16.10)") tpar1
+          write (unit, fmt="(' tperp0 = ',e16.10)") tperp0
+          write (unit, fmt="(' tperp1 = ',e16.10)") tperp1
+          write (unit, fmt="(' tperp2 = ',e16.10)") tperp2
+
+       case (ginitopt_nl4)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl4"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_nl5)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl5"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' chop_side = ',L1)") chop_side
+          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+
+       case (ginitopt_nl6)
+          write (unit, fmt="(' ginit_option = ',a)") '"nl6"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+          write (unit, fmt="(' scale = ',e16.10)") scale
+
+       case (ginitopt_alf)
+          write (unit, fmt="(' ginit_option = ',a)") '"alf"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+
+       case (ginitopt_gs)
+          write (unit, fmt="(' ginit_option = ',a)") '"gs"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' refac = ',e16.10)") refac
+          write (unit, fmt="(' imfac = ',e16.10)") imfac
+          write (unit, fmt="(' den1 = ',e16.10)") den1
+          write (unit, fmt="(' upar1 = ',e16.10)") upar1
+          write (unit, fmt="(' tpar1 = ',e16.10)") tpar1
+          write (unit, fmt="(' tperp1 = ',e16.10)") tperp1
+
+
+       case (ginitopt_kpar)
+          write (unit, fmt="(' ginit_option = ',a)") '"kpar"'
+          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' width0 = ',e16.10)") width0
+          write (unit, fmt="(' refac = ',e16.10)") refac
+          write (unit, fmt="(' imfac = ',e16.10)") imfac
+          write (unit, fmt="(' den0 = ',e16.10)") den0
+          write (unit, fmt="(' den1 = ',e16.10)") den1
+          write (unit, fmt="(' den2 = ',e16.10)") den2
+          write (unit, fmt="(' upar0 = ',e16.10)") upar0
+          write (unit, fmt="(' upar1 = ',e16.10)") upar1
+          write (unit, fmt="(' upar2 = ',e16.10)") upar2
+          write (unit, fmt="(' tpar0 = ',e16.10)") tpar0
+          write (unit, fmt="(' tpar1 = ',e16.10)") tpar1
+          write (unit, fmt="(' tperp0 = ',e16.10)") tperp0
+          write (unit, fmt="(' tperp1 = ',e16.10)") tperp1
+          write (unit, fmt="(' tperp2 = ',e16.10)") tperp2
+
+       end select
+       write (unit, fmt="(' /')")
+  end subroutine wnml_init_g
+
+ 
+  subroutine check_init_g(report_unit)
+  use run_parameters, only : delt_option_switch, delt_option_auto
+  use species, only : spec, has_electron_species
+  implicit none
+  integer :: report_unit
+    select case (ginitopt_switch)
+    case (ginitopt_default)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('  Amplitude:        ',f10.4)") phiinit
+       write (report_unit, fmt="('  Width in theta:   ',f10.4)") width0
+       if (chop_side) then
+          write (report_unit, fmt="('  Parity:   none')") 
+       else
+          write (report_unit, fmt="('  Parity:   even')") 
+       end if
+
+    case (ginitopt_kz0)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('  Amplitude:        ',f10.4)") phiinit
+       write (report_unit, fmt="('  Constant along field line',f10.4)") width0
+       if (chop_side) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('  Parity:   none')") 
+          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+          write (report_unit, fmt="('Remedy: set chop_side = .false. in init_g_knobs.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+
+    case (ginitopt_noise)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('  Amplitude:        ',f10.4)") phiinit
+       write (report_unit, fmt="('  Noise along field line.')") 
+       if (zf_init /= 1.) then
+          write (report_unit, fmt="('  Zonal flows adjusted by factor of zf_init = ',f10.4)") zf_init
+       end if
+
+    case (ginitopt_kpar)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('  Amplitude:             ',f10.4)") phiinit
+       write (report_unit, fmt="('  Real part multiplier:  ',f10.4)") refac
+       write (report_unit, fmt="('  Imag part multiplier:  ',f10.4)") imfac
+       if (width0 > 0.) then
+          write (report_unit, fmt="('  Gaussian envelope in theta with width:  ',f10.4)") width0
+       end if
+       if (chop_side) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('  Parity:   none')") 
+          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+          write (report_unit, fmt="('Remedy: set chop_side = .false. in init_g_knobs.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+       if (den0 > epsilon(0.0) .or. den1 > epsilon(0.0) .or. den2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial density perturbation of the form:')")
+          write (report_unit, fmt="('den0   + den1 * cos(theta) + den2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with den0 =',f7.4,' den1 = ',f7.4,' den2 = ',f7.4)") den0, den1, den2
+       end if
+       if (upar0 > epsilon(0.0) .or. upar1 > epsilon(0.0) .or. upar2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial parallel velocity perturbation of the form:')")
+          write (report_unit, fmt="('upar0   + upar1 * cos(theta) + upar2 * cos(2.*theta)')")
+          write (report_unit, fmt="('90 degrees out of phase with other perturbations.')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with upar0 =',f7.4,' upar1 = ',f7.4,' upar2 = ',f7.4)") upar0, upar1, upar2
+       end if
+       if (tpar0 > epsilon(0.0) .or. tpar1 > epsilon(0.0) .or. tpar2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial Tpar perturbation of the form:')")
+          write (report_unit, fmt="('tpar0   + tpar1 * cos(theta) + tpar2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with tpar0 =',f7.4,' tpar1 = ',f7.4,' tpar2 = ',f7.4)") tpar0, tpar1, tpar2
+       end if
+       if (tperp0 > epsilon(0.0) .or. tperp1 > epsilon(0.0) .or. tperp2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial Tperp perturbation of the form:')")
+          write (report_unit, fmt="('tperp0   + tperp1 * cos(theta) + tperp2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with tperp0 =',f7.4,' tperp1 = ',f7.4,' tperp2 = ',f7.4)") tperp0, tperp1, tperp2
+       end if
+       if (has_electron_species(spec)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Field line average of g_electron subtracted off.')")
+       end if
+
+    case (ginitopt_gs)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('  Randomly phased kpar=1 sines and cosines')") 
+       write (report_unit, fmt="('  in density, upar, tpar, or tperp.')") 
+       write (report_unit, fmt="('  Real part amplitude:  ',f10.4)") refac*phiinit
+       write (report_unit, fmt="('  Imag part amplitude:  ',f10.4)") imfac*phiinit
+       if (abs( den1)  > epsilon(0.0)) write (report_unit, fmt="('  Density amplitude:  ',f10.4)") den1
+       if (abs( upar1) > epsilon(0.0)) write (report_unit, fmt="('  Upar amplitude:  ',f10.4)") upar1
+       if (abs( tpar1) > epsilon(0.0)) write (report_unit, fmt="('  Tpar amplitude:  ',f10.4)") tpar1
+       if (abs(tperp1) > epsilon(0.0)) write (report_unit, fmt="('  Tperp amplitude:  ',f10.4)") tperp1
+
+    case (ginitopt_nl)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('At most two k_perps excited, with amplitude = ',f10.4)") phiinit
+       write (report_unit, fmt="(' First k_perp has ik = ',i3,' it = ',i3)") ikk(1), itt(1)
+       write (report_unit, fmt="('Second k_perp has ik = ',i3,' it = ',i3)") ikk(2), itt(2)
+       if (chop_side) then
+          write (report_unit, fmt="('  Parity:   none')") 
+       else
+          write (report_unit, fmt="('  Parity:   even')") 
+       end if
+       write (report_unit, fmt="('Reality condition is enforced.')")
+       
+    case (ginitopt_nl2)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('At most two k_perps excited, with amplitude = ',f10.4)") phiinit
+       write (report_unit, fmt="(' First k_perp has ik = ',i3,' it = ',i3)") ikk(1), itt(1)
+       write (report_unit, fmt="('Second k_perp has ik = ',i3,' it = ',i3)") ikk(2), itt(2)
+       if (chop_side) then
+          write (report_unit, fmt="('  Parity:   none')") 
+       else
+          write (report_unit, fmt="('  Parity:   even')") 
+       end if
+       write (report_unit, fmt="('Reality condition is enforced.')")
+       write (report_unit, fmt="('g perturbation proportional to (1+v_parallel)*sin(theta)')")
+
+    case (ginitopt_nl3)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('At most two k_perps excited, with amplitude = ',f10.4)") phiinit
+       write (report_unit, fmt="(' First k_perp has ik = ',i3,' it = ',i3)") ikk(1), itt(1)
+       write (report_unit, fmt="('Second k_perp has ik = ',i3,' it = ',i3)") ikk(2), itt(2)
+       write (report_unit, fmt="('  Real part multiplied by:  ',f10.4)") refac
+       write (report_unit, fmt="('  Imag part multiplied by:  ',f10.4)") imfac
+       if (width0 > 0.) then
+          write (report_unit, fmt="('  Gaussian envelope in theta with width:  ',f10.4)") width0
+       end if
+       if (chop_side) then
+          write (report_unit, fmt="('  Parity:   none')") 
+       else
+          write (report_unit, fmt="('  Parity:   even')") 
+       end if
+       write (report_unit, fmt="('Reality condition is enforced.')")
+       if (den0 > epsilon(0.0) .or. den1 > epsilon(0.0) .or. den2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial density perturbation of the form:')")
+          write (report_unit, fmt="('den0   + den1 * cos(theta) + den2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with den0 =',f7.4,' den1 = ',f7.4,' den2 = ',f7.4)") den0, den1, den2
+       end if
+       if (upar0 > epsilon(0.0) .or. upar1 > epsilon(0.0) .or. upar2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial parallel velocity perturbation of the form:')")
+          write (report_unit, fmt="('upar0   + upar1 * cos(theta) + upar2 * cos(2.*theta)')")
+          write (report_unit, fmt="('90 degrees out of phase with other perturbations.')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with upar0 =',f7.4,' upar1 = ',f7.4,' upar2 = ',f7.4)") upar0, upar1, upar2
+       end if
+       if (tpar0 > epsilon(0.0) .or. tpar1 > epsilon(0.0) .or. tpar2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial Tpar perturbation of the form:')")
+          write (report_unit, fmt="('tpar0   + tpar1 * cos(theta) + tpar2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with tpar0 =',f7.4,' tpar1 = ',f7.4,' tpar2 = ',f7.4)") tpar0, tpar1, tpar2
+       end if
+       if (tperp0 > epsilon(0.0) .or. tperp1 > epsilon(0.0) .or. tperp2 > epsilon(0.0)) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('Initial Tperp perturbation of the form:')")
+          write (report_unit, fmt="('tperp0   + tperp1 * cos(theta) + tperp2 * cos(2.*theta)')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('with tperp0 =',f7.4,' tperp1 = ',f7.4,' tperp2 = ',f7.4)") tperp0, tperp1, tperp2
+       end if
+       
+    case (ginitopt_nl4)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Under development for study of secondary instabilities.')")
+       write (report_unit, fmt="('Scale factor:   ',f10.4)") scale
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_nl5)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Under development for study of secondary instabilities.')")
+       write (report_unit, fmt="('Scale factor:   ',f10.4)") scale
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_nl6)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Change amplitude of a particular mode.')")
+       write (report_unit, fmt="('Scale factor:   ',f10.4)") scale
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_xi)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Perturbation proportional to pitch angle.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_xi2)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Perturbation proportional to function of pitch angle.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_rh)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Maxwellian perturbation in ik=1 mode.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_alf)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Ion dist fn proportional to v_parallel * sin(theta).')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_zero)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Distribution function = 0.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_test3)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_convect)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    case (ginitopt_restart_single)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('Restart from a single NetCDF HDF5 parallel restart file.')") 
+
+    case (ginitopt_restart_many)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('Each PE restarts from its own NetCDF restart file.')") 
+
+    case (ginitopt_restart_small)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, fmt="('Each PE restarts from its own NetCDF restart file.')") 
+       write (report_unit, fmt="('with amplitudes scaled by factor of scale = ',f10.4)") scale
+       write (report_unit, fmt="('Noise added with amplitude = ',f10.4)") phiinit
+
+    case (ginitopt_continue)
+       write (report_unit, fmt="('Initial conditions:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+
+    end select
+
+    if (ginitopt_switch == ginitopt_restart_many) then
+       if (delt_option_switch == delt_option_auto) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('This run is a continuation of a previous run.')") 
+          write (report_unit, fmt="('The time step at the beginning of this run')") 
+          write (report_unit, fmt="('will be taken from the end of the previous run.')") 
+       else
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('This run is a continuation of a previous run.')") 
+          write (report_unit, fmt="('The time step is being set by hand.')") 
+          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+          write (report_unit, fmt="('You probably want to set delt_option to be check_restart in the knobs namelist.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+    end if
+
+    if (delt_option_switch == delt_option_auto) then
+       if (ginitopt_switch /= ginitopt_restart_many) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('This is not a normal continuation run.')") 
+          write (report_unit, fmt="('You probably want to set delt_option to be default in the knobs namelist.')") 
+          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+    end if
+  end subroutine check_init_g
 
   subroutine init_init_g
     use gs2_save, only: init_save
     use gs2_layouts, only: init_gs2_layouts
     use mp, only: proc0, broadcast, job
     implicit none
+    integer :: ind_slash
 !    logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
-
     call init_gs2_layouts
 
     if (proc0) call read_parameters
@@ -76,7 +587,15 @@ contains
     ! append trailing slash if not exists
     if(restart_dir(len_trim(restart_dir):) /= "/") &
          restart_dir=trim(restart_dir)//"/"
-    restart_file=trim(restart_dir)//trim(restart_file)
+!Determine if restart file contains "/" if so split on this point to give DIR//FILE
+    !so restart files are created in DIR//restart_dir//FILE
+    ind_slash=index(restart_file,"/",.True.)
+    if (ind_slash.EQ.0) then !No slash present
+       restart_file=trim(restart_dir)//trim(restart_file)
+    else !Slash present
+       restart_file=trim(restart_file(1:ind_slash))//trim(restart_dir)//trim(restart_file(ind_slash+1:))
+    endif
+
 
     ! MAB - allows for ensemble averaging of multiple flux tube calculations
     ! job=0 if not doing multiple flux tube calculations, so phiinit unaffected
@@ -112,11 +631,14 @@ contains
     call broadcast (itt) 
     call broadcast (ikkk)
     call broadcast (ittt) 
+    call broadcast (phiamp)
+    call broadcast (aparamp)
     call broadcast (scale)
     call broadcast (new_field_init)
 
     ! RN>
     call broadcast (phiinit0)
+    call broadcast (phiinit_rand)
     call broadcast (a0)
     call broadcast (b0)
     call broadcast (null_phi)
@@ -130,6 +652,10 @@ contains
     call broadcast (input_check_recon)
     call broadcast (nkxy_pt)
     call broadcast (ukxy_pt)
+    
+    call broadcast (ikpar_init)
+    call broadcast (ikx_init)
+    call broadcast (kpar_init)
     ! <RN
     call init_save (restart_file)
 
@@ -150,6 +676,10 @@ contains
        call ginit_kz0
     case (ginitopt_noise)
        call ginit_noise
+    case (ginitopt_single_parallel_mode)
+       call ginit_single_parallel_mode
+    case (ginitopt_all_modes_equal)
+       call ginit_all_modes_equal
     case (ginitopt_kpar)
        call ginit_kpar
     case (ginitopt_gs)
@@ -197,8 +727,6 @@ contains
        scale = 1.
     case (ginitopt_nl7)
        call ginit_nl7
-    case (ginitopt_test1)
-       call ginit_test1
     case (ginitopt_xi)
        call ginit_xi
     case (ginitopt_xi2)
@@ -213,14 +741,14 @@ contains
        call ginit_test3
     case (ginitopt_convect)
        call ginit_convect
-    case (ginitopt_restart_file)
-       call ginit_restart_file 
+    case (ginitopt_restart_single)
+       call ginit_restart_single
        call init_tstart (tstart, istatus)
        restarted = .true.
        scale = 1.
     case (ginitopt_restart_many)
        call ginit_restart_many 
-       call init_tstart (tstart, istatus)
+       call init_tstart (tstart, istatus, .true.)
        restarted = .true.
        scale = 1.
     case (ginitopt_restart_small)
@@ -243,6 +771,8 @@ contains
        scale = 1.
     case (ginitopt_recon3)
        call ginit_recon3
+    case (ginitopt_ot)
+       call ginit_ot
     end select
   end subroutine ginit
 
@@ -251,10 +781,9 @@ contains
     use text_options, only: text_option, get_option_value
     implicit none
 
-    type (text_option), dimension (30), parameter :: ginitopts = &
+    type (text_option), dimension (32), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
-            text_option('test1', ginitopt_test1), &
             text_option('xi', ginitopt_xi), &
             text_option('xi2', ginitopt_xi2), &
             text_option('zero', ginitopt_zero), &
@@ -263,7 +792,7 @@ contains
             text_option('rh', ginitopt_rh), &
             text_option('many', ginitopt_restart_many), &
             text_option('small', ginitopt_restart_small), &
-            text_option('file', ginitopt_restart_file), &
+            text_option('single', ginitopt_restart_single), &
             text_option('cont', ginitopt_continue), &
             text_option('kz0', ginitopt_kz0), &
             text_option('nl', ginitopt_nl), &
@@ -281,7 +810,10 @@ contains
             text_option('harris', ginitopt_harris), &
             text_option('recon', ginitopt_recon), &
             text_option('recon3', ginitopt_recon3), &
-            text_option('zonal_only', ginitopt_zonal_only) &
+            text_option('ot', ginitopt_ot), &
+            text_option('zonal_only', ginitopt_zonal_only), &
+            text_option('single_parallel_mode', ginitopt_single_parallel_mode), &
+            text_option('all_modes_equal', ginitopt_all_modes_equal) &
             /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
@@ -290,13 +822,15 @@ contains
          den1, upar1, tpar1, tperp1, &
          den2, upar2, tpar2, tperp2, dphiinit, apar0, &
          new_field_init, &
-         phiinit0, a0, b0, null_phi, null_bpar, null_apar, adj_spec, &
+         phiinit0, phiinit_rand, a0, b0, &
+         null_phi, null_bpar, null_apar, adj_spec, &
          eq_type, prof_width, eq_mode_u, eq_mode_n, &
          input_check_recon, nkxy_pt, ukxy_pt, &
-         ikkk, ittt, phifrac
+         ikkk, ittt, phiamp, aparamp, phifrac, ikpar_init, kpar_init, &
+         ikx_init
+
 
     integer :: ierr, in_file
-    logical :: exist
 
     tstart = 0.
     scale = 1.0
@@ -333,7 +867,10 @@ contains
     ! >RN
     ikkk(1) = 1 ; ikkk(2) = 2 ; ikkk(3) = 2
     ittt(1) = 1 ; ittt(2) = 2 ; ittt(3) = 2
+    phiamp(1:6) = cmplx(0.0,0.0)
+    aparamp(1:6) = cmplx(0.0,0.0)
     phiinit0 = 0.
+    phiinit_rand = 0.
     a0 = 0.
     b0 = 0.
     null_phi = .false.
@@ -347,6 +884,11 @@ contains
     input_check_recon=.false.
     nkxy_pt=cmplx(0.,0.)
     ukxy_pt=cmplx(0.,0.)
+
+    ikpar_init = 0
+    kpar_init = 0.0
+    ikx_init = -1
+
     ! <RN
     restart_file = trim(run_name)//".nc"
     restart_dir = "./"
@@ -407,6 +949,8 @@ contains
     gnew = g
   end subroutine ginit_default
 
+  !> Initialise with only the kparallel = 0 mode.
+  
   subroutine ginit_kz0
     use species, only: spec
     use theta_grid, only: ntgrid 
@@ -508,6 +1052,46 @@ contains
 !    gnew = g
 !  end subroutine ginit_noise
   
+  subroutine single_initial_kx(phi)
+    use species, only: spec, tracer_species
+    use theta_grid, only: ntgrid 
+    use kt_grids, only: naky, ntheta0, aky, reality, akx
+    use le_grids, only: forbid
+    use dist_fn_arrays, only: g, gnew
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use ran
+    use mp, only: mp_abort
+    implicit none
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky), intent(inout) :: phi
+    real :: a, b
+    integer :: iglo
+    integer :: ig, ik, it, il, is, nn
+
+    if (ikx_init  < 2 .or. ikx_init > (ntheta0+1)/2) then
+      call mp_abort("The subroutine single_initial_kx should only be called when 1 < ikx_init < (ntheta0+1)/2")
+    end if
+
+    do it = 1, ntheta0
+      if (it .ne. ikx_init) then 
+        !write (*,*) "zeroing out kx_index: ", it, "at kx: ", akx(it)
+         do ik = 1, naky
+            do ig = -ntgrid, ntgrid
+               a = 0.0
+               b = 0.0 
+  !             phi(:,it,ik) = cmplx(a,b)
+               phi(ig,it,ik) = cmplx(a,b)
+             end do
+         end do
+       end if
+    end do
+  end subroutine single_initial_kx
+
+
+
+  !> Initialise the distribution function with random noise. This is the default
+  !! initialisation option. Each different mode is given a random amplitude
+  !! between zero and one.
+
   subroutine ginit_noise
     use species, only: spec, tracer_species
     use theta_grid, only: ntgrid 
@@ -521,6 +1105,7 @@ contains
     real :: a, b
     integer :: iglo
     integer :: ig, ik, it, il, is, nn
+    !integer :: itstart, itend
 
     phit = 0.
     do it=2,ntheta0/2+1
@@ -530,7 +1115,11 @@ contains
     end do
 
 ! keep old (it, ik) loop order to get old results exactly: 
-    do it = 1, ntheta0
+
+  !write (*,*) "ikx_init is", ikx_init
+
+
+     do it = 1, ntheta0
        do ik = 1, naky
           do ig = -ntgrid, ntgrid
              a = ranf()-0.5
@@ -547,6 +1136,9 @@ contains
           end if
        end do
     end do
+
+
+    if (ikx_init  > 0) call single_initial_kx(phi)
 
     if (naky > 1 .and. aky(1) == 0.0) then
        phi(:,:,1) = phi(:,:,1)*zf_init
@@ -575,6 +1167,198 @@ contains
     gnew = g
 
   end subroutine ginit_noise
+
+ 	!> Initialize with a single parallel mode. Only makes sense in a linear 
+  !! calculation. k_parallel is specified with kpar_init or with ikpar_init 
+  !! when periodic boundary conditions are used. 
+
+  subroutine ginit_single_parallel_mode
+    use species, only: spec, tracer_species
+    use theta_grid, only: ntgrid, shat, theta 
+    use kt_grids, only: naky, ntheta0, aky, reality
+    use le_grids, only: forbid
+    use mp, only: mp_abort
+    use dist_fn_arrays, only: g, gnew
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use ran
+    implicit none
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
+    real :: a, b
+    integer :: iglo
+    integer :: ig, ik, it, il, is, nn
+
+    phit = 0.
+    do it=2,ntheta0/2+1
+       nn = it-1
+! extra factor of 4 to reduce the high k wiggles for now
+       phit (:, it, 1) = (-1)**nn*exp(-8.*(real(nn)/ntheta0)**2)
+    end do
+
+    if (abs(shat) < 1.0e-05) then 
+      if (ikpar_init+1 > ntgrid) then 
+        call mp_abort("Error: this value of k_parallel is too large. Increase ntheta or decrease ikpar_init.")
+      end if
+      kpar_init = ikpar_init
+    end if
+
+
+    do it = 1, ntheta0
+       do ik = 1, naky
+          do ig = -ntgrid, ntgrid
+              !Set the field to cos(kpar_init*theta), where we remember that the gridpoints are not necessarily evenly spaced in the parallel direction, so we use theta(ig).
+               !reality for ky=0 means we must use -kpar for kx < 0
+              !if (naky == 1 .and. it > (ntheta0+1)/2) then
+                !a = cos(-kpar_init * theta(ig)) 
+                !b = sin(-kpar_init * theta(ig))
+              !else
+                a = cos(kpar_init * theta(ig)) 
+                b = sin(kpar_init * theta(ig))
+              !end if
+              
+
+!              a = ranf()-0.5
+!              b = ranf()-0.5
+!             phi(:,it,ik) = cmplx(a,b)
+             phi(ig,it,ik) = cmplx(a,b)
+           end do
+          if (chop_side) then
+             if (left) then
+                phi(:-1,it,ik) = 0.0
+             else
+                phi(1:,it,ik) = 0.0
+             end if
+          end if
+       end do
+    end do
+
+    if (naky > 1 .and. aky(1) == 0.0) then
+       phi(:,:,1) = phi(:,:,1)*zf_init
+    end if
+
+
+    if (ikx_init  > 0) call single_initial_kx(phi)
+
+    !<doc> reality condition for ky = 0 component: </doc>
+    if (reality) then
+       do it = 1, ntheta0/2
+          phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
+          phit(:,it+(ntheta0+1)/2,1) = conjg(phit(:,(ntheta0+1)/2+1-it,1))
+       enddo
+    end if
+       
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       if (spec(is)%type == tracer_species) then          
+          g(:,1,iglo) =-phit(:,it,ik)*spec(is)%z*phiinit
+       else
+          g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit
+       end if
+       where (forbid(:,il)) g(:,1,iglo) = 0.0
+       g(:,2,iglo) = g(:,1,iglo)
+    end do
+    gnew = g
+
+  end subroutine ginit_single_parallel_mode
+
+ 	!> Initialize with every parallel and perpendicular mode having equal amplitude. 
+  !! Only makes sense in a linear calculation. k_parallel is specified with kpar_init 
+  !! or with ikpar_init when periodic boundary conditions are used. EGH 
+
+  subroutine ginit_all_modes_equal
+    use species, only: spec, tracer_species
+    use theta_grid, only: ntgrid, shat, theta, ntheta 
+    use kt_grids, only: naky, ntheta0, aky, reality
+    use le_grids, only: forbid
+    use dist_fn_arrays, only: g, gnew
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use ran
+    use mp, only: mp_abort
+!     use file_utils, only: error_unit
+    implicit none
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
+    real :: a, b
+    integer :: iglo
+    integer :: ig, ik, it, il, is, nn, ikpar
+
+    phit = 0.
+    do it=2,ntheta0/2+1
+       nn = it-1
+! extra factor of 4 to reduce the high k wiggles for now
+       phit (:, it, 1) = (-1)**nn*exp(-8.*(real(nn)/ntheta0)**2)
+    end do
+
+    !if (abs(shat) < 1.0e-05) then 
+      !if (ikpar_init+1 > ntgrid) then 
+        !call mp_abort("Error: this value of k_parallel is too large. Increase ntheta or decrease ikpar_init.")
+!!         stop 'Aborting...'
+      !end if
+      !kpar_init = ikpar_init
+    !end if
+
+
+    do it = 1, ntheta0
+       do ik = 1, naky
+          do ig = -ntgrid, ntgrid
+              ! Set the field to cos(kpar*theta) for all kpar, where we remember that the gridpoints are not necessarily evenly spaced in the parallel direction, so we use theta(ig)</doc>
+            a = 0.0 
+            b = 0.0
+            do ikpar = 0, ntheta - 1 
+              a = a + cos(ikpar * theta(ig)) 
+              ! we want to include the positive and negative wave numbers in
+              ! equal measure, which of course means a real sine wave.
+              b = 0.0 !b + cos(ikpar * theta(ig))
+            end do
+
+!              a = ranf()-0.5
+!              b = ranf()-0.5
+!             phi(:,it,ik) = cmplx(a,b)
+             phi(ig,it,ik) = cmplx(a,b)
+           end do
+          if (chop_side) then
+             if (left) then
+                phi(:-1,it,ik) = 0.0
+             else
+                phi(1:,it,ik) = 0.0
+             end if
+          end if
+       end do
+    end do
+
+    if (naky > 1 .and. aky(1) == 0.0) then
+       phi(:,:,1) = phi(:,:,1)*zf_init
+    end if
+
+
+    if (ikx_init  > 0) call single_initial_kx(phi)
+
+    !<doc> reality condition for ky = 0 component: </doc>
+    if (reality) then
+       do it = 1, ntheta0/2
+          phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
+          phit(:,it+(ntheta0+1)/2,1) = conjg(phit(:,(ntheta0+1)/2+1-it,1))
+       enddo
+    end if
+       
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       if (spec(is)%type == tracer_species) then          
+          g(:,1,iglo) =-phit(:,it,ik)*spec(is)%z*phiinit
+       else
+          g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit
+       end if
+       where (forbid(:,il)) g(:,1,iglo) = 0.0
+       g(:,2,iglo) = g(:,1,iglo)
+    end do
+    gnew = g
+
+  end subroutine ginit_all_modes_equal
+
   
   subroutine ginit_nl
     use species, only: spec
@@ -1012,7 +1796,7 @@ contains
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
     integer :: iglo, istatus, ierr
     integer :: ig, ik, it, il, is, j
-    logical :: many = .true.
+    logical :: many = .false.
     
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
     if (istatus /= 0) then
@@ -1128,7 +1912,7 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
     integer :: iglo, istatus
     integer :: ig, ik, it, is, il, ierr
-    logical :: many = .true.
+    logical :: many = .false.
     
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
     if (istatus /= 0) then
@@ -1230,7 +2014,7 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
     integer :: iglo, istatus
     integer :: ig, ik, it, is, il, ierr
-    logical :: many = .true.
+    logical :: many = .false.
     
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
     if (istatus /= 0) then
@@ -1322,8 +2106,8 @@ contains
     integer :: iglo, istatus
 !    integer :: ig, ik, it, is, il, ierr
     integer :: ik, it, ierr
-    logical :: many = .true.
-    
+    logical :: many = .false.
+
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
@@ -1447,6 +2231,104 @@ contains
     gnew = g
 
   end subroutine ginit_nl7
+
+  ! Orszag-Tang 2D vortex problem
+  subroutine ginit_ot
+    use species, only: spec
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, nakx => ntheta0, reality
+    use dist_fn_arrays, only: g, gnew, vpa, kperp2
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use constants, only: pi
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use dist_fn, only: get_init_field
+    implicit none
+    integer :: iglo, ik, it, is, i
+    real :: fac
+    complex, dimension (-ntgrid:ntgrid,nakx,naky) :: phi, jpar !! local !!
+    real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
+
+    !! phi, jpar are local !!
+    phi = 0.0 ; jpar = 0.0
+!!$    phi(:,1,2) = phiinit * cmplx(2.0, 0.0)  ! 2 cos(y)
+!!$    phi(:,2,1) = phiinit * cmplx(1.0, 0.0)  ! 2 cos(x)
+!!$    jpar(:,1,2) = apar0 * cmplx(2.0, 0.0) ! 2 cos(y)
+!!$    jpar(:,3,1) = apar0 * cmplx(2.0, 0.0) ! 4 cos(2x)
+    do i=1, 3
+       it = ittt(i)
+       ik = ikkk(i)
+       phi(:,it,ik) = phiamp(i)
+       jpar(:,it,ik) = aparamp(i) * kperp2(:,it,ik)
+    end do
+
+! reality condition for ky = 0 component:
+    if (reality) then
+       do it = 1, nakx/2
+          phi(:,it+(nakx+1)/2,1) = conjg(phi(:,(nakx+1)/2+1-it,1))
+          jpar(:,it+(nakx+1)/2,1) = conjg(jpar(:,(nakx+1)/2+1-it,1))
+       end do
+    end if
+
+    dfac     = den0
+    ufac     = upar0
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+
+       g(:,1,iglo) = &
+            ( dfac*spec(is)%dens0                * phi(:,it,ik) &
+            + 2.*ufac* vpa(:,1,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+
+       g(:,2,iglo) = &
+            ( dfac*spec(is)%dens0                * phi(:,it,ik) &
+            + 2.*ufac* vpa(:,2,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+
+    end do
+
+    gnew = g
+
+    ! normalize
+    call get_init_field (phinew, aparnew, bparnew)
+    do i=1, 3
+       it = ittt(i)
+       ik = ikkk(i)
+       if (abs(phiamp(i)) > epsilon(0.0)) then
+          fac = phiamp(i) / phinew(0,it,ik)
+          phi(:,it,ik) = phi(:,it,ik) * fac
+       end if
+       if (abs(aparamp(i)) > epsilon(0.0)) then
+          fac = aparamp(i) / aparnew(0,it,ik)
+          jpar(:,it,ik) = jpar(:,it,ik) * fac
+       end if
+    end do
+
+    ! redefine g
+    if (reality) then
+       do it = 1, nakx/2
+          phi(:,it+(nakx+1)/2,1) = conjg(phi(:,(nakx+1)/2+1-it,1))
+          jpar(:,it+(nakx+1)/2,1) = conjg(jpar(:,(nakx+1)/2+1-it,1))
+       end do
+    end if
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+
+       g(:,1,iglo) = &
+            ( dfac*spec(is)%dens0                * phi(:,it,ik) &
+            + 2.*ufac* vpa(:,1,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+
+       g(:,2,iglo) = &
+            ( dfac*spec(is)%dens0                * phi(:,it,ik) &
+            + 2.*ufac* vpa(:,2,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+
+    end do
+
+    gnew = g
+
+  end subroutine ginit_ot
 
   subroutine ginit_kpar
     use species, only: spec, has_electron_species
@@ -1584,40 +2466,6 @@ contains
     gnew = g
   end subroutine ginit_gs
 
-  subroutine ginit_test1
-    use species, only: spec
-    use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, akr
-    use le_grids, only: e, forbid
-    use dist_fn_arrays, only: g, gnew
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
-    use constants
-    implicit none
-    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
-    integer :: iglo
-    integer :: ig, ik, it, il, ie, is
-
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             phi(ig,it,ik) = sin(akr(ig,it)*theta(ig))/(akr(ig,it))*zi
-          end do
-       end do
-    end do
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit*exp(-e(ie,is))
-       where (forbid(:,il)) g(:,1,iglo) = 0.0
-       g(:,2,iglo) = g(:,1,iglo)
-    end do
-    gnew = g
-  end subroutine ginit_test1
-
   subroutine ginit_xi
     use theta_grid, only: ntgrid, theta, bmag
     use le_grids, only: forbid, al
@@ -1671,7 +2519,7 @@ contains
   end subroutine ginit_xi2
 
   subroutine ginit_rh
-    use le_grids, only: forbid, e
+    use le_grids, only: forbid, energy
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, it_idx, il_idx, ie_idx, is_idx
     use constants
@@ -1684,7 +2532,7 @@ contains
        il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       g(:,1,iglo) = exp(-e(ie,is))
+       g(:,1,iglo) = exp(-energy(ie))
        where (forbid(:,il)) g(:,1,iglo) = 0.0
        g(:,2,iglo) = g(:,1,iglo)
     end do
@@ -1793,6 +2641,7 @@ contains
     use dist_fn, only: gamtot, gamtot1, gamtot2
     use constants, only: pi, zi
     use file_utils, only: error_unit, get_unused_unit
+    use ran, only: ranf
     implicit none
     integer :: iglo
 !    integer :: ig, ik, it, is, is2
@@ -1835,7 +2684,8 @@ contains
 
     ! real space profile to be Fourier transformed
     real :: xx,dx,lx,ly
-    integer, parameter :: nfx=2**10
+    integer, parameter :: nfxp=2**10
+    integer :: nfx=nfxp
     real, allocatable :: nxy(:,:),uxy(:,:)
     real, allocatable :: phixy(:,:,:),aparxy(:,:,:),bparxy(:,:,:)
     real, allocatable :: jparxy(:,:,:)
@@ -1849,8 +2699,12 @@ contains
     integer :: unit
     real :: xmax, bymax, xa, xl1, xl2
     real :: fmin, fmax
+    
+    real :: a,b
 
     if(debug.and.proc0) write(6,*) 'Initialization recon3'
+
+    if (nfxp < nx) nfx=nx
 
 !!! adjust input parameters to kill initial field if wanted
     if(debug.and.proc0) write(6,*) 'check parameters'
@@ -2063,6 +2917,16 @@ contains
           end do
        end do
     endif
+
+    if (phiinit_rand /= 0.) then
+       do it = 1, nakx
+          do ik = 1, naky
+             a = ranf()-0.5
+             b = ranf()-0.5
+             ukxyz(:,it,ik) = ukxyz(:,it,ik) + phiinit_rand*cmplx(a,b)
+          end do
+       end do
+    end if
 
 !!! reality condition for k_theta = 0 component:
     if(debug.and.proc0) write(6,*) 'set reality condition'
@@ -2474,16 +3338,17 @@ contains
 
   end subroutine ginit_recon3
 
-  subroutine ginit_restart_file
+  subroutine ginit_restart_single
     use dist_fn_arrays, only: g, gnew
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, fapar, fbpar    
     implicit none
     integer :: istatus, ierr
+    logical :: many = .false.
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -2491,7 +3356,7 @@ contains
     end if
     gnew = g
 
-  end subroutine ginit_restart_file
+  end subroutine ginit_restart_single
 
   subroutine ginit_restart_many
     use dist_fn_arrays, only: g, gnew
@@ -2522,7 +3387,8 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     implicit none
     integer :: istatus, ierr
-    logical :: many = .true.
+    logical :: many = .false.
+
 
     call ginit_noise
 
@@ -2589,7 +3455,7 @@ contains
     end do
     gnew = g
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -2601,8 +3467,10 @@ contains
   end subroutine ginit_restart_smallflat
 
 
-	!<doc> This subroutine removes all turbulence except the zonal flow (ky = 0) component upon 
-	!restarting. It can be selected by setting the input parameter ginit to "zonal_only". The size of the zonal flows can be adjusted using the input parameter zf_init. Author EGH</doc> 
+	!> Restart but remove all turbulence except the zonal flow (ky = 0) component upon 
+	!! restarting. It can be selected by setting the input parameter ginit to "zonal_only". 
+  !! The size of the zonal flows can be adjusted using the input parameter zf_init. 
+  ! Author EGH
 
   subroutine ginit_restart_zonal_only
 
@@ -2615,11 +3483,13 @@ contains
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use fields_arrays, only: phi, apar, bpar
     use run_parameters, only: fphi, fapar, fbpar
     use ran
 
     implicit none
-    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
+!     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
     integer :: istatus, ierr
     logical :: many = .true.
     real :: a, b
@@ -2627,38 +3497,42 @@ contains
 !    integer :: ig, ik, it, il, is
     integer :: ik, it, il, is
 
-		! <doc> Load phi and g from the restart file
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+
+! 		if (phiinit > epsilon(0.0)) then 
+! 
+!     end if 
+       
+
+		!  Load phi and g from the restart file
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
        g = 0.
     end if
-!     g = g + gnew
-!     gnew = g 
+		write (*,*) "Initialised g"
 
-		phi = fphi
-
-
-		!<doc> Set all non-zonal components of phi to 0</doc>
+		! Set all non-zonal components of phi to 0
     do it = 1, ntheta0
        do ik = 2, naky ! Starting at 2 is the crucial bit!!
-          phi(:,it,ik) = cmplx(0.0,0.0)
+          phinew(:,it,ik) = cmplx(0.0,0.0)
        end do
     end do
 
-	! <doc>Allow adjustment of the size of the zonal flows via the input parameter zf_init</doc>
-     phi(:,:,1) = phi(:,:,1)*zf_init
+	! Allow adjustment of the size of the zonal flows via the input parameter zf_init
+     phinew(:,:,1) = phinew(:,:,1)*zf_init
 
 
-		!<doc> Apply reality condition for k_theta = 0 component</doc>
-    if (reality) then
-       do it = 1, ntheta0/2
-          phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
-       enddo
-    end if
+		!Apply reality condition for k_theta = 0 component!
+    !if (reality) then
+!        do it = 1, ntheta0/2
+!           phinew(:,it+(ntheta0+1)/2,1) = conjg(phinew(:,(ntheta0+1)/2+1-it,1))
+!        enddo
+!     end if
 
-		!<doc> Set non-zonal components of g to zero using phi</doc>
+		!Set non-zonal components of g to zero using phi
+
+		write(*,*) "Zeroing g"
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -2666,16 +3540,26 @@ contains
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
 				if (ik > 1) then
-					g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit
+					g(:,1,iglo) = 0.0 !-phi(:,it,ik)*spec(is)%z*phiinit
 					where (forbid(:,il)) g(:,1,iglo) = 0.0
 					g(:,2,iglo) = g(:,1,iglo)
 				end if
     end do
+
+    ! If phiinit > 0, add some noise
+    if (phiinit >  epsilon(0.0)) then 
+     call ginit_noise
+     g = g + gnew
+    end if
+
     gnew = g
 
 
 
   end subroutine ginit_restart_zonal_only
+
+
+
 
 
   subroutine reset_init

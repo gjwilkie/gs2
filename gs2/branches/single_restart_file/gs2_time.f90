@@ -9,7 +9,6 @@ module gs2_time
   real :: user_dt_cfl = -1.
   real :: code_dt_cfl = -1.
 
-  real :: code_dt_max, user_dt_max
   real :: code_dt_min, user_dt_min
 
   ! added May 18, 2009 to take care of problems
@@ -21,10 +20,9 @@ module gs2_time
   real :: code_time = 0.
 
 !  real :: dt
-  real :: vtfac
 
   public :: user_dt, code_dt, update_time, code_dt_old
-  public :: user_time, code_time, code_dt_max
+  public :: user_time, code_time
   public :: save_dt_min, save_dt, save_dt_cfl, write_dt
   public :: init_tstart, init_delt
   public :: code_dt_cfl, code_dt_min, user2code
@@ -36,51 +34,19 @@ contains
     real, intent (in) :: tstart
 
     user_time = tstart
-    code_time = tstart * vtfac
+    code_time = tstart
 
   end subroutine init_tstart
 
-  subroutine init_delt (delt, tnorm)
-    real, intent (in) :: delt, tnorm
+  subroutine init_delt (delt)
+    real, intent (in) :: delt
 
-! The decision of how to define v_t, i.e., with or without
-! a sqrt(2) factor, is made in kt_grids, with the "norm_option"
-! variable.  It would be TOO CRAZY to allow v_t to be defined 
-! in two different modules, and I do not want to introduce a 
-! module solely to define v_t, so there is a little dance here.
-!
-! The point is:
-!
-! If norm_option -> v_t == sqrt(2 T/m ) then tnorm = 1.
-! If norm_option -> v_t == sqrt(T/m ) then tnorm = sqrt(2)
-!
-! This comes up because time is normalized as follows:
-!
-! t_phys = t_N * a / v_t
-!
-! Internal to the code, v_t is always v_t == sqrt(2T/m)
-! because that is how MTK coded everything.
 !
 ! delt_in is a user input, from the run_parameters module.
 ! In a perfect world, we could have a gs2_time namelist. 
-!
-! So: we require the time in the code to be normalized by 
-!
-! t_N = t_phys * sqrt(2T/m) / a
 ! 
-! When v_t is defined to be sqrt(T/m), the additional factor of 
-! sqrt(2) is supplied by tnorm.
-!
-! 
-    vtfac = tnorm
-!CMR:
-! vtfac = sqrt(2) if user chooses norm_option  v_t=sqrt(T/m)
-!       OR  1     if user chooses norm_option  v_t=sqrt(2T/m)
-! user_dt = delt: taken from input file in USER's time normalisation
-! code_dt = delt*vtfac: timestep in GS2 MUST use v_t=sqrt(2T/m) normalisation
-!CMRend
     user_dt = delt
-    code_dt = delt * vtfac
+    code_dt = delt
 
   end subroutine init_delt
 
@@ -97,7 +63,7 @@ contains
     real, intent (in) :: delt_cfl
 
     code_dt_cfl = delt_cfl
-    user_dt_cfl = delt_cfl / vtfac
+    user_dt_cfl = delt_cfl
 
   end subroutine save_dt_cfl
 
@@ -106,7 +72,7 @@ contains
     real, intent (in) :: dt_min
 
     user_dt_min = dt_min
-    code_dt_min = dt_min * vtfac
+    code_dt_min = dt_min
 
   end subroutine save_dt_min
 
@@ -115,7 +81,7 @@ contains
     real, intent (in) :: delt
 
     code_dt = delt
-    user_dt = delt / vtfac 
+    user_dt = delt
     
   end subroutine save_dt
 
@@ -131,7 +97,7 @@ contains
     real, intent (in) :: usertime
     real, intent (out) :: codetime
 
-    codetime = usertime * vtfac
+    codetime = usertime
 
   end subroutine user2code
 

@@ -7,7 +7,9 @@ module hyper
   implicit none
   private
   public :: init_hyper, finish_hyper, hyper_diff, D_res
+  public :: read_parameters, wnml_hyper, check_hyper
   public :: D_v, D_eta, nexp
+  public :: hypervisc_filter
 
 ! D_v, D_eta are hyper coefficients, normalized correctly 
 ! i.e., either by unity or by 1/k_perp**2*nexp
@@ -21,22 +23,225 @@ module hyper
        hyper_option_visc = 2, &
        hyper_option_res  = 3, &
        hyper_option_both = 4
-  logical :: const_amp, include_kpar, isotropic_shear
+  character(9) :: hyper_option
+  logical :: const_amp, include_kpar, isotropic_shear, damp_zonal_only
   logical :: hyper_on = .false.
   logical :: gridnorm
 
-  real, dimension (:,:), allocatable, save :: aintnorm
   real, dimension (:,:), allocatable, save :: D_res
   ! (it, ik)
+
+  real, dimension (:,:,:), allocatable, save :: hypervisc_filter
+  ! (-ntgrid:ntgrid, ntheta0, naky)
 
   logical :: initialized = .false.
 
 contains
 
+  subroutine check_hyper(report_unit)
+  implicit none
+  integer :: report_unit
+    select case (hyper_option_switch)
+    case (hyper_option_none)
+       if (D_hyperres > 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperresistivity.  &
+	       &D_hyperres ignored.')") trim(hyper_option)
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          D_hyperres = -10.
+       end if
+       if (D_hypervisc > 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperviscosity.  &
+               &D_hypervisc ignored.')") trim(hyper_option)
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          D_hypervisc = -10.
+       endif
+
+    case (hyper_option_visc)
+       hyper_on = .true.
+       if (D_hyperres > 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperresistivity.  &
+            &D_hyperres ignored.')") trim(hyper_option)
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          D_hyperres = -10.
+       end if
+       if (D_hypervisc < 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperviscosity but &
+               &D_hypervisc < 0.')") trim(hyper_option)
+          write (report_unit, fmt="('No hyperviscosity used.')")
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          hyper_on = .false.
+       endif
+
+    case (hyper_option_res)
+       hyper_on = .true.
+       if (D_hyperres < 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperresistivity but D_hyperres < 0.')") trim(hyper_option)
+          write(report_unit, fmt="('No hyperresistivity used.')")
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          hyper_on = .false.
+       end if
+       if (D_hypervisc > 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperviscosity.  D_hypervisc ignored.')") trim(hyper_option)
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+          D_hypervisc = -10.
+       endif
+
+    case (hyper_option_both)
+       hyper_on = .true.
+       if (D_hyperres < 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperresistivity but D_hyperres < 0.')") trim(hyper_option)
+          write (report_unit, fmt="('No hyperresistivity used.')")
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       end if
+       if (D_hypervisc < 0.) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('hyper_option = ',a,' chooses hyperviscosity but D_hypervisc < 0.')") trim(hyper_option)
+          write (report_unit, fmt="('No hyperviscosity used.')")
+          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, *) 
+       endif
+       if (D_hypervisc < 0. .and. D_hyperres < 0.) hyper_on = .false.
+
+    end select
+
+    if (hyper_on) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('------------------------------------------------------------')")
+       write (report_unit, *) 
+
+       select case (hyper_option_switch)
+
+          case (hyper_option_visc)
+
+          write (report_unit, *) 
+          write (report_unit, fmt="('Hyperviscosity included without hyperresistivity.')")
+          if (const_amp) then
+             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hypervisc
+          else
+             write (report_unit, fmt="('The damping coefficent is ',e10.4)") D_hypervisc
+             write (report_unit, fmt="('The damping rate is proportional to the RMS amplitude of the turbulence.')")
+          end if
+          if (isotropic_shear) then
+             write (report_unit, fmt="('The hyperviscosity is isotropic in the perpendicular plane.')")
+             write (report_unit, fmt="('This is appropriate for MHD-like calculations.')")
+          else
+             write (report_unit, fmt="('The hyperviscosity is anisotropic in the perpendicular plane.')")
+             write (report_unit, fmt="('This is appropriate for drift-type calculations.')")
+             write (report_unit, fmt="('omega_osc = ',e10.4)") omega_osc
+          end if
+          
+       case (hyper_option_res)
+
+          write (report_unit, *) 
+          write (report_unit, fmt="('Hyperresistivity included without hyperviscosity.')")
+          if (const_amp) then
+             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
+          else
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, *) 
+          end if
+          if (isotropic_shear) then
+             write (report_unit, fmt="('The hyperresistivity is isotropic in the perpendicular plane.')")
+             write (report_unit, fmt="('This is appropriate for MHD-like calculations.')")
+          else
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, fmt="('isotropic_shear = .false. is not implemented for hyperresistivity.')")
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, *) 
+          end if
+
+       case (hyper_option_both)
+          
+          write (report_unit, *) 
+          write (report_unit, fmt="('Hyperresistivity and hyperviscosity included.')")
+          if (const_amp) then
+             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
+          else
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
+             write (report_unit, fmt="('THIS IS AN ERROR.')")
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, *) 
+          end if
+          if (isotropic_shear) then
+             write (report_unit, fmt="('The damping is isotropic in the perpendicular plane.')")
+             write (report_unit, fmt="('This is appropriate for MHD-like calculations.')")
+          else
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, fmt="('isotropic_shear = .false. is not implemented for hyperresistivity.')")
+             write (report_unit, fmt="('THIS IS AN ERROR.')")
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, *) 
+          end if
+       end select
+    end if
+  end subroutine check_hyper
+
+  subroutine wnml_hyper(unit)
+    implicit none
+    integer :: unit          
+          if (.not. hyper_on) return
+          write (unit, *)
+          write (unit, fmt="(' &',a)") "hyper_knobs"
+
+          select case (hyper_option_switch)
+             
+          case (hyper_option_visc) 
+             write (unit, fmt="(' hyper_option = ',a)") '"visc_only"'
+             write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
+             
+          case (hyper_option_res) 
+             write (unit, fmt="(' hyper_option = ',a)") '"res_only"'
+             write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
+             
+          case (hyper_option_both) 
+             write (unit, fmt="(' hyper_option = ',a)") '"both"'
+             if (D_hyperres == D_hypervisc) then
+                write (unit, fmt="(' D_hyper = ',e16.10)") D_hyper
+             else
+                write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
+                write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
+             end if
+          end select
+
+!          write (unit, fmt="(' include_kpar = ',L1)") include_kpar
+
+          write (unit, fmt="(' const_amp = ',L1)") const_amp
+          write (unit, fmt="(' isotropic_shear = ',L1)") isotropic_shear
+          if (.not. isotropic_shear) &
+               write (unit, fmt="(' omega_osc = ',e16.10)") omega_osc
+
+          write (unit, fmt="(' gridnorm = ',L1)") gridnorm
+          write (unit, fmt="(' /')")
+  end subroutine wnml_hyper
+
   subroutine init_hyper
 
     use kt_grids, only: ntheta0, naky, akx, aky
-    use run_parameters, only: tnorm
     use gs2_time, only: code_dt
     use gs2_layouts, only: init_gs2_layouts
     implicit none
@@ -68,7 +273,7 @@ contains
     if (D_hyperres > 0.) then
        do ik = 1, naky
           do it = 1, ntheta0
-             D_res(it, ik) = D_hyperres*code_dt/tnorm &
+             D_res(it, ik) = D_hyperres*code_dt &
                   * (aky(ik)**2 + akx(it)**2)**nexp/akperp4_max
           end do
        end do
@@ -97,17 +302,18 @@ contains
             text_option('visc_only', hyper_option_visc), &
             text_option('res_only', hyper_option_res), &
             text_option('both', hyper_option_both) /)
-    character(9) :: hyper_option
     integer :: ierr, in_file
     logical :: exist
     
     namelist /hyper_knobs/ hyper_option, const_amp, include_kpar, &
-         isotropic_shear, D_hyperres, D_hypervisc, D_hyper, omega_osc, gridnorm, nexp
+         isotropic_shear, D_hyperres, D_hypervisc, D_hyper, omega_osc, gridnorm,&
+         nexp, damp_zonal_only
     
     if (proc0) then
        const_amp = .false.
        include_kpar = .false.
        isotropic_shear = .true.
+       damp_zonal_only = .false.
        nexp = 2
        D_hyperres = -10.
        D_hypervisc = -10.
@@ -207,6 +413,7 @@ contains
     call broadcast (const_amp)
     call broadcast (include_kpar)
     call broadcast (isotropic_shear)
+    call broadcast (damp_zonal_only)
     call broadcast (D_hyper)
     call broadcast (D_hyperres)
     call broadcast (D_hypervisc)
@@ -219,40 +426,35 @@ contains
   end subroutine read_parameters
 
   subroutine allocate_arrays
+    use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     implicit none
-!    logical :: alloc = .true.
 
-!    if (alloc) then
     if (.not. allocated(D_res)) then
        allocate (D_res(ntheta0, naky)) 
     endif
+    if (.not. allocated(hypervisc_filter)) then
+       allocate (hypervisc_filter(-ntgrid:ntgrid,ntheta0,naky)) ; hypervisc_filter = 0.0
+    end if
     D_res = 0.
-!    alloc = .false.
 
   end subroutine allocate_arrays
 
-  subroutine hyper_diff (g0, g1, phi, bpar)
+  subroutine hyper_diff (g0, phi, bpar)
 
     use mp, only: proc0
     use gs2_layouts, only: ik_idx, it_idx, is_idx
     use theta_grid, only: ntgrid
-    use run_parameters, only: tnorm, fphi, fbpar
+    use run_parameters, only: fphi, fbpar
     use gs2_time, only: code_dt
-    use gs2_layouts, only: g_lo, geint_lo, gint_lo
+    use gs2_layouts, only: g_lo
     use kt_grids, only: aky, akx, naky, ntheta0
-    use le_grids, only: integrate, geint2g
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0, g1
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-    complex, dimension (:,:), allocatable :: g0eint, g1eint
-!    real, dimension (:,:), allocatable, save :: aintnorm
-!    logical :: first = .true.
-    logical :: conserve_number = .false.
-    logical :: conserve_inth = .true.
 
-    real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, &
-         shear_rate_z, shear_rate_z_nz
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
+
+    real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, shear_rate_z, shear_rate_z_nz
 
     integer :: iglo, ik, it, ige
     integer :: ncall = 0 ! variables declared with value are automatically saved
@@ -276,47 +478,11 @@ contains
     if (.not. hyper_on) return
     if (D_hypervisc < 0.) return
 
-    if (conserve_number) then ! get initial particle number
-       allocate (g0eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-       allocate (g1eint(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-
-!       if (first) then
-!          first = .false.
-       if (.not. allocated(aintnorm)) then
-          allocate (aintnorm(-ntgrid:ntgrid,geint_lo%llim_proc:geint_lo%ulim_alloc))
-          aintnorm = 0. ; g1 = 1.0
-          call integrate (g1, g1eint)
-          do ige = geint_lo%llim_proc, geint_lo%ulim_proc
-             aintnorm(:,ige) = 1.0/real(g1eint(:,ige))
-          end do
-       end if
-
-       if (conserve_inth) call g_adjust (g0, phi, bpar, fphi, fbpar)
-       call integrate (g0, g0eint)
-       if (conserve_inth) call g_adjust (g0, phi, bpar, -fphi, -fbpar)
-
-    end if
-
     if(isotropic_shear) then
        call iso_shear
     else
        call aniso_shear
     end if
-
-    if (conserve_number) then ! restore particle number
-       if (conserve_inth) call g_adjust (g1, phi, bpar, fphi, fbpar)
-       call integrate (g1, g1eint)
-       if (conserve_inth) call g_adjust (g1, phi, bpar, -fphi, -fbpar)
-       do ige = geint_lo%llim_proc, geint_lo%ulim_proc
-          g0eint(:,ige) = (g0eint(:,ige) - g1eint(:,ige)) &
-               *aintnorm(:,ige)
-       end do
-       call geint2g (g0eint, g0)
-       g0 = g0 + g1
-       deallocate (g0eint, g1eint)
-    else
-       g0 = g1
-    endif
 
   contains
 
@@ -370,24 +536,16 @@ contains
          it = it_idx(g_lo, iglo)
          
          if(aky(ik) == 0.) then
-            
-            g1(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt / tnorm &
-                 * ( shear_rate_z_nz(:) *  akx(it) ** 4 / akx4_max )))
-            
-            g1(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt / tnorm & 
-                 * ( shear_rate_z_nz(:) *  akx(it) ** 4 / akx4_max )))
-            
+            hypervisc_filter(:,it,ik) = exp(- (D_hypervisc * code_dt &
+                 * ( shear_rate_z_nz(:) * akx(it) ** 4 / akx4_max )))
          else
-            
-            g1(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt / tnorm & 
+            hypervisc_filter(:,it,ik) = exp(- ( D_hypervisc * code_dt & 
                  * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max & 
                  + shear_rate_z(:) * akx(it) ** 4/ akx4_max * aky(ik) / aky_max )))
-            
-            g1(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt / tnorm &
-                 * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max & 
-                 + shear_rate_z(:) * akx(it) ** 4 / akx4_max * aky(ik) / aky_max )))
-            
          endif
+         
+         g0(:,1,iglo) = g0(:,1,iglo) * hypervisc_filter(:,it,ik)
+         g0(:,2,iglo) = g0(:,2,iglo) * hypervisc_filter(:,it,ik)
       end do
     
     end subroutine aniso_shear
@@ -415,46 +573,17 @@ contains
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
          it = it_idx(g_lo, iglo)
-         
-         g1(:,1,iglo) = g0(:,1,iglo) * exp(- ( D_hypervisc * code_dt / tnorm &
+         if (damp_zonal_only .and. .not. aky(ik)==epsilon(0.0)) cycle
+         hypervisc_filter(:,it,ik) = exp(- ( D_hypervisc * code_dt &
               * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
          
-         g1(:,2,iglo) = g0(:,2,iglo) * exp(- ( D_hypervisc * code_dt / tnorm &
-              * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
+         g0(:,1,iglo) = g0(:,1,iglo) * hypervisc_filter(:,it,ik)
+         g0(:,2,iglo) = g0(:,2,iglo) * hypervisc_filter(:,it,ik)
       end do
       
     end subroutine iso_shear
+
   end subroutine hyper_diff
-
-  subroutine g_adjust (g, phi, bpar, facphi, facbpar)
-    use species, only: spec
-    use theta_grid, only: ntgrid
-    use le_grids, only: anon
-    use dist_fn_arrays, only: vperp2, aj0, aj1
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
-    real, intent (in) :: facphi, facbpar
-
-    integer :: iglo, ig, ik, it, ie, is
-    complex :: adj
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do ig = -ntgrid, ntgrid
-          adj = anon(ie,is)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
-                  *bpar(ig,it,ik)*facbpar &
-               + spec(is)%z*anon(ie,is)*phi(ig,it,ik)*aj0(ig,iglo) &
-                  /spec(is)%temp*facphi
-          g(ig,1,iglo) = g(ig,1,iglo) + adj
-          g(ig,2,iglo) = g(ig,2,iglo) + adj
-       end do
-    end do
-  end subroutine g_adjust
 
   subroutine finish_hyper
 
@@ -463,7 +592,7 @@ contains
     hyper_on = .false.
     initialized = .false.
     if (allocated(D_res)) deallocate (D_res)
-    if (allocated(aintnorm)) deallocate (aintnorm)
+    if (allocated(hypervisc_filter)) deallocate (hypervisc_filter)
 
   end subroutine finish_hyper
 

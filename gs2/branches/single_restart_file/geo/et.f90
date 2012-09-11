@@ -21,12 +21,13 @@ program eiktest
 
   namelist/stuff/ntheta,nperiod,rmaj,akappri,akappa,shift,equal_arc, &
        rhoc,rmin,rmax,itor,qinp,iflux,delrho,tri,bishop, &
-       irho,isym,tripri,vmom_eq,efit_eq,dfit_eq,writelots,R_geo, &
-       gen_eq, ppl_eq, eqfile,ismooth,ak0,k1,k2,local_eq,idfit_eq,&
+       irho,isym,tripri,efit_eq,dfit_eq,writelots,R_geo, &
+       gen_eq, ppl_eq, eqfile, local_eq, idfit_eq,&
+       chs_eq,&
        s_hat_input,p_prime_input,invLp_input,beta_prime_input, &
        diffscheme,nbeta,beta_p1,beta_p2,alpha_input,big, &
        beta_prime_times, beta_prime_over, fast, profile_fac, &
-       tstar, shotnum, mds, gs2d_eq, transp_eq, Xanthopoulos
+       tstar, shotnum, gs2d_eq, transp_eq, Xanthopoulos
 
   pi=2.*acos(0.)
      
@@ -34,16 +35,15 @@ program eiktest
 
   gen_eq = .false.
   ppl_eq = .false.
+  chs_eq = .false.
   idfit_eq = .false.
   dfit_eq = .false.
   efit_eq = .false.
   gs2d_eq = .false.
   transp_eq = .false.
-  vmom_eq = .false.
   Xanthopoulos = .false.
 
   dipole = .false.
-  mds = .false.
   shotnum=1001109020
   tstar = 1.0
 
@@ -74,11 +74,6 @@ program eiktest
 
   delrho = 0.01
 
-  ismooth = 0
-  ak0 = 1.
-  k1 = -30
-  k2 = -15
-
   eqinit = 1       ! Mike K. codes do not have this variable.
 
       
@@ -95,9 +90,6 @@ program eiktest
      dp_mult = beta_prime_times
   endif
 
-  if(k1.lt.0) k1=(ntheta/abs(k1))**2
-  if(k2.lt.0) k2=(ntheta/abs(k2))**2
-  
 !
 ! Note that if iflux=1 then always choose itor=1
 !
@@ -119,14 +111,14 @@ program eiktest
   endif
   
   if(iflux.ne.1) then
-     if(vmom_eq) write(*,*) 'Forcing vmom_eq to be false'
      if(gen_eq) write(*,*) 'Forcing gen_eq to be false'
      if(ppl_eq) write(*,*) 'Forcing ppl_eq to be false'
+     if(chs_eq) write(*,*) 'Forcing chs_eq to be false'
      if(transp_eq) write(*,*) 'Forcing transp_eq to be false'
-     if(vmom_eq .or. gen_eq .or. ppl_eq .or. transp_eq) write(*,*) 'because iflux.ne.1'
-     vmom_eq=.false.
+     if(gen_eq .or. ppl_eq .or. transp_eq) write(*,*) 'because iflux.ne.1'
      gen_eq=.false.
      ppl_eq=.false.
+     chs_eq = .false.
   endif
   
   open(unit=21,file='eik.out',status='unknown')
@@ -138,8 +130,8 @@ program eiktest
 !     
 !     compute the theta grid
 
-  if((.not. vmom_eq) .and. (.not. gen_eq) &
-       .and. (.not. transp_eq) .and. (.not. ppl_eq)) &
+  if((.not. gen_eq) &
+       .and. (.not. transp_eq) .and. (.not. ppl_eq) .and. (.not. chs_eq)) &
        call init_theta(ntheta)
   
   call eikcoefs
@@ -210,6 +202,11 @@ program eiktest
 
   write(11,*) 'dV/drhon= ',dvdrhon
   if (.not. dipole) then
+     write (11,*)
+     write (11,*) 'The following q and shat values'
+     write (11,*) 'were calculated directly'
+     write (11,*) 'from the equilibrium.'
+     write (11,*) 'They should match the ones above' !EGH
      q=qfun(0.)
      write(11,*) 'q_0= ',q
      q=qfun(pbarofrho(rhoc))
