@@ -85,7 +85,7 @@ USE_FFT ?= fftw
 # uses netcdf library (bin)
 USE_NETCDF ?= on
 # uses hdf5 library (bin)
-USE_HDF5 ?=
+USE_HDF5 ?= 
 # Use function pointer in layouts_indices.c (bin)
 # see also README
 USE_C_INDEX ?= 
@@ -253,6 +253,7 @@ ifdef USE_HDF5
 	ifdef USE_MPI
 		FC = $(H5FC_par)
 		CC = $(H5CC_par)
+		CPPFLAGS += -DHDF5
 	else
 		FC = $(H5FC)
 		CC = $(H5CC)
@@ -393,7 +394,7 @@ sinclude Makefile.target_$(GK_PROJECT)
 ############################################################### SPECIAL RULES
 
 # comment this out to keep intermediate .f90 files
-#.PRECIOUS: $(F90FROMFPP)
+.PRECIOUS: $(F90FROMFPP)
 
 .INTERMEDIATE: $(GK_PROJECT)_transforms.f90 $(GK_PROJECT)_io.f90 $(GK_PROJECT)_save.f90 \
 		mp.f90 fft_work.f90

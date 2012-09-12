@@ -52,6 +52,7 @@ module gs2_diagnostics
   logical, public :: dump_check1, dump_check2
   logical, public :: dump_fields_periodically, make_movie
   logical, public :: save_for_restart
+  logical, public :: save_many
   logical, public :: save_distfn !<DD> Added for saving distribution function
   logical, public :: write_symmetry, write_correlation_extend, write_correlation
   integer, public :: nwrite, igomega, nmovie
@@ -78,7 +79,7 @@ module gs2_diagnostics
          write_full_moments_notgc, write_cross_phase, &
          dump_check1, dump_check2, &
          dump_fields_periodically, make_movie, &
-         save_for_restart, write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
+         save_for_restart, save_many, write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time
 
@@ -127,6 +128,7 @@ contains
        write (unit, *)
        write (unit, fmt="(' &',a)") "gs2_diagnostics_knobs"
        write (unit, fmt="(' save_for_restart = ',L1)") save_for_restart
+       write (unit, fmt="(' save_many = ',L1)") save_many
        write (unit, fmt="(' print_line = ',L1)") print_line 
        write (unit, fmt="(' write_line = ',L1)") write_line
        write (unit, fmt="(' print_flux_line = ',L1)") print_flux_line
@@ -391,6 +393,7 @@ contains
     call broadcast (dump_fields_periodically)
     call broadcast (make_movie)
     call broadcast (save_for_restart)
+    call broadcast (save_many)
     call broadcast (save_distfn) !<DD> Added for saving distribution function
     call broadcast (write_gs)
     call broadcast (write_g)
@@ -619,6 +622,7 @@ contains
        dump_fields_periodically = .false.
        make_movie = .false.
        save_for_restart = .false.
+       save_many = .false.
        save_distfn = .false. !<DD> Added for saving distribution function
        write_phi_over_time = .false.
        write_bpar_over_time = .false.
@@ -1015,7 +1019,7 @@ contains
 
     if (save_for_restart) then
        call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
-            fphi, fapar, fbpar, .true.)
+            fphi, fapar, fbpar, exit_in=.true.,save_many=save_many)
     end if
 
     !<DD> Added for saving distribution function
@@ -1025,7 +1029,7 @@ contains
     	
     	!Save dfn, fields and velocity grids to file
        	CALL gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
-          	fphi, fapar, fbpar, .true.,.true.)
+          	fphi, fapar, fbpar, exit_in=.true.,distfn=.true.,save_many=save_many)
     	
         !Convert distribution function back to h
         CALL g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)

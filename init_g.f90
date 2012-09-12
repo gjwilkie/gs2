@@ -18,7 +18,7 @@ module init_g
   integer :: ginitopt_switch
   integer, parameter :: ginitopt_default = 1,  &
        ginitopt_xi = 3, ginitopt_xi2 = 4, ginitopt_rh = 5, ginitopt_zero = 6, &
-       ginitopt_test3 = 7, ginitopt_convect = 8, ginitopt_restart_file = 9, &
+       ginitopt_test3 = 7, ginitopt_convect = 8, ginitopt_restart_single = 9, &
        ginitopt_noise = 10, ginitopt_restart_many = 11, ginitopt_continue = 12, &
        ginitopt_nl = 13, ginitopt_kz0 = 14, ginitopt_restart_small = 15, &
        ginitopt_nl2 = 16, ginitopt_nl3 = 17, ginitopt_nl4 = 18, & 
@@ -138,7 +138,7 @@ contains
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
           write (unit, fmt="(' scale = ',e16.10)") scale
 
-       case (ginitopt_restart_file)
+       case (ginitopt_restart_single)
           write (unit, fmt="(' ginit_option = ',a)") '"file"'
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
           write (unit, fmt="(' scale = ',e16.10)") scale
@@ -514,14 +514,9 @@ contains
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, *) 
 
-    case (ginitopt_restart_file)
+    case (ginitopt_restart_single)
        write (report_unit, fmt="('Initial conditions:')")
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('Restart from a single NetCDF restart file.')") 
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
+       write (report_unit, fmt="('Restart from a single NetCDF HDF5 parallel restart file.')") 
 
     case (ginitopt_restart_many)
        write (report_unit, fmt="('Initial conditions:')")
@@ -746,14 +741,14 @@ contains
        call ginit_test3
     case (ginitopt_convect)
        call ginit_convect
-    case (ginitopt_restart_file)
-       call ginit_restart_file 
+    case (ginitopt_restart_single)
+       call ginit_restart_single
        call init_tstart (tstart, istatus)
        restarted = .true.
        scale = 1.
     case (ginitopt_restart_many)
        call ginit_restart_many 
-       call init_tstart (tstart, istatus)
+       call init_tstart (tstart, istatus, .true.)
        restarted = .true.
        scale = 1.
     case (ginitopt_restart_small)
@@ -797,7 +792,7 @@ contains
             text_option('rh', ginitopt_rh), &
             text_option('many', ginitopt_restart_many), &
             text_option('small', ginitopt_restart_small), &
-            text_option('file', ginitopt_restart_file), &
+            text_option('single', ginitopt_restart_single), &
             text_option('cont', ginitopt_continue), &
             text_option('kz0', ginitopt_kz0), &
             text_option('nl', ginitopt_nl), &
@@ -1801,7 +1796,7 @@ contains
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
     integer :: iglo, istatus, ierr
     integer :: ig, ik, it, il, is, j
-    logical :: many = .true.
+    logical :: many = .false.
     
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
     if (istatus /= 0) then
@@ -1917,7 +1912,7 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
     integer :: iglo, istatus
     integer :: ig, ik, it, is, il, ierr
-    logical :: many = .true.
+    logical :: many = .false.
     
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
     if (istatus /= 0) then
@@ -2019,7 +2014,7 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
     integer :: iglo, istatus
     integer :: ig, ik, it, is, il, ierr
-    logical :: many = .true.
+    logical :: many = .false.
     
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
     if (istatus /= 0) then
@@ -2111,8 +2106,8 @@ contains
     integer :: iglo, istatus
 !    integer :: ig, ik, it, is, il, ierr
     integer :: ik, it, ierr
-    logical :: many = .true.
-    
+    logical :: many = .false.
+
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
@@ -3343,16 +3338,17 @@ contains
 
   end subroutine ginit_recon3
 
-  subroutine ginit_restart_file
+  subroutine ginit_restart_single
     use dist_fn_arrays, only: g, gnew
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, fapar, fbpar    
     implicit none
     integer :: istatus, ierr
+    logical :: many = .false.
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -3360,7 +3356,7 @@ contains
     end if
     gnew = g
 
-  end subroutine ginit_restart_file
+  end subroutine ginit_restart_single
 
   subroutine ginit_restart_many
     use dist_fn_arrays, only: g, gnew
@@ -3391,7 +3387,8 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     implicit none
     integer :: istatus, ierr
-    logical :: many = .true.
+    logical :: many = .false.
+
 
     call ginit_noise
 
@@ -3458,7 +3455,7 @@ contains
     end do
     gnew = g
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -3507,7 +3504,7 @@ contains
        
 
 		!  Load phi and g from the restart file
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
