@@ -149,7 +149,7 @@ contains
 
     !<DD> Added for saving distribution function
     IF (PRESENT(distfn)) THEN
-    	local_init=initialized_dfn
+       local_init=initialized_dfn
     ELSE
     	local_init=initialized
     END IF
@@ -169,27 +169,38 @@ contains
        
 !CMR, 5/4/2011: Add optional piece of filename
        IF (PRESENT(fileopt)) THEN
-        	file_proc=trim(file_proc)//trim(fileopt)
+          file_proc=trim(file_proc)//trim(fileopt)
        END IF
 !CMRend 
 
-       !<DD> Added for saving distribution function
-       IF (PRESENT(distfn)) THEN
-        	WRITE (suffix,'(a5,i0)') '.dfn.', iproc	
-       ELSE
-            WRITE (suffix,'(a1,i0)') '.', iproc
-       END IF
-       !</DD> Added for saving distribution function
 !</HL>  This directive includes code for parallel netcdf using HDF5
 !       to write the output to a single restart file
 !       The many flag allows the old style multiple file output
-# ifdef HDF5
+# ifndef HDF5  ! If HDF5 is not present then the many flag will always be true 
+       many = .true.
+# endif
+       !<DD> Added for saving distribution function
+       IF (PRESENT(distfn)) THEN
+          if(many) then
+             WRITE (suffix,'(a5,i0)') '.dfn.', iproc
+          else
+             WRITE (suffix,'(a4)') '.dfn'
+          endif
+       ELSE
+          if(many) then
+             WRITE (suffix,'(a1,i0)') '.', iproc
+          else
+             WRITE (suffix,*) ''
+          endif
+       END IF
+       !</DD> Added for saving distribution function
+
+       file_proc = trim(trim(file_proc)//adjustl(suffix))          
+
        if(many) then
-# endif                  
-          file_proc = trim(trim(file_proc)//adjustl(suffix))          
           istatus = nf90_create (file_proc, NF90_CLOBBER, ncid)
-# ifdef HDF5                    
        else
+# ifdef HDF5                    
           call barrier
           
           if(iproc .eq. 0) then
@@ -200,8 +211,8 @@ contains
           call barrier
 
           istatus = nf90_create (file_proc, ior(NF90_HDF5,NF90_CLOBBER), ncid, comm=communicator, info=mpi_info)
-       end if
 # endif
+       end if
 
        if (istatus /= NF90_NOERR) then
           ierr = error_unit()
@@ -564,7 +575,6 @@ contains
        end if
 
        if (include_parameter_scan) then
-          if (proc0) write (*,*) "Starting current_scan_parameter_value write"
           ! <EGH see parameter_scan.f90
           istatus = nf90_put_var (ncid, &
                current_scan_parameter_value_id, current_scan_parameter_value)
