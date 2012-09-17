@@ -35,9 +35,11 @@ contains
     real, dimension (:,:,:), allocatable :: legp
     real, dimension (:,:), allocatable :: xi, emax, dphidr
     real, dimension (:,:,:,:), allocatable :: chebyp1, chebyp2
-    real, dimension (:), allocatable :: dl_over_b, transport
-    real, dimension (:), allocatable :: pflx, qflx, vflx, qpar, upar1
-    real :: radius, jboot, phi2, vtor, upar0
+    real, dimension (:), allocatable :: dl_over_b
+    real, dimension (:,:), allocatable :: transport 
+    real, dimension (:,:), allocatable :: pflx, qflx, vflx, qpar, upar1, upar !JPL
+    real, dimension (:), allocatable ::  radius, jboot, phi2, vtor, upar0 
+    real, dimension (size(energy)) :: w_r 
 
     integer :: il, ie, is, ns, nc, nl, nr, ig, ixi, ir, ir_loc
     integer :: ntheta, nlambda, nenergy, nxi
@@ -298,47 +300,64 @@ contains
 !        end do
 !     end if
 
+  
     dl_over_b = delthet*jacob
     dl_over_b = dl_over_b/sum(dl_over_b)
 
-    ! get parallel heat flux (int d3v vpa * v^2 * F1^{nc})
-    if (.not. allocated(pflx)) allocate (pflx(ns), qflx(ns), vflx(ns), upar1(ns), qpar(ns))
-    qpar = 0.
-    do ie = 1, nenergy
-       do ixi = 1, nxi
-          il = min(ixi, nxi+1-ixi)
-          do ig = 1, ntheta
-             qpar = qpar + hneo(ir_loc,ig,ixi,ie,:)*energy(ie) &
-                  *(xi(ig,ixi)*sqrt(energy(ie))-upar1)*w(ie)*wl(-ntgrid+ig-1,il)*dl_over_b(ig)
-          end do
-       end do
-    end do
-
-    if (.not. allocated(transport)) allocate (transport(5+ns*8))
+    if (.not. allocated(pflx)) allocate (pflx(nr,ns), qflx(nr,ns), vflx(nr,ns), upar1(nr,ns), upar(nr,ns), qpar(nr,ns))  !JPL
+    if (.not. allocated(transport)) allocate (transport(nr,(5+ns*8)))  !JPL, NEO output for all radius
+    if (.not. allocated(radius)) allocate (radius(nr), phi2(nr), jboot(nr), vtor(nr), upar0(nr))
 
     if (proc0) then
        call get_unused_unit (neo_unit)
+       ! read the diagnosis in NEO from "neo_transport.out"
        open (unit=neo_unit, file='neo_transport.out', status='old', action='read')
-       read (neo_unit,*) transport
-       radius = transport(1)
-       phi2 = transport(2)
-       jboot = transport(3)
-       vtor = transport(4)
-       upar0 = transport(5)
-       do is = 1, ns
-          pflx(is) = transport(5+(is-1)*8+1)
-          qflx(is) = transport(5+(is-1)*8+2)
-          vflx(is) = transport(5+(is-1)*8+3)
-          upar1(is) = transport(5+(is-1)*8+4)
+       do ir=1, nr
+          read (neo_unit,*) transport(ir,:)
+          radius(ir) = transport(ir,1)
+          phi2(ir) = transport(ir,2)
+          jboot(ir) = transport(ir,3)
+          vtor(ir) = transport(ir,4)
+          upar0(ir) = transport(ir,5)
+          do is = 1, ns
+             pflx(ir,is) = transport(ir,5+(is-1)*8+1)/sqrt(2.0)  ! NEO uses vt=sqrt(T/m) while GS2 uses vt=sqrt(2T/m)
+             qflx(ir,is) = transport(ir,5+(is-1)*8+2)/(sqrt(2.0)**3)
+             vflx(ir,is) = transport(ir,5+(is-1)*8+3)/(sqrt(2.0)**2)
+             upar1(ir,is) = transport(ir,5+(is-1)*8+4)/sqrt(2.0)
+          end do
        end do
        close (neo_unit)
+       
+       ! evaluate the neoclassical parallel heat flux and parallel velcotiy in GS2 geometry
+       do ir=1, nr 
+          do is=1, ns
+             qpar(ir,is)=0.
+             upar(ir,is)=0.
+             do ie = 1, nenergy
+                do ixi = 1, nxi
+                   il = min(ixi, nxi+1-ixi)
+                   do ig = 1, ntheta
+                      w_r(ie)=w(ie)*exp(energy(ie)*(1.0-1.0/(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))))*(1.0/(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2))))**2
+                      qpar(ir,is) = qpar(ir,is) + hneo(ir,ig,ixi,ie,is)*energy(ie)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))*(xi(ig,ixi)*sqrt(energy(ie)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))))*w_r(ie)*wl(-ntgrid+ig-1,il)*dl_over_b(ig)*bmag(ig)
+                      upar(ir,is) = upar(ir,is) + hneo(ir,ig,ixi,ie,is)*(xi(ig,ixi)*sqrt(energy(ie)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))))*w_r(ie) &
+                           *wl(-ntgrid+ig-1,il)*dl_over_b(ig)*bmag(ig)      
+                   end do
+                end do
+             end do
+             qpar(ir,is)=qpar(ir,is)-2.50*upar(ir,is)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2))) !JPL
+          end do
+       end do
 
        call open_output_file (neot_unit,".neotransp")
-       write (neot_unit,fmt='(a110)') "# 1) rad,    2) spec, 3) pflx,    4) qflx,    5) vflx   , 6) qparflx, 7) upar1   , 8) <phi**2>, 9) bootstrap"
-       do is = 1, ns
-          write (neot_unit,fmt='(e14.5,i4,7e14.5)') radius, is, pflx(is), qflx(is), vflx(is), qpar(is), upar1(is), &
-               phi2, jboot
+      ! print out in ".neotransp" file
+       write (neot_unit,fmt='(a130)') "# 1) rad,    2) spec, 3) pflx,    4) qflx,    5) vflx   , 6) qparflx,  7) upar(GS2),  8) upar1(NEO), 9) <phi**2>, 10) bootstrap"
+       do ir=1, nr
+          do is = 1, ns
+             write (neot_unit,fmt='(e14.5,i4,8e14.5)') radius(ir), is, pflx(ir,is), qflx(ir,is), vflx(ir,is), qpar(ir,is),upar(ir,is), upar1(ir,is)*sqrt((1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))), &
+               phi2(ir), jboot(ir)
+          end do
        end do
+
        call close_output_file (neot_unit)
     end if
 
