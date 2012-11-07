@@ -83,7 +83,6 @@ ffttester_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -142,7 +141,6 @@ gs2_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -204,7 +202,6 @@ ingen_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -609,6 +606,16 @@ kt_grids.o: \
 	 text_options.o \
 	 theta_grid.o 
 layouts_type.o: 
+le_derivatives.o: \
+	 collisions.o \
+	 dist_fn_arrays.o \
+	 gs2_layouts.o \
+	 gs2_time.o \
+	 le_grids.o \
+	 mp.o \
+	 redistribute.o \
+	 run_parameters.o \
+	 theta_grid.o 
 le_grids.o: \
 	 constants.o \
 	 file_utils.o \
@@ -624,6 +631,7 @@ leq.o: \
 	 constants.o \
 	 spl.o 
 lowflow.o: \
+	 constants.o \
 	 file_utils.o \
 	 le_grids.o \
 	 mp.o \
@@ -635,7 +643,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -674,8 +681,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \

@@ -359,6 +359,8 @@ module kt_grids_box
   integer :: naky_private, ntheta0_private, nx_private, ny_private
   integer :: nkpolar_private
   integer :: jtwist
+  integer :: level, mult, mult_mine
+  integer, dimension(:), allocatable :: mult_list
 
 contains
 
@@ -371,13 +373,17 @@ contains
     integer :: in_file
     logical :: exist
     namelist /kt_grids_box_parameters/ naky, ntheta0, ly, nx, ny, jtwist, &
-	y0, rtwist, x0, nkpolar
+	y0, rtwist, x0, nkpolar, level, mult
 
     call init_theta_grid
 
     nkpolar = 0   ;   naky = 0    ;  ntheta0 = 0
     ly = 0.0      ;   y0 = 2.0    ;  x0 = 0.
     nx = 0        ;   ny = 0
+
+
+    level = -1
+    mult = -1
 
     jtwist = max(int(2.0*pi*shat + 0.5),1)  ! default jtwist -- MAB
     rtwist = 0.0
@@ -399,6 +405,14 @@ contains
     nx_private = nx
     ny_private = ny
   end subroutine init_kt_grids_box
+
+  subroutine set_mult
+    integer :: nlevels
+    nlevels = 0
+    do while (10**nlevels < mult) 
+      nlevels = nlevels + 1
+      end do
+  end subroutine set_mult
 
   subroutine wnml_kt_grids_box (unit)
    implicit none
