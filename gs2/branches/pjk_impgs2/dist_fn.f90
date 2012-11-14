@@ -24,8 +24,6 @@ module dist_fn
   public :: mom_coeff_tpara, mom_coeff_tperp
   public :: mom_shift_para, mom_shift_perp
 !+PJK
-  public :: bkdiff
-  public :: get_source_term  !  temp...
   public :: g_adjust_exp, get_source_term_exp
   public :: gnl_1, gnl_2, gnl_3, def_parity, even
   public :: wdrift, wstar, wcoriolis
@@ -962,8 +960,6 @@ contains
           vp = vpar(ig,1,iglo)
           bd = bkdiff(is)
 
-!+PJK  Hopefully fexp(is) = 1, bkdiff(is) = 0.0 if explicit...
-!-PJK  Circular makefile references prevent this to be enforced!
 ! should check sign of wc below to be sure -- MAB
           ainv(ig,iglo) &
                = 1.0/(1.0 + bd &
@@ -2552,41 +2548,7 @@ contains
        end do
     end do
   end subroutine g_adjust
-!+PJK
-  subroutine g_adjust_exp (g, apar, fapar)
 
-    !  Convert GS2's g to Wayne Arter's 'i', if fapar = 1,
-    !  or i to g if fapar = -1
-
-    use species, only: spec
-    use theta_grid, only: ntgrid
-    use le_grids, only: anon
-    use dist_fn_arrays, only: vpa, aj0
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
-    complex, dimension (-ntgrid:,:,:), intent (in) :: apar
-    real, intent (in) :: fapar
-
-    integer :: iglo, ig, ik, it, ie, is, isgn
-    complex :: adj
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       do ig = -ntgrid, ntgrid
-          do isgn = 1,2
-             adj = (-fapar) * &
-                  anon(ie,is)*spec(is)%z*vpa(ie,isgn,is)*aj0(ig,iglo)*apar(ig,it,ik) &
-                  /spec(is)%temp
-             g(ig,isgn,iglo) = g(ig,isgn,iglo) + adj
-          end do
-       end do
-    end do
-  end subroutine g_adjust_exp
-!-PJK
   subroutine get_source_term &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         isgn, iglo, sourcefac, source)
@@ -2761,7 +2723,6 @@ contains
 ! Do matrix multiplications
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-!+PJK Comment this section out if running pjk_advance() in fields_explicit.f90
     if (il <= lmax) then
        if (isgn == 1) then
           do ig = -ntgrid, ntgrid-1
@@ -2775,7 +2736,6 @@ contains
           end do
        end if
     end if
-!-PJK
     source(ntgrid) = source(-ntgrid)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2959,22 +2919,69 @@ contains
 
   end subroutine get_source_term
 
+!+PJK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+!  Code relevant to the explicit Discontinuous Galerkin scheme
+!  
+!  P J Knight
+
+  subroutine g_adjust_exp (g, apar, fapar)
+
+    !  Convert GS2's g to Wayne Arter's 'i', if fapar = 1,
+    !  or i to g if fapar = -1
+
+    use species, only: spec
+    use theta_grid, only: ntgrid
+    use le_grids, only: anon
+    use dist_fn_arrays, only: vpa, aj0
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
+
+    implicit none
+
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
+    complex, dimension (-ntgrid:,:,:), intent (in) :: apar
+    real, intent (in) :: fapar
+
+    integer :: iglo, ig, ik, it, ie, is, isgn
+    complex :: adj
+
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1,2
+          do ig = -ntgrid, ntgrid
+             adj = (-fapar) * &
+                  anon(ie,is)*spec(is)%z*vpa(ie,isgn,is)*aj0(ig,iglo)*apar(ig,it,ik) &
+                  /spec(is)%temp
+             g(ig,isgn,iglo) = g(ig,isgn,iglo) + adj
+          end do
+       end do
+    end do
+
+  end subroutine g_adjust_exp
+
+  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   subroutine get_source_term_exp (phi, apar, bpar, istep, isgn, iglo, fluxfn, source)
 
+    use constants
     use dist_fn_arrays, only: aj0, aj1, vperp2, vpa, vpar, vpac, g, ittp
-    use theta_grid, only: ntgrid, theta
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use gs2_time, only: code_dt
+    use hyper, only: D_res
     use kt_grids, only: aky, theta0, akx
     use le_grids, only: nlambda, ng2, lmax, anon, e, negrid, forbid
-    use species, only: spec, nspec
-    use run_parameters, only: fphi, fapar, fbpar, wunits, tunits
-    use gs2_time, only: code_dt
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
-    use run_parameters, only: tnorm
     use nonlinear_terms, only: nonlin
-    use hyper, only: D_res
-    use constants
-    use run_parameters, only: k0
+    use run_parameters, only: fphi, fapar, fbpar, k0, wunits, tnorm, tunits
+    use species, only: spec, nspec
+    use theta_grid, only: ntgrid, theta
+
     implicit none
+
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
     integer, intent (in) :: isgn, iglo
@@ -2985,7 +2992,7 @@ contains
     integer :: ig, ik, it, il, ie, is
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
 
-!    call timer (0, 'get_source_term_exp')
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     ik = ik_idx(g_lo,iglo)
     it = it_idx(g_lo,iglo)
@@ -3026,10 +3033,10 @@ contains
     fluxfn(ntgrid) = fluxfn(-ntgrid)
     source(ntgrid) = source(-ntgrid)
 
-!    !  Zero boundary condition
-!
-!    fluxfn(ntgrid) = 0.0
-!    source(ntgrid) = 0.0
+    !  Zero boundary condition
+    !
+    !fluxfn(ntgrid) = 0.0
+    !source(ntgrid) = 0.0
 
     !  Special source term for totally trapped particles
     !  Needs working on when these particles are included, i.e. g is g, not i...
@@ -3037,13 +3044,16 @@ contains
     if (source_option_switch == source_option_full) then
 
        if (nlambda > ng2 .and. isgn == 2) then
-          do ig = -ntgrid, ntgrid
-             if (il /= ittp(ig)) cycle
-             source(ig) &
-                  = g(ig,2,iglo)*a(ig,iglo) &
-                  - anon(ie,is)*zi*(wdriftttp(ig,it,ik,ie,is)+wcoriolis(ig,iglo))*phigavg(ig)*nfac &
-                  + zi*wstar(ik,ie,is)*phigavg(ig)
-          end do
+!+PJK 22/05/12
+          !do ig = -ntgrid, ntgrid
+          !   if (il /= ittp(ig)) cycle
+          !   source(ig) &
+          !        = g(ig,2,iglo)*a(ig,iglo) &
+          !        - anon(ie,is)*zi*(wdriftttp(ig,it,ik,ie,is)+wcoriolis(ig,iglo))*phigavg(ig)*nfac &
+          !        + zi*wstar(ik,ie,is)*phigavg(ig)
+
+          !end do
+!-PJK
 
           !  Add in nonlinear terms -- tfac normalizes the *amplitudes*.
 
@@ -3078,18 +3088,19 @@ contains
 
     end if
 
-!    call timer (1, 'get_source_term_exp')
   contains
+
+  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     subroutine set_source
 
       use species, only: spec
       use theta_grid, only: itor_over_B
-      use mp, only: proc0
 
-      complex :: apar_p, apar_m, phi_p, phi_m
-      real :: bd, bdfac_p, bdfac_m
+      complex :: apar_p, phi_p
       integer :: i_e, i_s
+
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
       if (.not. allocated(ufac)) then
          allocate (ufac(negrid, nspec))
@@ -3101,57 +3112,33 @@ contains
          end do
       endif
 
-      !  Enforce bd=0 for explicit solver case
-
-      !bd = 0.0  !  not bkdiff(1)
-      bd = bkdiff(1)
-
-      bdfac_p = 1.+bd*(3.-2.*real(isgn))
-      bdfac_m = 1.-bd*(3.-2.*real(isgn))
-
+      !  Summary of changes from original set_source routine:
+      !  (1) bkdiff dependence removed completely
+      !  (2) Centre differencing removed from phi_p and apar_p, to fix grid offset error
+      !  (3) phi_m deleted; removes CMR's term II (= fluxfn term, moved to LHS)
+      !  (4) apar_m deleted; removes CMR's term I
 
       do ig = -ntgrid, ntgrid-1
-!+PJK 01/05/12 removed centre-differencing, which fixes an apparent grid offset error
-         !phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
          phi_p = 2.0*phigavg(ig)
-!-PJK 01/05/12
-!+PJK 13/09/11 phi_m = phigavg(ig+1)-phigavg(ig)
-         phi_m = 0.0  !  removes CMR's term II
-!-PJK 13/09/11
-!+PJK 02/05/12 removed centre-differencing, which fixes an apparent grid offset error
-         !apar_p = apargavg(ig+1)+apargavg(ig)
          apar_p = 2.0*apargavg(ig)
-         apar_m = 0.0  !  removes CMR's term I
 
          !  Flux function required by the explicit DG scheme
+         !  No need to divide by 2*dt as the original version had this factor
+         !  embedded via the 2*vpar multiplication in source(ig) below
 
          fluxfn(ig) = (phigavg(ig) - apargavg(ig)*vpa(ig,isgn,iglo)*spec(is)%stm) &
               / spec(is)%tz
 
-!MAB, 6/5/2009:
-! added the omprimfac source term arising with equilibrium flow shear  
+         !  Source term (RHS) required by the explicit DG scheme
 
-!+PJK 13/09/11 Original...
-!         source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
-!              -spec(is)%zstm*vpac(ig,isgn,iglo) &
-!              *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
-!              + D_res(it,ik)*apar_p) &
-!              -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))*phi_p*nfac) &
-!              + zi*(wstar(ik,ie,is) &
-!              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-!              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
-!              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
-!+PJK 13/09/11 New...
-         source(ig) = anon(ie,is)*(-2.0*vpar(ig,isgn,iglo)*phi_m*nfac &
-              -spec(is)%zstm*vpac(ig,isgn,iglo) &
-              *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
-              + D_res(it,ik)*apar_p) &
-              -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))* & !  phi_p*nfac replaced by...
-              (phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))*nfac) & ! this line (CHECK)
-              + zi*(wstar(ik,ie,is) &
-              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)) &
-              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
+         source(ig) = anon(ie,is) * ( &
+              -spec(is)%zstm*vpa(ig,isgn,iglo)*(D_res(it,ik)*apar_p) &
+              -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))* &
+              (phi_p - apar_p*spec(is)%stm*vpa(ig,isgn,iglo))*nfac ) &
+              + zi * ( &
+              wstar(ik,ie,is) + vpa(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+              - 2.0*omprimfac*vpa(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig) ) &
+              *(phi_p - apar_p*spec(is)%stm*vpa(ig,isgn,iglo))
       end do
         
       !  Add in nonlinear terms -- tfac normalizes the *amplitudes*.
@@ -3180,17 +3167,18 @@ contains
          end select
       end if
 !+PJK check this is correct...
-      !  Trapped particles: zero source and fluxfn
+      !  Trapped particles: zero source term
       do ig = -ntgrid,ntgrid
          if (forbid(ig,il)) then
             source(ig) = 0.0
-            fluxfn(ig) = 0.0
          end if
       end do
 
     end subroutine set_source
 
   end subroutine get_source_term_exp
+
+!-PJK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine invert_rhs_1 &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
@@ -3412,18 +3400,6 @@ contains
           gnew(ig,2,iglo) = gnew(ig,2,iglo) + beta1*g1(ig,2)
        end do
     end if
-!+PJK
-!write(*,*) 'Trapped particle tests...'
-!if (il == 17) then
-!   !do ig = ntgl,ntgr-1
-!   do ig = -8,8,16
-!      !if (.not.forbid(ig,il).and.forbid(ig+1,il)) then
-!      if (.not.forbid(ig,il)) then
-!         write(*,*) ig,gnew(ig,1,iglo),gnew(ig,2,iglo)
-!      end if
-!   end do
-!end if
-!-PJK
 
 !! removed 5.9.08 to regain consistency with linked case -- MAB
 !! added 4.13.08 to treat wfb as trapped between ends but not middle wells -- MAB
@@ -4363,10 +4339,6 @@ subroutine getan (antot, antota, antotp, g, antota2)
   subroutine getfieldeq (phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-!+PJK
-!    use dist_fn_arrays, only: gnew
-!    use gs2_layouts, only: g_lo
-!-PJK
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
