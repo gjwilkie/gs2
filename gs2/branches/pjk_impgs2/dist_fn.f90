@@ -3,7 +3,7 @@ module dist_fn
   implicit none
   public :: init_dist_fn, finish_dist_fn
   public :: timeadv, get_stress, exb_shear
-  public :: getfieldeq, getan, getfieldexp, getmoms, gettotmoms, getemoms
+  public :: getfieldeq, getan, getmoms, gettotmoms, getemoms
   public :: flux, neoclassical_flux, lambda_flux
   public :: get_epar, e_flux, get_heat
   public :: vortcheck, fieldcheck
@@ -23,11 +23,13 @@ module dist_fn
   public :: mom_coeff_npara, mom_coeff_nperp
   public :: mom_coeff_tpara, mom_coeff_tperp
   public :: mom_shift_para, mom_shift_perp
-!+PJK
-  public :: g_adjust_exp, get_source_term_exp
+
+  !+PJK  Extra exports required for the explicit DG scheme
+  public :: g_adjust_exp, get_source_term_exp, getfieldexp
   public :: gnl_1, gnl_2, gnl_3, def_parity, even
   public :: wdrift, wstar, wcoriolis
-!-PJK
+  !-PJK
+
   private
 
   ! knobs
@@ -1941,12 +1943,13 @@ contains
   end subroutine get_right_connection
 
   subroutine allocate_arrays
+
+    !+PJK  Added allocation of gwork, gold arrays
+
     use kt_grids, only: naky, ntheta0, box
     use theta_grid, only: ntgrid, shat
     use dist_fn_arrays, only: g, gnew, gold
-!+PJK
     use dist_fn_arrays, only: gwork
-!-PJK
     use dist_fn_arrays, only: kx_shift, theta0_shift   ! MR
     use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
@@ -1957,11 +1960,8 @@ contains
     if (.not. allocated(g)) then
        allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-!       allocate (gold (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-!+PJK
        allocate (gold (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gwork(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-!-PJK
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        if (nonlin) then
           allocate (gnl_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -2919,16 +2919,226 @@ contains
 
   end subroutine get_source_term
 
-!+PJK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!
-!  Code relevant to the explicit Discontinuous Galerkin scheme
-!  
-!  P J Knight
+  !+PJK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  !
+  !  Code relevant to the explicit Discontinuous Galerkin scheme
+  !  
+  !  P J Knight
+
+  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine getfieldexp (g, phi, apar, bpar, g_or_i)
+    
+    !  Evaluates fields phi, apar, bpar given distribution function g
+    !
+    !  Replaces routine getfieldeq when using the explicit DG scheme,
+    !  i.e. when fieldopt_switch == fieldopt_explicit
+    !
+    !  P J Knight, W Arter, C Roach
+    !
+    !  The input argument g can be either the distribution function as used
+    !  by the implicit scheme, or the modified distribution function i as
+    !  used by the explicit DG scheme. Argument g_or_i signals which to
+    !  assume.
+    !
+    !  Routine getan requires different arguments for each case.
+    !
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+
+    implicit none
+
+    !  Arguments
+
+    complex, dimension (-ntgrid:,:,:), intent (in) :: g
+    character(len=1), intent(in) :: g_or_i
+    complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
+
+    !  Local variables
+
+    complex, dimension (:,:,:), allocatable :: antot, antota, antotp
+    complex, dimension (:,:,:), allocatable :: antota2
+
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antota2(-ntgrid:ntgrid,ntheta0,naky))
+
+    if (g_or_i == 'g') then
+       antota2 = 0.0
+       call getan (antot, antota, antotp, g=g)
+    else
+       call getan (antot, antota, antotp, g=g, antota2=antota2)
+    end if
+    call getfieldeq2 (phi, apar, bpar, antot, antota, antota2, antotp)
+
+    deallocate (antot, antota, antotp, antota2)
+
+  end subroutine getfieldexp
+
+  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine getfieldeq2 (phi, apar, bpar, antot, antota, antota2, antotp)
+
+    !  Routine to evaluate the field equations for phi, apar and bpar
+    !  explicitly from the species summed velocity integrals derived
+    !  from the perturbed distribution function.
+    !
+    !  P J Knight, W Arter, C Roach
+    !
+    !  Replaces routine getfieldeq1 when using the explicit DG scheme,
+    !  i.e. when fieldopt_switch == fieldopt_explicit
+    !  (although outputs are different)
+    !
+    !  Refs: (1) dg_explicit_scheme.tex: GS2 Field Equations section
+    !
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    use dist_fn_arrays, only: kperp2
+    use theta_grid, only: ntgrid, bmag, delthet, jacob
+    use kt_grids, only: naky, ntheta0, aky
+    use run_parameters, only: fphi, fapar, fbpar, beta, tite
+    use species, only: spec, has_electron_species
+
+    implicit none
+
+    !  Arguments
+
+    complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antota2, antotp
+
+    !  Local variables
+
+    integer :: ik, it
+    real, dimension (-ntgrid:ntgrid) :: denominator
+    complex, dimension (-ntgrid:ntgrid) :: numerator
+    real, dimension(-ntgrid:ntgrid) :: bob2
+
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    if (.not. has_electron_species(spec)) then
+       if ((adiabatic_option_switch == adiabatic_option_noJ) &
+            .or. (adiabatic_option_switch == adiabatic_option_fieldlineavg) ) then
+          ! prepare for field-line-average term, fl_avg2: 
+          if (.not. allocated(awgt2)) then
+             allocate (awgt2(ntheta0, naky))
+             awgt2 = 0.
+             do ik = 1, naky
+                do it = 1, ntheta0
+                   if (aky(ik) > epsilon(0.0)) cycle
+                   if (adiabatic_option_switch == adiabatic_option_noJ) then
+                      awgt2(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
+                   elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
+                      awgt2(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
+                   endif
+                end do
+             end do
+          endif
+          if (.not. allocated(fl_avg2)) then
+             allocate (fl_avg2(ntheta0, naky))
+          endif
+          fl_avg2=0.
+          do ik = 1, naky
+             do it = 1, ntheta0
+                if (aky(ik) > epsilon(0.0)) cycle
+                if (adiabatic_option_switch == adiabatic_option_noJ) then
+                   fl_avg2(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
+                elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
+                   fl_avg2(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
+                endif
+             end do
+          end do
+       endif
+    endif
+
+    !  Perturbed electrostatic potential, phi
+
+    if (fphi > epsilon(0.0)) then
+       bob2 = beta / (bmag*bmag)
+
+       do ik = 1, naky
+          do it = 1, ntheta0
+
+             numerator = (1.0 + bob2*gamtot2(:,it,ik))*antot(:,it,ik) &
+                  - bob2*antotp(:,it,ik)*gamtot1(:,it,ik)
+             if (allocated(fl_avg2)) then
+                numerator=numerator+fl_avg2(it,ik)*(1.0 + bob2*gamtot2(:,it,ik))
+             endif
+             denominator = (1.0 + bob2*gamtot2(:,it,ik))*gamtot(:,it,ik) &
+                  + 0.5*bob2*gamtot1(:,it,ik)*gamtot1(:,it,ik)
+
+             where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
+                phi(:,it,ik) = 0.0
+             elsewhere
+                phi(:,it,ik) = numerator / denominator
+             end where
+
+          end do
+       end do
+
+    end if
+
+    !  Perturbed parallel magnetic field, bpar
+
+    if (fbpar > epsilon(0.0)) then
+
+       do ik = 1, naky
+          do it = 1, ntheta0
+
+             numerator = -beta*( gamtot(:,it,ik)*antotp(:,it,ik) &
+                  + 0.5*gamtot1(:,it,ik)*antot(:,it,ik) )
+             denominator = (bmag*bmag + beta*gamtot2(:,it,ik))*gamtot(:,it,ik) &
+                  + 0.5*beta*gamtot1(:,it,ik)*gamtot1(:,it,ik)
+
+             where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
+                bpar(:,it,ik) = 0.0
+             elsewhere
+                bpar(:,it,ik) = numerator / denominator
+             end where
+
+          end do
+       end do
+
+    end if
+
+    !  Perturbed parallel magnetic potential, apar
+
+    if (fapar > epsilon(0.0)) then
+
+       do ik = 1, naky
+          do it = 1, ntheta0
+
+             !  antota2 is the new term required if we used Wayne's 'i' instead
+             !  of 'g' in the call to getan
+             denominator = kperp2(:,it,ik) + antota2(:,it,ik)
+
+             where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
+                apar(:,it,ik) = 0.0
+             elsewhere
+                apar(:,it,ik) = antota(:,it,ik) / denominator
+             end where
+
+          end do
+       end do
+
+    end if
+
+  end subroutine getfieldeq2
+
+  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine g_adjust_exp (g, apar, fapar)
 
     !  Convert GS2's g to Wayne Arter's 'i', if fapar = 1,
     !  or i to g if fapar = -1
+    !
+    !  P J Knight, W Arter, C Roach
+    !
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     use species, only: spec
     use theta_grid, only: ntgrid
@@ -2938,9 +3148,13 @@ contains
 
     implicit none
 
+    !  Arguments
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
     complex, dimension (-ntgrid:,:,:), intent (in) :: apar
     real, intent (in) :: fapar
+
+    !  Local variables
 
     integer :: iglo, ig, ik, it, ie, is, isgn
     complex :: adj
@@ -2966,7 +3180,22 @@ contains
 
   ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine get_source_term_exp (phi, apar, bpar, istep, isgn, iglo, fluxfn, source)
+  subroutine get_source_term_exp (phi,apar,bpar,istep,isgn,iglo,fluxfn,source)
+
+    !  Routine to evaluate the source term and the flux function
+    !  for the explicit DG scheme
+    !
+    !  P J Knight, W Arter, C Roach
+    !
+    !  Replaces routine get_source_term when using the explicit DG scheme,
+    !  i.e. when fieldopt_switch == fieldopt_explicit
+    !  In the original code, fluxfn() was part of source() on the RHS of the
+    !  equation being solved, but in the DG formulation it is used as part
+    !  of the LHS, specifically in the term vparallel * d(g+F)/dz
+    !
+    !  N.B. Totally trapped particles are (probably) not implemented completely yet...
+    !
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     use constants
     use dist_fn_arrays, only: aj0, aj1, vperp2, vpa, vpar, vpac, g, ittp
@@ -2982,13 +3211,17 @@ contains
 
     implicit none
 
+    !  Arguments
+
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
     integer, intent (in) :: isgn, iglo
     complex, dimension (-ntgrid:), intent (out) :: fluxfn
     complex, dimension (-ntgrid:), intent (out) :: source
-    real :: tfac
 
+    !  Local variables
+
+    real :: tfac
     integer :: ig, ik, it, il, ie, is
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
 
@@ -3008,7 +3241,7 @@ contains
 
     select case (source_option_switch)
 
-    !  Default choice: solve self-consistent equations
+       !  Default choice: solve self-consistent equations
 
     case (source_option_full)
        if (il <= lmax) then
@@ -3028,7 +3261,8 @@ contains
 
     end select
 
-    !  Periodic boundary condition (as done in original get_source_term)
+    !  Periodic boundary condition at end-points
+    !  (as done in original get_source_term)
 
     fluxfn(ntgrid) = fluxfn(-ntgrid)
     source(ntgrid) = source(-ntgrid)
@@ -3044,7 +3278,6 @@ contains
     if (source_option_switch == source_option_full) then
 
        if (nlambda > ng2 .and. isgn == 2) then
-!+PJK 22/05/12
           !do ig = -ntgrid, ntgrid
           !   if (il /= ittp(ig)) cycle
           !   source(ig) &
@@ -3053,7 +3286,6 @@ contains
           !        + zi*wstar(ik,ie,is)*phigavg(ig)
 
           !end do
-!-PJK
 
           !  Add in nonlinear terms -- tfac normalizes the *amplitudes*.
 
@@ -3077,7 +3309,7 @@ contains
                 do ig = -ntgrid, ntgrid
                    if (il /= ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*tfac*( &
-                          (23./12.)*gnl_1(ig,isgn,iglo) &
+                        (23./12.)*gnl_1(ig,isgn,iglo) &
                         - (4./3.)  *gnl_2(ig,isgn,iglo) &
                         + (5./12.) *gnl_3(ig,isgn,iglo))
                 end do
@@ -3090,7 +3322,7 @@ contains
 
   contains
 
-  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     subroutine set_source
 
@@ -3100,7 +3332,7 @@ contains
       complex :: apar_p, phi_p
       integer :: i_e, i_s
 
-    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
       if (.not. allocated(ufac)) then
          allocate (ufac(negrid, nspec))
@@ -3117,17 +3349,11 @@ contains
       !  (2) Centre differencing removed from phi_p and apar_p, to fix grid offset error
       !  (3) phi_m deleted; removes CMR's term II (= fluxfn term, moved to LHS)
       !  (4) apar_m deleted; removes CMR's term I
+      !  (5) vpa used instead of vpar
 
       do ig = -ntgrid, ntgrid-1
          phi_p = 2.0*phigavg(ig)
          apar_p = 2.0*apargavg(ig)
-
-         !  Flux function required by the explicit DG scheme
-         !  No need to divide by 2*dt as the original version had this factor
-         !  embedded via the 2*vpar multiplication in source(ig) below
-
-         fluxfn(ig) = (phigavg(ig) - apargavg(ig)*vpa(ig,isgn,iglo)*spec(is)%stm) &
-              / spec(is)%tz
 
          !  Source term (RHS) required by the explicit DG scheme
 
@@ -3137,10 +3363,18 @@ contains
               (phi_p - apar_p*spec(is)%stm*vpa(ig,isgn,iglo))*nfac ) &
               + zi * ( &
               wstar(ik,ie,is) + vpa(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              - 2.0*omprimfac*vpa(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig) ) &
-              *(phi_p - apar_p*spec(is)%stm*vpa(ig,isgn,iglo))
+              - 2.0*omprimfac*vpa(ig,isgn,iglo)*code_dt*wunits(ik) &
+              * g_exb*itor_over_B(ig) ) &
+              * (phi_p - apar_p*spec(is)%stm*vpa(ig,isgn,iglo))
+
+         !  Flux function required by the explicit DG scheme
+         !  N.B. there is no need to divide by 2*dt later
+
+         fluxfn(ig) = (phigavg(ig) - apargavg(ig)*vpa(ig,isgn,iglo)*spec(is)%stm) &
+              / spec(is)%tz
+
       end do
-        
+
       !  Add in nonlinear terms -- tfac normalizes the *amplitudes*.
 
       if (nonlin) then         
@@ -3160,14 +3394,15 @@ contains
          case default
             do ig = -ntgrid, ntgrid-1
                source(ig) = source(ig) + 0.5*code_dt*tfac*( &
-                      (23./12.)*gnl_1(ig,isgn,iglo) &
+                    (23./12.)*gnl_1(ig,isgn,iglo) &
                     - (4./3.)  *gnl_2(ig,isgn,iglo) &
                     + (5./12.) *gnl_3(ig,isgn,iglo))
             end do
          end select
       end if
-!+PJK check this is correct...
-      !  Trapped particles: zero source term
+
+      !  Trapped particles: zero RHS source term in forbidden regions
+
       do ig = -ntgrid,ntgrid
          if (forbid(ig,il)) then
             source(ig) = 0.0
@@ -3178,7 +3413,7 @@ contains
 
   end subroutine get_source_term_exp
 
-!-PJK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  !-PJK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine invert_rhs_1 &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
@@ -3629,9 +3864,16 @@ contains
     call prof_leaving ("invert_rhs", "dist_fn")
   end subroutine invert_rhs
 
-!+PJK  subroutine getan (antot, antota, antotp)
 subroutine getan (antot, antota, antotp, g, antota2)
-!-PJK
+
+  !+PJK  Modifications for DG explicit scheme implementation
+  !  New optional argument g (input) - used instead of gnew if present
+  !  New optional argument antota2 (output) - different denominator is
+  !    used if this argument is present, signifying that g is Wayne
+  !    Arter's 'i' instead of the implicit scheme's 'g'.
+  !  Use of new local gtemp to remove hardwired use of gnew
+  !-PJK
+
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
     use dist_fn_arrays, only: kperp2
     use species, only: nspec, spec
@@ -3641,18 +3883,18 @@ subroutine getan (antot, antota, antotp, g, antota2)
     use prof, only: prof_entering, prof_leaving
     use gs2_layouts, only: g_lo
     implicit none
-!+PJK
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), optional, intent (in) :: g
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), optional, intent (out) :: antota2
     complex, dimension (:,:,:), allocatable :: gtemp
-!-PJK
+
     complex, dimension (-ntgrid:,:,:), intent (out) :: antot, antota, antotp
     real, dimension (nspec) :: wgt
 
     integer :: isgn, iglo, ig
 
     call prof_entering ("getan", "dist_fn")
-!+PJK
+
     allocate(gtemp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     if (present(g)) then
        gtemp = g
@@ -3660,16 +3902,14 @@ subroutine getan (antot, antota, antotp, g, antota2)
        gtemp = gnew
     end if
     if (present(antota2)) antota2 = 0.
-!-PJK
+
     antot=0. ; antota=0. ; antotp=0.
 
     if (fphi > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
-!+PJK                g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
                 g0(ig,isgn,iglo) = aj0(ig,iglo)*gtemp(ig,isgn,iglo)
-!-PJK
              end do
           end do
        end do
@@ -3686,9 +3926,7 @@ subroutine getan (antot, antota, antotp, g, antota2)
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
-!+PJK                g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,iglo)*gnew(ig,isgn,iglo)
                 g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,iglo)*gtemp(ig,isgn,iglo)
-!-PJK
              end do
           end do
        end do
@@ -3698,7 +3936,7 @@ subroutine getan (antot, antota, antotp, g, antota2)
 !    if (kfilter > epsilon(0.0)) call par_filter(antota)
 
     end if
-!+PJK
+
     if (present(antota2)) then
        !  New code to evaluate additional denominator for apar, if Wayne's 'i'
        !  was used in the call to getan instead of 'g'
@@ -3715,14 +3953,12 @@ subroutine getan (antot, antota, antotp, g, antota2)
           call integrate_species (g0, wgt, antota2)
        end if
     end if
-!-PJK
+
     if (fbpar > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
-!+PJK                g0(ig,isgn,iglo) = aj1(ig,iglo)*vperp2(ig,iglo)*gnew(ig,isgn,iglo)
                 g0(ig,isgn,iglo) = aj1(ig,iglo)*vperp2(ig,iglo)*gtemp(ig,isgn,iglo)
-!-PJK
              end do
           end do
        end do
@@ -3731,9 +3967,9 @@ subroutine getan (antot, antota, antotp, g, antota2)
 !    if (kfilter > epsilon(0.0)) call par_filter(antotp)
 
     end if
-!+PJK
+
     deallocate (gtemp)
-!-PJK
+
     call prof_leaving ("getan", "dist_fn")
   end subroutine getan
 
@@ -4354,187 +4590,6 @@ subroutine getan (antot, antota, antotp, g, antota2)
     deallocate (antot, antota, antotp)
   end subroutine getfieldeq
   
-  subroutine getfieldexp (g, phi, apar, bpar, g_or_i)
-    !+PJK New input arguments g, g_or_i
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-    implicit none
-!+PJK
-    complex, dimension (-ntgrid:,:,:), intent (in) :: g
-    character(len=1), intent(in) :: g_or_i
-!-PJK
-    complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
-    complex, dimension (:,:,:), allocatable :: antot, antota, antotp
-!+PJK
-    complex, dimension (:,:,:), allocatable :: antota2
-    allocate (antota2(-ntgrid:ntgrid,ntheta0,naky))
-!-PJK
-    allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
-    allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
-    allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
-
-!+PJK    call getan (antot, antota, antotp)
-    if (g_or_i == 'g') then
-       antota2 = 0.0
-       call getan (antot, antota, antotp, g=g)
-    else
-       call getan (antot, antota, antotp, g=g, antota2=antota2)
-    end if
-    call getfieldeq2 (phi, apar, bpar, antot, antota, antota2, antotp)
-!-PJK    call getfieldeq2 (phi, apar, bpar, antot, antota, antotp)
-
-    deallocate (antot, antota, antotp)
-  end subroutine getfieldexp
-!+PJK
-  subroutine getfieldeq2 (phi, apar, bpar, antot, antota, antota2, antotp)
-
-    !  Routine to evaluate the field equations for phi, apar and bpar
-    !  explicitly from the species summed velocity integrals derived
-    !  from the perturbed distribution function
-    !
-    !  Used by the explicit solver only, i.e.
-    !  fieldopt_switch == fieldopt_explicit
-    !
-    !
-    !  Refs: (1) Gyrokinetic and Maxwell Field Equations in GS2, C M Roach,
-    !            T&M/PKNIGHT/HLST/014
-    !
-    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-    use dist_fn_arrays, only: kperp2
-    use theta_grid, only: ntgrid, bmag, delthet, jacob
-    use kt_grids, only: naky, ntheta0, aky
-    use run_parameters, only: fphi, fapar, fbpar
-    use run_parameters, only: beta, tite
-    use species, only: spec, has_electron_species
-
-    implicit none
-
-    !  Arguments
-
-    complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
-    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antota2, antotp
-
-    !  Local variables
-
-    integer :: ik, it
-    real, dimension (-ntgrid:ntgrid) :: denominator
-    complex, dimension (-ntgrid:ntgrid) :: numerator
-    real, dimension(-ntgrid:ntgrid) :: bob2
-
-    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-    if (.not. has_electron_species(spec)) then
-       if ((adiabatic_option_switch == adiabatic_option_noJ .or. adiabatic_option_switch == adiabatic_option_fieldlineavg) ) then
-! prepare for field-line-average term, fl_avg2: 
-          if (.not. allocated(awgt2)) then
-             allocate (awgt2(ntheta0, naky))
-             awgt2 = 0.
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   if (aky(ik) > epsilon(0.0)) cycle
-                   if (adiabatic_option_switch == adiabatic_option_noJ) then
-                      awgt2(it,ik) = 1.0/sum(delthet*gamtot3(:,it,ik))
-                   elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
-                      awgt2(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
-                   endif
-                end do
-             end do
-          endif
-          if (.not. allocated(fl_avg2)) then
-             allocate (fl_avg2(ntheta0, naky))
-          endif
-          fl_avg2=0.
-          do ik = 1, naky
-             do it = 1, ntheta0
-                if (aky(ik) > epsilon(0.0)) cycle
-                if (adiabatic_option_switch == adiabatic_option_noJ) then
-                   fl_avg2(it,ik) = tite*sum(delthet*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
-                elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
-                   fl_avg2(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt2(it,ik)
-                endif
-             end do
-          end do
-       endif
-    endif
-
-    !  Perturbed electrostatic potential, phi
-    !  Equation 17, ref.1
-
-    if (fphi > epsilon(0.0)) then
-       bob2 = beta / (bmag*bmag)
-
-       do ik = 1, naky
-          do it = 1, ntheta0
-
-             numerator = (1.0 + bob2*gamtot2(:,it,ik))*antot(:,it,ik) &
-                  - bob2*antotp(:,it,ik)*gamtot1(:,it,ik)
-             if (allocated(fl_avg2)) then
-                numerator=numerator+fl_avg2(it,ik)*(1.0 + bob2*gamtot2(:,it,ik))
-             endif
-             denominator = (1.0 + bob2*gamtot2(:,it,ik))*gamtot(:,it,ik) &
-                  + 0.5*bob2*gamtot1(:,it,ik)*gamtot1(:,it,ik)
-
-             where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
-                phi(:,it,ik) = 0.0
-             elsewhere
-                phi(:,it,ik) = numerator / denominator
-             end where
-
-          end do
-       end do
-
-    end if
-
-    !  Perturbed parallel magnetic field, bpar
-    !  Equation 18, ref.1
-
-    if (fbpar > epsilon(0.0)) then
-
-       do ik = 1, naky
-          do it = 1, ntheta0
-
-             numerator = -beta*( gamtot(:,it,ik)*antotp(:,it,ik) &
-                  + 0.5*gamtot1(:,it,ik)*antot(:,it,ik) )
-             denominator = (bmag*bmag + beta*gamtot2(:,it,ik))*gamtot(:,it,ik) &
-                  + 0.5*beta*gamtot1(:,it,ik)*gamtot1(:,it,ik)
-
-             where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
-                bpar(:,it,ik) = 0.0
-             elsewhere
-                bpar(:,it,ik) = numerator / denominator
-             end where
-
-           end do
-        end do
-
-    end if
-
-    !  Perturbed parallel magnetic potential, apar
-    !  Equation 19, ref.1
-
-    if (fapar > epsilon(0.0)) then
-
-       do ik = 1, naky
-          do it = 1, ntheta0
-
-             !  antota2 is the new term required if we used Wayne's 'i' instead
-             !  of 'g' in the call to getan
-             denominator = kperp2(:,it,ik) + antota2(:,it,ik)
-
-             where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
-                apar(:,it,ik) = 0.0
-             elsewhere
-                apar(:,it,ik) = antota(:,it,ik) / denominator
-             end where
-
-          end do
-       end do
-
-    end if
-
-  end subroutine getfieldeq2
-!-PJK
 ! replaced by bessel function implementation of RN and TT (in utils/spfunc.fpp)
 !  elemental function j0 (x)
 !! A&S, p. 369, 9.4
@@ -7698,12 +7753,13 @@ subroutine getan (antot, antota, antotp, g, antota2)
 
   subroutine finish_dist_fn
 
+    !+PJK  Added deallocation of gwork, gold arrays
+    !+PJK  Removed redundant deallocations of bfac, f1 etc.
+
     use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
     use dist_fn_arrays, only: aj0, aj1, kperp2
     use dist_fn_arrays, only: g, gnew, kx_shift
-!+PJK
     use dist_fn_arrays, only: gwork, gold
-!-PJK
 
     implicit none
 
@@ -7733,10 +7789,8 @@ subroutine getan (antot, antota, antotp, g, antota2)
     if (allocated(connections)) deallocate (connections)
     if (allocated(g_adj)) deallocate (g_adj)
     if (allocated(g)) deallocate (g, gnew, g0)
-!+PJK
     if (allocated(gold)) deallocate (gold)
     if (allocated(gwork)) deallocate (gwork)
-!-PJK
     if (allocated(gnl_1)) deallocate (gnl_1, gnl_2, gnl_3)
     if (allocated(g_h)) deallocate (g_h, save_h)
     if (allocated(kx_shift)) deallocate (kx_shift)
@@ -7748,9 +7802,8 @@ subroutine getan (antot, antota, antotp, g, antota2)
     if (allocated(gamtot3)) deallocate (gamtot3)
     if (allocated(fl_avg)) deallocate (fl_avg)
     if (allocated(awgt)) deallocate (awgt)
-!+PJK    if (allocated(fl_avg2)) deallocate (fl_avg2, bfac, f1, f2, f3, f4, kp2)
+    !if (allocated(fl_avg2)) deallocate (fl_avg2, bfac, f1, f2, f3, f4, kp2)
     if (allocated(fl_avg2)) deallocate (fl_avg2)
-!-PJK
     if (allocated(awgt2)) deallocate (awgt2)
     if (allocated(kmax)) deallocate (kmax)
     if (allocated(mom_coeff)) deallocate (mom_coeff, mom_coeff_npara, mom_coeff_nperp, &

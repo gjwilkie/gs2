@@ -17,6 +17,9 @@ contains
 
   subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, heat, dvdrho, grho, nofinish)
 
+    !+PJK  Added code to reset the timestep if the explicit DG scheme's adaptive
+    !+PJK  timestep algorithm requires it
+
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
@@ -36,17 +39,16 @@ contains
     use gs2_time, only: write_dt, init_tstart
     use gs2_time, only: user_time, user_dt
     use gs2_time, only: code_time
-!+PJK
-    use gs2_time, only: save_dt
-!-PJK
     use init_g, only: tstart
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
     use fields_implicit, only: time_field
-!+PJK
+    !+PJK
+    use gs2_time, only: save_dt
     use dg_scheme, only: adaptive_dt_reset, adaptive_dt_new
-!-PJK
+    !-PJK
+
     implicit none
 
     integer, intent (in), optional :: mpi_comm, nensembles
@@ -155,14 +157,16 @@ contains
        call loop_diagnostics (istep, exit)
        call check_time_step (reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
-!+PJK  if (reset) call reset_time_step (istep, exit)
+
+       !+PJK
        if (adaptive_dt_reset) then
           call save_dt(adaptive_dt_new)
           call reset_time_step (istep, exit)
        else
           if (reset) call reset_time_step (istep, exit)
        end if
-!-PJK       
+       !-PJK
+
        if (mod(istep,5) == 0) call checkstop(exit)
        
        call checktime(avail_cpu_time,exit)

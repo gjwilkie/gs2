@@ -2,7 +2,7 @@ module fields
   use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
   use fields_arrays, only: phitmp, apartmp, bpartmp
   use fields_arrays, only: phitmp1, apartmp1, bpartmp1
-!+PJK
+!+PJK  Added use of phiold, aparold, bparold
   use fields_arrays, only: phiold, aparold, bparold
 !-PJK
   use fields_arrays, only: phi_ext, apar_ext
@@ -23,9 +23,9 @@ module fields
   end interface
 
   ! knobs
-  !+PJK Added public attribute to fieldopt variables
+  !+PJK  Added public attribute to fieldopt variables
   integer, public :: fieldopt_switch
-  integer, public, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_explicit = 3
+  integer, public, parameter :: fieldopt_implicit=1, fieldopt_test=2, fieldopt_explicit=3
 
   logical :: initialized = .false.
 
@@ -119,6 +119,9 @@ contains
   end subroutine read_parameters
 
   subroutine allocate_arrays
+
+    !+PJK  Added allocation of phiold, aparold, bparold
+
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     implicit none
@@ -132,11 +135,9 @@ contains
        allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (bparnew (-ntgrid:ntgrid,ntheta0,naky))
-!+PJK
        allocate ( phiold (-ntgrid:ntgrid,ntheta0,naky))
        allocate (aparold (-ntgrid:ntgrid,ntheta0,naky))
        allocate (bparold (-ntgrid:ntgrid,ntheta0,naky))
-!-PJK
        allocate (  phitmp (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( apartmp (-ntgrid:ntgrid,ntheta0,naky))
        allocate (bpartmp (-ntgrid:ntgrid,ntheta0,naky))
@@ -149,9 +150,7 @@ contains
     phi = 0.; phinew = 0.; phitmp = 0. 
     apar = 0.; aparnew = 0.; apartmp = 0. 
     bpar = 0.; bparnew = 0.; bpartmp = 0.
-!+PJK
     phiold = 0.; aparold = 0.; bparold = 0.
-!-PJK
 !    phitmp1 = 0. ; apartmp1 = 0. ; bpartmp1 = 0.
 !    phi_ext = 0.
     apar_ext = 0.
@@ -279,6 +278,8 @@ contains
 
   subroutine finish_fields
 
+    !+PJK  Added deallocation of phiold, aparold, bparold
+
     use fields_implicit, only: implicit_reset => reset_init
     use fields_test, only: test_reset => reset_init
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
@@ -292,9 +293,8 @@ contains
 
     if (allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew, &
          phitmp, apartmp, bpartmp, apar_ext)
-!+PJK
     if (allocated(phiold)) deallocate (phiold, aparold, bparold)
-!-PJK
+
   end subroutine finish_fields
 
 end module fields
