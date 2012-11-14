@@ -2,7 +2,7 @@ module dist_fn_arrays
 
   ! dist fn
   complex, dimension (:,:,:), allocatable :: g, gnew, gold
-!+PJK
+!+PJK  Added new array gwork for the explicit DG scheme
   complex, dimension (:,:,:), allocatable :: gwork
 !-PJK
   ! (-ntgrid:ntgrid,2, -g-layout-)

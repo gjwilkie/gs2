@@ -6,7 +6,7 @@ module fields_arrays
   complex, dimension (:,:,:), allocatable :: phinew, aparnew, bparnew
   complex, dimension (:,:,:), allocatable :: phitmp, apartmp, bpartmp
   complex, dimension (:,:,:), allocatable :: phitmp1, apartmp1, bpartmp1
-!+PJK
+!+PJK  Added new arrays phiold, aparold, bparold for the explicit DG scheme
   complex, dimension (:,:,:), allocatable :: phiold, aparold, bparold
 !-PJK
   ! (-ntgrid:ntgrid,ntheta0,naky) replicated

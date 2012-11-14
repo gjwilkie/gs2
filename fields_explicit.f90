@@ -743,16 +743,16 @@ contains
     end if
 
     !+PJK diagnostic tests
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       il = il_idx(g_lo,iglo) ! il = ittp(ig) = 25 at ig = +-56, +-28, 0
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       if ((il == 20).and.(ie == 9).and.(is == 1)) then
-          do ig = -ntgrid,ntgrid
-             write(65,*) real(ig), abs(g(ig,1,iglo))
-          end do
-       end if
-    end do
+    !do iglo = g_lo%llim_proc, g_lo%ulim_proc
+    !   il = il_idx(g_lo,iglo) ! il = ittp(ig) = 25 at ig = +-56, +-28, 0
+    !   ie = ie_idx(g_lo,iglo)
+    !   is = is_idx(g_lo,iglo)
+    !   if ((il == 20).and.(ie == 9).and.(is == 1)) then
+    !      do ig = -ntgrid,ntgrid
+    !         write(65,*) real(ig), abs(g(ig,1,iglo))
+    !      end do
+    !   end if
+    !end do
     !-PJK
 
     if (allocated(gnew1)) then
@@ -924,6 +924,12 @@ contains
           src(:) = src(:)/(2.0*dt*tunits(ik))
           smodal = src
           call nodal2modal(smodal,lb1,ub1)
+
+          !if ((isgn == 1).and.(iglo == 219)) then
+          !   do ig = -ntgrid,ntgrid
+          !      write(65,*) real(ig), abs(fluxfn(ig))
+          !   end do
+          !end if
 
           !  Evaluate -i*wd*g term
           !  Have to divide wd by dt here
