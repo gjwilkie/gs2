@@ -1902,7 +1902,8 @@ if (debug) write(6,*) 'get_grids: call file_get_grids'
     else
 !CMR, 19/10/10: moved MAB's definition of geometry quantity itor_over_B from 
 !               dist_fn.f90 to here.
-! Calculate the parallel velocity shear drive factor itor_over_B (which effectively depends on the angle the field lines make with the flow)
+! Calculate the parallel velocity shear drive factor itor_over_B 
+! (which effectively depends on the angle the field lines make with the flow)
 ! note that the following is only valid in a torus!
 ! itor_over_B = (q/rho) * Rmaj*Btor/(a*B)
        IoB = sqrt(Rplot**2 - (grho/(bmag*drhodpsi))**2)
