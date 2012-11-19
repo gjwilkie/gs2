@@ -26,7 +26,7 @@ module fields
   !+PJK  Added public attribute to fieldopt variables
   integer, public :: fieldopt_switch
   integer, public, parameter :: fieldopt_implicit=1, fieldopt_test=2, fieldopt_explicit=3
-
+  !-PJK
   logical :: initialized = .false.
 
 contains

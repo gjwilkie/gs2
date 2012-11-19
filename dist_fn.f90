@@ -3247,12 +3247,10 @@ contains
        if (il <= lmax) then
           call set_source
        else
-          fluxfn = 0.0
           source = 0.0
        end if
 
     case (source_option_zero)
-       fluxfn = 0.0
        source = 0.0
 
     case default
@@ -3266,11 +3264,6 @@ contains
 
     fluxfn(ntgrid) = fluxfn(-ntgrid)
     source(ntgrid) = source(-ntgrid)
-
-    !  Zero boundary condition
-    !
-    !fluxfn(ntgrid) = 0.0
-    !source(ntgrid) = 0.0
 
     !  Special source term for totally trapped particles
     !  Needs working on when these particles are included, i.e. g is g, not i...
