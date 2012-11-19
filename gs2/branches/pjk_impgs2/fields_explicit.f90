@@ -609,16 +609,17 @@ contains
        is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        do ig = -ntgrid,ntgrid
-          !v(ig,:,iglo) = spec(is)%tz * spec(is)%zstm * tunits(ik)*code_dt &
-          !     * 1.0/delthet(ig) * abs(gradpar(ig))*vpa(ig,:,iglo)
+          v(ig,:,iglo) = spec(is)%tz * spec(is)%zstm * tunits(ik)*code_dt &
+               * 1.0/delthet(ig) * abs(gradpar(ig))*vpa(ig,:,iglo)
 
           !  Shift delthet by half a grid point to make it symmetrical...
-          if (ig == -ntgrid) then
-             v(ig,:,iglo) = 0.0
-          else
-             v(ig,:,iglo) = spec(is)%tz * spec(is)%zstm * tunits(ik)*code_dt &
-                  * 2.0/(delthet(ig)+delthet(ig-1)) * abs(gradpar(ig))*vpa(ig,:,iglo)
-          end if
+          !  Worse agreement with implicit case, though
+          !if (ig == -ntgrid) then
+          !   v(ig,:,iglo) = 0.0
+          !else
+          !   v(ig,:,iglo) = spec(is)%tz * spec(is)%zstm * tunits(ik)*code_dt &
+          !        * 2.0/(delthet(ig)+delthet(ig-1)) * abs(gradpar(ig))*vpa(ig,:,iglo)
+          !end if
 
           wd(ig,iglo)  = spec(is)%tz * (wdrift(ig,iglo) + wcoriolis(ig,iglo))
        end do
@@ -816,6 +817,8 @@ contains
 
     dt = min(dt0,dtmax)
     dt = max(dt,dtmin)
+
+    deallocate(ymodal,dy)
 
   end subroutine adaptive_dt0
 
