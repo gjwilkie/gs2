@@ -20,6 +20,7 @@ contains
     use le_grids, only: w, wl
     use theta_grid, only: delthet, jacob, ntgrid, Rplot
     use file_utils, only: open_output_file, close_output_file, get_unused_unit
+    use geometry, only: rmaj
     use species, only: spec
 
     implicit none
@@ -335,6 +336,9 @@ contains
           end do
        end do
 
+       ! this is equal and opposite to GS2's 'mach' parameter if the total torodial
+       ! angular momentum (including diamagnetic + ExB) is zero.
+       ! this assumes temp varies radially in GS2 so that T_ref does not vary with radius
        do is = 1, ns
           upar_over_B(is) = 0.
           do ie = 1, nenergy
@@ -342,7 +346,8 @@ contains
                 il = min(ixi, nxi+1-ixi)
                 do ig = 1, ntheta
                    upar_over_B(is) = upar_over_B(is) + hneo(2,ig,ixi,ie,is)*xi(ig,ixi) &
-                        *sqrt(energy(ie))*w(ie)*wl(-ntgrid+ig-1,il)*dl_over_b(ig)/bmag(ig)      
+                        *sqrt(energy(ie))*w(ie)*wl(-ntgrid+ig-1,il)*dl_over_b(ig)/bmag(ig) &
+                        *sqrt(spec(is)%temp)*rmaj
                 end do
              end do
           end do
