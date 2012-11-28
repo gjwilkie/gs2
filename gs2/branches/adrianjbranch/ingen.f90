@@ -1647,7 +1647,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
        write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
        write (report_unit, *)
-       write (report_unit, fmt="('(*) denotes process counts that are from factors of the kx or ky indices separately rather than the combined kx*ky index.')")
+       write (report_unit, fmt="('(*) denotes process counts that are from factors of the combined kx*ky index rather than the ordered kx or ky indices separately.')")
        write (report_unit, fmt="('To use the unbalanced functionality set unbalanced_xxf = .true. or unbalanced_yxf = .true. in the &layouts_knobs namelist in your GS2 ')")
        write (report_unit, fmt="('input file. You can also set the max_unbalanced_xxf and max_unbalanced_yxf flags in the same namelist in the input file to specify the')")
        write (report_unit, fmt="('maximum amount of computational imbalance allowed. These flags specify the maximum imbalance as 1 with no imbalance as 0, so to allow')")
