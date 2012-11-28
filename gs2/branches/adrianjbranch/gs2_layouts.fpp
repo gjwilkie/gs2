@@ -37,7 +37,7 @@ module gs2_layouts
   public :: jf_lo, jf_layout_type
   public :: mj, ij, dj
 
-  public :: init_lorentz_layouts
+  public :: init_lambda_layouts
 ! TT>
 !  public :: lz_lo, lz_layout_type
   public :: lz_lo
@@ -45,7 +45,7 @@ module gs2_layouts
   public :: gidx2lzidx
   public :: gidx2gintidx, gintidx2geidx
 
-  public :: init_ediffuse_layouts
+  public :: init_energy_layouts
 ! TT>
 !  public :: e_lo, e_layout_type
   public :: e_lo
@@ -1586,7 +1586,7 @@ contains
 
 ! TT>
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Lorentz-Ediffuse layouts
+! Lambda-Energy layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine init_le_layouts (ntgrid, naky, ntheta0, nspec)
@@ -1795,10 +1795,10 @@ contains
 ! <TT
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Energy scattering layouts
+! Energy layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine init_ediffuse_layouts &
+  subroutine init_energy_layouts &
        (ntgrid, naky, ntheta0, nlambda, nspec)
     use mp, only: iproc, nproc
 ! TT>
@@ -1845,7 +1845,7 @@ contains
 # endif
 ! <TT
 
-  end subroutine init_ediffuse_layouts
+  end subroutine init_energy_layouts
 
 ! TT>
 # ifdef USE_C_INDEX
@@ -2121,10 +2121,10 @@ contains
   end function ig_local_e
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Lorentz layouts
+! Lambda layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine init_lorentz_layouts &
+  subroutine init_lambda_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
     use mp, only: iproc, nproc
 ! TT>
@@ -2204,7 +2204,7 @@ contains
 # endif
 ! <TT
 
-  end subroutine init_lorentz_layouts
+  end subroutine init_lambda_layouts
 
 ! TT>
 # ifdef USE_C_INDEX

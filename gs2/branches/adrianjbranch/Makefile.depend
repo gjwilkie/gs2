@@ -80,8 +80,10 @@ ffttester_mod = \
 	 job_manage.o \
 	 kt_grids.o \
 	 layouts_type.o \
+	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
+	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -139,8 +141,10 @@ gs2_mod = \
 	 job_manage.o \
 	 kt_grids.o \
 	 layouts_type.o \
+	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
+	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -201,8 +205,10 @@ ingen_mod = \
 	 job_manage.o \
 	 kt_grids.o \
 	 layouts_type.o \
+	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
+	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -263,6 +269,7 @@ ceq.o: \
 collisions.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
+	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
@@ -295,6 +302,7 @@ dist_fn.o: \
 	 gs2_transforms.o \
 	 hyper.o \
 	 kt_grids.o \
+	 le_derivatives.o \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
@@ -476,6 +484,7 @@ gs2_main.o: \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
+	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
 	 gs2_time.o \
@@ -540,9 +549,7 @@ gs2_transforms.o: \
 	 redistribute.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o \
-	 convert.o \
-	 file_utils.o 
+	 constants.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -585,11 +592,13 @@ init_g.o: \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 file_utils.o \
+	 geometry.o \
 	 gs2_layouts.o \
 	 gs2_save.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
 	 le_grids.o \
+	 lowflow.o \
 	 mp.o \
 	 ran.o \
 	 run_parameters.o \
@@ -609,6 +618,15 @@ kt_grids.o: \
 	 text_options.o \
 	 theta_grid.o 
 layouts_type.o: 
+le_derivatives.o: \
+	 collisions.o \
+	 dist_fn_arrays.o \
+	 gs2_layouts.o \
+	 gs2_time.o \
+	 le_grids.o \
+	 redistribute.o \
+	 run_parameters.o \
+	 theta_grid.o 
 le_grids.o: \
 	 constants.o \
 	 file_utils.o \
@@ -624,6 +642,7 @@ leq.o: \
 	 constants.o \
 	 spl.o 
 lowflow.o: \
+	 constants.o \
 	 file_utils.o \
 	 le_grids.o \
 	 mp.o \
@@ -678,8 +697,11 @@ ran.o: \
 	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
+	 gs2_layouts.o \
 	 job_manage.o \
-	 mp.o 
+	 kt_grids.o \
+	 mp.o \
+	 theta_grid.o 
 regress.o: \
 	 regression.o 
 regression.o: 

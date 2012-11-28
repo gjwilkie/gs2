@@ -77,15 +77,16 @@ module le_grids
 
   public :: init_le_grids, finish_le_grids
   public :: read_parameters, wnml_le_grids
-  public :: integrate_species
+  public :: integrate_species, write_mpdist, write_mpdist_le
   public :: energy, anon, al, delal, jend, forbid, dele, wl, w
-  public :: negrid, nlambda, ng2, lmax, integrate_moment, nesub
-  public :: xloc
+  public :: negrid, nlambda, ng2, nxi, lmax, integrate_moment, nesub
+  public :: xloc, sgn, ixi_to_il, ixi_to_isgn, speed, xi
   public :: xx, nterp, new_trap_int, vcut
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
   public :: eint_error, lint_error, trap_error, wdim
-  public :: integrate_kysum, integrate_volume ! MAB
+  public :: integrate_kysum, integrate_volume
   public :: get_flux_vs_theta_vs_vpa
+  public :: lambda_map, energy_map, g2le, init_map
 
   private
 
@@ -115,11 +116,15 @@ module le_grids
   real, dimension (:,:), allocatable, save :: lpe, lpl
   real, dimension (:,:,:,:), allocatable, save :: lpt
 
-  real, dimension (:), allocatable :: energy, w, anon, dele ! (negrid)
+  real, dimension (:), allocatable :: energy, w, anon, dele, speed ! (negrid)
   real, dimension (:), allocatable :: al, delal ! (nlambda)
   real, dimension (:,:), allocatable :: wl ! (nlambda,-ntgrid:ntgrid)
   integer, dimension (:), allocatable :: jend ! (-ntgrid:ntgrid)
   logical, dimension (:,:), allocatable :: forbid ! (-ntgrid:ntgrid,nlambda)
+
+  real, dimension (:,:), allocatable :: xi
+  integer, dimension (:,:), allocatable :: ixi_to_il, ixi_to_isgn
+  integer, dimension (2) :: sgn
 
   integer :: wdim
   integer :: lint_lo, lint_hi, eint_lo, eint_hi
@@ -132,7 +137,7 @@ module le_grids
   integer :: ngauss, negrid, nesuper, nesub
   real :: bouncefuzz, vcut
 
-  integer :: nlambda, ng2, lmax
+  integer :: nlambda, ng2, lmax, nxi
   logical :: accel_x = .false.
   logical :: accel_v = .false.
   logical :: test = .false.
@@ -144,11 +149,18 @@ module le_grids
   logical :: lintinit = .false.
   logical :: eintinit = .false.
   logical :: initialized = .false.
+  logical :: leinit = .false.
+  logical :: lzinit = .false.
+  logical :: einit = .false.
 
   integer :: nmax = 500
   integer :: nterp = 100
 
   real :: wgt_fac = 10.0
+
+  type (redist_type), save :: lambda_map
+  type (redist_type), save :: energy_map
+  type (redist_type), save :: g2le
 
 contains
 
@@ -216,7 +228,7 @@ contains
     use egrid, only: zeroes, x0, init_egrid
     use theta_grid, only: ntgrid
     implicit none
-    integer :: il, is, ie, ipt, isgn, tsize
+    integer :: ig, il, is, ie, ipt, isgn, tsize
 
     tsize = 2*nterp-1
 
@@ -226,6 +238,7 @@ contains
     call broadcast (nesub)
     call broadcast (vcut)
     call broadcast (bouncefuzz)
+    call broadcast (nxi)
     call broadcast (nlambda)
     call broadcast (ng2)
     call broadcast (lmax)
@@ -237,7 +250,7 @@ contains
     call broadcast (nterp)
 
     if (.not. proc0) then
-       allocate (energy(negrid), w(negrid), anon(negrid))
+       allocate (energy(negrid), w(negrid), anon(negrid), speed(negrid))
        allocate (dele(negrid))
        allocate (al(nlambda), delal(nlambda))
        allocate (wl(-ntgrid:ntgrid,nlambda))
@@ -246,6 +259,9 @@ contains
        allocate (xx(ng2))
        allocate (lgrnge(-ntgrid:ntgrid,nlambda,tsize,2))
        allocate (xloc(-ntgrid:ntgrid,tsize))
+       allocate (xi(-ntgrid:ntgrid, 2*nlambda))
+       allocate (ixi_to_il(-ntgrid:ntgrid, 2*nlambda))
+       allocate (ixi_to_isgn(-ntgrid:ntgrid, 2*nlambda))
     end if
 
     call init_egrid (negrid)
@@ -258,6 +274,7 @@ contains
     call broadcast (jend)
  
     call broadcast (energy)
+    call broadcast (speed)
     call broadcast (dele)
     call broadcast (w)
     call broadcast (anon)
@@ -276,6 +293,13 @@ contains
        end do
     end do
 
+    do ig = -ntgrid, ntgrid
+       call broadcast (xi(ig,:))
+       call broadcast (ixi_to_il(ig,:))
+       call broadcast (ixi_to_isgn(ig,:))
+    end do
+    call broadcast (sgn)
+
   end subroutine broadcast_results
 
   subroutine read_parameters
@@ -291,7 +315,7 @@ contains
     nesuper = 2
     ngauss = 5
     negrid = -10
-    vcut = 4.0
+    vcut = 2.5
     bouncefuzz = 1e-5
     in_file=input_unit_exist("le_grids_knobs", exist)
     if (exist) read (unit=in_file, nml=le_grids_knobs)
@@ -302,7 +326,7 @@ contains
 
 ! If user chose negrid, assume nesuper makes sense and check nesub if necessary
     else 
-       nesuper = min(negrid/16+1, 3)
+       nesuper = min(negrid/10+1, 4)
        nesub = negrid - nesuper
     endif
 
@@ -1078,10 +1102,9 @@ contains
     complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
 !    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     complex, dimension (lo%llim_proc:), intent (out) :: total
-    integer :: ixi, nxi, ie, il, ile, is, it, ik, ig
+    integer :: ixi, ie, il, ile, is, it, ik, ig
     real :: fac
 
-    nxi = max(2*nlambda-1,2*ng2)
     total = 0.0
     do ile = lo%llim_proc, lo%ulim_proc
        ig = ig_idx (lo,ile)
@@ -1090,9 +1113,8 @@ contains
        is = is_idx (lo,ile)
        do ie=1, negrid
           do ixi=1, nxi
-             il = min(ixi, nxi+1-ixi)
+             il = ixi_to_il(ig,ixi)
              fac = w(ie) * wl(ig,il)
-!             total(ig,it,ik,is) = total(ig,it,ik,is) + fac * g(ixi,ie,ile)
              total(ile) = total(ile) + fac * g(ixi,ie,ile)
           end do
        end do
@@ -1445,10 +1467,11 @@ contains
     call init_theta_grid
     call init_species
 
-    allocate (energy(negrid), w(negrid), anon(negrid), dele(negrid))
+    allocate (energy(negrid), w(negrid), anon(negrid), dele(negrid), speed(negrid))
 
     call setvgrid (vcut, negrid, energy, w, nesub)
-
+    speed = sqrt(energy)
+    
     anon = 1.0
 
     tsize = 2*nterp-1
@@ -1465,6 +1488,7 @@ contains
        nlambda = ng2
        lmax = nlambda
     end if
+    nxi = max(2*nlambda-1, 2*ng2)
     allocate (al(nlambda), delal(nlambda))
     allocate (wl(-ntgrid:ntgrid,nlambda))
     allocate (jend(-ntgrid:ntgrid))
@@ -1522,7 +1546,10 @@ contains
     forbid = .false.
 
 !    if (eps <= epsilon(0.0)) return
-    if (.not. trapped_particles .or. eps <= epsilon(0.0)) return
+    if (.not. trapped_particles .or. eps <= epsilon(0.0)) then
+       call xigridset
+       return
+    end if
 
 ! pick integration method (new=high-order interp, old=finite difference)
     if (new_trap_int) then
@@ -1716,9 +1743,75 @@ contains
        end do
     end do
 
+    call xigridset
+
     eflag = .false.
 
   end subroutine lgridset
+
+  subroutine xigridset
+
+    use theta_grid, only: ntgrid, bmag
+
+    implicit none
+
+    integer :: ig, je, ixi
+
+    if (.not. allocated(xi)) allocate (xi(-ntgrid:ntgrid,2*nlambda))
+    if (.not. allocated(ixi_to_il)) allocate (ixi_to_il(-ntgrid:ntgrid,2*nlambda))
+    if (.not. allocated(ixi_to_isgn)) allocate (ixi_to_isgn(-ntgrid:ntgrid,2*nlambda))
+
+    ! define array 'sgn' that returns sign of vpa associated with isgn=1,2
+    sgn(1) = 1
+    sgn(2) = -1
+
+    ! xi is vpa / v and goes from 1 --> -1
+    xi = 0.0
+    do ig = -ntgrid, ntgrid
+       xi(ig,:jend(ig)) = sqrt(max(1.0 - al(:jend(ig))*spread(bmag(ig),1,jend(ig)),0.0))
+       xi(ig,jend(ig)+1:2*jend(ig)-1) = -xi(ig,jend(ig)-1:1:-1)
+!       do ixi = 1, nxi
+!          write (*,*) 'xi', xi(ig,ixi)
+!       end do
+    end do
+
+!    xi = max(xi,0.0)
+!    xi = sqrt(xi)
+    
+    ! get mapping from ixi (which runs between 1 and 2*nlambda) and il (runs between 1 and nlambda)
+    do ig = -ntgrid, ntgrid
+       je = jend(ig)
+       ! if no trapped particles
+       if (je == 0) then
+          do ixi = 1, 2*nlambda
+             if (ixi > nlambda) then
+                ixi_to_isgn(ig,ixi) = 2
+                ixi_to_il(ig,ixi) = 2*nlambda - ixi + 1
+             else
+                ixi_to_isgn(ig,ixi) = 1
+                ixi_to_il(ig,ixi) = ixi
+             end if
+          end do
+       else
+          do ixi = 1, 2*nlambda
+             if (ixi >= nlambda + je + 1) then
+                ixi_to_isgn(ig,ixi) = 2
+                ixi_to_il(ig,ixi) = 2*nlambda + je + 1 - ixi
+             else if (ixi >= 2*je) then
+                ixi_to_isgn(ig,ixi) = 1
+                ixi_to_il(ig,ixi) = ixi - je
+             else if (ixi >= je) then
+                ixi_to_isgn(ig,ixi) = 2
+                ixi_to_il(ig,ixi) = 2*je - ixi
+             else
+                ixi_to_isgn(ig,ixi) = 1
+                ixi_to_il(ig,ixi) = ixi
+             end if
+          end do
+       end if
+    end do
+
+  end subroutine xigridset
 
   subroutine lagrange_coefs (ig, nodes, lfac, xloc)
     
@@ -2117,6 +2210,639 @@ contains
 
   end subroutine get_hermite_polynomials_1d
 
+  subroutine init_map (use_lz_layout, use_e_layout, use_le_layout, test)
+
+    use mp, only: finish_mp, proc0
+    use redistribute, only: report_map_property
+
+    implicit none
+
+    logical, intent (in) :: use_lz_layout, use_e_layout, use_le_layout, test
+
+    ! initialize maps from g_lo to lz_lo, e_lo, and/or le_lo
+
+    if (use_lz_layout) then
+       ! init_lambda_layout is called in redistribute
+       call init_lambda_redistribute
+       if (test) then
+          if (proc0) print *, '=== Lambda map property ==='
+          call report_map_property (lambda_map)
+       end if
+    end if
+
+    if (use_e_layout) then
+       ! init_energy_layout is called in redistribute
+       call init_energy_redistribute
+       if (test) then
+          if (proc0) print *, '=== Energy map property ==='
+          call report_map_property (energy_map)
+       end if
+    end if
+
+    if (use_le_layout) then
+       call init_g2le_redistribute
+       if (test) call check_g2le
+    end if
+    
+    if (test) then
+       if (proc0) print *, 'init_map done'
+!!$    call finish_mp
+!!$    stop
+    end if
+
+  end subroutine init_map
+
+  subroutine init_g2le_redistribute
+
+    use mp, only: nproc
+    use species, only: nspec
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: init_le_layouts
+    use gs2_layouts, only: g_lo, le_lo
+    use gs2_layouts, only: idx_local, proc_id
+    use gs2_layouts, only: ik_idx, it_idx, ie_idx, is_idx, il_idx, idx
+    use redistribute, only: index_list_type, init_redist, delete_list
+
+    implicit none
+
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
+    integer, dimension (0:nproc-1) :: nn_to, nn_from
+    integer, dimension (3) :: from_low, from_high
+    integer, dimension (3) :: to_high
+    integer :: to_low
+    integer :: ig, isign, iglo, il, ile
+    integer :: ik, it, ie, is, ixi
+    integer :: n, ip, je
+
+    if (leinit) return
+
+    call init_le_layouts (ntgrid, naky, ntheta0, nspec)
+
+    ! count number of elements to be redistributed to/from each processor
+    nn_to = 0
+    nn_from = 0
+    do iglo = g_lo%llim_world, g_lo%ulim_world
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do ig = -ntgrid, ntgrid
+          ile = idx (le_lo, ig, ik, it, is)
+          if (idx_local(g_lo,iglo)) nn_from(proc_id(le_lo,ile)) = nn_from(proc_id(le_lo,ile)) + 2
+          if (idx_local(le_lo,ile)) nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 2
+       end do
+    end do
+
+    do ip = 0, nproc-1
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first (nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+          allocate (from_list(ip)%third (nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first (nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+          allocate (to_list(ip)%third (nn_to(ip)))
+       end if
+    end do
+
+    ! get local indices of elements distributed to/from other processors
+    nn_to = 0
+    nn_from = 0
+    do iglo = g_lo%llim_world, g_lo%ulim_world
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isign = 1, 2
+          do ig = -ntgrid, ntgrid
+             il = il_idx(g_lo,iglo)
+             je = jend(ig)
+             if (je == 0) then
+                if (isign == 2) then
+                   il = 2*g_lo%nlambda+1 - il
+                end if
+             else
+                if (il == je) then
+                   if (isign == 1) il = 2*je  ! throw this info away
+                else if (il > je) then 
+                   if (isign == 1) il = il + je
+                   if (isign == 2) il = 2*g_lo%nlambda + 1 - il + je
+                else
+                   if (isign == 2) il = 2*je - il !+ 1
+                end if
+             end if
+             ile = idx (le_lo, ig, ik, it, is)
+             if (idx_local(g_lo,iglo)) then
+                ip = proc_id(le_lo,ile)
+                n = nn_from(ip) + 1
+                nn_from(ip) = n
+                from_list(ip)%first(n)  = ig
+                from_list(ip)%second(n) = isign
+                from_list(ip)%third(n)  = iglo
+             end if
+             if (idx_local(le_lo,ile)) then
+                ip = proc_id(g_lo,iglo)
+                n = nn_to(ip) + 1
+                nn_to(ip) = n
+                to_list(ip)%first(n)  = il
+                to_list(ip)%second(n) = ie
+                to_list(ip)%third(n)  = ile
+             end if
+          end do
+       end do
+    end do
+
+    from_low (1) = -ntgrid
+    from_low (2) = 1
+    from_low (3) = g_lo%llim_proc
+
+    from_high(1) = ntgrid
+    from_high(2) = 2
+    from_high(3) = g_lo%ulim_alloc
+
+    to_low = le_lo%llim_proc
+
+    to_high(1) = max(2*nlambda, 2*ng2+1)
+    to_high(2) = negrid + 1  ! TT: just followed convention with +1.
+    ! TT: It may be good to avoid bank conflict.
+    to_high(3) = le_lo%ulim_alloc
+
+    call init_redist (g2le, 'c', to_low, to_high, to_list, from_low, from_high, from_list)
+
+    call delete_list (to_list)
+    call delete_list (from_list)
+
+    leinit = .true.
+
+  end subroutine init_g2le_redistribute
+
+  subroutine check_g2le
+
+    use file_utils, only: error_unit
+    use mp, only: finish_mp, iproc, nproc, proc0
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo, le_lo
+    use gs2_layouts, only: ig_idx, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use redistribute, only: gather, scatter, report_map_property
+
+    implicit none
+
+    integer :: iglo, ile, ig, isgn, ik, it, il, ie, is, ierr
+    integer :: ip, ixi, je
+    complex, dimension (:,:,:), allocatable :: gtmp, letmp
+
+    if (proc0) then
+       ierr = error_unit()
+    else
+       ierr = 6
+    end if
+
+    ! report the map property
+    if (proc0) print *, '=== g2le map property ==='
+    call report_map_property (g2le)
+
+    allocate (gtmp(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate (letmp(nlambda*2+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+
+    ! gather check
+    gtmp = 0.0
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             gtmp(ig,isgn,iglo) = rule(ig,isgn,ik,it,il,ie,is)
+          end do
+       end do
+    end do
+    call gather (g2le, gtmp, letmp)
+    do ile = le_lo%llim_proc, le_lo%ulim_proc
+       ig = ig_idx(le_lo,ile)
+       je = jend(ig)
+       ik = ik_idx(le_lo,ile)
+       it = it_idx(le_lo,ile)
+       is = is_idx(le_lo,ile)
+       do ixi = 1, 2*nlambda
+          isgn = ixi_to_isgn(ig,ixi)
+          il = ixi_to_il(ig,ixi)
+          if (int(real(letmp(ixi,ie,ile))) /= rule(ig,isgn,ik,it,il,ie,is)) &
+               write (ierr,'(a,8i6)') 'ERROR: gather by g2le broken!', iproc
+       end do
+
+    end do
+    if (proc0) write (ierr,'(a)') 'g2le gather check done'
+
+    ! scatter check
+    gtmp = 0.0
+    call scatter (g2le, letmp, gtmp)
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             if (gtmp(ig,isgn,iglo) /= rule(ig,isgn,ik,it,il,ie,is)) &
+                  write (ierr,'(a,i6)') 'ERROR: scatter by g2le broken!', iproc
+          end do
+       end do
+    end do
+    if (proc0) write (ierr,'(a)') 'g2le scatter check done'
+
+    deallocate (gtmp,letmp)
+
+!    call finish_mp
+!    stop
+
+  contains
+
+    function rule (ig, isgn, ik, it, il, ie, is)
+      integer, intent (in) :: ig, isgn, ik, it, il, ie, is
+      integer :: rule
+      rule = ig + isgn + ik + it + il + ie + is  ! make whatever you want
+    end function rule
+
+  end subroutine check_g2le
+
+  subroutine init_lambda_redistribute
+
+    use mp, only: nproc
+    use species, only: nspec
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: init_lambda_layouts
+    use gs2_layouts, only: g_lo, lz_lo
+    use gs2_layouts, only: idx_local, proc_id
+    use gs2_layouts, only: ik_idx, it_idx, ie_idx, is_idx, il_idx, idx
+    use redistribute, only: index_list_type, init_redist, delete_list
+
+    implicit none
+
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
+    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    integer, dimension(3) :: from_low, from_high
+    integer, dimension(2) :: to_high
+    integer :: to_low
+    integer :: ig, isign, iglo, il, ilz
+    integer :: ik, it, ie, is, je
+    integer :: n, ip
+
+    if (lzinit) return
+
+    call init_lambda_layouts &
+         (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
+
+    ! count number of elements to be redistributed to/from each processor
+    nn_to = 0
+    nn_from = 0
+    do iglo = g_lo%llim_world, g_lo%ulim_world
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isign = 1, 2
+          do ig = -ntgrid, ntgrid
+             ilz = idx(lz_lo, ig, ik, it, ie, is)
+             if (idx_local(g_lo,iglo)) &
+                  nn_from(proc_id(lz_lo,ilz)) = nn_from(proc_id(lz_lo,ilz)) + 1
+             if (idx_local(lz_lo,ilz)) &
+                  nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
+          end do
+       end do
+    end do
+
+    do ip = 0, nproc-1
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first(nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+          allocate (from_list(ip)%third(nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first(nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+       end if
+    end do
+
+    ! get local indices of elements distributed to/from other processors
+    nn_to = 0
+    nn_from = 0
+    do iglo = g_lo%llim_world, g_lo%ulim_world
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isign = 1, 2
+          do ig = -ntgrid, ntgrid
+             je = jend(ig)
+             il = il_idx(g_lo,iglo)
+             if (je == 0) then
+                if (isign == 2) then
+                   il = 2*g_lo%nlambda+1 - il
+                end if
+             else
+                if (il == je) then
+                   if (isign == 1) il = 2*je  ! throw this info away
+                else if (il > je) then 
+                   if (isign == 1) il = il + je
+                   if (isign == 2) il = 2*g_lo%nlambda + 1 - il + je
+                else
+                   if (isign == 2) il = 2*je - il !+ 1
+                end if
+             end if
+             ilz = idx(lz_lo, ig, ik, it, ie, is)
+             if (idx_local(g_lo,iglo)) then
+                ip = proc_id(lz_lo,ilz)
+                n = nn_from(ip) + 1
+                nn_from(ip) = n
+                from_list(ip)%first(n) = ig
+                from_list(ip)%second(n) = isign
+                from_list(ip)%third(n) = iglo
+             end if
+             if (idx_local(lz_lo,ilz)) then
+                ip = proc_id(g_lo,iglo)
+                n = nn_to(ip) + 1
+                nn_to(ip) = n
+                to_list(ip)%first(n) = il
+                to_list(ip)%second(n) = ilz
+             end if
+          end do
+       end do
+    end do
+
+    from_low (1) = -ntgrid
+    from_low (2) = 1
+    from_low (3) = g_lo%llim_proc
+
+    to_low = lz_lo%llim_proc
+
+    to_high(1) = max(2*nlambda, 2*ng2+1)
+    to_high(2) = lz_lo%ulim_alloc
+
+    from_high(1) = ntgrid
+    from_high(2) = 2
+    from_high(3) = g_lo%ulim_alloc
+    call init_redist (lambda_map, 'c', to_low, to_high, to_list, &
+         from_low, from_high, from_list)
+    call delete_list (to_list)
+    call delete_list (from_list)
+
+    lzinit = .true.
+
+  end subroutine init_lambda_redistribute
+
+  subroutine init_energy_redistribute
+
+    use mp, only: nproc
+    use species, only: nspec
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: init_energy_layouts
+    use gs2_layouts, only: g_lo, e_lo, ie_idx, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: idx_local, proc_id, idx
+    use redistribute, only: index_list_type, init_redist, delete_list
+
+    implicit none
+
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
+    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    integer, dimension(3) :: from_low, from_high
+    integer, dimension(2) :: to_high
+    integer :: to_low
+    integer :: ig, isign, iglo, ik, it, il, ie, is, ielo
+    integer :: n, ip
+
+    if (einit) return
+    
+!DD, March 2009: Nullify pointers on initialisation, so do not pass association
+!                test when not allocated. 
+!  Problem arose on Pascali compiler (York) with  to_list(ip)%third and fourth
+    do ip=0, (nproc-1)
+       nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
+    end do
+!<DD
+	
+    call init_energy_layouts &
+         (ntgrid, naky, ntheta0, nlambda, nspec)
+
+    ! count number of elements to be redistributed to/from each processor
+    nn_to = 0
+    nn_from = 0
+    do iglo = g_lo%llim_world, g_lo%ulim_world
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isign = 1, 2
+          do ig = -ntgrid, ntgrid
+             ielo = idx(e_lo,ig,isign,ik,it,il,is)
+             if (idx_local(g_lo,iglo)) &
+                  nn_from(proc_id(e_lo,ielo)) = nn_from(proc_id(e_lo,ielo)) + 1
+             if (idx_local(e_lo,ielo)) &
+                  nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
+          end do
+       end do
+    end do
+
+    do ip = 0, nproc-1
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first(nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+          allocate (from_list(ip)%third(nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first(nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+       end if
+    end do
+
+    ! get local indices of elements distributed to/from other processors
+    nn_to = 0
+    nn_from = 0
+    do iglo = g_lo%llim_world, g_lo%ulim_world
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       do isign = 1, 2
+          do ig = -ntgrid, ntgrid
+             ielo = idx(e_lo,ig,isign,ik,it,il,is)
+
+             if (idx_local(g_lo,iglo)) then
+                ip = proc_id(e_lo,ielo)
+                n = nn_from(ip) + 1
+                nn_from(ip) = n
+                from_list(ip)%first(n) = ig
+                from_list(ip)%second(n) = isign
+                from_list(ip)%third(n) = iglo
+             end if
+             if (idx_local(e_lo,ielo)) then
+                ip = proc_id(g_lo,iglo)
+                n = nn_to(ip) + 1
+                nn_to(ip) = n
+                to_list(ip)%first(n) = ie
+                to_list(ip)%second(n) = ielo
+             end if
+          end do
+       end do
+    end do
+
+    from_low (1) = -ntgrid
+    from_low (2) = 1
+    from_low (3) = g_lo%llim_proc
+
+    to_low = e_lo%llim_proc
+
+    to_high(1) = negrid+1
+    to_high(2) = e_lo%ulim_alloc
+
+    from_high(1) = ntgrid
+    from_high(2) = 2
+    from_high(3) = g_lo%ulim_alloc
+    
+    call init_redist (energy_map, 'c', to_low, to_high, to_list, &
+         from_low, from_high, from_list)
+
+    call delete_list (to_list)
+    call delete_list (from_list)
+
+    einit = .true.
+
+  end subroutine init_energy_redistribute
+
+
+  ! subroutine used for testing
+  ! takes as input an array using g_lo and
+  ! writes it to a .distmp output file
+  subroutine write_mpdist (dist, extension, last)
+
+    use mp, only: proc0, send, receive
+    use file_utils, only: open_output_file, close_output_file
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use gs2_layouts, only: ie_idx, il_idx, idx_local, proc_id
+    use theta_grid, only: ntgrid, bmag, theta
+
+    implicit none
+
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: dist
+!    real, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: dist
+    character (*), intent (in) :: extension
+    logical, intent (in), optional :: last
+
+    integer :: iglo, ik, it, is, ie, il, ig
+    integer, save :: unit
+    logical :: done = .false.
+    real :: vpa1
+    complex, dimension (2) :: gtmp
+!    real, dimension (2) :: gtmp
+
+     if (.not. done) then
+!        if (proc0) call open_output_file (unit, ".distmp")
+        if (proc0) call open_output_file (unit, trim(extension))
+        do iglo=g_lo%llim_world, g_lo%ulim_world
+           ik = ik_idx(g_lo, iglo)
+           it = it_idx(g_lo, iglo)
+           is = is_idx(g_lo, iglo)
+           ie = ie_idx(g_lo, iglo)
+           il = il_idx(g_lo, iglo)
+           do ig = -ntgrid, ntgrid
+              if (idx_local (g_lo, ik, it, il, ie, is)) then
+                 if (proc0) then
+                    gtmp = dist(ig,:,iglo)
+                 else
+                    call send (dist(ig,:,iglo), 0)
+                 end if
+              else if (proc0) then
+                 call receive (gtmp, proc_id(g_lo, iglo))
+              end if
+              if (proc0) then
+                 if (.not. forbid(ig,il)) then
+                    vpa1 = sqrt(energy(ie)*max(0.0,1.0-al(il)*bmag(ig)))
+                    write (unit,'(7e14.5)') theta(ig), vpa1, energy(ie), &
+                         real(gtmp(1)), aimag(gtmp(1)), real(gtmp(2)), aimag(gtmp(2))
+!                    write (unit,'(5e14.5)') theta(ig), vpa1, energy(ie), gtmp(1), gtmp(2)
+                 end if
+              end if
+           end do
+           if (proc0) then
+              write (unit,*)
+              write (unit,*)
+           end if
+        end do
+        if (proc0) call close_output_file (unit)
+        if (present(last)) done = .true.
+     end if
+
+   end subroutine write_mpdist
+
+  ! subroutine used for testing
+  ! takes as input an array using le_lo and
+  ! writes it to a .distmp output file
+  subroutine write_mpdist_le (dist, extension, last)
+
+    use mp, only: proc0, send, receive
+    use file_utils, only: open_output_file, close_output_file
+    use gs2_layouts, only: le_lo, ig_idx, ik_idx, it_idx, is_idx
+    use gs2_layouts, only: idx_local, proc_id
+    use theta_grid, only: ntgrid, bmag, theta
+
+    implicit none
+
+    complex, dimension (:,:,le_lo%llim_proc:), intent (in) :: dist
+!    real, dimension (:,:,le_lo%llim_proc:), intent (in) :: dist
+    character (*), intent (in) :: extension
+    logical, intent (in), optional :: last
+
+    integer :: ile, ixi, nxi, ik, it, is, ie, il, ig, isgn
+    integer, save :: unit
+    logical :: done = .false.
+    real :: vpa1
+    complex :: gtmp
+!    real :: gtmp
+
+     if (.not. done) then
+        if (proc0) call open_output_file (unit, trim(extension))
+        nxi = max(2*nlambda-1, 2*ng2)
+        do ile=le_lo%llim_world, le_lo%ulim_world
+           ig = ig_idx(le_lo, ile)
+           ik = ik_idx(le_lo, ile)
+           it = it_idx(le_lo, ile)
+           is = is_idx(le_lo, ile)
+           do ie = 1, negrid
+              do ixi = 1, nxi
+                 il = ixi_to_il(ig,ixi)
+                 isgn = ixi_to_isgn(ig,ixi)
+                 if (idx_local (le_lo, ig, ik, it, is)) then
+                    if (proc0) then
+                       gtmp = dist(ixi,ie,ile)
+                    else
+                       call send (dist(ixi,ie,ile), 0)
+                    end if
+                 else if (proc0) then
+                    call receive (gtmp, proc_id(le_lo, ile))
+                 end if
+                 if (proc0) then
+                    if (.not. forbid(ig,il)) then
+                       vpa1 = sqrt(energy(ie)*max(0.0,1.0-al(il)*bmag(ig)))
+                       write (unit,'(5e14.5)') theta(ig), sgn(isgn)*vpa1, energy(ie), &
+                            real(gtmp), aimag(gtmp)
+!                    write (unit,'(5e14.5)') theta(ig), vpa1, energy(ie), gtmp(1), gtmp(2)
+                    end if
+                 end if
+              end do
+           end do
+        end do
+        if (proc0) call close_output_file (unit)
+        if (present(last)) done = .true.
+     end if
+
+   end subroutine write_mpdist_le
+
   subroutine finish_le_grids
 
     use egrid, only: zeroes
@@ -2137,6 +2863,9 @@ contains
     if (allocated(wlmod)) deallocate (wlmod)
     if (allocated(wmod)) deallocate (wmod)
     if (allocated(wtmod)) deallocate (wtmod)
+    if (allocated(xi)) deallocate (xi)
+    if (allocated(ixi_to_il)) deallocate (ixi_to_il)
+    if (allocated(ixi_to_isgn)) deallocate (ixi_to_isgn)
 
     accel_x = .false. ; accel_v = .false.
     test = .false. ; trapped_particles = .true.
