@@ -1,3 +1,7 @@
+! Modifications for optimised local copy in c_redist_22 and c_redist_32 
+! (and their inverse routines):
+! (c) The Numerical Algorithms Group (NAG) Ltd, 2012
+! on behalf of EPSRC for the HECToR project
 module redistribute
 !
 ! Redistribute distributed (integer, real, complex or logical) 
@@ -451,6 +455,12 @@ contains
     complex, dimension (r%to_low(1):, &
                         r%to_low(2):), intent (in out) :: to_here
 
+!    complex, dimension (:,:), allocatable :: to_here_temp
+
+    integer :: i
+
+!    allocate(to_here_temp(lbound(to_here,1):ubound(to_here,1),&
+!                          lbound(to_here,2):ubound(to_here,2)))
 
     ! redistribute from local processor to local processor
     ! The flag opt_local_copy is set by the user in the input 
@@ -462,6 +472,16 @@ contains
        ! c_redist_22_new_copy is the new local copy functionality where 
        ! indirect addressing has largely been removed
        call c_redist_22_new_copy(r, from_here, to_here)
+
+!       do i = 1, r%from(iproc)%nn
+!          if(to_here(r%to(iproc)%k(i),&
+!               r%to(iproc)%l(i)) .ne. &
+!               to_here_temp(r%to(iproc)%k(i), &
+!               r%to(iproc)%l(i))) then
+!             write(*,*) 'mismatch c_redist_22 iproc:',iproc,'i',i
+!          end if
+!       end do
+
     else
        ! c_redist_22_old_copy is the original local copy functionality
        call c_redist_22_old_copy(r, from_here, to_here)
@@ -470,6 +490,9 @@ contains
     ! c_redist_22_mpi_copy contains all the remote to local 
     ! copy functionality
     call c_redist_22_mpi_copy(r, from_here, to_here)
+
+!   deallocate(to_here_temp)
+
 
   end subroutine c_redist_22
 
@@ -634,16 +657,31 @@ contains
     complex, dimension (r%from_low(1):, &
                         r%from_low(2):), intent (in out) :: to_here
 
-    integer, dimension (r%from(iproc)%nn,4) :: old_index, new_index
 
-    integer :: i, idp, ipto, ipfrom, iadp
-    integer :: j,k,t2,t1,f2,f1,fhigh,thigh
+
+!    complex, dimension (:,:), allocatable :: to_here_temp
+
+!    integer :: i
+
+!    allocate(to_here_temp(lbound(to_here,1):ubound(to_here,1),&
+!                          lbound(to_here,2):ubound(to_here,2)))
 
     ! redistribute from local processor to local processor
     if(opt_local_copy) then
        ! c_redist_22_inv_new_copy is the new local copy functionality where 
        ! indirect addressing has largely been removed
        call c_redist_22_inv_new_copy(r, from_here, to_here)
+
+!       do i = 1, r%to(iproc)%nn
+!          if(to_here(r%from(iproc)%k(i),&
+!               r%from(iproc)%l(i)) .ne. &
+!               to_here_temp(r%from(iproc)%k(i), &
+!               r%from(iproc)%l(i))) then
+!             write(*,*) 'mismatch c_redist_22_inv iproc:',iproc,'i',i
+!          end if
+!       end do
+
+
     else
        ! c_redist_22_inv_old_copy is the original local copy functionality
        call c_redist_22_inv_old_copy(r, from_here, to_here)
@@ -652,6 +690,8 @@ contains
     ! c_redist_22_inv_mpi_copy contains all the remote to local 
     ! copy functionality
     call c_redist_22_inv_mpi_copy(r, from_here, to_here)
+
+!    deallocate(to_here_temp)
 
   end subroutine c_redist_22_inv
 
@@ -821,9 +861,14 @@ contains
     complex, dimension (r%to_low(1):, &
                         r%to_low(2):), intent (in out) :: to_here
 
+    complex, dimension (:,:), allocatable :: to_here_temp
+
     integer, save :: optimised_choice = 0
     real :: time_optimised_loop_1(2), time_optimised_loop_2(2)
     integer :: i
+
+!    allocate(to_here_temp(lbound(to_here,1):ubound(to_here,1),&
+!                          lbound(to_here,2):ubound(to_here,2)))
 
 !AJ redistribute from local processor to local processor
 !AJ The flag opt_local_copy is set by the user in the input 
@@ -849,14 +894,34 @@ contains
 !AJ three rather than one to deal ensure that we collect enough timing 
 !AJ data.
        if(optimised_choice .eq. 0) then
-          call c_redist_32_new_copy(r, from_here, to_here)
+
+
+!    do i = 1, r%from(iproc)%nn
+!       if(to_here(r%to(iproc)%k(i),&
+!            r%to(iproc)%l(i)) .ne. &
+!            to_here_temp(r%to(iproc)%k(i), &
+!            r%to(iproc)%l(i))) then
+!          write(*,*) 'mismatch c_redist_32 iproc:',iproc,'i',i
+!       end if
+!    end do
+
+
           call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
           do i= 1,3 
              call c_redist_32_new_copy(r, from_here, to_here)
           end do
           call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
 
-          call c_redist_32_new_opt_copy(r, from_here, to_here)
+!    do i = 1, r%from(iproc)%nn
+!       if(to_here(r%to(iproc)%k(i),&
+!            r%to(iproc)%l(i)) .ne. &
+!            to_here_temp(r%to(iproc)%k(i), &
+!            r%to(iproc)%l(i))) then
+!          write(*,*) 'mismatch c_redist_32 iproc:',iproc,'i',i
+!       end if
+!    end do
+
+
           call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
           do i = 1,3
              call c_redist_32_new_opt_copy(r, from_here, to_here)
@@ -872,12 +937,15 @@ contains
 !AJ This else is encountered once the optimised auto-tuning choice has 
 !AJ been calculated above.
        else
+
           if(optimised_choice .eq. 1) then
              call c_redist_32_new_copy(r, from_here, to_here)
           else
              call c_redist_32_new_opt_copy(r, from_here, to_here)
           end if
+
        end if
+
 !AJ This else is encountered when the optimised local copy functionality is 
 !AJ not enabled.
     else
@@ -885,6 +953,8 @@ contains
        call c_redist_32_old_copy(r, from_here, to_here)
     end if
     
+!    deallocate(to_here_temp)
+
 !AJ c_redist_32_mpi_copy contains all the remote to local 
 !AJ copy functionality
     call c_redist_32_mpi_copy(r, from_here, to_here)
@@ -1303,9 +1373,15 @@ contains
                         r%from_low(2):, &
                         r%from_low(3):), intent (in out) :: to_here
 
+    complex, dimension (:,:,:), allocatable :: to_here_temp
+
     integer, save :: optimised_choice = 0
     real :: time_optimised_loop_1(2), time_optimised_loop_2(2)
     integer :: i
+
+!    allocate(to_here_temp(lbound(to_here,1):ubound(to_here,1),&
+!                          lbound(to_here,2):ubound(to_here,2),&
+!                          lbound(to_here,3):ubound(to_here,3)))
 
 !AJ redistribute from local processor to local processor
 !AJ The flag opt_local_copy is set by the user in the input 
@@ -1331,14 +1407,36 @@ contains
 !AJ three rather than one to deal ensure that we collect enough timing 
 !AJ data.
        if(optimised_choice .eq. 0) then
-          call c_redist_32_inv_new_copy(r, from_here, to_here)
+
+!          call c_redist_32_inv_new_copy(r, from_here, to_here_temp)
+
+!       do i = 1, r%to(iproc)%nn
+!          if(to_here(r%from(iproc)%k(i),&
+!               r%from(iproc)%l(i),r%from(iproc)%m(i)) .ne. &
+!               to_here_temp(r%from(iproc)%k(i), &
+!               r%from(iproc)%l(i),r%from(iproc)%m(i))) then
+!             write(*,*) 'mismatch c_redist_32_inv 1 iproc:',iproc,'i',i
+!          end if
+!       end do
+
+
           call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
           do i= 1,3
              call c_redist_32_inv_new_copy(r, from_here, to_here)
           end do
           call time_message(.false.,time_optimised_loop_1,' Optimised Loop 1')
 
-          call c_redist_32_inv_new_opt_copy(r, from_here, to_here)
+!          call c_redist_32_inv_new_opt_copy(r, from_here, to_here_temp)
+
+!       do i = 1, r%to(iproc)%nn
+!          if(to_here(r%from(iproc)%k(i),&
+!               r%from(iproc)%l(i),r%from(iproc)%m(i)) .ne. &
+!               to_here_temp(r%from(iproc)%k(i), &
+!               r%from(iproc)%l(i),r%from(iproc)%m(i))) then
+!             write(*,*) 'mismatch c_redist_32_inv 2 iproc:',iproc,'i',i
+!          end if
+!       end do
+
           call time_message(.false.,time_optimised_loop_2,' Optimised Loop 2')
           do i = 1,3
              call c_redist_32_inv_new_opt_copy(r, from_here, to_here)
@@ -1362,6 +1460,7 @@ contains
              call c_redist_32_inv_new_opt_copy(r, from_here, to_here)       
           end if
        end if
+
 !AJ This else is encountered when the optimised local copy functionality is 
 !AJ not enabled.
     else
@@ -1372,6 +1471,8 @@ contains
 !AJ c_redist_32_inv_mpi_copy contains all the remote to local 
 !AJ copy functionality
     call c_redist_32_inv_mpi_copy(r, from_here, to_here)
+
+!    deallocate(to_here_temp)
 
   end subroutine c_redist_32_inv
 
