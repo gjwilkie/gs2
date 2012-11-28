@@ -957,7 +957,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
            write (report_unit, fmt="('nmesh=(2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec')")
            nmesh = (2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec
-           write (report_unit, fmt="('Number of meshpoints:    ',i12)") nmesh
+           write (report_unit, fmt="('Number of meshpoints:    ',i16)") nmesh
 
  !
  ! check that nx, ny have no large prime factors
