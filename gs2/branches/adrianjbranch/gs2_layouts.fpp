@@ -1,3 +1,6 @@
+! Modifications for unbalanced decomposition functionality:
+! (c) The Numerical Algorithms Group (NAG) Ltd, 2012
+! on behalf of EPSRC for the HECToR project
 # include "define.inc"
 
 module gs2_layouts
