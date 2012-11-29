@@ -173,7 +173,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     
     call loop_diagnostics(0,exit)
     
-    if (proc0) write(*,*) 'layout',layout
+    if (proc0) write(*,*) 'layout ',layout
 
     call time_message(.false.,time_main_loop,' Main Loop')
 
