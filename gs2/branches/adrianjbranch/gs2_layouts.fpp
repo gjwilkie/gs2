@@ -3256,11 +3256,12 @@ contains
        blocksize = largeblocksize
     end if
 
-    ! Calculate the lower limit to the block this process owns by working.
+    ! Calculate the lower limit to the block this process owns
     llim = ((iproc / procfactors) * block_multiple)
     if(modproc .ne. 0) then
        if(modproc .lt. numsmall) then
-	  llim = llim + smallblocksize * (modproc - 1)
+!AJ	  llim = llim + smallblocksize * (modproc - 1)
+          llim = llim + smallblocksize * (modproc)
        else
           llim = llim + (smallblocksize * numsmall) + (largeblocksize  * (modproc - numsmall))
        end if
