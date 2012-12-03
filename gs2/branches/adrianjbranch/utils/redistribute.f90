@@ -29,6 +29,7 @@ module redistribute
 
   public :: init_redist, gather, scatter
   public :: init_fill, fill
+  public :: set_redist_character_type
 
   interface gather
      module procedure c_redist_22, r_redist_22, i_redist_22, l_redist_22
@@ -91,6 +92,7 @@ module redistribute
      real,    dimension (:), pointer :: real_buff     => null()
      integer, dimension (:), pointer :: integer_buff  => null()
      logical, dimension (:), pointer :: logical_buff  => null()
+     character (len=3) :: redistname = ""
   end type redist_type
 
   type :: index_list_type
@@ -102,11 +104,20 @@ module redistribute
 
 contains
 
+  subroutine set_redist_character_type(r, chartype)
+
+    type (redist_type), intent (inout) :: r
+    character (3), intent (in) :: chartype
+
+    r%redistname = chartype
+
+  end subroutine set_redist_character_type
+
   subroutine init_redist (r, char, to_low, to_high, to_list, &
        from_low, from_high, from_list, ierr)
 
     use mp, only: iproc, nproc, proc0
-    type (redist_type), intent (out) :: r
+    type (redist_type), intent (inout) :: r
     character(1), intent (in) :: char
     integer, intent (in) :: to_low
 ! TT> caused a problem on PGI compiler
@@ -468,7 +479,7 @@ contains
     ! These c_redist_22_new_copy routine is the new local copy 
     ! functionality where indirect addressing has largely been removed.
     ! c_redist_22_old_copy is the original local copy code.
-    if(opt_local_copy) then
+    if(opt_local_copy .and. (r%redistname .eq. 'x2y')) then
        ! c_redist_22_new_copy is the new local copy functionality where 
        ! indirect addressing has largely been removed
        call c_redist_22_new_copy(r, from_here, to_here)
@@ -657,8 +668,6 @@ contains
     complex, dimension (r%from_low(1):, &
                         r%from_low(2):), intent (in out) :: to_here
 
-
-
 !    complex, dimension (:,:), allocatable :: to_here_temp
 
 !    integer :: i
@@ -667,7 +676,7 @@ contains
 !                          lbound(to_here,2):ubound(to_here,2)))
 
     ! redistribute from local processor to local processor
-    if(opt_local_copy) then
+    if(opt_local_copy .and. (r%redistname .eq. 'x2y')) then
        ! c_redist_22_inv_new_copy is the new local copy functionality where 
        ! indirect addressing has largely been removed
        call c_redist_22_inv_new_copy(r, from_here, to_here)
@@ -879,8 +888,7 @@ contains
 !AJ functionality which are selected at runtime (providing 
 !AJ opt_local_copy is true) through a performance measurement process 
 !AJ documented below.
-    if(opt_local_copy) then
-       
+    if(opt_local_copy .and. (r%redistname .eq.  'g2x')) then
 !AJ Because there are two different optimised local copy routines 
 !AJ which provide benefits for different process counts and use cases 
 !AJ we use an auto-tuning method to select which routine to use.  This 
@@ -982,7 +990,6 @@ contains
 !         g(ig, isgn, iglo) to xxf(it,ixxf) data type 
 !         where it is kx (or x) index, ixxf is (y,ig,isgn,"les") 
 !         and iglo is ("xyles") 
-
     do i = 1, r%from(iproc)%nn
 !
 ! redistribute from local processor to local processor
@@ -1392,8 +1399,7 @@ contains
 !AJ functionality which are selected at runtime (providing 
 !AJ opt_local_copy is true) through a performance measurement process 
 !AJ documented below.
-    if(opt_local_copy) then
-
+    if(opt_local_copy .and. (r%redistname .eq. 'g2x')) then
 !AJ Because there are two different optimised local copy routines 
 !AJ which provide benefits for different process counts and use cases 
 !AJ we use an auto-tuning method to select which routine to use.  This 
