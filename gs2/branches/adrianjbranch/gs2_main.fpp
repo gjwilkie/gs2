@@ -210,17 +210,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
 
     call time_message(.false.,time_main_loop,' Main Loop')
 
-    time_main_loop_max = time_main_loop(1)
-    call max_reduce(time_main_loop_max,0)
-    time_main_loop_min = time_main_loop(1)
-    call min_reduce(time_main_loop_min,0)
-    time_main_loop_av = time_main_loop(1)
-    call sum_reduce(time_main_loop_av,0)
-    time_main_loop_av = time_main_loop_av/nproc
-
-    if (proc0) write(*,*) 'Time Main Loop Max,Min,Av',time_main_loop_max, &
-    	       time_main_loop_min, time_main_loop_av
-
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
     if (proc0 .and. .not. present(job_id)) call write_dt
