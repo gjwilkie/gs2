@@ -66,7 +66,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     integer, intent (in), optional :: mpi_comm, job_id, nensembles
     character (*), intent (in), optional :: filename
     real, dimension (:), intent (out), optional :: pflux, qflux, heat
-    real, intent (out) :: vflux
+    real, intent (out), optional :: vflux
     real, intent (out), optional :: dvdrho, grho
 
     real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
