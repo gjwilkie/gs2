@@ -225,11 +225,11 @@ module read_chease
 
 
     read(infile, *)
-    read(infile, *), r0exp_chease
+    read(infile, *) r0exp_chease
 
 
     read(infile, *)
-    read(infile, *), b0exp_chease
+    read(infile, *) b0exp_chease
 
 
     allocate(psi_chease(npsi_chease))

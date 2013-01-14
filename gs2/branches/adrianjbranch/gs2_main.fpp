@@ -37,8 +37,8 @@ contains
   !! (EGH - used for Trinity?)
 
 
-!subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, vflux, heat, dvdrho, grho, nofinish)
-subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, dvdrho, grho)
+subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
+     pflux, qflux, vflux, heat, dvdrho, grho)
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
@@ -68,7 +68,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     integer, intent (in), optional :: mpi_comm, job_id, nensembles
     character (*), intent (in), optional :: filename
     real, dimension (:), intent (out), optional :: pflux, qflux, heat
-!    real, intent (out), optional :: dvdrho, grho, vflux
+    real, intent (out), optional :: vflux
     real, intent (out), optional :: dvdrho, grho
 
     real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
@@ -233,12 +233,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
              qflux(3) = qflux_avg(impurity)/time_interval
              heat(3) = heat_avg(impurity)/time_interval
           end if
-!       vflux = vflux_avg(1)/time_interval
        else
           pflux = pflux_avg/time_interval
           qflux = qflux_avg/time_interval
           heat = heat_avg/time_interval
        end if
+       vflux = vflux_avg(1)/time_interval
     else
        if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
        if (.not.nofin) call finish_gs2
@@ -310,8 +310,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
 
   end subroutine finish_gs2
 
-!  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, nu, nensembles)
-  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, nu, nensembles)
+  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
 
     use dist_fn, only: d_reset => reset_init
     use collisions, only: vnmult, c_reset => reset_init
@@ -332,12 +331,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     implicit none
 
     integer, intent (in) :: ntspec, nensembles
-!    real, intent (in) :: gexb
+    real, intent (in) :: gexb, mach
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
 
     integer :: istatus
 
-    ! doing nothing with gexb for now, but in will need to when
+    ! doing nothing with gexb or mach for now, but in future will need to when
     ! using GS2 to evolve rotation profiles in TRINITY
 
     if (nensembles > 1) call scope (subprocs)
@@ -367,8 +366,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
   end subroutine reset_gs2
 
   subroutine gs2_trin_init (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift, &
-!       betaprim, ntspec, dens, temp, fprim, tprim, gexb, nu, use_gs2_geo)
-       betaprim, ntspec, dens, temp, fprim, tprim, nu, use_gs2_geo)
+       betaprim, ntspec, dens, temp, fprim, tprim, gexb, mach, nu, use_gs2_geo)
 
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo
@@ -377,16 +375,16 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
 
     integer, intent (in) :: ntspec
     real, intent (in) :: rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift
-    real, intent (in) :: betaprim
-!    real, intent (in) :: gexb
+    real, intent (in) :: betaprim, gexb, mach
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
     logical, intent (in) :: use_gs2_geo
 
-    ! for now do nothing with gexb, but need to include later if want to use GS2
+    ! for now do nothing with gexb or mach, but need to include later if want to use GS2
     ! with TRINITY to evolve rotation profiles
 
     call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
-    if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift, betaprim)
+    if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, &
+         aspr, kap, kappri, tri, tripri, shift, betaprim)
     
   end subroutine gs2_trin_init
 
