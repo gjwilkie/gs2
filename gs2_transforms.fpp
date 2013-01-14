@@ -287,7 +287,7 @@ contains
     use gs2_layouts, only: init_x_transform_layouts
     use gs2_layouts, only: g_lo, xxf_lo, gidx2xxfidx, proc_id, idx_local
     use mp, only: nproc
-    use redistribute, only: index_list_type, init_redist, delete_list
+    use redistribute, only: index_list_type, init_redist, delete_list, set_redist_character_type
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
     integer, dimension(0:nproc-1) :: nn_to, nn_from
@@ -373,6 +373,8 @@ contains
     from_high(2) = 2
     from_high(3) = g_lo%ulim_alloc
 
+    call set_redist_character_type(g2x, 'g2x')
+
     call init_redist (g2x, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
 
@@ -385,7 +387,7 @@ contains
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx, proc_id, idx_local
     use mp, only: nproc
-    use redistribute, only: index_list_type, init_redist, delete_list
+    use redistribute, only: index_list_type, init_redist, delete_list, set_redist_character_type
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
     integer, dimension(0:nproc-1) :: nn_to, nn_from
@@ -475,6 +477,8 @@ contains
 
     from_high(1) = xxf_lo%nx
     from_high(2) = xxf_lo%ulim_alloc
+
+    call set_redist_character_type(x2y, 'x2y')
 
     call init_redist (x2y, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
