@@ -42,6 +42,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
+    use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields, advance
     use species, only: ions, electrons, impurity
@@ -60,6 +61,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
     use fields_implicit, only: time_field
+    use gs2_layouts, only: layout
     use parameter_scan, only: update_scan_parameter_value
     implicit none
 
@@ -72,12 +74,18 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
     real :: time_total(2) = 0.
     real :: time_interval
+    real :: time_main_loop(2)
+    real :: time_main_loop_min,time_main_loop_max,time_main_loop_av
+
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
     logical :: first_time = .true.
     logical :: nofin= .false.
 !    logical, optional, intent(in) :: nofinish
     character (500), target :: cbuff
+
+    time_main_loop(1) = 0.
+    time_main_loop(2) = 0.
 
 !
 !CMR, 12/2/2010: 
@@ -99,9 +107,13 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        ! <doc> Report # of processors being used </doc>
        if (proc0) then
           if (nproc == 1) then
-             if (.not. nofin) write(*,*) 'Running on ',nproc,' processor'
-          else
-             if (.not. nofin) write(*,*) 'Running on ',nproc,' processors'
+             if (.not. nofin) then
+	        write(*,*) 'Running on ',nproc,' processor'
+	     end if 
+         else
+             if (.not. nofin) then
+	        write(*,*) 'Running on ',nproc,' processors'
+	     end if	  
           end if
           write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
@@ -161,6 +173,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     
     call loop_diagnostics(0,exit)
     
+    if (proc0) write(*,*) 'layout ',layout
+
+    call time_message(.false.,time_main_loop,' Main Loop')
+
     do istep = 1, nstep
        
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
@@ -191,6 +207,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
           exit
        end if
     end do
+
+    call time_message(.false.,time_main_loop,' Main Loop')
 
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 

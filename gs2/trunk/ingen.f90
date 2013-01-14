@@ -683,7 +683,7 @@ contains
     call init_file_utils (list, name="template")
 if (debug) write(6,*) 'get_namelists: called init_file_utils'
     ncut= 100000
-    npmax=10000
+    npmax=100000
     scan = .false.
     stdin = .true.
     pythonin = "."//trim(run_name)//".pythonin"
@@ -957,7 +957,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
            write (report_unit, fmt="('nmesh=(2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec')")
            nmesh = (2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec
-           write (report_unit, fmt="('Number of meshpoints:    ',i12)") nmesh
+           write (report_unit, fmt="('Number of meshpoints:    ',i16)") nmesh
 
  !
  ! check that nx, ny have no large prime factors
@@ -1358,25 +1358,37 @@ if (debug) write(6,*) 'get_namelists: returning'
     use nonlinear_terms, only : nonlin
     use species, only : nspec
     use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
-    use kt_grids, only: naky, ntheta0
+    use kt_grids, only: naky, ntheta0, nx, ny
     use le_grids, only: negrid, nlambda
-    use gs2_layouts, only: layout
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: layout, init_x_transform_layouts, init_y_transform_layouts
     implicit none
     real :: fac
     integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkyfacs, nkxfacs, nspfacs
+    integer :: nefacs, nlfacs, nkyfacs, nkxfacs, nspfacs, nkxkyfacs
     integer, dimension(:,:), allocatable :: facs
-    integer :: npe
+    integer :: npe, checknpe, i, j
+    logical :: onlyxoryfac
     real :: time
 
     write (report_unit, fmt="('Layout = ',a5,/)") layout 
     write (report_unit, fmt="('Recommended #proc up to:'i8)") npmax 
     if (nonlin) then
+
+       write (report_unit, *) 
+       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
+       write (report_unit, fmt="('|   Number of    | Dimension | Percentage data moved | Recommend unbalanced_xxf | xxf unbalanced | Recommend unbalanced_yxf | yxf unbalanced |')")
+       write (report_unit, fmt="('|   processes    |   split   | by MPI from xxf->yxf  |    T = true F = false    |   amount (%)   |    T = true F = false    |   amount (%)   |')")
+       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
+       
+       
+       call init_x_transform_layouts(ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
+       call init_y_transform_layouts(ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+
        select case (layout)
        case ('lexys')
 
-          write (report_unit, *) 
-          write (report_unit, fmt="('Recommended numbers of processors, time on T3E')") 
+!          write (report_unit, fmt="('Recommended numbers of processors, time on T3E')") 
           allocate (facs(max(nspec,naky,ntheta0)/2+1,5))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (naky, nkyfacs, facs(:,2))
@@ -1386,39 +1398,33 @@ if (debug) write(6,*) 'get_namelists: returning'
           do i=1,nspfacs
              npe = facs(i,1)
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'s'
+             call report_idle_procs(npe, 's')
           end do
           do i=2,nkyfacs
              npe = facs(i,2)*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
+             call report_idle_procs(npe, 'y')
           end do
           do i=2,nkxfacs
              npe = facs(i,3)*naky*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step  (',a,')')") npe, time,'x'
+             call report_idle_procs(npe, 'x')
           end do
           do i=2,nefacs
              npe = facs(i,4)*ntheta0*naky*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step  (',a,')')") npe, time,'e'
+             call report_idle_procs(npe, 'e')
           end do
           do i=2,nlfacs
              npe = facs(i,5)*negrid*ntheta0*naky*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= 40.*nmesh/1.e7/npe**0.85
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step  (',a,')')") npe, time,'l'
+             call report_idle_procs(npe, 'l')
           end do
           deallocate (facs)
 
        case ('lxyes')
 
-          write (report_unit, *) 
-          write (report_unit, fmt="('Recommended numbers of processors, time on SP2')") 
+!          write (report_unit, fmt="('Recommended numbers of processors, time on SP2')") 
           allocate (facs(max(nspec,negrid,naky,ntheta0)/2+1,5))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (negrid, nefacs, facs(:,2))
@@ -1430,170 +1436,226 @@ if (debug) write(6,*) 'get_namelists: returning'
           do i=1,nspfacs
              npe = facs(i,1)
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'s'
+             call report_idle_procs(npe, 's')
           end do
           do i=2,nefacs
              npe = facs(i,2)*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'e'
+             call report_idle_procs(npe, 'e')
           end do
           do i=2,nkyfacs
              npe = facs(i,3)*negrid*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
+             call report_idle_procs(npe, 'y')
           end do
           do i=2,nkxfacs
              npe = facs(i,4)*naky*negrid*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'x'
+             call report_idle_procs(npe, 'x')
           end do
           do i=2,nlfacs
              npe = facs(i,5)*naky*ntheta0*negrid*nspec 
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'l'
+             call report_idle_procs(npe, 'l')
           end do
           deallocate (facs)
 
        case ('yxels')
 
-          write (report_unit, *) 
-          write (report_unit, fmt="('Recommended numbers of processors:')") 
-
-          allocate (facs(max(nspec,negrid,nlambda)/2+1,5))
+          allocate (facs(max(naky,ntheta0,nspec,negrid,nlambda)/2+1,6))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (nlambda, nlfacs, facs(:,2))
           call factors (negrid, nefacs, facs(:,3))
           call factors (ntheta0, nkxfacs, facs(:,4))
           call factors (naky, nkyfacs, facs(:,5))
+          call factors (naky*ntheta0, nkxkyfacs, facs(:,6))
           fac = 3.5*(real(nmesh))**1.1/1.e7
           do i=1,nspfacs
              npe = facs(i,1)
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'s'
+             call report_idle_procs(npe, 's')
           end do
           do i=2,nlfacs
              npe = facs(i,2)*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'l'
+             call report_idle_procs(npe, 'l')
           end do
           do i=2,nefacs
              npe = facs(i,3)*nlambda*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'e'
+             call report_idle_procs(npe, 'e')
           end do
-          do i=2,nkxfacs
-             npe = facs(i,4)*negrid*nlambda*nspec
+          do i=2,nkxkyfacs
+             npe = facs(i,6)*nlambda*negrid*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'x'
+! Check whether this process count would have been generated by the 
+! plain x or y factorisation or if it is new from the combined x*y
+! functionality             
+             onlyxoryfac = .false.
+             do j=2,nkxfacs
+                checknpe = facs(j,4)*negrid*nlambda*nspec
+                if (npe .eq. checknpe) then
+                   onlyxoryfac = .true.
+                   exit
+                end if
+             end do
+             do j=2,nkyfacs
+                checknpe = facs(j,5)*ntheta0*negrid*nlambda*nspec
+                if (npe .gt. checknpe) then
+                   onlyxoryfac = .true.
+                   exit
+                end if
+             end do
+             call report_idle_procs(npe, 'x*y', onlyxoryfac)
           end do
-          do i=2,nkyfacs
-             npe = facs(i,5)*ntheta0*negrid*nlambda*nspec
-             if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
-          end do
+!          do i=2,nkxfacs
+!             npe = facs(i,4)*negrid*nlambda*nspec
+!             if (npe .gt. npmax) exit
+!             call report_idle_procs(npe, 'x')
+!          end do
+!          do i=2,nkyfacs
+!             npe = facs(i,5)*ntheta0*negrid*nlambda*nspec
+!             if (npe .gt. npmax) exit
+!             call report_idle_procs(npe, 'y')
+!          end do
           deallocate (facs)
 
        case ('yxles')
 
-          write (report_unit, *) 
-          write (report_unit, fmt="('Recommended numbers of processors:')") 
-
-          allocate (facs(max(nspec,negrid,nlambda)/2+1,5))
+          allocate (facs(max(ntheta0,naky,nspec,negrid,nlambda)/2+1,6))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (negrid, nefacs, facs(:,2))
           call factors (nlambda, nlfacs, facs(:,3))
           call factors (ntheta0, nkxfacs, facs(:,4))
           call factors (naky, nkyfacs, facs(:,5))
+          call factors (naky*ntheta0, nkxkyfacs, facs(:,6))
           fac = 3.5*(real(nmesh))**1.1/1.e7
           do i=1,nspfacs
              npe = facs(i,1)
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'s'
+             call report_idle_procs(npe, 's')
           end do
           do i=2,nefacs
              npe = facs(i,2)*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'e'
+             call report_idle_procs(npe, 'e')
           end do
           do i=2,nlfacs
              npe = facs(i,3)*negrid*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'l'
+             call report_idle_procs(npe, 'l')
           end do
-          do i=2,nkxfacs
-             npe = facs(i,4)*nlambda*negrid*nspec
+          do i=2,nkxkyfacs
+             npe = facs(i,6)*nlambda*negrid*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'x'
+! Check whether this process count would have been generated by the 
+! plain x or y factorisation or if it is new from the combined x*y
+! functionality  
+             onlyxoryfac = .false.
+             do j=2,nkxfacs
+                checknpe = facs(j,4)*nlambda*negrid*nspec
+                if (npe .eq. checknpe) then
+                   onlyxoryfac = .true.
+                   exit
+                end if
+             end do
+             do j=2,nkyfacs
+                checknpe = facs(j,5)*ntheta0*nlambda*negrid*nspec
+                if (npe .eq. checknpe) then
+                   onlyxoryfac = .true.
+                   exit
+                end if
+             end do
+             call report_idle_procs(npe, 'x*y', onlyxoryfac)
           end do
-          do i=2,nkyfacs
-             npe = facs(i,5)*ntheta0*nlambda*negrid*nspec
-             if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
-          end do
+!          do i=2,nkxfacs
+!             npe = facs(i,4)*nlambda*negrid*nspec
+!             if (npe .gt. npmax) exit
+!             call report_idle_procs(npe, 'x')
+!          end do
+!          do i=2,nkyfacs
+!             npe = facs(i,5)*ntheta0*nlambda*negrid*nspec
+!             if (npe .gt. npmax) exit
+!             call report_idle_procs(npe, 'y')
+!          end do
           deallocate (facs)
 
        case ('xyles')
 !CMR, 11/11/2009: add processor recommendations for xyles layout
 !            NB added recommendations that also parallelise in y and x, 
 !                          which may be unwise!
-          write (report_unit, *) 
-          write (report_unit, fmt="('Recommended numbers of processors:')") 
 
-          allocate (facs(max(nspec,negrid,nlambda,naky,ntheta0)/2+1,5))
+          allocate (facs(max(nspec,negrid,nlambda,naky,ntheta0)/2+1,6))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (negrid, nefacs, facs(:,2))
           call factors (nlambda, nlfacs, facs(:,3))
           call factors (naky, nkyfacs, facs(:,4))
           call factors (ntheta0, nkxfacs, facs(:,5))
+          call factors (naky*ntheta0, nkxkyfacs, facs(:,6))
           fac = 3.5*(real(nmesh))**1.1/1.e7
           do i=1,nspfacs
              npe = facs(i,1)
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'s'
+             call report_idle_procs(npe, 's')
           end do
           do i=2,nefacs
              npe = facs(i,2)*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'e'
+             call report_idle_procs(npe, 'e')
           end do
           do i=2,nlfacs
              npe = facs(i,3)*negrid*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'l'
+             call report_idle_procs(npe, 'l')
           end do
-          do i=2,nkyfacs
-             npe = facs(i,4)*nlambda*negrid*nspec
+          do i=2,nkxkyfacs
+             npe = facs(i,6)*nlambda*negrid*nspec
              if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'y'
+! Check whether this process count would have been generated by the 
+! plain x or y factorisation or if it is new from the combined x*y
+! functionality  
+             onlyxoryfac = .false.
+             do j=2,nkyfacs
+                checknpe = facs(j,4)*nlambda*negrid*nspec
+                if (npe .eq. checknpe) then
+                   onlyxoryfac = .true.
+                   exit
+                end if
+             end do
+             do j=2,nkxfacs
+                checknpe = facs(j,5)*naky*nlambda*negrid*nspec
+                if (npe .eq. checknpe) then
+                   onlyxoryfac = .true.
+                   exit
+                end if
+             end do
+             call report_idle_procs(npe, 'x*y', onlyxoryfac)
           end do
-          do i=2,nkxfacs
-             npe = facs(i,5)*naky*nlambda*negrid*nspec
-             if (npe .gt. npmax) exit
-             time=-9.9e9 ; if (nmesh/npe > ncut) time= fac/npe**0.95
-             write (report_unit, fmt="('  npe = ',i8,'    time = ',1pe10.2,'  seconds/time step (',a,')')") npe, time,'x'
-          end do
+!          do i=2,nkyfacs
+!             npe = facs(i,4)*nlambda*negrid*nspec
+!             if (npe .gt. npmax) exit
+!             call report_idle_procs(npe, 'y')
+!          end do
+!          do i=2,nkxfacs
+!             npe = facs(i,5)*naky*nlambda*negrid*nspec
+!             if (npe .gt. npmax) exit
+!             call report_idle_procs(npe, 'x')
+!          end do
           deallocate (facs)
 
        end select
+
+       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
+       write (report_unit, *)
+       write (report_unit, fmt="('(*) denotes process counts that are from factors of the combined kx*ky index rather than the ordered kx or ky indices separately.')")
+       write (report_unit, fmt="('To use the unbalanced functionality set unbalanced_xxf = .true. or unbalanced_yxf = .true. in the &layouts_knobs namelist in your GS2 ')")
+       write (report_unit, fmt="('input file. You can also set the max_unbalanced_xxf and max_unbalanced_yxf flags in the same namelist in the input file to specify the')")
+       write (report_unit, fmt="('maximum amount of computational imbalance allowed. These flags specify the maximum imbalance as 1 with no imbalance as 0, so to allow')")
+       write (report_unit, fmt="('50% imbalanced on the xxf decomposition using the following flags in the input file: ')")
+       write (report_unit, fmt="('                                                                                     unbalanced_xxf = .true. ')")
+       write (report_unit, fmt="('                                                                                     max_unbalanced_xxf = 0.5 ')")
+       write (report_unit, fmt="('And likewise for yxf.')")
+
     else
        write (report_unit, *) 
        write (report_unit, fmt="('Recommended numbers of processors:')")
@@ -1799,6 +1861,131 @@ if (debug) write(6,*) 'get_namelists: returning'
     end if
 
   end subroutine nprocs
+
+  subroutine get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, &
+     use_unbalanced_xxf, use_unbalanced_yxf)
+  !====================================================================================
+  ! AJ June 2012
+  ! This subroutine is used to return the unbalanced suggestions for a given process 
+  ! count (npe).  The calculation is performed using the calculate_unbalanced_x 
+  ! and calculate_unbalanced_y subroutines from gs2_layouts.  These return the 
+  ! unbalanced decomposition size (difference between the suggested small and large
+  ! block size for the decomposition) and from this a logical is set to recommend
+  ! whether the unbalanced decomposition should be used or not.
+  !====================================================================================
+    use gs2_layouts, only : calculate_unbalanced_x, calculate_unbalanced_y
+    implicit none
+
+    integer, intent(in) :: npe
+    integer, intent(out) :: percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount
+    logical, intent(out) :: use_unbalanced_xxf, use_unbalanced_yxf
+
+    real  :: xxf_unbalanced_amount, yxf_unbalanced_amount
+
+    call calculate_unbalanced_x(npe, 0, xxf_unbalanced_amount)
+    if(xxf_unbalanced_amount .gt. 0) then
+       use_unbalanced_xxf = .true.
+       percentage_xxf_unbalanced_amount = xxf_unbalanced_amount * 100
+    else
+       use_unbalanced_xxf = .false.  
+       percentage_xxf_unbalanced_amount = 0
+    end if
+    call calculate_unbalanced_y(npe, 0, yxf_unbalanced_amount)
+    if(yxf_unbalanced_amount .gt. 0) then
+       use_unbalanced_yxf = .true.
+       percentage_yxf_unbalanced_amount = yxf_unbalanced_amount * 100
+    else
+       use_unbalanced_yxf = .false. 
+       percentage_yxf_unbalanced_amount = 0
+    end if
+    
+  end subroutine get_unbalanced_suggestions
+
+  subroutine get_idle_processes(npe, idle_percentage, use_unbalanced)
+  !====================================================================================
+  ! AJ June 2012
+  ! This subroutine is used to return the idle processes from the xxf and yxf layouts.
+  ! Idle processes sometimes occur, dependent on the process count used, because 
+  ! the data domain does not evenly divide by the total number of processes available. 
+  ! These can cause high communications overheads for the non-linear calculations
+  ! for large numbers of processes so it is useful to print this data out in ingen
+  ! to let users know which process counts this can happen at for a given input file
+  ! We currently use an arbitrary cutoff of 10% difference in idle processes to 
+  ! suggest that the unbalanced decomposition functionality should be used to 
+  ! mitigate the impact of this difference. 
+  !====================================================================================
+    use gs2_layouts, only : calculate_idle_processes
+    implicit none
+
+    integer, intent(in) :: npe
+    real, intent(out) :: idle_percentage
+    logical, intent(out) :: use_unbalanced
+
+    call calculate_idle_processes(npe, idle_percentage)
+! This 0.1 represents the arbitrary 10% difference threshold discussed above.
+    if(idle_percentage .gt. 0.1) then
+       use_unbalanced = .true.
+    else
+       use_unbalanced = .false.
+    end if
+    idle_percentage = idle_percentage * 100
+
+  end subroutine get_idle_processes
+  
+  subroutine report_idle_procs(npe, distchar, onlyxoryfac)
+!====================================================================================
+  ! AJ June 2012
+  ! This subroutine wraps up the output functionality for the code that creates the 
+  ! list of suggested process counts for the linear computation and checks whether 
+  ! those process counts work well for the non-linear calculations as well.
+  !
+  ! The optional parameter onlyxoryfac (which is a logical) is used to highlight 
+  ! process counts that have been generated using code which looks for the factors 
+  ! of kx*ky rather than kx and ky separately.  This is only currently used for 
+  ! layouts that start with x and y (for instance xyles or yxles).
+  !====================================================================================
+  
+    implicit none
+
+    integer, intent(in) :: npe
+    character(*), intent(in) :: distchar
+    logical, optional, intent(in) :: onlyxoryfac
+    integer :: percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount
+    logical :: use_unbalanced_xxf, use_unbalanced_yxf, use_unbalanced
+    real :: idle_percentage
+
+    call get_idle_processes(npe, idle_percentage, use_unbalanced)
+    if(use_unbalanced) then
+       call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
+       if(present(onlyxoryfac)) then
+          if(onlyxoryfac) then
+             write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |            ',L,'            |      ',i3,'       |            ',L,'            |      ',i3,'       |')") & 
+                  npe, distchar, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+          else
+             write (report_unit, fmt="('|     ',i8,'(*)|    ',a3,'    |          ',i3,'          |            ',L,'            |      ',i3,'       |            ',L,'            |      ',i3,'       |')") & 
+                  npe, distchar, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+          end if
+       else
+          write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |            ',L,'            |      ',i3,'       |            ',L,'            |      ',i3,'       |')") & 
+               npe, distchar, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
+       end if
+    else
+       if(present(onlyxoryfac)) then
+          if(onlyxoryfac) then
+             write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3'          |                          |                |                          |                |')") & 
+                  npe, distchar, INT(idle_percentage)
+          else
+             write (report_unit, fmt="('|     ',i8,'(*)|    ',a3,'    |          ',i3'          |                          |                |                          |                |')") & 
+                  npe, distchar, INT(idle_percentage)
+          end if
+       else
+          write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3'          |                          |                |                          |                |')") & 
+               npe, distchar, INT(idle_percentage)
+       end if
+    
+    end if
+    
+  end subroutine report_idle_procs
 
   subroutine tell (a, b, c)
     

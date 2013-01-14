@@ -484,6 +484,7 @@ gs2_main.o: \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
+	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
 	 gs2_time.o \
@@ -548,9 +549,7 @@ gs2_transforms.o: \
 	 redistribute.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o \
-	 convert.o \
-	 file_utils.o 
+	 constants.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -698,8 +697,11 @@ ran.o: \
 	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
+	 gs2_layouts.o \
 	 job_manage.o \
-	 mp.o 
+	 kt_grids.o \
+	 mp.o \
+	 theta_grid.o 
 regress.o: \
 	 regression.o 
 regression.o: 
