@@ -6781,6 +6781,7 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: gds23, gds24, gds24_noq, cvdrift_th, gbdrift_th
     use theta_grid, only: drhodpsi, qval, shat
     use le_grids, only: energy, al, negrid, nlambda, forbid, init_map
+    use le_grids, only: get_flux_vs_theta_vs_vpa
     use kt_grids, only: theta0, ntheta0, naky, aky, akx
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx, it_idx
@@ -6791,10 +6792,10 @@ subroutine check_dist_fn(report_unit)
 
     implicit none
 
-    integer, save :: neo_unit, neophi_unit
+    integer, save :: neo_unit, neophi_unit, neovpth_unit
     integer :: it, ik, il, ie, is, isgn, iglo, ig
     real, dimension (:,:,:,:,:), allocatable :: tmp1, tmp2, tmp3, tmp4, tmp5, tmp6
-    real, dimension (:,:,:), allocatable :: vpadhdec, dhdec, dhdxic, cdfac
+    real, dimension (:,:,:), allocatable :: vpadhdec, dhdec, dhdxic, cdfac, hneovpth
     real, dimension (:), allocatable :: tmp7, tmp8, tmp9
 
     allocate (vpadhdec (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -6821,6 +6822,8 @@ subroutine check_dist_fn(report_unit)
     allocate (tmp6(-ntgrid:ntgrid,nlambda,negrid,2,nspec)) ; tmp6 = 0.
     allocate (tmp7(-ntgrid:ntgrid), tmp8(-ntgrid:ntgrid), tmp9(-ntgrid:ntgrid))
     tmp7 = 0. ; tmp8 = 0. ; tmp9 = 0.
+
+    allocate (hneovpth(-ntgrid:ntgrid,negrid*nlambda,nspec)) ; hneovpth = 0.
 
     ! tmp1 is dH^{neo}/dE, tmp2 is dH^{neo}/dxi, tmp3 is vpa*dH^{neo}/dE,
     ! tmp4 is dH^{neo}/dr, tmp5 is dH^{neo}/dtheta, tmp6 is H^{neo}
@@ -6849,6 +6852,22 @@ subroutine check_dist_fn(report_unit)
        end do
        call close_output_file (neo_unit)
        
+       call open_output_file (neovpth_unit,".neothvp")
+
+       ! Get Fneo(theta,vpa)
+       call get_flux_vs_theta_vs_vpa (tmp6, hneovpth)
+
+       write (neovpth_unit,'(3a12)') '1) theta', '2) vpa', '3) Fneo'
+       do ie = 1, negrid*nlambda
+          do ig = -ntgrid, ntgrid
+             write (neovpth_unit,'(3e12.4)'), theta(ig), sqrt(energy(negrid))*(1.-2.*(ie-1)/real(negrid*nlambda-1)), &
+                  hneovpth(ig,ie,1)
+          end do
+          write (neovpth_unit,*)
+       end do
+
+       call close_output_file (neovpth_unit)
+
        call open_output_file (neophi_unit,".neophi")
        write (neophi_unit,*) "# 1) theta, 2) dphi/dr, 3) dphi/dtheta, 4) phi"
        do ig = -ntgrid, ntgrid
@@ -7033,7 +7052,7 @@ subroutine check_dist_fn(report_unit)
     end do
 
     deallocate (tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9)
-    deallocate (vpadhdec,dhdec,dhdxic,cdfac)
+    deallocate (vpadhdec,dhdec,dhdxic,cdfac,hneovpth)
 
   end subroutine init_lowflow
 #endif

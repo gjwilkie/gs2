@@ -41,7 +41,10 @@ contains
     real, dimension (:,:,:,:), allocatable :: chebyp1, chebyp2
     real, dimension (:), allocatable :: dl_over_b
     real, dimension (:,:), allocatable :: transport 
-    real, dimension (:,:), allocatable :: pflx, qflx, vflx, qpar, upar1, upar !JPL
+    real, dimension (:), allocatable :: phineo2
+    real, dimension (:,:), allocatable :: dens2, pres2, upar2
+    real, dimension (:,:,:), allocatable :: dens, pres, upar
+    real, dimension (:,:), allocatable :: pflx, qflx, vflx, qpar, upar1, uparB !JPL
     real, dimension (:), allocatable ::  radius, jboot, phi2, vtor, upar0, upar_over_B
     real, dimension (size(energy)) :: w_r 
 
@@ -286,7 +289,13 @@ contains
     dl_over_b = delthet*jacob
     dl_over_b = dl_over_b/sum(dl_over_b)
 
-    if (.not. allocated(pflx)) allocate (pflx(nr,ns), qflx(nr,ns), vflx(nr,ns), upar1(nr,ns), upar(nr,ns), qpar(nr,ns))  !JPL
+    if (.not. allocated(pflx)) allocate (pflx(nr,ns), qflx(nr,ns), vflx(nr,ns), upar1(nr,ns), uparB(nr,ns), qpar(nr,ns))  !JPL
+    if (.not. allocated(dens)) then
+       allocate (phineo2(nr))
+       allocate (dens2(nr,ns), pres2(nr,ns), upar2(nr,ns))
+       allocate (dens(nr,ns,ntheta), pres(nr,ns,ntheta), upar(nr,ns,ntheta))
+       dens = 0. ; pres = 0. ; upar = 0. ; dens2 = 0. ; pres2 = 0. ; upar2 = 0. ; phineo2 = 0.
+    end if
     if (.not. allocated(transport)) allocate (transport(nr,(5+ns*8)))  !JPL, NEO output for all radius
     if (.not. allocated(radius)) allocate (radius(nr), phi2(nr), jboot(nr), vtor(nr), upar0(nr))
     if (.not. allocated(upar_over_B)) allocate (upar_over_B(ns))
@@ -314,8 +323,7 @@ contains
        ! evaluate the neoclassical parallel heat flux and parallel velcotiy in GS2 geometry
        do ir=1, nr 
           do is=1, ns
-             qpar(ir,is)=0.
-             upar(ir,is)=0.
+             qpar(ir,is)=0. ; uparB(ir,is) = 0.
              do ie = 1, nenergy
                 do ixi = 1, nxi
                    il = min(ixi, nxi+1-ixi)
@@ -326,13 +334,27 @@ contains
                            *(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))*(xi(ig,ixi) &
                            *sqrt(energy(ie)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2))))) &
                            *w_r(ie)*wl(-ntgrid+ig-1,il)*dl_over_b(ig)*bmag(ig)
-                      upar(ir,is) = upar(ir,is) + hneo(ir,ig,ixi,ie,is)*(xi(ig,ixi) &
+                      uparB(ir,is) = uparB(ir,is) + hneo(ir,ig,ixi,ie,is)*(xi(ig,ixi) &
                            *sqrt(energy(ie)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))))*w_r(ie) &
                            *wl(-ntgrid+ig-1,il)*dl_over_b(ig)*bmag(ig)      
+                      upar(ir,is,ig) = upar(ir,is,ig) + hneo(ir,ig,ixi,ie,is)*xi(ig,ixi)*sqrt(energy(ie)) &
+                           * w_r(ie)*wl(-ntgrid+ig-1,il)
+                      dens(ir,is,ig) = dens(ir,is,ig) + hneo(ir,ig,ixi,ie,is)*w_r(ie)*wl(-ntgrid+ig-1,il)
+                      pres(ir,is,ig) = pres(ir,is,ig) + (2./3.)*hneo(ir,ig,ixi,ie,is)*energy(ie) &
+                           *w_r(ie)*wl(-ntgrid+ig-1,il)
                    end do
                 end do
              end do
-             qpar(ir,is)=qpar(ir,is)-2.50*upar(ir,is)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2))) !JPL
+             qpar(ir,is)=qpar(ir,is)-2.50*uparB(ir,is)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2))) !JPL
+          end do
+       end do
+
+       do is = 1, ns
+          do ir = 1, nr
+             dens2(ir,is) = sum(dens(ir,is,:)**2*dl_over_b)
+             pres2(ir,is) = sum(pres(ir,is,:)**2*dl_over_b)
+             upar2(ir,is) = sum(upar(ir,is,:)**2*dl_over_b)
+             phineo2(ir) = sum(phineo(ir,:)**2*dl_over_b)
           end do
        end do
 
@@ -362,14 +384,15 @@ contains
 
        call open_output_file (neot_unit,".neotransp")
       ! print out in ".neotransp" file
-!       write (neot_unit,fmt='(a130)') "# 1) rad,    2) spec, 3) pflx,    4) qflx,    5) vflx   , 6) qparflx,  7) upar(GS2),  8) upar1(NEO), 9) <phi**2>, 10) bootstrap"
-       write (neot_unit,fmt='(a14,a8,9a14)') "# 1) rad", "2) spec", "3) pflx", "4) qflx", "5) vflx", &
-            "6) qparflx", "7) upar(GS2)", "8) upar1(NEO)", "9) <phi**2>", "10) bootstrap", "11) upar_o_B"
+!       write (neot_unit,fmt='(a130)') "# 1) rad,    2) spec, 3) pflx,    4) qflx,    5) vflx   , 6) qparflx,  7) uparB(GS2),  8) upar1(NEO), 9) <phi**2>, 10) bootstrap"
+       write (neot_unit,fmt='(a14,a8,13a14)') "# 1) rad", "2) spec", "3) pflx", "4) qflx", "5) vflx", &
+            "6) qparflx", "7) uparB(GS2)", "8) upar1(NEO)", "9) <phi**2>", "10) bootstrap", "11) upar_o_B", &
+            "12) dens2", "13) pres2", "14) upar2", "15) phi2"
        do ir=1, nr
           do is = 1, ns
-             write (neot_unit,fmt='(e14.5,i8,9e14.5)') radius(ir), is, pflx(ir,is), qflx(ir,is), vflx(ir,is), &
-                  qpar(ir,is),upar(ir,is), upar1(ir,is)*sqrt((1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))), &
-                  phi2(ir), jboot(ir), upar_over_B(is)/rgeo2
+             write (neot_unit,fmt='(e14.5,i8,13e14.5)') radius(ir), is, pflx(ir,is), qflx(ir,is), vflx(ir,is), &
+                  qpar(ir,is),uparB(ir,is), upar1(ir,is)*sqrt((1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))), &
+                  phi2(ir), jboot(ir), upar_over_B(is)/rgeo2, dens2(ir,is), pres2(ir,is), upar2(ir,is), phineo2(ir)
           end do
        end do
 
@@ -379,6 +402,7 @@ contains
     deallocate (xi, emax, chebyp1, chebyp2, legp, coefs, dHdr, dHdth, dHdxi, dHdE, vpadHdE, hneo, forbid)
     deallocate (dphidr, dl_over_b, transport)
     deallocate (pflx, qflx, vflx, upar1, qpar)
+    deallocate (dens, pres, upar, uparB)
 
   end subroutine get_lowflow_terms
   
