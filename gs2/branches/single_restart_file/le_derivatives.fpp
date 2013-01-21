@@ -106,8 +106,6 @@ contains
 
     if (colls) then
 
-       if (proc0) write (*,*) 'something wrong with colls'
-
        if (heating_flag) then
           allocate (gc1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           if (hyper_colls) then

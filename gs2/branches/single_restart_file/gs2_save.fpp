@@ -6,7 +6,7 @@ module gs2_save
 
 # ifdef NETCDF
 !  use netcdf, only: NF90_FLOAT, NF90_DOUBLE
-# ifdef HDF5
+# ifdef NETCDF_PARALLEL
   use netcdf, only: NF90_HDF5
   use netcdf, only: nf90_var_par_access, NF90_COLLECTIVE
   use netcdf, only: nf90_put_att, NF90_GLOBAL, nf90_get_att
@@ -27,6 +27,7 @@ module gs2_save
   implicit none
 
   public :: gs2_restore, gs2_save_for_restart
+  public :: read_many, save_many
   public :: restore_current_scan_parameter_value
   public :: init_save, init_dt, init_tstart, init_ant_amp
   public :: init_vnm
@@ -37,6 +38,8 @@ module gs2_save
   interface gs2_restore
      module procedure gs2_restore_many!, gs2_restore_one
   end interface
+
+  logical :: read_many, save_many ! Read and write single or multiple restart files
   
   private
   character (300), save :: restart_file
@@ -68,7 +71,7 @@ module gs2_save
 contains
 
   subroutine gs2_save_for_restart &
-       (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in, distfn, fileopt, save_many)
+       (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in, distfn, fileopt)
 !<DD 18-10-2010> Added flag distfn to gs2_save_for_restart
 !If present then will save to "rootname.nc.dfn.proc" and will
 !include extra information including velocity and energy grids
@@ -116,8 +119,6 @@ contains
     integer, dimension(3) :: start_pos, counts
     logical :: exit
     logical :: local_init !<DD> Added for saving distribution function
-    logical, optional :: save_many
-    logical :: many
     integer, parameter :: tmpunit = 348
 
 !*********-----------------------_**********************
@@ -128,12 +129,6 @@ contains
        exit = exit_in
     else
        exit = .false.
-    end if
-
-    if (present(save_many)) then
-       many = save_many
-    else
-       many = .false.
     end if
 
 !    if (proc0) then
@@ -173,34 +168,41 @@ contains
        END IF
 !CMRend 
 
-!</HL>  This directive includes code for parallel netcdf using HDF5
-!       to write the output to a single restart file
-!       The many flag allows the old style multiple file output
-# ifndef HDF5  ! If HDF5 is not present then the many flag will always be true 
-       many = .true.
-# endif
+!</HL>  The NETCDF_PARALLEL directives include code for parallel 
+!       netcdf using HDF5 to write the output to a single restart file
+!       The read_many flag allows the old style multiple file output
        !<DD> Added for saving distribution function
        IF (PRESENT(distfn)) THEN
-          if(many) then
+# ifdef NETCDF_PARALLEL
+          if(save_many) then
+# endif            
              WRITE (suffix,'(a5,i0)') '.dfn.', iproc
+# ifdef NETCDF_PARALLEL
           else
              WRITE (suffix,'(a4)') '.dfn'
           endif
+# endif
        ELSE
-          if(many) then
+# ifdef NETCDF_PARALLEL
+          if(save_many) then
+# endif
              WRITE (suffix,'(a1,i0)') '.', iproc
+# ifdef NETCDF_PARALLEL
           else
              WRITE (suffix,*) ''
           endif
+# endif
        END IF
        !</DD> Added for saving distribution function
 
        file_proc = trim(trim(file_proc)//adjustl(suffix))          
 
-       if(many) then
+# ifdef NETCDF_PARALLEL       
+       if(save_many) then
+# endif
           istatus = nf90_create (file_proc, NF90_CLOBBER, ncid)
+# ifdef NETCDF_PARALLEL
        else
-# ifdef HDF5                    
           call barrier
           
           if(iproc .eq. 0) then
@@ -220,8 +222,8 @@ contains
           goto 1
        end if
 
-# ifdef HDF5
-       if(.not.many) then
+# ifdef NETCDF_PARALLEL
+       if(.not.save_many) then
           istatus = nf90_put_att(ncid, NF90_GLOBAL, 'layout', layout)
           if (istatus /= NF90_NOERR) then
              ierr = error_unit()
@@ -245,13 +247,16 @@ contains
              write(ierr,*) "nf90_def_dim sign error: ", nf90_strerror(istatus)
              goto 1
           end if
-          
-          if(many) then
+
+# ifdef NETCDF_PARALLEL                              
+          if(save_many) then
+# endif
              istatus = nf90_def_dim (ncid, "glo", n_elements, gloid)
+# ifdef NETCDF_PARALLEL                    
           else        
              istatus = nf90_def_dim (ncid, "glo", total_elements, gloid)
           endif
-
+# endif
           if (istatus /= NF90_NOERR) then
              ierr = error_unit()
              write(ierr,*) "nf90_def_dim glo error: ", nf90_strerror(istatus)
@@ -557,8 +562,9 @@ contains
        end if
     end if
 
-
-    if(many .or. iproc == 0) then
+# ifdef NETCDF_PARALLEL                    
+    if(save_many .or. iproc == 0) then
+# endif
 
        istatus = nf90_put_var (ncid, delt0id, delt0)
        if (istatus /= NF90_NOERR) then
@@ -656,11 +662,11 @@ contains
 
        tmpr = real(g)
 
-# ifdef HDF5
-       if(many) then
+# ifdef NETCDF_PARALLEL
+       if(save_many) then
 # endif
           istatus = nf90_put_var (ncid, gr_id, tmpr)
-#ifdef HDF5
+#ifdef NETCDF_PARALLEL
        else
           istatus = nf90_var_par_access(ncid, gr_id, NF90_COLLECTIVE)
           istatus = nf90_var_par_access(ncid, gi_id, NF90_COLLECTIVE)
@@ -675,11 +681,11 @@ contains
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gr_id)
        
        tmpr = aimag(g)
-# ifdef HDF5
-       if(many) then
+# ifdef NETCDF_PARALLEL
+       if(save_many) then
 # endif
           istatus = nf90_put_var (ncid, gi_id, tmpr)
-#ifdef HDF5
+#ifdef NETCDF_PARALLEL
        else
           istatus = nf90_put_var (ncid, gi_id, tmpr, start=start_pos, count=counts)
        endif
@@ -721,7 +727,9 @@ contains
        END IF
        !</DD> Added for saving distribution function
 
-       if(many .or. iproc == 0) then
+# ifdef NETCDF_PARALLEL                    
+       if(save_many .or. iproc == 0) then
+# endif
 
           if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
           if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))
@@ -790,7 +798,7 @@ contains
 
   end subroutine gs2_save_for_restart
 
-  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, many_flag)
+  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar)
 !MR, 2007: restore kx_shift array if already allocated
 # ifdef NETCDF
     use mp, only: proc0, iproc, nproc
@@ -807,21 +815,13 @@ contains
     real, intent (in) :: scale
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
-    logical, intent (in), optional :: many_flag
-    logical :: many
 # ifdef NETCDF
     integer, dimension(3) :: counts, start_pos
     character (306) :: file_proc
     character (10) :: suffix
     integer :: i, n_elements, ierr
     real :: fac
-
-    if(present(many_flag)) then
-       many = many_flag
-    else
-       many = .false.
-    endif
-
+    
     n_elements = g_lo%ulim_proc-g_lo%llim_proc+1
     if (n_elements <= 0) return
     
@@ -829,13 +829,13 @@ contains
 !       initialized = .true.
        file_proc = trim(restart_file)
 
-# ifdef HDF5
-       if(many) then
+# ifdef NETCDF_PARALLEL
+       if(read_many) then
 # endif
           write (suffix,'(a1,i0)') '.', iproc
           file_proc = trim(trim(file_proc)//adjustl(suffix))       
           istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
-# ifdef HDF5
+# ifdef NETCDF_PARALLEL
        else
           istatus = nf90_open (file_proc, NF90_NOWRITE, ncid, comm=communicator, info=mpi_info)
        endif
@@ -872,11 +872,11 @@ contains
        
        istatus = nf90_inquire_dimension (ncid, gloid, len=i)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=gloid)
-#ifdef HDF5       
-       if(many) then
+#ifdef NETCDF_PARALLEL       
+       if(read_many) then
 #endif
           if (i /= g_lo%ulim_proc-g_lo%llim_proc+1) write(*,*) 'Restart error: glo=? ',i,' : ',iproc
-#ifdef HDF5
+#ifdef NETCDF_PARALLEL
        else
           if (i /= g_lo%ulim_world+1) write(*,*) 'Restart error: glo=? ',i,' : ',iproc
        endif
@@ -931,11 +931,11 @@ contains
          allocate (tmpi(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
 
     tmpr = 0.; tmpi = 0.
-# ifdef HDF5
-    if(many) then
+# ifdef NETCDF_PARALLEL
+    if(read_many) then
 # endif
        istatus = nf90_get_var (ncid, gr_id, tmpr)
-#ifdef HDF5
+#ifdef NETCDF_PARALLEL
     else
        start_pos = (/1,1,g_lo%llim_proc+1/)
        counts = (/2*ntgrid+1, 2, n_elements/)
@@ -945,11 +945,11 @@ contains
 
    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gr_id)
 
-# ifdef HDF5
-    if(many) then
+# ifdef NETCDF_PARALLEL
+    if(read_many) then
 # endif
        istatus = nf90_get_var (ncid, gi_id, tmpi)
-#ifdef HDF5
+#ifdef NETCDF_PARALLEL
     else
        istatus = nf90_get_var (ncid, gi_id, tmpi, start=start_pos, count=counts)
     end if
@@ -1035,10 +1035,8 @@ contains
   subroutine init_save (file)
     use mp, only: proc0
     character(300), intent (in) :: file
-
     
     restart_file = file
-!    if(proc0) write (*,*) "Set restart_file"
 
   end subroutine init_save
 
@@ -1058,7 +1056,6 @@ contains
 
     if (proc0) then
 
-!          write (*,*) "Starting restore_current_scan_parameter_value"
       !if (.not. initialized) then
 
           file_proc = trim(restart_file)
@@ -1084,7 +1081,7 @@ contains
                  current_scan_parameter_value_id_local)
 
 
-            write (*,*) "Retrieved current_scan_parameter_value"
+!            write (*,*) "Retrieved current_scan_parameter_value"
       !   endif           
         
       !   if (.not.initialized) istatus = nf90_close (ncid_local)
@@ -1092,39 +1089,36 @@ contains
 
     !call broadcast (istatus)
     call broadcast (current_scan_parameter_value)
-          write (*,*) "Finishing restore_current_scan_parameter_value"
+    !write (*,*) "Finishing restore_current_scan_parameter_value"
 
 # endif
    end subroutine restore_current_scan_parameter_value
 
-  subroutine init_dt (delt0, istatus, many_flag)
+  subroutine init_dt (delt0, istatus)
 
 # ifdef NETCDF
-    use mp, only: nproc, proc0, broadcast
+    use mp, only: nproc, proc0, iproc, broadcast
     use file_utils, only: error_unit
 # endif
     implicit none
     real, intent (in out) :: delt0
     integer, intent (out) :: istatus
-    logical, intent(in), optional :: many_flag
-    logical :: many
 # ifdef NETCDF
     character (306) :: file_proc        
 
     if (proc0) then
-       if(present(many_flag)) then
-          many = many_flag
-       else
-          many = .false.
-       endif
 
        if (.not. initialized) then
 
-          if(many) then
+# ifdef NETCDF_PARALLEL
+          if(read_many) then
+# endif
              file_proc=trim(trim(restart_file)//'.0')
+# ifdef NETCDF_PARALLEL
           else 
              file_proc=trim(trim(restart_file))
           end if
+# endif
 
           istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus,file=file_proc)
@@ -1150,30 +1144,22 @@ contains
 
   end subroutine init_dt
 
-  subroutine init_vnm (vnm, istatus, many_flag)
+  subroutine init_vnm (vnm, istatus)
 
 # ifdef NETCDF
-    use mp, only: nproc, proc0, broadcast
+    use mp, only: nproc, proc0, iproc,broadcast
     use file_utils, only: error_unit
 # endif
     implicit none
     real, dimension(2), intent (in out) :: vnm
     integer, intent (out) :: istatus
-    logical, optional :: many_flag
-    logical :: many
 # ifdef NETCDF
     character (306) :: file_proc
-
-    if(present(many_flag)) then
-       many = many_flag
-    else
-       many = .false.
-    endif
 
     if (proc0) then
        if (.not.initialized) then
 
-          if(many) then
+          if(read_many) then
              file_proc=trim(trim(restart_file)//'.0')
           else 
              file_proc=trim(trim(restart_file))
@@ -1220,12 +1206,11 @@ contains
     use file_utils, only: error_unit
     use constants, only: zi
 # endif
-    use mp, only: proc0
+    use mp, only: proc0,iproc
     implicit none
     complex, dimension(:), intent (in out) :: a_ant, b_ant
     integer, intent (in) :: nk_stir
     integer, intent (out) :: istatus
-    logical :: many = .FALSE.
 # ifdef NETCDF
     character (306) :: file_proc
     integer :: ierr, i
@@ -1233,12 +1218,15 @@ contains
     if (proc0) then
        a_ant = 0. ; b_ant = 0.
 
-       if(many) then
+# ifdef NETCDF_PARALLEL
+       if(read_many) then
+# endif
           file_proc=trim(trim(restart_file)//'.0')
+# ifdef NETCDF_PARALLEL
        else 
           file_proc=trim(trim(restart_file))
        end if
-       
+# endif       
        istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
        if (istatus /= NF90_NOERR) then
           ierr = error_unit()
@@ -1299,34 +1287,29 @@ contains
 
   end subroutine init_ant_amp
 
-  subroutine init_tstart (tstart, istatus, many_flag)
+  subroutine init_tstart (tstart, istatus)
 
 # ifdef NETCDF
-    use mp, only: nproc, proc0, broadcast
+    use mp, only: nproc, proc0, iproc, broadcast
     use file_utils, only: error_unit
 # endif
     implicit none
     real, intent (in out) :: tstart
     integer, intent (out) :: istatus
-    logical, optional :: many_flag
-    logical :: many
 # ifdef NETCDF
     character (306) :: file_proc
     integer :: ierr
 
     if (proc0) then
-       
-       if(present(many_flag)) then
-          many = many_flag
-       else
-          many = .false.
-       endif
-
-       if(many) then
+# ifdef NETCDF_PARALLEL
+       if(read_many) then
+# endif
           file_proc=trim(trim(restart_file)//'.0')
+# ifdef NETCDF_PARALLEL
        else 
           file_proc=trim(trim(restart_file))
        end if
+# endif
 
        if (.not.initialized) then
 
@@ -1343,6 +1326,7 @@ contains
           tstart = -1.
        end if           
        if (.not.initialized) istatus = nf90_close (ncid)
+          
     endif
 
     call broadcast (istatus)

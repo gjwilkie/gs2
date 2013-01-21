@@ -4,6 +4,7 @@
 
 module gs2_diagnostics
   use gs2_heating, only: heating_diagnostics
+  use gs2_save, only: save_many
 
   implicit none
 
@@ -52,7 +53,6 @@ module gs2_diagnostics
   logical, public :: dump_check1, dump_check2
   logical, public :: dump_fields_periodically, make_movie
   logical, public :: save_for_restart
-  logical, public :: save_many
   logical, public :: save_distfn !<DD> Added for saving distribution function
   logical, public :: write_symmetry, write_correlation_extend, write_correlation
   integer, public :: nwrite, igomega, nmovie
@@ -79,7 +79,8 @@ module gs2_diagnostics
          write_full_moments_notgc, write_cross_phase, &
          dump_check1, dump_check2, &
          dump_fields_periodically, make_movie, &
-         save_for_restart, save_many, write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
+         save_for_restart, save_many, &
+         write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time
 
@@ -1019,7 +1020,7 @@ contains
 
     if (save_for_restart) then
        call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
-            fphi, fapar, fbpar, exit_in=.true.,save_many=save_many)
+            fphi, fapar, fbpar, exit_in=.true.)
     end if
 
     !<DD> Added for saving distribution function
@@ -1029,7 +1030,7 @@ contains
     	
     	!Save dfn, fields and velocity grids to file
        	CALL gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
-          	fphi, fapar, fbpar, exit_in=.true.,distfn=.true.,save_many=save_many)
+          	fphi, fapar, fbpar, exit_in=.true.,distfn=.true.)
     	
         !Convert distribution function back to h
         CALL g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
