@@ -253,7 +253,7 @@ ifdef USE_HDF5
 	ifdef USE_MPI
 		FC = $(H5FC_par)
 		CC = $(H5CC_par)
-		CPPFLAGS += -DHDF5
+		CPPFLAGS += -DNETCDF_PARALLEL
 	else
 		FC = $(H5FC)
 		CC = $(H5CC)

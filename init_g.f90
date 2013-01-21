@@ -570,7 +570,7 @@ contains
   end subroutine check_init_g
 
   subroutine init_init_g
-    use gs2_save, only: init_save
+    use gs2_save, only: init_save, read_many
     use gs2_layouts, only: init_gs2_layouts
     use mp, only: proc0, broadcast, job
     implicit none
@@ -580,7 +580,7 @@ contains
     if (initialized) return
     initialized = .true.
     call init_gs2_layouts
-
+   
     if (proc0) call read_parameters
 
     ! prepend restart_dir to restart_file
@@ -627,6 +627,7 @@ contains
     call broadcast (even)
     call broadcast (left)
     call broadcast (restart_file)
+    call broadcast (read_many)
     call broadcast (ikk)
     call broadcast (itt) 
     call broadcast (ikkk)
@@ -748,7 +749,7 @@ contains
        scale = 1.
     case (ginitopt_restart_many)
        call ginit_restart_many 
-       call init_tstart (tstart, istatus, .true.)
+       call init_tstart (tstart, istatus)
        restarted = .true.
        scale = 1.
     case (ginitopt_restart_small)
@@ -779,6 +780,8 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, run_name, input_unit_exist
     use text_options, only: text_option, get_option_value
+    use gs2_save, only: read_many
+
     implicit none
 
     type (text_option), dimension (32), parameter :: ginitopts = &
@@ -817,7 +820,7 @@ contains
             /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
-         restart_file, restart_dir, left, ikk, itt, scale, tstart, zf_init, &
+         restart_file, restart_dir, read_many, left, ikk, itt, scale, tstart, zf_init, &
          den0, upar0, tpar0, tperp0, imfac, refac, even, &
          den1, upar1, tpar1, tperp1, &
          den2, upar2, tpar2, tperp2, dphiinit, apar0, &
@@ -1796,9 +1799,8 @@ contains
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
     integer :: iglo, istatus, ierr
     integer :: ig, ik, it, il, is, j
-    logical :: many = .false.
     
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -1912,9 +1914,8 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
     integer :: iglo, istatus
     integer :: ig, ik, it, is, il, ierr
-    logical :: many = .false.
     
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -2014,9 +2015,8 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
     integer :: iglo, istatus
     integer :: ig, ik, it, is, il, ierr
-    logical :: many = .false.
     
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -2106,9 +2106,8 @@ contains
     integer :: iglo, istatus
 !    integer :: ig, ik, it, is, il, ierr
     integer :: ik, it, ierr
-    logical :: many = .false.
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -3346,9 +3345,8 @@ contains
     use run_parameters, only: fphi, fapar, fbpar    
     implicit none
     integer :: istatus, ierr
-    logical :: many = .false.
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -3366,9 +3364,8 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     implicit none
     integer :: istatus, ierr
-    logical :: many = .true.
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
 
     if (istatus /= 0) then
        ierr = error_unit()
@@ -3387,12 +3384,10 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     implicit none
     integer :: istatus, ierr
-    logical :: many = .false.
-
 
     call ginit_noise
 
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
@@ -3420,7 +3415,6 @@ contains
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
     integer :: istatus, ierr
-    logical :: many = .true.
     real :: a, b
     integer :: iglo
 !    integer :: ig, ik, it, il, is
@@ -3491,7 +3485,6 @@ contains
     implicit none
 !     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
     integer :: istatus, ierr
-    logical :: many = .true.
     real :: a, b
     integer :: iglo
 !    integer :: ig, ik, it, il, is
