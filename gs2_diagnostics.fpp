@@ -1024,17 +1024,17 @@ contains
     end if
 
     !<DD> Added for saving distribution function
-    IF (save_distfn) THEN
+    if (save_distfn) then
     	!Convert h to distribution function
-    	CALL g_adjust(gnew,phinew,bparnew,fphi,fbpar)
+    	call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
     	
     	!Save dfn, fields and velocity grids to file
-       	CALL gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
+       	call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
           	fphi, fapar, fbpar, exit_in=.true.,distfn=.true.)
     	
         !Convert distribution function back to h
-        CALL g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
-    END IF
+        call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
+    end if
 
     !</DD> Added for saving distribution function
     

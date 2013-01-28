@@ -37,11 +37,12 @@ contains
   !! (EGH - used for Trinity?)
 
 
-!subroutine run_gs2 (mpi_comm, filename, nensembles, pflux, qflux, vflux, heat, dvdrho, grho, nofinish)
-subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, dvdrho, grho)
+subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
+     pflux, qflux, vflux, heat, dvdrho, grho)
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
+    use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields, advance
     use species, only: ions, electrons, impurity
@@ -60,24 +61,31 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
     use fields_implicit, only: time_field
+    use gs2_layouts, only: layout
     use parameter_scan, only: update_scan_parameter_value
     implicit none
 
     integer, intent (in), optional :: mpi_comm, job_id, nensembles
     character (*), intent (in), optional :: filename
     real, dimension (:), intent (out), optional :: pflux, qflux, heat
-!    real, intent (out), optional :: dvdrho, grho, vflux
+    real, intent (out), optional :: vflux
     real, intent (out), optional :: dvdrho, grho
 
     real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
     real :: time_total(2) = 0.
     real :: time_interval
+    real :: time_main_loop(2)
+    real :: time_main_loop_min,time_main_loop_max,time_main_loop_av
+
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
     logical :: first_time = .true.
     logical :: nofin= .false.
 !    logical, optional, intent(in) :: nofinish
     character (500), target :: cbuff
+
+    time_main_loop(1) = 0.
+    time_main_loop(2) = 0.
 
 !
 !CMR, 12/2/2010: 
@@ -99,9 +107,13 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
        ! <doc> Report # of processors being used </doc>
        if (proc0) then
           if (nproc == 1) then
-             if (.not. nofin) write(*,*) 'Running on ',nproc,' processor'
-          else
-             if (.not. nofin) write(*,*) 'Running on ',nproc,' processors'
+             if (.not. nofin) then
+	        write(*,*) 'Running on ',nproc,' processor'
+	     end if 
+         else
+             if (.not. nofin) then
+	        write(*,*) 'Running on ',nproc,' processors'
+	     end if	  
           end if
           write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
@@ -161,6 +173,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     
     call loop_diagnostics(0,exit)
     
+    if (proc0) write(*,*) 'layout ',layout
+
+    call time_message(.false.,time_main_loop,' Main Loop')
+
     do istep = 1, nstep
        
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
@@ -192,6 +208,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
        end if
     end do
 
+    call time_message(.false.,time_main_loop,' Main Loop')
+
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
     if (proc0 .and. .not. present(job_id)) call write_dt
@@ -215,12 +233,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
              qflux(3) = qflux_avg(impurity)/time_interval
              heat(3) = heat_avg(impurity)/time_interval
           end if
-!       vflux = vflux_avg(1)/time_interval
        else
           pflux = pflux_avg/time_interval
           qflux = qflux_avg/time_interval
           heat = heat_avg/time_interval
        end if
+       vflux = vflux_avg(1)/time_interval
     else
        if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
        if (.not.nofin) call finish_gs2
@@ -292,8 +310,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
 
   end subroutine finish_gs2
 
-!  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, nu, nensembles)
-  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, nu, nensembles)
+  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
 
     use dist_fn, only: d_reset => reset_init
     use collisions, only: vnmult, c_reset => reset_init
@@ -314,12 +331,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
     implicit none
 
     integer, intent (in) :: ntspec, nensembles
-!    real, intent (in) :: gexb
+    real, intent (in) :: gexb, mach
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
 
     integer :: istatus
 
-    ! doing nothing with gexb for now, but in will need to when
+    ! doing nothing with gexb or mach for now, but in future will need to when
     ! using GS2 to evolve rotation profiles in TRINITY
 
     if (nensembles > 1) call scope (subprocs)
@@ -349,8 +366,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
   end subroutine reset_gs2
 
   subroutine gs2_trin_init (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift, &
-!       betaprim, ntspec, dens, temp, fprim, tprim, gexb, nu, use_gs2_geo)
-       betaprim, ntspec, dens, temp, fprim, tprim, nu, use_gs2_geo)
+       betaprim, ntspec, dens, temp, fprim, tprim, gexb, mach, nu, use_gs2_geo)
 
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo
@@ -359,16 +375,16 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, pflux, qflux, heat, 
 
     integer, intent (in) :: ntspec
     real, intent (in) :: rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift
-    real, intent (in) :: betaprim
-!    real, intent (in) :: gexb
+    real, intent (in) :: betaprim, gexb, mach
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
     logical, intent (in) :: use_gs2_geo
 
-    ! for now do nothing with gexb, but need to include later if want to use GS2
+    ! for now do nothing with gexb or mach, but need to include later if want to use GS2
     ! with TRINITY to evolve rotation profiles
 
     call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
-    if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift, betaprim)
+    if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, &
+         aspr, kap, kappri, tri, tripri, shift, betaprim)
     
   end subroutine gs2_trin_init
 

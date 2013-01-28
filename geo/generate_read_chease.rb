@@ -84,7 +84,7 @@ module read_chease
 #{zero_dim_vars.map{ |v|
 "
     read(infile, *)
-    read(infile, *), #{v}
+    read(infile, *) #{v}
 "}.join("\n")}
 
     allocate(psi_chease(npsi_chease))

@@ -80,7 +80,7 @@ module le_grids
   public :: integrate_species, write_mpdist, write_mpdist_le
   public :: energy, anon, al, delal, jend, forbid, dele, wl, w
   public :: negrid, nlambda, ng2, nxi, lmax, integrate_moment, nesub
-  public :: xloc, sgn, ixi_to_il, ixi_to_isgn, speed
+  public :: xloc, sgn, ixi_to_il, ixi_to_isgn, speed, xi
   public :: xx, nterp, new_trap_int, vcut
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
   public :: eint_error, lint_error, trap_error, wdim
@@ -122,6 +122,7 @@ module le_grids
   integer, dimension (:), allocatable :: jend ! (-ntgrid:ntgrid)
   logical, dimension (:,:), allocatable :: forbid ! (-ntgrid:ntgrid,nlambda)
 
+  real, dimension (:,:), allocatable :: xi
   integer, dimension (:,:), allocatable :: ixi_to_il, ixi_to_isgn
   integer, dimension (2) :: sgn
 
@@ -258,6 +259,7 @@ contains
        allocate (xx(ng2))
        allocate (lgrnge(-ntgrid:ntgrid,nlambda,tsize,2))
        allocate (xloc(-ntgrid:ntgrid,tsize))
+       allocate (xi(-ntgrid:ntgrid, 2*nlambda))
        allocate (ixi_to_il(-ntgrid:ntgrid, 2*nlambda))
        allocate (ixi_to_isgn(-ntgrid:ntgrid, 2*nlambda))
     end if
@@ -292,6 +294,7 @@ contains
     end do
 
     do ig = -ntgrid, ntgrid
+       call broadcast (xi(ig,:))
        call broadcast (ixi_to_il(ig,:))
        call broadcast (ixi_to_isgn(ig,:))
     end do
@@ -312,7 +315,7 @@ contains
     nesuper = 2
     ngauss = 5
     negrid = -10
-    vcut = 4.0
+    vcut = 2.5
     bouncefuzz = 1e-5
     in_file=input_unit_exist("le_grids_knobs", exist)
     if (exist) read (unit=in_file, nml=le_grids_knobs)
@@ -323,7 +326,7 @@ contains
 
 ! If user chose negrid, assume nesuper makes sense and check nesub if necessary
     else 
-       nesuper = min(negrid/16+1, 3)
+       nesuper = min(negrid/10+1, 4)
        nesub = negrid - nesuper
     endif
 
@@ -1748,12 +1751,13 @@ contains
 
   subroutine xigridset
 
-    use theta_grid, only: ntgrid
+    use theta_grid, only: ntgrid, bmag
 
     implicit none
 
     integer :: ig, je, ixi
 
+    if (.not. allocated(xi)) allocate (xi(-ntgrid:ntgrid,2*nlambda))
     if (.not. allocated(ixi_to_il)) allocate (ixi_to_il(-ntgrid:ntgrid,2*nlambda))
     if (.not. allocated(ixi_to_isgn)) allocate (ixi_to_isgn(-ntgrid:ntgrid,2*nlambda))
 
@@ -1761,6 +1765,19 @@ contains
     sgn(1) = 1
     sgn(2) = -1
 
+    ! xi is vpa / v and goes from 1 --> -1
+    xi = 0.0
+    do ig = -ntgrid, ntgrid
+       xi(ig,:jend(ig)) = sqrt(max(1.0 - al(:jend(ig))*spread(bmag(ig),1,jend(ig)),0.0))
+       xi(ig,jend(ig)+1:2*jend(ig)-1) = -xi(ig,jend(ig)-1:1:-1)
+!       do ixi = 1, nxi
+!          write (*,*) 'xi', xi(ig,ixi)
+!       end do
+    end do
+
+!    xi = max(xi,0.0)
+!    xi = sqrt(xi)
+    
     ! get mapping from ixi (which runs between 1 and 2*nlambda) and il (runs between 1 and nlambda)
     do ig = -ntgrid, ntgrid
        je = jend(ig)
@@ -2746,12 +2763,16 @@ contains
               if (proc0) then
                  if (.not. forbid(ig,il)) then
                     vpa1 = sqrt(energy(ie)*max(0.0,1.0-al(il)*bmag(ig)))
-                    write (unit,'(6e14.5)') vpa1, energy(ie), &
+                    write (unit,'(7e14.5)') theta(ig), vpa1, energy(ie), &
                          real(gtmp(1)), aimag(gtmp(1)), real(gtmp(2)), aimag(gtmp(2))
 !                    write (unit,'(5e14.5)') theta(ig), vpa1, energy(ie), gtmp(1), gtmp(2)
                  end if
               end if
            end do
+           if (proc0) then
+              write (unit,*)
+              write (unit,*)
+           end if
         end do
         if (proc0) call close_output_file (unit)
         if (present(last)) done = .true.
@@ -2808,7 +2829,7 @@ contains
                  if (proc0) then
                     if (.not. forbid(ig,il)) then
                        vpa1 = sqrt(energy(ie)*max(0.0,1.0-al(il)*bmag(ig)))
-                       write (unit,'(4e14.5)') sgn(isgn)*vpa1, energy(ie), &
+                       write (unit,'(5e14.5)') theta(ig), sgn(isgn)*vpa1, energy(ie), &
                             real(gtmp), aimag(gtmp)
 !                    write (unit,'(5e14.5)') theta(ig), vpa1, energy(ie), gtmp(1), gtmp(2)
                     end if
@@ -2842,6 +2863,7 @@ contains
     if (allocated(wlmod)) deallocate (wlmod)
     if (allocated(wmod)) deallocate (wmod)
     if (allocated(wtmod)) deallocate (wtmod)
+    if (allocated(xi)) deallocate (xi)
     if (allocated(ixi_to_il)) deallocate (ixi_to_il)
     if (allocated(ixi_to_isgn)) deallocate (ixi_to_isgn)
 

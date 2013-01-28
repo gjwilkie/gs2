@@ -636,7 +636,9 @@ leq.o: \
 	 constants.o \
 	 spl.o 
 lowflow.o: \
+	 constants.o \
 	 file_utils.o \
+	 geometry.o \
 	 le_grids.o \
 	 mp.o \
 	 species.o \
@@ -688,8 +690,11 @@ prof.o:
 ran.o: 
 read_chease.o: 
 redistribute.o: \
+	 gs2_layouts.o \
 	 job_manage.o \
-	 mp.o 
+	 kt_grids.o \
+	 mp.o \
+	 theta_grid.o 
 regress.o: \
 	 regression.o 
 regression.o: 
