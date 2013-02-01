@@ -36,6 +36,11 @@ module dist_fn
   public :: mom_coeff_npara, mom_coeff_nperp
   public :: mom_coeff_tpara, mom_coeff_tperp
   public :: mom_shift_para, mom_shift_perp
+!CMR, 25/1/13: 
+!  add public variables below for init_g
+  public :: boundary_option_switch, boundary_option_linked
+  public :: boundary_option_self_periodic, boundary_option_zero
+  public :: init_pass_right, pass_right
 
   private
 
@@ -150,6 +155,8 @@ module dist_fn
   type (redist_type), save :: gc_from_left, gc_from_right
   type (redist_type), save :: links_p, links_h
   type (redist_type), save :: wfb_p, wfb_h
+  type (redist_type), save :: pass_right
+
   integer, dimension (:,:), allocatable :: l_links, r_links
   integer, dimension (:,:,:), allocatable :: n_links
   logical, dimension (:,:), allocatable :: save_h
@@ -2173,6 +2180,124 @@ subroutine check_dist_fn(report_unit)
     end if
 
   end subroutine init_connected_bc
+
+
+
+  subroutine init_pass_right
+! CMR, 29/1/2013: simple new routine sets up "pass_right" redist_type 
+! to pass g(ntgrid,1,iglo) to g(-ntgrid,1,iglo) in right neighbouring flux tube.
+! To be used in init_g.
+    use gs2_layouts, only: g_lo, il_idx, idx, proc_id
+    use le_grids, only: ng2
+    use mp, only: iproc, nproc, max_allreduce
+    use redistribute, only: redist_type
+    use redistribute, only: index_list_type, init_fill, delete_list
+    use theta_grid, only:ntgrid 
+    implicit none
+    type (index_list_type), dimension(0:nproc-1) :: to, from
+    integer, dimension (0:nproc-1) :: nn_from, nn_to
+    integer, dimension(3) :: from_low, from_high, to_low, to_high
+    integer :: il, iglo, ip, iglo_right, ipright, n, nn_max
+    logical :: haslinks=.true.
+    logical :: debug=.false.
+
+      if (boundary_option_switch .eq. boundary_option_linked) then
+! Need communications to satisfy || boundary conditions
+! First find required blocksizes 
+         nn_to = 0   ! # communicates from ip TO HERE (iproc)
+         nn_from = 0 ! # communicates to ip FROM HERE (iproc)
+         do iglo = g_lo%llim_world, g_lo%ulim_world
+            il = il_idx(g_lo,iglo)          
+            if (il > ng2+1) cycle     ! Exclude trapped as not connected
+            ip = proc_id(g_lo,iglo)
+! ONLY interested in right connections here  (for use in init_g)
+            call get_right_connection (iglo, iglo_right, ipright)
+            if (ipright .eq. iproc ) then
+               nn_to(ip)=nn_to(ip)+1
+               if (ip .eq.1 .and. ipright.eq.0) then
+                  write(6,*) "TO 0 from 1:",ip,iglo,ipright,iglo_right
+               endif
+            endif
+            if (ip .eq. iproc .and. ipright .ge. 0 ) then
+               nn_from(ipright)=nn_from(ipright)+1
+               if ( ip .eq. 1 .and. ipright.eq.0 ) then
+                  write(6,*) "FROM 1 to 0:",ip,iglo,ipright,iglo_right
+               endif
+            endif
+         end do
+         nn_max = maxval(nn_to)
+         call max_allreduce (nn_max)
+! skip addressing if no links are needed
+         if (nn_max == 0) then 
+            haslinks=.false.
+         endif
+      endif
+      if (debug) then
+         write(6,*) 'init_pass_right processor, nn_to:',iproc,nn_to
+         write(6,*) 'init_pass_right processor, nn_from:',iproc,nn_from
+      endif
+
+      if (boundary_option_switch.eq.boundary_option_linked .and. haslinks) then
+! 
+! CMR, 25/1/2013: 
+!      communication required to satisfy linked BC
+!      allocate indirect addresses for sends/receives 
+!     
+!      NB communications use "c_fill_3" as g has 3 indices
+!      but 1 index sufficient as only communicating g(ntgrid,1,*)! 
+!      if "c_fill_1" in redistribute we'd only need allocate: from|to(ip)%first 
+!                             could be more efficient
+!  
+         do ip = 0, nproc-1
+            if (nn_from(ip) > 0) then
+               allocate (from(ip)%first(nn_from(ip)))
+               allocate (from(ip)%second(nn_from(ip)))
+               allocate (from(ip)%third(nn_from(ip)))
+            endif
+            if (nn_to(ip) > 0) then
+               allocate (to(ip)%first(nn_to(ip)))
+               allocate (to(ip)%second(nn_to(ip)))
+               allocate (to(ip)%third(nn_to(ip)))
+            endif
+         end do
+! Now fill the indirect addresses...
+         nn_from = 0 ; nn_to = 0          
+         do iglo = g_lo%llim_world, g_lo%ulim_world
+            il = il_idx(g_lo,iglo)          
+            if (il > ng2+1) cycle     ! Exclude disconnected trapped particles
+            ip = proc_id(g_lo,iglo)
+            call get_right_connection (iglo, iglo_right, ipright)
+            if (ip .eq. iproc .and. ipright .ge. 0 ) then 
+               n=nn_from(ipright)+1 ; nn_from(ipright)=n
+               from(ipright)%first(n)=ntgrid
+               from(ipright)%second(n)=1
+               from(ipright)%third(n)=iglo
+            endif
+            if (ipright .eq. iproc ) then 
+               n=nn_to(ip)+1 ; nn_to(ip)=n
+               to(ip)%first(n)=-ntgrid
+               to(ip)%second(n)=1
+               to(ip)%third(n)=iglo_right
+            endif
+         end do
+         if (debug) then
+            write(6,*) 'init_pass_right processor, nn_to:',iproc,nn_to
+            write(6,*) 'init_pass_right processor, nn_from:',iproc,nn_from
+         endif
+
+         from_low(1)=-ntgrid ; from_low(2)=1 ; from_low(3)=g_lo%llim_proc       
+         from_high(1)=ntgrid; from_high(2)=2; from_high(3)=g_lo%ulim_alloc
+         to_low(1)=-ntgrid  ; to_low(2)=1   ; to_low(3)=g_lo%llim_proc       
+         to_high(1)=ntgrid ; to_high(2)=2  ; to_high(3)=g_lo%ulim_alloc
+         call init_fill (pass_right, 'c', to_low, to_high, to, &
+               from_low, from_high, from)
+
+         call delete_list (from)
+         call delete_list (to)
+      endif
+  end subroutine init_pass_right
+
+
 
   subroutine get_left_connection (iglo, iglo_left, iproc_left)
     use gs2_layouts, only: g_lo, proc_id, idx
