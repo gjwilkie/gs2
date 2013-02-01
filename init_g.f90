@@ -18,7 +18,7 @@ module init_g
   integer :: ginitopt_switch
   integer, parameter :: ginitopt_default = 1,  &
        ginitopt_xi = 3, ginitopt_xi2 = 4, ginitopt_rh = 5, ginitopt_zero = 6, &
-       ginitopt_test3 = 7, ginitopt_convect = 8, ginitopt_restart_single = 9, &
+       ginitopt_test3 = 7, ginitopt_convect = 8, ginitopt_restart_file = 9, &
        ginitopt_noise = 10, ginitopt_restart_many = 11, ginitopt_continue = 12, &
        ginitopt_nl = 13, ginitopt_kz0 = 14, ginitopt_restart_small = 15, &
        ginitopt_nl2 = 16, ginitopt_nl3 = 17, ginitopt_nl4 = 18, & 
@@ -34,7 +34,7 @@ module init_g
   real :: den1, upar1, tpar1, tperp1
   real :: den2, upar2, tpar2, tperp2
   real :: tstart, scale, apar0
-  logical :: chop_side, left, even, new_field_init
+  logical :: chop_side, clean_init, left, even, new_field_init
   character(300), public :: restart_file
   character (len=150) :: restart_dir
   integer, dimension(2) :: ikk, itt
@@ -102,6 +102,7 @@ contains
           write (unit, fmt="(' zf_init = ',e16.10)") zf_init
           write (unit, fmt="(' chop_side = ',L1)") chop_side
           if (chop_side) write (unit, fmt="(' left = ',L1)") left
+          write (unit, fmt="(' clean_init = ',L1)") clean_init
 
        case (ginitopt_xi)
           write (unit, fmt="(' ginit_option = ',a)") '"xi"'
@@ -138,7 +139,7 @@ contains
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
           write (unit, fmt="(' scale = ',e16.10)") scale
 
-       case (ginitopt_restart_single)
+       case (ginitopt_restart_file)
           write (unit, fmt="(' ginit_option = ',a)") '"file"'
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
           write (unit, fmt="(' scale = ',e16.10)") scale
@@ -514,9 +515,14 @@ contains
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, *) 
 
-    case (ginitopt_restart_single)
+    case (ginitopt_restart_file)
        write (report_unit, fmt="('Initial conditions:')")
-       write (report_unit, fmt="('Restart from a single NetCDF HDF5 parallel restart file.')") 
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Restart from a single NetCDF restart file.')") 
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
 
     case (ginitopt_restart_many)
        write (report_unit, fmt="('Initial conditions:')")
@@ -580,7 +586,7 @@ contains
     if (initialized) return
     initialized = .true.
     call init_gs2_layouts
-   
+
     if (proc0) call read_parameters
 
     ! prepend restart_dir to restart_file
@@ -626,6 +632,7 @@ contains
     call broadcast (chop_side)
     call broadcast (even)
     call broadcast (left)
+    call broadcast (clean_init)
     call broadcast (restart_file)
     call broadcast (read_many)
     call broadcast (ikk)
@@ -742,8 +749,8 @@ contains
        call ginit_test3
     case (ginitopt_convect)
        call ginit_convect
-    case (ginitopt_restart_single)
-       call ginit_restart_single
+    case (ginitopt_restart_file)
+       call ginit_restart_file 
        call init_tstart (tstart, istatus)
        restarted = .true.
        scale = 1.
@@ -795,7 +802,7 @@ contains
             text_option('rh', ginitopt_rh), &
             text_option('many', ginitopt_restart_many), &
             text_option('small', ginitopt_restart_small), &
-            text_option('single', ginitopt_restart_single), &
+            text_option('file', ginitopt_restart_file), &
             text_option('cont', ginitopt_continue), &
             text_option('kz0', ginitopt_kz0), &
             text_option('nl', ginitopt_nl), &
@@ -820,7 +827,9 @@ contains
             /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
-         restart_file, restart_dir, read_many, left, ikk, itt, scale, tstart, zf_init, &
+         clean_init, restart_file, restart_dir, read_many, &
+         left, ikk, itt, scale, tstart, zf_init, clean_init, &
+         restart_file, restart_dir, left, ikk, itt, scale, tstart, zf_init, &
          den0, upar0, tpar0, tperp0, imfac, refac, even, &
          den1, upar1, tpar1, tperp1, &
          den2, upar2, tpar2, tperp2, dphiinit, apar0, &
@@ -860,6 +869,7 @@ contains
     chop_side = .true.
     left = .true.
     even = .true.
+    clean_init=.false.
     new_field_init = .true.
     ikk(1) = 1
     ikk(2) = 2
@@ -1101,15 +1111,21 @@ contains
     use kt_grids, only: naky, ntheta0, aky, reality
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, proc_id
+    use dist_fn, only: boundary_option_linked, boundary_option_switch
+    use dist_fn, only: boundary_option_self_periodic, boundary_option_zero
+    use dist_fn, only: l_links, r_links
+    use dist_fn, only: init_pass_right, pass_right
+    use redistribute, only: fill
     use ran
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
     real :: a, b
-    integer :: iglo
-    integer :: ig, ik, it, il, is, nn
+    integer :: iglo, ig, ik, it, il, is, nn
+
     !integer :: itstart, itend
 
+!CMR: need to document tracer phit parameter   ;-)
     phit = 0.
     do it=2,ntheta0/2+1
        nn = it-1
@@ -1121,30 +1137,58 @@ contains
 
   !write (*,*) "ikx_init is", ikx_init
 
-
      do it = 1, ntheta0
        do ik = 1, naky
           do ig = -ntgrid, ntgrid
              a = ranf()-0.5
              b = ranf()-0.5
-!             phi(:,it,ik) = cmplx(a,b)
              phi(ig,it,ik) = cmplx(a,b)
            end do
+!CMR,28/1/13: 
+! clean_init debrutalises influence of chop_side on phi with linked bc
           if (chop_side) then
              if (left) then
-                phi(:-1,it,ik) = 0.0
+                if (clean_init) then
+                   if (boundary_option_switch .eq. boundary_option_linked) then
+                      if (l_links(ik,it) .lt. r_links(ik,it)) then
+                         phi(:,it,ik) = 0.0 
+                      else if (l_links(ik,it) .eq. r_links(ik,it)) then
+                        phi(:-1,it,ik) = 0.0
+                      endif
+                   else
+                      phi(:-1,it,ik) = 0.0
+                   endif
+                else
+                   phi(:-1,it,ik) = 0.0
+                endif
              else
-                phi(1:,it,ik) = 0.0
-             end if
+                if (clean_init) then
+                   if (boundary_option_switch .eq. boundary_option_linked) then
+                      if (r_links(ik,it) .lt. l_links(ik,it)) then
+                         phi(:,it,ik) = 0.0
+                      else if (l_links(ik,it) .eq. r_links(ik,it)) then
+                         phi(1:,it,ik) = 0.0
+                      endif
+                   else
+                      phi(1:,it,ik) = 0.0
+                   endif
+                else
+                   phi(1:,it,ik) = 0.0
+                endif
+             endif
           end if
        end do
     end do
 
-
     if (ikx_init  > 0) call single_initial_kx(phi)
 
-    if (naky > 1 .and. aky(1) == 0.0) then
+    if (naky .ge. 1 .and. aky(1) == 0.0) then
        phi(:,:,1) = phi(:,:,1)*zf_init
+       if (clean_init .and. boundary_option_switch.eq.boundary_option_linked) then
+!CMR, 25/1/13: clean_init forces periodic zonal flows
+          phi(ntgrid,:,1)=phi(-ntgrid,:,1)
+          phit(ntgrid,:,1)=phit(-ntgrid,:,1)
+       end if
     end if
 ! reality condition for k_theta = 0 component:
     if (reality) then
@@ -1153,7 +1197,7 @@ contains
           phit(:,it+(ntheta0+1)/2,1) = conjg(phit(:,(ntheta0+1)/2+1-it,1))
        enddo
     end if
-       
+
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
@@ -1165,10 +1209,31 @@ contains
           g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit
        end if
        where (forbid(:,il)) g(:,1,iglo) = 0.0
-       g(:,2,iglo) = g(:,1,iglo)
+       if ( clean_init .and. boundary_option_switch .eq. boundary_option_linked .and. ik .gt. 1) then
+!CMR: clean_init sets g=0 for incoming particles, 
+!                         and outgoing particles
+!                      as initial condition sets g(:,1,:) = g(:,2,:) )
+          if ( l_links(ik,it) .eq. 0 ) g(-ntgrid,1,iglo)=0.0
+          if ( r_links(ik,it) .eq. 0 ) g(ntgrid,1,iglo)=0.0
+       endif
     end do
-    gnew = g
 
+    if ( clean_init .and. boundary_option_switch .eq. boundary_option_linked .and. sum(r_links+l_links) .gt. 0 ) then
+!   
+!CMR, 23/1/13:  
+!  clean_init: ensure continuity in || direction with linked bcs
+!  set up redistribute type pass_right 
+!  this passes g(ntgrid,1,iglo) to g(-ntgrid,1,iglo_r) on right neighbour 
+         call init_pass_right
+         gnew(:,1,:)=g(:,1,:)
+         call fill(pass_right,g,gnew)
+         gnew(:,2,:)=gnew(:,1,:)
+         g=gnew
+    else 
+! finally initialise isign=2
+       g(:,2,:) = g(:,1,:)
+       gnew = g
+    endif
   end subroutine ginit_noise
 
  	!> Initialize with a single parallel mode. Only makes sense in a linear 
@@ -2106,7 +2171,7 @@ contains
     integer :: iglo, istatus
 !    integer :: ig, ik, it, is, il, ierr
     integer :: ik, it, ierr
-
+    
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
@@ -3337,12 +3402,12 @@ contains
 
   end subroutine ginit_recon3
 
-  subroutine ginit_restart_single
+  subroutine ginit_restart_file
     use dist_fn_arrays, only: g, gnew
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar    
+    use run_parameters, only: fphi, fapar, fbpar
     implicit none
     integer :: istatus, ierr
 
@@ -3354,7 +3419,7 @@ contains
     end if
     gnew = g
 
-  end subroutine ginit_restart_single
+  end subroutine ginit_restart_file
 
   subroutine ginit_restart_many
     use dist_fn_arrays, only: g, gnew
