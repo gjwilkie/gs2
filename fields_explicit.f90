@@ -1,4 +1,4 @@
-! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 module rk_schemes
 
@@ -218,6 +218,7 @@ module dg_scheme
 
   integer :: p = 3  !  scheme order, = number of FD grid points per finite element
   integer :: ne     !  number of finite elements
+  integer :: ntgriddg  !  array upper bound in theta direction
 
   !  Normalised parallel velocity, omega drift
 
@@ -230,7 +231,7 @@ module dg_scheme
 
   !  Adaptive timestep variables
 
-  logical :: adaptive_dt = .false.  !  master switch for adaptive timestep algorithm
+  logical :: adaptive_dt = .true.  !  master switch for adaptive timestep algorithm
   logical :: adaptive_dt_reset = .false.
   real :: adaptive_dt_new
 
@@ -522,14 +523,21 @@ contains
     end if
 
     !  ne is the number of finite elements,
-    !  each representing p finite difference grid points
+    !  each representing p finite difference grid points.
+    !  ne*p is guaranteed to cover at least (-ntgrid:ntgrid) grid points
 
-    ne = (2*ntgrid+1)/p
+    ne = ceiling( real(2*ntgrid+1)/p )
+
+    !  ntgriddg is the new upper bound for arrays (local to this module)
+    !  in the theta direction, guaranteeing that exactly p grid points
+    !  lie on each finite element
+
+    ntgriddg = ne*p - ntgrid - 1
 
     if (.not.allocated(v)) then
        allocate( &
-            v(-ntgrid:ntgrid,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
-            wd(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_proc) )
+            v(-ntgrid:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
+            wd(-ntgrid:ntgriddg,g_lo%llim_proc:g_lo%ulim_proc) )
     end if
 
   end subroutine init_dg_scheme
@@ -574,14 +582,15 @@ contains
     integer :: modep
     complex, parameter :: z1 = (1.0, 0.0)
     complex, allocatable, dimension (:,:,:) :: gmodal, gnew1, gnew2
-
+    complex, allocatable, dimension (:,:,:) :: g_dg  ! local copy of g
+                                                     ! with extended theta range
     integer, save :: first_call = 1
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     istep_dg = istep  !  to pass into dydt routine
 
-    lb1 = -ntgrid ; ub1 = ntgrid
+    lb1 = -ntgrid ; ub1 = ntgriddg
     lb3 = g_lo%llim_proc ; ub3 = g_lo%ulim_proc
     nx = (ub1-lb1+1)*2*(ub3-lb3+1)
 
@@ -593,7 +602,9 @@ contains
     !-PJK
 
     allocate( gmodal(lb1:ub1,1:2,lb3:ub3), &
-         gnew1(lb1:ub1,1:2,lb3:ub3), gnew2(lb1:ub1,1:2,lb3:ub3) )
+         gnew1(lb1:ub1,1:2,lb3:ub3), &
+         gnew2(lb1:ub1,1:2,lb3:ub3), &
+         g_dg(lb1:ub1,1:2,lb3:ub3))
 
     modep = 0
     !if (present(mode)) modep = mode
@@ -624,6 +635,10 @@ contains
           wd(ig,iglo)  = spec(is)%tz * (wdrift(ig,iglo) + wcoriolis(ig,iglo))
        end do
        v(ntgrid,:,iglo) = 0.0  !  since delthet(ntgrid) = 0.0...
+
+       !  Zero values outside 'true' range
+       v(ntgrid+1:ntgriddg,:,iglo) = 0.0
+       wd(ntgrid+1:ntgriddg,iglo) = 0.0
     end do
 
     !  Evaluate fields at old timestep (still need to do this because of
@@ -638,6 +653,11 @@ contains
 
     call g_adjust_exp (g, apar, fapar)  !  convert g to i
 
+    !  Initialise g_dg, = g but with expanded theta range for DG finite elements
+
+    g_dg = 0.0
+    g_dg(-ntgrid:ntgrid,:,:) = g
+
     !  On first call only, approximate the 'best' choice for the
     !  initial time step
 
@@ -645,7 +665,7 @@ contains
        dt = code_dt
        adaptive_dt_reset = .false.
        if (first_call == 1) then
-          call adaptive_dt0(g,p,code_time,dt0,dt,dtmin,dtmax,epsr,epsa)
+          call adaptive_dt0(g_dg,p,code_time,dt0,dt,dtmin,dtmax,epsr,epsa)
           if (dt /= code_dt) then
              adaptive_dt_reset = .true.
              adaptive_dt_new = dt
@@ -654,7 +674,7 @@ contains
        end if
     end if
 
-    gmodal = g
+    gmodal = g_dg
     call nodal2modal(gmodal,lb1,ub1,1,2,lb3,ub3)
 
     !  Time-advance using Runge-Kutta pair method
@@ -671,7 +691,7 @@ contains
        !  Actual difference between 2nd and 3rd order estimates
        g3dn = maxval(abs(gnew2-gnew1)) ; call max_allreduce(g3dn)
 
-       gomax = maxval(abs(g)) ; call max_allreduce(gomax)
+       gomax = maxval(abs(g_dg)) ; call max_allreduce(gomax)
        gnmax = maxval(abs(gnew2)) ; call max_allreduce(gnmax)
 
        !  (reps *) Maximum allowed difference between 2nd and 3rd order estimates
@@ -687,9 +707,9 @@ contains
              dtmax_damped = min(dtmax_damped,dt)
           end if
           zdt = max(zhf*dt,dtmin)
-!!!          zdt = min(zdt,dtmax_damped)  !  Uncomment for 'damped' dt
+          zdt = min(zdt,dtmax_damped)  !  Uncomment for 'damped' dt
           dt = zdt
-          gnew = gnew1
+          gnew = gnew1(-ntgrid:ntgrid,:,:)
           lfail = .false.
           !write(*,*) 'Success: old dt, new dt = ',code_dt, dt
 
@@ -719,7 +739,7 @@ contains
        end if
 
     else
-       gnew = gnew1
+       gnew = gnew1(-ntgrid:ntgrid,:,:)
     end if
 
     !  Evaluate fields at new timestep
@@ -757,7 +777,7 @@ contains
     !-PJK
 
     if (allocated(gnew1)) then
-       deallocate(gmodal,gnew1,gnew2)
+       deallocate(gmodal,gnew1,gnew2,g_dg)
     end if
 
   end subroutine advance_explicit
@@ -774,7 +794,7 @@ contains
 
     !  Arguments
 
-    complex, dimension(-ntgrid:ntgrid,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
+    complex, dimension(-ntgrid:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
          intent(in) :: y       !  g_old (actually i_old)
     integer, intent(in) :: p   !  order of the spatial Legendre fit
     real, intent(in) :: t      !  code_time
@@ -794,7 +814,7 @@ contains
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    lb1 = -ntgrid ; ub1 = ntgrid
+    lb1 = -ntgrid ; ub1 = ntgriddg
     lb2 = 1 ; ub2 = 2
     lb3 = g_lo%llim_proc ; ub3 = g_lo%ulim_proc
 
@@ -839,9 +859,9 @@ contains
     !  Arguments
 
     real, intent(in) :: t, dt
-    complex, dimension(-ntgrid:ntgrid,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
+    complex, dimension(-ntgrid:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
          intent(in) :: gmodal
-    complex, dimension(-ntgrid:ntgrid,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
+    complex, dimension(-ntgrid:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
          intent(out) :: dgdt_modal
 
     !  Local variables
@@ -853,7 +873,7 @@ contains
     complex, parameter :: zi = (0.0,1.0)
     logical :: trapped
 
-    complex, allocatable, dimension(:,:,:) :: g
+    complex, allocatable, dimension(:,:,:) :: g, g_dg
     complex, allocatable, dimension(:,:,:) :: dgdt, dgdt_tmp
     complex, allocatable, dimension(:,:,:) :: dgdt_mod
     complex, allocatable, dimension(:) :: iwg, iwg_modal
@@ -881,11 +901,12 @@ contains
          source = (/ 1,3,5, -1,3,5, 1,-3,5, -1,-3,-5, 1,3,5, -1,-3,-5 /), &
          shape = (/ 3,6 /) ))
 
-    lb1 = -ntgrid ; ub1 = ntgrid
+    lb1 = -ntgrid ; ub1 = ntgriddg
     lb3 = g_lo%llim_proc ; ub3 = g_lo%ulim_proc
 
     allocate( &
-         g(lb1:ub1,2,lb3:ub3), &
+         g(-ntgrid:ntgrid,2,lb3:ub3), & ! original theta range
+         g_dg(lb1:ub1,2,lb3:ub3), &
          dgdt(lb1:ub1,2,lb3:ub3), &
          dgdt_tmp(lb1:ub1,2,lb3:ub3), &
          dgdt_mod(lb1:ub1,2,lb3:ub3), &
@@ -903,8 +924,9 @@ contains
 
     !  Obtain g in nodal form
 
-    g = gmodal
-    call modal2nodal(g,lb1,ub1,1,2,lb3,ub3)
+    g_dg = gmodal
+    call modal2nodal(g_dg,lb1,ub1,1,2,lb3,ub3)
+    g = g_dg(-ntgrid:ntgrid,:,:)
 
     !  Evaluate field equations
 
@@ -921,8 +943,9 @@ contains
 
           !  Calculate source term and flux function (nodal)
 
+          src = 0.0 ; fluxfn = 0.0
           call get_source_term_exp(phitmp,apartmp,bpartmp,istep_dg,isgn,iglo, &
-               fluxfn(:),src(:))
+               fluxfn(lb1:ntgrid),src(lb1:ntgrid))
           !  src is actually (2.dt.S), therefore need to divide by 2.dt
           src(:) = src(:)/(2.0*dt*tunits(ik))
           smodal = src
@@ -937,7 +960,8 @@ contains
           !  Evaluate -i*wd*g term
           !  Have to divide wd by dt here
 
-          do ig = lb1,ub1
+          iwg = 0.0
+          do ig = -ntgrid,ntgrid
              if (forbid(ig,il)) then
                 iwg(ig) = 0.0
              else
@@ -950,7 +974,7 @@ contains
 
           !  Add g to F
 
-          gplusf(:) = g(:,isgn,iglo) + fluxfn(:)
+          gplusf(:) = g_dg(:,isgn,iglo) + fluxfn(:)
           gplusf_modal = gplusf
           call nodal2modal(gplusf_modal,lb1,ub1)
 
@@ -1018,7 +1042,7 @@ contains
           call modal2nodal(mgplusf,lb1,ub1)
 
           do ig = lb1,ub1
-             if (forbid(ig,il)) then
+             if ((forbid(ig,il)).or.(ig > ntgrid)) then
                 vterm(ig) = 0.0
              else
                 vterm(ig) = 1.0/(p*dt*tunits(ik)) * v(ig,isgn,iglo) &
@@ -1058,7 +1082,7 @@ contains
 
        if (trapped) then
           lbp = -9999 ; ubp = -9999
-          do ig = lb1,ub1-1
+          do ig = lb1,ntgrid-1
 
              !+PJK prototype stuff for totally trapped particles
              if (il == ittp(ig)) then
@@ -1109,7 +1133,7 @@ contains
     end do ! iglo
 
     dgdt(lb1,1,:) = 0.0
-    dgdt(ub1,2,:) = 0.0
+    dgdt(ntgrid:ntgriddg,2,:) = 0.0
 
     dgdt_modal = dgdt
     call nodal2modal(dgdt_modal,lb1,ub1,1,2,lb3,ub3)
