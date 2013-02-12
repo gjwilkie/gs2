@@ -2,7 +2,7 @@
 
 module gs2_save
 
-  use mp, only: communicator, mpi_info
+  use mp, only: mp_comm, mp_info
 
 # ifdef NETCDF
 !  use netcdf, only: NF90_FLOAT, NF90_DOUBLE
@@ -212,7 +212,7 @@ contains
 
           call barrier
 
-          istatus = nf90_create (file_proc, ior(NF90_HDF5,NF90_CLOBBER), ncid, comm=communicator, info=mpi_info)
+          istatus = nf90_create (file_proc, ior(NF90_HDF5,NF90_CLOBBER), ncid, comm=mp_comm, info=mp_info)
 # endif
        end if
 
@@ -837,7 +837,7 @@ contains
           istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
 # ifdef NETCDF_PARALLEL
        else
-          istatus = nf90_open (file_proc, NF90_NOWRITE, ncid, comm=communicator, info=mpi_info)
+          istatus = nf90_open (file_proc, NF90_NOWRITE, ncid, comm=mp_comm, info=mp_info)
        endif
 # endif
 
