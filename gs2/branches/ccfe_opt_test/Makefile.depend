@@ -598,6 +598,7 @@ init_g.o: \
 	 le_grids.o \
 	 mp.o \
 	 ran.o \
+	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
 	 text_options.o \
@@ -695,11 +696,8 @@ ran.o: \
 	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
-	 gs2_layouts.o \
 	 job_manage.o \
-	 kt_grids.o \
-	 mp.o \
-	 theta_grid.o 
+	 mp.o 
 regress.o: \
 	 regression.o 
 regression.o: 

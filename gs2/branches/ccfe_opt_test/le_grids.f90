@@ -586,7 +586,6 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (out) :: total
 ! total = total(theta, kx, ky)
 !    complex, dimension (:,:), allocatable :: geint
-    complex, dimension (:), allocatable :: work
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i
 
@@ -602,30 +601,9 @@ contains
        total(:, it, ik) = total(:, it, ik) + fac*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
     end do
 
-    allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             work(i) = total(ig, it, ik)
-          end do
-       end do
-    end do
-    
-    call sum_allreduce (work) 
-
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             total(ig, it, ik) = work(i)
-          end do
-       end do
-    end do
-    deallocate (work)
-
+    !<DDHACK>
+    call sum_allreduce(total)
+    !</DDHACK>
   end subroutine integrate_species
 
   subroutine legendre_transform (g, tote, totl, istep, tott)
@@ -636,7 +614,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, idx, idx_local
-    use mp, only: sum_reduce, proc0
+    use mp, only: sum_reduce , proc0
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (0:,-ntgrid:,:,:,:), intent (out) :: tote, totl
@@ -751,71 +729,75 @@ contains
     end do
 
     if (nproc > 1) then
-       allocate (worke((2*ntgrid+1)*naky*ntheta0*nspec*lpesize)) ; worke = 0.
-       allocate (workl((2*ntgrid+1)*naky*ntheta0*nspec*ng2)) ; workl = 0.
+!<DDHACK>
+       ! allocate (worke((2*ntgrid+1)*naky*ntheta0*nspec*lpesize)) ; worke = 0.
+       ! allocate (workl((2*ntgrid+1)*naky*ntheta0*nspec*ng2)) ; workl = 0.
 
-       if (present(tott)) then
-          allocate (workt((2*ntgrid+1)*naky*ntheta0*nspec*(2*(nlambda-ng2)-1)))
-          workt = 0.
-       end if
+       ! if (present(tott)) then
+       !    allocate (workt((2*ntgrid+1)*naky*ntheta0*nspec*(2*(nlambda-ng2)-1)))
+       !    workt = 0.
+       ! end if
 
-       i = 0 ; j = 0 ; k = 0
+       ! i = 0 ; j = 0 ; k = 0
 
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                do ig = -ntgrid, ntgrid
-                   do im = 0, lpesize-1
-                      i = i + 1
-                      worke(i) = tote(im, ig, it, ik, is)
-                   end do
-                   do im = 0, ng2-1
-                      j = j + 1
-                      workl(j) = totl(im, ig, it, ik, is)
-                   end do
-                   if (present(tott)) then
-                      do im = 0, 2*(nlambda-ng2-1)
-                         k = k + 1
-                         workt(k) = tott(im, ig, it, ik, is)
-                      end do
-                   end if
-                end do
-             end do
-          end do
-       end do
+       ! do is = 1, nspec
+       !    do ik = 1, naky
+       !       do it = 1, ntheta0
+       !          do ig = -ntgrid, ntgrid
+       !             do im = 0, lpesize-1
+       !                i = i + 1
+       !                worke(i) = tote(im, ig, it, ik, is)
+       !             end do
+       !             do im = 0, ng2-1
+       !                j = j + 1
+       !                workl(j) = totl(im, ig, it, ik, is)
+       !             end do
+       !             if (present(tott)) then
+       !                do im = 0, 2*(nlambda-ng2-1)
+       !                   k = k + 1
+       !                   workt(k) = tott(im, ig, it, ik, is)
+       !                end do
+       !             end if
+       !          end do
+       !       end do
+       !    end do
+       ! end do
 
-       call sum_reduce (worke, 0)
-       call sum_reduce (workl, 0)
-       if (present(tott)) call sum_reduce (workt, 0)
+       ! call sum_reduce (worke, 0)
+       ! call sum_reduce (workl, 0)
+       ! if (present(tott)) call sum_reduce (workt, 0)
 
-       if (proc0) then
-          i = 0 ; j = 0 ; k = 0
-          do is = 1, nspec
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   do ig = -ntgrid, ntgrid
-                      do im = 0, lpesize-1
-                         i = i + 1
-                         tote(im, ig, it, ik, is) = worke(i)
-                      end do
-                      do im = 0, ng2-1
-                         j = j + 1
-                         totl(im, ig, it, ik, is) = workl(j)
-                      end do
-                      if (present(tott)) then
-                         do im = 0, 2*(nlambda-ng2-1)
-                            k = k + 1
-                            tott(im, ig, it, ik, is) = workt(k)
-                         end do
-                      end if
-                   end do
-                end do
-             end do
-          end do
-       end if
+       ! if (proc0) then
+       !    i = 0 ; j = 0 ; k = 0
+       !    do is = 1, nspec
+       !       do ik = 1, naky
+       !          do it = 1, ntheta0
+       !             do ig = -ntgrid, ntgrid
+       !                do im = 0, lpesize-1
+       !                   i = i + 1
+       !                   tote(im, ig, it, ik, is) = worke(i)
+       !                end do
+       !                do im = 0, ng2-1
+       !                   j = j + 1
+       !                   totl(im, ig, it, ik, is) = workl(j)
+       !                end do
+       !                if (present(tott)) then
+       !                   do im = 0, 2*(nlambda-ng2-1)
+       !                      k = k + 1
+       !                      tott(im, ig, it, ik, is) = workt(k)
+       !                   end do
+       !                end if
+       !             end do
+       !          end do
+       !       end do
+       !    end do
+       ! end if
 
-       deallocate (worke,workl)
-       if (present(tott)) deallocate (workt)
+       ! deallocate (worke,workl)
+       ! if (present(tott)) deallocate (workt)
+       call sum_reduce(tote,0)
+       call sum_reduce(totl,0)
+       if (present(tott)) call sum_reduce(tott,0)
     end if
 
   end subroutine legendre_transform
@@ -872,14 +854,12 @@ contains
     integer, optional, intent(in) :: all
     integer, intent(in) :: istep
 
-    complex, dimension (:), allocatable :: work
     real, dimension (:,:,:), allocatable :: ypt
     integer :: il, ie, ik, it, iglo, ig, i, ix, tsize
 
     allocate(ypt(-ntgrid:ntgrid,nlambda,2))
 
     ypt = 0.0
-
     poly = 0.
     do ie = 1, negrid
        do il = ng2+1, nlambda
@@ -902,48 +882,14 @@ contains
        end do
     end do
 
-    tsize = 2*nterp-1
-
     if (nproc > 1) then
-
-       allocate (work((2*ntgrid+1)*naky*ntheta0*negrid*tsize)) ; work = 0.
-
-       i = 0
-       do ix = 1, tsize
-          do ie = 1, negrid
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   do ig = -ntgrid, ntgrid
-                      i = i + 1
-                      work(i) = poly(ig, it, ik, ie, ix)
-                   end do
-                end do
-             end do
-          end do
-       end do
-       
+       !<DDHACK>
        if (present(all)) then
-          call sum_allreduce (work)
+          call sum_allreduce (poly)
        else
-          call sum_reduce (work, 0)
+          call sum_reduce (poly, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do ix = 1, tsize
-             do ie = 1, negrid
-                do ik = 1, naky
-                   do it = 1, ntheta0
-                      do ig = -ntgrid, ntgrid
-                         i = i + 1
-                         poly(ig, it, ik, ie, ix) = work(i)
-                      end do
-                   end do
-                end do
-             end do
-          end do
-       end if
-       deallocate (work)
+       !</DDHACK>
     end if
 
     deallocate(ypt)
@@ -969,11 +915,9 @@ contains
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     integer, optional, intent(in) :: all
 
-    complex, dimension (:), allocatable :: work
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i
 !    logical :: only = .true.
-
     total = 0.
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -989,39 +933,13 @@ contains
     end do
 
     if (nproc > 1) then
-       allocate (work((2*ntgrid+1)*naky*ntheta0*nspec)) ; work = 0.
-       i = 0
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                do ig = -ntgrid, ntgrid
-                   i = i + 1
-                   work(i) = total(ig, it, ik, is)
-                end do
-             end do
-          end do
-       end do
-       
+       !<DDHACK>
        if (present(all)) then
-          call sum_allreduce (work)
+          call sum_allreduce (total)
        else
-          call sum_reduce (work, 0)
+          call sum_reduce (total, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do is = 1, nspec
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   do ig = -ntgrid, ntgrid
-                      i = i + 1
-                      total(ig, it, ik, is) = work(i)
-                   end do
-                end do
-             end do
-          end do
-       end if
-       deallocate (work)
+       !</DDHACK>
     end if
 
   end subroutine integrate_moment_c34
@@ -1042,10 +960,8 @@ contains
     real, dimension (-ntgrid:,:,:), intent (out) :: total
     integer, optional, intent(in) :: all
 
-    real, dimension (:), allocatable :: work
     real :: fac
     integer :: is, il, ie, ik, iplo, ig, i
-
     total = 0.
     do iplo = p_lo%llim_proc, p_lo%ulim_proc
        ik = ik_idx(p_lo,iplo)
@@ -1060,35 +976,13 @@ contains
     end do
 
     if (nproc > 1) then
-       allocate (work((2*ntgrid+1)*naky*nspec)) ; work = 0.
-       i = 0
-       do is = 1, nspec
-          do ik = 1, naky
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                work(i) = total(ig, ik, is)
-             end do
-          end do
-       end do
-
+       !<DDHACK>
        if (present(all)) then
-          call sum_allreduce (work)
+          call sum_allreduce (total)
        else
-          call sum_reduce (work, 0)
+          call sum_reduce (total, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do is = 1, nspec
-             do ik = 1, naky
-                do ig = -ntgrid, ntgrid
-                   i = i + 1
-                   total(ig, ik, is) = work(i)
-                end do
-             end do
-          end do
-       end if
-       deallocate (work)
+       !</DDHACK>
     end if
 
   end subroutine integrate_moment_r33
@@ -1146,10 +1040,8 @@ contains
     integer, optional, intent(in) :: all
 
     complex, dimension (negrid,nlambda,nspec) :: gksum
-    complex, dimension (:), allocatable :: work
     real :: fac
     integer :: is, il, ie, ik, it, iplo, i
-
     total = 0. ; gksum = 0.
     do iplo = p_lo%llim_proc, p_lo%ulim_proc
        ik = ik_idx(p_lo,iplo)
@@ -1171,27 +1063,13 @@ contains
     end do
 
     if (nproc > 1) then
-       allocate (work(nspec)) ; work = 0.
-       i = 0
-       do is = 1, nspec
-          i = i + 1
-          work(i) = total(is)
-       end do
-       
+       !<DDHACK>
        if (present(all)) then
-          call sum_allreduce (work)
+          call sum_allreduce (total)
        else
-          call sum_reduce (work, 0)
+          call sum_reduce (total, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do is = 1, nspec
-             i = i + 1
-             total(is) = work(i)
-          end do
-       end if
-       deallocate (work)
+       !</DDHACK>
     end if
 
   end subroutine integrate_kysum
@@ -1207,7 +1085,6 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
-    complex, dimension (:), allocatable :: work
 !    real, dimension (:,:,:), allocatable, save :: wlmod
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i, ipt
@@ -1243,8 +1120,9 @@ contains
 !       first = .false.
     end if
 
+total=0. !<DDHACK>
     do ipt=1,ng2
-       total(:,:,:,ipt) = 0.
+!<DDHACK>       total(:,:,:,ipt) = 0.
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
@@ -1255,32 +1133,34 @@ contains
 
           total(:, it, ik, ipt) = total(:, it, ik, ipt) + fac*wlmod(:,il,ipt)*(g(:,1,iglo)+g(:,2,iglo))
        end do
-
-       allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                work(i) = total(ig, it, ik, ipt)
-             end do
-          end do
-       end do
+       !<DDHACK>
+    enddo
+       ! allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
+       ! i = 0
+       ! do ik = 1, naky
+       !    do it = 1, ntheta0
+       !       do ig = -ntgrid, ntgrid
+       !          i = i + 1
+       !          work(i) = total(ig, it, ik, ipt)
+       !       end do
+       !    end do
+       ! end do
        
-       call sum_allreduce (work) 
+       ! call sum_allreduce (work) 
        
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                total(ig, it, ik, ipt) = work(i)
-             end do
-          end do
-       end do
-       deallocate (work)
-    end do
-
+       ! i = 0
+       ! do ik = 1, naky
+       !    do it = 1, ntheta0
+       !       do ig = -ntgrid, ntgrid
+       !          i = i + 1
+       !          total(ig, it, ik, ipt) = work(i)
+       !       end do
+       !    end do
+       ! end do
+       ! deallocate (work)
+!    end do
+    call sum_allreduce(total)
+    !</DDHACK>
   end subroutine lint_error
 
   subroutine trap_error (g, weights, total)
@@ -1294,7 +1174,6 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
-    complex, dimension (:), allocatable :: work
 !    real, dimension (:,:,:), allocatable, save :: wtmod
 !    real, dimension (:,:), allocatable, save :: ypts2
     real :: fac
@@ -1350,32 +1229,34 @@ contains
 
           total(:, it, ik, ipt) = total(:, it, ik, ipt) + fac*wtmod(:,il,ipt)*(g(:,1,iglo)+g(:,2,iglo))
        end do
-
-       allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                work(i) = total(ig, it, ik, ipt)
-             end do
-          end do
-       end do
+       !<DDHACK>
+    enddo
+    !    allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
+    !    i = 0
+    !    do ik = 1, naky
+    !       do it = 1, ntheta0
+    !          do ig = -ntgrid, ntgrid
+    !             i = i + 1
+    !             work(i) = total(ig, it, ik, ipt)
+    !          end do
+    !       end do
+    !    end do
        
-       call sum_allreduce (work) 
+    !    call sum_allreduce (work) 
        
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                total(ig, it, ik, ipt) = work(i)
-             end do
-          end do
-       end do
-       deallocate (work)
-    end do
-
+    !    i = 0
+    !    do ik = 1, naky
+    !       do it = 1, ntheta0
+    !          do ig = -ntgrid, ntgrid
+    !             i = i + 1
+    !             total(ig, it, ik, ipt) = work(i)
+    !          end do
+    !       end do
+    !    end do
+    !    deallocate (work)
+    ! end do
+    call sum_allreduce(total)
+    !</DDHACK>
   end subroutine trap_error
 
   subroutine eint_error (g, weights, total)
@@ -1390,7 +1271,7 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
-    complex, dimension (:), allocatable :: work
+
 !    real, dimension (:,:), allocatable, save :: wmod
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i, ipt
@@ -1416,8 +1297,9 @@ contains
 !       first = .false.
     end if
 
+total=0.!<DDHACK>
     do ipt=1,wdim
-       total(:,:,:,ipt) = 0.
+!<DDHACK>       total(:,:,:,ipt) = 0.
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
@@ -1428,32 +1310,34 @@ contains
 
           total(:, it, ik, ipt) = total(:, it, ik, ipt) + fac*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
        end do
-
-       allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                work(i) = total(ig, it, ik, ipt)
-             end do
-          end do
-       end do
+!<DDHACK>
+    enddo
+     !   allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
+    !    i = 0
+    !    do ik = 1, naky
+    !       do it = 1, ntheta0
+    !          do ig = -ntgrid, ntgrid
+    !             i = i + 1
+    !             work(i) = total(ig, it, ik, ipt)
+    !          end do
+    !       end do
+    !    end do
        
-       call sum_allreduce (work) 
+    !    call sum_allreduce (work) 
        
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                total(ig, it, ik, ipt) = work(i)
-             end do
-          end do
-       end do
-       deallocate (work)
-    end do
-
+    !    i = 0
+    !    do ik = 1, naky
+    !       do it = 1, ntheta0
+    !          do ig = -ntgrid, ntgrid
+    !             i = i + 1
+    !             total(ig, it, ik, ipt) = work(i)
+    !          end do
+    !       end do
+    !    end do
+    !    deallocate (work)
+    ! end do
+    call sum_allreduce(total)
+    !</DDHACK>
   end subroutine eint_error
 
   subroutine set_grids
@@ -1509,7 +1393,6 @@ contains
     use gauss_quad, only: get_legendre_grids_from_cheb
     use constants
     use file_utils, only: open_output_file, close_output_file
-
     use species, only: nspec
 
     implicit none
@@ -1541,7 +1424,6 @@ contains
                *((1.0/bmax-al(il))/(1.0/bmag(ig)-al(il))))
        end do
     end do
-
     jend = 0
     forbid = .false.
 
@@ -1904,10 +1786,8 @@ contains
     complex, dimension (-ntgrid:,:,:,:,:), intent (out) :: total
     integer, optional, intent(in) :: all
 
-    complex, dimension (:), allocatable :: work
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i, isgn
-
     total = 0.
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -1930,43 +1810,13 @@ contains
     end do
 
     if (nproc > 1) then
-       allocate (work((2*ntgrid+1)*nlambda*negrid*nspec*2)) ; work = 0.
-       i = 0
-       do is = 1, nspec
-          do isgn = 1, 2
-             do ie = 1, negrid
-                do il = 1, nlambda
-                   do ig = -ntgrid, ntgrid
-                      i = i + 1
-                      work(i) = total(ig, il, ie, isgn, is)
-                   end do
-                end do
-             end do
-          end do
-       end do
-
+       !<DDHACK>
        if (present(all)) then
-          call sum_allreduce (work)
+          call sum_allreduce (total)
        else
-          call sum_reduce (work, 0)
+          call sum_reduce (total, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do is = 1, nspec
-             do isgn = 1, 2
-                do ie = 1, negrid
-                   do il = 1, nlambda
-                      do ig = -ntgrid, ntgrid
-                         i = i + 1
-                         total(ig, il, ie, isgn, is) = work(i)
-                      end do
-                   end do
-                end do
-             end do
-          end do
-       end if
-       deallocate (work)
+       !</DDHACK>
     end if
 
   end subroutine integrate_volume_c
@@ -1986,10 +1836,8 @@ contains
     real, dimension (-ntgrid:,:,:,:,:), intent (out) :: total
     integer, optional, intent(in) :: all
 
-    real, dimension (:), allocatable :: work
     real :: fac
     integer :: is, il, ie, ik, it, iglo, ig, i, isgn
-
     total = 0.
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -2012,43 +1860,13 @@ contains
     end do
 
     if (nproc > 1) then
-       allocate (work((2*ntgrid+1)*nlambda*negrid*nspec*2)) ; work = 0.
-       i = 0
-       do is = 1, nspec
-          do isgn = 1, 2
-             do ie = 1, negrid
-                do il = 1, nlambda
-                   do ig = -ntgrid, ntgrid
-                      i = i + 1
-                      work(i) = total(ig, il, ie, isgn, is)
-                   end do
-                end do
-             end do
-          end do
-       end do
-
+       !<DDHACK>
        if (present(all)) then
-          call sum_allreduce (work)
+          call sum_allreduce (total)
        else
-          call sum_reduce (work, 0)
+          call sum_reduce (total, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do is = 1, nspec
-             do isgn = 1, 2
-                do ie = 1, negrid
-                   do il = 1, nlambda
-                      do ig = -ntgrid, ntgrid
-                         i = i + 1
-                         total(ig, il, ie, isgn, is) = work(i)
-                      end do
-                   end do
-                end do
-             end do
-          end do
-       end if
-       deallocate (work)
+       !</DDHACK>
     end if
 
   end subroutine integrate_volume_r
