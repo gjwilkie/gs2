@@ -262,23 +262,23 @@ contains
        ! for testing
 !       upar = 0.
 !       qpar(1,:,:) = qpar(2,:,:) ; qpar(3,:,:) = qpar(2,:,:)
-!!       qpar = 0.
+!       qpar = 0.
        ! added after doing the qpar=0 test (to decouple upar and dupar/dr effects)
 !       upar(1,:,:) = upar(2,:,:) ; upar(3,:,:) = upar(2,:,:)
        ! added after doing the qpar=0,du/dr=0 test...am eliminating the du/dtheta effect
-!!       do is = 1, ns
-!!          do ir = 1, nr
-!!             upar(ir,is,:) = sum(upar(ir,is,:)*dl_over_b)
-!!          end do
-!!       end do
+!       do is = 1, ns
+!          do ir = 1, nr
+!             upar(ir,is,:) = sum(upar(ir,is,:)*dl_over_b)
+!          end do
+!       end do
 
        do is = 1, ns
           do ir = 1, nr
              drlt = drad_neo(ir)*spec(is)%tprim ; drln = drad_neo(ir)*spec(is)%fprim
-!             afac(ir,is,:) = 2.*(upar(ir,is,:)-qpar(ir,is,:)/(1.0-drln) - drlt*upar(ir,is,:))/(1.0-drlt)**2
-!             bfac(ir,is,:) = 0.8*qpar(ir,is,:) / ((1.0-drln) * (1.0-drlt)**3)
-             afac(ir,is,:) = 2.*(upar(ir,is,:)-qpar(ir,is,:)/(1.0-drln)/(1.0-drlt))/sqrt(1.0-drlt)
-             bfac(ir,is,:) = 0.8*qpar(ir,is,:) / ((1.0-drln) * (1.0-drlt)**1.5)
+             afac(ir,is,:) = 2.*(upar(ir,is,:)-qpar(ir,is,:)/(1.0-drln) - drlt*upar(ir,is,:))/(1.0-drlt)**2
+             bfac(ir,is,:) = 0.8*qpar(ir,is,:) / ((1.0-drln) * (1.0-drlt)**3)
+!             afac(ir,is,:) = 2.*(upar(ir,is,:)-qpar(ir,is,:)/(1.0-drln)/(1.0-drlt))/sqrt(1.0-drlt)
+!             bfac(ir,is,:) = 0.8*qpar(ir,is,:) / ((1.0-drln) * (1.0-drlt)**1.5)
           end do
        end do
 
@@ -818,7 +818,7 @@ contains
           end do
 
           ! TMP FOR TESTING -- MAB
-!!          neo_phi = 0.
+!          neo_phi = 0.
 
           ! need to interpolate coefficients from neo's theta grid to gs2's
           if ( ptheta_neo .gt. 1) then
