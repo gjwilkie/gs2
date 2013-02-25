@@ -275,8 +275,10 @@ contains
        do is = 1, ns
           do ir = 1, nr
              drlt = drad_neo(ir)*spec(is)%tprim ; drln = drad_neo(ir)*spec(is)%fprim
-             afac(ir,is,:) = 2.*(upar(ir,is,:)-qpar(ir,is,:)/(1.0-drln) - drlt*upar(ir,is,:))/(1.0-drlt)**2
-             bfac(ir,is,:) = 0.8*qpar(ir,is,:) / ((1.0-drln) * (1.0-drlt)**3)
+!             afac(ir,is,:) = 2.*(upar(ir,is,:)-qpar(ir,is,:)/(1.0-drln) - drlt*upar(ir,is,:))/(1.0-drlt)**2
+!             bfac(ir,is,:) = 0.8*qpar(ir,is,:) / ((1.0-drln) * (1.0-drlt)**3)
+             afac(ir,is,:) = 2.*(upar(ir,is,:)-qpar(ir,is,:)/(1.0-drln)/(1.0-drlt))/sqrt(1.0-drlt)
+             bfac(ir,is,:) = 0.8*qpar(ir,is,:) / ((1.0-drln) * (1.0-drlt)**1.5)
           end do
        end do
 
