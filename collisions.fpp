@@ -48,11 +48,11 @@ module collisions
   logical :: ei_coll_only
   logical :: test
 
-  integer, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
+  integer, public, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
   integer, public, parameter :: collision_model_none = 3
-  integer, parameter :: collision_model_lorentz_test = 5 ! if this changes, check gs2_diagnostics
-  integer, parameter :: collision_model_full = 6
-  integer, parameter :: collision_model_ediffuse = 7
+  integer, public, parameter :: collision_model_lorentz_test = 5 ! if this changes, check gs2_diagnostics
+  integer, public, parameter :: collision_model_full = 6
+  integer, public, parameter :: collision_model_ediffuse = 7
 
   integer, parameter :: lorentz_scheme_default = 1
   integer, parameter :: lorentz_scheme_old = 2
