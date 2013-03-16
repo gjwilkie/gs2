@@ -43,6 +43,8 @@ eiktest_mod = \
 	 spl.o 
 
 ffttester_mod = \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 antenna.o \
 	 antenna_data.o \
 	 ceq.o \
@@ -81,11 +83,7 @@ ffttester_mod = \
 	 kt_grids.o \
 	 layouts_type.o \
 	 le_derivatives.o \
-	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
-	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -104,6 +102,8 @@ ffttester_mod = \
 	 theta_grid_params.o 
 
 gs2_mod = \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 antenna.o \
 	 antenna_data.o \
 	 ceq.o \
@@ -142,11 +142,7 @@ gs2_mod = \
 	 kt_grids.o \
 	 layouts_type.o \
 	 le_derivatives.o \
-	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
-	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -169,6 +165,8 @@ hrate_mod = \
 	 hrate.o 
 
 ingen_mod = \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 antenna.o \
 	 antenna_data.o \
 	 ceq.o \
@@ -206,11 +204,7 @@ ingen_mod = \
 	 kt_grids.o \
 	 layouts_type.o \
 	 le_derivatives.o \
-	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
-	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -247,14 +241,28 @@ rungridgen_mod = \
 	 rungridgen.o \
 	 spl.o 
 
+BAKMOD_le_grids.o: \
+	 MOD_mp.o \
+	 constants.o \
+	 file_utils.o \
+	 gauss_quad.o \
+	 gs2_layouts.o \
+	 kt_grids.o \
+	 layouts_type.o \
+	 redistribute.o \
+	 species.o \
+	 theta_grid.o 
+MOD_mp.o: \
+	 constants.o \
+	 file_utils.o 
 antenna.o: \
+	 MOD_mp.o \
 	 antenna_data.o \
 	 constants.o \
 	 file_utils.o \
 	 gs2_save.o \
 	 gs2_time.o \
 	 kt_grids.o \
-	 mp.o \
 	 ran.o \
 	 run_parameters.o \
 	 species.o \
@@ -267,6 +275,8 @@ ceq.o: \
 	 read_chease.o \
 	 spl.o 
 collisions.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 constants.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
@@ -274,8 +284,6 @@ collisions.o: \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
 	 prof.o \
 	 redistribute.o \
 	 run_parameters.o \
@@ -289,6 +297,8 @@ convert.o:
 deq.o: \
 	 spl.o 
 dist_fn.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 antenna.o \
 	 collisions.o \
 	 constants.o \
@@ -303,9 +313,6 @@ dist_fn.o: \
 	 hyper.o \
 	 kt_grids.o \
 	 le_derivatives.o \
-	 le_grids.o \
-	 lowflow.o \
-	 mp.o \
 	 nonlinear_terms.o \
 	 prof.o \
 	 redistribute.o \
@@ -315,8 +322,8 @@ dist_fn.o: \
 	 text_options.o \
 	 theta_grid.o 
 dist_fn_arrays.o: \
+	 BAKMOD_le_grids.o \
 	 gs2_layouts.o \
-	 le_grids.o \
 	 species.o \
 	 theta_grid.o 
 drive.o: \
@@ -327,9 +334,11 @@ eeq.o: \
 et.o: \
 	 geometry.o 
 fft_work.o: \
-	 constants.o \
-	 mp.o 
+	 MOD_mp.o \
+	 constants.o 
 ffttester.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 constants.o \
 	 dist_fn_arrays.o \
 	 gs2_diagnostics.o \
@@ -337,11 +346,10 @@ ffttester.o: \
 	 gs2_main.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
 	 species.o \
 	 theta_grid.o 
 fields.o: \
+	 MOD_mp.o \
 	 antenna.o \
 	 constants.o \
 	 dist_fn.o \
@@ -352,13 +360,13 @@ fields.o: \
 	 file_utils.o \
 	 init_g.o \
 	 kt_grids.o \
-	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
 	 text_options.o \
 	 theta_grid.o 
 fields_arrays.o: 
 fields_implicit.o: \
+	 MOD_mp.o \
 	 antenna.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
@@ -368,7 +376,6 @@ fields_implicit.o: \
 	 init_g.o \
 	 job_manage.o \
 	 kt_grids.o \
-	 mp.o \
 	 parameter_scan_arrays.o \
 	 prof.o \
 	 run_parameters.o \
@@ -381,9 +388,9 @@ fields_test.o: \
 file_utils.o: \
 	 command_line.o 
 gauss_quad.o: \
+	 MOD_mp.o \
 	 constants.o \
-	 file_utils.o \
-	 mp.o 
+	 file_utils.o 
 geometry.o: \
 	 ceq.o \
 	 deq.o \
@@ -401,6 +408,8 @@ gridgen4mod.o: \
 gs2.o: \
 	 gs2_main.o 
 gs2_diagnostics.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 antenna.o \
 	 collisions.o \
 	 constants.o \
@@ -417,8 +426,6 @@ gs2_diagnostics.o: \
 	 gs2_transforms.o \
 	 init_g.o \
 	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
 	 prof.o \
@@ -427,18 +434,20 @@ gs2_diagnostics.o: \
 	 spl.o \
 	 theta_grid.o 
 gs2_dist_io_hdf.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
 	 species.o \
 	 theta_grid.o 
 gs2_heating.o: \
-	 mp.o \
+	 MOD_mp.o \
 	 species.o 
 gs2_io.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 constants.o \
 	 convert.o \
 	 fields_arrays.o \
@@ -447,8 +456,6 @@ gs2_io.o: \
 	 gs2_layouts.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -456,6 +463,8 @@ gs2_io.o: \
 	 species.o \
 	 theta_grid.o 
 gs2_io_hdf5.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 constants.o \
 	 convert.o \
 	 fields_arrays.o \
@@ -463,18 +472,18 @@ gs2_io_hdf5.o: \
 	 gs2_layouts.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
 	 species.o \
 	 theta_grid.o 
 gs2_layouts.o: \
+	 MOD_mp.o \
 	 file_utils.o \
-	 layouts_type.o \
-	 mp.o 
+	 layouts_type.o 
 gs2_main.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 antenna.o \
 	 collisions.o \
 	 dist_fn.o \
@@ -493,8 +502,6 @@ gs2_main.o: \
 	 init_g.o \
 	 job_manage.o \
 	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
 	 redistribute.o \
@@ -502,6 +509,7 @@ gs2_main.o: \
 	 species.o \
 	 theta_grid_params.o 
 gs2_reinit.o: \
+	 MOD_mp.o \
 	 antenna.o \
 	 collisions.o \
 	 dist_fn.o \
@@ -514,10 +522,11 @@ gs2_reinit.o: \
 	 gs2_time.o \
 	 init_g.o \
 	 job_manage.o \
-	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o 
 gs2_save.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 antenna_data.o \
 	 constants.o \
 	 dist_fn_arrays.o \
@@ -526,47 +535,45 @@ gs2_save.o: \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 layouts_type.o \
-	 le_grids.o \
-	 mp.o \
 	 netcdf_utils.o \
 	 parameter_scan_arrays.o \
 	 species.o \
 	 theta_grid.o 
 gs2_save_hdf5.o: \
+	 MOD_mp.o \
 	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
-	 mp.o \
 	 parameter_scan_arrays.o \
 	 theta_grid.o 
 gs2_time.o: 
 gs2_transforms.o: \
+	 MOD_mp.o \
 	 fft_work.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
-	 mp.o \
 	 prof.o \
 	 redistribute.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o \
-	 convert.o \
-	 file_utils.o 
+	 constants.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
+	 MOD_mp.o \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 kt_grids.o \
-	 mp.o \
 	 run_parameters.o \
 	 text_options.o \
 	 theta_grid.o 
 ideq.o: \
 	 spl.o 
 ingen.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 antenna.o \
 	 collisions.o \
 	 constants.o \
@@ -581,8 +588,6 @@ ingen.o: \
 	 hyper.o \
 	 init_g.o \
 	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
 	 species.o \
@@ -590,6 +595,8 @@ ingen.o: \
 	 theta_grid.o \
 	 theta_grid_params.o 
 init_g.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 constants.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
@@ -599,8 +606,6 @@ init_g.o: \
 	 gs2_save.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
 	 ran.o \
 	 redistribute.o \
 	 run_parameters.o \
@@ -609,36 +614,35 @@ init_g.o: \
 	 theta_grid.o \
 	 theta_grid_params.o 
 job_manage.o: \
-	 file_utils.o \
-	 mp.o 
+	 MOD_mp.o \
+	 file_utils.o 
 kpar.o: \
 	 command_line.o 
 kt_grids.o: \
+	 MOD_mp.o \
 	 constants.o \
 	 file_utils.o \
-	 mp.o \
 	 text_options.o \
 	 theta_grid.o 
 layouts_type.o: 
 le_derivatives.o: \
+	 BAKMOD_le_grids.o \
 	 collisions.o \
 	 dist_fn_arrays.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
-	 le_grids.o \
-	 lowflow.o \
 	 redistribute.o \
 	 run_parameters.o \
-	 species.o \
 	 theta_grid.o 
 le_grids.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 constants.o \
 	 file_utils.o \
 	 gauss_quad.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 layouts_type.o \
-	 mp.o \
 	 redistribute.o \
 	 species.o \
 	 theta_grid.o 
@@ -646,11 +650,11 @@ leq.o: \
 	 constants.o \
 	 spl.o 
 lowflow.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 constants.o \
 	 file_utils.o \
 	 geometry.o \
-	 le_grids.o \
-	 mp.o \
 	 species.o \
 	 spl.o \
 	 theta_grid.o 
@@ -659,11 +663,12 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
 nonlinear_terms.o: \
+	 BAKMOD_le_grids.o \
+	 MOD_mp.o \
 	 constants.o \
 	 dist_fn_arrays.o \
 	 file_utils.o \
@@ -671,8 +676,6 @@ nonlinear_terms.o: \
 	 gs2_time.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
 	 run_parameters.o \
 	 species.o \
 	 text_options.o \
@@ -680,13 +683,13 @@ nonlinear_terms.o: \
 om.o: \
 	 command_line.o 
 parameter_scan.o: \
+	 MOD_mp.o \
 	 fields_implicit.o \
 	 file_utils.o \
 	 gs2_diagnostics.o \
 	 gs2_save.o \
 	 gs2_time.o \
 	 init_g.o \
-	 mp.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
 	 text_options.o 
@@ -698,21 +701,20 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
-	 job_manage.o \
-	 mp.o 
+	 MOD_mp.o \
+	 job_manage.o 
 regress.o: \
 	 regression.o 
 regression.o: 
 run_parameters.o: \
+	 MOD_mp.o \
 	 file_utils.o \
 	 gs2_save.o \
 	 gs2_time.o \
 	 kt_grids.o \
-	 mp.o \
 	 text_options.o 
 rungridgen.o: \
 	 constants.o \
@@ -720,21 +722,21 @@ rungridgen.o: \
 	 gridgen4mod.o \
 	 spl.o 
 species.o: \
+	 MOD_mp.o \
 	 file_utils.o \
-	 mp.o \
 	 text_options.o 
 spfunc.o: \
 	 constants.o 
 spl.o: 
 test_layouts.o: \
-	 mp.o 
+	 MOD_mp.o 
 text_options.o: 
 theta_grid.o: \
+	 MOD_mp.o \
 	 constants.o \
 	 file_utils.o \
 	 geometry.o \
 	 gridgen4mod.o \
-	 mp.o \
 	 spl.o \
 	 text_options.o \
 	 theta_grid_params.o 
