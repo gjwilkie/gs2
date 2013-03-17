@@ -557,7 +557,7 @@ contains
     use file_utils, only: error_unit
     use kt_grids, only: aky, akx
     use theta_grid, only: ntgrid
-    use mp, only: broadcast, send, receive, barrier, iproc
+    use mp, only: broadcast, send, receive, iproc
     use gs2_layouts, only: f_lo, idx, idx_local, proc_id, jf_lo
     use gs2_layouts, only: if_idx, im_idx, in_idx, local_field_solve
     use gs2_layouts, only: ig_idx, ifield_idx, ij_idx, mj, dj
@@ -578,7 +578,6 @@ contains
     
     allocate (lhscol (nidx*N_class(ic),M_class(ic)))
     allocate (rhsrow (nidx*N_class(ic),M_class(ic)))
-    call barrier
    
     j = nidx*N_class(ic)
     allocate (a_inv(j,f_lo(ic)%llim_proc:f_lo(ic)%ulim_alloc))
@@ -612,6 +611,11 @@ contains
                 lhscol(:,m) = am(:,ilo)
                 rhsrow(:,m) = a_inv(:,ilo)
              end if
+             !Here we send lhscol and rhscol sections to all procs
+             !from the one on which it is currently known
+             !Can't do this outside m loop as proc_id depends on m
+             !These broadcasts can be relatively expensive so local_field_solve
+             !may be preferable
              call broadcast (lhscol(:,m), proc_id(f_lo(ic),ilo))
              call broadcast (rhsrow(:,m), proc_id(f_lo(ic),ilo))
           end do
@@ -675,20 +679,26 @@ contains
        jskip = in_idx(f_lo(ic), jlo) < N_class(ic) .and. jskip
        if (jskip) then
           ilo = jlo + nfield
+          !If we have ilo on this proc send it to...
           if (idx_local(f_lo(ic), ilo)) then
+             !jlo on this proc
              if (idx_local(f_lo(ic), jlo)) then
                 a_inv(:,jlo) = a_inv(:,ilo)
+             !jlo on proc which has jlo
              else
                 call send(a_inv(:,ilo), proc_id(f_lo(ic), jlo))
              endif
           else
+             !If this proc has jlo then get ready to receive
              if (idx_local(f_lo(ic), jlo)) then
                 call receive(a_inv(:,jlo), proc_id(f_lo(ic), ilo))
              end if
           end if
        end if
-       call barrier
     end do
+    !The send receives in the above loop should be able to function in a
+    !non-blocking manner fairly easily, but probably don't cost that much
+    !Would require WAITALL before doing am=a_inv line below
 
     am = a_inv
     deallocate (a_inv)
@@ -806,7 +816,6 @@ contains
              
           end do
        end if
-       call barrier
     end do
 
     deallocate (am_tmp)
