@@ -218,6 +218,8 @@ module dg_scheme
 
   integer :: p = 3  !  scheme order, = number of FD grid points per finite element
   integer :: ne     !  number of finite elements
+  integer :: ne2    !  ne, or ne+2 if flux-tube (to account for FEs 0 and ne+1)
+  integer :: ntgriddgmin  !  array lower bound in theta direction, for *some* arrays
   integer :: ntgriddg  !  array upper bound in theta direction
 
   !  Normalised parallel velocity, omega drift
@@ -225,13 +227,17 @@ module dg_scheme
   real, allocatable, dimension (:,:,:) :: v
   real, allocatable, dimension (:,:) :: wd
 
+  !  Flux tube scenario flag
+
+  logical :: flux_tube = .false.
+
   !  Other stuff needed to be passed to the low-level routines
 
   integer :: istep_dg
 
   !  Adaptive timestep variables
 
-  logical :: adaptive_dt = .true.  !  master switch for adaptive timestep algorithm
+  logical :: adaptive_dt = .false.  !  master switch for adaptive timestep algorithm
   logical :: adaptive_dt_reset = .false.
   real :: adaptive_dt_new
 
@@ -248,7 +254,7 @@ contains
 
   ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine nodal2modal_full(y,lb1,ub1,lb2,ub2,lb3,ub3)
+  subroutine nodal2modal_full(y,lb1,ub1,lb2,ub2,lb3,ub3,ne)
 
     !  Version for y(ig,isgn,iglo)
 
@@ -258,6 +264,7 @@ contains
 
     integer, intent(in) :: lb1, ub1, lb2, ub2, lb3, ub3
     complex, dimension(lb1:ub1,lb2:ub2,lb3:ub3), intent(inout) :: y
+    integer, intent(in) :: ne
 
     !  Local variables
 
@@ -273,6 +280,7 @@ contains
           ytemp = y(:,i,j)
 
           do element = 1,ne
+
              !  k is the index of first point of this finite element in ytemp;
              !  ytemp starts at index number 1.  kk is the equivalent index in y
              !  since this does not necessarily start at 1
@@ -296,7 +304,7 @@ contains
 
   ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine nodal2modal_1d(y,lbound,ubound)
+  subroutine nodal2modal_1d(y,lbound,ubound,ne)
 
     !  Version for y(ig), i.e. no isgn or iglo dimensions
 
@@ -306,6 +314,7 @@ contains
 
     integer, intent(in) :: lbound, ubound
     complex, dimension(lbound:ubound), intent(inout) :: y
+    integer, intent(in) :: ne
 
     !  Local variables
 
@@ -319,6 +328,7 @@ contains
     ytemp = y(:)
 
     do element = 1,ne
+
        !  k is the index of first point of this finite element in ytemp;
        !  ytemp starts at index number 1.  kk is the equivalent index in y
        !  since this does not necessarily start at 1
@@ -339,7 +349,7 @@ contains
 
   ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine modal2nodal_full(y,lb1,ub1,lb2,ub2,lb3,ub3)
+  subroutine modal2nodal_full(y,lb1,ub1,lb2,ub2,lb3,ub3,ne)
 
     !  Version for y(ig,isgn,iglo)
 
@@ -349,6 +359,7 @@ contains
 
     integer, intent(in) :: lb1,ub1,lb2,ub2,lb3,ub3
     complex, dimension(lb1:ub1,lb2:ub2,lb3:ub3), intent(inout) :: y
+    integer, intent(in) :: ne
 
     !  Local variables
 
@@ -366,6 +377,7 @@ contains
           ytemp = y(:,i,j)
 
           do element = 1,ne
+
              !  k is the index of first point of this finite element in ytemp;
              !  ytemp starts at index number 1.  kk is the equivalent index in y
              !  since this does not necessarily start at 1
@@ -389,7 +401,7 @@ contains
 
   ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine modal2nodal_1d(y,lbound,ubound)
+  subroutine modal2nodal_1d(y,lbound,ubound,ne)
 
     !  Version for y(ig), i.e. no isgn or iglo dimensions
 
@@ -399,6 +411,7 @@ contains
 
     integer, intent(in) :: lbound,ubound
     complex, dimension(lbound:ubound), intent(inout) :: y
+    integer, intent(in) :: ne
 
     !  Local variables
 
@@ -409,11 +422,10 @@ contains
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    !  There are ne finite elements, each with p points
-
     ytemp = y(:)
 
     do element = 1,ne
+
        !  k is the index of first point of this finite element in ytemp;
        !  ytemp starts at index number 1.  kk is the equivalent index in y
        !  since this does not necessarily start at 1
@@ -499,6 +511,7 @@ contains
     use gs2_time, only: code_dt
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
+    use dist_fn, only: boundary_option_switch, boundary_option_linked
 
     implicit none
 
@@ -522,17 +535,55 @@ contains
        dtmin = epsbig*dt0
     end if
 
+    !  Local flag denoting whether this is a flux-tube run
+    !  rather than a ballooning run
+
+    if (boundary_option_switch == boundary_option_linked) then
+       flux_tube = .true.
+    else
+       flux_tube = .false.
+    end if
+
+    !  Constrain theta grid size to certain values for convenience
+
+    if (flux_tube) then
+       if (mod(2*ntgrid,p) /= 0) then
+          write(*,*) 'Number of theta points is currently incompatible with'
+          write(*,*) 'explicit DG scheme in flux tube mode.'
+          write(*,*) 'Adjust ntheta to be a multiple of ',2*p
+          write(*,*) 'or 1 + (multiple of ',2*p,')'
+          stop
+       end if
+    end if
+
     !  ne is the number of finite elements,
     !  each representing p finite difference grid points.
     !  ne*p is guaranteed to cover at least (-ntgrid:ntgrid) grid points
 
-    ne = ceiling( real(2*ntgrid+1)/p )
+    if (.not.flux_tube) then
+       ne = ceiling( real(2*ntgrid+1)/p )
+       ne2 = ne
+    else
+       !  ne*p must exactly cover the range -ntgrid to ntgrid-1 inclusive
+       !  (assuming the mod(...) stuff above applies)
+       ne = int( real(2*ntgrid+1)/p )
+       ne2 = ne+2
+    end if
 
     !  ntgriddg is the new upper bound for arrays (local to this module)
     !  in the theta direction, guaranteeing that exactly p grid points
     !  lie on each finite element
+    !
+    !  ntgriddgmin is the lower bound for certain arrays in the theta direction
+    !  to include a 'halo' finite element for flux tube message passing
 
-    ntgriddg = ne*p - ntgrid - 1
+    if (.not.flux_tube) then
+       ntgriddgmin = -ntgrid
+       ntgriddg = ne*p - ntgrid - 1
+    else
+       ntgriddgmin = -ntgrid-p
+       ntgriddg = (ne+1)*p - ntgrid - 1  !  as ne is one less with FTs
+    end if
 
     if (.not.allocated(v)) then
        allocate( &
@@ -590,7 +641,7 @@ contains
 
     istep_dg = istep  !  to pass into dydt routine
 
-    lb1 = -ntgrid ; ub1 = ntgriddg
+    lb1 = ntgriddgmin ; ub1 = ntgriddg
     lb3 = g_lo%llim_proc ; ub3 = g_lo%ulim_proc
     nx = (ub1-lb1+1)*2*(ub3-lb3+1)
 
@@ -675,14 +726,15 @@ contains
     end if
 
     gmodal = g_dg
-    call nodal2modal(gmodal,lb1,ub1,1,2,lb3,ub3)
+
+    call nodal2modal(gmodal,lb1,ub1,1,2,lb3,ub3,ne2)
 
     !  Time-advance using Runge-Kutta pair method
 
     call rk_adaptive_complex(dydt_dggs2,gmodal,gnew1,gnew2,nx,code_time,code_dt)
 
-    call modal2nodal(gnew1,lb1,ub1,1,2,lb3,ub3)
-    call modal2nodal(gnew2,lb1,ub1,1,2,lb3,ub3)
+    call modal2nodal(gnew1,lb1,ub1,1,2,lb3,ub3,ne2)
+    call modal2nodal(gnew2,lb1,ub1,1,2,lb3,ub3,ne2)
 
     !  Adaptive timestep algorithm
 
@@ -794,8 +846,9 @@ contains
 
     !  Arguments
 
-    complex, dimension(-ntgrid:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
+    complex, dimension(ntgriddgmin:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
          intent(in) :: y       !  g_old (actually i_old)
+
     integer, intent(in) :: p   !  order of the spatial Legendre fit
     real, intent(in) :: t      !  code_time
     real, intent(in) :: dt0    !  code_dt
@@ -814,7 +867,7 @@ contains
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    lb1 = -ntgrid ; ub1 = ntgriddg
+    lb1 = ntgriddgmin ; ub1 = ntgriddg
     lb2 = 1 ; ub2 = 2
     lb3 = g_lo%llim_proc ; ub3 = g_lo%ulim_proc
 
@@ -824,9 +877,9 @@ contains
     !  Calculate dg/dt using the Discontinuous Galerkin scheme
 
     ymodal = y
-    call nodal2modal(ymodal,lb1,ub1,1,2,lb3,ub3)
+    call nodal2modal(ymodal,lb1,ub1,1,2,lb3,ub3,ne2)
     call dydt_dggs2(ymodal,t,dt0,dy)
-    call modal2nodal(dy,lb1,ub1,1,2,lb3,ub3)
+    call modal2nodal(dy,lb1,ub1,1,2,lb3,ub3,ne2)
 
     gdotn = maxval(abs(dy)) ; call max_allreduce(gdotn)
     gn = maxval(abs(y)) ; call max_allreduce(gn)
@@ -859,16 +912,16 @@ contains
     !  Arguments
 
     real, intent(in) :: t, dt
-    complex, dimension(-ntgrid:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
+    complex, dimension(ntgriddgmin:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
          intent(in) :: gmodal
-    complex, dimension(-ntgrid:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
+    complex, dimension(ntgriddgmin:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
          intent(out) :: dgdt_modal
 
     !  Local variables
 
     integer :: ip, ip2
     integer :: i, j, kk, element, ig, igg, ik, is, il, ie, isgn, iglo
-    integer :: lb1, ub1, lb3, ub3, lbp, ubp
+    integer :: lb1, ub1, lb3, ub3, lbp, ubp, lb1a
 
     complex, parameter :: zi = (0.0,1.0)
     logical :: trapped
@@ -880,8 +933,8 @@ contains
     complex, allocatable, dimension(:) :: gplusf, gplusf_modal
     complex, allocatable, dimension(:) :: mgplusf, mgplusf_modal
     complex, allocatable, dimension(:) :: vterm, vterm_modal
-    complex, allocatable, dimension(:) :: fluxfn
     complex, allocatable, dimension(:) :: src, smodal
+    complex, allocatable, dimension(:,:,:) :: src3, fluxfn
 
     real, dimension(3,6) :: mat_p3p, mat_p3m
 
@@ -902,35 +955,54 @@ contains
          shape = (/ 3,6 /) ))
 
     lb1 = -ntgrid ; ub1 = ntgriddg
+    lb1a = ntgriddgmin
     lb3 = g_lo%llim_proc ; ub3 = g_lo%ulim_proc
 
     allocate( &
          g(-ntgrid:ntgrid,2,lb3:ub3), & ! original theta range
-         g_dg(lb1:ub1,2,lb3:ub3), &
+         g_dg(lb1a:ub1,2,lb3:ub3), &
          dgdt(lb1:ub1,2,lb3:ub3), &
          dgdt_tmp(lb1:ub1,2,lb3:ub3), &
          dgdt_mod(lb1:ub1,2,lb3:ub3), &
          iwg(lb1:ub1), &
          iwg_modal(lb1:ub1), &
-         gplusf(lb1:ub1), &
-         gplusf_modal(lb1:ub1), &
+         gplusf(lb1a:ub1), &
+         gplusf_modal(lb1a:ub1), &
          mgplusf(lb1:ub1), &
          mgplusf_modal(lb1:ub1), &
          vterm(lb1:ub1), &
          vterm_modal(lb1:ub1), &
-         fluxfn(lb1:ub1), &
+         fluxfn(lb1a:ub1,2,lb3:ub3), &
          src(lb1:ub1), &
+         src3(lb1:ub1,2,lb3:ub3), &
          smodal(lb1:ub1) )
+
+    g_dg = gmodal
+
+    !  g halo elements need to be populated, as these are used in the
+    !  advection term, which takes information from upwind finite elements
+
+    if (flux_tube) call pass_fluxtube_halos(g_dg,ntgrid,p,lb3,ub3)
 
     !  Obtain g in nodal form
 
-    g_dg = gmodal
-    call modal2nodal(g_dg,lb1,ub1,1,2,lb3,ub3)
+    call modal2nodal(g_dg,lb1a,ub1,1,2,lb3,ub3,ne2)
     g = g_dg(-ntgrid:ntgrid,:,:)
 
     !  Evaluate field equations
 
     call getfieldexp(g,phitmp,apartmp,bpartmp,'i')
+
+    !  Calculate source term and flux function (nodal)
+
+    src3 = 0.0 ; fluxfn = 0.0
+    call get_source_term_exp(phitmp,apartmp,bpartmp,istep_dg, &
+         fluxfn(lb1:ntgrid,:,:),src3(lb1:ntgrid,:,:))
+
+    !  Flux function halos need to be populated, as these are used in the
+    !  advection term, which takes information from upwind finite elements
+
+    if (flux_tube) call pass_fluxtube_halos(fluxfn,ntgrid,p,lb3,ub3)
 
     do iglo = lb3, ub3
        ik = ik_idx(g_lo,iglo)
@@ -940,22 +1012,6 @@ contains
        !  isgn=1, v >= 0 ; isgn=2, v < 0
 
        do isgn = 1,2
-
-          !  Calculate source term and flux function (nodal)
-
-          src = 0.0 ; fluxfn = 0.0
-          call get_source_term_exp(phitmp,apartmp,bpartmp,istep_dg,isgn,iglo, &
-               fluxfn(lb1:ntgrid),src(lb1:ntgrid))
-          !  src is actually (2.dt.S), therefore need to divide by 2.dt
-          src(:) = src(:)/(2.0*dt*tunits(ik))
-          smodal = src
-          call nodal2modal(smodal,lb1,ub1)
-
-          !if ((isgn == 1).and.(iglo == 219)) then
-          !   do ig = -ntgrid,ntgrid
-          !      write(65,*) real(ig), abs(fluxfn(ig))
-          !   end do
-          !end if
 
           !  Evaluate -i*wd*g term
           !  Have to divide wd by dt here
@@ -970,13 +1026,18 @@ contains
           end do
 
           iwg_modal = iwg
-          call nodal2modal(iwg_modal,lb1,ub1)
+          call nodal2modal(iwg_modal,lb1,ub1,ne)
 
           !  Add g to F
 
-          gplusf(:) = g_dg(:,isgn,iglo) + fluxfn(:)
+          gplusf(:) = g_dg(:,isgn,iglo) + fluxfn(:,isgn,iglo)
           gplusf_modal = gplusf
-          call nodal2modal(gplusf_modal,lb1,ub1)
+
+          if (.not.flux_tube) then
+             call nodal2modal(gplusf_modal,lb1,ub1,ne2)
+          else
+             call nodal2modal(gplusf_modal,lb1a,ub1,ne2)
+          end if
 
           !  Perform matrix multiplication to calculate d(g+F)/dz
           !  For speed, ought to store and use transpose...
@@ -985,49 +1046,93 @@ contains
 
           if (isgn == 1) then  !  Positive parallel velocity
 
-             do element = 1,ne
-                !  Fill ftemp with correct elements from (g+F)modal
-                if (element /= 1) then
-                   kk = lb1 + p*(element-2)  !  take values from element to left
-                   ftemp(1:p) = gplusf_modal(kk:kk+p-1)
-                else
-                   ftemp(1:p) = 0.0  !  'ghost' element to left contains zeroes
-                end if
-                kk = lb1 + p*(element-1)  !  take values from this element
-                ftemp(p+1:2*p) = gplusf_modal(kk:kk+p-1)
+             if (.not.flux_tube) then
 
-                do ip = 1,p
-                   kk = lb1 + p*(element-1) + ip-1
-                   do ip2 = 1,2*p
-                      mgplusf_modal(kk) = mgplusf_modal(kk) &
-                           + mat_p3p(ip,ip2)*ftemp(ip2)
+                do element = 1,ne
+                   !  Fill ftemp with correct elements from (g+F)modal
+                   if (element /= 1) then
+                      kk = lb1 + p*(element-2)  !  take values from element to left
+                      ftemp(1:p) = gplusf_modal(kk:kk+p-1)
+                   else
+                      ftemp(1:p) = 0.0  !  'ghost' element to left contains zeroes
+                   end if
+                   kk = lb1 + p*(element-1)  !  take values from this element
+                   ftemp(p+1:2*p) = gplusf_modal(kk:kk+p-1)
+
+                   do ip = 1,p
+                      kk = lb1 + p*(element-1) + ip-1
+                      do ip2 = 1,2*p
+                         mgplusf_modal(kk) = mgplusf_modal(kk) &
+                              + mat_p3p(ip,ip2)*ftemp(ip2)
+                      end do
                    end do
                 end do
 
-             end do
+             else  !  flux-tube scenario
+
+                do element = 1,ne
+                   !  Fill ftemp with correct elements from (g+F)modal
+                   !  Element '0' contains halo values
+                   kk = lb1 + p*(element-2)  !  take values from element to left
+                   ftemp(1:p) = gplusf_modal(kk:kk+p-1)
+                   kk = lb1 + p*(element-1)  !  take values from this element
+                   ftemp(p+1:2*p) = gplusf_modal(kk:kk+p-1)
+
+                   do ip = 1,p
+                      kk = lb1 + p*(element-1) + ip-1
+                      do ip2 = 1,2*p
+                         mgplusf_modal(kk) = mgplusf_modal(kk) &
+                              + mat_p3p(ip,ip2)*ftemp(ip2)
+                      end do
+                   end do
+                end do
+
+             end if
 
           else  !  Negative parallel velocity
 
-             do element = 1,ne
-                !  Fill ftemp with correct elements from (g+F)modal
-                kk = lb1 + p*(element-1)  !  take values from this element
-                ftemp(1:p) = gplusf_modal(kk:kk+p-1)
-                if (element /= ne) then
-                   kk = lb1 + p*element  !  take values from element to right
-                   ftemp(p+1:2*p) = gplusf_modal(kk:kk+p-1)
-                else
-                   ftemp(p+1:2*p) = 0.0  !  'ghost' element to right contains zeros
-                end if
+             if (.not.flux_tube) then
 
-                do ip = 1,p
-                   kk = lb1 + p*(element-1) + ip-1
-                   do ip2 = 1,2*p
-                      mgplusf_modal(kk) = mgplusf_modal(kk) &
-                           + mat_p3m(ip,ip2)*ftemp(ip2)
+                do element = 1,ne
+                   !  Fill ftemp with correct elements from (g+F)modal
+                   kk = lb1 + p*(element-1)  !  take values from this element
+                   ftemp(1:p) = gplusf_modal(kk:kk+p-1)
+                   if (element /= ne) then
+                      kk = lb1 + p*element  !  take values from element to right
+                      ftemp(p+1:2*p) = gplusf_modal(kk:kk+p-1)
+                   else
+                      ftemp(p+1:2*p) = 0.0  !  'ghost' element to right contains zeros
+                   end if
+
+                   do ip = 1,p
+                      kk = lb1 + p*(element-1) + ip-1
+                      do ip2 = 1,2*p
+                         mgplusf_modal(kk) = mgplusf_modal(kk) &
+                              + mat_p3m(ip,ip2)*ftemp(ip2)
+                      end do
                    end do
                 end do
 
-             end do
+             else  !  flux-tube scenario
+
+                do element = 1,ne
+                   !  Fill ftemp with correct elements from (g+F)modal
+                   !  Element 'ne+1' contains halo values
+                   kk = lb1 + p*(element-1)  !  take values from this element
+                   ftemp(1:p) = gplusf_modal(kk:kk+p-1)
+                   kk = lb1 + p*element  !  take values from element to right
+                   ftemp(p+1:2*p) = gplusf_modal(kk:kk+p-1)
+
+                   do ip = 1,p
+                      kk = lb1 + p*(element-1) + ip-1
+                      do ip2 = 1,2*p
+                         mgplusf_modal(kk) = mgplusf_modal(kk) &
+                              + mat_p3m(ip,ip2)*ftemp(ip2)
+                      end do
+                   end do
+                end do
+
+             end if
 
           end if
 
@@ -1039,10 +1144,12 @@ contains
           !  We must also remove the numerator dt, so we need to divide v by p*dt
 
           mgplusf = mgplusf_modal
-          call modal2nodal(mgplusf,lb1,ub1)
+          call modal2nodal(mgplusf,lb1,ub1,ne)
 
           do ig = lb1,ub1
-             if ((forbid(ig,il)).or.(ig > ntgrid)) then
+             if (ig > ntgrid) then
+                vterm(ig) = 0.0
+             else if (forbid(ig,il)) then
                 vterm(ig) = 0.0
              else
                 vterm(ig) = 1.0/(p*dt*tunits(ik)) * v(ig,isgn,iglo) &
@@ -1051,7 +1158,15 @@ contains
           end do
 
           vterm_modal = vterm
-          call nodal2modal(vterm_modal,lb1,ub1)
+          call nodal2modal(vterm_modal,lb1,ub1,ne)
+
+          !  Convert source term to modal form.
+          !  src3 is actually (2.dt.S), therefore need to divide by 2.dt
+
+          src = 0.0
+          src(:) = src3(:,isgn,iglo)/(2.0*dt*tunits(ik))
+          smodal = src
+          call nodal2modal(smodal,lb1,ub1,ne)
 
           !  Sum all the modal terms to get dg/dt (modal)
 
@@ -1067,7 +1182,7 @@ contains
     end do  !  iglo loop
 
     dgdt_tmp = dgdt_mod(:,:,:)
-    call modal2nodal(dgdt_tmp,lb1,ub1,1,2,lb3,ub3)
+    call modal2nodal(dgdt_tmp,lb1,ub1,1,2,lb3,ub3,ne)
 
     !  Apply relevant boundary conditions to passing/trapped particles
 
@@ -1132,11 +1247,22 @@ contains
 
     end do ! iglo
 
+    !  Boundary conditions
+!+PJKFT Check this is correct for FT; actually only applies for left-most
+!+PJKFT or right-most procs
     dgdt(lb1,1,:) = 0.0
     dgdt(ntgrid:ntgriddg,2,:) = 0.0
+!-PJKFT
 
-    dgdt_modal = dgdt
-    call nodal2modal(dgdt_modal,lb1,ub1,1,2,lb3,ub3)
+    !  Finally, convert dg/dt back to modal space
+
+    if (.not.flux_tube) then
+       dgdt_modal = dgdt
+    else
+       dgdt_modal = 0.0
+       dgdt_modal(lb1:ub1,:,:) = dgdt
+    end if
+    call nodal2modal(dgdt_modal,lb1a,ub1,1,2,lb3,ub3,ne2)
 
   end subroutine dydt_dggs2
 
@@ -1205,5 +1331,54 @@ contains
     end do
 
   end subroutine rk_adaptive_complex
+
+  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine pass_fluxtube_halos(array, ntgrid, p, lb3, ub3)
+
+    !  Pass the contents of halo finite elements between processors,
+    !  during flux-tube runs
+    !
+    !  Code adapted from David Dickinson's ensure_single_val_g routine
+    !
+    !  The input/output argument array must have dimensions
+    !  array(-ntgrid-p:ntgrid+p-1, 1:2, g_lo%llim_proc:g_lo%ulim_proc)
+    !
+    !  P J Knight
+    !
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    use redistribute, only: fill, delete_redist
+    use dist_fn, only: init_pass_dg, pass_right, pass_left
+
+    implicit none
+
+    !  Arguments
+
+    integer, intent(in) :: ntgrid, p, lb3, ub3
+    complex, dimension (-ntgrid-p:ntgrid+p-1,1:2,lb3:ub3), &
+         intent(inout) :: array
+
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    !  Initialise communicator to right
+
+    call init_pass_dg(pass_right,'r')
+
+    !  Pass to the right
+
+    call fill(pass_right,array,array)
+
+    !  Deallocate communicator
+
+    call delete_redist(pass_right)
+
+    !  Repeat for left-going data
+
+    call init_pass_dg(pass_left,'l')
+    call fill(pass_left,array,array)
+    call delete_redist(pass_left)
+
+  end subroutine pass_fluxtube_halos
 
 end module fields_explicit
