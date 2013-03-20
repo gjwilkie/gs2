@@ -220,7 +220,7 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
-    use run_parameters, only: beta
+    use run_parameters, only: beta, fapar
     use species, only: nspec
     implicit none
     type (text_option), dimension (6), parameter :: modelopts = &
@@ -310,7 +310,7 @@ contains
     call broadcast (adjust)
     call broadcast (ei_coll_only)
 
-    drag = resistivity .and. (beta > epsilon(0.0)) .and. (nspec > 1)
+    drag = resistivity .and. (beta > epsilon(0.0)) .and. (nspec > 1) .and. (fapar.gt.0)
   end subroutine read_parameters
 
   subroutine init_arrays
@@ -2509,7 +2509,7 @@ contains
                         vnmult(1)*spec(is)%vnewk*code_dt &
                         * kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0le(ixi,ie,ile) &
                         / (beta*spec(is)%stm*energy(ie)) &
-                        * sgn(isgn)*sqrt(1.0-al(il)*bmag(ig))
+                        * sgn(isgn)*sqrt(MAX(1.0-al(il)*bmag(ig),0.0))
                    ! probably need 1/(spec(is_ion)%z*spec(is_ion)%dens) above
                 end do
              end do
