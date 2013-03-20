@@ -28,6 +28,8 @@ module dist_fn
   public :: g_adjust_exp, get_source_term_exp, getfieldexp
   public :: gnl_1, gnl_2, gnl_3, def_parity, even
   public :: wdrift, wstar, wcoriolis
+  public :: boundary_option_switch, boundary_option_linked
+  public :: pass_right, pass_left, init_pass_dg
   !-PJK
 
   private
@@ -159,6 +161,9 @@ module dist_fn
   type (redist_type), save :: gc_from_left, gc_from_right
   type (redist_type), save :: links_p, links_h
   type (redist_type), save :: wfb_p, wfb_h
+  !+PJK
+  type (redist_type), save :: pass_right, pass_left
+  !-PJK
   integer, dimension (:,:), allocatable :: l_links, r_links
   integer, dimension (:,:,:), allocatable :: n_links
   logical, dimension (:,:), allocatable :: save_h
@@ -2924,6 +2929,303 @@ contains
   !  Code relevant to the explicit Discontinuous Galerkin scheme
   !  
   !  P J Knight
+  !  
+  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine init_pass_dg(pass_obj, direction)
+
+    !  David Dickinson's init_pass_ends routine, but customised for
+    !  the explicit DG scheme, specifically for passing the distribution
+    !  function g or the flux function fluxfn, for both v directions
+    !  (sigma = 1 *and* 2), and assuming a finite element width p=3 in the
+    !  theta direction.
+    !
+    !  An extended theta range is assumed, from -ntgrid-p to ntgrid+p-1, to
+    !  provide an extra finite element at each end. The number of grid points
+    !  as defined by ntheta (and indirectly ntgrid) is constrained elsewhere
+    !  (see init_dg_scheme) so that the FEs exactly cover the range
+    !  -ntgrid to ntgrid-1 (plus one extra FE at each end, making the extended
+    !  range -ntgrid-p to ntgrid+p-1).
+    !
+    !  To pass g_dg to the right connected process:
+    !    call init_pass_dg(pass_right,'r')
+    !    call fill(pass_right,g_dg,g_dg)
+    !
+    !  This will pass g_dg( ntgrid-p: ntgrid-1, 1:2, iglo) to 
+    !                 g_dg(-ntgrid-p:-ntgrid-1, 1:2, iglo_linked)
+    !
+    !  To pass g_dg to the left connected process:
+    !    call init_pass_dg(pass_left,'l')
+    !    call fill(pass_left,g_dg,g_dg)
+    !
+    !  This will pass g_dg(-ntgrid:-ntgrid+p-1, 1:2, iglo) to 
+    !                 g_dg( ntgrid: ntgrid+p-1, 1:2, iglo_linked)
+    !
+    !  P J Knight
+    !
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    use gs2_layouts, only: g_lo, il_idx, idx, proc_id
+    use le_grids, only: ng2
+    use mp, only: iproc, nproc, max_allreduce, proc0
+    use redistribute, only: index_list_type, init_fill, delete_list, redist_type
+    use theta_grid, only: ntgrid
+
+    implicit none
+
+    !  Arguments
+
+    type (redist_type), intent(inout) :: pass_obj !  Redist type object to hold
+    !                                                communication logic
+    character(len=1),intent(in) :: direction      !  Direction of communication,
+    !                                                'l' = left, 'r' = right
+
+    !  Internal variables
+
+    character(len=1) :: dir
+    type (index_list_type), dimension(0:nproc-1) :: to, from
+    integer, dimension (0:nproc-1) :: nn_from, nn_to
+    integer, dimension(3) :: from_low, from_high, to_low, to_high
+    integer :: il, iglo, ip, iglo_con, ipcon, n, nn_max, j
+    integer :: sigma
+    logical :: debug = .false.
+    integer, parameter :: p = 3  !  Must match DG finite element width p
+
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    !  Only applies to linked boundary option so exit if not linked
+
+    if (boundary_option_switch /= boundary_option_linked) return
+
+    !  Handle the direction, to account for uppercase input
+
+    if ((direction == 'r').or.(direction == 'R')) then
+       dir = 'r'
+    else if ((direction == 'l').or.(direction == 'L')) then
+       dir = 'l'
+    else
+       if (proc0) then
+          write(6,*) "Invalid direction string passed to init_pass_ends,"
+          write(6,*) "defaulting to 'r'"
+       end if
+       dir = 'r'
+    end if
+
+    !  Need communications to satisfy || boundary conditions
+    !  First find required blocksizes 
+    
+    !  Initialise variables used to count how many entries to send and receive
+    !  for each processor
+
+    nn_to   = 0  !  # nn_to(ip) = communicates from ip TO HERE (iproc)
+    nn_from = 0  !  # nn_from(ip) = communicates to ip FROM HERE (iproc)
+    
+    !  Now loop over >all< iglo indices and work out how much data needs
+    !  to be sent and received by each processor
+
+    do iglo = g_lo%llim_world, g_lo%ulim_world
+
+       !  Get the lambda index so we can skip trapped particles
+
+       il = il_idx(g_lo,iglo)
+       
+       !  Exclude disconnected trapped particles
+
+       if (il > ng2+1) cycle
+       
+       !  Get the processor id for the proc holding the current iglo index
+
+       ip = proc_id(g_lo,iglo)
+       
+       !  What iglo connects to the current one in the direction of interest
+       !  (and what proc is it on)
+       !  Note ipcon is <0 if no connection in direction of interest
+
+       if (dir == 'r') then
+          call get_right_connection (iglo, iglo_con, ipcon)
+       else
+          call get_left_connection (iglo, iglo_con, ipcon)
+       endif
+       
+       !  Is the connected tube's proc the current processor?
+
+       if (ipcon == iproc ) then
+          !  If so add an entry recording an extra piece of information is to be sent
+          !  to proc ip (the proc holding iglo) from this proc (ipcon)
+          !  Note: Here we assume sigma and theta grid points are all on same proc
+          nn_to(ip) = nn_to(ip) + 2*p  !  2 required to account for both sigmas
+       end if
+       
+       !  Is the proc holding iglo this proc and is there a connection
+       !  in the direction of interest?
+
+       if ((ip == iproc).and.(ipcon >= 0)) then
+          !  If so add an entry recording an extra piece of information is to be sent
+          !  from this proc (ipcon) to ip
+          !  Note: Here we assume sigma and theta grid points are all on same proc
+          nn_from(ipcon) = nn_from(ipcon) + 2*p  !  2 required to account for both sigmas
+       end if
+
+    end do ! iglo
+    
+    !  Find the maximum amount of data to be received by a given processor
+
+    nn_max = maxval(nn_to)
+    call max_allreduce (nn_max)
+    
+    !  Bit of debug printing, not controlled so will be messy
+    if (proc0.and.debug) then
+       write(6,*) 'init_pass_ends (1) processor, nn_to, nn_from:',iproc,nn_to,nn_from
+    end if
+
+    !  Now that we've worked out how much data needs to be sent and received,
+    !  define what specific data needs to be sent to where
+
+    if (nn_max > 0) then
+
+       ! CMR, 25/1/2013: 
+       !      communication required to satisfy linked BC
+       !      allocate indirect addresses for sends/receives 
+       !     
+       !      NB communications use "c_fill_3" as g has 3 indices
+       !      but 1 index sufficient as only communicating g(ntgrid,1,*)! 
+       !      if "c_fill_1" in redistribute we'd only need allocate: from|to(ip)%first 
+       !                             could be more efficient
+       !  
+       !<DD>, 06/01/2013: This redist object consists of a buffer of length n to hold the 
+       !data during transfer and (currently) 3*2 integer arrays each of length n to hold
+       !the indices of sent and received data.
+       !By using c_fill_1 2*2 of these integer arrays would be removed.
+       !Assuming a double complex buffer and long integer indices a 4n long array
+       !saving would be equivalent to the buffer size and as such should represent
+       !a good memory saving but would not effect the amount of data communicated
+       !(obviously).
+
+       !  Create to and from list objects for each processor and 
+       !  create storage to hold information about each specific from/to
+       !  communication
+
+       do ip = 0,nproc-1
+          !  If proc ip is sending anything to this processor (iproc)
+          if (nn_from(ip) > 0) then
+             allocate (from(ip)%first(nn_from(ip)))
+             allocate (from(ip)%second(nn_from(ip)))
+             allocate (from(ip)%third(nn_from(ip)))
+          end if
+          !  If proc ip is receiving anything from this processor (iproc)
+          if (nn_to(ip) > 0) then
+             allocate (to(ip)%first(nn_to(ip)))
+             allocate (to(ip)%second(nn_to(ip)))
+             allocate (to(ip)%third(nn_to(ip)))
+          end if
+       end do
+
+       !  Now fill the indirect addresses...
+       
+       !  (Re-)Initialise counters used to record how many pieces of data to expect
+
+       nn_from = 0 ; nn_to = 0
+       
+       ! Loop over >all< iglo indices
+
+       do iglo = g_lo%llim_world, g_lo%ulim_world
+
+          !  Get the lambda index so we can skip trapped particles
+
+          il = il_idx(g_lo,iglo)
+
+          !  Exclude disconnected trapped particles
+
+          if (il > ng2+1) cycle
+
+          !  What's the processor for the current iglo
+
+          ip = proc_id(g_lo,iglo)
+
+          !  What iglo connects to the current one in the direction of interest
+          !  (and what proc is it on)?
+          !  Note ipcon is <0 if no connection in direction of interest
+
+          if (dir == 'r') then
+             call get_right_connection (iglo, iglo_con, ipcon)
+          else
+             call get_left_connection (iglo, iglo_con, ipcon)
+          end if
+          
+          !  For current proc for current iglo if there are connections in direction
+          !  then add an entry to the connected procs list of data to expect
+
+          if ((ip == iproc) .and. (ipcon >= 0)) then
+
+             !  Loop over sigma and theta grid indices
+             !  Note: Here we assume sigma and theta grid points are all on same proc
+
+             do sigma = 1,2
+                do j = 0,p-1
+                   n = nn_from(ipcon)+1 ; nn_from(ipcon) = n
+                   if (dir == 'r') then
+                      from(ipcon)%first(n) =  ntgrid-p+j  !  Theta point to send right
+                   else
+                      from(ipcon)%first(n) = -ntgrid+j  !  Theta point to send left
+                   end if
+                   from(ipcon)%second(n) = sigma  !  Sigma grid index to send
+                   from(ipcon)%third(n) = iglo  !  iglo index to send
+                end do
+             end do
+          end if
+          
+          !  If target iglo (iglo_con) is on this processor then add an entry
+          !  recording where we need to put the data when we receive it.
+
+          if (ipcon == iproc ) then
+
+             !  Loop over sigma and theta grid indices
+             !  Note: Here we assume sigma and theta grid points are all on same proc
+
+             do sigma = 1,2
+                do j = 0,p-1
+                   n = nn_to(ip)+1 ; nn_to(ip) = n
+                   if (dir == 'r') then
+                      to(ip)%first(n) = -ntgrid-p+j  !  Theta index to store received data
+                   else
+                      to(ip)%first(n) =  ntgrid+j  !  Theta index to store received data
+                   end if
+                   to(ip)%second(n) = sigma       !  Sigma index to store received data
+                   to(ip)%third(n) = iglo_con  !  iglo index to store received data
+                end do
+             end do
+
+          end if
+
+       end do ! iglo
+       
+       !  Bit of debug printing, not controlled so will be messy
+       if (debug.and.proc0) then
+          write(6,*) 'init_pass_ends (2) processor, nn_to, nn_from:',iproc,nn_to,nn_from
+       end if
+
+       !  Set data ranges for arrays to be passed; note, this just affects how
+       !  arrays are indexed, not how big the buffer is.
+       
+       from_low(1) = -ntgrid-p   ; from_low(2) = 1  ; from_low(3) = g_lo%llim_proc
+       from_high(1) = ntgrid+p-1 ; from_high(2) = 2 ; from_high(3) = g_lo%ulim_alloc
+
+       to_low(1) = -ntgrid-p   ; to_low(2) = 1  ; to_low(3) = g_lo%llim_proc       
+       to_high(1) = ntgrid+p-1 ; to_high(2) = 2 ; to_high(3) = g_lo%ulim_alloc
+       
+       !  Initialise fill object
+
+       call init_fill (pass_obj, 'c', to_low, to_high, to, &
+            from_low, from_high, from)
+       
+       !  Clean up lists
+
+       call delete_list (from)
+       call delete_list (to)
+
+    end if
+
+  end subroutine init_pass_dg
 
   ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -3169,7 +3471,7 @@ contains
        do isgn = 1,2
           do ig = -ntgrid, ntgrid
              adj = (-fapar) * &
-                  anon(ie,is)*spec(is)%z*vpa(ie,isgn,is)*aj0(ig,iglo)*apar(ig,it,ik) &
+                  anon(ie,is)*spec(is)%z*vpa(ig,isgn,is)*aj0(ig,iglo)*apar(ig,it,ik) &
                   /spec(is)%temp
              g(ig,isgn,iglo) = g(ig,isgn,iglo) + adj
           end do
@@ -3180,7 +3482,7 @@ contains
 
   ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine get_source_term_exp (phi,apar,bpar,istep,isgn,iglo,fluxfn,source)
+  subroutine get_source_term_exp (phi,apar,bpar,istep,fluxfn,source)
 
     !  Routine to evaluate the source term and the flux function
     !  for the explicit DG scheme
@@ -3192,6 +3494,11 @@ contains
     !  In the original code, fluxfn() was part of source() on the RHS of the
     !  equation being solved, but in the DG formulation it is used as part
     !  of the LHS, specifically in the term vparallel * d(g+F)/dz
+    !
+    !  Note that the iglo and isgn loops are contained within the routine,
+    !  rather than the routine being called within such loops; that is,
+    !  the fluxfn and source arguments have all three dimensions, not just the
+    !  ig (=theta) dimension.
     !
     !  N.B. Totally trapped particles are (probably) not implemented completely yet...
     !
@@ -3215,103 +3522,114 @@ contains
 
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
-    integer, intent (in) :: isgn, iglo
-    complex, dimension (-ntgrid:), intent (out) :: fluxfn
-    complex, dimension (-ntgrid:), intent (out) :: source
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: fluxfn
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: source
 
     !  Local variables
 
     real :: tfac
     integer :: ig, ik, it, il, ie, is
+    integer :: isgn, iglo
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    ik = ik_idx(g_lo,iglo)
-    it = it_idx(g_lo,iglo)
-    il = il_idx(g_lo,iglo)
-    ie = ie_idx(g_lo,iglo)
-    is = is_idx(g_lo,iglo)
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
 
-    phigavg = phi(:,it,ik)*aj0(:,iglo)*fphi &
-         + bpar(:,it,ik)*aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
-    apargavg = apar(:,it,ik)*aj0(:,iglo)*fapar
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
 
-    !  Source term in finite difference equations
+       phigavg = phi(:,it,ik)*aj0(:,iglo)*fphi &
+            + bpar(:,it,ik)*aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
+       apargavg = apar(:,it,ik)*aj0(:,iglo)*fapar
 
-    select case (source_option_switch)
+       do isgn = 1,2
 
-       !  Default choice: solve self-consistent equations
+          !  Source term in finite difference equations
 
-    case (source_option_full)
-       if (il <= lmax) then
-          call set_source
-       else
-          source = 0.0
-       end if
+          select case (source_option_switch)
 
-    case (source_option_zero)
-       source = 0.0
+             !  Default choice: solve self-consistent equations
 
-    case default
-       write(*,*) 'Invalid source_option_switch for explicit solver...'
-       stop
+          case (source_option_full)
+             if (il <= lmax) then
+                call set_source
+             else
+                source = 0.0
+             end if
 
-    end select
+          case (source_option_zero)
+             source = 0.0
 
-    !  Periodic boundary condition at end-points
-    !  (as done in original get_source_term)
+          case default
+             write(*,*) 'Invalid source_option_switch for explicit solver...'
+             stop
 
-    fluxfn(ntgrid) = fluxfn(-ntgrid)
-    source(ntgrid) = source(-ntgrid)
+          end select
 
-    !  Special source term for totally trapped particles
-    !  Needs working on when these particles are included, i.e. g is g, not i...
+          !  Periodic boundary condition at end-points
+          !  (as done in original get_source_term)
+          !  For flux-tube runs, the ntgrid point will be ignored anyway
+          !  in most cases, as it's equivalent to the -ntgrid point in the next tube.
 
-    if (source_option_switch == source_option_full) then
+          fluxfn(ntgrid,isgn,iglo) = fluxfn(-ntgrid,isgn,iglo)
+          source(ntgrid,isgn,iglo) = source(-ntgrid,isgn,iglo)
 
-       if (nlambda > ng2 .and. isgn == 2) then
-          !do ig = -ntgrid, ntgrid
-          !   if (il /= ittp(ig)) cycle
-          !   source(ig) &
-          !        = g(ig,2,iglo)*a(ig,iglo) &
-          !        - anon(ie,is)*zi*(wdriftttp(ig,it,ik,ie,is)+wcoriolis(ig,iglo))*phigavg(ig)*nfac &
-          !        + zi*wstar(ik,ie,is)*phigavg(ig)
+          !  Special source term for totally trapped particles
+          !  Needs working on when these particles are included, i.e. g is g, not i...
 
-          !end do
+          if (source_option_switch == source_option_full) then
 
-          !  Add in nonlinear terms -- tfac normalizes the *amplitudes*.
+             if (nlambda > ng2 .and. isgn == 2) then
+                !do ig = -ntgrid, ntgrid
+                !   if (il /= ittp(ig)) cycle
+                !   source(ig,isgn,iglo) &
+                !        = g(ig,2,iglo)*a(ig,iglo) &
+                !        - anon(ie,is)*zi*(wdriftttp(ig,it,ik,ie,is)+wcoriolis(ig,iglo))*phigavg(ig)*nfac &
+                !        + zi*wstar(ik,ie,is)*phigavg(ig)
+                !end do
 
-          if (nonlin) then         
-             tfac = 1./tnorm
-             select case (istep)
-             case (0)
-                ! nothing
-             case (1)
-                do ig = -ntgrid, ntgrid
-                   if (il /= ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
-                end do
-             case (2) 
-                do ig = -ntgrid, ntgrid
-                   if (il /= ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*tfac*( &
-                        1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
-                end do
-             case default
-                do ig = -ntgrid, ntgrid
-                   if (il /= ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*tfac*( &
-                        (23./12.)*gnl_1(ig,isgn,iglo) &
-                        - (4./3.)  *gnl_2(ig,isgn,iglo) &
-                        + (5./12.) *gnl_3(ig,isgn,iglo))
-                end do
-             end select
+                !  Add in nonlinear terms -- tfac normalizes the *amplitudes*.
+
+                if (nonlin) then         
+                   tfac = 1./tnorm
+                   select case (istep)
+                   case (0)
+                      ! nothing
+                   case (1)
+                      do ig = -ntgrid, ntgrid
+                         if (il /= ittp(ig)) cycle
+                         source(ig,isgn,iglo) = source(ig,isgn,iglo) &
+                              + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
+                      end do
+                   case (2) 
+                      do ig = -ntgrid, ntgrid
+                         if (il /= ittp(ig)) cycle
+                         source(ig,isgn,iglo) = source(ig,isgn,iglo) &
+                              + 0.5*code_dt*tfac*( &
+                              1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
+                      end do
+                   case default
+                      do ig = -ntgrid, ntgrid
+                         if (il /= ittp(ig)) cycle
+                         source(ig,isgn,iglo) = source(ig,isgn,iglo) &
+                              + 0.5*code_dt*tfac*( &
+                              (23./12.)*gnl_1(ig,isgn,iglo) &
+                              - (4./3.)  *gnl_2(ig,isgn,iglo) &
+                              + (5./12.) *gnl_3(ig,isgn,iglo))
+                      end do
+                   end select
+                end if
+
+             end if
+
           end if
 
-       end if
-
-    end if
+       end do ! isgn
+    end do ! iglo
 
   contains
 
@@ -3343,6 +3661,7 @@ contains
       !  (3) phi_m deleted; removes CMR's term II (= fluxfn term, moved to LHS)
       !  (4) apar_m deleted; removes CMR's term I
       !  (5) vpa used instead of vpar
+      !  (6) source has three dimensions, not just ig (similarly fluxfn)
 
       do ig = -ntgrid, ntgrid-1
          phi_p = 2.0*phigavg(ig)
@@ -3350,7 +3669,7 @@ contains
 
          !  Source term (RHS) required by the explicit DG scheme
 
-         source(ig) = anon(ie,is) * ( &
+         source(ig,isgn,iglo) = anon(ie,is) * ( &
               -spec(is)%zstm*vpa(ig,isgn,iglo)*(D_res(it,ik)*apar_p) &
               -zi*(wdrift(ig,iglo)+wcoriolis(ig,iglo))* &
               (phi_p - apar_p*spec(is)%stm*vpa(ig,isgn,iglo))*nfac ) &
@@ -3363,8 +3682,8 @@ contains
          !  Flux function required by the explicit DG scheme
          !  N.B. there is no need to divide by 2*dt later
 
-         fluxfn(ig) = (phigavg(ig) - apargavg(ig)*vpa(ig,isgn,iglo)*spec(is)%stm) &
-              / spec(is)%tz
+         fluxfn(ig,isgn,iglo) = (phigavg(ig) - &
+              apargavg(ig)*vpa(ig,isgn,iglo)*spec(is)%stm) / spec(is)%tz
 
       end do
 
@@ -3377,16 +3696,17 @@ contains
             ! nothing
          case (1)
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
+               source(ig,isgn,iglo) = source(ig,isgn,iglo) &
+                    + 0.5*code_dt*tfac*gnl_1(ig,isgn,iglo)
             end do
          case (2) 
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+               source(ig,isgn,iglo) = source(ig,isgn,iglo) + 0.5*code_dt*tfac*( &
                     1.5*gnl_1(ig,isgn,iglo) - 0.5*gnl_2(ig,isgn,iglo))
             end do
          case default
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*tfac*( &
+               source(ig,isgn,iglo) = source(ig,isgn,iglo) + 0.5*code_dt*tfac*( &
                     (23./12.)*gnl_1(ig,isgn,iglo) &
                     - (4./3.)  *gnl_2(ig,isgn,iglo) &
                     + (5./12.) *gnl_3(ig,isgn,iglo))
@@ -3398,7 +3718,7 @@ contains
 
       do ig = -ntgrid,ntgrid
          if (forbid(ig,il)) then
-            source(ig) = 0.0
+            source(ig,isgn,iglo) = 0.0
          end if
       end do
 
