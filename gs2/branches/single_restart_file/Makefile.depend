@@ -542,9 +542,7 @@ gs2_transforms.o: \
 	 redistribute.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o \
-	 convert.o \
-	 file_utils.o 
+	 constants.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -594,6 +592,7 @@ init_g.o: \
 	 le_grids.o \
 	 mp.o \
 	 ran.o \
+	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
 	 text_options.o \
@@ -690,11 +689,8 @@ prof.o:
 ran.o: 
 read_chease.o: 
 redistribute.o: \
-	 gs2_layouts.o \
 	 job_manage.o \
-	 kt_grids.o \
-	 mp.o \
-	 theta_grid.o 
+	 mp.o 
 regress.o: \
 	 regression.o 
 regression.o: 
