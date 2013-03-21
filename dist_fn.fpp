@@ -52,7 +52,7 @@ module dist_fn
   real :: t0, omega0, gamma0, source0
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
-  logical :: dfexist, skexist, nonad_zero, lf_default
+  logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose
 
   integer :: adiabatic_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -635,7 +635,7 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, nonad_zero, gridfac, apfac, &
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         g_exb, g_exbfac, omprimfac, btor_slab, mach, lf_default
+         g_exb, g_exbfac, omprimfac, btor_slab, mach, lf_default, lf_decompose
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -671,6 +671,7 @@ subroutine check_dist_fn(report_unit)
        def_parity = .false.
        even = .true.
        lf_default = .true.
+       lf_decompose = .false.
        source_option = 'default'
        in_file = input_unit_exist("dist_fn_knobs", dfexist)
 !       if (dfexist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
@@ -726,7 +727,8 @@ subroutine check_dist_fn(report_unit)
     call broadcast (mult_imp)
     call broadcast (test)
     call broadcast (def_parity)
-    call broadcast (lf_default)    
+    call broadcast (lf_default)
+    call broadcast (lf_decompose)
     call broadcast (even)
     call broadcast (wfb)
 
@@ -6954,7 +6956,7 @@ subroutine check_dist_fn(report_unit)
     ! tmp4 is dH^{neo}/dr, tmp5 is dH^{neo}/dtheta, tmp6 is H^{neo}
     ! tmp7 is phi^{neo}/dr, tmp8 is dphi^{neo}/dtheta, and tmp9 phi^{neo}
     call get_lowflow_terms (theta, al, energy, bmag, tmp1, tmp2, tmp3, tmp4, &
-         tmp5, tmp6, tmp7, tmp8, tmp9, lf_default)
+         tmp5, tmp6, tmp7, tmp8, tmp9, lf_default, lf_decompose)
     
     if (proc0) then
        call open_output_file (neo_unit,".neodist")

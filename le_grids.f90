@@ -575,56 +575,35 @@ contains
 
   subroutine integrate_species (g, weights, total)
     use theta_grid, only: ntgrid
-    use species, only: nspec
-    use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: g_lo, idx, idx_local
+    use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use mp, only: sum_allreduce
+
     implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:), intent (out) :: total
-! total = total(theta, kx, ky)
-!    complex, dimension (:,:), allocatable :: geint
-    complex, dimension (:), allocatable :: work
-    real :: fac
-    integer :: is, il, ie, ik, it, iglo, ig, i
+    integer :: is, il, ie, ik, it, iglo
 
+    !Ensure array is zero to begin
     total = 0.
+
+    !Performed integral (weighted sum) over local velocity space and species
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       !Convert from iglo to the separate indices
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
-       fac = weights(is)*w(ie)
 
-       total(:, it, ik) = total(:, it, ik) + fac*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+       !Sum up weighted g
+       total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
     end do
 
-    allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             work(i) = total(ig, it, ik)
-          end do
-       end do
-    end do
-    
-    call sum_allreduce (work) 
-
-    i = 0
-    do ik = 1, naky
-       do it = 1, ntheta0
-          do ig = -ntgrid, ntgrid
-             i = i + 1
-             total(ig, it, ik) = work(i)
-          end do
-       end do
-    end do
-    deallocate (work)
+    !Reduce sum across all procs to make integral over all velocity space and species
+    call sum_allreduce (total) 
 
   end subroutine integrate_species
 
@@ -644,18 +623,14 @@ contains
     integer, intent (in) :: istep
 
     complex :: totfac
-    complex, dimension (:), allocatable :: worke, workl, workt
     real :: fac, ulim
     integer :: is, il, ie, ik, it, iglo, ig, i, j, im, ntrap, k
     integer, save :: lpesize
-!    logical :: first = .true.
 
     real, dimension (:), allocatable :: nodes
     real, dimension (:,:), allocatable :: lpltmp, lpttmp
 !    real, dimension (:,:), allocatable, save :: lpe, lpl
 !    real, dimension (:,:,:,:), allocatable, save :: lpt
-
-!    if (first) then
 
     if (.not. allocated(lpl)) then
        allocate(lpltmp(ng2,0:ng2-1))
@@ -690,6 +665,7 @@ contains
                    nodes(il) = -sqrt(max(0.0,1.0-al(ng2+il)*bmag(ig)))
                 end do
                 nodes(ntrap+1:) = -nodes(ntrap-1:1:-1)
+!Can we remove this?
 ! TEMP FOR TESTING -- MAB
 !                nodes = nodes + sqrt(1.0-bmag(ig)/bmax)
 !                ulim = 2.*sqrt(1.0-bmag(ig)/bmax)
@@ -697,6 +673,7 @@ contains
                 call legendre_polynomials (-ulim,ulim,nodes,lpttmp)
                 lpt(ng2+1:jend(ig),0:2*(ntrap-1),ig,2) = lpttmp(1:ntrap,:)
                 lpt(ng2+1:jend(ig)-1,0:2*(ntrap-1),ig,1) = lpttmp(2*ntrap-1:ntrap+1:-1,:)
+!Can we remove this?
 !                lpt(ng2+1:jend(ig),0:2*(ntrap-1),ig,1) = lpttmp(2*ntrap-1:ntrap+1:-1,:)
 !                do ie = 0, 2*(ntrap-1)
 !                   do il = 1, 2*ntrap-1
@@ -714,18 +691,20 @@ contains
        end if
 
        deallocate (lpltmp)
-!       first = .false.
     end if
 
     ! carry out legendre transform to get coefficients of
     ! legendre polynomial expansion of g
     totfac = 0. ; tote = 0. ; totl = 0.
     if (present(tott)) tott = 0.
+
+    !Loop over all indices, note this loop is optimal only for layout 'xyles' (at least in terms of
+    !g memory access)
     do is = 1, nspec
        do ie = 1, negrid
           do il = 1, nlambda
-             do it = 1, ntheta0
-                do ik = 1, naky
+             do ik = 1, naky       !Swapped ik and it loop order.
+                do it = 1, ntheta0
                    iglo = idx (g_lo, ik, it, il, ie, is)
                    if (idx_local (g_lo, iglo)) then
                       do ig=-ntgrid,ntgrid
@@ -750,72 +729,12 @@ contains
        end do
     end do
 
+    !Do we really need this if?
     if (nproc > 1) then
-       allocate (worke((2*ntgrid+1)*naky*ntheta0*nspec*lpesize)) ; worke = 0.
-       allocate (workl((2*ntgrid+1)*naky*ntheta0*nspec*ng2)) ; workl = 0.
-
-       if (present(tott)) then
-          allocate (workt((2*ntgrid+1)*naky*ntheta0*nspec*(2*(nlambda-ng2)-1)))
-          workt = 0.
-       end if
-
-       i = 0 ; j = 0 ; k = 0
-
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                do ig = -ntgrid, ntgrid
-                   do im = 0, lpesize-1
-                      i = i + 1
-                      worke(i) = tote(im, ig, it, ik, is)
-                   end do
-                   do im = 0, ng2-1
-                      j = j + 1
-                      workl(j) = totl(im, ig, it, ik, is)
-                   end do
-                   if (present(tott)) then
-                      do im = 0, 2*(nlambda-ng2-1)
-                         k = k + 1
-                         workt(k) = tott(im, ig, it, ik, is)
-                      end do
-                   end if
-                end do
-             end do
-          end do
-       end do
-
-       call sum_reduce (worke, 0)
-       call sum_reduce (workl, 0)
-       if (present(tott)) call sum_reduce (workt, 0)
-
-       if (proc0) then
-          i = 0 ; j = 0 ; k = 0
-          do is = 1, nspec
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   do ig = -ntgrid, ntgrid
-                      do im = 0, lpesize-1
-                         i = i + 1
-                         tote(im, ig, it, ik, is) = worke(i)
-                      end do
-                      do im = 0, ng2-1
-                         j = j + 1
-                         totl(im, ig, it, ik, is) = workl(j)
-                      end do
-                      if (present(tott)) then
-                         do im = 0, 2*(nlambda-ng2-1)
-                            k = k + 1
-                            tott(im, ig, it, ik, is) = workt(k)
-                         end do
-                      end if
-                   end do
-                end do
-             end do
-          end do
-       end if
-
-       deallocate (worke,workl)
-       if (present(tott)) deallocate (workt)
+       !Now complete velocity integral, bringing back results to proc0
+       call sum_reduce (tote, 0)
+       call sum_reduce (totl, 0)
+       if (present(tott)) call sum_reduce (tott, 0)
     end if
 
   end subroutine legendre_transform
@@ -860,26 +779,21 @@ contains
   end subroutine legendre_polynomials
 
   subroutine lagrange_interp (g, poly, istep, all)
-
-    use mp, only: nproc, iproc
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, idx, idx_local
-    use mp, only: sum_reduce, proc0, sum_allreduce
+    use mp, only: sum_reduce, proc0, sum_allreduce, nproc
+
     implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:,:), intent (out) :: poly
     integer, optional, intent(in) :: all
     integer, intent(in) :: istep
+    real :: ypt
+    integer :: il, ie, ik, it, iglo, ig
 
-    complex, dimension (:), allocatable :: work
-    real, dimension (:,:,:), allocatable :: ypt
-    integer :: il, ie, ik, it, iglo, ig, i, ix, tsize
-
-    allocate(ypt(-ntgrid:ntgrid,nlambda,2))
-
-    ypt = 0.0
-
+    !Initialise to zero
     poly = 0.
     do ie = 1, negrid
        do il = ng2+1, nlambda
@@ -888,13 +802,15 @@ contains
                 iglo = idx (g_lo, ik, it, il, ie, 1)
                 if (idx_local (g_lo, iglo)) then
                    do ig = -ntgrid, ntgrid
+                      !Do we need this if?
                       if (.not. forbid(ig,il)) then
-                         ypt(ig,il,1) = sqrt(max(1.0 - bmag(ig)*al(il),0.0))                      
-                         ypt(ig,il,2) = -ypt(ig,il,1)
+                         ypt=sqrt(max(1.0 - bmag(ig)*al(il),0.0))                      
+                      else
+                         ypt=0.0
                       end if
                       poly(ig, it, ik, ie, :) = poly(ig, it, ik, ie, :) + &
-                           lgrnge(ig,il,:,1)*cos(0.1*istep*ypt(ig,il,1)+1.0) + &
-                           lgrnge(ig,il,:,2)*cos(0.1*istep*ypt(ig,il,2)+1.0)  !(g(ig,1,iglo)+g(ig,2,iglo))
+                           lgrnge(ig,il,:,1)*cos(0.1*istep*ypt+1.0) + &
+                           lgrnge(ig,il,:,2)*cos(-0.1*istep*ypt+1.0)
                    end do
                 end if
              end do
@@ -902,51 +818,15 @@ contains
        end do
     end do
 
-    tsize = 2*nterp-1
-
+    !Do we really need this if?
     if (nproc > 1) then
-
-       allocate (work((2*ntgrid+1)*naky*ntheta0*negrid*tsize)) ; work = 0.
-
-       i = 0
-       do ix = 1, tsize
-          do ie = 1, negrid
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   do ig = -ntgrid, ntgrid
-                      i = i + 1
-                      work(i) = poly(ig, it, ik, ie, ix)
-                   end do
-                end do
-             end do
-          end do
-       end do
-       
+       !Reduce integral across procs
        if (present(all)) then
-          call sum_allreduce (work)
+          call sum_allreduce (poly)
        else
-          call sum_reduce (work, 0)
+          call sum_reduce (poly, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do ix = 1, tsize
-             do ie = 1, negrid
-                do ik = 1, naky
-                   do it = 1, ntheta0
-                      do ig = -ntgrid, ntgrid
-                         i = i + 1
-                         poly(ig, it, ik, ie, ix) = work(i)
-                      end do
-                   end do
-                end do
-             end do
-          end do
-       end if
-       deallocate (work)
     end if
-
-    deallocate(ypt)
 
   end subroutine lagrange_interp
 
@@ -955,26 +835,23 @@ contains
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
 ! is over all velocity space
-    use mp, only: nproc, iproc
-    use theta_grid, only: ntgrid
-    use species, only: nspec
-    use kt_grids, only: naky, ntheta0
 ! TT>
-!    use gs2_layouts, only: g_lo, idx, idx_local
     use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx
 ! <TT
-    use mp, only: sum_reduce, proc0, sum_allreduce
+    use theta_grid, only: ntgrid
+    use mp, only: sum_reduce, proc0, sum_allreduce, nproc
+
     implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     integer, optional, intent(in) :: all
+    integer :: is, il, ie, ik, it, iglo
 
-    complex, dimension (:), allocatable :: work
-    real :: fac
-    integer :: is, il, ie, ik, it, iglo, ig, i
-!    logical :: only = .true.
-
+    !Ensure array is zero
     total = 0.
+
+    !Integrate over local velocity space
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
@@ -982,46 +859,22 @@ contains
        is = is_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
 
-       do ig = -ntgrid, ntgrid
-          total(ig, it, ik, is) = total(ig, it, ik, is) + &
-               w(ie)*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
-       end do
+       !Perform local sum
+       total(:, it, ik, is) = total(:, it, ik, is) + &
+            w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+
     end do
 
-    if (nproc > 1) then
-       allocate (work((2*ntgrid+1)*naky*ntheta0*nspec)) ; work = 0.
-       i = 0
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                do ig = -ntgrid, ntgrid
-                   i = i + 1
-                   work(i) = total(ig, it, ik, is)
-                end do
-             end do
-          end do
-       end do
-       
+    !Not sure that we really need to limit this to nproc>1 as if
+    !we run with 1 proc MPI calls should still work ok
+    if (nproc > 1) then     
        if (present(all)) then
-          call sum_allreduce (work)
+          !Complete integral over distributed velocity space and ensure all procs know the result
+          call sum_allreduce (total)
        else
-          call sum_reduce (work, 0)
+          !Complete integral over distributed velocity space but only proc0 knows the answer
+          call sum_reduce (total, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do is = 1, nspec
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   do ig = -ntgrid, ntgrid
-                      i = i + 1
-                      total(ig, it, ik, is) = work(i)
-                   end do
-                end do
-             end do
-          end do
-       end if
-       deallocate (work)
     end if
 
   end subroutine integrate_moment_c34
@@ -1031,91 +884,70 @@ contains
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(y, z, sigma, lambda, E, species) and returns int f, where the integral
 ! is over all velocity space
-    use mp, only: nproc, iproc
-    use theta_grid, only: ntgrid
-    use species, only: nspec
-    use kt_grids, only: naky
+    use mp, only: nproc
     use gs2_layouts, only: p_lo, is_idx, ik_idx, ie_idx, il_idx
     use mp, only: sum_reduce, proc0, sum_allreduce
+    use theta_grid, only: ntgrid
+
     implicit none
+
     real, dimension (-ntgrid:,:,p_lo%llim_proc:), intent (in) :: g
     real, dimension (-ntgrid:,:,:), intent (out) :: total
     integer, optional, intent(in) :: all
+    integer :: is, il, ie, ik, iplo
 
-    real, dimension (:), allocatable :: work
-    real :: fac
-    integer :: is, il, ie, ik, iplo, ig, i
-
+    !Ensure zero to start
     total = 0.
+
+    !Do local velocity space integral
     do iplo = p_lo%llim_proc, p_lo%ulim_proc
        ik = ik_idx(p_lo,iplo)
        ie = ie_idx(p_lo,iplo)
        is = is_idx(p_lo,iplo)
        il = il_idx(p_lo,iplo)
 
-       do ig = -ntgrid, ntgrid
-          total(ig, ik, is) = total(ig, ik, is) + &
-               w(ie)*wl(ig,il)*(g(ig,1,iplo)+g(ig,2,iplo))
-       end do
+       total(:, ik, is) = total(:, ik, is) + &
+            w(ie)*wl(:,il)*(g(:,1,iplo)+g(:,2,iplo))
+
     end do
 
+    !Do we really need this if?
     if (nproc > 1) then
-       allocate (work((2*ntgrid+1)*naky*nspec)) ; work = 0.
-       i = 0
-       do is = 1, nspec
-          do ik = 1, naky
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                work(i) = total(ig, ik, is)
-             end do
-          end do
-       end do
-
+       !Complete distributed integral
        if (present(all)) then
-          call sum_allreduce (work)
+          !Return result to all procs
+          call sum_allreduce (total)
        else
-          call sum_reduce (work, 0)
+          !Only proc0 knows the result
+          call sum_reduce (total, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do is = 1, nspec
-             do ik = 1, naky
-                do ig = -ntgrid, ntgrid
-                   i = i + 1
-                   total(ig, ik, is) = work(i)
-                end do
-             end do
-          end do
-       end if
-       deallocate (work)
     end if
 
   end subroutine integrate_moment_r33
 
   subroutine integrate_moment_lec (lo, g, total)
-
-    use theta_grid, only: ntgrid
+!Perform an integral over velocity space whilst in the LE_LAYOUT in 
+!which we have ensured that all of velocity space is local. As such
+!we don't need any calls to MPI reduction routines. Note that this means
+!the processors for different distributed spatial points (x,y) don't know
+!the results at other points.
     use layouts_type, only: le_layout_type
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
+
+    implicit none
+
     type (le_layout_type), intent (in) :: lo
     complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
-!    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     complex, dimension (lo%llim_proc:), intent (out) :: total
-    integer :: ixi, ie, il, ile, is, it, ik, ig
-    real :: fac
+    integer :: ixi, ie, il, ile, ig
 
     total = 0.0
     do ile = lo%llim_proc, lo%ulim_proc
        ig = ig_idx (lo,ile)
-       it = it_idx (lo,ile)
-       ik = ik_idx (lo,ile)
-       is = is_idx (lo,ile)
        do ie=1, negrid
           do ixi=1, nxi
              il = ixi_to_il(ig,ixi)
-             fac = w(ie) * wl(ig,il)
-             total(ile) = total(ile) + fac * g(ixi,ie,ile)
+             total(ile) = total(ile) + w(ie) * wl(ig,il) * g(ixi,ie,ile)
           end do
        end do
     end do
@@ -1132,24 +964,23 @@ contains
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(y, lambda, E, species) and returns int sum_{ky} f, where the integral
 ! is over energy and lambda (not sigma)
-    use constants, only: zi
-    use mp, only: nproc, iproc
-    use theta_grid, only: ntgrid
     use species, only: nspec
-    use kt_grids, only: naky, ntheta0, aky
-    use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx, p_lo
-    use mp, only: sum_reduce, proc0, sum_allreduce
+    use kt_grids, only: aky
+    use constants, only: zi
+    use gs2_layouts, only: is_idx, ik_idx, ie_idx, il_idx, p_lo
+    use mp, only: sum_reduce, proc0, sum_allreduce, nproc
+
     implicit none
+
     complex, dimension (p_lo%llim_proc:), intent (in) :: g
     integer, intent (in) :: ig
     complex, dimension (:), intent (out) :: total
     integer, optional, intent(in) :: all
 
     complex, dimension (negrid,nlambda,nspec) :: gksum
-    complex, dimension (:), allocatable :: work
-    real :: fac
-    integer :: is, il, ie, ik, it, iplo, i
+    integer :: is, il, ie, ik, it, iplo
 
+    !Initialise both arrays to zero
     total = 0. ; gksum = 0.
     do iplo = p_lo%llim_proc, p_lo%ulim_proc
        ik = ik_idx(p_lo,iplo)
@@ -1170,289 +1001,180 @@ contains
        total(is) = total(is) + w(ie)*wl(ig,il)*gksum(ie,il,is)
     end do
 
+    !Do we really need this if?
     if (nproc > 1) then
-       allocate (work(nspec)) ; work = 0.
-       i = 0
-       do is = 1, nspec
-          i = i + 1
-          work(i) = total(is)
-       end do
-       
        if (present(all)) then
-          call sum_allreduce (work)
+          call sum_allreduce (total)
        else
-          call sum_reduce (work, 0)
+          call sum_reduce (total, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do is = 1, nspec
-             i = i + 1
-             total(is) = work(i)
-          end do
-       end if
-       deallocate (work)
     end if
 
   end subroutine integrate_kysum
 
   subroutine lint_error (g, weights, total)
     use theta_grid, only: ntgrid, bmag, bmax
-    use species, only: nspec
-    use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: g_lo, idx, idx_local
+    use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use mp, only: sum_allreduce, proc0, broadcast
+
     implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
-    complex, dimension (:), allocatable :: work
-!    real, dimension (:,:,:), allocatable, save :: wlmod
-    real :: fac
-    integer :: is, il, ie, ik, it, iglo, ig, i, ipt
-!    logical, save :: first = .true.
+    integer :: is, il, ie, ik, it, iglo, ipt
 
-!    if (first) then
+    !If the weights array hasn't been filled in then do so now
     if (.not. allocated (wlmod)) then
+       !Allocate array, don't need to initialise as below loop ensures
+       !all elements are assigned a value
+       allocate (wlmod(-ntgrid:ntgrid,nlambda,ng2))
+
        if (proc0) then
-          allocate (wlmod(-ntgrid:ntgrid,nlambda,ng2))
-          wlmod = 0.0
           do ipt = 1, ng2
              do il = 1, ng2
-                do ig = -ntgrid, ntgrid
-                   wlmod(ig,il,ipt) = wlerr(il,ipt)*2.0*sqrt((bmag(ig)/bmax) &
-                        *((1.0/bmax-al(il))/(1.0/bmag(ig)-al(il))))
-                end do
+                wlmod(:,il,ipt) = wlerr(il,ipt)*2.0*sqrt((bmag(:)/bmax) &
+                     *((1.0/bmax-al(il))/(1.0/bmag(:)-al(il))))
              end do
+             !If we have trapped particles use the precalculated weights
+             !in wlmod as above is only for passing particles
              if (nlambda > ng2) wlmod(:,ng2+1:,ipt) = wl(:,ng2+1:)
           end do
        end if
-       
-       if (.not. proc0) then
-          allocate(wlmod(-ntgrid:ntgrid,nlambda,ng2))
-          wlmod = 0.0
-       end if
-       
-       do ipt=1,ng2
-          do il=1,nlambda
-             call broadcast (wlmod(:,il,ipt))
-          end do
-       end do
-       
-!       first = .false.
+
+       !Now send the calculated value from proc0 to all other procs
+       !We could just do the above calculations on all procs?
+       call broadcast (wlmod)
     end if
 
+    !Initialise to zero
+    total = 0.
+
+    !For each (passing) lambda point do velocity space integral
     do ipt=1,ng2
-       total(:,:,:,ipt) = 0.
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
           ie = ie_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           il = il_idx(g_lo,iglo)
-          fac = weights(is)*w(ie)
 
-          total(:, it, ik, ipt) = total(:, it, ik, ipt) + fac*wlmod(:,il,ipt)*(g(:,1,iglo)+g(:,2,iglo))
+          total(:, it, ik, ipt) = total(:, it, ik, ipt) + weights(is)*w(ie)*wlmod(:,il,ipt)*(g(:,1,iglo)+g(:,2,iglo))
        end do
-
-       allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                work(i) = total(ig, it, ik, ipt)
-             end do
-          end do
-       end do
-       
-       call sum_allreduce (work) 
-       
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                total(ig, it, ik, ipt) = work(i)
-             end do
-          end do
-       end do
-       deallocate (work)
     end do
+
+    !Moved this outside of the ipt loop above
+    call sum_allreduce (total) 
 
   end subroutine lint_error
 
   subroutine trap_error (g, weights, total)
     use theta_grid, only: ntgrid, bmag, bmax
-    use species, only: nspec
-    use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: g_lo, idx, idx_local
+    use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use mp, only: sum_allreduce, proc0, broadcast
+
     implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
-    complex, dimension (:), allocatable :: work
-!    real, dimension (:,:,:), allocatable, save :: wtmod
-!    real, dimension (:,:), allocatable, save :: ypts2
-    real :: fac
-    integer :: is, il, ie, ik, it, iglo, ig, i, ipt, ntrap
-!    logical, save :: first = .true.
+    integer :: is, il, ie, ik, it, iglo, ipt, ntrap
 
+    !How many trapped pitch angles are there?
     ntrap = nlambda - ng2
 
-!    if (first) then
+    !If weights not calculated yet do so now
     if (.not. allocated(wtmod)) then
+       !Allocate array, don't need to initialise as below loops
+       !ensure every element is assigned a value
+       allocate (wtmod(-ntgrid:ntgrid,nlambda,ntrap))
+          
        if (proc0) then
-          allocate (wtmod(-ntgrid:ntgrid,nlambda,ntrap))
           do ipt=1,ntrap
              wtmod(:,:ng2,ipt) = wl(:,:ng2)
           end do
+
+!Left below comments, but are we done testing this now?
 ! next line only to be used when testing!!!!
 !          wtmod(:,:ng2,:) = 0.
+
           wtmod(:,ng2+1:,:) = wlterr(:,ng2+1:,:)
-       else
-          allocate (wtmod(-ntgrid:ntgrid,nlambda,ntrap))
-          wtmod = 0.0
-       end if
+       endif
 
-       do ipt=1,ntrap
-          do il=1,nlambda
-             call broadcast (wtmod(:,il,ipt))
-          end do
-       end do
-
-!       allocate(ypts2(-ntgrid:ntgrid,nlambda))
-!       ypts2 = 0.0
-
-!       first = .false.
+       !Send from proc0 to all others | We could just do the above calculations on all procs?
+       call broadcast (wtmod)
     end if
 
+
+    !Initialise to zero
     total = 0.
+
+    !Loop over number of trapped points
     do ipt=1,ntrap
+       !Do local velocity integral
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
           ie = ie_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           il = il_idx(g_lo,iglo)
-          fac = weights(is)*w(ie)
 
-!          do ig=-ntgrid,ntgrid
-!             if (.not. forbid(ig,il)) then
-!                ypts2(ig,il) = sqrt(max(1.0-bmag(ig)*al(il),0.0))
-!             else
-!                ypts2(ig,il) = 0
-!             end if
-!          end do
-
-          total(:, it, ik, ipt) = total(:, it, ik, ipt) + fac*wtmod(:,il,ipt)*(g(:,1,iglo)+g(:,2,iglo))
+          total(:, it, ik, ipt) = total(:, it, ik, ipt) + weights(is)*w(ie)*wtmod(:,il,ipt)*(g(:,1,iglo)+g(:,2,iglo))
        end do
-
-       allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                work(i) = total(ig, it, ik, ipt)
-             end do
-          end do
-       end do
-       
-       call sum_allreduce (work) 
-       
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                total(ig, it, ik, ipt) = work(i)
-             end do
-          end do
-       end do
-       deallocate (work)
     end do
+
+    !Moved this out of ipt loop above
+    call sum_allreduce (total) 
 
   end subroutine trap_error
 
   subroutine eint_error (g, weights, total)
-
     use theta_grid, only: ntgrid
-    use species, only: nspec
-    use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: g_lo, idx, idx_local
+    use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use mp, only: sum_allreduce, proc0, broadcast
+
     implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
-    complex, dimension (:), allocatable :: work
-!    real, dimension (:,:), allocatable, save :: wmod
-    real :: fac
-    integer :: is, il, ie, ik, it, iglo, ig, i, ipt
-!    logical, save :: first = .true.
+    integer :: is, il, ie, ik, it, iglo, ipt
 
-!    if (first) then
+    !If we don't have the weights then calculate them now
     if (.not. allocated(wmod)) then
+       !Allocate array, don't initialise as we fill in all values below
+       allocate (wmod(negrid,wdim))
+
        if (proc0) then
-          allocate (wmod(negrid,wdim))
-          wmod = 0.0
           wmod(:negrid-1,:) = werr(:,:)
           wmod(negrid,:) = w(negrid)  
        end if
 
-       if (.not. proc0) then
-          allocate (wmod(negrid,wdim))
-       end if
-
-       do ie = 1, wdim
-          call broadcast (wmod(:,ie))
-       end do
-
-!       first = .false.
+       !send from proc0 to everywhere else
+       call broadcast(wmod)
     end if
 
+    !Initialise to zero
+    total=0.
+
+    !Do velocity space integral for each ipt (for all energy grid points)
     do ipt=1,wdim
-       total(:,:,:,ipt) = 0.
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
           ie = ie_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           il = il_idx(g_lo,iglo)
-          fac = weights(is)*wmod(ie,ipt)
 
-          total(:, it, ik, ipt) = total(:, it, ik, ipt) + fac*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+          total(:, it, ik, ipt) = total(:, it, ik, ipt) + weights(is)*wmod(ie,ipt)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
        end do
-
-       allocate (work((2*ntgrid+1)*naky*ntheta0)) ; work = 0.
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                work(i) = total(ig, it, ik, ipt)
-             end do
-          end do
-       end do
-       
-       call sum_allreduce (work) 
-       
-       i = 0
-       do ik = 1, naky
-          do it = 1, ntheta0
-             do ig = -ntgrid, ntgrid
-                i = i + 1
-                total(ig, it, ik, ipt) = work(i)
-             end do
-          end do
-       end do
-       deallocate (work)
     end do
+
+    !Moved this out of the above loop over ipt
+    call sum_allreduce (total) 
 
   end subroutine eint_error
 
@@ -1893,80 +1615,51 @@ contains
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
 ! is over x-y space
-    use mp, only: nproc, iproc
     use theta_grid, only: ntgrid
     use kt_grids, only: aky
-    use species, only: nspec
-    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx
-    use mp, only: sum_reduce, proc0, sum_allreduce
+    use gs2_layouts, only: g_lo, is_idx, ik_idx, ie_idx, il_idx
+    use mp, only: nproc, sum_reduce, proc0, sum_allreduce
+
     implicit none
+
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:,:), intent (out) :: total
     integer, optional, intent(in) :: all
-
-    complex, dimension (:), allocatable :: work
     real :: fac
-    integer :: is, il, ie, ik, it, iglo, ig, i, isgn
+    integer :: is, il, ie, ik, it, iglo, isgn
 
+    !Initialise to zero
     total = 0.
+
+    !Do integral over local x-y space
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
+
+       !Pick the weighting factor
        if (aky(ik) == 0.) then
           fac = 1.0
        else
           fac = 0.5
        end if
 
+       !For both signs of vpar do sum
+       !May be more efficient to move ign loop above iglo loop (good for total but bad for g memory access)
        do isgn = 1, 2
-          do ig = -ntgrid, ntgrid
-             total(ig, il, ie, isgn, is) = total(ig, il, ie, isgn, is) + &
-                  fac*g(ig,isgn,iglo)
-          end do
+          total(:, il, ie, isgn, is) = total(:, il, ie, isgn, is) + &
+               fac*g(:,isgn,iglo)
        end do
     end do
 
+    !Do we really need this if statement?
     if (nproc > 1) then
-       allocate (work((2*ntgrid+1)*nlambda*negrid*nspec*2)) ; work = 0.
-       i = 0
-       do is = 1, nspec
-          do isgn = 1, 2
-             do ie = 1, negrid
-                do il = 1, nlambda
-                   do ig = -ntgrid, ntgrid
-                      i = i + 1
-                      work(i) = total(ig, il, ie, isgn, is)
-                   end do
-                end do
-             end do
-          end do
-       end do
-
        if (present(all)) then
-          call sum_allreduce (work)
+          call sum_allreduce (total)
        else
-          call sum_reduce (work, 0)
+          call sum_reduce (total, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do is = 1, nspec
-             do isgn = 1, 2
-                do ie = 1, negrid
-                   do il = 1, nlambda
-                      do ig = -ntgrid, ntgrid
-                         i = i + 1
-                         total(ig, il, ie, isgn, is) = work(i)
-                      end do
-                   end do
-                end do
-             end do
-          end do
-       end if
-       deallocate (work)
     end if
 
   end subroutine integrate_volume_c
@@ -1975,80 +1668,51 @@ contains
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
 ! is over x-y space
-    use mp, only: nproc, iproc
     use theta_grid, only: ntgrid
     use kt_grids, only: aky
-    use species, only: nspec
-    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx
-    use mp, only: sum_reduce, proc0, sum_allreduce
+    use gs2_layouts, only: g_lo, is_idx, ik_idx, ie_idx, il_idx
+    use mp, only: nproc,sum_reduce, proc0, sum_allreduce
+
     implicit none
+
     real, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, dimension (-ntgrid:,:,:,:,:), intent (out) :: total
     integer, optional, intent(in) :: all
-
-    real, dimension (:), allocatable :: work
     real :: fac
-    integer :: is, il, ie, ik, it, iglo, ig, i, isgn
+    integer :: is, il, ie, ik, it, iglo, isgn
 
+    !Initialise to zero
     total = 0.
+
+    !Do integral over local x-y space
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
+
+       !Pick the weighting factor
        if (aky(ik) == 0.) then
           fac = 1.0
        else
           fac = 0.5
        end if
 
+       !For both signs of vpar do sum
+       !May be more efficient to move ign loop above iglo loop (good for total but bad for g memory access)
        do isgn = 1, 2
-          do ig = -ntgrid, ntgrid
-             total(ig, il, ie, isgn, is) = total(ig, il, ie, isgn, is) + &
-                  fac*g(ig,isgn,iglo)
-          end do
+          total(:, il, ie, isgn, is) = total(:, il, ie, isgn, is) + &
+               fac*g(:,isgn,iglo)
        end do
     end do
 
+    !Do we really need this if statement?
     if (nproc > 1) then
-       allocate (work((2*ntgrid+1)*nlambda*negrid*nspec*2)) ; work = 0.
-       i = 0
-       do is = 1, nspec
-          do isgn = 1, 2
-             do ie = 1, negrid
-                do il = 1, nlambda
-                   do ig = -ntgrid, ntgrid
-                      i = i + 1
-                      work(i) = total(ig, il, ie, isgn, is)
-                   end do
-                end do
-             end do
-          end do
-       end do
-
        if (present(all)) then
-          call sum_allreduce (work)
+          call sum_allreduce (total)
        else
-          call sum_reduce (work, 0)
+          call sum_reduce (total, 0)
        end if
-
-       if (proc0 .or. present(all)) then
-          i = 0
-          do is = 1, nspec
-             do isgn = 1, 2
-                do ie = 1, negrid
-                   do il = 1, nlambda
-                      do ig = -ntgrid, ntgrid
-                         i = i + 1
-                         total(ig, il, ie, isgn, is) = work(i)
-                      end do
-                   end do
-                end do
-             end do
-          end do
-       end if
-       deallocate (work)
     end if
 
   end subroutine integrate_volume_r

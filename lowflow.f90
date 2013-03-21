@@ -14,9 +14,9 @@ module lowflow
 contains
   
   subroutine get_lowflow_terms (theta, al, energy, bmag, dHdEc, dHdxic, vpadHdEc, dHdrc, &
-       dHdthc, hneoc, dphidrc, dphidthc, phi_neo, lf_default)
+       dHdthc, hneoc, dphidrc, dphidthc, phi_neo, lf_default, lf_decompose)
     
-    use mp, only: proc0
+    use mp, only: proc0, broadcast
     use le_grids, only: w, wl
     use theta_grid, only: delthet, jacob, ntgrid, Rplot
     use file_utils, only: open_output_file, close_output_file, get_unused_unit
@@ -30,22 +30,22 @@ contains
     real, dimension (:), intent (in) :: energy
     real, dimension (:,:,:,:,:), intent (out) :: dHdec, dHdxic, dHdrc, dHdthc, vpadHdEc, hneoc
     real, dimension (:), intent (out) :: dphidthc, dphidrc, phi_neo
-    logical, intent (in) :: lf_default
+    logical, intent (in) :: lf_default, lf_decompose
 
-    real :: rgeo2
+    real :: rgeo2, drlt, drln
 
     real, dimension (:,:,:,:,:), allocatable :: hneo
     real, dimension (:,:,:,:), allocatable :: dHdxi, dHdE, vpadHdE, dHdr, dHdth
     real, dimension (:,:,:), allocatable :: legp
     real, dimension (:,:), allocatable :: xi, emax, dphidr
     real, dimension (:,:,:,:), allocatable :: chebyp1, chebyp2
-    real, dimension (:), allocatable :: dl_over_b
+    real, dimension (:), allocatable :: dl_over_b, drad_neo
     real, dimension (:,:), allocatable :: transport 
     real, dimension (:), allocatable :: phineo2
-    real, dimension (:,:), allocatable :: dens2, pres2, upar2
-    real, dimension (:,:,:), allocatable :: dens, pres, upar
-    real, dimension (:,:), allocatable :: pflx, qflx, vflx, qpar, upar1, uparB !JPL
-    real, dimension (:), allocatable ::  radius, jboot, phi2, vtor, upar0, upar_over_B
+    real, dimension (:,:), allocatable :: upar2, qpar2
+    real, dimension (:,:,:), allocatable :: upar, qpar, afac, bfac
+    real, dimension (:,:), allocatable :: pflx, qflx, vflx, qparB, upar1, uparB, upar_over_B
+    real, dimension (:), allocatable ::  radius, jboot, phi2, vtor, upar0
     real, dimension (size(energy)) :: w_r 
 
     integer :: il, ie, is, ns, nc, nl, nr, ig, ixi, ir, ir_loc
@@ -84,12 +84,6 @@ contains
     ! nr is number of radii
     ! taken from neo
     call read_neocoefs (theta, ns, nc, nl, nr, ir_loc)
-
-    ! TMP FOR TESTING -- MAB
-!    coefs = 0.0
-!    coefs(:,:,0,0,:) = 1.0
-!    coefs(:,:,1,0,:) = 0.6 ; coefs(:,:,3,0,:) = 0.4
-!    coefs(:,:,1,0,:) = 1.0
     
     if (.not. allocated(chebyp1)) allocate (chebyp1(nr,nenergy,0:nc-1,ns), chebyp2(nr,nenergy,0:nc-1,ns))
     if (.not. allocated(legp)) allocate (legp(ntheta,nxi,0:nl+1))
@@ -123,8 +117,11 @@ contains
           emax(3,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(3)-rad_neo(2)))
        end do
     else
-       emax = 16.0       
+       emax = 16.0
     end if
+
+    allocate (drad_neo(nr)) ; drad_neo = 0.
+    drad_neo = rad_neo - rad_neo(2)
 
     ! get legendre polynomials on gs2 pitch-angle grid
     legp = 0.0
@@ -145,20 +142,203 @@ contains
        end do
     end do
 
+    ! first, get hneo = F_1/F_0 = H_1/F_0 - Z_s * e * Phi / T_s
+    ! H_1/F_0 is constructed from Legendre and Chebyshev polynomials
+    do is = 1, ns
+       do ig = 1, ntheta
+          do ir = 1, nr
+             call get_H (coefs(ir,ig,:,:,is), legp(ig,:,:), chebyp1(ir,:,:,is), &
+                  hneo(ir,ig,:,:,is), phineo(ir,ig), ig, is)
+          end do
+       end do
+    end do
+
+    ! calculate and write to file some useful quantities like Upar and Qpar
+    dl_over_b = delthet*jacob
+    dl_over_b = dl_over_b/sum(dl_over_b)
+
+    if (.not. allocated(pflx)) allocate (pflx(nr,ns), qflx(nr,ns), vflx(nr,ns), upar1(nr,ns))  
+    if (.not. allocated(upar)) then
+       allocate (phineo2(nr))
+       allocate (upar2(nr,ns), qpar2(nr,ns))
+       allocate (uparB(nr,ns), qparB(nr,ns))
+       allocate (upar(nr,ns,ntheta), qpar(nr,ns,ntheta))
+       allocate (upar_over_b(nr,ns))
+       upar = 0. ; qpar = 0.
+       upar2 = 0. ; qpar2 = 0. ; phineo2 = 0.
+       uparB = 0. ; qparB = 0.
+       upar_over_B = 0.
+    end if
+    if (.not. allocated(transport)) allocate (transport(nr,(5+ns*8)))  !JPL, NEO output for all radius
+    if (.not. allocated(radius)) allocate (radius(nr), phi2(nr), jboot(nr), vtor(nr), upar0(nr))
+
+    if (proc0) then
+       call get_unused_unit (neo_unit)
+       ! read the diagnosis in NEO from "neo_transport.out"
+       open (unit=neo_unit, file='neo_transport.out', status='old', action='read')
+       do ir=1, nr
+          read (neo_unit,*) transport(ir,:)
+          radius(ir) = transport(ir,1)
+          phi2(ir) = transport(ir,2)
+          jboot(ir) = transport(ir,3)
+          vtor(ir) = transport(ir,4)
+          upar0(ir) = transport(ir,5)
+          do is = 1, ns
+             pflx(ir,is) = transport(ir,5+(is-1)*8+1)/sqrt(2.0)  ! NEO uses vt=sqrt(T/m) while GS2 uses vt=sqrt(2T/m)
+             qflx(ir,is) = transport(ir,5+(is-1)*8+2)/(sqrt(2.0)**3)
+             vflx(ir,is) = transport(ir,5+(is-1)*8+3)/(sqrt(2.0)**2)
+             upar1(ir,is) = transport(ir,5+(is-1)*8+4)/sqrt(2.0)
+          end do
+       end do
+       close (neo_unit)
+       
+       ! evaluate the neoclassical parallel heat flux and parallel velcotiy in GS2 geometry
+       do ir=1, nr 
+          do is=1, ns
+             drlt = drad_neo(ir)*spec(is)%tprim ; drln = drad_neo(ir)*spec(is)%fprim
+             do ie = 1, nenergy
+                w_r(ie) = w(ie) * exp(energy(ie)*(1.0-1.0/(1.0-drlt))) / (1.0-drlt)**1.5
+                do ixi = 1, nxi
+                   il = min(ixi, nxi+1-ixi)
+                   do ig = 1, ntheta
+                      upar(ir,is,ig) = upar(ir,is,ig) + hneo(ir,ig,ixi,ie,is) &
+                           * sqrt(energy(ie))*xi(ig,ixi) * w_r(ie) * wl(-ntgrid+ig-1,il)
+                      qpar(ir,is,ig) = qpar(ir,is,ig) + hneo(ir,ig,ixi,ie,is) &
+                           * sqrt(energy(ie))*xi(ig,ixi)*(energy(ie)-2.5*(1.0-drlt)) &
+                           * (1.0-drln) * w_r(ie) * wl(-ntgrid+ig-1,il)
+                   end do
+                end do
+             end do
+          end do
+       end do
+
+       do is = 1, ns
+          do ir = 1, nr
+             uparB(ir,is) = sum(upar(ir,is,:)*dl_over_b*bmag)
+             qparB(ir,is) = sum(qpar(ir,is,:)*dl_over_b*bmag)
+             upar_over_B(ir,is) = sum(upar(ir,is,:)*dl_over_b/bmag)
+             upar2(ir,is) = sum(upar(ir,is,:)**2*dl_over_b)
+             qpar2(ir,is) = sum(qpar(ir,is,:)**2*dl_over_b)
+             phineo2(ir) = sum(phineo(ir,:)**2*dl_over_b)
+          end do
+       end do
+
+       rgeo2 = 0.
+       do ig = 1, ntheta
+          rgeo2 = rgeo2 + dl_over_b(ig)*Rplot(-ntgrid+ig-1)**2
+       end do
+
+       ! note that for total toroidal angular momentum (including diamagnetic and ExB) to be zero,
+       ! upar_over_b/rgeo2 = -(omega_phi * a / v_{t,ref}) * (a/R0)
+
+       call open_output_file (neot_unit,".neotransp")
+      ! print out in ".neotransp" file
+       write (neot_unit,fmt='(a14,a8,12a14)') "# 1) rad", "2) spec", "3) pflx", "4) qflx", "5) vflx", &
+            "6) qparflx", "7) uparB(GS2)", "8) upar1(NEO)", "9) <phi**2>", "10) bootstrap", "11) upar_o_B", &
+            "12) upar2", "13) qpar2", "14) phi2"
+       do ir=1, nr
+          do is = 1, ns
+             write (neot_unit,fmt='(e14.5,i8,12e14.5)') radius(ir), is, pflx(ir,is), qflx(ir,is), vflx(ir,is), &
+                  qparB(ir,is),uparB(ir,is), upar1(ir,is)*sqrt(1.0-drlt), &
+                  phi2(ir), jboot(ir), rmaj*upar_over_B(ir,is)/rgeo2, upar2(ir,is), qpar2(ir,is), phineo2(ir)
+          end do
+       end do
+
+       call close_output_file (neot_unit)
+    end if
+
+    do ir = 1, nr
+       do is = 1, ns
+          call broadcast (upar(ir,is,:))
+          call broadcast (qpar(ir,is,:))
+       end do
+    end do
+
+    allocate (afac(nr,ns,ntheta), bfac(nr,ns,ntheta))
+
+    ! Here only to set up F_1/F_0 = xi*(v/vth)*(a + b*(v/vth)^2)
+    if (lf_decompose) then
+
+       ! for testing
+!       upar = 0.
+!       qpar(1,:,:) = qpar(2,:,:) ; qpar(3,:,:) = qpar(2,:,:)
+!       qpar = 0.
+       ! added after doing the qpar=0 test (to decouple upar and dupar/dr effects)
+!       upar(1,:,:) = upar(2,:,:) ; upar(3,:,:) = upar(2,:,:)
+       ! added after doing the qpar=0,du/dr=0 test...am eliminating the du/dtheta effect
+!       do is = 1, ns
+!          do ir = 1, nr
+!             upar(ir,is,:) = sum(upar(ir,is,:)*dl_over_b)
+!          end do
+!       end do
+
+       do is = 1, ns
+          do ir = 1, nr
+             drlt = drad_neo(ir)*spec(is)%tprim ; drln = drad_neo(ir)*spec(is)%fprim
+             afac(ir,is,:) = 2.*(upar(ir,is,:)-qpar(ir,is,:)/(1.0-drln) - drlt*upar(ir,is,:))/(1.0-drlt)**2
+             bfac(ir,is,:) = 0.8*qpar(ir,is,:) / ((1.0-drln) * (1.0-drlt)**3)
+!             afac(ir,is,:) = 2.*(upar(ir,is,:)-qpar(ir,is,:)/(1.0-drln)/(1.0-drlt))/sqrt(1.0-drlt)
+!             bfac(ir,is,:) = 0.8*qpar(ir,is,:) / ((1.0-drln) * (1.0-drlt)**1.5)
+          end do
+       end do
+
+       coefs = 0.0
+       do ig = 1, ntheta
+          coefs(:,ig,1,0,:) = sqrt(emax)*(0.5*afac(:,:,ig) + 0.3125*bfac(:,:,ig)*emax)
+          coefs(:,ig,1,1,:) = 2.*sqrt(emax)*(0.25*afac(:,:,ig) + 0.234375*bfac(:,:,ig)*emax)
+          coefs(:,ig,1,2,:) = 2.*0.09375*emax**1.5*bfac(:,:,ig)
+          coefs(:,ig,1,3,:) = 2.*0.015625*emax**1.5*bfac(:,:,ig)
+       end do
+
+       ! first, get hneo = F_1/F_0 = H_1/F_0 - Z_s * e * Phi / T_s
+       ! H_1/F_0 is constructed from Legendre and Chebyshev polynomials
+       do is = 1, ns
+          do ig = 1, ntheta
+             do ir = 1, nr
+                call get_H (coefs(ir,ig,:,:,is), legp(ig,:,:), chebyp1(ir,:,:,is), &
+                     hneo(ir,ig,:,:,is), phineo(ir,ig), ig, is)
+             end do
+          end do
+       end do
+    
+       upar = 0. ; qpar = 0.
+       do ir = 1, nr
+          do is = 1, ns
+             drlt = drad_neo(ir)*spec(is)%tprim ; drln = drad_neo(ir)*spec(is)%fprim
+             do ie = 1, nenergy
+                w_r(ie) = w(ie) * exp(energy(ie)*(1.0-1.0/(1.0-drlt))) / (1.0-drlt)**1.5
+                do ixi = 1, nxi
+                   il = min(ixi, nxi+1-ixi)
+                   do ig = 1, ntheta
+                      upar(ir,is,ig) = upar(ir,is,ig) + hneo(ir,ig,ixi,ie,is) &
+                           * sqrt(energy(ie))*xi(ig,ixi) * w_r(ie) * wl(-ntgrid+ig-1,il)
+                      qpar(ir,is,ig) = qpar(ir,is,ig) + hneo(ir,ig,ixi,ie,is) &
+                           * sqrt(energy(ie))*xi(ig,ixi)*(energy(ie)-2.5*(1.0-drlt)) &
+                           * (1.0-drln) * w_r(ie) * wl(-ntgrid+ig-1,il)
+                   end do
+                end do
+             end do
+          end do
+       end do
+       
+       do is = 1, ns
+          do ir = 1, nr
+             upar2(ir,is) = sum(upar(ir,is,:)**2*dl_over_b)
+             qpar2(ir,is) = sum(qpar(ir,is,:)**2*dl_over_b)
+          end do
+       end do
+
+    end if
+
     ! get dphi/dr at GS2 radius (center of 3 NEO radii)
     ! note that radgrad takes derivative of e*phi/Tref,
     ! not the derivative of Z_s*e*phi/T_s
-!!!! deprecated ->  ! which is why the other piece is added in after (i.e. the T(r))
     do ig = 1, ntheta
        ! Note that we are neglecting the term prop. to dTref/dr, which is fine
        ! as long as Tref in NEO is the same for all radii.
        ! This will require a changing TEMP with radius if the species temperature
        ! changes with radius.
        call get_radgrad (phineo(:,ig), rad_neo, ir_loc, dphidr(ig,1))
-! deprecated ->       ! Count down so we can use dphidr(ig,1) without problems.
-! deprecated ->       do is = ns, 1, -1
-! deprecated ->         dphidr(ig,is) = spec(is)%zt*(dphidr(ig,1)+phineo(ir_loc,ig)*spec(is)%tprim)
-! deprecated ->      end do
     end do
 
     ! get radial derivative of F_1/F_0 at fixed (xi,E)
@@ -191,11 +371,6 @@ contains
 
     do is = 1, ns
        do ig = 1, ntheta
-          do ir = 1, nr
-             ! get_H returns hneo = F_1 / F_0
-             call get_H (coefs(ir,ig,:,:,is), legp(ig,:,:), chebyp1(ir,:,:,is), &
-                  hneo(ir,ig,:,:,is), phineo(ir,ig), ig, ntheta, ir, is, xi)
-          end do
           ! get dH/dxi at fixed E and dH/dE at fixed xi
           call get_dHdxi (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), xi(ig,:), dHdxi(ig,:,:,is))
           call get_dHdE (coefs(ir_loc,ig,:,:,is), legp(ig,:,:), chebyp1(ir_loc,:,:,is), chebyp2(ir_loc,:,:,is), &
@@ -286,123 +461,13 @@ contains
     dHdEc(ntheta,:,:,:,:) = 0.0 ; dHdxic(ntheta,:,:,:,:) = 0.0 ; hneoc(ntheta,:,:,:,:) = 0.0
     dphidrc(ntheta) = 0.0 ; dphidthc(ntheta) = 0.0
 
-    dl_over_b = delthet*jacob
-    dl_over_b = dl_over_b/sum(dl_over_b)
-
-    if (.not. allocated(pflx)) allocate (pflx(nr,ns), qflx(nr,ns), vflx(nr,ns), upar1(nr,ns), uparB(nr,ns), qpar(nr,ns))  !JPL
-    if (.not. allocated(dens)) then
-       allocate (phineo2(nr))
-       allocate (dens2(nr,ns), pres2(nr,ns), upar2(nr,ns))
-       allocate (dens(nr,ns,ntheta), pres(nr,ns,ntheta), upar(nr,ns,ntheta))
-       dens = 0. ; pres = 0. ; upar = 0. ; dens2 = 0. ; pres2 = 0. ; upar2 = 0. ; phineo2 = 0.
-    end if
-    if (.not. allocated(transport)) allocate (transport(nr,(5+ns*8)))  !JPL, NEO output for all radius
-    if (.not. allocated(radius)) allocate (radius(nr), phi2(nr), jboot(nr), vtor(nr), upar0(nr))
-    if (.not. allocated(upar_over_B)) allocate (upar_over_B(ns))
-
-    if (proc0) then
-       call get_unused_unit (neo_unit)
-       ! read the diagnosis in NEO from "neo_transport.out"
-       open (unit=neo_unit, file='neo_transport.out', status='old', action='read')
-       do ir=1, nr
-          read (neo_unit,*) transport(ir,:)
-          radius(ir) = transport(ir,1)
-          phi2(ir) = transport(ir,2)
-          jboot(ir) = transport(ir,3)
-          vtor(ir) = transport(ir,4)
-          upar0(ir) = transport(ir,5)
-          do is = 1, ns
-             pflx(ir,is) = transport(ir,5+(is-1)*8+1)/sqrt(2.0)  ! NEO uses vt=sqrt(T/m) while GS2 uses vt=sqrt(2T/m)
-             qflx(ir,is) = transport(ir,5+(is-1)*8+2)/(sqrt(2.0)**3)
-             vflx(ir,is) = transport(ir,5+(is-1)*8+3)/(sqrt(2.0)**2)
-             upar1(ir,is) = transport(ir,5+(is-1)*8+4)/sqrt(2.0)
-          end do
-       end do
-       close (neo_unit)
-       
-       ! evaluate the neoclassical parallel heat flux and parallel velcotiy in GS2 geometry
-       do ir=1, nr 
-          do is=1, ns
-             qpar(ir,is)=0. ; uparB(ir,is) = 0.
-             do ie = 1, nenergy
-                do ixi = 1, nxi
-                   il = min(ixi, nxi+1-ixi)
-                   do ig = 1, ntheta
-                      w_r(ie)=w(ie)*exp(energy(ie)*(1.0-1.0/(1.0-spec(is)%tprim &
-                           *(rad_neo(ir)-rad_neo(2)))))*(1.0/(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2))))**2
-                      qpar(ir,is) = qpar(ir,is) + hneo(ir,ig,ixi,ie,is)*energy(ie) &
-                           *(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))*(xi(ig,ixi) &
-                           *sqrt(energy(ie)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2))))) &
-                           *w_r(ie)*wl(-ntgrid+ig-1,il)*dl_over_b(ig)*bmag(ig)
-                      uparB(ir,is) = uparB(ir,is) + hneo(ir,ig,ixi,ie,is)*(xi(ig,ixi) &
-                           *sqrt(energy(ie)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))))*w_r(ie) &
-                           *wl(-ntgrid+ig-1,il)*dl_over_b(ig)*bmag(ig)      
-                      upar(ir,is,ig) = upar(ir,is,ig) + hneo(ir,ig,ixi,ie,is)*xi(ig,ixi)*sqrt(energy(ie)) &
-                           * w_r(ie)*wl(-ntgrid+ig-1,il)
-                      dens(ir,is,ig) = dens(ir,is,ig) + hneo(ir,ig,ixi,ie,is)*w_r(ie)*wl(-ntgrid+ig-1,il)
-                      pres(ir,is,ig) = pres(ir,is,ig) + (2./3.)*hneo(ir,ig,ixi,ie,is)*energy(ie) &
-                           *w_r(ie)*wl(-ntgrid+ig-1,il)
-                   end do
-                end do
-             end do
-             qpar(ir,is)=qpar(ir,is)-2.50*uparB(ir,is)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2))) !JPL
-          end do
-       end do
-
-       do is = 1, ns
-          do ir = 1, nr
-             dens2(ir,is) = sum(dens(ir,is,:)**2*dl_over_b)
-             pres2(ir,is) = sum(pres(ir,is,:)**2*dl_over_b)
-             upar2(ir,is) = sum(upar(ir,is,:)**2*dl_over_b)
-             phineo2(ir) = sum(phineo(ir,:)**2*dl_over_b)
-          end do
-       end do
-
-       ! this is equal and opposite to GS2's 'mach' parameter if the total torodial
-       ! angular momentum (including diamagnetic + ExB) is zero.
-       ! this assumes temp varies radially in GS2 so that T_ref does not vary with radius
-       do is = 1, ns
-          upar_over_B(is) = 0.
-          do ie = 1, nenergy
-             do ixi = 1, nxi
-                il = min(ixi, nxi+1-ixi)
-                do ig = 1, ntheta
-                   upar_over_B(is) = upar_over_B(is) + hneo(2,ig,ixi,ie,is)*xi(ig,ixi) &
-                        *sqrt(energy(ie))*w(ie)*wl(-ntgrid+ig-1,il)*dl_over_b(ig)/bmag(ig) &
-                        *sqrt(spec(is)%temp)*rmaj
-                end do
-             end do
-          end do
-       end do
-
-       rgeo2 = 0.
-       do ig = 1, ntheta
-          rgeo2 = rgeo2 + dl_over_b(ig)*Rplot(-ntgrid+ig-1)**2
-       end do
-
-       ! note that for tor momentum = 0, upar_over_b/rgeo2 = -(omega_phi * a / v_{t,ref}) * (a/R0)
-
-       call open_output_file (neot_unit,".neotransp")
-      ! print out in ".neotransp" file
-!       write (neot_unit,fmt='(a130)') "# 1) rad,    2) spec, 3) pflx,    4) qflx,    5) vflx   , 6) qparflx,  7) uparB(GS2),  8) upar1(NEO), 9) <phi**2>, 10) bootstrap"
-       write (neot_unit,fmt='(a14,a8,13a14)') "# 1) rad", "2) spec", "3) pflx", "4) qflx", "5) vflx", &
-            "6) qparflx", "7) uparB(GS2)", "8) upar1(NEO)", "9) <phi**2>", "10) bootstrap", "11) upar_o_B", &
-            "12) dens2", "13) pres2", "14) upar2", "15) phi2"
-       do ir=1, nr
-          do is = 1, ns
-             write (neot_unit,fmt='(e14.5,i8,13e14.5)') radius(ir), is, pflx(ir,is), qflx(ir,is), vflx(ir,is), &
-                  qpar(ir,is),uparB(ir,is), upar1(ir,is)*sqrt((1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))), &
-                  phi2(ir), jboot(ir), upar_over_B(is)/rgeo2, dens2(ir,is), pres2(ir,is), upar2(ir,is), phineo2(ir)
-          end do
-       end do
-
-       call close_output_file (neot_unit)
-    end if
-
-    deallocate (xi, emax, chebyp1, chebyp2, legp, coefs, dHdr, dHdth, dHdxi, dHdE, vpadHdE, hneo, forbid)
+    deallocate (xi, emax, chebyp1, chebyp2, legp, dHdr, dHdth, dHdxi, dHdE, vpadHdE, hneo, forbid)
+    deallocate (coefs, drad_neo)
     deallocate (dphidr, dl_over_b, transport)
-    deallocate (pflx, qflx, vflx, upar1, qpar)
-    deallocate (dens, pres, upar, uparB)
+    deallocate (pflx, qflx, vflx, upar1, qparB)
+    deallocate (upar, qpar, uparB)
+    deallocate (upar2, qpar2)
+    deallocate (afac, bfac)
 
   end subroutine get_lowflow_terms
   
@@ -465,7 +530,7 @@ contains
     
   end subroutine legendre
   
-  subroutine get_H (gjk, legdre, chebyshv, h, phi, ig, nth, ir, is, xi)
+  subroutine get_H (gjk, legdre, chebyshv, h, phi, ig, is)
 
     use species, only: spec
 
@@ -475,8 +540,7 @@ contains
     real, dimension (:,0:), intent (in) :: legdre, chebyshv
     real, intent (in) :: phi
     real, dimension (:,:), intent (out) :: h
-    integer, intent (in) :: ig, nth, ir, is
-    real, dimension (:,:), intent (in) :: xi
+    integer, intent (in) :: ig, is
 
     integer :: ix, ij, ik
 
@@ -752,6 +816,9 @@ contains
              neo_phi(ig) = tmp(idx)
              idx = idx+1
           end do
+
+          ! TMP FOR TESTING -- MAB
+!          neo_phi = 0.
 
           ! need to interpolate coefficients from neo's theta grid to gs2's
           if ( ptheta_neo .gt. 1) then
