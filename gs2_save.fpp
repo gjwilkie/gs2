@@ -213,8 +213,8 @@ contains
           call barrier
 
           istatus = nf90_create (file_proc, ior(NF90_HDF5,NF90_CLOBBER), ncid, comm=mp_comm, info=mp_info)
-# endif
        end if
+# endif
 
        if (istatus /= NF90_NOERR) then
           ierr = error_unit()
@@ -606,8 +606,9 @@ contains
           write (ierr,*) "nf90_put_var vnm(2) error: ", nf90_strerror(istatus)
           goto 1
        end if
-
+# ifdef NETCDF_PARALLEL
     endif
+# endif
 
 1   continue
 
@@ -776,8 +777,9 @@ contains
           istatus = nf90_put_var (ncid, kx_shift_id, stmp)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, kx_shift_id)
        endif ! MR end
-
+# ifdef NETCDF_PARALLEL
     end if
+# endif
        
     if (exit) then
        i = nf90_close (ncid)
