@@ -1161,11 +1161,15 @@ contains
     if (proc0) then
        if (.not.initialized) then
 
+# ifdef NETCDF_PARALLEL
           if(read_many) then
+# endif
              file_proc=trim(trim(restart_file)//'.0')
+# ifdef NETCDF_PARALLEL
           else 
              file_proc=trim(trim(restart_file))
           end if
+# endif
 
           istatus = nf90_open (file_proc, 0, ncid)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=file_proc)
