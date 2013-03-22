@@ -892,12 +892,12 @@ contains
     integer :: is, il, ie, ik, it, iglo
 
     !Allocate array and ensure is zero
-    if(velint_subcom)then
+    if(velint_subcom.and.(present(all)))then !If we're using reduce then we don't want to make array smaller
 !       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=0.
        allocate(total_small(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max))
     else
 !       total=0.
-       allocate(total_small(-ntgrid,g_lo%ntheta0,g_lo%naky,g_lo%nspec))       
+       allocate(total_small(-ntgrid:ntgrid,g_lo%ntheta0,g_lo%naky,g_lo%nspec))       
     endif
     total_small=0.
 
@@ -922,7 +922,7 @@ contains
           !Complete integral over distributed velocity space and ensure all procs in sub communicator know the result
           !Note: fi velint_subcom=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
           !all procs in this case.
-          call sum_allreduce_sub (total_small,g_lo%xysblock_comm)      
+          call sum_allreduce_sub (total_small,g_lo%xysblock_comm)
        else
           !Complete integral over distributed velocity space but only proc0 knows the answer
           call sum_reduce (total_small, 0)
@@ -939,6 +939,9 @@ contains
     else
        total=total_small
     endif
+
+    !Deallocate
+    deallocate(total_small)
 
   end subroutine integrate_moment_c34
 
