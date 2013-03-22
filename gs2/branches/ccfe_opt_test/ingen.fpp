@@ -660,6 +660,8 @@ contains
     use antenna, only: init_antenna
     use collisions, only: coll_read_parameters=>read_parameters
     use collisions, only: collision_model_switch, collision_model_none
+    use collisions, only: collision_model_full, collision_model_ediffuse
+    use collisions, only: collision_model_lorentz, collision_model_lorentz_test
     use fields, only : fields_read_parameters=>read_parameters
     use hyper, only : hyper_read_parameters=>read_parameters
     use species,only : spec, nspec
@@ -912,6 +914,9 @@ if (debug) write(6,*) 'get_namelists: returning'
      use theta_grid_params, only: nperiod, ntheta, eps, epsl, rmaj, r_geo
      use theta_grid_params, only: pk, qinp, rhoc, shift, shat
      use theta_grid_params, only: akappa, akappri, tri, tripri
+     use collisions, only: collision_model_switch, collision_model_none
+     use collisions, only: collision_model_full, collision_model_ediffuse
+     use collisions, only: collision_model_lorentz, collision_model_lorentz_test
 
      implicit none
      real :: alne, dbetadrho_spec
@@ -1034,7 +1039,26 @@ if (debug) write(6,*) 'get_namelists: returning'
            call nprocs_yxf(nmesh)
         endif
 
-     end if
+
+# ifdef USE_LE_LAYOUT
+        write (report_unit, fmt="(/'Collisions using le_lo')") 
+        call nprocs_le(nmesh)
+# else
+        select case (collision_model_switch)
+        case (collision_model_full)
+           write (report_unit, fmt="(/'Collisions using lz_lo')") 
+           call nprocs_lz(nmesh)
+           write (report_unit, fmt="(/'Collisions using e_lo')") 
+           call nprocs_e(nmesh)
+        case(collision_model_lorentz,collision_model_lorentz_test)
+           write (report_unit, fmt="(/'Collisions using lz_lo')") 
+           call nprocs_lz(nmesh)
+        case (collision_model_ediffuse)
+           write (report_unit, fmt="(/'Collisions using e_lo')") 
+           call nprocs_e(nmesh)
+        end select
+# endif
+     endif
 
      write (report_unit, *) 
      write (report_unit, fmt="('------------------------------------------------------------')")
@@ -1149,7 +1173,33 @@ if (debug) write(6,*) 'get_namelists: returning'
     call close_output_file (report_unit)
 
   end subroutine report
-
+ 
+  subroutine wsweetspots(sym,sdim,nfac,facs,npmax,LUN)
+! writes out sweetspot core counts for a layout
+!   sym: character string label for each dimension 
+!   sdim:  size of each dimension 
+!   nfac:  #factors of each sdim
+!   facs(i,j):  ith factor of jth dimension
+ 
+   character*3, dimension(:), intent(in):: sym
+   integer, dimension(:), intent(in):: sdim, nfac
+   integer, dimension(:,:), intent(in):: facs
+   integer, intent(in):: npmax
+   integer, optional:: LUN
+   integer :: lout=6, npe, i, j, lcores, nfacs
+   if (present(LUN)) lout=LUN
+   nfacs=size(nfac)
+   lcores=1
+   write (lout, fmt="('  npe = ',i8,'  (',a,')')") 1,trim(sym(1))
+   do i=1,nfacs
+      do j=2,nfac(i)
+         npe=facs(j,i)*lcores
+         if (npe .gt. npmax) exit
+         write (lout, fmt="('  npe = ',i8,'  (',a,')')") npe,trim(sym(i))
+      enddo
+      lcores=lcores*sdim(i)
+   enddo
+  end subroutine wsweetspots
 
   subroutine nprocs_xxf(nmesh)
     use nonlinear_terms, only : nonlin
@@ -1158,7 +1208,6 @@ if (debug) write(6,*) 'get_namelists: returning'
     use kt_grids, only: naky, ntheta0
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
-
     use gs2_layouts, only: layout
     implicit none
     real :: fac
@@ -1167,89 +1216,39 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer, dimension(:,:), allocatable :: facs
     integer :: npe
     real :: time
+    integer :: maxfacs
+    integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kyfacs
+    integer, dimension(6) :: nfac, sdim
+    character*3, dimension(6):: sym
 
     if (.not.nonlin) return
-    write (report_unit, fmt="('xxf sweetspot #proc up to:'i8)") npmax 
+    write (report_unit, fmt="('xxf sweetspot #proc up to:'i8)") npmax
+    maxfacs=max(nspec,negrid,nlambda,2,2*ntgrid+1,naky)/2+1
+    allocate (spfacs(maxfacs),efacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,6))
+    call factors (nspec, nspfacs, spfacs)
+    call factors (negrid, nefacs, efacs)
+    call factors (nlambda, nlfacs, lfacs)
+    call factors (2, nsgfacs, sgfacs)
+    call factors (2*ntgrid+1, ntgfacs, tgfacs)
+    call factors (naky, nkyfacs, kyfacs)
+
     select case (layout)
-    case ('lexys','lxyes','lyxes','yxles','xyles')
-          allocate (facs(max(nspec,negrid,nlambda,2,2*ntgrid+1,naky)/2+1,6))
-          call factors (nspec, nspfacs, facs(:,1))
-          call factors (negrid, nefacs, facs(:,2))
-          call factors (nlambda, nlfacs, facs(:,3))
-          call factors (2, nsgfacs, facs(:,4))
-          call factors (2*ntgrid+1, ntgfacs, facs(:,5))
-          call factors (naky, nkyfacs, facs(:,6))
-          do i=1,nspfacs
-             npe = facs(i,1)
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'s'
-          end do
-          do i=2,nefacs
-             npe = facs(i,2)*nspec
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'e'
-          end do
-          do i=2,nlfacs
-             npe = facs(i,3)*nspec*negrid
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'l'
-          end do
-          do i=2,nsgfacs
-             npe = facs(i,4)*nspec*negrid*nlambda
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a3,')')") npe,'sgn'
-          end do
-          do i=2,ntgfacs
-             npe = facs(i,5)*nspec*negrid*nlambda*2
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'tg'
-          end do
-          do i=2,nkyfacs
-             npe = facs(i,6)*nspec*negrid*nlambda*2*(2*ntgrid+1)
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'y'
-          end do
-          deallocate (facs)
+       case ('lexys','lxyes','lyxes','yxles','xyles')
+          sym = (/ "s  ","e  ","l  ","sgn","tg ","y  " /)
+          sdim = (/ nspec, negrid, nlambda, 2, 2*ntgrid+1, naky /)
+          nfac= (/ nspfacs, nefacs, nlfacs, nsgfacs, ntgfacs, nkyfacs /)
+          facs(:,1)=spfacs; facs(:,2)=efacs; facs(:,3)=lfacs
+          facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=nkyfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
        case ('yxels')
-          allocate (facs(max(nspec,nlambda,negrid,2,2*ntgrid+1,naky)/2+1,6))
-          call factors (nspec, nspfacs, facs(:,1))
-          call factors (nlambda, nlfacs, facs(:,2))
-          call factors (negrid, nefacs, facs(:,3))
-          call factors (2, nsgfacs, facs(:,4))
-          call factors (2*ntgrid+1, ntgfacs, facs(:,5))
-          call factors (naky, nkyfacs, facs(:,6))
-          do i=1,nspfacs
-             npe = facs(i,1)
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'s'
-          end do
-          do i=2,nlfacs
-             npe = facs(i,2)*nspec
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'l'
-          end do
-          do i=2,nefacs
-             npe = facs(i,3)*nspec*nlambda
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'e'
-          end do
-          do i=2,nsgfacs
-             npe = facs(i,4)*nspec*nlambda*negrid
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a3,')')") npe,'sgn'
-          end do
-          do i=2,ntgfacs
-             npe = facs(i,5)*nspec*nlambda*negrid*2
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'tg'
-          end do
-          do i=2,nkyfacs
-             npe = facs(i,6)*nspec*nlambda*negrid*2*(2*ntgrid+1)
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'y'
-          end do
-          deallocate (facs)
+          sym = (/ "s  ","l  ","e  ","sgn","tg ","y  " /)
+          sdim = (/ nspec, nlambda, negrid, 2, 2*ntgrid+1, naky /)
+          nfac= (/ nspfacs, nlfacs, nefacs, nsgfacs, ntgfacs, nkyfacs /)
+          facs(:,1)=spfacs; facs(:,2)=lfacs; facs(:,3)=efacs
+          facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=nkyfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
        end select
+       deallocate (facs,spfacs,efacs,lfacs,sgfacs,tgfacs,kyfacs)
   end subroutine nprocs_xxf
 
   subroutine nprocs_yxf(nmesh)
@@ -1268,91 +1267,210 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer, dimension(:,:), allocatable :: facs
     integer :: npe
     real :: time
+    integer :: maxfacs
+    integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kxfacs
+    integer, dimension(6) :: nfac, sdim
+    character*3, dimension(6):: sym
 
     if (.not.nonlin) return
     write (report_unit, fmt="('yxf sweetspot #proc up to:'i8)") npmax 
+    maxfacs=max(nspec,negrid,nlambda,2,2*ntgrid+1,naky)/2+1
+    allocate (spfacs(maxfacs),efacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),facs(maxfacs,6))
+    call factors (nspec, nspfacs, spfacs)
+    call factors (negrid, nefacs, efacs)
+    call factors (nlambda, nlfacs, lfacs)
+    call factors (2, nsgfacs, sgfacs)
+    call factors (2*ntgrid+1, ntgfacs, tgfacs)
+    call factors (nx, nkxfacs, kxfacs)
 
     select case (layout)
-    case ('lexys','lxyes','lyxes','yxles','xyles')
-          allocate (facs(max(nspec,negrid,nlambda,2,2*ntgrid+1,nx)/2+1,6))
-          call factors (nspec, nspfacs, facs(:,1))
-          call factors (negrid, nefacs, facs(:,2))
-          call factors (nlambda, nlfacs, facs(:,3))
-          call factors (2, nsgfacs, facs(:,4))
-          call factors (2*ntgrid+1, ntgfacs, facs(:,5))
-          call factors (nx, nkxfacs, facs(:,6))
-          do i=1,nspfacs
-             npe = facs(i,1)
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'s'
-          end do
-          do i=2,nefacs
-             npe = facs(i,2)*nspec
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'e'
-          end do
-          do i=2,nlfacs
-             npe = facs(i,3)*nspec*negrid
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'l'
-          end do
-          do i=2,nsgfacs
-             npe = facs(i,4)*nspec*negrid*nlambda
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a3,')')") npe,'sgn'
-          end do
-          do i=2,ntgfacs
-             npe = facs(i,5)*nspec*negrid*nlambda*2
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'tg'
-          end do
-          do i=2,nkxfacs
-             npe = facs(i,6)*nspec*negrid*nlambda*2*(2*ntgrid+1)
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'x'
-          end do
-          deallocate (facs)
+       case ('lexys','lxyes','lyxes','yxles','xyles')
+          sym = (/ "s  ","e  ","l  ","sgn","tg ","x  " /)
+          sdim = (/ nspec, negrid, nlambda, 2, 2*ntgrid+1, nx /)
+          nfac= (/ nspfacs, nefacs, nlfacs, nsgfacs, ntgfacs, nkxfacs /)
+          facs(:,1)=spfacs; facs(:,2)=efacs; facs(:,3)=lfacs
+          facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=kxfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
        case ('yxels')
-          allocate (facs(max(nspec,nlambda,negrid,2,2*ntgrid+1,nx)/2+1,6))
-          call factors (nspec, nspfacs, facs(:,1))
-          call factors (nlambda, nlfacs, facs(:,2))
-          call factors (negrid, nefacs, facs(:,3))
-          call factors (2, nsgfacs, facs(:,4))
-          call factors (2*ntgrid+1, ntgfacs, facs(:,5))
-          call factors (nx, nkxfacs, facs(:,6))
-          do i=1,nspfacs
-             npe = facs(i,1)
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'s'
-          end do
-          do i=2,nlfacs
-             npe = facs(i,2)*nspec
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'l'
-          end do
-          do i=2,nefacs
-             npe = facs(i,3)*nspec*nlambda
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a,')')") npe,'e'
-          end do
-          do i=2,nsgfacs
-             npe = facs(i,4)*nspec*nlambda*negrid
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a3,')')") npe,'sgn'
-          end do
-          do i=2,ntgfacs
-             npe = facs(i,5)*nspec*nlambda*negrid*2
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'tg'
-          end do
-          do i=2,nkxfacs
-             npe = facs(i,6)*nspec*nlambda*negrid*2*(2*ntgrid+1)
-             if (npe .gt. npmax) exit
-             write (report_unit, fmt="('  npe = ',i8,'  (',a2,')')") npe,'x'
-          end do
-          deallocate (facs)
-       end select
+          sym = (/ "s  ","l  ","e  ","sgn","tg ","x  " /)
+          sdim = (/ nspec, nlambda, negrid, 2, 2*ntgrid+1, nx /)
+          nfac= (/ nspfacs, nlfacs, nefacs, nsgfacs, ntgfacs, nkxfacs /)
+          facs(:,1)=spfacs; facs(:,2)=lfacs; facs(:,3)=efacs
+          facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=nkxfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+     end select
+     deallocate (facs,spfacs,efacs,lfacs,sgfacs,tgfacs,kxfacs)
   end subroutine nprocs_yxf
+
+  subroutine nprocs_e(nmesh)
+    use species, only : nspec
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+    use kt_grids, only: naky, ntheta0
+    use le_grids, only: negrid, nlambda
+    use theta_grid, only: ntgrid
+
+    use gs2_layouts, only: layout
+    implicit none
+    real :: fac
+    integer, intent (in) :: nmesh
+    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    integer, dimension(:,:), allocatable :: facs
+    integer :: npe
+    real :: time
+    integer :: maxfacs
+    integer, allocatable, dimension(:):: spfacs, lfacs, sgfacs, tgfacs, kxfacs, kyfacs
+    integer, dimension(6) :: nfac, sdim
+    character*3, dimension(6):: sym
+
+    write (report_unit, fmt="('#proc sweetspots for e_lo, up to:'i8)") npmax
+    maxfacs=max(nspec,nlambda,2,2*ntgrid+1,ntheta0,naky)/2+1
+    allocate (spfacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,6))
+    call factors (nspec, nspfacs, spfacs)
+    call factors (nlambda, nlfacs, lfacs)
+    call factors (2, nsgfacs, sgfacs)
+    call factors (2*ntgrid+1, ntgfacs, tgfacs)
+    call factors (ntheta0, nkxfacs, kxfacs)
+    call factors (naky, nkyfacs, kyfacs)
+
+    select case (layout)
+       case ('lexys','lxyes')
+          sym = (/ "s  ","y  ","x  ","l  ","sgn","tg " /)
+          sdim = (/ nspec, naky, ntheta0, nlambda, 2, 2*ntgrid+1 /)
+          nfac= (/ nspfacs, nkyfacs, nkxfacs, nlfacs, nsgfacs, ntgfacs /)
+          facs(:,1)=spfacs; facs(:,2)=kyfacs; facs(:,3)=kxfacs
+          facs(:,4)=lfacs; facs(:,5)=sgfacs; facs(:,6)=tgfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+       case ('lyxes')
+          sym = (/ "s  ","x  ","y  ","l  ","sgn","tg " /)
+          sdim = (/ nspec, ntheta0, naky, nlambda, 2, 2*ntgrid+1 /)
+          nfac= (/ nspfacs, nkxfacs, nkyfacs, nlfacs, nsgfacs, ntgfacs /)
+          facs(:,1)=spfacs; facs(:,2)=kxfacs; facs(:,3)=kyfacs
+          facs(:,4)=lfacs; facs(:,5)=sgfacs; facs(:,6)=tgfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+       case ('xyles')
+          sym = (/ "s  ","l  ","y  ","x  ","sgn","tg " /)
+          sdim = (/ nspec, nlambda, naky, ntheta0, 2, 2*ntgrid+1 /)
+          nfac= (/ nspfacs, nlfacs, nkyfacs, nkxfacs, nsgfacs, ntgfacs /)
+          facs(:,1)=spfacs; facs(:,2)=lfacs; facs(:,3)=kyfacs
+          facs(:,4)=kxfacs; facs(:,5)=sgfacs; facs(:,6)=tgfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+       case ('yxles','yxels')
+          sym = (/ "s  ","l  ","x  ","y  ","sgn","tg " /)
+          sdim = (/ nspec, nlambda, ntheta0, naky, 2, 2*ntgrid+1 /)
+          nfac= (/ nspfacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, ntgfacs /)
+          facs(:,1)=spfacs; facs(:,2)=lfacs; facs(:,3)=kxfacs
+          facs(:,4)=kyfacs; facs(:,5)=sgfacs; facs(:,6)=tgfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+     end select
+     deallocate (facs,spfacs,lfacs,sgfacs,tgfacs,kxfacs,kyfacs)
+  end subroutine nprocs_e
+
+
+  subroutine nprocs_lz(nmesh)
+    use species, only : nspec
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+    use kt_grids, only: naky, ntheta0
+    use le_grids, only: negrid, nlambda
+    use theta_grid, only: ntgrid
+
+    use gs2_layouts, only: layout
+    implicit none
+    real :: fac
+    integer, intent (in) :: nmesh
+    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    integer, dimension(:,:), allocatable :: facs
+    integer :: npe
+    real :: time
+    integer :: maxfacs
+    integer, allocatable, dimension(:):: spfacs, efacs, sgfacs, tgfacs, kxfacs, kyfacs
+    integer, dimension(5) :: nfac, sdim
+    character*3, dimension(5):: sym
+
+    write (report_unit, fmt="('#proc sweetspots for lz_lo, up to:'i8)") npmax
+
+    maxfacs=max(nspec,negrid,2*ntgrid+1,ntheta0,naky)/2+1
+    allocate (spfacs(maxfacs),efacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,6))
+    call factors (nspec, nspfacs, spfacs)
+    call factors (negrid, nefacs, efacs)
+    call factors (2*ntgrid+1, ntgfacs, tgfacs)
+    call factors (ntheta0, nkxfacs, kxfacs)
+    call factors (naky, nkyfacs, kyfacs)
+ 
+    select case (layout)
+       case ('lexys')
+          sym = (/ "s  ","y  ","x  ","e  ","tg " /)
+          sdim = (/ nspec, naky, ntheta0, negrid, 2*ntgrid+1 /)
+          nfac= (/ nspfacs, nkyfacs, nkxfacs, nefacs, ntgfacs /)
+          facs(:,1)=spfacs; facs(:,2)=kyfacs; facs(:,3)=kxfacs
+          facs(:,4)=efacs; facs(:,5)=tgfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+       case ('lyxes','yxles','yxels')
+          sym = (/ "s  ","e  ","x  ","y  ","tg " /)
+          sdim = (/ nspec, negrid, ntheta0, naky, 2*ntgrid+1 /)
+          nfac= (/ nspfacs, nefacs, nkxfacs, nkyfacs, ntgfacs /)
+          facs(:,1)=spfacs; facs(:,2)=efacs; facs(:,3)=kxfacs
+          facs(:,4)=kyfacs; facs(:,5)=tgfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+       case ('xyles','lxyes')
+          sym = (/ "s  ","e  ","y  ","x  ","tg " /)
+          sdim = (/ nspec, negrid, naky, ntheta0, 2*ntgrid+1 /)
+          nfac= (/ nspfacs, nefacs, nkyfacs, nkxfacs, ntgfacs /)
+          facs(:,1)=spfacs; facs(:,2)=efacs; facs(:,3)=kyfacs
+          facs(:,4)=kxfacs; facs(:,5)=tgfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+    end select
+    deallocate (spfacs,efacs,tgfacs,kxfacs,kyfacs,facs)
+  end subroutine nprocs_lz
+
+
+  subroutine nprocs_le(nmesh)
+    use species, only : nspec
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+    use kt_grids, only: naky, ntheta0
+    use le_grids, only: negrid, nlambda
+    use theta_grid, only: ntgrid
+
+    use gs2_layouts, only: layout
+    implicit none
+    real :: fac
+    integer, intent (in) :: nmesh
+    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    integer, dimension(:,:), allocatable :: facs
+    integer :: npe
+    real :: time
+    integer :: maxfacs
+    integer, allocatable, dimension(:):: spfacs, efacs, sgfacs, tgfacs, kxfacs, kyfacs
+    integer, dimension(4) :: nfac, sdim
+    character*3, dimension(4):: sym
+
+    write (report_unit, fmt="('#proc sweetspots for le_lo, up to:'i8)") npmax
+
+    maxfacs=max(nspec,2*ntgrid+1,ntheta0,naky)/2+1
+    allocate (spfacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,4))
+    call factors (nspec, nspfacs, spfacs)
+    call factors (2*ntgrid+1, ntgfacs, tgfacs)
+    call factors (ntheta0, nkxfacs, kxfacs)
+    call factors (naky, nkyfacs, kyfacs)
+
+    select case (layout)
+       case ('lexys','xyles','lxyes')
+          sym = (/ "s  ","y  ","x  ","tg " /)
+          sdim = (/ nspec, naky, ntheta0, 2*ntgrid+1 /)
+          nfac= (/ nspfacs, nkyfacs, nkxfacs, ntgfacs /)
+          facs(:,1)=spfacs; facs(:,2)=kyfacs
+          facs(:,3)=kxfacs; facs(:,4)=tgfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+       case ('lyxes','yxles','yxels')
+          sym = (/ "s  ","x  ","y  ","tg " /)
+          sdim = (/ nspec, ntheta0, naky, 2*ntgrid+1 /)
+          nfac= (/ nspfacs, nkxfacs, nkyfacs, ntgfacs /)
+          facs(:,1)=spfacs; facs(:,2)=kxfacs
+          facs(:,3)=kyfacs; facs(:,4)=tgfacs
+          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+    end select
+    deallocate (spfacs,tgfacs,kxfacs,kyfacs,facs)
+  end subroutine nprocs_le
+
 
   subroutine nprocs (nmesh)
     use nonlinear_terms, only : nonlin

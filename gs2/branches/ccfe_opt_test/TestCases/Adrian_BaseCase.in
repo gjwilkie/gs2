@@ -15,7 +15,6 @@
 /
 
 &collisions_knobs
- collision_model = 'none'
  collision_model = 'default' !DD: Change
  !collision_model='lorentz'
 /
@@ -187,11 +186,15 @@ cfl = 0.5
 
 &layouts_knobs
  layout = 'yxles'
+ !DD: To disabl new optimisations set below to false, currently default to true
+ !opt_redist_init = .true. !Use optimised algorithm for intialising redist objects
+ !opt_redist_nbk  = .true. !Use non-blocking communications in redist routines (gather/scatter). This can lead to slow down if large amount of data being transferred
+ !velint_subcom   = .true. !Use sub-communicators in the velocity space integral in integrate_moment_c34 
 !DD Disabling for now
- local_field_solve = .false.
- unbalanced_xxf = .true.
- max_unbalanced_xxf = 0.5
- unbalanced_yxf = .true.
- max_unbalanced_yxf = 0.5
- opt_local_copy = .true.
+ ! local_field_solve = .false.
+ ! unbalanced_xxf = .true.
+ ! max_unbalanced_xxf = 0.5
+ ! unbalanced_yxf = .true.
+ ! max_unbalanced_yxf = 0.5
+ ! opt_local_copy = .true.
 /
