@@ -3471,7 +3471,7 @@ contains
        do isgn = 1,2
           do ig = -ntgrid, ntgrid
              adj = (-fapar) * &
-                  anon(ie,is)*spec(is)%z*vpa(ig,isgn,is)*aj0(ig,iglo)*apar(ig,it,ik) &
+                  anon(ie,is)*spec(is)%z*vpa(ig,isgn,iglo)*aj0(ig,iglo)*apar(ig,it,ik) &
                   /spec(is)%temp
              g(ig,isgn,iglo) = g(ig,isgn,iglo) + adj
           end do
