@@ -5,6 +5,7 @@ module species
   public :: wnml_species, check_species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
+  public :: alpha_species, beam_species
   public :: has_electron_species, has_slowing_down_species
   public :: ions, electrons, impurity
 
@@ -31,6 +32,8 @@ module species
   integer, parameter :: electron_species = 2 ! for collision operator
   integer, parameter :: slowing_down_species = 3 ! slowing-down distn
   integer, parameter :: tracer_species = 4 ! for test particle diffusion studies
+  integer, parameter :: alpha_species = 5 ! alphas with slowing-down dist
+  integer, parameter :: beam_species = 6 ! beam particles
 
   integer :: nspec
   type (specie), dimension (:), allocatable :: spec
@@ -222,9 +225,9 @@ contains
             text_option('ion', ion_species), &
             text_option('electron', electron_species), &
             text_option('e', electron_species), &
-            text_option('beam', slowing_down_species), &
+            text_option('beam', beam_species), &
             text_option('fast', slowing_down_species), &
-            text_option('alpha', slowing_down_species), &
+            text_option('alpha', alpha_species), &
             text_option('slowing-down', slowing_down_species), &
             text_option('trace', tracer_species) /)
 

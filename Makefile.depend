@@ -62,6 +62,7 @@ ffttester_mod = \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
+	 generate_f0.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -121,6 +122,7 @@ gs2_mod = \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
+	 generate_f0.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -185,6 +187,7 @@ ingen_mod = \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
+	 generate_f0.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -380,6 +383,11 @@ gauss_quad.o: \
 	 constants.o \
 	 file_utils.o \
 	 mp.o 
+generate_f0.o: \
+	 file_utils.o \
+	 mp.o \
+	 species.o \
+	 text_options.o 
 geometry.o: \
 	 ceq.o \
 	 deq.o \
@@ -479,6 +487,7 @@ gs2_main.o: \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
+	 generate_f0.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
 	 gs2_layouts.o \
@@ -546,7 +555,9 @@ gs2_transforms.o: \
 	 redistribute.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o 
+	 constants.o \
+	 convert.o \
+	 file_utils.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -627,6 +638,7 @@ le_grids.o: \
 	 constants.o \
 	 file_utils.o \
 	 gauss_quad.o \
+	 generate_f0.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 layouts_type.o \
