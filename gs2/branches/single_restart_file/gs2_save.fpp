@@ -7,7 +7,7 @@ module gs2_save
 # ifdef NETCDF
 !  use netcdf, only: NF90_FLOAT, NF90_DOUBLE
 # ifdef NETCDF_PARALLEL
-  use netcdf, only: NF90_HDF5
+  use netcdf, only: NF90_HDF5,NF90_MPIIO
   use netcdf, only: nf90_var_par_access, NF90_COLLECTIVE
   use netcdf, only: nf90_put_att, NF90_GLOBAL, nf90_get_att
 # endif
@@ -212,7 +212,7 @@ contains
 
           call barrier
 
-          istatus = nf90_create (file_proc, ior(NF90_HDF5,NF90_CLOBBER), ncid, comm=mp_comm, info=mp_info)
+          istatus = nf90_create (file_proc, IOR(NF90_HDF5,NF90_MPIIO), ncid, comm=mp_comm, info=mp_info)
        end if
 # endif
 
@@ -839,7 +839,7 @@ contains
           istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
 # ifdef NETCDF_PARALLEL
        else
-          istatus = nf90_open (file_proc, NF90_NOWRITE, ncid, comm=mp_comm, info=mp_info)
+          istatus = nf90_open (file_proc, IOR(NF90_NOWRITE, NF90_MPIIO), ncid, comm=mp_comm, info=mp_info)
        endif
 # endif
 
@@ -1060,11 +1060,15 @@ contains
 
       !if (.not. initialized) then
 
-          file_proc = trim(restart_file)
-
-          write (suffix,'(a1,i0)') '.', iproc
-          file_proc = trim(trim(file_proc)//adjustl(suffix))
-
+# ifdef NETCDF_PARALLEL
+       if(read_many) then
+# endif
+          file_proc=trim(trim(restart_file)//'.0')
+# ifdef NETCDF_PARALLEL
+       else 
+          file_proc=trim(trim(restart_file))
+       end if
+# endif
           istatus = nf90_open (file_proc, NF90_NOWRITE, ncid_local)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus,file=file_proc)
           istatus = nf90_inq_varid (ncid_local, &
