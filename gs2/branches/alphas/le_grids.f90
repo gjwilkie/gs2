@@ -20,6 +20,7 @@ contains
     
     integer, intent (in) :: negrid
 
+
     if (.not. allocated(zeroes)) then
        allocate (zeroes(negrid-1)) ; zeroes = 0.
     end if
@@ -28,6 +29,7 @@ contains
 
   subroutine setvgrid (vcut, negrid, epts, wgts, nesub)
 
+    use generate_f0, only: calculate_f0_grids, f0_grid
     use constants, only: pi => dpi
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
 
@@ -47,7 +49,10 @@ contains
     epts(:nesub) = epts(:nesub)**2
 
     ! absorb exponential and volume element in weights
-    wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
+    !wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
+    ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
+    ! See eq. 4.12 of M. Barnes's thesis
+    wgts(:nesub) = wgts(:nesub)*epts(:nesub)/sqrt(pi)
 
     if (negrid > nesub) then
 
@@ -58,9 +63,19 @@ contains
        epts(nesub+1:) = epts(nesub+1:) + vcut**2
 
        ! absort exponential and volume element in weights
-       wgts(nesub+1:) = wgts(nesub+1:)*0.5*sqrt(epts(nesub+1:)/pi)*exp(-vcut**2)
+       ! See eq. 4.13 of M. Barnes's thesis
+    !   wgts(nesub+1:) = wgts(nesub+1:)*0.5*sqrt(epts(nesub+1:)/pi)*exp(-vcut**2)
+
+       ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
+       ! Note that here this means adding an exponential e^y
+       ! See eq. 4.13 of M. Barnes's thesis
+       wgts(nesub+1:) = wgts(nesub+1:)*0.5*exp(epts(:nesub))*sqrt(epts(nesub+1:)/pi)*exp(-vcut**2)
 
     end if
+
+
+    call calculate_f0_grids(epts)
+    wgts = wgts * f0_grid(1,:)
 
     zeroes = sqrt(epts(:negrid-1))
     x0 = sqrt(epts(negrid))
