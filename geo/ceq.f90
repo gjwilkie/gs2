@@ -305,6 +305,7 @@ contains
 
 !     assign scalars: R_mag, Z_mag, aminor
 !
+
 !     R_mag == R position of magnetic axis
 !     Z_mag == Z position of magnetic axis
 !     aminor    == half diameter of last flux surface at elevation of Z_mag
@@ -347,6 +348,11 @@ contains
 !
 
     avgrmid = aminor
+    ! rmaj changes depending on iflux.. FIX!!
+    ! see geometr... for Miller is the rgeo for the flux surface of 
+    ! interest... rgeo is rgeo of LCFS... check!!!
+    ! actually when iflux = 1, it is the major radius of the magnetic axis,
+    ! so below is OK.
     rmaj = R_mag 
     B_T0 = abs(B_T)
 
