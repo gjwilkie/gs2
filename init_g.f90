@@ -828,7 +828,7 @@ contains
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
          clean_init, restart_file, restart_dir, read_many, &
-         left, ikk, itt, scale, tstart, zf_init, clean_init, &
+         left, ikk, itt, scale, tstart, zf_init,  &
          restart_file, restart_dir, left, ikk, itt, scale, tstart, zf_init, &
          den0, upar0, tpar0, tperp0, imfac, refac, even, &
          den1, upar1, tpar1, tperp1, &
