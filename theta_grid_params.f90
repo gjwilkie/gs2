@@ -14,7 +14,7 @@ module theta_grid_params
   private
 
   logical :: trin_flag = .false.
-  real :: rhoc_trin, qval_trin, shat_trin, rmaj_trin, shift_trin
+  real :: rhoc_trin, qval_trin, shat_trin, rgeo_trin, rmaj_trin, shift_trin
   real :: kappa_trin, kappri_trin, tri_trin, tripri_trin, betaprim_trin
   real :: kp = -1.
   logical :: exist
@@ -29,7 +29,7 @@ contains
     initialized = .true.
     call read_parameters
     if (trin_flag) call reinit_theta_grid_params (rhoc_trin, qval_trin, &
-         shat_trin, rmaj_trin, kappa_trin, kappri_trin, tri_trin, tripri_trin, &
+         shat_trin, rgeo_trin, rmaj_trin, kappa_trin, kappri_trin, tri_trin, tripri_trin, &
          shift_trin, betaprim_trin)
   end subroutine init_theta_grid_params
 
@@ -98,19 +98,19 @@ contains
        write (unit, fmt="(' /')")
   end subroutine wnml_theta_grid_params
 
-  subroutine reinit_theta_grid_params (rhoc_in, qval_in, shat_in, rmaj_in, &
+  subroutine reinit_theta_grid_params (rhoc_in, qval_in, shat_in, rgeo_in, rmaj_in, &
        kappa_in, kappri_in, tri_in, tripri_in, shift_in, betaprim_in)
 
     implicit none
 
-    real, intent (in) :: rhoc_in, qval_in, shat_in, rmaj_in, kappa_in, tri_in
+    real, intent (in) :: rhoc_in, qval_in, shat_in, rgeo_in, rmaj_in, kappa_in, tri_in
     real, intent (in) :: kappri_in, tripri_in, shift_in, betaprim_in
 
     rhoc = rhoc_in
     qinp = qval_in
     shat = shat_in
     rmaj = rmaj_in
-    r_geo = rmaj_in
+    r_geo = rgeo_in
     akappa = kappa_in
     akappri = kappri_in
     tri = tri_in
@@ -120,12 +120,12 @@ contains
 
   end subroutine reinit_theta_grid_params
 
-  subroutine init_trin_geo (rhoc_in, qval_in, shat_in, rmaj_in, &
+  subroutine init_trin_geo (rhoc_in, qval_in, shat_in, rgeo_in, rmaj_in, &
        kappa_in, kappri_in, tri_in, tripri_in, shift_in, betaprim_in)
 
     implicit none
 
-    real, intent (in) :: rhoc_in, qval_in, shat_in, rmaj_in, kappa_in, tri_in
+    real, intent (in) :: rhoc_in, qval_in, shat_in, rgeo_in, rmaj_in, kappa_in, tri_in
     real, intent (in) :: kappri_in, tripri_in, shift_in, betaprim_in
 
     trin_flag = .true.
@@ -133,6 +133,7 @@ contains
     rhoc_trin = rhoc_in
     qval_trin = qval_in
     shat_trin = shat_in
+    rgeo_trin = rgeo_in
     rmaj_trin = rmaj_in
     kappa_trin = kappa_in
     kappri_trin = kappri_in

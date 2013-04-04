@@ -365,7 +365,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
   end subroutine reset_gs2
 
-  subroutine gs2_trin_init (rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift, &
+  subroutine gs2_trin_init (rhoc, qval, shat, rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift, &
        betaprim, ntspec, dens, temp, fprim, tprim, gexb, mach, nu, use_gs2_geo)
 
     use species, only: init_trin_species
@@ -374,7 +374,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     implicit none
 
     integer, intent (in) :: ntspec
-    real, intent (in) :: rhoc, qval, shat, aspr, kap, kappri, tri, tripri, shift
+    real, intent (in) :: rhoc, qval, shat, rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift
     real, intent (in) :: betaprim, gexb, mach
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
     logical, intent (in) :: use_gs2_geo
@@ -384,7 +384,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
     if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, &
-         aspr, kap, kappri, tri, tripri, shift, betaprim)
+         rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift, betaprim)
     
   end subroutine gs2_trin_init
 
