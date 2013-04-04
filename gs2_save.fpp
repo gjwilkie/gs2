@@ -7,6 +7,7 @@ module gs2_save
 # ifdef NETCDF
 !  use netcdf, only: NF90_FLOAT, NF90_DOUBLE
 # ifdef NETCDF_PARALLEL
+! If using netcdf version 4.1.2 or older delete NF90_MPIIO
   use netcdf, only: NF90_HDF5,NF90_MPIIO
   use netcdf, only: nf90_var_par_access, NF90_COLLECTIVE
   use netcdf, only: nf90_put_att, NF90_GLOBAL, nf90_get_att
@@ -211,7 +212,7 @@ contains
           end if
 
           call barrier
-
+! If using netcdf version 4.1.2 or older replace NF90_MPIIO with NF90_CLOBBER
           istatus = nf90_create (file_proc, IOR(NF90_HDF5,NF90_MPIIO), ncid, comm=mp_comm, info=mp_info)
        end if
 # endif
@@ -839,6 +840,7 @@ contains
           istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
 # ifdef NETCDF_PARALLEL
        else
+! If using netcdf version 4.1.2 deleted NF90_MPIIO and the associated IOR
           istatus = nf90_open (file_proc, IOR(NF90_NOWRITE, NF90_MPIIO), ncid, comm=mp_comm, info=mp_info)
        endif
 # endif
