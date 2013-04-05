@@ -86,8 +86,10 @@ USE_SHMEM ?=
 USE_FFT ?= fftw
 # uses netcdf library (bin)
 USE_NETCDF ?= on
+# uses parallel netcdf library
+USE_PARALLEL_NETCDF ?=
 # uses hdf5 library (bin)
-USE_HDF5 ?=
+USE_HDF5 ?= 
 # Use function pointer in layouts_indices.c (bin)
 # see also README
 USE_C_INDEX ?= 
@@ -255,6 +257,10 @@ ifdef USE_HDF5
 	ifdef USE_MPI
 		FC = $(H5FC_par)
 		CC = $(H5CC_par)
+		ifdef USE_PARALLEL_NETCDF
+			CPPFLAGS += -DNETCDF_PARALLEL
+		endif
+
 	else
 		FC = $(H5FC)
 		CC = $(H5CC)
