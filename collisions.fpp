@@ -2560,7 +2560,7 @@ contains
                         vnmult(1)*spec(is)%vnewk*code_dt &
                         * kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0le(ixi,ie,ile) &
                         / (beta*spec(is)%stm*energy(ie)) &
-                        * sgn(isgn)*sqrt(1.0-al(il)*bmag(ig))
+                        * sgn(isgn)*sqrt(MAX(1.0-al(il)*bmag(ig),0.0))
                    ! probably need 1/(spec(is_ion)%z*spec(is_ion)%dens) above
                 end do
              end do
