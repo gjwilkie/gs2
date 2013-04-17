@@ -45,7 +45,9 @@ geo.a: $(GEO_OBJ)
 
 geo_c: geometry_c_driver.o geo.a ../utils.a  
 	#$(FC) -o  $@ $^ ${F90FLAGS} ${GEO_OBJ} -lnetcdff -lfftw
-	$(FC) -o  geo_c geometry_c_driver.o geo.a ../utils.a  -lnetcdff -lfftw ceq.o read_chease.o command_line.o
+	#$(FC) -o  geo_c geometry_c_driver.o geo.a ../utils.a  -lnetcdff -lfftw ceq.o read_chease.o command_line.o
+	$(FC) -o  geo_c geometry_c_driver.o geo.a ../utils.a  read_chease.o command_line.o ${LIBS}
+
 ball: $(ball_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
