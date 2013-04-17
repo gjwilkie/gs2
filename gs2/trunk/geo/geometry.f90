@@ -3427,9 +3427,9 @@ subroutine geometry_set_inputs(equilibrium_type,&
 end subroutine geometry_set_inputs  
 
 
-!> This subroutine sets default values for the advanced switches
-!! and then returns a derived type (advanced_parameters_type) containing
-!! all the parameters. 
+!> This subroutine gets default values for the advanced switches,
+!! returning a derived type (advanced_parameters_type) containing
+!! all the parameters. It does not modify the geometry variables. 
 
 subroutine geometry_get_default_advanced_parameters(advanced_parameters_out)
   use geometry
@@ -3446,6 +3446,8 @@ subroutine geometry_get_default_advanced_parameters(advanced_parameters_out)
   advanced_parameters_out%itor =  1
 end subroutine geometry_get_default_advanced_parameters
 
+!> Returns a derived type containing values of the advanced geometry
+!! parameters. 
 subroutine geometry_get_advanced_parameters(advanced_parameters_out)
   use geometry
   type(advanced_parameters_type), intent(out) :: advanced_parameters_out
@@ -3464,6 +3466,8 @@ subroutine geometry_get_advanced_parameters(advanced_parameters_out)
 
 end subroutine geometry_get_advanced_parameters
 
+!> Accepts a derived type containing values of the advanced geometry
+!! parameters and sets the variables in the geometry module accordingly. 
 subroutine geometry_set_advanced_parameters(advanced_parameters_in)
   use geometry
   type(advanced_parameters_type), intent(in) :: advanced_parameters_in
