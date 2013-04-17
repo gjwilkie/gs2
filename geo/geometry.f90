@@ -58,7 +58,108 @@ module geometry
   !logical :: debug = .true.
   logical :: debug = .false.
 
-  character*80 :: eqfile
+  character*800 :: eqfile
+
+  !common /advanced_parameters/ equal_arc,&
+                              !bishop,&
+                              !dp_mult,&
+                              !delrho,&
+                              !rmin,&
+                              !rmax,&
+                              !isym,&
+                              !in_nt,&
+                              !writelots,&
+                              !itor
+  type advanced_parameters_type  
+    logical :: equal_arc
+    real :: dp_mult
+    real :: delrho
+    real :: rmin
+    real :: rmax
+    integer :: isym
+    logical :: in_nt
+    logical :: writelots
+    integer :: itor
+  end type advanced_parameters_type
+
+  type miller_parameters_type
+     real :: rmaj
+     real :: R_geo
+     real :: akappa
+     real :: akappri
+     real :: tri
+     real :: tripri
+     real :: shift
+     real :: qinp
+     real :: shat
+     real :: asym
+     real :: asympri
+   end type miller_parameters_type
+
+  type(advanced_parameters_type) :: advanced_parameters
+  type(miller_parameters_type) :: miller_parameters
+
+  type coefficients_type
+
+         !grho   
+         !bmag       
+         !gradpar    
+         !cvdrift    
+         !cvdrift0   
+         !gbdrift    
+         !gbdrift0   
+         !cdrift    
+         !cdrift0    
+         !gbdrift_th 
+         !cvdrift_th 
+         !gds2       
+         !gds21      
+         !gds22      
+         !gds23      
+         !gds24      
+         !gds24_noq  
+         !jacob      
+         !Rplot      
+         !Zplot      
+         !aplot      
+         !Rprime     
+         !Zprime     
+         !aprime     
+         !Uk1        
+         !Uk2        
+         !Bpol       
+
+    real :: grho   
+    real :: bmag       
+    real :: gradpar    
+    real :: cvdrift    
+    real :: cvdrift0   
+    real :: gbdrift    
+    real :: gbdrift0   
+    real :: cdrift    
+    real :: cdrift0    
+    real :: gbdrift_th 
+    real :: cvdrift_th 
+    real :: gds2       
+    real :: gds21      
+    real :: gds22      
+    real :: gds23      
+    real :: gds24      
+    real :: gds24_noq  
+    real :: jacob      
+    real :: Rplot      
+    real :: Zplot      
+    real :: aplot      
+    real :: Rprime     
+    real :: Zprime     
+    real :: aprime     
+    real :: Uk1        
+    real :: Uk2        
+    real :: Bpol       
+
+  end type coefficients_type
+
+  type(coefficients_type) :: output_coefficients
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -3236,3 +3337,287 @@ end subroutine geofax
 
 
 end module geometry
+
+
+
+  !type(geometry_advanced_parameters_type) :: geometry_advanced_parameters 
+
+!> This subroutine implements a general interface to geometry
+!! which can be used outside GS2; in particular, it can be
+!! called from C/C++ programs. 
+!!
+!! Equilibrium types:
+!!     1: Local (Miller)
+!!     2: EFIT
+!!     3: Chease
+!!     4: Transp
+!!
+!! Some equilibria, those that are created from a grid of psi(R,Z),
+!! which means EFIT and Chease, change ntheta. 
+!! This should then be used as the number of 
+!! gridpoints along the fieldline. 
+!!
+!! Massive note to self, check where iflux and local_eq are set
+!! in GS2
+
+!contains
+subroutine geometry_set_inputs(equilibrium_type,&
+                               eqfile_in, &
+                               irho_in, &
+                               rhoc_in, &
+                               bishop_in, &
+                               nperiod_in, &
+                               ntheta)
+  use geometry
+
+  integer, intent(in) :: equilibrium_type, nperiod_in, irho_in, bishop_in
+  real, intent(in) :: rhoc_in
+  integer, intent(inout) :: ntheta
+  character(len=800), intent(in) :: eqfile_in
+
+  write (*,*) 'Setting inputs'
+  write (*,*)
+
+  rhoc = rhoc_in
+  nperiod = nperiod_in
+  eqfile = eqfile_in
+  irho = irho_in
+
+  iflux = 1 ! Numerical unless changed for miller
+
+  local_eq = .false.
+  gen_eq = .false.
+  ppl_eq = .false.
+  transp_eq = .false.
+  chs_eq = .false.
+  efit_eq = .false.
+
+  equal_arc = .true.
+  bishop = bishop_in
+  dp_mult = 1.0
+  delrho = 1e-3
+  rmin = 1e-3
+  rmax = 1.0
+  isym = 0
+  in_nt = .false.
+  writelots = .false.
+  !! Advanced use only
+  itor = 1
+
+  
+  !ntheta_out = -1
+
+  select case (equilibrium_type)
+  case (1)  ! Miller
+    local_eq = .true.
+    iflux = 0
+    call init_theta(ntheta)
+  case (2)  ! EFIT
+    efit_eq = .true.
+  case (3)  ! CHEASE
+    chs_eq = .true.
+  case default
+    write(*,*) "Whatever geometry you are using hasn't "
+    write(*,*) "been tested in a long time!"
+    stop 
+  end select
+
+
+
+end subroutine geometry_set_inputs  
+
+
+!> This subroutine sets default values for the advanced switches
+!! and then returns a derived type (advanced_parameters_type) containing
+!! all the parameters. 
+
+subroutine geometry_get_default_advanced_parameters(advanced_parameters_out)
+  use geometry
+  type(advanced_parameters_type), intent(out) :: advanced_parameters_out
+ 
+  advanced_parameters_out%equal_arc = .true.
+  advanced_parameters_out%dp_mult = 1.0
+  advanced_parameters_out%delrho = 1e-3
+  advanced_parameters_out%rmin = 1e-3
+  advanced_parameters_out%rmax = 1.0
+  advanced_parameters_out%isym = 0
+  advanced_parameters_out%in_nt = .false.
+  advanced_parameters_out%writelots = .false.
+  advanced_parameters_out%itor =  1
+end subroutine geometry_get_default_advanced_parameters
+
+subroutine geometry_get_advanced_parameters(advanced_parameters_out)
+  use geometry
+  type(advanced_parameters_type), intent(out) :: advanced_parameters_out
+
+  advanced_parameters%equal_arc = equal_arc
+  advanced_parameters%dp_mult = dp_mult
+  advanced_parameters%delrho = delrho
+  advanced_parameters%rmin = rmin
+  advanced_parameters%rmax = rmax
+  advanced_parameters%isym = isym
+  advanced_parameters%in_nt = in_nt
+  advanced_parameters%writelots = writelots
+  advanced_parameters%itor = itor
+
+  advanced_parameters_out = advanced_parameters
+
+end subroutine geometry_get_advanced_parameters
+
+subroutine geometry_set_advanced_parameters(advanced_parameters_in)
+  use geometry
+  type(advanced_parameters_type), intent(in) :: advanced_parameters_in
+
+  write(*,*) 'Setting advanced parameters'
+  advanced_parameters = advanced_parameters_in
+
+  equal_arc = advanced_parameters%equal_arc
+  dp_mult = advanced_parameters%dp_mult
+  delrho = advanced_parameters%delrho
+  rmin = advanced_parameters%rmin
+  rmax = advanced_parameters%rmax
+  isym = advanced_parameters%isym
+  in_nt = advanced_parameters%in_nt
+  writelots = advanced_parameters%writelots
+  itor = advanced_parameters%itor
+
+  write(*,*) 'delrho was set to', delrho
+
+end subroutine geometry_set_advanced_parameters
+
+subroutine geometry_get_miller_parameters(miller_parameters_out)
+  use geometry
+  type(miller_parameters_type), intent(out) :: miller_parameters_out
+
+
+   miller_parameters%rmaj = rmaj
+   miller_parameters%r_geo = r_geo
+   miller_parameters%akappa = akappa
+   miller_parameters%akappri = akappri
+   miller_parameters%tri = tri
+   miller_parameters%tripri = tripri
+   miller_parameters%shift = shift
+   miller_parameters%qinp = qinp
+   miller_parameters%shat = shat
+   miller_parameters%asym = asym
+   miller_parameters%asympri = asympri
+
+   miller_parameters_out = miller_parameters
+
+end subroutine geometry_get_miller_parameters
+
+subroutine geometry_set_miller_parameters(miller_parameters_in)
+  use geometry
+  type(miller_parameters_type), intent(out) :: miller_parameters_in
+
+
+
+   miller_parameters = miller_parameters_in
+
+   rmaj = miller_parameters_in%rmaj
+   R_geo = miller_parameters_in%R_geo
+   akappa = miller_parameters_in%akappa
+   akappri = miller_parameters_in%akappri
+   tri = miller_parameters_in%tri
+   tripri = miller_parameters_in%tripri
+   shift = miller_parameters_in%shift
+   qinp = miller_parameters_in%qinp
+   shat = miller_parameters_in%shat
+   asym = miller_parameters_in%asym
+   asympri = miller_parameters_in%asympri
+
+   write(*,*) 's_hat was set to', shat
+
+end subroutine geometry_set_miller_parameters
+
+!> Vary the magnetic shear and pressure gradient 
+!! while maintaing a solution to the Grad-Shrafranov eqn,
+!! as described variously by Greene & Chance, Bishop and Miller.
+!! 
+subroutine geometry_vary_s_alpha(s_hat_input_in, beta_prime_input_in)
+  use geometry
+  real, intent(in) :: s_hat_input_in, beta_prime_input_in
+  s_hat_input = s_hat_input_in
+  beta_prime_input = beta_prime_input_in
+end subroutine geometry_vary_s_alpha
+
+subroutine geometry_calculate_coefficients(grid_size)
+  use geometry
+  integer, intent(out) :: grid_size
+  integer :: ntheta_out
+  call eikcoefs(ntheta_out)
+  write (*,*) 'ntheta out is ', ntheta_out
+  grid_size = (2*nperiod - 1)*ntheta_out/2
+end subroutine geometry_calculate_coefficients
+
+!> Get the geometric coefficients calculated by the geometry module.
+subroutine geometry_get_coefficients(ntheta, coefficients_out)
+  use geometry
+  type(coefficients_type), dimension((2*nperiod - 1) * ntheta + 1) :: coefficients_out
+  integer, intent(in) :: ntheta
+  integer ::ntgrid, i
+
+  ntgrid = (2*nperiod - 1) * ntheta/2
+
+   !allocate(coefficients_out(2*ntgrid+1))   
+  !write (*,*) 'HERE2'
+   !!allocate(coefficients_out%bmag(ntgrid:ntgrid))       
+   !allocate(coefficients_out%gradpar(ntgrid:ntgrid))    
+   !allocate(coefficients_out%cvdrift(ntgrid:ntgrid))    
+   !allocate(coefficients_out%cvdrift0(ntgrid:ntgrid))   
+   !allocate(coefficients_out%gbdrift(ntgrid:ntgrid))    
+   !allocate(coefficients_out%gbdrift0(ntgrid:ntgrid))   
+   !allocate(coefficients_out%cdrift(ntgrid:ntgrid))    
+   !allocate(coefficients_out%cdrift0(ntgrid:ntgrid))    
+   !allocate(coefficients_out%gbdrift_th(ntgrid:ntgrid)) 
+   !allocate(coefficients_out%cvdrift_th(ntgrid:ntgrid)) 
+   !allocate(coefficients_out%gds2(ntgrid:ntgrid))       
+   !allocate(coefficients_out%gds21(ntgrid:ntgrid))      
+   !allocate(coefficients_out%gds22(ntgrid:ntgrid))      
+   !allocate(coefficients_out%gds23(ntgrid:ntgrid))      
+   !allocate(coefficients_out%gds24(ntgrid:ntgrid))      
+   !allocate(coefficients_out%gds24_noq(ntgrid:ntgrid))  
+   !allocate(coefficients_out%jacob(ntgrid:ntgrid))      
+   !allocate(coefficients_out%Rplot(ntgrid:ntgrid))      
+   !allocate(coefficients_out%Zplot(ntgrid:ntgrid))      
+   !allocate(coefficients_out%aplot(ntgrid:ntgrid))      
+   !allocate(coefficients_out%Rprime(ntgrid:ntgrid))     
+   !allocate(coefficients_out%Zprime(ntgrid:ntgrid))     
+   !allocate(coefficients_out%aprime(ntgrid:ntgrid))     
+   !allocate(coefficients_out%Uk1(ntgrid:ntgrid))        
+   !allocate(coefficients_out%Uk2(ntgrid:ntgrid))        
+   !allocate(coefficients_out%Bpol(ntgrid:ntgrid))       
+
+  write (*,*) 'HERE'
+   do i = -ntgrid,ntgrid
+   write (*,*) 'i', i
+   coefficients_out(i+ntgrid+1)%grho        = grho(i)   
+   coefficients_out(i+ntgrid+1)%bmag        = bmag(i)       
+   coefficients_out(i+ntgrid+1)%gradpar     = gradpar(i)    
+   coefficients_out(i+ntgrid+1)%cvdrift     = cvdrift(i)    
+   coefficients_out(i+ntgrid+1)%cvdrift0    = cvdrift0(i)   
+   coefficients_out(i+ntgrid+1)%gbdrift     = gbdrift(i)    
+   coefficients_out(i+ntgrid+1)%gbdrift0    = gbdrift0(i)   
+   coefficients_out(i+ntgrid+1)%cdrift     = cdrift(i)    
+   coefficients_out(i+ntgrid+1)%cdrift0     = cdrift0(i)    
+   coefficients_out(i+ntgrid+1)%gbdrift_th  = gbdrift_th(i) 
+   coefficients_out(i+ntgrid+1)%cvdrift_th  = cvdrift_th(i) 
+   coefficients_out(i+ntgrid+1)%gds2        = gds2(i)       
+   coefficients_out(i+ntgrid+1)%gds21       = gds21(i)      
+   coefficients_out(i+ntgrid+1)%gds22       = gds22(i)      
+   coefficients_out(i+ntgrid+1)%gds23       = gds23(i)      
+   coefficients_out(i+ntgrid+1)%gds24       = gds24(i)      
+   coefficients_out(i+ntgrid+1)%gds24_noq   = gds24_noq(i)  
+   coefficients_out(i+ntgrid+1)%jacob       = jacob(i)      
+   coefficients_out(i+ntgrid+1)%Rplot       = Rplot(i)      
+   coefficients_out(i+ntgrid+1)%Zplot       = Zplot(i)      
+   coefficients_out(i+ntgrid+1)%aplot       = aplot(i)      
+   coefficients_out(i+ntgrid+1)%Rprime      = Rprime(i)     
+   coefficients_out(i+ntgrid+1)%Zprime      = Zprime(i)     
+   coefficients_out(i+ntgrid+1)%aprime      = aprime(i)     
+   coefficients_out(i+ntgrid+1)%Uk1         = Uk1(i)        
+   coefficients_out(i+ntgrid+1)%Uk2         = Uk2(i)        
+   coefficients_out(i+ntgrid+1)%Bpol        = Bpol(i)       
+   end do
+
+end subroutine geometry_get_coefficients
