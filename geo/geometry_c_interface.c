@@ -70,9 +70,9 @@ void geometry_calculate_coefficients_c(int * grid_size_out){
 	geometry_calculate_coefficients_(grid_size_out);
 }
 
-extern void geometry_get_coefficients_(int * ntheta, struct coefficients_struct * coefficients_out);
-void geometry_get_coefficients_c(int * ntheta, struct coefficients_struct * coefficients_out){
-		geometry_get_coefficients_(ntheta, coefficients_out);
+extern void geometry_get_coefficients_(int * grid_size_in, struct coefficients_struct * coefficients_out);
+void geometry_get_coefficients_c(int * grid_size_in, struct coefficients_struct * coefficients_out){
+		geometry_get_coefficients_(grid_size_in, coefficients_out);
 }
 
 
