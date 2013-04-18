@@ -18,7 +18,7 @@ module geometry
 
   real :: rhoc, rmaj, r_geo, shift, dbetadrho, kxfac
   real :: qinp, shat, akappa, akappri, tri, tripri, dpressdrho, asym, asympri
-  real :: delrho, rmin, rmax, qsf  
+  real :: delrho, rmin, rmax, qsf, aminor
   
   real :: s_hat_input, p_prime_input, invLp_input, beta_prime_input, &
        alpha_input, dp_mult
@@ -99,6 +99,8 @@ module geometry
   type(advanced_parameters_type) :: advanced_parameters
   type(miller_parameters_type) :: miller_parameters
 
+  !> These are functions of theta that are output by the 
+  !! geometry module
   type coefficients_type
 
          !grho   
@@ -159,7 +161,19 @@ module geometry
 
   end type coefficients_type
 
+  !> These are coefficients that are constant
+  !! on a flux surface
+  type constant_coefficients_type
+    real :: qsf
+    real :: rmaj
+    real :: shat
+    real :: kxfac
+    real :: aminor
+  end type constant_coefficients_type
+
   type(coefficients_type) :: output_coefficients
+
+  type(constant_coefficients_type) :: constant_coefficients
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -3630,3 +3644,17 @@ subroutine geometry_get_coefficients(grid_size, coefficients_out)
    write (*,*) 'Returning....'
 
 end subroutine geometry_get_coefficients
+
+subroutine geometry_get_constant_coefficients(constant_coefficients_out)
+  use geometry
+  type(constant_coefficients_type), intent(out) :: constant_coefficients_out
+
+
+  constant_coefficients%qsf = qsf
+  constant_coefficients%rmaj = rmaj
+  constant_coefficients%shat = shat
+  constant_coefficients%kxfac = kxfac
+  constant_coefficients%aminor = aminor
+  constant_coefficients_out = constant_coefficients
+  
+end subroutine geometry_get_constant_coefficients
