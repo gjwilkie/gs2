@@ -3624,4 +3624,6 @@ subroutine geometry_get_coefficients(ntheta, coefficients_out)
    coefficients_out(i+ntgrid+1)%Bpol        = Bpol(i)       
    end do
 
+   write (*,*) 'Returning....'
+
 end subroutine geometry_get_coefficients
