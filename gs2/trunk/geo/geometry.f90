@@ -3551,17 +3551,19 @@ subroutine geometry_calculate_coefficients(grid_size)
   integer :: ntheta_out
   call eikcoefs(ntheta_out)
   write (*,*) 'ntheta out is ', ntheta_out
-  grid_size = (2*nperiod - 1)*ntheta_out/2
+  grid_size = (2*nperiod - 1)*ntheta_out + 1 ! = 2*ntgrid + 1
+  write (*,*) 'grid_size out is ', grid_size
 end subroutine geometry_calculate_coefficients
 
 !> Get the geometric coefficients calculated by the geometry module.
-subroutine geometry_get_coefficients(ntheta, coefficients_out)
+subroutine geometry_get_coefficients(grid_size, coefficients_out)
   use geometry
-  type(coefficients_type), dimension((2*nperiod - 1) * ntheta + 1) :: coefficients_out
-  integer, intent(in) :: ntheta
+  integer, intent(in) :: grid_size
+  type(coefficients_type), dimension(grid_size) :: coefficients_out
   integer ::ntgrid, i
 
-  ntgrid = (2*nperiod - 1) * ntheta/2
+  !ntgrid = (2*nperiod - 1) * ntheta/2
+  ntgrid = (grid_size - 1)/2
 
    !allocate(coefficients_out(2*ntgrid+1))   
   !write (*,*) 'HERE2'
@@ -3593,6 +3595,7 @@ subroutine geometry_get_coefficients(ntheta, coefficients_out)
    !allocate(coefficients_out%Bpol(ntgrid:ntgrid))       
 
   write (*,*) 'HERE'
+  write (*,*) 'Grid size should be ', 2*ntgrid + 1
    do i = -ntgrid,ntgrid
    write (*,*) 'i', i
    coefficients_out(i+ntgrid+1)%grho        = grho(i)   
