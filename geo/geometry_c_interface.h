@@ -67,3 +67,11 @@ struct coefficients_struct {
 		 double  Bpol;       
 };
 
+struct constant_coefficients_struct {
+
+    double qsf;
+    double rmaj;
+    double shat;
+    double kxfac;
+    double aminor;
+};

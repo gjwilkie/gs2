@@ -56,6 +56,15 @@ void geometry_set_miller_parameters_c(
 			geometry_set_miller_parameters_(miller_parameters_in);
 }
 
+extern void geometry_get_constant_coefficients_(
+		struct constant_coefficients_struct * constant_coefficients_out);
+
+void geometry_get_constant_coefficients_c(
+		struct constant_coefficients_struct * constant_coefficients_out){
+
+			geometry_get_constant_coefficients_(constant_coefficients_out);
+}
+
 extern void geometry_vary_s_alpha_(
 		double * s_hat_input_in, double *beta_prime_input_in);
 
