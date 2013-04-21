@@ -4,8 +4,8 @@
 
 module dist_fn_arrays
 
-  public :: g, gnew, gold, kx_shift, theta0_shift, vpa, vpac
-  public :: vperp2, vpar, ittp, aj0, aj1, aj2, aj0f, aj1f
+  public :: g, gnew, gold, kx_shift, theta0_shift, vpa, vpac, vpacgen
+  public :: vperp2, vpar, vpargen, ittp, aj0, aj1, aj2, aj0f, aj1f
   public :: apar_ext, kperp2, c_rate
   public :: g_adjust
 #ifdef LOWFLOW
@@ -20,7 +20,8 @@ module dist_fn_arrays
   real, dimension(:), allocatable :: kx_shift, theta0_shift
   ! (naky)
 
-  real, dimension (:,:,:), allocatable :: vpa, vpac
+  !> vpacgen = vpac * T_s/Tstar_s
+  real, dimension (:,:,:), allocatable :: vpa, vpac, vpacgen
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   real, dimension (:,:), allocatable :: vperp2
@@ -29,6 +30,10 @@ module dist_fn_arrays
   real, dimension (:,:,:), allocatable :: vpar
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
+  !> This v_|| normalised times v_thsN times Z_N / Tstar_N
+  real, dimension (:,:,:), allocatable :: vpargen
+  ! (-ntgrid:ntgrid,2, -g-layout-)
+  
   integer, dimension (:), allocatable :: ittp
   ! (-ntgrid:ntgrid)
 

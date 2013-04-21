@@ -11,6 +11,7 @@
 !! This is free software released under the GPLv3
 !! Written by
 !!    Edmund Highcock (edmundhighcock@sourceforge.net)
+!!    George Wilkie  (gwilkie@umd.edu)
 !!  
 
 module general_f0
@@ -52,7 +53,12 @@ module general_f0
   !! function of energy and species
   public :: stm
   real, dimension (:,:), allocatable :: stm
+  
+  !> Generalized dF0/drho  for Maxwellian speices
+  public :: f0prim
+  real,dimension(:,:), allocatable:: f0prim
 
+  ! get rid of this!
   !> Equal to Z/sqrt(generalised_temperature/mass) as a 
   !! function of energy and species
   public :: zstm
@@ -60,14 +66,15 @@ module general_f0
 
   !> Equal to generalised_temperature/Z as a 
   !! function of energy and species
-  public :: tz
-  real, dimension (:,:), allocatable :: tz
+  public :: gtempoz
+  real, dimension (:,:), allocatable :: gtempoz
 
   !> Equal to Z/generalised_temperature as a 
   !! function of energy and species
-  public :: zt
-  real, dimension (:,:), allocatable :: zt
+  public :: zogtemp
+  real, dimension (:,:), allocatable :: zogtemp
 
+  ! probably get rid of this!
   !> Equal to abs(sqrt(generalised_temperature/mass)/Z) as a 
   !! function of energy and species
   public :: smz
@@ -228,9 +235,10 @@ contains
     allocate(generalised_temperature(negrid,nspec))
     allocate(stm(negrid,nspec))
     allocate(zstm(negrid,nspec))
-    allocate(zt(negrid,nspec))
-    allocate(tz(negrid,nspec))
+    allocate(zogtemp(negrid,nspec))
+    allocate(gtempoz(negrid,nspec))
     allocate(smz(negrid,nspec))
+    allocate(F0prim(negrid,nspec))
 
   end subroutine allocate_arrays
 
@@ -245,9 +253,10 @@ contains
     call broadcast(generalised_temperature)
     call broadcast(stm)
     call broadcast(zstm)
-    call broadcast(zt)
-    call broadcast(tz)
+    call broadcast(zogtemp)
+    call broadcast(gtempoz)
     call broadcast(smz)
+    call broadcast(F0prim)
   end subroutine broadcast_arrays
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -266,8 +275,11 @@ contains
     !do ie = 1,negrid
       generalised_temperature(:,is) = spec(is)%temp
     !end do
+    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
+    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+    
+    f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
   end subroutine calculate_f0_grids_maxwellian
-
 
 
 end module general_f0
