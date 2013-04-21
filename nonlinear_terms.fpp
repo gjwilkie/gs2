@@ -394,8 +394,9 @@ contains
 
   subroutine add_nl (g1, phi, apar, bpar)
     use mp, only: max_allreduce, proc0
+    use general_f0, only: zogtemp
     use theta_grid, only: ntgrid, kxfac
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, ie_idx
     use gs2_layouts, only: accelx_lo, yxf_lo
     use dist_fn_arrays, only: g, ittp
     use species, only: spec
@@ -412,7 +413,7 @@ contains
     real :: max_vel, zero
     real :: dt_cfl
 
-    integer :: iglo, ik, it, is, ig, il, ia, isgn
+    integer :: iglo, ik, it, is, ie, ig, il, ia, isgn
     
     if (fphi > zero) then
        call load_kx_phi
@@ -441,9 +442,10 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
-             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*aky(ik)*g(ig,isgn,iglo)
+             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*zogtemp(ie,is) + zi*aky(ik)*g(ig,isgn,iglo)
           end do
        end do
     end do
@@ -506,9 +508,10 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
-             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*akx(it)*g(ig,isgn,iglo)
+             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*zogtemp(ie,is) + zi*akx(it)*g(ig,isgn,iglo)
           end do
        end do
     end do

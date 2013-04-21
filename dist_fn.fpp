@@ -95,9 +95,21 @@ module dist_fn
   real, dimension (:,:,:,:,:,:), allocatable :: wdriftttp
   ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
 
+  !> This is omega_drift multiplied by T_s/Tstar_s, 
+  !! for totally trapped particles
+  !! It multiples phi
+  real, dimension (:,:,:,:,:,:), allocatable :: wdriftttpgen
+
+  ! (-ntgrid:ntgrid, 2, -g-layout-)
   real, dimension (:,:,:), allocatable :: wdrift
   ! (-ntgrid:ntgrid, 2, -g-layout-)
 
+  !> This is omega_drift multiplied by T_s/Tstar_s
+  !! It multiples phi
+  real, dimension (:,:,:), allocatable :: wdriftgen
+  ! (-ntgrid:ntgrid, 2, -g-layout-)
+
+  
   real, dimension (:,:,:), allocatable :: wstar
   ! (naky,negrid,nspec) replicated
 
@@ -816,7 +828,8 @@ subroutine check_dist_fn(report_unit)
   end subroutine fill_species_knobs
 
   subroutine init_wdrift
-    use species, only: nspec
+    use species, only: nspec, spec
+    use general_f0, only: generalised_temperature
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use le_grids, only: negrid, ng2, nlambda, al, jend, forbid
@@ -860,9 +873,11 @@ subroutine check_dist_fn(report_unit)
        ! allocate wdrift with sign(vpa) dependence because will contain 
        ! Coriolis as well as magnetic drifts
        allocate (wdrift(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (wdriftgen(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (wdriftttp(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec,2))
+       allocate (wdriftttpgen(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec,2))
     end if
-    wdrift = 0.  ; wdriftttp = 0.
+    wdrift = 0.  ; wdriftgen = 0. ; wdriftttp = 0. ; wdriftttpgen = 0.
 #ifdef LOWFLOW
     if (.not. allocated(wcurv)) allocate (wcurv(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
     wcurv = 0.
@@ -897,6 +912,7 @@ subroutine check_dist_fn(report_unit)
        end do
     end do
     wdriftttp = 0.0
+    wdriftttpgen = 0.0
     do is = 1, nspec
        do ie = 1, negrid
           do ik = 1, naky
@@ -932,6 +948,16 @@ subroutine check_dist_fn(report_unit)
        end do
     end do
 
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       wdriftgen(:,:,iglo) = &
+               wdrift(:,:,iglo)*spec(is)%temp/generalised_temperature(ie,is)
+       wdriftttpgen(:,it,ik,ie,is,:) = &
+        wdriftttp(:,it,ik,ie,is,:)*spec(is)%temp/generalised_temperature(ie,is)
+    end do
 !    alloc = .false.
 !CMR
     if (debug) write(6,*) 'init_wdrift: driftknob, tpdriftknob=',driftknob,tpdriftknob
@@ -1009,7 +1035,8 @@ subroutine check_dist_fn(report_unit)
   end function wcoriolis_func
 
   subroutine init_vpar
-    use dist_fn_arrays, only: vpa, vpar, vpac, vperp2
+    use general_f0, only: zogtemp, generalised_temperature
+    use dist_fn_arrays, only: vpa, vpar, vpargen, vpac,vpacgen, vperp2
     use species, only: spec
     use theta_grid, only: ntgrid, delthet, bmag, gradpar
     use le_grids, only: energy, al
@@ -1017,16 +1044,18 @@ subroutine check_dist_fn(report_unit)
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx
     implicit none
-    integer :: iglo, ik, is
+    integer :: iglo, ik, is, ie
     real :: al1, e1
     
     if (.not.allocated(vpa)) then
        allocate (vpa    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (vpac   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (vpacgen(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (vperp2 (-ntgrid:ntgrid,  g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (vpar   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (vpargen(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     endif
-    vpa = 0. ; vpac = 0. ; vperp2 = 0. ; vpar = 0.
+    vpa = 0. ; vpac = 0. ; vpacgen = 0.; vperp2 = 0. ; vpar = 0. ; vpargen = 0.
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        al1 = al(il_idx(g_lo,iglo))
@@ -1069,6 +1098,11 @@ subroutine check_dist_fn(report_unit)
 
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       
+       vpacgen(:,:,iglo) = vpac(:,:,iglo)*spec(is)%temp/ &
+          generalised_temperature(ie,is)
+
        vpar(-ntgrid:ntgrid-1,1,iglo) = &
             spec(is)%zstm*tunits(ik)*code_dt &
             *0.5/delthet(-ntgrid:ntgrid-1) &
@@ -1080,6 +1114,20 @@ subroutine check_dist_fn(report_unit)
             *(abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid)))&
             *vpac(-ntgrid:ntgrid-1,2,iglo)
        vpar(ntgrid,:,iglo) = 0.0
+
+       vpargen(-ntgrid:ntgrid-1,1,iglo) = &
+            zogtemp(ie,is)* spec(is)%stm*tunits(ik)*code_dt &
+            *0.5/delthet(-ntgrid:ntgrid-1) &
+            *(abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid)))&
+            *vpac(-ntgrid:ntgrid-1,1,iglo)
+       vpargen(-ntgrid:ntgrid-1,2,iglo) = &
+            zogtemp(ie,is)*spec(is)%stm*tunits(ik)*code_dt &
+            *0.5/delthet(-ntgrid:ntgrid-1) &
+            *(abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid)))&
+            *vpac(-ntgrid:ntgrid-1,2,iglo)
+       vpargen(ntgrid,:,iglo) = 0.0
+ 
+
     end do
 
   end subroutine init_vpar
@@ -1090,6 +1138,7 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: negrid, energy
     use run_parameters, only: wunits
     use gs2_time, only: code_dt
+    use general_f0, only: f0prim
 
     implicit none
     integer :: ik, ie, is
@@ -1099,8 +1148,8 @@ subroutine check_dist_fn(report_unit)
     do is = 1, nspec
        do ie = 1, negrid
           do ik = 1, naky
-             wstar(ik,ie,is) = code_dt*wunits(ik) &
-                  *(spec(is)%fprim+spec(is)%tprim*(energy(ie,is)-1.5))
+             wstar(ik,ie,is) = - code_dt*wunits(ik) &
+                  * f0prim(ie,is)
           end do
        end do
     end do
@@ -2864,7 +2913,7 @@ subroutine check_dist_fn(report_unit)
 #ifdef LOWFLOW
     use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
 #endif
-    use dist_fn_arrays, only: aj0, aj1, vperp2, vpar, vpac, g, ittp
+    use dist_fn_arrays, only: aj0, aj1, vperp2, vpar, vpargen, vpac, vpacgen, g, ittp
     use theta_grid, only: ntgrid, theta, bmag
     use kt_grids, only: aky, akx
     use le_grids, only: nlambda, ng2, lmax, anon, energy, negrid, forbid
@@ -2928,7 +2977,7 @@ subroutine check_dist_fn(report_unit)
           call set_source
           if (aky(ik) < epsilon(0.0)) then
              source(:ntgrid-1) = source(:ntgrid-1) &
-                  - zi*anon(ie)*wdrift(:ntgrid-1,isgn,iglo) &
+                  - zi*anon(ie)*wdriftgen(:ntgrid-1,isgn,iglo) &
                   *2.0*phi_ext*sourcefac*aj0(:ntgrid-1,iglo)
           end if
        else
@@ -2970,7 +3019,8 @@ subroutine check_dist_fn(report_unit)
                   - anon(ie)*zi*(wdttpfac(ig,it,ik,ie,is,2)*hneoc(ig,2,iglo))*phigavg(ig) &
                   + zi*wstar(ik,ie,is)*hneoc(ig,2,iglo)*phigavg(ig)
 #else
-                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is,2))*phigavg(ig) &
+                  - anon(ie)*zi*(wdriftttpgen(ig,it,ik,ie,is,2))*phigavg(ig) &
+                  ! Where is the PVG term? 
                   + zi*wstar(ik,ie,is)*phigavg(ig)
 #endif             
           end do
@@ -2983,7 +3033,7 @@ subroutine check_dist_fn(report_unit)
 #ifdef LOWFLOW
                      wdttpfac(ig,it,ik,ie,is,isgn)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
 #else
-                     wdriftttp(ig,it,ik,ie,is,isgn)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
+                     wdriftttpgen(ig,it,ik,ie,is,isgn)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
 #endif
              end do
           endif
@@ -3098,6 +3148,7 @@ subroutine check_dist_fn(report_unit)
 ! vparterm = -2.0*vpar (IN ABSENCE OF LOWFLOW TERMS)
 ! wdfac = wdrift + wcoriolis/spec(is)%stm (IN ABSENCE OF LOWFLOW TERMS)
 ! wstarfac = wstar  (IN ABSENCE OF LOWFLOW TERMS)
+! Line below is not true for alphas. vpar = q_s/Tstar * v_|| * the rest. EGH/GW
 ! vpar = q_s/sqrt{T_s m_s} (v_||^GS2). \gradpar(theta)/DTHETA . DELT (centred)
 ! wdrift =    q_s/T_s  v_d.\grad_perp . DELT 
 ! wcoriolis = q_s/T_s  v_C.\grad_perp . DELT 
@@ -3140,14 +3191,15 @@ subroutine check_dist_fn(report_unit)
               -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
 #else
-         source(ig) = anon(ie)*(-2.0*vpar(ig,isgn,iglo)*phi_m &
+         source(ig) = anon(ie)*(-2.0*vpargen(ig,isgn,iglo)*phi_m &
+               ! Note line below still needs to be changed for alphas
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
-              -zi*wdrift(ig,isgn,iglo)*phi_p) &
+              -zi*wdriftgen(ig,isgn,iglo)*phi_p) &
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
+              -2.0*omprimfac*vpacgen(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
 #endif
       end do
@@ -4106,6 +4158,7 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: anon, integrate_species
     use gs2_layouts, only: g_lo, ie_idx, is_idx
     use run_parameters, only: tite
+    use general_f0, only: generalised_temperature
     implicit none
     integer :: iglo, isgn
     integer :: ik, it, ie, is
@@ -4139,7 +4192,7 @@ subroutine check_dist_fn(report_unit)
     allocate (gamtot(-ntgrid:ntgrid,ntheta0,naky))
     allocate (gamtot1(-ntgrid:ntgrid,ntheta0,naky))
     allocate (gamtot2(-ntgrid:ntgrid,ntheta0,naky))
-    if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then	
+    if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
        allocate (gamtot3(-ntgrid:ntgrid,ntheta0,naky))
     endif
     
@@ -4147,10 +4200,11 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = (1.0 - aj0(:,iglo)**2)*anon(ie)
+          g0(:,isgn,iglo) = (1.0 - aj0(:,iglo)**2)*anon(ie)/ &
+             generalised_temperature(ie,is)
        end do
     end do
-    wgt = spec%z*spec%z*spec%dens/spec%temp
+    wgt = spec%z*spec%z*spec%dens
     call integrate_species (g0, wgt, tot)
     gamtot = real(tot) + kperp2*poisfac
     
@@ -5613,7 +5667,9 @@ subroutine check_dist_fn(report_unit)
     initialized = .false.
     
     wdrift = 0.
+    wdriftgen = 0.
     wdriftttp = 0.
+    wdriftttpgen = 0.
     a = 0.
     b = 0.
     r = 0.
@@ -6853,7 +6909,7 @@ subroutine check_dist_fn(report_unit)
 
   subroutine finish_dist_fn
 
-    use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
+    use dist_fn_arrays, only: ittp, vpa, vpac, vpacgen, vperp2, vpar, vpargen
     use dist_fn_arrays, only: aj0, aj1, kperp2
     use dist_fn_arrays, only: g, gnew, kx_shift
 
@@ -6868,8 +6924,9 @@ subroutine check_dist_fn(report_unit)
     call reset_init
 
     if (allocated(fexp)) deallocate (fexp, bkdiff, bd_exp)
-    if (allocated(ittp)) deallocate (ittp, wdrift, wdriftttp)
-    if (allocated(vpa)) deallocate (vpa, vpac, vperp2, vpar)
+    if (allocated(ittp)) deallocate (ittp, wdrift, wdriftgen, wdriftttp)
+    if (allocated(ittp)) deallocate (wdriftttpgen)
+    if (allocated(vpa)) deallocate (vpa, vpac, vpacgen, vperp2, vpar, vpargen)
     if (allocated(wstar)) deallocate (wstar)
     if (allocated(aj0)) deallocate (aj0, aj1)
     if (allocated(kperp2)) deallocate (kperp2)
