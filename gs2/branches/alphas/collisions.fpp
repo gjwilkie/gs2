@@ -369,7 +369,7 @@ contains
     use species, only: nspec, spec, electron_species
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid, bmag
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxwell, al, integrate_moment, negrid
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
     use run_parameters, only: tunits
@@ -783,7 +783,7 @@ contains
     use species, only: nspec, spec
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid, bmag
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxwell, al, integrate_moment, negrid
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
     use run_parameters, only: tunits
@@ -1160,7 +1160,7 @@ contains
 
   subroutine init_vnew (hee)
     use species, only: nspec, spec, electron_species, has_electron_species
-    use le_grids, only: negrid, energy, w
+    use le_grids, only: negrid, energy => energy_maxwell, w => w_maxwell
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use run_parameters, only: zeff, tunits
@@ -1361,7 +1361,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use le_grids, only: nlambda, negrid, ng2, nxi
     use le_grids, only: forbid, ixi_to_il, ixi_to_isgn
-    use egrid, only: zeroes, x0
+    use egrid, only: zeroes => zeroes_maxwell, x0 => x0_maxwell
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
 # ifdef USE_LE_LAYOUT
@@ -1470,7 +1470,7 @@ contains
     use species, only: spec
     use run_parameters, only: tunits
     use theta_grid, only: bmag
-    use le_grids, only: al, negrid, w
+    use le_grids, only: al, negrid, w=>w_maxwell
     use spfunc, only: erf => erf_ext
     use constants, only: pi
     use dist_fn_arrays, only: kperp2
@@ -1644,7 +1644,8 @@ contains
     use species, only: nspec, spec
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, negrid, al, jend, ng2, energy, wl, nxi
+    use le_grids, only: nlambda, negrid, al, jend, ng2, energy => energy_maxwell
+    use le_grids, only: wl, nxi
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: kperp2
@@ -1792,7 +1793,7 @@ contains
   subroutine get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
 
     use species, only: spec
-    use le_grids, only: nlambda, al, energy, ng2
+    use le_grids, only: nlambda, al, energy => energy_maxwell, ng2
     use le_grids, only: wl, jend, al
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: kperp2
@@ -2321,7 +2322,7 @@ contains
     use run_parameters, only: tunits, beta
     use gs2_time, only: code_dt
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: energy
+    use le_grids, only: energy => energy_maxwell
     use species, only: nspec, spec, electron_species
     use dist_fn_arrays, only: vpa, kperp2, aj0
     use fields_arrays, only: aparnew
@@ -2452,7 +2453,8 @@ contains
     use theta_grid, only: bmag
     use run_parameters, only: beta, ieqzip
     use gs2_time, only: code_dt
-    use le_grids, only: energy, negrid, nxi, ixi_to_il, ixi_to_isgn, sgn, al
+    use le_grids, only: energy => energy_maxwell
+    use le_grids, only: negrid, nxi, ixi_to_il, ixi_to_isgn, sgn, al
     use species, only: spec, electron_species
     use dist_fn_arrays, only: kperp2
     use fields_arrays, only: aparnew
@@ -2592,7 +2594,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxwell, al, integrate_moment, negrid
     use le_grids, only: ixi_to_il, ixi_to_isgn
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
@@ -2726,7 +2728,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxwell, al, integrate_moment, negrid
     use le_grids, only: ixi_to_il, ixi_to_isgn
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
@@ -2882,7 +2884,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxwell, al, integrate_moment, negrid
     use le_grids, only: ixi_to_il, ixi_to_isgn
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
@@ -3006,7 +3008,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxwell, al, integrate_moment, negrid
     use le_grids, only: ixi_to_il, ixi_to_isgn
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip

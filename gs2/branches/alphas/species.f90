@@ -24,6 +24,7 @@ module species
                        ! nu_h controls a hyperviscous term embedded in the collision operator
      real :: stm, zstm, tz, smz, zt
      integer :: type
+     logical :: is_maxwellian
   end type specie
 
   private
@@ -295,6 +296,11 @@ contains
 
           ierr = error_unit()
           call get_option_value (type, typeopts, spec(is)%type, ierr, "type in species_parameters_x")
+          if (spec(is)%type .eq. alpha_species) then 
+            spec(is)%is_maxwellian = .false.
+          else
+            spec(is)%is_maxwellian = .true.
+          end if
        end do
     end if
 

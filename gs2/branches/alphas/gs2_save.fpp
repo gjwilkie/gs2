@@ -398,7 +398,8 @@ contains
            IF (PRESENT(distfn)) THEN
 	          	!<DD 29-08-2010> Define energy and lambda variables
 	            !Define energy variable 
-	            istatus = nf90_def_var (ncid, "energy", netcdf_real, (/ egridid /), energy_id)
+              !EGH energy value now depends on species 
+	            istatus = nf90_def_var (ncid, "energy", netcdf_real, (/ egridid,nspecid  /), energy_id)
 	
 	            !Check variable created successfully
 	            IF (istatus /= NF90_NOERR) THEN
