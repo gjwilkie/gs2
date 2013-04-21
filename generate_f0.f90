@@ -7,8 +7,13 @@
 !! it will return either a Maxwellian or some other analytic
 !! function or a solution for F_0 returned from an external
 !! solver. 
+!!
+!! This is free software released under the GPLv3
+!! Written by
+!!    Edmund Highcock (edmundhighcock@sourceforge.net)
+!!  
 
-module generate_f0
+module general_f0
 
 
   !> Takes in the gridpoints in energy, as calculated 
@@ -20,13 +25,58 @@ module generate_f0
   !> Initialises the module, chiefly reading the parameters.
   !! NB does not allocate arrays, as negrid must be provided
   !! by the egrid module.
-  public :: init_generate_f0
+  public :: init_general_f0
 
   !> Deallocate arrays and close output files. 
-  public :: finish_generate_f0
+  public :: finish_general_f0
 
+  !> Grid of f0 as function of energy and species
   public :: f0_grid
   real, dimension (:,:), allocatable :: f0_grid
+
+  !> Grid of generalised temperature 
+  !! = -1/T^*_sN d(F_s/d energy_s)_N
+  !! = - T_r/T^*_s d(F_s/d energy_s) T*_s/F_s  
+  !! (where T*_s is just temperature for Maxwellian species)
+  !!  as function of energy and species.
+  !! For Maxwellian species this quantity is just equal to T_r/T_s
+  !! For alphas, T^*_s = E_alpha, the injection energy
+  !! and this grid is calculated in this module
+
+  public :: generalised_temperature
+  real, dimension (:,:), allocatable :: generalised_temperature
+
+  ! These arrays below replace the species quantites of the same name
+
+  !> Equal to sqrt(generalised_temperature/mass) as a 
+  !! function of energy and species
+  public :: stm
+  real, dimension (:,:), allocatable :: stm
+
+  !> Equal to Z/sqrt(generalised_temperature/mass) as a 
+  !! function of energy and species
+  public :: zstm
+  real, dimension (:,:), allocatable :: zstm
+
+  !> Equal to generalised_temperature/Z as a 
+  !! function of energy and species
+  public :: tz
+  real, dimension (:,:), allocatable :: tz
+
+  !> Equal to Z/generalised_temperature as a 
+  !! function of energy and species
+  public :: zt
+  real, dimension (:,:), allocatable :: zt
+
+  !> Equal to abs(sqrt(generalised_temperature/mass)/Z) as a 
+  !! function of energy and species
+  public :: smz
+  real, dimension (:,:), allocatable :: smz
+
+  !> Arrays are initially only calculated from proc0 as 
+  !! calculate_f0_grids is called from setvgrid. Later
+  !! this function is called to put them on all procs
+  public :: broadcast_arrays
 
   private
 
@@ -46,7 +96,9 @@ module generate_f0
   
   integer :: negrid
 
-  real, dimension(:), allocatable :: egrid
+  real, dimension(:,:), allocatable :: egrid
+
+  real, dimension(:), allocatable :: egrid_maxwell
 
 contains
 
@@ -56,7 +108,7 @@ contains
 !! This subsection contains routines for initializing/finalizing 
 !! the module and reading parameters. 
 
-  subroutine init_generate_f0
+  subroutine init_general_f0
     use file_utils, only: open_output_file
     use mp, only: proc0
     logical, save :: initialized = .false.
@@ -69,18 +121,18 @@ contains
     call read_parameters
 
 
-    if (proc0) call open_output_file(gen_f0_output_file, ".generate_f0")
+    if (proc0) call open_output_file(gen_f0_output_file, ".general_f0")
       
 
-  end subroutine init_generate_f0
+  end subroutine init_general_f0
 
 
 
-  subroutine finish_generate_f0
+  subroutine finish_general_f0
     use file_utils, only: close_output_file
 
     call close_output_file(gen_f0_output_file)
-  end subroutine finish_generate_f0
+  end subroutine finish_general_f0
   
 
 
@@ -99,7 +151,7 @@ contains
             text_option('analytic', beam_f0_analytic), &
             text_option('external', beam_f0_external) /)
     character(20) :: beam_f0
-    namelist /generate_f0_parameters/ &
+    namelist /general_f0_parameters/ &
             alpha_f0, &
             beam_f0
 
@@ -111,16 +163,16 @@ contains
        alpha_f0 = 'maxwellian'
        beam_f0 = 'maxwellian'
 
-       in_file = input_unit_exist ("generate_f0_parameters", exist)
-       if (exist) read (unit=in_file, nml=generate_f0_parameters)
+       in_file = input_unit_exist ("general_f0_parameters", exist)
+       if (exist) read (unit=in_file, nml=general_f0_parameters)
 
        ierr = error_unit()
        call get_option_value &
             (alpha_f0, alpha_f0_opts, alpha_f0_switch, &
-            ierr, "alpha_f0 in generate_f0_parameters")
+            ierr, "alpha_f0 in general_f0_parameters")
        call get_option_value &
             (beam_f0, beam_f0_opts, beam_f0_switch, &
-            ierr, "beam_f0 in generate_f0_parameters")
+            ierr, "beam_f0 in general_f0_parameters")
 
     end if
 
@@ -139,12 +191,12 @@ contains
     use species, only: nspec, spec
     use species, only: ion_species, electron_species, alpha_species
     use species, only: beam_species
-    real, dimension(:), intent(in) :: epoints
+    real, dimension(:,:), intent(inout) :: epoints
     integer :: is
     negrid = size(epoints)
-    allocate(egrid(negrid))
+    call allocate_arrays
     egrid = epoints
-    allocate (f0_grid(negrid,nspec))
+    egrid_maxwell(:) = epoints(:,1)
     do is = 1,nspec
       select case (spec(is)%type)
       case (ion_species)
@@ -163,8 +215,40 @@ contains
         end select
       end select
     end do
+    epoints = egrid
     
   end subroutine calculate_f0_grids
+
+  subroutine allocate_arrays
+    use species, only: nspec
+
+    allocate(egrid(negrid,nspec))
+    allocate(egrid_maxwell(negrid))
+    allocate(f0_grid(negrid,nspec))
+    allocate(generalised_temperature(negrid,nspec))
+    allocate(stm(negrid,nspec))
+    allocate(zstm(negrid,nspec))
+    allocate(zt(negrid,nspec))
+    allocate(tz(negrid,nspec))
+    allocate(smz(negrid,nspec))
+
+  end subroutine allocate_arrays
+
+  subroutine broadcast_arrays
+    use mp, only: proc0, broadcast
+    
+    call broadcast(negrid)
+    if (.not. proc0) call allocate_arrays
+    call broadcast(egrid)
+    call broadcast(egrid_maxwell)
+    call broadcast(f0_grid)
+    call broadcast(generalised_temperature)
+    call broadcast(stm)
+    call broadcast(zstm)
+    call broadcast(zt)
+    call broadcast(tz)
+    call broadcast(smz)
+  end subroutine broadcast_arrays
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !! Maxwellian
@@ -174,10 +258,16 @@ contains
 
 
   subroutine calculate_f0_grids_maxwellian(is)
+    use species, only: spec
     integer, intent(in) :: is
-    f0_grid(is, :) = exp(-egrid)
+    !integer :: ie
+    egrid(:,is) = egrid_maxwell(:)
+    f0_grid(:, is) = exp(-egrid(:,is))
+    !do ie = 1,negrid
+      generalised_temperature(:,is) = spec(is)%temp
+    !end do
   end subroutine calculate_f0_grids_maxwellian
 
 
 
-end module generate_f0
+end module general_f0

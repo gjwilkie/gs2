@@ -799,7 +799,8 @@ contains
     status = nf90_put_att (ncid, aky_id, 'long_name', 'ky rho')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, aky_id, att='long_name')
 
-    status = nf90_def_var (ncid, 'egrid', netcdf_real, negrid_dim, egrid_id)
+    ! EGH Energy is now a function of species
+    status = nf90_def_var (ncid, 'egrid', netcdf_real, (/negrid_dim, nspec_dim/), egrid_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='egrid')
     status = nf90_def_var (ncid, 'lambda', netcdf_real, nlambda_dim, lambda_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='lambda')

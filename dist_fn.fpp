@@ -877,14 +877,14 @@ subroutine check_dist_fn(report_unit)
           ik=ik_idx(g_lo,iglo)
           is=is_idx(g_lo,iglo)
           if ( jend(ig) > 0 .and. jend(ig) <= nlambda .and. il >= ng2+1 .and. il <= jend(ig)) then
-             wdrift(ig,1,iglo) = wdrift_func(ig, il, ie, it, ik)*tpdriftknob
+             wdrift(ig,1,iglo) = wdrift_func(ig, il, ie, it, ik, is)*tpdriftknob
 #ifdef LOWFLOW
              wcurv(ig,iglo) = wcurv_func(ig, it, ik)*tpdriftknob
 #endif
 !CMR:  multiply trapped particle drift by tpdriftknob 
 !CMR:               (tpdriftknob defaults to driftknob if not supplied)
           else
-             wdrift(ig,1,iglo) = wdrift_func(ig, il, ie, it, ik)*driftknob
+             wdrift(ig,1,iglo) = wdrift_func(ig, il, ie, it, ik, is)*driftknob
 #ifdef LOWFLOW
              wcurv(ig,iglo) = wcurv_func(ig, it, ik)*driftknob
 #endif
@@ -908,7 +908,7 @@ subroutine check_dist_fn(report_unit)
                       if (forbid(ig, il)) exit
 !GWH+JAB: should this be calculated only at ittp? or for each totally trapped pitch angle? (Orig logic: there was only one totally trapped pitch angle; now multiple ttp are allowed.
                       wdriftttp(ig,it,ik,ie,is,1) &
-                           = wdrift_func(ig,ittp(ig),ie,it,ik)*tpdriftknob
+                           = wdrift_func(ig,ittp(ig),ie,it,ik,is)*tpdriftknob
 !CMR:  totally trapped particle drifts also scaled by tpdriftknob 
                       ! add Coriolis drift to magnetic drifts
                       wdriftttp(ig,it,ik,ie,is,2) = wdriftttp(ig,it,ik,ie,is,1) &
@@ -938,7 +938,7 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine init_wdrift
 
-  function wdrift_func (ig, il, ie, it, ik)
+  function wdrift_func (ig, il, ie, it, ik, is)
     use theta_grid, only: bmag, gbdrift, gbdrift0, cvdrift, cvdrift0
     use theta_grid, only: shat
     use kt_grids, only: aky, theta0, akx
@@ -947,19 +947,19 @@ subroutine check_dist_fn(report_unit)
     use gs2_time, only: code_dt
     implicit none
     real :: wdrift_func
-    integer, intent (in) :: ig, ik, it, il, ie
+    integer, intent (in) :: ig, ik, it, il, ie,is
 
     ! note that wunits=aky/2 (for wstar_units=F)
     if (aky(ik) == 0.0) then
        wdrift_func = akx(it)/shat &
-                    *(cvdrift0(ig)*energy(ie)*(1.0 - al(il)*bmag(ig)) &
-                      + gbdrift0(ig)*0.5*energy(ie)*al(il)*bmag(ig)) &
+                    *(cvdrift0(ig)*energy(ie,is)*(1.0 - al(il)*bmag(ig)) &
+                      + gbdrift0(ig)*0.5*energy(ie,is)*al(il)*bmag(ig)) &
                      *code_dt/2.0
     else
        wdrift_func = ((cvdrift(ig) + theta0(it,ik)*cvdrift0(ig)) &
-                        *energy(ie)*(1.0 - al(il)*bmag(ig)) &
+                        *energy(ie,is)*(1.0 - al(il)*bmag(ig)) &
                       + (gbdrift(ig) + theta0(it,ik)*gbdrift0(ig)) &
-                        *0.5*energy(ie)*al(il)*bmag(ig)) &
+                        *0.5*energy(ie,is)*al(il)*bmag(ig)) &
                      *code_dt*wunits(ik)
     end if
   end function wdrift_func
@@ -999,10 +999,10 @@ subroutine check_dist_fn(report_unit)
     integer, intent (in) :: ig, ik, it, il, ie, is
 
     if (aky(ik) == 0.0) then
-       wcoriolis_func = mach*sqrt(max(energy(ie)*(1.0-al(il)*bmag(ig)),0.0)) &
+       wcoriolis_func = mach*sqrt(max(energy(ie,is)*(1.0-al(il)*bmag(ig)),0.0)) &
             * cdrift0(ig) * code_dt * akx(it)/(2.*shat*spec(is)%stm)
     else
-       wcoriolis_func = mach*sqrt(max(energy(ie)*(1.0-al(il)*bmag(ig)),0.0)) &
+       wcoriolis_func = mach*sqrt(max(energy(ie,is)*(1.0-al(il)*bmag(ig)),0.0)) &
             * (cdrift(ig) + theta0(it,ik)*cdrift0(ig))*code_dt*wunits(ik)/spec(is)%stm
     end if
 
@@ -1030,7 +1030,7 @@ subroutine check_dist_fn(report_unit)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        al1 = al(il_idx(g_lo,iglo))
-       e1 = energy(ie_idx(g_lo,iglo))
+       e1 = energy(ie_idx(g_lo,iglo),is_idx(g_lo,iglo))
 
        vpa(:,1,iglo) = sqrt(e1*max(0.0, 1.0 - al1*bmag))
        vpa(:,2,iglo) = - vpa(:,1,iglo)
@@ -1100,7 +1100,7 @@ subroutine check_dist_fn(report_unit)
        do ie = 1, negrid
           do ik = 1, naky
              wstar(ik,ie,is) = code_dt*wunits(ik) &
-                  *(spec(is)%fprim+spec(is)%tprim*(energy(ie)-1.5))
+                  *(spec(is)%fprim+spec(is)%tprim*(energy(ie,is)-1.5))
           end do
        end do
     end do
@@ -1138,7 +1138,7 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do ig = -ntgrid, ntgrid
-          arg = spec(is)%smz*sqrt(energy(ie)*al(il)/bmag(ig)*kperp2(ig,it,ik))
+          arg = spec(is)%smz*sqrt(energy(ie,is)*al(il)/bmag(ig)*kperp2(ig,it,ik))
           aj0(ig,iglo) = j0(arg)
 ! CMR 17/1/06: BEWARE, j1 returns and aj1 stores J_1(x)/x (NOT J_1(x)), 
           aj1(ig,iglo) = j1(arg)
@@ -3066,7 +3066,7 @@ subroutine check_dist_fn(report_unit)
          do i_e = 1, negrid
             do i_s = 1, nspec
                ufac(i_e, i_s) = (2.0*spec(i_s)%uprim &
-                    + spec(i_s)%uprim2*energy(i_e)**(1.5)*sqrt(pi)/4.0)
+                    + spec(i_s)%uprim2*energy(i_e,i_s)**(1.5)*sqrt(pi)/4.0)
             end do
          end do
       endif
@@ -3836,7 +3836,7 @@ subroutine check_dist_fn(report_unit)
 !    ie multiply by (n_s T_s spec(is)%stm) n_ref T_ref vt_ref to get abs qparflux
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
-          g0(:,isgn,iglo) = vpa(:,isgn,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)*energy(ie_idx(g_lo,iglo))
+          g0(:,isgn,iglo) = vpa(:,isgn,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)*energy(ie_idx(g_lo,iglo),is_idx(g_lo,iglo))
        end do
     end do 
     call integrate_moment (g0, qparflux)
@@ -3857,7 +3857,7 @@ subroutine check_dist_fn(report_unit)
 ! NB QPPERPJ1 is normalised to (n_s T_s^2/q_s)  n_ref  T_ref^2/q_ref
 !    ie multiply by (n_s T_s spec(is)%tz) n_ref T_ref^2/q_ref to get abs QPPERPJ1
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo))
+       g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo),is_idx(g_lo,iglo))
     end do
     call integrate_moment (g0, qpperpj1)
 
@@ -4409,7 +4409,7 @@ subroutine check_dist_fn(report_unit)
        call get_flux (phi, pflux, dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo))
+          g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo),is_idx(g_lo,iglo))
        end do
        call get_flux (phi, qflux(:,:,:,1), dnorm)
 
@@ -4462,7 +4462,7 @@ subroutine check_dist_fn(report_unit)
        call get_flux (apar, pmflux, dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo))
+          g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo),is_idx(g_lo,iglo))
        end do
        call get_flux (apar, qmflux(:,:,:,1), dnorm)
        
@@ -4514,7 +4514,7 @@ subroutine check_dist_fn(report_unit)
        call get_flux (bpar, pbflux, dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo))
+          g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo),is_idx(g_lo,iglo))
        end do
        call get_flux (bpar, qbflux(:,:,:,1), dnorm)
 
@@ -4639,7 +4639,7 @@ subroutine check_dist_fn(report_unit)
           do isgn = 1, 2
              ! get v_magnetic piece of g0 at grid points instead of cell centers
              do ig = -ntgrid, ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig,il,ie,it,ik)/code_dt &
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig,il,ie,it,ik,is)/code_dt &
                      * gnew(ig,isgn,iglo)*spec(is)%tz)
              end do
              ! get v_magnetic piece of g0 at cell centers and add in vpar piece at cell centers
@@ -6136,6 +6136,7 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: bmax, bmag
     use gs2_time, only: user_time
     use dist_fn_arrays, only: g, gnew
+    use species, only: nspec
 
     integer :: iglo, ik, it, is
     integer :: ie, il, ig
@@ -6145,16 +6146,17 @@ subroutine check_dist_fn(report_unit)
 !    logical :: first = .true.
     logical, intent(in)  :: last 
 
-    real, dimension (:), allocatable, save :: xpts, ypts
+    real, dimension (:,:), allocatable, save :: xpts
+    real, dimension (:), allocatable, save :: ypts
 
     if (.not. allocated(xpts)) then
-       allocate(xpts(negrid))
+       allocate(xpts(negrid,nspec))
        allocate(ypts(nlambda))
 
     ! should really just get rid of xpts and ypts
 !    if (first) then
-       xpts(1:negrid-1) = zeroes
-       xpts(negrid) = x0
+       xpts(1:negrid-1,:) = zeroes(1:negrid-1,:)
+       xpts(negrid,:) = x0(:)
 !       xpts = 0.0
        ypts = 0.0
        ! change argument of bmag depending on which theta you want to write out
@@ -6190,10 +6192,10 @@ subroutine check_dist_fn(report_unit)
        endif
        if (proc0) then
           if (.not. forbid(ig,il)) then
-             vpa = sqrt(energy(ie)*max(0.0, 1.0-al(il)*bmag(ig)))
-             vpe = sqrt(energy(ie)*al(il)*bmag(ig))
-             write (unit, "(8(1x,e12.6))") vpa, vpe, energy(ie), al(il), &
-                  xpts(ie), ypts(il), real(gtmp(1)), real(gtmp(2))
+             vpa = sqrt(energy(ie,is)*max(0.0, 1.0-al(il)*bmag(ig)))
+             vpe = sqrt(energy(ie,is)*al(il)*bmag(ig))
+             write (unit, "(8(1x,e12.6))") vpa, vpe, energy(ie,is), al(il), &
+                  xpts(ie,is), ypts(il), real(gtmp(1)), real(gtmp(2))
           end if
        end if
     end do
@@ -6301,7 +6303,7 @@ subroutine check_dist_fn(report_unit)
                 end if
                 
                 if (proc0) then
-                   write (unit, "(6(1x,e12.6))") energy(ie), al(il), &
+                   write (unit, "(6(1x,e12.6))") energy(ie,is), al(il), &
                         agp0(1), agp0(2), agp0zf(1), agp0zf(2)
                 end if
              end if
@@ -6336,7 +6338,7 @@ subroutine check_dist_fn(report_unit)
                 end if
                 
                 if (proc0) then
-                   write (unit, "(4(1x,e12.6),i8)") energy(ie), al(il), &
+                   write (unit, "(4(1x,e12.6),i8)") energy(ie,is), al(il), &
                         gp0, gp0zf, isign
                 end if
              end if
@@ -6907,7 +6909,7 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: theta, ntgrid, delthet, gradpar, bmag
     use theta_grid, only: gds23, gds24, gds24_noq, cvdrift_th, gbdrift_th
     use theta_grid, only: drhodpsi, qval, shat
-    use le_grids, only: energy, al, negrid, nlambda, forbid, init_map
+    use le_grids, only: energy => energy_maxwell, al, negrid, nlambda, forbid, init_map
     use le_grids, only: get_flux_vs_theta_vs_vpa
     use kt_grids, only: theta0, ntheta0, naky, aky, akx
     use gs2_time, only: code_dt

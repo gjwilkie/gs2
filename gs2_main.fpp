@@ -52,6 +52,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
+    use general_f0, only: init_general_f0
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
     use gs2_time, only: update_time, write_dt, init_tstart
@@ -145,6 +146,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        call broadcast (cbuff)
        if (.not. proc0) run_name => cbuff
        call init_parameter_scan
+       call init_general_f0
        call init_fields
        call init_gs2_diagnostics (list, nstep)
        call allocate_target_arrays ! must be after init_gs2_diagnostics
