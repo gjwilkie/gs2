@@ -414,6 +414,9 @@ contains
 
     integer :: iglo, ik, it, is, ig, il, ia, isgn
     
+    !Initialise zero so we can be sure tests are sensible
+    zero = epsilon(0.0)
+
     if (fphi > zero) then
        call load_kx_phi
     else
