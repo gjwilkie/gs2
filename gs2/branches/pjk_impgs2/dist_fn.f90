@@ -3316,7 +3316,7 @@ contains
     !  Local variables
 
     integer :: ik, it
-    real, dimension (-ntgrid:ntgrid) :: denominator
+    complex, dimension (-ntgrid:ntgrid) :: denominator
     complex, dimension (-ntgrid:ntgrid) :: numerator
     real, dimension(-ntgrid:ntgrid) :: bob2
 
@@ -3470,9 +3470,9 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1,2
           do ig = -ntgrid, ntgrid
-             adj = (-fapar) * &
-                  anon(ie,is)*spec(is)%z*vpa(ig,isgn,iglo)*aj0(ig,iglo)*apar(ig,it,ik) &
-                  /spec(is)%temp
+             adj = (fapar) * &
+                  anon(ie,is)*spec(is)%z*vpa(ig,isgn,iglo)*spec(is)%stm &
+                  *aj0(ig,iglo)*apar(ig,it,ik) / spec(is)%temp
              g(ig,isgn,iglo) = g(ig,isgn,iglo) + adj
           end do
        end do
@@ -3660,8 +3660,9 @@ contains
       !  (2) Centre differencing removed from phi_p and apar_p, to fix grid offset error
       !  (3) phi_m deleted; removes CMR's term II (= fluxfn term, moved to LHS)
       !  (4) apar_m deleted; removes CMR's term I
-      !  (5) vpa used instead of vpar
-      !  (6) source has three dimensions, not just ig (similarly fluxfn)
+      !  (5) (-apar_p*...) term added to -zi*(wdrift+wcoriolis) multiplier (CMR's term III)
+      !  (6) vpa used instead of vpac
+      !  (7) source has three dimensions, not just ig (similarly fluxfn)
 
       do ig = -ntgrid, ntgrid-1
          phi_p = 2.0*phigavg(ig)
