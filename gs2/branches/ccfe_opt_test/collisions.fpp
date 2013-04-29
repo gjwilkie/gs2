@@ -1,5 +1,4 @@
 # include "define.inc"
-
 ! lowflow terms include higher-order corrections to GK equation
 ! such as parallel nonlinearity that require derivatives in v-space.
 ! most efficient way to take these derivatives is to go from g_lo to le_lo,
@@ -37,7 +36,6 @@ module collisions
   private
 
   ! knobs
-
   logical :: const_v, conserve_moments
   logical :: conservative, resistivity
   integer :: collision_model_switch
@@ -177,9 +175,7 @@ contains
     use le_grids, only: init_le_grids, nlambda, negrid , init_map
     use run_parameters, only: init_run_parameters
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
-
     implicit none
-
     logical :: use_lz_layout = .false.
     logical :: use_e_layout = .false.
     logical :: use_le_layout = .false.
@@ -213,7 +209,6 @@ contains
 # endif
     call init_map (use_lz_layout, use_e_layout, use_le_layout, test)
     call init_arrays
-
   end subroutine init_collisions
 
   subroutine read_parameters
@@ -2463,7 +2458,6 @@ contains
 
     complex, dimension (:,:,le_lo%llim_proc:) :: gle
     integer, optional, intent (in) :: diagnostics
-
     integer :: ig, it, ik, il, ie, is, ile, ixi, isgn
 
     ! TMP FOR TESTING -- MAB
@@ -2560,7 +2554,7 @@ contains
                         vnmult(1)*spec(is)%vnewk*code_dt &
                         * kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0le(ixi,ie,ile) &
                         / (beta*spec(is)%stm*energy(ie)) &
-                        * sgn(isgn)*sqrt(1.0-al(il)*bmag(ig))
+                        * sgn(isgn)*sqrt(MAX(1.0-al(il)*bmag(ig),0.0))
                    ! probably need 1/(spec(is_ion)%z*spec(is_ion)%dens) above
                 end do
              end do
@@ -2581,7 +2575,6 @@ contains
        if (conserve_moments) call conserve_diffuse (gle)
 
     end select
-   
   end subroutine solfp1
 # endif
 
