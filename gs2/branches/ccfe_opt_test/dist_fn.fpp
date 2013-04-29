@@ -3689,6 +3689,7 @@ subroutine check_dist_fn(report_unit)
     call prof_leaving ("invert_rhs", "dist_fn")
   end subroutine invert_rhs
 
+!<DD>
   subroutine getan (antot, antota, antotp)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
     use dist_fn_arrays, only: kperp2
@@ -3706,7 +3707,12 @@ subroutine check_dist_fn(report_unit)
 
     call prof_entering ("getan", "dist_fn")
 
-    antot=0. ; antota=0. ; antotp=0.
+!<DD>
+!Don't do this as integrate_species_subgather4 will fill in all values
+!    antot=0. ; antota=0. ; antotp=0.
+!Need to set individual arrays to zero if not using integrate_species for
+!that field. (NOTE this probably isn't actually needed as we shouldn't
+!use the various antots if we're not calculating/using the related field).
 
     if (fphi > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -3722,7 +3728,10 @@ subroutine check_dist_fn(report_unit)
 
 !    if (kfilter > epsilon(0.0)) call par_filter(antot)
        if (afilter > epsilon(0.0)) antot = antot * exp(-afilter**4*kperp2**2/4.)
-
+!<DD>
+    else
+       antot=0.
+!</DD>
     end if
 
     if (fapar > epsilon(0.0)) then
@@ -3737,7 +3746,10 @@ subroutine check_dist_fn(report_unit)
        wgt = 2.0*beta*spec%z*spec%dens*sqrt(spec%temp/spec%mass)
        call integrate_species (g0, wgt, antota)
 !    if (kfilter > epsilon(0.0)) call par_filter(antota)
-
+!<DD>
+    else
+       antota=0.
+!</DD>
     end if
 
     if (fbpar > epsilon(0.0)) then
@@ -3751,10 +3763,14 @@ subroutine check_dist_fn(report_unit)
        wgt = spec%temp*spec%dens
        call integrate_species (g0, wgt, antotp)
 !    if (kfilter > epsilon(0.0)) call par_filter(antotp)
-
+!<DD>
+    else
+       antotp=0.
+!</DD>
     end if
     call prof_leaving ("getan", "dist_fn")
   end subroutine getan
+!</DD>
 
   subroutine getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew, g_adjust
@@ -4283,12 +4299,12 @@ subroutine check_dist_fn(report_unit)
     allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
     allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
     allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
-
+    
     call getan (antot, antota, antotp)
     call getfieldeq1 (phi, apar, bpar, antot, antota, antotp, &
          fieldeq, fieldeqa, fieldeqp)
-
     deallocate (antot, antota, antotp)
+
   end subroutine getfieldeq
   
 ! MAB> ported from agk
@@ -4312,8 +4328,11 @@ subroutine check_dist_fn(report_unit)
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: numerator
     real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: bmagsp
 
+!<DD>Don't need the following initialisations as fields are filled exactly below and
+!antots are initialised within getan
     phi=0. ; apar=0. ; bpar=0.
     antot=0.0 ; antota=0.0 ; antotp=0.0
+
 !CMR, 1/8/2011:  bmagsp is 3D array containing bmag
     bmagsp=spread(spread(bmag,2,ntheta0),3,naky)
     call getan (antot, antota, antotp)

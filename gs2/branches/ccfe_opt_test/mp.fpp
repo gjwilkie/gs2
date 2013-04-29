@@ -40,10 +40,15 @@ module mp
   public :: all_to_group, group_to_all
   public :: trin_flag
 ! <MAB
+!<DD> added
   public :: split
   public :: waitall
   public :: nbsend
   public :: nbrecv
+  public :: nproc_comm
+  public :: rank_comm
+  public :: allgatherv
+!</DD>
   public :: init_jobs
   public :: mp_comm
   public :: mp_info
@@ -90,14 +95,31 @@ module mp
      
 !<DD>
   interface nbsend
+     module procedure nbsend_real_array
+     module procedure nbsend_real_array_count
      module procedure nbsend_complex_array
      module procedure nbsend_complex_array_count
   end interface
 
 !<DD>
   interface nbrecv
+     module procedure nbrecv_real_array
+     module procedure nbrecv_real_array_count
      module procedure nbrecv_complex_array
      module procedure nbrecv_complex_array_count
+  end interface
+
+!<DD>
+  interface split
+     module procedure split_nokey
+     module procedure split_key
+  end interface
+!<DD>
+  interface allgatherv
+     module procedure allgatherv_complex_array_1to1
+     module procedure allgatherv_complex_array_1to3
+     module procedure allgatherv_complex_array_1to1_sub
+     module procedure allgatherv_complex_array_1to3_sub
   end interface
 
   interface broadcast
@@ -341,6 +363,30 @@ contains
 
   end subroutine init_mp
 
+!<DD>How many procs in passed communicator
+  subroutine nproc_comm(comm,nproc)
+    integer, intent(in) :: comm
+    integer, intent(out) :: nproc
+#ifdef MPI
+    integer :: ierror
+    call mpi_comm_size(comm,nproc,ierror)
+#else
+    nproc=1
+#endif
+  end subroutine nproc_comm
+
+!<DD>What's rank of proc in passed communicator
+  subroutine rank_comm(comm,rank)
+    integer, intent(in) :: comm
+    integer, intent(out) :: rank
+#ifdef MPI
+    integer :: ierror
+    call mpi_comm_rank(comm,rank,ierror)
+#else
+    rank=0
+#endif
+  end subroutine rank_comm
+
   subroutine scope (focus)
 
     integer, intent (in) :: focus
@@ -370,12 +416,83 @@ contains
 # endif
   end subroutine finish_mp
 
+! ************** allgathers *****************************
+  subroutine allgatherv_complex_array_1to1(arr,count,out,recvcnts,displs)
+    !<DD>A subroutine to do a allgatherv operation, sending recvcnts(iproc)
+    !data from the iproc'th processor to all others starting at arr(start).
+    implicit none
+    complex, dimension(:), intent(in) :: arr  !The data to gather
+    integer, intent(in) :: count !How much data to gather, <=SIZE(arr)
+    complex, dimension(:), intent(out) :: out !The gathered data
+    integer, dimension(:), intent(in) :: recvcnts !Array detailing how much data to expect from each proc
+    integer, dimension(:), intent(in) :: displs !Array detailing offset in array where gathered data is to be stored
+# ifdef MPI
+    integer :: ierror
+    !Do the gather
+    call mpi_allgatherv(arr,count,mpicmplx,out,recvcnts,displs,&
+         mpicmplx,mp_comm,ierror)
+#endif
+  end subroutine allgatherv_complex_array_1to1
+
+  subroutine allgatherv_complex_array_1to3(arr,count,out,recvcnts,displs)
+    !<DD>A subroutine to do a allgatherv operation, sending recvcnts(iproc)
+    !data from the iproc'th processor to all others starting at arr(start).
+    implicit none
+    complex, dimension(:), intent(in) :: arr  !The data to gather
+    integer, intent(in) :: count !How much data to gather, <=SIZE(arr)
+    complex, dimension(:,:,:), intent(out) :: out !The gathered data
+    integer, dimension(:), intent(in) :: recvcnts !Array detailing how much data to expect from each proc
+    integer, dimension(:), intent(in) :: displs !Array detailing offset in array where gathered data is to be stored
+# ifdef MPI
+    integer :: ierror
+    !Do the gather
+    call mpi_allgatherv(arr,count,mpicmplx,out,recvcnts,displs,&
+         mpicmplx,mp_comm,ierror)
+#endif
+  end subroutine allgatherv_complex_array_1to3
+
+  subroutine allgatherv_complex_array_1to1_sub(arr,count,out,recvcnts,displs,sub_comm)
+    !<DD>A subroutine to do a allgatherv operation, sending recvcnts(iproc)
+    !data from the iproc'th processor to all others starting at arr(start).
+    implicit none
+    complex, dimension(:), intent(in) :: arr  !The data to gather
+    integer, intent(in) :: count !How much data to gather, <=SIZE(arr)
+    complex, dimension(:), intent(out) :: out !The gathered data
+    integer, dimension(:), intent(in) :: recvcnts !Array detailing how much data to expect from each proc
+    integer, dimension(:), intent(in) :: displs !Array detailing offset in array where gathered data is to be stored
+    integer, intent(in) :: sub_comm !Sub-communicator handle
+# ifdef MPI
+    integer :: ierror
+    !Do the gather
+    call mpi_allgatherv(arr,count,mpicmplx,out,recvcnts,displs,&
+         mpicmplx,sub_comm,ierror)
+#endif
+  end subroutine allgatherv_complex_array_1to1_sub
+
+  subroutine allgatherv_complex_array_1to3_sub(arr,count,out,recvcnts,displs,sub_comm)
+    !<DD>A subroutine to do a allgatherv operation, sending recvcnts(iproc)
+    !data from the iproc'th processor to all others starting at arr(start).
+    implicit none
+    complex, dimension(:), intent(in) :: arr  !The data to gather
+    integer, intent(in) :: count !How much data to gather, <=SIZE(arr)
+    complex, dimension(:,:,:), intent(out) :: out !The gathered data
+    integer, dimension(:), intent(in) :: recvcnts !Array detailing how much data to expect from each proc
+    integer, dimension(:), intent(in) :: displs !Array detailing offset in array where gathered data is to be stored
+    integer, intent(in) :: sub_comm !Sub-communicator handle
+# ifdef MPI
+    integer :: ierror
+    !Do the gather
+    call mpi_allgatherv(arr,count,mpicmplx,out,recvcnts,displs,&
+         mpicmplx,sub_comm,ierror)
+#endif
+  end subroutine allgatherv_complex_array_1to3_sub
+
 ! ************** comm utils *****************************
 
 !In future we may wish to make split an interface to allow for
 !user specific keys (to reorder processor ranks) and to specify
 !a different communicator to split
-  subroutine split (col,new_comm)
+  subroutine split_nokey (col,new_comm)
     !<DD>A routine to split the mp_comm communicator into sub-groups
     !based on each procs specific colour "col". The sub communicator's
     !handle is passed back in new_comm
@@ -388,7 +505,22 @@ contains
     !meaning that the rank order is the same in the old and new communicators
     call mpi_comm_split(mp_comm,col,0,new_comm,ierror)
 # endif
-  end subroutine split
+  end subroutine split_nokey
+
+  subroutine split_key (col,key,new_comm)
+    !<DD>A routine to split the mp_comm communicator into sub-groups
+    !based on each procs specific colour "col" and ranked by key. The sub communicator's
+    !handle is passed back in new_comm
+    implicit none
+    integer, intent(in) :: col !Processors colour
+    integer, intent(in) :: key !Processors key, used to determine rank
+    integer, intent(out) :: new_comm !The new sub communicator's handle
+# ifdef MPI
+    integer :: ierror
+    !Split the comm group
+    call mpi_comm_split(mp_comm,col,key,new_comm,ierror)
+# endif
+  end subroutine split_key
 
 ! ************** broadcasts *****************************
 
@@ -1762,6 +1894,35 @@ contains
 ! <MAB
 
 ! ********************* non-blocking sends **********************
+  subroutine nbsend_real_array(z,dest,tag,handle)
+    !<DD>Routine for nonblocking send of z to dest. Use
+    !tag to label message and return handle for later checking.
+    implicit none
+    real, dimension(:), intent(in) :: z
+    integer, intent(in) :: dest
+    integer, intent(in) :: tag
+    integer,intent(out) :: handle
+# ifdef MPI
+    integer :: ierror
+    call mpi_isend(z,size(z),mpireal,dest,tag,mp_comm,handle,ierror)
+# endif
+  end subroutine nbsend_real_array
+
+  subroutine nbsend_real_array_count(z,count,dest,tag,handle)
+    !<DD>Routine for nonblocking send of z (size=count) to dest. Use
+    !tag to label message and return handle for later checking.
+    implicit none
+    real, dimension(:), intent(in) :: z
+    integer, intent(in) :: count
+    integer, intent(in) :: dest
+    integer, intent(in) :: tag
+    integer,intent(out) :: handle
+# ifdef MPI
+    integer :: ierror
+    call mpi_isend(z,count,mpireal,dest,tag,mp_comm,handle,ierror)
+# endif
+  end subroutine nbsend_real_array_count
+
   subroutine nbsend_complex_array(z,dest,tag,handle)
     !<DD>Routine for nonblocking send of z to dest. Use
     !tag to label message and return handle for later checking.
@@ -2036,6 +2197,35 @@ contains
   end subroutine receive_character
 
 ! ********************* non-blocking receives **********************
+  subroutine nbrecv_real_array(z,dest,tag,handle)
+    !<DD>Routine for nonblocking recv of z to dest. Use
+    !tag to label message and return handle for later checking.
+    implicit none
+    real, dimension(:), intent(in) :: z
+    integer, intent(in) :: dest
+    integer, intent(in) :: tag
+    integer,intent(out) :: handle
+# ifdef MPI
+    integer :: ierror
+    call mpi_irecv(z,size(z),mpireal,dest,tag,mp_comm,handle,ierror)
+# endif
+  end subroutine nbrecv_real_array
+
+  subroutine nbrecv_real_array_count(z,count,dest,tag,handle)
+    !<DD>Routine for nonblocking recv of z (size=count) to dest. Use
+    !tag to label message and return handle for later checking.
+    implicit none
+    real, dimension(:), intent(in) :: z
+    integer, intent(in) :: count
+    integer, intent(in) :: dest
+    integer, intent(in) :: tag
+    integer,intent(out) :: handle
+# ifdef MPI
+    integer :: ierror
+    call mpi_irecv(z,count,mpireal,dest,tag,mp_comm,handle,ierror)
+# endif
+  end subroutine nbrecv_real_array_count
+
   subroutine nbrecv_complex_array(z,dest,tag,handle)
     !<DD>Routine for nonblocking recv of z to dest. Use
     !tag to label message and return handle for later checking.

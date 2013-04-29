@@ -414,6 +414,11 @@ contains
 
     integer :: iglo, ik, it, is, ig, il, ia, isgn
     
+    !Define zero
+    zero = epsilon(0.0)
+
+    !Get derivative of EM potential in x direction
+    !/Fourier components
     if (fphi > zero) then
        call load_kx_phi
     else
@@ -423,12 +428,14 @@ contains
     if (fbpar > zero) call load_kx_bpar
     if (fapar  > zero) call load_kx_apar
 
+    !/Fourier transform to real space
     if (accelerated) then
        call transform2 (g1, aba, ia)
     else
        call transform2 (g1, ba)
     end if
     
+    !Calculate terms required to convert g_gs2 to g_wesson
     if (fphi > zero) then
        call load_ky_phi
     else
@@ -437,7 +444,8 @@ contains
     if (fbpar > zero) call load_ky_bpar
     
     ! more generally, there should probably be a factor of anon...
-    
+    !This is basically doing g_adjust to form i*ky*g_wesson (note the factor anon is missing)
+    !/Gives Fourier components of derivative of g_wesson in y direction
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -448,12 +456,16 @@ contains
        end do
     end do
     
+    !/Fourier transform to real space
     if (accelerated) then
        call transform2 (g1, agb, ia)
     else
        call transform2 (g1, gb)
     end if
     
+    !It should be possible to write the following with vector notation
+    !To find max_vel we'd then use MAXVAL rather than MAX
+    !Calculate (d Chi /dx).(d g_wesson/dy)
     if (accelerated) then
        max_vel = 0.
        do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
@@ -478,6 +490,8 @@ contains
 !       max_vel = maxval(abs(ba)*cfly)
     endif
 
+    !Get derivative of EM potential in y direction
+    !/Fourier components
     if (fphi > zero) then
        call load_ky_phi
     else
@@ -487,12 +501,14 @@ contains
     if (fbpar > zero) call load_ky_bpar
     if (fapar  > zero) call load_ky_apar
     
+    !/Fourier transform to real space
     if (accelerated) then
        call transform2 (g1, aba, ia)
     else
        call transform2 (g1, ba)
     end if
     
+    !Calculate terms required to convert g_gs2 to g_wesson
     if (fphi > zero) then
        call load_kx_phi
     else
@@ -502,7 +518,8 @@ contains
     if (fbpar > zero) call load_kx_bpar
     
     ! more generally, there should probably be a factor of anon...
-    
+    !This is basically doing g_adjust to form i*kx*g_wesson (note the factor anon is missing)
+    !/Gives Fourier components of derivative of g_wesson in x direction
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -513,12 +530,16 @@ contains
        end do
     end do
     
+    !/Fourier transform to real space
     if (accelerated) then
        call transform2 (g1, agb, ia)
     else
        call transform2 (g1, gb)
     end if
-    
+
+    !It should be possible to write the following with vector notation
+    !To find max_vel we'd then use MAXVAL rather than MAX   
+    !Calculate (d Chi /dy).(d g_wesson/dx) and subtract from (d Chi /dx).(d g_wesson/dy)
     if (accelerated) then
        do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
           do j = 1, 2
@@ -537,11 +558,25 @@ contains
        end do
     end if
     
+    !NOTE: We can possibly improve the determination of the new cfl time step as follows:
+    ! 1) Work out local dt_cfl
+    ! 2) Check if dt_cfl violates cfl constraint
+    ! 3) Make two sub-comms based on whether procs violate cfl or not
+    ! 4) Count number of procs in sub-comm.
+    ! 5) If on proc which doesn't violate cfl and nproc in sub-comm = global nproc then don't communicate.
+    ! 6) If it does then do a min_allreduce on that sub-comm and broadcast dt_cfl on global (if sub-comm doesn't have all the procs)
+    ! 7) Destroy the sub_comms
+    !This has the downside that dt_cfl is only updated when the cfl condition gets violated.
+    !We could also only check for a change in dt_cfl every n_something timesteps
+
+    !Find the maximum velocity on all procs
     call max_allreduce(max_vel)
     
+    !Calculate corresponding time step
     dt_cfl = 1./max_vel
     call save_dt_cfl (dt_cfl)
     
+    !Transform from real space to Fourier space
     if (accelerated) then
        call inverse2 (abracket, g1, ia)
     else

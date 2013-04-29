@@ -27,6 +27,10 @@ module layouts_type
      integer :: ik_min, ik_max, it_min, it_max, il_min, il_max, ie_min, ie_max, is_min, is_max
      integer :: xyblock_comm !Sub comms for xy blocks (i.e. l-e-s integrals)
      integer :: xysblock_comm !Sub comms for xys blocks (i.e. l-e integrals)
+     integer :: lesblock_comm !Sub comms for les blocks (i.e. x-y integrals)
+     integer,dimension(:,:),allocatable :: les_kxky_range !Used in integrate species, holds start and stop indices for flattened kxky dimension
+     logical :: x_before_y !Information about layout order
+     logical :: x_local, y_local, l_local, e_local, s_local !Used to record if various dimensions are entirely local
   end type g_layout_type
 
   type :: lz_layout_type
@@ -65,6 +69,9 @@ module layouts_type
      integer :: ig_ord, ik_ord, it_ord, is_ord
      integer :: ig_comp, ik_comp, it_comp, is_comp
      integer,dimension(4) :: compound_count
+     integer :: ik_min, it_min, ig_min, is_min 
+     integer :: ik_max, it_max, ig_max, is_max 
+     logical :: x_local, y_local, t_local, s_local !Used to record if various dimensions are entirely local
   end type le_layout_type
 
   type :: p_layout_type

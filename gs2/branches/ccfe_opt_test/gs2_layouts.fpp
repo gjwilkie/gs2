@@ -73,6 +73,10 @@ module gs2_layouts
   public :: opt_redist_init  !Improved redist object creation
   public :: opt_redist_nbk   !Non-blocking redists
   public :: velint_subcom    !Sub communicators for (some) velocity space integrals
+  public :: intspec_subgath  !Sub communicators plus gather for integrate species (also requires velint_subcom)
+  public :: field_subgath  !Gather for getfield (also requires velint_subcom)
+
+!</DD>
 
   logical :: initialized_x_transform = .false.
   logical :: initialized_y_transform = .false.
@@ -82,6 +86,9 @@ module gs2_layouts
   logical :: opt_redist_init
   logical :: opt_redist_nbk
   logical :: velint_subcom
+  logical :: intspec_subgath
+  logical :: field_subgath
+  !</DD>
   logical :: local_field_solve, accel_lxyes, lambda_local, unbalanced_xxf, unbalanced_yxf
   real :: max_unbalanced_xxf, max_unbalanced_yxf
   character (len=5) :: layout
@@ -121,6 +128,7 @@ module gs2_layouts
      integer :: iproc
      integer :: nindex, naky, ntheta0, ntgrid, nfield
      integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
+     integer :: ig_min,ig_max,ifield_min,ifield_max,it_min,it_max,ik_min,ik_max
   end type jf_layout_type
 
   type (jf_layout_type) :: jf_lo
@@ -193,6 +201,7 @@ module gs2_layouts
 
   interface ifield_idx
      module procedure ifield_idx_f
+     module procedure ifield_idx_jf !<DD> Added
   end interface
 
   interface if_idx
@@ -209,6 +218,7 @@ module gs2_layouts
      module procedure ig_idx_xxf
      module procedure ig_idx_yxf
      module procedure ig_idx_f
+     module procedure ig_idx_jf !<DD> Added
   end interface
 
   interface ik_idx
@@ -225,6 +235,7 @@ module gs2_layouts
      module procedure ik_idx_accel
      module procedure ik_idx_accelx
      module procedure ik_idx_parity
+     module procedure ik_idx_f !<DD> Added
   end interface
 
   interface it_idx
@@ -240,6 +251,7 @@ module gs2_layouts
      module procedure it_idx_yxf
      module procedure it_idx_accel
      module procedure it_idx_accelx
+     module procedure it_idx_f !<DD> Added
   end interface
 
   interface il_idx
@@ -365,7 +377,8 @@ contains
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
          max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
-         opt_local_copy, opt_redist_init, velint_subcom, opt_redist_nbk
+         opt_local_copy, opt_redist_init, velint_subcom, opt_redist_nbk, intspec_subgath,&
+         field_subgath
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
@@ -377,6 +390,8 @@ contains
     opt_redist_init = .true. !<DD>For testing, set to false for trunk?
     velint_subcom = .true. !<DD>For testing, set to false for trunk?
     opt_redist_nbk = .true. !<DD>For testing, set to false for trunk?
+    intspec_subgath = .true. !<DD>For testing, set to false for trunk?
+    field_subgath = .true. !<DD>For testing, set to false for trunk?
 
     in_file=input_unit_exist("layouts_knobs", exist)
     if (exist) read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
@@ -386,6 +401,9 @@ contains
        write(6,*) "gs2_layouts: read_parameters finds illegal layout=",layout," =>stop"
        stop
     endif
+
+    !Turn off intspec if not using sub-communicators
+    intspec_subgath=intspec_subgath.and.velint_subcom
 
 ! max_unbalanced_xxf and max_unbalanced_yxf have a maximum range of 0.0 - 1.0
 ! so check here whether the user has specified the range correctly and adjust if 
@@ -416,6 +434,8 @@ contains
     call broadcast (opt_redist_init)
     call broadcast (opt_redist_nbk)
     call broadcast (velint_subcom)
+    call broadcast (intspec_subgath)
+    call broadcast (field_subgath)
     call broadcast (layout)
     call broadcast (local_field_solve)
     call broadcast (unbalanced_xxf)
@@ -597,7 +617,9 @@ contains
   subroutine init_dist_fn_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
     use mp, only: iproc, nproc, proc0
-    use mp, only: split, mp_comm
+    use mp, only: split, mp_comm, nproc_comm, rank_comm
+    use mp, only: sum_allreduce_sub
+use mpi
 ! TT>
     use file_utils, only: error_unit
 ! <TT
@@ -605,7 +627,9 @@ contains
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
 !<DD>
     integer :: iglo,ik,it,il,ie,is,col,ierr,mycol
-    integer :: ik_min,ik_max,it_min,it_max,il_min,il_max,ie_min,ie_max,is_min,is_max
+    integer :: ik_min,ik_max,it_min,it_max,il_min,il_max,ie_min,ie_max,is_min,is_max,ip
+    integer :: nproc_subcomm, rank_subcomm, tmp
+    integer, dimension(:),allocatable :: les_kxky_range
     logical, save :: initialized = .false.
 ! TT>
 # ifdef USE_C_INDEX
@@ -889,10 +913,41 @@ contains
     g_lo%ie_max=ie_max
     g_lo%is_min=is_min
     g_lo%is_max=is_max
+    
+    !Work out if x comes before y in layout
+    do iglo=1,LEN_TRIM(layout)
+       if(layout(iglo:iglo).eq.'x') then
+          g_lo%x_before_y=.true.
+          exit
+       elseif (layout(iglo:iglo).eq.'y') then
+          g_lo%x_before_y=.false.
+          exit
+       endif
+    enddo
+
+    !Store dimension locality
+    g_lo%x_local=(it_min.eq.1).and.(it_max.eq.ntheta0)
+    g_lo%y_local=(ik_min.eq.1).and.(ik_max.eq.naky)
+    g_lo%l_local=(il_min.eq.1).and.(il_max.eq.nlambda)
+    g_lo%e_local=(ie_min.eq.1).and.(ie_max.eq.negrid)
+    g_lo%s_local=(is_min.eq.1).and.(is_max.eq.nspec)
+
+    !Update various flags based on locality
+    !/Don't use subcommunicator and  gather for integrate_species if x and y are entirely local
+    intspec_subgath=intspec_subgath.and.(.not.(g_lo%x_local.and.g_lo%y_local))
 
     !<DD>Now work out which xy block we live in for velocity space comms
     !Set sub communicators to mp_comm if we want to keep collective comms global.
+    !NOTE: We might want to consider using a communicator type so that we can attach
+    !some useful information to the communicators such as number of procs in comm,
+    !this procs rank in comm, if this comm is equivalent to mp_comm (i.e. if split
+    !doesn't actually split the global comm) etc.
+    !This could help reduce the amount of mp(i) calls placed throughout the code
+    !as things like the number of procs and the local rank are useful when using the sub
+    !comms but don't currently have a logical place to be stored and hence tend to be
+    !(re)calculated when needed.
     if(velint_subcom) then
+       !This is for unique xy blocks
        col=1
        mycol=0
        do it=1,ntheta0
@@ -909,7 +964,19 @@ contains
        !<DD>Now split the global communicator
        call split(mycol,g_lo%xyblock_comm)
 
+       !<DD>NOTE: A simple test that all blocks are equal would be:
+       !tmp=it_max*ik_max
+       !call max_allreduce(tmp,g_lo%xyblock_comm)
+       !if(tmp.ne.(it_max*ik_max)) then
+       !   print'(a)',"ERROR: In subcomm g_lo%xyblock_comm"
+       !   print'(a,I0,a)',"Proc with global rank ",iproc," doesn't have the same it*ik extent as other procs in its subcomm"
+       !   call mp_abort("Sub-comm creation error -- Consider changing the number of procs/number of xy gridpoints or setting velint_subcom=.false.")
+       !endif
+       !Similar tests can be done for all subcomms created here
+       !</DD>
+
        !<DD>Now work out which xys block we live in for velocity space comms
+       !This is for unique xys blocks
        col=1
        mycol=0
        do it=1,ntheta0
@@ -927,9 +994,78 @@ contains
 
        !<DD>Now split the global communicator
        call split(mycol,g_lo%xysblock_comm)
+
+       !This is for unique les blocks
+       col=1
+       mycol=0
+       do is=1,nspec
+          do il=1,nlambda
+             do ie=1,negrid
+                !This is inefficient but who cares
+                if(il_min.eq.il.and.ie_min.eq.ie.and.is_min.eq.is) then
+                   mycol=col
+                   exit
+                endif
+                col=col+1
+             enddo
+          enddo
+       enddo
+
+       !Now split
+       call split(mycol,g_lo%lesblock_comm)
     else
        g_lo%xyblock_comm=mp_comm
        g_lo%xysblock_comm=mp_comm
+       g_lo%lesblock_comm=mp_comm
+    endif
+
+    !Now allocate and fill various arrays
+    if(intspec_subgath.and.(.not.allocated(g_lo%les_kxky_range))) then
+       !->Kx-Ky range for procs in lesblock_comm sub comm
+       !Get number of procs in sub-comm
+       call nproc_comm(g_lo%lesblock_comm,nproc_subcomm)
+       !Get rank of proc in sub-comm
+       call rank_comm(g_lo%lesblock_comm,rank_subcomm)
+       !Allocate array | This will store the start and stop indices 
+       !for flattened kxky indices in velocity space independent (e.g. field)
+       !variables
+       allocate(g_lo%les_kxky_range(2,0:nproc_subcomm-1))
+       allocate(les_kxky_range(0:nproc_subcomm*2-1))
+       !Initialise as we do sum_allreduce later
+       !can remove if we use a gather
+       les_kxky_range=0
+       
+       !Now calculate our personal kxky range
+       it_min=it_idx(g_lo,g_lo%llim_proc)
+       it_max=it_idx(g_lo,g_lo%ulim_alloc)
+       ik_min=ik_idx(g_lo,g_lo%llim_proc)
+       ik_max=ik_idx(g_lo,g_lo%ulim_alloc)
+       
+       if(g_lo%x_before_y) then
+          les_kxky_range(rank_subcomm*2)=it_min-1+ntheta0*(ik_min-1)
+          tmp=les_kxky_range(rank_subcomm*2)
+          do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+             tmp=MAX(tmp,it_idx(g_lo,iglo)-1+ntheta0*(ik_idx(g_lo,iglo)-1))
+          enddo
+          les_kxky_range(rank_subcomm*2+1)=tmp
+       else
+          les_kxky_range(rank_subcomm*2)=ik_min-1+naky*(it_min-1)
+          tmp=les_kxky_range(rank_subcomm*2)
+          do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+             tmp=MAX(tmp,ik_idx(g_lo,iglo)-1+naky*(it_idx(g_lo,iglo)-1))
+          enddo
+          les_kxky_range(rank_subcomm*2+1)=tmp
+       endif
+       !Now gather values and store in g_lo, sum_allreduce would also work
+       !    call mpi_allgather(les_kxky_range(rank_subcomm*2:rank_subcomm*2+1),2,MPI_INTEGER,&
+       !         les_kxky_range,2,MPI_INTEGER,g_lo%lesblock_comm)
+       !Should really use gather but this is easier
+       call sum_allreduce_sub(les_kxky_range,g_lo%lesblock_comm)
+       do ip=0,nproc_subcomm-1
+          g_lo%les_kxky_range(:,ip)=les_kxky_range(ip*2:ip*2+1)
+       enddo
+       !Free memory
+       deallocate(les_kxky_range)
     endif
 !</DD>
 
@@ -1635,6 +1771,24 @@ contains
 
   end subroutine init_fields_layouts
 
+!<DD>Added
+  function ik_idx_f (lo, i)
+    implicit none
+    integer :: ik_idx_f
+    type (f_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+    ik_idx_f = lo%ik(im_idx(lo,i),in_idx(lo,i))
+  end function ik_idx_f
+
+!<DD>Added
+  function it_idx_f (lo, i)
+    implicit none
+    integer :: it_idx_f
+    type (f_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+    it_idx_f = lo%it(im_idx(lo,i),in_idx(lo,i))
+  end function it_idx_f
+
   function im_idx_f (lo, i)
     implicit none
     integer :: im_idx_f
@@ -1726,7 +1880,7 @@ contains
     implicit none
     integer, intent (in) :: nfield, nindex, naky, ntheta0, i_class
     logical, save :: initialized = .false.
-
+    integer :: ig,ifield,ik,it,jlo
     if (initialized) return
     initialized = .true.
     
@@ -1742,6 +1896,26 @@ contains
     jf_lo%llim_proc = jf_lo%blocksize*iproc
     jf_lo%ulim_proc = min(jf_lo%ulim_world, jf_lo%llim_proc + jf_lo%blocksize - 1)
     jf_lo%ulim_alloc = max(jf_lo%llim_proc, jf_lo%ulim_proc)
+
+    !Now work out the range of dimensions stored on this proc !<DD>
+    jf_lo%ig_max=-jf_lo%ntgrid-1
+    jf_lo%ig_min=jf_lo%ntgrid+1
+    jf_lo%ifield_max=0
+    jf_lo%ifield_min=nfield+1
+    jf_lo%ik_max=0
+    jf_lo%ik_min=naky+1
+    jf_lo%it_max=0
+    jf_lo%it_min=0
+    do jlo=jf_lo%llim_proc,jf_lo%ulim_alloc
+       jf_lo%ig_max=MAX(jf_lo%ig_max,ig_idx(jf_lo,jlo))
+       jf_lo%ig_min=MIN(jf_lo%ig_min,ig_idx(jf_lo,jlo))
+       jf_lo%ifield_max=MAX(jf_lo%ifield_max,ifield_idx(jf_lo,jlo))
+       jf_lo%ifield_min=MIN(jf_lo%ifield_min,ifield_idx(jf_lo,jlo))
+       jf_lo%ik_max=MAX(jf_lo%ik_max,ik_idx(jf_lo,jlo))
+       jf_lo%ik_min=MIN(jf_lo%ik_min,ik_idx(jf_lo,jlo))
+       jf_lo%it_max=MAX(jf_lo%it_max,it_idx(jf_lo,jlo))
+       jf_lo%it_min=MIN(jf_lo%it_min,it_idx(jf_lo,jlo))
+    enddo
 
     allocate (ij(jf_lo%llim_proc:jf_lo%ulim_alloc))
     allocate (mj(jf_lo%llim_proc:jf_lo%ulim_alloc))
@@ -1766,6 +1940,7 @@ contains
     it_idx_jf = 1 + mod((i - lo%llim_world)/lo%nindex, lo%ntheta0)
   end function it_idx_jf
 
+  !Here if is the compound theta*field index
   function if_idx_jf (lo, i)
     implicit none
     integer :: if_idx_jf
@@ -1773,6 +1948,24 @@ contains
     integer, intent (in) :: i
     if_idx_jf = 1 + mod(i - lo%llim_world, lo%nindex)
   end function if_idx_jf
+
+  !<DD>Added
+  function ig_idx_jf (lo, i)
+    implicit none
+    integer :: ig_idx_jf
+    type (jf_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+    ig_idx_jf = -lo%ntgrid + mod(i - lo%llim_world, lo%ntgrid*2+1)
+  end function ig_idx_jf
+
+  !<DD>Added
+  function ifield_idx_jf (lo, i)
+    implicit none
+    integer :: ifield_idx_jf
+    type (jf_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+    ifield_idx_jf = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid+1), lo%nfield)
+  end function ifield_idx_jf
 
   function idx_jf (lo, if, ik, it)
     implicit none
@@ -1826,6 +2019,9 @@ contains
     use file_utils, only: error_unit
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nspec
+    integer :: ik_min, it_min, ig_min, is_min
+    integer :: ik_max, it_max, ig_max, is_max
+    integer :: ik, it, ig, is, ile
     logical, save :: initialized = .false.
 # ifdef USE_C_INDEX
     integer :: ierr
@@ -1914,6 +2110,37 @@ contains
     le_lo%ik_comp=le_lo%compound_count(le_lo%ik_ord)
     le_lo%it_comp=le_lo%compound_count(le_lo%it_ord)
     le_lo%is_comp=le_lo%compound_count(le_lo%is_ord)
+    !<DD>Work out min and max of the five compound indices
+    !These are currently only used to slice the arrays used in the velocity space integrals
+    !but could well be useful in a number of places.
+    ik_max=0
+    ik_min=naky+1
+    it_max=0
+    it_min=ntheta0+1
+    ig_max=-ntgrid-1
+    ig_min=ntgrid+1
+    is_max=0
+    is_min=nspec+1
+    do ile=le_lo%llim_proc,le_lo%ulim_proc
+       ik=ik_idx(le_lo,ile)
+       it=it_idx(le_lo,ile)
+       ig=ig_idx(le_lo,ile)
+       is=is_idx(le_lo,ile)
+       ik_max=MAX(ik,ik_max)
+       it_max=MAX(it,it_max)
+       ig_max=MAX(ig,ig_max)
+       is_max=MAX(is,is_max)
+       ik_min=MIN(ik,ik_min)
+       it_min=MIN(it,it_min)
+       ig_min=MIN(ig,ig_min)
+       is_min=MIN(is,is_min)
+    enddo
+
+    !Store dimension locality
+    le_lo%x_local=(it_min.eq.1).and.(it_max.eq.ntheta0)
+    le_lo%y_local=(ik_min.eq.1).and.(ik_max.eq.naky)
+    le_lo%t_local=(ig_min.eq.-ntgrid).and.(ig_max.eq.ntgrid)
+    le_lo%s_local=(is_min.eq.1).and.(is_max.eq.nspec)
 !</DD>
 
 # ifdef USE_C_INDEX
