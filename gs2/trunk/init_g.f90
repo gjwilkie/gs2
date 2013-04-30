@@ -1113,31 +1113,27 @@ contains
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, proc_id
     use dist_fn, only: boundary_option_linked, boundary_option_switch
-    use dist_fn, only: boundary_option_self_periodic, boundary_option_zero
     use dist_fn, only: l_links, r_links
-    use dist_fn, only: init_pass_right, pass_right
-    use redistribute, only: fill
+    use dist_fn, only: pass_right, init_pass_ends
+    use redistribute, only: fill, delete_redist
     use ran
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
     real :: a, b
     integer :: iglo, ig, ik, it, il, is, nn
 
-    !integer :: itstart, itend
-
-!CMR: need to document tracer phit parameter   ;-)
+    !CMR: need to document tracer phit parameter   ;-)
     phit = 0.
     do it=2,ntheta0/2+1
        nn = it-1
 ! extra factor of 4 to reduce the high k wiggles for now
        phit (:, it, 1) = (-1)**nn*exp(-8.*(real(nn)/ntheta0)**2)
     end do
+    
+    ! keep old (it, ik) loop order to get old results exactly: 
 
-! keep old (it, ik) loop order to get old results exactly: 
-
-  !write (*,*) "ikx_init is", ikx_init
-
-     do it = 1, ntheta0
+    !Fill phi with random (complex) numbers between -0.5 and 0.5
+    do it = 1, ntheta0
        do ik = 1, naky
           do ig = -ntgrid, ntgrid
              a = ranf()-0.5
@@ -1148,28 +1144,26 @@ contains
 ! clean_init debrutalises influence of chop_side on phi with linked bc
           if (chop_side) then
              if (left) then
-                if (clean_init) then
-                   if (boundary_option_switch .eq. boundary_option_linked) then
-                      if (l_links(ik,it) .lt. r_links(ik,it)) then
-                         phi(:,it,ik) = 0.0 
-                      else if (l_links(ik,it) .eq. r_links(ik,it)) then
-                        phi(:-1,it,ik) = 0.0
-                      endif
-                   else
+                if (clean_init.and.(boundary_option_switch .eq. boundary_option_linked)) then
+                   !Does this tube have more links to the right than the left?
+                   !If so then it's on the left so set to zero
+                   if (l_links(ik,it) .lt. r_links(ik,it)) then
+                      phi(:,it,ik) = 0.0 
+                   !This tube is in the middle so only set the left half to 0
+                   else if (l_links(ik,it) .eq. r_links(ik,it)) then
                       phi(:-1,it,ik) = 0.0
                    endif
                 else
                    phi(:-1,it,ik) = 0.0
                 endif
              else
-                if (clean_init) then
-                   if (boundary_option_switch .eq. boundary_option_linked) then
-                      if (r_links(ik,it) .lt. l_links(ik,it)) then
-                         phi(:,it,ik) = 0.0
-                      else if (l_links(ik,it) .eq. r_links(ik,it)) then
-                         phi(1:,it,ik) = 0.0
-                      endif
-                   else
+                if (clean_init.and.(boundary_option_switch .eq. boundary_option_linked)) then
+                   !Does this tube have more links to the left than the right?
+                   !If so then it's on the right so set to zero
+                   if (r_links(ik,it) .lt. l_links(ik,it)) then
+                      phi(:,it,ik) = 0.0
+                   !This tube is in the middle so only set the right half to 0
+                   else if (l_links(ik,it) .eq. r_links(ik,it)) then
                       phi(1:,it,ik) = 0.0
                    endif
                 else
@@ -1179,56 +1173,85 @@ contains
           end if
        end do
     end do
-
+    
+    !Wipe out all but one kx if requested
     if (ikx_init  > 0) call single_initial_kx(phi)
-
+    
+    !Sort out the zonal/self-periodic modes
     if (naky .ge. 1 .and. aky(1) == 0.0) then
+       !Apply scaling factor
        phi(:,:,1) = phi(:,:,1)*zf_init
+       
+       !Set ky=kx=0.0 mode to zero in amplitude
+       phi(:,1,1) = 0.0
+       
+       !CMR, 25/1/13: clean_init forces periodic zonal flows
        if (clean_init .and. boundary_option_switch.eq.boundary_option_linked) then
-!CMR, 25/1/13: clean_init forces periodic zonal flows
           phi(ntgrid,:,1)=phi(-ntgrid,:,1)
           phit(ntgrid,:,1)=phit(-ntgrid,:,1)
        end if
     end if
-! reality condition for k_theta = 0 component:
+
+    !Apply reality condition (i.e. -kx mode is conjugate of +kx mode)
     if (reality) then
        do it = 1, ntheta0/2
           phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
           phit(:,it+(ntheta0+1)/2,1) = conjg(phit(:,(ntheta0+1)/2+1-it,1))
        enddo
     end if
-
+    
+    !Now set g using data in phi
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+
+       !Handle tracer_species 
        if (spec(is)%type == tracer_species) then          
           g(:,1,iglo) =-phit(:,it,ik)*spec(is)%z*phiinit
        else
           g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit
        end if
+
+       !Make sure there's no g in the forbidden regions
        where (forbid(:,il)) g(:,1,iglo) = 0.0
+     
+       !Set incoming and outgoing boundary conditions
        if ( clean_init .and. boundary_option_switch .eq. boundary_option_linked .and. ik .gt. 1) then
-!CMR: clean_init sets g=0 for incoming particles, 
-!                         and outgoing particles
-!                      as initial condition sets g(:,1,:) = g(:,2,:) )
+          !CMR: clean_init sets g=0 for incoming particles, 
+          !                         and outgoing particles
+          !                      as initial condition sets g(:,1,:) = g(:,2,:) )
+          !If no links to the left then we're at the left boundary
           if ( l_links(ik,it) .eq. 0 ) g(-ntgrid,1,iglo)=0.0
+          !If no links to the right then we're at the right boundary
           if ( r_links(ik,it) .eq. 0 ) g(ntgrid,1,iglo)=0.0
        endif
     end do
 
+    
+    !If clean_init is set and there are any links/connections then make sure repeated points are consistent
     if ( clean_init .and. boundary_option_switch .eq. boundary_option_linked .and. sum(r_links+l_links) .gt. 0 ) then
-!   
-!CMR, 23/1/13:  
-!  clean_init: ensure continuity in || direction with linked bcs
-!  set up redistribute type pass_right 
-!  this passes g(ntgrid,1,iglo) to g(-ntgrid,1,iglo_r) on right neighbour 
-         call init_pass_right
-         gnew(:,1,:)=g(:,1,:)
-         call fill(pass_right,g,gnew)
-         gnew(:,2,:)=gnew(:,1,:)
-         g=gnew
+       !   
+       !CMR, 23/1/13:  
+       !  clean_init: ensure continuity in || direction with linked bcs
+       !  set up redistribute type pass_right 
+       !  this passes g(ntgrid,1,iglo) to g(-ntgrid,1,iglo_r) on right neighbour 
+
+       !Initialise communications object !NOTE This should be moved to dist_fn in future
+       call init_pass_ends(pass_right,'r',1,'c')
+
+       !Pass right boundaries (ntgrid) of g to linked left boundaries (-ntgrid) of g
+       call fill(pass_right,g,g)
+
+       !Deallocate comm object as not used anywhere else !NOTE This will need removing if/when initialisation moved to dist_fn
+       call delete_redist(pass_right)
+
+       !Make leftwards and rightwards particles the same
+       g(:,2,:)=g(:,1,:)
+
+       !Set gnew to be the "fixed" data
+       gnew=g
     else 
 ! finally initialise isign=2
        g(:,2,:) = g(:,1,:)
