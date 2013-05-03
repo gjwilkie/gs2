@@ -156,6 +156,7 @@ module dist_fn
   type (redist_type), save :: wfb_p, wfb_h
   type (redist_type), save :: pass_right
   type (redist_type), save :: pass_left
+  type (redist_type), save :: parity_redist
 
   integer, dimension (:,:), allocatable :: l_links, r_links
   integer, dimension (:,:,:), allocatable :: n_links
@@ -2583,15 +2584,7 @@ subroutine check_dist_fn(report_unit)
 
     !Enforce parity if desired (also performed in invert_rhs, but this is required
     !as collisions etc. may break parity?)
-    if (def_parity) then
-       if (even) then
-          gnew(-ntgrid:-1, 1,:) = gnew( ntgrid: 1:-1,2,:)
-          gnew( 1: ntgrid, 1,:) = gnew(-1:-ntgrid:-1,2,:)
-       else
-          gnew( 1: ntgrid, 1,:) = -gnew(-1:-ntgrid:-1,2,:)
-          gnew(-ntgrid:-1, 1,:) = -gnew( ntgrid: 1:-1,2,:)
-       end if
-    end if
+    if (def_parity) call enforce_parity
        
   end subroutine timeadv
 
@@ -3001,7 +2994,220 @@ subroutine check_dist_fn(report_unit)
        enddo
     end if
   end subroutine exb_shear
-     
+
+  !<DD>Subroutine to setup a redistribute object to be used in enforcing parity
+  subroutine init_enforce_parity
+    use theta_grid, only : ntgrid
+    use gs2_layouts, only : g_lo,proc_id
+    use redistribute, only: index_list_type, init_fill, delete_list
+    use mp, only: iproc, nproc, max_allreduce
+    implicit none
+    integer :: iglo,iglo_conn,ip_conn,ip
+    integer :: ig, ndata, nn_max, n
+    type (index_list_type), dimension(0:nproc-1) :: to, from
+    integer, dimension (0:nproc-1) :: nn_from, nn_to
+    integer, dimension(3) :: from_low, from_high, to_low, to_high
+
+    !If enforced parity not requested then exit
+    if(.not.def_parity)return
+    
+    !If not linked then don't need any setup so exit
+    if(boundary_option_switch.ne.boundary_option_linked)return
+    
+    !NOTE: If we know x is entirely local (g_lo%x_local=.true.) then we
+    !know that we don't need to do any comms so our iglo range can be
+    !limited to what is on this proc. At the moment we don't take 
+    !advantage of this.
+
+    !Use a shorthand for how much data to send per iglo
+    ndata=2*ntgrid+1
+
+    !Count how much data is to be sent/recv to/from different procs
+    !/First initialise counters
+    nn_to =0
+    nn_from=0
+    
+    !/Now loop over iglo to workout what data is to be sent/received
+    do iglo=g_lo%llim_world,g_lo%ulim_world
+
+       !Get proc id of current iglo
+       ip=proc_id(g_lo,iglo)
+
+       !Find connected iglo to which we want to send the data
+       call get_parity_conn(iglo,iglo_conn,ip_conn)
+
+       !Do we have the data to send?
+       if(ip_conn.eq.iproc) nn_to(ip)=nn_to(ip)+ndata
+
+       !Are we going to receive the data?
+       if(ip.eq.iproc) nn_from(ip_conn)=nn_from(ip_conn)+ndata
+
+    enddo
+
+    !Now find the maxmimum amount of data to be sent
+    nn_max=MAXVAL(nn_to) !Local max
+    call max_allreduce(nn_max) !Global max
+
+    !Now define indices of send/receive data
+    if(nn_max.gt.0) then
+       !Create to/from list objects
+       do ip=0,nproc-1
+          if(nn_from(ip)>0)then
+             allocate(from(ip)%first(nn_from(ip)))
+             allocate(from(ip)%second(nn_from(ip)))
+             allocate(from(ip)%third(nn_from(ip)))
+          endif
+          if(nn_to(ip)>0)then
+             allocate(to(ip)%first(nn_to(ip)))
+             allocate(to(ip)%second(nn_to(ip)))
+             allocate(to(ip)%third(nn_to(ip)))
+          endif
+       enddo
+
+       !Now fill in the lists
+       nn_from=0
+       nn_to=0
+
+       !Loop over all iglo again (this doesn't scale)
+       do iglo=g_lo%llim_world, g_lo%ulim_world
+          !Get proc for this iglo
+          ip=proc_id(g_lo,iglo)
+
+          !Get connected point
+          call get_parity_conn(iglo,iglo_conn,ip_conn)
+
+          !If we're receiving data where do we put it?
+          if(ip.eq.iproc)then
+             do ig=-ntgrid,ntgrid !Optimised for data send
+                n=nn_from(ip_conn)+1
+                nn_from(ip_conn)=n
+                from(ip_conn)%first(n)=0-ig
+                from(ip_conn)%second(n)=1
+                from(ip_conn)%third(n)=iglo
+             enddo
+          endif
+
+          !If we're sending data where do we get it from?
+          if(ip_conn.eq.iproc)then
+             do ig=-ntgrid,ntgrid !Optimised for data send
+                n=nn_to(ip)+1
+                nn_to(ip)=n
+                to(ip)%first(n)=ig
+                to(ip)%second(n)=2
+                to(ip)%third(n)=iglo_conn
+             enddo
+          endif
+       enddo
+
+       !Now setup the redistribute object
+       from_low(1)=-ntgrid ; from_low(2)=1  ; from_low(3)=g_lo%llim_proc
+       from_high(1)=ntgrid ; from_high(2)=2 ; from_high(3)=g_lo%ulim_proc
+       to_low(1)=-ntgrid ; to_low(2)=1  ; to_low(3)=g_lo%llim_proc
+       to_high(1)=ntgrid ; to_high(2)=2 ; to_high(3)=g_lo%ulim_proc
+
+       !Initialise the fill object
+       call init_fill(parity_redist,'c',to_low,to_high,to,&
+            from_low,from_high, from)
+
+       !Delete lists
+       call delete_list(from)
+       call delete_list(to)
+    endif
+  end subroutine init_enforce_parity
+  !</DD>
+
+  !<DD>Subroutine to return the iglo corresponding to the part of the domain given
+  !by iglo reflected in theta=theta0
+  subroutine get_parity_conn(iglo,iglo_conn,iproc_conn)
+    use gs2_layouts, only: ik_idx,it_idx,proc_id,g_lo
+    implicit none
+    integer, intent(in) :: iglo
+    integer, intent(out) :: iglo_conn
+    integer, intent(out) :: iproc_conn
+    integer :: it, ik, it_conn, link
+
+    !Get indices
+    it=it_idx(g_lo,iglo)
+    ik=ik_idx(g_lo,iglo)
+
+    !Initialise to this cell
+    iglo_conn=iglo
+    
+    !Now check number of links
+    if(l_links(ik,it).eq.r_links(ik,it))then
+       !If in the middle of the domain then iglo doesn't change
+       !Just get the proc id
+       iproc_conn=proc_id(g_lo,iglo)
+    elseif(l_links(ik,it).gt.r_links(ik,it))then
+       !If we're on the right then look left
+       do link=1,l_links(ik,it)
+          !Get the next connected domain
+          call get_left_connection(iglo_conn,iglo_conn,iproc_conn)
+
+          !What is the it index here?
+          it_conn=it_idx(g_lo,iglo_conn)
+
+          !If the number of right links now matches the left then we've got the match
+          if(r_links(ik,it_conn).eq.l_links(ik,it)) exit
+       enddo
+    else
+       !If we're on the left then look right
+       do link=1,r_links(ik,it)
+          !Get the next connected domain
+          call get_right_connection(iglo_conn,iglo_conn,iproc_conn)
+
+          !What is the it index here?
+          it_conn=it_idx(g_lo,iglo_conn)
+
+          !If the number of left links now matches the right then we've got the match
+          if(l_links(ik,it_conn).eq.r_links(ik,it)) exit
+       enddo
+    endif
+  end subroutine get_parity_conn
+  !</DD>
+
+  !<DD>Subroutine to enforce requested parity
+  subroutine enforce_parity
+    use theta_grid, only:ntgrid
+    use dist_fn_arrays, only: gnew
+    use redistribute, only: scatter
+    use gs2_layouts, only: g_lo
+    implicit none
+    logical,save :: initialised=.false.
+    integer :: iglo,mult
+    !If enforced parity not requested then exit
+    if(.not.def_parity)return
+    
+    !Set multiplier
+    if(even) then
+       mult=1
+    else
+       mult=-1
+    endif
+    
+    !Behaviour depends upon if we're in flux tube or ballooning space
+    if(boundary_option_switch.eq.boundary_option_linked) then !Flux-tube
+       !Setup the redistribute object if required
+       if(.not.initialised) call init_enforce_parity
+       initialised=.true.
+
+       !Redistribute the data
+       call scatter(parity_redist,gnew,gnew)
+
+       !Multiply by factor if required
+       if(mult.ne.1) gnew(:,1,:)=mult*gnew(:,1,:)
+    else !Ballooning/extended space
+       !Loop over all local iglo
+       do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+          !Apply parity filter
+          gnew(-ntgrid:-1,1,iglo)=mult*gnew(ntgrid:1:-1,2,iglo)
+          gnew(1:ntgrid,1,iglo)=mult*gnew(-1:-ntgrid:-1,2,iglo)
+       enddo
+    endif
+    
+  end subroutine enforce_parity
+  !</DD>
+
   subroutine get_source_term &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         isgn, iglo, sourcefac, source)
@@ -3625,15 +3831,7 @@ subroutine check_dist_fn(report_unit)
        end do
     end if
 
-    if (def_parity) then
-       if (even) then
-          gnew(ntgl:-1,1,iglo) = gnew( ntgr:1:-1,2,iglo)
-          gnew(1:ntgr, 1,iglo) = gnew(-1:ntgl:-1,2,iglo)
-       else
-          gnew(1:ntgr, 1,iglo) = -gnew(-1:ntgl:-1,2,iglo)
-          gnew(ntgl:-1,1,iglo) = -gnew( ntgr:1:-1,2,iglo)
-       end if
-    end if
+    if (def_parity) call enforce_parity
 
     ! zero out spurious gnew outside trapped boundary
     where (forbid(:,il))
