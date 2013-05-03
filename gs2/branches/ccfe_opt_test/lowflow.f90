@@ -157,14 +157,16 @@ contains
     dl_over_b = delthet*jacob
     dl_over_b = dl_over_b/sum(dl_over_b)
 
-    if (.not. allocated(pflx)) allocate (pflx(nr,ns), qflx(nr,ns), vflx(nr,ns), upar1(nr,ns), uparB(nr,ns), qparB(nr,ns))  !JPL
+    if (.not. allocated(pflx)) allocate (pflx(nr,ns), qflx(nr,ns), vflx(nr,ns), upar1(nr,ns))  
     if (.not. allocated(upar)) then
        allocate (phineo2(nr))
        allocate (upar2(nr,ns), qpar2(nr,ns))
+       allocate (uparB(nr,ns), qparB(nr,ns))
        allocate (upar(nr,ns,ntheta), qpar(nr,ns,ntheta))
        allocate (upar_over_b(nr,ns))
        upar = 0. ; qpar = 0.
        upar2 = 0. ; qpar2 = 0. ; phineo2 = 0.
+       uparB = 0. ; qparB = 0.
        upar_over_B = 0.
     end if
     if (.not. allocated(transport)) allocate (transport(nr,(5+ns*8)))  !JPL, NEO output for all radius
@@ -193,41 +195,28 @@ contains
        ! evaluate the neoclassical parallel heat flux and parallel velcotiy in GS2 geometry
        do ir=1, nr 
           do is=1, ns
-             qparB(ir,is)=0. ; uparB(ir,is) = 0.
              drlt = drad_neo(ir)*spec(is)%tprim ; drln = drad_neo(ir)*spec(is)%fprim
              do ie = 1, nenergy
                 w_r(ie) = w(ie) * exp(energy(ie)*(1.0-1.0/(1.0-drlt))) / (1.0-drlt)**1.5
                 do ixi = 1, nxi
                    il = min(ixi, nxi+1-ixi)
                    do ig = 1, ntheta
-!                      w_r(ie)=w(ie)*exp(energy(ie)*(1.0-1.0/(1.0-spec(is)%tprim &
-!                           *(rad_neo(ir)-rad_neo(2)))))*(1.0/(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2))))**2
-                      qparB(ir,is) = qparB(ir,is) + hneo(ir,ig,ixi,ie,is)*energy(ie) &
-                           *(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))*xi(ig,ixi) &
-                           *sqrt(energy(ie)) &
-!                           *sqrt(energy(ie)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2))))) &
-                           *w_r(ie)*wl(-ntgrid+ig-1,il)*dl_over_b(ig)*bmag(ig)
-                      uparB(ir,is) = uparB(ir,is) + hneo(ir,ig,ixi,ie,is)*xi(ig,ixi) &
-!                           *sqrt(energy(ie)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))))*w_r(ie) &
-                           *sqrt(energy(ie))*w_r(ie) &
-                           *wl(-ntgrid+ig-1,il)*dl_over_b(ig)*bmag(ig)      
                       upar(ir,is,ig) = upar(ir,is,ig) + hneo(ir,ig,ixi,ie,is) &
                            * sqrt(energy(ie))*xi(ig,ixi) * w_r(ie) * wl(-ntgrid+ig-1,il)
                       qpar(ir,is,ig) = qpar(ir,is,ig) + hneo(ir,ig,ixi,ie,is) &
                            * sqrt(energy(ie))*xi(ig,ixi)*(energy(ie)-2.5*(1.0-drlt)) &
                            * (1.0-drln) * w_r(ie) * wl(-ntgrid+ig-1,il)
-                      upar_over_B(ir,is) = upar_over_B(ir,is) + hneo(ir,ig,ixi,ie,is) &
-                           * sqrt(energy(ie))*xi(ig,ixi) * w_r(ie) * wl(-ntgrid+ig-1,il) &
-                           * dl_over_b(ig)/bmag(ig)
                    end do
                 end do
              end do
-             qparB(ir,is)=qparB(ir,is)-2.50*uparB(ir,is)*(1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2))) !JPL
           end do
        end do
 
        do is = 1, ns
           do ir = 1, nr
+             uparB(ir,is) = sum(upar(ir,is,:)*dl_over_b*bmag)
+             qparB(ir,is) = sum(qpar(ir,is,:)*dl_over_b*bmag)
+             upar_over_B(ir,is) = sum(upar(ir,is,:)*dl_over_b/bmag)
              upar2(ir,is) = sum(upar(ir,is,:)**2*dl_over_b)
              qpar2(ir,is) = sum(qpar(ir,is,:)**2*dl_over_b)
              phineo2(ir) = sum(phineo(ir,:)**2*dl_over_b)
@@ -250,7 +239,7 @@ contains
        do ir=1, nr
           do is = 1, ns
              write (neot_unit,fmt='(e14.5,i8,12e14.5)') radius(ir), is, pflx(ir,is), qflx(ir,is), vflx(ir,is), &
-                  qparB(ir,is),uparB(ir,is), upar1(ir,is)*sqrt((1.0-spec(is)%tprim*(rad_neo(ir)-rad_neo(2)))), &
+                  qparB(ir,is),uparB(ir,is), upar1(ir,is)*sqrt(1.0-drlt), &
                   phi2(ir), jboot(ir), rmaj*upar_over_B(ir,is)/rgeo2, upar2(ir,is), qpar2(ir,is), phineo2(ir)
           end do
        end do
@@ -273,21 +262,23 @@ contains
        ! for testing
 !       upar = 0.
 !       qpar(1,:,:) = qpar(2,:,:) ; qpar(3,:,:) = qpar(2,:,:)
-!!       qpar = 0.
+!       qpar = 0.
        ! added after doing the qpar=0 test (to decouple upar and dupar/dr effects)
 !       upar(1,:,:) = upar(2,:,:) ; upar(3,:,:) = upar(2,:,:)
        ! added after doing the qpar=0,du/dr=0 test...am eliminating the du/dtheta effect
-!!       do is = 1, ns
-!!          do ir = 1, nr
-!!             upar(ir,is,:) = sum(upar(ir,is,:)*dl_over_b)
-!!          end do
-!!       end do
+!       do is = 1, ns
+!          do ir = 1, nr
+!             upar(ir,is,:) = sum(upar(ir,is,:)*dl_over_b)
+!          end do
+!       end do
 
        do is = 1, ns
           do ir = 1, nr
              drlt = drad_neo(ir)*spec(is)%tprim ; drln = drad_neo(ir)*spec(is)%fprim
              afac(ir,is,:) = 2.*(upar(ir,is,:)-qpar(ir,is,:)/(1.0-drln) - drlt*upar(ir,is,:))/(1.0-drlt)**2
              bfac(ir,is,:) = 0.8*qpar(ir,is,:) / ((1.0-drln) * (1.0-drlt)**3)
+!             afac(ir,is,:) = 2.*(upar(ir,is,:)-qpar(ir,is,:)/(1.0-drln)/(1.0-drlt))/sqrt(1.0-drlt)
+!             bfac(ir,is,:) = 0.8*qpar(ir,is,:) / ((1.0-drln) * (1.0-drlt)**1.5)
           end do
        end do
 
@@ -827,7 +818,7 @@ contains
           end do
 
           ! TMP FOR TESTING -- MAB
-!!          neo_phi = 0.
+!          neo_phi = 0.
 
           ! need to interpolate coefficients from neo's theta grid to gs2's
           if ( ptheta_neo .gt. 1) then

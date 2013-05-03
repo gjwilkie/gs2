@@ -40,8 +40,7 @@ module dist_fn
 !  add public variables below for init_g
   public :: boundary_option_switch, boundary_option_linked
   public :: boundary_option_self_periodic, boundary_option_zero
-  public :: init_pass_right, pass_right
-
+  public :: pass_right, pass_left, init_pass_ends
   private
 
   ! knobs
@@ -52,7 +51,7 @@ module dist_fn
   real :: t0, omega0, gamma0, source0
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
-  logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose
+  logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose, esv
 
   integer :: adiabatic_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -156,6 +155,8 @@ module dist_fn
   type (redist_type), save :: links_p, links_h
   type (redist_type), save :: wfb_p, wfb_h
   type (redist_type), save :: pass_right
+  type (redist_type), save :: pass_left
+  type (redist_type), save :: parity_redist
 
   integer, dimension (:,:), allocatable :: l_links, r_links
   integer, dimension (:,:,:), allocatable :: n_links
@@ -246,6 +247,13 @@ subroutine check_dist_fn(report_unit)
           write (report_unit, *) 
           write (report_unit, fmt="('Linked (twist and shift) boundary conditions will be used.')")
           write (report_unit, *) 
+          if (esv) then 
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, fmt="('Single valued antot arrays will be enforced.')")
+             write (report_unit, fmt="('This can significantly increase the cost of the run.')")
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, *) 
+          endif
        end if
     case (boundary_option_self_periodic)
        write (report_unit, *) 
@@ -424,6 +432,7 @@ subroutine check_dist_fn(report_unit)
 
        write (unit, fmt="(' nonad_zero = ',L1)") nonad_zero
        write (unit, fmt="(' gridfac = ',e16.10)") gridfac
+       write (unit, fmt="(' esv = ',L1)") esv
 
        if (.not. has_electron_species(spec)) then
           select case (adiabatic_option_switch)
@@ -635,7 +644,7 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, nonad_zero, gridfac, apfac, &
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         g_exb, g_exbfac, omprimfac, btor_slab, mach, lf_default, lf_decompose
+         g_exb, g_exbfac, omprimfac, btor_slab, mach, lf_default, lf_decompose, esv
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -647,6 +656,7 @@ subroutine check_dist_fn(report_unit)
     if (proc0) then
        boundary_option = 'default'
        nonad_zero = .false.
+       esv = .false.
        adiabatic_option = 'default'
        poisfac = 0.0
        gridfac = 1.0  ! used to be 5.e4
@@ -702,6 +712,7 @@ subroutine check_dist_fn(report_unit)
 
     call broadcast (boundary_option_switch)
     call broadcast (nonad_zero)
+    call broadcast (esv)
     call broadcast (adiabatic_option_switch)
     call broadcast (gridfac)
     call broadcast (poisfac)
@@ -731,6 +742,9 @@ subroutine check_dist_fn(report_unit)
     call broadcast (lf_decompose)
     call broadcast (even)
     call broadcast (wfb)
+
+    !<DD>Turn off esv if not using linked boundaries
+    esv=esv.and.(boundary_option_switch.eq.boundary_option_linked)
 
     if (mult_imp) then
        ! nothing -- fine for linear runs, but not implemented nonlinearly
@@ -1145,7 +1159,6 @@ subroutine check_dist_fn(report_unit)
           aj2(ig,iglo) = 2.0*aj1(ig,iglo)-aj0(ig,iglo)
        end do
     end do
-
   end subroutine init_bessel
 
   subroutine init_kperp2
@@ -2183,123 +2196,249 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine init_connected_bc
 
-
-
   subroutine init_pass_right
-! CMR, 29/1/2013: simple new routine sets up "pass_right" redist_type 
-! to pass g(ntgrid,1,iglo) to g(-ntgrid,1,iglo) in right neighbouring flux tube.
-! To be used in init_g.
+    !Create a pass_right object to pass boundary values to the left connection
+    !for sigma=1 (i.e. rightwards moving particles).
+    call init_pass_ends(pass_right,'r',1,'c')
+  end subroutine init_pass_right
+
+  subroutine init_pass_left
+    !Create a pass_left object to pass boundary values to the left connection
+    !for sigma=2 (i.e. leftwards moving particles).
+    call init_pass_ends(pass_left,'l',2,'c')
+  end subroutine init_pass_left
+
+  subroutine init_pass_ends(pass_obj,dir,sigma,typestr,ngsend)
+    !<DD> 01/02/2013: Copy of CMR's init_pass_right (revision 2085) 
+    !but in customisable direction to aid code reuse and with optional
+    !range in theta (i.e. so can pass more than just boundary points)
+    
+    !An example use is:
+    ! call init_pass_ends(pass_right,'r',1,'c',3)
+    ! call fill(pass_right,gnew,gnew)
+    !This will pass gnew(ntgrid-2:ntgrid,1,iglo) to 
+    !gnew(-ntgrid-2:-ntgrid,1,iglo_linked)
+    
+    !TODO:
+    !      1) May be helpful to be able to pass both sigmas at once (e.g. for explicit scheme)
     use gs2_layouts, only: g_lo, il_idx, idx, proc_id
     use le_grids, only: ng2
-    use mp, only: iproc, nproc, max_allreduce
-    use redistribute, only: redist_type
-    use redistribute, only: index_list_type, init_fill, delete_list
-    use theta_grid, only:ntgrid 
+    use mp, only: iproc, nproc, max_allreduce, proc0
+    use redistribute, only: index_list_type, init_fill, delete_list, redist_type
+    use theta_grid, only:ntgrid
+
     implicit none
+
+    type (redist_type), intent(inout) :: pass_obj !Redist type object to hold communication logic
+    character(1),intent(in)::dir                  !Character string for direction of communication, should be 'l' for left and 'r' for right
+    character(1),intent(in)::typestr              !Character string for type of data to be communicated. Should be 'c','r','i' or 'l'
+    integer,intent(in) :: sigma                   !Which sigma index to send
+    integer,intent(in),optional::ngsend           !How many theta grid points are we sending
+
+    !Internal variables
     type (index_list_type), dimension(0:nproc-1) :: to, from
     integer, dimension (0:nproc-1) :: nn_from, nn_to
     integer, dimension(3) :: from_low, from_high, to_low, to_high
-    integer :: il, iglo, ip, iglo_right, ipright, n, nn_max
-    logical :: haslinks=.true.
+    integer :: il, iglo, ip, iglo_con, ipcon, n, nn_max, j
     logical :: debug=.false.
+    integer :: bound_sign
+    integer :: local_ngsend
 
-      if (boundary_option_switch .eq. boundary_option_linked) then
-! Need communications to satisfy || boundary conditions
-! First find required blocksizes 
-         nn_to = 0   ! # communicates from ip TO HERE (iproc)
-         nn_from = 0 ! # communicates to ip FROM HERE (iproc)
-         do iglo = g_lo%llim_world, g_lo%ulim_world
-            il = il_idx(g_lo,iglo)          
-            if (il > ng2+1) cycle     ! Exclude trapped as not connected
-            ip = proc_id(g_lo,iglo)
-! ONLY interested in right connections here  (for use in init_g)
-            call get_right_connection (iglo, iglo_right, ipright)
-            if (ipright .eq. iproc ) then
-               nn_to(ip)=nn_to(ip)+1
-               if (ip .eq.1 .and. ipright.eq.0) then
-                  write(6,*) "TO 0 from 1:",ip,iglo,ipright,iglo_right
-               endif
-            endif
-            if (ip .eq. iproc .and. ipright .ge. 0 ) then
-               nn_from(ipright)=nn_from(ipright)+1
-               if ( ip .eq. 1 .and. ipright.eq.0 ) then
-                  write(6,*) "FROM 1 to 0:",ip,iglo,ipright,iglo_right
-               endif
-            endif
-         end do
-         nn_max = maxval(nn_to)
-         call max_allreduce (nn_max)
-! skip addressing if no links are needed
-         if (nn_max == 0) then 
-            haslinks=.false.
-         endif
-      endif
-      if (debug) then
-         write(6,*) 'init_pass_right processor, nn_to:',iproc,nn_to
-         write(6,*) 'init_pass_right processor, nn_from:',iproc,nn_from
-      endif
+    !Only applies to linked boundary option so exit if not linked
+    if (boundary_option_switch .ne. boundary_option_linked) return
 
-      if (boundary_option_switch.eq.boundary_option_linked .and. haslinks) then
-! 
-! CMR, 25/1/2013: 
-!      communication required to satisfy linked BC
-!      allocate indirect addresses for sends/receives 
-!     
-!      NB communications use "c_fill_3" as g has 3 indices
-!      but 1 index sufficient as only communicating g(ntgrid,1,*)! 
-!      if "c_fill_1" in redistribute we'd only need allocate: from|to(ip)%first 
-!                             could be more efficient
-!  
-         do ip = 0, nproc-1
-            if (nn_from(ip) > 0) then
-               allocate (from(ip)%first(nn_from(ip)))
-               allocate (from(ip)%second(nn_from(ip)))
-               allocate (from(ip)%third(nn_from(ip)))
-            endif
-            if (nn_to(ip) > 0) then
-               allocate (to(ip)%first(nn_to(ip)))
-               allocate (to(ip)%second(nn_to(ip)))
-               allocate (to(ip)%third(nn_to(ip)))
-            endif
-         end do
-! Now fill the indirect addresses...
-         nn_from = 0 ; nn_to = 0          
-         do iglo = g_lo%llim_world, g_lo%ulim_world
-            il = il_idx(g_lo,iglo)          
-            if (il > ng2+1) cycle     ! Exclude disconnected trapped particles
-            ip = proc_id(g_lo,iglo)
-            call get_right_connection (iglo, iglo_right, ipright)
-            if (ip .eq. iproc .and. ipright .ge. 0 ) then 
-               n=nn_from(ipright)+1 ; nn_from(ipright)=n
-               from(ipright)%first(n)=ntgrid
-               from(ipright)%second(n)=1
-               from(ipright)%third(n)=iglo
-            endif
-            if (ipright .eq. iproc ) then 
-               n=nn_to(ip)+1 ; nn_to(ip)=n
-               to(ip)%first(n)=-ntgrid
-               to(ip)%second(n)=1
-               to(ip)%third(n)=iglo_right
-            endif
-         end do
-         if (debug) then
-            write(6,*) 'init_pass_right processor, nn_to:',iproc,nn_to
-            write(6,*) 'init_pass_right processor, nn_from:',iproc,nn_from
-         endif
+    !Handle the direction sign, basically we're either doing
+    !     ntgrid --> -ntgrid (passing to right)
+    !or 
+    !    -ntgrid --> ntgrid  (passing to left)
+    if (dir=='r') then
+       bound_sign=1
+    elseif (dir=='l') then
+       bound_sign=-1
+    else
+       if (proc0) write(6,*) "Invalid direction string passed to init_pass_ends, defaulting to 'r'"
+       bound_sign=1
+    endif
 
-         from_low(1)=-ntgrid ; from_low(2)=1 ; from_low(3)=g_lo%llim_proc       
-         from_high(1)=ntgrid; from_high(2)=2; from_high(3)=g_lo%ulim_alloc
-         to_low(1)=-ntgrid  ; to_low(2)=1   ; to_low(3)=g_lo%llim_proc       
-         to_high(1)=ntgrid ; to_high(2)=2  ; to_high(3)=g_lo%ulim_alloc
-         call init_fill (pass_right, 'c', to_low, to_high, to, &
-               from_low, from_high, from)
+    !Set the default number of theta grid points to send, if required
+    if (present(ngsend)) then
+       local_ngsend=ngsend
+    else
+       local_ngsend=1
+    endif
 
-         call delete_list (from)
-         call delete_list (to)
-      endif
-  end subroutine init_pass_right
+    if (proc0.and.debug) write (6,*) "Initialising redist_type with settings Direction : ",dir," sigma",sigma,"local_ngsend",local_ngsend
+    
+    ! Need communications to satisfy || boundary conditions
+    ! First find required blocksizes 
+    
+    !Initialise variables used to count how many entries to send and receive
+    !for each processor
+    nn_to = 0   ! # nn_to(ip) = communicates from ip TO HERE (iproc)
+    nn_from = 0 ! # nn_from(ip) = communicates to ip FROM HERE (iproc)
+    
+    !Now loop over >all< iglo indices and work out how much data needs to be sent and received by each processor
+    !Hence this routine does not scale with number of procs, see updated redist object creation in ccfe_opt_test (~r2173)
+    !for examples which do scale
+    do iglo = g_lo%llim_world, g_lo%ulim_world
+       !Get the lambda index so we can skip trapped particles
+       il = il_idx(g_lo,iglo)
+       
+       !Exclude disconnected trapped particles
+       if (il > ng2+1) cycle     
+       
+       !Get the processor id for the proc holding the current iglo index
+       ip = proc_id(g_lo,iglo)
+       
+       !What iglo connects to the current one in the direction of interest (and what proc is it on)
+       !Note ipcon is <0 if no connection in direction of interest
+       if (bound_sign==1) then
+          call get_right_connection (iglo, iglo_con, ipcon)
+       else
+          call get_left_connection (iglo, iglo_con, ipcon)
+       endif
+       
+       !Is the connected tube's proc the current processor?
+       if (ipcon .eq. iproc ) then
+          !If so add an entry recording an extra piece of information is to be sent
+          !to proc ip (the proc holding iglo) from this proc (ipcon)
+          !Note: Here we assume theta grid points are all on same proc 
+          nn_to(ip)=nn_to(ip)+local_ngsend
+       endif
+       
+       !Is the proc holding iglo this proc and is there a connection in the direction of interest?
+       if (ip .eq. iproc .and. ipcon .ge. 0 ) then
+          !If so add an entry recording an extra piece of information is to be sent
+          !from this proc (ipcon) to ip
+          !Note: Here we assume theta grid points are all on same proc 
+          nn_from(ipcon)=nn_from(ipcon)+local_ngsend
+       endif
+    end do
+    
+    !Find the maximum amount of data to be received by a given processor
+    !(first do it locally)
+    nn_max = maxval(nn_to)
+    !(now do it globally)
+    call max_allreduce (nn_max)
+    
+    !Bit of debug printing
+    if (proc0.and.debug) then
+       write(6,*) 'init_pass_ends (1) processor, nn_to, nn_from:',iproc,nn_to,nn_from
+    endif
 
+    !Now that we've worked out how much data needs to be sent and received, define what specific
+    !data needs to be sent to where
+    if (nn_max.gt.0) then
+       ! 
+       ! CMR, 25/1/2013: 
+       !      communication required to satisfy linked BC
+       !      allocate indirect addresses for sends/receives 
+       !     
+       !      NB communications use "c_fill_3" as g has 3 indices
+       !      but 1 index sufficient as only communicating g(ntgrid,1,*)! 
+       !      if "c_fill_1" in redistribute we'd only need allocate: from|to(ip)%first 
+       !                             could be more efficient
+       !  
+       !<DD>, 06/01/2013: This redist object consists of a buffer of length n to hold the 
+       !data during transfer and (currently) 3*2 integer arrays each of length n to hold
+       !the indices of sent and received data.
+       !By using c_fill_1 2*2 of these integer arrays would be removed. Assuming a double complex
+       !buffer and long integer indices a 4n long array saving would be equivalent to the buffer
+       !size and as such should represent a good memory saving but would not effect the amount
+       !of data communicated (obviously).
 
+       !Create to and from list objects for each processor and 
+       !create storage to hold information about each specific from/to
+       !communication
+       do ip = 0, nproc-1
+          !If proc ip is sending anything to this processor (iproc)
+          if (nn_from(ip) > 0) then
+             allocate (from(ip)%first(nn_from(ip)))
+             allocate (from(ip)%second(nn_from(ip)))
+             allocate (from(ip)%third(nn_from(ip)))
+          endif
+          !If proc ip is receiving anything from this processor (iproc)
+          if (nn_to(ip) > 0) then
+             allocate (to(ip)%first(nn_to(ip)))
+             allocate (to(ip)%second(nn_to(ip)))
+             allocate (to(ip)%third(nn_to(ip)))
+          endif
+       end do
+
+       !Now fill the indirect addresses...
+       
+       !Initialise counters used to record how many pieces of data to expect
+       nn_from = 0 ; nn_to = 0
+       
+       !Loop over >all< iglo indices
+       do iglo = g_lo%llim_world, g_lo%ulim_world
+          !Get the lambda index so we can skip trapped particles
+          il = il_idx(g_lo,iglo)
+          
+          !Exclude disconnected trapped particles
+          if (il > ng2+1) cycle     
+          
+          !What's the processor for the current iglo
+          ip = proc_id(g_lo,iglo)
+          
+          !What iglo connects to the current one in the direction of interest (and what proc is it on)?
+          !Note ipcon is <0 if no connection in direction of interest
+          if (bound_sign==1) then
+             call get_right_connection (iglo, iglo_con, ipcon)
+          else
+             call get_left_connection (iglo, iglo_con, ipcon)
+          endif
+          
+          !For current proc for current iglo if there's connections in direction
+          !then add an entry to the connected procs list of data to expect
+          if (ip .eq. iproc .and. ipcon .ge. 0 ) then
+             !Loop over theta grid indices
+             !Note: Here we assume theta grid points are all on same proc 
+             !Note: By looping over theta inside iglo loop we should optimise
+             !      memory access compared to looping over theta outside.
+             do j=0,local_ngsend-1
+                n=nn_from(ipcon)+1 ; nn_from(ipcon)=n
+                from(ipcon)%first(n)=bound_sign*(ntgrid-j) !Which theta point to send
+                from(ipcon)%second(n)=sigma     !Sigma grid index to send
+                from(ipcon)%third(n)=iglo   !iglo index to send
+             enddo
+          endif
+          
+          !If target iglo (iglo_con) is on this processor then add an entry recording where
+          !we need to put the data when we receive it.
+          if (ipcon .eq. iproc ) then 
+             !Loop over theta grid indices
+             !Note: Here we assume theta grid points are all on same proc 
+             do j=0,local_ngsend-1
+                n=nn_to(ip)+1 ; nn_to(ip)=n
+                to(ip)%first(n)=-bound_sign*(ntgrid-j) !Which theta to store received data
+                to(ip)%second(n)=sigma       !Sigma grid index to store received data
+                to(ip)%third(n)=iglo_con !iglo index to store received data
+             enddo
+          endif
+       end do
+       
+       !Bit of debug printing,
+       if (debug.and.proc0) then
+          write(6,*) 'init_pass_ends (2) processor, nn_to, nn_from:',iproc,nn_to,nn_from
+       endif
+
+       !Set data ranges for arrays to be passed, not this just effects how
+       !arrays are indexed, not how big the buffer is.
+       from_low(1)=-ntgrid ; from_low(2)=1  ; from_low(3)=g_lo%llim_proc       
+       from_high(1)=ntgrid ; from_high(2)=2 ; from_high(3)=g_lo%ulim_alloc
+       to_low(1)=-ntgrid   ; to_low(2)=1    ; to_low(3)=g_lo%llim_proc       
+       to_high(1)=ntgrid   ; to_high(2)=2   ; to_high(3)=g_lo%ulim_alloc
+       
+       !Initialise fill object
+       call init_fill (pass_obj, typestr, to_low, to_high, to, &
+            from_low, from_high, from)
+       
+       !Clean up lists
+       call delete_list (from)
+       call delete_list (to)
+    endif
+  end subroutine init_pass_ends
 
   subroutine get_left_connection (iglo, iglo_left, iproc_left)
     use gs2_layouts, only: g_lo, proc_id, idx
@@ -2432,22 +2571,20 @@ subroutine check_dist_fn(report_unit)
     modep = 0
     if (present(mode)) modep = mode
 
+    !Calculate the explicit nonlinear terms
     call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
+    !Solve for gnew
     call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+    !Add hyper terms (damping)
     call hyper_diff (gnew, phinew, bparnew)
+    !Add collisions
     call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
 !    if (istep == nstep) call write_mpdist (gnew, '.gtmp', last=.true.)
 
-    if (def_parity) then
-       if (even) then
-          gnew(-ntgrid:-1, 1,:) = gnew( ntgrid: 1:-1,2,:)
-          gnew( 1: ntgrid, 1,:) = gnew(-1:-ntgrid:-1,2,:)
-       else
-          gnew( 1: ntgrid, 1,:) = -gnew(-1:-ntgrid:-1,2,:)
-          gnew(-ntgrid:-1, 1,:) = -gnew( ntgrid: 1:-1,2,:)
-       end if
-    end if
+    !Enforce parity if desired (also performed in invert_rhs, but this is required
+    !as collisions etc. may break parity?)
+    if (def_parity) call enforce_parity
        
   end subroutine timeadv
 
@@ -2857,7 +2994,220 @@ subroutine check_dist_fn(report_unit)
        enddo
     end if
   end subroutine exb_shear
-     
+
+  !<DD>Subroutine to setup a redistribute object to be used in enforcing parity
+  subroutine init_enforce_parity
+    use theta_grid, only : ntgrid
+    use gs2_layouts, only : g_lo,proc_id
+    use redistribute, only: index_list_type, init_fill, delete_list
+    use mp, only: iproc, nproc, max_allreduce
+    implicit none
+    integer :: iglo,iglo_conn,ip_conn,ip
+    integer :: ig, ndata, nn_max, n
+    type (index_list_type), dimension(0:nproc-1) :: to, from
+    integer, dimension (0:nproc-1) :: nn_from, nn_to
+    integer, dimension(3) :: from_low, from_high, to_low, to_high
+
+    !If enforced parity not requested then exit
+    if(.not.def_parity)return
+    
+    !If not linked then don't need any setup so exit
+    if(boundary_option_switch.ne.boundary_option_linked)return
+    
+    !NOTE: If we know x is entirely local (g_lo%x_local=.true.) then we
+    !know that we don't need to do any comms so our iglo range can be
+    !limited to what is on this proc. At the moment we don't take 
+    !advantage of this.
+
+    !Use a shorthand for how much data to send per iglo
+    ndata=2*ntgrid+1
+
+    !Count how much data is to be sent/recv to/from different procs
+    !/First initialise counters
+    nn_to =0
+    nn_from=0
+    
+    !/Now loop over iglo to workout what data is to be sent/received
+    do iglo=g_lo%llim_world,g_lo%ulim_world
+
+       !Get proc id of current iglo
+       ip=proc_id(g_lo,iglo)
+
+       !Find connected iglo to which we want to send the data
+       call get_parity_conn(iglo,iglo_conn,ip_conn)
+
+       !Do we have the data to send?
+       if(ip_conn.eq.iproc) nn_to(ip)=nn_to(ip)+ndata
+
+       !Are we going to receive the data?
+       if(ip.eq.iproc) nn_from(ip_conn)=nn_from(ip_conn)+ndata
+
+    enddo
+
+    !Now find the maxmimum amount of data to be sent
+    nn_max=MAXVAL(nn_to) !Local max
+    call max_allreduce(nn_max) !Global max
+
+    !Now define indices of send/receive data
+    if(nn_max.gt.0) then
+       !Create to/from list objects
+       do ip=0,nproc-1
+          if(nn_from(ip)>0)then
+             allocate(from(ip)%first(nn_from(ip)))
+             allocate(from(ip)%second(nn_from(ip)))
+             allocate(from(ip)%third(nn_from(ip)))
+          endif
+          if(nn_to(ip)>0)then
+             allocate(to(ip)%first(nn_to(ip)))
+             allocate(to(ip)%second(nn_to(ip)))
+             allocate(to(ip)%third(nn_to(ip)))
+          endif
+       enddo
+
+       !Now fill in the lists
+       nn_from=0
+       nn_to=0
+
+       !Loop over all iglo again (this doesn't scale)
+       do iglo=g_lo%llim_world, g_lo%ulim_world
+          !Get proc for this iglo
+          ip=proc_id(g_lo,iglo)
+
+          !Get connected point
+          call get_parity_conn(iglo,iglo_conn,ip_conn)
+
+          !If we're receiving data where do we put it?
+          if(ip.eq.iproc)then
+             do ig=-ntgrid,ntgrid !Optimised for data send
+                n=nn_from(ip_conn)+1
+                nn_from(ip_conn)=n
+                from(ip_conn)%first(n)=0-ig
+                from(ip_conn)%second(n)=1
+                from(ip_conn)%third(n)=iglo
+             enddo
+          endif
+
+          !If we're sending data where do we get it from?
+          if(ip_conn.eq.iproc)then
+             do ig=-ntgrid,ntgrid !Optimised for data send
+                n=nn_to(ip)+1
+                nn_to(ip)=n
+                to(ip)%first(n)=ig
+                to(ip)%second(n)=2
+                to(ip)%third(n)=iglo_conn
+             enddo
+          endif
+       enddo
+
+       !Now setup the redistribute object
+       from_low(1)=-ntgrid ; from_low(2)=1  ; from_low(3)=g_lo%llim_proc
+       from_high(1)=ntgrid ; from_high(2)=2 ; from_high(3)=g_lo%ulim_proc
+       to_low(1)=-ntgrid ; to_low(2)=1  ; to_low(3)=g_lo%llim_proc
+       to_high(1)=ntgrid ; to_high(2)=2 ; to_high(3)=g_lo%ulim_proc
+
+       !Initialise the fill object
+       call init_fill(parity_redist,'c',to_low,to_high,to,&
+            from_low,from_high, from)
+
+       !Delete lists
+       call delete_list(from)
+       call delete_list(to)
+    endif
+  end subroutine init_enforce_parity
+  !</DD>
+
+  !<DD>Subroutine to return the iglo corresponding to the part of the domain given
+  !by iglo reflected in theta=theta0
+  subroutine get_parity_conn(iglo,iglo_conn,iproc_conn)
+    use gs2_layouts, only: ik_idx,it_idx,proc_id,g_lo
+    implicit none
+    integer, intent(in) :: iglo
+    integer, intent(out) :: iglo_conn
+    integer, intent(out) :: iproc_conn
+    integer :: it, ik, it_conn, link
+
+    !Get indices
+    it=it_idx(g_lo,iglo)
+    ik=ik_idx(g_lo,iglo)
+
+    !Initialise to this cell
+    iglo_conn=iglo
+    
+    !Now check number of links
+    if(l_links(ik,it).eq.r_links(ik,it))then
+       !If in the middle of the domain then iglo doesn't change
+       !Just get the proc id
+       iproc_conn=proc_id(g_lo,iglo)
+    elseif(l_links(ik,it).gt.r_links(ik,it))then
+       !If we're on the right then look left
+       do link=1,l_links(ik,it)
+          !Get the next connected domain
+          call get_left_connection(iglo_conn,iglo_conn,iproc_conn)
+
+          !What is the it index here?
+          it_conn=it_idx(g_lo,iglo_conn)
+
+          !If the number of right links now matches the left then we've got the match
+          if(r_links(ik,it_conn).eq.l_links(ik,it)) exit
+       enddo
+    else
+       !If we're on the left then look right
+       do link=1,r_links(ik,it)
+          !Get the next connected domain
+          call get_right_connection(iglo_conn,iglo_conn,iproc_conn)
+
+          !What is the it index here?
+          it_conn=it_idx(g_lo,iglo_conn)
+
+          !If the number of left links now matches the right then we've got the match
+          if(l_links(ik,it_conn).eq.r_links(ik,it)) exit
+       enddo
+    endif
+  end subroutine get_parity_conn
+  !</DD>
+
+  !<DD>Subroutine to enforce requested parity
+  subroutine enforce_parity
+    use theta_grid, only:ntgrid
+    use dist_fn_arrays, only: gnew
+    use redistribute, only: scatter
+    use gs2_layouts, only: g_lo
+    implicit none
+    logical,save :: initialised=.false.
+    integer :: iglo,mult
+    !If enforced parity not requested then exit
+    if(.not.def_parity)return
+    
+    !Set multiplier
+    if(even) then
+       mult=1
+    else
+       mult=-1
+    endif
+    
+    !Behaviour depends upon if we're in flux tube or ballooning space
+    if(boundary_option_switch.eq.boundary_option_linked) then !Flux-tube
+       !Setup the redistribute object if required
+       if(.not.initialised) call init_enforce_parity
+       initialised=.true.
+
+       !Redistribute the data
+       call scatter(parity_redist,gnew,gnew)
+
+       !Multiply by factor if required
+       if(mult.ne.1) gnew(:,1,:)=mult*gnew(:,1,:)
+    else !Ballooning/extended space
+       !Loop over all local iglo
+       do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+          !Apply parity filter
+          gnew(-ntgrid:-1,1,iglo)=mult*gnew(ntgrid:1:-1,2,iglo)
+          gnew(1:ntgrid,1,iglo)=mult*gnew(-1:-ntgrid:-1,2,iglo)
+       enddo
+    endif
+    
+  end subroutine enforce_parity
+  !</DD>
+
   subroutine get_source_term &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         isgn, iglo, sourcefac, source)
@@ -3481,15 +3831,7 @@ subroutine check_dist_fn(report_unit)
        end do
     end if
 
-    if (def_parity) then
-       if (even) then
-          gnew(ntgl:-1,1,iglo) = gnew( ntgr:1:-1,2,iglo)
-          gnew(1:ntgr, 1,iglo) = gnew(-1:ntgl:-1,2,iglo)
-       else
-          gnew(1:ntgr, 1,iglo) = -gnew(-1:ntgl:-1,2,iglo)
-          gnew(ntgl:-1,1,iglo) = -gnew( ntgr:1:-1,2,iglo)
-       end if
-    end if
+    if (def_parity) call enforce_parity
 
     ! zero out spurious gnew outside trapped boundary
     where (forbid(:,il))
@@ -3689,7 +4031,52 @@ subroutine check_dist_fn(report_unit)
     call prof_leaving ("invert_rhs", "dist_fn")
   end subroutine invert_rhs
 
-!<DD>
+  !>Ensure that linked boundary values of passed complex field are single valued (e.g. kperp2(ntgrid,ikx,iky) is
+  !!equal to gnew(-ntgrid,ikx_link,iky) as these correspond to the same location).
+  subroutine ensure_single_val_fields_pass(arr)
+    !Added by <DD>
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use mp, only: broadcast
+    implicit none
+    integer :: it,ik, link_it
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: arr
+    if (boundary_option_switch.ne.boundary_option_linked) return
+    do ik=1,naky
+       do it=1,ntheta0
+          link_it=itright(ik,it)
+          if (link_it.lt.0) cycle
+          arr(-ntgrid,link_it,ik)=arr(ntgrid,it,ik)
+       enddo
+    enddo
+    !This broadcast was used originally but doesn't appear to be required during recent testing
+    !This could depend on the mpi library in use
+    !    call broadcast(arr)
+  end subroutine ensure_single_val_fields_pass
+
+  !>Ensure that linked boundary values of passed complex field are single valued (e.g. kperp2(ntgrid,ikx,iky) is
+  !!equal to gnew(-ntgrid,ikx_link,iky) as these correspond to the same location).
+  subroutine ensure_single_val_fields_pass_r(arr)
+    !Added by <DD>
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use mp, only: broadcast
+    implicit none
+    integer :: it,ik, link_it
+    real, dimension (-ntgrid:,:,:), intent (in out) :: arr
+    if (boundary_option_switch.ne.boundary_option_linked) return
+    do ik=1,naky
+       do it=1,ntheta0
+          link_it=itright(ik,it)
+          if (link_it.lt.0) cycle
+          arr(-ntgrid,link_it,ik)=arr(ntgrid,it,ik)
+       enddo
+    enddo
+    !This broadcast was used originally but doesn't appear to be required during recent testing
+    !This could depend on the mpi library in use
+    !    call broadcast(arr)
+  end subroutine ensure_single_val_fields_pass_r
+
   subroutine getan (antot, antota, antotp)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
     use dist_fn_arrays, only: kperp2
@@ -3708,7 +4095,7 @@ subroutine check_dist_fn(report_unit)
     call prof_entering ("getan", "dist_fn")
 
 !<DD>
-!Don't do this as integrate_species_subgather4 will fill in all values
+!Don't do this as integrate_species will fill in all values
 !    antot=0. ; antota=0. ; antotp=0.
 !Need to set individual arrays to zero if not using integrate_species for
 !that field. (NOTE this probably isn't actually needed as we shouldn't
@@ -3728,10 +4115,9 @@ subroutine check_dist_fn(report_unit)
 
 !    if (kfilter > epsilon(0.0)) call par_filter(antot)
        if (afilter > epsilon(0.0)) antot = antot * exp(-afilter**4*kperp2**2/4.)
-!<DD>
+       if(esv) call ensure_single_val_fields_pass(antot) !<DD>
     else
        antot=0.
-!</DD>
     end if
 
     if (fapar > epsilon(0.0)) then
@@ -3746,10 +4132,9 @@ subroutine check_dist_fn(report_unit)
        wgt = 2.0*beta*spec%z*spec%dens*sqrt(spec%temp/spec%mass)
        call integrate_species (g0, wgt, antota)
 !    if (kfilter > epsilon(0.0)) call par_filter(antota)
-!<DD>
+       if(esv) call ensure_single_val_fields_pass(antota) !<DD>
     else
        antota=0.
-!</DD>
     end if
 
     if (fbpar > epsilon(0.0)) then
@@ -3763,14 +4148,13 @@ subroutine check_dist_fn(report_unit)
        wgt = spec%temp*spec%dens
        call integrate_species (g0, wgt, antotp)
 !    if (kfilter > epsilon(0.0)) call par_filter(antotp)
-!<DD>
+       if(esv) call ensure_single_val_fields_pass(antotp) !<DD>
     else
        antotp=0.
-!</DD>
     end if
+
     call prof_leaving ("getan", "dist_fn")
   end subroutine getan
-!</DD>
 
   subroutine getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew, g_adjust
@@ -4193,6 +4577,13 @@ subroutine check_dist_fn(report_unit)
     call integrate_species (g0, wgt, tot)
     gamtot2 = real(tot)
 
+    !<DD>Make sure gamtots are single valued
+    if(esv)then
+       call ensure_single_val_fields_pass_r(gamtot)
+       call ensure_single_val_fields_pass_r(gamtot1)
+       call ensure_single_val_fields_pass_r(gamtot2)
+    endif
+
 ! adiabatic electrons 
     if (.not. has_electron_species(spec)) then
        if (adiabatic_option_switch == adiabatic_option_yavg) then
@@ -4299,12 +4690,12 @@ subroutine check_dist_fn(report_unit)
     allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
     allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
     allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
-    
+
     call getan (antot, antota, antotp)
     call getfieldeq1 (phi, apar, bpar, antot, antota, antotp, &
          fieldeq, fieldeqa, fieldeqp)
-    deallocate (antot, antota, antotp)
 
+    deallocate (antot, antota, antotp)
   end subroutine getfieldeq
   
 ! MAB> ported from agk
@@ -4328,11 +4719,8 @@ subroutine check_dist_fn(report_unit)
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: numerator
     real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: bmagsp
 
-!<DD>Don't need the following initialisations as fields are filled exactly below and
-!antots are initialised within getan
     phi=0. ; apar=0. ; bpar=0.
     antot=0.0 ; antota=0.0 ; antotp=0.0
-
 !CMR, 1/8/2011:  bmagsp is 3D array containing bmag
     bmagsp=spread(spread(bmag,2,ntheta0),3,naky)
     call getan (antot, antota, antotp)
