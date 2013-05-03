@@ -6,7 +6,7 @@ module dist_fn_arrays
 
   public :: g, gnew, gold, kx_shift, theta0_shift, vpa, vpac
   public :: vperp2, vpar, ittp, aj0, aj1, aj2, aj0f, aj1f
-  public :: apar_ext, kperp2, c_rate
+  public :: apar_ext, kperp2, c_rate, g_fixpar
   public :: g_adjust
 #ifdef LOWFLOW
   public :: hneoc, vparterm, wdfac, wstarfac, wdttpfac
@@ -14,7 +14,7 @@ module dist_fn_arrays
 
 
   ! dist fn
-  complex, dimension (:,:,:), allocatable :: g, gnew, gold
+  complex, dimension (:,:,:), allocatable :: g, gnew, gold, g_fixpar
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   real, dimension(:), allocatable :: kx_shift, theta0_shift

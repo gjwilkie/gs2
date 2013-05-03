@@ -41,6 +41,7 @@ module dist_fn
   public :: boundary_option_switch, boundary_option_linked
   public :: boundary_option_self_periodic, boundary_option_zero
   public :: pass_right, pass_left, init_pass_ends
+  public :: parity_redist_ik, init_enforce_parity
   private
 
   ! knobs
@@ -156,7 +157,7 @@ module dist_fn
   type (redist_type), save :: wfb_p, wfb_h
   type (redist_type), save :: pass_right
   type (redist_type), save :: pass_left
-  type (redist_type), save :: parity_redist
+  type (redist_type), save :: parity_redist, parity_redist_ik
 
   integer, dimension (:,:), allocatable :: l_links, r_links
   integer, dimension (:,:,:), allocatable :: n_links
@@ -1305,6 +1306,7 @@ subroutine check_dist_fn(report_unit)
     select case (boundary_option_switch)
     case (boundary_option_linked)
        call init_connected_bc
+       if(def_parity)call init_enforce_parity(parity_redist)
     case default
        if (.not. allocated(l_links)) then
           allocate (l_links(naky, ntheta0))
@@ -2493,10 +2495,11 @@ subroutine check_dist_fn(report_unit)
   subroutine allocate_arrays
     use kt_grids, only: naky, ntheta0, box
     use theta_grid, only: ntgrid, shat
-    use dist_fn_arrays, only: g, gnew, gold
+    use dist_fn_arrays, only: g, gnew, gold, g_fixpar
     use dist_fn_arrays, only: kx_shift, theta0_shift   ! MR
     use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
+    use run_parameters, only: fixpar_secondary
     implicit none
 !    logical :: alloc = .true.
 
@@ -2505,6 +2508,8 @@ subroutine check_dist_fn(report_unit)
        allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       !Note:This currently uses naky times more memory than strictly needed
+       if(fixpar_secondary.gt.0) allocate (g_fixpar(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
 #ifdef LOWFLOW
        allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gexp_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -2557,10 +2562,11 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: ntgrid
 !    use collisions, only: solfp1
     use le_derivatives, only: vspace_derivatives
-    use dist_fn_arrays, only: gnew, g, gold
+    use dist_fn_arrays, only: gnew, g, gold, g_fixpar
 !    use nonlinear_terms, only: add_nonlinear_terms
     use nonlinear_terms, only: add_explicit_terms
     use hyper, only: hyper_diff
+    use run_parameters, only: fixpar_secondary
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phinew, aparnew, bparnew
@@ -2584,8 +2590,13 @@ subroutine check_dist_fn(report_unit)
 
     !Enforce parity if desired (also performed in invert_rhs, but this is required
     !as collisions etc. may break parity?)
-    if (def_parity) call enforce_parity
-       
+    if (def_parity) call enforce_parity(parity_redist)
+      
+    !Ensure fixed ik has correct parity parts
+    if(fixpar_secondary.gt.0)then
+       call enforce_parity(parity_redist_ik,fixpar_secondary)
+       gnew=gnew+g_fixpar
+    endif
   end subroutine timeadv
 
 ! communication initializations for exb_shear should be done once and 
@@ -2996,24 +3007,33 @@ subroutine check_dist_fn(report_unit)
   end subroutine exb_shear
 
   !<DD>Subroutine to setup a redistribute object to be used in enforcing parity
-  subroutine init_enforce_parity
+  subroutine init_enforce_parity(redist_obj,ik_ind)
     use theta_grid, only : ntgrid
-    use gs2_layouts, only : g_lo,proc_id
-    use redistribute, only: index_list_type, init_fill, delete_list
+    use gs2_layouts, only : g_lo,proc_id, ik_idx
+    use redistribute, only: index_list_type, init_fill, delete_list, redist_type
     use mp, only: iproc, nproc, max_allreduce
     implicit none
+    type(redist_type), intent(out) :: redist_obj
+    integer, intent(in), optional :: ik_ind !If present then resulting redistribute object only applies to ik=ik_ind
     integer :: iglo,iglo_conn,ip_conn,ip
-    integer :: ig, ndata, nn_max, n
+    integer :: ig, ndata, nn_max, n,ik,ik_ind_local
     type (index_list_type), dimension(0:nproc-1) :: to, from
     integer, dimension (0:nproc-1) :: nn_from, nn_to
     integer, dimension(3) :: from_low, from_high, to_low, to_high
 
     !If enforced parity not requested then exit
-    if(.not.def_parity)return
+    if(.not.(def_parity.or.(fixpar_secondary.gt.0)))return
     
     !If not linked then don't need any setup so exit
     if(boundary_option_switch.ne.boundary_option_linked)return
     
+    !Deal with optional input
+    if(present(ik_ind)) then
+       ik_ind_local=ik_ind
+    else
+       ik_ind_local=-1
+    endif
+
     !NOTE: If we know x is entirely local (g_lo%x_local=.true.) then we
     !know that we don't need to do any comms so our iglo range can be
     !limited to what is on this proc. At the moment we don't take 
@@ -3029,6 +3049,10 @@ subroutine check_dist_fn(report_unit)
     
     !/Now loop over iglo to workout what data is to be sent/received
     do iglo=g_lo%llim_world,g_lo%ulim_world
+       !Check if we want to skip this
+       if(ik_ind_local.gt.0)then
+          if(ik_idx(g_lo,iglo).ne.ik_ind_local) cycle
+       endif
 
        !Get proc id of current iglo
        ip=proc_id(g_lo,iglo)
@@ -3070,6 +3094,11 @@ subroutine check_dist_fn(report_unit)
 
        !Loop over all iglo again (this doesn't scale)
        do iglo=g_lo%llim_world, g_lo%ulim_world
+          !Check if we want to skip this
+          if(ik_ind_local.gt.0)then
+             if(ik_idx(g_lo,iglo).ne.ik_ind_local) cycle
+          endif
+          
           !Get proc for this iglo
           ip=proc_id(g_lo,iglo)
 
@@ -3106,7 +3135,7 @@ subroutine check_dist_fn(report_unit)
        to_high(1)=ntgrid ; to_high(2)=2 ; to_high(3)=g_lo%ulim_proc
 
        !Initialise the fill object
-       call init_fill(parity_redist,'c',to_low,to_high,to,&
+       call init_fill(redist_obj,'c',to_low,to_high,to,&
             from_low,from_high, from)
 
        !Delete lists
@@ -3167,16 +3196,21 @@ subroutine check_dist_fn(report_unit)
   !</DD>
 
   !<DD>Subroutine to enforce requested parity
-  subroutine enforce_parity
+  subroutine enforce_parity(redist_obj,ik_ind)
     use theta_grid, only:ntgrid
     use dist_fn_arrays, only: gnew
-    use redistribute, only: scatter
-    use gs2_layouts, only: g_lo
+    use redistribute, only: scatter,redist_type
+    use gs2_layouts, only: g_lo,ik_idx
+    use run_parameters, only: fixpar_secondary
     implicit none
-    logical,save :: initialised=.false.
-    integer :: iglo,mult
+    type(redist_type),intent(in),optional :: redist_obj
+    integer, intent(in),optional :: ik_ind
+    type(redist_type) :: redist_local
+    integer :: ik_local
+    integer :: iglo,mult,ik
+
     !If enforced parity not requested then exit
-    if(.not.def_parity)return
+    if(.not.(def_parity.or.(fixpar_secondary.gt.0)))return
     
     !Set multiplier
     if(even) then
@@ -3187,18 +3221,33 @@ subroutine check_dist_fn(report_unit)
     
     !Behaviour depends upon if we're in flux tube or ballooning space
     if(boundary_option_switch.eq.boundary_option_linked) then !Flux-tube
-       !Setup the redistribute object if required
-       if(.not.initialised) call init_enforce_parity
-       initialised=.true.
+       !Ensure a redist object is present, if not default to parity_redist
+       if(present(redist_obj))then
+          redist_local=redist_obj
+       else
+          redist_local=parity_redist
+       endif
 
        !Redistribute the data
-       call scatter(parity_redist,gnew,gnew)
+       call scatter(redist_local,gnew,gnew)
 
        !Multiply by factor if required
        if(mult.ne.1) gnew(:,1,:)=mult*gnew(:,1,:)
     else !Ballooning/extended space
+       !Ensure ik_local is specified
+       if(present(ik_ind))then
+          ik_local=ik_ind
+       else
+          ik_local=-1
+       endif
+
        !Loop over all local iglo
        do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+          !Skip if needed
+          if(ik_local.gt.0) then
+             if(ik_idx(g_lo,iglo).ne.ik_local) cycle
+          endif
+
           !Apply parity filter
           gnew(-ntgrid:-1,1,iglo)=mult*gnew(ntgrid:1:-1,2,iglo)
           gnew(1:ntgrid,1,iglo)=mult*gnew(-1:-ntgrid:-1,2,iglo)
@@ -3831,7 +3880,7 @@ subroutine check_dist_fn(report_unit)
        end do
     end if
 
-    if (def_parity) call enforce_parity
+    if (def_parity) call enforce_parity(parity_redist)
 
     ! zero out spurious gnew outside trapped boundary
     where (forbid(:,il))
@@ -3997,6 +4046,8 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: g_lo
     use gs2_time, only: code_time
     use constants
+    use run_parameters, only: fixpar_secondary
+    use dist_fn_arrays, only: gnew, g_fixpar
     use prof, only: prof_entering, prof_leaving
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
@@ -4021,11 +4072,24 @@ subroutine check_dist_fn(report_unit)
     case (boundary_option_linked)
        call invert_rhs_linked &
             (phi, apar, bpar, phinew, aparnew, bparnew, istep, sourcefac) 
+
+       !If fixing parity particular ik then do it an add in fixpar
+       if (fixpar_secondary.gt.0) then
+          call enforce_parity(parity_redist_ik)
+          gnew=gnew+g_fixpar
+       endif
     case default
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           call invert_rhs_1 (phi, apar, bpar, phinew, aparnew, bparnew, &
                istep, iglo, sourcefac)
        end do
+
+       !If fixing parity particular ik then do it an add in fixpar
+       if (fixpar_secondary.gt.0) then
+          call enforce_parity(ik_ind=fixpar_secondary)
+          gnew=gnew+g_fixpar
+       endif
+
     end select
 
     call prof_leaving ("invert_rhs", "dist_fn")
@@ -7260,7 +7324,7 @@ subroutine check_dist_fn(report_unit)
 
     use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
     use dist_fn_arrays, only: aj0, aj1, kperp2
-    use dist_fn_arrays, only: g, gnew, kx_shift
+    use dist_fn_arrays, only: g, gnew, kx_shift, g_fixpar
 
     implicit none
 
@@ -7285,6 +7349,7 @@ subroutine check_dist_fn(report_unit)
     if (allocated(connections)) deallocate (connections)
     if (allocated(g_adj)) deallocate (g_adj)
     if (allocated(g)) deallocate (g, gnew, g0)
+    if (allocated(g_fixpar)) deallocate (g_fixpar)
     if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
     if (allocated(g_h)) deallocate (g_h, save_h)
     if (allocated(kx_shift)) deallocate (kx_shift)
