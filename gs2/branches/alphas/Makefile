@@ -527,5 +527,9 @@ unlink:
 revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
 
+
+unit_tests:
+	cd tests && ${MAKE}
+
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
