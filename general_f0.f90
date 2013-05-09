@@ -1,4 +1,5 @@
 
+
 !> A module which allows the simulation of species with a
 !! arbitrary background distribution function (e.g. alphas, 
 !! beam ions).
@@ -18,9 +19,12 @@ module general_f0
 
 
   !> Takes in the gridpoints in energy, as calculated 
-  !! for the quadrature, and calculates values of f0
-  !! on that grid
-  public :: calculate_f0_grids
+  !! for the Maxwellian species (which will be in the first
+  !! column of the input array, epoints(:,1)), 
+  !! calculates any other grids required
+  !! and calculates values of f0
+  !! and all other arrays on those grids
+  public :: calculate_f0_arrays
 
 
   !> Initialises the module, chiefly reading the parameters.
@@ -32,15 +36,15 @@ module general_f0
   public :: finish_general_f0
 
   !> Grid of f0 as function of energy and species
-  public :: f0_grid
-  real, dimension (:,:), allocatable :: f0_grid
+  public :: f0_values
+  real, dimension (:,:), allocatable :: f0_values
 
   !> Grid of generalised temperature 
   !! = -1/T^*_sN d(F_s/d energy_s)_N
   !! = - T_r/T^*_s d(F_s/d energy_s) T*_s/F_s  
   !! (where T*_s is just temperature for Maxwellian species)
   !!  as function of energy and species.
-  !! For Maxwellian species this quantity is just equal to T_r/T_s
+  !! For Maxwellian species this grid is just equal to T_r/T_s
   !! For alphas, T^*_s = E_alpha, the injection energy
   !! and this grid is calculated in this module
 
@@ -81,7 +85,7 @@ module general_f0
   real, dimension (:,:), allocatable :: smz
 
   !> Arrays are initially only calculated from proc0 as 
-  !! calculate_f0_grids is called from setvgrid. Later
+  !! calculate_f0_arrays is called from setvgrid. Later
   !! this function is called to put them on all procs
   public :: broadcast_arrays
 
@@ -194,7 +198,7 @@ contains
 
   !> NB this only gets called by proc0
   !! Arrays are broadcast later
-  subroutine calculate_f0_grids(epoints)
+  subroutine calculate_f0_arrays(epoints)
     use species, only: nspec, spec
     use species, only: ion_species, electron_species, alpha_species
     use species, only: beam_species
@@ -207,31 +211,31 @@ contains
     do is = 1,nspec
       select case (spec(is)%type)
       case (ion_species)
-        call calculate_f0_grids_maxwellian(is)
+        call calculate_f0_arrays_maxwellian(is)
       case (electron_species)
-        call calculate_f0_grids_maxwellian(is)
+        call calculate_f0_arrays_maxwellian(is)
       case (alpha_species)
         select case (alpha_f0_switch)
         case (alpha_f0_maxwellian)
-          call calculate_f0_grids_maxwellian(is)
+          call calculate_f0_arrays_maxwellian(is)
         end select
       case (beam_species)
         select case (beam_f0_switch)
         case (beam_f0_maxwellian)
-          call calculate_f0_grids_maxwellian(is)
+          call calculate_f0_arrays_maxwellian(is)
         end select
       end select
     end do
     epoints = egrid
     
-  end subroutine calculate_f0_grids
+  end subroutine calculate_f0_arrays
 
   subroutine allocate_arrays
     use species, only: nspec
 
     allocate(egrid(negrid,nspec))
     allocate(egrid_maxwell(negrid))
-    allocate(f0_grid(negrid,nspec))
+    allocate(f0_values(negrid,nspec))
     allocate(generalised_temperature(negrid,nspec))
     allocate(stm(negrid,nspec))
     allocate(zstm(negrid,nspec))
@@ -249,7 +253,7 @@ contains
     if (.not. proc0) call allocate_arrays
     call broadcast(egrid)
     call broadcast(egrid_maxwell)
-    call broadcast(f0_grid)
+    call broadcast(f0_values)
     call broadcast(generalised_temperature)
     call broadcast(stm)
     call broadcast(zstm)
@@ -266,20 +270,20 @@ contains
 !! Maxwellian distributions. 
 
 
-  subroutine calculate_f0_grids_maxwellian(is)
+  subroutine calculate_f0_arrays_maxwellian(is)
     use species, only: spec
     integer, intent(in) :: is
     !integer :: ie
     egrid(:,is) = egrid_maxwell(:)
-    f0_grid(:, is) = exp(-egrid(:,is))
+    f0_values(:, is) = exp(-egrid(:,is))
     !do ie = 1,negrid
-      generalised_temperature(:,is) = spec(is)%temp
+    generalised_temperature(:,is) = spec(is)%temp
     !end do
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
     
     f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
-  end subroutine calculate_f0_grids_maxwellian
+  end subroutine calculate_f0_arrays_maxwellian
 
 
 end module general_f0

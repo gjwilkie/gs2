@@ -34,7 +34,7 @@ contains
 
   subroutine setvgrid (vcut, negrid, epts, wgts, nesub)
 
-    use general_f0, only: calculate_f0_grids, f0_grid
+    use general_f0, only: calculate_f0_arrays, f0_values
     use constants, only: pi => dpi
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
     use species, only: nspec
@@ -82,12 +82,12 @@ contains
     end if
 
 
-    call calculate_f0_grids(epts)
+    call calculate_f0_arrays(epts)
     do is = 1,nspec
       wgts(:,is) = wgts(:,1)
     end do 
     do is = 1,nspec
-      wgts(:, is) = wgts(:, is) * f0_grid(:, is)
+      wgts(:, is) = wgts(:, is) * f0_values(:, is)
     end do
 
 
@@ -419,7 +419,7 @@ contains
   subroutine init_weights
 
     use file_utils, only: open_output_file, close_output_file
-    use general_f0, only: f0_grid
+    use general_f0, only: f0_values
     use egrid, only: zeroes
     use constants, only: pi => dpi
     use species, only: nspec
@@ -471,7 +471,7 @@ contains
          ! absorbing volume element into weights
          !werr(:nesub,ipt,is) = werr(:nesub,ipt)*energy(:nesub)*exp(-energy(:nesub))/sqrt(pi)
          werr(:nesub,ipt,is) = &
-              werr(:nesub,ipt,is)*energy(:nesub,is)/sqrt(pi)*f0_grid(:nesub,is)
+              werr(:nesub,ipt,is)*energy(:nesub,is)/sqrt(pi)*f0_values(:nesub,is)
        end do
        
     end do
