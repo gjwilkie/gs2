@@ -3012,6 +3012,7 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only : g_lo,proc_id, ik_idx
     use redistribute, only: index_list_type, init_fill, delete_list, redist_type
     use mp, only: iproc, nproc, max_allreduce
+    use run_parameters, only: fixpar_secondary
     implicit none
     type(redist_type), intent(out) :: redist_obj
     integer, intent(in), optional :: ik_ind !If present then resulting redistribute object only applies to ik=ik_ind
