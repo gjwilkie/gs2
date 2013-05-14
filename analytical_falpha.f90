@@ -17,6 +17,10 @@ module analytical_falpha
   !! and df0/drho for that species.
   public :: calculate_arrays
 
+  public :: unit_test_is_converged
+  public :: analytical_falpha_unit_test_chandrasekhar
+  public :: analytical_falpha_unit_test_nu_parallel
+
   public :: analytical_falpha_parameters_type
   type analytical_falpha_parameters_type
     integer :: alpha_is
@@ -75,7 +79,7 @@ contains
         f0(2)      = falpha(parameters, egrid(ie, is), egrid(1, is), resolution)
         gentemp(2) = dfalpha_denergy(parameters, & 
                         egrid(ie, is), f0_values(ie, is), resolution)
-        f0pr(2)    = falpha_prim(parameters, 
+        f0pr(2)    = falpha_prim(parameters,  &
                         egrid(ie, is), f0_values(ie, is), resolution)
 
         converged  = (is_converged(f0) .and.  &
@@ -89,6 +93,29 @@ contains
     end do
 
   end subroutine calculate_arrays
+
+  function is_converged(list)
+    real, dimension(2), intent(in) :: list
+    logical :: is_converged
+
+    if (abs(list(2) - list(1)/list(2)) .lt. 1.0e-6) then 
+      is_converged = .true.
+    else
+      is_converged = .false.
+    end if
+  end function is_converged
+
+  function unit_test_is_converged()
+    real, dimension(2) :: test_array
+    logical :: unit_test_is_converged
+
+    test_array = (/1.0, 1.0/)
+    unit_test_is_converged = is_converged(test_array)
+    test_array = (/1.0e-5, 1.0003e-5/)
+    unit_test_is_converged = (unit_test_is_converged .and. .not.  &
+      is_converged(test_array))
+  end function unit_test_is_converged
+
 
   !> Calculates the normalised alpha distribution function
   !! f_alpha/(n_alpha/v_inj^3)
@@ -171,7 +198,42 @@ contains
                       
 
 
-  end function falpha
+  end function nu_parallel
+
+  function analytical_falpha_unit_test_nu_parallel(parameters, energy, rslt)
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: rslt, energy
+    logical :: analytical_falpha_unit_test_nu_parallel
+
+    write(*,*) 'nu_parallel: ', nu_parallel(parameters, energy), &
+       ' should be ', rslt 
+    analytical_falpha_unit_test_nu_parallel = (abs((nu_parallel(parameters, energy) - rslt)/rslt) .lt. 1.0e-5)
+  end function analytical_falpha_unit_test_nu_parallel
+
+
+  function chandrasekhar(argument)
+    real, intent(in) :: argument
+    real ::  chandrasekhar
+    chandrasekhar = (erf(argument) - &
+        argument * 2.0 * exp(-argument**2.0) / 1.7724538509055159) / &
+        (2.0 * argument**2.0)
+  end function chandrasekhar
+
+  function analytical_falpha_unit_test_chandrasekhar()
+    logical :: analytical_falpha_unit_test_chandrasekhar
+    real :: result1, result2
+
+    result1 = 0.0373878
+    result2 = 0.213797
+    write (*,*) 'chandrasekhar(0.1): ', chandrasekhar(0.1), &
+      ' should be ', result1
+    write (*,*) 'chandrasekhar(1.0): ', chandrasekhar(1.0), &
+      ' should be ', result2
+    analytical_falpha_unit_test_chandrasekhar = &
+      (abs(chandrasekhar(0.1)-result1)/result1 .lt. 1.0e-6 .and. &
+      abs(chandrasekhar(1.0)-result2)/result2 .lt. 1.0e-5)
+  end function analytical_falpha_unit_test_chandrasekhar
+
 
   !> Calculates the normalised d f_alpha / d energy
   !! which replaces temperature for Maxwellian species 
