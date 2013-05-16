@@ -1,6 +1,7 @@
 
 program test_analytical_falpha
   use analytical_falpha
+  real :: energy, rslt
 
   type(analytical_falpha_parameters_type) :: parameters
   write (*,*) '*************************'
@@ -19,8 +20,10 @@ program test_analytical_falpha
   parameters%alpha_vth = (3.6e2 / 4.0)**0.5
 
   call announce_test('nu_parallel')
-  call process_test(analytical_falpha_unit_test_nu_parallel(parameters, 0.8, &
-    6.9741586014337e-5), 'nu_parallel')
+  energy = 0.8
+  rslt = 6.9741586014337e-5
+  call process_test(analytical_falpha_unit_test_nu_parallel(parameters, energy, &
+    rslt), 'nu_parallel')
 
 
 

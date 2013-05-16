@@ -528,6 +528,7 @@ revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
 
 
+export
 unit_tests:
 	cd tests && ${MAKE}
 
