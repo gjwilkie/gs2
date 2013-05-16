@@ -1,22 +1,11 @@
 
-.SUFFIXES: .fpp .f90 .c .o
-
-F90FLAGS += -I ../../
-LDFLAGS += -I ../../
-CLAGS += -I ../../
-
-.f90.o: 
-	$(FC) $(F90FLAGS) -c $<
-.fpp.f90:
-	$(CPP) $(CPPFLAGS) $< $@
-.c.o:
-	$(CC) $(CFLAGS) -c $<
-
+sinclude ../Makefile.tests_common
 all: test_analytical_falpha
-
-test_analytical_falpha.o: ../../analytical_falpha.o 
-
-test_analytical_falpha: test_analytical_falpha.o ../../analytical_falpha.o
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 	./test_analytical_falpha
+
+
+test_analytical_falpha.o: ../../analytical_falpha.o ../../unit_tests.o
+
+test_analytical_falpha: test_analytical_falpha.o ../../analytical_falpha.o ../../unit_tests.o
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
