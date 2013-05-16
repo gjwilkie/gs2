@@ -156,9 +156,10 @@ contains
     write (*,*) 'i2,', integral
     do j = 1, resolution/2
       v_2jm1 = energy_0**0.5 + real(j*2 -1)*dv 
-      write (*,*) 'energy', v_2jm1**2.0
       integral = integral + 4.0 * &
         falpha_integrand(parameters, energy, v_2jm1**2.0) 
+      write (*,*) 'energy', v_2jm1**2.0, falpha_integrand(parameters, energy, v_2jm1**2.0) 
+
     end do
     write (*,*) 'i3,', integral, 'energy_top', energy_top
     integral = integral + falpha_integrand(parameters, energy, energy_top)
