@@ -14,7 +14,7 @@ program test_analytical_falpha
   call process_test(analytical_falpha_unit_test_chandrasekhar(), 'chandrasekhar')
 
   parameters%alpha_ion_collision_rate = 0.01
-  parameters%alpha_electron_collision_rate = 0.006
+  parameters%alpha_electron_collision_rate = 0.0006
   parameters%ion_vth = 1.0
   parameters%electron_vth = 42.0
   parameters%alpha_vth = (3.6e2 / 4.0)**0.5
