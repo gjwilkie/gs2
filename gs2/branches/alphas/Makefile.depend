@@ -744,3 +744,5 @@ theta_grid.o: \
 	 theta_grid_params.o 
 theta_grid_params.o: \
 	 file_utils.o 
+analytical_falpha.o: \
+   unit_tests.o	

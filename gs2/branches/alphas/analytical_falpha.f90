@@ -20,6 +20,8 @@ module analytical_falpha
   public :: unit_test_is_converged
   public :: analytical_falpha_unit_test_chandrasekhar
   public :: analytical_falpha_unit_test_nu_parallel
+  public :: analytical_falpha_unit_test_falpha_integrand
+  public :: analytical_falpha_unit_test_falpha
 
   public :: analytical_falpha_parameters_type
   type analytical_falpha_parameters_type
@@ -120,6 +122,7 @@ contains
   !> Calculates the normalised alpha distribution function
   !! f_alpha/(n_alpha/v_inj^3)
   function falpha(parameters, energy, energy_0, resolution)
+    implicit none
     type(analytical_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, intent(in) :: energy
@@ -131,7 +134,7 @@ contains
     real :: energy_top
     integer :: j
 
-    energy_top = min(energy, alpha_injection_energy)
+    energy_top = min(energy, 1.0)
     integral = 0.0
     dv = (energy_top**0.5-energy_0**0.5) / real(resolution)
 
@@ -143,18 +146,25 @@ contains
     ! x_j = v_j = a + j*h = energy_0**).5 + j*dv
     ! dv = h = (b-a)/n = (energy_top**0.5-energy_0**0.5)/n
     integral = falpha_integrand(parameters, energy, energy_0)
+    write (*,*) 'i1,', integral
     do j = 1, resolution/2-1
       v_2j = energy_0**0.5 + real(j*2)*dv 
       integral = integral + 2.0 * &
         falpha_integrand(parameters, energy, v_2j**2.0) 
+      write (*,*) 'v_2j', v_2j, 'energy', v_2j**2.0, falpha_integrand(parameters, energy, v_2j**2.0)
     end do
+    write (*,*) 'i2,', integral
     do j = 1, resolution/2
       v_2jm1 = energy_0**0.5 + real(j*2 -1)*dv 
+      write (*,*) 'energy', v_2jm1**2.0
       integral = integral + 4.0 * &
         falpha_integrand(parameters, energy, v_2jm1**2.0) 
     end do
+    write (*,*) 'i3,', integral, 'energy_top', energy_top
     integral = integral + falpha_integrand(parameters, energy, energy_top)
+    write (*,*) 'i4,', integral, 'dv', dv
     integral = integral * dv/3.0
+    write (*,*) 'i5,', integral
 
     falpha = integral
 
@@ -162,6 +172,27 @@ contains
 
 
   end function falpha
+
+  function analytical_falpha_unit_test_falpha(parameters, &
+                                              energy, &
+                                              energy_0, &
+                                              resolution, &
+                                              rslt, &
+                                              err)
+    use unit_tests
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    integer, intent(in) :: resolution
+    real, intent(in) :: energy
+    real, intent(in) :: energy_0
+    real, intent(in) :: rslt
+    real, intent(in) :: err
+    logical :: analytical_falpha_unit_test_falpha
+
+    analytical_falpha_unit_test_falpha = &
+      agrees_with(falpha(parameters, energy, energy_0, resolution), rslt, err)
+
+  end function analytical_falpha_unit_test_falpha
+
 
   !> The integrand for the falpha integral, see eq
   function falpha_integrand(parameters, energy, energy_dummy_var)
@@ -180,6 +211,27 @@ contains
 
 
   end function falpha_integrand
+
+  !> Unit test used by test_analytical_falpha, testing the private
+  !! function falpha_integrand
+  function analytical_falpha_unit_test_falpha_integrand(parameters, &
+                                                        energy, &
+                                                        energy_dummy_var, &
+                                                        rslt, &
+                                                        err)
+    use unit_tests
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: energy
+    real, intent(in) :: energy_dummy_var
+    real, intent(in) :: rslt
+    real, intent(in) :: err
+    logical :: analytical_falpha_unit_test_falpha_integrand
+    
+    analytical_falpha_unit_test_falpha_integrand = &
+      agrees_with(falpha_integrand(parameters, energy, energy_dummy_var), &
+      rslt, err)
+
+  end function analytical_falpha_unit_test_falpha_integrand
 
   !> Normalised nu_parallel, see eq () of  
   function nu_parallel(parameters, energy)
@@ -200,15 +252,17 @@ contains
 
   end function nu_parallel
 
-  function analytical_falpha_unit_test_nu_parallel(parameters, energy, rslt)
+  !> Unit test used by test_analytical_falpha, testing the private
+  !! function nu_parallel
+  function analytical_falpha_unit_test_nu_parallel(parameters, energy, rslt, err)
+    use unit_tests
     type(analytical_falpha_parameters_type), intent(in) :: parameters
-    real, intent(in) :: rslt, energy
+    real, intent(in) :: rslt, energy, err
     logical :: analytical_falpha_unit_test_nu_parallel
 
-    write(*,*) 'nu_parallel: ', nu_parallel(parameters, energy), &
-       ' should be ', rslt 
-    analytical_falpha_unit_test_nu_parallel = (abs((nu_parallel(parameters, energy) - rslt)/rslt) .lt. 1.0e-5)
+    analytical_falpha_unit_test_nu_parallel = agrees_with(nu_parallel(parameters, energy), rslt, err)
   end function analytical_falpha_unit_test_nu_parallel
+
 
 
   function chandrasekhar(argument)
