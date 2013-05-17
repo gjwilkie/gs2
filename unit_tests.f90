@@ -4,6 +4,8 @@ module unit_tests
 
   !> Is the relative error of the first argument with respect
   !! to the correct answer less than err? 
+  !! If the correct value is 0.0, then err is treated as an 
+  !! absolute error
   public :: agrees_with
 
   !> Announce the start of the given test (to let the user know 
@@ -20,7 +22,11 @@ contains
     real, intent(in) :: val, correct, err
     logical :: agrees_with
     write (*,*) val, ' should be ', correct 
-    agrees_with = (abs((val-correct)/correct) .lt. err)
+    if (correct .eq. 0.0) then 
+      agrees_with = abs(val) .lt. err 
+    else
+      agrees_with = (abs((val-correct)/correct) .lt. err)
+    end if
   end function agrees_with
 
   subroutine announce_test(test_name)

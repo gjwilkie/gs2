@@ -11,6 +11,7 @@ program test_analytical_falpha
   implicit none
   real :: eps
   type(analytical_falpha_parameters_type) :: parameters
+  real, dimension(:,:,:), allocatable :: array
 
   ! General config
   eps = 1.0e-8
@@ -33,6 +34,8 @@ program test_analytical_falpha
   parameters%alpha_vth = (3.6e2 / 4.0)**0.5
   parameters%ion_temp = 1.0
   parameters%alpha_mass = 4.0
+  parameters%source = 0.01
+  parameters%alpha_injection_energy = 3.6e2
 
   call announce_test('nu_parallel')
   call process_test(analytical_falpha_unit_test_nu_parallel( &
@@ -49,10 +52,30 @@ program test_analytical_falpha
 
   call announce_test('falpha')
   call process_test(analytical_falpha_unit_test_falpha(&
-    parameters, 0.02, 0.01, 16, 63.562943357601526, eps), 'falpha 0.02') 
+    parameters, 0.02, 0.01, 128, 264.9390892941125*0.01, eps), 'falpha 0.02') 
+  call process_test(analytical_falpha_unit_test_falpha(&
+    parameters, 0.5, 0.01, 256, 4571.551171450769*0.01, eps), 'falpha 0.5') 
+  call process_test(analytical_falpha_unit_test_falpha(&
+    parameters, 1.0, 0.01, 256, 6233.062047471938*0.01, eps), 'falpha 1.0') 
+  call process_test(analytical_falpha_unit_test_falpha(&
+    parameters, 2.5, 0.01, 256, 310.32588629862335*0.01, eps), 'falpha 2.5') 
+  call process_test(analytical_falpha_unit_test_falpha(&
+    parameters, 0.01, 0.01, 128, 0.0, eps), 'falpha 0.01') 
 
 
+  allocate(array(6, 1,  7))
 
+  array(:,1,1) = (/0.0100000000000000, 0.675000000000000, 1.34000000000000, &
+  2.00500000000000, 2.67000000000000, 3.33500000000000/) ! egrid
+  array(:,1,5) = (/0.000000000000000, 53.4776774832068, 31.5777514771834, &
+  8.35159722869193, 2.20880756252364, 0.584179374874592/) ! f0_rslt
+
+  parameters%negrid = 6
+  parameters%alpha_is = 1
+  call announce_test('calculate_arrays')
+  call process_test(analytical_falpha_unit_test_calculate_arrays(&
+    parameters, array(:,:,1), array(:,:,2), array(:,:,3), array(:,:,4),&
+    array(:,:,5), eps), 'calculate_arrays') 
 
 
 

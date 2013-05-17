@@ -22,6 +22,7 @@ module analytical_falpha
   public :: analytical_falpha_unit_test_nu_parallel
   public :: analytical_falpha_unit_test_falpha_integrand
   public :: analytical_falpha_unit_test_falpha
+  public :: analytical_falpha_unit_test_calculate_arrays
 
   public :: analytical_falpha_parameters_type
   type analytical_falpha_parameters_type
@@ -29,6 +30,7 @@ module analytical_falpha
     real :: alpha_mass
     real :: alpha_vth
     real :: alpha_injection_energy
+    real :: source
     real :: ion_temp
     real :: ion_vth
     real :: electron_temp
@@ -72,7 +74,8 @@ contains
       f0 = -1.0
       gentemp = 0.0
       f0pr = 0.0
-      resolution = 64
+      resolution = 8
+      converged = .false.
       do while (.not. converged)
         f0(1)      = f0(2)
         gentemp(1) = gentemp(2)
@@ -84,6 +87,7 @@ contains
         f0pr(2)    = falpha_prim(parameters,  &
                         egrid(ie, is), f0_values(ie, is), resolution)
 
+        write (*,*) 'egrid ', egrid(ie, is), 'gentemp', gentemp
         converged  = (is_converged(f0) .and.  &
                      is_converged(gentemp) .and. &
                      is_converged(f0pr))
@@ -96,15 +100,49 @@ contains
 
   end subroutine calculate_arrays
 
+  function analytical_falpha_unit_test_calculate_arrays(parameters, &
+                              egrid, &
+                              f0_values, &
+                              generalised_temperature, &
+                              f0prim, &
+                              f0_rslt, &
+                              err)
+    use unit_tests
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, dimension(:,:), intent(in) :: egrid
+    real, dimension(:,:), intent(out) :: f0_values
+    real, dimension(:,:), intent(out) :: generalised_temperature
+    real, dimension(:,:), intent(out) :: f0prim
+    real, dimension(:,:), intent(in) :: f0_rslt
+    real, dimension(:,:), intent(in) :: gentemp_rslt
+    logical :: analytical_falpha_unit_test_calculate_arrays
+
+    integer :: i
+
+    call calculate_arrays(parameters, egrid, f0_values, &
+        generalised_temperature, f0prim)
+    analytical_falpha_unit_test_calculate_arrays = .true.
+
+    do i = 1,parameters%negrid
+      analytical_falpha_unit_test_calculate_arrays = &
+        analytical_falpha_unit_test_calculate_arrays .and. &
+        agrees_with(f0_values(i, parameters%alpha_is), &
+                    f0_rslt(i, parameters%alpha_is), err)
+        agrees_with(generalised_temperature(i, parameters%alpha_is), &
+                    gentemp_rslt(i, parameters%alpha_is), err)
+    end do
+
+  end function analytical_falpha_unit_test_calculate_arrays
+
   function is_converged(list)
     real, dimension(2), intent(in) :: list
     logical :: is_converged
-
-    if (abs(list(2) - list(1)/list(2)) .lt. 1.0e-6) then 
-      is_converged = .true.
+    if (list(2) .eq. 0.0) then 
+      is_converged = abs(list(1)) .lt. 1.0e-8
     else
-      is_converged = .false.
+      is_converged = (abs((list(1)-list(2))/list(2)) .lt. 1.0e-8)
     end if
+
   end function is_converged
 
   function unit_test_is_converged()
@@ -114,6 +152,9 @@ contains
     test_array = (/1.0, 1.0/)
     unit_test_is_converged = is_converged(test_array)
     test_array = (/1.0e-5, 1.0003e-5/)
+    unit_test_is_converged = (unit_test_is_converged .and. .not.  &
+      is_converged(test_array))
+    test_array = (/-1.0, 0.0/)
     unit_test_is_converged = (unit_test_is_converged .and. .not.  &
       is_converged(test_array))
   end function unit_test_is_converged
@@ -145,29 +186,23 @@ contains
     ! a = energy_0**0.5
     ! x_j = v_j = a + j*h = energy_0**).5 + j*dv
     ! dv = h = (b-a)/n = (energy_top**0.5-energy_0**0.5)/n
+    ! NB the integral is wrt v, not energy
     integral = falpha_integrand(parameters, energy, energy_0)
-    write (*,*) 'i1,', integral
     do j = 1, resolution/2-1
       v_2j = energy_0**0.5 + real(j*2)*dv 
       integral = integral + 2.0 * &
         falpha_integrand(parameters, energy, v_2j**2.0) 
-      write (*,*) 'v_2j', v_2j, 'energy', v_2j**2.0, falpha_integrand(parameters, energy, v_2j**2.0)
     end do
-    write (*,*) 'i2,', integral
     do j = 1, resolution/2
       v_2jm1 = energy_0**0.5 + real(j*2 -1)*dv 
       integral = integral + 4.0 * &
         falpha_integrand(parameters, energy, v_2jm1**2.0) 
-      write (*,*) 'energy', v_2jm1**2.0, falpha_integrand(parameters, energy, v_2jm1**2.0) 
 
     end do
-    write (*,*) 'i3,', integral, 'energy_top', energy_top
     integral = integral + falpha_integrand(parameters, energy, energy_top)
-    write (*,*) 'i4,', integral, 'dv', dv
     integral = integral * dv/3.0
-    write (*,*) 'i5,', integral
 
-    falpha = integral
+    falpha = integral * parameters%source
 
 
 
@@ -300,7 +335,17 @@ contains
     real, intent(in) :: energy
     real, intent(in) :: falph
     real :: dfalpha_denergy
-
+    dfalpha_denergy = 0.0
+    if (energy .gt. 1.0) then 
+      dfalpha_denergy = - parameters%alpha_injection_energy / parameters%ion_temp
+    else if (falph .eq. 0.0) then 
+      dfalpha_denergy = 0.0
+    else
+      dfalpha_denergy = parameters%source / falph / (&
+        4.0 * 3.14159265358979 * nu_parallel(parameters, energy) *  &
+        energy * (5.0/2.0) ) - &
+        parameters%alpha_injection_energy / parameters%ion_temp
+    end if
   end function dfalpha_denergy
 
   !> Calculates the normalised gradient of f_alpha
@@ -312,6 +357,7 @@ contains
     real, intent(in) :: energy
     real, intent(in) :: falph
     real :: falpha_prim
+    falpha_prim = 0.0
 
   end function falpha_prim
 
