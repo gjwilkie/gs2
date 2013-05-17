@@ -30,6 +30,7 @@ module analytical_falpha
     real :: alpha_mass
     real :: alpha_vth
     real :: alpha_injection_energy
+    real :: energy_0
     real :: source
     real :: ion_temp
     real :: ion_vth
@@ -81,11 +82,11 @@ contains
         gentemp(1) = gentemp(2)
         f0pr(1)    = f0pr(2) 
 
-        f0(2)      = falpha(parameters, egrid(ie, is), egrid(1, is), resolution)
+        f0(2)      = falpha(parameters, egrid(ie, is), parameters%energy_0, resolution)
         gentemp(2) = dfalpha_denergy(parameters, & 
-                        egrid(ie, is), f0_values(ie, is), resolution)
+                        egrid(ie, is), f0(2), resolution)
         f0pr(2)    = falpha_prim(parameters,  &
-                        egrid(ie, is), f0_values(ie, is), resolution)
+                        egrid(ie, is), f0(2), resolution)
 
         write (*,*) 'egrid ', egrid(ie, is), 'gentemp', gentemp
         converged  = (is_converged(f0) .and.  &
@@ -106,6 +107,7 @@ contains
                               generalised_temperature, &
                               f0prim, &
                               f0_rslt, &
+                              gentemp_rslt, &
                               err)
     use unit_tests
     type(analytical_falpha_parameters_type), intent(in) :: parameters
@@ -127,7 +129,7 @@ contains
       analytical_falpha_unit_test_calculate_arrays = &
         analytical_falpha_unit_test_calculate_arrays .and. &
         agrees_with(f0_values(i, parameters%alpha_is), &
-                    f0_rslt(i, parameters%alpha_is), err)
+                    f0_rslt(i, parameters%alpha_is), err) .and. &
         agrees_with(generalised_temperature(i, parameters%alpha_is), &
                     gentemp_rslt(i, parameters%alpha_is), err)
     end do
@@ -202,7 +204,7 @@ contains
     integral = integral + falpha_integrand(parameters, energy, energy_top)
     integral = integral * dv/3.0
 
-    falpha = integral * parameters%source
+    falpha = integral * parameters%source / 4.0 / 3.14159265358979
 
 
 
