@@ -83,7 +83,13 @@ contains
         f0pr(1)    = f0pr(2) 
 
         f0(2)      = falpha(parameters, egrid(ie, is), parameters%energy_0, resolution)
-        gentemp(2) = dfalpha_denergy(parameters, & 
+!        gentemp(2) = dfalpha_denergy(parameters, & 
+!                        egrid(ie, is), f0(2), resolution)
+!
+! Changed definition here to agree with the definition of generalised temperature
+! 1/T* = - (Tref/Eref) * d/dE ln F0
+! (GW)
+        gentemp(2) = - parameters%alpha_injection_energy / dfalpha_denergy(parameters, & 
                         egrid(ie, is), f0(2), resolution)
         f0pr(2)    = falpha_prim(parameters,  &
                         egrid(ie, is), f0(2), resolution)
@@ -345,7 +351,7 @@ contains
     else
       dfalpha_denergy = parameters%source / falph / (&
         4.0 * 3.14159265358979 * nu_parallel(parameters, energy) *  &
-        energy * (5.0/2.0) ) - &
+        energy ** (5.0/2.0) ) - &
         parameters%alpha_injection_energy / parameters%ion_temp
     end if
   end function dfalpha_denergy
