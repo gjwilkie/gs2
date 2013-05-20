@@ -83,9 +83,9 @@ USE_MPI ?= on
 # turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?=
 # which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
-USE_FFT ?= fftw
+USE_FFT ?= -ldfftw -ldrfftw
 # uses netcdf library (bin)
-USE_NETCDF ?= on
+USE_NETCDF ?= 
 # uses hdf5 library (bin)
 USE_HDF5 ?=
 # Use function pointer in layouts_indices.c (bin)
@@ -122,7 +122,7 @@ USE_LE_LAYOUT ?=
 
 MAKE		= make
 CPP		= cpp
-CPPFLAGS	= -C -P -traditional
+CPPFLAGS	= -P -traditional
 FC		= f90
 MPIFC		?= mpif90
 H5FC		?= h5fc
@@ -151,7 +151,7 @@ F90FLAGS_SFX2 =
 MPI_INC	?=
 MPI_LIB ?=
 FFT_INC ?=
-FFT_LIB ?=
+FFT_LIB ?= -L /usr/local/lib
 NETCDF_INC ?=
 NETCDF_LIB ?=
 HDF5_INC ?=
