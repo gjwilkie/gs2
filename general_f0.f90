@@ -93,7 +93,17 @@ module general_f0
 
   integer :: alpha_f0_switch, &
              beam_f0_switch
+  
+  real :: alpha_Einj
 
+  logical :: print_egrid
+ 
+  !> Flag that controls whether or not an externally-supplied f0 
+  !! is rescaled to fit the given species parameters.
+  !! f0_rescale = T -- f0 is rescaled to fit spec(is)%dens
+  !!            = F -- f0 is taken literally, spec(is)%dens is changed                     
+  !! This option does not rescale according to spec(is)%temp!
+  logical :: rescale_f0
 
   integer, parameter :: alpha_f0_maxwellian = 1, &
                         alpha_f0_analytic = 2, &
@@ -164,7 +174,8 @@ contains
     character(20) :: beam_f0
     namelist /general_f0_parameters/ &
             alpha_f0, &
-            beam_f0
+            beam_f0, &
+            alpha_Einj, rescale_f0, print_egrid
 
     integer :: ierr, in_file
     logical :: exist
@@ -218,6 +229,8 @@ contains
         select case (alpha_f0_switch)
         case (alpha_f0_maxwellian)
           call calculate_f0_arrays_maxwellian(is)
+        case (alpha_f0_external)
+          call calculate_f0_arrays_external(is)
         end select
       case (beam_species)
         select case (beam_f0_switch)
@@ -273,17 +286,128 @@ contains
   subroutine calculate_f0_arrays_maxwellian(is)
     use species, only: spec
     integer, intent(in) :: is
-    !integer :: ie
+    integer :: ie
     egrid(:,is) = egrid_maxwell(:)
     f0_values(:, is) = exp(-egrid(:,is))
-    !do ie = 1,negrid
-    generalised_temperature(:,is) = spec(is)%temp
-    !end do
+    do ie = 1,negrid
+       generalised_temperature(:,is) = spec(is)%temp
+       if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), & 
+                                   generalised_temperature(ie,is)
+    end do
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
     
     f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
   end subroutine calculate_f0_arrays_maxwellian
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! External
+!! 
+!! This subsection contains routines for handling 
+!! distributions that are given by an external
+!! input file.
+
+!> This subroutine calculates f0 on the grid from an external
+!! input file. Note that the f0 grid as entered by this input file 
+!! MUST comply with existing energy grid points. In the future, include
+!! an option to cubic-spline interpolate between given grid points 
+!! if necessary.
+  subroutine calculate_f0_arrays_external(is)
+    !
+    ! The egrid is already given by get_legendre_grids.
+    ! External input file *must* follow the existing v-grid.
+    !
+    ! The input file can take two forms, as controlled by the
+    ! control paramter num_cols, the first integer 
+    ! read from the file
+    !  - Single-Column Mode: Only F0(E) is given. To calculate
+    !      generalized temperature, a cubic spline is used to 
+    !      interpolate and the slope is taken from that.
+    !  - Two-Column Mode: First column is F0(E), the second is
+    !      dF0/dE.
+    ! 
+    use le_grids, only: integrate_species
+    use mp, only: broadcast
+    use species, only: spec, nspec
+    use file_utils, only: run_name
+    use splines, only: fitp_curvd, fitp_curv1, fitp_curv2
+    implicit none
+    integer, intent(in) :: is
+    integer:: f0in_unit = 21, num_cols, ie, ierr
+    real:: df0dE, n0_alpha, test
+    real:: yp(negrid), temp(negrid)
+    real:: pick_spec(nspec)
+    
+    ! Open file and read column option
+    open(unit=f0in_unit,file=trim(run_name)//'.f0in',status='old',action='read')
+    read(f0in_unit,*) num_cols
+
+    if (num_cols .EQ. 1) then
+       ! Read f0 values
+       do ie = 1,negrid
+          read(f0in_unit,*) f0_values(ie,is)
+       end do
+       ! Perform cubic spline to get the slope of F0 at grid points
+       do ie = 1,negrid
+
+          ! Generate splines
+          call fitp_curv1(negrid,egrid(:,is),f0_values(:,is),0.0,0.0,3,yp,temp,1.0,ierr)
+
+          if (ierr .NE. 0) then
+             write(*,*) "fitp_curv1 returned error code ", ierr
+             stop 1
+          end if
+
+          ! Calculate derivative of f0 at grid points
+          df0dE = fitp_curvd(egrid(ie,is),negrid,egrid(:,is), &
+                             f0_values(:,is),yp,1.0)
+
+          generalised_temperature(ie,is) = -alpha_Einj*f0_values(ie,is)/df0dE
+ 
+          ! Diagnostic output
+          if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE, & 
+                                   generalised_temperature(ie,is)
+       end do
+
+    else if (num_cols .EQ. 2) then
+       ! Read both f0 and df0/dE
+       do ie = 1,negrid
+          read(f0in_unit,*) f0_values(ie,is), df0dE
+
+          generalised_temperature(ie,is) = -alpha_Einj*f0_values(ie,is)/df0dE
+
+          ! Diagnostic output
+          if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE, & 
+                                   generalised_temperature(ie,is)
+       end do
+    else
+       write(*,*) "ERROR. First line in f0 input file should be num_cols: " 
+       write(*,*) " num_cols = 1 if only f0 is to be input, "
+       write(*,*) " num_cols=2 if f0 and df0/dE are input."
+       stop 1
+    end if
+    close(f0in_unit)    
+
+    ! This is wrong. Need to calculate 0th moment properly. For now, just trust that
+    ! f0 as input agrees with spec(is)%dens
+!    pick_spec = 0.0
+!    pick_spec(is) = 1.0
+!    ! Calculate 0th moment of f0 as input, and rescale either f0 or n0 consistently
+!    ! call integrate_species(cmplx(f0_values(:,:)),pick_spec,n0_alpha)
+
+!    if (rescale_f0) then
+!       ! Calculate 0th moment of f0 as input, and rescale according to n0
+!       f0_values(ie,is) = f0_values(ie,is) * spec(is)%dens / n0_alpha
+!    else
+!       spec(is)%dens = n0_alpha
+!    end if
+!    call broadcast(spec(is)%dens)
+!
+    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
+    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+    
+    f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
+
+  end subroutine calculate_f0_arrays_external
 
 end module general_f0
