@@ -65,7 +65,7 @@ GK_PROJECT ?= gs2
 # Be careful that DEBUG=off means DEBUG=on.
 #
 # turns on debug mode (bin)
-DEBUG ?=
+DEBUG ?=on
 # turns on scalasca instrumentation mode (bin)
 SCAL ?=
 # turns on test mode (bin)
@@ -83,9 +83,9 @@ USE_MPI ?= on
 # turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?=
 # which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
-USE_FFT ?= -ldfftw -ldrfftw
+USE_FFT ?= fftw
 # uses netcdf library (bin)
-USE_NETCDF ?= 
+USE_NETCDF ?= on
 # uses hdf5 library (bin)
 USE_HDF5 ?=
 # Use function pointer in layouts_indices.c (bin)
@@ -122,7 +122,7 @@ USE_LE_LAYOUT ?=
 
 MAKE		= make
 CPP		= cpp
-CPPFLAGS	= -P -traditional
+CPPFLAGS	= -C -P -traditional
 FC		= f90
 MPIFC		?= mpif90
 H5FC		?= h5fc
@@ -151,7 +151,7 @@ F90FLAGS_SFX2 =
 MPI_INC	?=
 MPI_LIB ?=
 FFT_INC ?=
-FFT_LIB ?= -L /usr/local/lib
+FFT_LIB ?=
 NETCDF_INC ?=
 NETCDF_LIB ?=
 HDF5_INC ?=
