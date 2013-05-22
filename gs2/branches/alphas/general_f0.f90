@@ -175,7 +175,7 @@ contains
     namelist /general_f0_parameters/ &
             alpha_f0, &
             beam_f0, &
-            alpha_Einj, rescale_f0, print_egrid
+            alpha_Einj, rescale_f0 , print_egrid
 
     integer :: ierr, in_file
     logical :: exist
@@ -327,15 +327,14 @@ contains
     !  - Two-Column Mode: First column is F0(E), the second is
     !      dF0/dE.
     ! 
-    use le_grids, only: w
     use mp, only: broadcast
     use species, only: spec, nspec
     use file_utils, only: run_name
     use splines, only: fitp_curvd, fitp_curv1, fitp_curv2
     implicit none
     integer, intent(in) :: is
-    integer:: f0in_unit = 21, num_cols, ie, ierr, numdat, js
-    real:: df0dE, n0_alpha, test
+    integer:: f0in_unit = 21, num_cols, ie, ierr, numdat, il, it
+    real:: df0dE, n0_alpha, test, wl_sum
     real:: pick_spec(nspec)
     real, dimension(:), allocatable:: f0_values_dat, df0dE_dat, egrid_dat, &
                                       f0_values_dat_log, df0dE_dat_log, yp, temp
@@ -444,26 +443,6 @@ contains
        write(*,*) " num_cols=2 if f0 and df0/dE are input."
        stop 1
     end if
-
-    ! This is wrong. Need to calculate 0th moment properly. For now, just trust that
-    ! f0 as input agrees with spec(is)%dens
-    ! Calculate 0th moment of f0 as input, and rescale either f0 or n0 consistently
-
-!    f0_values = f0_values/sqrt(2.0)
-
-!    n0_alpha = 0.0
-!    do ie = 1,negrid
-!       n0_alpha = n0_alpha + w(ie,is)*f0_values(ie,is)*4.0*egrid(ie,is)
-!    end do
-!    write(*,*) "n0_alpha = ", n0_alpha
-
-!    if (rescale_f0) then
-!       ! Calculate 0th moment of f0 as input, and rescale according to n0
-!       f0_values(ie,is) = f0_values(ie,is) * spec(is)%dens / n0_alpha
-!    else
-!       spec(is)%dens = n0_alpha
-!    end if
-!    call broadcast(spec(is)%dens)
 
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
