@@ -308,14 +308,15 @@ contains
 !! input file.
 
 !> This subroutine calculates f0 on the grid from an external
-!! input file. Note that the f0 grid as entered by this input file 
-!! MUST comply with existing energy grid points. In the future, include
-!! an option to cubic-spline interpolate between given grid points 
-!! if necessary.
+!! input file. The grid on the input file can differ from that 
+!! of gs2. A cubic-spline is used to interpolate between the two.
+!! This is a logarithmic interpolation on the splines to ensure positive-
+!! definiteness of F0. The user can either specify df0/dE or it 
+!! can be estimated internally.
   subroutine calculate_f0_arrays_external(is)
     !
-    ! The egrid is already given by get_legendre_grids.
-    ! External input file *must* follow the existing v-grid.
+    ! The egrid is already given by get_legendre_grids. The input values
+    ! are cubic-spline interpolated to the energy grid of gs2.
     !
     ! The input file can take two forms, as controlled by the
     ! control paramter num_cols, the first integer 
@@ -326,59 +327,116 @@ contains
     !  - Two-Column Mode: First column is F0(E), the second is
     !      dF0/dE.
     ! 
-    use le_grids, only: integrate_species
+    use le_grids, only: w
     use mp, only: broadcast
     use species, only: spec, nspec
     use file_utils, only: run_name
     use splines, only: fitp_curvd, fitp_curv1, fitp_curv2
     implicit none
     integer, intent(in) :: is
-    integer:: f0in_unit = 21, num_cols, ie, ierr
+    integer:: f0in_unit = 21, num_cols, ie, ierr, numdat, js
     real:: df0dE, n0_alpha, test
-    real:: yp(negrid), temp(negrid)
     real:: pick_spec(nspec)
+    real, dimension(:), allocatable:: f0_values_dat, df0dE_dat, egrid_dat, &
+                                      f0_values_dat_log, df0dE_dat_log, yp, temp
     
     ! Open file and read column option
     open(unit=f0in_unit,file=trim(run_name)//'.f0in',status='old',action='read')
     read(f0in_unit,*) num_cols
+    read(f0in_unit,*) numdat
 
-    if (num_cols .EQ. 1) then
+    allocate(f0_values_dat(numdat))
+    allocate(df0dE_dat(numdat))
+    allocate(egrid_dat(numdat))
+    allocate(f0_values_dat_log(numdat))
+    allocate(df0dE_dat_log(numdat))
+    allocate(yp(numdat))
+    allocate(temp(numdat))
+
+    if (num_cols .EQ. 2) then
        ! Read f0 values
-       do ie = 1,negrid
-          read(f0in_unit,*) f0_values(ie,is)
+       do ie = 1,numdat
+          read(f0in_unit,*) egrid_dat(ie), f0_values_dat(ie)
+          ! Interpolate the *logarithm* of f0 to ensure positive-definiteness
+          f0_values_dat_log(ie) = log(f0_values_dat(ie))
        end do
-       ! Perform cubic spline to get the slope of F0 at grid points
+       close(f0in_unit)
+
+       ! Perform cubic spline to get F0 and its slope at grid points
+
+       ! Generate spline parameters
+       call fitp_curv1(numdat,egrid_dat,f0_values_dat_log,0.0,0.0,3,yp,temp,1.0,ierr)
+       if (ierr .NE. 0) then
+          write(*,*) "fitp_curv1 returned error code ", ierr
+          stop 1
+       end if
+
        do ie = 1,negrid
+          ! Interpolate to get f0 at grid points
+          f0_values(ie,is) = fitp_curv2(egrid(ie,is),numdat,egrid_dat, &
+                             f0_values_dat_log,yp,1.0)
 
-          ! Generate splines
-          call fitp_curv1(negrid,egrid(:,is),f0_values(:,is),0.0,0.0,3,yp,temp,1.0,ierr)
+          ! Recover F0 from its logarithm
+          f0_values(ie,is) = exp(f0_values(ie,is))
 
-          if (ierr .NE. 0) then
-             write(*,*) "fitp_curv1 returned error code ", ierr
-             stop 1
-          end if
+          ! Calculate d/dE lnF0 to get generalised temperature
+          df0dE = fitp_curvd(egrid(ie,is),numdat,egrid_dat, &
+                             f0_values_dat_log,yp,1.0)
+          generalised_temperature(ie,is) = -alpha_Einj/df0dE
 
-          ! Calculate derivative of f0 at grid points
-          df0dE = fitp_curvd(egrid(ie,is),negrid,egrid(:,is), &
-                             f0_values(:,is),yp,1.0)
-
-          generalised_temperature(ie,is) = -alpha_Einj*f0_values(ie,is)/df0dE
- 
           ! Diagnostic output
           if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE, & 
                                    generalised_temperature(ie,is)
        end do
 
-    else if (num_cols .EQ. 2) then
+    else if (num_cols .EQ. 3) then
        ! Read both f0 and df0/dE
+       do ie = 1,numdat
+          read(f0in_unit,*) egrid_dat(ie), f0_values_dat(ie), df0dE_dat(ie)
+          f0_values_dat_log(ie) = log(f0_values_dat(ie))
+          df0dE_dat_log(ie) = log(abs(df0dE_dat(ie)))
+       end do
+       close(f0in_unit)
+
+       ! Generate spline parameters for f0
+       call fitp_curv1(numdat,egrid_dat,f0_values_dat_log,0.0,0.0,3,yp,temp,1.0,ierr)
+
+       if (ierr .NE. 0) then
+          write(*,*) "fitp_curv1 returned error code ", ierr
+          stop 1
+       end if
+
        do ie = 1,negrid
-          read(f0in_unit,*) f0_values(ie,is), df0dE
+
+          ! Interpolate to get F0 at grid points
+          f0_values(ie,is) = fitp_curv2(egrid(ie,is),numdat,egrid_dat, &
+                             f0_values_dat_log,yp,1.0)
+       end do
+
+       ! Recover F0 from its logarithm
+       f0_values = exp(f0_values)
+
+       ! Generate spline parameters for df0/dE
+       call fitp_curv1(numdat,egrid_dat,df0dE_dat_log,0.0,0.0,3,yp,temp,1.0,ierr)
+       if (ierr .NE. 0) then
+          write(*,*) "fitp_curv1 returned error code ", ierr
+          stop 1
+       end if
+
+       do ie = 1,negrid
+          ! Interpolate to get f0 at grid points
+          df0dE            = fitp_curv2(egrid(ie,is),numdat,egrid_dat, &
+                             df0dE_dat_log,yp,1.0)
+ 
+          ! Recover df0/dE from its logarithm (maintaining whatever sign it had before)
+          df0dE = sign(1.0,df0dE_dat(ie))* exp(df0dE)
 
           generalised_temperature(ie,is) = -alpha_Einj*f0_values(ie,is)/df0dE
 
           ! Diagnostic output
           if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE, & 
                                    generalised_temperature(ie,is)
+
        end do
     else
        write(*,*) "ERROR. First line in f0 input file should be num_cols: " 
@@ -386,14 +444,18 @@ contains
        write(*,*) " num_cols=2 if f0 and df0/dE are input."
        stop 1
     end if
-    close(f0in_unit)    
 
     ! This is wrong. Need to calculate 0th moment properly. For now, just trust that
     ! f0 as input agrees with spec(is)%dens
-!    pick_spec = 0.0
-!    pick_spec(is) = 1.0
-!    ! Calculate 0th moment of f0 as input, and rescale either f0 or n0 consistently
-!    ! call integrate_species(cmplx(f0_values(:,:)),pick_spec,n0_alpha)
+    ! Calculate 0th moment of f0 as input, and rescale either f0 or n0 consistently
+
+!    f0_values = f0_values/sqrt(2.0)
+
+!    n0_alpha = 0.0
+!    do ie = 1,negrid
+!       n0_alpha = n0_alpha + w(ie,is)*f0_values(ie,is)*4.0*egrid(ie,is)
+!    end do
+!    write(*,*) "n0_alpha = ", n0_alpha
 
 !    if (rescale_f0) then
 !       ! Calculate 0th moment of f0 as input, and rescale according to n0
@@ -402,11 +464,14 @@ contains
 !       spec(is)%dens = n0_alpha
 !    end if
 !    call broadcast(spec(is)%dens)
-!
+
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
     
     f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
+
+
+    deallocate(egrid_dat,f0_values_dat,df0dE_dat,f0_values_dat_log,df0dE_dat_log,yp,temp)
 
   end subroutine calculate_f0_arrays_external
 
