@@ -349,9 +349,9 @@ contains
     else if (falph .eq. 0.0) then 
       dfalpha_denergy = 0.0
     else
-      dfalpha_denergy = parameters%source / falph / (&
-        4.0 * 3.14159265358979 * nu_parallel(parameters, energy) *  &
-        energy ** (5.0/2.0) ) - &
+      dfalpha_denergy = parameters%source /  (&
+        falph * 4.0 * 3.14159265358979 * parameters%alpha_mass * &
+        nu_parallel(parameters, energy) * energy ** (5.0/2.0) ) - &
         parameters%alpha_injection_energy / parameters%ion_temp
     end if
   end function dfalpha_denergy
