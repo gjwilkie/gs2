@@ -100,8 +100,8 @@ module general_f0
  
   !> Flag that controls whether or not an externally-supplied f0 
   !! is rescaled to fit the given species parameters.
-  !! f0_rescale = T -- f0 is rescaled to fit spec(is)%dens
-  !!            = F -- f0 is taken literally, spec(is)%dens is changed                     
+  !! f0_rescale = T -- F0 is rescaled to fit spec(is)%dens
+  !!            = F -- F0 is taken literally, spec(is)%dens is changed                     
   !! This option does not rescale according to spec(is)%temp!
   logical :: rescale_f0
 
@@ -328,13 +328,14 @@ contains
     !      dF0/dE.
     ! 
     use mp, only: broadcast
+    use constants, only: pi
     use species, only: spec, nspec
     use file_utils, only: run_name
     use splines, only: fitp_curvd, fitp_curv1, fitp_curv2
     implicit none
     integer, intent(in) :: is
     integer:: f0in_unit = 21, num_cols, ie, ierr, numdat, il, it
-    real:: df0dE, n0_alpha, test, wl_sum
+    real:: df0dE, test, moment0, moment2
     real:: pick_spec(nspec)
     real, dimension(:), allocatable:: f0_values_dat, df0dE_dat, egrid_dat, &
                                       f0_values_dat_log, df0dE_dat_log, yp, temp
@@ -442,6 +443,28 @@ contains
        write(*,*) " num_cols = 1 if only f0 is to be input, "
        write(*,*) " num_cols=2 if f0 and df0/dE are input."
        stop 1
+    end if
+
+    ! Now calculate moments of F0 from trapezoidal rule.
+
+    moment0 = 0.0
+    do ie = 1,negrid-1
+       moment0  = moment0 + 0.5*(egrid(ie+1,is)-egrid(ie,is)) * &
+                           ( sqrt(egrid(ie,is))*f0_values(ie,is) + &
+                             sqrt(egrid(ie+1,is))*f0_values(ie+1,is) )
+    end do
+    moment0 = moment0*2.0/sqrt(pi)
+
+    ! Input parameter rescale_f0 determines the priority between the input species
+    ! density or the input F0.
+    if (rescale_f0) then
+       write(*,*) "rescale_f0 = T: Rescaling magnitude of F0 to agree with input dens"
+       write(*,*) "rescale factor is ", spec(is)%dens / moment0
+       f0_values = f0_values * spec(is)%dens / moment0
+    else
+       write(*,*) "rescale_f0 = F: Overriding species dens to agree with input F0"
+       write(*,*) "New dens = ", moment0
+       spec(is)%dens = moment0
     end if
 
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
