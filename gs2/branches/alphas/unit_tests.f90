@@ -16,6 +16,8 @@ module unit_tests
   !! either announce its success or announce its failure then stop.
   public :: process_test
 
+  public :: announce_module_test
+
 contains
 
   function agrees_with(val, correct, err)
@@ -43,5 +45,38 @@ contains
 
     write (*,*) '--> ', test_name, ' passed'
   end subroutine process_test
+
+  subroutine announce_module_test(module_name)
+    character(*), intent(in) :: module_name
+    character(8) :: message = 'Testing '
+    call print_with_stars(message, module_name)
+
+
+  end subroutine announce_module_test
+
+  subroutine close_module_test(module_name)
+    character(*), intent(in) :: module_name
+    character(17) :: message = 'Finished testing '
+    call print_with_stars(message, module_name)
+    write (*,*)
+
+
+  end subroutine close_module_test
+
+  subroutine print_with_stars(str1, str2)
+    character(*), intent (in) :: str1, str2
+    character, dimension(:), allocatable :: stars
+    integer :: i
+
+    allocate(stars(len(str1) + len(str2) ))
+    do i = 1,len(str1)+len(str2)
+      stars(i) = '*'
+    end do
+
+    write (*,*) stars
+    write (*,*) str1, str2
+    write (*,*) stars
+    
+  end subroutine print_with_stars
 
 end module unit_tests

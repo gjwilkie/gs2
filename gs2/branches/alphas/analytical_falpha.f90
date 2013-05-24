@@ -27,15 +27,21 @@ module analytical_falpha
   public :: analytical_falpha_parameters_type
   type analytical_falpha_parameters_type
     integer :: alpha_is
-    real :: alpha_mass
-    real :: alpha_vth
-    real :: alpha_injection_energy
     real :: energy_0
     real :: source
+    real :: source_prim
+    real :: alpha_mass
+    real :: alpha_injection_energy
+    real :: alpha_vth
+    real :: alpha_charge
+    real :: ion_mass
     real :: ion_temp
     real :: ion_vth
+    real :: ion_charge
+    real :: electron_mass
     real :: electron_temp
     real :: electron_vth
+    real :: electron_charge
     real :: alpha_ion_collision_rate
     real :: alpha_electron_collision_rate
     integer :: negrid
@@ -94,7 +100,7 @@ contains
         f0pr(2)    = falpha_prim(parameters,  &
                         egrid(ie, is), f0(2), resolution)
 
-        write (*,*) 'egrid ', egrid(ie, is), 'gentemp', gentemp
+        !write (*,*) 'egrid ', egrid(ie, is), 'gentemp', gentemp
         converged  = (is_converged(f0) .and.  &
                      is_converged(gentemp) .and. &
                      is_converged(f0pr))
@@ -114,6 +120,7 @@ contains
                               f0prim, &
                               f0_rslt, &
                               gentemp_rslt, &
+                              f0prim_rslt, &
                               err)
     use unit_tests
     type(analytical_falpha_parameters_type), intent(in) :: parameters
@@ -123,6 +130,8 @@ contains
     real, dimension(:,:), intent(out) :: f0prim
     real, dimension(:,:), intent(in) :: f0_rslt
     real, dimension(:,:), intent(in) :: gentemp_rslt
+    real, dimension(:,:), intent(in) :: f0prim_rslt
+    real, intent(in) :: err
     logical :: analytical_falpha_unit_test_calculate_arrays
 
     integer :: i
@@ -137,7 +146,9 @@ contains
         agrees_with(f0_values(i, parameters%alpha_is), &
                     f0_rslt(i, parameters%alpha_is), err) .and. &
         agrees_with(generalised_temperature(i, parameters%alpha_is), &
-                    gentemp_rslt(i, parameters%alpha_is), err)
+                    gentemp_rslt(i, parameters%alpha_is), err) .and. &
+        agrees_with(f0prim(i, parameters%alpha_is), &
+                    f0prim_rslt(i, parameters%alpha_is), err) 
     end do
 
   end function analytical_falpha_unit_test_calculate_arrays
@@ -248,9 +259,9 @@ contains
     falpha_integrand = 2.0 / &
                        (nu_parallel(parameters, energy_dummy_var) * &
                          energy_dummy_var**2.0) * &
-                       exp(parameters%alpha_mass * &
+                       exp(parameters%alpha_injection_energy * &
                          (energy_dummy_var - energy) / &
-                         (2.0*parameters%ion_temp) &
+                         parameters%ion_temp &
                        )
 
 
@@ -285,9 +296,15 @@ contains
 
     nu_parallel = 2.0/energy**1.5 * &
                   (parameters%alpha_ion_collision_rate * &
+                    (parameters%ion_vth / parameters%alpha_vth)**3.0 * &
+                    (parameters%ion_mass / parameters%alpha_mass * &
+                     parameters%alpha_charge / parameters%ion_charge)**2.0 * &
                     chandrasekhar(energy**0.5 * &
-                      parameters%alpha_vth / parameters%ion_vth) - & 
+                      parameters%alpha_vth / parameters%ion_vth) + & 
                   parameters%alpha_electron_collision_rate * &
+                    (parameters%electron_vth / parameters%alpha_vth)**3.0 * &
+                    (parameters%electron_mass / parameters%alpha_mass * &
+                     parameters%alpha_charge / parameters%electron_charge)**2.0 * &
                     chandrasekhar(energy**0.5 * &
                       parameters%alpha_vth / parameters%electron_vth))
                   
@@ -349,9 +366,9 @@ contains
     else if (falph .eq. 0.0) then 
       dfalpha_denergy = 0.0
     else
-      dfalpha_denergy = parameters%source /  (&
-        falph * 4.0 * 3.14159265358979 * parameters%alpha_mass * &
-        nu_parallel(parameters, energy) * energy ** (5.0/2.0) ) - &
+      dfalpha_denergy = parameters%source / falph / (&
+        4.0 * 3.14159265358979 * nu_parallel(parameters, energy) *  &
+        energy ** (5.0/2.0) ) - &
         parameters%alpha_injection_energy / parameters%ion_temp
     end if
   end function dfalpha_denergy
@@ -366,6 +383,7 @@ contains
     real, intent(in) :: falph
     real :: falpha_prim
     falpha_prim = 0.0
+    falpha_prim = - parameters%source_prim
 
   end function falpha_prim
 
