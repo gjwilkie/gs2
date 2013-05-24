@@ -453,7 +453,8 @@ contains
                            ( sqrt(egrid(ie,is))*f0_values(ie,is) + &
                              sqrt(egrid(ie+1,is))*f0_values(ie+1,is) )
     end do
-    moment0 = moment0*2.0/sqrt(pi)
+!    moment0 = moment0*2.0/sqrt(pi)
+    moment0 = moment0*4.0*pi
 
     ! Input parameter rescale_f0 determines the priority between the input species
     ! density or the input F0.

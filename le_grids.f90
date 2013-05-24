@@ -60,7 +60,7 @@ contains
     !wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
     ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
     ! See eq. 4.12 of M. Barnes's thesis
-    wgts(:nesub, 1) = wgts(:nesub, 1)*epts(:nesub,1)/sqrt(pi)
+    wgts(:nesub, 1) = wgts(:nesub, 1)*epts(:nesub,1)*2.0*pi
 
     if (negrid > nesub) then
 
@@ -77,7 +77,7 @@ contains
        ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
        ! Note that here this means adding an exponential e^y
        ! See eq. 4.13 of M. Barnes's thesis
-       wgts(nesub+1:, 1) = wgts(nesub+1:, 1)*0.5*exp(epts(nesub+1:,1))*sqrt(epts(nesub+1:,1)/pi)*exp(-vcut**2)
+       wgts(nesub+1:, 1) = wgts(nesub+1:, 1)*exp(epts(nesub+1:,1))*pi*sqrt(epts(nesub+1:,1))*exp(-vcut**2)
 
     end if
 
@@ -471,7 +471,7 @@ contains
          ! absorbing volume element into weights
          !werr(:nesub,ipt,is) = werr(:nesub,ipt)*energy(:nesub)*exp(-energy(:nesub))/sqrt(pi)
          werr(:nesub,ipt,is) = &
-              werr(:nesub,ipt,is)*energy(:nesub,is)/sqrt(pi)*f0_values(:nesub,is)
+              werr(:nesub,ipt,is)*energy(:nesub,is)*2.0*pi*f0_values(:nesub,is)
        end do
        
     end do
