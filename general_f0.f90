@@ -94,8 +94,6 @@ module general_f0
   integer :: alpha_f0_switch, &
              beam_f0_switch
   
-  real :: alpha_Einj
-
   logical :: print_egrid
  
   !> Flag that controls whether or not an externally-supplied f0 
@@ -175,7 +173,7 @@ contains
     namelist /general_f0_parameters/ &
             alpha_f0, &
             beam_f0, &
-            alpha_Einj, rescale_f0 , print_egrid
+            rescale_f0 , print_egrid
 
     integer :: ierr, in_file
     logical :: exist
@@ -284,11 +282,12 @@ contains
 
 
   subroutine calculate_f0_arrays_maxwellian(is)
+    use constants, only: pi
     use species, only: spec
     integer, intent(in) :: is
     integer :: ie
     egrid(:,is) = egrid_maxwell(:)
-    f0_values(:, is) = exp(-egrid(:,is))
+    f0_values(:, is) = exp(-egrid(:,is))/(2.0*pi**1.5)
     do ie = 1,negrid
        generalised_temperature(:,is) = spec(is)%temp
        if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), & 
@@ -382,7 +381,7 @@ contains
           ! Calculate d/dE lnF0 to get generalised temperature
           df0dE = fitp_curvd(egrid(ie,is),numdat,egrid_dat, &
                              f0_values_dat_log,yp,1.0)
-          generalised_temperature(ie,is) = -alpha_Einj/df0dE
+          generalised_temperature(ie,is) = - spec(is)%temp/df0dE
 
           ! Diagnostic output
           if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE, & 
@@ -431,7 +430,7 @@ contains
           ! Recover df0/dE from its logarithm (maintaining whatever sign it had before)
           df0dE = sign(1.0,df0dE_dat(ie))* exp(df0dE)
 
-          generalised_temperature(ie,is) = -alpha_Einj*f0_values(ie,is)/df0dE
+          generalised_temperature(ie,is) = -spec(is)%temp*f0_values(ie,is)/df0dE
 
           ! Diagnostic output
           if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE, & 
@@ -446,6 +445,8 @@ contains
     end if
 
     ! Now calculate moments of F0 from trapezoidal rule.
+    ! Should probably do this by quadrature, 
+    ! but le_grids is not defined yet
 
     moment0 = 0.0
     do ie = 1,negrid-1
@@ -453,7 +454,11 @@ contains
                            ( sqrt(egrid(ie,is))*f0_values(ie,is) + &
                              sqrt(egrid(ie+1,is))*f0_values(ie+1,is) )
     end do
-!    moment0 = moment0*2.0/sqrt(pi)
+!    do ie = 1,numdat-1
+!       moment0  = moment0 + 0.5*(egrid_dat(ie+1)-egrid_dat(ie)) * &
+!                           ( sqrt(egrid_dat(ie))*f0_values_dat(ie) + &
+!                             sqrt(egrid_dat(ie+1))*f0_values_dat(ie+1) )
+!    end do
     moment0 = moment0*4.0*pi
 
     ! Input parameter rescale_f0 determines the priority between the input species
