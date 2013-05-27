@@ -106,6 +106,7 @@ ffttester_mod = \
 gs2_mod = \
 	 antenna.o \
 	 antenna_data.o \
+	 analytical_falpha.o \
 	 ceq.o \
 	 collisions.o \
 	 command_line.o \
@@ -387,6 +388,7 @@ general_f0.o: \
 	 file_utils.o \
 	 mp.o \
 	 species.o \
+	 spl.o \
 	 text_options.o 
 geometry.o: \
 	 ceq.o \
