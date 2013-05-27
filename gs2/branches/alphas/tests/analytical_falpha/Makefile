@@ -4,8 +4,8 @@ all: test_analytical_falpha
 	./test_analytical_falpha
 
 
-test_analytical_falpha.o: ../../analytical_falpha.o ../../unit_tests.o
+test_analytical_falpha.o: $(TEST_MODS)
 
-test_analytical_falpha: test_analytical_falpha.o ../../analytical_falpha.o ../../unit_tests.o
+test_analytical_falpha: test_analytical_falpha.o $(TEST_MODS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 

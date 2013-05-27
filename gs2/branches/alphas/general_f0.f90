@@ -89,6 +89,11 @@ module general_f0
   !! this function is called to put them on all procs
   public :: broadcast_arrays
 
+
+  !> Unit tests
+  public :: general_f0_unit_test_init_general_f0
+  public :: general_f0_unit_test_calculate_f0_arrays
+
   private
 
   integer :: alpha_f0_switch, &
@@ -144,6 +149,36 @@ contains
       
 
   end subroutine init_general_f0
+
+  function general_f0_unit_test_init_general_f0()
+    use unit_tests
+    use species
+    logical :: general_f0_unit_test_init_general_f0
+
+    call init_general_f0
+
+    call announce_check('alpha_f0_switch')
+    general_f0_unit_test_init_general_f0 = &
+      agrees_with(alpha_f0_switch, alpha_f0_analytic)
+    call process_check(general_f0_unit_test_init_general_f0, 'alpha_f0_switch')
+
+    call announce_check('spec 1 type')
+    general_f0_unit_test_init_general_f0 = &
+      general_f0_unit_test_init_general_f0 .and. &
+      agrees_with(spec(1)%type, ion_species)
+    call process_check(general_f0_unit_test_init_general_f0, 'spec 1 type')
+    call announce_check('spec 2 type')
+    general_f0_unit_test_init_general_f0 = &
+      general_f0_unit_test_init_general_f0 .and. &
+      agrees_with(spec(2)%type, electron_species)
+    call process_check(general_f0_unit_test_init_general_f0, 'spec 2 type')
+    call announce_check('spec 3 type')
+    general_f0_unit_test_init_general_f0 = &
+      general_f0_unit_test_init_general_f0 .and. &
+      agrees_with(spec(3)%type, alpha_species)
+    call process_check(general_f0_unit_test_init_general_f0, 'spec 3 type')
+    
+  end function general_f0_unit_test_init_general_f0
 
 
 
@@ -213,7 +248,7 @@ contains
     use species, only: beam_species
     real, dimension(:,:), intent(inout) :: epoints
     integer :: is
-    negrid = size(epoints)
+    negrid = size(epoints(:,1))
     call allocate_arrays
     egrid = epoints
     egrid_maxwell(:) = epoints(:,1)
@@ -240,6 +275,56 @@ contains
     epoints = egrid
     
   end subroutine calculate_f0_arrays
+
+  function general_f0_unit_test_calculate_f0_arrays(epoints, rslts, err)
+    use unit_tests
+    real, dimension(:,:), intent(inout) :: epoints
+    real, dimension(:,:,:), intent(in) :: rslts
+    real, intent(in) :: err
+    logical :: general_f0_unit_test_calculate_f0_arrays
+    general_f0_unit_test_calculate_f0_arrays = .true.
+    call calculate_f0_arrays(epoints)
+
+    call announce_check('ion energy grid')
+    general_f0_unit_test_calculate_f0_arrays = &
+      general_f0_unit_test_calculate_f0_arrays .and. &
+      agrees_with(egrid(:,1), epoints(:,1), err)
+    call process_check(general_f0_unit_test_calculate_f0_arrays, 'ion energy grid')
+
+    call announce_check('electron energy grid')
+    general_f0_unit_test_calculate_f0_arrays = &
+      general_f0_unit_test_calculate_f0_arrays .and. &
+      agrees_with(egrid(:,2), epoints(:,1), err)
+    call process_check(general_f0_unit_test_calculate_f0_arrays, 'electron energy grid')
+
+    call announce_check('ion f0')
+    general_f0_unit_test_calculate_f0_arrays = &
+      general_f0_unit_test_calculate_f0_arrays .and. &
+      agrees_with(f0_values(:,1), rslts(:,1,1), err)
+    call process_check(general_f0_unit_test_calculate_f0_arrays, 'ion f0')
+    call announce_check('electron f0')
+    general_f0_unit_test_calculate_f0_arrays = &
+      agrees_with(f0_values(:,2), rslts(:,2,1), err)
+    call process_check(general_f0_unit_test_calculate_f0_arrays, 'electron f0')
+
+    call announce_check('ion gentemp')
+    general_f0_unit_test_calculate_f0_arrays = &
+      agrees_with(generalised_temperature(:,1), rslts(:,1,2), err)
+    call process_check(general_f0_unit_test_calculate_f0_arrays,' ion gentemp')
+    call announce_check('electron gentemp')
+    general_f0_unit_test_calculate_f0_arrays = &
+      agrees_with(generalised_temperature(:,2), rslts(:,2,2), err)
+    call process_check(general_f0_unit_test_calculate_f0_arrays,' electron gentemp')
+
+    call announce_check('ion f0prim')
+    general_f0_unit_test_calculate_f0_arrays = &
+      agrees_with(f0prim(:,1), rslts(:,1,3), err)
+    call process_check(general_f0_unit_test_calculate_f0_arrays,' ion f0prim')
+    call announce_check('electron f0prim')
+    general_f0_unit_test_calculate_f0_arrays = &
+      agrees_with(f0prim(:,2), rslts(:,2,3), err)
+    call process_check(general_f0_unit_test_calculate_f0_arrays,' electron f0prim')
+  end function general_f0_unit_test_calculate_f0_arrays
 
   subroutine allocate_arrays
     use species, only: nspec

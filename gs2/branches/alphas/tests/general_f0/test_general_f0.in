@@ -1,0 +1,41 @@
+
+&species_parameters_1
+  type = 'ion'
+  z = 1.0
+  temp = 1.0
+  dens = 0.5
+  mass = 1.0
+  tprim = 4.0
+  fprim = 3.0
+/
+
+&species_parameters_2
+  type = 'electron'
+  z = -1.0
+  temp = 0.8
+  dens = 1.0
+  tprim = 6.0
+  fprim = 3.0
+  !mass = 1.0/1836.0
+/
+
+&species_parameters_3
+  type = 'alpha'
+  z = 2.0
+  temp = 3.6e2
+  dens = 0.5
+  mass = 4.0
+/
+
+&general_f0_parameters
+  alpha_f0 = 'analytic'
+/
+
+&le_grids_knobs
+  negrid = 4
+
+/
+
+&species_knobs
+  nspec = 3
+/
