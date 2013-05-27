@@ -1,11 +1,15 @@
 
 sinclude ../Makefile.tests_common
-all: test_analytical_falpha
-	./test_analytical_falpha
+all: test_general_f0
+	./test_general_f0
 
+MODS=../../unit_tests.o ../../general_f0.o ../../mp.o ../../spl.o ../../file_utils.o 
 
-test_analytical_falpha.o: ../../analytical_falpha.o ../../unit_tests.o
+MODS=${echo gs2_mod | sed s/\(.+\)/..\/..\/\1/}
+MODS=${gs2_mod}
 
-test_analytical_falpha: test_analytical_falpha.o ../../analytical_falpha.o ../../unit_tests.o
+test_general_f0.o:  ${MODS} 
+
+test_general_f0: test_general_f0.o  ${MODS}
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
