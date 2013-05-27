@@ -1,15 +1,16 @@
 
 sinclude ../Makefile.tests_common
 all: test_general_f0
-	./test_general_f0
+	mpirun -np $(NTESTPROCS) test_general_f0 test_general_f0.in
 
-MODS=../../unit_tests.o ../../general_f0.o ../../mp.o ../../spl.o ../../file_utils.o 
 
-MODS=${echo gs2_mod | sed s/\(.+\)/..\/..\/\1/}
-MODS=${gs2_mod}
 
-test_general_f0.o:  ${MODS} 
+# For building unit tests - to get rid of too much dependency
+TEST_MODS = ../../unit_tests.o ../../general_f0.o ../../species.o ../../file_utils.o ../../spl.o ../../command_line.o ../../mp.o ../../text_options.o ../../constants.o
 
-test_general_f0: test_general_f0.o  ${MODS}
+
+test_general_f0.o:  ${TEST_MODS} 
+
+test_general_f0: test_general_f0.o $(TEST_MODS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
