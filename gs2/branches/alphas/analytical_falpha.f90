@@ -100,7 +100,7 @@ contains
         f0pr(2)    = falpha_prim(parameters,  &
                         egrid(ie, is), f0(2), resolution)
 
-        !write (*,*) 'egrid ', egrid(ie, is), 'gentemp', gentemp
+        write (*,*) 'egrid ', egrid(ie, is), ' f0 ', f0(2), ' gentemp ', gentemp(2), egrid(ie,is), parameters%energy_0
         converged  = (is_converged(f0) .and.  &
                      is_converged(gentemp) .and. &
                      is_converged(f0pr))
@@ -157,9 +157,9 @@ contains
     real, dimension(2), intent(in) :: list
     logical :: is_converged
     if (list(2) .eq. 0.0) then 
-      is_converged = abs(list(1)) .lt. 1.0e-8
+      is_converged = abs(list(1)) .lt. 1.0e-9
     else
-      is_converged = (abs((list(1)-list(2))/list(2)) .lt. 1.0e-8)
+      is_converged = (abs((list(1)-list(2))/list(2)) .lt. 1.0e-9)
     end if
 
   end function is_converged

@@ -106,6 +106,9 @@ MAKE_LIB ?=
 LOWFLOW ?=
 # Use le_layout for collision operator
 USE_LE_LAYOUT ?=
+
+# Number of process to use for unit tests
+NTESTPROCS?=$(NPROCS)
 #
 # * Targets:
 #

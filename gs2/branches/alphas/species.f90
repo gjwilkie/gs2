@@ -25,6 +25,11 @@ module species
      real :: stm, zstm, tz, smz, zt
      integer :: type
      logical :: is_maxwellian
+
+     real :: source  ! These are parameters for an analytical alpha model presented in
+     real :: sprim   ! .....
+     real :: gamma_ai
+     real :: gamma_ae
   end type specie
 
   private
@@ -212,13 +217,14 @@ contains
     implicit none
     real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h
     real :: tperp0, tpar0
+    real :: source, sprim, gamma_ae, gamma_ai
     character(20) :: type
     integer :: unit
     integer :: is
     namelist /species_knobs/ nspec
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
-         tperp0, tpar0
+         tperp0, tpar0, source, sprim, gamma_ai, gamma_ae
     integer :: ierr, in_file
 
     type (text_option), dimension (9), parameter :: typeopts = &
@@ -267,6 +273,11 @@ contains
           vnewk = 0.0
           nu = -1.0
           nu_h = 0.0
+          source = 0.0
+          sprim = 0.0
+          gamma_ai = 0.1
+          gamma_ae = 0.1
+
           type = "default"
           read (unit=unit, nml=species_parameters)
           close (unit=unit)
@@ -287,6 +298,11 @@ contains
           spec(is)%nustar = nustar
           spec(is)%nu = nu
           spec(is)%nu_h = nu_h
+
+          spec(is)%source = source
+          spec(is)%sprim = sprim
+          spec(is)%gamma_ai = gamma_ai
+          spec(is)%gamma_ae = gamma_ae
 
           spec(is)%stm = sqrt(temp/mass)
           spec(is)%zstm = z/sqrt(temp*mass)
@@ -321,6 +337,10 @@ contains
        call broadcast (spec(is)%nu)
        call broadcast (spec(is)%nu_h)
        call broadcast (spec(is)%nustar)
+       call broadcast (spec(is)%source)
+       call broadcast (spec(is)%sprim)
+       call broadcast (spec(is)%gamma_ai)
+       call broadcast (spec(is)%gamma_ae)
        call broadcast (spec(is)%stm)
        call broadcast (spec(is)%zstm)
        call broadcast (spec(is)%tz)
