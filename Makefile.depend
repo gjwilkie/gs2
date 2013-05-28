@@ -388,6 +388,7 @@ general_f0.o: \
 	 file_utils.o \
 	 mp.o \
 	 species.o \
+	 analytical_falpha.o \
 	 spl.o \
 	 text_options.o 
 geometry.o: \

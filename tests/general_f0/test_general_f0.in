@@ -16,7 +16,7 @@
   dens = 1.0
   tprim = 6.0
   fprim = 3.0
-  !mass = 1.0/1836.0
+  mass = 0.0005446623093681918
 /
 
 &species_parameters_3
@@ -25,10 +25,15 @@
   temp = 3.6e2
   dens = 0.5
   mass = 4.0
+  source = 0.01
+  sprim = 1.6
+  gamma_ae = 0.1
+  gamma_ai = 0.1
 /
 
 &general_f0_parameters
   alpha_f0 = 'analytic'
+  energy_0 = 0.01
 /
 
 &le_grids_knobs

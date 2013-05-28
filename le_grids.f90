@@ -82,13 +82,13 @@ contains
     end if
 
 
-    call calculate_f0_arrays(epts)
-    do is = 1,nspec
-      wgts(:,is) = wgts(:,1)
-    end do 
-    do is = 1,nspec
-      wgts(:, is) = wgts(:, is) * f0_values(:, is)
-    end do
+    call calculate_f0_arrays(epts, wgts, vcut)
+    !do is = 1,nspec
+      !wgts(:,is) = wgts(:,1)
+    !end do 
+    !do is = 1,nspec
+      !wgts(:, is) = wgts(:, is) * f0_values(:, is)
+    !end do
 
 
 

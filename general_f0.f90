@@ -120,9 +120,18 @@ module general_f0
   
   integer :: negrid
 
+  real :: vcut
+  real :: energy_min
+  real :: energy_0
+
   real, dimension(:,:), allocatable :: egrid
+  real, dimension(:,:), allocatable :: weights
 
   real, dimension(:), allocatable :: egrid_maxwell
+  real, dimension(:), allocatable :: weights_maxwell
+
+  !> Which species to use as the main ions in analytical_falpha
+  integer :: main_ion_species
 
 contains
 
@@ -208,7 +217,11 @@ contains
     namelist /general_f0_parameters/ &
             alpha_f0, &
             beam_f0, &
-            rescale_f0 , print_egrid
+            rescale_f0,&
+            main_ion_species,&
+            energy_min,&
+            energy_0,&
+            print_egrid
 
     integer :: ierr, in_file
     logical :: exist
@@ -217,6 +230,9 @@ contains
 
        alpha_f0 = 'maxwellian'
        beam_f0 = 'maxwellian'
+       main_ion_species = -1 
+       energy_min = 0.1
+       energy_0 = 0.08
 
        in_file = input_unit_exist ("general_f0_parameters", exist)
        if (exist) read (unit=in_file, nml=general_f0_parameters)
@@ -233,6 +249,9 @@ contains
 
     call broadcast (alpha_f0_switch)
     call broadcast (beam_f0_switch)
+    call broadcast (main_ion_species)
+    call broadcast (energy_min)
+    call broadcast (energy_0)
 
   end subroutine read_parameters
 
@@ -242,16 +261,21 @@ contains
 
   !> NB this only gets called by proc0
   !! Arrays are broadcast later
-  subroutine calculate_f0_arrays(epoints)
+  subroutine calculate_f0_arrays(epoints, wgts, vcut_in)
     use species, only: nspec, spec
     use species, only: ion_species, electron_species, alpha_species
     use species, only: beam_species
     real, dimension(:,:), intent(inout) :: epoints
+    real, dimension(:,:), intent(inout) :: wgts
+    real, intent(in) :: vcut_in
     integer :: is
     negrid = size(epoints(:,1))
+    vcut = vcut_in
     call allocate_arrays
     egrid = epoints
+    weights = wgts
     egrid_maxwell(:) = epoints(:,1)
+    weights_maxwell(:) = wgts(:,1)
     do is = 1,nspec
       select case (spec(is)%type)
       case (ion_species)
@@ -262,6 +286,8 @@ contains
         select case (alpha_f0_switch)
         case (alpha_f0_maxwellian)
           call calculate_f0_arrays_maxwellian(is)
+        case (alpha_f0_analytic)
+          call calculate_f0_arrays_analytic(is)
         case (alpha_f0_external)
           call calculate_f0_arrays_external(is)
         end select
@@ -273,57 +299,59 @@ contains
       end select
     end do
     epoints = egrid
+    wgts = weights
     
   end subroutine calculate_f0_arrays
 
-  function general_f0_unit_test_calculate_f0_arrays(epoints, rslts, err)
+  function general_f0_unit_test_calculate_f0_arrays(epoints, wgts, vcut_in, rslts, err)
     use unit_tests
     real, dimension(:,:), intent(inout) :: epoints
+    real, dimension(:,:), intent(inout) :: wgts
     real, dimension(:,:,:), intent(in) :: rslts
     real, intent(in) :: err
+    real, intent(in) :: vcut_in
     logical :: general_f0_unit_test_calculate_f0_arrays
-    general_f0_unit_test_calculate_f0_arrays = .true.
-    call calculate_f0_arrays(epoints)
+    logical :: tr ! test results
+    tr = .true.
+    call calculate_f0_arrays(epoints, wgts, vcut_in)
 
     call announce_check('ion energy grid')
-    general_f0_unit_test_calculate_f0_arrays = &
-      general_f0_unit_test_calculate_f0_arrays .and. &
-      agrees_with(egrid(:,1), epoints(:,1), err)
-    call process_check(general_f0_unit_test_calculate_f0_arrays, 'ion energy grid')
+    tr = tr .and. agrees_with(egrid(:,1), epoints(:,1), err)
+    call process_check(tr, 'ion energy grid')
 
     call announce_check('electron energy grid')
-    general_f0_unit_test_calculate_f0_arrays = &
-      general_f0_unit_test_calculate_f0_arrays .and. &
-      agrees_with(egrid(:,2), epoints(:,1), err)
-    call process_check(general_f0_unit_test_calculate_f0_arrays, 'electron energy grid')
+    tr = tr .and. agrees_with(egrid(:,2), epoints(:,1), err)
+    call process_check(tr, 'electron energy grid')
 
     call announce_check('ion f0')
-    general_f0_unit_test_calculate_f0_arrays = &
-      general_f0_unit_test_calculate_f0_arrays .and. &
-      agrees_with(f0_values(:,1), rslts(:,1,1), err)
-    call process_check(general_f0_unit_test_calculate_f0_arrays, 'ion f0')
+    tr = tr .and. agrees_with(f0_values(:,1), rslts(:,1,1), err)
+    call process_check(tr, 'ion f0')
     call announce_check('electron f0')
-    general_f0_unit_test_calculate_f0_arrays = &
-      agrees_with(f0_values(:,2), rslts(:,2,1), err)
-    call process_check(general_f0_unit_test_calculate_f0_arrays, 'electron f0')
+    tr = tr .and. agrees_with(f0_values(:,2), rslts(:,2,1), err)
+    call process_check(tr, 'electron f0')
+    call announce_check('alpha f0')
+    tr = tr .and. agrees_with(f0_values(:,3), rslts(:,3,1), err)
+    call process_check(tr, 'alpha f0')
 
     call announce_check('ion gentemp')
-    general_f0_unit_test_calculate_f0_arrays = &
-      agrees_with(generalised_temperature(:,1), rslts(:,1,2), err)
-    call process_check(general_f0_unit_test_calculate_f0_arrays,' ion gentemp')
+    tr = tr .and. agrees_with(generalised_temperature(:,1), rslts(:,1,2), err)
+    call process_check(tr,' ion gentemp')
     call announce_check('electron gentemp')
-    general_f0_unit_test_calculate_f0_arrays = &
-      agrees_with(generalised_temperature(:,2), rslts(:,2,2), err)
-    call process_check(general_f0_unit_test_calculate_f0_arrays,' electron gentemp')
+    tr = tr .and. agrees_with(generalised_temperature(:,2), rslts(:,2,2), err)
+    call process_check(tr,' electron gentemp')
+    call announce_check('alpha gentemp')
+    tr = tr .and. agrees_with(generalised_temperature(:,3), rslts(:,3,2), err)
+    call process_check(tr,' alpha gentemp')
 
     call announce_check('ion f0prim')
-    general_f0_unit_test_calculate_f0_arrays = &
-      agrees_with(f0prim(:,1), rslts(:,1,3), err)
-    call process_check(general_f0_unit_test_calculate_f0_arrays,' ion f0prim')
+    tr = tr .and. agrees_with(f0prim(:,1), rslts(:,1,3), err)
+    call process_check(tr,' ion f0prim')
     call announce_check('electron f0prim')
-    general_f0_unit_test_calculate_f0_arrays = &
-      agrees_with(f0prim(:,2), rslts(:,2,3), err)
-    call process_check(general_f0_unit_test_calculate_f0_arrays,' electron f0prim')
+    tr = tr .and. agrees_with(f0prim(:,2), rslts(:,2,3), err)
+    call process_check(tr,' electron f0prim')
+
+    general_f0_unit_test_calculate_f0_arrays = tr
+
   end function general_f0_unit_test_calculate_f0_arrays
 
   subroutine allocate_arrays
@@ -331,6 +359,8 @@ contains
 
     allocate(egrid(negrid,nspec))
     allocate(egrid_maxwell(negrid))
+    allocate(weights(negrid,nspec))
+    allocate(weights_maxwell(negrid))
     allocate(f0_values(negrid,nspec))
     allocate(generalised_temperature(negrid,nspec))
     allocate(stm(negrid,nspec))
@@ -349,6 +379,8 @@ contains
     if (.not. proc0) call allocate_arrays
     call broadcast(egrid)
     call broadcast(egrid_maxwell)
+    call broadcast(weights)
+    call broadcast(weights_maxwell)
     call broadcast(f0_values)
     call broadcast(generalised_temperature)
     call broadcast(stm)
@@ -373,6 +405,7 @@ contains
     integer :: ie
     egrid(:,is) = egrid_maxwell(:)
     f0_values(:, is) = exp(-egrid(:,is))/(2.0*pi**1.5)
+    weights(:,is) = weights_maxwell(:) * f0_values(:,is)
     do ie = 1,negrid
        generalised_temperature(:,is) = spec(is)%temp
        if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), & 
@@ -383,6 +416,81 @@ contains
     
     f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
   end subroutine calculate_f0_arrays_maxwellian
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! Analytic
+!! 
+!! This subsection contains routines for handling 
+!! distributions given by the formula ... in ... 
+
+
+  subroutine calculate_f0_arrays_analytic(is)
+    use analytical_falpha, only: analytical_falpha_parameters_type
+    use analytical_falpha, only: calculate_arrays
+    use constants, only: pi
+    use species, only: spec 
+    use species, only: nspec
+    use species, only: electron_species
+    use species, only: ion_species
+    use mp, only: mp_abort
+    type(analytical_falpha_parameters_type) :: parameters
+    integer, intent(in) :: is
+    integer :: ie
+    integer :: electron_spec
+    integer :: i
+
+    !> Determine which species is the electrons
+    do i = 1,nspec
+      if (spec(i)%type .eq. electron_species) electron_spec = i
+      if (main_ion_species < 1 .and. spec(i)%type .eq. ion_species) &
+        main_ion_species = i
+    end do
+
+    !if (main_ion_species < 1)  call mp_abort(&
+      !'main_ion_species < 1: please set main_ion_species in general_f0_parameters') 
+
+    parameters%energy_0 = energy_0
+    parameters%source_prim = spec(is)%sprim
+
+    parameters%alpha_is = is
+
+    parameters%alpha_ion_collision_rate = spec(is)%gamma_ai
+    parameters%alpha_electron_collision_rate = spec(is)%gamma_ae
+    parameters%ion_vth         = spec(main_ion_species)%stm
+    parameters%electron_vth    = spec(electron_species)%stm
+    parameters%alpha_vth       = spec(is)%stm
+    parameters%source          = spec(is)%source
+    parameters%alpha_injection_energy = spec(is)%temp
+    parameters%ion_temp        = spec(main_ion_species)%temp
+    parameters%alpha_charge    = spec(is)%z
+    parameters%electron_charge = spec(electron_spec)%z
+    parameters%ion_charge      = spec(main_ion_species)%z
+    parameters%alpha_mass      = spec(is)%mass
+    parameters%ion_mass        = spec(main_ion_species)%mass
+    parameters%electron_mass   = spec(electron_spec)%mass
+
+    parameters%negrid = negrid
+
+    if (parameters%source .eq. 0.0) then 
+      write (*,*) 'You have source = 0.0 for alphas!!!'
+      call mp_abort(' ')
+    end if
+
+    egrid(:,is) = egrid_maxwell(:) *(1.0 - energy_min)/vcut + energy_min
+
+    !write (*,*) 'parameters', parameters
+    !write(*,*) 'calling calculate_arrays'
+    write (*,*) 'egrid', egrid(:,is)
+    call calculate_arrays(parameters,&
+                          egrid, &
+                          f0_values, &
+                          generalised_temperature, &
+                          f0prim)
+    weights(:,is) =  weights_maxwell(:)*(1.0 - energy_min)/vcut * f0_values(:,is)
+    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
+    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+    
+  end subroutine calculate_f0_arrays_analytic
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !! External
