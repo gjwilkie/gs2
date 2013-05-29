@@ -191,6 +191,55 @@ contains
 
   !> Calculates the normalised alpha distribution function
   !! f_alpha/(n_alpha/v_inj^3)
+  function simpson(parameters, func, lower_lim, upper_lim, energy, resolution)
+    implicit none
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    integer, intent(in) :: resolution
+    real, external :: func
+    real, intent(in) :: lower_lim
+    real, intent(in) :: upper_lim
+    real, intent(in) :: energy
+    real :: simpson
+    real :: integral
+    real :: dv
+    real :: v_2j, v_2jm1
+    real :: energy_top
+    integer :: j
+
+    integral = 0.0
+    dv = (upper_lim-lower_lim) / real(resolution)
+
+    ! Let's use the composite Simpson's rule (see Wikipedia!). 
+    ! wrt the Wikipedia article
+    ! resolution = n
+    ! b = upper_lim
+    ! a = lower_lim
+    ! x_j = v_j = a + j*h = lower_lim + j*dv
+    ! dv = h = (b-a)/n = (upper_lim-lower_lim)/n
+    ! NB the integral is wrt v, not energy, so we have to put v^2 in everywhere
+    integral = func(parameters, energy, lower_lim**2.0)
+    do j = 1, resolution/2-1
+      v_2j = lower_lim + real(j*2)*dv 
+      integral = integral + 2.0 * &
+        func(parameters, energy, v_2j**2.0) 
+    end do
+    do j = 1, resolution/2
+      v_2jm1 = lower_lim + real(j*2 -1)*dv 
+      integral = integral + 4.0 * &
+        func(parameters, energy, v_2jm1**2.0) 
+
+    end do
+    integral = integral + func(parameters, energy, upper_lim**2.0)
+    integral = integral * dv/3.0
+
+    simpson = integral
+
+
+
+
+
+  end function simpson
+
   function falpha(parameters, energy, energy_0, resolution)
     implicit none
     type(analytical_falpha_parameters_type), intent(in) :: parameters
@@ -205,8 +254,6 @@ contains
     integer :: j
 
     energy_top = min(energy, 1.0)
-    integral = 0.0
-    dv = (energy_top**0.5-energy_0**0.5) / real(resolution)
 
     ! Let's use the composite Simpson's rule (see Wikipedia!). 
     ! wrt the Wikipedia article
@@ -216,20 +263,13 @@ contains
     ! x_j = v_j = a + j*h = energy_0**).5 + j*dv
     ! dv = h = (b-a)/n = (energy_top**0.5-energy_0**0.5)/n
     ! NB the integral is wrt v, not energy
-    integral = falpha_integrand(parameters, energy, energy_0)
-    do j = 1, resolution/2-1
-      v_2j = energy_0**0.5 + real(j*2)*dv 
-      integral = integral + 2.0 * &
-        falpha_integrand(parameters, energy, v_2j**2.0) 
-    end do
-    do j = 1, resolution/2
-      v_2jm1 = energy_0**0.5 + real(j*2 -1)*dv 
-      integral = integral + 4.0 * &
-        falpha_integrand(parameters, energy, v_2jm1**2.0) 
 
-    end do
-    integral = integral + falpha_integrand(parameters, energy, energy_top)
-    integral = integral * dv/3.0
+    integral = simpson(parameters, &
+                       falpha_integrand, &
+                       energy_0**0.5,&
+                       energy_top**0.5,&
+                       energy,&
+                       resolution)
 
     falpha = integral * parameters%source / 4.0 / 3.14159265358979
 
