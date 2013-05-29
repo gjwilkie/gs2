@@ -17,6 +17,8 @@ module analytical_falpha
   !! and df0/drho for that species.
   public :: calculate_arrays
 
+  !> Unit tests.. see general_f0 for a better example of 
+  !! the latest unit testing practice
   public :: unit_test_is_converged
   public :: analytical_falpha_unit_test_chandrasekhar
   public :: analytical_falpha_unit_test_nu_parallel
@@ -100,7 +102,7 @@ contains
         f0pr(2)    = falpha_prim(parameters,  &
                         egrid(ie, is), f0(2), resolution)
 
-        write (*,*) 'egrid ', egrid(ie, is), ' f0 ', f0(2), ' gentemp ', gentemp(2), egrid(ie,is), parameters%energy_0
+        !write (*,*) 'egrid ', egrid(ie, is), ' f0 ', f0(2), ' gentemp ', gentemp(2), egrid(ie,is), parameters%energy_0
         converged  = (is_converged(f0) .and.  &
                      is_converged(gentemp) .and. &
                      is_converged(f0pr))
@@ -140,11 +142,19 @@ contains
         generalised_temperature, f0prim)
     analytical_falpha_unit_test_calculate_arrays = .true.
 
+    call announce_check('f0_values')
+    analytical_falpha_unit_test_calculate_arrays = &
+      analytical_falpha_unit_test_calculate_arrays .and. &
+       agrees_with(f0_values(:, parameters%alpha_is), f0_rslt(:, parameters%alpha_is), err)
+    call process_check(analytical_falpha_unit_test_calculate_arrays, 'f0 values')
+    call announce_check('gentemp')
+    analytical_falpha_unit_test_calculate_arrays = &
+      analytical_falpha_unit_test_calculate_arrays .and. &
+       agrees_with(generalised_temperature(:, parameters%alpha_is), gentemp_rslt(:, parameters%alpha_is), err)
+    call process_check(analytical_falpha_unit_test_calculate_arrays, 'gentemp')
     do i = 1,parameters%negrid
       analytical_falpha_unit_test_calculate_arrays = &
         analytical_falpha_unit_test_calculate_arrays .and. &
-        agrees_with(f0_values(i, parameters%alpha_is), &
-                    f0_rslt(i, parameters%alpha_is), err) .and. &
         agrees_with(generalised_temperature(i, parameters%alpha_is), &
                     gentemp_rslt(i, parameters%alpha_is), err) .and. &
         agrees_with(f0prim(i, parameters%alpha_is), &

@@ -1,5 +1,6 @@
 
 
+
 !> A program that runs unit tests on the analytical_falpha module.
 !! The test results were calculated using sage and are viewable at
 !! http://www.sagenb.org/home/pub/5036
@@ -9,10 +10,13 @@
 program test_analytical_falpha
   use unit_tests
   use analytical_falpha
+  use mp, only: init_mp, finish_mp
   implicit none
   real :: eps
   type(analytical_falpha_parameters_type) :: parameters
   real, dimension(:,:,:), allocatable :: array
+
+  call init_mp
 
   ! General config
   eps = 1.0e-8
@@ -88,5 +92,7 @@ program test_analytical_falpha
 
 
   call close_module_test('analytical_falpha')
+
+  call finish_mp
 
 end program test_analytical_falpha
