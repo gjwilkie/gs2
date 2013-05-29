@@ -1,5 +1,5 @@
 
-!> A program that runs unit tests on the analytical_falpha module.
+!> A program that runs unit tests on the general_f0 module.
 !! The test results were calculated using sage and are viewable at
 !! http://www.sagenb.org/home/pub/5036
 !!
