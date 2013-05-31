@@ -13,7 +13,9 @@ program test_analytical_falpha
   use mp, only: init_mp, finish_mp
   implicit none
   real :: eps
+
   type(analytical_falpha_parameters_type) :: parameters
+
   real, dimension(:,:,:), allocatable :: array
 
   call init_mp
@@ -29,28 +31,50 @@ program test_analytical_falpha
   call process_test(unit_test_is_converged(), 'is_converged')
   call announce_test('chandrasekhar')
   call process_test(analytical_falpha_unit_test_chandrasekhar(), 'chandrasekhar')
+  call announce_test('chandrasekhar prime')
+  call process_test(&
+     analytical_falpha_unit_test_chandrasekhar_prime(0.1, 0.369396267397740, eps), &
+     'chandrasekhar prime')
+
+  call announce_test('simpson')
+  call process_test(analytical_falpha_unit_test_simpson(eps), 'simpson')
+
+  parameters%energy_0 = 0.01
+  parameters%source = 0.01
 
   parameters%alpha_ion_collision_rate = 0.1
   parameters%alpha_electron_collision_rate = 0.1
-  parameters%ion_vth = 1.0
-  parameters%electron_vth = (1836.0)**0.5
+
   parameters%alpha_vth = (3.6e2 / 4.0)**0.5
-  parameters%source = 0.01
   parameters%alpha_injection_energy = 3.6e2
-  parameters%ion_temp = 1.0
-  parameters%energy_0 = 0.01
-  parameters%alpha_charge = 2.0
-  parameters%electron_charge = -1.0
-  parameters%ion_charge = 1.0
   parameters%alpha_mass = 4.0
-  parameters%ion_mass = 1.0
-  parameters%electron_mass = 1.0/1836.0
+  parameters%alpha_charge = 2.0
   parameters%source_prim = 1.6
+
+  parameters%ion_temp = 1.0
+  parameters%ion_tprim = 4.0
+  parameters%ion_fprim = 3.0
+  parameters%ion_mass = 1.0
+  parameters%ion_vth = 1.0
+  parameters%ion_charge = 1.0
+
+  !parameters%electron_temp = 1.0
+  parameters%electron_charge = -1.0
+  parameters%electron_tprim = 6.0
+  parameters%electron_fprim = 3.0
+  parameters%electron_mass = 1.0/1836.0
+  parameters%electron_vth = (1836.0)**0.5
+
 
   call announce_test('nu_parallel')
   call process_test(analytical_falpha_unit_test_nu_parallel( &
     parameters, 0.8, 7.07304892219606e-7, eps), 'nu_parallel')
 
+  call announce_test('nu_parallel_prime')
+  call process_test(analytical_falpha_unit_test_nu_parallel_prime( &
+    parameters, 0.2, 0.000241542194333647/2.0, eps), 'nu_parallel_prime 0.2')
+  call process_test(analytical_falpha_unit_test_nu_parallel_prime( &
+    parameters, 0.8, 7.07304892219606e-7, eps), 'nu_parallel_prime 0.8')
   
   call announce_test('falpha_integrand')
   call process_test(analytical_falpha_unit_test_falpha_integrand(&
@@ -72,6 +96,12 @@ program test_analytical_falpha
   call process_test(analytical_falpha_unit_test_falpha(&
     parameters, 0.01, 0.01, 128, 0.0, eps), 'falpha 0.01') 
 
+
+  call announce_test('dfalpha_dti')
+  call process_test(analytical_falpha_unit_test_dfalpha_dti(&
+    parameters, 0.5,  0.01, 2048*8, -4.00357641291620, eps), 'dfalpha_dti 0.5')
+  call process_test(analytical_falpha_unit_test_dfalpha_dti(&
+    parameters, 0.9,  0.01, 2048*16, -4.00410087513562, eps), 'dfalpha_dti 0.9')
 
   allocate(array(6, 1,  7))
 

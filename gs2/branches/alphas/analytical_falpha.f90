@@ -21,10 +21,15 @@ module analytical_falpha
   !! the latest unit testing practice
   public :: unit_test_is_converged
   public :: analytical_falpha_unit_test_chandrasekhar
+  public :: analytical_falpha_unit_test_chandrasekhar_prime
   public :: analytical_falpha_unit_test_nu_parallel
+  public :: analytical_falpha_unit_test_nu_parallel_prime
   public :: analytical_falpha_unit_test_falpha_integrand
+  public :: analytical_falpha_unit_test_dfalpha_dti_integrand
   public :: analytical_falpha_unit_test_falpha
+  public :: analytical_falpha_unit_test_dfalpha_dti
   public :: analytical_falpha_unit_test_calculate_arrays
+  public :: analytical_falpha_unit_test_simpson
 
   public :: analytical_falpha_parameters_type
   type analytical_falpha_parameters_type
@@ -40,10 +45,14 @@ module analytical_falpha
     real :: ion_temp
     real :: ion_vth
     real :: ion_charge
+    real :: ion_tprim
+    real :: ion_fprim
     real :: electron_mass
     real :: electron_temp
     real :: electron_vth
     real :: electron_charge
+    real :: electron_tprim
+    real :: electron_fprim
     real :: alpha_ion_collision_rate
     real :: alpha_electron_collision_rate
     integer :: negrid
@@ -189,8 +198,7 @@ contains
   end function unit_test_is_converged
 
 
-  !> Calculates the normalised alpha distribution function
-  !! f_alpha/(n_alpha/v_inj^3)
+  !> Calculates the integral of func using the composite Simpson rule
   function simpson(parameters, func, lower_lim, upper_lim, energy, resolution)
     implicit none
     type(analytical_falpha_parameters_type), intent(in) :: parameters
@@ -239,6 +247,28 @@ contains
 
 
   end function simpson
+
+  function simpson_test_func(parameters, dummy, energy)
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: dummy
+    real, intent(in) :: energy
+    real ::  simpson_test_func
+    simpson_test_func = energy**1.5 + energy**2.0 ! v^3 + v^4
+  end function simpson_test_func
+
+  function analytical_falpha_unit_test_simpson(eps)
+    use unit_tests
+    real, intent(in) :: eps
+    logical :: analytical_falpha_unit_test_simpson
+    type(analytical_falpha_parameters_type) :: parameters
+    real :: dummy
+
+    analytical_falpha_unit_test_simpson = agrees_with(&
+      simpson(parameters, simpson_test_func, 0.0, 5.3, dummy, 1024),&
+      5.3**4.0/4.0 + 5.3**5.0/5.0,  eps)
+  end function analytical_falpha_unit_test_simpson
+      
+
 
   function falpha(parameters, energy, energy_0, resolution)
     implicit none
@@ -299,6 +329,7 @@ contains
   end function analytical_falpha_unit_test_falpha
 
 
+
   !> The integrand for the falpha integral, see eq
   function falpha_integrand(parameters, energy, energy_dummy_var)
     type(analytical_falpha_parameters_type), intent(in) :: parameters
@@ -338,6 +369,174 @@ contains
 
   end function analytical_falpha_unit_test_falpha_integrand
 
+  function dfalpha_dti(parameters, falph, energy, energy_0, resolution)
+    implicit none
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    integer, intent(in) :: resolution
+    real, intent(in) :: energy
+    real, intent(in) :: energy_0
+    real, intent(in) :: falph
+    real :: dfalpha_dti
+    real :: integral
+    real :: dv
+    real :: v_2j, v_2jm1
+    real :: energy_top
+    integer :: j
+
+    energy_top = min(energy, 1.0)
+
+    ! Let's use the composite Simpson's rule (see Wikipedia!). 
+    ! wrt the Wikipedia article
+    ! resolution = n
+    ! b = energy_top**0.5
+    ! a = energy_0**0.5
+    ! x_j = v_j = a + j*h = energy_0**).5 + j*dv
+    ! dv = h = (b-a)/n = (energy_top**0.5-energy_0**0.5)/n
+    ! NB the integral is wrt v, not energy
+
+    integral = simpson(parameters, &
+                       dfalpha_dti_integrand, &
+                       energy_0**0.5,&
+                       energy_top**0.5,&
+                       energy,&
+                       resolution)
+
+    dfalpha_dti = - parameters%ion_tprim  &
+      * parameters%alpha_injection_energy  &
+      / parameters%ion_temp * (&
+      energy - &
+      integral * parameters%source / 2.0 / 3.14159265358979 / falph)
+    
+
+
+
+
+  end function dfalpha_dti
+
+  function analytical_falpha_unit_test_dfalpha_dti(parameters, &
+                                              energy, &
+                                              energy_0, &
+                                              resolution, &
+                                              rslt, &
+                                              err)
+    use unit_tests
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    integer, intent(in) :: resolution
+    real, intent(in) :: energy
+    real, intent(in) :: energy_0
+    real, intent(in) :: rslt
+    real, intent(in) :: err
+    logical :: analytical_falpha_unit_test_dfalpha_dti
+
+    analytical_falpha_unit_test_dfalpha_dti = &
+      agrees_with(&
+      dfalpha_dti(parameters, &
+                  falpha(parameters, energy, energy_0, resolution), &
+                  energy, energy_0, resolution), rslt, err)
+
+  end function analytical_falpha_unit_test_dfalpha_dti
+  !> The integrand for the dfalpha/d Ti integral, see eq
+  function dfalpha_dti_integrand(parameters, energy, energy_dummy_var)
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: energy
+    real, intent(in) :: energy_dummy_var
+    real :: dfalpha_dti_integrand
+
+    dfalpha_dti_integrand = 1.0 / &
+                       (nu_parallel(parameters, energy_dummy_var) * &
+                         energy_dummy_var) * &
+                       exp(parameters%alpha_injection_energy * &
+                         (energy_dummy_var - energy) / &
+                         parameters%ion_temp &
+                       )
+
+
+  end function dfalpha_dti_integrand
+
+  !> Unit test used by test_analytical_falpha, testing the private
+  !! function dfalpha_dti_integrand
+  function analytical_falpha_unit_test_dfalpha_dti_integrand(parameters, &
+                                                        energy, &
+                                                        energy_dummy_var, &
+                                                        rslt, &
+                                                        err)
+    use unit_tests
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: energy
+    real, intent(in) :: energy_dummy_var
+    real, intent(in) :: rslt
+    real, intent(in) :: err
+    logical :: analytical_falpha_unit_test_dfalpha_dti_integrand
+    
+    analytical_falpha_unit_test_dfalpha_dti_integrand = &
+      agrees_with(dfalpha_dti_integrand(parameters, energy, energy_dummy_var), &
+      rslt, err)
+
+  end function analytical_falpha_unit_test_dfalpha_dti_integrand
+
+
+  !> Returns gamma_aiN * (Za/Zi)^2 * (mi/ma)^2 * (vthi/vtha)^3
+  !! where gamma_ai is the alpha-ion collisionality parameter
+  !! from eq ()
+  function gamma_fac_ions(parameters)
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real gamma_fac_ions
+    gamma_fac_ions = parameters%alpha_ion_collision_rate * &
+                    (parameters%ion_vth / parameters%alpha_vth)**3.0 * &
+                    (parameters%ion_mass / parameters%alpha_mass * &
+                     parameters%alpha_charge / parameters%ion_charge)**2.0
+  end function gamma_fac_ions
+
+  function gamma_fac_electrons(parameters)
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real gamma_fac_electrons
+    gamma_fac_electrons = parameters%alpha_electron_collision_rate * &
+                    (parameters%electron_vth / parameters%alpha_vth)**3.0 * &
+                    (parameters%electron_mass / parameters%alpha_mass * &
+                     parameters%alpha_charge / parameters%electron_charge)**2.0  
+  end function gamma_fac_electrons
+
+  !> Calculates d nu_parallel_N/d rho, see eq () of  
+  function nu_parallel_prime(parameters, energy)
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: energy
+    real :: nu_parallel_prime
+
+    nu_parallel_prime = 2.0/energy**1.5 * &
+                  (0.5 * gamma_fac_ions(parameters) * &
+                    chandrasekhar_prime(energy**0.5 * &
+                      parameters%alpha_vth / parameters%ion_vth) * &
+                    energy**0.5 * parameters%alpha_vth / parameters%ion_vth * &
+                    parameters%ion_tprim & 
+                  + 0.5 * gamma_fac_electrons(parameters) * &
+                    chandrasekhar_prime(energy**0.5 * &
+                      parameters%alpha_vth / parameters%electron_vth) * &
+                    energy**0.5 * parameters%alpha_vth / parameters%electron_vth * &
+                    parameters%electron_tprim &
+                  - gamma_fac_ions(parameters) * &
+                    parameters%ion_fprim * &
+                    chandrasekhar(energy**0.5 * &
+                      parameters%alpha_vth / parameters%ion_vth) & 
+                  - gamma_fac_electrons(parameters) * &
+                    parameters%electron_fprim * &
+                    chandrasekhar(energy**0.5 * &
+                      parameters%alpha_vth / parameters%electron_vth))
+                  
+                      
+
+
+  end function nu_parallel_prime
+
+  !> Unit test used by test_analytical_falpha, testing the private
+  !! function nu_parallel
+  function analytical_falpha_unit_test_nu_parallel_prime(parameters, energy, rslt, err)
+    use unit_tests
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: rslt, energy, err
+    logical :: analytical_falpha_unit_test_nu_parallel_prime
+
+    analytical_falpha_unit_test_nu_parallel_prime = agrees_with(nu_parallel_prime(parameters, energy), rslt, err)
+  end function analytical_falpha_unit_test_nu_parallel_prime
   !> Normalised nu_parallel, see eq () of  
   function nu_parallel(parameters, energy)
     type(analytical_falpha_parameters_type), intent(in) :: parameters
@@ -345,21 +544,12 @@ contains
     real :: nu_parallel
 
     nu_parallel = 2.0/energy**1.5 * &
-                  (parameters%alpha_ion_collision_rate * &
-                    (parameters%ion_vth / parameters%alpha_vth)**3.0 * &
-                    (parameters%ion_mass / parameters%alpha_mass * &
-                     parameters%alpha_charge / parameters%ion_charge)**2.0 * &
+                  (gamma_fac_ions(parameters) * &
                     chandrasekhar(energy**0.5 * &
                       parameters%alpha_vth / parameters%ion_vth) + & 
-                  parameters%alpha_electron_collision_rate * &
-                    (parameters%electron_vth / parameters%alpha_vth)**3.0 * &
-                    (parameters%electron_mass / parameters%alpha_mass * &
-                     parameters%alpha_charge / parameters%electron_charge)**2.0 * &
+                     gamma_fac_electrons(parameters) * &
                     chandrasekhar(energy**0.5 * &
                       parameters%alpha_vth / parameters%electron_vth))
-                  
-                      
-
 
   end function nu_parallel
 
@@ -398,6 +588,24 @@ contains
       (abs(chandrasekhar(0.1)-result1)/result1 .lt. 1.0e-6 .and. &
       abs(chandrasekhar(1.0)-result2)/result2 .lt. 1.0e-5)
   end function analytical_falpha_unit_test_chandrasekhar
+
+  function chandrasekhar_prime(argument)
+    use constants, only: pi
+    real, intent(in) :: argument
+    real ::  chandrasekhar_prime
+    chandrasekhar_prime = -2.0 / argument * chandrasekhar(argument) &
+      + 2.0/pi**0.5*exp(-argument**2.0)
+  end function chandrasekhar_prime
+
+  function analytical_falpha_unit_test_chandrasekhar_prime(arg, rslt, eps)
+    use unit_tests
+    logical :: analytical_falpha_unit_test_chandrasekhar_prime
+    real, intent(in) :: arg, rslt, eps
+
+    analytical_falpha_unit_test_chandrasekhar_prime = &
+      agrees_with(chandrasekhar_prime(arg), rslt, eps)
+      
+  end function analytical_falpha_unit_test_chandrasekhar_prime
 
 
   !> Calculates the normalised d f_alpha / d energy

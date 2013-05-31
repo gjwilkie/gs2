@@ -386,6 +386,7 @@ gauss_quad.o: \
 	 mp.o 
 general_f0.o: \
 	 file_utils.o \
+	 unit_tests.o \
 	 mp.o \
 	 species.o \
 	 analytical_falpha.o \
