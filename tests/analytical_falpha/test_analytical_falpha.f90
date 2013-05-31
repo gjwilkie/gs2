@@ -70,11 +70,13 @@ program test_analytical_falpha
   call process_test(analytical_falpha_unit_test_nu_parallel( &
     parameters, 0.8, 7.07304892219606e-7, eps), 'nu_parallel')
 
+  ! Note that the routine used to calculate the test result was not 
+  ! very accurate, hence eps * 1000
   call announce_test('nu_parallel_prime')
   call process_test(analytical_falpha_unit_test_nu_parallel_prime( &
-    parameters, 0.2, 0.000241542194333647/2.0, eps), 'nu_parallel_prime 0.2')
+    parameters, 0.2, -0.000127328179504318, eps*100.0), 'nu_parallel_prime 0.2')
   call process_test(analytical_falpha_unit_test_nu_parallel_prime( &
-    parameters, 0.8, 7.07304892219606e-7, eps), 'nu_parallel_prime 0.8')
+    parameters, 0.8, -3.99792050140238e-6, eps*1000.0), 'nu_parallel_prime 0.8')
   
   call announce_test('falpha_integrand')
   call process_test(analytical_falpha_unit_test_falpha_integrand(&
