@@ -37,7 +37,7 @@
 !! input parameters. Your changes will be ignored in favour of the
 !! automatically generated input parameter documentation. To edit 
 !! this input parameter documentation, please go to the wiki page: 
-!! http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=Gs2_Input_Parameters. 
+!! http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=GS2_Input_Parameters. 
 !! \subsection gen Updating this Documentation
 !!
 !! - Install doxygen: http://www.stack.nl/~dimitri/doxygen/
