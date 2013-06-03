@@ -39,22 +39,21 @@ module gs2_diagnostics
   logical, public :: print_line, print_flux_line
   logical, public :: print_summary, write_line, write_flux_line
   logical, public :: write_omega, write_omavg, write_ascii
-  logical, public :: write_gs, write_lpoly
+  logical, public :: write_gs
   logical, public :: write_g, write_gg, write_gyx
   logical, public :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
-  logical, public :: write_final_moments, write_avg_moments, write_parity
+  logical, public :: write_final_moments, write_avg_moments
   logical, public :: write_moments, write_final_db
   logical, public :: write_full_moments_notgc, write_cross_phase = .false.
   logical, public :: write_final_epar, write_kpar
   logical, public :: write_hrate, write_lorentzian
   logical, public :: write_nl_flux
-  logical, public :: write_verr, write_cerr, write_max_verr
   logical, public :: exit_when_converged
   logical, public :: dump_check1, dump_check2
   logical, public :: dump_fields_periodically, make_movie
   logical, public :: save_for_restart
   logical, public :: save_distfn !<DD> Added for saving distribution function
-  logical, public :: write_symmetry, write_correlation_extend, write_correlation
+  logical, public :: write_correlation_extend, write_correlation
   integer, public :: nwrite, igomega, nmovie
   integer, public :: navg, nsave, nwrite_mult
 
@@ -70,25 +69,24 @@ module gs2_diagnostics
   namelist /gs2_diagnostics_knobs/ print_line, print_flux_line, &
          write_line, write_flux_line, &
          write_omega, write_omavg, write_ascii, write_kpar, &
-         write_gs, write_gyx, write_g, write_gg, write_hrate, write_lpoly, &
+         write_gs, write_gyx, write_g, write_gg, write_hrate, &
          write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
-         write_final_epar, write_moments, write_final_moments, write_cerr, &
-         write_verr, write_max_verr, write_nl_flux, write_final_db, &
+         write_final_epar, write_moments, write_final_moments, &
+         write_nl_flux, write_final_db, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, &
          write_full_moments_notgc, write_cross_phase, &
          dump_check1, dump_check2, &
          dump_fields_periodically, make_movie, &
          save_for_restart, save_many, &
-         write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
+         save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time
 
-  integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
+  integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2
   integer :: jext_unit   !GGH Additions
   integer :: phase_unit
   integer :: dump_check1_unit, dump_check2_unit
-  integer :: res_unit, res_unit2, parity_unit
 
   complex, dimension (:,:,:), allocatable :: omegahist
   ! (navg,ntheta0,naky)
@@ -356,9 +354,7 @@ contains
     use init_g, only: init_init_g
     use gs2_io, only: init_gs2_io
     use gs2_heating, only: init_htype
-    use collisions, only: collision_model_switch, init_lorentz_error
     use mp, only: broadcast, proc0
-    use le_grids, only: init_weights
 
     implicit none
     logical, intent (in) :: list
@@ -401,10 +397,6 @@ contains
     call broadcast (write_gyx)
     call broadcast (write_gg)
     call broadcast (write_final_antot)
-    call broadcast (write_verr)
-    call broadcast (write_max_verr)
-    call broadcast (write_lpoly)
-    call broadcast (write_cerr)
 
     call broadcast (ntg_out)
     call broadcast (write_hrate)
@@ -418,10 +410,6 @@ contains
 
     nmovie_tot = nstep/nmovie
     nwrite_big_tot = nstep/(nwrite*nwrite_mult)-nstep/4/(nwrite*nwrite_mult)
-
-! initialize weights for less accurate integrals used
-! to provide an error estimate for v-space integrals (energy and untrapped)
-    if (write_verr .and. proc0) call init_weights
 
 ! allocate heating diagnostic data structures
     if (write_hrate) then
@@ -446,20 +434,11 @@ contains
 
     call init_gs2_io (write_nl_flux, write_omega, &
          write_hrate, write_final_antot, &
-         write_eigenfunc, make_movie, nmovie_tot, write_verr, &
+         write_eigenfunc, make_movie, nmovie_tot, &
          write_fields, write_moments, write_full_moments_notgc, &
-         write_symmetry, &
          write_correlation, nwrite_big_tot, write_correlation_extend, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time)
     
-    if (write_cerr) then
-       if (collision_model_switch == 1 .or. collision_model_switch == 5) then
-          call init_lorentz_error
-       else
-          write_cerr = .false.
-       end if
-    end if
-
     allocate (pflux_avg(nspec), qflux_avg(nspec), heat_avg(nspec), vflux_avg(nspec))
     pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
 
@@ -495,16 +474,6 @@ contains
        if (write_hrate .and. write_ascii) then
           call open_output_file (heat_unit, ".heat")
           call open_output_file (heat_unit2, ".heat2")
-       end if
-
-       if (write_verr .and. write_ascii) then
-          call open_output_file (res_unit, ".vres")
-          call open_output_file (lpc_unit, ".lpc")
-          if (write_max_verr) call open_output_file (res_unit2, ".vres2")
-       end if
-
-       if (write_parity .and. write_ascii) then
-          call open_output_file (parity_unit, ".parity")
        end if
 
        !GGH J_external, only if A_parallel is being calculated.
@@ -585,7 +554,6 @@ contains
        write_gs = .false.
        write_g = .false.
        write_gyx = .false.
-       write_lpoly = .false.
        write_gg = .false.
        write_lorentzian = .false.
        write_omega = .false.
@@ -596,8 +564,6 @@ contains
        write_moments = .false.
        write_final_moments = .false.
        write_avg_moments = .false.
-       write_parity = .false.
-       write_symmetry = .false.
        write_correlation_extend = .false.
        write_correlation = .false.
        write_fields = .false.
@@ -606,9 +572,6 @@ contains
        write_final_antot = .false.
        write_final_epar = .false.
        write_final_db = .false.
-       write_verr = .false.
-       write_max_verr = .false.
-       write_cerr = .false.
        nwrite = 100
        nmovie = 1000
        nwrite_mult = 10
@@ -670,9 +633,7 @@ contains
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn, only: getan, get_epar, getmoms, par_spectrum
     use dist_fn, only: write_f, write_fyx, def_parity, even
-    use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn_arrays, only: g_adjust
-    use collisions, only: vnmult
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
     use gs2_transforms, only: transform2, inverse2
@@ -713,21 +674,11 @@ contains
 
     if (write_gyx) call write_fyx (phinew,bparnew,last)
     if (write_g) call write_f (last)
-    if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
-    if (write_cerr) call collision_error (phinew, bparnew, last)
 !    if (write_gg) call write_dist (g)
 
     phi0 = 1.
 
     if (proc0) then
-       if (write_ascii .and. write_parity) then
-          call close_output_file (parity_unit)
-       end if
-       if (write_ascii .and. write_verr) then
-          call close_output_file (res_unit)
-          call close_output_file (lpc_unit)
-          if (write_max_verr) call close_output_file (res_unit2)
-       end if
        if (write_ascii) call close_output_file (out_unit)
        if (write_ascii .and. write_cross_phase) call close_output_file (phase_unit)
        if (write_ascii .and. write_hrate) call close_output_file (heat_unit)
@@ -1019,7 +970,7 @@ contains
     end if
 
     if (save_for_restart) then
-       call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
+       call gs2_save_for_restart (gnew, user_time, user_dt, istatus, &
             fphi, fapar, fbpar, exit_in=.true.)
     end if
 
@@ -1029,7 +980,7 @@ contains
     	call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
     	
     	!Save dfn, fields and velocity grids to file
-       	call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
+       	call gs2_save_for_restart (gnew, user_time, user_dt, istatus, &
           	fphi, fapar, fbpar, exit_in=.true.,distfn=.true.)
     	
         !Convert distribution function back to h
@@ -1369,26 +1320,22 @@ contains
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, write_f, write_fyx
     use dist_fn, only: omega0, gamma0, getmoms, par_spectrum
-    use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn, only: getmoms_notgc, lf_flux, eexchange
-    use dist_fn, only: flux_vs_theta_vs_vpa
     use dist_fn_arrays, only: g, gnew, aj0, vpa, g_adjust
-    use collisions, only: ncheck, vnmult, vary_vnew
     use mp, only: proc0, broadcast, iproc, send, receive
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
-    use gs2_io, only: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
+    use gs2_io, only: nc_loop_fullmom, nc_loop_corr, nc_loop_corr_extend
     use gs2_io, only: nc_loop_vres
     use gs2_io, only: nc_loop_movie, nc_write_fields, nc_write_moments
     use gs2_layouts, only: yxf_lo, g_lo
 ! MAB>
-    use gs2_layouts, only: init_parity_layouts, idx, idx_local, proc_id
-    use gs2_layouts, only: p_lo, ie_idx, is_idx, il_idx, it_idx, ik_idx
+    use gs2_layouts, only: idx, idx_local, proc_id
+    use gs2_layouts, only: is_idx, it_idx, ik_idx
 ! <MAB
     use gs2_transforms, only: init_transforms, transform2
-    use le_grids, only: nlambda, ng2, integrate_moment, negrid, integrate_kysum
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
     use gs2_heating, only: heating_diagnostics, del_htype
@@ -1418,20 +1365,6 @@ contains
 !    real, dimension (:,:,:,:), allocatable :: errest_by_mode
     integer, dimension (:,:), allocatable :: erridx
     real, dimension (:,:), allocatable :: errest
-!MAB> arrays needed for parity diagnostic
-    integer :: iplo, iglo, sgn2, isgn, il, ie
-    real, dimension (:,:,:), allocatable :: vflx_sym
-    complex, dimension (:,:,:,:), allocatable :: gparity, gmx, gpx
-    complex, dimension (:,:,:), allocatable :: g0, gm, gp
-    complex, dimension (:,:,:), allocatable :: g_kint, gm_kint, gp_kint
-    complex, dimension (:,:), allocatable :: g_avg, gnorm_avg, phim
-    complex, dimension (:), allocatable :: g_all_tot, g_nokx_tot, g_nosig_tot, gtmp
-    complex, dimension (:), allocatable :: gnorm_all_tot, gnorm_nokx_tot, gnorm_nosig_tot
-    real, dimension (:,:,:), allocatable :: gmnorm, gmint, gpint, gmnormint, gmavg, gpavg, gmnormavg
-    real, dimension (:), allocatable :: gmtot, gptot, gtot, gmnormtot
-    real, dimension (:), allocatable :: gm_nokx_tot, gp_nokx_tot, gmnorm_nokx_tot
-    real, dimension (:), allocatable :: gm_nosig_tot, gp_nosig_tot, gmnorm_nosig_tot
-    logical :: first = .true.
     ! arrays needed for parallel autocorrelation diagnostic
     real, save :: tcorr0 = 0.0
     real, dimension (:,:,:), allocatable :: phi2_extend
@@ -1440,7 +1373,6 @@ contains
     real, dimension (:,:,:), allocatable, save :: phiextend_sum
     complex, dimension (:,:,:), allocatable, save :: phicorr_sum
     complex, dimension (:,:), allocatable, save :: phicorr_2pi_sum
-!<MAB
     real :: geavg, glavg, gtavg
     real :: t, denom
     integer :: ig, ik, it, is, unit, i, j, nnx, nny, ifield, write_mod
@@ -1545,58 +1477,10 @@ if (debug) write(6,*) "loop_diagnostics: call update_time"
 
     if (write_gyx .and. mod(istep,nmovie) == 0) call write_fyx (phinew,bparnew,last)
 
-    if (vary_vnew) then
-       write_mod = mod(istep,ncheck)
-    else
-       write_mod = mod(istep,nwrite)
-    end if
-
-    if (write_max_verr) write_verr = .true.
-    if (write_verr .and. write_mod == 0) then
-
-       allocate(errest(5,2), erridx(5,3))
-
-       errest = 0.0; erridx = 0
-
-! error estimate obtained by comparing standard integral with less-accurate integral
-       call get_verr (errest, erridx, phinew, bparnew)
-
-! error estimate based on monitoring amplitudes of legendre polynomial coefficients
-       call get_gtran (geavg, glavg, gtavg, phinew, bparnew, istep)
-
-       if (proc0) then
-
-! write error estimates to .nc file          
-!          call nc_loop_vres (nout, errest_by_mode, lpcoef_by_mode)
-
-! write error estimates for ion dist. fn. at outboard midplane with ik=it=1 to ascii files
-          if (write_ascii) then
-             t = user_time
-             if (nlambda - ng2 > 1) then
-                write(lpc_unit,"(4(1x,e12.6))") t, geavg, glavg, gtavg
-             else
-                write(lpc_unit,"(3(1x,e12.6))") t, geavg, glavg
-             end if
-             write(res_unit,"(8(1x,e12.6))") t, errest(1,2), errest(2,2), errest(3,2), &
-                  errest(4,2), errest(5,2), vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
-             if (write_max_verr) then
-                write(res_unit2,"(3(i8),(1x,e12.6),3(i8),(1x,e12.6),3(i8),(1x,e12.6),3(i8),(1x,e12.6),3(i8),(1x,e12.6))") &
-                     erridx(1,1), erridx(1,2), erridx(1,3), errest(1,1), &
-                     erridx(2,1), erridx(2,2), erridx(2,3), errest(2,1), &
-                     erridx(3,1), erridx(3,2), erridx(3,3), errest(3,1), &
-                     erridx(4,1), erridx(4,2), erridx(4,3), errest(4,1), &
-                     erridx(5,1), erridx(5,2), erridx(5,3), errest(5,1)
-             end if
-          end if
-       end if
-       deallocate(errest,erridx)
-    end if
-
     if (mod(istep,nwrite) /= 0 .and. .not. exit) return
     t = user_time
 
     if (write_g) call write_f (last)
-    if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
 
     call prof_entering ("loop_diagnostics-1")
 if (debug) write(6,*) "loop_diagnostics: -1"
@@ -2063,16 +1947,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
     call broadcast(scan_momflux)
     call broadcast(scan_phi2_tot)
 
-    if (write_cerr) call collision_error(phinew,bparnew,last)
-
-    call broadcast (write_symmetry)
-    if (write_symmetry) then
-       allocate (vflx_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
-       call flux_vs_theta_vs_vpa (vflx_sym)
-       if (proc0) call nc_loop_sym (nout, vflx_sym)
-       deallocate (vflx_sym)
-    end if
-
     call broadcast (write_correlation)
     if (write_correlation) then
        allocate (phi_corr_2pi(-ntgrid:ntgrid,naky))
@@ -2100,409 +1974,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           nout_big = nout_big + 1
        end if
        deallocate (phi_corr, phi2_extend)
-    end if
-
-    call broadcast (write_parity)
-    if (write_parity) then
-
-       ! initialize layouts for parity diagnostic
-       if (first) then
-          call init_parity_layouts (naky, nlambda, negrid, nspec)
-          first = .false.
-       end if
-
-       allocate (gparity(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
-       allocate (g0(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
-       allocate (gm(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
-       allocate (gp(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
-       allocate (gmnorm(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
-       allocate (gmint(-ntgrid:ntgrid,naky,nspec))
-       allocate (gpint(-ntgrid:ntgrid,naky,nspec))
-       allocate (gmnormint(-ntgrid:ntgrid,naky,nspec))
-       allocate (gmavg(ntheta0,naky,nspec))
-       allocate (gpavg(ntheta0,naky,nspec))
-       allocate (gmnormavg(ntheta0,naky,nspec))
-       allocate (gmtot(nspec), gm_nokx_tot(nspec), gm_nosig_tot(nspec))
-       allocate (gptot(nspec), gp_nokx_tot(nspec), gp_nosig_tot(nspec))
-       allocate (gtot(nspec), gmnormtot(nspec), gmnorm_nokx_tot(nspec), gmnorm_nosig_tot(nspec))
-       allocate (phim(-ntgrid:ntgrid,naky))
-       allocate (g_kint(-ntgrid:ntgrid,2,nspec), gm_kint(-ntgrid:ntgrid,2,nspec), gp_kint(-ntgrid:ntgrid,2,nspec))
-       allocate (g_avg(ntheta0,nspec), gnorm_avg(ntheta0,nspec))
-       allocate (g_all_tot(nspec), g_nokx_tot(nspec), g_nosig_tot(nspec), gtmp(nspec))
-       allocate (gnorm_all_tot(nspec), gnorm_nokx_tot(nspec), gnorm_nosig_tot(nspec))
-
-       ! convert from g to h
-       call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
-
-       ! below we define gparity = J0 * h, where delta f = h - (q phi / T) F0
-       ! because we're ultimately interested in int J0 h * phi (i.e. particle flux)
-       do isgn = 1, 2
-          do ig = -ntgrid, ntgrid
-             do iglo = g_lo%llim_world, g_lo%ulim_world
-                ik = ik_idx(g_lo,iglo)
-                ie = ie_idx(g_lo,iglo)
-                il = il_idx(g_lo,iglo)
-                is = is_idx(g_lo,iglo)
-                it = it_idx(g_lo,iglo)
-                ! count total index for given (ik,il,ie,is) combo (dependent on layout)
-                iplo = idx(p_lo,ik,il,ie,is)
-                ! check to see if value of g corresponding to iglo is on this processor
-                if (idx_local(g_lo,iglo)) then
-                   if (idx_local(p_lo,iplo)) then
-                      ! if g value corresponding to iplo should be on this processor, then get it
-                      gparity(ig,it,isgn,iplo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)
-                   else
-                      ! otherwise, send g for this iplo value to correct processor
-                      call send (gnew(ig,isgn,iglo)*aj0(ig,iglo),proc_id(p_lo,iplo))
-                   end if
-                else if (idx_local(p_lo,iplo)) then
-                   ! if g for this iplo not on processor, receive it
-                   call receive (gparity(ig,it,isgn,iplo),proc_id(g_lo,iglo))
-                end if
-             end do
-          end do
-       end do
-
-       ! convert from h back to g
-       call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
-       
-       ! first diagnostic is phase space average of 
-       ! |J0*(h(z,vpa,kx) +/- h(-z,-vpa,-kx))|**2 / ( |J0*h(z,vpa,kx)|**2 + |J0*h(-z,-vpa,-kx)|**2 )
-       do it = 1, ntheta0
-          ! have to treat kx=0 specially
-          if (it == 1) then
-             do isgn = 1, 2
-                sgn2 = mod(isgn,2)+1
-                do ig = -ntgrid, ntgrid
-                   g0(ig,isgn,:) = gparity(-ig,1,sgn2,:)
-                end do
-             end do
-          else
-             do isgn = 1, 2
-                sgn2 = mod(isgn,2)+1
-                do ig = -ntgrid, ntgrid
-                   g0(ig,isgn,:) = gparity(-ig,ntheta0-it+2,sgn2,:)
-                end do
-             end do
-          end if
-          gm = gparity(:,it,:,:)-g0
-          gp = gparity(:,it,:,:)+g0
-          gmnorm = real(g0*conjg(g0))
-          ! integrate out velocity dependence
-          call integrate_moment (real(gm*conjg(gm)),gmint,1)
-          call integrate_moment (real(gp*conjg(gp)),gpint,1)
-          call integrate_moment (gmnorm,gmnormint,1)
-          ! average along field line
-          do is = 1, nspec
-             do ik = 1, naky
-                call get_fldline_avg (gmint(:,ik,is),gmavg(it,ik,is))
-                call get_fldline_avg (gpint(:,ik,is),gpavg(it,ik,is))
-                call get_fldline_avg (gmnormint(:,ik,is),gmnormavg(it,ik,is))
-             end do
-          end do
-
-          ! phim(theta,kx) = phi(-theta,-kx)
-          ! have to treat kx=0 specially
-          if (it == 1) then
-             do ig = -ntgrid, ntgrid
-                phim(ig,:) = phinew(-ig,1,:)
-             end do
-          else
-             do ig = -ntgrid, ntgrid
-                phim(ig,:) = phinew(-ig,ntheta0-it+2,:)
-             end do
-          end if
-
-          ! want int dtheta sum_{kx} int d3v | sum_{ky} [ J0*(h+ * conjg(phi-) + h- * conjg(phi+)) ky ] |**2
-          ! J0*(h+ * conjg(phi-) + h- * conjg(phi+)) = h*conjg(phi) - h(-theta,-vpa,-kx)*conjg(phi(-theta,-kx))
-          do iplo = p_lo%llim_proc, p_lo%ulim_proc
-             ik = ik_idx(p_lo,iplo)
-             do isgn = 1, 2
-                gm(:,isgn,iplo) = gparity(:,it,isgn,iplo)*conjg(phinew(:,it,ik)) - g0(:,isgn,iplo)*conjg(phim(:,ik))
-             end do
-          end do
-          do isgn = 1, 2
-             do ig = -ntgrid, ntgrid
-                call integrate_kysum (gm(ig,isgn,p_lo%llim_proc:p_lo%ulim_proc),ig,g_kint(ig,isgn,:),1)
-             end do
-          end do
-          do is = 1, nspec
-             call get_fldline_avg (g_kint(:,1,is)+g_kint(:,2,is),g_avg(it,is))
-          end do
-
-          ! get normalizing term for above diagnostic
-          do iplo = p_lo%llim_proc, p_lo%ulim_proc
-             ik = ik_idx(p_lo,iplo)
-             do isgn = 1, 2
-                gm(:,isgn,iplo) = gparity(:,it,isgn,iplo)*conjg(phinew(:,it,ik))
-                gp(:,isgn,iplo) = g0(:,isgn,iplo)*conjg(phim(:,ik))
-             end do
-          end do
-          do isgn = 1, 2
-             do ig = -ntgrid, ntgrid
-                call integrate_kysum (gm(ig,isgn,:),ig,gm_kint(ig,isgn,:),1)
-                call integrate_kysum (gp(ig,isgn,:),ig,gp_kint(ig,isgn,:),1)
-             end do
-          end do
-          do is = 1, nspec
-             call get_fldline_avg (gm_kint(:,1,is)+gm_kint(:,2,is) &
-                  + gp_kint(:,1,is)+gp_kint(:,2,is),gnorm_avg(it,is))
-          end do
-       end do
-
-       ! average over perp plane
-       do is = 1, nspec
-          call get_volume_average (gmavg(:,:,is), gmtot(is))
-          call get_volume_average (gpavg(:,:,is), gptot(is))
-          call get_volume_average (gmnormavg(:,:,is), gmnormtot(is))    
-          g_all_tot(is) = sum(g_avg(:,is))
-          gnorm_all_tot(is) = sum(gnorm_avg(:,is))
-       end do
-
-       allocate (gmx(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
-       allocate (gpx(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
-
-       ! now we want diagnostic of phase space average of
-       ! |J0*(h(z,vpa) +/- h(-z,-vpa))|**2 / ( |J0*h(z,vpa)|**2 + |J0*h(-z,-vpa)|**2 )
-       do it = 1, ntheta0
-          do isgn = 1, 2
-             sgn2 = mod(isgn,2)+1
-             do ig = -ntgrid, ntgrid
-                g0(ig,isgn,:) = gparity(-ig,it,sgn2,:)
-             end do
-          end do
-          gm = gparity(:,it,:,:)-g0
-          gp = gparity(:,it,:,:)+g0
-          gmnorm = real(g0*conjg(g0))
-          ! integrate out velocity dependence
-          call integrate_moment (real(gm*conjg(gm)),gmint,1)
-          call integrate_moment (real(gp*conjg(gp)),gpint,1)
-          call integrate_moment (gmnorm,gmnormint,1)
-          ! average along field line
-          do is = 1, nspec
-             do ik = 1, naky
-                call get_fldline_avg (gmint(:,ik,is),gmavg(it,ik,is))
-                call get_fldline_avg (gpint(:,ik,is),gpavg(it,ik,is))
-                call get_fldline_avg (gmnormint(:,ik,is),gmnormavg(it,ik,is))
-             end do
-          end do
-
-          ! phim(theta) = phi(-theta)
-          ! have to treat kx=0 specially
-          do ig = -ntgrid, ntgrid
-             phim(ig,:) = phinew(-ig,it,:)
-          end do
-          
-          ! want int dtheta int d3v | sum_{kx} sum_{ky} [ J0*(h+ * conjg(phi-) + h- * conjg(phi+)) ky ] |**2
-          ! J0*(h+ * conjg(phi-) + h- * conjg(phi+)) = h*conjg(phi) - h(-theta,-vpa)*conjg(phi(-theta))
-          do iplo = p_lo%llim_proc, p_lo%ulim_proc
-             ik = ik_idx(p_lo,iplo)
-             do isgn = 1, 2
-                gmx(:,it,isgn,iplo) = g0(:,isgn,iplo)*conjg(phim(:,ik))
-                gpx(:,it,isgn,iplo) = gparity(:,it,isgn,iplo)*conjg(phinew(:,it,ik)) - gmx(:,it,isgn,iplo) 
-             end do
-          end do
-       end do
-
-       ! sum over kx
-       gp = sum(gpx,2)
-       deallocate (gpx)
-       do isgn = 1, 2
-          do ig = -ntgrid, ntgrid
-             call integrate_kysum (gp(ig,isgn,:),ig,g_kint(ig,isgn,:),1)
-          end do
-       end do
-       do is = 1, nspec
-          call get_fldline_avg (g_kint(:,1,is)+g_kint(:,2,is), g_nokx_tot(is))
-       end do
-
-       ! get normalizing terms for above diagnostic
-       gm = sum(gmx,2)
-       deallocate (gmx)
-       do isgn = 1, 2
-          do ig = -ntgrid, ntgrid
-             call integrate_kysum (gm(ig,isgn,:),ig,gm_kint(ig,isgn,:),1)
-             call integrate_kysum (gm(ig,isgn,:)+gp(ig,isgn,:),ig,gp_kint(ig,isgn,:),1)
-          end do
-       end do
-       do is = 1, nspec
-          call get_fldline_avg (gm_kint(:,1,is)+gm_kint(:,2,is) &
-               + gp_kint(:,1,is)+gp_kint(:,2,is), gnorm_nokx_tot(is))
-       end do
-
-       ! average over perp plane
-       do is = 1, nspec
-          call get_volume_average (gmavg(:,:,is), gm_nokx_tot(is))
-          call get_volume_average (gpavg(:,:,is), gp_nokx_tot(is))
-          call get_volume_average (gmnormavg(:,:,is), gmnorm_nokx_tot(is))    
-       end do
-
-       ! final diagnostic is phase space average of 
-       ! |J0*(h(z,kx) +/- h(-z,-kx))|**2 / ( |J0*h(z,kx)|**2 + |J0*h(-z,-kx)|**2 )
-       do it = 1, ntheta0
-          ! have to treat kx=0 specially
-          if (it == 1) then
-             do ig = -ntgrid, ntgrid
-                g0(ig,:,:) = gparity(-ig,1,:,:)
-             end do
-          else
-             do ig = -ntgrid, ntgrid
-                g0(ig,:,:) = gparity(-ig,ntheta0-it+2,:,:)
-             end do
-          end if
-          gm = gparity(:,it,:,:)-g0
-          gp = gparity(:,it,:,:)+g0
-          gmnorm = real(g0*conjg(g0))
-          ! integrate out velocity dependence
-          call integrate_moment (real(gm*conjg(gm)),gmint,1)
-          call integrate_moment (real(gp*conjg(gp)),gpint,1)
-          call integrate_moment (gmnorm,gmnormint,1)
-          ! average along field line
-          do is = 1, nspec
-             do ik = 1, naky
-                call get_fldline_avg (gmint(:,ik,is),gmavg(it,ik,is))
-                call get_fldline_avg (gpint(:,ik,is),gpavg(it,ik,is))
-                call get_fldline_avg (gmnormint(:,ik,is),gmnormavg(it,ik,is))
-             end do
-          end do
-
-          ! phim(theta,kx) = phi(-theta,-kx)
-          ! have to treat kx=0 specially
-          if (it == 1) then
-             do ig = -ntgrid, ntgrid
-                phim(ig,:) = phinew(-ig,1,:)
-             end do
-          else
-             do ig = -ntgrid, ntgrid
-                phim(ig,:) = phinew(-ig,ntheta0-it+2,:)
-             end do
-          end if
-
-          ! want int dtheta sum_{kx} int dE dmu | sum_{sigma} sum_{ky} [ J0*(h+ * conjg(phi-) + h- * conjg(phi+)) ky ] |**2
-          ! J0*(h+ * conjg(phi-) + h- * conjg(phi+)) = h*conjg(phi) - h(-theta,-kx)*conjg(phi(-theta,-kx))
-          do iplo = p_lo%llim_proc, p_lo%ulim_proc
-             ik = ik_idx(p_lo,iplo)
-             do isgn = 1, 2
-                gm(:,isgn,iplo) = gparity(:,it,isgn,iplo)*conjg(phinew(:,it,ik)) - g0(:,isgn,iplo)*conjg(phim(:,ik))
-             end do
-          end do
-          do ig = -ntgrid, ntgrid
-             call integrate_kysum (gm(ig,1,:)+gm(ig,2,:),ig,g_kint(ig,1,:),1)
-          end do
-          do is = 1, nspec
-             call get_fldline_avg (g_kint(:,1,is),g_avg(it,is))
-          end do
-
-          ! get normalizing term for above diagnostic
-          do iplo = p_lo%llim_proc, p_lo%ulim_proc
-             ik = ik_idx(p_lo,iplo)
-             do isgn = 1, 2
-                gm(:,isgn,iplo) = gparity(:,it,isgn,iplo)*conjg(phinew(:,it,ik))
-                gp(:,isgn,iplo) = g0(:,isgn,iplo)*conjg(phim(:,ik))
-             end do
-          end do
-          do ig = -ntgrid, ntgrid
-             call integrate_kysum (gm(ig,1,:)+gm(ig,2,:),ig,gm_kint(ig,1,:),1)
-             call integrate_kysum (gp(ig,1,:)+gp(ig,2,:),ig,gp_kint(ig,1,:),1)
-          end do
-          do is = 1, nspec
-             call get_fldline_avg (gm_kint(:,1,is)+gp_kint(:,1,is),gnorm_avg(it,is))
-          end do
-       end do
-
-       ! average over perp plane
-       do is = 1, nspec
-          call get_volume_average (gmavg(:,:,is), gm_nosig_tot(is))
-          call get_volume_average (gpavg(:,:,is), gp_nosig_tot(is))
-          call get_volume_average (gmnormavg(:,:,is), gmnorm_nosig_tot(is))    
-          g_nosig_tot(is) = sum(g_avg(:,is))
-          gnorm_nosig_tot(is) = sum(gnorm_avg(:,is))
-       end do
-
-       deallocate (gparity) ; allocate (gparity(-ntgrid:ntgrid,ntheta0,naky,nspec))
-       ! obtain normalization factor = int over phase space of |g|**2
-       call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
-       call integrate_moment (spread(aj0,2,2)*spread(aj0,2,2)*gnew*conjg(gnew), gparity, 1)
-       call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                call get_fldline_avg (real(gparity(:,it,ik,is)),gmavg(it,ik,is))
-             end do
-          end do
-          call get_volume_average (gmavg(:,:,is), gtot(is))
-       end do
-
-       ! normalize g(theta,vpa,kx) - g(-theta,-vpa,-kx) terms
-       where (gtot+gmnormtot > epsilon(0.0))
-          gmtot = sqrt(gmtot/(gtot+gmnormtot)) ; gptot = sqrt(gptot/(gtot+gmnormtot))
-       elsewhere
-          gmtot = sqrt(gmtot) ; gptot = sqrt(gptot)
-       end where
-
-       where (real(gnorm_all_tot) > epsilon(0.0))
-          gtmp = sqrt(real(g_all_tot)/real(gnorm_all_tot))
-       elsewhere
-          gtmp = sqrt(real(g_all_tot))
-       end where
-       where (aimag(gnorm_all_tot) > epsilon(0.0))
-          g_all_tot = gtmp + zi*sqrt(aimag(g_all_tot)/aimag(gnorm_all_tot))
-       elsewhere
-          g_all_tot = gtmp + zi*sqrt(aimag(g_all_tot))
-       end where
-
-       ! normalize g(theta,vpa) +/- g(-theta,-vpa) terms
-       where (gtot+gmnorm_nokx_tot > epsilon(0.0))
-          gm_nokx_tot = sqrt(gm_nokx_tot/(gtot+gmnorm_nokx_tot)) ; gp_nokx_tot = sqrt(gp_nokx_tot/(gtot+gmnorm_nokx_tot))
-       elsewhere
-          gm_nokx_tot = sqrt(gm_nokx_tot) ; gp_nokx_tot = sqrt(gp_nokx_tot)
-       end where
-       
-       where (real(gnorm_nokx_tot) > epsilon(0.0))
-          gtmp = sqrt(real(g_nokx_tot)/real(gnorm_nokx_tot))
-       elsewhere
-          gtmp = sqrt(real(g_nokx_tot))
-       end where
-       where (aimag(gnorm_nokx_tot) > epsilon(0.0))
-          g_nokx_tot = gtmp + zi*sqrt(aimag(g_nokx_tot)/aimag(gnorm_nokx_tot))
-       elsewhere
-          g_nokx_tot = gtmp + zi*sqrt(aimag(g_nokx_tot))
-       end where
-
-       ! normalize g(theta,kx) +/ g(-theta,-kx) terms
-       where (gtot+gmnorm_nosig_tot > epsilon(0.0))
-          gm_nosig_tot = sqrt(gm_nosig_tot/(gtot+gmnorm_nosig_tot)) ; gp_nosig_tot = sqrt(gp_nosig_tot/(gtot+gmnorm_nosig_tot))
-       elsewhere
-          gm_nosig_tot = sqrt(gm_nosig_tot) ; gp_nosig_tot = sqrt(gp_nosig_tot)
-       end where
-
-       where (real(gnorm_nosig_tot) > epsilon(0.0))
-          gtmp = sqrt(real(g_nosig_tot)/real(gnorm_nosig_tot))
-       elsewhere
-          gtmp = sqrt(real(g_nosig_tot))
-       end where
-       where (aimag(gnorm_nosig_tot) > epsilon(0.0))
-          g_nosig_tot = gtmp + zi*sqrt(aimag(g_nosig_tot)/aimag(gnorm_nosig_tot))
-       elsewhere
-          g_nosig_tot = gtmp + zi*sqrt(aimag(g_nosig_tot))
-       end where
-
-       if (proc0) write (parity_unit,"(19(1x,e12.5))") t, gmtot, gptot, real(g_all_tot), aimag(g_all_tot), &
-            real(gnorm_all_tot), aimag(gnorm_all_tot), gm_nokx_tot, gp_nokx_tot, real(g_nokx_tot), aimag(g_nokx_tot), &
-            real(gnorm_nokx_tot), aimag(gnorm_nokx_tot), gm_nosig_tot, gp_nosig_tot, &
-            real(g_nosig_tot), aimag(g_nosig_tot), real(gnorm_nosig_tot), aimag(gnorm_nosig_tot)
-
-       deallocate (gparity, g0)
-       deallocate (gm, gp, gmnorm, gmint, gpint, gmnormint)
-       deallocate (gmavg, gpavg, gmnormavg)
-       deallocate (gmtot, gm_nokx_tot, gm_nosig_tot)
-       deallocate (gptot, gp_nokx_tot, gp_nosig_tot)
-       deallocate (gtot, gmnormtot, gmnorm_nokx_tot, gmnorm_nosig_tot)
-       deallocate (g_avg, gnorm_avg)
-       deallocate (g_kint, gm_kint, gp_kint)
-       deallocate (g_all_tot, g_nokx_tot, g_nosig_tot, gtmp)
-       deallocate (gnorm_all_tot, gnorm_nokx_tot, gnorm_nosig_tot)
-       deallocate (phim)
     end if
 
     call broadcast (write_avg_moments)
@@ -2619,11 +2090,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 
     if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) then
        call flush_output_file (out_unit, ".out")
-       if (write_verr) then
-          call flush_output_file (res_unit, ".vres")
-          call flush_output_file (lpc_unit, ".lpc")
-       end if
-       if (write_parity) call flush_output_file (parity_unit, ".parity")
     end if
 
 ! Deallocate variable for Jexternal
