@@ -108,7 +108,11 @@ LOWFLOW ?=
 USE_LE_LAYOUT ?=
 
 # Number of process to use for unit tests
-NTESTPROCS?=$(NPROCS)
+ifdef NPROCS
+	NTESTPROCS?=$(NPROCS)
+else
+	NTESTPROCS=2
+endif
 #
 # * Targets:
 #
@@ -532,8 +536,8 @@ revision:
 
 
 export
-#unit_tests: unit_tests.o $(gs2_mod)
-unit_tests: unit_tests.o 
+unit_tests: unit_tests.o $(gs2_mod)
+#unit_tests: unit_tests.o 
 	cd tests && ${MAKE}
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp

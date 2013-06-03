@@ -54,6 +54,7 @@ program test_general_f0
 
   rslts(:,1,3) = -(3.0 + (epoints(:,1) - 1.5) * 4.0) ! ion f0prim
   rslts(:,2,3) = -(3.0 + (epoints(:,1) - 1.5) * 6.0) ! electron f0prim
+  rslts(:,3,3) = (/1.32051044369054, 0.856175603678116, -0.0397244931703406, -777.639723666515/) ! alpha f0prim
 
   call announce_test('calculate_f0_arrays')
   call process_test(&

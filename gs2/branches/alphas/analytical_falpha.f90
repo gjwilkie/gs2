@@ -26,8 +26,10 @@ module analytical_falpha
   public :: analytical_falpha_unit_test_nu_parallel_prime
   public :: analytical_falpha_unit_test_falpha_integrand
   public :: analytical_falpha_unit_test_dfalpha_dti_integrand
+  public :: analytical_falpha_unit_test_dfalpha_dnupar_integrand
   public :: analytical_falpha_unit_test_falpha
   public :: analytical_falpha_unit_test_dfalpha_dti
+  public :: analytical_falpha_unit_test_dfalpha_dnupar
   public :: analytical_falpha_unit_test_calculate_arrays
   public :: analytical_falpha_unit_test_simpson
 
@@ -161,14 +163,13 @@ contains
       analytical_falpha_unit_test_calculate_arrays .and. &
        agrees_with(generalised_temperature(:, parameters%alpha_is), gentemp_rslt(:, parameters%alpha_is), err)
     call process_check(analytical_falpha_unit_test_calculate_arrays, 'gentemp')
-    do i = 1,parameters%negrid
-      analytical_falpha_unit_test_calculate_arrays = &
-        analytical_falpha_unit_test_calculate_arrays .and. &
-        agrees_with(generalised_temperature(i, parameters%alpha_is), &
-                    gentemp_rslt(i, parameters%alpha_is), err) .and. &
-        agrees_with(f0prim(i, parameters%alpha_is), &
-                    f0prim_rslt(i, parameters%alpha_is), err) 
-    end do
+    call announce_check('f0prim')
+    analytical_falpha_unit_test_calculate_arrays = &
+      analytical_falpha_unit_test_calculate_arrays .and. &
+       agrees_with(f0prim(:, parameters%alpha_is), f0prim_rslt(:, parameters%alpha_is), err)
+       !agrees_with(f0prim(:, parameters%alpha_is), f0prim(:, parameters%alpha_is), 100.0)
+    call process_check(analytical_falpha_unit_test_calculate_arrays, 'f0prim')
+    !analytical_falpha_unit_test_calculate_arrays = .false.
 
   end function analytical_falpha_unit_test_calculate_arrays
 
@@ -369,12 +370,13 @@ contains
 
   end function analytical_falpha_unit_test_falpha_integrand
 
-  function dfalpha_dti(parameters, falph, energy, energy_0, resolution)
+  !> Calculates (1/Falpha * (dTi/drho) * (dFalpha/dTi)) 
+  !! NB not dFalpha/dTi
+  function dfalpha_dti(parameters, falph, energy, resolution)
     implicit none
     type(analytical_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, intent(in) :: energy
-    real, intent(in) :: energy_0
     real, intent(in) :: falph
     real :: dfalpha_dti
     real :: integral
@@ -396,7 +398,7 @@ contains
 
     integral = simpson(parameters, &
                        dfalpha_dti_integrand, &
-                       energy_0**0.5,&
+                       parameters%energy_0**0.5,&
                        energy_top**0.5,&
                        energy,&
                        resolution)
@@ -415,7 +417,6 @@ contains
 
   function analytical_falpha_unit_test_dfalpha_dti(parameters, &
                                               energy, &
-                                              energy_0, &
                                               resolution, &
                                               rslt, &
                                               err)
@@ -423,7 +424,6 @@ contains
     type(analytical_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, intent(in) :: energy
-    real, intent(in) :: energy_0
     real, intent(in) :: rslt
     real, intent(in) :: err
     logical :: analytical_falpha_unit_test_dfalpha_dti
@@ -431,8 +431,8 @@ contains
     analytical_falpha_unit_test_dfalpha_dti = &
       agrees_with(&
       dfalpha_dti(parameters, &
-                  falpha(parameters, energy, energy_0, resolution), &
-                  energy, energy_0, resolution), rslt, err)
+                  falpha(parameters, energy, parameters%energy_0, resolution), &
+                  energy, resolution), rslt, err)
 
   end function analytical_falpha_unit_test_dfalpha_dti
   !> The integrand for the dfalpha/d Ti integral, see eq
@@ -473,6 +473,110 @@ contains
       rslt, err)
 
   end function analytical_falpha_unit_test_dfalpha_dti_integrand
+
+  function dfalpha_dnupar(parameters, falph, energy, resolution)
+    use constants, only: pi
+    implicit none
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    integer, intent(in) :: resolution
+    real, intent(in) :: energy
+    real, intent(in) :: falph
+    real :: dfalpha_dnupar
+    real :: integral
+    real :: dv
+    real :: v_2j, v_2jm1
+    real :: energy_top
+    integer :: j
+
+    energy_top = min(energy, 1.0)
+
+    ! Let's use the composite Simpson's rule (see Wikipedia!). 
+    ! wrt the Wikipedia article
+    ! resolution = n
+    ! b = energy_top**0.5
+    ! a = energy_0**0.5
+    ! x_j = v_j = a + j*h = energy_0**).5 + j*dv
+    ! dv = h = (b-a)/n = (energy_top**0.5-energy_0**0.5)/n
+    ! NB the integral is wrt v, not energy
+
+    integral = simpson(parameters, &
+                       dfalpha_dnupar_integrand, &
+                       parameters%energy_0**0.5,&
+                       energy_top**0.5,&
+                       energy,&
+                       resolution)
+
+    dfalpha_dnupar = - integral * parameters%source / 4.0 / pi
+    
+
+
+
+
+  end function dfalpha_dnupar
+
+  function analytical_falpha_unit_test_dfalpha_dnupar(parameters, &
+                                              energy, &
+                                              resolution, &
+                                              rslt, &
+                                              err)
+    use unit_tests
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    integer, intent(in) :: resolution
+    real, intent(in) :: energy
+    real, intent(in) :: rslt
+    real, intent(in) :: err
+    logical :: analytical_falpha_unit_test_dfalpha_dnupar
+
+    analytical_falpha_unit_test_dfalpha_dnupar = &
+      agrees_with(&
+      dfalpha_dnupar(parameters, &
+                  falpha(parameters, energy, parameters%energy_0, resolution), &
+                  energy, resolution), rslt, err)
+
+  end function analytical_falpha_unit_test_dfalpha_dnupar
+
+  !> The integrand for the dfalpha/d nu_parallel integral, see eq
+  function dfalpha_dnupar_integrand(parameters, energy, energy_dummy_var)
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: energy
+    real, intent(in) :: energy_dummy_var
+    real :: dfalpha_dnupar_integrand
+
+    !dfalpha_dnupar_integrand = 2.0 / &
+                       !(nu_parallel(parameters, energy_dummy_var)**2.0 * &
+                         !energy_dummy_var**2.0) * &
+                       !exp(parameters%alpha_injection_energy * &
+                         !(energy_dummy_var - energy) / &
+                         !parameters%ion_temp &
+                       !)
+    dfalpha_dnupar_integrand = &
+      falpha_integrand(parameters, energy, energy_dummy_var) / &
+      nu_parallel(parameters, energy_dummy_var) &
+        * nu_parallel_prime(parameters, energy_dummy_var)
+
+
+  end function dfalpha_dnupar_integrand
+
+  !> Unit test used by test_analytical_falpha, testing the private
+  !! function dfalpha_dnupar_integrand
+  function analytical_falpha_unit_test_dfalpha_dnupar_integrand(parameters, &
+                                                        energy, &
+                                                        energy_dummy_var, &
+                                                        rslt, &
+                                                        err)
+    use unit_tests
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: energy
+    real, intent(in) :: energy_dummy_var
+    real, intent(in) :: rslt
+    real, intent(in) :: err
+    logical :: analytical_falpha_unit_test_dfalpha_dnupar_integrand
+    
+    analytical_falpha_unit_test_dfalpha_dnupar_integrand = &
+      agrees_with(dfalpha_dnupar_integrand(parameters, energy, energy_dummy_var), &
+      rslt, err)
+
+  end function analytical_falpha_unit_test_dfalpha_dnupar_integrand
 
 
   !> Returns gamma_aiN * (Za/Zi)^2 * (mi/ma)^2 * (vthi/vtha)^3
@@ -641,8 +745,9 @@ contains
     real, intent(in) :: falph
     real :: falpha_prim
     falpha_prim = 0.0
-    falpha_prim = - parameters%source_prim
-
+    falpha_prim = - parameters%source_prim &
+      + dfalpha_dti(parameters, falph, energy, resolution) &
+      + dfalpha_dnupar(parameters, falph, energy, resolution)  / falph
   end function falpha_prim
 
 end module analytical_falpha
