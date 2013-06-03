@@ -3,12 +3,14 @@
 TEST_MODS=$(shell echo '$(gs2_mod)' | sed -e "s/gs2.o//" |  sed -e "s/\(\S\+\)/..\/..\/\1/g" )
 TEST_MODS+= ../../unit_tests.o
 
-SUBDIRS := $(wildcard */.) 
-     
-.PHONY: all $(SUBDIRS)
+# All subfolders unless otherwise specified
+TESTS ?= $(wildcard */.) 
 
-all: $(SUBDIRS)
+     
+.PHONY: all $(TESTS)
+
+all: $(TESTS)
 
 export
-$(SUBDIRS): 
+$(TESTS): 
 	$(MAKE) -C $@

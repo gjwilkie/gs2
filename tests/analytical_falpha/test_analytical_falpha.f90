@@ -41,6 +41,7 @@ program test_analytical_falpha
 
   parameters%energy_0 = 0.01
   parameters%source = 0.01
+  parameters%source_prim = 0.0 !1.6
 
   parameters%alpha_ion_collision_rate = 0.1
   parameters%alpha_electron_collision_rate = 0.1
@@ -49,7 +50,6 @@ program test_analytical_falpha
   parameters%alpha_injection_energy = 3.6e2
   parameters%alpha_mass = 4.0
   parameters%alpha_charge = 2.0
-  parameters%source_prim = 1.6
 
   parameters%ion_temp = 1.0
   parameters%ion_tprim = 4.0
@@ -70,13 +70,11 @@ program test_analytical_falpha
   call process_test(analytical_falpha_unit_test_nu_parallel( &
     parameters, 0.8, 7.07304892219606e-7, eps), 'nu_parallel')
 
-  ! Note that the routine used to calculate the test result was not 
-  ! very accurate, hence eps * 1000
   call announce_test('nu_parallel_prime')
   call process_test(analytical_falpha_unit_test_nu_parallel_prime( &
-    parameters, 0.2, -0.000127328179504318, eps*100.0), 'nu_parallel_prime 0.2')
+    parameters, 0.2, -0.000127328159032943, eps*1.0), 'nu_parallel_prime 0.2')
   call process_test(analytical_falpha_unit_test_nu_parallel_prime( &
-    parameters, 0.8, -3.99792050140238e-6, eps*1000.0), 'nu_parallel_prime 0.8')
+    parameters, 0.8, -3.99791538405283e-6, eps*1.0), 'nu_parallel_prime 0.8')
   
   call announce_test('falpha_integrand')
   call process_test(analytical_falpha_unit_test_falpha_integrand(&
@@ -101,9 +99,15 @@ program test_analytical_falpha
 
   call announce_test('dfalpha_dti')
   call process_test(analytical_falpha_unit_test_dfalpha_dti(&
-    parameters, 0.5,  0.01, 2048*8, -4.00357641291620, eps), 'dfalpha_dti 0.5')
+    parameters, 0.5,  2048*8, -4.00357641291620, eps), 'dfalpha_dti 0.5')
   call process_test(analytical_falpha_unit_test_dfalpha_dti(&
-    parameters, 0.9,  0.01, 2048*16, -4.00410087513562, eps), 'dfalpha_dti 0.9')
+    parameters, 0.9,  2048*16, -4.00410087513562, eps), 'dfalpha_dti 0.9')
+
+  call announce_test('dfalpha_dnupar')
+  call process_test(analytical_falpha_unit_test_dfalpha_dnupar(&
+    parameters, 0.1,  2048*8, 46.4718970860645, eps*1.0), 'dfalpha_dnupar 0.1')
+  call process_test(analytical_falpha_unit_test_dfalpha_dnupar(&
+    parameters, 0.5,  2048*8, 37.9134152517224, eps*1.0), 'dfalpha_dnupar 0.5')
 
   allocate(array(6, 1,  7))
 
@@ -113,10 +117,16 @@ program test_analytical_falpha
 ! The array below was generated using my own Mathematica worksheet, which also agrees perfectly with the above results (GW)
 ! Amended again after major changes to normalisations, EGH
   array(:,1,6) = (/12.5256589692896, 1416.58825193068, 1108.25154924379, 1002.67534577706, 1.00000000000000, 1.00000000000000/) 
-  array(:,1,7) = -parameters%source_prim
-
+  array(:,1,7) = (/0.0484936118028753, 2.68468051893912, 2.22466808876727, 1.73271163434981, -8.32950066620934, -363.529500481621/)
   parameters%negrid = 6
   parameters%alpha_is = 1
+
+  !parameters%ion_tprim = 0.0 !1200.0
+  !parameters%electron_tprim = 0.0! 80.0
+  !parameters%source_prim = 0.0!20.8
+  !parameters%electron_fprim = 40000.8
+  !parameters%ion_fprim = parameters%electron_fprim
+
   call announce_test('calculate_arrays')
   call process_test(analytical_falpha_unit_test_calculate_arrays(&
     parameters, array(:,:,1), array(:,:,2), array(:,:,3), array(:,:,4),&
