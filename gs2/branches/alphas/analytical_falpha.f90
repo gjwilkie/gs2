@@ -70,7 +70,8 @@ contains
                               f0_values, &
                               generalised_temperature, &
                               f0prim)
-    use mp, only: nproc, iproc, sum_allreduce
+    use mp, only: nproc, iproc, sum_allreduce, mp_abort
+    use unit_tests, only: print_with_stars
     type(analytical_falpha_parameters_type), intent(in) :: parameters
     real, dimension(:,:), intent(in) :: egrid
     real, dimension(:,:), intent(out) :: f0_values
@@ -95,6 +96,14 @@ contains
     f0prim(:,is) = 0.0
     do ie = 1,parameters%negrid
       if (.not. mod(ie, nproc) .eq. iproc) cycle
+
+      if (egrid(ie,is) .lt. parameters%energy_0) then 
+        write (*,*) 'egrid(ie,is)', egrid(ie,is), 'energy_0',&
+          parameters%energy_0
+        call print_with_stars('', &
+          'You are attempting to calculate F_alpha for energy < energy_0')
+        call mp_abort('')
+      end if 
       !write (*,*) 'iproc ', iproc, ' calculating ', ie
       ! Initialise arrays to test for convergence 
       f0 = -1.0

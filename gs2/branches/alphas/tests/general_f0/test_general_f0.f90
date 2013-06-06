@@ -8,7 +8,7 @@
 program test_general_f0
   use unit_tests
   use general_f0
-  use mp, only: init_mp, finish_mp
+  use mp, only: init_mp, finish_mp, proc0
   use file_utils, only: init_file_utils
   use species, only: init_species, nspec
   use constants, only: pi
@@ -28,7 +28,7 @@ program test_general_f0
 
   ! Set up depenencies
   call init_mp
-  call init_file_utils(dummy)
+  if (proc0) call init_file_utils(dummy)
   call init_species
 
 
@@ -36,6 +36,7 @@ program test_general_f0
 
   call announce_test('init_general_f0')
   call process_test(general_f0_unit_test_init_general_f0(), 'init_general_f0')
+  !stop 1
 
   negrid = 4
   vcut = 2.5
@@ -44,6 +45,8 @@ program test_general_f0
   allocate(weights(negrid, nspec))
   allocate(rslts(negrid, nspec, 3))
   epoints(:,1) = (/0.0, 1.0, 2.5, 4.0/)
+  epoints(:,2) = (/0.0, 1.0, 2.5, 4.0/)
+  epoints(:,3) = (/0.1, 0.4599999, 1.0, 1.5400000000000000/)
   rslts(:,1,1) = exp(-epoints(:,1))/(2.0*pi**1.5) ! ion f0
   rslts(:,2,1) = exp(-epoints(:,1))/(2.0*pi**1.5) ! electron f0
   rslts(:,3,1) = (/6.74132595300733, 6.26167292325401, 5.35544272159621, 2.00423248388538e-84/)
