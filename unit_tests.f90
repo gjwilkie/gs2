@@ -31,6 +31,8 @@ module unit_tests
   public :: announce_module_test
   public :: close_module_test
 
+  public :: print_with_stars
+
   interface agrees_with
     module procedure agrees_with_real
     module procedure agrees_with_real_1d_array

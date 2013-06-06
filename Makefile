@@ -535,10 +535,13 @@ revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
 
 
+# To save time you can set test deps yourself on the command line:
+# otherwise it builds everything just to be sure, because recursive
+# make can't resolve dependencies
+TEST_DEPS?=$(gs2_mod)
 export
-#unit_tests: unit_tests.o $(gs2_mod)
-unit_tests: unit_tests.o 
-	cd tests && ${MAKE}
+unit_tests: unit_tests.o $(TEST_DEPS)
+	cd tests && time ${MAKE} && echo "\nTests Successful!\n"
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
