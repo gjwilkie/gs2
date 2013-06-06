@@ -70,6 +70,7 @@ contains
                               f0_values, &
                               generalised_temperature, &
                               f0prim)
+    use mp, only: nproc, iproc, sum_allreduce
     type(analytical_falpha_parameters_type), intent(in) :: parameters
     real, dimension(:,:), intent(in) :: egrid
     real, dimension(:,:), intent(out) :: f0_values
@@ -89,7 +90,12 @@ contains
     is = parameters%alpha_is
 
 
+    f0_values(:,is) = 0.0
+    generalised_temperature(:,is) = 0.0
+    f0prim(:,is) = 0.0
     do ie = 1,parameters%negrid
+      if (.not. mod(ie, nproc) .eq. iproc) cycle
+      !write (*,*) 'iproc ', iproc, ' calculating ', ie
       ! Initialise arrays to test for convergence 
       f0 = -1.0
       gentemp = 0.0
@@ -123,6 +129,9 @@ contains
       generalised_temperature(ie, is) = gentemp(2)
       f0prim(ie, is) = f0pr(2)
     end do
+    call sum_allreduce(f0_values(:,is))
+    call sum_allreduce(generalised_temperature(:,is))
+    call sum_allreduce(f0prim(:,is))
 
   end subroutine calculate_arrays
 

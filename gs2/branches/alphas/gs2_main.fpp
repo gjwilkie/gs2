@@ -109,12 +109,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (proc0) then
           if (nproc == 1) then
              if (.not. nofin) then
-	        write(*,*) 'Running on ',nproc,' processor'
-	     end if 
+	              write(*,*) 'Running on ',nproc,' processor'
+      	     end if 
          else
              if (.not. nofin) then
-	        write(*,*) 'Running on ',nproc,' processors'
-	     end if	  
+	             write(*,*) 'Running on ',nproc,' processors'
+	            end if	  
           end if
           write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 

@@ -8,12 +8,16 @@ module egrid
 
   public :: setvgrid, init_egrid
   public :: zeroes, x0, zeroes_maxwell, x0_maxwell
+  !> Expose this for unit testing
+  public :: energy_grid
+  
 
   private
 
   real :: x0_maxwell
   real,dimension(:), allocatable :: x0
   real, dimension(:,:), allocatable, save :: zeroes
+  real, dimension(:,:), allocatable, save :: energy_grid
   real, dimension(:), allocatable, save :: zeroes_maxwell
 
 contains
@@ -25,6 +29,7 @@ contains
 
 
     if (.not. allocated(zeroes)) then
+       allocate (energy_grid(negrid, nspec))
        allocate (zeroes(negrid-1, nspec)) ; zeroes = 0.
        allocate (zeroes_maxwell(negrid-1)) ; zeroes = 0.
        allocate (x0(nspec))
@@ -36,8 +41,9 @@ contains
 
     use general_f0, only: calculate_f0_arrays, f0_values
     use constants, only: pi => dpi
+    use general_f0, only: energy_0_general_f0 => energy_0
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
-    use species, only: nspec
+    use species, only: nspec, spec, alpha_species
 
     implicit none
     
@@ -46,42 +52,62 @@ contains
     integer, intent (in) :: nesub
     real, dimension(:,:), intent (out) :: epts
     real, dimension(:,:), intent (out) :: wgts
+    real :: energy_0, vcut_local
     integer :: is
 
     call init_egrid (negrid)
+
+    do is = 1,nspec
+
+      if (spec(is)%type .eq. alpha_species) then
+        vcut_local = 1.0
+        energy_0 = energy_0_general_f0
+        !energy_0 = 0.2
+      else
+        vcut_local = vcut
+        energy_0 = 0.0
+      end if
+      
+      !write (*,*) 'For species ', is, ' energy_0 is ', energy_0
+      !write (*,*) 'nesub is ', nesub
+
     
-    ! get grid points in v up to vcut (epts is not E yet)
-    call get_legendre_grids_from_cheb (0., vcut, epts(:nesub,1), wgts(:nesub, 1))
+      ! get grid points in v up to vcut (epts is not E yet)
+      call get_legendre_grids_from_cheb (energy_0**0.5, vcut_local, epts(:nesub,is), wgts(:nesub, is))
 
-    ! change from v to E
-    epts(:nesub,1) = epts(:nesub,1)**2
+      ! change from v to E
+      epts(:nesub,is) = epts(:nesub,is)**2
 
-    ! absorb exponential and volume element in weights
-    !wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
-    ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
-    ! See eq. 4.12 of M. Barnes's thesis
-    wgts(:nesub, 1) = wgts(:nesub, 1)*epts(:nesub,1)*2.0*pi
+      ! absorb exponential and volume element in weights
+      !wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
+      ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
+      ! See eq. 4.12 of M. Barnes's thesis
+      wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*2.0*pi
 
-    if (negrid > nesub) then
+      if (negrid > nesub) then
 
-       ! get grid points in y = E - vcut**2 (epts not E yet)
-       call get_laguerre_grids (epts(nesub+1:,1), wgts(nesub+1:, 1))
+         ! get grid points in y = E - vcut**2 (epts not E yet)
+         call get_laguerre_grids (epts(nesub+1:,is), wgts(nesub+1:, is))
 
-       ! change from y to E
-       epts(nesub+1:,1) = epts(nesub+1:,1) + vcut**2
+         ! change from y to E
+         epts(nesub+1:,is) = epts(nesub+1:,is) + vcut_local**2
 
-       ! absort exponential and volume element in weights
-       ! See eq. 4.13 of M. Barnes's thesis
-    !   wgts(nesub+1:) = wgts(nesub+1:)*0.5*sqrt(epts(nesub+1:)/pi)*exp(-vcut**2)
+         ! absort exponential and volume element in weights
+         ! See eq. 4.13 of M. Barnes's thesis
+      !   wgts(nesub+1:) = wgts(nesub+1:)*0.5*sqrt(epts(nesub+1:)/pi)*exp(-vcut**2)
 
-       ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
-       ! Note that here this means adding an exponential e^y
-       ! See eq. 4.13 of M. Barnes's thesis
-       wgts(nesub+1:, 1) = wgts(nesub+1:, 1)*exp(epts(nesub+1:,1))*pi*sqrt(epts(nesub+1:,1))*exp(-vcut**2)
+         ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
+         ! Note that here this means adding an exponential e^y
+         ! See eq. 4.13 of M. Barnes's thesis
+         wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(epts(nesub+1:,is))*pi*sqrt(epts(nesub+1:,is))*exp(-vcut_local**2)
 
-    end if
+      end if
+
+    end do
 
 
+    !write (*,*) 'Weights in le_grids are', wgts
+    !write (*,*) 'epts', epts
     call calculate_f0_arrays(epts, wgts, vcut)
     !do is = 1,nspec
       !wgts(:,is) = wgts(:,1)
@@ -92,9 +118,10 @@ contains
 
 
 
-    !write (*,*) 'Weights in le_grids are', wgts
 
 
+
+    energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))
     x0(:) = sqrt(epts(negrid,:))
 
@@ -121,6 +148,9 @@ module le_grids
   public :: integrate_kysum, integrate_volume
   public :: get_flux_vs_theta_vs_vpa
   public :: lambda_map, energy_map, g2le, init_map
+
+  !> Unit tests
+  public :: le_grids_unit_test_init_le_grids
 
   private
 
@@ -240,6 +270,12 @@ contains
 
     if (proc0) then
        call read_parameters
+    end if
+    !write (*,*) 'negrid', negrid, 'proc0', proc0
+    call broadcast_parameters
+    !write (*,*) 'negrid', negrid, 'proc0', proc0
+    call set_vgrid
+    if (proc0) then
        call set_grids
     end if
     call broadcast_results
@@ -264,6 +300,68 @@ contains
     
   end subroutine init_le_grids
 
+  function le_grids_unit_test_init_le_grids(sizes, energy_results, err)
+    use unit_tests
+    use egrid
+    use species, only: nspec
+    use mp, only: proc0
+    integer, dimension(:), intent(in) :: sizes
+    real, dimension(:,:,:), intent(in) :: energy_results
+    real, intent(in) :: err
+    logical :: le_grids_unit_test_init_le_grids
+    logical :: tr ! Test result
+    logical :: accelerated_x, accelerated_v
+    integer :: i
+    character(2) :: istr
+
+    tr = .true. 
+    
+    call init_le_grids(accelerated_x, accelerated_v)
+    !call broadcast_results
+     !write (*,*)  'zeros', zeroes
+
+    call announce_check('Size of energy arrays')
+    tr = tr .and. agrees_with(size(energy), sizes(1)) 
+    tr = tr .and. agrees_with(size(w), sizes(1)) 
+    call process_check(tr, 'Size of energy arrays')
+
+    ! Energy grids only get calulcated on proc0
+    if (proc0) then
+      do i = 1,nspec
+        write(istr, '(I2)') i
+        call announce_check('values of the energy grid for species '//istr)
+        tr = tr .and. agrees_with(energy_grid(:,i), energy_results(:,i,1), err)
+        call process_check(tr, 'values of the energy grid for species '//istr)
+      end do
+    end if
+    do i = 1,nspec
+      write(istr, '(I2)') i
+      call announce_check('values of energy weights for species '//istr)
+      tr = tr .and. agrees_with(w(:,i), energy_results(:,i,2), err)
+      call process_check(tr, 'values of energy weights for species '//istr)
+    end do
+    
+    le_grids_unit_test_init_le_grids = tr
+  end function le_grids_unit_test_init_le_grids
+
+  subroutine broadcast_parameters
+    use mp, only: proc0, broadcast
+    !write (*,*) 'Broadcasting ', negrid
+    call broadcast (ngauss)
+    call broadcast (negrid)
+    call broadcast (nesuper)
+    call broadcast (nesub)
+    call broadcast (vcut)
+    call broadcast (bouncefuzz)
+    call broadcast (test)
+    call broadcast (nmax)
+    call broadcast (trapped_particles)
+    call broadcast (wgt_fac)
+    call broadcast (new_trap_int)
+    call broadcast (nterp)
+    !write (*,*) 'Broadcasting ', negrid
+  end subroutine broadcast_parameters
+
   subroutine broadcast_results
     use mp, only: proc0, broadcast
     use species, only: nspec
@@ -276,28 +374,19 @@ contains
 
     tsize = 2*nterp-1
 
-    call broadcast (ngauss)
-    call broadcast (negrid)
-    call broadcast (nesuper)
-    call broadcast (nesub)
-    call broadcast (vcut)
-    call broadcast (bouncefuzz)
-    call broadcast (nxi)
-    call broadcast (nlambda)
-    call broadcast (ng2)
+
+
     call broadcast (lmax)
-    call broadcast (test)
-    call broadcast (nmax)
-    call broadcast (trapped_particles)
-    call broadcast (wgt_fac)
-    call broadcast (new_trap_int)
-    call broadcast (nterp)
+    call broadcast (ng2)
+    call broadcast (nlambda)
+    call broadcast (nxi)
 
     if (.not. proc0) then
-       allocate (energy(negrid,nspec), w(negrid, nspec), anon(negrid), speed(negrid,nspec))
-       if (.not. allocated(zeroes)) &
-         allocate (zeroes(negrid-1,nspec), zeroes_maxwell(negrid-1))
-       allocate (x0(nspec))
+       !allocate (energy(negrid,nspec), w(negrid, nspec), anon(negrid), speed(negrid,nspec))
+       allocate (anon(negrid), speed(negrid,nspec))
+       !if (.not. allocated(zeroes)) &
+         !allocate (zeroes(negrid-1,nspec), zeroes_maxwell(negrid-1))
+       !allocate (x0(nspec))
        allocate (w_maxwell(negrid))
        allocate (energy_maxwell(negrid))
        allocate (speed_maxwell(negrid))
@@ -314,23 +403,23 @@ contains
        allocate (ixi_to_isgn(-ntgrid:ntgrid, 2*nlambda))
     end if
 
-    call init_egrid (negrid)
+    !call init_egrid (negrid)
     call broadcast (xx)
-    call broadcast (x0)
-    call broadcast (x0_maxwell)
-    call broadcast (zeroes)
-    call broadcast (zeroes_maxwell)
+    !call broadcast (x0)
+    !call broadcast (x0_maxwell)
+    !call broadcast (zeroes)
+    !call broadcast (zeroes_maxwell)
 
     call broadcast (al)
     call broadcast (delal)
     call broadcast (jend)
  
-    call broadcast (energy)
+    !call broadcast (energy)
     call broadcast (energy_maxwell)
     call broadcast (speed)
     call broadcast (speed_maxwell)
     call broadcast (dele)
-    call broadcast (w)
+    !call broadcast (w)
     call broadcast (w_maxwell)
     call broadcast (anon)
 
@@ -355,7 +444,7 @@ contains
     end do
     call broadcast (sgn)
 
-    call broadcast_arrays_gen_f0
+    !call broadcast_arrays_gen_f0
 
   end subroutine broadcast_results
 
@@ -1248,6 +1337,17 @@ contains
 
   end subroutine eint_error
 
+  subroutine set_vgrid
+    use species, only: nspec, init_species
+    use egrid, only: setvgrid
+    call init_species
+
+    !write (*,*) 'negrid is', negrid, 'nspec is ', nspec
+
+    allocate (energy(negrid,nspec), w(negrid,nspec))
+    call setvgrid (vcut, negrid, energy, w, nesub)
+  end subroutine set_vgrid
+
   subroutine set_grids
     use species, only: init_species, nspec, spec
     use species, only: ion_species, electron_species
@@ -1259,12 +1359,11 @@ contains
     logical :: has_maxwellian_species
 
     call init_theta_grid
-    call init_species
+    !call init_species
 
-    allocate (energy(negrid,nspec), w(negrid,nspec), anon(negrid), dele(negrid,nspec), speed(negrid,nspec))
+    allocate (anon(negrid), dele(negrid,nspec), speed(negrid,nspec))
     allocate (w_maxwell(negrid), energy_maxwell(negrid), speed_maxwell(negrid))
 
-    call setvgrid (vcut, negrid, energy, w, nesub)
 
     w_maxwell = 0.0
     energy_maxwell = 0.0
