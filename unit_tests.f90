@@ -34,6 +34,7 @@ module unit_tests
   interface agrees_with
     module procedure agrees_with_real
     module procedure agrees_with_real_1d_array
+    !module procedure agrees_with_real_2d_array
     module procedure agrees_with_integer
   end interface
 

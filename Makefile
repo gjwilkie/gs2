@@ -536,8 +536,8 @@ revision:
 
 
 export
-unit_tests: unit_tests.o $(gs2_mod)
-#unit_tests: unit_tests.o 
+#unit_tests: unit_tests.o $(gs2_mod)
+unit_tests: unit_tests.o 
 	cd tests && ${MAKE}
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp

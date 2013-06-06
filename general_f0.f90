@@ -89,6 +89,8 @@ module general_f0
   !! this function is called to put them on all procs
   public :: broadcast_arrays
 
+  !> Point below which F_alpha is 0
+  public :: energy_0
 
   !> Unit tests
   public :: general_f0_unit_test_init_general_f0
@@ -409,9 +411,11 @@ contains
     use species, only: spec
     integer, intent(in) :: is
     integer :: ie
-    egrid(:,is) = egrid_maxwell(:)
+    ! Energy grid now set for every species in module egrid
+    !egrid(:,is) = egrid_maxwell(:)
     f0_values(:, is) = exp(-egrid(:,is))/(2.0*pi**1.5)
-    weights(:,is) = weights_maxwell(:) * f0_values(:,is)
+    !weights(:,is) = weights_maxwell(:) * f0_values(:,is)
+    weights(:,is) = weights(:,is) * f0_values(:,is)
     do ie = 1,negrid
        generalised_temperature(:,is) = spec(is)%temp
        if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), & 
@@ -444,6 +448,7 @@ contains
     integer :: ie
     integer :: electron_spec
     integer :: i
+    real :: shift, scal ! For modifying the energy grid for alphas
 
     !> Determine which species is the electrons
     do i = 1,nspec
@@ -469,7 +474,7 @@ contains
 
     parameters%source          = spec(is)%source
     parameters%source_prim     = spec(is)%sprim
-    write (*,*) 'Source prim is', parameters%source_prim
+    !write (*,*) 'Source prim is', parameters%source_prim
 
     parameters%alpha_injection_energy = spec(is)%temp
     parameters%ion_temp        = spec(main_ion_species)%temp
@@ -496,7 +501,12 @@ contains
       call mp_abort(' ')
     end if
 
-    egrid(:,is) = egrid_maxwell(:) *(1.0 - energy_min)/vcut + energy_min
+    ! This bit of code shifts the grid so that vcut for alphas is 1
+    ! and the lowest point is energy min
+    !scal =  (energy_min - 1.0) / (egrid(1,1) - vcut)
+    !shift = energy_min - egrid(1,1) * scal
+    !egrid(:,is) = egrid_maxwell(:) *(1.0 - energy_min)/vcut + energy_min
+    !egrid(:,is) = egrid_maxwell(:) *scal + shift
 
     !write (*,*) 'parameters', parameters
     !write(*,*) 'calling calculate_arrays'
@@ -508,7 +518,9 @@ contains
                           f0prim)
     !write (*,*) 'f0prim', ',is', f0prim(:,is), is
     !write (*,*) 'f0prim(:,3),', f0prim(:,3)
-    weights(:,is) =  weights_maxwell(:)*(1.0 - energy_min)/vcut * f0_values(:,is)
+    !write (*,*) 'f0_values(:,3),', f0_values(:,3)
+    !weights(:,is) =  weights_maxwell(:)*scal * f0_values(:,is)
+    weights(:,is) = weights(:,is) * f0_values(:,is)
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
     

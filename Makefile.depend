@@ -649,6 +649,7 @@ le_grids.o: \
 	 mp.o \
 	 redistribute.o \
 	 species.o \
+	 unit_tests.o \
 	 theta_grid.o 
 leq.o: \
 	 constants.o \
