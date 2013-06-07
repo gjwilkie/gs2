@@ -55,6 +55,7 @@ program gs2
 
 # ifndef MAKE_LIB 
   use gs2_main, only: run_gs2
+  !use functional_tests ! Gets the deps of the tests right for make depend EGH
 # endif
 
   implicit none
