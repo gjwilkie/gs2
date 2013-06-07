@@ -43,6 +43,7 @@ eiktest_mod = \
 	 spl.o 
 
 ffttester_mod = \
+	 analytical_falpha.o \
 	 antenna.o \
 	 antenna_data.o \
 	 ceq.o \
@@ -85,7 +86,6 @@ ffttester_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -101,12 +101,13 @@ ffttester_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 unit_tests.o 
 
 gs2_mod = \
+	 analytical_falpha.o \
 	 antenna.o \
 	 antenna_data.o \
-	 analytical_falpha.o \
 	 ceq.o \
 	 collisions.o \
 	 command_line.o \
@@ -147,7 +148,6 @@ gs2_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -163,13 +163,15 @@ gs2_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 unit_tests.o 
 
 hrate_mod = \
 	 command_line.o \
 	 hrate.o 
 
 ingen_mod = \
+	 analytical_falpha.o \
 	 antenna.o \
 	 antenna_data.o \
 	 ceq.o \
@@ -211,7 +213,6 @@ ingen_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -226,7 +227,8 @@ ingen_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 unit_tests.o 
 
 kp_mod = \
 	 command_line.o \
@@ -248,6 +250,10 @@ rungridgen_mod = \
 	 rungridgen.o \
 	 spl.o 
 
+analytical_falpha.o: \
+	 constants.o \
+	 mp.o \
+	 unit_tests.o 
 antenna.o: \
 	 antenna_data.o \
 	 constants.o \
@@ -296,6 +302,7 @@ dist_fn.o: \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 file_utils.o \
+	 general_f0.o \
 	 geometry.o \
 	 gs2_heating.o \
 	 gs2_layouts.o \
@@ -385,13 +392,14 @@ gauss_quad.o: \
 	 file_utils.o \
 	 mp.o 
 general_f0.o: \
+	 analytical_falpha.o \
+	 constants.o \
 	 file_utils.o \
-	 unit_tests.o \
 	 mp.o \
 	 species.o \
-	 analytical_falpha.o \
 	 spl.o \
-	 text_options.o 
+	 text_options.o \
+	 unit_tests.o 
 geometry.o: \
 	 ceq.o \
 	 deq.o \
@@ -649,8 +657,8 @@ le_grids.o: \
 	 mp.o \
 	 redistribute.o \
 	 species.o \
-	 unit_tests.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 unit_tests.o 
 leq.o: \
 	 constants.o \
 	 spl.o 
@@ -668,7 +676,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -676,6 +683,7 @@ nonlinear_terms.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
 	 file_utils.o \
+	 general_f0.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 gs2_transforms.o \
@@ -707,8 +715,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -749,7 +756,5 @@ theta_grid.o: \
 	 theta_grid_params.o 
 theta_grid_params.o: \
 	 file_utils.o 
-analytical_falpha.o: \
-   unit_tests.o	
 unit_tests.o: \
-	 mp.o
+	 mp.o 
