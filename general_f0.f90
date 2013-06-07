@@ -414,7 +414,7 @@ contains
     integer :: ie
     ! Energy grid now set for every species in module egrid
     !egrid(:,is) = egrid_maxwell(:)
-    f0_values(:, is) = exp(-egrid(:,is))/(2.0*pi**1.5)
+    f0_values(:, is) = exp(-egrid(:,is))/(pi**1.5)
     !weights(:,is) = weights_maxwell(:) * f0_values(:,is)
     weights(:,is) = weights(:,is) * f0_values(:,is)
     do ie = 1,negrid
