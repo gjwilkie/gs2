@@ -10,6 +10,7 @@ module egrid
   public :: zeroes, x0, zeroes_maxwell, x0_maxwell
   !> Expose this for unit testing
   public :: energy_grid
+
   
 
   private
@@ -82,7 +83,8 @@ contains
       !wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
       ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
       ! See eq. 4.12 of M. Barnes's thesis
-      wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*2.0*pi
+      !wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*2.0*pi
+      wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*pi
 
       if (negrid > nesub) then
 
@@ -99,7 +101,7 @@ contains
          ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
          ! Note that here this means adding an exponential e^y
          ! See eq. 4.13 of M. Barnes's thesis
-         wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(epts(nesub+1:,is))*pi*sqrt(epts(nesub+1:,is))*exp(-vcut_local**2)
+         wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(epts(nesub+1:,is))*pi*0.5*sqrt(epts(nesub+1:,is))*exp(-vcut_local**2)
 
       end if
 
@@ -151,6 +153,7 @@ module le_grids
 
   !> Unit tests
   public :: le_grids_unit_test_init_le_grids
+  public :: le_grids_unit_test_integrate_species
 
   private
 
@@ -759,6 +762,52 @@ contains
     call sum_allreduce (total) 
 
   end subroutine integrate_species
+
+  function le_grids_unit_test_integrate_species(g, weights, sizes, rslt, err)
+    use unit_tests
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: g_lo
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    integer, dimension (:), intent (in) :: sizes
+    complex, dimension (:,:,:), allocatable :: total
+    complex, dimension (-ntgrid:,:,:) :: rslt
+    real, intent(in) :: err
+    logical :: le_grids_unit_test_integrate_species
+    logical :: tr
+
+    tr = .true.
+
+    call announce_check('Size of naky')
+    tr = tr .and. agrees_with(naky, sizes(1))
+    call process_check(tr, 'Size of naky')
+    call announce_check('Size of ntheta0')
+    tr = tr .and. agrees_with(ntheta0, sizes(2))
+    call process_check(tr, 'Size of ntheta0')
+    call announce_check('Size of ntgrid')
+    tr = tr .and. agrees_with(ntgrid, sizes(3))
+    call process_check(tr, 'Size of ntgrid')
+
+    allocate(total(-ntgrid:ntgrid,naky,ntheta0))
+
+    total = cmplx(0.0,0.0)
+
+
+    call integrate_species(g, weights, total)
+
+    call announce_check('total')
+    tr = tr .and. agrees_with(total(:,1,1), rslt(:,1,1), err)
+    call process_check(tr, 'total ')
+
+
+    deallocate(total)
+
+    le_grids_unit_test_integrate_species = tr
+
+
+
+  end function le_grids_unit_test_integrate_species
 
   subroutine legendre_transform (g, tote, totl, istep, tott)
     

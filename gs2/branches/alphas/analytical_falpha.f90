@@ -104,14 +104,15 @@ contains
           'You are attempting to calculate F_alpha for energy < energy_0')
         call mp_abort('')
       end if 
-      !write (*,*) 'iproc ', iproc, ' calculating ', ie
+      !write (*,*) 'iproc ', iproc, ' calculating ', ie, ' energy ',  egrid(ie, is)
       ! Initialise arrays to test for convergence 
       f0 = -1.0
       gentemp = 0.0
       f0pr = 0.0
-      resolution = 8
+      resolution = 64
       converged = .false.
       do while (.not. converged)
+        !write (*,*) 'resolution,', resolution
         f0(1)      = f0(2)
         gentemp(1) = gentemp(2)
         f0pr(1)    = f0pr(2) 
@@ -129,12 +130,17 @@ contains
                         egrid(ie, is), f0(2), resolution)
 
         !write (*,*) 'egrid ', egrid(ie, is), ' f0 ', f0(2), ' gentemp ', gentemp(2), egrid(ie,is), parameters%energy_0
-        converged  = (is_converged(f0) .and.  &
-                     is_converged(gentemp) .and. &
-                     is_converged(f0pr))
+        !if (f0(2) .eq. 0.0) then
+          !converged = is_converged(f0)
+        !else
+          converged  = (is_converged(f0) .and.  &
+                       is_converged(gentemp) .and. &
+                       is_converged(f0pr))
+        !end if
         resolution = resolution * 2
+        !write (*,*) ' f0', f0, ' f0pr', f0pr, ' gentemp', gentemp
       end do 
-      f0_values(ie, is) = f0(2) 
+      f0_values(ie, is) = f0(2)  * falpha_exponential(parameters , egrid(ie,is))
       generalised_temperature(ie, is) = gentemp(2)
       f0prim(ie, is) = f0pr(2)
     end do
@@ -194,10 +200,10 @@ contains
   function is_converged(list)
     real, dimension(2), intent(in) :: list
     logical :: is_converged
-    if (list(2) .eq. 0.0) then 
-      is_converged = abs(list(1)) .lt. 1.0e-9
+    if (abs(list(2)) .lt. 1.0e-60) then 
+      is_converged = abs(list(1)) .lt. 1.0e-60
     else
-      is_converged = (abs((list(1)-list(2))/list(2)) .lt. 1.0e-9)
+      is_converged = (abs((list(1)-list(2))/list(2)) .lt. 1.0e-7)
     end if
 
   end function is_converged
@@ -287,7 +293,17 @@ contains
       5.3**4.0/4.0 + 5.3**5.0/5.0,  eps)
   end function analytical_falpha_unit_test_simpson
       
+  
 
+
+  function falpha_exponential(parameters, energy)
+    implicit none
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: energy
+    real :: falpha_exponential
+    falpha_exponential = exp(parameters%alpha_injection_energy * &
+       (- energy) / parameters%ion_temp)
+  end function falpha_exponential
 
   function falpha(parameters, energy, energy_0, resolution)
     implicit none
@@ -317,7 +333,7 @@ contains
                        falpha_integrand, &
                        energy_0**0.5,&
                        energy_top**0.5,&
-                       energy,&
+                       0.0,& ! Get rid of exponential for better numerics
                        resolution)
 
     falpha = integral * parameters%source / 4.0 / 3.14159265358979
@@ -343,7 +359,8 @@ contains
     logical :: analytical_falpha_unit_test_falpha
 
     analytical_falpha_unit_test_falpha = &
-      agrees_with(falpha(parameters, energy, energy_0, resolution), rslt, err)
+      agrees_with(falpha(parameters, energy, energy_0, resolution) * &
+                  falpha_exponential(parameters, energy), rslt, err)
 
   end function analytical_falpha_unit_test_falpha
 
@@ -391,6 +408,7 @@ contains
   !> Calculates (1/Falpha * (dTi/drho) * (dFalpha/dTi)) 
   !! NB not dFalpha/dTi
   function dfalpha_dti(parameters, falph, energy, resolution)
+    use constants, only: pi
     implicit none
     type(analytical_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
@@ -418,14 +436,21 @@ contains
                        dfalpha_dti_integrand, &
                        parameters%energy_0**0.5,&
                        energy_top**0.5,&
-                       energy,&
-                       resolution)
+                       0.0,& ! Get rid of exp factor as it cancels with falpha
+                       resolution) / falph !  (&
+               !simpson(parameters, &
+                       !falpha_integrand, &
+                       !parameters%energy_0**0.5,&
+                       !energy_top**0.5,&
+                       !0.0,& ! Get rid of exp factor
+                       !resolution) * parameters%source / 4.0 / pi)
 
     dfalpha_dti = - parameters%ion_tprim  &
       * parameters%alpha_injection_energy  &
       / parameters%ion_temp * (&
       energy - &
-      integral * parameters%source / 2.0 / 3.14159265358979 / falph)
+      integral * parameters%source / 2.0 / 3.14159265358979) ! / &
+      !falpha(parameters, 0.0, parameters%energy_0, resolution))
     
 
 
@@ -492,6 +517,8 @@ contains
 
   end function analytical_falpha_unit_test_dfalpha_dti_integrand
 
+  !> Calculates 1/Falpha dFalpha/dnu_par d nu_par d rho
+  !! where d nu_par / d rho goes under the integral for Falpha
   function dfalpha_dnupar(parameters, falph, energy, resolution)
     use constants, only: pi
     implicit none
@@ -521,8 +548,15 @@ contains
                        dfalpha_dnupar_integrand, &
                        parameters%energy_0**0.5,&
                        energy_top**0.5,&
-                       energy,&
-                       resolution)
+                       0.0,&
+                       resolution)/  falph! (&
+               !simpson(parameters, &
+                       !falpha_integrand, &
+                       !parameters%energy_0**0.5,&
+                       !energy_top**0.5,&
+                       !0.0,& ! Get rid of exp factor
+                       !resolution) * parameters%source / 4.0 / pi)
+
 
     dfalpha_dnupar = - integral * parameters%source / 4.0 / pi
     
@@ -746,7 +780,8 @@ contains
     else if (falph .eq. 0.0) then 
       dfalpha_denergy = 0.0
     else
-      dfalpha_denergy = parameters%source / falph / (&
+      dfalpha_denergy = parameters%source / falph / &
+      falpha_exponential(parameters, energy) / (&
         4.0 * 3.14159265358979 * nu_parallel(parameters, energy) *  &
         energy ** (5.0/2.0) ) - &
         parameters%alpha_injection_energy / parameters%ion_temp
@@ -765,7 +800,7 @@ contains
     falpha_prim = 0.0
     falpha_prim = - parameters%source_prim &
       + dfalpha_dti(parameters, falph, energy, resolution) &
-      + dfalpha_dnupar(parameters, falph, energy, resolution)  / falph
+      + dfalpha_dnupar(parameters, falph, energy, resolution)  
   end function falpha_prim
 
 end module analytical_falpha

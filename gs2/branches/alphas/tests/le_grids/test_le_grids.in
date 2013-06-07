@@ -46,6 +46,18 @@
 /
 
 &theta_grid_parameters
-  ntheta = 16
+  nperiod = 1
+  ntheta = 8
 /
 
+&dist_fn_species_knobs_1
+/
+&dist_fn_species_knobs_2
+/
+&dist_fn_species_knobs_3
+/
+
+
+&kt_grids_knobs
+grid_option="single"
+/

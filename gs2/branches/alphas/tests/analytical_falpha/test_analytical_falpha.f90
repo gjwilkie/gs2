@@ -105,9 +105,9 @@ program test_analytical_falpha
 
   call announce_test('dfalpha_dnupar')
   call process_test(analytical_falpha_unit_test_dfalpha_dnupar(&
-    parameters, 0.1,  2048*8, 46.4718970860645, eps*1.0), 'dfalpha_dnupar 0.1')
+    parameters, 0.1,  2048*32, 6.90802623886552, eps*1000.0), 'dfalpha_dnupar 0.1')
   call process_test(analytical_falpha_unit_test_dfalpha_dnupar(&
-    parameters, 0.5,  2048*8, 37.9134152517224, eps*1.0), 'dfalpha_dnupar 0.5')
+    parameters, 0.5,  2048*8, 6.25450124922097 , eps*1000.0), 'dfalpha_dnupar 0.5')
 
   allocate(array(6, 1,  7))
 

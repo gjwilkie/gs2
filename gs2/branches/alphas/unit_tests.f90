@@ -36,6 +36,7 @@ module unit_tests
   interface agrees_with
     module procedure agrees_with_real
     module procedure agrees_with_real_1d_array
+    module procedure agrees_with_complex_1d_array
     !module procedure agrees_with_real_2d_array
     module procedure agrees_with_integer
   end interface
@@ -61,6 +62,18 @@ contains
     call should_be(val, correct)
     agrees_with_integer = (val .eq. correct)
   end function agrees_with_integer
+
+  function agrees_with_complex_1d_array(val, correct, err)
+    complex, dimension(:), intent(in) :: val, correct
+    real, intent(in) :: err
+    logical :: agrees_with_complex_1d_array
+    integer :: n, i
+    n = size(val)
+    agrees_with_complex_1d_array = &
+      agrees_with_real_1d_array(real(val), real(correct), err) .and.  &
+      agrees_with_real_1d_array(aimag(val), aimag(correct), err) 
+
+  end function agrees_with_complex_1d_array
 
   function agrees_with_real_1d_array(val, correct, err)
     real, dimension(:), intent(in) :: val, correct
