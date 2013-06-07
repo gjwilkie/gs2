@@ -47,8 +47,8 @@ program test_general_f0
   epoints(:,1) = (/0.0, 1.0, 2.5, 4.0/)
   epoints(:,2) = (/0.0, 1.0, 2.5, 4.0/)
   epoints(:,3) = (/0.1, 0.4599999, 1.0, 1.5400000000000000/)
-  rslts(:,1,1) = exp(-epoints(:,1))/(2.0*pi**1.5) ! ion f0
-  rslts(:,2,1) = exp(-epoints(:,1))/(2.0*pi**1.5) ! electron f0
+  rslts(:,1,1) = exp(-epoints(:,1))/(pi**1.5) ! ion f0
+  rslts(:,2,1) = exp(-epoints(:,1))/(pi**1.5) ! electron f0
   rslts(:,3,1) = (/6.74132595300733, 6.26167292325401, 5.35544272159621, 2.00423248388538e-84/)
 
   rslts(:,1,2) = 1.0 ! ion temp
