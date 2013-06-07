@@ -19,6 +19,8 @@ module gs2_diagnostics
   public :: reset_init
   public :: pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
 
+  public :: get_omegaavg
+
   interface get_vol_average
      module procedure get_vol_average_one, get_vol_average_all
   end interface
@@ -2745,6 +2747,8 @@ if (debug) write(6,*) "loop_diagnostics: done"
     integer :: j
     logical, optional :: debopt
     logical :: debug=.false.
+
+    !write (*,*) 'size of omegahist', size(omegahist)
 if (.not. allocated(domega)) allocate(domega(navg,ntheta0,naky))
     if (present(debopt)) debug=debopt
 if (debug) write(6,*) "get_omeaavg: start"

@@ -387,7 +387,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(GK_PROJECT)_all
+.PHONY: all $(GK_PROJECT)_all linear_tests unit_tests
 
 all: $(.DEFAULT_GOAL)
 
@@ -542,6 +542,9 @@ TEST_DEPS?=$(gs2_mod)
 export
 unit_tests: unit_tests.o $(TEST_DEPS)
 	cd tests && time ${MAKE} && echo "\nTests Successful!\n"
+
+linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
+	cd linear_tests && time ${MAKE} && echo "\nTests Successful!\n"
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
