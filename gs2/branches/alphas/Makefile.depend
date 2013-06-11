@@ -402,6 +402,7 @@ general_f0.o: \
 	 constants.o \
 	 file_utils.o \
 	 mp.o \
+	 run_parameters.o \
 	 species.o \
 	 spl.o \
 	 text_options.o \

@@ -290,8 +290,10 @@ contains
         case (alpha_f0_maxwellian)
           call calculate_f0_arrays_maxwellian(is)
         case (alpha_f0_analytic)
+          call check_electromagnetic
           call calculate_f0_arrays_analytic(is)
         case (alpha_f0_external)
+          call check_electromagnetic
           call calculate_f0_arrays_external(is)
         end select
       case (beam_species)
@@ -305,6 +307,17 @@ contains
     wgts = weights
     
   end subroutine calculate_f0_arrays
+
+  subroutine check_electromagnetic
+    use mp, only: mp_abort
+    use run_parameters, only: fapar, fbpar
+    if (abs(fapar) > epsilon(0.0) .or. abs(fbpar) > epsilon(0.0)) then
+      write(*,*) &
+      'Non-maxwellian species not implemented for electromagnetic runs'
+      call mp_abort('')
+    end if
+  end subroutine check_electromagnetic
+
 
   function general_f0_unit_test_calculate_f0_arrays(epoints, wgts, vcut_in, rslts, err)
     use unit_tests
