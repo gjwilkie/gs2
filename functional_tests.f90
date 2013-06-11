@@ -1,12 +1,21 @@
 
 !> A module which contains a series of high level tests used in the
-!! linear and nonlinear test cases.
+!! linear and nonlinear test cases, as well as a driver function 
+!! which runs GS2.
 module functional_tests
   use unit_tests
 
+  !> Check that the relative error of the growth rates as a 
+  !! function of ky with respect to the given rslt is less than
+  !! err. rslt should be an array of length naky which contains
+  !! the growth rates as a function of ky.
   public :: check_growth_rate
-  public :: announce_functional_test
-  public :: close_functional_test
+ 
+  !> Run gs2 and then call the test_function to check the results 
+  !! corresponding to the input file provided. test_name should 
+  !! be a character(*) containing the title of the tests, and 
+  !! test_function should be a logical function which returns
+  !! .true. for pass and false for .fail.
   public :: test_gs2
 
 

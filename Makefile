@@ -541,10 +541,10 @@ revision:
 TEST_DEPS?=$(gs2_mod)
 export
 unit_tests: unit_tests.o $(TEST_DEPS)
-	cd tests && time ${MAKE} && echo "\nTests Successful!\n"
+	cd tests && time ${MAKE} && echo && echo "Tests Successful!"
 
 linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
-	cd linear_tests && time ${MAKE} && echo "\nTests Successful!\n"
+	cd linear_tests && time ${MAKE} && echo && echo "Tests Successful!"
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
