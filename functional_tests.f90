@@ -9,6 +9,7 @@ module functional_tests
   !! function of ky with respect to the given rslt is less than
   !! err. rslt should be an array of length naky which contains
   !! the growth rates as a function of ky.
+  !! Returns .true. for pass and .false. for fail
   public :: check_growth_rate
  
   !> Run gs2 and then call the test_function to check the results 
