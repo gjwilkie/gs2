@@ -1019,8 +1019,8 @@ contains
        bparnew = bparnew*fac
     end if
 
-    ! RN 2008/05/23: this was commented out. why?
-    istatus = nf90_close (ncid)
+    ! RN 2008/05/23: this was commented out. why? HJL 2013/05/15 Because it stops future writing to the file
+!    istatus = nf90_close (ncid)
     if (istatus /= NF90_NOERR) then
        ierr = error_unit()
        write(ierr,*) "nf90_close error: ", nf90_strerror(istatus),' ',iproc
