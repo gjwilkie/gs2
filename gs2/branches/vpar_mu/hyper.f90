@@ -449,9 +449,10 @@ contains
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo
     use kt_grids, only: aky, akx, naky, ntheta0
+    use vpamu_grids, only: nvgrid
 
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in out) :: g0
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
 
     real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, shear_rate_z, shear_rate_z_nz
@@ -544,8 +545,7 @@ contains
                  + shear_rate_z(:) * akx(it) ** 4/ akx4_max * aky(ik) / aky_max )))
          endif
          
-         g0(:,1,iglo) = g0(:,1,iglo) * hypervisc_filter(:,it,ik)
-         g0(:,2,iglo) = g0(:,2,iglo) * hypervisc_filter(:,it,ik)
+         g0(:,:,iglo) = g0(:,:,iglo) * spread(hypervisc_filter(:,it,ik),2,2*nvgrid+1)
       end do
     
     end subroutine aniso_shear

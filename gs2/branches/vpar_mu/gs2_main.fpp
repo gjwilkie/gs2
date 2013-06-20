@@ -57,7 +57,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_time, only: update_time, write_dt, init_tstart
     use gs2_time, only: user_time, user_dt, code_time
     use init_g, only: tstart
-    use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
     use fields_implicit, only: time_field
@@ -183,7 +182,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        call advance (istep)
        
        if (nsave > 0 .and. mod(istep, nsave) == 0) &
-            call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+            call gs2_save_for_restart (gnew, user_time, user_dt, istatus, fphi, fapar, fbpar)
        call update_time
        call loop_diagnostics (istep, exit)
        call check_time_step (reset, exit)
@@ -278,14 +277,13 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
   subroutine finish_gs2
     
     use antenna, only: finish_antenna
-    use collisions, only: finish_collisions
     use dist_fn, only: finish_dist_fn
     use fields, only: finish_fields
     use file_utils, only: finish_file_utils
     use hyper, only: finish_hyper
     use init_g, only: finish_init_g
     use kt_grids, only: finish_kt_grids
-    use le_grids, only: finish_le_grids
+    use vpamu_grids, only: finish_vpamu_grids
     use parameter_scan, only: finish_parameter_scan
     use mp, only: proc0
     use nonlinear_terms, only: finish_nonlinear_terms
@@ -295,13 +293,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     implicit none
 
     call finish_antenna
-    call finish_collisions
     call finish_dist_fn
     call finish_fields
     call finish_hyper
     call finish_init_g
     call finish_kt_grids
-    call finish_le_grids
+    call finish_vpamu_grids
     call finish_nonlinear_terms
     call finish_run_parameters
     call finish_species
@@ -313,7 +310,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
   subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
 
     use dist_fn, only: d_reset => reset_init
-    use collisions, only: vnmult, c_reset => reset_init
     use fields, only: init_fields, f_reset => reset_init
     use fields_implicit, only: fi_reset => reset_init
     use fields_test, only: ft_reset => reset_init
@@ -341,13 +337,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     if (nensembles > 1) call scope (subprocs)
 
-    call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+    call gs2_save_for_restart (gnew, user_time, user_dt, istatus, fphi, fapar, fbpar)
     gnew = 0.
 
     call save_dt (code_dt)
 
     call d_reset
-    call c_reset
     call f_reset
     call fi_reset
     call ft_reset

@@ -7,7 +7,7 @@ module theta_grid_params
   real, public :: rhoc, rmaj, r_geo, eps, epsl
   real, public :: qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri
   real, public :: asym, asympri, btor_slab
-  real, public :: betaprim
+  real, public :: betaprim, thet_imp
 
   integer, public :: ntheta, nperiod
 
@@ -42,7 +42,7 @@ contains
 ! geometry, where flow is by definition in the toroidal direction.
     namelist /theta_grid_parameters/ rhoc, rmaj, r_geo, eps, epsl, &
          qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri, &
-         ntheta, nperiod, kp, asym, asympri, btor_slab
+         ntheta, nperiod, kp, asym, asympri, btor_slab, thet_imp
 
     rhoc = 0.5
     rmaj = 3.0
@@ -62,6 +62,7 @@ contains
     btor_slab = 0.0
     ntheta = 24
     nperiod = 2
+    thet_imp = 0.6
     in_file = input_unit_exist("theta_grid_parameters", exist)
     if (exist) read (unit=in_file, nml=theta_grid_parameters)
 

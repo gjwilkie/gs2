@@ -1462,16 +1462,17 @@ contains
 end module theta_grid_file
 
 module theta_grid
+
   implicit none
 
   public :: init_theta_grid, check_theta_grid, wnml_theta_grid
-  public :: theta, theta2, delthet, delthet2
+  public :: theta, theta2, delthet, delthet2, thetac, dbdthetc
   public :: bset
   public :: bmag, gradpar, itor_over_B, IoB
   public :: gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0
   public :: gbdrift_th, cvdrift_th, gds2, gds21, gds22, kxfac, qval
   public :: gds23, gds24, gds24_noq
-  public :: grho
+  public :: grho, thet_imp
   public :: bmin, bmax, eps, shat, drhodpsi, jacob
   public :: ntheta, ntgrid, nperiod, nbset
   public :: Rplot, Zplot, aplot, Rprime, Zprime, aprime, Bpol
@@ -1488,7 +1489,8 @@ module theta_grid
   real, dimension (:), allocatable :: grho, jacob
   real, dimension (:), allocatable :: Rplot, Zplot, aplot, Bpol
   real, dimension (:), allocatable :: Rprime, Zprime, aprime
-  real :: bmin, bmax, eps, shat, drhodpsi, kxfac, qval
+  real, dimension (:,:), allocatable :: thetac, dbdthetc
+  real :: bmin, bmax, eps, shat, drhodpsi, kxfac, qval, thet_imp
   integer :: ntheta, ntgrid, nperiod, nbset
   logical :: gb_to_cv
 
@@ -1589,8 +1591,10 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
   end subroutine init_theta_grid
 
   subroutine broadcast_results
+
     use mp, only: proc0, broadcast
     use geometry, only: rhoc
+
     implicit none
 
     call broadcast (bmin)
@@ -1609,6 +1613,8 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
        allocate (theta2(-ntgrid:ntgrid))
        allocate (delthet(-ntgrid:ntgrid))
        allocate (delthet2(-ntgrid:ntgrid))
+       allocate (thetac(-ntgrid:ntgrid,2))
+       allocate (dbdthetc(-ntgrid:ntgrid,2))
     end if
     call broadcast (theta)
     call broadcast (theta2)
@@ -1645,6 +1651,11 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast (Bpol)
     call broadcast (drhodpsi)
     call broadcast (gb_to_cv)
+    call broadcast (thetac(:,1))
+    call broadcast (thetac(:,2))
+    call broadcast (dbdthetc(:,1))
+    call broadcast (dbdthetc(:,2))
+    call broadcast (thet_imp)
   end subroutine broadcast_results
 
   subroutine read_parameters
@@ -1710,7 +1721,12 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
   end subroutine allocate_arrays
 
   subroutine finish_init
+
+    use centering, only: get_cell_value
+    use theta_grid_params, only: thet_impfac => thet_imp
+
     implicit none
+
     real, dimension (nbset) :: bset_save
     real, dimension (-ntgrid:ntgrid) :: eik_save
     integer :: ierr
@@ -1810,11 +1826,30 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     allocate (theta2(-ntgrid:ntgrid))
     allocate (delthet(-ntgrid:ntgrid))
     allocate (delthet2(-ntgrid:ntgrid))
+    allocate (thetac(-ntgrid:ntgrid,2))
+    allocate (dbdthetc(-ntgrid:ntgrid,2))
 
     theta2 = theta*theta
     delthet(:ntgrid-1) = theta(-ntgrid+1:) - theta(:ntgrid-1)
     delthet(ntgrid) = 0.!delthet(-ntgrid)
     delthet2 = delthet*delthet
+
+    thet_imp = thet_impfac
+    call get_cell_value (1.0-thet_imp, theta, thetac(:,1), -ntgrid)
+    call get_cell_value (thet_imp, theta, thetac(:,2), -ntgrid)
+    ! thetac(ntgrid) is not needed, but fill it in with nonzero value
+    ! to avoid possible divide by zero
+    thetac(ntgrid,:) = theta(ntgrid)
+
+    ! first get db/dtheta at grid points
+    dbdthetc(-ntgrid+1:ntgrid-1,1) = (bmag(-ntgrid+2:ntgrid)-bmag(-ntgrid:ntgrid-2)) &
+         / (delthet(-ntgrid:ntgrid-2)+delthet(-ntgrid+1:ntgrid-1))
+    dbdthetc(-ntgrid,1) = (bmag(-ntgrid+1)-bmag(-ntgrid))/delthet(-ntgrid)
+    dbdthetc(ntgrid,1) = (bmag(ntgrid)-bmag(ntgrid-1))/delthet(ntgrid-1)
+    dbdthetc(:,2) = dbdthetc(:,1)
+
+    call get_cell_value (1.0-thet_impfac, dbdthetc(:,1), dbdthetc(:,1), -ntgrid)
+    call get_cell_value (thet_impfac, dbdthetc(:,2), dbdthetc(:,2), -ntgrid)
 
     jacob = 1.0/(drhodpsi*gradpar*bmag)
   end subroutine finish_init

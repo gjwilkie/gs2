@@ -275,19 +275,20 @@ contains
     
     g = gnew
     phi = phinew
-    apar = aparnew 
-    bpar = bparnew       
-    
-    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-    aparnew = aparnew + apar_ext 
-    
-    call getfield (phinew, aparnew, bparnew)
-    
-    phinew   = phinew  + phi
-    aparnew  = aparnew + apar
-    bparnew  = bparnew + bpar
+    apar = aparnew
+    bpar = bparnew
 
-    if (remove_zonal_flows_switch) call remove_zonal_flows
+    ! MAB FLAG -- need to uncomment
+!     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+!     aparnew = aparnew + apar_ext 
+    
+!     call getfield (phinew, aparnew, bparnew)
+    
+!     phinew   = phinew  + phi
+!     aparnew  = aparnew + apar
+!     bparnew  = bparnew + bpar
+
+!     if (remove_zonal_flows_switch) call remove_zonal_flows
     
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
     
