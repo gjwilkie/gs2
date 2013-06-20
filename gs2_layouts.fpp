@@ -3,14 +3,14 @@
 ! on behalf of EPSRC for the HECToR project
 # include "define.inc"
 
-module gs3_layouts
+module gs2_layouts
 
   use layouts_type, only: g_layout_type
 
   implicit none
   private
 
-  public :: layout, finish_layouts
+  public :: layout, finish_layouts, local_field_solve
   public :: is_kx_local
   
   public :: init_dist_fn_layouts, init_gs2_layouts
@@ -34,12 +34,9 @@ module gs3_layouts
   public :: im_idx, in_idx, ij_idx, ifield_idx
   public :: idx, proc_id, idx_local
 
-  public :: opt_local_copy
-
   logical :: initialized_x_transform = .false.
   logical :: initialized_y_transform = .false.
 
-  logical :: opt_local_copy
   logical :: local_field_solve, unbalanced_xxf, unbalanced_yxf
   real :: max_unbalanced_xxf, max_unbalanced_yxf
   character (len=4) :: layout
@@ -202,13 +199,11 @@ contains
     implicit none
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
-         max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
-         opt_local_copy
+         max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
     unbalanced_yxf = .false.
-    opt_local_copy = .false. 
     max_unbalanced_xxf = 0.0
     max_unbalanced_yxf = 0.0
     layout = 'xyms'
@@ -253,7 +248,6 @@ contains
     call broadcast (unbalanced_yxf)
     call broadcast (max_unbalanced_xxf)
     call broadcast (max_unbalanced_yxf)
-    call broadcast (opt_local_copy)
 
   end subroutine broadcast_results
 
@@ -262,14 +256,14 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine init_dist_fn_layouts &
-       (naky, ntheta0, nmu, nspec)
+       (ntgrid, naky, ntheta0, nvgrid, nmu, nspec)
 
     use mp, only: iproc, nproc, proc0
     use file_utils, only: error_unit
 
     implicit none
 
-    integer, intent (in) :: naky, ntheta0, nmu, nspec
+    integer, intent (in) :: ntgrid, naky, ntheta0, nvgrid, nmu, nspec
     logical, save :: initialized = .false.
 
 # ifdef USE_C_INDEX
@@ -286,8 +280,10 @@ contains
     initialized = .true.
    
     g_lo%iproc = iproc
+    g_lo%ntgrid = ntgrid
     g_lo%naky = naky
     g_lo%ntheta0 = ntheta0
+    g_lo%nvgrid = nvgrid
     g_lo%nmu = nmu
     g_lo%nspec = nspec
     g_lo%llim_world = 0
@@ -869,7 +865,7 @@ contains
 ! X-space layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine init_x_transform_layouts &
-       (ntgrid, nvgrid, naky, ntheta0, nmu, nspec, nx)
+       (ntgrid, naky, ntheta0, nvgrid, nmu, nspec, nx)
     use mp, only: iproc, nproc, proc0, barrier
     implicit none
     integer, intent (in) :: ntgrid, nvgrid, naky, ntheta0, nmu, nspec, nx
@@ -1680,7 +1676,7 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine init_y_transform_layouts &
-       (ntgrid, nvgrid, naky, ntheta0, nmu, nspec, nx, ny)
+       (ntgrid, naky, ntheta0, nvgrid, nmu, nspec, nx, ny)
     use mp, only: iproc, nproc, proc0
     implicit none
     integer, intent (in) :: ntgrid, nvgrid, naky, ntheta0, nmu, nspec
@@ -2184,4 +2180,4 @@ contains
 
   end subroutine finish_layouts
 
-end module gs3_layouts
+end module gs2_layouts

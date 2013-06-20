@@ -14,7 +14,7 @@ module gs2_save
   character(300), save :: restart_file
 
   double precision, allocatable, dimension(:,:,:) :: tmpr, tmpi, ftmpr, ftmpi
-  integer :: ncid, thetaid, signid, gloid, kyid, kxid
+  integer :: ncid, thetaid, vpaid, gloid, kyid, kxid
   integer :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
   integer :: delt0id, t0id, gr_id, gi_id
   integer (kind_nf) :: current_scan_parameter_value_id
@@ -31,12 +31,13 @@ contains
     use mp, only: nproc, iproc, proc0
     use fields_arrays, only: phinew, aparnew, bparnew
     use kt_grids, only: naky, ntheta0
+    use vpamu_grids, only: nvgrid
     use file_utils, only: error_unit
     use parameter_scan_arrays, only: current_scan_parameter_value
     implicit none
     character (305) :: file_proc
     character (5) :: suffix
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
     real, intent (in) :: fphi, fapar, fbpar
     integer, intent (out) :: istatus
@@ -86,11 +87,11 @@ contains
              write(ierr,*) "nf_def_dim theta error: ", nf_strerror(istatus)
              goto 1
           end if
-          
-          istatus = nf_def_dim (ncid, "sign", 2, signid)
+
+          istatus = nf_def_dim (ncid, "vpa", 2*nvgrid+1, vpaid)
           if (istatus /= 0) then
              ierr = error_unit()
-             write(ierr,*) "nf_def_dim sign error: ", nf_strerror(istatus)
+             write(ierr,*) "nf_def_dim theta error: ", nf_strerror(istatus)
              goto 1
           end if
           
@@ -143,7 +144,7 @@ contains
        
        if (n_elements > 0) then
           istatus = nf_def_var (ncid, "gr", NF_DOUBLE, 3, &
-               (/ thetaid, signid, gloid /), gr_id)
+               (/ thetaid, vpaid, gloid /), gr_id)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_var g error: ", nf_strerror(istatus)
@@ -151,7 +152,7 @@ contains
           end if
           
           istatus = nf_def_var (ncid, "gi", NF_DOUBLE, 3, &
-               (/ thetaid, signid, gloid /), gi_id)
+               (/ thetaid, vpaid, gloid /), gi_id)
           if (istatus /= 0) then
              ierr = error_unit()
              write(ierr,*) "nf_def_var g error: ", nf_strerror(istatus)
@@ -254,7 +255,7 @@ contains
 
     if (n_elements > 0) then
 
-       if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
 
        tmpr = real(g)
        istatus = nf_put_var_double (ncid, gr_id, tmpr)
@@ -339,11 +340,12 @@ contains
     use fields_arrays, only: phinew, aparnew, bparnew
     use fields_arrays, only: phi, apar, bpar
     use kt_grids, only: naky, ntheta0
+    use vpamu_grids, only: nvgrid
     use file_utils, only: error_unit
     implicit none
     character (305) :: file_proc
     character (5) :: suffix
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
@@ -389,10 +391,10 @@ contains
           write(ierr,*) "nf_inq_dimid theta error: ", nf_strerror(istatus),' ',iproc
        end if
        
-       istatus = nf_inq_dimid (ncid, "sign", signid)
+       istatus = nf_inq_dimid (ncid, "vpa", vpaid)
        if (istatus /= 0) then
           ierr = error_unit()
-          write(ierr,*) "nf_inq_dimid sign error: ", nf_strerror(istatus),' ',iproc
+          write(ierr,*) "nf_inq_dimid vpa error: ", nf_strerror(istatus),' ',iproc
        end if
        
        istatus = nf_inq_dimid (ncid, "glo", gloid)
@@ -420,12 +422,12 @@ contains
        end if
        if (i /= 2*ntgrid + 1) write(*,*) 'Restart error: ntgrid=? ',i,' : ',ntgrid,' : ',iproc
        
-       istatus = nf_inq_dimlen (ncid, signid, i)       
+       istatus = nf_inq_dimlen (ncid, vpaid, i)       
        if (istatus /= 0) then
           ierr = error_unit()
-          write(ierr,*) "nf_inq_dimlen sign error: ", nf_strerror(istatus),' ',iproc
+          write(ierr,*) "nf_inq_dimlen vpa error: ", nf_strerror(istatus),' ',iproc
        end if
-       if (i /= 2) write(*,*) 'Restart error: sign=? ',i,' : ',iproc
+       if (i /= 2*nvgrid + 1) write(*,*) 'Restart error: nvgrid=? ',i,' : ',nvgrid,' : ',iproc
        
        istatus = nf_inq_dimlen (ncid, gloid, i)       
        if (istatus /= 0) then
@@ -503,8 +505,8 @@ contains
        end if
     end if
     
-    if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
-    if (.not. allocated(tmpi)) allocate (tmpi(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
+    if (.not. allocated(tmpi)) allocate (tmpi(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
 
      ! <doc> Restore the distribution function. </doc>
 
@@ -607,9 +609,10 @@ contains
     use fields_arrays, only: phinew, aparnew, bparnew
     use fields_arrays, only: phi, apar, bpar
     use kt_grids, only: naky, ntheta0
+    use vpamu_grids, only: nvgrid
     use file_utils, only: error_unit
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
@@ -630,10 +633,10 @@ contains
        write(ierr,*) "nf_inq_dimid theta error: ", nf_strerror(istatus),' ',iproc
     end if
 
-    istatus = nf_inq_dimid (ncid, "sign", signid)
+    istatus = nf_inq_dimid (ncid, "vpa", vpaid)
     if (istatus /= 0) then
        ierr = error_unit()
-       write(ierr,*) "nf_inq_dimid sign error: ", nf_strerror(istatus),' ',iproc
+       write(ierr,*) "nf_inq_dimid vpa error: ", nf_strerror(istatus),' ',iproc
     end if
 
     istatus = nf_inq_dimid (ncid, "glo", gloid)
@@ -661,12 +664,12 @@ contains
     end if
     if (i /= 2*ntgrid + 1) write(*,*) 'Restart error: ntgrid=? ',i,' : ',ntgrid,' : ',iproc
 
-    istatus = nf_inq_dimlen (ncid, signid, i)       
+    istatus = nf_inq_dimlen (ncid, vpaid, i)       
     if (istatus /= 0) then
        ierr = error_unit()
-       write(ierr,*) "nf_inq_dimlen sign error: ", nf_strerror(istatus),' ',iproc
+       write(ierr,*) "nf_inq_dimlen vpa error: ", nf_strerror(istatus),' ',iproc
     end if
-    if (i /= 2) write(*,*) 'Restart error: sign=? ',i,' : ',iproc
+    if (i /= 2*nvgrid + 1) write(*,*) 'Restart error: nvgrid=? ',i,' : ',nvgrid,' : ',iproc
 
     istatus = nf_inq_dimlen (ncid, gloid, i)       
     if (istatus /= 0) then
@@ -752,20 +755,20 @@ contains
        return
     endif
 
-    if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1, 2, n_elements))    
-    if (.not. allocated(tmpi)) allocate (tmpi(2*ntgrid+1, 2, n_elements))
+    if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1, 2*nvgrid+1, n_elements))    
+    if (.not. allocated(tmpi)) allocate (tmpi(2*ntgrid+1, 2*nvgrid+1, n_elements))
 
     tmpr = 0.;  tmpi = 0.
        
     istatus = nf_get_vara_double (ncid, gr_id, (/ 1, 1, g_lo%llim_proc /), &
-         (/ 2*ntgrid + 1, 2, n_elements /), tmpr)
+         (/ 2*ntgrid + 1, 2*nvgrid + 1, n_elements /), tmpr)
     if (istatus /= 0) then
        ierr = error_unit()
        write(ierr,*) "nf_get_vara_double gr error: ", nf_strerror(istatus),' ',iproc
     end if
     
     istatus = nf_get_vara_double (ncid, gi_id,  (/ 1, 1, g_lo%llim_proc /), &
-         (/ 2*ntgrid + 1, 2, n_elements /), tmpi)
+         (/ 2*ntgrid + 1, 2*nvgrid + 1, n_elements /), tmpi)
     if (istatus /= 0) then
        ierr = error_unit()
        write(ierr,*) "nf_get_vara_double gi error: ", nf_strerror(istatus),' ',iproc

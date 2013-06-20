@@ -11,7 +11,7 @@ module nonlinear_terms
   public :: read_parameters, wnml_nonlinear_terms, check_nonlinear_terms
 !  public :: add_nonlinear_terms, finish_nl_terms
   public :: add_explicit_terms, finish_nl_terms
-  public :: finish_init, reset_init, algorithm, nonlin, accelerated
+  public :: finish_init, reset_init, algorithm, nonlin
   public :: cfl
 
   private
@@ -28,9 +28,6 @@ module nonlinear_terms
   real, save, dimension (:,:), allocatable :: ba, gb, bracket
   ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
 
-  real, save, dimension (:,:,:), allocatable :: aba, agb, abracket
-  ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
-
   !complex, dimension (:,:), allocatable :: xax, xbx, g_xf
   ! xxf_lo%nx, xxf_lo%llim_proc:xxf_lo%ulim_alloc
 
@@ -46,7 +43,6 @@ module nonlinear_terms
   logical :: initializing = .true.
   logical :: alloc = .true.
   logical :: zip = .false.
-  logical :: accelerated = .false.
 
   logical :: exist
   
@@ -127,9 +123,9 @@ contains
   subroutine init_nonlinear_terms 
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0, nx, ny, akx, aky
-    use le_grids, only: init_le_grids, nlambda, negrid
+    use vpamu_grids, only: init_vpamu_grids, nvgrid, nmu
     use species, only: init_species, nspec
-    use gs2_layouts, only: init_dist_fn_layouts, yxf_lo, accelx_lo
+    use gs2_layouts, only: init_dist_fn_layouts, yxf_lo
     use gs2_layouts, only: init_gs2_layouts
     use gs2_transforms, only: init_transforms
     implicit none
@@ -145,32 +141,25 @@ contains
     call init_theta_grid
     if (debug) write(6,*) "init_nonlinear_terms: init_kt_grids"
     call init_kt_grids
-    if (debug) write(6,*) "init_nonlinear_terms: init_le_grids"
-    call init_le_grids (dum1, dum2)
+    if (debug) write(6,*) "init_nonlinear_terms: init_vpamu_grids"
+    call init_vpamu_grids
     if (debug) write(6,*) "init_nonlinear_terms: init_species"
     call init_species
     if (debug) write(6,*) "init_nonlinear_terms: init_dist_fn_layouts"
-    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nvgrid, nmu, nspec)
 
     call read_parameters
 
     if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
     if (nonlinear_mode_switch /= nonlinear_mode_none) then
-       call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
+       call init_transforms (ntgrid, naky, ntheta0, nvgrid, nmu, nspec, nx, ny)
 
        if (debug) write(6,*) "init_nonlinear_terms: allocations"
        if (alloc) then
-          if (accelerated) then
-             allocate (     aba(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
-             allocate (     agb(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
-             allocate (abracket(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
-             aba = 0. ; agb = 0. ; abracket = 0.
-          else
-             allocate (     ba(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-             allocate (     gb(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-             allocate (bracket(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-             ba = 0. ; gb = 0. ; bracket = 0.
-          end if
+          allocate (     ba(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+          allocate (     gb(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+          allocate (bracket(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+          ba = 0. ; gb = 0. ; bracket = 0.
           alloc = .false.
        end if
 
@@ -248,17 +237,15 @@ contains
 
   end subroutine read_parameters
 
-!  subroutine add_nonlinear_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
-  subroutine add_explicit_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+  subroutine add_explicit_terms (g1, g2, g3, phi, apar, bpar, istep)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_time, only: save_dt_cfl
+    use vpamu_grids, only: nvgrid
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     integer, intent (in) :: istep
-    real, intent (in) :: bd
-    complex, intent (in) :: fexp
     real :: dt_cfl
     logical, save :: nl = .true.
 
@@ -269,37 +256,33 @@ contains
        call save_dt_cfl (dt_cfl)
 #ifdef LOWFLOW
        if (istep /=0) &
-            call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+            call add_explicit (g1, g2, g3, phi, apar, bpar, istep)
 #endif
     case (nonlinear_mode_on)
-!       if (istep /= 0) call add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
-       if (istep /= 0) call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
+       if (istep /= 0) call add_explicit (g1, g2, g3, phi, apar, bpar, istep, nl)
     end select
-!  end subroutine add_nonlinear_terms
+
   end subroutine add_explicit_terms
 
-  subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
+  subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, nl)
 
-    use theta_grid, only: ntgrid
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use theta_grid, only: ntgrid, thet_imp
+    use vpamu_grids, only: nvgrid, vpa_imp
+    use gs2_layouts, only: g_lo, ik_idx, it_idx
     use dist_fn_arrays, only: g
-    use run_parameters, only: fapar, fbpar, fphi
     use gs2_time, only: save_dt_cfl
+    use centering, only: get_cell_value
 
     implicit none
 
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
-    real, intent (in) :: bd
-    complex, intent (in) :: fexp
     logical, intent (in), optional :: nl
 
     integer :: istep_last = 0
-    integer :: i, j, k
-    integer :: iglo, ik, it, is, ig, il, ia, isgn
-    real :: max_vel, zero
-    real :: dt_cfl
+    integer :: iglo, ik, it
+    real :: dt_cfl, zero
 
     if (initializing) then
        if (present(nl)) then
@@ -324,8 +307,11 @@ contains
        if (present(nl)) then
           call add_nl (g1, phi, apar, bpar)
           
-          ! takes g1 at grid points and returns 2*g1 at cell centers
-          call center (g1)
+          ! take g1 at grid points and return 2*g1 at cell centers
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             call get_cell_value (thet_imp, vpa_imp, g1(:,:,iglo), g1(:,:,iglo), -ntgrid, -nvgrid)
+          end do
+          g1 = 2.*g1
        else
           g1 = 0.
        end if
@@ -344,75 +330,38 @@ contains
 !          if (it /= 1) then
           if (ik /= 1) then
 !          if (ik == 2 .and. it == 1) then
-             g (:,1,iglo) = 0.
-             g (:,2,iglo) = 0.
-             g1(:,1,iglo) = 0.
-             g1(:,2,iglo) = 0.
+             g (:,:,iglo) = 0.
+             g1(:,:,iglo) = 0.
           end if
        end do
     end if
      
     istep_last = istep
 
-  contains
-
-    ! subroutine 'center' takes input array evaluated at theta grid points
-    ! and overwrites it with array evaluated at cell centers
-    ! note that there is an extra factor of 2 in output array
-    subroutine center (gtmp)
-
-      use dist_fn_arrays, only: ittp
-      use gs2_layouts, only: g_lo, il_idx
-      use theta_grid, only: ntgrid
-      use le_grids, only: forbid
-
-      implicit none
-
-      integer :: iglo, il, ig
-      complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: gtmp
-
-      ! factor of one-half appears elsewhere
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          il = il_idx(g_lo, iglo)
-          ! Totally trapped particles get no bakdif 
-          do ig = -ntgrid, ntgrid-1
-             !JAB & GWH: orig if (il == ittp(ig)) cycle 
-             if (il >= ittp(ig)) cycle
-             gtmp(ig,1,iglo) = (1.+bd)*gtmp(ig+1,1,iglo) + (1.-bd)*gtmp(ig,1,iglo)
-             gtmp(ig,2,iglo) = (1.-bd)*gtmp(ig+1,2,iglo) + (1.+bd)*gtmp(ig,2,iglo)
-          end do
-          ! zero out spurious gtmp outside trapped boundary
-          where (forbid(:,il))
-             gtmp(:,1,iglo) = 0.0
-             gtmp(:,2,iglo) = 0.0
-          end where
-       end do
-
-    end subroutine center
-
   end subroutine add_explicit
 
   subroutine add_nl (g1, phi, apar, bpar)
-    use mp, only: max_allreduce, proc0
+
+    use mp, only: max_allreduce
     use theta_grid, only: ntgrid, kxfac
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use gs2_layouts, only: accelx_lo, yxf_lo
-    use dist_fn_arrays, only: g, ittp
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use gs2_layouts, only: yxf_lo
+    use dist_fn_arrays, only: g
     use species, only: spec
     use gs2_transforms, only: transform2, inverse2
     use run_parameters, only: fapar, fbpar, fphi
     use kt_grids, only: aky, akx
-    use le_grids, only: forbid
+    use vpamu_grids, only: nvgrid
     use gs2_time, only: save_dt_cfl
     use constants, only: zi
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in out) :: g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer :: i, j, k
     real :: max_vel, zero
     real :: dt_cfl
 
-    integer :: iglo, ik, it, is, ig, il, ia, isgn
+    integer :: iglo, ik, it, is, ig, iv
     
     !Initialise zero so we can be sure tests are sensible
     zero = epsilon(0.0)
@@ -426,11 +375,7 @@ contains
     if (fbpar > zero) call load_kx_bpar
     if (fapar  > zero) call load_kx_apar
 
-    if (accelerated) then
-       call transform2 (g1, aba, ia)
-    else
-       call transform2 (g1, ba)
-    end if
+    call transform2 (g1, ba)
     
     if (fphi > zero) then
        call load_ky_phi
@@ -439,47 +384,26 @@ contains
     end if
     if (fbpar > zero) call load_ky_bpar
     
-    ! more generally, there should probably be a factor of anon...
-    
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
+       do iv = -nvgrid, nvgrid
           do ig = -ntgrid, ntgrid
-             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*aky(ik)*g(ig,isgn,iglo)
+             g1(ig,iv,iglo) = g1(ig,iv,iglo)*spec(is)%zt + zi*aky(ik)*g(ig,iv,iglo)
           end do
        end do
     end do
     
-    if (accelerated) then
-       call transform2 (g1, agb, ia)
-    else
-       call transform2 (g1, gb)
-    end if
+    call transform2 (g1, gb)
     
-    if (accelerated) then
-       max_vel = 0.
-       do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
-          do j = 1, 2
-             do i = 1, 2*ntgrid+1
-                abracket(i,j,k) = aba(i,j,k)*agb(i,j,k)*kxfac
-                max_vel = max(max_vel, abs(aba(i,j,k)))
-             end do
-          end do
+    max_vel = 0.
+    do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
+       do i = 1, yxf_lo%ny
+          bracket(i,j) = ba(i,j)*gb(i,j)*kxfac
+          max_vel = max(max_vel,abs(ba(i,j)))
        end do
-       max_vel = max_vel * cfly
-!       max_vel = maxval(abs(aba)*cfly)
-    else
-       max_vel = 0.
-       do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
-          do i = 1, yxf_lo%ny
-             bracket(i,j) = ba(i,j)*gb(i,j)*kxfac
-             max_vel = max(max_vel,abs(ba(i,j)))
-          end do
-       end do
-       max_vel = max_vel*cfly
-!       max_vel = maxval(abs(ba)*cfly)
-    endif
+    end do
+    max_vel = max_vel*cfly
 
     if (fphi > zero) then
        call load_ky_phi
@@ -490,11 +414,7 @@ contains
     if (fbpar > zero) call load_ky_bpar
     if (fapar  > zero) call load_ky_apar
     
-    if (accelerated) then
-       call transform2 (g1, aba, ia)
-    else
-       call transform2 (g1, ba)
-    end if
+    call transform2 (g1, ba)
     
     if (fphi > zero) then
        call load_kx_phi
@@ -504,52 +424,31 @@ contains
     
     if (fbpar > zero) call load_kx_bpar
     
-    ! more generally, there should probably be a factor of anon...
-    
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       do isgn = 1, 2
+       do iv = -nvgrid, nvgrid
           do ig = -ntgrid, ntgrid
-             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*akx(it)*g(ig,isgn,iglo)
+             g1(ig,iv,iglo) = g1(ig,iv,iglo)*spec(is)%zt + zi*akx(it)*g(ig,iv,iglo)
           end do
        end do
     end do
     
-    if (accelerated) then
-       call transform2 (g1, agb, ia)
-    else
-       call transform2 (g1, gb)
-    end if
+    call transform2 (g1, gb)
     
-    if (accelerated) then
-       do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
-          do j = 1, 2
-             do i = 1, 2*ntgrid+1
-                abracket(i,j,k) = abracket(i,j,k) - aba(i,j,k)*agb(i,j,k)*kxfac
-                max_vel = max(max_vel, abs(aba(i,j,k))*cflx)
-             end do
-          end do
+    do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
+       do i = 1, yxf_lo%ny
+          bracket(i,j) = bracket(i,j) - ba(i,j)*gb(i,j)*kxfac
+          max_vel = max(max_vel,abs(ba(i,j))*cflx)
        end do
-    else
-       do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
-          do i = 1, yxf_lo%ny
-             bracket(i,j) = bracket(i,j) - ba(i,j)*gb(i,j)*kxfac
-             max_vel = max(max_vel,abs(ba(i,j))*cflx)
-          end do
-       end do
-    end if
+    end do
     
     call max_allreduce(max_vel)
     
     dt_cfl = 1./max_vel
     call save_dt_cfl (dt_cfl)
     
-    if (accelerated) then
-       call inverse2 (abracket, g1, ia)
-    else
-       call inverse2 (bracket, g1)
-    end if
+    call inverse2 (bracket, g1)
     
   contains
 
@@ -563,8 +462,7 @@ contains
          ik = ik_idx(g_lo,iglo)
          do ig = -ntgrid, ntgrid
             fac = zi*akx(it)*aj0(ig,iglo)*phi(ig,it,ik)*fphi
-            g1(ig,1,iglo) = fac
-            g1(ig,2,iglo) = fac
+            g1(ig,:,iglo) = fac
          end do
       end do
 
@@ -580,31 +478,25 @@ contains
          ik = ik_idx(g_lo,iglo)
          do ig = -ntgrid, ntgrid
             fac = zi*aky(ik)*aj0(ig,iglo)*phi(ig,it,ik)*fphi
-            g1(ig,1,iglo) = fac
-            g1(ig,2,iglo) = fac
+            g1(ig,:,iglo) = fac
          end do
       end do
 
     end subroutine load_ky_phi
 
-! should I use vpa or vpac in next two routines??
-
     subroutine load_kx_apar
 
-      use dist_fn_arrays, only: vpa, aj0
+      use dist_fn_arrays, only: aj0
       use gs2_layouts, only: is_idx
+      use vpamu_grids, only: vpa
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
          do ig = -ntgrid, ntgrid
-            g1(ig,1,iglo) = g1(ig,1,iglo) - zi*akx(it)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,1,iglo)*apar(ig,it,ik)*fapar 
-         end do
-         do ig = -ntgrid, ntgrid
-            g1(ig,2,iglo) = g1(ig,2,iglo) - zi*akx(it)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
+            g1(ig,:,iglo) = g1(ig,:,iglo) - zi*akx(it)*aj0(ig,iglo)*spec(is)%stm &
+                 *vpa*apar(ig,it,ik)*fapar 
          end do
       end do
 
@@ -612,7 +504,8 @@ contains
 
     subroutine load_ky_apar
 
-      use dist_fn_arrays, only: vpa, aj0
+      use dist_fn_arrays, only: aj0
+      use vpamu_grids, only: vpa
       use gs2_layouts, only: is_idx
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -620,12 +513,8 @@ contains
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
          do ig = -ntgrid, ntgrid
-            g1(ig,1,iglo) = g1(ig,1,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,1,iglo)*apar(ig,it,ik)*fapar 
-         end do
-         do ig = -ntgrid, ntgrid
-            g1(ig,2,iglo) = g1(ig,2,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
+            g1(ig,:,iglo) = g1(ig,:,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
+                 *vpa*apar(ig,it,ik)*fapar 
          end do
       end do
 
@@ -633,8 +522,11 @@ contains
 
     subroutine load_kx_bpar
 
-      use dist_fn_arrays, only: vperp2, aj1
-      use gs2_layouts, only: is_idx
+      use dist_fn_arrays, only: aj1
+      use gs2_layouts, only: is_idx, ik_idx, it_idx, imu_idx
+      use vpamu_grids, only: mu, vperp2
+
+      integer :: it, ik, imu, is
       complex :: fac
 
 ! Is this factor of two from the old normalization?
@@ -643,9 +535,10 @@ contains
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
+         imu = imu_idx(g_lo,iglo)
          do ig = -ntgrid, ntgrid
             fac = g1(ig,1,iglo) + zi*akx(it)*aj1(ig,iglo) &
-                 *2.0*vperp2(ig,iglo)*spec(is)%tz*bpar(ig,it,ik)*fbpar
+                 *2.0*vperp2(ig,imu)*spec(is)%tz*bpar(ig,it,ik)*fbpar
             g1(ig,1,iglo) = fac
             g1(ig,2,iglo) = fac
          end do
@@ -655,8 +548,12 @@ contains
 
     subroutine load_ky_bpar
 
-      use dist_fn_arrays, only: vperp2, aj1
-      use gs2_layouts, only: is_idx
+      use dist_fn_arrays, only: aj1
+      use gs2_layouts, only: is_idx, ik_idx, it_idx, imu_idx
+      use vpamu_grids, only: vperp2
+      use kt_grids, only: aky
+
+      integer :: imu, it, ik, is, ig
       complex :: fac
 
 ! Is this factor of two from the old normalization?
@@ -667,7 +564,7 @@ contains
          is = is_idx(g_lo,iglo)
          do ig = -ntgrid, ntgrid
             fac = g1(ig,1,iglo) + zi*aky(ik)*aj1(ig,iglo) &
-                 *2.0*vperp2(ig,iglo)*spec(is)%tz*bpar(ig,it,ik)*fbpar
+                 *2.0*vperp2(ig,imu)*spec(is)%tz*bpar(ig,it,ik)*fbpar
             g1(ig,1,iglo) = fac 
             g1(ig,2,iglo) = fac
          end do
@@ -705,10 +602,9 @@ contains
 
     implicit none
 
-    if (allocated(aba)) deallocate (aba, agb, abracket)
     if (allocated(ba)) deallocate (ba, gb, bracket)
 
-    nonlin = .false. ; alloc = .true. ; zip = .false. ; accelerated = .false.
+    nonlin = .false. ; alloc = .true. ; zip = .false.
     initialized = .false. ; initializing = .true.
 
   end subroutine finish_nonlinear_terms

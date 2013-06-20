@@ -759,7 +759,7 @@ if (debug) write(6,*) 'get_namelists: returning'
   subroutine write_namelists (jr, tag1, tag2)
     use antenna, only: wnml_antenna
     use collisions, only: wnml_collisions
-    use dist_fn, only: wnml_dist_fn, wnml_dist_fn_species 
+    use dist_fn, only: wnml_dist_fn
     use fields, only: wnml_fields
     use gs2_reinit, only: wnml_gs2_reinit
     use gs2_layouts, only: wnml_gs2_layouts
@@ -827,7 +827,6 @@ if (debug) write(6,*) 'get_namelists: returning'
     electrons=has_electron_species(spec)
     call wnml_run_parameters(unit,electrons,coll_on)
     call wnml_species(unit)
-    call wnml_dist_fn_species(unit)
 
     call wnml_theta_grid_params(unit)
     call wnml_theta_grid(unit)

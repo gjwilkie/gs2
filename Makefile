@@ -439,7 +439,7 @@ depend:
 	#find | grep .fpp$$ | sed s/\.fpp/\.f90\ \\\\/ | sed s/\.\\//\\t/ >> Makefile.doc_depend
 #
 doc: $(F90FROMFPP)
-	doxygen ../doxygen/gs2 
+	doxygen ../doxygen/gs2
 	-rm -f $(F90FROMFPP)
 
 sync_doc: 

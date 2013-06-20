@@ -83,11 +83,10 @@ contains
     use kt_grids, only: naky, ntheta0,nx,ny
     use gs2_layouts, only: yxf_lo
     use theta_grid, only: ntgrid
-    use le_grids, only: nlambda, negrid
+    use vpamu_grids, only: nvgrid, nmu
     use species, only: nspec
 
     logical :: write_nl_flux, write_omega, write_phiavg, write_hrate, make_movie, write_fields
-    logical :: accelerated
     character (300) :: filename, filename_movie
     integer :: ierr         ! 0 if initialization is successful
     integer :: nmovie_tot
@@ -124,7 +123,7 @@ contains
     if(my_make_movie) then
     !perhaps put a call to init_y_transform
 !    call init_y_transform_layouts  
-    call init_transforms(ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
+    call init_transforms(ntgrid, naky, ntheta0, nvgrid, nmu, nspec, nx, ny)
        filename_movie = trim(trim(run_name)//'.movie.nc')
        if(serial_io) then
           ! only proc0 opens the file:

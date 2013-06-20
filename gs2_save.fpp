@@ -31,7 +31,7 @@ module gs2_save
   public :: read_many, save_many
   public :: restore_current_scan_parameter_value
   public :: init_save, init_dt, init_tstart, init_ant_amp
-  public :: init_vnm
+
 !# ifdef NETCDF
 !  public :: netcdf_real, kind_nf, get_netcdf_code_precision, netcdf_error
 !# endif
@@ -50,19 +50,12 @@ module gs2_save
   real, allocatable, dimension(:) :: stmp  ! MR: tmp var for kx_shift
   real, allocatable, dimension(:) :: atmp
 !  integer, parameter :: kind_nf = kind (NF90_NOERR)
-  integer (kind_nf) :: ncid, thetaid, signid, gloid, kyid, kxid, nk_stir_dim
+  integer (kind_nf) :: ncid, thetaid, vpaid, gloid, kyid, kxid, nk_stir_dim
   integer (kind_nf) :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
   integer (kind_nf) :: kx_shift_id   ! MR: added to save kx_shift variable
-  integer (kind_nf) :: t0id, gr_id, gi_id, vnm1id, vnm2id, delt0id
+  integer (kind_nf) :: t0id, gr_id, gi_id, delt0id
   integer (kind_nf) :: current_scan_parameter_value_id
   integer (kind_nf) :: a_antr_id, b_antr_id, a_anti_id, b_anti_id
-!<DD> Added for saving distribution function
-  INTEGER (KIND_NF) :: egridid,lgridid, vpa_id, vperp2_id
-  INTEGER (KIND_NF) :: energy_id, lambda_id
-  INTEGER (KIND_NF) :: nspecid, spec_id
-  LOGICAL :: initialized_dfn= .false.
-!</DD> Added for saving distribution function
-!  integer (kind_nf) :: netcdf_real=0
 
   logical :: initialized = .false.
   logical :: test = .false.
@@ -72,11 +65,7 @@ module gs2_save
 contains
 
   subroutine gs2_save_for_restart &
-       (g, t0, delt0, vnm, istatus, fphi, fapar, fbpar, exit_in, distfn, fileopt)
-!<DD 18-10-2010> Added flag distfn to gs2_save_for_restart
-!If present then will save to "rootname.nc.dfn.proc" and will
-!include extra information including velocity and energy grids
-!</DD>
+       (g, t0, delt0, istatus, fphi, fapar, fbpar, exit_in, fileopt)
 !CMR, 5/4/2011: Add optional parameter fileopt to add to output filename
 
 !MR, 2007: save kx_shift array in restart file if allocated    
@@ -97,20 +86,14 @@ contains
     use layouts_type, only: g_layout_type
 ! <TT
     use file_utils, only: error_unit
-    !<DD> Added for saving distribution function
-    use le_grids, only: energy, al, negrid, nlambda
-    use species, only: nspec
-    use dist_fn_arrays, only: vpa, vperp2
-    !</DD> Added for saving distribution function
+    use vpamu_grids, only: nvgrid
     use parameter_scan_arrays, only: current_scan_parameter_value
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
-    real, dimension (2), intent (in) :: vnm
     real, intent (in) :: fphi, fapar, fbpar
     integer, intent (out) :: istatus
     logical, intent (in), optional :: exit_in
-    LOGICAL, INTENT (in), optional :: distfn !<DD> Added for saving distribution function
     character (20), INTENT (in), optional :: fileopt
 # ifdef NETCDF
     character (306) :: file_proc
@@ -119,7 +102,6 @@ contains
     integer :: total_elements
     integer, dimension(3) :: start_pos, counts
     logical :: exit
-    logical :: local_init !<DD> Added for saving distribution function
     integer, parameter :: tmpunit = 348
 
 !*********-----------------------_**********************
@@ -143,23 +125,9 @@ contains
 
     if (n_elements <= 0) return
 
-    !<DD> Added for saving distribution function
-    IF (PRESENT(distfn)) THEN
-       local_init=initialized_dfn
-    ELSE
-    	local_init=initialized
-    END IF
-    !</DD> Added for saving distribution function
-    
-    if (.not.local_init) then
+    if (.not.initialized) then
 
-       !<DD> Added for saving distribution function
-       IF (PRESENT(distfn)) THEN
-        	initialized_dfn=.true.
-       ELSE
-    		initialized = .true.
-       END IF
-       !</DD> Added for saving distribution function
+       initialized = .true.
        
        file_proc = trim(restart_file)
        
@@ -172,29 +140,15 @@ contains
 !</HL>  The NETCDF_PARALLEL directives include code for parallel 
 !       netcdf using HDF5 to write the output to a single restart file
 !       The read_many flag allows the old style multiple file output
-       !<DD> Added for saving distribution function
-       IF (PRESENT(distfn)) THEN
 # ifdef NETCDF_PARALLEL
-          if(save_many) then
-# endif            
-             WRITE (suffix,'(a5,i0)') '.dfn.', iproc
-# ifdef NETCDF_PARALLEL
-          else
-             WRITE (suffix,'(a4)') '.dfn'
-          endif
+       if(save_many) then
 # endif
-       ELSE
+          WRITE (suffix,'(a1,i0)') '.', iproc
 # ifdef NETCDF_PARALLEL
-          if(save_many) then
+       else
+          WRITE (suffix,*) ''
+       endif
 # endif
-             WRITE (suffix,'(a1,i0)') '.', iproc
-# ifdef NETCDF_PARALLEL
-          else
-             WRITE (suffix,*) ''
-          endif
-# endif
-       END IF
-       !</DD> Added for saving distribution function
 
        file_proc = trim(trim(file_proc)//adjustl(suffix))          
 
@@ -241,14 +195,14 @@ contains
              write(ierr,*) "nf90_def_dim theta error: ", nf90_strerror(istatus)
              goto 1
           end if
-          
-          istatus = nf90_def_dim (ncid, "sign", 2, signid)
+
+          istatus = nf90_def_dim (ncid, "vpa", 2*nvgrid+1, vpaid)
           if (istatus /= NF90_NOERR) then
              ierr = error_unit()
-             write(ierr,*) "nf90_def_dim sign error: ", nf90_strerror(istatus)
+             write(ierr,*) "nf90_def_dim vpa error: ", nf90_strerror(istatus)
              goto 1
           end if
-
+   
 # ifdef NETCDF_PARALLEL                              
           if(save_many) then
 # endif
@@ -278,46 +232,6 @@ contains
              goto 1
           end if
        end if
-       
-       !<DD> Added for saving distribution function
-       IF (PRESENT(distfn)) THEN
-          !<DD 29-08-2010> Define energy and lambda dimensions
-
-          !Define negrid dimension (number of energy grid points)
-          istatus = nf90_def_dim (ncid, "negrid", negrid, egridid)
-	
-          !Check dimension created successfully
-          IF (istatus /= NF90_NOERR) THEN
-             ierr = error_unit()
-             WRITE(ierr,*) "nf90_def_dim negrid error: ", nf90_strerror(istatus)
-             GOTO 1
-          END IF
-	
-          !Define nlambda dimension (number of pitch angles)
-          istatus = nf90_def_dim (ncid, "nlambda", nlambda, lgridid)
-          
-          !Check dimension created successfully
-          IF (istatus /= NF90_NOERR) THEN
-             ierr = error_unit()
-             WRITE(ierr,*) "nf90_def_dim nlambda error: ", nf90_strerror(istatus)
-             GOTO 1
-          END IF
-          !</DD>
-          
-          !<DD 01-09-2010> Define species dimension
-          
-          !Define nspec dimension (number of species)
-          istatus = nf90_def_dim (ncid, "nspec", nspec, nspecid)
-          
-          !Check dimension created successfully
-          IF (istatus /= NF90_NOERR) THEN
-             ierr = error_unit()
-             WRITE(ierr,*) "nf90_def_dim nspec error: ", nf90_strerror(istatus)
-             GOTO 1
-          END IF
-          !</DD>
-       END IF
-       !</DD> Added for saving distribution function
        
        if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
 
@@ -349,20 +263,6 @@ contains
          !if (proc0) write (*,*) "Finishing current_scan_parameter_value def"
        end if
 
-       istatus = nf90_def_var (ncid, "vnm1", netcdf_real, vnm1id)
-       if (istatus /= NF90_NOERR) then
-          ierr = error_unit()
-          write(ierr,*) "nf90_def_var vnm(1) error: ", nf90_strerror(istatus)
-          goto 1
-       end if
-       
-       istatus = nf90_def_var (ncid, "vnm2", netcdf_real, vnm2id)
-       if (istatus /= NF90_NOERR) then
-          ierr = error_unit()
-          write(ierr,*) "nf90_def_var vnm(2) error: ", nf90_strerror(istatus)
-          goto 1
-       end if
-       
        if (ant_on) then
           istatus = nf90_def_dim (ncid, "nk_stir", nk_stir, nk_stir_dim)
           if (istatus /= NF90_NOERR) then
@@ -402,7 +302,7 @@ contains
        
        if (n_elements > 0) then
           istatus = nf90_def_var (ncid, "gr", netcdf_real, &
-               (/ thetaid, signid, gloid /), gr_id)
+               (/ thetaid, vpaid, gloid /), gr_id)
           if (istatus /= NF90_NOERR) then
              ierr = error_unit()
              write(ierr,*) "nf90_def_var g error: ", nf90_strerror(istatus)
@@ -410,7 +310,7 @@ contains
           end if
           
           istatus = nf90_def_var (ncid, "gi", netcdf_real, &
-               (/ thetaid, signid, gloid /), gi_id)
+               (/ thetaid, vpaid, gloid /), gi_id)
           if (istatus /= NF90_NOERR) then
              ierr = error_unit()
              write(ierr,*) "nf90_def_var g error: ", nf90_strerror(istatus)
@@ -471,68 +371,6 @@ contains
              end if
           end if
 
-          !<DD> Added for saving distribution function
-          IF (PRESENT(distfn)) THEN
-             !<DD 29-08-2010> Define energy and lambda variables
-             !Define energy variable 
-             istatus = nf90_def_var (ncid, "energy", netcdf_real, (/ egridid /), energy_id)
-             
-             !Check variable created successfully
-             IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_var energy error: ", nf90_strerror(istatus)
-                GOTO 1
-             END IF
-             
-             !Define lambda variable (pitch angles)
-             istatus = nf90_def_var (ncid, "lambda", netcdf_real, &
-                  (/ lgridid /), lambda_id)
-             
-             !Check variable created successfully
-             IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_var lambda error: ", nf90_strerror(istatus)
-                GOTO 1
-             END IF
-             !</DD>
-             
-             !<DD 01-09-2010> define species variable
-             !Define species variable
-             istatus = nf90_def_var (ncid, "species", netcdf_real, &
-                  (/ nspecid /), spec_id)
-             !Check variable created successfully
-             IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_var species error: ",nf90_strerror(istatus)
-                GOTO 1
-             END IF
-             !</DD>
-             
-             !<DD 02-09-2010> Define velocity variables
-             !Define vpa variable
-             istatus = nf90_def_var (ncid, "vpa", netcdf_real, &
-                  (/ thetaid, signid, gloid /), vpa_id)
-             
-             !Check variable created successfully
-             IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_var vpa error: ",nf90_strerror(istatus)
-                GOTO 1
-             END IF
-             
-             !Define vperp2 variable
-             istatus = nf90_def_var (ncid, "vperp2", netcdf_real, &
-                  (/ thetaid, gloid /), vperp2_id)
-             
-             !Check variable created successfully
-             IF (istatus /= NF90_NOERR) THEN
-                ierr = error_unit()
-                WRITE(ierr,*) "nf90_def_var vperp2 error: ",nf90_strerror(istatus)
-                GOTO 1
-             END IF
-             !</DD>
-          END IF
-          !</DD> Added for saving distribution function
        end if
 
 ! remove allocated conditional because we want to be able to restart
@@ -594,19 +432,6 @@ contains
           ! EGH>
        end if
  
-       istatus = nf90_put_var (ncid, vnm1id, vnm(1))
-       if (istatus /= NF90_NOERR) then
-          ierr = error_unit()
-          write (ierr,*) "nf90_put_var vnm(1) error: ", nf90_strerror(istatus)
-          goto 1
-       end if
- 
-       istatus = nf90_put_var (ncid, vnm2id, vnm(2))
-       if (istatus /= NF90_NOERR) then
-          ierr = error_unit()
-          write (ierr,*) "nf90_put_var vnm(2) error: ", nf90_strerror(istatus)
-          goto 1
-       end if
 # ifdef NETCDF_PARALLEL
     endif
 # endif
@@ -660,7 +485,7 @@ contains
        end if
 
        if (.not. allocated(tmpr)) &
-            allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+            allocate (tmpr(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
 
        tmpr = real(g)
 
@@ -674,7 +499,7 @@ contains
           istatus = nf90_var_par_access(ncid, gi_id, NF90_COLLECTIVE)
 
           start_pos = (/1,1,g_lo%llim_proc+1/)
-          counts = (/2*ntgrid+1, 2, n_elements/)
+          counts = (/2*ntgrid+1, 2*nvgrid+1, n_elements/)
 
           istatus = nf90_put_var (ncid, gr_id, tmpr, start=start_pos, count=counts)
        endif
@@ -695,40 +520,6 @@ contains
 
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gi_id)
        
-       !<DD> Added for saving distribution function
-       IF (PRESENT(distfn)) THEN
-        	!<DD 29-08-2010> Fill energy and lambda information
-
-	        !Store variable energy
-	        istatus = nf90_put_var (ncid, energy_id, energy)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, energy_id)
-	
-	        !Store variable lambda
-	        istatus = nf90_put_var (ncid, lambda_id, al)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, lambda_id)
-	        !</DD>
-	
-	        !<DD 02-09-2010> Fill velocity variables
-	
-	        !Store variable vpa
-	        istatus = nf90_put_var (ncid, vpa_id, vpa)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vpa_id)
-	
-	        !Store variable vperp2
-	        istatus = nf90_put_var (ncid, vperp2_id, vperp2)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vperp2_id)
-	        !</DD>
-       END IF
-       !</DD> Added for saving distribution function
-
 # ifdef NETCDF_PARALLEL                    
        if(save_many .or. iproc == 0) then
 # endif
@@ -811,10 +602,11 @@ contains
     use kt_grids, only: naky, ntheta0
 # endif
     use theta_grid, only: ntgrid
+    use vpamu_grids, only: nvgrid
     use gs2_layouts, only: g_lo
     use file_utils, only: error_unit
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
@@ -854,8 +646,8 @@ contains
        istatus = nf90_inq_dimid (ncid, "theta", thetaid)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='theta')
        
-       istatus = nf90_inq_dimid (ncid, "sign", signid)
-       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='sign')
+       istatus = nf90_inq_dimid (ncid, "vpa", vpaid)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='vpa')
        
        istatus = nf90_inq_dimid (ncid, "glo", gloid)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='glo')
@@ -870,9 +662,9 @@ contains
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=thetaid)
        if (i /= 2*ntgrid + 1) write(*,*) 'Restart error: ntgrid=? ',i,' : ',ntgrid,' : ',iproc
        
-       istatus = nf90_inquire_dimension (ncid, signid, len=i)
-       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=signid)
-       if (i /= 2) write(*,*) 'Restart error: sign=? ',i,' : ',iproc
+       istatus = nf90_inquire_dimension (ncid, vpaid, len=i)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=vpaid)
+       if (i /= 2*nvgrid + 1) write(*,*) 'Restart error: nvgrid=? ',i,' : ',nvgrid,' : ',iproc
        
        istatus = nf90_inquire_dimension (ncid, gloid, len=i)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, dimid=gloid)
@@ -930,9 +722,9 @@ contains
     end if
     
     if (.not. allocated(tmpr)) &
-         allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+         allocate (tmpr(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
     if (.not. allocated(tmpi)) &
-         allocate (tmpi(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+         allocate (tmpi(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
 
     tmpr = 0.; tmpi = 0.
 # ifdef NETCDF_PARALLEL
@@ -942,7 +734,7 @@ contains
 #ifdef NETCDF_PARALLEL
     else
        start_pos = (/1,1,g_lo%llim_proc+1/)
-       counts = (/2*ntgrid+1, 2, n_elements/)
+       counts = (/2*ntgrid+1, 2*nvgrid+1, n_elements/)
        istatus = nf90_get_var (ncid, gr_id, tmpr, start=start_pos, count=counts)
     end if
 # endif
@@ -1152,65 +944,6 @@ contains
 
   end subroutine init_dt
 
-  subroutine init_vnm (vnm, istatus)
-
-# ifdef NETCDF
-    use mp, only: nproc, proc0, iproc,broadcast
-    use file_utils, only: error_unit
-# endif
-    implicit none
-    real, dimension(2), intent (in out) :: vnm
-    integer, intent (out) :: istatus
-# ifdef NETCDF
-    character (306) :: file_proc
-
-    if (proc0) then
-       if (.not.initialized) then
-
-# ifdef NETCDF_PARALLEL
-          if(read_many) then
-# endif
-             file_proc=trim(trim(restart_file)//'.0')
-# ifdef NETCDF_PARALLEL
-          else 
-             file_proc=trim(trim(restart_file))
-          end if
-# endif
-
-          istatus = nf90_open (file_proc, 0, ncid)
-          if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=file_proc)
-
-          istatus = nf90_inq_varid (ncid, "vnm1", vnm1id)
-          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='vnm1')
-
-          istatus = nf90_inq_varid (ncid, "vnm2", vnm2id)
-          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='vnm2')
-       end if
-
-       istatus = nf90_get_var (ncid, vnm1id, vnm(1))
-
-       if (istatus /= NF90_NOERR) then
-          call netcdf_error (istatus, ncid, vnm1id, message=' in init_vnm')
-          vnm(1) = 0.
-       endif           
-
-       istatus = nf90_get_var (ncid, vnm2id, vnm(2))
-
-       if (istatus /= NF90_NOERR) then
-          call netcdf_error (istatus, ncid, vnm2id, message=' in init_vnm')
-          vnm(2) = 0.
-       endif           
-
-       if (.not. initialized) istatus = nf90_close (ncid)
-    endif
-
-    call broadcast (istatus)
-    call broadcast (vnm)
-
-# endif
-
-  end subroutine init_vnm
-
 ! This routine gets a_ant and b_ant for proc 0 only!!
   subroutine init_ant_amp (a_ant, b_ant, nk_stir, istatus)
 
@@ -1347,187 +1080,5 @@ contains
 # endif
 
   end subroutine init_tstart
-!!$
-!!$# ifdef NETCDF
-!!$  function get_netcdf_code_precision () result (code_real)
-!!$
-!!$    use file_utils, only: error_unit
-!!$    use constants, only: pi, kind_rs, kind_rd
-!!$    integer :: code_real
-!!$    integer :: ierr
-!!$
-!!$    ! second condition for Cray
-!!$    if ( (kind(pi)==kind_rs) .or. (kind_rs==kind_rd) ) then
-!!$       code_real = NF90_FLOAT
-!!$    else if (kind(pi)==kind_rd) then
-!!$       code_real = NF90_DOUBLE
-!!$    else
-!!$       ierr = error_unit()
-!!$       write (ierr,*) 'ERROR: precision mismatch in get_netcdf_code_precision'
-!!$    end if
-!!$
-!!$  end function get_netcdf_code_precision
-!!$
-!!$  subroutine check_netcdf_file_precision (ncid, filename)
-!!$
-!!$    use file_utils, only: error_unit
-!!$
-!!$    integer (kind_nf), intent (in), optional :: ncid
-!!$    character (*), intent (in), optional :: filename
-!!$    integer (kind_nf) :: file_real
-!!$    integer (kind_nf) :: ist, ncid_private, tid
-!!$    integer :: ierr
-!!$
-!!$    ist = NF90_NOERR
-!!$    file_real = -1
-!!$
-!!$    if (present(ncid)) then
-!!$       if (present(filename)) then
-!!$          ierr = error_unit()
-!!$          write (ierr,*) 'WARNING: in calling check_netcdf_file_precision'
-!!$          write (ierr,*) &
-!!$               'WARNING: both filename and ncid given -- filename ignored'
-!!$       end if
-!!$       ncid_private = ncid
-!!$    else
-!!$       if (present(filename)) then
-!!$          ist = nf90_open (filename, NF90_NOWRITE, ncid_private)
-!!$          if (test) write (error_unit(),*) &
-!!$               'opened netcdf file ', trim(filename), ' with ncid: ', &
-!!$               ncid_private, ' in check_netcdf_file_precision'
-!!$          if (ist /= NF90_NOERR) then
-!!$             call netcdf_error (ist, file=filename)
-!!$             return
-!!$          end if
-!!$       else
-!!$          ierr = error_unit()
-!!$          write (ierr,*) 'ERROR: in calling check_netcdf_file_precision'
-!!$          write (ierr,*) 'ERROR: either filename or ncid should be given'
-!!$          return
-!!$       end if
-!!$    end if
-!!$
-!!$    ist = nf90_inq_varid (ncid_private, 't0', tid)
-!!$    if (ist /= NF90_NOERR) call netcdf_error (ist, var='t0')
-!!$
-!!$    ! get file_real
-!!$    if (ist == NF90_NOERR) then
-!!$       ist = nf90_inquire_variable (ncid_private, tid, xtype=file_real)
-!!$       if (ist /= NF90_NOERR) call netcdf_error (ist, ncid_private, tid)
-!!$    end if
-!!$
-!!$    if (.not.present(ncid)) then
-!!$       ist = nf90_close (ncid_private)
-!!$       if (ist /= NF90_NOERR) call netcdf_error (ist, file=filename)
-!!$    end if
-!!$
-!!$    ! check if file_real == code_real
-!!$    if (file_real /= netcdf_real) then
-!!$       ierr = error_unit()
-!!$       write (ierr,*) 'WARNING: precision mismatch in input netcdf file and running code'
-!!$       if (file_real == NF90_FLOAT) then
-!!$          write (ierr,*) 'WARNING: file_real = NF90_FLOAT'
-!!$       else if (file_real == NF90_DOUBLE) then
-!!$          write (ierr,*) 'WARNING: file_real = NF90_DOUBLE'
-!!$       else
-!!$          write (ierr,*) 'WARNING: unknown file_real', file_real
-!!$       end if
-!!$       if (netcdf_real == NF90_FLOAT) then
-!!$          write (ierr,*) 'WARNING: code_real = NF90_FLOAT'
-!!$       else if (netcdf_real == NF90_DOUBLE) then
-!!$          write (ierr,*) 'WARNING: code_real = NF90_DOUBLE'
-!!$       else
-!!$          write (ierr,*) 'WARNING: unknown code_real'
-!!$       end if
-!!$    end if
-!!$
-!!$  end subroutine check_netcdf_file_precision
-!!$
-!!$  subroutine netcdf_error &
-!!$       (istatus, ncid, varid, dimid, file, dim, var, att, message)
-!!$
-!!$    use mp, only: proc0, iproc
-!!$    use file_utils, only: error_unit
-!!$    use netcdf, only: NF90_GLOBAL
-!!$
-!!$    integer (kind_nf), intent (in) :: istatus
-!!$    integer (kind_nf), intent (in), optional :: ncid
-!!$    integer (kind_nf), intent (in), optional :: varid
-!!$    integer (kind_nf), intent (in), optional :: dimid
-!!$    character (*), intent (in), optional :: file
-!!$    character (*), intent (in), optional :: dim
-!!$    character (*), intent (in), optional :: var
-!!$    character (*), intent (in), optional :: att
-!!$    character (*), intent (in), optional :: message
-!!$    integer (kind_nf) :: ist
-!!$    integer :: ierr
-!!$    character (20) :: varname, dimname
-!!$
-!!$    ierr = error_unit()
-!!$
-!!$    write (ierr, '(2a,$)') 'ERROR: ', trim (nf90_strerror (istatus))
-!!$    ! TT: If $ control fails, there is an alternative advance='no' specifier
-!!$
-!!$    if (present(file)) &
-!!$         write (ierr, '(2a,$)') ' in file: ', trim (file)
-!!$
-!!$    if (present(dim)) &
-!!$         write (ierr, '(2a,$)') ' in dimension: ', trim (dim)
-!!$
-!!$    if (present(var)) &
-!!$         write (ierr, '(2a,$)') ' in variable: ', trim (var)
-!!$
-!!$    if (present(varid)) then
-!!$       if (present(ncid)) then
-!!$          if ( (varid == NF90_GLOBAL) .and. present(att) ) then
-!!$             write (ierr, '(2a)') ' in global attribute: ', trim(att)
-!!$             return
-!!$          else
-!!$             ist = nf90_inquire_variable (ncid, varid, varname)
-!!$             if (ist == NF90_NOERR) then
-!!$                write (ierr, '(a,i8,2a,$)') ' in varid: ', varid, &
-!!$                     & ' variable name: ', trim (varname)
-!!$             else
-!!$                write (ierr, *) ''
-!!$                write (ierr, '(3a,i8,a,i8,$)') 'ERROR in netcdf_error: ', &
-!!$                     trim (nf90_strerror(ist)), ' in varid: ', varid, &
-!!$                     ', ncid: ', ncid
-!!$             end if
-!!$          end if
-!!$          if (present(att)) &
-!!$               write (ierr, '(2a)') ' with the attribute: ', trim(att)
-!!$       else
-!!$          write (ierr, *) ''
-!!$          write (ierr, '(2a,$)') 'ERROR in netcdf_error: ', &
-!!$               & 'ncid missing while varid present in the argument'
-!!$       end if
-!!$    end if
-!!$
-!!$    if (present(dimid)) then
-!!$       if (present(ncid)) then
-!!$          ist = nf90_inquire_dimension (ncid, dimid, dimname)
-!!$          if (ist == NF90_NOERR) then
-!!$             write (ierr, '(a,i8,2a,$)') ' in dimid: ', dimid, &
-!!$                  & ' dimension name: ', trim (dimname)
-!!$          else
-!!$             write (ierr, *) ''
-!!$             write (ierr, '(3a,i8,a,i8,$)') 'ERROR in netcdf_error: ', &
-!!$                  trim (nf90_strerror(ist)), ' in dimid: ', dimid, &
-!!$                  ', ncid: ', ncid
-!!$          end if
-!!$       else
-!!$          write (ierr, *) ''
-!!$          write (ierr, '(2a,$)') 'ERROR in netcdf_error: ', &
-!!$               & 'ncid missing while dimid present in the argument'
-!!$       end if
-!!$    end if
-!!$
-!!$    if (present(message)) write (ierr, '(a,$)') trim(message)
-!!$
-!!$    write (ierr, '(a,i8)') ' on iproc: ', iproc
-!!$
-!!$  end subroutine netcdf_error
-!!$# endif
-!!$! <TT
 
 end module gs2_save

@@ -3,7 +3,7 @@
 ! of the supercells.
 
 module gs2_diagnostics
-  use gs2_heating, only: heating_diagnostics
+
   use gs2_save, only: save_many
 
   implicit none
@@ -44,23 +44,19 @@ module gs2_diagnostics
   logical, public :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
   logical, public :: write_final_moments, write_avg_moments
   logical, public :: write_moments, write_final_db
-  logical, public :: write_full_moments_notgc, write_cross_phase = .false.
-  logical, public :: write_final_epar, write_kpar
-  logical, public :: write_hrate, write_lorentzian
+  logical, public :: write_full_moments_notgc!, write_cross_phase = .false.
+  logical, public :: write_kpar
+  logical, public :: write_lorentzian
   logical, public :: write_nl_flux
   logical, public :: exit_when_converged
   logical, public :: dump_check1, dump_check2
   logical, public :: dump_fields_periodically, make_movie
   logical, public :: save_for_restart
-  logical, public :: save_distfn !<DD> Added for saving distribution function
   logical, public :: write_correlation_extend, write_correlation
   integer, public :: nwrite, igomega, nmovie
   integer, public :: navg, nsave, nwrite_mult
 
   logical, public :: write_phi_over_time, write_apar_over_time, write_bpar_over_time !EGH
-!>GGH
-  logical :: write_jext=.false.
-!<GGH
 
   ! internal
   logical :: write_any, write_any_fluxes, dump_any
@@ -69,31 +65,25 @@ module gs2_diagnostics
   namelist /gs2_diagnostics_knobs/ print_line, print_flux_line, &
          write_line, write_flux_line, &
          write_omega, write_omavg, write_ascii, write_kpar, &
-         write_gs, write_gyx, write_g, write_gg, write_hrate, &
+         write_gs, write_gyx, write_g, write_gg, &
          write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
-         write_final_epar, write_moments, write_final_moments, &
+         write_moments, write_final_moments, &
          write_nl_flux, write_final_db, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, write_avg_moments, &
-         write_full_moments_notgc, write_cross_phase, &
+         write_full_moments_notgc, &!write_cross_phase, &
          dump_check1, dump_check2, &
          dump_fields_periodically, make_movie, &
          save_for_restart, save_many, &
-         save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2
-  integer :: jext_unit   !GGH Additions
   integer :: phase_unit
   integer :: dump_check1_unit, dump_check2_unit
 
   complex, dimension (:,:,:), allocatable :: omegahist
   ! (navg,ntheta0,naky)
-  type (heating_diagnostics), save :: h
-  type (heating_diagnostics), dimension(:), save, allocatable :: h_hist
-  type (heating_diagnostics), dimension(:,:), save, allocatable :: hk
-  type (heating_diagnostics), dimension(:,:,:), save, allocatable :: hk_hist
   !GGH J_external
   real, dimension(:,:,:), allocatable ::  j_ext_hist
 
@@ -147,11 +137,9 @@ contains
           write (unit, fmt="(' write_omega = ',L1)") write_omega
           write (unit, fmt="(' write_omavg = ',L1)") write_omavg
        end if
-       write (unit, fmt="(' write_hrate = ',L1)") write_hrate
        write (unit, fmt="(' write_lorentzian = ',L1)") write_lorentzian
        write (unit, fmt="(' write_eigenfunc = ',L1)") write_eigenfunc
        write (unit, fmt="(' write_final_fields = ',L1)") write_final_fields
-       write (unit, fmt="(' write_final_epar = ',L1)") write_final_epar
        write (unit, fmt="(' write_final_db = ',L1)") write_final_db
        write (unit, fmt="(' write_final_moments = ',L1)") write_final_moments
        write (unit, fmt="(' write_final_antot = ',L1)") write_final_antot
@@ -298,13 +286,6 @@ contains
        end if
     end if
 
-    if (write_final_epar) then
-       if (write_ascii) then
-          write (report_unit, fmt="('write_final_epar = T:      E_parallel(theta) written to ',a)") trim(run_name)//'.epar'
-       end if
-       write (report_unit, fmt="('write_final_epar = T:      E_parallel(theta) written to ',a)") trim(run_name)//'.out.nc'
-    end if
-
     if (write_nl_flux) then
        if (write_ascii) then
           write (report_unit, fmt="('write_nl_flux = T:         Phi**2(kx, ky) written to ',a)") trim(run_name)//'.out'
@@ -353,7 +334,6 @@ contains
     use dist_fn, only: init_dist_fn
     use init_g, only: init_init_g
     use gs2_io, only: init_gs2_io
-    use gs2_heating, only: init_htype
     use mp, only: broadcast, proc0
 
     implicit none
@@ -379,7 +359,7 @@ contains
     call broadcast (nsave)
     call broadcast (write_any)
     call broadcast (write_any_fluxes)
-    call broadcast (write_cross_phase)
+!    call broadcast (write_cross_phase)
     call broadcast (write_nl_flux)
     call broadcast (write_omega)
     call broadcast (dump_any)
@@ -391,7 +371,6 @@ contains
     call broadcast (make_movie)
     call broadcast (save_for_restart)
     call broadcast (save_many)
-    call broadcast (save_distfn) !<DD> Added for saving distribution function
     call broadcast (write_gs)
     call broadcast (write_g)
     call broadcast (write_gyx)
@@ -399,7 +378,6 @@ contains
     call broadcast (write_final_antot)
 
     call broadcast (ntg_out)
-    call broadcast (write_hrate)
     call broadcast (write_lorentzian)
     call broadcast (write_eigenfunc)
 
@@ -411,29 +389,8 @@ contains
     nmovie_tot = nstep/nmovie
     nwrite_big_tot = nstep/(nwrite*nwrite_mult)-nstep/4/(nwrite*nwrite_mult)
 
-! allocate heating diagnostic data structures
-    if (write_hrate) then
-       allocate (h_hist(0:navg-1))
-       call init_htype (h_hist,  nspec)
-
-       allocate (hk_hist(ntheta0,naky,0:navg-1))
-       call init_htype (hk_hist, nspec)
-
-       call init_htype (h,  nspec)
-
-       allocate (hk(ntheta0, naky))
-       call init_htype (hk, nspec)
-    else
-       allocate (h_hist(0))
-       allocate (hk(1,1))
-       allocate (hk_hist(1,1,0))
-    end if
-       
-!GGH Allocate density and velocity perturbation diagnostic structures
-    if (write_jext) allocate (j_ext_hist(ntheta0, naky,0:navg-1)) 
-
     call init_gs2_io (write_nl_flux, write_omega, &
-         write_hrate, write_final_antot, &
+         write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot, &
          write_fields, write_moments, write_full_moments_notgc, &
          write_correlation, nwrite_big_tot, write_correlation_extend, &
@@ -467,23 +424,9 @@ contains
 !          if (write_kpar) call open_output_file (kp_unit, ".kp")
        end if             
 
-       if (write_cross_phase .and. write_ascii) then
-          call open_output_file (phase_unit, ".phase")
-       end if
-
-       if (write_hrate .and. write_ascii) then
-          call open_output_file (heat_unit, ".heat")
-          call open_output_file (heat_unit2, ".heat2")
-       end if
-
-       !GGH J_external, only if A_parallel is being calculated.
-       if (write_jext .and. fapar > epsilon(0.0)) then
-          if (write_ascii) then
-             call open_output_file (jext_unit, ".jext")
-          end if
-       else
-          write_jext = .false.
-       end if
+!       if (write_cross_phase .and. write_ascii) then
+!          call open_output_file (phase_unit, ".phase")
+!       end if
 
        if (dump_check1) then
           call get_unused_unit (dump_check1_unit)
@@ -550,7 +493,6 @@ contains
        write_line = .true.
        write_flux_line = .true.
        write_kpar = .false.
-       write_hrate = .false.
        write_gs = .false.
        write_g = .false.
        write_gyx = .false.
@@ -570,7 +512,6 @@ contains
        write_full_moments_notgc = .false.
        write_final_fields = .false.
        write_final_antot = .false.
-       write_final_epar = .false.
        write_final_db = .false.
        nwrite = 100
        nmovie = 1000
@@ -587,7 +528,6 @@ contains
        make_movie = .false.
        save_for_restart = .false.
        save_many = .false.
-       save_distfn = .false. !<DD> Added for saving distribution function
        write_phi_over_time = .false.
        write_bpar_over_time = .false.
        write_apar_over_time = .false.
@@ -611,7 +551,7 @@ contains
 
        write_any = write_line .or. write_omega     .or. write_omavg &
             .or. write_flux_line                   .or. write_nl_flux  &
-            .or. write_kpar   .or. write_hrate     .or. write_lorentzian  .or. write_gs
+            .or. write_kpar   .or. write_lorentzian  .or. write_gs
        write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux 
        dump_any = dump_check1  .or. dump_fields_periodically &
             .or.  dump_check2 .or. make_movie .or. print_summary &
@@ -631,8 +571,9 @@ contains
     use theta_grid, only: drhodpsi, qval, shape
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, akx, aky
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
-    use dist_fn, only: getan, get_epar, getmoms, par_spectrum
-    use dist_fn, only: write_f, write_fyx, def_parity, even
+    use dist_fn, only: getan, getmoms, par_spectrum
+!    use dist_fn, only: write_f, write_fyx, def_parity, even
+    use dist_fn, only: write_f, def_parity, even
     use dist_fn_arrays, only: g_adjust
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: xxf_lo
@@ -640,12 +581,10 @@ contains
     use gs2_save, only: gs2_save_for_restart
     use constants
     use gs2_time, only: user_time, user_dt, code_dt
-    use gs2_io, only: nc_eigenfunc, nc_final_fields, nc_final_epar, nc_final_an
+    use gs2_io, only: nc_eigenfunc, nc_final_fields, nc_final_an
     use gs2_io, only: nc_final_moments, nc_finish
     use antenna, only: dump_ant_amp
     use splines, only: fitp_surf1, fitp_surf2
-    use gs2_heating, only: del_htype
-!    use gs2_dist_io, only: write_dist
     implicit none
     integer, intent (in) :: istep
     integer :: ig, ik, it, il, ie, is, unit, ierr
@@ -656,7 +595,7 @@ contains
     real, dimension (:,:,:), allocatable :: bxf, byf, vxf, vyf, bxfsavg, byfsavg
     real, dimension (:,:,:), allocatable :: bxfs, byfs, vxfs, vyfs, rvx, rvy, rx, ry
     complex, dimension (:,:,:), allocatable :: bx, by, vx, vy, vx2, vy2
-    complex, dimension (:,:,:), allocatable :: phi2, apar2, bpar2, antot, antota, antotp, epar
+    complex, dimension (:,:,:), allocatable :: phi2, apar2, bpar2, antot, antota, antotp
     complex, dimension (:,:,:,:), allocatable :: ntot, density, upar, tpar, tperp
     complex, dimension (:,:,:,:), allocatable :: qparflux, pperpj1, qpperpj1
     real, dimension (:), allocatable :: dl_over_b
@@ -672,7 +611,7 @@ contains
     integer :: istatus, nnx, nny, nnx4, nny4, ulim, llim, iblock, i, g_unit
     logical :: last = .true.
 
-    if (write_gyx) call write_fyx (phinew,bparnew,last)
+!    if (write_gyx) call write_fyx (phinew,bparnew,last)
     if (write_g) call write_f (last)
 !    if (write_gg) call write_dist (g)
 
@@ -680,10 +619,7 @@ contains
 
     if (proc0) then
        if (write_ascii) call close_output_file (out_unit)
-       if (write_ascii .and. write_cross_phase) call close_output_file (phase_unit)
-       if (write_ascii .and. write_hrate) call close_output_file (heat_unit)
-       if (write_ascii .and. write_hrate) call close_output_file (heat_unit2)
-       if (write_ascii .and. write_jext) call close_output_file (jext_unit)
+!       if (write_ascii .and. write_cross_phase) call close_output_file (phase_unit)
 
        if (dump_check1) close (dump_check1_unit)
        if (dump_check2) call close_output_file (dump_check2_unit)
@@ -787,30 +723,6 @@ contains
           deallocate (phi2, apar2, bpar2)
        end if
 
-       if (write_final_epar) then
-          allocate (epar(-ntgrid:ntgrid,ntheta0,naky))   ; epar = 0.
-
-          call get_epar (phi, apar, phinew, aparnew, epar)
-          if (write_ascii) then
-             call open_output_file (unit, ".epar")
-             do ik = 1, naky
-                do it = 1, ntheta0
-                   do ig = -ntg_out, ntg_out-1
-                      write (unit, "(6(1x,e12.5))") &
-!                           theta(ig), theta0(it,ik), aky(ik), &
-                           theta(ig), aky(ik), akx(it), &
-                           epar(ig,it,ik), &
-                           theta(ig) - theta0(it,ik)
-                   end do
-                   write (unit, "()")
-                end do
-             end do
-             call close_output_file (unit)
-          end if
-          call nc_final_epar (epar  )
-          deallocate (epar)
-       end if
-   
        if (write_final_db) then  ! definition here assumes we are not using wstar_units
           db = 0.
           do ik = 1, naky
@@ -974,21 +886,6 @@ contains
             fphi, fapar, fbpar, exit_in=.true.)
     end if
 
-    !<DD> Added for saving distribution function
-    if (save_distfn) then
-    	!Convert h to distribution function
-    	call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
-    	
-    	!Save dfn, fields and velocity grids to file
-       	call gs2_save_for_restart (gnew, user_time, user_dt, istatus, &
-          	fphi, fapar, fbpar, exit_in=.true.,distfn=.true.)
-    	
-        !Convert distribution function back to h
-        call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
-    end if
-
-    !</DD> Added for saving distribution function
-    
     call nc_finish
 
     if (proc0) call dump_ant_amp
@@ -1287,13 +1184,6 @@ contains
        call close_output_file (g_unit)
     end if
 
-    if (write_hrate) then
-       call del_htype (h)
-       call del_htype (h_hist)
-       call del_htype (hk_hist)
-       call del_htype (hk)
-    end if
-    if (allocated(h_hist)) deallocate (h_hist, hk_hist, hk)
     if (allocated(j_ext_hist)) deallocate (j_ext_hist)
     if (allocated(omegahist)) deallocate (omegahist)
     if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
@@ -1318,27 +1208,27 @@ contains
     use run_parameters, only: nstep
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
-    use dist_fn, only: flux, write_f, write_fyx
+    use dist_fn, only: flux, write_f!, write_fyx
     use dist_fn, only: omega0, gamma0, getmoms, par_spectrum
-    use dist_fn, only: getmoms_notgc, lf_flux, eexchange
-    use dist_fn_arrays, only: g, gnew, aj0, vpa, g_adjust
+    use dist_fn, only: getmoms_notgc, eexchange
+# ifdef LOWFLOW
+    use dist_fn, only: lf_flux
+# endif
+    use dist_fn_arrays, only: g, gnew, aj0, g_adjust
+    use vpamu_grids, only: vpa
     use mp, only: proc0, broadcast, iproc, send, receive
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
     use gs2_io, only: nc_loop_fullmom, nc_loop_corr, nc_loop_corr_extend
-    use gs2_io, only: nc_loop_vres
     use gs2_io, only: nc_loop_movie, nc_write_fields, nc_write_moments
     use gs2_layouts, only: yxf_lo, g_lo
-! MAB>
     use gs2_layouts, only: idx, idx_local, proc_id
     use gs2_layouts, only: is_idx, it_idx, ik_idx
-! <MAB
     use gs2_transforms, only: init_transforms, transform2
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
-    use gs2_heating, only: heating_diagnostics, del_htype
     use constants
     use parameter_scan_arrays, only: scan_hflux => hflux_tot 
     use parameter_scan_arrays, only: scan_momflux => momflux_tot 
@@ -1429,16 +1319,6 @@ contains
        call broadcast (exit)
     endif
 
-    if (write_hrate) call heating (istep, h, hk)
-
-!>GGH
-    !Write Jexternal vs. time
-    if (write_jext) then
-       allocate (j_ext(ntheta0, naky)); j_ext=0.
-       call calc_jext(istep,j_ext)
-    endif
-!<GGH
-
     call prof_leaving ("loop_diagnostics")
 if (debug) write(6,*) "loop_diagnostics: call update_time"
 
@@ -1475,7 +1355,7 @@ if (debug) write(6,*) "loop_diagnostics: call update_time"
 
     end if
 
-    if (write_gyx .and. mod(istep,nmovie) == 0) call write_fyx (phinew,bparnew,last)
+!    if (write_gyx .and. mod(istep,nmovie) == 0) call write_fyx (phinew,bparnew,last)
 
     if (mod(istep,nwrite) /= 0 .and. .not. exit) return
     t = user_time
@@ -1594,7 +1474,6 @@ if (debug) write(6,*) "loop_diagnostics: -1"
           pflux_avg = pflux_avg + (part_fluxes + mpart_fluxes + bpart_fluxes)*(t-t_old)
           qflux_avg = qflux_avg + (heat_fluxes + mheat_fluxes + bheat_fluxes)*(t-t_old)
           vflux_avg = vflux_avg + (mom_fluxes + mmom_fluxes + bmom_fluxes)*(t-t_old)
-          if (write_hrate) heat_avg = heat_avg + h%imp_colls*(t-t_old)
 !          t_old = t
        end if
     end if
@@ -1602,7 +1481,6 @@ if (debug) write(6,*) "loop_diagnostics: -1"
     call broadcast (pflux_avg)
     call broadcast (qflux_avg)
     call broadcast (vflux_avg)
-    if (write_hrate) call broadcast (heat_avg)
 
     fluxfac = 0.5
     fluxfac(1) = 1.0
@@ -1659,11 +1537,11 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        call nc_write_moments(nout, ntot)
     endif
 
-    if (write_cross_phase .and. has_electron_species(spec)) then
-       call get_cross_phase (phase_tot, phase_theta)
-       if (proc0) write (unit=phase_unit, fmt="('t= ',e16.10,' phase_tot= ',e10.4,' phase_theta= ',e10.4)") &
-            & t, phase_tot, phase_theta
-    end if
+!     if (write_cross_phase .and. has_electron_species(spec)) then
+!        call get_cross_phase (phase_tot, phase_theta)
+!        if (proc0) write (unit=phase_unit, fmt="('t= ',e16.10,' phase_tot= ',e10.4,' phase_theta= ',e10.4)") &
+!             & t, phase_tot, phase_theta
+!     end if
 
     call prof_leaving ("loop_diagnostics-1")
 
@@ -1676,119 +1554,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 
     if (proc0 .and. write_any) then
        if (write_ascii) write (unit=out_unit, fmt=*) 'time=', t
-       if (write_ascii .and. write_hrate) then
-!
-! For case with two species:
-!
-! Column     Item               
-!   1        time              
-!   2        Energy              
-!   3        dEnergy/dt            
-!   4        J_ant.E             
-!   5        [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0 for species 1
-!   6        [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0 for species 2
-!   7       -[h H(h) * T_0]_1
-!   8       -[h H(h) * T_0]_2
-!   9       -[h C(h) * T_0]_1 
-!  10       -[h C(h) * T_0]_2
-!  11        [h w_* h]_1
-!  12        [h w_* h]_2
-!  13        [h * (q dchi/dt - dh/dt * T0)]_1
-!  14        [h * (q dchi/dt - dh/dt * T0)]_2
-!  15      sum (h C(h) * T_0)  in total, as in 5, 6      
-!  16     -sum (h H(h) * T_0)      
-!  17     -sum (h C(h) * T_0)   
-!  18      sum (h w_* h)  
-!  19      sum [h (q dchi/dt - dh/dt * T0)]
-!  20      3 + 4 + 18 + 19
-!  21      (k_perp A)**2
-!  22      B_par**2
-!  23      df_1 ** 2
-!  24      df_2 ** 2
-!  25      h_1 ** 2
-!  26      h_2 ** 2
-!  27      Phi_bar_1 ** 2
-!  28      Phi_bar_2 ** 2
-!
-!
-! For case with one species:
-!
-! Column     Item               
-!   1        time              
-!   2        Energy              
-!   3        dEnergy/dt            
-!   4        J_ant.E             
-!   5        [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0 
-!   6       -[h H(h) * T_0]
-!   7       -[h C(h) * T_0]
-!   8        [h w_* h]
-!   9        [h * (q dchi/dt - dh/dt * T0)]_1
-!  10      sum (h C(h) * T_0)  in total, as in 5, 6      
-!  11     -sum (h H(h) * T_0)      
-!  12     -sum (h C(h) * T_0)   
-!  13      sum (h w_* h)  
-!  14      sum [h (q dchi/dt - dh/dt * T0)]
-!  15      3 + 4 + 9 + 10
-!  16      (k_perp A)**2
-!  17      B_par**2
-!  18      df ** 2
-!  19      h ** 2
-!  20      Phi_bar ** 2
-
-          write (unit=heat_unit, fmt="(28es12.4)") t,h % energy,  &
-               h % energy_dot, h % antenna, h % imp_colls, h % hypercoll, h % collisions, &
-               h % gradients, h % heating, sum(h % imp_colls), sum(h % hypercoll), sum(h % collisions), &
-               sum(h % gradients), sum(h % heating),sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot, &
-               h % eapar, h % ebpar, h % delfs2(:),  h % hs2(:), h % phis2(:)
-          
-          do is=1,nspec
-             write (unit=heat_unit2, fmt="(15es12.4)") t,h % energy,  &
-                  h % energy_dot, h % antenna, h % imp_colls(is), h % hypercoll(is), h % collisions(is), &
-                  h % gradients(is), h % heating(is), &
-                  h % eapar, h % ebpar, h % delfs2(is),  h % hs2(is), h % phis2(is), real(is)
-             write (unit=heat_unit2, fmt=*)
-          end do
-          write (unit=heat_unit2, fmt=*)
-
-          call flush_output_file (heat_unit, ".heat")
-          call flush_output_file (heat_unit2, ".heat2")
-
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' energy= ',e12.6)") t, h % energy
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' energy_dot= ',e12.6)") t, h % energy_dot
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' J_ant.E= ',e12.6)") t, h % antenna
-
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hyperC= ',12(1x,e12.6))") t, h % hypercoll
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hCh= ',12(1x,e12.6))") t, h % collisions
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hw*= ',12(1x,e12.6))") t, h % gradients
-!GGH!         write (unit=heat_unit, fmt="('t= ',e12.6,' hwd= ',12(1x,e12.6))") t, h % curvature
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' heating= ',12(1x,e12.6))") t, h % heating
-
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hvisc= ',e12.6)") t, sum(h % hypervisc)
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hyperC= ',e12.6)") t, sum(h % hypercoll)
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hCh= ',e12.6)") t, sum(h % collisions)
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hw*= ',e12.6)") t, sum(h % gradients)
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_heating= ',e12.6)") t, sum(h % heating)
-
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_power= ',e12.6)") t, &
-!GGH               sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot
-          !GGH TEST try adding sqrt(2.) to the edot
-!GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_power= ',e12.6)") t, &
-!GGH               sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot*sqrt(2.)
-!GGH          write (unit=heat_unit, fmt='(a)') ''
-       end if
-
-       !Write out data for j_external
-       if (write_ascii .and. write_jext) then
-          do ik=1,naky
-             do it = 1, ntheta0
-                if (j_ext(ik,it) .ne. 0.) then
-                   write (unit=jext_unit, fmt="(es12.4,i4,i4,es12.4)")  &
-                        t,it,ik,j_ext(ik,it)
-                endif
-             enddo
-          enddo
-       end if
-!>GGH
 
        if (write_flux_line) then
           hflux_tot = 0.
@@ -1879,7 +1644,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                phinew(igomega,:,:), phi2, phi2_by_mode, &
                aparnew(igomega,:,:), apar2, apar2_by_mode, &
                bparnew(igomega,:,:), bpar2, bpar2_by_mode, &
-               h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
+               omega, omegaavg, woutunits, phitot, write_omega)
 ! below line gives out-of-bounds array for runs inside trinity
 !               scan_phi2_tot(nout) = phi2
                scan_phi2_tot(mod(nout-1,nstep/nwrite+1)+1) = phi2
@@ -2092,115 +1857,11 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        call flush_output_file (out_unit, ".out")
     end if
 
-! Deallocate variable for Jexternal
-    if (write_jext) deallocate(j_ext)
-!<GGH
-
     t_old = t
     call prof_leaving ("loop_diagnostics-2")
 
 if (debug) write(6,*) "loop_diagnostics: done"
   end subroutine loop_diagnostics
-
-  subroutine heating (istep, h, hk)
-
-    use mp, only: proc0, iproc
-    use dist_fn, only: get_heat
-    use fields, only: phi, apar, bpar, phinew, aparnew, bparnew
-    use species, only: nspec, spec
-    use kt_grids, only: naky, ntheta0, aky, akx
-    use theta_grid, only: ntgrid, delthet, jacob
-    use nonlinear_terms, only: nonlin
-    use dist_fn_arrays, only: c_rate
-    use gs2_heating, only: heating_diagnostics, avg_h, avg_hk, zero_htype
-    implicit none
-    integer, intent (in) :: istep
-    type (heating_diagnostics) :: h
-    type (heating_diagnostics), dimension(:,:) :: hk
-
-    real, dimension(-ntgrid:ntgrid) :: wgt
-    real :: fac
-    integer :: is, ik, it, ig
-    
-    !Zero out variables for heating diagnostics
-    call zero_htype(h)
-    call zero_htype(hk)
-
-    if (proc0) then
-       
-       !GGH NOTE: Here wgt is 1/(2*ntgrid+1)
-       wgt = delthet*jacob
-       wgt = wgt/sum(wgt)
-          
-       do is = 1, nspec
-          do ik = 1, naky
-             fac = 0.5
-             if (aky(ik) < epsilon(0.)) fac = 1.0
-             do it = 1, ntheta0
-                if (aky(ik) < epsilon(0.0) .and. abs(akx(it)) < epsilon(0.0)) cycle
-                do ig = -ntgrid, ntgrid
-                   
-                   !Sum heating by k over all z points (ig)
-                   hk(it, ik) % collisions(is) = hk(it, ik) % collisions(is) &
-                        + real(c_rate(ig,it,ik,is,1))*fac*wgt(ig)*spec(is)%temp*spec(is)%dens
-
-                   hk(it, ik) % hypercoll(is) = hk(it, ik) % hypercoll(is) &
-                        + real(c_rate(ig,it,ik,is,2))*fac*wgt(ig)*spec(is)%temp*spec(is)%dens
-
-                   hk(it, ik) % imp_colls(is) = hk(it, ik) % imp_colls(is) &
-                        + real(c_rate(ig,it,ik,is,3))*fac*wgt(ig)*spec(is)%temp*spec(is)%dens
-
-                end do
-                h % collisions(is) = h % collisions(is) + hk(it, ik) % collisions(is)
-                h % hypercoll(is)  = h % hypercoll(is)  + hk(it, ik) % hypercoll(is)
-                h % imp_colls(is)  = h % imp_colls(is)  + hk(it, ik) % imp_colls(is)
-             end do
-          end do
-       end do
-    end if
-
-    call get_heat (h, hk, phi, apar, bpar, phinew, aparnew, bparnew)    
-
-    call avg_h(h, h_hist, istep, navg)
-    call avg_hk(hk, hk_hist, istep, navg)
-
-  end subroutine heating
-!=============================================================================
-! Density: Calculate Density perturbations
-!=============================================================================
- subroutine calc_jext (istep, j_ext)
-    use mp, only: proc0
-    use dist_fn, only: get_jext
-    implicit none
-    !Passed
-    integer, intent (in) :: istep
-    real, dimension(:,:) ::  j_ext
-    !Local 
-    integer :: i
-
-    !Call routine to calculate density and velocity perturbations
-    call get_jext(j_ext)    
-    
-    !Do averages with a history variable
-    if (proc0) then
-       !Save variable to history
-       if (navg > 1) then
-          if (istep > 1) &
-               j_ext_hist(:,:,mod(istep,navg))= j_ext(:,:)
-
-          !Use average of history
-          if (istep >= navg) then
-             j_ext=0.
-             do i=0,navg-1
-                j_ext(:,:) = j_ext(:,:) + j_ext_hist(:,:,i)/ real(navg)
-             end do
-          end if
-       end if
-    end if
-
-  end subroutine calc_jext
-!=============================================================================
-!<GGH
 
   subroutine get_omegaavg (istep, exit, omegaavg, debopt)
     use kt_grids, only: naky, ntheta0
@@ -2372,13 +2033,6 @@ if (debug) write(6,*) "get_omegaavg: done"
        qflux_avg = sum(qflx_global(:,is))
        vflux_avg = sum(vflx_global(:,is))
     end do
-    if (write_hrate) then
-       call group_to_all (heat_avg, heat_global, nensembles)
-       do is = 1, nspec
-          call broadcast (heat_global(:,is))
-          heat_avg = sum(heat_global(:,is))
-       end do
-    end if
   end subroutine ensemble_average
 
   subroutine get_fldline_avg_r (fld_in, fld_out)
@@ -2425,57 +2079,57 @@ if (debug) write(6,*) "get_omegaavg: done"
 
   end subroutine get_fldline_avg_c
 
-  subroutine get_cross_phase (phase_tot, phase_theta)
+!   subroutine get_cross_phase (phase_tot, phase_theta)
 
-! <doc> This is a highly simplified synthetic diagnostic which 
-! calculates the cross phase between the electron density and the 
-! perpendicular electron temperature for comparisons with DIII-D.  
-! Returns the value of the cross-phase at the outboard midplane and 
-! integrated over all v and x. We can generalize this routine to 
-! other fields at some point, but for now this is just a skeleton for 
-! a more realistic synthetic diagnostic. </doc>
+! ! <doc> This is a highly simplified synthetic diagnostic which 
+! ! calculates the cross phase between the electron density and the 
+! ! perpendicular electron temperature for comparisons with DIII-D.  
+! ! Returns the value of the cross-phase at the outboard midplane and 
+! ! integrated over all v and x. We can generalize this routine to 
+! ! other fields at some point, but for now this is just a skeleton for 
+! ! a more realistic synthetic diagnostic. </doc>
 
-    use species, only: nspec, spec, electron_species
-    use kt_grids, only: ntheta0, naky
-    use theta_grid, only: ntgrid
-    use dist_fn_arrays, only: gnew
-    use dist_fn, only: getemoms
-    use mp, only: proc0
+!     use species, only: nspec, spec, electron_species
+!     use kt_grids, only: ntheta0, naky
+!     use theta_grid, only: ntgrid
+!     use dist_fn_arrays, only: gnew
+!     use dist_fn, only: getemoms
+!     use mp, only: proc0
 
-    implicit none
-    real, intent (out) :: phase_tot, phase_theta
-    complex, dimension (:,:,:,:), allocatable :: ntot, tperp
-    complex, dimension (ntheta0, naky) :: nTp_by_mode
-    complex :: nTp
-    real, dimension (ntheta0, naky) :: n2_by_mode, T2_by_mode
-    real :: n2, T2
+!     implicit none
+!     real, intent (out) :: phase_tot, phase_theta
+!     complex, dimension (:,:,:,:), allocatable :: ntot, tperp
+!     complex, dimension (ntheta0, naky) :: nTp_by_mode
+!     complex :: nTp
+!     real, dimension (ntheta0, naky) :: n2_by_mode, T2_by_mode
+!     real :: n2, T2
 
-    integer :: it, ik, is, isgn, ig
-    integer :: iglo
+!     integer :: it, ik, is, isgn, ig
+!     integer :: iglo
 
-    allocate ( ntot(-ntgrid:ntgrid,ntheta0,naky,nspec))
-    allocate (tperp(-ntgrid:ntgrid,ntheta0,naky,nspec))
+!     allocate ( ntot(-ntgrid:ntgrid,ntheta0,naky,nspec))
+!     allocate (tperp(-ntgrid:ntgrid,ntheta0,naky,nspec))
 
-    call getemoms (ntot, tperp)
+!     call getemoms (ntot, tperp)
 
-    do is = 1,nspec
-       if (spec(is)%type == electron_species) then
-          ! get cross_phase at outboard midplane
-          call get_vol_int (ntot(0,:,:,is), tperp(0,:,:,is), nTp, nTp_by_mode)
-!          call get_vol_average (ntot(0,:,:,is), ntot(0,:,:,is), n2, n2_by_mode)
-!          call get_vol_average (tperp(0,:,:,is), tperp(0,:,:,is), T2, T2_by_mode)
-          phase_theta = atan2(aimag(nTp),real(nTp))!/sqrt(n2*T2)
-          ! get integrated cross_phase 
-          call get_vol_int (ntot(:,:,:,is), tperp(:,:,:,is), nTp, nTp_by_mode)
-!          call get_vol_average (ntot(:,:,:,is), ntot(:,:,:,is), n2, n2_by_mode)
-!          call get_vol_average (tperp(:,:,:,is), tperp(:,:,:,is), T2, T2_by_mode)
-          phase_tot = atan2(aimag(nTp),real(nTp))!/sqrt(n2*T2)
-       end if
-    end do
+!     do is = 1,nspec
+!        if (spec(is)%type == electron_species) then
+!           ! get cross_phase at outboard midplane
+!           call get_vol_int (ntot(0,:,:,is), tperp(0,:,:,is), nTp, nTp_by_mode)
+! !          call get_vol_average (ntot(0,:,:,is), ntot(0,:,:,is), n2, n2_by_mode)
+! !          call get_vol_average (tperp(0,:,:,is), tperp(0,:,:,is), T2, T2_by_mode)
+!           phase_theta = atan2(aimag(nTp),real(nTp))!/sqrt(n2*T2)
+!           ! get integrated cross_phase 
+!           call get_vol_int (ntot(:,:,:,is), tperp(:,:,:,is), nTp, nTp_by_mode)
+! !          call get_vol_average (ntot(:,:,:,is), ntot(:,:,:,is), n2, n2_by_mode)
+! !          call get_vol_average (tperp(:,:,:,is), tperp(:,:,:,is), T2, T2_by_mode)
+!           phase_tot = atan2(aimag(nTp),real(nTp))!/sqrt(n2*T2)
+!        end if
+!     end do
 
-    deallocate (ntot, tperp)
+!     deallocate (ntot, tperp)
 
-  end subroutine get_cross_phase
+!   end subroutine get_cross_phase
 
   subroutine get_vol_int_all (a, b, axb, axb_by_mode)
     use theta_grid, only: ntgrid, delthet, jacob

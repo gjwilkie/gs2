@@ -13,10 +13,9 @@ module run_parameters
 !  public :: delt, delt_max, wunits, woutunits, tunits
   public :: code_delt_max, wunits, woutunits, tunits
   public :: nstep, wstar_units, eqzip, margin
-  public :: secondary, tertiary, harris, fixpar_secondary
+  public :: secondary, tertiary, harris
   public :: ieqzip
-  public :: k0
-  public :: vnm_init
+  public :: k0, t_imp
   public :: avail_cpu_time
 !  public :: include_lowflow, rhostar, neo_test
   public :: rhostar, neo_test
@@ -25,14 +24,12 @@ module run_parameters
 
   real :: beta, zeff, tite
   real :: fphi, fapar, fbpar, faperp
-  real :: delt, code_delt_max, user_delt_max, margin
+  real :: delt, code_delt_max, user_delt_max, margin, t_imp
   real, dimension (:), allocatable :: wunits, woutunits, tunits
-  real, dimension (2) :: vnm_init
   real :: avail_cpu_time
   integer :: nstep
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
-  integer :: fixpar_secondary
   real :: k0
   integer, public :: delt_option_switch
   integer, public, parameter :: delt_option_hand = 1, delt_option_auto = 2
@@ -108,7 +105,6 @@ contains
        write (report_unit, *) 
        if (secondary) write (report_unit, fmt="('Mode with kx = 0, ky = ky_min fixed in time')")
        if (tertiary)  write (report_unit, fmt="('Mode with ky = 0, kx = kx_min fixed in time')")
-       if (fixpar_secondary.gt.0)  write (report_unit, fmt="('Mode with ky = ',I0,' fixed in time')") fixpar_secondary
     end if
   end subroutine check_run_parameters
 
@@ -139,7 +135,6 @@ contains
           write (unit, fmt="(' eqzip = ',L1)") eqzip
           write (unit, fmt="(' secondary = ',L1)") secondary
           write (unit, fmt="(' tertiary = ',L1)") tertiary
-          write (unit, fmt="(' fixpar_secondary = ',i8)") fixpar_secondary
        end if
        write (unit, fmt="(' margin = ',e16.10)") margin
        select case (delt_option_switch)
@@ -153,6 +148,7 @@ contains
   end subroutine wnml_run_parameters
 
   subroutine init_run_parameters
+
     use kt_grids, only: init_kt_grids, naky, nakx => ntheta0
     use gs2_time, only: init_delt, user2code
     
@@ -194,7 +190,7 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use mp, only: proc0, broadcast
-    use gs2_save, only: init_dt, init_vnm
+    use gs2_save, only: init_dt
     use text_options, only: text_option, get_option_value
     implicit none
     type (text_option), dimension (4), parameter :: eqzipopts = &
@@ -210,14 +206,13 @@ contains
     character(20) :: delt_option
     integer :: ierr, istatus, in_file
     real :: delt_saved
-    real, dimension (2) :: vnm_saved
 
     real :: teti  ! for back-compatibility
     namelist /parameters/ beta, zeff, tite, teti, k0, rhostar
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
-         delt_option, margin, secondary, tertiary, fixpar_secondary, faperp, harris, &
+         delt_option, margin, secondary, tertiary, faperp, harris, &
 !         avail_cpu_time, eqzip_option, include_lowflow, neo_test
-         avail_cpu_time, eqzip_option, neo_test
+         avail_cpu_time, eqzip_option, neo_test, t_imp
 
     if (proc0) then
        fbpar = -1.0
@@ -234,12 +229,12 @@ contains
        eqzip = .false.
        secondary = .true.
        tertiary = .false.
-       fixpar_secondary=-1
        harris = .false.
        k0 = 1.
        delt_option = 'default'
        margin = 0.05
        avail_cpu_time = 1.e10
+       t_imp = 0.6
 
        in_file = input_unit_exist("parameters", rpexist)
 !       if (rpexist) read (unit=input_unit("parameters"), nml=parameters)
@@ -275,13 +270,6 @@ contains
              write (ierr, *) 'Forcing tertiary = FALSE'
              write (ierr, *) 'because you have chosen harris = TRUE'
              tertiary = .false.
-          end if
-          if(fixpar_secondary.gt.0 .and. (secondary.or.tertiary.or.harris))then
-             ierr=error_unit()
-             write (ierr, *) 'Forcing secondary, tertiary and harris to false as fixpar_secondary>0'
-             secondary=.false.
-             tertiary=.false.
-             harris=.false.
           end if
        endif
 
@@ -327,7 +315,6 @@ contains
     call broadcast (wstar_units)
     call broadcast (eqzip)
     call broadcast (secondary)
-    call broadcast (fixpar_secondary)
     call broadcast (tertiary)
     call broadcast (harris)
     call broadcast (margin)
@@ -337,14 +324,12 @@ contains
 !    call broadcast (include_lowflow)
     call broadcast (rhostar)
     call broadcast (neo_test)
-    
+    call broadcast (t_imp)
+
     user_delt_max = delt
 
     delt_saved = delt
     if (delt_option_switch == delt_option_auto) then
-       vnm_init = 1.0
-       call init_vnm (vnm_saved, istatus)
-       if (istatus == 0) vnm_init = vnm_saved
        call init_dt (delt_saved, istatus)
        if (istatus == 0) delt  = delt_saved
     endif
