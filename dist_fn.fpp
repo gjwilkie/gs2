@@ -29,7 +29,8 @@ module dist_fn
   public :: get_verr, get_gtran, write_fyx, collision_error
   public :: get_init_field
   public :: flux_vs_theta_vs_vpa
-
+  public :: pflux_vs_theta_vs_vpa
+	
   public :: gamtot,gamtot1,gamtot2
   public :: getmoms_notgc
   public :: mom_coeff, ncnt_mom_coeff
@@ -4832,7 +4833,7 @@ subroutine check_dist_fn(report_unit)
   subroutine flux (phi, apar, bpar, &
        pflux,  qflux,  vflux, vflux_par, vflux_perp, &
        pmflux, qmflux, vmflux, &
-       pbflux, qbflux, vbflux)
+       pbflux, qbflux, vbflux, pflux_tormom)
 
 !CMR, 15/1/08: 
 !  Implemented Clemente Angioni's fix for fluxes by replacing g with gnew 
@@ -4853,7 +4854,7 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: Rplot, Bpol
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
-    real, dimension (:,:,:), intent (out) :: pflux, pmflux, pbflux
+    real, dimension (:,:,:), intent (out) :: pflux, pmflux, pbflux, pflux_tormom
     real, dimension (:,:,:), intent (out) :: vflux, vmflux, vbflux, vflux_par, vflux_perp
     real, dimension (:,:,:,:), intent (out) :: qflux, qmflux, qbflux
     real, dimension (:,:,:), allocatable :: dnorm
@@ -4866,6 +4867,7 @@ subroutine check_dist_fn(report_unit)
        pflux = 0.0;   qflux = 0.0;   vflux = 0.0 ; vflux_par = 0.0 ; vflux_perp = 0.0
        pmflux = 0.0;  qmflux = 0.0;  vmflux = 0.0
        pbflux = 0.0;  qbflux = 0.0;  vbflux = 0.0
+       pflux_tormom = 0.0 
     end if
 
     do ik = 1, naky
@@ -4879,6 +4881,7 @@ subroutine check_dist_fn(report_unit)
           g0(:,isgn,:) = gnew(:,isgn,:)*aj0
        end do
        call get_flux (phi, pflux, dnorm)
+       call get_flux_tormom (phi, pflux_tormom, dnorm)  !JPL
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo))
@@ -5063,6 +5066,48 @@ subroutine check_dist_fn(report_unit)
     deallocate (total)
 
   end subroutine get_flux
+
+  subroutine get_flux_tormom (fld, flx, dnorm) !JPL
+    use theta_grid, only: ntgrid, delthet, grho
+    use theta_grid, only: rplot, bpol, bmag
+    use kt_grids, only: ntheta0, aky, naky
+    use le_grids, only: integrate_moment
+    use species, only: nspec
+    use mp, only: proc0
+#ifdef LOWFLOW
+    use lowflow, only: mach_lab
+#endif
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: fld
+    real, dimension (:,:,:), intent (in out) :: flx
+    real, dimension (-ntgrid:,:,:) :: dnorm
+    complex, dimension (:,:,:,:), allocatable :: total
+    real :: wgt
+    integer :: ik, it, is, ig
+
+
+    allocate (total(-ntgrid:ntgrid,ntheta0,naky,nspec))
+    call integrate_moment (g0, total)
+
+    if (proc0) then
+       do is = 1, nspec
+          do ik = 1, naky
+             do it = 1, ntheta0
+                wgt = sum(dnorm(:,it,ik)*grho)
+#ifdef LOWFLOW
+		flx(it,ik,is) = sum(aimag(total(:,it,ik,is)*conjg(fld(:,it,ik))) &
+                     *dnorm(:,it,ik)*aky(ik)*Rplot(:)**2)/wgt*mach_lab(is)
+#endif
+ 
+             end do
+          end do
+       end do
+       flx = flx*0.5
+    end if
+
+    deallocate (total)
+
+  end subroutine get_flux_tormom !JPL
 
   subroutine eexchange (phi, exchange)
 
@@ -5335,6 +5380,65 @@ subroutine check_dist_fn(report_unit)
     deallocate (g0r)
 
   end subroutine flux_vs_theta_vs_vpa
+
+!=============================================================================
+! JPL: Diagnose particle flux contribution to toroidal momentum flux 
+!      in the lab frame in terms of vpar and theta. 
+!=============================================================================
+
+  subroutine pflux_vs_theta_vs_vpa (vflx)
+
+   
+    use dist_fn_arrays, only: gnew, aj0
+    use fields_arrays, only: phinew
+    use gs2_layouts, only: g_lo
+    use gs2_layouts, only: it_idx, ik_idx, is_idx
+    use geometry, only: rhoc
+    use theta_grid, only: ntgrid, Rplot !JPL
+    use kt_grids, only: aky, theta0
+    use le_grids, only: integrate_volume, nlambda, negrid
+    use le_grids, only: get_flux_vs_theta_vs_vpa
+    use species, only: spec, nspec
+#ifdef LOWFLOW
+    use lowflow, only: mach_lab    
+#endif
+    implicit none
+
+    real, dimension (-ntgrid:,:,:), intent (out) :: vflx
+    
+    integer :: all = 1
+    integer :: iglo, isgn, ig, it, ik, is
+
+    real, dimension (:,:,:), allocatable :: g0r
+    real, dimension (:,:,:,:,:), allocatable :: gavg
+	 
+    allocate (g0r(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate (gavg(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo) 
+#ifdef LOWFLOW  
+             g0r(ig,isgn,iglo) = aimag(g0(ig,isgn,iglo)*conjg(phinew(ig,it,ik)))*aky(ik)*Rplot(ig)**2*mach_lab(is)
+#else
+	     g0r(ig,isgn,iglo) = 0.0
+#endif
+          end do
+       end do
+    end do
+    
+    call integrate_volume (g0r, gavg, all)
+    call get_flux_vs_theta_vs_vpa (gavg, vflx)
+
+    deallocate (gavg)
+    deallocate (g0r)
+
+  end subroutine pflux_vs_theta_vs_vpa
+
 
 !=============================================================================
 ! Density: Calculate Density perturbations

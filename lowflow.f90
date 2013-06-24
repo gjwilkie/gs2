@@ -4,12 +4,14 @@ module lowflow
 
   public :: get_lowflow_terms, dphidth
   public :: phineo
+  public :: mach_lab    
 
   real, dimension (:), allocatable :: dphidth
   real, dimension (:,:,:,:,:), allocatable :: coefs
   real, dimension (:,:), allocatable :: phineo, dcoefsdr
   real, dimension (:,:,:), allocatable :: dcoefsdth
   real, dimension (:), allocatable :: rad_neo, theta_neo
+  real, dimension (:), allocatable :: mach_lab
 
 contains
   
@@ -171,6 +173,7 @@ contains
     end if
     if (.not. allocated(transport)) allocate (transport(nr,(5+ns*8)))  !JPL, NEO output for all radius
     if (.not. allocated(radius)) allocate (radius(nr), phi2(nr), jboot(nr), vtor(nr), upar0(nr))
+    if (.not. allocated(mach_lab)) allocate (mach_lab(ns))  
 
     if (proc0) then
        call get_unused_unit (neo_unit)
@@ -241,11 +244,13 @@ contains
              write (neot_unit,fmt='(e14.5,i8,12e14.5)') radius(ir), is, pflx(ir,is), qflx(ir,is), vflx(ir,is), &
                   qparB(ir,is),uparB(ir,is), upar1(ir,is)*sqrt(1.0-drlt), &
                   phi2(ir), jboot(ir), rmaj*upar_over_B(ir,is)/rgeo2, upar2(ir,is), qpar2(ir,is), phineo2(ir)
+             if (ir==2)  mach_lab(is)=rmaj*upar_over_B(ir,is)/rgeo2 
           end do
        end do
-
        call close_output_file (neot_unit)
     end if
+
+    call broadcast(mach_lab)
 
     do ir = 1, nr
        do is = 1, ns

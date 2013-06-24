@@ -18,6 +18,7 @@ module gs2_io
   public :: nc_loop_movie, nc_write_fields, nc_write_moments
 
   public :: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
+  public :: nc_loop_partsym_tormom 
 
   logical, parameter :: serial_io = .true.
 # ifdef NETCDF
@@ -60,16 +61,17 @@ module gs2_io
   integer :: phi2_by_ky_id, apar2_by_ky_id, bpar2_by_ky_id
   integer :: phi0_id, apar0_id, bpar0_id
   integer :: omega_id, omegaavg_id, phase_id
-  integer :: es_heat_flux_id, es_mom_flux_id, es_part_flux_id, es_energy_exchange_id
+  integer :: es_heat_flux_id, es_mom_flux_id, es_part_flux_id, es_energy_exchange_id, es_part_tormom_flux_id
   integer :: es_heat_par_id, es_heat_perp_id
   integer :: apar_heat_flux_id, apar_mom_flux_id, apar_part_flux_id
   integer :: apar_heat_par_id, apar_heat_perp_id
   integer :: bpar_heat_flux_id, bpar_mom_flux_id, bpar_part_flux_id
   integer :: bpar_heat_par_id, bpar_heat_perp_id
   integer :: hflux_tot_id, zflux_tot_id, vflux_tot_id
-  integer :: es_heat_by_k_id, es_mom_by_k_id, es_part_by_k_id
+  integer :: es_heat_by_k_id, es_mom_by_k_id, es_part_by_k_id, es_part_tormom_by_k_id 
   integer :: es_parmom_by_k_id, es_perpmom_by_k_id, es_mom0_by_k_id, es_mom1_by_k_id
-  integer :: es_mom_sym_id, phi_corr_id, phi2_extend_id, phi_corr_2pi_id
+  integer :: es_mom_sym_id, phi_corr_id, phi2_extend_id, phi_corr_2pi_id, es_part_sym_tormom_id 
+  integer :: es_part_sym_id 
   integer :: apar_heat_by_k_id, apar_mom_by_k_id, apar_part_by_k_id
   integer :: apar_heat_by_x_id
   integer :: bpar_heat_by_k_id, bpar_mom_by_k_id, bpar_part_by_k_id
@@ -118,7 +120,7 @@ contains
       write_hrate, write_final_antot, write_eigenfunc, &
       make_movie, nmovie_tot, write_verr, write_fields, &
       write_moments,&
-      write_full_moments_notgc, write_sym, write_correlation, nwrite_big_tot, &
+      write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, nwrite_big_tot, &
       write_correlation_extend, & 
       write_phi_over_time, write_apar_over_time, write_bpar_over_time) 
 
@@ -145,6 +147,7 @@ contains
     logical, intent(in) :: write_hrate, make_movie, write_fields, write_moments
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
+    logical, intent(in) :: write_pflux_sym, write_pflux_tormom 
     logical, intent(in) :: write_correlation_extend
     integer, intent (in) :: nmovie_tot, nwrite_big_tot
     logical, intent(in) :: write_phi_over_time
@@ -228,7 +231,7 @@ contains
        call define_dims (nmovie_tot, nwrite_big_tot)
        call define_vars (write_nl_flux, write_omega, &
             write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-            write_fields, write_moments, write_full_moments_notgc, write_sym, write_correlation, &
+            write_fields, write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
             write_correlation_extend)
        call nc_grids
        call nc_species
@@ -469,7 +472,7 @@ contains
 
   subroutine define_vars (write_nl_flux, write_omega, &
        write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-       write_fields, write_moments, write_full_moments_notgc, write_sym, write_correlation, &
+       write_fields, write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
        write_correlation_extend)
 
     use mp, only: nproc
@@ -490,6 +493,7 @@ contains
     logical, intent(in) :: write_hrate, write_final_antot
     logical, intent(in) :: write_eigenfunc, write_verr, write_fields, write_moments
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
+    logical, intent(in) :: write_pflux_sym, write_pflux_tormom 
     logical, intent(in) :: write_correlation_extend
 # ifdef NETCDF
     character (5) :: ci
@@ -948,6 +952,17 @@ contains
           status = nf90_def_var (ncid, 'es_mom_sym',  netcdf_real, sym_dim, es_mom_sym_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom_sym')
        end if
+       if (write_pflux_sym) then !JPL
+          status = nf90_def_var (ncid, 'es_part_tormom_sym',  netcdf_real, sym_dim, es_part_sym_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_tormom_sym')
+       end if
+       if (write_pflux_tormom) then !JPL
+          status = nf90_def_var (ncid, 'es_part_tormom_flux', netcdf_real, flux_dim, es_part_tormom_flux_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_tormom_flux')
+     	  status = nf90_def_var (ncid, 'es_part_tormom_by_k', netcdf_real, fluxk_dim, es_part_tormom_by_k_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_tormom_by_k')  
+       end if
+
        if (write_correlation) then
           status = nf90_def_var (ncid, 'phi_corr_2pi',  netcdf_real, phi_corr_2pi_dim, phi_corr_2pi_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='phi_corr_2pi')
@@ -1897,8 +1912,8 @@ contains
 # endif
   end subroutine nc_qflux
 
-  subroutine nc_pflux (nout, pflux, pmflux, pbflux, &
-       part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
+  subroutine nc_pflux (nout, pflux, pmflux, pbflux, pflux_tormom, &
+       part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot, part_tormom_fluxes)
 
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -1909,7 +1924,9 @@ contains
 # endif
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: pflux, pmflux, pbflux
+    real, dimension (:,:,:), intent (in) :: pflux_tormom 
     real, dimension(:), intent (in) :: part_fluxes, mpart_fluxes, bpart_fluxes
+    real, dimension(:), intent (in) :: part_tormom_fluxes 
     real, intent (in) :: zflux_tot
 # ifdef NETCDF
     integer, dimension (2) :: start, count
@@ -1937,6 +1954,11 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_flux_id)
        status = nf90_put_var (ncid, es_part_by_k_id, pflux, start=start4, count=count4)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_by_k_id)
+       status = nf90_put_var (ncid, es_part_tormom_flux_id, part_tormom_fluxes, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_tormom_flux_id)
+       status = nf90_put_var (ncid, es_part_tormom_by_k_id, pflux_tormom, start=start4, count=count4)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_tormom_by_k_id)
+   
     end if
 
     if (fapar > zero) then
@@ -2062,6 +2084,39 @@ contains
 
 # endif
   end subroutine nc_loop_sym
+  
+  subroutine nc_loop_partsym_tormom (nout, partflx_sym) 
+
+    use species, only: nspec
+    use run_parameters, only: fphi
+    use le_grids, only: negrid, nlambda
+    use theta_grid, only: ntgrid
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var
+# endif
+    integer, intent (in) :: nout
+    real, dimension (-ntgrid:,:,:), intent (in) :: partflx_sym
+# ifdef NETCDF
+    integer, dimension (4) :: start, count
+    integer :: status
+
+    start(1) = 1
+    start(2) = 1
+    start(3) = 1
+    start(4) = nout
+    
+    count(1) = 2*ntgrid+1
+    count(2) = nlambda*negrid
+    count(3) = nspec
+    count(4) = 1
+
+    if (fphi > zero) then
+       status = nf90_put_var (ncid, es_part_sym_id, partflx_sym, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_sym_id)
+    end if
+
+# endif
+  end subroutine nc_loop_partsym_tormom
 
   subroutine nc_loop_corr (nout,phi_2pi_corr)
 
