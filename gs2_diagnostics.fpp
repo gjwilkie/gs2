@@ -419,6 +419,8 @@ contains
     call broadcast (write_apar_over_time)
     call broadcast (write_bpar_over_time)
 
+    call broadcast (write_pflux_tormom)
+
     nmovie_tot = nstep/nmovie
     nwrite_big_tot = nstep/(nwrite*nwrite_mult)-nstep/4/(nwrite*nwrite_mult)
 
