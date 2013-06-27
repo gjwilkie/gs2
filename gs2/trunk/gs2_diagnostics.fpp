@@ -1387,7 +1387,7 @@ contains
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: user_time
-    use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
+    use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom, nc_loop, nc_loop_moments
     use gs2_io, only: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend, nc_loop_partsym_tormom 
     use gs2_io, only: nc_loop_vres
     use gs2_io, only: nc_loop_movie, nc_write_fields, nc_write_moments
@@ -2002,9 +2002,14 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 ! below line gives out-of-bounds array for runs inside trinity
 !                  scan_momflux(nout) = vflux_tot
                   scan_momflux(mod(nout-1,nstep/nwrite+1)+1) = vflux_tot
-             call nc_pflux (nout, pflux, pmflux, pbflux, pflux_tormom,&
-                  part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot, part_tormom_fluxes)
+             call nc_pflux (nout, pflux, pmflux, pbflux, &
+                  part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
           end if
+
+          if (write_pflux_tormom) then
+             call nc_pflux_tormom (nout, pflux_tormom, part_tormom_fluxes)
+          end if
+
           call nc_loop (nout, t, fluxfac, &
                phinew(igomega,:,:), phi2, phi2_by_mode, &
                aparnew(igomega,:,:), apar2, apar2_by_mode, &

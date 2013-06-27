@@ -13,7 +13,7 @@ module gs2_io
 
   public :: init_gs2_io, nc_eigenfunc, nc_final_fields, nc_final_epar
   public :: nc_final_moments, nc_final_an, nc_finish
-  public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
+  public :: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom, nc_loop, nc_loop_moments
   public :: nc_loop_vres
   public :: nc_loop_movie, nc_write_fields, nc_write_moments
 
@@ -1912,8 +1912,8 @@ contains
 # endif
   end subroutine nc_qflux
 
-  subroutine nc_pflux (nout, pflux, pmflux, pbflux, pflux_tormom, &
-       part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot, part_tormom_fluxes)
+  subroutine nc_pflux (nout, pflux, pmflux, pbflux, &
+       part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
 
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -1924,9 +1924,7 @@ contains
 # endif
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: pflux, pmflux, pbflux
-    real, dimension (:,:,:), intent (in) :: pflux_tormom 
     real, dimension(:), intent (in) :: part_fluxes, mpart_fluxes, bpart_fluxes
-    real, dimension(:), intent (in) :: part_tormom_fluxes 
     real, intent (in) :: zflux_tot
 # ifdef NETCDF
     integer, dimension (2) :: start, count
@@ -1954,11 +1952,6 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_flux_id)
        status = nf90_put_var (ncid, es_part_by_k_id, pflux, start=start4, count=count4)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_by_k_id)
-       status = nf90_put_var (ncid, es_part_tormom_flux_id, part_tormom_fluxes, start=start, count=count)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_tormom_flux_id)
-       status = nf90_put_var (ncid, es_part_tormom_by_k_id, pflux_tormom, start=start4, count=count4)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_tormom_by_k_id)
-   
     end if
 
     if (fapar > zero) then
@@ -1979,6 +1972,50 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, zflux_tot_id)
 # endif
   end subroutine nc_pflux
+
+ subroutine nc_pflux_tormom (nout, pflux_tormom, part_tormom_fluxes)
+
+    use species, only: nspec
+    use kt_grids, only: naky, ntheta0
+    use run_parameters, only: fphi, fapar, fbpar
+!    use nf90_mod, only: nf90_put_vara, nf90_put_var1
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var
+# endif
+    integer, intent (in) :: nout
+    real, dimension (:,:,:), intent (in) :: pflux_tormom
+    real, dimension(:), intent (in) :: part_tormom_fluxes
+# ifdef NETCDF
+    integer, dimension (2) :: start, count
+    integer, dimension (4) :: start4, count4
+    integer :: status
+
+    start4(1) = 1
+    start4(2) = 1
+    start4(3) = 1
+    start4(4) = nout
+
+    count4(1) = ntheta0
+    count4(2) = naky
+    count4(3) = nspec
+    count4(4) = 1
+
+    start(1) = 1
+    start(2) = nout
+
+    count(1) = nspec
+    count(2) = 1
+
+    if (fphi > zero) then
+       status = nf90_put_var (ncid, es_part_tormom_flux_id, part_tormom_fluxes, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_tormom_flux_id)
+       status = nf90_put_var (ncid, es_part_tormom_by_k_id, pflux_tormom, start=start4, count=count4)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_tormom_by_k_id)
+    end if
+
+# endif
+  end subroutine nc_pflux_tormom
+
 
   subroutine nc_vflux (nout, vflux, vmflux, vbflux, &
        mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot, &
