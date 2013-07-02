@@ -28,7 +28,7 @@
 !! This documentation is generated from commments added to the source code; to
 !! add to it, add more comments to the <i>trunk</i> source. All documenting
 !! comments begin with <tt>!></tt> and are continued with <tt>!!</tt>. For more help see the
-!! doxygen help: http://www.stack.nl/~dimitri/doxygen/docblocks.html.
+!! doxygen help: http://www.stack.nl/~dimitri/doxygen/manual/docblocks.html.
 !!
 !! DO NOT add comments in between ifdef/endif preprocessor blocks. Such
 !! comments will probably be ignored.
