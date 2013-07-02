@@ -45,6 +45,7 @@ contains
     use redistribute, only: time_redist
     use fields_implicit, only: time_field
     !+PJK
+    use fields, only: fieldopt_switch, fieldopt_explicit
     use gs2_time, only: save_dt
     use dg_scheme, only: adaptive_dt_reset, adaptive_dt_new
     !-PJK
@@ -159,7 +160,7 @@ contains
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
 
        !+PJK
-       if (adaptive_dt_reset) then
+       if ((fieldopt_switch == fieldopt_explicit).and.(adaptive_dt_reset)) then
           call save_dt(adaptive_dt_new)
           call reset_time_step (istep, exit)
        else

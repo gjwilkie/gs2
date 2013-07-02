@@ -16,6 +16,7 @@ contains
 
     !+PJK  Added code to prevent problems if the explicit DG scheme's adaptive
     !      timestep algorithm is in use
+    use fields, only: fieldopt_switch, fieldopt_implicit, fieldopt_explicit
     use dg_scheme, only: adaptive_dt
     !-PJK
 
@@ -53,7 +54,10 @@ contains
     endif
 
     !+PJK    if (nconsec .gt. 4) then
-    if ( (.not.adaptive_dt).and.(nconsec .gt. 4) ) then
+!!    if ( (.not.adaptive_dt).and.(nconsec .gt. 4) ) then
+    if ( ((fieldopt_switch == fieldopt_implicit).or. &
+         ((fieldopt_switch == fieldopt_explicit).and.(.not.adaptive_dt)) ).and. &
+         (nconsec .gt. 4) ) then
        !-PJK
        exit = .true.
        if (proc0) write(error_unit(), *) 'Time step changing rapidly.  Abort run.'
@@ -81,7 +85,9 @@ contains
 
 ! If timestep is too small, make it bigger
     !+PJK  else if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
-    else if ( (.not.adaptive_dt).and. &
+!!    else if ( (.not.adaptive_dt).and. &
+    else if ( ((fieldopt_switch == fieldopt_implicit).or. &
+         ((fieldopt_switch == fieldopt_explicit).and.(.not.adaptive_dt)) ).and. &
          (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) ) then
        !-PJK
        code_dt = min(code_dt*delt_adj, dt0)
