@@ -147,7 +147,7 @@ contains
     IF (PRESENT(distfn)) THEN
        local_init=initialized_dfn
     ELSE
-    	local_init=initialized
+       local_init=initialized
     END IF
     !</DD> Added for saving distribution function
     
@@ -155,9 +155,9 @@ contains
 
        !<DD> Added for saving distribution function
        IF (PRESENT(distfn)) THEN
-        	initialized_dfn=.true.
+          initialized_dfn=.true.
        ELSE
-    		initialized = .true.
+          initialized = .true.
        END IF
        !</DD> Added for saving distribution function
        
@@ -183,6 +183,7 @@ contains
              WRITE (suffix,'(a4)') '.dfn'
           endif
 # endif
+       !</DD> Added for saving distribution function
        ELSE
 # ifdef NETCDF_PARALLEL
           if(save_many) then
@@ -194,7 +195,6 @@ contains
           endif
 # endif
        END IF
-       !</DD> Added for saving distribution function
 
        file_proc = trim(trim(file_proc)//adjustl(suffix))          
 
@@ -829,7 +829,7 @@ contains
     if (n_elements <= 0) return
     
     if (.not.initialized) then
-!       initialized = .true.
+       initialized = .true.
        file_proc = trim(restart_file)
 
 # ifdef NETCDF_PARALLEL
@@ -1019,8 +1019,9 @@ contains
        bparnew = bparnew*fac
     end if
 
-    ! RN 2008/05/23: this was commented out. why? HJL 2013/05/15 Because it stops future writing to the file
-!    istatus = nf90_close (ncid)
+    ! RN 2008/05/23: this was commented out. why? HJL 2013/05/15 Because it stops future writing to the file, it's now back in after setting initialized to false
+    initialized=.false.
+    istatus = nf90_close (ncid)
     if (istatus /= NF90_NOERR) then
        ierr = error_unit()
        write(ierr,*) "nf90_close error: ", nf90_strerror(istatus),' ',iproc
@@ -1060,16 +1061,16 @@ contains
 
     if (proc0) then
 
-      !if (.not. initialized) then
+       if (.not. initialized) then
 
 # ifdef NETCDF_PARALLEL
-       if(read_many) then
+          if(read_many) then
 # endif
-          file_proc=trim(trim(restart_file)//'.0')
+             file_proc=trim(trim(restart_file)//'.0')
 # ifdef NETCDF_PARALLEL
-       else 
-          file_proc=trim(trim(restart_file))
-       end if
+          else 
+             file_proc=trim(trim(restart_file))
+          end if
 # endif
           istatus = nf90_open (file_proc, NF90_NOWRITE, ncid_local)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus,file=file_proc)
@@ -1078,21 +1079,18 @@ contains
                current_scan_parameter_value_id_local)
           if (istatus /= NF90_NOERR) call netcdf_error (istatus,&
                var='current_scan_parameter_value_id')
-         end if
+       end if
 
-         istatus = nf90_get_var (ncid_local, &
+       istatus = nf90_get_var (ncid_local, &
                                  current_scan_parameter_value_id_local, &
                                  current_scan_parameter_value)
-
-         if (istatus /= NF90_NOERR) then
-            call netcdf_error (istatus, ncid_local,&
-                 current_scan_parameter_value_id_local)
-
-
-!            write (*,*) "Retrieved current_scan_parameter_value"
-      !   endif           
+       
+       if (istatus /= NF90_NOERR) then
+          call netcdf_error (istatus, ncid_local,&
+               current_scan_parameter_value_id_local)          
+       endif
         
-      !   if (.not.initialized) istatus = nf90_close (ncid_local)
+       if (.not.initialized) istatus = nf90_close (ncid_local)
     endif
 
     !call broadcast (istatus)
@@ -1230,27 +1228,31 @@ contains
     if (proc0) then
        a_ant = 0. ; b_ant = 0.
 
+       if (.not.initialized) then
+
 # ifdef NETCDF_PARALLEL
-       if(read_many) then
+          if(read_many) then
 # endif
-          file_proc=trim(trim(restart_file)//'.0')
+             file_proc=trim(trim(restart_file)//'.0')
 # ifdef NETCDF_PARALLEL
-       else 
-          file_proc=trim(trim(restart_file))
-       end if
+          else 
+             file_proc=trim(trim(restart_file))
+          end if
 # endif       
-       istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
-       if (istatus /= NF90_NOERR) then
-          ierr = error_unit()
-          write(ierr,*) "nf90_open in init_ant_amp error: ", nf90_strerror(istatus) 
-          write(ierr,*) "If you did not intend for this to be a restarted run with an external antenna,"
-          write(ierr,*) "you may ignore the error message above."
-          return
+          istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
+          if (istatus /= NF90_NOERR) then
+             ierr = error_unit()
+             write(ierr,*) "nf90_open in init_ant_amp error: ", nf90_strerror(istatus) 
+             write(ierr,*) "If you did not intend for this to be a restarted run with an external antenna,"
+             write(ierr,*) "you may ignore the error message above."
+             return
+          endif
+
        endif
 
        istatus = nf90_inq_dimid (ncid, "nk_stir", nk_stir_dim)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, dim='nk_stir')
-
+       
        istatus = nf90_inquire_dimension (ncid, nk_stir_dim, len=i)
        if (istatus /= NF90_NOERR) &
             call netcdf_error (istatus, ncid, dimid=nk_stir_dim)
@@ -1288,7 +1290,7 @@ contains
        b_ant = b_ant + zi * atmp
 
        deallocate (atmp)
-       istatus = nf90_close (ncid)       
+       if (.not. initialized) istatus = nf90_close (ncid)
     endif
 
 # else
@@ -1313,31 +1315,33 @@ contains
     integer :: ierr
 
     if (proc0) then
-# ifdef NETCDF_PARALLEL
-       if(read_many) then
-# endif
-          file_proc=trim(trim(restart_file)//'.0')
-# ifdef NETCDF_PARALLEL
-       else 
-          file_proc=trim(trim(restart_file))
-       end if
-# endif
 
        if (.not.initialized) then
 
-          istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
-          if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=file_proc)
-       end if
+# ifdef NETCDF_PARALLEL
+          if(read_many) then
+# endif
+             file_proc=trim(trim(restart_file)//'.0')
+# ifdef NETCDF_PARALLEL
+          else 
+             file_proc=trim(trim(restart_file))
+          end if
+# endif
 
-       istatus = nf90_inq_varid (ncid, "t0", t0id)
-       if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='t0')
+             istatus = nf90_open (file_proc, NF90_NOWRITE, ncid)
+             if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=file_proc)
+          end if
+          
+          istatus = nf90_inq_varid (ncid, "t0", t0id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='t0')
+          
+          istatus = nf90_get_var (ncid, t0id, tstart)
+          if (istatus /= NF90_NOERR) then
+             call netcdf_error (istatus, ncid, t0id, message=' in init_tstart')
+             tstart = -1.
+          end if
 
-       istatus = nf90_get_var (ncid, t0id, tstart)
-       if (istatus /= NF90_NOERR) then
-          call netcdf_error (istatus, ncid, t0id, message=' in init_tstart')
-          tstart = -1.
-       end if           
-       if (.not.initialized) istatus = nf90_close (ncid)
+          if (.not.initialized) istatus = nf90_close (ncid)
           
     endif
 
