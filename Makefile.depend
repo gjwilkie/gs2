@@ -64,6 +64,7 @@ ffttester_mod = \
 	 file_utils.o \
 	 gauss_quad.o \
 	 general_f0.o \
+	 general_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -125,6 +126,7 @@ gs2_mod = \
 	 file_utils.o \
 	 gauss_quad.o \
 	 general_f0.o \
+	 general_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -191,6 +193,7 @@ ingen_mod = \
 	 file_utils.o \
 	 gauss_quad.o \
 	 general_f0.o \
+	 general_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -402,11 +405,12 @@ general_f0.o: \
 	 constants.o \
 	 file_utils.o \
 	 mp.o \
-	 run_parameters.o \
 	 species.o \
 	 spl.o \
 	 text_options.o \
 	 unit_tests.o 
+general_quad.o: \
+	 constants.o 
 geometry.o: \
 	 ceq.o \
 	 deq.o \
@@ -658,6 +662,7 @@ le_grids.o: \
 	 file_utils.o \
 	 gauss_quad.o \
 	 general_f0.o \
+	 general_quad.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 layouts_type.o \
