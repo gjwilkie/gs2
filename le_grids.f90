@@ -87,8 +87,6 @@ contains
       !wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*2.0*pi
       wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*pi
 
-write(*,*) "epts = ", epts(:nesub,is)
-write(*,*) "wgts = ", wgts(:nesub,is)
       if (negrid > nesub) then
 
          ! get grid points in y = E - vcut**2 (epts not E yet)
@@ -180,8 +178,6 @@ write(*,*) "wgts = ", wgts(:nesub,is)
       !wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*2.0*pi
       wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*pi*exp(epts(:nesub,is))
 
-write(*,*) "epts = ", epts(:nesub,is)
-write(*,*) "wgts = ", wgts(:nesub,is)/exp(epts(:nesub,is))
       if (negrid > nesub) then
 
          ! get grid points in y = E - vcut**2 (epts not E yet)
