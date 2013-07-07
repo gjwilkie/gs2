@@ -65,7 +65,7 @@ GK_PROJECT ?= gs2
 # Be careful that DEBUG=off means DEBUG=on.
 #
 # turns on debug mode (bin)
-DEBUG ?=on
+DEBUG ?=
 # turns on scalasca instrumentation mode (bin)
 SCAL ?=
 # turns on test mode (bin)
@@ -85,9 +85,11 @@ USE_SHMEM ?=
 # which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
 USE_FFT ?= fftw
 # uses netcdf library (bin)
-USE_NETCDF ?= on
+USE_NETCDF ?= 
+# uses parallel netcdf library
+USE_PARALLEL_NETCDF ?=
 # uses hdf5 library (bin)
-USE_HDF5 ?=
+USE_HDF5 ?= 
 # Use function pointer in layouts_indices.c (bin)
 # see also README
 USE_C_INDEX ?= 
@@ -106,13 +108,6 @@ MAKE_LIB ?=
 LOWFLOW ?=
 # Use le_layout for collision operator
 USE_LE_LAYOUT ?=
-
-# Number of process to use for unit tests
-ifdef NPROCS
-	NTESTPROCS?=$(NPROCS)
-else
-	NTESTPROCS=2
-endif
 #
 # * Targets:
 #
@@ -129,7 +124,7 @@ endif
 
 MAKE		= make
 CPP		= cpp
-CPPFLAGS	= -C -P -traditional
+CPPFLAGS	= -P -traditional
 FC		= f90
 MPIFC		?= mpif90
 H5FC		?= h5fc
@@ -157,8 +152,10 @@ F90FLAGS_SFX2 =
 
 MPI_INC	?=
 MPI_LIB ?=
-FFT_INC ?=
-FFT_LIB ?=
+FFT_INC ?=-L/usr/local/lib
+FFT_LIB ?=-ldrfftw -ldfftw
+LAPACK_INC ?=-L/usr/lib
+LAPACK_LIB ?=-llapack
 NETCDF_INC ?=
 NETCDF_LIB ?=
 HDF5_INC ?=
@@ -262,6 +259,10 @@ ifdef USE_HDF5
 	ifdef USE_MPI
 		FC = $(H5FC_par)
 		CC = $(H5CC_par)
+		ifdef USE_PARALLEL_NETCDF
+			CPPFLAGS += -DNETCDF_PARALLEL
+		endif
+
 	else
 		FC = $(H5FC)
 		CC = $(H5CC)
@@ -314,10 +315,10 @@ ifdef USE_LE_LAYOUT
 endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
-		$(IPM_LIB) $(NAG_LIB)
+		$(IPM_LIB) $(NAG_LIB) $(LAPACK_LIB) 
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
+	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) $(LAPACK_INC)
 CFLAGS += $(COPTFLAGS)
 
 DATE=$(shell date +%y%m%d)
@@ -387,7 +388,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(GK_PROJECT)_all linear_tests unit_tests
+.PHONY: all $(GK_PROJECT)_all
 
 all: $(.DEFAULT_GOAL)
 
@@ -533,18 +534,6 @@ unlink:
 
 revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
-
-
-# To save time you can set test deps yourself on the command line:
-# otherwise it builds everything just to be sure, because recursive
-# make can't resolve dependencies
-TEST_DEPS?=$(gs2_mod)
-export
-unit_tests: unit_tests.o $(TEST_DEPS)
-	cd tests && time ${MAKE} && echo && echo "Tests Successful!"
-
-linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
-	cd linear_tests && time ${MAKE} && echo && echo "Tests Successful!"
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
