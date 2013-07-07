@@ -452,6 +452,8 @@ contains
     call broadcast (wgt_fac)
     call broadcast (new_trap_int)
     call broadcast (nterp)
+    call broadcast (genquad)
+    call broadcast (ne_int_genquad)
     !write (*,*) 'Broadcasting ', negrid
   end subroutine broadcast_parameters
 
