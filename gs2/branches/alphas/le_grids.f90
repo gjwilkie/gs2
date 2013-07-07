@@ -7,6 +7,7 @@ module egrid
   implicit none
 
   public :: setvgrid, init_egrid
+  public :: setvgrid_genquad
   public :: zeroes, x0, zeroes_maxwell, x0_maxwell
   !> Expose this for unit testing
   public :: energy_grid
@@ -86,6 +87,8 @@ contains
       !wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*2.0*pi
       wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*pi
 
+write(*,*) "epts = ", epts(:nesub,is)
+write(*,*) "wgts = ", wgts(:nesub,is)
       if (negrid > nesub) then
 
          ! get grid points in y = E - vcut**2 (epts not E yet)
@@ -118,16 +121,104 @@ contains
       !wgts(:, is) = wgts(:, is) * f0_values(:, is)
     !end do
 
-
-
-
-
-
     energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))
     x0(:) = sqrt(epts(negrid,:))
 
   end subroutine setvgrid
+
+  subroutine setvgrid_genquad (ne_int,vcut, negrid, epts, wgts, nesub)
+
+    use general_f0, only: calculate_f0_arrays, f0_values
+    use constants, only: pi => dpi
+    use general_f0, only: energy_0_general_f0 => energy_0
+    use general_quad, only: get_general_weights_from_grid
+    use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
+    use species, only: nspec, spec, alpha_species
+
+    implicit none
+    
+    integer, intent (in) :: negrid, ne_int
+    real, intent (in) :: vcut
+    integer, intent (in) :: nesub
+    real, dimension(:,:), intent (out) :: epts
+    real, dimension(:,:), intent (out) :: wgts
+    real :: energy_0, vcut_local
+    real, dimension(1:ne_int):: vpts_temp, wgts_temp, F0_temp
+    integer :: is
+
+    call init_egrid (negrid)
+
+    do is = 1,nspec
+
+      if (spec(is)%type .eq. alpha_species) then
+        vcut_local = 1.0
+        energy_0 = energy_0_general_f0
+        !energy_0 = 0.2
+      else
+        vcut_local = vcut
+        energy_0 = 0.0
+      end if
+
+      call get_legendre_grids_from_cheb (energy_0**0.5, vcut_local, vpts_temp(1:ne_int), wgts_temp(1:ne_int))
+
+      F0_temp(1:ne_int) = exp(-vpts_temp(1:ne_int)**2) 
+
+      call get_general_weights_from_grid (ne_int, vpts_temp, wgts_temp, F0_temp, energy_0**0.5, vcut_local, &
+                                          nesub,epts(1:nesub,is),wgts(1:nesub,is))
+
+!      ! get grid points in v up to vcut (epts is not E yet)
+!      call get_legendre_grids_from_cheb (energy_0**0.5, vcut_local, epts(1:nesub,is), wgts(1:nesub, is))
+
+      ! change from v to E
+      epts(:nesub,is) = epts(:nesub,is)**2
+
+      ! absorb exponential and volume element in weights
+      !wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
+      ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
+      ! See eq. 4.12 of M. Barnes's thesis
+      !wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*2.0*pi
+      wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*pi*exp(epts(:nesub,is))
+
+write(*,*) "epts = ", epts(:nesub,is)
+write(*,*) "wgts = ", wgts(:nesub,is)/exp(epts(:nesub,is))
+      if (negrid > nesub) then
+
+         ! get grid points in y = E - vcut**2 (epts not E yet)
+         call get_laguerre_grids (epts(nesub+1:,is), wgts(nesub+1:, is))
+
+         ! change from y to E
+         epts(nesub+1:,is) = epts(nesub+1:,is) + vcut_local**2
+
+         ! absort exponential and volume element in weights
+         ! See eq. 4.13 of M. Barnes's thesis
+      !   wgts(nesub+1:) = wgts(nesub+1:)*0.5*sqrt(epts(nesub+1:)/pi)*exp(-vcut**2)
+
+         ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
+         ! Note that here this means adding an exponential e^y
+         ! See eq. 4.13 of M. Barnes's thesis
+         wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(epts(nesub+1:,is))*pi*0.5*sqrt(epts(nesub+1:,is))*exp(-vcut_local**2)
+
+      end if
+
+    end do
+
+
+    !write (*,*) 'Weights in le_grids are', wgts
+    !write (*,*) 'epts', epts
+    call calculate_f0_arrays(epts, wgts, vcut)
+    !do is = 1,nspec
+      !wgts(:,is) = wgts(:,1)
+    !end do 
+    !do is = 1,nspec
+      !wgts(:, is) = wgts(:, is) * f0_values(:, is)
+    !end do
+
+    energy_grid = epts
+    zeroes(:,:) = sqrt(epts(:negrid-1,:))
+    x0(:) = sqrt(epts(negrid,:))
+
+  end subroutine setvgrid_genquad
 
 end module egrid
 
@@ -150,6 +241,7 @@ module le_grids
   public :: integrate_kysum, integrate_volume
   public :: get_flux_vs_theta_vs_vpa
   public :: lambda_map, energy_map, g2le, init_map
+  public :: genquad
 
   !> Unit tests
   public :: le_grids_unit_test_init_le_grids
@@ -211,6 +303,8 @@ module le_grids
  ! knobs
   integer :: ngauss, negrid, nesuper, nesub
   real :: bouncefuzz, vcut
+  logical :: genquad = .false.
+  integer :: ne_int_genquad = 200
 
   integer :: nlambda, ng2, lmax, nxi
   logical :: accel_x = .false.
@@ -458,7 +552,8 @@ contains
     integer :: ierr, in_file
     namelist /le_grids_knobs/ ngauss, negrid, bouncefuzz, &
          nesuper, nesub, test, trapped_particles, &
-         nmax, wgt_fac, new_trap_int, nterp, vcut
+         nmax, wgt_fac, new_trap_int, nterp, vcut, &
+         genquad, ne_int_genquad
 
     nesub = 8
     nesuper = 2
@@ -466,6 +561,9 @@ contains
     negrid = -10
     vcut = 2.5
     bouncefuzz = 1e-5
+    genquad = .false.
+    ne_int_genquad = 200
+
     in_file=input_unit_exist("le_grids_knobs", exist)
     if (exist) read (unit=in_file, nml=le_grids_knobs)
 
@@ -1388,13 +1486,17 @@ contains
 
   subroutine set_vgrid
     use species, only: nspec, init_species
-    use egrid, only: setvgrid
+    use egrid, only: setvgrid, setvgrid_genquad
     call init_species
 
     !write (*,*) 'negrid is', negrid, 'nspec is ', nspec
 
     allocate (energy(negrid,nspec), w(negrid,nspec))
-    call setvgrid (vcut, negrid, energy, w, nesub)
+    if (genquad) then
+       call setvgrid_genquad (ne_int_genquad, vcut, negrid, energy, w, nesub)
+    else
+       call setvgrid (vcut, negrid, energy, w, nesub)
+    end if
   end subroutine set_vgrid
 
   subroutine set_grids
