@@ -186,7 +186,7 @@ contains
      real,dimension(0:),intent(in):: a,b
      real,dimension(0:),intent(inout):: alpha,beta
   
-     real,dimension(0:N,0:2*N-1):: sigma
+     real,dimension(-1:N,0:2*N):: sigma
      integer:: k,l
  
      sigma(:,:) =  0.0
