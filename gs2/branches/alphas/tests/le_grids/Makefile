@@ -2,6 +2,7 @@
 sinclude ../Makefile.tests_common
 all: test_le_grids
 	mpirun -np $(NTESTPROCS) test_le_grids test_le_grids.in
+	#mpirun -np $(NTESTPROCS) test_le_grids_adjust_source test_le_grids_adjust_source.in
 
 
 
@@ -10,6 +11,9 @@ all: test_le_grids
 
 
 test_le_grids.o:  ${TEST_MODS} 
+
+test_le_grids_adjust_source: test_le_grids_adjust_source.o $(TEST_MODS)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 test_le_grids: test_le_grids.o $(TEST_MODS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)

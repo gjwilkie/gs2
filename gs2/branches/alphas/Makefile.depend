@@ -87,6 +87,7 @@ ffttester_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -150,6 +151,7 @@ gs2_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -216,6 +218,7 @@ ingen_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -409,8 +412,7 @@ general_f0.o: \
 	 spl.o \
 	 text_options.o \
 	 unit_tests.o 
-general_quad.o: \
-	 constants.o 
+general_quad.o: 
 geometry.o: \
 	 ceq.o \
 	 deq.o \
@@ -688,6 +690,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -727,7 +730,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \

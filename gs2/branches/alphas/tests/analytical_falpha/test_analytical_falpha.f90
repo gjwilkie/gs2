@@ -15,6 +15,7 @@ program test_analytical_falpha
   real :: eps
 
   type(analytical_falpha_parameters_type) :: parameters
+  logical :: dummy
 
   real, dimension(:,:,:), allocatable :: array
 
@@ -50,6 +51,7 @@ program test_analytical_falpha
   parameters%alpha_injection_energy = 3.6e2
   parameters%alpha_mass = 4.0
   parameters%alpha_charge = 2.0
+  !parameters%alpha_density = -1.0
 
   parameters%ion_temp = 1.0
   parameters%ion_tprim = 4.0
@@ -131,6 +133,20 @@ program test_analytical_falpha
   call process_test(analytical_falpha_unit_test_calculate_arrays(&
     parameters, array(:,:,1), array(:,:,2), array(:,:,3), array(:,:,4),&
     array(:,:,5), array(:,:,6), array(:,:,7), eps), 'calculate_arrays') 
+
+
+  call announce_test('alpha_density')
+  call process_test(analytical_falpha_unit_test_alpha_density(&
+    parameters, 24.6272836977552, 0.001), 'alpha_density')
+  parameters%alpha_density = 0.5
+  parameters%source = -1
+  dummy = analytical_falpha_unit_test_calculate_arrays(&
+    parameters, array(:,:,1), array(:,:,2), array(:,:,3), array(:,:,4),&
+    array(:,:,5), array(:,:,6), array(:,:,7), eps)
+  call announce_test('alpha_density adjusted')
+  call process_test(analytical_falpha_unit_test_alpha_density(&
+    parameters, 1.0, eps), 'alpha_density adjusted')
+
 
 
   call close_module_test('analytical_falpha')

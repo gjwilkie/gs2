@@ -12,7 +12,7 @@ program test_le_grids
   use general_f0, only: init_general_f0
   use mp, only: init_mp, finish_mp, proc0
   use file_utils, only: init_file_utils
-  use species, only: init_species, nspec
+  use species, only: init_species, nspec, spec
   use constants, only: pi
   !use fields, only: init_fields
   !use fields_arrays, only: phi
