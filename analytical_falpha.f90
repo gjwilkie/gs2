@@ -32,6 +32,7 @@ module analytical_falpha
   public :: analytical_falpha_unit_test_dfalpha_dnupar
   public :: analytical_falpha_unit_test_calculate_arrays
   public :: analytical_falpha_unit_test_simpson
+  public :: analytical_falpha_unit_test_alpha_density
 
   public :: analytical_falpha_parameters_type
   type analytical_falpha_parameters_type
@@ -43,6 +44,7 @@ module analytical_falpha
     real :: alpha_injection_energy
     real :: alpha_vth
     real :: alpha_charge
+    real :: alpha_density
     real :: ion_mass
     real :: ion_temp
     real :: ion_vth
@@ -62,6 +64,7 @@ module analytical_falpha
 
   private 
 
+  integer :: good_resolution
 
 contains
 
@@ -72,7 +75,7 @@ contains
                               f0prim)
     use mp, only: nproc, iproc, sum_allreduce, mp_abort
     use unit_tests, only: print_with_stars
-    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    type(analytical_falpha_parameters_type), intent(inout) :: parameters
     real, dimension(:,:), intent(in) :: egrid
     real, dimension(:,:), intent(out) :: f0_values
     real, dimension(:,:), intent(out) :: generalised_temperature
@@ -85,8 +88,16 @@ contains
     real, dimension(2) :: f0
     real, dimension(2) :: gentemp
     real, dimension(2) :: f0pr
+    real :: density
+    logical :: adjust_density_flag
 
 
+    if (parameters%source < 0.0) then
+      adjust_density_flag = .true.
+      parameters%source = 1.0
+    else
+      adjust_density_flag = .false.
+    end if
 
     is = parameters%alpha_is
 
@@ -109,6 +120,22 @@ contains
       f0 = -1.0
       gentemp = 0.0
       f0pr = 0.0
+      resolution = 64
+      converged = .false.
+      do while (.not. converged)
+        !write (*,*) 'resolution,', resolution
+        f0(1)      = f0(2)
+        f0(2)      = falpha(parameters, egrid(ie, is), parameters%energy_0, resolution)
+          converged  = is_converged(f0)
+        !end if
+        resolution = resolution * 2
+        !write (*,*) ' f0', f0, ' f0pr', f0pr, ' gentemp', gentemp
+      end do 
+      if (adjust_density_flag) then
+        write (*,*) 'Adjusting source....'
+        density = alpha_density(parameters)
+        parameters%source = parameters%source * 1.0/density
+      end if
       resolution = 64
       converged = .false.
       do while (.not. converged)
@@ -160,7 +187,7 @@ contains
                               f0prim_rslt, &
                               err)
     use unit_tests
-    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    type(analytical_falpha_parameters_type), intent(inout) :: parameters
     real, dimension(:,:), intent(in) :: egrid
     real, dimension(:,:), intent(out) :: f0_values
     real, dimension(:,:), intent(out) :: generalised_temperature
@@ -293,7 +320,54 @@ contains
       5.3**4.0/4.0 + 5.3**5.0/5.0,  eps)
   end function analytical_falpha_unit_test_simpson
       
-  
+ 
+  function alpha_density(parameters)
+    use constants, only: pi
+    implicit none
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real :: alpha_density
+    good_resolution = 1024
+    write (*,*) 'Good resolution', good_resolution
+    alpha_density = simpson(parameters, &
+                       falpha_integral_function, &
+                       parameters%energy_0**0.5,&
+                       1.5,& ! I.e. 2 x the injection velocity
+                       0.0,& ! This is a dummy in this case
+                       good_resolution) * 4.0 * pi  
+                       !+simpson(parameters, &
+                       !falpha_integral_function, &
+                       !(parameters%alpha_injection_energy*1.0)**0.5,&
+                       !(parameters%alpha_injection_energy*3.0)**0.5,&
+                       !0.0,& ! This is a dummy in this case
+                       !good_resolution) * 4.0 * pi * 0.0
+  end function alpha_density
+
+  function analytical_falpha_unit_test_alpha_density(parameters, ans, eps)
+    use unit_tests
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: ans
+    real, intent(in) :: eps
+    logical :: analytical_falpha_unit_test_alpha_density
+    analytical_falpha_unit_test_alpha_density  = agrees_with(&
+      alpha_density(parameters), &
+      ans, &
+      eps)
+  end function analytical_falpha_unit_test_alpha_density
+
+
+
+  function falpha_integral_function(parameters, energy, energy_dummy_var)
+    type(analytical_falpha_parameters_type), intent(in) :: parameters
+    real, intent(in) :: energy
+    real, intent(in) :: energy_dummy_var
+    real :: falpha_integral_function
+    falpha_integral_function = falpha(parameters, &
+                                      energy_dummy_var, &
+                                      parameters%energy_0, &
+                                      good_resolution) * &
+                               falpha_exponential(parameters, energy_dummy_var)*&
+                               energy_dummy_var
+   end function falpha_integral_function
 
 
   function falpha_exponential(parameters, energy)
@@ -305,6 +379,10 @@ contains
        (- energy) / parameters%ion_temp)
   end function falpha_exponential
 
+  !> NB this does not calculate falpha, but falpha without the 
+  !! exp(-E_alpha * energy/T_i) part, as this can be very small
+  !! for some energies, and can mess up the calculation of the 
+  !! gradients
   function falpha(parameters, energy, energy_0, resolution)
     implicit none
     type(analytical_falpha_parameters_type), intent(in) :: parameters

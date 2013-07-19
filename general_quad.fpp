@@ -49,7 +49,7 @@ contains
     integer:: i
 
     N_overresolved = N_in
-
+#ifdef LAPACK
     ! Initialize arrays
     call init_general_quad(N_out)
 
@@ -67,7 +67,11 @@ contains
     call solve_jacobi_matrix(N_out,alpha(0:N_out-1),beta(0:N_out-1),out_abscissae,out_wgts)
 
     call finish_general_quad()
+#else
 
+    write (*,*) "You need LAPACK for this to work!"
+    stop 1
+#endif
   end subroutine get_general_weights_from_grid
 
 !> Accepts the "modified moments":
@@ -93,6 +97,7 @@ contains
     real,intent(in):: v0, vf
     integer:: i
 
+#ifdef LAPACK
     mod_moments(0:2*N_out-1) = moments_in(0:2*N_out-1)
 
     ! Initialize arrays
@@ -109,10 +114,15 @@ contains
     call solve_jacobi_matrix(N_out,alpha(0:N_out-1),beta(0:N_out-1),out_abscissae,out_wgts)
 
     call finish_general_quad()
+#else
+
+    write (*,*) "You need LAPACK for this to work!"
+    stop 1
+#endif
 
    end subroutine get_general_weights_from_moments
 
-
+#ifdef LAPACK
 !> Evaluates a polynomial given recursion coefficients
    real function evaluate_poly_recursion(a,b,n,x)
      implicit none
@@ -253,5 +263,6 @@ contains
      if(allocated(mod_moments)) deallocate(mod_moments)
    end subroutine finish_general_quad
 
+#endif
 end module general_quad
   

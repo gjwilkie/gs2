@@ -310,12 +310,12 @@ contains
 
   subroutine check_electromagnetic
     use mp, only: mp_abort
-    use run_parameters, only: fapar, fbpar
-    if (abs(fapar) > epsilon(0.0) .or. abs(fbpar) > epsilon(0.0)) then
-      write(*,*) &
-      'Non-maxwellian species not implemented for electromagnetic runs'
-      call mp_abort('')
-    end if
+    !use run_parameters, only: fapar, fbpar
+    !if (abs(fapar) > epsilon(0.0) .or. abs(fbpar) > epsilon(0.0)) then
+      !write(*,*) &
+      !'Non-maxwellian species not implemented for electromagnetic runs'
+      !call mp_abort('')
+    !end if
   end subroutine check_electromagnetic
 
 
@@ -476,6 +476,8 @@ contains
 
     parameters%energy_0 = energy_0
     parameters%source_prim = spec(is)%sprim
+    
+    parameters%alpha_density = spec(is)%dens
 
     parameters%alpha_is = is
 
@@ -530,6 +532,7 @@ contains
                           f0_values, &
                           generalised_temperature, &
                           f0prim)
+    spec(is)%source = parameters%source
     !write (*,*) 'f0prim', ',is', f0prim(:,is), is
     !write (*,*) 'f0prim(:,3),', f0prim(:,3)
     !write (*,*) 'f0_values(:,3),', f0_values(:,3)
