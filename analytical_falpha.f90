@@ -132,9 +132,11 @@ contains
         !write (*,*) ' f0', f0, ' f0pr', f0pr, ' gentemp', gentemp
       end do 
       if (adjust_density_flag) then
-        write (*,*) 'Adjusting source....'
+        !write (*,*) 'Adjusting source....'
         density = alpha_density(parameters)
+        !write (*,*) 'Density is ', density
         parameters%source = parameters%source * 1.0/density
+        !write (*,*) 'Source is', parameters%source
       end if
       resolution = 64
       converged = .false.
@@ -156,7 +158,7 @@ contains
         f0pr(2)    = falpha_prim(parameters,  &
                         egrid(ie, is), f0(2), resolution)
 
-        !write (*,*) 'egrid ', egrid(ie, is), ' f0 ', f0(2), ' gentemp ', gentemp(2), egrid(ie,is), parameters%energy_0
+        !write (*,*) 'egrid ', egrid(ie, is), ' f0 ', f0(2), ' gentemp ', gentemp(2), egrid(ie,is), parameters%energy_0, 'resolution', resolution
         !if (f0(2) .eq. 0.0) then
           !converged = is_converged(f0)
         !else

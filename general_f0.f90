@@ -456,6 +456,7 @@ contains
     use species, only: nspec
     use species, only: electron_species
     use species, only: ion_species
+    use species, only: has_electron_species
     use mp, only: mp_abort
     type(analytical_falpha_parameters_type) :: parameters
     integer, intent(in) :: is
@@ -465,11 +466,14 @@ contains
     real :: shift, scal ! For modifying the energy grid for alphas
 
     !> Determine which species is the electrons
+    !main_ion_species = -1
     do i = 1,nspec
       if (spec(i)%type .eq. electron_species) electron_spec = i
       if (main_ion_species < 1 .and. spec(i)%type .eq. ion_species) &
         main_ion_species = i
     end do
+
+    write(*,*) 'main_ion_species', main_ion_species, 'electron_spec', electron_spec
 
     !if (main_ion_species < 1)  call mp_abort(&
       !'main_ion_species < 1: please set main_ion_species in general_f0_parameters') 
@@ -484,8 +488,6 @@ contains
     parameters%alpha_ion_collision_rate = spec(is)%gamma_ai
     parameters%alpha_electron_collision_rate = spec(is)%gamma_ae
 
-    parameters%ion_vth         = spec(main_ion_species)%stm
-    parameters%electron_vth    = spec(electron_species)%stm
     parameters%alpha_vth       = spec(is)%stm
 
     parameters%source          = spec(is)%source
@@ -493,29 +495,58 @@ contains
     !write (*,*) 'Source prim is', parameters%source_prim
 
     parameters%alpha_injection_energy = spec(is)%temp
-    parameters%ion_temp        = spec(main_ion_species)%temp
-    parameters%electron_temp   = spec(electron_species)%temp
 
     parameters%alpha_charge    = spec(is)%z
-    parameters%electron_charge = spec(electron_spec)%z
-    parameters%ion_charge      = spec(main_ion_species)%z
 
     parameters%alpha_mass      = spec(is)%mass
-    parameters%ion_mass        = spec(main_ion_species)%mass
-    parameters%electron_mass   = spec(electron_spec)%mass
-
-    parameters%ion_tprim        = spec(main_ion_species)%tprim
-    parameters%electron_tprim   = spec(electron_spec)%tprim
-
-    parameters%ion_fprim        = spec(main_ion_species)%fprim
-    parameters%electron_fprim   = spec(electron_spec)%fprim
 
     parameters%negrid = negrid
+    if (has_electron_species(spec)) then 
+      parameters%electron_fprim   = spec(electron_spec)%fprim
+      parameters%electron_tprim   = spec(electron_spec)%tprim
+      parameters%electron_mass   = spec(electron_spec)%mass
+      parameters%electron_charge = spec(electron_spec)%z
+      parameters%electron_vth    = spec(electron_species)%stm
+      parameters%electron_temp   = spec(electron_species)%temp
+      if (main_ion_species>0) then 
+        parameters%ion_mass        = spec(main_ion_species)%mass
+        parameters%ion_tprim        = spec(main_ion_species)%tprim
+        parameters%ion_fprim        = spec(main_ion_species)%fprim
+        parameters%ion_charge      = spec(main_ion_species)%z
+        parameters%ion_vth         = spec(main_ion_species)%stm
+        parameters%ion_temp        = spec(main_ion_species)%temp
+      else
+        ! Assume main ions are deuterium with ti = te
+        parameters%ion_mass       = spec(electron_spec)%mass * 2.0 * 1836.0
+        parameters%ion_tprim      = 0.0
+        parameters%ion_fprim      = spec(electron_spec)%fprim * 0.0
+        parameters%ion_charge     = -spec(electron_spec)%z
+        parameters%ion_temp       = spec(electron_spec)%temp
+        parameters%ion_vth        = sqrt(parameters%ion_temp/parameters%ion_mass)
+      end if
 
-    if (parameters%source .eq. 0.0) then 
-      write (*,*) 'You have source = 0.0 for alphas!!!'
-      call mp_abort(' ')
+
+    else
+      if (main_ion_species>0) then 
+
+        parameters%electron_fprim   =  0.0
+        parameters%electron_tprim   =  0.0
+        ! Assume main ions are deuterium with ti = te
+        parameters%electron_mass   = spec(main_ion_species)%mass/1836.0/2.0
+        parameters%electron_charge = -spec(main_ion_species)%z
+        parameters%electron_temp   = spec(main_ion_species)%temp
+        parameters%electron_vth    = sqrt(parameters%electron_temp/parameters%electron_mass)
+      else
+        write (*,*) 'You have no electrons and no ions: not sure how to set'
+        write (*,*) 'alpha parameters!'
+        call mp_abort('')
+      end if
     end if
+
+    !if (parameters%source .eq. 0.0) then 
+      !write (*,*) 'You have source = 0.0 for alphas!!!'
+      !call mp_abort(' ')
+    !end if
 
     ! This bit of code shifts the grid so that vcut for alphas is 1
     ! and the lowest point is energy min
