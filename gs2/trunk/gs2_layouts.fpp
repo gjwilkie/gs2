@@ -2737,7 +2737,7 @@ contains
              
           if(proc0) then	
              write(*, fmt="('Using unbalanced decomposition for xxf. '&
-             'Unbalanced fraction',F6.2)") unbalanced_amount
+              & 'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 
        end if
@@ -3720,7 +3720,7 @@ contains
              
           if(proc0) then	
              write(*, fmt="('Using unbalanced decomposition for yxf. '&
-             'Unbalanced fraction',F6.2)") unbalanced_amount
+             & 'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 
        end if
