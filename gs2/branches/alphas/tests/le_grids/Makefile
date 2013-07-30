@@ -1,7 +1,7 @@
 
 sinclude ../Makefile.tests_common
 all: test_le_grids test_le_grids_adjust_source
-	#mpirun -np $(NTESTPROCS) test_le_grids test_le_grids.in
+	mpirun -np $(NTESTPROCS) test_le_grids test_le_grids.in
 	mpirun -np $(NTESTPROCS) test_le_grids_adjust_source test_le_grids_adjust_source.in
 
 
