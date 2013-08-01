@@ -148,7 +148,7 @@ contains
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
     logical, intent(in) :: write_pflux_sym, write_pflux_tormom 
-    logical, intent(in) :: write_correlation_extend
+    logical, intent(inout) :: write_correlation_extend
     integer, intent (in) :: nmovie_tot, nwrite_big_tot
     logical, intent(in) :: write_phi_over_time
     logical, intent(in) :: write_apar_over_time,  write_bpar_over_time
@@ -474,7 +474,8 @@ contains
        write_hrate, write_final_antot, write_eigenfunc, write_verr, &
        write_fields, write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
        write_correlation_extend)
-
+ 
+    use file_utils, only: error_unit
     use mp, only: nproc
     use species, only: nspec
     use kt_grids, only: naky, ntheta0, theta0
@@ -483,7 +484,7 @@ contains
 # ifdef NETCDF
     use netcdf, only: NF90_CHAR, NF90_INT, NF90_GLOBAL
     use netcdf, only: nf90_def_var, nf90_put_att, nf90_enddef, nf90_put_var
-    use netcdf, only: nf90_inq_libvers
+    use netcdf, only: nf90_inq_libvers, nf90_inquire_dimension
     use netcdf_utils, only: netcdf_real
 # endif
 !    use netcdf_mod
@@ -494,13 +495,14 @@ contains
     logical, intent(in) :: write_eigenfunc, write_verr, write_fields, write_moments
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
     logical, intent(in) :: write_pflux_sym, write_pflux_tormom 
-    logical, intent(in) :: write_correlation_extend
+    logical, intent(inout) :: write_correlation_extend
 # ifdef NETCDF
     character (5) :: ci
-    character (20) :: datestamp, timestamp, timezone
+    character (20) :: datestamp, timestamp, timezone, tmpc
     !logical :: d_fields_per = .false. - unnecessary - now set in input file
     
-    integer :: status
+    integer :: status, ierr, dimsize(5)
+    real    :: total
 
     fmode_dim(1) = nakx_dim
     fmode_dim(2) = naky_dim
@@ -609,6 +611,25 @@ contains
     sym_dim(3) = nspec_dim
     sym_dim(4) = time_dim
 
+
+    ! HJL This is a hack to stop the netcdf diagnostic output failing when the variable sizes are too big
+    ! The netcdf limit is 2^31-4 bytes, however this limit still causes a problem so 178180992 is used
+    ! This limit was found by running the code with different sizes, it is not exact but this is a hack
+    ! and is not worth pursuing at the moment
+    status = nf90_inquire_dimension(ncid, ri_dim, tmpc, dimsize(1))
+    status = nf90_inquire_dimension(ncid, nttotext_dim, tmpc, dimsize(2))
+    status = nf90_inquire_dimension(ncid, nakx_dim, tmpc, dimsize(3))
+    status = nf90_inquire_dimension(ncid, naky_dim, tmpc, dimsize(4))
+    status = nf90_inquire_dimension(ncid, time_big_dim, tmpc, dimsize(5))
+    ierr = error_unit()
+    total = product(real(dimsize(1:5)))
+    if(total .gt. 178180992) then ! number of reals allowed in netcdf
+       write(ierr, *) 'WARNING: phi_corr is larger than maximum netcdf size, removing.'
+       write(ierr, *) 'Try increasing nwrite_multi to avoid this.'
+       io_write_corr_extend = .false.
+       write_correlation_extend = .false.
+    endif
+    ! HJL End of hack
     if (io_write_corr_extend) then
        phi2_extend_dim(1) = nttotext_dim
        phi2_extend_dim(2) = nakx_dim
@@ -967,12 +988,6 @@ contains
           status = nf90_def_var (ncid, 'phi_corr_2pi',  netcdf_real, phi_corr_2pi_dim, phi_corr_2pi_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='phi_corr_2pi')
        end if
-       if (write_correlation_extend) then
-          status = nf90_def_var (ncid, 'phi_corr',  netcdf_real, phi_corr_dim, phi_corr_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='phi_corr')
-          status = nf90_def_var (ncid, 'phi2_extend',  netcdf_real, phi2_extend_dim, phi2_extend_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='phi2_extend')
-       end if
        if (write_fields) then
 	  status = nf90_def_var (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)  !MR
 	  if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')		   
@@ -1315,6 +1330,13 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, var='input_file')
     status = nf90_put_att (ncid, input_id, 'long_name', 'Input file')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, input_id, att='long_name')
+
+    if (io_write_corr_extend) then
+       status = nf90_def_var (ncid, 'phi2_extend',  netcdf_real, phi2_extend_dim, phi2_extend_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='phi2_extend')
+       status = nf90_def_var (ncid, 'phi_corr',  netcdf_real, phi_corr_dim, phi_corr_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='phi_corr')
+    end if
 
     status = nf90_enddef (ncid)  ! out of definition mode
     if (status /= NF90_NOERR) call netcdf_error (status)
@@ -2193,6 +2215,7 @@ contains
 
   subroutine nc_loop_corr_extend (nout_big,phi_corr,phi2_extend)
 
+    use file_utils, only: error_unit
     use convert, only: c2r
     use run_parameters, only: fphi
     use kt_grids, only: ntheta0, naky, jtwist_out
@@ -2206,9 +2229,11 @@ contains
 # ifdef NETCDF
     integer, dimension (4) :: start4, count4
     integer, dimension (5) :: start5, count5
-    integer :: status
+    integer :: status, ierr
 
     real, dimension (2, size(phi_corr,1), size(phi_corr,2), size(phi_corr,3)) :: ri3
+
+    ierr = error_unit()
 
     start4(1) = 1
     start4(2) = 1

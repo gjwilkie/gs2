@@ -423,6 +423,7 @@ contains
 
     nmovie_tot = nstep/nmovie
     nwrite_big_tot = nstep/(nwrite*nwrite_mult)-nstep/4/(nwrite*nwrite_mult)
+    if(nwrite_big_tot .le. 0) nwrite_big_tot = 1
 
 ! initialize weights for less accurate integrals used
 ! to provide an error estimate for v-space integrals (energy and untrapped)
