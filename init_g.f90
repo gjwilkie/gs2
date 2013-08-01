@@ -3099,7 +3099,7 @@ contains
        else
           bymax=sqrt(kperp2(0,1,1))
        endif
-       a0 = b0/bymax
+       a0 = b0/abs(bymax)
        cfit='B0'
     endif
 
