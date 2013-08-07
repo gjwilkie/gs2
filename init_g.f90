@@ -18,8 +18,7 @@ module init_g
   integer :: ginitopt_switch
   integer, parameter :: ginitopt_default = 1,  &
        ginitopt_noise = 2, ginitopt_restart_many = 3, &
-       ginitopt_restart_small = 4, ginitopt_kpar = 5, &
-       ginitopt_mb = 6
+       ginitopt_restart_small = 4, ginitopt_kpar = 5
 
   real :: width0, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
@@ -306,8 +305,6 @@ contains
        call init_tstart (tstart, istatus)
        restarted = .true.
        scale = 1.
-    case (ginitopt_mb)
-       call ginit_mb
     end select
   end subroutine ginit
 
@@ -318,13 +315,12 @@ contains
 
     implicit none
 
-    type (text_option), dimension (6), parameter :: ginitopts = &
+    type (text_option), dimension (5), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
             text_option('many', ginitopt_restart_many), &
             text_option('small', ginitopt_restart_small), &
-            text_option('kpar', ginitopt_kpar), &
-            text_option('mb', ginitopt_mb) &
+            text_option('kpar', ginitopt_kpar) &
             /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
@@ -390,7 +386,9 @@ contains
     right = .not. left
 
     do ig = -ntgrid, ntgrid
-       phi(ig,:,:) = exp(-((theta(ig)-theta0(:,:))/width0)**2)*cmplx(1.0,1.0)            
+! TMP FOR TESTING -- MAB
+       phi(ig,:,:) = exp(-((theta(ig)-theta0(:,:))/width0)**2)*cmplx(1.0,0.0)
+!       phi(ig,:,:) = exp(-((theta(ig)-theta0(:,:))/width0)**2)*cmplx(1.0,1.0)
     end do
     if (chop_side .and. left) phi(:-1,:,:) = 0.0
     if (chop_side .and. right) phi(1:,:,:) = 0.0

@@ -26,7 +26,7 @@ module dist_fn
   public :: l_links, r_links, itright, itleft, boundary
   public :: init_kperp2
 !  public :: write_fyx
-  public :: get_init_field
+  public :: get_init_field, write_mpdist
 
   public :: gamtot,gamtot1,gamtot2
   public :: getmoms_notgc
@@ -41,7 +41,7 @@ module dist_fn
 
   private
 
-  real :: gridfac, apfac, poisfac, driftknob
+  real :: apfac, poisfac, driftknob
   real :: t0, omega0, gamma0
   real :: afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
@@ -104,9 +104,6 @@ module dist_fn
   integer, dimension (:,:), allocatable :: nsegments, ir_up, iglo_shift
 
   !< end arrays for implicit solve
-
-  real, dimension (:,:,:), allocatable :: gridfac1
-  ! (-ntgrid:ntgrid,ntheta0,naky)
 
   complex, dimension (:,:,:), allocatable :: g0, g_h
   ! (-ntgrid:ntgrid,2, -g-layout-)
@@ -187,15 +184,6 @@ subroutine check_dist_fn(report_unit)
 
   integer :: report_unit
   integer :: is 
-    if (gridfac /= 1.) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('You selected gridfac = ',e10.4,' in dist_fn_knobs.')") gridfac
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-       write (report_unit, fmt="('The normal choice is gridfac = 1.')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-    end if
 
     if (apfac /= 1.) then
        write (report_unit, *) 
@@ -362,7 +350,6 @@ subroutine check_dist_fn(report_unit)
        end select
 
        write (unit, fmt="(' nonad_zero = ',L1)") nonad_zero
-       write (unit, fmt="(' gridfac = ',e16.10)") gridfac
 
        if (.not. has_electron_species(spec)) then
           select case (adiabatic_option_switch)
@@ -414,7 +401,12 @@ subroutine check_dist_fn(report_unit)
     use nonlinear_terms, only: init_nonlinear_terms
     use hyper, only: init_hyper
 
+    use gs2_layouts, only: g_lo
+    use dist_fn_arrays, only: gnew
+
     implicit none
+
+    integer :: iglo
 
     logical:: debug=.false.
 
@@ -533,7 +525,7 @@ subroutine check_dist_fn(report_unit)
             text_option('iphi00=3', adiabatic_option_yavg)/)
     character(30) :: adiabatic_option
             
-    namelist /dist_fn_knobs/ boundary_option, nonad_zero, gridfac, apfac, &
+    namelist /dist_fn_knobs/ boundary_option, nonad_zero, apfac, &
          driftknob, poisfac, adiabatic_option, &
          kfilter, afilter, test, def_parity, even, wfb, &
          g_exb, g_exbfac, omprimfac, btor_slab, mach, lf_default, lf_decompose
@@ -549,7 +541,6 @@ subroutine check_dist_fn(report_unit)
        nonad_zero = .false.
        adiabatic_option = 'default'
        poisfac = 0.0
-       gridfac = 1.0  ! used to be 5.e4
        apfac = 1.0
        driftknob = 1.0
        t0 = 100.0
@@ -590,7 +581,6 @@ subroutine check_dist_fn(report_unit)
     call broadcast (boundary_option_switch)
     call broadcast (nonad_zero)
     call broadcast (adiabatic_option_switch)
-    call broadcast (gridfac)
     call broadcast (poisfac)
     call broadcast (apfac)
     call broadcast (driftknob)
@@ -944,6 +934,7 @@ subroutine check_dist_fn(report_unit)
 
     integer :: iglo, imu, ig, iv, ntg
     real :: thm_fac, vpm_fac, decay_fac, vpp_fac, thp_fac
+    complex :: wd1, wd2
 
     real, dimension (:,:), allocatable :: dum1, dum2
 
@@ -989,7 +980,14 @@ subroutine check_dist_fn(report_unit)
        end where
     end do
 
-    decay_fac = exp(dvpa(-nvgrid)*(dvpa(-nvgrid)-2.*abs(vpa(-ntgrid))))
+    ! TMP FOR TESTING -- MAB
+!     do iv = -nvgrid, nvgrid-1
+!        do ig = -ntgrid, ntgrid-1
+!           write (*,'(a5,5e12.4)') 'dum1', dum1(ig,iv), code_dt, delthet(ig), vpac(iv,1), vpac(iv,2)
+!        end do
+!     end do
+
+    decay_fac = exp(dvpa(-nvgrid)*(dvpa(-nvgrid)-2.*abs(vpa(-nvgrid))))
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
 
@@ -1022,30 +1020,45 @@ subroutine check_dist_fn(report_unit)
              end if
              thm_fac = 1.0-thp_fac ; vpm_fac = 1.0-vpp_fac
 
-             pppfac(ig,iv,iglo) = thp_fac*vpp_fac &
+             ! wd1 and wd2 account for contributions from wdrift
+!             wd1 = 1.0 + t_imp*zi*wdrift(ig,iv,iglo)
+!             wd2 = 1.0 + (t_imp-1.0)*zi*wdrift(ig,iv,iglo)
+             ! TMP FOR TESTING -- MAB
+             wd1 = 1.0 ; wd2 = 1.0
+
+             pppfac(ig,iv,iglo) = thp_fac*vpp_fac*wd1 &
                   + t_imp*vpp_fac*dum1(ig,iv) &
                   + t_imp*thp_fac*dum2(ig,iv)
-             ppmfac(ig,iv,iglo) = thp_fac*vpm_fac &
+             ppmfac(ig,iv,iglo) = thp_fac*vpm_fac*wd1 &
                   + t_imp*vpm_fac*dum1(ig,iv) &
                   - t_imp*thp_fac*dum2(ig,iv)
-             pmpfac(ig,iv,iglo) = thm_fac*vpp_fac &
+             pmpfac(ig,iv,iglo) = thm_fac*vpp_fac*wd1 &
                   - t_imp*vpp_fac*dum1(ig,iv) &
                   + t_imp*thm_fac*dum2(ig,iv)
-             pmmfac(ig,iv,iglo) = thm_fac*vpm_fac &
+             pmmfac(ig,iv,iglo) = thm_fac*vpm_fac*wd1 &
                   - t_imp*vpm_fac*dum1(ig,iv) &
                   - t_imp*thm_fac*dum2(ig,iv)
-             mppfac(ig,iv,iglo) = -thp_fac*vpp_fac &
+             mppfac(ig,iv,iglo) = -thp_fac*vpp_fac*wd2 &
                   + (1.0-t_imp)*vpp_fac*dum1(ig,iv) &
                   + (1.0-t_imp)*thp_fac*dum2(ig,iv)
-             mpmfac(ig,iv,iglo) = -thp_fac*vpm_fac &
+             mpmfac(ig,iv,iglo) = -thp_fac*vpm_fac*wd2 &
                   + (1.0-t_imp)*vpm_fac*dum1(ig,iv) &
                   - (1.0-t_imp)*thp_fac*dum2(ig,iv)
-             mmpfac(ig,iv,iglo) = -thm_fac*vpp_fac &
+             mmpfac(ig,iv,iglo) = -thm_fac*vpp_fac*wd2 &
                   - (1.0-t_imp)*vpp_fac*dum1(ig,iv) &
                   + (1.0-t_imp)*thm_fac*dum2(ig,iv)
-             mmmfac(ig,iv,iglo) = -thm_fac*vpm_fac &
+             mmmfac(ig,iv,iglo) = -thm_fac*vpm_fac*wd2 &
                   - (1.0-t_imp)*vpm_fac*dum1(ig,iv) &
                   - (1.0-t_imp)*thm_fac*dum2(ig,iv)
+
+! TMP FOR TESTING -- MAB
+!              write (*,*) '!-------------------- xxxfac -----------------------!'
+!              write (*,'(a7,3i4)') 'xxxfac', ig, iv, iglo
+!              write (*,'(a7,4e12.4)') 'xxxfac', pppfac(ig,iv,iglo), ppmfac(ig,iv,iglo), pmpfac(ig,iv,iglo), pmmfac(ig,iv,iglo)
+!              write (*,'(a7,4e12.4)') 'xxxfac', mppfac(ig,iv,iglo), mpmfac(ig,iv,iglo), mmpfac(ig,iv,iglo), mmmfac(ig,iv,iglo)
+!              write (*,'(a7,5e12.4)') 'xxxfac', thm_fac, vpm_fac, t_imp, dum1(ig,iv), dum2(ig,iv)
+!              write (*,'(a7,4e12.4)') 'xxxfac', mu(imu), dvpa(iv), dbdthetc(ig,1), dbdthetc(ig,2)
+!              write (*,*) '!---------------------------------------------------!'
 
           end do
        end do
@@ -1080,13 +1093,39 @@ subroutine check_dist_fn(report_unit)
           mmpfac(:ntgrid-1,nvgrid-1,iglo) = 0.
        end where
 
+!        do iv = -nvgrid, nvgrid
+!           do ig = -ntgrid, ntgrid
+!              write (*,*) '!-------------------- xxxfac -----------------------!'
+!              write (*,'(a7,4e12.4)') 'xxxfac', pppfac(ig,iv,iglo), ppmfac(ig,iv,iglo), pmpfac(ig,iv,iglo), pmmfac(ig,iv,iglo)
+!              write (*,'(a7,4e12.4)') 'xxxfac', mppfac(ig,iv,iglo), mpmfac(ig,iv,iglo), mmpfac(ig,iv,iglo), mmmfac(ig,iv,iglo)
+!              write (*,*) '!---------------------------------------------------!'
+!           end do
+!           write (*,*)
+!        end do
+
     end do
 
     ! get response of g at theta<=0, vpa=-dvpa
     ! to unit impulses in g at theta<0, vpa=0
     call get_gresponse_matrix
 
+! TMP FOR TESTING -- MAB
+!     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!        do iv = 1, ntg*nseg_max+1
+!           do ig = 1, ntg*nseg_max+1
+!              write (*,'(a10,2e12.4)'), 'gresponse', gresponse(ig,iv,iglo), m_mat(ig,iv,iglo)
+!           end do
+!        end do
+!     end do
+
     ! MAB FLAG -- need to figure out how to deal with i_class, M_class, N_class
+
+    i_class = 1
+    if (.not. allocated(M_class)) then
+       allocate (M_class(i_class))
+       allocate (N_class(i_class))
+    end if
+    M_class = naky*ntheta0 ; N_class = 1
 
 !     select case (boundary_option_switch)
 !     case (boundary_option_linked)
@@ -1114,8 +1153,11 @@ subroutine check_dist_fn(report_unit)
 
   subroutine init_connections
 
+    use mp, only: nproc, mp_abort
     use theta_grid, only: nperiod, ntgrid, ntheta
     use kt_grids, only: ntheta0, jtwist_out, naky
+    use species, only: nspec
+    use vpamu_grids, only: nmu
 
     implicit none
 
@@ -1168,6 +1210,12 @@ subroutine check_dist_fn(report_unit)
        end do
 
     case (boundary_option_linked)
+
+       if (nproc > naky*nmu*nspec) then
+          write (*,*) 'Parallelization over kx not currently supported'
+          write (*,*) 'with twist and shift boundary condition.  Aborting.'
+          call mp_abort ('Parallelization over kx not currently supported with twist-and-shift BC.')
+       end if
        
        ik = 1
        it_shift(ik) = ntheta0 ; neigen(ik) = it_shift(ik)
@@ -1672,6 +1720,7 @@ subroutine check_dist_fn(report_unit)
        iglomod(iseg) = iglo + it_shift_left(it)
        itmod = it + it_shift_left(it)
        gnew(ig_low(iseg):ig_mid(iseg),0,iglomod(iseg)) = tmp(k:kmax)
+
        k = kmax+1
        if (nsegments(it,ik) > 1) then
           do iseg = 2, nsegments(it,ik)
@@ -2908,6 +2957,7 @@ subroutine check_dist_fn(report_unit)
 
     if (.not. allocated(g)) then
        allocate (g    (-ntgrid:ntgrid,-nvgrid:nvgrid,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (gold (-ntgrid:ntgrid,-nvgrid:nvgrid,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,-nvgrid:nvgrid,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (g0   (-ntgrid:ntgrid,-nvgrid:nvgrid,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (source(-ntgrid:ntgrid,-nvgrid:nvgrid,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -2951,7 +3001,7 @@ subroutine check_dist_fn(report_unit)
   !! It calculates both the inhomogenous part, gnew, due to the sources
   !! (principly the drive terms and the nonlinear term)
   !! and the homogenous part, g1. The actual evolution of the dist func
-  !! is done in the subroutine invert_rhs. 
+  !! is done in the subroutine implicit_solve
   !!
   !! After solving for the new dist funcs, this routine calls hyper_diff, which
   !! adds hyper diffusion if present, and solfp1, from the collisions module,
@@ -2964,6 +3014,10 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: gnew, g, gold
     use nonlinear_terms, only: add_explicit_terms
     use hyper, only: hyper_diff
+    use run_parameters, only: nstep
+
+    use vpamu_grids, only: nvgrid
+    use gs2_layouts, only: g_lo
 
     implicit none
 
@@ -2973,20 +3027,40 @@ subroutine check_dist_fn(report_unit)
     integer, optional, intent (in) :: mode
     integer :: modep
 
+    ! TMP FOR TESTING -- MAB
+    integer :: ig, iglo, iv
+
     modep = 0
     if (present(mode)) modep = mode
 
+    if (istep == nstep) call write_mpdist (gnew, '.gtmp', last=.true.)
+
     ! Calculate the explicit nonlinear terms
-!    call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
-!         phi, apar, bpar, istep)
+    call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
+         phi, apar, bpar, istep)
+    ! TMP FOR TESTING -- MAB
+!     if (istep > 0) then
+!        do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!           do ig = 1, nseg_max
+!              write (*,'(a8,2e12.4)') 'source0', real(source0(ig,iglo)), aimag(source0(ig,iglo))
+!           end do
+!        end do
+!     end if
     ! Implicit Solve for gnew
     call implicit_solve
-!    call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+!     if (istep > 0) then
+!        do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!           do iv = -nvgrid, nvgrid
+!              do ig = -ntgrid, ntgrid
+!                 write (*,'(a11,2e12.4)') 'post-solve', real(gnew(ig,iv,iglo)), aimag(gnew(ig,iv,iglo))
+!              end do
+!           end do
+!        end do
+!     end if
     ! Add hyper terms (damping)
 !    call hyper_diff (gnew, phinew, bparnew)
     ! Add collisions
 !    call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
-!    if (istep == nstep) call write_mpdist (gnew, '.gtmp', last=.true.)
 
   end subroutine timeadv
 
@@ -4040,100 +4114,83 @@ subroutine check_dist_fn(report_unit)
     endif
   end subroutine getmoms_notgc
 
-!   subroutine init_fieldeq
-!     use dist_fn_arrays, only: aj0, aj1, vperp2, kperp2
-!     use species, only: nspec, spec, has_electron_species
-!     use theta_grid, only: ntgrid
-!     use kt_grids, only: naky, ntheta0, aky
-!     use le_grids, only: anon, integrate_species
-!     use gs2_layouts, only: g_lo, ie_idx, is_idx
-!     use run_parameters, only: tite
-!     implicit none
-!     integer :: iglo, isgn
-!     integer :: ik, it, ie, is
-!     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: tot
-!     real, dimension (nspec) :: wgt
+  subroutine init_fieldeq
 
-!     if (feqinit) return
-!     feqinit = .true.
+    use dist_fn_arrays, only: aj0, aj1, kperp2
+    use species, only: nspec, spec, has_electron_species
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0, aky
+    use vpamu_grids, only: anon, integrate_species, vperp2, nvgrid
+    use gs2_layouts, only: g_lo, is_idx, imu_idx
+    use run_parameters, only: tite
 
-!     allocate (gridfac1(-ntgrid:ntgrid,ntheta0,naky))
-!     gridfac1 = 1.0
-!     select case (boundary_option_switch)
-!     case (boundary_option_self_periodic)
-!        ! nothing
-!     case (boundary_option_linked)
-!        do it = 1, ntheta0
-!           do ik = 1, naky
-!              if (aky(ik) == 0.0) cycle
-!              if (itleft(ik,it) < 0) gridfac1(-ntgrid,it,ik) = gridfac
-!              if (itright(ik,it) < 0) gridfac1(ntgrid,it,ik) = gridfac
-!           end do
-!        end do
-!     case default
-!        do ik = 1, naky
-!           if (aky(ik) == 0.0) cycle
-!           gridfac1(-ntgrid,:,ik) = gridfac
-!           gridfac1(ntgrid,:,ik) = gridfac
-!        end do
-!     end select
+    implicit none
 
-!     allocate (gamtot(-ntgrid:ntgrid,ntheta0,naky))
-!     allocate (gamtot1(-ntgrid:ntgrid,ntheta0,naky))
-!     allocate (gamtot2(-ntgrid:ntgrid,ntheta0,naky))
-!     if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then	
-!        allocate (gamtot3(-ntgrid:ntgrid,ntheta0,naky))
-!     endif
+    integer :: iglo, iv
+    integer :: ik, it, imu, is
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: tot
+    real, dimension (nspec) :: wgt
+
+    if (feqinit) return
+    feqinit = .true.
+
+    allocate (gamtot(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (gamtot1(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (gamtot2(-ntgrid:ntgrid,ntheta0,naky))
+    if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then	
+       allocate (gamtot3(-ntgrid:ntgrid,ntheta0,naky))
+    endif
     
-!     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!        ie = ie_idx(g_lo,iglo)
-!        is = is_idx(g_lo,iglo)
-!        do isgn = 1, 2
-!           g0(:,isgn,iglo) = (1.0 - aj0(:,iglo)**2)*anon(ie)
-!        end do
-!     end do
-!     wgt = spec%z*spec%z*spec%dens/spec%temp
-!     call integrate_species (g0, wgt, tot)
-!     gamtot = real(tot) + kperp2*poisfac
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       imu = imu_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do iv = -nvgrid, nvgrid
+          g0(:,iv,iglo) = (1.0 - aj0(:,iglo)**2)*anon(:,iv,imu)
+       end do
+    end do
+    wgt = spec%z*spec%z*spec%dens/spec%temp
+    call integrate_species (g0, wgt, tot)
+    gamtot = real(tot) + kperp2*poisfac
     
-!     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!        ie = ie_idx(g_lo,iglo)
-!        is = is_idx(g_lo,iglo)
-!        do isgn = 1, 2
-!           g0(:,isgn,iglo) = aj0(:,iglo)*aj1(:,iglo) &
-!                *2.0*vperp2(:,iglo)*anon(ie)
-!        end do
-!     end do
-!     wgt = spec%z*spec%dens
-!     call integrate_species (g0, wgt, tot)
-!     gamtot1 = real(tot)
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       imu = imu_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do iv = -nvgrid, nvgrid
+          g0(:,iv,iglo) = aj0(:,iglo)*aj1(:,iglo) &
+               *2.0*vperp2(:,imu)*anon(:,iv,imu)
+       end do
+    end do
+    wgt = spec%z*spec%dens
+    call integrate_species (g0, wgt, tot)
+    gamtot1 = real(tot)
     
-!     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!        ie = ie_idx(g_lo,iglo)
-!        is = is_idx(g_lo,iglo)
-!        do isgn = 1, 2
-!           g0(:,isgn,iglo) = aj1(:,iglo)**2*2.0*vperp2(:,iglo)**2*anon(ie)
-!        end do
-!     end do
-!     wgt = spec%temp*spec%dens
-!     call integrate_species (g0, wgt, tot)
-!     gamtot2 = real(tot)
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       imu = imu_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do iv = -nvgrid, nvgrid
+          g0(:,iv,iglo) = aj1(:,iglo)**2*2.0*vperp2(:,imu)**2*anon(:,iv,imu)
+       end do
+    end do
+    wgt = spec%temp*spec%dens
+    call integrate_species (g0, wgt, tot)
+    gamtot2 = real(tot)
 
-! ! adiabatic electrons 
-!     if (.not. has_electron_species(spec)) then
-!        if (adiabatic_option_switch == adiabatic_option_yavg) then
-!           do ik = 1, naky
-!              if (aky(ik) > epsilon(0.0)) gamtot(:,:,ik) = gamtot(:,:,ik) + tite
-!           end do
-!        elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
-!           gamtot  = gamtot + tite
-!           gamtot3 = (gamtot-tite) / gamtot
-!           where (gamtot3 < 2.*epsilon(0.0)) gamtot3 = 1.0
-!        else
-!           gamtot = gamtot + tite 
-!        endif
-!     endif
-!   end subroutine init_fieldeq
+! adiabatic electrons 
+    if (.not. has_electron_species(spec)) then
+       if (adiabatic_option_switch == adiabatic_option_yavg) then
+          do ik = 1, naky
+             if (aky(ik) > epsilon(0.0)) gamtot(:,:,ik) = gamtot(:,:,ik) + tite
+          end do
+       elseif (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
+          gamtot  = gamtot + tite
+          gamtot3 = (gamtot-tite) / gamtot
+          where (gamtot3 < 2.*epsilon(0.0)) gamtot3 = 1.0
+       else
+          gamtot = gamtot + tite 
+       endif
+    endif
+
+  end subroutine init_fieldeq
 
   subroutine getfieldeq1 (phi, apar, bpar, antot, antota, antotp, &
        fieldeq, fieldeqa, fieldeqp)
@@ -4181,7 +4238,7 @@ subroutine check_dist_fn(report_unit)
     end if
 
     if (fphi > epsilon(0.0)) then
-       fieldeq = antot + bpar*gamtot1 - gamtot*gridfac1*phi 
+       fieldeq = antot + bpar*gamtot1 - gamtot*phi 
 
        if (.not. has_electron_species(spec)) then
           do ik = 1, naky
@@ -4193,7 +4250,7 @@ subroutine check_dist_fn(report_unit)
     end if
 
     if (fapar > epsilon(0.0)) then
-       fieldeqa = antota - kperp2*gridfac1*apar
+       fieldeqa = antota - kperp2*apar
     end if
     ! bpar == delta B_parallel / B_0(theta) b/c of the factor of 1/bmag(theta)**2
     ! in the following
@@ -4204,7 +4261,7 @@ subroutine check_dist_fn(report_unit)
              fieldeqp(:,it,ik) = fieldeqp(:,it,ik)/bmag(:)**2
           end do
        end do
-       fieldeqp = fieldeqp + bpar*gridfac1
+       fieldeqp = fieldeqp + bpar
     end if
 
   end subroutine getfieldeq1
@@ -5809,6 +5866,69 @@ subroutine check_dist_fn(report_unit)
 !    initialized=.true.
   end subroutine init_mom_coeff
 
+  ! subroutine used for testing
+  ! takes as input an array using g_lo and
+  ! writes it to a .distmp output file
+  subroutine write_mpdist (dist, extension, last)
+
+    use mp, only: proc0, send, receive
+    use file_utils, only: open_output_file, close_output_file
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use gs2_layouts, only: imu_idx, idx_local, proc_id
+    use gs2_time, only: code_time
+    use theta_grid, only: ntgrid, bmag, theta
+    use vpamu_grids, only: vpa, nvgrid, mu
+    use kt_grids, only: theta0
+
+    implicit none
+    
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: dist
+!    real, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: dist
+    character (*), intent (in) :: extension
+    logical, intent (in), optional :: last
+    
+    integer :: iglo, ik, it, is, imu, ig, iv
+    integer, save :: unit
+    logical, save :: done = .false.
+    complex :: gtmp
+!    real, dimension (2) :: gtmp
+    
+    if (.not. done) then
+       !        if (proc0) call open_output_file (unit, ".distmp")
+       if (proc0) call open_output_file (unit, trim(extension))
+       do iglo=g_lo%llim_world, g_lo%ulim_world
+          ik = ik_idx(g_lo, iglo)
+          it = it_idx(g_lo, iglo)
+          is = is_idx(g_lo, iglo) ; if (is /= 1) cycle
+          imu = imu_idx(g_lo, iglo)
+          do iv = -nvgrid, nvgrid
+             do ig = -ntgrid, ntgrid
+                if (idx_local (g_lo, ik, it, imu, is)) then
+                   if (proc0) then
+                      gtmp = dist(ig,iv,iglo)
+                   else
+                      call send (dist(ig,iv,iglo), 0)
+                   end if
+                else if (proc0) then
+                   call receive (gtmp, proc_id(g_lo, iglo))
+                end if
+                if (proc0) then
+                   write (unit,'(a1,8e14.4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
+                        real(gtmp), aimag(gtmp), theta(ig)-theta0(it,ik)
+                end if
+             end do
+          end do
+          if (proc0) then
+             write (unit,*)
+             write (unit,*)
+          end if
+       end do
+       if (proc0) call close_output_file (unit)
+       if (present(last)) done = .true.
+    end if
+    
+  end subroutine write_mpdist
+  
   subroutine finish_dist_fn
 
     use vpamu_grids, only: vperp2, energy, anon
@@ -5841,7 +5961,7 @@ subroutine check_dist_fn(report_unit)
     if (allocated(jump)) deallocate (jump)
     if (allocated(ikx_indexed)) deallocate (ikx_indexed)
     if (allocated(ufac)) deallocate (ufac)
-    if (allocated(gridfac1)) deallocate (gridfac1, gamtot, gamtot1, gamtot2)
+    if (allocated(gamtot)) deallocate (gamtot, gamtot1, gamtot2)
     if (allocated(gamtot3)) deallocate (gamtot3)
     if (allocated(fl_avg)) deallocate (fl_avg)
     if (allocated(awgt)) deallocate (awgt)

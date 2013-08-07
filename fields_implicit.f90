@@ -261,7 +261,7 @@ contains
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
     use dist_fn, only: timeadv, exb_shear
-    use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
+    use dist_fn_arrays, only: g, gold, gnew, kx_shift, theta0_shift
     implicit none
     integer :: diagnostics = 1
     integer, intent (in) :: istep
@@ -273,7 +273,7 @@ contains
        
     if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
     
-    g = gnew
+    g = gnew ; gold = gnew
     phi = phinew
     apar = aparnew
     bpar = bparnew
@@ -880,7 +880,7 @@ contains
   subroutine kt2ki (i, n, ik, it)
 
     use file_utils, only: error_unit
-    use dist_fn, only: l_links, r_links, N_class, i_class
+    use dist_fn, only: N_class, i_class
 
     integer, intent (in) :: ik, it
     integer, intent (out) :: i, n
@@ -889,7 +889,8 @@ contains
 !
 ! Get size of this supercell
 !
-    nn = 1 + l_links(ik,it) + r_links(ik,it)
+!    nn = 1 + l_links(ik,it) + r_links(ik,it)
+    nn = 1
 !
 ! Find i = N_class**-1(nn)
 !
@@ -909,7 +910,8 @@ contains
 ! 
 ! Get position in this supercell, counting from the left
 !
-    n = 1 + l_links(ik, it)
+!    n = 1 + l_links(ik, it)
+    n = 1
 
   end subroutine kt2ki
 

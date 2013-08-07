@@ -1101,6 +1101,8 @@ if (debug) write(6,*) 'eik_get_grids: ntgrid=',ntgrid
        theta(ig)     = theta_out(ig)
        gradpar(ig)   = gradpar_out(ig)
        bmag(ig)      = bmag_out(ig)
+! TMP FOR TESTING -- MAB
+       bmag(ig) = 1.0 - 0.1*cos(theta(ig))
        cvdrift(ig)   = cvdrift_out(ig)
        cvdrift0(ig)  = cvdrift0_out(ig)
        gbdrift(ig)   = gbdrift_out(ig)
@@ -1729,7 +1731,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
 
     real, dimension (nbset) :: bset_save
     real, dimension (-ntgrid:ntgrid) :: eik_save
-    integer :: ierr
+    integer :: ierr, ig
     
     ! in case nbset changes after gridgen
     if (nbset /= size(bset)) then

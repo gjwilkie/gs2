@@ -68,13 +68,16 @@ contains
     use mp, only: proc0
     use theta_grid, only: init_theta_grid
     use run_parameters, only: init_run_parameters
-    use dist_fn, only: init_dist_fn
+    use dist_fn, only: init_dist_fn, write_mpdist
+    use dist_fn_arrays, only: gnew
+    use gs2_layouts, only: g_lo
     use init_g, only: ginit, init_init_g
     use fields_implicit, only: init_fields_implicit, init_phi_implicit
     use fields_test, only: init_fields_test, init_phi_test
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
     implicit none
+    integer :: iglo
     logical :: restarted
     logical:: debug=.false.
 
@@ -115,6 +118,9 @@ contains
 
     if (debug) write(6,*) "init_fields: ginit"
     call ginit (restarted)
+
+    call write_mpdist (gnew, '.ginit')
+
     if (debug) write(6,*) "init_fields: init_antenna"
     call init_antenna
     if (restarted) return

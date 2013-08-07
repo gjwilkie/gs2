@@ -45,8 +45,8 @@ eiktest_mod = \
 ffttester_mod = \
 	 antenna.o \
 	 antenna_data.o \
+	 centering.o \
 	 ceq.o \
-	 collisions.o \
 	 command_line.o \
 	 constants.o \
 	 convert.o \
@@ -61,12 +61,10 @@ ffttester_mod = \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
-	 gauss_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2_diagnostics.o \
-	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_main.o \
@@ -80,8 +78,6 @@ ffttester_mod = \
 	 job_manage.o \
 	 kt_grids.o \
 	 layouts_type.o \
-	 le_derivatives.o \
-	 le_grids.o \
 	 leq.o \
 	 mp.o \
 	 netcdf_utils.o \
@@ -99,13 +95,14 @@ ffttester_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 vpamu_grids.o 
 
 gs2_mod = \
 	 antenna.o \
 	 antenna_data.o \
+	 centering.o \
 	 ceq.o \
-	 collisions.o \
 	 command_line.o \
 	 constants.o \
 	 convert.o \
@@ -119,13 +116,11 @@ gs2_mod = \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
-	 gauss_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2.o \
 	 gs2_diagnostics.o \
-	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_main.o \
@@ -139,8 +134,6 @@ gs2_mod = \
 	 job_manage.o \
 	 kt_grids.o \
 	 layouts_type.o \
-	 le_derivatives.o \
-	 le_grids.o \
 	 leq.o \
 	 mp.o \
 	 netcdf_utils.o \
@@ -158,7 +151,8 @@ gs2_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 vpamu_grids.o 
 
 hrate_mod = \
 	 command_line.o \
@@ -167,8 +161,8 @@ hrate_mod = \
 ingen_mod = \
 	 antenna.o \
 	 antenna_data.o \
+	 centering.o \
 	 ceq.o \
-	 collisions.o \
 	 command_line.o \
 	 constants.o \
 	 convert.o \
@@ -182,12 +176,10 @@ ingen_mod = \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
-	 gauss_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2_diagnostics.o \
-	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
@@ -201,8 +193,6 @@ ingen_mod = \
 	 job_manage.o \
 	 kt_grids.o \
 	 layouts_type.o \
-	 le_derivatives.o \
-	 le_grids.o \
 	 leq.o \
 	 mp.o \
 	 netcdf_utils.o \
@@ -219,7 +209,8 @@ ingen_mod = \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 vpamu_grids.o 
 
 kp_mod = \
 	 command_line.o \
@@ -256,48 +247,28 @@ antenna.o: \
 antenna_data.o: 
 ball.o: \
 	 geometry.o 
+centering.o: 
 ceq.o: \
 	 constants.o \
 	 read_chease.o \
 	 spl.o 
-collisions.o: \
-	 constants.o \
-	 dist_fn_arrays.o \
-	 fields_arrays.o \
-	 file_utils.o \
-	 gs2_layouts.o \
-	 gs2_time.o \
-	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
-	 prof.o \
-	 redistribute.o \
-	 run_parameters.o \
-	 species.o \
-	 spfunc.o \
-	 text_options.o \
-	 theta_grid.o 
 command_line.o: 
 constants.o: 
 convert.o: 
 deq.o: \
 	 spl.o 
 dist_fn.o: \
-	 antenna.o \
-	 collisions.o \
+	 centering.o \
 	 constants.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 file_utils.o \
 	 geometry.o \
-	 gs2_heating.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 gs2_transforms.o \
 	 hyper.o \
 	 kt_grids.o \
-	 le_derivatives.o \
-	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 prof.o \
@@ -306,12 +277,13 @@ dist_fn.o: \
 	 species.o \
 	 spfunc.o \
 	 text_options.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 vpamu_grids.o 
 dist_fn_arrays.o: \
 	 gs2_layouts.o \
-	 le_grids.o \
 	 species.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 vpamu_grids.o 
 drive.o: \
 	 regression.o 
 ediff.o: 
@@ -330,7 +302,6 @@ ffttester.o: \
 	 gs2_main.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
-	 le_grids.o \
 	 mp.o \
 	 species.o \
 	 theta_grid.o 
@@ -395,14 +366,12 @@ gs2.o: \
 	 gs2_main.o 
 gs2_diagnostics.o: \
 	 antenna.o \
-	 collisions.o \
 	 constants.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
 	 fields_arrays.o \
 	 file_utils.o \
-	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_save.o \
@@ -410,7 +379,6 @@ gs2_diagnostics.o: \
 	 gs2_transforms.o \
 	 init_g.o \
 	 kt_grids.o \
-	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -418,36 +386,24 @@ gs2_diagnostics.o: \
 	 run_parameters.o \
 	 species.o \
 	 spl.o \
-	 theta_grid.o 
-gs2_dist_io_hdf.o: \
-	 file_utils.o \
-	 gs2_layouts.o \
-	 gs2_transforms.o \
-	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
-	 species.o \
-	 theta_grid.o 
-gs2_heating.o: \
-	 mp.o \
-	 species.o 
+	 theta_grid.o \
+	 vpamu_grids.o 
 gs2_io.o: \
 	 constants.o \
 	 convert.o \
 	 fields_arrays.o \
 	 file_utils.o \
-	 gs2_heating.o \
 	 gs2_layouts.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
-	 le_grids.o \
 	 mp.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
 	 species.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 vpamu_grids.o 
 gs2_io_hdf5.o: \
 	 constants.o \
 	 convert.o \
@@ -456,20 +412,19 @@ gs2_io_hdf5.o: \
 	 gs2_layouts.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
-	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
 	 species.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 vpamu_grids.o 
 gs2_layouts.o: \
 	 file_utils.o \
 	 layouts_type.o \
 	 mp.o 
 gs2_main.o: \
 	 antenna.o \
-	 collisions.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
@@ -486,17 +441,16 @@ gs2_main.o: \
 	 init_g.o \
 	 job_manage.o \
 	 kt_grids.o \
-	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
 	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 vpamu_grids.o 
 gs2_reinit.o: \
 	 antenna.o \
-	 collisions.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
@@ -519,12 +473,11 @@ gs2_save.o: \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 layouts_type.o \
-	 le_grids.o \
 	 mp.o \
 	 netcdf_utils.o \
 	 parameter_scan_arrays.o \
-	 species.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 vpamu_grids.o 
 gs2_save_hdf5.o: \
 	 fields_arrays.o \
 	 file_utils.o \
@@ -532,7 +485,8 @@ gs2_save_hdf5.o: \
 	 kt_grids.o \
 	 mp.o \
 	 parameter_scan_arrays.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 vpamu_grids.o 
 gs2_time.o: 
 gs2_transforms.o: \
 	 fft_work.o \
@@ -556,12 +510,12 @@ hyper.o: \
 	 mp.o \
 	 run_parameters.o \
 	 text_options.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 vpamu_grids.o 
 ideq.o: \
 	 spl.o 
 ingen.o: \
 	 antenna.o \
-	 collisions.o \
 	 constants.o \
 	 dist_fn.o \
 	 fields.o \
@@ -574,7 +528,6 @@ ingen.o: \
 	 hyper.o \
 	 init_g.o \
 	 kt_grids.o \
-	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
@@ -586,13 +539,10 @@ init_g.o: \
 	 constants.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
-	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 gs2_save.o \
-	 gs2_transforms.o \
 	 kt_grids.o \
-	 le_grids.o \
 	 mp.o \
 	 ran.o \
 	 redistribute.o \
@@ -600,7 +550,7 @@ init_g.o: \
 	 species.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o 
+	 vpamu_grids.o 
 job_manage.o: \
 	 file_utils.o \
 	 mp.o 
@@ -614,24 +564,11 @@ kt_grids.o: \
 	 theta_grid.o 
 layouts_type.o: 
 le_derivatives.o: \
-	 collisions.o \
 	 dist_fn_arrays.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
-	 le_grids.o \
 	 redistribute.o \
 	 run_parameters.o \
-	 theta_grid.o 
-le_grids.o: \
-	 constants.o \
-	 file_utils.o \
-	 gauss_quad.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 layouts_type.o \
-	 mp.o \
-	 redistribute.o \
-	 species.o \
 	 theta_grid.o 
 leq.o: \
 	 constants.o \
@@ -640,7 +577,6 @@ lowflow.o: \
 	 constants.o \
 	 file_utils.o \
 	 geometry.o \
-	 le_grids.o \
 	 mp.o \
 	 species.o \
 	 spl.o \
@@ -654,6 +590,7 @@ netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
 nonlinear_terms.o: \
+	 centering.o \
 	 constants.o \
 	 dist_fn_arrays.o \
 	 file_utils.o \
@@ -661,12 +598,12 @@ nonlinear_terms.o: \
 	 gs2_time.o \
 	 gs2_transforms.o \
 	 kt_grids.o \
-	 le_grids.o \
 	 mp.o \
 	 run_parameters.o \
 	 species.o \
 	 text_options.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 vpamu_grids.o 
 om.o: \
 	 command_line.o 
 parameter_scan.o: \
@@ -719,6 +656,7 @@ test_layouts.o: \
 	 mp.o 
 text_options.o: 
 theta_grid.o: \
+	 centering.o \
 	 constants.o \
 	 file_utils.o \
 	 geometry.o \
@@ -729,3 +667,10 @@ theta_grid.o: \
 	 theta_grid_params.o 
 theta_grid_params.o: \
 	 file_utils.o 
+vpamu_grids.o: \
+	 centering.o \
+	 constants.o \
+	 file_utils.o \
+	 gs2_layouts.o \
+	 mp.o \
+	 theta_grid.o 

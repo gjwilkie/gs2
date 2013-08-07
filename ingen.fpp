@@ -37,7 +37,6 @@ program ingen
 
   integer :: in_file, i, ierr, unit, is, report_unit, iunit, ncut, npmax
   logical :: exist, scan, stdin
-  logical :: coll_on = .false.
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -658,10 +657,6 @@ contains
 !                 which is gradually shrinking.!                  
 !
     use antenna, only: init_antenna
-    use collisions, only: coll_read_parameters=>read_parameters
-    use collisions, only: collision_model_switch, collision_model_none
-    use collisions, only: collision_model_full, collision_model_ediffuse
-    use collisions, only: collision_model_lorentz, collision_model_lorentz_test
     use fields, only : fields_read_parameters=>read_parameters
     use hyper, only : hyper_read_parameters=>read_parameters
     use species,only : spec, nspec
@@ -675,7 +670,6 @@ contains
     use gs2_diagnostics,only: gs2diag_read_parameters=>read_parameters
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
-    use le_grids, only: init_le_grids
     use theta_grid, only: init_theta_grid, nbset, ntgrid
     use constants, only: pi
     implicit none
@@ -708,9 +702,6 @@ if (debug) write(6,*) 'get_namelists: layouts'
     ! run_parameters:
     call init_run_parameters
 
-if (debug) write(6,*) 'get_namelists: collisions'
-    call coll_read_parameters
-
 if (debug) write(6,*) 'get_namelists: init_g'
     call init_init_g
 
@@ -726,19 +717,11 @@ if (debug) write(6,*) 'get_namelists: hyper'
 if (debug) write(6,*) 'get_namelists: kt_grids'
     call init_kt_grids
 
-if (debug) write(6,*) 'get_namelists: le_grids'
-    call init_le_grids(accelx, accelv)
-
 if (debug) write(6,*) 'get_namelists: nonlinear terms'
     call nonlinear_terms_read_parameters
 
 if (debug) write(6,*) 'get_namelists: init_species'
     call init_species
-
-    do is=1, nspec
-        coll_on = spec(is)%vnewk > epsilon(0.0) .or. coll_on
-    end do
-    coll_on = coll_on .and. (collision_model_switch /= collision_model_none)
 
 !CMR, 2/2/2011:  reduce much duplication by calling init_theta_grid
 if (debug) write(6,*) 'get_namelists: call init_theta_grid, ntgrid=',ntgrid
@@ -758,7 +741,6 @@ if (debug) write(6,*) 'get_namelists: returning'
 
   subroutine write_namelists (jr, tag1, tag2)
     use antenna, only: wnml_antenna
-    use collisions, only: wnml_collisions
     use dist_fn, only: wnml_dist_fn
     use fields, only: wnml_fields
     use gs2_reinit, only: wnml_gs2_reinit
@@ -767,7 +749,6 @@ if (debug) write(6,*) 'get_namelists: returning'
     use hyper, only: wnml_hyper
     use init_g, only : wnml_init_g
     use kt_grids, only: wnml_kt
-    use le_grids, only: wnml_le_grids
     use nonlinear_terms, only: nonlin, wnml_nonlinear_terms
     use run_parameters, only: wnml_run_parameters
     use species, only: wnml_species, nspec, spec, has_electron_species
@@ -814,7 +795,6 @@ if (debug) write(6,*) 'get_namelists: returning'
     end if
 
     call wnml_gs2_layouts(unit)
-    call wnml_collisions(unit)
     call wnml_init_g(unit)
     call wnml_dist_fn(unit)
     call wnml_fields(unit)
@@ -822,10 +802,9 @@ if (debug) write(6,*) 'get_namelists: returning'
     if (nonlin) call wnml_gs2_reinit(unit)
     call wnml_hyper(unit)
     call wnml_kt(unit)
-    call wnml_le_grids(unit)
     call wnml_nonlinear_terms(unit)
     electrons=has_electron_species(spec)
-    call wnml_run_parameters(unit,electrons,coll_on)
+    call wnml_run_parameters(unit,electrons)
     call wnml_species(unit)
 
     call wnml_theta_grid_params(unit)
@@ -889,7 +868,6 @@ if (debug) write(6,*) 'get_namelists: returning'
 
    subroutine report
      use antenna, only: check_antenna
-     use collisions, only: check_collisions
      use dist_fn, only: check_dist_fn
      use fields, only: check_fields
      use gs2_diagnostics, only: check_gs2_diagnostics
@@ -901,8 +879,6 @@ if (debug) write(6,*) 'get_namelists: returning'
      use init_g, only: check_init_g
      use kt_grids, only: check_kt_grids, grid_option, gridopt_switch
      use kt_grids, only: gridopt_box, naky, ntheta0, nx, ny
-!     use le_grids, only: leok_le_grids, check_le_grids
-     use le_grids, only: negrid, nlambda
      use nonlinear_terms, only: nonlin, cfl, check_nonlinear_terms
      use run_parameters, only: check_run_parameters
      use run_parameters, only: beta, tite, margin, code_delt_max
@@ -913,16 +889,12 @@ if (debug) write(6,*) 'get_namelists: returning'
      use theta_grid_params, only: nperiod, ntheta, eps, epsl, rmaj, r_geo
      use theta_grid_params, only: pk, qinp, rhoc, shift, shat
      use theta_grid_params, only: akappa, akappri, tri, tripri
-     use collisions, only: collision_model_switch, collision_model_none
-     use collisions, only: collision_model_full, collision_model_ediffuse
-     use collisions, only: collision_model_lorentz, collision_model_lorentz_test
 
      implicit none
      real :: alne, dbetadrho_spec
      real :: kxfac, drhodpsi
      character (20) :: datestamp, timestamp, zone
      character (200) :: line
-     logical :: le_ok = .true.
      integer :: j, nmesh
      integer, dimension(4) :: pfacs
 
@@ -942,123 +914,6 @@ if (debug) write(6,*) 'get_namelists: returning'
 
      write (report_unit, fmt="(/'------------------------------------------------------------'/)")
 
-!     le_ok=leok_le_grids(report_unit)
-     le_ok = .true.  ! temporary fix until leok_le_grids is restored to the distibution.  BD (sorry about that)
-     
-     if (le_ok) then
-
-        if (nonlin) then
-           if (gridopt_switch /= gridopt_box) then
-              write (report_unit, *) 
-              write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, fmt="('Nonlinear runs must be carried out in a box.')") 
-              write (report_unit, fmt="('Set grid_option to box in the kt_grids_knobs namelist')") 
-              write (report_unit, fmt="('or set nonlinear_mode to off in the nonlinear_knobs namelist.')") 
-              write (report_unit, fmt="('THIS IS AN ERROR.')") 
-              write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, *) 
-           end if
-
-           write (report_unit, fmt="('nmesh=(2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec')")
-           nmesh = (2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec
-           write (report_unit, fmt="('Number of meshpoints:    ',i16)") nmesh
-
- !
- ! check that nx, ny have no large prime factors
- !
-         pfacs = 0
-           call pfactors (ny, pfacs)
-           if (pfacs(4) /= 0) then
-              write (report_unit, *) 
-              write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, fmt="('ny is a multiple of ',i4)") pfacs(4)
-              write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')")
-              write (report_unit, fmt="('ny should have only 2, 3, and/or 5 as prime factors.')")
-              write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, *) 
-           end if
-           i = 1
-           if (pfacs(1) > 0) i=2**pfacs(1)
-           if (pfacs(2) > 0) i=3**pfacs(2)*i
-           if (pfacs(3) > 0) i=5**pfacs(3)*i
-           if (i /= ny) then
-              write (report_unit, *) 
-              write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, fmt="('ny = ',i3)") ny
-              write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')")
-              write (report_unit, fmt="('ny should have only 2, 3, and/or 5 as prime factors.')")
-              write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, *) 
-           end if
-
-           pfacs = 0
-           call pfactors (nx, pfacs)
-           if (pfacs(4) /= 0) then
-              write (report_unit, *) 
-              write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, fmt="('nx is a multiple of ',i3)") pfacs(4)
-              write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')")
-              write (report_unit, fmt="('nx should have only 2, 3, and/or 5 as prime factors.')")
-              write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, *) 
-           end if
-           i = 1
-           if (pfacs(1) > 0) i=2**pfacs(1)
-           if (pfacs(2) > 0) i=3**pfacs(2)*i
-           if (pfacs(3) > 0) i=5**pfacs(3)*i
-           if (i /= nx) then
-              write (report_unit, *) 
-              write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, fmt="('nx = ',i3)") nx
-              write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')")
-              write (report_unit, fmt="('nx should have only 2, 3, and/or 5 as prime factors.')")
-              write (report_unit, fmt="('################# WARNING #######################')")
-              write (report_unit, *) 
-           end if
-        else
-           write (report_unit, fmt="('nmesh=(2*ntgrid+1)*2*nlambda*negrid*ntheta0*naky*nspec')")
-           nmesh = (2*ntgrid+1)*2*nlambda*negrid*ntheta0*naky*nspec
-           write (report_unit, fmt="('Number of meshpoints:    ',i14)") nmesh
-        end if
-
-        write (report_unit, fmt="(T12,' ntgrid=',i12)") ntgrid
-        write (report_unit, fmt="(T9,'2*ntgrid+1=',i12)") 2*ntgrid+1
-        write (report_unit, fmt="(T12,'nlambda=',i12)") nlambda
-        write (report_unit, fmt="(T12,' negrid=',i12)") negrid
-        write (report_unit, fmt="(T12,'ntheta0=',i12)") ntheta0
-        write (report_unit, fmt="(T12,'     nx=',i12)") nx
-        write (report_unit, fmt="(T12,'   naky=',i12)") naky
-        write (report_unit, fmt="(T12,'     ny=',i12)") ny
-        write (report_unit, fmt="(T12,'  nspec=',i12,/)") nspec
-
-        call nprocs (nmesh)
-        if (nonlin) then
-           write (report_unit, fmt="(/'Nonlinear run => consider #proc sweetspots for xxf+yxf objects!')") 
-           call nprocs_xxf(nmesh)
-           call nprocs_yxf(nmesh)
-        endif
-
-
-# ifdef USE_LE_LAYOUT
-        write (report_unit, fmt="(/'Collisions using le_lo')") 
-        call nprocs_le(nmesh)
-# else
-        select case (collision_model_switch)
-        case (collision_model_full)
-           write (report_unit, fmt="(/'Collisions using lz_lo')") 
-           call nprocs_lz(nmesh)
-           write (report_unit, fmt="(/'Collisions using e_lo')") 
-           call nprocs_e(nmesh)
-        case(collision_model_lorentz,collision_model_lorentz_test)
-           write (report_unit, fmt="(/'Collisions using lz_lo')") 
-           call nprocs_lz(nmesh)
-        case (collision_model_ediffuse)
-           write (report_unit, fmt="(/'Collisions using e_lo')") 
-           call nprocs_e(nmesh)
-        end select
-# endif
-     endif
-
      write (report_unit, *) 
      write (report_unit, fmt="('------------------------------------------------------------')")
      write (report_unit, *) 
@@ -1072,13 +927,6 @@ if (debug) write(6,*) 'get_namelists: returning'
 
      write (report_unit, fmt="(/'------------------------------------------------------------'/)")
 
-     if (coll_on) then 
-        call check_collisions(report_unit) 
-     else
-       write (report_unit, fmt="('All collisionality parameters (vnewk) are zero.')")
-       write (report_unit, fmt="('No collision operator will be used.')")
-     end if
-       
     write (report_unit, *) 
     write (report_unit, fmt="('------------------------------------------------------------')")
     write (report_unit, *) 
@@ -1157,12 +1005,6 @@ if (debug) write(6,*) 'get_namelists: returning'
 
     call check_hyper(report_unit)
 
-! BD broke this accidentally and will fix it.  July 22, 2011
-!
-!    write (report_unit, fmt="(/'------------------------------------------------------------'/)")
-!
-!    call check_le_grids(report_unit,le_ok)   
-
     write (report_unit, fmt="(/'------------------------------------------------------------'/)")
     call check_run_parameters(report_unit)
 
@@ -1200,431 +1042,258 @@ if (debug) write(6,*) 'get_namelists: returning'
    enddo
   end subroutine wsweetspots
 
-  subroutine nprocs_xxf(nmesh)
-    use nonlinear_terms, only : nonlin
-    use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
-    use kt_grids, only: naky, ntheta0
-    use le_grids, only: negrid, nlambda
-    use theta_grid, only: ntgrid
-    use gs2_layouts, only: layout
-    implicit none
-    real :: fac
-    integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
-    integer, dimension(:,:), allocatable :: facs
-    integer :: npe
-    real :: time
-    integer :: maxfacs
-    integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kyfacs
-    integer, dimension(6) :: nfac, sdim
-    character*3, dimension(6):: sym
+!   subroutine nprocs_xxf(nmesh)
+!     use nonlinear_terms, only : nonlin
+!     use species, only : nspec
+!     use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+!     use kt_grids, only: naky, ntheta0
+!     use theta_grid, only: ntgrid
+!     use gs2_layouts, only: layout
+!     implicit none
+!     real :: fac
+!     integer, intent (in) :: nmesh
+!     integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+!     integer, dimension(:,:), allocatable :: facs
+!     integer :: npe
+!     real :: time
+!     integer :: maxfacs
+!     integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kyfacs
+!     integer, dimension(6) :: nfac, sdim
+!     character*3, dimension(6):: sym
 
-    if (.not.nonlin) return
-    write (report_unit, fmt="('xxf sweetspot #proc up to:'i8)") npmax
-    maxfacs=max(nspec,negrid,nlambda,2,2*ntgrid+1,naky)/2+1
-    allocate (spfacs(maxfacs),efacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,6))
-    call factors (nspec, nspfacs, spfacs)
-    call factors (negrid, nefacs, efacs)
-    call factors (nlambda, nlfacs, lfacs)
-    call factors (2, nsgfacs, sgfacs)
-    call factors (2*ntgrid+1, ntgfacs, tgfacs)
-    call factors (naky, nkyfacs, kyfacs)
+!     if (.not.nonlin) return
+!     write (report_unit, fmt="('xxf sweetspot #proc up to:'i8)") npmax
+!     maxfacs=max(nspec,negrid,nlambda,2,2*ntgrid+1,naky)/2+1
+!     allocate (spfacs(maxfacs),efacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,6))
+!     call factors (nspec, nspfacs, spfacs)
+!     call factors (negrid, nefacs, efacs)
+!     call factors (nlambda, nlfacs, lfacs)
+!     call factors (2, nsgfacs, sgfacs)
+!     call factors (2*ntgrid+1, ntgfacs, tgfacs)
+!     call factors (naky, nkyfacs, kyfacs)
 
-    select case (layout)
-       case ('lexys','lxyes','lyxes','yxles','xyles')
-          sym = (/ "s  ","e  ","l  ","sgn","tg ","y  " /)
-          sdim = (/ nspec, negrid, nlambda, 2, 2*ntgrid+1, naky /)
-          nfac= (/ nspfacs, nefacs, nlfacs, nsgfacs, ntgfacs, nkyfacs /)
-          facs(:,1)=spfacs; facs(:,2)=efacs; facs(:,3)=lfacs
-          facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=nkyfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-       case ('yxels')
-          sym = (/ "s  ","l  ","e  ","sgn","tg ","y  " /)
-          sdim = (/ nspec, nlambda, negrid, 2, 2*ntgrid+1, naky /)
-          nfac= (/ nspfacs, nlfacs, nefacs, nsgfacs, ntgfacs, nkyfacs /)
-          facs(:,1)=spfacs; facs(:,2)=lfacs; facs(:,3)=efacs
-          facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=nkyfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-       end select
-       deallocate (facs,spfacs,efacs,lfacs,sgfacs,tgfacs,kyfacs)
-  end subroutine nprocs_xxf
+!     select case (layout)
+!        case ('lexys','lxyes','lyxes','yxles','xyles')
+!           sym = (/ "s  ","e  ","l  ","sgn","tg ","y  " /)
+!           sdim = (/ nspec, negrid, nlambda, 2, 2*ntgrid+1, naky /)
+!           nfac= (/ nspfacs, nefacs, nlfacs, nsgfacs, ntgfacs, nkyfacs /)
+!           facs(:,1)=spfacs; facs(:,2)=efacs; facs(:,3)=lfacs
+!           facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=nkyfacs
+!           call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+!        case ('yxels')
+!           sym = (/ "s  ","l  ","e  ","sgn","tg ","y  " /)
+!           sdim = (/ nspec, nlambda, negrid, 2, 2*ntgrid+1, naky /)
+!           nfac= (/ nspfacs, nlfacs, nefacs, nsgfacs, ntgfacs, nkyfacs /)
+!           facs(:,1)=spfacs; facs(:,2)=lfacs; facs(:,3)=efacs
+!           facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=nkyfacs
+!           call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+!        end select
+!        deallocate (facs,spfacs,efacs,lfacs,sgfacs,tgfacs,kyfacs)
+!   end subroutine nprocs_xxf
 
-  subroutine nprocs_yxf(nmesh)
-    use nonlinear_terms, only : nonlin
-    use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
-    use kt_grids, only: naky, ntheta0, nx
-    use le_grids, only: negrid, nlambda
-    use theta_grid, only: ntgrid
+!   subroutine nprocs_yxf(nmesh)
+!     use nonlinear_terms, only : nonlin
+!     use species, only : nspec
+!     use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+!     use kt_grids, only: naky, ntheta0, nx
+!     use theta_grid, only: ntgrid
 
-    use gs2_layouts, only: layout
-    implicit none
-    real :: fac
-    integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
-    integer, dimension(:,:), allocatable :: facs
-    integer :: npe
-    real :: time
-    integer :: maxfacs
-    integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kxfacs
-    integer, dimension(6) :: nfac, sdim
-    character*3, dimension(6):: sym
+!     use gs2_layouts, only: layout
+!     implicit none
+!     real :: fac
+!     integer, intent (in) :: nmesh
+!     integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+!     integer, dimension(:,:), allocatable :: facs
+!     integer :: npe
+!     real :: time
+!     integer :: maxfacs
+!     integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kxfacs
+!     integer, dimension(6) :: nfac, sdim
+!     character*3, dimension(6):: sym
 
-    if (.not.nonlin) return
-    write (report_unit, fmt="('yxf sweetspot #proc up to:'i8)") npmax 
-    maxfacs=max(nspec,negrid,nlambda,2,2*ntgrid+1,naky)/2+1
-    allocate (spfacs(maxfacs),efacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),facs(maxfacs,6))
-    call factors (nspec, nspfacs, spfacs)
-    call factors (negrid, nefacs, efacs)
-    call factors (nlambda, nlfacs, lfacs)
-    call factors (2, nsgfacs, sgfacs)
-    call factors (2*ntgrid+1, ntgfacs, tgfacs)
-    call factors (nx, nkxfacs, kxfacs)
+!     if (.not.nonlin) return
+!     write (report_unit, fmt="('yxf sweetspot #proc up to:'i8)") npmax 
+!     maxfacs=max(nspec,negrid,nlambda,2,2*ntgrid+1,naky)/2+1
+!     allocate (spfacs(maxfacs),efacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),facs(maxfacs,6))
+!     call factors (nspec, nspfacs, spfacs)
+!     call factors (negrid, nefacs, efacs)
+!     call factors (nlambda, nlfacs, lfacs)
+!     call factors (2, nsgfacs, sgfacs)
+!     call factors (2*ntgrid+1, ntgfacs, tgfacs)
+!     call factors (nx, nkxfacs, kxfacs)
 
-    select case (layout)
-       case ('lexys','lxyes','lyxes','yxles','xyles')
-          sym = (/ "s  ","e  ","l  ","sgn","tg ","x  " /)
-          sdim = (/ nspec, negrid, nlambda, 2, 2*ntgrid+1, nx /)
-          nfac= (/ nspfacs, nefacs, nlfacs, nsgfacs, ntgfacs, nkxfacs /)
-          facs(:,1)=spfacs; facs(:,2)=efacs; facs(:,3)=lfacs
-          facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=kxfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-       case ('yxels')
-          sym = (/ "s  ","l  ","e  ","sgn","tg ","x  " /)
-          sdim = (/ nspec, nlambda, negrid, 2, 2*ntgrid+1, nx /)
-          nfac= (/ nspfacs, nlfacs, nefacs, nsgfacs, ntgfacs, nkxfacs /)
-          facs(:,1)=spfacs; facs(:,2)=lfacs; facs(:,3)=efacs
-          facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=nkxfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-     end select
-     deallocate (facs,spfacs,efacs,lfacs,sgfacs,tgfacs,kxfacs)
-  end subroutine nprocs_yxf
+!     select case (layout)
+!        case ('lexys','lxyes','lyxes','yxles','xyles')
+!           sym = (/ "s  ","e  ","l  ","sgn","tg ","x  " /)
+!           sdim = (/ nspec, negrid, nlambda, 2, 2*ntgrid+1, nx /)
+!           nfac= (/ nspfacs, nefacs, nlfacs, nsgfacs, ntgfacs, nkxfacs /)
+!           facs(:,1)=spfacs; facs(:,2)=efacs; facs(:,3)=lfacs
+!           facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=kxfacs
+!           call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+!        case ('yxels')
+!           sym = (/ "s  ","l  ","e  ","sgn","tg ","x  " /)
+!           sdim = (/ nspec, nlambda, negrid, 2, 2*ntgrid+1, nx /)
+!           nfac= (/ nspfacs, nlfacs, nefacs, nsgfacs, ntgfacs, nkxfacs /)
+!           facs(:,1)=spfacs; facs(:,2)=lfacs; facs(:,3)=efacs
+!           facs(:,4)=sgfacs; facs(:,5)=tgfacs; facs(:,6)=nkxfacs
+!           call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
+!      end select
+!      deallocate (facs,spfacs,efacs,lfacs,sgfacs,tgfacs,kxfacs)
+!   end subroutine nprocs_yxf
 
-  subroutine nprocs_e(nmesh)
-    use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
-    use kt_grids, only: naky, ntheta0
-    use le_grids, only: negrid, nlambda
-    use theta_grid, only: ntgrid
+!   subroutine nprocs (nmesh)
+!     use nonlinear_terms, only : nonlin
+!     use species, only : nspec
+!     use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+!     use kt_grids, only: naky, ntheta0, nx, ny
+!     use theta_grid, only: ntgrid
+!     use gs2_layouts, only: layout, init_x_transform_layouts, init_y_transform_layouts
+!     implicit none
+!     real :: fac
+!     integer, intent (in) :: nmesh
+!     integer :: nefacs, nlfacs, nkyfacs, nkxfacs, nspfacs, nkxkyfacs
+!     integer, dimension(:,:), allocatable :: facs
+!     integer :: npe, checknpe, i, j
+!     logical :: onlyxoryfac
+!     real :: time
 
-    use gs2_layouts, only: layout
-    implicit none
-    real :: fac
-    integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
-    integer, dimension(:,:), allocatable :: facs
-    integer :: npe
-    real :: time
-    integer :: maxfacs
-    integer, allocatable, dimension(:):: spfacs, lfacs, sgfacs, tgfacs, kxfacs, kyfacs
-    integer, dimension(6) :: nfac, sdim
-    character*3, dimension(6):: sym
+!     write (report_unit, fmt="('Layout = ',a5,/)") layout 
+!     write (report_unit, fmt="('Recommended #proc up to:'i8)") npmax 
+!     if (nonlin) then
 
-    write (report_unit, fmt="('#proc sweetspots for e_lo, up to:'i8)") npmax
-    maxfacs=max(nspec,nlambda,2,2*ntgrid+1,ntheta0,naky)/2+1
-    allocate (spfacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,6))
-    call factors (nspec, nspfacs, spfacs)
-    call factors (nlambda, nlfacs, lfacs)
-    call factors (2, nsgfacs, sgfacs)
-    call factors (2*ntgrid+1, ntgfacs, tgfacs)
-    call factors (ntheta0, nkxfacs, kxfacs)
-    call factors (naky, nkyfacs, kyfacs)
-
-    select case (layout)
-       case ('lexys','lxyes')
-          sym = (/ "s  ","y  ","x  ","l  ","sgn","tg " /)
-          sdim = (/ nspec, naky, ntheta0, nlambda, 2, 2*ntgrid+1 /)
-          nfac= (/ nspfacs, nkyfacs, nkxfacs, nlfacs, nsgfacs, ntgfacs /)
-          facs(:,1)=spfacs; facs(:,2)=kyfacs; facs(:,3)=kxfacs
-          facs(:,4)=lfacs; facs(:,5)=sgfacs; facs(:,6)=tgfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-       case ('lyxes')
-          sym = (/ "s  ","x  ","y  ","l  ","sgn","tg " /)
-          sdim = (/ nspec, ntheta0, naky, nlambda, 2, 2*ntgrid+1 /)
-          nfac= (/ nspfacs, nkxfacs, nkyfacs, nlfacs, nsgfacs, ntgfacs /)
-          facs(:,1)=spfacs; facs(:,2)=kxfacs; facs(:,3)=kyfacs
-          facs(:,4)=lfacs; facs(:,5)=sgfacs; facs(:,6)=tgfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-       case ('xyles')
-          sym = (/ "s  ","l  ","y  ","x  ","sgn","tg " /)
-          sdim = (/ nspec, nlambda, naky, ntheta0, 2, 2*ntgrid+1 /)
-          nfac= (/ nspfacs, nlfacs, nkyfacs, nkxfacs, nsgfacs, ntgfacs /)
-          facs(:,1)=spfacs; facs(:,2)=lfacs; facs(:,3)=kyfacs
-          facs(:,4)=kxfacs; facs(:,5)=sgfacs; facs(:,6)=tgfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-       case ('yxles','yxels')
-          sym = (/ "s  ","l  ","x  ","y  ","sgn","tg " /)
-          sdim = (/ nspec, nlambda, ntheta0, naky, 2, 2*ntgrid+1 /)
-          nfac= (/ nspfacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, ntgfacs /)
-          facs(:,1)=spfacs; facs(:,2)=lfacs; facs(:,3)=kxfacs
-          facs(:,4)=kyfacs; facs(:,5)=sgfacs; facs(:,6)=tgfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-     end select
-     deallocate (facs,spfacs,lfacs,sgfacs,tgfacs,kxfacs,kyfacs)
-  end subroutine nprocs_e
-
-
-  subroutine nprocs_lz(nmesh)
-    use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
-    use kt_grids, only: naky, ntheta0
-    use le_grids, only: negrid, nlambda
-    use theta_grid, only: ntgrid
-
-    use gs2_layouts, only: layout
-    implicit none
-    real :: fac
-    integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
-    integer, dimension(:,:), allocatable :: facs
-    integer :: npe
-    real :: time
-    integer :: maxfacs
-    integer, allocatable, dimension(:):: spfacs, efacs, sgfacs, tgfacs, kxfacs, kyfacs
-    integer, dimension(5) :: nfac, sdim
-    character*3, dimension(5):: sym
-
-    write (report_unit, fmt="('#proc sweetspots for lz_lo, up to:'i8)") npmax
-
-    maxfacs=max(nspec,negrid,2*ntgrid+1,ntheta0,naky)/2+1
-    allocate (spfacs(maxfacs),efacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,6))
-    call factors (nspec, nspfacs, spfacs)
-    call factors (negrid, nefacs, efacs)
-    call factors (2*ntgrid+1, ntgfacs, tgfacs)
-    call factors (ntheta0, nkxfacs, kxfacs)
-    call factors (naky, nkyfacs, kyfacs)
- 
-    select case (layout)
-       case ('lexys')
-          sym = (/ "s  ","y  ","x  ","e  ","tg " /)
-          sdim = (/ nspec, naky, ntheta0, negrid, 2*ntgrid+1 /)
-          nfac= (/ nspfacs, nkyfacs, nkxfacs, nefacs, ntgfacs /)
-          facs(:,1)=spfacs; facs(:,2)=kyfacs; facs(:,3)=kxfacs
-          facs(:,4)=efacs; facs(:,5)=tgfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-       case ('lyxes','yxles','yxels')
-          sym = (/ "s  ","e  ","x  ","y  ","tg " /)
-          sdim = (/ nspec, negrid, ntheta0, naky, 2*ntgrid+1 /)
-          nfac= (/ nspfacs, nefacs, nkxfacs, nkyfacs, ntgfacs /)
-          facs(:,1)=spfacs; facs(:,2)=efacs; facs(:,3)=kxfacs
-          facs(:,4)=kyfacs; facs(:,5)=tgfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-       case ('xyles','lxyes')
-          sym = (/ "s  ","e  ","y  ","x  ","tg " /)
-          sdim = (/ nspec, negrid, naky, ntheta0, 2*ntgrid+1 /)
-          nfac= (/ nspfacs, nefacs, nkyfacs, nkxfacs, ntgfacs /)
-          facs(:,1)=spfacs; facs(:,2)=efacs; facs(:,3)=kyfacs
-          facs(:,4)=kxfacs; facs(:,5)=tgfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-    end select
-    deallocate (spfacs,efacs,tgfacs,kxfacs,kyfacs,facs)
-  end subroutine nprocs_lz
-
-
-  subroutine nprocs_le(nmesh)
-    use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
-    use kt_grids, only: naky, ntheta0
-    use le_grids, only: negrid, nlambda
-    use theta_grid, only: ntgrid
-
-    use gs2_layouts, only: layout
-    implicit none
-    real :: fac
-    integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
-    integer, dimension(:,:), allocatable :: facs
-    integer :: npe
-    real :: time
-    integer :: maxfacs
-    integer, allocatable, dimension(:):: spfacs, efacs, sgfacs, tgfacs, kxfacs, kyfacs
-    integer, dimension(4) :: nfac, sdim
-    character*3, dimension(4):: sym
-
-    write (report_unit, fmt="('#proc sweetspots for le_lo, up to:'i8)") npmax
-
-    maxfacs=max(nspec,2*ntgrid+1,ntheta0,naky)/2+1
-    allocate (spfacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,4))
-    call factors (nspec, nspfacs, spfacs)
-    call factors (2*ntgrid+1, ntgfacs, tgfacs)
-    call factors (ntheta0, nkxfacs, kxfacs)
-    call factors (naky, nkyfacs, kyfacs)
-
-    select case (layout)
-       case ('lexys','xyles','lxyes')
-          sym = (/ "s  ","y  ","x  ","tg " /)
-          sdim = (/ nspec, naky, ntheta0, 2*ntgrid+1 /)
-          nfac= (/ nspfacs, nkyfacs, nkxfacs, ntgfacs /)
-          facs(:,1)=spfacs; facs(:,2)=kyfacs
-          facs(:,3)=kxfacs; facs(:,4)=tgfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-       case ('lyxes','yxles','yxels')
-          sym = (/ "s  ","x  ","y  ","tg " /)
-          sdim = (/ nspec, ntheta0, naky, 2*ntgrid+1 /)
-          nfac= (/ nspfacs, nkxfacs, nkyfacs, ntgfacs /)
-          facs(:,1)=spfacs; facs(:,2)=kxfacs
-          facs(:,3)=kyfacs; facs(:,4)=tgfacs
-          call wsweetspots(sym,sdim,nfac,facs,npmax,LUN=report_unit)
-    end select
-    deallocate (spfacs,tgfacs,kxfacs,kyfacs,facs)
-  end subroutine nprocs_le
-
-
-  subroutine nprocs (nmesh)
-    use nonlinear_terms, only : nonlin
-    use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
-    use kt_grids, only: naky, ntheta0, nx, ny
-    use le_grids, only: negrid, nlambda
-    use theta_grid, only: ntgrid
-    use gs2_layouts, only: layout, init_x_transform_layouts, init_y_transform_layouts
-    implicit none
-    real :: fac
-    integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkyfacs, nkxfacs, nspfacs, nkxkyfacs
-    integer, dimension(:,:), allocatable :: facs
-    integer :: npe, checknpe, i, j
-    logical :: onlyxoryfac
-    real :: time
-
-    write (report_unit, fmt="('Layout = ',a5,/)") layout 
-    write (report_unit, fmt="('Recommended #proc up to:'i8)") npmax 
-    if (nonlin) then
-
-       write (report_unit, *) 
-       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
-       write (report_unit, fmt="('|   Number of    | Dimension | Percentage data moved | Recommend unbalanced_xxf | xxf unbalanced | Recommend unbalanced_yxf | yxf unbalanced |')")
-       write (report_unit, fmt="('|   processes    |   split   | by MPI from xxf->yxf  |    T = true F = false    |   amount (%)   |    T = true F = false    |   amount (%)   |')")
-       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
+!        write (report_unit, *) 
+!        write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
+!        write (report_unit, fmt="('|   Number of    | Dimension | Percentage data moved | Recommend unbalanced_xxf | xxf unbalanced | Recommend unbalanced_yxf | yxf unbalanced |')")
+!        write (report_unit, fmt="('|   processes    |   split   | by MPI from xxf->yxf  |    T = true F = false    |   amount (%)   |    T = true F = false    |   amount (%)   |')")
+!        write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
        
        
-       call init_x_transform_layouts(ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
-       call init_y_transform_layouts(ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+!        call init_x_transform_layouts(ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
+!        call init_y_transform_layouts(ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
 
-       select case (layout)
-       case ('lexys')
+!        select case (layout)
+!        case ('lexys')
 
 !          write (report_unit, fmt="('Recommended numbers of processors, time on T3E')") 
-          allocate (facs(max(nspec,naky,ntheta0)/2+1,5))
-          call factors (nspec, nspfacs, facs(:,1))
-          call factors (naky, nkyfacs, facs(:,2))
-          call factors (ntheta0, nkxfacs, facs(:,3))
-          call factors (negrid, nefacs, facs(:,4))
-          call factors (nlambda, nlfacs, facs(:,5))
-          do i=1,nspfacs
-             npe = facs(i,1)
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 's')
-          end do
-          do i=2,nkyfacs
-             npe = facs(i,2)*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'y')
-          end do
-          do i=2,nkxfacs
-             npe = facs(i,3)*naky*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'x')
-          end do
-          do i=2,nefacs
-             npe = facs(i,4)*ntheta0*naky*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'e')
-          end do
-          do i=2,nlfacs
-             npe = facs(i,5)*negrid*ntheta0*naky*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'l')
-          end do
-          deallocate (facs)
+!           allocate (facs(max(nspec,naky,ntheta0)/2+1,5))
+!           call factors (nspec, nspfacs, facs(:,1))
+!           call factors (naky, nkyfacs, facs(:,2))
+!           call factors (ntheta0, nkxfacs, facs(:,3))
+!           call factors (negrid, nefacs, facs(:,4))
+!           call factors (nlambda, nlfacs, facs(:,5))
+!           do i=1,nspfacs
+!              npe = facs(i,1)
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 's')
+!           end do
+!           do i=2,nkyfacs
+!              npe = facs(i,2)*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'y')
+!           end do
+!           do i=2,nkxfacs
+!              npe = facs(i,3)*naky*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'x')
+!           end do
+!           do i=2,nefacs
+!              npe = facs(i,4)*ntheta0*naky*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'e')
+!           end do
+!           do i=2,nlfacs
+!              npe = facs(i,5)*negrid*ntheta0*naky*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'l')
+!           end do
+!           deallocate (facs)
 
-       case ('lxyes')
+!        case ('lxyes')
 
 !          write (report_unit, fmt="('Recommended numbers of processors, time on SP2')") 
-          allocate (facs(max(nspec,negrid,naky,ntheta0)/2+1,5))
-          call factors (nspec, nspfacs, facs(:,1))
-          call factors (negrid, nefacs, facs(:,2))
-          call factors (naky, nkyfacs, facs(:,3))
-          call factors (ntheta0, nkxfacs, facs(:,4))
-          call factors (nlambda, nlfacs, facs(:,5))
+!           allocate (facs(max(nspec,negrid,naky,ntheta0)/2+1,5))
+!           call factors (nspec, nspfacs, facs(:,1))
+!           call factors (negrid, nefacs, facs(:,2))
+!           call factors (naky, nkyfacs, facs(:,3))
+!           call factors (ntheta0, nkxfacs, facs(:,4))
+!           call factors (nlambda, nlfacs, facs(:,5))
 !          faclin = 3.5*(real(nmesh))**1.1/1.e7/5.
-          fac = 3.5*(real(nmesh))**1.1/1.e7
-          do i=1,nspfacs
-             npe = facs(i,1)
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 's')
-          end do
-          do i=2,nefacs
-             npe = facs(i,2)*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'e')
-          end do
-          do i=2,nkyfacs
-             npe = facs(i,3)*negrid*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'y')
-          end do
-          do i=2,nkxfacs
-             npe = facs(i,4)*naky*negrid*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'x')
-          end do
-          do i=2,nlfacs
-             npe = facs(i,5)*naky*ntheta0*negrid*nspec 
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'l')
-          end do
-          deallocate (facs)
+!           fac = 3.5*(real(nmesh))**1.1/1.e7
+!           do i=1,nspfacs
+!              npe = facs(i,1)
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 's')
+!           end do
+!           do i=2,nefacs
+!              npe = facs(i,2)*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'e')
+!           end do
+!           do i=2,nkyfacs
+!              npe = facs(i,3)*negrid*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'y')
+!           end do
+!           do i=2,nkxfacs
+!              npe = facs(i,4)*naky*negrid*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'x')
+!           end do
+!           do i=2,nlfacs
+!              npe = facs(i,5)*naky*ntheta0*negrid*nspec 
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'l')
+!           end do
+!           deallocate (facs)
 
-       case ('yxels')
+!        case ('yxels')
 
-          allocate (facs(max(naky,ntheta0,nspec,negrid,nlambda)/2+1,6))
-          call factors (nspec, nspfacs, facs(:,1))
-          call factors (nlambda, nlfacs, facs(:,2))
-          call factors (negrid, nefacs, facs(:,3))
-          call factors (ntheta0, nkxfacs, facs(:,4))
-          call factors (naky, nkyfacs, facs(:,5))
-          call factors (naky*ntheta0, nkxkyfacs, facs(:,6))
-          fac = 3.5*(real(nmesh))**1.1/1.e7
-          do i=1,nspfacs
-             npe = facs(i,1)
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 's')
-          end do
-          do i=2,nlfacs
-             npe = facs(i,2)*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'l')
-          end do
-          do i=2,nefacs
-             npe = facs(i,3)*nlambda*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'e')
-          end do
-          do i=2,nkxkyfacs
-             npe = facs(i,6)*nlambda*negrid*nspec
-             if (npe .gt. npmax) exit
+!           allocate (facs(max(naky,ntheta0,nspec,negrid,nlambda)/2+1,6))
+!           call factors (nspec, nspfacs, facs(:,1))
+!           call factors (nlambda, nlfacs, facs(:,2))
+!           call factors (negrid, nefacs, facs(:,3))
+!           call factors (ntheta0, nkxfacs, facs(:,4))
+!           call factors (naky, nkyfacs, facs(:,5))
+!           call factors (naky*ntheta0, nkxkyfacs, facs(:,6))
+!           fac = 3.5*(real(nmesh))**1.1/1.e7
+!           do i=1,nspfacs
+!              npe = facs(i,1)
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 's')
+!           end do
+!           do i=2,nlfacs
+!              npe = facs(i,2)*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'l')
+!           end do
+!           do i=2,nefacs
+!              npe = facs(i,3)*nlambda*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'e')
+!           end do
+!           do i=2,nkxkyfacs
+!              npe = facs(i,6)*nlambda*negrid*nspec
+!              if (npe .gt. npmax) exit
 ! Check whether this process count would have been generated by the 
 ! plain x or y factorisation or if it is new from the combined x*y
 ! functionality             
-             onlyxoryfac = .false.
-             do j=2,nkxfacs
-                checknpe = facs(j,4)*negrid*nlambda*nspec
-                if (npe .eq. checknpe) then
-                   onlyxoryfac = .true.
-                   exit
-                end if
-             end do
-             do j=2,nkyfacs
-                checknpe = facs(j,5)*ntheta0*negrid*nlambda*nspec
-                if (npe .gt. checknpe) then
-                   onlyxoryfac = .true.
-                   exit
-                end if
-             end do
-             call report_idle_procs(npe, 'x*y', onlyxoryfac)
-          end do
+!              onlyxoryfac = .false.
+!              do j=2,nkxfacs
+!                 checknpe = facs(j,4)*negrid*nlambda*nspec
+!                 if (npe .eq. checknpe) then
+!                    onlyxoryfac = .true.
+!                    exit
+!                 end if
+!              end do
+!              do j=2,nkyfacs
+!                 checknpe = facs(j,5)*ntheta0*negrid*nlambda*nspec
+!                 if (npe .gt. checknpe) then
+!                    onlyxoryfac = .true.
+!                    exit
+!                 end if
+!              end do
+!              call report_idle_procs(npe, 'x*y', onlyxoryfac)
+!           end do
 !          do i=2,nkxfacs
 !             npe = facs(i,4)*negrid*nlambda*nspec
 !             if (npe .gt. npmax) exit
@@ -1635,56 +1304,56 @@ if (debug) write(6,*) 'get_namelists: returning'
 !             if (npe .gt. npmax) exit
 !             call report_idle_procs(npe, 'y')
 !          end do
-          deallocate (facs)
+!           deallocate (facs)
 
-       case ('yxles')
+!        case ('yxles')
 
-          allocate (facs(max(ntheta0,naky,nspec,negrid,nlambda)/2+1,6))
-          call factors (nspec, nspfacs, facs(:,1))
-          call factors (negrid, nefacs, facs(:,2))
-          call factors (nlambda, nlfacs, facs(:,3))
-          call factors (ntheta0, nkxfacs, facs(:,4))
-          call factors (naky, nkyfacs, facs(:,5))
-          call factors (naky*ntheta0, nkxkyfacs, facs(:,6))
-          fac = 3.5*(real(nmesh))**1.1/1.e7
-          do i=1,nspfacs
-             npe = facs(i,1)
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 's')
-          end do
-          do i=2,nefacs
-             npe = facs(i,2)*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'e')
-          end do
-          do i=2,nlfacs
-             npe = facs(i,3)*negrid*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'l')
-          end do
-          do i=2,nkxkyfacs
-             npe = facs(i,6)*nlambda*negrid*nspec
-             if (npe .gt. npmax) exit
+!           allocate (facs(max(ntheta0,naky,nspec,negrid,nlambda)/2+1,6))
+!           call factors (nspec, nspfacs, facs(:,1))
+!           call factors (negrid, nefacs, facs(:,2))
+!           call factors (nlambda, nlfacs, facs(:,3))
+!           call factors (ntheta0, nkxfacs, facs(:,4))
+!           call factors (naky, nkyfacs, facs(:,5))
+!           call factors (naky*ntheta0, nkxkyfacs, facs(:,6))
+!           fac = 3.5*(real(nmesh))**1.1/1.e7
+!           do i=1,nspfacs
+!              npe = facs(i,1)
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 's')
+!           end do
+!           do i=2,nefacs
+!              npe = facs(i,2)*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'e')
+!           end do
+!           do i=2,nlfacs
+!              npe = facs(i,3)*negrid*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'l')
+!           end do
+!           do i=2,nkxkyfacs
+!              npe = facs(i,6)*nlambda*negrid*nspec
+!              if (npe .gt. npmax) exit
 ! Check whether this process count would have been generated by the 
 ! plain x or y factorisation or if it is new from the combined x*y
 ! functionality  
-             onlyxoryfac = .false.
-             do j=2,nkxfacs
-                checknpe = facs(j,4)*nlambda*negrid*nspec
-                if (npe .eq. checknpe) then
-                   onlyxoryfac = .true.
-                   exit
-                end if
-             end do
-             do j=2,nkyfacs
-                checknpe = facs(j,5)*ntheta0*nlambda*negrid*nspec
-                if (npe .eq. checknpe) then
-                   onlyxoryfac = .true.
-                   exit
-                end if
-             end do
-             call report_idle_procs(npe, 'x*y', onlyxoryfac)
-          end do
+!              onlyxoryfac = .false.
+!              do j=2,nkxfacs
+!                 checknpe = facs(j,4)*nlambda*negrid*nspec
+!                 if (npe .eq. checknpe) then
+!                    onlyxoryfac = .true.
+!                    exit
+!                 end if
+!              end do
+!              do j=2,nkyfacs
+!                 checknpe = facs(j,5)*ntheta0*nlambda*negrid*nspec
+!                 if (npe .eq. checknpe) then
+!                    onlyxoryfac = .true.
+!                    exit
+!                 end if
+!              end do
+!              call report_idle_procs(npe, 'x*y', onlyxoryfac)
+!           end do
 !          do i=2,nkxfacs
 !             npe = facs(i,4)*nlambda*negrid*nspec
 !             if (npe .gt. npmax) exit
@@ -1695,59 +1364,59 @@ if (debug) write(6,*) 'get_namelists: returning'
 !             if (npe .gt. npmax) exit
 !             call report_idle_procs(npe, 'y')
 !          end do
-          deallocate (facs)
+!           deallocate (facs)
 
-       case ('xyles')
-!CMR, 11/11/2009: add processor recommendations for xyles layout
+!        case ('xyles')
+! CMR, 11/11/2009: add processor recommendations for xyles layout
 !            NB added recommendations that also parallelise in y and x, 
 !                          which may be unwise!
 
-          allocate (facs(max(nspec,negrid,nlambda,naky,ntheta0)/2+1,6))
-          call factors (nspec, nspfacs, facs(:,1))
-          call factors (negrid, nefacs, facs(:,2))
-          call factors (nlambda, nlfacs, facs(:,3))
-          call factors (naky, nkyfacs, facs(:,4))
-          call factors (ntheta0, nkxfacs, facs(:,5))
-          call factors (naky*ntheta0, nkxkyfacs, facs(:,6))
-          fac = 3.5*(real(nmesh))**1.1/1.e7
-          do i=1,nspfacs
-             npe = facs(i,1)
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 's')
-          end do
-          do i=2,nefacs
-             npe = facs(i,2)*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'e')
-          end do
-          do i=2,nlfacs
-             npe = facs(i,3)*negrid*nspec
-             if (npe .gt. npmax) exit
-             call report_idle_procs(npe, 'l')
-          end do
-          do i=2,nkxkyfacs
-             npe = facs(i,6)*nlambda*negrid*nspec
-             if (npe .gt. npmax) exit
+!           allocate (facs(max(nspec,negrid,nlambda,naky,ntheta0)/2+1,6))
+!           call factors (nspec, nspfacs, facs(:,1))
+!           call factors (negrid, nefacs, facs(:,2))
+!           call factors (nlambda, nlfacs, facs(:,3))
+!           call factors (naky, nkyfacs, facs(:,4))
+!           call factors (ntheta0, nkxfacs, facs(:,5))
+!           call factors (naky*ntheta0, nkxkyfacs, facs(:,6))
+!           fac = 3.5*(real(nmesh))**1.1/1.e7
+!           do i=1,nspfacs
+!              npe = facs(i,1)
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 's')
+!           end do
+!           do i=2,nefacs
+!              npe = facs(i,2)*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'e')
+!           end do
+!           do i=2,nlfacs
+!              npe = facs(i,3)*negrid*nspec
+!              if (npe .gt. npmax) exit
+!              call report_idle_procs(npe, 'l')
+!           end do
+!           do i=2,nkxkyfacs
+!              npe = facs(i,6)*nlambda*negrid*nspec
+!              if (npe .gt. npmax) exit
 ! Check whether this process count would have been generated by the 
 ! plain x or y factorisation or if it is new from the combined x*y
 ! functionality  
-             onlyxoryfac = .false.
-             do j=2,nkyfacs
-                checknpe = facs(j,4)*nlambda*negrid*nspec
-                if (npe .eq. checknpe) then
-                   onlyxoryfac = .true.
-                   exit
-                end if
-             end do
-             do j=2,nkxfacs
-                checknpe = facs(j,5)*naky*nlambda*negrid*nspec
-                if (npe .eq. checknpe) then
-                   onlyxoryfac = .true.
-                   exit
-                end if
-             end do
-             call report_idle_procs(npe, 'x*y', onlyxoryfac)
-          end do
+!              onlyxoryfac = .false.
+!              do j=2,nkyfacs
+!                 checknpe = facs(j,4)*nlambda*negrid*nspec
+!                 if (npe .eq. checknpe) then
+!                    onlyxoryfac = .true.
+!                    exit
+!                 end if
+!              end do
+!              do j=2,nkxfacs
+!                 checknpe = facs(j,5)*naky*nlambda*negrid*nspec
+!                 if (npe .eq. checknpe) then
+!                    onlyxoryfac = .true.
+!                    exit
+!                 end if
+!              end do
+!              call report_idle_procs(npe, 'x*y', onlyxoryfac)
+!           end do
 !          do i=2,nkyfacs
 !             npe = facs(i,4)*nlambda*negrid*nspec
 !             if (npe .gt. npmax) exit
@@ -1758,226 +1427,226 @@ if (debug) write(6,*) 'get_namelists: returning'
 !             if (npe .gt. npmax) exit
 !             call report_idle_procs(npe, 'x')
 !          end do
-          deallocate (facs)
+!           deallocate (facs)
 
-       end select
+!        end select
 
-       write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
-       write (report_unit, *)
-       write (report_unit, fmt="('(*) denotes process counts that are from factors of the combined kx*ky index rather than the ordered kx or ky indices separately.')")
-       write (report_unit, fmt="('To use the unbalanced functionality set unbalanced_xxf = .true. or unbalanced_yxf = .true. in the &layouts_knobs namelist in your GS2 ')")
-       write (report_unit, fmt="('input file. You can also set the max_unbalanced_xxf and max_unbalanced_yxf flags in the same namelist in the input file to specify the')")
-       write (report_unit, fmt="('maximum amount of computational imbalance allowed. These flags specify the maximum imbalance as 1 with no imbalance as 0, so to allow')")
-       write (report_unit, fmt="('50% imbalanced on the xxf decomposition using the following flags in the input file: ')")
-       write (report_unit, fmt="('                                                                                     unbalanced_xxf = .true. ')")
-       write (report_unit, fmt="('                                                                                     max_unbalanced_xxf = 0.5 ')")
-       write (report_unit, fmt="('And likewise for yxf.')")
+!        write (report_unit, fmt="('----------------------------------------------------------------------------------------------------------------------------------------------')")
+!        write (report_unit, *)
+!        write (report_unit, fmt="('(*) denotes process counts that are from factors of the combined kx*ky index rather than the ordered kx or ky indices separately.')")
+!        write (report_unit, fmt="('To use the unbalanced functionality set unbalanced_xxf = .true. or unbalanced_yxf = .true. in the &layouts_knobs namelist in your GS2 ')")
+!        write (report_unit, fmt="('input file. You can also set the max_unbalanced_xxf and max_unbalanced_yxf flags in the same namelist in the input file to specify the')")
+!        write (report_unit, fmt="('maximum amount of computational imbalance allowed. These flags specify the maximum imbalance as 1 with no imbalance as 0, so to allow')")
+!        write (report_unit, fmt="('50% imbalanced on the xxf decomposition using the following flags in the input file: ')")
+!        write (report_unit, fmt="('                                                                                     unbalanced_xxf = .true. ')")
+!        write (report_unit, fmt="('                                                                                     max_unbalanced_xxf = 0.5 ')")
+!        write (report_unit, fmt="('And likewise for yxf.')")
 
-    else
-       write (report_unit, *) 
-       write (report_unit, fmt="('Recommended numbers of processors:')")
-       select case (gridopt_switch)
+!     else
+!        write (report_unit, *) 
+!        write (report_unit, fmt="('Recommended numbers of processors:')")
+!        select case (gridopt_switch)
 
-       case (gridopt_single)
+!        case (gridopt_single)
 
-          select case (layout)
-          case ('lexys', 'yxles', 'lxyes', 'xyles')
-             allocate (facs(max(negrid,nspec,nlambda)/2+1,3))
-             call factors (nspec, nspfacs, facs(:,1))
-             call factors (negrid, nefacs, facs(:,2))
-             call factors (nlambda, nlfacs, facs(:,3))
-             do i=1,nspfacs-1
-                npe = facs(i,1)
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nefacs-1
-                npe = facs(i,2)*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nlfacs
-                npe = facs(i,3)*negrid*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             deallocate (facs)
+!           select case (layout)
+!           case ('lexys', 'yxles', 'lxyes', 'xyles')
+!              allocate (facs(max(negrid,nspec,nlambda)/2+1,3))
+!              call factors (nspec, nspfacs, facs(:,1))
+!              call factors (negrid, nefacs, facs(:,2))
+!              call factors (nlambda, nlfacs, facs(:,3))
+!              do i=1,nspfacs-1
+!                 npe = facs(i,1)
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nefacs-1
+!                 npe = facs(i,2)*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nlfacs
+!                 npe = facs(i,3)*negrid*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              deallocate (facs)
 
-          case ('yxels')
-             allocate (facs(max(negrid,nspec,nlambda)/2+1,3))
-             call factors (nspec, nspfacs, facs(:,1))
-             call factors (nlambda, nlfacs, facs(:,2))
-             call factors (negrid, nefacs, facs(:,3))
-             do i=1,nspfacs-1
-                npe = facs(i,1)
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nlfacs-1
-                npe = facs(i,2)*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nefacs
-                npe = facs(i,3)*nlambda*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             deallocate (facs)
-          end select
+!           case ('yxels')
+!              allocate (facs(max(negrid,nspec,nlambda)/2+1,3))
+!              call factors (nspec, nspfacs, facs(:,1))
+!              call factors (nlambda, nlfacs, facs(:,2))
+!              call factors (negrid, nefacs, facs(:,3))
+!              do i=1,nspfacs-1
+!                 npe = facs(i,1)
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nlfacs-1
+!                 npe = facs(i,2)*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nefacs
+!                 npe = facs(i,3)*nlambda*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              deallocate (facs)
+!           end select
 
-       case (gridopt_range,gridopt_specified,gridopt_box)
+!        case (gridopt_range,gridopt_specified,gridopt_box)
 
-          select case (layout)
-          case ('lexys')
+!           select case (layout)
+!           case ('lexys')
 
-             allocate (facs(max(nspec,naky,ntheta0,negrid,nlambda)/2+1,5))
-             call factors (nspec, nspfacs, facs(:,1))
-             call factors (naky, nkyfacs, facs(:,2))
-             call factors (ntheta0, nkxfacs, facs(:,3))
-             call factors (negrid, nefacs, facs(:,4))
-             call factors (nlambda, nlfacs, facs(:,5))
-             do i=1,nspfacs-1
-                npe = facs(i,1)
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nkyfacs-1
-                npe = facs(i,2)*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nkxfacs-1
-                npe = facs(i,3)*naky*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nefacs-1
-                npe = facs(i,4)*ntheta0*naky*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nlfacs
-                npe = facs(i,5)*negrid*ntheta0*naky*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             deallocate (facs)
+!              allocate (facs(max(nspec,naky,ntheta0,negrid,nlambda)/2+1,5))
+!              call factors (nspec, nspfacs, facs(:,1))
+!              call factors (naky, nkyfacs, facs(:,2))
+!              call factors (ntheta0, nkxfacs, facs(:,3))
+!              call factors (negrid, nefacs, facs(:,4))
+!              call factors (nlambda, nlfacs, facs(:,5))
+!              do i=1,nspfacs-1
+!                 npe = facs(i,1)
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nkyfacs-1
+!                 npe = facs(i,2)*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nkxfacs-1
+!                 npe = facs(i,3)*naky*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nefacs-1
+!                 npe = facs(i,4)*ntheta0*naky*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nlfacs
+!                 npe = facs(i,5)*negrid*ntheta0*naky*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              deallocate (facs)
 
-          case ('lxyes')
+!           case ('lxyes')
 
-             write (report_unit, *) 
-             allocate (facs(max(nspec,negrid,naky,ntheta0)/2+1,4))
-             call factors (nspec, nspfacs, facs(:,1))
-             call factors (negrid, nefacs, facs(:,2))
-             call factors (naky, nkyfacs, facs(:,3))
-             call factors (ntheta0, nkxfacs, facs(:,4))
+!              write (report_unit, *) 
+!              allocate (facs(max(nspec,negrid,naky,ntheta0)/2+1,4))
+!              call factors (nspec, nspfacs, facs(:,1))
+!              call factors (negrid, nefacs, facs(:,2))
+!              call factors (naky, nkyfacs, facs(:,3))
+!              call factors (ntheta0, nkxfacs, facs(:,4))
 !             fac = 3.5*(real(nmesh))**1.1/1.e7/5.  ! okay for large runs, not small
-             do i=1,nspfacs-1
-                npe = facs(i,1)
+!              do i=1,nspfacs-1
+!                 npe = facs(i,1)
 !                if (nmesh/npe > ncut) write &
 !                     & (report_unit, fmt="('  npe = ',i4,'    time = ',f8.2,'  seconds/time step')") &
 !                     & npe, fac/npe**0.95
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nefacs-1
-                npe = facs(i,2)*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nkyfacs-1
-                npe = facs(i,3)*negrid*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nkxfacs
-                npe = facs(i,4)*naky*negrid*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             deallocate (facs)
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nefacs-1
+!                 npe = facs(i,2)*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nkyfacs-1
+!                 npe = facs(i,3)*negrid*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nkxfacs
+!                 npe = facs(i,4)*naky*negrid*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              deallocate (facs)
 
-          case ('yxles')
+!           case ('yxles')
 
-             allocate (facs(max(nspec,naky,ntheta0,negrid,nlambda)/2+1,5))
-             call factors (nspec, nspfacs, facs(:,1))
-             call factors (negrid, nefacs, facs(:,2))
-             call factors (nlambda, nlfacs, facs(:,3))
-             call factors (ntheta0, nkxfacs, facs(:,4))
-             call factors (naky, nkyfacs, facs(:,5))
-             do i=1,nspfacs-1
-                npe = facs(i,1)
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nefacs-1
-                npe = facs(i,2)*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nlfacs-1
-                npe = facs(i,3)*negrid*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nkxfacs-1
-                npe = facs(i,4)*nlambda*negrid*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nkyfacs
-                npe = facs(i,5)*ntheta0*nlambda*negrid*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             deallocate (facs)
+!              allocate (facs(max(nspec,naky,ntheta0,negrid,nlambda)/2+1,5))
+!              call factors (nspec, nspfacs, facs(:,1))
+!              call factors (negrid, nefacs, facs(:,2))
+!              call factors (nlambda, nlfacs, facs(:,3))
+!              call factors (ntheta0, nkxfacs, facs(:,4))
+!              call factors (naky, nkyfacs, facs(:,5))
+!              do i=1,nspfacs-1
+!                 npe = facs(i,1)
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nefacs-1
+!                 npe = facs(i,2)*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nlfacs-1
+!                 npe = facs(i,3)*negrid*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nkxfacs-1
+!                 npe = facs(i,4)*nlambda*negrid*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nkyfacs
+!                 npe = facs(i,5)*ntheta0*nlambda*negrid*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              deallocate (facs)
 
-          case ('xyles')
+!           case ('xyles')
 
-             allocate (facs(max(nspec,naky,ntheta0,negrid,nlambda)/2+1,5))
-             call factors (nspec, nspfacs, facs(:,1))
-             call factors (negrid, nefacs, facs(:,2))
-             call factors (nlambda, nlfacs, facs(:,3))
-             call factors (naky, nkyfacs, facs(:,4))
-             call factors (ntheta0, nkxfacs, facs(:,5))
-             do i=1,nspfacs-1
-                npe = facs(i,1)
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
-             end do
-             do i=1,nefacs-1
-                npe = facs(i,2)*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
-             end do
-             do i=1,nlfacs-1
-                npe = facs(i,3)*negrid*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
-             end do
-             do i=1,nkyfacs-1
-                npe = facs(i,4)*nlambda*negrid*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
-             end do
-             do i=1,nkxfacs
-                npe = facs(i,5)*ntheta0*nlambda*negrid*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
-             end do
-             deallocate (facs)
+!              allocate (facs(max(nspec,naky,ntheta0,negrid,nlambda)/2+1,5))
+!              call factors (nspec, nspfacs, facs(:,1))
+!              call factors (negrid, nefacs, facs(:,2))
+!              call factors (nlambda, nlfacs, facs(:,3))
+!              call factors (naky, nkyfacs, facs(:,4))
+!              call factors (ntheta0, nkxfacs, facs(:,5))
+!              do i=1,nspfacs-1
+!                 npe = facs(i,1)
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
+!              end do
+!              do i=1,nefacs-1
+!                 npe = facs(i,2)*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
+!              end do
+!              do i=1,nlfacs-1
+!                 npe = facs(i,3)*negrid*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
+!              end do
+!              do i=1,nkyfacs-1
+!                 npe = facs(i,4)*nlambda*negrid*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
+!              end do
+!              do i=1,nkxfacs
+!                 npe = facs(i,5)*ntheta0*nlambda*negrid*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i8)") npe
+!              end do
+!              deallocate (facs)
 
-          case ('yxels')
+!           case ('yxels')
 
-             allocate (facs(max(nspec,naky,ntheta0,negrid,nlambda)/2+1,5))
-             call factors (nspec, nspfacs, facs(:,1))
-             call factors (nlambda, nlfacs, facs(:,2))
-             call factors (negrid, nefacs, facs(:,3))
-             call factors (ntheta0, nkxfacs, facs(:,4))
-             call factors (naky, nkyfacs, facs(:,5))
-             do i=1,nspfacs-1
-                npe = facs(i,1)
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nlfacs-1
-                npe = facs(i,2)*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nefacs-1
-                npe = facs(i,3)*nlambda*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nkxfacs-1
-                npe = facs(i,4)*negrid*nlambda*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             do i=1,nkyfacs
-                npe = facs(i,5)*ntheta0*negrid*nlambda*nspec
-                if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
-             end do
-             deallocate (facs)
+!              allocate (facs(max(nspec,naky,ntheta0,negrid,nlambda)/2+1,5))
+!              call factors (nspec, nspfacs, facs(:,1))
+!              call factors (nlambda, nlfacs, facs(:,2))
+!              call factors (negrid, nefacs, facs(:,3))
+!              call factors (ntheta0, nkxfacs, facs(:,4))
+!              call factors (naky, nkyfacs, facs(:,5))
+!              do i=1,nspfacs-1
+!                 npe = facs(i,1)
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nlfacs-1
+!                 npe = facs(i,2)*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nefacs-1
+!                 npe = facs(i,3)*nlambda*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nkxfacs-1
+!                 npe = facs(i,4)*negrid*nlambda*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              do i=1,nkyfacs
+!                 npe = facs(i,5)*ntheta0*negrid*nlambda*nspec
+!                 if (nmesh/npe > ncut) write (report_unit, fmt="('  npe = ',i4)") npe
+!              end do
+!              deallocate (facs)
 
-          end select
-       end select
-    end if
+!           end select
+!        end select
+!     end if
 
-  end subroutine nprocs
+!   end subroutine nprocs
 
   subroutine get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, &
      use_unbalanced_xxf, use_unbalanced_yxf)
