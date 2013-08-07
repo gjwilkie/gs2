@@ -926,7 +926,7 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: g_lo, imu_idx
     use gs2_time, only: code_dt
     use run_parameters, only: t_imp
-    use theta_grid, only: ntgrid, dbdthetc, thet_imp, delthet, ntheta
+    use theta_grid, only: ntgrid, dbdthetc, gradparc, thet_imp, delthet, ntheta
     use vpamu_grids, only: nvgrid, vpa_imp, vpac, dvpa, vpa, mu
     use kt_grids, only: naky, ntheta0
 
@@ -962,21 +962,23 @@ subroutine check_dist_fn(report_unit)
     end if
 
     ! need to add in multiplication by b . grad theta
-    dum1(-ntgrid:-1,:) = code_dt*spread(vpac(:nvgrid-1,1),1,ntgrid)/spread(delthet(-ntgrid:-1),2,2*nvgrid)
-    dum1(0:ntgrid-1,:) = code_dt*spread(vpac(:nvgrid-1,2),1,ntgrid)/spread(delthet(0:ntgrid-1),2,2*nvgrid)
+!    dum1(-ntgrid:-1,:) = code_dt*spread(vpac(:nvgrid-1,1),1,ntgrid)/spread(delthet(-ntgrid:-1),2,2*nvgrid)
+!    dum1(0:ntgrid-1,:) = code_dt*spread(vpac(:nvgrid-1,2),1,ntgrid)/spread(delthet(0:ntgrid-1),2,2*nvgrid)
 
+    ! need to add in multiplication by b . grad theta
+    ! dbdthetc test below needed to ensure proper upwinding of vpa
     do iv = -nvgrid, -1
        where (dbdthetc(:ntgrid-1,1) < 0.0)
-          dum1(:ntgrid-1,iv) = code_dt*vpac(iv,1)/delthet(:ntgrid-1)
+          dum1(:ntgrid-1,iv) = code_dt*vpac(iv,1)*gradparc(:ntgrid-1,1)/delthet(:ntgrid-1)
        elsewhere
-          dum1(:ntgrid-1,iv) = code_dt*vpac(iv,2)/delthet(:ntgrid-1)
+          dum1(:ntgrid-1,iv) = code_dt*vpac(iv,2)*gradparc(:ntgrid-1,1)/delthet(:ntgrid-1)
        end where
     end do
     do iv = 0, nvgrid-1
        where (dbdthetc(:ntgrid-1,2) < 0.0)
-          dum1(:ntgrid-1,iv) = code_dt*vpac(iv,1)/delthet(:ntgrid-1)
+          dum1(:ntgrid-1,iv) = code_dt*vpac(iv,1)*gradparc(:ntgrid-1,2)/delthet(:ntgrid-1)
        elsewhere
-          dum1(:ntgrid-1,iv) = code_dt*vpac(iv,2)/delthet(:ntgrid-1)
+          dum1(:ntgrid-1,iv) = code_dt*vpac(iv,2)*gradparc(:ntgrid-1,2)/delthet(:ntgrid-1)
        end where
     end do
 
@@ -994,11 +996,10 @@ subroutine check_dist_fn(report_unit)
        ! get im corresponding to iglo
        imu = imu_idx(g_lo,iglo)
 
-       ! MAB FLAG - need to add in b . grad theta !!!
        dum2(:,-nvgrid:-1) = -code_dt*mu(imu) &
-            / spread(dvpa(-nvgrid:-1),1,2*ntgrid)*spread(dbdthetc(:ntgrid-1,1),2,nvgrid)
+            / spread(dvpa(-nvgrid:-1),1,2*ntgrid)*spread(dbdthetc(:ntgrid-1,1)*gradparc(:ntgrid-1,1),2,nvgrid)
        dum2(:,0:nvgrid-1) = -code_dt*mu(imu) &
-            / spread(dvpa(0:nvgrid-1),1,2*ntgrid)*spread(dbdthetc(:ntgrid-1,2),2,nvgrid)
+            / spread(dvpa(0:nvgrid-1),1,2*ntgrid)*spread(dbdthetc(:ntgrid-1,2)*gradparc(:ntgrid-1,2),2,nvgrid)
 
        ! first treat theta<0, vpa>0 quadrant
        ! to upwind here requires using info from ig-1,iv-1
