@@ -186,7 +186,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        call update_time
        call loop_diagnostics (istep, exit)
        call check_time_step (reset, exit)
-       call update_scan_parameter_value(istep, reset, exit)
+!       call update_scan_parameter_value(istep, reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
        if (reset) then
           ! if called within trinity, do not dump info to screen
