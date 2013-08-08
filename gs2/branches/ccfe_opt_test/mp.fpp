@@ -431,6 +431,8 @@ contains
     !Do the gather
     call mpi_allgatherv(arr,count,mpicmplx,out,recvcnts,displs,&
          mpicmplx,mp_comm,ierror)
+# else
+    out=RESHAPE(arr,SHAPE(out))    
 #endif
   end subroutine allgatherv_complex_array_1to1
 
@@ -448,6 +450,8 @@ contains
     !Do the gather
     call mpi_allgatherv(arr,count,mpicmplx,out,recvcnts,displs,&
          mpicmplx,mp_comm,ierror)
+# else
+    out=RESHAPE(arr,SHAPE(out))
 #endif
   end subroutine allgatherv_complex_array_1to3
 
@@ -466,6 +470,8 @@ contains
     !Do the gather
     call mpi_allgatherv(arr,count,mpicmplx,out,recvcnts,displs,&
          mpicmplx,sub_comm,ierror)
+# else
+    out=RESHAPE(arr,SHAPE(out))
 #endif
   end subroutine allgatherv_complex_array_1to1_sub
 
@@ -484,6 +490,8 @@ contains
     !Do the gather
     call mpi_allgatherv(arr,count,mpicmplx,out,recvcnts,displs,&
          mpicmplx,sub_comm,ierror)
+#else
+    out=RESHAPE(arr,SHAPE(out))
 #endif
   end subroutine allgatherv_complex_array_1to3_sub
 
