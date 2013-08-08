@@ -619,7 +619,6 @@ contains
     use mp, only: iproc, nproc, proc0
     use mp, only: split, mp_comm, nproc_comm, rank_comm
     use mp, only: sum_allreduce_sub
-use mpi
 ! TT>
     use file_utils, only: error_unit
 ! <TT

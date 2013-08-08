@@ -1278,9 +1278,9 @@ contains
   subroutine sum_allreduce_sub_complex_array (z,sub_comm)
     implicit none
     complex, dimension (:), intent (in out) :: z
+    integer, intent(in) :: sub_comm
 # ifdef MPI
     integer :: ierror
-    integer, intent(in) :: sub_comm
     call mpi_allreduce &
          (MPI_IN_PLACE, z, size(z), mpicmplx, MPI_SUM, sub_comm, ierror)
 # endif
@@ -2278,10 +2278,14 @@ contains
     implicit none
     integer, intent(in) :: count
     integer, dimension(:), intent (inout) :: requests
+# ifdef MPI
     integer, dimension(MPI_STATUS_SIZE,count), intent(out) :: status
+# else
+    integer,intent(out) :: status
+# endif
+# ifdef MPI
     !Note mpi_wait will set the request handle to MPI_NULL (or similar)
     !when message complete so have to set requests as inout
-# ifdef MPI
     integer :: ierror
     call mpi_waitall(count,requests,status,ierror)
 # endif
