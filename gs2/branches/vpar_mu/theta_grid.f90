@@ -1101,8 +1101,6 @@ if (debug) write(6,*) 'eik_get_grids: ntgrid=',ntgrid
        theta(ig)     = theta_out(ig)
        gradpar(ig)   = gradpar_out(ig)
        bmag(ig)      = bmag_out(ig)
-! TMP FOR TESTING -- MAB
-       bmag(ig) = 1.0 - 0.1*cos(theta(ig))
        cvdrift(ig)   = cvdrift_out(ig)
        cvdrift0(ig)  = cvdrift0_out(ig)
        gbdrift(ig)   = gbdrift_out(ig)

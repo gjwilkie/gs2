@@ -386,9 +386,7 @@ contains
     right = .not. left
 
     do ig = -ntgrid, ntgrid
-! TMP FOR TESTING -- MAB
-       phi(ig,:,:) = exp(-((theta(ig)-theta0(:,:))/width0)**2)*cmplx(1.0,0.0)
-!       phi(ig,:,:) = exp(-((theta(ig)-theta0(:,:))/width0)**2)*cmplx(1.0,1.0)
+       phi(ig,:,:) = exp(-((theta(ig)-theta0(:,:))/width0)**2)*cmplx(1.0,1.0)
     end do
     if (chop_side .and. left) phi(:-1,:,:) = 0.0
     if (chop_side .and. right) phi(1:,:,:) = 0.0
