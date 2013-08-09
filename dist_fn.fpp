@@ -84,17 +84,17 @@ module dist_fn
   !> following arrays needed for implicit solve
 
   ! coefficients multiplying g_{i+1,j+1}^{n+1}, g_{i+1,j+1}^{n}, g_{i+1,j}^{n+1}, etc.
-  real, dimension (:,:,:), allocatable :: pppfac, ppmfac, pmpfac, pmmfac
-  real, dimension (:,:,:), allocatable :: mppfac, mpmfac, mmpfac, mmmfac
+  complex, dimension (:,:,:), allocatable :: pppfac, ppmfac, pmpfac, pmmfac
+  complex, dimension (:,:,:), allocatable :: mppfac, mpmfac, mmpfac, mmmfac
   ! (-ntgrid:ntgird, -nvgrid:nvgrid, -g-layout-)
 
   ! response matrix in g
-  real, dimension (:,:,:), allocatable :: gresponse
+  complex, dimension (:,:,:), allocatable :: gresponse1, gresponse2
   ! special source term for point where dvpa/dt = 0
   complex, dimension (:,:), allocatable :: source0
 
   ! matrix needed for reponse matrix approach
-  real, dimension (:,:,:), allocatable :: m_mat
+  complex, dimension (:,:,:), allocatable :: m_mat
 
   ! these arrays needed to keep track of connections between different
   ! 2pi segments
@@ -942,8 +942,9 @@ subroutine check_dist_fn(report_unit)
 
     ntg = ntheta/2
 
-    if (.not. allocated(gresponse)) then
-       allocate (gresponse(ntg*nseg_max+1,ntg*nseg_max+1,g_lo%llim_proc:g_lo%ulim_alloc))
+    if (.not. allocated(gresponse1)) then
+       allocate (gresponse1(ntg*nseg_max+1,ntg*nseg_max+1,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (gresponse2(ntg*nseg_max+1,ntg*nseg_max+1,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (m_mat(ntg*nseg_max+1,ntg*nseg_max+1,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (source0(nseg_max,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (pppfac(-ntgrid:ntgrid,-nvgrid:nvgrid,g_lo%llim_proc:g_lo%ulim_alloc)) ; pppfac = 0.0
@@ -1305,17 +1306,20 @@ subroutine check_dist_fn(report_unit)
 
     implicit none
 
-    integer :: ig, iv, iglo, i, j, k, idx, ntg, iseg, it, itmod, ik, kmax
+    integer :: ig, iv, iglo, i, j, k, idx, ntg, iseg, it, itmod, ik, kmax, iup
     integer, dimension (:), allocatable :: iglomod
-    real, dimension (:,:), allocatable :: p_mat
+    real, dimension (:,:), allocatable :: amat1, amat2
+    complex, dimension (:,:), allocatable :: p_mat
 
     ntg = ntheta/2
     
     ! ensure that gnew and source are initialized to zero
-    gnew = 0.0 ; source = 0.0 ; gresponse = 0.0 ; source0 = 0.0
+    gnew = 0.0 ; source = 0.0 ; gresponse1 = 0.0 ; gresponse2 = 0.0 ; source0 = 0.0
 
     m_mat = 0.0
     allocate (p_mat(ntg*nseg_max+1,ntg*nseg_max+1)) ; p_mat = 0.0
+    allocate (amat1(ntg*nseg_max+1,ntg*nseg_max+1)) ; amat1 = 0.0
+    allocate (amat2(ntg*nseg_max+1,ntg*nseg_max+1)) ; amat2 = 0.0
 
     ! get response of particles with vpa=-dvpa below and including the midplane to a unit impulse
     ! in particles with vpa=0 below (not including) the midplane
@@ -1343,79 +1347,8 @@ subroutine check_dist_fn(report_unit)
           end do
        end if
 
-       i = 1
-
-       ! for iseg=1 (the left-most segment), g(theta=-pi,vpa=0) is not known
-       ! for subsequent segments, g(theta=-pi,vpa=0) will have been solved for
-       ! thus iseg=1 must be treated specially
-       iseg = 1
-       ! give a unit impulse to each theta from -pi up to but not including theta=0 (for vpa=0)
-       ! and obtain the corresponding columns in the response matrix
-       do ig = ig_low(iseg), ig_mid(iseg)-1
-          ! give a unit impulse to g at this theta
-          gnew(ig,0,iglomod(iseg)) = 1.0
-
-          ! sweep over entire (theta,vpa) plane and get values of gnew 
-          ! for particles with vpa=-dvpa below the midplane
-          call implicit_sweep (iglo)
-
-          ! fill in cotribution from jth segment to ith column of initial 
-          ! (ntheta/2*nsegment+1) x (ntheta/2*nsegment+1) x (nmu) response matrix          
-          ! again, must treat left-most segment specially
-          j = 1 ; k = 1 ; kmax = k+ntheta/2
-          gresponse(k:kmax,i,iglo) = real(gnew(ig_low(iseg):ig_mid(iseg),-1,iglomod(iseg)))          
-          k = kmax + 1
-          if (nsegments(it,ik) > 1) then
-             do j = 2, nsegments(it,ik)
-                kmax = k+ntheta/2-1
-                gresponse(k:kmax,i,iglo) = real(gnew(ig_low(iseg)+1:ig_mid(iseg),-1,iglomod(iseg)))
-                k = kmax + 1
-             end do
-          end if
-
-          ! reset g to zero everywhere
-          gnew(:,:,iglomod(iseg)) = 0.0
-
-          i = i + 1
-       end do
-
-       ! put in blank column for theta=0 since it can be determined without
-       ! coupling to other theta-vpa points
-       i = i + 1
-
-       if (nsegments(it,ik) > 1) then
-          do iseg = 2, nsegments(it,ik)
-             do ig = ig_low(iseg)+1, ig_mid(iseg)-1
-                ! give a unit impulse to g at this theta
-                gnew(ig,0,iglomod(iseg)) = 1.0
-
-                ! sweep over (theta,vpa) plane and get values of gnew for theta<0, vpa=-dvpa
-                call implicit_sweep (iglo)
-                
-                ! fill in cotribution from jth segment to ith column of initial 
-                ! (ntheta/2*nsegment+1) x (ntheta/2*nsegment+1) x (nmu) response matrix          
-                ! again, must treat left-most segment specially
-                j = 1 ; k = 1 ; kmax = k+ntheta/2
-                gresponse(k:kmax,i,iglo) = real(gnew(ig_low(iseg):ig_mid(iseg),-1,iglomod(iseg)))
-                k = kmax + 1
-                if (nsegments(it,ik) > 1) then
-                   do j = 2, nsegments(it,ik)
-                      kmax = k+ntheta/2-1
-                      gresponse(k:kmax,i,iglo) = real(gnew(ig_low(iseg)+1:ig_mid(iseg),-1,iglomod(iseg)))
-                      k = kmax + 1
-                   end do
-                end if
-
-                ! reset g to zero everywhere
-                gnew(:,:,iglomod(iseg)) = 0.0
-
-                i = i + 1
-             end do
-             ! put in blank column for theta=0 since it can be determined without
-             ! coupling to other theta-vpa points
-             i = i + 1
-          end do
-       end if
+       call fill_response (iglo, it, ik, iglomod, impulse=cmplx(1.0,0.0), response=gresponse1)
+       call fill_response (iglo, it, ik, iglomod, impulse=cmplx(0.0,1.0), response=gresponse2)
 
        ! get the matrices multiplying g(theta<=0,vpa=0) and g(theta<=0,dvpa=-dvpa) 
        ! in the implicit solve. these are necessary to obtain the final response matrix
@@ -1452,21 +1385,147 @@ subroutine check_dist_fn(report_unit)
           end do
        end if
 
-       gresponse(:ir_up(it,ik),:ir_up(it,ik),iglo) = p_mat(:ir_up(it,ik),:ir_up(it,ik)) &
-            + matmul(m_mat(:ir_up(it,ik),:ir_up(it,ik),iglo),gresponse(:ir_up(it,ik),:ir_up(it,ik),iglo))
+       iup = ir_up(it,ik)
 
-       ! take the inverse to get the final response matrix
-       call invert_matrix (gresponse(:ir_up(it,ik),:ir_up(it,ik),iglo))
+       ! these correspond to (M1+M2*R1) and (M2*R2) from MAB notes, respectively
+       gresponse1(:iup,:iup,iglo) = p_mat(:iup,:iup) &
+            + matmul(m_mat(:iup,:iup,iglo),gresponse1(:iup,:iup,iglo))
+       gresponse2(:iup,:iup,iglo) = &
+            matmul(m_mat(:iup,:iup,iglo),gresponse2(:iup,:iup,iglo))
+
+       ! amat1 is A1 from MAB notes; i.e., A1=(Im[M2*R2]+Re[M1])*Re[M1+M2*R1] + (Im[M1]-Re[M2*R2])*Im[M1+M2*R1]
+       amat1(:iup,:iup) = matmul( aimag(gresponse2(:iup,:iup,iglo)) &
+            + real(p_mat(:iup,:iup)), real(gresponse1(:iup,:iup,iglo))) &
+            + matmul(aimag(p_mat(:iup,:iup)) - real(gresponse2(:iup,:iup,iglo)), &
+            aimag(gresponse1(:iup,:iup,iglo)))
+       ! amat2 is A2 from MAB notes; i.e., A2=(Im[M1+M2*R1]*(Re[M2*R2]-Im[M1]) - Re[M1+M2*R1]*(Re[M1]+Im[M2*R2])
+       amat2(:iup,:iup) = matmul( aimag(gresponse1(:iup,:iup,iglo)), &
+            (real(gresponse2(:iup,:iup,iglo)) - aimag(p_mat(:iup,:iup))) ) &
+            - matmul( real(gresponse1(:iup,:iup,iglo)), (real(p_mat(:iup,:iup)) &
+            + aimag(gresponse2(:iup,:iup,iglo))) )
+
+       ! take the inverses of A1 and A2 that will be needed later
+       call invert_matrix (amat1(:iup,:iup))
+       call invert_matrix (amat2(:iup,:iup))
+
+       ! set Im[gresponse1] = A2^{-1} * Im[M1+M2*R1]
+       ! this is G12 from MAB notes
+       gresponse1(:iup,:iup,iglo) = &
+            cmplx( real(gresponse1(:iup,:iup,iglo)), matmul(amat2(:iup,:iup),aimag(gresponse1(:iup,:iup,iglo))) )
+       ! set Re[gresponse1] = A2^{-1} * Re[M1+M2*R1]
+       ! this is G11 from MAB notes
+       gresponse1(:iup,:iup,iglo) = cmplx( matmul(amat2(:iup,:iup),real(gresponse1(:iup,:iup,iglo))), &
+            aimag(gresponse1(:iup,:iup,iglo)) )
+       ! set Im[gresponse2] = A1^{-1} * (Im[M2*R2]+Re[M1])
+       ! this is G21 from MAB notes
+       gresponse2(:iup,:iup,iglo) = cmplx( real(gresponse2(:iup,:iup,iglo)), &
+            matmul(amat1(:iup,:iup),aimag(gresponse2(:iup,:iup,iglo)) &
+            + real(p_mat(:iup,:iup))) )
+       ! set Re[gresponse2] = A1^{-1} * (Re[M2*R2]-Im[M1])
+       ! this is G22 from MAB notes
+       gresponse2(:iup,:iup,iglo) = cmplx( matmul(amat1(:iup,:iup),real(gresponse2(:iup,:iup,iglo)) &
+             -aimag(p_mat(:iup,:iup))), aimag(gresponse2(:iup,:iup,iglo)) )
 
        p_mat = 0.0
 
        deallocate (iglomod)
     end do
 
-    deallocate (p_mat)
+    deallocate (p_mat, amat1, amat2)
 
   end subroutine get_gresponse_matrix
 
+  subroutine fill_response (iglo, it, ik, iglomod, impulse, response)
+
+    use theta_grid, only: ntheta
+    use gs2_layouts, only: g_lo
+    use dist_fn_arrays, only: gnew
+
+    implicit none
+
+    integer, intent (in) :: iglo, it, ik
+    integer, dimension (:), intent (in) :: iglomod
+    complex, intent (in) :: impulse
+    complex, dimension (:,:,g_lo%llim_proc:), intent (out) :: response
+
+    integer :: i, j, k, kmax, iseg, ig
+
+    i = 1
+
+    ! for iseg=1 (the left-most segment), g(theta=-pi,vpa=0) is not known
+    ! for subsequent segments, g(theta=-pi,vpa=0) will have been solved for
+    ! thus iseg=1 must be treated specially
+    iseg = 1
+    ! give a unit impulse to each theta from -pi up to but not including theta=0 (for vpa=0)
+    ! and obtain the corresponding columns in the response matrix
+    do ig = ig_low(iseg), ig_mid(iseg)-1
+       ! give a unit impulse to g at this theta
+       gnew(ig,0,iglomod(iseg)) = 1.0
+
+       ! sweep over entire (theta,vpa) plane and get values of gnew 
+       ! for particles with vpa=-dvpa below the midplane
+       call implicit_sweep (iglo)
+
+       ! fill in cotribution from jth segment to ith column of initial 
+       ! (ntheta/2*nsegment+1) x (ntheta/2*nsegment+1) x (nmu) response matrix          
+       ! again, must treat left-most segment specially
+       j = 1 ; k = 1 ; kmax = k+ntheta/2
+       response(k:kmax,i,iglo) = gnew(ig_low(iseg):ig_mid(iseg),-1,iglomod(iseg))
+       k = kmax + 1
+       if (nsegments(it,ik) > 1) then
+          do j = 2, nsegments(it,ik)
+             kmax = k+ntheta/2-1
+             response(k:kmax,i,iglo) = gnew(ig_low(iseg)+1:ig_mid(iseg),-1,iglomod(iseg))
+             k = kmax + 1
+          end do
+       end if
+
+       ! reset g to zero everywhere
+       gnew(:,:,iglomod(iseg)) = 0.0
+       
+       i = i + 1
+    end do
+    
+    ! put in blank column for theta=0 since it can be determined without
+    ! coupling to other theta-vpa points
+    i = i + 1
+    
+    if (nsegments(it,ik) > 1) then
+       do iseg = 2, nsegments(it,ik)
+          do ig = ig_low(iseg)+1, ig_mid(iseg)-1
+             ! give a unit impulse to g at this theta
+             gnew(ig,0,iglomod(iseg)) = 1.0
+             
+             ! sweep over (theta,vpa) plane and get values of gnew for theta<0, vpa=-dvpa
+             call implicit_sweep (iglo)
+             
+             ! fill in cotribution from jth segment to ith column of initial 
+             ! (ntheta/2*nsegment+1) x (ntheta/2*nsegment+1) x (nmu) response matrix          
+             ! again, must treat left-most segment specially
+             j = 1 ; k = 1 ; kmax = k+ntheta/2
+             response(k:kmax,i,iglo) = gnew(ig_low(iseg):ig_mid(iseg),-1,iglomod(iseg))
+             k = kmax + 1
+             if (nsegments(it,ik) > 1) then
+                do j = 2, nsegments(it,ik)
+                   kmax = k+ntheta/2-1
+                   response(k:kmax,i,iglo) = gnew(ig_low(iseg)+1:ig_mid(iseg),-1,iglomod(iseg))
+                   k = kmax + 1
+                end do
+             end if
+             
+             ! reset g to zero everywhere
+             gnew(:,:,iglomod(iseg)) = 0.0
+             
+             i = i + 1
+          end do
+          ! put in blank column for theta=0 since it can be determined without
+          ! coupling to other theta-vpa points
+          i = i + 1
+       end do
+    end if
+
+  end subroutine fill_response
+    
   ! implicit_sweep starts with a boundary condition for g^{n+1} along the line (theta<0,vpa=0)
   ! as well as zero BCs at (theta=-theta_max,vpa>0), (theta=theta_max,vpa<0), 
   ! (vpa=-vpa_max,theta<0), and (vpa=vpa_max,theta>0), and solves for g^{n+1}.  
@@ -1481,9 +1540,9 @@ subroutine check_dist_fn(report_unit)
     implicit none
 
     integer, intent (in) :: iglo
-    real, dimension (:), intent (in out), optional :: source_mod
+    complex, dimension (:), intent (in out), optional :: source_mod
 
-    integer :: ig, iv, ntg, k, iseg, kmax, it, itmod, ik
+    integer :: ig, iv, ntg, k, iseg, kmax, it, itmod, ik, iup
     integer, dimension (:), allocatable :: iglomod
     complex, dimension (:), allocatable :: dgdgn
 
@@ -1565,23 +1624,24 @@ subroutine check_dist_fn(report_unit)
           end do
        end if
 
-       ! will need to remove 'real' operator below later -- MAB
-       ! this will require tackling the inversion of a complex matrix gresponse as well
-       dgdgn(:ir_up(it,ik)) = matmul(m_mat(:ir_up(it,ik),:ir_up(it,ik),iglo),real(dgdgn(:ir_up(it,ik))))
+       iup = ir_up(it,ik)
+
+       ! this is M2*r_{-1} from MAB notes
+       dgdgn(:iup) = matmul(m_mat(:iup,:iup,iglo),dgdgn(:iup))
 
        k=1
        iseg=1 ; kmax=k+ntg
-       source_mod(k:kmax-1) = real(source(ig_low(iseg):ig_mid(iseg)-1,-1,iglomod(iseg))) &
-            - real(dgdgn(k:kmax-1))
-       source_mod(kmax) = real(source0(iseg,iglomod(iseg)))
+       source_mod(k:kmax-1) = source(ig_low(iseg):ig_mid(iseg)-1,-1,iglomod(iseg)) &
+            - dgdgn(k:kmax-1)
+       source_mod(kmax) = source0(iseg,iglomod(iseg))
        k = kmax+1
 
        if (nsegments(it,ik) > 1) then
           do iseg = 2, nsegments(it,ik)
              kmax = k+ntg-1
-             source_mod(k:kmax-1) = real(source(ig_low(iseg)+1:ig_mid(iseg)-1,-1,iglomod(iseg))) &
-                  - real(dgdgn(k:kmax-1))
-             source_mod(kmax) = real(source0(iseg,iglomod(iseg)))
+             source_mod(k:kmax-1) = source(ig_low(iseg)+1:ig_mid(iseg)-1,-1,iglomod(iseg)) &
+                  - dgdgn(k:kmax-1)
+             source_mod(kmax) = source0(iseg,iglomod(iseg))
              k = kmax+1
           end do
        end if
@@ -1678,10 +1738,10 @@ subroutine check_dist_fn(report_unit)
 
     implicit none
 
-    integer :: iglo, iseg, k, kmax, ntg, it, itmod, ig, ik
+    integer :: iglo, iseg, k, kmax, ntg, it, itmod, ig, ik, iup
 
     integer, dimension (:), allocatable :: iglomod
-    real, dimension (:), allocatable :: source_mod, tmp
+    complex, dimension (:), allocatable :: source_mod, tmp
 
     ntg = ntheta/2
 
@@ -1706,6 +1766,8 @@ subroutine check_dist_fn(report_unit)
 
        if (it > it_shift(ik)) cycle
 
+       iup = ir_up(it,ik)
+
        allocate (iglomod(nsegments(it,ik)))
 
        ! sweep through vpa and theta once to obtain the response of 
@@ -1714,7 +1776,10 @@ subroutine check_dist_fn(report_unit)
        call implicit_sweep (iglo, source_mod=source_mod)
        
        ! get g^{n+1}(theta<=0,vpa=0) using response matrix
-       tmp = matmul(gresponse(:ir_up(it,ik),:ir_up(it,ik),iglo), source_mod(:ir_up(it,ik)))
+       tmp(:iup) = cmplx( matmul(aimag(gresponse2(:iup,:iup,iglo)), real(source_mod(:iup))) &
+            - matmul(real(gresponse2(:iup,:iup,iglo)), aimag(source_mod(:iup))), &
+            matmul(aimag(gresponse1(:iup,:iup,iglo)), real(source_mod(:iup))) &
+            - matmul(real(gresponse1(:iup,:iup,iglo)), aimag(source_mod(:iup))) )
 
        k=1
        iseg=1 ; kmax=k+ntg
@@ -5970,7 +6035,10 @@ subroutine check_dist_fn(report_unit)
          mom_coeff_tpara, mom_coeff_tperp, mom_shift_para, mom_shift_perp)
 
     if (allocated(source0)) deallocate (source0)
-    if (allocated(gresponse)) deallocate (gresponse)
+    if (allocated(gresponse1)) then
+       deallocate (gresponse1)
+       deallocate (gresponse2)
+    end if
     if (allocated(m_mat)) deallocate (m_mat)
 
     if (allocated(pppfac)) then
