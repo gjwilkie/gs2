@@ -32,7 +32,7 @@
 /
 
 &general_f0_parameters
-  alpha_f0 = 'analytic'
+  alpha_f0 = 'split'
   energy_0 = 0.01
 /
 

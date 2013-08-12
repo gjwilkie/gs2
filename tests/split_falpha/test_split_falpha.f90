@@ -7,14 +7,14 @@
 !!
 !! This is free software released under GPLv3
 !!   Written by: Edmund Highcock (edmundhighcock@sourceforge.net)
-program test_analytical_falpha
+program test_split_falpha
   use unit_tests
-  use analytical_falpha
+  use split_falpha
   use mp, only: init_mp, finish_mp
   implicit none
   real :: eps
 
-  type(analytical_falpha_parameters_type) :: parameters
+  type(split_falpha_parameters_type) :: parameters
   logical :: dummy
 
   real, dimension(:,:,:), allocatable :: array
@@ -26,19 +26,19 @@ program test_analytical_falpha
 
 
 
-  call announce_module_test('analytical_falpha')
+  call announce_module_test('split_falpha')
 
   call announce_test('is_converged')
   call process_test(unit_test_is_converged(), 'is_converged')
   call announce_test('chandrasekhar')
-  call process_test(analytical_falpha_unit_test_chandrasekhar(), 'chandrasekhar')
+  call process_test(split_falpha_unit_test_chandrasekhar(), 'chandrasekhar')
   call announce_test('chandrasekhar prime')
   call process_test(&
-     analytical_falpha_unit_test_chandrasekhar_prime(0.1, 0.369396267397740, eps), &
+     split_falpha_unit_test_chandrasekhar_prime(0.1, 0.369396267397740, eps), &
      'chandrasekhar prime')
 
   call announce_test('simpson')
-  call process_test(analytical_falpha_unit_test_simpson(eps), 'simpson')
+  call process_test(split_falpha_unit_test_simpson(eps), 'simpson')
 
   parameters%energy_0 = 0.01
   parameters%source = 0.01
@@ -69,46 +69,46 @@ program test_analytical_falpha
 
 
   call announce_test('nu_parallel')
-  call process_test(analytical_falpha_unit_test_nu_parallel( &
+  call process_test(split_falpha_unit_test_nu_parallel( &
     parameters, 0.8, 7.07304892219606e-7, eps), 'nu_parallel')
 
   call announce_test('nu_parallel_prime')
-  call process_test(analytical_falpha_unit_test_nu_parallel_prime( &
+  call process_test(split_falpha_unit_test_nu_parallel_prime( &
     parameters, 0.2, -0.000127328159032943, eps*1.0), 'nu_parallel_prime 0.2')
-  call process_test(analytical_falpha_unit_test_nu_parallel_prime( &
+  call process_test(split_falpha_unit_test_nu_parallel_prime( &
     parameters, 0.8, -3.99791538405283e-6, eps*1.0), 'nu_parallel_prime 0.8')
   
   call announce_test('falpha_integrand')
-  call process_test(analytical_falpha_unit_test_falpha_integrand(&
+  call process_test(split_falpha_unit_test_falpha_integrand(&
     parameters, 0.9,  0.4, 2.40051081062416e-72, eps), 'falpha_integrand 0.9')
-  call process_test(analytical_falpha_unit_test_falpha_integrand(&
+  call process_test(split_falpha_unit_test_falpha_integrand(&
     parameters, 0.01, 0.4, 3.37485927208412e67, eps), 'falpha_integrand 0.01')
-  call process_test(analytical_falpha_unit_test_falpha_integrand(&
+  call process_test(split_falpha_unit_test_falpha_integrand(&
     parameters, 2.5,  0.4, 0.0, eps), 'falpha_integrand 2.5')
 
   call announce_test('falpha')
-  call process_test(analytical_falpha_unit_test_falpha(&
+  call process_test(split_falpha_unit_test_falpha(&
     parameters, 0.02, 0.01, 128, 10.6555616529750, eps), 'falpha 0.02') 
-  call process_test(analytical_falpha_unit_test_falpha(&
+  call process_test(split_falpha_unit_test_falpha(&
     parameters, 0.5, 0.01, 2048*8, 6.06172663857817, eps), 'falpha 0.5') 
-  call process_test(analytical_falpha_unit_test_falpha(&
+  call process_test(split_falpha_unit_test_falpha(&
     parameters, 1.0, 0.01, 2048*16, 5.07680938596173, eps), 'falpha 1.0') 
-  call process_test(analytical_falpha_unit_test_falpha(&
+  call process_test(split_falpha_unit_test_falpha(&
     parameters, 2.5, 0.01, 256, 0.0, eps), 'falpha 2.5') 
-  call process_test(analytical_falpha_unit_test_falpha(&
+  call process_test(split_falpha_unit_test_falpha(&
     parameters, 0.01, 0.01, 128, 0.0, eps), 'falpha 0.01') 
 
 
   call announce_test('dfalpha_dti')
-  call process_test(analytical_falpha_unit_test_dfalpha_dti(&
+  call process_test(split_falpha_unit_test_dfalpha_dti(&
     parameters, 0.5,  2048*8, -4.00357641291620, eps), 'dfalpha_dti 0.5')
-  call process_test(analytical_falpha_unit_test_dfalpha_dti(&
+  call process_test(split_falpha_unit_test_dfalpha_dti(&
     parameters, 0.9,  2048*16, -4.00410087513562, eps), 'dfalpha_dti 0.9')
 
   call announce_test('dfalpha_dnupar')
-  call process_test(analytical_falpha_unit_test_dfalpha_dnupar(&
+  call process_test(split_falpha_unit_test_dfalpha_dnupar(&
     parameters, 0.1,  2048*32, 6.90802623886552, eps*1000.0), 'dfalpha_dnupar 0.1')
-  call process_test(analytical_falpha_unit_test_dfalpha_dnupar(&
+  call process_test(split_falpha_unit_test_dfalpha_dnupar(&
     parameters, 0.5,  2048*8, 6.25450124922097 , eps*1000.0), 'dfalpha_dnupar 0.5')
 
   allocate(array(6, 1,  7))
@@ -130,27 +130,27 @@ program test_analytical_falpha
   !parameters%ion_fprim = parameters%electron_fprim
 
   call announce_test('calculate_arrays')
-  call process_test(analytical_falpha_unit_test_calculate_arrays(&
+  call process_test(split_falpha_unit_test_calculate_arrays(&
     parameters, array(:,:,1), array(:,:,2), array(:,:,3), array(:,:,4),&
     array(:,:,5), array(:,:,6), array(:,:,7), eps), 'calculate_arrays') 
 
 
   call announce_test('alpha_density')
-  call process_test(analytical_falpha_unit_test_alpha_density(&
+  call process_test(split_falpha_unit_test_alpha_density(&
     parameters, 24.6272836977552, 0.001), 'alpha_density')
   parameters%alpha_density = 0.5
   parameters%source = -1
-  dummy = analytical_falpha_unit_test_calculate_arrays(&
+  dummy = split_falpha_unit_test_calculate_arrays(&
     parameters, array(:,:,1), array(:,:,2), array(:,:,3), array(:,:,4),&
     array(:,:,5), array(:,:,6), array(:,:,7), eps)
   call announce_test('alpha_density adjusted')
-  call process_test(analytical_falpha_unit_test_alpha_density(&
+  call process_test(split_falpha_unit_test_alpha_density(&
     parameters, 1.0, eps), 'alpha_density adjusted')
 
 
 
-  call close_module_test('analytical_falpha')
+  call close_module_test('split_falpha')
 
   call finish_mp
 
-end program test_analytical_falpha
+end program test_split_falpha

@@ -112,11 +112,13 @@ module general_f0
 
   integer, parameter :: alpha_f0_maxwellian = 1, &
                         alpha_f0_analytic = 2, &
-                        alpha_f0_external =3
+                        alpha_f0_split = 3, &
+                        alpha_f0_external =4
 
   integer, parameter :: beam_f0_maxwellian = 1, &
                         beam_f0_analytic = 2, &
-                        beam_f0_external =3
+                        beam_f0_split = 3, &
+                        beam_f0_external =4
 
   integer :: gen_f0_output_file
   
@@ -132,8 +134,13 @@ module general_f0
   real, dimension(:), allocatable :: egrid_maxwell
   real, dimension(:), allocatable :: weights_maxwell
 
-  !> Which species to use as the main ions in analytical_falpha
+  !> Which species to use as the main ions in falpha
   integer :: main_ion_species
+
+  !> "Critical speed" that parameterizes the analytic slowing-down distribution 
+  !! Can, in principle, be calculated from ion and electron properties, but for now
+  !! just an input parameter
+  real:: vcrit 
 
 contains
 
@@ -170,7 +177,7 @@ contains
 
     call announce_check('alpha_f0_switch')
     general_f0_unit_test_init_general_f0 = &
-      agrees_with(alpha_f0_switch, alpha_f0_analytic)
+      agrees_with(alpha_f0_switch, alpha_f0_split)
     call process_check(general_f0_unit_test_init_general_f0, 'alpha_f0_switch')
 
     call announce_check('spec 1 type')
@@ -207,9 +214,10 @@ contains
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     implicit none
-    type (text_option), dimension (3), parameter :: alpha_f0_opts = &
+    type (text_option), dimension (4), parameter :: alpha_f0_opts = &
          (/ text_option('maxwellian', alpha_f0_maxwellian), &
             text_option('analytic', alpha_f0_analytic), &
+            text_option('split', alpha_f0_split), &
             text_option('external', alpha_f0_external) /)
     character(20) :: alpha_f0
     type (text_option), dimension (3), parameter :: beam_f0_opts = &
@@ -224,7 +232,8 @@ contains
             main_ion_species,&
             energy_min,&
             energy_0,&
-            print_egrid
+            print_egrid,&
+            vcrit
 
     integer :: ierr, in_file
     logical :: exist
@@ -236,6 +245,7 @@ contains
        main_ion_species = -1 
        energy_min = 0.1
        energy_0 = 0.08
+       vcrit = -1.0
 
        in_file = input_unit_exist ("general_f0_parameters", exist)
        if (exist) read (unit=in_file, nml=general_f0_parameters)
@@ -255,6 +265,7 @@ contains
     call broadcast (main_ion_species)
     call broadcast (energy_min)
     call broadcast (energy_0)
+    call broadcast (vcrit)
 
   end subroutine read_parameters
 
@@ -292,6 +303,9 @@ contains
         case (alpha_f0_analytic)
           call check_electromagnetic
           call calculate_f0_arrays_analytic(is)
+        case (alpha_f0_split)
+          call check_electromagnetic
+          call calculate_f0_arrays_split(is)
         case (alpha_f0_external)
           call check_electromagnetic
           call calculate_f0_arrays_external(is)
@@ -442,15 +456,16 @@ contains
   end subroutine calculate_f0_arrays_maxwellian
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!! Analytic
+!! Split
 !! 
 !! This subsection contains routines for handling 
-!! distributions given by the formula ... in ... 
+!! distributions given by the semianalytical form
+!! found with fast alphas as a split species
 
 
-  subroutine calculate_f0_arrays_analytic(is)
-    use analytical_falpha, only: analytical_falpha_parameters_type
-    use analytical_falpha, only: calculate_arrays
+  subroutine calculate_f0_arrays_split(is)
+    use split_falpha, only: split_falpha_parameters_type
+    use split_falpha, only: calculate_arrays
     use constants, only: pi
     use species, only: spec 
     use species, only: nspec
@@ -458,7 +473,7 @@ contains
     use species, only: ion_species
     use species, only: has_electron_species
     use mp, only: mp_abort
-    type(analytical_falpha_parameters_type) :: parameters
+    type(split_falpha_parameters_type) :: parameters
     integer, intent(in) :: is
     integer :: ie
     integer :: electron_spec
@@ -572,7 +587,7 @@ contains
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
     
-  end subroutine calculate_f0_arrays_analytic
+  end subroutine calculate_f0_arrays_split
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !! External
@@ -757,5 +772,82 @@ contains
     deallocate(egrid_dat,f0_values_dat,df0dE_dat,f0_values_dat_log,df0dE_dat_log,yp,temp)
 
   end subroutine calculate_f0_arrays_external
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! Analytic
+!! 
+!! This subsection contains routines for handling 
+!! the analytic approximation to the fast-particle 
+!! slowing-down distribution 
+!!
+!! f0(v) = A/(vc^3 + v^3)                                           (if v < vstar)
+!!       = B*exp(-Ealpha*v^2/Ti)                                    (if v > vstar)
+!! 
+!! vc    = critical speed, input
+!! A     = normalization chosen so that f0 integrates to unity
+!! B     = constant chosen to enforce continuity at v = vstar
+!!
+!! To do: 
+!! - Calculate vc based on parameters of other species.
+!! - Implement an appropriate generalization of temperature gradient, perhaps based on other species
+!!
+  subroutine calculate_f0_arrays_analytic(is)
+    use constants, only: pi
+    use species, only: spec, nspec
+    use mp, only: mp_abort
+    use species, only: ion_species, electron_species, alpha_species
+    implicit none
+    integer,intent(in):: is
+    real:: A, Ti, Ealpha, vstar, v, df0dv, df0dE, B
+    integer:: ie, i, electron_spec
+
+    if (vcrit .LE. 0.0) then
+       write(*,*) "ERROR: in general_f0. If alpha_f0='analytic' is chosen, vcrit must also be specified."
+       call mp_abort('')
+    end if
+
+    do i = 1,nspec
+      if (spec(i)%type .eq. electron_species) electron_spec = i
+      if (main_ion_species < 1 .and. spec(i)%type .eq. ion_species) &
+        main_ion_species = i
+    end do
+
+    Ti = spec(main_ion_species)%temp
+    Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
+
+    vstar = sqrt(Ealpha)
+!    vstar = 1.0
+!    Ealpha = 1.0
+    
+    A = (4.0*pi/3.0)*log( (vcrit**3 + vstar**3)/(vcrit**3))
+    A = A + (pi*Ti/Ealpha)**1.5*exp(Ealpha*vstar**2/Ti)*(1.0-erf(sqrt(Ealpha/Ti)*vstar))/(vcrit**3 + vstar**3)
+    A = A + (2.0*pi*vstar*Ti/Ealpha)/(vcrit**3 + vstar**3)
+    A = 1.0/A
+
+    B = A*exp(Ealpha*vstar**2/Ti)/(vcrit**3 + vstar**3)
+
+    do ie = 1,negrid 
+       v = sqrt(egrid(ie,is))
+       if (v .LE. vstar) then
+          f0_values(ie,is) = A/(vcrit**3 + v**3)
+          df0dv = -A*3.0*v**2/(vcrit**3 + v**3)**2
+          df0dE = (0.5/v)*df0dv
+          generalised_temperature(ie,is) = -spec(is)%temp*f0_values(ie,is)/df0dE
+          gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
+          zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+       else
+          f0_values(ie,is) = B*exp(-Ealpha*v**2/Ti)
+          df0dE = -B*Ealpha*f0_values(ie,is)/Ti
+          generalised_temperature(ie,is) = -spec(is)%temp*f0_values(ie,is)/df0dE
+          gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
+          zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+       end if
+    end do
+
+    f0prim(:,is) = - spec(is)%fprim 
+
+    weights(:,is) = weights(:,is) * f0_values(:,is)
+
+  end subroutine
 
 end module general_f0

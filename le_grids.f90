@@ -55,7 +55,7 @@ contains
     real, dimension(:,:), intent (out) :: epts
     real, dimension(:,:), intent (out) :: wgts
     real :: energy_0, vcut_local
-    integer :: is
+    integer :: is,ie
 
     call init_egrid (negrid)
 
@@ -112,6 +112,9 @@ contains
     !write (*,*) 'Weights in le_grids are', wgts
     !write (*,*) 'epts', epts
     call calculate_f0_arrays(epts, wgts, vcut)
+    !do ie = 1,negrid
+    !   write(*,*) ie, sqrt(epts(ie,3)), wgts(ie,3), f0_values(ie,3)
+    !end do
     !do is = 1,nspec
       !wgts(:,is) = wgts(:,1)
     !end do 
@@ -200,8 +203,8 @@ contains
     end do
 
 
-    !write (*,*) 'Weights in le_grids are', wgts
-    !write (*,*) 'epts', epts
+!    write (*,*) 'Weights in le_grids are', wgts
+!    write (*,*) 'epts', epts
     call calculate_f0_arrays(epts, wgts, vcut)
     !do is = 1,nspec
       !wgts(:,is) = wgts(:,1)
