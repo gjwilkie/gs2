@@ -126,7 +126,6 @@ contains
     end do
 
     ! get vpa at cell centers
-    write (*,*) 'vpa'
     call get_cell_value (vpa_imp, vpa, vpac(:,1), -nvgrid)
     call get_cell_value (1.0-vpa_imp, vpa, vpac(:,2), -nvgrid)
     ! vpac(nvgrid) should not be needed but set it nonzero to avoid possible

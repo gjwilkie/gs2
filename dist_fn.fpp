@@ -1044,7 +1044,7 @@ subroutine check_dist_fn(report_unit)
              ppmfac(igm:igu-1,-nvgrid:nvgrid-1,iglo) = &
                   dum2(igm:igu-1,-nvgrid:nvgrid-1)*wd1(igm:igu-1,-nvgrid:nvgrid-1) &
                   + stm*t_imp*dum1(igm:igu-1,-nvgrid:nvgrid-1)
-             pmpfac(igm:igu-1,-nvgrid:nvgrid-1,iglo) = &
+             pmmfac(igm:igu-1,-nvgrid:nvgrid-1,iglo) = &
                   (1.0-dum2(igm:igu-1,-nvgrid:nvgrid-1))*wd1(igm:igu-1,-nvgrid:nvgrid-1) &
                   - stm*t_imp*dum1(igm:igu-1,-nvgrid:nvgrid-1)
              mpmfac(igm:igu-1,-nvgrid:nvgrid-1,iglo) = &
@@ -1757,7 +1757,6 @@ subroutine check_dist_fn(report_unit)
     if (imu==1) then
        ! now get gnew(theta,vpa=0), which is decoupled from other points
        gnew(ig_low(iseg):ig_up(iseg),0,iglo) = mu0_source(ig_low(iseg):ig_up(iseg),iglo)
-       write (*,*) 'mu0source', real(gnew(0,0,iglo)), real(mu0_source(0,iglo))
     end if
        
   end subroutine implicit_sweep_right
@@ -3887,7 +3886,6 @@ subroutine check_dist_fn(report_unit)
 
 !   end subroutine get_source_term
 
-  ! MAB FLAG -- need to uncomment all the way down to reset_init
   subroutine getan (antot, antota, antotp)
 
     use dist_fn_arrays, only: aj0, aj1, gnew, kperp2
@@ -4498,14 +4496,10 @@ subroutine check_dist_fn(report_unit)
     ! solve Maxwell's equations; e.g., antot = sum_s Z_s int d3v J0_s * g_s / n_ref
     call getan (antot, antota, antotp)
 
-    write (*,*) 'antot', antot
-
     ! getfieldeq1 returns field equations;
     ! e.g., fieldeq = antot + sum_s (Gam0_s - 1)*Z_s^2*e*phi/T_s * n_s / n_ref = 0
     call getfieldeq1 (phi, apar, bpar, antot, antota, antotp, &
          fieldeq, fieldeqa, fieldeqp)
-
-    write (*,*) 'fieldeq', fieldeq
 
     deallocate (antot, antota, antotp)
 
@@ -4856,7 +4850,6 @@ subroutine check_dist_fn(report_unit)
        end do
     end do
 
-    write (*,*) 'gradpar'
     call get_cell_value (thet_imp, gradpar, gradparc, -ntgrid)
     if (fphi > epsilon(0.0)) then
        g0 = 0.
