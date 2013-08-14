@@ -1844,7 +1844,6 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     thet_imp = thet_impfac
 
     ! get cell values for theta and gradpar. depends on sign(vpa) due to upwinding
-    write (*,*) 'theta'
     call get_cell_value (1.0-thet_imp, theta, thetac(:,1), -ntgrid)
     call get_cell_value (thet_imp, theta, thetac(:,2), -ntgrid)
 
@@ -1864,7 +1863,6 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     dbdthetc(:,2) = dbdthetc(:,1)
 
     ! then get cell values
-    write (*,*) 'dbdthet'
     call get_cell_value (1.0-thet_imp, dbdthetc(:,1), dbdthetc(:,1), -ntgrid)
     call get_cell_value (thet_imp, dbdthetc(:,2), dbdthetc(:,2), -ntgrid)
 

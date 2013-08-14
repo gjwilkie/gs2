@@ -227,8 +227,6 @@ contains
     ! though because they have been evaluated using old values of phi, apar, bpar.
     call get_field_vector (fl, phi, apar, bpar)
 
-    write (*,*) 'fl', fl
-    
     u = 0.
     do jflo = jf_lo%llim_proc, jf_lo%ulim_proc
 
@@ -249,14 +247,11 @@ contains
        end do
     end do
 
-    write (*,*) 'u1', u
-
     deallocate (fl)
     call sum_allreduce (u)
 
     call get_field_solution (u)
 
-    write (*,*) 'u2', u
     deallocate (u)
 
     call prof_leaving ("getfield", "fields_implicit")
@@ -301,17 +296,6 @@ contains
     apar = aparnew
     bpar = bparnew
 
-    ! TMP FOR TESTING -- MAB
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       imu = imu_idx(g_lo,iglo)
-       if (imu==1) then
-          do iv = 0, nvgrid
-             write (*,'(a7,4e12.4)') 'gnew 1', mu(imu), vpa(iv), real(gnew(0,iv,iglo)/anon(0,iv,imu)), &
-                  aimag(gnew(0,iv,iglo)/anon(0,iv,imu))
-          end do
-       end if
-    end do
-
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
     aparnew = aparnew + apar_ext 
 
@@ -322,23 +306,25 @@ contains
 !    end do
 
     ! TMP FOR TESTING -- MAB
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       imu = imu_idx(g_lo,iglo)
-!       if (imu==1) then
-          do iv = 0, nvgrid
-             write (*,'(a7,4e12.4)') 'gnew 2', mu(imu), vpa(iv), real(gnew(0,iv,iglo)/anon(0,iv,imu)), &
-                  aimag(gnew(0,iv,iglo)/anon(0,iv,imu))
-          end do
-!       end if
-    end do
+!     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!        imu = imu_idx(g_lo,iglo)
+!        if (imu==1) then
+!           do iv = -nvgrid, nvgrid
+!              do ig = -ntgrid, ntgrid
+!                 write (*,'(a7,2i4,4e12.4)') 'gnew 2', ig, iv, mu(imu), vpa(iv), real(gnew(ig,iv,iglo)/anon(ig,iv,imu)), &
+!                      aimag(gnew(ig,iv,iglo)/anon(ig,iv,imu))
+!              end do
+!           end do
+!        end if
+!     end do
 
     call getfield (phinew, aparnew, bparnew)
 
     ! TMP FOR TESTING -- MAB
-    do ig = -ntgrid, ntgrid
-       write (*,*) 'phinew', real(phinew(ig,1,1)), aimag(phinew(ig,1,1))
-    end do
-    stop
+!    do ig = -ntgrid, ntgrid
+!       write (*,*) 'phinew', real(phinew(ig,1,1)), aimag(phinew(ig,1,1))
+!    end do
+!    stop
 
     phinew   = phinew  + phi
     aparnew  = aparnew + apar
