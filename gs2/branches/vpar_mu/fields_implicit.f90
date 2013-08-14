@@ -222,7 +222,12 @@ contains
     ! am*u = fl, Poisson's and Ampere's law, u is phi, apar, bpar 
     ! u = aminv*fl
 
+    ! setup fl to contain the field equations, which should be zero
+    ! for the right choice of phi, apar, bpar.  They will be nonzero
+    ! though because they have been evaluated using old values of phi, apar, bpar.
     call get_field_vector (fl, phi, apar, bpar)
+
+    write (*,*) 'fl', fl
     
     u = 0.
     do jflo = jf_lo%llim_proc, jf_lo%ulim_proc
@@ -244,10 +249,14 @@ contains
        end do
     end do
 
+    write (*,*) 'u1', u
+
     deallocate (fl)
     call sum_allreduce (u)
 
     call get_field_solution (u)
+
+    write (*,*) 'u2', u
     deallocate (u)
 
     call prof_leaving ("getfield", "fields_implicit")
@@ -262,33 +271,83 @@ contains
     use antenna, only: antenna_amplitudes
     use dist_fn, only: timeadv, exb_shear
     use dist_fn_arrays, only: g, gold, gnew, kx_shift, theta0_shift
+
+    ! TMP FOR TESTING -- MAB
+    use vpamu_grids, only: anon, vpa, mu, nvgrid
+    use gs2_layouts, only: g_lo, imu_idx
+    use theta_grid, only: ntgrid
+    use kt_grids, only: ntheta0, naky
+    use mp, only: proc0
+
     implicit none
+
+    ! TMP FOR TESTING -- MAB
+    integer :: iglo, imu, ig, it, ik, iv
+
     integer :: diagnostics = 1
     integer, intent (in) :: istep
     logical, intent (in) :: remove_zonal_flows_switch
-
 
     !GGH NOTE: apar_ext is initialized in this call
     call antenna_amplitudes (apar_ext)
        
     if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
     
+    ! TMP FOR TESTING -- MAB
+!    phinew = 0.0
+
     g = gnew ; gold = gnew
     phi = phinew
     apar = aparnew
     bpar = bparnew
 
-    ! MAB FLAG -- need to uncomment
-!     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-!     aparnew = aparnew + apar_ext 
-    
-!     call getfield (phinew, aparnew, bparnew)
-    
-!     phinew   = phinew  + phi
-!     aparnew  = aparnew + apar
-!     bparnew  = bparnew + bpar
+    ! TMP FOR TESTING -- MAB
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       imu = imu_idx(g_lo,iglo)
+       if (imu==1) then
+          do iv = 0, nvgrid
+             write (*,'(a7,4e12.4)') 'gnew 1', mu(imu), vpa(iv), real(gnew(0,iv,iglo)/anon(0,iv,imu)), &
+                  aimag(gnew(0,iv,iglo)/anon(0,iv,imu))
+          end do
+       end if
+    end do
 
-!     if (remove_zonal_flows_switch) call remove_zonal_flows
+    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+    aparnew = aparnew + apar_ext 
+
+    ! TMP FOR TESTING -- MAB
+!    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!       imu = imu_idx(g_lo,iglo)
+!       gnew(:,:,iglo) = anon(:,:,imu)
+!    end do
+
+    ! TMP FOR TESTING -- MAB
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       imu = imu_idx(g_lo,iglo)
+!       if (imu==1) then
+          do iv = 0, nvgrid
+             write (*,'(a7,4e12.4)') 'gnew 2', mu(imu), vpa(iv), real(gnew(0,iv,iglo)/anon(0,iv,imu)), &
+                  aimag(gnew(0,iv,iglo)/anon(0,iv,imu))
+          end do
+!       end if
+    end do
+
+    call getfield (phinew, aparnew, bparnew)
+
+    ! TMP FOR TESTING -- MAB
+    do ig = -ntgrid, ntgrid
+       write (*,*) 'phinew', real(phinew(ig,1,1)), aimag(phinew(ig,1,1))
+    end do
+    stop
+
+    phinew   = phinew  + phi
+    aparnew  = aparnew + apar
+    bparnew  = bparnew + bpar
+    
+    ! TMP FOR TESTING -- MAB
+!    phinew = 0.0
+
+    if (remove_zonal_flows_switch) call remove_zonal_flows
     
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
     
@@ -555,6 +614,7 @@ contains
   end subroutine init_response_row
 
   subroutine init_inverse_matrix (am, ic)
+
     use file_utils, only: error_unit
     use kt_grids, only: aky, akx
     use theta_grid, only: ntgrid
@@ -565,7 +625,9 @@ contains
     use prof, only: prof_entering, prof_leaving
     use fields_arrays, only: aminv
     use dist_fn, only: i_class, M_class, N_class
+
     implicit none
+
     integer, intent (in) :: ic
     complex, dimension(:,f_lo(ic)%llim_proc:), intent (in out) :: am
     complex, dimension(:,:), allocatable :: a_inv, lhscol, rhsrow
