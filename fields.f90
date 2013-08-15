@@ -119,8 +119,6 @@ contains
     if (debug) write(6,*) "init_fields: ginit"
     call ginit (restarted)
 
-    call write_mpdist (gnew, '.ginit')
-
     if (debug) write(6,*) "init_fields: init_antenna"
     call init_antenna
     if (restarted) return

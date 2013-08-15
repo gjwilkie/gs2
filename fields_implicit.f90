@@ -199,6 +199,7 @@ contains
   end subroutine get_field_solution
 
   subroutine getfield (phi, apar, bpar)
+
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: f_lo, jf_lo, ij, mj, dj
     use prof, only: prof_entering, prof_leaving
@@ -207,7 +208,9 @@ contains
     use dist_fn, only: N_class
     use mp, only: sum_allreduce, proc0
     use job_manage, only: time_message
+
     implicit none
+
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (:,:,:), allocatable :: fl
     complex, dimension (:), allocatable :: u
@@ -267,17 +270,7 @@ contains
     use dist_fn, only: timeadv, exb_shear
     use dist_fn_arrays, only: g, gold, gnew, kx_shift, theta0_shift
 
-    ! TMP FOR TESTING -- MAB
-    use vpamu_grids, only: anon, vpa, mu, nvgrid
-    use gs2_layouts, only: g_lo, imu_idx
-    use theta_grid, only: ntgrid
-    use kt_grids, only: ntheta0, naky
-    use mp, only: proc0
-
     implicit none
-
-    ! TMP FOR TESTING -- MAB
-    integer :: iglo, imu, ig, it, ik, iv
 
     integer :: diagnostics = 1
     integer, intent (in) :: istep
@@ -288,9 +281,6 @@ contains
        
     if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
     
-    ! TMP FOR TESTING -- MAB
-!    phinew = 0.0
-
     g = gnew ; gold = gnew
     phi = phinew
     apar = aparnew
@@ -299,40 +289,12 @@ contains
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
     aparnew = aparnew + apar_ext 
 
-    ! TMP FOR TESTING -- MAB
-!    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!       imu = imu_idx(g_lo,iglo)
-!       gnew(:,:,iglo) = anon(:,:,imu)
-!    end do
-
-    ! TMP FOR TESTING -- MAB
-!     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!        imu = imu_idx(g_lo,iglo)
-!        if (imu==1) then
-!           do iv = -nvgrid, nvgrid
-!              do ig = -ntgrid, ntgrid
-!                 write (*,'(a7,2i4,4e12.4)') 'gnew 2', ig, iv, mu(imu), vpa(iv), real(gnew(ig,iv,iglo)/anon(ig,iv,imu)), &
-!                      aimag(gnew(ig,iv,iglo)/anon(ig,iv,imu))
-!              end do
-!           end do
-!        end if
-!     end do
-
     call getfield (phinew, aparnew, bparnew)
-
-    ! TMP FOR TESTING -- MAB
-!    do ig = -ntgrid, ntgrid
-!       write (*,*) 'phinew', real(phinew(ig,1,1)), aimag(phinew(ig,1,1))
-!    end do
-!    stop
 
     phinew   = phinew  + phi
     aparnew  = aparnew + apar
     bparnew  = bparnew + bpar
     
-    ! TMP FOR TESTING -- MAB
-!    phinew = 0.0
-
     if (remove_zonal_flows_switch) call remove_zonal_flows
     
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
@@ -536,6 +498,7 @@ contains
   end subroutine init_response_matrix
 
   subroutine init_response_row (ig, ifield, am, ic, n)
+
     use mp, only: proc0
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
@@ -544,7 +507,9 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     use gs2_layouts, only: f_lo, idx, idx_local
     use prof, only: prof_entering, prof_leaving
+
     implicit none
+
     integer, intent (in) :: ig, ifield, ic, n
     complex, dimension(:,f_lo(ic)%llim_proc:), intent (in out) :: am
     complex, dimension (:,:,:), allocatable :: fieldeq, fieldeqa, fieldeqp
@@ -557,6 +522,7 @@ contains
     allocate (fieldeqp(-ntgrid:ntgrid, ntheta0, naky))
 
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, 0)
+
     call getfieldeq (phinew, aparnew, bparnew, fieldeq, fieldeqa, fieldeqp)
 
     do nn = 1, N_class(ic)
@@ -632,7 +598,7 @@ contains
     j = nidx*N_class(ic)
     allocate (a_inv(j,f_lo(ic)%llim_proc:f_lo(ic)%ulim_alloc))
     a_inv = 0.0
-    
+
     do ilo = f_lo(ic)%llim_proc, f_lo(ic)%ulim_proc
        a_inv(if_idx(f_lo(ic),ilo),ilo) = 1.0
     end do
@@ -698,7 +664,7 @@ contains
           else
              a_inv(:,jlo) = 0.0
           end if
-   
+
        end do
     end do
 

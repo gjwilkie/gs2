@@ -76,9 +76,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real :: time_main_loop(2)
     real :: time_main_loop_min,time_main_loop_max,time_main_loop_av
 
-    ! TMP FOR TESTING -- MAB
-    integer :: t_fin_diag, t_fin_gs2, t_fin, rate, t_init_start, t_init_end
-
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
     logical :: first_time = .true.
@@ -144,20 +141,17 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
           cbuff = trim(run_name)
        end if
        
-       call system_clock (t_init_start, rate)
+
 
        call broadcast (cbuff)
        if (.not. proc0) run_name => cbuff
        call init_parameter_scan
        call init_fields
+
        call init_gs2_diagnostics (list, nstep)
        call allocate_target_arrays ! must be after init_gs2_diagnostics
        call init_tstart (tstart)   ! tstart is in user units 
-
-       call system_clock (t_init_end)
        
-       print *, 'init time: ', real(t_init_end-t_init_start) / real(rate)
-
        if (present(dvdrho)) then
           if (proc0) then
              dvdrho = dvdrhon
@@ -186,10 +180,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     call time_message(.false.,time_main_loop,' Main Loop')
 
     do istep = 1, nstep
-       
+
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
        call advance (istep)
-       
+
        if (nsave > 0 .and. mod(istep, nsave) == 0) &
             call gs2_save_for_restart (gnew, user_time, user_dt, istatus, fphi, fapar, fbpar)
        call update_time
@@ -209,7 +203,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (mod(istep,5) == 0) call checkstop(exit)
        
        call checktime(avail_cpu_time,exit)
-       
+
        if (exit) then
           istep_end = istep
           exit
@@ -248,12 +242,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        end if
        vflux = vflux_avg(1)/time_interval
     else
-       call system_clock (t_fin_diag)
        if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
-       call system_clock (t_fin_gs2)
        if (.not.nofin) call finish_gs2
-       call system_clock (t_fin)
-       print *, 'finishing time: ', real(t_fin_gs2-t_fin_diag) / real(rate), real(t_fin-t_fin_gs2) / real(rate)
     end if
     
     if (proc0) call time_message(.false.,time_finish,' Finished run')
