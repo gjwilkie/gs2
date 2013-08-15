@@ -375,7 +375,7 @@ contains
     use theta_grid, only: ntgrid, theta, bmag
     use kt_grids, only: naky, ntheta0, theta0, aky, reality
     use vpamu_grids, only: nvgrid, vpa, mu
-    use dist_fn_arrays, only: g, gnew
+    use dist_fn_arrays, only: g, gnew, gold
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, imu_idx
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
@@ -412,7 +412,7 @@ contains
        imu = imu_idx(g_lo,iglo)
        g(:,:,iglo) = spread(exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1)*spec(is)%z*phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2)
     end do
-    gnew = g
+    gnew = g ; gold = g
   end subroutine ginit_default
 
   !> Initialise with only the kparallel = 0 mode.
@@ -452,7 +452,7 @@ contains
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0, aky, reality
     use vpamu_grids, only: nvgrid, vpa, mu
-    use dist_fn_arrays, only: g, gnew
+    use dist_fn_arrays, only: g, gnew, gold
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, imu_idx, proc_id
     use dist_fn, only: boundary_option_linked, boundary_option_switch
     use dist_fn, only: l_links, r_links
@@ -526,7 +526,7 @@ contains
        end if
     end do
 
-    gnew = g
+    gnew = g ; gold = g
   end subroutine ginit_noise
 
   subroutine ginit_kpar
@@ -535,7 +535,7 @@ contains
     use theta_grid, only: ntgrid, theta, bmag
     use kt_grids, only: naky, ntheta0, theta0
     use vpamu_grids, only: nvgrid, vpa, mu, vperp2
-    use dist_fn_arrays, only: g, gnew
+    use dist_fn_arrays, only: g, gnew, gold
     use gs2_layouts, only: g_lo, ik_idx, it_idx, imu_idx
     use constants
     use ran
@@ -598,12 +598,12 @@ contains
        g = g - gnew
     end if
 
-    gnew = g
+    gnew = g ; gold = g
 
   end subroutine ginit_kpar
 
   subroutine ginit_restart_many
-    use dist_fn_arrays, only: g, gnew
+    use dist_fn_arrays, only: g, gnew, gold
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
@@ -618,12 +618,12 @@ contains
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
        g = 0.
     end if
-    gnew = g
+    gnew = g ; gold = g
 
   end subroutine ginit_restart_many
 
   subroutine ginit_restart_small
-    use dist_fn_arrays, only: g, gnew
+    use dist_fn_arrays, only: g, gnew, gold
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
@@ -640,7 +640,7 @@ contains
        g = 0.
     end if
     g = g + gnew
-    gnew = g 
+    gnew = g ; gold = g
 
   end subroutine ginit_restart_small
 
