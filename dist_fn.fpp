@@ -1921,8 +1921,10 @@ subroutine check_dist_fn(report_unit)
                   + gold(ig,iv+1,iglo)*mmpfac(ig,iv,iglo) &
                   + gold(ig,iv,iglo)*mmmfac(ig,iv,iglo)) &
                   ! from here on are actual source terms (not contributions from g at old time level)
-                  - anon(ig,iv,imu)*(code_dt*( spec(is)%zstm*vp(ig,iv)*gradparc(ig,idx)*phi_m(ig) )) !&
+                  - anon(ig,iv,imu)*(code_dt*( spec(is)%zstm*vp(ig,iv)*gradparc(ig,idx)*phi_m(ig) ) &
+! TMP FOR TESTING -- MAB
 !                  + zi*(wdrift(ig,iv,iglo)-wstar(ig,iv,iglo))*phic(ig,idx))
+                  + zi*(-wstar(ig,iv,iglo))*phic(ig,idx))
 
           end do
 
@@ -1930,8 +1932,9 @@ subroutine check_dist_fn(report_unit)
 
        ! treat mu=0,vpa=0 points specially, as they are decoupled from other points
        if (imu==1) then
-          mu0_source(:,it,ik,is) = gold(:,0,iglo) !+ zi*anon(:,0,1) &
+          mu0_source(:,it,ik,is) = gold(:,0,iglo) + zi*anon(:,0,1) &
 !               * (wstar(:,0,iglo)-wdrift(:,0,iglo))*phic(:,3)
+               * (wstar(:,0,iglo))*phic(:,3)
        end if
           
        if (it > it_shift(ik)) cycle
@@ -1941,8 +1944,9 @@ subroutine check_dist_fn(report_unit)
           ! this is the source at the (theta=0,vpa=0) grid point (not a cell value)
           ! it is needed because that point does not take info from other grid points
           ! except indirectly through the fields
-          source0(iseg,iglomod) = gold(ig_mid(iseg),0,iglomod) !+ zi*anon(ig_mid(iseg),0,imu) &
+          source0(iseg,iglomod) = gold(ig_mid(iseg),0,iglomod) + zi*anon(ig_mid(iseg),0,imu) &
 !               * (wstar(ig_mid(iseg),0,iglomod)-wdrift(ig_mid(iseg),0,iglomod))*phic(ig_mid(iseg),3)
+               * (wstar(ig_mid(iseg),0,iglomod))*phic(ig_mid(iseg),3)
           iglomod = iglomod + iglo_shift(itmod,ik)
           itmod = itmod + iglo_shift(itmod,ik)
        end do
