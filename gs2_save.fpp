@@ -27,7 +27,7 @@ module gs2_save
 
   implicit none
 
-  public :: gs2_restore, gs2_save_for_restart
+  public :: gs2_restore, gs2_save_for_restart, finish_save
   public :: read_many, save_many
   public :: restore_current_scan_parameter_value
   public :: init_save, init_dt, init_tstart, init_ant_amp
@@ -1044,6 +1044,20 @@ contains
     restart_file = file
 
   end subroutine init_save
+
+  subroutine finish_save
+    
+    if (allocated(tmpr)) deallocate(tmpr)
+    if (allocated(tmpi)) deallocate(tmpi)
+    if (allocated(ftmpr)) deallocate(ftmpr)
+    if (allocated(ftmpi)) deallocate(ftmpi)
+    if (allocated(stmp)) deallocate(stmp)
+    if (allocated(atmp)) deallocate(atmp)
+    
+    initialized = .false.
+    initialized_dfn = .false.
+
+  end subroutine finish_save
 
   subroutine restore_current_scan_parameter_value(current_scan_parameter_value)
 # ifdef NETCDF

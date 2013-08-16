@@ -38,10 +38,10 @@ contains
 
 
 subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
-     pflux, qflux, vflux, heat, dvdrho, grho)
+     pflux, qflux, vflux, heat, dvdrho, grho, restart)
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
-    use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
+    use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs, trin_job
     use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields, advance
@@ -82,18 +82,23 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     logical :: first_time = .true.
     logical :: nofin= .false.
 !    logical, optional, intent(in) :: nofinish
+    logical, optional, intent(in) :: restart
     character (500), target :: cbuff
 
     time_main_loop(1) = 0.
     time_main_loop(2) = 0.
 
+    if (present(restart)) first_time = .true.
+
+    trin_job = job_id
 !
 !CMR, 12/2/2010: 
 !     add nofinish optional variable to avoid deallocations at end of simulation
 !     as may want to do post-processing
 !
 !    if (present(nofinish)) nofin=nofinish
-    
+     
+
     if (first_time) then
 
        ! <doc> Initialize message passing </doc>
@@ -164,6 +169,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        first_time = .false.
 
     else if (present(nensembles)) then
+       if(proc0) write(6,*) 'GS2 setting scope'
        if (nensembles > 1) then
           call scope (subprocs)
        end if
@@ -190,10 +196,13 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        call update_scan_parameter_value(istep, reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
        if (reset) then
+          if(proc0) write(6,*) 'Dumping info to screen'
           ! if called within trinity, do not dump info to screen
           if (present(job_id)) then
+             if(proc0) write(6,*) 'Dumping info to screen as part of trinity'
              call reset_time_step (istep, exit, job_id)
           else       
+             if(proc0) write(6,*) 'Dumping info to screen NOT as part of trinity'
              call reset_time_step (istep, exit)
           end if
        end if
@@ -243,6 +252,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
        if (.not.nofin) call finish_gs2
     end if
+
+    if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
+    if (.not.nofin) call finish_gs2
     
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
@@ -286,6 +298,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use init_g, only: finish_init_g
     use kt_grids, only: finish_kt_grids
     use le_grids, only: finish_le_grids
+    use gs2_layouts, only: finish_layouts
+    use gs2_transforms, only: finish_transforms
+    use gs2_save, only: finish_save
     use parameter_scan, only: finish_parameter_scan
     use mp, only: proc0
     use nonlinear_terms, only: finish_nonlinear_terms
@@ -293,6 +308,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use species, only: finish_species
 
     implicit none
+
+!    if(proc0) write(6,*) 'Finishing GS2'
 
     call finish_antenna
     call finish_collisions
@@ -306,6 +323,11 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     call finish_run_parameters
     call finish_species
     call finish_parameter_scan
+! HJL <
+    call finish_layouts
+    call finish_transforms
+    call finish_save
+! > HJL
     if (proc0) call finish_file_utils
 
   end subroutine finish_gs2
