@@ -30,6 +30,10 @@ module gs2_layouts
   public :: geint_lo, geint_layout_type
   public :: p_lo
 
+! HJL>
+  public :: finish_layouts
+! <HJL
+
   public :: init_fields_layouts
   public :: f_lo, f_layout_type
 
@@ -75,6 +79,15 @@ module gs2_layouts
 
   logical :: initialized_x_transform = .false.
   logical :: initialized_y_transform = .false.
+  logical :: initialized_layouts = .false.
+  logical :: initialized_dist_fn_layouts = .false.
+  logical :: initialized_fields_layouts = .false.
+  logical :: initialized_jfields_layouts = .false.
+  logical :: initialized_le_layouts = .false.
+  logical :: initialized_energy_layouts = .false.
+  logical :: initialized_lambda_layouts = .false.
+  logical :: initialized_parity_layouts = .false.
+  logical :: initialized_accel_transform_layouts = .false.
 
   logical :: opt_local_copy
   logical :: local_field_solve, accel_lxyes, lambda_local, unbalanced_xxf, unbalanced_yxf
@@ -361,10 +374,9 @@ contains
     
     use mp, only: proc0
     implicit none
-    logical, save :: initialized = .false.
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_layouts) return
+    initialized_layouts = .true.
     
     if (proc0) call read_parameters
     call broadcast_results
@@ -607,7 +619,6 @@ contains
 ! <TT
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
-    logical, save :: initialized = .false.
 ! TT>
 # ifdef USE_C_INDEX
     integer :: ierr
@@ -620,8 +631,8 @@ contains
 # endif
 ! <TT
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_dist_fn_layouts) return
+    initialized_dist_fn_layouts = .true.
    
     g_lo%iproc = iproc
     g_lo%naky = naky
@@ -1364,11 +1375,10 @@ contains
     integer, intent (in) :: nfield, nindex, naky, ntheta0
     integer, dimension(:), intent (in) :: M_class, N_class
     integer, intent (in) :: i_class
-    logical, save :: initialized = .false.
     integer :: i, utmp, btmp
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_fields_layouts) return
+    initialized_fields_layouts = .true.
     
     allocate (f_lo(i_class))
     do i = 1, i_class
@@ -1402,6 +1412,39 @@ contains
     end do
 
   end subroutine init_fields_layouts
+
+! HJL < Finish routine so that gs2 can be restarted with a different
+! number of processors by trinity
+  subroutine finish_layouts
+
+    integer :: i,f_size
+
+    f_size = size(f_lo)
+    do i=1,f_size
+       deallocate (f_lo(i)%ik)
+       deallocate (f_lo(i)%it)
+    enddo
+
+    if(allocated(f_lo)) deallocate(f_lo)    
+    if(allocated(ij)) deallocate(ij)    
+    if(allocated(mj)) deallocate(mj)    
+    if(allocated(dj)) deallocate(dj)    
+
+!    initialized = .false.
+    initialized_layouts = .false.
+    initialized_dist_fn_layouts = .false.
+    initialized_fields_layouts = .false.
+    initialized_jfields_layouts = .false.
+    initialized_le_layouts = .false.
+    initialized_energy_layouts = .false.
+    initialized_lambda_layouts = .false.
+    initialized_parity_layouts = .false.
+    initialized_accel_transform_layouts = .false.
+    initialized_x_transform = .false.
+    initialized_y_transform = .false.
+
+  end subroutine finish_layouts
+! > HJL
 
   function im_idx_f (lo, i)
     implicit none
@@ -1493,10 +1536,9 @@ contains
     use mp, only: iproc, nproc
     implicit none
     integer, intent (in) :: nfield, nindex, naky, ntheta0, i_class
-    logical, save :: initialized = .false.
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_jfields_layouts) return
+    initialized_jfields_layouts = .true.
     
     jf_lo%iproc = iproc
     jf_lo%nindex = nindex
@@ -1594,7 +1636,6 @@ contains
     use file_utils, only: error_unit
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nspec
-    logical, save :: initialized = .false.
 # ifdef USE_C_INDEX
     integer :: ierr
     interface
@@ -1605,8 +1646,8 @@ contains
     end interface
 # endif
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_le_layouts) return
+    initialized_le_layouts = .true.
     
     le_lo%iproc = iproc
     le_lo%ntgrid = ntgrid
@@ -1806,7 +1847,6 @@ contains
 ! <TT
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, nspec
-    logical, save :: initialized = .false.
 ! TT>
 # ifdef USE_C_INDEX
     integer :: ierr
@@ -1819,8 +1859,8 @@ contains
 # endif
 ! <TT
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_energy_layouts) return
+    initialized_energy_layouts = .true.
     
     e_lo%iproc = iproc
     e_lo%ntgrid = ntgrid
@@ -2126,14 +2166,13 @@ contains
 
   subroutine init_lambda_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
-    use mp, only: iproc, nproc
+    use mp, only: iproc, nproc, proc0
 ! TT>
     use file_utils, only: error_unit
 ! <TT
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2
     integer :: ngroup, nprocset
-    logical, save :: initialized = .false.
 ! TT>
 # ifdef USE_C_INDEX
     integer :: ierr
@@ -2146,9 +2185,10 @@ contains
 # endif
 ! <TT
 
-    if (initialized) return
-    initialized = .true.
-    
+!    if(proc0) write(6,*) 'Initializing lambda layouts', initialized_lambda_layouts
+    if (initialized_lambda_layouts) return
+    initialized_lambda_layouts = .true.
+
     lz_lo%iproc = iproc
     lz_lo%ntgrid = ntgrid
     lz_lo%naky = naky
@@ -2203,6 +2243,9 @@ contains
          & write (error_unit(),*) 'ERROR: layout not found: ', trim(layout)
 # endif
 ! <TT
+
+!    if(proc0) write(6,*) 'Initialized lambda layouts', initialized_lambda_layouts
+
 
   end subroutine init_lambda_layouts
 
@@ -2493,10 +2536,9 @@ contains
     use mp, only: iproc, nproc
     implicit none
     integer, intent (in) :: naky, nlambda, negrid, nspec
-    logical, save :: initialized = .false.
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_parity_layouts) return
+    initialized_parity_layouts = .true.
     
     p_lo%iproc = iproc
     p_lo%naky = naky
@@ -4221,11 +4263,10 @@ contains
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
-    logical, save :: initialized = .false.
     integer :: nnx, nny
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_accel_transform_layouts) return
+    initialized_accel_transform_layouts = .true.
 
     if (nx > ntheta0) then
        nnx = nx

@@ -210,7 +210,7 @@ contains
     real :: tperp0, tpar0
     character(20) :: type
     integer :: unit
-    integer :: is
+    integer :: is, iostat
     namelist /species_knobs/ nspec
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
@@ -264,9 +264,9 @@ contains
           nu = -1.0
           nu_h = 0.0
           type = "default"
-          read (unit=unit, nml=species_parameters)
+          read (unit=unit, nml=species_parameters, iostat=iostat)
+          if(iostat /= 0) write(6,*) 'Error ',iostat,'reading species parameters'
           close (unit=unit)
-
           spec(is)%z = z
           spec(is)%mass = mass
           spec(is)%dens = dens
