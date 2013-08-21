@@ -21,10 +21,12 @@ module fields
   end interface
 
   ! knobs
-  integer :: fieldopt_switch
+  !+PJK  20/08/2013 Added fieldopt_explicit, and public attributes
+  integer, public :: fieldopt_switch
   logical :: remove_zonal_flows_switch
-  integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2
-
+  integer, public, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, &
+       fieldopt_explicit = 3
+  !-PJK
   logical :: initialized = .false.
   logical :: exist
 
@@ -36,6 +38,10 @@ contains
     select case (fieldopt_switch)
     case (fieldopt_implicit)
        write (report_unit, fmt="('The field equations will be advanced in time implicitly.')")
+    !+PJK  20/08/2013 New clause for fieldopt_explicit
+    case (fieldopt_explicit)
+       write (report_unit, fmt="('The field equations will be advanced in time explicitly.')")
+    !-PJK
     case (fieldopt_test)
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -56,6 +62,10 @@ contains
        select case (fieldopt_switch)
        case (fieldopt_implicit)
           write (unit, fmt="(' field_option = ',a)") '"implicit"'
+       !+PJK  20/08/2013 New clause for fieldopt_explicit
+       case (fieldopt_explicit)
+          write (unit, fmt="(' field_option = ',a)") '"explicit"'
+       !-PJK
        case (fieldopt_test)
           write (unit, fmt="(' field_option = ',a)") '"test"'
        end select
@@ -71,6 +81,9 @@ contains
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
     use fields_implicit, only: init_fields_implicit, init_phi_implicit
+    !+PJK  21/08/2013
+    use fields_explicit, only: init_fields_explicit, init_phi_explicit
+    !-PJK
     use fields_test, only: init_fields_test, init_phi_test
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
@@ -104,6 +117,11 @@ contains
     case (fieldopt_implicit)
        if (debug) write(6,*) "init_fields: init_fields_implicit"
        call init_fields_implicit
+    !+PJK  20/08/2013 New clause for fieldopt_explicit
+    case (fieldopt_explicit)
+       if (debug) write(6,*) "init_fields: init_fields_explicit"
+       call init_fields_explicit
+    !-PJK
     case (fieldopt_test)
        if (debug) write(6,*) "init_fields: init_fields_test"
        call init_fields_test
@@ -123,6 +141,11 @@ contains
     case (fieldopt_implicit)
        if (debug) write(6,*) "init_fields: init_phi_implicit"
        call init_phi_implicit
+    !+PJK  20/08/2013 New clause for fieldopt_explicit
+    case (fieldopt_explicit)
+       if (debug) write(6,*) "init_fields: init_phi_explicit"
+       call init_phi_explicit
+    !-PJK
     case (fieldopt_test)
        if (debug) write(6,*) "init_fields: init_phi_test"
        call init_phi_test
@@ -135,9 +158,11 @@ contains
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     implicit none
-    type (text_option), dimension (3), parameter :: fieldopts = &
+    !+PJK  20/08/2013 New explicit option
+    type (text_option), dimension (4), parameter :: fieldopts = &
          (/ text_option('default', fieldopt_implicit), &
             text_option('implicit', fieldopt_implicit), &
+            text_option('explicit', fieldopt_explicit), &
             text_option('test', fieldopt_test) /)
     character(20) :: field_option
     namelist /fields_knobs/ field_option, remove_zonal_flows_switch
@@ -197,6 +222,9 @@ contains
 
   subroutine advance (istep)
     use fields_implicit, only: advance_implicit
+    !+PJK  20/08/2013 Added advance_explicit
+    use fields_explicit, only: advance_explicit
+    !-PJK
     use fields_test, only: advance_test
     implicit none
     integer, intent (in) :: istep
@@ -204,6 +232,10 @@ contains
     select case (fieldopt_switch)
     case (fieldopt_implicit)
        call advance_implicit (istep, remove_zonal_flows_switch)
+    !+PJK  20/08/2013 Added advance_explicit clause
+    case (fieldopt_explicit)
+       call advance_explicit (istep)!!!!!!!, remove_zonal_flows_switch)
+    !-PJK
     case (fieldopt_test)
        call advance_test (istep)
     end select

@@ -58,6 +58,7 @@ ffttester_mod = \
 	 ffttester.o \
 	 fields.o \
 	 fields_arrays.o \
+	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -84,7 +85,6 @@ ffttester_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -117,6 +117,7 @@ gs2_mod = \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
+	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -144,7 +145,6 @@ gs2_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -181,6 +181,7 @@ ingen_mod = \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
+	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -207,7 +208,6 @@ ingen_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -343,6 +343,7 @@ fields.o: \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
+	 fields_explicit.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
@@ -354,6 +355,22 @@ fields.o: \
 	 text_options.o \
 	 theta_grid.o 
 fields_arrays.o: 
+fields_explicit.o: \
+	 collisions.o \
+	 dist_fn.o \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
+	 gs2_layouts.o \
+	 gs2_time.o \
+	 hyper.o \
+	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
+	 nonlinear_terms.o \
+	 redistribute.o \
+	 run_parameters.o \
+	 species.o \
+	 theta_grid.o 
 fields_implicit.o: \
 	 antenna.o \
 	 dist_fn.o \
@@ -653,7 +670,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -692,8 +708,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
