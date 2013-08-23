@@ -108,6 +108,12 @@ MAKE_LIB ?=
 LOWFLOW ?=
 # Use le_layout for collision operator
 USE_LE_LAYOUT ?=
+
+ifdef NPROCS
+	NTESTPROCS=$(NPROCS)
+else
+	NTESTPROCS=2
+endif
 #
 # * Targets:
 #
@@ -386,7 +392,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(GK_PROJECT)_all
+.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests
 
 all: $(.DEFAULT_GOAL)
 
@@ -532,6 +538,17 @@ unlink:
 
 revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
+	
+# To save time you can set test deps yourself on the command line:
+# otherwise it builds everything just to be sure, because recursive
+# make can't resolve dependencies
+TEST_DEPS?=$(gs2_mod)
+export
+unit_tests: unit_tests.o $(TEST_DEPS)
+	cd unit_tests && time ${MAKE} && echo && echo "Tests Successful!"
+
+linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
+	cd linear_tests && time ${MAKE} && echo && echo "Tests Successful!"
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
