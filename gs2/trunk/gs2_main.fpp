@@ -9,6 +9,12 @@
 module gs2_main
   
   public :: run_gs2, finish_gs2, reset_gs2
+  public :: functional_test_flag
+  public :: ilast_step
+
+  logical :: functional_test_flag = .false.
+  integer :: ilast_step
+ 
   
 contains
 # endif
@@ -170,6 +176,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     end if
     
     istep_end = nstep
+    ilast_step = nstep
     
     call loop_diagnostics(0,exit)
     
@@ -204,6 +211,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        
        if (exit) then
           istep_end = istep
+          ilast_step = istep
           exit
        end if
     end do
@@ -240,8 +248,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        end if
        vflux = vflux_avg(1)/time_interval
     else
-       if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
-       if (.not.nofin) call finish_gs2
+       if (.not.nofin .and. .not. functional_test_flag ) call finish_gs2_diagnostics (istep_end)
+       if (.not.nofin .and. .not. functional_test_flag) call finish_gs2
     end if
     
     if (proc0) call time_message(.false.,time_finish,' Finished run')
