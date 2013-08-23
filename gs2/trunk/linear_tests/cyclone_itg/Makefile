@@ -1,7 +1,7 @@
 
 sinclude ../Makefile.tests_common
 all: cyclone_itg_low_res 
-	mpirun -np $(NTESTPROCS) cyclone_itg_low_res cyclone_itg_low_res.in
+	$(TESTCOMMAND) cyclone_itg_low_res cyclone_itg_low_res.in
 	#mpirun -np $(NTESTPROCS) cyclone_itg_high_res cyclone_itg_high_res.in
 
 

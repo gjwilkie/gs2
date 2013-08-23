@@ -1,7 +1,7 @@
 
 sinclude ../Makefile.tests_common
 all: slab_itg_s_hat_0_low_res 
-	mpirun -np $(NTESTPROCS) slab_itg_s_hat_0_low_res slab_itg_s_hat_0_low_res.in
+	$(TESTCOMMAND) slab_itg_s_hat_0_low_res slab_itg_s_hat_0_low_res.in
 	#mpirun -np $(NTESTPROCS) slab_itg_s_hat_0_high_res slab_itg_s_hat_0_high_res.in
 
 
