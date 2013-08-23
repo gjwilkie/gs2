@@ -60,9 +60,14 @@ program test_le_grids
   sizes(1) = 8 ! Size of energy grid
 
   ! Resuls for energy grids
-  energy_results(:,1,1) = (/4.0468821658005425E-003,  0.10438457502758539, 0.55159372522148142, 1.5625000000000000, 3.0881259213302132, 4.7389544850238012, 5.9359713343080411, 7.2500000000000000/) ! Quadrature grid for Maxwellian... this was not calculated inpendently but was taken from the code output
+  energy_results(:,1,1) = (/4.0468821658005425E-003,  0.10438457502758539, &
+    0.55159372522148142, 1.5625000000000000, 3.0881259213302132, 4.7389544850238012, &
+    5.9359713343080411, 7.2500000000000000/) ! Quadrature grid for Maxwellian... this was not calculated inpendently but was taken from the code output
   energy_results(:,2,1) = energy_results(:,1,1)
-  !energy_results(:,3,1) = (/1.5104763817839494E-002, 4.6790434219629591E-002, 0.13496048316473824, 0.30250000000000005, 0.53674718302836155, 0.78090630796303029, 0.95472159703717052, 2.0000000000000000/) ! Quadrature grid for alphas... this was not calculated inpendently but was taken from the code output
+  !energy_results(:,3,1) = (/1.5104763817839494E-002, &
+  !4.6790434219629591E-002, 0.13496048316473824, 0.30250000000000005, &
+  !0.53674718302836155, 0.78090630796303029, 0.95472159703717052, 2.0000000000000000/) 
+  ! Quadrature grid for alphas... this was not calculated inpendently but was taken from the code output
 
   !energy_min = 0.1 ! (the default value)
   !vcut_local = 2.5 !(the default value)
@@ -73,12 +78,16 @@ program test_le_grids
 
 
   ! Energy integration weights
-  energy_results(:,1,2) = (/4.1155680601883985E-003, 0.22931213960689217, 1.6541668127613292, 5.1291308630037440, 9.2609382215892992, 10.410539988051941, 6.0367198818202885, 22.993938099111912 /) ! Weights grid for Maxwellian ions... this was not calculated inpendently but was taken from the code output
+  energy_results(:,1,2) = (/4.1155680601883985E-003, 0.22931213960689217, &
+  1.6541668127613292, 5.1291308630037440, 9.2609382215892992, 10.410539988051941, &
+  6.0367198818202885, 22.993938099111912 /) ! Weights grid for Maxwellian ions... this was not calculated inpendently but was taken from the code output
   ! Add maxwellian factor
   energy_results(:,1,2) = energy_results(:,1,2) * exp(-energy_results(:,1,1)) /(2.0*pi**1.5)
   energy_results(:,2,2) = energy_results(:,1,2) !  Electron weights
   ! For alphas,  mult weights taken from quadrature by alpha f0 calculated in sage
-  !energy_results(:,3,2) = (/5.5300068428637454E-003, 3.7004138295655242E-002, 0.14570320717563151, 0.35747990462790902, 0.57947173999263779, 0.61757847512538577, 0.34953323523071972, 12.077007956766620/) * &
+  !energy_results(:,3,2) = (/5.5300068428637454E-003, 3.7004138295655242E-002, &
+  !0.14570320717563151, 0.35747990462790902, 0.57947173999263779, &
+  !0.61757847512538577, 0.34953323523071972, 12.077007956766620/) * &
     !(/11.4454095380492, 7.12710579325183, 6.70488115401418, 6.49924424567821, 6.13726132537038, 5.72552031567843, 5.43111188929011, 2.41424807372596e-156/) / 2.0
 
 

@@ -114,6 +114,17 @@ ifdef NPROCS
 else
 	NTESTPROCS=2
 endif
+
+ifdef TESTNORUN
+	TESTCOMMAND=:
+else
+	ifdef TESTEXEC
+		TESTCOMMAND=$(TESTEXEC)
+	else
+		TESTCOMMAND=mpirun -np $(NTESTPROCS)
+	endif
+endif
+
 #
 # * Targets:
 #
@@ -549,6 +560,13 @@ unit_tests: unit_tests.o $(TEST_DEPS)
 
 linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
 	cd linear_tests && time ${MAKE} && echo && echo "Tests Successful!"
+
+test_script: unit_tests linear_tests
+	echo "" > test_script.sh
+	find $(PWD)/unit_tests -executable | grep -v svn | grep 'unit_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
+	find $(PWD)/linear_tests -executable | grep -v svn | grep 'linear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
+	echo "echo \"Tests Successful\"" >> test_script.sh
+	#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
