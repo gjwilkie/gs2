@@ -24,11 +24,11 @@ contains
 
   subroutine announce_functional_test(test_name)
     character(*), intent(in) :: test_name
-    call print_with_stars('Starting functional test: ', test_name)
+    if (verbosity() .gt. 0) call print_with_stars('Starting functional test: ', test_name)
   end subroutine announce_functional_test
   subroutine close_functional_test(test_name)
     character(*), intent(in) :: test_name
-    call print_with_stars('Completed functional test: ', test_name)
+    if (verbosity() .gt. 0) call print_with_stars('Completed functional test: ', test_name)
   end subroutine close_functional_test
   function check_growth_rate(rslt, err)
     use gs2_main, only: ilast_step
@@ -40,15 +40,17 @@ contains
     logical :: check_growth_rate
 
     logical :: dummy
+    logical :: check_result
     complex, dimension(ntheta0, naky) :: omegaavg
 
     check_growth_rate = .true.
+  
 
     if (proc0) then
       call announce_check('growth rate')
       call get_omegaavg(ilast_step-1, dummy, omegaavg)
-      check_growth_rate = check_growth_rate .and. agrees_with(aimag(omegaavg(1,:)), rslt, err)
-      call process_check(check_growth_rate, 'growth rate')
+      check_result =  agrees_with(aimag(omegaavg(1,:)), rslt, err)
+      call process_check(check_growth_rate, check_result, 'growth rate')
     end if
 
 
