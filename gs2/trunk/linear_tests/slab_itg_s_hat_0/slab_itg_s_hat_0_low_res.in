@@ -48,7 +48,7 @@
 !  
 !==============================
 &theta_grid_parameters
- ntheta = 16 ! Number of points along field line (theta) per 2 pi segment
+ ntheta = 20 ! Number of points along field line (theta) per 2 pi segment
  nperiod = 1 ! Number of 2 pi segments along equilibrium magnetic field.
  eps = 0.0 ! eps=r/R
  epsl = 0.0 ! epsl=2 a/R
@@ -108,8 +108,8 @@
  fphi = 1.0 ! Multiplies Phi (electrostatic potential).
  fapar = 0.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)
  fbpar = 0.0 ! Multiplies B_parallel. Use 1 for high beta, 0 otherwise.
- delt = 0.5 ! Time step
- nstep = 100 ! Maximum number of timesteps
+ delt = 0.05 ! Time step
+ nstep = 1000 ! Maximum number of timesteps
 /
 
 !==============================
