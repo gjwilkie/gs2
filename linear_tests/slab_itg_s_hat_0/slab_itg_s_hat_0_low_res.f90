@@ -3,13 +3,13 @@
 
 module checks_mod
   use functional_tests
-public checks
-contains
-  function checks()
-    logical :: checks
-    ! We only expect this low res test to get the growth rate to 10%
-    checks =  check_growth_rate((/0.164/), 0.1)
-  end function checks
+  public checks
+  contains
+    function checks()
+      logical :: checks
+      ! We only expect this low res test to get the growth rate to 3%
+      checks =  check_growth_rate((/0.164/), 0.3)
+    end function checks
 end module checks_mod
 
 program slab_itg_s_hat_0_low_res

@@ -3,13 +3,13 @@
 
 module checks_mod
   use functional_tests
-public checks
-contains
-  function checks()
-    logical :: checks
-    ! We only expect this low res test to get the growth rate to 1%
-    checks =  check_growth_rate((/0.1687/), 0.01)
-  end function checks
+  public checks
+  contains
+    function checks()
+      logical :: checks
+      ! We only expect this low res test to get the growth rate to 1%
+      checks =  check_growth_rate((/0.1687/), 0.01)
+    end function checks
 end module checks_mod
 
 program cyclone_itg_low_res
