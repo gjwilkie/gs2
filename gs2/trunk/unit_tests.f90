@@ -33,6 +33,8 @@ module unit_tests
 
   public :: print_with_stars
 
+  public :: verbosity
+
   interface agrees_with
     module procedure agrees_with_real
     module procedure agrees_with_real_1d_array
@@ -49,6 +51,14 @@ module unit_tests
 
 
 contains
+
+  function verbosity()
+    integer :: verbosity
+    character(len=10) :: verbosity_char
+    call getenv("VERBOSITY", verbosity_char)
+    read (verbosity_char,'(I1)') verbosity
+    !write (*,*) 'verbosity is ', verbosity
+  end function verbosity
 
   function proc_message()
     use mp, only: iproc
@@ -105,19 +115,26 @@ contains
     end if
   end function agrees_with_real
 
+  function should_print(verbosity_level)
+    use mp, only: proc0
+    integer, intent(in) :: verbosity_level
+    logical :: should_print
+    should_print = (proc0 .and. verbosity() .ge. verbosity_level) .or. verbosity() .gt. 3
+  end function should_print
+
   subroutine should_be_int(val, rslt)
     integer, intent(in) :: val, rslt
-    write (*,*) '      Value: ', val, ' should be ', rslt, proc_message()
+    if (should_print(3)) write (*,*) '      Value: ', val, ' should be ', rslt, proc_message()
   end subroutine should_be_int
 
   subroutine should_be_real(val, rslt)
     real, intent(in) :: val, rslt
-    write (*,*) '      Value: ', val, ' should be ', rslt, proc_message()
+    if (should_print(3)) write (*,*) '      Value: ', val, ' should be ', rslt, proc_message()
   end subroutine should_be_real
 
   subroutine announce_test(test_name)
     character(*), intent(in) :: test_name
-    write (*,*) '--> Testing ', test_name, proc_message()
+    if (should_print(1)) write (*,*) '--> Testing ', test_name, proc_message()
   end subroutine announce_test
 
   subroutine process_test(rslt, test_name)
@@ -128,28 +145,31 @@ contains
       stop 1
     end if
 
-    write (*,*) '--> ', test_name, ' passed', proc_message()
+    if (should_print(1)) write (*,*) '--> ', test_name, ' passed', proc_message()
   end subroutine process_test
 
   subroutine announce_check(test_name)
     character(*), intent(in) :: test_name
-    write (*,*) '   --> Checking ', test_name, proc_message()
+    if (should_print(2)) write (*,*) '   --> Checking ', test_name, proc_message()
   end subroutine announce_check
 
-  subroutine process_check(rslt, test_name)
+  subroutine process_check(test_result, rslt, test_name)
+    use mp, only: proc0
+    logical, intent (inout) :: test_result
     logical, intent (in) :: rslt
     character(*), intent(in) :: test_name
     if (.not. rslt) then 
       write(*,*) '   --> ', test_name, ' failed', proc_message()
     else
-      write (*,*) '   --> ', test_name, ' passed', proc_message()
+      if (should_print(2)) write (*,*) '   --> ', test_name, ' passed', proc_message()
     end if
+    test_result = test_result .and. rslt
   end subroutine process_check
 
   subroutine announce_module_test(module_name)
     character(*), intent(in) :: module_name
     character(8) :: message = 'Testing '
-    call print_with_stars(message, module_name)
+    if (should_print(1)) call print_with_stars(message, module_name)
 
 
   end subroutine announce_module_test
@@ -157,7 +177,7 @@ contains
   subroutine close_module_test(module_name)
     character(*), intent(in) :: module_name
     character(17) :: message = 'Finished testing '
-    call print_with_stars(message, module_name)
+    if (should_print(1)) call print_with_stars(message, module_name)
     write (*,*)
 
 
