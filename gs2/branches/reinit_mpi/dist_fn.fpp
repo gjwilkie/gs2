@@ -812,7 +812,6 @@ subroutine check_dist_fn(report_unit)
   end subroutine read_species_knobs
 
   subroutine fill_species_knobs (unit, fexp_out, bakdif_out, bd_exp_out)
-    use mp, only: trin_job
     implicit none
     integer, intent (in) :: unit
     complex, intent (in out) :: fexp_out
@@ -826,7 +825,6 @@ subroutine check_dist_fn(report_unit)
     fexpi = aimag(fexp_out)
     bakdif = bakdif_out
     bd_exp = bd_exp_out
-!    write(6,*) 'Job ',trin_job,'reading unit',unit
     read (unit=unit, nml=dist_fn_species_knobs,iostat=iostat)
     if(iostat /= 0) write(6,*) 'Error ',iostat,'dist_fn species knobs'
     fexp_out = cmplx(fexpr,fexpi)
@@ -6191,7 +6189,6 @@ subroutine check_dist_fn(report_unit)
     initializing  = .true.
     initialized = .false.
     
-    write(6,*) 'Setting wdrift and wdriftttp',allocated(wdrift),allocated(wdriftttp)
     wdrift = 0.
     wdriftttp = 0.
     a = 0.
@@ -7442,8 +7439,6 @@ subroutine check_dist_fn(report_unit)
     readinit = .false. ; bessinit = .false. ; kp2init = .false. ; connectinit = .false.
     feqinit = .false. ; lpolinit = .false. ; fyxinit = .false. ; cerrinit = .false. ; mominit = .false.
     increase = .true. ; decrease = .false.
-
-    write(6,*) 'calling reset_init',allocated(wdrift),allocated(wdriftttp)
 
     call reset_init
 

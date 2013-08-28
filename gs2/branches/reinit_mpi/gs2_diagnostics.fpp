@@ -68,7 +68,7 @@ module gs2_diagnostics
   logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
 ! HJL < moved here so that it can be deallocated
-  complex, allocatable, dimension (:,:,:) :: domega
+  complex, allocatable, save, dimension (:,:,:) :: domega
 ! > HJL
 
   namelist /gs2_diagnostics_knobs/ print_line, print_flux_line, &
@@ -1785,7 +1785,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 !                     phitot(it,ik)
              end do
           end do
-          write (*,*) 
+!          write (*,*) 
        end if
     end if
 
