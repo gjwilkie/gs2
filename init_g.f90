@@ -9,6 +9,7 @@ module init_g
   public :: width0
   public :: tstart
   public :: reset_init
+  public :: restart
   public :: init_vnmult
   public :: new_field_init
   private :: single_initial_kx
@@ -34,7 +35,7 @@ module init_g
   real :: den1, upar1, tpar1, tperp1
   real :: den2, upar2, tpar2, tperp2
   real :: tstart, scale, apar0
-  logical :: chop_side, clean_init, left, even, new_field_init
+  logical :: chop_side, clean_init, left, even, new_field_init, restart
   character(300), public :: restart_file
   character (len=150) :: restart_dir
   integer, dimension(2) :: ikk, itt
@@ -813,6 +814,7 @@ contains
     use file_utils, only: input_unit, error_unit, run_name, input_unit_exist
     use text_options, only: text_option, get_option_value
     use gs2_save, only: read_many
+    use mp, only: proc0
 
     implicit none
 
@@ -934,6 +936,10 @@ contains
     in_file = input_unit_exist ("init_g_knobs", exist)
 !    if (exist) read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
     if (exist) read (unit=in_file,nml=init_g_knobs)
+
+! HJL < if this is a restarted trinity run we need to force the many flag
+    if(restart) ginit_option="many"
+! > HJL
 
     ierr = error_unit()
     call get_option_value &

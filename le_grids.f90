@@ -364,6 +364,7 @@ contains
     use file_utils, only: open_output_file, close_output_file
     use egrid, only: zeroes
     use constants, only: pi => dpi
+    use mp, only: iproc
 
     implicit none
 
@@ -382,7 +383,7 @@ contains
     wdim = nesub
     allocate(modzeroes(nesub-1), werrtmp(nesub-1))
     allocate(werr(negrid-1,nesub))
-    
+
     werr = 0.0 ; modzeroes = 0.0 ; werrtmp = 0.0
     
     ! loop to obtain weights for energy grid points.  negrid-1 sets

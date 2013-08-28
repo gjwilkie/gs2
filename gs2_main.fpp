@@ -8,7 +8,7 @@
 
 module gs2_main
   
-  public :: run_gs2, finish_gs2, reset_gs2
+  public :: run_gs2, finish_gs2, reset_gs2, trin_finish_gs2
   
 contains
 # endif
@@ -38,10 +38,10 @@ contains
 
 
 subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
-     pflux, qflux, vflux, heat, dvdrho, grho, restart)
+     pflux, qflux, vflux, heat, dvdrho, grho, restart_trinity)
 
     use job_manage, only: checkstop, job_fork, checktime, time_message
-    use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs, trin_job
+    use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields, advance
@@ -55,8 +55,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
     use gs2_time, only: update_time, write_dt, init_tstart
-    use gs2_time, only: user_time, user_dt, code_time
-    use init_g, only: tstart
+    use gs2_time, only: user_time, user_dt, code_time, last_time
+    use init_g, only: tstart, restart
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
@@ -82,15 +82,18 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     logical :: first_time = .true.
     logical :: nofin= .false.
 !    logical, optional, intent(in) :: nofinish
-    logical, optional, intent(in) :: restart
+    logical, optional, intent(in) :: restart_trinity
     character (500), target :: cbuff
 
     time_main_loop(1) = 0.
     time_main_loop(2) = 0.
 
-    if (present(restart)) first_time = .true.
+    if (present(restart_trinity)) then
+       first_time = .true.
+       restart = restart_trinity
+    endif
+       
 
-    trin_job = job_id
 !
 !CMR, 12/2/2010: 
 !     add nofinish optional variable to avoid deallocations at end of simulation
@@ -113,14 +116,14 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (proc0) then
           if (nproc == 1) then
              if (.not. nofin) then
-	        write(*,*) 'Running on ',nproc,' processor'
+	        write(*,*) 'Job ID:',job_id,'Running on ',nproc,' processor'
 	     end if 
          else
              if (.not. nofin) then
-	        write(*,*) 'Running on ',nproc,' processors'
+	        write(*,*) 'Job ID:',job_id,'Running on ',nproc,' processors'
 	     end if	  
           end if
-          write (*,*) 
+!          write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
           !  whether we are doing a [[Trinity]] run or a list of runs. </doc>
           ! <doc>If it is a [[Trinity]] run then [[filename]] (the name of the input file?) is passed to  init_file_utils</doc>
@@ -169,17 +172,17 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        first_time = .false.
 
     else if (present(nensembles)) then
-       if(proc0) write(6,*) 'GS2 setting scope'
        if (nensembles > 1) then
           call scope (subprocs)
        end if
     end if
     
     istep_end = nstep
+    last_time = nstep
     
     call loop_diagnostics(0,exit)
     
-    if (proc0) write(*,*) 'layout ',layout
+!    if (proc0) write(*,*) 'layout ',layout
 
     call time_message(.false.,time_main_loop,' Main Loop')
 
@@ -196,13 +199,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        call update_scan_parameter_value(istep, reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
        if (reset) then
-          if(proc0) write(6,*) 'Dumping info to screen'
           ! if called within trinity, do not dump info to screen
           if (present(job_id)) then
-             if(proc0) write(6,*) 'Dumping info to screen as part of trinity'
              call reset_time_step (istep, exit, job_id)
           else       
-             if(proc0) write(6,*) 'Dumping info to screen NOT as part of trinity'
              call reset_time_step (istep, exit)
           end if
        end if
@@ -211,6 +211,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        
        call checktime(avail_cpu_time,exit)
        
+       last_time = istep
+
        if (exit) then
           istep_end = istep
           exit
@@ -253,9 +255,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (.not.nofin) call finish_gs2
     end if
 
-    if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
-    if (.not.nofin) call finish_gs2
-    
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
     if (proc0) call time_message(.false.,time_total,' Total')
@@ -287,6 +286,33 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     
   end subroutine run_gs2
   
+! HJL <
+  subroutine trin_finish_gs2
+
+    use gs2_layouts, only: finish_layouts
+    use gs2_transforms, only: finish_transforms
+    use gs2_diagnostics, only: finish_gs2_diagnostics
+    use gs2_save, only: gs2_save_for_restart, finish_save
+    use dist_fn_arrays, only: gnew
+    use gs2_time, only: user_dt, user_time
+    use run_parameters, only: fphi, fapar, fbpar
+    use collisions, only: vnmult
+    use mp, only: proc0
+    use gs2_time, only: last_time
+    
+    integer :: istatus
+
+    call finish_gs2_diagnostics (last_time)
+    call finish_gs2    
+
+    call finish_layouts
+    call finish_transforms
+    call finish_save
+
+  end subroutine trin_finish_gs2
+! > HJL
+
+
   subroutine finish_gs2
     
     use antenna, only: finish_antenna
@@ -298,9 +324,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use init_g, only: finish_init_g
     use kt_grids, only: finish_kt_grids
     use le_grids, only: finish_le_grids
-    use gs2_layouts, only: finish_layouts
-    use gs2_transforms, only: finish_transforms
-    use gs2_save, only: finish_save
     use parameter_scan, only: finish_parameter_scan
     use mp, only: proc0
     use nonlinear_terms, only: finish_nonlinear_terms
@@ -323,14 +346,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     call finish_run_parameters
     call finish_species
     call finish_parameter_scan
-! HJL <
-    call finish_layouts
-    call finish_transforms
-    call finish_save
-! > HJL
     if (proc0) call finish_file_utils
 
   end subroutine finish_gs2
+  
 
   subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
 
