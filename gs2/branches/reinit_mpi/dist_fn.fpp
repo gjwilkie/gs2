@@ -528,6 +528,7 @@ subroutine check_dist_fn(report_unit)
     call init_gs2_layouts
 
     if (debug) write(6,*) "init_dist_fn: init_species"
+!    write(6,*) "init_dist_fn: init_species"
     call init_species
 
     if (debug) write(6,*) "init_dist_fn: init_theta_grid"

@@ -45,7 +45,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields, advance
-    use species, only: ions, electrons, impurity
+    use species, only: ions, electrons, impurity, job, trin_restart
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
@@ -91,7 +91,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (present(restart_trinity)) then
        first_time = .true.
        restart = restart_trinity
+       trin_restart = restart_trinity
     endif
+
+    job = job_id
        
 
 !
@@ -297,13 +300,15 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_time, only: user_dt, user_time
     use run_parameters, only: fphi, fapar, fbpar
     use collisions, only: vnmult
+    use species, only: finish_trin_species
     use mp, only: proc0
     use gs2_time, only: last_time
     
     integer :: istatus
 
     call finish_gs2_diagnostics (last_time)
-    call finish_gs2    
+    call finish_gs2
+!    call finish_trin_species
 
     call finish_layouts
     call finish_transforms

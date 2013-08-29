@@ -192,6 +192,7 @@ contains
     initialized = .true.
 
     call init_gs2_layouts
+!    write(6,*) "init_le_grids: init_species"
     call init_species
     call init_theta_grid
     call init_kt_grids
