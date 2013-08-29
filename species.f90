@@ -1,13 +1,15 @@
 module species
   implicit none
 
-  public :: init_species, finish_species, reinit_species, init_trin_species
+  public :: init_species, finish_species, reinit_species, init_trin_species, finish_trin_species, trin_restart
   public :: wnml_species, check_species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
   public :: has_electron_species, has_slowing_down_species
-  public :: ions, electrons, impurity
+  public :: ions, electrons, impurity, job
 
+  integer :: job, trin_restart
+  
   type :: specie
      real :: z
      real :: mass
@@ -189,7 +191,7 @@ contains
   end subroutine wnml_species
 
   subroutine init_species
-    use mp, only: trin_flag
+    use mp, only: trin_flag, proc0
     implicit none
 !    logical, save :: initialized = .false.
 
@@ -197,8 +199,10 @@ contains
     initialized = .true.
 
     call read_parameters
-    if (trin_flag) call reinit_species (ntspec_trin, dens_trin, &
+    if (trin_flag) then
+       call reinit_species (ntspec_trin, dens_trin, &
          temp_trin, fprim_trin, tprim_trin, nu_trin)
+    endif
   end subroutine init_species
 
   subroutine read_parameters
@@ -232,7 +236,11 @@ contains
        nspec = 2
        in_file = input_unit_exist("species_knobs", exist)
 !       if (exist) read (unit=input_unit("species_knobs"), nml=species_knobs)
-       if (exist) read (unit=in_file, nml=species_knobs)
+       if (exist) then
+          read (unit=in_file, nml=species_knobs)
+       else 
+          write(6,*) 'Error: species_knobs namelist file does not exist'
+       endif
        if (nspec < 1) then
           ierr = error_unit()
           write (unit=ierr, &
@@ -265,8 +273,9 @@ contains
           nu_h = 0.0
           type = "default"
           read (unit=unit, nml=species_parameters, iostat=iostat)
-          if(iostat /= 0) write(6,*) 'Error ',iostat,'reading species parameters'
-          close (unit=unit)
+          if(iostat /= 0) write(6,*) 'Error ',iostat,'reading species parameters, job', job
+          close (unit=unit, iostat=iostat)
+          if(iostat /= 0) write(6,*) 'Error ',iostat,'closing species parameters namelist, job', job
           spec(is)%z = z
           spec(is)%mass = mass
           spec(is)%dens = dens
@@ -339,11 +348,29 @@ contains
 
     implicit none
 
-    deallocate (spec)
+!    if(allocated(spec)) deallocate (spec)
 
-    initialized = .false.
+!    initialized = .false.
 
   end subroutine finish_species
+
+  subroutine finish_trin_species
+
+    implicit none
+
+    call finish_species
+
+    if (allocated(dens_trin)) then
+       deallocate(dens_trin)
+    endif
+    if (allocated(temp_trin)) deallocate(temp_trin)
+    if (allocated(fprim_trin)) deallocate(fprim_trin)
+    if (allocated(tprim_trin)) deallocate(tprim_trin)
+    if (allocated(nu_trin)) deallocate(nu_trin)
+
+  end subroutine finish_trin_species
+
+
 
   subroutine reinit_species (ntspec, dens, temp, fprim, tprim, nu)
 
@@ -356,6 +383,8 @@ contains
 
     integer :: is
     logical, save :: first = .true.
+
+    if(trin_restart) first = .true.
 
     if (first) then
        if (nspec == 1) then
@@ -382,7 +411,7 @@ contains
              end if
           end do
        end if
-       first = .false.
+!       first = .false.
     end if
 
     if (proc0) then
@@ -464,13 +493,12 @@ contains
     integer, intent (in) :: ntspec_in
     real, dimension (:), intent (in) :: dens_in, fprim_in, temp_in, tprim_in, nu_in
 
-    if (.not. allocated(temp_trin)) then
-       allocate (dens_trin(size(dens_in)))
-       allocate (fprim_trin(size(fprim_in)))
-       allocate (temp_trin(size(temp_in)))
-       allocate (tprim_trin(size(tprim_in)))
-       allocate (nu_trin(size(nu_in)))
-    end if
+
+    if (.not. allocated(dens_trin)) allocate (dens_trin(size(dens_in)))
+    if (.not. allocated(fprim_trin)) allocate (fprim_trin(size(fprim_in)))
+    if (.not. allocated(temp_trin)) allocate (temp_trin(size(temp_in)))
+    if (.not. allocated(tprim_trin)) allocate (tprim_trin(size(tprim_in)))
+    if (.not. allocated(nu_trin)) allocate (nu_trin(size(nu_in)))
 
     ntspec_trin = ntspec_in
     dens_trin = dens_in

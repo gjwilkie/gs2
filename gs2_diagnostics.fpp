@@ -377,6 +377,7 @@ contains
     call init_theta_grid
     call init_kt_grids
     call init_run_parameters
+!    write(6,*) "init_gs2_diagnostics: init_species"
     call init_species
     call init_init_g
     call init_dist_fn
