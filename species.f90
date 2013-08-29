@@ -348,9 +348,9 @@ contains
 
     implicit none
 
-!    if(allocated(spec)) deallocate (spec)
+    if(allocated(spec)) deallocate (spec)
 
-!    initialized = .false.
+    initialized = .false.
 
   end subroutine finish_species
 
@@ -360,9 +360,7 @@ contains
 
     call finish_species
 
-    if (allocated(dens_trin)) then
-       deallocate(dens_trin)
-    endif
+    if (allocated(dens_trin)) deallocate(dens_trin)
     if (allocated(temp_trin)) deallocate(temp_trin)
     if (allocated(fprim_trin)) deallocate(fprim_trin)
     if (allocated(tprim_trin)) deallocate(tprim_trin)
