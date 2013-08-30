@@ -303,6 +303,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use species, only: finish_trin_species
     use mp, only: proc0
     use gs2_time, only: last_time
+    use theta_grid, only: finish_theta_grid
     
     integer :: istatus
 
@@ -313,6 +314,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     call finish_layouts
     call finish_transforms
     call finish_save
+    call finish_theta_grid
 
   end subroutine trin_finish_gs2
 ! > HJL

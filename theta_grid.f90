@@ -1,7 +1,7 @@
 module theta_grid_gridgen
   implicit none
 
-  public :: theta_grid_gridgen_init
+  public :: theta_grid_gridgen_init, finish_theta_grid_gridgen
   public :: gridgen_get_grids
   public :: wnml_theta_grid_gridgen
 
@@ -11,7 +11,7 @@ module theta_grid_gridgen
   integer :: npadd
   real :: alknob, epsknob, bpknob, extrknob, tension
   real :: thetamax, deltaw, widthw
-  logical :: exist
+  logical :: exist, initialized
 
 contains
   subroutine wnml_theta_grid_gridgen(unit)
@@ -34,12 +34,17 @@ contains
 
   subroutine theta_grid_gridgen_init
     implicit none
-    logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
     call read_parameters
   end subroutine theta_grid_gridgen_init
+  
+  subroutine finish_theta_grid_gridgen
+
+    initialized = .false.
+    
+  end subroutine finish_theta_grid_gridgen
 
   subroutine read_parameters
     use file_utils, only: input_unit, input_unit_exist
@@ -179,7 +184,8 @@ end module theta_grid_gridgen
 module theta_grid_salpha
   implicit none
 
-  public :: init_theta_grid_salpha, check_theta_grid_salpha, wnml_theta_grid_salpha
+  public :: init_theta_grid_salpha, finish_theta_grid_salpha
+  public :: check_theta_grid_salpha, wnml_theta_grid_salpha
   public :: salpha_get_sizes
   public :: salpha_get_grids
 
@@ -196,7 +202,7 @@ module theta_grid_salpha
   
 
   real :: shift
-  logical :: exist
+  logical :: exist, initialized = .false.
 
 
 contains
@@ -386,10 +392,9 @@ contains
      use theta_grid_params, only: init_theta_grid_params, rhoc, eps, epsl
      use geometry, only: rhoc_geo=>rhoc
      implicit none
-     logical, save :: initialized = .false.
 
      if (initialized) return
-    initialized = .false.
+     initialized = .false.
 
     call init_theta_grid_params
 ! make rhoc consistent with eps, epsl, and insert this value into geometry 
@@ -402,6 +407,12 @@ contains
 
     call read_parameters
   end subroutine init_theta_grid_salpha
+
+  subroutine finish_theta_grid_salpha
+
+    initialized = .false.
+
+  end subroutine finish_theta_grid_salpha
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
@@ -617,12 +628,12 @@ end module theta_grid_salpha
 module theta_grid_eik
   implicit none
 
-  public :: init_theta_grid_eik, check_theta_grid_eik, wnml_theta_grid_eik
+  public :: init_theta_grid_eik, finish_theta_grid_eik, check_theta_grid_eik, wnml_theta_grid_eik
   public :: eik_get_sizes
   public :: eik_get_grids
 
   private
-  logical :: exist
+  logical :: exist, initialized = .false.
 
 contains
 
@@ -999,9 +1010,11 @@ contains
     use geometry, only: eikcoefs, itor, delrho, rhoc
     use geometry, only: gen_eq, ppl_eq, transp_eq
     use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
+    use species, only: job
+    use mp, only: proc0
     implicit none
     real :: rhoc_save
-    logical, save :: initialized = .false.
+!    logical, save :: initialized = .false.
 !CMR nov04: adding following debug switch
     logical :: debug=.false.
 !CMR
@@ -1028,15 +1041,19 @@ if (debug) write(6,*) "init_theta_grid_eik: call read_parameters, ntheta=",nthet
     nperiod_geo = nperiod 
     rhoc_save = rhoc
     if (itor == 0) rhoc = 1.5*delrho
-!    print *, 'itor= ',itor, ' rhoc= ',rhoc, 'rhoc_save = ',rhoc_save
+
 if (debug) write(6,*) "init_theta_grid_eik: call eikcoefs, ntheta=",ntheta
     call eikcoefs (ntheta)
 if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
 
-!    write (*,*) 'init_theta_grid_eik: ntheta = ',ntheta
-
     rhoc = rhoc_save
   end subroutine init_theta_grid_eik
+
+  subroutine finish_theta_grid_eik
+
+    initialized = .false.
+
+  end subroutine finish_theta_grid_eik
 
   subroutine eik_get_sizes (nthetaout, nperiodout, nbsetout)
     use geometry, only: nperiod
@@ -1231,7 +1248,8 @@ end module theta_grid_eik
 module theta_grid_file
   implicit none
 
-  public :: init_theta_grid_file, check_theta_grid_file, wnml_theta_grid_file
+  public :: init_theta_grid_file, finish_theta_grid_file
+  public :: check_theta_grid_file, wnml_theta_grid_file
   public :: file_get_sizes
   public :: file_get_grids
 
@@ -1241,7 +1259,7 @@ module theta_grid_file
   real :: shat_input, drhodpsi_input, kxfac_input, qval_input
   logical :: no_geo_info = .false.
   integer, public :: ntheta, nperiod, ntgrid, nbset
-  logical :: exist
+  logical :: exist, initialized = .false.
 contains
 
   subroutine wnml_theta_grid_file(unit)
@@ -1307,7 +1325,7 @@ contains
   subroutine init_theta_grid_file
     use theta_grid_params, only: init_theta_grid_params
     implicit none
-    logical, save :: initialized = .false.
+!    logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
@@ -1315,6 +1333,12 @@ contains
     call init_theta_grid_params
     call read_parameters
   end subroutine init_theta_grid_file
+
+  subroutine finish_theta_grid_file
+
+    initialized = .false.
+
+  end subroutine finish_theta_grid_file
 
   subroutine read_parameters
     use file_utils, only: input_unit, input_unit_exist
@@ -1464,7 +1488,7 @@ end module theta_grid_file
 module theta_grid
   implicit none
 
-  public :: init_theta_grid, check_theta_grid, wnml_theta_grid
+  public :: init_theta_grid, finish_theta_grid, check_theta_grid, wnml_theta_grid
   public :: theta, theta2, delthet, delthet2
   public :: bset
   public :: bmag, gradpar, itor_over_B, IoB
@@ -1496,7 +1520,7 @@ module theta_grid
   integer :: eqopt_switch
   integer, parameter :: eqopt_eik = 1, eqopt_salpha = 2, eqopt_file = 3
   character (8) :: shape
-  logical :: exist
+  logical :: exist, initialized = .false.
 
 contains
 
@@ -1566,7 +1590,7 @@ contains
   subroutine init_theta_grid
     use mp, only: proc0
     implicit none
-    logical, save :: initialized = .false.
+!    logical, save :: initialized = .false.
     integer :: i
     logical :: debug=.false.
     if (initialized) return
@@ -1587,6 +1611,24 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast_results
 
   end subroutine init_theta_grid
+
+  subroutine finish_theta_grid
+
+    use theta_grid_gridgen, only: finish_theta_grid_gridgen
+    use theta_grid_salpha, only: finish_theta_grid_salpha
+    use theta_grid_eik, only: finish_theta_grid_eik
+    use theta_grid_file, only: finish_theta_grid_file
+
+    initialized = .false.
+    
+    call finish_theta_grid_gridgen
+    call finish_theta_grid_salpha
+    call finish_theta_grid_eik
+    call finish_theta_grid_file
+    call deallocate_arrays
+
+  end subroutine finish_theta_grid
+
 
   subroutine broadcast_results
     use mp, only: proc0, broadcast
@@ -1708,6 +1750,45 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     allocate (aprime(-ntgrid:ntgrid))
     allocate (Bpol(-ntgrid:ntgrid))
   end subroutine allocate_arrays
+
+  subroutine deallocate_arrays
+    implicit none
+    deallocate (theta)
+    deallocate (bset)
+    deallocate (bmag)
+    deallocate (gradpar)
+    deallocate (itor_over_B)
+    deallocate (IoB)
+    deallocate (gbdrift)
+    deallocate (gbdrift0)
+    deallocate (cvdrift)
+    deallocate (cvdrift0)
+    deallocate (cdrift)
+    deallocate (cdrift0)
+    deallocate (gbdrift_th)
+    deallocate (cvdrift_th)
+    deallocate (gds2)
+    deallocate (gds21)
+    deallocate (gds22)
+    deallocate (gds23)
+    deallocate (gds24)
+    deallocate (gds24_noq)
+    deallocate (grho)
+    deallocate (jacob)
+    deallocate (Rplot)
+    deallocate (Rprime)
+    deallocate (Zplot)
+    deallocate (Zprime)
+    deallocate (aplot)
+    deallocate (aprime)
+    deallocate (Bpol)
+
+    deallocate (theta2)
+    deallocate (delthet)
+    deallocate (delthet2)
+
+
+  end subroutine deallocate_arrays
 
   subroutine finish_init
     implicit none
