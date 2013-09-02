@@ -645,6 +645,21 @@ contains
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
     integer :: iglo
 
+!CMR+GC: 2/9/2013
+!  gs2's Fourier coefficients,  F_k^gs2, not standard form: i.e. f(x) = f_k e^(i k.x)
+!
+!  F_k^gs2 are 2 x larger for ky > 0,   i.e.
+!                     F_k^gs2 = |    f_k   for ky = 0
+!                               |  2 f_k   for ky > 0
+!
+! Following large loop (due to this) can be eliminated with std Fourier coeffs.
+! Similar optimisations possible in: 
+!          "inverse2_5d", "transform2_5d_accel", "inverse2_5d_accel" 
+!
+! NB Moving to standard Fourier coeffs would impact considerably on diagnostics:
+!       e.g. fac in get_volume_average
+!
+
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        if (ik_idx(g_lo, iglo) == 1) cycle
        g(:,:,iglo) = g(:,:,iglo) / 2.0
@@ -665,6 +680,11 @@ contains
     call inverse_x (xxf, g)
 
     g = g * xb_fft%scale * yb_fft%scale
+
+!CMR+GC: 2/9/2013
+! Following large loop can be eliminated if gs2 used standard Fourier coefficients.
+! (See above comment in transform2_5d.)
+!
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        if (ik_idx(g_lo, iglo) == 1) cycle
@@ -696,7 +716,10 @@ contains
     integer :: ntgrid
 
     ntgrid = accel_lo%ntgrid
-
+!
+!CMR+GC, 2/9/2013:
+!  Scaling g would not be necessary if gs2 used standard Fourier coefficients.
+!
     ! scale the g and copy into the anti-aliased array ag
     ! zero out empty ag
     ! touch each g and ag only once
@@ -729,6 +752,10 @@ contains
           idx = idx + 1
        endif
     enddo
+
+!CMR+GC: 2/9/2013
+! Following large loop can be eliminated if gs2 used standard Fourier coefficients.
+! (See above comment in transform2_5d.)
 
     ! we might not have scaled all g
     Do iglo = idx, g_lo%ulim_proc
@@ -786,6 +813,9 @@ contains
     do k = accel_lo%llim_proc, accel_lo%ulim_proc
        ! ignore the large k (anti-alias)
        if ( .not.aidx(k)) then
+!
+!CMR+GC, 2/9/2013:
+!  Scaling g here would be unnecessary if gs2 used standard Fourier coefficients.
           ! different scale factors depending on ky == 0
           if (ik_idx(g_lo, idx) .ne. 1) then
              do iduo = 1, 2 
@@ -806,6 +836,10 @@ contains
        endif
     enddo
     
+!CMR+GC: 2/9/2013
+! Following large loop can be eliminated if gs2 used standard Fourier coefficients.
+! (See above comment in transform2_5d.)
+
     ! we might not have scaled all g
     Do iglo = idx, g_lo%ulim_proc
        if (ik_idx(g_lo, iglo) .ne. 1) then

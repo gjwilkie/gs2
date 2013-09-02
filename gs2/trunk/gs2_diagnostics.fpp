@@ -2864,6 +2864,11 @@ if (debug) write(6,*) "get_omegaavg: done"
 ! ky=0 modes have correct amplitudes; rest must be scaled
 ! note contrast with scaling factors in FFT routines.
 
+!CMR+GC: 2/9/2013
+!  fac values here arise because gs2's Fourier coefficients, F_k^gs2, not standard form: 
+!          i.e. f(x) = f_k e^(i k.x)
+!  With standard Fourier coeffs in gs2, we would instead need:  fac=2.0 for ky > 0
+!      (fac=2.0 would account ky<0 contributions, not stored due to reality condition)
     favg = 0.
     do ik = 1, naky
        fac = 0.5
@@ -2886,6 +2891,12 @@ if (debug) write(6,*) "get_omegaavg: done"
 
 ! ky=0 modes have correct amplitudes; rest must be scaled
 ! note contrast with scaling factors in FFT routines.
+
+!CMR+GC: 2/9/2013
+!  fac values here arise because gs2's Fourier coefficients, F_k^gs2, not standard form: 
+!          i.e. f(x) = f_k e^(i k.x)
+!  With standard Fourier coeffs in gs2, we would instead need:  fac=2.0 for ky > 0
+!      (fac=2.0 would account ky<0 contributions, not stored due to reality condition)
 
     favg = 0.
     do ik = 1, naky
@@ -3090,6 +3101,12 @@ if (debug) write(6,*) "get_omegaavg: done"
 
 ! ky=0 modes have correct amplitudes; rest must be scaled
 ! note contrast with scaling factors in FFT routines.
+
+!CMR+GC: 2/9/2013
+!  fac values here arise because gs2's Fourier coefficients, F_k^gs2, not standard form: 
+!          i.e. f(x) = f_k e^(i k.x)
+!  With standard Fourier coeffs in gs2, we would instead need:  fac=2.0 for ky > 0
+!      (fac=2.0 would account ky<0 contributions, not stored due to reality condition)
 
     favg = 0.
     do ik = 1, naky
