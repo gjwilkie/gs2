@@ -1010,7 +1010,6 @@ contains
     use geometry, only: eikcoefs, itor, delrho, rhoc
     use geometry, only: gen_eq, ppl_eq, transp_eq
     use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
-    use species, only: job
     use mp, only: proc0
     implicit none
     real :: rhoc_save

@@ -88,6 +88,10 @@ module le_grids
   public :: get_flux_vs_theta_vs_vpa
   public :: lambda_map, energy_map, g2le, init_map
 
+  !> Unit tests
+  public :: le_grids_unit_test_init_le_grids
+  public :: le_grids_unit_test_integrate_species
+
   private
 
   interface integrate_moment
@@ -221,6 +225,53 @@ contains
     endif
     
   end subroutine init_le_grids
+
+  function le_grids_unit_test_init_le_grids(sizes, energy_results, err)
+    use unit_tests
+    use egrid
+    use species, only: nspec
+    use mp, only: proc0
+    integer, dimension(:), intent(in) :: sizes
+    real, dimension(:,:,:), intent(in) :: energy_results
+    real, intent(in) :: err
+    logical :: le_grids_unit_test_init_le_grids
+    logical :: tr ! Test result
+    logical :: cr ! check result
+    logical :: accelerated_x, accelerated_v
+    integer :: i
+    character(2) :: istr
+
+    tr = .true. 
+    
+    call init_le_grids(accelerated_x, accelerated_v)
+    !call broadcast_results
+     !write (*,*)  'zeros', zeroes
+
+    call announce_check('Size of energy array')
+    cr = agrees_with(size(energy), sizes(1)) 
+    call process_check(tr, cr, 'Size of energy array')
+    call announce_check('Size of w array')
+    cr = agrees_with(size(w), sizes(1)) 
+    call process_check(tr, cr, 'Size of w array')
+
+    ! Energy grids only get calulcated on proc0
+    if (proc0) then
+      !do i = 1,nspec
+        !write(istr, '(I2)') i
+        !call announce_check('values of the energy grid for species '//istr)
+        !!tr = tr .and. agrees_with(energy_grid(:), energy_results(:,i,1), err)
+        !call process_check(tr, 'values of the energy grid for species '//istr)
+      !end do
+    end if
+    do i = 1,nspec
+      write(istr, '(I2)') i
+      call announce_check('values of energy weights for species '//istr)
+      cr =  agrees_with(w(:), energy_results(:,i,2), err)
+      call process_check(tr, cr, 'values of energy weights for species '//istr)
+    end do
+    
+    le_grids_unit_test_init_le_grids = tr
+  end function le_grids_unit_test_init_le_grids
 
   subroutine broadcast_results
     use mp, only: proc0, broadcast
@@ -607,6 +658,55 @@ contains
     call sum_allreduce (total) 
 
   end subroutine integrate_species
+
+  function le_grids_unit_test_integrate_species(g, weights, sizes, rslt, err)
+    use unit_tests
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: g_lo
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    integer, dimension (:), intent (in) :: sizes
+    complex, dimension (:,:,:), allocatable :: total
+    complex, dimension (-ntgrid:,:,:) :: rslt
+    real, intent(in) :: err
+    logical :: le_grids_unit_test_integrate_species
+    logical :: tr
+    logical :: cr
+
+    tr = .true.
+
+    call announce_check('Size of naky')
+    cr = agrees_with(naky, sizes(1))
+    call process_check(tr, cr, 'Size of naky')
+    call announce_check('Size of ntheta0')
+    cr = agrees_with(ntheta0, sizes(2))
+    call process_check(tr, cr, 'Size of ntheta0')
+    call announce_check('Size of ntgrid')
+    cr = agrees_with(ntgrid, sizes(3))
+    call process_check(tr, cr, 'Size of ntgrid')
+
+    allocate(total(-ntgrid:ntgrid,naky,ntheta0))
+
+    total = cmplx(0.0,0.0)
+
+
+    call integrate_species(g, weights, total)
+
+    call announce_check('total')
+    cr = agrees_with(total(:,1,1), rslt(:,1,1), err)
+    call process_check(tr, cr, 'total ')
+
+
+
+
+    deallocate(total)
+
+    le_grids_unit_test_integrate_species = tr
+
+
+
+  end function le_grids_unit_test_integrate_species
 
   subroutine legendre_transform (g, tote, totl, istep, tott)
     

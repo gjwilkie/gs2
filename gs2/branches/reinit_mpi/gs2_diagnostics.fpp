@@ -20,6 +20,7 @@ module gs2_diagnostics
   public :: reset_init
   public :: pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
 
+  public :: get_omegaavg
   interface get_vol_average
      module procedure get_vol_average_one, get_vol_average_all
   end interface
