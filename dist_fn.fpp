@@ -658,7 +658,7 @@ subroutine check_dist_fn(report_unit)
 
     if (proc0) then
        boundary_option = 'default'
-       nonad_zero = .false.
+       nonad_zero = .true.  ! BD: Default value changed to TRUE  8.15.13
        esv = .false.
        adiabatic_option = 'default'
        poisfac = 0.0

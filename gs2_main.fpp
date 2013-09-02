@@ -9,6 +9,7 @@
 module gs2_main
   
   public :: run_gs2, finish_gs2, reset_gs2, trin_finish_gs2
+ 
   
 contains
 # endif
@@ -45,7 +46,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
     use fields, only: init_fields, advance
-    use species, only: ions, electrons, impurity, job, trin_restart
+    use species, only: ions, electrons, impurity, trin_restart
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
@@ -55,7 +56,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
     use gs2_time, only: update_time, write_dt, init_tstart
-    use gs2_time, only: user_time, user_dt, code_time, last_time
+    use gs2_time, only: user_time, user_dt, code_time, ilast_step
     use init_g, only: tstart, restart
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
@@ -63,6 +64,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use fields_implicit, only: time_field
     use gs2_layouts, only: layout
     use parameter_scan, only: update_scan_parameter_value
+    use unit_tests, only: functional_test_flag
     implicit none
 
     integer, intent (in), optional :: mpi_comm, job_id, nensembles
@@ -82,7 +84,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     logical :: first_time = .true.
     logical :: nofin= .false.
 !    logical, optional, intent(in) :: nofinish
-    logical, optional, intent(in) :: restart_trinity
+    logical, optional, intent(in) :: restart_trinity    
     character (500), target :: cbuff
 
     time_main_loop(1) = 0.
@@ -93,9 +95,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        restart = restart_trinity
        trin_restart = restart_trinity
     endif
-
-    job = job_id
-       
 
 !
 !CMR, 12/2/2010: 
@@ -181,7 +180,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     end if
     
     istep_end = nstep
-    last_time = nstep
+    ilast_step = nstep
     
     call loop_diagnostics(0,exit)
     
@@ -214,10 +213,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        
        call checktime(avail_cpu_time,exit)
        
-       last_time = istep
-
        if (exit) then
           istep_end = istep
+          ilast_step = istep
           exit
        end if
     end do
@@ -254,8 +252,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        end if
        vflux = vflux_avg(1)/time_interval
     else
-       if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
-       if (.not.nofin) call finish_gs2
+       if (.not.nofin .and. .not. functional_test_flag ) call finish_gs2_diagnostics (istep_end)
+       if (.not.nofin .and. .not. functional_test_flag) call finish_gs2
     end if
 
     if (proc0) call time_message(.false.,time_finish,' Finished run')
@@ -297,17 +295,16 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_diagnostics, only: finish_gs2_diagnostics
     use gs2_save, only: gs2_save_for_restart, finish_save
     use dist_fn_arrays, only: gnew
-    use gs2_time, only: user_dt, user_time
+    use gs2_time, only: user_dt, user_time, ilast_step
     use run_parameters, only: fphi, fapar, fbpar
     use collisions, only: vnmult
     use species, only: finish_trin_species
     use mp, only: proc0
-    use gs2_time, only: last_time
     use theta_grid, only: finish_theta_grid
     
     integer :: istatus
 
-    call finish_gs2_diagnostics (last_time)
+    call finish_gs2_diagnostics (ilast_step)
     call finish_gs2
 !    call finish_trin_species
 

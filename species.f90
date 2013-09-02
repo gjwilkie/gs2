@@ -6,9 +6,9 @@ module species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
   public :: has_electron_species, has_slowing_down_species
-  public :: ions, electrons, impurity, job
+  public :: ions, electrons, impurity
 
-  integer :: job, trin_restart
+  integer :: trin_restart
   
   type :: specie
      real :: z
@@ -273,9 +273,9 @@ contains
           nu_h = 0.0
           type = "default"
           read (unit=unit, nml=species_parameters, iostat=iostat)
-          if(iostat /= 0) write(6,*) 'Error ',iostat,'reading species parameters, job', job
+          if(iostat /= 0) write(6,*) 'Error ',iostat,'reading species parameters'
           close (unit=unit, iostat=iostat)
-          if(iostat /= 0) write(6,*) 'Error ',iostat,'closing species parameters namelist, job', job
+          if(iostat /= 0) write(6,*) 'Error ',iostat,'closing species parameters namelist'
           spec(is)%z = z
           spec(is)%mass = mass
           spec(is)%dens = dens
