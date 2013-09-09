@@ -236,8 +236,9 @@ module dg_scheme
   integer :: istep_dg
 
   !  Adaptive timestep variables
-
-  logical :: adaptive_dt = .true.  !  master switch for adaptive timestep algorithm
+!+PJKTEMP
+  logical :: adaptive_dt = .FALSE.  !  master switch for adaptive timestep algorithm
+!-PJKTEMP
   logical :: adaptive_dt_reset = .false.
   real :: adaptive_dt_new
 
