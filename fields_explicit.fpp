@@ -471,8 +471,10 @@ contains
 
   subroutine init_fields_explicit
 
+    use antenna, only: init_antenna
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
+    use gs2_layouts, only: init_gs2_layouts
 
     implicit none
 
@@ -481,8 +483,11 @@ contains
     if (initialized) return
     initialized = .true.
 
+    call init_gs2_layouts
     call init_theta_grid
     call init_kt_grids
+    call init_antenna
+
     call init_dg_scheme
 
   end subroutine init_fields_explicit

@@ -8482,7 +8482,7 @@ subroutine check_dist_fn(report_unit)
              if (il <= lmax) then
                 call set_source
              else
-                source = 0.0
+                source(:,isgn,iglo) = 0.0
              end if
 
           case default
