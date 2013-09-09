@@ -3558,7 +3558,7 @@ contains
              if (il <= lmax) then
                 call set_source
              else
-                source = 0.0
+                source(:,isgn,iglo) = 0.0
              end if
 
           case (source_option_zero)
