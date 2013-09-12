@@ -7,8 +7,8 @@ module checks_mod
   contains
     function checks()
       logical :: checks
-      ! We only expect this low res test to get the growth rate to 1%
-      checks =  check_growth_rate((/0.1687/), 0.01)
+      ! We only expect this low res test to get the growth rate to 3%
+      checks =  check_growth_rate((/0.1687/), 0.03)
     end function checks
 end module checks_mod
 
