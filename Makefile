@@ -549,6 +549,9 @@ unlink:
 
 revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
+
+
+gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 	
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
