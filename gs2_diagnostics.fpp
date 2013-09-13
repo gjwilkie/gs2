@@ -1769,8 +1769,8 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 !                        real( omegaavg(it,ik)*woutunits(ik)), &
 !                        aimag(omegaavg(it,ik)*woutunits(ik)), &
 !                        phitot(it,ik)
-                write (unit=*, fmt="('ky=',f7.4, ' kx=',f7.4, &
-                     &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e8.2)") &
+                write (unit=*, fmt="('ky=',1pe9.2, ' kx=',1pe9.2, &
+                     &' om=',e9.2,x,e9.2,' omav=',e9.2,x,e9.2,' phtot=',e8.2)") &
                      aky(ik), akx(it), &
                      real( omega(it,ik)*woutunits(ik)), &
                      aimag(omega(it,ik)*woutunits(ik)), &

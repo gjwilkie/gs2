@@ -2314,7 +2314,7 @@ contains
   end subroutine init_lorentz_error
 
 # ifndef USE_LE_LAYOUT
-  subroutine solfp1 (g, g1, gc1, gc2, diagnostics)
+  subroutine solfp1 (g, g1, gc1, gc2, diagnostics, gtoc, ctog)
 
     use gs2_layouts, only: g_lo, it_idx, ik_idx, ie_idx, is_idx
     use theta_grid, only: ntgrid
@@ -2336,6 +2336,27 @@ contains
     integer, optional, intent (in) :: diagnostics
 
     integer :: ig, it, ik, ie, is, iglo
+!CMR, 12/9/2013: 
+!CMR   New logical optional input parameters gtoc, ctog used to set
+!CMR   flags (g_to_c and c_to_g) to control whether redistributes required
+!CMR   to map g_lo to collision_lo, and collision_lo to g_lo.
+!CMR   All redistributes are performed by default.
+!CMR  
+    logical, optional :: gtoc, ctog
+    logical :: g_to_c, c_to_g
+
+    if (present(gtoc)) then 
+       g_to_c=gtoc 
+    else 
+       g_to_c=.true.
+    endif
+
+    if (present(ctog)) then 
+       c_to_g=ctog 
+    else 
+       c_to_g=.true.
+    endif
+
 
     ! TMP FOR TESTING -- MAB
 !    integer :: t0, t1, t2, t3, t4, t5, tr
