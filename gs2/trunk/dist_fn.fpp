@@ -54,6 +54,8 @@ module dist_fn
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
   logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose, esv
+!CMR, 12/9/13: New logical cllc to modify order of operator in timeadv
+  logical :: cllc
 
   integer :: adiabatic_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -646,7 +648,7 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, nonad_zero, gridfac, apfac, &
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         g_exb, g_exbfac, omprimfac, btor_slab, mach, lf_default, lf_decompose, esv
+         g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, lf_decompose, esv
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -658,6 +660,7 @@ subroutine check_dist_fn(report_unit)
     if (proc0) then
        boundary_option = 'default'
        nonad_zero = .true.  ! BD: Default value changed to TRUE  8.15.13
+       cllc = .false.
        esv = .false.
        adiabatic_option = 'default'
        poisfac = 0.0
@@ -714,6 +717,7 @@ subroutine check_dist_fn(report_unit)
 
     call broadcast (boundary_option_switch)
     call broadcast (nonad_zero)
+    call broadcast (cllc)
     call broadcast (esv)
     call broadcast (adiabatic_option_switch)
     call broadcast (gridfac)
@@ -2561,10 +2565,8 @@ subroutine check_dist_fn(report_unit)
   subroutine timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, mode)
 
     use theta_grid, only: ntgrid
-!    use collisions, only: solfp1
     use le_derivatives, only: vspace_derivatives
     use dist_fn_arrays, only: gnew, g, gold, g_fixpar
-!    use nonlinear_terms, only: add_nonlinear_terms
     use nonlinear_terms, only: add_explicit_terms
     use hyper, only: hyper_diff
     use run_parameters, only: fixpar_secondary
@@ -2574,20 +2576,60 @@ subroutine check_dist_fn(report_unit)
     integer, intent (in) :: istep
     integer, optional, intent (in) :: mode
     integer :: modep
+    integer,save :: istep_last=-1
 
     modep = 0
     if (present(mode)) modep = mode
 
-    !Calculate the explicit nonlinear terms
-    call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
+    if (istep.eq.0 .or. .not.cllc) then
+!CMR do the usual LC when computing response matrix
+       !Calculate the explicit nonlinear terms
+       call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
-    !Solve for gnew
-    call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-    !Add hyper terms (damping)
-    call hyper_diff (gnew, phinew, bparnew)
-    !Add collisions
-    call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
-!    if (istep == nstep) call write_mpdist (gnew, '.gtmp', last=.true.)
+       !Solve for gnew
+       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+       !Add hyper terms (damping)
+       call hyper_diff (gnew, phinew, bparnew)
+       !Add collisions
+       call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
+
+    else if (istep.eq.1 .and. istep.ne.istep_last) then
+!CMR on first half step at istep=1 do CL with all redists
+       call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
+       !Calculate the explicit nonlinear terms
+       call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
+         phi, apar, bpar, istep, bkdiff(1), fexp(1))
+
+       !Solve for gnew
+       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+       !Add hyper terms (damping)
+       call hyper_diff (gnew, phinew, bparnew)
+    else if (istep.ne.istep_last) then
+!CMR on first half step do CL with all redists without gtoc redist
+       call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep,gtoc=.false.)
+       !Calculate the explicit nonlinear terms
+       call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
+         phi, apar, bpar, istep, bkdiff(1), fexp(1))
+
+       !Solve for gnew
+       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+       !Add hyper terms (damping)
+       call hyper_diff (gnew, phinew, bparnew)
+    else if (istep.eq.istep_last) then
+!CMR on second half of all timesteps do LC without ctog redist
+       !Calculate the explicit nonlinear terms 
+       !NB following call should be unnecessary as NL terms not added on second
+       !    half of istep: keeping for now as may be needed by some code
+       call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
+         phi, apar, bpar, istep, bkdiff(1), fexp(1))
+
+       !Solve for gnew
+       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+       !Add hyper terms (damping)
+       call hyper_diff (gnew, phinew, bparnew)
+       call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep, ctog=.false.)
+    endif
+
 
     !Enforce parity if desired (also performed in invert_rhs, but this is required
     !as collisions etc. may break parity?)
@@ -2598,6 +2640,8 @@ subroutine check_dist_fn(report_unit)
        call enforce_parity(parity_redist_ik,fixpar_secondary)
        gnew=gnew+g_fixpar
     endif
+    istep_last=istep
+
   end subroutine timeadv
 
 ! communication initializations for exb_shear should be done once and 

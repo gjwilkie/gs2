@@ -20,7 +20,7 @@ module le_derivatives
 
 contains
 
-  subroutine vspace_derivatives (g, gold, g1, phi, apar, bpar, phinew, aparnew, bparnew, diagnostics)
+  subroutine vspace_derivatives (g, gold, g1, phi, apar, bpar, phinew,aparnew, bparnew, diagnostics, gtoc, ctog)
 
     use redistribute, only: gather, scatter
     use dist_fn_arrays, only: c_rate, g_adjust
@@ -55,6 +55,27 @@ contains
     complex, dimension (:,:,:), allocatable :: gc1, gc2, gc3
     logical :: heating_flag
 
+!CMR, 12/9/2013: 
+!CMR   New logical optional input parameters gtoc, ctog used to set
+!CMR   flags (g_to_c and c_to_g) to control whether redistributes required
+!CMR   to map g_lo to collision_lo, and collision_lo to g_lo.
+!CMR   All redistributes are performed by default.
+!CMR  
+    logical, optional :: gtoc, ctog
+    logical :: g_to_c, c_to_g
+
+    if (present(gtoc)) then 
+       g_to_c=gtoc 
+    else 
+       g_to_c=.true.
+    endif
+
+    if (present(ctog)) then 
+       c_to_g=ctog 
+    else 
+       c_to_g=.true.
+    endif
+
     heating_flag = heating .and. present(diagnostics)
 
 # ifdef USE_LE_LAYOUT
@@ -75,7 +96,7 @@ contains
        allocate (gle(nxi+1,negrid+1,le_lo%llim_proc:le_lo%ulim_alloc)) ; gle = 0.
 
        ! map data from g_layout to le_layout
-       call gather (g2le, g, gle)
+       if (g_to_c) call gather (g2le, g, gle)
        
 # ifdef LOWFLOW
 
@@ -102,18 +123,19 @@ contains
        if (colls) then
 # endif
        ! update distribution function to take into account collisions
-       if (present(diagnostics)) then
-          call solfp1 (gle, diagnostics)
-       else
-          call solfp1 (gle)
-       end if
+!       if (present(diagnostics)) then
+
+       call solfp1 (gle, diagnostics)
+!       else
+!          call solfp1 (gle)
+!       end if
 
 # ifdef LOWFLOW
        end if
 # endif
 
        ! remap from le_layout to g_layout
-       call scatter (g2le, gle, g)
+       if (c_to_g) call scatter (g2le, gle, g)
 
        deallocate (gle)
 

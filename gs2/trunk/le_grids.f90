@@ -1025,6 +1025,84 @@ contains
 
   end subroutine integrate_moment_r33
 
+
+
+  subroutine integrate_moment_elo (lo, g, total, all)
+!Integrate over velocity space whilst in e_lo_LAYOUT. 
+    use layouts_type, only: e_layout_type
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, il_idx
+    use theta_grid, only: ntgrid
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+
+    type (e_layout_type), intent (in) :: lo
+    complex, dimension (:,lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
+    integer, optional, intent(in) :: all
+    integer :: is, il, ie, ik, it, ig, ielo
+
+    total = 0.0
+    do ielo = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ielo)
+       ik = ik_idx(lo,ielo)
+       it = it_idx(lo,ielo)
+       is = is_idx(lo,ielo)
+       il = il_idx(lo,ielo)
+       !Perform local sum
+       do ie=1, negrid
+           total(ig, it, ik, is) = total(ig, it, ik, is) + &
+            w(ie)*wl(ig,il)*g(ie,ielo)
+       end do
+    end do
+
+    if (present(all)) then
+       !Complete vspace integral and get result to all procs
+       call sum_allreduce (total)
+    else
+       !Complete vspace integral, sending result to proc0
+       call sum_reduce (total, 0)
+    end if
+  end subroutine integrate_moment_elo
+
+
+  subroutine integrate_moment_lzlo (lo, g, total, all)
+!Integrate over velocity space whilst in lz_lo_LAYOUT. 
+    use layouts_type, only: lz_layout_type
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, ie_idx
+    use theta_grid, only: ntgrid
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+
+    type (lz_layout_type), intent (in) :: lo
+    complex, dimension (:,lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
+    integer, optional, intent(in) :: all
+    integer :: is, il, ie, ik, it, ig, ilzlo
+
+    total = 0.0
+    do ilzlo = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ilzlo)
+       ik = ik_idx(lo,ilzlo)
+       it = it_idx(lo,ilzlo)
+       ie = ie_idx(lo,ilzlo)
+       is = is_idx(lo,ilzlo)
+       !Perform local sum
+       do il=1, nlambda
+           total(ig, it, ik, is) = total(ig, it, ik, is) + &
+            w(ie)*wl(ig,il)*g(il,ilzlo)
+       end do
+    end do
+
+    if (present(all)) then
+       !Complete vspace integral and get result to all procs
+       call sum_allreduce (total)
+    else
+       !Complete vspace integral, sending result to proc0
+       call sum_reduce (total, 0)
+    end if
+  end subroutine integrate_moment_lzlo
+
+
   subroutine integrate_moment_lec (lo, g, total)
 !Perform an integral over velocity space whilst in the LE_LAYOUT in 
 !which we have ensured that all of velocity space is local. As such
