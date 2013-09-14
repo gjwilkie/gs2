@@ -17,6 +17,7 @@ program time_ffts
   use dist_fn_arrays, only: g
   use nonlinear_terms, only: nonlinear_terms_unit_test_time_add_nl
   use kt_grids, only: ntheta0, naky
+  use job_manage, only: time_message
   implicit none
   real :: eps
     character (500), target :: cbuff
@@ -26,6 +27,7 @@ program time_ffts
   real, dimension(:,:,:), allocatable :: energy_results
   real :: energy_min
   real :: vcut_local
+  real :: time_taken(2) = 0.0
   integer :: i
 
   complex, dimension (:,:,:), allocatable :: integrate_species_results
@@ -58,10 +60,18 @@ program time_ffts
   allocate(apar(-ntgrid:ntgrid,ntheta0,naky))
   allocate(bpar(-ntgrid:ntgrid,ntheta0,naky))
 
-  do i = 1,100
+  if (proc0) call time_message(.false., time_taken, "FFT time")
+
+  do i = 1,50
     call nonlinear_terms_unit_test_time_add_nl(g1, phi, apar, bpar)
-    if (proc0) write (*,*) 'Finished nonlinear_terms_unit_test_time_add_nl ', i
+    !if (proc0) write (*,*) 'Finished nonlinear_terms_unit_test_time_add_nl ', i
   end do
+
+  if (proc0) then
+    call time_message(.false., time_taken, "FFT time")
+    write(*, '(" Time for nonlinear_terms: ",F3.1," s")') time_taken(1)
+    write(*,*)
+  end if
 
   call finish_nonlinear_terms
 
