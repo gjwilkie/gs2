@@ -403,7 +403,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests
+.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests benchmarks
 
 all: $(.DEFAULT_GOAL)
 
@@ -570,6 +570,9 @@ test_script: unit_tests linear_tests
 	find $(PWD)/linear_tests -executable | grep -v svn | grep 'linear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
 	echo "echo \"Tests Successful\"" >> test_script.sh
 	#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
+
+benchmarks: functional_tests.o unit_tests.o $(TEST_DEPS)
+	cd benchmarks && time ${MAKE} && echo && echo "Completed Benchmarks"
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
