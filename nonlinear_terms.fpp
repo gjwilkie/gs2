@@ -12,6 +12,7 @@ module nonlinear_terms
 !  public :: add_nonlinear_terms, finish_nl_terms
   public :: add_explicit_terms, finish_nl_terms
   public :: finish_init, reset_init, algorithm, nonlin, accelerated
+  public :: nonlinear_terms_unit_test_time_add_nl
   public :: cfl
 
   private
@@ -278,6 +279,7 @@ contains
 !  end subroutine add_nonlinear_terms
   end subroutine add_explicit_terms
 
+
   subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
 
     use theta_grid, only: ntgrid
@@ -391,6 +393,14 @@ contains
     end subroutine center
 
   end subroutine add_explicit
+
+  subroutine nonlinear_terms_unit_test_time_add_nl(g1, phi, apar, bpar)
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use theta_grid, only: ntgrid
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    call add_nl(g1, phi, apar, bpar)
+  end subroutine nonlinear_terms_unit_test_time_add_nl
 
   subroutine add_nl (g1, phi, apar, bpar)
     use mp, only: max_allreduce, proc0
