@@ -92,7 +92,7 @@ function test_ffts()
       !write(message, '("ffttest ix = ")') 
       !message = 'Hello'
       !call announce_check(message)
-        dummy = ffttest(ix,iy) .and. dummy
+        dummy = ffttest(ix,iy, .true.) .and. dummy
     enddo
   enddo
 
@@ -445,6 +445,9 @@ if (printlots) call barrier
     endif
 
    if (anyfail) ffttest = .false.
+
+   ! anyfail is only set on proc0... hence we broadcast ffttest
+   call broadcast(ffttest)
 
    first=.false.
 end function ffttest
