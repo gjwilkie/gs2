@@ -83,6 +83,7 @@ function test_ffts()
   logical ::dummy
   integer :: ix, iy
   !character(len=22) :: message = ''
+  dummy = .true.
   
 
   do ix=0,ntheta0/2-1
@@ -91,9 +92,11 @@ function test_ffts()
       !write(message, '("ffttest ix = ")') 
       !message = 'Hello'
       !call announce_check(message)
-        dummy = ffttest(ix,iy)
+        dummy = ffttest(ix,iy) .and. dummy
     enddo
   enddo
+
+  test_ffts = dummy
 
 end function test_ffts
 
