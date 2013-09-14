@@ -63,8 +63,8 @@ grid_option="box"
 /
 
 &kt_grids_box_parameters
-ny = 15
-nx = 16
+ny = 8
+nx = 8
 y0=10.0
 x0=10.0
 jtwist = 6
