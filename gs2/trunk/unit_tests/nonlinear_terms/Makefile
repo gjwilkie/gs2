@@ -1,7 +1,7 @@
 
 sinclude ../Makefile.tests_common
-all: time_ffts 
-	$(TESTCOMMAND) time_ffts time_ffts.in
+all: test_nonlinear_terms 
+	$(TESTCOMMAND) test_nonlinear_terms test_nonlinear_terms.in
 
 
 
@@ -9,8 +9,8 @@ all: time_ffts
 #TEST_MODS = ../../unit_tests.o ../../general_f0.o ../../species.o ../../file_utils.o ../../spl.o ../../command_line.o ../../mp.o ../../text_options.o ../../constants.o ../../analytical_falpha.o
 
 
-time_ffts.o:  ${TEST_MODS} 
+test_nonlinear_terms.o:  ${TEST_MODS} 
 
-time_ffts: time_ffts.o $(TEST_MODS)
+test_nonlinear_terms: test_nonlinear_terms.o $(TEST_MODS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
