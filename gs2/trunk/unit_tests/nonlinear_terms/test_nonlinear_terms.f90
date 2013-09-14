@@ -82,17 +82,27 @@ function test_ffts()
   logical :: test_ffts
   logical ::dummy
   integer :: ix, iy
-  !character(len=22) :: message = ''
+  character(len=2000) :: message = ''
   dummy = .true.
   
 
+  !ix =0
+  !iy=0
+    !write(message, fmt="(A12, I2, A6, I2)") 'ffttest ix =', ix, ' iy = ', iy
+    !write(message, fmt="(A12, I2, A6, I2)") 'ffttest ix =', ix, ' iy = ', iy
   do ix=0,ntheta0/2-1
     do iy=0,naky-1
-      !write(message, fmt="(A12,I2,A6,I2)") 'ffttest ix =', ix, ' iy = ', iy
+       !write(message, '(22A1)') ' '
+
+       !write(*, fmt="(A12, I2, A6, I2)") 'ffttest ix =', ix, ' iy = ', iy
+       !write(*, *) message
+       !write(message, fmt="(A12, I2, A6, I2)") 'ffttest ix =', ix, ' iy = ', iy
+       !write(message, *) 'ffttest ix =', ix, ' iy = ', iy
+       !write(*, *) message
       !write(message, '("ffttest ix = ")') 
       !message = 'Hello'
-      !call announce_check(message)
-        dummy = ffttest(ix,iy, .true.) .and. dummy
+      !call announce_check(trim(message))
+        dummy = ffttest(ix,iy, .false.) .and. dummy
     enddo
   enddo
 
@@ -244,7 +254,7 @@ if (printlots) call barrier
       end if
    end if
 
-   if (first .and. proc0) write(6,fmt='(9a8,a12)') "Dim","Dir","jx","jy","nx","ny","nproc","layout","accel","Pass/Fail"
+   if (first .and. proc0 .and. printlots) write(6,fmt='(9a8,a12)') "Dim","Dir","jx","jy","nx","ny","nproc","layout","accel","Pass/Fail"
 
 ! CMR, compute 3-D FFT
    fail = .false.
