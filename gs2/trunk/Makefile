@@ -67,7 +67,7 @@ GK_PROJECT ?= gs2
 # turns on debug mode (bin)
 DEBUG ?=
 # turns on scalasca instrumentation mode (bin)
-SCAL ?=
+SCAL ?= 
 # turns on test mode (bin)
 TEST ?=
 # turns on profile mode (gprof,ipm)
@@ -79,11 +79,11 @@ STATIC ?=
 # promotes precisions of real and complex (bin)
 DBLE ?= on
 # turns on distributed memory parallelization using MPI (bin)
-USE_MPI ?= on
+USE_MPI ?= on 
 # turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?=
 # which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
-USE_FFT ?= fftw
+USE_FFT ?= fftw3
 # uses netcdf library (bin)
 USE_NETCDF ?= on
 # uses parallel netcdf library
@@ -106,8 +106,6 @@ USE_NAGLIB ?=
 MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
-# Use le_layout for collision operator
-USE_LE_LAYOUT ?=
 
 ifdef NPROCS
 	NTESTPROCS=$(NPROCS)

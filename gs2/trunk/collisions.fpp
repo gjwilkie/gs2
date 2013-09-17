@@ -35,11 +35,6 @@ module collisions
      module procedure solfp_lorentz_standard_layout
   end interface
 
-  interface solfp_ediffuse
-     module procedure solfp_ediffuse_le_layout
-     module procedure solfp_ediffuse_standard_layout
-  end interface
-
   interface conserve_lorentz
      module procedure conserve_lorentz_le_layout
      module procedure conserve_lorentz_standard_layout
@@ -243,6 +238,10 @@ contains
     end if
     call init_map (use_lz_layout, use_e_layout, use_le_layout, test)
     call init_arrays
+
+    if(proc0) then
+      write(*,*) 'using le layout',use_le_layout
+    end if
 
   end subroutine init_collisions
 
@@ -896,10 +895,10 @@ contains
 
     if(use_le_layout) then    
       call gather (g2le, bz0, ctmp)
-      call solfp_ediffuse (ctmp,le_lo)
+      call solfp_ediffuse_le_layout (ctmp,le_lo)
       call scatter (g2le, ctmp, bz0)   ! bz0 is redefined below
     else
-      call solfp_ediffuse (bz0,init=.true.)   ! bz0 is redefined below
+      call solfp_ediffuse_standard_layout (bz0,init=.true.)   ! bz0 is redefined below
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -982,10 +981,10 @@ contains
 
     if(use_le_layout) then
       call gather (g2le, bs0, ctmp)
-      call solfp_ediffuse (ctmp,le_lo)
+      call solfp_ediffuse_le_layout (ctmp, le_lo)
       call scatter (g2le, ctmp, bs0)   ! bs0
     else
-      call solfp_ediffuse (bs0,init=.true.)    ! s0
+      call solfp_ediffuse_standard_layout (bs0,init=.true.)    ! s0
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1064,10 +1063,10 @@ contains
 
     if(use_le_layout) then    
       call gather (g2le, bw0, ctmp)
-      call solfp_ediffuse (ctmp,le_lo)
+      call solfp_ediffuse_le_layout (ctmp, le_lo)
       call scatter (g2le, ctmp, bw0)
     else
-      call solfp_ediffuse (bw0,init=.true.)
+      call solfp_ediffuse_standard_layout (bw0,init=.true.)
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2386,7 +2385,7 @@ contains
        ! TMP FOR TESTING -- MAB
 !       if (proc0) call system_clock (count=t0, count_rate=tr)
 
-       call solfp_ediffuse (g)
+       call solfp_ediffuse_standard_layout (g)
 
        ! TMP FOR TESTING -- MAB
 !       if (proc0) then
@@ -2474,7 +2473,7 @@ contains
 
     case (collision_model_ediffuse)
 
-       call solfp_ediffuse (g)
+       call solfp_ediffuse_standard_layout (g)
        if (conserve_moments) call conserve_diffuse (g, g1)
 
     end select
@@ -2513,7 +2512,7 @@ contains
        ! TMP FOR TESTING -- MAB
 !       if (proc0) call system_clock (count=t0, count_rate=tr)
 
-       call solfp_ediffuse (gle,le_lo)
+       call solfp_ediffuse_le_layout (gle, le_lo)
 
        ! TMP FOR TESTING -- MAB
 !       if (proc0) then
@@ -2612,7 +2611,8 @@ contains
 
     case (collision_model_ediffuse)
 
-       call solfp_ediffuse (gle,le_lo)
+       call solfp_ediffuse_le_layout (gle, le_lo)
+
        if (conserve_moments) call conserve_diffuse (gle)
 
     end select

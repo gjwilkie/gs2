@@ -917,6 +917,7 @@ if (debug) write(6,*) 'get_namelists: returning'
      use collisions, only: collision_model_switch, collision_model_none
      use collisions, only: collision_model_full, collision_model_ediffuse
      use collisions, only: collision_model_lorentz, collision_model_lorentz_test
+     use collisions, only: use_le_layout
 
      implicit none
      real :: alne, dbetadrho_spec
@@ -1039,25 +1040,24 @@ if (debug) write(6,*) 'get_namelists: returning'
            call nprocs_yxf(nmesh)
         endif
 
-
-# ifdef USE_LE_LAYOUT
-        write (report_unit, fmt="(/'Collisions using le_lo')") 
-        call nprocs_le(nmesh)
-# else
-        select case (collision_model_switch)
-        case (collision_model_full)
-           write (report_unit, fmt="(/'Collisions using lz_lo')") 
-           call nprocs_lz(nmesh)
-           write (report_unit, fmt="(/'Collisions using e_lo')") 
-           call nprocs_e(nmesh)
-        case(collision_model_lorentz,collision_model_lorentz_test)
-           write (report_unit, fmt="(/'Collisions using lz_lo')") 
-           call nprocs_lz(nmesh)
-        case (collision_model_ediffuse)
-           write (report_unit, fmt="(/'Collisions using e_lo')") 
-           call nprocs_e(nmesh)
-        end select
-# endif
+        if(use_le_layout .eq. .true.) then
+          write (report_unit, fmt="(/'Collisions using le_lo')") 
+          call nprocs_le(nmesh)
+        else
+          select case (collision_model_switch)
+          case (collision_model_full)
+             write (report_unit, fmt="(/'Collisions using lz_lo')") 
+             call nprocs_lz(nmesh)
+             write (report_unit, fmt="(/'Collisions using e_lo')") 
+             call nprocs_e(nmesh)
+          case(collision_model_lorentz,collision_model_lorentz_test)
+             write (report_unit, fmt="(/'Collisions using lz_lo')") 
+             call nprocs_lz(nmesh)
+          case (collision_model_ediffuse)
+             write (report_unit, fmt="(/'Collisions using e_lo')") 
+             call nprocs_e(nmesh)
+          end select
+       end if
      endif
 
      write (report_unit, *) 
