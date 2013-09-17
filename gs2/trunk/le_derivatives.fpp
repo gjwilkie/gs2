@@ -66,7 +66,7 @@ contains
 
     heating_flag = heating .and. present(diagnostics)
 
-    if(use_le_layout .eq. .true.) then
+    if(use_le_layout) then
 
 # ifndef LOWFLOW
       if (colls) then
