@@ -98,6 +98,9 @@ module le_grids
      module procedure integrate_moment_c34
      module procedure integrate_moment_lec
      module procedure integrate_moment_r33
+     module procedure integrate_moment_lz 
+     module procedure integrate_moment_e
+
   end interface
 
   interface integrate_volume
@@ -1026,8 +1029,7 @@ contains
   end subroutine integrate_moment_r33
 
 
-
-  subroutine integrate_moment_elo (lo, g, total, all)
+  subroutine integrate_moment_e (lo, g, total, all)
 !Integrate over velocity space whilst in e_lo_LAYOUT. 
     use layouts_type, only: e_layout_type
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, il_idx
@@ -1047,6 +1049,7 @@ contains
        ik = ik_idx(lo,ielo)
        it = it_idx(lo,ielo)
        is = is_idx(lo,ielo)
+!CMR: in e_lo il is lambda index, and isign is separate.
        il = il_idx(lo,ielo)
        !Perform local sum
        do ie=1, negrid
@@ -1062,10 +1065,10 @@ contains
        !Complete vspace integral, sending result to proc0
        call sum_reduce (total, 0)
     end if
-  end subroutine integrate_moment_elo
+  end subroutine integrate_moment_e
 
 
-  subroutine integrate_moment_lzlo (lo, g, total, all)
+  subroutine integrate_moment_lz (lo, g, total, all)
 !Integrate over velocity space whilst in lz_lo_LAYOUT. 
     use layouts_type, only: lz_layout_type
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, ie_idx
@@ -1077,7 +1080,7 @@ contains
     complex, dimension (:,lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     integer, optional, intent(in) :: all
-    integer :: is, il, ie, ik, it, ig, ilzlo
+    integer :: is, ixi, il, ie, ik, it, ig, ilzlo
 
     total = 0.0
     do ilzlo = lo%llim_proc, lo%ulim_proc
@@ -1087,8 +1090,10 @@ contains
        ie = ie_idx(lo,ilzlo)
        is = is_idx(lo,ilzlo)
        !Perform local sum
-       do il=1, nlambda
-           total(ig, it, ik, is) = total(ig, it, ik, is) + &
+!CMR: in lz_lo il muxt be obtained from local index ixi, which includes isign.
+       do ixi=1, nxi
+          il = ixi_to_il(ig,ixi)
+          total(ig, it, ik, is) = total(ig, it, ik, is) + &
             w(ie)*wl(ig,il)*g(il,ilzlo)
        end do
     end do
@@ -1100,7 +1105,7 @@ contains
        !Complete vspace integral, sending result to proc0
        call sum_reduce (total, 0)
     end if
-  end subroutine integrate_moment_lzlo
+  end subroutine integrate_moment_lz
 
 
   subroutine integrate_moment_lec (lo, g, total)
