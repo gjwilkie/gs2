@@ -230,7 +230,7 @@ contains
     call init_run_parameters
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
     call read_parameters
-    if(use_le_layout .ne. .true.) then
+    if( .not. use_le_layout ) then
        select case (collision_model_switch)
        case (collision_model_full)
           use_lz_layout = .true.
@@ -421,7 +421,7 @@ contains
     integer :: ie, il, ik, is, isgn, iglo, all, it
     complex, dimension (:,:,:), allocatable :: ctmp, z_big
 
-    if(use_le_layout .eq. .true.) then
+    if(use_le_layout) then
        allocate (ctmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
     end if
     
@@ -471,7 +471,7 @@ contains
        end do
     end do
 
-    if(use_le_layout .eq. .true.) then    
+    if(use_le_layout) then    
       call gather (g2le, z0, ctmp)
       call solfp_lorentz (ctmp)
       call scatter (g2le, ctmp, z0)   ! z0 is redefined below
@@ -568,7 +568,7 @@ contains
        end do
     end do
 
-    if(use_le_layout .eq. .true.) then    
+    if(use_le_layout) then    
       call gather (g2le, s0, ctmp)
       call solfp_lorentz (ctmp)
       call scatter (g2le, ctmp, s0)   ! s0
@@ -659,7 +659,7 @@ contains
        end do
     end do
 
-    if(use_le_layout .eq. .true.) then    
+    if(use_le_layout) then    
       call gather (g2le, w0, ctmp)
       call solfp_lorentz (ctmp)
       call scatter (g2le, ctmp, w0)
@@ -757,7 +757,7 @@ contains
     deallocate (gtmp, duinv, dtmp, vns)
 
 
-    if(use_le_layout .eq. .true.) then    
+    if(use_le_layout) then    
       allocate (z_big(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
 
       ! first set s0le, w0le & z0le
@@ -832,7 +832,7 @@ contains
     integer :: ie, il, ik, is, isgn, iglo, all, it
     complex, dimension (:,:,:), allocatable :: ctmp, z_big
 
-    if(use_le_layout .eq. .true.) then
+    if(use_le_layout) then
       allocate (ctmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
     end  if
 
@@ -894,7 +894,7 @@ contains
        end do
     end do
 
-    if(use_le_layout .eq. .true.) then    
+    if(use_le_layout) then    
       call gather (g2le, bz0, ctmp)
       call solfp_ediffuse (ctmp)
       call scatter (g2le, ctmp, bz0)   ! bz0 is redefined below
@@ -980,7 +980,7 @@ contains
        end do
     end do
 
-    if(use_le_layout .eq. .true.) then
+    if(use_le_layout) then
       call gather (g2le, bs0, ctmp)
       call solfp_ediffuse (ctmp)
       call scatter (g2le, ctmp, bs0)   ! bs0
@@ -1062,7 +1062,7 @@ contains
        end do
     end do
 
-    if(use_le_layout .eq. .true.) then    
+    if(use_le_layout) then    
       call gather (g2le, bw0, ctmp)
       call solfp_ediffuse (ctmp)
       call scatter (g2le, ctmp, bw0)
@@ -1158,7 +1158,7 @@ contains
     deallocate (gtmp, duinv, dtmp, vns)
 
 
-    if(use_le_layout .eq. .true.) then    
+    if(use_le_layout) then    
       if (.not. allocated(bs0le)) then
          allocate (bs0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
          allocate (bz0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
@@ -1424,7 +1424,7 @@ contains
     end if
 
 
-    if(use_le_layout .eq. .true.) then    
+    if(use_le_layout) then    
 
       if (.not.allocated(ec1le)) then
          allocate (ec1le   (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
@@ -1690,7 +1690,7 @@ contains
 
     call init_vpdiff
 
-    if(use_le_layout .eq. .true.) then
+    if(use_le_layout) then
 
       if (heating .and. .not. allocated(glec)) then
          allocate (glec(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
@@ -3773,7 +3773,7 @@ contains
     if (allocated(vnewh)) deallocate (vnewh)
     if (allocated(sq)) deallocate (sq)
 
-    if(use_le_layout .eq. .true.) then
+    if(use_le_layout) then
       if (allocated(c1le)) then
          deallocate (c1le, betaale, qle)
          if (heating) deallocate (d1le, h1le)
