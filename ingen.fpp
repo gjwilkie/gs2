@@ -1040,7 +1040,7 @@ if (debug) write(6,*) 'get_namelists: returning'
            call nprocs_yxf(nmesh)
         endif
 
-        if(use_le_layout .eq. .true.) then
+        if(use_le_layout) then
           write (report_unit, fmt="(/'Collisions using le_lo')") 
           call nprocs_le(nmesh)
         else
