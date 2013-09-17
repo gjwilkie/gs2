@@ -244,10 +244,6 @@ contains
     call init_map (use_lz_layout, use_e_layout, use_le_layout, test)
     call init_arrays
 
-    if (proc0) then
-       write(*,*) 'using le layout',use_le_layout
-    end if
-
   end subroutine init_collisions
 
   subroutine read_parameters
