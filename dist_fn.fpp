@@ -592,7 +592,9 @@ subroutine check_dist_fn(report_unit)
 
 #ifdef LOWFLOW
     if (debug) write(6,*) "init_dist_fn: init_lowflow"
-    call init_lowflow ! needs to be before init_invert_rhs
+    call init_lowflow ! needs to be before init_invert_rhs but after
+                      ! init_collisions as use_le_layouts is set in 
+		      ! collisions
 #endif
 
     if (debug) write(6,*) "init_dist_fn: init_invert_rhs"
@@ -7518,6 +7520,9 @@ subroutine check_dist_fn(report_unit)
   end subroutine finish_dist_fn
 
 #ifdef LOWFLOW
+  ! This rouinte must be called after init_collisions as it relies on the 
+  ! variable use_le_layout which is set in init_collisions based on input 
+  ! from the user provided input file.
   subroutine init_lowflow
 
     use constants, only: zi
@@ -7536,6 +7541,7 @@ subroutine check_dist_fn(report_unit)
     use run_parameters, only: tunits, wunits, rhostar, neo_test
     use lowflow, only: get_lowflow_terms
     use file_utils, only: open_output_file, close_output_file
+    use collisions, only: use_le_layout
     use mp, only: proc0
 
     implicit none
@@ -7630,11 +7636,11 @@ subroutine check_dist_fn(report_unit)
     
     ! intialize mappings from g_lo to e_lo and lz_lo or to le_lo to facilitate
     ! energy and lambda derivatives in parallel nonlinearity, etc.
-# ifdef USE_LE_LAYOUT
-    call init_map (use_lz_layout=.false., use_e_layout=.false., use_le_layout=.true., test=.false.)
-# else
-    call init_map (use_lz_layout=.true., use_e_layout=.true., use_le_layout=.false., test=.false.)
-# endif
+    if(use_le_layout .eq. .true.) then
+      call init_map (use_lz_layout=.false., use_e_layout=.false., use_le_layout=.true., test=.false.)
+    else
+      call init_map (use_lz_layout=.true., use_e_layout=.true., use_le_layout=.false., test=.false.)
+    end if
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
