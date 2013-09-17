@@ -896,7 +896,7 @@ contains
 
     if(use_le_layout) then    
       call gather (g2le, bz0, ctmp)
-      call solfp_ediffuse (ctmp)
+      call solfp_ediffuse (ctmp,le_lo)
       call scatter (g2le, ctmp, bz0)   ! bz0 is redefined below
     else
       call solfp_ediffuse (bz0,init=.true.)   ! bz0 is redefined below
@@ -982,7 +982,7 @@ contains
 
     if(use_le_layout) then
       call gather (g2le, bs0, ctmp)
-      call solfp_ediffuse (ctmp)
+      call solfp_ediffuse (ctmp,le_lo)
       call scatter (g2le, ctmp, bs0)   ! bs0
     else
       call solfp_ediffuse (bs0,init=.true.)    ! s0
@@ -1064,7 +1064,7 @@ contains
 
     if(use_le_layout) then    
       call gather (g2le, bw0, ctmp)
-      call solfp_ediffuse (ctmp)
+      call solfp_ediffuse (ctmp,le_lo)
       call scatter (g2le, ctmp, bw0)
     else
       call solfp_ediffuse (bw0,init=.true.)
@@ -2513,7 +2513,7 @@ contains
        ! TMP FOR TESTING -- MAB
 !       if (proc0) call system_clock (count=t0, count_rate=tr)
 
-       call solfp_ediffuse (gle)
+       call solfp_ediffuse (gle,le_lo)
 
        ! TMP FOR TESTING -- MAB
 !       if (proc0) then
@@ -2612,7 +2612,7 @@ contains
 
     case (collision_model_ediffuse)
 
-       call solfp_ediffuse (gle)
+       call solfp_ediffuse (gle,le_lo)
        if (conserve_moments) call conserve_diffuse (gle)
 
     end select
@@ -3589,16 +3589,18 @@ contains
   end subroutine solfp_ediffuse_standard_layout
 
 
-  subroutine solfp_ediffuse_le_layout (gle)
+  subroutine solfp_ediffuse_le_layout (gle,lo)
 
     use species, only: spec
     use le_grids, only: nxi, negrid, forbid, ixi_to_il
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx, le_lo
     use run_parameters, only: ieqzip
+    use layouts_type, only: le_layout_type
 
     implicit none
 
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
+    type (le_layout_type), intent (in) :: lo
 
     integer :: ie, is, iglo, ig, isgn, it, ik, il
     complex, dimension (negrid) :: delta
