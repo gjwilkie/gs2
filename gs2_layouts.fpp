@@ -290,6 +290,7 @@ module gs2_layouts
   end interface
 
   interface isign_idx
+     module procedure isign_idx_e
      module procedure isign_idx_xxf
      module procedure isign_idx_yxf
   end interface
@@ -1930,6 +1931,18 @@ contains
 ! <TT
 
   end function il_idx_e
+
+
+  elemental function isign_idx_e (lo, i)
+    implicit none
+    integer :: isign_idx_e
+    type (e_layout_type), intent (in) :: lo
+    integer, intent (in) :: i
+
+    isign_idx_e = 1 + mod((i - lo%llim_world)/(2*lo%ntgrid + 1),lo%nsign)
+  end function isign_idx_e
+
+
 
 ! TT>
 # ifdef USE_C_INDEX
