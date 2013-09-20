@@ -256,7 +256,7 @@ ifeq ($(USE_FFT),fftw)
 endif
 
 ifeq ($(USE_FFT),fftw3)
-	CPPFLAGS += -DFFT=_FFTW3_
+	CPPFLAGS += -DFFT=_FFTW3_ $(FFT_INC)
 	FFT_LIB ?= -lfftw -lrfftw
 endif
 
