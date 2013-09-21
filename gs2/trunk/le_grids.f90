@@ -656,10 +656,119 @@ contains
        total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
     end do
 
-    !Reduce sum across all procs to make integral over all velocity space and species
+!Reduce sum across all procs to make integral over all velocity space and species
     call sum_allreduce (total) 
-
   end subroutine integrate_species
+
+  subroutine integrate_species_e (lo, g, weights, total)
+!Integrate over velocity space whilst in e_lo_LAYOUT. 
+    use layouts_type, only: e_layout_type
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, il_idx
+    use theta_grid, only: ntgrid
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+
+    type (e_layout_type), intent (in) :: lo
+    complex, dimension (:,lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (-ntgrid:,:,:), intent (out) :: total
+    integer :: is, il, ie, ik, it, ig, ielo
+
+    total = 0.0
+    do ielo = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ielo)
+       ik = ik_idx(lo,ielo)
+       it = it_idx(lo,ielo)
+       is = is_idx(lo,ielo)
+!CMR: in e_lo il is lambda index, and isign is separate.
+       il = il_idx(lo,ielo)
+       !Perform local sum
+       do ie=1, negrid
+           total(ig, it, ik) = total(ig, it, ik) + &
+            weights(is)*w(ie)*wl(ig,il)*g(ie,ielo)
+       end do
+    end do
+!Sum over all procs to make integral over all velocity space and species
+    call sum_allreduce (total)
+  end subroutine integrate_species_e
+
+
+  subroutine integrate_species_lz (lo, g, weights, total)
+!Integrate over velocity space whilst in lz_lo_LAYOUT. 
+    use layouts_type, only: lz_layout_type
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, ie_idx
+    use theta_grid, only: ntgrid
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+
+    type (lz_layout_type), intent (in) :: lo
+    complex, dimension (:,lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (-ntgrid:,:,:), intent (out) :: total
+    integer :: is, ixi, il, ie, ik, it, ig, ilzlo
+
+    total = 0.0
+    do ilzlo = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ilzlo)
+       ik = ik_idx(lo,ilzlo)
+       it = it_idx(lo,ilzlo)
+       ie = ie_idx(lo,ilzlo)
+       is = is_idx(lo,ilzlo)
+       !Perform local sum
+!CMR: in lz_lo il muxt be obtained from local index ixi, which includes isign.
+       do ixi=1, nxi
+          il = ixi_to_il(ig,ixi)
+          total(ig, it, ik) = total(ig, it, ik) + &
+            weights(is)*w(ie)*wl(ig,il)*g(il,ilzlo)
+       end do
+    end do
+!Sum over all procs to make integral over all velocity space and species
+    call sum_allreduce (total)
+  end subroutine integrate_species_lz
+
+
+  subroutine integrate_species_lec (lo, g, weights, total)
+!Perform an integral over velocity space whilst in the LE_LAYOUT in 
+!which we have ensured that all of velocity space is local. As such
+!we don't need any calls to MPI reduction routines. Note that this means
+!the processors for different distributed spatial points (x,y) don't know
+!the results at other points.
+    use layouts_type, only: le_layout_type
+    use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
+    use theta_grid, only: ntgrid
+    use mp, only: sum_allreduce
+
+    implicit none
+
+    type (le_layout_type), intent (in) :: lo
+    complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (-ntgrid:,:,:), intent (out) :: total
+    integer :: ixi, ie, il, ile, ig, it, ik, is
+
+    total = 0.0
+    do ile = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ile)
+       it = it_idx (lo,ile)
+       ik = ik_idx (lo,ile)
+       do ie=1, negrid
+          do ixi=1, nxi
+             il = ixi_to_il(ig,ixi)
+             total(ig,it,ik) = total(ig,ie,ik) + weights(is)*w(ie) * wl(ig,il) * g(ixi,ie,ile)
+          end do
+       end do
+    end do
+!Sum over all procs to make integral over all velocity space and species
+    call sum_allreduce (total)
+
+  end subroutine integrate_species_lec
+
+
+
+
+
+
+
 
   function le_grids_unit_test_integrate_species(g, weights, sizes, rslt, err)
     use unit_tests
@@ -933,7 +1042,6 @@ contains
 
   end subroutine lagrange_interp
 
-!  subroutine integrate_moment (g, total, all)
   subroutine integrate_moment_c34 (g, total, all)
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
@@ -982,7 +1090,6 @@ contains
 
   end subroutine integrate_moment_c34
 
-!  subroutine integrate_moment (g, total, all)
   subroutine integrate_moment_r33 (g, total, all)
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(y, z, sigma, lambda, E, species) and returns int f, where the integral
