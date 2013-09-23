@@ -1844,6 +1844,8 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     thet_imp = thet_impfac
 
     ! get cell values for theta and gradpar. depends on sign(vpa) due to upwinding
+    ! example: for thet_imp=1 (fully upwinded), thetac(ig,1)=theta(ig)
+    ! and thetac(ig,2)=theta(ig+1)
     call get_cell_value (1.0-thet_imp, theta, thetac(:,1), -ntgrid)
     call get_cell_value (thet_imp, theta, thetac(:,2), -ntgrid)
 
