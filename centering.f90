@@ -28,9 +28,11 @@ contains
 
     integer :: u
 
-    u = -l-1
+    ! u = -l-1
+    ! cell(l:u) = impfac*grid(l+1:) + (1.0-impfac)*grid(:u)
 
-    cell(l:u) = impfac*grid(l+1:) + (1.0-impfac)*grid(:u)
+    u = size(grid)+l-1
+    cell(l:u-1) = impfac*grid(l+1:u) + (1.0-impfac)*grid(l:u-1)
 
   end subroutine get_cell_value_1d
 
@@ -46,31 +48,65 @@ contains
     integer, intent (in) :: l1, l2
 
     integer :: u1, u2, ig, iv
+    real, dimension (:,:), allocatable :: tmp
 
     ! upper limits for first and second indices of grid and cell
-    u1 = -l1
-    u2 = -l2
+!    u1 = -l1
+!    u2 = -l2
+
+    ! ! first do centering in vpar
+    ! ! for theta<0
+    ! do ig = l1, -1 
+    !    call get_cell_value (vp_imp,grid(ig,:),cell(ig,:),l2)
+    ! end do
+    ! ! for theta>0
+    ! do ig = 0, u1-1
+    !    call get_cell_value (1.0-vp_imp,grid(ig,:),cell(ig,:),l2)
+    ! end do
+    
+    ! ! next do centering in theta
+    ! ! for vpa<0
+    ! do iv = l2, -1
+    !    call get_cell_value (1.0-th_imp,grid(:,iv),cell(:,iv),l1)
+    ! end do
+    ! ! for vpa>0
+    ! do iv = 0, u2-1
+    !    call get_cell_value (th_imp,grid(:,iv),cell(:,iv),l1)
+    ! end do
+
+    u1 = size(grid,1)+l1-1
+    u2 = size(grid,2)+l2-1
+
+    allocate (tmp(l1:u1,l2:u2-1)) ; tmp = 0.0
 
     ! first do centering in vpar
     ! for theta<0
-    do ig = l1, -1 
-       call get_cell_value (vp_imp,grid(ig,:),cell(ig,:),l2)
+    do ig = l1, -1
+       call get_cell_value (vp_imp,grid(ig,:),tmp(ig,:),l2)
     end do
     ! for theta>0
-    do ig = 0, u1-1
-       call get_cell_value (1.0-vp_imp,grid(ig,:),cell(ig,:),l2)
+    do ig = 1, u1
+       call get_cell_value (1.0-vp_imp,grid(ig,:),tmp(ig,:),l2)
     end do
-    
+    ! for theta=0
+    ig = 0
+    ! for vp>0
+    call get_cell_value (vp_imp,grid(ig,0:),tmp(ig,0:),0)
+    ! for vp<0
+    call get_cell_value (1.0-vp_imp,grid(ig,l2:0),tmp(ig,l2:-1),l2)
+
     ! next do centering in theta
     ! for vpa<0
     do iv = l2, -1
-       call get_cell_value (1.0-th_imp,grid(:,iv),cell(:,iv),l1)
+       call get_cell_value (1.0-th_imp,tmp(:,iv),cell(:,iv),l1)
     end do
     ! for vpa>0
     do iv = 0, u2-1
-       call get_cell_value (th_imp,grid(:,iv),cell(:,iv),l1)
+       call get_cell_value (th_imp,tmp(:,iv),cell(:,iv),l1)
     end do
-    
+
+    deallocate (tmp)
+
   end subroutine get_cell_value_2d
 
   ! takes an array of grid values and calculates a cell
@@ -88,9 +124,12 @@ contains
 
     integer :: u
 
-    u = -l-1
+    ! u = -l-1
 
-    cell(l:u) = impfac*grid(l+1:) + (1.0-impfac)*grid(:u)
+    ! cell(l:u) = impfac*grid(l+1:) + (1.0-impfac)*grid(:u)
+
+    u = size(grid)+l-1
+    cell(l:u-1) = impfac*grid(l+1:u) + (1.0-impfac)*grid(:u-1)
 
   end subroutine get_cell_value_1d_complex
 
@@ -106,30 +145,62 @@ contains
     integer, intent (in) :: l1, l2
 
     integer :: u1, u2, ig, iv
+    complex, dimension (:,:), allocatable :: tmp
 
     ! upper limits for first and second indices of grid and cell
-    u1 = -l1
-    u2 = -l2
+    ! u1 = -l1
+    ! u2 = -l2
+
+    ! ! first do centering in vpar
+    ! ! for theta<0
+    ! do ig = l1, -1 
+    !    call get_cell_value (vp_imp,grid(ig,:),cell(ig,:),l2)
+    ! end do
+    ! ! for theta>0
+    ! do ig = 0, u1-1
+    !    call get_cell_value (1.0-vp_imp,grid(ig,:),cell(ig,:),l2)
+    ! end do
+    
+    ! ! next do centering in theta
+    ! ! for vpa<0
+    ! do iv = l2, -1
+    !    call get_cell_value (1.0-th_imp,grid(:,iv),cell(:,iv),l1)
+    ! end do
+    ! ! for vpa>0
+    ! do iv = 0, u2-1
+    !    call get_cell_value (th_imp,grid(:,iv),cell(:,iv),l1)
+    ! end do
+
+    u1 = size(grid,1)+l1-1
+    u2 = size(grid,2)+l2-1
+
+    allocate (tmp(l1:u1,l2:u2-1)) ; tmp = 0.0
 
     ! first do centering in vpar
     ! for theta<0
-    do ig = l1, -1 
-       call get_cell_value (vp_imp,grid(ig,:),cell(ig,:),l2)
+    do ig = l1, -1
+       call get_cell_value (vp_imp,grid(ig,:),tmp(ig,:),l2)
     end do
     ! for theta>0
-    do ig = 0, u1-1
-       call get_cell_value (1.0-vp_imp,grid(ig,:),cell(ig,:),l2)
+    do ig = 1, u1
+       call get_cell_value (1.0-vp_imp,grid(ig,:),tmp(ig,:),l2)
     end do
-    
+    ! for theta=0
+    ig = 0
+    call get_cell_value (vp_imp,grid(ig,0:),tmp(ig,0:),0)
+    call get_cell_value (1.0-vp_imp,grid(ig,l2:0),tmp(ig,l2:-1),l2)
+
     ! next do centering in theta
     ! for vpa<0
     do iv = l2, -1
-       call get_cell_value (1.0-th_imp,grid(:,iv),cell(:,iv),l1)
+       call get_cell_value (1.0-th_imp,tmp(:,iv),cell(:,iv),l1)
     end do
     ! for vpa>0
     do iv = 0, u2-1
-       call get_cell_value (th_imp,grid(:,iv),cell(:,iv),l1)
+       call get_cell_value (th_imp,tmp(:,iv),cell(:,iv),l1)
     end do
+
+    deallocate (tmp)
     
   end subroutine get_cell_value_2d_complex
 

@@ -6,7 +6,7 @@ module vpamu_grids
   public :: integrate_moment, integrate_species
   public :: vpa, nvgrid, wgts_vpa, dvpa, vpac
   public :: mu, nmu, wgts_mu, vpa_imp
-  public :: vperp2, energy, anon
+  public :: vperp2, energy, anon, anonc
 
   integer :: nvgrid
   integer :: nmu
@@ -20,7 +20,7 @@ module vpamu_grids
   ! vpa-mu related arrays that are declared here
   ! but allocated and filled elsewhere because they depend on theta, etc.
   real, dimension (:,:), allocatable :: vperp2
-  real, dimension (:,:,:), allocatable :: energy, anon
+  real, dimension (:,:,:), allocatable :: energy, anon, anonc
 
 contains
 
@@ -89,7 +89,8 @@ contains
        ! to the parallel velocity grid points
        allocate (wgts_vpa(-nvgrid:nvgrid)) ; wgts_vpa = 0.0
        ! vpac is the parallel velocity at cells
-       ! the 2nd dimension keeps track of theta < 0 (1) and theta > 0 (2)
+       ! the 2nd dimension keeps track of dvpa/dt < 0 (1) and dvpa/dt > 0 (2)
+       ! which for lowest order GK equation corresponds to theta < 0 and theta > 0
        allocate (vpac(-nvgrid:nvgrid,2)) ; vpac = 0.0
        ! dvpa is the grid spacing in vpa
        allocate (dvpa(-nvgrid:nvgrid)) ; dvpa = 0.0
@@ -126,6 +127,8 @@ contains
     end do
 
     ! get vpa at cell centers
+    ! example: if vpa_imp=1 (fully upwinded), vpac(iv,1)=vpa(iv+1)
+    ! and vpac(iv,2)=vpa(iv)
     call get_cell_value (vpa_imp, vpa, vpac(:,1), -nvgrid)
     call get_cell_value (1.0-vpa_imp, vpa, vpac(:,2), -nvgrid)
     ! vpac(nvgrid) should not be needed but set it nonzero to avoid possible
@@ -236,10 +239,15 @@ contains
     allocate (dmu(nmu-1)) ; dmu = 0.0
 
     ! construct mu grid
+    ! first get sqrt(mu) grid to be equally spaced
     do imu = 1, nmu
-       mu(imu) = real(imu-1)*mu_max/(nmu-1)
+       mu(imu) = real(imu-1)*sqrt(mu_max)/(nmu-1)
     end do
     dmu = (/ (mu(i+1)-mu(i), i=1,nmu-1) /)
+    ! do imu = 1, nmu
+    !    mu(imu) = real(imu-1)*mu_max/(nmu-1)
+    ! end do
+    ! dmu = (/ (mu(i+1)-mu(i), i=1,nmu-1) /)
 
     ! get integration weights corresponding to mu grid points
     ! for now use Simpson's rule; 
@@ -254,20 +262,29 @@ contains
     do iseg = 1, nmu_seg
        idx = (iseg-1)*2 + 1
        del = (dmu(idx)+dmu(idx+1))/6.
-       wgts_mu(idx) = wgts_mu(idx) + del
-       wgts_mu(idx+1) = wgts_mu(idx+1) + 4.*del
-       wgts_mu(idx+2) = wgts_mu(idx+2) + del
+       wgts_mu(idx) = wgts_mu(idx) + del*mu(idx)
+       wgts_mu(idx+1) = wgts_mu(idx+1) + 4.*del*mu(idx+1)
+       wgts_mu(idx+2) = wgts_mu(idx+2) + del*mu(idx+2)
+!       wgts_mu(idx) = wgts_mu(idx) + del
+!       wgts_mu(idx+1) = wgts_mu(idx+1) + 4.*del
+!       wgts_mu(idx+2) = wgts_mu(idx+2) + del
     end do
     ! if there is an extra segment with only 2 points in it,
     ! assign weights using trapezoid rule
-    if (mod(nmu,2)==0) wgts_mu(nmu-1:) = wgts_mu(nmu-1:) + dmu(nmu-1)*0.5
+    if (mod(nmu,2)==0) wgts_mu(nmu-1:) = wgts_mu(nmu-1:) + dmu(nmu-1)*0.5*mu(nmu-1)
+!    if (mod(nmu,2)==0) wgts_mu(nmu-1:) = wgts_mu(nmu-1:) + dmu(nmu-1)*0.5
 
     ! factor of 2./sqrt(pi) necessary to account for 2pi from 
     ! integration over gyro-angle and 1/pi^(3/2) normalization
     ! of velocity space Jacobian
     ! note that a factor of bmag is missing and will have to be
     ! applied when doing integrals
-    wgts_mu = wgts_mu*2./sqrt(pi)
+    wgts_mu = wgts_mu*4./sqrt(pi)
+!    wgts_mu = wgts_mu*2./sqrt(pi)
+
+    ! now convert from sqrt(mu) to mu
+    mu = mu**2
+    dmu = (/ (mu(i+1)-mu(i), i=1,nmu-1) /)
 
     deallocate (dmu)
 

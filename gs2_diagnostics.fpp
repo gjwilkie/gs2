@@ -514,7 +514,7 @@ contains
        write_final_antot = .false.
        write_final_db = .false.
        nwrite = 100
-       nmovie = 1000
+       nmovie = 100000
        nwrite_mult = 10
        navg = 100
        nsave = -1
@@ -1360,7 +1360,7 @@ if (debug) write(6,*) "loop_diagnostics: call update_time"
     if (mod(istep,nwrite) /= 0 .and. .not. exit) return
     t = user_time
 
-    if (write_g) call write_f (last)
+    if (write_g .and. mod(istep,nmovie) == 0) call write_f (last)
 
     call prof_entering ("loop_diagnostics-1")
 if (debug) write(6,*) "loop_diagnostics: -1"

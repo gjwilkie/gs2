@@ -154,7 +154,9 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     use gs2_layouts, only: jf_lo, ij_idx
     use prof, only: prof_entering, prof_leaving
+
     implicit none
+
     complex, dimension (0:), intent (in) :: u
     integer :: ik, it, ifield, ll, lr
 
@@ -280,7 +282,7 @@ contains
     call antenna_amplitudes (apar_ext)
        
     if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
-    
+
     g = gnew ; gold = gnew
     phi = phinew
     apar = aparnew
