@@ -1,9 +1,13 @@
 
-!> A program that repeatedly calls add_nl for benchmarking the ffts and
-!! transposes
+!> A program that tests the nonlinear terms module. It incorporates ffttest,
+!! an earlier program  which initialises the distribution
+!! function and fields with specific functions and sees if the poisson bracket
+!! is correctly calculated.
 !!
 !! This is free software released under GPLv3
 !!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
+!!               Colin Roach (colin.m.roach@ccfe.ac.uk)
+
 program test_nonlinear_terms
   use unit_tests
   use mp, only: init_mp, finish_mp, proc0, broadcast

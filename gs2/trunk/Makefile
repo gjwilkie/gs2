@@ -401,7 +401,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests benchmarks
+.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests benchmarks clean_tests
 
 all: $(.DEFAULT_GOAL)
 
@@ -469,10 +469,26 @@ sync_input_doc:
 clean:
 	-rm -f *.o *.mod *.g90 *.h core */core
 
+CLEANCOMMAND=echo $$$$PWD
+CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod
+
+ifdef CLEAN_TEXTFILES
+	CLEANCOMMAND+= *~ *.orig
+endif
+
+export 
+
+clean_tests:
+	$(MAKE) clean -C linear_tests 
+	$(MAKE) clean -C unit_tests 
+
+clean_benchmarks:
+	$(MAKE) clean -C benchmarks 
+
 cleanlib:
 	-rm -f *.a
 
-distclean: unlink clean cleanlib
+distclean: unlink clean cleanlib clean_tests clean_benchmarks
 
 tar:
 	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
