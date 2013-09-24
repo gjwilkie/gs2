@@ -9,9 +9,8 @@ module gs2_layouts
 
 ! TT>
   use layouts_type, only: g_layout_type, lz_layout_type, e_layout_type
-  use layouts_type, only: le_layout_type
+  use layouts_type, only: le_layout_type, p_layout_type
 ! <TT
-  use layouts_type, only: p_layout_type
 
   implicit none
   private
@@ -23,7 +22,6 @@ module gs2_layouts
   public :: wnml_gs2_layouts
   public :: init_parity_layouts ! MAB
 ! TT>
-!  public :: g_lo, g_layout_type
   public :: g_lo
 ! <TT
   public :: gint_lo, gint_layout_type
@@ -39,7 +37,6 @@ module gs2_layouts
 
   public :: init_lambda_layouts
 ! TT>
-!  public :: lz_lo, lz_layout_type
   public :: lz_lo
 ! <TT
   public :: gidx2lzidx
@@ -47,7 +44,6 @@ module gs2_layouts
 
   public :: init_energy_layouts
 ! TT>
-!  public :: e_lo, e_layout_type
   public :: e_lo
 ! <TT
 
@@ -374,11 +370,12 @@ contains
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
+    use redistribute, only: opt_redist_nbk
     implicit none
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
          max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
-         opt_local_copy
+         opt_local_copy, opt_redist_nbk
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
@@ -387,6 +384,8 @@ contains
     max_unbalanced_xxf = 0.0
     max_unbalanced_yxf = 0.0
     layout = 'lxyes'
+    opt_redist_nbk = .false. !<DD>True=>Use nonblocking redistributes
+
     in_file=input_unit_exist("layouts_knobs", exist)
     if (exist) read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
     if (layout.ne.'yxels' .and. layout.ne.'yxles' .and. layout.ne.'lexys'&
@@ -420,8 +419,10 @@ contains
     
   subroutine broadcast_results
     use mp, only: broadcast
+    use redistribute, only: opt_redist_nbk
     implicit none
 
+    call broadcast (opt_redist_nbk)
     call broadcast (layout)
     call broadcast (local_field_solve)
     call broadcast (unbalanced_xxf)

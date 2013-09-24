@@ -84,6 +84,7 @@ ffttester_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -144,6 +145,7 @@ gs2_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -207,6 +209,7 @@ ingen_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -271,6 +274,7 @@ collisions.o: \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 kt_grids.o \
+	 layouts_type.o \
 	 le_grids.o \
 	 mp.o \
 	 prof.o \
@@ -379,8 +383,10 @@ file_utils.o: \
 functional_tests.o: \
 	 gs2_diagnostics.o \
 	 gs2_main.o \
+	 job_manage.o \
 	 kt_grids.o \
 	 mp.o \
+	 run_parameters.o \
 	 unit_tests.o 
 gauss_quad.o: \
 	 constants.o \
@@ -475,7 +481,8 @@ gs2_io_hdf5.o: \
 gs2_layouts.o: \
 	 file_utils.o \
 	 layouts_type.o \
-	 mp.o 
+	 mp.o \
+	 redistribute.o 
 gs2_main.o: \
 	 antenna.o \
 	 collisions.o \
@@ -660,6 +667,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -698,7 +706,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
