@@ -95,6 +95,7 @@ ffttester_mod = \
 	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 sorting.o \
 	 species.o \
 	 spfunc.o \
 	 spl.o \
@@ -156,6 +157,7 @@ gs2_mod = \
 	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 sorting.o \
 	 species.o \
 	 spfunc.o \
 	 spl.o \
@@ -219,6 +221,7 @@ ingen_mod = \
 	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 sorting.o \
 	 species.o \
 	 spfunc.o \
 	 spl.o \
@@ -557,6 +560,7 @@ gs2_transforms.o: \
 	 mp.o \
 	 prof.o \
 	 redistribute.o \
+	 sorting.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
 	 constants.o \
@@ -647,6 +651,7 @@ le_grids.o: \
 	 layouts_type.o \
 	 mp.o \
 	 redistribute.o \
+	 sorting.o \
 	 species.o \
 	 theta_grid.o \
 	 unit_tests.o 
@@ -727,6 +732,7 @@ rungridgen.o: \
 	 file_utils.o \
 	 gridgen4mod.o \
 	 spl.o 
+sorting.o: 
 species.o: \
 	 file_utils.o \
 	 mp.o \

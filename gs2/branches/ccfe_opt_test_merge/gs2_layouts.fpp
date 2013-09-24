@@ -68,11 +68,13 @@ module gs2_layouts
   public :: idx, proc_id, idx_local
 
   public :: opt_local_copy
+  public :: opt_redist_init !Do we use optimised redist init routines?
 
   logical :: initialized_x_transform = .false.
   logical :: initialized_y_transform = .false.
 
   logical :: opt_local_copy
+  logical :: opt_redist_init
   logical :: local_field_solve, accel_lxyes, lambda_local, unbalanced_xxf, unbalanced_yxf
   real :: max_unbalanced_xxf, max_unbalanced_yxf
   character (len=5) :: layout
@@ -375,7 +377,7 @@ contains
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
          max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
-         opt_local_copy, opt_redist_nbk
+         opt_local_copy, opt_redist_nbk, opt_redist_init
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
@@ -385,6 +387,7 @@ contains
     max_unbalanced_yxf = 0.0
     layout = 'lxyes'
     opt_redist_nbk = .false. !<DD>True=>Use nonblocking redistributes
+    opt_redist_init= .false. !<DD>True=>Use optimised routines to init redist objects
 
     in_file=input_unit_exist("layouts_knobs", exist)
     if (exist) read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
@@ -422,6 +425,7 @@ contains
     use redistribute, only: opt_redist_nbk
     implicit none
 
+    call broadcast (opt_redist_init)
     call broadcast (opt_redist_nbk)
     call broadcast (layout)
     call broadcast (local_field_solve)
