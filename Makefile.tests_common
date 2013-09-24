@@ -1,0 +1,18 @@
+
+.SUFFIXES: .fpp .f90 .c .o
+.PHONY: all clean
+
+F90FLAGS += -I ../../
+LDFLAGS += -I ../../
+CLAGS += -I ../../
+
+.f90.o: 
+	$(FC) $(F90FLAGS) -c $<
+.fpp.f90:
+	$(CPP) $(CPPFLAGS) $< $@
+.c.o:
+	$(CC) $(CFLAGS) -c $<
+
+
+clean: 
+	$(CLEANCOMMAND)
