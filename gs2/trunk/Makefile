@@ -470,7 +470,7 @@ clean:
 	-rm -f *.o *.mod *.g90 *.h core */core
 
 CLEANCOMMAND=echo $$$$PWD
-CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod
+CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch
 
 ifdef CLEAN_TEXTFILES
 	CLEANCOMMAND+= *~ *.orig
