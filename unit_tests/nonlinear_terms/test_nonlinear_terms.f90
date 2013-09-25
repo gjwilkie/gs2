@@ -86,7 +86,7 @@ function test_ffts()
   logical :: test_ffts
   logical ::dummy
   integer :: ix, iy
-  character(len=2000) :: message = ''
+  character(len=22) :: message = ''
   dummy = .true.
   
 
@@ -100,13 +100,13 @@ function test_ffts()
 
        !write(*, fmt="(A12, I2, A6, I2)") 'ffttest ix =', ix, ' iy = ', iy
        !write(*, *) message
-       !write(message, fmt="(A12, I2, A6, I2)") 'ffttest ix =', ix, ' iy = ', iy
+       write(message, fmt="(A12, I2, A6, I2)") 'ffttest ix =', ix, ' iy = ', iy
        !write(message, *) 'ffttest ix =', ix, ' iy = ', iy
        !write(*, *) message
       !write(message, '("ffttest ix = ")') 
       !message = 'Hello'
-      !call announce_check(trim(message))
-        dummy = ffttest(ix,iy, .false.) .and. dummy
+      call announce_check(message)
+      call process_check(test_ffts, ffttest(ix,iy, .false.), message)
     enddo
   enddo
 
@@ -139,7 +139,8 @@ function ffttest (jx,jy,debug)
 !  ik,is,ie,il,it are indices for ky, species, energy, lambda and kx respectively
   integer:: ik,is,ie,il,it,ia
   integer:: isgn, ig, iglo, index, mpierr
-  logical:: accelerated, printlots, fail, anyfail
+  logical:: printlots, fail, anyfail
+  logical, save :: accelerated
   logical,save:: first=.true. 
 
   real, save, dimension (:,:), allocatable :: gr  ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
@@ -159,7 +160,7 @@ function ffttest (jx,jy,debug)
   printlots=.false. 
 ! Following line was causing seg faults, but the problem has disappeared 
 ! (don't know why, but possibly due to fixing a memory leak?)
-  if (present(debug)) printlots=debug
+  if (present(debug) .and. debug) printlots=.true.
 
 !CMR, 5-D FFTs
   g=0
@@ -235,6 +236,7 @@ if (printlots) call barrier
          allocate (gra(-ntgrid:ntgrid, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
          gra=0.
       else
+     !write (*,*) accelerated, 'accelerated', iproc
          if (printlots) then
             write(6,fmt='(2A20)') "yxf_lo"
             write(6,fmt='(A20,I20)') "yxf_lo%iproc",yxf_lo%iproc
@@ -366,6 +368,7 @@ if (printlots) call barrier
 
    fail=.false.
    if (accelerated) then
+     !write (*,*) accelerated, 'accelerated', iproc
       call transform2 (g, gra, ia)
       gra=2.0*gra
    else
