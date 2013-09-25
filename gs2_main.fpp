@@ -118,11 +118,11 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (proc0) then
           if (nproc == 1) then
              if (.not. nofin) then
-	        write(*,*) 'Job ID:',job_id,'Running on ',nproc,' processor'
+	        write(*,*) 'Running on ',nproc,' processor'
 	     end if 
          else
              if (.not. nofin) then
-	        write(*,*) 'Job ID:',job_id,'Running on ',nproc,' processors'
+	        write(*,*) 'Running on ',nproc,' processors'
 	     end if	  
           end if
 !          write (*,*) 
