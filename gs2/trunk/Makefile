@@ -570,13 +570,15 @@ gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
-TEST_DEPS?=$(gs2_mod)
+TEST_DEPS?=$(gs2_mod) functional_tests.o
 export
 unit_tests: unit_tests.o $(TEST_DEPS)
 	cd unit_tests && time ${MAKE} && echo && echo "Tests Successful!"
 
 linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
 	cd linear_tests && time ${MAKE} && echo && echo "Tests Successful!"
+
+tests: unit_tests linear_tests
 
 test_script: unit_tests linear_tests
 	echo "" > test_script.sh
