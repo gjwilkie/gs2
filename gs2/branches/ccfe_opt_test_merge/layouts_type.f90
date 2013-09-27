@@ -13,7 +13,7 @@ module layouts_type
 !    For branchless index lookup routines
      integer :: ik_ord, it_ord, il_ord, ie_ord, is_ord
      integer :: ik_comp, it_comp, il_comp, ie_comp, is_comp
-     integer,dimension(5) :: compound_count
+     integer,dimension(5) :: compound_count, dim_size
 !    For replacing loops over iglo with 5 separate loops
 !    This is not currently implemented, but involves replacing "do iglo=...." with
 !    EQUIVALENCE(dind(1),d1),(dind(2),d2).... !Note this is just a short hand for storing currently d values in an array   

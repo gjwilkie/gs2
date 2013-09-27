@@ -69,12 +69,17 @@ module gs2_layouts
 
   public :: opt_local_copy
   public :: opt_redist_init !Do we use optimised redist init routines?
+  public :: intmom_sub !Do we use sub-communicators in velocity space?
+  public :: intspec_sub !Do we use sub-communicators in integrate_species?
+
 
   logical :: initialized_x_transform = .false.
   logical :: initialized_y_transform = .false.
 
   logical :: opt_local_copy
   logical :: opt_redist_init
+  logical :: intmom_sub
+  logical :: intspec_sub
   logical :: local_field_solve, accel_lxyes, lambda_local, unbalanced_xxf, unbalanced_yxf
   real :: max_unbalanced_xxf, max_unbalanced_yxf
   character (len=5) :: layout
@@ -390,7 +395,8 @@ contains
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
          max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
-         opt_local_copy, opt_redist_nbk, opt_redist_init
+         opt_local_copy, opt_redist_nbk, opt_redist_init, intmom_sub, &
+         intspec_sub
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
@@ -401,7 +407,8 @@ contains
     layout = 'lxyes'
     opt_redist_nbk = .false. !<DD>True=>Use nonblocking redistributes
     opt_redist_init= .false. !<DD>True=>Use optimised routines to init redist objects
-
+    intmom_sub=.false.
+    intspec_sub=.false.
     in_file=input_unit_exist("layouts_knobs", exist)
     if (exist) read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
     if (layout.ne.'yxels' .and. layout.ne.'yxles' .and. layout.ne.'lexys'&
@@ -440,6 +447,8 @@ contains
 
     call broadcast (opt_redist_init)
     call broadcast (opt_redist_nbk)
+    call broadcast (intmom_sub)
+    call broadcast (intspec_sub)
     call broadcast (layout)
     call broadcast (local_field_solve)
     call broadcast (unbalanced_xxf)
@@ -621,6 +630,8 @@ contains
   subroutine init_dist_fn_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
     use mp, only: iproc, nproc, proc0
+    use mp, only: split, mp_comm, nproc_comm, rank_comm
+    use mp, only: sum_allreduce_sub
 ! TT>
     use file_utils, only: error_unit
 ! <TT
@@ -629,6 +640,12 @@ contains
 !<DD>
     integer :: iglo,ik,it,il,ie,is,col,ierr,mycol
     integer :: ik_min,ik_max,it_min,it_max,il_min,il_max,ie_min,ie_max,is_min,is_max,ip
+    integer :: nproc_subcomm, rank_subcomm, tmp
+    integer :: nproc_tmp, idim
+    real :: tmp_r
+    integer,dimension(5) :: nproc_dim
+    integer,dimension(:),allocatable :: les_kxky_range
+    logical,dimension(5) :: dim_divides,dim_local
     logical, save :: initialized = .false.
 ! TT>
 # ifdef USE_C_INDEX
@@ -674,6 +691,11 @@ contains
        g_lo%compound_count(3)=naky*ntheta0
        g_lo%compound_count(4)=naky*ntheta0*negrid
        g_lo%compound_count(5)=naky*ntheta0*negrid*nlambda
+       g_lo%dim_size(1)=naky
+       g_lo%dim_size(2)=ntheta0
+       g_lo%dim_size(3)=negrid
+       g_lo%dim_size(4)=nlambda
+       g_lo%dim_size(5)=nspec
     case ('yxles')
        g_lo%ie_ord=4
        g_lo%il_ord=3
@@ -685,6 +707,11 @@ contains
        g_lo%compound_count(3)=naky*ntheta0
        g_lo%compound_count(4)=naky*ntheta0*nlambda
        g_lo%compound_count(5)=naky*ntheta0*nlambda*negrid
+       g_lo%dim_size(1)=naky
+       g_lo%dim_size(2)=ntheta0
+       g_lo%dim_size(3)=nlambda
+       g_lo%dim_size(4)=negrid
+       g_lo%dim_size(5)=nspec
     case ('lexys')
        g_lo%ie_ord=2
        g_lo%il_ord=1
@@ -696,6 +723,11 @@ contains
        g_lo%compound_count(3)=nlambda*negrid
        g_lo%compound_count(4)=nlambda*negrid*ntheta0
        g_lo%compound_count(5)=nlambda*negrid*ntheta0*naky
+       g_lo%dim_size(1)=nlambda
+       g_lo%dim_size(2)=negrid
+       g_lo%dim_size(3)=ntheta0
+       g_lo%dim_size(4)=naky
+       g_lo%dim_size(5)=nspec
     case ('lxyes')
        g_lo%ie_ord=4
        g_lo%il_ord=1
@@ -707,6 +739,11 @@ contains
        g_lo%compound_count(3)=nlambda*ntheta0
        g_lo%compound_count(4)=nlambda*ntheta0*naky
        g_lo%compound_count(5)=nlambda*ntheta0*naky*negrid
+       g_lo%dim_size(1)=nlambda
+       g_lo%dim_size(2)=ntheta0
+       g_lo%dim_size(3)=naky
+       g_lo%dim_size(4)=negrid
+       g_lo%dim_size(5)=nspec
     case ('lyxes')
        g_lo%ie_ord=4
        g_lo%il_ord=1
@@ -718,6 +755,11 @@ contains
        g_lo%compound_count(3)=nlambda*naky
        g_lo%compound_count(4)=nlambda*naky*ntheta0
        g_lo%compound_count(5)=nlambda*naky*ntheta0*negrid
+       g_lo%dim_size(1)=nlambda
+       g_lo%dim_size(2)=naky
+       g_lo%dim_size(3)=ntheta0
+       g_lo%dim_size(4)=negrid
+       g_lo%dim_size(5)=nspec
     case ('xyles')
        g_lo%ie_ord=4
        g_lo%il_ord=3
@@ -729,6 +771,11 @@ contains
        g_lo%compound_count(3)=ntheta0*naky
        g_lo%compound_count(4)=ntheta0*naky*nlambda
        g_lo%compound_count(5)=ntheta0*naky*nlambda*negrid
+       g_lo%dim_size(1)=ntheta0
+       g_lo%dim_size(2)=naky
+       g_lo%dim_size(3)=nlambda
+       g_lo%dim_size(4)=negrid
+       g_lo%dim_size(5)=nspec
     end select
     g_lo%ik_comp=g_lo%compound_count(g_lo%ik_ord)
     g_lo%it_comp=g_lo%compound_count(g_lo%it_ord)
@@ -930,6 +977,214 @@ contains
     g_lo%l_local=(il_min.eq.1).and.(il_max.eq.nlambda)
     g_lo%e_local=(ie_min.eq.1).and.(ie_max.eq.negrid)
     g_lo%s_local=(is_min.eq.1).and.(is_max.eq.nspec)
+
+    !Now work out how the compound dimension splits amongst processors
+    nproc_tmp=nproc
+    !/Initialise
+    nproc_dim=-1
+    dim_divides=.false.
+    dim_local=.false.
+    do idim=5,1,-1
+
+       !If we are down to 1 proc then everything else is local
+       !so say dim_divides and exit loop
+       !If nproc_tmp is 0 then this indicates the last dimension
+       !had more entries than procs available
+       if(nproc_tmp.le.1) then
+          dim_divides(idim:1:-1)=.true.
+          dim_local(idim:1:-1)=.true.
+          exit
+       endif
+       
+       !Does the current dimension divide evenly
+       !amongst the remaining processors
+       tmp_r=(1.0*nproc_tmp)/g_lo%dim_size(idim)
+
+       !Check if the current dimension is larger than the number of processors
+       !if so then we can still divide nicely but can't rely on division being integer
+       !Invert division to check!
+       if(int(tmp_r).eq.0) then
+          tmp_r=g_lo%dim_size(idim)/nproc_tmp
+       endif
+
+       !Store logical to indicate if things divide perfectly
+       dim_divides(idim)=((tmp_r-int(tmp_r)).eq.0)
+
+       !If this dimension doesn't divide perfectly then we exit
+       !loop and leave other dims as "un-initialised"
+       if(.not.dim_divides(idim)) then
+          nproc_dim(idim)=tmp
+          exit
+       endif
+
+       !If we do split nicely then store how many procs there are
+       !to deal with the subsequent dims
+       !If this is zero then it indicates a dimension that is not
+       !fully distributed.
+       nproc_dim(idim)=nproc_tmp/g_lo%dim_size(idim)
+
+       !Update the available processor count
+       nproc_tmp=nproc_dim(idim)
+    enddo
+
+    !Now print some stuff for debugging
+!     if (proc0) then
+!        write(6,'("Idim | Divides | Nproc_per_block | Size | Local")')
+!        do idim=5,1,-1
+!           write(6,'(I0,6(" "),L,9(" "),I0,16(" "),I0,8(" "),L)') idim,dim_divides(idim),nproc_dim(idim),g_lo%dim_size(idim),dim_local(idim)
+!        enddo
+!     endif
+
+    !Now use the dimension splitting to work out if the various subcommunicators are
+    !allowed.
+    if(.not.(dim_divides(g_lo%is_ord).and.dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
+       if(intmom_sub.and.proc0) write(error_unit(),'("Disabling intmom_sub -- is,it,ik split nicely ? ",3(L," "))') dim_divides(g_lo%is_ord),dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
+       intmom_sub=.false.
+    endif
+    if(.not.(dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
+       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- it,ik split nicely ? ",3(L," "))') dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
+       intspec_sub=.false.
+    endif
+
+    !Update various flags based on locality
+    !/Don't use subcommunicator and  gather for integrate_species if x and y are entirely local
+    if(.not.(intspec_sub.and.(.not.(g_lo%x_local.and.g_lo%y_local)))) then
+       if(proc0) write(error_unit(),'("Disabling intspec_sub as x and y are local")')
+       intspec_sub=.false.
+    endif
+
+    !<DD>Now work out which xy block we live in for velocity space comms
+    !Set sub communicators to mp_comm if we want to keep collective comms global.
+    !NOTE: We might want to consider using a communicator type so that we can attach
+    !some useful information to the communicators such as number of procs in comm,
+    !this procs rank in comm, if this comm is equivalent to mp_comm (i.e. if split
+    !doesn't actually split the global comm) etc.
+    !This could help reduce the amount of mp(i) calls placed throughout the code
+    !as things like the number of procs and the local rank are useful when using the sub
+    !comms but don't currently have a logical place to be stored and hence tend to be
+    !(re)calculated when needed.
+    if(intmom_sub) then
+       !This is for unique xy blocks
+       col=1
+       mycol=0
+       do it=1,ntheta0
+          do ik=1,naky
+             !This is inefficient but who cares
+             if(it_min.eq.it.and.ik_min.eq.ik) then
+                mycol=col
+                exit
+             endif
+             col=col+1
+          enddo
+       enddo
+
+       !<DD>Now split the global communicator
+       call split(mycol,g_lo%xyblock_comm)
+
+       !<DD>NOTE: A simple test that all blocks are equal would be:
+       !tmp=it_max*ik_max
+       !call max_allreduce(tmp,g_lo%xyblock_comm)
+       !if(tmp.ne.(it_max*ik_max)) then
+       !   print'(a)',"ERROR: In subcomm g_lo%xyblock_comm"
+       !   print'(a,I0,a)',"Proc with global rank ",iproc," doesn't have the same it*ik extent as other procs in its subcomm"
+       !   call mp_abort("Sub-comm creation error -- Consider changing the number of procs/number of xy gridpoints or setting intmom_sub=.false.")
+       !endif
+       !Similar tests can be done for all subcomms created here
+       !</DD>
+
+       !<DD>Now work out which xys block we live in for velocity space comms
+       !This is for unique xys blocks
+       col=1
+       mycol=0
+       do it=1,ntheta0
+          do ik=1,naky
+             do is=1,nspec
+                !This is inefficient but who cares
+                if(it_min.eq.it.and.ik_min.eq.ik.and.is_min.eq.is) then
+                   mycol=col
+                   exit
+                endif
+                col=col+1
+             enddo
+          enddo
+       enddo
+
+       !<DD>Now split the global communicator
+       call split(mycol,g_lo%xysblock_comm)
+
+       !This is for unique les blocks
+       col=1
+       mycol=0
+       do is=1,nspec
+          do il=1,nlambda
+             do ie=1,negrid
+                !This is inefficient but who cares
+                if(il_min.eq.il.and.ie_min.eq.ie.and.is_min.eq.is) then
+                   mycol=col
+                   exit
+                endif
+                col=col+1
+             enddo
+          enddo
+       enddo
+
+       !Now split
+       call split(mycol,g_lo%lesblock_comm)
+    else
+       g_lo%xyblock_comm=mp_comm
+       g_lo%xysblock_comm=mp_comm
+       g_lo%lesblock_comm=mp_comm
+    endif
+
+    !Now allocate and fill various arrays
+    if(intspec_sub.and.(.not.allocated(g_lo%les_kxky_range))) then
+       !->Kx-Ky range for procs in lesblock_comm sub comm
+       !Get number of procs in sub-comm
+       call nproc_comm(g_lo%lesblock_comm,nproc_subcomm)
+       !Get rank of proc in sub-comm
+       call rank_comm(g_lo%lesblock_comm,rank_subcomm)
+       !Allocate array | This will store the start and stop indices 
+       !for flattened kxky indices in velocity space independent (e.g. field)
+       !variables
+       allocate(g_lo%les_kxky_range(2,0:nproc_subcomm-1))
+       allocate(les_kxky_range(0:nproc_subcomm*2-1))
+       !Initialise as we do sum_allreduce later
+       !can remove if we use a gather
+       les_kxky_range=0
+       
+       !Now calculate our personal kxky range
+       it_min=it_idx(g_lo,g_lo%llim_proc)
+       it_max=it_idx(g_lo,g_lo%ulim_alloc)
+       ik_min=ik_idx(g_lo,g_lo%llim_proc)
+       ik_max=ik_idx(g_lo,g_lo%ulim_alloc)
+       
+       if(g_lo%x_before_y) then
+          les_kxky_range(rank_subcomm*2)=it_min-1+ntheta0*(ik_min-1)
+          tmp=les_kxky_range(rank_subcomm*2)
+          do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+             tmp=MAX(tmp,it_idx(g_lo,iglo)-1+ntheta0*(ik_idx(g_lo,iglo)-1))
+          enddo
+          les_kxky_range(rank_subcomm*2+1)=tmp
+       else
+          les_kxky_range(rank_subcomm*2)=ik_min-1+naky*(it_min-1)
+          tmp=les_kxky_range(rank_subcomm*2)
+          do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+             tmp=MAX(tmp,ik_idx(g_lo,iglo)-1+naky*(it_idx(g_lo,iglo)-1))
+          enddo
+          les_kxky_range(rank_subcomm*2+1)=tmp
+       endif
+       !Now gather values and store in g_lo, sum_allreduce would also work
+       !    call mpi_allgather(les_kxky_range(rank_subcomm*2:rank_subcomm*2+1),2,MPI_INTEGER,&
+       !         les_kxky_range,2,MPI_INTEGER,g_lo%lesblock_comm)
+       !Should really use gather but this is easier
+       call sum_allreduce_sub(les_kxky_range,g_lo%lesblock_comm)
+       do ip=0,nproc_subcomm-1
+          g_lo%les_kxky_range(:,ip)=les_kxky_range(ip*2:ip*2+1)
+       enddo
+       !Free memory
+       deallocate(les_kxky_range)
+    endif
+!</DD>
 
 !Note: gint_lo isn't used anywhere!
     gint_lo%iproc = iproc
