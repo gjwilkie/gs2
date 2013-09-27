@@ -1055,8 +1055,8 @@ contains
 
     !Update various flags based on locality
     !/Don't use subcommunicator and  gather for integrate_species if x and y are entirely local
-    if(.not.(intspec_sub.and.(.not.(g_lo%x_local.and.g_lo%y_local)))) then
-       if(proc0) write(error_unit(),'("Disabling intspec_sub as x and y are local")')
+    if((g_lo%x_local.and.g_lo%y_local)) then
+       if(proc0.and.intspec_sub) write(error_unit(),'("Disabling intspec_sub as x and y are local")')
        intspec_sub=.false.
     endif
 
@@ -1070,7 +1070,7 @@ contains
     !as things like the number of procs and the local rank are useful when using the sub
     !comms but don't currently have a logical place to be stored and hence tend to be
     !(re)calculated when needed.
-    if(intmom_sub) then
+    if(intspec_sub) then
        !This is for unique xy blocks
        col=1
        mycol=0
@@ -1087,6 +1087,30 @@ contains
 
        !<DD>Now split the global communicator
        call split(mycol,g_lo%xyblock_comm)
+
+       !This is for unique les blocks
+       col=1
+       mycol=0
+       do is=1,nspec
+          do il=1,nlambda
+             do ie=1,negrid
+                !This is inefficient but who cares
+                if(il_min.eq.il.and.ie_min.eq.ie.and.is_min.eq.is) then
+                   mycol=col
+                   exit
+                endif
+                col=col+1
+             enddo
+          enddo
+       enddo
+    else
+       g_lo%xyblock_comm=mp_comm
+       g_lo%lesblock_comm=mp_comm
+    endif
+
+    if(intmom_sub)then
+       !Now split
+       call split(mycol,g_lo%lesblock_comm)
 
        !<DD>NOTE: A simple test that all blocks are equal would be:
        !tmp=it_max*ik_max
@@ -1118,29 +1142,8 @@ contains
 
        !<DD>Now split the global communicator
        call split(mycol,g_lo%xysblock_comm)
-
-       !This is for unique les blocks
-       col=1
-       mycol=0
-       do is=1,nspec
-          do il=1,nlambda
-             do ie=1,negrid
-                !This is inefficient but who cares
-                if(il_min.eq.il.and.ie_min.eq.ie.and.is_min.eq.is) then
-                   mycol=col
-                   exit
-                endif
-                col=col+1
-             enddo
-          enddo
-       enddo
-
-       !Now split
-       call split(mycol,g_lo%lesblock_comm)
     else
-       g_lo%xyblock_comm=mp_comm
        g_lo%xysblock_comm=mp_comm
-       g_lo%lesblock_comm=mp_comm
     endif
 
     !Now allocate and fill various arrays
