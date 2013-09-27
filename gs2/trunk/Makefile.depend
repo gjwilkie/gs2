@@ -84,6 +84,7 @@ ffttester_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -94,6 +95,7 @@ ffttester_mod = \
 	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 sorting.o \
 	 species.o \
 	 spfunc.o \
 	 spl.o \
@@ -144,6 +146,7 @@ gs2_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -154,6 +157,7 @@ gs2_mod = \
 	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 sorting.o \
 	 species.o \
 	 spfunc.o \
 	 spl.o \
@@ -207,6 +211,7 @@ ingen_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -216,6 +221,7 @@ ingen_mod = \
 	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 sorting.o \
 	 species.o \
 	 spfunc.o \
 	 spl.o \
@@ -271,6 +277,7 @@ collisions.o: \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 kt_grids.o \
+	 layouts_type.o \
 	 le_grids.o \
 	 mp.o \
 	 prof.o \
@@ -379,8 +386,10 @@ file_utils.o: \
 functional_tests.o: \
 	 gs2_diagnostics.o \
 	 gs2_main.o \
+	 job_manage.o \
 	 kt_grids.o \
 	 mp.o \
+	 run_parameters.o \
 	 unit_tests.o 
 gauss_quad.o: \
 	 constants.o \
@@ -475,7 +484,8 @@ gs2_io_hdf5.o: \
 gs2_layouts.o: \
 	 file_utils.o \
 	 layouts_type.o \
-	 mp.o 
+	 mp.o \
+	 redistribute.o 
 gs2_main.o: \
 	 antenna.o \
 	 collisions.o \
@@ -550,6 +560,7 @@ gs2_transforms.o: \
 	 mp.o \
 	 prof.o \
 	 redistribute.o \
+	 sorting.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
 	 constants.o \
@@ -640,6 +651,7 @@ le_grids.o: \
 	 layouts_type.o \
 	 mp.o \
 	 redistribute.o \
+	 sorting.o \
 	 species.o \
 	 theta_grid.o \
 	 unit_tests.o 
@@ -660,6 +672,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -698,7 +711,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -718,6 +732,7 @@ rungridgen.o: \
 	 file_utils.o \
 	 gridgen4mod.o \
 	 spl.o 
+sorting.o: 
 species.o: \
 	 file_utils.o \
 	 mp.o \
