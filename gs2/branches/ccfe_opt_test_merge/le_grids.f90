@@ -87,6 +87,7 @@ module le_grids
   public :: integrate_kysum, integrate_volume
   public :: get_flux_vs_theta_vs_vpa
   public :: lambda_map, energy_map, g2le, init_map
+  public :: integrate_species_sub !<DD>
 
   !> Unit tests
   public :: le_grids_unit_test_init_le_grids
@@ -627,7 +628,7 @@ contains
        
   end subroutine get_intrvl_weights
 
-  subroutine integrate_species (g, weights, total)
+  subroutine integrate_species_original (g, weights, total)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
@@ -656,9 +657,200 @@ contains
        total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
     end do
 
-!Reduce sum across all procs to make integral over all velocity space and species
+    !Reduce sum across all procs to make integral over all velocity space and species
     call sum_allreduce (total) 
+  end subroutine integrate_species_original
+
+
+  !<DD>Integrate species on xy subcommunicator - NO GATHER
+  subroutine integrate_species_sub (g, weights, total)
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo, intspec_sub
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
+    use mp, only: sum_allreduce_sub, sum_allreduce
+
+    implicit none
+
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (-ntgrid:,:,:), intent (out) :: total
+    complex, dimension(:,:,:),allocatable :: total_small
+    integer :: is, il, ie, ik, it, iglo
+
+    !Allocate array and ensure is zero
+    if(intspec_sub)then
+       !       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max)=0.
+       allocate(total_small(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max))
+    else
+       !total=0.
+       allocate(total_small(-ntgrid:ntgrid,g_lo%ntheta0,g_lo%naky))       
+    endif
+    total_small=0.
+
+    !Performed integral (weighted sum) over local velocity space and species
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       !Convert from iglo to the separate indices
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+
+       !Sum up weighted g
+       total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+    end do
+
+    !Reduce sum across all procs in sub communicator to make integral over all velocity space and species
+    if(intspec_sub)then
+       call sum_allreduce_sub(total_small,g_lo%xyblock_comm)
+    else
+       call sum_allreduce(total_small)
+    endif
+
+    !Copy data into output array
+    !Note: When not using sub-comms this is an added expense which will mean
+    !this routine is more expensive than original version just using total.
+    !In practice we should have two integrate_moment_c34 routines, one for sub-comms
+    !and one for world-comms.
+    if(intspec_sub)then
+       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max)=total_small
+    else
+       total=total_small
+    endif
+
+    !Deallocate
+    deallocate(total_small)
+
+  end subroutine integrate_species_sub
+
+  !<DD>integrate_species on subcommunicator with gather
+  !Falls back to original method if not using xyblock sub comm
+  subroutine integrate_species (g, weights, total,nogath)
+    use theta_grid, only: ntgrid
+    use kt_grids, only: ntheta0, naky
+    use gs2_layouts, only: g_lo, intspec_sub
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
+    use mp, only: sum_allreduce_sub, allgatherv
+    use mp, only: nproc_comm,rank_comm
+    implicit none
+
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (0:,:,:), intent (out) :: total
+    logical, intent(in), optional:: nogath
+    complex, dimension (:), allocatable :: total_flat
+    complex, dimension (:,:,:), allocatable :: total_transp
+    integer :: nl,nr, ik, it, iglo, ip, ierror,ie,is,il, ig
+    integer, dimension(:),allocatable,save :: recvcnts,displs
+    integer, save :: sz, local_rank
+
+    !If not using sub-communicators then just use original method
+    !Note that if x and y are entirely local then we force intspec_sub=.false.
+    if(.not.intspec_sub) then
+       call integrate_species_original(g,weights,total)
+       return
+    endif
+
+    !If we don't want to gather then use integrate_species_sub
+    if(present(nogath))then
+       print*,"using nogath method"
+       if(nogath)then
+          call integrate_species_sub(g,weights,total)
+          return
+       endif
+    endif
+
+    !->First intialise gather vars
+    !Note: We only do this on the first call
+    if(.not.allocated(recvcnts)) then
+       !Get subcomm size
+       call nproc_comm(g_lo%lesblock_comm,sz)
+
+       !Get local rank
+       call rank_comm(g_lo%lesblock_comm,local_rank)
+
+       !Create displacement and receive count arrays
+       allocate(recvcnts(sz),displs(sz))
+
+       do ip=0,sz-1
+          displs(ip+1)=MIN(g_lo%les_kxky_range(1,ip)*(2*ntgrid+1),ntheta0*naky*(2*ntgrid+1)-1)
+          recvcnts(ip+1)=MAX((g_lo%les_kxky_range(2,ip)-g_lo%les_kxky_range(1,ip)+1)*(2*ntgrid+1),0)
+       enddo
+    endif
+
+    !Allocate array and ensure is zero
+    allocate(total_flat(g_lo%les_kxky_range(1,local_rank)*&
+         (2*ntgrid+1):(1+g_lo%les_kxky_range(2,local_rank))*(2*ntgrid+1)))
+    total_flat=0.
+
+    !Performed integral (weighted sum) over local velocity space and species
+    if(g_lo%x_before_y) then
+
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          !Convert from iglo to the separate indices
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          
+          !Calculate extent
+          nl=(2*ntgrid+1)*(it-1+ntheta0*(ik-1))
+          nr=nl+(2*ntgrid)
+          
+          !Sum up weighted g
+          total_flat(nl:nr) = total_flat(nl:nr) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+       end do
+    else
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          !Convert from iglo to the separate indices
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          
+          !Calculate extent
+          nl=(2*ntgrid+1)*(ik-1+naky*(it-1))
+          nr=nl+(2*ntgrid)
+
+          !Sum up weighted g
+          total_flat(nl:nr) = total_flat(nl:nr) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+       end do
+    endif
+
+    !Reduce sum across all procs in sub communicator to make integral over all velocity space and species
+    call sum_allreduce_sub(total_flat,g_lo%xyblock_comm)
+
+    !Now gather missing xy data from other procs (only talk to procs
+    !with the same piece of les)
+!   print*,"lesblock_comm = ",g_lo%lesblock_comm
+!    print*,"xyblock_comm = ",g_lo%xyblock_comm
+
+    if(g_lo%x_before_y)then
+       call allgatherv(total_flat,recvcnts(local_rank+1),total,recvcnts,displs,g_lo%lesblock_comm)
+    else
+       allocate(total_transp(0:2*ntgrid,naky,ntheta0))
+       call allgatherv(total_flat,recvcnts(local_rank+1),total_transp,recvcnts,displs,g_lo%lesblock_comm)
+       do ig=0,2*ntgrid
+          total(ig,:,:)=transpose(total_transp(ig,:,:))
+       enddo
+       !This is pretty bad for memory access so can do this all at once
+       !using reshape with a specified order :
+       !total=RESHAPE(total_transp,(/2*ntgrid+1,ntheta0,naky/),ORDER=(/1,3,2/))
+       !BUT timings in a simple test code suggest loop+transpose can be faster.
+       !In the case where ntgrid is large and ntheta0 is small reshape can win
+       !whilst in the case where ntgrid is small and ntheta0 is large transpose wins.
+       !When both are large reshape seems to win.
+       !In conclusion it's not clear which method is better but if we assume we care most
+       !about nonlinear simulations then small ntgrid with large ntheta0 is most likely so
+       !pick transpose method
+       deallocate(total_transp)
+    endif
+
+    deallocate(total_flat)
   end subroutine integrate_species
+!</DD>
 
   subroutine integrate_species_e (lo, g, weights, total)
 !Integrate over velocity space whilst in e_lo_LAYOUT. 
@@ -1047,20 +1239,28 @@ contains
 ! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
 ! is over all velocity space
 ! TT>
-    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx
+    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx,intmom_sub
 ! <TT
     use theta_grid, only: ntgrid
-    use mp, only: sum_reduce, proc0, sum_allreduce, nproc
+    use mp, only: sum_reduce, proc0, sum_allreduce_sub, nproc, sum_allreduce
 
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
+    complex, dimension(:,:,:,:),allocatable :: total_small
     integer, optional, intent(in) :: all
     integer :: is, il, ie, ik, it, iglo
 
-    !Ensure array is zero
-    total = 0.
+    !Allocate array and ensure is zero
+    if(intmom_sub.and.(present(all)))then !If we're using reduce then we don't want to make array smaller
+!       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=0.
+       allocate(total_small(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max))
+    else
+!       total=0.
+       allocate(total_small(-ntgrid:ntgrid,g_lo%ntheta0,g_lo%naky,g_lo%nspec))       
+    endif
+    total_small=0.
 
     !Integrate over local velocity space
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -1071,7 +1271,7 @@ contains
        il = il_idx(g_lo,iglo)
 
        !Perform local sum
-       total(:, it, ik, is) = total(:, it, ik, is) + &
+       total_small(:, it, ik, is) = total_small(:, it, ik, is) + &
             w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
 
     end do
@@ -1080,13 +1280,29 @@ contains
     !we run with 1 proc MPI calls should still work ok
     if (nproc > 1) then     
        if (present(all)) then
-          !Complete integral over distributed velocity space and ensure all procs know the result
-          call sum_allreduce (total)
+          !Complete integral over distributed velocity space and ensure all procs in sub communicator know the result
+          !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
+          !all procs in this case.
+          call sum_allreduce_sub (total_small,g_lo%xysblock_comm)
        else
           !Complete integral over distributed velocity space but only proc0 knows the answer
-          call sum_reduce (total, 0)
+          call sum_reduce (total_small, 0)
        end if
     end if
+
+    !Copy data into output array
+    !Note: When not using sub-comms this is an added expense which will mean
+    !this routine is more expensive than original version just using total.
+    !In practice we should have two integrate_moment_c34 routines, one for sub-comms
+    !and one for world-comms.
+    if(intmom_sub.and.(present(all)))then
+       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=total_small
+    else
+       total=total_small
+    endif
+
+    !Deallocate
+    deallocate(total_small)
 
   end subroutine integrate_moment_c34
 
