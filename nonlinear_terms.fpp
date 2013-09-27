@@ -450,7 +450,8 @@ contains
     if (fbpar > zero) call load_ky_bpar
     
     ! more generally, there should probably be a factor of anon...
-    
+    !This is basically doing g_adjust to form i*ky*g_wesson (note the factor anon is missing)
+    !/Gives Fourier components of derivative of g_wesson in y direction
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -467,6 +468,9 @@ contains
        call transform2 (g1, gb)
     end if
     
+    !It should be possible to write the following with vector notation
+    !To find max_vel we'd then use MAXVAL rather than MAX
+    !Calculate (d Chi /dx).(d g_wesson/dy)
     if (accelerated) then
        max_vel = 0.
        do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
@@ -515,7 +519,8 @@ contains
     if (fbpar > zero) call load_kx_bpar
     
     ! more generally, there should probably be a factor of anon...
-    
+    !This is basically doing g_adjust to form i*kx*g_wesson (note the factor anon is missing)
+    !/Gives Fourier components of derivative of g_wesson in x direction
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -531,7 +536,10 @@ contains
     else
        call transform2 (g1, gb)
     end if
-    
+
+    !It should be possible to write the following with vector notation
+    !To find max_vel we'd then use MAXVAL rather than MAX   
+    !Calculate (d Chi /dy).(d g_wesson/dx) and subtract from (d Chi /dx).(d g_wesson/dy)
     if (accelerated) then
        do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
           do j = 1, 2
