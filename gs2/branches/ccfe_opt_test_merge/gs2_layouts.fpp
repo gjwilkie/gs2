@@ -1103,15 +1103,16 @@ contains
              enddo
           enddo
        enddo
+
+       !Now split
+       call split(mycol,g_lo%lesblock_comm)
+
     else
        g_lo%xyblock_comm=mp_comm
        g_lo%lesblock_comm=mp_comm
     endif
 
     if(intmom_sub)then
-       !Now split
-       call split(mycol,g_lo%lesblock_comm)
-
        !<DD>NOTE: A simple test that all blocks are equal would be:
        !tmp=it_max*ik_max
        !call max_allreduce(tmp,g_lo%xyblock_comm)
