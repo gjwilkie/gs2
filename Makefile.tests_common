@@ -4,7 +4,8 @@
 
 F90FLAGS += -I ../../
 LDFLAGS += -I ../../
-CLAGS += -I ../../
+CFLAGS += -I ../../
+CPPFLAGS += -I ../../
 
 .f90.o: 
 	$(FC) $(F90FLAGS) -c $<
@@ -16,3 +17,7 @@ CLAGS += -I ../../
 
 clean: 
 	$(CLEANCOMMAND)
+
+
+RUNCOMMAND= $(TESTCOMMAND) $(1) $(BLUEGENESTUFF) $(2)
+

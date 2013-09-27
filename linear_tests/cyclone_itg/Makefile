@@ -4,7 +4,7 @@ sinclude ../Makefile.tests_common
 CLEANCOMMAND+= cyclone_itg_low_res
 
 all: cyclone_itg_low_res 
-	$(TESTCOMMAND) cyclone_itg_low_res cyclone_itg_low_res.in
+	$(call RUNCOMMAND,cyclone_itg_low_res,cyclone_itg_low_res.in)
 	#mpirun -np $(NTESTPROCS) cyclone_itg_high_res cyclone_itg_high_res.in
 
 cyclone_itg_low_res.o:  ${TEST_MODS} 
