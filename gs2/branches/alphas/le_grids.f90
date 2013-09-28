@@ -43,7 +43,6 @@ contains
 
     use general_f0, only: calculate_f0_arrays, f0_values
     use constants, only: pi => dpi
-    use general_f0, only: energy_0_general_f0 => energy_0
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
     use species, only: nspec, spec, alpha_species
 
@@ -54,7 +53,7 @@ contains
     integer, intent (in) :: nesub
     real, dimension(:,:), intent (out) :: epts
     real, dimension(:,:), intent (out) :: wgts
-    real :: energy_0, vcut_local
+    real :: vcut_local
     integer :: is,ie
 
     call init_egrid (negrid)
@@ -63,19 +62,12 @@ contains
 
       if (spec(is)%type .eq. alpha_species) then
         vcut_local = 1.0
-        energy_0 = energy_0_general_f0
-        !energy_0 = 0.2
       else
         vcut_local = vcut
-        energy_0 = 0.0
       end if
       
-      !write (*,*) 'For species ', is, ' energy_0 is ', energy_0
-      !write (*,*) 'nesub is ', nesub
-
-    
       ! get grid points in v up to vcut (epts is not E yet)
-      call get_legendre_grids_from_cheb (energy_0**0.5, vcut_local, epts(:nesub,is), wgts(:nesub, is))
+      call get_legendre_grids_from_cheb (0.0, vcut_local, epts(:nesub,is), wgts(:nesub, is))
 
       ! change from v to E
       epts(:nesub,is) = epts(:nesub,is)**2
@@ -132,7 +124,6 @@ contains
 
     use general_f0, only: calculate_f0_arrays, f0_values
     use constants, only: pi => dpi
-    use general_f0, only: energy_0_general_f0 => energy_0
     use general_quad, only: get_general_weights_from_grid
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
     use species, only: nspec, spec, alpha_species
@@ -144,7 +135,7 @@ contains
     integer, intent (in) :: nesub
     real, dimension(:,:), intent (out) :: epts
     real, dimension(:,:), intent (out) :: wgts
-    real :: energy_0, vcut_local
+    real :: vcut_local
     real, dimension(1:ne_int):: vpts_temp, wgts_temp, F0_temp
     integer :: is
 
@@ -154,18 +145,15 @@ contains
 
       if (spec(is)%type .eq. alpha_species) then
         vcut_local = 1.0
-        energy_0 = energy_0_general_f0
-        !energy_0 = 0.2
       else
         vcut_local = vcut
-        energy_0 = 0.0
       end if
 
-      call get_legendre_grids_from_cheb (energy_0**0.5, vcut_local, vpts_temp(1:ne_int), wgts_temp(1:ne_int))
+      call get_legendre_grids_from_cheb (0.0, vcut_local, vpts_temp(1:ne_int), wgts_temp(1:ne_int))
 
       F0_temp(1:ne_int) = exp(-vpts_temp(1:ne_int)**2) 
 
-      call get_general_weights_from_grid (ne_int, vpts_temp, wgts_temp, F0_temp, energy_0**0.5, vcut_local, &
+      call get_general_weights_from_grid (ne_int, vpts_temp, wgts_temp, F0_temp, 0.0, vcut_local, &
                                           nesub,epts(1:nesub,is),wgts(1:nesub,is))
 
 !      ! get grid points in v up to vcut (epts is not E yet)
