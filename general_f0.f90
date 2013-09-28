@@ -26,6 +26,8 @@ module general_f0
   !! and all other arrays on those grids
   public :: calculate_f0_arrays
 
+  !> Public function that returns the value of f0 for any arbitrary argument
+  public :: evaluate_f0
 
   !> Initialises the module, chiefly reading the parameters.
   !! NB does not allocate arrays, as negrid must be provided
@@ -89,13 +91,14 @@ module general_f0
   !! this function is called to put them on all procs
   public :: broadcast_arrays
 
-  !> Point below which F_alpha is 0
-  public :: energy_0
+  !> F0alpha(v=0). This is the consistency condition between fast
+  !! alphas and ash. 
+  public :: Halpha_0
 
   !> Unit tests
   public :: general_f0_unit_test_init_general_f0
   public :: general_f0_unit_test_calculate_f0_arrays
-
+ 
   private
 
   integer :: alpha_f0_switch, &
@@ -126,7 +129,7 @@ module general_f0
 
   real :: vcut
   real :: energy_min
-  real :: energy_0
+  real :: Halpha_0
 
   real, dimension(:,:), allocatable :: egrid
   real, dimension(:,:), allocatable :: weights
@@ -231,7 +234,7 @@ contains
             rescale_f0,&
             main_ion_species,&
             energy_min,&
-            energy_0,&
+            Halpha_0,&
             print_egrid,&
             vcrit
 
@@ -244,7 +247,7 @@ contains
        beam_f0 = 'maxwellian'
        main_ion_species = -1 
        energy_min = 0.1
-       energy_0 = 0.08
+       Halpha_0 = 1.0             !< Need a better default estimate (GW)
        vcrit = -1.0
 
        in_file = input_unit_exist ("general_f0_parameters", exist)
@@ -264,7 +267,7 @@ contains
     call broadcast (beam_f0_switch)
     call broadcast (main_ion_species)
     call broadcast (energy_min)
-    call broadcast (energy_0)
+    call broadcast (Halpha_0)
     call broadcast (vcrit)
 
   end subroutine read_parameters
@@ -493,7 +496,7 @@ contains
     !if (main_ion_species < 1)  call mp_abort(&
       !'main_ion_species < 1: please set main_ion_species in general_f0_parameters') 
 
-    parameters%energy_0 = energy_0
+    parameters%Halpha_0 = Halpha_0
     parameters%source_prim = spec(is)%sprim
     
     parameters%alpha_density = spec(is)%dens
@@ -794,11 +797,11 @@ contains
   subroutine calculate_f0_arrays_analytic(is)
     use constants, only: pi
     use species, only: spec, nspec
-    use mp, only: mp_abort
+    use mp, only: mp_abort, proc0
     use species, only: ion_species, electron_species, alpha_species
     implicit none
     integer,intent(in):: is
-    real:: A, Ti, Ealpha, vstar, v, df0dv, df0dE, B
+    real:: A, Ti, Ealpha, vstar, v, df0dv, df0dE, B, test
     integer:: ie, i, electron_spec
 
     if (vcrit .LE. 0.0) then
@@ -811,22 +814,24 @@ contains
       if (main_ion_species < 1 .and. spec(i)%type .eq. ion_species) &
         main_ion_species = i
     end do
-
+ 
     Ti = spec(main_ion_species)%temp
     Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
 
-    vstar = sqrt(Ealpha)
-!    vstar = 1.0
-!    Ealpha = 1.0
+    vstar = 1.0
     
     A = (4.0*pi/3.0)*log( (vcrit**3 + vstar**3)/(vcrit**3))
     A = A + (pi*Ti/Ealpha)**1.5*exp(Ealpha*vstar**2/Ti)*(1.0-erf(sqrt(Ealpha/Ti)*vstar))/(vcrit**3 + vstar**3)
     A = A + (2.0*pi*vstar*Ti/Ealpha)/(vcrit**3 + vstar**3)
     A = 1.0/A
 
-    B = A*exp(Ealpha*vstar**2/Ti)/(vcrit**3 + vstar**3)
-
     do ie = 1,negrid 
+!       if (egrid(ie,is) .GT. 1.0) then 
+!          weights(ie,is) = weights(ie,is) /(exp(egrid(ie,is))*sqrt(egrid(ie,is)))
+!          egrid(ie,is) = 1.0 + (Ti/Ealpha)*(egrid(ie,is)-1.0)
+!          weights(ie,is) = weights(ie,is) *(exp(egrid(ie,is))*sqrt(egrid(ie,is)))
+!       end if
+
        v = sqrt(egrid(ie,is))
        if (v .LE. vstar) then
           f0_values(ie,is) = A/(vcrit**3 + v**3)
@@ -836,9 +841,8 @@ contains
           gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
           zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
        else
-          f0_values(ie,is) = B*exp(-Ealpha*v**2/Ti)
-          df0dE = -B*Ealpha*f0_values(ie,is)/Ti
-          generalised_temperature(ie,is) = -spec(is)%temp*f0_values(ie,is)/df0dE
+          f0_values(ie,is) = A*exp(-Ealpha*(v**2-vstar**2)/Ti)/(vcrit**3 + vstar**3)
+          generalised_temperature(ie,is) = Ti/Ealpha
           gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
           zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
        end if
@@ -846,8 +850,98 @@ contains
 
     f0prim(:,is) = - spec(is)%fprim 
 
+!if (proc0) open(unit=9,file="f0out",status="replace")
+!if (proc0) write(9,*) negrid, ie, sqrt(egrid(ie,is)),weights(ie,is), f0_values(ie,is), generalised_temperature(ie,is)
+!    end do
+!close(9)
+
     weights(:,is) = weights(:,is) * f0_values(:,is)
 
-  end subroutine
+  end subroutine calculate_f0_arrays_analytic
+
+  real function evaluate_f0(v,is)
+    use species, only: ion_species, electron_species, alpha_species, beam_species, spec
+    use mp, only: mp_abort
+    implicit none
+    real,intent(in):: v
+    integer, intent(in)::is
+    real:: rslt
+
+
+    select case (spec(is)%type)
+      case (ion_species)
+         rslt = evaluate_f0_maxwellian(v)
+      case (electron_species)
+         rslt = evaluate_f0_maxwellian(v)
+      case (alpha_species)
+        select case (alpha_f0_switch)
+        case (alpha_f0_maxwellian)
+         rslt = evaluate_f0_maxwellian(v)
+        case (alpha_f0_analytic)
+         rslt = evaluate_f0_slowdown(v,is)
+        case (alpha_f0_split)
+          write(*,*) "ERROR in evaluate_f0: Direct evaluation of f0 not valid for 'split' option" 
+          call mp_abort('')
+        case (alpha_f0_external)
+          write(*,*) "ERROR in evaluate_f0: Direct evaluation of f0 not valid for 'external' option" 
+          call mp_abort('')
+        end select
+      case (beam_species)
+        select case (beam_f0_switch)
+        case (beam_f0_maxwellian)
+         rslt = evaluate_f0_maxwellian(v)
+        end select
+      end select
+   
+    evaluate_f0 = rslt
+    return
+  end function evaluate_f0
+
+  real function evaluate_f0_maxwellian(v)
+    use constants, only:pi
+    implicit none
+    real,intent(in):: v
+  
+    evaluate_f0_maxwellian = exp(-v**2)/pi**1.5
+ 
+  end function evaluate_f0_maxwellian
+
+  real function evaluate_f0_slowdown(v,is)
+    use constants, only:pi
+    use species, only: spec, nspec
+    implicit none
+    real,intent(in):: v
+    integer,intent(in):: is
+    real:: Ti, Ealpha, vstar, rslt
+    real,save:: A
+    logical:: first = .true.
+ 
+    Ti = spec(main_ion_species)%temp
+    Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
+
+    vstar = 1.0
+    
+    if (first) then
+       A = (4.0*pi/3.0)*log( (vcrit**3 + vstar**3)/(vcrit**3))
+       A = A + (pi*Ti/Ealpha)**1.5*exp(Ealpha*vstar**2/Ti)*(1.0-erf(sqrt(Ealpha/Ti)*vstar))/(vcrit**3 + vstar**3)
+       A = A + (2.0*pi*vstar*Ti/Ealpha)/(vcrit**3 + vstar**3)
+       A = 1.0/A
+       first = .false.
+    end if
+
+    if (v .LT. 1.0) then
+       rslt =  A/(vcrit**3 + v**3)
+    else
+       rslt = A*exp(-Ealpha*(v**2-1.0)/Ti)/(vcrit**3 + vstar**3)
+    end if
+
+
+   
+    evaluate_f0_slowdown = rslt 
+
+    return 
+  end function evaluate_f0_slowdown
+
+
 
 end module general_f0

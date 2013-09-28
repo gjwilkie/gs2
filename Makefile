@@ -65,7 +65,7 @@ GK_PROJECT ?= gs2
 # Be careful that DEBUG=off means DEBUG=on.
 #
 # turns on debug mode (bin)
-DEBUG ?=on
+DEBUG ?=
 # turns on scalasca instrumentation mode (bin)
 SCAL ?=
 # turns on test mode (bin)
@@ -107,7 +107,7 @@ LOWFLOW ?=
 # Use le_layout for collision operator
 USE_LE_LAYOUT ?=
 # Use LAPACK library for general quadrature
-USE_LAPACK ?=
+USE_LAPACK ?=on
 
 # Number of process to use for unit tests
 ifdef NPROCS
@@ -161,8 +161,8 @@ MPI_INC	?=
 MPI_LIB ?=
 FFT_INC ?=
 FFT_LIB ?=
-NETCDF_INC ?=
-NETCDF_LIB ?=
+NETCDF_INC ?= 
+NETCDF_LIB ?= -L/usr/lib -llapack
 HDF5_INC ?=
 HDF5_LIB ?=
 IPM_LIB ?=
@@ -318,11 +318,11 @@ ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
-LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
+LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) $(LAPACK_LIB) \
 		$(IPM_LIB) $(NAG_LIB)
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
+	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) $(LAPACK_INC)
 CFLAGS += $(COPTFLAGS)
 
 DATE=$(shell date +%y%m%d)

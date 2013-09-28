@@ -37,7 +37,7 @@ module split_falpha
   public :: split_falpha_parameters_type
   type split_falpha_parameters_type
     integer :: alpha_is
-    real :: energy_0
+    real :: Halpha_0
     real :: source
     real :: source_prim
     real :: alpha_mass
@@ -108,13 +108,6 @@ contains
     do ie = 1,parameters%negrid
       if (.not. mod(ie, nproc) .eq. iproc) cycle
 
-      if (egrid(ie,is) .lt. parameters%energy_0) then 
-        write (*,*) 'egrid(ie,is)', egrid(ie,is), 'energy_0',&
-          parameters%energy_0
-        call print_with_stars('', &
-          'You are attempting to calculate F_alpha for energy < energy_0')
-        call mp_abort('')
-      end if 
       !write (*,*) 'iproc ', iproc, ' calculating ', ie, ' energy ',  egrid(ie, is)
       ! Initialise arrays to test for convergence 
       f0 = -1.0
@@ -125,7 +118,7 @@ contains
       do while (.not. converged)
         !write (*,*) 'resolution,', resolution
         f0(1)      = f0(2)
-        f0(2)      = falpha(parameters, egrid(ie, is), parameters%energy_0, resolution)
+        f0(2)      = falpha(parameters, egrid(ie, is), parameters%Halpha_0, resolution)
           converged  = is_converged(f0)
         !end if
         resolution = resolution * 2
@@ -146,7 +139,7 @@ contains
         gentemp(1) = gentemp(2)
         f0pr(1)    = f0pr(2) 
 
-        f0(2)      = falpha(parameters, egrid(ie, is), parameters%energy_0, resolution)
+        f0(2)      = falpha(parameters, egrid(ie, is), parameters%Halpha_0, resolution)
 !        gentemp(2) = dfalpha_denergy(parameters, & 
 !                        egrid(ie, is), f0(2), resolution)
 !
@@ -332,7 +325,7 @@ contains
     write (*,*) 'Good resolution', good_resolution
     alpha_density = simpson(parameters, &
                        falpha_integral_function, &
-                       parameters%energy_0**0.5,&
+                       0.0,&
                        1.5,& ! I.e. 2 x the injection velocity
                        0.0,& ! This is a dummy in this case
                        good_resolution) * 4.0 * pi  
@@ -365,7 +358,7 @@ contains
     real :: falpha_integral_function
     falpha_integral_function = falpha(parameters, &
                                       energy_dummy_var, &
-                                      parameters%energy_0, &
+                                      parameters%Halpha_0, &
                                       good_resolution) * &
                                falpha_exponential(parameters, energy_dummy_var)*&
                                energy_dummy_var
@@ -385,12 +378,12 @@ contains
   !! exp(-E_alpha * energy/T_i) part, as this can be very small
   !! for some energies, and can mess up the calculation of the 
   !! gradients
-  function falpha(parameters, energy, energy_0, resolution)
+  function falpha(parameters, energy, Halpha_0, resolution)
     implicit none
     type(split_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, intent(in) :: energy
-    real, intent(in) :: energy_0
+    real, intent(in) :: Halpha_0
     real :: falpha
     real :: integral
     real :: dv
@@ -398,25 +391,18 @@ contains
     real :: energy_top
     integer :: j
 
-    energy_top = min(energy, 1.0)
-
-    ! Let's use the composite Simpson's rule (see Wikipedia!). 
-    ! wrt the Wikipedia article
-    ! resolution = n
-    ! b = energy_top**0.5
-    ! a = energy_0**0.5
-    ! x_j = v_j = a + j*h = energy_0**).5 + j*dv
-    ! dv = h = (b-a)/n = (energy_top**0.5-energy_0**0.5)/n
-    ! NB the integral is wrt v, not energy
+!    energy_top = min(energy, 1.0)
+    energy_top = energy
 
     integral = simpson(parameters, &
                        falpha_integrand, &
-                       energy_0**0.5,&
+                       0.0,&
                        energy_top**0.5,&
                        0.0,& ! Get rid of exponential for better numerics
                        resolution)
 
-    falpha = integral * parameters%source / 4.0 / 3.14159265358979
+    falpha = integral * parameters%source / 2.0 / 3.14159265358979 &
+            + Halpha_0*exp(-energy*parameters%alpha_injection_energy/parameters%ion_temp)
 
 
 
@@ -425,7 +411,7 @@ contains
 
   function split_falpha_unit_test_falpha(parameters, &
                                               energy, &
-                                              energy_0, &
+                                              Halpha_0, &
                                               resolution, &
                                               rslt, &
                                               err)
@@ -433,13 +419,13 @@ contains
     type(split_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, intent(in) :: energy
-    real, intent(in) :: energy_0
+    real, intent(in) :: Halpha_0
     real, intent(in) :: rslt
     real, intent(in) :: err
     logical :: split_falpha_unit_test_falpha
 
     split_falpha_unit_test_falpha = &
-      agrees_with(falpha(parameters, energy, energy_0, resolution) * &
+      agrees_with(falpha(parameters, energy, Halpha_0, resolution) * &
                   falpha_exponential(parameters, energy), rslt, err)
 
   end function split_falpha_unit_test_falpha
@@ -452,8 +438,18 @@ contains
     real, intent(in) :: energy
     real, intent(in) :: energy_dummy_var
     real :: falpha_integrand
+    real :: extra_fac, heaviside, arg
 
-    falpha_integrand = 2.0 / &
+    if (energy .GT. 1.0) then
+       heaviside = 0.0
+    else
+       heaviside = 1.0
+    end if
+
+    arg = sqrt(parameters%alpha_injection_energy*energy_dummy_var/parameters%ion_temp)
+    extra_fac = 2.0*energy_dummy_var*chandrasekhar(arg) - 1.0 + heaviside
+
+    falpha_integrand = 2.0 * extra_fac / &
                        (nu_parallel(parameters, energy_dummy_var) * &
                          energy_dummy_var**2.0) * &
                        exp(parameters%alpha_injection_energy * &
@@ -501,20 +497,12 @@ contains
     real :: energy_top
     integer :: j
 
-    energy_top = min(energy, 1.0)
-
-    ! Let's use the composite Simpson's rule (see Wikipedia!). 
-    ! wrt the Wikipedia article
-    ! resolution = n
-    ! b = energy_top**0.5
-    ! a = energy_0**0.5
-    ! x_j = v_j = a + j*h = energy_0**).5 + j*dv
-    ! dv = h = (b-a)/n = (energy_top**0.5-energy_0**0.5)/n
-    ! NB the integral is wrt v, not energy
+!    energy_top = min(energy, 1.0)
+    energy_top = energy
 
     integral = simpson(parameters, &
                        dfalpha_dti_integrand, &
-                       parameters%energy_0**0.5,&
+                       0.0,&
                        energy_top**0.5,&
                        0.0,& ! Get rid of exp factor as it cancels with falpha
                        resolution) / falph !  (&
@@ -554,7 +542,7 @@ contains
     split_falpha_unit_test_dfalpha_dti = &
       agrees_with(&
       dfalpha_dti(parameters, &
-                  falpha(parameters, energy, parameters%energy_0, resolution), &
+                  falpha(parameters, energy, parameters%Halpha_0, resolution), &
                   energy, resolution), rslt, err)
 
   end function split_falpha_unit_test_dfalpha_dti
@@ -613,7 +601,8 @@ contains
     real :: energy_top
     integer :: j
 
-    energy_top = min(energy, 1.0)
+!    energy_top = min(energy, 1.0)
+    energy_top = energy
 
     ! Let's use the composite Simpson's rule (see Wikipedia!). 
     ! wrt the Wikipedia article
@@ -626,7 +615,7 @@ contains
 
     integral = simpson(parameters, &
                        dfalpha_dnupar_integrand, &
-                       parameters%energy_0**0.5,&
+                       0.0,&
                        energy_top**0.5,&
                        0.0,&
                        resolution)/  falph! (&
@@ -662,7 +651,7 @@ contains
     split_falpha_unit_test_dfalpha_dnupar = &
       agrees_with(&
       dfalpha_dnupar(parameters, &
-                  falpha(parameters, energy, parameters%energy_0, resolution), &
+                  falpha(parameters, energy, parameters%Halpha_0, resolution), &
                   energy, resolution), rslt, err)
 
   end function split_falpha_unit_test_dfalpha_dnupar

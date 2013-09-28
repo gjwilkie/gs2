@@ -49,6 +49,7 @@ contains
     integer:: i
 
     N_overresolved = N_in
+
 #ifdef LAPACK
     ! Initialize arrays
     call init_general_quad(N_out)
@@ -72,6 +73,7 @@ contains
     write (*,*) "You need LAPACK for this to work!"
     stop 1
 #endif
+
   end subroutine get_general_weights_from_grid
 
 !> Accepts the "modified moments":
@@ -97,9 +99,9 @@ contains
     real,intent(in):: v0, vf
     integer:: i
 
-#ifdef LAPACK
     mod_moments(0:2*N_out-1) = moments_in(0:2*N_out-1)
 
+#ifdef LAPACK
     ! Initialize arrays
     call init_general_quad(N_out)
 
@@ -227,7 +229,7 @@ contains
 
 !> Finds the eigenvalues and eigenvectors for a symmetric tridiagonal matrix and interprets
 !! them as the absissae and weights for Gaussian quadrature. See Numerical Recipes, 3rd Ed. 
-!! section 4.6.2. Uses the LAPACK routine, given as an external source file.
+!! section 4.6.2. Uses the 1 routine, given as an external source file.
   subroutine solve_jacobi_matrix(N,a,b,abscissae,wgts)
     implicit none
     integer,intent(in):: N
