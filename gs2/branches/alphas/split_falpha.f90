@@ -842,19 +842,13 @@ contains
     integer, intent(in) :: resolution
     real, intent(in) :: energy
     real, intent(in) :: falph
-    real :: dfalpha_denergy
-    dfalpha_denergy = 0.0
-    if (energy .gt. 1.0) then 
-      dfalpha_denergy = - parameters%alpha_injection_energy / parameters%ion_temp
-    else if (falph .eq. 0.0) then 
-      dfalpha_denergy = 0.0
-    else
-      dfalpha_denergy = parameters%source / falph / &
-      falpha_exponential(parameters, energy) / (&
-        4.0 * 3.14159265358979 * nu_parallel(parameters, energy) *  &
-        energy ** (5.0/2.0) ) - &
-        parameters%alpha_injection_energy / parameters%ion_temp
-    end if
+    real :: sum
+
+    sum = - parameters%alpha_injection_energy / parameters%ion_temp
+    sum = sum + (0.5/sqrt(energy))*parameters%source *falpha_integrand(parameters,energy,energy) / (2.0 * 3.14159265358979) 
+ 
+    dfalpha_denergy = sum
+    return
   end function dfalpha_denergy
 
   !> Calculates the normalised gradient of f_alpha
