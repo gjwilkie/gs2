@@ -31,7 +31,7 @@ contains
     if (verbosity() .gt. 0) call print_with_stars('Completed functional test: ', test_name)
   end subroutine close_functional_test
   function check_growth_rate(rslt, err)
-    use gs2_main, only: ilast_step
+    use unit_tests, only: ilast_step
     use gs2_diagnostics, only: get_omegaavg
     use kt_grids, only: ntheta0, naky
     use mp, only: proc0
@@ -56,8 +56,70 @@ contains
 
   end function check_growth_rate
 
+  function check_growth_rates_equal_in_list(err)
+    use unit_tests, only: ilast_step
+    use gs2_diagnostics, only: get_omegaavg
+    use kt_grids, only: ntheta0, naky
+    use mp, only: proc0, grp0, scope, subprocs, allprocs
+    use mp, only: iproc, nproc, sum_allreduce
+    use kt_grids, only: aky
+    use run_parameters, only: wstar_units
+    use job_manage, only: njobs
+    implicit none
+    real, intent(in) :: err
+    real, dimension(naky, njobs) :: omegas
+    logical :: check_growth_rates_equal_in_list
+
+    logical :: dummy
+    logical :: check_result
+    integer :: i, ijob
+    complex, dimension(ntheta0, naky) :: omegaavg
+
+    check_growth_rates_equal_in_list = .true.
+
+    omegas=0.
+    omegaavg=0.
+  
+
+    if (proc0) then
+      !call announce_check('growth rate')
+      call get_omegaavg(ilast_step-1, dummy, omegaavg)
+      !check_result =  agrees_with(aimag(omegaavg(1,:)), rslt, err)
+      !call process_check(check_growth_rate, check_result, 'growth rate')
+      call scope(allprocs)
+      ! work out which job in the list we are
+      do i = 1,njobs
+        if (iproc==grp0(i-1)) ijob = i 
+      end do
+      ! Get the omegas from this job
+      omegas(:,ijob) = aimag(omegaavg(1,:))
+      if (wstar_units) then
+        omegas(:, ijob) = omegas(:,ijob) * aky(:) / 2.0
+      end if
+    else
+      call scope(allprocs)
+    end if
+
+    call sum_allreduce(omegas)
+    call scope(subprocs)
+
+    do i = 2,njobs
+      call announce_check('growth rate')
+      check_result = agrees_with(omegas(:,1), omegas(:,i), err)
+      call process_check( &
+        check_growth_rates_equal_in_list, check_result, 'growth rate')
+    end do
+
+    
+     
+
+
+
+  end function check_growth_rates_equal_in_list
+
   subroutine test_gs2(test_name, test_function)
-    use gs2_main, only: run_gs2, functional_test_flag, ilast_step, finish_gs2
+    use gs2_main, only: run_gs2, finish_gs2
+    use unit_tests, only: functional_test_flag, ilast_step
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
     use gs2_diagnostics, only: finish_gs2_diagnostics
     implicit none

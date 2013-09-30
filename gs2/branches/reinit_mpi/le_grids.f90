@@ -87,6 +87,7 @@ module le_grids
   public :: integrate_kysum, integrate_volume
   public :: get_flux_vs_theta_vs_vpa
   public :: lambda_map, energy_map, g2le, init_map
+  public :: integrate_species_sub !<DD>
 
   !> Unit tests
   public :: le_grids_unit_test_init_le_grids
@@ -98,6 +99,9 @@ module le_grids
      module procedure integrate_moment_c34
      module procedure integrate_moment_lec
      module procedure integrate_moment_r33
+     module procedure integrate_moment_lz 
+     module procedure integrate_moment_e
+
   end interface
 
   interface integrate_volume
@@ -625,7 +629,7 @@ contains
        
   end subroutine get_intrvl_weights
 
-  subroutine integrate_species (g, weights, total)
+  subroutine integrate_species_original (g, weights, total)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
@@ -656,8 +660,308 @@ contains
 
     !Reduce sum across all procs to make integral over all velocity space and species
     call sum_allreduce (total) 
+  end subroutine integrate_species_original
 
+
+  !<DD>Integrate species on xy subcommunicator - NO GATHER
+  subroutine integrate_species_sub (g, weights, total)
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo, intspec_sub
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
+    use mp, only: sum_allreduce_sub, sum_allreduce
+
+    implicit none
+
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (-ntgrid:,:,:), intent (out) :: total
+    complex, dimension(:,:,:),allocatable :: total_small
+    integer :: is, il, ie, ik, it, iglo
+
+    !Allocate array and ensure is zero
+    if(intspec_sub)then
+       !       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max)=0.
+       allocate(total_small(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max))
+    else
+       !total=0.
+       allocate(total_small(-ntgrid:ntgrid,g_lo%ntheta0,g_lo%naky))       
+    endif
+    total_small=0.
+
+    !Performed integral (weighted sum) over local velocity space and species
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       !Convert from iglo to the separate indices
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+
+       !Sum up weighted g
+       total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+    end do
+
+    !Reduce sum across all procs in sub communicator to make integral over all velocity space and species
+    if(intspec_sub)then
+       call sum_allreduce_sub(total_small,g_lo%xyblock_comm)
+    else
+       call sum_allreduce(total_small)
+    endif
+
+    !Copy data into output array
+    !Note: When not using sub-comms this is an added expense which will mean
+    !this routine is more expensive than original version just using total.
+    !In practice we should have two integrate_moment_c34 routines, one for sub-comms
+    !and one for world-comms.
+    if(intspec_sub)then
+       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max)=total_small
+    else
+       total=total_small
+    endif
+
+    !Deallocate
+    deallocate(total_small)
+
+  end subroutine integrate_species_sub
+
+  !<DD>integrate_species on subcommunicator with gather
+  !Falls back to original method if not using xyblock sub comm
+  subroutine integrate_species (g, weights, total,nogath)
+    use theta_grid, only: ntgrid
+    use kt_grids, only: ntheta0, naky
+    use gs2_layouts, only: g_lo, intspec_sub
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
+    use mp, only: sum_allreduce_sub, allgatherv
+    use mp, only: nproc_comm,rank_comm
+    implicit none
+
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (0:,:,:), intent (out) :: total
+    logical, intent(in), optional:: nogath
+    complex, dimension (:), allocatable :: total_flat
+    complex, dimension (:,:,:), allocatable :: total_transp
+    integer :: nl,nr, ik, it, iglo, ip, ierror,ie,is,il, ig
+    integer, dimension(:),allocatable,save :: recvcnts,displs
+    integer, save :: sz, local_rank
+
+    !If not using sub-communicators then just use original method
+    !Note that if x and y are entirely local then we force intspec_sub=.false.
+    if(.not.intspec_sub) then
+       call integrate_species_original(g,weights,total)
+       return
+    endif
+
+    !If we don't want to gather then use integrate_species_sub
+    if(present(nogath))then
+       print*,"using nogath method"
+       if(nogath)then
+          call integrate_species_sub(g,weights,total)
+          return
+       endif
+    endif
+
+    !->First intialise gather vars
+    !Note: We only do this on the first call
+    if(.not.allocated(recvcnts)) then
+       !Get subcomm size
+       call nproc_comm(g_lo%lesblock_comm,sz)
+
+       !Get local rank
+       call rank_comm(g_lo%lesblock_comm,local_rank)
+
+       !Create displacement and receive count arrays
+       allocate(recvcnts(sz),displs(sz))
+
+       do ip=0,sz-1
+          displs(ip+1)=MIN(g_lo%les_kxky_range(1,ip)*(2*ntgrid+1),ntheta0*naky*(2*ntgrid+1)-1)
+          recvcnts(ip+1)=MAX((g_lo%les_kxky_range(2,ip)-g_lo%les_kxky_range(1,ip)+1)*(2*ntgrid+1),0)
+       enddo
+    endif
+
+    !Allocate array and ensure is zero
+    allocate(total_flat(g_lo%les_kxky_range(1,local_rank)*&
+         (2*ntgrid+1):(1+g_lo%les_kxky_range(2,local_rank))*(2*ntgrid+1)))
+    total_flat=0.
+
+    !Performed integral (weighted sum) over local velocity space and species
+    if(g_lo%x_before_y) then
+
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          !Convert from iglo to the separate indices
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          
+          !Calculate extent
+          nl=(2*ntgrid+1)*(it-1+ntheta0*(ik-1))
+          nr=nl+(2*ntgrid)
+          
+          !Sum up weighted g
+          total_flat(nl:nr) = total_flat(nl:nr) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+       end do
+    else
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          !Convert from iglo to the separate indices
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          
+          !Calculate extent
+          nl=(2*ntgrid+1)*(ik-1+naky*(it-1))
+          nr=nl+(2*ntgrid)
+
+          !Sum up weighted g
+          total_flat(nl:nr) = total_flat(nl:nr) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+       end do
+    endif
+
+    !Reduce sum across all procs in sub communicator to make integral over all velocity space and species
+    call sum_allreduce_sub(total_flat,g_lo%xyblock_comm)
+
+    !Now gather missing xy data from other procs (only talk to procs
+    !with the same piece of les)
+!   print*,"lesblock_comm = ",g_lo%lesblock_comm
+!    print*,"xyblock_comm = ",g_lo%xyblock_comm
+
+    if(g_lo%x_before_y)then
+       call allgatherv(total_flat,recvcnts(local_rank+1),total,recvcnts,displs,g_lo%lesblock_comm)
+    else
+       allocate(total_transp(0:2*ntgrid,naky,ntheta0))
+       call allgatherv(total_flat,recvcnts(local_rank+1),total_transp,recvcnts,displs,g_lo%lesblock_comm)
+       do ig=0,2*ntgrid
+          total(ig,:,:)=transpose(total_transp(ig,:,:))
+       enddo
+       !This is pretty bad for memory access so can do this all at once
+       !using reshape with a specified order :
+       !total=RESHAPE(total_transp,(/2*ntgrid+1,ntheta0,naky/),ORDER=(/1,3,2/))
+       !BUT timings in a simple test code suggest loop+transpose can be faster.
+       !In the case where ntgrid is large and ntheta0 is small reshape can win
+       !whilst in the case where ntgrid is small and ntheta0 is large transpose wins.
+       !When both are large reshape seems to win.
+       !In conclusion it's not clear which method is better but if we assume we care most
+       !about nonlinear simulations then small ntgrid with large ntheta0 is most likely so
+       !pick transpose method
+       deallocate(total_transp)
+    endif
+
+    deallocate(total_flat)
   end subroutine integrate_species
+!</DD>
+
+  subroutine integrate_species_e (lo, g, weights, total)
+!Integrate over velocity space whilst in e_lo_LAYOUT. 
+    use layouts_type, only: e_layout_type
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, il_idx
+    use theta_grid, only: ntgrid
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+
+    type (e_layout_type), intent (in) :: lo
+    complex, dimension (:,lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (-ntgrid:,:,:), intent (out) :: total
+    integer :: is, il, ie, ik, it, ig, ielo
+
+    total = 0.0
+    do ielo = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ielo)
+       ik = ik_idx(lo,ielo)
+       it = it_idx(lo,ielo)
+       is = is_idx(lo,ielo)
+!CMR: in e_lo il is lambda index, and isign is separate.
+       il = il_idx(lo,ielo)
+       !Perform local sum
+       do ie=1, negrid
+           total(ig, it, ik) = total(ig, it, ik) + &
+            weights(is)*w(ie)*wl(ig,il)*g(ie,ielo)
+       end do
+    end do
+!Sum over all procs to make integral over all velocity space and species
+    call sum_allreduce (total)
+  end subroutine integrate_species_e
+
+
+  subroutine integrate_species_lz (lo, g, weights, total)
+!Integrate over velocity space whilst in lz_lo_LAYOUT. 
+    use layouts_type, only: lz_layout_type
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, ie_idx
+    use theta_grid, only: ntgrid
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+
+    type (lz_layout_type), intent (in) :: lo
+    complex, dimension (:,lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (-ntgrid:,:,:), intent (out) :: total
+    integer :: is, ixi, il, ie, ik, it, ig, ilzlo
+
+    total = 0.0
+    do ilzlo = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ilzlo)
+       ik = ik_idx(lo,ilzlo)
+       it = it_idx(lo,ilzlo)
+       ie = ie_idx(lo,ilzlo)
+       is = is_idx(lo,ilzlo)
+       !Perform local sum
+!CMR: in lz_lo il muxt be obtained from local index ixi, which includes isign.
+       do ixi=1, nxi
+          il = ixi_to_il(ig,ixi)
+          total(ig, it, ik) = total(ig, it, ik) + &
+            weights(is)*w(ie)*wl(ig,il)*g(il,ilzlo)
+       end do
+    end do
+!Sum over all procs to make integral over all velocity space and species
+    call sum_allreduce (total)
+  end subroutine integrate_species_lz
+
+
+  subroutine integrate_species_lec (lo, g, weights, total)
+!Perform an integral over velocity space whilst in the LE_LAYOUT in 
+!which we have ensured that all of velocity space is local. As such
+!we don't need any calls to MPI reduction routines. Note that this means
+!the processors for different distributed spatial points (x,y) don't know
+!the results at other points.
+    use layouts_type, only: le_layout_type
+    use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
+    use theta_grid, only: ntgrid
+    use mp, only: sum_allreduce
+
+    implicit none
+
+    type (le_layout_type), intent (in) :: lo
+    complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (-ntgrid:,:,:), intent (out) :: total
+    integer :: ixi, ie, il, ile, ig, it, ik, is
+
+    total = 0.0
+    do ile = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ile)
+       it = it_idx (lo,ile)
+       ik = ik_idx (lo,ile)
+       do ie=1, negrid
+          do ixi=1, nxi
+             il = ixi_to_il(ig,ixi)
+             total(ig,it,ik) = total(ig,ie,ik) + weights(is)*w(ie) * wl(ig,il) * g(ixi,ie,ile)
+          end do
+       end do
+    end do
+!Sum over all procs to make integral over all velocity space and species
+    call sum_allreduce (total)
+
+  end subroutine integrate_species_lec
+
+
+
+
+
+
+
 
   function le_grids_unit_test_integrate_species(g, weights, sizes, rslt, err)
     use unit_tests
@@ -931,26 +1235,33 @@ contains
 
   end subroutine lagrange_interp
 
-!  subroutine integrate_moment (g, total, all)
   subroutine integrate_moment_c34 (g, total, all)
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
 ! is over all velocity space
 ! TT>
-    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx
+    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx,intmom_sub
 ! <TT
     use theta_grid, only: ntgrid
-    use mp, only: sum_reduce, proc0, sum_allreduce, nproc
+    use mp, only: sum_reduce, proc0, sum_allreduce_sub, nproc, sum_allreduce
 
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
+    complex, dimension(:,:,:,:),allocatable :: total_small
     integer, optional, intent(in) :: all
     integer :: is, il, ie, ik, it, iglo
 
-    !Ensure array is zero
-    total = 0.
+    !Allocate array and ensure is zero
+    if(intmom_sub.and.(present(all)))then !If we're using reduce then we don't want to make array smaller
+!       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=0.
+       allocate(total_small(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max))
+    else
+!       total=0.
+       allocate(total_small(-ntgrid:ntgrid,g_lo%ntheta0,g_lo%naky,g_lo%nspec))       
+    endif
+    total_small=0.
 
     !Integrate over local velocity space
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -961,7 +1272,7 @@ contains
        il = il_idx(g_lo,iglo)
 
        !Perform local sum
-       total(:, it, ik, is) = total(:, it, ik, is) + &
+       total_small(:, it, ik, is) = total_small(:, it, ik, is) + &
             w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
 
     end do
@@ -970,17 +1281,32 @@ contains
     !we run with 1 proc MPI calls should still work ok
     if (nproc > 1) then     
        if (present(all)) then
-          !Complete integral over distributed velocity space and ensure all procs know the result
-          call sum_allreduce (total)
+          !Complete integral over distributed velocity space and ensure all procs in sub communicator know the result
+          !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
+          !all procs in this case.
+          call sum_allreduce_sub (total_small,g_lo%xysblock_comm)
        else
           !Complete integral over distributed velocity space but only proc0 knows the answer
-          call sum_reduce (total, 0)
+          call sum_reduce (total_small, 0)
        end if
     end if
 
+    !Copy data into output array
+    !Note: When not using sub-comms this is an added expense which will mean
+    !this routine is more expensive than original version just using total.
+    !In practice we should have two integrate_moment_c34 routines, one for sub-comms
+    !and one for world-comms.
+    if(intmom_sub.and.(present(all)))then
+       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=total_small
+    else
+       total=total_small
+    endif
+
+    !Deallocate
+    deallocate(total_small)
+
   end subroutine integrate_moment_c34
 
-!  subroutine integrate_moment (g, total, all)
   subroutine integrate_moment_r33 (g, total, all)
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(y, z, sigma, lambda, E, species) and returns int f, where the integral
@@ -1025,6 +1351,86 @@ contains
     end if
 
   end subroutine integrate_moment_r33
+
+
+  subroutine integrate_moment_e (lo, g, total, all)
+!Integrate over velocity space whilst in e_lo_LAYOUT. 
+    use layouts_type, only: e_layout_type
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, il_idx
+    use theta_grid, only: ntgrid
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+
+    type (e_layout_type), intent (in) :: lo
+    complex, dimension (:,lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
+    integer, optional, intent(in) :: all
+    integer :: is, il, ie, ik, it, ig, ielo
+
+    total = 0.0
+    do ielo = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ielo)
+       ik = ik_idx(lo,ielo)
+       it = it_idx(lo,ielo)
+       is = is_idx(lo,ielo)
+!CMR: in e_lo il is lambda index, and isign is separate.
+       il = il_idx(lo,ielo)
+       !Perform local sum
+       do ie=1, negrid
+           total(ig, it, ik, is) = total(ig, it, ik, is) + &
+            w(ie)*wl(ig,il)*g(ie,ielo)
+       end do
+    end do
+
+    if (present(all)) then
+       !Complete vspace integral and get result to all procs
+       call sum_allreduce (total)
+    else
+       !Complete vspace integral, sending result to proc0
+       call sum_reduce (total, 0)
+    end if
+  end subroutine integrate_moment_e
+
+
+  subroutine integrate_moment_lz (lo, g, total, all)
+!Integrate over velocity space whilst in lz_lo_LAYOUT. 
+    use layouts_type, only: lz_layout_type
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, ie_idx
+    use theta_grid, only: ntgrid
+    use mp, only: sum_reduce, proc0, sum_allreduce
+    implicit none
+
+    type (lz_layout_type), intent (in) :: lo
+    complex, dimension (:,lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
+    integer, optional, intent(in) :: all
+    integer :: is, ixi, il, ie, ik, it, ig, ilzlo
+
+    total = 0.0
+    do ilzlo = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ilzlo)
+       ik = ik_idx(lo,ilzlo)
+       it = it_idx(lo,ilzlo)
+       ie = ie_idx(lo,ilzlo)
+       is = is_idx(lo,ilzlo)
+       !Perform local sum
+!CMR: in lz_lo il muxt be obtained from local index ixi, which includes isign.
+       do ixi=1, nxi
+          il = ixi_to_il(ig,ixi)
+          total(ig, it, ik, is) = total(ig, it, ik, is) + &
+            w(ie)*wl(ig,il)*g(il,ilzlo)
+       end do
+    end do
+
+    if (present(all)) then
+       !Complete vspace integral and get result to all procs
+       call sum_allreduce (total)
+    else
+       !Complete vspace integral, sending result to proc0
+       call sum_reduce (total, 0)
+    end if
+  end subroutine integrate_moment_lz
+
 
   subroutine integrate_moment_lec (lo, g, total)
 !Perform an integral over velocity space whilst in the LE_LAYOUT in 
@@ -1979,7 +2385,7 @@ contains
 
     use mp, only: finish_mp, proc0
     use redistribute, only: report_map_property
-
+    use gs2_layouts, only: opt_redist_init
     implicit none
 
     logical, intent (in) :: use_lz_layout, use_e_layout, use_le_layout, test
@@ -1991,7 +2397,11 @@ contains
     if (use_lz_layout) then
 !      if(proc0) write(6,*) 'le_grids: Calling init_lambda_redistribute'
        ! init_lambda_layout is called in redistribute
-       call init_lambda_redistribute
+       if(opt_redist_init)then
+          call init_lambda_redistribute_local
+       else
+          call init_lambda_redistribute
+       endif
        if (test) then
           if (proc0) print *, '=== Lambda map property ==='
           call report_map_property (lambda_map)
@@ -2001,7 +2411,11 @@ contains
     if (use_e_layout) then
 !      if(proc0) write(6,*) 'le_grids: Calling init_energy_redistribute'
        ! init_energy_layout is called in redistribute
-       call init_energy_redistribute
+       if(opt_redist_init) then
+          call init_energy_redistribute_local
+       else
+          call init_energy_redistribute
+       endif
        if (test) then
           if (proc0) print *, '=== Energy map property ==='
           call report_map_property (energy_map)
@@ -2009,8 +2423,11 @@ contains
     end if
 
     if (use_le_layout) then
-!       if(proc0) write(6,*) 'le_grids: Calling init_g2le_redistribute'
-       call init_g2le_redistribute
+       if(opt_redist_init) then
+          call init_g2le_redistribute_local
+       else
+          call init_g2le_redistribute
+       endif
        if (test) call check_g2le
     end if
     
@@ -2151,6 +2568,315 @@ contains
 
   end subroutine init_g2le_redistribute
 
+!<DD>
+  subroutine init_g2le_redistribute_local
+
+    use mp, only: nproc, iproc
+    use species, only: nspec
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: init_le_layouts
+    use gs2_layouts, only: g_lo, le_lo
+    use gs2_layouts, only: idx_local, proc_id
+    use gs2_layouts, only: ig_idx, isign_idx
+    use gs2_layouts, only: ik_idx, it_idx, ie_idx, is_idx, il_idx, idx
+    use sorting, only: quicksort
+    use redistribute, only: index_list_type, init_redist, delete_list
+
+    implicit none
+
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list, sort_list
+!    type (index_list_type), dimension(0:nproc-1) :: old_list !Testing
+    integer, dimension (0:nproc-1) :: nn_to, nn_from
+!    integer, dimension (0:nproc-1) :: nn_to_old, nn_from_old !Testing
+    integer, dimension (3) :: from_low, from_high
+    integer, dimension (3) :: to_high
+    integer :: to_low
+    integer :: ig, isign, iglo, il, ile
+    integer :: ik, it, ie, is, ixi
+    integer :: n, ip, je
+    integer :: ile_bak, il0
+    logical :: debug=.true.
+
+    !Early exit if possible
+    if (leinit) return
+    leinit = .true.
+
+    !Warning message | NOTE: To test we should use the original routine to generate to_list and from_list
+    !and compare with those generated by this routine. They should be identical
+    !Testing is now complete?
+    !if(iproc.eq.0) write(6,*) "WARNING: init_g2le_redistribute_local has not been well tested, consider using opt_redist_init=.false."
+
+    !Setup the le layout object (le_lo)
+    call init_le_layouts (ntgrid, naky, ntheta0, nspec)
+
+    !Initialise the data counters
+    nn_to = 0
+    nn_from = 0
+
+    !First count the data to be sent | g_lo-->le_lo
+    !Protect against procs with no data
+    if(g_lo%ulim_proc.ge.g_lo%llim_proc)then
+       do iglo = g_lo%llim_proc,g_lo%ulim_alloc
+          !Get le_lo idx for ig=-ntgrid
+          ile=idx(le_lo,-ntgrid,ik_idx(g_lo,iglo),&
+               it_idx(g_lo,iglo),is_idx(g_lo,iglo))
+
+          !Loop over remaining dimensions, note ile is independent of isign
+          !so add two to count
+          do ig=-ntgrid,ntgrid
+             !Increment the data sent counter for this proc
+             nn_from(proc_id(le_lo,ile))=nn_from(proc_id(le_lo,ile))+2
+
+             !Increment ile
+             ile=ile+1
+          enddo
+       enddo
+    endif
+
+    !Now count how much data to receive | le_lo<--g_lo
+    !Protect against procs with no data
+    if(le_lo%ulim_proc.ge.le_lo%llim_proc)then
+       do ile=le_lo%llim_proc,le_lo%ulim_alloc
+          !Loop over local dimensions, adding 2 to account for each sign
+          do ie=1,g_lo%negrid
+             do il=1,g_lo%nlambda
+                !Get index
+                iglo=idx(g_lo,ik_idx(le_lo,ile),it_idx(le_lo,ile),&
+                     il,ie,is_idx(le_lo,ile))
+
+                !Increment the data to receive counter
+                nn_to(proc_id(g_lo,iglo))=nn_to(proc_id(g_lo,iglo))+2
+             enddo
+          enddo
+       enddo
+    endif
+
+    ! !ORIGINAL --> Testing
+    ! nn_from_old=0
+    ! nn_to_old=0
+    ! do iglo = g_lo%llim_world, g_lo%ulim_world
+    !    ik = ik_idx(g_lo,iglo)
+    !    it = it_idx(g_lo,iglo)
+    !    is = is_idx(g_lo,iglo)
+    !    do ig = -ntgrid, ntgrid
+    !       ile = idx (le_lo, ig, ik, it, is)
+    !       if (idx_local(g_lo,iglo)) nn_from_old(proc_id(le_lo,ile)) = nn_from_old(proc_id(le_lo,ile)) + 2
+    !       if (idx_local(le_lo,ile)) nn_to_old(proc_id(g_lo,iglo)) = nn_to_old(proc_id(g_lo,iglo)) + 2
+    !    end do
+    ! end do
+
+    !Now allocate storage for index arrays
+    do ip = 0, nproc-1
+       !Testing
+       !print*,iproc,ip,nn_to(ip),nn_to_old(ip),nn_from(ip),nn_from_old(ip)
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first (nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+          allocate (from_list(ip)%third (nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first (nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+          allocate (to_list(ip)%third (nn_to(ip)))
+          !For sorting message order later
+          allocate (sort_list(ip)%first(nn_to(ip)))
+          ! !For testing
+          ! allocate (old_list(ip)%first (nn_to_old(ip)))
+          ! allocate (old_list(ip)%second(nn_to_old(ip)))
+          ! allocate (old_list(ip)%third (nn_to_old(ip)))
+       end if
+    end do
+
+    !Reinitialise counters
+    nn_to = 0
+    nn_from = 0
+
+    !First fill in sending indices, these define the message order
+    !Protect against procs with no data
+    if(g_lo%ulim_proc.ge.g_lo%llim_proc)then
+       do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+          !Get ile for ig=-ntgrid
+          ile=idx(le_lo,-ntgrid,ik_idx(g_lo,iglo),&
+               it_idx(g_lo,iglo),is_idx(g_lo,iglo))
+          ile_bak=ile
+
+          !Loop over sign
+          do isign=1,2
+             do ig=-ntgrid,ntgrid
+                !Get proc id
+                ip=proc_id(le_lo,ile)
+
+                !Increment procs message counter
+                n=nn_from(ip)+1
+                nn_from(ip)=n
+
+                !Store indices
+                from_list(ip)%first(n)=ig
+                from_list(ip)%second(n)=isign
+                from_list(ip)%third(n)=iglo
+
+                !Increment ile
+                ile=ile+1
+             enddo
+
+             !Restore ile
+             ile=ile_bak
+          enddo
+       enddo
+    endif
+
+    !Now fill in the receiving indices, these must match message data order
+    !Protect against procs with no data
+    if(le_lo%ulim_proc.ge.le_lo%llim_proc)then
+       do ile=le_lo%llim_proc,le_lo%ulim_alloc
+          !Get ig index
+          ig=ig_idx(le_lo,ile)
+ 
+          !Loop over local dimensions,Whilst ile is independent of sign this information
+          !is in lambda so loop over sign included here
+          do ie=1,g_lo%negrid
+             do isign=1,2
+                do il0=1,g_lo%nlambda
+                   !Pick correct extended lambda value
+                   je=jend(ig)
+                   il=il0
+                   if (je.eq.0) then
+                      if (isign.eq.2) il=2*g_lo%nlambda+1-il
+                   else
+                      if(il.eq.je) then
+                         if(isign.eq.1) il=2*je
+                      else if(il.gt.je) then
+                         if(isign.eq.1) then
+                            il=il+je
+                         else
+                            il=2*g_lo%nlambda+1-il+je
+                         endif
+                      else
+                         if(isign.eq.2) il=2*je-il
+                      endif
+                   endif
+                   
+                   !Get iglo value
+                   iglo=idx(g_lo,ik_idx(le_lo,ile),it_idx(le_lo,ile),&
+                        il0,ie,is_idx(le_lo,ile))
+
+                   !Get proc_id
+                   ip=proc_id(g_lo,iglo)
+
+                   !Increment counter
+                   n=nn_to(ip)+1
+                   nn_to(ip)=n
+
+                   !Store indices
+                   to_list(ip)%first(n)=il
+                   to_list(ip)%second(n)=ie
+                   to_list(ip)%third(n)=ile
+
+                   !Store sorting index
+                   sort_list(ip)%first(n)=ig+ntgrid-1+(2*ntgrid+1)*(isign-1+2*(iglo-g_lo%llim_world))
+                enddo
+             enddo
+          enddo
+       enddo
+    endif
+
+    !Now sort receive indices into message order
+    do ip=0,nproc-1
+       if(nn_to(ip)>0) then
+          !Apply quicksort
+          CALL quicksort(nn_to(ip),sort_list(ip)%first,to_list(ip)%first,to_list(ip)%second,to_list(ip)%third)
+       endif
+    enddo
+
+    ! ! !ORIGINAL, modified for testing
+    ! nn_to_old=0.
+    ! do iglo = g_lo%llim_world, g_lo%ulim_world
+    !    ik = ik_idx(g_lo,iglo)
+    !    it = it_idx(g_lo,iglo)
+    !    ie = ie_idx(g_lo,iglo)
+    !    is = is_idx(g_lo,iglo)
+    !    do isign = 1, 2
+    !       do ig = -ntgrid, ntgrid
+    !          il = il_idx(g_lo,iglo)
+    !          je = jend(ig)
+    !          if (je == 0) then
+    !             if (isign == 2) then
+    !                il = 2*g_lo%nlambda+1 - il
+    !             end if
+    !          else
+    !             if (il == je) then
+    !                if (isign == 1) il = 2*je  ! throw this info away
+    !             else if (il > je) then 
+    !                if (isign == 1) il = il + je
+    !                if (isign == 2) il = 2*g_lo%nlambda + 1 - il + je
+    !             else
+    !                if (isign == 2) il = 2*je - il !+ 1
+    !             end if
+    !          end if
+    !          ile = idx (le_lo, ig, ik, it, is)
+    !          ! if (idx_local(g_lo,iglo)) then
+    !          !    ip = proc_id(le_lo,ile)
+    !          !    n = nn_from(ip) + 1
+    !          !    nn_from(ip) = n
+    !          !    from_list(ip)%first(n)  = ig
+    !          !    from_list(ip)%second(n) = isign
+    !          !    from_list(ip)%third(n)  = iglo
+    !          ! end if
+    !          if (idx_local(le_lo,ile)) then
+    !             ip = proc_id(g_lo,iglo)
+    !             n = nn_to_old(ip) + 1
+    !             nn_to_old(ip) = n
+    !             old_list(ip)%first(n)  = il
+    !             old_list(ip)%second(n) = ie
+    !             old_list(ip)%third(n)  = ile
+    !          end if
+    !       end do
+    !    end do
+    ! end do
+
+    ! !Testing
+    ! do ip=0,nproc-1
+    !    if (nn_to(ip)>0)then
+    !       if(sum(abs(to_list(ip)%first-old_list(ip)%first)).ne.0)print*,"Error in first: iproc,to",iproc,ip
+    !       if(sum(abs(to_list(ip)%second-old_list(ip)%second)).ne.0)print*,"Error in second: iproc,to",iproc,ip
+    !       if(sum(abs((to_list(ip)%third-le_lo%llim_proc)-(old_list(ip)%third-le_lo%llim_proc))).ne.0) then
+    !          print*,"Error in third: iproc,to",iproc,ip
+    !          do n=1,nn_to(ip)
+    !             print*,"N O M R",to_list(ip)%third(n),old_list(ip)%third(n),iproc,ip
+    !          enddo
+    !       endif
+    !    endif
+    ! enddo
+
+    !Now setup array range values
+    from_low (1) = -ntgrid
+    from_low (2) = 1
+    from_low (3) = g_lo%llim_proc
+
+    from_high(1) = ntgrid
+    from_high(2) = 2
+    from_high(3) = g_lo%ulim_alloc
+
+    to_low = le_lo%llim_proc
+
+    to_high(1) = max(2*nlambda, 2*ng2+1)
+    to_high(2) = negrid + 1  ! TT: just followed convention with +1.
+    ! TT: It may be good to avoid bank conflict.
+    to_high(3) = le_lo%ulim_alloc
+
+    !Create g2le redist object
+    call init_redist (g2le, 'c', to_low, to_high, to_list, from_low, from_high, from_list)
+
+    !Deallocate lists
+    call delete_list (to_list)
+    call delete_list (from_list)
+    call delete_list (sort_list)
+    !Testing
+    !call delete_list (old_list)
+
+  end subroutine init_g2le_redistribute_local
+!</DD>
   subroutine check_g2le
 
     use file_utils, only: error_unit
@@ -2371,6 +3097,219 @@ contains
 
   end subroutine init_lambda_redistribute
 
+!<DD>
+  subroutine init_lambda_redistribute_local
+
+    use mp, only: nproc, iproc, barrier
+    use species, only: nspec
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: init_lambda_layouts
+    use gs2_layouts, only: g_lo, lz_lo
+    use gs2_layouts, only: idx_local, proc_id
+    use gs2_layouts, only: ik_idx, it_idx, ie_idx, is_idx, il_idx, idx, ig_idx,isign_idx
+    use redistribute, only: index_list_type, init_redist, delete_list
+    use sorting, only: quicksort
+    implicit none
+
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list, sort_list
+    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    integer, dimension(3) :: from_low, from_high
+    integer, dimension(2) :: to_high
+    integer :: to_low
+    integer :: ig, isign, iglo, il, ilz, il0
+    integer :: ik, it, ie, is, je, ilz_bak
+    integer :: n, ip
+    logical :: debug=.true.
+
+    !Early exit if possible
+    if (lzinit) return
+    lzinit = .true.
+
+    !Setup the lambda layout object (lz_lo)
+    call init_lambda_layouts &
+         (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
+
+    !Initialise data counters
+    nn_to = 0
+    nn_from = 0
+
+    !First count the data to be send | g_lo-->lz_lo
+    !Protect against procs with no data
+    if(g_lo%ulim_proc.ge.g_lo%llim_proc)then
+       do iglo = g_lo%llim_proc, g_lo%ulim_alloc
+          !Get lz_lo idx for ig=-ntgrid
+          ilz=idx(lz_lo,-ntgrid,ik_idx(g_lo,iglo), &
+               it_idx(g_lo,iglo),ie_idx(g_lo,iglo),is_idx(g_lo,iglo))
+          
+          !Loop over other local dimensions, noting that ig->ig+1 ==> ilz->ilz+1
+          !Note that ilz is independent ofi sign so we just add two pieces of data per point instead
+          do ig=-ntgrid,ntgrid
+             !Increment the data sent counter for the processor with ilz
+             nn_from(proc_id(lz_lo,ilz))=nn_from(proc_id(lz_lo,ilz))+2
+             
+             !Increment ilz
+             ilz=ilz+1
+          enddo
+       enddo
+    endif
+
+    !Now count how much data to receive | lz_lo<--g_lo
+    !Protect against procs with no data
+    if(lz_lo%ulim_proc.ge.lz_lo%llim_proc)then
+       do ilz = lz_lo%llim_proc, lz_lo%ulim_alloc
+          do il=1,g_lo%nlambda
+             !Get iglo
+             iglo=idx(g_lo,ik_idx(lz_lo,ilz),it_idx(lz_lo,ilz),&
+                  il,ie_idx(lz_lo,ilz),is_idx(lz_lo,ilz))
+             
+             !Increment the data to receive count for this proc
+             !Note we increment by two due to independence of isign
+             nn_to(proc_id(g_lo,iglo))=nn_to(proc_id(g_lo,iglo))+2
+          enddo
+       enddo
+    endif
+
+   !Now allocate storage for index arrays
+    do ip = 0, nproc-1
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first(nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+          allocate (from_list(ip)%third(nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first(nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+          !For sorting messsages later
+          allocate (sort_list(ip)%first(nn_to(ip)))
+       end if
+    end do
+
+    !Reinitialise counters
+    nn_to = 0
+    nn_from = 0
+
+    !First fill in the sending indices, these define the message order
+    !Protect against procs with no data
+    if(g_lo%ulim_proc.ge.g_lo%llim_proc)then
+       do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+          !Convert to ilz for ig=-ntgrid
+          ilz=idx(lz_lo,-ntgrid,ik_idx(g_lo,iglo), &
+            it_idx(g_lo,iglo),ie_idx(g_lo,iglo),is_idx(g_lo,iglo))
+          
+          !Store backup of ilz value
+          ilz_bak=ilz
+          
+          !Loop over other local dimensions
+          do isign=1,2
+             do ig=-ntgrid,ntgrid
+                !Get proc id
+                ip=proc_id(lz_lo,ilz)
+                
+                !Increment procs message counter
+                n=nn_from(ip)+1
+                nn_from(ip)=n
+                
+                !Store indices
+                from_list(ip)%first(n)=ig
+                from_list(ip)%second(n)=isign
+                from_list(ip)%third(n)=iglo
+                
+                !Increment ilz
+                ilz=ilz+1
+             enddo
+             
+          !Restore ilz
+             ilz=ilz_bak
+          enddo
+       enddo
+    endif
+
+    !Now fill in the receiving indices, these must match the message order (through sorting later)
+    !NOTE: Not all procs have data in lz_lo so protect against this 
+    if(lz_lo%ulim_proc.ge.lz_lo%llim_proc)then
+       do ilz=lz_lo%llim_proc,lz_lo%ulim_alloc
+          ig=ig_idx(lz_lo,ilz)
+          !Whilst lz_lo is independent of sign we actually have a lambda dimension double that of other layouts, which is how the sign dependent information is stored, so loop over sign here.
+          do isign=1,2
+             !Should the upper limit actually be max(nlambda,ng2+1)?
+             do il0=1,g_lo%nlambda
+                je=jend(ig)
+                !Pick the correct value of il
+                il=il0
+                if (je.eq.0) then
+                   if (isign.eq.2) il=2*g_lo%nlambda+1-il
+                else
+                   if(il.eq.je) then
+                      if(isign.eq.1) il=2*je
+                   else if(il.gt.je) then
+                      if(isign.eq.1) then
+                         il=il+je
+                      else
+                         il=2*g_lo%nlambda+1-il+je
+                      endif
+                   else
+                      if(isign.eq.2) il=2*je-il
+                   endif
+                endif
+                
+                !Get iglo value. Note we use il0 and not il
+                iglo=idx(g_lo,ik_idx(lz_lo,ilz),it_idx(lz_lo,ilz),&
+                     il0,ie_idx(lz_lo,ilz),is_idx(lz_lo,ilz))
+                
+                !Get proc id
+                ip=proc_id(g_lo,iglo)
+                
+                !Increment counter
+                n=nn_to(ip)+1
+                nn_to(ip)=n
+                
+                !Store indices
+                to_list(ip)%first(n)=il
+                to_list(ip)%second(n)=ilz
+                
+                !Store sorting index
+                sort_list(ip)%first(n)=ig+ntgrid-1+(2*ntgrid+1)*(isign-1+2*(iglo-g_lo%llim_world))
+             enddo
+          enddo
+       enddo
+    endif
+    
+    !Now sort receive indices into message order
+    do ip=0,nproc-1
+       !Only worry about the cases where we're receiving data
+       if(nn_to(ip)>0) then
+          !Apply quicksort
+          CALL quicksort(nn_to(ip),sort_list(ip)%first,to_list(ip)%first,to_list(ip)%second)
+       endif
+    enddo
+
+    !Now setup array range values
+    from_low (1) = -ntgrid
+    from_low (2) = 1
+    from_low (3) = g_lo%llim_proc
+
+    to_low = lz_lo%llim_proc
+
+    to_high(1) = max(2*nlambda, 2*ng2+1)
+    to_high(2) = lz_lo%ulim_alloc
+
+    from_high(1) = ntgrid
+    from_high(2) = 2
+    from_high(3) = g_lo%ulim_alloc
+
+    !Create lambda map redistribute objects
+    call init_redist (lambda_map, 'c', to_low, to_high, to_list, &
+         from_low, from_high, from_list)
+
+    !Deallocate the list objects
+    call delete_list (to_list)
+    call delete_list (from_list)
+    call delete_list (sort_list)
+
+  end subroutine init_lambda_redistribute_local
+!</DD>
+
   subroutine init_energy_redistribute
 
     use mp, only: nproc
@@ -2491,6 +3430,201 @@ contains
 
   end subroutine init_energy_redistribute
 
+!<DD>
+  subroutine init_energy_redistribute_local
+    use mp, only: nproc, iproc
+    use species, only: nspec
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky,ntheta0
+    use gs2_layouts, only: init_energy_layouts
+    use gs2_layouts, only: g_lo, e_lo, ie_idx, ik_idx, it_idx, il_idx, is_idx, ig_idx, isign_idx
+    use gs2_layouts, only:proc_id, idx, idx_local
+    use redistribute, only: index_list_type, init_redist, delete_list
+    use sorting, only: quicksort
+
+    implicit none
+
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list,sort_list  
+    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    integer, dimension(3) :: from_low, from_high
+    integer, dimension(2) :: to_high
+    integer :: to_low
+    integer :: ig, isign, iglo, ik, it, il, ie, is, ielo
+    integer :: n, ip
+    logical :: debug=.true.
+
+    !Early exit if possible
+    if (einit) return
+    einit = .true.
+
+    !DD, March 2009: Nullify pointers on initialisation, so do not pass association
+    !                test when not allocated. 
+    !  Problem arose on Pascali compiler (York) with  to_list(ip)%third and fourth
+    do ip=0, (nproc-1)
+       nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
+    end do
+    !<DD>
+	
+    !Initialise e_lo layout object
+    call init_energy_layouts &
+         (ntgrid, naky, ntheta0, nlambda, nspec)
+
+    !Initialise counters to zero
+    nn_to = 0
+    nn_from = 0
+
+    !First count how much data to send | g_lo-->e_lo
+    !Protect against procs with no data
+    if(g_lo%ulim_proc.ge.g_lo%llim_proc)then
+       do iglo = g_lo%llim_proc, g_lo%ulim_alloc
+          !Get e_lo idx for ig=-ntgrid and isign=1
+          ielo=idx(e_lo,-ntgrid,1,ik_idx(g_lo,iglo), &
+               it_idx(g_lo,iglo),il_idx(g_lo,iglo),is_idx(g_lo,iglo))
+
+          !Loop over other local dimensions, noting that ig->ig+1 ==> ielo->ielo+1
+          do isign = 1,2
+             do ig=-ntgrid,ntgrid
+                !Increment the data sent counter for the processor with ielo
+                nn_from(proc_id(e_lo,ielo))=nn_from(proc_id(e_lo,ielo))+1
+
+                !Increment ielo
+                ielo=ielo+1
+             enddo
+          enddo
+       enddo
+    endif
+
+    !Now count how much data to receive | e_lo<--g_lo
+    !Protect against procs with no data
+    if(e_lo%ulim_proc.ge.e_lo%llim_proc)then
+       do ielo = e_lo%llim_proc, e_lo%ulim_alloc
+          do ie=1,g_lo%negrid
+             !Get iglo
+             iglo=idx(g_lo,ik_idx(e_lo,ielo),it_idx(e_lo,ielo),&
+                  il_idx(e_lo,ielo),ie,is_idx(e_lo,ielo))
+
+             !Increment the data to receive count for this proc
+             nn_to(proc_id(g_lo,iglo))=nn_to(proc_id(g_lo,iglo))+1
+          enddo
+       enddo
+    endif
+
+    !Now we've done counting allocate index arrays
+    do ip = 0, nproc-1
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first(nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+          allocate (from_list(ip)%third(nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first(nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+          !For sorting messages later
+          allocate (sort_list(ip)%first(nn_to(ip)))
+       end if
+    end do
+
+    !<DD>Debug test, are we sending and receiving the same amount to ourselves? Remove when testing completed
+    !if(debug.and.nn_to(iproc).ne.nn_from(iproc)) print*,"ERROR: iproc ",iproc,"nn_from",nn_from(iproc),"nn_to",nn_to(iproc)  
+
+    !Reinitialise counters to zero
+    nn_to = 0
+    nn_from = 0
+
+    !First fill in the sending indices, these define the message order
+    !Protect against procs with no data
+    if(g_lo%ulim_proc.ge.g_lo%llim_proc)then
+       do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+          !Convert to ielo for ig=-ntgrid and isign=1
+          ielo=idx(e_lo,-ntgrid,1,ik_idx(g_lo,iglo), &
+               it_idx(g_lo,iglo),il_idx(g_lo,iglo),is_idx(g_lo,iglo))
+
+          !Loop over other local dimensions
+          do isign=1,2
+             do ig=-ntgrid,ntgrid
+                !Get proc id
+                ip=proc_id(e_lo,ielo)
+
+                !Increment procs message counter
+                n=nn_from(ip)+1
+                nn_from(ip)=n
+
+                !Store indices
+                from_list(ip)%first(n)=ig
+                from_list(ip)%second(n)=isign
+                from_list(ip)%third(n)=iglo
+
+                !Increment ielo
+                ielo=ielo+1
+             enddo
+          enddo
+       enddo
+    endif
+
+    !Now fill in receive indices, these must match message data order (achieved through sorting later)
+    !Protect against procs with no data
+    if(e_lo%ulim_proc.ge.e_lo%llim_proc)then
+       do ielo=e_lo%llim_proc,e_lo%ulim_alloc
+          !Get indices used for creating sort index
+          ig=ig_idx(e_lo,ielo)
+          isign=isign_idx(e_lo,ielo)
+
+          do ie=1,g_lo%negrid
+             !Get iglo index
+             iglo=idx(g_lo,ik_idx(e_lo,ielo),it_idx(e_lo,ielo),&
+                  il_idx(e_lo,ielo),ie,is_idx(e_lo,ielo))
+
+             !Get proc id
+             ip=proc_id(g_lo,iglo)
+
+             !Increment procs data counter
+             n=nn_to(ip)+1
+             nn_to(ip)=n
+
+             !Store message indices
+             to_list(ip)%first(n)=ie
+             to_list(ip)%second(n)=ielo
+
+             !Store index for sorting
+             sort_list(ip)%first(n)=ig+ntgrid-1+(2*ntgrid+1)*(isign-1+(iglo-g_lo%llim_world)*2)
+          enddo
+       enddo
+    endif
+
+    !Now sort receive indices into message order
+    do ip=0,nproc-1
+       !Only worry about cases where we're receiving data
+       if(nn_to(ip)>0) then
+          !Sort based on quicksort
+          CALL quicksort(nn_to(ip),sort_list(ip)%first,to_list(ip)%first,to_list(ip)%second)
+       endif
+    enddo
+
+    !Now setup array range values
+    from_low (1) = -ntgrid
+    from_low (2) = 1
+    from_low (3) = g_lo%llim_proc
+
+    to_low = e_lo%llim_proc
+
+    to_high(1) = negrid+1
+    to_high(2) = e_lo%ulim_alloc
+
+    from_high(1) = ntgrid
+    from_high(2) = 2
+    from_high(3) = g_lo%ulim_alloc
+
+    !Create energy map redistribute object
+    call init_redist (energy_map, 'c', to_low, to_high, to_list, &
+         from_low, from_high, from_list)
+
+    !Deallocate the list objects 
+    call delete_list (to_list)
+    call delete_list (from_list)
+    call delete_list (sort_list)
+
+  end subroutine init_energy_redistribute_local
+!</DD>
 
   ! subroutine used for testing
   ! takes as input an array using g_lo and

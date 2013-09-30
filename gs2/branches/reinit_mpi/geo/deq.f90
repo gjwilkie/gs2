@@ -65,18 +65,15 @@ contains
     use splines, only: inter_cspl
     implicit none
 
-    real :: xdum, p_0
-    real :: rwid, rleft, zhei, amin, B_T
+    real :: p_0
+    real :: rwid, zhei, amin, B_T
     real :: psi_0, psi_a, rmaj, bcentr
-    real, dimension(:), allocatable :: tmp1, tmp2, zp, temp, &
-             zx1, zxm, zy1, zyn
-    real :: zxy11, zxym1, zxy1n, zxymn
-    real :: fitp_surf2, delta_R, delta_Z
-    
+    real :: delta_R, delta_Z
+!    real :: fitp_surf2, ierr, rleft, zxy11, zxy1n, zxym1, zxymn
+!    real, dimension(:), allocatable :: temp, zp, zx1, zxm, zy1, zyn
     character*80 :: filename, eqfile
-    character char*10
     
-    integer :: i, j, init, ndum, initeq, i1, big, nhb, nwb, ierr
+    integer :: i, j, init, initeq, big, nhb, nwb
     integer :: jmin, jmax
     
     data init /1/
@@ -380,7 +377,7 @@ contains
     real, dimension(-ntm:), intent(in) :: rgrid, theta
     real, dimension(-ntm:,:), intent(out) :: grad
     real aa(1), daa(1), rp, rpt(1)
-    integer i, j
+    integer i
     
     grad = 0.
     do i=-nth, nth
@@ -409,7 +406,6 @@ contains
     real tmp(2), aa(1), daa(1), rp, rpt(1)
     real, dimension(nw, nh, 2) ::  dbish
     integer i
-    logical :: first = .true.
  
     dbish(:,:,1) = sqrt(dpm(:,:,1)**2 + dpm(:,:,2)**2)
     dbish(:,:,2) = 0.
@@ -732,7 +728,6 @@ contains
     use splines
     real :: theta, bound
     type (spline), save :: spl
-    integer i
 
     if(init_bound) call new_spline(nbbbs, thetab, r_bound, spl)
     init_bound = .false.

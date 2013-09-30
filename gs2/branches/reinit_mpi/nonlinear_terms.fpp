@@ -12,6 +12,7 @@ module nonlinear_terms
 !  public :: add_nonlinear_terms, finish_nl_terms
   public :: add_explicit_terms, finish_nl_terms
   public :: finish_init, reset_init, algorithm, nonlin, accelerated
+  public :: nonlinear_terms_unit_test_time_add_nl
   public :: cfl
 
   private
@@ -279,6 +280,7 @@ contains
 !  end subroutine add_nonlinear_terms
   end subroutine add_explicit_terms
 
+
   subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
 
     use theta_grid, only: ntgrid
@@ -393,6 +395,14 @@ contains
 
   end subroutine add_explicit
 
+  subroutine nonlinear_terms_unit_test_time_add_nl(g1, phi, apar, bpar)
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use theta_grid, only: ntgrid
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    call add_nl(g1, phi, apar, bpar)
+  end subroutine nonlinear_terms_unit_test_time_add_nl
+
   subroutine add_nl (g1, phi, apar, bpar)
     use mp, only: max_allreduce, proc0
     use theta_grid, only: ntgrid, kxfac
@@ -441,7 +451,8 @@ contains
     if (fbpar > zero) call load_ky_bpar
     
     ! more generally, there should probably be a factor of anon...
-    
+    !This is basically doing g_adjust to form i*ky*g_wesson (note the factor anon is missing)
+    !/Gives Fourier components of derivative of g_wesson in y direction
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -458,6 +469,9 @@ contains
        call transform2 (g1, gb)
     end if
     
+    !It should be possible to write the following with vector notation
+    !To find max_vel we'd then use MAXVAL rather than MAX
+    !Calculate (d Chi /dx).(d g_wesson/dy)
     if (accelerated) then
        max_vel = 0.
        do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
@@ -506,7 +520,8 @@ contains
     if (fbpar > zero) call load_kx_bpar
     
     ! more generally, there should probably be a factor of anon...
-    
+    !This is basically doing g_adjust to form i*kx*g_wesson (note the factor anon is missing)
+    !/Gives Fourier components of derivative of g_wesson in x direction
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -522,7 +537,10 @@ contains
     else
        call transform2 (g1, gb)
     end if
-    
+
+    !It should be possible to write the following with vector notation
+    !To find max_vel we'd then use MAXVAL rather than MAX   
+    !Calculate (d Chi /dy).(d g_wesson/dx) and subtract from (d Chi /dx).(d g_wesson/dy)
     if (accelerated) then
        do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
           do j = 1, 2

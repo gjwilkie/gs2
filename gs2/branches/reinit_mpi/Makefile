@@ -67,7 +67,7 @@ GK_PROJECT ?= gs2
 # turns on debug mode (bin)
 DEBUG ?=
 # turns on scalasca instrumentation mode (bin)
-SCAL ?=
+SCAL ?= 
 # turns on test mode (bin)
 TEST ?=
 # turns on profile mode (gprof,ipm)
@@ -79,11 +79,11 @@ STATIC ?=
 # promotes precisions of real and complex (bin)
 DBLE ?= on
 # turns on distributed memory parallelization using MPI (bin)
-USE_MPI ?= on
+USE_MPI ?= on 
 # turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?=
 # which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
-USE_FFT ?= fftw
+USE_FFT ?= fftw3
 # uses netcdf library (bin)
 USE_NETCDF ?= on
 # uses parallel netcdf library
@@ -106,8 +106,6 @@ USE_NAGLIB ?=
 MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
-# Use le_layout for collision operator
-USE_LE_LAYOUT ?=
 
 ifdef NPROCS
 	NTESTPROCS=$(NPROCS)
@@ -258,7 +256,7 @@ ifeq ($(USE_FFT),fftw)
 endif
 
 ifeq ($(USE_FFT),fftw3)
-	CPPFLAGS += -DFFT=_FFTW3_
+	CPPFLAGS += -DFFT=_FFTW3_ $(FFT_INC)
 	FFT_LIB ?= -lfftw -lrfftw
 endif
 
@@ -403,7 +401,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests
+.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests benchmarks clean_tests
 
 all: $(.DEFAULT_GOAL)
 
@@ -471,10 +469,26 @@ sync_input_doc:
 clean:
 	-rm -f *.o *.mod *.g90 *.h core */core
 
+CLEANCOMMAND=echo $$$$PWD
+CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch
+
+ifdef CLEAN_TEXTFILES
+	CLEANCOMMAND+= *~ *.orig
+endif
+
+export 
+
+clean_tests:
+	$(MAKE) clean -C linear_tests 
+	$(MAKE) clean -C unit_tests 
+
+clean_benchmarks:
+	$(MAKE) clean -C benchmarks 
+
 cleanlib:
 	-rm -f *.a
 
-distclean: unlink clean cleanlib
+distclean: unlink clean cleanlib clean_tests clean_benchmarks
 
 tar:
 	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
@@ -549,11 +563,14 @@ unlink:
 
 revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
+
+
+gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 	
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
-TEST_DEPS?=$(gs2_mod)
+TEST_DEPS?=$(gs2_mod) functional_tests.o
 export
 unit_tests: unit_tests.o $(TEST_DEPS)
 	cd unit_tests && time ${MAKE} && echo && echo "Tests Successful!"
@@ -561,12 +578,17 @@ unit_tests: unit_tests.o $(TEST_DEPS)
 linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
 	cd linear_tests && time ${MAKE} && echo && echo "Tests Successful!"
 
+tests: unit_tests linear_tests
+
 test_script: unit_tests linear_tests
 	echo "" > test_script.sh
-	find $(PWD)/unit_tests -executable | grep -v svn | grep 'unit_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
+	find $(PWD)/unit_tests -executable | grep -v svn | grep 'unit_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 $(BLUEGENEARGS) \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
 	find $(PWD)/linear_tests -executable | grep -v svn | grep 'linear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
 	echo "echo \"Tests Successful\"" >> test_script.sh
 	#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
+
+benchmarks: functional_tests.o unit_tests.o $(TEST_DEPS)
+	cd benchmarks && time ${MAKE} && echo && echo "Completed Benchmarks"
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^

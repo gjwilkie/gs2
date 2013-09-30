@@ -88,7 +88,7 @@ contains
   subroutine init_transforms &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
     use mp, only: nproc
-    use gs2_layouts, only: init_gs2_layouts
+    use gs2_layouts, only: init_gs2_layouts, opt_redist_init
     use gs2_layouts, only: pe_layout, init_accel_transform_layouts
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: init_x_transform_layouts
@@ -100,8 +100,8 @@ contains
     character (1) :: char
 ! CMR, 12/2/2010:  return correct status of "accelerated" even if already initialised
     accelerated = accel
-! CMR, 12/2/2010:  return correct status of "accelerated" even if already initialised
-    accelerated = accel
+
+    !Early exit if possible
     if (initialized) return
     initialized = .true.
 
@@ -113,7 +113,13 @@ contains
        accel = .true.
        call init_accel_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
     else
-       call init_y_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+       !Recommended for p+log(p)>log(N) where p is number of processors and N is total number of mesh points
+       !Could automate selection, though above condition is only fairly rough
+       if (opt_redist_init) then
+          call init_y_redist_local (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+       else
+          call init_y_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+       endif
     end if
 
 ! need these for movies
@@ -181,7 +187,7 @@ contains
 
   subroutine init_y_fft (ntgrid)
 
-    use gs2_layouts, only: xxf_lo, yxf_lo, accel_lo, accelx_lo, dealiasing, g_lo
+    use gs2_layouts, only: xxf_lo, yxf_lo, accel_lo, accelx_lo, dealiasing
     use fft_work, only: init_crfftw, init_rcfftw, init_ccfftw
     implicit none
     integer, intent (in) :: ntgrid
@@ -305,6 +311,12 @@ contains
     if (initialized_x_redist) return
     initialized_x_redist = .true.
 
+!<DD>This routine can probably be optimised somewhat.
+!in particular the large number of calls to the index lookup routines
+!and idx_local can be reduced significantly by exploiting knowledge of
+!the xxf layout and similar.
+!For most cases init_x_redist_local is faster
+
     call init_x_transform_layouts &
          (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
 
@@ -388,6 +400,224 @@ contains
 
   end subroutine init_x_redist
 
+  !<DD>
+  subroutine init_x_redist_local (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
+    use gs2_layouts, only: init_x_transform_layouts
+    use gs2_layouts, only: g_lo, xxf_lo, gidx2xxfidx, proc_id, idx_local
+    use gs2_layouts, only: opt_local_copy, layout
+    use gs2_layouts, only: ik_idx,il_idx,ie_idx,is_idx,idx, ig_idx, isign_idx
+    use mp, only: nproc
+    use redistribute, only: index_list_type, init_redist, delete_list
+    use redistribute, only: set_redist_character_type, set_xxf_optimised_variables
+    use sorting, only: quicksort
+    implicit none
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list, sort_list
+    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    integer, dimension (3) :: from_low, from_high
+    integer, dimension (2) :: to_high
+    integer :: to_low
+    integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
+    logical :: initialized = .false.
+
+    integer :: iglo, isign, ig, it, ixxf, it0
+    integer :: n, ip
+
+    !Early exit if possible
+    if (initialized) return
+    initialized = .true.
+
+    !Setup the xxf_lo layout object
+    call init_x_transform_layouts &
+         (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
+
+    ! count number of elements to be redistributed to/from each processor
+    nn_to = 0
+    nn_from = 0
+
+    !Here we loop over the whole domain (so this doesn't get cheaper with more cores)
+    !This is required to ensure that we can associate send and receive message elements
+    !i.e. so we know that we put the received data in the correct place.
+    !However, as we know the order the iglo,isign,ig indices should increase we could
+    !loop over our ixxf local range, calculate the corresponding iglo,isign and ig indices
+    !and sort the ixxf messages on this to ensure they're in the correct order.
+    !Either way when just counting how much data we are going to send and receive we don't
+    !care about order so we can just loop over our local range!
+    !First count the sends | g_lo-->xxf_lo
+    !Protect against procs with no data
+    if(g_lo%ulim_proc.ge.g_lo%llim_proc)then
+       do iglo = g_lo%llim_proc, g_lo%ulim_alloc
+          !Convert iglo,isign=1,ig=-ntgrid into ixxf
+          ixxf=idx(xxf_lo,-ntgrid,1,ik_idx(g_lo,iglo),&
+               il_idx(g_lo,iglo),ie_idx(g_lo,iglo),is_idx(g_lo,iglo))
+
+          !Now loop over other local dimensions
+          do isign = 1, 2
+             do ig = -ntgrid, ntgrid
+                !Increase the data send count for the proc which has the ixxf
+                nn_from(proc_id(xxf_lo,ixxf))=nn_from(proc_id(xxf_lo,ixxf))+1
+
+                !Increase ixxf using knowledge of the xxf_lo layout
+                ixxf=ixxf+xxf_lo%naky
+             enddo
+          enddo
+       enddo
+    endif
+
+    !Now count the receives | xxf_lo<--g_lo
+    !Protect against procs with no data
+    if(xxf_lo%ulim_proc.ge.xxf_lo%llim_proc)then
+       do ixxf = xxf_lo%llim_proc, xxf_lo%ulim_alloc
+          !Could split it (or x) domain into two parts to account for
+          !difference in it (or x) meaning and order in g_lo and xxf_lo
+          !but only interested in how much data we receive and not the
+          !exact indices (yet) so just do 1-->ntheta0 (this is how many 
+          !non-zero x's?)
+          do it=1,g_lo%ntheta0
+             !Convert ixxf,it indices into iglo, ig and isign indices
+             iglo=idx(g_lo,ik_idx(xxf_lo,ixxf),it,il_idx(xxf_lo,ixxf),&
+                  ie_idx(xxf_lo,ixxf),is_idx(xxf_lo,ixxf))
+
+             !Increase the data to receive count for proc with this data
+             !Note, we only worry about iglo and not isign/ig because we know that
+             !in g_lo each proc has all ig and isign domain.
+             !The xxf_lo domain contains ig and isign so we only need to add one
+             !to the count for each ixxf.
+             nn_to(proc_id(g_lo,iglo))=nn_to(proc_id(g_lo,iglo))+1
+          enddo
+       enddo
+    endif
+
+    !<DD>Debug test, are we sending and receiving the same amount to ourselves? Remove when testing completed
+    !if(debug.and.nn_to(iproc).ne.nn_from(iproc)) print*,"ERROR: iproc ",iproc,"nn_from",nn_from(iproc),"nn_to",nn_to(iproc)
+
+    !Now allocate storage for data mapping indices
+    do ip = 0, nproc-1
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first(nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+          allocate (from_list(ip)%third(nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first(nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+          !For sorting to_list later
+          allocate (sort_list(ip)%first(nn_to(ip)))
+       end if
+    end do
+
+    !Reinitialise count arrays to zero
+    nn_to = 0
+    nn_from = 0
+
+    !First fill in the sending indices, these define the messages data order
+    !Protect against procs with no data
+    if(g_lo%ulim_proc.ge.g_lo%llim_proc)then
+       do iglo=g_lo%llim_proc, g_lo%ulim_alloc
+          !Convert iglo,isign=1,ig=-ntgrid into ixxf
+          ixxf=idx(xxf_lo,-ntgrid,1,ik_idx(g_lo,iglo),&
+               il_idx(g_lo,iglo),ie_idx(g_lo,iglo),is_idx(g_lo,iglo))
+
+          !Now loop over other local dimensions
+          do isign = 1, 2
+             do ig = -ntgrid, ntgrid
+                !Get proc id
+                ip=proc_id(xxf_lo,ixxf)
+
+                !Increment procs message counter
+                n=nn_from(ip)+1
+                nn_from(ip)=n
+
+                !Store indices
+                from_list(ip)%first(n) = ig
+                from_list(ip)%second(n) = isign
+                from_list(ip)%third(n) = iglo
+
+                !We could send this information, transformed to the xxf layout to the proc.
+
+                !Increment counter
+                ixxf=ixxf+xxf_lo%naky
+             enddo
+          enddo
+       enddo
+    endif
+
+    !Now lets fill in the receiving indices, these must match the messages data order
+    !Protect against procs with no data
+    if(xxf_lo%ulim_proc.ge.xxf_lo%llim_proc)then
+       do ixxf = xxf_lo%llim_proc, xxf_lo%ulim_alloc
+          !Get ig and isign indices
+          ig=ig_idx(xxf_lo,ixxf)
+          isign=isign_idx(xxf_lo,ixxf)
+
+          !Loop over receiving "it" indices 
+          do it=1,g_lo%ntheta0
+             !Convert from g_lo%it to xxf_lo%it
+             if(it>(xxf_lo%ntheta0+1)/2) then
+                it0=it+xxf_lo%nx-xxf_lo%ntheta0
+             else
+                it0=it
+             endif
+
+             !Convert ixxf,it indices into iglo indices
+             iglo=idx(g_lo,ik_idx(xxf_lo,ixxf),it,il_idx(xxf_lo,ixxf),&
+                  ie_idx(xxf_lo,ixxf),is_idx(xxf_lo,ixxf))
+
+             !Get proc id which has this data
+             ip=proc_id(g_lo,iglo)
+
+             !Determine message position index
+             n=nn_to(ip)+1
+             nn_to(ip)=n
+
+             !Store receive indices
+             to_list(ip)%first(n)=it0
+             to_list(ip)%second(n)=ixxf
+
+             !Store index for sorting
+             sort_list(ip)%first(n) = ig+ntgrid-1+xxf_lo%ntgridtotal*(isign-1+2*(iglo-g_lo%llim_world)) 
+          enddo
+       enddo
+    endif
+
+    !Now we need to sort the to_list message indices based on sort_list | This seems potentially slow + inefficient
+    do ip=0,nproc-1
+       !Only need to worry about procs which we are receiving from
+       if(nn_to(ip)>0) then
+          !Sort using quicksort
+          CALL QUICKSORT(nn_to(ip),sort_list(ip)%first,to_list(ip)%first,to_list(ip)%second)
+       endif
+    enddo
+
+    !Setup array range values
+    from_low (1) = -ntgrid
+    from_low (2) = 1
+    from_low (3) = g_lo%llim_proc
+
+    to_low = xxf_lo%llim_proc
+    
+    to_high(1) = xxf_lo%nx
+    to_high(2) = xxf_lo%ulim_alloc
+
+    from_high(1) = ntgrid
+    from_high(2) = 2
+    from_high(3) = g_lo%ulim_alloc
+
+    call set_redist_character_type(g2x, 'g2x')
+    call set_xxf_optimised_variables(opt_local_copy, naky, ntgrid, ntheta0, &
+       nlambda, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
+
+    !Create g2x redistribute object
+    call init_redist (g2x, 'c', to_low, to_high, to_list, &
+         from_low, from_high, from_list)
+
+    !Deallocate list objects
+    call delete_list (to_list)
+    call delete_list (from_list)
+    call delete_list(sort_list)
+
+  end subroutine init_x_redist_local
+!</DD>
+
   subroutine init_y_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx, proc_id, idx_local
@@ -404,6 +634,11 @@ contains
 
     integer :: it, ixxf, ik, iyxf
     integer :: n, ip
+!<DD>This routine can probably be optimised somewhat.
+!in particular the large number of calls to the index lookup routines
+!and idx_local can be reduced significantly by exploiting knowledge of
+!the xxf layout and similar.
+!For most cases init_y_redist_local is faster
 
     if (initialized_y_redist) return
     initialized_y_redist = .true.
@@ -495,6 +730,202 @@ contains
     
   end subroutine init_y_redist
 
+!<DD>
+  subroutine init_y_redist_local (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+    use gs2_layouts, only: init_y_transform_layouts
+    use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx, proc_id, idx_local
+    use gs2_layouts, only: ik_idx,it_idx,il_idx,ie_idx,is_idx,idx,ig_idx,isign_idx
+    use mp, only: nproc
+    use redistribute, only: index_list_type, init_redist, delete_list
+    use redistribute, only: set_yxf_optimised_variables, set_redist_character_type
+    use sorting, only: quicksort
+    implicit none
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list,sort_list
+    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    integer, dimension (2) :: from_low, from_high, to_high
+    integer :: to_low
+    integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
+    integer, intent (in) :: nx, ny
+
+    integer :: it, ixxf, ik, iyxf
+    integer :: ixxf_start, iyxf_start
+    integer :: n, ip
+    logical :: initialized = .false.
+
+    !Early exit if possible
+    if (initialized) return
+    initialized = .true.
+
+    !Setup g_lo-->xxf_lo redist object first
+    call init_x_redist_local (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
+
+    !Setup the yxf layout object
+    call init_y_transform_layouts &
+         (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+
+    !Initialise counts to zero
+    nn_to = 0
+    nn_from = 0
+
+    !First count data to send | xxf_lo-->yxf_lo
+    !Protect against procs with no data
+    if(xxf_lo%ulim_proc.ge.xxf_lo%llim_proc)then
+       do ixxf=xxf_lo%llim_proc,xxf_lo%ulim_alloc
+          !Get iyxf index for "it"=1 
+          iyxf_start=idx(yxf_lo,ig_idx(xxf_lo,ixxf),&
+               isign_idx(xxf_lo,ixxf),1,il_idx(xxf_lo,ixxf),&
+               ie_idx(xxf_lo,ixxf),is_idx(xxf_lo,ixxf))
+
+          !Loop over "it" range, note that we actually only want to know
+          !iyxf in this range and we know that it-->it+1 => iyxf-->iyxf+1
+          !so replace loop with one over iyxf
+          do iyxf=iyxf_start,iyxf_start+yxf_lo%nx-1
+             !Increase the appropriate procs send count
+             nn_from(proc_id(yxf_lo,iyxf))=nn_from(proc_id(yxf_lo,iyxf))+1
+          enddo
+       enddo
+    endif
+
+    !Now count data to receive | yxf_lo<--xxf_lo
+    !Protect against procs with no data
+    if(yxf_lo%ulim_proc.ge.yxf_lo%llim_proc)then
+       do iyxf=yxf_lo%llim_proc,yxf_lo%ulim_alloc
+          !Get ixxf index for "ik"=1 
+          ixxf_start=idx(xxf_lo,ig_idx(yxf_lo,iyxf),&
+               isign_idx(yxf_lo,iyxf),1,il_idx(yxf_lo,iyxf),&
+               ie_idx(yxf_lo,iyxf),is_idx(yxf_lo,iyxf))
+
+          !Loop over "ik" range, note that we actually only want to know
+          !ixxf in this range and we know that ik-->ik+1 => ixxf-->ixxf+1
+          !so replace loop with one over ixxf
+          do ixxf=ixxf_start,ixxf_start+xxf_lo%naky-1
+             !Increase the appropriate procs recv count
+             nn_to(proc_id(xxf_lo,ixxf))=nn_to(proc_id(xxf_lo,ixxf))+1
+          enddo
+       enddo
+    endif
+
+    !<DD>Debug test, are we sending and receiving the same amount to ourselves? Remove when testing completed
+    !if(debug.and.nn_to(iproc).ne.nn_from(iproc)) print*,"ERROR: iproc ",iproc,"nn_from",nn_from(iproc),"nn_to",nn_to(iproc)
+
+    !Now allocate storage for data mapping structures
+    do ip = 0, nproc-1
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first(nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first(nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+          !For sorting to_list later
+          allocate (sort_list(ip)%first(nn_to(ip)))
+       end if
+    end do
+
+    !Reinitialise count arrays to zero
+    nn_to = 0
+    nn_from = 0
+
+    !First fill in the sending indices, these define the messages data order
+    !Protect against procs with no data
+    if(xxf_lo%ulim_proc.ge.xxf_lo%llim_proc)then
+       do ixxf=xxf_lo%llim_proc,xxf_lo%ulim_alloc
+          !Get iyxf for "it"=1
+          iyxf=idx(yxf_lo,ig_idx(xxf_lo,ixxf),&
+               isign_idx(xxf_lo,ixxf),1,il_idx(xxf_lo,ixxf),&
+               ie_idx(xxf_lo,ixxf),is_idx(xxf_lo,ixxf))
+
+          !Now loop over other local dimension. Note we need "it" here
+          !so don't replace this with loop over iyxf
+          do it=1,yxf_lo%nx
+             !Get the processor id
+             ip=proc_id(yxf_lo,iyxf)
+
+             !Increment the procs message counter
+             n=nn_from(ip)+1
+             nn_from(ip)=n
+
+             !Store indices
+             from_list(ip)%first(n)=it
+             from_list(ip)%second(n)=ixxf
+
+             !Increment iyxf
+             iyxf=iyxf+1
+          enddo
+       enddo
+    endif
+
+    !Now fill in the receiving indices, these must match the message data order, achieved by later sorting
+    !Protect against procs with no data
+    if(yxf_lo%ulim_proc.ge.yxf_lo%llim_proc)then
+       do iyxf=yxf_lo%llim_proc,yxf_lo%ulim_alloc
+          !Get ixxf for "ik"=1
+          ixxf=idx(xxf_lo,ig_idx(yxf_lo,iyxf),&
+               isign_idx(yxf_lo,iyxf),1,il_idx(yxf_lo,iyxf),&
+               ie_idx(yxf_lo,iyxf),is_idx(yxf_lo,iyxf))
+
+          !Now loop over other local dimension. Note we need "ik" here
+          !so don't replace this with loop over ixxf
+          do ik=1,xxf_lo%naky
+             !Get the processor id
+             ip=proc_id(xxf_lo,ixxf)
+
+             !Increment the procs message counter
+             n=nn_to(ip)+1
+             nn_to(ip)=n
+
+             !Store indices
+             to_list(ip)%first(n)=ik
+             to_list(ip)%second(n)=iyxf
+
+             !Store index for sorting
+             sort_list(ip)%first(n)=it_idx(yxf_lo,iyxf)+ixxf*yxf_lo%nx
+
+             !Increment ixxf
+             ixxf=ixxf+1
+          enddo
+       enddo
+    endif
+
+    !Now we need to sort the to_list message indices based on sort_list
+    !This could be slow and inefficient
+    do ip=0,nproc-1
+       !Only need to worry about procs which we are receiving from
+       if(nn_to(ip)>0) then
+          !Use quicksort based on compound index
+          CALL quicksort(nn_to(ip),sort_list(ip)%first,to_list(ip)%first,to_list(ip)%second)
+       endif
+    enddo
+
+    !Setup array bound values
+    from_low(1) = 1
+    from_low(2) = xxf_lo%llim_proc
+
+    to_low = yxf_lo%llim_proc
+
+    to_high(1) = yxf_lo%ny/2+1
+    to_high(2) = yxf_lo%ulim_alloc
+
+    from_high(1) = xxf_lo%nx
+    from_high(2) = xxf_lo%ulim_alloc
+
+    call set_redist_character_type(x2y, 'x2y')
+    call set_yxf_optimised_variables(yxf_lo%ulim_proc)
+
+    !Create x2y redist object
+    call init_redist (x2y, 'c', to_low, to_high, to_list, &
+         from_low, from_high, from_list)
+    
+    !Deallocate list objects
+    call delete_list (to_list)
+    call delete_list (from_list)
+    call delete_list (sort_list)
+
+  end subroutine init_y_redist_local
+!</DD>
+
+!</DD>
+
   subroutine transform_x5d (g, xxf)
     use gs2_layouts, only: xxf_lo, g_lo
     use prof, only: prof_entering, prof_leaving
@@ -502,8 +933,10 @@ contains
     implicit none
     complex, dimension (-xxf_lo%ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (:,xxf_lo%llim_proc:), intent (out) :: xxf
+# if FFT == _FFTW_
     complex, dimension(:), allocatable :: aux
     integer :: i
+# endif
 
     call prof_entering ("transform_x5d", "gs2_transforms")
 
@@ -542,8 +975,10 @@ contains
     implicit none
     complex, dimension (:,xxf_lo%llim_proc:), intent (in out) :: xxf
     complex, dimension (-xxf_lo%ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
+# if FFT == _FFTW_
     complex, dimension(:), allocatable :: aux
     integer :: i
+# endif
 
     call prof_entering ("inverse_x5d", "gs2_transforms")
 
@@ -578,10 +1013,11 @@ contains
     complex, dimension (:,xxf_lo%llim_proc:), intent (in) :: xxf
 # ifdef FFT
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
+    integer :: i
 # else
     real, dimension (:,yxf_lo%llim_proc:) :: yxf
 # endif
-    integer :: i
+
 
     call prof_entering ("transform_y5d", "gs2_transforms")
 
@@ -614,7 +1050,9 @@ contains
     implicit none
     real, dimension (:,yxf_lo%llim_proc:), intent (in out) :: yxf
     complex, dimension (:,xxf_lo%llim_proc:), intent (out) :: xxf
+# if FFT == _FFTW_
     integer :: i 
+# endif
 
     call prof_entering ("inverse_y5d", "gs2_transforms")
 
@@ -645,6 +1083,21 @@ contains
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
     integer :: iglo
 
+!CMR+GC: 2/9/2013
+!  gs2's Fourier coefficients,  F_k^gs2, not standard form: i.e. f(x) = f_k e^(i k.x)
+!
+!  F_k^gs2 are 2 x larger for ky > 0,   i.e.
+!                     F_k^gs2 = |    f_k   for ky = 0
+!                               |  2 f_k   for ky > 0
+!
+! Following large loop (due to this) can be eliminated with std Fourier coeffs.
+! Similar optimisations possible in: 
+!          "inverse2_5d", "transform2_5d_accel", "inverse2_5d_accel" 
+!
+! NB Moving to standard Fourier coeffs would impact considerably on diagnostics:
+!       e.g. fac in get_volume_average
+!
+
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        if (ik_idx(g_lo, iglo) == 1) cycle
        g(:,:,iglo) = g(:,:,iglo) / 2.0
@@ -665,6 +1118,11 @@ contains
     call inverse_x (xxf, g)
 
     g = g * xb_fft%scale * yb_fft%scale
+
+!CMR+GC: 2/9/2013
+! Following large loop can be eliminated if gs2 used standard Fourier coefficients.
+! (See above comment in transform2_5d.)
+!
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        if (ik_idx(g_lo, iglo) == 1) cycle
@@ -696,7 +1154,10 @@ contains
     integer :: ntgrid
 
     ntgrid = accel_lo%ntgrid
-
+!
+!CMR+GC, 2/9/2013:
+!  Scaling g would not be necessary if gs2 used standard Fourier coefficients.
+!
     ! scale the g and copy into the anti-aliased array ag
     ! zero out empty ag
     ! touch each g and ag only once
@@ -729,6 +1190,10 @@ contains
           idx = idx + 1
        endif
     enddo
+
+!CMR+GC: 2/9/2013
+! Following large loop can be eliminated if gs2 used standard Fourier coefficients.
+! (See above comment in transform2_5d.)
 
     ! we might not have scaled all g
     Do iglo = idx, g_lo%ulim_proc
@@ -786,6 +1251,9 @@ contains
     do k = accel_lo%llim_proc, accel_lo%ulim_proc
        ! ignore the large k (anti-alias)
        if ( .not.aidx(k)) then
+!
+!CMR+GC, 2/9/2013:
+!  Scaling g here would be unnecessary if gs2 used standard Fourier coefficients.
           ! different scale factors depending on ky == 0
           if (ik_idx(g_lo, idx) .ne. 1) then
              do iduo = 1, 2 
@@ -806,6 +1274,10 @@ contains
        endif
     enddo
     
+!CMR+GC: 2/9/2013
+! Following large loop can be eliminated if gs2 used standard Fourier coefficients.
+! (See above comment in transform2_5d.)
+
     ! we might not have scaled all g
     Do iglo = idx, g_lo%ulim_proc
        if (ik_idx(g_lo, iglo) .ne. 1) then
@@ -855,7 +1327,7 @@ contains
 
   subroutine transform2_3d (phi, phixf, nny, nnx)
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0, nx, aky
+    use kt_grids, only: naky, ntheta0, aky
     implicit none
     integer :: nnx, nny
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
@@ -972,7 +1444,7 @@ contains
 
   subroutine transform2_2d (phi, phixf, nny, nnx)
     use fft_work, only: FFTW_BACKWARD, delete_fft, init_crfftw
-    use kt_grids, only: naky, nakx => ntheta0, nx, aky, akx
+    use kt_grids, only: naky, nakx => ntheta0, nx, aky
     implicit none
     integer :: nnx, nny
     complex, intent (in) :: phi(:,:)
@@ -1049,7 +1521,7 @@ contains
 
     allocate (aphi (nny/2+1, nnx))
     allocate (phix (nny, nnx))
-    phix(:,:)=cmplx(0.,0.); aphi(:,:)=cmplx(0.,0.)
+    phix(:,:)=0.; aphi(:,:)=cmplx(0.,0.)
 
     phix(:,:)=transpose(phixf(:,:))
 
@@ -1081,7 +1553,7 @@ contains
 !     but transform only operates for species=1
 !     anyone who uses this routine should be aware of/fix this!
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0, nx, aky
+    use kt_grids, only: naky, ntheta0, aky
     implicit none
     integer :: nnx, nny
     complex, dimension (-ntgrid:,:,:,:), intent (in) :: den

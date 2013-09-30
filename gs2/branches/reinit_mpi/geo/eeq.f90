@@ -46,7 +46,6 @@ contains
   subroutine write_gs2d(filename)
     implicit none
     character(len=40), intent(in) :: filename
-    integer :: i,j
     open(1,file=filename,status='unknown')
     write(1,fmt='("GS2 input file",T30,"Produced by GS2D at:",a40)') ' '
     write(1,fmt='(A80/,"GS2D Equilibrium Boundary description:",3(/A80))') repeat('-',80),' ',' ',repeat('-',80)
@@ -145,16 +144,15 @@ contains
     use gs2d
     implicit none
 
-    real :: xdum, p_0
+    real :: p_0
     real :: rwid, rleft, zhei, amin, B_T
     real :: psi_0, psi_a, rmaj, rcentr, bcentr
     real, dimension(:), allocatable :: zp, temp, zx1, zxm, zy1, zyn
     real :: zxy11, zxym1, zxy1n, zxymn
     
     character*80 :: filename, eqfile
-    character char*10
     
-    integer :: i, j, init, ndum, initeq, big, nhb, nwb, ierr
+    integer :: i, j, init, initeq, big, nhb, nwb, ierr
     
     data init /1/
     save init
@@ -327,10 +325,6 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
     efit_dR = efit_R(2) - efit_R(1)
     efit_dZ = efit_Z(2) - efit_Z(1)
-
-    1000 format(5(a10),i2,i4,i4)
-    2020 format (5e16.9)
-    2022 format (2i5)      
 
   end subroutine gs2din
 
@@ -663,7 +657,7 @@ if (debug) write(6,*) "efit_init: do i"
     real, dimension(-ntm:), intent(in) :: rgrid, theta
     real, dimension(-ntm:,:), intent(out) :: grad
     real aa(1), daa(1), rp, rpt(1)
-    integer i, j
+    integer i
     
     grad = 0.
     do i=-nth, nth
@@ -692,7 +686,6 @@ if (debug) write(6,*) "efit_init: do i"
     real tmp(2), aa(1), daa(1), rp, rpt(1)
     real, dimension(nw, nh, 2) ::  dbish
     integer i
-    logical :: first = .true.
  
     dbish(:,:,1) = sqrt(dpm(:,:,1)**2 + dpm(:,:,2)**2)
     dbish(:,:,2) = 0.
@@ -993,7 +986,6 @@ if (debug) write(6,*) "efit_init: do i"
     use splines
     real :: theta, bound
     type (spline), save :: spl
-    integer i
 
     if(init_bound) call new_spline(nbbbs, thetab, r_bound, spl)
     init_bound = .false.
@@ -1116,7 +1108,7 @@ if (debug) write(6,*) "efit_init: do i"
 
     real, dimension(:) :: a, b, c, d
     real tmp
-    integer :: i, j, jmax
+    integer :: i, jmax
     logical :: sorted
 
     jmax = size(a)

@@ -378,7 +378,6 @@ contains
     call init_theta_grid
     call init_kt_grids
     call init_run_parameters
-!    write(6,*) "init_gs2_diagnostics: init_species"
     call init_species
     call init_init_g
     call init_dist_fn
@@ -1749,21 +1748,21 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 
     if (proc0) then
        if (print_flux_line) then
-!          write (unit=*, fmt="('t= ',e16.10,' <phi**2>= ',e12.6, &
-!               & ' heat fluxes: ', 5(1x,e12.6))") &
-!               t, phi2, heat_fluxes(1:min(nspec,5))
-!          write (unit=*, fmt="('t= ',e16.10,' <phi**2>= ',e12.6, &
-!               & ' energy exchange: ', 5(1x,e12.6))") &
-!               t, phi2, energy_exchange(1:min(nspec,5))
+          write (unit=*, fmt="('t= ',e16.10,' <phi**2>= ',e12.6, &
+               & ' heat fluxes: ', 5(1x,e12.6))") &
+               t, phi2, heat_fluxes(1:min(nspec,5))
+          write (unit=*, fmt="('t= ',e16.10,' <phi**2>= ',e12.6, &
+               & ' energy exchange: ', 5(1x,e12.6))") &
+               t, phi2, energy_exchange(1:min(nspec,5))
           if (fapar > epsilon(0.0)) then
-!             write (unit=*, fmt="('t= ',e16.10,' <apar**2>= ',e10.4, &
-!                  & ' heat flux m: ', 5(1x,e10.4))") &
-!                  t, apar2, mheat_fluxes(1:min(nspec,5))
+             write (unit=*, fmt="('t= ',e16.10,' <apar**2>= ',e10.4, &
+                  & ' heat flux m: ', 5(1x,e10.4))") &
+                  t, apar2, mheat_fluxes(1:min(nspec,5))
           end if
           if (fbpar > epsilon(0.0)) then
-!             write (unit=*, fmt="('t= ',e16.10,' <bpar**2>= ',e10.4, &
-!                  & ' heat flux b: ', 5(1x,e10.4))") &
-!                  t, bpar2, bheat_fluxes(1:min(nspec,5))
+             write (unit=*, fmt="('t= ',e16.10,' <bpar**2>= ',e10.4, &
+                  & ' heat flux b: ', 5(1x,e10.4))") &
+                  t, bpar2, bheat_fluxes(1:min(nspec,5))
           end if
        end if
        if (print_line) then
@@ -1777,14 +1776,14 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 !                        real( omegaavg(it,ik)*woutunits(ik)), &
 !                        aimag(omegaavg(it,ik)*woutunits(ik)), &
 !                        phitot(it,ik)
-!                write (unit=*, fmt="('ky=',f7.4, ' kx=',f7.4, &
-!                     &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e8.2)") &
-!                     aky(ik), akx(it), &
-!                     real( omega(it,ik)*woutunits(ik)), &
-!                     aimag(omega(it,ik)*woutunits(ik)), &
-!                     real( omegaavg(it,ik)*woutunits(ik)), &
-!                     aimag(omegaavg(it,ik)*woutunits(ik)), &
-!                     phitot(it,ik)
+                write (unit=*, fmt="('ky=',1pe9.2, ' kx=',1pe9.2, &
+                     &' om=',e9.2,x,e9.2,' omav=',e9.2,x,e9.2,' phtot=',e8.2)") &
+                     aky(ik), akx(it), &
+                     real( omega(it,ik)*woutunits(ik)), &
+                     aimag(omega(it,ik)*woutunits(ik)), &
+                     real( omegaavg(it,ik)*woutunits(ik)), &
+                     aimag(omegaavg(it,ik)*woutunits(ik)), &
+                     phitot(it,ik)
              end do
           end do
 !          write (*,*) 
@@ -2035,14 +2034,14 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 !                write (out_unit,*) "aky=",aky(ik)," theta0=",theta0(it,ik)
 
                 if (write_line) then
-!                   write (out_unit, "('t= ',e16.10,' aky= ',1pe12.4, ' akx= ',1pe12.4, &
-!                        &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4)") &
-!                        t, aky(ik), akx(it), &
-!                        real( omega(it,ik)*woutunits(ik)), &
-!                        aimag(omega(it,ik)*woutunits(ik)), &
-!                        real( omegaavg(it,ik)*woutunits(ik)), &
-!                        aimag(omegaavg(it,ik)*woutunits(ik)), &
-!                        phitot(it,ik)
+                   write (out_unit, "('t= ',e16.10,' aky= ',1pe12.4, ' akx= ',1pe12.4, &
+                        &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4)") &
+                        t, aky(ik), akx(it), &
+                        real( omega(it,ik)*woutunits(ik)), &
+                        aimag(omega(it,ik)*woutunits(ik)), &
+                        real( omegaavg(it,ik)*woutunits(ik)), &
+                        aimag(omegaavg(it,ik)*woutunits(ik)), &
+                        phitot(it,ik)
                 end if
                 
 !                if (write_omega) write (out_unit, *) &
@@ -2783,6 +2782,7 @@ if (debug) write(6,*) "loop_diagnostics: done"
     logical, intent (in out) :: exit
     complex, dimension (:,:), intent (out) :: omegaavg
 !CMR, 7/11/2008: save here crucial to avoid crippling memory leak with mpixl!
+!HJL - moved to top of module
 !    complex, allocatable, save, dimension (:,:,:) :: domega
     integer :: j
     logical, optional :: debopt
@@ -2872,6 +2872,11 @@ if (debug) write(6,*) "get_omegaavg: done"
 ! ky=0 modes have correct amplitudes; rest must be scaled
 ! note contrast with scaling factors in FFT routines.
 
+!CMR+GC: 2/9/2013
+!  fac values here arise because gs2's Fourier coefficients, F_k^gs2, not standard form: 
+!          i.e. f(x) = f_k e^(i k.x)
+!  With standard Fourier coeffs in gs2, we would instead need:  fac=2.0 for ky > 0
+!      (fac=2.0 would account ky<0 contributions, not stored due to reality condition)
     favg = 0.
     do ik = 1, naky
        fac = 0.5
@@ -2894,6 +2899,12 @@ if (debug) write(6,*) "get_omegaavg: done"
 
 ! ky=0 modes have correct amplitudes; rest must be scaled
 ! note contrast with scaling factors in FFT routines.
+
+!CMR+GC: 2/9/2013
+!  fac values here arise because gs2's Fourier coefficients, F_k^gs2, not standard form: 
+!          i.e. f(x) = f_k e^(i k.x)
+!  With standard Fourier coeffs in gs2, we would instead need:  fac=2.0 for ky > 0
+!      (fac=2.0 would account ky<0 contributions, not stored due to reality condition)
 
     favg = 0.
     do ik = 1, naky
@@ -3098,6 +3109,12 @@ if (debug) write(6,*) "get_omegaavg: done"
 
 ! ky=0 modes have correct amplitudes; rest must be scaled
 ! note contrast with scaling factors in FFT routines.
+
+!CMR+GC: 2/9/2013
+!  fac values here arise because gs2's Fourier coefficients, F_k^gs2, not standard form: 
+!          i.e. f(x) = f_k e^(i k.x)
+!  With standard Fourier coeffs in gs2, we would instead need:  fac=2.0 for ky > 0
+!      (fac=2.0 would account ky<0 contributions, not stored due to reality condition)
 
     favg = 0.
     do ik = 1, naky

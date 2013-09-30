@@ -1,15 +1,5 @@
 # include "define.inc"
 
-! lowflow terms include higher-order corrections to GK equation
-! such as parallel nonlinearity that require derivatives in v-space.
-! most efficient way to take these derivatives is to go from g_lo to le_lo,
-! i.e., bring all energies and lambdas onto each processor
-# ifdef LOWFLOW
-# ifndef USE_LE_LAYOUT
-# define USE_LE_LAYOUT on
-# endif
-# endif
-
 !>  Routines for implementing the model collision operator
 !!defined by Barnes, Abel et al. 2009. The collision operator causes 
 !! physically motivated smoothing of structure in velocity space which 
@@ -33,11 +23,33 @@ module collisions
   public :: init_lorentz_conserve, init_diffuse_conserve
   public :: init_lorentz_error, collision_model_switch
   public :: colls, hyper_colls, heating, adjust
+  public :: use_le_layout
+
+  interface solfp1
+     module procedure solfp1_le_layout
+     module procedure solfp1_standard_layout
+  end interface
+
+  interface solfp_lorentz
+     module procedure solfp_lorentz_le_layout
+     module procedure solfp_lorentz_standard_layout
+  end interface
+
+  interface conserve_lorentz
+     module procedure conserve_lorentz_le_layout
+     module procedure conserve_lorentz_standard_layout
+  end interface
+
+  interface conserve_diffuse
+     module procedure conserve_diffuse_le_layout
+     module procedure conserve_diffuse_standard_layout
+  end interface 
+
 
   private
 
   ! knobs
-
+  logical :: use_le_layout = .false.
   logical :: const_v, conserve_moments
   logical :: conservative, resistivity
   integer :: collision_model_switch
@@ -91,34 +103,41 @@ module collisions
 
   ! only for momentum conservation due to Lorentz operator (8.06)
   complex, dimension(:,:,:), allocatable :: s0, w0, z0
-# ifdef USE_LE_LAYOUT
+  ! The following (between the start and finish comments) are only used for LE layout
+  ! start
   real, dimension (:,:,:), allocatable :: s0le, w0le, z0le
   real, dimension (:,:,:), allocatable :: aj0le, aj1le
-# endif
+  ! finish
 
   ! needed for momentum and energy conservation due to energy diffusion (3.08)
   complex, dimension(:,:,:), allocatable :: bs0, bw0, bz0
-# ifdef USE_LE_LAYOUT
+
+  ! The following (between the start and finish comments) are only used for LE layout
+  ! start
   real, dimension (:,:), allocatable :: vpatmp
   complex, dimension (:,:,:), allocatable :: bs0le, bw0le, bz0le
-# endif
+  ! finish
 
   ! only for original parallel mom conservation (not used nowadays)
   real, dimension (:,:,:), allocatable :: sq
   ! (-ntgrid:ntgrid,nlambda,2) replicated
 
   real :: cfac
-# ifdef USE_LE_LAYOUT
+
+  ! The following (between the start and finish comments) are only used for LE layout
+  ! start
   ! only for lorentz
   real, dimension (:,:,:), allocatable :: c1le, betaale, qle, d1le, h1le
   ! only for energy diffusion
   real, dimension (:,:,:), allocatable :: ec1le, ebetaale, eqle
-# else
+  ! finish
+  ! The following (between the start and finish comments) are only used for none LE layout
+  ! start
   ! only for lorentz
   real, dimension (:,:), allocatable :: c1, betaa, ql, d1, h1
   ! only for energy diffusion
   real, dimension (:,:), allocatable :: ec1, ebetaa, eql
-# endif
+  ! finish
 
   logical :: drag = .false.
   logical :: heating_flag = .false.
@@ -177,12 +196,20 @@ contains
     use le_grids, only: init_le_grids, nlambda, negrid , init_map
     use run_parameters, only: init_run_parameters
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
+    use mp, only: proc0
 
     implicit none
 
     logical :: use_lz_layout = .false.
     logical :: use_e_layout = .false.
-    logical :: use_le_layout = .false.
+! lowflow terms include higher-order corrections to GK equation
+! such as parallel nonlinearity that require derivatives in v-space.
+! most efficient way to take these derivatives is to go from g_lo to le_lo,
+! i.e., bring all energies and lambdas onto each processor
+# ifdef LOWFLOW
+    use_le_layout = .true.
+# endif
+
 
     if (initialized) return
     initialized = .true.
@@ -198,19 +225,17 @@ contains
     call init_run_parameters
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
     call read_parameters
-# ifdef USE_LE_LAYOUT
-    use_le_layout = .true.
-# else
-    select case (collision_model_switch)
-    case (collision_model_full)
-       use_lz_layout = .true.
-       use_e_layout = .true.
-    case (collision_model_lorentz,collision_model_lorentz_test)
-       use_lz_layout = .true.
-    case (collision_model_ediffuse)
-       use_e_layout = .true.
-    end select
-# endif
+    if( .not. use_le_layout ) then
+       select case (collision_model_switch)
+       case (collision_model_full)
+          use_lz_layout = .true.
+          use_e_layout = .true.
+       case (collision_model_lorentz,collision_model_lorentz_test)
+          use_lz_layout = .true.
+       case (collision_model_ediffuse)
+          use_e_layout = .true.
+       end select
+    end if
     call init_map (use_lz_layout, use_e_layout, use_le_layout, test)
     call init_arrays
 
@@ -241,7 +266,8 @@ contains
          heating, adjust, const_v, cfac, hypermult, ei_coll_only, &
          lorentz_scheme, ediff_scheme, resistivity, conservative, test, &
 ! following only needed for adaptive collisionality
-         vnfac, etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa
+         vnfac, etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, &
+	 use_le_layout
     integer :: ierr, in_file
 
     if (proc0) then
@@ -286,6 +312,7 @@ contains
             ierr, "ediff_scheme in collisions_knobs")
     end if
 
+
     call broadcast (hypermult)
     call broadcast (cfac)
 !> only need for adaptive collisionality
@@ -309,6 +336,7 @@ contains
     call broadcast (test)
     call broadcast (adjust)
     call broadcast (ei_coll_only)
+    call broadcast (use_le_layout)
 
     drag = resistivity .and. (beta > epsilon(0.0)) .and. (nspec > 1) .and. (fapar.gt.0)
   end subroutine read_parameters
@@ -363,7 +391,7 @@ contains
   subroutine init_lorentz_conserve
 
 ! Precompute three quantities needed for momentum and energy conservation:
-! z0, w0, s0 (z0le, w0le, s0le if USE_LE_LAYOUT defined)
+! z0, w0, s0 (z0le, w0le, s0le if use_le_layout chosen in the input file defined)
     
     use gs2_layouts, only: g_lo, ie_idx, is_idx, ik_idx, il_idx, it_idx
     use species, only: nspec, spec, electron_species
@@ -374,11 +402,9 @@ contains
     use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
     use run_parameters, only: tunits
     use constants, only: pi
-# ifdef USE_LE_LAYOUT
     use le_grids, only: nlambda, ng2, g2le, nxi
     use gs2_layouts, only: le_lo
     use redistribute, only: gather, scatter
-# endif
 
     implicit none
     
@@ -388,11 +414,11 @@ contains
     complex, dimension (:,:,:,:), allocatable :: duinv, dtmp
     real, dimension (:,:,:,:), allocatable :: vns
     integer :: ie, il, ik, is, isgn, iglo, all, it
-# ifdef USE_LE_LAYOUT
     complex, dimension (:,:,:), allocatable :: ctmp, z_big
 
-    allocate (ctmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-# endif
+    if(use_le_layout) then
+       allocate (ctmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+    end if
     
 ! TO DO: 
 ! tunits not included anywhere yet
@@ -439,14 +465,14 @@ contains
           end if
        end do
     end do
-    
-# ifdef USE_LE_LAYOUT
-    call gather (g2le, z0, ctmp)
-    call solfp_lorentz (ctmp)
-    call scatter (g2le, ctmp, z0)   ! z0 is redefined below
-# else
-    call solfp_lorentz (z0,dum1,dum2,init=init_flag)   ! z0 is redefined below
-# endif
+
+    if(use_le_layout) then    
+      call gather (g2le, z0, ctmp)
+      call solfp_lorentz (ctmp)
+      call scatter (g2le, ctmp, z0)   ! z0 is redefined below
+    else
+      call solfp_lorentz (z0,dum1,dum2,init=init_flag)   ! z0 is redefined below
+    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v0z0
@@ -537,13 +563,13 @@ contains
        end do
     end do
 
-# ifdef USE_LE_LAYOUT
-    call gather (g2le, s0, ctmp)
-    call solfp_lorentz (ctmp)
-    call scatter (g2le, ctmp, s0)   ! s0
-# else
-    call solfp_lorentz (s0,dum1,dum2,init=init_flag)   ! s0
-# endif
+    if(use_le_layout) then    
+      call gather (g2le, s0, ctmp)
+      call solfp_lorentz (ctmp)
+      call scatter (g2le, ctmp, s0)   ! s0
+    else
+      call solfp_lorentz (s0,dum1,dum2,init=init_flag)   ! s0
+    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v0s0
@@ -628,13 +654,13 @@ contains
        end do
     end do
 
-# ifdef USE_LE_LAYOUT
-    call gather (g2le, w0, ctmp)
-    call solfp_lorentz (ctmp)
-    call scatter (g2le, ctmp, w0)
-# else
-    call solfp_lorentz (w0,dum1,dum2,init=init_flag)
-# endif
+    if(use_le_layout) then    
+      call gather (g2le, w0, ctmp)
+      call solfp_lorentz (ctmp)
+      call scatter (g2le, ctmp, w0)
+    else
+      call solfp_lorentz (w0,dum1,dum2,init=init_flag)
+    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v0w0
@@ -725,52 +751,52 @@ contains
 
     deallocate (gtmp, duinv, dtmp, vns)
 
-# ifdef USE_LE_LAYOUT
 
-    allocate (z_big(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
+    if(use_le_layout) then    
+      allocate (z_big(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
 
-    ! first set s0le, w0le & z0le
-    z_big = 0.0
-    z_big = cmplx(real(s0), real(w0))
+      ! first set s0le, w0le & z0le
+      z_big = 0.0
+      z_big = cmplx(real(s0), real(w0))
 
-    call gather (g2le, z_big, ctmp)
+      call gather (g2le, z_big, ctmp)
 
-    if (.not. allocated(z0le)) then
-       allocate (s0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-       allocate (w0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-       allocate (z0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+      if (.not. allocated(z0le)) then
+         allocate (s0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+         allocate (w0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+         allocate (z0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+      end if
+
+      s0le = real(ctmp)
+      w0le = aimag(ctmp)
+
+      ! set z0le
+      call gather (g2le, z0, ctmp)
+
+      z0le = real(ctmp)
+
+      ! next set aj0le & aj1l
+      z_big(:,1,:) = cmplx(aj0,aj1)
+      z_big(:,2,:) = z_big(:,1,:)
+
+      call gather (g2le, z_big, ctmp)
+
+      if (.not. allocated(aj0le)) then
+         allocate (aj0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+         allocate (aj1le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+      end if
+
+      aj0le = real(ctmp)
+      aj1le = aimag(ctmp)
+
+      deallocate (ctmp, z_big)
+
+      ! get rid of z0, s0, w0 now that we've converted to z0le, s0le, w0le
+      if (allocated(s0)) deallocate(s0)
+      if (allocated(z0)) deallocate(z0)
+      if (allocated(w0)) deallocate(w0)
+
     end if
-
-    s0le = real(ctmp)
-    w0le = aimag(ctmp)
-
-    ! set z0le
-    call gather (g2le, z0, ctmp)
-
-    z0le = real(ctmp)
-
-    ! next set aj0le & aj1l
-    z_big(:,1,:) = cmplx(aj0,aj1)
-    z_big(:,2,:) = z_big(:,1,:)
-
-    call gather (g2le, z_big, ctmp)
-
-    if (.not. allocated(aj0le)) then
-       allocate (aj0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-       allocate (aj1le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-    end if
-
-    aj0le = real(ctmp)
-    aj1le = aimag(ctmp)
-
-    deallocate (ctmp, z_big)
-
-    ! get rid of z0, s0, w0 now that we've converted to z0le, s0le, w0le
-    if (allocated(s0)) deallocate(s0)
-    if (allocated(z0)) deallocate(z0)
-    if (allocated(w0)) deallocate(w0)
-
-# endif
     
   end subroutine init_lorentz_conserve
 
@@ -788,11 +814,9 @@ contains
     use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
     use run_parameters, only: tunits
     use constants, only: pi
-# ifdef USE_LE_LAYOUT
     use le_grids, only: nlambda, ng2, g2le, nxi
     use gs2_layouts, only: le_lo
     use redistribute, only: gather, scatter
-# endif
 
     implicit none
 
@@ -801,11 +825,11 @@ contains
     complex, dimension (:,:,:,:), allocatable :: duinv, dtmp
     real, dimension (:,:,:,:), allocatable :: vns
     integer :: ie, il, ik, is, isgn, iglo, all, it
-# ifdef USE_LE_LAYOUT
     complex, dimension (:,:,:), allocatable :: ctmp, z_big
 
-    allocate (ctmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-# endif
+    if(use_le_layout) then
+      allocate (ctmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+    end  if
 
 ! TO DO: 
 ! tunits not included anywhere yet
@@ -864,14 +888,14 @@ contains
                * aj0(:,iglo)*duinv(:,it,ik,is)
        end do
     end do
-    
-# ifdef USE_LE_LAYOUT
-    call gather (g2le, bz0, ctmp)
-    call solfp_ediffuse (ctmp)
-    call scatter (g2le, ctmp, bz0)   ! bz0 is redefined below
-# else
-    call solfp_ediffuse (bz0,init=.true.)   ! bz0 is redefined below
-# endif
+
+    if(use_le_layout) then    
+      call gather (g2le, bz0, ctmp)
+      call solfp_ediffuse_le_layout (ctmp,le_lo)
+      call scatter (g2le, ctmp, bz0)   ! bz0 is redefined below
+    else
+      call solfp_ediffuse_standard_layout (bz0,init=.true.)   ! bz0 is redefined below
+    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v0z0
@@ -951,13 +975,13 @@ contains
        end do
     end do
 
-# ifdef USE_LE_LAYOUT
-    call gather (g2le, bs0, ctmp)
-    call solfp_ediffuse (ctmp)
-    call scatter (g2le, ctmp, bs0)   ! bs0
-# else
-    call solfp_ediffuse (bs0,init=.true.)    ! s0
-# endif
+    if(use_le_layout) then
+      call gather (g2le, bs0, ctmp)
+      call solfp_ediffuse_le_layout (ctmp, le_lo)
+      call scatter (g2le, ctmp, bs0)   ! bs0
+    else
+      call solfp_ediffuse_standard_layout (bs0,init=.true.)    ! s0
+    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v0s0
@@ -1033,13 +1057,13 @@ contains
        end do
     end do
 
-# ifdef USE_LE_LAYOUT
-    call gather (g2le, bw0, ctmp)
-    call solfp_ediffuse (ctmp)
-    call scatter (g2le, ctmp, bw0)
-# else
-    call solfp_ediffuse (bw0,init=.true.)
-# endif
+    if(use_le_layout) then    
+      call gather (g2le, bw0, ctmp)
+      call solfp_ediffuse_le_layout (ctmp, le_lo)
+      call scatter (g2le, ctmp, bw0)
+    else
+      call solfp_ediffuse_standard_layout (bw0,init=.true.)
+    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get v0w0
@@ -1128,33 +1152,33 @@ contains
 
     deallocate (gtmp, duinv, dtmp, vns)
 
-# ifdef USE_LE_LAYOUT
 
-    if (.not. allocated(bs0le)) then
-       allocate (bs0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-       allocate (bz0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-       allocate (bw0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+    if(use_le_layout) then    
+      if (.not. allocated(bs0le)) then
+         allocate (bs0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+         allocate (bz0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+         allocate (bw0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+      end if
+      call gather (g2le, bs0, bs0le)
+      call gather (g2le, bz0, bz0le)
+      call gather (g2le, bw0, bw0le)
+
+      if (.not. allocated(aj0le)) then
+         allocate (z_big(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
+         ! next set aj0le & aj1l
+         z_big(:,1,:) = cmplx(aj0,aj1)
+         z_big(:,2,:) = z_big(:,1,:)
+         call gather (g2le, z_big, ctmp)
+         allocate (aj0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+         allocate (aj1le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+         aj0le = real(ctmp)
+         aj1le = aimag(ctmp)
+         deallocate (z_big)
+      end if
+
+      deallocate (ctmp)
+
     end if
-    call gather (g2le, bs0, bs0le)
-    call gather (g2le, bz0, bz0le)
-    call gather (g2le, bw0, bw0le)
-
-    if (.not. allocated(aj0le)) then
-       allocate (z_big(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
-       ! next set aj0le & aj1l
-       z_big(:,1,:) = cmplx(aj0,aj1)
-       z_big(:,2,:) = z_big(:,1,:)
-       call gather (g2le, z_big, ctmp)
-       allocate (aj0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-       allocate (aj1le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-       aj0le = real(ctmp)
-       aj1le = aimag(ctmp)
-       deallocate (z_big)
-    end if
-
-    deallocate (ctmp)
-
-# endif
 
   end subroutine init_diffuse_conserve
 
@@ -1364,12 +1388,8 @@ contains
     use egrid, only: zeroes, x0
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
-# ifdef USE_LE_LAYOUT
     use le_grids, only: nlambda
-    use gs2_layouts, only: le_lo
-# else
-    use gs2_layouts, only: e_lo, il_idx
-# endif
+    use gs2_layouts, only: le_lo, e_lo, il_idx
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
     use dist_fn_arrays, only: kperp2
     use spfunc, only: erf => erf_ext
@@ -1382,11 +1402,8 @@ contains
     real, dimension (:), allocatable :: aa, bb, cc, xe, el
     real :: vn, xe0, xe1, xe2, xer, xel, er, fac, ee, capgl, capgr, slb1
 !    real :: erf ! this is needed for PGI: RN
-# ifdef USE_LE_LAYOUT
     integer :: ile, ixi
-# else
     integer :: ielo
-# endif
 
     allocate (aa(negrid), bb(negrid), cc(negrid))
     allocate (xe(negrid))
@@ -1401,65 +1418,66 @@ contains
        vnmult(2) = max (vnmult_target, 1.0)
     end if
 
-# ifdef USE_LE_LAYOUT
 
-    if (.not.allocated(ec1le)) then
-       allocate (ec1le   (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
-       allocate (ebetaale(nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
-       allocate (eqle    (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
-       vnmult(2) = max(1.0, vnmult(2))
-    end if
-    ec1le = 0.0 ; ebetaale = 0.0 ; eqle = 0.0
+    if(use_le_layout) then    
 
-    do ile = le_lo%llim_proc, le_lo%ulim_proc
-       ik = ik_idx(le_lo, ile)
-       it = it_idx(le_lo, ile)
-       is = is_idx(le_lo, ile)
-       ig = ig_idx(le_lo, ile)
-       do ixi=1, nxi
-          il = ixi_to_il(ig,ixi)
-          if (forbid(ig,il)) cycle
-          call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, el, xe)
-          ec1le(ixi,:,ile) = cc
-          ebetaale(ixi,1,ile) = 1.0 / bb(1)
-          do ie = 1, negrid-1
-             eqle(ixi,ie+1,ile) = aa(ie+1) * ebetaale(ixi,ie,ile)
-             ebetaale(ixi,ie+1,ile) = 1.0 / ( bb(ie+1) - eqle(ixi,ie+1,ile) &
-                  * ec1le(ixi,ie,ile) )
-          end do
-       end do
-    end do
+      if (.not.allocated(ec1le)) then
+         allocate (ec1le   (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
+         allocate (ebetaale(nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
+         allocate (eqle    (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
+         vnmult(2) = max(1.0, vnmult(2))
+      end if
+      ec1le = 0.0 ; ebetaale = 0.0 ; eqle = 0.0
 
-# else
+      do ile = le_lo%llim_proc, le_lo%ulim_proc
+         ik = ik_idx(le_lo, ile)
+         it = it_idx(le_lo, ile)
+         is = is_idx(le_lo, ile)
+         ig = ig_idx(le_lo, ile)
+         do ixi=1, nxi
+            il = ixi_to_il(ig,ixi)
+            if (forbid(ig,il)) cycle
+            call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, el, xe)
+            ec1le(ixi,:,ile) = cc
+            ebetaale(ixi,1,ile) = 1.0 / bb(1)
+            do ie = 1, negrid-1
+               eqle(ixi,ie+1,ile) = aa(ie+1) * ebetaale(ixi,ie,ile)
+               ebetaale(ixi,ie+1,ile) = 1.0 / ( bb(ie+1) - eqle(ixi,ie+1,ile) &
+                    * ec1le(ixi,ie,ile) )
+            end do
+         end do
+      end do
 
-    if (.not.allocated(ec1)) then
-       allocate (ec1    (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
-       allocate (ebetaa (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
-       allocate (eql    (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
-       vnmult(2) = max(1.0, vnmult(2))
-    endif
-    ec1 = 0.0 ; ebetaa = 0.0 ; eql = 0.0
+    else
 
-    do ielo = e_lo%llim_proc, e_lo%ulim_proc
-       is = is_idx(e_lo, ielo)
-       ik = ik_idx(e_lo, ielo)
-       il = il_idx(e_lo, ielo)
-       ig = ig_idx(e_lo, ielo)
-       it = it_idx(e_lo, ielo)
-       if (forbid(ig,il)) cycle
-       call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, el, xe)
-       ec1(:,ielo) = cc
+      if (.not.allocated(ec1)) then
+         allocate (ec1    (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
+         allocate (ebetaa (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
+         allocate (eql    (negrid,e_lo%llim_proc:e_lo%ulim_alloc))
+         vnmult(2) = max(1.0, vnmult(2))
+      endif
+      ec1 = 0.0 ; ebetaa = 0.0 ; eql = 0.0
+
+      do ielo = e_lo%llim_proc, e_lo%ulim_proc
+         is = is_idx(e_lo, ielo)
+         ik = ik_idx(e_lo, ielo)
+         il = il_idx(e_lo, ielo)
+         ig = ig_idx(e_lo, ielo)
+         it = it_idx(e_lo, ielo)
+         if (forbid(ig,il)) cycle
+         call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, el, xe)
+         ec1(:,ielo) = cc
 
 ! fill in the arrays for the tridiagonal
-       ebetaa(1,ielo) = 1.0/bb(1)
-       do ie = 1, negrid-1
-          eql(ie+1,ielo) = aa(ie+1)*ebetaa(ie,ielo)
-          ebetaa(ie+1,ielo) = 1.0/(bb(ie+1)-eql(ie+1,ielo)*ec1(ie,ielo))
-       end do
+         ebetaa(1,ielo) = 1.0/bb(1)
+         do ie = 1, negrid-1
+            eql(ie+1,ielo) = aa(ie+1)*ebetaa(ie,ielo)
+            ebetaa(ie+1,ielo) = 1.0/(bb(ie+1)-eql(ie+1,ielo)*ec1(ie,ielo))
+         end do
 
-    end do
+      end do
 
-# endif
+    end if
 
     deallocate(aa, bb, cc, xe, el)
 
@@ -1648,11 +1666,8 @@ contains
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: kperp2
-# ifdef USE_LE_LAYOUT
     use gs2_layouts, only: le_lo
-# else
     use gs2_layouts, only: lz_lo
-# endif
     use gs2_layouts, only: ig_idx, ik_idx, ie_idx, is_idx, it_idx
 
     implicit none
@@ -1663,127 +1678,124 @@ contains
     real, dimension (:), allocatable :: aa, bb, cc
     real, dimension (:), allocatable :: dd, hh
     real :: slb0, slb1, slb2, slbl, slbr, vn, ee, vnh, vnc
-# ifdef USE_LE_LAYOUT
     integer :: ile
-# else
     integer :: ilz
-# endif
 
     allocate (aa(nxi+1), bb(nxi+1), cc(nxi+1), dd(nxi+1), hh(nxi+1))
 
     call init_vpdiff
 
-# ifdef USE_LE_LAYOUT
+    if(use_le_layout) then
 
-    if (heating .and. .not. allocated(glec)) then
-       allocate (glec(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-       glec = 0.0
-    end if
-    if (.not.allocated(c1le)) then
-       allocate (c1le    (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
-       allocate (betaale (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
-       allocate (qle     (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
-       if (heating) then
-          allocate (d1le    (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
-          allocate (h1le    (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
-          d1le = 0.0 ; h1le = 0.0
-       end if
-       vnmult(1) = max(1.0, vnmult(1))
-    endif
-    c1le = 0.0 ; betaale = 0.0 ; qle = 0.0
+      if (heating .and. .not. allocated(glec)) then
+         allocate (glec(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+         glec = 0.0
+      end if
+      if (.not.allocated(c1le)) then
+         allocate (c1le    (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
+         allocate (betaale (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
+         allocate (qle     (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
+         if (heating) then
+            allocate (d1le    (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
+            allocate (h1le    (nxi+1, negrid, le_lo%llim_proc:le_lo%ulim_alloc))
+            d1le = 0.0 ; h1le = 0.0
+         end if
+         vnmult(1) = max(1.0, vnmult(1))
+      endif
+      c1le = 0.0 ; betaale = 0.0 ; qle = 0.0
 
-    if (present(vnmult_target)) then
-       vnmult(1) = max (vnmult_target, 1.0)
-    end if
+      if (present(vnmult_target)) then
+         vnmult(1) = max (vnmult_target, 1.0)
+      end if
 
-    do ile = le_lo%llim_proc, le_lo%ulim_proc
+      do ile = le_lo%llim_proc, le_lo%ulim_proc
 
-       ig = ig_idx(le_lo,ile)
-       ik = ik_idx(le_lo,ile)
-       it = it_idx(le_lo,ile)
-       is = is_idx(le_lo,ile)
-       je = jend(ig)
-       if (je <= ng2+1) then
-          te2 = 2*ng2
-       else
-          te2 = 2*je-1
-       end if
-       do ie = 1, negrid
+         ig = ig_idx(le_lo,ile)
+         ik = ik_idx(le_lo,ile)
+         it = it_idx(le_lo,ile)
+         is = is_idx(le_lo,ile)
+         je = jend(ig)
+         if (je <= ng2+1) then
+            te2 = 2*ng2
+         else
+            te2 = 2*je-1
+         end if
+         do ie = 1, negrid
 
-          call get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
-          c1le(:,ie,ile) = cc
-          if (allocated(d1le)) then
-             d1le(:,ie,ile) = dd
-             h1le(:,ie,ile) = hh
-          end if
+            call get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
+            c1le(:,ie,ile) = cc
+            if (allocated(d1le)) then
+               d1le(:,ie,ile) = dd
+               h1le(:,ie,ile) = hh
+            end if
 
-          qle(1,ie,ile) = 0.0
-          betaale(1,ie,ile) = 1.0/bb(1)
-          do il = 1, te2-1
-             qle(il+1,ie,ile) = aa(il+1) * betaale(il,ie,ile)
-             betaale(il+1,ie,ile) = 1.0 / ( bb(il+1) - qle(il+1,ie,ile) &
-                  * c1le(il,ie,ile) )
-          end do
-          qle(te2+1,ie,ile) = 0.0
-          betaale(te2+1,ie,ile) = 0.0
+            qle(1,ie,ile) = 0.0
+            betaale(1,ie,ile) = 1.0/bb(1)
+            do il = 1, te2-1
+               qle(il+1,ie,ile) = aa(il+1) * betaale(il,ie,ile)
+               betaale(il+1,ie,ile) = 1.0 / ( bb(il+1) - qle(il+1,ie,ile) &
+                    * c1le(il,ie,ile) )
+            end do
+            qle(te2+1,ie,ile) = 0.0
+            betaale(te2+1,ie,ile) = 0.0
 
-       end do
-    end do
+         end do
+      end do
 
-# else
+    else
 
-    if (.not.allocated(c1)) then
-       allocate (c1(nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
-       allocate (betaa(nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
-       allocate (ql(nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
-       if (heating) then
-          allocate (d1   (nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
-          allocate (h1   (nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
-          d1 = 0.0 ; h1 = 0.0
-       end if
-       vnmult(1) = max(1.0, vnmult(1))
-    end if
+      if (.not.allocated(c1)) then
+         allocate (c1(nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
+         allocate (betaa(nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
+         allocate (ql(nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
+         if (heating) then
+            allocate (d1   (nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
+            allocate (h1   (nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
+            d1 = 0.0 ; h1 = 0.0
+         end if
+         vnmult(1) = max(1.0, vnmult(1))
+      end if
        
-    c1 = 0.0 ; betaa = 0.0 ; ql = 0.0
+      c1 = 0.0 ; betaa = 0.0 ; ql = 0.0
 
-    if (present(vnmult_target)) then
-       vnmult(1) = max (vnmult_target, 1.0)
+      if (present(vnmult_target)) then
+         vnmult(1) = max (vnmult_target, 1.0)
+      end if
+
+      do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
+         is = is_idx(lz_lo,ilz)
+         ik = ik_idx(lz_lo,ilz)
+         it = it_idx(lz_lo,ilz)
+         ie = ie_idx(lz_lo,ilz)
+         ig = ig_idx(lz_lo,ilz)
+         je = jend(ig)
+         if (je <= ng2+1) then
+            te2 = 2*ng2
+         else
+            te2 = 2*je-1
+         end if
+
+         call get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
+         c1(:,ilz) = cc
+         if (allocated(d1)) then
+            d1(:,ilz) = dd
+            h1(:,ilz) = hh
+         end if
+
+         betaa(1,ilz) = 1.0/bb(1)
+         do il = 1, te2-1
+            ql(il+1,ilz) = aa(il+1)*betaa(il,ilz)
+            betaa(il+1,ilz) = 1.0/(bb(il+1)-ql(il+1,ilz)*c1(il,ilz))
+         end do
+
+         ql(1,ilz) = 0.0
+         ql(te2+1:,ilz) = 0.0
+         c1(te2+1:,ilz) = 0.0
+         betaa(te2+1:,ilz) = 0.0
+
+      end do
+
     end if
-
-    do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
-       is = is_idx(lz_lo,ilz)
-       ik = ik_idx(lz_lo,ilz)
-       it = it_idx(lz_lo,ilz)
-       ie = ie_idx(lz_lo,ilz)
-       ig = ig_idx(lz_lo,ilz)
-       je = jend(ig)
-       if (je <= ng2+1) then
-          te2 = 2*ng2
-       else
-          te2 = 2*je-1
-       end if
-
-       call get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
-       c1(:,ilz) = cc
-       if (allocated(d1)) then
-          d1(:,ilz) = dd
-          h1(:,ilz) = hh
-       end if
-
-       betaa(1,ilz) = 1.0/bb(1)
-       do il = 1, te2-1
-          ql(il+1,ilz) = aa(il+1)*betaa(il,ilz)
-          betaa(il+1,ilz) = 1.0/(bb(il+1)-ql(il+1,ilz)*c1(il,ilz))
-       end do
-
-       ql(1,ilz) = 0.0
-       ql(te2+1:,ilz) = 0.0
-       c1(te2+1:,ilz) = 0.0
-       betaa(te2+1:,ilz) = 0.0
-
-    end do
-
-# endif
 
     deallocate (aa, bb, cc, dd, hh)
 
@@ -2313,8 +2325,7 @@ contains
     deallocate (slb, dprod, dlcoef, d2lcoef)
   end subroutine init_lorentz_error
 
-# ifndef USE_LE_LAYOUT
-  subroutine solfp1 (g, g1, gc1, gc2, diagnostics)
+  subroutine solfp1_standard_layout (g, g1, gc1, gc2, diagnostics, gtoc, ctog)
 
     use gs2_layouts, only: g_lo, it_idx, ik_idx, ie_idx, is_idx
     use theta_grid, only: ntgrid
@@ -2336,6 +2347,27 @@ contains
     integer, optional, intent (in) :: diagnostics
 
     integer :: ig, it, ik, ie, is, iglo
+!CMR, 12/9/2013: 
+!CMR   New logical optional input parameters gtoc, ctog used to set
+!CMR   flags (g_to_c and c_to_g) to control whether redistributes required
+!CMR   to map g_lo to collision_lo, and collision_lo to g_lo.
+!CMR   All redistributes are performed by default.
+!CMR  
+    logical, optional :: gtoc, ctog
+    logical :: g_to_c, c_to_g
+
+    if (present(gtoc)) then 
+       g_to_c=gtoc 
+    else 
+       g_to_c=.true.
+    endif
+
+    if (present(ctog)) then 
+       c_to_g=ctog 
+    else 
+       c_to_g=.true.
+    endif
+
 
     ! TMP FOR TESTING -- MAB
 !    integer :: t0, t1, t2, t3, t4, t5, tr
@@ -2349,7 +2381,7 @@ contains
        ! TMP FOR TESTING -- MAB
 !       if (proc0) call system_clock (count=t0, count_rate=tr)
 
-       call solfp_ediffuse (g)
+       call solfp_ediffuse_standard_layout (g)
 
        ! TMP FOR TESTING -- MAB
 !       if (proc0) then
@@ -2437,16 +2469,14 @@ contains
 
     case (collision_model_ediffuse)
 
-       call solfp_ediffuse (g)
+       call solfp_ediffuse_standard_layout (g)
        if (conserve_moments) call conserve_diffuse (g, g1)
 
     end select
    
-  end subroutine solfp1
+  end subroutine solfp1_standard_layout
 
-# else
-
-  subroutine solfp1 (gle, diagnostics)
+  subroutine solfp1_le_layout (gle, diagnostics)
 
     use gs2_layouts, only: le_lo, it_idx, ik_idx, ig_idx, is_idx
     use theta_grid, only: bmag
@@ -2478,7 +2508,7 @@ contains
        ! TMP FOR TESTING -- MAB
 !       if (proc0) call system_clock (count=t0, count_rate=tr)
 
-       call solfp_ediffuse (gle)
+       call solfp_ediffuse_le_layout (gle, le_lo)
 
        ! TMP FOR TESTING -- MAB
 !       if (proc0) then
@@ -2577,16 +2607,16 @@ contains
 
     case (collision_model_ediffuse)
 
-       call solfp_ediffuse (gle)
+       call solfp_ediffuse_le_layout (gle, le_lo)
+
        if (conserve_moments) call conserve_diffuse (gle)
 
     end select
    
-  end subroutine solfp1
-# endif
+  end subroutine solfp1_le_layout
 
-# ifndef USE_LE_LAYOUT
-  subroutine conserve_lorentz (g, g1)
+
+  subroutine conserve_lorentz_standard_layout (g, g1)
 
     use theta_grid, only: ntgrid
     use species, only: nspec
@@ -2716,11 +2746,10 @@ contains
 
     deallocate (vns, v0y0, v1y1, v2y2)
 
-  end subroutine conserve_lorentz
+  end subroutine conserve_lorentz_standard_layout
 
-# else
 
-  subroutine conserve_lorentz (gle)
+  subroutine conserve_lorentz_le_layout (gle)
 
     use theta_grid, only: ntgrid
     use species, only: nspec
@@ -2872,11 +2901,10 @@ contains
 
     deallocate (vpanud, v0y0, v1y1, v2y2)
 
-  end subroutine conserve_lorentz
-# endif
+  end subroutine conserve_lorentz_le_layout
 
-# ifndef USE_LE_LAYOUT
-  subroutine conserve_diffuse (g, g1)
+
+  subroutine conserve_diffuse_standard_layout (g, g1)
 
     use theta_grid, only: ntgrid
     use species, only: nspec
@@ -2996,11 +3024,9 @@ contains
 
     deallocate (vns, v0y0, v1y1, v2y2, gtmp)
 
-  end subroutine conserve_diffuse
+  end subroutine conserve_diffuse_standard_layout
 
-# else
-
-  subroutine conserve_diffuse (gle)
+  subroutine conserve_diffuse_le_layout (gle)
 
     use theta_grid, only: ntgrid
     use species, only: nspec
@@ -3196,11 +3222,9 @@ contains
 
     deallocate (vpadelnu, vns, v0y0, v1y1, v2y2, gtmp)
 
-  end subroutine conserve_diffuse
-# endif
+  end subroutine conserve_diffuse_le_layout
 
-# ifndef USE_LE_LAYOUT
-  subroutine solfp_lorentz (g, gc, gh, diagnostics, init)
+  subroutine solfp_lorentz_standard_layout (g, gc, gh, diagnostics, init)
 
     use species, only: spec, electron_species
     use theta_grid, only: ntgrid, bmag
@@ -3351,11 +3375,10 @@ contains
 
     call prof_leaving ("solfp_lorentz", "collisions")
 
-  end subroutine solfp_lorentz
+  end subroutine solfp_lorentz_standard_layout
 
-# else
 
-  subroutine solfp_lorentz (gle, diagnostics)
+  subroutine solfp_lorentz_le_layout (gle, diagnostics)
 
     use le_grids, only: jend, ng2, negrid, nxi, integrate_moment
     use gs2_layouts, only: ig_idx, ik_idx, is_idx, it_idx
@@ -3502,14 +3525,12 @@ contains
     
     call prof_leaving ("solfp_lorentz", "collisions")
 
-  end subroutine solfp_lorentz
-# endif
+  end subroutine solfp_lorentz_le_layout
 
   ! energy diffusion subroutine used with energy layout (not le_layout)
   ! this is always the case when initializing the conserving terms,
-  ! otherwise is the case if USE_LE_LAYOUT is not defined
-# ifndef USE_LE_LAYOUT
-  subroutine solfp_ediffuse (g, init)
+  ! otherwise is the case if use_le_layout is no specified in the input file.
+  subroutine solfp_ediffuse_standard_layout (g, init)
 
     use species, only: spec, nspec
     use theta_grid, only: ntgrid
@@ -3561,20 +3582,21 @@ contains
 
     deallocate (ged)
 
-  end subroutine solfp_ediffuse
+  end subroutine solfp_ediffuse_standard_layout
 
-# else
 
-  subroutine solfp_ediffuse (gle)
+  subroutine solfp_ediffuse_le_layout (gle,lo)
 
     use species, only: spec
     use le_grids, only: nxi, negrid, forbid, ixi_to_il
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx, le_lo
     use run_parameters, only: ieqzip
+    use layouts_type, only: le_layout_type
 
     implicit none
 
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
+    type (le_layout_type), intent (in) :: lo
 
     integer :: ie, is, iglo, ig, isgn, it, ik, il
     complex, dimension (negrid) :: delta
@@ -3606,8 +3628,8 @@ contains
        end do
     end do
 
-  end subroutine solfp_ediffuse
-# endif
+  end subroutine solfp_ediffuse_le_layout
+
 
   subroutine check_g (str, g)
 
@@ -3749,21 +3771,21 @@ contains
     if (allocated(vnewh)) deallocate (vnewh)
     if (allocated(sq)) deallocate (sq)
 
-# ifdef USE_LE_LAYOUT
-    if (allocated(c1le)) then
-       deallocate (c1le, betaale, qle)
-       if (heating) deallocate (d1le, h1le)
+    if(use_le_layout) then
+      if (allocated(c1le)) then
+         deallocate (c1le, betaale, qle)
+         if (heating) deallocate (d1le, h1le)
+      end if
+      if (allocated(ec1le)) deallocate (ec1le, ebetaale, eqle)
+      if (allocated(glec)) deallocate (glec)
+      if (allocated(vpatmp)) deallocate (vpatmp)
+    else
+      if (allocated(c1)) then
+         deallocate (c1, betaa, ql)
+         if (heating) deallocate (d1, h1)
+      end if
+      if (allocated(ec1)) deallocate (ec1, ebetaa, eql)
     end if
-    if (allocated(ec1le)) deallocate (ec1le, ebetaale, eqle)
-    if (allocated(glec)) deallocate (glec)
-    if (allocated(vpatmp)) deallocate (vpatmp)
-# else
-    if (allocated(c1)) then
-       deallocate (c1, betaa, ql)
-       if (heating) deallocate (d1, h1)
-    end if
-    if (allocated(ec1)) deallocate (ec1, ebetaa, eql)
-# endif
     if (allocated(vpdiff)) deallocate (vpdiff)
     if (allocated(dtot)) deallocate (dtot, fdf, fdb)
 

@@ -77,16 +77,15 @@ contains
     real, intent (out) :: rmaj, amin, psi_a_out, psi_0_out, B_T
     integer, intent (in) :: initeq
 
-    real :: xdum, p_0
+    real :: xdum
     real :: I_ring, twopi
     real :: dpsidr, dpsidz
     
-    integer :: i, j, init, ierr
+    integer :: i, j, init
     integer :: idum, jj, nthg
-    integer :: jmin, jmax
+    integer :: jmax
     
     character*80 :: filename
-    character char*10
     character (200) :: line
     
     data init /1/
@@ -410,12 +409,10 @@ contains
     character*1, intent (in) :: char
     real, dimension (-ntm:), intent (in)  ::  rgrid, theta
     real, dimension (-ntm:,:), intent (out) :: grad
-    real, dimension (2) :: tmp
     real, dimension (1) :: aa, daa, rpt
     real :: rp
     real, dimension(nr, nt, 2) ::  dbish
     integer i
-    logical :: first = .true.
  
     select case(char)
     case('B') 
