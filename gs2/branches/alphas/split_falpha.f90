@@ -440,7 +440,7 @@ contains
     real :: falpha_integrand
     real :: extra_fac, heaviside, arg
 
-    if (energy .GT. 1.0) then
+    if (energy_dummy_var .GT. 1.0) then
        heaviside = 0.0
     else
        heaviside = 1.0
