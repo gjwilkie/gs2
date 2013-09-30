@@ -574,7 +574,6 @@ hyper.o: \
 	 gs2_time.o \
 	 kt_grids.o \
 	 mp.o \
-	 run_parameters.o \
 	 text_options.o \
 	 theta_grid.o 
 ideq.o: \

@@ -361,7 +361,7 @@ contains
     integer, intent(out) :: nthg
 !    integer :: initeq, nthg
 !    real :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid, d, R_geo
-    real :: d, R_geo
+    real :: R_geo
 !    logical :: in_nt
     logical, intent(in) :: in_nt
 
@@ -1396,7 +1396,7 @@ contains
   function dpfun (pbar)
   
     use splines
-    real :: pbar, dpfun, f
+    real :: pbar, dpfun
     type (spline), save :: spl
 !
 ! p_N would be B**2/mu_0 => p = beta/2 in our units
@@ -1441,7 +1441,6 @@ contains
   subroutine Hahm_Burrell(irho, a) 
 
     use splines
-    type (spline), save :: spl
 
     real, intent(in) :: a
     integer :: i, irho

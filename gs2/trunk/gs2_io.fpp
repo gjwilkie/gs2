@@ -132,7 +132,6 @@ contains
     use file_utils, only: run_name
     use gs2_transforms, only: init_transforms
     use kt_grids, only: naky, ntheta0,nx,ny
-    use gs2_layouts, only: yxf_lo
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, negrid
     use species, only: nspec
@@ -321,7 +320,7 @@ contains
 
   subroutine nc_grids
 
-    use theta_grid, only: ntgrid, theta, eps, ntheta
+    use theta_grid, only: ntgrid, theta
     use kt_grids, only: naky, ntheta0, theta0, akx, aky, nx, ny
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
@@ -477,8 +476,7 @@ contains
  
     use file_utils, only: error_unit
     use mp, only: nproc
-    use species, only: nspec
-    use kt_grids, only: naky, ntheta0, theta0
+    use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi, fapar, fbpar
     use parameter_scan_arrays, only: write_scan_parameter
 # ifdef NETCDF
@@ -1557,11 +1555,11 @@ contains
 
 !    use nf90_mod, only: nf90_put_var
     use convert, only: c2r
-    use run_parameters, only: fphi, fapar, fbpar
     use fields_arrays, only: phi, apar, bpar
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
 # ifdef NETCDF
+    use run_parameters, only: fphi, fapar, fbpar
     use netcdf, only: nf90_put_var
 
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
@@ -1712,7 +1710,6 @@ contains
 
 !    use nf90_mod, only: nf90_put_vara
     use convert, only: c2r
-    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
 # ifdef NETCDF
@@ -1999,9 +1996,9 @@ contains
 
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
-    use run_parameters, only: fphi, fapar, fbpar
 !    use nf90_mod, only: nf90_put_vara, nf90_put_var1
 # ifdef NETCDF
+    use run_parameters, only: fphi
     use netcdf, only: nf90_put_var
 # endif
     integer, intent (in) :: nout
@@ -2045,9 +2042,9 @@ contains
 
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
-    use run_parameters, only: fphi, fapar, fbpar
 !    use nf90_mod, only: nf90_put_vara, nf90_put_var1
 # ifdef NETCDF
+    use run_parameters, only: fphi, fapar, fbpar
     use netcdf, only: nf90_put_var
 # endif
     integer, intent (in) :: nout
@@ -2181,7 +2178,7 @@ contains
 
     use convert, only: c2r
     use run_parameters, only: fphi
-    use kt_grids, only: ntheta0, naky, jtwist_out
+    use kt_grids, only: naky
     use theta_grid, only: ntgrid
 # ifdef NETCDF
     use netcdf, only: nf90_put_var
@@ -2311,7 +2308,6 @@ contains
 
     !Added by EGH ; for writing phi_t, the whole potential vs time
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
-    real, dimension (2, 2*ntgrid+1, ntheta0, naky, 1) :: ri_phi_t
     integer, dimension (5) :: start5, count5
 
     start5(1) = 1
@@ -2632,7 +2628,7 @@ contains
 # ifdef NETCDF
     real, dimension (2, nakx, naky, nspec) :: ri3
     integer, dimension (5) :: startmom, countmom
-    integer :: status, it, ik, is
+    integer :: status
 
     status = nf90_put_var (ncid, time_id, time, start=(/nout/))
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, time_id)
@@ -2671,9 +2667,9 @@ contains
   subroutine nc_loop_movie (nout_movie, time, yxphi, yxapar, yxbpar)
     use gs2_layouts, only: yxf_lo
     use theta_grid, only: ntgrid
-    use run_parameters, only: fphi, fapar, fbpar
 !    use nf90_mod, only: nf90_put_var1, nf90_put_vara
 # ifdef NETCDF
+    use run_parameters, only: fphi, fbpar
     use netcdf, only: nf90_put_var, nf90_sync
 # endif
     integer, intent (in) :: nout_movie
@@ -2699,7 +2695,7 @@ contains
        status = nf90_put_var (ncid_movie, phi_by_xmode_id, yxphi, start=start, count=count)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, phi_by_xmode_id)
     end if
-!    if ( fapar > zero) then
+!    if ( fapar > zero) then !<DD> Why is this commented out?
        status = nf90_put_var (ncid_movie, apar_by_xmode_id, yxapar, start=start, count=count)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, apar_by_xmode_id)
 !    end if
@@ -2718,7 +2714,6 @@ contains
 
   subroutine nc_species
 
-    use run_parameters, only: beta
     use species, only: spec
 !    use nf90_mod, only: nf90_put_var
 # ifdef NETCDF

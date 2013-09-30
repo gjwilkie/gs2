@@ -81,19 +81,23 @@ contains
 
 !MR, 2007: save kx_shift array in restart file if allocated    
 # ifdef NETCDF
-    use constants, only: kind_rs, kind_rd, pi
     use fields_arrays, only: phinew, aparnew, bparnew
     use dist_fn_arrays, only: kx_shift  !MR
     use kt_grids, only: naky, ntheta0
     use antenna_data, only: nk_stir, a_ant, b_ant, ant_on
+# else
+    use mp, only: proc0
 # endif    
-    use mp, only: nproc, iproc, proc0, barrier
+    use mp, only: iproc, barrier
     use theta_grid, only: ntgrid
 ! Must include g_layout_type here to avoid obscure bomb while compiling
 ! gs2_diagnostics.f90 (which uses this module) with the Compaq F90 compiler:
 ! TT>
 !    use gs2_layouts, only: g_lo, g_layout_type
-    use gs2_layouts, only: g_lo, layout
+    use gs2_layouts, only: g_lo
+# ifdef NETCDF_PARALLEL
+    use gs2_layouts, only: layout
+# endif
     use layouts_type, only: g_layout_type
 ! <TT
     use file_utils, only: error_unit
@@ -117,10 +121,13 @@ contains
     character (10) :: suffix
     integer :: i, n_elements, ierr
     integer :: total_elements
+# ifdef NETCDF_PARALLEL
     integer, dimension(3) :: start_pos, counts
+    integer, parameter :: tmpunit = 348
+# endif
     logical :: exit
     logical :: local_init !<DD> Added for saving distribution function
-    integer, parameter :: tmpunit = 348
+
 
 !*********-----------------------_**********************
 
@@ -804,7 +811,7 @@ contains
   subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar)
 !MR, 2007: restore kx_shift array if already allocated
 # ifdef NETCDF
-    use mp, only: proc0, iproc, nproc
+    use mp, only: iproc
     use fields_arrays, only: phinew, aparnew, bparnew
     use fields_arrays, only: phi, apar, bpar
     use dist_fn_arrays, only: kx_shift   ! MR
@@ -819,7 +826,9 @@ contains
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
 # ifdef NETCDF
+# ifdef NETCDF_PARALLEL
     integer, dimension(3) :: counts, start_pos
+# endif
     character (306) :: file_proc
     character (10) :: suffix
     integer :: i, n_elements, ierr
@@ -1038,7 +1047,6 @@ contains
 
 
   subroutine init_save (file)
-    use mp, only: proc0
     character(300), intent (in) :: file
     
     restart_file = file
@@ -1047,7 +1055,7 @@ contains
 
   subroutine restore_current_scan_parameter_value(current_scan_parameter_value)
 # ifdef NETCDF
-    use mp, only: nproc, proc0, broadcast, iproc
+    use mp, only: proc0, broadcast
     use file_utils, only: error_unit
 # endif
     implicit none
@@ -1056,7 +1064,6 @@ contains
     real, intent (out) :: current_scan_parameter_value
 # ifdef NETCDF
     character (306) :: file_proc
-    character (10) :: suffix
     if (.not. include_parameter_scan) return
 
     if (proc0) then
@@ -1103,7 +1110,7 @@ contains
   subroutine init_dt (delt0, istatus)
 
 # ifdef NETCDF
-    use mp, only: nproc, proc0, iproc, broadcast
+    use mp, only: proc0, broadcast
     use file_utils, only: error_unit
 # endif
     implicit none
@@ -1153,7 +1160,7 @@ contains
   subroutine init_vnm (vnm, istatus)
 
 # ifdef NETCDF
-    use mp, only: nproc, proc0, iproc,broadcast
+    use mp, only: proc0, broadcast
     use file_utils, only: error_unit
 # endif
     implicit none
@@ -1216,7 +1223,7 @@ contains
     use file_utils, only: error_unit
     use constants, only: zi
 # endif
-    use mp, only: proc0,iproc
+    use mp, only: proc0
     implicit none
     complex, dimension(:), intent (in out) :: a_ant, b_ant
     integer, intent (in) :: nk_stir
@@ -1304,7 +1311,7 @@ contains
   subroutine init_tstart (tstart, istatus)
 
 # ifdef NETCDF
-    use mp, only: nproc, proc0, iproc, broadcast
+    use mp, only: proc0, broadcast
     use file_utils, only: error_unit
 # endif
     implicit none
@@ -1312,7 +1319,6 @@ contains
     integer, intent (out) :: istatus
 # ifdef NETCDF
     character (306) :: file_proc
-    integer :: ierr
 
     if (proc0) then
 
