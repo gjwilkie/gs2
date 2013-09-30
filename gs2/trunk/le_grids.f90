@@ -279,11 +279,10 @@ contains
 
   subroutine broadcast_results
     use mp, only: proc0, broadcast
-    use species, only: nspec
     use egrid, only: zeroes, x0, init_egrid
     use theta_grid, only: ntgrid
     implicit none
-    integer :: ig, il, is, ie, ipt, isgn, tsize
+    integer :: ig, il, ipt, isgn, tsize
 
     tsize = 2*nterp-1
 
@@ -358,10 +357,9 @@ contains
   end subroutine broadcast_results
 
   subroutine read_parameters
-    use species, only: spec, has_slowing_down_species
-    use file_utils, only: input_unit, error_unit, input_unit_exist
+    use file_utils, only: input_unit_exist
     implicit none
-    integer :: ierr, in_file
+    integer :: in_file
     namelist /le_grids_knobs/ ngauss, negrid, bouncefuzz, &
          nesuper, nesub, test, trapped_particles, &
          nmax, wgt_fac, new_trap_int, nterp, vcut
@@ -427,7 +425,6 @@ contains
     integer :: ipt, ndiv, divmax
     logical :: eflag = .false.
 
-    integer :: ie, il
 
     allocate(lmodzeroes(ng2-1), wlerrtmp(ng2-1))
     allocate(wlerr(ng2,ng2))
@@ -506,7 +503,7 @@ contains
     logical, intent (out) :: err_flag
     integer, intent (out) :: ndiv, divmax
 
-    integer :: npts, rmndr, basepts, divrmndr, base_idx, idiv, epts, im, maxpts
+    integer :: npts, rmndr, basepts, divrmndr, base_idx, idiv, epts, maxpts
     integer, dimension (:), allocatable :: divpts
 
     real :: wgt_max
@@ -740,7 +737,7 @@ contains
     logical, intent(in), optional:: nogath
     complex, dimension (:), allocatable :: total_flat
     complex, dimension (:,:,:), allocatable :: total_transp
-    integer :: nl,nr, ik, it, iglo, ip, ierror,ie,is,il, ig
+    integer :: nl,nr, ik, it, iglo, ip, ie,is,il, ig
     integer, dimension(:),allocatable,save :: recvcnts,displs
     integer, save :: sz, local_rank
 
@@ -857,7 +854,7 @@ contains
     use layouts_type, only: e_layout_type
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, il_idx
     use theta_grid, only: ntgrid
-    use mp, only: sum_reduce, proc0, sum_allreduce
+    use mp, only: sum_reduce, sum_allreduce
     implicit none
 
     type (e_layout_type), intent (in) :: lo
@@ -890,7 +887,7 @@ contains
     use layouts_type, only: lz_layout_type
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, ie_idx
     use theta_grid, only: ntgrid
-    use mp, only: sum_reduce, proc0, sum_allreduce
+    use mp, only: sum_reduce, sum_allreduce
     implicit none
 
     type (lz_layout_type), intent (in) :: lo
@@ -943,6 +940,7 @@ contains
        ig = ig_idx (lo,ile)
        it = it_idx (lo,ile)
        ik = ik_idx (lo,ile)
+       is = is_idx (lo,ile)
        do ie=1, negrid
           do ixi=1, nxi
              il = ixi_to_il(ig,ixi)
@@ -1019,7 +1017,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, idx, idx_local
-    use mp, only: sum_reduce, proc0
+    use mp, only: sum_reduce
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (0:,-ntgrid:,:,:,:), intent (out) :: tote, totl
@@ -1027,8 +1025,8 @@ contains
     integer, intent (in) :: istep
 
     complex :: totfac
-    real :: fac, ulim
-    integer :: is, il, ie, ik, it, iglo, ig, i, j, im, ntrap, k
+    real :: ulim
+    integer :: is, il, ie, ik, it, iglo, ig, im, ntrap
     integer, save :: lpesize
 
     real, dimension (:), allocatable :: nodes
@@ -1153,7 +1151,7 @@ contains
     real, dimension (:), intent (in)   :: xptsdum
     real, dimension (:,0:), intent(out) :: lpdum
 
-    integer :: j, im, mmax
+    integer :: j, mmax
 
     lpdum = 0.0
 
@@ -1186,7 +1184,7 @@ contains
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, idx, idx_local
-    use mp, only: sum_reduce, proc0, sum_allreduce, nproc
+    use mp, only: sum_reduce, sum_allreduce, nproc
 
     implicit none
 
@@ -1242,7 +1240,7 @@ contains
     use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx,intmom_sub
 ! <TT
     use theta_grid, only: ntgrid
-    use mp, only: sum_reduce, proc0, sum_allreduce_sub, nproc, sum_allreduce
+    use mp, only: sum_reduce, sum_allreduce_sub, nproc, sum_allreduce
 
     implicit none
 
@@ -1312,7 +1310,7 @@ contains
 ! is over all velocity space
     use mp, only: nproc
     use gs2_layouts, only: p_lo, is_idx, ik_idx, ie_idx, il_idx
-    use mp, only: sum_reduce, proc0, sum_allreduce
+    use mp, only: sum_reduce, sum_allreduce
     use theta_grid, only: ntgrid
 
     implicit none
@@ -1357,7 +1355,7 @@ contains
     use layouts_type, only: e_layout_type
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, il_idx
     use theta_grid, only: ntgrid
-    use mp, only: sum_reduce, proc0, sum_allreduce
+    use mp, only: sum_reduce, sum_allreduce
     implicit none
 
     type (e_layout_type), intent (in) :: lo
@@ -1396,7 +1394,7 @@ contains
     use layouts_type, only: lz_layout_type
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ig_idx, ie_idx
     use theta_grid, only: ntgrid
-    use mp, only: sum_reduce, proc0, sum_allreduce
+    use mp, only: sum_reduce, sum_allreduce
     implicit none
 
     type (lz_layout_type), intent (in) :: lo
@@ -1474,7 +1472,7 @@ contains
     use kt_grids, only: aky
     use constants, only: zi
     use gs2_layouts, only: is_idx, ik_idx, ie_idx, il_idx, p_lo
-    use mp, only: sum_reduce, proc0, sum_allreduce, nproc
+    use mp, only: sum_reduce, sum_allreduce, nproc
 
     implicit none
 
@@ -1484,7 +1482,7 @@ contains
     integer, optional, intent(in) :: all
 
     complex, dimension (negrid,nlambda,nspec) :: gksum
-    integer :: is, il, ie, ik, it, iplo
+    integer :: is, il, ie, ik, iplo
 
     !Initialise both arrays to zero
     total = 0. ; gksum = 0.
@@ -1576,7 +1574,7 @@ contains
   end subroutine lint_error
 
   subroutine trap_error (g, weights, total)
-    use theta_grid, only: ntgrid, bmag, bmax
+    use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use mp, only: sum_allreduce, proc0, broadcast
@@ -1685,7 +1683,7 @@ contains
   end subroutine eint_error
 
   subroutine set_grids
-    use species, only: init_species, nspec
+    use species, only: init_species
     use egrid, only: setvgrid
     use theta_grid, only: init_theta_grid, ntgrid, nbset, bset, eps
     implicit none
@@ -1733,12 +1731,11 @@ contains
 
   subroutine lgridset
 
-    use theta_grid, only: ntgrid, bmag, bmax, eps, ntheta
+    use theta_grid, only: ntgrid, bmag, bmax, eps
     use gauss_quad, only: get_legendre_grids_from_cheb
     use constants
     use file_utils, only: open_output_file, close_output_file
 
-    use species, only: nspec
 
     implicit none
 
@@ -1747,13 +1744,12 @@ contains
     real, dimension (2*ngauss) :: wx
     real, dimension (:), allocatable :: ytmp, yb, yberr, wb, wberrtmp
     real, dimension (:,:), allocatable :: wberr
-    integer :: icnt, npts, ix, ntrap
+    integer :: npts, ix, ntrap
     real :: wwo, llim, ulim
     logical :: eflag = .false.
 
     integer :: ig, il, ndiv, divmax, divmaxerr, ndiverr
 
-    integer :: ie, is
 
     allocate (xx(2*ngauss))
 
@@ -2124,7 +2120,7 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: aky
     use gs2_layouts, only: g_lo, is_idx, ik_idx, ie_idx, il_idx
-    use mp, only: nproc, sum_reduce, proc0, sum_allreduce
+    use mp, only: nproc, sum_reduce, sum_allreduce
 
     implicit none
 
@@ -2132,7 +2128,7 @@ contains
     complex, dimension (-ntgrid:,:,:,:,:), intent (out) :: total
     integer, optional, intent(in) :: all
     real :: fac
-    integer :: is, il, ie, ik, it, iglo, isgn
+    integer :: is, il, ie, ik, iglo, isgn
 
     !Initialise to zero
     total = 0.
@@ -2177,7 +2173,7 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: aky
     use gs2_layouts, only: g_lo, is_idx, ik_idx, ie_idx, il_idx
-    use mp, only: nproc,sum_reduce, proc0, sum_allreduce
+    use mp, only: nproc,sum_reduce, sum_allreduce
 
     implicit none
 
@@ -2185,7 +2181,7 @@ contains
     real, dimension (-ntgrid:,:,:,:,:), intent (out) :: total
     integer, optional, intent(in) :: all
     real :: fac
-    integer :: is, il, ie, ik, it, iglo, isgn
+    integer :: is, il, ie, ik, iglo, isgn
 
     !Initialise to zero
     total = 0.
@@ -2227,7 +2223,6 @@ contains
   ! of vpar and theta
   subroutine get_flux_vs_theta_vs_vpa (f, vflx)
 
-    use constants, only: pi
     use theta_grid, only: ntgrid, bmag
     use species, only: nspec
 
@@ -2242,8 +2237,7 @@ contains
     real, dimension (:,:,:,:), allocatable, save :: vpapts
     real, dimension (:,:,:,:,:), allocatable, save :: hermp
 
-    real :: fac
-    integer :: is, il, ie, ig, isgn, iv
+    integer :: is, il, ie, ig, iv
     integer :: norder
 
     norder = min(negrid, nlambda)/2
@@ -2454,7 +2448,7 @@ contains
     integer, dimension (3) :: to_high
     integer :: to_low
     integer :: ig, isign, iglo, il, ile
-    integer :: ik, it, ie, is, ixi
+    integer :: ik, it, ie, is
     integer :: n, ip, je
 
     if (leinit) return
@@ -2562,7 +2556,7 @@ contains
 !<DD>
   subroutine init_g2le_redistribute_local
 
-    use mp, only: nproc, iproc
+    use mp, only: nproc
     use species, only: nspec
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
@@ -2584,10 +2578,9 @@ contains
     integer, dimension (3) :: to_high
     integer :: to_low
     integer :: ig, isign, iglo, il, ile
-    integer :: ik, it, ie, is, ixi
+    integer :: ie
     integer :: n, ip, je
     integer :: ile_bak, il0
-    logical :: debug=.true.
 
     !Early exit if possible
     if (leinit) return
@@ -2871,7 +2864,7 @@ contains
   subroutine check_g2le
 
     use file_utils, only: error_unit
-    use mp, only: finish_mp, iproc, nproc, proc0
+    use mp, only: finish_mp, iproc, proc0
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo, le_lo
     use gs2_layouts, only: ig_idx, ik_idx, it_idx, il_idx, ie_idx, is_idx
@@ -2880,7 +2873,7 @@ contains
     implicit none
 
     integer :: iglo, ile, ig, isgn, ik, it, il, ie, is, ierr
-    integer :: ip, ixi, je
+    integer :: ixi, je
     complex, dimension (:,:,:), allocatable :: gtmp, letmp
 
     if (proc0) then
@@ -3089,7 +3082,7 @@ contains
 !<DD>
   subroutine init_lambda_redistribute_local
 
-    use mp, only: nproc, iproc, barrier
+    use mp, only: nproc, barrier
     use species, only: nspec
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
@@ -3107,9 +3100,8 @@ contains
     integer, dimension(2) :: to_high
     integer :: to_low
     integer :: ig, isign, iglo, il, ilz, il0
-    integer :: ik, it, ie, is, je, ilz_bak
+    integer :: je, ilz_bak
     integer :: n, ip
-    logical :: debug=.true.
 
     !Early exit if possible
     if (lzinit) return
@@ -3421,7 +3413,7 @@ contains
 
 !<DD>
   subroutine init_energy_redistribute_local
-    use mp, only: nproc, iproc
+    use mp, only: nproc
     use species, only: nspec
     use theta_grid, only: ntgrid
     use kt_grids, only: naky,ntheta0
@@ -3438,9 +3430,8 @@ contains
     integer, dimension(3) :: from_low, from_high
     integer, dimension(2) :: to_high
     integer :: to_low
-    integer :: ig, isign, iglo, ik, it, il, ie, is, ielo
+    integer :: ig, isign, iglo, ie, ielo
     integer :: n, ip
-    logical :: debug=.true.
 
     !Early exit if possible
     if (einit) return
@@ -3688,7 +3679,7 @@ contains
     use file_utils, only: open_output_file, close_output_file
     use gs2_layouts, only: le_lo, ig_idx, ik_idx, it_idx, is_idx
     use gs2_layouts, only: idx_local, proc_id
-    use theta_grid, only: ntgrid, bmag, theta
+    use theta_grid, only: bmag, theta
 
     implicit none
 
