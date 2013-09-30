@@ -418,7 +418,7 @@ sinclude Makefile.target_$(GK_PROJECT)
 ############################################################### SPECIAL RULES
 
 # comment this out to keep intermediate .f90 files
-.PRECIOUS: $(F90FROMFPP)
+#.PRECIOUS: $(F90FROMFPP)
 
 .INTERMEDIATE: $(GK_PROJECT)_transforms.f90 $(GK_PROJECT)_io.f90 $(GK_PROJECT)_save.f90 \
 		mp.f90 fft_work.f90
