@@ -1786,7 +1786,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
                      phitot(it,ik)
              end do
           end do
-!          write (*,*) 
+          write (*,*) 
        end if
     end if
 
