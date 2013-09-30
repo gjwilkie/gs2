@@ -83,10 +83,9 @@ contains
 !    logical :: in_nt
     logical, intent(in) :: in_nt
     
-    integer :: istatus
-    integer :: ncid, id, i, j
+    integer :: i,j
     integer :: nchar
-!    integer :: ncid, id, i, j, ifail, nchar
+!    integer :: ncid, id, i, j, ifail, nchar, istatus
 !    character*31 :: fortrancrap
 !    character*80 :: filename, eqfile
     character (len=80) :: filename
@@ -979,8 +978,8 @@ contains
     use constants, only: pi
     integer :: i, j, istar, jstar
     character*1 :: char
-    real :: r, thet, fstar, sign, tp, tps, theta_in
-!    real :: st, dt, sr, dr, pi
+    real :: r, thet, fstar, sign, theta_in
+!    real :: st, dt, sr, dr, pi, tp, tps
     real :: st, dt, sr, dr
     real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
@@ -1435,7 +1434,7 @@ contains
   function dpfun (pbar)
   
     use splines
-    real :: pbar, dpfun, f
+    real :: pbar, dpfun
     type (spline), save :: spl
 !
 ! p_N would be B**2/mu_0 => p = beta/2 in our units
@@ -1480,7 +1479,6 @@ contains
   subroutine Hahm_Burrell(irho, a) 
 
     use splines
-    type (spline), save :: spl
 
     real, intent(in) :: a
     integer :: i, irho

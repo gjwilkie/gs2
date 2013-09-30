@@ -134,19 +134,20 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
+    use fields_implicit, only: field_subgath
     implicit none
     type (text_option), dimension (3), parameter :: fieldopts = &
          (/ text_option('default', fieldopt_implicit), &
             text_option('implicit', fieldopt_implicit), &
             text_option('test', fieldopt_test) /)
     character(20) :: field_option
-    namelist /fields_knobs/ field_option, remove_zonal_flows_switch
+    namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath
     integer :: ierr, in_file
 
     if (proc0) then
        field_option = 'default'
        remove_zonal_flows_switch = .false.
-
+       field_subgath=.false.
        in_file = input_unit_exist ("fields_knobs", exist)
 !       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
        if (exist) read (unit=in_file, nml=fields_knobs)
@@ -160,6 +161,7 @@ contains
 
     call broadcast (fieldopt_switch)
     call broadcast (remove_zonal_flows_switch)
+    call broadcast (field_subgath)
   end subroutine read_parameters
 
   subroutine allocate_arrays
