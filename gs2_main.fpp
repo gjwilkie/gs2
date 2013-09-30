@@ -56,7 +56,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
     use gs2_time, only: update_time, write_dt, init_tstart
-    use gs2_time, only: user_time, user_dt, code_time, ilast_step
+    use gs2_time, only: user_time, user_dt, code_time
     use init_g, only: tstart, restart
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
@@ -64,7 +64,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use fields_implicit, only: time_field
     use gs2_layouts, only: layout
     use parameter_scan, only: update_scan_parameter_value
-    use unit_tests, only: functional_test_flag
+    use unit_tests, only: functional_test_flag, ilast_step
     implicit none
 
     integer, intent (in), optional :: mpi_comm, job_id, nensembles
@@ -295,12 +295,13 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_diagnostics, only: finish_gs2_diagnostics
     use gs2_save, only: gs2_save_for_restart, finish_save
     use dist_fn_arrays, only: gnew
-    use gs2_time, only: user_dt, user_time, ilast_step
+    use gs2_time, only: user_dt, user_time
     use run_parameters, only: fphi, fapar, fbpar
     use collisions, only: vnmult
     use species, only: finish_trin_species
     use mp, only: proc0
     use theta_grid, only: finish_theta_grid
+    use unit_tests, only: ilast_step
     
     integer :: istatus
 
