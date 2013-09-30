@@ -196,7 +196,6 @@ contains
     use le_grids, only: init_le_grids, nlambda, negrid , init_map
     use run_parameters, only: init_run_parameters
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
-    use mp, only: proc0
 
     implicit none
 
@@ -344,7 +343,6 @@ contains
   subroutine init_arrays
     use species, only: nspec
     use le_grids, only: negrid
-    use gs2_layouts, only: g_lo
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use dist_fn_arrays, only: c_rate
@@ -401,8 +399,7 @@ contains
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
     use run_parameters, only: tunits
-    use constants, only: pi
-    use le_grids, only: nlambda, ng2, g2le, nxi
+    use le_grids, only: g2le, nxi
     use gs2_layouts, only: le_lo
     use redistribute, only: gather, scatter
 
@@ -812,15 +809,12 @@ contains
     use le_grids, only: energy, al, integrate_moment, negrid
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
-    use run_parameters, only: tunits
-    use constants, only: pi
-    use le_grids, only: nlambda, ng2, g2le, nxi
+    use le_grids, only: g2le, nxi
     use gs2_layouts, only: le_lo
     use redistribute, only: gather, scatter
 
     implicit none
 
-    logical :: init = .true.
     complex, dimension (:,:,:), allocatable :: gtmp
     complex, dimension (:,:,:,:), allocatable :: duinv, dtmp
     real, dimension (:,:,:,:), allocatable :: vns
@@ -1195,7 +1189,7 @@ contains
     real, dimension (:), intent (out) :: hee
     real,dimension (negrid)::heevth, hsg, hsgvth
     integer :: ik, ie, is, it, ig
-    real :: v, k4max
+    real :: k4max
     real :: vl, vr, dv2l, dv2r
 !    real :: erf ! this is needed for PGI: RN
 
@@ -1379,28 +1373,20 @@ contains
   end function hsg_func
 
   subroutine init_ediffuse (vnmult_target)
-    use constants, only: pi
-    use species, only: nspec, spec
-    use theta_grid, only: ntgrid, bmag
-    use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, negrid, ng2, nxi
-    use le_grids, only: forbid, ixi_to_il, ixi_to_isgn
+    use le_grids, only: negrid, nxi
+    use le_grids, only: forbid, ixi_to_il
     use egrid, only: zeroes, x0
-    use run_parameters, only: tunits
-    use gs2_time, only: code_dt
     use le_grids, only: nlambda
     use gs2_layouts, only: le_lo, e_lo, il_idx
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
-    use dist_fn_arrays, only: kperp2
     use spfunc, only: erf => erf_ext
 
     implicit none
     
     real, intent (in), optional :: vnmult_target
 
-    integer :: ie, is, iglo, ik, il, ig, it
+    integer :: ie, is, ik, il, ig, it
     real, dimension (:), allocatable :: aa, bb, cc, xe, el
-    real :: vn, xe0, xe1, xe2, xer, xel, er, fac, ee, capgl, capgr, slb1
 !    real :: erf ! this is needed for PGI: RN
     integer :: ile, ixi
     integer :: ielo
@@ -1659,13 +1645,7 @@ contains
   end subroutine get_ediffuse_matrix
 
   subroutine init_lorentz (vnmult_target)
-    use species, only: nspec, spec
-    use theta_grid, only: ntgrid, bmag
-    use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, negrid, al, jend, ng2, energy, wl, nxi
-    use run_parameters, only: tunits
-    use gs2_time, only: code_dt
-    use dist_fn_arrays, only: kperp2
+    use le_grids, only: negrid, jend, ng2, nxi
     use gs2_layouts, only: le_lo
     use gs2_layouts, only: lz_lo
     use gs2_layouts, only: ig_idx, ik_idx, ie_idx, is_idx, it_idx
@@ -1674,10 +1654,9 @@ contains
 
     real, intent (in), optional :: vnmult_target
 
-    integer :: ig, il, it, ik, ie, is, je, te, te2, teh
+    integer :: ig, il, it, ik, ie, is, je, te2
     real, dimension (:), allocatable :: aa, bb, cc
     real, dimension (:), allocatable :: dd, hh
-    real :: slb0, slb1, slb2, slbl, slbr, vn, ee, vnh, vnc
     integer :: ile
     integer :: ilz
 
@@ -1804,11 +1783,11 @@ contains
   subroutine get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
 
     use species, only: spec
-    use le_grids, only: nlambda, al, energy, ng2
+    use le_grids, only: al, energy, ng2
     use le_grids, only: wl, jend, al
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: kperp2
-    use theta_grid, only: bmag, ntgrid
+    use theta_grid, only: bmag
     use run_parameters, only: tunits
 
     implicit none
@@ -2329,11 +2308,10 @@ contains
 
     use gs2_layouts, only: g_lo, it_idx, ik_idx, ie_idx, is_idx
     use theta_grid, only: ntgrid
-    use run_parameters, only: tunits, beta
+    use run_parameters, only: beta
     use gs2_time, only: code_dt
-    use kt_grids, only: naky, ntheta0
     use le_grids, only: energy
-    use species, only: nspec, spec, electron_species
+    use species, only: spec, electron_species
     use dist_fn_arrays, only: vpa, kperp2, aj0
     use fields_arrays, only: aparnew
     use run_parameters, only: ieqzip
@@ -2623,7 +2601,6 @@ contains
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
     use le_grids, only: energy, al, integrate_moment, negrid
-    use le_grids, only: ixi_to_il, ixi_to_isgn
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
 
@@ -2635,7 +2612,7 @@ contains
     real, dimension (:,:,:), allocatable :: vns
     complex, dimension (:,:,:,:), allocatable :: v0y0, v1y1, v2y2
 
-    integer :: ig, isgn, iglo, ik, ie, il, is, it, all = 1
+    integer :: isgn, iglo, ik, ie, il, is, it, all = 1
 
     allocate (v0y0(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (v1y1(-ntgrid:ntgrid, ntheta0, naky, nspec))
@@ -2753,13 +2730,11 @@ contains
 
     use theta_grid, only: ntgrid
     use species, only: nspec
-    use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
+    use gs2_layouts, only: ik_idx, it_idx, ie_idx, il_idx, is_idx
     use le_grids, only: energy, al, integrate_moment, negrid
     use le_grids, only: ixi_to_il, ixi_to_isgn
-    use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
-    use le_grids, only: nlambda, ng2, sgn, g2le, nxi
+    use le_grids, only: sgn, nxi
     use gs2_layouts, only: le_lo, ig_idx
     use redistribute, only: scatter
     use run_parameters, only: tunits
@@ -2770,11 +2745,10 @@ contains
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
     complex, dimension (:,:,:), allocatable :: gtmp
 
-    real, dimension (:,:,:), allocatable :: vns
     real, dimension (:,:,:,:), allocatable :: vpanud
     complex, dimension (:), allocatable :: v0y0, v1y1, v2y2
 
-    integer :: ig, isgn, iglo, ik, ie, il, is, it, all = 1
+    integer :: ig, isgn, ik, ie, il, is, it
     integer :: ile, ixi
 
     allocate (v0y0(le_lo%llim_proc:le_lo%ulim_alloc))
@@ -2911,7 +2885,6 @@ contains
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
     use le_grids, only: energy, al, integrate_moment, negrid
-    use le_grids, only: ixi_to_il, ixi_to_isgn
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
 
@@ -2922,7 +2895,7 @@ contains
 
     real, dimension (:,:,:), allocatable :: vns
 
-    integer :: ig, isgn, iglo, ik, ie, il, is, it, all = 1
+    integer :: isgn, iglo, ik, ie, il, is, it, all = 1
     complex, dimension (:,:,:,:), allocatable :: v0y0, v1y1, v2y2    
 
     allocate (v0y0(-ntgrid:ntgrid, ntheta0, naky, nspec))
@@ -3030,13 +3003,12 @@ contains
 
     use theta_grid, only: ntgrid
     use species, only: nspec
-    use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
+    use kt_grids, only: naky
+    use gs2_layouts, only: ik_idx, it_idx, ie_idx, il_idx, is_idx
     use le_grids, only: energy, al, integrate_moment, negrid
     use le_grids, only: ixi_to_il, ixi_to_isgn
-    use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
-    use le_grids, only: nlambda, ng2, forbid, sgn, speed, g2le, nxi
+    use le_grids, only: forbid, sgn, speed, nxi
     use gs2_layouts, only: le_lo, ig_idx
     use redistribute, only: scatter
     use theta_grid, only: bmag
@@ -3051,7 +3023,7 @@ contains
 
     real, dimension (:,:,:), allocatable :: vns
 
-    integer :: ig, isgn, iglo, ik, ie, il, is, it, all = 1
+    integer :: ig, isgn, ik, ie, il, is, it
     integer :: ile, ixi
     real, dimension (:,:,:,:), allocatable :: vpadelnu
     complex, dimension (:), allocatable :: v0y0, v1y1, v2y2
@@ -3226,9 +3198,8 @@ contains
 
   subroutine solfp_lorentz_standard_layout (g, gc, gh, diagnostics, init)
 
-    use species, only: spec, electron_species
-    use theta_grid, only: ntgrid, bmag
-    use le_grids, only: nlambda, jend, ng2, al, lambda_map, nxi
+    use theta_grid, only: ntgrid
+    use le_grids, only: nlambda, jend, ng2, lambda_map, nxi
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: ig_idx, ik_idx, il_idx, is_idx, it_idx, ie_idx
     use prof, only: prof_entering, prof_leaving
@@ -3247,7 +3218,7 @@ contains
     integer :: ilz
     complex, dimension (nxi+1) :: delta
     complex :: fac, gwfb
-    integer :: iglo, ig, ik, il, is, je, it, ie, isgn, ixi
+    integer :: ig, ik, il, is, je, ie
 
     call prof_entering ("solfp_lorentz", "collisions")
 
@@ -3396,7 +3367,7 @@ contains
     integer :: ile
     complex, dimension (nxi+1) :: delta
     complex :: fac, gwfb
-    integer :: iglo, ig, ik, il, is, je, it, ie, isgn, ixi
+    integer :: ig, ik, il, is, je, it, ie
 
     call prof_entering ("solfp_lorentz", "collisions")
 
@@ -3532,11 +3503,10 @@ contains
   ! otherwise is the case if use_le_layout is no specified in the input file.
   subroutine solfp_ediffuse_standard_layout (g, init)
 
-    use species, only: spec, nspec
+    use species, only: spec
     use theta_grid, only: ntgrid
-    use kt_grids, only: ntheta0, naky
-    use le_grids, only: negrid, forbid, ng2
-    use le_grids, only: ixi_to_il, energy_map
+    use le_grids, only: negrid, forbid
+    use le_grids, only: energy_map
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, il_idx, is_idx, e_lo, g_lo
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
@@ -3547,7 +3517,7 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     logical, intent (in), optional :: init
 
-    integer :: ie, is, iglo, ig, isgn, it, ik, il
+    integer :: ie, is, ig, il
     complex, dimension (negrid) :: delta
     complex, dimension (:,:), allocatable :: ged
     integer :: ielo
@@ -3598,7 +3568,7 @@ contains
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
     type (le_layout_type), intent (in) :: lo
 
-    integer :: ie, is, iglo, ig, isgn, it, ik, il
+    integer :: ie, is, ig, il
     complex, dimension (negrid) :: delta
     integer :: ile, ixi
 
@@ -3688,8 +3658,6 @@ contains
 
     integer :: il, ig, je, te
     real :: slb0, slb1, slb2, slbl, slbr
-    real, dimension (nlambda) :: xi
-    real, dimension (2,nlambda) :: vptmp
 
     if (.not. allocated(vpdiff) .and. conservative) then
 

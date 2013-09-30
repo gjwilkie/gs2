@@ -285,7 +285,6 @@ contains
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use dist_fn_arrays, only: g
-    use run_parameters, only: fapar, fbpar, fphi
     use gs2_time, only: save_dt_cfl
 
     implicit none
@@ -298,9 +297,8 @@ contains
     logical, intent (in), optional :: nl
 
     integer :: istep_last = 0
-    integer :: i, j, k
-    integer :: iglo, ik, it, is, ig, il, ia, isgn
-    real :: max_vel, zero
+    integer :: iglo, ik, it
+    real :: zero
     real :: dt_cfl
 
     if (initializing) then
@@ -403,16 +401,15 @@ contains
   end subroutine nonlinear_terms_unit_test_time_add_nl
 
   subroutine add_nl (g1, phi, apar, bpar)
-    use mp, only: max_allreduce, proc0
+    use mp, only: max_allreduce
     use theta_grid, only: ntgrid, kxfac
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use gs2_layouts, only: accelx_lo, yxf_lo
-    use dist_fn_arrays, only: g, ittp
+    use dist_fn_arrays, only: g
     use species, only: spec
     use gs2_transforms, only: transform2, inverse2
     use run_parameters, only: fapar, fbpar, fphi
     use kt_grids, only: aky, akx
-    use le_grids, only: forbid
     use gs2_time, only: save_dt_cfl
     use constants, only: zi
     implicit none
@@ -422,7 +419,7 @@ contains
     real :: max_vel, zero
     real :: dt_cfl
 
-    integer :: iglo, ik, it, is, ig, il, ia, isgn
+    integer :: iglo, ik, it, is, ig, ia, isgn
     
     !Initialise zero so we can be sure tests are sensible
     zero = epsilon(0.0)

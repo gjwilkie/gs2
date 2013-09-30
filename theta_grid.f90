@@ -460,7 +460,7 @@ contains
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, &
        qval, shape, gb_to_cv, Bpol)
     use constants
-    use theta_grid_params, only: eps, epsl, shat_param => shat, pk, qinp, rhoc
+    use theta_grid_params, only: eps, epsl, shat_param => shat, pk
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
     implicit none
     integer, intent (in) :: nperiod
@@ -631,7 +631,8 @@ contains
   use geometry, only: delrho, dp_mult, rmin, rmax
   use geometry, only: bishop, iflux, irho, itor, isym
   use geometry, only: eqfile
-  use geometry, only: idfit_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq
+!  use geometry, only: idfit_eq
+  use geometry, only: gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq
   use geometry, only: gs2d_eq, transp_eq, writelots, equal_arc
   implicit none
   integer :: unit
@@ -1040,7 +1041,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
 
   subroutine eik_get_sizes (nthetaout, nperiodout, nbsetout)
     use geometry, only: nperiod
-    use theta_grid_params, only: ntheta, nperiod_th => nperiod
+    use theta_grid_params, only: ntheta
     implicit none
     integer, intent (out) :: nthetaout, nperiodout, nbsetout
 
@@ -1094,7 +1095,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
          Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     logical, intent (in) :: gb_to_cv
-    integer :: i, ig
+    integer :: ig
     logical:: debug=.false.
 if (debug) write(6,*) 'eik_get_grids: ntgrid=',ntgrid
     do ig=-ntgrid,ntgrid
@@ -1567,7 +1568,6 @@ contains
     use mp, only: proc0
     implicit none
     logical, save :: initialized = .false.
-    integer :: i
     logical :: debug=.false.
     if (initialized) return
     initialized = .true.
@@ -1713,7 +1713,6 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     implicit none
     real, dimension (nbset) :: bset_save
     real, dimension (-ntgrid:ntgrid) :: eik_save
-    integer :: ierr
     
     ! in case nbset changes after gridgen
     if (nbset /= size(bset)) then
@@ -1853,7 +1852,6 @@ if (debug) write(6,*) 'get_sizes: done'
   end subroutine get_sizes
 
   subroutine get_grids
-    use mp, only: proc0
     use theta_grid_eik, only: eik_get_grids
     use theta_grid_salpha, only: salpha_get_grids
     use theta_grid_file, only: file_get_grids

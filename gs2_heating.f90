@@ -692,7 +692,6 @@ contains
   subroutine zero_dvtype_0 (dv)
 
     type (dens_vel_diagnostics) :: dv
-    integer :: n, nmax
 
     dv % dvpar = 0. 
     dv % dvperp = 0.  
@@ -818,11 +817,10 @@ contains
 !=============================================================================
   subroutine avg_dv (dv, dv_hist, istep, navg)
     use mp, only: proc0
-    use species, only: nspec
     type (dens_vel_diagnostics) :: dv
     type (dens_vel_diagnostics), dimension (0:) :: dv_hist
     integer, intent (in) :: istep, navg
-    integer :: is, i
+    integer :: i
 
     if (proc0) then
        if (navg > 1) then
@@ -847,11 +845,10 @@ contains
 !=============================================================================
   subroutine avg_dvk (dvk, dvk_hist, istep, navg)
     use mp, only: proc0
-    use species, only: nspec
     type (dens_vel_diagnostics), dimension(:,:) :: dvk
     type (dens_vel_diagnostics), dimension (:,:,0:) :: dvk_hist
     integer, intent (in) :: istep, navg
-    integer :: is, i, m, n, mmax, nmax
+    integer :: i, m, n, mmax, nmax
 
     mmax = size(dvk, 1)
     nmax = size(dvk, 2)

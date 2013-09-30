@@ -1604,7 +1604,6 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 
     integer ifail
 
-    integer i
 
 ! these next arrays should be double precision, which we usually get with 
 ! compiler options
