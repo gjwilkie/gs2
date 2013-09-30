@@ -186,7 +186,7 @@ contains
 
   subroutine init_y_fft (ntgrid)
 
-    use gs2_layouts, only: xxf_lo, yxf_lo, accel_lo, accelx_lo, dealiasing, g_lo
+    use gs2_layouts, only: xxf_lo, yxf_lo, accel_lo, accelx_lo, dealiasing
     use fft_work, only: init_crfftw, init_rcfftw, init_ccfftw
     implicit none
     integer, intent (in) :: ntgrid
@@ -405,24 +405,21 @@ contains
     use gs2_layouts, only: g_lo, xxf_lo, gidx2xxfidx, proc_id, idx_local
     use gs2_layouts, only: opt_local_copy, layout
     use gs2_layouts, only: ik_idx,il_idx,ie_idx,is_idx,idx, ig_idx, isign_idx
-    use mp, only: nproc, iproc
+    use mp, only: nproc
     use redistribute, only: index_list_type, init_redist, delete_list
     use redistribute, only: set_redist_character_type, set_xxf_optimised_variables
     use sorting, only: quicksort
     implicit none
-    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list, sort_list, sto_list
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list, sort_list
     integer, dimension(0:nproc-1) :: nn_to, nn_from
     integer, dimension (3) :: from_low, from_high
     integer, dimension (2) :: to_high
     integer :: to_low
-    integer,dimension(:),allocatable :: nn
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
     logical :: initialized = .false.
 
-    integer :: iglo, isign, ig, it, ixxf, it0, count
+    integer :: iglo, isign, ig, it, ixxf, it0
     integer :: n, ip
-    integer :: glomesg_count, xxfmesg_count
-    logical, parameter :: debug=.true.
 
     !Early exit if possible
     if (initialized) return
@@ -737,12 +734,12 @@ contains
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx, proc_id, idx_local
     use gs2_layouts, only: ik_idx,it_idx,il_idx,ie_idx,is_idx,idx,ig_idx,isign_idx
-    use mp, only: nproc,iproc
+    use mp, only: nproc
     use redistribute, only: index_list_type, init_redist, delete_list
     use redistribute, only: set_yxf_optimised_variables, set_redist_character_type
     use sorting, only: quicksort
     implicit none
-    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list,sort_list,sto_list
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list,sort_list
     integer, dimension(0:nproc-1) :: nn_to, nn_from
     integer, dimension (2) :: from_low, from_high, to_high
     integer :: to_low
@@ -750,10 +747,9 @@ contains
     integer, intent (in) :: nx, ny
 
     integer :: it, ixxf, ik, iyxf
-    integer :: ixxf_start, iyxf_start, count
+    integer :: ixxf_start, iyxf_start
     integer :: n, ip
     logical :: initialized = .false.
-    logical :: debug=.true.
 
     !Early exit if possible
     if (initialized) return
@@ -927,381 +923,6 @@ contains
   end subroutine init_y_redist_local
 !</DD>
 
-!<DD> Numerical recipes quicksort algorithm 
-  !e.g. see Section 8.2 of Numerical recipes for fortran
-  !We should perhaps move this routine to some other module as
-  !it will be useful for other cases (e.g. collision layout objects)
-  !Goto page 326 of numerical recipes in f90 available at http://apps.nrbook.com/fortran/index.html
-
-  SUBROUTINE QUICKSORT2 (n,key,arr1,arr2)
-    IMPLICIT NONE
-    INTEGER, INTENT(in) :: n !How long is the array?
-    !Arrays to be sorted into ascending order based on key arr order
-    INTEGER, INTENT(inout), DIMENSION(1:n) :: key, arr1, arr2 
-    INTEGER, PARAMETER :: m=7 !How small does list segment have to be to use insertion sort
-    INTEGER :: nstack !What is the best way to set this? For now just relate it to message size.
-    INTEGER, DIMENSION(:),ALLOCATABLE::istack
-    INTEGER :: i,ir,j,jstack,k,l
-    INTEGER :: ak,a1,a2, temp
-
-    !Initialise vars
-    nstack=MAX(n/2,50)
-    ALLOCATE(istack(nstack))
-    jstack=0
-    l=1
-    ir=n
-
-!Insertion sort when list segment becomes small enough
-1   if(ir-l.lt.m) then
-       do j=l+1,ir
-          !Get current values
-          ak=key(j)
-          a1=arr1(j)
-          a2=arr2(j)
-          !Loop over left values
-          do i=j-1,l,-1
-             if(key(i).le.ak) goto 2
-             key(i+1)=key(i)
-             arr1(i+1)=arr1(i)
-             arr2(i+1)=arr2(i)
-          enddo
-          i=l-1
-2         key(i+1)=ak
-          arr1(i+1)=a1
-          arr2(i+1)=a2
-       enddo
-       !Exit if nothing left on stack to sort
-       if(jstack.eq.0) then
-          deallocate(istack)
-          return
-       endif
-
-       !Move on to next section of stack, ir and l set range to look at
-       ir=istack(jstack)
-       l=istack(jstack-1)
-       jstack=jstack-2
-!Partioning and quicksort part
-    else
-       !Choose partion value as median of left, centre and right values
-       !Which index are we looking at --> Middle of sub-array
-       k=(l+ir)/2
-
-       !Swap k and l+1 values | Key
-       temp=key(k)
-       key(k)=key(l+1)
-       key(l+1)=temp
-       !Swap k and l+1 values | Arr1
-       temp=arr1(k)
-       arr1(k)=arr1(l+1)
-       arr1(l+1)=temp
-       !Swap k and l+1 values | Arr2
-       temp=arr2(k)
-       arr2(k)=arr2(l+1)
-       arr2(l+1)=temp
-
-       !Put in order so key(l)<=key(l+1)<=key(ir)
-       if(key(l).gt.key(ir)) then
-          !Key
-          temp=key(l)
-          key(l)=key(ir)
-          key(ir)=temp
-          !Arr1
-          temp=arr1(l)
-          arr1(l)=arr1(ir)
-          arr1(ir)=temp
-          !Arr2
-          temp=arr2(l)
-          arr2(l)=arr2(ir)
-          arr2(ir)=temp
-       endif
-       if(key(l+1).gt.key(ir)) then
-          !Key
-          temp=key(l+1)
-          key(l+1)=key(ir)
-          key(ir)=temp
-          !Arr1
-          temp=arr1(l+1)
-          arr1(l+1)=arr1(ir)
-          arr1(ir)=temp
-          !Arr2
-          temp=arr2(l+1)
-          arr2(l+1)=arr2(ir)
-          arr2(ir)=temp
-       endif
-       if(key(l).gt.key(l+1)) then
-          !Key
-          temp=key(l)
-          key(l)=key(l+1)
-          key(l+1)=temp
-          !Arr1
-          temp=arr1(l)
-          arr1(l)=arr1(l+1)
-          arr1(l+1)=temp
-          !Arr2
-          temp=arr2(l)
-          arr2(l)=arr2(l+1)
-          arr2(l+1)=temp
-       endif
-
-       !Now get ready for partitioning
-       i=l+1
-       j=ir
-
-       !Pick partion value
-       ak=key(l+1)
-       a1=arr1(l+1)
-       a2=arr2(l+1)
-
-3      continue !Effectively a while loop until we find first element bigger than ak
-       i=i+1 !Scan until we find key(i)>ak
-       if(key(i).lt.ak) GOTO 3
-
-4      continue !Effectively a while loop until we find first element smaller than ak
-       j=j-1
-       if(key(j).gt.ak) GOTO 4
-
-       if(j.lt.i) GOTO 5 !If j<i then partioning has completed so move onto sorting
-
-       !Now swap elements | Key
-       temp=key(i)
-       key(i)=key(j)
-       key(j)=temp
-       !Now swap elements | Arr1
-       temp=arr1(i)
-       arr1(i)=arr1(j)
-       arr1(j)=temp
-       !Now swap elements | Arr2
-       temp=arr2(i)
-       arr2(i)=arr2(j)
-       arr2(j)=temp
-       !Now move onto next elements
-       GOTO 3
-       !Put partiioning element in correct place
-5      continue
-       key(l+1)=key(j)
-       key(j)=ak
-       arr1(l+1)=arr1(j)
-       arr1(j)=a1
-       arr2(l+1)=arr2(j)
-       arr2(j)=a2
-
-       !Increase stack counter (move onto next section of array?)
-       jstack=jstack+2
-       if (jstack.gt.nstack) print*,"NSTACK too small in quicksort" !Would like to remove this
-       if (ir-i+1.ge.j-l) then
-          istack(jstack)=ir
-          istack(jstack-1)=i
-          ir=j-1
-       else
-          istack(jstack)=j-1
-          istack(jstack-1)=l
-          l=i
-       endif
-    endif
-
-    !Repeat process for new sublist, i.e. like recursive function
-    GOTO 1
-
-  END SUBROUTINE QUICKSORT2
-
-  SUBROUTINE QUICKSORT3 (n,key,arr1,arr2,arr3)
-    IMPLICIT NONE
-    INTEGER, INTENT(in) :: n !How long is the array?
-    !Arrays to be sorted into ascending order based on key arr order
-    INTEGER, INTENT(inout), DIMENSION(1:n) :: key, arr1, arr2, arr3
-    INTEGER, PARAMETER :: m=7 !How small does list segment have to be to use insertion sort
-    INTEGER :: nstack !What is the best way to set this? For now just relate it to message size.
-    INTEGER, DIMENSION(:),ALLOCATABLE::istack
-    INTEGER :: i,ir,j,jstack,k,l
-    INTEGER :: ak,a1,a2,a3, temp
-
-    !Initialise vars
-    nstack=MAX(n/2,50)
-    ALLOCATE(istack(nstack))
-    jstack=0
-    l=1
-    ir=n
-
-!Insertion sort when list segment becomes small enough
-1   if(ir-l.lt.m) then
-       do j=l+1,ir
-          !Get current values
-          ak=key(j)
-          a1=arr1(j)
-          a2=arr2(j)
-          a3=arr3(j)
-          !Loop over left values
-          do i=j-1,l,-1
-             if(key(i).le.ak) goto 2
-             key(i+1)=key(i)
-             arr1(i+1)=arr1(i)
-             arr2(i+1)=arr2(i)
-             arr3(i+1)=arr3(i)
-          enddo
-          i=l-1
-2         key(i+1)=ak
-          arr1(i+1)=a1
-          arr2(i+1)=a2
-          arr3(i+1)=a3
-       enddo
-       !Exit if nothing left on stack to sort
-       if(jstack.eq.0) then
-          deallocate(istack)
-          return
-       endif
-
-       !Move on to next section of stack, ir and l set range to look at
-       ir=istack(jstack)
-       l=istack(jstack-1)
-       jstack=jstack-2
-!Partioning and quicksort part
-    else
-       !Choose partion value as median of left, centre and right values
-       !Which index are we looking at --> Middle of sub-array
-       k=(l+ir)/2
-
-       !Swap k and l+1 values | Key
-       temp=key(k)
-       key(k)=key(l+1)
-       key(l+1)=temp
-       !Swap k and l+1 values | Arr1
-       temp=arr1(k)
-       arr1(k)=arr1(l+1)
-       arr1(l+1)=temp
-       !Swap k and l+1 values | Arr2
-       temp=arr2(k)
-       arr2(k)=arr2(l+1)
-       arr2(l+1)=temp
-       !Swap k and l+1 values | Arr3
-       temp=arr3(k)
-       arr3(k)=arr3(l+1)
-       arr3(l+1)=temp
-
-       !Put in order so key(l)<=key(l+1)<=key(ir)
-       if(key(l).gt.key(ir)) then
-          !Key
-          temp=key(l)
-          key(l)=key(ir)
-          key(ir)=temp
-          !Arr1
-          temp=arr1(l)
-          arr1(l)=arr1(ir)
-          arr1(ir)=temp
-          !Arr2
-          temp=arr2(l)
-          arr2(l)=arr2(ir)
-          arr2(ir)=temp
-          !Arr3
-          temp=arr3(l)
-          arr3(l)=arr3(ir)
-          arr3(ir)=temp
-       endif
-       if(key(l+1).gt.key(ir)) then
-          !Key
-          temp=key(l+1)
-          key(l+1)=key(ir)
-          key(ir)=temp
-          !Arr1
-          temp=arr1(l+1)
-          arr1(l+1)=arr1(ir)
-          arr1(ir)=temp
-          !Arr2
-          temp=arr2(l+1)
-          arr2(l+1)=arr2(ir)
-          arr2(ir)=temp
-          !Arr3
-          temp=arr3(l+1)
-          arr3(l+1)=arr3(ir)
-          arr3(ir)=temp
-       endif
-       if(key(l).gt.key(l+1)) then
-          !Key
-          temp=key(l)
-          key(l)=key(l+1)
-          key(l+1)=temp
-          !Arr1
-          temp=arr1(l)
-          arr1(l)=arr1(l+1)
-          arr1(l+1)=temp
-          !Arr2
-          temp=arr2(l)
-          arr2(l)=arr2(l+1)
-          arr2(l+1)=temp
-          !Arr3
-          temp=arr3(l)
-          arr3(l)=arr3(l+1)
-          arr3(l+1)=temp
-       endif
-
-       !Now get ready for partitioning
-       i=l+1
-       j=ir
-
-       !Pick partion value
-       ak=key(l+1)
-       a1=arr1(l+1)
-       a2=arr2(l+1)
-       a3=arr3(l+1)
-
-3      continue !Effectively a while loop until we find first element bigger than ak
-       i=i+1 !Scan until we find key(i)>ak
-       if(key(i).lt.ak) GOTO 3
-
-4      continue !Effectively a while loop until we find first element smaller than ak
-       j=j-1
-       if(key(j).gt.ak) GOTO 4
-
-       if(j.lt.i) GOTO 5 !If j<i then partioning has completed so move onto sorting
-
-       !Now swap elements | Key
-       temp=key(i)
-       key(i)=key(j)
-       key(j)=temp
-       !Now swap elements | Arr1
-       temp=arr1(i)
-       arr1(i)=arr1(j)
-       arr1(j)=temp
-       !Now swap elements | Arr2
-       temp=arr2(i)
-       arr2(i)=arr2(j)
-       arr2(j)=temp
-       !Now swap elements | Arr3
-       temp=arr3(i)
-       arr3(i)=arr3(j)
-       arr3(j)=temp
-
-       !Now move onto next elements
-       GOTO 3
-       !Put partiioning element in correct place
-5      continue
-       key(l+1)=key(j)
-       key(j)=ak
-       arr1(l+1)=arr1(j)
-       arr1(j)=a1
-       arr2(l+1)=arr2(j)
-       arr2(j)=a2
-       arr3(l+1)=arr3(j)
-       arr3(j)=a3
-
-       !Increase stack counter (move onto next section of array?)
-       jstack=jstack+2
-       if (jstack.gt.nstack) print*,"NSTACK too small in quicksort" !Would like to remove this
-       if (ir-i+1.ge.j-l) then
-          istack(jstack)=ir
-          istack(jstack-1)=i
-          ir=j-1
-       else
-          istack(jstack)=j-1
-          istack(jstack-1)=l
-          l=i
-       endif
-    endif
-
-    !Repeat process for new sublist, i.e. like recursive function
-    GOTO 1
-
-  END SUBROUTINE QUICKSORT3
-
 !</DD>
 
   subroutine transform_x5d (g, xxf)
@@ -1311,8 +932,10 @@ contains
     implicit none
     complex, dimension (-xxf_lo%ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (:,xxf_lo%llim_proc:), intent (out) :: xxf
+# if FFT == _FFTW_
     complex, dimension(:), allocatable :: aux
     integer :: i
+# endif
 
     call prof_entering ("transform_x5d", "gs2_transforms")
 
@@ -1351,8 +974,10 @@ contains
     implicit none
     complex, dimension (:,xxf_lo%llim_proc:), intent (in out) :: xxf
     complex, dimension (-xxf_lo%ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
+# if FFT == _FFTW_
     complex, dimension(:), allocatable :: aux
     integer :: i
+# endif
 
     call prof_entering ("inverse_x5d", "gs2_transforms")
 
@@ -1387,10 +1012,11 @@ contains
     complex, dimension (:,xxf_lo%llim_proc:), intent (in) :: xxf
 # ifdef FFT
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
+    integer :: i
 # else
     real, dimension (:,yxf_lo%llim_proc:) :: yxf
 # endif
-    integer :: i
+
 
     call prof_entering ("transform_y5d", "gs2_transforms")
 
@@ -1423,7 +1049,9 @@ contains
     implicit none
     real, dimension (:,yxf_lo%llim_proc:), intent (in out) :: yxf
     complex, dimension (:,xxf_lo%llim_proc:), intent (out) :: xxf
+# if FFT == _FFTW_
     integer :: i 
+# endif
 
     call prof_entering ("inverse_y5d", "gs2_transforms")
 
@@ -1699,7 +1327,7 @@ contains
 
   subroutine transform2_3d (phi, phixf, nny, nnx)
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0, nx, aky
+    use kt_grids, only: naky, ntheta0, aky
     implicit none
     integer :: nnx, nny
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
@@ -1816,7 +1444,7 @@ contains
 
   subroutine transform2_2d (phi, phixf, nny, nnx)
     use fft_work, only: FFTW_BACKWARD, delete_fft, init_crfftw
-    use kt_grids, only: naky, nakx => ntheta0, nx, aky, akx
+    use kt_grids, only: naky, nakx => ntheta0, nx, aky
     implicit none
     integer :: nnx, nny
     complex, intent (in) :: phi(:,:)
@@ -1893,7 +1521,7 @@ contains
 
     allocate (aphi (nny/2+1, nnx))
     allocate (phix (nny, nnx))
-    phix(:,:)=cmplx(0.,0.); aphi(:,:)=cmplx(0.,0.)
+    phix(:,:)=0.; aphi(:,:)=cmplx(0.,0.)
 
     phix(:,:)=transpose(phixf(:,:))
 
@@ -1925,7 +1553,7 @@ contains
 !     but transform only operates for species=1
 !     anyone who uses this routine should be aware of/fix this!
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0, nx, aky
+    use kt_grids, only: naky, ntheta0, aky
     implicit none
     integer :: nnx, nny
     complex, dimension (-ntgrid:,:,:,:), intent (in) :: den
