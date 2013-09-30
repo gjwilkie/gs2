@@ -9,13 +9,7 @@
 module gs2_main
   
   public :: run_gs2, finish_gs2, reset_gs2
-  public :: functional_test_flag
-  public :: ilast_step
 
-  logical :: functional_test_flag = .false.
-  integer :: ilast_step
- 
-  
 contains
 # endif
 
@@ -69,6 +63,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use fields_implicit, only: time_field
     use gs2_layouts, only: layout
     use parameter_scan, only: update_scan_parameter_value
+    use unit_tests, only: functional_test_flag, ilast_step
+        
     implicit none
 
     integer, intent (in), optional :: mpi_comm, job_id, nensembles

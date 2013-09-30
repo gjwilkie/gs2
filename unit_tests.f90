@@ -35,6 +35,13 @@ module unit_tests
 
   public :: verbosity
 
+! HJL Moved here from gs2_main
+  public :: functional_test_flag
+  public :: ilast_step
+
+  logical :: functional_test_flag = .false.
+  integer :: ilast_step
+ 
   interface agrees_with
     module procedure agrees_with_real
     module procedure agrees_with_real_1d_array

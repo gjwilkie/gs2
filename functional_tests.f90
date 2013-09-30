@@ -31,7 +31,7 @@ contains
     if (verbosity() .gt. 0) call print_with_stars('Completed functional test: ', test_name)
   end subroutine close_functional_test
   function check_growth_rate(rslt, err)
-    use gs2_main, only: ilast_step
+    use unit_tests, only: ilast_step
     use gs2_diagnostics, only: get_omegaavg
     use kt_grids, only: ntheta0, naky
     use mp, only: proc0
@@ -57,7 +57,7 @@ contains
   end function check_growth_rate
 
   function check_growth_rates_equal_in_list(err)
-    use gs2_main, only: ilast_step
+    use unit_tests, only: ilast_step
     use gs2_diagnostics, only: get_omegaavg
     use kt_grids, only: ntheta0, naky
     use mp, only: proc0, grp0, scope, subprocs, allprocs
@@ -118,7 +118,8 @@ contains
   end function check_growth_rates_equal_in_list
 
   subroutine test_gs2(test_name, test_function)
-    use gs2_main, only: run_gs2, functional_test_flag, ilast_step, finish_gs2
+    use gs2_main, only: run_gs2, finish_gs2
+    use unit_tests, only: functional_test_flag, ilast_step
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
     use gs2_diagnostics, only: finish_gs2_diagnostics
     implicit none
