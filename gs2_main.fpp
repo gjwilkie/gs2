@@ -125,7 +125,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 	        write(*,*) 'Running on ',nproc,' processors'
 	     end if	  
           end if
-!          write (*,*) 
+          write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
           !  whether we are doing a [[Trinity]] run or a list of runs. </doc>
           ! <doc>If it is a [[Trinity]] run then [[filename]] (the name of the input file?) is passed to  init_file_utils</doc>
@@ -184,7 +184,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     
     call loop_diagnostics(0,exit)
     
-!    if (proc0) write(*,*) 'layout ',layout
+    if (proc0) write(*,*) 'layout ',layout
 
     call time_message(.false.,time_main_loop,' Main Loop')
 
@@ -307,6 +307,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     call finish_gs2_diagnostics (ilast_step)
     call finish_gs2
+! HJL Species won't change during a run so shouldn't need this    
 !    call finish_trin_species
 
     call finish_layouts
@@ -336,8 +337,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use species, only: finish_species
 
     implicit none
-
-!    if(proc0) write(6,*) 'Finishing GS2'
 
     call finish_antenna
     call finish_collisions
