@@ -3526,7 +3526,7 @@ end subroutine geometry_get_miller_parameters
 
 subroutine geometry_set_miller_parameters(miller_parameters_in)
   use geometry
-  type(miller_parameters_type), intent(out) :: miller_parameters_in
+  type(miller_parameters_type), intent(in) :: miller_parameters_in
 
 
 
