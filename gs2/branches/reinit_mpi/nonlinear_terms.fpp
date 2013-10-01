@@ -149,7 +149,6 @@ contains
     if (debug) write(6,*) "init_nonlinear_terms: init_le_grids"
     call init_le_grids (dum1, dum2)
     if (debug) write(6,*) "init_nonlinear_terms: init_species"
-!    write(6,*) "init_nonlinear_terms: init_species"
     call init_species
     if (debug) write(6,*) "init_nonlinear_terms: init_dist_fn_layouts"
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)

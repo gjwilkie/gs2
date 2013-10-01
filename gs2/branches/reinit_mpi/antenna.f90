@@ -126,7 +126,6 @@ contains
     initialized = .true.
 
     if (.not. allocated(w_stir)) then
-!       write(6,*) "init_antenna: init_species"
        call init_species
 
        call read_parameters
