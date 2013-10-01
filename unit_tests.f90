@@ -84,7 +84,7 @@ contains
     complex, dimension(:), intent(in) :: val, correct
     real, intent(in) :: err
     logical :: agrees_with_complex_1d_array
-    integer :: n, i
+    integer :: n
     n = size(val)
     agrees_with_complex_1d_array = &
       agrees_with_real_1d_array(real(val), real(correct), err) .and.  &
@@ -161,7 +161,6 @@ contains
   end subroutine announce_check
 
   subroutine process_check(test_result, rslt, test_name)
-    use mp, only: proc0
     logical, intent (inout) :: test_result
     logical, intent (in) :: rslt
     character(*), intent(in) :: test_name
@@ -191,7 +190,6 @@ contains
   end subroutine close_module_test
 
   subroutine print_with_stars(str1, str2)
-    use mp, only: iproc
     character(*), intent (in) :: str1, str2
     character, dimension(:), allocatable :: stars
     integer :: i

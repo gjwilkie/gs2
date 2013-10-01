@@ -65,7 +65,6 @@ contains
   subroutine init_fields
 !CMR,18/2/2011:
 ! add optional logical arg "noalloc" to avoid array allocations in ingen
-    use mp, only: proc0
     use theta_grid, only: init_theta_grid
     use run_parameters, only: init_run_parameters
     use dist_fn, only: init_dist_fn
@@ -276,13 +275,14 @@ contains
   end subroutine fieldlineavgphi_loc
 
   subroutine fieldlineavgphi_tot (phiavg)
-    use theta_grid, only: ntgrid, drhodpsi, gradpar, bmag, delthet
+    use theta_grid, only: ntgrid, drhodpsi, gradpar, bmag
+!    use theta_grid, only: delthet
     implicit none
     complex, dimension (:,:), intent (out) :: phiavg
     real, dimension (-ntgrid:ntgrid) :: jac
-    integer :: ntg
+!    integer :: ntg
 
-    ntg = ntgrid
+!    ntg = ntgrid
     jac = 1.0/abs(drhodpsi*gradpar*bmag)
 !    phiavg = sum(phi(-ntg:ntg,:,:)*jac(-ntg:ntg)*delthet(-ntg:ntg)) &
 !         /sum(delthet(-ntg:ntg)*jac(-ntg:ntg))

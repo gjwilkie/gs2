@@ -442,10 +442,8 @@ contains
 
   subroutine hyper_diff (g0, phi, bpar)
 
-    use mp, only: proc0
     use gs2_layouts, only: ik_idx, it_idx, is_idx
     use theta_grid, only: ntgrid
-    use run_parameters, only: fphi, fbpar
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo
     use kt_grids, only: aky, akx, naky, ntheta0
@@ -456,8 +454,7 @@ contains
 
     real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, shear_rate_z, shear_rate_z_nz
 
-    integer :: iglo, ik, it, ige
-    integer :: ncall = 0 ! variables declared with value are automatically saved
+    integer :: iglo, ik, it
  
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !

@@ -591,12 +591,10 @@ contains
     character*1, intent (in) :: char
     real, dimension (-ntm:), intent (in)  ::  rgrid, theta
     real, dimension (-ntm:,:), intent (out) :: grad
-    real, dimension (2) :: tmp
     real, dimension (1) :: aa, daa, rpt
     real, dimension(nr, nt, 2) ::  dbish
     real :: rp
     integer :: i
-    logical :: first = .true.
 
     select case(char)
     case('B') 

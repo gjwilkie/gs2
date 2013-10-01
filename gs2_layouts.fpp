@@ -650,10 +650,10 @@ contains
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
 !<DD>
-    integer :: iglo,ik,it,il,ie,is,col,ierr,mycol
+    integer :: iglo,ik,it,il,ie,is,col,mycol
     integer :: ik_min,ik_max,it_min,it_max,il_min,il_max,ie_min,ie_max,is_min,is_max,ip
-    integer :: nproc_subcomm, rank_subcomm, tmp
-    integer :: nproc_tmp, idim
+    integer :: nproc_subcomm, rank_subcomm
+    integer :: nproc_tmp, idim, tmp
     real :: tmp_r
     integer,dimension(5) :: nproc_dim
     integer,dimension(:),allocatable :: les_kxky_range
@@ -1025,7 +1025,7 @@ contains
        !If this dimension doesn't divide perfectly then we exit
        !loop and leave other dims as "un-initialised"
        if(.not.dim_divides(idim)) then
-          nproc_dim(idim)=tmp
+          nproc_dim(idim)=int(tmp_r-int(tmp_r))
           exit
        endif
 
@@ -1253,7 +1253,7 @@ contains
     integer, intent (in) :: negrid, nspec, nlambda, naky, ntheta0
     logical, intent (out) :: kx_local
     integer, dimension(:,:), allocatable :: facs
-    integer :: nsfacs, nefacs, nyfacs, nxfacs, nlfacs
+    integer :: nsfacs, nefacs, nyfacs, nlfacs
     integer :: i
 
     kx_local = .true.
@@ -2051,7 +2051,7 @@ contains
     use mp, only: iproc, nproc
     implicit none
     integer, intent (in) :: nfield, nindex, naky, ntheta0, i_class
-    integer :: ig,ifield,ik,it,jlo
+    integer :: jlo
     if (initialized_jfields_layouts) return
     initialized_jfields_layouts = .true.
     
@@ -3381,7 +3381,7 @@ contains
     use mp, only: iproc, nproc, proc0, barrier
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
-    integer :: nprocset, ngroup, ip, nblock, ntgridtotal, nsign
+    integer :: nprocset, ngroup, nblock, ntgridtotal, nsign
     real :: unbalanced_amount
 
     if (initialized_x_transform) return
