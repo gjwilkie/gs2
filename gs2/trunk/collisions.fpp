@@ -1376,7 +1376,6 @@ contains
     use le_grids, only: negrid, nxi
     use le_grids, only: forbid, ixi_to_il
     use egrid, only: zeroes, x0
-    use le_grids, only: nlambda
     use gs2_layouts, only: le_lo, e_lo, il_idx
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
     use spfunc, only: erf => erf_ext

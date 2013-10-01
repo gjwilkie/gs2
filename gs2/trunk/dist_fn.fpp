@@ -5501,7 +5501,7 @@ subroutine check_dist_fn(report_unit)
   subroutine get_jext(j_ext)
     use dist_fn_arrays, only: kperp2
     use kt_grids, only: ntheta0, naky,aky
-    use mp, only: proc0
+!    use mp, only: proc0
     use theta_grid, only: jacob, delthet, ntgrid
     use antenna, only: antenna_apar
     implicit none

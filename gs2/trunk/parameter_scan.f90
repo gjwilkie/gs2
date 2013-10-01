@@ -97,7 +97,8 @@ contains
   !end subroutine set_restarted_scan_parameter_value 
 
   subroutine allocate_target_arrays
-    use gs2_diagnostics, only: nwrite, write_nl_flux, write_flux_line
+    use gs2_diagnostics, only: nwrite, write_nl_flux
+!    use gs2_diagnostics, only: write_flux_line
     use run_parameters, only: nstep
     use mp, only : mp_abort
 
@@ -242,7 +243,6 @@ contains
     use mp, only : mp_abort, proc0
     logical, intent (out) :: increment_condition_satisfied
     integer, intent (in) :: istep
-    logical, save :: first = .true.
     integer, save :: last_timestep = 0
     real, save :: last_time = 0.0
 
