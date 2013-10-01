@@ -115,11 +115,9 @@ contains
   end subroutine wnml_antenna
 
   subroutine init_antenna
-    use mp, only: proc0
     use species, only: spec, nspec, init_species
     use run_parameters, only: beta
     use antenna_data, only: init_antenna_data
-    use theta_grid, only: gradpar
     implicit none
 
     integer :: i
@@ -163,7 +161,7 @@ contains
     use gs2_save, only: init_ant_amp
     implicit none
     complex :: a, b
-    integer :: kx, ky, kz, i, unit, in_file, ierr
+    integer :: kx, ky, kz, i, in_file, ierr
     logical :: exist, travel
 
     namelist /driver/ amplitude, w_antenna, nk_stir, write_antenna, ant_off, w_dot, t0, restarting
@@ -291,7 +289,7 @@ contains
 
     complex, dimension (-ntgrid:,:,:), intent(out) :: apar
     complex :: force_a, force_b
-    real :: dt, sigma, time, amp
+    real :: dt, sigma, time
     integer :: i, it, ik
 !    logical, save :: first = .true.
 
@@ -460,11 +458,10 @@ contains
 !=============================================================================
   subroutine dump_ant_amp
     use gs2_time, only: user_time
-    use theta_grid, only: ntgrid, theta
     use mp, only: proc0
     implicit none
     real :: time
-    integer :: i, it, ik, ig
+    integer :: i
 
     if (no_driver) return
     if (.not. write_antenna) then

@@ -512,7 +512,7 @@ subroutine check_dist_fn(report_unit)
     use mp, only: proc0, finish_mp
     use species, only: init_species, nspec
     use theta_grid, only: init_theta_grid, ntgrid
-    use kt_grids, only: init_kt_grids, naky, ntheta0, akx, aky
+    use kt_grids, only: init_kt_grids, naky, ntheta0
     use le_grids, only: init_le_grids, nlambda, negrid
     use run_parameters, only: init_run_parameters
     use collisions, only: init_collisions!, vnmult
@@ -614,7 +614,7 @@ subroutine check_dist_fn(report_unit)
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
-    use theta_grid, only: nperiod, shat
+    use theta_grid, only: shat
     use text_options, only: text_option, get_option_value
     use species, only: nspec
     use mp, only: proc0, broadcast
@@ -841,9 +841,11 @@ subroutine check_dist_fn(report_unit)
 
   subroutine init_wdrift
     use species, only: nspec
-    use theta_grid, only: ntgrid, bmag
+    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: negrid, ng2, nlambda, al, jend, forbid
+    use le_grids, only: negrid, ng2, nlambda, jend, forbid
+!    use le_grids, only: al
+!    use theta_grids, only: bmag
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use dist_fn_arrays, only: ittp
     implicit none
@@ -1134,7 +1136,6 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: aj0, aj1, aj2, kperp2
     use species, only: spec
     use theta_grid, only: ntgrid, bmag
-    use kt_grids, only: naky, aky, akx
     use le_grids, only: energy, al
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use spfunc, only: j0, j1
@@ -1173,7 +1174,6 @@ subroutine check_dist_fn(report_unit)
 
   subroutine init_kperp2
     use dist_fn_arrays, only: kperp2
-    use species, only: spec
     use theta_grid, only: ntgrid, gds2, gds21, gds22, shat
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
     implicit none
@@ -1228,18 +1228,17 @@ subroutine check_dist_fn(report_unit)
   end subroutine par_spectrum
 
   subroutine init_invert_rhs
-    use mp, only: proc0
-    use dist_fn_arrays, only: vpa, vpar, vpac, ittp
+    use dist_fn_arrays, only: vpar, ittp
     use species, only: spec
-    use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, aky
-    use le_grids, only: negrid, nlambda, ng2, forbid
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use le_grids, only: nlambda, ng2, forbid
     use constants
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     implicit none
     integer :: iglo
     integer :: ig, ik, it, il, ie, is, isgn
-    real :: wd, wdttp, vp, bd, wc
+    real :: wd, wdttp, vp, bd
 
     if (.not.allocated(a)) then
        allocate (a(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -1343,7 +1342,8 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: ng2, nlambda
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use gs2_layouts, only: idx, proc_id
-    use mp, only: iproc, nproc, max_allreduce, proc0
+    use mp, only: iproc, nproc, max_allreduce
+!    use mp, only: proc0
     use constants
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
@@ -2502,9 +2502,9 @@ subroutine check_dist_fn(report_unit)
   end subroutine get_right_connection
 
   subroutine allocate_arrays
-    use kt_grids, only: naky, ntheta0, box
+    use kt_grids, only: naky,  box
     use theta_grid, only: ntgrid, shat
-    use dist_fn_arrays, only: g, gnew, gold, g_fixpar
+    use dist_fn_arrays, only: g, gnew, g_fixpar
     use dist_fn_arrays, only: kx_shift, theta0_shift   ! MR
     use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
@@ -2570,7 +2570,7 @@ subroutine check_dist_fn(report_unit)
 
     use theta_grid, only: ntgrid
     use le_derivatives, only: vspace_derivatives
-    use dist_fn_arrays, only: gnew, g, gold, g_fixpar
+    use dist_fn_arrays, only: gnew, g, g_fixpar
     use nonlinear_terms, only: add_explicit_terms
     use hyper, only: hyper_diff
     use run_parameters, only: fixpar_secondary
@@ -2671,7 +2671,7 @@ subroutine check_dist_fn(report_unit)
 ! CMR, Oct 2010: add save statements to prevent potentially large and memory 
 !                killing array allocations!
     
-    use mp, only: iproc, proc0, send, receive, mp_abort
+    use mp, only: send, receive, mp_abort
     use gs2_layouts, only: ik_idx, it_idx, g_lo, idx_local, idx, proc_id
     use run_parameters, only: tunits
     use theta_grid, only: ntgrid, ntheta, shat
@@ -2690,7 +2690,7 @@ subroutine check_dist_fn(report_unit)
     complex, dimension(:,:), allocatable :: temp2
     integer, dimension(1), save :: itmin
     integer :: ierr, j 
-    integer :: ik, it, ie, is, il, isgn, to_iglo, from_iglo, to_iproc, from_iproc
+    integer :: ik, it, ie, is, il, isgn, to_iglo, from_iglo
     integer:: iib, iit, ileft, iright, i
 
     real, save :: dkx, dtheta0
@@ -3066,7 +3066,7 @@ subroutine check_dist_fn(report_unit)
     type(redist_type), intent(out) :: redist_obj
     integer, intent(in), optional :: ik_ind !If present then resulting redistribute object only applies to ik=ik_ind
     integer :: iglo,iglo_conn,ip_conn,ip
-    integer :: ig, ndata, nn_max, n,ik,ik_ind_local
+    integer :: ig, ndata, nn_max, n,ik_ind_local
     type (index_list_type), dimension(0:nproc-1) :: to, from
     integer, dimension (0:nproc-1) :: nn_from, nn_to
     integer, dimension(3) :: from_low, from_high, to_low, to_high
@@ -3203,28 +3203,32 @@ subroutine check_dist_fn(report_unit)
     integer, intent(in) :: iglo
     integer, intent(out) :: iglo_conn
     integer, intent(out) :: iproc_conn
-    integer :: it, ik, it_conn, link
+    integer :: it, ik, it_conn, link, tmp
 
     !Get indices
     it=it_idx(g_lo,iglo)
     ik=ik_idx(g_lo,iglo)
 
     !Initialise to this cell
-    iglo_conn=iglo
+    tmp=iglo
     
     !Now check number of links
     if(l_links(ik,it).eq.r_links(ik,it))then
        !If in the middle of the domain then iglo doesn't change
        !Just get the proc id
        iproc_conn=proc_id(g_lo,iglo)
+       iglo_conn=tmp
     elseif(l_links(ik,it).gt.r_links(ik,it))then
        !If we're on the right then look left
        do link=1,l_links(ik,it)
           !Get the next connected domain
-          call get_left_connection(iglo_conn,iglo_conn,iproc_conn)
+          call get_left_connection(tmp,iglo_conn,iproc_conn)
 
           !What is the it index here?
           it_conn=it_idx(g_lo,iglo_conn)
+
+          !Update current iglo
+          tmp=iglo_conn
 
           !If the number of right links now matches the left then we've got the match
           if(r_links(ik,it_conn).eq.l_links(ik,it)) exit
@@ -3233,10 +3237,13 @@ subroutine check_dist_fn(report_unit)
        !If we're on the left then look right
        do link=1,r_links(ik,it)
           !Get the next connected domain
-          call get_right_connection(iglo_conn,iglo_conn,iproc_conn)
+          call get_right_connection(tmp,iglo_conn,iproc_conn)
 
           !What is the it index here?
           it_conn=it_idx(g_lo,iglo_conn)
+
+          !Update current iglo
+          tmp=iglo_conn
 
           !If the number of left links now matches the right then we've got the match
           if(l_links(ik,it_conn).eq.r_links(ik,it)) exit
@@ -3257,7 +3264,7 @@ subroutine check_dist_fn(report_unit)
     integer, intent(in),optional :: ik_ind
     type(redist_type) :: redist_local
     integer :: ik_local
-    integer :: iglo,mult,ik
+    integer :: iglo,mult
 
     !If enforced parity not requested then exit
     if(.not.(def_parity.or.(fixpar_secondary.gt.0)))return
@@ -3314,11 +3321,11 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
 #endif
     use dist_fn_arrays, only: aj0, aj1, vperp2, vpar, vpac, g, ittp
-    use theta_grid, only: ntgrid, theta, bmag
-    use kt_grids, only: aky, akx
-    use le_grids, only: nlambda, ng2, lmax, anon, energy, negrid, forbid
+    use theta_grid, only: ntgrid
+    use kt_grids, only: aky
+    use le_grids, only: nlambda, ng2, lmax, anon, energy, negrid
     use species, only: spec, nspec
-    use run_parameters, only: fphi, fapar, fbpar, wunits, tunits
+    use run_parameters, only: fphi, fapar, fbpar, wunits
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use nonlinear_terms, only: nonlin
@@ -3500,7 +3507,6 @@ subroutine check_dist_fn(report_unit)
 
       use species, only: spec
       use theta_grid, only: itor_over_B
-      use mp, only: proc0
 
       complex :: apar_p, apar_m, phi_p, phi_m!, bpar_p !GGH added bpar_p
 !      real, dimension(:,:), allocatable, save :: ufac
@@ -3662,7 +3668,7 @@ subroutine check_dist_fn(report_unit)
     use kt_grids, only: aky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use prof, only: prof_entering, prof_leaving
-    use run_parameters, only: fapar, fbpar, fphi, ieqzip
+    use run_parameters, only: fbpar, fphi, ieqzip
     use species, only: spec
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
@@ -4504,7 +4510,6 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: ntgrid
     use kt_grids, only: nakx => ntheta0, naky
     use le_grids, only: integrate_moment
-    use mp, only: iproc
     use fields_arrays, only: phinew, bparnew
     implicit none
     complex, intent (out) :: &
@@ -4824,8 +4829,7 @@ subroutine check_dist_fn(report_unit)
     use run_parameters, only: beta, fphi, fapar, fbpar
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: ntheta0, naky
-    use species, only: nspec
-    use dist_fn_arrays, only: aj0, vpa, kperp2
+    use dist_fn_arrays, only: kperp2
 
     complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
     real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: denominator
@@ -4889,9 +4893,11 @@ subroutine check_dist_fn(report_unit)
 !  This fixed unphysical oscillations in non-ambipolar particle fluxes 
 !
     use species, only: spec
-    use theta_grid, only: ntgrid, bmag, gradpar, grho, delthet, drhodpsi
+    use theta_grid, only: ntgrid, bmag, gradpar, delthet
     use theta_grid, only: qval, shat, gds21, gds22
-    use kt_grids, only: naky, ntheta0, akx, theta0, aky
+    use kt_grids, only: naky, ntheta0, theta0, aky
+!   use theta_grid, only: drhodpsi, grho
+!    use kt_grids, only: akx
     use le_grids, only: energy
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
@@ -5082,7 +5088,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine flux
 
   subroutine get_flux (fld, flx, dnorm)
-    use theta_grid, only: ntgrid, delthet, grho
+    use theta_grid, only: ntgrid, grho
     use kt_grids, only: ntheta0, aky, naky
     use le_grids, only: integrate_moment
     use species, only: nspec
@@ -5093,7 +5099,7 @@ subroutine check_dist_fn(report_unit)
     real, dimension (-ntgrid:,:,:) :: dnorm
     complex, dimension (:,:,:,:), allocatable :: total
     real :: wgt
-    integer :: ik, it, is, ig
+    integer :: ik, it, is
 
     allocate (total(-ntgrid:ntgrid,ntheta0,naky,nspec))
     call integrate_moment (g0, total)
@@ -5116,13 +5122,14 @@ subroutine check_dist_fn(report_unit)
   end subroutine get_flux
 
   subroutine get_flux_tormom (fld, flx, dnorm) !JPL
-    use theta_grid, only: ntgrid, delthet, grho
-    use theta_grid, only: rplot, bpol, bmag
-    use kt_grids, only: ntheta0, aky, naky
+    use theta_grid, only: ntgrid, grho
+    use kt_grids, only: ntheta0, naky
     use le_grids, only: integrate_moment
     use species, only: nspec
     use mp, only: proc0
 #ifdef LOWFLOW
+    use theta_grid, only: rplot
+    use kt_grids, only: aky
     use lowflow, only: mach_lab
 #endif
     implicit none
@@ -5131,7 +5138,7 @@ subroutine check_dist_fn(report_unit)
     real, dimension (-ntgrid:,:,:) :: dnorm
     complex, dimension (:,:,:,:), allocatable :: total
     real :: wgt
-    integer :: ik, it, is, ig
+    integer :: ik, it, is
 
 
     allocate (total(-ntgrid:ntgrid,ntheta0,naky,nspec))
@@ -5164,10 +5171,10 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: g_lo, il_idx, ie_idx, it_idx, ik_idx, is_idx
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: gnew, aj0, vpac
-    use theta_grid, only: ntgrid, gradpar, delthet, bmag, jacob
+    use theta_grid, only: ntgrid, gradpar, delthet, jacob
     use kt_grids, only: ntheta0, naky
     use le_grids, only: integrate_moment
-    use run_parameters, only: woutunits, fphi
+    use run_parameters, only: fphi
     use species, only: spec, nspec
     use nonlinear_terms, only: nonlin
 
@@ -5266,23 +5273,23 @@ subroutine check_dist_fn(report_unit)
 
   subroutine lf_flux (phi, vflx0, vflx1)
 
-    use species, only: spec, nspec
-    use theta_grid, only: ntgrid, bmag, gradpar, grho, delthet
-    use theta_grid, only: qval, shat, gds21, gds22, drhodpsi, IoB
-    use kt_grids, only: naky, ntheta0, akx, aky
-    use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
+    use species, only: nspec
+    use theta_grid, only: ntgrid, bmag, gradpar, delthet
+    use theta_grid, only: drhodpsi, IoB
+    use kt_grids, only: naky, ntheta0
+    use dist_fn_arrays, only: gnew, aj0, vpa
+!    use dist_fn_arrays, only: vpac
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use mp, only: proc0
-    use run_parameters, only: woutunits, fphi, fapar, fbpar, rhostar
+    use run_parameters, only: woutunits, fphi, rhostar
     use constants, only: zi
-    use geometry, only: rhoc
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
     real, dimension (:,:,:), intent (out) :: vflx0, vflx1
     real, dimension (:,:), allocatable :: dum
     real, dimension (:,:,:), allocatable :: dnorm
     complex, dimension (:,:,:), allocatable :: dphi
-    integer :: it, ik, is, isgn, ig
+    integer :: it, ik, isgn, ig
     integer :: iglo
 
     allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
@@ -5343,7 +5350,7 @@ subroutine check_dist_fn(report_unit)
 
   subroutine get_lfflux (fld, flx, dnorm)
     use theta_grid, only: ntgrid
-    use kt_grids, only: ntheta0, aky, naky
+    use kt_grids, only: ntheta0, naky
     use le_grids, only: integrate_moment
     use theta_grid, only: grho
     use species, only: nspec
@@ -5354,7 +5361,7 @@ subroutine check_dist_fn(report_unit)
     real, dimension (-ntgrid:,:,:) :: dnorm
     complex, dimension (:,:,:,:), allocatable :: total
     real :: wgt
-    integer :: ik, it, is, ig
+    integer :: ik, it, is
 
     allocate (total(-ntgrid:ntgrid,ntheta0,naky,nspec))
     call integrate_moment (g0, total)
@@ -5438,15 +5445,17 @@ subroutine check_dist_fn(report_unit)
 
    
     use dist_fn_arrays, only: gnew, aj0
-    use fields_arrays, only: phinew
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: it_idx, ik_idx, is_idx
-    use geometry, only: rhoc
-    use theta_grid, only: ntgrid, Rplot !JPL
-    use kt_grids, only: aky, theta0
+    use theta_grid, only: ntgrid
+#ifdef LOWFLOW
+    use theta_grid, only: Rplot !JPL
+    use fields_arrays, only: phinew
+    use kt_grids, only: aky
+#endif
     use le_grids, only: integrate_volume, nlambda, negrid
     use le_grids, only: get_flux_vs_theta_vs_vpa
-    use species, only: spec, nspec
+    use species, only:  nspec
 #ifdef LOWFLOW
     use lowflow, only: mach_lab    
 #endif
@@ -5494,7 +5503,7 @@ subroutine check_dist_fn(report_unit)
   subroutine get_jext(j_ext)
     use dist_fn_arrays, only: kperp2
     use kt_grids, only: ntheta0, naky,aky
-    use mp, only: proc0
+!    use mp, only: proc0
     use theta_grid, only: jacob, delthet, ntgrid
     use antenna, only: antenna_apar
     implicit none
@@ -5533,20 +5542,22 @@ subroutine check_dist_fn(report_unit)
        end do
     enddo
 
-    if (proc0) deallocate (wgt)
+!    if (proc0) then
+       deallocate (wgt)
+!    endif
     deallocate (j_extz)
 
   end subroutine get_jext
 !<GGH
 !=============================================================================
   subroutine get_heat (h, hk, phi, apar, bpar, phinew, aparnew, bparnew)
-    use mp, only: proc0, iproc
-    use constants, only: pi, zi
+    use mp, only: proc0
+    use constants, only: zi
     use kt_grids, only: ntheta0, naky, aky, akx
 #ifdef LOWFLOW
     use dist_fn_arrays, only: hneoc
 #endif
-    use dist_fn_arrays, only: vpa, vpac, aj0, aj1, vperp2, g, gnew, kperp2, g_adjust
+    use dist_fn_arrays, only: vpac, aj0, aj1, vperp2, g, gnew, kperp2, g_adjust
     use gs2_heating, only: heating_diagnostics
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, ie_idx
     use le_grids, only: integrate_moment
@@ -6256,10 +6267,10 @@ subroutine check_dist_fn(report_unit)
 
   subroutine get_verr (errest, erridx, phi, bpar)
      
-    use mp, only: proc0, broadcast
+    use mp, only: broadcast
     use le_grids, only: integrate_species
     use le_grids, only: eint_error, trap_error, lint_error, wdim
-    use le_grids, only: ng2, nlambda, negrid, new_trap_int, jend
+    use le_grids, only: ng2, nlambda, new_trap_int
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky, aky, akx
     use species, only: nspec, spec
@@ -6468,7 +6479,6 @@ subroutine check_dist_fn(report_unit)
   subroutine get_vnewk (vnm, vnm_target, incr)
 
     use collisions, only: vnfac, vnslow
-    use mp, only: proc0
 
     implicit none
 
@@ -6557,7 +6567,7 @@ subroutine check_dist_fn(report_unit)
 
   subroutine get_gtran (geavg, glavg, gtavg, phi, bpar, istep)
 
-    use le_grids, only: legendre_transform, negrid, nlambda, ng2, nesub, jend
+    use le_grids, only: legendre_transform, nlambda, ng2, nesub, jend
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
@@ -6757,9 +6767,8 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: idx_local, proc_id
     use le_grids, only: al, energy, forbid, negrid, nlambda
     use egrid, only: zeroes, x0
-    use theta_grid, only: bmax, bmag
-    use gs2_time, only: user_time
-    use dist_fn_arrays, only: g, gnew
+    use theta_grid, only: bmag
+    use dist_fn_arrays, only: gnew
 
     integer :: iglo, ik, it, is
     integer :: ie, il, ig
@@ -6833,9 +6842,7 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: il_idx, ig_idx, ik_idx, it_idx, is_idx, isign_idx, ie_idx
     use gs2_layouts, only: idx_local, proc_id, yxf_lo, accelx_lo, g_lo
     use le_grids, only: al, energy, forbid, negrid, nlambda
-    use kt_grids, only: naky, ntheta0, nx, ny
     use theta_grid, only: bmag, ntgrid
-    use species, only: nspec
     use dist_fn_arrays, only: gnew, g_adjust
     use nonlinear_terms, only: accelerated
     use gs2_transforms, only: transform2, init_transforms
@@ -6982,11 +6989,11 @@ subroutine check_dist_fn(report_unit)
   subroutine collision_error (phi, bpar, last)
     
     use mp, only: proc0, send, receive, barrier
-    use le_grids, only: ng2, jend, nlambda, al, forbid, lambda_map
-    use theta_grid, only: ntgrid, bmag
-    use dist_fn_arrays, only: gnew, aj0, g_adjust
+    use le_grids, only: ng2, jend, nlambda, lambda_map
+    use theta_grid, only: ntgrid
+    use dist_fn_arrays, only: gnew, g_adjust
     use run_parameters, only: fphi, fbpar
-    use gs2_layouts, only: g_lo, lz_lo, ig_idx, idx_local, proc_id
+    use gs2_layouts, only: lz_lo, ig_idx, idx_local, proc_id
     use gs2_layouts, only: ik_idx, ie_idx, is_idx, it_idx, il_idx
     use collisions, only: dtot, fdf, fdb
     use redistribute, only: gather, scatter
@@ -7638,7 +7645,7 @@ subroutine check_dist_fn(report_unit)
     
     ! intialize mappings from g_lo to e_lo and lz_lo or to le_lo to facilitate
     ! energy and lambda derivatives in parallel nonlinearity, etc.
-    if(use_le_layout .eq. .true.) then
+    if(use_le_layout) then
       call init_map (use_lz_layout=.false., use_e_layout=.false., use_le_layout=.true., test=.false.)
     else
       call init_map (use_lz_layout=.true., use_e_layout=.true., use_le_layout=.false., test=.false.)

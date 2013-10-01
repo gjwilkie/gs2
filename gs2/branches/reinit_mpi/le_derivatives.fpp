@@ -206,7 +206,7 @@ contains
     subroutine get_gvpa (g_in, dv, ig0, il0, ixi0, ie0, isgn0, g_out)
 
       use theta_grid, only: bmag
-      use le_grids, only: speed, energy, al, xi, negrid, jend, sgn
+      use le_grids, only: speed, energy, al, xi, negrid, jend
 
       implicit none
 
@@ -343,8 +343,8 @@ contains
 
     subroutine interp_g (ig0, isgn, il_low, il_up, ix_low, ix_up, ie_low, ie_up, v0, x0, lam0, p0, g, gint)
 
-      use theta_grid, only: ntgrid
-      use le_grids, only: speed, xi, negrid, sgn, nlambda, al
+      use le_grids, only: speed, xi, negrid, sgn
+!      use le_grids, only: nlambda,al
 
       implicit none
 
@@ -353,7 +353,7 @@ contains
       complex, dimension (:,:), intent (in) :: g
       complex, intent (out) :: gint
 
-      real :: d1, d2, d3, d4, d5, dtot, dg, xpt
+      real :: d1, d2, d3, d4, dtot, xpt
       real, dimension (:), allocatable :: var
 
       allocate (var(size(xi,2)))

@@ -1,15 +1,13 @@
 module species
   implicit none
 
-  public :: init_species, finish_species, reinit_species, init_trin_species, finish_trin_species, trin_restart
+  public :: init_species, finish_species, reinit_species, init_trin_species, finish_trin_species
   public :: wnml_species, check_species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
   public :: has_electron_species, has_slowing_down_species
   public :: ions, electrons, impurity
 
-  integer :: trin_restart
-  
   type :: specie
      real :: z
      real :: mass
@@ -357,6 +355,7 @@ contains
   subroutine finish_trin_species
 
     implicit none
+    write(6,*) 'Finishing trin species'
 
     call finish_species
 
@@ -381,8 +380,6 @@ contains
 
     integer :: is
     logical, save :: first = .true.
-
-    if(trin_restart) first = .true.
 
     if (first) then
        if (nspec == 1) then

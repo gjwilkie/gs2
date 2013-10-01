@@ -22,7 +22,6 @@ module fields_implicit
 contains
 
   subroutine init_fields_implicit
-    use mp, only: proc0
     use antenna, only: init_antenna
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
@@ -343,7 +342,7 @@ contains
   end subroutine advance_implicit
 
   subroutine remove_zonal_flows
-    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use fields_arrays, only: phinew
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     
@@ -419,7 +418,8 @@ contains
   end subroutine reset_init
 
   subroutine init_response_matrix
-    use mp, only: barrier, proc0
+    use mp, only: barrier
+!   use mp, only: proc0
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
@@ -576,7 +576,6 @@ contains
   end subroutine init_response_matrix
 
   subroutine init_response_row (ig, ifield, am, ic, n)
-    use mp, only: proc0
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0

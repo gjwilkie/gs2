@@ -1424,10 +1424,9 @@ end subroutine eikcoefs
 
     real, dimension (-ntgrid:ntgrid, 3) :: bgradtot, pgradtot, &
          dummy, dummy1, curve
-    real, dimension (-ntgrid:ntgrid, 2) :: pgrad, igrad, bgrad1
+    real, dimension (-ntgrid:ntgrid, 2) :: pgrad, bgrad1
     real, dimension (-ntgrid:ntgrid) :: gbdrift1, gbdrift2, cvdrift1, cvdrift2, cdrift1, cdrift2
     real, dimension (-ntgrid:ntgrid) :: gbdrift3, cvdrift3
-    real, dimension (2*ntgrid + 1) :: dumdum1, dumdum2
 
     real :: dum
     character*1 char
@@ -1878,7 +1877,7 @@ end subroutine eikcoefs
     use eeq, only: eeq_iofpbar => btori
     use leq, only: leq_i => btori
     
-    real :: iofrho, f
+    real :: iofrho
     real, intent (in) :: rho
             
     if (gen_eq) iofrho = geq_iofpbar(pbarofrho(rho))
@@ -2446,8 +2445,6 @@ end subroutine geofax
        
     endif
     
-1000 format(1x,11e16.9)
-    
   end function bmodfun
 
   subroutine arclength (ntheta, nperiod, gpar, arcl)
@@ -2744,7 +2741,7 @@ end subroutine geofax
     real :: pi
 !RN>
 !    integer :: nthg, nthsave, i, ntheta_returned
-    integer :: nthg, nthsave, i
+    integer :: nthg, i
     integer, intent(out), optional :: ntheta_returned
 !<RN
 !cmr Jun06: adding following debug switch
@@ -3118,7 +3115,7 @@ end subroutine geofax
 !         write(*,*) 'a, b = ',a,b
     rfun=zbrent(rpfun, a, b, rootval, thetroot, xerrsec)
 !         write(*,1000) a, b, fa, fb, rfun, thet
- 1000 format(1x,11e16.9)
+! 1000 format(1x,11e16.9)
 
   end function rfun
 

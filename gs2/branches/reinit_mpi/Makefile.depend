@@ -83,6 +83,7 @@ ffttester_mod = \
 	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
+	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -145,6 +146,7 @@ gs2_mod = \
 	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
+	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -210,6 +212,7 @@ ingen_mod = \
 	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
+	 lowflow.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -308,6 +311,7 @@ dist_fn.o: \
 	 kt_grids.o \
 	 le_derivatives.o \
 	 le_grids.o \
+	 lowflow.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 prof.o \
@@ -512,7 +516,8 @@ gs2_main.o: \
 	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 unit_tests.o 
 gs2_reinit.o: \
 	 antenna.o \
 	 collisions.o \
@@ -574,7 +579,6 @@ hyper.o: \
 	 gs2_time.o \
 	 kt_grids.o \
 	 mp.o \
-	 run_parameters.o \
 	 text_options.o \
 	 theta_grid.o 
 ideq.o: \
@@ -639,8 +643,10 @@ le_derivatives.o: \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 le_grids.o \
+	 lowflow.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 species.o \
 	 theta_grid.o 
 le_grids.o: \
 	 constants.o \

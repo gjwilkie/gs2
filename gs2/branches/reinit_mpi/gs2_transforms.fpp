@@ -146,7 +146,9 @@ contains
 
     character (1) :: char
 
+# if FFT == _FFTW3_
     integer :: nb_ffts
+# endif
 
     if (initialized_x) return
     initialized_x = .true.
@@ -194,7 +196,9 @@ contains
 
     integer :: idx, i
 
+# if FFT == _FFTW3_
     integer :: nb_ffts
+# endif
 
     if (initialized_y_fft) return
     initialized_y_fft = .true.

@@ -600,11 +600,11 @@ module kt_grids
 contains
 
   subroutine init_kt_grids
-    use theta_grid, only: init_theta_grid, shat, gds22
+    use theta_grid, only: init_theta_grid
     use mp, only: proc0, broadcast
     implicit none
 
-    integer :: ik, it
+    integer :: ik
 
     if (initialized) return
     initialized = .true.

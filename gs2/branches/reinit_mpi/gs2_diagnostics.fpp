@@ -479,9 +479,7 @@ contains
   subroutine real_init (list)
     use run_parameters, only: fapar
     use file_utils, only: open_output_file, get_unused_unit
-    use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, aky, akx
-    use gs2_layouts, only: yxf_lo
+    use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use mp, only: proc0
     use constants
@@ -579,7 +577,7 @@ contains
 !
     use file_utils, only: input_unit, input_unit_exist
     use theta_grid, only: nperiod, ntheta
-    use kt_grids, only: box, nx, ny
+!    use kt_grids, only: box
     use mp, only: proc0
     implicit none
     integer :: in_file
@@ -686,8 +684,8 @@ contains
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn_arrays, only: g_adjust
     use collisions, only: vnmult
-    use dist_fn_arrays, only: g, gnew
-    use gs2_layouts, only: xxf_lo
+    use dist_fn_arrays, only: gnew
+!    use dist_fn_arrays, only: g
     use gs2_transforms, only: transform2, inverse2
     use gs2_save, only: gs2_save_for_restart
     use constants
@@ -700,11 +698,9 @@ contains
 !    use gs2_dist_io, only: write_dist
     implicit none
     integer, intent (in) :: istep
-    integer :: ig, ik, it, il, ie, is, unit, ierr
-    complex, dimension (:,:,:,:), allocatable :: fcheck_f
+    integer :: ig, ik, it, is, unit, ierr
 !    complex, dimension (:,:,:), allocatable :: xphi, xapar, xbpar
     real, dimension (:), allocatable :: total
-    real, dimension (:,:,:), allocatable :: xphi
     real, dimension (:,:,:), allocatable :: bxf, byf, vxf, vyf, bxfsavg, byfsavg
     real, dimension (:,:,:), allocatable :: bxfs, byfs, vxfs, vyfs, rvx, rvy, rx, ry
     complex, dimension (:,:,:), allocatable :: bx, by, vx, vy, vx2, vy2
@@ -1377,9 +1373,8 @@ contains
   subroutine loop_diagnostics (istep, exit, debopt)
     use species, only: nspec, spec, has_electron_species
     use theta_grid, only: theta, ntgrid, delthet, jacob
-    use theta_grid, only: gradpar, nperiod
     use kt_grids, only: naky, ntheta0, theta0, aky, akx
-    use kt_grids, only: nkpolar, jtwist_out !, akpolar
+    use kt_grids, only: jtwist_out !, akpolar
     use run_parameters, only: woutunits, tunits, fapar, fphi, fbpar, eqzip
 !    use run_parameters, only: nstep, include_lowflow
     use run_parameters, only: nstep
@@ -1390,9 +1385,10 @@ contains
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn, only: getmoms_notgc, lf_flux, eexchange
     use dist_fn, only: flux_vs_theta_vs_vpa, pflux_vs_theta_vs_vpa
-    use dist_fn_arrays, only: g, gnew, aj0, vpa, g_adjust
+    use dist_fn_arrays, only: gnew, aj0, g_adjust
     use collisions, only: ncheck, vnmult, vary_vnew
-    use mp, only: proc0, broadcast, iproc, send, receive
+    use mp, only: proc0, broadcast, send, receive
+!   use mp, only: iproc
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: user_time
@@ -1410,7 +1406,7 @@ contains
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
     use gs2_heating, only: heating_diagnostics, del_htype
-    use constants
+    use constants, only: zi
     use parameter_scan_arrays, only: scan_hflux => hflux_tot 
     use parameter_scan_arrays, only: scan_momflux => momflux_tot 
     use parameter_scan_arrays, only: scan_phi2_tot => phi2_tot 
@@ -1428,7 +1424,6 @@ contains
     real, dimension(:,:), allocatable ::  j_ext
 
     real, dimension (ntheta0, naky) :: phitot, akperp
-    complex, dimension (ntheta0, naky, nspec) :: pfluxneo,qfluxneo
     real :: phi2, apar2, bpar2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode
     real, dimension (ntheta0, naky, nspec) :: ntot2_by_mode, ntot20_by_mode
@@ -1458,15 +1453,14 @@ contains
     complex, dimension (:,:), allocatable :: phi_corr_2pi
     real, dimension (:,:,:), allocatable, save :: phiextend_sum
     complex, dimension (:,:,:), allocatable, save :: phicorr_sum
-    complex, dimension (:,:), allocatable, save :: phicorr_2pi_sum
 !<MAB
     real :: geavg, glavg, gtavg
     real :: t, denom
-    integer :: ig, ik, it, is, unit, i, j, nnx, nny, ifield, write_mod
+    integer :: ig, ik, it, is, unit, i, nnx, nny, write_mod
     complex :: sourcefac
 !    complex :: phiavg
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
-         upar, tpar, tperp, qparflux, pperpj1, qpperpj1, upartot, uperptot, ttot
+         upar, tpar, tperp, qparflux, pperpj1, qpperpj1
     complex, dimension (ntheta0, nspec) :: ntot00, density00, upar00, tpar00, tperp00
     complex, dimension (ntheta0) :: phi00
     complex, save :: wtmp_new
@@ -1475,7 +1469,9 @@ contains
     real, dimension (ntheta0, nspec) :: x_qmflux
     real, dimension (nspec) :: ntot2, ntot20, tpar2, tperp2
     real, dimension (nspec) ::  heat_fluxes,  part_fluxes, mom_fluxes, parmom_fluxes, perpmom_fluxes, part_tormom_fluxes
+#ifdef LOWFLOW
     real, dimension (nspec) :: lfmom_fluxes, vflux1_avg  ! low-flow correction to turbulent momentum fluxes
+#endif
     real, dimension (nspec) :: mheat_fluxes, mpart_fluxes, mmom_fluxes
     real, dimension (nspec) :: bheat_fluxes, bpart_fluxes, bmom_fluxes
     real, dimension (nspec) :: energy_exchange
@@ -1486,7 +1482,6 @@ contains
     real :: phase_tot, phase_theta
 !    real, dimension (:), allocatable :: phi_by_k, apar_by_k, bpar_by_k
     real :: hflux_tot, zflux_tot, vflux_tot
-    real, dimension(nspec) :: tprim_tot, fprim_tot
     real, save :: t_old = 0.
     character(200) :: filename
     logical :: last = .false.
@@ -2674,13 +2669,12 @@ if (debug) write(6,*) "loop_diagnostics: done"
 
   subroutine heating (istep, h, hk)
 
-    use mp, only: proc0, iproc
+    use mp, only: proc0
     use dist_fn, only: get_heat
     use fields, only: phi, apar, bpar, phinew, aparnew, bparnew
     use species, only: nspec, spec
     use kt_grids, only: naky, ntheta0, aky, akx
     use theta_grid, only: ntgrid, delthet, jacob
-    use nonlinear_terms, only: nonlin
     use dist_fn_arrays, only: c_rate
     use gs2_heating, only: heating_diagnostics, avg_h, avg_hk, zero_htype
     implicit none
@@ -2861,7 +2855,6 @@ if (debug) write(6,*) "get_omegaavg: done"
   end subroutine get_vol_average_one
 
   subroutine get_volume_average (f, favg)
-    use mp, only: iproc
     use kt_grids, only: naky, ntheta0, aky
     implicit none
     real, dimension (:,:), intent (in) :: f
@@ -2889,7 +2882,6 @@ if (debug) write(6,*) "get_omegaavg: done"
   end subroutine get_volume_average
 
   subroutine get_surf_average (f, favg)
-    use mp, only: iproc
     use kt_grids, only: naky, ntheta0, aky
     implicit none
     real, dimension (:,:), intent (in) :: f
@@ -3020,20 +3012,17 @@ if (debug) write(6,*) "get_omegaavg: done"
     use species, only: nspec, spec, electron_species
     use kt_grids, only: ntheta0, naky
     use theta_grid, only: ntgrid
-    use dist_fn_arrays, only: gnew
     use dist_fn, only: getemoms
-    use mp, only: proc0
 
     implicit none
     real, intent (out) :: phase_tot, phase_theta
     complex, dimension (:,:,:,:), allocatable :: ntot, tperp
     complex, dimension (ntheta0, naky) :: nTp_by_mode
     complex :: nTp
-    real, dimension (ntheta0, naky) :: n2_by_mode, T2_by_mode
-    real :: n2, T2
+!    real, dimension (ntheta0, naky) :: n2_by_mode, T2_by_mode
+!    real :: n2, T2
 
-    integer :: it, ik, is, isgn, ig
-    integer :: iglo
+    integer ::  is
 
     allocate ( ntot(-ntgrid:ntgrid,ntheta0,naky,nspec))
     allocate (tperp(-ntgrid:ntgrid,ntheta0,naky,nspec))
@@ -3099,7 +3088,6 @@ if (debug) write(6,*) "get_omegaavg: done"
   end subroutine get_vol_int_one
 
   subroutine get_volume_int (f, favg)
-    use mp, only: iproc
     use kt_grids, only: naky, ntheta0, aky
     implicit none
     complex, dimension (:,:), intent (in) :: f
@@ -3130,10 +3118,11 @@ if (debug) write(6,*) "get_omegaavg: done"
 !  subroutine autocorrelation (cfnc,phi2extend,cfnc_2pi)
   subroutine correlation_extend (cfnc,phi2extend)
 
-    use constants, only: pi
+!    use constants, only: pi
     use fields_arrays, only: phinew
-    use theta_grid, only: ntgrid, theta, jacob, delthet
-    use kt_grids, only: theta0, ntheta0, naky, jtwist_out
+    use theta_grid, only: ntgrid, jacob, delthet
+!   use theta_grid, only: theta
+    use kt_grids, only: ntheta0, naky, jtwist_out
 
     implicit none
 
@@ -3142,7 +3131,7 @@ if (debug) write(6,*) "get_omegaavg: done"
 
     integer :: ig, it, ik, im, igmod
     integer :: itshift, nconnect, offset
-    real :: fac
+!    real :: fac
 
     real, dimension (:), allocatable :: dl_over_b
     complex, dimension (:,:,:), allocatable :: phiextend

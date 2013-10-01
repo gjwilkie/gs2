@@ -164,7 +164,7 @@ function ffttest (jx,jy,debug)
 
 !CMR, 5-D FFTs
   g=0
-  if (printlots) write(6,fmt='("nx=",i6,": ny=",i6,": ntheta0=",i6,": naky=",i6)') ,nx,ny,ntheta0,naky
+  if (printlots) write(6,fmt='("nx=",i6,": ny=",i6,": ntheta0=",i6,": naky=",i6)') nx,ny,ntheta0,naky
   if (jy .ge. naky) then 
      write(6,*) "ffttest: quit as jy>=naky --- jy, naky=",jy,naky
      return

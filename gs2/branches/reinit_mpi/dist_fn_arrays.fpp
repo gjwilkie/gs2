@@ -71,7 +71,7 @@ contains
 !    call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
 !
     use species, only: spec
-    use theta_grid, only: ntgrid, bmag
+    use theta_grid, only: ntgrid
     use le_grids, only: anon
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
     implicit none
