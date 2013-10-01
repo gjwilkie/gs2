@@ -417,7 +417,6 @@ contains
     use file_utils, only: open_output_file, close_output_file
     use egrid, only: zeroes
     use constants, only: pi => dpi
-    use mp, only: iproc
 
     implicit none
 
@@ -2386,10 +2385,7 @@ contains
 
     ! initialize maps from g_lo to lz_lo, e_lo, and/or le_lo
 
-!    if(proc0) write(6,*) 'init_map: starting'
-
     if (use_lz_layout) then
-!      if(proc0) write(6,*) 'le_grids: Calling init_lambda_redistribute'
        ! init_lambda_layout is called in redistribute
        if(opt_redist_init)then
           call init_lambda_redistribute_local
@@ -2403,7 +2399,6 @@ contains
     end if
 
     if (use_e_layout) then
-!      if(proc0) write(6,*) 'le_grids: Calling init_energy_redistribute'
        ! init_energy_layout is called in redistribute
        if(opt_redist_init) then
           call init_energy_redistribute_local
@@ -2424,8 +2419,6 @@ contains
        endif
        if (test) call check_g2le
     end if
-    
-!    if(proc0) write(6,*) 'init_map: finished'
     
     if (test) then
        if (proc0) print *, 'init_map done'
@@ -2551,9 +2544,7 @@ contains
     ! TT: It may be good to avoid bank conflict.
     to_high(3) = le_lo%ulim_alloc
 
-!    write(6,*) 'le_grids: calling init_redist (g2le)'
     call init_redist (g2le, 'c', to_low, to_high, to_list, from_low, from_high, from_list)
-!    write(6,*) 'le_grids: called init_redist (g2le)'
 
     call delete_list (to_list)
     call delete_list (from_list)
@@ -3079,10 +3070,8 @@ contains
     from_high(1) = ntgrid
     from_high(2) = 2
     from_high(3) = g_lo%ulim_alloc
-!    write(6,*) 'le_grids: calling init_redist (lambda_map)'
     call init_redist (lambda_map, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
-!    write(6,*) 'le_grids: called init_redist (lambda_map)'
     call delete_list (to_list)
     call delete_list (from_list)
 
@@ -3411,10 +3400,10 @@ contains
     from_high(1) = ntgrid
     from_high(2) = 2
     from_high(3) = g_lo%ulim_alloc
-!    write(6,*) 'le_grids: calling init_redist (energy_map)'
+
     call init_redist (energy_map, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
-!    write(6,*) 'le_grids: called init_redist (energy_map)'
+
     call delete_list (to_list)
     call delete_list (from_list)
 

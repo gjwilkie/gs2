@@ -39,7 +39,7 @@ module species
   integer :: ntspec_trin
   real, dimension (:), allocatable :: dens_trin, temp_trin, fprim_trin, tprim_trin, nu_trin
 
-  logical :: initialized = .false.
+  logical, save :: initialized = .false.
   logical :: exist
 
 contains
@@ -189,7 +189,7 @@ contains
   end subroutine wnml_species
 
   subroutine init_species
-    use mp, only: trin_flag, proc0
+    use mp, only: trin_flag
     implicit none
 !    logical, save :: initialized = .false.
 
@@ -355,7 +355,6 @@ contains
   subroutine finish_trin_species
 
     implicit none
-    write(6,*) 'Finishing trin species'
 
     call finish_species
 
@@ -406,7 +405,7 @@ contains
              end if
           end do
        end if
-!       first = .false.
+       first = .false.
     end if
 
     if (proc0) then
