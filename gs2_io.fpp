@@ -1587,12 +1587,10 @@ contains
 
   subroutine nc_final_epar (epar)
 
-!    use nf90_mod, only: nf90_put_var
-    use convert, only: c2r
-    use run_parameters, only: fphi, fapar, fbpar
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
 # ifdef NETCDF
+    use convert, only: c2r
+    use kt_grids, only: naky, ntheta0
+    use theta_grid, only: ntgrid
     use netcdf, only: nf90_put_var
 # endif
     complex, dimension (:,:,:), intent (in) :: epar

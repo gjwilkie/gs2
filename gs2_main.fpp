@@ -43,7 +43,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use mp, only: max_reduce, min_reduce, sum_reduce
-    use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
+    use file_utils, only: init_file_utils, run_name!, finish_file_utils
     use fields, only: init_fields, advance
     use species, only: ions, electrons, impurity
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
@@ -55,7 +55,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
     use gs2_time, only: update_time, write_dt, init_tstart
-    use gs2_time, only: user_time, user_dt, code_time
+    use gs2_time, only: user_time, user_dt
     use init_g, only: tstart
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
@@ -77,7 +77,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real :: time_total(2) = 0.
     real :: time_interval
     real :: time_main_loop(2)
-    real :: time_main_loop_min,time_main_loop_max,time_main_loop_av
 
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
@@ -330,7 +329,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_time, only: code_dt, user_dt, save_dt, user_time
     use run_parameters, only: fphi, fapar, fbpar
     use antenna, only: a_reset => reset_init
-    use mp, only: proc0, scope, subprocs, allprocs
+    use mp, only: scope, subprocs, allprocs
 
     implicit none
 

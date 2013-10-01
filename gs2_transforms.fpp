@@ -145,7 +145,9 @@ contains
     logical, save :: initialized = .false.
     character (1) :: char
 
+# if FFT == _FFTW3_
     integer :: nb_ffts
+# endif
 
     if (initialized) return
     initialized = .true.
@@ -194,7 +196,9 @@ contains
     logical :: initialized = .false.
     integer :: idx, i
 
+# if FFT == _FFTW3_
     integer :: nb_ffts
+# endif
 
     if (initialized) return
     initialized = .true.

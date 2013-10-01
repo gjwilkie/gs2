@@ -54,7 +54,7 @@ contains
     integer :: ntheta, nlambda, nenergy, nxi
     integer, save :: neo_unit, neot_unit
 
-    logical, save :: initialized = .false.
+!    logical, save :: initialized = .false.
     logical, dimension (:,:), allocatable :: forbid
     
 !    if (initialized) return

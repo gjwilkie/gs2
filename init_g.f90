@@ -923,18 +923,18 @@ contains
     input_check_recon=.false.
     nkxy_pt=cmplx(0.,0.)
     ukxy_pt=cmplx(0.,0.)
-
+    
     ikpar_init = 0
     kpar_init = 0.0
     ikx_init = -1
-
+    read_many=.false.
     ! <RN
     restart_file = trim(run_name)//".nc"
     restart_dir = "./"
     in_file = input_unit_exist ("init_g_knobs", exist)
 !    if (exist) read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
     if (exist) read (unit=in_file,nml=init_g_knobs)
-
+    
     ierr = error_unit()
     call get_option_value &
          (ginit_option, ginitopts, ginitopt_switch, &
@@ -1092,19 +1092,14 @@ contains
 !  end subroutine ginit_noise
   
   subroutine single_initial_kx(phi)
-    use species, only: spec, tracer_species
     use theta_grid, only: ntgrid 
-    use kt_grids, only: naky, ntheta0, aky, reality, akx
-    use le_grids, only: forbid
-    use dist_fn_arrays, only: g, gnew
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use ran
+    use kt_grids, only: naky, ntheta0
+!   use kt_grids, only: akx
     use mp, only: mp_abort
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky), intent(inout) :: phi
     real :: a, b
-    integer :: iglo
-    integer :: ig, ik, it, il, is, nn
+    integer :: ig, ik, it
 
     if (ikx_init  < 2 .or. ikx_init > (ntheta0+1)/2) then
       call mp_abort("The subroutine single_initial_kx should only be called when 1 < ikx_init < (ntheta0+1)/2")
@@ -1386,7 +1381,8 @@ contains
 
   subroutine ginit_all_modes_equal
     use species, only: spec, tracer_species
-    use theta_grid, only: ntgrid, shat, theta, ntheta 
+    use theta_grid, only: ntgrid, theta, ntheta 
+!    use theta_grid, only: shat
     use kt_grids, only: naky, ntheta0, aky, reality
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew
@@ -1586,7 +1582,7 @@ contains
   end subroutine ginit_nl2
 
   subroutine ginit_nl3
-    use species, only: spec, has_electron_species, electron_species
+    use species, only: spec, has_electron_species
     use theta_grid, only: ntgrid, theta
     use kt_grids, only: naky, ntheta0, theta0, reality
     use le_grids, only: forbid
@@ -1687,13 +1683,13 @@ contains
   end subroutine ginit_nl3
 
   subroutine ginit_nl3r
-    use species, only: spec, has_electron_species, electron_species
+    use species, only: spec, has_electron_species
     use theta_grid, only: ntgrid, theta
     use kt_grids, only: naky, ntheta0, theta0, reality
     use le_grids, only: forbid
 !    use le_grids, only: ng2
-    use fields_arrays, only: apar, bpar
-    use fields_arrays, only: aparnew, bparnew
+    use fields_arrays, only: apar
+    use fields_arrays, only: aparnew
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use constants
@@ -1793,11 +1789,10 @@ contains
   end subroutine ginit_nl3r
 
   subroutine ginit_harris
-    use species, only: spec, has_electron_species, electron_species
-    use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, theta0, reality, nx
+    use species, only: spec, has_electron_species
+    use kt_grids, only: naky, ntheta0, reality, nx
     use le_grids, only: forbid
-    use dist_fn_arrays, only: g, gnew, vpa, vperp2, aj0
+    use dist_fn_arrays, only: g, gnew, vpa, aj0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
     use constants
     use ran
@@ -1896,7 +1891,7 @@ contains
     use mp, only: proc0
     use species, only: spec, has_electron_species
     use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, theta0, reality
+    use kt_grids, only: naky, ntheta0, reality
     use le_grids, only: forbid
 !    use le_grids, only: ng2
     use gs2_save, only: gs2_restore
@@ -2203,12 +2198,11 @@ contains
 
   subroutine ginit_nl6
     use mp, only: proc0
-    use species, only: spec
     use gs2_save, only: gs2_restore
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
+!    use theta_grid, only: ntgrid
+    use kt_grids, only: ntheta0
+!   use kt_grids, only: naky
     use dist_fn_arrays, only: g, gnew
-    use le_grids, only: forbid
     use fields_arrays, only: phi, apar, bpar
     use fields_arrays, only: phinew, aparnew, bparnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
@@ -2262,12 +2256,11 @@ contains
   subroutine ginit_nl7
     use species, only: spec, has_electron_species
     use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, theta0, reality
+    use kt_grids, only: naky, ntheta0, reality
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use constants
-    use ran
+    use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
@@ -2352,14 +2345,13 @@ contains
     use kt_grids, only: naky, nakx => ntheta0, reality
     use dist_fn_arrays, only: g, gnew, vpa, kperp2
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
-    use constants, only: pi
     use fields_arrays, only: phinew, aparnew, bparnew
     use dist_fn, only: get_init_field
     implicit none
     integer :: iglo, ik, it, is, i
     real :: fac
     complex, dimension (-ntgrid:ntgrid,nakx,naky) :: phi, jpar !! local !!
-    real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
+    real, dimension (-ntgrid:ntgrid) :: dfac, ufac
 
     !! phi, jpar are local !!
     phi = 0.0 ; jpar = 0.0
@@ -2519,7 +2511,7 @@ contains
   subroutine ginit_gs
     use species, only: spec, has_electron_species
     use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, theta0, reality
+    use kt_grids, only: naky, ntheta0
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
@@ -2541,7 +2533,9 @@ contains
           odd(:,it,ik) = sin(theta+phase)*cmplx(refac,imfac) * zi
        end do
     end do
-    
+  
+!<DD>Should this be triggered for kt_grids::reality=.true. only?
+  
 ! reality condition for k_theta = 0 component:
     do it = 1, ntheta0/2
        phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
@@ -2737,13 +2731,12 @@ contains
 
   subroutine ginit_recon3
     use mp, only: proc0
-    use mp, only: iproc
     use species, only: nspec, spec, has_electron_species
     use theta_grid, only: ntgrid, theta
     use kt_grids, only: naky, nakx => ntheta0, akx, aky, reality
     use kt_grids, only: nx,ny
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
-    use dist_fn_arrays, only: aj0,aj1,vperp2
+    use dist_fn_arrays, only: vperp2
     use dist_fn_arrays, only: kperp2
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
     use gs2_transforms, only: inverse2,transform2
@@ -3575,8 +3568,8 @@ contains
   end subroutine ginit_restart_smallflat
 
 
-	!> Restart but remove all turbulence except the zonal flow (ky = 0) component upon 
-	!! restarting. It can be selected by setting the input parameter ginit to "zonal_only". 
+  !> Restart but remove all turbulence except the zonal flow (ky = 0) component upon 
+  !! restarting. It can be selected by setting the input parameter ginit to "zonal_only". 
   !! The size of the zonal flows can be adjusted using the input parameter zf_init. 
   ! Author EGH
 
@@ -3585,72 +3578,69 @@ contains
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
-    use species, only: spec
-    use theta_grid, only: ntgrid 
-    use kt_grids, only: naky, ntheta0, aky, reality
+    use kt_grids, only: naky, ntheta0
+!    use kt_grids, only: reality
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use fields_arrays, only: phinew, aparnew, bparnew
-    use fields_arrays, only: phi, apar, bpar
+    use fields_arrays, only: phinew
     use run_parameters, only: fphi, fapar, fbpar
     use ran
 
     implicit none
 !     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
     integer :: istatus, ierr
-    real :: a, b
     integer :: iglo
 !    integer :: ig, ik, it, il, is
     integer :: ik, it, il, is
 
 
-! 		if (phiinit > epsilon(0.0)) then 
+!    if (phiinit > epsilon(0.0)) then 
 ! 
-!     end if 
+!    end if 
        
 
-		!  Load phi and g from the restart file
+    !  Load phi and g from the restart file
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
        ierr = error_unit()
        if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
        g = 0.
     end if
-		write (*,*) "Initialised g"
-
-		! Set all non-zonal components of phi to 0
+    write (*,*) "Initialised g"
+    
+    ! Set all non-zonal components of phi to 0
     do it = 1, ntheta0
        do ik = 2, naky ! Starting at 2 is the crucial bit!!
           phinew(:,it,ik) = cmplx(0.0,0.0)
        end do
     end do
-
-	! Allow adjustment of the size of the zonal flows via the input parameter zf_init
-     phinew(:,:,1) = phinew(:,:,1)*zf_init
-
-
-		!Apply reality condition for k_theta = 0 component!
+    
+    ! Allow adjustment of the size of the zonal flows via the input parameter zf_init
+    phinew(:,:,1) = phinew(:,:,1)*zf_init
+    
+    
+    !Apply reality condition for k_theta = 0 component!
     !if (reality) then
-!        do it = 1, ntheta0/2
-!           phinew(:,it+(ntheta0+1)/2,1) = conjg(phinew(:,(ntheta0+1)/2+1-it,1))
-!        enddo
-!     end if
-
-		!Set non-zonal components of g to zero using phi
-
-		write(*,*) "Zeroing g"
-
+    !        do it = 1, ntheta0/2
+    !           phinew(:,it+(ntheta0+1)/2,1) = conjg(phinew(:,(ntheta0+1)/2+1-it,1))
+    !        enddo
+    !     end if
+    
+    !Set non-zonal components of g to zero using phi
+    
+    write(*,*) "Zeroing g"
+    
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-				if (ik > 1) then
-					g(:,1,iglo) = 0.0 !-phi(:,it,ik)*spec(is)%z*phiinit
-					where (forbid(:,il)) g(:,1,iglo) = 0.0
-					g(:,2,iglo) = g(:,1,iglo)
-				end if
+       if (ik > 1) then
+          g(:,1,iglo) = 0.0 !-phi(:,it,ik)*spec(is)%z*phiinit
+          where (forbid(:,il)) g(:,1,iglo) = 0.0
+          g(:,2,iglo) = g(:,1,iglo)
+       end if
     end do
 
     ! If phiinit > 0, add some noise
@@ -3660,8 +3650,6 @@ contains
     end if
 
     gnew = g
-
-
 
   end subroutine ginit_restart_zonal_only
 
@@ -3679,7 +3667,7 @@ contains
     use run_parameters, only : fixpar_secondary
     implicit none
     integer :: iglo, istatus
-    integer :: ig, ik, it, ierr
+    integer :: ik, it, ierr
 
     !Check we should be using this routine
     if(fixpar_secondary.le.0)then
