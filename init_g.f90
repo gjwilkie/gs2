@@ -1220,7 +1220,7 @@ contains
           phit(:,it+(ntheta0+1)/2,1) = conjg(phit(:,(ntheta0+1)/2+1-it,1))
        enddo
     end if
-    
+
     !Now set g using data in phi
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)

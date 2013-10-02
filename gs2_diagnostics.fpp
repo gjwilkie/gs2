@@ -68,6 +68,9 @@ module gs2_diagnostics
   ! internal
   logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
+! HJL < moved here so that it can be deallocated
+  complex, allocatable, save, dimension (:,:,:) :: domega
+! > HJL
 
   namelist /gs2_diagnostics_knobs/ print_line, print_flux_line, &
          write_line, write_flux_line, &
@@ -1356,6 +1359,10 @@ contains
     if (allocated(pflux_tormom)) deallocate (pflux_tormom) 
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
     if (allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
+
+! HJL <    
+    if (allocated(domega)) deallocate(domega)
+! > HJL
 
     wtmp_old = 0. ; nout = 1 ; nout_movie = 1 ; nout_big = 1
     initialized = .false.
@@ -2769,7 +2776,8 @@ if (debug) write(6,*) "loop_diagnostics: done"
     logical, intent (in out) :: exit
     complex, dimension (:,:), intent (out) :: omegaavg
 !CMR, 7/11/2008: save here crucial to avoid crippling memory leak with mpixl!
-    complex, allocatable, save, dimension (:,:,:) :: domega
+!HJL - moved to top of module
+!    complex, allocatable, save, dimension (:,:,:) :: domega
     integer :: j
     logical, optional :: debopt
     logical :: debug=.false.

@@ -8,8 +8,8 @@
 
 module gs2_main
   
-  public :: run_gs2, finish_gs2, reset_gs2
-
+  public :: run_gs2, finish_gs2, reset_gs2, trin_finish_gs2
+ 
 contains
 # endif
 
@@ -64,7 +64,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_layouts, only: layout
     use parameter_scan, only: update_scan_parameter_value
     use unit_tests, only: functional_test_flag, ilast_step
-        
+
     implicit none
 
     integer, intent (in), optional :: mpi_comm, job_id, nensembles
@@ -94,7 +94,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 !     as may want to do post-processing
 !
 !    if (present(nofinish)) nofin=nofinish
-    
+     
+
     if (first_time) then
 
        ! <doc> Initialize message passing </doc>
@@ -246,7 +247,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (.not.nofin .and. .not. functional_test_flag ) call finish_gs2_diagnostics (istep_end)
        if (.not.nofin .and. .not. functional_test_flag) call finish_gs2
     end if
-    
+
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
     if (proc0) call time_message(.false.,time_total,' Total')
@@ -278,6 +279,30 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     
   end subroutine run_gs2
   
+! HJL <
+  subroutine trin_finish_gs2
+
+    use gs2_layouts, only: finish_layouts
+    use gs2_transforms, only: finish_transforms
+    use gs2_diagnostics, only: finish_gs2_diagnostics
+    use gs2_save, only: gs2_save_for_restart, finish_save
+    use theta_grid, only: finish_theta_grid
+    use unit_tests, only: ilast_step
+    
+    call finish_gs2_diagnostics (ilast_step)
+    call finish_gs2
+! HJL Species won't change during a run so shouldn't need this    
+!    call finish_trin_species
+
+    call finish_layouts
+    call finish_transforms
+    call finish_save
+    call finish_theta_grid
+
+  end subroutine trin_finish_gs2
+! > HJL
+
+
   subroutine finish_gs2
     
     use antenna, only: finish_antenna
@@ -312,6 +337,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (proc0) call finish_file_utils
 
   end subroutine finish_gs2
+  
 
   subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
 

@@ -522,7 +522,6 @@ subroutine check_dist_fn(report_unit)
     implicit none
     logical:: debug=.false.
 
-!    write (*,*) 'entering init_dist_fn'
     if (initialized) return
     initialized = .true.
 
@@ -823,7 +822,7 @@ subroutine check_dist_fn(report_unit)
     complex, intent (in out) :: fexp_out
     real, intent (in out) :: bakdif_out
     integer, intent (in out) :: bd_exp_out
-    integer :: bd_exp
+    integer :: bd_exp,iostat
     real :: fexpr, fexpi, bakdif
     namelist /dist_fn_species_knobs/ fexpr, fexpi, bakdif, bd_exp
 
@@ -831,7 +830,8 @@ subroutine check_dist_fn(report_unit)
     fexpi = aimag(fexp_out)
     bakdif = bakdif_out
     bd_exp = bd_exp_out
-    read (unit=unit, nml=dist_fn_species_knobs)
+    read (unit=unit, nml=dist_fn_species_knobs,iostat=iostat)
+    if(iostat /= 0) write(6,*) 'Error ',iostat,'dist_fn species knobs'
     fexp_out = cmplx(fexpr,fexpi)
     bd_exp_out = bd_exp
     bakdif_out = bakdif
@@ -7481,7 +7481,7 @@ subroutine check_dist_fn(report_unit)
   subroutine finish_dist_fn
 
     use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
-    use dist_fn_arrays, only: aj0, aj1, kperp2
+    use dist_fn_arrays, only: aj0, aj1, aj2, kperp2
     use dist_fn_arrays, only: g, gnew, kx_shift, g_fixpar
 
     implicit none
@@ -7498,7 +7498,7 @@ subroutine check_dist_fn(report_unit)
     if (allocated(ittp)) deallocate (ittp, wdrift, wdriftttp)
     if (allocated(vpa)) deallocate (vpa, vpac, vperp2, vpar)
     if (allocated(wstar)) deallocate (wstar)
-    if (allocated(aj0)) deallocate (aj0, aj1)
+    if (allocated(aj0)) deallocate (aj0, aj1, aj2)
     if (allocated(kperp2)) deallocate (kperp2)
     if (allocated(a)) deallocate (a, b, r, ainv)
     if (allocated(l_links)) deallocate (l_links, r_links, n_links)
