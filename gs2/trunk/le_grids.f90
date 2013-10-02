@@ -434,7 +434,7 @@ contains
     wdim = nesub
     allocate(modzeroes(nesub-1), werrtmp(nesub-1))
     allocate(werr(negrid-1,nesub))
-    
+
     werr = 0.0 ; modzeroes = 0.0 ; werrtmp = 0.0
     
     ! loop to obtain weights for energy grid points.  negrid-1 sets
@@ -3400,7 +3400,7 @@ contains
     from_high(1) = ntgrid
     from_high(2) = 2
     from_high(3) = g_lo%ulim_alloc
-    
+
     call init_redist (energy_map, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
 
@@ -3740,7 +3740,7 @@ contains
     implicit none
 
     if (allocated(zeroes)) deallocate (zeroes)
-    if (allocated(energy)) deallocate (energy, dele, al, wl, jend, forbid, xx, lgrnge, xloc)
+    if (allocated(energy)) deallocate (energy, dele, al, wl, jend, forbid, xx, lgrnge, xloc, speed)
     if (allocated(integration_work)) deallocate (integration_work)
     if (allocated(wlerr)) deallocate (wlerr)
     if (allocated(werr)) deallocate (werr)
@@ -3763,6 +3763,9 @@ contains
 
     intinit = .false. ; slintinit = .false. ; lintinit = .false. ; eintinit = .false.
 
+    leinit = .false.
+    lzinit = .false.
+    einit = .false.
     initialized = .false.
 
   end subroutine finish_le_grids

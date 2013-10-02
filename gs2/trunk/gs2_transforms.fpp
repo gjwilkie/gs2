@@ -12,12 +12,15 @@ module gs2_transforms
 
   implicit none
 
-  public :: init_transforms
+  public :: init_transforms, finish_transforms
   public :: init_x_transform, init_zf, kz_spectrum
   public :: transform_x, transform_y, transform2
   public :: inverse_x, inverse_y, inverse2
 
   private
+
+  logical :: initialized, initialized_x, initialized_y_fft
+  logical :: initialized_x_redist, initialized_y_redist, initialized_3d
 
   interface transform_x
      module procedure transform_x5d
@@ -93,8 +96,7 @@ contains
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
     logical, intent (out) :: accelerated
-    
-    logical, save :: initialized = .false.
+
     character (1) :: char
 ! CMR, 12/2/2010:  return correct status of "accelerated" even if already initialised
     accelerated = accel
@@ -142,15 +144,14 @@ contains
     use gs2_layouts, only: xxf_lo, pe_layout
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
 
-    logical, save :: initialized = .false.
     character (1) :: char
 
 # if FFT == _FFTW3_
     integer :: nb_ffts
 # endif
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_x) return
+    initialized_x = .true.
 
     call pe_layout (char)
 
@@ -193,15 +194,14 @@ contains
     implicit none
     integer, intent (in) :: ntgrid
 
-    logical :: initialized = .false.
     integer :: idx, i
 
 # if FFT == _FFTW3_
     integer :: nb_ffts
 # endif
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_y_fft) return
+    initialized_y_fft = .true.
 
     if (accel) then
 
@@ -308,18 +308,18 @@ contains
     integer, dimension (2) :: to_high
     integer :: to_low
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
-    logical :: initialized = .false.
 
     integer :: iglo, isign, ig, it, ixxf
     integer :: n, ip
+
+    if (initialized_x_redist) return
+    initialized_x_redist = .true.
 
 !<DD>This routine can probably be optimised somewhat.
 !in particular the large number of calls to the index lookup routines
 !and idx_local can be reduced significantly by exploiting knowledge of
 !the xxf layout and similar.
 !For most cases init_x_redist_local is faster
-    if (initialized) return
-    initialized = .true.
 
     call init_x_transform_layouts &
          (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
@@ -394,7 +394,6 @@ contains
     call set_redist_character_type(g2x, 'g2x')
     call set_xxf_optimised_variables(opt_local_copy, naky, ntgrid, ntheta0, &
        nlambda, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
-
     call init_redist (g2x, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
 
@@ -637,15 +636,14 @@ contains
 
     integer :: it, ixxf, ik, iyxf
     integer :: n, ip
-    logical :: initialized = .false.
 !<DD>This routine can probably be optimised somewhat.
 !in particular the large number of calls to the index lookup routines
 !and idx_local can be reduced significantly by exploiting knowledge of
 !the xxf layout and similar.
 !For most cases init_y_redist_local is faster
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_y_redist) return
+    initialized_y_redist = .true.
 
     call init_x_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
     call init_y_transform_layouts &
@@ -727,7 +725,6 @@ contains
 
     call init_redist (x2y, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
-
     call delete_list (to_list)
     call delete_list (from_list)
     
@@ -1293,11 +1290,10 @@ contains
   subroutine init_3d (nny_in, nnx_in, how_many_in)
 
     use fft_work, only: init_crfftw, init_rcfftw, delete_fft
-    logical :: initialized = .false.
     integer :: nny_in, nnx_in, how_many_in
     integer, save :: nnx, nny, how_many
 
-    if (initialized) then
+    if (initialized_3d) then
        if (nnx /= nnx_in .or. nny /= nny_in) then
           call delete_fft(xf3d_cr)
           call delete_fft(xf3d_rc)
@@ -1310,7 +1306,7 @@ contains
           return
        end if
     end if
-    initialized = .true.
+    initialized_3d = .true.
     nny = nny_in
     nnx = nnx_in
     how_many = how_many_in
@@ -1643,5 +1639,43 @@ contains
     an2 = conjg(an2)*an2
 
   end subroutine kz_spectrum
+
+! HJL <
+
+  subroutine finish_transforms
+    use redistribute, only : delete_redist
+
+!    integer :: ip
+
+    if(allocated(xxf)) deallocate(xxf)
+    if(allocated(ia)) deallocate(ia)
+    if(allocated(iak)) deallocate(iak)
+    if(allocated(aidx)) deallocate(aidx)
+    if(allocated(ag)) deallocate(ag)
+
+    call delete_redist(g2x)
+    call delete_redist(x2y)
+
+    if(allocated(fft)) deallocate(fft) 
+
+!    do ip = 0, nprocs-1
+!       if(nnfrom(ip)>0) then
+!          if(allocated(from_list(ip)%first)) deallocate(from_list(ip)%first)
+!       endo
+
+    initialized = .false.
+    initialized_x = .false.
+    initialized_y_fft = .false.
+    initialized_x_redist = .false.
+    initialized_y_redist = .false.
+    initialized_3d = .false.
+    xfft_initted = .false.
+
+
+  end subroutine finish_transforms
+
+! > HJL
+
+
 
 end module gs2_transforms

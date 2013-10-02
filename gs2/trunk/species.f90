@@ -1,7 +1,7 @@
 module species
   implicit none
 
-  public :: init_species, finish_species, reinit_species, init_trin_species
+  public :: init_species, finish_species, reinit_species, init_trin_species, finish_trin_species
   public :: wnml_species, check_species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
@@ -197,8 +197,10 @@ contains
     initialized = .true.
 
     call read_parameters
-    if (trin_flag) call reinit_species (ntspec_trin, dens_trin, &
+    if (trin_flag) then
+       call reinit_species (ntspec_trin, dens_trin, &
          temp_trin, fprim_trin, tprim_trin, nu_trin)
+    endif
   end subroutine init_species
 
   subroutine read_parameters
@@ -210,7 +212,7 @@ contains
     real :: tperp0, tpar0
     character(20) :: type
     integer :: unit
-    integer :: is
+    integer :: is, iostat
     namelist /species_knobs/ nspec
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
@@ -232,7 +234,11 @@ contains
        nspec = 2
        in_file = input_unit_exist("species_knobs", exist)
 !       if (exist) read (unit=input_unit("species_knobs"), nml=species_knobs)
-       if (exist) read (unit=in_file, nml=species_knobs)
+       if (exist) then
+          read (unit=in_file, nml=species_knobs)
+       else 
+          write(6,*) 'Error: species_knobs namelist file does not exist'
+       endif
        if (nspec < 1) then
           ierr = error_unit()
           write (unit=ierr, &
@@ -264,9 +270,10 @@ contains
           nu = -1.0
           nu_h = 0.0
           type = "default"
-          read (unit=unit, nml=species_parameters)
-          close (unit=unit)
-
+          read (unit=unit, nml=species_parameters, iostat=iostat)
+          if(iostat /= 0) write(6,*) 'Error ',iostat,'reading species parameters'
+          close (unit=unit, iostat=iostat)
+          if(iostat /= 0) write(6,*) 'Error ',iostat,'closing species parameters namelist'
           spec(is)%z = z
           spec(is)%mass = mass
           spec(is)%dens = dens
@@ -339,11 +346,27 @@ contains
 
     implicit none
 
-    deallocate (spec)
+    if(allocated(spec)) deallocate (spec)
 
     initialized = .false.
 
   end subroutine finish_species
+
+  subroutine finish_trin_species
+
+    implicit none
+
+    call finish_species
+
+    if (allocated(dens_trin)) deallocate(dens_trin)
+    if (allocated(temp_trin)) deallocate(temp_trin)
+    if (allocated(fprim_trin)) deallocate(fprim_trin)
+    if (allocated(tprim_trin)) deallocate(tprim_trin)
+    if (allocated(nu_trin)) deallocate(nu_trin)
+
+  end subroutine finish_trin_species
+
+
 
   subroutine reinit_species (ntspec, dens, temp, fprim, tprim, nu)
 
@@ -464,13 +487,12 @@ contains
     integer, intent (in) :: ntspec_in
     real, dimension (:), intent (in) :: dens_in, fprim_in, temp_in, tprim_in, nu_in
 
-    if (.not. allocated(temp_trin)) then
-       allocate (dens_trin(size(dens_in)))
-       allocate (fprim_trin(size(fprim_in)))
-       allocate (temp_trin(size(temp_in)))
-       allocate (tprim_trin(size(tprim_in)))
-       allocate (nu_trin(size(nu_in)))
-    end if
+
+    if (.not. allocated(dens_trin)) allocate (dens_trin(size(dens_in)))
+    if (.not. allocated(fprim_trin)) allocate (fprim_trin(size(fprim_in)))
+    if (.not. allocated(temp_trin)) allocate (temp_trin(size(temp_in)))
+    if (.not. allocated(tprim_trin)) allocate (tprim_trin(size(tprim_in)))
+    if (.not. allocated(nu_trin)) allocate (nu_trin(size(nu_in)))
 
     ntspec_trin = ntspec_in
     dens_trin = dens_in
