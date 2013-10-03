@@ -72,10 +72,10 @@ end module egrid
 module le_grids
   
   use redistribute, only: redist_type
-
   implicit none
 
   public :: init_le_grids, finish_le_grids
+  public :: init_g2le_redistribute, init_lambda_redistribute, init_energy_redistribute
   public :: read_parameters, wnml_le_grids
   public :: integrate_species, write_mpdist, write_mpdist_le
   public :: energy, anon, al, delal, jend, forbid, dele, wl, w
@@ -98,10 +98,17 @@ module le_grids
   interface integrate_moment
      module procedure integrate_moment_c34
      module procedure integrate_moment_lec
+     module procedure integrate_moment_le
      module procedure integrate_moment_r33
      module procedure integrate_moment_lz 
      module procedure integrate_moment_e
+  end interface
 
+  interface integrate_species
+     module procedure integrate_species_master
+     module procedure integrate_species_le
+     module procedure integrate_species_lz 
+     module procedure integrate_species_e
   end interface
 
   interface integrate_volume
@@ -722,7 +729,7 @@ contains
 
   !<DD>integrate_species on subcommunicator with gather
   !Falls back to original method if not using xyblock sub comm
-  subroutine integrate_species (g, weights, total,nogath)
+  subroutine integrate_species_master (g, weights, total,nogath)
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     use gs2_layouts, only: g_lo, intspec_sub
@@ -846,7 +853,7 @@ contains
     endif
 
     deallocate(total_flat)
-  end subroutine integrate_species
+  end subroutine integrate_species_master
 !</DD>
 
   subroutine integrate_species_e (lo, g, weights, total)
@@ -905,7 +912,14 @@ contains
        is = is_idx(lo,ilzlo)
        !Perform local sum
 !CMR: in lz_lo il muxt be obtained from local index ixi, which includes isign.
-       do ixi=1, nxi
+!CMR, 2/10/2013:
+!   nxi+1 limit on do loop below is CRUCIAL, as its stores phase space point
+!   corresponding to g_lo (il=nlambda, isign=2).
+!   This MUST contribute to the v-space integral, but is NOT
+!   needed in collision operator as EQUIVALENT to g_lo(il=nlambda, isign=2).
+!   (In collisions at ig=0, both of these points are EXACTLY equivalent, xi=0.)
+!  
+       do ixi=1, nxi+1
           il = ixi_to_il(ig,ixi)
           total(ig, it, ik) = total(ig, it, ik) + &
             weights(is)*w(ie)*wl(ig,il)*g(il,ilzlo)
@@ -916,7 +930,7 @@ contains
   end subroutine integrate_species_lz
 
 
-  subroutine integrate_species_lec (lo, g, weights, total)
+  subroutine integrate_species_le (lo, g, weights, total)
 !Perform an integral over velocity space whilst in the LE_LAYOUT in 
 !which we have ensured that all of velocity space is local. As such
 !we don't need any calls to MPI reduction routines. Note that this means
@@ -942,22 +956,23 @@ contains
        ik = ik_idx (lo,ile)
        is = is_idx (lo,ile)
        do ie=1, negrid
-          do ixi=1, nxi
+!CMR, 2/10/2013:
+!   nxi+1 limit on do loop below is CRUCIAL, as its stores phase space point
+!   corresponding to g_lo (il=nlambda, isign=2).
+!   This MUST contribute to the v-space integral, but is NOT
+!   needed in collision operator as EQUIVALENT to g_lo(il=nlambda, isign=2).
+!   (In collisions at ig=0, both of these points are EXACTLY equivalent, xi=0.)
+!  
+          do ixi=1, nxi+1
              il = ixi_to_il(ig,ixi)
-             total(ig,it,ik) = total(ig,ie,ik) + weights(is)*w(ie) * wl(ig,il) * g(ixi,ie,ile)
+             total(ig,it,ik) = total(ig,it,ik) + weights(is)*w(ie) * wl(ig,il) * g(ixi,ie,ile)
           end do
        end do
     end do
 !Sum over all procs to make integral over all velocity space and species
     call sum_allreduce (total)
 
-  end subroutine integrate_species_lec
-
-
-
-
-
-
+  end subroutine integrate_species_le
 
 
   function le_grids_unit_test_integrate_species(g, weights, sizes, rslt, err)
@@ -965,7 +980,8 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (inout) :: g
     real, dimension (:), intent (in) :: weights
     integer, dimension (:), intent (in) :: sizes
     complex, dimension (:,:,:), allocatable :: total
@@ -987,7 +1003,7 @@ contains
     cr = agrees_with(ntgrid, sizes(3))
     call process_check(tr, cr, 'Size of ntgrid')
 
-    allocate(total(-ntgrid:ntgrid,naky,ntheta0))
+    allocate(total(-ntgrid:ntgrid,ntheta0,naky))
 
     total = cmplx(0.0,0.0)
 
@@ -997,9 +1013,6 @@ contains
     call announce_check('total')
     cr = agrees_with(total(:,1,1), rslt(:,1,1), err)
     call process_check(tr, cr, 'total ')
-
-
-
 
     deallocate(total)
 
@@ -1259,7 +1272,6 @@ contains
        allocate(total_small(-ntgrid:ntgrid,g_lo%ntheta0,g_lo%naky,g_lo%nspec))       
     endif
     total_small=0.
-
     !Integrate over local velocity space
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -1271,7 +1283,6 @@ contains
        !Perform local sum
        total_small(:, it, ik, is) = total_small(:, it, ik, is) + &
             w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
-
     end do
 
     !Not sure that we really need to limit this to nproc>1 as if
@@ -1412,7 +1423,14 @@ contains
        is = is_idx(lo,ilzlo)
        !Perform local sum
 !CMR: in lz_lo il muxt be obtained from local index ixi, which includes isign.
-       do ixi=1, nxi
+!CMR, 2/10/2013:
+!   nxi+1 limit on do loop below is CRUCIAL, as its stores phase space point
+!   corresponding to g_lo (il=nlambda, isign=2).
+!   This MUST contribute to the v-space integral, but is NOT
+!   needed in collision operator as EQUIVALENT to g_lo(il=nlambda, isign=2).
+!   (In collisions at ig=0, both of these points are EXACTLY equivalent, xi=0.)
+!  
+       do ixi=1, nxi+1
           il = ixi_to_il(ig,ixi)
           total(ig, it, ik, is) = total(ig, it, ik, is) + &
             w(ie)*wl(ig,il)*g(il,ilzlo)
@@ -1443,19 +1461,26 @@ contains
     type (le_layout_type), intent (in) :: lo
     complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
     complex, dimension (lo%llim_proc:), intent (out) :: total
-    integer :: ixi, ie, il, ile, ig
-
-    total = 0.0
+    integer :: ixi, ie, il, ile, ig, it, ik
+    total = cmplx(0.0,0.0)
     do ile = lo%llim_proc, lo%ulim_proc
        ig = ig_idx (lo,ile)
+       it = it_idx (lo,ile)
+       ik = ik_idx (lo,ile)
        do ie=1, negrid
-          do ixi=1, nxi
+!CMR, 2/10/2013:
+!   nxi+1 limit on do loop below is CRUCIAL, as its stores phase space point
+!   corresponding to g_lo (il=nlambda, isign=2).
+!   This MUST contribute to the v-space integral, but is NOT
+!   needed in collision operator as EQUIVALENT to g_lo(il=nlambda, isign=2).
+!   (In collisions at ig=0, both of these points are EXACTLY equivalent, xi=0.)
+!  
+          do ixi=1, nxi+1
              il = ixi_to_il(ig,ixi)
              total(ile) = total(ile) + w(ie) * wl(ig,il) * g(ixi,ie,ile)
           end do
        end do
     end do
-
     ! No need for communication since all velocity grid points are together
     ! and each prcessor does not touch the unset place
     ! They actually don't need to keep all 4D array
@@ -1463,6 +1488,47 @@ contains
     ! --- ile contains necessary and sufficient information for (ig,it,ik,is)
 
   end subroutine integrate_moment_lec
+
+  subroutine integrate_moment_le (lo, g, total)
+!Perform an integral over velocity space whilst in the LE_LAYOUT in 
+!which we have ensured that all of velocity space is local. As such
+!we don't need any calls to MPI reduction routines. Note that this means
+!the processors for different distributed spatial points (x,y) don't know
+!the results at other points.
+    use layouts_type, only: le_layout_type
+    use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
+    use theta_grid, only: ntgrid
+
+    implicit none
+
+    type (le_layout_type), intent (in) :: lo
+    complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
+    integer :: ixi, ie, il, ile, ig, it, ik, is
+    total = cmplx(0.0,0.0)
+    do ile = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ile)
+       it = it_idx (lo,ile)
+       ik = ik_idx (lo,ile)
+       is = is_idx (lo,ile)
+       do ie=1, negrid
+!CMR, 2/10/2013:
+!   nxi+1 limit on do loop below is CRUCIAL, as its stores phase space point
+!   corresponding to g_lo (il=nlambda, isign=2).
+!   This MUST contribute to the v-space integral, but is NOT
+!   needed in collision operator as EQUIVALENT to g_lo(il=nlambda, isign=2).
+!   (In collisions at ig=0, both of these points are EXACTLY equivalent, xi=0.)
+!  
+          do ixi=1, nxi+1
+             il = ixi_to_il(ig,ixi)
+             total(ig,it,ik,is) = total(ig,it,ik,is) + w(ie) * wl(ig,il) * g(ixi,ie,ile)
+          end do
+       end do
+    end do
+    ! No need for communication since all velocity grid points are together
+    ! and each prcessor does not touch the unset place
+  end subroutine integrate_moment_le
+
 
   subroutine integrate_kysum (g, ig, total, all)
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
@@ -2445,8 +2511,7 @@ contains
     type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
     integer, dimension (0:nproc-1) :: nn_to, nn_from
     integer, dimension (3) :: from_low, from_high
-    integer, dimension (3) :: to_high
-    integer :: to_low
+    integer, dimension (3) :: to_low, to_high
     integer :: ig, isign, iglo, il, ile
     integer :: ik, it, ie, is
     integer :: n, ip, je
@@ -2537,7 +2602,9 @@ contains
     from_high(2) = 2
     from_high(3) = g_lo%ulim_alloc
 
-    to_low = le_lo%llim_proc
+    to_low(1) = 1
+    to_low(2) = 1
+    to_low(3) = le_lo%llim_proc
 
     to_high(1) = max(2*nlambda, 2*ng2+1)
     to_high(2) = negrid + 1  ! TT: just followed convention with +1.
@@ -2970,8 +3037,7 @@ contains
     type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
     integer, dimension(0:nproc-1) :: nn_to, nn_from
     integer, dimension(3) :: from_low, from_high
-    integer, dimension(2) :: to_high
-    integer :: to_low
+    integer, dimension(2) :: to_low, to_high
     integer :: ig, isign, iglo, il, ilz
     integer :: ik, it, ie, is, je
     integer :: n, ip
@@ -3062,7 +3128,8 @@ contains
     from_low (2) = 1
     from_low (3) = g_lo%llim_proc
 
-    to_low = lz_lo%llim_proc
+    to_low(1) = 1
+    to_low(2) = lz_lo%llim_proc
 
     to_high(1) = max(2*nlambda, 2*ng2+1)
     to_high(2) = lz_lo%ulim_alloc
@@ -3307,8 +3374,7 @@ contains
     type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
     integer, dimension(0:nproc-1) :: nn_to, nn_from
     integer, dimension(3) :: from_low, from_high
-    integer, dimension(2) :: to_high
-    integer :: to_low
+    integer, dimension(2) :: to_low, to_high
     integer :: ig, isign, iglo, ik, it, il, ie, is, ielo
     integer :: n, ip
 
@@ -3392,7 +3458,8 @@ contains
     from_low (2) = 1
     from_low (3) = g_lo%llim_proc
 
-    to_low = e_lo%llim_proc
+    to_low(1) = 1
+    to_low(2) = e_lo%llim_proc
 
     to_high(1) = negrid+1
     to_high(2) = e_lo%ulim_alloc
