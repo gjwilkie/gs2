@@ -1580,7 +1580,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
        case ('yxels')
 
-          allocate (facs(max(naky,ntheta0,nspec,negrid,nlambda)/2+1,6))
+          allocate (facs(max(naky,ntheta0,nspec,negrid,nlambda,ntheta0*naky)/2+1,6))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (nlambda, nlfacs, facs(:,2))
           call factors (negrid, nefacs, facs(:,3))
@@ -1640,7 +1640,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
        case ('yxles')
 
-          allocate (facs(max(ntheta0,naky,nspec,negrid,nlambda)/2+1,6))
+          allocate (facs(max(ntheta0,naky,nspec,negrid,nlambda,ntheta0*naky)/2+1,6))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (negrid, nefacs, facs(:,2))
           call factors (nlambda, nlfacs, facs(:,3))
@@ -1703,7 +1703,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 !            NB added recommendations that also parallelise in y and x, 
 !                          which may be unwise!
 
-          allocate (facs(max(nspec,negrid,nlambda,naky,ntheta0)/2+1,6))
+          allocate (facs(max(nspec,negrid,nlambda,naky,ntheta0,ntheta0*naky)/2+1,6))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (negrid, nefacs, facs(:,2))
           call factors (nlambda, nlfacs, facs(:,3))
