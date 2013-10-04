@@ -44,6 +44,7 @@ eiktest_mod = \
 
 ffttester_mod = \
 	 split_falpha.o \
+	 semianalytic_falpha.o \
 	 cal_falpha.o \
 	 antenna.o \
 	 antenna_data.o \
@@ -110,6 +111,7 @@ ffttester_mod = \
 gs2_mod = \
 	 analytical_falpha.o \
 	 split_falpha.o \
+	 semianalytic_falpha.o \
 	 antenna.o \
 	 antenna_data.o \
 	 ceq.o \
@@ -179,6 +181,7 @@ hrate_mod = \
 ingen_mod = \
 	 analytical_falpha.o \
 	 split_falpha.o \
+	 semianalytic_falpha.o \
 	 antenna.o \
 	 antenna_data.o \
 	 ceq.o \
@@ -260,6 +263,10 @@ rungridgen_mod = \
 	 spl.o 
 
 analytical_falpha.o: \
+	 constants.o \
+	 mp.o \
+	 unit_tests.o 
+semianalytic_falpha.o: \
 	 constants.o \
 	 mp.o \
 	 unit_tests.o 
@@ -412,6 +419,7 @@ gauss_quad.o: \
 	 mp.o 
 general_f0.o: \
 	 analytical_falpha.o \
+	 semianalytic_falpha.o \
 	 split_falpha.o \
 	 constants.o \
 	 file_utils.o \

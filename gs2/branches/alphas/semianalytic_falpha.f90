@@ -4,10 +4,12 @@
 !!
 !! This is free software released under the GPLv3
 !! Written by
+!!    George Wilkie
 !!    Edmund Highcock (edmundhighcock@sourceforge.net)
 !!    Ian Abel ()
 
-module split_falpha
+
+module semianalytic_falpha
 
   !> This subroutine does the work of the module.
   !! It takes in a grid of energy values and the species index
@@ -16,27 +18,9 @@ module split_falpha
   !! and df0/drho for that species.
   public :: calculate_arrays
 
-  !> Unit tests.. see general_f0 for a better example of 
-  !! the latest unit testing practice
-  public :: unit_test_is_converged
-  public :: split_falpha_unit_test_chandrasekhar
-  public :: split_falpha_unit_test_chandrasekhar_prime
-  public :: split_falpha_unit_test_nu_parallel
-  public :: split_falpha_unit_test_nu_parallel_prime
-  public :: split_falpha_unit_test_falpha_integrand
-  public :: split_falpha_unit_test_dfalpha_dti_integrand
-  public :: split_falpha_unit_test_dfalpha_dnupar_integrand
-  public :: split_falpha_unit_test_falpha
-  public :: split_falpha_unit_test_dfalpha_dti
-  public :: split_falpha_unit_test_dfalpha_dnupar
-  public :: split_falpha_unit_test_calculate_arrays
-  public :: split_falpha_unit_test_simpson
-  public :: split_falpha_unit_test_alpha_density
-
-  public :: split_falpha_parameters_type
-  type split_falpha_parameters_type
+  public :: semianalytic_falpha_parameters_type
+  type semianalytic_falpha_parameters_type
     integer :: alpha_is
-    real :: Halpha_0
     real :: source
     real :: source_prim
     real :: alpha_mass
@@ -59,7 +43,7 @@ module split_falpha
     real :: alpha_ion_collision_rate
     real :: alpha_electron_collision_rate
     integer :: negrid
-  end type split_falpha_parameters_type
+  end type semianalytic_falpha_parameters_type
 
   private 
 
@@ -74,7 +58,7 @@ contains
                               f0prim)
     use mp, only: nproc, iproc, sum_allreduce, mp_abort
     use unit_tests, only: print_with_stars
-    type(split_falpha_parameters_type), intent(inout) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(inout) :: parameters
     real, dimension(:,:), intent(in) :: egrid
     real, dimension(:,:), intent(out) :: f0_values
     real, dimension(:,:), intent(out) :: generalised_temperature
@@ -87,19 +71,9 @@ contains
     real, dimension(2) :: f0
     real, dimension(2) :: gentemp
     real, dimension(2) :: f0pr
-    real :: density
-    logical :: adjust_density_flag
-
-
-    if (parameters%source < 0.0) then
-      adjust_density_flag = .true.
-      parameters%source = 1.0
-    else
-      adjust_density_flag = .false.
-    end if
+    real :: T_ash, df0dE
 
     is = parameters%alpha_is
-
 
     f0_values(:,is) = 0.0
     generalised_temperature(:,is) = 0.0
@@ -117,19 +91,12 @@ contains
       do while (.not. converged)
         !write (*,*) 'resolution,', resolution
         f0(1)      = f0(2)
-        f0(2)      = falpha(parameters, egrid(ie, is), parameters%Halpha_0, resolution)
+        f0(2)      = falpha(parameters, egrid(ie, is), resolution)
           converged  = is_converged(f0)
         !end if
         resolution = resolution * 2
         !write (*,*) ' f0', f0, ' f0pr', f0pr, ' gentemp', gentemp
       end do 
-      if (adjust_density_flag) then
-        !write (*,*) 'Adjusting source....'
-        density = alpha_density(parameters)
-        !write (*,*) 'Density is ', density
-        parameters%source = parameters%source * 1.0/density
-        !write (*,*) 'Source is', parameters%source
-      end if
       resolution = 64
       converged = .false.
       do while (.not. converged)
@@ -138,86 +105,83 @@ contains
         gentemp(1) = gentemp(2)
         f0pr(1)    = f0pr(2) 
 
-        f0(2)      = falpha(parameters, egrid(ie, is), parameters%Halpha_0, resolution)
-!        gentemp(2) = dfalpha_denergy(parameters, & 
-!                        egrid(ie, is), f0(2), resolution)
-!
-! Changed definition here to agree with the definition of generalised temperature
-! 1/T* = - (Tref/Eref) * d/dE ln F0
-! (GW)
-        gentemp(2) = - parameters%alpha_injection_energy / dfalpha_denergy(parameters, & 
-                        egrid(ie, is), f0(2), resolution)
+        f0(2)      = falpha(parameters, egrid(ie, is), resolution)
+        gentemp(2) = - parameters%alpha_injection_energy *f0(2) / dfalpha_denergy(parameters,egrid(ie, is),  resolution)
         f0pr(2)    = falpha_prim(parameters,  &
                         egrid(ie, is), f0(2), resolution)
 
-        !write (*,*) 'egrid ', egrid(ie, is), ' f0 ', f0(2), ' gentemp ', gentemp(2), egrid(ie,is), parameters%energy_0, 'resolution', resolution
-        !if (f0(2) .eq. 0.0) then
-          !converged = is_converged(f0)
-        !else
           converged  = (is_converged(f0) .and.  &
                        is_converged(gentemp) .and. &
                        is_converged(f0pr))
-        !end if
         resolution = resolution * 2
-        !write (*,*) ' f0', f0, ' f0pr', f0pr, ' gentemp', gentemp
       end do 
       f0_values(ie, is) = f0(2)  * falpha_exponential(parameters , egrid(ie,is))
       generalised_temperature(ie, is) = gentemp(2)
       f0prim(ie, is) = f0pr(2)
     end do
+
+    ! At this point we have H_alpha(v). We still need to add the ash.
+    ! To do this, we now need to integrate the newly-found function
+    ! Two options:
+    !   - We can "is-converged" our way to a good Simpons grid
+    !   - Import le_grids weights (which have already been calcualted!)
+    ! The second option preempts the use of the generalized quadrature scheme, since that would result in a circular dependence 
+    ! between the integration weights and F0. Use simpson instead.
+    ! Note we lose the ability to say that the numerical integral of F0 is absolutely unity. This may cause problems.
+    ! (GW)
+
+    ! Take ash isothermal with main ions for now (GW)
+    T_ash = parameters%ion_temp
+
+    call add_ash(parameters,egrid(:,is),f0_values(:,is),generalised_temperature(:,is))
+
     call sum_allreduce(f0_values(:,is))
     call sum_allreduce(generalised_temperature(:,is))
     call sum_allreduce(f0prim(:,is))
 
   end subroutine calculate_arrays
+  
+  subroutine add_ash(parameters,egrid,f0,gentemp)
+    use constants, only: pi
+    implicit none
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
+    real,dimension(:),intent(inout):: f0,gentemp
+    real,dimension(:),intent(in):: egrid
+    real:: f0moment, n_ash, T_ash,n_tot,Ealpha, energy_top, dF0dE
+    real,dimension(2):: integral
+    integer:: resolution, ie
+    logical:: converged
 
-  function split_falpha_unit_test_calculate_arrays(parameters, &
-                              egrid, &
-                              f0_values, &
-                              generalised_temperature, &
-                              f0prim, &
-                              f0_rslt, &
-                              gentemp_rslt, &
-                              f0prim_rslt, &
-                              err)
-    use unit_tests
-    type(split_falpha_parameters_type), intent(inout) :: parameters
-    real, dimension(:,:), intent(in) :: egrid
-    real, dimension(:,:), intent(out) :: f0_values
-    real, dimension(:,:), intent(out) :: generalised_temperature
-    real, dimension(:,:), intent(out) :: f0prim
-    real, dimension(:,:), intent(in) :: f0_rslt
-    real, dimension(:,:), intent(in) :: gentemp_rslt
-    real, dimension(:,:), intent(in) :: f0prim_rslt
-    real, intent(in) :: err
-    logical :: split_falpha_unit_test_calculate_arrays
+    T_ash = parameters%ion_temp
+    Ealpha = parameters%alpha_injection_energy
+    n_tot = parameters%alpha_density
+    energy_top = 1.2*Ealpha
 
-    integer :: i
+    ! Find the 0th moment of H_alpha(v): the input distribution of fast alphas
+    integral = -1.0
+    resolution = 64
+    converged = .false.
+    do while (.not. converged)
+       integral(1)      = integral(2)
+       integral(2)      = simpson(parameters,falpha,0.0,energy_top**0.5,0.0,resolution)
+       converged  = is_converged(integral)
 
-    call calculate_arrays(parameters, egrid, f0_values, &
-        generalised_temperature, f0prim)
-    split_falpha_unit_test_calculate_arrays = .true.
+       resolution = resolution * 2
+    end do 
+    ! Define n_ash
+    n_ash = n_tot - f0moment
 
-    call announce_check('f0_values')
-    split_falpha_unit_test_calculate_arrays = &
-      split_falpha_unit_test_calculate_arrays .and. &
-       agrees_with(f0_values(:, parameters%alpha_is), f0_rslt(:, parameters%alpha_is), err)
-    call process_check(split_falpha_unit_test_calculate_arrays, 'f0 values')
-    call announce_check('gentemp')
-    split_falpha_unit_test_calculate_arrays = &
-      split_falpha_unit_test_calculate_arrays .and. &
-       agrees_with(generalised_temperature(:, parameters%alpha_is), gentemp_rslt(:, parameters%alpha_is), err)
-    call process_check(split_falpha_unit_test_calculate_arrays, 'gentemp')
-    call announce_check('f0prim')
-    split_falpha_unit_test_calculate_arrays = &
-      split_falpha_unit_test_calculate_arrays .and. &
-       agrees_with(f0prim(:, parameters%alpha_is), f0prim_rslt(:, parameters%alpha_is), err)
-       !agrees_with(f0prim(:, parameters%alpha_is), f0prim(:, parameters%alpha_is), 100.0)
-    call process_check(split_falpha_unit_test_calculate_arrays, 'f0prim')
-    !split_falpha_unit_test_calculate_arrays = .false.
+    do ie = 1,size(egrid)
+       ! Unwrap gentemp, and 
+       df0dE = -f0(ie) * Ealpha / gentemp(ie)
+       df0dE = df0dE - n_ash*(Ealpha/T_ash)*exp(-egrid(ie)*Ealpha/T_ash)/(2.0*pi)**1.5
+       gentemp(ie) = -f0(ie)*Ealpha/df0dE
+      
+       f0(ie) = f0(ie) + n_ash*exp(-egrid(ie)*Ealpha/T_ash)/(2.0*pi)**1.5
+    end do
 
-  end function split_falpha_unit_test_calculate_arrays
-
+  end subroutine add_ash
+ 
   function is_converged(list)
     real, dimension(2), intent(in) :: list
     logical :: is_converged
@@ -229,25 +193,10 @@ contains
 
   end function is_converged
 
-  function unit_test_is_converged()
-    real, dimension(2) :: test_array
-    logical :: unit_test_is_converged
-
-    test_array = (/1.0, 1.0/)
-    unit_test_is_converged = is_converged(test_array)
-    test_array = (/1.0e-5, 1.0003e-5/)
-    unit_test_is_converged = (unit_test_is_converged .and. .not.  &
-      is_converged(test_array))
-    test_array = (/-1.0, 0.0/)
-    unit_test_is_converged = (unit_test_is_converged .and. .not.  &
-      is_converged(test_array))
-  end function unit_test_is_converged
-
-
   !> Calculates the integral of func using the composite Simpson rule
   function simpson(parameters, func, lower_lim, upper_lim, energy, resolution)
     implicit none
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, external :: func
     real, intent(in) :: lower_lim
@@ -288,76 +237,15 @@ contains
 
     simpson = integral
 
-
-
-
-
   end function simpson
 
-  function simpson_test_func(parameters, dummy, energy)
-    type(split_falpha_parameters_type), intent(in) :: parameters
-    real, intent(in) :: dummy
-    real, intent(in) :: energy
-    real ::  simpson_test_func
-    simpson_test_func = energy**1.5 + energy**2.0 ! v^3 + v^4
-  end function simpson_test_func
-
-  function split_falpha_unit_test_simpson(eps)
-    use unit_tests
-    real, intent(in) :: eps
-    logical :: split_falpha_unit_test_simpson
-    type(split_falpha_parameters_type) :: parameters
-    real :: dummy
-
-    split_falpha_unit_test_simpson = agrees_with(&
-      simpson(parameters, simpson_test_func, 0.0, 5.3, dummy, 1024),&
-      5.3**4.0/4.0 + 5.3**5.0/5.0,  eps)
-  end function split_falpha_unit_test_simpson
-      
- 
-  function alpha_density(parameters)
-    use constants, only: pi
-    implicit none
-    type(split_falpha_parameters_type), intent(in) :: parameters
-    real :: alpha_density
-    good_resolution = 1024
-    write (*,*) 'Good resolution', good_resolution
-    alpha_density = simpson(parameters, &
-                       falpha_integral_function, &
-                       0.0,&
-                       1.5,& ! I.e. 2 x the injection velocity
-                       0.0,& ! This is a dummy in this case
-                       good_resolution) * 4.0 * pi  
-                       !+simpson(parameters, &
-                       !falpha_integral_function, &
-                       !(parameters%alpha_injection_energy*1.0)**0.5,&
-                       !(parameters%alpha_injection_energy*3.0)**0.5,&
-                       !0.0,& ! This is a dummy in this case
-                       !good_resolution) * 4.0 * pi * 0.0
-  end function alpha_density
-
-  function split_falpha_unit_test_alpha_density(parameters, ans, eps)
-    use unit_tests
-    type(split_falpha_parameters_type), intent(in) :: parameters
-    real, intent(in) :: ans
-    real, intent(in) :: eps
-    logical :: split_falpha_unit_test_alpha_density
-    split_falpha_unit_test_alpha_density  = agrees_with(&
-      alpha_density(parameters), &
-      ans, &
-      eps)
-  end function split_falpha_unit_test_alpha_density
-
-
-
   function falpha_integral_function(parameters, energy, energy_dummy_var)
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real, intent(in) :: energy
     real, intent(in) :: energy_dummy_var
     real :: falpha_integral_function
     falpha_integral_function = falpha(parameters, &
                                       energy_dummy_var, &
-                                      parameters%Halpha_0, &
                                       good_resolution) * &
                                falpha_exponential(parameters, energy_dummy_var)*&
                                energy_dummy_var
@@ -366,7 +254,7 @@ contains
 
   function falpha_exponential(parameters, energy)
     implicit none
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real, intent(in) :: energy
     real :: falpha_exponential
     falpha_exponential = exp(parameters%alpha_injection_energy * &
@@ -377,12 +265,11 @@ contains
   !! exp(-E_alpha * energy/T_i) part, as this can be very small
   !! for some energies, and can mess up the calculation of the 
   !! gradients
-  function falpha(parameters, energy, Halpha_0, resolution)
+  function falpha(parameters, energy, resolution)
     implicit none
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, intent(in) :: energy
-    real, intent(in) :: Halpha_0
     real :: falpha
     real :: integral
     real :: dv
@@ -400,40 +287,14 @@ contains
                        0.0,& ! Get rid of exponential for better numerics
                        resolution)
 
-    falpha = integral * parameters%source / 2.0 / 3.14159265358979 &
-            + Halpha_0*exp(-energy*parameters%alpha_injection_energy/parameters%ion_temp)
-
-
-
+    falpha = integral * parameters%source / 2.0 / 3.14159265358979 
 
   end function falpha
-
-  function split_falpha_unit_test_falpha(parameters, &
-                                              energy, &
-                                              Halpha_0, &
-                                              resolution, &
-                                              rslt, &
-                                              err)
-    use unit_tests
-    type(split_falpha_parameters_type), intent(in) :: parameters
-    integer, intent(in) :: resolution
-    real, intent(in) :: energy
-    real, intent(in) :: Halpha_0
-    real, intent(in) :: rslt
-    real, intent(in) :: err
-    logical :: split_falpha_unit_test_falpha
-
-    split_falpha_unit_test_falpha = &
-      agrees_with(falpha(parameters, energy, Halpha_0, resolution) * &
-                  falpha_exponential(parameters, energy), rslt, err)
-
-  end function split_falpha_unit_test_falpha
-
 
 
   !> The integrand for the falpha integral, see eq
   function falpha_integrand(parameters, energy, energy_dummy_var)
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real, intent(in) :: energy
     real, intent(in) :: energy_dummy_var
     real :: falpha_integrand
@@ -459,33 +320,33 @@ contains
 
   end function falpha_integrand
 
-  !> Unit test used by test_split_falpha, testing the private
+  !> Unit test used by test_semianalytic_falpha, testing the private
   !! function falpha_integrand
-  function split_falpha_unit_test_falpha_integrand(parameters, &
+  function semianalytic_falpha_unit_test_falpha_integrand(parameters, &
                                                         energy, &
                                                         energy_dummy_var, &
                                                         rslt, &
                                                         err)
     use unit_tests
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real, intent(in) :: energy
     real, intent(in) :: energy_dummy_var
     real, intent(in) :: rslt
     real, intent(in) :: err
-    logical :: split_falpha_unit_test_falpha_integrand
+    logical :: semianalytic_falpha_unit_test_falpha_integrand
     
-    split_falpha_unit_test_falpha_integrand = &
+    semianalytic_falpha_unit_test_falpha_integrand = &
       agrees_with(falpha_integrand(parameters, energy, energy_dummy_var), &
       rslt, err)
 
-  end function split_falpha_unit_test_falpha_integrand
+  end function semianalytic_falpha_unit_test_falpha_integrand
 
   !> Calculates (1/Falpha * (dTi/drho) * (dFalpha/dTi)) 
   !! NB not dFalpha/dTi
   function dfalpha_dti(parameters, falph, energy, resolution)
     use constants, only: pi
     implicit none
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, intent(in) :: energy
     real, intent(in) :: falph
@@ -520,34 +381,11 @@ contains
       !falpha(parameters, 0.0, parameters%energy_0, resolution))
     
 
-
-
-
   end function dfalpha_dti
 
-  function split_falpha_unit_test_dfalpha_dti(parameters, &
-                                              energy, &
-                                              resolution, &
-                                              rslt, &
-                                              err)
-    use unit_tests
-    type(split_falpha_parameters_type), intent(in) :: parameters
-    integer, intent(in) :: resolution
-    real, intent(in) :: energy
-    real, intent(in) :: rslt
-    real, intent(in) :: err
-    logical :: split_falpha_unit_test_dfalpha_dti
-
-    split_falpha_unit_test_dfalpha_dti = &
-      agrees_with(&
-      dfalpha_dti(parameters, &
-                  falpha(parameters, energy, parameters%Halpha_0, resolution), &
-                  energy, resolution), rslt, err)
-
-  end function split_falpha_unit_test_dfalpha_dti
   !> The integrand for the dfalpha/d Ti integral, see eq
   function dfalpha_dti_integrand(parameters, energy, energy_dummy_var)
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real, intent(in) :: energy
     real, intent(in) :: energy_dummy_var
     real :: dfalpha_dti_integrand
@@ -563,33 +401,33 @@ contains
 
   end function dfalpha_dti_integrand
 
-  !> Unit test used by test_split_falpha, testing the private
+  !> Unit test used by test_semianalytic_falpha, testing the private
   !! function dfalpha_dti_integrand
-  function split_falpha_unit_test_dfalpha_dti_integrand(parameters, &
+  function semianalytic_falpha_unit_test_dfalpha_dti_integrand(parameters, &
                                                         energy, &
                                                         energy_dummy_var, &
                                                         rslt, &
                                                         err)
     use unit_tests
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real, intent(in) :: energy
     real, intent(in) :: energy_dummy_var
     real, intent(in) :: rslt
     real, intent(in) :: err
-    logical :: split_falpha_unit_test_dfalpha_dti_integrand
+    logical :: semianalytic_falpha_unit_test_dfalpha_dti_integrand
     
-    split_falpha_unit_test_dfalpha_dti_integrand = &
+    semianalytic_falpha_unit_test_dfalpha_dti_integrand = &
       agrees_with(dfalpha_dti_integrand(parameters, energy, energy_dummy_var), &
       rslt, err)
 
-  end function split_falpha_unit_test_dfalpha_dti_integrand
+  end function semianalytic_falpha_unit_test_dfalpha_dti_integrand
 
   !> Calculates 1/Falpha dFalpha/dnu_par d nu_par d rho
   !! where d nu_par / d rho goes under the integral for Falpha
   function dfalpha_dnupar(parameters, falph, energy, resolution)
     use constants, only: pi
     implicit none
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, intent(in) :: energy
     real, intent(in) :: falph
@@ -600,7 +438,6 @@ contains
     real :: energy_top
     integer :: j
 
-!    energy_top = min(energy, 1.0)
     energy_top = energy
 
     ! Let's use the composite Simpson's rule (see Wikipedia!). 
@@ -617,47 +454,15 @@ contains
                        0.0,&
                        energy_top**0.5,&
                        0.0,&
-                       resolution)/  falph! (&
-               !simpson(parameters, &
-                       !falpha_integrand, &
-                       !parameters%energy_0**0.5,&
-                       !energy_top**0.5,&
-                       !0.0,& ! Get rid of exp factor
-                       !resolution) * parameters%source / 4.0 / pi)
-
+                       resolution)/  falph! 
 
     dfalpha_dnupar = - integral * parameters%source / 4.0 / pi
-    
-
-
-
 
   end function dfalpha_dnupar
 
-  function split_falpha_unit_test_dfalpha_dnupar(parameters, &
-                                              energy, &
-                                              resolution, &
-                                              rslt, &
-                                              err)
-    use unit_tests
-    type(split_falpha_parameters_type), intent(in) :: parameters
-    integer, intent(in) :: resolution
-    real, intent(in) :: energy
-    real, intent(in) :: rslt
-    real, intent(in) :: err
-    logical :: split_falpha_unit_test_dfalpha_dnupar
-
-    split_falpha_unit_test_dfalpha_dnupar = &
-      agrees_with(&
-      dfalpha_dnupar(parameters, &
-                  falpha(parameters, energy, parameters%Halpha_0, resolution), &
-                  energy, resolution), rslt, err)
-
-  end function split_falpha_unit_test_dfalpha_dnupar
-
   !> The integrand for the dfalpha/d nu_parallel integral, see eq
   function dfalpha_dnupar_integrand(parameters, energy, energy_dummy_var)
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real, intent(in) :: energy
     real, intent(in) :: energy_dummy_var
     real :: dfalpha_dnupar_integrand
@@ -677,33 +482,11 @@ contains
 
   end function dfalpha_dnupar_integrand
 
-  !> Unit test used by test_split_falpha, testing the private
-  !! function dfalpha_dnupar_integrand
-  function split_falpha_unit_test_dfalpha_dnupar_integrand(parameters, &
-                                                        energy, &
-                                                        energy_dummy_var, &
-                                                        rslt, &
-                                                        err)
-    use unit_tests
-    type(split_falpha_parameters_type), intent(in) :: parameters
-    real, intent(in) :: energy
-    real, intent(in) :: energy_dummy_var
-    real, intent(in) :: rslt
-    real, intent(in) :: err
-    logical :: split_falpha_unit_test_dfalpha_dnupar_integrand
-    
-    split_falpha_unit_test_dfalpha_dnupar_integrand = &
-      agrees_with(dfalpha_dnupar_integrand(parameters, energy, energy_dummy_var), &
-      rslt, err)
-
-  end function split_falpha_unit_test_dfalpha_dnupar_integrand
-
-
   !> Returns gamma_aiN * (Za/Zi)^2 * (mi/ma)^2 * (vthi/vtha)^3
   !! where gamma_ai is the alpha-ion collisionality parameter
   !! from eq ()
   function gamma_fac_ions(parameters)
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real gamma_fac_ions
     gamma_fac_ions = parameters%alpha_ion_collision_rate * &
                     (parameters%ion_vth / parameters%alpha_vth)**3.0 * &
@@ -712,7 +495,7 @@ contains
   end function gamma_fac_ions
 
   function gamma_fac_electrons(parameters)
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real gamma_fac_electrons
     gamma_fac_electrons = parameters%alpha_electron_collision_rate * &
                     (parameters%electron_vth / parameters%alpha_vth)**3.0 * &
@@ -722,7 +505,7 @@ contains
 
   !> Calculates d nu_parallel_N/d rho, see eq () of  
   function nu_parallel_prime(parameters, energy)
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real, intent(in) :: energy
     real :: nu_parallel_prime
 
@@ -745,25 +528,12 @@ contains
                     parameters%electron_fprim * &
                     chandrasekhar(energy**0.5 * &
                       parameters%alpha_vth / parameters%electron_vth))
-                  
-                      
-
 
   end function nu_parallel_prime
 
-  !> Unit test used by test_split_falpha, testing the private
-  !! function nu_parallel
-  function split_falpha_unit_test_nu_parallel_prime(parameters, energy, rslt, err)
-    use unit_tests
-    type(split_falpha_parameters_type), intent(in) :: parameters
-    real, intent(in) :: rslt, energy, err
-    logical :: split_falpha_unit_test_nu_parallel_prime
-
-    split_falpha_unit_test_nu_parallel_prime = agrees_with(nu_parallel_prime(parameters, energy), rslt, err)
-  end function split_falpha_unit_test_nu_parallel_prime
   !> Normalised nu_parallel, see eq () of  
   function nu_parallel(parameters, energy)
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real, intent(in) :: energy
     real :: nu_parallel
 
@@ -777,19 +547,6 @@ contains
 
   end function nu_parallel
 
-  !> Unit test used by test_split_falpha, testing the private
-  !! function nu_parallel
-  function split_falpha_unit_test_nu_parallel(parameters, energy, rslt, err)
-    use unit_tests
-    type(split_falpha_parameters_type), intent(in) :: parameters
-    real, intent(in) :: rslt, energy, err
-    logical :: split_falpha_unit_test_nu_parallel
-
-    split_falpha_unit_test_nu_parallel = agrees_with(nu_parallel(parameters, energy), rslt, err)
-  end function split_falpha_unit_test_nu_parallel
-
-
-
   function chandrasekhar(argument)
     real, intent(in) :: argument
     real ::  chandrasekhar
@@ -797,21 +554,6 @@ contains
         argument * 2.0 * exp(-argument**2.0) / 1.7724538509055159) / &
         (2.0 * argument**2.0)
   end function chandrasekhar
-
-  function split_falpha_unit_test_chandrasekhar()
-    logical :: split_falpha_unit_test_chandrasekhar
-    real :: result1, result2
-
-    result1 = 0.0373878
-    result2 = 0.213797
-    write (*,*) 'chandrasekhar(0.1): ', chandrasekhar(0.1), &
-      ' should be ', result1
-    write (*,*) 'chandrasekhar(1.0): ', chandrasekhar(1.0), &
-      ' should be ', result2
-    split_falpha_unit_test_chandrasekhar = &
-      (abs(chandrasekhar(0.1)-result1)/result1 .lt. 1.0e-6 .and. &
-      abs(chandrasekhar(1.0)-result2)/result2 .lt. 1.0e-5)
-  end function split_falpha_unit_test_chandrasekhar
 
   function chandrasekhar_prime(argument)
     use constants, only: pi
@@ -821,30 +563,18 @@ contains
       + 2.0/pi**0.5*exp(-argument**2.0)
   end function chandrasekhar_prime
 
-  function split_falpha_unit_test_chandrasekhar_prime(arg, rslt, eps)
-    use unit_tests
-    logical :: split_falpha_unit_test_chandrasekhar_prime
-    real, intent(in) :: arg, rslt, eps
-
-    split_falpha_unit_test_chandrasekhar_prime = &
-      agrees_with(chandrasekhar_prime(arg), rslt, eps)
-      
-  end function split_falpha_unit_test_chandrasekhar_prime
-
-
   !> Calculates the normalised d f_alpha / d energy
   !! which replaces temperature for Maxwellian species 
   !! in the GK equation and field equations
   !! = T_r/E_alpha * (d f_alpha / d energy) * E_alpha/f_alpha
-  function dfalpha_denergy(parameters, energy, falph, resolution)
-    type(split_falpha_parameters_type), intent(in) :: parameters
+  real function dfalpha_denergy(parameters, energy, resolution)
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, intent(in) :: energy
-    real, intent(in) :: falph
     real :: sum
 
     sum = - parameters%alpha_injection_energy / parameters%ion_temp
-    sum = sum + (0.5/sqrt(energy))*parameters%source *falpha_integrand(parameters,energy,energy) / (2.0 * 3.14159265358979 * falph) 
+    sum = sum + (0.5/sqrt(energy))*parameters%source *falpha_integrand(parameters,energy,energy) / (2.0 * 3.14159265358979 ) 
  
     dfalpha_denergy = 1.0/sum
     return
@@ -854,7 +584,7 @@ contains
   !! d(ln f_alpha) / d rho = d (ln f_alpha)/ d psi * d psi/d rho
   !! where rho is the GS2 flux label (usually r/a, see docs for irho)
   function falpha_prim(parameters, energy, falph, resolution)
-    type(split_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, intent(in) :: energy
     real, intent(in) :: falph
@@ -865,4 +595,4 @@ contains
       + dfalpha_dnupar(parameters, falph, energy, resolution)  
   end function falpha_prim
 
-end module split_falpha
+end module semianalytic_falpha
