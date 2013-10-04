@@ -1,5 +1,3 @@
-
-
 !> A module which allows the simulation of species with a
 !! arbitrary background distribution function (e.g. alphas, 
 !! beam ions).
@@ -26,8 +24,6 @@ module general_f0
   !! and all other arrays on those grids
   public :: calculate_f0_arrays
 
-  !> Public function that returns the value of f0 for any arbitrary argument
-  public :: evaluate_f0
 
   !> Initialises the module, chiefly reading the parameters.
   !! NB does not allocate arrays, as negrid must be provided
@@ -91,14 +87,10 @@ module general_f0
   !! this function is called to put them on all procs
   public :: broadcast_arrays
 
-  !> F0alpha(v=0). This is the consistency condition between fast
-  !! alphas and ash. 
-  public :: Halpha_0
-
   !> Unit tests
   public :: general_f0_unit_test_init_general_f0
   public :: general_f0_unit_test_calculate_f0_arrays
- 
+
   private
 
   integer :: alpha_f0_switch, &
@@ -115,13 +107,13 @@ module general_f0
 
   integer, parameter :: alpha_f0_maxwellian = 1, &
                         alpha_f0_analytic = 2, &
-                        alpha_f0_split = 3, &
-                        alpha_f0_external =4
+                        alpha_f0_semianalytic = 3, &
+                        alpha_f0_split = 4, &
+                        alpha_f0_external =5
 
   integer, parameter :: beam_f0_maxwellian = 1, &
                         beam_f0_analytic = 2, &
-                        beam_f0_split = 3, &
-                        beam_f0_external =4
+                        beam_f0_external = 3
 
   integer :: gen_f0_output_file
   
@@ -129,7 +121,6 @@ module general_f0
 
   real :: vcut
   real :: energy_min
-  real :: Halpha_0
 
   real, dimension(:,:), allocatable :: egrid
   real, dimension(:,:), allocatable :: weights
@@ -209,17 +200,15 @@ contains
     call close_output_file(gen_f0_output_file)
   end subroutine finish_general_f0
 
-  
-
-
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     implicit none
-    type (text_option), dimension (4), parameter :: alpha_f0_opts = &
+    type (text_option), dimension (5), parameter :: alpha_f0_opts = &
          (/ text_option('maxwellian', alpha_f0_maxwellian), &
             text_option('analytic', alpha_f0_analytic), &
+            text_option('semianalytic', alpha_f0_semianalytic), &
             text_option('split', alpha_f0_split), &
             text_option('external', alpha_f0_external) /)
     character(20) :: alpha_f0
@@ -234,7 +223,6 @@ contains
             rescale_f0,&
             main_ion_species,&
             energy_min,&
-            Halpha_0,&
             print_egrid,&
             vcrit
 
@@ -247,7 +235,6 @@ contains
        beam_f0 = 'maxwellian'
        main_ion_species = -1 
        energy_min = 0.1
-       Halpha_0 = 1.0             !< Need a better default estimate (GW)
        vcrit = -1.0
 
        in_file = input_unit_exist ("general_f0_parameters", exist)
@@ -267,7 +254,6 @@ contains
     call broadcast (beam_f0_switch)
     call broadcast (main_ion_species)
     call broadcast (energy_min)
-    call broadcast (Halpha_0)
     call broadcast (vcrit)
 
   end subroutine read_parameters
@@ -306,6 +292,9 @@ contains
         case (alpha_f0_analytic)
           call check_electromagnetic
           call calculate_f0_arrays_analytic(is)
+        case (alpha_f0_semianalytic)
+          call check_electromagnetic
+          call calculate_f0_arrays_semianalytic(is)
         case (alpha_f0_split)
           call check_electromagnetic
           call calculate_f0_arrays_split(is)
@@ -459,12 +448,146 @@ contains
   end subroutine calculate_f0_arrays_maxwellian
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! Semianalytic
+!! 
+!! This subsection contains routines for handling 
+!! distributions given by the semianalytical form,
+!! ammended such that all alphas, including ash,
+!! are combined in one species.
+
+  subroutine calculate_f0_arrays_semianalytic(is)
+    use semianalytic_falpha, only: semianalytic_falpha_parameters_type
+    use semianalytic_falpha, only: calculate_arrays
+    use constants, only: pi
+    use species, only: spec 
+    use species, only: nspec
+    use species, only: electron_species
+    use species, only: ion_species
+    use species, only: has_electron_species
+    use mp, only: mp_abort
+    type(semianalytic_falpha_parameters_type) :: parameters
+    integer, intent(in) :: is
+    integer :: ie
+    integer :: electron_spec
+    integer :: i
+    real :: shift, scal ! For modifying the energy grid for alphas
+
+    !> Determine which species is the electrons
+    !main_ion_species = -1
+    do i = 1,nspec
+      if (spec(i)%type .eq. electron_species) electron_spec = i
+      if (main_ion_species < 1 .and. spec(i)%type .eq. ion_species) &
+        main_ion_species = i
+    end do
+
+    write(*,*) 'main_ion_species', main_ion_species, 'electron_spec', electron_spec
+
+    !if (main_ion_species < 1)  call mp_abort(&
+      !'main_ion_species < 1: please set main_ion_species in general_f0_parameters') 
+
+    parameters%source_prim = spec(is)%sprim
+    
+    parameters%alpha_density = spec(is)%dens      
+
+    parameters%alpha_is = is
+
+    parameters%alpha_ion_collision_rate = spec(is)%gamma_ai
+    parameters%alpha_electron_collision_rate = spec(is)%gamma_ae
+
+    parameters%alpha_vth       = spec(is)%stm
+
+    parameters%source          = spec(is)%source
+    parameters%source_prim     = spec(is)%sprim
+    !write (*,*) 'Source prim is', parameters%source_prim
+
+    parameters%alpha_injection_energy = spec(is)%temp
+
+    parameters%alpha_charge    = spec(is)%z
+
+    parameters%alpha_mass      = spec(is)%mass
+
+    parameters%negrid = negrid
+    if (has_electron_species(spec)) then 
+      parameters%electron_fprim   = spec(electron_spec)%fprim
+      parameters%electron_tprim   = spec(electron_spec)%tprim
+      parameters%electron_mass   = spec(electron_spec)%mass
+      parameters%electron_charge = spec(electron_spec)%z
+      parameters%electron_vth    = spec(electron_species)%stm
+      parameters%electron_temp   = spec(electron_species)%temp
+      if (main_ion_species>0) then 
+        parameters%ion_mass        = spec(main_ion_species)%mass
+        parameters%ion_tprim        = spec(main_ion_species)%tprim
+        parameters%ion_fprim        = spec(main_ion_species)%fprim
+        parameters%ion_charge      = spec(main_ion_species)%z
+        parameters%ion_vth         = spec(main_ion_species)%stm
+        parameters%ion_temp        = spec(main_ion_species)%temp
+      else
+        ! Assume main ions are deuterium with ti = te
+        parameters%ion_mass       = spec(electron_spec)%mass * 2.0 * 1836.0
+        parameters%ion_tprim      = 0.0
+        parameters%ion_fprim      = spec(electron_spec)%fprim * 0.0
+        parameters%ion_charge     = -spec(electron_spec)%z
+        parameters%ion_temp       = spec(electron_spec)%temp
+        parameters%ion_vth        = sqrt(parameters%ion_temp/parameters%ion_mass)
+      end if
+
+
+    else
+      if (main_ion_species>0) then 
+
+        parameters%electron_fprim   =  0.0
+        parameters%electron_tprim   =  0.0
+        ! Assume main ions are deuterium with ti = te
+        parameters%electron_mass   = spec(main_ion_species)%mass/1836.0/2.0
+        parameters%electron_charge = -spec(main_ion_species)%z
+        parameters%electron_temp   = spec(main_ion_species)%temp
+        parameters%electron_vth    = sqrt(parameters%electron_temp/parameters%electron_mass)
+      else
+        write (*,*) 'You have no electrons and no ions: not sure how to set'
+        write (*,*) 'alpha parameters!'
+        call mp_abort('')
+      end if
+    end if
+
+    !if (parameters%source .eq. 0.0) then 
+      !write (*,*) 'You have source = 0.0 for alphas!!!'
+      !call mp_abort(' ')
+    !end if
+
+    ! This bit of code shifts the grid so that vcut for alphas is 1
+    ! and the lowest point is energy min
+    !scal =  (energy_min - 1.0) / (egrid(1,1) - vcut)
+    !shift = energy_min - egrid(1,1) * scal
+    !egrid(:,is) = egrid_maxwell(:) *(1.0 - energy_min)/vcut + energy_min
+    !egrid(:,is) = egrid_maxwell(:) *scal + shift
+
+    !write (*,*) 'parameters', parameters
+    !write(*,*) 'calling calculate_arrays'
+    !write (*,*) 'egrid', egrid(:,is)
+    call calculate_arrays(parameters,&
+                          egrid, &
+                          f0_values, &
+                          generalised_temperature, &
+                          f0prim)
+    spec(is)%source = parameters%source
+    !write (*,*) 'f0prim', ',is', f0prim(:,is), is
+    !write (*,*) 'f0prim(:,3),', f0prim(:,3)
+    !write (*,*) 'f0_values(:,3),', f0_values(:,3)
+    !weights(:,is) =  weights_maxwell(:)*scal * f0_values(:,is)
+    weights(:,is) = weights(:,is) * f0_values(:,is)
+    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
+    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+    
+  end subroutine calculate_f0_arrays_semianalytic
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !! Split
 !! 
 !! This subsection contains routines for handling 
 !! distributions given by the semianalytical form
-!! found with fast alphas as a split species
-
+!! found with fast alphas as a seperate species 
+!! from ash.
 
   subroutine calculate_f0_arrays_split(is)
     use split_falpha, only: split_falpha_parameters_type
@@ -496,7 +619,6 @@ contains
     !if (main_ion_species < 1)  call mp_abort(&
       !'main_ion_species < 1: please set main_ion_species in general_f0_parameters') 
 
-    parameters%Halpha_0 = Halpha_0
     parameters%source_prim = spec(is)%sprim
     
     parameters%alpha_density = spec(is)%dens
@@ -797,11 +919,11 @@ contains
   subroutine calculate_f0_arrays_analytic(is)
     use constants, only: pi
     use species, only: spec, nspec
-    use mp, only: mp_abort, proc0
+    use mp, only: mp_abort
     use species, only: ion_species, electron_species, alpha_species
     implicit none
     integer,intent(in):: is
-    real:: A, Ti, Ealpha, vstar, v, df0dv, df0dE, B, test
+    real:: A, Ti, Ealpha, vstar, v, df0dv, df0dE, B
     integer:: ie, i, electron_spec
 
     if (vcrit .LE. 0.0) then
@@ -814,24 +936,22 @@ contains
       if (main_ion_species < 1 .and. spec(i)%type .eq. ion_species) &
         main_ion_species = i
     end do
- 
+
     Ti = spec(main_ion_species)%temp
     Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
 
-    vstar = 1.0
+    vstar = sqrt(Ealpha)
+!    vstar = 1.0
+!    Ealpha = 1.0
     
     A = (4.0*pi/3.0)*log( (vcrit**3 + vstar**3)/(vcrit**3))
     A = A + (pi*Ti/Ealpha)**1.5*exp(Ealpha*vstar**2/Ti)*(1.0-erf(sqrt(Ealpha/Ti)*vstar))/(vcrit**3 + vstar**3)
     A = A + (2.0*pi*vstar*Ti/Ealpha)/(vcrit**3 + vstar**3)
     A = 1.0/A
 
-    do ie = 1,negrid 
-!       if (egrid(ie,is) .GT. 1.0) then 
-!          weights(ie,is) = weights(ie,is) /(exp(egrid(ie,is))*sqrt(egrid(ie,is)))
-!          egrid(ie,is) = 1.0 + (Ti/Ealpha)*(egrid(ie,is)-1.0)
-!          weights(ie,is) = weights(ie,is) *(exp(egrid(ie,is))*sqrt(egrid(ie,is)))
-!       end if
+    B = A*exp(Ealpha*vstar**2/Ti)/(vcrit**3 + vstar**3)
 
+    do ie = 1,negrid 
        v = sqrt(egrid(ie,is))
        if (v .LE. vstar) then
           f0_values(ie,is) = A/(vcrit**3 + v**3)
@@ -841,8 +961,9 @@ contains
           gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
           zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
        else
-          f0_values(ie,is) = A*exp(-Ealpha*(v**2-vstar**2)/Ti)/(vcrit**3 + vstar**3)
-          generalised_temperature(ie,is) = Ti/Ealpha
+          f0_values(ie,is) = B*exp(-Ealpha*v**2/Ti)
+          df0dE = -B*Ealpha*f0_values(ie,is)/Ti
+          generalised_temperature(ie,is) = -spec(is)%temp*f0_values(ie,is)/df0dE
           gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
           zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
        end if
@@ -850,98 +971,8 @@ contains
 
     f0prim(:,is) = - spec(is)%fprim 
 
-!if (proc0) open(unit=9,file="f0out",status="replace")
-!if (proc0) write(9,*) negrid, ie, sqrt(egrid(ie,is)),weights(ie,is), f0_values(ie,is), generalised_temperature(ie,is)
-!    end do
-!close(9)
-
     weights(:,is) = weights(:,is) * f0_values(:,is)
 
-  end subroutine calculate_f0_arrays_analytic
-
-  real function evaluate_f0(v,is)
-    use species, only: ion_species, electron_species, alpha_species, beam_species, spec
-    use mp, only: mp_abort
-    implicit none
-    real,intent(in):: v
-    integer, intent(in)::is
-    real:: rslt
-
-
-    select case (spec(is)%type)
-      case (ion_species)
-         rslt = evaluate_f0_maxwellian(v)
-      case (electron_species)
-         rslt = evaluate_f0_maxwellian(v)
-      case (alpha_species)
-        select case (alpha_f0_switch)
-        case (alpha_f0_maxwellian)
-         rslt = evaluate_f0_maxwellian(v)
-        case (alpha_f0_analytic)
-         rslt = evaluate_f0_slowdown(v,is)
-        case (alpha_f0_split)
-          write(*,*) "ERROR in evaluate_f0: Direct evaluation of f0 not valid for 'split' option" 
-          call mp_abort('')
-        case (alpha_f0_external)
-          write(*,*) "ERROR in evaluate_f0: Direct evaluation of f0 not valid for 'external' option" 
-          call mp_abort('')
-        end select
-      case (beam_species)
-        select case (beam_f0_switch)
-        case (beam_f0_maxwellian)
-         rslt = evaluate_f0_maxwellian(v)
-        end select
-      end select
-   
-    evaluate_f0 = rslt
-    return
-  end function evaluate_f0
-
-  real function evaluate_f0_maxwellian(v)
-    use constants, only:pi
-    implicit none
-    real,intent(in):: v
-  
-    evaluate_f0_maxwellian = exp(-v**2)/pi**1.5
- 
-  end function evaluate_f0_maxwellian
-
-  real function evaluate_f0_slowdown(v,is)
-    use constants, only:pi
-    use species, only: spec, nspec
-    implicit none
-    real,intent(in):: v
-    integer,intent(in):: is
-    real:: Ti, Ealpha, vstar, rslt
-    real,save:: A
-    logical:: first = .true.
- 
-    Ti = spec(main_ion_species)%temp
-    Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
-
-    vstar = 1.0
-    
-    if (first) then
-       A = (4.0*pi/3.0)*log( (vcrit**3 + vstar**3)/(vcrit**3))
-       A = A + (pi*Ti/Ealpha)**1.5*exp(Ealpha*vstar**2/Ti)*(1.0-erf(sqrt(Ealpha/Ti)*vstar))/(vcrit**3 + vstar**3)
-       A = A + (2.0*pi*vstar*Ti/Ealpha)/(vcrit**3 + vstar**3)
-       A = 1.0/A
-       first = .false.
-    end if
-
-    if (v .LT. 1.0) then
-       rslt =  A/(vcrit**3 + v**3)
-    else
-       rslt = A*exp(-Ealpha*(v**2-1.0)/Ti)/(vcrit**3 + vstar**3)
-    end if
-
-
-   
-    evaluate_f0_slowdown = rslt 
-
-    return 
-  end function evaluate_f0_slowdown
-
-
+  end subroutine
 
 end module general_f0
