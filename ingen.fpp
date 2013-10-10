@@ -840,16 +840,21 @@ if (debug) write(6,*) 'get_namelists: returning'
    end subroutine write_namelists
 
    subroutine factors (n, j, div)
+!CMR, 3/10/13:
+!    Find all the factors of n and return in div(j)
      integer, intent (in) :: n
      integer, intent (out) :: j
      integer, dimension (:), intent (out) :: div
      integer :: i, imax
 
+! find: i = lowest factor of n
+! and therefore imax=n/1 is the HIGHEST factor of n
      do i=2,n
         if (mod(n,i)==0) exit
      end do
      imax = n/i
      j=1
+! loop over all possible factors of n, and return in div(j)
      do i=1,imax
         if (mod(n,i)==0) then
            div(j) = i
