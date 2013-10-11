@@ -235,11 +235,14 @@ contains
     u = 0.
     do jflo = jf_lo%llim_proc, jf_lo%ulim_proc
 
+       ! i here identifies the 2*pi segment
        i = ij(jflo)
        m = mj(jflo)
        ik = f_lo(i)%ik(m,1)  ! For fixed i and m, ik does not change as n varies 
        dc = dj(i,jflo)
        
+       ! N_class is the number of (2*ntgrid+1) segments for this ky
+       ! needed to form extended grid in theta
        do n = 1, N_class(i)
                     
           it = f_lo(i)%it(m,n)
@@ -283,6 +286,9 @@ contains
        
     if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
 
+    ! TMP FOR TESTING -- MAB
+!    phinew = 0.0
+
     g = gnew ; gold = gnew
     phi = phinew
     apar = aparnew
@@ -291,7 +297,27 @@ contains
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
     aparnew = aparnew + apar_ext 
 
+    ! TMP FOR TESTING -- MAB
+    ! do it = 1, ntheta0
+    !    do ig = -ntgrid, ntgrid
+    !       write (*,*) 'phiold', real(phinew(ig,it,naky)), aimag(phinew(ig,it,naky)), theta(ig)-theta0(it,naky)
+    !    end do
+    ! end do
+    ! write (*,*)
+
+    ! call write_mpdist (gold, '.gold')
+    ! call write_mpdist (source, '.source')
+    ! call write_mpdist (gnew, '.gnew', last=.true.)
+
     call getfield (phinew, aparnew, bparnew)
+
+    ! do it = 1, ntheta0
+    !    do ig = -ntgrid, ntgrid
+    !       write (*,*) 'phinew', real(phinew(ig,it,naky)), aimag(phinew(ig,it,naky)), theta(ig)-theta0(it,naky)
+    !    end do
+    ! end do
+    ! write (*,*)
+    ! stop
 
     phinew   = phinew  + phi
     aparnew  = aparnew + apar
@@ -358,7 +384,6 @@ contains
     end if
 
   end subroutine fieldline_average_phi
-
 
   subroutine reset_init
 
@@ -836,13 +861,16 @@ contains
     use dist_fn, only: N_class, i_class, itright, boundary
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: f_lo, jf_lo, ij, ik_idx, it_idx
+
     implicit none
+
     integer :: i, m, n, ii, ik, it, itr, jflo
 
     call boundary(linked)
     if (linked) then
 
 ! Complication comes from having to order the supercells in each class
+
        do ii = 1, i_class
           m = 1
           do it = 1, ntheta0
@@ -896,7 +924,7 @@ contains
   subroutine kt2ki (i, n, ik, it)
 
     use file_utils, only: error_unit
-    use dist_fn, only: N_class, i_class
+    use dist_fn, only: l_links, r_links, N_class, i_class
 
     integer, intent (in) :: ik, it
     integer, intent (out) :: i, n
@@ -905,8 +933,8 @@ contains
 !
 ! Get size of this supercell
 !
-!    nn = 1 + l_links(ik,it) + r_links(ik,it)
-    nn = 1
+    nn = 1 + l_links(ik,it) + r_links(ik,it)
+
 !
 ! Find i = N_class**-1(nn)
 !
@@ -926,8 +954,7 @@ contains
 ! 
 ! Get position in this supercell, counting from the left
 !
-!    n = 1 + l_links(ik, it)
-    n = 1
+    n = 1 + l_links(ik, it)
 
   end subroutine kt2ki
 

@@ -46,7 +46,7 @@ module dist_fn
   real :: afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
   logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose
-  logical :: upwind_theta0, vpa_bc_zero, theta_bc_zero
+  logical :: vpa_bc_zero, theta_bc_zero
 
   integer :: adiabatic_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -502,7 +502,7 @@ subroutine check_dist_fn(report_unit)
   subroutine read_parameters
 
     use file_utils, only: input_unit, error_unit, input_unit_exist
-    use theta_grid, only: nperiod, shat
+    use theta_grid, only: shat
     use text_options, only: text_option, get_option_value
     use species, only: nspec
     use mp, only: proc0, broadcast
@@ -533,7 +533,7 @@ subroutine check_dist_fn(report_unit)
     character(30) :: adiabatic_option
             
     namelist /dist_fn_knobs/ boundary_option, nonad_zero, apfac, &
-         driftknob, poisfac, adiabatic_option, upwind_theta0, vpa_bc_zero, &
+         driftknob, poisfac, adiabatic_option, vpa_bc_zero, &
          kfilter, afilter, test, def_parity, even, wfb, theta_bc_zero, &
          g_exb, g_exbfac, omprimfac, btor_slab, mach, lf_default, lf_decompose
     
@@ -546,7 +546,6 @@ subroutine check_dist_fn(report_unit)
     if (proc0) then
        boundary_option = 'default'
        nonad_zero = .true.
-       upwind_theta0 = .false.
        vpa_bc_zero = .false.
        theta_bc_zero = .true.
        adiabatic_option = 'default'
@@ -590,7 +589,6 @@ subroutine check_dist_fn(report_unit)
 
     call broadcast (boundary_option_switch)
     call broadcast (nonad_zero)
-    call broadcast (upwind_theta0)
     call broadcast (vpa_bc_zero)
     call broadcast (theta_bc_zero)
     call broadcast (adiabatic_option_switch)
@@ -670,6 +668,8 @@ subroutine check_dist_fn(report_unit)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        imu = imu_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
        ! get wdrift at center of theta-vpa cells
        call get_cell_value (thet_imp, vpa_imp, &
             wdrift(:,:,iglo), wdriftc(:,:,iglo), -ntgrid, -nvgrid)
@@ -783,7 +783,8 @@ subroutine check_dist_fn(report_unit)
     end do
 
     do imu = 1, nmu
-       call get_cell_value (thet_imp, vpa_imp, anon(:,:,imu), anonc(:,:,imu), -ntgrid, -nvgrid)
+       call get_cell_value (thet_imp, vpa_imp, anon(:,:,imu), anonc(:,:,imu), &
+            -ntgrid, -nvgrid)
     end do
 
 !    do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -813,7 +814,7 @@ subroutine check_dist_fn(report_unit)
 
     use centering, only: get_cell_value
     use species, only: spec
-    use theta_grid, only: ntgrid, thet_imp
+    use theta_grid, only: ntgrid, thet_imp, itor_over_b
     use vpamu_grids, only: nvgrid, vpa, vperp2, vpa_imp
     use run_parameters, only: wunits
     use gs2_time, only: code_dt
@@ -835,7 +836,10 @@ subroutine check_dist_fn(report_unit)
        do iv = -nvgrid, nvgrid
           do ig = -ntgrid, ntgrid
              wstar(ig,iv,iglo) = code_dt*wunits(ik) &
-                  *(spec(is)%fprim+spec(is)%tprim*(vpa(iv)**2+vperp2(ig,imu)-1.5))
+                  ! contribution from background rotation gradient source term
+                  *( -2.0*vpa(iv)*g_exb*itor_over_b(ig)/spec(is)%stm &
+                  ! contribution from background density and temperature gradients
+                  + spec(is)%fprim+spec(is)%tprim*(vpa(iv)**2+vperp2(ig,imu)-1.5))
           end do
        end do
 
@@ -1175,52 +1179,14 @@ subroutine check_dist_fn(report_unit)
           mmpfac(:ntgrid-1,nvgrid-1,iglo) = 0.
        end where
 
-       ! treat theta=0 specially since dvpa/dt=0 there       
-       if (upwind_theta0) then
-          do iseg = 1, nsegments(it,ik)
-             ig = ig_mid(iseg)
-             do iv = -nvgrid, -1
-                tmp = -vpa(iv)*code_dt*gradpar(ig) &
-                     / (delthet(ig)+delthet(ig+1)-delthet(ig)*(1.0+delthet(ig+1)/delthet(ig))**2)
-                pmmfac(ig,iv,iglo) = 1.0 + t_imp*tmp*(1.0-(1.0+delthet(ig+1)/delthet(ig))**2)
-                mmmfac(ig,iv,iglo) = -1.0 + (1.0-t_imp)*tmp*(1.0-(1.0+delthet(ig+1)/delthet(ig))**2)
-                ppmfac(ig,iv,iglo) = t_imp*tmp*(1.0 + delthet(ig+1)/delthet(ig))**2
-                mpmfac(ig,iv,iglo) = (1.0-t_imp)*tmp*(1.0 + delthet(ig+1)/delthet(ig))**2
-                ! these correspond to g(theta+2*dthet)
-                pmpfac(ig,iv,iglo) = -t_imp*tmp
-                mmpfac(ig,iv,iglo) = -(1.0-t_imp)*tmp
-                pppfac(ig,iv,iglo) = 0.0 ; mppfac(ig,iv,iglo) = 0.0
-             end do
-             
-             ig=ig_mid(iseg)-1
-             do iv = 0, nvgrid-1
-                tmp = vpa(iv+1)*code_dt*gradpar(ig+1) &
-                     /(delthet(ig)+delthet(ig-1)-delthet(ig)*(1.0+delthet(ig-1)/delthet(ig))**2)
-                pppfac(ig,iv,iglo) = 1.0 + t_imp*tmp*(1.0-(1.0+delthet(ig-1)/delthet(ig))**2)
-                mppfac(ig,iv,iglo) = -1.0 + (1.0-t_imp)*tmp*(1.0-(1.0+delthet(ig-1)/delthet(ig))**2)
-                pmpfac(ig,iv,iglo) = t_imp*tmp*(1.0 + delthet(ig-1)/delthet(ig))**2
-                mmpfac(ig,iv,iglo) = (1.0-t_imp)*tmp*(1.0 + delthet(ig-1)/delthet(ig))**2
-                ! these correspond to g(theta=-2*dthet)
-                ppmfac(ig,iv,iglo) = -t_imp*tmp
-                mmmfac(ig,iv,iglo) = -(1.0-t_imp)*tmp
-                pmmfac(ig,iv,iglo) = 0.0 ; mpmfac(ig,iv,iglo) = 0.0
-             end do
-          end do
-       end if
-
     end do
+
+!    call write_mpdist (pppfac, '.pppfac', last=.true.)
 
     ! get response of g at theta<=0, vpa=-dvpa
     ! to unit impulses in g at theta<0, vpa=0
     ! note that this is not needed for mu=0 where different vpa points are not connected
     call get_gresponse_matrix
-
-    i_class = 1
-    if (.not. allocated(M_class)) then
-       allocate (M_class(i_class))
-       allocate (N_class(i_class))
-    end if
-    M_class = naky*ntheta0 ; N_class = 1
 
     if (allocated(dum1)) deallocate (dum1, dum2, wd1, wd2)
 
@@ -1229,6 +1195,7 @@ subroutine check_dist_fn(report_unit)
   subroutine init_connections
 
     use mp, only: nproc, mp_abort
+    use centering, only: init_centering
     use theta_grid, only: nperiod, ntgrid, ntheta
     use kt_grids, only: ntheta0, jtwist_out, naky
     use species, only: nspec
@@ -1283,6 +1250,13 @@ subroutine check_dist_fn(report_unit)
           ig_mid(iseg) = ig_low(iseg) + ntheta/2
           ig_up(iseg) = ig_low(iseg) + ntheta
        end do
+
+       i_class = 1
+       if (.not. allocated(M_class)) then
+          allocate (M_class(i_class))
+          allocate (N_class(i_class))
+       end if
+       M_class = naky*ntheta0 ; N_class = 1
 
     case (boundary_option_linked)
 
@@ -1364,10 +1338,928 @@ subroutine check_dist_fn(report_unit)
           allocate (ig_mid(nseg_max)) ; ig_mid = 0
           allocate (ig_up(nseg_max)) ; ig_up = ntgrid
        end if
+       
+       call init_connected_bc
 
+!        i_class = nseg_max
+!        if (.not. allocated(M_class)) then
+!           allocate (M_class(i_class))
+!           allocate (N_class(i_class))
+!        end if
+!        N_class
+! !       M_class = naky*ntheta0 ; N_class = 1
+       
     end select
 
+    call init_centering (nperiod, ig_low, ig_mid, ig_up)
+
   end subroutine init_connections
+
+  subroutine init_connected_bc
+
+    use theta_grid, only: ntgrid, nperiod, ntheta, theta
+    use kt_grids, only: naky, ntheta0, aky, theta0
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, imu_idx, is_idx
+    use gs2_layouts, only: idx, proc_id
+    use mp, only: iproc, nproc, max_allreduce, proc0
+    use constants
+    use redistribute, only: index_list_type, init_fill, delete_list
+    use vpamu_grids, only: nvgrid
+
+    implicit none
+
+    type (index_list_type), dimension(0:nproc-1) :: to, from
+    integer, dimension (0:nproc-1) :: nn_from, nn_to
+    integer, dimension (3) :: to_low, from_low, to_high, from_high
+    integer :: ik, it, imu, is, iglo, it0, itl, itr, jshift0
+    integer :: ip, ipleft, ipright
+    integer :: iglo_left, iglo_right, i, j, k
+    integer :: iglo_star, it_star, ncell
+    integer :: n, n_links_max, nn_max
+    integer :: ng
+    integer, dimension(naky*ntheta0) :: n_k
+
+    if (connectinit) return
+    connectinit = .true.
+
+    ng = ntheta/2 + (nperiod-1)*ntheta
+
+    ! jshift0 corresponds to J (not delta j) from Beer thesis
+    ! delta j is the number of akxs (i.e. theta0s) 'skipped' when connecting one 
+    ! parallel segment to the next to satisfy the twist and shift
+    ! boundary conditions. delta j = (ik - 1) * jshift0
+
+    if (naky > 1 .and. ntheta0 > 1) then
+       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,2)-theta0(1,2)) + 0.01)
+    else if (naky == 1 .and. ntheta0 > 1 .and. aky(1) /= 0.0) then
+       jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,1)-theta0(1,1)) + 0.01)
+    else
+       jshift0 = 1
+    end if
+    
+    allocate (itleft(naky,ntheta0), itright(naky,ntheta0))
+    itleft(1,:) = -1 ! No connected segments when ky = 0.
+    itright(1,:) = -1
+    do ik = 1, naky
+       do it = 1, ntheta0
+          if (it > (ntheta0+1)/2) then
+             ! akx is negative (-1 shift because akx(1) = 0)
+             it0 = it - ntheta0 - 1
+          else
+             ! akx is positive (-1 shift because akx(1) = 0)
+             it0 = it - 1
+          end if
+
+          if (ik == 1) then
+             if (aky(ik) /= 0.0 .and. naky == 1) then
+                ! for this case, jshift0 is delta j from Beer thesis
+                itl = it0 + jshift0
+                itr = it0 - jshift0
+             else
+                itl = it0
+                itr = it0
+             end if
+          else
+             ! ik = 1 corresponds to aky=0, so shift index by 1
+             ! (ik-1)*jshift0 is delta j from Beer thesis
+             itl = it0 + (ik-1)*jshift0
+             itr = it0 - (ik-1)*jshift0
+          end if
+
+          ! remap to usual GS2 indices
+          if (itl >= 0 .and. itl < (ntheta0+1)/2) then
+             itleft(ik,it) = itl + 1
+          else if (itl + ntheta0 + 1 > (ntheta0+1)/2 &
+             .and. itl + ntheta0 + 1 <= ntheta0) then
+             itleft(ik,it) = itl + ntheta0 + 1
+          else
+             ! for periodic, need to change below -- MAB/BD
+             ! j' = j + delta j not included in simulation, so can't connect
+             itleft(ik,it) = -1
+          end if
+
+          ! same stuff for j' = j - delta j
+          if (itr >= 0 .and. itr < (ntheta0+1)/2) then
+             itright(ik,it) = itr + 1
+          else if (itr + ntheta0 + 1 > (ntheta0+1)/2 &
+             .and. itr + ntheta0 + 1 <= ntheta0) then
+             itright(ik,it) = itr + ntheta0 + 1
+          else
+             ! for periodic, need to change below -- MAB/BD
+             itright(ik,it) = -1
+          end if
+       end do
+    end do
+
+    allocate (connections(g_lo%llim_proc:g_lo%ulim_alloc))
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       imu = imu_idx(g_lo,iglo)
+
+       ! get processors and indices for j' (kx') modes connecting
+       ! to mode j (kx) so we can set up communication
+
+       if (itleft(ik,it) < 0) then
+          connections(iglo)%iproc_left = -1
+          connections(iglo)%iglo_left = -1
+       else
+          connections(iglo)%iproc_left &
+               = proc_id(g_lo,idx(g_lo,ik,itleft(ik,it),imu,is))
+          connections(iglo)%iglo_left &
+               = idx(g_lo,ik,itleft(ik,it),imu,is)
+       end if
+       if (itright(ik,it) < 0) then
+          connections(iglo)%iproc_right = -1
+          connections(iglo)%iglo_right = -1
+       else
+          connections(iglo)%iproc_right &
+               = proc_id(g_lo,idx(g_lo,ik,itright(ik,it),imu,is))
+          connections(iglo)%iglo_right &
+               = idx(g_lo,ik,itright(ik,it),imu,is)
+       end if
+       if (connections(iglo)%iproc_left >= 0 .or. &
+            connections(iglo)%iproc_right >= 0) then
+          connections(iglo)%neighbor = .true.
+       else
+          connections(iglo)%neighbor = .false.
+       end if
+    end do
+
+    if (boundary_option_switch == boundary_option_linked) then
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc          
+          ik = ik_idx(g_lo,iglo)
+          if (connections(iglo)%iglo_left >= 0 .and. aky(ik) /= 0.0) &
+               save_h (1,iglo) = .true.
+          if (connections(iglo)%iglo_right >= 0 .and. aky(ik) /= 0.0) &
+               save_h (2,iglo) = .true.
+       end do
+
+       allocate (l_links(naky, ntheta0))
+       allocate (r_links(naky, ntheta0))
+       allocate (n_links(2, naky, ntheta0))
+
+       n_links_max = 0
+       do it = 1, ntheta0
+          do ik = 1, naky
+! count the links for each region
+! l_links = number of links to the left
+             l_links(ik, it) = 0
+             it_star = it
+             do 
+                if (it_star == itleft(ik, it_star)) exit
+                if (itleft(ik, it_star) >= 0) then
+                   l_links(ik, it) = l_links(ik, it) + 1
+                   it_star = itleft(ik, it_star)
+                   if (l_links(ik, it) > 5000) then
+! abort by deallocating twice
+                      write(*,*) 'l_links error'
+                      deallocate (l_links)
+                      deallocate (l_links)
+                   endif
+                else
+                   exit
+                end if
+             end do
+! r_links = number of links to the right
+             r_links(ik, it) = 0
+             it_star = it
+             do 
+                if (it_star == itright(ik, it_star)) exit
+                if (itright(ik, it_star) >= 0) then
+                   r_links(ik, it) = r_links(ik, it) + 1
+                   it_star = itright(ik, it_star)
+                   if (r_links(ik, it) > 5000) then
+! abort by deallocating twice
+                      write(*,*) 'r_links error'
+                      deallocate (r_links)
+                      deallocate (r_links)
+                   endif
+                else
+                   exit
+                end if
+             end do
+! 'n_links' complex numbers are needed to specify bc for (ik, it) region
+! ignoring wfb
+! n_links(1,:,:) is for v_par > 0, etc.
+             if (l_links(ik, it) == 0) then
+                n_links(1, ik, it) = 0
+             else 
+                n_links(1, ik, it) = 2*l_links(ik, it) - 1
+             end if
+
+             if (r_links(ik, it) == 0) then
+                n_links(2, ik, it) = 0
+             else 
+                n_links(2, ik, it) = 2*r_links(ik, it) - 1
+             end if
+             n_links_max = max(n_links_max, n_links(1,ik,it), n_links(2,ik,it))
+          end do
+       end do
+! wfb
+!       if (n_links_max > 0) n_links_max = n_links_max + 3
+       
+! now set up communication pattern:
+! excluding wfb
+
+       nn_to = 0
+       nn_from = 0 
+
+       do iglo = g_lo%llim_world, g_lo%ulim_world
+
+          ! Exclude trapped particles (inc wfb)
+!          if (nlambda > ng2 .and. il >= ng2+1) cycle
+
+          ip = proc_id(g_lo,iglo)
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          
+          ncell = r_links(ik, it) + l_links(ik, it) + 1
+          if (ncell == 1) cycle
+
+          iglo_star = iglo
+          do j = 1, r_links(ik, it)
+             call get_right_connection (iglo_star, iglo_right, ipright)
+
+             if (ip /= ipright) then
+! sender
+                if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
+! receiver
+                if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
+             end if
+
+             iglo_star = iglo_right
+          end do
+             
+          iglo_star = iglo
+          do j = 1, l_links(ik, it)
+             call get_left_connection (iglo_star, iglo_left, ipleft)
+             if (ip /= ipleft) then
+! sender
+                if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
+! receiver
+                if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
+             end if
+             iglo_star = iglo_left
+          end do
+
+       end do
+       
+       nn_max = maxval(nn_to)
+       call max_allreduce (nn_max)
+       if (nn_max == 0) then
+          no_comm = .true.
+!          write (*,*) 'no communication in init_connected_bc'
+          goto 200
+       end if
+!       write (*,*) 'communication in init_connected_bc'
+
+       do ip = 0, nproc-1
+          if (nn_from(ip) > 0) then
+             allocate (from(ip)%first(nn_from(ip)))
+             allocate (from(ip)%second(nn_from(ip)))
+             allocate (from(ip)%third(nn_from(ip)))
+          endif
+          if (nn_to(ip) > 0) then
+             allocate (to(ip)%first(nn_to(ip)))
+             allocate (to(ip)%second(nn_to(ip)))
+             allocate (to(ip)%third(nn_to(ip)))
+          endif
+       end do
+       
+       nn_from = 0
+       nn_to = 0          
+
+       do iglo = g_lo%llim_world, g_lo%ulim_world
+
+!          if (nlambda > ng2 .and. il >= ng2+1) cycle
+
+          ip = proc_id(g_lo,iglo)
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          
+          ncell = r_links(ik, it) + l_links(ik, it) + 1
+          if (ncell == 1) cycle
+          
+          iglo_star = iglo
+          do j = 1, r_links(ik, it)
+             call get_right_connection (iglo_star, iglo_right, ipright)
+! sender
+             if (ip == iproc) then
+                n = nn_from(ipright) + 1
+                nn_from(ipright) = n
+                from(ipright)%first(n) = ntgrid
+                from(ipright)%second(n) = 1
+                from(ipright)%third(n) = iglo
+             end if
+! receiver
+             if (ipright == iproc) then
+                n = nn_to(ip) + 1
+                nn_to(ip) = n
+                to(ip)%first(n) = j 
+                to(ip)%second(n) = 1
+                to(ip)%third(n) = iglo_right
+             end if
+             iglo_star = iglo_right
+          end do
+             
+          iglo_star = iglo
+          do j = 1, l_links(ik, it)
+             call get_left_connection (iglo_star, iglo_left, ipleft)
+! sender
+             if (ip == iproc) then
+                n = nn_from(ipleft) + 1
+                nn_from(ipleft) = n
+                from(ipleft)%first(n) = -ntgrid
+                from(ipleft)%second(n) = 2
+                from(ipleft)%third(n) = iglo
+             end if
+! receiver
+             if (ipleft == iproc) then
+                n = nn_to(ip) + 1
+                nn_to(ip) = n
+                to(ip)%first(n) = j 
+                to(ip)%second(n) = 2
+                to(ip)%third(n) = iglo_left
+             end if
+             iglo_star = iglo_left
+          end do
+       end do
+
+       from_low (1) = -ntgrid
+       ! perhaps from_low(2), from_high(2), to_low(2), to_high(2)
+       ! below should be 1 and 2 instead of -nvgrid and nvgrid?
+       from_low (2) = -nvgrid
+       from_low (3) = g_lo%llim_proc
+       
+       from_high(1) = ntgrid
+       from_high(2) = nvgrid
+       from_high(3) = g_lo%ulim_alloc
+
+       to_low (1) = 1
+       to_low (2) = -nvgrid
+       to_low (3) = g_lo%llim_proc
+       
+       to_high(1) = n_links_max
+       to_high(2) = nvgrid
+       to_high(3) = g_lo%ulim_alloc
+
+       call init_fill (links_p, 'c', to_low, to_high, to, &
+            from_low, from_high, from)
+       
+       call delete_list (from)
+       call delete_list (to)
+       
+! take care of wfb
+
+!        nn_to = 0
+!        nn_from = 0 
+
+!        do iglo = g_lo%llim_world, g_lo%ulim_world
+
+!           il = il_idx(g_lo,iglo)
+!           if (il /= ng2+1) cycle
+
+!           ip = proc_id(g_lo,iglo)
+!           ik = ik_idx(g_lo,iglo)
+!           it = it_idx(g_lo,iglo)
+          
+!           ncell = r_links(ik, it) + l_links(ik, it) + 1
+!           if (ncell == 1) cycle
+             
+!           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
+
+! ! v_par > 0:
+!           call find_leftmost_link (iglo, iglo_right, ipright)
+!           do j = 1, ncell
+! ! sender
+!              if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
+! ! receiver
+!              if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
+!              call get_right_connection (iglo_right, iglo_right, ipright)
+!           end do
+             
+! ! v_par < 0:
+!           call find_rightmost_link (iglo, iglo_left, ipleft)
+!           do j = 1, ncell
+! ! sender
+!              if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
+! ! receiver
+!              if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
+!              call get_left_connection (iglo_left, iglo_left, ipleft)
+!           end do
+!        end do
+       
+!        do ip = 0, nproc-1
+!           if (nn_from(ip) > 0) then
+!              allocate (from(ip)%first(nn_from(ip)))
+!              allocate (from(ip)%second(nn_from(ip)))
+!              allocate (from(ip)%third(nn_from(ip)))
+!           endif
+!           if (nn_to(ip) > 0) then
+!              allocate (to(ip)%first(nn_to(ip)))
+!              allocate (to(ip)%second(nn_to(ip)))
+!              allocate (to(ip)%third(nn_to(ip)))
+!           endif
+!        end do
+       
+!        nn_from = 0
+!        nn_to = 0          
+
+!        do iglo = g_lo%llim_world, g_lo%ulim_world
+
+!           il = il_idx(g_lo,iglo)
+!           if (il /= ng2+1) cycle
+
+!           ip = proc_id(g_lo,iglo)
+!           ik = ik_idx(g_lo,iglo)
+!           it = it_idx(g_lo,iglo)
+          
+!           ncell = r_links(ik, it) + l_links(ik, it) + 1
+!           if (ncell == 1) cycle
+
+!           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
+
+! ! v_par > 0: 
+!           call find_leftmost_link (iglo, iglo_right, ipright)
+!           do j = 1, ncell
+! ! sender
+!              if (ip == iproc) then
+!                 n = nn_from(ipright) + 1
+!                 nn_from(ipright) = n
+!                 from(ipright)%first(n) = ntgrid
+!                 from(ipright)%second(n) = 1
+!                 from(ipright)%third(n) = iglo
+!              end if
+! ! receiver
+!              if (ipright == iproc) then
+!                 n = nn_to(ip) + 1
+!                 nn_to(ip) = n
+!                 to(ip)%first(n) = r_links(ik, it) + 1
+!                 to(ip)%second(n) = 1
+!                 to(ip)%third(n) = iglo_right
+!              end if
+!              call get_right_connection (iglo_right, iglo_right, ipright)
+!           end do
+             
+! ! v_par < 0: 
+!           call find_rightmost_link (iglo, iglo_left, ipleft)
+!           do j = 1, ncell
+! ! sender
+!              if (ip == iproc) then
+!                 n = nn_from(ipleft) + 1
+!                 nn_from(ipleft) = n
+!                 from(ipleft)%first(n) = -ntgrid
+!                 from(ipleft)%second(n) = 2
+!                 from(ipleft)%third(n) = iglo
+!              end if
+! ! receiver
+!              if (ipleft == iproc) then
+!                 n = nn_to(ip) + 1
+!                 nn_to(ip) = n
+!                 to(ip)%first(n) = l_links(ik, it) + 1
+!                 to(ip)%second(n) = 2
+!                 to(ip)%third(n) = iglo_left
+!              end if
+!              call get_left_connection (iglo_left, iglo_left, ipleft)
+!           end do
+!        end do
+
+!        from_low (1) = -ntgrid
+!        from_low (2) = 1
+!        from_low (3) = g_lo%llim_proc
+       
+!        from_high(1) = ntgrid
+!        from_high(2) = 2
+!        from_high(3) = g_lo%ulim_alloc
+
+!        to_low (1) = 1
+!        to_low (2) = 1 
+!        to_low (3) = g_lo%llim_proc
+       
+!        to_high(1) = n_links_max
+!        to_high(2) = 2
+!        to_high(3) = g_lo%ulim_alloc
+
+!        call init_fill (wfb_p, 'c', to_low, to_high, to, from_low, from_high, from)
+       
+!       call delete_list (from)
+!       call delete_list (to)
+       
+! n_links_max is typically 2 * number of cells in largest supercell
+       allocate (g_adj (n_links_max, 2*nvgrid+1, g_lo%llim_proc:g_lo%ulim_alloc))
+
+! now set up links_h:
+! excluding wfb
+
+       nn_to = 0
+       nn_from = 0 
+
+       do iglo = g_lo%llim_world, g_lo%ulim_world
+
+!          if (nlambda > ng2 .and. il >= ng2+1) cycle
+
+          ip = proc_id(g_lo,iglo)
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          
+          ncell = r_links(ik, it) + l_links(ik, it) + 1
+          if (ncell == 1) cycle
+
+! If this is not the first link in the chain, continue
+          if (l_links(ik, it) > 0) then
+! For each link to the right, do:
+             iglo_star = iglo
+             do j = 1, r_links(ik, it)
+                call get_right_connection (iglo_star, iglo_right, ipright)
+! sender
+                if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
+! receiver
+                if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
+                iglo_star = iglo_right
+             end do
+          end if
+
+          if (r_links(ik, it) > 0) then
+! For each link to the left, do:
+             iglo_star = iglo
+             do j = 1, l_links(ik, it)
+                call get_left_connection (iglo_star, iglo_left, ipleft)
+! sender
+                if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
+! receiver
+                if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
+                iglo_star = iglo_left
+             end do
+          end if
+       end do
+       
+       do ip = 0, nproc-1
+          if (nn_from(ip) > 0) then
+             allocate (from(ip)%first(nn_from(ip)))
+             allocate (from(ip)%second(nn_from(ip)))
+             allocate (from(ip)%third(nn_from(ip)))
+          endif
+          if (nn_to(ip) > 0) then
+             allocate (to(ip)%first(nn_to(ip)))
+             allocate (to(ip)%second(nn_to(ip)))
+             allocate (to(ip)%third(nn_to(ip)))
+          endif
+       end do
+       
+       nn_from = 0
+       nn_to = 0          
+
+       do iglo = g_lo%llim_world, g_lo%ulim_world
+
+!          if (nlambda > ng2 .and. il >= ng2+1) cycle
+
+          ip = proc_id(g_lo,iglo)
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          
+          ncell = r_links(ik, it) + l_links(ik, it) + 1
+          if (ncell == 1) cycle
+
+          if (l_links(ik, it) > 0) then
+! For each link to the right, do:
+             iglo_star = iglo
+             do j = 1, r_links(ik, it)
+! get address of link
+                call get_right_connection (iglo_star, iglo_right, ipright)
+! sender
+                if (ip == iproc) then
+                   n = nn_from(ipright) + 1
+                   nn_from(ipright) = n
+                   from(ipright)%first(n) = ntgrid
+                   from(ipright)%second(n) = 1
+                   from(ipright)%third(n) = iglo
+                end if
+! receiver
+                if (ipright == iproc) then
+                   n = nn_to(ip) + 1
+                   nn_to(ip) = n
+                   to(ip)%first(n) = 2*l_links(ik, it) + j
+                   to(ip)%second(n) = 1
+                   to(ip)%third(n) = iglo_right
+                end if
+                iglo_star = iglo_right
+             end do
+          end if
+
+          if (r_links(ik, it) > 0) then
+! For each link to the left, do:
+             iglo_star = iglo
+             do j = 1, l_links(ik, it)
+! get address of link
+                call get_left_connection (iglo_star, iglo_left, ipleft)
+! sender
+                if (ip == iproc) then
+                   n = nn_from(ipleft) + 1
+                   nn_from(ipleft) = n
+                   from(ipleft)%first(n) = -ntgrid
+                   from(ipleft)%second(n) = 2   
+                   from(ipleft)%third(n) = iglo
+                end if
+! receiver
+                if (ipleft == iproc) then
+                   n = nn_to(ip) + 1
+                   nn_to(ip) = n
+                   to(ip)%first(n) = 2*r_links(ik, it) + j
+                   to(ip)%second(n) = 2
+                   to(ip)%third(n) = iglo_left
+                end if
+                iglo_star = iglo_left
+             end do
+          end if
+       end do
+
+       ! second index of arrays below perhaps should be -nvgrid, nvgrid?
+       from_low (1) = -ntgrid
+       from_low (2) = 1
+       from_low (3) = g_lo%llim_proc
+       
+       from_high(1) = ntgrid
+       from_high(2) = 2
+       from_high(3) = g_lo%ulim_alloc
+
+       to_low (1) = 1
+       to_low (2) = 1 
+       to_low (3) = g_lo%llim_proc
+       
+       to_high(1) = n_links_max
+       to_high(2) = 2
+       to_high(3) = g_lo%ulim_alloc
+
+       call init_fill (links_h, 'c', to_low, to_high, to, &
+            from_low, from_high, from)
+       
+       call delete_list (from)
+       call delete_list (to)
+
+! now take care of wfb (homogeneous part)
+
+!        nn_to = 0
+!        nn_from = 0 
+
+!        do iglo = g_lo%llim_world, g_lo%ulim_world
+
+!           il = il_idx(g_lo,iglo)
+!           if (il /= ng2+1) cycle
+
+!           ip = proc_id(g_lo,iglo)
+!           ik = ik_idx(g_lo,iglo)
+!           it = it_idx(g_lo,iglo)
+          
+!           ncell = r_links(ik, it) + l_links(ik, it) + 1
+!           if (ncell == 1) cycle
+
+!           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
+
+! ! v_par > 0:
+!           call find_leftmost_link (iglo, iglo_right, ipright)
+!           do j = 1, ncell
+! ! sender
+!              if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
+! ! receiver
+!              if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
+!              call get_right_connection (iglo_right, iglo_right, ipright)
+!           end do
+
+! ! v_par < 0:
+!           call find_rightmost_link (iglo, iglo_left, ipleft)
+!           do j = 1, ncell
+! ! sender
+!              if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
+! ! receiver
+!              if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
+!              call get_left_connection (iglo_left, iglo_left, ipleft)
+!           end do
+!        end do
+       
+!        do ip = 0, nproc-1
+!           if (nn_from(ip) > 0) then
+!              allocate (from(ip)%first(nn_from(ip)))
+!              allocate (from(ip)%second(nn_from(ip)))
+!              allocate (from(ip)%third(nn_from(ip)))
+!           endif
+!           if (nn_to(ip) > 0) then
+!              allocate (to(ip)%first(nn_to(ip)))
+!              allocate (to(ip)%second(nn_to(ip)))
+!              allocate (to(ip)%third(nn_to(ip)))
+!           endif
+!        end do
+       
+!        nn_from = 0
+!        nn_to = 0          
+
+!        do iglo = g_lo%llim_world, g_lo%ulim_world
+
+!           il = il_idx(g_lo,iglo)
+!           if (il /= ng2+1) cycle
+
+!           ip = proc_id(g_lo,iglo)
+!           ik = ik_idx(g_lo,iglo)
+!           it = it_idx(g_lo,iglo)
+          
+!           ncell = r_links(ik, it) + l_links(ik, it) + 1
+!           if (ncell == 1) cycle
+
+!           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
+
+! ! v_par > 0:
+!           call find_leftmost_link (iglo, iglo_right, ipright)
+!           do j = 1, ncell
+! ! sender
+!              if (ip == iproc) then
+!                 n = nn_from(ipright) + 1
+!                 nn_from(ipright) = n
+!                 from(ipright)%first(n) = ntgrid
+!                 from(ipright)%second(n) = 1
+!                 from(ipright)%third(n) = iglo
+!              end if
+! ! receiver
+!              if (ipright == iproc) then
+!                 n = nn_to(ip) + 1
+!                 nn_to(ip) = n
+!                 to(ip)%first(n) = 2*ncell - r_links(ik, it)
+!                 to(ip)%second(n) = 1
+!                 to(ip)%third(n) = iglo_right
+!              end if
+!              call get_right_connection (iglo_right, iglo_right, ipright)
+!           end do
+ 
+! ! v_par < 0:
+!           call find_rightmost_link (iglo, iglo_left, ipleft)
+!           do j = 1, ncell
+! ! sender
+!              if (ip == iproc) then
+!                 n = nn_from(ipleft) + 1
+!                 nn_from(ipleft) = n
+!                 from(ipleft)%first(n) = -ntgrid
+!                 from(ipleft)%second(n) = 2   
+!                 from(ipleft)%third(n) = iglo
+!              end if
+                
+! ! receiver
+!              if (ipleft == iproc) then
+!                 n = nn_to(ip) + 1
+!                 nn_to(ip) = n
+!                 to(ip)%first(n) = 2*ncell - l_links(ik, it)
+!                 to(ip)%second(n) = 2
+!                 to(ip)%third(n) = iglo_left
+!              end if
+!              call get_left_connection (iglo_left, iglo_left, ipleft)
+!           end do
+!        end do
+
+!        from_low (1) = -ntgrid
+!        from_low (2) = 1
+!        from_low (3) = g_lo%llim_proc
+       
+!        from_high(1) = ntgrid
+!        from_high(2) = 2
+!        from_high(3) = g_lo%ulim_alloc
+
+!        to_low (1) = 1
+!        to_low (2) = 1 
+!        to_low (3) = g_lo%llim_proc
+       
+!        to_high(1) = n_links_max
+!        to_high(2) = 2
+!        to_high(3) = g_lo%ulim_alloc
+
+!        call init_fill (wfb_h, 'c', to_low, to_high, to, from_low, from_high, from)
+       
+!        call delete_list (from)
+!        call delete_list (to)
+
+200    continue
+
+! Now set up class arrays for the implicit fields 
+! i_class classes
+! N_class(i) = number of linked cells for i_th class 
+! M_class(i) = number of members in i_th class
+
+! First count number of linked cells for each (kx, ky) 
+       k = 1
+       do it = 1, ntheta0
+          do ik = 1, naky
+             n_k(k) = 1 + l_links(ik, it) + r_links(ik, it)
+             k = k + 1
+!             if (proc0) write (*,*) 'init_connected_bc: ',ik, it, l_links(ik, it), r_links(ik, it)
+          end do
+       end do
+
+! Count how many unique values of n_k there are.  This is the number 
+! of classes.
+
+! Sort: 
+       do j = 1, naky*ntheta0-1
+          do k = 1, naky*ntheta0-1                       
+             if (n_k(k+1) < n_k(k)) then
+                i = n_k(k)
+                n_k(k) = n_k(k+1)
+                n_k(k+1) = i
+             end if
+          end do
+       end do
+
+! Then count:
+       i_class = 1
+       do k = 1, naky*ntheta0-1
+          if (n_k(k) == n_k(k+1)) cycle
+          i_class = i_class + 1
+       end do
+
+! Allocate M, N:
+       allocate (M_class(i_class))
+       allocate (N_class(i_class))
+
+! Initial values
+       M_class = 1 ; N_class = 0
+
+! Fill M, N arrays: 
+       j = 1
+       do k = 2, naky*ntheta0
+          if (n_k(k) == n_k(k-1)) then
+             M_class(j) = M_class(j) + 1
+          else 
+             N_class(j) = n_k(k-1)
+             M_class(j) = M_class(j)/N_class(j)
+             j = j + 1
+          end if
+       end do       
+       j = i_class
+       N_class(j) = n_k(naky*ntheta0)
+       M_class(j) = M_class(j)/N_class(j)
+
+! Check for consistency:
+       
+! j is number of linked cells in class structure
+       j = 0
+       do i = 1, i_class
+          j = j + N_class(i)*M_class(i)
+       end do
+
+       if (j /= naky*ntheta0) then
+          write(*,*) 'PE ',iproc,'has j= ',j,' k= ',naky*ntheta0,' : Stopping'
+          stop
+       end if
+
+    end if
+
+  end subroutine init_connected_bc
+
+  subroutine get_left_connection (iglo, iglo_left, iproc_left)
+    use gs2_layouts, only: g_lo, proc_id, idx
+    use gs2_layouts, only: ik_idx, it_idx, imu_idx, is_idx
+    implicit none
+    integer, intent (in) :: iglo
+    integer, intent (out) :: iglo_left, iproc_left
+    integer :: ik, it, is, imu
+
+    ik = ik_idx(g_lo,iglo)
+    it = it_idx(g_lo,iglo)
+    
+    if (itleft(ik,it) < 0) then
+       iglo_left = -1
+       iproc_left = -1
+       return
+    end if
+
+    imu = imu_idx(g_lo,iglo)
+    is = is_idx(g_lo,iglo)
+
+    iglo_left = idx(g_lo,ik,itleft(ik,it),imu,is)
+    iproc_left = proc_id(g_lo,iglo_left)
+  end subroutine get_left_connection
+
+  subroutine get_right_connection (iglo, iglo_right, iproc_right)
+    use gs2_layouts, only: g_lo, proc_id, idx
+    use gs2_layouts, only: ik_idx, it_idx, imu_idx, is_idx
+    implicit none
+    integer, intent (in) :: iglo
+    integer, intent (out) :: iglo_right, iproc_right
+    integer :: ik, it, imu, is
+
+    ik = ik_idx(g_lo,iglo)
+    it = it_idx(g_lo,iglo)
+    
+    if (itright(ik,it) < 0) then
+       iglo_right = -1
+       iproc_right = -1
+       return
+    end if
+
+    imu = imu_idx(g_lo,iglo)
+    is = is_idx(g_lo,iglo)
+
+    iglo_right = idx(g_lo,ik,itright(ik,it),imu,is)
+    iproc_right = proc_id(g_lo,iglo_right)
+  end subroutine get_right_connection
 
   subroutine get_gresponse_matrix
 
@@ -1396,8 +2288,8 @@ subroutine check_dist_fn(report_unit)
 
     ! get response of particles with vpa=-dvpa below and including the midplane to a unit impulse
     ! in particles with vpa=0 below (not including) the midplane
-    ! this will be used to calculate the distribution of particles with vpa=0 below the midplane, which
-    ! starts the implicit sweep in theta and vpa;
+    ! this will be used to calculate the distribution of particles with vpa=0 below the midplane, 
+    ! which starts the implicit sweep in theta and vpa;
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
 
        it = it_idx(g_lo,iglo)
@@ -1534,7 +2426,8 @@ subroutine check_dist_fn(report_unit)
     ! and obtain the corresponding columns in the response matrix
     do ig = ig_low(iseg), ig_mid(iseg)-1
        ! give a unit impulse to g at this theta
-       gnew(ig,0,iglomod(iseg)) = 1.0
+!       gnew(ig,0,iglomod(iseg)) = 1.0
+       gnew(ig,0,iglomod(iseg)) = impulse
 
        ! sweep over entire (theta,vpa) plane and get values of gnew 
        ! for particles with vpa=-dvpa below the midplane
@@ -1568,7 +2461,8 @@ subroutine check_dist_fn(report_unit)
        do iseg = 2, nsegments(it,ik)
           do ig = ig_low(iseg)+1, ig_mid(iseg)-1
              ! give a unit impulse to g at this theta
-             gnew(ig,0,iglomod(iseg)) = 1.0
+!             gnew(ig,0,iglomod(iseg)) = 1.0
+             gnew(ig,0,iglomod(iseg)) = impulse
              
              ! sweep over (theta,vpa) plane and get values of gnew for theta<0, vpa=-dvpa
              call implicit_sweep (iglo)
@@ -1664,6 +2558,7 @@ subroutine check_dist_fn(report_unit)
           ! make connection with previous segment by setting gnew(-pi) for this segment
           ! equal to gnew(pi) from previous segment
           gnew(ig_low(iseg),0:,iglomod(iseg)) = gnew(ig_up(iseg-1),0:,iglomod(iseg-1))
+!          source(ig_low(iseg),0:,iglomod(iseg)) = source(ig_up(iseg-1),0:,iglomod(iseg-1))
 
           call implicit_sweep_right (iglomod(iseg), iseg, imu)
        end do
@@ -1757,25 +2652,11 @@ subroutine check_dist_fn(report_unit)
     ! boundary condition for vpa > 0 is g(theta=-infinity) = 0
     ! boundary condition for theta < 0 (dvpa/dt > 0) is g(vpa=-infinity)=0
     do iv = 0, nvgrid-1
-!       do ig = ig_low(iseg), ig_mid(iseg)-1
-       do ig = ig_low(iseg), ig_mid(iseg)-2
+       do ig = ig_low(iseg), ig_mid(iseg)-1
           gnew(ig+1,iv+1,iglo) = (source(ig,iv,iglo) - (gnew(ig,iv+1,iglo)*pmpfac(ig,iv,iglo) &
                + gnew(ig+1,iv,iglo)*ppmfac(ig,iv,iglo) &
                + gnew(ig,iv,iglo)*pmmfac(ig,iv,iglo))) / pppfac(ig,iv,iglo)
        end do
-
-       ! note that ppmfac below deviates from the usual convention in
-       ! order to retain second order accuracy while fully upwinding
-       ig = ig_mid(iseg)-1
-       if (upwind_theta0) then
-          gnew(ig+1,iv+1,iglo) = (source(ig,iv,iglo) - (gnew(ig,iv+1,iglo)*pmpfac(ig,iv,iglo) &
-               + gnew(ig-1,iv+1,iglo)*ppmfac(ig,iv,iglo))) / pppfac(ig,iv,iglo)
-       else
-          gnew(ig+1,iv+1,iglo) = (source(ig,iv,iglo) - (gnew(ig,iv+1,iglo)*pmpfac(ig,iv,iglo) &
-               + gnew(ig+1,iv,iglo)*ppmfac(ig,iv,iglo) &
-               + gnew(ig,iv,iglo)*pmmfac(ig,iv,iglo))) / pppfac(ig,iv,iglo)
-       end if
-
     end do
 
     ! boundary condition for vpa > 0 particles is g(theta=-infinity) = 0
@@ -1820,24 +2701,11 @@ subroutine check_dist_fn(report_unit)
     ! boundary condition for vpa < 0 particles is g(theta=infinity) = 0
     ! boundary condition for theta > 0 (dvpa/dt < 0) is g(vpa=infinity)=0
     do iv = -1, -nvgrid, -1
-!       do ig = ig_up(iseg)-1, ig_mid(iseg), -1
-       do ig = ig_up(iseg)-1, ig_mid(iseg)+1, -1
+       do ig = ig_up(iseg)-1, ig_mid(iseg), -1
           gnew(ig,iv,iglo) = (source(ig,iv,iglo) - (gnew(ig+1,iv+1,iglo)*pppfac(ig,iv,iglo) &
                + gnew(ig+1,iv,iglo)*ppmfac(ig,iv,iglo) &
                + gnew(ig,iv+1,iglo)*pmpfac(ig,iv,iglo))) / pmmfac(ig,iv,iglo)
        end do
-
-       ! treat theta=0 separately since dvpa/dt=0 there
-       ig = ig_mid(iseg)
-       if (upwind_theta0) then
-          gnew(ig,iv,iglo) = (source(ig,iv,iglo) - (gnew(ig+1,iv,iglo)*ppmfac(ig,iv,iglo) &
-               + gnew(ig+2,iv,iglo)*pmpfac(ig,iv,iglo))) / pmmfac(ig,iv,iglo)
-       else
-          gnew(ig,iv,iglo) = (source(ig,iv,iglo) - (gnew(ig+1,iv+1,iglo)*pppfac(ig,iv,iglo) &
-               + gnew(ig+1,iv,iglo)*ppmfac(ig,iv,iglo) &
-               + gnew(ig,iv+1,iglo)*pmpfac(ig,iv,iglo))) / pmmfac(ig,iv,iglo)
-       end if
-
     end do
     
     ! boundary condition for vpa < 0 is g(theta=infinity) = 0
@@ -2008,7 +2876,6 @@ subroutine check_dist_fn(report_unit)
        phi_m(:ntgrid-1) = ( phic(-ntgrid+1:,3) - phic(:ntgrid-1,3) ) / delthet(:ntgrid-1)
 
        do iv = -nvgrid, nvgrid-1
-
           ! idx needed to distinguish between +/- vpar for upwinding
           if (iv < 0) then
              idx = 1
@@ -2017,7 +2884,6 @@ subroutine check_dist_fn(report_unit)
           end if
 
           do iseg = 1, nsegments(it,ik)
-
              do ig = ig_low(iseg), ig_up(iseg)-1
                 source(ig,iv,iglo) = -(gold(ig+1,iv+1,iglo)*mppfac(ig,iv,iglo) &
                      + gold(ig+1,iv,iglo)*mpmfac(ig,iv,iglo) &
@@ -2027,40 +2893,13 @@ subroutine check_dist_fn(report_unit)
                      - anonc(ig,iv,imu)*(code_dt*( spec(is)%zstm*vp(ig,iv)*gradparc(ig,idx)*phi_m(ig) ) &
                      + zi*(wdriftc(ig,iv,iglo)-wstarc(ig,iv,iglo))*phic(ig,idx))
              end do
-
-!              if (upwind_theta0) then
-!                 if (iv >= 0) then
-!                    ig = ig_mid(iseg)-1
-!                    source(ig,iv,iglo) = -(gold(ig+1,iv+1,iglo)*mppfac(ig,iv,iglo) &
-!                         + gold(ig,iv+1,iglo)*mmpfac(ig,iv,iglo) &
-!                         + gold(ig-1,iv+1,iglo)*mpmfac(ig,iv,iglo)) &
-!                         ! from here on are actual source terms (not contributions from g at old time level)
-!                         - anon(ig_mid(iseg),iv+1,imu)*(code_dt*( spec(is)%zstm*vpa(iv+1)*gradpar(ig_mid(iseg))*phi_m(ig) ) &
-!                         + zi*(wdrift(ig,iv,iglo)-wstar(ig,iv+1,iglo))*phic(ig_mid(iseg),3))
-
-
-
-!                 else
-!                    ig = ig_mid(iseg)
-!                    source(ig,iv,iglo) = -(gold(ig,iv,iglo)*mmmfac(ig,iv,iglo) &
-!                         + gold(ig+1,iv,iglo)*mpmfac(ig,iv,iglo) &
-!                         + gold(ig+2,iv,iglo)*mmpfac(ig,iv,iglo)) &
-!                         ! from here on are actual source terms (not contributions from g at old time level)
-!                         - anon(ig,iv,imu)*(code_dt*( spec(is)%zstm*vpa(iv)*gradpar(ig)*phi_m(ig) ) &
-!                         + zi*(-wstar(ig,iv,iglo))*phic(ig,3))
-
-!                 end if
-!              end if
-                
           end do
-
        end do
 
        ! treat mu=0,vpa=0 points specially, as they are decoupled from other points
        if (imu==1) then
           mu0_source(:,it,ik,is) = gold(:,0,iglo) + zi*anon(:,0,imu) &
                * (wstar(:,0,iglo)-wdrift(:,0,iglo))*phic(:,3)
-!               * (wstar(:,0,iglo))*phic(:,3)
        end if
           
        if (it > it_shift(ik)) cycle
@@ -2071,8 +2910,8 @@ subroutine check_dist_fn(report_unit)
           ! it is needed because that point does not take info from other grid points
           ! except indirectly through the fields
           source0(iseg,iglomod) = gold(ig_mid(iseg),0,iglomod) + zi*anon(ig_mid(iseg),0,imu) &
-               * (wstar(ig_mid(iseg),0,iglomod)-wdrift(ig_mid(iseg),0,iglomod))*phic(ig_mid(iseg),3)
-!               * (wstar(ig_mid(iseg),0,iglomod))*phic(ig_mid(iseg),3)
+               * (wstar(ig_mid(iseg),0,iglomod)-wdrift(ig_mid(iseg),0,iglomod)) &
+               * aj0(ig_mid(iseg),iglomod)*(t_imp*phinew(ig_mid(iseg),itmod,ik) + (1.0-t_imp)*phi(ig_mid(iseg),itmod,ik))
           iglomod = iglomod + iglo_shift(itmod,ik)
           itmod = itmod + iglo_shift(itmod,ik)
        end do
@@ -2175,6 +3014,7 @@ subroutine check_dist_fn(report_unit)
          phi, apar, bpar, istep)
     ! Implicit Solve for gnew
     call implicit_solve (phi, phinew)
+
 !    if (istep == nstep) call write_mpdist (gnew, '.gnew', last=.true.)
     ! Add hyper terms (damping)
 !    call hyper_diff (gnew, phinew, bparnew)
@@ -3546,7 +4386,8 @@ subroutine check_dist_fn(report_unit)
              end do
           end do
           ! get cell centered value in theta and vpa
-          call get_cell_value (thet_imp, vpa_imp, g0(:,:,iglo), g0(:,:,iglo), -ntgrid, -nvgrid)
+          call get_cell_value (thet_imp, vpa_imp, &
+               g0(:,:,iglo), g0(:,:,iglo), -ntgrid, -nvgrid)
           ! note that gnew below is not cell centered in vpa, which is should be!
           ! MAB FLAG
           do iv = -nvgrid, nvgrid
@@ -4809,8 +5650,8 @@ subroutine check_dist_fn(report_unit)
                    call receive (gtmp, proc_id(g_lo, iglo))
                 end if
                 if (proc0) then
-                   write (unit,'(a1,8e14.4,i4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
-                        real(gtmp), aimag(gtmp), theta(ig)-theta0(it,ik), is
+                   write (unit,'(a1,9e14.4,3i4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
+                        real(gtmp), aimag(gtmp), theta(ig)-theta0(it,ik), theta0(it,ik), is, ik, it
                 end if
              end do
           end do

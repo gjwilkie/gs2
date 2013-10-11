@@ -1505,6 +1505,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
           end if
        end if
        if (print_line) then
+          write (*,*) 'time: ', t
           do ik = 1, naky
              do it = 1, ntheta0
 !                   write (unit=*, fmt="('aky=',f5.2, ' th0=',f7.2, &
