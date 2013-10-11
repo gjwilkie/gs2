@@ -2,7 +2,7 @@ module centering
 
   implicit none
 
-  public :: get_cell_value, invert_matrix
+  public :: init_centering, get_cell_value, invert_matrix
 
   interface get_cell_value
      module procedure get_cell_value_1d
@@ -11,7 +11,32 @@ module centering
      module procedure get_cell_value_2d_complex
   end interface
 
+  private
+
+  integer :: np
+  integer, dimension (:), allocatable :: igl, igm, igu
+
 contains
+
+  subroutine init_centering (np_in, igl_in, igm_in, igu_in)
+
+    implicit none
+
+    integer, intent (in) :: np_in
+    integer, dimension (:), intent (in) :: igl_in, igm_in, igu_in
+
+    if (.not. allocated(igl)) then
+       allocate (igl(size(igl_in)))
+       allocate (igm(size(igm_in)))
+       allocate (igu(size(igu_in)))
+    end if
+
+    np = np_in
+    igl = igl_in
+    igm = igm_in
+    igu = igu_in
+
+  end subroutine init_centering
 
   ! takes an array of grid values and calculates a cell
   ! value, with the location in the cell determined by impfac
@@ -47,12 +72,8 @@ contains
     real, dimension (l1:,l2:), intent (out) :: cell
     integer, intent (in) :: l1, l2
 
-    integer :: u1, u2, ig, iv
+    integer :: u1, u2, ig, iv, iseg
     real, dimension (:,:), allocatable :: tmp
-
-    ! upper limits for first and second indices of grid and cell
-!    u1 = -l1
-!    u2 = -l2
 
     ! ! first do centering in vpar
     ! ! for theta<0
@@ -79,6 +100,8 @@ contains
 
     allocate (tmp(l1:u1,l2:u2-1)) ; tmp = 0.0
 
+    ! need to treat theta = +/- pi specially since dB/dthet=0 there as well
+
     ! first do centering in vpar
     ! for theta<0
     do ig = l1, -1
@@ -95,6 +118,24 @@ contains
     ! for vp<0
     call get_cell_value (1.0-vp_imp,grid(ig,l2:0),tmp(ig,l2:-1),l2)
 
+    ! ! first do centering in vpar
+    ! do iseg = 1, 2*np-1
+    !    ! for theta below midplane
+    !    do ig = igl(iseg), igm(iseg)-1
+    !       call get_cell_value (vp_imp,grid(ig,:),tmp(ig,:),l2)
+    !    end do
+    !    ! for theta above midplane
+    !    do ig = igm(iseg)+1, igu(iseg)
+    !       call get_cell_value (1.0-vp_imp,grid(ig,:),tmp(ig,:),l2)
+    !    end do
+    !    ! for outboard midplane
+    !    ig = igm(iseg)
+    !    ! for vp>0
+    !    call get_cell_value (vp_imp,grid(ig,0:),tmp(ig,0:),0)
+    !    ! for vp<0
+    !    call get_cell_value (1.0-vp_imp,grid(ig,l2:0),tmp(ig,l2:-1),l2)
+    ! end do
+
     ! next do centering in theta
     ! for vpa<0
     do iv = l2, -1
@@ -105,7 +146,58 @@ contains
        call get_cell_value (th_imp,tmp(:,iv),cell(:,iv),l1)
     end do
 
-    deallocate (tmp)
+    ! ! first do centering in theta
+    ! ! for vpa<0
+    ! do iv = l2, -1
+    !    call get_cell_value (1.0-th_imp,grid(:,iv),tmp(:,iv),l1)
+    ! end do
+    ! ! for vpa>0
+    ! do iv = 1, u2-1
+    !    call get_cell_value (th_imp,grid(:,iv),tmp(:,iv),l1)
+    ! end do
+    ! ! for vpa=0
+    ! iv=0
+    ! do iseg = 1, 2*np-1
+    !    ! for theta below the midplane
+    !    call get_cell_value (th_imp,grid(igl(iseg):igm(iseg)-1,iv),tmp(igl(iseg):igm(iseg)-1,iv),igl(iseg))
+    !    ! for theta above the midplane
+    !    call get_cell_value (1.0-th_imp,grid(igm(iseg)+1:igu(iseg),iv),tmp(igm(iseg)+1,igu(iseg),iv),igm(iseg)+1)
+    ! end do
+
+!    write (*,*) 'cell1', cell(ig,iv)
+
+    do iseg = 1, 2*np-1
+       ! center the vpa<0 and theta below midplane quadrant
+       do iv = l2, -1
+          do ig = igl(iseg), igm(iseg)-1
+             cell(ig,iv) = (1.0-th_imp)*((1.0-vp_imp)*grid(ig+1,iv) + vp_imp*grid(ig+1,iv+1)) &
+                  + th_imp*((1.0-vp_imp)*grid(ig,iv) + vp_imp*grid(ig,iv+1))
+          end do
+       end do
+       ! center the vpa>0 and theta below midplane quadrant
+       do iv = 0, -l2-1
+          do ig = igl(iseg), igm(iseg)-1
+             cell(ig,iv) = th_imp*((1.0-vp_imp)*grid(ig+1,iv) + vp_imp*grid(ig+1,iv+1)) &
+                  + (1.0-th_imp)*((1.0-vp_imp)*grid(ig,iv) + vp_imp*grid(ig,iv+1))
+          end do
+       end do
+       ! center the vpa<0 and theta above midplane quadrant
+       do iv = l2, -1
+          do ig = igm(iseg), igu(iseg)-1
+             cell(ig,iv) = (1.0-th_imp)*(vp_imp*grid(ig+1,iv) + (1.0-vp_imp)*grid(ig+1,iv+1)) &
+                  + th_imp*(vp_imp*grid(ig,iv) + (1.0-vp_imp)*grid(ig,iv+1))
+          end do
+       end do
+       ! center the vpa>0 and theta above midplane quadrant
+       do iv = 0, -l2-1
+          do ig = igm(iseg), igu(iseg)-1
+             cell(ig,iv) = th_imp*(vp_imp*grid(ig+1,iv) + (1.0-vp_imp)*grid(ig+1,iv+1)) &
+                  + (1.0-th_imp)*(vp_imp*grid(ig,iv) + (1.0-vp_imp)*grid(ig,iv+1))
+          end do
+       end do
+    end do
+
+!    deallocate (tmp)
 
   end subroutine get_cell_value_2d
 
@@ -144,7 +236,7 @@ contains
     complex, dimension (l1:,l2:), intent (out) :: cell
     integer, intent (in) :: l1, l2
 
-    integer :: u1, u2, ig, iv
+    integer :: u1, u2, ig, iv, iseg
     complex, dimension (:,:), allocatable :: tmp
 
     ! upper limits for first and second indices of grid and cell
@@ -171,36 +263,85 @@ contains
     !    call get_cell_value (th_imp,grid(:,iv),cell(:,iv),l1)
     ! end do
 
-    u1 = size(grid,1)+l1-1
-    u2 = size(grid,2)+l2-1
+!    u1 = size(grid,1)+l1-1
+!    u2 = size(grid,2)+l2-1
 
-    allocate (tmp(l1:u1,l2:u2-1)) ; tmp = 0.0
+    ! allocate (tmp(l1:u1,l2:u2-1)) ; tmp = 0.0
 
-    ! first do centering in vpar
-    ! for theta<0
-    do ig = l1, -1
-       call get_cell_value (vp_imp,grid(ig,:),tmp(ig,:),l2)
-    end do
-    ! for theta>0
-    do ig = 1, u1
-       call get_cell_value (1.0-vp_imp,grid(ig,:),tmp(ig,:),l2)
-    end do
-    ! for theta=0
-    ig = 0
-    call get_cell_value (vp_imp,grid(ig,0:),tmp(ig,0:),0)
-    call get_cell_value (1.0-vp_imp,grid(ig,l2:0),tmp(ig,l2:-1),l2)
+    ! ! first do centering in vpar
+    ! ! for theta<0
+    ! do ig = l1, -1
+    !    call get_cell_value (vp_imp,grid(ig,:),tmp(ig,:),l2)
+    ! end do
+    ! ! for theta>0
+    ! do ig = 1, u1
+    !    call get_cell_value (1.0-vp_imp,grid(ig,:),tmp(ig,:),l2)
+    ! end do
+    ! ! for theta=0
+    ! ig = 0
+    ! call get_cell_value (vp_imp,grid(ig,0:),tmp(ig,0:),0)
+    ! call get_cell_value (1.0-vp_imp,grid(ig,l2:0),tmp(ig,l2:-1),l2)
 
-    ! next do centering in theta
-    ! for vpa<0
-    do iv = l2, -1
-       call get_cell_value (1.0-th_imp,tmp(:,iv),cell(:,iv),l1)
-    end do
-    ! for vpa>0
-    do iv = 0, u2-1
-       call get_cell_value (th_imp,tmp(:,iv),cell(:,iv),l1)
+    ! ! first do centering in vpar
+    ! do iseg = 1, 2*np-1
+    !    ! for theta below midplane
+    !    do ig = igl(iseg), igm(iseg)-1
+    !       call get_cell_value (vp_imp,grid(ig,:),tmp(ig,:),l2)
+    !    end do
+    !    ! for theta above midplane
+    !    do ig = igm(iseg)+1, igu(iseg)
+    !       call get_cell_value (1.0-vp_imp,grid(ig,:),tmp(ig,:),l2)
+    !    end do
+    !    ! for outboard midplane
+    !    ig = igm(iseg)
+    !    ! for vp>0
+    !    call get_cell_value (vp_imp,grid(ig,0:),tmp(ig,0:),0)
+    !    ! for vp<0
+    !    call get_cell_value (1.0-vp_imp,grid(ig,l2:0),tmp(ig,l2:-1),l2)
+    ! end do
+
+    ! ! next do centering in theta
+    ! ! for vpa<0
+    ! do iv = l2, -1
+    !    call get_cell_value (1.0-th_imp,tmp(:,iv),cell(:,iv),l1)
+    ! end do
+    ! ! for vpa>0
+    ! do iv = 0, u2-1
+    !    call get_cell_value (th_imp,tmp(:,iv),cell(:,iv),l1)
+    ! end do
+
+    do iseg = 1, 2*np-1
+       ! center the vpa<0 and theta below midplane quadrant
+       do iv = l2, -1
+          do ig = igl(iseg), igm(iseg)-1
+             cell(ig,iv) = (1.0-th_imp)*((1.0-vp_imp)*grid(ig+1,iv) + vp_imp*grid(ig+1,iv+1)) &
+                  + th_imp*((1.0-vp_imp)*grid(ig,iv) + vp_imp*grid(ig,iv+1))
+          end do
+       end do
+       ! center the vpa>0 and theta below midplane quadrant
+       do iv = 0, -l2-1
+          do ig = igl(iseg), igm(iseg)-1
+             cell(ig,iv) = th_imp*((1.0-vp_imp)*grid(ig+1,iv) + vp_imp*grid(ig+1,iv+1)) &
+                  + (1.0-th_imp)*((1.0-vp_imp)*grid(ig,iv) + vp_imp*grid(ig,iv+1))
+          end do
+       end do
+       ! center the vpa<0 and theta above midplane quadrant
+       do iv = l2, -1
+          do ig = igm(iseg), igu(iseg)-1
+             cell(ig,iv) = (1.0-th_imp)*(vp_imp*grid(ig+1,iv) + (1.0-vp_imp)*grid(ig+1,iv+1)) &
+                  + th_imp*(vp_imp*grid(ig,iv) + (1.0-vp_imp)*grid(ig,iv+1))
+          end do
+       end do
+       ! center the vpa>0 and theta above midplane quadrant
+       do iv = 0, -l2-1
+          do ig = igm(iseg), igu(iseg)-1
+             cell(ig,iv) = th_imp*(vp_imp*grid(ig+1,iv) + (1.0-vp_imp)*grid(ig+1,iv+1)) &
+                  + (1.0-th_imp)*(vp_imp*grid(ig,iv) + (1.0-vp_imp)*grid(ig,iv+1))
+          end do
+       end do
     end do
 
-    deallocate (tmp)
+!    deallocate (tmp)
     
   end subroutine get_cell_value_2d_complex
 
