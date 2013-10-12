@@ -428,7 +428,8 @@ general_f0.o: \
 	 spl.o \
 	 text_options.o \
 	 unit_tests.o 
-general_quad.o: 
+general_quad.o: \
+	 gauss_quad.o 
 geometry.o: \
 	 ceq.o \
 	 deq.o \

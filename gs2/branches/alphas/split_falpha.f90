@@ -836,7 +836,7 @@ contains
   !! which replaces temperature for Maxwellian species 
   !! in the GK equation and field equations
   !! = T_r/E_alpha * (d f_alpha / d energy) * E_alpha/f_alpha
-  function dfalpha_denergy(parameters, energy, falph, resolution)
+  real function dfalpha_denergy(parameters, energy, falph, resolution)
     type(split_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
     real, intent(in) :: energy

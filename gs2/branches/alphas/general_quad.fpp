@@ -13,15 +13,201 @@ module general_quad
   implicit none
 
   public :: get_general_weights_from_grid
+  public :: get_general_weights_from_func_conv
+  public :: get_general_weights_from_func
   public :: get_general_weights_from_moments
 
   private
 
   real,dimension(:),allocatable:: mod_moments
   integer:: N_overresolved
+  integer:: N_quad_max = 2000
  
 
 contains
+
+!> Accepts an external function pointer that points to new weight function. Routine
+!! converges on a set of modified moments using the existing legendre quadrature scheme.
+!! Calculates the modified moments, and returns the abscissae and weights for a new 
+!! scheme based on polynomials orthogonal to the given weight function. The method is 
+!! that of Wheeler. Also described in Numerical Recipes, 3rd ed. section 4.6.2 and 4.6.3.
+  subroutine get_general_weights_from_func_conv ( &
+    tol, &             !< Input: Tolerance with which to converge new polynomial coefficients
+    fcn_ptr_in, &      !< Input: The new orthogonality weight function. Assumed to be 
+                       !!   multiplied by whatever function will be integrated.
+                       !!   Must accept an argument of type real, and returns a real value
+    v0,&               !< Input: The left boundary of the integration domain
+    vf,&               !< Input: The right boundary of the integration domain
+    N_out,&            !< Input: The number of integration points desired
+    out_abscissae, &   !< Output: The abscissae (quadrature points) for integration
+    out_wgts)          !< Output: The integration weights
+
+    use gauss_quad, only: get_legendre_grids_from_cheb
+    implicit none
+    interface
+      real function fcn_ptr_in(v)
+        implicit none
+        real,intent(in):: v
+      end function fcn_ptr_in
+    end interface
+    integer,intent(in):: N_out
+    real, intent(in):: tol
+    real,dimension(1:), intent(inout):: out_abscissae, out_wgts
+    real,dimension(0:2*N_out-1):: a_legendre,b_legendre
+    real,dimension(0:N_out):: alpha,beta, a_prev, b_prev
+    real,intent(in):: v0, vf
+    integer:: i
+    real:: iter_fac, metric
+    logical:: converged
+    real,dimension(N_quad_max):: v_table_in, wgt_table_in, new_wgt_fcn
+    
+#ifdef LAPACK
+
+    iter_fac = 1.2
+!    tol = 1.e-9
+    N_overresolved = 40
+
+    ! Initialize arrays
+    call init_general_quad(N_out)
+
+    ! Calculate recursion coefficients for Legendre polynomials
+    call populate_legendre_coeffs(2*N_out-1,a_legendre,b_legendre,v0,vf)
+
+    converged = .false.
+    a_prev = 0.0
+    b_prev = 0.0
+    do while (.NOT. converged)  
+ 
+        if (N_overresolved .GT. N_quad_max) then
+           write(*,*) "ERROR: general_quad could not converge to a good set of modified moments &
+with an accuracy of ", tol, " with fewer than ", N_quad_max, " quadrature points. Aborting. N_out = ", N_out
+           stop
+        end if
+
+        call get_legendre_grids_from_cheb (v0, vf, v_table_in(1:N_overresolved), wgt_table_in(1:N_overresolved))
+
+        do i = 1,N_overresolved
+           new_wgt_fcn(i) = fcn_ptr_in(v_table_in(i))
+        end do
+
+        call calculate_modified_moments(2*N_out-1,v_table_in,wgt_table_in, &
+           new_wgt_fcn,a_legendre,b_legendre)
+
+        ! Calculate the recursion coefficients for the polynomials orthogonal with respect to 
+        ! new_wgt_fcn 
+        call calculate_new_coeffs(N_out,a_legendre,b_legendre,alpha,beta)
+
+        metric = 0.0
+        do i = 0,N_out
+           if ( abs(alpha(i)) .GT. 10.0*epsilon(0.0) ) then 
+              metric = max(metric, abs((alpha(i) - a_prev(i)))/alpha(i))
+           end if
+           if ( abs(beta(i)) .GT. 10.0*epsilon(0.0) ) then 
+              metric = max(metric, abs((beta(i) - b_prev(i)))/beta(i))
+           end if
+        end do
+
+        if (metric .LE. tol) then 
+           converged = .true.
+        else
+           N_overresolved = nint(real(N_overresolved)*iter_fac)
+        end if
+!         converged = .true.
+
+        a_prev = alpha
+        b_prev = beta
+
+    end do
+
+
+    ! Find the zeroes and weights of the new polynomials
+    call solve_jacobi_matrix(N_out,alpha(0:N_out-1),beta(0:N_out-1),out_abscissae,out_wgts)
+
+    call finish_general_quad()
+
+#else
+
+    write (*,*) "You need LAPACK for this to work!"
+    stop 1
+#endif
+  end subroutine get_general_weights_from_func_conv
+
+
+!> Accepts an external function pointer that points to new weight function. Routine
+!! calculates a set of modified moments using the existing legendre quadrature scheme.
+!! Calculates the modified moments, and returns the abscissae and weights for a new 
+!! scheme based on polynomials orthogonal to the given weight function. The method is 
+!! that of Wheeler. Also described in Numerical Recipes, 3rd ed. section 4.6.2 and 4.6.3.
+  subroutine get_general_weights_from_func ( &
+    res, &             !< Input: Resolution to use to calculate
+    fcn_ptr_in, &      !< Input: The new orthogonality weight function. Assumed to be 
+                       !!   multiplied by whatever function will be integrated.
+                       !!   Must accept an argument of type real, and returns a real value
+    v0,&               !< Input: The left boundary of the integration domain
+    vf,&               !< Input: The right boundary of the integration domain
+    N_out,&            !< Input: The number of integration points desired
+    out_abscissae, &   !< Output: The abscissae (quadrature points) for integration
+    out_wgts)          !< Output: The integration weights
+
+    use gauss_quad, only: get_legendre_grids_from_cheb
+    implicit none
+    interface
+      real function fcn_ptr_in(v)
+        implicit none
+        real,intent(in):: v
+      end function fcn_ptr_in
+    end interface
+    integer,intent(in):: N_out
+    integer, intent(in):: res
+    real,dimension(1:), intent(inout):: out_abscissae, out_wgts
+    real,dimension(0:2*N_out-1):: a_legendre,b_legendre
+    real,dimension(0:N_out):: alpha,beta
+    real,intent(in):: v0, vf
+    integer:: i
+    real:: iter_fac, metric
+    logical:: converged
+    real,dimension(:),allocatable:: v_table_in, wgt_table_in, new_wgt_fcn
+
+#ifdef LAPACK
+    allocate(v_table_in(res))
+    allocate(wgt_table_in(res))
+    allocate(new_wgt_fcn(res))
+    
+    N_overresolved = res
+
+    ! Initialize arrays
+    call init_general_quad(N_out)
+
+    ! Calculate recursion coefficients for Legendre polynomials
+    call populate_legendre_coeffs(2*N_out-1,a_legendre,b_legendre,v0,vf)
+
+    call get_legendre_grids_from_cheb (v0, vf, v_table_in(1:N_overresolved), wgt_table_in(1:N_overresolved))
+
+    do i = 1,N_overresolved
+       new_wgt_fcn(i) = fcn_ptr_in(v_table_in(i))
+    end do
+
+    call calculate_modified_moments(2*N_out-1,v_table_in,wgt_table_in, &
+       new_wgt_fcn,a_legendre,b_legendre)
+
+    ! Calculate the recursion coefficients for the polynomials orthogonal with respect to 
+    ! new_wgt_fcn 
+    call calculate_new_coeffs(N_out,a_legendre,b_legendre,alpha,beta)
+
+    ! Find the zeroes and weights of the new polynomials
+    call solve_jacobi_matrix(N_out,alpha(0:N_out-1),beta(0:N_out-1),out_abscissae,out_wgts)
+
+    call finish_general_quad()
+
+    deallocate(v_table_in,wgt_table_in,new_wgt_fcn)
+
+#else
+
+    write (*,*) "You need LAPACK for this to work!"
+    stop 1
+#endif
+  end subroutine get_general_weights_from_func
+
 !> Accepts an over-resolved integration scheme complete with abscissae and weights, 
 !! calculates the modified moments, and returns the abscissae and weights for a new 
 !! scheme based on polynomials orthogonal to the given weight function. The method is 
@@ -48,9 +234,9 @@ contains
     real,intent(in):: v0, vf
     integer:: i
 
+#ifdef LAPACK
     N_overresolved = N_in
 
-#ifdef LAPACK
     ! Initialize arrays
     call init_general_quad(N_out)
 
@@ -68,12 +254,12 @@ contains
     call solve_jacobi_matrix(N_out,alpha(0:N_out-1),beta(0:N_out-1),out_abscissae,out_wgts)
 
     call finish_general_quad()
+
 #else
 
     write (*,*) "You need LAPACK for this to work!"
     stop 1
 #endif
-
   end subroutine get_general_weights_from_grid
 
 !> Accepts the "modified moments":
@@ -99,9 +285,9 @@ contains
     real,intent(in):: v0, vf
     integer:: i
 
+#ifdef LAPACK
     mod_moments(0:2*N_out-1) = moments_in(0:2*N_out-1)
 
-#ifdef LAPACK
     ! Initialize arrays
     call init_general_quad(N_out)
 
@@ -116,13 +302,14 @@ contains
     call solve_jacobi_matrix(N_out,alpha(0:N_out-1),beta(0:N_out-1),out_abscissae,out_wgts)
 
     call finish_general_quad()
+
 #else
 
     write (*,*) "You need LAPACK for this to work!"
     stop 1
 #endif
-
    end subroutine get_general_weights_from_moments
+
 
 #ifdef LAPACK
 !> Evaluates a polynomial given recursion coefficients
@@ -229,7 +416,7 @@ contains
 
 !> Finds the eigenvalues and eigenvectors for a symmetric tridiagonal matrix and interprets
 !! them as the absissae and weights for Gaussian quadrature. See Numerical Recipes, 3rd Ed. 
-!! section 4.6.2. Uses the 1 routine, given as an external source file.
+!! section 4.6.2. Uses the LAPACK routine, given as an external source file.
   subroutine solve_jacobi_matrix(N,a,b,abscissae,wgts)
     implicit none
     integer,intent(in):: N
@@ -245,10 +432,13 @@ contains
     b_use = sqrt(b)
     a_use = a
 
+!write(*,*) N, " a = ", a_use
+!write(*,*) N, " b = ", b_use
+
     call DPTEQR('I',N,a_use(0:N-1),b_use(1:N-1),eigenvectors(1:N,1:N),N,workspace(1:4*N),info)
 
     if (info .NE. 0) then
-       write(*,*) "LAPACK returned error code ", info
+       write(*,*) "LAPACK returned error code ", info, ". N = ", N
        stop
     end if
 
