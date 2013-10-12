@@ -24,6 +24,13 @@ module general_f0
   !! and all other arrays on those grids
   public :: calculate_f0_arrays
 
+  !> A single local function that calculates f0. Takes one argument
+  public :: eval_f0
+
+  !> To facilitate the need to only call one function with one argument
+  !! in eval_f0, user must first call this function to set the species
+  public :: set_current_f0_species
+
 
   !> Initialises the module, chiefly reading the parameters.
   !! NB does not allocate arrays, as negrid must be provided
@@ -92,6 +99,10 @@ module general_f0
   public :: general_f0_unit_test_calculate_f0_arrays
 
   private
+
+  logical :: genquad_flag = .false.
+
+  integer :: is_local = -1
 
   integer :: alpha_f0_switch, &
              beam_f0_switch
@@ -162,6 +173,7 @@ contains
 
   end subroutine init_general_f0
 
+
   function general_f0_unit_test_init_general_f0()
     use unit_tests
     use species
@@ -191,8 +203,6 @@ contains
     call process_check(general_f0_unit_test_init_general_f0, 'spec 3 type')
     
   end function general_f0_unit_test_init_general_f0
-
-
 
   subroutine finish_general_f0
     use file_utils, only: close_output_file
@@ -258,20 +268,76 @@ contains
 
   end subroutine read_parameters
 
+  subroutine set_current_f0_species(is)
+    implicit none
+    integer,intent(in):: is
+    is_local = is
+  end subroutine
+
+  real function eval_f0(v)
+    use mp, only: mp_abort
+    use species, only: ion_species, electron_species, alpha_species,beam_species,spec
+    use constants, only: pi
+    implicit none
+    real,intent(in):: v
+    integer:: is    
+    real:: f0, dummy
+  
+    if ( is_local .LT. 0 ) then 
+       write(*,*) "ERROR: Species needs to be set with set_current_f0_species to call eval_f0" 
+       call mp_abort('')
+    end if
+
+    is = is_local
+
+    select case (spec(is)%type)
+      case (ion_species)
+        f0 = exp(-v**2)/(pi**1.5)
+      case (electron_species)
+        f0 = exp(-v**2)/(pi**1.5)
+      case (alpha_species)
+        select case (alpha_f0_switch)
+        case (alpha_f0_maxwellian)
+          f0 = exp(-v**2)/(pi**1.5)
+        case (alpha_f0_analytic)
+          call eval_f0_analytic(is,v,f0,dummy) 
+        case (alpha_f0_semianalytic)
+          write(*,*) "ERROR: eval_f0 cannot yet handle semianalytic option."
+          call mp_abort('')
+        case (alpha_f0_split)
+          write(*,*) "ERROR: eval_f0 cannot yet handle split option."
+          call mp_abort('')
+        case (alpha_f0_external)
+          write(*,*) "ERROR: eval_f0 cannot yet handle external option."
+          call mp_abort('')
+        end select
+      case (beam_species)
+        select case (beam_f0_switch)
+        case (beam_f0_maxwellian)
+          call calculate_f0_arrays_maxwellian(is)
+        end select
+    end select
+
+    eval_f0 = f0
+    return
+  end function eval_f0
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !! General functions
 !  Functions which apply to all species
 
   !> NB this only gets called by proc0
   !! Arrays are broadcast later
-  subroutine calculate_f0_arrays(epoints, wgts, vcut_in)
+  subroutine calculate_f0_arrays(epoints, wgts, vcut_in, genquad_flag_in)
     use species, only: nspec, spec
     use species, only: ion_species, electron_species, alpha_species
     use species, only: beam_species
     real, dimension(:,:), intent(inout) :: epoints
     real, dimension(:,:), intent(inout) :: wgts
     real, intent(in) :: vcut_in
+    logical,intent(in):: genquad_flag_in
     integer :: is
+    genquad_flag = genquad_flag_in
     negrid = size(epoints(:,1))
     vcut = vcut_in
     call allocate_arrays
@@ -335,7 +401,7 @@ contains
     logical :: general_f0_unit_test_calculate_f0_arrays
     logical :: tr ! test results
     tr = .true.
-    call calculate_f0_arrays(epoints, wgts, vcut_in)
+    call calculate_f0_arrays(epoints, wgts, vcut_in,genquad_flag)
 
     call announce_check('ion energy grid')
     tr = tr .and. agrees_with(egrid(:,1), epoints(:,1), err)
@@ -435,7 +501,7 @@ contains
     !egrid(:,is) = egrid_maxwell(:)
     f0_values(:, is) = exp(-egrid(:,is))/(pi**1.5)
     !weights(:,is) = weights_maxwell(:) * f0_values(:,is)
-    weights(:,is) = weights(:,is) * f0_values(:,is)
+    if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
     do ie = 1,negrid
        generalised_temperature(:,is) = spec(is)%temp
        if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), & 
@@ -574,7 +640,7 @@ contains
     !write (*,*) 'f0prim(:,3),', f0prim(:,3)
     !write (*,*) 'f0_values(:,3),', f0_values(:,3)
     !weights(:,is) =  weights_maxwell(:)*scal * f0_values(:,is)
-    weights(:,is) = weights(:,is) * f0_values(:,is)
+    if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
     
@@ -708,7 +774,7 @@ contains
     !write (*,*) 'f0prim(:,3),', f0prim(:,3)
     !write (*,*) 'f0_values(:,3),', f0_values(:,3)
     !weights(:,is) =  weights_maxwell(:)*scal * f0_values(:,is)
-    weights(:,is) = weights(:,is) * f0_values(:,is)
+    if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
     
@@ -893,6 +959,7 @@ contains
     
     f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
 
+    if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
 
     deallocate(egrid_dat,f0_values_dat,df0dE_dat,f0_values_dat_log,df0dE_dat_log,yp,temp)
 
@@ -931,6 +998,36 @@ contains
        call mp_abort('')
     end if
 
+    do ie = 1,negrid 
+       v = sqrt(egrid(ie,is))
+       call eval_f0_analytic(is,v,f0_values(ie,is),generalised_temperature(ie,is))
+    end do
+
+    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
+    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+
+    f0prim(:,is) = - spec(is)%fprim 
+
+    if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
+
+  end subroutine calculate_f0_arrays_analytic
+
+  subroutine eval_f0_analytic(is,v,f0,gentemp)
+    use species, only: ion_species, electron_species, alpha_species, spec, nspec
+    use constants, only: pi
+    use mp, only: mp_abort
+    implicit none
+    integer,intent(in):: is
+    real,intent(in):: v
+    real,intent(inout):: f0,gentemp
+    real:: A, Ti, Ealpha, vstar, df0dv, df0dE
+    integer:: ie, i, electron_spec
+
+    if (vcrit .LE. 0.0) then
+       write(*,*) "ERROR: in general_f0. If alpha_f0='analytic' is chosen, vcrit must also be specified."
+       call mp_abort('')
+    end if
+
     do i = 1,nspec
       if (spec(i)%type .eq. electron_species) electron_spec = i
       if (main_ion_species < 1 .and. spec(i)%type .eq. ion_species) &
@@ -940,39 +1037,27 @@ contains
     Ti = spec(main_ion_species)%temp
     Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
 
-    vstar = sqrt(Ealpha)
-!    vstar = 1.0
+!    vstar = sqrt(Ealpha)
 !    Ealpha = 1.0
     
-    A = (4.0*pi/3.0)*log( (vcrit**3 + vstar**3)/(vcrit**3))
-    A = A + (pi*Ti/Ealpha)**1.5*exp(Ealpha*vstar**2/Ti)*(1.0-erf(sqrt(Ealpha/Ti)*vstar))/(vcrit**3 + vstar**3)
-    A = A + (2.0*pi*vstar*Ti/Ealpha)/(vcrit**3 + vstar**3)
+    A = (4.0*pi/3.0)*log( (vcrit**3 + 1.0)/(vcrit**3))
+    A = A + (pi*Ti/Ealpha)**1.5*exp(Ealpha/Ti)*(1.0-erf(sqrt(Ealpha/Ti)))/(vcrit**3 + 1.0)
+    A = A + (2.0*pi*Ti/Ealpha)/(vcrit**3 + 1.0)
     A = 1.0/A
 
-    B = A*exp(Ealpha*vstar**2/Ti)/(vcrit**3 + vstar**3)
+    if (v .LE. 1.0) then
+       f0 = A/(vcrit**3 + v**3)
+       df0dv = -A*3.0*v**2/(vcrit**3 + v**3)**2
+       df0dE = (0.5/v)*df0dv
+       gentemp = -spec(is)%temp*f0/df0dE
+    else
+       f0 = exp(-Ealpha*(v**2-1.0)/Ti)
+       df0dE = -Ealpha*f0/Ti
+       gentemp = -spec(is)%temp*f0/df0dE
+    end if
 
-    do ie = 1,negrid 
-       v = sqrt(egrid(ie,is))
-       if (v .LE. vstar) then
-          f0_values(ie,is) = A/(vcrit**3 + v**3)
-          df0dv = -A*3.0*v**2/(vcrit**3 + v**3)**2
-          df0dE = (0.5/v)*df0dv
-          generalised_temperature(ie,is) = -spec(is)%temp*f0_values(ie,is)/df0dE
-          gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
-          zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
-       else
-          f0_values(ie,is) = B*exp(-Ealpha*v**2/Ti)
-          df0dE = -B*Ealpha*f0_values(ie,is)/Ti
-          generalised_temperature(ie,is) = -spec(is)%temp*f0_values(ie,is)/df0dE
-          gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
-          zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
-       end if
-    end do
+!    write(*,*) v,f0,gentemp
 
-    f0prim(:,is) = - spec(is)%fprim 
-
-    weights(:,is) = weights(:,is) * f0_values(:,is)
-
-  end subroutine
+  end subroutine eval_f0_analytic
 
 end module general_f0

@@ -41,10 +41,11 @@ contains
 
   subroutine setvgrid (vcut, negrid, epts, wgts, nesub)
 
+    use mp, only: proc0, mp_abort
     use general_f0, only: calculate_f0_arrays, f0_values
     use constants, only: pi => dpi
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
-    use species, only: nspec, spec, alpha_species
+    use species, only: nspec, spec, alpha_species, ion_species
 
     implicit none
     
@@ -53,8 +54,8 @@ contains
     integer, intent (in) :: nesub
     real, dimension(:,:), intent (out) :: epts
     real, dimension(:,:), intent (out) :: wgts
-    real :: vcut_local
-    integer :: is,ie
+    real :: vcut_local, laguerre_fac
+    integer :: is,ie,js,main_ion_species
 
     call init_egrid (negrid)
 
@@ -62,8 +63,20 @@ contains
 
       if (spec(is)%type .eq. alpha_species) then
         vcut_local = 1.0
+        main_ion_species = -1
+        do js = 1,nspec
+           if ( main_ion_species .LT. 0 .AND. (spec(js)%type .eq. ion_species)) then
+              main_ion_species = js
+           end if
+        end do
+        if (main_ion_species .LT. 0) then
+           write(*,*) "Could not find main ion species!"
+           call mp_abort('')
+        end if
+        laguerre_fac = spec(is)%temp/spec(main_ion_species)%temp
       else
         vcut_local = vcut
+        laguerre_fac = 1.0
       end if
       
       ! get grid points in v up to vcut (epts is not E yet)
@@ -85,7 +98,7 @@ contains
          call get_laguerre_grids (epts(nesub+1:,is), wgts(nesub+1:, is))
 
          ! change from y to E
-         epts(nesub+1:,is) = epts(nesub+1:,is) + vcut_local**2
+         epts(nesub+1:,is) = epts(nesub+1:,is)/laguerre_fac + vcut_local**2
 
          ! absort exponential and volume element in weights
          ! See eq. 4.13 of M. Barnes's thesis
@@ -94,25 +107,22 @@ contains
          ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
          ! Note that here this means adding an exponential e^y
          ! See eq. 4.13 of M. Barnes's thesis
-         wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(epts(nesub+1:,is))*pi*0.5*sqrt(epts(nesub+1:,is))*exp(-vcut_local**2)
+         wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(laguerre_fac*(epts(nesub+1:,is)-vcut_local**2))*pi*0.5*sqrt(epts(nesub+1:,is))/laguerre_fac
+  
+!         if (spec(is)%type .EQ. alpha_species) wgts(nesub+1:,is) = 0.0
 
       end if
 
     end do
 
-
-    !write (*,*) 'Weights in le_grids are', wgts
-    !write (*,*) 'epts', epts
-    call calculate_f0_arrays(epts, wgts, vcut)
-    !do ie = 1,negrid
-    !   write(*,*) ie, sqrt(epts(ie,3)), wgts(ie,3), f0_values(ie,3)
-    !end do
-    !do is = 1,nspec
-      !wgts(:,is) = wgts(:,1)
-    !end do 
-    !do is = 1,nspec
-      !wgts(:, is) = wgts(:, is) * f0_values(:, is)
-    !end do
+    call calculate_f0_arrays(epts, wgts, vcut,.false.)
+    
+!    do is = 1,nspec
+!       do ie = 1,negrid
+!          if (proc0) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
+!       end do
+!       write(*,*) sum(wgts(:,is))
+!    end do
 
     energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))
@@ -122,11 +132,14 @@ contains
 
   subroutine setvgrid_genquad (ne_int,vcut, negrid, epts, wgts, nesub)
 
-    use general_f0, only: calculate_f0_arrays, f0_values
+    use general_f0, only: calculate_f0_arrays, f0_values, eval_f0
+    use general_f0, only: set_current_f0_species
     use constants, only: pi => dpi
-    use general_quad, only: get_general_weights_from_grid
+    use general_quad, only: get_general_weights_from_func
+    use general_quad, only: get_general_weights_from_func_conv
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
-    use species, only: nspec, spec, alpha_species
+    use species, only: nspec, spec, alpha_species, ion_species
+    use mp, only: mp_abort, proc0
 
     implicit none
     
@@ -135,9 +148,9 @@ contains
     integer, intent (in) :: nesub
     real, dimension(:,:), intent (out) :: epts
     real, dimension(:,:), intent (out) :: wgts
-    real :: vcut_local
+    real :: vcut_local, laguerre_fac
     real, dimension(1:ne_int):: vpts_temp, wgts_temp, F0_temp
-    integer :: is
+    integer :: is, main_ion_species, js, ie
 
     call init_egrid (negrid)
 
@@ -145,17 +158,32 @@ contains
 
       if (spec(is)%type .eq. alpha_species) then
         vcut_local = 1.0
+        main_ion_species = -1
+        do js = 1,nspec
+           if ( main_ion_species .LT. 0 .AND. (spec(js)%type .eq. ion_species)) then
+              main_ion_species = js
+           end if
+        end do
+        if (main_ion_species .LT. 0) then
+           write(*,*) "Could not find main ion species!"
+           call mp_abort('')
+        end if
+        laguerre_fac = spec(is)%temp/spec(main_ion_species)%temp
       else
         vcut_local = vcut
+        laguerre_fac = 1.0
       end if
 
-      call get_legendre_grids_from_cheb (0.0, vcut_local, vpts_temp(1:ne_int), wgts_temp(1:ne_int))
+      call set_current_f0_species(is)
 
-      F0_temp(1:ne_int) = exp(-vpts_temp(1:ne_int)**2) 
-
-      call get_general_weights_from_grid (ne_int, vpts_temp, wgts_temp, F0_temp, 0.0, vcut_local, &
+      if (ne_int .LT. 0) then
+         call get_general_weights_from_func_conv (1.e-9,eval_f0, 0.0, vcut_local, &
                                           nesub,epts(1:nesub,is),wgts(1:nesub,is))
-
+      else
+         call get_general_weights_from_func (ne_int,eval_f0, 0.0, vcut_local, &
+                                          nesub,epts(1:nesub,is),wgts(1:nesub,is))
+      end if
+          
 !      ! get grid points in v up to vcut (epts is not E yet)
 !      call get_legendre_grids_from_cheb (energy_0**0.5, vcut_local, epts(1:nesub,is), wgts(1:nesub, is))
 
@@ -167,7 +195,7 @@ contains
       ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
       ! See eq. 4.12 of M. Barnes's thesis
       !wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*2.0*pi
-      wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*pi*exp(epts(:nesub,is))
+      wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*pi**2.5
 
       if (negrid > nesub) then
 
@@ -175,7 +203,7 @@ contains
          call get_laguerre_grids (epts(nesub+1:,is), wgts(nesub+1:, is))
 
          ! change from y to E
-         epts(nesub+1:,is) = epts(nesub+1:,is) + vcut_local**2
+         epts(nesub+1:,is) = epts(nesub+1:,is)/laguerre_fac + vcut_local**2
 
          ! absort exponential and volume element in weights
          ! See eq. 4.13 of M. Barnes's thesis
@@ -184,23 +212,20 @@ contains
          ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
          ! Note that here this means adding an exponential e^y
          ! See eq. 4.13 of M. Barnes's thesis
-         wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(epts(nesub+1:,is))*pi*0.5*sqrt(epts(nesub+1:,is))*exp(-vcut_local**2)
+         wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(-laguerre_fac*vcut_local**2)*pi*0.5*sqrt(epts(nesub+1:,is))/laguerre_fac
 
       end if
 
     end do
 
+    call calculate_f0_arrays(epts, wgts, vcut,.true.)
 
-!    write (*,*) 'Weights in le_grids are', wgts
-!    write (*,*) 'epts', epts
-    call calculate_f0_arrays(epts, wgts, vcut)
-    !do is = 1,nspec
-      !wgts(:,is) = wgts(:,1)
-    !end do 
-    !do is = 1,nspec
-      !wgts(:, is) = wgts(:, is) * f0_values(:, is)
-    !end do
-
+!    do is = 1,nspec
+!       do ie = 1,negrid
+!          if (proc0) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
+!       end do
+!       write(*,*) sum(wgts(:,is))
+!    end do
     energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))
     x0(:) = sqrt(epts(negrid,:))
