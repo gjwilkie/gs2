@@ -9,31 +9,31 @@ module kt_grids_single
 
   private
 
-  real :: akx, aky, theta0, rhostar
+  real :: akx, aky, theta0, rhostar_single
   integer :: n0
 
 contains
 
   subroutine init_kt_grids_single
 !CMR, 14/10/2013: 
-! New namelist variables n0, rhostar to set aky using toroidal mode number.
+! New namelist variables n0, rhostar_single to set aky using toroidal mode number.
 ! Toroidal modenumber used if n0> 0 prescribed in input file. 
     use file_utils, only: input_unit, input_unit_exist
     use theta_grid, only: drhodpsi
     implicit none
     integer :: in_file
     logical :: exist
-    namelist /kt_grids_single_parameters/ n0, aky, theta0, akx, rhostar
+    namelist /kt_grids_single_parameters/ n0, aky, theta0, akx, rhostar_single
 
     aky = 0.4   ;  theta0 = 0.0   ;   akx = 0.0
-    n0 = 0      ; rhostar=1.0e-4
+    n0 = 0      ; rhostar_single=1.0e-4
 
     in_file = input_unit_exist ("kt_grids_single_parameters", exist)
     if (exist) read (in_file, nml=kt_grids_single_parameters)
 
     if (n0 .gt. 0) then
 !CMR if n0>0 then override aky inputs and use n0 to determine aky
-       aky=n0*drhodpsi*rhostar
+       aky=n0*drhodpsi*rhostar_single
     endif
 
   end subroutine init_kt_grids_single
@@ -75,7 +75,7 @@ contains
 
        write (report_unit, *) 
        write (report_unit, fmt="('A single k_perp will be evolved, with: ')")
-       if (n0 .gt.0) write (report_unit, fmt="('ky set using toroidal mode number, n0=',i8/T30,'rhostar='e12.4)") n0, rhostar
+       if (n0 .gt.0) write (report_unit, fmt="('ky set using toroidal mode number, n0=',i8/T24,'rhostar_single='1pe12.4)") n0, rhostar_single
        write (report_unit, *) 
        write (report_unit, fmt="('ky rho = ',f10.4)") aky
        write (report_unit, fmt="('theta_0 = ',f10.4)") theta0
@@ -105,16 +105,16 @@ module kt_grids_range
 
   integer :: naky, ntheta0, nn0, n0_min, n0_max
   real :: aky_min, aky_max, theta0_min, theta0_max
-  real :: akx_min, akx_max, rhostar
+  real :: akx_min, akx_max, rhostar_range
   namelist /kt_grids_range_parameters/ naky, ntheta0, nn0, n0_min, n0_max, &
-       aky_min, aky_max, theta0_min, theta0_max, akx_min, akx_max, rhostar
+       aky_min, aky_max, theta0_min, theta0_max, akx_min, akx_max, rhostar_range
 
 contains
 
   subroutine init_kt_grids_range
 !CMR, 14/10/2013: 
-! New namelist variables nn0, n0_min, n0_max, rhostar to set ky grid using 
-!          toroidal mode numbers.
+! New namelist variables nn0, n0_min, n0_max, rhostar_range to set ky grid 
+!                                             using toroidal mode numbers.
 ! Toroidal modenumbers are used if n0_min> 0 prescribed in input file. 
     use file_utils, only: input_unit, input_unit_exist
     use theta_grid, only: drhodpsi
@@ -128,19 +128,19 @@ contains
     akx_min = 0.0     ;  akx_max = 0.0
     nn0 = 1           ;  ntheta0 = 1  
     n0_min = 0        ;  n0_max = 0
-    rhostar=1.0e-4
+    rhostar_range=1.0e-4
 
     in_file = input_unit_exist ("kt_grids_range_parameters", exist)
     if (exist) read (in_file, nml=kt_grids_range_parameters)
     if (n0_min .gt. 0) then
 !CMR if n0_min>0 then override aky inputs and use nn0, n0_min, n0_max to determine aky range
-       aky_min=n0_min*drhodpsi*rhostar
+       aky_min=n0_min*drhodpsi*rhostar_range
        if (mod(n0_max-n0_min,nn0).ne.0 .or. nn0 .eq. 1 .or. n0_min.ge.n0_max) then
           naky=1
           aky_max=aky_min
        else
           naky=nn0
-          aky_max=n0_max*drhodpsi*rhostar
+          aky_max=n0_max*drhodpsi*rhostar_range
        endif 
     endif
 
@@ -157,7 +157,7 @@ contains
      write (unit, fmt="(' nn0 = ',i3)") nn0
      write (unit, fmt="(' n0_min = ',i10)") n0_min
      write (unit, fmt="(' n0_max = ',i10)") n0_max
-     write (unit, fmt="(' rhostar = ',e16.10)") rhostar
+     write (unit, fmt="(' rhostar_range = ',e16.10)") rhostar_range
      write (unit, fmt="(' ntheta0 = ',i3)") ntheta0
      write (unit, fmt="(' theta0_min = ',e16.10)") theta0_min
      write (unit, fmt="(' theta0_max = ',e16.10)") theta0_max
@@ -235,7 +235,7 @@ contains
 
        write (report_unit, *) 
        write (report_unit, fmt="('A range of k_perps will be evolved.')")
-       if (n0_min .gt.0) write (report_unit, fmt="('ky set using toroidal mode numbers with n0_min=',i8/T40,'rhostar=',e12.4)") n0_min,rhostar
+       if (n0_min .gt.0) write (report_unit, fmt="('ky set using toroidal mode numbers with n0_min=',i8/T34,'rhostar_range=',1pe12.4)") n0_min,rhostar_range
        write (report_unit, *) 
        write (report_unit, fmt="('There are ',i3,' values of ky rho and ',i3,' values of theta_0/kx rho:')") naky, ntheta0
        write (report_unit, *) 
@@ -390,7 +390,7 @@ module kt_grids_box
 
   private
 
-  real :: ly, y0, x0, rtwist, rhostar
+  real :: ly, y0, x0, rtwist, rhostar_box
   integer :: naky_private, ntheta0_private, nx_private, ny_private
   integer :: nkpolar_private, n0
   integer :: jtwist
@@ -399,8 +399,8 @@ contains
 
   subroutine init_kt_grids_box
 !CMR, 14/10/2013: 
-! New namelist variables: n0, rhostar. 
-! If n0 and rhostar are defined, set ky(1) using toroidal mode number.
+! New namelist variables: n0, rhostar_box. 
+! If n0 and rhostar_box defined, set ky(1) using toroidal mode number.
 
     use theta_grid, only: init_theta_grid, shat, drhodpsi
     use file_utils, only: input_unit, input_unit_exist
@@ -410,14 +410,14 @@ contains
     integer :: in_file
     logical :: exist
     namelist /kt_grids_box_parameters/ naky, ntheta0, ly, nx, ny, n0, jtwist, &
-	y0, rtwist, x0, nkpolar, rhostar
+	y0, rtwist, x0, nkpolar, rhostar_box
 
     call init_theta_grid
 
     nkpolar = 0   ;   naky = 0    ;  ntheta0 = 0
     ly = 0.0      ;   y0 = 2.0    ;  x0 = 0.
     nx = 0        ;   ny = 0      
-    n0=0          ;   rhostar=0.0
+    n0=0          ;   rhostar_box=0.0
 
     jtwist = max(int(2.0*pi*shat + 0.5),1)  ! default jtwist -- MAB
     rtwist = 0.0
@@ -425,7 +425,7 @@ contains
     in_file = input_unit_exist("kt_grids_box_parameters", exist)
     if (exist) read (in_file, nml=kt_grids_box_parameters)
 
-    if (rhostar .gt. 0.0 .and. n0 .gt. 0) y0=1.0/(n0*rhostar*drhodpsi)
+    if (rhostar_box .gt. 0.0 .and. n0 .gt. 0) y0=1.0/(n0*rhostar_box*drhodpsi)
 
     if (y0 < 0) y0 = -1./y0
 
@@ -572,7 +572,7 @@ contains
 
     write (report_unit, *) 
     write (report_unit, fmt="('A rectangular simulation domain has been selected.')")
-    if (rhostar .gt. 0.0 .and. n0 .gt. 0) write (report_unit, fmt="('The flux-tube size corresponds to toroidal mode number, n0=',i8/T48,' at rhostar=',e12.4)") n0,rhostar
+    if (rhostar_box .gt. 0.0 .and. n0 .gt. 0) write (report_unit, fmt="('The flux-tube size corresponds to toroidal mode number, n0=',i8/T44,' at rhostar_box=',1pe12.4)") n0,rhostar_box
     write (report_unit, *) 
     write (report_unit, fmt="('The domain is ',f10.4,' rho in the y direction.')") ly
 
