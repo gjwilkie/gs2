@@ -2391,21 +2391,6 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id)
 	end if
 
-	if(write_apar_t) then
-          call c2r (apar, ri3)
-          !ri_apar_t(:,:,:,:,1) = ri3(:,:,:,:)
-	  status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id)
-	end if
-
-	if(write_bpar_t) then
-          call c2r (bpar, ri3)
-          !ri_bpar_t(:,:,:,:,1) = ri3(:,:,:,:)
-	  status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id)
-	end if
-
-
        if (ntheta0 > 1) then
           do it = 1, ntheta0
              field2_by_kx(it) = sum(phi2_by_mode(it,:)*fluxfac(:))
@@ -2433,6 +2418,13 @@ contains
 
     if (fapar > zero) then
 
+	if(write_apar_t) then
+          call c2r (apar, ri3)
+          !ri_apar_t(:,:,:,:,1) = ri3(:,:,:,:)
+	  status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id)
+	end if
+
        if (ntheta0 > 1) then
           do it = 1, ntheta0
              field2_by_kx(it) = sum(apar2_by_mode(it,:)*fluxfac(:))
@@ -2459,6 +2451,13 @@ contains
     end if
 
     if (fbpar > zero) then
+
+	if(write_bpar_t) then
+          call c2r (bpar, ri3)
+          !ri_bpar_t(:,:,:,:,1) = ri3(:,:,:,:)
+	  status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id)
+	end if
 
        if (ntheta0 > 1) then
           do it = 1, ntheta0
