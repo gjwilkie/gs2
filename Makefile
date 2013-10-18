@@ -123,6 +123,8 @@ else
 	endif
 endif
 
+export TESTCOMMAND
+
 #
 # * Targets:
 #
@@ -476,7 +478,7 @@ ifdef CLEAN_TEXTFILES
 	CLEANCOMMAND+= *~ *.orig
 endif
 
-export 
+export CLEANCOMMAND
 
 clean_tests:
 	$(MAKE) clean -C linear_tests 
@@ -571,7 +573,7 @@ gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
 TEST_DEPS?=$(gs2_mod) functional_tests.o
-export
+
 unit_tests: unit_tests.o $(TEST_DEPS)
 	cd unit_tests && time ${MAKE} && echo && echo "Tests Successful!"
 
