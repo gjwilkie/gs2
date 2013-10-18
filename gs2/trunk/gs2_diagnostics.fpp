@@ -2775,6 +2775,7 @@ if (debug) write(6,*) "loop_diagnostics: done"
     integer, intent (in) :: istep
     logical, intent (in out) :: exit
     complex, dimension (:,:), intent (out) :: omegaavg
+    real :: fac
 !CMR, 7/11/2008: save here crucial to avoid crippling memory leak with mpixl!
 !HJL - moved to top of module
 !    complex, allocatable, save, dimension (:,:,:) :: domega
@@ -2785,8 +2786,18 @@ if (.not. allocated(domega)) allocate(domega(navg,ntheta0,naky))
     if (present(debopt)) debug=debopt
 if (debug) write(6,*) "get_omeaavg: start"
     j = igomega
-    where (abs(phinew(j,:,:)+aparnew(j,:,:)+bparnew(j,:,:)) < epsilon(0.0) &
-           .or. abs(phi(j,:,:)+apar(j,:,:)+bpar(j,:,:)) < epsilon(0.0))
+!<DD>The logic below was originally
+!    where (abs(phinew(j,:,:)+aparnew(j,:,:)+bparnew(j,:,:)) < epsilon(0.0) &
+!           .or. abs(phi(j,:,:)+apar(j,:,:)+bpar(j,:,:)) < epsilon(0.0))
+!This results in not calculating the frequency whenever the fields drop below epsilon(0.0) [~1d-16 for DP]
+!What we really want to do is prevent dividing by too small a number. 
+    if(omegatol.eq.0)then
+       fac=1.0
+    else
+       fac=1000/abs(omegatol)
+    endif
+    where (abs(phinew(j,:,:)+aparnew(j,:,:)+bparnew(j,:,:)) < tiny(0.0)*fac &
+           .or. abs(phi(j,:,:)+apar(j,:,:)+bpar(j,:,:)) < tiny(0.0)*fac)
        omegahist(mod(istep,navg),:,:) = 0.0
     elsewhere
        omegahist(mod(istep,navg),:,:) &
@@ -2799,7 +2810,7 @@ if (debug) write(6,*) "get_omegaavg: omegaavg=",omegaavg
     if (istep > navg) then
        domega = spread(omegaavg,1,navg) - omegahist
        if (all(sqrt(sum(abs(domega)**2/real(navg),dim=1)) &
-            < min(abs(omegaavg),1.0)*omegatol)) &
+            .le. min(abs(omegaavg),1.0)*omegatol)) &
        then
           if (write_ascii) write (out_unit, "('*** omega converged')")
           exit = .true. .and. exit_when_converged
