@@ -46,7 +46,7 @@ module antenna
 
   private
   public :: init_antenna, dump_ant_amp, amplitude, finish_antenna, reset_init
-  public :: wnml_antenna, check_antenna
+  public :: wnml_antenna, check_antenna, no_driver
   public :: antenna_w, antenna_apar, antenna_amplitudes, a_ext_data
 
 contains
