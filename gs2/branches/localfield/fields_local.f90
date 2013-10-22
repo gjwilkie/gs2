@@ -5,7 +5,7 @@ module fields_local
 
   public :: init_fields_local, init_phi_local
   public :: advance_local, reset_fields_local
-  public :: getfield_local, time_field_local
+  public :: getfield_local
 
   !//////////////////////////////
   !// CUSTOM TYPES
@@ -247,7 +247,6 @@ module fields_local
   integer :: MinNrow=256 !Smallest row block size used when working out which rows to have.
   logical :: debug=.true. !Do we do debug stuff?
   logical :: initialised=.false. !Have we initialised yet?
-  real, dimension(2) :: time_field_local !For timing the field solve
   integer :: nfield !How many fields
   integer :: nfq !How many field equations (always equal to nfield)
   type(pc_type),save :: pc !This is the parallel control object
@@ -3176,6 +3175,7 @@ contains
 
   !>Calculate the update to the fields
   subroutine getfield_local(phi,apar,bpar,do_gather_in)
+    use fields_arrays, only: time_field
     use mp, only: proc0, barrier, broadcast
     use run_parameters, only: fphi, fapar, fbpar
     use job_manage, only: time_message
@@ -3191,7 +3191,7 @@ contains
 
     !For timing
     !if(debug)call barrier !!/These barriers influence the reported time
-    if (proc0) call time_message(.false.,time_field_local,' Field Solver')
+    if (proc0) call time_message(.false.,time_field,' Field Solver')
 
     !Use fieldmat routine to calculate the field update
     call fieldmat%get_field_update(phi,apar,bpar)
@@ -3211,19 +3211,61 @@ contains
     !Barrier usage ensures that proc0 measures the longest time taken on
     !any proc.
     !if(debug)call barrier !!/These barriers influence the reported time
-    if (proc0) call time_message(.false.,time_field_local,' Field Solver')
+    if (proc0) call time_message(.false.,time_field,' Field Solver')
   end subroutine getfield_local
 
+  !>Initialise the fields from the initial g, just uses the
+  !fields_implicit routine
   subroutine init_phi_local
     use fields_implicit, only: init_phi_implicit
     implicit none
     call init_phi_implicit
   end subroutine init_phi_local
 
+  !>This routine advances the solution by one full time step
   subroutine advance_local(istep, remove_zonal_flows_switch)
+    use run_parameters, only: fphi, fapar, fbpar
+    use fields_implicit, only: remove_zonal_flows
+    use fields_arrays, only: phi, apar, bpar, phinew
+    use fields_arrays, only: aparnew, bparnew, apar_ext
+    use dist_fn, only: timeadv, exb_shear, g_exb, g_exbfac
+    use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
+    use antenna, only: antenna_amplitudes, no_driver
     implicit none
     integer, intent(in) :: istep
     logical, intent(in) :: remove_zonal_flows_switch
+    integer :: diagnostics = 1
+
+    !GGH NOTE: apar_ext is initialized in this call
+    if(.not.no_driver) call antenna_amplitudes (apar_ext)
+
+    !Apply flow shear if active
+    if(abs(g_exb*g_exbfac).gt.epsilon(0.)) call exb_shear(gnew,phinew,aparnew,bparnew)
+
+    !Update g and fields
+    g=gnew
+    if(fphi.gt.0) phi=phinew
+    if(fapar.gt.0) apar=aparnew
+    if(fbpar.gt.0) bpar=bparnew
+
+    !Find gnew given fields at time step midpoint
+    call timeadv (phi, apar, bpar, phinew, &
+         aparnew, bparnew, istep)
+
+    !Add in antenna driving if present
+    !<DD>TAGGED: Should we only this is fapar>0 as well?
+    if(.not.no_driver) aparnew=aparnew+apar_ext
+
+    !Calculate the fields at the next time point
+    call getfield_local(phinew,aparnew,bparnew)
+
+    !Remove zonal component if requested
+    if(remove_zonal_flows_switch) call remove_zonal_flows
+
+    !Evolve gnew to next half time point
+    call timeadv (phi, apar, bpar, phinew, &
+         aparnew, bparnew, istep, diagnostics) 
+
   end subroutine advance_local
 
 end module fields_local

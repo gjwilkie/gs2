@@ -386,6 +386,7 @@ fields_implicit.o: \
 	 species.o \
 	 theta_grid.o 
 fields_local.o: \
+	 antenna.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
@@ -513,6 +514,7 @@ gs2_main.o: \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
+	 fields_arrays.o \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \

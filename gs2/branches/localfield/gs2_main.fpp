@@ -60,7 +60,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
-    use fields_implicit, only: time_field
+    use fields_arrays, only: time_field
     use gs2_layouts, only: layout
     use parameter_scan, only: update_scan_parameter_value
     use unit_tests, only: functional_test_flag, ilast_step

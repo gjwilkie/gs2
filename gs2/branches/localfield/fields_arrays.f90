@@ -13,6 +13,8 @@ module fields_arrays
 
   integer, save :: nidx
 
+  real, save :: time_field(2)=0.
+
 ! Within each supercell, there are are N_class primary cells.  Each 
 ! has (2*ntgrid+1)*nfield points.
   type dcell_type

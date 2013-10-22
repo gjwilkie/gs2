@@ -4,10 +4,10 @@ module fields_implicit
 
   public :: init_fields_implicit
   public :: advance_implicit
+  public :: remove_zonal_flows
   public :: init_phi_implicit
   public :: nidx
   public :: reset_init
-  public :: time_field
   public :: set_scan_parameter
   public :: field_subgath
 
@@ -16,7 +16,6 @@ module fields_implicit
   integer, save :: nfield
   logical :: initialized = .false.
   logical :: linked = .false.
-  real, save :: time_field(2)=0.
   logical :: field_subgath
 
 contains
@@ -203,7 +202,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: f_lo, jf_lo, ij, mj, dj
     use prof, only: prof_entering, prof_leaving
-    use fields_arrays, only: aminv
+    use fields_arrays, only: aminv, time_field
     use theta_grid, only: ntgrid
     use dist_fn, only: N_class
     use mp, only: sum_allreduce, allgatherv, iproc,nproc, proc0
