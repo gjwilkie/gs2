@@ -59,6 +59,7 @@ ffttester_mod = \
 	 fields.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
+	 fields_local.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -83,6 +84,7 @@ ffttester_mod = \
 	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
+	 matrix_inverse.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -120,6 +122,7 @@ gs2_mod = \
 	 fields.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
+	 fields_local.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -145,6 +148,7 @@ gs2_mod = \
 	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
+	 matrix_inverse.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -186,6 +190,7 @@ ingen_mod = \
 	 fields.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
+	 fields_local.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -210,6 +215,7 @@ ingen_mod = \
 	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
+	 matrix_inverse.o \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
@@ -352,6 +358,7 @@ fields.o: \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
+	 fields_local.o \
 	 fields_test.o \
 	 file_utils.o \
 	 init_g.o \
@@ -377,6 +384,19 @@ fields_implicit.o: \
 	 prof.o \
 	 run_parameters.o \
 	 species.o \
+	 theta_grid.o 
+fields_local.o: \
+	 dist_fn.o \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
+	 fields_implicit.o \
+	 file_utils.o \
+	 gs2_layouts.o \
+	 job_manage.o \
+	 kt_grids.o \
+	 matrix_inverse.o \
+	 mp.o \
+	 run_parameters.o \
 	 theta_grid.o 
 fields_test.o: \
 	 dist_fn.o \
@@ -670,6 +690,7 @@ lowflow.o: \
 	 species.o \
 	 spl.o \
 	 theta_grid.o 
+matrix_inverse.o: 
 mds.o: \
 	 constants.o 
 mp.o: \

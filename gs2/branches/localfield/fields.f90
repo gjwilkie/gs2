@@ -23,7 +23,7 @@ module fields
   ! knobs
   integer :: fieldopt_switch
   logical :: remove_zonal_flows_switch
-  integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2
+  integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_local = 3
 
   logical :: initialized = .false.
   logical :: exist
@@ -43,6 +43,8 @@ contains
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, *) 
+    case (fieldopt_local)
+       write (report_unit, fmt="('The field equations will be advanced in time implicitly with decomposition respecting g_lo layout.')")
     end select
   end subroutine check_fields
 
@@ -58,6 +60,8 @@ contains
           write (unit, fmt="(' field_option = ',a)") '"implicit"'
        case (fieldopt_test)
           write (unit, fmt="(' field_option = ',a)") '"test"'
+       case (fieldopt_local)
+          write (unit, fmt="(' field_option = ',a)") '"local"'
        end select
        write (unit, fmt="(' /')")
   end subroutine wnml_fields
@@ -71,6 +75,7 @@ contains
     use init_g, only: ginit, init_init_g
     use fields_implicit, only: init_fields_implicit, init_phi_implicit
     use fields_test, only: init_fields_test, init_phi_test
+    use fields_local, only: init_fields_local, init_phi_local
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
     implicit none
@@ -106,6 +111,9 @@ contains
     case (fieldopt_test)
        if (debug) write(6,*) "init_fields: init_fields_test"
        call init_fields_test
+    case (fieldopt_local)
+       if (debug) write(6,*) "init_fields: init_fields_local"
+       call init_fields_local
     end select
 
 ! Turn on nonlinear terms.
@@ -125,6 +133,9 @@ contains
     case (fieldopt_test)
        if (debug) write(6,*) "init_fields: init_phi_test"
        call init_phi_test
+    case (fieldopt_local)
+       if (debug) write(6,*) "init_fields: init_phi_local"
+       call init_phi_local
     end select
     
   end subroutine init_fields
@@ -135,10 +146,12 @@ contains
     use mp, only: proc0, broadcast
     use fields_implicit, only: field_subgath
     implicit none
-    type (text_option), dimension (3), parameter :: fieldopts = &
+    type (text_option), dimension (5), parameter :: fieldopts = &
          (/ text_option('default', fieldopt_implicit), &
             text_option('implicit', fieldopt_implicit), &
-            text_option('test', fieldopt_test) /)
+            text_option('test', fieldopt_test),&
+            text_option('local', fieldopt_local),&
+            text_option('implicit_local', fieldopt_local)/)
     character(20) :: field_option
     namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath
     integer :: ierr, in_file
@@ -199,6 +212,7 @@ contains
   subroutine advance (istep)
     use fields_implicit, only: advance_implicit
     use fields_test, only: advance_test
+    use fields_local, only: advance_local
     implicit none
     integer, intent (in) :: istep
 
@@ -207,6 +221,8 @@ contains
        call advance_implicit (istep, remove_zonal_flows_switch)
     case (fieldopt_test)
        call advance_test (istep)
+    case (fieldopt_local)
+       call advance_local (istep, remove_zonal_flows_switch)
     end select
   end subroutine advance
 
