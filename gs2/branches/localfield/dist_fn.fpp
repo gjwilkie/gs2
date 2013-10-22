@@ -18,6 +18,7 @@ module dist_fn
   public :: read_parameters, wnml_dist_fn, wnml_dist_fn_species, check_dist_fn
   public :: timeadv, exb_shear, g_exb
   public :: getfieldeq, getan, getmoms, getemoms
+  public :: getfieldeq_nogath
   public :: flux, lf_flux, eexchange
   public :: get_epar, get_heat
   public :: t0, omega0, gamma0, source0
@@ -3667,6 +3668,7 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fbpar, fphi, ieqzip
+    use kt_grids, only: filter
     use species, only: spec
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
@@ -3687,6 +3689,10 @@ subroutine check_dist_fn(report_unit)
 
     ik = ik_idx(g_lo,iglo)
     it = it_idx(g_lo,iglo)
+
+    !Skip work if we're not interested in this ik and it
+    if(filter(it,ik)) return
+
     il = il_idx(g_lo,iglo)
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
@@ -4814,6 +4820,194 @@ subroutine check_dist_fn(report_unit)
 
     deallocate (antot, antota, antotp)
   end subroutine getfieldeq
+
+
+!///////////////////////////////////////
+!// SOME NO GATHER TEST ROUTINES
+!///////////////////////////////////////
+  subroutine getfieldeq_nogath (phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
+    complex, dimension (:,:,:), allocatable :: antot, antota, antotp
+
+    allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
+
+    call getan_nogath (antot, antota, antotp)
+    call getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
+         fieldeq, fieldeqa, fieldeqp)
+
+    deallocate (antot, antota, antotp)
+  end subroutine getfieldeq_nogath
+
+  subroutine getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
+       fieldeq, fieldeqa, fieldeqp)
+    use dist_fn_arrays, only: kperp2
+    use theta_grid, only: ntgrid, bmag, delthet, jacob
+    use kt_grids, only: naky, ntheta0, aky
+    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: beta, tite
+    use kt_grids, only: filter
+    use species, only: spec, has_electron_species
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
+    complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
+
+    integer :: ik, it
+    if (.not. allocated(fl_avg)) allocate (fl_avg(ntheta0, naky))
+    fl_avg = 0.
+
+    if (.not. has_electron_species(spec)) then
+       if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
+          if (.not. allocated(awgt)) then
+             allocate (awgt(ntheta0, naky))
+             awgt = 0.
+             do ik = 1, naky
+                if (aky(ik) > epsilon(0.0)) cycle
+                do it = 1, ntheta0
+                   if(filter(it,ik)) cycle
+                   awgt(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
+                end do
+             end do
+          endif
+           
+          do ik = 1, naky
+             do it = 1, ntheta0
+                if(filter(it,ik)) cycle
+                fl_avg(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
+             end do
+          end do
+       end if
+    end if
+
+    if (fphi > epsilon(0.0)) then
+       fieldeq = antot + bpar*gamtot1 - gamtot*gridfac1*phi 
+
+       if (.not. has_electron_species(spec)) then
+          do ik = 1, naky
+             do it = 1, ntheta0
+                if(filter(it,ik)) cycle
+                fieldeq(:,it,ik) = fieldeq(:,it,ik) + fl_avg(it,ik)
+             end do
+          end do
+       end if
+    end if
+
+    if (fapar > epsilon(0.0)) then
+       fieldeqa = antota - kperp2*gridfac1*apar
+    end if
+! bpar == delta B_parallel / B_0(theta) b/c of the factor of 1/bmag(theta)**2
+! in the following
+    if (fbpar > epsilon(0.0)) then
+       fieldeqp = (antotp+bpar*gamtot2+0.5*phi*gamtot1)*beta*apfac
+       do ik = 1, naky
+          do it = 1, ntheta0
+             if(filter(it,ik)) cycle
+             fieldeqp(:,it,ik) = fieldeqp(:,it,ik)/bmag(:)**2
+          end do
+       end do
+       fieldeqp = fieldeqp + bpar*gridfac1
+    end if
+  end subroutine getfieldeq1_nogath
+
+  subroutine getan_nogath (antot, antota, antotp)
+    use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
+    use dist_fn_arrays, only: kperp2
+    use species, only: nspec, spec
+    use theta_grid, only: ntgrid
+    use le_grids, only: integrate_species_sub
+    use run_parameters, only: beta, fphi, fapar, fbpar
+    use prof, only: prof_entering, prof_leaving
+    use gs2_layouts, only: g_lo, it_idx,ik_idx
+    use kt_grids, only: filter
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (out) :: antot, antota, antotp
+    real, dimension (nspec) :: wgt
+
+    integer :: isgn, iglo, ig, it,ik
+
+    call prof_entering ("getan", "dist_fn")
+
+!<DD>
+!Don't do this as integrate_species will fill in all values
+!    antot=0. ; antota=0. ; antotp=0.
+!Need to set individual arrays to zero if not using integrate_species for
+!that field. (NOTE this probably isn't actually needed as we shouldn't
+!use the various antots if we're not calculating/using the related field).
+
+    if (fphi > epsilon(0.0)) then
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          it=it_idx(g_lo,iglo)
+          ik=ik_idx(g_lo,iglo)
+          if(filter(it,ik))cycle
+          do isgn = 1, 2
+             do ig=-ntgrid, ntgrid
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
+             end do
+          end do
+       end do
+
+       wgt = spec%z*spec%dens
+       call integrate_species_sub (g0, wgt, antot)
+
+       if (afilter > epsilon(0.0)) antot = antot * exp(-afilter**4*kperp2**2/4.)
+       !NOTE: We don't do ensure_single_val_fields here as we're not certain we
+       !have the full data
+    else
+       antot=0.
+    end if
+
+    if (fapar > epsilon(0.0)) then
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          it=it_idx(g_lo,iglo)
+          ik=ik_idx(g_lo,iglo)
+          if(filter(it,ik))cycle
+          do isgn = 1, 2
+             do ig=-ntgrid, ntgrid
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,iglo)*gnew(ig,isgn,iglo)
+             end do
+          end do
+       end do
+       
+       wgt = 2.0*beta*spec%z*spec%dens*sqrt(spec%temp/spec%mass)
+       call integrate_species_sub (g0, wgt, antota)
+       !NOTE: We don't do ensure_single_val_fields here as we're not certain we
+       !have the full data
+    else
+       antota=0.
+    end if
+
+    if (fbpar > epsilon(0.0)) then
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          it=it_idx(g_lo,iglo)
+          ik=ik_idx(g_lo,iglo)
+          if(filter(it,ik))cycle
+          do isgn = 1, 2
+             do ig=-ntgrid, ntgrid
+                g0(ig,isgn,iglo) = aj1(ig,iglo)*vperp2(ig,iglo)*gnew(ig,isgn,iglo)
+             end do
+          end do
+       end do
+       wgt = spec%temp*spec%dens
+       call integrate_species_sub (g0, wgt, antotp)
+       !NOTE: We don't do ensure_single_val_fields here as we're not certain we
+       !have the full data
+    else
+       antotp=0.
+    end if
+
+    call prof_leaving ("getan", "dist_fn")
+  end subroutine getan_nogath
+
+!///////////////////////////////////////
+!///////////////////////////////////////
+!///////////////////////////////////////
+
   
 ! MAB> ported from agk
 ! TT> Given initial distribution function this obtains consistent fields

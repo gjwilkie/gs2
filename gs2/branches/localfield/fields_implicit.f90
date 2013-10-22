@@ -224,7 +224,7 @@ contains
     !On first call to this routine setup the receive counts (recvcnts)
     !and displacement arrays (displs)
     if ((.not.allocated(recvcnts)).and.field_subgath) then
-       allocate(recvcnts(nproc),displs(nproc))
+       allocate(recvcnts(nproc),displs(nproc)) !Note there's no matching deallocate
        do i=0,nproc-1
           displs(i+1)=MIN(i*jf_lo%blocksize,jf_lo%ulim_world+1) !This will assign a displacement outside the array for procs with no data
           recvcnts(i+1)=MIN(jf_lo%blocksize,jf_lo%ulim_world-displs(i+1)+1) !This ensures that we expect no data from procs without any
@@ -598,6 +598,12 @@ contains
     allocate (fieldeqp(-ntgrid:ntgrid, ntheta0, naky))
 
     !Find response to delta function fields
+    !NOTE:Timeadv will loop over all iglo even though only one ik
+    !has any amplitude, this is quite a waste. Should ideally do all
+    !ik at once
+    !NOTE:We currently do each independent supercell of the same length
+    !together, this may not be so easy if we do all the ik together but it should
+    !be possible.
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, 0)
     call getfieldeq (phinew, aparnew, bparnew, fieldeq, fieldeqa, fieldeqp)
 

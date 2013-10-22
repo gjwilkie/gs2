@@ -2314,6 +2314,7 @@ contains
     use dist_fn_arrays, only: vpa, kperp2, aj0
     use fields_arrays, only: aparnew
     use run_parameters, only: ieqzip
+    use kt_grids, only: filter
     use constants
     ! TMP FOR TESTING -- MAB
 !    use mp, only: proc0
@@ -2380,6 +2381,7 @@ contains
              if (spec(is)%type /= electron_species) cycle
              it = it_idx(g_lo,iglo)
              ik = ik_idx(g_lo,iglo)
+             if(filter(it,ik)) cycle
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
                 g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
@@ -2426,6 +2428,7 @@ contains
              if (spec(is)%type /= electron_species) cycle
              it = it_idx(g_lo,iglo)
              ik = ik_idx(g_lo,iglo)
+             if(filter(it,ik))cycle
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
                 g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
@@ -2602,7 +2605,8 @@ contains
     use le_grids, only: energy, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
-
+    use kt_grids, only: filter
+    
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
@@ -2627,6 +2631,9 @@ contains
 ! First get v0y0
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          it = it_idx(g_lo,iglo)
+          ik = ik_idx(g_lo,iglo)
+          if(filter(it,ik))cycle
           do isgn = 1, 2
              ! v0 = vpa J0 f0, y0 = g
              gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*g(:,isgn,iglo)
@@ -2641,6 +2648,7 @@ contains
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
+          if(filter(it,ik))cycle
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
              g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
@@ -2659,6 +2667,8 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       if(filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -2682,6 +2692,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       if(filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v1y1(:,it,ik,is) &
@@ -2695,6 +2706,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       if(filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -2713,6 +2725,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       if(filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v2y2(:,it,ik,is) &
@@ -2886,6 +2899,7 @@ contains
     use le_grids, only: energy, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
+    use kt_grids, only: filter
 
     implicit none
 
@@ -2911,6 +2925,8 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       if(filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
@@ -2928,6 +2944,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       if(filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
@@ -2940,6 +2957,8 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       if(filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
@@ -2957,6 +2976,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       if(filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v1y1(:,it,ik,is) &
@@ -2969,6 +2989,8 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       if(filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -2987,6 +3009,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       if(filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v2y2(:,it,ik,is) &
@@ -3204,6 +3227,7 @@ contains
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
     use run_parameters, only: ieqzip
+    use kt_grids, only: filter
     use gs2_layouts, only: lz_lo
 
     implicit none
@@ -3217,7 +3241,7 @@ contains
     integer :: ilz
     complex, dimension (nxi+1) :: delta
     complex :: fac, gwfb
-    integer :: ig, ik, il, is, je, ie
+    integer :: ig, ik, il, is, it, je, ie
 
     call prof_entering ("solfp_lorentz", "collisions")
 
@@ -3276,8 +3300,9 @@ contains
        ie = ie_idx(lz_lo,ilz)
        ig = ig_idx(lz_lo,ilz)
        ik = ik_idx(lz_lo,ilz)
+       it = it_idx(lz_lo,ilz)
        is = is_idx(lz_lo,ilz)
-
+       if(filter(it,ik))cycle
        if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
        if (ieqzip(it_idx(lz_lo,ilz),ik_idx(lz_lo,ilz))==0) cycle
 
@@ -3510,13 +3535,14 @@ contains
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
     use run_parameters, only: ieqzip
+    use kt_grids, only: filter
 
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     logical, intent (in), optional :: init
 
-    integer :: ie, is, ig, il
+    integer :: ie, is, ig, il, it, ik
     complex, dimension (negrid) :: delta
     complex, dimension (:,:), allocatable :: ged
     integer :: ielo
@@ -3531,7 +3557,9 @@ contains
        is = is_idx(e_lo,ielo)
        ig = ig_idx(e_lo,ielo)
        il = il_idx(e_lo,ielo)
-
+       it = it_idx(e_lo,ielo)       
+       ik = ik_idx(e_lo,ielo)
+       if(filter(it,ik))cycle
        if (spec(is)%vnewk < 2.0*epsilon(0.0) .or. forbid(ig,il)) cycle
        if (ieqzip(it_idx(e_lo,ielo),ik_idx(e_lo,ielo))==0) cycle
 

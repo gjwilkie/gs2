@@ -672,7 +672,7 @@ contains
     use gs2_layouts, only: g_lo, intspec_sub
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use mp, only: sum_allreduce_sub, sum_allreduce
-
+    use kt_grids, only: filter
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
@@ -696,6 +696,7 @@ contains
        !Convert from iglo to the separate indices
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
+       if(filter(it,ik)) cycle
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
@@ -757,7 +758,6 @@ contains
 
     !If we don't want to gather then use integrate_species_sub
     if(present(nogath))then
-       print*,"using nogath method"
        if(nogath)then
           call integrate_species_sub(g,weights,total)
           return
@@ -765,7 +765,7 @@ contains
     endif
 
     !->First intialise gather vars
-    !Note: We only do this on the first call
+    !Note: We only do this on the first call !!May be better to move this to some init routine?
     if(.not.allocated(recvcnts)) then
        !Get subcomm size
        call nproc_comm(g_lo%lesblock_comm,sz)
