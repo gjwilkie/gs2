@@ -355,14 +355,22 @@ contains
 
     use fields_implicit, only: implicit_reset => reset_init
     use fields_test, only: test_reset => reset_init
+    use fields_local, only: reset_fields_local
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: phitmp, apartmp, bpartmp, apar_ext
 
     implicit none
 
     call reset_init
-    call implicit_reset
-    call test_reset
+    
+    select case (fieldopt_switch)
+    case (fieldopt_implicit)
+       call implicit_reset
+    case (fieldopt_test)
+       call test_reset
+    case (fieldopt_local)
+       call reset_fields_local
+    end select
 
     if (allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew, &
          phitmp, apartmp, bpartmp, apar_ext)
