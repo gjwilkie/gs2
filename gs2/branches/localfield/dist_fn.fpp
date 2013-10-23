@@ -4920,7 +4920,7 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: kperp2
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
-    use le_grids, only: integrate_species_sub
+    use le_grids, only: integrate_species!_sub
     use run_parameters, only: beta, fphi, fapar, fbpar
     use prof, only: prof_entering, prof_leaving
     use gs2_layouts, only: g_lo, it_idx,ik_idx
@@ -4953,7 +4953,7 @@ subroutine check_dist_fn(report_unit)
        end do
 
        wgt = spec%z*spec%dens
-       call integrate_species_sub (g0, wgt, antot)
+       call integrate_species (g0, wgt, antot, nogath=.true.)
 
        if (afilter > epsilon(0.0)) antot = antot * exp(-afilter**4*kperp2**2/4.)
        !NOTE: We don't do ensure_single_val_fields here as we're not certain we
@@ -4975,7 +4975,7 @@ subroutine check_dist_fn(report_unit)
        end do
        
        wgt = 2.0*beta*spec%z*spec%dens*sqrt(spec%temp/spec%mass)
-       call integrate_species_sub (g0, wgt, antota)
+       call integrate_species (g0, wgt, antota, nogath=.true.)
        !NOTE: We don't do ensure_single_val_fields here as we're not certain we
        !have the full data
     else
@@ -4994,7 +4994,7 @@ subroutine check_dist_fn(report_unit)
           end do
        end do
        wgt = spec%temp*spec%dens
-       call integrate_species_sub (g0, wgt, antotp)
+       call integrate_species (g0, wgt, antotp, nogath=.true.)
        !NOTE: We don't do ensure_single_val_fields here as we're not certain we
        !have the full data
     else

@@ -2061,9 +2061,6 @@ contains
     use kt_grids, only: ntheta0, naky
     use theta_grid, only: ntgrid
     use dist_fn, only: getfieldeq, getfieldeq_nogath
-    use run_parameters, only: fphi, fapar, fbpar
-    use mp, only: broadcast_sub
-    use fields_arrays, only: phinew, aparnew, bparnew
     implicit none
     class(fieldmat_type), intent(inout) :: self
     complex, dimension(:,:,:), intent(inout) :: phi,apar,bpar
@@ -3028,8 +3025,36 @@ contains
     get_leftmost_it=it_cur
   end function get_leftmost_it
 
-  !>Routine use to initialise field matrix data
+  !>Routine to initialise
   subroutine init_fields_local
+    use antenna, only: init_antenna
+    use theta_grid, only: init_theta_grid
+    use kt_grids, only: init_kt_grids
+    use gs2_layouts, only: init_gs2_layouts
+    use parameter_scan_arrays, only: run_scan
+    implicit none
+    logical:: debug=.false.
+    logical :: dummy
+
+    if (initialised) return
+
+
+    if (debug) write(6,*) "init_fields_local: gs2_layouts"
+    call init_gs2_layouts
+    if (debug) write(6,*) "init_fields_local: theta_grid"
+    call init_theta_grid
+    if (debug) write(6,*) "init_fields_local: kt_grids"
+    call init_kt_grids
+    if (debug) write(6,*) "init_fields_local: init_fields_matrixlocal"
+    call init_fields_matrixlocal
+    if (debug) write(6,*) "init_fields_local: antenna"
+    call init_antenna
+
+    initialised = .true.
+  end subroutine init_fields_local
+
+  !>Routine use to initialise field matrix data
+  subroutine init_fields_matrixlocal
     use mp, only: proc0, barrier, iproc
     implicit none
     real :: ts,te
@@ -3163,7 +3188,7 @@ contains
 
     !Now write debug data
 !    call fieldmat%write_debug_data
-  end subroutine init_fields_local
+  end subroutine init_fields_matrixlocal
 
   !>Reset the fields_local module
   subroutine reset_fields_local
@@ -3257,7 +3282,10 @@ contains
     if(.not.no_driver) aparnew=aparnew+apar_ext
 
     !Calculate the fields at the next time point
-    call getfield_local(phinew,aparnew,bparnew)
+    call getfield_local(phinew,aparnew,bparnew,.true.)
+    if(fphi.gt.0) phinew=phinew+phi
+    if(fapar.gt.0) aparnew=aparnew+apar
+    if(fbpar.gt.0) bparnew=bparnew+bpar
 
     !Remove zonal component if requested
     if(remove_zonal_flows_switch) call remove_zonal_flows
