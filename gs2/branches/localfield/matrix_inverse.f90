@@ -60,7 +60,7 @@ contains
     !Is it better to make these allocatable?
     !<DD>Tagged
     complex :: tmp,fac
-    integer i, j, k
+    integer i, k
 
     do i=1,n
        fac=1/a(i,i) !This would become inverse if done on blocks
@@ -93,7 +93,7 @@ contains
     !Is it better to make these allocatable?
     !<DD>Tagged
     complex :: tmp,fac
-    integer i, j, k
+    integer i, k
 
     do i=1,n
        fac=1/a(i,i) !This would become inverse if done on blocks
@@ -125,7 +125,7 @@ contains
     !Is it better to make these allocatable?
     !<DD>Tagged
     complex :: tmp,fac
-    integer i, j, k
+    integer i, k
 
     !Can't omp at top level currently due to data dependencies
     do i=1,n
