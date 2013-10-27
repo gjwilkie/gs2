@@ -530,7 +530,7 @@ contains
     use species, only: electron_species
     use species, only: ion_species
     use species, only: has_electron_species
-    use mp, only: mp_abort
+    use mp, only: mp_abort, proc0
     type(semianalytic_falpha_parameters_type) :: parameters
     integer, intent(in) :: is
     integer :: ie
@@ -563,6 +563,7 @@ contains
     parameters%alpha_vth       = spec(is)%stm
 
     parameters%source          = spec(is)%source
+    parameters%ash_fraction    = spec(is)%ash_fraction
     parameters%source_prim     = spec(is)%sprim
     !write (*,*) 'Source prim is', parameters%source_prim
 
@@ -581,6 +582,7 @@ contains
       parameters%electron_vth    = spec(electron_species)%stm
       parameters%electron_temp   = spec(electron_species)%temp
       if (main_ion_species>0) then 
+        parameters%ash_temp        = spec(main_ion_species)%temp
         parameters%ion_mass        = spec(main_ion_species)%mass
         parameters%ion_tprim        = spec(main_ion_species)%tprim
         parameters%ion_fprim        = spec(main_ion_species)%fprim
@@ -643,6 +645,12 @@ contains
     if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+
+    if (proc0) write(*,*) "source = ", parameters%source
+    if (proc0) write(*,*) "ash_fraction = ", parameters%ash_fraction
+    do ie = 1,negrid
+       if (proc0) write(*,*) sqrt(egrid(ie,is)), f0_values(ie,is), generalised_temperature(ie,is)
+    end do
     
   end subroutine calculate_f0_arrays_semianalytic
 

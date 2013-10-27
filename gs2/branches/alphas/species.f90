@@ -27,6 +27,7 @@ module species
      logical :: is_maxwellian
 
      real :: source  ! These are parameters for an analytical alpha model presented in
+     real :: ash_fraction
      real :: sprim   ! .....
      real :: gamma_ai
      real :: gamma_ae
@@ -217,14 +218,14 @@ contains
     implicit none
     real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h
     real :: tperp0, tpar0
-    real :: source, sprim, gamma_ae, gamma_ai
+    real :: source, sprim, gamma_ae, gamma_ai, ash_fraction
     character(20) :: type
     integer :: unit
     integer :: is
     namelist /species_knobs/ nspec
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
-         tperp0, tpar0, source, sprim, gamma_ai, gamma_ae
+         tperp0, tpar0, source, sprim, gamma_ai, gamma_ae, ash_fraction
     integer :: ierr, in_file
 
     type (text_option), dimension (9), parameter :: typeopts = &
@@ -273,7 +274,8 @@ contains
           vnewk = 0.0
           nu = -1.0
           nu_h = 0.0
-          source = 0.0
+          source = -1.0
+          ash_fraction = -1.0
           sprim = 0.0
           gamma_ai = 0.1
           gamma_ae = 0.1
@@ -300,6 +302,7 @@ contains
           spec(is)%nu_h = nu_h
 
           spec(is)%source = source
+          spec(is)%ash_fraction = ash_fraction
           spec(is)%sprim = sprim
           spec(is)%gamma_ai = gamma_ai
           spec(is)%gamma_ae = gamma_ae
@@ -338,6 +341,7 @@ contains
        call broadcast (spec(is)%nu_h)
        call broadcast (spec(is)%nustar)
        call broadcast (spec(is)%source)
+       call broadcast (spec(is)%ash_fraction)
        call broadcast (spec(is)%sprim)
        call broadcast (spec(is)%gamma_ai)
        call broadcast (spec(is)%gamma_ae)
