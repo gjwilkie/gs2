@@ -28,6 +28,8 @@ module semianalytic_falpha
     real :: alpha_vth
     real :: alpha_charge
     real :: alpha_density
+    real :: ash_fraction
+    real :: ash_temp
     real :: ion_mass
     real :: ion_temp
     real :: ion_vth
@@ -56,7 +58,7 @@ contains
                               f0_values, &
                               generalised_temperature, &
                               f0prim)
-    use mp, only: nproc, iproc, sum_allreduce, mp_abort
+    use mp, only: nproc, iproc, sum_allreduce, mp_abort, proc0
     use unit_tests, only: print_with_stars
     type(semianalytic_falpha_parameters_type), intent(inout) :: parameters
     real, dimension(:,:), intent(in) :: egrid
@@ -71,15 +73,17 @@ contains
     real, dimension(2) :: f0
     real, dimension(2) :: gentemp
     real, dimension(2) :: f0pr
-    real :: T_ash, df0dE
+    real :: df0dE
 
     is = parameters%alpha_is
+
+    good_resolution = 1
 
     f0_values(:,is) = 0.0
     generalised_temperature(:,is) = 0.0
     f0prim(:,is) = 0.0
     do ie = 1,parameters%negrid
-      if (.not. mod(ie, nproc) .eq. iproc) cycle
+!      if (.not. mod(ie, nproc) .eq. iproc) cycle
 
       !write (*,*) 'iproc ', iproc, ' calculating ', ie, ' energy ',  egrid(ie, is)
       ! Initialise arrays to test for convergence 
@@ -89,7 +93,6 @@ contains
       resolution = 64
       converged = .false.
       do while (.not. converged)
-        !write (*,*) 'resolution,', resolution
         f0(1)      = f0(2)
         f0(2)      = falpha(parameters, egrid(ie, is), resolution)
           converged  = is_converged(f0)
@@ -100,22 +103,23 @@ contains
       resolution = 64
       converged = .false.
       do while (.not. converged)
-        !write (*,*) 'resolution,', resolution
         f0(1)      = f0(2)
         gentemp(1) = gentemp(2)
         f0pr(1)    = f0pr(2) 
 
         f0(2)      = falpha(parameters, egrid(ie, is), resolution)
         gentemp(2) = - parameters%alpha_injection_energy *f0(2) / dfalpha_denergy(parameters,egrid(ie, is),  resolution)
-        f0pr(2)    = falpha_prim(parameters,  &
-                        egrid(ie, is), f0(2), resolution)
+        f0pr(2) = 0.0
+!        f0pr(2)    = falpha_prim(parameters,  &
+!                        egrid(ie, is), f0(2), resolution)
 
           converged  = (is_converged(f0) .and.  &
                        is_converged(gentemp) .and. &
                        is_converged(f0pr))
         resolution = resolution * 2
       end do 
-      f0_values(ie, is) = f0(2)  * falpha_exponential(parameters , egrid(ie,is))
+      good_resolution = max(good_resolution,resolution/2)
+      f0_values(ie, is) = f0(2) 
       generalised_temperature(ie, is) = gentemp(2)
       f0prim(ie, is) = f0pr(2)
     end do
@@ -130,9 +134,6 @@ contains
     ! Note we lose the ability to say that the numerical integral of F0 is absolutely unity. This may cause problems.
     ! (GW)
 
-    ! Take ash isothermal with main ions for now (GW)
-    T_ash = parameters%ion_temp
-
     call add_ash(parameters,egrid(:,is),f0_values(:,is),generalised_temperature(:,is))
 
     call sum_allreduce(f0_values(:,is))
@@ -143,16 +144,16 @@ contains
   
   subroutine add_ash(parameters,egrid,f0,gentemp)
     use constants, only: pi
+    use mp, only: mp_abort, proc0
     implicit none
-    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
+    type(semianalytic_falpha_parameters_type), intent(inout) :: parameters
     real,dimension(:),intent(inout):: f0,gentemp
     real,dimension(:),intent(in):: egrid
-    real:: f0moment, n_ash, T_ash,n_tot,Ealpha, energy_top, dF0dE
+    real:: f0moment, n_ash, n_tot,Ealpha, energy_top, dF0dE
     real,dimension(2):: integral
     integer:: resolution, ie
     logical:: converged
 
-    T_ash = parameters%ion_temp
     Ealpha = parameters%alpha_injection_energy
     n_tot = parameters%alpha_density
     energy_top = 1.2*Ealpha
@@ -162,22 +163,47 @@ contains
     resolution = 64
     converged = .false.
     do while (.not. converged)
+        if (proc0) write (*,*) resolution, integral(1),integral(2)
        integral(1)      = integral(2)
-       integral(2)      = simpson(parameters,falpha,0.0,energy_top**0.5,0.0,resolution)
+       integral(2)      = simpson(parameters,density_integrand,0.0,energy_top**0.5,0.0,resolution)
        converged  = is_converged(integral)
 
        resolution = resolution * 2
     end do 
-    ! Define n_ash
-    n_ash = n_tot - f0moment
+
+    if (parameters%source .LT. 0.0) then
+       if (parameters%ash_fraction .LT. 0.0) then
+          call mp_abort("semianalytic_falpha: must specify either source or ash_fraction for alphas species")
+       else
+          ! Ash fraction given
+          parameters%source = (1.0 - parameters%ash_fraction)/integral(2)
+       end if
+       if (parameters%source .LT. 0.0) then 
+          if (proc0) write(*,*) "semianalytic_falpha failed to calculate a good value of source"
+          if (proc0) write(*,*) "  ash_fraction = ", parameters%ash_fraction
+          if (proc0) write(*,*) "  source = ", parameters%source
+          if (proc0) write(*,*) "  0th moment of H_0alpha = ", integral(2)
+          call mp_abort("semianalytic_falpha: value of source not compatible with positive source")
+       end if
+    else 
+       ! Source given
+       parameters%ash_fraction = 1.0 - parameters%source*integral(2) 
+       if (parameters%ash_fraction .LT. 0.0) then 
+          if (proc0) write(*,*) "semianalytic_falpha failed to calculate a good value of ash_fraction"
+          if (proc0) write(*,*) "  ash_fraction = ", parameters%ash_fraction
+          if (proc0) write(*,*) "  source = ", parameters%source
+          if (proc0) write(*,*) "  0th moment of H_0alpha = ", integral(2)
+          call mp_abort("semianalytic_falpha: value of source not compatible with positive ash_fraction")
+       end if
+    end if
 
     do ie = 1,size(egrid)
        ! Unwrap gentemp, and 
        df0dE = -f0(ie) * Ealpha / gentemp(ie)
-       df0dE = df0dE - n_ash*(Ealpha/T_ash)*exp(-egrid(ie)*Ealpha/T_ash)/(2.0*pi)**1.5
-       gentemp(ie) = -f0(ie)*Ealpha/df0dE
+       df0dE = df0dE - parameters%ash_fraction*(Ealpha/parameters%ash_temp)**2.5*exp(-egrid(ie)*Ealpha/parameters%ash_temp)/pi**1.5
       
-       f0(ie) = f0(ie) + n_ash*exp(-egrid(ie)*Ealpha/T_ash)/(2.0*pi)**1.5
+       f0(ie) = f0(ie) + n_ash*exp(-egrid(ie)*Ealpha/parameters%ash_temp)*(Ealpha/(parameters%ash_temp*pi))**1.5
+       gentemp(ie) = -f0(ie)*Ealpha/df0dE
     end do
 
   end subroutine add_ash
@@ -195,6 +221,7 @@ contains
 
   !> Calculates the integral of func using the composite Simpson rule
   function simpson(parameters, func, lower_lim, upper_lim, energy, resolution)
+    use mp, only: proc0
     implicit none
     type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
@@ -221,6 +248,7 @@ contains
     ! dv = h = (b-a)/n = (upper_lim-lower_lim)/n
     ! NB the integral is wrt v, not energy, so we have to put v^2 in everywhere
     integral = func(parameters, energy, lower_lim**2.0)
+    !integral = 0.0
     do j = 1, resolution/2-1
       v_2j = lower_lim + real(j*2)*dv 
       integral = integral + 2.0 * &
@@ -230,7 +258,6 @@ contains
       v_2jm1 = lower_lim + real(j*2 -1)*dv 
       integral = integral + 4.0 * &
         func(parameters, energy, v_2jm1**2.0) 
-
     end do
     integral = integral + func(parameters, energy, upper_lim**2.0)
     integral = integral * dv/3.0
@@ -258,14 +285,11 @@ contains
     real, intent(in) :: energy
     real :: falpha_exponential
     falpha_exponential = exp(parameters%alpha_injection_energy * &
-       (- energy) / parameters%ion_temp)
+       (- energy) / parameters%ash_temp)
   end function falpha_exponential
 
-  !> NB this does not calculate falpha, but falpha without the 
-  !! exp(-E_alpha * energy/T_i) part, as this can be very small
-  !! for some energies, and can mess up the calculation of the 
-  !! gradients
   function falpha(parameters, energy, resolution)
+    use mp, only: proc0
     implicit none
     type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     integer, intent(in) :: resolution
@@ -277,28 +301,39 @@ contains
     real :: energy_top
     integer :: j
 
-!    energy_top = min(energy, 1.0)
     energy_top = energy
-
-    integral = simpson(parameters, &
+    if (energy .LT. 1.0) then
+       integral = simpson(parameters, &
                        falpha_integrand, &
                        0.0,&
                        energy_top**0.5,&
-                       0.0,& ! Get rid of exponential for better numerics
+                       energy,& 
                        resolution)
 
-    falpha = integral * parameters%source / 2.0 / 3.14159265358979 
+     else
+       integral = simpson(parameters, &
+                       falpha_integrand, &
+                       0.0,&
+                       1.0,&
+                       0.0,& 
+                       resolution)
+        integral = integral*falpha_exponential(parameters,energy)
+     end if
+       falpha = integral / 2.0 / 3.14159265358979  
 
+!if (proc0) write(*,*) energy,falpha, parameters%source,integral
   end function falpha
 
 
   !> The integrand for the falpha integral, see eq
   function falpha_integrand(parameters, energy, energy_dummy_var)
+    use mp, only: proc0 
+    implicit none
     type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real, intent(in) :: energy
     real, intent(in) :: energy_dummy_var
     real :: falpha_integrand
-    real :: extra_fac, heaviside, arg
+    real :: bracket, heaviside, arg
 
     if (energy_dummy_var .GT. 1.0) then
        heaviside = 0.0
@@ -306,19 +341,38 @@ contains
        heaviside = 1.0
     end if
 
-    arg = sqrt(parameters%alpha_injection_energy*energy_dummy_var/parameters%ion_temp)
-    extra_fac = 2.0*energy_dummy_var*chandrasekhar(arg) - 1.0 + heaviside
+    arg = sqrt(parameters%alpha_injection_energy*energy_dummy_var/parameters%ash_temp)
+    bracket = 2.0*energy_dummy_var*parameters%alpha_injection_energy*chandrasekhar(arg)/parameters%ash_temp - 1.0 + heaviside
 
-    falpha_integrand = 2.0 * extra_fac / &
+    if ( abs(arg) .LT. 10.0*epsilon(0.0)) then
+       falpha_integrand = 0.0
+    else
+       falpha_integrand =  bracket / &
                        (nu_parallel(parameters, energy_dummy_var) * &
                          energy_dummy_var**2.0) * &
                        exp(parameters%alpha_injection_energy * &
-                         (energy_dummy_var - energy) / &
-                         parameters%ion_temp &
+                         (energy_dummy_var - energy ) / &
+                         parameters%ash_temp &
                        )
+    end if
 
+!if (proc0 .AND. falpha_integrand .GT. 1.e50) write(*,*) falpha_integrand,energy,energy_dummy_var,exp(parameters%alpha_injection_energy*(energy_dummy_var - energy)/parameters%ash_temp),energy_dummy_var - energy
+!stop
+!if (proc0)write(*,*) energy,energy_dummy_var,falpha_integrand, arg,chandrasekhar(arg),nu_parallel(parameters,energy_dummy_var)
 
   end function falpha_integrand
+
+  real function density_integrand(parameters, energy, energy_dummy_var)
+    use constants, only: pi
+    implicit none
+    type(semianalytic_falpha_parameters_type), intent(in) :: parameters
+    real,intent(in):: energy,energy_dummy_var
+
+    density_integrand = 4.0*pi*energy_dummy_var* &
+            falpha(parameters,energy_dummy_var,good_resolution) * &
+            falpha_exponential(parameters,energy_dummy_var)
+
+  end function density_integrand
 
   !> Unit test used by test_semianalytic_falpha, testing the private
   !! function falpha_integrand
@@ -486,21 +540,23 @@ contains
   !! where gamma_ai is the alpha-ion collisionality parameter
   !! from eq ()
   function gamma_fac_ions(parameters)
+    implicit none
     type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real gamma_fac_ions
-    gamma_fac_ions = parameters%alpha_ion_collision_rate * &
-                    (parameters%ion_vth / parameters%alpha_vth)**3.0 * &
-                    (parameters%ion_mass / parameters%alpha_mass * &
-                     parameters%alpha_charge / parameters%ion_charge)**2.0
+    gamma_fac_ions = parameters%alpha_ion_collision_rate ! & 
+!                    * (parameters%ion_vth / parameters%alpha_vth)**3.0 * &
+!                    (parameters%ion_mass / parameters%alpha_mass * &
+!                     parameters%alpha_charge / parameters%ion_charge)**2.0
   end function gamma_fac_ions
 
   function gamma_fac_electrons(parameters)
+    implicit none
     type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real gamma_fac_electrons
-    gamma_fac_electrons = parameters%alpha_electron_collision_rate * &
-                    (parameters%electron_vth / parameters%alpha_vth)**3.0 * &
-                    (parameters%electron_mass / parameters%alpha_mass * &
-                     parameters%alpha_charge / parameters%electron_charge)**2.0  
+    gamma_fac_electrons = parameters%alpha_electron_collision_rate ! &
+!                   * (parameters%electron_vth / parameters%alpha_vth)**3.0 * &
+!                    (parameters%electron_mass / parameters%alpha_mass * &
+!                     parameters%alpha_charge / parameters%electron_charge)**2.0  
   end function gamma_fac_electrons
 
   !> Calculates d nu_parallel_N/d rho, see eq () of  
@@ -533,10 +589,13 @@ contains
 
   !> Normalised nu_parallel, see eq () of  
   function nu_parallel(parameters, energy)
+    use mp, only: proc0
+    implicit none
     type(semianalytic_falpha_parameters_type), intent(in) :: parameters
     real, intent(in) :: energy
     real :: nu_parallel
 
+!if (proc0) write(*,*) "gamma = ", gamma_fac_ions(parameters),gamma_fac_electrons(parameters)
     nu_parallel = 2.0/energy**1.5 * &
                   (gamma_fac_ions(parameters) * &
                     chandrasekhar(energy**0.5 * &
@@ -550,9 +609,13 @@ contains
   function chandrasekhar(argument)
     real, intent(in) :: argument
     real ::  chandrasekhar
-    chandrasekhar = (erf(argument) - &
-        argument * 2.0 * exp(-argument**2.0) / 1.7724538509055159) / &
-        (2.0 * argument**2.0)
+    if (abs(argument) .LT. 10.0*epsilon(0.0)) then
+       chandrasekhar = 0.0
+    else
+       chandrasekhar = (erf(argument) - &
+           argument * 2.0 * exp(-argument**2.0) / 1.7724538509055159) / &
+           (2.0 * argument**2.0)
+    end if
   end function chandrasekhar
 
   function chandrasekhar_prime(argument)
@@ -573,10 +636,10 @@ contains
     real, intent(in) :: energy
     real :: sum
 
-    sum = - parameters%alpha_injection_energy / parameters%ion_temp
-    sum = sum + (0.5/sqrt(energy))*parameters%source *falpha_integrand(parameters,energy,energy) / (2.0 * 3.14159265358979 ) 
+    sum =  falpha_integrand(parameters,energy,energy)  / (2.0 * 3.14159265358979 ) 
+    sum = sum - (parameters%alpha_injection_energy/parameters%ash_temp)*falpha(parameters,energy,resolution)
  
-    dfalpha_denergy = 1.0/sum
+    dfalpha_denergy = sum
     return
   end function dfalpha_denergy
 
