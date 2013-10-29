@@ -3315,7 +3315,7 @@ subroutine check_dist_fn(report_unit)
 
   subroutine get_source_term &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
-        isgn, iglo, sourcefac, source)
+        iglo, sourcefac, source, ik,it,il,ie,is)
 #ifdef LOWFLOW
     use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
 #endif
@@ -3334,20 +3334,15 @@ subroutine check_dist_fn(report_unit)
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
     integer, intent (in) :: istep
-    integer, intent (in) :: isgn, iglo
+    integer, intent (in) :: iglo
+    integer :: isgn
     complex, intent (in) :: sourcefac
-    complex, dimension (-ntgrid:), intent (out) :: source
+    complex, dimension (-ntgrid:,:), intent (out) :: source
+    integer, intent(inout) :: ik, it, il, ie, is
 
-    integer :: ig, ik, it, il, ie, is
+    integer :: ig
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
 
-!    call timer (0, 'get_source_term')
-
-    ik = ik_idx(g_lo,iglo)
-    it = it_idx(g_lo,iglo)
-    il = il_idx(g_lo,iglo)
-    ie = ie_idx(g_lo,iglo)
-    is = is_idx(g_lo,iglo)
 !CMR, 4/8/2011
 ! apargavg and phigavg combine to give the GK EM potential chi. 
 !          chi = phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm
@@ -3355,12 +3350,36 @@ subroutine check_dist_fn(report_unit)
 ! apargavg = apar J0 
 ! Both quantities are decentred in time and evaluated on || grid points
 !
-    phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
-                *aj0(:,iglo)*fphi &
-             + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
+!      phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
+!                 *aj0(:,iglo)*fphi &
+!                 + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
+!                 *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
+!      apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
+!                 *aj0(:,iglo)*fapar
+
+!<DD> Only accessing the non-zero fields can save time
+!This is where we "time average", "spatial averaging" is done in set_source
+if(fphi.gt.epsilon(0.0))then
+     phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
+                *aj0(:,iglo)*fphi
+else
+   phigavg=0.0
+endif
+
+if(fbpar.gt.epsilon(0.0))then
+     phigavg=phigavg + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
                 *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
-    apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
-                *aj0(:,iglo)*fapar
+endif
+
+if(fapar.gt.epsilon(0.0))then
+   apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
+        *aj0(:,iglo)*fapar
+else
+   apargavg = 0.0
+endif
+
+!Do both signs
+do isgn=1,2
 
 ! source term in finite difference equations
     select case (source_option_switch)
@@ -3372,7 +3391,7 @@ subroutine check_dist_fn(report_unit)
        if (il <= lmax) then
           call set_source
        else
-          source = 0.0
+          source(:,isgn) = 0.0
        end if       
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -3382,7 +3401,7 @@ subroutine check_dist_fn(report_unit)
        if (il <= lmax) then
           call set_source
           if (aky(ik) < epsilon(0.0)) then
-             source(:ntgrid-1) = source(:ntgrid-1) &
+             source(:ntgrid-1,isgn) = source(:ntgrid-1,isgn) &
                   - zi*anon(ie)*wdrift(:ntgrid-1,isgn,iglo) &
                   *2.0*phi_ext*sourcefac*aj0(:ntgrid-1,iglo)
           end if
@@ -3398,18 +3417,18 @@ subroutine check_dist_fn(report_unit)
     if (il <= lmax) then
        if (isgn == 1) then
           do ig = -ntgrid, ntgrid-1
-             source(ig) = source(ig) &
+             source(ig,isgn) = source(ig,isgn) &
                   + b(ig,1,iglo)*g(ig,1,iglo) + a(ig,1,iglo)*g(ig+1,1,iglo)
           end do
        else
           do ig = -ntgrid, ntgrid-1
-             source(ig) = source(ig) &
+             source(ig,isgn) = source(ig,isgn) &
                   + a(ig,2,iglo)*g(ig,2,iglo) + b(ig,2,iglo)*g(ig+1,2,iglo)
           end do
        end if
     end if
 
-    source(ntgrid) = source(-ntgrid)  ! is this necessary?  BD
+    source(ntgrid,isgn) = source(-ntgrid,isgn)  ! is this necessary?  BD
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! special source term for totally trapped particles
@@ -3419,7 +3438,7 @@ subroutine check_dist_fn(report_unit)
        if (nlambda > ng2 .and. isgn == 2) then
           do ig = -ntgrid, ntgrid
              if (il < ittp(ig)) cycle
-             source(ig) &
+             source(ig,isgn) &
                   = g(ig,2,iglo)*a(ig,2,iglo) &
 #ifdef LOWFLOW
                   - anon(ie)*zi*(wdttpfac(ig,it,ik,ie,is,2)*hneoc(ig,2,iglo))*phigavg(ig) &
@@ -3434,7 +3453,7 @@ subroutine check_dist_fn(report_unit)
                aky(ik) < epsilon(0.0)) then
              do ig = -ntgrid, ntgrid
                 if (il < ittp(ig)) cycle             
-                source(ig) = source(ig) - zi*anon(ie)* &
+                source(ig,isgn) = source(ig,isgn) - zi*anon(ie)* &
 #ifdef LOWFLOW
                      wdttpfac(ig,it,ik,ie,is,isgn)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
 #else
@@ -3450,18 +3469,18 @@ subroutine check_dist_fn(report_unit)
           case (1)
              do ig = -ntgrid, ntgrid
                 if (il < ittp(ig)) cycle
-                source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
+                source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
              end do
           case (2) 
              do ig = -ntgrid, ntgrid
                 if (il < ittp(ig)) cycle
-                source(ig) = source(ig) + 0.5*code_dt*( &
+                source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                      1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
              end do
           case default
              do ig = -ntgrid, ntgrid
                 if (il < ittp(ig)) cycle
-                source(ig) = source(ig) + 0.5*code_dt*( &
+                source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                      (23./12.)*gexp_1(ig,isgn,iglo) &
                      - (4./3.)  *gexp_2(ig,isgn,iglo) &
                      + (5./12.) *gexp_3(ig,isgn,iglo))
@@ -3476,18 +3495,18 @@ subroutine check_dist_fn(report_unit)
              case (1)
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
+                   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
                 end do
              case (2) 
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*( &
+                   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                         1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
                 end do                   
              case default
                 do ig = -ntgrid, ntgrid
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*( &
+                   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                           (23./12.)*gexp_1(ig,isgn,iglo) &
                         - (4./3.)  *gexp_2(ig,isgn,iglo) &
                         + (5./12.) *gexp_3(ig,isgn,iglo))
@@ -3498,12 +3517,11 @@ subroutine check_dist_fn(report_unit)
 
        end if
     end if
+enddo
 
-!    call timer (1, 'get_source_term')
   contains
 
     subroutine set_source
-
       use species, only: spec
       use theta_grid, only: itor_over_B
 
@@ -3584,7 +3602,7 @@ subroutine check_dist_fn(report_unit)
 ! (Would be less confusing if always used same Tref!)
 !
 #ifdef LOWFLOW
-         source(ig) = anon(ie)*(vparterm(ig,isgn,iglo)*phi_m &
+         source(ig,isgn) = anon(ie)*(vparterm(ig,isgn,iglo)*phi_m &
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
@@ -3594,15 +3612,15 @@ subroutine check_dist_fn(report_unit)
               -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
 #else
-         source(ig) = anon(ie)*(-2.0*vpar(ig,isgn,iglo)*phi_m &
+         source(ig,isgn) = anon(ie)*(-2.0*vpar(ig,isgn,iglo)*phi_m &
               -spec(is)%zstm*vpac(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
               -zi*wdrift(ig,isgn,iglo)*phi_p) &
               + zi*(wstar(ik,ie,is) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
-              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
+               -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
+               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
 #endif
       end do
         
@@ -3612,16 +3630,16 @@ subroutine check_dist_fn(report_unit)
          ! nothing
       case (1)
          do ig = -ntgrid, ntgrid-1
-            source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
+            source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
          end do
       case (2) 
          do ig = -ntgrid, ntgrid-1
-            source(ig) = source(ig) + 0.5*code_dt*( &
+            source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                  1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
          end do
       case default
          do ig = -ntgrid, ntgrid-1
-            source(ig) = source(ig) + 0.5*code_dt*( &
+            source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                  (23./12.)*gexp_1(ig,isgn,iglo) &
                  - (4./3.)  *gexp_2(ig,isgn,iglo) &
                  + (5./12.) *gexp_3(ig,isgn,iglo))
@@ -3635,16 +3653,16 @@ subroutine check_dist_fn(report_unit)
             ! nothing
          case (1)
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
+               source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
             end do
          case (2) 
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*( &
+               source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                     1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
             end do
          case default
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*( &
+               source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                       (23./12.)*gexp_1(ig,isgn,iglo) &
                     - (4./3.)  *gexp_2(ig,isgn,iglo) &
                     + (5./12.) *gexp_3(ig,isgn,iglo))
@@ -3657,9 +3675,368 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine get_source_term
 
+  subroutine get_source_term_2&
+       (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
+        iglo, sourcefac, source, ik,it,il,ie,is)
+#ifdef LOWFLOW
+    use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
+#endif
+    use dist_fn_arrays, only: aj0, aj1, vperp2, vpar, vpac, g, ittp
+    use theta_grid, only: ntgrid
+    use kt_grids, only: aky
+    use le_grids, only: nlambda, ng2, lmax, anon, energy, negrid
+    use species, only: spec, nspec
+    use run_parameters, only: fphi, fapar, fbpar, wunits
+    use gs2_time, only: code_dt
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use nonlinear_terms, only: nonlin
+    use hyper, only: D_res
+    use constants
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
+    integer, intent (in) :: istep
+    integer, intent (in) :: iglo
+    integer :: isgn
+    complex, intent (in) :: sourcefac
+    complex, dimension (-ntgrid:,:), intent (out) :: source
+    integer, intent(inout) :: ik, it, il, ie, is
+
+    integer :: ig
+    complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
+
+    !<DD> Only accessing the non-zero fields can save time
+    !This is where we "time average", "spatial averaging" is done in set_source
+    if(fphi.gt.epsilon(0.0))then
+       phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
+            *aj0(:,iglo)*fphi
+    else
+       phigavg=0.0
+    endif
+    
+    if(fbpar.gt.epsilon(0.0))then
+       phigavg=phigavg + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
+            *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
+    endif
+    
+    if(fapar.gt.epsilon(0.0))then
+       apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
+            *aj0(:,iglo)*fapar
+    else
+       apargavg = 0.0
+    endif
+
+    !Setup source for passing particles and Initialise trapped to 0
+    if(il<=lmax) then
+       !Setup source
+       select case (source_option_switch)
+       case (source_option_full)
+          call set_source_2
+       case(source_option_phiext_full)
+          call set_source_2
+          if (aky(ik) < epsilon(0.0)) then
+             do isgn=1,2
+                source(:ntgrid-1,isgn) = source(:ntgrid-1,isgn) &
+                     - zi*anon(ie)*wdrift(:ntgrid-1,isgn,iglo) &
+                     *2.0*phi_ext*sourcefac*aj0(:ntgrid-1,iglo)
+             enddo
+          end if
+       end select
+
+       !Get the full source
+       !<DD>Note we could easily remove the if statements by swapping a(:,2,:) and b(:,2,:)
+       do isgn=1,2
+          if (isgn == 1) then
+             source(:ntgrid-1,isgn)=source(:ntgrid-1,isgn)&
+                  +b(:ntgrid-1,isgn,iglo)*g(:ntgrid-1,isgn,iglo)&
+                  +a(:ntgrid-1,isgn,iglo)*g(-ntgrid+1:,isgn,iglo)
+          else
+             source(:ntgrid-1,isgn)=source(:ntgrid-1,isgn)&
+                  +a(:ntgrid-1,isgn,iglo)*g(:ntgrid-1,isgn,iglo)&
+                  +b(:ntgrid-1,isgn,iglo)*g(-ntgrid+1:,isgn,iglo)
+
+          end if
+       enddo
+    else
+       source=0.0
+    endif
+
+    !Totally trapped particle source
+    !<DD>Note can this only happen for il>ng2+1?
+    !<DD>Note that either way we overwrite any existing source at the
+    !appropriate points
+    isgn=2
+    if (nlambda > ng2 .and. isgn == 2) then
+       do ig = -ntgrid, ntgrid
+          if (il < ittp(ig)) cycle
+          source(ig,isgn) &
+               = g(ig,isgn,iglo)*a(ig,isgn,iglo) &
+#ifdef LOWFLOW
+               - anon(ie)*zi*(wdttpfac(ig,it,ik,ie,is,isgn)*hneoc(ig,isgn,iglo))*phigavg(ig) &
+               + zi*wstar(ik,ie,is)*hneoc(ig,isgn,iglo)*phigavg(ig)
+#else
+          - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is,isgn))*phigavg(ig) &
+               + zi*wstar(ik,ie,is)*phigavg(ig)
+#endif             
+       end do
+
+       if (source_option_switch == source_option_phiext_full .and. &
+            aky(ik) < epsilon(0.0)) then
+          do ig = -ntgrid, ntgrid
+             if (il < ittp(ig)) cycle             
+             source(ig,isgn) = source(ig,isgn) - zi*anon(ie)* &
+#ifdef LOWFLOW
+                  wdttpfac(ig,it,ik,ie,is,isgn)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
+#else
+             wdriftttp(ig,it,ik,ie,is,isgn)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
+#endif
+          end do
+       endif
+
+#ifdef LOWFLOW
+       select case (istep)
+       case (0)
+          ! nothing
+       case (1)
+          do ig = -ntgrid, ntgrid
+             if (il < ittp(ig)) cycle
+             source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
+          end do
+       case (2) 
+          do ig = -ntgrid, ntgrid
+             if (il < ittp(ig)) cycle
+             source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+                  1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
+          end do
+       case default
+          do ig = -ntgrid, ntgrid
+             if (il < ittp(ig)) cycle
+             source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+                  (23./12.)*gexp_1(ig,isgn,iglo) &
+                  - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                  + (5./12.) *gexp_3(ig,isgn,iglo))
+          end do
+       end select
+#else
+! add in nonlinear terms 
+       if (nonlin) then         
+          select case (istep)
+          case (0)
+             ! nothing
+          case (1)
+             do ig = -ntgrid, ntgrid
+                if (il < ittp(ig)) cycle
+                source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
+             end do
+          case (2) 
+             do ig = -ntgrid, ntgrid
+                if (il < ittp(ig)) cycle
+                source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+                     1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
+             end do
+          case default
+             do ig = -ntgrid, ntgrid
+                if (il < ittp(ig)) cycle
+                source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+                     (23./12.)*gexp_1(ig,isgn,iglo) &
+                     - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                     + (5./12.) *gexp_3(ig,isgn,iglo))
+             end do
+          end select
+       end if
+#endif
+
+    end if
+
+  contains
+
+    subroutine set_source_2
+      use species, only: spec
+      use theta_grid, only: itor_over_B, ntgrid
+
+      complex, dimension(:), allocatable :: apar_p, apar_m, phi_p, phi_m
+      real :: bd, bdfac_p, bdfac_m
+      integer :: i_e, i_s
+      logical, save :: has_ufac=.false.
+      logical, save :: has_exb=.false.
+
+      if (.not. allocated(ufac)) then
+
+         allocate (ufac(negrid, nspec))
+         do i_e = 1, negrid
+            do i_s = 1, nspec
+               ufac(i_e, i_s) = (2.0*spec(i_s)%uprim &
+                    + spec(i_s)%uprim2*energy(i_e)**(1.5)*sqrt(pi)/4.0)
+            end do
+         end do
+         if(abs(maxval(ufac)).lt.epsilon(0.0))then
+            has_ufac=.false.
+         else
+            has_ufac=.true.
+         endif
+
+         if(abs(omprimfac*g_exb).lt.epsilon(0.0))then
+            has_exb=.false.
+         else
+            has_exb=.true.
+         endif
+      endif
+
+      if(fapar.gt.0.0) then 
+         allocate(apar_p(-ntgrid:ntgrid-1),apar_m(-ntgrid:ntgrid-1))
+         apar_p=apargavg(-ntgrid+1:)+apargavg(:ntgrid-1)
+         apar_m = aparnew(-ntgrid+1:,it,ik)+aparnew(:ntgrid-1,it,ik) & 
+              -apar(-ntgrid+1:,it,ik)-apar(:ntgrid-1,it,ik)
+      endif
+
+      allocate(phi_p(-ntgrid:ntgrid-1),phi_m(-ntgrid:ntgrid-1))
+      phi_m=phigavg(-ntgrid+1:)-phigavg(:ntgrid-1)
+
+! try fixing bkdiff dependence
+      bd = bkdiff(1)
+
+     
+      do isgn=1,2
+         bdfac_p = 1.+bd*(3.-2.*real(isgn))
+         bdfac_m = 1.-bd*(3.-2.*real(isgn))
+
+         phi_p = bdfac_p*phigavg(-ntgrid+1:)+bdfac_m*phigavg(:ntgrid-1)
+
+!CMR, 4/8/2011:
+! Some concerns, may be red herrings !
+! (1) no bakdif factors in phi_m, apar_p, apar_m, vpar !!! 
+!                        (RN also spotted this for apar_p)
+! (2) can interpolations of products be improved? 
+!
+!  Attempt at variable documentation:
+! phigavg  = phi J0 + 2 T_s/q_s . vperp^2 bpar/bmag J1/Z
+! apargavg = apar J0                        (decentered in t) 
+! NB apargavg and phigavg combine to give the GK EM potential chi
+! chi = phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm
+! phi_p = 2 phigavg                      .... (roughly!)
+! phi_m = d/dtheta (phigavg)*DTHETA 
+! apar_p = 2 apargavg  
+! apar_m = 2 d/dt (apar)*DELT  (gets multiplied later by J0 and vpa when included in source)
+! => phi_p - apar_p*vpa(:,isgn,iglo)*spec(is)%stm = 2 chi  .... (roughly!)  
+! vparterm = -2.0*vpar (IN ABSENCE OF LOWFLOW TERMS)
+! wdfac = wdrift + wcoriolis/spec(is)%stm (IN ABSENCE OF LOWFLOW TERMS)
+! wstarfac = wstar  (IN ABSENCE OF LOWFLOW TERMS)
+! vpar = q_s/sqrt{T_s m_s} (v_||^GS2). \gradpar(theta)/DTHETA . DELT (centred)
+! wdrift =    q_s/T_s  v_d.\grad_perp . DELT 
+! wcoriolis = q_s/T_s  v_C.\grad_perp . DELT 
+!
+! Definition of source:= 2*code_dt*RHS of GKE
+! source     appears to contain following physical terms
+!   -2q_s/T_s v||.grad(J0 phi + 2 vperp^2 bpar/bmag J1/Z T_s/q_s).delt 
+!   -2d/dt(q v|| J0 apar / T).delt
+!   +hyperviscosity
+!   -2 v_d.\grad_perp (q J0 phi/T + 2 vperp^2 bpar/bmag J1/Z).delt 
+!   -coriolis terms
+!   2{\chi,f_{0s}}.delt  (allowing for sheared flow)
+!CMRend
+
+!MAB, 6/5/2009:
+! added the omprimfac source term arising with equilibrium flow shear  
+!CMR, 26/11/2010:
+! Useful to understand that all source terms propto aky are specified here 
+! using Tref=mref vtref^2. See 
+! [note by BD and MK on "Microinstabilities in Axisymmetric Configurations"].
+! This is converted to  the standard internal gs2 normalisation, 
+! Tref=(1/2) mref vtref^2, by wunits, which contains a crucial factor 1/2.
+! (Would be less confusing if always used same Tref!)
+!
+#ifdef LOWFLOW
+         source(:ntgrid-1,isgn) = anon(ie)*(vparterm(:ntgrid-1,isgn,iglo)*phi_m &
+              -spec(is)%zstm*vpac(:ntgrid-1,isgn,iglo) &
+              *((aj0(-ntgrid+1:,iglo) + aj0(:ntgrid-1,iglo))*0.5*apar_m  &
+              + D_res(it,ik)*apar_p) &
+              -zi*wdfac(:ntgrid-1,isgn,iglo)*phi_p) &
+              + zi*(wstarfac(:ntgrid-1,isgn,iglo) &
+              + vpac(:ntgrid-1,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+              -2.0*omprimfac*vpac(:ntgrid-1,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(:ntgrid-1)/spec(is)%stm) &
+              *(phi_p - apar_p*spec(is)%stm*vpac(:ntgrid-1,isgn,iglo))
+#else
+         source(:ntgrid-1,isgn) = anon(ie)*(&
+              -2.0*vpar(:ntgrid-1,isgn,iglo)*phi_m &
+              -zi*wdrift(:ntgrid-1,isgn,iglo)*phi_p &
+              ) &
+              + zi*(&
+              wstar(ik,ie,is) &
+               )*(phi_p )
+
+         if(has_ufac) source(:ntgrid-1,isgn)=source(:ntgrid-1,isgn)+&
+              zi*vpac(:ntgrid-1,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is)*phi_p
+         if(has_exb) source(:ntgrid-1,isgn)=source(:ntgrid-1,isgn)-&
+              phi_p*zi*2.0*omprimfac*vpac(:ntgrid-1,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(:ntgrid-1)/spec(is)%stm
+
+         if(fapar.gt.epsilon(0.0))then
+            source(:ntgrid-1,isgn)=source(:ntgrid-1,isgn)+anon(ie)*(&
+                 -spec(is)%zstm*vpac(:ntgrid-1,isgn,iglo) &
+                 *((aj0(-ntgrid+1:,iglo) + aj0(:ntgrid-1,iglo))*0.5*apar_m + D_res(it,ik)*apar_p) &
+                 ) & 
+                 -zi*wstar(ik,ie,is)*apar_p*spec(is)%stm*vpac(:ntgrid-1,isgn,iglo)
+
+            if(has_ufac) source(:ntgrid-1,isgn)=source(:ntgrid-1,isgn)-&
+                 zi*vpac(:ntgrid-1,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is)*apar_p*spec(is)%stm*vpac(:ntgrid-1,isgn,iglo)
+            if(has_exb) source(:ntgrid-1,isgn)=source(:ntgrid-1,isgn)+&
+                 apar_p*spec(is)%stm*vpac(:ntgrid-1,isgn,iglo)*zi*2.0*omprimfac*vpac(:ntgrid-1,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(:ntgrid-1)/spec(is)%stm
+
+         endif
+            
+#endif
+
+        
+#ifdef LOWFLOW
+      select case (istep)
+      case (0)
+         ! nothing
+      case (1)
+         do ig = -ntgrid, ntgrid-1
+            source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
+         end do
+      case (2) 
+         do ig = -ntgrid, ntgrid-1
+            source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+                 1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
+         end do
+      case default
+         do ig = -ntgrid, ntgrid-1
+            source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+                 (23./12.)*gexp_1(ig,isgn,iglo) &
+                 - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                 + (5./12.) *gexp_3(ig,isgn,iglo))
+         end do
+      end select
+#else
+! add in nonlinear terms 
+      if (nonlin) then         
+         select case (istep)
+         case (0)
+            ! nothing
+         case (1)
+               source(:ntgrid-1,isgn) = source(:ntgrid-1,isgn) + 0.5*code_dt*gexp_1(:ntgrid-1,isgn,iglo)
+         case (2) 
+               source(:ntgrid-1,isgn) = source(:ntgrid-1,isgn) + 0.5*code_dt*( &
+                    1.5*gexp_1(:ntgrid-1,isgn,iglo) - 0.5*gexp_2(:ntgrid-1,isgn,iglo))
+         case default
+               source(:ntgrid-1,isgn) = source(:ntgrid-1,isgn) + 0.5*code_dt*( &
+                      (23./12.)*gexp_1(:ntgrid-1,isgn,iglo) &
+                    - (4./3.)  *gexp_2(:ntgrid-1,isgn,iglo) &
+                    + (5./12.) *gexp_3(:ntgrid-1,isgn,iglo))
+         end select
+      end if
+#endif
+   enddo
+
+   deallocate(phi_p,phi_m)
+   if(fapar.gt.epsilon(0.0))deallocate(apar_p,apar_m)
+    end subroutine set_source_2
+
+  end subroutine get_source_term_2
+
   subroutine invert_rhs_1 &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
-        iglo, sourcefac)
+         sourcefac)
     use dist_fn_arrays, only: gnew, ittp, vperp2, aj1, aj0
     use run_parameters, only: eqzip, secondary, tertiary, harris
     use theta_grid, only: ntgrid
@@ -3674,7 +4051,7 @@ subroutine check_dist_fn(report_unit)
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
     integer, intent (in) :: istep
-    integer, intent (in) :: iglo
+    integer :: iglo
     complex, intent (in) :: sourcefac
 
     integer :: ig, ik, it, il, ie, isgn, is
@@ -3685,31 +4062,29 @@ subroutine check_dist_fn(report_unit)
     logical :: kperiod_flag, speriod_flag
     integer :: ntgl, ntgr
 
-    call prof_entering ("invert_rhs_1", "dist_fn")
-
+!    call prof_entering ("invert_rhs_1", "dist_fn")
+do iglo=g_lo%llim_proc,g_lo%ulim_proc
     ik = ik_idx(g_lo,iglo)
     it = it_idx(g_lo,iglo)
 
     !Skip work if we're not interested in this ik and it
-    if(filter(it,ik)) return
+    if(filter(it,ik)) cycle !return
 
     il = il_idx(g_lo,iglo)
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
 
-    if(ieqzip(it_idx(g_lo,iglo),ik_idx(g_lo,iglo))==0) return
+    if(ieqzip(it,ik)==0) cycle
     if (eqzip) then
-       if (secondary .and. ik == 2 .and. it == 1) return ! do not evolve primary mode
+       if (secondary .and. ik == 2 .and. it == 1) cycle ! do not evolve primary mode
        if (tertiary .and. ik == 1) then
-          if (it == 2 .or. it == ntheta0) return ! do not evolve periodic equilibrium
+          if (it == 2 .or. it == ntheta0) cycle ! do not evolve periodic equilibrium
        end if
-       if (harris .and. ik == 1) return ! do not evolve primary mode       
+       if (harris .and. ik == 1) cycle ! do not evolve primary mode       
     end if
 
-    do isgn = 1, 2
-       call get_source_term (phi, apar, bpar, phinew, aparnew, bparnew, &
-            istep, isgn, iglo, sourcefac, source(:,isgn))
-    end do
+    call get_source_term_2 (phi, apar, bpar, phinew, aparnew, bparnew, &
+         istep, iglo, sourcefac, source, ik,it,il,ie,is)
 
     ! gnew is the inhomogeneous solution
     gnew(:,:,iglo) = 0.0
@@ -3948,8 +4323,8 @@ subroutine check_dist_fn(report_unit)
        gnew(:,2,iglo) = 0.0
     end where
 
-    call prof_leaving ("invert_rhs_1", "dist_fn")
-
+!    call prof_leaving ("invert_rhs_1", "dist_fn")
+end do
   contains
 
     subroutine self_periodic
@@ -3988,15 +4363,13 @@ subroutine check_dist_fn(report_unit)
     integer :: il, ik, it, n, i, j
     integer :: iglo, ncell
 
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       call invert_rhs_1 (phi, apar, bpar, phinew, aparnew, bparnew, &
-            istep, iglo, sourcefac)
-    end do
+    call invert_rhs_1 (phi, apar, bpar, phinew, aparnew, bparnew, &
+         istep, sourcefac)
 
     if (no_comm) then
        ! nothing
     else       
-       g_adj = 0.
+!       g_adj = 0.
        call fill (links_p, gnew, g_adj)
        call fill (links_h, g_h, g_adj)
        call fill (wfb_p, gnew, g_adj)
@@ -4005,10 +4378,12 @@ subroutine check_dist_fn(report_unit)
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
 
           ncell = r_links(ik, it) + l_links(ik, it) + 1
           if (ncell == 1) cycle
+
+          il = il_idx(g_lo,iglo)
+
 ! wfb
           if (nlambda > ng2 .and. il == ng2+1) then
              if (save_h(1, iglo)) then
@@ -4119,7 +4494,7 @@ subroutine check_dist_fn(report_unit)
     real :: time
     complex :: sourcefac
 
-    call prof_entering ("invert_rhs", "dist_fn")
+!    call prof_entering ("invert_rhs", "dist_fn")
 
     time = code_time
     if (time > t0) then
@@ -4139,10 +4514,10 @@ subroutine check_dist_fn(report_unit)
           gnew=gnew+g_fixpar
        endif
     case default
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!       do iglo = g_lo%llim_proc, g_lo%ulim_proc
           call invert_rhs_1 (phi, apar, bpar, phinew, aparnew, bparnew, &
-               istep, iglo, sourcefac)
-       end do
+               istep, sourcefac)
+!       end do
 
        !If fixing parity particular ik then do it an add in fixpar
        if (fixpar_secondary.gt.0) then
@@ -4152,7 +4527,7 @@ subroutine check_dist_fn(report_unit)
 
     end select
 
-    call prof_leaving ("invert_rhs", "dist_fn")
+!    call prof_leaving ("invert_rhs", "dist_fn")
   end subroutine invert_rhs
 
   !>Ensure that linked boundary values of passed complex field are single valued (e.g. kperp2(ntgrid,ikx,iky) is
@@ -4860,7 +5235,7 @@ subroutine check_dist_fn(report_unit)
 
     integer :: ik, it
     if (.not. allocated(fl_avg)) allocate (fl_avg(ntheta0, naky))
-    fl_avg = 0.
+    if (.not. has_electron_species(spec)) fl_avg = 0.
 
     if (.not. has_electron_species(spec)) then
        if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
@@ -4886,7 +5261,9 @@ subroutine check_dist_fn(report_unit)
     end if
 
     if (fphi > epsilon(0.0)) then
-       fieldeq = antot + bpar*gamtot1 - gamtot*gridfac1*phi 
+!       fieldeq = antot + bpar*gamtot1 - gamtot*gridfac1*phi 
+       fieldeq = antot - gamtot*gridfac1*phi 
+       if(fbpar.gt.epsilon(0.0)) fieldeq=fieldeq + bpar*gamtot1
 
        if (.not. has_electron_species(spec)) then
           do ik = 1, naky
@@ -4920,37 +5297,38 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: kperp2
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
-    use le_grids, only: integrate_species!_sub
+    use le_grids, only: integrate_species
     use run_parameters, only: beta, fphi, fapar, fbpar
-    use prof, only: prof_entering, prof_leaving
     use gs2_layouts, only: g_lo, it_idx,ik_idx
     use kt_grids, only: filter
+
     implicit none
+
     complex, dimension (-ntgrid:,:,:), intent (out) :: antot, antota, antotp
     real, dimension (nspec) :: wgt
-
-    integer :: isgn, iglo, ig, it,ik
-
-    call prof_entering ("getan", "dist_fn")
-
-!<DD>
-!Don't do this as integrate_species will fill in all values
-!    antot=0. ; antota=0. ; antotp=0.
-!Need to set individual arrays to zero if not using integrate_species for
-!that field. (NOTE this probably isn't actually needed as we shouldn't
-!use the various antots if we're not calculating/using the related field).
+    integer :: isgn, iglo, it,ik
 
     if (fphi > epsilon(0.0)) then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          it=it_idx(g_lo,iglo)
-          ik=ik_idx(g_lo,iglo)
-          if(filter(it,ik))cycle
-          do isgn = 1, 2
-             do ig=-ntgrid, ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*gnew(ig,isgn,iglo)
+       !<DD>NOTE: It's possible to rewrite this loop as simply
+       !g0=gnew*spread(aj0,2,2)
+       !but this seems to be slower than an explicit loop and 
+       !the ability to skip certain it/ik values is lost.
+       if(any(filter))then
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             it=it_idx(g_lo,iglo)
+             ik=ik_idx(g_lo,iglo)
+             if(filter(it,ik))cycle
+             do isgn = 1, 2
+                g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)
              end do
           end do
-       end do
+       else
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             do isgn = 1, 2
+                g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)
+             end do
+          end do
+       endif
 
        wgt = spec%z*spec%dens
        call integrate_species (g0, wgt, antot, nogath=.true.)
@@ -4958,50 +5336,56 @@ subroutine check_dist_fn(report_unit)
        if (afilter > epsilon(0.0)) antot = antot * exp(-afilter**4*kperp2**2/4.)
        !NOTE: We don't do ensure_single_val_fields here as we're not certain we
        !have the full data
-    else
-       antot=0.
     end if
 
     if (fapar > epsilon(0.0)) then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          it=it_idx(g_lo,iglo)
-          ik=ik_idx(g_lo,iglo)
-          if(filter(it,ik))cycle
-          do isgn = 1, 2
-             do ig=-ntgrid, ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,iglo)*gnew(ig,isgn,iglo)
+       if(any(filter))then
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             it=it_idx(g_lo,iglo)
+             ik=ik_idx(g_lo,iglo)
+             if(filter(it,ik))cycle
+             do isgn = 1, 2
+                   g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
              end do
           end do
-       end do
-       
-       wgt = 2.0*beta*spec%z*spec%dens*sqrt(spec%temp/spec%mass)
+       else
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             do isgn = 1, 2
+                   g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
+             end do
+          end do
+       endif
+
+       wgt = 2.0*beta*spec%z*spec%dens*spec%stm
        call integrate_species (g0, wgt, antota, nogath=.true.)
        !NOTE: We don't do ensure_single_val_fields here as we're not certain we
        !have the full data
-    else
-       antota=0.
     end if
 
     if (fbpar > epsilon(0.0)) then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          it=it_idx(g_lo,iglo)
-          ik=ik_idx(g_lo,iglo)
-          if(filter(it,ik))cycle
-          do isgn = 1, 2
-             do ig=-ntgrid, ntgrid
-                g0(ig,isgn,iglo) = aj1(ig,iglo)*vperp2(ig,iglo)*gnew(ig,isgn,iglo)
+       if(any(filter))then
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             it=it_idx(g_lo,iglo)
+             ik=ik_idx(g_lo,iglo)
+             if(filter(it,ik))cycle
+             do isgn = 1, 2
+                   g0(:,isgn,iglo) = aj1(:,iglo)*vperp2(:,iglo)*gnew(:,isgn,iglo)
              end do
           end do
-       end do
+       else
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             do isgn = 1, 2
+                   g0(:,isgn,iglo) = aj1(:,iglo)*vperp2(:,iglo)*gnew(:,isgn,iglo)
+             end do
+          end do
+       endif
+
        wgt = spec%temp*spec%dens
        call integrate_species (g0, wgt, antotp, nogath=.true.)
        !NOTE: We don't do ensure_single_val_fields here as we're not certain we
        !have the full data
-    else
-       antotp=0.
     end if
 
-    call prof_leaving ("getan", "dist_fn")
   end subroutine getan_nogath
 
 !///////////////////////////////////////
