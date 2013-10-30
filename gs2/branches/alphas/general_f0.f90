@@ -1024,6 +1024,7 @@ contains
     use species, only: ion_species, electron_species, alpha_species, spec, nspec
     use constants, only: pi
     use mp, only: mp_abort
+    use spfunc, only: erf => erf_ext
     implicit none
     integer,intent(in):: is
     real,intent(in):: v

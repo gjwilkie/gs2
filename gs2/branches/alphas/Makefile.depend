@@ -418,6 +418,7 @@ gauss_quad.o: \
 	 file_utils.o \
 	 mp.o 
 general_f0.o: \
+	 spfunc.o \
 	 analytical_falpha.o \
 	 semianalytic_falpha.o \
 	 split_falpha.o \
