@@ -107,7 +107,7 @@ LOWFLOW ?=
 # Use le_layout for collision operator
 USE_LE_LAYOUT ?=
 # Use LAPACK library for general quadrature
-USE_LAPACK ?=on
+USE_LAPACK ?=
 
 # Number of process to use for unit tests
 ifdef NPROCS
