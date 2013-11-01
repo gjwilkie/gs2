@@ -55,8 +55,7 @@ module dist_fn
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
   logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose, esv
 !CMR, 12/9/13: New logical cllc to modify order of operator in timeadv
-!CMR, 20/10/13: New logical wfb_cmr enforces trapping conditions on wfb
-  logical :: cllc, wfb_cmr
+  logical :: cllc
 
   integer :: adiabatic_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -438,8 +437,6 @@ subroutine check_dist_fn(report_unit)
        write (unit, fmt="(' nonad_zero = ',L1)") nonad_zero
        write (unit, fmt="(' gridfac = ',e16.10)") gridfac
        write (unit, fmt="(' esv = ',L1)") esv
-       write (unit, fmt="(' cllc = ',L1)") cllc
-       write (unit, fmt="(' wfb_cmr = ',L1)") wfb_cmr
 
        if (.not. has_electron_species(spec)) then
           select case (adiabatic_option_switch)
@@ -652,8 +649,7 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, nonad_zero, gridfac, apfac, &
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, &
-         lf_decompose, esv, wfb_cmr
+         g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, lf_decompose, esv
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -665,7 +661,6 @@ subroutine check_dist_fn(report_unit)
     if (proc0) then
        boundary_option = 'default'
        nonad_zero = .true.  ! BD: Default value changed to TRUE  8.15.13
-       wfb_cmr = .false.
        cllc = .false.
        esv = .false.
        adiabatic_option = 'default'
@@ -723,7 +718,6 @@ subroutine check_dist_fn(report_unit)
 
     call broadcast (boundary_option_switch)
     call broadcast (nonad_zero)
-    call broadcast (wfb_cmr)
     call broadcast (cllc)
     call broadcast (esv)
     call broadcast (adiabatic_option_switch)
@@ -1572,12 +1566,6 @@ subroutine check_dist_fn(report_unit)
        nn_from = 0 
 
        do iglo = g_lo%llim_world, g_lo%ulim_world
-!CMR, 20/10/2013:
-!     Communicate pattern sends passing particles to downwind linked cells
-!      (ntgrid,1,iglo)  => each RH connected cell (j,1,iglo_right)
-!      (-ntgrid,2,iglo) => each LH connected cell (j,2,iglo_left)
-!          where j index in receive buffer = #hops in connection
-!                         (nb j=1 is nearest connection)
 
           il = il_idx(g_lo,iglo)
           ! Exclude trapped particles (inc wfb)
@@ -1721,13 +1709,6 @@ subroutine check_dist_fn(report_unit)
        nn_from = 0 
 
        do iglo = g_lo%llim_world, g_lo%ulim_world
-!CMR, 20/10/2013:
-!     Communicate pattern sends wfb endpoint to ALL linked cells
-!      (ntgrid,1,iglo)  => ALL connected cells (j,1,iglo_conn)
-!            where j index in receive buffer = r_links(iglo)+1
-!      (-ntgrid,2,iglo) => ALL connected cells (j,2,iglo_conn)
-!         where j index in receive buffer = l_links(iglo)+1
-!
 
           il = il_idx(g_lo,iglo)
           if (il /= ng2+1) cycle
@@ -1742,27 +1723,23 @@ subroutine check_dist_fn(report_unit)
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
 ! v_par > 0:
-!CMR: introduced iglo_star to make notation below less confusing
-!
-          call find_leftmost_link (iglo, iglo_star, ipright)
+          call find_leftmost_link (iglo, iglo_right, ipright)
           do j = 1, ncell
 ! sender
              if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
 ! receiver
              if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_right_connection (iglo_star, iglo_right, ipright)
-             iglo_star=iglo_right
+             call get_right_connection (iglo_right, iglo_right, ipright)
           end do
              
 ! v_par < 0:
-          call find_rightmost_link (iglo, iglo_star, ipleft)
+          call find_rightmost_link (iglo, iglo_left, ipleft)
           do j = 1, ncell
 ! sender
              if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
 ! receiver
              if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_left_connection (iglo_star, iglo_left, ipleft)
-             iglo_star=iglo_left
+             call get_left_connection (iglo_left, iglo_left, ipleft)
           end do
        end do
        
@@ -1797,7 +1774,7 @@ subroutine check_dist_fn(report_unit)
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
 ! v_par > 0: 
-          call find_leftmost_link (iglo, iglo_star, ipright)
+          call find_leftmost_link (iglo, iglo_right, ipright)
           do j = 1, ncell
 ! sender
              if (ip == iproc) then
@@ -1813,14 +1790,13 @@ subroutine check_dist_fn(report_unit)
                 nn_to(ip) = n
                 to(ip)%first(n) = r_links(ik, it) + 1
                 to(ip)%second(n) = 1
-                to(ip)%third(n) = iglo_star
+                to(ip)%third(n) = iglo_right
              end if
-             call get_right_connection (iglo_star, iglo_right, ipright)
-             iglo_star=iglo_right
+             call get_right_connection (iglo_right, iglo_right, ipright)
           end do
              
 ! v_par < 0: 
-          call find_rightmost_link (iglo, iglo_star, ipleft)
+          call find_rightmost_link (iglo, iglo_left, ipleft)
           do j = 1, ncell
 ! sender
              if (ip == iproc) then
@@ -1836,10 +1812,9 @@ subroutine check_dist_fn(report_unit)
                 nn_to(ip) = n
                 to(ip)%first(n) = l_links(ik, it) + 1
                 to(ip)%second(n) = 2
-                to(ip)%third(n) = iglo_star
+                to(ip)%third(n) = iglo_left
              end if
-             call get_left_connection (iglo_star, iglo_left, ipleft)
-             iglo_star=iglo_left
+             call get_left_connection (iglo_left, iglo_left, ipleft)
           end do
        end do
 
@@ -1874,15 +1849,6 @@ subroutine check_dist_fn(report_unit)
        nn_from = 0 
 
        do iglo = g_lo%llim_world, g_lo%ulim_world
-!CMR, 20/10/2013:
-!     Communicate pattern sends passing homogeneous endpoints to linked cells
-!      (ntgrid,1,iglo) (cell > 2) => RH connected cells (j,1,iglo_conn)
-!            where j index in receive buffer = 2.l_links(iglo)+ #RH hops
-!      (-ntgrid,2,iglo) (cell < ncell-1) => LH connected cells (j,2,iglo_conn)
-!         where j index in receive buffer = 2.r_links(iglo)+#LH hops
-! NB: homogenous(H) follow inhomogeneous (IH), but orders in j differs!
-!     IH#hop=1, IH#hop=2, ... H#hop=2, H#hop=1  
-!          
 
           il = il_idx(g_lo,iglo)
           if (nlambda > ng2 .and. il >= ng2+1) cycle
@@ -1896,10 +1862,6 @@ subroutine check_dist_fn(report_unit)
 
 ! If this is not the first link in the chain, continue
           if (l_links(ik, it) > 0) then
-!CMR, 20/10/2013:  
-! this sends homogeneous solutions for rightwards passing particles 
-! rightwards from all cells APART from the INCOMING cell 
-!
 ! For each link to the right, do:
              iglo_star = iglo
              do j = 1, r_links(ik, it)
@@ -1913,10 +1875,6 @@ subroutine check_dist_fn(report_unit)
           end if
 
           if (r_links(ik, it) > 0) then
-!CMR, 20/10/2013:  
-! this sends homogeneous solutions for leftwards passing particles 
-! leftwards from all cells APART from the INCOMING cell 
-!
 ! For each link to the left, do:
              iglo_star = iglo
              do j = 1, l_links(ik, it)
@@ -2039,17 +1997,6 @@ subroutine check_dist_fn(report_unit)
        nn_from = 0 
 
        do iglo = g_lo%llim_world, g_lo%ulim_world
-!CMR, 20/10/2013:
-!     Communicate pattern sends wfb homogeneous endpoint to ALL linked cells
-!      (ntgrid,1,iglo)  => ALL connected cells (j,1,iglo_conn)
-!            where j index in receive buffer = 2.ncell - r_links(iglo)
-!            1 <= j <= 2.ncell  accommodates inhomog, homog bcs from cells
-!               ncell, ncell-1, ncell-2, ..., 1, 1, 2,... ncell-1, ncell  
-!      (-ntgrid,2,iglo) => ALL connected cells (j,2,iglo_conn)
-!         where j index in receive buffer = 2.ncell - l_links(iglo)
-!         1 <= j <= 2.ncell  accommodates inhomog, homog bcs from cells
-!                1, 2, .., ncell, ncell, ncell-1, .., 2, 1  
-! NB: homogenous follow inhomogeneous bcs, but order of source cell differs!
 
           il = il_idx(g_lo,iglo)
           if (il /= ng2+1) cycle
@@ -2064,25 +2011,23 @@ subroutine check_dist_fn(report_unit)
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
 ! v_par > 0:
-          call find_leftmost_link (iglo, iglo_star, ipright)
+          call find_leftmost_link (iglo, iglo_right, ipright)
           do j = 1, ncell
 ! sender
              if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
 ! receiver
              if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_right_connection (iglo_star, iglo_right, ipright)
-             iglo_star=iglo_right
+             call get_right_connection (iglo_right, iglo_right, ipright)
           end do
 
 ! v_par < 0:
-          call find_rightmost_link (iglo, iglo_star, ipleft)
+          call find_rightmost_link (iglo, iglo_left, ipleft)
           do j = 1, ncell
 ! sender
              if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
 ! receiver
              if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_left_connection (iglo_star, iglo_left, ipleft)
-             iglo_star=iglo_left
+             call get_left_connection (iglo_left, iglo_left, ipleft)
           end do
        end do
        
@@ -2117,7 +2062,7 @@ subroutine check_dist_fn(report_unit)
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
 ! v_par > 0:
-          call find_leftmost_link (iglo, iglo_star, ipright)
+          call find_leftmost_link (iglo, iglo_right, ipright)
           do j = 1, ncell
 ! sender
              if (ip == iproc) then
@@ -2133,14 +2078,13 @@ subroutine check_dist_fn(report_unit)
                 nn_to(ip) = n
                 to(ip)%first(n) = 2*ncell - r_links(ik, it)
                 to(ip)%second(n) = 1
-                to(ip)%third(n) = iglo_star
+                to(ip)%third(n) = iglo_right
              end if
-             call get_right_connection (iglo_star, iglo_right, ipright)
-             iglo_star=iglo_right
+             call get_right_connection (iglo_right, iglo_right, ipright)
           end do
  
 ! v_par < 0:
-          call find_rightmost_link (iglo, iglo_star, ipleft)
+          call find_rightmost_link (iglo, iglo_left, ipleft)
           do j = 1, ncell
 ! sender
              if (ip == iproc) then
@@ -2157,10 +2101,9 @@ subroutine check_dist_fn(report_unit)
                 nn_to(ip) = n
                 to(ip)%first(n) = 2*ncell - l_links(ik, it)
                 to(ip)%second(n) = 2
-                to(ip)%third(n) = iglo_star
+                to(ip)%third(n) = iglo_left
              end if
-             call get_left_connection (iglo_star, iglo_left, ipleft)
-             iglo_star=iglo_left
+             call get_left_connection (iglo_left, iglo_left, ipleft)
           end do
        end do
 
@@ -2629,9 +2572,6 @@ subroutine check_dist_fn(report_unit)
     use nonlinear_terms, only: add_explicit_terms
     use hyper, only: hyper_diff
     use run_parameters, only: fixpar_secondary
-use dist_fn_arrays, only : check_g_bouncepoints
-use le_grids, only : ng2,jend,negrid
-use gs2_layouts, only: g_lo, idx
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phinew, aparnew, bparnew
@@ -2639,8 +2579,6 @@ use gs2_layouts, only: g_lo, idx
     integer, optional, intent (in) :: mode
     integer :: modep
     integer,save :: istep_last=-1
-integer :: ik,it,il,ie,is,iglo,ig
-real :: err
 
     modep = 0
     if (present(mode)) modep = mode
@@ -2651,33 +2589,11 @@ real :: err
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
        !Solve for gnew
-!write(6,*) "============================================"
-!write(6,fmt='("timeadv, pre invert_rhs, istep=0")') 
-!write(6,fmt='(3i4)') maxloc(abs(phi+phinew))
-!ik=1;it=1;ie=1;is=1
-!do il=ng2+1, ng2+3
-!   call check_g_bouncepoints(gnew,ik,it,il,ie,is,err)
-!enddo
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-if (istep .gt.0 .and. mod(istep,10) == 0) then
-   write(6,fmt='("timeadv, post invert_rhs, istep=",i5)') istep 
-   ik=1;it=1;is=1; il=ng2+1
-   do ie=1, negrid
-      call check_g_bouncepoints(gnew,ik,it,il,ie,is,err)
-   enddo
-endif
-
        !Add hyper terms (damping)
        call hyper_diff (gnew, phinew, bparnew)
        !Add collisions
        call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
-if (istep .gt.0 .and. mod(istep,10) == 0) then
-   write(6,fmt='("timeadv, post collisions, istep=",i5)') istep
-   ik=1;it=1;is=1; il=ng2+1
-   do ie=1, negrid
-      call check_g_bouncepoints(gnew,ik,it,il,ie,is,err)
-   enddo
-endif
 
     else if (istep.eq.1 .and. istep.ne.istep_last) then
 !CMR on first half step at istep=1 do CL with all redists
@@ -3492,9 +3408,7 @@ endif
        end if
     end if
 
-!CMR not happy with following line either: 
-! why should a delta function source at -ntgrid result in a source at ntgrid?
-!    source(ntgrid) = source(-ntgrid)  ! is this necessary?  BD
+    source(ntgrid) = source(-ntgrid)  ! is this necessary?  BD
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! special source term for totally trapped particles
@@ -3748,7 +3662,7 @@ endif
     use dist_fn_arrays, only: gnew, ittp, vperp2, aj1, aj0
     use run_parameters, only: eqzip, secondary, tertiary, harris
     use theta_grid, only: ntgrid
-    use le_grids, only: nlambda, ng2, lmax, forbid, anon, jend
+    use le_grids, only: nlambda, ng2, lmax, forbid, anon
     use kt_grids, only: aky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use prof, only: prof_entering, prof_leaving
@@ -3802,7 +3716,7 @@ endif
 ! Here ensure ZERO incoming particles in nonadiabatic delta f at domain ends
 !  (exploits code used in subroutine g_adjust to transform g_wesson to g_gs2)
     if ( nonad_zero ) then 
-       if (il <= ng2) then
+       if (il <= ng2+1) then
           !This ensures that we only apply the new boundary condition to the leftmost
           !cell for sign going from left to right
           if (l_links(ik,it) .eq. 0) then
@@ -3971,10 +3885,15 @@ endif
        end do
     end if
 
-    if (boundary_option_switch == boundary_option_linked) then
-! self_periodic bc applied (for boundary_option_linked = T) to:
-!      passing + wfb for aky=0 (sets speriod_flag = T) 
+!CMR, 17/4/2012:  
+! self_periodic bc applied as follows:
+! boundary_option_linked = T
+!      passing + wfb if aky=0
 !      isolated wfb (ie no linked domains) 
+! boundary_option_linked = F
+!      passing and wfb particles if boundary_option_self_periodic = T
+!      wfb 
+    if (boundary_option_switch == boundary_option_linked) then
        if (speriod_flag .and. il <= ng2+1) then
           call self_periodic
        else 
@@ -3988,29 +3907,17 @@ endif
             call self_periodic
 
     else       
-! self_periodic bc applied (for boundary_option_linked = F) to:
-!      passing+wfb if (kperiod_flag = T), ie:    
-!         boundary_option_self_periodic .or. aky=0
-!CMR, 15/10/2013:
-!
-       if (wfb_cmr) then
-!CMR, 20/10/2013: surely self_periodic bcs unphysical for wfb?
-!  set wfb_cmr=T   to enforce trapping conditions for wfb
-          if (kperiod_flag .and. il <= ng2) call self_periodic
-          if (il == ng2+1) call wfb_bc
-       else
-          if (kperiod_flag .and. il <= ng2+1) then
-             call self_periodic
-          else if (il == ng2 + 1) then
-            call self_periodic
-          end if
-       endif
+       ! add correct amount of homogeneous solution now
+       if (kperiod_flag .and. il <= ng2+1) then
+          call self_periodic
+       else if (il == ng2 + 1) then
+          call self_periodic
+       end if
+
     end if
 
     ! add correct amount of homogeneous solution for trapped particles to satisfy boundary conditions
 !JAB include wfb (ng2+1)
-!CMR: NB this change adds NO homogeneous solution for wfb, 
-!                     as wfb has forbid = false everywhere
  !orig   if (il >= ng2+2 .and. il <= lmax) then
     if (il >= ng2+1 .and. il <= lmax) then
        beta1 = 0.0
@@ -4055,37 +3962,6 @@ endif
       end if
       
     end subroutine self_periodic
-
-    subroutine wfb_bc
-!CMR, 18/10/2013: 
-! sum homogeneous and inhomogeneous solutions to satisfy 
-!                 trapping conditions in ballooning space 
-!     gnew(ib,2,iglo) = gnew(ib,1,iglo) at all bounce points (ntgl:ntgr) 
-! 
-    complex :: c1, c2
-
-    c1 =(  g1(ntgr,2)*(gnew(ntgl,2,iglo) - gnew(ntgl,1,iglo))      & 
-            + g1(ntgl,2)*(gnew(ntgr,1,iglo) - gnew(ntgr,2,iglo)) ) &
-      / (g1(ntgl,1)*g1(ntgr,2) - g1(ntgl,2)*g1(ntgr,1))
-
-    c2 = (gnew(ntgl,1,iglo) + c1*g1(ntgl,1) - gnew(ntgl,2,iglo)) &
-         /g1(ntgl,2)
-
-    gnew(:,1,iglo)=gnew(:,1,iglo)+c1*g1(:,1)
-    gnew(:,2,iglo)=gnew(:,2,iglo)+c2*g1(:,2)
-
-!CMR: now enforce trapping conditions at all internal trapping points
-!     this looks arbitrary, but an infinitesimal collision rate forces: 
-!     gnew(ib,2,iglo)=gnew(ib,1,iglo), 
-!     and here we conserve particles, momentum and energy.
-    
-    do ig=ntgl+1,ntgr-1
-       if (jend(ig).eq.ng2+1) then
-          gnew(ig,1,iglo)=0.5*(gnew(ig,1,iglo)+gnew(ig,2,iglo))
-          gnew(ig,2,iglo)=gnew(ig,1,iglo)
-       endif
-    enddo  
-    end subroutine wfb_bc
 
   end subroutine invert_rhs_1
 
@@ -4222,8 +4098,6 @@ endif
   subroutine invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
-use gs2_layouts, only: idx
-use le_grids, only: jend
     use gs2_time, only: code_time
     use constants
     use run_parameters, only: fixpar_secondary
@@ -4235,7 +4109,6 @@ use le_grids, only: jend
     integer, intent (in) :: istep
 
     integer :: iglo
-integer :: ik, it, il, ie, is, ig
 
     real :: time
     complex :: sourcefac
