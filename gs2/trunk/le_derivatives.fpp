@@ -48,7 +48,12 @@ contains
 !CMR   flags (g_to_c and c_to_g) to control whether redistributes required
 !CMR   to map g_lo to collision_lo, and collision_lo to g_lo.
 !CMR   All redistributes are performed by default.
-!CMR  
+!CMR 
+ 
+!CMR, 3/10/2013:
+!CMR   Just realised we need to be careful with g_adjust if we avoid
+!CMR   mapping g_lo <=> le_lo    Mmmm, a little more to think about here ;-(
+!CMR
     logical, optional :: gtoc, ctog
     logical :: g_to_c, c_to_g
 
@@ -69,80 +74,70 @@ contains
     if(use_le_layout) then
 
 # ifndef LOWFLOW
-      if (colls) then
+       if (colls) then
 # endif
 
-         if (adjust) then
-            call g_adjust (g, phinew, bparnew, fphi, fbpar)
-            if (heating_flag) call g_adjust (gold, phi, bpar, fphi, fbpar)
-         end if
-         if (heating_flag) then
-            allocate (gc3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-            gc3 = g
-         end if
+          if (adjust) then
+             call g_adjust (g, phinew, bparnew, fphi, fbpar)
+             if (heating_flag) call g_adjust (gold, phi, bpar, fphi, fbpar)
+          end if
+          if (heating_flag) then
+             allocate (gc3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+             gc3 = g
+          end if
        
-         allocate (gle(nxi+1,negrid+1,le_lo%llim_proc:le_lo%ulim_alloc)) ; gle = 0.
+          allocate (gle(nxi+1,negrid+1,le_lo%llim_proc:le_lo%ulim_alloc)) ; gle = 0.
 
-         ! map data from g_layout to le_layout
-         if (g_to_c) call gather (g2le, g, gle)
+      ! map data from g_layout to le_layout
+          if (g_to_c) call gather (g2le, g, gle)
        
 # ifdef LOWFLOW
 
-         allocate (gtmp(nxi+1,negrid+1)) ; gtmp = 0.
+       allocate (gtmp(nxi+1,negrid+1)) ; gtmp = 0.
  
          ! use semi-lagrange scheme to evaluate dg/dvpa term
-         do ile = le_lo%llim_proc, le_lo%ulim_proc
-            gtmp = gle(:,:,ile)
-            ig = ig_idx(le_lo,ile)
-            is = is_idx(le_lo,ile)
-            dvp = spec(is)%zstm*dphidth(ig+ntgrid+1)*gradpar(ig)*0.5*code_dt
-            do ie = 1, negrid
-               do ixi = 1, nxi
-                  il = ixi_to_il(ig,ixi)
-                  isgn = ixi_to_isgn(ig,ixi)
-                  if (.not. forbid(ig,il)) &
-                       call get_gvpa (gtmp, dvp, ig, il, ixi, ie, isgn, gle(ixi,ie,ile))
-               end do
-            end do
-         end do
+       do ile = le_lo%llim_proc, le_lo%ulim_proc
+          gtmp = gle(:,:,ile)
+          ig = ig_idx(le_lo,ile)
+          is = is_idx(le_lo,ile)
+          dvp = spec(is)%zstm*dphidth(ig+ntgrid+1)*gradpar(ig)*0.5*code_dt
+          do ie = 1, negrid
+             do ixi = 1, nxi
+                il = ixi_to_il(ig,ixi)
+                isgn = ixi_to_isgn(ig,ixi)
+                if (.not. forbid(ig,il)) &
+                   call get_gvpa (gtmp, dvp, ig, il, ixi, ie, isgn, gle(ixi,ie,ile))
+                end do
+             end do
+          end do
 
-         deallocate (gtmp)
+          deallocate (gtmp)
 
-         if (colls) then
+          if (colls) then
 # endif
        ! update distribution function to take into account collisions
-!       if (present(diagnostics)) then
-
-         call solfp1 (gle, diagnostics)
-!       else
-!          call solfp1 (gle)
-!       end if
+          call solfp1 (gle, diagnostics)
 
 # ifdef LOWFLOW
-         end if
+          end if
 # endif
-
          ! remap from le_layout to g_layout
-         if (c_to_g) call scatter (g2le, gle, g)
-
-         deallocate (gle)
-
-         if (heating_flag) then
+          if (c_to_g) call scatter (g2le, gle, g)
+          deallocate (gle)
+          if (heating_flag) then
             ! form (h_i+1 + h_i)/2 * C(h_i+1) and integrate.  
-            gc3 = 0.5*conjg(g+gold)*(g-gc3)/code_dt
-          
-            call integrate_moment (gc3, c_rate(:,:,:,:,3))
-          
-            deallocate (gc3)
-         end if
+             gc3 = 0.5*conjg(g+gold)*(g-gc3)/code_dt          
+             call integrate_moment (gc3, c_rate(:,:,:,:,3))
+             deallocate (gc3)
+          endif
 
-         if (adjust) then
-            call g_adjust (g, phinew, bparnew, -fphi, -fbpar)
-            if (heating_flag) call g_adjust (gold, phi, bpar, -fphi, -fbpar)
-         end if
+          if (adjust) then
+             call g_adjust (g, phinew, bparnew, -fphi, -fbpar)
+             if (heating_flag) call g_adjust (gold, phi, bpar, -fphi, -fbpar)
+          endif
 
 # ifndef LOWFLOW
-      end if
+       endif
 # endif
 
       else
@@ -172,11 +167,7 @@ contains
          if (heating_flag) gc3 = g
 
          ! update distribution function to take into account collisions
-         if (present(diagnostics)) then
-            call solfp1 (g, g1, gc1, gc2, diagnostics)
-         else
-            call solfp1 (g, g1, gc1, gc2)
-         end if
+         call solfp1 (g, g1, gc1, gc2, diagnostics)
 
          if (heating_flag) then
             call integrate_moment (gc1, c_rate(:,:,:,:,1))
