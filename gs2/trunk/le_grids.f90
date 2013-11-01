@@ -2000,6 +2000,10 @@ contains
 
 ! old (finite-difference) integration scheme
     else
+!CMR, 1/11/2013: 
+!  jend(ig)=  il      lambda index of the trapped particle bouncing at theta(ig)
+!             0       if no trapped particles
+!
        jend = ng2 + 1
 !       wlterr = 0.0
        do il = ng2+1, nlambda-1
@@ -2083,6 +2087,16 @@ contains
              end if
           end do
        else
+!CMR, 1/11/2013:
+! Sketch of how ixi=>il mapping is arranged
+!===============================================================================================
+!  ixi=   1, ... , je-1, je, je+1, ... , 2je-1, || 2je, 2je+1, ... , nl+je, nl+je+1, ... ,  2nl
+!   il=   1, ... , je-1, je, je-1, ... ,     1, ||  je,  je+1, ... ,    nl,      nl, ... , je+1
+! isgn=   1, ... ,    1,  2,    2, ... ,     2, ||   1,     1, ... ,     1,       2, ... ,    2
+!         particles passing through             ||  je,   + forbidden trapped velocity space
+!         nb only need one isigma for je, as v||=0 at the bounce point
+!===============================================================================================
+
           do ixi = 1, 2*nlambda
              if (ixi >= nlambda + je + 1) then
                 ixi_to_isgn(ig,ixi) = 2
