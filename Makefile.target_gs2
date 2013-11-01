@@ -1,4 +1,4 @@
-gs2_all: modules gs2 ingen rungridgen
+gs2_all: modules gs2 ingen rungridgen test_intmoms
 
 gs2: $(gs2_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
@@ -16,6 +16,9 @@ regress: $(drive_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 ffttester: $(ffttester_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+test_intmoms: $(test_intmoms_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 .PHONY: modules utils_all geo_all libgs2_all

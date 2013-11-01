@@ -102,7 +102,7 @@ contains
 
  
 
-     subroutine check_g_bouncepoints(g,ik,it,il,ie,is,err,tol)
+     subroutine check_g_bouncepoints(g, ik,it,il,ie,is,err,tol)
 ! CMR, 3/10/2013: 
 !  This routine checks if 
 !     g(thetab,1:ik,it,il,ie,is)=g(thetab,2:ik,it,il,ie,is)
@@ -114,8 +114,8 @@ contains
       use mp, only: mp_abort
 
       implicit none
-      complex, dimension(-ntgrid:,:,:), intent(in) :: g
       integer, intent(in) :: ik, it, il, ie, is
+      complex, dimension(-ntgrid:,:,g_lo%llim_proc:), intent(in) :: g
       real, intent(out):: err
       real, optional:: tol
       real :: tolerance, dg
@@ -143,6 +143,7 @@ contains
       enddo
       write(6,fmt='(t5,"ik",t11,"it",t17,"il",t23,"ie",t29,"is",t33,"MaxFracBP Error")')
       write(6,fmt='(5i6,1pe12.4)')it,ik,il,ie,is,err
+      write(6,*) "-----"
       end subroutine check_g_bouncepoints
 
 end module dist_fn_arrays
