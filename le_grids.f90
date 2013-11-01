@@ -33,7 +33,7 @@ contains
     if (.not. allocated(zeroes)) then
        allocate (energy_grid(negrid, nspec))
        allocate (zeroes(negrid-1, nspec)) ; zeroes = 0.
-       allocate (zeroes_maxwell(negrid-1)) ; zeroes = 0.
+       allocate (zeroes_maxwell(negrid-1)) ; zeroes_maxwell = 0.
        allocate (x0(nspec))
     end if
 
@@ -41,7 +41,7 @@ contains
 
   subroutine setvgrid (vcut, negrid, epts, wgts, nesub)
 
-    use mp, only: proc0, mp_abort
+    use mp, only: proc0, mp_abort, iproc
     use general_f0, only: calculate_f0_arrays, f0_values
     use constants, only: pi => dpi
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
@@ -254,6 +254,7 @@ module le_grids
   public :: get_flux_vs_theta_vs_vpa
   public :: lambda_map, energy_map, g2le, init_map
   public :: genquad
+  public :: Bovervpar
 
   !> Unit tests
   public :: le_grids_unit_test_init_le_grids
@@ -304,6 +305,8 @@ module le_grids
   real, dimension (:,:), allocatable :: xi
   integer, dimension (:,:), allocatable :: ixi_to_il, ixi_to_isgn
   integer, dimension (2) :: sgn
+
+  real, dimension (:,:), allocatable:: Bovervpar
 
   integer :: wdim
   integer :: lint_lo, lint_hi, eint_lo, eint_hi
@@ -504,22 +507,23 @@ contains
        allocate (dele(negrid, nspec))
        allocate (al(nlambda), delal(nlambda))
        allocate (wl(-ntgrid:ntgrid,nlambda))
+       allocate (Bovervpar(-ntgrid:ntgrid,nlambda))
        allocate (jend(-ntgrid:ntgrid))
        allocate (forbid(-ntgrid:ntgrid,nlambda))
        allocate (xx(ng2))
-       allocate (lgrnge(-ntgrid:ntgrid,nlambda,tsize,2))
-       allocate (xloc(-ntgrid:ntgrid,tsize))
+       allocate (lgrnge(-ntgrid:ntgrid,nlambda,tsize,2)); lgrnge = 0.0
+       allocate (xloc(-ntgrid:ntgrid,tsize)); xloc = 0.0
        allocate (xi(-ntgrid:ntgrid, 2*nlambda))
        allocate (ixi_to_il(-ntgrid:ntgrid, 2*nlambda))
        allocate (ixi_to_isgn(-ntgrid:ntgrid, 2*nlambda))
     end if
 
     !call init_egrid (negrid)
-    call broadcast (xx)
+    !call broadcast (xx)
     !call broadcast (x0)
-    !call broadcast (x0_maxwell)
+    call broadcast (x0_maxwell)
     !call broadcast (zeroes)
-    !call broadcast (zeroes_maxwell)
+    call broadcast (zeroes_maxwell)
 
     call broadcast (al)
     call broadcast (delal)
@@ -536,6 +540,7 @@ contains
 
     do il = 1, nlambda
        call broadcast (wl(:,il))
+       call broadcast (Bovervpar(:,il))
        call broadcast (forbid(:,il))
     end do
 
@@ -1529,15 +1534,17 @@ contains
     allocate (anon(negrid), dele(negrid,nspec), speed(negrid,nspec))
     allocate (w_maxwell(negrid), energy_maxwell(negrid), speed_maxwell(negrid))
 
-
     w_maxwell = 0.0
     energy_maxwell = 0.0
     speed_maxwell = 0.0
     has_maxwellian_species = .false. 
+    speed = sqrt(energy)
+
     do is = 1,nspec
       !if (spec(is)%type .eq. ion_species .or. &
            !spec(is)%type .eq. electron_species) then
       if (spec(is)%is_maxwellian) then
+!write(*,*) "speed = ",speed(:,is)
           has_maxwellian_species = .true. 
           w_maxwell(:) = w(:,is)
           energy_maxwell(:) = energy(:,is)
@@ -1552,7 +1559,6 @@ contains
 
 
          
-    speed = sqrt(energy)
     
     anon = 1.0
 
@@ -1573,10 +1579,11 @@ contains
     nxi = max(2*nlambda-1, 2*ng2)
     allocate (al(nlambda), delal(nlambda))
     allocate (wl(-ntgrid:ntgrid,nlambda))
+    allocate (Bovervpar(-ntgrid:ntgrid,nlambda))
     allocate (jend(-ntgrid:ntgrid))
     allocate (forbid(-ntgrid:ntgrid,nlambda))
-    allocate (lgrnge(-ntgrid:ntgrid,nlambda,tsize,2))
-    allocate (xloc(-ntgrid:ntgrid,tsize))
+    allocate (lgrnge(-ntgrid:ntgrid,nlambda,tsize,2)); lgrnge = 0.0
+    allocate (xloc(-ntgrid:ntgrid,tsize)); xloc = 0.0
     if (nlambda-ng2 > 0) then
        al(ng2+1:nlambda) = 1.0/bset
     end if
@@ -1614,6 +1621,7 @@ contains
     call get_legendre_grids_from_cheb (1., 0., xx, wx)
 
     wl = 0.0
+    Bovervpar = 0.0 
 
     al(:ng2) = (1.0 - xx(:ng2)**2)/bmax
 
@@ -1621,6 +1629,11 @@ contains
        do ig = -ntgrid, ntgrid
           wl(ig,il) = wx(il)*2.0*sqrt((bmag(ig)/bmax) &
                *((1.0/bmax-al(il))/(1.0/bmag(ig)-al(il))))
+          ! Replace flag with alpha flux diagnostic:
+          if (.false.) then
+             Bovervpar(ig,il) = 2.0*sqrt((bmag(ig)/bmax) &
+               *((1.0/bmax-al(il))/(1.0/bmag(ig)-al(il))))
+          end if
        end do
     end do
 
@@ -2876,7 +2889,7 @@ contains
     implicit none
 
     if (allocated(zeroes)) deallocate (zeroes,x0,zeroes_maxwell)
-    if (allocated(energy)) deallocate (energy, energy_maxwell, dele, al, wl, jend, forbid, xx, lgrnge, xloc, speed_maxwell, speed)
+    if (allocated(energy)) deallocate (energy, energy_maxwell, dele, al, wl, Bovervpar, jend, forbid, xx, lgrnge, xloc, speed_maxwell, speed)
     if (allocated(integration_work)) deallocate (integration_work)
     if (allocated(wlerr)) deallocate (wlerr)
     if (allocated(werr)) deallocate (werr)

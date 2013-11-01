@@ -16,6 +16,7 @@ module gs2_io
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
   public :: nc_loop_vres
   public :: nc_loop_movie, nc_write_fields, nc_write_moments
+  public :: nc_flux_emu
 
   public :: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
 
@@ -40,6 +41,7 @@ module gs2_io
   integer, dimension (3) :: fluxx_dim
   integer, dimension (3) :: mode_dim, phase_dim, loop_phi_dim, heat_dim
   integer, dimension (2) :: kx_dim, ky_dim, om_dim, flux_dim, nin_dim, fmode_dim
+  integer, dimension (5) :: flux_emu_dim
 
   ! added by EAB 03/05/04 for movies
   logical :: my_make_movie, io_write_corr_extend
@@ -103,6 +105,7 @@ module gs2_io
   integer :: hk_delfs2_id, hk_hs2_id, hk_phis2_id
   integer :: hk_hypervisc_id, hk_hyperres_id, hk_collisions_id
   integer :: hk_gradients_id, hk_hypercoll_id, hk_heating_id, hk_imp_colls_id
+  integer :: es_flux_emu_id, apar_flux_emu_id, bpar_flux_emu_id
   integer, dimension (5) :: mom_dim
   integer :: ntot0_id, density0_id, upar0_id, tpar0_id, tperp0_id
   logical :: write_apar_t, write_phi_t, write_bpar_t ! Should the fields be written out every nwrite?
@@ -348,7 +351,6 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, negrid_id)
     status = nf90_put_var (ncid, nlambda_id, nlambda)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, nlambda_id)
-
     status = nf90_put_var (ncid, akx_id, akx)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, akx_id)
     status = nf90_put_var (ncid, aky_id, aky)
@@ -477,6 +479,7 @@ contains
     use kt_grids, only: naky, ntheta0, theta0
     use run_parameters, only: fphi, fapar, fbpar
     use parameter_scan_arrays, only: write_scan_parameter
+    use gs2_diagnostics, only: write_flux_emu
 # ifdef NETCDF
     use netcdf, only: NF90_CHAR, NF90_INT, NF90_GLOBAL
     use netcdf, only: nf90_def_var, nf90_put_att, nf90_enddef, nf90_put_var
@@ -541,6 +544,12 @@ contains
     
     flux_dim (1) = nspec_dim
     flux_dim (2) = time_dim
+
+    flux_emu_dim (1) = negrid_dim
+    flux_emu_dim (2) = nlambda_dim
+    flux_emu_dim (3) = nsign_dim
+    flux_emu_dim (4) = nspec_dim
+    flux_emu_dim (5) = time_dim
 
     fluxk_dim (1) = nakx_dim
     fluxk_dim (2) = naky_dim
@@ -928,6 +937,10 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom_flux')
           status = nf90_def_var (ncid, 'es_part_flux', netcdf_real, flux_dim, es_part_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_flux')
+          if (write_flux_emu) then
+             status = nf90_def_var (ncid, 'es_flux_emu', netcdf_real, flux_emu_dim, es_flux_emu_id)
+             if (status /= NF90_NOERR) call netcdf_error (status, var='es_flux_emu')
+          end if
           status = nf90_def_var (ncid, 'es_energy_exchange', netcdf_real, flux_dim, es_energy_exchange_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_energy_exchange')
           status = nf90_def_var (ncid, 'es_heat_by_k', netcdf_real, fluxk_dim, es_heat_by_k_id)
@@ -1034,6 +1047,10 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_heat_perp')
           status = nf90_def_var (ncid, 'apar_mom_flux',  netcdf_real, flux_dim, apar_mom_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_mom_flux')
+          if (write_flux_emu) then
+             status = nf90_def_var (ncid, 'apar_flux_emu', netcdf_real, flux_emu_dim, apar_flux_emu_id)
+             if (status /= NF90_NOERR) call netcdf_error (status, var='apar_flux_emu')
+          end if
           status = nf90_def_var (ncid, 'apar_part_flux', netcdf_real, flux_dim, apar_part_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_part_flux')
           status = nf90_def_var (ncid, 'apar_heat_by_k', netcdf_real, fluxk_dim, apar_heat_by_k_id)
@@ -1097,6 +1114,10 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_mom_flux')
           status = nf90_def_var (ncid, 'bpar_part_flux', netcdf_real, flux_dim, bpar_part_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_part_flux')
+          if (write_flux_emu) then       
+             status = nf90_def_var (ncid, 'bpar_flux_emu', netcdf_real, flux_emu_dim, bpar_flux_emu_id)
+             if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_flux_emu')
+          end if
           status = nf90_def_var (ncid, 'bpar_heat_by_k', netcdf_real, fluxk_dim, bpar_heat_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_heat_by_k')
           status = nf90_def_var (ncid, 'bpar_mom_by_k', netcdf_real, fluxk_dim, bpar_mom_by_k_id)
@@ -1897,6 +1918,50 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, hflux_tot_id)
 # endif
   end subroutine nc_qflux
+
+  subroutine nc_flux_emu(nout,flux,mflux,bflux)
+    use species, only: nspec
+    use le_grids, only: negrid, nlambda
+    use run_parameters, only: fphi,fapar,fbpar
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var
+# endif
+    implicit none
+    integer,intent(in):: nout
+    real,dimension(:,:,:,:),intent(in):: flux,mflux,bflux
+# ifdef NETCDF
+    integer, dimension (5) :: start, count
+    integer:: status
+
+    start(1) = 1
+    start(2) = 1
+    start(3) = 1
+    start(4) = 1
+    start(5) = nout
+   
+    count(1) = negrid
+    count(2) = nlambda
+    count(3) = 2
+    count(4) = nspec
+    count(4) = 1
+
+    if (fphi > zero) then
+       status = nf90_put_var (ncid, es_part_flux_id, flux, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_flux_id)
+    end if
+
+    if (fapar > zero) then
+       status = nf90_put_var (ncid, apar_part_flux_id, mflux, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_part_flux_id)
+    end if
+
+    if (fbpar > zero) then
+       status = nf90_put_var (ncid, bpar_part_flux_id, bflux, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_part_flux_id)
+    end if
+
+# endif
+  end subroutine nc_flux_emu
 
   subroutine nc_pflux (nout, pflux, pmflux, pbflux, &
        part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
