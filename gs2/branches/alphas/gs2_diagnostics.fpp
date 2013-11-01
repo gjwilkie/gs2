@@ -58,6 +58,7 @@ module gs2_diagnostics
   logical, public :: write_symmetry, write_correlation_extend, write_correlation
   integer, public :: nwrite, igomega, nmovie
   integer, public :: navg, nsave, nwrite_mult
+  logical, public :: write_flux_emu
 
   logical, public :: write_phi_over_time, write_apar_over_time, write_bpar_over_time !EGH
 !>GGH
@@ -82,7 +83,7 @@ module gs2_diagnostics
          dump_fields_periodically, make_movie, &
          save_for_restart, write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
-         write_phi_over_time, write_apar_over_time, write_bpar_over_time
+         write_phi_over_time, write_apar_over_time, write_bpar_over_time, write_flux_emu
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: jext_unit   !GGH Additions
@@ -107,6 +108,7 @@ module gs2_diagnostics
   real, dimension (:,:,:), allocatable :: pmflux, vmflux
   real, dimension (:,:,:), allocatable :: pbflux, vbflux
   real, dimension (:,:,:), allocatable :: exchange
+  real,dimension(:,:,:,:), allocatable :: pflux_emu, mflux_emu, bflux_emu
 
   ! (ntheta0,naky,nspec)
 
@@ -408,6 +410,7 @@ contains
     call broadcast (write_hrate)
     call broadcast (write_lorentzian)
     call broadcast (write_eigenfunc)
+    call broadcast (write_flux_emu)
 
     call broadcast (write_full_moments_notgc)
     call broadcast (write_phi_over_time)
@@ -465,13 +468,14 @@ contains
  
 
   subroutine real_init (list)
+    use le_grids, only: negrid, nlambda
     use run_parameters, only: fapar
     use file_utils, only: open_output_file, get_unused_unit
     use theta_grid, only: ntgrid, theta
     use kt_grids, only: naky, ntheta0, aky, akx
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
-    use mp, only: proc0
+    use mp, only: proc0, iproc
     use constants
     implicit none
     logical, intent (in) :: list
@@ -557,6 +561,12 @@ contains
     allocate (pbflux(ntheta0,naky,nspec)) ; pbflux = 0.
     allocate (qbheat(ntheta0,naky,nspec,3)) ; qbheat = 0.
     allocate (vbflux(ntheta0,naky,nspec)) ; vbflux = 0.
+
+    if (write_flux_emu) then
+       allocate (pflux_emu(negrid,nlambda,2,nspec)) ; pflux_emu = 0.
+       allocate (mflux_emu(negrid,nlambda,2,nspec)) ; mflux_emu = 0.
+       allocate (bflux_emu(negrid,nlambda,2,nspec)) ; bflux_emu = 0.
+    end if
       
   end subroutine real_init
 
@@ -626,6 +636,7 @@ contains
        write_bpar_over_time = .false.
        write_apar_over_time = .false.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
+       write_flux_emu = .false.
 
 	!<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
 !       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
@@ -645,8 +656,8 @@ contains
 
        write_any = write_line .or. write_omega     .or. write_omavg &
             .or. write_flux_line                   .or. write_nl_flux  &
-            .or. write_kpar   .or. write_hrate     .or. write_lorentzian  .or. write_gs
-       write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux 
+            .or. write_kpar   .or. write_hrate     .or. write_lorentzian  .or. write_gs .or. write_flux_emu
+       write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux  .or. write_flux_emu
        dump_any = dump_check1  .or. dump_fields_periodically &
             .or.  dump_check2 .or. make_movie .or. print_summary &
             .or.  write_full_moments_notgc
@@ -1344,6 +1355,7 @@ contains
     if (allocated(omegahist)) deallocate (omegahist)
     if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange)
+    if (allocated(pflux_emu)) deallocate(pflux_emu,mflux_emu,bflux_emu)
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
     if (allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
 
@@ -1364,7 +1376,7 @@ contains
     use run_parameters, only: nstep
     use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
-    use dist_fn, only: flux, write_f, write_fyx
+    use dist_fn, only: flux, write_f, write_fyx, flux_emu
     use dist_fn, only: omega0, gamma0, getmoms, par_spectrum
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn, only: getmoms_notgc, lf_flux, eexchange
@@ -1375,7 +1387,7 @@ contains
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: user_time
-    use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
+    use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments, nc_flux_emu
     use gs2_io, only: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
     use gs2_io, only: nc_loop_vres
     use gs2_io, only: nc_loop_movie, nc_write_fields, nc_write_moments
@@ -1617,6 +1629,9 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 
     if (write_any_fluxes) then
        call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
+       if (write_flux_emu) then
+          call flux_emu (phinew, aparnew, bparnew, pflux_emu, mflux_emu, bflux_emu)
+       end if
        call flux (phinew, aparnew, bparnew, &
             pflux,  qheat,  vflux, vflux_par, vflux_perp, &
             pmflux, qmheat, vmflux, pbflux, qbheat, vbflux)
