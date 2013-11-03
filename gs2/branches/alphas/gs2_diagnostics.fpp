@@ -475,7 +475,7 @@ contains
     use kt_grids, only: naky, ntheta0, aky, akx
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
-    use mp, only: proc0, iproc
+    use mp, only: proc0, iproc, broadcast
     use constants
     implicit none
     logical, intent (in) :: list
@@ -541,6 +541,8 @@ contains
        allocate (omegahist(0:navg-1,ntheta0,naky))
        omegahist = 0.0
     end if
+
+    call broadcast(write_flux_emu)
 
     !<doc> Allocate arrays for storing the various fluxes which the diagnostics will output </doc>
     allocate (pflux (ntheta0,naky,nspec)) ; pflux = 0.

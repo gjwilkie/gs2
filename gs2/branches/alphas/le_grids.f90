@@ -1630,10 +1630,8 @@ contains
           wl(ig,il) = wx(il)*2.0*sqrt((bmag(ig)/bmax) &
                *((1.0/bmax-al(il))/(1.0/bmag(ig)-al(il))))
           ! Replace flag with alpha flux diagnostic:
-          if (.false.) then
-             Bovervpar(ig,il) = 2.0*sqrt((bmag(ig)/bmax) &
+          Bovervpar(ig,il) = 2.0*sqrt((bmag(ig)/bmax) &
                *((1.0/bmax-al(il))/(1.0/bmag(ig)-al(il))))
-          end if
        end do
     end do
 
