@@ -127,8 +127,8 @@ contains
        write (unit, fmt="(' nwrite = ',i6)") nwrite
        write (unit, fmt="(' nsave = ',i6)") nsave
        write (unit, fmt="(' navg = ',i6)") navg
-       write (unit, fmt="(' omegatol = ',e16.10)") omegatol
-       write (unit, fmt="(' omegatinst = ',e16.10)") omegatinst
+       write (unit, fmt="(' omegatol = ',e17.10)") omegatol
+       write (unit, fmt="(' omegatinst = ',e17.10)") omegatinst
 ! should be legal -- not checked yet
        if (igomega /= 0) write (unit, fmt="(' igomega = ',i6)") igomega  
        
@@ -1174,7 +1174,7 @@ contains
     if (proc0) then
        call open_output_file (g_unit, ".g")
        write (g_unit,fmt="('# shape: ',a)") trim(shape)
-       write (g_unit,fmt="('# q = ',e10.4,' drhodpsi = ',e10.4)") qval, drhodpsi
+       write (g_unit,fmt="('# q = ',e11.4,' drhodpsi = ',e11.4)") qval, drhodpsi
        write (g_unit,fmt="('# theta1             R2                  Z3               alpha4      ', &
             &   '       Rprime5              Zprime6           alpha_prime7 ')")
        do i=-ntgrid,ntgrid
@@ -1211,9 +1211,9 @@ contains
     use dist_fn, only: flux, write_f!, write_fyx
     use dist_fn, only: omega0, gamma0, getmoms, par_spectrum
     use dist_fn, only: getmoms_notgc, eexchange
-# ifdef LOWFLOW
-    use dist_fn, only: lf_flux
-# endif
+!# ifdef LOWFLOW
+!    use dist_fn, only: lf_flux
+!# endif
     use dist_fn_arrays, only: g, gnew, aj0, g_adjust
     use vpamu_grids, only: vpa
     use mp, only: proc0, broadcast, iproc, send, receive
@@ -1387,10 +1387,10 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        call flux (phinew, aparnew, bparnew, &
             pflux,  qheat,  vflux, vflux_par, vflux_perp, &
             pmflux, qmheat, vmflux, pbflux, qbheat, vbflux)
-#ifdef LOWFLOW
-       ! lowflow terms only implemented in electrostatic limit at present
-       call lf_flux (phinew, vflux0, vflux1)
-#endif
+!#ifdef LOWFLOW
+!       ! lowflow terms only implemented in electrostatic limit at present
+!       call lf_flux (phinew, vflux0, vflux1)
+!#endif
        call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
        call eexchange (phinew, exchange)
 
@@ -1487,20 +1487,20 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 
     if (proc0) then
        if (print_flux_line) then
-          write (unit=*, fmt="('t= ',e16.10,' <phi**2>= ',e12.6, &
-               & ' heat fluxes: ', 5(1x,e12.6))") &
+          write (unit=*, fmt="('t= ',e17.10,' <phi**2>= ',e13.6, &
+               & ' heat fluxes: ', 5(1x,e13.6))") &
                t, phi2, heat_fluxes(1:min(nspec,5))
-          write (unit=*, fmt="('t= ',e16.10,' <phi**2>= ',e12.6, &
-               & ' energy exchange: ', 5(1x,e12.6))") &
+          write (unit=*, fmt="('t= ',e17.10,' <phi**2>= ',e13.6, &
+               & ' energy exchange: ', 5(1x,e13.6))") &
                t, phi2, energy_exchange(1:min(nspec,5))
           if (fapar > epsilon(0.0)) then
-             write (unit=*, fmt="('t= ',e16.10,' <apar**2>= ',e10.4, &
-                  & ' heat flux m: ', 5(1x,e10.4))") &
+             write (unit=*, fmt="('t= ',e17.10,' <apar**2>= ',e11.4, &
+                  & ' heat flux m: ', 5(1x,e11.4))") &
                   t, apar2, mheat_fluxes(1:min(nspec,5))
           end if
           if (fbpar > epsilon(0.0)) then
-             write (unit=*, fmt="('t= ',e16.10,' <bpar**2>= ',e10.4, &
-                  & ' heat flux b: ', 5(1x,e10.4))") &
+             write (unit=*, fmt="('t= ',e17.10,' <bpar**2>= ',e11.4, &
+                  & ' heat flux b: ', 5(1x,e11.4))") &
                   t, bpar2, bheat_fluxes(1:min(nspec,5))
           end if
        end if
@@ -1509,7 +1509,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
           do ik = 1, naky
              do it = 1, ntheta0
 !                   write (unit=*, fmt="('aky=',f5.2, ' th0=',f7.2, &
-!                          &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e10.4)") &
+!                          &' om=',2f8.3,' omav=', 2f8.3,' phtot=',e11.4)") &
 !                        aky(ik), theta0(it,ik), &
 !                        real( omega(it,ik)*woutunits(ik)), &
 !                        aimag(omega(it,ik)*woutunits(ik)), &
@@ -1540,7 +1540,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 
 !     if (write_cross_phase .and. has_electron_species(spec)) then
 !        call get_cross_phase (phase_tot, phase_theta)
-!        if (proc0) write (unit=phase_unit, fmt="('t= ',e16.10,' phase_tot= ',e10.4,' phase_theta= ',e10.4)") &
+!        if (proc0) write (unit=phase_unit, fmt="('t= ',e17.10,' phase_tot= ',e11.4,' phase_theta= ',e11.4)") &
 !             & t, phase_tot, phase_theta
 !     end if
 
@@ -1561,20 +1561,20 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           zflux_tot = 0.
           if (fphi > epsilon(0.0)) then
              if (write_ascii) then
-                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' heat fluxes: ', 5(1x,e10.4),' qflux_avg: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <phi**2>= ',e11.4, &
+                     & ' heat fluxes: ', 5(1x,e11.4),' qflux_avg: ', 5(1x,e11.4))") &
 !                     t, phi2, heat_fluxes(1:min(nspec,5)), qflux_avg(1:min(nspec,5))/t
                      t, phi2, heat_fluxes(1:min(nspec,5)), energy_exchange(1:min(nspec,5))
-                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' part fluxes: ', 5(1x,e10.4),' pflux_avg: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <phi**2>= ',e11.4, &
+                     & ' part fluxes: ', 5(1x,e11.4),' pflux_avg: ', 5(1x,e11.4))") &
                      t, phi2, part_fluxes(1:min(nspec,5)), pflux_avg(1:min(nspec,5))/t
-                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' mom fluxes: ', 5(1x,e10.4),' vflux_avg: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <phi**2>= ',e11.4, &
+                     & ' mom fluxes: ', 5(1x,e11.4),' vflux_avg: ', 5(1x,e11.4))") &
                      t, phi2, mom_fluxes(1:min(nspec,5)), vflux_avg(1:min(nspec,5))/t
 
 #ifdef LOWFLOW
-                   write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                        & ' lfmom fluxes: ', 5(1x,e10.4),' lfvflx1: ', 5(1x,e10.4))") &
+                   write (unit=out_unit, fmt="('t= ',e17.10,' <phi**2>= ',e11.4, &
+                        & ' lfmom fluxes: ', 5(1x,e11.4),' lfvflx1: ', 5(1x,e11.4))") &
                         t, phi2, lfmom_fluxes(1:min(nspec,5)), vflux1_avg(1:min(nspec,5))
 #endif
              end if
@@ -1586,16 +1586,16 @@ if (debug) write(6,*) "loop_diagnostics: -2"
              if (write_lorentzian .and. write_ascii) then
                 wtmp_new = antenna_w()
                 if (real(wtmp_old) /= 0. .and. wtmp_new /= wtmp_old) &
-                     write (unit=out_unit, fmt="('w= ',e16.10, &
-                     &  ' amp= ',e16.10)") real(wtmp_new), sqrt(2.*apar2)
+                     write (unit=out_unit, fmt="('w= ',e17.10, &
+                     &  ' amp= ',e17.10)") real(wtmp_new), sqrt(2.*apar2)
                 wtmp_old = wtmp_new                
              end if
              if (write_ascii) then
-                write (unit=out_unit, fmt="('t= ',e16.10,' <apar**2>= ',e10.4, &
-                     & ' heat mluxes: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <apar**2>= ',e11.4, &
+                     & ' heat mluxes: ', 5(1x,e11.4))") &
                      t, apar2, mheat_fluxes(1:min(nspec,5))
-                write (unit=out_unit, fmt="('t= ',e16.10,' <apar**2>= ',e10.4, &
-                     & ' part mluxes: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <apar**2>= ',e11.4, &
+                     & ' part mluxes: ', 5(1x,e11.4))") &
                      t, apar2, mpart_fluxes(1:min(nspec,5))
              end if
              hflux_tot = hflux_tot + sum(mheat_fluxes)
@@ -1604,19 +1604,19 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           end if
           if (fbpar > epsilon(0.0)) then
              if (write_ascii) then
-                write (unit=out_unit, fmt="('t= ',e16.10,' <bpar**2>= ',e10.4, &
-                     & ' heat bluxes: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <bpar**2>= ',e11.4, &
+                     & ' heat bluxes: ', 5(1x,e11.4))") &
                      t, bpar2, bheat_fluxes(1:min(nspec,5))
-                write (unit=out_unit, fmt="('t= ',e16.10,' <bpar**2>= ',e10.4, &
-                     & ' part bluxes: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <bpar**2>= ',e11.4, &
+                     & ' part bluxes: ', 5(1x,e11.4))") &
                      t, bpar2, bpart_fluxes(1:min(nspec,5))
              end if
              hflux_tot = hflux_tot + sum(bheat_fluxes)
              vflux_tot = vflux_tot + sum(bmom_fluxes)
              zflux_tot = zflux_tot + sum(bpart_fluxes*spec%z)
           end if
-          if (write_ascii) write (unit=out_unit, fmt="('t= ',e16.10,' h_tot= ',e10.4, &
-               & ' z_tot= ',e10.4)") t, hflux_tot, zflux_tot
+          if (write_ascii) write (unit=out_unit, fmt="('t= ',e17.10,' h_tot= ',e11.4, &
+               & ' z_tot= ',e11.4)") t, hflux_tot, zflux_tot
           if (write_nl_flux) then
              call nc_qflux (nout, qheat(:,:,:,1), qmheat(:,:,:,1), qbheat(:,:,:,1), &
                   heat_par, mheat_par, bheat_par, &
@@ -1656,7 +1656,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 !                write (out_unit,*) "aky=",aky(ik)," theta0=",theta0(it,ik)
 
                 if (write_line) then
-                   write (out_unit, "('t= ',e16.10,' aky= ',1pe12.4, ' akx= ',1pe12.4, &
+                   write (out_unit, "('t= ',e17.10,' aky= ',1pe12.4, ' akx= ',1pe12.4, &
                         &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4)") &
                         t, aky(ik), akx(it), &
                         real( omega(it,ik)*woutunits(ik)), &
@@ -1690,18 +1690,18 @@ if (debug) write(6,*) "loop_diagnostics: -2"
              if (write_nl_flux) then
                 if (write_ascii) then
 !                   write (out_unit,"('ik,it,aky,akx,<phi**2>,t: ', &
-!                        & 2i5,4(1x,e12.6))") &
+!                        & 2i5,4(1x,e13.6))") &
 !                        ik, it, aky(ik), akx(it), phi2_by_mode(it,ik), t
 !                   write (out_unit,"('ik,it,aky,akx,<apar**2>,t: ', &
-!                        & 2i5,4(1x,e12.6))") &
+!                        & 2i5,4(1x,e13.6))") &
 !                        ik, it, aky(ik), akx(it), apar2_by_mode(it,ik), t
                 end if
 !                if (ntheta0 > 1 .and. ik == 1) then
-!                   write (out_unit, "('it,akx,<phi**2>,t: ',i5,3(1x,e12.6))") &
+!                   write (out_unit, "('it,akx,<phi**2>,t: ',i5,3(1x,e13.6))") &
 !                        it, akx(it), sum(phi2_by_mode(it,:)*fluxfac(:)), t
 !                end if
 !                if (naky > 1 .and. it == 1) then
-!                   write (out_unit, "('ik,aky,<phi**2>,t: ',i5,3(1x,e12.6))") &
+!                   write (out_unit, "('ik,aky,<phi**2>,t: ',i5,3(1x,e13.6))") &
 !                        ik, aky(ik), sum(phi2_by_mode(:,ik))*fluxfac(ik), t
 !                end if
              end if
@@ -1783,7 +1783,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                   ntot20(is), ntot20_by_mode(:,:,is))
           end do
 
-!          write (out_unit, "('t,u0 ',2(1x,e12.6))") t, aimag(upar00 (1,1))
+!          write (out_unit, "('t,u0 ',2(1x,e13.6))") t, aimag(upar00 (1,1))
 
           call nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, &
                ntot20_by_mode, phi00, ntot00, density00, upar00, &
@@ -1832,7 +1832,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 
     if (dump_fields_periodically .and. mod(istep,10*nwrite) == 0) then
        call get_unused_unit (unit)
-       write (filename, "('dump.fields.t=',e12.6)") t
+       write (filename, "('dump.fields.t=',e13.6)") t
        open (unit=unit, file=filename, status="unknown")
        do ik = 1, naky
           do it = 1, ntheta0
