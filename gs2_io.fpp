@@ -123,7 +123,7 @@ contains
       write_moments,&
       write_full_moments_notgc, write_sym, write_correlation, nwrite_big_tot, &
       write_correlation_extend, & 
-      write_phi_over_time, write_apar_over_time, write_bpar_over_time) 
+      write_phi_over_time, write_apar_over_time, write_bpar_over_time,write_flux_emu) 
 
     !write_fields_over_time added by EGH 08/2009
 !David has made some changes to this subroutine (may 2005) now should 
@@ -144,7 +144,7 @@ contains
 # endif
 !    logical :: write_nl_flux, write_omega, write_hrate, make_movie
 !    logical :: write_final_antot, write_eigenfunc, write_verr
-    logical, intent(in) :: write_nl_flux, write_omega
+    logical, intent(in) :: write_nl_flux, write_omega, write_flux_emu
     logical, intent(in) :: write_hrate, make_movie, write_fields, write_moments
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
@@ -232,7 +232,7 @@ contains
        call define_vars (write_nl_flux, write_omega, &
             write_hrate, write_final_antot, write_eigenfunc, write_verr, &
             write_fields, write_moments, write_full_moments_notgc, write_sym, write_correlation, &
-            write_correlation_extend)
+            write_correlation_extend,write_flux_emu)
        call nc_grids
        call nc_species
        call nc_geo
@@ -472,14 +472,13 @@ contains
   subroutine define_vars (write_nl_flux, write_omega, &
        write_hrate, write_final_antot, write_eigenfunc, write_verr, &
        write_fields, write_moments, write_full_moments_notgc, write_sym, write_correlation, &
-       write_correlation_extend)
+       write_correlation_extend,write_flux_emu)
 
     use mp, only: nproc
     use species, only: nspec
     use kt_grids, only: naky, ntheta0, theta0
     use run_parameters, only: fphi, fapar, fbpar
     use parameter_scan_arrays, only: write_scan_parameter
-    use gs2_diagnostics, only: write_flux_emu
 # ifdef NETCDF
     use netcdf, only: NF90_CHAR, NF90_INT, NF90_GLOBAL
     use netcdf, only: nf90_def_var, nf90_put_att, nf90_enddef, nf90_put_var
@@ -489,7 +488,7 @@ contains
 !    use netcdf_mod
 !    logical :: write_nl_flux, write_omega, write_hrate
 !    logical :: write_final_antot, write_eigenfunc, write_verr
-    logical, intent(in) :: write_nl_flux, write_omega
+    logical, intent(in) :: write_nl_flux, write_omega, write_flux_emu
     logical, intent(in) :: write_hrate, write_final_antot
     logical, intent(in) :: write_eigenfunc, write_verr, write_fields, write_moments
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
@@ -1945,8 +1944,9 @@ contains
     count(4) = nspec
     count(4) = 1
 
+
     if (fphi > zero) then
-       status = nf90_put_var (ncid, es_part_flux_id, flux, start=start, count=count)
+       status = nf90_put_var (ncid, es_flux_emu_id, flux, start=start, count=count)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_part_flux_id)
     end if
 
