@@ -300,7 +300,7 @@ contains
         case (alpha_f0_maxwellian)
           f0 = exp(-v**2)/(pi**1.5)
         case (alpha_f0_analytic)
-          call eval_f0_analytic(is,v,f0,dummy) 
+          call eval_f0_analytic(is,v,f0,dummy,dummy) 
         case (alpha_f0_semianalytic)
           write(*,*) "ERROR: eval_f0 cannot yet handle semianalytic option."
           call mp_abort('')
@@ -1001,50 +1001,68 @@ contains
     real:: A, Ti, Ealpha, vstar, v, df0dv, df0dE, B
     integer:: ie, i, electron_spec
 
-    if (vcrit .LE. 0.0) then
-       write(*,*) "ERROR: in general_f0. If alpha_f0='analytic' is chosen, vcrit must also be specified."
-       call mp_abort('')
-    end if
+!    if (vcrit .LE. 0.0) then
+!       write(*,*) "ERROR: in general_f0. If alpha_f0='analytic' is chosen, vcrit must also be specified."
+!       call mp_abort('')
+!    end if
 
     do ie = 1,negrid 
        v = sqrt(egrid(ie,is))
-       call eval_f0_analytic(is,v,f0_values(ie,is),generalised_temperature(ie,is))
+       call eval_f0_analytic(is,v,f0_values(ie,is),generalised_temperature(ie,is),f0prim(ie,is))
     end do
 
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
 
-    f0prim(:,is) = - spec(is)%fprim 
+!    f0prim(:,is) = - spec(is)%fprim 
 
     if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
 
   end subroutine calculate_f0_arrays_analytic
 
-  subroutine eval_f0_analytic(is,v,f0,gentemp)
+  subroutine eval_f0_analytic(is,v,f0,gentemp,f0prim)
     use species, only: ion_species, electron_species, alpha_species, spec, nspec
     use constants, only: pi
-    use mp, only: mp_abort
+    use mp, only: mp_abort, proc0
     use spfunc, only: erf => erf_ext
     implicit none
     integer,intent(in):: is
     real,intent(in):: v
-    real,intent(inout):: f0,gentemp
-    real:: A, Ti, Ealpha, vstar, df0dv, df0dE
+    real,intent(inout):: f0,gentemp, f0prim
+    real:: A, Ti, Ealpha, vstar, df0dv, df0dE, vta, vti, vte, Zi,ni,ne, ni_prim,ne_prim,Ti_prim,Te_prim
     integer:: ie, i, electron_spec
 
-    if (vcrit .LE. 0.0) then
-       write(*,*) "ERROR: in general_f0. If alpha_f0='analytic' is chosen, vcrit must also be specified."
-       call mp_abort('')
-    end if
-
+    electron_spec = -1
     do i = 1,nspec
       if (spec(i)%type .eq. electron_species) electron_spec = i
       if (main_ion_species < 1 .and. spec(i)%type .eq. ion_species) &
         main_ion_species = i
     end do
 
-    Ti = spec(main_ion_species)%temp
     Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
+    vta = sqrt(Ealpha/spec(is)%mass)
+
+       vti = spec(main_ion_species)%stm
+       ni = spec(main_ion_species)%dens
+       Zi = spec(main_ion_species)%z
+       Ti = spec(main_ion_species)%temp
+       Ti_prim = spec(main_ion_species)%tprim
+       ni_prim = spec(main_ion_species)%fprim
+
+       if (electron_species .GT. 0) then
+          vte = spec(electron_spec)%stm
+          ne = spec(electron_spec)%dens
+       else
+          ne = Zi*ni + spec(is)%z * spec(is)%dens
+          vte = vti*1836.0
+          ne_prim = Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim
+          Te_prim = Ti_prim
+       end if
+
+    if (vcrit .LE. 0.0) then
+       vcrit = (3.0*sqrt(pi)*vti**2*vte*Zi*ni/(4.0*ne))**(1.0/3.0)/vta
+    end if
+
 
 !    vstar = sqrt(Ealpha)
 !    Ealpha = 1.0
@@ -1059,13 +1077,19 @@ contains
        df0dv = -A*3.0*v**2/(vcrit**3 + v**3)**2
        df0dE = (0.5/v)*df0dv
        gentemp = -spec(is)%temp*f0/df0dE
+       f0prim = -spec(is)%fprim + (vcrit**3/(vcrit**3 + v**3))*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)
+       f0prim = f0prim + (3.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(-3))))*(-ni_prim + ne_prim + Ti_prim + 0.5*Te_prim)
     else
-       f0 = exp(-Ealpha*(v**2-1.0)/Ti)
+       f0 = exp(-Ealpha*(v**2-1.0)/Ti) * A / (vcrit**3 + 1.0)
        df0dE = -Ealpha*f0/Ti
        gentemp = -spec(is)%temp*f0/df0dE
+       f0prim = -spec(is)%fprim + (vcrit**3/(vcrit**3 + 1.0))*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)
+       f0prim = f0prim + (3.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(-3))))*(-ni_prim + ne_prim + Ti_prim + 0.5*Te_prim)
+       f0prim = f0prim + (Ealpha/Ti)*(v**2-1.0)*Ti_prim
     end if
 
-!    write(*,*) v,f0,gentemp
+!    write(*,*) Ealpha/Ti,v,f0,gentemp, f0prim
+
 
   end subroutine eval_f0_analytic
 
