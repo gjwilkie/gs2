@@ -1049,7 +1049,7 @@ contains
        Ti_prim = spec(main_ion_species)%tprim
        ni_prim = spec(main_ion_species)%fprim
 
-       if (electron_species .GT. 0) then
+       if (electron_spec .GT. 0) then
           vte = spec(electron_spec)%stm
           ne = spec(electron_spec)%dens
        else
