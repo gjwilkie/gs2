@@ -42,6 +42,7 @@ module gs2_io
   integer, dimension (3) :: mode_dim, phase_dim, loop_phi_dim, heat_dim
   integer, dimension (2) :: kx_dim, ky_dim, om_dim, flux_dim, nin_dim, fmode_dim
   integer, dimension (5) :: flux_emu_dim
+  integer, dimension(2) :: nenergy_dim, nlambdaspec_dim
 
   ! added by EAB 03/05/04 for movies
   logical :: my_make_movie, io_write_corr_extend
@@ -109,6 +110,7 @@ module gs2_io
   integer, dimension (5) :: mom_dim
   integer :: ntot0_id, density0_id, upar0_id, tpar0_id, tperp0_id
   logical :: write_apar_t, write_phi_t, write_bpar_t ! Should the fields be written out every nwrite?
+  integer :: energy_int_wgt_id, lambda_int_wgt_id
 
 # endif
   real :: zero
@@ -325,7 +327,7 @@ contains
     use kt_grids, only: naky, ntheta0, theta0, akx, aky, nx, ny
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
-    use le_grids, only: negrid, nlambda, energy, al
+    use le_grids, only: negrid, nlambda, energy, al, lwgts=>wl, ewgts=>w
     use nonlinear_terms, only: nonlin
 # ifdef NETCDF
 !    use netcdf_mod
@@ -363,6 +365,10 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, egrid_id)
     status = nf90_put_var (ncid, lambda_id, al)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, lambda_id)
+!    status = nf90_put_var (ncid, energy_int_wgt_id, ewgts)
+!    if (status /= NF90_NOERR) call netcdf_error (status, ncid, energy_int_wgt_id)
+!    status = nf90_put_var (ncid, lambda_int_wgt_id, lwgts)
+!    if (status /= NF90_NOERR) call netcdf_error (status, ncid, lambda_int_wgt_id)
 
     if (nonlin) then
        nmesh = (2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec
@@ -549,6 +555,12 @@ contains
     flux_emu_dim (3) = nsign_dim
     flux_emu_dim (4) = nspec_dim
     flux_emu_dim (5) = time_dim
+
+    nenergy_dim(1) = negrid_dim
+    nenergy_dim(2) = nspec_dim
+
+    nlambdaspec_dim(1) = nlambda_dim
+    nlambdaspec_dim(2) = nttot_dim
 
     fluxk_dim (1) = nakx_dim
     fluxk_dim (2) = naky_dim
@@ -808,10 +820,17 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, aky_id, att='long_name')
 
     ! EGH Energy is now a function of species
-    status = nf90_def_var (ncid, 'egrid', netcdf_real, (/negrid_dim, nspec_dim/), egrid_id)
+!    status = nf90_def_var (ncid, 'egrid', netcdf_real, (/negrid_dim, nspec_dim/), egrid_id)
+    status = nf90_def_var (ncid, 'egrid', netcdf_real, nenergy_dim , egrid_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='egrid')
     status = nf90_def_var (ncid, 'lambda', netcdf_real, nlambda_dim, lambda_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='lambda')
+
+    status = nf90_def_var (ncid, 'energy_int_wgt', netcdf_real, nenergy_dim , energy_int_wgt_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='egrid')
+    status = nf90_def_var (ncid, 'lambda_int_wgt', netcdf_real, nlambdaspec_dim , lambda_int_wgt_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='egrid')
+
 
     status = nf90_def_var (ncid, 'theta', netcdf_real, nttot_dim, theta_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='theta')
