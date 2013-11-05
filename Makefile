@@ -1,4 +1,4 @@
-#################################################################### OVERVIEW
+
 #
 #  Makefile for Trinity (GS2) / AstroGK Gyrokinetic Turbulence code 
 #               GSP Gyrokinetic PIC code
