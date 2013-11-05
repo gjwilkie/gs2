@@ -159,6 +159,7 @@ contains
        write (unit, fmt="(' write_final_moments = ',L1)") write_final_moments
        write (unit, fmt="(' write_final_antot = ',L1)") write_final_antot
        write (unit, fmt="(' write_nl_flux = ',L1)") write_nl_flux
+       write (unit, fmt="(' write_flux_emu = ',L1)") write_flux_emu
        write (unit, fmt="(' exit_when_converged = ',L1)") exit_when_converged
        if (write_avg_moments) write (unit, fmt="(' write_avg_moments = ',L1)") write_avg_moments
        if (dump_check1) write (unit, fmt="(' dump_check1 = ',L1)") dump_check1
@@ -451,7 +452,7 @@ contains
          write_fields, write_moments, write_full_moments_notgc, &
          write_symmetry, &
          write_correlation, nwrite_big_tot, write_correlation_extend, &
-         write_phi_over_time, write_apar_over_time, write_bpar_over_time)
+         write_phi_over_time, write_apar_over_time, write_bpar_over_time,write_flux_emu)
     
     if (write_cerr) then
        if (collision_model_switch == 1 .or. collision_model_switch == 5) then
@@ -2004,6 +2005,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                   scan_momflux(mod(nout-1,nstep/nwrite+1)+1) = vflux_tot
              call nc_pflux (nout, pflux, pmflux, pbflux, &
                   part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
+             if (write_flux_emu) call nc_flux_emu(nout,pflux_emu,mflux_emu,bflux_emu)
           end if
           call nc_loop (nout, t, fluxfac, &
                phinew(igomega,:,:), phi2, phi2_by_mode, &
