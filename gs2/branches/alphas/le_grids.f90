@@ -109,20 +109,18 @@ contains
          ! See eq. 4.13 of M. Barnes's thesis
          wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(laguerre_fac*(epts(nesub+1:,is)-vcut_local**2))*pi*0.5*sqrt(epts(nesub+1:,is))/laguerre_fac
   
-!         if (spec(is)%type .EQ. alpha_species) wgts(nesub+1:,is) = 0.0
-
       end if
 
     end do
 
     call calculate_f0_arrays(epts, wgts, vcut,.false.)
     
-!    do is = 1,nspec
-!       do ie = 1,negrid
-!          if (proc0) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
-!       end do
-!       write(*,*) sum(wgts(:,is))
-!    end do
+    do is = 1,nspec
+       do ie = 1,negrid
+          if (proc0) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
+       end do
+       write(*,*) sum(wgts(:,is))
+    end do
 
     energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))
