@@ -1055,15 +1055,15 @@ contains
 
   subroutine finish_save
     
-    if (allocated(tmpr)) deallocate(tmpr)
-    if (allocated(tmpi)) deallocate(tmpi)
-    if (allocated(ftmpr)) deallocate(ftmpr)
-    if (allocated(ftmpi)) deallocate(ftmpi)
-    if (allocated(stmp)) deallocate(stmp)
-    if (allocated(atmp)) deallocate(atmp)
+    !if (allocated(tmpr)) deallocate(tmpr)
+    !if (allocated(tmpi)) deallocate(tmpi)
+    !if (allocated(ftmpr)) deallocate(ftmpr)
+    !if (allocated(ftmpi)) deallocate(ftmpi)
+    !if (allocated(stmp)) deallocate(stmp)
+    !if (allocated(atmp)) deallocate(atmp)
     
-    initialized = .false.
-    initialized_dfn = .false.
+    !initialized = .false.
+    !initialized_dfn = .false.
 
   end subroutine finish_save
 
