@@ -29,7 +29,7 @@ module dist_fn
   public :: get_verr, get_gtran, write_fyx, collision_error
   public :: get_init_field
   public :: flux_vs_theta_vs_vpa
-  public :: flux_emu
+  public :: flux_emu, flux_e
 
   public :: gamtot,gamtot1,gamtot2
   public :: getmoms_notgc
@@ -4685,6 +4685,79 @@ subroutine check_dist_fn(report_unit)
     deallocate (dnorm)
   end subroutine flux_emu
 
+  subroutine flux_e (phi, apar, bpar, pflux, pmflux, pbflux)
+    use species, only: spec
+    use theta_grid, only: ntgrid, bmag, gradpar, grho, delthet, drhodpsi
+    use theta_grid, only: qval, shat, gds21, gds22
+    use kt_grids, only: naky, ntheta0, akx, theta0, aky
+    use le_grids, only: energy
+    use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
+    use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
+    use mp, only: proc0
+    use run_parameters, only: woutunits, fphi, fapar, fbpar
+    use constants, only: zi
+    use geometry, only: rhoc
+    use theta_grid, only: Rplot, Bpol
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    real, dimension (:,:), intent (inout) :: pflux, pmflux, pbflux
+    real, dimension (:,:,:), allocatable :: dnorm
+    integer :: it, ik, is, isgn, ig
+    integer :: iglo
+
+    allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
+
+    if (proc0) then
+        pflux = 0.0;   pmflux = 0.0; pbflux = 0.0 ; 
+    end if
+
+    do ik = 1, naky
+       do it = 1, ntheta0
+          dnorm(:,it,ik) = delthet/bmag/gradpar*woutunits(ik)
+       end do
+    end do
+
+    if (fphi > epsilon(0.0)) then
+       do isgn = 1, 2
+          g0(:,isgn,:) = gnew(:,isgn,:)*aj0
+       end do
+       call get_flux_e (phi, pflux, dnorm)
+
+    else
+       pflux = 0.
+    end if
+
+    if (fapar > epsilon(0.0)) then
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          is = is_idx(g_lo,iglo)
+          do isgn = 1, 2
+             g0(:,isgn,iglo) &
+                  = -gnew(:,isgn,iglo)*aj0(:,iglo)*spec(is)%stm*vpa(:,isgn,iglo)
+          end do
+       end do
+       call get_flux_e (apar, pmflux, dnorm)
+
+    else
+       pmflux = 0.
+    end if
+
+    if (fbpar > epsilon(0.0)) then
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          is = is_idx(g_lo,iglo)
+          do isgn = 1, 2
+             g0(:,isgn,iglo) &
+                  = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz
+          end do
+       end do
+       call get_flux_e (bpar, pbflux, dnorm)
+    else
+       pbflux = 0.
+    end if
+
+    deallocate (dnorm)
+  end subroutine flux_e
+
+
   subroutine get_flux (fld, flx, dnorm)
     use theta_grid, only: ntgrid, delthet, grho
     use kt_grids, only: ntheta0, aky, naky
@@ -4761,6 +4834,47 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine get_flux_emu
 
+  subroutine get_flux_e (fld, flx, dnorm)
+    use theta_grid, only: ntgrid, delthet, grho
+    use kt_grids, only: ntheta0, aky, naky
+    use le_grids, only: negrid,nlambda,wl
+    use species, only: nspec
+    use mp, only: sum_reduce, proc0
+    use gs2_layouts, only: g_lo,ie_idx,il_idx,is_idx,it_idx,ik_idx,isign_idx,yxf_lo
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: fld
+    real, dimension (:,:), intent (in out) :: flx
+    real, dimension (-ntgrid:,:,:) :: dnorm
+    real, dimension (:,:), allocatable :: total
+    real:: wgt
+    integer :: ik, it, is, ig, iglo, ie, il, isgn
+
+    allocate(total(negrid,nspec))
+    total = 0.
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+
+       wgt = sum(dnorm(-ntgrid:,it,ik)*grho(-ntgrid:))
+       total(ie,is) = total(ie,is) + & 
+          sum(aimag(g0(-ntgrid:,1,iglo)*conjg(fld(-ntgrid:,it,ik)) * &
+          dnorm(-ntgrid:,it,ik) * aky(ik)) * wl(-ntgrid:,il)/wgt)
+       total(ie,is) = total(ie,is) + & 
+          sum(aimag(g0(-ntgrid:,2,iglo)*conjg(fld(-ntgrid:,it,ik)) * &
+          dnorm(-ntgrid:,it,ik) * aky(ik)) * wl(-ntgrid:,il)/wgt)
+    end do
+
+    call sum_reduce(total,0)
+
+    if (proc0) flx = 0.5*total    !< Reality condition from summing over ky
+
+    deallocate(total)
+
+  end subroutine get_flux_e
 
   subroutine eexchange (phi, exchange)
 
