@@ -1107,7 +1107,7 @@ contains
     use mp, only: broadcast_sub, mp_abort
     implicit none
     class(supercell_type), intent(inout) :: self
-    complex, dimension(self%nrow,self%ncol), intent(out) :: arr
+    complex, dimension(self%nrow,self%ncol), intent(in) :: arr
     integer :: ic, ir
     integer :: rl,ru,cl,cu
     !If empty don't have anywhere to store data so exit
