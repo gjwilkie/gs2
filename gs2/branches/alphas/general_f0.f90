@@ -147,6 +147,10 @@ module general_f0
   !! just an input parameter
   real:: vcrit 
 
+  !> Input parameter that gives a simple gradient in F0alpha (not a function of velocity - simply 1/Lnalpha)
+  !! Not physical, but could diagnose problems.
+  logical :: simple_gradient
+
 contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -234,7 +238,7 @@ contains
             main_ion_species,&
             energy_min,&
             print_egrid,&
-            vcrit
+            vcrit, simple_gradient
 
     integer :: ierr, in_file
     logical :: exist
@@ -246,6 +250,7 @@ contains
        main_ion_species = -1 
        energy_min = 0.1
        vcrit = -1.0
+       simple_gradient = .false.
 
        in_file = input_unit_exist ("general_f0_parameters", exist)
        if (exist) read (unit=in_file, nml=general_f0_parameters)
@@ -994,7 +999,7 @@ contains
   subroutine calculate_f0_arrays_analytic(is)
     use constants, only: pi
     use species, only: spec, nspec
-    use mp, only: mp_abort
+    use mp, only: mp_abort, proc0
     use species, only: ion_species, electron_species, alpha_species
     implicit none
     integer,intent(in):: is
@@ -1014,7 +1019,11 @@ contains
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
 
-!    f0prim(:,is) = - spec(is)%fprim 
+!do ie = 1,negrid
+!  if (proc0) write(*,*) ie, egrid(ie,is), f0_values(ie,is), f0prim(ie,is)
+!end do
+
+    if (simple_gradient) f0prim(:,is) = - spec(is)%fprim 
 
     if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
 
@@ -1055,8 +1064,9 @@ contains
        else
           ne = Zi*ni + spec(is)%z * spec(is)%dens
           vte = vti*1836.0
-          ne_prim = Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim
-          Te_prim = Ti_prim
+          ne_prim = (Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim)/ne
+!          Te_prim = Ti_prim
+          Te_prim = 0.0
        end if
 
     if (vcrit .LE. 0.0) then
@@ -1078,13 +1088,13 @@ contains
        df0dE = (0.5/v)*df0dv
        gentemp = -spec(is)%temp*f0/df0dE
        f0prim = -spec(is)%fprim + (vcrit**3/(vcrit**3 + v**3))*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)
-       f0prim = f0prim + (3.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(-3))))*(-ni_prim + ne_prim + Ti_prim + 0.5*Te_prim)
+       f0prim = f0prim + (3.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3))))*(-ni_prim + ne_prim + Ti_prim + 0.5*Te_prim)
     else
        f0 = exp(-Ealpha*(v**2-1.0)/Ti) * A / (vcrit**3 + 1.0)
        df0dE = -Ealpha*f0/Ti
        gentemp = -spec(is)%temp*f0/df0dE
        f0prim = -spec(is)%fprim + (vcrit**3/(vcrit**3 + 1.0))*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)
-       f0prim = f0prim + (3.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(-3))))*(-ni_prim + ne_prim + Ti_prim + 0.5*Te_prim)
+       f0prim = f0prim + (3.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3))))*(-ni_prim + ne_prim + Ti_prim + 0.5*Te_prim)
        f0prim = f0prim + (Ealpha/Ti)*(v**2-1.0)*Ti_prim
     end if
 
