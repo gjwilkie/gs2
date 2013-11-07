@@ -658,7 +658,7 @@ contains
     integer,dimension(5) :: nproc_dim
     integer,dimension(:),allocatable :: les_kxky_range
     logical,dimension(5) :: dim_divides,dim_local
-
+    logical,dimension(:),allocatable :: it_local, ik_local, il_local, ie_local, is_local
 ! TT>
 # ifdef USE_C_INDEX
     integer :: ierr
@@ -795,9 +795,12 @@ contains
     g_lo%ie_comp=g_lo%compound_count(g_lo%ie_ord)
     g_lo%is_comp=g_lo%compound_count(g_lo%is_ord)
 
-    !<DD>Work out min and max of the five compound indices
+    !<DD>Work out min and max of the five compound indices and the locality
     !These are currently only used to slice the arrays used in the velocity space integrals
     !but could well be useful in a number of places.
+    !<DD>NOTE: These are typically only useful if the dimensions are split nicely (i.e. we're using
+    !a sweet spot) otherwise our local ik section may look like, [naky-1,naky,1,2], so whilst the 
+    !min and max values (1,naky) are technically correct, we cannot assume we cover the range 1-naky
     ik_max=0
     ik_min=naky+1
     it_max=0
@@ -808,6 +811,12 @@ contains
     ie_min=negrid+1
     is_max=0
     is_min=nspec+1
+    allocate(ik_local(naky),it_local(ntheta0),il_local(nlambda),ie_local(negrid),is_local(nspec))
+    ik_local=.false.
+    it_local=.false.
+    il_local=.false.
+    ie_local=.false.
+    is_local=.false.
     do iglo=g_lo%llim_proc,g_lo%ulim_proc
        ik=ik_idx(g_lo,iglo)
        it=it_idx(g_lo,iglo)
@@ -824,9 +833,25 @@ contains
        il_min=MIN(il,il_min)
        ie_min=MIN(ie,ie_min)
        is_min=MIN(is,is_min)
+       ik_local(ik)=.true.
+       it_local(it)=.true.
+       il_local(il)=.true.
+       ie_local(ie)=.true.
+       is_local(is)=.true.
     enddo
 
-    !<DD>Now store in appropriate dimension vars
+    !Store dimension locality
+    g_lo%y_local=all(ik_local)
+    g_lo%x_local=all(it_local)
+    g_lo%l_local=all(il_local)
+    g_lo%e_local=all(ie_local)
+    g_lo%s_local=all(is_local)
+    
+    !//Deallocate locality data. Note this may actually be useful in some
+    !places, so we may want to think about attaching it to the g_lo object
+    deallocate(ik_local,it_local,il_local,ie_local,is_local)
+
+    !<DD>Now store min/max in appropriate dimension vars
     !This data isn't currently used but is useful to allow us to
     !replace loops over iglo with nested loops over the 5 generic dimensions
     !which are certain to be in optimised memory order.
@@ -983,13 +1008,6 @@ contains
        endif
     enddo
 
-    !Store dimension locality
-    g_lo%x_local=(it_min.eq.1).and.(it_max.eq.ntheta0)
-    g_lo%y_local=(ik_min.eq.1).and.(ik_max.eq.naky)
-    g_lo%l_local=(il_min.eq.1).and.(il_max.eq.nlambda)
-    g_lo%e_local=(ie_min.eq.1).and.(ie_max.eq.negrid)
-    g_lo%s_local=(is_min.eq.1).and.(is_max.eq.nspec)
-
     !Now work out how the compound dimension splits amongst processors
     nproc_tmp=nproc
     !/Initialise
@@ -1016,7 +1034,7 @@ contains
        !if so then we can still divide nicely but can't rely on division being integer
        !Invert division to check!
        if(int(tmp_r).eq.0) then
-          tmp_r=g_lo%dim_size(idim)/nproc_tmp
+          tmp_r=g_lo%dim_size(idim)/(1.0*nproc_tmp)
        endif
 
        !Store logical to indicate if things divide perfectly
@@ -1071,6 +1089,10 @@ contains
        if(proc0.and.intspec_sub) write(error_unit(),'("Disabling intspec_sub as x and y are local")')
        intspec_sub=.false.
     endif
+
+    !We could(should) use a logical allreduction here to ensure that ALL processors have the same flag settings
+    !(if not then we'll get a program hang in the following splits).
+    !The logic above **should** ensure everyone has the right answer anyway.
 
     !<DD>Now work out which xy block we live in for velocity space comms
     !Set sub communicators to mp_comm if we want to keep collective comms global.
