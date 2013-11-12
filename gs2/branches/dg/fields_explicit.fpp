@@ -216,7 +216,8 @@ module dg_scheme
 
   !  Primary DG variables
 
-  integer :: p = 3  !  scheme order, = number of FD grid points per finite element
+  integer, parameter :: p = 3  !  scheme order, = number of FD grid points
+                               !  per finite element
   integer :: ne     !  number of finite elements
   integer :: ne2    !  ne, or ne+2 if flux-tube (to account for FEs 0 and ne+1)
   integer :: ntgriddgmin  !  array lower bound in theta direction, for *some* arrays
@@ -259,6 +260,7 @@ contains
   subroutine nodal2modal_full(y,lb1,ub1,lb2,ub2,lb3,ub3,ne)
 
     !  Version for y(ig,isgn,iglo)
+    !  Scheme order p = 3 is assumed.
 
     implicit none
 
@@ -289,14 +291,10 @@ contains
              k = p*(element-1) + 1
              kk = lb1 + k-1
 
-             if (p == 3) then
-                y(kk,i,j)   = 0.125*(3.0*ytemp(k) + 2.0*ytemp(k+1) + 3.0*ytemp(k+2))
-                y(kk+1,i,j) = 0.75*(ytemp(k+2) - ytemp(k))
-                y(kk+2,i,j) = 0.75*(ytemp(k) - 2.0*ytemp(k+1) + ytemp(k+2))
-             else
-                write(*,*) 'Bad p value...'
-                stop
-             end if
+             y(kk,i,j)   = 0.125*(3.0*ytemp(k) + 2.0*ytemp(k+1) + 3.0*ytemp(k+2))
+             y(kk+1,i,j) = 0.75*(ytemp(k+2) - ytemp(k))
+             y(kk+2,i,j) = 0.75*(ytemp(k) - 2.0*ytemp(k+1) + ytemp(k+2))
+
           end do
 
        end do
@@ -309,6 +307,7 @@ contains
   subroutine nodal2modal_1d(y,lbound,ubound,ne)
 
     !  Version for y(ig), i.e. no isgn or iglo dimensions
+    !  Scheme order p = 3 is assumed.
 
     implicit none
 
@@ -337,14 +336,10 @@ contains
        k = p*(element-1) + 1
        kk = lbound + k-1
 
-       if (p == 3) then
-          y(kk)   = 0.125*(3.0*ytemp(k) + 2.0*ytemp(k+1) + 3.0*ytemp(k+2))
-          y(kk+1) = 0.75*(ytemp(k+2) - ytemp(k))
-          y(kk+2) = 0.75*(ytemp(k) - 2.0*ytemp(k+1) + ytemp(k+2))
-       else
-          write(*,*) 'Bad p value...'
-          stop
-       end if
+       y(kk)   = 0.125*(3.0*ytemp(k) + 2.0*ytemp(k+1) + 3.0*ytemp(k+2))
+       y(kk+1) = 0.75*(ytemp(k+2) - ytemp(k))
+       y(kk+2) = 0.75*(ytemp(k) - 2.0*ytemp(k+1) + ytemp(k+2))
+
     end do
 
   end subroutine nodal2modal_1d
@@ -354,6 +349,7 @@ contains
   subroutine modal2nodal_full(y,lb1,ub1,lb2,ub2,lb3,ub3,ne)
 
     !  Version for y(ig,isgn,iglo)
+    !  Scheme order p = 3 is assumed.
 
     implicit none
 
@@ -386,14 +382,10 @@ contains
              k = p*(element-1) + 1
              kk = lb1 + k-1
 
-             if (p == 3) then
-                y(kk,i,j)   = ytemp(k) - twothirds*ytemp(k+1) + sixth*ytemp(k+2)
-                y(kk+1,i,j) = ytemp(k)                        -   0.5*ytemp(k+2)
-                y(kk+2,i,j) = ytemp(k) + twothirds*ytemp(k+1) + sixth*ytemp(k+2)
-             else
-                write(*,*) 'Bad p value...'
-                stop
-             end if
+             y(kk,i,j)   = ytemp(k) - twothirds*ytemp(k+1) + sixth*ytemp(k+2)
+             y(kk+1,i,j) = ytemp(k)                        -   0.5*ytemp(k+2)
+             y(kk+2,i,j) = ytemp(k) + twothirds*ytemp(k+1) + sixth*ytemp(k+2)
+
           end do
 
        end do
@@ -406,6 +398,7 @@ contains
   subroutine modal2nodal_1d(y,lbound,ubound,ne)
 
     !  Version for y(ig), i.e. no isgn or iglo dimensions
+    !  Scheme order p = 3 is assumed.
 
     implicit none
 
@@ -434,14 +427,10 @@ contains
        k = p*(element-1) + 1
        kk = lbound + k-1
 
-       if (p == 3) then
-          y(kk)   = ytemp(k) - twothirds*ytemp(k+1) + sixth*ytemp(k+2)
-          y(kk+1) = ytemp(k)                        -   0.5*ytemp(k+2)
-          y(kk+2) = ytemp(k) + twothirds*ytemp(k+1) + sixth*ytemp(k+2)
-       else
-          write(*,*) 'Bad p value...'
-          stop
-       end if
+       y(kk)   = ytemp(k) - twothirds*ytemp(k+1) + sixth*ytemp(k+2)
+       y(kk+1) = ytemp(k)                        -   0.5*ytemp(k+2)
+       y(kk+2) = ytemp(k) + twothirds*ytemp(k+1) + sixth*ytemp(k+2)
+
     end do
 
   end subroutine modal2nodal_1d
@@ -1031,7 +1020,20 @@ contains
     !  g halo elements need to be populated, as these are used in the
     !  advection term, which takes information from upwind finite elements
 
-    if (flux_tube) call pass_fluxtube_halos(g_dg,ntgrid,p,lb3,ub3)
+    if (flux_tube) then
+       call pass_fluxtube_halos(g_dg,ntgrid,p,lb3,ub3)
+
+       !  Force periodic boundary conditions for the ky=0 zonal mode
+       !  (for which all theta points are on the same MPI process)
+
+       do iglo = lb3, ub3
+          ik = ik_idx(g_lo,iglo)
+          if (ik == 1) then
+             g_dg(lb1-p:lb1-1,1,iglo) = g_dg(ntgrid-p:ntgrid-1,1,iglo)
+             g_dg(ntgrid:ntgrid+p-1,2,iglo) = g_dg(lb1:lb1+p-1,2,iglo)
+          endif
+       enddo
+    endif
 
     !  Obtain g in nodal form
 
@@ -1056,6 +1058,14 @@ contains
     do iglo = lb3, ub3
        ik = ik_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
+
+       !  Force periodic boundary conditions for the ky=0 zonal mode
+       !  (for which all theta points are on the same MPI process)
+
+       if ((flux_tube).and.(ik == 1)) then
+          fluxfn(lb1-p:lb1-1,1,iglo) = fluxfn(ntgrid-p:ntgrid-1,1,iglo)
+          fluxfn(ntgrid:ntgrid+p-1,2,iglo) = fluxfn(lb1:lb1+p-1,2,iglo)
+       endif
 
        !  Loop over sign of the parallel velocity
        !  isgn=1, v >= 0 ; isgn=2, v < 0
