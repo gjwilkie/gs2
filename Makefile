@@ -87,9 +87,9 @@ USE_FFT ?= fftw3
 # uses netcdf library (bin)
 USE_NETCDF ?= on
 # uses parallel netcdf library
-USE_PARALLEL_NETCDF ?=
+USE_PARALLEL_NETCDF ?= 
 # uses hdf5 library (bin)
-USE_HDF5 ?= 
+USE_HDF5 ?=  
 # Use function pointer in layouts_indices.c (bin)
 # see also README
 USE_C_INDEX ?= 
@@ -283,6 +283,11 @@ ifdef USE_HDF5
 		CC = $(H5CC)
 	endif
 	CPPFLAGS += -DHDF
+endif
+ifndef USE_HDF5
+   ifdef USE_PARALLEL_NETCDF
+      $(error 'USE_PARALLEL_NETCDF will not work unless USE_HDF5 is set to on.')
+   endif
 endif
 ifdef USE_C_INDEX
 	CPPFLAGS += -DUSE_C_INDEX
