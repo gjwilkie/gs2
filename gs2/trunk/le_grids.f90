@@ -384,7 +384,7 @@ contains
     if (negrid == -10) then
        negrid = nesub + nesuper
 
-! If user chose negrid, assume nesuper makes sense and check nesub if necessary
+! If user chose negrid, then set nesuper and nesub accordingly
     else 
        nesuper = min(negrid/10+1, 4)
        nesub = negrid - nesuper
