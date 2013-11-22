@@ -623,7 +623,7 @@ contains
     total = product(real(dimsize(1:5)))
     if(total .gt. 178180992) then ! number of reals allowed in netcdf
        write(ierr, *) 'WARNING: phi_corr is larger than maximum netcdf size, removing.'
-       write(ierr, *) 'Try increasing nwrite_multi to avoid this.'
+       write(ierr, *) 'Try increasing nwrite_mult to avoid this.'
        io_write_corr_extend = .false.
        write_correlation_extend = .false.
     endif
