@@ -3144,19 +3144,6 @@ contains
        write(dlun,'("--Done in ",F12.4," units")') te-ts
     endif
 
-    !Now fill the fieldmat with data
-    !if(debug)call barrier
-    if(proc0.and.debug)then
-       write(dlun,'("Populating.")')
-       call cpu_time(ts)
-    endif
-    call fieldmat%populate
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
-    endif
-
     !Need to make cell/supercell level sub-communicators
     !at some point before we try to invert.
     !Can make them at any point after locality defined
@@ -3179,6 +3166,27 @@ contains
        call cpu_time(te)
        write(dlun,'("--Done in ",F12.4," units")') te-ts
     endif    
+
+!!!!!!!!!!
+!!NOTE: All of the above should be a one off setup cost unless something
+!!fundamental changes with the parallel layout (a change in nproc/layout etc.)
+!!The remaining two tasks (populate+prepare) must be repeated each time the
+!!relevant physics and numerical parameters change. In practice this just means
+!!when the time step changes.
+!!!!!!!!!!
+
+    !Now fill the fieldmat with data
+    !if(debug)call barrier
+    if(proc0.and.debug)then
+       write(dlun,'("Populating.")')
+       call cpu_time(ts)
+    endif
+    call fieldmat%populate
+    !if(debug)call barrier
+    if(proc0.and.debug) then 
+       call cpu_time(te)
+       write(dlun,'("--Done in ",F12.4," units")') te-ts
+    endif
 
     !Now prepare the response matrices
     !Note: Currently prepare just means invert
