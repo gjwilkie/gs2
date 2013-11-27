@@ -49,7 +49,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
-    use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time
+    use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time, margin_cpu_time
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
@@ -203,7 +203,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
        if (mod(istep,5) == 0) call checkstop(exit)
        
-       call checktime(avail_cpu_time,exit)
+       call checktime(avail_cpu_time,exit,margin_cpu_time)
        
        if (exit) then
           istep_end = istep

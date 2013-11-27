@@ -17,7 +17,7 @@ module run_parameters
   public :: ieqzip
   public :: k0
   public :: vnm_init
-  public :: avail_cpu_time
+  public :: avail_cpu_time, margin_cpu_time
 !  public :: include_lowflow, rhostar, neo_test
   public :: rhostar, neo_test
 
@@ -28,7 +28,7 @@ module run_parameters
   real :: delt, code_delt_max, user_delt_max, margin
   real, dimension (:), allocatable :: wunits, woutunits, tunits
   real, dimension (2) :: vnm_init
-  real :: avail_cpu_time
+  real :: avail_cpu_time, margin_cpu_time
   integer :: nstep
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
@@ -217,7 +217,7 @@ contains
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
          delt_option, margin, secondary, tertiary, fixpar_secondary, faperp, harris, &
 !         avail_cpu_time, eqzip_option, include_lowflow, neo_test
-         avail_cpu_time, eqzip_option, neo_test
+         avail_cpu_time, margin_cpu_time, eqzip_option, neo_test
 
     if (proc0) then
        fbpar = -1.0
@@ -240,6 +240,7 @@ contains
        delt_option = 'default'
        margin = 0.05
        avail_cpu_time = 1.e10
+       margin_cpu_time = 300.
 
        in_file = input_unit_exist("parameters", rpexist)
 !       if (rpexist) read (unit=input_unit("parameters"), nml=parameters)
@@ -333,6 +334,7 @@ contains
     call broadcast (margin)
     call broadcast (k0)
     call broadcast (avail_cpu_time)
+    call broadcast (margin_cpu_time)
     call broadcast (eqzip_option_switch)
 !    call broadcast (include_lowflow)
     call broadcast (rhostar)
