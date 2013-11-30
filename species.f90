@@ -31,6 +31,11 @@ module species
      real :: sprim   ! .....
      real :: gamma_ai
      real :: gamma_ae
+     !> This is required when species_type is alpha, but using the equivalent-Maxwellian to the
+     !! slowing-down distribution. The reason is that le_grids needs to know whether or not a species
+     !! is Maxwellian to create the velocity-space grids, but this is before f0 is calculated on said grid,
+     !! which is where is_maxwellian can be changed. So when using "equivmaxw", this needs to be turned on.
+     logical :: equivalent_maxwellian_flag  
   end type specie
 
   private
@@ -222,10 +227,11 @@ contains
     character(20) :: type
     integer :: unit
     integer :: is
+    logical:: equivalent_maxwellian_flag
     namelist /species_knobs/ nspec
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
-         tperp0, tpar0, source, sprim, gamma_ai, gamma_ae, ash_fraction
+         tperp0, tpar0, source, sprim, gamma_ai, gamma_ae, ash_fraction, equivalent_maxwellian_flag
     integer :: ierr, in_file
 
     type (text_option), dimension (9), parameter :: typeopts = &
@@ -279,6 +285,7 @@ contains
           sprim = 0.0
           gamma_ai = 0.1
           gamma_ae = 0.1
+          equivalent_maxwellian_flag = .false.
 
           type = "default"
           read (unit=unit, nml=species_parameters)
@@ -320,6 +327,8 @@ contains
           else
             spec(is)%is_maxwellian = .true.
           end if
+
+          if (equivalent_maxwellian_flag) spec(is)%is_maxwellian = .true.
        end do
     end if
 
@@ -351,6 +360,7 @@ contains
        call broadcast (spec(is)%zt)
        call broadcast (spec(is)%smz)
        call broadcast (spec(is)%type)
+       call broadcast (spec(is)%is_maxwellian)
     end do
   end subroutine read_parameters
 

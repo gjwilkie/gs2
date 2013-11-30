@@ -61,7 +61,7 @@ contains
 
     do is = 1,nspec
 
-      if (spec(is)%type .eq. alpha_species) then
+      if (.NOT. spec(is)%is_maxwellian ) then
         vcut_local = 1.0
         main_ion_species = -1
         do js = 1,nspec
