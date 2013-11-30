@@ -120,7 +120,8 @@ module general_f0
                         alpha_f0_analytic = 2, &
                         alpha_f0_semianalytic = 3, &
                         alpha_f0_split = 4, &
-                        alpha_f0_external =5
+                        alpha_f0_equivmaxw = 5, &
+                        alpha_f0_external =6
 
   integer, parameter :: beam_f0_maxwellian = 1, &
                         beam_f0_analytic = 2, &
@@ -219,11 +220,12 @@ contains
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     implicit none
-    type (text_option), dimension (5), parameter :: alpha_f0_opts = &
+    type (text_option), dimension (6), parameter :: alpha_f0_opts = &
          (/ text_option('maxwellian', alpha_f0_maxwellian), &
             text_option('analytic', alpha_f0_analytic), &
             text_option('semianalytic', alpha_f0_semianalytic), &
             text_option('split', alpha_f0_split), &
+            text_option('equivmaxw', alpha_f0_equivmaxw), &
             text_option('external', alpha_f0_external) /)
     character(20) :: alpha_f0
     type (text_option), dimension (3), parameter :: beam_f0_opts = &
@@ -312,6 +314,8 @@ contains
         case (alpha_f0_split)
           write(*,*) "ERROR: eval_f0 cannot yet handle split option."
           call mp_abort('')
+        case (alpha_f0_equivmaxw)
+          f0 = exp(-v**2)/(pi**1.5)
         case (alpha_f0_external)
           write(*,*) "ERROR: eval_f0 cannot yet handle external option."
           call mp_abort('')
@@ -369,6 +373,8 @@ contains
         case (alpha_f0_split)
           call check_electromagnetic
           call calculate_f0_arrays_split(is)
+        case (alpha_f0_equivmaxw)
+          call calculate_f0_arrays_equivmaxw(is)
         case (alpha_f0_external)
           call check_electromagnetic
           call calculate_f0_arrays_external(is)
@@ -1019,9 +1025,9 @@ contains
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
 
-!do ie = 1,negrid
-!  if (proc0) write(*,*) ie, egrid(ie,is), f0_values(ie,is), f0prim(ie,is)
-!end do
+do ie = 1,negrid
+  if (proc0) write(*,*) ie, egrid(ie,is), f0_values(ie,is), f0prim(ie,is)
+end do
 
     if (simple_gradient) f0prim(:,is) = - spec(is)%fprim 
 
@@ -1061,16 +1067,25 @@ contains
        if (electron_spec .GT. 0) then
           vte = spec(electron_spec)%stm
           ne = spec(electron_spec)%dens
+          ne_prim = spec(electron_spec)%fprim
+          Te_prim = spec(electron_spec)%tprim
        else
           ne = Zi*ni + spec(is)%z * spec(is)%dens
-          vte = vti*1836.0
+          vte = sqrt(1836.0 * Ti)
           ne_prim = (Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim)/ne
-!          Te_prim = Ti_prim
-          Te_prim = 0.0
+          Te_prim = Ti_prim
+          if (proc0) then
+             write(*,*) "Since electrons are adiabatic, we need to improvise electron parameters to "
+             write(*,*) "caluclate alpha species properties. Imposed by global quasineutrality, and "
+             write(*,*) "assuming the reference species are protons:"
+             write(*,*) "  ne = ", ne
+             write(*,*) "  ne_prim = ", ne_prim
+             write(*,*) "  Te_prim = ", Te_prim
+          end if
        end if
 
     if (vcrit .LE. 0.0) then
-       vcrit = (3.0*sqrt(pi)*vti**2*vte*Zi*ni/(4.0*ne))**(1.0/3.0)/vta
+       vcrit = (3.0*sqrt(pi)*vti**2*vte*Zi**2*ni/(4.0*ne))**(1.0/3.0)/vta
     end if
 
 
@@ -1100,5 +1115,130 @@ contains
 
 
   end subroutine eval_f0_analytic
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! Equivalent Maxwellian
+!! 
+!! This option takes input parameters and constructs a Maxwellian alpha species with the same 
+!! first two moments as the slowing-down distribution that would have been constructed by them.
+!! A seperate option because the radial derivatives are treated differently than a regular
+!! Maxwellian species. A possible source of confusion: input parameter "temp" is still the 
+!! alpha injection energy! It gets changed here to the equivalent temperature.
+
+  subroutine calculate_f0_arrays_equivmaxw(is)
+    use constants, only: pi
+    use species, only: spec, nspec
+    use mp, only: mp_abort, proc0, broadcast
+    use species, only: ion_species, electron_species, alpha_species, spec, nspec
+    implicit none
+    integer, intent(in):: is
+    integer:: electron_spec, i, ie
+    real:: vti,ni,Zi,Ti,Ti_prim,ni_prim,vte,ne,ne_prim,Te_prim,vcva,Ealpha,vta
+    real:: veff2va2, dveff2dvc, temp, LTa, Teff, mass, z
+
+    electron_spec = -1
+    do i = 1,nspec
+      if (spec(i)%type .eq. electron_species) electron_spec = i
+      if (main_ion_species < 1 .and. spec(i)%type .eq. ion_species) &
+        main_ion_species = i
+    end do
+
+    vti = spec(main_ion_species)%stm
+    ni = spec(main_ion_species)%dens
+    Zi = spec(main_ion_species)%z
+    Ti = spec(main_ion_species)%temp
+    Ti_prim = spec(main_ion_species)%tprim
+    ni_prim = spec(main_ion_species)%fprim
+
+    if (electron_spec .GT. 0) then
+       vte = spec(electron_spec)%stm
+       ne = spec(electron_spec)%dens
+       ne_prim = spec(electron_spec)%fprim
+       Te_prim = spec(electron_spec)%tprim
+    else
+       ne = Zi*ni + spec(is)%z * spec(is)%dens
+       vte = sqrt(1836.0 * Ti)
+       ne_prim = (Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim)/ne
+       Te_prim = Ti_prim
+       if (proc0) then
+          write(*,*) "Since electrons are adiabatic, we need to improvise electron parameters to "
+          write(*,*) "caluclate alpha species properties. Imposed by global quasineutrality, and "
+          write(*,*) "assuming the reference species are protons:"
+          write(*,*) "  ne = ", ne
+          write(*,*) "  ne_prim = ", ne_prim
+          write(*,*) "  Te_prim = ", Te_prim
+       end if
+    end if
+
+    Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
+    vta = sqrt(Ealpha/spec(is)%mass)
+
+    ! Tricky!!!
+    ! Species *becomes* Maxwellian here. So what to normalize by: v_alpha or v_t,eff?
+    ! Need to make sure setvgrid does the right thing (i.e. recognizes Maxwellian nature)
+
+    ! Calculate vc/valpha
+    vcva = (3.0*sqrt(pi)*vti**2*vte*Zi**2*ni/(4.0*ne))**(1.0/3.0)/vta
+if (proc0) write(*,*) vcva, vta
+
+    ! Calculate vteff^2/valpha^2
+    veff2va2 = 1.0 - pi*vcva**2/(3.0**1.5) + (2.0*vcva**2/sqrt(3.0))*atan((vcva-2.0)/(sqrt(3.0)*vcva)) - (vcva**2/3.0)*log((1.0-vcva+vcva**2)/(1+vcva)**2)
+    veff2va2 = veff2va2/log(1.0+(1.0/vcva)**3)
+
+    ! Calculate d/dvc (vteff^2)
+    dveff2dvc = veff2va2 * 3.0 / ( (1.0+vcva**3)*log(1.0+(1.0/vcva)**3))
+    temp = 6.0*vcva/((1.0+vcva)*(1.0-vcva+vcva**2)) - 2.0*pi/sqrt(3.0) + 4.0*sqrt(3.0)*atan((vcva-2.0)/(sqrt(3.0)*vcva)) - 2.0*log((1.0-vcva+vcva**2)/(vcva+1.0)**2)
+    dveff2dvc = dveff2dvc + (vcva**2/(3.0*log(1.0+(1.0/vcva)**3)))*temp
+
+    ! Put it all together: define an effective LTalpha and calculate f0prim
+    LTa = dveff2dvc*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)/veff2va2
+    spec(is)%tprim = LTa
+
+    temp = Ealpha * veff2va2
+    mass = spec(is)%mass
+    z = spec(is)%z
+  
+    ! Redefine temperature. As input it's the alpha injection energy, but not it will be the temperature of the corresonding effective Maxwellian
+    spec(is)%temp = temp
+
+    ! Create a Maxwellian species as usual:
+    spec(is)%stm = sqrt(temp/mass)
+    spec(is)%zstm = z/sqrt(temp*mass)
+    spec(is)%tz = temp/z
+    spec(is)%zt = z/temp
+    spec(is)%smz = abs(sqrt(temp*mass)/z)
+
+    spec(is)%is_maxwellian = .true.
+
+    f0_values(:,is) = exp(-egrid(:,is)) / (pi**1.5)
+    if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
+    do ie = 1,negrid
+       generalised_temperature(:,is) = spec(is)%temp
+       if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), & 
+                                   generalised_temperature(ie,is)
+    end do
+    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
+    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+ 
+    f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
+
+    ! Broadcast changed values
+    call broadcast(spec(is)%stm)
+    call broadcast(spec(is)%zstm)
+    call broadcast(spec(is)%tz)
+    call broadcast(spec(is)%zt)
+    call broadcast(spec(is)%smz)
+    call broadcast(spec(is)%is_maxwellian)
+
+    if (proc0) then
+       write(*,*) "Using equivalent-Maxwellian option for species ", is
+       write(*,*) "Parameters have been changed to the following values:"
+       write(*,*) "  vc/va = ", vcva
+       write(*,*) "  temp = ", temp
+       write(*,*) "  tprim = ", LTa
+    end if
+
+
+  end subroutine calculate_f0_arrays_equivmaxw
 
 end module general_f0
