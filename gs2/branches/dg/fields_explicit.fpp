@@ -833,10 +833,10 @@ contains
     if (def_parity) call enforce_parity(parity_redist)
       
     !Ensure fixed ik has correct parity parts
-    if(fixpar_secondary.gt.0)then
+    if (fixpar_secondary.gt.0)then
        call enforce_parity(parity_redist_ik,fixpar_secondary)
-       gnew=gnew+g_fixpar
-    endif
+       gnew = gnew + g_fixpar
+    end if
     ! Old stuff...
     !call hyper_diff (gnew, gwork, phinew, bparnew)
     !call kill (gnew, gwork, phinew, bparnew)
@@ -1031,9 +1031,9 @@ contains
           if (ik == 1) then
              g_dg(lb1-p:lb1-1,1,iglo) = g_dg(ntgrid-p:ntgrid-1,1,iglo)
              g_dg(ntgrid:ntgrid+p-1,2,iglo) = g_dg(lb1:lb1+p-1,2,iglo)
-          endif
-       enddo
-    endif
+          end if
+       end do
+    end if
 
     !  Obtain g in nodal form
 
@@ -1065,7 +1065,7 @@ contains
        if ((flux_tube).and.(ik == 1)) then
           fluxfn(lb1-p:lb1-1,1,iglo) = fluxfn(ntgrid-p:ntgrid-1,1,iglo)
           fluxfn(ntgrid:ntgrid+p-1,2,iglo) = fluxfn(lb1:lb1+p-1,2,iglo)
-       endif
+       end if
 
        !  Loop over sign of the parallel velocity
        !  isgn=1, v >= 0 ; isgn=2, v < 0
@@ -1418,25 +1418,28 @@ contains
     complex, dimension (-ntgrid-p:ntgrid+p-1,1:2,lb3:ub3), &
          intent(inout) :: array
 
+    logical :: initd = .false.
+
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    !  Initialise communicator to right
+    !  Initialise left and right communicators
+    !  (need only do this at the start of a run)
 
-    call init_pass_dg(pass_right,'r')
+    if (.not.initd) then
+       call init_pass_dg(pass_right,'r')
+       call init_pass_dg(pass_left,'l')
+       initd = .true.
+    end if
 
-    !  Pass to the right
+    !  Pass to the right and left
 
     call fill(pass_right,array,array)
+    call fill(pass_left,array,array)
 
     !  Deallocate communicator
-
-    call delete_redist(pass_right)
-
-    !  Repeat for left-going data
-
-    call init_pass_dg(pass_left,'l')
-    call fill(pass_left,array,array)
-    call delete_redist(pass_left)
+    !  (currently not done; should move these into a destructor routine)
+    !call delete_redist(pass_right)
+    !call delete_redist(pass_left)
 
   end subroutine pass_fluxtube_halos
 
