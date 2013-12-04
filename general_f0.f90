@@ -1191,7 +1191,7 @@ if (proc0) write(*,*) vcva, vta
     dveff2dvc = dveff2dvc + (vcva**2/(3.0*log(1.0+(1.0/vcva)**3)))*temp
 
     ! Put it all together: define an effective LTalpha and calculate f0prim
-    LTa = dveff2dvc*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)/veff2va2
+    LTa = (1.0/3.0)*dveff2dvc*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)/veff2va2
     spec(is)%tprim = LTa
 
     temp = Ealpha * veff2va2
