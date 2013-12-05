@@ -84,7 +84,8 @@ contains
   subroutine init_phi_implicit
 
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
-    use dist_fn_arrays, only: g, gnew
+    use fields_arrays, only: phip, aparp, bparp, phipnew, aparpnew, bparpnew
+    use dist_fn_arrays, only: g, gnew, gpnew
     use dist_fn, only: get_init_field
     use init_g, only: new_field_init
 
@@ -92,23 +93,39 @@ contains
 
     ! MAB> new field init option ported from agk
     if (new_field_init) then
-       call get_init_field (phinew, aparnew, bparnew)
+       ! get iniitial phik corresponding to gk
+       call get_init_field (gnew, phinew, aparnew, bparnew)
        phi = phinew; apar = aparnew; bpar = bparnew; g = gnew
+
+       ! get initial dphi/drho corresponding to dgk/drho
+       call get_init_field (gpnew, phipnew, aparpnew, bparpnew)
+       phip = phipnew ; aparp = aparpnew ; bparp = bparpnew
     else
-       call getfield (phinew, aparnew, bparnew)
+       ! get initial phik corresponding to gk
+       call getfield (gnew, phinew, aparnew, bparnew)
        phi = phinew; apar = aparnew; bpar = bparnew
+
+       ! get initial dphi/drho corresponding to dgk/drho
+       call getfield (gpnew, phipnew, aparpnew, bparpnew)
+       phip = phipnew; aparp = aparpnew; bparp = bparpnew
     end if
     ! <MAB
 
   end subroutine init_phi_implicit
 
-  subroutine get_field_vector (fl, phi, apar, bpar)
+  subroutine get_field_vector (fl, gfnc, phi, apar, bpar)
+
+    use gs2_layouts, only: g_lo
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use dist_fn, only: getfieldeq
     use run_parameters, only: fphi, fapar, fbpar
     use prof, only: prof_entering, prof_leaving
+    use vpamu_grids, only: nvgrid
+
     implicit none
+
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: gfnc
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (:,:,:), intent (out) :: fl
     complex, dimension (:,:,:), allocatable :: fieldeq, fieldeqa, fieldeqp
@@ -120,7 +137,7 @@ contains
     allocate (fieldeqa(-ntgrid:ntgrid,ntheta0,naky))
     allocate (fieldeqp(-ntgrid:ntgrid,ntheta0,naky))
 
-    call getfieldeq (phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
+    call getfieldeq (gfnc, phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
 
     ifin = 0
 
@@ -145,9 +162,10 @@ contains
     deallocate (fieldeq, fieldeqa, fieldeqp)
 
     call prof_leaving ("get_field_vector", "fields_implicit")
+
   end subroutine get_field_vector
 
-  subroutine get_field_solution (u)
+  subroutine get_field_solution (u, phifnc, aparfnc, bparfnc)
     use fields_arrays, only: phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
@@ -158,6 +176,8 @@ contains
     implicit none
 
     complex, dimension (0:), intent (in) :: u
+    complex, dimension (-ntgrid:,:,:), intent (out) :: phifnc, aparfnc, bparfnc
+
     integer :: ik, it, ifield, ll, lr
 
     call prof_entering ("get_field_solution", "fields_implicit")
@@ -170,7 +190,7 @@ contains
           do it = 1, ntheta0
              ll = ij_idx (jf_lo, -ntgrid, ifield, ik, it)
              lr = ll + 2*ntgrid
-             phinew(:,it,ik) = u(ll:lr)
+             phifnc(:,it,ik) = u(ll:lr)
           end do
        end do
     endif
@@ -181,7 +201,7 @@ contains
           do it = 1, ntheta0
              ll = ij_idx (jf_lo, -ntgrid, ifield, ik, it)
              lr = ll + 2*ntgrid
-             aparnew(:,it,ik) = u(ll:lr)
+             aparfnc(:,it,ik) = u(ll:lr)
           end do
        end do
     endif
@@ -192,28 +212,31 @@ contains
           do it = 1, ntheta0
              ll = ij_idx (jf_lo, -ntgrid, ifield, ik, it)
              lr = ll + 2*ntgrid
-             bparnew(:,it,ik) = u(ll:lr)
+             bparfnc(:,it,ik) = u(ll:lr)
           end do
        end do
     endif
 
     call prof_leaving ("get_field_solution", "fields_implicit")
+
   end subroutine get_field_solution
 
-  subroutine getfield (phi, apar, bpar)
+  subroutine getfield (gfnc, phi, apar, bpar)
 
     use kt_grids, only: naky, ntheta0
-    use gs2_layouts, only: f_lo, jf_lo, ij, mj, dj
+    use gs2_layouts, only: f_lo, jf_lo, ij, mj, dj, g_lo
     use prof, only: prof_entering, prof_leaving
     use fields_arrays, only: aminv
     use theta_grid, only: ntgrid
     use dist_fn, only: N_class
     use mp, only: sum_allreduce, proc0
     use job_manage, only: time_message
+    use vpamu_grids, only: nvgrid
 
     implicit none
 
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: gfnc
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
     complex, dimension (:,:,:), allocatable :: fl
     complex, dimension (:), allocatable :: u
     integer :: jflo, ik, it, nl, nr, i, m, n, dc
@@ -230,7 +253,7 @@ contains
     ! setup fl to contain the field equations, which should be zero
     ! for the right choice of phi, apar, bpar.  They will be nonzero
     ! though because they have been evaluated using old values of phi, apar, bpar.
-    call get_field_vector (fl, phi, apar, bpar)
+    call get_field_vector (fl, gfnc, phi, apar, bpar)
 
     u = 0.
     do jflo = jf_lo%llim_proc, jf_lo%ulim_proc
@@ -258,7 +281,7 @@ contains
     deallocate (fl)
     call sum_allreduce (u)
 
-    call get_field_solution (u)
+    call get_field_solution (u, phi, apar, bpar)
 
     deallocate (u)
 
@@ -269,11 +292,14 @@ contains
   end subroutine getfield
 
   subroutine advance_implicit (istep, remove_zonal_flows_switch)
+
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use fields_arrays, only: phip, aparp, bparp, phipnew, aparpnew, bparpnew
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
     use dist_fn, only: timeadv, exb_shear
     use dist_fn_arrays, only: g, gold, gnew, kx_shift, theta0_shift
+    use dist_fn_arrays, only: gpold, gpnew
 
     implicit none
 
@@ -284,48 +310,43 @@ contains
     !GGH NOTE: apar_ext is initialized in this call
     call antenna_amplitudes (apar_ext)
        
-    if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
+    !! need to repeat for gpnew !!
+    if (allocated(kx_shift) .or. allocated(theta0_shift)) then
+       call exb_shear (gnew, phinew, aparnew, bparnew)
+       call exb_shear (gpnew, phipnew, aparpnew, bparpnew)
+    end if
 
     ! TMP FOR TESTING -- MAB
 !    phinew = 0.0
 
-    g = gnew ; gold = gnew
-    phi = phinew
-    apar = aparnew
-    bpar = bparnew
+    g = gnew ; gold = gnew ; gpold = gpnew
+    phi = phinew ; phip = phipnew
+    apar = aparnew ; aparp = aparpnew
+    bpar = bparnew ; bparp = bparpnew
 
-    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-    aparnew = aparnew + apar_ext 
+    ! get gk^{*}, which is g^{n+1} obtained with phi=phi^{n}
+    call timeadv (gnew, gold, phi, apar, bpar, phinew, aparnew, bparnew, istep, primed=.false.)
+    ! get (dgk/drho)^{*}, which is is (dgk/drho)^{n+1} obtained with (dphik/drho)=(dphik/drho)^{n}
+    call timeadv (gpnew, gpold, phip, aparp, bparp, phipnew, aparpnew, bparpnew, istep, primed=.true.)
 
-    ! TMP FOR TESTING -- MAB
-    ! do it = 1, ntheta0
-    !    do ig = -ntgrid, ntgrid
-    !       write (*,*) 'phiold', real(phinew(ig,it,naky)), aimag(phinew(ig,it,naky)), theta(ig)-theta0(it,naky)
-    !    end do
-    ! end do
-    ! write (*,*)
+    aparnew = aparnew + apar_ext ; aparpnew = aparpnew + apar_ext
 
-    ! call write_mpdist (gold, '.gold')
-    ! call write_mpdist (source, '.source')
-    ! call write_mpdist (gnew, '.gnew', last=.true.)
+    ! probably need to change getfield subroutine to have g as an in out variable
+    ! get phik, apark, bpark
+    call getfield (gnew, phinew, aparnew, bparnew)
+    ! get phipk, aparpk, bparpk
+    call getfield (gpnew, phipnew, aparpnew, bparpnew)
 
-    call getfield (phinew, aparnew, bparnew)
-
-    ! do it = 1, ntheta0
-    !    do ig = -ntgrid, ntgrid
-    !       write (*,*) 'phinew', real(phinew(ig,it,naky)), aimag(phinew(ig,it,naky)), theta(ig)-theta0(it,naky)
-    !    end do
-    ! end do
-    ! write (*,*)
-    ! stop
-
-    phinew   = phinew  + phi
-    aparnew  = aparnew + apar
-    bparnew  = bparnew + bpar
+    phinew   = phinew  + phi ; phipnew = phipnew + phip
+    aparnew  = aparnew + apar ; aparpnew = aparpnew + aparp
+    bparnew  = bparnew + bpar ; bparpnew = bparpnew + bparp
     
     if (remove_zonal_flows_switch) call remove_zonal_flows
     
-    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
+    ! get gk^{n+1}
+    call timeadv (gnew, gold, phi, apar, bpar, phinew, aparnew, bparnew, istep, primed=.false., mode=diagnostics)
+    ! get (dgk/drho)^{n+1}
+    call timeadv (gpnew, gpold, phip, aparp, bparp, phipnew, aparpnew, bparpnew, istep, primed=.true.)
     
   end subroutine advance_implicit
 
@@ -527,6 +548,7 @@ contains
   subroutine init_response_row (ig, ifield, am, ic, n)
 
     use mp, only: proc0
+    use dist_fn_arrays, only: gnew, gold
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
@@ -548,9 +570,9 @@ contains
     allocate (fieldeqa(-ntgrid:ntgrid, ntheta0, naky))
     allocate (fieldeqp(-ntgrid:ntgrid, ntheta0, naky))
 
-    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, 0)
+    call timeadv (gnew, gold, phi, apar, bpar, phinew, aparnew, bparnew, 0, primed=.false.)
 
-    call getfieldeq (phinew, aparnew, bparnew, fieldeq, fieldeqa, fieldeqp)
+    call getfieldeq (gnew, phinew, aparnew, bparnew, fieldeq, fieldeqa, fieldeqp)
 
     do nn = 1, N_class(ic)
        do m = 1, M_class(ic)

@@ -35,12 +35,12 @@ contains
   subroutine advance_test (istep)
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn, only: timeadv
-    use dist_fn_arrays, only: g, gnew
+    use dist_fn_arrays, only: g, gnew, gold
     implicit none
     integer, intent (in) :: istep
 
     g = gnew
-    call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+    call timeadv (gnew, gold, phi, apar, bpar, phinew, aparnew, bparnew, istep, primed=.false.)
   end subroutine advance_test
 
   subroutine reset_init

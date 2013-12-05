@@ -18,7 +18,8 @@ module init_g
   integer :: ginitopt_switch
   integer, parameter :: ginitopt_default = 1,  &
        ginitopt_noise = 2, ginitopt_restart_many = 3, &
-       ginitopt_restart_small = 4, ginitopt_kpar = 5
+       ginitopt_restart_small = 4, ginitopt_kpar = 5, &
+       ginitopt_nltest = 6
 
   real :: width0, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
@@ -50,49 +51,49 @@ contains
 
        case (ginitopt_default)
           write (unit, fmt="(' ginit_option = ',a)") '"default"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
-          write (unit, fmt="(' width0 = ',e16.10)") width0
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+          write (unit, fmt="(' width0 = ',e17.10)") width0
           write (unit, fmt="(' chop_side = ',L1)") chop_side
           if (chop_side) write (unit, fmt="(' left = ',L1)") left
 
        case (ginitopt_noise)
           write (unit, fmt="(' ginit_option = ',a)") '"noise"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
-          write (unit, fmt="(' zf_init = ',e16.10)") zf_init
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+          write (unit, fmt="(' zf_init = ',e17.10)") zf_init
           write (unit, fmt="(' chop_side = ',L1)") chop_side
           if (chop_side) write (unit, fmt="(' left = ',L1)") left
 
        case (ginitopt_restart_many)
           write (unit, fmt="(' ginit_option = ',a)") '"many"'
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' scale = ',e17.10)") scale
 
        case (ginitopt_restart_small)
           write (unit, fmt="(' ginit_option = ',a)") '"small"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
-          write (unit, fmt="(' zf_init = ',e16.10)") zf_init
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+          write (unit, fmt="(' zf_init = ',e17.10)") zf_init
           write (unit, fmt="(' chop_side = ',L1)") chop_side
           if (chop_side) write (unit, fmt="(' left = ',L1)") left
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' scale = ',e17.10)") scale
 
        case (ginitopt_kpar)
           write (unit, fmt="(' ginit_option = ',a)") '"kpar"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
-          write (unit, fmt="(' width0 = ',e16.10)") width0
-          write (unit, fmt="(' refac = ',e16.10)") refac
-          write (unit, fmt="(' imfac = ',e16.10)") imfac
-          write (unit, fmt="(' den0 = ',e16.10)") den0
-          write (unit, fmt="(' den1 = ',e16.10)") den1
-          write (unit, fmt="(' den2 = ',e16.10)") den2
-          write (unit, fmt="(' upar0 = ',e16.10)") upar0
-          write (unit, fmt="(' upar1 = ',e16.10)") upar1
-          write (unit, fmt="(' upar2 = ',e16.10)") upar2
-          write (unit, fmt="(' tpar0 = ',e16.10)") tpar0
-          write (unit, fmt="(' tpar1 = ',e16.10)") tpar1
-          write (unit, fmt="(' tperp0 = ',e16.10)") tperp0
-          write (unit, fmt="(' tperp1 = ',e16.10)") tperp1
-          write (unit, fmt="(' tperp2 = ',e16.10)") tperp2
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+          write (unit, fmt="(' width0 = ',e17.10)") width0
+          write (unit, fmt="(' refac = ',e17.10)") refac
+          write (unit, fmt="(' imfac = ',e17.10)") imfac
+          write (unit, fmt="(' den0 = ',e17.10)") den0
+          write (unit, fmt="(' den1 = ',e17.10)") den1
+          write (unit, fmt="(' den2 = ',e17.10)") den2
+          write (unit, fmt="(' upar0 = ',e17.10)") upar0
+          write (unit, fmt="(' upar1 = ',e17.10)") upar1
+          write (unit, fmt="(' upar2 = ',e17.10)") upar2
+          write (unit, fmt="(' tpar0 = ',e17.10)") tpar0
+          write (unit, fmt="(' tpar1 = ',e17.10)") tpar1
+          write (unit, fmt="(' tperp0 = ',e17.10)") tperp0
+          write (unit, fmt="(' tperp1 = ',e17.10)") tperp1
+          write (unit, fmt="(' tperp2 = ',e17.10)") tperp2
 
        end select
        write (unit, fmt="(' /')")
@@ -305,6 +306,8 @@ contains
        call init_tstart (tstart, istatus)
        restarted = .true.
        scale = 1.
+    case (ginitopt_nltest)
+       call ginit_nltest
     end select
   end subroutine ginit
 
@@ -315,11 +318,12 @@ contains
 
     implicit none
 
-    type (text_option), dimension (5), parameter :: ginitopts = &
+    type (text_option), dimension (6), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
             text_option('many', ginitopt_restart_many), &
             text_option('small', ginitopt_restart_small), &
+            text_option('nltest', ginitopt_nltest), &
             text_option('kpar', ginitopt_kpar) &
             /)
     character(20) :: ginit_option
@@ -371,13 +375,17 @@ contains
   end subroutine read_parameters
 
   subroutine ginit_default
+
     use species, only: spec
     use theta_grid, only: ntgrid, theta, bmag
     use kt_grids, only: naky, ntheta0, theta0, aky, reality
     use vpamu_grids, only: nvgrid, vpa, mu
     use dist_fn_arrays, only: g, gnew, gold
+    use dist_fn_arrays, only: gpnew, gpold
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, imu_idx
+
     implicit none
+
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
     logical :: right
     integer :: iglo
@@ -413,7 +421,53 @@ contains
        g(:,:,iglo) = spread(exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1)*spec(is)%z*phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2)
     end do
     gnew = g ; gold = g
+    gpnew = gnew ; gpold = gold
+
   end subroutine ginit_default
+
+  ! initialize two kys and kx=0
+  subroutine ginit_nltest
+
+    use mp, only: proc0
+    use species, only: spec
+    use theta_grid, only: ntgrid, theta, bmag
+    use kt_grids, only: naky, ntheta0, theta0, aky, reality
+    use vpamu_grids, only: nvgrid, vpa, mu
+    use dist_fn_arrays, only: g, gnew, gold
+    use dist_fn_arrays, only: gpnew, gpold
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, imu_idx
+
+    implicit none
+
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
+    logical :: right
+    integer :: iglo
+    integer :: ig, ik, it, is, imu
+
+    right = .not. left
+
+    if (naky < 4 .or. ntheta0 < 2) then
+       if (proc0) write (*,*) 'must have at least 2 kxs and 4 kys to use nltest init option. aborting.'
+       stop
+    end if
+
+    phi = 0.0
+    do ig = -ntgrid, ntgrid
+       phi(ig,2,2) = 1.0!exp(-((theta(ig)-theta0(2,2))/width0)**2)*cmplx(1.0,1.0)
+    end do
+    
+    g = 0.0
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo) ; if (ik /= 2 .and. ik /= 3) cycle
+       it = it_idx(g_lo,iglo) ; if (it /= 1) cycle
+       is = is_idx(g_lo,iglo)
+       imu = imu_idx(g_lo,iglo)
+       g(:,:,iglo) = spread(exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1)*spec(is)%z*phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2)
+    end do
+    gnew = g ; gold = g
+    gpnew = gnew ; gpold = gold
+
+  end subroutine ginit_nltest
 
   !> Initialise with only the kparallel = 0 mode.
   
@@ -448,17 +502,21 @@ contains
   !! between zero and one.
 
   subroutine ginit_noise
+
     use species, only: spec, tracer_species
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0, aky, reality
     use vpamu_grids, only: nvgrid, vpa, mu
     use dist_fn_arrays, only: g, gnew, gold
+    use dist_fn_arrays, only: gpnew, gpold
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, imu_idx, proc_id
     use dist_fn, only: boundary_option_linked, boundary_option_switch
     use dist_fn, only: l_links, r_links
     use redistribute, only: fill, delete_redist
     use ran
+
     implicit none
+
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
     real :: a, b
     integer :: iglo, ig, ik, it, imu, is, nn
@@ -527,6 +585,8 @@ contains
     end do
 
     gnew = g ; gold = g
+    gpnew = gnew ; gpold = gold
+
   end subroutine ginit_noise
 
   subroutine ginit_kpar
@@ -536,6 +596,7 @@ contains
     use kt_grids, only: naky, ntheta0, theta0
     use vpamu_grids, only: nvgrid, vpa, mu, vperp2
     use dist_fn_arrays, only: g, gnew, gold
+    use dist_fn_arrays, only: gpnew, gpold
     use gs2_layouts, only: g_lo, ik_idx, it_idx, imu_idx
     use constants
     use ran
@@ -599,11 +660,14 @@ contains
     end if
 
     gnew = g ; gold = g
+    gpnew = gnew ; gpold = gold
 
   end subroutine ginit_kpar
 
   subroutine ginit_restart_many
+
     use dist_fn_arrays, only: g, gnew, gold
+    use dist_fn_arrays, only: gpnew, gpold
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
@@ -619,11 +683,14 @@ contains
        g = 0.
     end if
     gnew = g ; gold = g
+    gpnew = gnew ; gpold = gold
 
   end subroutine ginit_restart_many
 
   subroutine ginit_restart_small
+
     use dist_fn_arrays, only: g, gnew, gold
+    use dist_fn_arrays, only: gpnew, gpold
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
@@ -641,6 +708,7 @@ contains
     end if
     g = g + gnew
     gnew = g ; gold = g
+    gpnew = gnew ; gpold = gold
 
   end subroutine ginit_restart_small
 

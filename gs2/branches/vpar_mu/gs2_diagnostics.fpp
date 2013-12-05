@@ -571,6 +571,7 @@ contains
     use theta_grid, only: drhodpsi, qval, shape
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, akx, aky
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use fields_arrays, only: phip, aparp, bparp
     use dist_fn, only: getan, getmoms, par_spectrum
 !    use dist_fn, only: write_f, write_fyx, def_parity, even
     use dist_fn, only: write_f, def_parity, even
@@ -670,6 +671,23 @@ contains
                            bpar(ig,it,ik), &
                            theta(ig) - theta0(it,ik), &
                            cabs(phi(ig,it,ik))
+                   end do
+                   write (unit, "()")
+                end do
+             end do
+             call close_output_file (unit)
+             ! TMP FOR TESTING -- MAB
+             call open_output_file (unit, ".fields2")
+             do ik = 1, naky
+                do it = 1, ntheta0
+                   do ig = -ntg_out, ntg_out
+                      write (unit, "(15(1x,e12.5))") &
+                           theta(ig), aky(ik), akx(it), &
+                           phip(ig,it,ik), &
+                           aparp(ig,it,ik), &
+                           bparp(ig,it,ik), &
+                           theta(ig) - theta0(it,ik), &
+                           cabs(phip(ig,it,ik))
                    end do
                    write (unit, "()")
                 end do
@@ -857,7 +875,7 @@ contains
        allocate ( antot(-ntgrid:ntgrid,ntheta0,naky)) ; antot = 0.
        allocate (antota(-ntgrid:ntgrid,ntheta0,naky)) ; antota = 0. 
        allocate (antotp(-ntgrid:ntgrid,ntheta0,naky)) ; antotp = 0.
-       call getan (antot, antota, antotp)
+       call getan (gnew, antot, antota, antotp)
        if (proc0) then
           if (write_ascii) then
              call open_output_file (unit, ".antot")

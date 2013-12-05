@@ -14,8 +14,8 @@ module species
      real :: dens, dens0, u0
      real :: tpar0,tperp0
      real :: temp
-     real :: tprim
-     real :: fprim
+     real :: tprim, tdbprim
+     real :: fprim, fdbprim
      real :: uprim, uprim2
      real :: vnewk, nustar
      real :: nu, nu_h  ! nu will be the preferred collisionality parameter moving forward
@@ -207,14 +207,14 @@ contains
     use mp, only: proc0, broadcast
     implicit none
     real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h
-    real :: tperp0, tpar0
+    real :: tperp0, tpar0, tdbprim, fdbprim
     character(20) :: type
     integer :: unit
     integer :: is
     namelist /species_knobs/ nspec
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
-         tperp0, tpar0
+         tperp0, tpar0, tdbprim, fdbprim
     integer :: ierr, in_file
 
     type (text_option), dimension (9), parameter :: typeopts = &
@@ -257,6 +257,8 @@ contains
           temp = 1.0
           tprim = 6.9
           fprim = 2.2
+          tdbprim = 0.0
+          fdbprim = 0.0
           uprim = 0.0
           uprim2 = 0.0
           nustar = -1.0
@@ -277,6 +279,8 @@ contains
           spec(is)%temp = temp
           spec(is)%tprim = tprim
           spec(is)%fprim = fprim
+          spec(is)%tdbprim = tdbprim
+          spec(is)%fdbprim = fdbprim
           spec(is)%uprim = uprim
           spec(is)%uprim2 = uprim2
           spec(is)%vnewk = vnewk
@@ -306,6 +310,8 @@ contains
        call broadcast (spec(is)%temp)
        call broadcast (spec(is)%tprim)
        call broadcast (spec(is)%fprim)
+       call broadcast (spec(is)%tdbprim)
+       call broadcast (spec(is)%fdbprim)
        call broadcast (spec(is)%uprim)
        call broadcast (spec(is)%uprim2)
        call broadcast (spec(is)%vnewk)
