@@ -272,8 +272,8 @@ contains
 
     !  Local variables
 
-    integer :: i, j, k, kk, element
-    complex, dimension(ne*p) :: ytemp
+    integer :: i, j, k, element
+    complex :: y0, y1, y2
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -281,19 +281,17 @@ contains
 
     do j = lb3,ub3
        do i = lb2,ub2
-          ytemp = y(:,i,j)
 
           do element = 1,ne
 
-             !  k is the index of first point of this finite element in ytemp;
-             !  ytemp starts at index number 1.  kk is the equivalent index in y
-             !  since this does not necessarily start at 1
-             k = p*(element-1) + 1
-             kk = lb1 + k-1
+             !  index of first point of this finite element in y
 
-             y(kk,i,j)   = 0.125*(3.0*ytemp(k) + 2.0*ytemp(k+1) + 3.0*ytemp(k+2))
-             y(kk+1,i,j) = 0.75*(ytemp(k+2) - ytemp(k))
-             y(kk+2,i,j) = 0.75*(ytemp(k) - 2.0*ytemp(k+1) + ytemp(k+2))
+             k = lb1 + p*(element-1)
+             y0 = y(k,i,j) ; y1 = y(k+1,i,j) ; y2 = y(k+2,i,j)
+
+             y(k,i,j)   = 0.125 * (3.0*y0 + 2.0*y1 + 3.0*y2)
+             y(k+1,i,j) = 0.750 * (y2 - y0)
+             y(k+2,i,j) = 0.750 * (y0 - 2.0*y1 + y2)
 
           end do
 
@@ -319,26 +317,23 @@ contains
 
     !  Local variables
 
-    integer :: k, kk, element
-    complex, dimension(ne*p) :: ytemp
+    integer :: k, element
+    complex :: y0, y1, y2
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     !  There are ne finite elements, each with p points
 
-    ytemp = y(:)
-
     do element = 1,ne
 
-       !  k is the index of first point of this finite element in ytemp;
-       !  ytemp starts at index number 1.  kk is the equivalent index in y
-       !  since this does not necessarily start at 1
-       k = p*(element-1) + 1
-       kk = lbound + k-1
+       !  index of first point of this finite element in y
 
-       y(kk)   = 0.125*(3.0*ytemp(k) + 2.0*ytemp(k+1) + 3.0*ytemp(k+2))
-       y(kk+1) = 0.75*(ytemp(k+2) - ytemp(k))
-       y(kk+2) = 0.75*(ytemp(k) - 2.0*ytemp(k+1) + ytemp(k+2))
+       k = lbound + p*(element-1)
+       y0 = y(k) ; y1 = y(k+1) ; y2 = y(k+2)
+
+       y(k)   = 0.125 * (3.0*y0 + 2.0*y1 + 3.0*y2)
+       y(k+1) = 0.750 * (y2 - y0)
+       y(k+2) = 0.750 * (y0 - 2.0*y1 + y2)
 
     end do
 
@@ -363,8 +358,9 @@ contains
 
     real, parameter :: twothirds = 2.0/3.0
     real, parameter :: sixth = 1.0/6.0
-    integer :: i, j, k, kk, element
-    complex, dimension(ne*p) :: ytemp
+
+    integer :: i, j, k, element
+    complex :: y0, y1, y2
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -372,19 +368,17 @@ contains
 
     do j = lb3,ub3
        do i = lb2,ub2
-          ytemp = y(:,i,j)
 
           do element = 1,ne
 
-             !  k is the index of first point of this finite element in ytemp;
-             !  ytemp starts at index number 1.  kk is the equivalent index in y
-             !  since this does not necessarily start at 1
-             k = p*(element-1) + 1
-             kk = lb1 + k-1
+             !  index of first point of this finite element in y
 
-             y(kk,i,j)   = ytemp(k) - twothirds*ytemp(k+1) + sixth*ytemp(k+2)
-             y(kk+1,i,j) = ytemp(k)                        -   0.5*ytemp(k+2)
-             y(kk+2,i,j) = ytemp(k) + twothirds*ytemp(k+1) + sixth*ytemp(k+2)
+             k = lb1 + p*(element-1)
+             y0 = y(k,i,j) ; y1 = y(k+1,i,j) ; y2 = y(k+2,i,j)
+
+             y(k,i,j)   = y0 - twothirds*y1 + sixth*y2
+             y(k+1,i,j) = y0                -   0.5*y2
+             y(k+2,i,j) = y0 + twothirds*y1 + sixth*y2
 
           end do
 
@@ -412,24 +406,22 @@ contains
 
     real, parameter :: twothirds = 2.0/3.0
     real, parameter :: sixth = 1.0/6.0
-    integer :: k, kk, element
-    complex, dimension(ne*p) :: ytemp
+
+    integer :: k, element
+    complex :: y0, y1, y2
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    ytemp = y(:)
-
     do element = 1,ne
 
-       !  k is the index of first point of this finite element in ytemp;
-       !  ytemp starts at index number 1.  kk is the equivalent index in y
-       !  since this does not necessarily start at 1
-       k = p*(element-1) + 1
-       kk = lbound + k-1
+       !  index of first point of this finite element in y
 
-       y(kk)   = ytemp(k) - twothirds*ytemp(k+1) + sixth*ytemp(k+2)
-       y(kk+1) = ytemp(k)                        -   0.5*ytemp(k+2)
-       y(kk+2) = ytemp(k) + twothirds*ytemp(k+1) + sixth*ytemp(k+2)
+       k = lbound + p*(element-1)
+       y0 = y(k) ; y1 = y(k+1) ; y2 = y(k+2)
+
+       y(k)   = y0 - twothirds*y1 + sixth*y2
+       y(k+1) = y0                -   0.5*y2
+       y(k+2) = y0 + twothirds*y1 + sixth*y2
 
     end do
 
@@ -645,7 +637,7 @@ contains
     integer :: lb1, ub1, lb3, ub3
     integer :: modep
     complex, parameter :: z1 = (1.0, 0.0)
-    complex, allocatable, dimension (:,:,:) :: gmodal, gnew1, gnew2
+    complex, allocatable, dimension (:,:,:) :: gnew1, gnew2
     complex, allocatable, dimension (:,:,:) :: g_dg  ! local copy of g
                                                      ! with extended theta range
     integer, save :: first_call = 1
@@ -665,7 +657,7 @@ contains
     !    if (allocated(kx_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
     !-PJK
 
-    allocate( gmodal(lb1:ub1,1:2,lb3:ub3), &
+    allocate( &
          gnew1(lb1:ub1,1:2,lb3:ub3), &
          gnew2(lb1:ub1,1:2,lb3:ub3), &
          g_dg(lb1:ub1,1:2,lb3:ub3))
@@ -744,25 +736,26 @@ contains
        end if
     end if
 
-    gmodal = g_dg
+    if (adaptive_dt) then
+       gomax = maxval(abs(g_dg)) ; call max_allreduce(gomax)
+    end if
 
-    call nodal2modal(gmodal,lb1,ub1,1,2,lb3,ub3,ne2)
+    call nodal2modal(g_dg,lb1,ub1,1,2,lb3,ub3,ne2)
 
     !  Time-advance using Runge-Kutta pair method
 
-    call rk_adaptive_complex(dydt_dggs2,gmodal,gnew1,gnew2,nx,code_time,code_dt)
+    call rk_adaptive_complex(dydt_dggs2,g_dg,gnew1,gnew2,nx,code_time,code_dt)
 
     call modal2nodal(gnew1,lb1,ub1,1,2,lb3,ub3,ne2)
-    call modal2nodal(gnew2,lb1,ub1,1,2,lb3,ub3,ne2)
 
     !  Adaptive timestep algorithm
 
     if (adaptive_dt) then
 
+       call modal2nodal(gnew2,lb1,ub1,1,2,lb3,ub3,ne2)
+
        !  Actual difference between 2nd and 3rd order estimates
        g3dn = maxval(abs(gnew2-gnew1)) ; call max_allreduce(g3dn)
-
-       gomax = maxval(abs(g_dg)) ; call max_allreduce(gomax)
        gnmax = maxval(abs(gnew2)) ; call max_allreduce(gnmax)
 
        !  (reps *) Maximum allowed difference between 2nd and 3rd order estimates
@@ -867,7 +860,7 @@ contains
     !-PJK
 
     if (allocated(gnew1)) then
-       deallocate(gmodal,gnew1,gnew2,g_dg)
+       deallocate(gnew1,gnew2,g_dg)
     end if
 
   end subroutine advance_explicit
@@ -935,7 +928,377 @@ contains
 
   ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine dydt_dggs2(gmodal,t,dt,dgdt_modal)
+  subroutine dydt_dggs2(g_dg,t,dt,dgdt_modal)
+
+    use dist_fn, only: getfieldexp, get_source_term_exp
+    use dist_fn_arrays, only: ittp
+    use fields_arrays, only: phitmp, apartmp, bpartmp
+    use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx
+    use le_grids, only: nlambda, ng2, lmax, forbid
+    use run_parameters, only: tunits
+    use theta_grid, only: ntgrid
+
+    implicit none
+
+    !  Arguments
+
+
+    real, intent(in) :: t, dt
+    complex, dimension(ntgriddgmin:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
+         !  N.B. g_dg is modified within the routine (just to save a simple copy)
+         intent(inout) :: g_dg
+    complex, dimension(ntgriddgmin:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
+         intent(out) :: dgdt_modal
+
+    !  Local variables
+
+    integer :: ip, ip2
+    integer :: i, j, kk, element, ig, igg, ik, is, il, ie, isgn, iglo
+    integer :: lb1, ub1, lb3, ub3, lbp, ubp, lb1a
+
+    complex, parameter :: zi = (0.0,1.0)
+    logical :: trapped
+
+    complex, allocatable, dimension(:,:,:) :: g
+    complex, allocatable, dimension(:,:,:) :: dgdt, dgdt_tmp
+    complex, allocatable, dimension(:) :: iwg
+    complex, allocatable, dimension(:) :: gplusf
+    complex, allocatable, dimension(:) :: mgplusf
+    complex, allocatable, dimension(:) :: vterm
+    complex, allocatable, dimension(:) :: src
+    complex, allocatable, dimension(:,:,:) :: src3, fluxfn
+
+    real, dimension(3,6) :: mat_p3p, mat_p3m
+
+    complex, dimension(2*p) :: ftemp
+
+    ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    !  Advection term matrix, p=3, positive v
+
+    mat_p3p = real(reshape( &
+         source = (/ 1,-3,5, 1,-3,5, 1,-3,5, -1,3,-5, -1,-3,5, -1,-3,-5 /), &
+         shape = (/ 3,6 /) ))
+
+    !  Advection term matrix, p=3, negative v
+
+    mat_p3m = real(reshape( &
+         source = (/ 1,3,5, -1,3,5, 1,-3,5, -1,-3,-5, 1,3,5, -1,-3,-5 /), &
+         shape = (/ 3,6 /) ))
+
+    lb1 = -ntgrid ; ub1 = ntgriddg
+    lb1a = ntgriddgmin
+    lb3 = g_lo%llim_proc ; ub3 = g_lo%ulim_proc
+
+    allocate( &
+         g(-ntgrid:ntgrid,2,lb3:ub3), & ! original theta range
+         dgdt(lb1:ub1,2,lb3:ub3), &
+         dgdt_tmp(lb1:ub1,2,lb3:ub3), &
+         iwg(lb1:ub1), &
+         gplusf(lb1a:ub1), &
+         mgplusf(lb1:ub1), &
+         vterm(lb1:ub1), &
+         fluxfn(lb1a:ub1,2,lb3:ub3), &
+         src(lb1:ub1), &
+         src3(lb1:ub1,2,lb3:ub3) )
+
+    !  On entry, g_dg is in MODAL form.
+
+    !  g halo elements need to be populated, as these are used in the
+    !  advection term, which takes information from upwind finite elements
+
+    if (flux_tube) then
+       call pass_fluxtube_halos(g_dg,ntgrid,p,lb3,ub3)
+
+       !  Force periodic boundary conditions for the ky=0 zonal mode
+       !  (for which all theta points are on the same MPI process)
+
+       do iglo = lb3, ub3
+          ik = ik_idx(g_lo,iglo)
+          if (ik == 1) then
+             g_dg(lb1-p:lb1-1,1,iglo) = g_dg(ntgrid-p:ntgrid-1,1,iglo)
+             g_dg(ntgrid:ntgrid+p-1,2,iglo) = g_dg(lb1:lb1+p-1,2,iglo)
+          end if
+       end do
+    end if
+
+    !  Obtain g in nodal form
+
+    call modal2nodal(g_dg,lb1a,ub1,1,2,lb3,ub3,ne2)
+    g = g_dg(-ntgrid:ntgrid,:,:)  !  This copy is necessary
+
+    !  Evaluate field equations
+
+    call getfieldexp(g,phitmp,apartmp,bpartmp,'i')
+
+    !  Calculate source term and flux function (nodal)
+
+    src3 = 0.0 ; fluxfn = 0.0
+    call get_source_term_exp(phitmp,apartmp,bpartmp,istep_dg, &
+         fluxfn(lb1:ntgrid,:,:),src3(lb1:ntgrid,:,:))
+
+    !  Flux function halos need to be populated, as these are used in the
+    !  advection term, which takes information from upwind finite elements
+
+    if (flux_tube) call pass_fluxtube_halos(fluxfn,ntgrid,p,lb3,ub3)
+
+    do iglo = lb3, ub3
+       ik = ik_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+
+       !  Force periodic boundary conditions for the ky=0 zonal mode
+       !  (for which all theta points are on the same MPI process)
+
+       if ((flux_tube).and.(ik == 1)) then
+          fluxfn(lb1-p:lb1-1,1,iglo) = fluxfn(ntgrid-p:ntgrid-1,1,iglo)
+          fluxfn(ntgrid:ntgrid+p-1,2,iglo) = fluxfn(lb1:lb1+p-1,2,iglo)
+       end if
+
+       !  Loop over sign of the parallel velocity
+       !  isgn=1, v >= 0 ; isgn=2, v < 0
+
+       do isgn = 1,2
+
+          !  Evaluate -i*wd*g term
+          !  Have to divide wd by dt here
+
+          iwg = 0.0
+          do ig = -ntgrid,ntgrid
+             if (forbid(ig,il)) then
+                iwg(ig) = 0.0
+             else
+                iwg(ig) = -zi * wd(ig,isgn,iglo) * g(ig,isgn,iglo) / (dt*tunits(ik))
+             end if
+          end do
+
+          !  Add g to F
+
+          gplusf(:) = g_dg(:,isgn,iglo) + fluxfn(:,isgn,iglo)
+
+          if (.not.flux_tube) then
+             call nodal2modal(gplusf,lb1,ub1,ne2)
+          else
+             call nodal2modal(gplusf,lb1a,ub1,ne2)
+          end if
+
+          !  Perform matrix multiplication in modal space to calculate d(g+F)/dz
+          !  For speed, ought to store and use transpose...
+
+          mgplusf(:) = 0.0
+
+          if (isgn == 1) then  !  Positive parallel velocity
+
+             if (.not.flux_tube) then
+
+                do element = 1,ne
+                   !  Fill ftemp with correct elements from (g+F)modal
+                   if (element /= 1) then
+                      kk = lb1 + p*(element-2)  !  take values from element to left
+                      ftemp(1:p) = gplusf(kk:kk+p-1)
+                   else
+                      ftemp(1:p) = 0.0  !  'ghost' element to left contains zeroes
+                   end if
+                   kk = lb1 + p*(element-1)  !  take values from this element
+                   ftemp(p+1:2*p) = gplusf(kk:kk+p-1)
+
+                   do ip = 1,p
+                      kk = lb1 + p*(element-1) + ip-1
+                      do ip2 = 1,2*p
+                         mgplusf(kk) = mgplusf(kk) &
+                              + mat_p3p(ip,ip2)*ftemp(ip2)
+                      end do
+                   end do
+                end do
+
+             else  !  flux-tube scenario
+
+                do element = 1,ne
+                   !  Fill ftemp with correct elements from (g+F)modal
+                   !  Element '0' contains halo values
+                   kk = lb1 + p*(element-2)  !  take values from element to left
+                   ftemp(1:p) = gplusf(kk:kk+p-1)
+                   kk = lb1 + p*(element-1)  !  take values from this element
+                   ftemp(p+1:2*p) = gplusf(kk:kk+p-1)
+
+                   do ip = 1,p
+                      kk = lb1 + p*(element-1) + ip-1
+                      do ip2 = 1,2*p
+                         mgplusf(kk) = mgplusf(kk) &
+                              + mat_p3p(ip,ip2)*ftemp(ip2)
+                      end do
+                   end do
+                end do
+
+             end if
+
+          else  !  Negative parallel velocity
+
+             if (.not.flux_tube) then
+
+                do element = 1,ne
+                   !  Fill ftemp with correct elements from (g+F)modal
+                   kk = lb1 + p*(element-1)  !  take values from this element
+                   ftemp(1:p) = gplusf(kk:kk+p-1)
+                   if (element /= ne) then
+                      kk = lb1 + p*element  !  take values from element to right
+                      ftemp(p+1:2*p) = gplusf(kk:kk+p-1)
+                   else
+                      ftemp(p+1:2*p) = 0.0  !  'ghost' element to right contains zeros
+                   end if
+
+                   do ip = 1,p
+                      kk = lb1 + p*(element-1) + ip-1
+                      do ip2 = 1,2*p
+                         mgplusf(kk) = mgplusf(kk) &
+                              + mat_p3m(ip,ip2)*ftemp(ip2)
+                      end do
+                   end do
+                end do
+
+             else  !  flux-tube scenario
+
+                do element = 1,ne
+                   !  Fill ftemp with correct elements from (g+F)modal
+                   !  Element 'ne+1' contains halo values
+                   kk = lb1 + p*(element-1)  !  take values from this element
+                   ftemp(1:p) = gplusf(kk:kk+p-1)
+                   kk = lb1 + p*element  !  take values from element to right
+                   ftemp(p+1:2*p) = gplusf(kk:kk+p-1)
+
+                   do ip = 1,p
+                      kk = lb1 + p*(element-1) + ip-1
+                      do ip2 = 1,2*p
+                         mgplusf(kk) = mgplusf(kk) &
+                              + mat_p3m(ip,ip2)*ftemp(ip2)
+                      end do
+                   end do
+                end do
+
+             end if
+
+          end if
+
+          !  Multiply this term by v/dz, which must be done in nodal form
+          !  Array v = (T/q)*vp, where vp = dt/h*(parallel velocity),
+          !  i.e. vp is non-dimensional.
+          !  h is the finite difference mesh separation, but dz must be
+          !  element size p*h, not h.
+          !  We must also remove the numerator dt, so we need to divide v by p*dt
+
+          call modal2nodal(mgplusf,lb1,ub1,ne)
+
+          do ig = lb1,ub1
+             if (ig > ntgrid) then
+                vterm(ig) = 0.0
+             else if (forbid(ig,il)) then
+                vterm(ig) = 0.0
+             else
+                vterm(ig) = 1.0/(p*dt*tunits(ik)) * v(ig,isgn,iglo) &
+                     * mgplusf(ig)
+             end if
+          end do
+
+          !  Source term
+          !  src3 is actually (2.dt.S), therefore need to divide by 2.dt
+
+          src = 0.0
+          src(:) = src3(:,isgn,iglo)/(2.0*dt*tunits(ik))
+
+          !  Sum all the terms to get dg/dt (nodal)
+
+          do i = lb1,ub1
+             dgdt_tmp(i,isgn,iglo) = iwg(i) + vterm(i) + src(i)
+          end do
+
+       end do  !  isgn loop
+
+    end do  !  iglo loop
+
+    !  Apply relevant boundary conditions to passing/trapped particles
+
+    dgdt = 0.0
+
+    do iglo = lb3,ub3
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+
+       trapped = (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax)
+
+       if (trapped) then
+          lbp = -9999 ; ubp = -9999
+          do ig = lb1,ntgrid-1
+
+             !+PJK prototype stuff for totally trapped particles
+             if (il == ittp(ig)) then
+                if (forbid(ig,il)) then
+                   dgdt(ig,:,iglo) = 0.0
+                else
+                   dgdt(ig,1,iglo) = dgdt_tmp(ig,1,iglo)
+                   dgdt(ig,2,iglo) = dgdt(ig,1,iglo)
+                end if
+                cycle
+             end if
+             !-PJK
+
+             if (forbid(ig,il).and..not.forbid(ig+1,il)) then
+                lbp = ig+1  !  lower bounce point found
+             end if
+
+             if (.not.forbid(ig,il).and.forbid(ig+1,il)) then
+                ubp = ig  !  upper bounce point found
+
+                if (lbp == -9999) then
+                   write(*,*) 'oh dear... UBP found but no LBP!'
+                   write(*,*) lbp,ubp,il
+                   stop
+                end if
+
+                do igg = lbp+1,ubp-1
+                    dgdt(igg,:,iglo) = dgdt_tmp(igg,:,iglo)
+                end do
+
+                !  Boundary condition at bounce points:
+                !  dgdt(v > 0) = dgdt(v < 0)
+
+                dgdt(lbp,1,iglo) = dgdt_tmp(lbp,2,iglo)
+                dgdt(lbp,2,iglo) = dgdt_tmp(lbp,2,iglo)
+
+                dgdt(ubp,1,iglo) = dgdt_tmp(ubp,1,iglo)
+                dgdt(ubp,2,iglo) = dgdt_tmp(ubp,1,iglo)
+
+                lbp = -9999 ; ubp = -9999
+             end if
+          end do
+
+       else  !  nothing trapped at this il
+          dgdt(:,:,iglo) = dgdt_tmp(:,:,iglo)
+       end if
+
+    end do ! iglo
+
+    !  Boundary conditions
+!+PJKFT Check this is correct for FT; actually only applies for left-most
+!+PJKFT or right-most procs
+    dgdt(lb1,1,:) = 0.0
+    dgdt(ntgrid:ntgriddg,2,:) = 0.0
+!-PJKFT
+
+    !  Finally, convert dg/dt back to modal space
+
+    if (.not.flux_tube) then
+       dgdt_modal = dgdt
+    else
+       dgdt_modal = 0.0
+       dgdt_modal(lb1:ub1,:,:) = dgdt
+    end if
+    call nodal2modal(dgdt_modal,lb1a,ub1,1,2,lb3,ub3,ne2)
+
+  end subroutine dydt_dggs2
+
+  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine dydt_dggs2_orig(gmodal,t,dt,dgdt_modal)
 
     use dist_fn, only: getfieldexp, get_source_term_exp
     use dist_fn_arrays, only: ittp
@@ -1323,7 +1686,7 @@ contains
     end if
     call nodal2modal(dgdt_modal,lb1a,ub1,1,2,lb3,ub3,ne2)
 
-  end subroutine dydt_dggs2
+  end subroutine dydt_dggs2_orig
 
   ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -1377,7 +1740,7 @@ contains
 
        !  Calculate dy/dt
 
-       call dydt(ytest,ttest,dt,ydot)
+       call dydt(ytest,ttest,dt,ydot)  !  Beware, ytest is modified in dydt...
        k(:,i) = ydot
     end do
 
