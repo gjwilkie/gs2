@@ -9,7 +9,9 @@ module geometry
   real, allocatable, dimension(:) :: grho, theta, bmag, gradpar, &
        cvdrift, cvdrift0, gbdrift, gbdrift0, gds2, gds21, gds22, jacob, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, Uk1, Uk2, &
-       cdrift, cdrift0, gds23, gds24, gds24_noq, gbdrift_th, cvdrift_th, Bpol ! MAB
+       cdrift, cdrift0, gds23, gds24, gds24_noq, gbdrift_th, cvdrift_th, Bpol, &
+       dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
+       dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho
   
   real, allocatable, dimension(:) :: J_X, B_X, g11_X, g12_X, g22_X, &
        K1_X, K2_X, gradpar_X
@@ -17,7 +19,8 @@ module geometry
   real :: Rref_X, Bref_X
 
   real :: rhoc, rmaj, r_geo, shift, dbetadrho, kxfac
-  real :: qinp, shat, akappa, akappri, tri, tripri, dpressdrho, asym, asympri
+  real :: qinp, shat, akappa, akappri, tri, tripri, dpressdrho, asym, asympri, d2qdr2
+  real :: betadbprim
   real :: delrho, rmin, rmax, qsf, aminor
   
   real :: s_hat_input, p_prime_input, invLp_input, beta_prime_input, &
@@ -94,6 +97,8 @@ module geometry
      real :: shat
      real :: asym
      real :: asympri
+     real :: d2qdr2
+     real :: betadbprim
    end type miller_parameters_type
 
   type(advanced_parameters_type) :: advanced_parameters
@@ -298,7 +303,7 @@ contains
 !cmr    use  eeq, only: efitin, eeq_init => efit_init, gs2din
     use  deq, only: dfitin, deq_init => dfit_init
     use ideq, only: idfitin, ideq_init => dfit_init
-    use  leq, only: leqin, dpdrhofun
+    use  leq, only: leqin, dpdrhofun, leqcoefs
 
     implicit none
 !cmr nov04: adding following debug switch
@@ -375,9 +380,29 @@ if (debug) write(6,*) "eikcoefs: call check"
     if(iflux /= 1 .and. iflux /= 10) then
 
        call leqin(rmaj, R_geo, akappa, akappri, tri, tripri, rhoc, delrho, shift, &
-            qinp, s_hat_input, asym, asympri, ntgrid)
+            qinp, s_hat_input, asym, asympri, beta_prime_input, betadbprim, d2qdr2, ntheta/2+1)
        if(.not.allocated(gds22)) call alloc_module_arrays(ntgrid)
        call alloc_local_arrays(ntgrid)
+       ! get geometry coefficients needed for dgk/drho equation
+       call leqcoefs (dgradpardrho(-ntheta/2:ntheta/2),dgradparbdrho(-ntheta/2:ntheta/2), &
+            dcvdrift0drho(-ntheta/2:ntheta/2), dgbdrift0drho(-ntheta/2:ntheta/2), &
+            dcvdriftdrho(-ntheta/2:ntheta/2), dgbdriftdrho(-ntheta/2:ntheta/2), &
+            dgds2dr(-ntheta/2:ntheta/2), dgds21dr(-ntheta/2:ntheta/2), dgds22dr(-ntheta/2:ntheta/2), &
+            dBdrho(-ntheta/2:ntheta/2))
+       ! coefficients returned only go from -pi -> pi
+       ! fill extended theta values for nperiod > 1
+       if (nperiod > 1) then
+          call periodic_copy (dgradpardrho,0.)
+          call periodic_copy (dgradparbdrho,0.)
+          call periodic_copy (dcvdrift0drho,0.)
+          call periodic_copy (dgbdrift0drho,0.)
+          call periodic_copy (dcvdriftdrho,0.)
+          call periodic_copy (dgbdriftdrho,0.)
+          call periodic_copy (dgds2dr,0.)
+          call periodic_copy (dgds21dr,0.)
+          call periodic_copy (dgds22dr,0.)
+          call periodic_copy (dBdrho,0.)
+       end if
     endif
 
 if (debug) write(6,*) "eikcoefs: iflux=",iflux
@@ -846,6 +871,7 @@ if (debug) write(6,*) "eikcoefs: end gradients"
        
        do i=-nth,nth
           dsdrp(i)=(seik2(i)-seik1(i))/(2.*delrp)
+          write (*,*) 'dsdrp', dsdrp(i)
        enddo
     
        if(iflux == 1) then
@@ -1061,6 +1087,10 @@ if (debug) write(6,*) "eikcoefs: end gradients"
     call plotdata (rgrid, seik, grads, dpsidrho)
 
     Bpol = bpolmag
+
+!    do i = -nth, nth
+!       write (*,'(a7,8e12.4)') 'cveik', theta(i), gradpar(i), gradpar(i), gbdrift(i), cvdrift(i), gds2(i), gds21(i), gds22(i), gbdrift0(i), cvdrift0(i)
+!    end do
 
     call dealloc_local_arrays
 
@@ -2824,9 +2854,9 @@ end subroutine geofax
          gds2       (-n:n), &
          gds21      (-n:n), &
          gds22      (-n:n), &
-         gds23      (-n:n), &  ! MAB
-         gds24      (-n:n), &  ! MAB
-         gds24_noq  (-n:n), &  ! MAB
+         gds23      (-n:n), &
+         gds24      (-n:n), &
+         gds24_noq  (-n:n), &
          jacob      (-n:n), &
          Rplot      (-n:n), &
          Zplot      (-n:n), &
@@ -2836,7 +2866,17 @@ end subroutine geofax
          aprime     (-n:n), &
          Uk1        (-n:n), &
          Uk2        (-n:n), &
-         Bpol       (-n:n))
+         Bpol       (-n:n), &
+         dgradpardrho(-n:n), &
+         dgradparBdrho(-n:n), &
+         dcvdrift0drho(-n:n), &
+         dgbdrift0drho(-n:n), &
+         dcvdriftdrho(-n:n), &
+         dgbdriftdrho(-n:n), &
+         dgds2dr(-n:n), &
+         dgds21dr(-n:n), &
+         dgds22dr(-n:n), &
+         dBdrho(-n:n))
     if (debug) write(6,*) "alloc_module_arrays: done"
   end subroutine alloc_module_arrays
 
@@ -3519,6 +3559,8 @@ subroutine geometry_get_miller_parameters(miller_parameters_out)
    miller_parameters%shat = shat
    miller_parameters%asym = asym
    miller_parameters%asympri = asympri
+   miller_parameters%d2qdr2 = d2qdr2
+   miller_parameters%betadbprim = betadbprim
 
    miller_parameters_out = miller_parameters
 
@@ -3543,6 +3585,7 @@ subroutine geometry_set_miller_parameters(miller_parameters_in)
    shat = miller_parameters_in%shat
    asym = miller_parameters_in%asym
    asympri = miller_parameters_in%asympri
+   betadbprim = miller_parameters_in%betadbprim
 
    write(*,*) 's_hat was set to', shat
 

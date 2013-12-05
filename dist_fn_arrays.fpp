@@ -5,8 +5,9 @@
 module dist_fn_arrays
 
   public :: g, gnew, gold, kx_shift, theta0_shift, source
-  public :: vpar, aj0, aj1, aj2, mirror
-  public :: apar_ext, kperp2
+  public :: gpnew, gpold
+  public :: vpar, aj0, aj1, aj2, mirror, vparp, aj0p
+  public :: apar_ext, kperp2, dkperp2dr
   public :: g_adjust
 #ifdef LOWFLOW
   public :: hneoc, vparterm, wdfac, wstarfac
@@ -15,22 +16,23 @@ module dist_fn_arrays
 
   ! dist fn
   complex, dimension (:,:,:), allocatable :: g, gnew, gold, source
+  complex, dimension (:,:,:), allocatable :: gpnew, gpold
   ! (-ntgrid:ntgrid, -nvgrid:nvgrid, -g-layout-)
 
   real, dimension(:), allocatable :: kx_shift, theta0_shift
   ! (naky)
 
-  real, dimension (:,:,:), allocatable :: vpar, mirror
+  real, dimension (:,:,:), allocatable :: vpar, mirror, vparp
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
 
 ! DJA: 17/1/06, add variable aj2 to store J_2(x)
-  real, dimension (:,:), allocatable :: aj0, aj1, aj2
+  real, dimension (:,:), allocatable :: aj0, aj1, aj2, aj0p
   ! (-ntgrid:ntgrid, -g-layout-)
 
   ! fieldeq
   complex, dimension (:,:,:), allocatable :: apar_ext
-  real, dimension (:,:,:), allocatable :: kperp2
+  real, dimension (:,:,:), allocatable :: kperp2, dkperp2dr
   ! (-ntgrid:ntgrid,ntheta0,naky) replicated
 
 #ifdef LOWFLOW

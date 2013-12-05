@@ -307,11 +307,12 @@ contains
        if (present(nl)) then
           call add_nl (g1, phi, apar, bpar)
           
-          ! take g1 at grid points and return 2*g1 at cell centers
+          ! take g1 at grid points and return g1 at cell centers
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              call get_cell_value (thet_imp, vpa_imp, g1(:,:,iglo), g1(:,:,iglo), &
                   -ntgrid, -nvgrid)
           end do
+	  ! artifact left from GS2 convention
           g1 = 2.*g1
        else
           g1 = 0.

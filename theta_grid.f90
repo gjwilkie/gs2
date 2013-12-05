@@ -21,14 +21,14 @@ contains
        write (unit, *)
        write (unit, fmt="(' &',a)") "theta_grid_gridgen_knobs"
        write (unit, fmt="(' npadd =    ',i4)") npadd
-       write (unit, fmt="(' alknob =   ',e16.10)") alknob
-       write (unit, fmt="(' epsknob =  ',e16.10)") epsknob
-       write (unit, fmt="(' bpknob =   ',e16.10)") bpknob
-       write (unit, fmt="(' extrknob = ',e16.10)") extrknob
-       write (unit, fmt="(' tension =  ',e16.10)") tension
-       write (unit, fmt="(' thetamax = ',e16.10)") thetamax
-       write (unit, fmt="(' deltaw =   ',e16.10)") deltaw
-       write (unit, fmt="(' widthw =   ',e16.10)") widthw
+       write (unit, fmt="(' alknob =   ',e16.8)") alknob
+       write (unit, fmt="(' epsknob =  ',e16.8)") epsknob
+       write (unit, fmt="(' bpknob =   ',e16.8)") bpknob
+       write (unit, fmt="(' extrknob = ',e16.8)") extrknob
+       write (unit, fmt="(' tension =  ',e16.8)") tension
+       write (unit, fmt="(' thetamax = ',e16.8)") thetamax
+       write (unit, fmt="(' deltaw =   ',e16.8)") deltaw
+       write (unit, fmt="(' widthw =   ',e16.8)") widthw
        write (unit, fmt="(' /')")
   end subroutine wnml_theta_grid_gridgen
 
@@ -66,7 +66,9 @@ contains
        theta, bset, bmag, gradpar, gbdrift, gbdrift0, cvdrift, &
        cvdrift0, cdrift, cdrift0, gbdrift_th, cvdrift_th, &
        gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-       Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
+       Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol, &
+       dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
+       dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     use gridgen4mod
     use constants
     implicit none
@@ -77,7 +79,9 @@ contains
     real, dimension (-ntgrid:ntgrid), intent (in out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
+         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol, &
+         dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
+         dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho
     integer :: ntheta_old, ntgrid_old, nbset_old
     real, dimension (-ntgrid:ntgrid) :: thetasave
     real, dimension (ntheta+1) :: thetaold, thetanew
@@ -150,6 +154,15 @@ if (debug) write(6,*) 'gridgen_get_grids: call regrid'
     call regrid (ntgrid_old, thetasave, Zprime, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, aprime, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, Bpol, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, dgradpardrho, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, dgradparbdrho, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, dcvdrift0drho, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, dgbdrift0drho, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, dcvdriftdrho, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, dgds2dr, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, dgds21dr, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, dgds22dr, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, dBdrho, ntgrid, theta)
 
 if (debug) write(6,*) 'gridgen_get_grids: end'
   end subroutine gridgen_get_grids
@@ -352,8 +365,8 @@ contains
      if (.not. exist) return
      write (unit, *)
      write (unit, fmt="(' &',a)") "theta_grid_salpha_knobs"
-     write (unit, fmt="(' alpmhdfac = ',e16.10)") alpmhdfac
-     write (unit, fmt="(' alpha1 =    ',e16.10)") alpha1
+     write (unit, fmt="(' alpmhdfac = ',e16.8)") alpmhdfac
+     write (unit, fmt="(' alpha1 =    ',e16.8)") alpha1
      
      select case (model_switch)
         
@@ -458,7 +471,9 @@ contains
        bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
        gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, &
-       qval, shape, gb_to_cv, Bpol)
+       qval, shape, gb_to_cv, Bpol, &
+       dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
+       dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     use constants
     use theta_grid_params, only: eps, epsl, shat_param => shat, pk, qinp, rhoc
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
@@ -470,7 +485,9 @@ contains
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
+         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol, &
+         dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
+         dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     character (8), intent(out) :: shape
     logical, intent (in) :: gb_to_cv
@@ -585,6 +602,17 @@ contains
 
     end select
     gradpar = pk/2.0
+    ! have not setup s-alpha to deal with dgk/dpsi geometry coefs
+    dgradpardrho = 0.0
+    dgradparbdrho = 0.0
+    dcvdrift0drho = 0.0
+    dgbdrift0drho = 0.0
+    dcvdriftdrho = 0.0
+    dgbdriftdrho = 0.0
+    dgds2dr = 0.0
+    dgds21dr = 0.0
+    dgds22dr = 0.0
+    dBdrho = 0.0
 
     ! not sure about factor of epsl below...
     cdrift = 2.*epsl*(cos(theta)+shat*theta*sin(theta))
@@ -608,7 +636,9 @@ contains
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-            Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
+            Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol, &
+            dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
+            dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     end if
   end subroutine salpha_get_grids
 
@@ -995,11 +1025,14 @@ contains
   end subroutine checklogic_theta_grid_eik
 
   subroutine init_theta_grid_eik
+
     use geometry, only: init_theta, nperiod_geo => nperiod
     use geometry, only: eikcoefs, itor, delrho, rhoc
     use geometry, only: gen_eq, ppl_eq, transp_eq
     use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
+
     implicit none
+
     real :: rhoc_save
     logical, save :: initialized = .false.
 !CMR nov04: adding following debug switch
@@ -1036,6 +1069,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
 !    write (*,*) 'init_theta_grid_eik: ntheta = ',ntheta
 
     rhoc = rhoc_save
+
   end subroutine init_theta_grid_eik
 
   subroutine eik_get_sizes (nthetaout, nperiodout, nbsetout)
@@ -1053,7 +1087,9 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, &
             grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi,&
-            kxfac, qval, gb_to_cv, Bpol)
+            kxfac, qval, gb_to_cv, Bpol, &
+            dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
+            dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
     use geometry, only: kxfac_out => kxfac
     use geometry, only: theta_out => theta
@@ -1083,6 +1119,16 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
     use geometry, only: Bpol_out => Bpol
     use geometry, only: qsf
     use geometry, only: s_hat_new, drhodpsin
+    use geometry, only: dgradpardrho_out => dgradpardrho
+    use geometry, only: dgradparbdrho_out => dgradparbdrho
+    use geometry, only: dcvdrift0drho_out => dcvdrift0drho
+    use geometry, only: dgbdrift0drho_out => dgbdrift0drho
+    use geometry, only: dcvdriftdrho_out => dcvdriftdrho
+    use geometry, only: dgbdriftdrho_out => dgbdriftdrho
+    use geometry, only: dgds2dr_out => dgds2dr
+    use geometry, only: dgds21dr_out => dgds21dr
+    use geometry, only: dgds22dr_out => dgds22dr
+    use geometry, only: dBdrho_out => dBdrho
     implicit none
     integer, intent (in) :: nperiod
     integer, intent (in out) :: ntheta, ntgrid, nbset
@@ -1091,7 +1137,9 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
+         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol, &
+         dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
+         dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     logical, intent (in) :: gb_to_cv
     integer :: i, ig
@@ -1123,6 +1171,16 @@ if (debug) write(6,*) 'eik_get_grids: ntgrid=',ntgrid
        Zprime(ig)    = Zprime_out(ig)
        aprime(ig)    = aprime_out(ig)
        Bpol(ig)      = Bpol_out(ig)
+       dgradpardrho(ig) = dgradpardrho_out(ig)
+       dgradparbdrho(ig) = dgradparbdrho_out(ig)
+       dcvdrift0drho(ig) = dcvdrift0drho_out(ig)
+       dgbdrift0drho(ig) = dgbdrift0drho_out(ig)
+       dcvdriftdrho(ig) = dcvdriftdrho_out(ig)
+       dgbdriftdrho(ig) = dgbdriftdrho_out(ig)
+       dgds2dr(ig) = dgds2dr_out(ig)
+       dgds21dr(ig) = dgds21dr_out(ig)
+       dgds22dr(ig) = dgds22dr_out(ig)
+       dBdrho(ig) = dBdrho_out(ig)
     end do
        
     if (gb_to_cv) then
@@ -1145,7 +1203,9 @@ if (debug) write(6,*) 'eik_get_grids: call gridgen_get_grids'
          theta, bset, bmag, &
          gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, &
-         grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
+         grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol, &
+         dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
+         dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     shat = s_hat_new
     drhodpsi = drhodpsin
     kxfac = kxfac_out
@@ -1172,6 +1232,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
     use geometry, only: alpha_input, invLp_input, beta_prime_input, dp_mult
     use geometry, only: rmaj, r_geo
     use geometry, only: shift, qinp, akappa, akappri, tri, tripri, asym, asympri
+    use geometry, only: d2qdr2, betadbprim
     use geometry, only: delrho, rmin, rmax
     use geometry, only: isym, in_nt, writelots
     use theta_grid_params, only: nperiod_in => nperiod
@@ -1184,6 +1245,8 @@ if (debug) write(6,*) 'eik_get_grids: end'
     use theta_grid_params, only: tri_in => tri, tripri_in => tripri
     use theta_grid_params, only: asym_in => asym, asympri_in => asympri
     use theta_grid_params, only: betaprim_in => betaprim
+    use theta_grid_params, only: d2qdr2_in => d2qdr2
+    use theta_grid_params, only: betadbprim_in => betadbprim
     implicit none
     integer :: in_file
 
@@ -1208,6 +1271,8 @@ if (debug) write(6,*) 'eik_get_grids: end'
     asym = asym_in
     asympri = asympri_in
     beta_prime_input = betaprim_in
+    d2qdr2 = d2qdr2_in
+    betadbprim = betadbprim_in
 
     itor = 1
     iflux = 0
@@ -1466,7 +1531,9 @@ module theta_grid
   implicit none
 
   public :: init_theta_grid, check_theta_grid, wnml_theta_grid
-  public :: theta, theta2, delthet, delthet2, thetac, dbdthetc, gradparc
+  public :: theta, theta2, delthet, delthet2, thetac, dbdthetc, gradparc, bmagc,dbdthet
+  public :: dgradpardrhoc, dgradparbdrhoc, dcvdrift0drhoc, dgbdrift0drhoc
+  public :: dcvdriftdrhoc, dgbdriftdrhoc, dgds2drc, dgds21drc, dgds22drc, dBdrhoc
   public :: bset
   public :: bmag, gradpar, itor_over_B, IoB
   public :: gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0
@@ -1477,19 +1544,29 @@ module theta_grid
   public :: ntheta, ntgrid, nperiod, nbset
   public :: Rplot, Zplot, aplot, Rprime, Zprime, aprime, Bpol
   public :: shape, gb_to_cv
+  public :: dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho
+  public :: dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho
 
   private
 
   real, dimension (:), allocatable :: theta, theta2, delthet, delthet2
   real, dimension (:), allocatable :: bset
-  real, dimension (:), allocatable :: bmag, gradpar
+  real, dimension (:), allocatable :: bmag, gradpar, dbdthet
   real, dimension (:), allocatable :: itor_over_B, IoB
   real, dimension (:), allocatable :: gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0
   real, dimension (:), allocatable :: gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq
   real, dimension (:), allocatable :: grho, jacob
   real, dimension (:), allocatable :: Rplot, Zplot, aplot, Bpol
   real, dimension (:), allocatable :: Rprime, Zprime, aprime
-  real, dimension (:,:), allocatable :: thetac, dbdthetc, gradparc
+  real, dimension (:,:), allocatable :: thetac, dbdthetc, gradparc, bmagc, dgradpardrhoc, dgradparbdrhoc
+  real, dimension (:,:), allocatable :: dcvdrift0drhoc, dgbdrift0drhoc, dcvdriftdrhoc, dgbdriftdrhoc
+  real, dimension (:,:), allocatable :: dgds2drc, dgds21drc, dgds22drc, dBdrhoc
+
+  ! geometry coefficients needed for dgk/drho equation
+  real, dimension (:), allocatable :: dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho
+  real, dimension (:), allocatable :: dcvdriftdrho, dgbdriftdrho
+  real, dimension (:), allocatable :: dgds2dr, dgds21dr, dgds22dr, dBdrho
+
   real :: bmin, bmax, eps, shat, drhodpsi, kxfac, qval, thet_imp
   integer :: ntheta, ntgrid, nperiod, nbset
   logical :: gb_to_cv
@@ -1612,12 +1689,24 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
 
     if (.not. proc0) then
        call allocate_arrays
+       allocate (dbdthet(-ntgrid:ntgrid))
        allocate (theta2(-ntgrid:ntgrid))
        allocate (delthet(-ntgrid:ntgrid))
        allocate (delthet2(-ntgrid:ntgrid))
        allocate (thetac(-ntgrid:ntgrid,2))
        allocate (dbdthetc(-ntgrid:ntgrid,2))
        allocate (gradparc(-ntgrid:ntgrid,2))
+       allocate (bmagc(-ntgrid:ntgrid,2))
+       allocate (dgradpardrhoc(-ntgrid:ntgrid,2))
+       allocate (dgradparbdrhoc(-ntgrid:ntgrid,2))
+       allocate (dcvdrift0drhoc(-ntgrid:ntgrid,2))
+       allocate (dgbdrift0drhoc(-ntgrid:ntgrid,2))
+       allocate (dcvdriftdrhoc(-ntgrid:ntgrid,2))
+       allocate (dgbdriftdrhoc(-ntgrid:ntgrid,2))
+       allocate (dgds2drc(-ntgrid:ntgrid,2))
+       allocate (dgds21drc(-ntgrid:ntgrid,2))
+       allocate (dgds22drc(-ntgrid:ntgrid,2))
+       allocate (dBdrhoc(-ntgrid:ntgrid,2))
     end if
     call broadcast (theta)
     call broadcast (theta2)
@@ -1654,12 +1743,34 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast (Bpol)
     call broadcast (drhodpsi)
     call broadcast (gb_to_cv)
+    call broadcast (dgradpardrho)
+    call broadcast (dgradparbdrho)
+    call broadcast (dcvdrift0drho)
+    call broadcast (dgbdrift0drho)
+    call broadcast (dcvdriftdrho)
+    call broadcast (dgbdriftdrho)
+    call broadcast (dbdthet)
+    call broadcast (dgds2dr)
+    call broadcast (dgds21dr)
+    call broadcast (dgds22dr)
+    call broadcast (dBdrho)
     ! these are quantities that vary depending on if vpa is positive or negative
     ! they depend on sign(vpa) due to possibility of upwinding
     do i = 1, 2
        call broadcast (thetac(:,i))
        call broadcast (dbdthetc(:,i))
        call broadcast (gradparc(:,i))
+       call broadcast (bmagc(:,i))
+       call broadcast (dgradpardrhoc(:,i))
+       call broadcast (dgradparbdrhoc(:,i))
+       call broadcast (dcvdrift0drhoc(:,i))
+       call broadcast (dgbdrift0drhoc(:,i))
+       call broadcast (dcvdriftdrhoc(:,i))
+       call broadcast (dgbdriftdrhoc(:,i))
+       call broadcast (dgds2drc(:,i))
+       call broadcast (dgds21drc(:,i))
+       call broadcast (dgds22drc(:,i))
+       call broadcast (dBdrhoc(:,i))
     end do
     call broadcast (thet_imp)
   end subroutine broadcast_results
@@ -1724,6 +1835,16 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     allocate (aplot(-ntgrid:ntgrid))
     allocate (aprime(-ntgrid:ntgrid))
     allocate (Bpol(-ntgrid:ntgrid))
+    allocate (dgradpardrho(-ntgrid:ntgrid))
+    allocate (dgradparbdrho(-ntgrid:ntgrid))
+    allocate (dcvdrift0drho(-ntgrid:ntgrid))
+    allocate (dgbdrift0drho(-ntgrid:ntgrid))
+    allocate (dcvdriftdrho(-ntgrid:ntgrid))
+    allocate (dgbdriftdrho(-ntgrid:ntgrid))
+    allocate (dgds2dr(-ntgrid:ntgrid))
+    allocate (dgds21dr(-ntgrid:ntgrid))
+    allocate (dgds22dr(-ntgrid:ntgrid))
+    allocate (dBdrho(-ntgrid:ntgrid))
   end subroutine allocate_arrays
 
   subroutine finish_init
@@ -1819,6 +1940,36 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
 
        eik_save = Bpol(-ntgrid:ntgrid); deallocate (Bpol)
        allocate (Bpol(-ntgrid:ntgrid)); Bpol = eik_save
+
+       eik_save = dgradpardrho(-ntgrid:ntgrid); deallocate (dgradpardrho)
+       allocate (dgradpardrho(-ntgrid:ntgrid)); dgradpardrho = eik_save
+
+       eik_save = dgradparbdrho(-ntgrid:ntgrid); deallocate (dgradparbdrho)
+       allocate (dgradparbdrho(-ntgrid:ntgrid)); dgradparbdrho = eik_save
+
+       eik_save = dcvdrift0drho(-ntgrid:ntgrid); deallocate (dcvdrift0drho)
+       allocate (dcvdrift0drho(-ntgrid:ntgrid)); dcvdrift0drho = eik_save
+
+       eik_save = dgbdrift0drho(-ntgrid:ntgrid); deallocate (dgbdrift0drho)
+       allocate (dgbdrift0drho(-ntgrid:ntgrid)); dgbdrift0drho = eik_save
+
+       eik_save = dcvdriftdrho(-ntgrid:ntgrid); deallocate (dcvdriftdrho)
+       allocate (dcvdriftdrho(-ntgrid:ntgrid)); dcvdriftdrho = eik_save
+
+       eik_save = dgbdriftdrho(-ntgrid:ntgrid); deallocate (dgbdriftdrho)
+       allocate (dgbdriftdrho(-ntgrid:ntgrid)); dgbdriftdrho = eik_save
+
+       eik_save = dgds2dr(-ntgrid:ntgrid); deallocate (dgds2dr)
+       allocate (dgds2dr(-ntgrid:ntgrid)); dgds2dr = eik_save
+
+       eik_save = dgds21dr(-ntgrid:ntgrid); deallocate (dgds21dr)
+       allocate (dgds21dr(-ntgrid:ntgrid)); dgds21dr = eik_save
+
+       eik_save = dgds22dr(-ntgrid:ntgrid); deallocate (dgds22dr)
+       allocate (dgds22dr(-ntgrid:ntgrid)); dgds22dr = eik_save
+
+       eik_save = dBdrho(-ntgrid:ntgrid); deallocate (dBdrho)
+       allocate (dBdrho(-ntgrid:ntgrid)); dBdrho = eik_save
     end if
 
     bmax = maxval(bmag)
@@ -1829,12 +1980,24 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     eps = 1.0 - sqrt(bmin/bmax)
 !    eps = 1.0 - 1.0/bmax
 
+    allocate (dbdthet(-ntgrid:ntgrid))
     allocate (theta2(-ntgrid:ntgrid))
     allocate (delthet(-ntgrid:ntgrid))
     allocate (delthet2(-ntgrid:ntgrid))
     allocate (thetac(-ntgrid:ntgrid,2))
     allocate (dbdthetc(-ntgrid:ntgrid,2))
     allocate (gradparc(-ntgrid:ntgrid,2))
+    allocate (bmagc(-ntgrid:ntgrid,2))
+    allocate (dgradpardrhoc(-ntgrid:ntgrid,2))
+    allocate (dgradparbdrhoc(-ntgrid:ntgrid,2))
+    allocate (dcvdrift0drhoc(-ntgrid:ntgrid,2))
+    allocate (dgbdrift0drhoc(-ntgrid:ntgrid,2))
+    allocate (dcvdriftdrhoc(-ntgrid:ntgrid,2))
+    allocate (dgbdriftdrhoc(-ntgrid:ntgrid,2))
+    allocate (dgds2drc(-ntgrid:ntgrid,2))
+    allocate (dgds21drc(-ntgrid:ntgrid,2))
+    allocate (dgds22drc(-ntgrid:ntgrid,2))
+    allocate (dBdrhoc(-ntgrid:ntgrid,2))
 
     theta2 = theta*theta
     delthet(:ntgrid-1) = theta(-ntgrid+1:) - theta(:ntgrid-1)
@@ -1852,21 +2015,64 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call get_cell_value (1.0-thet_imp, gradpar, gradparc(:,1), -ntgrid)
     call get_cell_value (thet_imp, gradpar, gradparc(:,2), -ntgrid)
 
+    call get_cell_value (1.0-thet_imp, bmag, bmagc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, bmag, bmagc(:,2), -ntgrid)
+
+    call get_cell_value (1.0-thet_imp, dgradpardrho, dgradpardrhoc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, dgradpardrho, dgradpardrhoc(:,2), -ntgrid)
+
+    call get_cell_value (1.0-thet_imp, dgradparbdrho, dgradparbdrhoc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, dgradparbdrho, dgradparbdrhoc(:,2), -ntgrid)
+
+    call get_cell_value (1.0-thet_imp, dcvdrift0drho, dcvdrift0drhoc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, dcvdrift0drho, dcvdrift0drhoc(:,2), -ntgrid)
+
+    call get_cell_value (1.0-thet_imp, dgbdrift0drho, dgbdrift0drhoc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, dgbdrift0drho, dgbdrift0drhoc(:,2), -ntgrid)
+
+    call get_cell_value (1.0-thet_imp, dcvdriftdrho, dcvdriftdrhoc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, dcvdriftdrho, dcvdriftdrhoc(:,2), -ntgrid)
+
+    call get_cell_value (1.0-thet_imp, dgbdriftdrho, dgbdriftdrhoc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, dgbdriftdrho, dgbdriftdrhoc(:,2), -ntgrid)
+
+    call get_cell_value (1.0-thet_imp, dgds2dr, dgds2drc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, dgds2dr, dgds2drc(:,2), -ntgrid)
+
+    call get_cell_value (1.0-thet_imp, dgds21dr, dgds21drc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, dgds21dr, dgds21drc(:,2), -ntgrid)
+
+    call get_cell_value (1.0-thet_imp, dgds22dr, dgds22drc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, dgds22dr, dgds22drc(:,2), -ntgrid)
+
+    call get_cell_value (1.0-thet_imp, dBdrho, dBdrhoc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, dBdrho, dBdrhoc(:,2), -ntgrid)
+
     ! cell values at ntgrid not needed, but fill in with nonzero value
     ! to avoid possible divide by zero
     thetac(ntgrid,:) = theta(ntgrid)
     gradparc(ntgrid,:) = gradpar(ntgrid)
+    bmagc(ntgrid,:) = bmag(ntgrid)
+    dgradpardrhoc(ntgrid,:) = dgradpardrho(ntgrid)
+    dgradparbdrhoc(ntgrid,:) = dgradparbdrho(ntgrid)
+    dcvdrift0drhoc(ntgrid,:) = dcvdrift0drho(ntgrid)
+    dgbdrift0drhoc(ntgrid,:) = dgbdrift0drho(ntgrid)
+    dcvdriftdrhoc(ntgrid,:) = dcvdriftdrho(ntgrid)
+    dgbdriftdrhoc(ntgrid,:) = dgbdriftdrho(ntgrid)
+    dgds2drc(ntgrid,:) = dgds2dr(ntgrid)
+    dgds21drc(ntgrid,:) = dgds21dr(ntgrid)
+    dgds22drc(ntgrid,:) = dgds22dr(ntgrid)
+    dBdrhoc(ntgrid,:) = dBdrho(ntgrid)
 
     ! first get db/dtheta at grid points
-    dbdthetc(-ntgrid+1:ntgrid-1,1) = (bmag(-ntgrid+2:ntgrid)-bmag(-ntgrid:ntgrid-2)) &
+    dbdthet(-ntgrid+1:ntgrid-1) = (bmag(-ntgrid+2:ntgrid)-bmag(-ntgrid:ntgrid-2)) &
          / (delthet(-ntgrid:ntgrid-2)+delthet(-ntgrid+1:ntgrid-1))
-    dbdthetc(-ntgrid,1) = (bmag(-ntgrid+1)-bmag(-ntgrid))/delthet(-ntgrid)
-    dbdthetc(ntgrid,1) = (bmag(ntgrid)-bmag(ntgrid-1))/delthet(ntgrid-1)
-    dbdthetc(:,2) = dbdthetc(:,1)
+    dbdthet(-ntgrid) = (bmag(-ntgrid+1)-bmag(-ntgrid))/delthet(-ntgrid)
+    dbdthet(ntgrid) = (bmag(ntgrid)-bmag(ntgrid-1))/delthet(ntgrid-1)
 
     ! then get cell values
-    call get_cell_value (1.0-thet_imp, dbdthetc(:,1), dbdthetc(:,1), -ntgrid)
-    call get_cell_value (thet_imp, dbdthetc(:,2), dbdthetc(:,2), -ntgrid)
+    call get_cell_value (1.0-thet_imp, dbdthet, dbdthetc(:,1), -ntgrid)
+    call get_cell_value (thet_imp, dbdthet, dbdthetc(:,2), -ntgrid)
 
     jacob = 1.0/(drhodpsi*gradpar*bmag)
   end subroutine finish_init
@@ -1921,7 +2127,9 @@ if (debug) write(6,*) 'get_grids: call eik_get_grids'
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
             Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
-            shat, drhodpsi, kxfac, qval, gb_to_cv, Bpol)
+            shat, drhodpsi, kxfac, qval, gb_to_cv, Bpol, &
+            dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
+            dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
        shape = 'torus   '
     case (eqopt_salpha)
 if (debug) write(6,*) 'get_grids: call salpha_get_grids'
@@ -1930,7 +2138,9 @@ if (debug) write(6,*) 'get_grids: call salpha_get_grids'
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
             Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
-            shat, drhodpsi, kxfac, qval, shape, gb_to_cv, Bpol)
+            shat, drhodpsi, kxfac, qval, shape, gb_to_cv, Bpol, &
+            dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
+            dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     case (eqopt_file)
 if (debug) write(6,*) 'get_grids: call file_get_grids'
        call file_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, bmag, &

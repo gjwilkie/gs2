@@ -1,5 +1,7 @@
+
 module fields
   use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+  use fields_arrays, only: phip, aparp, bparp, phipnew, aparpnew, bparpnew
   use fields_arrays, only: phitmp, apartmp, bpartmp
   use fields_arrays, only: phitmp1, apartmp1, bpartmp1
   use fields_arrays, only: phi_ext, apar_ext
@@ -11,6 +13,7 @@ module fields
   public :: advance
   public :: phinorm, kperp, fieldlineavgphi
   public :: phi, apar, bpar, phinew, aparnew, bparnew
+  public :: phip, aparp, bparp, phipnew, aparpnew, bparpnew
   public :: reset_init
 
   private
@@ -180,6 +183,12 @@ contains
        allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (bparnew (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (phip (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (aparp (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (bparp (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (phipnew (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (aparpnew (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (bparpnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (  phitmp (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( apartmp (-ntgrid:ntgrid,ntheta0,naky))
        allocate (bpartmp (-ntgrid:ntgrid,ntheta0,naky))
@@ -189,9 +198,12 @@ contains
 !       allocate ( phi_ext (-ntgrid:ntgrid,ntheta0,naky))
        allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
     endif
-    phi = 0.; phinew = 0.; phitmp = 0. 
+    phi = 0.; phinew = 0.; phitmp = 0.
     apar = 0.; aparnew = 0.; apartmp = 0. 
     bpar = 0.; bparnew = 0.; bpartmp = 0.
+    phip = 0. ; phipnew = 0.
+    aparp = 0. ; aparpnew = 0.
+    bparp = 0. ; bparpnew = 0.
 !    phitmp1 = 0. ; apartmp1 = 0. ; bpartmp1 = 0.
 !    phi_ext = 0.
     apar_ext = 0.
@@ -320,6 +332,8 @@ contains
     initialized  = .false.
     phi = 0.
     phinew = 0.
+    phip = 0.
+    phipnew = 0.
 
   end subroutine reset_init
 
@@ -343,6 +357,7 @@ contains
     use fields_test, only: test_reset => reset_init
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: phitmp, apartmp, bpartmp, apar_ext
+    use fields_arrays, only: phip, aparp, bparp, phipnew, aparpnew, bparpnew
 
     implicit none
 
@@ -352,6 +367,7 @@ contains
 
     if (allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew, &
          phitmp, apartmp, bpartmp, apar_ext)
+    if (allocated(phip)) deallocate (phip, aparp, bparp, phipnew, aparpnew, bparpnew)
 
   end subroutine finish_fields
 

@@ -80,6 +80,7 @@ ffttester_mod = \
 	 layouts_type.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -136,6 +137,7 @@ gs2_mod = \
 	 layouts_type.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -195,6 +197,7 @@ ingen_mod = \
 	 layouts_type.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -284,6 +287,29 @@ dist_fn_arrays.o: \
 	 species.o \
 	 theta_grid.o \
 	 vpamu_grids.o 
+dist_fn_back.o: \
+	 centering.o \
+	 constants.o \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 geometry.o \
+	 gs2_layouts.o \
+	 gs2_time.o \
+	 gs2_transforms.o \
+	 hyper.o \
+	 kt_grids.o \
+	 lowflow.o \
+	 mp.o \
+	 nonlinear_terms.o \
+	 prof.o \
+	 redistribute.o \
+	 run_parameters.o \
+	 species.o \
+	 spfunc.o \
+	 text_options.o \
+	 theta_grid.o \
+	 vpamu_grids.o 
 drive.o: \
 	 regression.o 
 ediff.o: 
@@ -314,6 +340,7 @@ fields.o: \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
+	 gs2_layouts.o \
 	 init_g.o \
 	 kt_grids.o \
 	 mp.o \
@@ -356,6 +383,20 @@ geometry.o: \
 	 ideq.o \
 	 leq.o \
 	 peq.o 
+geometry_get_advanced_parameters__genmod.o: \
+	 geometry.o 
+geometry_get_coefficients__genmod.o: \
+	 geometry.o 
+geometry_get_constant_coefficients__genmod.o: \
+	 geometry.o 
+geometry_get_default_advanced_parameters__genmod.o: \
+	 geometry.o 
+geometry_get_miller_parameters__genmod.o: \
+	 geometry.o 
+geometry_set_advanced_parameters__genmod.o: \
+	 geometry.o 
+geometry_set_miller_parameters__genmod.o: \
+	 geometry.o 
 geq.o: \
 	 constants.o \
 	 netcdf_utils.o \
@@ -497,9 +538,7 @@ gs2_transforms.o: \
 	 redistribute.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o \
-	 convert.o \
-	 file_utils.o 
+	 constants.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -567,8 +606,10 @@ le_derivatives.o: \
 	 dist_fn_arrays.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
+	 lowflow.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 species.o \
 	 theta_grid.o 
 leq.o: \
 	 constants.o \
@@ -586,6 +627,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -625,7 +667,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
