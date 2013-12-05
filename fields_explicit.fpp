@@ -244,6 +244,19 @@ module dg_scheme
   logical :: adaptive_dt_reset = .false.
   real :: adaptive_dt_new
 
+  !  Switch to advance g in modal space or real (nodal) space.
+  !
+  !  The original plan was to advance g in modal space,
+  !  i.e. find d/dt(g modal coefficients) at each Runge-Kutta sub-step,
+  !  and advance g(modal) using the RK scheme, but it now seems likely that
+  !  the advance can be done in real space instead (thus saving several
+  !  nodal <--> modal conversions, and therefore execution time), unless...
+  !    1) the present DG scheme were to be replaced by a higher-order version, or
+  !    2) flux limiters need to be introduced to minimise gradients at finite
+  !       element boundaries
+
+  logical :: modal_advance = .false.
+
   real, save :: epsmach = 1.0E-15, epsr = 1.0E-6, epsa = 1.0E-6 ! both from 1.0E-6
   real, save :: ffac = 0.9 ! = (1.0 - eps1) in write-up
   real, save :: dt0,dtmin,dtmax,epsrmin,epsbig,g3dn,g23n, dtmax_damped = 10.0
@@ -740,19 +753,25 @@ contains
        gomax = maxval(abs(g_dg)) ; call max_allreduce(gomax)
     end if
 
-    call nodal2modal(g_dg,lb1,ub1,1,2,lb3,ub3,ne2)
+    if (modal_advance) then
+       call nodal2modal(g_dg,lb1,ub1,1,2,lb3,ub3,ne2)
+    end if
 
     !  Time-advance using Runge-Kutta pair method
 
     call rk_adaptive_complex(dydt_dggs2,g_dg,gnew1,gnew2,nx,code_time,code_dt)
 
-    call modal2nodal(gnew1,lb1,ub1,1,2,lb3,ub3,ne2)
+    if (modal_advance) then
+       call modal2nodal(gnew1,lb1,ub1,1,2,lb3,ub3,ne2)
+    end if
 
     !  Adaptive timestep algorithm
 
     if (adaptive_dt) then
 
-       call modal2nodal(gnew2,lb1,ub1,1,2,lb3,ub3,ne2)
+       if (modal_advance) then
+          call modal2nodal(gnew2,lb1,ub1,1,2,lb3,ub3,ne2)
+       end if
 
        !  Actual difference between 2nd and 3rd order estimates
        g3dn = maxval(abs(gnew2-gnew1)) ; call max_allreduce(g3dn)
@@ -893,7 +912,7 @@ contains
 
     integer :: lb1, ub1, lb2, ub2, lb3, ub3
     real :: gdotn,gn,epst
-    complex, allocatable, dimension(:,:,:) :: ymodal
+    complex, allocatable, dimension(:,:,:) :: ytemp
     complex, allocatable, dimension(:,:,:) :: dy
 
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -902,15 +921,20 @@ contains
     lb2 = 1 ; ub2 = 2
     lb3 = g_lo%llim_proc ; ub3 = g_lo%ulim_proc
 
-    allocate(ymodal(lb1:ub1,lb2:ub2,lb3:ub3))
+    allocate(ytemp(lb1:ub1,lb2:ub2,lb3:ub3))
     allocate(dy(lb1:ub1,lb2:ub2,lb3:ub3))
 
     !  Calculate dg/dt using the Discontinuous Galerkin scheme
 
-    ymodal = y
-    call nodal2modal(ymodal,lb1,ub1,1,2,lb3,ub3,ne2)
-    call dydt_dggs2(ymodal,t,dt0,dy)
-    call modal2nodal(dy,lb1,ub1,1,2,lb3,ub3,ne2)
+    ytemp = y  !  since dydt_dggs2 changes ytemp, and we do not want to corrupt y
+
+    if (modal_advance) then
+       call nodal2modal(ytemp,lb1,ub1,1,2,lb3,ub3,ne2)
+       call dydt_dggs2(ytemp,t,dt0,dy)
+       call modal2nodal(dy,lb1,ub1,1,2,lb3,ub3,ne2)
+    else
+       call dydt_dggs2(ytemp,t,dt0,dy)
+    end if
 
     gdotn = maxval(abs(dy)) ; call max_allreduce(gdotn)
     gn = maxval(abs(y)) ; call max_allreduce(gn)
@@ -922,13 +946,13 @@ contains
     dt = min(dt0,dtmax)
     dt = max(dt,dtmin)
 
-    deallocate(ymodal,dy)
+    deallocate(ytemp,dy)
 
   end subroutine adaptive_dt0
 
   ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine dydt_dggs2(g_dg,t,dt,dgdt_modal)
+  subroutine dydt_dggs2(g_dg,t,dt,dgdt_arg)
 
     use dist_fn, only: getfieldexp, get_source_term_exp
     use dist_fn_arrays, only: ittp
@@ -948,7 +972,7 @@ contains
          !  N.B. g_dg is modified within the routine (just to save a simple copy)
          intent(inout) :: g_dg
     complex, dimension(ntgriddgmin:ntgriddg,1:2,g_lo%llim_proc:g_lo%ulim_proc), &
-         intent(out) :: dgdt_modal
+         intent(out) :: dgdt_arg
 
     !  Local variables
 
@@ -1002,8 +1026,6 @@ contains
          src(lb1:ub1), &
          src3(lb1:ub1,2,lb3:ub3) )
 
-    !  On entry, g_dg is in MODAL form.
-
     !  g halo elements need to be populated, as these are used in the
     !  advection term, which takes information from upwind finite elements
 
@@ -1024,8 +1046,10 @@ contains
 
     !  Obtain g in nodal form
 
-    call modal2nodal(g_dg,lb1a,ub1,1,2,lb3,ub3,ne2)
-    g = g_dg(-ntgrid:ntgrid,:,:)  !  This copy is necessary
+    if (modal_advance) then
+       call modal2nodal(g_dg,lb1a,ub1,1,2,lb3,ub3,ne2)
+    end if
+    g = g_dg(-ntgrid:ntgrid,:,:)  !  This copy is necessary because of array ranges
 
     !  Evaluate field equations
 
@@ -1284,15 +1308,18 @@ contains
     dgdt(ntgrid:ntgriddg,2,:) = 0.0
 !-PJKFT
 
-    !  Finally, convert dg/dt back to modal space
+    !  Finally, convert dg/dt back to modal space, if required
 
     if (.not.flux_tube) then
-       dgdt_modal = dgdt
+       dgdt_arg = dgdt
     else
-       dgdt_modal = 0.0
-       dgdt_modal(lb1:ub1,:,:) = dgdt
+       dgdt_arg = 0.0
+       dgdt_arg(lb1:ub1,:,:) = dgdt
     end if
-    call nodal2modal(dgdt_modal,lb1a,ub1,1,2,lb3,ub3,ne2)
+
+    if (modal_advance) then
+       call nodal2modal(dgdt_arg,lb1a,ub1,1,2,lb3,ub3,ne2)
+    end if
 
   end subroutine dydt_dggs2
 
