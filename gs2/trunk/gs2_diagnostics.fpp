@@ -2029,9 +2029,9 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 !                write (out_unit,*) "aky=",aky(ik)," theta0=",theta0(it,ik)
 
                 if (write_line) then
-                   write (out_unit, "('t= ',e16.10,' aky= ',1pe12.4, ' akx= ',1pe12.4, &
+                   write (out_unit, "('t= ',e16.10,' aky= ',1pe12.4, ' theta0= ',1pe12.4, &
                         &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4)") &
-                        t, aky(ik), akx(it), &
+                        t, aky(ik), theta0(it,ik), &
                         real( omega(it,ik)*woutunits(ik)), &
                         aimag(omega(it,ik)*woutunits(ik)), &
                         real( omegaavg(it,ik)*woutunits(ik)), &
