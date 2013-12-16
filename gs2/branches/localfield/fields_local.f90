@@ -3,7 +3,7 @@ module fields_local
   implicit none
   private
 
-  public :: init_fields_local, init_phi_local
+  public :: init_fields_local, init_phi_local, finish_fields_local
   public :: advance_local, reset_fields_local
 
   !//////////////////////////////
@@ -245,6 +245,7 @@ module fields_local
   integer :: MinNrow=256 !Smallest row block size used when working out which rows to have.
   logical :: debug=.true. !Do we do debug stuff?
   logical :: initialised=.false. !Have we initialised yet?
+  logical :: reinit=.false. !Are we reinitialising?
   integer :: nfield !How many fields
   integer :: nfq !How many field equations (always equal to nfield)
   type(pc_type),save :: pc !This is the parallel control object
@@ -3061,6 +3062,7 @@ contains
 
     !Set the initialised state
     initialised = .true.
+    reinit = .false.
   end subroutine init_fields_local
 
   !>Routine use to initialise field matrix data
@@ -3070,103 +3072,103 @@ contains
     real :: ts,te
     !Exit if we've already initialised
     if(initialised) return
+    if(.not.reinit)then
+       !Use the fieldmat init routine to create fieldmat
+       !structure and fill some of the basic variables
+       !if(debug)call barrier
+       if(proc0.and.debug) then
+          write(dlun,'("Initialising fieldmat.")')
+          call cpu_time(ts)
+       endif
+       call fieldmat%init
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
 
-    !Use the fieldmat init routine to create fieldmat
-    !structure and fill some of the basic variables
-    !if(debug)call barrier
-    if(proc0.and.debug) then
-       write(dlun,'("Initialising fieldmat.")')
-       call cpu_time(ts)
-    endif
-    call fieldmat%init
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
-    endif
+       !Now initialise the parallel decomposition object
+       !Note: We don't actually decompose until we make some
+       !of the primary subcom so we know how many procs are 
+       !available to each object etc.
+       !if(debug)call barrier
+       if(proc0.and.debug) then
+          write(dlun,'("Initialising pc.")')
+          call cpu_time(ts)
+       endif
+       call pc%init
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
 
-    !Now initialise the parallel decomposition object
-    !Note: We don't actually decompose until we make some
-    !of the primary subcom so we know how many procs are 
-    !available to each object etc.
-    !if(debug)call barrier
-    if(proc0.and.debug) then
-       write(dlun,'("Initialising pc.")')
-       call cpu_time(ts)
-    endif
-    call pc%init
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
-    endif
+       !Now use the pc object to set field object locality
+       !and make the primary subcommunicators
+       !if(debug)call barrier
+       if(proc0.and.debug) then
+          write(dlun,'("Setting initial locality and making primary subcommunicators.")')
+          call cpu_time(ts)
+       endif
+       call fieldmat%set_is_local
+       call fieldmat%make_subcom_1
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
 
-    !Now use the pc object to set field object locality
-    !and make the primary subcommunicators
-    !if(debug)call barrier
-    if(proc0.and.debug) then
-       write(dlun,'("Setting initial locality and making primary subcommunicators.")')
-       call cpu_time(ts)
-    endif
-    call fieldmat%set_is_local
-    call fieldmat%make_subcom_1
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
-    endif
+       !Now we can setup the decomposition, which basically
+       !consists of setting the row limit of row block objects
+       !if(debug)call barrier
+       if(proc0.and.debug) then
+          write(dlun,'("Initialising decomposition.")')
+          call cpu_time(ts)
+       endif
+       call pc%make_decomp
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
 
-    !Now we can setup the decomposition, which basically
-    !consists of setting the row limit of row block objects
-    !if(debug)call barrier
-    if(proc0.and.debug) then
-       write(dlun,'("Initialising decomposition.")')
-       call cpu_time(ts)
-    endif
-    call pc%make_decomp
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
-    endif
+       !Now set fieldmat locality and allocate data arrays
+       !if(debug)call barrier
+       if(proc0.and.debug) then
+          write(dlun,'("Setting locality and allocating.")')
+          call cpu_time(ts)
+       endif
+       call fieldmat%set_is_local
+       call fieldmat%allocate
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
 
-    !Now set fieldmat locality and allocate data arrays
-    !if(debug)call barrier
-    if(proc0.and.debug) then
-       write(dlun,'("Setting locality and allocating.")')
-       call cpu_time(ts)
-    endif
-    call fieldmat%set_is_local
-    call fieldmat%allocate
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
-    endif
+       !Need to make cell/supercell level sub-communicators
+       !at some point before we try to invert.
+       !Can make them at any point after locality defined
 
-    !Need to make cell/supercell level sub-communicators
-    !at some point before we try to invert.
-    !Can make them at any point after locality defined
-
-    !/Note that to split a sub-comm everybody in the original
-    !communicator needs to make the call. We can either split
-    !all groups off from WORLD or we can take "nested subsets"
-    !Note sure if there is any perfomance benefit in the actual
-    !comms (i'd guess not) but it should be faster to split smaller
-    !groups and can do it in parallel so the nested subset approach
-    !may be better.
-    !if(debug)call barrier
-    if(proc0.and.debug)then
-       write(dlun,'("Creating the secondary subcoms.")')
-       call cpu_time(ts)
+       !/Note that to split a sub-comm everybody in the original
+       !communicator needs to make the call. We can either split
+       !all groups off from WORLD or we can take "nested subsets"
+       !Note sure if there is any perfomance benefit in the actual
+       !comms (i'd guess not) but it should be faster to split smaller
+       !groups and can do it in parallel so the nested subset approach
+       !may be better.
+       !if(debug)call barrier
+       if(proc0.and.debug)then
+          write(dlun,'("Creating the secondary subcoms.")')
+          call cpu_time(ts)
+       endif
+       call fieldmat%make_subcom_2
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
     endif
-    call fieldmat%make_subcom_2
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
-    endif    
-
 !!!!!!!!!!
 !!NOTE: All of the above should be a one off setup cost unless something
 !!fundamental changes with the parallel layout (a change in nproc/layout etc.)
@@ -3211,14 +3213,18 @@ contains
   !>Reset the fields_local module
   subroutine reset_fields_local
     implicit none
-    !Note: In typical usage we don't really need to
-    !reset everything, all we really want to do is 
-    !recalculate the response data, which could be
-    !achieved by calling fieldmat%populate and fieldmat%prepare
+    initialised=.false.
+    reinit=.true.
+  end subroutine reset_fields_local
+
+  !>Finish the fields_local module
+  subroutine finish_fields_local
+    implicit none
+!!NOTE: Don't currently free the sub-communicators which is bad
     call pc%reset
     call fieldmat%reset
     initialised=.false.
-  end subroutine reset_fields_local
+  end subroutine finish_fields_local
 
   !>Calculate the update to the fields
   subroutine getfield_local(phi,apar,bpar,do_gather_in)

@@ -330,11 +330,21 @@ contains
 
 
   subroutine reset_init
-
+    use fields_implicit, only: fi_reset => reset_init
+    use fields_test, only: ft_reset => reset_init
+    use fields_local, only: fl_reset => reset_fields_local
+    implicit none
     initialized  = .false.
     phi = 0.
     phinew = 0.
-
+    select case (fieldopt_switch)
+    case (fieldopt_implicit)
+       call fi_reset
+    case (fieldopt_test)
+       call ft_reset
+    case (fieldopt_local)
+       call fl_reset
+    end select
   end subroutine reset_init
 
   subroutine timer
@@ -355,7 +365,7 @@ contains
 
     use fields_implicit, only: implicit_reset => reset_init
     use fields_test, only: test_reset => reset_init
-    use fields_local, only: reset_fields_local
+    use fields_local, only: finish_fields_local
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: phitmp, apartmp, bpartmp, apar_ext
 
@@ -369,7 +379,7 @@ contains
     case (fieldopt_test)
        call test_reset
     case (fieldopt_local)
-       call reset_fields_local
+       call finish_fields_local
     end select
 
     if (allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew, &

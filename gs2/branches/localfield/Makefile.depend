@@ -545,8 +545,6 @@ gs2_reinit.o: \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
-	 fields_implicit.o \
-	 fields_test.o \
 	 file_utils.o \
 	 gs2_save.o \
 	 gs2_time.o \
