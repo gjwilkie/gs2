@@ -813,6 +813,7 @@ contains
     use file_utils, only: input_unit, error_unit, run_name, input_unit_exist
     use text_options, only: text_option, get_option_value
     use gs2_save, only: read_many
+    use job_manage, only: trin_restart
 
     implicit none
 
@@ -934,6 +935,8 @@ contains
     in_file = input_unit_exist ("init_g_knobs", exist)
 !    if (exist) read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
     if (exist) read (unit=in_file,nml=init_g_knobs)
+
+    if(trin_restart) ginit_option='many'
     
     ierr = error_unit()
     call get_option_value &
