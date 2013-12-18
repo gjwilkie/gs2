@@ -641,7 +641,8 @@ contains
 
   subroutine init_dist_fn_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
-    use mp, only: iproc, nproc, proc0
+    use mpi
+    use mp, only: iproc, nproc, proc0,  shm_info
     use mp, only: split, mp_comm, nproc_comm, rank_comm
     use mp, only: sum_allreduce_sub
 ! TT>
@@ -659,6 +660,11 @@ contains
     integer,dimension(:),allocatable :: les_kxky_range
     logical,dimension(5) :: dim_divides,dim_local
     logical,dimension(:),allocatable :: it_local, ik_local, il_local, ie_local, is_local
+
+    logical, save :: initialized_dist_fn_layouts = .false.
+    
+    integer ierr
+
 ! TT>
 # ifdef USE_C_INDEX
     integer :: ierr
@@ -672,8 +678,8 @@ contains
 ! <TT
 
     if (initialized_dist_fn_layouts) return
-    initialized_dist_fn_layouts = .true.
-   
+    initialized_dist_fn_layouts = .true.   
+
     g_lo%iproc = iproc
     g_lo%naky = naky
     g_lo%ntheta0 = ntheta0
@@ -682,10 +688,22 @@ contains
     g_lo%nspec = nspec
     g_lo%llim_world = 0
     g_lo%ulim_world = naky*ntheta0*negrid*nlambda*nspec - 1
-      
+
     g_lo%blocksize = g_lo%ulim_world/nproc + 1
     g_lo%llim_proc = g_lo%blocksize*iproc
     g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
+    g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
+
+    !shm_info%g_lo_se(1, shm_info%id) = g_lo%llim_proc
+    !hm_info%g_lo_se(2, shm_info%id) = g_lo%ulim_proc
+    ! collect node info on g_lo
+
+!  need the gather g_lo%ulim_alloc to ensure that all ranks allocate g
+! a bit hackish ....
+    call mpi_allgather((/ g_lo%llim_proc, g_lo%ulim_alloc/), 2, MPI_Integer, &
+         shm_info%g_lo_se, 2, MPI_Integer, shm_info%comm, ierr)  
+
+    !g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
     g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
 
 !<DD>Calculate constants used in the index lookup routines
@@ -1026,6 +1044,7 @@ contains
           exit
        endif
        
+
        !Does the current dimension divide evenly
        !amongst the remaining processors
        tmp_r=(1.0*nproc_tmp)/g_lo%dim_size(idim)
@@ -1232,6 +1251,9 @@ contains
 !</DD>
 
 !Note: gint_lo isn't used anywhere!
+
+! assume that the layout below are not used in fft_test
+
     gint_lo%iproc = iproc
     gint_lo%naky = naky
     gint_lo%ntheta0 = ntheta0
@@ -1265,7 +1287,7 @@ contains
          & write (error_unit(),*) 'ERROR: layout not found: ', trim(layout)
 # endif
 ! <TT
-
+    
   end subroutine init_dist_fn_layouts
 
   subroutine is_kx_local(negrid, nspec, nlambda, naky, ntheta0, kx_local)  
@@ -1617,6 +1639,7 @@ contains
     ig_local_g = lo%iproc == proc_id(lo, ig)
   end function ig_local_g
 
+  
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Once-integrated distribution function layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -4982,6 +5005,7 @@ contains
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
+    logical, save :: initialized = .false.
     integer :: nnx, nny
 
     if (initialized_accel_transform_layouts) return
@@ -4998,6 +5022,7 @@ contains
        nny = 3*naky
     end if
 
+        
     accelx_lo%iproc = iproc
     accelx_lo%ntgrid = ntgrid
     accelx_lo%nsign = 2
@@ -5038,7 +5063,7 @@ contains
     accel_lo%ulim_proc &
          = min(accel_lo%ulim_world, accel_lo%llim_proc + accel_lo%blocksize - 1)
     accel_lo%ulim_alloc = max(accel_lo%llim_proc, accel_lo%ulim_proc)
-
+    
   end subroutine init_accel_transform_layouts
 
   elemental function is_idx_accelx (lo, i)
@@ -5341,7 +5366,7 @@ contains
   subroutine pe_layout (char)
 
     character (1), intent (out) :: char
-
+    
     select case (layout)
     case ('yxels')
        char = 'v'

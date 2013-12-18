@@ -2511,8 +2511,8 @@ subroutine check_dist_fn(report_unit)
 !    logical :: alloc = .true.
 
 !    if (alloc) then
-    if (.not. allocated(g)) then
-       allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    if (.not. allocated(gnew)) then
+       !allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        !Note:This currently uses naky times more memory than strictly needed
@@ -7506,7 +7506,8 @@ subroutine check_dist_fn(report_unit)
     if (allocated(itleft)) deallocate (itleft, itright)
     if (allocated(connections)) deallocate (connections)
     if (allocated(g_adj)) deallocate (g_adj)
-    if (allocated(g)) deallocate (g, gnew, g0)
+    !g is handled by FIPC
+    if (allocated(gnew)) deallocate (gnew, g0)
     if (allocated(g_fixpar)) deallocate (g_fixpar)
     if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
     if (allocated(g_h)) deallocate (g_h, save_h)

@@ -1772,14 +1772,13 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 !                        aimag(omegaavg(it,ik)*woutunits(ik)), &
 !                        phitot(it,ik)
                 write (unit=*, fmt="('ky=',1pe9.2, ' kx=',1pe9.2, &
-                     ' om=',e9.2,x,e9.2,' omav=',e9.2,x,e9.2, &
-                     ' phtot=',e8.2,' theta0=',1pe9.2)") &
+                     &' om=',e9.2,x,e9.2,' omav=',e9.2,x,e9.2,' phtot=',e8.2)") &
                      aky(ik), akx(it), &
                      real( omega(it,ik)*woutunits(ik)), &
                      aimag(omega(it,ik)*woutunits(ik)), &
                      real( omegaavg(it,ik)*woutunits(ik)), &
                      aimag(omegaavg(it,ik)*woutunits(ik)), &
-                     phitot(it,ik), theta0(it,ik)
+                     phitot(it,ik)
              end do
           end do
           write (*,*) 
@@ -2031,13 +2030,13 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 
                 if (write_line) then
                    write (out_unit, "('t= ',e16.10,' aky= ',1pe12.4, ' akx= ',1pe12.4, &
-                        &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4,' theta0= ',1pe12.4)") &
+                        &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4)") &
                         t, aky(ik), akx(it), &
                         real( omega(it,ik)*woutunits(ik)), &
                         aimag(omega(it,ik)*woutunits(ik)), &
                         real( omegaavg(it,ik)*woutunits(ik)), &
                         aimag(omegaavg(it,ik)*woutunits(ik)), &
-                        phitot(it,ik),theta0(it,ik)
+                        phitot(it,ik)
                 end if
                 
 !                if (write_omega) write (out_unit, *) &

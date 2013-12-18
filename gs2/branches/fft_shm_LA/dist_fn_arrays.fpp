@@ -14,7 +14,8 @@ module dist_fn_arrays
 
 
   ! dist fn
-  complex, dimension (:,:,:), allocatable :: g, gnew, gold, g_fixpar
+  complex, dimension (:,:,:), allocatable :: gnew, gold, g_fixpar
+  complex,  dimension (:,:, :), pointer :: g ! for shared memory
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   real, dimension(:), allocatable :: kx_shift, theta0_shift

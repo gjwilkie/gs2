@@ -9,8 +9,9 @@
 !!               Colin Roach (colin.m.roach@ccfe.ac.uk)
 
 program test_nonlinear_terms
+  use FIPC_module
   use unit_tests
-  use mp, only: init_mp, finish_mp, proc0, broadcast
+  use mp, only: init_mp, finish_mp, mp_abort, proc0, broadcast, shm_info
   use file_utils, only: init_file_utils, run_name
   use species, only: init_species, nspec, spec
   use constants, only: pi
@@ -30,10 +31,10 @@ program test_nonlinear_terms
   real, dimension(:,:,:), allocatable :: energy_results
   real :: energy_min
   real :: vcut_local
-  integer :: i
+  integer :: i, is, isn, ie, ien, nruns, ierr
 
   complex, dimension (:,:,:), allocatable :: integrate_species_results
-  complex, dimension (:,:,:), allocatable :: g1
+  complex, dimension (:,:,:), pointer :: g1
   complex, dimension (:,:,:), allocatable :: phi, apar, bpar
 
 
@@ -56,8 +57,34 @@ program test_nonlinear_terms
 
   call init_nonlinear_terms
 
-  allocate(g1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
-  allocate(g(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
+  isn = shm_info%g_lo_se(1, 0)
+  ien = shm_info%g_lo_se(2, shm_info%size - 1)
+  is = shm_info%g_lo_se(1, shm_info%id) 
+  ie = shm_info%g_lo_se(2, shm_info%id)
+  allocate(shm_info%g_lo_ptr(2))
+  Call FIPC_seg_create( FIPC_ctxt_world, (/ (2*ntgrid+1), 2, (ien - isn + 1)  /),shm_info%g_lo_ptr(1)%p , ierr)
+  if (ierr /= FIPC_success ) then 
+     write(0,*)' FIPC error 1', ierr
+     call mp_abort("time_ffts: error in shared segment allocation")
+  endif
+
+  shm_info%g_lo_ptr(1)%p => remap_bounds(-ntgrid, 1, isn, shm_info%g_lo_ptr(1)%p)
+  
+  g1 => shm_info%g_lo_ptr(1)%p(:,:, is:ie)
+  g1 => remap_bounds(-ntgrid, 1, g_lo%llim_proc, g1)
+  !write(0,*) 'remap g1', iproc,lbound(g1),ubound(g1)
+
+  Call FIPC_seg_create( FIPC_ctxt_world, (/ (2*ntgrid+1), 2, ien - isn + 1 /),shm_info%g_lo_ptr(2)%p, ierr)
+  if (ierr /= FIPC_success ) then
+     write(0,*)' FIPC error 2', ierr
+     call mp_abort("time_ffts: error in shared segment allocation")
+  endif
+  shm_info%g_lo_ptr(2)%p => remap_bounds(-ntgrid, 1, isn, shm_info%g_lo_ptr(2)%p)
+  g =>  shm_info%g_lo_ptr(2)%p(:,:, is:ie)
+  g => remap_bounds(-ntgrid, 1, g_lo%llim_proc, g)
+
+  !allocate(g1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
+  !allocate(g(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
   allocate(phi(-ntgrid:ntgrid,ntheta0,naky))
   allocate(apar(-ntgrid:ntgrid,ntheta0,naky))
   allocate(bpar(-ntgrid:ntgrid,ntheta0,naky))
@@ -69,8 +96,10 @@ program test_nonlinear_terms
   call announce_test('fast fourier transforms in nonlinear term')
   call process_test(test_ffts(),'fast fourier transforms in nonlinear term')
 
-
   call finish_nonlinear_terms
+
+  call FIPC_seg_free(shm_info%g_lo_ptr(1)%p, ierr)
+  call FIPC_seg_free(shm_info%g_lo_ptr(2)%p, ierr)
 
   call close_module_test('nonlinear_terms')
 
@@ -106,7 +135,7 @@ function test_ffts()
       !write(message, '("ffttest ix = ")') 
       !message = 'Hello'
       call announce_check(message)
-      call process_check(test_ffts, ffttest(ix,iy, .false.), message)
+      call process_check(test_ffts, ffttest(ix,iy, .true.), message)
     enddo
   enddo
 
@@ -468,5 +497,12 @@ if (printlots) call barrier
 
    first=.false.
 end function ffttest
+
+FUNCTION remap_bounds(lb1,lb2,lb3,array) RESULT(ptr)
+  INTEGER, INTENT(IN)                            :: lb1,lb2,lb3
+  complex, DIMENSION(lb1:,lb2:,lb3:), INTENT(IN), TARGET :: array
+  complex, DIMENSION(:,:,:), POINTER                  :: ptr
+  ptr => array
+END FUNCTION remap_bounds
 
 end program test_nonlinear_terms

@@ -184,7 +184,7 @@ contains
     character(*), intent(in) :: module_name
     character(17) :: message = 'Finished testing '
     if (should_print(1)) call print_with_stars(message, module_name)
-    write (*,*)
+    !write (*,*) is this needed ?
 
 
   end subroutine close_module_test

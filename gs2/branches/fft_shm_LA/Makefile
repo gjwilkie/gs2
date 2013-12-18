@@ -85,7 +85,7 @@ USE_SHMEM ?=
 # which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
 USE_FFT ?= fftw3
 # uses netcdf library (bin)
-USE_NETCDF ?= on
+USE_NETCDF ?= 
 # uses parallel netcdf library
 USE_PARALLEL_NETCDF ?= 
 # uses hdf5 library (bin)
@@ -123,7 +123,7 @@ else
 	endif
 endif
 
-export TESTCOMMAND
+export TESTCOMMAND FC LD F90FLAGS LDFLAGS CFLAGS CPPFLAGS TEST_MODS gs2_mod
 
 #
 # * Targets:
@@ -425,7 +425,7 @@ sinclude Makefile.target_$(GK_PROJECT)
 ############################################################### SPECIAL RULES
 
 # comment this out to keep intermediate .f90 files
-#.PRECIOUS: $(F90FROMFPP)
+.PRECIOUS: $(F90FROMFPP)
 
 .INTERMEDIATE: $(GK_PROJECT)_transforms.f90 $(GK_PROJECT)_io.f90 $(GK_PROJECT)_save.f90 \
 		mp.f90 fft_work.f90
@@ -572,14 +572,13 @@ revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
 
 
-gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
-	
+gryfx_libs: utils.a geo.a geo/geometry_c_interface.o	
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
 TEST_DEPS?=$(gs2_mod) functional_tests.o
 
-unit_tests: unit_tests.o $(TEST_DEPS)
+unit_tests: FreeIPC_c.o FreeIPC.o unit_tests.o $(TEST_DEPS)
 	cd unit_tests && time ${MAKE} && echo && echo "Tests Successful!"
 
 linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
@@ -592,10 +591,11 @@ test_script: unit_tests linear_tests
 	find $(PWD)/unit_tests -executable | grep -v svn | grep 'unit_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 $(BLUEGENEARGS) \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
 	find $(PWD)/linear_tests -executable | grep -v svn | grep 'linear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
 	echo "echo \"Tests Successful\"" >> test_script.sh
-	#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
+#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
 
-benchmarks: functional_tests.o unit_tests.o $(TEST_DEPS)
+benchmarks:  FreeIPC_c.o FreeIPC.o functional_tests.o unit_tests.o $(TEST_DEPS)
 	cd benchmarks && time ${MAKE} && echo && echo "Completed Benchmarks"
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
+
