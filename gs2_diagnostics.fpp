@@ -470,8 +470,10 @@ contains
        end if
     end if
 
-    allocate (pflux_avg(nspec), qflux_avg(nspec), heat_avg(nspec), vflux_avg(nspec))
-    pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
+    if(.not. allocated(pflux_avg)) then
+       allocate (pflux_avg(nspec), qflux_avg(nspec), heat_avg(nspec), vflux_avg(nspec))
+       pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
+    endif
 
   end subroutine init_gs2_diagnostics
  
@@ -695,6 +697,8 @@ contains
     use antenna, only: dump_ant_amp
     use splines, only: fitp_surf1, fitp_surf2
     use gs2_heating, only: del_htype
+    use job_manage, only: trin_restart
+
 !    use gs2_dist_io, only: write_dist
     implicit none
     integer, intent (in) :: istep
@@ -1358,7 +1362,7 @@ contains
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange)
     if (allocated(pflux_tormom)) deallocate (pflux_tormom) 
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
-    if (allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
+    if (.not. trin_restart .and. allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
 
 ! HJL <    
     if (allocated(domega)) deallocate(domega)
@@ -1391,7 +1395,7 @@ contains
 !   use mp, only: iproc
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
-    use gs2_time, only: user_time
+    use gs2_time, only: user_time, user_dt
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom, nc_loop, nc_loop_moments
     use gs2_io, only: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend, nc_loop_partsym_tormom 
     use gs2_io, only: nc_loop_vres
@@ -1411,6 +1415,7 @@ contains
     use parameter_scan_arrays, only: scan_momflux => momflux_tot 
     use parameter_scan_arrays, only: scan_phi2_tot => phi2_tot 
     use parameter_scan_arrays, only: scan_nout => nout
+    use job_manage, only: trin_restart
 
     implicit none
 !    integer :: nout = 1

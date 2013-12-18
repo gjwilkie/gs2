@@ -622,6 +622,7 @@ contains
 
     if (istatus /= NF90_NOERR) then
        i = nf90_close (ncid)
+       initialized = .false.
        return
     end if
 
@@ -793,6 +794,7 @@ contains
        i = nf90_close (ncid)
        if (i /= NF90_NOERR) &
             call netcdf_error (istatus, message='nf90_close error')
+       initialized = .false.
     else
        i = nf90_sync (ncid)
        if (i /= NF90_NOERR) &
@@ -1055,15 +1057,15 @@ contains
 
   subroutine finish_save
     
-    !if (allocated(tmpr)) deallocate(tmpr)
-    !if (allocated(tmpi)) deallocate(tmpi)
-    !if (allocated(ftmpr)) deallocate(ftmpr)
-    !if (allocated(ftmpi)) deallocate(ftmpi)
-    !if (allocated(stmp)) deallocate(stmp)
-    !if (allocated(atmp)) deallocate(atmp)
+    if (allocated(tmpr)) deallocate(tmpr)
+    if (allocated(tmpi)) deallocate(tmpi)
+    if (allocated(ftmpr)) deallocate(ftmpr)
+    if (allocated(ftmpi)) deallocate(ftmpi)
+    if (allocated(stmp)) deallocate(stmp)
+    if (allocated(atmp)) deallocate(atmp)
     
-    !initialized = .false.
-    !initialized_dfn = .false.
+    initialized = .false.
+    initialized_dfn = .false.
 
   end subroutine finish_save
 

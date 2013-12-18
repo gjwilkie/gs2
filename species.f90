@@ -381,6 +381,7 @@ contains
   subroutine reinit_species (ntspec, dens, temp, fprim, tprim, nu)
 
     use mp, only: broadcast, proc0
+    use job_manage, only: trin_restart
 
     implicit none
 
@@ -389,6 +390,8 @@ contains
 
     integer :: is
     logical, save :: first = .true.
+
+    if(trin_restart) first = .true.
 
     if (first) then
        if (nspec == 1) then

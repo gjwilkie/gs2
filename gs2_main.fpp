@@ -38,15 +38,15 @@ contains
 
 
 subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
-     pflux, qflux, vflux, heat, dvdrho, grho)
+     pflux, qflux, vflux, heat, dvdrho, grho, trinity_reset, converged)
 
-    use job_manage, only: checkstop, job_fork, checktime, time_message
+    use job_manage, only: checkstop, job_fork, checktime, time_message, trin_reset, trin_restart
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name!, finish_file_utils
     use fields, only: init_fields, advance
     use species, only: ions, electrons, impurity
-    use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
+    use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics, gd_reset => reset_init 
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
     use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time, margin_cpu_time
@@ -72,6 +72,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real, dimension (:), intent (out), optional :: pflux, qflux, heat
     real, intent (out), optional :: vflux
     real, intent (out), optional :: dvdrho, grho
+    logical, intent (in), optional :: trinity_reset
+    logical, intent (out), optional :: converged
 
     real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
     real :: time_total(2) = 0.
@@ -95,6 +97,11 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 !
 !    if (present(nofinish)) nofin=nofinish
      
+     if(present(trinity_reset)) then
+        converged = .false.
+        trin_reset = trinity_reset
+        first_time = .true.
+     endif
 
     if (first_time) then
 
@@ -163,6 +170,11 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        
        if (proc0) call time_message(.false.,time_init,' Initialization')
        
+        if(present(trinity_reset)) then ! For trinity load balance restarts
+           if(trin_reset) call gd_reset
+           trin_restart = .true. ! All trinity runs are restarted except the first
+        endif
+
        first_time = .false.
 
     else if (present(nensembles)) then
@@ -189,6 +201,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
             call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
        call update_time
        call loop_diagnostics (istep, exit)
+       if(exit .and. present(converged)) converged = .true.
        call check_time_step (reset, exit)
        call update_scan_parameter_value(istep, reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
@@ -296,7 +309,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     call finish_layouts
     call finish_transforms
-    !call finish_save
+    call finish_save
     call finish_theta_grid
 
   end subroutine trin_finish_gs2
