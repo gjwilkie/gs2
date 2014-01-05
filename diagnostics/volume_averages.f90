@@ -3,7 +3,24 @@ module volume_averages
 
   use theta_grid, only: ntheta, nperiod
   use fields_parallelization, only: field_k_local
-    integer :: ntg_out
+
+  integer :: ntg_out
+  interface average_all
+    module procedure average_all_txy
+    module procedure average_all_real_xys
+  end interface average_all
+
+  interface average_theta
+    module procedure average_theta_txy
+  end interface
+
+  interface average_ky
+    module procedure average_ky_xy
+  end interface
+
+  interface average_kx
+    module procedure average_kx_xy
+  end interface
 
 
 contains
@@ -40,8 +57,39 @@ contains
     !end do
 
   !end subroutine average_theta_distributed
+  subroutine average_all_real_xys (a, avg, distributed)
+    use theta_grid, only: ntgrid, delthet, jacob, nperiod, ntheta
+    use kt_grids, only: naky, ntheta0
+    use species, only: nspec
+    implicit none
+    real, dimension (ntheta0, naky,nspec), intent (in) :: a
+    real, dimension (naky, nspec) :: axb_by_ky
+    real, dimension(nspec), intent(out) :: avg
+    logical,intent(in) :: distributed
+    integer :: is
 
-  subroutine average_theta (a, b, axb_by_mode, distributed)
+    do is = 1,nspec
+      call average_kx(a(:,:,is), axb_by_ky(:,is), distributed)
+      avg(is) = sum(axb_by_ky(:,is))
+    end do
+  end subroutine average_all_real_xys
+
+  subroutine average_all_txy (a, b, avg, distributed)
+    use theta_grid, only: ntgrid, delthet, jacob, nperiod, ntheta
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: a, b
+    real, intent(out) :: avg
+    real, dimension (ntheta0,naky) :: axb_by_mode
+    real, dimension (naky) :: axb_by_ky
+    logical,intent(in) :: distributed
+
+    call average_theta(a, b, axb_by_mode, distributed)
+    call average_kx(axb_by_mode, axb_by_ky, distributed)
+    avg = sum(axb_by_ky)
+  end subroutine average_all_txy
+
+  subroutine average_theta_txy (a, b, axb_by_mode, distributed)
     use theta_grid, only: ntgrid, delthet, jacob, nperiod, ntheta
     use kt_grids, only: naky, ntheta0
     implicit none
@@ -70,9 +118,9 @@ contains
        end do
     end do
 
-  end subroutine average_theta
+  end subroutine average_theta_txy
 
-  subroutine average_ky (f, favg, distributed)
+  subroutine average_ky_xy (f, favg, distributed)
     use kt_grids, only: naky, ntheta0, aky
     use fields_parallelization, only: field_k_local
     use mp, only: sum_allreduce
@@ -105,8 +153,8 @@ contains
     end do
     if (distributed) call sum_allreduce(favg)
 
-  end subroutine average_ky
-  subroutine average_kx (f, favg, distributed)
+  end subroutine average_ky_xy
+  subroutine average_kx_xy (f, favg, distributed)
     use kt_grids, only: naky, ntheta0, aky
     use fields_parallelization, only: field_k_local
     use mp, only: sum_allreduce
@@ -139,5 +187,6 @@ contains
     end do
     if (distributed) call sum_allreduce(favg)
 
-  end subroutine average_kx
+  end subroutine average_kx_xy
+
 end module volume_averages

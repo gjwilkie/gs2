@@ -6,9 +6,7 @@
 !! subroutines in diagnostics_write follows the naming conventions of variables
 !! within the netcdf file itself.
 module gs2_diagnostics_new
-  use diagnostics_write
   use diagnostics_create_and_write
-  use diagnostics_calculate
   use simpledataio
 
   implicit none
@@ -20,12 +18,14 @@ module gs2_diagnostics_new
 
 contains
   subroutine init_gs2_diagnostics_new
-    use volume_averages
+    use volume_averages, only: init_volume_averages
+    use diagnostics_write_fluxes, only: init_diagnostics_write_fluxes
     use file_utils, only: run_name
     use mp, only: mp_comm
     call createfile_parallel(netcdf_file, trim(run_name)//'.cdf', mp_comm)
     call create_dimensions
     call init_volume_averages
+    call init_diagnostics_write_fluxes
   end subroutine init_gs2_diagnostics_new
 
   subroutine finish_gs2_diagnostics_new
@@ -36,11 +36,13 @@ contains
     use gs2_diagnostics, only: nwrite
     use gs2_time, only: user_time
     use mp, only: proc0
+    use diagnostics_write_fluxes, only: write_fluxes
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
 
     if (mod(istep, nwrite).eq.0.or.exit) then
       call write_fields(istep)
+      call write_fluxes(netcdf_file, istep)
 
       ! Finally, write time value and update time index
       call create_and_write_variable(netcdf_file, SDATIO_DOUBLE, "t", "t", &
@@ -53,12 +55,14 @@ contains
     use kt_grids, only: naky, ntheta0, aky, akx
     use theta_grid, only: ntgrid, theta
     use le_grids, only: negrid, nlambda, al, energy
+    use species, only: nspec
 
     call add_dimension(netcdf_file, "x", ntheta0, "", "")
     call add_dimension(netcdf_file, "y", naky, "", "")
     call add_dimension(netcdf_file, "z", 2*ntgrid+1, "", "")
     call add_dimension(netcdf_file, "e", negrid, "", "")
     call add_dimension(netcdf_file, "l", nlambda, "", "")
+    call add_dimension(netcdf_file, "s", nspec, "", "")
     call add_dimension(netcdf_file, "r", 2, "", "")
     call add_dimension(netcdf_file, "t", SDATIO_UNLIMITED, "", "")
 
