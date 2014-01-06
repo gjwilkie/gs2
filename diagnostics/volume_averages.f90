@@ -1,4 +1,14 @@
 
+!> This module contains functions for averaging quantities
+!! which have the dimensions of space, and potentially species.
+!! For example, (y), (x), (x,y), (theta,x,y), (x,y,s) etc.
+!! The names of the interfaces are self-explanatory: for example,
+!! the function average_theta averages the theta dimension.
+!! 
+!! The quantities may or may not be distributed across processes.
+!! If they are not local, they must be distributed in the same way
+!! that the fields are distributed, i.e. in x and y only, and
+!! according to the same pattern.
 module volume_averages
 
   use theta_grid, only: ntheta, nperiod
