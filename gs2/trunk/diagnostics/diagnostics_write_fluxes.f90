@@ -3,6 +3,7 @@
 module diagnostics_write_fluxes
 
   use kt_grids, only: naky, ntheta0
+  use diagnostics_config, only: diagnostics_type
   use species, only: nspec
   use theta_grid, only: ntgrid
   use simpledataio
@@ -14,8 +15,20 @@ implicit none
 !> Allocate arrays
 public :: init_diagnostics_write_fluxes
 
+!> Deallocate arrays
+public :: finish_diagnostics_write_fluxes
+
+!> Calculate and write fluxes.  The fluxes are actually calculated
+!!  in the module dist_fn. They are returned as a function of
+!!  x, y and species. This function writes the whole array,
+!!  and also various averages of them.
 public :: write_fluxes
-  logical :: fluxes_local = .false.
+
+!>  Given that the fluxes are calculated from the fields,
+!!   they will in general be distributed across processes
+!!   in the same way as the fields. Therefore this flag
+!!    is set to false. It is provided as an option for future proofing.
+logical :: fluxes_local = .false.
 
 private
   real, dimension (:,:,:,:), allocatable ::  qheat, qmheat, qbheat
@@ -57,13 +70,13 @@ contains
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange)
   end subroutine finish_diagnostics_write_fluxes
 
-  subroutine write_fluxes(netcdf_file, istep)
+  subroutine write_fluxes(gnostics, istep)
     use dist_fn, only: flux
     use dist_fn_arrays, only: g_adjust, gnew
     use species, only: nspec, spec
     use fields_arrays, only: phinew, bparnew, aparnew
     use run_parameters, only: fphi, fapar, fbpar
-    type(sdatio_file), intent(in) :: netcdf_file
+    type(diagnostics_type), intent(in) :: gnostics
     integer, intent(in) :: istep
     integer :: is
     !if (istep > 0) then
@@ -84,34 +97,39 @@ contains
           qheat(:,:,is,3) = qheat(:,:,is,3) * spec(is)%dens*spec(is)%temp
 
           pflux(:,:,is) = pflux(:,:,is) * spec(is)%dens
+          pflux_tormom(:,:,is) = pflux_tormom(:,:,is) * spec(is)%dens  
+
+          vflux(:,:,is) = vflux(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
+          vflux_par(:,:,is) = vflux_par(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
+          vflux_perp(:,:,is) = vflux_perp(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
        end do
     end if
-    call write_standard_flux_properties(netcdf_file, &
+    call write_standard_flux_properties(gnostics, &
       'heat_flux',  'Turbulent flux of heat', 'Q_gB = ', qheat(:,:,:,1), .true.)
-    call write_standard_flux_properties(netcdf_file, &
-      'heat_par',  'Turbulent flux of parallel heat', 'Q_gB = ', qheat(:,:,:,2), .true.)
-    call write_standard_flux_properties(netcdf_file, &
-      'heat_perp',  'Turbulent flux of perpendicular heat', 'Q_gB = ', qheat(:,:,:,3), .true.)
-    call write_standard_flux_properties(netcdf_file, &
+    call write_standard_flux_properties(gnostics, &
+      'heat_flux_par',  'Turbulent flux of parallel heat', 'Q_gB = ', qheat(:,:,:,2), .true.)
+    call write_standard_flux_properties(gnostics, &
+      'heat_flux_perp',  'Turbulent flux of perpendicular heat', 'Q_gB = ', qheat(:,:,:,3), .true.)
+
+    call write_standard_flux_properties(gnostics, &
       'part_flux',  'Turbulent flux of particles', 'n_r? ', pflux, .true.)
-          !call get_volume_average (qheat(:,:,is,1), heat_fluxes(is))
+    call write_standard_flux_properties(gnostics, &
+      'part_tormom_flux',  'Ask Jung-Pyo Lee...', '? ', pflux_tormom, .true.)
 
-          !call get_volume_average (qheat(:,:,is,2), heat_par(is))
+    call write_standard_flux_properties(gnostics, &
+      'mom_flux',  'Flux of toroidal angular momentum', 'Pi_gB =  ', vflux, .true.)
+    call write_standard_flux_properties(gnostics, &
+      'mom_flux_par',  &
+      'Flux of the parallel component of the toroidal angular momentum', 'Pi_gB =  ', vflux_par, .true.)
+    call write_standard_flux_properties(gnostics, &
+      'mom_flux_perp', &
+      'Flux of the perpendicular component of the toroidal angular momentum', 'Pi_gB =  ', vflux_perp, .true.)
 
-          !call get_volume_average (qheat(:,:,is,3), heat_perp(is))
-          
-          !call get_volume_average (pflux(:,:,is), part_fluxes(is))
 
-!pflux_tormom(:,:,is) = pflux_tormom(:,:,is) * spec(is)%dens  
-      !call get_volume_average (pflux_tormom(:,:,is), part_tormom_fluxes(is))
-
-          !vflux(:,:,is) = vflux(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
           !call get_volume_average (vflux(:,:,is), mom_fluxes(is))
 
-          !vflux_par(:,:,is) = vflux_par(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
           !call get_volume_average (vflux_par(:,:,is), parmom_fluxes(is))
 
-          !vflux_perp(:,:,is) = vflux_perp(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
           !call get_volume_average (vflux_perp(:,:,is), perpmom_fluxes(is))
 
           !exchange(:,:,is) = exchange(:,:,is) * spec(is)%dens*spec(is)%z
@@ -168,14 +186,14 @@ contains
        end do
     end if
   end subroutine write_fluxes
-  subroutine write_standard_flux_properties(netcdf_file, flux_name, flux_description, &
+  subroutine write_standard_flux_properties(gnostics, flux_name, flux_description, &
     flux_units, flux_value, distributed)
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
     use diagnostics_create_and_write, only: create_and_write_variable
     use volume_averages
     use fields_parallelization, only: field_k_local
-    type(sdatio_file), intent(in) :: netcdf_file
+    type(diagnostics_type), intent(in) :: gnostics
     character(*), intent(in) :: flux_name, flux_description, flux_units
     real, dimension(ntheta0,naky,nspec), intent(in) :: flux_value
     logical, intent(in) :: distributed
@@ -187,13 +205,13 @@ contains
     !logical, external :: k_local
 
     !call average_theta(flux_value, flux_value, flux_by_mode, .true.)
-    !!call create_and_write_flux(netcdf_file, flux_name, flux_description, flux_units, flux_value)
+    !!call create_and_write_flux(gnostics%sfile, flux_name, flux_description, flux_units, flux_value)
     call average_all(flux_value, flux_by_species, distributed) 
-    call create_and_write_variable(netcdf_file, REAL_TYPE, "es_"//flux_name, "st", &
+    call create_and_write_variable(gnostics%sfile, REAL_TYPE, "es_"//flux_name, "st", &
       flux_description//" averaged over kx and ky, as a function of species and time", &
       flux_units, flux_by_species)
 
-    call create_and_write_flux_by_mode(netcdf_file, flux_name, flux_description, flux_units, &
+    call create_and_write_flux_by_mode(gnostics%sfile, flux_name, flux_description, flux_units, &
       flux_value, total_flux_by_mode, distributed)
 
 
@@ -211,16 +229,16 @@ contains
 
 
     call average_kx(total_flux_by_mode, total_flux_by_ky, .true.)
-    call create_and_write_variable(netcdf_file, REAL_TYPE, "total_"//flux_name//"_by_ky", "yt", &
+    call create_and_write_variable(gnostics%sfile, REAL_TYPE, "total_"//flux_name//"_by_ky", "yt", &
       flux_description//" summed over species and averaged over kx, as a function of ky and time", &
       flux_units, total_flux_by_ky)
 
     call average_ky(total_flux_by_mode, total_flux_by_kx, .true.)
-    call create_and_write_variable(netcdf_file, REAL_TYPE, "total_"//flux_name//"_by_kx", "xt", &
+    call create_and_write_variable(gnostics%sfile, REAL_TYPE, "total_"//flux_name//"_by_kx", "xt", &
       flux_description//" summed over species and averaged over ky, as a function of kx and time", &
       flux_units, total_flux_by_kx)
 
-    call create_and_write_variable(netcdf_file, REAL_TYPE, flux_name//"_tot", "t", &
+    call create_and_write_variable(gnostics%sfile, REAL_TYPE, flux_name//"_tot", "t", &
       flux_description//" summed over species and averaged over kx and ky, as a function of time", &
       flux_units, sum(total_flux_by_kx))
 
