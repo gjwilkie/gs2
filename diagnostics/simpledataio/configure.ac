@@ -18,7 +18,7 @@ AM_CONDITIONAL(PARALLEL, [test "x$enable_parallel" = xyes])
 
 # Check whether to build it using mpi compilers (must be used for enable_parallel)
 if test x"$enable_parallel" = xyes; then
-	enable_mpi = yes
+enable_mpi=yes
 else
 AC_MSG_CHECKING([whether to build using mpi (automatically enabled by --enable-parallel)])
 AC_ARG_ENABLE([mpi],
@@ -26,8 +26,8 @@ AC_ARG_ENABLE([mpi],
                               [build with mpi version of compilers])],
 							[enable_mpi=yes], [enable_mpi=no])
 AC_MSG_RESULT([$enable_mpi])
-AM_CONDITIONAL(WITHMPI, [test "x$enable_mpi" = xyes])
 fi
+AM_CONDITIONAL(WITHMPI, [test "x$enable_mpi" = xyes])
 
 #AC_ARG_VAR([CC], [C Compiler])
 # Checks for programs. If enable parallel, find the appropriate mpi programs, libraries etc.
