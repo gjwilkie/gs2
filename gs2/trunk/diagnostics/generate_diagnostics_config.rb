@@ -1,3 +1,4 @@
+# This Ruby script automatically generates the module diagnostics_config. It is compatible with any version of Ruby, which means that it should work out of the box on any system, since even the most decrepit systems usually have Ruby 1.8.7. It is automatically invoked by the Makefile; thus, after editing it a simple make will trigger the generation of the file diagnostics_config.f90.
 
 class Generator
 	attr_accessor :name, :type
@@ -34,7 +35,17 @@ end
 # Leave third element of array empty to use the default default
 generators = [
 	['integer', 'nwrite', '10'],
-	['logical', 'write_fields']
+	['logical', 'write_any', '.true.'],
+
+	['logical', 'write_fields', '.true.'],
+	['logical', 'write_phi_over_time'],
+	['logical', 'write_apar_over_time'],
+	['logical', 'write_bpar_over_time'],
+
+	['logical', 'write_fluxes', '.true.'],
+	['logical', 'write_fluxes_by_mode'],
+
+	['logical', 'write_omega'],
 ].map{|type, name, default| Generator.new(type,name,default)}
 
 
@@ -51,10 +62,15 @@ module diagnostics_config
 
   public :: init_diagnostics_config
   public :: finish_diagnostics_config
-	public ::diagnostics_type
+  public ::diagnostics_type
 
   type diagnostics_type
    type(sdatio_file) :: sfile
+   !> Integer below gives the sdatio type 
+   !! which corresponds to a gs2 real
+   integer :: rtype
+   integer :: istep
+   logical :: create
    #{generators.map{|g| g.declaration}.join("\n   ") }
   end type diagnostics_type
 
@@ -81,7 +97,7 @@ contains
     namelist /diagnostics_config/ &
       #{generators.map{|g| g.name}.join(", &\n      ")}
 
-    integer :: ierr, in_file
+    integer :: in_file
     logical :: exist
 
     if (proc0) then

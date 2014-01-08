@@ -14,6 +14,7 @@ module volume_averages
   use theta_grid, only: ntheta, nperiod
   use fields_parallelization, only: field_k_local
 
+  implicit none
   integer :: ntg_out
   interface average_all
     module procedure average_all_txy
@@ -73,14 +74,14 @@ contains
     use species, only: nspec
     implicit none
     real, dimension (ntheta0, naky,nspec), intent (in) :: a
-    real, dimension (naky, nspec) :: axb_by_ky
+    real, dimension (ntheta0, nspec) :: axb_by_kx
     real, dimension(nspec), intent(out) :: avg
     logical,intent(in) :: distributed
     integer :: is
 
     do is = 1,nspec
-      call average_kx(a(:,:,is), axb_by_ky(:,is), distributed)
-      avg(is) = sum(axb_by_ky(:,is))
+      call average_ky(a(:,:,is), axb_by_kx(:,is), distributed)
+      avg(is) = sum(axb_by_kx(:,is))
     end do
   end subroutine average_all_real_xys
 

@@ -24,12 +24,6 @@ public :: finish_diagnostics_write_fluxes
 !!  and also various averages of them.
 public :: write_fluxes
 
-!>  Given that the fluxes are calculated from the fields,
-!!   they will in general be distributed across processes
-!!   in the same way as the fields. Therefore this flag
-!!    is set to false. It is provided as an option for future proofing.
-logical :: fluxes_local = .false.
-
 private
   real, dimension (:,:,:,:), allocatable ::  qheat, qmheat, qbheat
   real, dimension (:,:,:), allocatable ::  pflux,  vflux, vflux_par, vflux_perp
@@ -38,7 +32,7 @@ private
   real, dimension (:,:,:), allocatable :: pmflux, vmflux
   real, dimension (:,:,:), allocatable :: pbflux, vbflux
   real, dimension (:,:,:), allocatable :: exchange
-  integer, parameter :: REAL_TYPE = SDATIO_DOUBLE
+  !integer, parameter :: gnostics%rtype = SDATIO_DOUBLE
 
 
 contains
@@ -70,14 +64,13 @@ contains
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange)
   end subroutine finish_diagnostics_write_fluxes
 
-  subroutine write_fluxes(gnostics, istep)
+  subroutine write_fluxes(gnostics)
     use dist_fn, only: flux
     use dist_fn_arrays, only: g_adjust, gnew
     use species, only: nspec, spec
     use fields_arrays, only: phinew, bparnew, aparnew
     use run_parameters, only: fphi, fapar, fbpar
     type(diagnostics_type), intent(in) :: gnostics
-    integer, intent(in) :: istep
     integer :: is
     !if (istep > 0) then
      call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
@@ -91,7 +84,7 @@ contains
      call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
     !end if
     if (fphi > epsilon(0.0)) then
-       do is = 1, nspec
+      do is = 1, nspec
           qheat(:,:,is,1) = qheat(:,:,is,1) * spec(is)%dens*spec(is)%temp
           qheat(:,:,is,2) = qheat(:,:,is,2) * spec(is)%dens*spec(is)%temp
           qheat(:,:,is,3) = qheat(:,:,is,3) * spec(is)%dens*spec(is)%temp
@@ -102,28 +95,28 @@ contains
           vflux(:,:,is) = vflux(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
           vflux_par(:,:,is) = vflux_par(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
           vflux_perp(:,:,is) = vflux_perp(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
-       end do
+      end do
+      call write_standard_flux_properties(gnostics, &
+        'heat_flux',  'Turbulent flux of heat', 'Q_gB = ', qheat(:,:,:,1), .true.)
+      call write_standard_flux_properties(gnostics, &
+        'heat_flux_par',  'Turbulent flux of parallel heat', 'Q_gB = ', qheat(:,:,:,2), .true.)
+      call write_standard_flux_properties(gnostics, &
+        'heat_flux_perp',  'Turbulent flux of perpendicular heat', 'Q_gB = ', qheat(:,:,:,3), .true.)
+
+      call write_standard_flux_properties(gnostics, &
+        'part_flux',  'Turbulent flux of particles', 'n_r? ', pflux, .true.)
+      call write_standard_flux_properties(gnostics, &
+        'part_tormom_flux',  'Ask Jung-Pyo Lee...', '? ', pflux_tormom, .true.)
+
+      call write_standard_flux_properties(gnostics, &
+        'mom_flux',  'Flux of toroidal angular momentum', 'Pi_gB =  ', vflux, .true.)
+      call write_standard_flux_properties(gnostics, &
+        'mom_flux_par',  &
+        'Flux of the parallel component of the toroidal angular momentum', 'Pi_gB =  ', vflux_par, .true.)
+      call write_standard_flux_properties(gnostics, &
+        'mom_flux_perp', &
+        'Flux of the perpendicular component of the toroidal angular momentum', 'Pi_gB =  ', vflux_perp, .true.)
     end if
-    call write_standard_flux_properties(gnostics, &
-      'heat_flux',  'Turbulent flux of heat', 'Q_gB = ', qheat(:,:,:,1), .true.)
-    call write_standard_flux_properties(gnostics, &
-      'heat_flux_par',  'Turbulent flux of parallel heat', 'Q_gB = ', qheat(:,:,:,2), .true.)
-    call write_standard_flux_properties(gnostics, &
-      'heat_flux_perp',  'Turbulent flux of perpendicular heat', 'Q_gB = ', qheat(:,:,:,3), .true.)
-
-    call write_standard_flux_properties(gnostics, &
-      'part_flux',  'Turbulent flux of particles', 'n_r? ', pflux, .true.)
-    call write_standard_flux_properties(gnostics, &
-      'part_tormom_flux',  'Ask Jung-Pyo Lee...', '? ', pflux_tormom, .true.)
-
-    call write_standard_flux_properties(gnostics, &
-      'mom_flux',  'Flux of toroidal angular momentum', 'Pi_gB =  ', vflux, .true.)
-    call write_standard_flux_properties(gnostics, &
-      'mom_flux_par',  &
-      'Flux of the parallel component of the toroidal angular momentum', 'Pi_gB =  ', vflux_par, .true.)
-    call write_standard_flux_properties(gnostics, &
-      'mom_flux_perp', &
-      'Flux of the perpendicular component of the toroidal angular momentum', 'Pi_gB =  ', vflux_perp, .true.)
 
 
           !call get_volume_average (vflux(:,:,is), mom_fluxes(is))
@@ -207,12 +200,14 @@ contains
     !call average_theta(flux_value, flux_value, flux_by_mode, .true.)
     !!call create_and_write_flux(gnostics%sfile, flux_name, flux_description, flux_units, flux_value)
     call average_all(flux_value, flux_by_species, distributed) 
-    call create_and_write_variable(gnostics%sfile, REAL_TYPE, "es_"//flux_name, "st", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "es_"//flux_name, "st", &
       flux_description//" averaged over kx and ky, as a function of species and time", &
       flux_units, flux_by_species)
 
-    call create_and_write_flux_by_mode(gnostics%sfile, flux_name, flux_description, flux_units, &
-      flux_value, total_flux_by_mode, distributed)
+    if (gnostics%write_fluxes_by_mode) then 
+      call create_and_write_flux_by_mode(gnostics, flux_name, flux_description, flux_units, &
+        flux_value, total_flux_by_mode, distributed)
+    end if
 
 
     total_flux_by_mode = 0.
@@ -228,26 +223,26 @@ contains
     end do
 
 
-    call average_kx(total_flux_by_mode, total_flux_by_ky, .true.)
-    call create_and_write_variable(gnostics%sfile, REAL_TYPE, "total_"//flux_name//"_by_ky", "yt", &
+    call average_kx(total_flux_by_mode, total_flux_by_ky, distributed)
+    call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_ky", "yt", &
       flux_description//" summed over species and averaged over kx, as a function of ky and time", &
       flux_units, total_flux_by_ky)
 
-    call average_ky(total_flux_by_mode, total_flux_by_kx, .true.)
-    call create_and_write_variable(gnostics%sfile, REAL_TYPE, "total_"//flux_name//"_by_kx", "xt", &
+    call average_ky(total_flux_by_mode, total_flux_by_kx, distributed)
+    call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_kx", "xt", &
       flux_description//" summed over species and averaged over ky, as a function of kx and time", &
       flux_units, total_flux_by_kx)
 
-    call create_and_write_variable(gnostics%sfile, REAL_TYPE, flux_name//"_tot", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, flux_name//"_tot", "t", &
       flux_description//" summed over species and averaged over kx and ky, as a function of time", &
       flux_units, sum(total_flux_by_kx))
 
   end subroutine write_standard_flux_properties
 
-  subroutine create_and_write_flux_by_mode(sfile, flux_name, flux_description, flux_units, &
-      flux_value, total_flux_by_mode, write_flux_by_time)
+  subroutine create_and_write_flux_by_mode(gnostics, flux_name, flux_description, flux_units, &
+      flux_value, total_flux_by_mode, distributed)
     use fields_parallelization, only: field_k_local
-   type(sdatio_file), intent(in) :: sfile
+   type(diagnostics_type), intent(in) :: gnostics
    character(*), intent(in) :: flux_name
    character(*), intent(in) :: flux_description
    character(*), intent(in) :: flux_units
@@ -255,7 +250,7 @@ contains
    character(len=len(flux_name)+3+8) :: flux_by_mode_name
    real, intent(in), dimension(ntheta0, naky, nspec) :: flux_value
    real, dimension(ntheta0, naky), intent(in) :: total_flux_by_mode
-   logical, intent(in) :: write_flux_by_time
+   logical, intent(in) :: distributed
    !logical, external :: k_local
 
    real, dimension(1, 1, nspec) :: dummyc
@@ -268,59 +263,64 @@ contains
    !flux_t_name = flux_name//"_t"
 
 
-	 
-	 if (.not. variable_exists(sfile, flux_by_mode_name)) then 
-	   call create_variable(sfile, SDATIO_DOUBLE, flux_by_mode_name, "xyst", &
+ 
+   if (gnostics%create) then 
+    call create_variable(gnostics%sfile, SDATIO_DOUBLE, flux_by_mode_name, "xyst", &
        flux_description//" as a function of species, kx and ky", flux_units)
-	 end if
-	 if (.not. variable_exists(sfile, total_flux_by_mode_name)) then 
-	   call create_variable(sfile, SDATIO_DOUBLE, total_flux_by_mode_name, "xyt", &
+    call create_variable(gnostics%sfile, SDATIO_DOUBLE, total_flux_by_mode_name, "xyt", &
        flux_description//" summed over species, as a function of kx and ky" , flux_units)
-	 end if
-	 !if (write_flux_by_time .and. .not. variable_exists(sfile, flux_t_name)) then 
-	   !call create_variable(sfile, SDATIO_DOUBLE, flux_t_name, "rzxyt", &
-       !flux_description//" as a function of time", flux_units)
-	 !end if
-	 
-   if (fluxes_local) then
 
-     call write_variable(sfile, flux_by_mode_name, flux_value)
-     call write_variable(sfile, total_flux_by_mode_name, total_flux_by_mode)
-     !if (write_flux_by_time) call write_variable(sfile, flux_t_name, flux_value)
+     return
+
+   end if
+  !if (write_flux_by_time .and. .not. variable_exists(gnostics%sfile, flux_t_name)) then 
+     !call create_variable(gnostics%sfile, SDATIO_DOUBLE, flux_t_name, "rzxyt", &
+       !flux_description//" as a function of time", flux_units)
+   !end if
+   
+!>  Given that the fluxes are calculated from the fields,
+!!   they will in general be distributed across processes
+!!   in the same way as the fields. 
+!!  In this case distributed is true
+   if (.not. distributed) then
+
+     call write_variable(gnostics%sfile, flux_by_mode_name, flux_value)
+     call write_variable(gnostics%sfile, total_flux_by_mode_name, total_flux_by_mode)
+     !if (write_flux_by_time) call write_variable(gnostics%sfile, flux_t_name, flux_value)
 
    else
 
-     call set_count(sfile, flux_by_mode_name, "x", 1)
-     call set_count(sfile, flux_by_mode_name, "y", 1)
-     call set_count(sfile, total_flux_by_mode_name, "x", 1)
-     call set_count(sfile, total_flux_by_mode_name, "y", 1)
+     call set_count(gnostics%sfile, flux_by_mode_name, "x", 1)
+     call set_count(gnostics%sfile, flux_by_mode_name, "y", 1)
+     call set_count(gnostics%sfile, total_flux_by_mode_name, "x", 1)
+     call set_count(gnostics%sfile, total_flux_by_mode_name, "y", 1)
      !if (write_flux_by_time) then
-       !call set_count(sfile, flux_t_name, "x", 1)
-       !call set_count(sfile, flux_t_name, "y", 1)
+       !call set_count(gnostics%sfile, flux_t_name, "x", 1)
+       !call set_count(gnostics%sfile, flux_t_name, "y", 1)
      !end if
 
      ! For some reason every process has to make at least
      ! one write to a variable with an infinite dimension.
      ! Here we make some dummy writes to satisfy that
-     call write_variable(sfile, flux_by_mode_name, dummyc)
-     call write_variable(sfile, total_flux_by_mode_name, dummyr)
+     call write_variable(gnostics%sfile, flux_by_mode_name, dummyc)
+     call write_variable(gnostics%sfile, total_flux_by_mode_name, dummyr)
 
      do ik = 1,naky
        do it = 1,ntheta0
          if (field_k_local(it,ik)) then
 
-           call set_start(sfile, flux_by_mode_name, "x", it)
-           call set_start(sfile, flux_by_mode_name, "y", ik)
-           call write_variable(sfile, flux_by_mode_name, flux_value)
+           call set_start(gnostics%sfile, flux_by_mode_name, "x", it)
+           call set_start(gnostics%sfile, flux_by_mode_name, "y", ik)
+           call write_variable(gnostics%sfile, flux_by_mode_name, flux_value)
 
-           call set_start(sfile, total_flux_by_mode_name, "x", it)
-           call set_start(sfile, total_flux_by_mode_name, "y", ik)
-           call write_variable(sfile, total_flux_by_mode_name, total_flux_by_mode)
+           call set_start(gnostics%sfile, total_flux_by_mode_name, "x", it)
+           call set_start(gnostics%sfile, total_flux_by_mode_name, "y", ik)
+           call write_variable(gnostics%sfile, total_flux_by_mode_name, total_flux_by_mode)
 
            !if (write_flux_by_time) then
-             !call set_start(sfile, flux_t_name, "x", it)
-             !call set_start(sfile, flux_t_name, "y", ik)
-             !call write_variable(sfile, flux_t_name, flux_value)
+             !call set_start(gnostics%sfile, flux_t_name, "x", it)
+             !call set_start(gnostics%sfile, flux_t_name, "y", ik)
+             !call write_variable(gnostics%sfile, flux_t_name, flux_value)
            !end if
          end if
        end do
