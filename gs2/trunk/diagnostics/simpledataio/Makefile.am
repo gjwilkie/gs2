@@ -26,7 +26,7 @@ endif
 include_HEADERS = include/simpledataio.h $(SDAT_MOD) $(SDAT_WRITE_MOD)
 # Sources required
 libsimpledataio_la_SOURCES = src/simpledataio.c 
-libsimpledataiof_la_SOURCES = src/simpledataiof.F95 src/simpledataio_write.f95
+libsimpledataiof_la_SOURCES = src/simpledataiof.F90 src/simpledataio_write.f90
 
 # Test programs
 bin_PROGRAMS=$(top_builddir)/test/testprog 
@@ -35,7 +35,7 @@ bin_PROGRAMS+=$(top_builddir)/test/testprog_fortran
 # Test program sources
 __top_builddir__test_testprog_SOURCES=test/test.c
 __top_builddir__test_testprog_LDADD=libsimpledataio.la
-__top_builddir__test_testprog_fortran_SOURCES=test/testf.f95
+__top_builddir__test_testprog_fortran_SOURCES=test/testf.f90
 __top_builddir__test_testprog_fortran_LDADD=libsimpledataiof.la libsimpledataio.la 
 
 # Weird that this is necessary, but oh well
@@ -54,7 +54,7 @@ AM_CPPFLAGS=-DPARALLEL
 bin_PROGRAMS+=$(top_builddir)/test/testprog_fortran_parallel
 TESTS +=  test/test_parallel.sh
 
-__top_builddir__test_testprog_fortran_parallel_SOURCES=test/test_parallelf.f95
+__top_builddir__test_testprog_fortran_parallel_SOURCES=test/test_parallelf.f90
 __top_builddir__test_testprog_fortran_parallel_LDADD=libsimpledataiof.la libsimpledataio.la
 #__top_builddir__test_testprog_fortran_parallel_LDFLAGS=-lmpi -lmpi_f90
 endif
@@ -74,11 +74,11 @@ $(SDAT_WRITE_MOD): simpledataio_write.lo
 include/$(SDAT_WRITE_MOD): $(SDAT_WRITE_MOD)
 	cp $(SDAT_WRITE_MOD) include/.
 #simpledataio_write.o: include/$(SDAT_MOD) 
-test/testf.f95: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
-test/test_parallelf.f95: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
+test/testf.f90: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
+test/test_parallelf.f90: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
 endif
 
 # Need to generate the module file for simpledataiof before building simpledataio_write
-src/simpledataio_write.f95: src/generate_simpledataio_write.rb $(SDAT_MOD)
+src/simpledataio_write.f90: src/generate_simpledataio_write.rb $(SDAT_MOD)
 	env ruby $< > $@
 
