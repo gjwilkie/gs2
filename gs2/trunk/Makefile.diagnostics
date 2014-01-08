@@ -3,7 +3,7 @@ SIMPLEDATAIO_INC=-I$(PWD)/diagnostics/simpledataio/include
 SIMPLEDATAIO_LIB_DIR=$(PWD)/diagnostics/simpledataio/.libs
 SIMPLEDATAIO_LIB=$(SIMPLEDATAIO_LIB_DIR)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a
 
-SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  --enable-mpi
+SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  --enable-mpi LDFLAGS=-all-static
 
 ifdef USE_PARALLEL_NETCDF
 SIMPLEDATAIO_CONF+=--enable-parallel
