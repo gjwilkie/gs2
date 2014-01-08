@@ -35,7 +35,7 @@ end
 # Leave third element of array empty to use the default default
 generators = [
 	['integer', 'nwrite', '10'],
-	['logical', 'write_any', '.true.'],
+	['logical', 'write_any', '.false.'],
 
 	['logical', 'write_fields', '.true.'],
 	['logical', 'write_phi_over_time'],
