@@ -17,15 +17,10 @@ class Generator
 	end
 	def val_get
 		complex ? 
-		"realval(1:,#{@dimsize.times.map{|i| "starts(#{i+2}):"}.join(",")})"
-		:
-		"val(#{@dimsize.times.map{|i| "starts(#{i+1}):"}.join(",")})"
+		"realval(1:,#{@dimsize.times.map{|i| "starts(#{i+2}):"}.join(",")})" : "val(#{@dimsize.times.map{|i| "starts(#{i+1}):"}.join(",")})"
 	end
 	def val_get_0
-		complex ?
-    "realval"
-			:
-    "(/val/)"
+		complex ?  "realval" : "(/val/)"
 	end
 	def complex
 		@type =~ /complex/i
@@ -54,9 +49,7 @@ class Generator
    call number_of_unlimited_dimensions(sfile, variable_name, n)
    allocate(starts(n+#@dimsize#{complex ? "+1" : nil}))
    allocate(counts(n+#@dimsize#{complex ? "+1" : nil}))
-	 #{complex ?
- 	
-	2.times.map{|i| "
+	 #{complex ?  2.times.map{|i| "
 	 call set_count(sfile, variable_name, \"r\", 1)
 	 call set_start(sfile, variable_name, \"r\", #{i+1})
 	 realval(1#{([",:"]*@dimsize).join('')}) = #{realimag[i]}(#{@dimsize==0 ? "val" : "val(#{dimension_spec})"})
@@ -64,11 +57,7 @@ class Generator
    status =  nf90_put_var(fileid, varid+1, &
 		   #{@dimsize == 0 ? val_get_0 : val_get}, start=starts, count=counts)
    if (.not. status .eq. 0) write (*,*) 'Error writing variable: ', variable_name, ', ',  nf90_strerror(status)"
-	}.join("\n\n")
-
-	:
-
-  " 
+	}.join("\n\n")        :         "  
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts)
    status =  nf90_put_var(fileid, varid+1, &
 		   #{@dimsize == 0 ? "(/val/)" : val_get}, start=starts, count=counts)
