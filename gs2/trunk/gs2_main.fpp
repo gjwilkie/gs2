@@ -42,7 +42,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     use job_manage, only: checkstop, job_fork, checktime, time_message, trin_reset, trin_restart
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
-    use mp, only: max_reduce, min_reduce, sum_reduce
+    use mp, only: max_reduce, min_reduce, sum_reduce, iproc
     use file_utils, only: init_file_utils, run_name!, finish_file_utils
     use fields, only: init_fields, advance
     use species, only: ions, electrons, impurity
@@ -53,6 +53,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
+    use gs2_diagnostics_new, only: run_diagnostics, init_gs2_diagnostics_new
+    use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
     use gs2_time, only: update_time, write_dt, init_tstart
     use gs2_time, only: user_time, user_dt
@@ -117,12 +119,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (proc0) then
           if (nproc == 1) then
              if (.not. nofin) then
-	        write(*,*) 'Running on ',nproc,' processor'
-	     end if 
+          write(*,*) 'Running on ',nproc,' processor'
+       end if 
          else
              if (.not. nofin) then
-	        write(*,*) 'Running on ',nproc,' processors'
-	     end if	  
+          write(*,*) 'Running on ',nproc,' processors'
+       end if	  
           end if
           write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
@@ -156,6 +158,13 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        call init_parameter_scan
        call init_fields
        call init_gs2_diagnostics (list, nstep)
+
+#ifdef NETCDF_PARALLEL
+       call init_gs2_diagnostics_new(.true.)
+#else
+       call init_gs2_diagnostics_new(.false.)
+#endif
+
        call allocate_target_arrays ! must be after init_gs2_diagnostics
        call init_tstart (tstart)   ! tstart is in user units 
        
@@ -187,8 +196,14 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ilast_step = nstep
     
     call loop_diagnostics(0,exit)
+
+    ! Create variables
+    call run_diagnostics(-1,exit)
+    ! Write initial values
+    call run_diagnostics(0,exit)
     
-    if (proc0) write(*,*) 'layout ',layout
+    !if (proc0) write(*,*) 'layout ',layout
+    !write (*,*) 'iproc here', iproc
 
     call time_message(.false.,time_main_loop,' Main Loop')
 
@@ -201,6 +216,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
             call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
        call update_time
        call loop_diagnostics (istep, exit)
+       call run_diagnostics (istep, exit)
        if(exit .and. present(converged)) converged = .true.
        call check_time_step (reset, exit)
        call update_scan_parameter_value(istep, reset, exit)
@@ -257,6 +273,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        end if
        vflux = vflux_avg(1)/time_interval
     else
+       if (.not.nofin .and. .not. functional_test_flag ) call finish_gs2_diagnostics_new 
        if (.not.nofin .and. .not. functional_test_flag ) call finish_gs2_diagnostics (istep_end)
        if (.not.nofin .and. .not. functional_test_flag) call finish_gs2
     end if

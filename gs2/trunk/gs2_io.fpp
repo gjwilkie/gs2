@@ -1179,7 +1179,7 @@ contains
 
     if (write_nl_flux) then
        status = nf90_def_var (ncid, 'hflux_tot', netcdf_real, time_dim, hflux_tot_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='kflux_tot')
+       if (status /= NF90_NOERR) call netcdf_error (status, var='hflux_tot')
        status = nf90_def_var (ncid, 'vflux_tot', netcdf_real, time_dim, vflux_tot_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='vflux_tot')
        status = nf90_def_var (ncid, 'zflux_tot', netcdf_real, time_dim, zflux_tot_id)
@@ -1555,7 +1555,8 @@ contains
 
 !    use nf90_mod, only: nf90_put_var
     use convert, only: c2r
-    use fields_arrays, only: phi, apar, bpar
+    !use fields_arrays, only: phi, apar, bpar ! EGH changed Jan 14
+    use fields_arrays, only: phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
 # ifdef NETCDF
@@ -1566,19 +1567,19 @@ contains
     integer :: status
 
     if (fphi > zero) then
-       call c2r (phi, ri3)
+       call c2r (phinew, ri3)
        status = nf90_put_var (ncid, phi_id, ri3)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id)
     end if
 
     if (fapar > zero) then
-       call c2r (apar, ri3)
+       call c2r (aparnew, ri3)
        status = nf90_put_var (ncid, apar_id, ri3)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id)
     end if
 
     if (fbpar > zero) then
-       call c2r (bpar, ri3)
+       call c2r (bparnew, ri3)
        status = nf90_put_var (ncid, bpar_id, ri3)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id)
     end if
@@ -2275,7 +2276,8 @@ contains
     use theta_grid, only: ntgrid
     use species, only: nspec
     use convert, only: c2r
-    use fields_arrays, only: phi, apar, bpar
+    !use fields_arrays, only: phi, apar, bpar
+    use fields_arrays, only: phinew, aparnew, bparnew
     use parameter_scan_arrays, only: write_scan_parameter,&
                                      current_scan_parameter_value
 
@@ -2385,7 +2387,7 @@ contains
 
 	!<wkdoc> Write fields at the current timestep, if [[write_phi_over_time]], [[write_apar_over_time]], [[write_bpar_over_time]] are set in the input file</wkdoc>
 	if(write_phi_t) then
-          call c2r (phi, ri3)
+          call c2r (phinew, ri3)
           !ri_phi_t(:,:,:,:,1) = ri3(:,:,:,:)
 	  status = nf90_put_var (ncid, phi_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id)
@@ -2419,7 +2421,7 @@ contains
     if (fapar > zero) then
 
 	if(write_apar_t) then
-          call c2r (apar, ri3)
+          call c2r (aparnew, ri3)
           !ri_apar_t(:,:,:,:,1) = ri3(:,:,:,:)
 	  status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id)
@@ -2453,7 +2455,7 @@ contains
     if (fbpar > zero) then
 
 	if(write_bpar_t) then
-          call c2r (bpar, ri3)
+          call c2r (bparnew, ri3)
           !ri_bpar_t(:,:,:,:,1) = ri3(:,:,:,:)
 	  status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id)
