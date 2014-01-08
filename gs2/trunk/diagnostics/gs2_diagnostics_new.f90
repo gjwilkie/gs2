@@ -92,6 +92,7 @@ contains
     ! Sets whether field-like arrays are assumed
     ! to be distributed across processes
     gnostics%distributed = gnostics%parallel
+    gnostics%wryte = .false.
 
     ! Write constants/parameters
     if (istep < 1) then

@@ -77,7 +77,7 @@ contains
 
     if (proc0) then
       nwrite = 10
-      write_any = .true.
+      write_any = .false.
       write_fields = .true.
       write_phi_over_time = .false.
       write_apar_over_time = .false.
