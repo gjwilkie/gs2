@@ -105,7 +105,7 @@ contains
       if (gnostics%write_fluxes) call write_fluxes(gnostics)
 !
       ! Finally, write time value and update time index
-      call create_and_write_variable(gnostics, SDATIO_DOUBLE, "t", "t", &
+      call create_and_write_variable(gnostics, gnostics%rtype, "t", "t", &
          "Values of the time coordinate", "a/v_thr", user_time) 
       if (gnostics%wryte) call increment_start(gnostics%sfile, "t")
     end if

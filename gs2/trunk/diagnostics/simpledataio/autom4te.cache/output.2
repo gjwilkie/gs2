@@ -2883,7 +2883,7 @@ fi
 
 # Check whether to build it using mpi compilers (must be used for enable_parallel)
 if test x"$enable_parallel" = xyes; then
-	enable_mpi = yes
+enable_mpi=yes
 else
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build using mpi (automatically enabled by --enable-parallel)" >&5
 $as_echo_n "checking whether to build using mpi (automatically enabled by --enable-parallel)... " >&6; }
@@ -2896,6 +2896,7 @@ fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $enable_mpi" >&5
 $as_echo "$enable_mpi" >&6; }
+fi
  if test "x$enable_mpi" = xyes; then
   WITHMPI_TRUE=
   WITHMPI_FALSE='#'
@@ -2904,7 +2905,6 @@ else
   WITHMPI_FALSE=
 fi
 
-fi
 
 #AC_ARG_VAR([CC], [C Compiler])
 # Checks for programs. If enable parallel, find the appropriate mpi programs, libraries etc.
