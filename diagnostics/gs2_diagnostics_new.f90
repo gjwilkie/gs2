@@ -27,15 +27,18 @@ module gs2_diagnostics_new
 
 
 contains
-  subroutine init_gs2_diagnostics_new
+  subroutine init_gs2_diagnostics_new(parallel_io)
     use diagnostics_config, only: init_diagnostics_config
     use volume_averages, only: init_volume_averages
     use diagnostics_write_fluxes, only: init_diagnostics_write_fluxes
     use file_utils, only: run_name
-    use mp, only: mp_comm
+    use mp, only: mp_comm, proc0
+    logical, intent(in) :: parallel_io
 
     call init_diagnostics_config(gnostics)
     call init_volume_averages
+
+    gnostics%parallel = parallel_io
 
 
     if (.not. gnostics%write_any) return
@@ -48,16 +51,21 @@ contains
    !! which corresponds to a gs2 real
     gnostics%rtype = SDATIO_DOUBLE
 
-    call createfile_parallel(gnostics%sfile, trim(run_name)//'.cdf', mp_comm)
-    call create_dimensions
+    if (gnostics%parallel) then
+      call createfile_parallel(gnostics%sfile, trim(run_name)//'.cdf', mp_comm)
+    else if (proc0) then
+      call createfile(gnostics%sfile, trim(run_name)//'.cdf')
+    end if
+
+    if (gnostics%parallel .or. proc0) call create_dimensions
   end subroutine init_gs2_diagnostics_new
 
   subroutine finish_gs2_diagnostics_new
     use diagnostics_write_fluxes, only: finish_diagnostics_write_fluxes
-
+    use mp, only: proc0
     if (.not. gnostics%write_any) return
     call finish_diagnostics_write_fluxes
-    call closefile(gnostics%sfile)
+    if (gnostics%parallel .or. proc0) call closefile(gnostics%sfile)
   end subroutine finish_gs2_diagnostics_new
 
   subroutine run_diagnostics(istep, exit)
@@ -73,7 +81,17 @@ contains
 
     gnostics%istep = istep
 
-    gnostics%create = (istep==-1)
+    if (gnostics%parallel .or. proc0) then
+      gnostics%create = (istep==-1)
+      gnostics%wryte = (istep>-1)
+    else
+      gnostics%create=.false.
+      gnostics%wryte=.false.
+    end if
+
+    ! Sets whether field-like arrays are assumed
+    ! to be distributed across processes
+    gnostics%distributed = gnostics%parallel
 
     ! Write constants/parameters
     if (istep < 1) then
@@ -82,14 +100,14 @@ contains
     end if
 
 
-    if (gnostics%create.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
+    if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
       if (gnostics%write_fields) call write_fields(gnostics)
       if (gnostics%write_fluxes) call write_fluxes(gnostics)
-
+!
       ! Finally, write time value and update time index
       call create_and_write_variable(gnostics, SDATIO_DOUBLE, "t", "t", &
          "Values of the time coordinate", "a/v_thr", user_time) 
-      if (.not. gnostics%create) call increment_start(gnostics%sfile, "t")
+      if (gnostics%wryte) call increment_start(gnostics%sfile, "t")
     end if
   end subroutine run_diagnostics
 

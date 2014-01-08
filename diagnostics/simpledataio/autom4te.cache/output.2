@@ -693,6 +693,8 @@ CFLAGS
 ac_ct_CC
 CC
 MPICC
+WITHMPI_FALSE
+WITHMPI_TRUE
 PARALLEL_FALSE
 PARALLEL_TRUE
 am__untar
@@ -760,6 +762,7 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 enable_parallel
+enable_mpi
 enable_dependency_tracking
 enable_shared
 enable_static
@@ -1402,6 +1405,7 @@ Optional Features:
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --enable-parallel       build with parallel netcdf (requires netcdf4, hdf5
                           and mpi)
+  --enable-mpi            build with mpi version of compilers
   --disable-dependency-tracking  speeds up one-time build
   --enable-dependency-tracking   do not reject slow dependency extractors
   --enable-shared@<:@=PKGS@:>@  build shared libraries @<:@default=yes@:>@
@@ -2877,6 +2881,31 @@ else
 fi
 
 
+# Check whether to build it using mpi compilers (must be used for enable_parallel)
+if test x"$enable_parallel" = xyes; then
+	enable_mpi = yes
+else
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build using mpi (automatically enabled by --enable-parallel)" >&5
+$as_echo_n "checking whether to build using mpi (automatically enabled by --enable-parallel)... " >&6; }
+@%:@ Check whether --enable-mpi was given.
+if test "${enable_mpi+set}" = set; then :
+  enableval=$enable_mpi; enable_mpi=yes
+else
+  enable_mpi=no
+fi
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $enable_mpi" >&5
+$as_echo "$enable_mpi" >&6; }
+ if test "x$enable_mpi" = xyes; then
+  WITHMPI_TRUE=
+  WITHMPI_FALSE='#'
+else
+  WITHMPI_TRUE='#'
+  WITHMPI_FALSE=
+fi
+
+fi
+
 #AC_ARG_VAR([CC], [C Compiler])
 # Checks for programs. If enable parallel, find the appropriate mpi programs, libraries etc.
 DEPDIR="${am__leading_dot}deps"
@@ -2947,7 +2976,7 @@ fi
   
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to compile using MPI" >&5
 $as_echo_n "checking whether to compile using MPI... " >&6; }
-    if test "x$enable_parallel" = xyes; then
+    if test "x$enable_mpi" = xyes; then
       _ax_prog_cc_mpi_mpi_wanted=yes
     else
       _ax_prog_cc_mpi_mpi_wanted=no
@@ -4093,7 +4122,7 @@ $as_echo "@%:@define HAVE_MPI 1" >>confdefs.h
 else
   
         
-    if test x"$enable_parallel" = xyes; then
+    if test x"$enable_mpi" = xyes; then
       { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
 $as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
 as_fn_error $? "MPI C compiler requested, but could not use MPI.
@@ -4113,7 +4142,7 @@ fi
   
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to compile using MPI" >&5
 $as_echo_n "checking whether to compile using MPI... " >&6; }
-    if test "x$enable_parallel" = xyes; then
+    if test "x$enable_mpi" = xyes; then
       _ax_prog_fc_mpi_mpi_wanted=yes
     else
       _ax_prog_fc_mpi_mpi_wanted=no
@@ -4536,7 +4565,7 @@ $as_echo "@%:@define HAVE_MPI 1" >>confdefs.h
 else
   
         
-    if test x"$enable_parallel" = xyes; then
+    if test x"$enable_mpi" = xyes; then
       { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
 $as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
 as_fn_error $? "MPI Fortran compiler requested, but could not use MPI.
@@ -15564,6 +15593,10 @@ fi
 
 if test -z "${PARALLEL_TRUE}" && test -z "${PARALLEL_FALSE}"; then
   as_fn_error $? "conditional \"PARALLEL\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${WITHMPI_TRUE}" && test -z "${WITHMPI_FALSE}"; then
+  as_fn_error $? "conditional \"WITHMPI\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${AMDEP_TRUE}" && test -z "${AMDEP_FALSE}"; then

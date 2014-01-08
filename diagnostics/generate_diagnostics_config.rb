@@ -71,6 +71,9 @@ module diagnostics_config
    integer :: rtype
    integer :: istep
    logical :: create
+   logical :: wryte
+   logical :: distributed
+   logical :: parallel
    #{generators.map{|g| g.declaration}.join("\n   ") }
   end type diagnostics_type
 

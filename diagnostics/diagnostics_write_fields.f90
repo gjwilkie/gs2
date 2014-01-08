@@ -19,11 +19,11 @@ contains
 
     
     if (fphi >epsilon(0.0)) call write_standard_field_properties(gnostics, &
-      'phi',  'The electrostatic potential', 'T_r/e', phinew, .true.)
+      'phi',  'The electrostatic potential', 'T_r/e', phinew, gnostics%distributed)
     if (fapar>epsilon(0.0)) call write_standard_field_properties(gnostics, &
-      'apar', 'The parallel magnetic potential', '...', aparnew, .true.)
+      'apar', 'The parallel magnetic potential', '...', aparnew, gnostics%distributed)
     if (fbpar>epsilon(0.0)) call write_standard_field_properties(gnostics, &
-      'bpar', 'The parallel magnetic potential', '...', bparnew, .true.)
+      'bpar', 'The parallel magnetic potential', '...', bparnew, gnostics%distributed)
   end subroutine write_fields
 
   subroutine write_standard_field_properties(gnostics, field_name, field_description, &
@@ -94,9 +94,10 @@ contains
          field_description//" as a function of time", field_units)
      end if
 
-     return 
 
    end if
+   
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    if (.not. distributed) then
 

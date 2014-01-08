@@ -44,8 +44,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -65,8 +66,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -86,8 +88,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -107,8 +110,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -128,8 +132,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -149,8 +154,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -170,8 +176,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -191,8 +198,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -212,8 +220,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -233,8 +242,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -254,8 +264,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -275,8 +286,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -296,8 +308,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -317,8 +330,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -338,8 +352,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -359,8 +374,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -380,8 +396,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -401,8 +418,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -422,8 +440,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -443,8 +462,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 
@@ -464,8 +484,9 @@ contains
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     return
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
    
    call write_variable(gnostics%sfile, variable_name, val)
 

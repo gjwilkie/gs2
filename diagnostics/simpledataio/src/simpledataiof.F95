@@ -98,7 +98,7 @@ contains
      call sdatio_createfile(sfile, fname//c_null_char)
    end subroutine createfile
 
-#ifdef PARALLEL 
+!#ifdef PARALLEL 
   subroutine createfile_parallel(sfile, fname, comm)
      type(sdatio_file), intent(out) :: sfile
      character(*), intent(in) :: fname
@@ -114,7 +114,7 @@ contains
      end interface
      call sdatio_createfile_parallel(sfile, fname//c_null_char, comm)
    end subroutine createfile_parallel
-#endif
+!#endif
 
 !/* Create a new dimension in the file sfile. Dimension names must
  !* be a single letter. */
