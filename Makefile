@@ -107,6 +107,7 @@ MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
 
+
 ifdef NPROCS
 	NTESTPROCS=$(NPROCS)
 else
@@ -334,11 +335,14 @@ ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
+sinclude Makefile.diagnostics
+
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
-		$(IPM_LIB) $(NAG_LIB)
+		$(IPM_LIB) $(NAG_LIB) $(SIMPLEDATAIO_LIB)
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
+	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) \
+		 $(SIMPLEDATAIO_INC)
 CFLAGS += $(COPTFLAGS)
 
 DATE=$(shell date +%y%m%d)
@@ -354,7 +358,7 @@ ifneq ($(TOPDIR),$(CURDIR))
 	SUBDIR=true
 endif
 
-VPATH = $(UTILS):$(GEO):Aux:../$(UTILS):../$(GEO)
+VPATH = $(UTILS):$(GEO):Aux:diagnostics:../$(UTILS):../$(GEO):../diagnostics
 # this just removes non-existing directory from VPATH
 VPATH_tmp := $(foreach tmpvp,$(subst :, ,$(VPATH)),$(shell [ -d $(tmpvp) ] && echo $(tmpvp)))
 VPATH = .:$(shell echo $(VPATH_tmp) | sed "s/ /:/g")
@@ -450,20 +454,17 @@ help: helplocal
 
 ############################################################# MORE DIRECTIVES
 
-.PHONY: depend clean distclean tar test_make
+.PHONY: depend clean distclean tar test_make diagnostics simpledataio
 
 depend:
 	mv input_parameters_documentation.f90 input_parameters_documentation.f90.hidden
-	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=0 $(VPATH)
+	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=3 $(VPATH)
 	mv input_parameters_documentation.f90.hidden input_parameters_documentation.f90
 
-#doc_depend:
-	#echo "documentation_depend = \\" > Makefile.doc_depend
-	#find | grep .fpp$$ | sed s/\.fpp/\.f90\ \\\\/ | sed s/\.\\//\\t/ >> Makefile.doc_depend
-#
+
 doc: $(F90FROMFPP)
 	doxygen ../doxygen/gs2 
-	-rm -f $(F90FROMFPP)
+	rm -f $(F90FROMFPP)
 
 sync_doc: 
 	rsync -av --delete ../doxygen/doc/html/	${USER},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/
@@ -474,7 +475,7 @@ sync_input_doc:
 	coderunner cc read_mediawiki_documentation wiki_in.tmp -C gs2
 	coderunner cc write_mediawiki_documentation > wiki_out.txt -C gs2
 
-clean:
+clean: clean_simpledataio
 	-rm -f *.o *.mod *.g90 *.h core */core
 
 CLEANCOMMAND=echo $$$$PWD
@@ -496,7 +497,7 @@ clean_benchmarks:
 cleanlib:
 	-rm -f *.a
 
-distclean: unlink clean cleanlib clean_tests clean_benchmarks
+distclean: unlink clean cleanlib clean_tests clean_benchmarks distclean_simpledataio
 
 tar:
 	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
@@ -578,13 +579,28 @@ gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
-TEST_DEPS?=$(gs2_mod) functional_tests.o
+TEST_DEPS?=$(gs2_mod) functional_tests.o diagnostics
+
+TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(LIBS)"
+MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
+#MAKETESTS = $(MAKE)
+
+#export TEST_DEPS
+export TESTCOMMAND
+export gs2_mod
+#export TESTFC=$(FC)
+#export TESTF90FLAGS=$(F90FLAGS)
+#export TESTCPP=$(CPP)
+#export TESTLD=$(LD)
+#export TESTLDFLAGS=$(LDFLAGS)
+#export TESTLIBS=$(LIBS)
+#export
 
 unit_tests: unit_tests.o $(TEST_DEPS)
-	cd unit_tests && time ${MAKE} && echo && echo "Tests Successful!"
+	cd unit_tests && time ${MAKETESTS} && echo && echo "Tests Successful!"
 
 linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
-	cd linear_tests && time ${MAKE} && echo && echo "Tests Successful!"
+	cd linear_tests && time ${MAKETESTS} && echo && echo "Tests Successful!"
 
 tests: unit_tests linear_tests
 

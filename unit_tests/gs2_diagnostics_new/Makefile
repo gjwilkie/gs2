@@ -1,13 +1,15 @@
 
 sinclude ../Makefile.tests_common
 
-CLEANCOMMAND+= test_nonlinear_terms
+CLEANCOMMAND+= test_gs2_diagnostics_new
 
-all: test_nonlinear_terms 
-	$(call RUNCOMMAND,test_nonlinear_terms,test_nonlinear_terms.in)
+all: test_gs2_diagnostics_new 
+	$(call RUNCOMMAND,test_gs2_diagnostics_new,test_gs2_diagnostics_new.in)
 
-test_nonlinear_terms.o:  ${TEST_MODS} 
+#$(info "TEST_MODS=$(TEST_MODS)")
 
-test_nonlinear_terms: test_nonlinear_terms.o $(TEST_MODS)
+test_gs2_diagnostics_new.o:  ${TEST_MODS} 
+
+test_gs2_diagnostics_new: test_gs2_diagnostics_new.o $(TEST_MODS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 

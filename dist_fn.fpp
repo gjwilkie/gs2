@@ -135,7 +135,8 @@ module dist_fn
   real, dimension(:,:), allocatable :: ufac
 
   ! getfieldeq1
-  real, allocatable, dimension(:,:) :: fl_avg, awgt
+  real, allocatable, dimension(:,:) :: awgt
+  complex, allocatable, dimension(:,:) :: fl_avg
 
   ! get_verr
   real, dimension (:,:), allocatable :: kmax
@@ -4915,12 +4916,14 @@ subroutine check_dist_fn(report_unit)
 
     allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
 
-    if (proc0) then
+    ! EGH for new parallel I/O everyone
+    ! calculates fluxes
+    !if (proc0) then
        pflux = 0.0;   qflux = 0.0;   vflux = 0.0 ; vflux_par = 0.0 ; vflux_perp = 0.0
        pmflux = 0.0;  qmflux = 0.0;  vmflux = 0.0
        pbflux = 0.0;  qbflux = 0.0;  vbflux = 0.0
        pflux_tormom = 0.0 
-    end if
+    !end if
 
     do ik = 1, naky
        do it = 1, ntheta0
@@ -5100,9 +5103,15 @@ subroutine check_dist_fn(report_unit)
     integer :: ik, it, is
 
     allocate (total(-ntgrid:ntgrid,ntheta0,naky,nspec))
-    call integrate_moment (g0, total)
+    ! EGH added final parameter 'all'
+    ! to the call below for new parallel output
+    ! This is temporary until distributed fields
+    ! are implemented 1/2014
+    call integrate_moment (g0, total, 1)
 
-    if (proc0) then
+    ! EGH for new parallel I/O everyone
+    ! calculates fluxes
+    !if (proc0) then
        do is = 1, nspec
           do ik = 1, naky
              do it = 1, ntheta0
@@ -5113,7 +5122,7 @@ subroutine check_dist_fn(report_unit)
           end do
        end do
        flx = flx*0.5
-    end if
+    ! end if
 
     deallocate (total)
 

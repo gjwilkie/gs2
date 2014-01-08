@@ -1,4 +1,4 @@
-gs2_all: modules gs2 ingen rungridgen
+gs2_all: diagnostics modules gs2 ingen rungridgen
 
 gs2: $(gs2_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)

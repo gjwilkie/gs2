@@ -1,0 +1,30 @@
+
+SIMPLEDATAIO_INC=-I$(PWD)/diagnostics/simpledataio/include
+SIMPLEDATAIO_LIB_DIR=$(PWD)/diagnostics/simpledataio/.libs
+SIMPLEDATAIO_LIB=$(SIMPLEDATAIO_LIB_DIR)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a
+
+SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  --enable-mpi
+
+ifdef USE_PARALLEL_NETCDF
+SIMPLEDATAIO_CONF+=--enable-parallel
+endif
+
+diagnostics: diagnostics/diagnostics_create_and_write.f90 diagnostics/diagnostics_config.f90 simpledataio
+
+diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_create_and_write.rb
+	env ruby $< > $@
+diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb
+	env ruby $< > $@
+
+simpledataio: diagnostics/simpledataio/.libs/libsimpledataiof.a
+
+diagnostics/simpledataio/.libs/libsimpledataiof.a: diagnostics/simpledataio/Makefile
+	make -C diagnostics/simpledataio
+
+diagnostics/simpledataio/Makefile: diagnostics/simpledataio/configure
+	cd diagnostics/simpledataio && ./configure $(SIMPLEDATAIO_CONF)
+
+clean_simpledataio:
+	make clean -C diagnostics/simpledataio || echo "already clean"
+distclean_simpledataio:
+	make distclean -C diagnostics/simpledataio || echo "already clean"
