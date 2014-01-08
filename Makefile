@@ -446,6 +446,7 @@ fft_work.o: fft_work.f90
 layouts_indices.o: layouts_type.h
 layouts_type.h: layouts_type.f90
 	$(AWK) -f makehead.awk $^ > $@
+help: helplocal
 
 ############################################################# MORE DIRECTIVES
 
@@ -599,3 +600,7 @@ benchmarks: functional_tests.o unit_tests.o $(TEST_DEPS)
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
+
+help:
+		# make SCAL=on : makes with SCALASCA instrumentation
+
