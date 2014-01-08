@@ -19,6 +19,9 @@ module diagnostics_config
    integer :: rtype
    integer :: istep
    logical :: create
+   logical :: wryte
+   logical :: distributed
+   logical :: parallel
    integer :: nwrite
    logical :: write_any
    logical :: write_fields

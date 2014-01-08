@@ -20,6 +20,8 @@
 #ifdef PARALLEL 
 #include "mpi.h"
 #include "netcdf_par.h"
+#else
+typedef int MPI_Comm;
 #endif
 
 #define ERRCODE 2
@@ -41,7 +43,6 @@ void sdatio_recommence_definitions(struct sdatio_file * sfile){
 	if ((retval = nc_redef(sfile->nc_file_id))) ERR(retval);
 }
 
-#ifdef PARALLEL 
 void sdatio_createfile_parallel(struct sdatio_file * sfile, char * fname, MPI_Comm * comm)  {
 	/*printf("called\n");*/
 	int retval;
@@ -52,7 +53,12 @@ void sdatio_createfile_parallel(struct sdatio_file * sfile, char * fname, MPI_Co
 	retval = 0;
 
 	/*MPI_Init(&retval, &args);*/
+#ifdef PARALLEL 
 		if ((retval = nc_create_par(fname, NC_NETCDF4|NC_MPIPOSIX|NC_CLOBBER, MPI_COMM_WORLD, MPI_INFO_NULL,  &(sfile->nc_file_id)))) ERR(retval);
+#else
+		printf("sdatio was built without --enable-parallel, sdatio_createfile_parallel will not work\n");
+		abort();
+#endif
 		/*}*/
 	sfile->n_dimensions = 0;
 	sfile->n_variables = 0;
@@ -60,7 +66,6 @@ void sdatio_createfile_parallel(struct sdatio_file * sfile, char * fname, MPI_Co
 	sfile->data_written = 0;
 	sdatio_end_definitions(sfile);
 }
-#endif
 
 void sdatio_createfile(struct sdatio_file * sfile, char * fname)  {
 	/*printf("called\n");*/

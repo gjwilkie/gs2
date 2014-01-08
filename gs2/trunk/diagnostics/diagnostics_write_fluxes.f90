@@ -97,25 +97,27 @@ contains
           vflux_perp(:,:,is) = vflux_perp(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
       end do
       call write_standard_flux_properties(gnostics, &
-        'heat_flux',  'Turbulent flux of heat', 'Q_gB = ', qheat(:,:,:,1), .true.)
+        'heat_flux',  'Turbulent flux of heat', 'Q_gB = ', qheat(:,:,:,1), gnostics%distributed)
       call write_standard_flux_properties(gnostics, &
-        'heat_flux_par',  'Turbulent flux of parallel heat', 'Q_gB = ', qheat(:,:,:,2), .true.)
+        'heat_flux_par',  'Turbulent flux of parallel heat', 'Q_gB = ', qheat(:,:,:,2), gnostics%distributed)
       call write_standard_flux_properties(gnostics, &
-        'heat_flux_perp',  'Turbulent flux of perpendicular heat', 'Q_gB = ', qheat(:,:,:,3), .true.)
+        'heat_flux_perp',  'Turbulent flux of perpendicular heat', 'Q_gB = ', qheat(:,:,:,3), gnostics%distributed)
 
       call write_standard_flux_properties(gnostics, &
-        'part_flux',  'Turbulent flux of particles', 'n_r? ', pflux, .true.)
+        'part_flux',  'Turbulent flux of particles', 'n_r? ', pflux, gnostics%distributed)
       call write_standard_flux_properties(gnostics, &
-        'part_tormom_flux',  'Ask Jung-Pyo Lee...', '? ', pflux_tormom, .true.)
+        'part_tormom_flux',  'Ask Jung-Pyo Lee...', '? ', pflux_tormom, gnostics%distributed)
 
       call write_standard_flux_properties(gnostics, &
-        'mom_flux',  'Flux of toroidal angular momentum', 'Pi_gB =  ', vflux, .true.)
+        'mom_flux',  'Flux of toroidal angular momentum', 'Pi_gB =  ', vflux, gnostics%distributed)
       call write_standard_flux_properties(gnostics, &
         'mom_flux_par',  &
-        'Flux of the parallel component of the toroidal angular momentum', 'Pi_gB =  ', vflux_par, .true.)
+        'Flux of the parallel component of the toroidal angular momentum', 'Pi_gB =  ', &
+        vflux_par, gnostics%distributed)
       call write_standard_flux_properties(gnostics, &
         'mom_flux_perp', &
-        'Flux of the perpendicular component of the toroidal angular momentum', 'Pi_gB =  ', vflux_perp, .true.)
+        'Flux of the perpendicular component of the toroidal angular momentum', 'Pi_gB =  ', &
+        vflux_perp, gnostics%distributed)
     end if
 
 
@@ -270,9 +272,10 @@ contains
     call create_variable(gnostics%sfile, SDATIO_DOUBLE, total_flux_by_mode_name, "xyt", &
        flux_description//" summed over species, as a function of kx and ky" , flux_units)
 
-     return
 
    end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
   !if (write_flux_by_time .and. .not. variable_exists(gnostics%sfile, flux_t_name)) then 
      !call create_variable(gnostics%sfile, SDATIO_DOUBLE, flux_t_name, "rzxyt", &
        !flux_description//" as a function of time", flux_units)

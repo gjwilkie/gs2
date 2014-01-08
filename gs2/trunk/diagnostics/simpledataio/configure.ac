@@ -16,17 +16,30 @@ AC_ARG_ENABLE([parallel],
 AC_MSG_RESULT([$enable_parallel])
 AM_CONDITIONAL(PARALLEL, [test "x$enable_parallel" = xyes])
 
+# Check whether to build it using mpi compilers (must be used for enable_parallel)
+if test x"$enable_parallel" = xyes; then
+	enable_mpi = yes
+else
+AC_MSG_CHECKING([whether to build using mpi (automatically enabled by --enable-parallel)])
+AC_ARG_ENABLE([mpi],
+              [AS_HELP_STRING([--enable-mpi],
+                              [build with mpi version of compilers])],
+							[enable_mpi=yes], [enable_mpi=no])
+AC_MSG_RESULT([$enable_mpi])
+AM_CONDITIONAL(WITHMPI, [test "x$enable_mpi" = xyes])
+fi
+
 #AC_ARG_VAR([CC], [C Compiler])
 # Checks for programs. If enable parallel, find the appropriate mpi programs, libraries etc.
-AX_PROG_CC_MPI([test "x$enable_parallel" = xyes], [], [
-    if test x"$enable_parallel" = xyes; then
+AX_PROG_CC_MPI([test "x$enable_mpi" = xyes], [], [
+    if test x"$enable_mpi" = xyes; then
       AC_MSG_FAILURE([MPI C compiler requested, but could not use MPI.])
     else
       AC_MSG_WARN([No MPI C compiler found, not using MPI.])
     fi
   ])
-AX_PROG_FC_MPI([test "x$enable_parallel" = xyes], [], [
-    if test x"$enable_parallel" = xyes; then
+AX_PROG_FC_MPI([test "x$enable_mpi" = xyes], [], [
+    if test x"$enable_mpi" = xyes; then
       AC_MSG_FAILURE([MPI Fortran compiler requested, but could not use MPI.])
     else
       AC_MSG_WARN([No MPI Fortran compiler found, not using MPI.])
