@@ -30,402 +30,444 @@ end interface create_and_write_variable
 
 contains
 
- subroutine create_and_write_variable_real_0(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_real_0(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    real, intent(in) :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_real_0
 
- subroutine create_and_write_variable_real_1(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_real_1(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    real, intent(in), dimension(:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_real_1
 
- subroutine create_and_write_variable_real_2(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_real_2(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    real, intent(in), dimension(:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_real_2
 
- subroutine create_and_write_variable_real_3(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_real_3(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    real, intent(in), dimension(:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_real_3
 
- subroutine create_and_write_variable_real_4(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_real_4(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    real, intent(in), dimension(:,:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_real_4
 
- subroutine create_and_write_variable_real_5(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_real_5(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    real, intent(in), dimension(:,:,:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_real_5
 
- subroutine create_and_write_variable_real_6(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_real_6(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    real, intent(in), dimension(:,:,:,:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_real_6
 
- subroutine create_and_write_variable_integer_0(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_integer_0(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    integer, intent(in) :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_integer_0
 
- subroutine create_and_write_variable_integer_1(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_integer_1(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    integer, intent(in), dimension(:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_integer_1
 
- subroutine create_and_write_variable_integer_2(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_integer_2(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    integer, intent(in), dimension(:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_integer_2
 
- subroutine create_and_write_variable_integer_3(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_integer_3(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    integer, intent(in), dimension(:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_integer_3
 
- subroutine create_and_write_variable_integer_4(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_integer_4(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    integer, intent(in), dimension(:,:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_integer_4
 
- subroutine create_and_write_variable_integer_5(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_integer_5(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    integer, intent(in), dimension(:,:,:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_integer_5
 
- subroutine create_and_write_variable_integer_6(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_integer_6(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    integer, intent(in), dimension(:,:,:,:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_integer_6
 
- subroutine create_and_write_variable_character_0(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_character_0(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    character, intent(in) :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_character_0
 
- subroutine create_and_write_variable_character_1(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_character_1(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    character, intent(in), dimension(:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_character_1
 
- subroutine create_and_write_variable_character_2(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_character_2(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    character, intent(in), dimension(:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_character_2
 
- subroutine create_and_write_variable_character_3(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_character_3(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    character, intent(in), dimension(:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_character_3
 
- subroutine create_and_write_variable_character_4(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_character_4(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    character, intent(in), dimension(:,:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_character_4
 
- subroutine create_and_write_variable_character_5(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_character_5(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    character, intent(in), dimension(:,:,:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_character_5
 
- subroutine create_and_write_variable_character_6(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-	 use simpledataio
-	 use simpledataio_write
-   type(sdatio_file), intent(in) :: sfile
-	 integer, intent(in) :: variable_type
+ subroutine create_and_write_variable_character_6(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
    character(*), intent(in) :: variable_name
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
    character, intent(in), dimension(:,:,:,:,:,:)  :: val
-	 
-	 if (.not. variable_exists(sfile, variable_name)) then 
-	   call create_variable(sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-	 end if
-	 
-	 call write_variable(sfile, variable_name, val)
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     return
+   end if
+   
+   call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_character_6
 
