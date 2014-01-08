@@ -128,7 +128,7 @@ __top_builddir__test_testprog_fortran_OBJECTS =  \
 __top_builddir__test_testprog_fortran_DEPENDENCIES =  \
 	libsimpledataiof.la libsimpledataio.la
 am____top_builddir__test_testprog_fortran_parallel_SOURCES_DIST =  \
-	test/test_parallelf.f95
+	test/test_parallelf.f90
 @PARALLEL_TRUE@am___top_builddir__test_testprog_fortran_parallel_OBJECTS =  \
 @PARALLEL_TRUE@	test_parallelf.$(OBJEXT)
 __top_builddir__test_testprog_fortran_parallel_OBJECTS =  \
@@ -333,12 +333,12 @@ lib_LTLIBRARIES = libsimpledataio.la libsimpledataiof.la
 include_HEADERS = include/simpledataio.h $(SDAT_MOD) $(SDAT_WRITE_MOD)
 # Sources required
 libsimpledataio_la_SOURCES = src/simpledataio.c 
-libsimpledataiof_la_SOURCES = src/simpledataiof.F95 src/simpledataio_write.f95
+libsimpledataiof_la_SOURCES = src/simpledataiof.F90 src/simpledataio_write.f90
 
 # Test program sources
 __top_builddir__test_testprog_SOURCES = test/test.c
 __top_builddir__test_testprog_LDADD = libsimpledataio.la
-__top_builddir__test_testprog_fortran_SOURCES = test/testf.f95
+__top_builddir__test_testprog_fortran_SOURCES = test/testf.f90
 __top_builddir__test_testprog_fortran_LDADD = libsimpledataiof.la libsimpledataio.la 
 
 # Weird that this is necessary, but oh well
@@ -352,14 +352,14 @@ TESTS_ENVIRONMENT =
 
 # If the user has specified --enable-parallel
 @PARALLEL_TRUE@AM_CPPFLAGS = -DPARALLEL
-@PARALLEL_TRUE@__top_builddir__test_testprog_fortran_parallel_SOURCES = test/test_parallelf.f95
+@PARALLEL_TRUE@__top_builddir__test_testprog_fortran_parallel_SOURCES = test/test_parallelf.f90
 @PARALLEL_TRUE@__top_builddir__test_testprog_fortran_parallel_LDADD = libsimpledataiof.la libsimpledataio.la
 #__top_builddir__test_testprog_fortran_parallel_LDFLAGS=-lmpi -lmpi_f90
 CLEANFILES = test.cdf testfile.cdf test_parallel.cdf $(SDAT_MOD) $(SDAT_WRITE_MOD) include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
 all: all-am
 
 .SUFFIXES:
-.SUFFIXES: .F95 .c .f95 .lo .o .obj
+.SUFFIXES: .F90 .c .f90 .lo .o .obj
 am--refresh: Makefile
 	@:
 $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
@@ -498,17 +498,17 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/simpledataio.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test.Po@am__quote@
 
-.F95.o:
+.F90.o:
 	$(PPFCCOMPILE) -c -o $@ $<
 
-.F95.obj:
+.F90.obj:
 	$(PPFCCOMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
 
-.F95.lo:
+.F90.lo:
 	$(LTPPFCCOMPILE) -c -o $@ $<
 
-simpledataiof.lo: src/simpledataiof.F95
-	$(LIBTOOL)  --tag=FC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(FC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_FCFLAGS) $(FCFLAGS) -c -o simpledataiof.lo `test -f 'src/simpledataiof.F95' || echo '$(srcdir)/'`src/simpledataiof.F95
+simpledataiof.lo: src/simpledataiof.F90
+	$(LIBTOOL)  --tag=FC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(FC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_FCFLAGS) $(FCFLAGS) -c -o simpledataiof.lo `test -f 'src/simpledataiof.F90' || echo '$(srcdir)/'`src/simpledataiof.F90
 
 .c.o:
 @am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -552,29 +552,29 @@ test.obj: test/test.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o test.obj `if test -f 'test/test.c'; then $(CYGPATH_W) 'test/test.c'; else $(CYGPATH_W) '$(srcdir)/test/test.c'; fi`
 
-.f95.o:
+.f90.o:
 	$(FCCOMPILE) -c -o $@ $<
 
-.f95.obj:
+.f90.obj:
 	$(FCCOMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
 
-.f95.lo:
+.f90.lo:
 	$(LTFCCOMPILE) -c -o $@ $<
 
-simpledataio_write.lo: src/simpledataio_write.f95
-	$(LIBTOOL)  --tag=FC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(FC) $(AM_FCFLAGS) $(FCFLAGS) -c -o simpledataio_write.lo `test -f 'src/simpledataio_write.f95' || echo '$(srcdir)/'`src/simpledataio_write.f95
+simpledataio_write.lo: src/simpledataio_write.f90
+	$(LIBTOOL)  --tag=FC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(FC) $(AM_FCFLAGS) $(FCFLAGS) -c -o simpledataio_write.lo `test -f 'src/simpledataio_write.f90' || echo '$(srcdir)/'`src/simpledataio_write.f90
 
-testf.o: test/testf.f95
-	$(FC) $(AM_FCFLAGS) $(FCFLAGS) -c -o testf.o `test -f 'test/testf.f95' || echo '$(srcdir)/'`test/testf.f95
+testf.o: test/testf.f90
+	$(FC) $(AM_FCFLAGS) $(FCFLAGS) -c -o testf.o `test -f 'test/testf.f90' || echo '$(srcdir)/'`test/testf.f90
 
-testf.obj: test/testf.f95
-	$(FC) $(AM_FCFLAGS) $(FCFLAGS) -c -o testf.obj `if test -f 'test/testf.f95'; then $(CYGPATH_W) 'test/testf.f95'; else $(CYGPATH_W) '$(srcdir)/test/testf.f95'; fi`
+testf.obj: test/testf.f90
+	$(FC) $(AM_FCFLAGS) $(FCFLAGS) -c -o testf.obj `if test -f 'test/testf.f90'; then $(CYGPATH_W) 'test/testf.f90'; else $(CYGPATH_W) '$(srcdir)/test/testf.f90'; fi`
 
-test_parallelf.o: test/test_parallelf.f95
-	$(FC) $(AM_FCFLAGS) $(FCFLAGS) -c -o test_parallelf.o `test -f 'test/test_parallelf.f95' || echo '$(srcdir)/'`test/test_parallelf.f95
+test_parallelf.o: test/test_parallelf.f90
+	$(FC) $(AM_FCFLAGS) $(FCFLAGS) -c -o test_parallelf.o `test -f 'test/test_parallelf.f90' || echo '$(srcdir)/'`test/test_parallelf.f90
 
-test_parallelf.obj: test/test_parallelf.f95
-	$(FC) $(AM_FCFLAGS) $(FCFLAGS) -c -o test_parallelf.obj `if test -f 'test/test_parallelf.f95'; then $(CYGPATH_W) 'test/test_parallelf.f95'; else $(CYGPATH_W) '$(srcdir)/test/test_parallelf.f95'; fi`
+test_parallelf.obj: test/test_parallelf.f90
+	$(FC) $(AM_FCFLAGS) $(FCFLAGS) -c -o test_parallelf.obj `if test -f 'test/test_parallelf.f90'; then $(CYGPATH_W) 'test/test_parallelf.f90'; else $(CYGPATH_W) '$(srcdir)/test/test_parallelf.f90'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -1064,11 +1064,11 @@ uninstall-am: uninstall-binPROGRAMS uninstall-includeHEADERS \
 @HAS_F90_MODULES_TRUE@include/$(SDAT_WRITE_MOD): $(SDAT_WRITE_MOD)
 @HAS_F90_MODULES_TRUE@	cp $(SDAT_WRITE_MOD) include/.
 #simpledataio_write.o: include/$(SDAT_MOD) 
-@HAS_F90_MODULES_TRUE@test/testf.f95: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
-@HAS_F90_MODULES_TRUE@test/test_parallelf.f95: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
+@HAS_F90_MODULES_TRUE@test/testf.f90: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
+@HAS_F90_MODULES_TRUE@test/test_parallelf.f90: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
 
 # Need to generate the module file for simpledataiof before building simpledataio_write
-src/simpledataio_write.f95: src/generate_simpledataio_write.rb $(SDAT_MOD)
+src/simpledataio_write.f90: src/generate_simpledataio_write.rb $(SDAT_MOD)
 	env ruby $< > $@
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
