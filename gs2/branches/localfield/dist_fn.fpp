@@ -136,7 +136,8 @@ module dist_fn
   real, dimension(:,:), allocatable :: ufac
 
   ! getfieldeq1
-  real, allocatable, dimension(:,:) :: fl_avg, awgt
+  real, allocatable, dimension(:,:) :: awgt
+  complex, allocatable, dimension(:,:) :: fl_avg
 
   ! get_verr
   real, dimension (:,:), allocatable :: kmax
