@@ -44,6 +44,11 @@ AM_FCFLAGS=-I/usr/include
 # To get the module files
 AM_FCFLAGS+=-Iinclude/
 
+# On HPC systems with Intel/PGI compilers, force static linking
+if FORCE_STATIC
+AM_LDFLAGS=-all-static
+endif
+
 # Serial tests for C and Fortran... invoked by make check
 TESTS = test/testprog test/testprog_fortran
 TESTS_ENVIRONMENT = 
