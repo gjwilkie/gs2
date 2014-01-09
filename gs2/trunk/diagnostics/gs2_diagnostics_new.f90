@@ -92,13 +92,13 @@ contains
     ! Sets whether field-like arrays are assumed
     ! to be distributed across processes
     gnostics%distributed = gnostics%parallel
-    gnostics%wryte = .false.
 
     ! Write constants/parameters
     if (istep < 1) then
       call write_dimensions
       call write_geometry
     end if
+
 
 
     if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
@@ -172,17 +172,17 @@ contains
       "Values of grho, ", "TBC", grho)
     call create_and_write_variable(gnostics, gnostics%rtype, "jacob", "z", &
       "Values of jacob, ", "TBC", jacob)
-    call create_and_write_variable(gnostics, gnostics%rtype, "shat", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "shat", "", &
       "Values of shat, the magnetic shear", "TBC", shat)
-    call create_and_write_variable(gnostics, gnostics%rtype, "drhodpsi", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "drhodpsi", "", &
       "Values of drhodpsi, ", "TBC", drhodpsi)
-    call create_and_write_variable(gnostics, gnostics%rtype, "eps", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "eps", "", &
       "Values of eps, ", "TBC", eps)
     call create_and_write_variable(gnostics, gnostics%rtype, "cdrift", "z", &
       "Values of cdrift, ", "TBC", cdrift)
     call create_and_write_variable(gnostics, gnostics%rtype, "cdrift0", "z", &
       "Values of cdrift0, ", "TBC", cdrift0)
-    call create_and_write_variable(gnostics, gnostics%rtype, "qval", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "qval", "", &
       "Values of qval, ", "TBC", qval)
   end subroutine write_geometry
 

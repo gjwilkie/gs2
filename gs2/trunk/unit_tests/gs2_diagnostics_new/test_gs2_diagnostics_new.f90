@@ -86,14 +86,14 @@ program test_gs2_diagnostics_new
     call finish_gs2_diagnostics_new
     call finish_gs2
 
-    !if (proc0) then
-      !do i = 1,n_vars
-        !call announce_test("value of "//trim(new_variables(i)))
-        !call process_test(test_variable(trim(variables(i)), trim(new_variables(i)), &
-          !trim(n_lines(i))), &
-          !"value of "//trim(new_variables(i)))
-      !end do
-    !end if
+    if (proc0) then
+      do i = 1,n_vars
+        call announce_test("value of "//trim(new_variables(i)))
+        call process_test(test_variable(trim(variables(i)), trim(new_variables(i)), &
+          trim(n_lines(i))), &
+          "value of "//trim(new_variables(i)))
+      end do
+    end if
 
 
    call close_module_test("gs2_diagnostics_new")
