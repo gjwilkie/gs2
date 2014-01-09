@@ -32,10 +32,14 @@ class Generator
 	end
 end
 
+# This is a list of all the input parameters to the namelist
+# diagnostics_config, with their default values.
 # Leave third element of array empty to use the default default
+#
+# This list is used in generating diagnostics_config.f90
 generators = [
 	['integer', 'nwrite', '10'],
-	['logical', 'write_any', '.false.'],
+	['logical', 'write_any', '.true.'],
 
 	['logical', 'write_fields', '.true.'],
 	['logical', 'write_phi_over_time'],
