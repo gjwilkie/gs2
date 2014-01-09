@@ -338,7 +338,7 @@ endif
 sinclude Makefile.diagnostics
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
-		$(IPM_LIB) $(NAG_LIB) $(SIMPLEDATAIO_LIB)
+		$(IPM_LIB) $(NAG_LIB) 
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
 	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) \
@@ -581,7 +581,7 @@ gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 # make can't resolve dependencies
 TEST_DEPS?=$(gs2_mod) functional_tests.o diagnostics
 
-TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(LIBS)"
+TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(LIBS) $(SIMPLEDATAIO_LIB_ABS)"
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
 #MAKETESTS = $(MAKE)
 

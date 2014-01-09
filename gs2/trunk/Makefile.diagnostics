@@ -1,7 +1,10 @@
 
 SIMPLEDATAIO_INC=-I$(PWD)/diagnostics/simpledataio/include
-SIMPLEDATAIO_LIB_DIR=$(PWD)/diagnostics/simpledataio/.libs
+SIMPLEDATAIO_LIB_DIR=diagnostics/simpledataio/.libs
 SIMPLEDATAIO_LIB=$(SIMPLEDATAIO_LIB_DIR)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a
+
+SIMPLEDATAIO_LIB_DIR_ABS=$(PWD)/diagnostics/simpledataio/.libs
+SIMPLEDATAIO_LIB_ABS=$(SIMPLEDATAIO_LIB_DIR_ABS)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR_ABS)/libsimpledataio.a
 
 SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  --enable-mpi
 
@@ -11,12 +14,14 @@ endif
 
 diagnostics: diagnostics/diagnostics_create_and_write.f90 diagnostics/diagnostics_config.f90 simpledataio
 
-diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_create_and_write.rb
+diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_create_and_write.rb $(SIMPLEDATAIO_LIB)
 	env ruby $< > $@
-diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb
+diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  $(SIMPLEDATAIO_LIB)
 	env ruby $< > $@
 
 simpledataio: diagnostics/simpledataio/.libs/libsimpledataiof.a
+
+diagnostics/simpledataio/.libs/libsimpledataio.a:  diagnostics/simpledataio/.libs/libsimpledataiof.a
 
 diagnostics/simpledataio/.libs/libsimpledataiof.a: diagnostics/simpledataio/Makefile
 	make -C diagnostics/simpledataio
