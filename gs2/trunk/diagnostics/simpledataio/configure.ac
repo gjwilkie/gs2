@@ -16,6 +16,7 @@ AC_ARG_ENABLE([parallel],
 AC_MSG_RESULT([$enable_parallel])
 AM_CONDITIONAL(PARALLEL, [test "x$enable_parallel" = xyes])
 
+
 # Check whether to build it using mpi compilers (must be used for enable_parallel)
 if test x"$enable_parallel" = xyes; then
 enable_mpi=yes
@@ -45,6 +46,10 @@ AX_PROG_FC_MPI([test "x$enable_mpi" = xyes], [], [
       AC_MSG_WARN([No MPI Fortran compiler found, not using MPI.])
     fi
   ])
+
+AX_COMPILER_VENDOR
+AM_CONDITIONAL(FORCE_STATIC, [test "x$ax_cv_c_compiler_vendor" != xgnu])
+#AC_MSG_WARN([compiler vendor is $ax_cv_c_compiler_vendor])
 
 AC_FC_MODULE_EXTENSION
 AM_CONDITIONAL(HAS_F90_MODULES, [test "x$FC_MODEXT" != x])
