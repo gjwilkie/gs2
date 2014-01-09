@@ -70,4 +70,4 @@ end module diagnostics_create_and_write
 EOF
 
 
-puts string
+File.open(ARGV[-1], 'w'){|f| f.puts string}
