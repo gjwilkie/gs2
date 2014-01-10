@@ -3,7 +3,7 @@ SIMPLEDATAIO_INC=-I$(PWD)/diagnostics/simpledataio/include
 SIMPLEDATAIO_LIB_DIR=diagnostics/simpledataio/.libs
 SIMPLEDATAIO_LIB=$(SIMPLEDATAIO_LIB_DIR)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a
 
-SIMPLEDATAIO_LIB_DIR_ABS=$(PWD)/diagnostics/simpledataio/.libs
+SIMPLEDATAIO_LIB_DIR_ABS=$(PWD)/$(SIMPLEDATAIO_LIB_DIR)
 SIMPLEDATAIO_LIB_ABS=$(SIMPLEDATAIO_LIB_DIR_ABS)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR_ABS)/libsimpledataio.a
 
 SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  --enable-mpi $(SIMPLEDATAIO_CONF_SYSTEM)
@@ -14,10 +14,12 @@ endif
 
 diagnostics: diagnostics/diagnostics_create_and_write.f90 diagnostics/diagnostics_config.f90 simpledataio
 
+RUBY_GENERATE=env ruby $2 $1; if test "$$?" != 0; then  echo && echo && echo  "Warning: no ruby: $1 is not updated!!!" && echo && echo; fi
+
 diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_create_and_write.rb $(SIMPLEDATAIO_LIB)
-	env ruby $<  $@ || echo && echo && echo  "WARNING: no ruby: $@ is not updated!!!" && echo && echo
+	$(call RUBY_GENERATE,$@,$<)
 diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  $(SIMPLEDATAIO_LIB)
-	env ruby $<  $@ ||  echo && echo && echo  "WARNING: no ruby: $@ is not updated!!!" && echo && echo
+	$(call RUBY_GENERATE,$@,$<)
 
 simpledataio: diagnostics/simpledataio/.libs/libsimpledataiof.a
 
