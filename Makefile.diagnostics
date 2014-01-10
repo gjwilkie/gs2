@@ -15,9 +15,9 @@ endif
 diagnostics: diagnostics/diagnostics_create_and_write.f90 diagnostics/diagnostics_config.f90 simpledataio
 
 diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_create_and_write.rb $(SIMPLEDATAIO_LIB)
-	env rubys $<  $@ || echo && echo && echo  "WARNING: no ruby: $@ is not updated!!!" && echo && echo
+	env ruby $<  $@ || echo && echo && echo  "WARNING: no ruby: $@ is not updated!!!" && echo && echo
 diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  $(SIMPLEDATAIO_LIB)
-	env rubys $<  $@ ||  echo && echo && echo  "WARNING: no ruby: $@ is not updated!!!" && echo && echo
+	env ruby $<  $@ ||  echo && echo && echo  "WARNING: no ruby: $@ is not updated!!!" && echo && echo
 
 simpledataio: diagnostics/simpledataio/.libs/libsimpledataiof.a
 
