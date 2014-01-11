@@ -51,10 +51,6 @@ ffttester_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
-	 diagnostics_config.o \
-	 diagnostics_create_and_write.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_fluxes.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -63,7 +59,6 @@ ffttester_mod = \
 	 fields.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
-	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -71,7 +66,6 @@ ffttester_mod = \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -107,8 +101,7 @@ ffttester_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o \
-	 volume_averages.o 
+	 unit_tests.o 
 
 gs2_mod = \
 	 antenna.o \
@@ -119,10 +112,6 @@ gs2_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
-	 diagnostics_config.o \
-	 diagnostics_create_and_write.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_fluxes.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -130,7 +119,6 @@ gs2_mod = \
 	 fields.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
-	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -139,7 +127,6 @@ gs2_mod = \
 	 gridgen4mod.o \
 	 gs2.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -175,8 +162,7 @@ gs2_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o \
-	 volume_averages.o 
+	 unit_tests.o 
 
 hrate_mod = \
 	 command_line.o \
@@ -260,6 +246,9 @@ rungridgen_mod = \
 	 gridgen4mod.o \
 	 rungridgen.o \
 	 spl.o 
+
+test_mod = \
+	 test_double.o 
 
 antenna.o: \
 	 antenna_data.o \
@@ -559,7 +548,6 @@ gs2_main.o: \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
@@ -809,6 +797,7 @@ species.o: \
 spfunc.o: \
 	 constants.o 
 spl.o: 
+test_double.o: 
 test_layouts.o: \
 	 mp.o 
 text_options.o: 
