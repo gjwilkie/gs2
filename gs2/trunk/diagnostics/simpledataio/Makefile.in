@@ -341,13 +341,13 @@ __top_builddir__test_testprog_LDADD = libsimpledataio.la
 __top_builddir__test_testprog_fortran_SOURCES = test/testf.f90
 __top_builddir__test_testprog_fortran_LDADD = libsimpledataiof.la libsimpledataio.la 
 
+# Weird that this is necessary, but oh well
+
 # To get the module files
-AM_FCFLAGS = -Iinclude/
+AM_FCFLAGS = -I/usr/include -Iinclude/
 
 # On HPC systems with Intel/PGI compilers, force static linking
 @FORCE_STATIC_TRUE@AM_LDFLAGS = -all-static
-# Weird that this is necessary, but oh well
-#AM_FCFLAGS+=-I/usr/include
 
 # Serial tests for C and Fortran... invoked by make check
 TESTS = test/testprog test/testprog_fortran $(am__append_2)
