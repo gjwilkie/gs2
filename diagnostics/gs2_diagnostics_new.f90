@@ -23,22 +23,35 @@ module gs2_diagnostics_new
   !!   istep>0 --> Write variables
   public :: run_diagnostics
 
+  !> Options passed to init_gs2_diagnostics_new 
+  public :: diagnostics_init_options_type
+
+  type diagnostics_init_options_type
+    logical :: parallel_io
+    logical :: default_double
+  end type diagnostics_init_options_type
+
   private 
 
 
 contains
-  subroutine init_gs2_diagnostics_new(parallel_io)
+  subroutine init_gs2_diagnostics_new(init_options)
     use diagnostics_config, only: init_diagnostics_config
     use volume_averages, only: init_volume_averages
     use diagnostics_write_fluxes, only: init_diagnostics_write_fluxes
     use file_utils, only: run_name
     use mp, only: mp_comm, proc0
-    logical, intent(in) :: parallel_io
+    type(diagnostics_init_options_type), intent(in) :: init_options
 
     call init_diagnostics_config(gnostics)
     call init_volume_averages
 
-    gnostics%parallel = parallel_io
+    gnostics%parallel = init_options%parallel_io
+    if (init_options%default_double) then
+      gnostics%rtype = SDATIO_DOUBLE
+    else
+      gnostics%rtype = SDATIO_FLOAT
+    end if
 
 
     if (.not. gnostics%write_any) return

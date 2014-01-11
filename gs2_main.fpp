@@ -54,7 +54,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_save, only: gs2_save_for_restart
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
     use gs2_diagnostics_new, only: run_diagnostics, init_gs2_diagnostics_new
-    use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
+    use gs2_diagnostics_new, only: finish_gs2_diagnostics_new, diagnostics_init_options_type
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
     use gs2_time, only: update_time, write_dt, init_tstart
     use gs2_time, only: user_time, user_dt
@@ -81,6 +81,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real :: time_total(2) = 0.
     real :: time_interval
     real :: time_main_loop(2)
+    real :: precision_test
 
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
@@ -88,6 +89,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     logical :: nofin= .false.
 !    logical, optional, intent(in) :: nofinish
     character (500), target :: cbuff
+
+    type(diagnostics_init_options_type) :: diagnostics_init_options
 
     time_main_loop(1) = 0.
     time_main_loop(2) = 0.
@@ -159,11 +162,18 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        call init_fields
        call init_gs2_diagnostics (list, nstep)
 
+
+
 #ifdef NETCDF_PARALLEL
-       call init_gs2_diagnostics_new(.true.)
+       diagnostics_init_options%parallel_io = .true.
 #else
-       call init_gs2_diagnostics_new(.false.)
+       diagnostics_init_options%parallel_io = .false.
 #endif
+
+       ! Here we check if reals have been promoted to doubles
+       diagnostics_init_options%default_double =  (precision(precision_test).gt.10)
+
+       call init_gs2_diagnostics_new(diagnostics_init_options)
 
        call allocate_target_arrays ! must be after init_gs2_diagnostics
        call init_tstart (tstart)   ! tstart is in user units 
