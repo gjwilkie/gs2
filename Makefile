@@ -107,6 +107,8 @@ MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
 
+USE_NEW_DIAG=
+
 
 ifdef NPROCS
 	NTESTPROCS=$(NPROCS)
@@ -118,10 +120,10 @@ ifdef TESTNORUN
 	TESTCOMMAND=:
 else
 	ifdef TESTEXEC
-		TESTCOMMAND=$(TESTEXEC) 
+		TESTCOMMAND="$(TESTEXEC) "
 	else
 		ifdef USE_MPI
-				TESTCOMMAND=mpirun -np $(NTESTPROCS)
+				TESTCOMMAND=mpirun -np $(NTESTPROCS)  
 		else
 		    TESTCOMMAND=./
 		endif
@@ -255,6 +257,11 @@ ifdef USE_MPI
 	CC = $(MPICC)
 	CPPFLAGS += -DMPI
 endif
+
+ifdef USE_NEW_DIAG
+	CPPFLAGS+=-DNEW_DIAG
+endif
+
 ifdef USE_SHMEM
 	CPPFLAGS += -DSHMEM
 endif
@@ -340,7 +347,15 @@ ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
+ifdef USE_NEW_DIAG
 sinclude Makefile.diagnostics
+else
+
+distclean_simpledataio:
+clean_simpledataio:
+diagnostics:
+simpledataio:
+endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
 		$(IPM_LIB) $(NAG_LIB) 
@@ -585,7 +600,7 @@ gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
-TEST_DEPS?=$(gs2_mod) functional_tests.o diagnostics
+TEST_DEPS?=$(gs2_mod) functional_tests.o
 
 TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(LIBS) $(SIMPLEDATAIO_LIB_ABS)"
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)

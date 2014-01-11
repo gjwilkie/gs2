@@ -53,8 +53,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
+#ifdef NEW_DIAG
     use gs2_diagnostics_new, only: run_diagnostics, init_gs2_diagnostics_new
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new, diagnostics_init_options_type
+#endif
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
     use gs2_time, only: update_time, write_dt, init_tstart
     use gs2_time, only: user_time, user_dt
@@ -90,7 +92,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 !    logical, optional, intent(in) :: nofinish
     character (500), target :: cbuff
 
+#ifdef NEW_DIAG
     type(diagnostics_init_options_type) :: diagnostics_init_options
+#endif
 
     time_main_loop(1) = 0.
     time_main_loop(2) = 0.
@@ -164,6 +168,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
 
 
+#ifdef NEW_DIAG
 #ifdef NETCDF_PARALLEL
        diagnostics_init_options%parallel_io = .true.
 #else
@@ -174,6 +179,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        diagnostics_init_options%default_double =  (precision(precision_test).gt.10)
 
        call init_gs2_diagnostics_new(diagnostics_init_options)
+#endif
 
        call allocate_target_arrays ! must be after init_gs2_diagnostics
        call init_tstart (tstart)   ! tstart is in user units 
@@ -207,10 +213,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     
     call loop_diagnostics(0,exit)
 
+#ifdef NEW_DIAG
     ! Create variables
     call run_diagnostics(-1,exit)
     ! Write initial values
     call run_diagnostics(0,exit)
+#endif
     
     !if (proc0) write(*,*) 'layout ',layout
     !write (*,*) 'iproc here', iproc
@@ -226,7 +234,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
             call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
        call update_time
        call loop_diagnostics (istep, exit)
+#ifdef NEW_DIAG
        call run_diagnostics (istep, exit)
+#endif
        if(exit .and. present(converged)) converged = .true.
        call check_time_step (reset, exit)
        call update_scan_parameter_value(istep, reset, exit)
@@ -283,7 +293,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        end if
        vflux = vflux_avg(1)/time_interval
     else
+#ifdef NEW_DIAG
        if (.not.nofin .and. .not. functional_test_flag ) call finish_gs2_diagnostics_new 
+#endif
        if (.not.nofin .and. .not. functional_test_flag ) call finish_gs2_diagnostics (istep_end)
        if (.not.nofin .and. .not. functional_test_flag) call finish_gs2
     end if
