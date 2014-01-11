@@ -59,10 +59,8 @@ build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = $(top_builddir)/test/testprog$(EXEEXT) \
 	$(top_builddir)/test/testprog_fortran$(EXEEXT) $(am__EXEEXT_1)
-# Weird that this is necessary, but oh well
-@FORCE_STATIC_FALSE@am__append_1 = -I/usr/include
-@PARALLEL_TRUE@am__append_2 = $(top_builddir)/test/testprog_fortran_parallel
-@PARALLEL_TRUE@am__append_3 = test/test_parallel.sh
+@PARALLEL_TRUE@am__append_1 = $(top_builddir)/test/testprog_fortran_parallel
+@PARALLEL_TRUE@am__append_2 = test/test_parallel.sh
 subdir = .
 DIST_COMMON = README $(am__configure_deps) $(am__include_HEADERS_DIST) \
 	$(srcdir)/Makefile.am $(srcdir)/Makefile.in \
@@ -344,13 +342,15 @@ __top_builddir__test_testprog_fortran_SOURCES = test/testf.f90
 __top_builddir__test_testprog_fortran_LDADD = libsimpledataiof.la libsimpledataio.la 
 
 # To get the module files
-AM_FCFLAGS = -Iinclude/ $(am__append_1)
+AM_FCFLAGS = -Iinclude/
 
 # On HPC systems with Intel/PGI compilers, force static linking
 @FORCE_STATIC_TRUE@AM_LDFLAGS = -all-static
+# Weird that this is necessary, but oh well
+#AM_FCFLAGS+=-I/usr/include
 
 # Serial tests for C and Fortran... invoked by make check
-TESTS = test/testprog test/testprog_fortran $(am__append_3)
+TESTS = test/testprog test/testprog_fortran $(am__append_2)
 TESTS_ENVIRONMENT = 
 
 # If the user has specified --enable-parallel
