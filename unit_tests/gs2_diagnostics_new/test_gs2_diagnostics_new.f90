@@ -34,7 +34,7 @@ program test_gs2_diagnostics_new
       !n_lines = (/'3', '30'/)
 
     variables(1) = 'lambda'
-    n_lines(1) = '6'
+    n_lines(1) = '4'
     variables(2) = 'phi'
     n_lines(2) = '78'
     variables(3) = 'kx'

@@ -267,9 +267,9 @@ contains
 
  
    if (gnostics%create) then 
-    call create_variable(gnostics%sfile, SDATIO_DOUBLE, flux_by_mode_name, "xyst", &
+    call create_variable(gnostics%sfile, gnostics%rtype, flux_by_mode_name, "xyst", &
        flux_description//" as a function of species, kx and ky", flux_units)
-    call create_variable(gnostics%sfile, SDATIO_DOUBLE, total_flux_by_mode_name, "xyt", &
+    call create_variable(gnostics%sfile, gnostics%rtype, total_flux_by_mode_name, "xyt", &
        flux_description//" summed over species, as a function of kx and ky" , flux_units)
 
 
@@ -277,7 +277,7 @@ contains
 
    if (gnostics%create .or. .not. gnostics%wryte) return
   !if (write_flux_by_time .and. .not. variable_exists(gnostics%sfile, flux_t_name)) then 
-     !call create_variable(gnostics%sfile, SDATIO_DOUBLE, flux_t_name, "rzxyt", &
+     !call create_variable(gnostics%sfile, gnostics%rtype, flux_t_name, "rzxyt", &
        !flux_description//" as a function of time", flux_units)
    !end if
    

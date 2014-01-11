@@ -52,6 +52,7 @@ contains
     else
       gnostics%rtype = SDATIO_FLOAT
     end if
+    !write (*,*) 'gnostics%rtype', gnostics%rtype, 'doub', SDATIO_DOUBLE, 'float', SDATIO_FLOAT
 
 
     if (.not. gnostics%write_any) return
@@ -62,7 +63,7 @@ contains
     !gnostics%create = .true.
    !> Integer below gives the sdatio type 
    !! which corresponds to a gs2 real
-    gnostics%rtype = SDATIO_DOUBLE
+    !gnostics%rtype = SDATIO_DOUBLE
 
     if (gnostics%parallel) then
       call createfile_parallel(gnostics%sfile, trim(run_name)//'.cdf', mp_comm)
@@ -101,6 +102,8 @@ contains
       gnostics%create=.false.
       gnostics%wryte=.false.
     end if
+
+    !gnostics%wryte = .false.
 
     ! Sets whether field-like arrays are assumed
     ! to be distributed across processes
