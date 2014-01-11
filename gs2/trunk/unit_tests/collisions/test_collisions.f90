@@ -41,6 +41,7 @@ program test_le_grids
 
   ! General config
   eps = 1.0e-7
+  if (precision(eps).lt. 11) eps = eps * 10.0
 
   ! Set up depenencies
   call init_mp
@@ -50,7 +51,7 @@ program test_le_grids
 
 
 
-  call announce_module_test('le_grids')
+  call announce_module_test('le_grids in collisions')
 
   call announce_test('init_le_grids')
 

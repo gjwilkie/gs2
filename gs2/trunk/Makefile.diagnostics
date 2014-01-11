@@ -1,8 +1,9 @@
 
-SIMPLEDATAIO_INC=-I$(PWD)/diagnostics/simpledataio/include
+SIMPLEDATAIO_INC_DIR=diagnostics/simpledataio/include
+SIMPLEDATAIO_INC=-I$(PWD)/$(SIMPLEDATAIO_INC_DIR)
 SIMPLEDATAIO_LIB_DIR=diagnostics/simpledataio/.libs
 SIMPLEDATAIO_LIB=$(SIMPLEDATAIO_LIB_DIR)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a
-SIMPLEDATAIO_MODULE_FILES=$(SIMPLEDATAIO_INC)/simpledataio.mod $(SIMPLEDATAIO_INC)/simpledataio_write.mod
+SIMPLEDATAIO_MODULE_FILES=$(SIMPLEDATAIO_INC_DIR)/simpledataio.mod $(SIMPLEDATAIO_INC_DIR)/simpledataio_write.mod
 
 SIMPLEDATAIO_LIB_DIR_ABS=$(PWD)/$(SIMPLEDATAIO_LIB_DIR)
 SIMPLEDATAIO_LIB_ABS=$(SIMPLEDATAIO_LIB_DIR_ABS)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR_ABS)/libsimpledataio.a
@@ -17,7 +18,7 @@ ifdef USE_PARALLEL_NETCDF
 SIMPLEDATAIO_CONF+=--enable-parallel
 endif
 
-diagnostics: diagnostics/diagnostics_create_and_write.f90 diagnostics/diagnostics_config.f90 simpledataio
+diagnostics: diagnostics/diagnostics_create_and_write.f90 diagnostics/diagnostics_config.f90 $(SIMPLEDATAIO_LIB)
 
 RUBY_GENERATE=env ruby $2 $1; if test "$$?" != 0; then  echo && echo && echo  "Warning: no ruby: $1 is not updated!!!" && echo && echo; fi
 
@@ -33,7 +34,14 @@ diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  
 
 #diagnostics/simpledataio/.libs/libsimpledataiof.a: build_simpledatio
 
-$(SIMPLEDATAIO_LIB) $(SIMPLEDATAIO_MODULE_FILES): simpledatio
+$(SIMPLEDATAIO_LIB_DIR)/libsimpledataiof.a: $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a
+	make -C diagnostics/simpledataio
+
+$(SIMPLEDATAIO_MODULE_FILES): $(SIMPLEDATAIO_LIB)
+	make -C diagnostics/simpledataio
+
+$(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a: diagnostics/simpledataio/Makefile
+	make -C diagnostics/simpledataio
 
 simpledatio: diagnostics/simpledataio/Makefile
 	make -C diagnostics/simpledataio
