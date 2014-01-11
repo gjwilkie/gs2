@@ -2,11 +2,16 @@
 SIMPLEDATAIO_INC=-I$(PWD)/diagnostics/simpledataio/include
 SIMPLEDATAIO_LIB_DIR=diagnostics/simpledataio/.libs
 SIMPLEDATAIO_LIB=$(SIMPLEDATAIO_LIB_DIR)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a
+SIMPLEDATAIO_MODULE_FILES=$(SIMPLEDATAIO_INC)/simpledataio.mod $(SIMPLEDATAIO_INC)/simpledataio_write.mod
 
 SIMPLEDATAIO_LIB_DIR_ABS=$(PWD)/$(SIMPLEDATAIO_LIB_DIR)
 SIMPLEDATAIO_LIB_ABS=$(SIMPLEDATAIO_LIB_DIR_ABS)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR_ABS)/libsimpledataio.a
 
-SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  --enable-mpi $(SIMPLEDATAIO_CONF_SYSTEM)
+ifdef USE_MPI
+	SIMPLEDATAIO_EMPI=--enable-mpi
+endif
+
+SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) $(SIMPLEDATAIO_CONF_SYSTEM)
 
 ifdef USE_PARALLEL_NETCDF
 SIMPLEDATAIO_CONF+=--enable-parallel
@@ -16,16 +21,21 @@ diagnostics: diagnostics/diagnostics_create_and_write.f90 diagnostics/diagnostic
 
 RUBY_GENERATE=env ruby $2 $1; if test "$$?" != 0; then  echo && echo && echo  "Warning: no ruby: $1 is not updated!!!" && echo && echo; fi
 
-diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_create_and_write.rb $(SIMPLEDATAIO_LIB)
+
+diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_create_and_write.rb $(SIMPLEDATAIO_LIB) $(SIMPLEDATAIO_MODULE_FILES)
 	$(call RUBY_GENERATE,$@,$<)
-diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  $(SIMPLEDATAIO_LIB)
+diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  $(SIMPLEDATAIO_LIB) 
 	$(call RUBY_GENERATE,$@,$<)
 
-simpledataio: diagnostics/simpledataio/.libs/libsimpledataiof.a
+#simpledataio: $(SIMPLEDATAIO_LIB) $(SIMPLEDATAIO_MODULE_FILES)
 
-diagnostics/simpledataio/.libs/libsimpledataio.a:  diagnostics/simpledataio/.libs/libsimpledataiof.a
+#diagnostics/simpledataio/.libs/libsimpledataio.a: build_simpledatio 
 
-diagnostics/simpledataio/.libs/libsimpledataiof.a: diagnostics/simpledataio/Makefile
+#diagnostics/simpledataio/.libs/libsimpledataiof.a: build_simpledatio
+
+$(SIMPLEDATAIO_LIB) $(SIMPLEDATAIO_MODULE_FILES): simpledatio
+
+simpledatio: diagnostics/simpledataio/Makefile
 	make -C diagnostics/simpledataio
 
 diagnostics/simpledataio/Makefile: diagnostics/simpledataio/configure
