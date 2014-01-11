@@ -47,7 +47,7 @@ if FORCE_STATIC
 AM_LDFLAGS=-all-static
 else
 # Weird that this is necessary, but oh well
-AM_FCFLAGS+=-I/usr/include
+#AM_FCFLAGS+=-I/usr/include
 endif
 
 # Serial tests for C and Fortran... invoked by make check
