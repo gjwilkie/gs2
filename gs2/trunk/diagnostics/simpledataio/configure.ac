@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([simpledataio], [VERSION], [BUG-REPORT-ADDRESS])
+AC_INIT([simpledataio], [1.0.0], [edmundhighcock@users.sourceforge.net])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([])
 AC_CONFIG_SRCDIR([src/simpledataio.c])
@@ -47,10 +47,13 @@ AX_PROG_FC_MPI([test "x$enable_mpi" = xyes], [], [
     fi
   ])
 
+# If we are not using the GNU compiler, we are probably on an HPC system
+# in which case, we force static compilation of the test programs
 AX_COMPILER_VENDOR
 AM_CONDITIONAL(FORCE_STATIC, [test "x$ax_cv_c_compiler_vendor" != xgnu])
 #AC_MSG_WARN([compiler vendor is $ax_cv_c_compiler_vendor])
 
+# Check whether the Fortran compiler produces seperate .mod files
 AC_FC_MODULE_EXTENSION
 AM_CONDITIONAL(HAS_F90_MODULES, [test "x$FC_MODEXT" != x])
 
