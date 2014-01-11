@@ -86,11 +86,11 @@ contains
    if (field_name .eq. 'bpar' .and. gnostics%write_bpar_over_time) write_field_by_time = .true.
    
    if (gnostics%create) then 
-     call create_variable(gnostics%sfile, SDATIO_DOUBLE, field_name, "rzxy", field_description, field_units)
-     call create_variable(gnostics%sfile, SDATIO_DOUBLE, field2_by_mode_name, "xyt", &
+     call create_variable(gnostics%sfile, gnostics%rtype, field_name, "rzxy", field_description, field_units)
+     call create_variable(gnostics%sfile, gnostics%rtype, field2_by_mode_name, "xyt", &
        field_description//" squared and averaged over theta, as a function of kx and ky" , "("//field_units//")^2")
      if (write_field_by_time) then 
-       call create_variable(gnostics%sfile, SDATIO_DOUBLE, field_t_name, "rzxyt", &
+       call create_variable(gnostics%sfile, gnostics%rtype, field_t_name, "rzxyt", &
          field_description//" as a function of time", field_units)
      end if
 
