@@ -107,7 +107,7 @@ MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
 
-USE_NEW_DIAG=
+USE_NEW_DIAG?=
 
 
 ifdef NPROCS
@@ -117,10 +117,10 @@ else
 endif
 
 ifdef TESTNORUN
-	TESTCOMMAND=:
+	TESTCOMMAND=: 
 else
 	ifdef TESTEXEC
-		TESTCOMMAND="$(TESTEXEC) "
+		TESTCOMMAND=$(TESTEXEC)
 	else
 		ifdef USE_MPI
 				TESTCOMMAND=mpirun -np $(NTESTPROCS)  
@@ -358,7 +358,7 @@ simpledataio:
 endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
-		$(IPM_LIB) $(NAG_LIB) 
+		$(IPM_LIB) $(NAG_LIB)
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
 	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) \
@@ -609,6 +609,7 @@ MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
 #export TEST_DEPS
 export TESTCOMMAND
 export gs2_mod
+#export TESTNORUN
 #export TESTFC=$(FC)
 #export TESTF90FLAGS=$(F90FLAGS)
 #export TESTCPP=$(CPP)
