@@ -46,6 +46,15 @@ contains
     call init_diagnostics_config(gnostics)
     call init_volume_averages
 
+    if (.not. simpledataio_functional()) then
+      if (proc0) then
+        write (*,*) "WARNING: simpledataio is non-functional. &
+         & Setting write_any to false in gs2_diagnostics_new"
+     end if
+     gnostics%write_any = .false.
+    end if
+    if (.not. gnostics%write_any) return
+
     gnostics%parallel = init_options%parallel_io
     if (init_options%default_double) then
       gnostics%rtype = SDATIO_DOUBLE
@@ -55,7 +64,6 @@ contains
     !write (*,*) 'gnostics%rtype', gnostics%rtype, 'doub', SDATIO_DOUBLE, 'float', SDATIO_FLOAT
 
 
-    if (.not. gnostics%write_any) return
 
 
     call init_diagnostics_write_fluxes
