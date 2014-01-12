@@ -18,8 +18,10 @@
 #include "include/simpledataio.h"
 
 #ifdef PARALLEL 
-#include "mpi.h"
 #include "netcdf_par.h"
+#endif
+#if HAVE_MPI
+#include "mpi.h"
 #else
 typedef int MPI_Comm;
 #endif

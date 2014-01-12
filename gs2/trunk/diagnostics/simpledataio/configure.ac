@@ -57,6 +57,12 @@ AM_CONDITIONAL(FORCE_STATIC, [test "x$ax_cv_c_compiler_vendor" != xgnu])
 AC_FC_MODULE_EXTENSION
 AM_CONDITIONAL(HAS_F90_MODULES, [test "x$FC_MODEXT" != x])
 
+AL_CHECK_ISO_C_BINDING
+if test "x$nc_iso_c_binding" = xno; then 
+	AC_MSG_WARN("The Fortran compiler does not support the intrinsic iso_c_binding module: the fortran netCDF interface will not work")
+fi
+AM_CONDITIONAL(HAS_ISO_C_BINDING, test "x$nc_iso_c_binding" = xyes)
+
 
 LT_INIT
 #AC_PROG_FC
@@ -66,23 +72,52 @@ LT_INIT
 
 # Checks for libraries.
 AC_CHECK_LIB([hdf5], [H5open])
-AC_CHECK_LIB([netcdf], [nc_create])
-AC_CHECK_LIB([netcdff], [nc_create])
-AC_CHECK_DECL([nc_create], [], AC_MSG_FAILURE([Cannot find function nc_create ]), [
-							 #include "netcdf.h"
-							 ])
 
-# Checks for header files.
-AC_CHECK_HEADERS([stdlib.h])
-AC_CHECK_HEADERS([netcdf.h], [], [echo "netcdf.h not found... suggest defining CFLAGS='-I/location/of/netcdf/include'" && exit])
 #AC_CHECK_HEADERS([netcdf.mod])
 #AC_CHECK_HEADERS([simpledataio.h])
+
+AC_CHECK_HEADERS([stdlib.h])
+
+# Check whether NetCDF builds OK
+AL_CHECK_NETCDF
+if test "x$al_netcdf_ok" = xno; then
+	# If not,
+	# try to automatically find the netcdf prefix
+	AC_MSG_RESULT([could not find netcdf... trying to setup netcdf using nc-config])
+	if AC_TRY_EVAL("nc-config --prefix > conftest.tmp "); then
+		AC_MSG_CHECKING([netcdf prefix])
+		al_netcdf_prefix=`nc-config --prefix`
+		al_netcdf_found_prefix=yes
+		AC_MSG_RESULT([$al_netcdf_prefix])
+		al_netcdf_libs=`nc-config --libs`
+		al_netcdf_inc=`nc-config --includedir`
+		FCFLAGS+=" -I$al_netcdf_inc"
+		CFLAGS+=" -I$al_netcdf_inc"
+		LDFLAGS+=" $al_netcdf_libs"
+
+
+	else
+		AC_MSG_WARN("Couldn't automatically detect netcdf prefix: nc-config wasn't available")
+		al_netcdf_found_prefix=no
+	fi
+	AL_CHECK_NETCDF
+	if test "x$al_netcdf_ok" = xno; then
+		AC_MSG_FAILURE("Failed to find all netCDF prerequisites")
+	fi
+fi
+
+if test "x$al_netcdff_present" = xno; then
+	AC_MSG_WARN("Cannot find the fortran netcdf library: the fortran netCDF interface will not work")
+fi
+AM_CONDITIONAL(HAS_FORTRAN_NETCDF, test "x$al_netcdff_present" = xyes)
+
 
 # Checks for typedefs, structures, and compiler characteristics.
 #AC_TYPE_SIZE_T
 
 # Checks for library functions.
 #AC_FUNC_MALLOC
+
 
 
 if test "$enable_parallel" = yes; then

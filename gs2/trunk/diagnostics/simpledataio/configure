@@ -638,6 +638,8 @@ LTLIBOBJS
 LIBOBJS
 UPPER_CASE_MOD_FALSE
 UPPER_CASE_MOD_TRUE
+HAS_FORTRAN_NETCDF_FALSE
+HAS_FORTRAN_NETCDF_TRUE
 CPP
 OTOOL64
 OTOOL
@@ -668,6 +670,9 @@ build_vendor
 build_cpu
 build
 LIBTOOL
+HAS_ISO_C_BINDING_FALSE
+HAS_ISO_C_BINDING_TRUE
+FCFLAGS_f90
 HAS_F90_MODULES_FALSE
 HAS_F90_MODULES_TRUE
 FC_MODEXT
@@ -1864,52 +1869,6 @@ $as_echo "$ac_res" >&6; }
 
 } # ac_fn_c_check_func
 
-# ac_fn_c_check_decl LINENO SYMBOL VAR INCLUDES
-# ---------------------------------------------
-# Tests whether SYMBOL is declared in INCLUDES, setting cache variable VAR
-# accordingly.
-ac_fn_c_check_decl ()
-{
-  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
-  as_decl_name=`echo $2|sed 's/ *(.*//'`
-  as_decl_use=`echo $2|sed -e 's/(/((/' -e 's/)/) 0&/' -e 's/,/) 0& (/g'`
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether $as_decl_name is declared" >&5
-$as_echo_n "checking whether $as_decl_name is declared... " >&6; }
-if eval \${$3+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-$4
-int
-main ()
-{
-#ifndef $as_decl_name
-#ifdef __cplusplus
-  (void) $as_decl_use;
-#else
-  (void) $as_decl_name;
-#endif
-#endif
-
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_compile "$LINENO"; then :
-  eval "$3=yes"
-else
-  eval "$3=no"
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
-fi
-eval ac_res=\$$3
-	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
-$as_echo "$ac_res" >&6; }
-  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
-
-} # ac_fn_c_check_decl
-
 # ac_fn_c_check_header_mongrel LINENO HEADER VAR INCLUDES
 # -------------------------------------------------------
 # Tests whether HEADER exists, giving a warning if it cannot be compiled using
@@ -2000,6 +1959,52 @@ fi
   eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
 
 } # ac_fn_c_check_header_mongrel
+
+# ac_fn_c_check_decl LINENO SYMBOL VAR INCLUDES
+# ---------------------------------------------
+# Tests whether SYMBOL is declared in INCLUDES, setting cache variable VAR
+# accordingly.
+ac_fn_c_check_decl ()
+{
+  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
+  as_decl_name=`echo $2|sed 's/ *(.*//'`
+  as_decl_use=`echo $2|sed -e 's/(/((/' -e 's/)/) 0&/' -e 's/,/) 0& (/g'`
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether $as_decl_name is declared" >&5
+$as_echo_n "checking whether $as_decl_name is declared... " >&6; }
+if eval \${$3+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+$4
+int
+main ()
+{
+#ifndef $as_decl_name
+#ifdef __cplusplus
+  (void) $as_decl_use;
+#else
+  (void) $as_decl_name;
+#endif
+#endif
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  eval "$3=yes"
+else
+  eval "$3=no"
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+eval ac_res=\$$3
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+$as_echo "$ac_res" >&6; }
+  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
+
+} # ac_fn_c_check_decl
 cat >config.log <<_ACEOF
 This file contains any messages produced by compilers while
 running configure, to aid debugging if configure makes a mistake.
@@ -4706,6 +4711,117 @@ fi
 else
   HAS_F90_MODULES_TRUE='#'
   HAS_F90_MODULES_FALSE=
+fi
+
+
+
+# next check to see if the Fortran compiler will support
+# ISO_C_BINDING
+nc_iso_c_binding=yes
+
+# Some f90 compilers change the case of the mod file names. Others
+# require special flags to be set to deal with .f90 files. Find out
+# about this compiler.
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for Fortran flag to compile .f90 files" >&5
+$as_echo_n "checking for Fortran flag to compile .f90 files... " >&6; }
+if ${ac_cv_fc_srcext_f90+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_ext=f90
+ac_fcflags_srcext_save=$ac_fcflags_srcext
+ac_fcflags_srcext=
+ac_cv_fc_srcext_f90=unknown
+case $ac_ext in #(
+  [fF]77) ac_try=f77;; #(
+  *) ac_try=f95;;
+esac
+for ac_flag in none -qsuffix=f=f90 -Tf "-x $ac_try"; do
+  test "x$ac_flag" != xnone && ac_fcflags_srcext="$ac_flag"
+  cat > conftest.$ac_ext <<_ACEOF
+      program main
+
+      end
+_ACEOF
+if ac_fn_fc_try_compile "$LINENO"; then :
+  ac_cv_fc_srcext_f90=$ac_flag; break
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+done
+rm -f conftest.$ac_objext conftest.f90
+ac_fcflags_srcext=$ac_fcflags_srcext_save
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_fc_srcext_f90" >&5
+$as_echo "$ac_cv_fc_srcext_f90" >&6; }
+if test "x$ac_cv_fc_srcext_f90" = xunknown; then
+  as_fn_error $? "Fortran could not compile .f90 files" "$LINENO" 5
+else
+  ac_fc_srcext=f90
+  if test "x$ac_cv_fc_srcext_f90" = xnone; then
+    ac_fcflags_srcext=""
+    FCFLAGS_f90=""
+  else
+    ac_fcflags_srcext=$ac_cv_fc_srcext_f90
+    FCFLAGS_f90=$ac_cv_fc_srcext_f90
+  fi
+
+
+fi
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+
+ac_ext=c
+ac_cpp='$CPP $CPPFLAGS'
+ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_c_compiler_gnu
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if Fortran compiler supports Fortran 2003 ISO_C_BINDING" >&5
+$as_echo_n "checking if Fortran compiler supports Fortran 2003 ISO_C_BINDING... " >&6; }
+cat <<EOF >conftest.f90
+module conftest_module
+use iso_c_binding
+end module conftest_module
+EOF
+doit='$FC -c ${FCFLAGS} ${FCFLAGS_f90} conftest.f90'
+if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$doit\""; } >&5
+  (eval $doit) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+	 nc_iso_c_binding=yes
+else
+	 nc_iso_c_binding=no
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $nc_iso_c_binding" >&5
+$as_echo "$nc_iso_c_binding" >&6; }
+
+if test "x$nc_iso_c_binding" = xno; then
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: ISO_C_BINDING not supported - defaulting to F90 interfaces" >&5
+$as_echo "$as_me: WARNING: ISO_C_BINDING not supported - defaulting to F90 interfaces" >&2;}
+fi
+
+if test "x$nc_iso_c_binding" = xno; then
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: \"The Fortran compiler does not support the intrinsic iso_c_binding module: the fortran netCDF interface will not work\"" >&5
+$as_echo "$as_me: WARNING: \"The Fortran compiler does not support the intrinsic iso_c_binding module: the fortran netCDF interface will not work\"" >&2;}
+fi
+ if test "x$nc_iso_c_binding" = xyes; then
+  HAS_ISO_C_BINDING_TRUE=
+  HAS_ISO_C_BINDING_FALSE='#'
+else
+  HAS_ISO_C_BINDING_TRUE='#'
+  HAS_ISO_C_BINDING_FALSE=
 fi
 
 
@@ -15241,6 +15357,98 @@ _ACEOF
 
 fi
 
+
+#AC_CHECK_HEADERS([netcdf.mod])
+#AC_CHECK_HEADERS([simpledataio.h])
+
+for ac_header in stdlib.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "stdlib.h" "ac_cv_header_stdlib_h" "$ac_includes_default"
+if test "x$ac_cv_header_stdlib_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_STDLIB_H 1
+_ACEOF
+
+fi
+
+done
+
+
+# Check whether NetCDF builds OK
+
+# Check to see if we can build both the C and Fortran netcdf bits
+
+#AC_REQUIRE([AC_PROG_FC_UPPERCASE_MOD])
+
+al_netcdf_ok=yes
+unset ac_cv_lib_netcdff_nc_create
+unset ac_cv_lib_netcdff_nf_close
+unset ac_cv_lib_netcdff_nf_close_
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for Fortran flag to compile .f90 files" >&5
+$as_echo_n "checking for Fortran flag to compile .f90 files... " >&6; }
+if ${ac_cv_fc_srcext_f90+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_ext=f90
+ac_fcflags_srcext_save=$ac_fcflags_srcext
+ac_fcflags_srcext=
+ac_cv_fc_srcext_f90=unknown
+case $ac_ext in #(
+  [fF]77) ac_try=f77;; #(
+  *) ac_try=f95;;
+esac
+for ac_flag in none -qsuffix=f=f90 -Tf "-x $ac_try"; do
+  test "x$ac_flag" != xnone && ac_fcflags_srcext="$ac_flag"
+  cat > conftest.$ac_ext <<_ACEOF
+      program main
+
+      end
+_ACEOF
+if ac_fn_fc_try_compile "$LINENO"; then :
+  ac_cv_fc_srcext_f90=$ac_flag; break
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+done
+rm -f conftest.$ac_objext conftest.f90
+ac_fcflags_srcext=$ac_fcflags_srcext_save
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_fc_srcext_f90" >&5
+$as_echo "$ac_cv_fc_srcext_f90" >&6; }
+if test "x$ac_cv_fc_srcext_f90" = xunknown; then
+  as_fn_error $? "Fortran could not compile .f90 files" "$LINENO" 5
+else
+  ac_fc_srcext=f90
+  if test "x$ac_cv_fc_srcext_f90" = xnone; then
+    ac_fcflags_srcext=""
+    FCFLAGS_f90=""
+  else
+    ac_fcflags_srcext=$ac_cv_fc_srcext_f90
+    FCFLAGS_f90=$ac_cv_fc_srcext_f90
+  fi
+
+
+fi
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+
+ac_ext=c
+ac_cpp='$CPP $CPPFLAGS'
+ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_c_compiler_gnu
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for nc_create in -lnetcdf" >&5
 $as_echo_n "checking for nc_create in -lnetcdf... " >&6; }
 if ${ac_cv_lib_netcdf_nc_create+:} false; then :
@@ -15284,8 +15492,11 @@ _ACEOF
 
   LIBS="-lnetcdf $LIBS"
 
+else
+  al_netcdf_ok=no
 fi
 
+al_netcdff_present=yes
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for nc_create in -lnetcdff" >&5
 $as_echo_n "checking for nc_create in -lnetcdff... " >&6; }
 if ${ac_cv_lib_netcdff_nc_create+:} false; then :
@@ -15329,8 +15540,111 @@ _ACEOF
 
   LIBS="-lnetcdff $LIBS"
 
+else
+  al_netcdff_present=no
 fi
 
+if test "x$al_netcdff_present" = xno; then
+	al_netcdff_present=yes
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for nf_close in -lnetcdff" >&5
+$as_echo_n "checking for nf_close in -lnetcdff... " >&6; }
+if ${ac_cv_lib_netcdff_nf_close+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lnetcdff  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char nf_close ();
+int
+main ()
+{
+return nf_close ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_netcdff_nf_close=yes
+else
+  ac_cv_lib_netcdff_nf_close=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_netcdff_nf_close" >&5
+$as_echo "$ac_cv_lib_netcdff_nf_close" >&6; }
+if test "x$ac_cv_lib_netcdff_nf_close" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBNETCDFF 1
+_ACEOF
+
+  LIBS="-lnetcdff $LIBS"
+
+else
+  al_netcdff_present=no
+fi
+
+fi
+if test "x$al_netcdff_present" = xno; then
+	al_netcdff_present=yes
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for nf_close_ in -lnetcdff" >&5
+$as_echo_n "checking for nf_close_ in -lnetcdff... " >&6; }
+if ${ac_cv_lib_netcdff_nf_close_+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lnetcdff  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char nf_close_ ();
+int
+main ()
+{
+return nf_close_ ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_netcdff_nf_close_=yes
+else
+  ac_cv_lib_netcdff_nf_close_=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_netcdff_nf_close_" >&5
+$as_echo "$ac_cv_lib_netcdff_nf_close_" >&6; }
+if test "x$ac_cv_lib_netcdff_nf_close_" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBNETCDFF 1
+_ACEOF
+
+  LIBS="-lnetcdff $LIBS"
+
+else
+  al_netcdff_present=no
+fi
+
+fi
+unset ac_cv_have_decl_nc_create
 ac_fn_c_check_decl "$LINENO" "nc_create" "ac_cv_have_decl_nc_create" "
 							 #include \"netcdf.h\"
 
@@ -15338,26 +15652,15 @@ ac_fn_c_check_decl "$LINENO" "nc_create" "ac_cv_have_decl_nc_create" "
 if test "x$ac_cv_have_decl_nc_create" = xyes; then :
 
 else
-  { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
-$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
-as_fn_error $? "Cannot find function nc_create
-See \`config.log' for more details" "$LINENO" 5; }
+  al_netcdf_ok=no
 fi
 
+#AC_CHECK_DECL([nc_create], [], AC_MSG_FAILURE([Cannot find function nc_create ]), [
+							 ##include "netcdf.h"
+							 #])
 
 # Checks for header files.
-for ac_header in stdlib.h
-do :
-  ac_fn_c_check_header_mongrel "$LINENO" "stdlib.h" "ac_cv_header_stdlib_h" "$ac_includes_default"
-if test "x$ac_cv_header_stdlib_h" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_STDLIB_H 1
-_ACEOF
-
-fi
-
-done
-
+#AC_CHECK_HEADERS([netcdf.h], [], [echo "netcdf.h not found... suggest defining CFLAGS='-I/location/of/netcdf/include'" && exit])
 for ac_header in netcdf.h
 do :
   ac_fn_c_check_header_mongrel "$LINENO" "netcdf.h" "ac_cv_header_netcdf_h" "$ac_includes_default"
@@ -15367,19 +15670,595 @@ if test "x$ac_cv_header_netcdf_h" = xyes; then :
 _ACEOF
 
 else
-  echo "netcdf.h not found... suggest defining CFLAGS='-I/location/of/netcdf/include'" && exit
+  al_netcdf_ok=no
 fi
 
 done
 
-#AC_CHECK_HEADERS([netcdf.mod])
-#AC_CHECK_HEADERS([simpledataio.h])
+#echo "al_netcdf_ok"
+#echo $al_netcdf_ok
+if test "x$FC_MODEXT" != x; then
+ #if test "x$ac_cv_prog_f90_uppercase_mod" = xyes; then
+   #AL_CHECK_FORTRAN_MODULE([NETCDF.mod], [], al_netcdf_ok=no)
+ #else
+
+# next check to see if the Fortran compiler will support
+# ISO_C_BINDING
+nc_iso_c_binding=yes
+
+# Some f90 compilers change the case of the mod file names. Others
+# require special flags to be set to deal with .f90 files. Find out
+# about this compiler.
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for Fortran flag to compile .f90 files" >&5
+$as_echo_n "checking for Fortran flag to compile .f90 files... " >&6; }
+if ${ac_cv_fc_srcext_f90+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_ext=f90
+ac_fcflags_srcext_save=$ac_fcflags_srcext
+ac_fcflags_srcext=
+ac_cv_fc_srcext_f90=unknown
+case $ac_ext in #(
+  [fF]77) ac_try=f77;; #(
+  *) ac_try=f95;;
+esac
+for ac_flag in none -qsuffix=f=f90 -Tf "-x $ac_try"; do
+  test "x$ac_flag" != xnone && ac_fcflags_srcext="$ac_flag"
+  cat > conftest.$ac_ext <<_ACEOF
+      program main
+
+      end
+_ACEOF
+if ac_fn_fc_try_compile "$LINENO"; then :
+  ac_cv_fc_srcext_f90=$ac_flag; break
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+done
+rm -f conftest.$ac_objext conftest.f90
+ac_fcflags_srcext=$ac_fcflags_srcext_save
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_fc_srcext_f90" >&5
+$as_echo "$ac_cv_fc_srcext_f90" >&6; }
+if test "x$ac_cv_fc_srcext_f90" = xunknown; then
+  as_fn_error $? "Fortran could not compile .f90 files" "$LINENO" 5
+else
+  ac_fc_srcext=f90
+  if test "x$ac_cv_fc_srcext_f90" = xnone; then
+    ac_fcflags_srcext=""
+    FCFLAGS_f90=""
+  else
+    ac_fcflags_srcext=$ac_cv_fc_srcext_f90
+    FCFLAGS_f90=$ac_cv_fc_srcext_f90
+  fi
+
+
+fi
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+
+ac_ext=c
+ac_cpp='$CPP $CPPFLAGS'
+ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_c_compiler_gnu
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking the Fortran 90 module netcdf is available " >&5
+$as_echo_n "checking the Fortran 90 module netcdf is available ... " >&6; }
+cat <<EOF >conftest.f90
+module conftest_module
+use netcdf
+end module conftest_module
+EOF
+doit='$FC -c ${FCFLAGS} ${FCFLAGS_f90} conftest.f90'
+if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$doit\""; } >&5
+  (eval $doit) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+	 al_has_module=yes
+else
+	 al_has_module=no
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $al_has_module" >&5
+$as_echo "$al_has_module" >&6; }
+if test x"$al_has_module" = xyes; then :
+
+
+
+else
+
+        al_netcdf_ok=no
+
+fi
+
+
+ #fi
+fi
+#echo "al_netcdf_ok"
+#echo $al_netcdf_ok
+
+if test "x$al_netcdf_ok" = xno; then
+	# If not,
+	# try to automatically find the netcdf prefix
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: could not find netcdf... trying to setup netcdf using nc-config" >&5
+$as_echo "could not find netcdf... trying to setup netcdf using nc-config" >&6; }
+	if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$"nc-config --prefix > conftest.tmp "\""; } >&5
+  (eval $"nc-config --prefix > conftest.tmp ") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: checking netcdf prefix" >&5
+$as_echo_n "checking netcdf prefix... " >&6; }
+		al_netcdf_prefix=`nc-config --prefix`
+		al_netcdf_found_prefix=yes
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $al_netcdf_prefix" >&5
+$as_echo "$al_netcdf_prefix" >&6; }
+		al_netcdf_libs=`nc-config --libs`
+		al_netcdf_inc=`nc-config --includedir`
+		FCFLAGS+=" -I$al_netcdf_inc"
+		CFLAGS+=" -I$al_netcdf_inc"
+		LDFLAGS+=" $al_netcdf_libs"
+
+
+	else
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: \"Couldn't automatically detect netcdf prefix: nc-config wasn't available\"" >&5
+$as_echo "$as_me: WARNING: \"Couldn't automatically detect netcdf prefix: nc-config wasn't available\"" >&2;}
+		al_netcdf_found_prefix=no
+	fi
+
+# Check to see if we can build both the C and Fortran netcdf bits
+
+#AC_REQUIRE([AC_PROG_FC_UPPERCASE_MOD])
+
+al_netcdf_ok=yes
+unset ac_cv_lib_netcdff_nc_create
+unset ac_cv_lib_netcdff_nf_close
+unset ac_cv_lib_netcdff_nf_close_
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for Fortran flag to compile .f90 files" >&5
+$as_echo_n "checking for Fortran flag to compile .f90 files... " >&6; }
+if ${ac_cv_fc_srcext_f90+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_ext=f90
+ac_fcflags_srcext_save=$ac_fcflags_srcext
+ac_fcflags_srcext=
+ac_cv_fc_srcext_f90=unknown
+case $ac_ext in #(
+  [fF]77) ac_try=f77;; #(
+  *) ac_try=f95;;
+esac
+for ac_flag in none -qsuffix=f=f90 -Tf "-x $ac_try"; do
+  test "x$ac_flag" != xnone && ac_fcflags_srcext="$ac_flag"
+  cat > conftest.$ac_ext <<_ACEOF
+      program main
+
+      end
+_ACEOF
+if ac_fn_fc_try_compile "$LINENO"; then :
+  ac_cv_fc_srcext_f90=$ac_flag; break
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+done
+rm -f conftest.$ac_objext conftest.f90
+ac_fcflags_srcext=$ac_fcflags_srcext_save
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_fc_srcext_f90" >&5
+$as_echo "$ac_cv_fc_srcext_f90" >&6; }
+if test "x$ac_cv_fc_srcext_f90" = xunknown; then
+  as_fn_error $? "Fortran could not compile .f90 files" "$LINENO" 5
+else
+  ac_fc_srcext=f90
+  if test "x$ac_cv_fc_srcext_f90" = xnone; then
+    ac_fcflags_srcext=""
+    FCFLAGS_f90=""
+  else
+    ac_fcflags_srcext=$ac_cv_fc_srcext_f90
+    FCFLAGS_f90=$ac_cv_fc_srcext_f90
+  fi
+
+
+fi
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+
+ac_ext=c
+ac_cpp='$CPP $CPPFLAGS'
+ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_c_compiler_gnu
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for nc_create in -lnetcdf" >&5
+$as_echo_n "checking for nc_create in -lnetcdf... " >&6; }
+if ${ac_cv_lib_netcdf_nc_create+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lnetcdf  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char nc_create ();
+int
+main ()
+{
+return nc_create ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_netcdf_nc_create=yes
+else
+  ac_cv_lib_netcdf_nc_create=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_netcdf_nc_create" >&5
+$as_echo "$ac_cv_lib_netcdf_nc_create" >&6; }
+if test "x$ac_cv_lib_netcdf_nc_create" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBNETCDF 1
+_ACEOF
+
+  LIBS="-lnetcdf $LIBS"
+
+else
+  al_netcdf_ok=no
+fi
+
+al_netcdff_present=yes
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for nc_create in -lnetcdff" >&5
+$as_echo_n "checking for nc_create in -lnetcdff... " >&6; }
+if ${ac_cv_lib_netcdff_nc_create+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lnetcdff  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char nc_create ();
+int
+main ()
+{
+return nc_create ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_netcdff_nc_create=yes
+else
+  ac_cv_lib_netcdff_nc_create=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_netcdff_nc_create" >&5
+$as_echo "$ac_cv_lib_netcdff_nc_create" >&6; }
+if test "x$ac_cv_lib_netcdff_nc_create" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBNETCDFF 1
+_ACEOF
+
+  LIBS="-lnetcdff $LIBS"
+
+else
+  al_netcdff_present=no
+fi
+
+if test "x$al_netcdff_present" = xno; then
+	al_netcdff_present=yes
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for nf_close in -lnetcdff" >&5
+$as_echo_n "checking for nf_close in -lnetcdff... " >&6; }
+if ${ac_cv_lib_netcdff_nf_close+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lnetcdff  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char nf_close ();
+int
+main ()
+{
+return nf_close ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_netcdff_nf_close=yes
+else
+  ac_cv_lib_netcdff_nf_close=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_netcdff_nf_close" >&5
+$as_echo "$ac_cv_lib_netcdff_nf_close" >&6; }
+if test "x$ac_cv_lib_netcdff_nf_close" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBNETCDFF 1
+_ACEOF
+
+  LIBS="-lnetcdff $LIBS"
+
+else
+  al_netcdff_present=no
+fi
+
+fi
+if test "x$al_netcdff_present" = xno; then
+	al_netcdff_present=yes
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for nf_close_ in -lnetcdff" >&5
+$as_echo_n "checking for nf_close_ in -lnetcdff... " >&6; }
+if ${ac_cv_lib_netcdff_nf_close_+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lnetcdff  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char nf_close_ ();
+int
+main ()
+{
+return nf_close_ ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_netcdff_nf_close_=yes
+else
+  ac_cv_lib_netcdff_nf_close_=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_netcdff_nf_close_" >&5
+$as_echo "$ac_cv_lib_netcdff_nf_close_" >&6; }
+if test "x$ac_cv_lib_netcdff_nf_close_" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBNETCDFF 1
+_ACEOF
+
+  LIBS="-lnetcdff $LIBS"
+
+else
+  al_netcdff_present=no
+fi
+
+fi
+unset ac_cv_have_decl_nc_create
+ac_fn_c_check_decl "$LINENO" "nc_create" "ac_cv_have_decl_nc_create" "
+							 #include \"netcdf.h\"
+
+"
+if test "x$ac_cv_have_decl_nc_create" = xyes; then :
+
+else
+  al_netcdf_ok=no
+fi
+
+#AC_CHECK_DECL([nc_create], [], AC_MSG_FAILURE([Cannot find function nc_create ]), [
+							 ##include "netcdf.h"
+							 #])
+
+# Checks for header files.
+#AC_CHECK_HEADERS([netcdf.h], [], [echo "netcdf.h not found... suggest defining CFLAGS='-I/location/of/netcdf/include'" && exit])
+for ac_header in netcdf.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "netcdf.h" "ac_cv_header_netcdf_h" "$ac_includes_default"
+if test "x$ac_cv_header_netcdf_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_NETCDF_H 1
+_ACEOF
+
+else
+  al_netcdf_ok=no
+fi
+
+done
+
+#echo "al_netcdf_ok"
+#echo $al_netcdf_ok
+if test "x$FC_MODEXT" != x; then
+ #if test "x$ac_cv_prog_f90_uppercase_mod" = xyes; then
+   #AL_CHECK_FORTRAN_MODULE([NETCDF.mod], [], al_netcdf_ok=no)
+ #else
+
+# next check to see if the Fortran compiler will support
+# ISO_C_BINDING
+nc_iso_c_binding=yes
+
+# Some f90 compilers change the case of the mod file names. Others
+# require special flags to be set to deal with .f90 files. Find out
+# about this compiler.
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for Fortran flag to compile .f90 files" >&5
+$as_echo_n "checking for Fortran flag to compile .f90 files... " >&6; }
+if ${ac_cv_fc_srcext_f90+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_ext=f90
+ac_fcflags_srcext_save=$ac_fcflags_srcext
+ac_fcflags_srcext=
+ac_cv_fc_srcext_f90=unknown
+case $ac_ext in #(
+  [fF]77) ac_try=f77;; #(
+  *) ac_try=f95;;
+esac
+for ac_flag in none -qsuffix=f=f90 -Tf "-x $ac_try"; do
+  test "x$ac_flag" != xnone && ac_fcflags_srcext="$ac_flag"
+  cat > conftest.$ac_ext <<_ACEOF
+      program main
+
+      end
+_ACEOF
+if ac_fn_fc_try_compile "$LINENO"; then :
+  ac_cv_fc_srcext_f90=$ac_flag; break
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+done
+rm -f conftest.$ac_objext conftest.f90
+ac_fcflags_srcext=$ac_fcflags_srcext_save
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_fc_srcext_f90" >&5
+$as_echo "$ac_cv_fc_srcext_f90" >&6; }
+if test "x$ac_cv_fc_srcext_f90" = xunknown; then
+  as_fn_error $? "Fortran could not compile .f90 files" "$LINENO" 5
+else
+  ac_fc_srcext=f90
+  if test "x$ac_cv_fc_srcext_f90" = xnone; then
+    ac_fcflags_srcext=""
+    FCFLAGS_f90=""
+  else
+    ac_fcflags_srcext=$ac_cv_fc_srcext_f90
+    FCFLAGS_f90=$ac_cv_fc_srcext_f90
+  fi
+
+
+fi
+ac_ext=${ac_fc_srcext-f}
+ac_compile='$FC -c $FCFLAGS $ac_fcflags_srcext conftest.$ac_ext >&5'
+ac_link='$FC -o conftest$ac_exeext $FCFLAGS $LDFLAGS $ac_fcflags_srcext conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_fc_compiler_gnu
+
+ac_ext=c
+ac_cpp='$CPP $CPPFLAGS'
+ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_c_compiler_gnu
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking the Fortran 90 module netcdf is available " >&5
+$as_echo_n "checking the Fortran 90 module netcdf is available ... " >&6; }
+cat <<EOF >conftest.f90
+module conftest_module
+use netcdf
+end module conftest_module
+EOF
+doit='$FC -c ${FCFLAGS} ${FCFLAGS_f90} conftest.f90'
+if { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$doit\""; } >&5
+  (eval $doit) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+	 al_has_module=yes
+else
+	 al_has_module=no
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $al_has_module" >&5
+$as_echo "$al_has_module" >&6; }
+if test x"$al_has_module" = xyes; then :
+
+
+
+else
+
+        al_netcdf_ok=no
+
+fi
+
+
+ #fi
+fi
+#echo "al_netcdf_ok"
+#echo $al_netcdf_ok
+
+	if test "x$al_netcdf_ok" = xno; then
+		{ { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
+$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
+as_fn_error $? "\"Failed to find all netCDF prerequisites\"
+See \`config.log' for more details" "$LINENO" 5; }
+	fi
+fi
+
+if test "x$al_netcdff_present" = xno; then
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: \"Cannot find the fortran netcdf library: the fortran netCDF interface will not work\"" >&5
+$as_echo "$as_me: WARNING: \"Cannot find the fortran netcdf library: the fortran netCDF interface will not work\"" >&2;}
+fi
+ if test "x$al_netcdff_present" = xyes; then
+  HAS_FORTRAN_NETCDF_TRUE=
+  HAS_FORTRAN_NETCDF_FALSE='#'
+else
+  HAS_FORTRAN_NETCDF_TRUE='#'
+  HAS_FORTRAN_NETCDF_FALSE=
+fi
+
+
 
 # Checks for typedefs, structures, and compiler characteristics.
 #AC_TYPE_SIZE_T
 
 # Checks for library functions.
 #AC_FUNC_MALLOC
+
 
 
 if test "$enable_parallel" = yes; then
@@ -15686,6 +16565,14 @@ Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${HAS_F90_MODULES_TRUE}" && test -z "${HAS_F90_MODULES_FALSE}"; then
   as_fn_error $? "conditional \"HAS_F90_MODULES\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${HAS_ISO_C_BINDING_TRUE}" && test -z "${HAS_ISO_C_BINDING_FALSE}"; then
+  as_fn_error $? "conditional \"HAS_ISO_C_BINDING\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${HAS_FORTRAN_NETCDF_TRUE}" && test -z "${HAS_FORTRAN_NETCDF_FALSE}"; then
+  as_fn_error $? "conditional \"HAS_FORTRAN_NETCDF\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${UPPER_CASE_MOD_TRUE}" && test -z "${UPPER_CASE_MOD_FALSE}"; then

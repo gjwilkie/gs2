@@ -3,8 +3,8 @@ program test
   use simpledataio_write
   implicit none
   type (sdatio_file) :: sdatfile
-  type (sdatio_variable), pointer :: svar
-  type (sdatio_variable) :: svar2
+!  type (sdatio_variable), pointer :: svar
+!  type (sdatio_variable) :: svar2
   real :: parameter1 = 0.5
   double precision, dimension(2) :: yvar = (/0.1d0, 0.3d0/)
 	real, dimension(2) :: floatvar = (/0.1,0.3/)
@@ -12,7 +12,7 @@ program test
 	!double precision, dimension(3,2) ::  phivar = (/(/0.1,0.3/), (/2.0, 4.0/), (/-1.0, 3.6/)/);
 	double precision, dimension(3,2) ::  phivar = reshape((/0.1d0,2.0d0,-1.0d0, 0.3d0,4.0d0, 3.6d0/), (/3,2/))
 	complex*16 , dimension(3,2) ::  phicomp
-  complex :: parameter_comp = cmplx(4.0, 5.0)
+  complex :: parameter_comp 
   double precision, dimension(2) :: phi_tvar
   !write (*, *) 'phivar', phivar(2,1)
   integer :: i
@@ -25,6 +25,7 @@ program test
   phicomp = cmplx(phivar, phivar*2.0d0) ! for some reason this results in a loss
     ! of precision
   phicomp =  phivar + phivar*cmplx(0.0,2.0)
+  parameter_comp =  cmplx(4.0, 5.0)
   write (*,*) 'phicomp(1,1) is ', phicomp(1,1)
 
   call createfile(sdatfile, "test.cdf")

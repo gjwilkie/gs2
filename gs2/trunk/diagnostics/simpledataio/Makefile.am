@@ -26,7 +26,7 @@ endif
 include_HEADERS = include/simpledataio.h $(SDAT_MOD) $(SDAT_WRITE_MOD)
 # Sources required
 libsimpledataio_la_SOURCES = src/simpledataio.c 
-libsimpledataiof_la_SOURCES = src/simpledataiof.F90 src/simpledataio_write.f90
+libsimpledataiof_la_SOURCES = src/simpledataiof.F90 src/simpledataio_write.F90
 
 # Test programs
 bin_PROGRAMS=$(top_builddir)/test/testprog 
@@ -38,16 +38,22 @@ __top_builddir__test_testprog_LDADD=libsimpledataio.la
 __top_builddir__test_testprog_fortran_SOURCES=test/testf.f90
 __top_builddir__test_testprog_fortran_LDADD=libsimpledataiof.la libsimpledataio.la 
 
-# Weird that this is necessary, but oh well
-AM_FCFLAGS=-I/usr/include
 
 # To get the module files
-AM_FCFLAGS+=-Iinclude/
+AM_FCFLAGS=-Iinclude/
+
 
 # On HPC systems with Intel/PGI compilers, force static linking
 if FORCE_STATIC
 AM_LDFLAGS=-all-static
 else
+endif
+
+if HAS_FORTRAN_NETCDF
+AM_FCFLAGS+= -DFORTRAN_NETCDF
+endif
+if HAS_ISO_C_BINDING
+AM_FCFLAGS+= -DISO_C_BINDING
 endif
 
 # Serial tests for C and Fortran... invoked by make check
@@ -85,6 +91,6 @@ test/test_parallelf.f90: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
 endif
 
 # Need to generate the module file for simpledataiof before building simpledataio_write
-src/simpledataio_write.f90: src/generate_simpledataio_write.rb $(SDAT_MOD)
+src/simpledataio_write.F90: src/generate_simpledataio_write.rb $(SDAT_MOD)
 	env ruby $< > $@
 
