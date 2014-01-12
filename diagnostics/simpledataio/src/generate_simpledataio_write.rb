@@ -37,7 +37,9 @@ class Generator
 	def function_string
 		string = <<EOF
  subroutine #{procedure_name}(sfile, variable_name, val)
+#ifdef FORTRAN_NETCDF
    use netcdf
+#endif
 	 use simpledataio
    type(sdatio_file), intent(in) :: sfile
    character(*), intent(in) :: variable_name
@@ -46,6 +48,7 @@ class Generator
    integer :: fileid, varid, status, n
 	 #{complex ? realval_declaration : nil}
 
+#ifdef FORTRAN_NETCDF
    call number_of_unlimited_dimensions(sfile, variable_name, n)
    allocate(starts(n+#@dimsize#{complex ? "+1" : nil}))
    allocate(counts(n+#@dimsize#{complex ? "+1" : nil}))
@@ -64,6 +67,7 @@ class Generator
    if (.not. status .eq. 0) write (*,*) 'Error writing variable: ', variable_name, ', ',  nf90_strerror(status)"
 	 }
 
+#endif
 
  end subroutine #{procedure_name}
 EOF

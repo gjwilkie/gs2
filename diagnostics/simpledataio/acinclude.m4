@@ -444,3 +444,112 @@ AC_DEFUN([AX_COMPILER_VENDOR],
  ])
 ])
 
+
+AC_DEFUN([AL_CHECK_ISO_C_BINDING], [
+# next check to see if the Fortran compiler will support
+# ISO_C_BINDING
+nc_iso_c_binding=yes
+
+# Some f90 compilers change the case of the mod file names. Others
+# require special flags to be set to deal with .f90 files. Find out
+# about this compiler.
+AC_LANG_PUSH(Fortran)
+AC_FC_SRCEXT(f90)
+AC_LANG_POP(Fortran)
+AC_MSG_CHECKING([if Fortran compiler supports Fortran 2003 ISO_C_BINDING])
+cat <<EOF >conftest.f90
+module conftest_module
+use iso_c_binding
+end module conftest_module
+EOF
+doit='$FC -c ${FCFLAGS} ${FCFLAGS_f90} conftest.f90'
+if AC_TRY_EVAL(doit); then
+	 nc_iso_c_binding=yes
+else
+	 nc_iso_c_binding=no
+fi
+AC_MSG_RESULT([$nc_iso_c_binding])
+
+if test "x$nc_iso_c_binding" = xno; then
+		AC_MSG_WARN([ISO_C_BINDING not supported - defaulting to F90 interfaces])
+fi
+])
+
+AC_DEFUN([AL_CHECK_FORTRAN_MODULE], [
+# next check to see if the Fortran compiler will support
+# ISO_C_BINDING
+nc_iso_c_binding=yes
+
+# Some f90 compilers change the case of the mod file names. Others
+# require special flags to be set to deal with .f90 files. Find out
+# about this compiler.
+AC_LANG_PUSH(Fortran)
+AC_FC_SRCEXT(f90)
+AC_LANG_POP(Fortran)
+AC_MSG_CHECKING([the Fortran 90 module $1 is available ])
+cat <<EOF >conftest.f90
+module conftest_module
+use $1
+end module conftest_module
+EOF
+doit='$FC -c ${FCFLAGS} ${FCFLAGS_f90} conftest.f90'
+if AC_TRY_EVAL(doit); then
+	 al_has_module=yes
+else
+	 al_has_module=no
+fi
+AC_MSG_RESULT([$al_has_module])
+AS_IF([test x"$al_has_module" = xyes], [
+        $2
+],[
+        $3
+])
+
+])
+
+AC_DEFUN([AL_CHECK_NETCDF], [
+# Check to see if we can build both the C and Fortran netcdf bits
+
+#AC_REQUIRE([AC_PROG_FC_UPPERCASE_MOD])
+AC_REQUIRE([AC_FC_MODULE_EXTENSION])
+al_netcdf_ok=yes
+unset ac_cv_lib_netcdff_nc_create
+unset ac_cv_lib_netcdff_nf_close
+unset ac_cv_lib_netcdff_nf_close_
+AC_LANG_PUSH(Fortran)
+AC_FC_SRCEXT(f90)
+AC_LANG_POP(Fortran)
+AC_CHECK_LIB([netcdf], [nc_create], [], al_netcdf_ok=no)
+al_netcdff_present=yes
+AC_CHECK_LIB([netcdff], [nc_create], [], al_netcdff_present=no)
+if test "x$al_netcdff_present" = xno; then
+	al_netcdff_present=yes
+	AC_CHECK_LIB([netcdff], [nf_close], [], al_netcdff_present=no)
+fi
+if test "x$al_netcdff_present" = xno; then
+	al_netcdff_present=yes
+	AC_CHECK_LIB([netcdff], [nf_close_], [], al_netcdff_present=no)
+fi
+unset ac_cv_have_decl_nc_create
+AC_CHECK_DECL([nc_create], [], al_netcdf_ok=no, [
+							 #include "netcdf.h"
+							 ])
+#AC_CHECK_DECL([nc_create], [], AC_MSG_FAILURE([Cannot find function nc_create ]), [
+							 ##include "netcdf.h"
+							 #])
+
+# Checks for header files.
+#AC_CHECK_HEADERS([netcdf.h], [], [echo "netcdf.h not found... suggest defining CFLAGS='-I/location/of/netcdf/include'" && exit])
+AC_CHECK_HEADERS([netcdf.h], [], al_netcdf_ok=no)
+#echo "al_netcdf_ok"
+#echo $al_netcdf_ok
+if test "x$FC_MODEXT" != x; then 
+ #if test "x$ac_cv_prog_f90_uppercase_mod" = xyes; then
+   #AL_CHECK_FORTRAN_MODULE([NETCDF.mod], [], al_netcdf_ok=no)
+ #else
+   AL_CHECK_FORTRAN_MODULE([netcdf], [], al_netcdf_ok=no)
+ #fi
+fi
+#echo "al_netcdf_ok"
+#echo $al_netcdf_ok
+])
