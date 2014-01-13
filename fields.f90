@@ -69,7 +69,7 @@ contains
     use run_parameters, only: init_run_parameters
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
-    use fields_implicit, only: init_fields_implicit, init_phi_implicit
+    use fields_implicit, only: init_fields_implicit, init_allfields_implicit
     use fields_test, only: init_fields_test, init_phi_test
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
@@ -120,8 +120,8 @@ contains
 
     select case (fieldopt_switch)
     case (fieldopt_implicit)
-       if (debug) write(6,*) "init_fields: init_phi_implicit"
-       call init_phi_implicit
+       if (debug) write(6,*) "init_fields: init_allfields_implicit"
+       call init_allfields_implicit
     case (fieldopt_test)
        if (debug) write(6,*) "init_fields: init_phi_test"
        call init_phi_test

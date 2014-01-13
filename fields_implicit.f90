@@ -4,7 +4,7 @@ module fields_implicit
 
   public :: init_fields_implicit
   public :: advance_implicit
-  public :: init_phi_implicit
+  public :: init_allfields_implicit
   public :: nidx
   public :: reset_init
   public :: time_field
@@ -82,7 +82,7 @@ contains
   subroutine read_parameters
   end subroutine read_parameters
 
-  subroutine init_phi_implicit
+  subroutine init_allfields_implicit
 
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn_arrays, only: g, gnew
@@ -101,7 +101,7 @@ contains
     end if
     ! <MAB
 
-  end subroutine init_phi_implicit
+  end subroutine init_allfields_implicit
 
   subroutine get_field_vector (fl, phi, apar, bpar)
     use theta_grid, only: ntgrid
