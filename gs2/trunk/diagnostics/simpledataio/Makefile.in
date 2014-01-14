@@ -21,6 +21,7 @@
 
 
 
+
 VPATH = @srcdir@
 am__make_dryrun = \
   { \
@@ -57,12 +58,14 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-bin_PROGRAMS = $(top_builddir)/test/testprog$(EXEEXT) \
-	$(top_builddir)/test/testprog_fortran$(EXEEXT) $(am__EXEEXT_1)
+@USE_LIBTOOL_TRUE@bin_PROGRAMS =  \
+@USE_LIBTOOL_TRUE@	$(top_builddir)/test/testprog$(EXEEXT) \
+@USE_LIBTOOL_TRUE@	$(top_builddir)/test/testprog_fortran$(EXEEXT) \
+@USE_LIBTOOL_TRUE@	$(am__EXEEXT_1)
 @HAS_FORTRAN_NETCDF_TRUE@am__append_1 = -DFORTRAN_NETCDF
 @HAS_ISO_C_BINDING_TRUE@am__append_2 = -DISO_C_BINDING
-@PARALLEL_TRUE@am__append_3 = $(top_builddir)/test/testprog_fortran_parallel
-@PARALLEL_TRUE@am__append_4 = test/test_parallel.sh
+@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@am__append_3 = $(top_builddir)/test/testprog_fortran_parallel
+@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@am__append_4 = test/test_parallel.sh
 subdir = .
 DIST_COMMON = README $(am__configure_deps) $(am__include_HEADERS_DIST) \
 	$(srcdir)/Makefile.am $(srcdir)/Makefile.in \
@@ -107,36 +110,64 @@ am__uninstall_files_from_dir = { \
     || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
          $(am__cd) "$$dir" && rm -f $$files; }; \
   }
-am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" \
-	"$(DESTDIR)$(includedir)"
+am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(libdir)" \
+	"$(DESTDIR)$(bindir)" "$(DESTDIR)$(includedir)"
+LIBRARIES = $(lib_LIBRARIES)
+ARFLAGS = cru
+libsimpledataio_a_AR = $(AR) $(ARFLAGS)
+libsimpledataio_a_LIBADD =
+am__libsimpledataio_a_SOURCES_DIST = src/simpledataio2.c
+@USE_LIBTOOL_FALSE@am_libsimpledataio_a_OBJECTS =  \
+@USE_LIBTOOL_FALSE@	simpledataio2.$(OBJEXT)
+libsimpledataio_a_OBJECTS = $(am_libsimpledataio_a_OBJECTS)
+libsimpledataiof_a_AR = $(AR) $(ARFLAGS)
+libsimpledataiof_a_LIBADD =
+am__libsimpledataiof_a_SOURCES_DIST = src/simpledataiof2.F90 \
+	src/simpledataio_write2.F90
+@USE_LIBTOOL_FALSE@am_libsimpledataiof_a_OBJECTS =  \
+@USE_LIBTOOL_FALSE@	simpledataiof2.$(OBJEXT) \
+@USE_LIBTOOL_FALSE@	simpledataio_write2.$(OBJEXT)
+libsimpledataiof_a_OBJECTS = $(am_libsimpledataiof_a_OBJECTS)
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libsimpledataio_la_LIBADD =
-am_libsimpledataio_la_OBJECTS = simpledataio.lo
+am__libsimpledataio_la_SOURCES_DIST = src/simpledataio.c
+@USE_LIBTOOL_TRUE@am_libsimpledataio_la_OBJECTS = simpledataio.lo
 libsimpledataio_la_OBJECTS = $(am_libsimpledataio_la_OBJECTS)
+@USE_LIBTOOL_TRUE@am_libsimpledataio_la_rpath = -rpath $(libdir)
 libsimpledataiof_la_LIBADD =
-am_libsimpledataiof_la_OBJECTS = simpledataiof.lo \
-	simpledataio_write.lo
+am__libsimpledataiof_la_SOURCES_DIST = src/simpledataiof.F90 \
+	src/simpledataio_write.F90
+@USE_LIBTOOL_TRUE@am_libsimpledataiof_la_OBJECTS = simpledataiof.lo \
+@USE_LIBTOOL_TRUE@	simpledataio_write.lo
 libsimpledataiof_la_OBJECTS = $(am_libsimpledataiof_la_OBJECTS)
-@PARALLEL_TRUE@am__EXEEXT_1 = $(top_builddir)/test/testprog_fortran_parallel$(EXEEXT)
+@USE_LIBTOOL_TRUE@am_libsimpledataiof_la_rpath = -rpath $(libdir)
+@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@am__EXEEXT_1 = $(top_builddir)/test/testprog_fortran_parallel$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS)
-am___top_builddir__test_testprog_OBJECTS = test.$(OBJEXT)
+am____top_builddir__test_testprog_SOURCES_DIST = test/test.c
+@USE_LIBTOOL_TRUE@am___top_builddir__test_testprog_OBJECTS =  \
+@USE_LIBTOOL_TRUE@	test.$(OBJEXT)
 __top_builddir__test_testprog_OBJECTS =  \
 	$(am___top_builddir__test_testprog_OBJECTS)
-__top_builddir__test_testprog_DEPENDENCIES = libsimpledataio.la
+@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_DEPENDENCIES =  \
+@USE_LIBTOOL_TRUE@	libsimpledataio.$(LA)
 am__dirstamp = $(am__leading_dot)dirstamp
-am___top_builddir__test_testprog_fortran_OBJECTS = testf.$(OBJEXT)
+am____top_builddir__test_testprog_fortran_SOURCES_DIST =  \
+	test/testf.f90
+@USE_LIBTOOL_TRUE@am___top_builddir__test_testprog_fortran_OBJECTS =  \
+@USE_LIBTOOL_TRUE@	testf.$(OBJEXT)
 __top_builddir__test_testprog_fortran_OBJECTS =  \
 	$(am___top_builddir__test_testprog_fortran_OBJECTS)
-__top_builddir__test_testprog_fortran_DEPENDENCIES =  \
-	libsimpledataiof.la libsimpledataio.la
+@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_DEPENDENCIES =  \
+@USE_LIBTOOL_TRUE@	libsimpledataiof.$(LA) libsimpledataio.$(LA)
 am____top_builddir__test_testprog_fortran_parallel_SOURCES_DIST =  \
 	test/test_parallelf.f90
-@PARALLEL_TRUE@am___top_builddir__test_testprog_fortran_parallel_OBJECTS =  \
-@PARALLEL_TRUE@	test_parallelf.$(OBJEXT)
+@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@am___top_builddir__test_testprog_fortran_parallel_OBJECTS =  \
+@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@	test_parallelf.$(OBJEXT)
 __top_builddir__test_testprog_fortran_parallel_OBJECTS =  \
 	$(am___top_builddir__test_testprog_fortran_parallel_OBJECTS)
-@PARALLEL_TRUE@__top_builddir__test_testprog_fortran_parallel_DEPENDENCIES =  \
-@PARALLEL_TRUE@	libsimpledataiof.la libsimpledataio.la
+@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_parallel_DEPENDENCIES =  \
+@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@	libsimpledataiof.$(LA) \
+@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@	libsimpledataio.$(LA)
 DEFAULT_INCLUDES = -I.@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -162,14 +193,17 @@ LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 FCCOMPILE = $(FC) $(AM_FCFLAGS) $(FCFLAGS)
 LTFCCOMPILE = $(LIBTOOL) --tag=FC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=compile $(FC) $(AM_FCFLAGS) $(FCFLAGS)
-SOURCES = $(libsimpledataio_la_SOURCES) $(libsimpledataiof_la_SOURCES) \
+SOURCES = $(libsimpledataio_a_SOURCES) $(libsimpledataiof_a_SOURCES) \
+	$(libsimpledataio_la_SOURCES) $(libsimpledataiof_la_SOURCES) \
 	$(__top_builddir__test_testprog_SOURCES) \
 	$(__top_builddir__test_testprog_fortran_SOURCES) \
 	$(__top_builddir__test_testprog_fortran_parallel_SOURCES)
-DIST_SOURCES = $(libsimpledataio_la_SOURCES) \
-	$(libsimpledataiof_la_SOURCES) \
-	$(__top_builddir__test_testprog_SOURCES) \
-	$(__top_builddir__test_testprog_fortran_SOURCES) \
+DIST_SOURCES = $(am__libsimpledataio_a_SOURCES_DIST) \
+	$(am__libsimpledataiof_a_SOURCES_DIST) \
+	$(am__libsimpledataio_la_SOURCES_DIST) \
+	$(am__libsimpledataiof_la_SOURCES_DIST) \
+	$(am____top_builddir__test_testprog_SOURCES_DIST) \
+	$(am____top_builddir__test_testprog_fortran_SOURCES_DIST) \
 	$(am____top_builddir__test_testprog_fortran_parallel_SOURCES_DIST)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
@@ -319,12 +353,22 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
+@USE_LIBTOOL_FALSE@LA = a
+#
+#
+@USE_LIBTOOL_TRUE@LA = la
+@USE_LIBTOOL_FALSE@LO = o
+@USE_LIBTOOL_TRUE@LO = lo
+
 # C and Fortran Libraries
-lib_LTLIBRARIES = libsimpledataio.la libsimpledataiof.la
+@USE_LIBTOOL_TRUE@lib_LTLIBRARIES = libsimpledataio.la libsimpledataiof.la
+@USE_LIBTOOL_FALSE@lib_LIBRARIES = libsimpledataio.a libsimpledataiof.a
+@USE_LIBTOOL_TRUE@lib_LIBRARIES = 
 # The Cray compiler, for example, stores the module information
 # in the object files, hence no modules are necessary
 @HAS_F90_MODULES_FALSE@SDAT_MOD = 
 @HAS_F90_MODULES_TRUE@@UPPER_CASE_MOD_FALSE@SDAT_MOD = simpledataio.mod
+#lib_LTLIBRARIES=
 
 # If the compiler generates .mod files
 # If the .mod files have uppercase names
@@ -335,14 +379,18 @@ lib_LTLIBRARIES = libsimpledataio.la libsimpledataiof.la
 # Public headers/fortran modules
 include_HEADERS = include/simpledataio.h $(SDAT_MOD) $(SDAT_WRITE_MOD)
 # Sources required
-libsimpledataio_la_SOURCES = src/simpledataio.c 
-libsimpledataiof_la_SOURCES = src/simpledataiof.F90 src/simpledataio_write.F90
+@USE_LIBTOOL_TRUE@libsimpledataio_la_SOURCES = src/simpledataio.c
+#EXTRA_libsimpledataio_la_SOURCES = src/simpledataio.c 
+@USE_LIBTOOL_TRUE@libsimpledataiof_la_SOURCES = src/simpledataiof.F90 src/simpledataio_write.F90
+#EXTRA_libsimpledataiof_la_SOURCES = src/simpledataiof.F90 src/simpledataio_write.F90
+@USE_LIBTOOL_FALSE@libsimpledataio_a_SOURCES = src/simpledataio2.c 
+@USE_LIBTOOL_FALSE@libsimpledataiof_a_SOURCES = src/simpledataiof2.F90 src/simpledataio_write2.F90
 
 # Test program sources
-__top_builddir__test_testprog_SOURCES = test/test.c
-__top_builddir__test_testprog_LDADD = libsimpledataio.la
-__top_builddir__test_testprog_fortran_SOURCES = test/testf.f90
-__top_builddir__test_testprog_fortran_LDADD = libsimpledataiof.la libsimpledataio.la 
+@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_SOURCES = test/test.c
+@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_LDADD = libsimpledataio.$(LA)
+@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_SOURCES = test/testf.f90
+@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_LDADD = libsimpledataiof.$(LA) libsimpledataio.$(LA) 
 
 # To get the module files
 AM_FCFLAGS = -Iinclude/ $(am__append_1) $(am__append_2)
@@ -356,10 +404,18 @@ TESTS_ENVIRONMENT =
 
 # If the user has specified --enable-parallel
 @PARALLEL_TRUE@AM_CPPFLAGS = -DPARALLEL
-@PARALLEL_TRUE@__top_builddir__test_testprog_fortran_parallel_SOURCES = test/test_parallelf.f90
-@PARALLEL_TRUE@__top_builddir__test_testprog_fortran_parallel_LDADD = libsimpledataiof.la libsimpledataio.la
+@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_parallel_SOURCES = test/test_parallelf.f90
+@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_parallel_LDADD = libsimpledataiof.$(LA) libsimpledataio.$(LA)
 #__top_builddir__test_testprog_fortran_parallel_LDFLAGS=-lmpi -lmpi_f90
-CLEANFILES = test.cdf testfile.cdf test_parallel.cdf $(SDAT_MOD) $(SDAT_WRITE_MOD) include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
+CLEANFILES = test.cdf testfile.cdf test_parallel.cdf $(SDAT_MOD) \
+	$(SDAT_WRITE_MOD) include/$(SDAT_MOD) \
+	include/$(SDAT_WRITE_MOD) src/simpledataio2.c \
+	src/simpledataiof2.F90 src/simpledataio_write2.F90
+
+#TEST_EXTENSIONS = .sh
+#SH_LOG_COMPILER = bash
+#LOG_COMPILER = sh
+@USE_LIBTOOL_FALSE@TWO = 2
 all: all-am
 
 .SUFFIXES:
@@ -398,6 +454,45 @@ $(top_srcdir)/configure:  $(am__configure_deps)
 $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
 	$(am__cd) $(srcdir) && $(ACLOCAL) $(ACLOCAL_AMFLAGS)
 $(am__aclocal_m4_deps):
+install-libLIBRARIES: $(lib_LIBRARIES)
+	@$(NORMAL_INSTALL)
+	@list='$(lib_LIBRARIES)'; test -n "$(libdir)" || list=; \
+	list2=; for p in $$list; do \
+	  if test -f $$p; then \
+	    list2="$$list2 $$p"; \
+	  else :; fi; \
+	done; \
+	test -z "$$list2" || { \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(libdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(libdir)" || exit 1; \
+	  echo " $(INSTALL_DATA) $$list2 '$(DESTDIR)$(libdir)'"; \
+	  $(INSTALL_DATA) $$list2 "$(DESTDIR)$(libdir)" || exit $$?; }
+	@$(POST_INSTALL)
+	@list='$(lib_LIBRARIES)'; test -n "$(libdir)" || list=; \
+	for p in $$list; do \
+	  if test -f $$p; then \
+	    $(am__strip_dir) \
+	    echo " ( cd '$(DESTDIR)$(libdir)' && $(RANLIB) $$f )"; \
+	    ( cd "$(DESTDIR)$(libdir)" && $(RANLIB) $$f ) || exit $$?; \
+	  else :; fi; \
+	done
+
+uninstall-libLIBRARIES:
+	@$(NORMAL_UNINSTALL)
+	@list='$(lib_LIBRARIES)'; test -n "$(libdir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(libdir)'; $(am__uninstall_files_from_dir)
+
+clean-libLIBRARIES:
+	-test -z "$(lib_LIBRARIES)" || rm -f $(lib_LIBRARIES)
+libsimpledataio.a: $(libsimpledataio_a_OBJECTS) $(libsimpledataio_a_DEPENDENCIES) $(EXTRA_libsimpledataio_a_DEPENDENCIES) 
+	-rm -f libsimpledataio.a
+	$(libsimpledataio_a_AR) libsimpledataio.a $(libsimpledataio_a_OBJECTS) $(libsimpledataio_a_LIBADD)
+	$(RANLIB) libsimpledataio.a
+libsimpledataiof.a: $(libsimpledataiof_a_OBJECTS) $(libsimpledataiof_a_DEPENDENCIES) $(EXTRA_libsimpledataiof_a_DEPENDENCIES) 
+	-rm -f libsimpledataiof.a
+	$(libsimpledataiof_a_AR) libsimpledataiof.a $(libsimpledataiof_a_OBJECTS) $(libsimpledataiof_a_LIBADD)
+	$(RANLIB) libsimpledataiof.a
 install-libLTLIBRARIES: $(lib_LTLIBRARIES)
 	@$(NORMAL_INSTALL)
 	@list='$(lib_LTLIBRARIES)'; test -n "$(libdir)" || list=; \
@@ -431,9 +526,9 @@ clean-libLTLIBRARIES:
 	  rm -f "$${dir}/so_locations"; \
 	done
 libsimpledataio.la: $(libsimpledataio_la_OBJECTS) $(libsimpledataio_la_DEPENDENCIES) $(EXTRA_libsimpledataio_la_DEPENDENCIES) 
-	$(LINK) -rpath $(libdir) $(libsimpledataio_la_OBJECTS) $(libsimpledataio_la_LIBADD) $(LIBS)
+	$(LINK) $(am_libsimpledataio_la_rpath) $(libsimpledataio_la_OBJECTS) $(libsimpledataio_la_LIBADD) $(LIBS)
 libsimpledataiof.la: $(libsimpledataiof_la_OBJECTS) $(libsimpledataiof_la_DEPENDENCIES) $(EXTRA_libsimpledataiof_la_DEPENDENCIES) 
-	$(FCLINK) -rpath $(libdir) $(libsimpledataiof_la_OBJECTS) $(libsimpledataiof_la_LIBADD) $(LIBS)
+	$(FCLINK) $(am_libsimpledataiof_la_rpath) $(libsimpledataiof_la_OBJECTS) $(libsimpledataiof_la_LIBADD) $(LIBS)
 install-binPROGRAMS: $(bin_PROGRAMS)
 	@$(NORMAL_INSTALL)
 	@list='$(bin_PROGRAMS)'; test -n "$(bindir)" || list=; \
@@ -500,6 +595,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/simpledataio.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/simpledataio2.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test.Po@am__quote@
 
 .F90.o:
@@ -510,6 +606,18 @@ distclean-compile:
 
 .F90.lo:
 	$(LTPPFCCOMPILE) -c -o $@ $<
+
+simpledataiof2.o: src/simpledataiof2.F90
+	$(FC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_FCFLAGS) $(FCFLAGS) -c -o simpledataiof2.o `test -f 'src/simpledataiof2.F90' || echo '$(srcdir)/'`src/simpledataiof2.F90
+
+simpledataiof2.obj: src/simpledataiof2.F90
+	$(FC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_FCFLAGS) $(FCFLAGS) -c -o simpledataiof2.obj `if test -f 'src/simpledataiof2.F90'; then $(CYGPATH_W) 'src/simpledataiof2.F90'; else $(CYGPATH_W) '$(srcdir)/src/simpledataiof2.F90'; fi`
+
+simpledataio_write2.o: src/simpledataio_write2.F90
+	$(FC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_FCFLAGS) $(FCFLAGS) -c -o simpledataio_write2.o `test -f 'src/simpledataio_write2.F90' || echo '$(srcdir)/'`src/simpledataio_write2.F90
+
+simpledataio_write2.obj: src/simpledataio_write2.F90
+	$(FC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_FCFLAGS) $(FCFLAGS) -c -o simpledataio_write2.obj `if test -f 'src/simpledataio_write2.F90'; then $(CYGPATH_W) 'src/simpledataio_write2.F90'; else $(CYGPATH_W) '$(srcdir)/src/simpledataio_write2.F90'; fi`
 
 simpledataiof.lo: src/simpledataiof.F90
 	$(LIBTOOL)  --tag=FC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(FC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_FCFLAGS) $(FCFLAGS) -c -o simpledataiof.lo `test -f 'src/simpledataiof.F90' || echo '$(srcdir)/'`src/simpledataiof.F90
@@ -537,6 +645,20 @@ simpledataio_write.lo: src/simpledataio_write.F90
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LTCOMPILE) -c -o $@ $<
+
+simpledataio2.o: src/simpledataio2.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT simpledataio2.o -MD -MP -MF $(DEPDIR)/simpledataio2.Tpo -c -o simpledataio2.o `test -f 'src/simpledataio2.c' || echo '$(srcdir)/'`src/simpledataio2.c
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/simpledataio2.Tpo $(DEPDIR)/simpledataio2.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='src/simpledataio2.c' object='simpledataio2.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o simpledataio2.o `test -f 'src/simpledataio2.c' || echo '$(srcdir)/'`src/simpledataio2.c
+
+simpledataio2.obj: src/simpledataio2.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT simpledataio2.obj -MD -MP -MF $(DEPDIR)/simpledataio2.Tpo -c -o simpledataio2.obj `if test -f 'src/simpledataio2.c'; then $(CYGPATH_W) 'src/simpledataio2.c'; else $(CYGPATH_W) '$(srcdir)/src/simpledataio2.c'; fi`
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/simpledataio2.Tpo $(DEPDIR)/simpledataio2.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='src/simpledataio2.c' object='simpledataio2.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o simpledataio2.obj `if test -f 'src/simpledataio2.c'; then $(CYGPATH_W) 'src/simpledataio2.c'; else $(CYGPATH_W) '$(srcdir)/src/simpledataio2.c'; fi`
 
 simpledataio.lo: src/simpledataio.c
 @am__fastdepCC_TRUE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT simpledataio.lo -MD -MP -MF $(DEPDIR)/simpledataio.Tpo -c -o simpledataio.lo `test -f 'src/simpledataio.c' || echo '$(srcdir)/'`src/simpledataio.c
@@ -921,11 +1043,11 @@ distcleancheck: distclean
 check-am: all-am
 	$(MAKE) $(AM_MAKEFLAGS) check-TESTS
 check: check-am
-all-am: Makefile $(LTLIBRARIES) $(PROGRAMS) $(HEADERS)
+all-am: Makefile $(LIBRARIES) $(LTLIBRARIES) $(PROGRAMS) $(HEADERS)
 install-binPROGRAMS: install-libLTLIBRARIES
 
 installdirs:
-	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(includedir)"; do \
+	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(libdir)" "$(DESTDIR)$(bindir)" "$(DESTDIR)$(includedir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-am
@@ -962,8 +1084,8 @@ maintainer-clean-generic:
 	@echo "it deletes files that may require special tools to rebuild."
 clean: clean-am
 
-clean-am: clean-binPROGRAMS clean-generic clean-libLTLIBRARIES \
-	clean-libtool mostlyclean-am
+clean-am: clean-binPROGRAMS clean-generic clean-libLIBRARIES \
+	clean-libLTLIBRARIES clean-libtool mostlyclean-am
 
 distclean: distclean-am
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
@@ -990,7 +1112,8 @@ install-dvi: install-dvi-am
 
 install-dvi-am:
 
-install-exec-am: install-binPROGRAMS install-libLTLIBRARIES
+install-exec-am: install-binPROGRAMS install-libLIBRARIES \
+	install-libLTLIBRARIES
 
 install-html: install-html-am
 
@@ -1033,43 +1156,46 @@ ps: ps-am
 ps-am:
 
 uninstall-am: uninstall-binPROGRAMS uninstall-includeHEADERS \
-	uninstall-libLTLIBRARIES
+	uninstall-libLIBRARIES uninstall-libLTLIBRARIES
 
 .MAKE: check-am install-am install-strip
 
 .PHONY: CTAGS GTAGS all all-am am--refresh check check-TESTS check-am \
-	clean clean-binPROGRAMS clean-generic clean-libLTLIBRARIES \
-	clean-libtool ctags dist dist-all dist-bzip2 dist-gzip \
-	dist-lzip dist-lzma dist-shar dist-tarZ dist-xz dist-zip \
-	distcheck distclean distclean-compile distclean-generic \
-	distclean-libtool distclean-tags distcleancheck distdir \
-	distuninstallcheck dvi dvi-am html html-am info info-am \
-	install install-am install-binPROGRAMS install-data \
-	install-data-am install-dvi install-dvi-am install-exec \
-	install-exec-am install-html install-html-am \
+	clean clean-binPROGRAMS clean-generic clean-libLIBRARIES \
+	clean-libLTLIBRARIES clean-libtool ctags dist dist-all \
+	dist-bzip2 dist-gzip dist-lzip dist-lzma dist-shar dist-tarZ \
+	dist-xz dist-zip distcheck distclean distclean-compile \
+	distclean-generic distclean-libtool distclean-tags \
+	distcleancheck distdir distuninstallcheck dvi dvi-am html \
+	html-am info info-am install install-am install-binPROGRAMS \
+	install-data install-data-am install-dvi install-dvi-am \
+	install-exec install-exec-am install-html install-html-am \
 	install-includeHEADERS install-info install-info-am \
-	install-libLTLIBRARIES install-man install-pdf install-pdf-am \
-	install-ps install-ps-am install-strip installcheck \
-	installcheck-am installdirs maintainer-clean \
-	maintainer-clean-generic mostlyclean mostlyclean-compile \
-	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
-	tags uninstall uninstall-am uninstall-binPROGRAMS \
-	uninstall-includeHEADERS uninstall-libLTLIBRARIES
+	install-libLIBRARIES install-libLTLIBRARIES install-man \
+	install-pdf install-pdf-am install-ps install-ps-am \
+	install-strip installcheck installcheck-am installdirs \
+	maintainer-clean maintainer-clean-generic mostlyclean \
+	mostlyclean-compile mostlyclean-generic mostlyclean-libtool \
+	pdf pdf-am ps ps-am tags uninstall uninstall-am \
+	uninstall-binPROGRAMS uninstall-includeHEADERS \
+	uninstall-libLIBRARIES uninstall-libLTLIBRARIES
 
-
-#TEST_EXTENSIONS = .sh
-#SH_LOG_COMPILER = bash
-#LOG_COMPILER = sh
-
-@HAS_F90_MODULES_TRUE@$(SDAT_MOD): simpledataiof.lo
+@HAS_F90_MODULES_TRUE@$(SDAT_MOD): simpledataiof$(TWO).$(LO)
 @HAS_F90_MODULES_TRUE@include/$(SDAT_MOD): $(SDAT_MOD)
 @HAS_F90_MODULES_TRUE@	cp $(SDAT_MOD) include/.
-@HAS_F90_MODULES_TRUE@$(SDAT_WRITE_MOD): simpledataio_write.lo
+@HAS_F90_MODULES_TRUE@$(SDAT_WRITE_MOD): simpledataio_write$(TWO).$(LO)
 @HAS_F90_MODULES_TRUE@include/$(SDAT_WRITE_MOD): $(SDAT_WRITE_MOD)
 @HAS_F90_MODULES_TRUE@	cp $(SDAT_WRITE_MOD) include/.
 #simpledataio_write.o: include/$(SDAT_MOD) 
 @HAS_F90_MODULES_TRUE@test/testf.f90: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
 @HAS_F90_MODULES_TRUE@test/test_parallelf.f90: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
+
+@USE_LIBTOOL_FALSE@src/simpledataio2.c: src/simpledataio.c
+@USE_LIBTOOL_FALSE@	cp $< $@
+@USE_LIBTOOL_FALSE@src/simpledataiof2.F90: src/simpledataiof.F90
+@USE_LIBTOOL_FALSE@	cp $< $@
+@USE_LIBTOOL_FALSE@src/simpledataio_write2.F90: src/simpledataio_write.F90
+@USE_LIBTOOL_FALSE@	cp $< $@
 
 # Need to generate the module file for simpledataiof before building simpledataio_write
 src/simpledataio_write.F90: src/generate_simpledataio_write.rb $(SDAT_MOD)
