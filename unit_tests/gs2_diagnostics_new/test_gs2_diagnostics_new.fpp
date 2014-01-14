@@ -1,3 +1,4 @@
+#define CONCAT //
 
 !> A program that tests the new diagnostics module. It  runs 
 !! a  linear cyclone test case and then checks that the old and
@@ -24,7 +25,9 @@ program test_gs2_diagnostics_new
     use unit_tests
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
     use gs2_diagnostics, only: finish_gs2_diagnostics
+#ifdef NEW_DIAG
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
+#endif
     implicit none
     integer :: n_vars 
     integer :: i
@@ -83,7 +86,9 @@ program test_gs2_diagnostics_new
     !call process_test(test_function(), 'results')
 
     call finish_gs2_diagnostics(ilast_step)
+#ifdef NEW_DIAG
     call finish_gs2_diagnostics_new
+#endif
     call finish_gs2
 
     if (proc0) then
@@ -108,6 +113,8 @@ contains
     logical :: test_variable
     character(200) ::  command 
     
+    test_variable=.true.
+#ifdef NEW_DIAG
     command = "if [ ""`ncdump -v "//var_name//" test_gs2_diagnostics_new.out.nc  | tail -n "//n_lines//"`"" = &
      &  ""`ncdump -v "//new_var_name//" test_gs2_diagnostics_new.cdf | tail -n "//n_lines//" `"" ]; &
      & then echo ""T"" > test_tmp.txt; fi"
@@ -119,6 +126,7 @@ contains
     open(120349, file='test_tmp.txt')
     read(120349, '(L)') test_variable
     close(120349)
+#endif
   end function test_variable
 
 

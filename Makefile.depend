@@ -84,6 +84,7 @@ ffttester_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -145,6 +146,7 @@ gs2_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -209,6 +211,7 @@ ingen_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -246,9 +249,6 @@ rungridgen_mod = \
 	 gridgen4mod.o \
 	 rungridgen.o \
 	 spl.o 
-
-test_mod = \
-	 test_double.o 
 
 antenna.o: \
 	 antenna_data.o \
@@ -298,10 +298,6 @@ diagnostics_config.o: \
 	 text_options.o 
 diagnostics_create_and_write.o: \
 	 diagnostics_config.o 
-diagnostics_switches.o: \
-	 file_utils.o \
-	 mp.o \
-	 text_options.o 
 diagnostics_write_fields.o: \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
@@ -439,6 +435,20 @@ geometry.o: \
 	 ideq.o \
 	 leq.o \
 	 peq.o 
+geometry_get_advanced_parameters__genmod.o: \
+	 geometry.o 
+geometry_get_coefficients__genmod.o: \
+	 geometry.o 
+geometry_get_constant_coefficients__genmod.o: \
+	 geometry.o 
+geometry_get_default_advanced_parameters__genmod.o: \
+	 geometry.o 
+geometry_get_miller_parameters__genmod.o: \
+	 geometry.o 
+geometry_set_advanced_parameters__genmod.o: \
+	 geometry.o 
+geometry_set_miller_parameters__genmod.o: \
+	 geometry.o 
 geq.o: \
 	 constants.o \
 	 netcdf_utils.o \
@@ -726,13 +736,10 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
-new_diagnostics_switches.o: \
-	 file_utils.o \
-	 mp.o \
-	 text_options.o 
 nonlinear_terms.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
@@ -768,7 +775,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -797,7 +805,6 @@ species.o: \
 spfunc.o: \
 	 constants.o 
 spl.o: 
-test_double.o: 
 test_layouts.o: \
 	 mp.o 
 text_options.o: 

@@ -1,7 +1,15 @@
 
-SIMPLEDATAIO_INC_DIR=diagnostics/simpledataio/include
+ifeq ($(SIMPLEDATAIO_CONF_ARCHIVEONLY), true)
+  SIMPLEDATAIO_CONF_EARCHIVE=--enable-archiveonly
+	SIMPLEDATAIO_INC_DIR=diagnostics/simpledataio/
+	SIMPLEDATAIO_LIB_DIR=diagnostics/simpledataio/
+else
+  SIMPLEDATAIO_CONF_EARCHIVE=
+	SIMPLEDATAIO_INC_DIR=diagnostics/simpledataio/include
+	SIMPLEDATAIO_LIB_DIR=diagnostics/simpledataio/.libs
+endif
+
 SIMPLEDATAIO_INC=-I$(PWD)/$(SIMPLEDATAIO_INC_DIR)
-SIMPLEDATAIO_LIB_DIR=diagnostics/simpledataio/.libs
 SIMPLEDATAIO_LIB=$(SIMPLEDATAIO_LIB_DIR)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a
 SIMPLEDATAIO_MODULE_FILES=$(SIMPLEDATAIO_INC_DIR)/simpledataio.mod $(SIMPLEDATAIO_INC_DIR)/simpledataio_write.mod
 
@@ -13,16 +21,18 @@ ifdef USE_MPI
 endif
 
 
-ifeq ($(SIMPLEDATAIO_CONF_SYSTEM), none)
-SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) 
-else
-ifndef SIMPLEDATAIO_CONF_SYSTEM
-SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) FCFLAGS="$(NETCDF_INC)" LDFLAGS="$(NETCDF_LIB)"
-SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) FCFLAGS="$(NETCDF_INC)"
-else
+
+#ifeq ($(SIMPLEDATAIO_CONF_SYSTEM), none)
+#SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) 
+#else
+#ifndef SIMPLEDATAIO_CONF_SYSTEM
+#SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) FCFLAGS="$(NETCDF_INC)" LDFLAGS="$(NETCDF_LIB)"
+#SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) FCFLAGS="$(NETCDF_INC)"
+#else
 SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) $(SIMPLEDATAIO_CONF_SYSTEM)
-endif
-endif
+SIMPLEDATAIO_CONF+=$(SIMPLEDATAIO_CONF_EARCHIVE)
+#endif
+#endif
 
 ifdef USE_PARALLEL_NETCDF
 SIMPLEDATAIO_CONF+=--enable-parallel
