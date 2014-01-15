@@ -7,20 +7,12 @@ module gs2_diagnostics_new
 
   implicit none
 
-  type(diagnostics_type) :: gnostics
   !integer, parameter :: gnostics%rtype = SDATIO_DOUBLE
 
-  !> Read namelist diagnostics_config, initialise submodules,
-  !! open output file 'run_name.cdf' and create dimensions.
   public :: init_gs2_diagnostics_new
   
-  !> Close output file and finish submodules
   public :: finish_gs2_diagnostics_new
 
-  !> Create or write all variables according to the value of istep:
-  !!   istep=-1 --> Create all netcdf variables
-  !!   istep=0 --> Write constant arrays/parameters (e.g. aky) and initial values
-  !!   istep>0 --> Write variables
   public :: run_diagnostics
 
   !> Options passed to init_gs2_diagnostics_new 
@@ -33,8 +25,12 @@ module gs2_diagnostics_new
 
   private 
 
+  type(diagnostics_type) :: gnostics
+
 
 contains
+  !> Read namelist diagnostics_config, initialise submodules,
+  !! open output file 'run_name.cdf' and create dimensions.
   subroutine init_gs2_diagnostics_new(init_options)
     use diagnostics_config, only: init_diagnostics_config
     use volume_averages, only: init_volume_averages
@@ -69,8 +65,8 @@ contains
     call init_diagnostics_write_fluxes
 
     !gnostics%create = .true.
-   !> Integer below gives the sdatio type 
-   !! which corresponds to a gs2 real
+   ! Integer below gives the sdatio type 
+   ! which corresponds to a gs2 real
     !gnostics%rtype = SDATIO_DOUBLE
 
     if (gnostics%parallel) then
@@ -90,6 +86,10 @@ contains
     if (gnostics%parallel .or. proc0) call closefile(gnostics%sfile)
   end subroutine finish_gs2_diagnostics_new
 
+  !> Create or write all variables according to the value of istep:
+  !! istep=-1 --> Create all netcdf variables
+  !! istep=0 --> Write constant arrays/parameters (e.g. aky) and initial values
+  !! istep>0 --> Write variables
   subroutine run_diagnostics(istep, exit)
     use gs2_diagnostics, only: nwrite
     use gs2_time, only: user_time
