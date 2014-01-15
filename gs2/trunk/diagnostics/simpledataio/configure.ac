@@ -23,9 +23,9 @@ AC_MSG_CHECKING([whether to build archives only])
 AC_ARG_ENABLE([archiveonly],
               [AS_HELP_STRING([--enable-archiveonly],
                               [disable libtool and build old-fashioned .a libraries... useful on some HPC systems with limited compilers. Also diagnose compilation of test programs])],
-							[enable_libtool=no], [enable_libtool=yes])
-AC_MSG_RESULT([$enable_libtool])
-AM_CONDITIONAL(USE_LIBTOOL, [test "x$enable_libtool" = xyes])
+							[enable_archiveonly=yes], [enable_archiveonly=no])
+AC_MSG_RESULT([$enable_archiveonly])
+AM_CONDITIONAL(ARCHIVEONLY, [test "x$enable_archiveonly" = xyes])
 
 
 # Check whether to build it using mpi compilers (must be used for enable_parallel)
@@ -57,6 +57,11 @@ AX_PROG_FC_MPI([test "x$enable_mpi" = xyes], [], [
       AC_MSG_WARN([No MPI Fortran compiler found, not using MPI.])
     fi
   ])
+AC_FC_PP_DEFINE
+AC_SUBST([FC_DEFINE])
+AC_FC_PP_SRCEXT(F90)
+#AC_MSG_RESULT([fcdefine is $FC_DEFINE])
+#FCFLAGS+=$FC_DEFINE
 
 # If we are not using the GNU compiler, we are probably on an HPC system
 # in which case, we force static compilation of the test programs
@@ -151,6 +156,72 @@ fi
 
 AC_PROG_FC_UPPERCASE_MOD
 AM_CONDITIONAL(UPPER_CASE_MOD, [test "x$ac_cv_prog_f90_uppercase_mod" = xyes])
+
+#MYDEFS=$DEFS
+#AC_SUBST([MYDEFS])
+ac_script=['
+:mline
+/\\$/{
+ N
+ s,\\\n,,
+ b mline
+}
+t clear
+:clear
+s/^[   ]*#[  ]*define[   ][  ]*\([^  (][^  (]*([^)]*)\)[   ]*\(.*\)/-D\1=\2/g
+t quote
+s/^[   ]*#[  ]*define[   ][  ]*\([^  ][^   ]*\)[   ]*\(.*\)/-D\1=\2/g
+t quote
+b any
+:quote
+s/[  `~#$^&*(){}\\|;'\''"<>?]/\\&/g
+s/\[/\\&/g
+s/\]/\\&/g
+s/\$/$$/g
+H
+:any
+${
+  g
+  s/^\n//
+  s/\n/ /g
+  p
+}
+']
+ac_scriptf=['
+:mline
+/\\$/{
+ N
+ s,\\\n,,
+ b mline
+}
+t clear
+:clear
+s/^[   ]*#[  ]*define[   ][  ]*\([^  (][^  (]*([^)]*)\)[   ]*\(.*\)/FC_DEFINE\1=\2/g
+t quote
+s/^[   ]*#[  ]*define[   ][  ]*\([^  ][^   ]*\)[   ]*\(.*\)/FC_DEFINE\1=\2/g
+t quote
+b any
+:quote
+s/[  `~#$^&*(){}\\|;'\''"<>?]/\\&/g
+s/\[/\\&/g
+s/\]/\\&/g
+s/\$/$$/g
+H
+:any
+${
+  g
+  s/^\n//
+  s/\n/ /g
+  p
+}
+']
+
+MYDEFS=`sed -n "$ac_script" confdefs.h`
+AC_SUBST([MYDEFS])
+sed -n "$ac_scriptf" confdefs.h > confdefs.h2
+#MYDEFSF=`cat "$MYDEFSF" | sed  -e s/FC_DEFINE/$FC_DEFINE/  `
+MYDEFSF=` sed  -e s/FC_DEFINE/$FC_DEFINE/g confdefs.h2 `
+AC_SUBST([MYDEFSF])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

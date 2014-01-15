@@ -58,14 +58,14 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@USE_LIBTOOL_TRUE@bin_PROGRAMS =  \
-@USE_LIBTOOL_TRUE@	$(top_builddir)/test/testprog$(EXEEXT) \
-@USE_LIBTOOL_TRUE@	$(top_builddir)/test/testprog_fortran$(EXEEXT) \
-@USE_LIBTOOL_TRUE@	$(am__EXEEXT_1)
-@HAS_FORTRAN_NETCDF_TRUE@am__append_1 = -DFORTRAN_NETCDF
-@HAS_ISO_C_BINDING_TRUE@am__append_2 = -DISO_C_BINDING
-@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@am__append_3 = $(top_builddir)/test/testprog_fortran_parallel
-@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@am__append_4 = test/test_parallel.sh
+@ARCHIVEONLY_FALSE@bin_PROGRAMS =  \
+@ARCHIVEONLY_FALSE@	$(top_builddir)/test/testprog$(EXEEXT) \
+@ARCHIVEONLY_FALSE@	$(top_builddir)/test/testprog_fortran$(EXEEXT) \
+@ARCHIVEONLY_FALSE@	$(am__EXEEXT_1)
+@HAS_FORTRAN_NETCDF_TRUE@am__append_1 = $(FDEF)FORTRAN_NETCDF
+@HAS_ISO_C_BINDING_TRUE@am__append_2 = $(FDEF)ISO_C_BINDING
+@ARCHIVEONLY_FALSE@@PARALLEL_TRUE@am__append_3 = $(top_builddir)/test/testprog_fortran_parallel
+@ARCHIVEONLY_FALSE@@PARALLEL_TRUE@am__append_4 = test/test_parallel.sh
 subdir = .
 DIST_COMMON = README $(am__configure_deps) $(am__include_HEADERS_DIST) \
 	$(srcdir)/Makefile.am $(srcdir)/Makefile.in \
@@ -117,57 +117,58 @@ ARFLAGS = cru
 libsimpledataio_a_AR = $(AR) $(ARFLAGS)
 libsimpledataio_a_LIBADD =
 am__libsimpledataio_a_SOURCES_DIST = src/simpledataio2.c
-@USE_LIBTOOL_FALSE@am_libsimpledataio_a_OBJECTS =  \
-@USE_LIBTOOL_FALSE@	simpledataio2.$(OBJEXT)
+@ARCHIVEONLY_TRUE@am_libsimpledataio_a_OBJECTS =  \
+@ARCHIVEONLY_TRUE@	simpledataio2.$(OBJEXT)
 libsimpledataio_a_OBJECTS = $(am_libsimpledataio_a_OBJECTS)
 libsimpledataiof_a_AR = $(AR) $(ARFLAGS)
 libsimpledataiof_a_LIBADD =
 am__libsimpledataiof_a_SOURCES_DIST = src/simpledataiof2.F90 \
 	src/simpledataio_write2.F90
-@USE_LIBTOOL_FALSE@am_libsimpledataiof_a_OBJECTS =  \
-@USE_LIBTOOL_FALSE@	simpledataiof2.$(OBJEXT) \
-@USE_LIBTOOL_FALSE@	simpledataio_write2.$(OBJEXT)
+@ARCHIVEONLY_TRUE@am_libsimpledataiof_a_OBJECTS =  \
+@ARCHIVEONLY_TRUE@	simpledataiof2.$(OBJEXT) \
+@ARCHIVEONLY_TRUE@	simpledataio_write2.$(OBJEXT)
 libsimpledataiof_a_OBJECTS = $(am_libsimpledataiof_a_OBJECTS)
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libsimpledataio_la_LIBADD =
 am__libsimpledataio_la_SOURCES_DIST = src/simpledataio.c
-@USE_LIBTOOL_TRUE@am_libsimpledataio_la_OBJECTS = simpledataio.lo
+@ARCHIVEONLY_FALSE@am_libsimpledataio_la_OBJECTS = simpledataio.lo
 libsimpledataio_la_OBJECTS = $(am_libsimpledataio_la_OBJECTS)
-@USE_LIBTOOL_TRUE@am_libsimpledataio_la_rpath = -rpath $(libdir)
+@ARCHIVEONLY_FALSE@am_libsimpledataio_la_rpath = -rpath $(libdir)
 libsimpledataiof_la_LIBADD =
 am__libsimpledataiof_la_SOURCES_DIST = src/simpledataiof.F90 \
 	src/simpledataio_write.F90
-@USE_LIBTOOL_TRUE@am_libsimpledataiof_la_OBJECTS = simpledataiof.lo \
-@USE_LIBTOOL_TRUE@	simpledataio_write.lo
+@ARCHIVEONLY_FALSE@am_libsimpledataiof_la_OBJECTS = simpledataiof.lo \
+@ARCHIVEONLY_FALSE@	simpledataio_write.lo
 libsimpledataiof_la_OBJECTS = $(am_libsimpledataiof_la_OBJECTS)
-@USE_LIBTOOL_TRUE@am_libsimpledataiof_la_rpath = -rpath $(libdir)
-@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@am__EXEEXT_1 = $(top_builddir)/test/testprog_fortran_parallel$(EXEEXT)
+@ARCHIVEONLY_FALSE@am_libsimpledataiof_la_rpath = -rpath $(libdir)
+@ARCHIVEONLY_FALSE@@PARALLEL_TRUE@am__EXEEXT_1 = $(top_builddir)/test/testprog_fortran_parallel$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS)
 am____top_builddir__test_testprog_SOURCES_DIST = test/test.c
-@USE_LIBTOOL_TRUE@am___top_builddir__test_testprog_OBJECTS =  \
-@USE_LIBTOOL_TRUE@	test.$(OBJEXT)
+@ARCHIVEONLY_FALSE@am___top_builddir__test_testprog_OBJECTS =  \
+@ARCHIVEONLY_FALSE@	test.$(OBJEXT)
 __top_builddir__test_testprog_OBJECTS =  \
 	$(am___top_builddir__test_testprog_OBJECTS)
-@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_DEPENDENCIES =  \
-@USE_LIBTOOL_TRUE@	libsimpledataio.$(LA)
+@ARCHIVEONLY_FALSE@__top_builddir__test_testprog_DEPENDENCIES =  \
+@ARCHIVEONLY_FALSE@	libsimpledataio.$(LA)
 am__dirstamp = $(am__leading_dot)dirstamp
 am____top_builddir__test_testprog_fortran_SOURCES_DIST =  \
 	test/testf.f90
-@USE_LIBTOOL_TRUE@am___top_builddir__test_testprog_fortran_OBJECTS =  \
-@USE_LIBTOOL_TRUE@	testf.$(OBJEXT)
+@ARCHIVEONLY_FALSE@am___top_builddir__test_testprog_fortran_OBJECTS =  \
+@ARCHIVEONLY_FALSE@	testf.$(OBJEXT)
 __top_builddir__test_testprog_fortran_OBJECTS =  \
 	$(am___top_builddir__test_testprog_fortran_OBJECTS)
-@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_DEPENDENCIES =  \
-@USE_LIBTOOL_TRUE@	libsimpledataiof.$(LA) libsimpledataio.$(LA)
+@ARCHIVEONLY_FALSE@__top_builddir__test_testprog_fortran_DEPENDENCIES =  \
+@ARCHIVEONLY_FALSE@	libsimpledataiof.$(LA) \
+@ARCHIVEONLY_FALSE@	libsimpledataio.$(LA)
 am____top_builddir__test_testprog_fortran_parallel_SOURCES_DIST =  \
 	test/test_parallelf.f90
-@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@am___top_builddir__test_testprog_fortran_parallel_OBJECTS =  \
-@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@	test_parallelf.$(OBJEXT)
+@ARCHIVEONLY_FALSE@@PARALLEL_TRUE@am___top_builddir__test_testprog_fortran_parallel_OBJECTS =  \
+@ARCHIVEONLY_FALSE@@PARALLEL_TRUE@	test_parallelf.$(OBJEXT)
 __top_builddir__test_testprog_fortran_parallel_OBJECTS =  \
 	$(am___top_builddir__test_testprog_fortran_parallel_OBJECTS)
-@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_parallel_DEPENDENCIES =  \
-@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@	libsimpledataiof.$(LA) \
-@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@	libsimpledataio.$(LA)
+@ARCHIVEONLY_FALSE@@PARALLEL_TRUE@__top_builddir__test_testprog_fortran_parallel_DEPENDENCIES =  \
+@ARCHIVEONLY_FALSE@@PARALLEL_TRUE@	libsimpledataiof.$(LA) \
+@ARCHIVEONLY_FALSE@@PARALLEL_TRUE@	libsimpledataio.$(LA)
 DEFAULT_INCLUDES = -I.@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -245,7 +246,7 @@ CFLAGS = @CFLAGS@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DEFS = @DEFS@
+DEFS = 
 DEPDIR = @DEPDIR@
 DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
@@ -257,7 +258,10 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FC = @FC@
 FCFLAGS = @FCFLAGS@
+FCFLAGS_F = @FCFLAGS_F@
+FCFLAGS_F90 = @FCFLAGS_F90@
 FCFLAGS_f90 = @FCFLAGS_f90@
+FC_DEFINE = @FC_DEFINE@
 FC_MODEXT = @FC_MODEXT@
 FGREP = @FGREP@
 GREP = @GREP@
@@ -279,6 +283,10 @@ MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 MPICC = @MPICC@
 MPIFC = @MPIFC@
+
+#$(info "DEFS is (DEFS)")
+MYDEFS = @MYDEFS@
+MYDEFSF = @MYDEFSF@
 NM = @NM@
 NMEDIT = @NMEDIT@
 OBJDUMP = @OBJDUMP@
@@ -352,18 +360,31 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
+#CDEFS=$(MYDEFS)
+#$(info "DEFS is $(DEFS)")
+#DEFS=
+AM_CFLAGS = $(MYDEFS)
+#FDEFS=$(subst -D,$(FDEF),$(MYDEFS))
+
+# To get the module files
+AM_FCFLAGS = $(MYDEFSF) -Iinclude/ $(am__append_1) $(am__append_2)
 ACLOCAL_AMFLAGS = -I m4
-@USE_LIBTOOL_FALSE@LA = a
+
+# Flag needed for defining macros to the fortran preprocessor (usually -D)
+FDEF = @FC_DEFINE@
+
+# Now adjust fortran and C preprocessor flags separately
 #
 #
-@USE_LIBTOOL_TRUE@LA = la
-@USE_LIBTOOL_FALSE@LO = o
-@USE_LIBTOOL_TRUE@LO = lo
+@ARCHIVEONLY_FALSE@LA = la
+@ARCHIVEONLY_TRUE@LA = a
+@ARCHIVEONLY_FALSE@LO = lo
+@ARCHIVEONLY_TRUE@LO = o
 
 # C and Fortran Libraries
-@USE_LIBTOOL_TRUE@lib_LTLIBRARIES = libsimpledataio.la libsimpledataiof.la
-@USE_LIBTOOL_FALSE@lib_LIBRARIES = libsimpledataio.a libsimpledataiof.a
-@USE_LIBTOOL_TRUE@lib_LIBRARIES = 
+@ARCHIVEONLY_FALSE@lib_LTLIBRARIES = libsimpledataio.la libsimpledataiof.la
+@ARCHIVEONLY_FALSE@lib_LIBRARIES = 
+@ARCHIVEONLY_TRUE@lib_LIBRARIES = libsimpledataio.a libsimpledataiof.a
 # The Cray compiler, for example, stores the module information
 # in the object files, hence no modules are necessary
 @HAS_F90_MODULES_FALSE@SDAT_MOD = 
@@ -376,24 +397,21 @@ ACLOCAL_AMFLAGS = -I m4
 @HAS_F90_MODULES_FALSE@SDAT_WRITE_MOD = 
 @HAS_F90_MODULES_TRUE@@UPPER_CASE_MOD_FALSE@SDAT_WRITE_MOD = simpledataio_write.mod
 @HAS_F90_MODULES_TRUE@@UPPER_CASE_MOD_TRUE@SDAT_WRITE_MOD = SIMPLEDATAIO_WRITE.mod
+
 # Public headers/fortran modules
 include_HEADERS = include/simpledataio.h $(SDAT_MOD) $(SDAT_WRITE_MOD)
+
 # Sources required
-@USE_LIBTOOL_TRUE@libsimpledataio_la_SOURCES = src/simpledataio.c
-#EXTRA_libsimpledataio_la_SOURCES = src/simpledataio.c 
-@USE_LIBTOOL_TRUE@libsimpledataiof_la_SOURCES = src/simpledataiof.F90 src/simpledataio_write.F90
-#EXTRA_libsimpledataiof_la_SOURCES = src/simpledataiof.F90 src/simpledataio_write.F90
-@USE_LIBTOOL_FALSE@libsimpledataio_a_SOURCES = src/simpledataio2.c 
-@USE_LIBTOOL_FALSE@libsimpledataiof_a_SOURCES = src/simpledataiof2.F90 src/simpledataio_write2.F90
+@ARCHIVEONLY_FALSE@libsimpledataio_la_SOURCES = src/simpledataio.c
+@ARCHIVEONLY_FALSE@libsimpledataiof_la_SOURCES = src/simpledataiof.F90 src/simpledataio_write.F90
+@ARCHIVEONLY_TRUE@libsimpledataio_a_SOURCES = src/simpledataio2.c 
+@ARCHIVEONLY_TRUE@libsimpledataiof_a_SOURCES = src/simpledataiof2.F90 src/simpledataio_write2.F90
 
 # Test program sources
-@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_SOURCES = test/test.c
-@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_LDADD = libsimpledataio.$(LA)
-@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_SOURCES = test/testf.f90
-@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_LDADD = libsimpledataiof.$(LA) libsimpledataio.$(LA) 
-
-# To get the module files
-AM_FCFLAGS = -Iinclude/ $(am__append_1) $(am__append_2)
+@ARCHIVEONLY_FALSE@__top_builddir__test_testprog_SOURCES = test/test.c
+@ARCHIVEONLY_FALSE@__top_builddir__test_testprog_LDADD = libsimpledataio.$(LA)
+@ARCHIVEONLY_FALSE@__top_builddir__test_testprog_fortran_SOURCES = test/testf.f90
+@ARCHIVEONLY_FALSE@__top_builddir__test_testprog_fortran_LDADD = libsimpledataiof.$(LA) libsimpledataio.$(LA) 
 
 # On HPC systems with Intel/PGI compilers, force static linking
 @FORCE_STATIC_TRUE@AM_LDFLAGS = -all-static
@@ -404,8 +422,8 @@ TESTS_ENVIRONMENT =
 
 # If the user has specified --enable-parallel
 @PARALLEL_TRUE@AM_CPPFLAGS = -DPARALLEL
-@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_parallel_SOURCES = test/test_parallelf.f90
-@PARALLEL_TRUE@@USE_LIBTOOL_TRUE@__top_builddir__test_testprog_fortran_parallel_LDADD = libsimpledataiof.$(LA) libsimpledataio.$(LA)
+@ARCHIVEONLY_FALSE@@PARALLEL_TRUE@__top_builddir__test_testprog_fortran_parallel_SOURCES = test/test_parallelf.f90
+@ARCHIVEONLY_FALSE@@PARALLEL_TRUE@__top_builddir__test_testprog_fortran_parallel_LDADD = libsimpledataiof.$(LA) libsimpledataio.$(LA)
 #__top_builddir__test_testprog_fortran_parallel_LDFLAGS=-lmpi -lmpi_f90
 CLEANFILES = test.cdf testfile.cdf test_parallel.cdf $(SDAT_MOD) \
 	$(SDAT_WRITE_MOD) include/$(SDAT_MOD) \
@@ -415,7 +433,7 @@ CLEANFILES = test.cdf testfile.cdf test_parallel.cdf $(SDAT_MOD) \
 #TEST_EXTENSIONS = .sh
 #SH_LOG_COMPILER = bash
 #LOG_COMPILER = sh
-@USE_LIBTOOL_FALSE@TWO = 2
+@ARCHIVEONLY_TRUE@TWO = 2
 all: all-am
 
 .SUFFIXES:
@@ -1190,12 +1208,12 @@ uninstall-am: uninstall-binPROGRAMS uninstall-includeHEADERS \
 @HAS_F90_MODULES_TRUE@test/testf.f90: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
 @HAS_F90_MODULES_TRUE@test/test_parallelf.f90: include/$(SDAT_MOD) include/$(SDAT_WRITE_MOD)
 
-@USE_LIBTOOL_FALSE@src/simpledataio2.c: src/simpledataio.c
-@USE_LIBTOOL_FALSE@	cp $< $@
-@USE_LIBTOOL_FALSE@src/simpledataiof2.F90: src/simpledataiof.F90
-@USE_LIBTOOL_FALSE@	cp $< $@
-@USE_LIBTOOL_FALSE@src/simpledataio_write2.F90: src/simpledataio_write.F90
-@USE_LIBTOOL_FALSE@	cp $< $@
+@ARCHIVEONLY_TRUE@src/simpledataio2.c: src/simpledataio.c
+@ARCHIVEONLY_TRUE@	cp $< $@
+@ARCHIVEONLY_TRUE@src/simpledataiof2.F90: src/simpledataiof.F90
+@ARCHIVEONLY_TRUE@	cp $< $@
+@ARCHIVEONLY_TRUE@src/simpledataio_write2.F90: src/simpledataio_write.F90
+@ARCHIVEONLY_TRUE@	cp $< $@
 
 # Need to generate the module file for simpledataiof before building simpledataio_write
 src/simpledataio_write.F90: src/generate_simpledataio_write.rb $(SDAT_MOD)
