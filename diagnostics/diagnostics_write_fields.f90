@@ -44,12 +44,12 @@ contains
       field_value, field2_by_mode, distributed)
 
     call average_kx(field2_by_mode, field2_by_ky, distributed)
-    call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2_by_ky", "yt", &
+    call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2_by_ky", "Yt", &
       field_description//" squared and averaged over theta and kx, as a function of time", &
       "("//field_units//")^2", field2_by_ky)
 
     call average_ky(field2_by_mode, field2_by_kx, distributed)
-    call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2_by_kx", "xt", &
+    call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2_by_kx", "Xt", &
       field_description//" squared and averaged over theta and ky, as a function of time", &
       "("//field_units//")^2", field2_by_kx)
 
@@ -86,11 +86,11 @@ contains
    if (field_name .eq. 'bpar' .and. gnostics%write_bpar_over_time) write_field_by_time = .true.
    
    if (gnostics%create) then 
-     call create_variable(gnostics%sfile, gnostics%rtype, field_name, "rzxy", field_description, field_units)
-     call create_variable(gnostics%sfile, gnostics%rtype, field2_by_mode_name, "xyt", &
+     call create_variable(gnostics%sfile, gnostics%rtype, field_name, "rzXY", field_description, field_units)
+     call create_variable(gnostics%sfile, gnostics%rtype, field2_by_mode_name, "XYt", &
        field_description//" squared and averaged over theta, as a function of kx and ky" , "("//field_units//")^2")
      if (write_field_by_time) then 
-       call create_variable(gnostics%sfile, gnostics%rtype, field_t_name, "rzxyt", &
+       call create_variable(gnostics%sfile, gnostics%rtype, field_t_name, "rzXYt", &
          field_description//" as a function of time", field_units)
      end if
 

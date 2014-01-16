@@ -226,12 +226,12 @@ contains
 
 
     call average_kx(total_flux_by_mode, total_flux_by_ky, distributed)
-    call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_ky", "yt", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_ky", "Yt", &
       flux_description//" summed over species and averaged over kx, as a function of ky and time", &
       flux_units, total_flux_by_ky)
 
     call average_ky(total_flux_by_mode, total_flux_by_kx, distributed)
-    call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_kx", "xt", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_kx", "Xt", &
       flux_description//" summed over species and averaged over ky, as a function of kx and time", &
       flux_units, total_flux_by_kx)
 
@@ -267,9 +267,9 @@ contains
 
  
    if (gnostics%create) then 
-    call create_variable(gnostics%sfile, gnostics%rtype, flux_by_mode_name, "xyst", &
+    call create_variable(gnostics%sfile, gnostics%rtype, flux_by_mode_name, "XYst", &
        flux_description//" as a function of species, kx and ky", flux_units)
-    call create_variable(gnostics%sfile, gnostics%rtype, total_flux_by_mode_name, "xyt", &
+    call create_variable(gnostics%sfile, gnostics%rtype, total_flux_by_mode_name, "XYt", &
        flux_description//" summed over species, as a function of kx and ky" , flux_units)
 
 
@@ -277,7 +277,7 @@ contains
 
    if (gnostics%create .or. .not. gnostics%wryte) return
   !if (write_flux_by_time .and. .not. variable_exists(gnostics%sfile, flux_t_name)) then 
-     !call create_variable(gnostics%sfile, gnostics%rtype, flux_t_name, "rzxyt", &
+     !call create_variable(gnostics%sfile, gnostics%rtype, flux_t_name, "rzXYt", &
        !flux_description//" as a function of time", flux_units)
    !end if
    
