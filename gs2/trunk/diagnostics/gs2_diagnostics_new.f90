@@ -142,9 +142,16 @@ contains
     use le_grids, only: negrid, nlambda
     use species, only: nspec
 
-    call add_dimension(gnostics%sfile, "x", ntheta0, "", "")
-    call add_dimension(gnostics%sfile, "y", naky, "", "")
-    call add_dimension(gnostics%sfile, "z", 2*ntgrid+1, "", "")
+    ! Please stick to the convention of CAPITALS for spectral
+    ! dimensions and lower case for non-spectral
+
+    ! The final two arguments of the add_dimension function call currently
+    ! have no effect, but may in the future
+    ! Their values are given for documentation purposes
+
+    call add_dimension(gnostics%sfile, "X", ntheta0, "The kx dimension", "")
+    call add_dimension(gnostics%sfile, "Y", naky, "The ky dimension", "")
+    call add_dimension(gnostics%sfile, "z", 2*ntgrid+1, "The theta (parallel) dimension", "")
     call add_dimension(gnostics%sfile, "e", negrid, "", "")
     call add_dimension(gnostics%sfile, "l", nlambda, "", "")
     call add_dimension(gnostics%sfile, "s", nspec, "", "")
@@ -158,9 +165,9 @@ contains
     use theta_grid, only: theta
     use le_grids, only: al, energy
 
-    call create_and_write_variable(gnostics, gnostics%rtype, "kx",     "x",  &
+    call create_and_write_variable(gnostics, gnostics%rtype, "kx",     "X",  &
         "Values of kx, the wavenumber perpendicular to the flux surface ", "1/rho_r", akx)
-    call create_and_write_variable(gnostics, gnostics%rtype, "ky",     "y",  &
+    call create_and_write_variable(gnostics, gnostics%rtype, "ky",     "Y",  &
         "Values of ky, the wavenumber in the direction of grad alpha ", "1/rho_r", aky)
     call create_and_write_variable(gnostics, gnostics%rtype, "theta",  "z",  &
         "Values of theta, the poloidal angle. ", "rad", theta)
