@@ -3449,6 +3449,7 @@ contains
 
   subroutine ginit_restart_file
     use dist_fn_arrays, only: g, gnew
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
@@ -3463,6 +3464,7 @@ contains
        g = 0.
     end if
     gnew = g
+    phi=phinew ; apar=aparnew ; bpar=bparnew
 
   end subroutine ginit_restart_file
 
