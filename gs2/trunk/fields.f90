@@ -23,6 +23,7 @@ module fields
   ! knobs
   integer :: fieldopt_switch
   logical :: remove_zonal_flows_switch
+  logical :: force_maxwell_reinit
   integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2
 
   logical :: initialized = .false.
@@ -116,7 +117,7 @@ contains
     call ginit (restarted)
     if (debug) write(6,*) "init_fields: init_antenna"
     call init_antenna
-    if (restarted) return
+    if (restarted .and. .not. force_maxwell_reinit) return
 
     select case (fieldopt_switch)
     case (fieldopt_implicit)
@@ -140,13 +141,14 @@ contains
             text_option('implicit', fieldopt_implicit), &
             text_option('test', fieldopt_test) /)
     character(20) :: field_option
-    namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath
+    namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit
     integer :: ierr, in_file
 
     if (proc0) then
        field_option = 'default'
        remove_zonal_flows_switch = .false.
        field_subgath=.false.
+       force_maxwell_reinit=.true.
        in_file = input_unit_exist ("fields_knobs", exist)
 !       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
        if (exist) read (unit=in_file, nml=fields_knobs)
@@ -161,6 +163,7 @@ contains
     call broadcast (fieldopt_switch)
     call broadcast (remove_zonal_flows_switch)
     call broadcast (field_subgath)
+    call broadcast (force_maxwell_reinit)
   end subroutine read_parameters
 
   subroutine allocate_arrays
