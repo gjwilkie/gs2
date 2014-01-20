@@ -449,6 +449,7 @@ gs2_diagnostics.o: \
 	 gs2_time.o \
 	 gs2_transforms.o \
 	 init_g.o \
+	 job_manage.o \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
@@ -634,6 +635,7 @@ init_g.o: \
 	 gs2_layouts.o \
 	 gs2_save.o \
 	 gs2_transforms.o \
+	 job_manage.o \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
@@ -759,6 +761,7 @@ rungridgen.o: \
 sorting.o: 
 species.o: \
 	 file_utils.o \
+	 job_manage.o \
 	 mp.o \
 	 text_options.o 
 spfunc.o: \

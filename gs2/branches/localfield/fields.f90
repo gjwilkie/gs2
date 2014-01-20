@@ -23,6 +23,7 @@ module fields
   ! knobs
   integer :: fieldopt_switch
   logical :: remove_zonal_flows_switch
+  logical :: force_maxwell_reinit
   integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_local = 3
 
   logical :: initialized = .false.
@@ -73,9 +74,9 @@ contains
     use run_parameters, only: init_run_parameters
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
-    use fields_implicit, only: init_fields_implicit, init_phi_implicit
+    use fields_implicit, only: init_fields_implicit, init_allfields_implicit
     use fields_test, only: init_fields_test, init_phi_test
-    use fields_local, only: init_fields_local, init_phi_local
+    use fields_local, only: init_fields_local, init_allfields_local
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
     implicit none
@@ -124,18 +125,18 @@ contains
     call ginit (restarted)
     if (debug) write(6,*) "init_fields: init_antenna"
     call init_antenna
-    if (restarted) return
+    if (restarted .and. .not. force_maxwell_reinit) return
 
     select case (fieldopt_switch)
     case (fieldopt_implicit)
-       if (debug) write(6,*) "init_fields: init_phi_implicit"
-       call init_phi_implicit
+       if (debug) write(6,*) "init_fields: init_allfields_implicit"
+       call init_allfields_implicit
     case (fieldopt_test)
        if (debug) write(6,*) "init_fields: init_phi_test"
        call init_phi_test
     case (fieldopt_local)
-       if (debug) write(6,*) "init_fields: init_phi_local"
-       call init_phi_local
+       if (debug) write(6,*) "init_fields: init_allfields_local"
+       call init_allfields_local
     end select
     
   end subroutine init_fields
@@ -153,13 +154,14 @@ contains
             text_option('local', fieldopt_local),&
             text_option('implicit_local', fieldopt_local)/)
     character(20) :: field_option
-    namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath
+    namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit
     integer :: ierr, in_file
 
     if (proc0) then
        field_option = 'default'
        remove_zonal_flows_switch = .false.
        field_subgath=.false.
+       force_maxwell_reinit=.true.
        in_file = input_unit_exist ("fields_knobs", exist)
 !       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
        if (exist) read (unit=in_file, nml=fields_knobs)
@@ -174,6 +176,7 @@ contains
     call broadcast (fieldopt_switch)
     call broadcast (remove_zonal_flows_switch)
     call broadcast (field_subgath)
+    call broadcast (force_maxwell_reinit)
   end subroutine read_parameters
 
   subroutine allocate_arrays

@@ -4046,7 +4046,7 @@ enddo
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fbpar, fphi, ieqzip
-    use kt_grids, only: filter
+    use kt_grids, only: kwork_filter
     use species, only: spec
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
@@ -4069,7 +4069,7 @@ do iglo=g_lo%llim_proc,g_lo%ulim_proc
     it = it_idx(g_lo,iglo)
 
     !Skip work if we're not interested in this ik and it
-    if(filter(it,ik)) cycle !return
+    if(kwork_filter(it,ik)) cycle !return
 
     il = il_idx(g_lo,iglo)
     ie = ie_idx(g_lo,iglo)
@@ -5227,7 +5227,7 @@ end do
     use kt_grids, only: naky, ntheta0, aky
     use run_parameters, only: fphi, fapar, fbpar
     use run_parameters, only: beta, tite
-    use kt_grids, only: filter
+    use kt_grids, only: kwork_filter
     use species, only: spec, has_electron_species
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
@@ -5246,7 +5246,7 @@ end do
              do ik = 1, naky
                 if (aky(ik) > epsilon(0.0)) cycle
                 do it = 1, ntheta0
-                   if(filter(it,ik)) cycle
+                   if(kwork_filter(it,ik)) cycle
                    awgt(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
                 end do
              end do
@@ -5254,7 +5254,7 @@ end do
            
           do ik = 1, naky
              do it = 1, ntheta0
-                if(filter(it,ik)) cycle
+                if(kwork_filter(it,ik)) cycle
                 fl_avg(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
              end do
           end do
@@ -5269,7 +5269,7 @@ end do
        if (.not. has_electron_species(spec)) then
           do ik = 1, naky
              do it = 1, ntheta0
-                if(filter(it,ik)) cycle
+                if(kwork_filter(it,ik)) cycle
                 fieldeq(:,it,ik) = fieldeq(:,it,ik) + fl_avg(it,ik)
              end do
           end do
@@ -5285,7 +5285,7 @@ end do
        fieldeqp = (antotp+bpar*gamtot2+0.5*phi*gamtot1)*beta*apfac
        do ik = 1, naky
           do it = 1, ntheta0
-             if(filter(it,ik)) cycle
+             if(kwork_filter(it,ik)) cycle
              fieldeqp(:,it,ik) = fieldeqp(:,it,ik)/bmag(:)**2
           end do
        end do
@@ -5301,7 +5301,7 @@ end do
     use le_grids, only: integrate_species
     use run_parameters, only: beta, fphi, fapar, fbpar
     use gs2_layouts, only: g_lo, it_idx,ik_idx
-    use kt_grids, only: filter
+    use kt_grids, only: kwork_filter
 
     implicit none
 
@@ -5314,11 +5314,11 @@ end do
        !g0=gnew*spread(aj0,2,2)
        !but this seems to be slower than an explicit loop and 
        !the ability to skip certain it/ik values is lost.
-       if(any(filter))then
+       if(any(kwork_filter))then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              it=it_idx(g_lo,iglo)
              ik=ik_idx(g_lo,iglo)
-             if(filter(it,ik))cycle
+             if(kwork_filter(it,ik))cycle
              do isgn = 1, 2
                 g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)
              end do
@@ -5340,11 +5340,11 @@ end do
     end if
 
     if (fapar > epsilon(0.0)) then
-       if(any(filter))then
+       if(any(kwork_filter))then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              it=it_idx(g_lo,iglo)
              ik=ik_idx(g_lo,iglo)
-             if(filter(it,ik))cycle
+             if(kwork_filter(it,ik))cycle
              do isgn = 1, 2
                    g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
              end do
@@ -5364,11 +5364,11 @@ end do
     end if
 
     if (fbpar > epsilon(0.0)) then
-       if(any(filter))then
+       if(any(kwork_filter))then
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              it=it_idx(g_lo,iglo)
              ik=ik_idx(g_lo,iglo)
-             if(filter(it,ik))cycle
+             if(kwork_filter(it,ik))cycle
              do isgn = 1, 2
                    g0(:,isgn,iglo) = aj1(:,iglo)*vperp2(:,iglo)*gnew(:,isgn,iglo)
              end do

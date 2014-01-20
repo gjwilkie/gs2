@@ -384,7 +384,7 @@ contains
     if (negrid == -10) then
        negrid = nesub + nesuper
 
-! If user chose negrid, assume nesuper makes sense and check nesub if necessary
+! If user chose negrid, then set nesuper and nesub accordingly
     else 
        nesuper = min(negrid/10+1, 4)
        nesub = negrid - nesuper
@@ -636,7 +636,7 @@ contains
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
-    use kt_grids, only: filter
+    use kt_grids, only: kwork_filter
     use mp, only: sum_allreduce
 
     implicit none
@@ -650,12 +650,12 @@ contains
     total = 0.
 
     !Performed integral (weighted sum) over local velocity space and species
-    if(any(filter))then
+    if(any(kwork_filter))then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           !Convert from iglo to the separate indices
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
-          if(filter(it,ik)) cycle
+          if(kwork_filter(it,ik)) cycle
           ie = ie_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           il = il_idx(g_lo,iglo)
@@ -687,7 +687,7 @@ contains
     use gs2_layouts, only: g_lo, intspec_sub
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use mp, only: sum_allreduce_sub, sum_allreduce
-    use kt_grids, only: filter
+    use kt_grids, only: kwork_filter
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
@@ -707,18 +707,32 @@ contains
     total_small=0.
 
     !Performed integral (weighted sum) over local velocity space and species
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       !Convert from iglo to the separate indices
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       if(filter(it,ik)) cycle
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-       il = il_idx(g_lo,iglo)
-
-       !Sum up weighted g
-       total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
-    end do
+    if(any(kwork_filter))then
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          !Convert from iglo to the separate indices
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          if(kwork_filter(it,ik)) cycle
+          ie = ie_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          
+          !Sum up weighted g
+          total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+       end do
+    else
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          !Convert from iglo to the separate indices
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          
+          !Sum up weighted g
+          total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+       end do
+    endif
 
     !Reduce sum across all procs in sub communicator to make integral over all velocity space and species
     if(intspec_sub)then
@@ -2015,6 +2029,10 @@ contains
 
 ! old (finite-difference) integration scheme
     else
+!CMR, 1/11/2013: 
+!  jend(ig)=  il      lambda index of the trapped particle bouncing at theta(ig)
+!             0       if no trapped particles
+!
        jend = ng2 + 1
 !       wlterr = 0.0
        do il = ng2+1, nlambda-1
@@ -2098,6 +2116,16 @@ contains
              end if
           end do
        else
+!CMR, 1/11/2013:
+! Sketch of how ixi=>il mapping is arranged
+!===============================================================================================
+!  ixi=   1, ... , je-1, je, je+1, ... , 2je-1, || 2je, 2je+1, ... , nl+je, nl+je+1, ... ,  2nl
+!   il=   1, ... , je-1, je, je-1, ... ,     1, ||  je,  je+1, ... ,    nl,      nl, ... , je+1
+! isgn=   1, ... ,    1,  2,    2, ... ,     2, ||   1,     1, ... ,     1,       2, ... ,    2
+!         particles passing through             ||  je,   + forbidden trapped velocity space
+!         nb only need one isigma for je, as v||=0 at the bounce point
+!===============================================================================================
+
           do ixi = 1, 2*nlambda
              if (ixi >= nlambda + je + 1) then
                 ixi_to_isgn(ig,ixi) = 2

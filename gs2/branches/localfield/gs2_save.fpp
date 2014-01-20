@@ -622,6 +622,7 @@ contains
 
     if (istatus /= NF90_NOERR) then
        i = nf90_close (ncid)
+       initialized = .false.
        return
     end if
 
@@ -793,6 +794,7 @@ contains
        i = nf90_close (ncid)
        if (i /= NF90_NOERR) &
             call netcdf_error (istatus, message='nf90_close error')
+       initialized = .false.
     else
        i = nf90_sync (ncid)
        if (i /= NF90_NOERR) &

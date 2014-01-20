@@ -3,7 +3,7 @@ module fields_local
   implicit none
   private
 
-  public :: init_fields_local, init_phi_local, finish_fields_local
+  public :: init_fields_local, init_allfields_local, finish_fields_local
   public :: advance_local, reset_fields_local
 
   !//////////////////////////////
@@ -1776,7 +1776,7 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn_arrays, only: g
-    use kt_grids, only: filter
+    use kt_grids, only: kwork_filter
     implicit none
     class(fieldmat_type), intent(inout) :: self
     integer :: ifl, pts_remain, ik, is
@@ -1802,7 +1802,7 @@ contains
        ifl=ifl+1
 
        !Reset the filter array
-       filter=.false.
+       kwork_filter=.false.
 
        !Reset the init state arrays
        self%kyb%initdone=.false.
@@ -1815,7 +1815,7 @@ contains
 
        !Now loop over all points and initialise
        do while(pts_remain.gt.0)
-          call self%init_next_field_points(phinew,pts_remain,filter,ifl)
+          call self%init_next_field_points(phinew,pts_remain,kwork_filter,ifl)
        enddo
     endif
 
@@ -1828,7 +1828,7 @@ contains
        ifl=ifl+1
 
        !Reset the filter array
-       filter=.false.
+       kwork_filter=.false.
 
        !Reset the init state arrays
        self%kyb%initdone=.false.
@@ -1841,7 +1841,7 @@ contains
 
        !Now loop over all points and initialise
        do while(pts_remain.gt.0)
-          call self%init_next_field_points(aparnew,pts_remain,filter,ifl)
+          call self%init_next_field_points(aparnew,pts_remain,kwork_filter,ifl)
        enddo
     endif
 
@@ -1854,7 +1854,7 @@ contains
        ifl=ifl+1
 
        !Reset the filter array
-       filter=.false.
+       kwork_filter=.false.
 
        !Reset the init state arrays
        self%kyb%initdone=.false.
@@ -1867,17 +1867,17 @@ contains
 
        !Now loop over all points and initialise
        do while(pts_remain.gt.0)
-          call self%init_next_field_points(bparnew,pts_remain,filter,ifl)
+          call self%init_next_field_points(bparnew,pts_remain,kwork_filter,ifl)
        enddo
     endif
     
     !Reset the filter array
-    filter=.false.
+    kwork_filter=.false.
   end subroutine fm_populate
 
   !>Initialise the next set of delta functions, find the response
   !and store in the appropriate rows.
-  subroutine fm_init_next_field_points(self,field,pts_remain,filter,ifl)
+  subroutine fm_init_next_field_points(self,field,pts_remain,kwork_filter,ifl)
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use dist_fn, only: getfieldeq, getfieldeq_nogath, timeadv
@@ -1887,7 +1887,7 @@ contains
     complex, dimension(-ntgrid:ntgrid,ntheta0,naky), intent(inout) :: field
     integer, intent(inout) :: pts_remain
     integer, intent(in) :: ifl
-    logical, dimension(ntheta0, naky), intent(inout) :: filter
+    logical, dimension(ntheta0, naky), intent(inout) :: kwork_filter
     complex, dimension(:,:,:), allocatable :: fq, fqa, fqp
     integer :: ik, is, iex, ic, iex_init, ig, it
     integer :: it_cur, ig_cur, found_it, found_ig
@@ -1905,7 +1905,7 @@ contains
        !If we've finished this ky set the 
        !filter and move on to next ik
        if(self%kyb(ik)%initdone)then
-          filter(:,ik)=.true.
+          kwork_filter(:,ik)=.true.
           cycle
        endif
 
@@ -1916,7 +1916,7 @@ contains
           if(self%kyb(ik)%supercells(is)%initdone)then
              !Set filter for all it on supercell
              do ic=1,self%kyb(ik)%supercells(is)%ncell
-                filter(self%kyb(ik)%supercells(is)%cells(ic)%it_ind,ik)=.true.
+                kwork_filter(self%kyb(ik)%supercells(is)%cells(ic)%it_ind,ik)=.true.
              enddo
              cycle
           endif
@@ -3263,11 +3263,11 @@ contains
 
   !>Initialise the fields from the initial g, just uses the
   !fields_implicit routine
-  subroutine init_phi_local
-    use fields_implicit, only: init_phi_implicit
+  subroutine init_allfields_local
+    use fields_implicit, only: init_allfields_implicit
     implicit none
-    call init_phi_implicit
-  end subroutine init_phi_local
+    call init_allfields_implicit
+  end subroutine init_allfields_local
 
   !>This routine advances the solution by one full time step
   subroutine advance_local(istep, remove_zonal_flows_switch)

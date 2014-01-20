@@ -22,6 +22,7 @@ module species
                        ! as it will have a consistent v_t scaling
                        ! nu_h controls a hyperviscous term embedded in the collision operator
      real :: stm, zstm, tz, smz, zt
+     real :: bess_fac !Artificial factor multiplying the Bessel function argument
      integer :: type
   end type specie
 
@@ -72,6 +73,8 @@ contains
         write (report_unit, fmt="('      Temperature:  ',f7.3)") spec(is)%tprim
         write (report_unit, fmt="('      Density:      ',f7.3)") spec(is)%fprim
         write (report_unit, fmt="('      Parallel v:   ',f7.3)") spec(is)%uprim
+        if (spec(is)%bess_fac.ne.1.0) &
+             write (report_unit, fmt="('      Bessel function arg multiplied by:   ',f7.3)") spec(is)%bess_fac
 !        write (report_unit, fmt="('    Ignore this:')")
 !        write (report_unit, fmt="('    D_0: ',es10.4)") spec(is)%dens0
         if (spec(is)%type /= 2) then
@@ -152,6 +155,7 @@ contains
      write (report_unit, fmt="('The total normalized inverse pressure gradient scale length is ',f10.4)") alp
      dbetadrho_spec = -beta*ptot*alp
      write (report_unit, fmt="('corresponding to d beta / d rho = ',f10.4)") dbetadrho_spec
+
   end subroutine check_species
 
   subroutine wnml_species(unit)
@@ -185,6 +189,8 @@ contains
           if (spec(i)%type == slowing_down_species) &
                write (unit, fmt="(a)") ' type = "fast"  /'
           write (unit, fmt="(' dens0 = ',e13.6)") spec(i)%dens0
+          if(spec(i)%bess_fac.ne.1.0) &
+               write (unit, fmt="(' bess_fac = ',e13.6)") spec(i)%bess_fac
        end do
   end subroutine wnml_species
 
@@ -209,14 +215,14 @@ contains
     use mp, only: proc0, broadcast
     implicit none
     real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h
-    real :: tperp0, tpar0
+    real :: tperp0, tpar0, bess_fac
     character(20) :: type
     integer :: unit
     integer :: is, iostat
     namelist /species_knobs/ nspec
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
-         tperp0, tpar0
+         tperp0, tpar0, bess_fac
     integer :: ierr, in_file
 
     type (text_option), dimension (9), parameter :: typeopts = &
@@ -269,6 +275,7 @@ contains
           vnewk = 0.0
           nu = -1.0
           nu_h = 0.0
+          bess_fac=1.0
           type = "default"
           read (unit=unit, nml=species_parameters, iostat=iostat)
           if(iostat /= 0) write(6,*) 'Error ',iostat,'reading species parameters'
@@ -296,6 +303,8 @@ contains
           spec(is)%tz = temp/z
           spec(is)%zt = z/temp
           spec(is)%smz = abs(sqrt(temp*mass)/z)
+
+          spec(is)%bess_fac=bess_fac
 
           ierr = error_unit()
           call get_option_value (type, typeopts, spec(is)%type, ierr, "type in species_parameters_x")
@@ -325,6 +334,7 @@ contains
        call broadcast (spec(is)%zt)
        call broadcast (spec(is)%smz)
        call broadcast (spec(is)%type)
+       call broadcast (spec(is)%bess_fac)
     end do
   end subroutine read_parameters
 
@@ -371,6 +381,7 @@ contains
   subroutine reinit_species (ntspec, dens, temp, fprim, tprim, nu)
 
     use mp, only: broadcast, proc0
+    use job_manage, only: trin_restart
 
     implicit none
 
@@ -379,6 +390,8 @@ contains
 
     integer :: is
     logical, save :: first = .true.
+
+    if(trin_restart) first = .true.
 
     if (first) then
        if (nspec == 1) then

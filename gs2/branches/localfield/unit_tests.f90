@@ -28,6 +28,9 @@ module unit_tests
   !! either announce its success or announce its failure.
   public :: process_check
 
+  !> Returns true when the verbosity is greater than or equal to the argument
+  public :: should_print
+
   public :: announce_module_test
   public :: close_module_test
 

@@ -2314,7 +2314,7 @@ contains
     use dist_fn_arrays, only: vpa, kperp2, aj0
     use fields_arrays, only: aparnew
     use run_parameters, only: ieqzip
-    use kt_grids, only: filter
+    use kt_grids, only: kwork_filter
     use constants
     ! TMP FOR TESTING -- MAB
 !    use mp, only: proc0
@@ -2381,7 +2381,7 @@ contains
              if (spec(is)%type /= electron_species) cycle
              it = it_idx(g_lo,iglo)
              ik = ik_idx(g_lo,iglo)
-             if(filter(it,ik)) cycle
+             if(kwork_filter(it,ik)) cycle
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
                 g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
@@ -2428,7 +2428,7 @@ contains
              if (spec(is)%type /= electron_species) cycle
              it = it_idx(g_lo,iglo)
              ik = ik_idx(g_lo,iglo)
-             if(filter(it,ik))cycle
+             if(kwork_filter(it,ik))cycle
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
                 g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
@@ -2605,7 +2605,7 @@ contains
     use le_grids, only: energy, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
-    use kt_grids, only: filter
+    use kt_grids, only: kwork_filter
     
     implicit none
 
@@ -2633,7 +2633,7 @@ contains
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
-          if(filter(it,ik))cycle
+          if(kwork_filter(it,ik))cycle
           do isgn = 1, 2
              ! v0 = vpa J0 f0, y0 = g
              gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*g(:,isgn,iglo)
@@ -2648,7 +2648,7 @@ contains
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
-          if(filter(it,ik))cycle
+          if(kwork_filter(it,ik))cycle
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
              g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
@@ -2668,7 +2668,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -2692,7 +2692,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v1y1(:,it,ik,is) &
@@ -2706,7 +2706,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -2725,7 +2725,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v2y2(:,it,ik,is) &
@@ -2899,7 +2899,7 @@ contains
     use le_grids, only: energy, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
-    use kt_grids, only: filter
+    use kt_grids, only: kwork_filter
 
     implicit none
 
@@ -2926,7 +2926,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
@@ -2944,7 +2944,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
@@ -2958,7 +2958,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
@@ -2976,7 +2976,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v1y1(:,it,ik,is) &
@@ -2990,7 +2990,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -3009,7 +3009,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v2y2(:,it,ik,is) &
@@ -3227,7 +3227,7 @@ contains
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
     use run_parameters, only: ieqzip
-    use kt_grids, only: filter
+    use kt_grids, only: kwork_filter
     use gs2_layouts, only: lz_lo
 
     implicit none
@@ -3302,7 +3302,7 @@ contains
        ik = ik_idx(lz_lo,ilz)
        it = it_idx(lz_lo,ilz)
        is = is_idx(lz_lo,ilz)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
        if (ieqzip(it_idx(lz_lo,ilz),ik_idx(lz_lo,ilz))==0) cycle
 
@@ -3474,6 +3474,12 @@ contains
           je = 2*ng2+1
        end if
 
+!CMR, 1/11/2013:
+! wfb does not seem to be treated correctly.
+! Surely wfb's bounce point should be handled like any other trapped particle bp?
+! Numerical instability referred to below more likely arises from wfb failing
+! to satisfy trapping condition after invert_rhs.
+!
        do ie = 1, negrid
           ! deal with special case of wfb
           if (jend(ig) == ng2+1) then
@@ -3511,6 +3517,10 @@ contains
              gle(ng2+2:je,ie,ile) = gle0(ng2+2:je)
           end if
 
+!CMR, 1/11/2013:
+! next line ensures bounce condition is satisfied after lorentz collisions
+! this is right thing to do, but it would mask any prior bug in trapping condition!
+
           if (jend(ig) /= 0) gle(2*jend(ig),ie,ile) = gle(jend(ig),ie,ile)
 
        end do
@@ -3535,7 +3545,7 @@ contains
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
     use run_parameters, only: ieqzip
-    use kt_grids, only: filter
+    use kt_grids, only: kwork_filter
 
     implicit none
 
@@ -3559,7 +3569,7 @@ contains
        il = il_idx(e_lo,ielo)
        it = it_idx(e_lo,ielo)       
        ik = ik_idx(e_lo,ielo)
-       if(filter(it,ik))cycle
+       if(kwork_filter(it,ik))cycle
        if (spec(is)%vnewk < 2.0*epsilon(0.0) .or. forbid(ig,il)) cycle
        if (ieqzip(it_idx(e_lo,ielo),ik_idx(e_lo,ielo))==0) cycle
 
