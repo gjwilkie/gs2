@@ -5,6 +5,29 @@
 
 # include "define.inc"
 
+
+! The function calls for single and double precision fftw3 are different.
+! Here we save ourself the bother of writing them out twice by defining
+! a macro that correctly sets the beginning of the function
+
+#ifdef ANSI_CPP
+
+#ifdef SINGLE_PRECISION
+#define FFTW_PREFIX(fn) sfftw##fn
+#else
+#define FFTW_PREFIX(fn) dfftw##fn
+#endif
+
+#else
+
+#ifdef SINGLE_PRECISION
+#define FFTW_PREFIX(fn) sfftw/**/fn
+#else
+#define FFTW_PREFIX(fn) dfftw/**/fn
+#endif
+
+#endif
+
 module gs2_transforms
 
   use redistribute, only: redist_type

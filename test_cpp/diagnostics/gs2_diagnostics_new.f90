@@ -80,6 +80,7 @@ contains
     if (gnostics%parallel .or. proc0) call create_dimensions
   end subroutine init_gs2_diagnostics_new
 
+  !> Close the output file and deallocate arrays
   subroutine finish_gs2_diagnostics_new
     use diagnostics_write_fluxes, only: finish_diagnostics_write_fluxes
     use diagnostics_write_omega, only: finish_diagnostics_write_omega

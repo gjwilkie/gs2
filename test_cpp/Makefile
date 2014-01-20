@@ -272,7 +272,13 @@ endif
 
 ifeq ($(USE_FFT),fftw3)
 	CPPFLAGS += -DFFT=_FFTW3_ $(FFT_INC)
-	FFT_LIB ?= -lfftw -lrfftw
+	# EGH The line below is definitely wrong
+	#FFT_LIB ?= -lfftw -lrfftw
+ifndef DBLE
+	FFT_LIB ?= -lfftw3 -lfftw3f
+else
+	FFT_LIB ?= -lfftw3 
+endif
 endif
 
 ifeq ($(USE_FFT),mkl_fftw)
@@ -331,6 +337,9 @@ $(warning Precision mismatch with NAG libarray)
 		endif
 		CPPFLAGS += -DNAG_PREC=_NAGSNGL_
 	endif
+endif
+ifndef DBLE
+	CPPFLAGS+=-DSINGLE_PRECISION
 endif
 ifndef PGPLOT_LIB
 	ifeq ($(MAKECMDGOALS),agk_fields_plot)
