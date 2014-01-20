@@ -622,8 +622,10 @@ module kt_grids
   public :: ikx, iky, jtwist_out
   public :: gridopt_switch, grid_option
   public :: gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+  public :: kwork_filter
   private
 
+  logical, dimension(:,:), allocatable :: kwork_filter
   real, dimension (:,:), allocatable :: theta0
   real, dimension (:), allocatable :: aky, akx
   integer, dimension(:), allocatable :: ikx, iky
@@ -679,7 +681,8 @@ contains
     do ik = 1, naky
        call broadcast (theta0(:,ik))
     end do
-
+    allocate(kwork_filter(ntheta0,naky))
+    kwork_filter=.false.
   end subroutine init_kt_grids
 
   subroutine read_parameters
@@ -795,7 +798,7 @@ contains
     implicit none
 
     if (allocated(aky)) deallocate (akx, aky, theta0, ikx, iky)
-
+    if (allocated(kwork_filter)) deallocate(kwork_filter)
     reality = .false. ; box = .false.
     initialized = .false.
 
