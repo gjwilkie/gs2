@@ -1177,7 +1177,7 @@ contains
   end subroutine init_diffuse_conserve
 
   subroutine init_vnew (hee)
-    use species, only: nspec, spec, electron_species, has_electron_species
+    use species, only: nspec, spec, electron_species, has_electron_species, adiabatic_type, ion_species
     use le_grids, only: negrid, energy, w
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
@@ -1227,7 +1227,8 @@ contains
     if(.not.allocated(vnewh)) allocate (vnewh(-ntgrid:ntgrid,ntheta0,naky,nspec))
 
     do is = 1, nspec
-       if (spec(is)%type == electron_species) then
+!       if (spec(is)%type == electron_species) then
+       if (spec(is)%type == electron_species .or. ((nspec == 1).and.(adiabatic_type.eq.ion_species))) then
           do ie = 1, negrid
              do ik = 1, naky
                 if (const_v) then
