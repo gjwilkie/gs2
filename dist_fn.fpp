@@ -137,7 +137,7 @@ module dist_fn
 
   ! getfieldeq1
   real, allocatable, dimension(:,:) :: awgt
-  complex, allocatable, dimension(:,:) :: fl_avg
+  complex, allocatable, dimension(:,:) :: fl_avg !Changed
 
   ! get_verr
   real, dimension (:,:), allocatable :: kmax
