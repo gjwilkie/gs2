@@ -361,6 +361,26 @@ contains
                      
  end subroutine set_start
 
+ function number_of_dimensions(sfile, variable_name)
+   type(sdatio_file), intent(in) :: sfile
+   character(*), intent(in) :: variable_name
+   integer :: number_of_dimensions
+#ifdef ISO_C_BINDING
+   !integer :: c_number_of_dimensions
+   interface
+       function sdatio_number_of_dimensions(sfile, variable_name) &
+            bind(c, name='sdatio_number_of_dimensions')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+         character(c_char) :: variable_name(*)
+         integer(c_int) :: sdatio_number_of_dimensions
+       end function sdatio_number_of_dimensions
+   end interface 
+   number_of_dimensions = sdatio_number_of_dimensions(sfile, variable_name//c_null_char)
+#endif
+ end function number_of_dimensions
+
  subroutine number_of_unlimited_dimensions(sfile, variable_name, n)
    type(sdatio_file), intent(in) :: sfile
    character(*), intent(in) :: variable_name

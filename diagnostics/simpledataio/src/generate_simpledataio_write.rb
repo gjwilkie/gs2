@@ -40,35 +40,43 @@ class Generator
 #ifdef FORTRAN_NETCDF
    use netcdf
 #endif
-	 use simpledataio
+   use simpledataio
    type(sdatio_file), intent(in) :: sfile
    character(*), intent(in) :: variable_name
    #{@type}, intent(in)#{@dimension} :: val
    integer, dimension(:), allocatable :: starts, counts
-   integer :: fileid, varid, status, n
-	 #{complex ? realval_declaration : nil}
+   integer :: fileid, varid, status, n, n2, ndims
+   #{complex ? realval_declaration : nil}
 
 #ifdef FORTRAN_NETCDF
    call number_of_unlimited_dimensions(sfile, variable_name, n)
-   allocate(starts(n+#@dimsize#{complex ? "+1" : nil}))
-   allocate(counts(n+#@dimsize#{complex ? "+1" : nil}))
-	 #{complex ?  2.times.map{|i| "
-	 call set_count(sfile, variable_name, \"r\", 1)
-	 call set_start(sfile, variable_name, \"r\", #{i+1})
-	 realval(1#{([",:"]*@dimsize).join('')}) = #{realimag[i]}(#{@dimsize==0 ? "val" : "val(#{dimension_spec})"})
+   n2 = n+#@dimsize#{complex ? "+1" : nil}
+   allocate(starts(n2))
+   allocate(counts(n2))
+   ndims = number_of_dimensions(sfile, variable_name)
+   if (ndims /= n2) then
+     write (*,*) "WARNING: The variable you pass to write_variable must have the same size &
+     & and shape (excluding unlimited dimensions and the complex dimension) &
+     & as the variable in the output file, regardless of what the values of starts &
+     & and counts are. This is a necessary condition for the simpledataio simplified interface. &
+     & You are probably about to encounter a segmentation fault. "
+   end if
+   #{complex ?  2.times.map{|i| "
+   call set_count(sfile, variable_name, \"r\", 1)
+   call set_start(sfile, variable_name, \"r\", #{i+1})
+   realval(1#{([",:"]*@dimsize).join('')}) = #{realimag[i]}(#{@dimsize==0 ? "val" : "val(#{dimension_spec})"})
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts)
    status =  nf90_put_var(fileid, varid+1, &
-		   #{@dimsize == 0 ? val_get_0 : val_get}, start=starts, count=counts)
+       #{@dimsize == 0 ? val_get_0 : val_get}, start=starts, count=counts)
    if (.not. status .eq. 0) write (*,*) 'Error writing variable: ', variable_name, ', ',  nf90_strerror(status)"
-	}.join("\n\n")        :         "  
+  }.join("\n\n")        :         "  
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts)
    status =  nf90_put_var(fileid, varid+1, &
-		   #{@dimsize == 0 ? "(/val/)" : val_get}, start=starts, count=counts)
+       #{@dimsize == 0 ? "(/val/)" : val_get}, start=starts, count=counts)
    if (.not. status .eq. 0) write (*,*) 'Error writing variable: ', variable_name, ', ',  nf90_strerror(status)"
-	 }
+   }
 
 #endif
-
  end subroutine #{procedure_name}
 EOF
   end

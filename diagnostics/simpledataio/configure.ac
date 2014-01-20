@@ -57,9 +57,6 @@ AX_PROG_FC_MPI([test "x$enable_mpi" = xyes], [], [
       AC_MSG_WARN([No MPI Fortran compiler found, not using MPI.])
     fi
   ])
-AC_FC_PP_DEFINE
-AC_SUBST([FC_DEFINE])
-AC_FC_PP_SRCEXT(F90)
 #AC_MSG_RESULT([fcdefine is $FC_DEFINE])
 #FCFLAGS+=$FC_DEFINE
 
@@ -157,71 +154,22 @@ fi
 AC_PROG_FC_UPPERCASE_MOD
 AM_CONDITIONAL(UPPER_CASE_MOD, [test "x$ac_cv_prog_f90_uppercase_mod" = xyes])
 
-#MYDEFS=$DEFS
-#AC_SUBST([MYDEFS])
-ac_script=['
-:mline
-/\\$/{
- N
- s,\\\n,,
- b mline
-}
-t clear
-:clear
-s/^[   ]*#[  ]*define[   ][  ]*\([^  (][^  (]*([^)]*)\)[   ]*\(.*\)/-D\1=\2/g
-t quote
-s/^[   ]*#[  ]*define[   ][  ]*\([^  ][^   ]*\)[   ]*\(.*\)/-D\1=\2/g
-t quote
-b any
-:quote
-s/[  `~#$^&*(){}\\|;'\''"<>?]/\\&/g
-s/\[/\\&/g
-s/\]/\\&/g
-s/\$/$$/g
-H
-:any
-${
-  g
-  s/^\n//
-  s/\n/ /g
-  p
-}
-']
-ac_scriptf=['
-:mline
-/\\$/{
- N
- s,\\\n,,
- b mline
-}
-t clear
-:clear
-s/^[   ]*#[  ]*define[   ][  ]*\([^  (][^  (]*([^)]*)\)[   ]*\(.*\)/FC_DEFINE\1=\2/g
-t quote
-s/^[   ]*#[  ]*define[   ][  ]*\([^  ][^   ]*\)[   ]*\(.*\)/FC_DEFINE\1=\2/g
-t quote
-b any
-:quote
-s/[  `~#$^&*(){}\\|;'\''"<>?]/\\&/g
-s/\[/\\&/g
-s/\]/\\&/g
-s/\$/$$/g
-H
-:any
-${
-  g
-  s/^\n//
-  s/\n/ /g
-  p
-}
-']
+# Determine flag needed to define preprocessor macros using the Fortran compiler
+AC_FC_PP_DEFINE
 
-MYDEFS=`sed -n "$ac_script" confdefs.h`
-AC_SUBST([MYDEFS])
-sed -n "$ac_scriptf" confdefs.h > confdefs.h2
-#MYDEFSF=`cat "$MYDEFSF" | sed  -e s/FC_DEFINE/$FC_DEFINE/  `
-MYDEFSF=` sed  -e s/FC_DEFINE/$FC_DEFINE/g confdefs.h2 `
-AC_SUBST([MYDEFSF])
+AC_SUBST([FC_DEFINE])
+AC_FC_PP_SRCEXT(F90)
+
+# Define custom preprocessor macro definition strings
+AL_PP_DEFS([-D])
+DEFS_CC=$al_pp_defs_out
+AC_SUBST([DEFS_CC])
+
+AL_PP_DEFS([$FC_DEFINE])
+DEFS_FC=$al_pp_defs_out
+AC_SUBST([DEFS_FC])
+
+
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

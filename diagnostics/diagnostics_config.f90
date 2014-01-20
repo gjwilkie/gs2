@@ -22,6 +22,7 @@ module diagnostics_config
    logical :: wryte
    logical :: distributed
    logical :: parallel
+   logical :: exit
    integer :: nwrite
    logical :: write_any
    logical :: write_fields
@@ -31,6 +32,11 @@ module diagnostics_config
    logical :: write_fluxes
    logical :: write_fluxes_by_mode
    logical :: write_omega
+   integer :: navg
+   integer :: igomega
+   real :: omegatinst
+   real :: omegatol
+   logical :: exit_when_converged
   end type diagnostics_type
 
 
@@ -61,6 +67,11 @@ contains
     logical :: write_fluxes
     logical :: write_fluxes_by_mode
     logical :: write_omega
+    integer :: navg
+    integer :: igomega
+    real :: omegatinst
+    real :: omegatol
+    logical :: exit_when_converged
     namelist /diagnostics_config/ &
       nwrite, &
       write_any, &
@@ -70,7 +81,12 @@ contains
       write_bpar_over_time, &
       write_fluxes, &
       write_fluxes_by_mode, &
-      write_omega
+      write_omega, &
+      navg, &
+      igomega, &
+      omegatinst, &
+      omegatol, &
+      exit_when_converged
 
     integer :: in_file
     logical :: exist
@@ -84,7 +100,12 @@ contains
       write_bpar_over_time = .false.
       write_fluxes = .true.
       write_fluxes_by_mode = .false.
-      write_omega = .false.
+      write_omega = .true.
+      navg = 10
+      igomega = 0
+      omegatinst = 1.0e6
+      omegatol = -0.001
+      exit_when_converged = .true.
 
       in_file = input_unit_exist ("diagnostics_config", exist)
       if (exist) read (unit=in_file, nml=diagnostics_config)
@@ -98,6 +119,11 @@ contains
       gnostics%write_fluxes = write_fluxes
       gnostics%write_fluxes_by_mode = write_fluxes_by_mode
       gnostics%write_omega = write_omega
+      gnostics%navg = navg
+      gnostics%igomega = igomega
+      gnostics%omegatinst = omegatinst
+      gnostics%omegatol = omegatol
+      gnostics%exit_when_converged = exit_when_converged
 
     end if
 
@@ -110,6 +136,11 @@ contains
     call broadcast (gnostics%write_fluxes)
     call broadcast (gnostics%write_fluxes_by_mode)
     call broadcast (gnostics%write_omega)
+    call broadcast (gnostics%navg)
+    call broadcast (gnostics%igomega)
+    call broadcast (gnostics%omegatinst)
+    call broadcast (gnostics%omegatol)
+    call broadcast (gnostics%exit_when_converged)
 
 
 

@@ -107,13 +107,13 @@ contains
 
    else
 
-     call set_count(gnostics%sfile, field_name, "x", 1)
-     call set_count(gnostics%sfile, field_name, "y", 1)
-     call set_count(gnostics%sfile, field2_by_mode_name, "x", 1)
-     call set_count(gnostics%sfile, field2_by_mode_name, "y", 1)
+     call set_count(gnostics%sfile, field_name, "X", 1)
+     call set_count(gnostics%sfile, field_name, "Y", 1)
+     call set_count(gnostics%sfile, field2_by_mode_name, "X", 1)
+     call set_count(gnostics%sfile, field2_by_mode_name, "Y", 1)
      if (write_field_by_time) then
-       call set_count(gnostics%sfile, field_t_name, "x", 1)
-       call set_count(gnostics%sfile, field_t_name, "y", 1)
+       call set_count(gnostics%sfile, field_t_name, "X", 1)
+       call set_count(gnostics%sfile, field_t_name, "Y", 1)
      end if
 
      ! For some reason every process has to make at least
@@ -126,17 +126,17 @@ contains
        do it = 1,ntheta0
          if (field_k_local(it,ik)) then
 
-           call set_start(gnostics%sfile, field_name, "x", it)
-           call set_start(gnostics%sfile, field_name, "y", ik)
+           call set_start(gnostics%sfile, field_name, "X", it)
+           call set_start(gnostics%sfile, field_name, "Y", ik)
            call write_variable(gnostics%sfile, field_name, val)
 
-           call set_start(gnostics%sfile, field2_by_mode_name, "x", it)
-           call set_start(gnostics%sfile, field2_by_mode_name, "y", ik)
+           call set_start(gnostics%sfile, field2_by_mode_name, "X", it)
+           call set_start(gnostics%sfile, field2_by_mode_name, "Y", ik)
            call write_variable(gnostics%sfile, field2_by_mode_name, field2_by_mode)
 
            if (write_field_by_time) then
-             call set_start(gnostics%sfile, field_t_name, "x", it)
-             call set_start(gnostics%sfile, field_t_name, "y", ik)
+             call set_start(gnostics%sfile, field_t_name, "X", it)
+             call set_start(gnostics%sfile, field_t_name, "Y", ik)
              call write_variable(gnostics%sfile, field_t_name, val)
            end if
          end if

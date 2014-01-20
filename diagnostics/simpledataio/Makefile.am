@@ -3,20 +3,16 @@
 # Written by:
 # 	Edmund Highcock (edmund.highcock@users.sourceforge.net)
 
+# Here we override the standard preprocessor DEFS and define custom ones to allow for
+# different macro definition flags (the standard flag is -D)
 DEFS=
-
-#$(info "DEFS is (DEFS)")
-MYDEFS=@MYDEFS@
-MYDEFSF=@MYDEFSF@
-#CDEFS=$(MYDEFS)
-#$(info "DEFS is $(DEFS)")
-#DEFS=
-AM_CFLAGS=$(MYDEFS)
-#FDEFS=$(subst -D,$(FDEF),$(MYDEFS))
-AM_FCFLAGS=$(MYDEFSF)
+DEFS_CC=@DEFS_CC@
+DEFS_FC=@DEFS_FC@
+AM_CFLAGS=$(DEFS_CC)
+AM_FCFLAGS=$(DEFS_FC)
 ACLOCAL_AMFLAGS=-I m4
-
-# Flag needed for defining macros to the fortran preprocessor (usually -D)
+# Here we set the flag needed for defining macros to the  Fortran preprocessor (usually -D)
+# The only known variant is the IBM XL compiler, for which -WF,-D must be used 
 FDEF=@FC_DEFINE@
 
 # Now adjust fortran and C preprocessor flags separately
