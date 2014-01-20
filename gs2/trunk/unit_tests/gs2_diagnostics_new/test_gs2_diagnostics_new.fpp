@@ -68,7 +68,14 @@ program test_gs2_diagnostics_new
     new_variables(13) = 'es_mom_flux'
     n_lines(13) = '4'
 
-    n_vars = 13
+    variables(14) = 'omega'
+    new_variables(14) = 'omega'
+    n_lines(14) = '4'
+    variables(15) = 'omegaavg'
+    new_variables(15) = 'omega_average'
+    n_lines(15) = '4'
+
+    n_vars = 15
 
 
 
