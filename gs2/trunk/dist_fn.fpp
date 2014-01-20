@@ -16,8 +16,9 @@ module dist_fn
   implicit none
   public :: init_dist_fn, finish_dist_fn
   public :: read_parameters, wnml_dist_fn, wnml_dist_fn_species, check_dist_fn
-  public :: timeadv, exb_shear, g_exb
+  public :: timeadv, exb_shear, g_exb, g_exbfac
   public :: getfieldeq, getan, getmoms, getemoms
+  public :: getfieldeq_nogath
   public :: flux, lf_flux, eexchange
   public :: get_epar, get_heat
   public :: t0, omega0, gamma0, source0
@@ -3668,6 +3669,7 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fbpar, fphi, ieqzip
+    use kt_grids, only: kwork_filter
     use species, only: spec
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
@@ -3688,11 +3690,15 @@ subroutine check_dist_fn(report_unit)
 
     ik = ik_idx(g_lo,iglo)
     it = it_idx(g_lo,iglo)
+
+    !Skip work if we're not interested in this ik and it
+    if(kwork_filter(it,ik)) return
+
     il = il_idx(g_lo,iglo)
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
 
-    if(ieqzip(it_idx(g_lo,iglo),ik_idx(g_lo,iglo))==0) return
+    if(ieqzip(it,ik)==0) return
     if (eqzip) then
        if (secondary .and. ik == 2 .and. it == 1) return ! do not evolve primary mode
        if (tertiary .and. ik == 1) then
@@ -3991,7 +3997,7 @@ subroutine check_dist_fn(report_unit)
     if (no_comm) then
        ! nothing
     else       
-       g_adj = 0.
+       g_adj = 0. !This shouldn't be needed
        call fill (links_p, gnew, g_adj)
        call fill (links_h, g_h, g_adj)
        call fill (wfb_p, gnew, g_adj)
@@ -4000,10 +4006,12 @@ subroutine check_dist_fn(report_unit)
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
 
           ncell = r_links(ik, it) + l_links(ik, it) + 1
           if (ncell == 1) cycle
+
+          il = il_idx(g_lo,iglo)
+
 ! wfb
           if (nlambda > ng2 .and. il == ng2+1) then
              if (save_h(1, iglo)) then
@@ -4815,6 +4823,203 @@ subroutine check_dist_fn(report_unit)
 
     deallocate (antot, antota, antotp)
   end subroutine getfieldeq
+
+
+!///////////////////////////////////////
+!// SOME NO GATHER TEST ROUTINES
+!///////////////////////////////////////
+  subroutine getfieldeq_nogath (phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
+    complex, dimension (:,:,:), allocatable :: antot, antota, antotp
+
+    allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
+
+    call getan_nogath (antot, antota, antotp)
+    call getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
+         fieldeq, fieldeqa, fieldeqp)
+
+    deallocate (antot, antota, antotp)
+  end subroutine getfieldeq_nogath
+
+  subroutine getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
+       fieldeq, fieldeqa, fieldeqp)
+    use dist_fn_arrays, only: kperp2
+    use theta_grid, only: ntgrid, bmag, delthet, jacob
+    use kt_grids, only: naky, ntheta0, aky
+    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: beta, tite
+    use kt_grids, only: kwork_filter
+    use species, only: spec, has_electron_species
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
+    complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
+
+    integer :: ik, it
+    if (.not. allocated(fl_avg)) allocate (fl_avg(ntheta0, naky))
+    if (.not. has_electron_species(spec)) fl_avg = 0.
+
+    if (.not. has_electron_species(spec)) then
+       if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
+          if (.not. allocated(awgt)) then
+             allocate (awgt(ntheta0, naky))
+             awgt = 0.
+             do ik = 1, naky
+                if (aky(ik) > epsilon(0.0)) cycle
+                do it = 1, ntheta0
+                   if(kwork_filter(it,ik)) cycle
+                   awgt(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
+                end do
+             end do
+          endif
+           
+          do ik = 1, naky
+             do it = 1, ntheta0
+                if(kwork_filter(it,ik)) cycle
+                fl_avg(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
+             end do
+          end do
+       end if
+    end if
+
+    if (fphi > epsilon(0.0)) then
+!       fieldeq = antot + bpar*gamtot1 - gamtot*gridfac1*phi 
+       fieldeq = antot - gamtot*gridfac1*phi 
+       if(fbpar.gt.epsilon(0.0)) fieldeq=fieldeq + bpar*gamtot1
+
+       if (.not. has_electron_species(spec)) then
+          do ik = 1, naky
+             do it = 1, ntheta0
+                if(kwork_filter(it,ik)) cycle
+                fieldeq(:,it,ik) = fieldeq(:,it,ik) + fl_avg(it,ik)
+             end do
+          end do
+       end if
+    end if
+
+    if (fapar > epsilon(0.0)) then
+       fieldeqa = antota - kperp2*gridfac1*apar
+    end if
+! bpar == delta B_parallel / B_0(theta) b/c of the factor of 1/bmag(theta)**2
+! in the following
+    if (fbpar > epsilon(0.0)) then
+       fieldeqp = (antotp+bpar*gamtot2+0.5*phi*gamtot1)*beta*apfac
+       do ik = 1, naky
+          do it = 1, ntheta0
+             if(kwork_filter(it,ik)) cycle
+             fieldeqp(:,it,ik) = fieldeqp(:,it,ik)/bmag(:)**2
+          end do
+       end do
+       fieldeqp = fieldeqp + bpar*gridfac1
+    end if
+  end subroutine getfieldeq1_nogath
+
+  subroutine getan_nogath (antot, antota, antotp)
+    use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
+    use dist_fn_arrays, only: kperp2
+    use species, only: nspec, spec
+    use theta_grid, only: ntgrid
+    use le_grids, only: integrate_species
+    use run_parameters, only: beta, fphi, fapar, fbpar
+    use gs2_layouts, only: g_lo, it_idx,ik_idx
+    use kt_grids, only: kwork_filter
+
+    implicit none
+
+    complex, dimension (-ntgrid:,:,:), intent (out) :: antot, antota, antotp
+    real, dimension (nspec) :: wgt
+    integer :: isgn, iglo, it,ik
+
+    if (fphi > epsilon(0.0)) then
+       !<DD>NOTE: It's possible to rewrite this loop as simply
+       !g0=gnew*spread(aj0,2,2)
+       !but this seems to be slower than an explicit loop and 
+       !the ability to skip certain it/ik values is lost.
+       if(any(kwork_filter))then
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             it=it_idx(g_lo,iglo)
+             ik=ik_idx(g_lo,iglo)
+             if(kwork_filter(it,ik))cycle
+             do isgn = 1, 2
+                g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)
+             end do
+          end do
+       else
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             do isgn = 1, 2
+                g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)
+             end do
+          end do
+       endif
+
+       wgt = spec%z*spec%dens
+       call integrate_species (g0, wgt, antot, nogath=.true.)
+
+       if (afilter > epsilon(0.0)) antot = antot * exp(-afilter**4*kperp2**2/4.)
+       !NOTE: We don't do ensure_single_val_fields here as we're not certain we
+       !have the full data
+    end if
+
+    if (fapar > epsilon(0.0)) then
+       if(any(kwork_filter))then
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             it=it_idx(g_lo,iglo)
+             ik=ik_idx(g_lo,iglo)
+             if(kwork_filter(it,ik))cycle
+             do isgn = 1, 2
+                   g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
+             end do
+          end do
+       else
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             do isgn = 1, 2
+                   g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
+             end do
+          end do
+       endif
+
+       wgt = 2.0*beta*spec%z*spec%dens*spec%stm
+       call integrate_species (g0, wgt, antota, nogath=.true.)
+       !NOTE: We don't do ensure_single_val_fields here as we're not certain we
+       !have the full data
+    end if
+
+    if (fbpar > epsilon(0.0)) then
+       if(any(kwork_filter))then
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             it=it_idx(g_lo,iglo)
+             ik=ik_idx(g_lo,iglo)
+             if(kwork_filter(it,ik))cycle
+             do isgn = 1, 2
+                   g0(:,isgn,iglo) = aj1(:,iglo)*vperp2(:,iglo)*gnew(:,isgn,iglo)
+             end do
+          end do
+       else
+          do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             do isgn = 1, 2
+                   g0(:,isgn,iglo) = aj1(:,iglo)*vperp2(:,iglo)*gnew(:,isgn,iglo)
+             end do
+          end do
+       endif
+
+       wgt = spec%temp*spec%dens
+       call integrate_species (g0, wgt, antotp, nogath=.true.)
+       !NOTE: We don't do ensure_single_val_fields here as we're not certain we
+       !have the full data
+    end if
+
+  end subroutine getan_nogath
+
+!///////////////////////////////////////
+!///////////////////////////////////////
+!///////////////////////////////////////
+
   
 ! MAB> ported from agk
 ! TT> Given initial distribution function this obtains consistent fields

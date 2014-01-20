@@ -4,10 +4,10 @@ module fields_implicit
 
   public :: init_fields_implicit
   public :: advance_implicit
+  public :: remove_zonal_flows
   public :: init_allfields_implicit
   public :: nidx
   public :: reset_init
-  public :: time_field
   public :: set_scan_parameter
   public :: field_subgath
 
@@ -16,7 +16,6 @@ module fields_implicit
   integer, save :: nfield
   logical :: initialized = .false.
   logical :: linked = .false.
-  real, save :: time_field(2)=0.
   logical :: field_subgath
 
 contains
@@ -203,7 +202,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: f_lo, jf_lo, ij, mj, dj
     use prof, only: prof_entering, prof_leaving
-    use fields_arrays, only: aminv
+    use fields_arrays, only: aminv, time_field
     use theta_grid, only: ntgrid
     use dist_fn, only: N_class
     use mp, only: sum_allreduce, allgatherv, iproc,nproc, proc0
@@ -224,7 +223,7 @@ contains
     !On first call to this routine setup the receive counts (recvcnts)
     !and displacement arrays (displs)
     if ((.not.allocated(recvcnts)).and.field_subgath) then
-       allocate(recvcnts(nproc),displs(nproc))
+       allocate(recvcnts(nproc),displs(nproc)) !Note there's no matching deallocate
        do i=0,nproc-1
           displs(i+1)=MIN(i*jf_lo%blocksize,jf_lo%ulim_world+1) !This will assign a displacement outside the array for procs with no data
           recvcnts(i+1)=MIN(jf_lo%blocksize,jf_lo%ulim_world-displs(i+1)+1) !This ensures that we expect no data from procs without any
@@ -307,7 +306,7 @@ contains
   subroutine advance_implicit (istep, remove_zonal_flows_switch)
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: apar_ext !, phi_ext
-    use antenna, only: antenna_amplitudes
+    use antenna, only: antenna_amplitudes, no_driver
     use dist_fn, only: timeadv, exb_shear
     use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
     implicit none
@@ -317,7 +316,7 @@ contains
 
 
     !GGH NOTE: apar_ext is initialized in this call
-    call antenna_amplitudes (apar_ext)
+    if(.not.no_driver) call antenna_amplitudes (apar_ext)
        
     if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
     
@@ -327,7 +326,7 @@ contains
     bpar = bparnew       
     
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-    aparnew = aparnew + apar_ext 
+    if(.not.no_driver) aparnew = aparnew + apar_ext 
     
     call getfield (phinew, aparnew, bparnew)
     
@@ -598,6 +597,12 @@ contains
     allocate (fieldeqp(-ntgrid:ntgrid, ntheta0, naky))
 
     !Find response to delta function fields
+    !NOTE:Timeadv will loop over all iglo even though only one ik
+    !has any amplitude, this is quite a waste. Should ideally do all
+    !ik at once
+    !NOTE:We currently do each independent supercell of the same length
+    !together, this may not be so easy if we do all the ik together but it should
+    !be possible.
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, 0)
     call getfieldeq (phinew, aparnew, bparnew, fieldeq, fieldeqa, fieldeqp)
 
