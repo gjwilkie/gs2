@@ -2,11 +2,11 @@ module species
   implicit none
 
   public :: init_species, finish_species, reinit_species, init_trin_species, finish_trin_species
-  public :: wnml_species, check_species
+  public :: wnml_species, check_species, get_appropriate_adiabatic_option
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
-  public :: has_electron_species, has_slowing_down_species
-  public :: ions, electrons, impurity
+  public :: has_electron_species, has_slowing_down_species, has_adiabatic_species
+  public :: ions, electrons, impurity, adiabatic_type
 
   type :: specie
      real :: z
@@ -28,6 +28,7 @@ module species
 
   private
 
+  integer, parameter :: no_adiabatic_species = 0
   integer, parameter :: ion_species = 1
   integer, parameter :: electron_species = 2 ! for collision operator
   integer, parameter :: slowing_down_species = 3 ! slowing-down distn
@@ -43,6 +44,7 @@ module species
   logical :: initialized = .false.
   logical :: exist
 
+  integer :: adiabatic_type
 contains
 
   subroutine check_species(report_unit,beta,tite,alne,dbetadrho_spec)
@@ -51,6 +53,7 @@ contains
   real :: beta, tite, alne, dbetadrho_spec
   integer :: is
   real :: aln, alp, charge, ee, ne, ptot, zeff_calc
+  character(len=30) :: adia_type
      write (report_unit, fmt="('Number of species: ',i3)") nspec
      zeff_calc = 0.
      charge = 0.
@@ -145,6 +148,23 @@ contains
         end if
      end if
 
+     if(has_adiabatic_species(spec))then
+        select case(adiabatic_type)
+           case(electron_species)
+              adia_type='electron'
+           case(ion_species)
+              adia_type='ion'
+           case(no_adiabatic_species)
+              adia_type='NONE -- This is an error.'
+           case default
+              adia_type='UNKNOWN -- This is an error.'
+        end select
+        write (report_unit, *) 
+        write (report_unit, fmt="('################# WARNING #######################')")
+        write (report_unit, fmt="('You are including an adiabatic species.')")
+        write (report_unit, fmt="('This species is of type ',A)") trim(adia_type)
+        write (report_unit, fmt="('################# WARNING #######################')")
+     end if
      write (report_unit, *) 
      write (report_unit, fmt="('------------------------------------------------------------')")
 
@@ -256,6 +276,9 @@ contains
     call broadcast (nspec)
     allocate (spec(nspec))
 
+    !<DD>Default the adiabatic type setting to be none
+    adiabatic_type=no_adiabatic_species
+
     if (proc0) then
        do is = 1, nspec
           call get_indexed_namelist_unit (unit, "species_parameters", is)
@@ -336,7 +359,65 @@ contains
        call broadcast (spec(is)%type)
        call broadcast (spec(is)%bess_fac)
     end do
+    
+    !<DD>Now update the adiabatic_type if required
+    if(has_adiabatic_species(spec))then
+       if(spec(1)%z.gt.0)then
+          adiabatic_type=electron_species
+       else
+          adiabatic_type=ion_species
+       endif
+    endif
   end subroutine read_parameters
+
+  !<DD>A function to set adiabatic_option based on adiabatic_type
+  function get_appropriate_adiabatic_option(spec)
+    implicit none
+    type (specie), dimension (:), intent (in) :: spec
+    character(len=30) :: get_appropriate_adiabatic_option
+    !Early exit if possible
+    if(.not.has_adiabatic_species(spec))then
+       get_appropriate_adiabatic_option='default'
+       return
+    end if
+
+    select case(adiabatic_type)
+       case(ion_species)
+          !No field line average
+          get_appropriate_adiabatic_option='iphi00=0'
+       case(electron_species)
+          !Field line average
+          get_appropriate_adiabatic_option='iphi00=2'
+       case default
+          !Should never get here
+          get_appropriate_adiabatic_option='ERROR: Unknown adiabatic_type'
+    end select
+  end function get_appropriate_adiabatic_option
+
+  !<DD>A simple function to try to work out if the user intends
+  !to include an adiabatic species. We do this simply by seeing
+  !if all species have the same charge or not.
+  pure function has_adiabatic_species(spec)
+    !Really this won't change during a run so we should have a 
+    !module level variable which stores the result which is used
+    !everytime except the first call
+    implicit none
+    type (specie), dimension (:), intent (in) :: spec
+    logical :: has_adiabatic_species, has_neg, has_pos
+    integer :: is, ns
+    ns=size(spec)
+    has_adiabatic_species=.false.
+    has_neg=.false.
+    has_pos=.false.
+    do is=1,ns
+       if(spec(is)%z.lt.0) then
+          has_neg=.true.
+       elseif(spec(is)%z.gt.0) then
+          has_pos=.true.
+       endif
+    enddo
+    has_adiabatic_species=(.not.(has_neg.and.has_pos))
+  end function has_adiabatic_species
 
   pure function has_electron_species (spec)
     implicit none
@@ -375,8 +456,6 @@ contains
     if (allocated(nu_trin)) deallocate(nu_trin)
 
   end subroutine finish_trin_species
-
-
 
   subroutine reinit_species (ntspec, dens, temp, fprim, tprim, nu)
 

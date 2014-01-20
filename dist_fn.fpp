@@ -194,7 +194,7 @@ contains
 subroutine check_dist_fn(report_unit)
   use kt_grids, only: grid_option, gridopt_box, gridopt_switch
   use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_on
-  use species, only: spec, nspec, has_electron_species
+  use species, only: spec, nspec, has_adiabatic_species
   implicit none
   integer :: report_unit
   integer :: is 
@@ -282,7 +282,7 @@ subroutine check_dist_fn(report_unit)
     endif
     write (report_unit, *) 
 
-    if (.not. has_electron_species(spec)) then
+    if (has_adiabatic_species(spec)) then
        select case (adiabatic_option_switch)
           case (adiabatic_option_default)
              write (report_unit, *) 
@@ -413,7 +413,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine check_dist_fn
 
   subroutine wnml_dist_fn(unit)
-  use species, only: spec, has_electron_species
+  use species, only: spec, has_adiabatic_species
   implicit none
   integer :: unit
     if (dfexist) then
@@ -440,7 +440,7 @@ subroutine check_dist_fn(report_unit)
        write (unit, fmt="(' gridfac = ',e16.10)") gridfac
        write (unit, fmt="(' esv = ',L1)") esv
 
-       if (.not. has_electron_species(spec)) then
+       if (has_adiabatic_species(spec)) then
           select case (adiabatic_option_switch)
              
           case (adiabatic_option_default)
@@ -616,7 +616,7 @@ subroutine check_dist_fn(report_unit)
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use theta_grid, only: shat
     use text_options, only: text_option, get_option_value
-    use species, only: nspec
+    use species, only: nspec, has_adiabatic_species, spec, get_appropriate_adiabatic_option
     use mp, only: proc0, broadcast
     use theta_grid, only: itor_over_B
     implicit none
@@ -665,7 +665,8 @@ subroutine check_dist_fn(report_unit)
        nonad_zero = .true.  ! BD: Default value changed to TRUE  8.15.13
        cllc = .false.
        esv = .false.
-       adiabatic_option = 'default'
+       !<DD>Try to set an intelligent default
+       adiabatic_option=get_appropriate_adiabatic_option(spec)
        poisfac = 0.0
        gridfac = 1.0  ! used to be 5.e4
        apfac = 1.0
@@ -4626,7 +4627,7 @@ subroutine check_dist_fn(report_unit)
 
   subroutine init_fieldeq
     use dist_fn_arrays, only: aj0, aj1, vperp2, kperp2
-    use species, only: nspec, spec, has_electron_species
+    use species, only: nspec, spec, has_adiabatic_species
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, aky
     use le_grids, only: anon, integrate_species
@@ -4710,8 +4711,8 @@ subroutine check_dist_fn(report_unit)
        call ensure_single_val_fields_pass_r(gamtot2)
     endif
 
-! adiabatic electrons 
-    if (.not. has_electron_species(spec)) then
+! adiabatic species 
+    if (has_adiabatic_species(spec)) then
        if (adiabatic_option_switch == adiabatic_option_yavg) then
           do ik = 1, naky
              if (aky(ik) > epsilon(0.0)) gamtot(:,:,ik) = gamtot(:,:,ik) + tite
@@ -4733,7 +4734,7 @@ subroutine check_dist_fn(report_unit)
     use kt_grids, only: naky, ntheta0, aky
     use run_parameters, only: fphi, fapar, fbpar
     use run_parameters, only: beta, tite
-    use species, only: spec, has_electron_species
+    use species, only: spec, has_adiabatic_species
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
@@ -4746,7 +4747,7 @@ subroutine check_dist_fn(report_unit)
     if (.not. allocated(fl_avg)) allocate (fl_avg(ntheta0, naky))
     fl_avg = 0.
 
-    if (.not. has_electron_species(spec)) then
+    if (has_adiabatic_species(spec)) then
        if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
           
 !          if (first) then 
@@ -4777,7 +4778,7 @@ subroutine check_dist_fn(report_unit)
     if (fphi > epsilon(0.0)) then
        fieldeq = antot + bpar*gamtot1 - gamtot*gridfac1*phi 
 
-       if (.not. has_electron_species(spec)) then
+       if (has_adiabatic_species(spec)) then
           do ik = 1, naky
              do it = 1, ntheta0
                 fieldeq(:,it,ik) = fieldeq(:,it,ik) + fl_avg(it,ik)
@@ -4855,7 +4856,7 @@ subroutine check_dist_fn(report_unit)
     use run_parameters, only: fphi, fapar, fbpar
     use run_parameters, only: beta, tite
     use kt_grids, only: kwork_filter
-    use species, only: spec, has_electron_species
+    use species, only: spec, has_adiabatic_species
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
@@ -4863,9 +4864,9 @@ subroutine check_dist_fn(report_unit)
 
     integer :: ik, it
     if (.not. allocated(fl_avg)) allocate (fl_avg(ntheta0, naky))
-    if (.not. has_electron_species(spec)) fl_avg = 0.
+    if (has_adiabatic_species(spec)) fl_avg = 0.
 
-    if (.not. has_electron_species(spec)) then
+    if (has_adiabatic_species(spec)) then
        if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
           if (.not. allocated(awgt)) then
              allocate (awgt(ntheta0, naky))
@@ -4893,7 +4894,7 @@ subroutine check_dist_fn(report_unit)
        fieldeq = antot - gamtot*gridfac1*phi 
        if(fbpar.gt.epsilon(0.0)) fieldeq=fieldeq + bpar*gamtot1
 
-       if (.not. has_electron_species(spec)) then
+       if (has_adiabatic_species(spec)) then
           do ik = 1, naky
              do it = 1, ntheta0
                 if(kwork_filter(it,ik)) cycle
@@ -5773,7 +5774,7 @@ subroutine check_dist_fn(report_unit)
     use gs2_heating, only: heating_diagnostics
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, ie_idx
     use le_grids, only: integrate_moment
-    use species, only: spec, nspec,has_electron_species
+    use species, only: spec, nspec,has_adiabatic_species
     use theta_grid, only: jacob, delthet, ntgrid
     use run_parameters, only: fphi, fapar, fbpar, tunits, beta, tite
     use gs2_time, only: code_dt
@@ -5985,7 +5986,7 @@ subroutine check_dist_fn(report_unit)
 
 !GGH Include response of Boltzmann species for single-species runs
 
-    if (.not. has_electron_species(spec)) then
+    if (has_adiabatic_species(spec)) then
        if (proc0) then
           !NOTE: It is assumed here that n0i=n0e and zi=-ze
           do ik=1,naky
@@ -6355,7 +6356,7 @@ subroutine check_dist_fn(report_unit)
 ! Calculate delfs2 (rest of energy)-----------------------------------------------
 
 !GGH  Include response of Boltzmann species for single species runs
-    if (.not. has_electron_species(spec)) then
+    if (has_adiabatic_species(spec)) then
        if (proc0) then
           !NOTE: It is assumed here that n0i=n0e and zi=-ze
           do ik=1,naky
