@@ -51,11 +51,6 @@ ffttester_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
-	 diagnostics_config.o \
-	 diagnostics_create_and_write.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_fluxes.o \
-	 diagnostics_write_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -64,7 +59,6 @@ ffttester_mod = \
 	 fields.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
-	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -72,7 +66,6 @@ ffttester_mod = \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -109,8 +102,7 @@ ffttester_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o \
-	 volume_averages.o 
+	 unit_tests.o 
 
 gs2_mod = \
 	 antenna.o \
@@ -121,11 +113,6 @@ gs2_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
-	 diagnostics_config.o \
-	 diagnostics_create_and_write.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_fluxes.o \
-	 diagnostics_write_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -133,7 +120,6 @@ gs2_mod = \
 	 fields.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
-	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -142,7 +128,6 @@ gs2_mod = \
 	 gridgen4mod.o \
 	 gs2.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -179,8 +164,7 @@ gs2_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o \
-	 volume_averages.o 
+	 unit_tests.o 
 
 hrate_mod = \
 	 command_line.o \
@@ -342,6 +326,7 @@ diagnostics_write_omega.o: \
 	 constants.o \
 	 diagnostics_config.o \
 	 fields_arrays.o \
+	 fields_parallelization.o \
 	 gs2_time.o \
 	 kt_grids.o 
 dist_fn.o: \
@@ -442,7 +427,6 @@ file_utils.o: \
 	 command_line.o 
 functional_tests.o: \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_main.o \
 	 job_manage.o \
 	 kt_grids.o \
@@ -503,7 +487,6 @@ gs2_diagnostics_new.o: \
 	 diagnostics_write_fluxes.o \
 	 diagnostics_write_omega.o \
 	 file_utils.o \
-	 gs2_diagnostics.o \
 	 gs2_time.o \
 	 kt_grids.o \
 	 le_grids.o \
@@ -571,7 +554,6 @@ gs2_main.o: \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
