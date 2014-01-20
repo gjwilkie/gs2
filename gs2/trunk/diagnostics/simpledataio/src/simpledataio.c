@@ -438,6 +438,12 @@ void sdatio_set_count(struct sdatio_file * sfile, char * variable_name, char * d
 
 
 }
+
+int sdatio_number_of_dimensions(struct sdatio_file * sfile, char * variable_name){
+	struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
+	return strlen(svar->dimension_list);
+}
+
 void sdatio_number_of_unlimited_dimensions(struct sdatio_file * sfile, char * variable_name, int * n){
 	struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
 	struct sdatio_dimension * sdim;

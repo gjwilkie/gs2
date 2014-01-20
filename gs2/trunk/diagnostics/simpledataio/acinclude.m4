@@ -559,3 +559,13 @@ fi
 #echo "al_netcdf_ok"
 #echo $al_netcdf_ok
 ])
+
+
+AC_DEFUN([AL_PP_DEFS], [
+# Here we create the definition strings for the C and Fortran preprocessors depending on 
+# the flag needed for the Fortran compiler (usually -D)
+# The only known variant is the IBM XL compiler, for which -WF,-D must be used for Fortran
+
+sed -nf setdefs.sed confdefs.h > confdefs.h2
+al_pp_defs_out=`sed -e s/PP_DEFINE/$1/g confdefs.h2`
+])

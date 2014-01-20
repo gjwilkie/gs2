@@ -35,6 +35,7 @@ contains
     use diagnostics_config, only: init_diagnostics_config
     use volume_averages, only: init_volume_averages
     use diagnostics_write_fluxes, only: init_diagnostics_write_fluxes
+    use diagnostics_write_omega, only: init_diagnostics_write_omega
     use file_utils, only: run_name
     use mp, only: mp_comm, proc0
     type(diagnostics_init_options_type), intent(in) :: init_options
@@ -63,6 +64,7 @@ contains
 
 
     call init_diagnostics_write_fluxes
+    call init_diagnostics_write_omega(gnostics)
 
     !gnostics%create = .true.
    ! Integer below gives the sdatio type 
@@ -80,9 +82,11 @@ contains
 
   subroutine finish_gs2_diagnostics_new
     use diagnostics_write_fluxes, only: finish_diagnostics_write_fluxes
+    use diagnostics_write_omega, only: finish_diagnostics_write_omega
     use mp, only: proc0
     if (.not. gnostics%write_any) return
     call finish_diagnostics_write_fluxes
+    call finish_diagnostics_write_omega
     if (gnostics%parallel .or. proc0) call closefile(gnostics%sfile)
   end subroutine finish_gs2_diagnostics_new
 
@@ -91,17 +95,18 @@ contains
   !! istep=0 --> Write constant arrays/parameters (e.g. aky) and initial values
   !! istep>0 --> Write variables
   subroutine run_diagnostics(istep, exit)
-    use gs2_diagnostics, only: nwrite
     use gs2_time, only: user_time
     use mp, only: proc0
     use diagnostics_write_fluxes, only: write_fluxes
     use diagnostics_write_fields, only: write_fields
+    use diagnostics_write_omega, only: calculate_omega, write_omega
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
 
     if (.not. gnostics%write_any) return
 
     gnostics%istep = istep
+    gnostics%exit = exit
 
     if (gnostics%parallel .or. proc0) then
       gnostics%create = (istep==-1)
@@ -122,10 +127,15 @@ contains
       call write_dimensions
       call write_geometry
     end if
+    
+    if (istep > 0) then
+      call calculate_omega(gnostics)
+    end if
 
 
 
     if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
+      if (gnostics%write_omega)  call write_omega (gnostics)
       if (gnostics%write_fields) call write_fields(gnostics)
       if (gnostics%write_fluxes) call write_fluxes(gnostics)
 !
@@ -134,6 +144,9 @@ contains
          "Values of the time coordinate", "a/v_thr", user_time) 
       if (gnostics%wryte) call increment_start(gnostics%sfile, "t")
     end if
+
+    exit = gnostics%exit
+
   end subroutine run_diagnostics
 
   subroutine create_dimensions

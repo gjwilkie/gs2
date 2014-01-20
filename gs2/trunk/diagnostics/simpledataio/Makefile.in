@@ -246,7 +246,12 @@ CFLAGS = @CFLAGS@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
 CYGPATH_W = @CYGPATH_W@
+
+# Here we override the standard preprocessor DEFS and define custom ones to allow for
+# different macro definition flags (the standard flag is -D)
 DEFS = 
+DEFS_CC = @DEFS_CC@
+DEFS_FC = @DEFS_FC@
 DEPDIR = @DEPDIR@
 DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
@@ -283,10 +288,6 @@ MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 MPICC = @MPICC@
 MPIFC = @MPIFC@
-
-#$(info "DEFS is (DEFS)")
-MYDEFS = @MYDEFS@
-MYDEFSF = @MYDEFSF@
 NM = @NM@
 NMEDIT = @NMEDIT@
 OBJDUMP = @OBJDUMP@
@@ -360,17 +361,13 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-#CDEFS=$(MYDEFS)
-#$(info "DEFS is $(DEFS)")
-#DEFS=
-AM_CFLAGS = $(MYDEFS)
-#FDEFS=$(subst -D,$(FDEF),$(MYDEFS))
+AM_CFLAGS = $(DEFS_CC)
 
 # To get the module files
-AM_FCFLAGS = $(MYDEFSF) -Iinclude/ $(am__append_1) $(am__append_2)
+AM_FCFLAGS = $(DEFS_FC) -Iinclude/ $(am__append_1) $(am__append_2)
 ACLOCAL_AMFLAGS = -I m4
-
-# Flag needed for defining macros to the fortran preprocessor (usually -D)
+# Here we set the flag needed for defining macros to the  Fortran preprocessor (usually -D)
+# The only known variant is the IBM XL compiler, for which -WF,-D must be used 
 FDEF = @FC_DEFINE@
 
 # Now adjust fortran and C preprocessor flags separately
