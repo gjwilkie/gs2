@@ -3474,6 +3474,12 @@ contains
           je = 2*ng2+1
        end if
 
+!CMR, 1/11/2013:
+! wfb does not seem to be treated correctly.
+! Surely wfb's bounce point should be handled like any other trapped particle bp?
+! Numerical instability referred to below more likely arises from wfb failing
+! to satisfy trapping condition after invert_rhs.
+!
        do ie = 1, negrid
           ! deal with special case of wfb
           if (jend(ig) == ng2+1) then
@@ -3510,6 +3516,10 @@ contains
              gle(ng2+1,ie,ile) = gwfb
              gle(ng2+2:je,ie,ile) = gle0(ng2+2:je)
           end if
+
+!CMR, 1/11/2013:
+! next line ensures bounce condition is satisfied after lorentz collisions
+! this is right thing to do, but it would mask any prior bug in trapping condition!
 
           if (jend(ig) /= 0) gle(2*jend(ig),ie,ile) = gle(jend(ig),ie,ile)
 
