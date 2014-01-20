@@ -5,6 +5,29 @@
 
 # include "define.inc"
 
+
+! The function calls for single and double precision fftw3 are different.
+! Here we save ourself the bother of writing them out twice by defining
+! a macro that correctly sets the beginning of the function
+
+#ifdef ANSI_CPP
+
+#ifdef SINGLE_PRECISION
+#define FFTW_PREFIX(fn) sfftw##fn
+#else
+#define FFTW_PREFIX(fn) dfftw##fn
+#endif
+
+#else
+
+#ifdef SINGLE_PRECISION
+#define FFTW_PREFIX(fn) sfftw/**/fn
+#else
+#define FFTW_PREFIX(fn) dfftw/**/fn
+#endif
+
+#endif
+
 module gs2_transforms
 
   use redistribute, only: redist_type
@@ -962,7 +985,7 @@ contains
     call fftw_f77 (xf_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
     deallocate (aux)
 # elif FFT == _FFTW3_
-    call dfftw_execute(xf_fft%plan)
+    call FFTW_PREFIX(_execute)(xf_fft%plan)
 # endif
 
     call prof_leaving ("transform_x5d", "gs2_transforms")
@@ -997,7 +1020,7 @@ contains
     call fftw_f77 (xb_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
     deallocate (aux)
 # elif FFT == _FFTW3_
-    call dfftw_execute(xb_fft%plan)
+    call FFTW_PREFIX(_execute)(xb_fft%plan)
 # endif
 
     call scatter (g2x, xxf, g)
@@ -1037,7 +1060,7 @@ contains
     call rfftwnd_f77_complex_to_real (yf_fft%plan, i, fft, 1, yxf_lo%ny/2+1, yxf, 1, yxf_lo%ny)
 # elif FFT == _FFTW3_
 
-    call dfftw_execute_dft_c2r (yf_fft%plan, fft, yxf)
+    call FFTW_PREFIX(_execute_dft_c2r) (yf_fft%plan, fft, yxf)
 # endif
 
     call prof_leaving ("transform_y5d", "gs2_transforms")
@@ -1068,7 +1091,7 @@ contains
     i = yxf_lo%ulim_alloc - yxf_lo%llim_proc + 1
     call rfftwnd_f77_real_to_complex (yb_fft%plan, i, yxf, 1, yxf_lo%ny, fft, 1, yxf_lo%ny/2+1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_r2c (yb_fft%plan, yxf, fft)
+    call FFTW_PREFIX(_execute_dft_r2c) (yb_fft%plan, yxf, fft)
 # endif
 
     call scatter (x2y, fft, xxf)
@@ -1212,7 +1235,7 @@ contains
             axf(:,:,ia(idx):), i, 1)
 # elif FFT == _FFTW3_
        ! remember FFTW3 for c2r destroys the contents of ag
-       call dfftw_execute_dft_c2r (yf_fft%plan, ag(:, :, k:), &
+       call FFTW_PREFIX(_execute_dft_c2r) (yf_fft%plan, ag(:, :, k:), &
             axf(:, :, ia(idx):))
 # endif
        idx = idx + 1
@@ -1241,7 +1264,7 @@ contains
        call rfftwnd_f77_real_to_complex (yb_fft%plan, i, axf(:,:,k:), i, 1, &
             ag(:,:,iak(idx):), i, 1)
 # elif FFT == _FFTW3_
-       call dfftw_execute_dft_r2c(yb_fft%plan, axf(:, :, k:), &
+       call FFTW_PREFIX(_execute_dft_r2c)(yb_fft%plan, axf(:, :, k:), &
             ag(:, :, iak(idx):))
 # endif
        idx = idx + 1
@@ -1366,7 +1389,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_c2r (xf3d_cr%plan, aphi, phix)
+    call FFTW_PREFIX(_execute_dft_c2r) (xf3d_cr%plan, aphi, phix)
 # endif
 
     do it=1,nnx
@@ -1411,7 +1434,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (xf3d_rc%plan, i, phix, i, 1, aphi, i, 1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_r2c (xf3d_rc%plan, phix, aphi)
+    call FFTW_PREFIX(_execute_dft_r2c) (xf3d_rc%plan, phix, aphi)
 # endif
 
 ! dealias and scale
@@ -1485,7 +1508,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf2d%plan, 1, aphi, 1, 1, phix, 1, 1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_c2r (xf2d%plan, aphi, phix)
+    call FFTW_PREFIX(_execute_dft_c2r) (xf2d%plan, aphi, phix)
 # endif
 
     phixf(:,:)=transpose(phix(:,:))
@@ -1529,7 +1552,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (xf2d%plan, 1, phix, 1, 1, aphi, 1, 1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_r2c (xf2d%plan, phix, aphi)
+    call FFTW_PREFIX(_execute_dft_r2c) (xf2d%plan, phix, aphi)
 # endif
 
 ! scale, dealias and transpose
@@ -1592,7 +1615,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_c2r (xf3d_cr%plan, aphi, phix)
+    call FFTW_PREFIX(_execute_dft_c2r) (xf3d_cr%plan, aphi, phix)
 # endif
 
     do it=1,nnx
@@ -1634,7 +1657,7 @@ contains
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft(zf_fft%plan, an, an2)
+    call FFTW_PREFIX(_execute_dft)(zf_fft%plan, an, an2)
 # endif
     an2 = conjg(an2)*an2
 

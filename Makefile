@@ -332,6 +332,9 @@ $(warning Precision mismatch with NAG libarray)
 		CPPFLAGS += -DNAG_PREC=_NAGSNGL_
 	endif
 endif
+ifndef DBLE
+	CPPFLAGS+=-DSINGLE_PRECISION
+endif
 ifndef PGPLOT_LIB
 	ifeq ($(MAKECMDGOALS),agk_fields_plot)
 $(error PGPLOT_LIB is not defined)

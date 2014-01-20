@@ -256,6 +256,9 @@ rungridgen_mod = \
 	 rungridgen.o \
 	 spl.o 
 
+test_mod = \
+	 test_double.o 
+
 antenna.o: \
 	 antenna_data.o \
 	 constants.o \
@@ -819,6 +822,7 @@ species.o: \
 spfunc.o: \
 	 constants.o 
 spl.o: 
+test_double.o: 
 test_layouts.o: \
 	 mp.o 
 text_options.o: 
