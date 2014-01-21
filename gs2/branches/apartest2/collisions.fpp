@@ -337,7 +337,7 @@ contains
     call broadcast (ei_coll_only)
     call broadcast (use_le_layout)
 
-    drag = resistivity .and. (beta > epsilon(0.0)) .and. (nspec > 1) .and. (fapar.gt.0)
+    drag = resistivity .and. (nspec > 1) !.and. (beta > epsilon(0.0)) .and. (fapar.gt.0)
   end subroutine read_parameters
 
   subroutine init_arrays
