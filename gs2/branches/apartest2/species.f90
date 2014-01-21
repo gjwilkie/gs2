@@ -64,9 +64,9 @@ contains
      do is=1, nspec
         write (report_unit, *) 
         write (report_unit, fmt="('  Species ',i3)") is
-        if (spec(is)%type == 1) write (report_unit, fmt="('    Type:             Ion')")
-        if (spec(is)%type == 2) write (report_unit, fmt="('    Type:             Electron')")
-        if (spec(is)%type == 3) write (report_unit, fmt="('    Type:             Slowing-down')")
+        if (spec(is)%type == ion_species) write (report_unit, fmt="('    Type:             Ion')")
+        if (spec(is)%type == electron_species) write (report_unit, fmt="('    Type:             Electron')")
+        if (spec(is)%type == slowing_down_species) write (report_unit, fmt="('    Type:             Slowing-down')")
         write (report_unit, fmt="('    Charge:         ',f7.3)") spec(is)%z
         write (report_unit, fmt="('    Mass:             ',es10.4)") spec(is)%mass
         write (report_unit, fmt="('    Density:        ',f7.3)") spec(is)%dens
@@ -80,7 +80,7 @@ contains
              write (report_unit, fmt="('      Bessel function arg multiplied by:   ',f7.3)") spec(is)%bess_fac
 !        write (report_unit, fmt="('    Ignore this:')")
 !        write (report_unit, fmt="('    D_0: ',es10.4)") spec(is)%dens0
-        if (spec(is)%type /= 2) then
+        if (spec(is)%type /= electron_species) then
            zeff_calc = zeff_calc + spec(is)%dens*spec(is)%z**2
            charge = charge + spec(is)%dens*spec(is)%z
            aln = aln + spec(is)%dens*spec(is)%z*spec(is)%fprim
@@ -93,6 +93,7 @@ contains
         ptot = ptot + spec(is)%dens * spec(is)%temp
      end do
 
+!<DD>This may need generalising for AI !APARTEST
      if (.not. has_electron_species(spec)) then
         ptot = ptot + 1./tite   ! electron contribution to pressure
         alp = alp + aln/tite    ! assuming charge neutrality, electron contribution to alp
@@ -105,6 +106,7 @@ contains
 
      write (report_unit, fmt="('Calculated Z_eff: ',f7.3)") zeff_calc
 
+!<DD>This may need generalising for AI !APARTEST
      if (has_electron_species(spec)) then
         if (abs(charge+ne*ee) > 1.e-2) then
            if (charge+ne*ee < 0.) then
@@ -162,7 +164,7 @@ contains
         write (report_unit, *) 
         write (report_unit, fmt="('################# WARNING #######################')")
         write (report_unit, fmt="('You are including an adiabatic species.')")
-        write (report_unit, fmt="('This species is of type ',A)") trim(adia_type)
+        write (report_unit, fmt="('Species estimated to be type ',A)") trim(adia_type)
         write (report_unit, fmt="('################# WARNING #######################')")
      end if
      write (report_unit, *) 
@@ -360,9 +362,11 @@ contains
        call broadcast (spec(is)%bess_fac)
     end do
     
-    !<DD>Now update the adiabatic_type if required
+    !<DD>Now update the adiabatic_type if required, used to set
+    !default adiabatic_option, this can be overridden by values
+    !in the input file.
     if(has_adiabatic_species(spec))then
-       if(spec(1)%z.gt.0)then
+       if(.not.has_electron_species(spec))then
           adiabatic_type=electron_species
        else
           adiabatic_type=ion_species
@@ -396,27 +400,34 @@ contains
 
   !<DD>A simple function to try to work out if the user intends
   !to include an adiabatic species. We do this simply by seeing
-  !if all species have the same charge or not.
-  pure function has_adiabatic_species(spec)
-    !Really this won't change during a run so we should have a 
-    !module level variable which stores the result which is used
-    !everytime except the first call
+  !if all species have the same charge.
+  function has_adiabatic_species(spec)
+    !Really this won't change during a run so we use
+    !saved variables to see if we've calculated answer etc.
     implicit none
     type (specie), dimension (:), intent (in) :: spec
-    logical :: has_adiabatic_species, has_neg, has_pos
+    logical :: has_adiabatic_species
+    logical :: has_pos, has_neg
     integer :: is, ns
-    ns=size(spec)
-    has_adiabatic_species=.false.
-    has_neg=.false.
-    has_pos=.false.
-    do is=1,ns
-       if(spec(is)%z.lt.0) then
-          has_neg=.true.
-       elseif(spec(is)%z.gt.0) then
-          has_pos=.true.
-       endif
-    enddo
-    has_adiabatic_species=(.not.(has_neg.and.has_pos))
+    logical, save:: first=.true., stored_answer=.false.
+    if(first)then
+       ns=size(spec)
+       has_adiabatic_species=.false.
+       has_pos=.false.
+       has_neg=.false.
+       do is=1,ns
+          if(spec(is)%z.gt.0)then
+             has_pos=.true.
+          elseif(spec(is)%z.lt.0)then
+             has_neg=.true.
+          endif
+       enddo
+       has_adiabatic_species=(.not.(has_pos.and.has_neg))
+       first=.false.
+       stored_answer=has_adiabatic_species
+    else
+       has_adiabatic_species=stored_answer
+    endif
   end function has_adiabatic_species
 
   pure function has_electron_species (spec)

@@ -616,7 +616,7 @@ subroutine check_dist_fn(report_unit)
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use theta_grid, only: shat
     use text_options, only: text_option, get_option_value
-    use species, only: nspec, has_adiabatic_species, spec, get_appropriate_adiabatic_option
+    use species, only: nspec, spec, get_appropriate_adiabatic_option
     use mp, only: proc0, broadcast
     use theta_grid, only: itor_over_B
     implicit none
