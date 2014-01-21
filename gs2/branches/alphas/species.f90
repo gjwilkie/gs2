@@ -223,7 +223,7 @@ contains
     implicit none
     real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h
     real :: tperp0, tpar0
-    real :: source, sprim, gamma_ae, gamma_ai, ash_fraction
+    real :: source, sprim, gamma_ae, gamma_ai, ash_fraction, zero
     character(20) :: type
     integer :: unit
     integer :: is
@@ -328,7 +328,18 @@ contains
             spec(is)%is_maxwellian = .true.
           end if
 
-          if (equivalent_maxwellian_flag) spec(is)%is_maxwellian = .true.
+          if (equivalent_maxwellian_flag) then 
+             spec(is)%is_maxwellian = .true.
+!             !> Don't trust any of the below values until le_grids is called
+!             zero = 0.0
+!             spec(is)%stm = 1.0/zero
+!             spec(is)%zstm = 1.0/zero
+!             spec(is)%zt = 1.0/zero
+!             spec(is)%tz = 1.0/zero
+!             spec(is)%smz = 1.0/zero
+          end if
+      
+
        end do
     end if
 
