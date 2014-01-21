@@ -1227,8 +1227,7 @@ contains
     if(.not.allocated(vnewh)) allocate (vnewh(-ntgrid:ntgrid,ntheta0,naky,nspec))
 
     do is = 1, nspec
-!       if (spec(is)%type == electron_species) then
-       if (spec(is)%type == electron_species .or. ((nspec == 1).and.(adiabatic_type.eq.ion_species))) then
+       if (spec(is)%type == electron_species) then
           do ie = 1, negrid
              do ik = 1, naky
                 if (const_v) then

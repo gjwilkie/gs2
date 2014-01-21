@@ -94,7 +94,7 @@ program ingen
 contains
 
   subroutine interactive
-    use species, only: spec, nspec, has_electron_species
+    use species, only: spec, nspec, has_electron_species, electron_species
     use geometry, only: beta_prime_input, bishop
     use run_parameters, only: beta, fapar, fbpar
     integer :: sel, nbeta, j, ise
@@ -211,7 +211,7 @@ contains
              alpi = 0.
              ise = 0
              do is=1,nspec
-                if (spec(is)%type == 2) then
+                if (spec(is)%type == electron_species) then
                    pe = spec(is)%dens * spec(is)%temp
                    ise = is
                 else
