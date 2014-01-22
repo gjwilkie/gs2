@@ -1,3 +1,7 @@
+!> This module implements the same implicit algorithm as fields_implicit.
+!! However, it is an almost complete rewrite of the implementation 
+!! which can give large gains in the speed of calculating the response 
+!! matrix, as well as significant gains to the advance steps
 module fields_local
   use mp, only: comm_type
   implicit none
