@@ -458,7 +458,7 @@ contains
     use run_parameters, only: ieqzip, beta
     use kt_grids, only: kwork_filter
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent(inout) :: g_coll
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent(inout) :: g_coll
     integer :: iglo, is, it, ik, ie, ig
 
     !Pick field method -- keep both to allow for testing
@@ -500,7 +500,7 @@ contains
   !   use kt_grids, only: kwork_filter
   !   use layouts_type, only: le_layout_type
   !   implicit none
-  !   complex, dimension (-ntgrid:,:,:), intent(inout) :: g_coll_le
+  !   complex, dimension (-ntgrid:,:,le_lo%llim_proc:), intent(inout) :: g_coll_le
   !   type(le_layout_type), intent(in) :: lo
   !   integer :: ile, is, it, ik, ie, ixi, il, isgn
 
@@ -2452,17 +2452,17 @@ contains
 
   subroutine solfp1_standard_layout (g, g1, gc1, gc2, diagnostics, gtoc, ctog)
 
-    use gs2_layouts, only: g_lo, it_idx, ik_idx, ie_idx, is_idx
+    use gs2_layouts, only: g_lo!, it_idx, ik_idx, ie_idx, is_idx
     use theta_grid, only: ntgrid
-    use run_parameters, only: beta
-    use gs2_time, only: code_dt
-    use le_grids, only: energy
-    use species, only: spec, electron_species
-    use dist_fn_arrays, only: vpa, kperp2, aj0
-    use fields_arrays, only: aparnew
-    use run_parameters, only: ieqzip
-    use kt_grids, only: kwork_filter
-    use constants
+!    use run_parameters, only: beta
+!    use gs2_time, only: code_dt
+!    use le_grids, only: energy
+!    use species, only: spec, electron_species
+!    use dist_fn_arrays, only: vpa, kperp2, aj0
+!    use fields_arrays, only: aparnew
+!    use run_parameters, only: ieqzip
+!    use kt_grids, only: kwork_filter
+!    use constants
     ! TMP FOR TESTING -- MAB
 !    use mp, only: proc0
 
