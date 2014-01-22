@@ -43,9 +43,9 @@ program test_fields_local
 
   call announce_module_test('fields_local')
 
-  call init_kt_grids
-  call init_theta_grid
-  call init_dist_fn
+  !call init_kt_grids
+  !call init_theta_grid
+  !call init_dist_fn
   call fields_pre_init
   !call init_fields_implicit
 
@@ -160,21 +160,6 @@ contains
       end do
     end do
 
-    !!Now work out if we agree.
-    !!The exact definition of how well we agree
-    !!may not be what I have here (e.g. test each
-    !!field individually).
-    !diff=abs(phi_imp-phi_loc)+abs(apar_imp-apar_loc)+abs(bpar_imp-bpar_loc)
-    !fdiff=diff/(abs(phi_loc)+abs(apar_loc)+abs(bpar_loc))
-
-    !!Check the difference, the 100*epsilon(1.0) should ignore
-    !!error in the last few SF
-    !if(fdiff.gt.100*epsilon(1.0))then
-        !write(6,'("The fields disagree.")')
-        !write(6,'("     --- diff  : ",F12.5)') diff
-        !write(6,'("     --- fdiff : ",F12.5)') fdiff
-    !endif
-    
   end function test_advance
 
 end program test_fields_local
