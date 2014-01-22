@@ -29,7 +29,7 @@ endif
 ### UTILS
 utils_all: utils.a 
 
-UTIL_OBJ = spl.o constants.o file_utils.o netcdf_utils.o command_line.o
+UTIL_OBJ = spl.o constants.o file_utils.o netcdf_utils.o command_line.o runtime_tests.o
 utils.a: $(UTIL_OBJ)
 	$(ARCH) $(ARCHFLAGS) $@ $^
 	$(RANLIB) $@

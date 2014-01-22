@@ -13,6 +13,10 @@ module fields
   public :: phi, apar, bpar, phinew, aparnew, bparnew
   public :: reset_init
 
+  !> Made public for unit tests
+  public :: fields_pre_init
+  public :: remove_zonal_flows_switch
+
   private
 
   interface fieldlineavgphi
@@ -67,24 +71,17 @@ contains
        write (unit, fmt="(' /')")
   end subroutine wnml_fields
 
-  subroutine init_fields
-!CMR,18/2/2011:
-! add optional logical arg "noalloc" to avoid array allocations in ingen
+  !> Calls all initialisations required for init_fields_implicit/local, 
+  !! reads parameters and allocates field arrays
+  subroutine fields_pre_init
     use theta_grid, only: init_theta_grid
     use run_parameters, only: init_run_parameters
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
-    use fields_implicit, only: init_fields_implicit, init_allfields_implicit
-    use fields_test, only: init_fields_test, init_phi_test
-    use fields_local, only: init_fields_local, init_allfields_local
-    use nonlinear_terms, only: nl_finish_init => finish_init
-    use antenna, only: init_antenna
     implicit none
     logical :: restarted
     logical:: debug=.false.
 
-    if (initialized) return
-    initialized = .true.
     
     if (debug) write(6,*) "init_fields: init_theta_grid"
     call init_theta_grid
@@ -104,6 +101,28 @@ contains
     call read_parameters
     if (debug) write(6,*) "init_fields: allocate_arrays"
     call allocate_arrays
+  end subroutine fields_pre_init
+
+  subroutine init_fields
+!CMR,18/2/2011:
+! add optional logical arg "noalloc" to avoid array allocations in ingen
+    use theta_grid, only: init_theta_grid
+    use run_parameters, only: init_run_parameters
+    use dist_fn, only: init_dist_fn
+    use init_g, only: ginit, init_init_g
+    use fields_implicit, only: init_fields_implicit, init_allfields_implicit
+    use fields_test, only: init_fields_test, init_phi_test
+    use fields_local, only: init_fields_local, init_allfields_local
+    use nonlinear_terms, only: nl_finish_init => finish_init
+    use antenna, only: init_antenna
+    implicit none
+    logical :: restarted
+    logical:: debug=.false.
+
+    if (initialized) return
+    initialized = .true.
+    
+    call fields_pre_init
 
     select case (fieldopt_switch)
     case (fieldopt_implicit)
@@ -140,6 +159,7 @@ contains
     end select
     
   end subroutine init_fields
+
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist

@@ -104,13 +104,15 @@ contains
     agrees_with_real_1d_array = .true.
     do i = 1,n
 
-      call should_be(val(i), correct(i))
-      if (correct(i) .eq. 0.0) then 
-        agrees_with_real_1d_array = agrees_with_real_1d_array .and. (abs(val(i)) .lt. err) 
-      else
-        agrees_with_real_1d_array = agrees_with_real_1d_array .and. &
-                                        (abs((val(i)-correct(i))/correct(i)) .lt. err)
-      end if
+      !call should_be(val(i), correct(i))
+      !if (correct(i) .eq. 0.0 .or. abs(correct(i)) .lt. 10.0**(-maxexponent(err)/4)) then 
+        !agrees_with_real_1d_array = agrees_with_real_1d_array .and. (abs(val(i)) .lt. err) 
+      !else
+        !agrees_with_real_1d_array = agrees_with_real_1d_array .and. &
+                                        !(abs((val(i)-correct(i))/correct(i)) .lt. err)
+      !end if
+      agrees_with_real_1d_array = agrees_with_real_1d_array .and. &
+        agrees_with_real(val(i), correct(i), err)
       if (.not. agrees_with_real_1d_array) exit
     end do 
   end function agrees_with_real_1d_array
@@ -118,9 +120,11 @@ contains
     real, intent(in) :: val, correct, err
     logical :: agrees_with_real
     call should_be(val, correct)
-    if (correct .eq. 0.0) then 
+    if (correct .eq. 0.0 .or. abs(correct) .lt. 10.0**(-maxexponent(err)/4)) then 
+      !write (*,*) 'testing abs'
       agrees_with_real = abs(val) .lt. err 
     else
+      !write (*,*) 'testing rel'
       agrees_with_real = (abs((val-correct)/correct) .lt. err)
     end if
   end function agrees_with_real

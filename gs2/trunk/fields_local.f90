@@ -5,6 +5,10 @@ module fields_local
 
   public :: init_fields_local, init_allfields_local, finish_fields_local
   public :: advance_local, reset_fields_local
+  public :: fields_local_functional
+
+  !> Unit tests
+  public :: fields_local_unit_test_init_fields_matrixlocal
 
   !//////////////////////////////
   !// CUSTOM TYPES
@@ -3065,6 +3069,15 @@ contains
     reinit = .false.
   end subroutine init_fields_local
 
+  function fields_local_unit_test_init_fields_matrixlocal()
+    logical :: fields_local_unit_test_init_fields_matrixlocal
+
+    call init_fields_local
+
+    fields_local_unit_test_init_fields_matrixlocal = .true.
+
+  end function fields_local_unit_test_init_fields_matrixlocal
+
   !>Routine use to initialise field matrix data
   subroutine init_fields_matrixlocal
     use mp, only: proc0 !, barrier
@@ -3317,5 +3330,16 @@ contains
          aparnew, bparnew, istep, diagnostics) 
 
   end subroutine advance_local
+
+  !> Returns true if GS2 was built in such a way
+  !! as to allow this module to work.
+  !! Currently does not work with PGI compilers. 
+  !! See online discussions.
+  function fields_local_functional()
+    use runtime_tests, only: compiler_pgi
+    logical :: fields_local_functional
+    fields_local_functional = (.not. compiler_pgi())
+  end function fields_local_functional
+
 
 end module fields_local
