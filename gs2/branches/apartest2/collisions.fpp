@@ -344,6 +344,7 @@ contains
     call broadcast (adjust)
     call broadcast (ei_coll_only)
     call broadcast (use_le_layout)
+    call broadcast (new_apar_coll)
 
     drag = resistivity .and. (nspec > 1) !.and. (beta > epsilon(0.0)) .and. (fapar.gt.0)
   end subroutine read_parameters
@@ -413,11 +414,10 @@ contains
     use species, only: nspec, spec
     use le_grids, only : integrate_species
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent(inout) :: g_in
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent(inout) :: g_in
     complex, dimension (:,:,:), allocatable :: antota, g0
     integer :: iglo, isgn
     real,dimension(nspec) :: wgt
-
     !Allocate storage
     allocate(antota(-ntgrid:ntgrid,ntheta0,naky))
     allocate(g0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -443,6 +443,9 @@ contains
     elsewhere
        apar_coll=antota/kperp2
     end where
+
+    !Clean up
+    deallocate(antota,g0)
   end subroutine get_apar_for_coll
 
   !>This routine adds the apar part of the drag term in the
