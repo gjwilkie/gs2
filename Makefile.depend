@@ -97,6 +97,7 @@ ffttester_mod = \
 	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 runtime_tests.o \
 	 sorting.o \
 	 species.o \
 	 spfunc.o \
@@ -161,6 +162,7 @@ gs2_mod = \
 	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 runtime_tests.o \
 	 sorting.o \
 	 species.o \
 	 spfunc.o \
@@ -227,6 +229,7 @@ ingen_mod = \
 	 read_chease.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 runtime_tests.o \
 	 sorting.o \
 	 species.o \
 	 spfunc.o \
@@ -435,6 +438,7 @@ fields_local.o: \
 	 matrix_inverse.o \
 	 mp.o \
 	 run_parameters.o \
+	 runtime_tests.o \
 	 theta_grid.o 
 fields_parallelization.o: \
 	 kt_grids.o \
@@ -813,6 +817,7 @@ rungridgen.o: \
 	 file_utils.o \
 	 gridgen4mod.o \
 	 spl.o 
+runtime_tests.o: 
 sorting.o: 
 species.o: \
 	 file_utils.o \

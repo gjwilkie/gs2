@@ -11,6 +11,9 @@ module fields_implicit
   public :: set_scan_parameter
   public :: field_subgath
 
+  !> Unit tests
+  public :: fields_implicit_unit_test_init_fields_implicit
+
   private
 
   integer, save :: nfield
@@ -51,6 +54,15 @@ contains
     call init_antenna
 
   end subroutine init_fields_implicit
+
+  function fields_implicit_unit_test_init_fields_implicit()
+    logical :: fields_implicit_unit_test_init_fields_implicit
+
+    call init_fields_implicit
+
+    fields_implicit_unit_test_init_fields_implicit = .true.
+
+  end function fields_implicit_unit_test_init_fields_implicit
 
   
   subroutine set_scan_parameter(reset)
