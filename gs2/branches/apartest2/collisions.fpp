@@ -45,6 +45,10 @@ module collisions
      module procedure conserve_diffuse_standard_layout
   end interface 
 
+  interface add_apar_drag_term
+!     module procedure add_apar_drag_term_le_layout !NOT YET IMPLEMENTED
+     module procedure add_apar_drag_term_standard_layout
+  end interface
 
   private
 
@@ -59,7 +63,7 @@ module collisions
   logical :: hyper_colls
   logical :: ei_coll_only
   logical :: test
-
+  logical :: new_apar_coll
   integer, public, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
   integer, public, parameter :: collision_model_none = 3
   integer, public, parameter :: collision_model_lorentz_test = 5 ! if this changes, check gs2_diagnostics
@@ -121,6 +125,9 @@ module collisions
   ! only for original parallel mom conservation (not used nowadays)
   real, dimension (:,:,:), allocatable :: sq
   ! (-ntgrid:ntgrid,nlambda,2) replicated
+
+  !For drag term in ei collisions
+  complex, dimension(:,:,:), allocatable :: apar_coll
 
   real :: cfac
 
@@ -266,7 +273,7 @@ contains
          lorentz_scheme, ediff_scheme, resistivity, conservative, test, &
 ! following only needed for adaptive collisionality
          vnfac, etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, &
-	 use_le_layout
+	 use_le_layout, new_apar_coll
     integer :: ierr, in_file
 
     if (proc0) then
@@ -293,6 +300,7 @@ contains
        heating = .false.
        test = .false.
        ei_coll_only = .false.
+       new_apar_coll=.false.
        in_file = input_unit_exist ("collisions_knobs", exist)
 !       if (exist) read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
        if (exist) read (unit=in_file, nml=collisions_knobs)
@@ -384,7 +392,146 @@ contains
        if (conserve_moments) call init_diffuse_conserve
     end select
 
+    if(drag) allocate(apar_coll(-ntgrid:ntgrid,ntheta0,naky))
   end subroutine init_arrays
+
+  !>This routine calculates apar directly from gnew
+  !using Maxwell's equations for use in the collisional
+  !drag term for electron-ion collisions. Note there is 
+  !a factor of beta missing here as we would divide by beta
+  !in collisions (prevents 0/0)
+  subroutine get_apar_for_coll(g_in)
+    !NOTE: At the moment the g we are given will be the result of
+    !calling g_adjust on the evolved g. This may mean our equations
+    !here are not quite correct. We could easily fix this either
+    !with another two g_adjust calls or by moving the calculation
+    !of apar_coll to a point before the g_adjust.
+    use dist_fn_arrays, only: aj0, vpa, kperp2
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: g_lo
+    use species, only: nspec, spec
+    use le_grids, only : integrate_species
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent(inout) :: g_in
+    complex, dimension (:,:,:), allocatable :: antota, g0
+    integer :: iglo, isgn
+    real,dimension(nspec) :: wgt
+
+    !Allocate storage
+    allocate(antota(-ntgrid:ntgrid,ntheta0,naky))
+    allocate(g0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+
+    !For the  integrand
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do isgn = 1, 2
+          g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*g_in(:,isgn,iglo)
+       end do
+    end do
+
+    !Note missing factor of beta here is intentional
+    wgt = 2.0*spec%z*spec%dens*sqrt(spec%temp/spec%mass)
+    call integrate_species (g0, wgt, antota)
+
+    !We should do this for consistency BUT can't use dist_fn
+    !due to dependencies
+    !if(esv) call ensure_single_val_fields_pass(antota)
+
+    !Now we can form the field using kperp2*apar=Int(J0*v||*g)
+    where(abs(kperp2)<epsilon(0.0))
+       apar_coll=0.0
+    elsewhere
+       apar_coll=antota/kperp2
+    end where
+  end subroutine get_apar_for_coll
+
+  !>This routine adds the apar part of the drag term in the
+  !electron-ion collision operator | Standard layout
+  subroutine add_apar_drag_term_standard_layout(g_coll)
+    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx
+    use species, only: spec, electron_species
+    use theta_grid, only: ntgrid
+    use gs2_time, only: code_dt
+    use le_grids, only: energy
+    use dist_fn_arrays, only: vpa, kperp2, aj0
+    use fields_arrays, only: aparnew
+    use run_parameters, only: ieqzip, beta
+    use kt_grids, only: kwork_filter
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent(inout) :: g_coll
+    integer :: iglo, is, it, ik, ie, ig
+
+    !Pick field method -- keep both to allow for testing
+    if(new_apar_coll)then
+       !Calculate the appropriate apar
+       call get_apar_for_coll(g_coll)
+    else
+       apar_coll=aparnew/beta
+    endif
+
+    !Now add in the term
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo,iglo)
+       if (spec(is)%type /= electron_species) cycle
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       if(kwork_filter(it,ik)) cycle
+       ie = ie_idx(g_lo,iglo)
+       do ig = -ntgrid, ntgrid
+          g_coll(ig,:,iglo) = g_coll(ig,:,iglo) + ieqzip(it,ik) * &
+               vnmult(1)*spec(is)%vnewk*code_dt &
+               * vpa(ig,:,iglo)*kperp2(ig,it,ik)*apar_coll(ig,it,ik)*aj0(ig,iglo) &
+               / (spec(is)%stm*energy(ie)**1.5)
+       end do
+    end do
+  end subroutine add_apar_drag_term_standard_layout
+
+!THIS WILL NOT WORK UNTIL WE PROVIDE AN INTEGRATE_SPECIES FOR LE_LAYOUTS
+  ! !>This routine adds the apar part of the drag term in the
+  ! !electron-ion collision operator | LE layout
+  ! subroutine add_apar_drag_term_le_layout(g_coll_le,lo)
+  !   use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, le_lo
+  !   use species, only: spec, electron_species
+  !   use gs2_time, only: code_dt
+  !   use le_grids, only: energy, negrid, nxi, ixi_to_il, ixi_to_isgn, sgn, al
+  !   use dist_fn_arrays, only: kperp2
+  !   use fields_arrays, only: aparnew
+  !   use run_parameters, only: ieqzip, beta
+  !   use kt_grids, only: kwork_filter
+  !   use layouts_type, only: le_layout_type
+  !   implicit none
+  !   complex, dimension (-ntgrid:,:,:), intent(inout) :: g_coll_le
+  !   type(le_layout_type), intent(in) :: lo
+  !   integer :: ile, is, it, ik, ie, ixi, il, isgn
+
+  !   !Pick field method -- keep both to allow for testing
+  !   if(new_apar_coll)then
+  !      !Calculate the appropriate apar
+  !      call get_apar_for_coll(g_coll_le)
+  !   else
+  !      apar_coll=aparnew/beta
+  !   endif
+
+  !   do ile = le_lo%llim_proc, le_lo%ulim_proc
+  !      is = is_idx(le_lo,ile)
+  !      if (spec(is)%type /= electron_species) cycle
+  !      it = it_idx(le_lo,ile)
+  !      ik = ik_idx(le_lo,ile)
+  !      ig = ig_idx(le_lo,ile)
+  !      do ie = 1, negrid
+  !         do ixi = 1, nxi
+  !            il = ixi_to_il(ig,ixi)
+  !            isgn = ixi_to_isgn(ig,ixi)
+  !            g_coll_le(ixi,ie,ile) = g_coll_le(ixi,ie,ile) + ieqzip(it,ik) * &
+  !                 vnmult(1)*spec(is)%vnewk*code_dt &
+  !                 * kperp2(ig,it,ik)*apar_coll(ig,it,ik)*aj0le(ixi,ie,ile) &
+  !                 / (spec(is)%stm*energy(ie)) &
+  !                 * sgn(isgn)*sqrt(MAX(1.0-al(il)*bmag(ig),0.0))
+  !            ! probably need 1/(spec(is_ion)%z*spec(is_ion)%dens) above
+  !         end do
+  !      end do
+  !   end do
+  ! end subroutine add_apar_drag_term_le_layout
 
   subroutine init_lorentz_conserve
 
@@ -2376,21 +2523,22 @@ contains
 !       end if
 
        if (drag) then
-          do iglo = g_lo%llim_proc, g_lo%ulim_proc
-             is = is_idx(g_lo,iglo)
-             if (spec(is)%type /= electron_species) cycle
-             it = it_idx(g_lo,iglo)
-             ik = ik_idx(g_lo,iglo)
-             if(kwork_filter(it,ik)) cycle
-             ie = ie_idx(g_lo,iglo)
-             do ig = -ntgrid, ntgrid
-                g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
-                     vnmult(1)*spec(is)%vnewk*code_dt &
-                     * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
-                     / (beta*spec(is)%stm*energy(ie)**1.5)
-                ! probably need 1/(spec(is_ion)%z*spec(is_ion)%dens) above
-             end do
-          end do
+          call add_apar_drag_term(g)
+          ! do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          !    is = is_idx(g_lo,iglo)
+          !    if (spec(is)%type /= electron_species) cycle
+          !    it = it_idx(g_lo,iglo)
+          !    ik = ik_idx(g_lo,iglo)
+          !    if(kwork_filter(it,ik)) cycle
+          !    ie = ie_idx(g_lo,iglo)
+          !    do ig = -ntgrid, ntgrid
+          !       g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
+          !            vnmult(1)*spec(is)%vnewk*code_dt &
+          !            * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
+          !            / (beta*spec(is)%stm*energy(ie)**1.5)
+          !       ! probably need 1/(spec(is_ion)%z*spec(is_ion)%dens) above
+          !    end do
+          ! end do
        end if
 
        ! TMP FOR TESTING -- MAB
@@ -2423,20 +2571,21 @@ contains
     case (collision_model_lorentz,collision_model_lorentz_test)
 
        if (drag) then
-          do iglo = g_lo%llim_proc, g_lo%ulim_proc
-             is = is_idx(g_lo,iglo)
-             if (spec(is)%type /= electron_species) cycle
-             it = it_idx(g_lo,iglo)
-             ik = ik_idx(g_lo,iglo)
-             if(kwork_filter(it,ik))cycle
-             ie = ie_idx(g_lo,iglo)
-             do ig = -ntgrid, ntgrid
-                g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
-                     vnmult(1)*spec(is)%vnewk*code_dt &
-                     * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
-                     / (beta*spec(is)%stm*energy(ie)**1.5)
-             end do
-          end do
+          call add_apar_drag_term(g)
+          ! do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          !    is = is_idx(g_lo,iglo)
+          !    if (spec(is)%type /= electron_species) cycle
+          !    it = it_idx(g_lo,iglo)
+          !    ik = ik_idx(g_lo,iglo)
+          !    if(kwork_filter(it,ik))cycle
+          !    ie = ie_idx(g_lo,iglo)
+          !    do ig = -ntgrid, ntgrid
+          !       g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
+          !            vnmult(1)*spec(is)%vnewk*code_dt &
+          !            * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
+          !            / (beta*spec(is)%stm*energy(ie)**1.5)
+          !    end do
+          ! end do
        end if
        
        if (heating_flag) then
@@ -2505,6 +2654,7 @@ contains
 !       end if
 
        if (drag) then
+!          call add_apar_drag_term(gle,le_lo) !NOT YET IMPLEMENTED
           do ile = le_lo%llim_proc, le_lo%ulim_proc
              is = is_idx(le_lo,ile)
              if (spec(is)%type /= electron_species) cycle
@@ -2556,6 +2706,7 @@ contains
     case (collision_model_lorentz,collision_model_lorentz_test)
 
        if (drag) then
+!          call add_apar_drag_term(gle,le_lo) !NOT YET IMPLEMENTED
           do ile = le_lo%llim_proc, le_lo%ulim_proc
              is = is_idx(le_lo,ile)
              if (spec(is)%type /= electron_species) cycle
@@ -3775,7 +3926,7 @@ contains
     if (allocated(vnew)) deallocate (vnew, vnew_s, vnew_D, vnew_E, delvnew)
     if (allocated(vnewh)) deallocate (vnewh)
     if (allocated(sq)) deallocate (sq)
-
+    if (allocated(apar_coll)) deallocate(apar_coll)
     if(use_le_layout) then
       if (allocated(c1le)) then
          deallocate (c1le, betaale, qle)
