@@ -236,6 +236,9 @@ ifeq ($(MAKECMDGOALS),depend)
 		USE_LOCAL_BESSEL=on USE_LOCAL_RAN=mt
 endif
 
+#Here we define SVN_REV based on the output of svnversion
+CPPFLAGS+=-DSVN_REV='"$(shell svnversion -n .)"'
+
 ifdef USE_SHMEM
 $(warning USE_SHMEM is not working yet)
 	override USE_SHMEM =	
