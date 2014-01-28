@@ -65,6 +65,12 @@ module gs2_diagnostics
   logical :: write_jext=.false.
 !<GGH
 
+! HJL <  Variables for convergence condition testing
+  integer, public :: trin_nsteps = 0
+  real :: heat_sum_av_diff_max = 0.0
+  real :: heat_sum_av(0:9) = 0
+
+
   ! internal
   logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
@@ -1415,7 +1421,7 @@ contains
     use parameter_scan_arrays, only: scan_momflux => momflux_tot 
     use parameter_scan_arrays, only: scan_phi2_tot => phi2_tot 
     use parameter_scan_arrays, only: scan_nout => nout
-    use job_manage, only: trin_restart
+    use job_manage, only: trin_restart, trin_reset, trin_job
 
     implicit none
 !    integer :: nout = 1
@@ -1491,6 +1497,10 @@ contains
     character(200) :: filename
     logical :: last = .false.
     logical,optional:: debopt
+! Variables for convergence condition (HJL)
+    real :: heat_sum_av_diff
+    integer :: numav, place, last_place, itrin
+
     logical:: debug=.false.
 
     if (present(debopt)) debug=debopt
@@ -1746,7 +1756,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
     fluxfac = 0.5
     fluxfac(1) = 1.0
 
-    if (proc0) then
+    if (proc0 .and. -10) then
        if (print_flux_line) then
           write (unit=*, fmt="('t= ',e16.10,' <phi**2>= ',e12.6, &
                & ' heat fluxes: ', 5(1x,e12.6))") &
@@ -1790,6 +1800,54 @@ if (debug) write(6,*) "loop_diagnostics: -1"
           write (*,*) 
        end if
     end if
+
+    itrin=(trin_nsteps+istep)/nwrite
+
+    ! Trinity convergence condition - simple and experimental
+    ! look for the averaged differential of the summed averaged heat flux to drop below a threshold (1e-12?)
+    exit_when_converged = .false.
+    if((trin_restart .or. exit_when_converged) .and. .not. (istep .eq. 0 .and. itrin .ne. 0)) then
+       numav = 10
+       if(proc0) then
+          heat_sum_av_diff = 0
+          place = mod(istep,nwrite*numav)/nwrite
+          last_place = place - 1
+          if(last_place < 0) last_place = numav - 1
+          
+          ! Calculate a cumulative average of heat flux
+          if(itrin == 0) then
+             heat_sum_av(place) = heat_fluxes(1)
+          else 
+             heat_sum_av(place) = (heat_sum_av(last_place) * itrin &
+                  + heat_fluxes(1)) / (itrin+1)
+          endif
+          write(6,'(A,I5,A,I4,I4)') 'Job ',trin_job,' place, last_place = ',place,last_place
+          write(6,'(A,I5,A,E10.4,A,I6,I6)') 'Job ',trin_job,' time = ',t, ' istep ',istep
+          write(6,'(A,I5,A,I6,A,I6)') 'Job ',trin_job,' trin_nsteps = ',trin_nsteps,' itrin ', itrin
+          write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
+               ' heat = ',heat_fluxes(1), &
+               ' heatsumav = ',heat_sum_av(place)          
+          ! Calculate change in cumulative average flux with time
+          if(istep .gt. nwrite*numav .or. .not. trin_reset) then
+             last_place = place + 1 ! Re-use last_place for differential
+             if(last_place .ge. numav) last_place = 0
+             heat_sum_av_diff = (heat_sum_av(place) - heat_sum_av(last_place)) &
+                  /(user_dt*nwrite*(numav-1))
+             write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
+                  ' heat_sum_av_diff = ',heat_sum_av_diff, &
+                  ' heat_sum_av_diff_max = ',heat_sum_av_diff_max
+!             if(heat_sum_av_diff .lt. 1e-12 .and. istep .gt. 4000) exit = .true.
+             if(abs(heat_sum_av_diff) .lt. abs(heat_sum_av_diff_max/20)) then
+                if(trin_restart) exit = .true.
+                write(6,'(A,I5,A,I6)')'Job ',trin_job,' &
+                     Reached exit condition after step ',istep
+             endif
+             
+             if(heat_sum_av_diff > heat_sum_av_diff_max) heat_sum_av_diff_max = heat_sum_av_diff
+          endif
+       endif
+       call broadcast(exit)
+    endif
 
     i=istep/nwrite
 
@@ -2932,6 +2990,10 @@ if (debug) write(6,*) "get_omegaavg: done"
 
     implicit none
 
+! HJL > reset values for convergence condition
+    heat_sum_av_diff_max = 0.0
+    heat_sum_av = 0.0
+    trin_nsteps = 0
     start_time = user_time
     pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
 

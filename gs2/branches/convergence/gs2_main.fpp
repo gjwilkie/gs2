@@ -40,13 +40,13 @@ contains
 subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
      pflux, qflux, vflux, heat, dvdrho, grho, trinity_reset, converged)
 
-    use job_manage, only: checkstop, job_fork, checktime, time_message, trin_reset, trin_restart
+    use job_manage, only: checkstop, job_fork, checktime, time_message, trin_reset, trin_restart, trin_job
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use mp, only: max_reduce, min_reduce, sum_reduce, iproc
     use file_utils, only: init_file_utils, run_name!, finish_file_utils
     use fields, only: init_fields, advance
     use species, only: ions, electrons, impurity
-    use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics, gd_reset => reset_init 
+    use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics, gd_reset => reset_init, trin_nsteps
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
     use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time, margin_cpu_time
@@ -106,11 +106,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 !
 !    if (present(nofinish)) nofin=nofinish
      
-     if(present(trinity_reset)) then
-        converged = .false.
-        trin_reset = trinity_reset
-        first_time = .true.
-     endif
+    if(present(trinity_reset)) then
+       converged = .false.
+       trin_reset = trinity_reset
+       first_time = .true.
+    endif
+    if(present(job_id)) trin_job = job_id + 1
 
     if (first_time) then
 
@@ -126,12 +127,16 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (proc0) then
           if (nproc == 1) then
              if (.not. nofin) then
-          write(*,*) 'Running on ',nproc,' processor'
-       end if 
-         else
+                write(*,*) 'Running on ',nproc,' processor'
+             end if
+          else
              if (.not. nofin) then
-          write(*,*) 'Running on ',nproc,' processors'
-       end if	  
+                if(present(job_id)) then
+                   write(*,*) 'Job ',trin_job,'Running on ',nproc,' processors'
+                else
+                   write(*,*) 'Running on ',nproc,' processors'
+                endif
+             end if
           end if
           write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
@@ -260,6 +265,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
           exit
        end if
     end do
+
+    if(present(trinity_reset)) trin_nsteps = trin_nsteps + istep - 1
 
     call time_message(.false.,time_main_loop,' Main Loop')
 

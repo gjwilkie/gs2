@@ -168,9 +168,9 @@ contains
     call init_delt (delt)
     call user2code (user_delt_max, code_delt_max)
 
-    allocate (wunits(naky))
-    allocate (woutunits(naky))
-    allocate (tunits(naky))
+    if(.not. allocated(wunits)) allocate (wunits(naky))
+    if(.not. allocated(woutunits)) allocate (woutunits(naky))
+    if(.not. allocated(tunits)) allocate (tunits(naky))
 
 ! omega_* normalization of time: 
     call adjust_time_norm
@@ -400,6 +400,7 @@ contains
     implicit none
 
     if (allocated(wunits)) deallocate (wunits, woutunits, tunits)
+    if (allocated(ieqzip)) deallocate (ieqzip)
 
     initialized = .false.
 
