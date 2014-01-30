@@ -31,7 +31,7 @@ module gs2_save
   public :: read_many, save_many
   public :: restore_current_scan_parameter_value
   public :: init_save, init_dt, init_tstart, init_ant_amp
-  public :: init_vnm
+  public :: init_vnm, restart_writable
 !# ifdef NETCDF
 !  public :: netcdf_real, kind_nf, get_netcdf_code_precision, netcdf_error
 !# endif
@@ -1047,6 +1047,68 @@ contains
 
   end subroutine gs2_restore_many
 
+  !>This function checks to see if we can create a file with name
+  !<restart_file>//<SomeSuffix> if not then our restarts are not
+  !going to be possible and we return false. Can also be used to check
+  !that we can read from the restart file (which assumes it exists).
+  function restart_writable(read_only,my_file)
+    use mp, only: proc0, broadcast
+    use file_utils, only: get_unused_unit
+    implicit none
+    character(16) :: SuffixTmp='.ThisIsATestFile'
+    character(9) :: FileMode
+    character(len=*),intent(in),optional::my_file
+    character(300) :: local_file
+    logical, intent(in), optional :: read_only
+    logical :: restart_writable, writable
+    integer :: unit,ierr
+
+    !Check that restart_file will be writable now
+    writable=.false.
+    ierr=-200
+    local_file=trim(restart_file)
+    if(present(my_file)) local_file=trim(my_file)
+
+    !On proc0 try to open tmp file for writing
+    if(proc0)then
+       !Get a unit
+       call get_unused_unit(unit)
+
+       !Set the default file mode to readwrite
+       FileMode='readwrite'
+
+       !Set filemode to READ if read_only=T
+       if(present(read_only))then
+          if(read_only) FileMode='read'
+       endif
+
+       !If checking readonly then we need to make sure we try to read from
+       !an existing file
+       if(trim(FileMode).eq.'read')then
+          open(unit=unit,File=trim(local_file),&
+               iostat=ierr,Action=FileMode)
+       !If we want to test write capability then do it with an unusual
+       !file name to prevent clobber
+       else
+          open(unit=unit,File=trim(local_file)//trim(SuffixTmp),&
+               iostat=ierr,Action=FileMode)
+       endif
+
+       !If open was successful then we can close the file and delete it
+       if(ierr.eq.0)then
+          if(trim(FileMode).eq.'read')then
+             close(unit=unit)
+          else
+             close(unit=unit,status='delete')
+          endif
+       endif
+    endif
+
+    !Now make sure everyone knows the answer
+    call broadcast(ierr)
+    if(ierr.eq.0)writable=.true.
+    restart_writable=writable
+  end function restart_writable
 
   subroutine init_save (file)
     character(300), intent (in) :: file
