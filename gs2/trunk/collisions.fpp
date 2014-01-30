@@ -59,7 +59,7 @@ module collisions
   logical :: hyper_colls
   logical :: ei_coll_only
   logical :: test
-
+  logical :: special_wfb_lorentz
   integer, public, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
   integer, public, parameter :: collision_model_none = 3
   integer, public, parameter :: collision_model_lorentz_test = 5 ! if this changes, check gs2_diagnostics
@@ -266,7 +266,7 @@ contains
          lorentz_scheme, ediff_scheme, resistivity, conservative, test, &
 ! following only needed for adaptive collisionality
          vnfac, etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, &
-	 use_le_layout
+	 use_le_layout, special_wfb_lorentz
     integer :: ierr, in_file
 
     if (proc0) then
@@ -293,6 +293,7 @@ contains
        heating = .false.
        test = .false.
        ei_coll_only = .false.
+       special_wfb_lorentz=.true.
        in_file = input_unit_exist ("collisions_knobs", exist)
 !       if (exist) read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
        if (exist) read (unit=in_file, nml=collisions_knobs)
@@ -336,6 +337,7 @@ contains
     call broadcast (adjust)
     call broadcast (ei_coll_only)
     call broadcast (use_le_layout)
+    call broadcast (special_wfb_lorentz)
 
     drag = resistivity .and. (beta > epsilon(0.0)) .and. (nspec > 1) .and. (fapar.gt.0)
   end subroutine read_parameters
@@ -3315,7 +3317,7 @@ contains
        end if
 
        ! deal with special case of wfb
-       if (jend(ig) == ng2+1) then
+       if (jend(ig) == ng2+1 .and.special_wfb_lorentz) then
           ! if wfb, remove vpa = 0 point (which has wgt of zero)
           glz0(:ng2) = glz(:ng2,ilz)
           glz0(ng2+1:je-1) = glz(ng2+2:je,ilz)
@@ -3344,7 +3346,7 @@ contains
 !       ! and insert this point into glz
        ! interpolation described above mysteriously causing numerical instability
        ! stabilized by using old (pre-collision) value of g for wfb
-       if (jend(ig) == ng2+1) then
+       if (jend(ig) == ng2+1.and.special_wfb_lorentz) then
           glz0(ng2+2:je) = glz(ng2+1:je-1,ilz)
 !          glz(ng2+1,ilz) = 0.5*(glz(ng2,ilz)+glz(ng2+1,ilz))
           glz(ng2+1,ilz) = gwfb
@@ -3482,7 +3484,7 @@ contains
 !
        do ie = 1, negrid
           ! deal with special case of wfb
-          if (jend(ig) == ng2+1) then
+          if (jend(ig) == ng2+1.and.special_wfb_lorentz) then
              ! if wfb, remove vpa = 0 point (which has wgt of zero)
              gle0(:ng2) = gle(:ng2,ie,ile)
              gle0(ng2+1:je-1) = gle(ng2+2:je,ie,ile)
@@ -3510,7 +3512,7 @@ contains
 !       ! and insert this point into glz
           ! interpolation described above mysteriously causing numerical instability
           ! stabilized by using old (pre-collision) value of g for wfb
-          if (jend(ig) == ng2+1) then
+          if (jend(ig) == ng2+1.and.special_wfb_lorentz) then
              gle0(ng2+2:je) = gle(ng2+1:je-1,ie,ile)
 !          gle(ng2+1,ie,ile) = 0.5*(gle(ng2,ie,ile)+gle(ng2+1,ie,ile))
              gle(ng2+1,ie,ile) = gwfb
