@@ -57,6 +57,7 @@ module gs2_diagnostics
   logical, public :: save_distfn !<DD> Added for saving distribution function
   logical, public :: write_symmetry, write_correlation_extend, write_correlation
   logical, public :: write_pflux_sym, write_pflux_tormom  
+  logical :: file_safety_check
   integer, public :: nwrite, igomega, nmovie
   integer, public :: navg, nsave, nwrite_mult
 
@@ -88,7 +89,7 @@ module gs2_diagnostics
          write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
- 	 write_pflux_sym,  write_pflux_tormom  
+ 	 write_pflux_sym,  write_pflux_tormom, file_safety_check
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: jext_unit   !GGH Additions
@@ -136,7 +137,9 @@ contains
        write (unit, *)
        write (unit, fmt="(' &',a)") "gs2_diagnostics_knobs"
        write (unit, fmt="(' save_for_restart = ',L1)") save_for_restart
+       write (unit, fmt="(' save_distfn = ',L1)") save_distfn
        write (unit, fmt="(' save_many = ',L1)") save_many
+       write (unit, fmt="(' file_safety_check = ',L1)") file_safety_check
        write (unit, fmt="(' print_line = ',L1)") print_line 
        write (unit, fmt="(' write_line = ',L1)") write_line
        write (unit, fmt="(' print_flux_line = ',L1)") print_flux_line
@@ -364,13 +367,15 @@ contains
     use gs2_io, only: init_gs2_io
     use gs2_heating, only: init_htype
     use collisions, only: collision_model_switch, init_lorentz_error
-    use mp, only: broadcast, proc0
+    use mp, only: broadcast, proc0, mp_abort
     use le_grids, only: init_weights
+    use gs2_save, only: restart_writable
 
     implicit none
     logical, intent (in) :: list
     integer, intent (in) :: nstep
     integer :: nmovie_tot, nwrite_big_tot
+    logical :: writable
 
     if (initialized) return
     initialized = .true.
@@ -425,6 +430,7 @@ contains
 
     call broadcast (write_pflux_tormom)
 
+    call broadcast (file_safety_check)
     nmovie_tot = nstep/nmovie
     nwrite_big_tot = nstep/(nwrite*nwrite_mult)-nstep/4/(nwrite*nwrite_mult)
     if(nwrite_big_tot .le. 0) nwrite_big_tot = 1
@@ -473,6 +479,21 @@ contains
     if(.not. allocated(pflux_avg)) then
        allocate (pflux_avg(nspec), qflux_avg(nspec), heat_avg(nspec), vflux_avg(nspec))
        pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
+    endif
+
+    !Verify restart file can be written
+    if((save_for_restart.or.save_distfn).and.(file_safety_check))then
+       !Can we write file?
+       writable=restart_writable()
+
+       !If we can't write the restart file then we should probably quit
+       if((.not.writable).and.save_for_restart) call mp_abort("Cannot write to test file, maybe restart_dir doesn't exist --> Aborting.",to_screen=.true.)
+
+       !If it's just a case of save_distfn then we can carry on but print a useful mesasge
+       if((.not.writable).and.save_distfn)then
+          if(proc0)write(6,'("Warning: Cannot write to test restart_file --> Setting save_distfn=F.")')
+          save_distfn=.false.
+       endif
     endif
 
   end subroutine init_gs2_diagnostics
@@ -641,6 +662,7 @@ contains
        write_phi_over_time = .false.
        write_bpar_over_time = .false.
        write_apar_over_time = .false.
+       file_safety_check=.false.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
 
 	!<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
