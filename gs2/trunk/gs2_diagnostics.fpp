@@ -186,8 +186,10 @@ contains
    use dist_fn, only : def_parity, even 
    use kt_grids, only : gridopt_switch, gridopt_box
    use init_g, only : restart_file
+   use gs2_save, only: restart_writable
    implicit none
    integer :: report_unit
+   logical :: writable
     write (report_unit, *) 
     write (report_unit, fmt="('------------------------------------------------------------')")
     write (report_unit, *) 
@@ -353,6 +355,32 @@ contains
           write (report_unit, *) 
        end if
     end if
+
+    !Verify restart file can be written
+    if((save_for_restart.or.save_distfn).and.(file_safety_check))then
+       !Can we write file?
+       writable=restart_writable()
+
+       !If we can't write the restart file then we should probably quit
+       if((.not.writable))then
+          if(save_for_restart)then 
+             write (report_unit, *) 
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, fmt="('save_for_restart = T:   But we cannot write to a test file like ',A,'.')") trim(restart_file)
+             write (report_unit, fmt="('THIS IS PROBABLY AN ERROR --> Check restart_dir.')") 
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, *) 
+          endif
+          if(save_distfn)then 
+             write (report_unit, *) 
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, fmt="('save_distfn = T:   But we cannot write to a test file like ',A,'.')") trim(restart_file)
+             write (report_unit, fmt="('THIS IS PROBABLY AN ERROR --> Check restart_dir.')") 
+             write (report_unit, fmt="('################# WARNING #######################')")
+             write (report_unit, *) 
+          endif
+       endif
+    endif
 
   end subroutine check_gs2_diagnostics
 
@@ -662,7 +690,7 @@ contains
        write_phi_over_time = .false.
        write_bpar_over_time = .false.
        write_apar_over_time = .false.
-       file_safety_check=.false.
+       file_safety_check=.true.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
 
 	!<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
