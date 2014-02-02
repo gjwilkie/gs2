@@ -117,6 +117,7 @@ contains
   subroutine init_antenna
     use mp, only: proc0
     use species, only: spec, nspec, init_species
+    use le_grids,only: init_le_grids
     use run_parameters, only: beta
     use antenna_data, only: init_antenna_data
     use theta_grid, only: gradpar
@@ -129,6 +130,8 @@ contains
 
     if (.not. allocated(w_stir)) then
        call init_species
+
+       call init_le_grids
 
        call read_parameters
        if (no_driver) then
