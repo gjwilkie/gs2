@@ -281,6 +281,7 @@ antenna.o: \
 	 gs2_save.o \
 	 gs2_time.o \
 	 kt_grids.o \
+	 le_grids.o \
 	 mp.o \
 	 ran.o \
 	 run_parameters.o \

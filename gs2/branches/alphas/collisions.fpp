@@ -188,13 +188,13 @@ contains
     initialized = .true.
     call init_gs2_layouts
     call init_species
+    call init_le_grids (accelerated_x, accelerated_v)
 
     hyper_colls = .false.
     if (any(spec%nu_h > epsilon(0.0))) hyper_colls = .true.
 
     call init_theta_grid
     call init_kt_grids
-    call init_le_grids (accelerated_x, accelerated_v)
     call init_run_parameters
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
     call read_parameters

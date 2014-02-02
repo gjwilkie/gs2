@@ -362,7 +362,7 @@ contains
     use gs2_heating, only: init_htype
     use collisions, only: collision_model_switch, init_lorentz_error
     use mp, only: broadcast, proc0
-    use le_grids, only: init_weights
+    use le_grids, only: init_weights, init_le_grids
 
     implicit none
     logical, intent (in) :: list
@@ -376,6 +376,7 @@ contains
     call init_kt_grids
     call init_run_parameters
     call init_species
+    call init_le_grids
     call init_init_g
     call init_dist_fn
 

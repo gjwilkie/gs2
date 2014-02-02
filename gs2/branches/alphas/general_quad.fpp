@@ -256,9 +256,7 @@ with an accuracy of ", tol, " with fewer than ", N_quad_max, " quadrature points
     call finish_general_quad()
 
 #else
-
-    write (*,*) "You need LAPACK for this to work!"
-    stop 1
+    write(*,*) "You need LAPACK for this to work!"
 #endif
   end subroutine get_general_weights_from_grid
 
@@ -304,9 +302,7 @@ with an accuracy of ", tol, " with fewer than ", N_quad_max, " quadrature points
     call finish_general_quad()
 
 #else
-
-    write (*,*) "You need LAPACK for this to work!"
-    stop 1
+    write(*,*) "You need LAPACK for this to work!"
 #endif
    end subroutine get_general_weights_from_moments
 
@@ -456,5 +452,6 @@ with an accuracy of ", tol, " with fewer than ", N_quad_max, " quadrature points
    end subroutine finish_general_quad
 
 #endif
+
 end module general_quad
   
