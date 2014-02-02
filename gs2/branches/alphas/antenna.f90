@@ -124,6 +124,7 @@ contains
     implicit none
 
     integer :: i
+    logical:: dummy1,dummy2
 
     if (initialized) return
     initialized = .true.
@@ -131,7 +132,7 @@ contains
     if (.not. allocated(w_stir)) then
        call init_species
 
-       call init_le_grids
+       call init_le_grids(dummy1,dummy2)
 
        call read_parameters
        if (no_driver) then

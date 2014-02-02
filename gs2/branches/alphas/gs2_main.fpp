@@ -346,6 +346,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
 
     integer :: istatus
+    logical:: dum1,dum2
 
     ! doing nothing with gexb or mach for now, but in future will need to when
     ! using GS2 to evolve rotation profiles in TRINITY
@@ -370,7 +371,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 !!    call gs_reset
 
     call reinit_species (ntspec, dens, temp, fprim, tprim, nu)
-    call init_le_grids
+    call init_le_grids(dum1,dum2)
     call init_fields
 
     if (nensembles > 1) call scope (allprocs)
