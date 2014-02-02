@@ -337,6 +337,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use run_parameters, only: fphi, fapar, fbpar
     use antenna, only: a_reset => reset_init
     use mp, only: proc0, scope, subprocs, allprocs
+    use le_grids,only: init_le_grids
 
     implicit none
 
@@ -369,6 +370,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 !!    call gs_reset
 
     call reinit_species (ntspec, dens, temp, fprim, tprim, nu)
+    call init_le_grids
     call init_fields
 
     if (nensembles > 1) call scope (allprocs)

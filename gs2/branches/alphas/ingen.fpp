@@ -726,14 +726,14 @@ if (debug) write(6,*) 'get_namelists: hyper'
 if (debug) write(6,*) 'get_namelists: kt_grids'
     call init_kt_grids
 
-if (debug) write(6,*) 'get_namelists: le_grids'
-    call init_le_grids(accelx, accelv)
-
 if (debug) write(6,*) 'get_namelists: nonlinear terms'
     call nonlinear_terms_read_parameters
 
 if (debug) write(6,*) 'get_namelists: init_species'
     call init_species
+
+if (debug) write(6,*) 'get_namelists: le_grids'
+    call init_le_grids(accelx, accelv)
 
     do is=1, nspec
         coll_on = spec(is)%vnewk > epsilon(0.0) .or. coll_on
