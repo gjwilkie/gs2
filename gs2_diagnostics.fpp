@@ -368,6 +368,7 @@ contains
     logical, intent (in) :: list
     integer, intent (in) :: nstep
     integer :: nmovie_tot, nwrite_big_tot
+    logical :: dum1,dum2
 
     if (initialized) return
     initialized = .true.
@@ -376,7 +377,7 @@ contains
     call init_kt_grids
     call init_run_parameters
     call init_species
-    call init_le_grids
+    call init_le_grids(dum1,dum2)
     call init_init_g
     call init_dist_fn
 
