@@ -1,4 +1,4 @@
-
+#################################################################### OVERVIEW
 #
 #  Makefile for Trinity (GS2) / AstroGK Gyrokinetic Turbulence code 
 #               GSP Gyrokinetic PIC code
@@ -67,7 +67,7 @@ GK_PROJECT ?= gs2
 # turns on debug mode (bin)
 DEBUG ?=
 # turns on scalasca instrumentation mode (bin)
-SCAL ?=
+SCAL ?= 
 # turns on test mode (bin)
 TEST ?=
 # turns on profile mode (gprof,ipm)
@@ -79,15 +79,17 @@ STATIC ?=
 # promotes precisions of real and complex (bin)
 DBLE ?= on
 # turns on distributed memory parallelization using MPI (bin)
-USE_MPI ?= on
+USE_MPI ?= on 
 # turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?=
 # which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
-USE_FFT ?= fftw
+USE_FFT ?= fftw3
 # uses netcdf library (bin)
 USE_NETCDF ?= on
+# uses parallel netcdf library
+USE_PARALLEL_NETCDF ?=
 # uses hdf5 library (bin)
-USE_HDF5 ?=
+USE_HDF5 ?= 
 # Use function pointer in layouts_indices.c (bin)
 # see also README
 USE_C_INDEX ?= 
@@ -104,17 +106,25 @@ USE_NAGLIB ?=
 MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
-# Use le_layout for collision operator
-USE_LE_LAYOUT ?=
-# Use LAPACK library for general quadrature
-USE_LAPACK ?=
 
-# Number of process to use for unit tests
 ifdef NPROCS
-	NTESTPROCS?=$(NPROCS)
+	NTESTPROCS=$(NPROCS)
 else
 	NTESTPROCS=2
 endif
+
+ifdef TESTNORUN
+	TESTCOMMAND=:
+else
+	ifdef TESTEXEC
+		TESTCOMMAND=$(TESTEXEC)
+	else
+		TESTCOMMAND=mpirun -np $(NTESTPROCS)
+	endif
+endif
+
+export TESTCOMMAND
+
 #
 # * Targets:
 #
@@ -161,8 +171,8 @@ MPI_INC	?=
 MPI_LIB ?=
 FFT_INC ?=
 FFT_LIB ?=
-NETCDF_INC ?= 
-NETCDF_LIB ?= -L/usr/lib -llapack
+NETCDF_INC ?=
+NETCDF_LIB ?=
 HDF5_INC ?=
 HDF5_LIB ?=
 IPM_LIB ?=
@@ -239,9 +249,6 @@ ifdef USE_MPI
 	CC = $(MPICC)
 	CPPFLAGS += -DMPI
 endif
-ifdef USE_LAPACK
-	CPPFLAGS += -DLAPACK
-endif
 ifdef USE_SHMEM
 	CPPFLAGS += -DSHMEM
 endif
@@ -251,7 +258,7 @@ ifeq ($(USE_FFT),fftw)
 endif
 
 ifeq ($(USE_FFT),fftw3)
-	CPPFLAGS += -DFFT=_FFTW3_
+	CPPFLAGS += -DFFT=_FFTW3_ $(FFT_INC)
 	FFT_LIB ?= -lfftw -lrfftw
 endif
 
@@ -267,6 +274,10 @@ ifdef USE_HDF5
 	ifdef USE_MPI
 		FC = $(H5FC_par)
 		CC = $(H5CC_par)
+		ifdef USE_PARALLEL_NETCDF
+			CPPFLAGS += -DNETCDF_PARALLEL
+		endif
+
 	else
 		FC = $(H5FC)
 		CC = $(H5CC)
@@ -318,11 +329,11 @@ ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
-LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) $(LAPACK_LIB) \
+LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
 		$(IPM_LIB) $(NAG_LIB)
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) $(LAPACK_INC)
+	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
 CFLAGS += $(COPTFLAGS)
 
 DATE=$(shell date +%y%m%d)
@@ -392,7 +403,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(GK_PROJECT)_all linear_tests unit_tests
+.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests benchmarks clean_tests
 
 all: $(.DEFAULT_GOAL)
 
@@ -460,10 +471,26 @@ sync_input_doc:
 clean:
 	-rm -f *.o *.mod *.g90 *.h core */core
 
+CLEANCOMMAND=echo $$$$PWD
+CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch
+
+ifdef CLEAN_TEXTFILES
+	CLEANCOMMAND+= *~ *.orig
+endif
+
+export CLEANCOMMAND
+
+clean_tests:
+	$(MAKE) clean -C linear_tests 
+	$(MAKE) clean -C unit_tests 
+
+clean_benchmarks:
+	$(MAKE) clean -C benchmarks 
+
 cleanlib:
 	-rm -f *.a
 
-distclean: unlink clean cleanlib
+distclean: unlink clean cleanlib clean_tests clean_benchmarks
 
 tar:
 	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
@@ -540,16 +567,30 @@ revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
 
 
+gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
+	
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
-TEST_DEPS?=$(gs2_mod)
-export
+TEST_DEPS?=$(gs2_mod) functional_tests.o
+
 unit_tests: unit_tests.o $(TEST_DEPS)
-	cd tests && time ${MAKE} && echo && echo "Tests Successful!"
+	cd unit_tests && time ${MAKE} && echo && echo "Tests Successful!"
 
 linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
 	cd linear_tests && time ${MAKE} && echo && echo "Tests Successful!"
+
+tests: unit_tests linear_tests
+
+test_script: unit_tests linear_tests
+	echo "" > test_script.sh
+	find $(PWD)/unit_tests -executable | grep -v svn | grep 'unit_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 $(BLUEGENEARGS) \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
+	find $(PWD)/linear_tests -executable | grep -v svn | grep 'linear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
+	echo "echo \"Tests Successful\"" >> test_script.sh
+	#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
+
+benchmarks: functional_tests.o unit_tests.o $(TEST_DEPS)
+	cd benchmarks && time ${MAKE} && echo && echo "Completed Benchmarks"
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^

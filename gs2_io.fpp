@@ -982,10 +982,8 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom_flux')
           status = nf90_def_var (ncid, 'es_part_flux', netcdf_real, flux_dim, es_part_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_flux')
-          if (write_flux_emu) then
-             status = nf90_def_var (ncid, 'es_flux_emu', netcdf_real, flux_emu_dim, es_flux_emu_id)
-             if (status /= NF90_NOERR) call netcdf_error (status, var='es_flux_emu')
-          end if
+          status = nf90_def_var (ncid, 'es_flux_emu', netcdf_real, flux_emu_dim, es_flux_emu_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_flux_emu')
           if (write_flux_e) then
              status = nf90_def_var (ncid, 'es_flux_e', netcdf_real, flux_e_dim, es_flux_e_id)
              if (status /= NF90_NOERR) call netcdf_error (status, var='es_flux_e')
@@ -1096,10 +1094,8 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_heat_perp')
           status = nf90_def_var (ncid, 'apar_mom_flux',  netcdf_real, flux_dim, apar_mom_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_mom_flux')
-          if (write_flux_emu) then
-             status = nf90_def_var (ncid, 'apar_flux_emu', netcdf_real, flux_emu_dim, apar_flux_emu_id)
-             if (status /= NF90_NOERR) call netcdf_error (status, var='apar_flux_emu')
-          end if
+          status = nf90_def_var (ncid, 'apar_flux_emu', netcdf_real, flux_emu_dim, apar_flux_emu_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='apar_flux_emu')
           if (write_flux_e) then
              status = nf90_def_var (ncid, 'apar_flux_e', netcdf_real, flux_e_dim, apar_flux_e_id)
              if (status /= NF90_NOERR) call netcdf_error (status, var='apar_flux_e')
@@ -1167,10 +1163,8 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_mom_flux')
           status = nf90_def_var (ncid, 'bpar_part_flux', netcdf_real, flux_dim, bpar_part_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_part_flux')
-          if (write_flux_emu) then       
-             status = nf90_def_var (ncid, 'bpar_flux_emu', netcdf_real, flux_emu_dim, bpar_flux_emu_id)
-             if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_flux_emu')
-          end if
+          status = nf90_def_var (ncid, 'bpar_flux_emu', netcdf_real, flux_emu_dim, bpar_flux_emu_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_flux_emu')
           if (write_flux_e) then       
              status = nf90_def_var (ncid, 'bpar_flux_e', netcdf_real, flux_e_dim, bpar_flux_e_id)
              if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_flux_e')

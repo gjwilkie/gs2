@@ -533,14 +533,14 @@ subroutine check_dist_fn(report_unit)
     if (debug) write(6,*) "init_dist_fn: init_species"
     call init_species
 
+    if (debug) write(6,*) "init_dist_fn: init_le_grids"
+    call init_le_grids (accelerated_x, accelerated_v)
+
     if (debug) write(6,*) "init_dist_fn: init_theta_grid"
     call init_theta_grid
 
     if (debug) write(6,*) "init_dist_fn: init_kt_grids"
     call init_kt_grids
-
-    if (debug) write(6,*) "init_dist_fn: init_le_grids"
-    call init_le_grids (accelerated_x, accelerated_v)
 
     if (debug) write(6,*) "init_dist_fn: read_parameters"
     call read_parameters
