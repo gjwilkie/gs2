@@ -200,10 +200,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        
        if (proc0) call time_message(.false.,time_init,' Initialization')
        
-        if(present(trinity_reset)) then ! For trinity load balance restarts
-           if(trin_reset) call gd_reset
-           trin_restart = .true. ! All trinity runs are restarted except the first
-        endif
+       if(present(trinity_reset)) then ! For trinity load balance restarts
+          if(trin_reset) call gd_reset
+          trin_restart = .true. ! All trinity runs are restarted except the first
+       endif
 
        first_time = .false.
 
@@ -266,6 +266,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        end if
     end do
 
+!    converged = .true.
+
     if(present(trinity_reset)) trin_nsteps = trin_nsteps + istep - 1
 
     call time_message(.false.,time_main_loop,' Main Loop')
@@ -306,6 +308,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (.not.nofin .and. .not. functional_test_flag ) call finish_gs2_diagnostics (istep_end)
        if (.not.nofin .and. .not. functional_test_flag) call finish_gs2
     end if
+
+!    if(proc0) then
+!       write(6,*) 'Job ',trin_job
+!       write(6,*) 'pflux = ',pflux
 
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
