@@ -9,8 +9,8 @@ module fields_local
 
   !> Module level routines
   public :: init_fields_local, init_allfields_local, finish_fields_local
-  public :: advance_local, reset_fields_local, dump_response_to_file
-  public :: fields_local_functional, read_response_from_file
+  public :: advance_local, reset_fields_local, dump_response_to_file_local
+  public :: fields_local_functional, read_response_from_file_local
 
   !> Unit tests
   public :: fields_local_unit_test_init_fields_matrixlocal
@@ -1605,7 +1605,7 @@ contains
   !>Initialise the field objects
   subroutine fm_init(self)
     use kt_grids, only: naky, ntheta0
-    use dist_fn, only: itright
+    use dist_fn, only: itright, get_leftmost_it
     use run_parameters, only: fphi, fapar, fbpar
     use theta_grid, only: ntgrid
     implicit none
@@ -3024,27 +3024,6 @@ contains
 !// MODULE LEVEL ROUTINES
 !//////////////////////////////
 
-  !>Helper function for finding the leftmost it of supercell
-  function get_leftmost_it(it,ik)
-    USE dist_fn, ONLY: itleft, boundary_option_switch, boundary_option_linked
-    implicit none
-    integer, intent(in) :: ik, it
-    integer :: get_leftmost_it
-    integer :: it_cur
-    !If not linked then no connections so only one cell in supercell
-    if (boundary_option_switch.eq.boundary_option_linked) then
-       it_cur=it
-       do while(itleft(ik,it_cur).ge.0.and.itleft(ik,it_cur).ne.it_cur)
-          !Keep updating it_cur with left connected it until there are no
-          !connections to left
-          it_cur=itleft(ik,it_cur)
-       enddo
-    else
-       it_cur=it
-    endif
-    get_leftmost_it=it_cur
-  end function get_leftmost_it
-
   !>Routine to initialise
   subroutine init_fields_local
     use antenna, only: init_antenna
@@ -3207,7 +3186,7 @@ contains
           write(dlun,'("Populating from dump.")')
           call cpu_time(ts)
        endif
-       call read_response_from_file
+       call read_response_from_file_local
        if(proc0.and.debug) then 
           call cpu_time(te)
           write(dlun,'("--Done in ",F12.4," units")') te-ts
@@ -3248,7 +3227,7 @@ contains
           write(dlun,'("Dumping to file.")')
           call cpu_time(ts)
        endif
-       call dump_response_to_file
+       call dump_response_to_file_local
        if(proc0.and.debug) then 
           call cpu_time(te)
           write(dlun,'("--Done in ",F12.4," units")') te-ts
@@ -3370,7 +3349,7 @@ contains
   !> Routine to dump the current response matrix data
   !! to file. One file per connected domain. Each written
   !! by the head of the supercell.
-  subroutine dump_response_to_file(suffix)
+  subroutine dump_response_to_file_local(suffix)
     use file_utils, only: get_unused_unit, run_name
     implicit none
     character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
@@ -3422,13 +3401,13 @@ contains
        enddo
     enddo
 
-  end subroutine dump_response_to_file
+  end subroutine dump_response_to_file_local
 
   !> Routine to read the current response matrix data
   !! from file dump. One file per connected domain. Each written
   !! by the head of the supercell.
   !! NOTE: Have to have setup communicators etc.
-  subroutine read_response_from_file(suffix)
+  subroutine read_response_from_file_local(suffix)
     use file_utils, only: get_unused_unit, run_name
     use mp, only: sum_allreduce_sub
     implicit none
@@ -3488,7 +3467,7 @@ contains
        enddo
     enddo
 
-  end subroutine read_response_from_file
+  end subroutine read_response_from_file_local
 
   !> Returns true if GS2 was built in such a way
   !! as to allow this module to work.
