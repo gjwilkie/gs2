@@ -2536,6 +2536,7 @@ subroutine check_dist_fn(report_unit)
     if (.not. allocated(g)) then
        allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+!       allocate (gold (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        !Note:This currently uses naky times more memory than strictly needed
        if(fixpar_secondary.gt.0) allocate (g_fixpar(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -2616,7 +2617,6 @@ subroutine check_dist_fn(report_unit)
        call hyper_diff (gnew, phinew, bparnew)
        !Add collisions
        call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
-
     else if (istep.eq.1 .and. istep.ne.istep_last) then
 !CMR on first half step at istep=1 do CL with all redists
        call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
@@ -2653,7 +2653,6 @@ subroutine check_dist_fn(report_unit)
        call hyper_diff (gnew, phinew, bparnew)
        call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep, ctog=.false.)
     endif
-
 
     !Enforce parity if desired (also performed in invert_rhs, but this is required
     !as collisions etc. may break parity?)
@@ -5079,6 +5078,7 @@ subroutine check_dist_fn(report_unit)
        elsewhere
           phi = numerator / denominator
        end where
+
     end if
 
     ! get apar
@@ -5396,34 +5396,38 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine get_flux_tormom !JPL
 
-  subroutine eexchange (phi, exchange)
+  subroutine eexchange (phinew, phi, exchange1, exchange2)
 
     use mp, only: proc0
     use constants, only: zi
     use gs2_layouts, only: g_lo, il_idx, ie_idx, it_idx, ik_idx, is_idx
     use gs2_time, only: code_dt
-    use dist_fn_arrays, only: gnew, aj0, vpac
+    use dist_fn_arrays, only: gnew, aj0, vpac, g
     use theta_grid, only: ntgrid, gradpar, delthet, jacob
     use kt_grids, only: ntheta0, naky
     use le_grids, only: integrate_moment
     use run_parameters, only: fphi
     use species, only: spec, nspec
     use nonlinear_terms, only: nonlin
+    use hyper, only: hypervisc_filter
 
     implicit none
 
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
-    real, dimension (:,:,:), intent (out) :: exchange
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, phi
+    real, dimension (:,:,:), intent (out) :: exchange1, exchange2
 
     integer :: ig, il, ie, it, ik, is, iglo, isgn
-    real :: wgt
+    real :: wgt, dgdt_hypervisc
     real, dimension (:,:,:), allocatable :: dnorm
-    complex, dimension (:,:,:,:), allocatable :: total
+    complex, dimension (:,:,:,:), allocatable :: total, total2
 
     allocate (dnorm(-ntgrid:ntgrid, ntheta0, naky)) ; dnorm = 0.0
     allocate (total(-ntgrid:ntgrid, ntheta0, naky, nspec)) ; total = 0.0
+    allocate (total2(-ntgrid:ntgrid, ntheta0, naky, nspec)) ; total2 = 0.0
 
-    if (proc0) exchange = 0.0
+    if (proc0) then
+       exchange1 = 0.0 ; exchange2 = 0.0
+    end if
 
     do ik = 1, naky
        do it = 1, ntheta0
@@ -5446,6 +5450,17 @@ subroutine check_dist_fn(report_unit)
                 g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig,il,ie,it,ik)/code_dt &
                      * gnew(ig,isgn,iglo)*spec(is)%tz)
              end do
+
+             ! add contribution to g0 from hyperviscosity at grid points
+             ! this is -(dg/dt)_hypervisc, equivalent to collisions term in eqn. 5 of PRL 109, 185003
+             do ig = -ntgrid, ntgrid
+                if (abs(hypervisc_filter(ig,it,ik)-1.0) > epsilon(0.0)) then
+                   dgdt_hypervisc = (1.0-1./hypervisc_filter(ig,it,ik))*gnew(ig,isgn,iglo)/code_dt
+                   ! should gnew be (gnew+gold)/2?
+                   g0(ig,isgn,iglo) = g0(ig,isgn,iglo) - dgdt_hypervisc
+                end if
+             end do
+
              ! get v_magnetic piece of g0 at cell centers and add in vpar piece at cell centers
              do ig = -ntgrid, ntgrid-1
                 g0(ig,isgn,iglo) = 0.5*(g0(ig,isgn,iglo)+g0(ig+1,isgn,iglo)) &
@@ -5453,32 +5468,6 @@ subroutine check_dist_fn(report_unit)
                      * (gnew(ig+1,isgn,iglo)-gnew(ig,isgn,iglo))*spec(is)%stm
              end do
 
-!              do ig = -ntgrid+1, ntgrid-1
-!                 g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
-!                      * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/(delthet(ig)+delthet(ig+1)) &
-!                      * (gnew(ig+1,isgn,iglo)-gnew(ig-1,isgn,iglo))*spec(is)%stm)
-!              end do
-!              if (isgn == 1) then
-!                 ! g = 0 at ig = -ntgrid for vpa > 0
-!                 ig = -ntgrid
-!                 g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
-!                      * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig) &
-!                      * gnew(ig+1,isgn,iglo)*spec(is)%stm)
-!                 ig = ntgrid
-!                 g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
-!                      * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig-1) &
-!                      * (gnew(ig,isgn,iglo)-gnew(ig-1,isgn,iglo))*spec(is)%stm)
-!              else
-!                 ! g = 0 at ig = ntgrid for vpa < 0
-!                 ig = ntgrid
-!                 g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
-!                      * gnew(ig,isgn,iglo)*spec(is)%tz - vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig-1) &
-!                      * gnew(ig-1,isgn,iglo)*spec(is)%stm)
-!                 ig = -ntgrid
-!                 g0(ig,isgn,iglo) = aj0(ig,iglo)*(zi*wdrift_func(ig, il, ie, it, ik)/code_dt &
-!                      * gnew(ig,isgn,iglo)*spec(is)%tz + vpa(ig,isgn,iglo)*gradpar(ig)/delthet(ig) &
-!                      * (gnew(ig+1,isgn,iglo)-gnew(ig,isgn,iglo))*spec(is)%stm)
-!              end if
           end do
        end do
 
@@ -5490,7 +5479,38 @@ subroutine check_dist_fn(report_unit)
                 do it = 1, ntheta0
                    if (nonlin .and. it==1 .and. ik==1) cycle
                    wgt = sum(dnorm(:,it,ik))
-                   exchange(it,ik,is) = sum(real(total(:,it,ik,is)*conjg(phi(:,it,ik))) &
+                   exchange1(it,ik,is) = sum(real(total(:,it,ik,is)*conjg(phinew(:,it,ik))) &
+                        *dnorm(:,it,ik))/wgt
+                end do
+             end do
+          end do
+       end if
+
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          do isgn = 1, 2
+             g0(:,isgn,iglo) = aj0(:,iglo)*0.25*(gnew(:,isgn,iglo)+g(:,isgn,iglo))
+          end do
+       end do
+       call integrate_moment (g0, total)
+
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          do isgn = 1, 2
+             g0(:,isgn,iglo) = aj0(:,iglo)*0.25*(gnew(:,isgn,iglo)-g(:,isgn,iglo))
+          end do
+       end do
+       call integrate_moment (g0, total2)
+
+       ! exchange2 is a symmetrized form of energy exchange,
+       ! which guarantees species-summed energy exchange is zero
+       if (proc0) then
+          do is = 1, nspec
+             do ik = 1, naky
+                do it = 1, ntheta0
+                   if (nonlin .and. it==1 .and. ik==1) cycle
+                   wgt = sum(dnorm(:,it,ik))*code_dt
+                   exchange2(it,ik,is) = sum(real(total(:,it,ik,is) &
+                        *conjg(phinew(:,it,ik)-phi(:,it,ik)) &
+                        - (phinew(:,it,ik)+phi(:,it,ik))*conjg(total2(:,it,ik,is))) &
                         *dnorm(:,it,ik))/wgt
                 end do
              end do
@@ -5499,7 +5519,7 @@ subroutine check_dist_fn(report_unit)
 
     end if
 
-    deallocate (dnorm, total)
+    deallocate (dnorm, total, total2)
 
   end subroutine eexchange
 

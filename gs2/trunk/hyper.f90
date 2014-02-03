@@ -434,7 +434,7 @@ contains
        allocate (D_res(ntheta0, naky)) 
     endif
     if (.not. allocated(hypervisc_filter)) then
-       allocate (hypervisc_filter(-ntgrid:ntgrid,ntheta0,naky)) ; hypervisc_filter = 0.0
+       allocate (hypervisc_filter(-ntgrid:ntgrid,ntheta0,naky)) ; hypervisc_filter = 1.0
     end if
     D_res = 0.
 
