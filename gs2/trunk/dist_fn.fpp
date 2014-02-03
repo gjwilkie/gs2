@@ -43,7 +43,7 @@ module dist_fn
   public :: boundary_option_switch, boundary_option_linked
   public :: boundary_option_self_periodic, boundary_option_zero
   public :: pass_right, pass_left, init_pass_ends
-  public :: parity_redist_ik, init_enforce_parity
+  public :: parity_redist_ik, init_enforce_parity, get_leftmost_it
   private
 
   ! knobs
@@ -2500,6 +2500,26 @@ subroutine check_dist_fn(report_unit)
     iglo_right = idx(g_lo,ik,itright(ik,it),il,ie,is)
     iproc_right = proc_id(g_lo,iglo_right)
   end subroutine get_right_connection
+
+  !>Helper function for finding the leftmost it of supercell
+  function get_leftmost_it(it,ik)
+    implicit none
+    integer, intent(in) :: ik, it
+    integer :: get_leftmost_it
+    integer :: it_cur
+    !If not linked then no connections so only one cell in supercell
+    if (boundary_option_switch.eq.boundary_option_linked) then
+       it_cur=it
+       do while(itleft(ik,it_cur).ge.0.and.itleft(ik,it_cur).ne.it_cur)
+          !Keep updating it_cur with left connected it until there are no
+          !connections to left
+          it_cur=itleft(ik,it_cur)
+       enddo
+    else
+       it_cur=it
+    endif
+    get_leftmost_it=it_cur
+  end function get_leftmost_it
 
   subroutine allocate_arrays
     use kt_grids, only: naky,  box
