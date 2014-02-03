@@ -114,7 +114,7 @@ module gs2_diagnostics
   real, dimension (:,:,:), allocatable :: vflux0, vflux1  ! low flow correction to turbulent momentum flux
   real, dimension (:,:,:), allocatable :: pmflux, vmflux
   real, dimension (:,:,:), allocatable :: pbflux, vbflux
-  real, dimension (:,:,:), allocatable :: exchange
+  real, dimension (:,:,:), allocatable :: exchange1, exchange
 
   ! (ntheta0,naky,nspec)
 
@@ -604,6 +604,7 @@ contains
     allocate (pflux_tormom (ntheta0,naky,nspec)) ; pflux_tormom = 0. 
     allocate (qheat (ntheta0,naky,nspec,3)) ; qheat = 0.
     allocate (vflux (ntheta0,naky,nspec)) ; vflux = 0.
+    allocate (exchange1 (ntheta0,naky,nspec)) ; exchange1 = 0.
     allocate (exchange (ntheta0,naky,nspec)) ; exchange = 0.
 
     allocate (vflux_par (ntheta0,naky,nspec)) ; vflux_par = 0.
@@ -1409,7 +1410,7 @@ contains
     if (allocated(j_ext_hist)) deallocate (j_ext_hist)
     if (allocated(omegahist)) deallocate (omegahist)
     if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
-         pbflux, qbheat, vbflux, vflux0, vflux1, exchange)
+         pbflux, qbheat, vbflux, vflux0, vflux1, exchange1, exchange)
     if (allocated(pflux_tormom)) deallocate (pflux_tormom) 
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
     if (.not. trin_restart .and. allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
@@ -1432,7 +1433,7 @@ contains
     use run_parameters, only: woutunits, tunits, fapar, fphi, fbpar, eqzip
 !    use run_parameters, only: nstep, include_lowflow
     use run_parameters, only: nstep
-    use fields, only: phinew, aparnew, bparnew
+    use fields, only: phinew, aparnew, bparnew, phi
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, write_f, write_fyx
     use dist_fn, only: omega0, gamma0, getmoms, par_spectrum
@@ -1448,7 +1449,7 @@ contains
     use gs2_time, only: user_time, user_dt
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom, nc_loop, nc_loop_moments
     use gs2_io, only: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend, nc_loop_partsym_tormom 
-    use gs2_io, only: nc_loop_vres
+    use gs2_io, only: nc_loop_vres, nc_exchange
     use gs2_io, only: nc_loop_movie, nc_write_fields, nc_write_moments
     use gs2_layouts, only: yxf_lo, g_lo
 ! MAB>
@@ -1698,7 +1699,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        call lf_flux (phinew, vflux0, vflux1)
 #endif
        call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
-       call eexchange (phinew, exchange)
+       call eexchange (phinew, phi, exchange1, exchange)
 
        if (proc0) then
           if (fphi > epsilon(0.0)) then
@@ -1986,15 +1987,17 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           if (fphi > epsilon(0.0)) then
              if (write_ascii) then
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' heat fluxes: ', 5(1x,e10.4),' qflux_avg: ', 5(1x,e10.4))") &
-!                     t, phi2, heat_fluxes(1:min(nspec,5)), qflux_avg(1:min(nspec,5))/t
-                     t, phi2, heat_fluxes(1:min(nspec,5)), energy_exchange(1:min(nspec,5))
+                     & ' heat fluxes: ', 5(1x,e10.4))") &
+                     t, phi2, heat_fluxes(1:min(nspec,5))
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' part fluxes: ', 5(1x,e10.4),' pflux_avg: ', 5(1x,e10.4))") &
-                     t, phi2, part_fluxes(1:min(nspec,5)), pflux_avg(1:min(nspec,5))/t
+                     & ' part fluxes: ', 5(1x,e10.4))") &
+                     t, phi2, part_fluxes(1:min(nspec,5))
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' mom fluxes: ', 5(1x,e10.4),' vflux_avg: ', 5(1x,e10.4))") &
-                     t, phi2, mom_fluxes(1:min(nspec,5)), vflux_avg(1:min(nspec,5))/t
+                     & ' mom fluxes: ', 5(1x,e10.4))") &
+                     t, phi2, mom_fluxes(1:min(nspec,5))
+                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
+                     & ' energy exchange: ', 5(1x,e10.4))") &
+                     t, phi2, energy_exchange(1:min(nspec,5))
 
 #ifdef LOWFLOW
                    write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
@@ -2045,8 +2048,8 @@ if (debug) write(6,*) "loop_diagnostics: -2"
              call nc_qflux (nout, qheat(:,:,:,1), qmheat(:,:,:,1), qbheat(:,:,:,1), &
                   heat_par, mheat_par, bheat_par, &
                   heat_perp, mheat_perp, bheat_perp, &
-                  heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot, &
-                  energy_exchange)
+                  heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
+             call nc_exchange (nout, exchange, energy_exchange)
                   ! Update the target array in parameter_scan_arrays
 ! below line gives out-of-bounds array for runs inside trinity
 !                  scan_hflux(nout) = hflux_tot
