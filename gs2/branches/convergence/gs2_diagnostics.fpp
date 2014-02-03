@@ -67,8 +67,9 @@ module gs2_diagnostics
 
 ! HJL <  Variables for convergence condition testing
   integer, public :: trin_nsteps = 0
+  integer :: conv_ireq = 0
   real :: heat_sum_av_diff_max = 0.0
-  real :: heat_sum_av(0:9) = 0
+  real, save, allocatable, dimension(:) :: conv_heat_sum_av
 
 
   ! internal
@@ -94,13 +95,16 @@ module gs2_diagnostics
          write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
- 	 write_pflux_sym,  write_pflux_tormom  
+ 	 write_pflux_sym, write_pflux_tormom, conv_nav, conv_diff_threshold, conv_min_step
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: jext_unit   !GGH Additions
   integer :: phase_unit
   integer :: dump_check1_unit, dump_check2_unit
   integer :: res_unit, res_unit2, parity_unit
+  integer :: conv_nav ! The number of diagnostic (nwrite) steps the convergence condition averages over
+  integer :: conv_min_step ! The minimum number of steps before the convergence condition will be met
+  integer :: conv_nreq ! The number of steps where convergence is true before convergence is accepted
 
   complex, dimension (:,:,:), allocatable :: omegahist
   ! (navg,ntheta0,naky)
@@ -125,6 +129,7 @@ module gs2_diagnostics
 
   real :: start_time = 0.0
   real, dimension (:), allocatable :: pflux_avg, qflux_avg, heat_avg, vflux_avg
+  real :: conv_diff_threshold ! The threshold differential for averaged summed flux that triggers the convergence condition
 
   integer :: ntg_out, ntg_extend, nth0_extend
   integer :: nout = 1
@@ -490,6 +495,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use mp, only: proc0
+    use job_manage, only: trin_job
     use constants
     implicit none
     logical, intent (in) :: list
@@ -554,6 +560,8 @@ contains
        
        allocate (omegahist(0:navg-1,ntheta0,naky))
        omegahist = 0.0
+       if(.not. allocated(conv_heat_sum_av)) allocate(conv_heat_sum_av(0:conv_nav-1))
+
     end if
 
     !<doc> Allocate arrays for storing the various fluxes which the diagnostics will output </doc>
@@ -633,6 +641,10 @@ contains
        nwrite_mult = 10
        navg = 100
        nsave = -1
+       conv_nav = 10
+       conv_diff_threshold = 1e-13
+       conv_min_step = 1000
+       conv_nreq = 4
        omegatol = 1e-3
        omegatinst = 1.0
        igomega = 0
@@ -703,7 +715,7 @@ contains
     use antenna, only: dump_ant_amp
     use splines, only: fitp_surf1, fitp_surf2
     use gs2_heating, only: del_htype
-    use job_manage, only: trin_restart
+    use job_manage, only: trin_restart, trin_reset
 
 !    use gs2_dist_io, only: write_dist
     implicit none
@@ -1368,7 +1380,9 @@ contains
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange)
     if (allocated(pflux_tormom)) deallocate (pflux_tormom) 
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
-    if (.not. trin_restart .and. allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
+    if (.not. trin_restart .and. allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg) ! check, restart always true?
+
+!    if (proc0 .and. trin_reset .and. allocated(conv_heat_sum_av)) deallocate (conv_heat_sum_av)
 
 ! HJL <    
     if (allocated(domega)) deallocate(domega)
@@ -1499,7 +1513,7 @@ contains
     logical,optional:: debopt
 ! Variables for convergence condition (HJL)
     real :: heat_sum_av_diff
-    integer :: numav, place, last_place, itrin
+    integer :: place, last_place, itrin
 
     logical:: debug=.false.
 
@@ -1801,48 +1815,53 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        end if
     end if
 
-    itrin=(trin_nsteps+istep)/nwrite
-
     ! Trinity convergence condition - simple and experimental
     ! look for the averaged differential of the summed averaged heat flux to drop below a threshold (1e-12?)
-    exit_when_converged = .false.
-    if((trin_restart .or. exit_when_converged) .and. .not. (istep .eq. 0 .and. itrin .ne. 0)) then
-       numav = 10
+!    exit_when_converged = .false.
+    itrin=(trin_nsteps+istep)/nwrite
+!    if((trin_restart .or. exit_when_converged) .and. .not. (istep .eq. 0 .and. itrin .ne. 0)) then
+    if(.not. (istep .eq. 0 .and. itrin .ne. 0)) then
        if(proc0) then
           heat_sum_av_diff = 0
-          place = mod(istep,nwrite*numav)/nwrite
+          place = mod(istep+trin_nsteps,nwrite*conv_nav)/nwrite
           last_place = place - 1
-          if(last_place < 0) last_place = numav - 1
+          if(last_place < 0) last_place = conv_nav - 1
           
           ! Calculate a cumulative average of heat flux
           if(itrin == 0) then
-             heat_sum_av(place) = heat_fluxes(1)
+             conv_heat_sum_av(place) = heat_fluxes(1)
           else 
-             heat_sum_av(place) = (heat_sum_av(last_place) * itrin &
+             conv_heat_sum_av(place) = (conv_heat_sum_av(last_place) * itrin &
                   + heat_fluxes(1)) / (itrin+1)
           endif
-          write(6,'(A,I5,A,I4,I4)') 'Job ',trin_job,' place, last_place = ',place,last_place
-          write(6,'(A,I5,A,E10.4,A,I6,I6)') 'Job ',trin_job,' time = ',t, ' istep ',istep
-          write(6,'(A,I5,A,I6,A,I6)') 'Job ',trin_job,' trin_nsteps = ',trin_nsteps,' itrin ', itrin
+!          if(trin_job == 1) then
+          write(6,'(A,I5,A,E10.4,A,I6,I6)') 'Job ',trin_job,' time = ',t, ' step = ',istep+trin_nsteps
+!          write(6,'(A,I5,A,I6,A,I6)') 'Job ',trin_job,' step = ',istep+trin_nsteps, ' itrin = ',itrin
+!          write(6,'(A,I5,A,I6,A,I6)') 'Job ',trin_job,' place = ',place, ' last_place = ',last_place
           write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
                ' heat = ',heat_fluxes(1), &
-               ' heatsumav = ',heat_sum_av(place)          
+               ' heatsumav = ',conv_heat_sum_av(place)          
+!          endif
           ! Calculate change in cumulative average flux with time
-          if(istep .gt. nwrite*numav .or. .not. trin_reset) then
+          if(istep + trin_nsteps .ge. nwrite * conv_nav) then
              last_place = place + 1 ! Re-use last_place for differential
-             if(last_place .ge. numav) last_place = 0
-             heat_sum_av_diff = (heat_sum_av(place) - heat_sum_av(last_place)) &
-                  /(user_dt*nwrite*(numav-1))
+             if(last_place .ge. conv_nav) last_place = 0
+             heat_sum_av_diff = (conv_heat_sum_av(place) - conv_heat_sum_av(last_place)) &
+                  /(user_dt*nwrite*(conv_nav-1))
              write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
                   ' heat_sum_av_diff = ',heat_sum_av_diff, &
                   ' heat_sum_av_diff_max = ',heat_sum_av_diff_max
-!             if(heat_sum_av_diff .lt. 1e-12 .and. istep .gt. 4000) exit = .true.
-             if(abs(heat_sum_av_diff) .lt. abs(heat_sum_av_diff_max/20)) then
-                if(trin_restart) exit = .true.
-                write(6,'(A,I5,A,I6)')'Job ',trin_job,' &
-                     Reached exit condition after step ',istep
-             endif
-             
+             if(abs(heat_sum_av_diff) .lt. conv_diff_threshold .and. &
+                  (trin_nsteps+istep) .gt. conv_min_step .and. &
+                  exit_when_converged == .true. ) then
+                conv_ireq = conv_ireq + 1
+!             if(abs(heat_sum_av_diff) .lt. abs(heat_sum_av_diff_max/20)) then
+                if(conv_ireq .ge. conv_nreq) exit = .true.
+                write(6,'(A,I5,A,I6,I3)')'Job ',trin_job,' &
+                     Reached convergence condition after step ',istep+trin_nsteps, conv_ireq
+             else
+                conv_ireq = 0
+             endif            
              if(heat_sum_av_diff > heat_sum_av_diff_max) heat_sum_av_diff_max = heat_sum_av_diff
           endif
        endif
@@ -2987,13 +3006,18 @@ if (debug) write(6,*) "get_omegaavg: done"
   subroutine reset_init
 
     use gs2_time, only: user_time
+    use mp, only: proc0
+    use job_manage, only: trin_job
 
     implicit none
 
 ! HJL > reset values for convergence condition
-    heat_sum_av_diff_max = 0.0
-    heat_sum_av = 0.0
-    trin_nsteps = 0
+    if(proc0) then
+       conv_ireq = 0
+       heat_sum_av_diff_max = 0.0
+       conv_heat_sum_av = 0.0
+       trin_nsteps = 0
+    endif
     start_time = user_time
     pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
 
