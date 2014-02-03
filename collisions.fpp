@@ -2735,7 +2735,7 @@ contains
        end do
     end do
 
-    deallocate (vns, v0y0, v1y1, v2y2)
+    deallocate (vns, v0y0, v1y1, v2y2, gtmp)
 
   end subroutine conserve_lorentz_standard_layout
 
@@ -2887,7 +2887,7 @@ contains
        gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*w0le(:,:,ile) * v2y2(ile)
     end do
 
-    deallocate (vpanud, v0y0, v1y1, v2y2)
+    deallocate (gtmp, vpanud, v0y0, v1y1, v2y2)
 
   end subroutine conserve_lorentz_le_layout
 
