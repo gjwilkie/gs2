@@ -29,7 +29,7 @@ module fields
   logical :: remove_zonal_flows_switch
   logical :: force_maxwell_reinit
   integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_local = 3
-
+  logical :: dump_response, read_response
   logical :: initialized = .false.
   logical :: exist
 
@@ -50,6 +50,8 @@ contains
        write (report_unit, *) 
     case (fieldopt_local)
        write (report_unit, fmt="('The field equations will be advanced in time implicitly with decomposition respecting g_lo layout.')")
+       if(dump_response) write (report_unit, fmt="('The response matrix will be dumped to file.')")
+       if(read_response) write (report_unit, fmt="('The response matrix will be read from file.')")
     end select
   end subroutine check_fields
 
@@ -68,6 +70,8 @@ contains
        case (fieldopt_local)
           write (unit, fmt="(' field_option = ',a)") '"local"'
        end select
+       if(dump_response) write (unit, fmt="(' dump_response = ',L)") dump_response
+       if(read_response) write (unit, fmt="(' read_response = ',L)") read_response
        write (unit, fmt="(' /')")
   end subroutine wnml_fields
 
@@ -166,6 +170,7 @@ contains
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     use fields_implicit, only: field_subgath
+    use fields_local, only: dump_response_local=>dump_response, read_response_local=>read_response
     implicit none
     type (text_option), dimension (5), parameter :: fieldopts = &
          (/ text_option('default', fieldopt_implicit), &
@@ -174,7 +179,8 @@ contains
             text_option('local', fieldopt_local),&
             text_option('implicit_local', fieldopt_local)/)
     character(20) :: field_option
-    namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit
+    namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit,&
+         dump_response, read_response
     integer :: ierr, in_file
 
     if (proc0) then
@@ -182,6 +188,8 @@ contains
        remove_zonal_flows_switch = .false.
        field_subgath=.false.
        force_maxwell_reinit=.true.
+       dump_response=.false.
+       read_response=.false.
        in_file = input_unit_exist ("fields_knobs", exist)
 !       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
        if (exist) read (unit=in_file, nml=fields_knobs)
@@ -197,6 +205,12 @@ contains
     call broadcast (remove_zonal_flows_switch)
     call broadcast (field_subgath)
     call broadcast (force_maxwell_reinit)
+    call broadcast (dump_response)
+    call broadcast (read_response)
+   
+    !Can repeat for other field types if implemented
+    dump_response_local=dump_response
+    read_response_local=read_response
   end subroutine read_parameters
 
   subroutine allocate_arrays
