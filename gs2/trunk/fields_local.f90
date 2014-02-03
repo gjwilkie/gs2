@@ -7,12 +7,16 @@ module fields_local
   implicit none
   private
 
+  !> Module level routines
   public :: init_fields_local, init_allfields_local, finish_fields_local
-  public :: advance_local, reset_fields_local
-  public :: fields_local_functional
+  public :: advance_local, reset_fields_local, dump_response_to_file
+  public :: fields_local_functional, read_response_from_file
 
   !> Unit tests
   public :: fields_local_unit_test_init_fields_matrixlocal
+
+  !> User set parameters
+  public :: dump_response, read_response
 
   !//////////////////////////////
   !// CUSTOM TYPES
@@ -254,6 +258,8 @@ module fields_local
   logical :: debug=.true. !Do we do debug stuff?
   logical :: initialised=.false. !Have we initialised yet?
   logical :: reinit=.false. !Are we reinitialising?
+  logical :: dump_response=.false. !Do we dump the response matrix?
+  logical :: read_response=.false. !Do we read the response matrix from dump?
   integer :: nfield !How many fields
   integer :: nfq !How many field equations (always equal to nfield)
   type(pc_type),save :: pc !This is the parallel control object
@@ -3068,6 +3074,7 @@ contains
     if (debug) write(6,*) "init_fields_local: antenna"
     call init_antenna
 
+
     !Set the initialised state
     initialised = .true.
     reinit = .false.
@@ -3195,32 +3202,57 @@ contains
 !!!!!!!!!!
 
     !Now fill the fieldmat with data
-    !if(debug)call barrier
-    if(proc0.and.debug)then
-       write(dlun,'("Populating.")')
-       call cpu_time(ts)
-    endif
-    call fieldmat%populate
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
+    if(read_response)then
+       if(proc0.and.debug)then
+          write(dlun,'("Populating from dump.")')
+          call cpu_time(ts)
+       endif
+       call read_response_from_file
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
+    else       
+       !if(debug)call barrier
+       if(proc0.and.debug)then
+          write(dlun,'("Populating.")')
+          call cpu_time(ts)
+       endif
+       call fieldmat%populate
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
+
+       !Now prepare the response matrices
+       !Note: Currently prepare just means invert
+       !but at some point we may wish to LU decompose
+       !or other approaches etc.
+       !if(debug)call barrier
+       if(proc0.and.debug) then
+          write(dlun,'("Preparing.")')
+          call cpu_time(ts)
+       endif
+       call fieldmat%prepare
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
     endif
 
-    !Now prepare the response matrices
-    !Note: Currently prepare just means invert
-    !but at some point we may wish to LU decompose
-    !or other approaches etc.
-    !if(debug)call barrier
-    if(proc0.and.debug) then
-       write(dlun,'("Preparing.")')
-       call cpu_time(ts)
-    endif
-    call fieldmat%prepare
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
+    !Dump response to file
+    if(dump_response)then
+       if(proc0.and.debug)then
+          write(dlun,'("Dumping to file.")')
+          call cpu_time(ts)
+       endif
+       call dump_response_to_file
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
     endif
 
     !Now write debug data
@@ -3334,6 +3366,129 @@ contains
          aparnew, bparnew, istep, diagnostics) 
 
   end subroutine advance_local
+
+  !> Routine to dump the current response matrix data
+  !! to file. One file per connected domain. Each written
+  !! by the head of the supercell.
+  subroutine dump_response_to_file(suffix)
+    use file_utils, only: get_unused_unit, run_name
+    implicit none
+    character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
+    character(len=64) :: suffix_local, suffix_default='.response'
+    character(len=256) :: file_name
+    complex, dimension(:,:), allocatable :: tmp_arr
+    integer :: ik, is, unit
+
+    !Set file suffix
+    suffix_local=suffix_default
+    if(present(suffix)) suffix_local=suffix
+
+    !First we have to pull data so that head of each supercell has full data
+    !Currently we are lazy and just ensure all procs in supercell has full data
+    do ik=1,fieldmat%naky
+       !If ik isn't local than cycle
+       if(.not.fieldmat%kyb(ik)%is_local) cycle
+
+       !Loop over supercells
+       do is=1,fieldmat%kyb(ik)%nsupercell
+          !If is isn't local than cycle
+          if(.not.fieldmat%kyb(ik)%supercells(is)%is_local) cycle
+
+          !Now allocate array
+          allocate(tmp_arr(fieldmat%kyb(ik)%supercells(is)%nrow,fieldmat%kyb(ik)%supercells(is)%ncol))
+
+          !First have to pull all row level data
+          call fieldmat%kyb(ik)%supercells(is)%pull_rows_to_arr(tmp_arr)
+          
+          !Now save if on head proc
+          if(fieldmat%kyb(ik)%supercells(is)%is_head)then
+             !Really we should do this with netcdf but for now we will
+             !simply dump a binary file.
+
+             !First make file name
+             write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(run_name),ik,is,trim(suffix_local)
+
+             !Get a free unit
+             call get_unused_unit(unit)
+
+             !Open file and write
+             open(unit=unit,file=file_name,form="unformatted")
+             write(unit) tmp_arr
+             close(unit)
+          endif
+
+          !Deallocate
+          deallocate(tmp_arr)
+       enddo
+    enddo
+
+  end subroutine dump_response_to_file
+
+  !> Routine to read the current response matrix data
+  !! from file dump. One file per connected domain. Each written
+  !! by the head of the supercell.
+  !! NOTE: Have to have setup communicators etc.
+  subroutine read_response_from_file(suffix)
+    use file_utils, only: get_unused_unit, run_name
+    use mp, only: sum_allreduce_sub
+    implicit none
+    character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
+    character(len=64) :: suffix_local, suffix_default='.response'
+    character(len=256) :: file_name
+    complex, dimension(:,:), allocatable :: tmp_arr
+    integer :: ik, is, unit
+
+    !Set file suffix
+    suffix_local=suffix_default
+    if(present(suffix)) suffix_local=suffix
+
+    !First we have to pull data so that head of each supercell has full data
+    !Currently we are lazy and just ensure all procs in supercell has full data
+    do ik=1,fieldmat%naky
+       !If ik isn't local than cycle
+       if(.not.fieldmat%kyb(ik)%is_local) cycle
+
+       !Loop over supercells
+       do is=1,fieldmat%kyb(ik)%nsupercell
+          !If is isn't local than cycle
+          if(.not.fieldmat%kyb(ik)%supercells(is)%is_local) cycle
+
+          !Now allocate array
+          allocate(tmp_arr(fieldmat%kyb(ik)%supercells(is)%nrow,fieldmat%kyb(ik)%supercells(is)%ncol))
+          tmp_arr=0.
+
+          !Now if on head proc read
+          if(fieldmat%kyb(ik)%supercells(is)%is_head)then
+             !Really we should do this with netcdf but for now we will
+             !simply dump a binary file.
+
+             !First make file name
+             write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(run_name),ik,is,trim(suffix_local)
+
+             !Get a free unit
+             call get_unused_unit(unit)
+
+             !Open file and write
+             open(unit=unit,file=file_name,form="unformatted")
+             read(unit) tmp_arr
+             close(unit)
+          endif
+
+          !Now we need to broadcast the data to everyone with supercell.
+          !NOTE: Really we would want a supercell bound method which will do
+          !this so that this module level routine is insensitive to communicators etc.
+          !Furthermore we are lazy and use a sum_allreduce_sub to send data to everyone
+          call sum_allreduce_sub(tmp_arr,fieldmat%kyb(ik)%supercells(is)%sc_sub_all%id)
+
+          !Now push array to local storage
+          call fieldmat%kyb(ik)%supercells(is)%push_arr_to_rows(tmp_arr)
+
+          !Deallocate
+          deallocate(tmp_arr)
+       enddo
+    enddo
+
+  end subroutine read_response_from_file
 
   !> Returns true if GS2 was built in such a way
   !! as to allow this module to work.
