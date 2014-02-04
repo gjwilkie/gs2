@@ -9,7 +9,7 @@ module fields_implicit
   public :: nidx
   public :: reset_init
   public :: set_scan_parameter
-  public :: field_subgath
+  public :: field_subgath, dump_response
 
   !> Unit tests
   public :: fields_implicit_unit_test_init_fields_implicit
@@ -20,7 +20,7 @@ module fields_implicit
   logical :: initialized = .false.
   logical :: linked = .false.
   logical :: field_subgath
-
+  logical :: dump_response=.false.
 contains
 
   subroutine init_fields_implicit
@@ -52,7 +52,6 @@ contains
     call init_response_matrix
     if (debug) write(6,*) "init_fields_implicit: antenna"
     call init_antenna
-
   end subroutine init_fields_implicit
 
   function fields_implicit_unit_test_init_fields_implicit()
@@ -456,6 +455,13 @@ contains
     call init_fields_layouts (nfield, nidx, naky, ntheta0, M_class, N_class, i_class)
     call init_jfields_layouts (nfield, nidx, naky, ntheta0, i_class)
     call finish_fields_layouts
+
+    !If we implement a read_response routine then we should put it here
+    !if(read_response) then
+    !    call read_response.....
+    !else
+    !do the do loop below
+
 !
 ! keep storage cost down by doing one class at a time
 ! Note: could define a superclass (of all classes), a structure containing all am, 
@@ -582,6 +588,7 @@ contains
 
     end do
 
+    if(dump_response) call dump_response_to_file_imp(suffix=".resp_imp")
     call prof_leaving ("init_response_matrix", "fields_implicit")
 
   end subroutine init_response_matrix
@@ -1107,6 +1114,231 @@ contains
     n = 1 + l_links(ik, it)
 
   end subroutine kt2ki
+
+  subroutine dump_response_to_file_imp(suffix)
+    use file_utils, only: get_unused_unit, run_name
+    use fields_arrays, only: aminv
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use dist_fn, only: i_class, N_class, M_class, get_leftmost_it, itright
+    use gs2_layouts, only: f_lo, jf_lo, ij_idx, idx_local, idx, proc_id,idx_local,dj
+    use mp, only: proc0, send, receive
+    implicit none
+    character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
+    character(len=64) :: suffix_local, suffix_default='.response'
+    character(len=256) :: file_name
+    complex, dimension(:,:), allocatable :: tmp_arr, tmp_arr_full
+    complex, dimension(:), allocatable :: tmp_vec_full, tmp_vec
+    integer :: ic, im, ik, it, itmin, unit, supercell_length, supercell_length_bound, in, ifld, ig, is_tmp
+    integer :: jflo, dc, nn, in_tmp, icount, it_tmp, nl, nr, ifld_tmp, ext_dom_length, ig_tmp, cur_idx
+    integer, dimension(:,:), allocatable :: it_to_is, leftmost_it
+    integer, dimension(:), allocatable :: tmp_ints
+    logical :: is_local
+    !Set file suffix
+    suffix_local=suffix_default
+    if(present(suffix)) suffix_local=suffix
+
+    !Make a lookup array to convert itmin (the leftmost it in a connected domain)
+    !to the supercell index "is" used in the local fields. This will be used to 
+    !ensure equivalent files can be given the same name.
+    allocate(it_to_is(ntheta0,naky),leftmost_it(ntheta0,naky),tmp_ints(ntheta0))
+    it_to_is=0
+    !//Note the following code is mostly borrowed from fm_init in the local fields
+    
+    !First find all the leftmost it
+    do ik=1,naky
+       do it=1,ntheta0
+          leftmost_it(it,ik)=get_leftmost_it(it,ik)
+       enddo
+    enddo
+
+    !Now find supercell ids for each ky at a time
+    do ik=1,naky
+       tmp_ints=leftmost_it(:,ik)
+       it_tmp=0
+       is_tmp=0
+       do while(sum(tmp_ints).ne.-1*ntheta0)
+          it_tmp=it_tmp+1
+          cur_idx=tmp_ints(it_tmp)
+
+          !If we've seen this domain skip
+          if(cur_idx.eq.-1)cycle
+
+          !Increment counter
+          is_tmp=is_tmp+1
+
+          !Here we store the value
+          it_to_is(it_tmp,ik)=is_tmp
+
+          !Now we set all other connected locations to -1
+          !and store the appropriate is value
+          do it=1,ntheta0
+             if(tmp_ints(it).eq.cur_idx) then
+                tmp_ints(it)=-1
+                it_to_is(it,ik)=is_tmp
+             endif
+          enddo
+       enddo
+    enddo
+
+    !Cleanup
+    deallocate(tmp_ints)
+
+    !/End of borrowed code
+
+    !Notation recap:
+    ! A class refers to all independent domains with the same length
+    ! i_class is how many classes we have
+    ! N_class(i_class) is how many 2Pi domains are in each member of i_class
+    ! M_class(i_class) is how many independent domains are in i_class
+
+    allocate(tmp_vec(nfield*(2*ntgrid+1)))
+    allocate(tmp_arr(1+(2*ntgrid),nfield))
+
+    !Loop over classes (supercell length)
+    do ic=1,i_class
+       !Work out how long the supercell is
+       supercell_length=1+(2*ntgrid)*nfield*N_class(ic) !Without boundary points
+       supercell_length_bound=(1+2*ntgrid)*nfield*N_class(ic) !With boundary points
+       !Extended domain length
+       ext_dom_length=1+(2*ntgrid)*N_class(ic)
+
+       !Make storage
+       allocate(tmp_arr_full(supercell_length,supercell_length))
+       allocate(tmp_vec_full(supercell_length))
+
+       !Now loop over all members of this class
+       do im=1,M_class(ic)
+          !Now we are thinking about a single supercell
+          !we can get certain properties before looping
+          !over the individual elements
+          
+          !Get the ik index
+          ik=f_lo(ic)%ik(im,1)
+
+          !Get the leftmost it index (named itmin to match local field routines)
+          !This is currently used to identify the supercell like "is" is used in
+          !the local field routines. It would be nice to also use "is" here (or
+          !"itmin" there).
+          itmin=leftmost_it(f_lo(ic)%it(im,1),ik)
+          
+          !Now we have the basic properties we want to loop over the elements
+          !First initialise "it"
+          it=itmin
+
+          !Initialise counter
+          icount=1
+
+          !Loop over the different it (2Pi domains)
+          do in=1,N_class(ic)
+             !Loop over the fields
+             do ifld=1,nfield
+                !Loop over theta
+                do ig=-ntgrid,ntgrid
+                   !Skip the duplicate boundary points
+                   if((ig.eq.ntgrid).and.(in.ne.N_class(ic))) cycle
+
+                   !Convert to jf_lo index
+                   jflo=ij_idx(jf_lo,ig,ifld,ik,it)
+
+                   !See if it's local
+                   is_local=idx_local(jf_lo,jflo)
+
+                   !If it's not local then we have nothing to do
+                   !unless we're the proc who writes (proc0).
+                   if(.not.(is_local.or.proc0)) cycle
+
+                   !Now pack tmp_vec and do communications if needed
+                   if(is_local)then
+                      !Get dcell index
+                      dc=dj(ic,jflo)
+
+                      !Now we pack the tmp_vec in the correct order
+                      !whilst ignoring the repeated boundary points
+                      !We need to pick the value of "n" in the right order
+                      it_tmp=itmin
+                      do in_tmp=1,N_class(ic)
+                         !Pick the correct n
+                         do nn=1,N_class(ic)
+                            if(f_lo(ic)%it(im,nn).eq.it_tmp) exit
+                         enddo
+
+                         !Now we can get supercell range (including boundaries)
+                         nl=1+nidx*(nn-1)
+                         nr=nl+nidx-1
+                         
+                         !Extract section
+                         tmp_vec=aminv(ic)%dcell(dc)%supercell(nl:nr)
+
+                         !All that remains now is to ignore the boundary points
+                         !To do this we just split on the field so we can ignore
+                         !boundary if we want
+                         do ifld_tmp=1,nfield
+                            nl=1+(ifld_tmp-1)*(2*ntgrid+1)
+                            nr=nl+2*ntgrid
+                            tmp_arr(:,ifld_tmp)=tmp_vec(nl:nr)
+                         enddo
+
+                         !Now we need to work out where to put things in tmp_vec_full
+                         !In doing this we try to match the local fields data layout
+                         !to aid comparisons
+                         do ifld_tmp=1,nfield
+                            do ig_tmp=1,2*ntgrid+1
+                               !Skip boundary points
+                               if((ig_tmp.eq.(2*ntgrid+1)).and.(in_tmp.ne.N_class(ic))) cycle
+
+                               !Get index
+                               cur_idx=ig_tmp+(2*ntgrid)*(in_tmp-1)+(ifld_tmp-1)*ext_dom_length
+
+                               !Store data
+                               tmp_vec_full(cur_idx)=tmp_arr(ig_tmp,ifld_tmp)
+                            enddo
+                         enddo
+
+                         !Increment it
+                         it_tmp=itright(ik,it_tmp)
+                      enddo
+
+                      !No comms needed if on proc0
+                      if(.not.proc0) call send(tmp_vec_full,0)
+                   else
+                      !Only proc0 should get here but test anyway
+                      if(proc0) call receive(tmp_vec_full,proc_id(jf_lo,jflo))
+                   endif
+
+                   !Now we need to store in the full array
+                   !May need to check index order matches local case.
+                   if(proc0) then
+                      tmp_arr_full(:,icount)=tmp_vec_full
+                   endif
+
+                   !Increment counter
+                   icount=icount+1
+                enddo
+             enddo
+
+             !Increment it
+             it=itright(ik,it)
+          enddo
+
+          !Now make file name
+          write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(run_name),ik,it_to_is(itmin,ik),trim(suffix_local)
+          if(proc0) then
+             !NOTE: We should probably do this with a netcdf file instead.
+             call get_unused_unit(unit)
+             open(unit=unit,file=file_name,form="unformatted")
+             write(unit) tmp_arr_full
+             close(unit)
+          endif
+       end do
+          
+       deallocate(tmp_arr_full,tmp_vec_full)
+    end do
+
+    !Tidy
+    deallocate(tmp_vec,tmp_arr,leftmost_it,it_to_is)
+
+  end subroutine dump_response_to_file_imp
 
   subroutine timer
     
