@@ -42,6 +42,7 @@ contains
     case (fieldopt_implicit)
        write (report_unit, fmt="('The field equations will be advanced in time implicitly.')")
        if(dump_response) write (report_unit, fmt="('The response matrix will be dumped to file.')")
+       if(read_response) write (report_unit, fmt="('The response matrix will be read from file.')")
     case (fieldopt_test)
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -170,7 +171,7 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
-    use fields_implicit, only: field_subgath, dump_response_imp=>dump_response
+    use fields_implicit, only: field_subgath, dump_response_imp=>dump_response, read_response_imp=>read_response
     use fields_local, only: dump_response_local=>dump_response, read_response_local=>read_response
     implicit none
     type (text_option), dimension (5), parameter :: fieldopts = &
@@ -213,6 +214,7 @@ contains
     select case (fieldopt_switch)
     case (fieldopt_implicit)
        dump_response_imp=dump_response
+       read_response_imp=read_response
     case (fieldopt_test)
     case (fieldopt_local)
        dump_response_local=dump_response
