@@ -209,7 +209,7 @@ contains
 !    logical, save :: initialized = .false.
 
     if (initialized) return
-!    initialized = .true.
+    initialized = .true.
 
     call read_parameters
     if (trin_flag) call reinit_species (ntspec_trin, dens_trin, &
@@ -330,13 +330,13 @@ contains
 
           if (equivalent_maxwellian_flag) then 
              spec(is)%is_maxwellian = .true.
-!             !> Don't trust any of the below values until le_grids is called
-!             zero = 0.0
-!             spec(is)%stm = 1.0/zero
-!             spec(is)%zstm = 1.0/zero
-!             spec(is)%zt = 1.0/zero
-!             spec(is)%tz = 1.0/zero
-!             spec(is)%smz = 1.0/zero
+             !> Don't trust any of the below values until le_grids is called
+             zero = 0.0
+             spec(is)%stm = 1.0/zero
+             spec(is)%zstm = 1.0/zero
+             spec(is)%zt = 1.0/zero
+             spec(is)%tz = 1.0/zero
+             spec(is)%smz = 1.0/zero
           end if
       
 

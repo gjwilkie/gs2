@@ -116,7 +116,7 @@ contains
     call calculate_f0_arrays(epts, wgts, vcut,.false.)
     
     do is = 1,nspec
-write(*,*) iproc, is, spec(is)%temp, spec(is)%fprim, spec(is)%tprim, spec(is)%stm
+!write(*,*) iproc, is, spec(is)%temp, spec(is)%fprim, spec(is)%tprim, spec(is)%stm
        do ie = 1,negrid
 !write(*,*) iproc, is,ie, zogtemp(ie,is)
 !          if (iproc .EQ. 3) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
@@ -372,7 +372,7 @@ contains
 !    logical, save :: initialized = .false.
     integer :: il, ie
 
-!    if (initialized) return
+    if (initialized) return
     initialized = .true.
 
     call init_gs2_layouts
