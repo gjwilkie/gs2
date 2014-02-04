@@ -209,7 +209,7 @@ contains
 !    logical, save :: initialized = .false.
 
     if (initialized) return
-    initialized = .true.
+!    initialized = .true.
 
     call read_parameters
     if (trin_flag) call reinit_species (ntspec_trin, dens_trin, &

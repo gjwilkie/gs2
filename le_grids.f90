@@ -372,7 +372,7 @@ contains
 !    logical, save :: initialized = .false.
     integer :: il, ie
 
-    if (initialized) return
+!    if (initialized) return
     initialized = .true.
 
     call init_gs2_layouts
