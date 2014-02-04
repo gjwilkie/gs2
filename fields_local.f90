@@ -3350,7 +3350,8 @@ contains
   !! to file. One file per connected domain. Each written
   !! by the head of the supercell.
   subroutine dump_response_to_file_local(suffix)
-    use file_utils, only: get_unused_unit, run_name
+    use file_utils, only: run_name
+    use gs2_save, only: gs2_save_response
     implicit none
     character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
     character(len=64) :: suffix_local, suffix_default='.response'
@@ -3386,14 +3387,7 @@ contains
 
              !First make file name
              write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(run_name),ik,is,trim(suffix_local)
-
-             !Get a free unit
-             call get_unused_unit(unit)
-
-             !Open file and write
-             open(unit=unit,file=file_name,form="unformatted")
-             write(unit) tmp_arr
-             close(unit)
+             call gs2_save_response(tmp_arr,file_name)
           endif
 
           !Deallocate
@@ -3408,7 +3402,8 @@ contains
   !! by the head of the supercell.
   !! NOTE: Have to have setup communicators etc.
   subroutine read_response_from_file_local(suffix)
-    use file_utils, only: get_unused_unit, run_name
+    use file_utils, only: run_name
+    use gs2_save, only: gs2_restore_response
     use mp, only: sum_allreduce_sub
     implicit none
     character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
@@ -3443,14 +3438,7 @@ contains
 
              !First make file name
              write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(run_name),ik,is,trim(suffix_local)
-
-             !Get a free unit
-             call get_unused_unit(unit)
-
-             !Open file and write
-             open(unit=unit,file=file_name,form="unformatted")
-             read(unit) tmp_arr
-             close(unit)
+             call gs2_restore_response(tmp_arr,file_name)
           endif
 
           !Now we need to broadcast the data to everyone with supercell.
