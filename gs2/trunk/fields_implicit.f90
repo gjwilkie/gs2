@@ -456,11 +456,12 @@ contains
     call init_jfields_layouts (nfield, nidx, naky, ntheta0, i_class)
     call finish_fields_layouts
 
-    !If we implement a read_response routine then we should put it here
-    read_response=.false. !<DD> For now disable read_response_from_file_imp as it doesn't work
+    !Either read the reponse
     if(read_response) then
-        call read_response_from_file_imp(suffix=".resp_imp")
+        call read_response_from_file_imp
     else
+    !or calculate it
+
 !
 ! keep storage cost down by doing one class at a time
 ! Note: could define a superclass (of all classes), a structure containing all am, 
@@ -588,7 +589,7 @@ contains
        end do
     endif 
 
-    if(dump_response) call dump_response_to_file_imp(suffix=".resp_imp")
+    if(dump_response) call dump_response_to_file_imp
     call prof_leaving ("init_response_matrix", "fields_implicit")
 
   end subroutine init_response_matrix
@@ -1123,7 +1124,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use dist_fn, only: i_class, N_class, M_class, get_leftmost_it, itright
     use gs2_layouts, only: f_lo, jf_lo, ij_idx, idx_local, idx, proc_id,idx_local,dj
-    use mp, only: proc0, send, receive, iproc
+    use mp, only: proc0, send, receive
     implicit none
     character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
     character(len=64) :: suffix_local, suffix_default='.response'
@@ -1348,9 +1349,9 @@ contains
     use fields_arrays, only: aminv
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-    use dist_fn, only: i_class, N_class, M_class, get_leftmost_it, itright,itleft
+    use dist_fn, only: i_class, N_class, M_class, get_leftmost_it, itright
     use gs2_layouts, only: f_lo, jf_lo, ij_idx, idx_local, idx, proc_id,idx_local,dj
-    use mp, only: proc0, send, receive, iproc
+    use mp, only: proc0, send, receive
     implicit none
     character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
     character(len=64) :: suffix_local, suffix_default='.response'
@@ -1359,9 +1360,10 @@ contains
     complex, dimension(:), allocatable :: tmp_vec_full, tmp_vec
     integer :: ic, im, ik, it, itmin, unit, supercell_length, supercell_length_bound, in, ifld, ig, is_tmp
     integer :: jflo, dc, nn, in_tmp, icount, it_tmp, nl, nr, ifld_tmp, ext_dom_length, ig_tmp, cur_idx
+    integer :: jflo_dup, dc_dup
     integer, dimension(:,:), allocatable :: it_to_is, leftmost_it
     integer, dimension(:), allocatable :: tmp_ints
-    logical :: is_local
+    logical :: is_local, is_local_dup
     !Set file suffix
     suffix_local=suffix_default
     if(present(suffix)) suffix_local=suffix
@@ -1532,17 +1534,22 @@ contains
                             enddo
                          enddo
 
-                         !Fix boundary points
-                         if(in_tmp.ne.N_class(ic))then
-                            do ifld_tmp=1,nfield
-                               cur_idx=1+(2*ntgrid)*(in_tmp)+(ifld_tmp-1)*ext_dom_length
-                               tmp_arr(2*ntgrid+1,ifld_tmp)=tmp_vec_full(cur_idx)
-                            enddo
-                         endif
+                         !<DD>It may be anticipated that we need to fix the boundary points
+                         !here but we don't actually need to do anything.
+                         !Because we sum over the entire supercell in getfield we only want
+                         !the repeated boundary point to be included once.
+                         !We still need to calculate the field at the repeated point but the
+                         !fix for that is handled at the bottom of the routine
+                         !In other words we don't need something of the form:
+                         ! !Fix boundary points
+                         ! if(in_tmp.ne.N_class(ic))then
+                         !    do ifld_tmp=1,nfield
+                         !       cur_idx=1+(2*ntgrid)*(in_tmp)+(ifld_tmp-1)*ext_dom_length
+                         !       tmp_arr(2*ntgrid+1,ifld_tmp)=tmp_vec_full(cur_idx)
+                         !    enddo
+                         ! endif
 
-                         !All that remains now is to ignore the boundary points
-                         !To do this we just split on the field so we can ignore
-                         !boundary if we want
+                         !Store in correct order
                          do ifld_tmp=1,nfield
                             nl=1+(ifld_tmp-1)*(2*ntgrid+1)
                             nr=nl+2*ntgrid
@@ -1558,7 +1565,7 @@ contains
                          nl=1+nidx*(nn-1)
                          nr=nl+nidx-1
 
-                         !Extract section
+                         !Store section
                          aminv(ic)%dcell(dc)%supercell(nl:nr)=tmp_vec
 
                          !Increment it
@@ -1575,19 +1582,55 @@ contains
              it=itright(ik,it)
           enddo
 
+          !Now we need to fill in the repeated boundary points
+
+          !If there are no boundary points then advance
+          if(N_class(ic).eq.1) cycle
+          it=itmin
+          do in=1,N_class(ic)-1
+             do ifld=1,nfield
+                !First get the index of the point we want to fill
+                jflo=ij_idx(jf_lo,ntgrid,ifld,ik,it)
+
+                !Now we get the index of the point which has this data
+                jflo_dup=ij_idx(jf_lo,-ntgrid,ifld,ik,itright(ik,it))
+
+                !Now get locality
+                is_local=idx_local(jf_lo,jflo)
+                is_local_dup=idx_local(jf_lo,jflo_dup)
+
+                !Get dcell values
+                if(is_local) dc=dj(ic,jflo)
+                if(is_local_dup) dc_dup=dj(ic,jflo_dup)
+
+                !Now copy/communicate
+                if(is_local)then
+                   if(is_local_dup)then
+                      aminv(ic)%dcell(dc)%supercell=aminv(ic)%dcell(dc_dup)%supercell
+                   else
+                      call receive(aminv(ic)%dcell(dc)%supercell,proc_id(jf_lo,jflo_dup))
+                   endif
+                elseif(is_local_dup)then
+                   call send(aminv(ic)%dcell(dc_dup)%supercell,proc_id(jf_lo,jflo))
+                endif
+             enddo
+
+             !Increment it
+             it=itright(ik,it)
+          enddo
        end do
-          
+       
+       !Free
        deallocate(tmp_arr_full,tmp_vec_full)
     end do
 
     !Tidy
     deallocate(tmp_vec,tmp_arr,leftmost_it,it_to_is)
-
   end subroutine read_response_from_file_imp
 
   !>A subroutine to allocate the response matrix storage objects
   subroutine alloc_response_objects
-    use dist_fn, only: i_class, N_class, M_class
+    use dist_fn, only: i_class, N_class
     use fields_arrays, only: aminv
     use gs2_layouts, only: jf_lo, f_lo, im_idx, in_idx, ig_idx, ifield_idx, ij_idx,dj,mj, idx_local
     use theta_grid, only: ntgrid
