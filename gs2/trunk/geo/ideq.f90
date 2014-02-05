@@ -221,16 +221,16 @@ contains
   subroutine alloc_arrays(nr, nt)
 
     integer :: nr, nt
-	
-	if(.not.allocated(rho_d)) then
-    allocate(rho_d(nr), eqpsi(nr), psi_bar(nr), fp(nr), qsf(nr), beta(nr), pressure(nr), &
-         rc(nr), diam(nr))
-    allocate(R_psi(nr, nt), Z_psi(nr, nt), B_psi(nr, nt))
-    allocate(drm(nr, nt, 2), dzm(nr, nt, 2), dbm(nr, nt, 2), dbtm(nr, nt, 2), &
-         dpm(nr, nt, 2), dtm(nr, nt, 2))
-    allocate(dpcart(nr, nt, 2), dbcart(nr, nt, 2), dtcart(nr, nt, 2), dbtcart(nr, nt, 2))
-    allocate(dpbish(nr, nt, 2), dbbish(nr, nt, 2), dtbish(nr, nt, 2), dbtbish(nr, nt, 2))
-	endif
+
+    if(.not.allocated(rho_d)) then
+       allocate(rho_d(nr), eqpsi(nr), psi_bar(nr), fp(nr), qsf(nr), beta(nr), pressure(nr), &
+            rc(nr), diam(nr))
+       allocate(R_psi(nr, nt), Z_psi(nr, nt), B_psi(nr, nt))
+       allocate(drm(nr, nt, 2), dzm(nr, nt, 2), dbm(nr, nt, 2), dbtm(nr, nt, 2), &
+            dpm(nr, nt, 2), dtm(nr, nt, 2))
+       allocate(dpcart(nr, nt, 2), dbcart(nr, nt, 2), dtcart(nr, nt, 2), dbtcart(nr, nt, 2))
+       allocate(dpbish(nr, nt, 2), dbbish(nr, nt, 2), dtbish(nr, nt, 2), dbtbish(nr, nt, 2))
+    endif
   end subroutine alloc_arrays
 
   subroutine dfit_init
@@ -486,11 +486,11 @@ contains
 
 ! disallow evaluations outside the plasma surface for now
 
-	if(r == eqpsi(nr)) then
-		rt = 0.9999999999*r
-	if(rt > eqpsi(nr)) rt = 1.0000000001*r
-	r = rt
-	endif
+    if(r == eqpsi(nr)) then
+       rt = 0.9999999999*r
+       if(rt > eqpsi(nr)) rt = 1.0000000001*r
+       r = rt
+    endif
 
     if(r >= eqpsi(nr)) then
        write(*,*) 'No evaluation of eqitem allowed outside surface'

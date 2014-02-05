@@ -292,14 +292,14 @@ contains
 
           !Define negrid dimension (number of energy grid points)
           istatus = nf90_def_dim (ncid, "negrid", negrid, egridid)
-	
+
           !Check dimension created successfully
           IF (istatus /= NF90_NOERR) THEN
              ierr = error_unit()
              WRITE(ierr,*) "nf90_def_dim negrid error: ", nf90_strerror(istatus)
              GOTO 1
           END IF
-	
+
           !Define nlambda dimension (number of pitch angles)
           istatus = nf90_def_dim (ncid, "nlambda", nlambda, lgridid)
           
@@ -705,35 +705,35 @@ contains
        
        !<DD> Added for saving distribution function
        IF (PRESENT(distfn)) THEN
-        	!<DD 29-08-2010> Fill energy and lambda information
-
-	        !Store variable energy
-	        istatus = nf90_put_var (ncid, energy_id, energy)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, energy_id)
-	
-	        !Store variable lambda
-	        istatus = nf90_put_var (ncid, lambda_id, al)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, lambda_id)
-	        !</DD>
-	
-	        !<DD 02-09-2010> Fill velocity variables
-	
-	        !Store variable vpa
-	        istatus = nf90_put_var (ncid, vpa_id, vpa)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vpa_id)
-	
-	        !Store variable vperp2
-	        istatus = nf90_put_var (ncid, vperp2_id, vperp2)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vperp2_id)
-	        !</DD>
+          !<DD 29-08-2010> Fill energy and lambda information
+          
+          !Store variable energy
+          istatus = nf90_put_var (ncid, energy_id, energy)
+          
+          !Check store was successful
+          IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, energy_id)
+          
+          !Store variable lambda
+          istatus = nf90_put_var (ncid, lambda_id, al)
+          
+          !Check store was successful
+          IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, lambda_id)
+          !</DD>
+          
+          !<DD 02-09-2010> Fill velocity variables
+          
+          !Store variable vpa
+          istatus = nf90_put_var (ncid, vpa_id, vpa)
+          
+          !Check store was successful
+          IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vpa_id)
+          
+          !Store variable vperp2
+          istatus = nf90_put_var (ncid, vperp2_id, vperp2)
+          
+          !Check store was successful
+          IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vperp2_id)
+          !</DD>
        END IF
        !</DD> Added for saving distribution function
 

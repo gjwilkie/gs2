@@ -31,7 +31,7 @@ module dist_fn
   public :: get_init_field
   public :: flux_vs_theta_vs_vpa
   public :: pflux_vs_theta_vs_vpa
-	
+  
   public :: gamtot,gamtot1,gamtot2
   public :: getmoms_notgc
   public :: mom_coeff, ncnt_mom_coeff
@@ -595,7 +595,7 @@ subroutine check_dist_fn(report_unit)
     if (debug) write(6,*) "init_dist_fn: init_lowflow"
     call init_lowflow ! needs to be before init_invert_rhs but after
                       ! init_collisions as use_le_layouts is set in 
-		      ! collisions
+                      ! collisions
 #endif
 
     if (debug) write(6,*) "init_dist_fn: init_invert_rhs"
@@ -4684,7 +4684,7 @@ subroutine check_dist_fn(report_unit)
     allocate (gamtot(-ntgrid:ntgrid,ntheta0,naky))
     allocate (gamtot1(-ntgrid:ntgrid,ntheta0,naky))
     allocate (gamtot2(-ntgrid:ntgrid,ntheta0,naky))
-    if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then	
+    if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
        allocate (gamtot3(-ntgrid:ntgrid,ntheta0,naky))
     endif
     
@@ -5382,7 +5382,7 @@ subroutine check_dist_fn(report_unit)
              do it = 1, ntheta0
                 wgt = sum(dnorm(:,it,ik)*grho)
 #ifdef LOWFLOW
-		flx(it,ik,is) = sum(aimag(total(:,it,ik,is)*conjg(fld(:,it,ik))) &
+                flx(it,ik,is) = sum(aimag(total(:,it,ik,is)*conjg(fld(:,it,ik))) &
                      *dnorm(:,it,ik)*aky(ik)*Rplot(:)**2)/wgt*mach_lab(is)
 #endif
  
@@ -5443,7 +5443,7 @@ subroutine check_dist_fn(report_unit)
           ie = ie_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)          
-	  if (nonlin .and. it==1 .and. ik==1) cycle
+          if (nonlin .and. it==1 .and. ik==1) cycle
           do isgn = 1, 2
              ! get v_magnetic piece of g0 at grid points instead of cell centers
              do ig = -ntgrid, ntgrid
@@ -5720,7 +5720,7 @@ subroutine check_dist_fn(report_unit)
 
     real, dimension (:,:,:), allocatable :: g0r
     real, dimension (:,:,:,:,:), allocatable :: gavg
-	 
+ 
     allocate (g0r(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (gavg(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
 
@@ -5734,7 +5734,7 @@ subroutine check_dist_fn(report_unit)
 #ifdef LOWFLOW  
              g0r(ig,isgn,iglo) = aimag(g0(ig,isgn,iglo)*conjg(phinew(ig,it,ik)))*aky(ik)*Rplot(ig)**2*mach_lab(is)
 #else
-	     g0r(ig,isgn,iglo) = 0.0
+             g0r(ig,isgn,iglo) = 0.0
 #endif
           end do
        end do

@@ -89,7 +89,7 @@ module gs2_diagnostics
          write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
- 	 write_pflux_sym,  write_pflux_tormom, file_safety_check
+         write_pflux_sym,  write_pflux_tormom, file_safety_check
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: jext_unit   !GGH Additions
@@ -276,10 +276,10 @@ contains
     if (write_final_antot) then
        if (write_ascii) then
           write (report_unit, fmt="('write_final_antot = T:          Sources for Maxwell eqns. written to ',a)") &
-          	& trim(run_name)//'.antot'
+               & trim(run_name)//'.antot'
        end if
        write (report_unit, fmt="('write_final_antot = T:          Sources for Maxwell eqns. written to ',a)") &
-	& trim(run_name)//'.out.nc'
+            & trim(run_name)//'.out.nc'
     end if
 
     if (write_final_moments) then
@@ -634,9 +634,9 @@ contains
     implicit none
     integer :: in_file
     logical, intent (in) :: list
-    !<doc> Set defaults for the gs2_diagnostics_knobs</doc>		
+    !<doc> Set defaults for the gs2_diagnostics_knobs</doc>
     if (proc0) then
-	!<wkdoc> Set defaults for the gs2_diagnostics_knobs</wkdoc>		
+       !<wkdoc> Set defaults for the gs2_diagnostics_knobs</wkdoc>
        print_line = .true.
        print_flux_line = .false.
        write_line = .true.
@@ -694,7 +694,7 @@ contains
        file_safety_check=.true.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
 
-	!<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
+       !<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
 !       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
        if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
 
@@ -1089,15 +1089,15 @@ contains
 
     !<DD> Added for saving distribution function
     if (save_distfn) then
-    	!Convert h to distribution function
-    	call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
-    	
-    	!Save dfn, fields and velocity grids to file
-       	call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
-          	fphi, fapar, fbpar, exit_in=.true.,distfn=.true.)
-    	
-        !Convert distribution function back to h
-        call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
+       !Convert h to distribution function
+       call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
+       
+       !Save dfn, fields and velocity grids to file
+       call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
+            fphi, fapar, fbpar, exit_in=.true.,distfn=.true.)
+       
+       !Convert distribution function back to h
+       call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
     end if
 
     !</DD> Added for saving distribution function
@@ -1549,7 +1549,7 @@ contains
     part_fluxes = 0.0 ; mpart_fluxes = 0.0 ; bpart_fluxes = 0.0
     heat_fluxes = 0.0 ; mheat_fluxes = 0.0 ; bheat_fluxes = 0.0
     mom_fluxes = 0.0 ; mmom_fluxes = 0.0 ; bmom_fluxes = 0.0  
-    part_tormom_fluxes = 0.0	
+    part_tormom_fluxes = 0.0
     energy_exchange = 0.0
 
     phase_tot = 0.0 ;  phase_theta = 0.0
@@ -1716,8 +1716,8 @@ if (debug) write(6,*) "loop_diagnostics: -1"
                 pflux(:,:,is) = pflux(:,:,is) * spec(is)%dens
                 call get_volume_average (pflux(:,:,is), part_fluxes(is))
 
-		pflux_tormom(:,:,is) = pflux_tormom(:,:,is) * spec(is)%dens  
-   	        call get_volume_average (pflux_tormom(:,:,is), part_tormom_fluxes(is))
+                pflux_tormom(:,:,is) = pflux_tormom(:,:,is) * spec(is)%dens  
+                call get_volume_average (pflux_tormom(:,:,is), part_tormom_fluxes(is))
 
                 vflux(:,:,is) = vflux(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
                 call get_volume_average (vflux(:,:,is), mom_fluxes(is))

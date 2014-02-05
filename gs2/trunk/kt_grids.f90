@@ -410,7 +410,7 @@ contains
     integer :: in_file
     logical :: exist
     namelist /kt_grids_box_parameters/ naky, ntheta0, ly, nx, ny, n0, jtwist, &
-	y0, rtwist, x0, nkpolar, rhostar_box
+         y0, rtwist, x0, nkpolar, rhostar_box
 
     call init_theta_grid
 

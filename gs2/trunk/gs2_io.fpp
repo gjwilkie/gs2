@@ -982,7 +982,7 @@ contains
        if (write_pflux_tormom) then !JPL
           status = nf90_def_var (ncid, 'es_part_tormom_flux', netcdf_real, flux_dim, es_part_tormom_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_tormom_flux')
-     	  status = nf90_def_var (ncid, 'es_part_tormom_by_k', netcdf_real, fluxk_dim, es_part_tormom_by_k_id)
+          status = nf90_def_var (ncid, 'es_part_tormom_by_k', netcdf_real, fluxk_dim, es_part_tormom_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_tormom_by_k')  
        end if
 
@@ -991,8 +991,8 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='phi_corr_2pi')
        end if
        if (write_fields) then
-	  status = nf90_def_var (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)  !MR
-	  if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')		   
+          status = nf90_def_var (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)  !MR
+          if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')
        endif
        if (write_eigenfunc) then
           status = nf90_def_var (ncid, 'phi_norm',  netcdf_real, final_field_dim, phi_norm_id)
@@ -2429,13 +2429,13 @@ contains
     if (fphi > zero) then
 
 
-	!<wkdoc> Write fields at the current timestep, if [[write_phi_over_time]], [[write_apar_over_time]], [[write_bpar_over_time]] are set in the input file</wkdoc>
-	if(write_phi_t) then
+       !<wkdoc> Write fields at the current timestep, if [[write_phi_over_time]], [[write_apar_over_time]], [[write_bpar_over_time]] are set in the input file</wkdoc>
+       if(write_phi_t) then
           call c2r (phinew, ri3)
           !ri_phi_t(:,:,:,:,1) = ri3(:,:,:,:)
-	  status = nf90_put_var (ncid, phi_t_id, ri3, start=start5, count=count5)
+          status = nf90_put_var (ncid, phi_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id)
-	end if
+       end if
 
        if (ntheta0 > 1) then
           do it = 1, ntheta0
@@ -2464,12 +2464,12 @@ contains
 
     if (fapar > zero) then
 
-	if(write_apar_t) then
+       if(write_apar_t) then
           call c2r (aparnew, ri3)
           !ri_apar_t(:,:,:,:,1) = ri3(:,:,:,:)
-	  status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
+          status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id)
-	end if
+       end if
 
        if (ntheta0 > 1) then
           do it = 1, ntheta0
@@ -2498,12 +2498,12 @@ contains
 
     if (fbpar > zero) then
 
-	if(write_bpar_t) then
+       if(write_bpar_t) then
           call c2r (bparnew, ri3)
           !ri_bpar_t(:,:,:,:,1) = ri3(:,:,:,:)
-	  status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
+          status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id)
-	end if
+       end if
 
        if (ntheta0 > 1) then
           do it = 1, ntheta0

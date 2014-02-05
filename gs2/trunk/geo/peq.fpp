@@ -1475,7 +1475,7 @@ contains
 
        gamma(i) = 0.01*gradpsi**2*(d2p(i)/pres(i)-a*(dp(i)/pres(i))**2) &
             /mag_B*(2.*pres(i)/beta_0)**((1-a)/2.) &
-	    *(-pres(i)/(dp(i)/drhodpsiq))            
+            *(-pres(i)/(dp(i)/drhodpsiq))            
     enddo
     
     do i=3,nr-2
