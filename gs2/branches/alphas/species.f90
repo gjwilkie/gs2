@@ -335,6 +335,8 @@ contains
             else
               spec(is)%is_maxwellian = .true.
             end if
+          else
+            spec(is)%is_maxwellian = .true.
           end if
 
 !          if (equivalent_maxwellian_flag) then 

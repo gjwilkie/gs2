@@ -1074,14 +1074,6 @@ end do
           vte = sqrt(1836.0 * Ti)
           ne_prim = (Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim)/ne
           Te_prim = Ti_prim
-          if (proc0) then
-             write(*,*) "Since electrons are adiabatic, we need to improvise electron parameters to "
-             write(*,*) "caluclate alpha species properties. Imposed by global quasineutrality, and "
-             write(*,*) "assuming the reference species are protons:"
-             write(*,*) "  ne = ", ne
-             write(*,*) "  ne_prim = ", ne_prim
-             write(*,*) "  Te_prim = ", Te_prim
-          end if
        end if
 
     if (vcrit .LE. 0.0) then
