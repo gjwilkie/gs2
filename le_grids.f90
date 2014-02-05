@@ -220,12 +220,13 @@ contains
 
     call calculate_f0_arrays(epts, wgts, vcut,.true.)
 
-!    do is = 1,nspec
-!       do ie = 1,negrid
-!          if (proc0) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
-!       end do
-!       write(*,*) sum(wgts(:,is))
-!    end do
+    do is = 1,nspec
+
+       do ie = 1,negrid
+          if (proc0) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
+       end do
+       write(*,*) sum(wgts(:,is))
+    end do
     energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))
     x0(:) = sqrt(epts(negrid,:))
