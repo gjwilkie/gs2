@@ -113,7 +113,7 @@ contains
 !  that exceed a threshold tolerance, tol. 
       use theta_grid, only: ntgrid, bmag
       use gs2_layouts, only: g_lo, idx
-      use le_grids, only: negrid, ng2, nlambda, jend, forbid, al
+      use le_grids, only: ng2, jend, al
       use mp, only: mp_abort
 
       implicit none

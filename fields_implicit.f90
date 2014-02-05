@@ -1132,7 +1132,7 @@ contains
     character(len=256) :: file_name
     complex, dimension(:,:), allocatable :: tmp_arr, tmp_arr_full
     complex, dimension(:), allocatable :: tmp_vec_full, tmp_vec
-    integer :: ic, im, ik, it, itmin, unit, supercell_length, supercell_length_bound, in, ifld, ig, is_tmp
+    integer :: ic, im, ik, it, itmin, supercell_length, supercell_length_bound, in, ifld, ig, is_tmp
     integer :: jflo, dc, nn, in_tmp, icount, it_tmp, nl, nr, ifld_tmp, ext_dom_length, ig_tmp, cur_idx
     integer, dimension(:,:), allocatable :: it_to_is, leftmost_it
     integer, dimension(:), allocatable :: tmp_ints
@@ -1354,7 +1354,7 @@ contains
     character(len=256) :: file_name
     complex, dimension(:,:), allocatable :: tmp_arr, tmp_arr_full
     complex, dimension(:), allocatable :: tmp_vec_full, tmp_vec
-    integer :: ic, im, ik, it, itmin, unit, supercell_length, supercell_length_bound, in, ifld, ig, is_tmp
+    integer :: ic, im, ik, it, itmin, supercell_length, supercell_length_bound, in, ifld, ig, is_tmp
     integer :: jflo, dc, nn, in_tmp, icount, it_tmp, nl, nr, ifld_tmp, ext_dom_length, ig_tmp, cur_idx
     integer :: jflo_dup, dc_dup
     integer, dimension(:,:), allocatable :: it_to_is, leftmost_it

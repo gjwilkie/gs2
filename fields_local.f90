@@ -1065,6 +1065,7 @@ contains
     use mp, only: mp_abort
     implicit none
     class(supercell_type), intent(inout) :: self
+    self%is_empty=.true. !Until implemented make everything be treated as empty.
     call mp_abort("ERROR: Invert with mpi not yet implemented.")
   end subroutine sc_invert_mpi
 
@@ -3357,7 +3358,7 @@ contains
     character(len=64) :: suffix_local, suffix_default='.response'
     character(len=256) :: file_name
     complex, dimension(:,:), allocatable :: tmp_arr
-    integer :: ik, is, unit
+    integer :: ik, is
 
     !Set file suffix
     suffix_local=suffix_default
@@ -3410,7 +3411,7 @@ contains
     character(len=64) :: suffix_local, suffix_default='.response'
     character(len=256) :: file_name
     complex, dimension(:,:), allocatable :: tmp_arr
-    integer :: ik, is, unit
+    integer :: ik, is
 
     !Set file suffix
     suffix_local=suffix_default

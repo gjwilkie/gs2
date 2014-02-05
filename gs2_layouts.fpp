@@ -2850,7 +2850,7 @@ contains
 
   subroutine init_lambda_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
-    use mp, only: iproc, nproc, proc0
+    use mp, only: iproc, nproc
 ! TT>
     use file_utils, only: error_unit
 ! <TT

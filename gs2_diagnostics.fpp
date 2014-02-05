@@ -1446,7 +1446,7 @@ contains
 !   use mp, only: iproc
     use file_utils, only: get_unused_unit, flush_output_file
     use prof, only: prof_entering, prof_leaving
-    use gs2_time, only: user_time, user_dt
+    use gs2_time, only: user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom, nc_loop, nc_loop_moments
     use gs2_io, only: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend, nc_loop_partsym_tormom 
     use gs2_io, only: nc_loop_vres, nc_exchange
@@ -1466,7 +1466,6 @@ contains
     use parameter_scan_arrays, only: scan_momflux => momflux_tot 
     use parameter_scan_arrays, only: scan_phi2_tot => phi2_tot 
     use parameter_scan_arrays, only: scan_nout => nout
-    use job_manage, only: trin_restart
 
     implicit none
 !    integer :: nout = 1
@@ -1828,8 +1827,8 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 !                        aimag(omegaavg(it,ik)*woutunits(ik)), &
 !                        phitot(it,ik)
                 write (unit=*, fmt="('ky=',1pe9.2, ' kx=',1pe9.2, &
-                     ' om=',e9.2,x,e9.2,' omav=',e9.2,x,e9.2, &
-                     ' phtot=',e8.2,' theta0=',1pe9.2)") &
+                     & ' om=',e9.2,x,e9.2,' omav=',e9.2,x,e9.2, &
+                     & ' phtot=',e8.2,' theta0=',1pe9.2)") &
                      aky(ik), akx(it), &
                      real( omega(it,ik)*woutunits(ik)), &
                      aimag(omega(it,ik)*woutunits(ik)), &
