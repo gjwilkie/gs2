@@ -85,7 +85,6 @@ contains
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
     implicit none
-    logical :: restarted
     logical:: debug=.false.
 
     

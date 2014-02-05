@@ -42,7 +42,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     use job_manage, only: checkstop, job_fork, checktime, time_message, trin_reset, trin_restart
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
-    use mp, only: max_reduce, min_reduce, sum_reduce, iproc
+    use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name!, finish_file_utils
     use fields, only: init_fields, advance
     use species, only: ions, electrons, impurity
@@ -65,7 +65,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
     use fields_arrays, only: time_field
-    use gs2_layouts, only: layout
     use parameter_scan, only: update_scan_parameter_value
     use unit_tests, only: functional_test_flag, ilast_step
 
@@ -83,8 +82,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real :: time_total(2) = 0.
     real :: time_interval
     real :: time_main_loop(2)
+#ifdef NEW_DIAG
     real :: precision_test
-
+#endif
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
     logical :: first_time = .true.
