@@ -3430,7 +3430,7 @@ contains
        nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
     end do
 !<DD
-	
+
     call init_energy_layouts &
          (ntgrid, naky, ntheta0, nlambda, nspec)
 
@@ -3554,7 +3554,7 @@ contains
        nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
     end do
     !<DD>
-	
+
     !Initialise e_lo layout object
     call init_energy_layouts &
          (ntgrid, naky, ntheta0, nlambda, nspec)

@@ -47,7 +47,7 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperresistivity.  &
-	       &D_hyperres ignored.')") trim(hyper_option)
+               &D_hyperres ignored.')") trim(hyper_option)
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, *) 
           D_hyperres = -10.

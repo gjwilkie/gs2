@@ -266,7 +266,7 @@ contains
          lorentz_scheme, ediff_scheme, resistivity, conservative, test, &
 ! following only needed for adaptive collisionality
          vnfac, etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, &
-	 use_le_layout, special_wfb_lorentz
+         use_le_layout, special_wfb_lorentz
     integer :: ierr, in_file
 
     if (proc0) then

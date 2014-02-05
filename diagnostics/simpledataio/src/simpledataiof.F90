@@ -35,59 +35,59 @@ integer, parameter :: SDATIO_UNLIMITED = NF90_UNLIMITED
 #ifdef ISO_C_BINDING
 type,bind(c) :: sdatio_dimension 
   type(c_ptr) :: name
-	integer(c_int) :: size
-	integer(c_int) :: nc_id
-	integer(c_int) :: start
-end type
+  integer(c_int) :: size
+  integer(c_int) :: nc_id
+  integer(c_int) :: start
+end type sdatio_dimension
 
 
 type :: sdatio_variable 
-	character, dimension(:), allocatable :: name
-	integer :: nc_id
-	integer :: type
-  type(c_ptr) :: dimension_list
-  type(c_ptr) :: dimension_ids
-	integer :: type_size
-  type(c_ptr) :: manual_counts
-  type(c_ptr) :: manual_starts
-end type
+   character, dimension(:), allocatable :: name
+   integer :: nc_id
+   integer :: type
+   type(c_ptr) :: dimension_list
+   type(c_ptr) :: dimension_ids
+   integer :: type_size
+   type(c_ptr) :: manual_counts
+   type(c_ptr) :: manual_starts
+end type sdatio_variable
 
 
 type, bind(c) :: sdatio_file 
-	integer(c_int) :: nc_file_id
-	integer(c_int):: is_parallel
-	integer(c_int) :: n_dimensions
-  type(c_ptr) ::  dimensions
-	integer(c_int)  :: n_variables
-  type(c_ptr) :: variables
-	integer(c_int) :: data_written
-end type
+   integer(c_int) :: nc_file_id
+   integer(c_int):: is_parallel
+   integer(c_int) :: n_dimensions
+   type(c_ptr) ::  dimensions
+   integer(c_int)  :: n_variables
+   type(c_ptr) :: variables
+   integer(c_int) :: data_written
+end type sdatio_file
 
 #else
 
 type :: sdatio_file
-  integer :: nc_file_id
-  integer :: is_parallel
-  integer :: n_dimensions  
-  integer :: n_variables
-  integer :: data_written
-end type
+   integer :: nc_file_id
+   integer :: is_parallel
+   integer :: n_dimensions  
+   integer :: n_variables
+   integer :: data_written
+end type sdatio_file
 
 #endif
 
 !interface 
 !!/* Open a new datafile for writing. fname is the name of the file 
- !!* The stuct sfile is used to store the state information
- !!* of the file.*/
+!!* The stuct sfile is used to store the state information
+!!* of the file.*/
 !!/* Create a new dimension in the file sfile. Dimension names must
- !!* be a single letter. */
- !subroutine sdatio_add_dimension(sfile, dimension_name, dimsize, description, units)
-   !import sdatio_file
-   !type(sdatio_file), intent(in) :: sfile
-   !character(*), intent(in) :: dimension_name
-   !integer, intent(in) :: dimsize
-   !character(*), intent(in) :: description, units
- !end subroutine sdatio_add_dimension
+!!* be a single letter. */
+!subroutine sdatio_add_dimension(sfile, dimension_name, dimsize, description, units)
+!import sdatio_file
+!type(sdatio_file), intent(in) :: sfile
+!character(*), intent(in) :: dimension_name
+!integer, intent(in) :: dimsize
+!character(*), intent(in) :: description, units
+!end subroutine sdatio_add_dimension
 
 
 !end interface
@@ -97,8 +97,8 @@ end type
 !int sdatio_debug
 
 !/* Open a new datafile for writing. fname is the name of the file 
- !* The stuct sfile is used to store the state information
- !* of the file.*/
+!* The stuct sfile is used to store the state information
+!* of the file.*/
 contains 
   subroutine createfile(sfile, fname)
      type(sdatio_file), intent(out) :: sfile
@@ -186,11 +186,11 @@ contains
    call sdatio_add_dimension(sfile, dimension_name//c_null_char, dimsize, description//c_null_char, units//c_null_char)
 #endif
  end subroutine add_dimension
-													 !char * dimension_name, 
-													 !int size,
-													 !char * description,
-													 !char * units)
-
+ !char * dimension_name, 
+ !int size,
+ !char * description,
+ !char * units)
+ 
 
 !/* Print out a nice list of all the dimensions defined so far*/
 !void sdatio_print_dimensions(struct sdatio_file * sfile)
@@ -246,11 +246,11 @@ contains
  !* is a character string listing (in order) the dimension names
  !* (which are all single characters) e.g. "xyx".*/
 !void sdatio_create_variable(struct sdatio_file * sfile,
-														!int variable_type,
-														!char * variable_name,
-														!char * dimension_list,
-														!char * description,
-														!char * units)
+  !int variable_type,
+  !char * variable_name,
+  !char * dimension_list,
+  !char * description,
+  !char * units)
  subroutine create_variable(sfile, variable_type, variable_name, dimension_list, description, units)
    implicit none
    type(sdatio_file), intent(in) :: sfile

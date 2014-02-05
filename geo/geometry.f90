@@ -612,7 +612,7 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
     call eikonal(rgrid, rpgrad, thgrad, qval, seik, dsdthet, dpsidrp)
     if (debug) write(6,*) "eikcoefs: done eikonal"
     if(writelots) write(11,*) 'q= ',qval
-	
+
     if(iflux == 0 .or. iflux == 2) then
        bi = btori(rgrid(0), theta(0))
        drhodpsin = drhodrp/dpsidrp
@@ -1623,10 +1623,10 @@ end subroutine eikcoefs
     
     char='T'
     if(bishop == 0) then
-	if(efit_eq .or. dfit_eq) then
-   	   write(*,*) 'error in thetagrad'
-	   stop
-	endif
+       if(efit_eq .or. dfit_eq) then
+          write(*,*) 'error in thetagrad'
+          stop
+       endif
        call grad(rgrid, theta, thgrad, char, dum, nth, ntgrid)
     else
        call bgrad(rgrid, theta, thgrad, char, dum, nth, ntgrid)
@@ -1951,7 +1951,7 @@ end subroutine eikcoefs
        qfun=leq_qfun(pbar)
        return
     endif
-	    
+
     if(eqinit ==1 ) initq = 1
 
     if (gen_eq) then

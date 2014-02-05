@@ -1283,7 +1283,7 @@ contains
     endif
   end subroutine ginit_noise
 
- 	!> Initialize with a single parallel mode. Only makes sense in a linear 
+  !> Initialize with a single parallel mode. Only makes sense in a linear 
   !! calculation. k_parallel is specified with kpar_init or with ikpar_init 
   !! when periodic boundary conditions are used. 
 
@@ -1378,7 +1378,7 @@ contains
 
   end subroutine ginit_single_parallel_mode
 
- 	!> Initialize with every parallel and perpendicular mode having equal amplitude. 
+  !> Initialize with every parallel and perpendicular mode having equal amplitude. 
   !! Only makes sense in a linear calculation. k_parallel is specified with kpar_init 
   !! or with ikpar_init when periodic boundary conditions are used. EGH 
 
@@ -1926,7 +1926,7 @@ contains
        g (:,1,iglo) = 0.
        g (:,2,iglo) = 0.
     end do
-	
+
     phinew(:,:,2:naky) = 0.
     aparnew(:,:,2:naky) = 0.
     bparnew(:,:,2:naky) = 0.
@@ -2142,7 +2142,7 @@ contains
        g (:,1,iglo) = 0.
        g (:,2,iglo) = 0.
     end do
-	
+
     phinew(:,:,2:naky) = 0.
     aparnew(:,:,2:naky) = 0.
     bparnew(:,:,2:naky) = 0.
@@ -2235,7 +2235,7 @@ contains
 
        g (:,:,iglo) = gnew(:,:,iglo)
     end do
-	
+
     phinew(:,2,1) = 0.   
     aparnew(:,2,1) = 0.
     bparnew(:,2,1) = 0.
