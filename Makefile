@@ -237,7 +237,8 @@ ifeq ($(MAKECMDGOALS),depend)
 endif
 
 #Here we define SVN_REV based on the output of svnversion
-CPPFLAGS+=-DSVN_REV='"$(shell svnversion -n .)"'
+SVN_REV='"$(shell svnversion -n .)"'
+CPPFLAGS+=-DSVN_REV=$(SVN_REV)
 
 ifdef USE_SHMEM
 $(warning USE_SHMEM is not working yet)
@@ -558,6 +559,9 @@ test_make:
 	@echo TOPDIR is $(TOPDIR)
 	@echo NETCDF_DIR is $(NETCDF_DIR)
 	@echo FFTW_DIR is $(FFTW_DIR)
+	@echo FC is $(FC)
+	@echo CC is $(CC)
+	@echo SVN_REV is $(SVN_REV)
 	@echo
 	@echo Compile mode:
 	@echo  DEBUG is $(DEBUG)
@@ -579,6 +583,7 @@ test_make:
 	@echo  USE_LOCAL_RAN is $(USE_LOCAL_RAN)
 	@echo  USE_LOCAL_SPFUNC is $(USE_LOCAL_SPFUNC)
 	@echo  USE_NAGLIB is $(USE_NAGLIB)
+	@echo  USE_NEW_DIAG is $(USE_NEW_DIAG)
 	@echo  DEFAULT_LIB is $(DEFAULT_LIB)
 	@echo  MPI_LIB is $(MPI_LIB)
 	@echo
