@@ -75,7 +75,7 @@ contains
 
        write (report_unit, *) 
        write (report_unit, fmt="('A single k_perp will be evolved, with: ')")
-       if (n0 .gt.0) write (report_unit, fmt="('ky set using toroidal mode number, n0=',i8/T24,'rhostar_single='1pe12.4)") n0, rhostar_single
+       if (n0 .gt.0) write (report_unit, fmt="('ky set using toroidal mode number, n0=',i8/T24,'rhostar_single=',1pe12.4)") n0, rhostar_single
        write (report_unit, *) 
        write (report_unit, fmt="('ky rho = ',f10.4)") aky
        write (report_unit, fmt="('theta_0 = ',f10.4)") theta0

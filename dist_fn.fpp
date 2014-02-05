@@ -2795,7 +2795,7 @@ subroutine check_dist_fn(report_unit)
           j=jump(ik)
           if (j .eq. 0) cycle     
           if (abs(j) .ge. ntheta0) then
-              write(str,fmt='("in exb_shear: jump(ik)=",i4," > ntheta0 =",i4," for ik=",i4". => reduce timestep or increase ntheta0")') j,ik,ntheta0
+              write(str,fmt='("in exb_shear: jump(ik)=",i4," > ntheta0 =",i4," for ik=",i4,". => reduce timestep or increase ntheta0")') j,ik,ntheta0
               write(ierr,*) str
               call mp_abort(str)
           endif 

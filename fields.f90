@@ -72,8 +72,8 @@ contains
        case (fieldopt_local)
           write (unit, fmt="(' field_option = ',a)") '"local"'
        end select
-       if(dump_response) write (unit, fmt="(' dump_response = ',L)") dump_response
-       if(read_response) write (unit, fmt="(' read_response = ',L)") read_response
+       if(dump_response) write (unit, fmt="(' dump_response = ',L1)") dump_response
+       if(read_response) write (unit, fmt="(' read_response = ',L1)") read_response
        write (unit, fmt="(' /')")
   end subroutine wnml_fields
 

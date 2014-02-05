@@ -58,7 +58,7 @@ module geometry
   !logical :: debug = .true.
   logical :: debug = .false.
 
-  character*800 :: eqfile
+  character(800) :: eqfile
 
   !common /advanced_parameters/ equal_arc,&
                               !bishop,&
@@ -333,7 +333,7 @@ contains
     real :: a_b, b_b, c_b
     real :: s_hat, dp, di, pressure, tmp, rbar
 
-    character*1 :: char
+    character(1) :: char
     integer :: i, j, k, itot, nthg, n
 
 !     compute the initial constants
@@ -1429,7 +1429,7 @@ end subroutine eikcoefs
     real, dimension (-ntgrid:ntgrid) :: gbdrift3, cvdrift3
 
     real :: dum
-    character*1 char
+    character(1) char
     integer :: i, k, itot, ndum
 
     ndum = 2*nth + 1
@@ -1568,7 +1568,7 @@ end subroutine eikcoefs
     real, dimension(-ntgrid:ntgrid, 2) :: thgrad, rpgrad
     real :: dpsidrp, dum
     
-    character*1 char    
+    character(1) char    
     
     rgrid = rp
     char='P'
@@ -1619,7 +1619,7 @@ end subroutine eikcoefs
     real, dimension(-ntgrid:), intent (in) :: rgrid
     real, dimension(-ntgrid:, :), intent (out) :: thgrad
     real :: dum
-    character*1 char
+    character(1) char
     
     char='T'
     if(bishop == 0) then
@@ -2993,7 +2993,7 @@ end subroutine geofax
      integer :: nth, ntgrid
      real, dimension(-ntgrid:) :: rgrid, theta
      real, dimension(-ntgrid:,:) :: gradf
-     character*1 :: char
+     character(1) :: char
      real rp
 
      if(gen_eq)   call  geq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
@@ -3019,7 +3019,7 @@ end subroutine geofax
      integer :: nth, ntgrid
      real, dimension(-ntgrid:) :: rgrid, theta
      real, dimension(-ntgrid:,:) :: gradf
-     character*1 :: char
+     character(1) :: char
      real rp
 
      if(gen_eq)   call  geq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
