@@ -5415,7 +5415,8 @@ subroutine check_dist_fn(report_unit)
     real, dimension (:,:,:), intent (out) :: exchange1, exchange2
 
     integer :: ig, il, ie, it, ik, is, iglo, isgn
-    real :: wgt, dgdt_hypervisc
+    real :: wgt
+    complex :: dgdt_hypervisc
     real, dimension (:,:,:), allocatable :: dnorm
     complex, dimension (:,:,:,:), allocatable :: total, total2
 
