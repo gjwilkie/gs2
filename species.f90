@@ -36,6 +36,7 @@ module species
      !! is Maxwellian to create the velocity-space grids, but this is before f0 is calculated on said grid,
      !! which is where is_maxwellian can be changed. So when using "equivmaxw", this needs to be turned on.
      logical :: equivalent_maxwellian_flag  
+     
   end type specie
 
   private
@@ -220,14 +221,16 @@ contains
     use file_utils, only: input_unit, error_unit, get_indexed_namelist_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
+    use constants, only: pi
     implicit none
     real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h
     real :: tperp0, tpar0
     real :: source, sprim, gamma_ae, gamma_ai, ash_fraction, zero
     character(20) :: type
     integer :: unit
-    integer :: is
-    logical:: equivalent_maxwellian_flag
+    integer :: is, alpha_index, main_ion_species, electron_spec
+    logical:: equivalent_maxwellian_flag,alphas_exist
+    real:: vti,ni,Zi,Ti,ne,vte,veff2va2,vcva,vta,Ealpha,dveff2dvc,ni_prim,ne_prim,Ti_prim,Te_prim
     namelist /species_knobs/ nspec
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
@@ -262,6 +265,7 @@ contains
     allocate (spec(nspec))
 
     if (proc0) then
+       alphas_exist = .false.
        do is = 1, nspec
           call get_indexed_namelist_unit (unit, "species_parameters", is)
           z = 1
@@ -313,6 +317,7 @@ contains
           spec(is)%sprim = sprim
           spec(is)%gamma_ai = gamma_ai
           spec(is)%gamma_ae = gamma_ae
+          spec(is)%equivalent_maxwellian_flag = equivalent_maxwellian_flag
 
           spec(is)%stm = sqrt(temp/mass)
           spec(is)%zstm = z/sqrt(temp*mass)
@@ -322,25 +327,102 @@ contains
 
           ierr = error_unit()
           call get_option_value (type, typeopts, spec(is)%type, ierr, "type in species_parameters_x")
-          if (spec(is)%type .eq. alpha_species) then 
-            spec(is)%is_maxwellian = .false.
-          else
-            spec(is)%is_maxwellian = .true.
+          if (spec(is)%type .eq. alpha_species)  then
+            alpha_index = is
+            alphas_exist = .true.
+            if (.NOT.equivalent_maxwellian_flag)  then 
+               spec(is)%is_maxwellian = .false.
+            else
+              spec(is)%is_maxwellian = .true.
+            end if
           end if
 
-          if (equivalent_maxwellian_flag) then 
-             spec(is)%is_maxwellian = .true.
-             !> Don't trust any of the below values until le_grids is called
-             zero = 0.0
-             spec(is)%stm = 1.0/zero
-             spec(is)%zstm = 1.0/zero
-             spec(is)%zt = 1.0/zero
-             spec(is)%tz = 1.0/zero
-             spec(is)%smz = 1.0/zero
-          end if
-      
-
+!          if (equivalent_maxwellian_flag) then 
+!             spec(is)%is_maxwellian = .true.
+!             !> Don't trust any of the below values until le_grids is called
+!             zero = 0.0
+!             spec(is)%stm = 1.0/zero
+!             spec(is)%zstm = 1.0/zero
+!             spec(is)%zt = 1.0/zero
+!             spec(is)%tz = 1.0/zero
+!             spec(is)%smz = 1.0/zero
+!          end if
        end do
+
+       electron_spec = -1
+       main_ion_species = -1
+
+       do is = 1,nspec
+          if (spec(is)%type .eq. electron_species) electron_spec = is
+          if (main_ion_species < 1 .and. spec(is)%type .eq. ion_species) &
+            main_ion_species = is
+       end do
+
+       vti = spec(main_ion_species)%stm
+       ni = spec(main_ion_species)%dens
+       Zi = spec(main_ion_species)%z
+       Ti = spec(main_ion_species)%temp
+       Ti_prim = spec(main_ion_species)%tprim
+       ni_prim = spec(main_ion_species)%fprim
+
+       is = alpha_index
+
+       if (electron_spec .GT. 0) then
+          vte = spec(electron_spec)%stm
+          ne = spec(electron_spec)%dens
+          ne_prim = spec(electron_spec)%fprim
+          Te_prim = spec(electron_spec)%tprim
+       else
+          ne = Zi*ni + spec(is)%z * spec(is)%dens
+          vte = sqrt(1836.0 * Ti)     !< Assuming Te=Ti here. This is wrong, but tite has depencency issues with this module
+          ne_prim = (Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim)/ne
+          Te_prim = Ti_prim
+          write(*,*) "Since electrons are adiabatic, we need to improvise electron parameters to "
+          write(*,*) "caluclate alpha species properties. Imposed by global quasineutrality, and "
+          write(*,*) "assuming the reference species are protons:"
+          write(*,*) "  ne = ", ne
+          write(*,*) "  ne_prim = ", ne_prim
+          write(*,*) "  Te_prim = ", Te_prim
+       end if
+
+       if (alphas_exist .AND. spec(alpha_index)%equivalent_maxwellian_flag) then
+          ! Species *becomes* Maxwellian here. So what to normalize by: v_alpha or v_t,eff?
+          ! Need to make sure setvgrid does the right thing (i.e. recognizes Maxwellian nature)
+          Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
+          vta = sqrt(Ealpha/spec(is)%mass)
+          z = spec(is)%z     
+
+          ! Calculate vc/valpha
+          vcva = (3.0*sqrt(pi)*vti**2*vte*Zi**2*ni/(4.0*ne))**(1.0/3.0)/vta
+
+          ! Calculate vteff^2/valpha^2
+          veff2va2 = 1.0 - pi*vcva**2/(3.0**1.5) + (2.0*vcva**2/sqrt(3.0))*atan((vcva-2.0)/(sqrt(3.0)*vcva)) - (vcva**2/3.0)*log((1.0-vcva+vcva**2)/(1+vcva)**2)
+          veff2va2 = veff2va2/log(1.0+(1.0/vcva)**3)
+
+          ! Calculate d/dvc (vteff^2)
+          dveff2dvc = veff2va2 * 3.0 / ( (1.0+vcva**3)*log(1.0+(1.0/vcva)**3))
+          temp = 6.0*vcva/((1.0+vcva)*(1.0-vcva+vcva**2)) - 2.0*pi/sqrt(3.0) + 4.0*sqrt(3.0)*atan((vcva-2.0)/(sqrt(3.0)*vcva)) - 2.0*log((1.0-vcva+vcva**2)/(vcva+1.0)**2)
+          dveff2dvc = dveff2dvc + (vcva**2/(3.0*log(1.0+(1.0/vcva)**3)))*temp
+
+          temp = Ealpha*veff2va2
+
+          spec(is)%temp = temp
+          spec(is)%tprim = (1.0/3.0)*dveff2dvc*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)/veff2va2
+
+          spec(is)%stm = sqrt(temp/mass)
+          spec(is)%zstm = z/sqrt(temp*mass)
+          spec(is)%tz = temp/z
+          spec(is)%zt = z/temp
+          spec(is)%smz = abs(sqrt(temp*mass)/z)
+
+          spec(is)%is_maxwellian = .true.
+          write(*,*) "Using equivalent-Maxwellian option for species ", is
+          write(*,*) "Parameters have been changed to the following values:"
+          write(*,*) "  vc/va = ", vcva
+          write(*,*) "  temp = ", spec(is)%temp
+          write(*,*) "  tprim = ", spec(is)%tprim
+       end if
+
     end if
 
     do is = 1, nspec
@@ -373,6 +455,8 @@ contains
        call broadcast (spec(is)%type)
        call broadcast (spec(is)%is_maxwellian)
     end do
+
+
   end subroutine read_parameters
 
   pure function has_electron_species (spec)
