@@ -150,7 +150,7 @@ contains
     real, dimension(:), allocatable :: zp, temp, zx1, zxm, zy1, zyn
     real :: zxy11, zxym1, zxy1n, zxymn
     
-    character*80 :: filename, eqfile
+    character(80) :: filename, eqfile
     
     integer :: i, j, init, initeq, big, nhb, nwb, ierr
     
@@ -353,8 +353,8 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     real, dimension(:), allocatable :: zp, temp, zx1, zxm, zy1, zyn
     real :: zxy11, zxym1, zxy1n, zxymn
     
-    character*80 :: filename, eqfile
-    character char*10
+    character(80) :: filename, eqfile
+    character(10) ::  char
     
     integer :: i, j, init, ndum, initeq, big, nhb, nwb, ierr
     
@@ -653,7 +653,7 @@ if (debug) write(6,*) "efit_init: do i"
 
     use splines, only: inter_d_cspl
     integer nth, ntm
-    character*1 char
+    character(1) char
     real, dimension(-ntm:), intent(in) :: rgrid, theta
     real, dimension(-ntm:,:), intent(out) :: grad
     real aa(1), daa(1), rp, rpt(1)
@@ -681,7 +681,7 @@ if (debug) write(6,*) "efit_init: do i"
     implicit none
     
     integer nth_used, ntm
-    character*1 char
+    character(1) char
     real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
     real tmp(2), aa(1), daa(1), rp, rpt(1)
     real, dimension(nw, nh, 2) ::  dbish

@@ -1068,18 +1068,18 @@ contains
     !Now use the dimension splitting to work out if the various subcommunicators are
     !allowed.
     if(.not.(dim_divides(g_lo%is_ord).and.dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
-       if(intmom_sub.and.proc0) write(error_unit(),'("Disabling intmom_sub -- is,it,ik split nicely ? ",3(L," "))') dim_divides(g_lo%is_ord),dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
+       if(intmom_sub.and.proc0) write(error_unit(),'("Disabling intmom_sub -- is,it,ik split nicely ? ",3(L1," "))') dim_divides(g_lo%is_ord),dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
        intmom_sub=.false.
     endif
     if(.not.(dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
-       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- it,ik split nicely ? ",2(L," "))') dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
+       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- it,ik split nicely ? ",2(L1," "))') dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
        intspec_sub=.false.
     endif
     !Note that because we currently need to gather amongst LES blocks at the end of
     !integrate_species we need to make sure that LES blocks are also sensible
     !This could be removed if we don't want to gather in integrate_species
     if(.not.(dim_divides(g_lo%il_ord).and.dim_divides(g_lo%ie_ord).and.dim_divides(g_lo%is_ord))) then
-       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- il,ie,is split nicely ? ",3(L," "))') dim_divides(g_lo%il_ord),dim_divides(g_lo%ie_ord),dim_divides(g_lo%is_ord)
+       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- il,ie,is split nicely ? ",3(L1," "))') dim_divides(g_lo%il_ord),dim_divides(g_lo%ie_ord),dim_divides(g_lo%is_ord)
        intspec_sub=.false.
     endif
 
@@ -3576,7 +3576,7 @@ contains
        else
              
           if(proc0) then
-             write(*, fmt="('Using unbalanced decomposition for xxf. '&
+             write(*, fmt="('Using unbalanced decomposition for xxf. ',&
               & 'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 
@@ -4565,7 +4565,7 @@ contains
        else
              
           if(proc0) then
-             write(*, fmt="('Using unbalanced decomposition for yxf. '&
+             write(*, fmt="('Using unbalanced decomposition for yxf. ',&
              & 'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 

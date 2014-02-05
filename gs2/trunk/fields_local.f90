@@ -2515,10 +2515,10 @@ contains
        do is=1,self%kyb(ik)%nsupercell
           write(unit,'("    * is : ",I0)') is
 !          if(.not.self%kyb(ik)%supercells(is)%is_local) cycle
-          write(unit,'("           ","is_head      - ",L)') self%kyb(ik)%supercells(is)%is_head
-          write(unit,'("           ","is_empty     - ",L)') self%kyb(ik)%supercells(is)%is_empty
-          write(unit,'("           ","is_local     - ",L)') self%kyb(ik)%supercells(is)%is_local
-          write(unit,'("           ","is_all_local - ",L)') self%kyb(ik)%supercells(is)%is_all_local
+          write(unit,'("           ","is_head      - ",L1)') self%kyb(ik)%supercells(is)%is_head
+          write(unit,'("           ","is_empty     - ",L1)') self%kyb(ik)%supercells(is)%is_empty
+          write(unit,'("           ","is_local     - ",L1)') self%kyb(ik)%supercells(is)%is_local
+          write(unit,'("           ","is_all_local - ",L1)') self%kyb(ik)%supercells(is)%is_all_local
           write(unit,'()')
           write(unit,'("        ",4(" ",A8," "))') "ic", "rllim", "rulim", "nrow"
           write(unit,'("        ",4(" ",9("-")))')
