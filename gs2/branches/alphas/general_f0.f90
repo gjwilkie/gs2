@@ -1103,7 +1103,7 @@ end do
        f0prim = f0prim - (Ealpha/Ti)*(v**2-1.0)*Ti_prim
     end if
 
-!    write(*,*) Ealpha/Ti,v,f0,gentemp, f0prim
+    if (proc0) write(*,*) ie,Ealpha/Ti,v,f0,gentemp, f0prim
 
 
   end subroutine eval_f0_analytic
