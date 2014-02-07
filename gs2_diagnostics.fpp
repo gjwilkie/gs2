@@ -1565,6 +1565,11 @@ contains
           if (debug) write(6,*) "loop_diagnostics: proc0 done called get_omegaavg"
        endif
        call broadcast (exit)
+    else
+       !Make sure we've at least initialised the omega arrays
+       !for any later output etc.
+       omega=0.
+       omegaavg=0.
     endif
 
     if (write_hrate) call heating (istep, h, hk)
