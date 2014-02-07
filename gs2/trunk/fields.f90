@@ -11,7 +11,7 @@ module fields
   public :: advance
   public :: phinorm, kperp, fieldlineavgphi
   public :: phi, apar, bpar, phinew, aparnew, bparnew
-  public :: reset_init
+  public :: reset_init, set_init_fields
 
   !> Made public for unit tests
   public :: fields_pre_init
@@ -115,9 +115,9 @@ contains
     use run_parameters, only: init_run_parameters
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
-    use fields_implicit, only: init_fields_implicit, init_allfields_implicit
-    use fields_test, only: init_fields_test, init_phi_test
-    use fields_local, only: init_fields_local, init_allfields_local
+    use fields_implicit, only: init_fields_implicit
+    use fields_test, only: init_fields_test
+    use fields_local, only: init_fields_local
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
     implicit none
@@ -151,6 +151,18 @@ contains
     call init_antenna
     if (restarted .and. .not. force_maxwell_reinit) return
 
+    !Set the initial fields
+    call set_init_fields
+  end subroutine init_fields
+
+  subroutine set_init_fields
+    use fields_implicit, only: init_allfields_implicit
+    use fields_test, only: init_phi_test
+    use mp, only: proc0
+    use fields_local, only: init_allfields_local
+    implicit none
+    logical :: debug=.false.
+    if(proc0.and.debug) write(6,*) "Syncing fields with g."
     select case (fieldopt_switch)
     case (fieldopt_implicit)
        if (debug) write(6,*) "init_fields: init_allfields_implicit"
@@ -162,9 +174,7 @@ contains
        if (debug) write(6,*) "init_fields: init_allfields_local"
        call init_allfields_local
     end select
-    
-  end subroutine init_fields
-
+  end subroutine set_init_fields
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
