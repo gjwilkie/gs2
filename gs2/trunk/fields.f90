@@ -120,6 +120,8 @@ contains
     use fields_local, only: init_fields_local
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
+    use kt_grids, only: gridopt_switch, gridopt_box, kwork_filter
+    use mp, only: iproc
     implicit none
     logical :: restarted
     logical:: debug=.false.
@@ -153,6 +155,9 @@ contains
 
     !Set the initial fields
     call set_init_fields
+
+    !If running in flux tube disable evolution of ky=kx=0 mode
+    if(gridopt_switch.eq.gridopt_box) kwork_filter(1,1)=.true.
   end subroutine init_fields
 
   subroutine set_init_fields

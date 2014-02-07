@@ -671,6 +671,7 @@ contains
     call broadcast (ntheta0)
     call broadcast (ny)
     call broadcast (nx)
+    call broadcast (gridopt_switch)
     call allocate_arrays
 
     if (proc0) call get_grids

@@ -5074,6 +5074,9 @@ subroutine check_dist_fn(report_unit)
        denominator = (beta * gamtot2 + bmagsp**2) * gamtot + (beta/2.0) * gamtot1 * gamtot1
 
        where (abs(denominator) < epsilon(0.0)) ! it == ik == 1 only
+          !NOTE: denominator=0 for the it==ik==1 only in certain circumstances
+          !for example a simulation with beta=0.0 and an adiabatic species does
+          !not have a zero denominator.
           phi = 0.0
        elsewhere
           phi = numerator / denominator
