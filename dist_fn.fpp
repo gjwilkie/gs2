@@ -1235,11 +1235,11 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: nlambda, ng2, forbid
     use constants
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use mp, only: iproc
     implicit none
     integer :: iglo
     integer :: ig, ik, it, il, ie, is, isgn
     real :: wd, wdttp, vp, bd
-
     if (.not.allocated(a)) then
        allocate (a(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (b(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -1347,14 +1347,14 @@ subroutine check_dist_fn(report_unit)
     use constants
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
-    type (index_list_type), dimension(0:nproc-1) :: to, from
-    integer, dimension (0:nproc-1) :: nn_from, nn_to
+    type (index_list_type), dimension(0:nproc-1) :: from, from_p, from_h, to_p, to_h
+    integer, dimension (0:nproc-1) :: nn_from, nn_to, nn_from_h, nn_to_h
     integer, dimension (3) :: to_low, from_low, to_high, from_high
     integer :: ik, it, il, ie, is, iglo, it0, itl, itr, jshift0
     integer :: ip, ipleft, ipright
     integer :: iglo_left, iglo_right, i, j, k
     integer :: iglo_star, it_star, ncell
-    integer :: n, n_links_max, nn_max
+    integer :: n, n_h, n_links_max, nn_max
     integer :: ng
     integer, dimension(naky*ntheta0) :: n_k
 
@@ -1370,18 +1370,16 @@ subroutine check_dist_fn(report_unit)
 
     if (naky > 1 .and. ntheta0 > 1) then
        jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,2)-theta0(1,2)) + 0.01)
-!       if (proc0) write (*,*) 'init_connected_bc: ',theta0(2,2), theta0(1,2), jshift0
     else if (naky == 1 .and. ntheta0 > 1 .and. aky(1) /= 0.0) then
        jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,1)-theta0(1,1)) + 0.01)
     else
        jshift0 = 1
     end if
     
-!    if (proc0) write (*,*) 'init_connected_bc: jshift0 = ',jshift0
-
     allocate (itleft(naky,ntheta0), itright(naky,ntheta0))
     itleft(1,:) = -1 ! No connected segments when ky = 0. EGH
     itright(1,:) = -1
+
     do ik = 1, naky
        do it = 1, ntheta0
           if (it > (ntheta0+1)/2) then
@@ -1407,8 +1405,6 @@ subroutine check_dist_fn(report_unit)
              itl = it0 + (ik-1)*jshift0
              itr = it0 - (ik-1)*jshift0
           end if
-
-!          if (ik>1 .and. proc0) write(*,*) 'init_connected_bc: itl, itr = ',itl, itr
 
           ! remap to usual GS2 indices -- MAB
           if (itl >= 0 .and. itl < (ntheta0+1)/2) then
@@ -1438,11 +1434,7 @@ subroutine check_dist_fn(report_unit)
     allocate (connections(g_lo%llim_proc:g_lo%ulim_alloc))
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
-       ie = ie_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
 
        ! get processors and indices for j' (kx') modes connecting
        ! to mode j (kx) so we can set up communication -- MAB
@@ -1454,6 +1446,10 @@ subroutine check_dist_fn(report_unit)
           connections(iglo)%iproc_right = -1
           connections(iglo)%iglo_right = -1
        else
+          ik = ik_idx(g_lo,iglo)
+          it = it_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
           if (itleft(ik,it) < 0) then
              connections(iglo)%iproc_left = -1
              connections(iglo)%iglo_left = -1
@@ -1566,6 +1562,8 @@ subroutine check_dist_fn(report_unit)
 
        nn_to = 0
        nn_from = 0 
+       nn_to_h = 0
+       nn_from_h = 0 
 
        do iglo = g_lo%llim_world, g_lo%ulim_world
 
@@ -1573,12 +1571,13 @@ subroutine check_dist_fn(report_unit)
           ! Exclude trapped particles (inc wfb)
           if (nlambda > ng2 .and. il >= ng2+1) cycle
 
-          ip = proc_id(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
           
           ncell = r_links(ik, it) + l_links(ik, it) + 1
           if (ncell == 1) cycle
+
+          ip = proc_id(g_lo,iglo)
 
           iglo_star = iglo
           do j = 1, r_links(ik, it)
@@ -1587,6 +1586,12 @@ subroutine check_dist_fn(report_unit)
              if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
 ! receiver
              if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
+
+             !Special counting for links_h
+             if(l_links(ik,it)>0) then
+                if (ip == iproc) nn_from_h(ipright) = nn_from_h(ipright) + 1
+                if (ipright == iproc) nn_to_h(ip) = nn_to_h(ip) + 1
+             endif
 
              iglo_star = iglo_right
           end do
@@ -1598,6 +1603,13 @@ subroutine check_dist_fn(report_unit)
              if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
 ! receiver
              if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
+
+             !Special counting for links_h
+             if(r_links(ik,it)>0) then
+                if (ip == iproc) nn_from_h(ipleft) = nn_from_h(ipleft) + 1
+                if (ipleft == iproc) nn_to_h(ip) = nn_to_h(ip) + 1
+             endif
+
              iglo_star = iglo_left
           end do
 
@@ -1612,32 +1624,45 @@ subroutine check_dist_fn(report_unit)
 
        do ip = 0, nproc-1
           if (nn_from(ip) > 0) then
-             allocate (from(ip)%first(nn_from(ip)))
-             allocate (from(ip)%second(nn_from(ip)))
-             allocate (from(ip)%third(nn_from(ip)))
+             allocate (from_p(ip)%first(nn_from(ip)))
+             allocate (from_p(ip)%second(nn_from(ip)))
+             allocate (from_p(ip)%third(nn_from(ip)))
+          endif
+          if (nn_from_h(ip) > 0) then
+             allocate (from_h(ip)%first(nn_from_h(ip)))
+             allocate (from_h(ip)%second(nn_from_h(ip)))
+             allocate (from_h(ip)%third(nn_from_h(ip)))
           endif
           if (nn_to(ip) > 0) then
-             allocate (to(ip)%first(nn_to(ip)))
-             allocate (to(ip)%second(nn_to(ip)))
-             allocate (to(ip)%third(nn_to(ip)))
+             allocate (to_p(ip)%first(nn_to(ip)))
+             allocate (to_p(ip)%second(nn_to(ip)))
+             allocate (to_p(ip)%third(nn_to(ip)))
+          endif
+          if (nn_to_h(ip)>0) then
+             allocate (to_h(ip)%first(nn_to_h(ip)))
+             allocate (to_h(ip)%second(nn_to_h(ip)))
+             allocate (to_h(ip)%third(nn_to_h(ip)))
           endif
        end do
        
        nn_from = 0
+       nn_from_h=0
        nn_to = 0          
+       nn_to_h=0
 
        do iglo = g_lo%llim_world, g_lo%ulim_world
 
           il = il_idx(g_lo,iglo)
           if (nlambda > ng2 .and. il >= ng2+1) cycle
 
-          ip = proc_id(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
           
           ncell = r_links(ik, it) + l_links(ik, it) + 1
           if (ncell == 1) cycle
-          
+
+          ip = proc_id(g_lo,iglo)          
+
           iglo_star = iglo
           do j = 1, r_links(ik, it)
              call get_right_connection (iglo_star, iglo_right, ipright)
@@ -1645,17 +1670,33 @@ subroutine check_dist_fn(report_unit)
              if (ip == iproc) then
                 n = nn_from(ipright) + 1
                 nn_from(ipright) = n
-                from(ipright)%first(n) = ntgrid
-                from(ipright)%second(n) = 1
-                from(ipright)%third(n) = iglo
+                from_p(ipright)%first(n) = ntgrid
+                from_p(ipright)%second(n) = 1
+                from_p(ipright)%third(n) = iglo
+                !Special restriction for links_h
+                if(l_links(ik,it)>0)then
+                   n_h=nn_from_h(ipright)+1
+                   nn_from_h(ipright)=n_h
+                   from_h(ipright)%first(n_h) = ntgrid
+                   from_h(ipright)%second(n_h) = 1
+                   from_h(ipright)%third(n_h) = iglo
+                endif
              end if
 ! receiver
              if (ipright == iproc) then
                 n = nn_to(ip) + 1
                 nn_to(ip) = n
-                to(ip)%first(n) = j 
-                to(ip)%second(n) = 1
-                to(ip)%third(n) = iglo_right
+                to_p(ip)%first(n) = j 
+                to_p(ip)%second(n) = 1
+                to_p(ip)%third(n) = iglo_right
+                !Special restriction for links_h
+                if(l_links(ik,it)>0)then
+                   n_h=nn_to_h(ipright)+1
+                   nn_to_h(ipright)=n_h
+                   to_h(ip)%first(n_h) = 2*l_links(ik,it)+j
+                   to_h(ip)%second(n_h) = 1
+                   to_h(ip)%third(n_h) = iglo_right
+                endif
              end if
              iglo_star = iglo_right
           end do
@@ -1667,17 +1708,33 @@ subroutine check_dist_fn(report_unit)
              if (ip == iproc) then
                 n = nn_from(ipleft) + 1
                 nn_from(ipleft) = n
-                from(ipleft)%first(n) = -ntgrid
-                from(ipleft)%second(n) = 2
-                from(ipleft)%third(n) = iglo
+                from_p(ipleft)%first(n) = -ntgrid
+                from_p(ipleft)%second(n) = 2
+                from_p(ipleft)%third(n) = iglo
+                !Special restriction for links_h
+                if(r_links(ik,it)>0)then
+                   n_h=nn_from_h(ipleft)+1
+                   nn_from_h(ipleft)=n_h
+                   from_h(ipright)%first(n_h) = -ntgrid
+                   from_h(ipright)%second(n_h) = 2
+                   from_h(ipright)%third(n_h) = iglo
+                endif
              end if
 ! receiver
              if (ipleft == iproc) then
                 n = nn_to(ip) + 1
                 nn_to(ip) = n
-                to(ip)%first(n) = j 
-                to(ip)%second(n) = 2
-                to(ip)%third(n) = iglo_left
+                to_p(ip)%first(n) = j 
+                to_p(ip)%second(n) = 2
+                to_p(ip)%third(n) = iglo_left
+                !Special restriction for links_h
+                if(r_links(ik,it)>0)then
+                   n_h = nn_to_h(ip) + 1
+                   nn_to_h(ip) = n_h
+                   to_h(ip)%first(n_h) = 2*r_links(ik,it)+j 
+                   to_h(ip)%second(n_h) = 2
+                   to_h(ip)%third(n_h) = iglo_left
+                endif
              end if
              iglo_star = iglo_left
           end do
@@ -1699,28 +1756,34 @@ subroutine check_dist_fn(report_unit)
        to_high(2) = 2
        to_high(3) = g_lo%ulim_alloc
 
-       call init_fill (links_p, 'c', to_low, to_high, to, &
-            from_low, from_high, from)
+       call init_fill (links_p, 'c', to_low, to_high, to_p, &
+            from_low, from_high, from_p)
+       call init_fill (links_h, 'c', to_low, to_high, to_h, &
+            from_low, from_high, from_h)
        
-       call delete_list (from)
-       call delete_list (to)
+       call delete_list (from_p)
+       call delete_list (from_h)
+       call delete_list (to_p)
+       call delete_list (to_h)
        
 ! take care of wfb
 
        nn_to = 0
        nn_from = 0 
 
+       !NOTE: No special restriction/counting for wfb_h unlike links_h
        do iglo = g_lo%llim_world, g_lo%ulim_world
 
           il = il_idx(g_lo,iglo)
           if (il /= ng2+1) cycle
 
-          ip = proc_id(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
           
           ncell = r_links(ik, it) + l_links(ik, it) + 1
           if (ncell == 1) cycle
+
+          ip = proc_id(g_lo,iglo)
              
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
@@ -1752,9 +1815,12 @@ subroutine check_dist_fn(report_unit)
              allocate (from(ip)%third(nn_from(ip)))
           endif
           if (nn_to(ip) > 0) then
-             allocate (to(ip)%first(nn_to(ip)))
-             allocate (to(ip)%second(nn_to(ip)))
-             allocate (to(ip)%third(nn_to(ip)))
+             allocate (to_p(ip)%first(nn_to(ip)))
+             allocate (to_p(ip)%second(nn_to(ip)))
+             allocate (to_p(ip)%third(nn_to(ip)))
+             allocate (to_h(ip)%first(nn_to(ip)))
+             allocate (to_h(ip)%second(nn_to(ip)))
+             allocate (to_h(ip)%third(nn_to(ip)))
           endif
        end do
        
@@ -1766,12 +1832,13 @@ subroutine check_dist_fn(report_unit)
           il = il_idx(g_lo,iglo)
           if (il /= ng2+1) cycle
 
-          ip = proc_id(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
           
           ncell = r_links(ik, it) + l_links(ik, it) + 1
           if (ncell == 1) cycle
+
+          ip = proc_id(g_lo,iglo)
 
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
@@ -1790,9 +1857,12 @@ subroutine check_dist_fn(report_unit)
              if (ipright == iproc) then
                 n = nn_to(ip) + 1
                 nn_to(ip) = n
-                to(ip)%first(n) = r_links(ik, it) + 1
-                to(ip)%second(n) = 1
-                to(ip)%third(n) = iglo_right
+                to_p(ip)%first(n) = r_links(ik, it) + 1
+                to_p(ip)%second(n) = 1
+                to_p(ip)%third(n) = iglo_right
+                to_h(ip)%first(n) = 2*ncell-r_links(ik,it)
+                to_h(ip)%second(n) = 1
+                to_h(ip)%third(n) = iglo_right
              end if
              call get_right_connection (iglo_right, iglo_right, ipright)
           end do
@@ -1812,9 +1882,12 @@ subroutine check_dist_fn(report_unit)
              if (ipleft == iproc) then
                 n = nn_to(ip) + 1
                 nn_to(ip) = n
-                to(ip)%first(n) = l_links(ik, it) + 1
-                to(ip)%second(n) = 2
-                to(ip)%third(n) = iglo_left
+                to_p(ip)%first(n) = l_links(ik, it) + 1
+                to_p(ip)%second(n) = 2
+                to_p(ip)%third(n) = iglo_left
+                to_h(ip)%first(n) = 2*ncell-l_links(ik, it)
+                to_h(ip)%second(n) = 2
+                to_h(ip)%third(n) = iglo_left
              end if
              call get_left_connection (iglo_left, iglo_left, ipleft)
           end do
@@ -1836,299 +1909,15 @@ subroutine check_dist_fn(report_unit)
        to_high(2) = 2
        to_high(3) = g_lo%ulim_alloc
 
-       call init_fill (wfb_p, 'c', to_low, to_high, to, from_low, from_high, from)
+       call init_fill (wfb_p, 'c', to_low, to_high, to_p, from_low, from_high, from)
+       call init_fill (wfb_h, 'c', to_low, to_high, to_h, from_low, from_high, from)
        
        call delete_list (from)
-       call delete_list (to)
+       call delete_list (to_p)
+       call delete_list (to_h)
        
 ! n_links_max is typically 2 * number of cells in largest supercell
        allocate (g_adj (n_links_max, 2, g_lo%llim_proc:g_lo%ulim_alloc))
-
-! now set up links_h:
-! excluding wfb
-
-       nn_to = 0
-       nn_from = 0 
-
-       do iglo = g_lo%llim_world, g_lo%ulim_world
-
-          il = il_idx(g_lo,iglo)
-          if (nlambda > ng2 .and. il >= ng2+1) cycle
-
-          ip = proc_id(g_lo,iglo)
-          ik = ik_idx(g_lo,iglo)
-          it = it_idx(g_lo,iglo)
-          
-          ncell = r_links(ik, it) + l_links(ik, it) + 1
-          if (ncell == 1) cycle
-
-! If this is not the first link in the chain, continue
-          if (l_links(ik, it) > 0) then
-! For each link to the right, do:
-             iglo_star = iglo
-             do j = 1, r_links(ik, it)
-                call get_right_connection (iglo_star, iglo_right, ipright)
-! sender
-                if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
-! receiver
-                if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
-                iglo_star = iglo_right
-             end do
-          end if
-
-          if (r_links(ik, it) > 0) then
-! For each link to the left, do:
-             iglo_star = iglo
-             do j = 1, l_links(ik, it)
-                call get_left_connection (iglo_star, iglo_left, ipleft)
-! sender
-                if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
-! receiver
-                if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
-                iglo_star = iglo_left
-             end do
-          end if
-       end do
-       
-       do ip = 0, nproc-1
-          if (nn_from(ip) > 0) then
-             allocate (from(ip)%first(nn_from(ip)))
-             allocate (from(ip)%second(nn_from(ip)))
-             allocate (from(ip)%third(nn_from(ip)))
-          endif
-          if (nn_to(ip) > 0) then
-             allocate (to(ip)%first(nn_to(ip)))
-             allocate (to(ip)%second(nn_to(ip)))
-             allocate (to(ip)%third(nn_to(ip)))
-          endif
-       end do
-       
-       nn_from = 0
-       nn_to = 0          
-
-       do iglo = g_lo%llim_world, g_lo%ulim_world
-
-          il = il_idx(g_lo,iglo)
-          if (nlambda > ng2 .and. il >= ng2+1) cycle
-
-          ip = proc_id(g_lo,iglo)
-          ik = ik_idx(g_lo,iglo)
-          it = it_idx(g_lo,iglo)
-          
-          ncell = r_links(ik, it) + l_links(ik, it) + 1
-          if (ncell == 1) cycle
-
-          if (l_links(ik, it) > 0) then
-! For each link to the right, do:
-             iglo_star = iglo
-             do j = 1, r_links(ik, it)
-! get address of link
-                call get_right_connection (iglo_star, iglo_right, ipright)
-! sender
-                if (ip == iproc) then
-                   n = nn_from(ipright) + 1
-                   nn_from(ipright) = n
-                   from(ipright)%first(n) = ntgrid
-                   from(ipright)%second(n) = 1
-                   from(ipright)%third(n) = iglo
-                end if
-! receiver
-                if (ipright == iproc) then
-                   n = nn_to(ip) + 1
-                   nn_to(ip) = n
-                   to(ip)%first(n) = 2*l_links(ik, it) + j
-                   to(ip)%second(n) = 1
-                   to(ip)%third(n) = iglo_right
-                end if
-                iglo_star = iglo_right
-             end do
-          end if
-
-          if (r_links(ik, it) > 0) then
-! For each link to the left, do:
-             iglo_star = iglo
-             do j = 1, l_links(ik, it)
-! get address of link
-                call get_left_connection (iglo_star, iglo_left, ipleft)
-! sender
-                if (ip == iproc) then
-                   n = nn_from(ipleft) + 1
-                   nn_from(ipleft) = n
-                   from(ipleft)%first(n) = -ntgrid
-                   from(ipleft)%second(n) = 2   
-                   from(ipleft)%third(n) = iglo
-                end if
-! receiver
-                if (ipleft == iproc) then
-                   n = nn_to(ip) + 1
-                   nn_to(ip) = n
-                   to(ip)%first(n) = 2*r_links(ik, it) + j
-                   to(ip)%second(n) = 2
-                   to(ip)%third(n) = iglo_left
-                end if
-                iglo_star = iglo_left
-             end do
-          end if
-       end do
-
-       from_low (1) = -ntgrid
-       from_low (2) = 1
-       from_low (3) = g_lo%llim_proc
-       
-       from_high(1) = ntgrid
-       from_high(2) = 2
-       from_high(3) = g_lo%ulim_alloc
-
-       to_low (1) = 1
-       to_low (2) = 1 
-       to_low (3) = g_lo%llim_proc
-       
-       to_high(1) = n_links_max
-       to_high(2) = 2
-       to_high(3) = g_lo%ulim_alloc
-
-       call init_fill (links_h, 'c', to_low, to_high, to, &
-            from_low, from_high, from)
-       
-       call delete_list (from)
-       call delete_list (to)
-
-! now take care of wfb (homogeneous part)
-
-       nn_to = 0
-       nn_from = 0 
-
-       do iglo = g_lo%llim_world, g_lo%ulim_world
-
-          il = il_idx(g_lo,iglo)
-          if (il /= ng2+1) cycle
-
-          ip = proc_id(g_lo,iglo)
-          ik = ik_idx(g_lo,iglo)
-          it = it_idx(g_lo,iglo)
-          
-          ncell = r_links(ik, it) + l_links(ik, it) + 1
-          if (ncell == 1) cycle
-
-          iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
-
-! v_par > 0:
-          call find_leftmost_link (iglo, iglo_right, ipright)
-          do j = 1, ncell
-! sender
-             if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
-! receiver
-             if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_right_connection (iglo_right, iglo_right, ipright)
-          end do
-
-! v_par < 0:
-          call find_rightmost_link (iglo, iglo_left, ipleft)
-          do j = 1, ncell
-! sender
-             if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
-! receiver
-             if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_left_connection (iglo_left, iglo_left, ipleft)
-          end do
-       end do
-       
-       do ip = 0, nproc-1
-          if (nn_from(ip) > 0) then
-             allocate (from(ip)%first(nn_from(ip)))
-             allocate (from(ip)%second(nn_from(ip)))
-             allocate (from(ip)%third(nn_from(ip)))
-          endif
-          if (nn_to(ip) > 0) then
-             allocate (to(ip)%first(nn_to(ip)))
-             allocate (to(ip)%second(nn_to(ip)))
-             allocate (to(ip)%third(nn_to(ip)))
-          endif
-       end do
-       
-       nn_from = 0
-       nn_to = 0          
-
-       do iglo = g_lo%llim_world, g_lo%ulim_world
-
-          il = il_idx(g_lo,iglo)
-          if (il /= ng2+1) cycle
-
-          ip = proc_id(g_lo,iglo)
-          ik = ik_idx(g_lo,iglo)
-          it = it_idx(g_lo,iglo)
-          
-          ncell = r_links(ik, it) + l_links(ik, it) + 1
-          if (ncell == 1) cycle
-
-          iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
-
-! v_par > 0:
-          call find_leftmost_link (iglo, iglo_right, ipright)
-          do j = 1, ncell
-! sender
-             if (ip == iproc) then
-                n = nn_from(ipright) + 1
-                nn_from(ipright) = n
-                from(ipright)%first(n) = ntgrid
-                from(ipright)%second(n) = 1
-                from(ipright)%third(n) = iglo
-             end if
-! receiver
-             if (ipright == iproc) then
-                n = nn_to(ip) + 1
-                nn_to(ip) = n
-                to(ip)%first(n) = 2*ncell - r_links(ik, it)
-                to(ip)%second(n) = 1
-                to(ip)%third(n) = iglo_right
-             end if
-             call get_right_connection (iglo_right, iglo_right, ipright)
-          end do
- 
-! v_par < 0:
-          call find_rightmost_link (iglo, iglo_left, ipleft)
-          do j = 1, ncell
-! sender
-             if (ip == iproc) then
-                n = nn_from(ipleft) + 1
-                nn_from(ipleft) = n
-                from(ipleft)%first(n) = -ntgrid
-                from(ipleft)%second(n) = 2   
-                from(ipleft)%third(n) = iglo
-             end if
-                
-! receiver
-             if (ipleft == iproc) then
-                n = nn_to(ip) + 1
-                nn_to(ip) = n
-                to(ip)%first(n) = 2*ncell - l_links(ik, it)
-                to(ip)%second(n) = 2
-                to(ip)%third(n) = iglo_left
-             end if
-             call get_left_connection (iglo_left, iglo_left, ipleft)
-          end do
-       end do
-
-       from_low (1) = -ntgrid
-       from_low (2) = 1
-       from_low (3) = g_lo%llim_proc
-       
-       from_high(1) = ntgrid
-       from_high(2) = 2
-       from_high(3) = g_lo%ulim_alloc
-
-       to_low (1) = 1
-       to_low (2) = 1 
-       to_low (3) = g_lo%llim_proc
-       
-       to_high(1) = n_links_max
-       to_high(2) = 2
-       to_high(3) = g_lo%ulim_alloc
-
-       call init_fill (wfb_h, 'c', to_low, to_high, to, from_low, from_high, from)
-       
-       call delete_list (from)
-       call delete_list (to)
 
 200    continue
 
@@ -2143,7 +1932,6 @@ subroutine check_dist_fn(report_unit)
           do ik = 1, naky
              n_k(k) = 1 + l_links(ik, it) + r_links(ik, it)
              k = k + 1
-!             if (proc0) write (*,*) 'init_connected_bc: ',ik, it, l_links(ik, it), r_links(ik, it)
           end do
        end do
 
@@ -2520,6 +2308,26 @@ subroutine check_dist_fn(report_unit)
     endif
     get_leftmost_it=it_cur
   end function get_leftmost_it
+
+  !>Helper function for finding the rightmost it of supercell
+  function get_rightmost_it(it,ik)
+    implicit none
+    integer, intent(in) :: ik, it
+    integer :: get_rightmost_it
+    integer :: it_cur
+    !If not linked then no connections so only one cell in supercell
+    if (boundary_option_switch.eq.boundary_option_linked) then
+       it_cur=it
+       do while(itright(ik,it_cur).ge.0.and.itright(ik,it_cur).ne.it_cur)
+          !Keep updating it_cur with right connected it until there are no
+          !connections to right
+          it_cur=itright(ik,it_cur)
+       enddo
+    else
+       it_cur=it
+    endif
+    get_rightmost_it=it_cur
+  end function get_rightmost_it
 
   subroutine allocate_arrays
     use kt_grids, only: naky,  box
@@ -7503,38 +7311,66 @@ subroutine check_dist_fn(report_unit)
   end subroutine get_epar
 
   subroutine find_leftmost_link (iglo, iglo_left, ipleft)
-
+    use gs2_layouts, only: it_idx,ik_idx,g_lo,il_idx,ie_idx,is_idx,idx,proc_id
+    use mp, only: iproc
+    implicit none
     integer, intent (in) :: iglo
     integer, intent (in out) :: iglo_left, ipleft
     integer :: iglo_star, iglo_left_star, ipleft_star
-
+    integer :: it_cur,ik,it,il,ie,is
     iglo_star = iglo
-    do 
-       call get_left_connection (iglo_star, iglo_left_star, ipleft_star)
-    
-       if (ipleft_star == -1) exit
-       iglo_star = iglo_left_star
-       iglo_left = iglo_left_star
-       ipleft = ipleft_star
-    end do
+    it_cur=it_idx(g_lo,iglo)
+    it=it_cur
+    ik=ik_idx(g_lo,iglo)
+
+    !Now get the leftmost it
+    it_cur=get_leftmost_it(it,ik)
+
+    !If we're at the same it then don't need to do much
+    if(it.eq.it_cur)then
+       iglo_left=iglo
+       ipleft=proc_id(g_lo,iglo)
+       return
+    endif
+
+    !If not then we need to calculate iglo_left and ipleft
+    il=il_idx(g_lo,iglo)
+    ie=ie_idx(g_lo,iglo)
+    is=is_idx(g_lo,iglo)
+    iglo_left=idx(g_lo,ik,it_cur,il,ie,is)
+    ipleft=proc_id(g_lo,iglo_left)
 
   end subroutine find_leftmost_link
 
   subroutine find_rightmost_link (iglo, iglo_right, ipright)
-
+    use gs2_layouts, only: it_idx,ik_idx,g_lo,il_idx,ie_idx,is_idx,idx,proc_id
+    use mp, only: iproc
+    implicit none
     integer, intent (in) :: iglo
     integer, intent (in out) :: iglo_right, ipright
     integer :: iglo_star, iglo_right_star, ipright_star
-
+    integer :: it_cur,ik,it,il,ie,is
     iglo_star = iglo
-    do 
-       call get_right_connection (iglo_star, iglo_right_star, ipright_star)
-    
-       if (ipright_star == -1) exit
-       iglo_star = iglo_right_star
-       iglo_right = iglo_right_star
-       ipright = ipright_star
-    end do
+    it_cur=it_idx(g_lo,iglo)
+    ik=ik_idx(g_lo,iglo)
+    it=it_cur
+
+    !Now get the rightmost it
+    it_cur=get_rightmost_it(it,ik)
+
+    !If we're at the same it then don't need to do much
+    if(it.eq.it_cur)then
+       iglo_right=iglo
+       ipright=proc_id(g_lo,iglo)
+       return
+    endif
+
+    !If not then we need to calculate iglo_left and ipleft
+    il=il_idx(g_lo,iglo)
+    ie=ie_idx(g_lo,iglo)
+    is=is_idx(g_lo,iglo)
+    iglo_right=idx(g_lo,ik,it_cur,il,ie,is)
+    ipright=proc_id(g_lo,iglo_right)
 
   end subroutine find_rightmost_link
 
