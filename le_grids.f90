@@ -1484,7 +1484,7 @@ contains
 !the results at other points.
     use layouts_type, only: le_layout_type
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
-
+    use kt_grids, only: kwork_filter
     implicit none
 
     type (le_layout_type), intent (in) :: lo
@@ -1493,9 +1493,10 @@ contains
     integer :: ixi, ie, il, ile, ig, it, ik
     total = cmplx(0.0,0.0)
     do ile = lo%llim_proc, lo%ulim_proc
-       ig = ig_idx (lo,ile)
        it = it_idx (lo,ile)
        ik = ik_idx (lo,ile)
+       if(kwork_filter(it,ik)) cycle
+       ig = ig_idx (lo,ile)
        do ie=1, negrid
 !CMR, 2/10/2013:
 !   nxi+1 limit on do loop below is CRUCIAL, as its stores phase space point
@@ -1527,7 +1528,7 @@ contains
     use layouts_type, only: le_layout_type
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
     use theta_grid, only: ntgrid
-
+    use kt_grids, only: kwork_filter
     implicit none
 
     type (le_layout_type), intent (in) :: lo
@@ -1536,9 +1537,10 @@ contains
     integer :: ixi, ie, il, ile, ig, it, ik, is
     total = cmplx(0.0,0.0)
     do ile = lo%llim_proc, lo%ulim_proc
-       ig = ig_idx (lo,ile)
        it = it_idx (lo,ile)
        ik = ik_idx (lo,ile)
+       if(kwork_filter(it,ik)) cycle
+       ig = ig_idx (lo,ile)
        is = is_idx (lo,ile)
        do ie=1, negrid
 !CMR, 2/10/2013:
