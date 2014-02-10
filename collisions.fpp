@@ -3239,7 +3239,6 @@ contains
     logical, optional, intent (in) :: init
 
     complex, dimension (:,:), allocatable :: glz, glzc
-    complex, dimension (:), allocatable :: glz0
     integer :: ilz
     complex, dimension (nxi+1) :: delta
     complex :: fac, gwfb
@@ -3248,8 +3247,7 @@ contains
     call prof_entering ("solfp_lorentz", "collisions")
 
     allocate (glz(nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
-    allocate (glz0(nxi+1))
-    glz = 0.0 ; glz0 = 0.0
+    glz = 0.0
     if (heating) then
        allocate (glzc(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
        glzc = 0.0
@@ -3308,27 +3306,22 @@ contains
        if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
        if (ieqzip(it_idx(lz_lo,ilz),ik_idx(lz_lo,ilz))==0) cycle
 
-       je = jend(ig)
-
-       if (je > ng2+1) then
-          je = 2*je
-       else
-          je = 2*ng2+1
-       end if
-
-       ! deal with special case of wfb
+!CMRDDGC, 10/2/1014: 
+! Fixes for wfb treatment below, use same je definition in ALL cases
+!   je  = #physical xi values at location, includes duplicate point at vpar=0
+!  je-1 = #physical xi values removing duplicate vpar=0 point
+       je=2*jend(ig)
+       glz(je,ilz)=0.0d0  ! zero redundant duplicate xi, isign=2 for vpar=0!
        if (jend(ig) == ng2+1 .and.special_wfb_lorentz) then
-          ! if wfb, remove vpa = 0 point (which has wgt of zero)
-          glz0(:ng2) = glz(:ng2,ilz)
-          glz0(ng2+1:je-1) = glz(ng2+2:je,ilz)
-          ! save gwfb for reinsertion later
-          gwfb = glz(ng2+1,ilz)
-       else
-          glz0 = glz(:,ilz)
-       end if
-
-       glz(:je-1,ilz) = glz0(:je-1)
-       glz(je:,ilz) = 0.0
+!CMRDDGC:  special_wfb_lorentz = t  => unphysical handling of wfb at bounce pt: 
+!          remove wfb from collisions, reinsert later
+!
+! first save gwfb for reinsertion later
+          gwfb = glz(ng2+1,ilz) 
+! then remove vpa = 0 point, weight 0: (CMR confused by this comment!)  
+          glz(ng2+1:je-2,ilz) = glz(ng2+2:je-1,ilz) 
+       endif
+!CMRDDGCend
 
        ! right and left sweeps for tridiagonal solve:
 
@@ -3347,10 +3340,8 @@ contains
        ! interpolation described above mysteriously causing numerical instability
        ! stabilized by using old (pre-collision) value of g for wfb
        if (jend(ig) == ng2+1.and.special_wfb_lorentz) then
-          glz0(ng2+2:je) = glz(ng2+1:je-1,ilz)
-!          glz(ng2+1,ilz) = 0.5*(glz(ng2,ilz)+glz(ng2+1,ilz))
+          glz(ng2+2:je-1,ilz) = glz(ng2+1:je-2,ilz)
           glz(ng2+1,ilz) = gwfb
-          glz(ng2+2:je,ilz) = glz0(ng2+2:je)
        end if
 
 !
@@ -3367,7 +3358,7 @@ contains
 
     call scatter (lambda_map, glz, g)
 
-    deallocate (glz, glz0)
+    deallocate (glz)
     if (heating) deallocate (glzc)
 
     call prof_leaving ("solfp_lorentz", "collisions")
@@ -3389,7 +3380,7 @@ contains
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
     integer, optional, intent (in) :: diagnostics
 
-    complex, dimension (:), allocatable :: gle0, tmp
+    complex, dimension (:), allocatable :: tmp
     integer :: ile
     complex, dimension (nxi+1) :: delta
     complex :: fac, gwfb
@@ -3397,7 +3388,6 @@ contains
 
     call prof_entering ("solfp_lorentz", "collisions")
 
-    allocate (gle0(nxi+1)) ; gle0 = 0.0
     allocate (tmp(le_lo%llim_proc:le_lo%ulim_alloc)) ; tmp = 0.0
 
     if (heating .and. present(diagnostics)) then
@@ -3468,34 +3458,29 @@ contains
        if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
        if (ieqzip(it,ik)==0) cycle
 
-       je = jend(ig)
-
-       if (je > ng2+1) then
-          je = 2*je
-       else
-          je = 2*ng2+1
-       end if
-
+!CMRDDGC, 10/2/1014: 
+! Fixes for wfb treatment below, use same je definition in ALL cases
+!   je  = #physical xi values at location, includes duplicate point at vpar=0
+!  je-1 = #physical xi values removing duplicate vpar=0 point
+       je=2*jend(ig)
+! These fixes address previous comment by CMR: 
+! "surely wfb's bounce point should be handled like any other trapped bp?"
 !CMR, 1/11/2013:
-! wfb does not seem to be treated correctly.
-! Surely wfb's bounce point should be handled like any other trapped particle bp?
 ! Numerical instability referred to below more likely arises from wfb failing
 ! to satisfy trapping condition after invert_rhs.
 !
        do ie = 1, negrid
-          ! deal with special case of wfb
-          if (jend(ig) == ng2+1.and.special_wfb_lorentz) then
-             ! if wfb, remove vpa = 0 point (which has wgt of zero)
-             gle0(:ng2) = gle(:ng2,ie,ile)
-             gle0(ng2+1:je-1) = gle(ng2+2:je,ie,ile)
-             ! save gwfb for reinsertion later
+          gle(je,ie,ile)=0.0d0  ! zero redundant duplicate xi, isign=2 for vpar=0!
+          if (jend(ig) == ng2+1 .and.special_wfb_lorentz) then
+!CMRDDGC:  special_wfb_lorentz = t  => unphysical handling of wfb at bounce pt: 
+!          remove wfb from collisions, reinsert later
+!
+! first save gwfb for reinsertion later
              gwfb = gle(ng2+1,ie,ile)
-          else
-             gle0 = gle(:,ie,ile)
-          end if
-
-          gle(:je-1,ie,ile) = gle0(:je-1)
-          gle(je:,ie,ile) = 0.0
+! then remove vpa = 0 point, weight 0: (CMR confused by this comment!)  
+             gle(ng2+1:je-2,ie,ile) = gle(ng2+2:je-1,ie,ile)
+          endif
+!CMRDDGCend
 
           ! right and left sweeps for tridiagonal solve:
           
@@ -3513,10 +3498,9 @@ contains
           ! interpolation described above mysteriously causing numerical instability
           ! stabilized by using old (pre-collision) value of g for wfb
           if (jend(ig) == ng2+1.and.special_wfb_lorentz) then
-             gle0(ng2+2:je) = gle(ng2+1:je-1,ie,ile)
+             gle(ng2+2:je-1,ie,ile)=gle(ng2+1:je-2,ie,ile)
+             gle(ng2+1,ie,ile)=gwfb
 !          gle(ng2+1,ie,ile) = 0.5*(gle(ng2,ie,ile)+gle(ng2+1,ie,ile))
-             gle(ng2+1,ie,ile) = gwfb
-             gle(ng2+2:je,ie,ile) = gle0(ng2+2:je)
           end if
 
 !CMR, 1/11/2013:
@@ -3528,7 +3512,7 @@ contains
        end do
     end do
 
-    deallocate (gle0, tmp)
+    deallocate (tmp)
     
     call prof_leaving ("solfp_lorentz", "collisions")
 
