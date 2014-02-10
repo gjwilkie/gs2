@@ -171,8 +171,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        call init_fields
        call init_gs2_diagnostics (list, nstep)
 
-
-
 #ifdef NEW_DIAG
 #ifdef NETCDF_PARALLEL
        diagnostics_init_options%parallel_io = .true.
@@ -200,11 +198,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        
        if (proc0) call time_message(.false.,time_init,' Initialization')
        
-       if(present(trinity_reset)) then ! For trinity load balance restarts
-          if(trin_reset) call gd_reset
-          trin_restart = .true. ! All trinity runs are restarted except the first
-       endif
-
        first_time = .false.
 
     else if (present(nensembles)) then
@@ -218,6 +211,11 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     
     call loop_diagnostics(0,exit)
 
+    if(present(trinity_reset)) then ! For trinity load balance restarts
+       if(trin_reset) call gd_reset
+       trin_restart = .true. ! All trinity runs are restarted except the first
+    endif
+
 #ifdef NEW_DIAG
     ! Create variables
     call run_diagnostics(-1,exit)
@@ -225,13 +223,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     call run_diagnostics(0,exit)
 #endif
     
-    !if (proc0) write(*,*) 'layout ',layout
-    !write (*,*) 'iproc here', iproc
-
     call time_message(.false.,time_main_loop,' Main Loop')
 
     do istep = 1, nstep
-       
+
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
        call advance (istep)
        
@@ -265,8 +260,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
           exit
        end if
     end do
-
-!    converged = .true.
 
     if(present(trinity_reset)) trin_nsteps = trin_nsteps + istep - 1
 
@@ -308,10 +301,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (.not.nofin .and. .not. functional_test_flag ) call finish_gs2_diagnostics (istep_end)
        if (.not.nofin .and. .not. functional_test_flag) call finish_gs2
     end if
-
-!    if(proc0) then
-!       write(6,*) 'Job ',trin_job
-!       write(6,*) 'pflux = ',pflux
 
     if (proc0) call time_message(.false.,time_finish,' Finished run')
 
@@ -464,6 +453,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo
+    use job_manage, only: trin_job
+    use mp, only: proc0
 
     implicit none
 
@@ -475,6 +466,28 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     ! for now do nothing with gexb or mach, but need to include later if want to use GS2
     ! with TRINITY to evolve rotation profiles
+
+    if(-10) then !proc0 .and. trin_job==13) then
+       write(6,*) 'gs2_trin_init --------------------------------------'
+       write(6,*) 'ntspec ',ntspec
+       write(6,*) 'dens ', dens
+       write(6,*) 'temp ', temp
+       write(6,*) 'fprim ', fprim
+       write(6,*) 'tprim ', tprim
+       write(6,*) 'nu ', nu
+       write(6,*) 'rhoc ', rhoc
+       write(6,*) 'qval ', qval
+       write(6,*) 'shat ', shat
+       write(6,*) 'rgeo_lcfs ', rgeo_lcfs
+       write(6,*) 'rgeo_local ', rgeo_local
+       write(6,*) 'kap ', kap
+       write(6,*) 'kappri ', kappri
+       write(6,*) 'tri ', tri
+       write(6,*) 'tripri ', tripri
+       write(6,*) 'shift ', shift
+       write(6,*) 'betaprim ', betaprim
+       write(6,*) 'gs2_trin_init ======================================'
+    endif
 
     call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
     if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, &

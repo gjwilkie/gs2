@@ -404,6 +404,7 @@ contains
           do is = 1, nspec
              if (abs(spec(is)%mass-1.0) <= epsilon(0.0)) then
                 ions = is
+                if(is == 2) write(6,*) ' Warning, ions in element 2 **************'
              else if (spec(is)%mass < 0.3) then
                 ! for electrons, assuming electrons are at least a factor of 3 less massive
                 ! than main ion and other ions are no less than 30% the mass of the main ion
