@@ -3243,6 +3243,7 @@ contains
     complex, dimension (nxi+1) :: delta
     complex :: fac, gwfb
     integer :: ig, ik, il, is, it, je, ie
+    integer :: nxi_scatt
 
     call prof_entering ("solfp_lorentz", "collisions")
 
@@ -3311,6 +3312,7 @@ contains
 !   je  = #physical xi values at location, includes duplicate point at vpar=0
 !  je-1 = #physical xi values removing duplicate vpar=0 point
        je=2*jend(ig)
+       nxi_scatt=je-1
        glz(je,ilz)=0.0d0  ! zero redundant duplicate xi, isign=2 for vpar=0!
        if (jend(ig) == ng2+1 .and.special_wfb_lorentz) then
 !CMRDDGC:  special_wfb_lorentz = t  => unphysical handling of wfb at bounce pt: 
@@ -3319,19 +3321,20 @@ contains
 ! first save gwfb for reinsertion later
           gwfb = glz(ng2+1,ilz) 
 ! then remove vpa = 0 point, weight 0: (CMR confused by this comment!)  
-          glz(ng2+1:je-2,ilz) = glz(ng2+2:je-1,ilz) 
+          glz(ng2+1:je-2,ilz) = glz(ng2+2:je-1,ilz)
+          nxi_scatt=nxi_scatt-1
        endif
 !CMRDDGCend
 
        ! right and left sweeps for tridiagonal solve:
 
        delta(1) = glz(1,ilz)
-       do il = 1, je-1
+       do il = 1, nxi_scatt
           delta(il+1) = glz(il+1,ilz) - ql(il+1,ilz)*delta(il)
        end do
        
        glz(je,ilz) = delta(je)*betaa(je,ilz)
-       do il = je-1, 1, -1
+       do il = nxi_scatt, 1, -1
           glz(il,ilz) = (delta(il) - c1(il,ilz)*glz(il+1,ilz))*betaa(il,ilz)
        end do
 
@@ -3385,6 +3388,7 @@ contains
     complex, dimension (nxi+1) :: delta
     complex :: fac, gwfb
     integer :: ig, ik, il, is, je, it, ie
+    integer :: nxi_scatt
 
     call prof_entering ("solfp_lorentz", "collisions")
 
@@ -3463,6 +3467,7 @@ contains
 !   je  = #physical xi values at location, includes duplicate point at vpar=0
 !  je-1 = #physical xi values removing duplicate vpar=0 point
        je=2*jend(ig)
+       nxi_scatt=je-1
 ! These fixes address previous comment by CMR: 
 ! "surely wfb's bounce point should be handled like any other trapped bp?"
 !CMR, 1/11/2013:
@@ -3479,18 +3484,19 @@ contains
              gwfb = gle(ng2+1,ie,ile)
 ! then remove vpa = 0 point, weight 0: (CMR confused by this comment!)  
              gle(ng2+1:je-2,ie,ile) = gle(ng2+2:je-1,ie,ile)
+             nxi_scatt=nxi_scatt-1
           endif
 !CMRDDGCend
 
           ! right and left sweeps for tridiagonal solve:
           
           delta(1) = gle(1,ie,ile)
-          do il = 1, je-1
+          do il = 1, nxi_scatt
              delta(il+1) = gle(il+1,ie,ile) - qle(il+1,ie,ile)*delta(il)
           end do
        
           gle(je,ie,ile) = delta(je)*betaale(je,ie,ile)
-          do il = je-1, 1, -1
+          do il = nxi_scatt, 1, -1
              gle(il,ie,ile) = (delta(il) - c1le(il,ie,ile)*gle(il+1,ie,ile))*betaale(il,ie,ile)
           end do
 !       ! interpolate to obtain glz(vpa = 0) point for wfb
