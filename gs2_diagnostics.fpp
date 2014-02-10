@@ -524,6 +524,8 @@ contains
        endif
     endif
 
+    !Setup the parallel fft if we're writing/using the parallel spectrum
+    if(write_kpar.or.write_gs) call init_par_filter
   end subroutine init_gs2_diagnostics
  
 
@@ -732,7 +734,7 @@ contains
     use theta_grid, only: drhodpsi, qval, shape
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, akx, aky
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
-    use dist_fn, only: getan, get_epar, getmoms, par_spectrum
+    use dist_fn, only: getan, get_epar, getmoms
     use dist_fn, only: write_f, write_fyx, def_parity, even
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn_arrays, only: g_adjust
@@ -1436,7 +1438,7 @@ contains
     use fields, only: phinew, aparnew, bparnew, phi
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, write_f, write_fyx
-    use dist_fn, only: omega0, gamma0, getmoms, par_spectrum
+    use dist_fn, only: omega0, gamma0, getmoms
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn, only: getmoms_notgc, lf_flux, eexchange
     use dist_fn, only: flux_vs_theta_vs_vpa, pflux_vs_theta_vs_vpa
@@ -3340,4 +3342,30 @@ if (debug) write(6,*) "get_omegaavg: done"
 
   end subroutine reorder_kx
 
+  subroutine init_par_filter
+    use theta_grid, only: ntgrid, nperiod
+    use gs2_transforms, only: init_zf
+    use kt_grids, only: naky, ntheta0
+
+    if ( naky*ntheta0 .eq. 0 ) then
+       print *,"WARNING: kt_grids used in init_par_filter before initialised?"
+    endif
+
+    call init_zf (ntgrid, nperiod, ntheta0*naky)
+
+  end subroutine init_par_filter
+
+  subroutine par_spectrum(an, an2)
+    use gs2_transforms, only: kz_spectrum
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+
+    complex, dimension(:,:,:) :: an, an2    
+    real :: scale
+
+    call kz_spectrum (an, an2, ntgrid, ntheta0, naky)
+    scale = 1./real(4*ntgrid**2)
+    an2 = an2*scale
+
+  end subroutine par_spectrum
 end module gs2_diagnostics

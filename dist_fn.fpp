@@ -23,7 +23,7 @@ module dist_fn
   public :: get_epar, get_heat
   public :: t0, omega0, gamma0, source0
   public :: reset_init, write_f, reset_physics, write_poly
-  public :: M_class, N_class, i_class, par_spectrum
+  public :: M_class, N_class, i_class
   public :: l_links, r_links, itright, itleft, boundary
   public :: init_kperp2
   public :: get_jext !GGH
@@ -583,9 +583,6 @@ subroutine check_dist_fn(report_unit)
 
     if (debug) write(6,*) "init_dist_fn: init_bessel"
     call init_bessel
-
-    if (debug) write(6,*) "init_dist_fn: init_par_filter"
-    call init_par_filter
 
 !    call init_vnmult (vnmult)
     if (debug) write(6,*) "init_dist_fn: init_collisions"
@@ -1199,41 +1196,13 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine init_kperp2
 
-  subroutine init_par_filter
-    use theta_grid, only: ntgrid, nperiod
-    use gs2_transforms, only: init_zf
-    use kt_grids, only: naky, ntheta0
-
-    if ( naky*ntheta0 .eq. 0 ) then
-       print *,"WARNING: kt_grids used in init_par_filter before initialised?"
-    endif
-
-    call init_zf (ntgrid, nperiod, ntheta0*naky)
-
-  end subroutine init_par_filter
-
-  subroutine par_spectrum(an, an2)
-
-    use gs2_transforms, only: kz_spectrum
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-
-    complex, dimension(:,:,:) :: an, an2    
-    real :: scale
-
-    call kz_spectrum (an, an2, ntgrid, ntheta0, naky)
-    scale = 1./real(4*ntgrid**2)
-    an2 = an2*scale
-
-  end subroutine par_spectrum
-
   subroutine init_invert_rhs
     use dist_fn_arrays, only: vpar, ittp
-    use species, only: spec
+    use species, only: spec, nspec
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, ng2, forbid
-    use constants
+    use le_grids, only: nlambda, ng2, forbid, negrid, energy
+    use constants, only: pi, zi
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use mp, only: iproc
     implicit none
@@ -1331,6 +1300,17 @@ subroutine check_dist_fn(report_unit)
        M_class = naky*ntheta0 ; N_class = 1
        
     end select
+
+    !Initialise ufac for use in set_source
+    if (.not. allocated(ufac)) then
+       allocate (ufac(negrid, nspec))
+       do ie = 1, negrid
+          do is = 1, nspec
+             ufac(ie, is) = (2.0*spec(is)%uprim &
+                  + spec(is)%uprim2*energy(ie)**(1.5)*sqrt(pi)/4.0)
+          end do
+       end do
+    endif
 
     initializing = .false.
 
@@ -3143,7 +3123,7 @@ subroutine check_dist_fn(report_unit)
 
   subroutine get_source_term &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
-        isgn, iglo, sourcefac, source)
+        isgn, iglo,ik,it,il,ie,is, sourcefac, source)
 #ifdef LOWFLOW
     use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
 #endif
@@ -3154,7 +3134,7 @@ subroutine check_dist_fn(report_unit)
     use species, only: spec, nspec
     use run_parameters, only: fphi, fapar, fbpar, wunits
     use gs2_time, only: code_dt
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
     use hyper, only: D_res
     use constants
@@ -3162,20 +3142,15 @@ subroutine check_dist_fn(report_unit)
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
     integer, intent (in) :: istep
-    integer, intent (in) :: isgn, iglo
+    integer, intent (in) :: isgn, iglo, ik, it, il, ie, is
     complex, intent (in) :: sourcefac
     complex, dimension (-ntgrid:), intent (out) :: source
 
-    integer :: ig, ik, it, il, ie, is
+    integer :: ig
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
 
 !    call timer (0, 'get_source_term')
 
-    ik = ik_idx(g_lo,iglo)
-    it = it_idx(g_lo,iglo)
-    il = il_idx(g_lo,iglo)
-    ie = ie_idx(g_lo,iglo)
-    is = is_idx(g_lo,iglo)
 !CMR, 4/8/2011
 ! apargavg and phigavg combine to give the GK EM potential chi. 
 !          chi = phigavg - apargavg*vpa(:,isgn,iglo)*spec(is)%stm
@@ -3334,24 +3309,9 @@ subroutine check_dist_fn(report_unit)
 
       use species, only: spec
       use theta_grid, only: itor_over_B
-
+      implicit none
       complex :: apar_p, apar_m, phi_p, phi_m!, bpar_p !GGH added bpar_p
-!      real, dimension(:,:), allocatable, save :: ufac
       real :: bd, bdfac_p, bdfac_m
-      integer :: i_e, i_s
-!      logical :: first = .true.
-
-!      if (first) then
-      if (.not. allocated(ufac)) then
-!         first = .false.
-         allocate (ufac(negrid, nspec))
-         do i_e = 1, negrid
-            do i_s = 1, nspec
-               ufac(i_e, i_s) = (2.0*spec(i_s)%uprim &
-                    + spec(i_s)%uprim2*energy(i_e)**(1.5)*sqrt(pi)/4.0)
-            end do
-         end do
-      endif
 
 ! try fixing bkdiff dependence
       bd = bkdiff(1)
@@ -3536,7 +3496,7 @@ subroutine check_dist_fn(report_unit)
 
     do isgn = 1, 2
        call get_source_term (phi, apar, bpar, phinew, aparnew, bparnew, &
-            istep, isgn, iglo, sourcefac, source(:,isgn))
+            istep, isgn, iglo,ik,it,il,ie,is, sourcefac, source(:,isgn))
     end do
 
     ! gnew is the inhomogeneous solution
