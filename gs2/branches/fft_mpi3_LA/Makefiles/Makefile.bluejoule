@@ -1,0 +1,43 @@
+# System: IBM Blue Gene/Q
+
+system_help:
+		# 
+		# This is a Makefile for the BlueGene/Q computer at STFC 
+		# Daresbury, though doubtless it will work on similar 
+		# machines.
+		#
+		#
+		# Before building set up the system as follows:
+		#   module load ibmmpi
+		#   module load netcdf/3.6.2
+		#   module load fftw/2.1.5
+
+
+CHIP=bluegene_q
+COMPILER=xl
+MPIFC=mpixlf90_r
+MPICC=mpixlc_r
+
+USE_FFT := 1
+FFTW_DIR := . #/opt/intel/mkl
+
+ifdef FFTW_DIR
+        USE_FFT = fftw3
+endif
+
+
+ifdef USE_FFT
+	FFT_INC=-I/gpfs/packages/ibm/fftw/3.3.2/include/
+	FFT_LIB= -L/bgsys/ibm_essl/prod/opt/ibmmath/essl/5.1/lib64 -lesslbg -L/gpfs/packages/ibm/fftw/3.3.2/lib -lfftw3 -lrt
+endif
+ifdef USE_NETCDF
+	NETCDF_INC=-I/gpfs/packages/ibm/netcdf/3.6.2/include
+	NETCDF_LIB=-L/gpfs/packages/ibm/netcdf/3.6.2/lib -lnetcdf 
+endif
+
+Use_LOCAL_SPFUNC=on
+
+###################
+include Makefile.xl
+###################
+
