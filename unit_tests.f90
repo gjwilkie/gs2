@@ -28,9 +28,6 @@ module unit_tests
   !! either announce its success or announce its failure.
   public :: process_check
 
-  !> Returns true when the verbosity is greater than or equal to the argument
-  public :: should_print
-
   public :: announce_module_test
   public :: close_module_test
 
@@ -66,8 +63,6 @@ contains
     integer :: verbosity
     character(len=10) :: verbosity_char
     call getenv("VERBOSITY", verbosity_char)
-    !For fortran 2003 standard should replace above with
-    !call get_environment_variable("VERBOSITY", verbosity_char)
     read (verbosity_char,'(I1)') verbosity
     !write (*,*) 'verbosity is ', verbosity
   end function verbosity
@@ -106,15 +101,13 @@ contains
     agrees_with_real_1d_array = .true.
     do i = 1,n
 
-      !call should_be(val(i), correct(i))
-      !if (correct(i) .eq. 0.0 .or. abs(correct(i)) .lt. 10.0**(-maxexponent(err)/4)) then 
-        !agrees_with_real_1d_array = agrees_with_real_1d_array .and. (abs(val(i)) .lt. err) 
-      !else
-        !agrees_with_real_1d_array = agrees_with_real_1d_array .and. &
-                                        !(abs((val(i)-correct(i))/correct(i)) .lt. err)
-      !end if
-      agrees_with_real_1d_array = agrees_with_real_1d_array .and. &
-        agrees_with_real(val(i), correct(i), err)
+      call should_be(val(i), correct(i))
+      if (correct(i) .eq. 0.0) then 
+        agrees_with_real_1d_array = agrees_with_real_1d_array .and. (abs(val(i)) .lt. err) 
+      else
+        agrees_with_real_1d_array = agrees_with_real_1d_array .and. &
+                                        (abs((val(i)-correct(i))/correct(i)) .lt. err)
+      end if
       if (.not. agrees_with_real_1d_array) exit
     end do 
   end function agrees_with_real_1d_array
@@ -122,11 +115,9 @@ contains
     real, intent(in) :: val, correct, err
     logical :: agrees_with_real
     call should_be(val, correct)
-    if (correct .eq. 0.0 .or. abs(correct) .lt. 10.0**(-maxexponent(err)/4)) then 
-      !write (*,*) 'testing abs'
+    if (correct .eq. 0.0) then 
       agrees_with_real = abs(val) .lt. err 
     else
-      !write (*,*) 'testing rel'
       agrees_with_real = (abs((val-correct)/correct) .lt. err)
     end if
   end function agrees_with_real
@@ -193,7 +184,7 @@ contains
     character(*), intent(in) :: module_name
     character(17) :: message = 'Finished testing '
     if (should_print(1)) call print_with_stars(message, module_name)
-    write (*,*)
+    !write (*,*) is this needed ?
 
 
   end subroutine close_module_test

@@ -28,6 +28,8 @@ contains
     use collisions, only: c_reset => reset_init, vnmult
     use dist_fn, only: d_reset => reset_init
     use fields, only: f_reset => reset_init, init_fields
+    use fields_implicit, only: fi_reset => reset_init
+    use fields_test, only: ft_reset => reset_init
     use init_g, only: g_reset => reset_init
     use run_parameters, only: fphi, fapar, fbpar
     use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
@@ -96,6 +98,8 @@ contains
     call d_reset
     call c_reset
     call f_reset
+    call fi_reset
+    call ft_reset
     call g_reset
     call nl_reset
 

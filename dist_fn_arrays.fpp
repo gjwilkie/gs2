@@ -4,9 +4,7 @@
 
 module dist_fn_arrays
 
-! gold never used
-!  public :: gold
-  public :: g, gnew, kx_shift, theta0_shift, vpa, vpac
+  public :: g, gnew, gold, kx_shift, theta0_shift, vpa, vpac
   public :: vperp2, vpar, ittp, aj0, aj1, aj2, aj0f, aj1f
   public :: apar_ext, kperp2, c_rate, g_fixpar
   public :: g_adjust, check_g_bouncepoints
@@ -16,8 +14,8 @@ module dist_fn_arrays
 
 
   ! dist fn
-!  complex, dimension (:,:,:), allocatable :: g, gnew, gold, g_fixpar
-  complex, dimension (:,:,:), allocatable :: g, gnew, g_fixpar
+  complex, dimension (:,:,:), allocatable :: gnew, gold, g_fixpar
+  complex,  dimension (:,:, :), pointer :: g ! for shared memory
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   real, dimension(:), allocatable :: kx_shift, theta0_shift
@@ -113,7 +111,7 @@ contains
 !  that exceed a threshold tolerance, tol. 
       use theta_grid, only: ntgrid, bmag
       use gs2_layouts, only: g_lo, idx
-      use le_grids, only: ng2, jend, al
+      use le_grids, only: negrid, ng2, nlambda, jend, forbid, al
       use mp, only: mp_abort
 
       implicit none

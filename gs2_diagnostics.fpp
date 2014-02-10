@@ -57,7 +57,6 @@ module gs2_diagnostics
   logical, public :: save_distfn !<DD> Added for saving distribution function
   logical, public :: write_symmetry, write_correlation_extend, write_correlation
   logical, public :: write_pflux_sym, write_pflux_tormom  
-  logical :: file_safety_check
   integer, public :: nwrite, igomega, nmovie
   integer, public :: navg, nsave, nwrite_mult
 
@@ -89,7 +88,7 @@ module gs2_diagnostics
          write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
-         write_pflux_sym,  write_pflux_tormom, file_safety_check
+ 	 write_pflux_sym,  write_pflux_tormom  
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: jext_unit   !GGH Additions
@@ -114,7 +113,7 @@ module gs2_diagnostics
   real, dimension (:,:,:), allocatable :: vflux0, vflux1  ! low flow correction to turbulent momentum flux
   real, dimension (:,:,:), allocatable :: pmflux, vmflux
   real, dimension (:,:,:), allocatable :: pbflux, vbflux
-  real, dimension (:,:,:), allocatable :: exchange1, exchange
+  real, dimension (:,:,:), allocatable :: exchange
 
   ! (ntheta0,naky,nspec)
 
@@ -137,9 +136,7 @@ contains
        write (unit, *)
        write (unit, fmt="(' &',a)") "gs2_diagnostics_knobs"
        write (unit, fmt="(' save_for_restart = ',L1)") save_for_restart
-       write (unit, fmt="(' save_distfn = ',L1)") save_distfn
        write (unit, fmt="(' save_many = ',L1)") save_many
-       write (unit, fmt="(' file_safety_check = ',L1)") file_safety_check
        write (unit, fmt="(' print_line = ',L1)") print_line 
        write (unit, fmt="(' write_line = ',L1)") write_line
        write (unit, fmt="(' print_flux_line = ',L1)") print_flux_line
@@ -186,10 +183,8 @@ contains
    use dist_fn, only : def_parity, even 
    use kt_grids, only : gridopt_switch, gridopt_box
    use init_g, only : restart_file
-   use gs2_save, only: restart_writable
    implicit none
    integer :: report_unit
-   logical :: writable
     write (report_unit, *) 
     write (report_unit, fmt="('------------------------------------------------------------')")
     write (report_unit, *) 
@@ -276,10 +271,10 @@ contains
     if (write_final_antot) then
        if (write_ascii) then
           write (report_unit, fmt="('write_final_antot = T:          Sources for Maxwell eqns. written to ',a)") &
-               & trim(run_name)//'.antot'
+          	& trim(run_name)//'.antot'
        end if
        write (report_unit, fmt="('write_final_antot = T:          Sources for Maxwell eqns. written to ',a)") &
-            & trim(run_name)//'.out.nc'
+	& trim(run_name)//'.out.nc'
     end if
 
     if (write_final_moments) then
@@ -356,32 +351,6 @@ contains
        end if
     end if
 
-    !Verify restart file can be written
-    if((save_for_restart.or.save_distfn).and.(file_safety_check))then
-       !Can we write file?
-       writable=restart_writable()
-
-       !If we can't write the restart file then we should probably quit
-       if((.not.writable))then
-          if(save_for_restart)then 
-             write (report_unit, *) 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('save_for_restart = T:   But we cannot write to a test file like ',A,'.')") trim(restart_file)
-             write (report_unit, fmt="('THIS IS PROBABLY AN ERROR --> Check restart_dir.')") 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
-          endif
-          if(save_distfn)then 
-             write (report_unit, *) 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('save_distfn = T:   But we cannot write to a test file like ',A,'.')") trim(restart_file)
-             write (report_unit, fmt="('THIS IS PROBABLY AN ERROR --> Check restart_dir.')") 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
-          endif
-       endif
-    endif
-
   end subroutine check_gs2_diagnostics
 
 
@@ -395,15 +364,13 @@ contains
     use gs2_io, only: init_gs2_io
     use gs2_heating, only: init_htype
     use collisions, only: collision_model_switch, init_lorentz_error
-    use mp, only: broadcast, proc0, mp_abort
+    use mp, only: broadcast, proc0
     use le_grids, only: init_weights
-    use gs2_save, only: restart_writable
 
     implicit none
     logical, intent (in) :: list
     integer, intent (in) :: nstep
     integer :: nmovie_tot, nwrite_big_tot
-    logical :: writable
 
     if (initialized) return
     initialized = .true.
@@ -458,7 +425,6 @@ contains
 
     call broadcast (write_pflux_tormom)
 
-    call broadcast (file_safety_check)
     nmovie_tot = nstep/nmovie
     nwrite_big_tot = nstep/(nwrite*nwrite_mult)-nstep/4/(nwrite*nwrite_mult)
     if(nwrite_big_tot .le. 0) nwrite_big_tot = 1
@@ -504,28 +470,9 @@ contains
        end if
     end if
 
-    if(.not. allocated(pflux_avg)) then
-       allocate (pflux_avg(nspec), qflux_avg(nspec), heat_avg(nspec), vflux_avg(nspec))
-       pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
-    endif
+    allocate (pflux_avg(nspec), qflux_avg(nspec), heat_avg(nspec), vflux_avg(nspec))
+    pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
 
-    !Verify restart file can be written
-    if((save_for_restart.or.save_distfn).and.(file_safety_check))then
-       !Can we write file?
-       writable=restart_writable()
-
-       !If we can't write the restart file then we should probably quit
-       if((.not.writable).and.save_for_restart) call mp_abort("Cannot write to test file, maybe restart_dir doesn't exist --> Aborting.",to_screen=.true.)
-
-       !If it's just a case of save_distfn then we can carry on but print a useful mesasge
-       if((.not.writable).and.save_distfn)then
-          if(proc0)write(6,'("Warning: Cannot write to test restart_file --> Setting save_distfn=F.")')
-          save_distfn=.false.
-       endif
-    endif
-
-    !Setup the parallel fft if we're writing/using the parallel spectrum
-    if(write_kpar.or.write_gs) call init_par_filter
   end subroutine init_gs2_diagnostics
  
 
@@ -606,7 +553,6 @@ contains
     allocate (pflux_tormom (ntheta0,naky,nspec)) ; pflux_tormom = 0. 
     allocate (qheat (ntheta0,naky,nspec,3)) ; qheat = 0.
     allocate (vflux (ntheta0,naky,nspec)) ; vflux = 0.
-    allocate (exchange1 (ntheta0,naky,nspec)) ; exchange1 = 0.
     allocate (exchange (ntheta0,naky,nspec)) ; exchange = 0.
 
     allocate (vflux_par (ntheta0,naky,nspec)) ; vflux_par = 0.
@@ -636,9 +582,9 @@ contains
     implicit none
     integer :: in_file
     logical, intent (in) :: list
-    !<doc> Set defaults for the gs2_diagnostics_knobs</doc>
+    !<doc> Set defaults for the gs2_diagnostics_knobs</doc>		
     if (proc0) then
-       !<wkdoc> Set defaults for the gs2_diagnostics_knobs</wkdoc>
+	!<wkdoc> Set defaults for the gs2_diagnostics_knobs</wkdoc>		
        print_line = .true.
        print_flux_line = .false.
        write_line = .true.
@@ -693,10 +639,9 @@ contains
        write_phi_over_time = .false.
        write_bpar_over_time = .false.
        write_apar_over_time = .false.
-       file_safety_check=.true.
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
 
-       !<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
+	!<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
 !       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
        if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
 
@@ -734,7 +679,7 @@ contains
     use theta_grid, only: drhodpsi, qval, shape
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, akx, aky
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
-    use dist_fn, only: getan, get_epar, getmoms
+    use dist_fn, only: getan, get_epar, getmoms, par_spectrum
     use dist_fn, only: write_f, write_fyx, def_parity, even
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn_arrays, only: g_adjust
@@ -750,8 +695,6 @@ contains
     use antenna, only: dump_ant_amp
     use splines, only: fitp_surf1, fitp_surf2
     use gs2_heating, only: del_htype
-    use job_manage, only: trin_restart
-
 !    use gs2_dist_io, only: write_dist
     implicit none
     integer, intent (in) :: istep
@@ -1091,15 +1034,15 @@ contains
 
     !<DD> Added for saving distribution function
     if (save_distfn) then
-       !Convert h to distribution function
-       call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
-       
-       !Save dfn, fields and velocity grids to file
-       call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
-            fphi, fapar, fbpar, exit_in=.true.,distfn=.true.)
-       
-       !Convert distribution function back to h
-       call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
+    	!Convert h to distribution function
+    	call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
+    	
+    	!Save dfn, fields and velocity grids to file
+       	call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, &
+          	fphi, fapar, fbpar, exit_in=.true.,distfn=.true.)
+    	
+        !Convert distribution function back to h
+        call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
     end if
 
     !</DD> Added for saving distribution function
@@ -1412,10 +1355,10 @@ contains
     if (allocated(j_ext_hist)) deallocate (j_ext_hist)
     if (allocated(omegahist)) deallocate (omegahist)
     if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
-         pbflux, qbheat, vbflux, vflux0, vflux1, exchange1, exchange)
+         pbflux, qbheat, vbflux, vflux0, vflux1, exchange)
     if (allocated(pflux_tormom)) deallocate (pflux_tormom) 
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
-    if (.not. trin_restart .and. allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
+    if (allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
 
 ! HJL <    
     if (allocated(domega)) deallocate(domega)
@@ -1435,10 +1378,10 @@ contains
     use run_parameters, only: woutunits, tunits, fapar, fphi, fbpar, eqzip
 !    use run_parameters, only: nstep, include_lowflow
     use run_parameters, only: nstep
-    use fields, only: phinew, aparnew, bparnew, phi
+    use fields, only: phinew, aparnew, bparnew
     use fields, only: kperp, fieldlineavgphi, phinorm
     use dist_fn, only: flux, write_f, write_fyx
-    use dist_fn, only: omega0, gamma0, getmoms
+    use dist_fn, only: omega0, gamma0, getmoms, par_spectrum
     use dist_fn, only: get_verr, get_gtran, write_poly, collision_error
     use dist_fn, only: getmoms_notgc, lf_flux, eexchange
     use dist_fn, only: flux_vs_theta_vs_vpa, pflux_vs_theta_vs_vpa
@@ -1451,7 +1394,7 @@ contains
     use gs2_time, only: user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom, nc_loop, nc_loop_moments
     use gs2_io, only: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend, nc_loop_partsym_tormom 
-    use gs2_io, only: nc_loop_vres, nc_exchange
+    use gs2_io, only: nc_loop_vres
     use gs2_io, only: nc_loop_movie, nc_write_fields, nc_write_moments
     use gs2_layouts, only: yxf_lo, g_lo
 ! MAB>
@@ -1550,7 +1493,7 @@ contains
     part_fluxes = 0.0 ; mpart_fluxes = 0.0 ; bpart_fluxes = 0.0
     heat_fluxes = 0.0 ; mheat_fluxes = 0.0 ; bheat_fluxes = 0.0
     mom_fluxes = 0.0 ; mmom_fluxes = 0.0 ; bmom_fluxes = 0.0  
-    part_tormom_fluxes = 0.0
+    part_tormom_fluxes = 0.0	
     energy_exchange = 0.0
 
     phase_tot = 0.0 ;  phase_theta = 0.0
@@ -1567,11 +1510,6 @@ contains
           if (debug) write(6,*) "loop_diagnostics: proc0 done called get_omegaavg"
        endif
        call broadcast (exit)
-    else
-       !Make sure we've at least initialised the omega arrays
-       !for any later output etc.
-       omega=0.
-       omegaavg=0.
     endif
 
     if (write_hrate) call heating (istep, h, hk)
@@ -1705,7 +1643,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        call lf_flux (phinew, vflux0, vflux1)
 #endif
        call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
-       call eexchange (phinew, phi, exchange1, exchange)
+       call eexchange (phinew, exchange)
 
        if (proc0) then
           if (fphi > epsilon(0.0)) then
@@ -1722,8 +1660,8 @@ if (debug) write(6,*) "loop_diagnostics: -1"
                 pflux(:,:,is) = pflux(:,:,is) * spec(is)%dens
                 call get_volume_average (pflux(:,:,is), part_fluxes(is))
 
-                pflux_tormom(:,:,is) = pflux_tormom(:,:,is) * spec(is)%dens  
-                call get_volume_average (pflux_tormom(:,:,is), part_tormom_fluxes(is))
+		pflux_tormom(:,:,is) = pflux_tormom(:,:,is) * spec(is)%dens  
+   	        call get_volume_average (pflux_tormom(:,:,is), part_tormom_fluxes(is))
 
                 vflux(:,:,is) = vflux(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
                 call get_volume_average (vflux(:,:,is), mom_fluxes(is))
@@ -1834,14 +1772,13 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 !                        aimag(omegaavg(it,ik)*woutunits(ik)), &
 !                        phitot(it,ik)
                 write (unit=*, fmt="('ky=',1pe9.2, ' kx=',1pe9.2, &
-                     & ' om=',e9.2,1x,e9.2,' omav=',e9.2,1x,e9.2, &
-                     & ' phtot=',e8.2,' theta0=',1pe9.2)") &
+                     &' om=',e9.2,x,e9.2,' omav=',e9.2,x,e9.2,' phtot=',e8.2)") &
                      aky(ik), akx(it), &
                      real( omega(it,ik)*woutunits(ik)), &
                      aimag(omega(it,ik)*woutunits(ik)), &
                      real( omegaavg(it,ik)*woutunits(ik)), &
                      aimag(omegaavg(it,ik)*woutunits(ik)), &
-                     phitot(it,ik), theta0(it,ik)
+                     phitot(it,ik)
              end do
           end do
           write (*,*) 
@@ -1993,17 +1930,15 @@ if (debug) write(6,*) "loop_diagnostics: -2"
           if (fphi > epsilon(0.0)) then
              if (write_ascii) then
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' heat fluxes: ', 5(1x,e10.4))") &
-                     t, phi2, heat_fluxes(1:min(nspec,5))
+                     & ' heat fluxes: ', 5(1x,e10.4),' qflux_avg: ', 5(1x,e10.4))") &
+!                     t, phi2, heat_fluxes(1:min(nspec,5)), qflux_avg(1:min(nspec,5))/t
+                     t, phi2, heat_fluxes(1:min(nspec,5)), energy_exchange(1:min(nspec,5))
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' part fluxes: ', 5(1x,e10.4))") &
-                     t, phi2, part_fluxes(1:min(nspec,5))
+                     & ' part fluxes: ', 5(1x,e10.4),' pflux_avg: ', 5(1x,e10.4))") &
+                     t, phi2, part_fluxes(1:min(nspec,5)), pflux_avg(1:min(nspec,5))/t
                 write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' mom fluxes: ', 5(1x,e10.4))") &
-                     t, phi2, mom_fluxes(1:min(nspec,5))
-                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' energy exchange: ', 5(1x,e10.4))") &
-                     t, phi2, energy_exchange(1:min(nspec,5))
+                     & ' mom fluxes: ', 5(1x,e10.4),' vflux_avg: ', 5(1x,e10.4))") &
+                     t, phi2, mom_fluxes(1:min(nspec,5)), vflux_avg(1:min(nspec,5))/t
 
 #ifdef LOWFLOW
                    write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
@@ -2054,8 +1989,8 @@ if (debug) write(6,*) "loop_diagnostics: -2"
              call nc_qflux (nout, qheat(:,:,:,1), qmheat(:,:,:,1), qbheat(:,:,:,1), &
                   heat_par, mheat_par, bheat_par, &
                   heat_perp, mheat_perp, bheat_perp, &
-                  heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
-             call nc_exchange (nout, exchange, energy_exchange)
+                  heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot, &
+                  energy_exchange)
                   ! Update the target array in parameter_scan_arrays
 ! below line gives out-of-bounds array for runs inside trinity
 !                  scan_hflux(nout) = hflux_tot
@@ -2095,13 +2030,13 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 
                 if (write_line) then
                    write (out_unit, "('t= ',e16.10,' aky= ',1pe12.4, ' akx= ',1pe12.4, &
-                        &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4,' theta0= ',1pe12.4)") &
+                        &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4)") &
                         t, aky(ik), akx(it), &
                         real( omega(it,ik)*woutunits(ik)), &
                         aimag(omega(it,ik)*woutunits(ik)), &
                         real( omegaavg(it,ik)*woutunits(ik)), &
                         aimag(omegaavg(it,ik)*woutunits(ik)), &
-                        phitot(it,ik),theta0(it,ik)
+                        phitot(it,ik)
                 end if
                 
 !                if (write_omega) write (out_unit, *) &
@@ -3342,30 +3277,4 @@ if (debug) write(6,*) "get_omegaavg: done"
 
   end subroutine reorder_kx
 
-  subroutine init_par_filter
-    use theta_grid, only: ntgrid, nperiod
-    use gs2_transforms, only: init_zf
-    use kt_grids, only: naky, ntheta0
-
-    if ( naky*ntheta0 .eq. 0 ) then
-       print *,"WARNING: kt_grids used in init_par_filter before initialised?"
-    endif
-
-    call init_zf (ntgrid, nperiod, ntheta0*naky)
-
-  end subroutine init_par_filter
-
-  subroutine par_spectrum(an, an2)
-    use gs2_transforms, only: kz_spectrum
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-
-    complex, dimension(:,:,:) :: an, an2    
-    real :: scale
-
-    call kz_spectrum (an, an2, ntgrid, ntheta0, naky)
-    scale = 1./real(4*ntgrid**2)
-    an2 = an2*scale
-
-  end subroutine par_spectrum
 end module gs2_diagnostics

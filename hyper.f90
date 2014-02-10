@@ -47,7 +47,7 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperresistivity.  &
-               &D_hyperres ignored.')") trim(hyper_option)
+	       &D_hyperres ignored.')") trim(hyper_option)
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, *) 
           D_hyperres = -10.
@@ -434,7 +434,7 @@ contains
        allocate (D_res(ntheta0, naky)) 
     endif
     if (.not. allocated(hypervisc_filter)) then
-       allocate (hypervisc_filter(-ntgrid:ntgrid,ntheta0,naky)) ; hypervisc_filter = 1.0
+       allocate (hypervisc_filter(-ntgrid:ntgrid,ntheta0,naky)) ; hypervisc_filter = 0.0
     end if
     D_res = 0.
 

@@ -1,13 +1,13 @@
-gs2_all: diagnostics modules gs2 ingen rungridgen
+gs2_all: modules gs2 ingen rungridgen
 
-gs2: $(gs2_mod) $(SIMPLEDATAIO_LIB)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
+gs2: $(gs2_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 gs2.x: $(gs2_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-ingen: $(ingen_mod) $(SIMPLEDATAIO_LIB)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
+ingen: $(ingen_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 rungridgen: $(rungridgen_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
@@ -21,15 +21,15 @@ ffttester: $(ffttester_mod)
 .PHONY: modules utils_all geo_all libgs2_all
 
 ifdef MAKE_LIB
-modules: utils.a geo.a libgs2.a diagnostics
+modules: utils.a geo.a libgs2.a
 else
-modules: utils.a geo.a diagnostics
+modules: utils.a geo.a
 endif
 
 ### UTILS
 utils_all: utils.a 
 
-UTIL_OBJ = spl.o constants.o file_utils.o netcdf_utils.o command_line.o runtime_tests.o
+UTIL_OBJ = spl.o constants.o file_utils.o netcdf_utils.o command_line.o
 utils.a: $(UTIL_OBJ)
 	$(ARCH) $(ARCHFLAGS) $@ $^
 	$(RANLIB) $@

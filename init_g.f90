@@ -813,7 +813,6 @@ contains
     use file_utils, only: input_unit, error_unit, run_name, input_unit_exist
     use text_options, only: text_option, get_option_value
     use gs2_save, only: read_many
-    use job_manage, only: trin_restart
 
     implicit none
 
@@ -935,8 +934,6 @@ contains
     in_file = input_unit_exist ("init_g_knobs", exist)
 !    if (exist) read (unit=input_unit("init_g_knobs"), nml=init_g_knobs)
     if (exist) read (unit=in_file,nml=init_g_knobs)
-
-    if(trin_restart) ginit_option='many'
     
     ierr = error_unit()
     call get_option_value &
@@ -1283,7 +1280,7 @@ contains
     endif
   end subroutine ginit_noise
 
-  !> Initialize with a single parallel mode. Only makes sense in a linear 
+ 	!> Initialize with a single parallel mode. Only makes sense in a linear 
   !! calculation. k_parallel is specified with kpar_init or with ikpar_init 
   !! when periodic boundary conditions are used. 
 
@@ -1378,7 +1375,7 @@ contains
 
   end subroutine ginit_single_parallel_mode
 
-  !> Initialize with every parallel and perpendicular mode having equal amplitude. 
+ 	!> Initialize with every parallel and perpendicular mode having equal amplitude. 
   !! Only makes sense in a linear calculation. k_parallel is specified with kpar_init 
   !! or with ikpar_init when periodic boundary conditions are used. EGH 
 
@@ -1926,7 +1923,7 @@ contains
        g (:,1,iglo) = 0.
        g (:,2,iglo) = 0.
     end do
-
+	
     phinew(:,:,2:naky) = 0.
     aparnew(:,:,2:naky) = 0.
     bparnew(:,:,2:naky) = 0.
@@ -2142,7 +2139,7 @@ contains
        g (:,1,iglo) = 0.
        g (:,2,iglo) = 0.
     end do
-
+	
     phinew(:,:,2:naky) = 0.
     aparnew(:,:,2:naky) = 0.
     bparnew(:,:,2:naky) = 0.
@@ -2235,7 +2232,7 @@ contains
 
        g (:,:,iglo) = gnew(:,:,iglo)
     end do
-
+	
     phinew(:,2,1) = 0.   
     aparnew(:,2,1) = 0.
     bparnew(:,2,1) = 0.
@@ -3449,7 +3446,6 @@ contains
 
   subroutine ginit_restart_file
     use dist_fn_arrays, only: g, gnew
-    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
@@ -3464,13 +3460,11 @@ contains
        g = 0.
     end if
     gnew = g
-    phi=phinew ; apar=aparnew ; bpar=bparnew
 
   end subroutine ginit_restart_file
 
   subroutine ginit_restart_many
     use dist_fn_arrays, only: g, gnew
-    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
@@ -3486,7 +3480,6 @@ contains
        g = 0.
     end if
     gnew = g
-    phi=phinew ; apar=aparnew ; bpar=bparnew
 
   end subroutine ginit_restart_many
 

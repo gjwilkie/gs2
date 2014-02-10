@@ -1186,7 +1186,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 !   nfac:  #factors of each sdim
 !   facs(i,j):  ith factor of jth dimension
  
-   character(3), dimension(:), intent(in):: sym
+   character*3, dimension(:), intent(in):: sym
    integer, dimension(:), intent(in):: sdim, nfac
    integer, dimension(:,:), intent(in):: facs
    integer, intent(in):: npmax
@@ -1224,10 +1224,10 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer :: maxfacs
     integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kyfacs
     integer, dimension(6) :: nfac, sdim
-    character(3), dimension(6):: sym
+    character*3, dimension(6):: sym
 
     if (.not.nonlin) return
-    write (report_unit, fmt="('xxf sweetspot #proc up to:',i8)") npmax
+    write (report_unit, fmt="('xxf sweetspot #proc up to:'i8)") npmax
     maxfacs=max(nspec,negrid,nlambda,2,2*ntgrid+1,naky)/2+1
     allocate (spfacs(maxfacs),efacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,6))
     call factors (nspec, nspfacs, spfacs)
@@ -1275,10 +1275,10 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer :: maxfacs
     integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kxfacs
     integer, dimension(6) :: nfac, sdim
-    character(3), dimension(6):: sym
+    character*3, dimension(6):: sym
 
     if (.not.nonlin) return
-    write (report_unit, fmt="('yxf sweetspot #proc up to:',i8)") npmax 
+    write (report_unit, fmt="('yxf sweetspot #proc up to:'i8)") npmax 
     maxfacs=max(nspec,negrid,nlambda,2,2*ntgrid+1,naky)/2+1
     allocate (spfacs(maxfacs),efacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),facs(maxfacs,6))
     call factors (nspec, nspfacs, spfacs)
@@ -1325,9 +1325,9 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer :: maxfacs
     integer, allocatable, dimension(:):: spfacs, lfacs, sgfacs, tgfacs, kxfacs, kyfacs
     integer, dimension(6) :: nfac, sdim
-    character(3), dimension(6):: sym
+    character*3, dimension(6):: sym
 
-    write (report_unit, fmt="('#proc sweetspots for e_lo, up to:',i8)") npmax
+    write (report_unit, fmt="('#proc sweetspots for e_lo, up to:'i8)") npmax
     maxfacs=max(nspec,nlambda,2,2*ntgrid+1,ntheta0,naky)/2+1
     allocate (spfacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,6))
     call factors (nspec, nspfacs, spfacs)
@@ -1389,9 +1389,9 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer :: maxfacs
     integer, allocatable, dimension(:):: spfacs, efacs, sgfacs, tgfacs, kxfacs, kyfacs
     integer, dimension(5) :: nfac, sdim
-    character(3), dimension(5):: sym
+    character*3, dimension(5):: sym
 
-    write (report_unit, fmt="('#proc sweetspots for lz_lo, up to:',i8)") npmax
+    write (report_unit, fmt="('#proc sweetspots for lz_lo, up to:'i8)") npmax
 
     maxfacs=max(nspec,negrid,2*ntgrid+1,ntheta0,naky)/2+1
     allocate (spfacs(maxfacs),efacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,6))
@@ -1446,9 +1446,9 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer :: maxfacs
     integer, allocatable, dimension(:):: spfacs, efacs, sgfacs, tgfacs, kxfacs, kyfacs
     integer, dimension(4) :: nfac, sdim
-    character(3), dimension(4):: sym
+    character*3, dimension(4):: sym
 
-    write (report_unit, fmt="('#proc sweetspots for le_lo, up to:',i8)") npmax
+    write (report_unit, fmt="('#proc sweetspots for le_lo, up to:'i8)") npmax
 
     maxfacs=max(nspec,2*ntgrid+1,ntheta0,naky)/2+1
     allocate (spfacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),kyfacs(maxfacs),facs(maxfacs,4))
@@ -1495,7 +1495,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     real :: time
 
     write (report_unit, fmt="('Layout = ',a5,/)") layout 
-    write (report_unit, fmt="('Recommended #proc up to:',i8)") npmax 
+    write (report_unit, fmt="('Recommended #proc up to:'i8)") npmax 
     if (nonlin) then
 
        write (report_unit, *) 
@@ -2082,27 +2082,27 @@ if (debug) write(6,*) 'get_namelists: returning'
        call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
        if(present(onlyxoryfac)) then
           if(onlyxoryfac) then
-             write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |            ',L1,'            |      ',i3,'       |            ',L1,'            |      ',i3,'       |')") & 
+             write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |            ',L,'            |      ',i3,'       |            ',L,'            |      ',i3,'       |')") & 
                   npe, distchar, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
           else
-             write (report_unit, fmt="('|     ',i8,'(*)|    ',a3,'    |          ',i3,'          |            ',L1,'            |      ',i3,'       |            ',L1,'            |      ',i3,'       |')") & 
+             write (report_unit, fmt="('|     ',i8,'(*)|    ',a3,'    |          ',i3,'          |            ',L,'            |      ',i3,'       |            ',L,'            |      ',i3,'       |')") & 
                   npe, distchar, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
           end if
        else
-          write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |            ',L1,'            |      ',i3,'       |            ',L1,'            |      ',i3,'       |')") & 
+          write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |            ',L,'            |      ',i3,'       |            ',L,'            |      ',i3,'       |')") & 
                npe, distchar, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
        end if
     else
        if(present(onlyxoryfac)) then
           if(onlyxoryfac) then
-             write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |                          |                |                          |                |')") & 
+             write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3'          |                          |                |                          |                |')") & 
                   npe, distchar, INT(idle_percentage)
           else
-             write (report_unit, fmt="('|     ',i8,'(*)|    ',a3,'    |          ',i3,'          |                          |                |                          |                |')") & 
+             write (report_unit, fmt="('|     ',i8,'(*)|    ',a3,'    |          ',i3'          |                          |                |                          |                |')") & 
                   npe, distchar, INT(idle_percentage)
           end if
        else
-          write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |                          |                |                          |                |')") & 
+          write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3'          |                          |                |                          |                |')") & 
                npe, distchar, INT(idle_percentage)
        end if
     

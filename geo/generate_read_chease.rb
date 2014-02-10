@@ -44,26 +44,26 @@ module read_chease
   implicit none
   integer :: npsi_chease, nchi_chease 
   public :: npsi_chease, nchi_chease 
-  
+	
 #{zero_dim_vars.map{|v| 
 "
-  real :: #{v}
-  public :: #{v}
+	real :: #{v}
+	public :: #{v}
 "}.join("\n")}
-
+	
   real, dimension (:), allocatable :: psi_chease,chi_chease
-  public :: psi_chease, chi_chease
+	public :: psi_chease, chi_chease
 
 #{one_dim_vars.map{ |v| 
 "
-  real, dimension(:), allocatable :: #{v}
-  public :: #{v}"}.join("\n")
+	real, dimension(:), allocatable :: #{v}
+	public :: #{v}"}.join("\n")
 }
-
+	
 #{two_dim_vars.map{|v| 
 "
-  real, dimension(:,:), allocatable :: #{v}
-  public :: #{v}
+	real, dimension(:,:), allocatable :: #{v}
+	public :: #{v}
 "}.join("\n")}
 
   integer :: infile=1212
@@ -119,7 +119,7 @@ module read_chease
   subroutine finish
     deallocate(psi_chease)
     deallocate(chi_chease)
-    #{(one_dim_vars + two_dim_vars).map{|v|
+		#{(one_dim_vars + two_dim_vars).map{|v|
 "
     deallocate(#{v})"}.join("\n")}
   end subroutine finish
@@ -133,7 +133,7 @@ end module read_chease
 !  call read_infile("ogyropsi.dat")
 !
 !end program test
-
+	
 EOF
 
 

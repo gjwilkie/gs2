@@ -125,7 +125,8 @@ contains
     endif
   end subroutine wnml_nonlinear_terms
 
-  subroutine init_nonlinear_terms 
+  subroutine init_nonlinear_terms
+    use mp, only : iproc
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0, nx, ny, akx, aky
     use le_grids, only: init_le_grids, nlambda, negrid
@@ -158,7 +159,14 @@ contains
     if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
     if (nonlinear_mode_switch /= nonlinear_mode_none) then
        call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
-
+       if (iproc == 0) then 
+          if (accelerated) then 
+             print*, "init nl : accelerated"
+          else
+              print*, "init nl : non-accelerated"
+          endif
+       endif
+          
        if (debug) write(6,*) "init_nonlinear_terms: allocations"
        if (alloc) then
           if (accelerated) then
@@ -557,7 +565,12 @@ contains
     
     call max_allreduce(max_vel)
     
-    dt_cfl = 1./max_vel
+    if ( abs (max_vel) > 0.d0) then 
+       dt_cfl = 1./max_vel
+    else
+       dt_cfl = 1.e8 ! as set above ?!?
+    endif
+
     call save_dt_cfl (dt_cfl)
     
     if (accelerated) then

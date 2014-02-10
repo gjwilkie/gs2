@@ -42,9 +42,6 @@ program test_le_grids
   ! General config
   eps = 1.0e-7
 
-  if (precision(eps).lt. 11) eps = eps * 100.0
-  !if (precision(eps).lt. 11) write (*,*) 'low precision'
-
   ! Set up depenencies
   call init_mp
   if (proc0) call init_file_utils(dummy)

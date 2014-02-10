@@ -5,29 +5,6 @@
 
 # include "define.inc"
 
-
-! The function calls for single and double precision fftw3 are different.
-! Here we save ourself the bother of writing them out twice by defining
-! a macro that correctly sets the beginning of the function
-
-#ifdef ANSI_CPP
-
-#ifdef SINGLE_PRECISION
-#define FFTW_PREFIX(fn) sfftw##fn
-#else
-#define FFTW_PREFIX(fn) dfftw##fn
-#endif
-
-#else
-
-#ifdef SINGLE_PRECISION
-#define FFTW_PREFIX(fn) sfftw/**/fn
-#else
-#define FFTW_PREFIX(fn) dfftw/**/fn
-#endif
-
-#endif
-
 module gs2_transforms
 
   use redistribute, only: redist_type
@@ -131,8 +108,9 @@ contains
     call init_gs2_layouts
 
     call pe_layout (char)
-
+    
     if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then  
+    !if(.true.) then
        accel = .true.
        call init_accel_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
     else
@@ -277,12 +255,12 @@ contains
 # elif FFT == _FFTW3_
           ! number of ffts to be calculated
           !JH 7th December 2011
-          !JH xxf_lo%ulim_alloc is used here rather than xxf_lo%lulim_proc
-          !JH because there are situations where xxf_lo%llim_proc is greater 
-          !JH than xxf_lo%ulim_proc and that would create a negative number 
-          !JH of FFTs to be calculated.  However, xxf_lo%ulim_alloc is set
-          !JH to be xxf_lo%llim_proc in this situation, and that will give 
-          !JH 1 FFT to be calculated which the code can correctly undertake.
+	  !JH xxf_lo%ulim_alloc is used here rather than xxf_lo%lulim_proc
+	  !JH because there are situations where xxf_lo%llim_proc is greater 
+	  !JH than xxf_lo%ulim_proc and that would create a negative number 
+	  !JH of FFTs to be calculated.  However, xxf_lo%ulim_alloc is set
+	  !JH to be xxf_lo%llim_proc in this situation, and that will give 
+	  !JH 1 FFT to be calculated which the code can correctly undertake.
           nb_ffts = xxf_lo%ulim_alloc - xxf_lo%llim_proc + 1
           
           call init_ccfftw (xf_fft,  1, xxf_lo%nx, nb_ffts, xxf)
@@ -321,19 +299,19 @@ contains
     use gs2_layouts, only: g_lo, xxf_lo, gidx2xxfidx, proc_id, idx_local
     use gs2_layouts, only: opt_local_copy, layout
     
-    use mp, only: nproc
+    use mp, only: nproc, shm_info, onnode, node_id
     use redistribute, only: index_list_type, init_redist, delete_list
     use redistribute, only: set_redist_character_type, set_xxf_optimised_variables
     implicit none
-    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
-    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list, node_list(0:shm_info%size-1)
+    integer, dimension(0:nproc-1) :: nn_to, nn_from, nn_node(0:shm_info%size-1)
     integer, dimension (3) :: from_low, from_high
     integer, dimension (2) :: to_high
-    integer :: to_low
+    integer, dimension (2) :: to_low
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
 
     integer :: iglo, isign, ig, it, ixxf
-    integer :: n, ip
+    integer :: n, ip, ipn
 
     if (initialized_x_redist) return
     initialized_x_redist = .true.
@@ -350,14 +328,24 @@ contains
     ! count number of elements to be redistributed to/from each processor
     nn_to = 0
     nn_from = 0
+    nn_node = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
              call gidx2xxfidx (ig, isign, iglo, g_lo, xxf_lo, it, ixxf)
+! one should not count the destination on node. 
+! however the gather scatter subrouitne check if the destination is on onde
+! needs revision
              if (idx_local(g_lo,iglo)) &
                   nn_from(proc_id(xxf_lo,ixxf)) = nn_from(proc_id(xxf_lo,ixxf)) + 1
-             if (idx_local(xxf_lo,ixxf)) &
-                nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
+             if (idx_local(xxf_lo,ixxf)) then
+                ip = proc_id(g_lo,iglo); 
+                nn_to(ip) = nn_to(ip) + 1
+                if (onnode(ip)) then 
+                   ipn = node_id(ip) 
+                   nn_node(ipn) = nn_node(ipn) + 1
+                endif
+             endif
           end do
        end do
     end do
@@ -373,11 +361,20 @@ contains
           allocate (to_list(ip)%second(nn_to(ip)))
        end if
     end do
-
+    
+    do ipn = 0, shm_info%size-1 
+       n =  nn_node(ipn)
+       if (n > 0) then 
+          allocate(node_list(ipn)%first(n), &
+               node_list(ipn)%second(n), &
+               node_list(ipn)%third(n))
+       endif
+    enddo
 
     ! get local indices of elements distributed to/from other processors
     nn_to = 0
     nn_from = 0
+    nn_node = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
@@ -396,6 +393,14 @@ contains
                 nn_to(ip) = n
                 to_list(ip)%first(n) = it
                 to_list(ip)%second(n) = ixxf
+                if (onnode(ip)) then
+                   ipn = node_id(ip)
+                   n = nn_node(ipn) + 1	
+                   nn_node(ipn) = n
+                   node_list(ipn)%first(n) = ig
+                   node_list(ipn)%second(n) = isign
+                   node_list(ipn)%third(n) = iglo
+                endif
              end if
           end do
        end do
@@ -405,8 +410,10 @@ contains
     from_low (2) = 1
     from_low (3) = g_lo%llim_proc
 
-    to_low = xxf_lo%llim_proc
-    
+    to_low(1) = xxf_lo%llim_proc
+! <LA made up value, to_low needs to be an array in init_redist 
+    to_low(2) = xxf_lo%llim_proc
+! LA>    
     to_high(1) = xxf_lo%nx
     to_high(2) = xxf_lo%ulim_alloc
 
@@ -418,11 +425,12 @@ contains
     call set_xxf_optimised_variables(opt_local_copy, naky, ntgrid, ntheta0, &
        nlambda, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
     call init_redist (g2x, 'c', to_low, to_high, to_list, &
-         from_low, from_high, from_list)
+         from_low, from_high, from_list, node_list)
 
     call delete_list (to_list)
     call delete_list (from_list)
-
+    call delete_list (node_list)
+    
   end subroutine init_x_redist
 
   !<DD>
@@ -985,7 +993,7 @@ contains
     call fftw_f77 (xf_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
     deallocate (aux)
 # elif FFT == _FFTW3_
-    call FFTW_PREFIX(_execute)(xf_fft%plan)
+    call dfftw_execute(xf_fft%plan)
 # endif
 
     call prof_leaving ("transform_x5d", "gs2_transforms")
@@ -1020,7 +1028,7 @@ contains
     call fftw_f77 (xb_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
     deallocate (aux)
 # elif FFT == _FFTW3_
-    call FFTW_PREFIX(_execute)(xb_fft%plan)
+    call dfftw_execute(xb_fft%plan)
 # endif
 
     call scatter (g2x, xxf, g)
@@ -1060,7 +1068,7 @@ contains
     call rfftwnd_f77_complex_to_real (yf_fft%plan, i, fft, 1, yxf_lo%ny/2+1, yxf, 1, yxf_lo%ny)
 # elif FFT == _FFTW3_
 
-    call FFTW_PREFIX(_execute_dft_c2r) (yf_fft%plan, fft, yxf)
+    call dfftw_execute_dft_c2r (yf_fft%plan, fft, yxf)
 # endif
 
     call prof_leaving ("transform_y5d", "gs2_transforms")
@@ -1091,7 +1099,7 @@ contains
     i = yxf_lo%ulim_alloc - yxf_lo%llim_proc + 1
     call rfftwnd_f77_real_to_complex (yb_fft%plan, i, yxf, 1, yxf_lo%ny, fft, 1, yxf_lo%ny/2+1)
 # elif FFT == _FFTW3_
-    call FFTW_PREFIX(_execute_dft_r2c) (yb_fft%plan, yxf, fft)
+    call dfftw_execute_dft_r2c (yb_fft%plan, yxf, fft)
 # endif
 
     call scatter (x2y, fft, xxf)
@@ -1227,19 +1235,20 @@ contains
        
        
     ! transform
-    i = (2*accel_lo%ntgrid+1)*2
-    idx = 1
-    do k = accel_lo%llim_proc, accel_lo%ulim_proc, accel_lo%nxnky
+       i = (2*accel_lo%ntgrid+1)*2
+       idx = 1
+       do k = accel_lo%llim_proc, accel_lo%ulim_proc, accel_lo%nxnky
 # if FFT == _FFTW_
-       call rfftwnd_f77_complex_to_real (yf_fft%plan, i, ag(:,:,k:), i, 1, &
-            axf(:,:,ia(idx):), i, 1)
+          call rfftwnd_f77_complex_to_real (yf_fft%plan, i, ag(:,:,k:), i, 1, &
+               axf(:,:,ia(idx):), i, 1)
 # elif FFT == _FFTW3_
-       ! remember FFTW3 for c2r destroys the contents of ag
-       call FFTW_PREFIX(_execute_dft_c2r) (yf_fft%plan, ag(:, :, k:), &
-            axf(:, :, ia(idx):))
+          ! remember FFTW3 for c2r destroys the contents of ag
+          call dfftw_execute_dft_c2r (yf_fft%plan, ag(:, :, k:), &
+               axf(:, :, ia(idx):))
 # endif
-       idx = idx + 1
-    end do
+          idx = idx + 1
+       end do
+       
 
   end subroutine transform2_5d_accel
 
@@ -1264,7 +1273,7 @@ contains
        call rfftwnd_f77_real_to_complex (yb_fft%plan, i, axf(:,:,k:), i, 1, &
             ag(:,:,iak(idx):), i, 1)
 # elif FFT == _FFTW3_
-       call FFTW_PREFIX(_execute_dft_r2c)(yb_fft%plan, axf(:, :, k:), &
+       call dfftw_execute_dft_r2c(yb_fft%plan, axf(:, :, k:), &
             ag(:, :, iak(idx):))
 # endif
        idx = idx + 1
@@ -1389,7 +1398,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
 # elif FFT == _FFTW3_
-    call FFTW_PREFIX(_execute_dft_c2r) (xf3d_cr%plan, aphi, phix)
+    call dfftw_execute_dft_c2r (xf3d_cr%plan, aphi, phix)
 # endif
 
     do it=1,nnx
@@ -1434,7 +1443,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (xf3d_rc%plan, i, phix, i, 1, aphi, i, 1)
 # elif FFT == _FFTW3_
-    call FFTW_PREFIX(_execute_dft_r2c) (xf3d_rc%plan, phix, aphi)
+    call dfftw_execute_dft_r2c (xf3d_rc%plan, phix, aphi)
 # endif
 
 ! dealias and scale
@@ -1508,7 +1517,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf2d%plan, 1, aphi, 1, 1, phix, 1, 1)
 # elif FFT == _FFTW3_
-    call FFTW_PREFIX(_execute_dft_c2r) (xf2d%plan, aphi, phix)
+    call dfftw_execute_dft_c2r (xf2d%plan, aphi, phix)
 # endif
 
     phixf(:,:)=transpose(phix(:,:))
@@ -1552,7 +1561,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (xf2d%plan, 1, phix, 1, 1, aphi, 1, 1)
 # elif FFT == _FFTW3_
-    call FFTW_PREFIX(_execute_dft_r2c) (xf2d%plan, phix, aphi)
+    call dfftw_execute_dft_r2c (xf2d%plan, phix, aphi)
 # endif
 
 ! scale, dealias and transpose
@@ -1615,7 +1624,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
 # elif FFT == _FFTW3_
-    call FFTW_PREFIX(_execute_dft_c2r) (xf3d_cr%plan, aphi, phix)
+    call dfftw_execute_dft_c2r (xf3d_cr%plan, aphi, phix)
 # endif
 
     do it=1,nnx
@@ -1657,7 +1666,7 @@ contains
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)
 # elif FFT == _FFTW3_
-    call FFTW_PREFIX(_execute_dft)(zf_fft%plan, an, an2)
+    call dfftw_execute_dft(zf_fft%plan, an, an2)
 # endif
     an2 = conjg(an2)*an2
 

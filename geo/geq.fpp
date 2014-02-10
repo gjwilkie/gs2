@@ -80,8 +80,8 @@ contains
     integer :: ncid, id
     integer :: nchar
 !    integer :: ncid, id, i, j, ifail, nchar
-!    character(31) :: fortrancrap
-!    character(80) :: filename, eqfile
+!    character*31 :: fortrancrap
+!    character*80 :: filename, eqfile
     character (len=80) :: filename
 !    integer, dimension(2) :: start, cnt
 
@@ -477,7 +477,7 @@ contains
     use constants, only: pi
     implicit none
     integer :: i, j
-    character(1) :: char
+    character*1 :: char
 !    real :: f(:,:), dfm(:,:,:), pi
     real :: f(:,:), dfm(:,:,:)
 
@@ -528,7 +528,7 @@ contains
     implicit none
 
     integer, intent (in) :: nth_used, ntm
-    character(1), intent (in) :: char
+    character*1, intent (in) :: char
     real, dimension (-ntm:), intent (in)  :: rgrid, theta
     real, dimension (-ntm:,:), intent (out) :: grad
     real, dimension(nr,nt,2) :: dcart
@@ -588,7 +588,7 @@ contains
     implicit none
 
     integer, intent (in) :: nth_used, ntm
-    character(1), intent (in) :: char
+    character*1, intent (in) :: char
     real, dimension (-ntm:), intent (in)  ::  rgrid, theta
     real, dimension (-ntm:,:), intent (out) :: grad
     real, dimension (1) :: aa, daa, rpt
@@ -638,7 +638,7 @@ contains
 
     use constants, only: pi
     integer :: i, j, istar, jstar
-    character(1) :: char
+    character*1 :: char
     real :: r, thet, fstar, sign, tp, tps, theta_in
 !    real :: st, dt, sr, dr, pi, rt
     real :: st, dt, sr, dr, rt

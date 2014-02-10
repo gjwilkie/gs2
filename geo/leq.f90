@@ -145,7 +145,7 @@ contains
 
     implicit none
     integer i, j
-    character(1) :: char
+    character*1 :: char
     real f(:,:), dfm(:,:,:), pi
 
     pi = 2*acos(0.)
@@ -195,7 +195,7 @@ contains
     implicit none
     
     integer nth_used, ntm
-    character(1) char
+    character*1 char
     real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
     real tmp(2), aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) :: dcart
@@ -250,7 +250,7 @@ contains
     implicit none
     
     integer nth_used, ntm
-    character(1) char
+    character*1 char
     real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
     real :: aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) ::  dbish
@@ -295,7 +295,7 @@ contains
   subroutine eqitem(r, theta_in, f, fstar, char)
       
     integer :: j, istar, jstar
-    character(1) :: char
+    character*1 :: char
     real :: r, thet, fstar, tp, tps, theta_in
     real :: st, dt, pi
     real, dimension(:,:) :: f

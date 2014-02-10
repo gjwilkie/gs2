@@ -46,7 +46,7 @@ module antenna
 
   private
   public :: init_antenna, dump_ant_amp, amplitude, finish_antenna, reset_init
-  public :: wnml_antenna, check_antenna, no_driver
+  public :: wnml_antenna, check_antenna
   public :: antenna_w, antenna_apar, antenna_amplitudes, a_ext_data
 
 contains
@@ -178,7 +178,7 @@ contains
        if (.not. exist) then
           no_driver = .true.
        else
-          if (ant_off) no_driver = .true.
+	  if (ant_off) no_driver = .true.
 
           read (unit=input_unit("driver"), nml=driver)
           
@@ -213,7 +213,7 @@ contains
              kz_stir(i) = kz
              trav(i) = travel
 ! If a, b are not specified in the input file:
-             if (a == -1.0 .and. b == -1.0) then
+	     if (a == -1.0 .and. b == -1.0) then
 ! And if a, b are not specified in the restart file 
 ! (else use values from restart file by default)
                 if (ierr /= 0) then                   
@@ -366,9 +366,9 @@ contains
 
        if (write_antenna) then
          if (proc0) write(out_unit, fmt='(8(1x,e13.6),1x,i2)') &
-              & time, real((a_ant(i)+b_ant(i))/sqrt(2.)), &
-              &     aimag((a_ant(i)+b_ant(i))/sqrt(2.)),real(a_ant(i)), aimag(a_ant(i)), &
-              &     real(b_ant(i)), aimag(b_ant(i)), real(wtmp), i
+	 & time, real((a_ant(i)+b_ant(i))/sqrt(2.)), &
+         &     aimag((a_ant(i)+b_ant(i))/sqrt(2.)),real(a_ant(i)), aimag(a_ant(i)), &
+         &     real(b_ant(i)), aimag(b_ant(i)), real(wtmp), i
        end if
     end do
 
@@ -467,9 +467,9 @@ contains
        time = user_time
        do i=1,nk_stir
          if (proc0) write(out_unit, fmt='(7(1x,e13.6),1x,i2)') &
-              & time, real((a_ant(i)+b_ant(i))/sqrt(2.)), &
-              &     aimag((a_ant(i)+b_ant(i))/sqrt(2.)),real(a_ant(i)), aimag(a_ant(i)), &
-              &     real(b_ant(i)), aimag(b_ant(i)),i
+	 & time, real((a_ant(i)+b_ant(i))/sqrt(2.)), &
+         &     aimag((a_ant(i)+b_ant(i))/sqrt(2.)),real(a_ant(i)), aimag(a_ant(i)), &
+         &     real(b_ant(i)), aimag(b_ant(i)),i
   
        end do
     end if

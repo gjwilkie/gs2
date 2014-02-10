@@ -59,7 +59,7 @@ module collisions
   logical :: hyper_colls
   logical :: ei_coll_only
   logical :: test
-  logical :: special_wfb_lorentz
+
   integer, public, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
   integer, public, parameter :: collision_model_none = 3
   integer, public, parameter :: collision_model_lorentz_test = 5 ! if this changes, check gs2_diagnostics
@@ -266,7 +266,7 @@ contains
          lorentz_scheme, ediff_scheme, resistivity, conservative, test, &
 ! following only needed for adaptive collisionality
          vnfac, etol, ewindow, ncheck, vnslow, vary_vnew, etola, ewindowa, &
-         use_le_layout, special_wfb_lorentz
+	 use_le_layout
     integer :: ierr, in_file
 
     if (proc0) then
@@ -293,7 +293,6 @@ contains
        heating = .false.
        test = .false.
        ei_coll_only = .false.
-       special_wfb_lorentz=.true.
        in_file = input_unit_exist ("collisions_knobs", exist)
 !       if (exist) read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
        if (exist) read (unit=in_file, nml=collisions_knobs)
@@ -337,7 +336,6 @@ contains
     call broadcast (adjust)
     call broadcast (ei_coll_only)
     call broadcast (use_le_layout)
-    call broadcast (special_wfb_lorentz)
 
     drag = resistivity .and. (beta > epsilon(0.0)) .and. (nspec > 1) .and. (fapar.gt.0)
   end subroutine read_parameters
@@ -2316,7 +2314,6 @@ contains
     use dist_fn_arrays, only: vpa, kperp2, aj0
     use fields_arrays, only: aparnew
     use run_parameters, only: ieqzip
-    use kt_grids, only: kwork_filter
     use constants
     ! TMP FOR TESTING -- MAB
 !    use mp, only: proc0
@@ -2383,7 +2380,6 @@ contains
              if (spec(is)%type /= electron_species) cycle
              it = it_idx(g_lo,iglo)
              ik = ik_idx(g_lo,iglo)
-             if(kwork_filter(it,ik)) cycle
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
                 g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
@@ -2430,7 +2426,6 @@ contains
              if (spec(is)%type /= electron_species) cycle
              it = it_idx(g_lo,iglo)
              ik = ik_idx(g_lo,iglo)
-             if(kwork_filter(it,ik))cycle
              ie = ie_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
                 g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
@@ -2468,7 +2463,6 @@ contains
     use species, only: spec, electron_species
     use dist_fn_arrays, only: kperp2
     use fields_arrays, only: aparnew
-    use kt_grids, only: kwork_filter
     ! TMP FOR TESTING -- MAB
 !    use mp, only: proc0
 
@@ -2513,7 +2507,6 @@ contains
              if (spec(is)%type /= electron_species) cycle
              it = it_idx(le_lo,ile)
              ik = ik_idx(le_lo,ile)
-             if(kwork_filter(it,ik)) cycle
              ig = ig_idx(le_lo,ile)
              do ie = 1, negrid
                 do ixi = 1, nxi
@@ -2565,7 +2558,6 @@ contains
              if (spec(is)%type /= electron_species) cycle
              it = it_idx(le_lo,ile)
              ik = ik_idx(le_lo,ile)
-             if(kwork_filter(it,ik)) cycle
              ig = ig_idx(le_lo,ile)
              do ie = 1, negrid
                 do ixi = 1, nxi
@@ -2610,8 +2602,7 @@ contains
     use le_grids, only: energy, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
-    use kt_grids, only: kwork_filter
-    
+
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
@@ -2636,9 +2627,6 @@ contains
 ! First get v0y0
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          it = it_idx(g_lo,iglo)
-          ik = ik_idx(g_lo,iglo)
-          if(kwork_filter(it,ik))cycle
           do isgn = 1, 2
              ! v0 = vpa J0 f0, y0 = g
              gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*g(:,isgn,iglo)
@@ -2653,7 +2641,6 @@ contains
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
-          if(kwork_filter(it,ik))cycle
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
              g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
@@ -2672,8 +2659,6 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       if(kwork_filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -2697,7 +2682,6 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v1y1(:,it,ik,is) &
@@ -2711,7 +2695,6 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(kwork_filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -2730,7 +2713,6 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v2y2(:,it,ik,is) &
@@ -2738,7 +2720,7 @@ contains
        end do
     end do
 
-    deallocate (vns, v0y0, v1y1, v2y2, gtmp)
+    deallocate (vns, v0y0, v1y1, v2y2)
 
   end subroutine conserve_lorentz_standard_layout
 
@@ -2756,7 +2738,7 @@ contains
     use redistribute, only: scatter
     use run_parameters, only: tunits
     use theta_grid, only: bmag
-    use kt_grids, only: kwork_filter
+
     implicit none
 
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
@@ -2799,9 +2781,6 @@ contains
        do ile = le_lo%llim_proc, le_lo%ulim_proc
           is = is_idx(le_lo,ile)
           ig = ig_idx(le_lo,ile)
-          it = it_idx(le_lo,ile)
-          ik = ik_idx(le_lo,ile)
-          if(kwork_filter(it,ik)) cycle
           gtmp(:,:,ile) = vpanud(ig,:,:,is) * aj0le(:,:,ile) * gle(:,:,ile)
        end do
        call integrate_moment (le_lo, gtmp, v0y0)    ! v0y0
@@ -2812,7 +2791,6 @@ contains
        do ile = le_lo%llim_proc, le_lo%ulim_proc
           it = it_idx(le_lo,ile)
           ik = ik_idx(le_lo,ile)
-          if(kwork_filter(it,ik)) cycle
           gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)* z0le(:,:,ile) * v0y0(ile)
        end do
 
@@ -2850,10 +2828,8 @@ contains
 
     ! v1 = nud vpa J0 f0, y1 = gle
     do ile = le_lo%llim_proc, le_lo%ulim_proc
-       ik = ik_idx(le_lo,ile)
-       it = it_idx(le_lo,ile)
-       if(kwork_filter(it,ik)) cycle
        is = is_idx(le_lo,ile)
+       ik = ik_idx(le_lo,ile)
        ig = ig_idx(le_lo,ile)
        gtmp(:,:,ile) = vpanud(ig,:,:,is) * tunits(ik) * aj0le(:,:,ile) &
             * gle(:,:,ile)
@@ -2867,8 +2843,6 @@ contains
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
-       if(kwork_filter(it,ik)) cycle
-
        gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*s0le(:,:,ile) * v1y1(ile)
     end do
 
@@ -2876,10 +2850,8 @@ contains
 ! Now get v2y2
 
     do ile = le_lo%llim_proc, le_lo%ulim_proc
-       it = it_idx(le_lo,ile)
-       ik = ik_idx(le_lo,ile)
-       if(kwork_filter(it,ik)) cycle
        is = is_idx(le_lo,ile)
+       ik = ik_idx(le_lo,ile)
        ig = ig_idx(le_lo,ile)
        do ixi=1, nxi
           il = ixi_to_il(ig,ixi)
@@ -2897,11 +2869,10 @@ contains
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
-       if(kwork_filter(it,ik)) cycle
        gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*w0le(:,:,ile) * v2y2(ile)
     end do
 
-    deallocate (gtmp, vpanud, v0y0, v1y1, v2y2)
+    deallocate (vpanud, v0y0, v1y1, v2y2)
 
   end subroutine conserve_lorentz_le_layout
 
@@ -2915,7 +2886,6 @@ contains
     use le_grids, only: energy, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
-    use kt_grids, only: kwork_filter
 
     implicit none
 
@@ -2936,16 +2906,11 @@ contains
 
     vns = vnmult(2)*delvnew
 
-    !This is needed to to ensure the it,ik values we don't set aren't included
-    !in the integral (can also be enforced in integrate_moment routine)
-    if(any(kwork_filter)) gtmp=0.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! First get v0y0
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       if(kwork_filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
@@ -2963,7 +2928,6 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
@@ -2976,8 +2940,6 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       if(kwork_filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
@@ -2995,7 +2957,6 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v1y1(:,it,ik,is) &
@@ -3008,8 +2969,6 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
-       if(kwork_filter(it,ik))cycle
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -3028,7 +2987,6 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
-       if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v2y2(:,it,ik,is) &
@@ -3050,11 +3008,10 @@ contains
     use le_grids, only: ixi_to_il, ixi_to_isgn
     use run_parameters, only: ieqzip
     use le_grids, only: forbid, sgn, speed, nxi
-    use gs2_layouts, only: le_lo, ig_idx, ik_idx, it_idx
+    use gs2_layouts, only: le_lo, ig_idx
     use redistribute, only: scatter
     use theta_grid, only: bmag
     use run_parameters, only: tunits
-    use kt_grids, only: kwork_filter
     ! TMP FOR TESTING -- MAB
 !    use mp, only: proc0
 
@@ -3082,10 +3039,6 @@ contains
     allocate (vpadelnu(-ntgrid:ntgrid, nxi+1, negrid+1, nspec)) ; vpadelnu = 0.0
     allocate (vns(naky,negrid,nspec))
 
-    !This is needed to to ensure the it,ik values we don't set aren't included
-    !in the integral (can also be enforced in integrate_moment routine)
-    if(any(kwork_filter)) gtmp=0.
-
     if (.not. allocated(vpatmp)) then
        allocate(vpatmp(-ntgrid:ntgrid,nxi)) ; vpatmp = 0.0
        do ixi = 1, nxi
@@ -3109,8 +3062,7 @@ contains
      do ile = le_lo%llim_proc, le_lo%ulim_proc
         is = is_idx(le_lo,ile)
         ik = ik_idx(le_lo,ile)
-        it = it_idx(le_lo,ile)
-        if(kwork_filter(it,ik)) cycle
+       
         do ie=1, negrid
            do ixi = 1, nxi
               gtmp(ixi,ie,ile) = vns(ik,ie,is)*aj0le(ixi,ie,ile)*gle(ixi,ie,ile)
@@ -3133,8 +3085,6 @@ contains
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
-       if(kwork_filter(it,ik)) cycle
-
        gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*v0y0(ile)*bz0le(:,:,ile)
     end do
 
@@ -3165,9 +3115,6 @@ contains
        is = is_idx(le_lo,ile)
        ig = ig_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
-       it = it_idx(le_lo,ile)
-       if(kwork_filter(it,ik)) cycle
-
        gtmp (:,:,ile) = vpadelnu(ig,:,:,is) * tunits(ik) * aj0le(:,:,ile) * gle(:,:,ile)
     end do
 
@@ -3185,8 +3132,6 @@ contains
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
-       if(kwork_filter(it,ik)) cycle
-
        gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*bs0le(:,:,ile) * v1y1(ile)
     end do
 
@@ -3208,9 +3153,6 @@ contains
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        is = is_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
-       it = it_idx(le_lo,ile)
-       if(kwork_filter(it,ik)) cycle
-
        ig = ig_idx(le_lo,ile)
        do ie=1, negrid
           do ixi = 1, nxi
@@ -3235,8 +3177,6 @@ contains
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
-       if(kwork_filter(it,ik)) cycle
-
        gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*bw0le(:,:,ile) * v2y2(ile)
     end do
 
@@ -3264,7 +3204,6 @@ contains
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
     use run_parameters, only: ieqzip
-    use kt_grids, only: kwork_filter
     use gs2_layouts, only: lz_lo
 
     implicit none
@@ -3274,16 +3213,17 @@ contains
     logical, optional, intent (in) :: init
 
     complex, dimension (:,:), allocatable :: glz, glzc
+    complex, dimension (:), allocatable :: glz0
     integer :: ilz
     complex, dimension (nxi+1) :: delta
     complex :: fac, gwfb
-    integer :: ig, ik, il, is, it, je, ie
-    integer :: nxi_scatt
+    integer :: ig, ik, il, is, je, ie
 
     call prof_entering ("solfp_lorentz", "collisions")
 
     allocate (glz(nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
-    glz = 0.0
+    allocate (glz0(nxi+1))
+    glz = 0.0 ; glz0 = 0.0
     if (heating) then
        allocate (glzc(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
        glzc = 0.0
@@ -3333,43 +3273,45 @@ contains
     ! solve for glz row by row
     do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
 
-       ik = ik_idx(lz_lo,ilz)
-       it = it_idx(lz_lo,ilz)
-       if(kwork_filter(it,ik))cycle
-       if (ieqzip(it,ik)==0) cycle
-       is = is_idx(lz_lo,ilz)
-       if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
        ie = ie_idx(lz_lo,ilz)
        ig = ig_idx(lz_lo,ilz)
+       ik = ik_idx(lz_lo,ilz)
+       is = is_idx(lz_lo,ilz)
 
-!CMRDDGC, 10/2/1014: 
-! Fixes for wfb treatment below, use same je definition in ALL cases
-!   je  = #physical xi values at location, includes duplicate point at vpar=0
-!  je-1 = #physical xi values removing duplicate vpar=0 point
-       je=2*jend(ig)
-       nxi_scatt=je-1
-       glz(je,ilz)=0.0d0  ! zero redundant duplicate xi, isign=2 for vpar=0!
-       if (jend(ig) == ng2+1 .and.special_wfb_lorentz) then
-!CMRDDGC:  special_wfb_lorentz = t  => unphysical handling of wfb at bounce pt: 
-!          remove wfb from collisions, reinsert later
-!
-! first save gwfb for reinsertion later
-          gwfb = glz(ng2+1,ilz) 
-! then remove vpa = 0 point, weight 0: (CMR confused by this comment!)  
-          glz(ng2+1:je-2,ilz) = glz(ng2+2:je-1,ilz)
-          nxi_scatt=nxi_scatt-1
-       endif
-!CMRDDGCend
+       if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
+       if (ieqzip(it_idx(lz_lo,ilz),ik_idx(lz_lo,ilz))==0) cycle
+
+       je = jend(ig)
+
+       if (je > ng2+1) then
+          je = 2*je
+       else
+          je = 2*ng2+1
+       end if
+
+       ! deal with special case of wfb
+       if (jend(ig) == ng2+1) then
+          ! if wfb, remove vpa = 0 point (which has wgt of zero)
+          glz0(:ng2) = glz(:ng2,ilz)
+          glz0(ng2+1:je-1) = glz(ng2+2:je,ilz)
+          ! save gwfb for reinsertion later
+          gwfb = glz(ng2+1,ilz)
+       else
+          glz0 = glz(:,ilz)
+       end if
+
+       glz(:je-1,ilz) = glz0(:je-1)
+       glz(je:,ilz) = 0.0
 
        ! right and left sweeps for tridiagonal solve:
 
        delta(1) = glz(1,ilz)
-       do il = 1, nxi_scatt
+       do il = 1, je-1
           delta(il+1) = glz(il+1,ilz) - ql(il+1,ilz)*delta(il)
        end do
        
        glz(je,ilz) = delta(je)*betaa(je,ilz)
-       do il = nxi_scatt, 1, -1
+       do il = je-1, 1, -1
           glz(il,ilz) = (delta(il) - c1(il,ilz)*glz(il+1,ilz))*betaa(il,ilz)
        end do
 
@@ -3377,9 +3319,11 @@ contains
 !       ! and insert this point into glz
        ! interpolation described above mysteriously causing numerical instability
        ! stabilized by using old (pre-collision) value of g for wfb
-       if (jend(ig) == ng2+1.and.special_wfb_lorentz) then
-          glz(ng2+2:je-1,ilz) = glz(ng2+1:je-2,ilz)
+       if (jend(ig) == ng2+1) then
+          glz0(ng2+2:je) = glz(ng2+1:je-1,ilz)
+!          glz(ng2+1,ilz) = 0.5*(glz(ng2,ilz)+glz(ng2+1,ilz))
           glz(ng2+1,ilz) = gwfb
+          glz(ng2+2:je,ilz) = glz0(ng2+2:je)
        end if
 
 !
@@ -3396,7 +3340,7 @@ contains
 
     call scatter (lambda_map, glz, g)
 
-    deallocate (glz)
+    deallocate (glz, glz0)
     if (heating) deallocate (glzc)
 
     call prof_leaving ("solfp_lorentz", "collisions")
@@ -3412,21 +3356,21 @@ contains
     use run_parameters, only: ieqzip
     use gs2_layouts, only: le_lo
     use dist_fn_arrays, only: c_rate
-    use kt_grids, only: kwork_filter
+
     implicit none
 
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
     integer, optional, intent (in) :: diagnostics
 
-    complex, dimension (:), allocatable :: tmp
+    complex, dimension (:), allocatable :: gle0, tmp
     integer :: ile
     complex, dimension (nxi+1) :: delta
     complex :: fac, gwfb
     integer :: ig, ik, il, is, je, it, ie
-    integer :: nxi_scatt
 
     call prof_entering ("solfp_lorentz", "collisions")
 
+    allocate (gle0(nxi+1)) ; gle0 = 0.0
     allocate (tmp(le_lo%llim_proc:le_lo%ulim_alloc)) ; tmp = 0.0
 
     if (heating .and. present(diagnostics)) then
@@ -3488,59 +3432,64 @@ contains
 
     ! solve for gle row by row
     do ile = le_lo%llim_proc, le_lo%ulim_proc
+
+       ig = ig_idx(le_lo,ile)
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
-       if (kwork_filter(it,ik)) cycle
-       if (ieqzip(it,ik)==0) cycle
        is = is_idx(le_lo,ile)
-       if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
-       ig = ig_idx(le_lo,ile)
 
-!CMRDDGC, 10/2/1014: 
-! Fixes for wfb treatment below, use same je definition in ALL cases
-!   je  = #physical xi values at location, includes duplicate point at vpar=0
-!  je-1 = #physical xi values removing duplicate vpar=0 point
-       je=2*jend(ig)
-       nxi_scatt=je-1
-! These fixes address previous comment by CMR: 
-! "surely wfb's bounce point should be handled like any other trapped bp?"
+       if (abs(vnew(ik,1,is)) < 2.0*epsilon(0.0)) cycle
+       if (ieqzip(it,ik)==0) cycle
+
+       je = jend(ig)
+
+       if (je > ng2+1) then
+          je = 2*je
+       else
+          je = 2*ng2+1
+       end if
+
 !CMR, 1/11/2013:
+! wfb does not seem to be treated correctly.
+! Surely wfb's bounce point should be handled like any other trapped particle bp?
 ! Numerical instability referred to below more likely arises from wfb failing
 ! to satisfy trapping condition after invert_rhs.
 !
        do ie = 1, negrid
-          gle(je,ie,ile)=0.0d0  ! zero redundant duplicate xi, isign=2 for vpar=0!
-          if (jend(ig) == ng2+1 .and.special_wfb_lorentz) then
-!CMRDDGC:  special_wfb_lorentz = t  => unphysical handling of wfb at bounce pt: 
-!          remove wfb from collisions, reinsert later
-!
-! first save gwfb for reinsertion later
+          ! deal with special case of wfb
+          if (jend(ig) == ng2+1) then
+             ! if wfb, remove vpa = 0 point (which has wgt of zero)
+             gle0(:ng2) = gle(:ng2,ie,ile)
+             gle0(ng2+1:je-1) = gle(ng2+2:je,ie,ile)
+             ! save gwfb for reinsertion later
              gwfb = gle(ng2+1,ie,ile)
-! then remove vpa = 0 point, weight 0: (CMR confused by this comment!)  
-             gle(ng2+1:je-2,ie,ile) = gle(ng2+2:je-1,ie,ile)
-             nxi_scatt=nxi_scatt-1
-          endif
-!CMRDDGCend
+          else
+             gle0 = gle(:,ie,ile)
+          end if
+
+          gle(:je-1,ie,ile) = gle0(:je-1)
+          gle(je:,ie,ile) = 0.0
 
           ! right and left sweeps for tridiagonal solve:
           
           delta(1) = gle(1,ie,ile)
-          do il = 1, nxi_scatt
+          do il = 1, je-1
              delta(il+1) = gle(il+1,ie,ile) - qle(il+1,ie,ile)*delta(il)
           end do
        
           gle(je,ie,ile) = delta(je)*betaale(je,ie,ile)
-          do il = nxi_scatt, 1, -1
+          do il = je-1, 1, -1
              gle(il,ie,ile) = (delta(il) - c1le(il,ie,ile)*gle(il+1,ie,ile))*betaale(il,ie,ile)
           end do
 !       ! interpolate to obtain glz(vpa = 0) point for wfb
 !       ! and insert this point into glz
           ! interpolation described above mysteriously causing numerical instability
           ! stabilized by using old (pre-collision) value of g for wfb
-          if (jend(ig) == ng2+1.and.special_wfb_lorentz) then
-             gle(ng2+2:je-1,ie,ile)=gle(ng2+1:je-2,ie,ile)
-             gle(ng2+1,ie,ile)=gwfb
+          if (jend(ig) == ng2+1) then
+             gle0(ng2+2:je) = gle(ng2+1:je-1,ie,ile)
 !          gle(ng2+1,ie,ile) = 0.5*(gle(ng2,ie,ile)+gle(ng2+1,ie,ile))
+             gle(ng2+1,ie,ile) = gwfb
+             gle(ng2+2:je,ie,ile) = gle0(ng2+2:je)
           end if
 
 !CMR, 1/11/2013:
@@ -3552,7 +3501,7 @@ contains
        end do
     end do
 
-    deallocate (tmp)
+    deallocate (gle0, tmp)
     
     call prof_leaving ("solfp_lorentz", "collisions")
 
@@ -3571,14 +3520,13 @@ contains
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather, scatter
     use run_parameters, only: ieqzip
-    use kt_grids, only: kwork_filter
 
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     logical, intent (in), optional :: init
 
-    integer :: ie, is, ig, il, it, ik
+    integer :: ie, is, ig, il
     complex, dimension (negrid) :: delta
     complex, dimension (:,:), allocatable :: ged
     integer :: ielo
@@ -3590,15 +3538,12 @@ contains
     ! solve for ged row by row
     do ielo = e_lo%llim_proc, e_lo%ulim_proc
 
-       it = it_idx(e_lo,ielo)       
-       ik = ik_idx(e_lo,ielo)
-       if(kwork_filter(it,ik))cycle
-       if (ieqzip(it,ik)==0) cycle
        is = is_idx(e_lo,ielo)
-       if (spec(is)%vnewk < 2.0*epsilon(0.0)) cycle
        ig = ig_idx(e_lo,ielo)
        il = il_idx(e_lo,ielo)
-       if (forbid(ig,il)) cycle
+
+       if (spec(is)%vnewk < 2.0*epsilon(0.0) .or. forbid(ig,il)) cycle
+       if (ieqzip(it_idx(e_lo,ielo),ik_idx(e_lo,ielo))==0) cycle
 
        delta(1) = ged(1,ielo)
        do ie = 1, negrid-1
@@ -3626,7 +3571,7 @@ contains
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx, le_lo
     use run_parameters, only: ieqzip
     use layouts_type, only: le_layout_type
-    use kt_grids, only: kwork_filter
+
     implicit none
 
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
@@ -3634,18 +3579,16 @@ contains
 
     integer :: ie, is, ig, il
     complex, dimension (negrid) :: delta
-    integer :: ile, ixi, ik, it
+    integer :: ile, ixi
 
     ! solve for gle row by row
     do ile = le_lo%llim_proc, le_lo%ulim_proc
 
        is = is_idx(le_lo,ile)
-       if (spec(is)%vnewk < 2.0*epsilon(0.0)) cycle
-       it=it_idx(le_lo,ile)
-       ik=ik_idx(le_lo,ile)
-       if (kwork_filter(it,ik)) cycle
-       if (ieqzip(it,ik)==0) cycle
        ig = ig_idx(le_lo,ile)
+
+       if (spec(is)%vnewk < 2.0*epsilon(0.0)) cycle
+       if (ieqzip(it_idx(le_lo,ile),ik_idx(le_lo,ile))==0) cycle
 
        do ixi = 1, nxi
           il = ixi_to_il(ig,ixi)

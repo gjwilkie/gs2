@@ -1,0 +1,34 @@
+# Host: rokko at UHyogo (SGI Altix)
+#
+#COMPILER ?= gnu-gfortran
+COMPILER ?= intel
+#COMPILER ?= pgi
+
+include Makefile.$(COMPILER)
+
+ifdef USE_MPI
+	MPIFC := $(FC)
+	MPICC := $(CC)
+ifneq ($(COMPILER),g95)
+	LIBS += -lmpi
+endif
+#	MPIINC = on
+endif
+
+USE_HDF5=on
+
+ifdef USE_NETCDF
+#	NETCDF_INC = -l/usr/include
+#	NETCDF_LIB = -L/usr/lib64 -lnetcdf -lnetcdff
+#	NETCDF_INC = -I/home1/n272r011/local/intel/include
+#	NETCDF_LIB = -L/home1/n272r011/local/intel/lib -lnetcdf -lnetcdff
+endif
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = $(FFTW_LIB)
+	FFT_INC = $(FFTW_INC)
+#	FFT_LIB = -lrfftw -lfftw
+#	FFT_LIB = -lrfftw -lfftw
+#	FFT_LIB = -L/usr/lib64 -ldrfftw -ldfftw
+#	FFT_LIB = -L/usr/lib64 -ldrfftw -ldfftw
+endif

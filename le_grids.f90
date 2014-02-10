@@ -636,7 +636,6 @@ contains
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
-    use kt_grids, only: kwork_filter
     use mp, only: sum_allreduce
 
     implicit none
@@ -650,32 +649,18 @@ contains
     total = 0.
 
     !Performed integral (weighted sum) over local velocity space and species
-    if(any(kwork_filter))then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          !Convert from iglo to the separate indices
-          ik = ik_idx(g_lo,iglo)
-          it = it_idx(g_lo,iglo)
-          if(kwork_filter(it,ik)) cycle
-          ie = ie_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       !Convert from iglo to the separate indices
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
 
-          !Sum up weighted g
-          total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
-       end do
-    else
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          !Convert from iglo to the separate indices
-          ik = ik_idx(g_lo,iglo)
-          it = it_idx(g_lo,iglo)
-          ie = ie_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
+       !Sum up weighted g
+       total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+    end do
 
-          !Sum up weighted g
-          total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
-       end do
-    endif
     !Reduce sum across all procs to make integral over all velocity space and species
     call sum_allreduce (total) 
   end subroutine integrate_species_original
@@ -687,7 +672,7 @@ contains
     use gs2_layouts, only: g_lo, intspec_sub
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use mp, only: sum_allreduce_sub, sum_allreduce
-    use kt_grids, only: kwork_filter
+
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
@@ -707,32 +692,17 @@ contains
     total_small=0.
 
     !Performed integral (weighted sum) over local velocity space and species
-    if(any(kwork_filter))then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          !Convert from iglo to the separate indices
-          ik = ik_idx(g_lo,iglo)
-          it = it_idx(g_lo,iglo)
-          if(kwork_filter(it,ik)) cycle
-          ie = ie_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
-          
-          !Sum up weighted g
-          total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
-       end do
-    else
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          !Convert from iglo to the separate indices
-          ik = ik_idx(g_lo,iglo)
-          it = it_idx(g_lo,iglo)
-          ie = ie_idx(g_lo,iglo)
-          is = is_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
-          
-          !Sum up weighted g
-          total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
-       end do
-    endif
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       !Convert from iglo to the separate indices
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+
+       !Sum up weighted g
+       total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+    end do
 
     !Reduce sum across all procs in sub communicator to make integral over all velocity space and species
     if(intspec_sub)then
@@ -787,6 +757,7 @@ contains
 
     !If we don't want to gather then use integrate_species_sub
     if(present(nogath))then
+       print*,"using nogath method"
        if(nogath)then
           call integrate_species_sub(g,weights,total)
           return
@@ -794,7 +765,7 @@ contains
     endif
 
     !->First intialise gather vars
-    !Note: We only do this on the first call !!May be better to move this to some init routine?
+    !Note: We only do this on the first call
     if(.not.allocated(recvcnts)) then
        !Get subcomm size
        call nproc_comm(g_lo%lesblock_comm,sz)
@@ -1484,7 +1455,7 @@ contains
 !the results at other points.
     use layouts_type, only: le_layout_type
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
-    use kt_grids, only: kwork_filter
+
     implicit none
 
     type (le_layout_type), intent (in) :: lo
@@ -1493,10 +1464,9 @@ contains
     integer :: ixi, ie, il, ile, ig, it, ik
     total = cmplx(0.0,0.0)
     do ile = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ile)
        it = it_idx (lo,ile)
        ik = ik_idx (lo,ile)
-       if(kwork_filter(it,ik)) cycle
-       ig = ig_idx (lo,ile)
        do ie=1, negrid
 !CMR, 2/10/2013:
 !   nxi+1 limit on do loop below is CRUCIAL, as its stores phase space point
@@ -1528,7 +1498,7 @@ contains
     use layouts_type, only: le_layout_type
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
     use theta_grid, only: ntgrid
-    use kt_grids, only: kwork_filter
+
     implicit none
 
     type (le_layout_type), intent (in) :: lo
@@ -1537,10 +1507,9 @@ contains
     integer :: ixi, ie, il, ile, ig, it, ik, is
     total = cmplx(0.0,0.0)
     do ile = lo%llim_proc, lo%ulim_proc
+       ig = ig_idx (lo,ile)
        it = it_idx (lo,ile)
        ik = ik_idx (lo,ile)
-       if(kwork_filter(it,ik)) cycle
-       ig = ig_idx (lo,ile)
        is = is_idx (lo,ile)
        do ie=1, negrid
 !CMR, 2/10/2013:
@@ -3432,7 +3401,7 @@ contains
        nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
     end do
 !<DD
-
+	
     call init_energy_layouts &
          (ntgrid, naky, ntheta0, nlambda, nspec)
 
@@ -3556,7 +3525,7 @@ contains
        nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
     end do
     !<DD>
-
+	
     !Initialise e_lo layout object
     call init_energy_layouts &
          (ntgrid, naky, ntheta0, nlambda, nspec)

@@ -1,8 +1,4 @@
 
-&layouts_knobs
-layout = 'xyles'
-/
-
 &species_parameters_1
   type = 'ion'
   z = 1.0
@@ -51,7 +47,7 @@ layout = 'xyles'
 
 &theta_grid_parameters
   nperiod = 1
-  ntheta = 10
+  ntheta = 8
 /
 
 &dist_fn_species_knobs_1

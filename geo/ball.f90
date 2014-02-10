@@ -67,7 +67,7 @@ program ball
 
   if(.not.local_eq) then
      if(beta_prime_times >= 0) then
-        if(beta_prime_over == -1) beta_prime_over = beta_prime_times
+	if(beta_prime_over == -1) beta_prime_over = beta_prime_times
      endif     
   endif
 
@@ -119,7 +119,7 @@ program ball
      allocate(psi(-ntgrid:ntgrid))
   else 
      allocate(psi(-1:1))
-  endif 
+  endif	 
 
   open(11,file='ball.out')
   open(29,file='psi.out')
@@ -232,7 +232,7 @@ contains
 !     do i=-ntgrid,ntgrid
 !        write(29,996) theta(i),psi(i), &
 !             gds2(i)*gradpar(i)/bmag(i),beta_prime*cvdrift(i)/(2.*bmag(i)*gradpar(i)), &
-!             gds2(i), cvdrift(i), bmag(i)
+!		gds2(i), cvdrift(i), bmag(i)
 !     enddo
     enddo
 

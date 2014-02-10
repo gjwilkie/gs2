@@ -641,7 +641,8 @@ contains
 
   subroutine init_dist_fn_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
-    use mp, only: iproc, nproc, proc0
+    use mpi
+    use mp, only: iproc, nproc, proc0,  shm_info
     use mp, only: split, mp_comm, nproc_comm, rank_comm
     use mp, only: sum_allreduce_sub
 ! TT>
@@ -659,6 +660,11 @@ contains
     integer,dimension(:),allocatable :: les_kxky_range
     logical,dimension(5) :: dim_divides,dim_local
     logical,dimension(:),allocatable :: it_local, ik_local, il_local, ie_local, is_local
+
+    logical, save :: initialized_dist_fn_layouts = .false.
+    
+    integer ierr
+
 ! TT>
 # ifdef USE_C_INDEX
     integer :: ierr
@@ -672,8 +678,8 @@ contains
 ! <TT
 
     if (initialized_dist_fn_layouts) return
-    initialized_dist_fn_layouts = .true.
-   
+    initialized_dist_fn_layouts = .true.   
+
     g_lo%iproc = iproc
     g_lo%naky = naky
     g_lo%ntheta0 = ntheta0
@@ -682,10 +688,22 @@ contains
     g_lo%nspec = nspec
     g_lo%llim_world = 0
     g_lo%ulim_world = naky*ntheta0*negrid*nlambda*nspec - 1
-      
+
     g_lo%blocksize = g_lo%ulim_world/nproc + 1
     g_lo%llim_proc = g_lo%blocksize*iproc
     g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
+    g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
+
+    !shm_info%g_lo_se(1, shm_info%id) = g_lo%llim_proc
+    !hm_info%g_lo_se(2, shm_info%id) = g_lo%ulim_proc
+    ! collect node info on g_lo
+
+!  need the gather g_lo%ulim_alloc to ensure that all ranks allocate g
+! a bit hackish ....
+    call mpi_allgather((/ g_lo%llim_proc, g_lo%ulim_alloc/), 2, MPI_Integer, &
+         shm_info%g_lo_se, 2, MPI_Integer, shm_info%comm, ierr)  
+
+    !g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
     g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
 
 !<DD>Calculate constants used in the index lookup routines
@@ -1026,6 +1044,7 @@ contains
           exit
        endif
        
+
        !Does the current dimension divide evenly
        !amongst the remaining processors
        tmp_r=(1.0*nproc_tmp)/g_lo%dim_size(idim)
@@ -1068,18 +1087,18 @@ contains
     !Now use the dimension splitting to work out if the various subcommunicators are
     !allowed.
     if(.not.(dim_divides(g_lo%is_ord).and.dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
-       if(intmom_sub.and.proc0) write(error_unit(),'("Disabling intmom_sub -- is,it,ik split nicely ? ",3(L1," "))') dim_divides(g_lo%is_ord),dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
+       if(intmom_sub.and.proc0) write(error_unit(),'("Disabling intmom_sub -- is,it,ik split nicely ? ",3(L," "))') dim_divides(g_lo%is_ord),dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
        intmom_sub=.false.
     endif
     if(.not.(dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
-       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- it,ik split nicely ? ",2(L1," "))') dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
+       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- it,ik split nicely ? ",2(L," "))') dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
        intspec_sub=.false.
     endif
     !Note that because we currently need to gather amongst LES blocks at the end of
     !integrate_species we need to make sure that LES blocks are also sensible
     !This could be removed if we don't want to gather in integrate_species
     if(.not.(dim_divides(g_lo%il_ord).and.dim_divides(g_lo%ie_ord).and.dim_divides(g_lo%is_ord))) then
-       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- il,ie,is split nicely ? ",3(L1," "))') dim_divides(g_lo%il_ord),dim_divides(g_lo%ie_ord),dim_divides(g_lo%is_ord)
+       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- il,ie,is split nicely ? ",3(L," "))') dim_divides(g_lo%il_ord),dim_divides(g_lo%ie_ord),dim_divides(g_lo%is_ord)
        intspec_sub=.false.
     endif
 
@@ -1232,6 +1251,9 @@ contains
 !</DD>
 
 !Note: gint_lo isn't used anywhere!
+
+! assume that the layout below are not used in fft_test
+
     gint_lo%iproc = iproc
     gint_lo%naky = naky
     gint_lo%ntheta0 = ntheta0
@@ -1265,7 +1287,7 @@ contains
          & write (error_unit(),*) 'ERROR: layout not found: ', trim(layout)
 # endif
 ! <TT
-
+    
   end subroutine init_dist_fn_layouts
 
   subroutine is_kx_local(negrid, nspec, nlambda, naky, ntheta0, kx_local)  
@@ -1617,6 +1639,7 @@ contains
     ig_local_g = lo%iproc == proc_id(lo, ig)
   end function ig_local_g
 
+  
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Once-integrated distribution function layouts
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2850,7 +2873,7 @@ contains
 
   subroutine init_lambda_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
-    use mp, only: iproc, nproc
+    use mp, only: iproc, nproc, proc0
 ! TT>
     use file_utils, only: error_unit
 ! <TT
@@ -3558,7 +3581,9 @@ contains
        ! naky*(2*ntgrid+1)*nsign*nlambda*negrid*nspec
        ! Note: We precalculate 2*ntgrid+1 as ntgridtotal.
        if (unbalanced_xxf) then
-          call calculate_unbalanced_x(nproc, iproc, unbalanced_amount)
+
+       	  call calculate_unbalanced_x(nproc, iproc, unbalanced_amount)		
+          
        end if
 
        ! If we are not using the unbalanced code, either because the
@@ -3575,8 +3600,8 @@ contains
 
        else
              
-          if(proc0) then
-             write(*, fmt="('Using unbalanced decomposition for xxf. ',&
+          if(proc0) then	
+             write(*, fmt="('Using unbalanced decomposition for xxf. '&
               & 'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 
@@ -4100,7 +4125,7 @@ contains
     llim = ((iproc / procfactors) * block_multiple)
     if(modproc .ne. 0) then
        if(modproc .lt. numsmall) then
-!AJ       llim = llim + smallblocksize * (modproc - 1)
+!AJ	  llim = llim + smallblocksize * (modproc - 1)
           llim = llim + smallblocksize * (modproc)
        else
           llim = llim + (smallblocksize * numsmall) + (largeblocksize  * (modproc - numsmall))
@@ -4300,7 +4325,7 @@ contains
           offset_block_number = block_offset * j
           !AJ tempi represents where this index is inside the group of blocks
           !AJ this i point sits.
-          tempi = i - (block_offset * lo%block_multiple)
+	  tempi = i - (block_offset * lo%block_multiple)
           !AJ Work through each block in the group of blocks and see if this i 
           !AJ is within that block.  If it is set the proc_id_xxf as this block 
           !AJ owner.          
@@ -4311,31 +4336,31 @@ contains
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%small_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-                if(tempi .lt. lo%small_block_size) then
+	        if(tempi .lt. lo%small_block_size) then
                    !AJ (k -1) is the number of blocks that we have already considered 
                    !AJ within this group of blocks we have selected. 
-                   proc_id_xxf =  offset_block_number + (k - 1)
-                   exit 
-                else
+	           proc_id_xxf =  offset_block_number + (k - 1)
+		   exit 
+	        else
                    !AJ If the index is not in this block then reduce tempi by a small
                    !AJ block size and move on to the next block.
-                   tempi = tempi - lo%small_block_size
-                end if
-             else
+	           tempi = tempi - lo%small_block_size
+	        end if
+	     else
                 !AJ TODO: The if-else construct used below could potentially be rationalised 
                 !AJ TODO: to a more efficient formula where:
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%large_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-                if(tempi .lt. lo%large_block_size) then
-                   proc_id_xxf = offset_block_number + (k - 1)
-                   exit 
-                else
+	        if(tempi .lt. lo%large_block_size) then
+	           proc_id_xxf = offset_block_number + (k - 1)
+		   exit 
+	        else
                    !AJ If the index is not in this block then reduce tempi by a large
                    !AJ block size and move on to the next block.
-                   tempi = tempi - lo%large_block_size
-                end if
-             end if
+	           tempi = tempi - lo%large_block_size
+	        end if
+	     end if
           end do
        else
           !AJ This code is called if the unbalanced decomposition is not being used.
@@ -4564,8 +4589,8 @@ contains
        
        else
              
-          if(proc0) then
-             write(*, fmt="('Using unbalanced decomposition for yxf. ',&
+          if(proc0) then	
+             write(*, fmt="('Using unbalanced decomposition for yxf. '&
              & 'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 
@@ -4893,9 +4918,9 @@ contains
           !AJ offset_block_number is the number of blocks up to the start of the 
           !AJ group of blocks we are considering.
           offset_block_number = block_offset * j
-          !AJ tempi represents where this index is inside the group of blocks
+	  !AJ tempi represents where this index is inside the group of blocks
           !AJ this i point sits.
-          tempi = i - (block_offset * lo%block_multiple)
+	  tempi = i - (block_offset * lo%block_multiple)
           !AJ Work through each block in the group of blocks and see if this i 
           !AJ is within that block.  If it is set the proc_id_xxf as this block 
           !AJ owner.          
@@ -4906,31 +4931,31 @@ contains
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%small_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-                if(tempi .lt. lo%small_block_size) then
+	        if(tempi .lt. lo%small_block_size) then
                    !AJ (k -1) is the number of blocks that we have already considered 
                    !AJ within this group of blocks we have selected. 
-                   proc_id_yxf = offset_block_number + (k - 1)
-                   exit 
-                else
+	           proc_id_yxf = offset_block_number + (k - 1)
+		   exit 
+	        else
                    !AJ If the index is not in this block then reduce tempi by a small
                    !AJ block size and move on to the next block.
-                   tempi = tempi - lo%small_block_size
-                end if
-             else
+	           tempi = tempi - lo%small_block_size
+	        end if
+	     else
                 !AJ TODO: The if-else construct used below could potentially be rationalised 
                 !AJ TODO: to a more efficient formula where:
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%large_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-                if(tempi .lt. lo%large_block_size) then
-                   proc_id_yxf = (block_offset * j) + (k - 1)
-                   exit 
-                else
+	        if(tempi .lt. lo%large_block_size) then
+	           proc_id_yxf = (block_offset * j) + (k - 1)
+		   exit 
+	        else
                    !AJ If the index is not in this block then reduce tempi by a large
                    !AJ block size and move on to the next block.
-                   tempi = tempi - lo%large_block_size
-                end if
-             end if
+	           tempi = tempi - lo%large_block_size
+	        end if
+	     end if
           end do
        else
           proc_id_yxf = i/lo%blocksize
@@ -4980,6 +5005,7 @@ contains
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
+    logical, save :: initialized = .false.
     integer :: nnx, nny
 
     if (initialized_accel_transform_layouts) return
@@ -4996,6 +5022,7 @@ contains
        nny = 3*naky
     end if
 
+        
     accelx_lo%iproc = iproc
     accelx_lo%ntgrid = ntgrid
     accelx_lo%nsign = 2
@@ -5036,7 +5063,7 @@ contains
     accel_lo%ulim_proc &
          = min(accel_lo%ulim_world, accel_lo%llim_proc + accel_lo%blocksize - 1)
     accel_lo%ulim_alloc = max(accel_lo%llim_proc, accel_lo%ulim_proc)
-
+    
   end subroutine init_accel_transform_layouts
 
   elemental function is_idx_accelx (lo, i)
@@ -5339,7 +5366,7 @@ contains
   subroutine pe_layout (char)
 
     character (1), intent (out) :: char
-
+    
     select case (layout)
     case ('yxels')
        char = 'v'
