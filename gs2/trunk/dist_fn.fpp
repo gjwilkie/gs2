@@ -54,7 +54,7 @@ module dist_fn
   real :: t0, omega0, gamma0, source0
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
-  logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose, esv
+  logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose, esv, opt_init_bc
 !CMR, 12/9/13: New logical cllc to modify order of operator in timeadv
   logical :: cllc
 
@@ -439,6 +439,7 @@ subroutine check_dist_fn(report_unit)
        write (unit, fmt="(' nonad_zero = ',L1)") nonad_zero
        write (unit, fmt="(' gridfac = ',e16.10)") gridfac
        write (unit, fmt="(' esv = ',L1)") esv
+       write (unit, fmt="(' opt_init_bc = ',L1)") opt_init_bc
 
        if (.not. has_electron_species(spec)) then
           select case (adiabatic_option_switch)
@@ -648,7 +649,8 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, nonad_zero, gridfac, apfac, &
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, lf_decompose, esv
+         g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, lf_decompose, esv, &
+         opt_init_bc
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -662,6 +664,7 @@ subroutine check_dist_fn(report_unit)
        nonad_zero = .true.  ! BD: Default value changed to TRUE  8.15.13
        cllc = .false.
        esv = .false.
+       opt_init_bc = .false.
        adiabatic_option = 'default'
        poisfac = 0.0
        gridfac = 1.0  ! used to be 5.e4
@@ -719,6 +722,7 @@ subroutine check_dist_fn(report_unit)
     call broadcast (nonad_zero)
     call broadcast (cllc)
     call broadcast (esv)
+    call broadcast (opt_init_bc)
     call broadcast (adiabatic_option_switch)
     call broadcast (gridfac)
     call broadcast (poisfac)
@@ -1282,7 +1286,11 @@ subroutine check_dist_fn(report_unit)
 
     select case (boundary_option_switch)
     case (boundary_option_linked)
-       call init_connected_bc
+       if(opt_init_bc)then
+          call init_connected_bc_opt
+       else
+          call init_connected_bc
+       endif
        if(def_parity)call init_enforce_parity(parity_redist)
     case default
        if (.not. allocated(l_links)) then
@@ -2187,7 +2195,7 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine init_connected_bc
 
-  subroutine init_connected_bc_2
+  subroutine init_connected_bc_opt
     use theta_grid, only: ntgrid, nperiod, ntheta, theta
     use kt_grids, only: naky, ntheta0, aky, theta0
     use le_grids, only: ng2, nlambda
@@ -2542,8 +2550,8 @@ subroutine check_dist_fn(report_unit)
                 to_p(ip)%third(n) = iglo_right
                 !Special restriction for links_h
                 if(l_links(ik,it)>0)then
-                   n_h=nn_to_h(ipright)+1
-                   nn_to_h(ipright)=n_h
+                   n_h=nn_to_h(ip)+1
+                   nn_to_h(ip)=n_h
                    to_h(ip)%first(n_h) = 2*l_links(ik,it)+j
                    to_h(ip)%second(n_h) = 1
                    to_h(ip)%third(n_h) = iglo_right
@@ -2566,9 +2574,9 @@ subroutine check_dist_fn(report_unit)
                 if(r_links(ik,it)>0)then
                    n_h=nn_from_h(ipleft)+1
                    nn_from_h(ipleft)=n_h
-                   from_h(ipright)%first(n_h) = -ntgrid
-                   from_h(ipright)%second(n_h) = 2
-                   from_h(ipright)%third(n_h) = iglo
+                   from_h(ipleft)%first(n_h) = -ntgrid
+                   from_h(ipleft)%second(n_h) = 2
+                   from_h(ipleft)%third(n_h) = iglo
                 endif
              end if
 ! receiver
@@ -2616,7 +2624,7 @@ subroutine check_dist_fn(report_unit)
        call delete_list (from_h)
        call delete_list (to_p)
        call delete_list (to_h)
-       
+
 ! take care of wfb
 
        nn_to = 0
@@ -2766,7 +2774,7 @@ subroutine check_dist_fn(report_unit)
        call delete_list (from)
        call delete_list (to_p)
        call delete_list (to_h)
-       
+      
 ! n_links_max is typically 2 * number of cells in largest supercell
        allocate (g_adj (n_links_max, 2, g_lo%llim_proc:g_lo%ulim_alloc))
 
@@ -2844,7 +2852,7 @@ subroutine check_dist_fn(report_unit)
 
     end if
 
-  end subroutine init_connected_bc_2
+  end subroutine init_connected_bc_opt
 
   subroutine init_pass_right
     !Create a pass_right object to pass boundary values to the left connection
