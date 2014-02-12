@@ -659,9 +659,9 @@ contains
 
     if (proc0) write(*,*) "source = ", parameters%source
     if (proc0) write(*,*) "ash_fraction = ", parameters%ash_fraction
-    do ie = 1,negrid
-       if (proc0) write(*,*) sqrt(egrid(ie,is)), f0_values(ie,is), generalised_temperature(ie,is)
-    end do
+!    do ie = 1,negrid
+!       if (proc0) write(*,*) sqrt(egrid(ie,is)), f0_values(ie,is), generalised_temperature(ie,is)
+!    end do
     
   end subroutine calculate_f0_arrays_semianalytic
 
@@ -1025,10 +1025,6 @@ contains
     gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
     zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
 
-do ie = 1,negrid
-  if (proc0) write(*,*) ie, egrid(ie,is), f0_values(ie,is), f0prim(ie,is)
-end do
-
     if (simple_gradient) f0prim(:,is) = - spec(is)%fprim 
 
     if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
@@ -1103,7 +1099,7 @@ end do
        f0prim = f0prim - (Ealpha/Ti)*(v**2-1.0)*Ti_prim
     end if
 
-    if (proc0) write(*,*) ie,Ealpha/Ti,v,f0,gentemp, f0prim
+!    if (proc0) write(*,*) ie,Ealpha/Ti,v,f0,gentemp, f0prim
 
 
   end subroutine eval_f0_analytic

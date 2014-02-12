@@ -118,7 +118,7 @@ contains
     do is = 1,nspec
 !write(*,*) iproc, is, spec(is)%temp, spec(is)%fprim, spec(is)%tprim, spec(is)%stm
        do ie = 1,negrid
-if (proc0) write(*,*) is, ie, spec(is)%fprim, spec(is)%tprim, f0prim(ie,is)
+!if (proc0) write(*,*) is, ie, spec(is)%fprim, spec(is)%tprim, f0prim(ie,is)
 !write(*,*) iproc, is,ie, zogtemp(ie,is)
 !          if (iproc .EQ. 3) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
        end do
