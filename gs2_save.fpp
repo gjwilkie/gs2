@@ -1050,7 +1050,6 @@ contains
   !>This routine writes a passed square complex array to a file
   !with passed name
   subroutine gs2_save_response(resp,fname)
-    use mp, only: proc0
     use file_utils, only: error_unit
 #ifdef NETCDF
     use gs2_time, only: code_dt
@@ -1068,8 +1067,8 @@ contains
 #else
     integer :: unit
 #endif
-    !Currently only support serial writing by proc0
-    if(.not.proc0) return
+    !Currently only support serial writing, but could be by any proc
+    !so we have to make sure only one proc calls this routine
 
     !Verify we have a square array
     sz=size(resp(:,1))
@@ -1134,7 +1133,6 @@ contains
   !>This routine reads a square complex array from a file
   !with passed name
   subroutine gs2_restore_response(resp,fname)
-    use mp, only: proc0
     use file_utils, only: error_unit
 #ifdef NETCDF
     use convert, only: r2c
@@ -1151,8 +1149,8 @@ contains
 #else
     integer :: unit
 #endif
-    !Currently only support serial reading by proc0
-    if(.not.proc0) return
+    !Currently only support serial reading, but could be by any proc
+    !so we have to make sure only one proc calls this routine
 
     !Verify we have a square array
     sz=size(resp(:,1))
