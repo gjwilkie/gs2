@@ -2085,11 +2085,14 @@ contains
        if(.not.self%kyb(ik)%is_local) cycle
        do is=1,self%kyb(ik)%nsupercell
           if(.not.self%kyb(ik)%supercells(is)%is_local) cycle
-          if(self%kyb(ik)%supercells(is)%is_empty)then
+          self%kyb(ik)%supercells(is)%tmp_sum=0.0
+!If we wanted to do non-blocking comms then we could pre post receives here
+!for empty procs (i.e. ones not involved in field computation)
+!          if(self%kyb(ik)%supercells(is)%is_empty)then
 !             call self%kyb(ik)%supercells(is)%gfu_post_recv
-          else
-             self%kyb(ik)%supercells(is)%tmp_sum=0.0
-          endif
+!          else
+!             !Do nothing
+!          endif
        enddo
     enddo
 

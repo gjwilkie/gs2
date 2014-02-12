@@ -1326,7 +1326,7 @@ contains
 
           !Now make file name
           write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(run_name),ik,it_to_is(itmin,ik),trim(suffix_local)
-          call gs2_save_response(tmp_arr_full,file_name)
+          if(proc0)call gs2_save_response(tmp_arr_full,file_name)
        end do
           
        deallocate(tmp_arr_full,tmp_vec_full)
@@ -1460,7 +1460,7 @@ contains
 
           !Now make file name
           write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(run_name),ik,it_to_is(itmin,ik),trim(suffix_local)
-          call gs2_restore_response(tmp_arr_full,file_name)
+          if(proc0)call gs2_restore_response(tmp_arr_full,file_name)
 
           !Initialise counter
           icount=1
