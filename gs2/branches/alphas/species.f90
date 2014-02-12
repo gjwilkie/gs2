@@ -58,6 +58,8 @@ module species
   logical :: initialized = .false.
   logical :: exist
 
+  real :: mime = -1.0
+
 contains
 
   subroutine check_species(report_unit,beta,tite,alne,dbetadrho_spec)
@@ -231,7 +233,7 @@ contains
     integer :: is, alpha_index, main_ion_species, electron_spec
     logical:: equivalent_maxwellian_flag,alphas_exist
     real:: vti,ni,Zi,Ti,ne,vte,veff2va2,vcva,vta,Ealpha,dveff2dvc,ni_prim,ne_prim,Ti_prim,Te_prim
-    namelist /species_knobs/ nspec
+    namelist /species_knobs/ nspec, mime
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
          tperp0, tpar0, source, sprim, gamma_ai, gamma_ae, ash_fraction, equivalent_maxwellian_flag
@@ -375,13 +377,17 @@ contains
           ne_prim = spec(electron_spec)%fprim
           Te_prim = spec(electron_spec)%tprim
        else
+          if (alphas_exist .AND. mime .LT. 0.0) then
+             write(*,*) "WARNING: If using alpha species, you should set mime = (reference mass)/(electron mass) in species_knobs."
+             write(*,*) " Using mime = 1836.0 as default. Assuming Ti = Te. If this is not true, adjust mime appropriately."
+             mime = 1836.0
+          end if
           ne = Zi*ni + spec(is)%z * spec(is)%dens
-          vte = sqrt(1836.0 * Ti)     !< Assuming Te=Ti here. This is wrong, but tite has depencency issues with this module
+          vte = sqrt(mime * Ti)     !< Assuming Te=Ti here. This is wrong, but tite has depencency issues with this module
           ne_prim = (Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim)/ne
           Te_prim = Ti_prim
           write(*,*) "Since electrons are adiabatic, we need to improvise electron parameters to "
-          write(*,*) "caluclate alpha species properties. Imposed by global quasineutrality, and "
-          write(*,*) "assuming the reference species are protons:"
+          write(*,*) "caluclate alpha species properties. Imposed by global quasineutrality:"
           write(*,*) "  ne = ", ne
           write(*,*) "  ne_prim = ", ne_prim
           write(*,*) "  Te_prim = ", Te_prim
