@@ -1208,7 +1208,6 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: nlambda, ng2, forbid, negrid, energy
     use constants, only: pi, zi
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
-    use mp, only: iproc
     implicit none
     integer :: iglo
     integer :: ig, ik, it, il, ie, is, isgn
@@ -4009,11 +4008,10 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: aj0, aj1, vperp2, vpar, vpac, g, ittp
     use theta_grid, only: ntgrid
     use kt_grids, only: aky
-    use le_grids, only: nlambda, ng2, lmax, anon, energy, negrid
-    use species, only: spec, nspec
+    use le_grids, only: nlambda, ng2, lmax, anon
+    use species, only: spec
     use run_parameters, only: fphi, fapar, fbpar, wunits
     use gs2_time, only: code_dt
-    use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
     use hyper, only: D_res
     use constants
@@ -8151,11 +8149,10 @@ subroutine check_dist_fn(report_unit)
 
   subroutine find_leftmost_link (iglo, iglo_left, ipleft)
     use gs2_layouts, only: it_idx,ik_idx,g_lo,il_idx,ie_idx,is_idx,idx,proc_id
-    use mp, only: iproc
     implicit none
     integer, intent (in) :: iglo
     integer, intent (in out) :: iglo_left, ipleft
-    integer :: iglo_star, iglo_left_star, ipleft_star
+    integer :: iglo_star
     integer :: it_cur,ik,it,il,ie,is
     iglo_star = iglo
     it_cur=it_idx(g_lo,iglo)
@@ -8183,11 +8180,10 @@ subroutine check_dist_fn(report_unit)
 
   subroutine find_rightmost_link (iglo, iglo_right, ipright)
     use gs2_layouts, only: it_idx,ik_idx,g_lo,il_idx,ie_idx,is_idx,idx,proc_id
-    use mp, only: iproc
     implicit none
     integer, intent (in) :: iglo
     integer, intent (in out) :: iglo_right, ipright
-    integer :: iglo_star, iglo_right_star, ipright_star
+    integer :: iglo_star
     integer :: it_cur,ik,it,il,ie,is
     iglo_star = iglo
     it_cur=it_idx(g_lo,iglo)

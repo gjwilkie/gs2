@@ -1011,7 +1011,6 @@ contains
     use geometry, only: eikcoefs, itor, delrho, rhoc
     use geometry, only: gen_eq, ppl_eq, transp_eq
     use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
-    use mp, only: proc0
     implicit none
     real :: rhoc_save
 !    logical, save :: initialized = .false.
@@ -1238,7 +1237,13 @@ if (debug) write(6,*) 'eik_get_grids: end'
     isym = 0
     in_nt = .false.
     writelots = .false.
-    local_eq = .true.
+    eqfile='dskeq.cdf'
+    invlp_input=0.0
+    !Default to miller (local) equilibrium
+    local_eq = .true. ; gs2d_eq=.false.
+    ppl_eq = .false. ; gen_eq=.false. 
+    efit_eq=.false. ; dfit_eq=.false.
+    transp_eq=.false. ; idfit_eq=.false.
 
     in_file = input_unit_exist("theta_grid_eik_knobs", exist)
     if (exist) read (unit=input_unit("theta_grid_eik_knobs"), nml=theta_grid_eik_knobs)
