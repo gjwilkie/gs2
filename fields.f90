@@ -121,7 +121,6 @@ contains
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
     use kt_grids, only: gridopt_switch, gridopt_box, kwork_filter
-    use mp, only: iproc
     implicit none
     logical :: restarted
     logical:: debug=.false.
