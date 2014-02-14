@@ -111,6 +111,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        trin_reset = trinity_reset
        first_time = .true.
     endif
+       
     if(present(job_id)) trin_job = job_id + 1
 
     if (first_time) then
@@ -200,21 +201,21 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        
        first_time = .false.
 
+       if(present(trinity_reset) .and. trin_reset) then
+          return
+       endif
     else if (present(nensembles)) then
        if (nensembles > 1) then
           call scope (subprocs)
        end if
-    end if
-    
+    endif
+
     istep_end = nstep
     ilast_step = nstep
     
     call loop_diagnostics(0,exit)
 
-    if(present(trinity_reset)) then ! For trinity load balance restarts
-       if(trin_reset) call gd_reset
-       trin_restart = .true. ! All trinity runs are restarted except the first
-    endif
+    if(present(trinity_reset)) trin_restart = .true. ! All trinity runs are restarted except the first
 
 #ifdef NEW_DIAG
     ! Create variables
