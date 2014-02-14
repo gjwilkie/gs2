@@ -20,11 +20,11 @@ ffttester: $(ffttester_mod)
 
 .PHONY: modules utils_all geo_all libgs2_all
 
-ifdef MAKE_LIB
+#ifdef MAKE_LIB
 modules: utils.a geo.a libgs2.a diagnostics
-else
-modules: utils.a geo.a diagnostics
-endif
+#else
+#modules: utils.a geo.a diagnostics
+#endif
 
 ### UTILS
 utils_all: utils.a 
