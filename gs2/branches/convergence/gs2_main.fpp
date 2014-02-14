@@ -46,7 +46,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use file_utils, only: init_file_utils, run_name!, finish_file_utils
     use fields, only: init_fields, advance
     use species, only: ions, electrons, impurity
-    use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics, gd_reset => reset_init, trin_nsteps
+    use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics, gd_reset => reset_init
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
     use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time, margin_cpu_time
@@ -253,15 +253,13 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (mod(istep,5) == 0) call checkstop(exit)
        
        call checktime(avail_cpu_time,exit,margin_cpu_time)
-       
+
        if (exit) then
           istep_end = istep
           ilast_step = istep
           exit
        end if
     end do
-
-    if(present(trinity_reset)) trin_nsteps = trin_nsteps + istep - 1
 
     call time_message(.false.,time_main_loop,' Main Loop')
 
