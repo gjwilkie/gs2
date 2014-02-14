@@ -66,10 +66,10 @@ module gs2_diagnostics
 !<GGH
 
 ! HJL <  Variables for convergence condition testing
-  integer, public :: trin_nsteps = 0
-  integer :: conv_ireq = 0
-  real :: heat_sum_av_diff_max = 0.0
-  real, save, allocatable, dimension(:) :: conv_heat_sum_av
+  integer :: trin_istep = 0
+  integer :: conv_isteps_converged = 0
+  real, save, allocatable, dimension(:) :: conv_heat
+  real, save :: heat_sum_av = 0, heat_av = 0, heat_av_test = 0
 
 
   ! internal
@@ -95,17 +95,18 @@ module gs2_diagnostics
          write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
- 	 write_pflux_sym, write_pflux_tormom, conv_nav, conv_diff_threshold, conv_min_step, conv_max_step
+ 	 write_pflux_sym, write_pflux_tormom, &
+         conv_nstep_av, conv_diff_threshold, conv_min_step, conv_max_step, conv_nsteps_converged
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: jext_unit   !GGH Additions
   integer :: phase_unit
   integer :: dump_check1_unit, dump_check2_unit
   integer :: res_unit, res_unit2, parity_unit
-  integer :: conv_nav ! The number of diagnostic (nwrite) steps the convergence condition averages over
+  integer :: conv_nstep_av ! The number of timesteps the convergence condition averages over
   integer :: conv_min_step ! The minimum number of steps before the convergence condition will be met
-  integer :: conv_max_step ! The maximum number of steps allowed before declaring converged with a warning
-  integer :: conv_nreq ! The number of steps where convergence is true before convergence is accepted
+  integer :: conv_max_step ! The maximum number of steps allowed before declaring convergence with a warning
+  integer :: conv_nsteps_converged ! The number of steps where convergence is true before convergence is accepted
 
   complex, dimension (:,:,:), allocatable :: omegahist
   ! (navg,ntheta0,naky)
@@ -561,7 +562,7 @@ contains
        
        allocate (omegahist(0:navg-1,ntheta0,naky))
        omegahist = 0.0
-       if(.not. allocated(conv_heat_sum_av)) allocate(conv_heat_sum_av(0:conv_nav-1))
+       if(.not. allocated(conv_heat)) allocate(conv_heat(0:conv_nstep_av/nwrite-1))
 
     end if
 
@@ -642,11 +643,11 @@ contains
        nwrite_mult = 10
        navg = 100
        nsave = -1
-       conv_nav = 10
+       conv_nstep_av = 4000
        conv_diff_threshold = 1e-13
-       conv_min_step = 2000
-       conv_max_step = 40000
-       conv_nreq = 4
+       conv_min_step = 4000
+       conv_max_step = 80000
+       conv_nsteps_converged = 4000
        omegatol = 1e-3
        omegatinst = 1.0
        igomega = 0
@@ -1513,9 +1514,6 @@ contains
     character(200) :: filename
     logical :: last = .false.
     logical,optional:: debopt
-! Variables for convergence condition (HJL)
-    real :: heat_sum_av_diff, threshold
-    integer :: place, last_place, itrin, trin_total_steps
 
     logical:: debug=.false.
 
@@ -1817,63 +1815,8 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        end if
     end if
 
-    ! Trinity convergence condition - simple and experimental
-    ! look for the averaged differential of the summed averaged heat flux to drop below a threshold (1e-12?)
-    trin_total_steps = trin_nsteps + istep
-    itrin=trin_total_steps/nwrite
-    if(nonlin .and. .not. (istep .eq. 0 .and. trin_nsteps .ne. 0)) then
-       if(proc0) then
-          heat_sum_av_diff = 0
-          place = mod(trin_total_steps,nwrite*conv_nav)/nwrite
-          last_place = place - 1
-          if(last_place < 0) last_place = conv_nav - 1
-          
-          ! Calculate a cumulative average of heat flux
-          if(itrin == 0) then
-             conv_heat_sum_av(place) = heat_fluxes(1)
-          else 
-             conv_heat_sum_av(place) = (conv_heat_sum_av(last_place) * itrin &
-                  + heat_fluxes(1)) / (itrin+1)
-          endif
-
-          write(6,'(A,I5,A,E10.4,A,I6,I6)') 'Job ',trin_job,' time = ',t, ' step = ',trin_total_steps
-          write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
-               ' heat = ',heat_fluxes(1), &
-               ' heatsumav = ',conv_heat_sum_av(place)          
-
-          ! Calculate change in cumulative average flux with time
-          if(trin_total_steps .ge. nwrite * conv_nav) then
-             last_place = place + 1 ! Re-use last_place for differential
-             if(last_place .ge. conv_nav) last_place = 0
-             heat_sum_av_diff = (conv_heat_sum_av(place) - conv_heat_sum_av(last_place)) &
-                  /(user_dt*nwrite*(conv_nav-1))
-             ! Adjust the threshold to be proportional to the current average flux
-             threshold = max(abs(conv_heat_sum_av(place) * 1e-3),conv_diff_threshold)
-             write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
-                  ' heat_sum_av_diff = ',heat_sum_av_diff, &
-                  ' heat_sum_av_diff_max = ',heat_sum_av_diff_max
-             if((abs(heat_sum_av_diff) .lt. conv_diff_threshold .or. &
-                  abs(heat_fluxes(1)) .lt. 1e-12) .and. & ! Sometimes the heat flux just drops away to zero
-                  trin_total_steps .ge. conv_min_step .and. &
-                  exit_when_converged == .true.) then
-                conv_ireq = conv_ireq + 1
-                if(conv_ireq .ge. conv_nreq) exit = .true.
-                write(6,'(A,I5,A,I6,I3)')'Job ',trin_job,' &
-                     Reached convergence condition after step ',trin_total_steps, conv_ireq
-             else
-                conv_ireq = 0
-             endif            
-             if(istep+trin_nsteps .gt. conv_max_step) then
-                write(6,'(A,I5,A)') '*** Warning. Job ',trin_job, &
-                     ' did not meet the convergence condition after ',trin_total_steps
-                exit = .true.
-             endif
-
-             if(heat_sum_av_diff > heat_sum_av_diff_max) heat_sum_av_diff_max = heat_sum_av_diff
-          endif
-       endif
-       call broadcast(exit)
-    endif
+! Check for convergence
+    if(nonlin) call check_nonlin_convergence(istep, heat_fluxes(1), exit)
 
     i=istep/nwrite
 
@@ -2757,6 +2700,76 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 if (debug) write(6,*) "loop_diagnostics: done"
   end subroutine loop_diagnostics
 
+
+  ! Trinity convergence condition - simple and experimental
+  ! look for the averaged differential of the summed averaged heat flux to drop below a threshold
+  subroutine check_nonlin_convergence(istep, heat_flux, exit)
+    use job_manage, only: trin_restart, trin_reset, trin_job
+    use gs2_time, only: user_time
+    use mp, only: proc0, broadcast
+
+    logical, intent(inout) :: exit
+    integer, intent(in) :: istep
+    real, intent(in) :: heat_flux
+
+! Variables for convergence condition (HJL)
+    real :: heat_av_new, heat_av_diff
+    integer :: place, iwrite, nwrite_av
+
+    if(proc0) then
+       if(istep .gt. 0) trin_istep = trin_istep + nwrite ! Total number of steps including restarted trinity runs
+       iwrite = trin_istep/nwrite ! Number of diagnostic write steps written
+       nwrite_av = conv_nstep_av/nwrite ! Number of diagnostic write steps to average over        
+
+       heat_sum_av = (heat_sum_av * iwrite + heat_flux) / (iwrite+1) ! Cumulative average of heat flux
+
+       place = mod(trin_istep,conv_nstep_av)/nwrite
+       conv_heat(place) = heat_flux
+     
+       write(6,'(A,I5,A,E10.4,A,I6,I6)') 'Job ',trin_job,' time = ',user_time, ' step = ',trin_istep
+       write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
+            ' heat = ',heat_flux, &
+            ' heatsumav = ',heat_av
+
+       if (trin_istep .ge. conv_nstep_av) then
+          heat_av_new = sum(conv_heat) / nwrite_av
+          heat_av_diff = heat_av_new - heat_av
+          write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
+               ' heat_sum_av_diff = ',heat_sum_av
+          write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
+               ' heat_av = ',heat_av
+          heat_av = heat_av_new
+
+! Convergence test - needs to be met conv_nsteps_converged/nwrite times in succession
+          if (abs(heat_av_diff) .lt. heat_av_test) then
+             conv_isteps_converged = conv_isteps_converged + 1
+             write(6,*) 'conv_isteps_converged ', conv_isteps_converged 
+          else
+             conv_isteps_converged = 0
+             heat_av_test = heat_sum_av * 2e-1
+          endif
+          
+          if (conv_isteps_converged .ge. conv_nsteps_converged/nwrite .and. &
+               trin_istep .ge. conv_min_step .and. &
+               exit_when_converged == .true.) then
+             write(6,'(A,I5,A,I6,I3)')'Job ',trin_job,' &
+                  Reached convergence condition after step ',trin_istep, conv_isteps_converged
+             exit = .true.
+          endif
+
+          if(trin_istep .gt. conv_max_step) then
+             write(6,'(A,I5,A,I7)') '*** Warning. Job ',trin_job, &
+                  ' did not meet the convergence condition after ',trin_istep
+             exit = .true.
+          endif
+       endif
+    endif
+
+    call broadcast(exit)
+
+  end subroutine check_nonlin_convergence
+
+
   subroutine heating (istep, h, hk)
 
     use mp, only: proc0
@@ -3020,10 +3033,10 @@ if (debug) write(6,*) "get_omegaavg: done"
 
 ! HJL > reset values for convergence condition
     if(proc0) then
-       conv_ireq = 0
-       heat_sum_av_diff_max = 0.0
-       conv_heat_sum_av = 0.0
-       trin_nsteps = 0
+       conv_isteps_converged = 0
+       heat_sum_av = 0.0
+       conv_heat = 0.0
+       trin_istep = 0
     endif
     start_time = user_time
     pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
