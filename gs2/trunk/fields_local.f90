@@ -2115,7 +2115,7 @@ contains
     else
        call getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
 !<DD>Could improve performance by using a "smart" routine which only operates on local/not empty data
-       call self%getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
+!       call self%getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
     endif
 
     !Now get the field update for each ik
