@@ -201,6 +201,8 @@ module fields_local
      procedure :: write_debug_data => fm_write_debug_data
      procedure :: set_is_local => fm_set_is_local
      procedure :: count_subcom => fm_count_subcom
+     procedure :: getfieldeq_nogath => fm_getfieldeq_nogath
+     procedure :: getfieldeq1_nogath => fm_getfieldeq1_nogath
   end type fieldmat_type
 
   !>This is the type which controls/organises the parallel
@@ -562,6 +564,9 @@ contains
     !than allreduce_sub as we're going to broadcast the result later anyway.
     !if(self%sc_sub_pd%nproc.gt.0) call sum_allreduce_sub(self%tmp_sum,self%sc_sub_pd%id)
     if(.not.(self%is_empty.or.self%is_all_local)) call sum_reduce_sub(self%tmp_sum,0,self%sc_sub_pd)
+    
+    !<DD> At this point the head of the supercell has the field update stored in self%tmp_sum
+    !all other procs have partial/no data
 
     !This can be used to populate the empty procs, but is not needed at the moment as we broadcast
     !the result at the end of getfield_local currently, which turns out to be a lot faster (>~factor 2).
@@ -1991,6 +1996,8 @@ contains
        call getfieldeq(phinew,aparnew,bparnew,fq,fqa,fqp)
     else
        call getfieldeq_nogath(phinew,aparnew,bparnew,fq,fqa,fqp)
+!<DD>Could improve performance by using a "smart" routine which only operates on local/not empty data
+!       call self%getfieldeq_nogath(phinew,aparnew,bparnew,fq,fqa,fqp)
     endif
 
     !Now we need to store the field equations in the appropriate places
@@ -2107,6 +2114,8 @@ contains
        call getfieldeq(phi,apar,bpar,fq,fqa,fqp)
     else
        call getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
+!<DD>Could improve performance by using a "smart" routine which only operates on local/not empty data
+       call self%getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
     endif
 
     !Now get the field update for each ik
@@ -2596,6 +2605,108 @@ contains
     !Now close output file
     call close_output_file(unit)
   end subroutine fm_write_debug_data
+
+  subroutine fm_getfieldeq_nogath (self,phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
+    use theta_grid, only: ntgrid
+    use dist_fn, only: getan_nogath
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    class(fieldmat_type), intent(in) :: self
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
+    complex, dimension (:,:,:), allocatable :: antot, antota, antotp
+
+    allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
+
+    call getan_nogath (antot, antota, antotp)
+    call self%getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
+         fieldeq, fieldeqa, fieldeqp)
+
+    deallocate (antot, antota, antotp)
+  end subroutine fm_getfieldeq_nogath
+
+  subroutine fm_getfieldeq1_nogath (self,phi, apar, bpar, antot, antota, antotp, &
+       fieldeq, fieldeqa, fieldeqp)
+    use dist_fn_arrays, only: kperp2
+    use theta_grid, only: ntgrid, bmag, delthet, jacob
+    use kt_grids, only: naky, ntheta0, aky
+    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: beta, tite
+    use kt_grids, only: kwork_filter
+    use species, only: spec, has_electron_species
+    use dist_fn, only: gamtot,gamtot1, gamtot2, gamtot3, fl_avg, gridfac1, apfac, awgt
+    use dist_fn, only: adiabatic_option_switch, adiabatic_option_fieldlineavg
+    implicit none
+    class(fieldmat_type), intent(in) :: self
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
+    complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
+
+    integer :: ik, it, is, ic
+
+    if (.not. allocated(fl_avg)) allocate (fl_avg(ntheta0, naky))
+    if (.not. has_electron_species(spec)) fl_avg = 0.
+
+    if (.not. has_electron_species(spec)) then
+       if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
+          if (.not. allocated(awgt)) then
+             allocate (awgt(ntheta0, naky))
+             awgt = 0.
+             do ik = 1, naky
+                if (aky(ik) > epsilon(0.0)) cycle
+                do it = 1, ntheta0
+                   if(kwork_filter(it,ik)) cycle
+                   awgt(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
+                end do
+             end do
+          endif
+           
+          do ik = 1, naky
+             do it = 1, ntheta0
+                if(kwork_filter(it,ik)) cycle
+                fl_avg(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
+             end do
+          end do
+       end if
+    end if
+
+    !Now loop over cells and calculate field equation as required
+    do ik=1,self%naky
+       !Skip empty cells, note this is slightly different to skipping
+       !.not.is_local. Skipping empty is probably faster but may be more dangerous
+       if(self%kyb(ik)%is_empty) cycle
+       do is=1,self%kyb(ik)%nsupercell
+          if(self%kyb(ik)%supercells(is)%is_empty) cycle
+          do ic=1,self%kyb(ik)%supercells(is)%ncell
+             if(self%kyb(ik)%supercells(is)%cells(ic)%is_empty) cycle
+
+             it=self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+             if(kwork_filter(it,ik)) cycle
+
+             !Now fill in data
+             if(fphi>epsilon(0.0)) then
+                fieldeq(:,it,ik)=antot(:,it,ik)-gamtot(:,it,ik)*gridfac1(:,it,ik)*phi(:,it,ik)
+                if(fbpar.gt.epsilon(0.0)) fieldeq(:,it,ik)=fieldeq(:,it,ik)+bpar(:,it,ik)*gamtot1(:,it,ik)
+                if(.not.has_electron_species(spec)) fieldeq(:,it,ik)= fieldeq(:,it,ik)+fl_avg(it,ik)
+             endif
+
+             if(fapar>epsilon(0.0)) then
+                fieldeqa(:,it,ik)=antota(:,it,ik)-kperp2(:,it,ik)*gridfac1(:,it,ik)*apar(:,it,ik)
+             endif
+
+             if(fbpar>epsilon(0.0))then
+                fieldeqp(:,it,ik)=bpar(:,it,ik)*gridfac1(:,it,ik)+&
+                     (antotp(:,it,ik)+bpar(:,it,ik)*gamtot2(:,it,ik)+&
+                     0.5*phi(:,it,ik)*gamtot1(:,it,ik))*beta*apfac/bmag(:)**2
+             endif
+          enddo
+       enddo
+    enddo
+  end subroutine fm_getfieldeq1_nogath
+
 !------------------------------------------------------------------------ 
 
 !================
@@ -3034,12 +3145,15 @@ contains
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use gs2_layouts, only: init_gs2_layouts
-    use mp, only: proc0
+    use mp, only: proc0, mp_abort
     implicit none
     logical:: debug=.false.
 
     !Early exit if possible
     if (initialised) return
+
+    !Exit if local fields not supported (e.g. compiled with pgi)
+    if(.not.fields_local_functional()) call mp_abort("field_option='local' not supported with this build")
 
     !Make sure only proc0 does the printing
     debug=debug.and.proc0
@@ -3470,6 +3584,5 @@ contains
     logical :: fields_local_functional
     fields_local_functional = (.not. compiler_pgi())
   end function fields_local_functional
-
 
 end module fields_local
