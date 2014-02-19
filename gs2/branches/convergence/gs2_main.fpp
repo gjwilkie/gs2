@@ -106,12 +106,13 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 !
 !    if (present(nofinish)) nofin=nofinish
      
+
+! HJL tests on Trinity optionals for load balancing
     if(present(trinity_reset)) then
        converged = .false.
        trin_reset = trinity_reset
        first_time = .true.
     endif
-       
     if(present(job_id)) trin_job = job_id + 1
 
     if (first_time) then
@@ -201,9 +202,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        
        first_time = .false.
 
-       if(present(trinity_reset) .and. trin_reset) then
-          return
-       endif
+       ! When trinity starts a new step it needs to reset after initialisation
+       if(present(trinity_reset) .and. trin_reset) return
+
     else if (present(nensembles)) then
        if (nensembles > 1) then
           call scope (subprocs)
@@ -465,29 +466,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     ! for now do nothing with gexb or mach, but need to include later if want to use GS2
     ! with TRINITY to evolve rotation profiles
-
-    if(-10) then !proc0 .and. trin_job==13) then
-       write(6,*) 'gs2_trin_init --------------------------------------'
-       write(6,*) 'ntspec ',ntspec
-       write(6,*) 'dens ', dens
-       write(6,*) 'temp ', temp
-       write(6,*) 'fprim ', fprim
-       write(6,*) 'tprim ', tprim
-       write(6,*) 'nu ', nu
-       write(6,*) 'rhoc ', rhoc
-       write(6,*) 'qval ', qval
-       write(6,*) 'shat ', shat
-       write(6,*) 'rgeo_lcfs ', rgeo_lcfs
-       write(6,*) 'rgeo_local ', rgeo_local
-       write(6,*) 'kap ', kap
-       write(6,*) 'kappri ', kappri
-       write(6,*) 'tri ', tri
-       write(6,*) 'tripri ', tripri
-       write(6,*) 'shift ', shift
-       write(6,*) 'betaprim ', betaprim
-       write(6,*) 'gs2_trin_init ======================================'
-    endif
-
     call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
     if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, &
          rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift, betaprim)
