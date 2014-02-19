@@ -96,7 +96,7 @@ module gs2_diagnostics
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
  	 write_pflux_sym, write_pflux_tormom, &
-         conv_nstep_av, conv_diff_threshold, conv_min_step, conv_max_step, conv_nsteps_converged
+         conv_nstep_av, conv_test_multiplier, conv_min_step, conv_max_step, conv_nsteps_converged
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: jext_unit   !GGH Additions
@@ -131,7 +131,7 @@ module gs2_diagnostics
 
   real :: start_time = 0.0
   real, dimension (:), allocatable :: pflux_avg, qflux_avg, heat_avg, vflux_avg
-  real :: conv_diff_threshold ! The threshold differential for averaged summed flux that triggers the convergence condition
+  real :: conv_test_multiplier ! The value sum av is multiplied by for the convergence test
 
   integer :: ntg_out, ntg_extend, nth0_extend
   integer :: nout = 1
@@ -644,7 +644,7 @@ contains
        navg = 100
        nsave = -1
        conv_nstep_av = 4000
-       conv_diff_threshold = 1e-13
+       conv_test_multiplier = 2e-1
        conv_min_step = 4000
        conv_max_step = 80000
        conv_nsteps_converged = 4000
@@ -1385,7 +1385,7 @@ contains
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
     if (.not. trin_restart .and. allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg) ! check, restart always true?
 
-!    if (proc0 .and. trin_reset .and. allocated(conv_heat_sum_av)) deallocate (conv_heat_sum_av)
+    if (proc0 .and. trin_reset .and. allocated(conv_heat)) deallocate (conv_heat)
 
 ! HJL <    
     if (allocated(domega)) deallocate(domega)
@@ -2715,8 +2715,9 @@ if (debug) write(6,*) "loop_diagnostics: done"
 ! Variables for convergence condition (HJL)
     real :: heat_av_new, heat_av_diff
     integer :: place, iwrite, nwrite_av
+    logical :: debug = .false.
 
-    if(proc0) then
+    if(proc0 .and. .not. (trin_istep .ne. 0 .and. istep .eq. 0)) then
        if(istep .gt. 0) trin_istep = trin_istep + nwrite ! Total number of steps including restarted trinity runs
        iwrite = trin_istep/nwrite ! Number of diagnostic write steps written
        nwrite_av = conv_nstep_av/nwrite ! Number of diagnostic write steps to average over        
@@ -2726,34 +2727,30 @@ if (debug) write(6,*) "loop_diagnostics: done"
        place = mod(trin_istep,conv_nstep_av)/nwrite
        conv_heat(place) = heat_flux
      
-       write(6,'(A,I5,A,E10.4,A,I6,I6)') 'Job ',trin_job,' time = ',user_time, ' step = ',trin_istep
-       write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
-            ' heat = ',heat_flux, &
-            ' heatsumav = ',heat_av
+       if (debug) write(6,'(A,I5,A,E10.4,A,I6,I6)') 'Job ',trin_job, &
+            ' time = ',user_time, ' step = ',trin_istep
+       if (debug) write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
+            ' heat = ',heat_flux, ' heatsumav = ',heat_av
 
        if (trin_istep .ge. conv_nstep_av) then
           heat_av_new = sum(conv_heat) / nwrite_av
           heat_av_diff = heat_av_new - heat_av
-          write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
+          if(debug) write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
                ' heat_sum_av_diff = ',heat_sum_av
-          write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
-               ' heat_av = ',heat_av
           heat_av = heat_av_new
-
-! Convergence test - needs to be met conv_nsteps_converged/nwrite times in succession
+          ! Convergence test - needs to be met conv_nsteps_converged/nwrite times in succession
           if (abs(heat_av_diff) .lt. heat_av_test) then
              conv_isteps_converged = conv_isteps_converged + 1
-             write(6,*) 'conv_isteps_converged ', conv_isteps_converged 
           else
              conv_isteps_converged = 0
-             heat_av_test = heat_sum_av * 2e-1
+             heat_av_test = heat_sum_av * conv_test_multiplier
           endif
           
           if (conv_isteps_converged .ge. conv_nsteps_converged/nwrite .and. &
                trin_istep .ge. conv_min_step .and. &
                exit_when_converged == .true.) then
              write(6,'(A,I5,A,I6,I3)')'Job ',trin_job,' &
-                  Reached convergence condition after step ',trin_istep, conv_isteps_converged
+                  Reached convergence condition after step ',trin_istep
              exit = .true.
           endif
 
