@@ -74,7 +74,7 @@ module init_g
   complex :: nkxy_pt(3), ukxy_pt(3)
   ! <RN
   
-  logical :: debug = .false.
+  logical, parameter :: debug = .false.
   logical :: initialized = .false.
   logical :: exist
 
