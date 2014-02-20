@@ -525,7 +525,7 @@ subroutine check_dist_fn(report_unit)
     use nonlinear_terms, only: init_nonlinear_terms
     use hyper, only: init_hyper
     implicit none
-    logical:: debug=.false.
+    logical,parameter:: debug=.false.
 
     if (initialized) return
     initialized = .true.
@@ -856,7 +856,7 @@ subroutine check_dist_fn(report_unit)
     integer :: iglo
 !    logical :: alloc = .true.
 !CMR
-    logical :: debug = .false.
+    logical,parameter :: debug = .false.
 !CMR
 
 ! find totally trapped particles 
@@ -2421,6 +2421,17 @@ subroutine check_dist_fn(report_unit)
 ! now set up communication pattern:
 ! excluding wfb
 
+!################################
+!Setup the linked communications
+!################################
+       !<DD>Note the communications setup here are often equivalent to an all-to-all type
+       !communication, i.e. when nproc --> 2 nproc, t_fill --> 4 t_fill
+       !See comments in invert_rhs_linked for more details.
+
+       !Note: This setup currently involves several loops over the entire domain
+       !and hence does not scale well (effectively serial code). This can come to
+       !dominate initialisation at large core count.
+
        nn_to = 0
        nn_from = 0 
        nn_to_h = 0
@@ -2779,6 +2790,9 @@ subroutine check_dist_fn(report_unit)
       
 ! n_links_max is typically 2 * number of cells in largest supercell
        allocate (g_adj (n_links_max, 2, g_lo%llim_proc:g_lo%ulim_alloc))
+!################################
+!End of linked comms setup
+!################################
 
 200    continue
 
@@ -2900,7 +2914,7 @@ subroutine check_dist_fn(report_unit)
     integer, dimension (0:nproc-1) :: nn_from, nn_to
     integer, dimension(3) :: from_low, from_high, to_low, to_high
     integer :: il, iglo, ip, iglo_con, ipcon, n, nn_max, j
-    logical :: debug=.false.
+    logical,parameter :: debug=.false.
     integer :: bound_sign
     integer :: local_ngsend
 
@@ -4362,10 +4376,6 @@ subroutine check_dist_fn(report_unit)
     !Skip work if we're not interested in this ik and it
     if(kwork_filter(it,ik)) return
 
-    il = il_idx(g_lo,iglo)
-    ie = ie_idx(g_lo,iglo)
-    is = is_idx(g_lo,iglo)
-
     if(ieqzip(it,ik)==0) return
     if (eqzip) then
        if (secondary .and. ik == 2 .and. it == 1) return ! do not evolve primary mode
@@ -4374,6 +4384,10 @@ subroutine check_dist_fn(report_unit)
        end if
        if (harris .and. ik == 1) return ! do not evolve primary mode       
     end if
+
+    il = il_idx(g_lo,iglo)
+    ie = ie_idx(g_lo,iglo)
+    is = is_idx(g_lo,iglo)
 
     do isgn = 1, 2
        call get_source_term (phi, apar, bpar, phinew, aparnew, bparnew, &
@@ -4666,6 +4680,13 @@ subroutine check_dist_fn(report_unit)
        ! nothing
     else       
        g_adj = 0. !This shouldn't be needed
+       !<DD>Note these fill routines are often equivalent to an all-to-all type
+       !communication, i.e. when nproc --> 2 nproc, t_fill --> 4 t_fill
+       !By only communicating with our direct neighbours we would significantly
+       !reduce the amount of data to communicate and we should improve the communication
+       !scaling. However, if we do this then we lose the ability to perform the linked
+       !update (i.e. what we do below) in a parallel manner, so the below code would
+       !become partially serial.
        call fill (links_p, gnew, g_adj)
        call fill (links_h, g_h, g_adj)
        call fill (wfb_p, gnew, g_adj)
@@ -5982,7 +6003,9 @@ subroutine check_dist_fn(report_unit)
     ! to the call below for new parallel output
     ! This is temporary until distributed fields
     ! are implemented 1/2014
-    call integrate_moment (g0, total, 1)
+    ! DD added full_arr=.true. to ensure all procs get the 
+    ! full array
+    call integrate_moment (g0, total, 1, full_arr=.true.)
 
     ! EGH for new parallel I/O everyone
     ! calculates fluxes
@@ -6089,12 +6112,12 @@ subroutine check_dist_fn(report_unit)
     if (fphi > epsilon(0.0)) then
        g0 = 0.
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          is = is_idx(g_lo,iglo)
-          il = il_idx(g_lo,iglo)
-          ie = ie_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)          
           if (nonlin .and. it==1 .and. ik==1) cycle
+          is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              ! get v_magnetic piece of g0 at grid points instead of cell centers
              do ig = -ntgrid, ntgrid
