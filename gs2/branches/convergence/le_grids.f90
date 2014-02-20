@@ -1274,7 +1274,7 @@ contains
 
   end subroutine lagrange_interp
 
-  subroutine integrate_moment_c34 (g, total, all)
+  subroutine integrate_moment_c34 (g, total, all, full_arr)
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
 ! NOTE: Takes f = f(x, y, z, sigma, lambda, E, species) and returns int f, where the integral
 ! is over all velocity space
@@ -1290,10 +1290,19 @@ contains
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     complex, dimension(:,:,:,:),allocatable :: total_small
     integer, optional, intent(in) :: all
+    logical, optional, intent(in) :: full_arr
+    logical :: local_full_arr
     integer :: is, il, ie, ik, it, iglo
 
+    !Do we want to know the full result?
+    local_full_arr=.false.
+    if(present(full_arr)) local_full_arr=full_arr
+    !NOTE: Currently we're lazy and force the full_arr approach to reduce
+    !over the whole array. Really we should still use the sub-communicator
+    !approach and then gather the remaining data as we do for integrate_species
+
     !Allocate array and ensure is zero
-    if(intmom_sub.and.(present(all)))then !If we're using reduce then we don't want to make array smaller
+    if(intmom_sub.and.(present(all)).and.(.not.local_full_arr))then !If we're using reduce then we don't want to make array smaller
 !       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=0.
        allocate(total_small(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max))
     else
@@ -1317,7 +1326,7 @@ contains
     !Not sure that we really need to limit this to nproc>1 as if
     !we run with 1 proc MPI calls should still work ok
     if (nproc > 1) then     
-       if (present(all)) then
+       if (present(all).and.(.not.local_full_arr)) then
           !Complete integral over distributed velocity space and ensure all procs in sub communicator know the result
           !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
           !all procs in this case.
@@ -1333,7 +1342,7 @@ contains
     !this routine is more expensive than original version just using total.
     !In practice we should have two integrate_moment_c34 routines, one for sub-comms
     !and one for world-comms.
-    if(intmom_sub.and.(present(all)))then
+    if(intmom_sub.and.(present(all)).and.(.not.local_full_arr))then
        total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=total_small
     else
        total=total_small
@@ -1484,7 +1493,7 @@ contains
 !the results at other points.
     use layouts_type, only: le_layout_type
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
-
+    use kt_grids, only: kwork_filter
     implicit none
 
     type (le_layout_type), intent (in) :: lo
@@ -1493,9 +1502,10 @@ contains
     integer :: ixi, ie, il, ile, ig, it, ik
     total = cmplx(0.0,0.0)
     do ile = lo%llim_proc, lo%ulim_proc
-       ig = ig_idx (lo,ile)
        it = it_idx (lo,ile)
        ik = ik_idx (lo,ile)
+       if(kwork_filter(it,ik)) cycle
+       ig = ig_idx (lo,ile)
        do ie=1, negrid
 !CMR, 2/10/2013:
 !   nxi+1 limit on do loop below is CRUCIAL, as its stores phase space point
@@ -1527,7 +1537,7 @@ contains
     use layouts_type, only: le_layout_type
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
     use theta_grid, only: ntgrid
-
+    use kt_grids, only: kwork_filter
     implicit none
 
     type (le_layout_type), intent (in) :: lo
@@ -1536,9 +1546,10 @@ contains
     integer :: ixi, ie, il, ile, ig, it, ik, is
     total = cmplx(0.0,0.0)
     do ile = lo%llim_proc, lo%ulim_proc
-       ig = ig_idx (lo,ile)
        it = it_idx (lo,ile)
        ik = ik_idx (lo,ile)
+       if(kwork_filter(it,ik)) cycle
+       ig = ig_idx (lo,ile)
        is = is_idx (lo,ile)
        do ie=1, negrid
 !CMR, 2/10/2013:
@@ -3430,7 +3441,7 @@ contains
        nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
     end do
 !<DD
-	
+
     call init_energy_layouts &
          (ntgrid, naky, ntheta0, nlambda, nspec)
 
@@ -3554,7 +3565,7 @@ contains
        nullify(to_list(ip)%first,from_list(ip)%first,to_list(ip)%second,from_list(ip)%second,to_list(ip)%third,from_list(ip)%third,to_list(ip)%fourth,from_list(ip)%fourth)
     end do
     !<DD>
-	
+
     !Initialise e_lo layout object
     call init_energy_layouts &
          (ntgrid, naky, ntheta0, nlambda, nspec)

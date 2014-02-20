@@ -66,6 +66,8 @@ contains
     integer :: verbosity
     character(len=10) :: verbosity_char
     call getenv("VERBOSITY", verbosity_char)
+    !For fortran 2003 standard should replace above with
+    !call get_environment_variable("VERBOSITY", verbosity_char)
     read (verbosity_char,'(I1)') verbosity
     !write (*,*) 'verbosity is ', verbosity
   end function verbosity

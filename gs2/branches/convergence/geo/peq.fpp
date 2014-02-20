@@ -87,8 +87,8 @@ contains
     integer :: ncid, id, i, j
     integer :: nchar
 !    integer :: ncid, id, i, j, ifail, nchar
-!    character*31 :: fortrancrap
-!    character*80 :: filename, eqfile
+!    character(31) :: fortrancrap
+!    character(80) :: filename, eqfile
     character (len=80) :: filename
 !    integer, dimension(2) :: start, cnt
 
@@ -369,8 +369,8 @@ contains
     integer :: ncid, id, i, j
     integer :: nchar
 !    integer :: ncid, id, i, j, ifail, nchar
-!    character*31 :: fortrancrap
-!    character*80 :: filename, eqfile
+!    character(31) :: fortrancrap
+!    character(80) :: filename, eqfile
     character (len=80) :: filename
 !    integer, dimension(2) :: start, cnt
 
@@ -741,7 +741,7 @@ contains
     use constants, only: pi
     implicit none
     integer i, j
-    character*1 :: char
+    character(1) :: char
 !    real f(:,:), dfm(:,:,:), pi
     real :: f(:,:), dfm(:,:,:)
 
@@ -828,7 +828,7 @@ contains
     implicit none
     
     integer nth_used, ntm
-    character*1 char
+    character(1) char
     real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
     real tmp(2), aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) :: dcart
@@ -891,7 +891,7 @@ contains
     implicit none
     
     integer :: nth_used, ntm
-    character*1 :: char
+    character(1) :: char
     real :: rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
     real :: aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) ::  dbish
@@ -940,7 +940,7 @@ contains
  
     use constants, only: pi
     integer :: i, j, istar, jstar
-    character*1 :: char
+    character(1) :: char
     real :: r, thet, fstar, sign, tp, tps, theta_in
 !    real :: st, dt, sr, dr, pi
     real :: st, dt, sr, dr
@@ -1475,7 +1475,7 @@ contains
 
        gamma(i) = 0.01*gradpsi**2*(d2p(i)/pres(i)-a*(dp(i)/pres(i))**2) &
             /mag_B*(2.*pres(i)/beta_0)**((1-a)/2.) &
-	    *(-pres(i)/(dp(i)/drhodpsiq))            
+            *(-pres(i)/(dp(i)/drhodpsiq))            
     enddo
     
     do i=3,nr-2

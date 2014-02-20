@@ -11,7 +11,7 @@ module fields
   public :: advance
   public :: phinorm, kperp, fieldlineavgphi
   public :: phi, apar, bpar, phinew, aparnew, bparnew
-  public :: reset_init
+  public :: reset_init, set_init_fields
 
   !> Made public for unit tests
   public :: fields_pre_init
@@ -29,7 +29,7 @@ module fields
   logical :: remove_zonal_flows_switch
   logical :: force_maxwell_reinit
   integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_local = 3
-
+  logical :: dump_response, read_response
   logical :: initialized = .false.
   logical :: exist
 
@@ -41,6 +41,8 @@ contains
     select case (fieldopt_switch)
     case (fieldopt_implicit)
        write (report_unit, fmt="('The field equations will be advanced in time implicitly.')")
+       if(dump_response) write (report_unit, fmt="('The response matrix will be dumped to file.')")
+       if(read_response) write (report_unit, fmt="('The response matrix will be read from file.')")
     case (fieldopt_test)
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -50,6 +52,8 @@ contains
        write (report_unit, *) 
     case (fieldopt_local)
        write (report_unit, fmt="('The field equations will be advanced in time implicitly with decomposition respecting g_lo layout.')")
+       if(dump_response) write (report_unit, fmt="('The response matrix will be dumped to file.')")
+       if(read_response) write (report_unit, fmt="('The response matrix will be read from file.')")
     end select
   end subroutine check_fields
 
@@ -68,6 +72,8 @@ contains
        case (fieldopt_local)
           write (unit, fmt="(' field_option = ',a)") '"local"'
        end select
+       if(dump_response) write (unit, fmt="(' dump_response = ',L1)") dump_response
+       if(read_response) write (unit, fmt="(' read_response = ',L1)") read_response
        write (unit, fmt="(' /')")
   end subroutine wnml_fields
 
@@ -79,7 +85,6 @@ contains
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
     implicit none
-    logical :: restarted
     logical:: debug=.false.
 
     
@@ -110,11 +115,12 @@ contains
     use run_parameters, only: init_run_parameters
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
-    use fields_implicit, only: init_fields_implicit, init_allfields_implicit
-    use fields_test, only: init_fields_test, init_phi_test
-    use fields_local, only: init_fields_local, init_allfields_local
+    use fields_implicit, only: init_fields_implicit
+    use fields_test, only: init_fields_test
+    use fields_local, only: init_fields_local
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
+    use kt_grids, only: gridopt_switch, gridopt_box, kwork_filter
     implicit none
     logical :: restarted
     logical:: debug=.false.
@@ -146,6 +152,21 @@ contains
     call init_antenna
     if (restarted .and. .not. force_maxwell_reinit) return
 
+    !Set the initial fields
+    call set_init_fields
+
+    !If running in flux tube disable evolution of ky=kx=0 mode
+    if(gridopt_switch.eq.gridopt_box) kwork_filter(1,1)=.true.
+  end subroutine init_fields
+
+  subroutine set_init_fields
+    use fields_implicit, only: init_allfields_implicit
+    use fields_test, only: init_phi_test
+    use mp, only: proc0
+    use fields_local, only: init_allfields_local
+    implicit none
+    logical :: debug=.false.
+    if(proc0.and.debug) write(6,*) "Syncing fields with g."
     select case (fieldopt_switch)
     case (fieldopt_implicit)
        if (debug) write(6,*) "init_fields: init_allfields_implicit"
@@ -157,15 +178,14 @@ contains
        if (debug) write(6,*) "init_fields: init_allfields_local"
        call init_allfields_local
     end select
-    
-  end subroutine init_fields
-
+  end subroutine set_init_fields
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
-    use fields_implicit, only: field_subgath
+    use fields_implicit, only: field_subgath, dump_response_imp=>dump_response, read_response_imp=>read_response
+    use fields_local, only: dump_response_local=>dump_response, read_response_local=>read_response
     implicit none
     type (text_option), dimension (5), parameter :: fieldopts = &
          (/ text_option('default', fieldopt_implicit), &
@@ -174,7 +194,8 @@ contains
             text_option('local', fieldopt_local),&
             text_option('implicit_local', fieldopt_local)/)
     character(20) :: field_option
-    namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit
+    namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit,&
+         dump_response, read_response
     integer :: ierr, in_file
 
     if (proc0) then
@@ -182,6 +203,8 @@ contains
        remove_zonal_flows_switch = .false.
        field_subgath=.false.
        force_maxwell_reinit=.true.
+       dump_response=.false.
+       read_response=.false.
        in_file = input_unit_exist ("fields_knobs", exist)
 !       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
        if (exist) read (unit=in_file, nml=fields_knobs)
@@ -197,6 +220,20 @@ contains
     call broadcast (remove_zonal_flows_switch)
     call broadcast (field_subgath)
     call broadcast (force_maxwell_reinit)
+    call broadcast (dump_response)
+    call broadcast (read_response)
+   
+    !Set the solve type specific flags
+    select case (fieldopt_switch)
+    case (fieldopt_implicit)
+       dump_response_imp=dump_response
+       read_response_imp=read_response
+    case (fieldopt_test)
+    case (fieldopt_local)
+       dump_response_local=dump_response
+       read_response_local=read_response
+    end select
+
   end subroutine read_parameters
 
   subroutine allocate_arrays

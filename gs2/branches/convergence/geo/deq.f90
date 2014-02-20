@@ -71,7 +71,7 @@ contains
     real :: delta_R, delta_Z
 !    real :: fitp_surf2, ierr, rleft, zxy11, zxy1n, zxym1, zxymn
 !    real, dimension(:), allocatable :: temp, zp, zx1, zxm, zy1, zyn
-    character*80 :: filename, eqfile
+    character(80) :: filename, eqfile
     
     integer :: i, j, init, initeq, big, nhb, nwb
     integer :: jmin, jmax
@@ -373,7 +373,7 @@ contains
 
     use splines, only: inter_d_cspl
     integer nth, ntm
-    character*1 char
+    character(1) char
     real, dimension(-ntm:), intent(in) :: rgrid, theta
     real, dimension(-ntm:,:), intent(out) :: grad
     real aa(1), daa(1), rp, rpt(1)
@@ -401,7 +401,7 @@ contains
     implicit none
     
     integer nth_used, ntm
-    character*1 char
+    character(1) char
     real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
     real tmp(2), aa(1), daa(1), rp, rpt(1)
     real, dimension(nw, nh, 2) ::  dbish

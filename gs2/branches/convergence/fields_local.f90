@@ -7,12 +7,16 @@ module fields_local
   implicit none
   private
 
+  !> Module level routines
   public :: init_fields_local, init_allfields_local, finish_fields_local
-  public :: advance_local, reset_fields_local
-  public :: fields_local_functional
+  public :: advance_local, reset_fields_local, dump_response_to_file_local
+  public :: fields_local_functional, read_response_from_file_local
 
   !> Unit tests
   public :: fields_local_unit_test_init_fields_matrixlocal
+
+  !> User set parameters
+  public :: dump_response, read_response
 
   !//////////////////////////////
   !// CUSTOM TYPES
@@ -197,6 +201,8 @@ module fields_local
      procedure :: write_debug_data => fm_write_debug_data
      procedure :: set_is_local => fm_set_is_local
      procedure :: count_subcom => fm_count_subcom
+     procedure :: getfieldeq_nogath => fm_getfieldeq_nogath
+     procedure :: getfieldeq1_nogath => fm_getfieldeq1_nogath
   end type fieldmat_type
 
   !>This is the type which controls/organises the parallel
@@ -254,6 +260,8 @@ module fields_local
   logical :: debug=.true. !Do we do debug stuff?
   logical :: initialised=.false. !Have we initialised yet?
   logical :: reinit=.false. !Are we reinitialising?
+  logical :: dump_response=.false. !Do we dump the response matrix?
+  logical :: read_response=.false. !Do we read the response matrix from dump?
   integer :: nfield !How many fields
   integer :: nfq !How many field equations (always equal to nfield)
   type(pc_type),save :: pc !This is the parallel control object
@@ -556,6 +564,9 @@ contains
     !than allreduce_sub as we're going to broadcast the result later anyway.
     !if(self%sc_sub_pd%nproc.gt.0) call sum_allreduce_sub(self%tmp_sum,self%sc_sub_pd%id)
     if(.not.(self%is_empty.or.self%is_all_local)) call sum_reduce_sub(self%tmp_sum,0,self%sc_sub_pd)
+    
+    !<DD> At this point the head of the supercell has the field update stored in self%tmp_sum
+    !all other procs have partial/no data
 
     !This can be used to populate the empty procs, but is not needed at the moment as we broadcast
     !the result at the end of getfield_local currently, which turns out to be a lot faster (>~factor 2).
@@ -1059,6 +1070,7 @@ contains
     use mp, only: mp_abort
     implicit none
     class(supercell_type), intent(inout) :: self
+    self%is_empty=.true. !Until implemented make everything be treated as empty.
     call mp_abort("ERROR: Invert with mpi not yet implemented.")
   end subroutine sc_invert_mpi
 
@@ -1599,7 +1611,7 @@ contains
   !>Initialise the field objects
   subroutine fm_init(self)
     use kt_grids, only: naky, ntheta0
-    use dist_fn, only: itright
+    use dist_fn, only: itright, get_leftmost_it
     use run_parameters, only: fphi, fapar, fbpar
     use theta_grid, only: ntgrid
     implicit none
@@ -1984,6 +1996,8 @@ contains
        call getfieldeq(phinew,aparnew,bparnew,fq,fqa,fqp)
     else
        call getfieldeq_nogath(phinew,aparnew,bparnew,fq,fqa,fqp)
+!<DD>Could improve performance by using a "smart" routine which only operates on local/not empty data
+!       call self%getfieldeq_nogath(phinew,aparnew,bparnew,fq,fqa,fqp)
     endif
 
     !Now we need to store the field equations in the appropriate places
@@ -2078,11 +2092,14 @@ contains
        if(.not.self%kyb(ik)%is_local) cycle
        do is=1,self%kyb(ik)%nsupercell
           if(.not.self%kyb(ik)%supercells(is)%is_local) cycle
-          if(self%kyb(ik)%supercells(is)%is_empty)then
+          self%kyb(ik)%supercells(is)%tmp_sum=0.0
+!If we wanted to do non-blocking comms then we could pre post receives here
+!for empty procs (i.e. ones not involved in field computation)
+!          if(self%kyb(ik)%supercells(is)%is_empty)then
 !             call self%kyb(ik)%supercells(is)%gfu_post_recv
-          else
-             self%kyb(ik)%supercells(is)%tmp_sum=0.0
-          endif
+!          else
+!             !Do nothing
+!          endif
        enddo
     enddo
 
@@ -2097,6 +2114,8 @@ contains
        call getfieldeq(phi,apar,bpar,fq,fqa,fqp)
     else
        call getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
+!<DD>Could improve performance by using a "smart" routine which only operates on local/not empty data
+!       call self%getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
     endif
 
     !Now get the field update for each ik
@@ -2508,10 +2527,10 @@ contains
        do is=1,self%kyb(ik)%nsupercell
           write(unit,'("    * is : ",I0)') is
 !          if(.not.self%kyb(ik)%supercells(is)%is_local) cycle
-          write(unit,'("           ","is_head      - ",L)') self%kyb(ik)%supercells(is)%is_head
-          write(unit,'("           ","is_empty     - ",L)') self%kyb(ik)%supercells(is)%is_empty
-          write(unit,'("           ","is_local     - ",L)') self%kyb(ik)%supercells(is)%is_local
-          write(unit,'("           ","is_all_local - ",L)') self%kyb(ik)%supercells(is)%is_all_local
+          write(unit,'("           ","is_head      - ",L1)') self%kyb(ik)%supercells(is)%is_head
+          write(unit,'("           ","is_empty     - ",L1)') self%kyb(ik)%supercells(is)%is_empty
+          write(unit,'("           ","is_local     - ",L1)') self%kyb(ik)%supercells(is)%is_local
+          write(unit,'("           ","is_all_local - ",L1)') self%kyb(ik)%supercells(is)%is_all_local
           write(unit,'()')
           write(unit,'("        ",4(" ",A8," "))') "ic", "rllim", "rulim", "nrow"
           write(unit,'("        ",4(" ",9("-")))')
@@ -2586,6 +2605,108 @@ contains
     !Now close output file
     call close_output_file(unit)
   end subroutine fm_write_debug_data
+
+  subroutine fm_getfieldeq_nogath (self,phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
+    use theta_grid, only: ntgrid
+    use dist_fn, only: getan_nogath
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    class(fieldmat_type), intent(in) :: self
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
+    complex, dimension (:,:,:), allocatable :: antot, antota, antotp
+
+    allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
+
+    call getan_nogath (antot, antota, antotp)
+    call self%getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
+         fieldeq, fieldeqa, fieldeqp)
+
+    deallocate (antot, antota, antotp)
+  end subroutine fm_getfieldeq_nogath
+
+  subroutine fm_getfieldeq1_nogath (self,phi, apar, bpar, antot, antota, antotp, &
+       fieldeq, fieldeqa, fieldeqp)
+    use dist_fn_arrays, only: kperp2
+    use theta_grid, only: ntgrid, bmag, delthet, jacob
+    use kt_grids, only: naky, ntheta0, aky
+    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: beta, tite
+    use kt_grids, only: kwork_filter
+    use species, only: spec, has_electron_species
+    use dist_fn, only: gamtot,gamtot1, gamtot2, gamtot3, fl_avg, gridfac1, apfac, awgt
+    use dist_fn, only: adiabatic_option_switch, adiabatic_option_fieldlineavg
+    implicit none
+    class(fieldmat_type), intent(in) :: self
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
+    complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
+
+    integer :: ik, it, is, ic
+
+    if (.not. allocated(fl_avg)) allocate (fl_avg(ntheta0, naky))
+    if (.not. has_electron_species(spec)) fl_avg = 0.
+
+    if (.not. has_electron_species(spec)) then
+       if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
+          if (.not. allocated(awgt)) then
+             allocate (awgt(ntheta0, naky))
+             awgt = 0.
+             do ik = 1, naky
+                if (aky(ik) > epsilon(0.0)) cycle
+                do it = 1, ntheta0
+                   if(kwork_filter(it,ik)) cycle
+                   awgt(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
+                end do
+             end do
+          endif
+           
+          do ik = 1, naky
+             do it = 1, ntheta0
+                if(kwork_filter(it,ik)) cycle
+                fl_avg(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
+             end do
+          end do
+       end if
+    end if
+
+    !Now loop over cells and calculate field equation as required
+    do ik=1,self%naky
+       !Skip empty cells, note this is slightly different to skipping
+       !.not.is_local. Skipping empty is probably faster but may be more dangerous
+       if(self%kyb(ik)%is_empty) cycle
+       do is=1,self%kyb(ik)%nsupercell
+          if(self%kyb(ik)%supercells(is)%is_empty) cycle
+          do ic=1,self%kyb(ik)%supercells(is)%ncell
+             if(self%kyb(ik)%supercells(is)%cells(ic)%is_empty) cycle
+
+             it=self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+             if(kwork_filter(it,ik)) cycle
+
+             !Now fill in data
+             if(fphi>epsilon(0.0)) then
+                fieldeq(:,it,ik)=antot(:,it,ik)-gamtot(:,it,ik)*gridfac1(:,it,ik)*phi(:,it,ik)
+                if(fbpar.gt.epsilon(0.0)) fieldeq(:,it,ik)=fieldeq(:,it,ik)+bpar(:,it,ik)*gamtot1(:,it,ik)
+                if(.not.has_electron_species(spec)) fieldeq(:,it,ik)= fieldeq(:,it,ik)+fl_avg(it,ik)
+             endif
+
+             if(fapar>epsilon(0.0)) then
+                fieldeqa(:,it,ik)=antota(:,it,ik)-kperp2(:,it,ik)*gridfac1(:,it,ik)*apar(:,it,ik)
+             endif
+
+             if(fbpar>epsilon(0.0))then
+                fieldeqp(:,it,ik)=bpar(:,it,ik)*gridfac1(:,it,ik)+&
+                     (antotp(:,it,ik)+bpar(:,it,ik)*gamtot2(:,it,ik)+&
+                     0.5*phi(:,it,ik)*gamtot1(:,it,ik))*beta*apfac/bmag(:)**2
+             endif
+          enddo
+       enddo
+    enddo
+  end subroutine fm_getfieldeq1_nogath
+
 !------------------------------------------------------------------------ 
 
 !================
@@ -3018,39 +3139,21 @@ contains
 !// MODULE LEVEL ROUTINES
 !//////////////////////////////
 
-  !>Helper function for finding the leftmost it of supercell
-  function get_leftmost_it(it,ik)
-    USE dist_fn, ONLY: itleft, boundary_option_switch, boundary_option_linked
-    implicit none
-    integer, intent(in) :: ik, it
-    integer :: get_leftmost_it
-    integer :: it_cur
-    !If not linked then no connections so only one cell in supercell
-    if (boundary_option_switch.eq.boundary_option_linked) then
-       it_cur=it
-       do while(itleft(ik,it_cur).ge.0.and.itleft(ik,it_cur).ne.it_cur)
-          !Keep updating it_cur with left connected it until there are no
-          !connections to left
-          it_cur=itleft(ik,it_cur)
-       enddo
-    else
-       it_cur=it
-    endif
-    get_leftmost_it=it_cur
-  end function get_leftmost_it
-
   !>Routine to initialise
   subroutine init_fields_local
     use antenna, only: init_antenna
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use gs2_layouts, only: init_gs2_layouts
-    use mp, only: proc0
+    use mp, only: proc0, mp_abort
     implicit none
     logical:: debug=.false.
 
     !Early exit if possible
     if (initialised) return
+
+    !Exit if local fields not supported (e.g. compiled with pgi)
+    if(.not.fields_local_functional()) call mp_abort("field_option='local' not supported with this build")
 
     !Make sure only proc0 does the printing
     debug=debug.and.proc0
@@ -3067,6 +3170,7 @@ contains
     call init_fields_matrixlocal
     if (debug) write(6,*) "init_fields_local: antenna"
     call init_antenna
+
 
     !Set the initialised state
     initialised = .true.
@@ -3195,32 +3299,57 @@ contains
 !!!!!!!!!!
 
     !Now fill the fieldmat with data
-    !if(debug)call barrier
-    if(proc0.and.debug)then
-       write(dlun,'("Populating.")')
-       call cpu_time(ts)
-    endif
-    call fieldmat%populate
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
+    if(read_response)then
+       if(proc0.and.debug)then
+          write(dlun,'("Populating from dump.")')
+          call cpu_time(ts)
+       endif
+       call read_response_from_file_local
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
+    else       
+       !if(debug)call barrier
+       if(proc0.and.debug)then
+          write(dlun,'("Populating.")')
+          call cpu_time(ts)
+       endif
+       call fieldmat%populate
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
+
+       !Now prepare the response matrices
+       !Note: Currently prepare just means invert
+       !but at some point we may wish to LU decompose
+       !or other approaches etc.
+       !if(debug)call barrier
+       if(proc0.and.debug) then
+          write(dlun,'("Preparing.")')
+          call cpu_time(ts)
+       endif
+       call fieldmat%prepare
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
     endif
 
-    !Now prepare the response matrices
-    !Note: Currently prepare just means invert
-    !but at some point we may wish to LU decompose
-    !or other approaches etc.
-    !if(debug)call barrier
-    if(proc0.and.debug) then
-       write(dlun,'("Preparing.")')
-       call cpu_time(ts)
-    endif
-    call fieldmat%prepare
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
+    !Dump response to file
+    if(dump_response)then
+       if(proc0.and.debug)then
+          write(dlun,'("Dumping to file.")')
+          call cpu_time(ts)
+       endif
+       call dump_response_to_file_local
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
     endif
 
     !Now write debug data
@@ -3335,6 +3464,117 @@ contains
 
   end subroutine advance_local
 
+  !> Routine to dump the current response matrix data
+  !! to file. One file per connected domain. Each written
+  !! by the head of the supercell.
+  subroutine dump_response_to_file_local(suffix)
+    use file_utils, only: run_name
+    use gs2_save, only: gs2_save_response
+    implicit none
+    character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
+    character(len=64) :: suffix_local, suffix_default='.response'
+    character(len=256) :: file_name
+    complex, dimension(:,:), allocatable :: tmp_arr
+    integer :: ik, is
+
+    !Set file suffix
+    suffix_local=suffix_default
+    if(present(suffix)) suffix_local=suffix
+
+    !First we have to pull data so that head of each supercell has full data
+    !Currently we are lazy and just ensure all procs in supercell has full data
+    do ik=1,fieldmat%naky
+       !If ik isn't local than cycle
+       if(.not.fieldmat%kyb(ik)%is_local) cycle
+
+       !Loop over supercells
+       do is=1,fieldmat%kyb(ik)%nsupercell
+          !If is isn't local than cycle
+          if(.not.fieldmat%kyb(ik)%supercells(is)%is_local) cycle
+
+          !Now allocate array
+          allocate(tmp_arr(fieldmat%kyb(ik)%supercells(is)%nrow,fieldmat%kyb(ik)%supercells(is)%ncol))
+
+          !First have to pull all row level data
+          call fieldmat%kyb(ik)%supercells(is)%pull_rows_to_arr(tmp_arr)
+          
+          !Now save if on head proc
+          if(fieldmat%kyb(ik)%supercells(is)%is_head)then
+             !Really we should do this with netcdf but for now we will
+             !simply dump a binary file.
+
+             !First make file name
+             write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(run_name),ik,is,trim(suffix_local)
+             call gs2_save_response(tmp_arr,file_name)
+          endif
+
+          !Deallocate
+          deallocate(tmp_arr)
+       enddo
+    enddo
+
+  end subroutine dump_response_to_file_local
+
+  !> Routine to read the current response matrix data
+  !! from file dump. One file per connected domain. Each written
+  !! by the head of the supercell.
+  !! NOTE: Have to have setup communicators etc.
+  subroutine read_response_from_file_local(suffix)
+    use file_utils, only: run_name
+    use gs2_save, only: gs2_restore_response
+    use mp, only: sum_allreduce_sub
+    implicit none
+    character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
+    character(len=64) :: suffix_local, suffix_default='.response'
+    character(len=256) :: file_name
+    complex, dimension(:,:), allocatable :: tmp_arr
+    integer :: ik, is
+
+    !Set file suffix
+    suffix_local=suffix_default
+    if(present(suffix)) suffix_local=suffix
+
+    !First we have to pull data so that head of each supercell has full data
+    !Currently we are lazy and just ensure all procs in supercell has full data
+    do ik=1,fieldmat%naky
+       !If ik isn't local than cycle
+       if(.not.fieldmat%kyb(ik)%is_local) cycle
+
+       !Loop over supercells
+       do is=1,fieldmat%kyb(ik)%nsupercell
+          !If is isn't local than cycle
+          if(.not.fieldmat%kyb(ik)%supercells(is)%is_local) cycle
+
+          !Now allocate array
+          allocate(tmp_arr(fieldmat%kyb(ik)%supercells(is)%nrow,fieldmat%kyb(ik)%supercells(is)%ncol))
+          tmp_arr=0.
+
+          !Now if on head proc read
+          if(fieldmat%kyb(ik)%supercells(is)%is_head)then
+             !Really we should do this with netcdf but for now we will
+             !simply dump a binary file.
+
+             !First make file name
+             write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(run_name),ik,is,trim(suffix_local)
+             call gs2_restore_response(tmp_arr,file_name)
+          endif
+
+          !Now we need to broadcast the data to everyone with supercell.
+          !NOTE: Really we would want a supercell bound method which will do
+          !this so that this module level routine is insensitive to communicators etc.
+          !Furthermore we are lazy and use a sum_allreduce_sub to send data to everyone
+          call sum_allreduce_sub(tmp_arr,fieldmat%kyb(ik)%supercells(is)%sc_sub_all%id)
+
+          !Now push array to local storage
+          call fieldmat%kyb(ik)%supercells(is)%push_arr_to_rows(tmp_arr)
+
+          !Deallocate
+          deallocate(tmp_arr)
+       enddo
+    enddo
+
+  end subroutine read_response_from_file_local
+
   !> Returns true if GS2 was built in such a way
   !! as to allow this module to work.
   !! Currently does not work with PGI compilers. 
@@ -3344,6 +3584,5 @@ contains
     logical :: fields_local_functional
     fields_local_functional = (.not. compiler_pgi())
   end function fields_local_functional
-
 
 end module fields_local
