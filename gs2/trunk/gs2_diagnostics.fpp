@@ -398,7 +398,6 @@ contains
     use mp, only: broadcast, proc0, mp_abort
     use le_grids, only: init_weights
     use gs2_save, only: restart_writable
-
     implicit none
     logical, intent (in) :: list
     integer, intent (in) :: nstep
@@ -445,7 +444,6 @@ contains
     call broadcast (write_max_verr)
     call broadcast (write_lpoly)
     call broadcast (write_cerr)
-
     call broadcast (ntg_out)
     call broadcast (write_hrate)
     call broadcast (write_lorentzian)
@@ -459,6 +457,20 @@ contains
     call broadcast (write_pflux_tormom)
 
     call broadcast (file_safety_check)
+
+    !<DD> Moved the following from loop/finish_diagnostics to init
+    call broadcast (write_symmetry)
+    call broadcast (write_pflux_sym) !JPL
+    call broadcast (write_correlation)
+    call broadcast (write_correlation_extend)
+    call broadcast (write_parity)
+    call broadcast (write_avg_moments)
+    call broadcast (write_final_moments)
+
+    !<DD> Adding broadcast of a few other variables
+    call broadcast (omegatol)
+    call broadcast (omegatinst)
+
     nmovie_tot = nstep/nmovie
     nwrite_big_tot = nstep/(nwrite*nwrite_mult)-nstep/4/(nwrite*nwrite_mult)
     if(nwrite_big_tot .le. 0) nwrite_big_tot = 1
@@ -596,7 +608,7 @@ contains
           write (unit=out_unit, fmt="('Date: ',a,' Time: ',a,1x,a)") &
                trim(datestamp), trim(timestamp), trim(zone)
        end if
-       
+
        allocate (omegahist(0:navg-1,ntheta0,naky))
        omegahist = 0.0
     end if
@@ -958,7 +970,6 @@ contains
        end if
     end if
 
-    call broadcast (write_final_moments)
     if (write_final_moments) then
 
        allocate (ntot(-ntgrid:ntgrid,ntheta0,naky,nspec))
@@ -1468,7 +1479,9 @@ contains
     use parameter_scan_arrays, only: scan_momflux => momflux_tot 
     use parameter_scan_arrays, only: scan_phi2_tot => phi2_tot 
     use parameter_scan_arrays, only: scan_nout => nout
-
+    use parameter_scan, only: scan_type_switch, scan_type_none, target_parameter_switch
+    use parameter_scan, only: target_parameter_hflux_tot,target_parameter_momflux_tot,target_parameter_phi2_tot
+    
     implicit none
 !    integer :: nout = 1
 !    integer :: nout_movie = 1
@@ -1480,7 +1493,7 @@ contains
     !GGH J_external
     real, dimension(:,:), allocatable ::  j_ext
 
-    real, dimension (ntheta0, naky) :: phitot, akperp
+    real, dimension (ntheta0, naky) :: phitot!, akperp
     real :: phi2, apar2, bpar2
     real, dimension (ntheta0, naky) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode
     real, dimension (ntheta0, naky, nspec) :: ntot2_by_mode, ntot20_by_mode
@@ -1546,15 +1559,6 @@ contains
     logical:: debug=.false.
 
     if (present(debopt)) debug=debopt
-
-    part_fluxes = 0.0 ; mpart_fluxes = 0.0 ; bpart_fluxes = 0.0
-    heat_fluxes = 0.0 ; mheat_fluxes = 0.0 ; bheat_fluxes = 0.0
-    mom_fluxes = 0.0 ; mmom_fluxes = 0.0 ; bmom_fluxes = 0.0  
-    part_tormom_fluxes = 0.0
-    energy_exchange = 0.0
-
-    phase_tot = 0.0 ;  phase_theta = 0.0
-
     call prof_entering ("loop_diagnostics")
 
     exit = .false.
@@ -1670,6 +1674,16 @@ if (debug) write(6,*) "loop_diagnostics: call update_time"
     end if
 
     if (mod(istep,nwrite) /= 0 .and. .not. exit) return
+
+    part_fluxes = 0.0 ; mpart_fluxes = 0.0 ; bpart_fluxes = 0.0
+    heat_fluxes = 0.0 ; mheat_fluxes = 0.0 ; bheat_fluxes = 0.0
+    mom_fluxes = 0.0 ; mmom_fluxes = 0.0 ; bmom_fluxes = 0.0  
+    part_tormom_fluxes = 0.0
+    energy_exchange = 0.0
+
+    phase_tot = 0.0 ;  phase_theta = 0.0
+
+
     t = user_time
 
     if (write_g) call write_f (last)
@@ -1793,12 +1807,12 @@ if (debug) write(6,*) "loop_diagnostics: -1"
           if (write_hrate) heat_avg = heat_avg + h%imp_colls*(t-t_old)
 !          t_old = t
        end if
-    end if
 
-    call broadcast (pflux_avg)
-    call broadcast (qflux_avg)
-    call broadcast (vflux_avg)
-    if (write_hrate) call broadcast (heat_avg)
+       call broadcast (pflux_avg)
+       call broadcast (qflux_avg)
+       call broadcast (vflux_avg)
+       if (write_hrate) call broadcast (heat_avg)
+    end if
 
     fluxfac = 0.5
     fluxfac(1) = 1.0
@@ -1869,7 +1883,8 @@ if (debug) write(6,*) "loop_diagnostics: -1"
 if (debug) write(6,*) "loop_diagnostics: -2"
     call prof_entering ("loop_diagnostics-2")
 
-    call kperp (ntg_out, akperp)
+!<DD>Commenting out as akperp not used anywhere
+!    call kperp (ntg_out, akperp)
 
     if (proc0 .and. write_any) then
        if (write_ascii) write (unit=out_unit, fmt=*) 'time=', t
@@ -2147,13 +2162,21 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        end do
     end if
 
-    call broadcast(scan_hflux)
-    call broadcast(scan_momflux)
-    call broadcast(scan_phi2_tot)
+    if(scan_type_switch.ne.scan_type_none)then
+       select case(target_parameter_switch)
+       case(target_parameter_hflux_tot)
+          call broadcast(scan_hflux)
+       case(target_parameter_momflux_tot)
+          call broadcast(scan_momflux)
+       case(target_parameter_phi2_tot)
+          call broadcast(scan_phi2_tot)
+       case default
+          !Nothing as should generate warning/error within parameter_scan
+       endselect
+    endif
 
     if (write_cerr) call collision_error(phinew,bparnew,last)
 
-    call broadcast (write_symmetry)
     if (write_symmetry) then
        allocate (vflx_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
        call flux_vs_theta_vs_vpa (vflx_sym)
@@ -2161,7 +2184,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        deallocate (vflx_sym)
     end if
 
-   call broadcast (write_pflux_sym)  !JPL
     if (write_pflux_sym) then
        allocate (pflux_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
        call pflux_vs_theta_vs_vpa (pflux_sym)
@@ -2169,7 +2191,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        deallocate (pflux_sym)
     end if
     
-    call broadcast (write_correlation)
     if (write_correlation) then
        allocate (phi_corr_2pi(-ntgrid:ntgrid,naky))
        call correlation (phi_corr_2pi)
@@ -2177,7 +2198,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        deallocate (phi_corr_2pi)
     end if
 
-    call broadcast (write_correlation_extend)
     if (write_correlation_extend .and. istep > nstep/4) then
        if (.not. allocated(phicorr_sum)) then
           ntg_extend = (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1)
@@ -2198,7 +2218,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        deallocate (phi_corr, phi2_extend)
     end if
 
-    call broadcast (write_parity)
     if (write_parity) then
 
        ! initialize layouts for parity diagnostic
@@ -2601,7 +2620,6 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        deallocate (phim)
     end if
 
-    call broadcast (write_avg_moments)
     if (write_avg_moments) then
 
        call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
