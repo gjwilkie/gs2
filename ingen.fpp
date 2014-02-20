@@ -35,7 +35,7 @@ program ingen
   character (100) :: pythonin
   integer :: interactive_record, interactive_input
 
-  integer :: in_file, i, unit, is, report_unit, ncut, npmax
+  integer :: in_file, i, ierr, unit, is, report_unit, iunit, ncut, npmax
   logical :: exist, scan, stdin
   logical :: coll_on = .false.
 
@@ -58,7 +58,7 @@ program ingen
   namelist /ingen_knobs/ ncut, scan, stdin, npmax
 
 !CMR
-  logical:: debug=.false.
+  logical, parameter :: debug=.false.
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -97,10 +97,10 @@ contains
     use species, only: spec, nspec, has_electron_species
     use geometry, only: beta_prime_input, bishop
     use run_parameters, only: beta, fapar, fbpar
-    integer :: sel, nbeta, j, ise, bishop_save
+    integer :: sel, nbeta, j, ise
     real :: beta_low, beta_high, dbeta, beta_save
     real :: fapar_save, fbpar_save, pri, pe, alpi, tpe_save, ptot, alp, dbdr
-    real :: alt, aln, fac, beta_prime_save
+    real :: alt, aln, fac, beta_prime_save, bishop_save
     real, dimension (:), allocatable :: tp_save, fp_save
     character (500) :: tag1, tag2
     logical :: first = .true.
@@ -676,11 +676,11 @@ contains
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use le_grids, only: init_le_grids
-    use theta_grid, only: init_theta_grid, ntgrid
+    use theta_grid, only: init_theta_grid, nbset, ntgrid
     use constants, only: pi
     implicit none
     logical :: list, accelx=.false., accelv=.false.
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
     integer :: is
     call init_file_utils (list, name="template")
 if (debug) write(6,*) 'get_namelists: called init_file_utils'
@@ -770,7 +770,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     use le_grids, only: wnml_le_grids
     use nonlinear_terms, only: nonlin, wnml_nonlinear_terms
     use run_parameters, only: wnml_run_parameters
-    use species, only: wnml_species, spec, has_electron_species
+    use species, only: wnml_species, nspec, spec, has_electron_species
     use theta_grid, only: wnml_theta_grid
     use theta_grid_params, only: wnml_theta_grid_params
 
@@ -779,6 +779,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     logical :: electrons
 
     integer :: h, t, u
+    integer :: i
     character (4) :: suffix
     character(20) :: datestamp, timestamp, zone
     
@@ -901,19 +902,23 @@ if (debug) write(6,*) 'get_namelists: returning'
      use gs2_diagnostics, only: dump_fields_periodically, save_for_restart
      use gs2_diagnostics, only: nsave, make_movie, nmovie, exit_when_converged, nwrite, omegatol
      use gs2_reinit, only: delt_adj
-     use gs2_time, only: code_dt, user_dt
+     use gs2_time, only: code_dt, user_dt, code_dt_min
      use hyper, only: check_hyper
      use init_g, only: check_init_g
-     use kt_grids, only: check_kt_grids, gridopt_switch
+     use kt_grids, only: check_kt_grids, grid_option, gridopt_switch
      use kt_grids, only: gridopt_box, naky, ntheta0, nx, ny
 !     use le_grids, only: leok_le_grids, check_le_grids
      use le_grids, only: negrid, nlambda
-     use nonlinear_terms, only: nonlin, check_nonlinear_terms
+     use nonlinear_terms, only: nonlin, cfl, check_nonlinear_terms
      use run_parameters, only: check_run_parameters
-     use run_parameters, only: beta, tite
+     use run_parameters, only: beta, tite, margin, code_delt_max
      use run_parameters, only: nstep, wstar_units
-     use species, only: check_species, nspec, has_electron_species
-     use theta_grid, only: check_theta_grid,ntgrid
+     use species, only: check_species, spec, nspec, has_electron_species
+     use theta_grid, only: check_theta_grid
+     use theta_grid, only: gb_to_cv, nbset, ntgrid
+     use theta_grid_params, only: nperiod, ntheta, eps, epsl, rmaj, r_geo
+     use theta_grid_params, only: pk, qinp, rhoc, shift, shat
+     use theta_grid_params, only: akappa, akappri, tri, tripri
      use collisions, only: collision_model_switch, collision_model_none
      use collisions, only: collision_model_full, collision_model_ediffuse
      use collisions, only: collision_model_lorentz, collision_model_lorentz_test
@@ -921,9 +926,11 @@ if (debug) write(6,*) 'get_namelists: returning'
 
      implicit none
      real :: alne, dbetadrho_spec
+     real :: kxfac, drhodpsi
      character (20) :: datestamp, timestamp, zone
+     character (200) :: line
      logical :: le_ok = .true.
-     integer :: nmesh
+     integer :: j, nmesh
      integer, dimension(4) :: pfacs
 
      call get_unused_unit (report_unit)
@@ -1034,26 +1041,26 @@ if (debug) write(6,*) 'get_namelists: returning'
         call nprocs (nmesh)
         if (nonlin) then
            write (report_unit, fmt="(/'Nonlinear run => consider #proc sweetspots for xxf+yxf objects!')") 
-           call nprocs_xxf
-           call nprocs_yxf
+           call nprocs_xxf(nmesh)
+           call nprocs_yxf(nmesh)
         endif
 
         if(use_le_layout) then
           write (report_unit, fmt="(/'Collisions using le_lo')") 
-          call nprocs_le
+          call nprocs_le(nmesh)
         else
           select case (collision_model_switch)
           case (collision_model_full)
              write (report_unit, fmt="(/'Collisions using lz_lo')") 
-             call nprocs_lz
+             call nprocs_lz(nmesh)
              write (report_unit, fmt="(/'Collisions using e_lo')") 
-             call nprocs_e
+             call nprocs_e(nmesh)
           case(collision_model_lorentz,collision_model_lorentz_test)
              write (report_unit, fmt="(/'Collisions using lz_lo')") 
-             call nprocs_lz
+             call nprocs_lz(nmesh)
           case (collision_model_ediffuse)
              write (report_unit, fmt="(/'Collisions using e_lo')") 
-             call nprocs_e
+             call nprocs_e(nmesh)
           end select
        end if
      endif
@@ -1199,16 +1206,21 @@ if (debug) write(6,*) 'get_namelists: returning'
    enddo
   end subroutine wsweetspots
 
-  subroutine nprocs_xxf
+  subroutine nprocs_xxf(nmesh)
     use nonlinear_terms, only : nonlin
     use species, only : nspec
-    use kt_grids, only: naky
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+    use kt_grids, only: naky, ntheta0
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
     use gs2_layouts, only: layout
     implicit none
-    integer :: nefacs, nlfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    real :: fac
+    integer, intent (in) :: nmesh
+    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
     integer, dimension(:,:), allocatable :: facs
+    integer :: npe
+    real :: time
     integer :: maxfacs
     integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kyfacs
     integer, dimension(6) :: nfac, sdim
@@ -1244,17 +1256,22 @@ if (debug) write(6,*) 'get_namelists: returning'
        deallocate (facs,spfacs,efacs,lfacs,sgfacs,tgfacs,kyfacs)
   end subroutine nprocs_xxf
 
-  subroutine nprocs_yxf
+  subroutine nprocs_yxf(nmesh)
     use nonlinear_terms, only : nonlin
     use species, only : nspec
-    use kt_grids, only: naky, nx
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+    use kt_grids, only: naky, ntheta0, nx
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
 
     use gs2_layouts, only: layout
     implicit none
-    integer :: nefacs, nlfacs, nkxfacs, nsgfacs, nspfacs, ntgfacs
+    real :: fac
+    integer, intent (in) :: nmesh
+    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
     integer, dimension(:,:), allocatable :: facs
+    integer :: npe
+    real :: time
     integer :: maxfacs
     integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kxfacs
     integer, dimension(6) :: nfac, sdim
@@ -1290,16 +1307,21 @@ if (debug) write(6,*) 'get_namelists: returning'
      deallocate (facs,spfacs,efacs,lfacs,sgfacs,tgfacs,kxfacs)
   end subroutine nprocs_yxf
 
-  subroutine nprocs_e
+  subroutine nprocs_e(nmesh)
     use species, only : nspec
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda
+    use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
 
     use gs2_layouts, only: layout
     implicit none
-    integer :: nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    real :: fac
+    integer, intent (in) :: nmesh
+    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
     integer, dimension(:,:), allocatable :: facs
+    integer :: npe
+    real :: time
     integer :: maxfacs
     integer, allocatable, dimension(:):: spfacs, lfacs, sgfacs, tgfacs, kxfacs, kyfacs
     integer, dimension(6) :: nfac, sdim
@@ -1349,18 +1371,23 @@ if (debug) write(6,*) 'get_namelists: returning'
   end subroutine nprocs_e
 
 
-  subroutine nprocs_lz
+  subroutine nprocs_lz(nmesh)
     use species, only : nspec
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: negrid
+    use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
 
     use gs2_layouts, only: layout
     implicit none
-    integer :: nefacs, nkxfacs, nkyfacs, nspfacs, ntgfacs
+    real :: fac
+    integer, intent (in) :: nmesh
+    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
     integer, dimension(:,:), allocatable :: facs
+    integer :: npe
+    real :: time
     integer :: maxfacs
-    integer, allocatable, dimension(:):: spfacs, efacs, tgfacs, kxfacs, kyfacs
+    integer, allocatable, dimension(:):: spfacs, efacs, sgfacs, tgfacs, kxfacs, kyfacs
     integer, dimension(5) :: nfac, sdim
     character(3), dimension(5):: sym
 
@@ -1400,17 +1427,24 @@ if (debug) write(6,*) 'get_namelists: returning'
     deallocate (spfacs,efacs,tgfacs,kxfacs,kyfacs,facs)
   end subroutine nprocs_lz
 
-  subroutine nprocs_le
+
+  subroutine nprocs_le(nmesh)
     use species, only : nspec
+    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
     use kt_grids, only: naky, ntheta0
+    use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
 
     use gs2_layouts, only: layout
     implicit none
-    integer :: nkxfacs, nkyfacs, nspfacs, ntgfacs
+    real :: fac
+    integer, intent (in) :: nmesh
+    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
     integer, dimension(:,:), allocatable :: facs
+    integer :: npe
+    real :: time
     integer :: maxfacs
-    integer, allocatable, dimension(:):: spfacs, tgfacs, kxfacs, kyfacs
+    integer, allocatable, dimension(:):: spfacs, efacs, sgfacs, tgfacs, kxfacs, kyfacs
     integer, dimension(4) :: nfac, sdim
     character(3), dimension(4):: sym
 
@@ -1458,6 +1492,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer, dimension(:,:), allocatable :: facs
     integer :: npe, checknpe, i, j
     logical :: onlyxoryfac
+    real :: time
 
     write (report_unit, fmt="('Layout = ',a5,/)") layout 
     write (report_unit, fmt="('Recommended #proc up to:',i8)") npmax 
@@ -1476,6 +1511,7 @@ if (debug) write(6,*) 'get_namelists: returning'
        select case (layout)
        case ('lexys')
 
+!          write (report_unit, fmt="('Recommended numbers of processors, time on T3E')") 
           allocate (facs(max(nspec,naky,ntheta0)/2+1,5))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (naky, nkyfacs, facs(:,2))
@@ -1511,6 +1547,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
        case ('lxyes')
 
+!          write (report_unit, fmt="('Recommended numbers of processors, time on SP2')") 
           allocate (facs(max(nspec,negrid,naky,ntheta0)/2+1,5))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (negrid, nefacs, facs(:,2))
@@ -1971,7 +2008,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     call calculate_unbalanced_x(npe, 0, xxf_unbalanced_amount)
     if(xxf_unbalanced_amount .gt. 0) then
        use_unbalanced_xxf = .true.
-       percentage_xxf_unbalanced_amount = int(xxf_unbalanced_amount * 100)
+       percentage_xxf_unbalanced_amount = xxf_unbalanced_amount * 100
     else
        use_unbalanced_xxf = .false.  
        percentage_xxf_unbalanced_amount = 0
@@ -1979,7 +2016,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     call calculate_unbalanced_y(npe, 0, yxf_unbalanced_amount)
     if(yxf_unbalanced_amount .gt. 0) then
        use_unbalanced_yxf = .true.
-       percentage_yxf_unbalanced_amount = int(yxf_unbalanced_amount * 100)
+       percentage_yxf_unbalanced_amount = yxf_unbalanced_amount * 100
     else
        use_unbalanced_yxf = .false. 
        percentage_yxf_unbalanced_amount = 0
@@ -2045,14 +2082,14 @@ if (debug) write(6,*) 'get_namelists: returning'
        call get_unbalanced_suggestions(npe, percentage_xxf_unbalanced_amount, percentage_yxf_unbalanced_amount, use_unbalanced_xxf, use_unbalanced_yxf)
        if(present(onlyxoryfac)) then
           if(onlyxoryfac) then
-             write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |            ',L1,'             |      ',i3,'       |            ',L1,'             |      ',i3,'       |')") & 
+             write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |            ',L1,'            |      ',i3,'       |            ',L1,'            |      ',i3,'       |')") & 
                   npe, distchar, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
           else
-             write (report_unit, fmt="('|     ',i8,'(*)|    ',a3,'    |          ',i3,'          |            ',L1,'             |      ',i3,'       |            ',L1,'             |      ',i3,'       |')") & 
+             write (report_unit, fmt="('|     ',i8,'(*)|    ',a3,'    |          ',i3,'          |            ',L1,'            |      ',i3,'       |            ',L1,'            |      ',i3,'       |')") & 
                   npe, distchar, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
           end if
        else
-          write (report_unit,    fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |            ',L1,'             |      ',i3,'       |            ',L1,'             |      ',i3,'       |')") & 
+          write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |            ',L1,'            |      ',i3,'       |            ',L1,'            |      ',i3,'       |')") & 
                npe, distchar, INT(idle_percentage), use_unbalanced_xxf, percentage_xxf_unbalanced_amount, use_unbalanced_yxf, percentage_yxf_unbalanced_amount
        end if
     else
@@ -2065,7 +2102,7 @@ if (debug) write(6,*) 'get_namelists: returning'
                   npe, distchar, INT(idle_percentage)
           end if
        else
-          write (report_unit,    fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |                          |                |                          |                |')") & 
+          write (report_unit, fmt="('|     ',i8,'   |    ',a3,'    |          ',i3,'          |                          |                |                          |                |')") & 
                npe, distchar, INT(idle_percentage)
        end if
     

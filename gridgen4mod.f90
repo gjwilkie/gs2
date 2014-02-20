@@ -163,7 +163,7 @@ contains
     integer :: nthetaout, nlambdaout
     
     integer :: debug_unit
-    logical :: debug=.false.    
+    logical, parameter :: debug=.false.    
     npi = n * twopi
 
 if (debug) write(6,*) "gridgen4_2: call gg4init"

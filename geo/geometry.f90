@@ -55,8 +55,8 @@ module geometry
        qfun, rpofrho, rcenter, init_theta, nth_get, f_trap  !procedures
 
   integer, private :: ntgrid, nth, ntheta
-  !logical :: debug = .true.
-  logical :: debug = .false.
+  !logical, parameter :: debug = .true.
+  logical, parameter :: debug = .false.
 
   character(800) :: eqfile
 
@@ -302,9 +302,9 @@ contains
 
     implicit none
 !cmr nov04: adding following debug switch
-    !logical :: debug=.false.
+    !logical, parameter :: debug=.false.
 ! EGH gave debug switch module scope Apr12
-    !logical :: debug=.true.
+    !logical, parameter :: debug=.true.
 !cmr
     integer, optional, intent (out) :: ntheta_returned
 
@@ -2745,9 +2745,9 @@ end subroutine geofax
     integer, intent(out), optional :: ntheta_returned
 !<RN
 !cmr Jun06: adding following debug switch
-    !logical :: debug=.false.
+    !logical, parameter :: debug=.false.
 !cmr
-!    logical :: first = .true.
+!    logical, parameter :: first = .true.
     
 !    if(.not.first) return
 !    first = .false.
@@ -2803,7 +2803,7 @@ end subroutine geofax
 
     integer n
 !cmr Jun06: adding following debug switch
-    logical :: debug=.false.
+    logical, parameter :: debug=.false.
 !cmr
     if (debug) write(6,*) "alloc_module_arrays: n=",n
 !CMR
@@ -2843,7 +2843,7 @@ end subroutine geofax
     integer i
     real :: pi
 !cmr Jun06: adding following debug switch
-    logical :: debug=.false.
+    logical, parameter :: debug=.false.
 !cmr
     logical :: first_local = .true.
 

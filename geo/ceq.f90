@@ -49,7 +49,7 @@ module ceq
   public :: betafun,  initialize_beta
   public :: psi,      initialize_psi
 
-  logical :: debug = .true.
+  logical, parameter :: debug = .true.
 
 contains
 
