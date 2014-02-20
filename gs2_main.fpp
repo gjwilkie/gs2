@@ -48,7 +48,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use species, only: ions, electrons, impurity
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics, gd_reset => reset_init 
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
-    use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
+    use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time, nwrite, write_nl_flux
     use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time, margin_cpu_time
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
@@ -181,7 +181,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        call init_gs2_diagnostics_new(diagnostics_init_options)
 #endif
 
-       call allocate_target_arrays ! must be after init_gs2_diagnostics
+       call allocate_target_arrays(nwrite,write_nl_flux) ! must be after init_gs2_diagnostics
        call init_tstart (tstart)   ! tstart is in user units 
        
        if (present(dvdrho)) then

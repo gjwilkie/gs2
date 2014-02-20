@@ -222,6 +222,7 @@ ingen_mod = \
 	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
@@ -438,6 +439,7 @@ fields_local.o: \
 	 mp.o \
 	 run_parameters.o \
 	 runtime_tests.o \
+	 species.o \
 	 theta_grid.o 
 fields_parallelization.o: \
 	 kt_grids.o \
@@ -498,6 +500,7 @@ gs2_diagnostics.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 prof.o \
 	 run_parameters.o \
@@ -781,7 +784,6 @@ om.o: \
 parameter_scan.o: \
 	 fields_implicit.o \
 	 file_utils.o \
-	 gs2_diagnostics.o \
 	 gs2_save.o \
 	 gs2_time.o \
 	 init_g.o \
