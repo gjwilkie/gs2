@@ -1068,18 +1068,18 @@ contains
     !Now use the dimension splitting to work out if the various subcommunicators are
     !allowed.
     if(.not.(dim_divides(g_lo%is_ord).and.dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
-       if(intmom_sub.and.proc0) write(error_unit(),'("Disabling intmom_sub -- is,it,ik split nicely ? ",3(L," "))') dim_divides(g_lo%is_ord),dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
+       if(intmom_sub.and.proc0) write(error_unit(),'("Disabling intmom_sub -- is,it,ik split nicely ? ",3(L1," "))') dim_divides(g_lo%is_ord),dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
        intmom_sub=.false.
     endif
     if(.not.(dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
-       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- it,ik split nicely ? ",2(L," "))') dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
+       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- it,ik split nicely ? ",2(L1," "))') dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
        intspec_sub=.false.
     endif
     !Note that because we currently need to gather amongst LES blocks at the end of
     !integrate_species we need to make sure that LES blocks are also sensible
     !This could be removed if we don't want to gather in integrate_species
     if(.not.(dim_divides(g_lo%il_ord).and.dim_divides(g_lo%ie_ord).and.dim_divides(g_lo%is_ord))) then
-       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- il,ie,is split nicely ? ",3(L," "))') dim_divides(g_lo%il_ord),dim_divides(g_lo%ie_ord),dim_divides(g_lo%is_ord)
+       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- il,ie,is split nicely ? ",3(L1," "))') dim_divides(g_lo%il_ord),dim_divides(g_lo%ie_ord),dim_divides(g_lo%is_ord)
        intspec_sub=.false.
     endif
 
@@ -2850,7 +2850,7 @@ contains
 
   subroutine init_lambda_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
-    use mp, only: iproc, nproc, proc0
+    use mp, only: iproc, nproc
 ! TT>
     use file_utils, only: error_unit
 ! <TT
@@ -3558,9 +3558,7 @@ contains
        ! naky*(2*ntgrid+1)*nsign*nlambda*negrid*nspec
        ! Note: We precalculate 2*ntgrid+1 as ntgridtotal.
        if (unbalanced_xxf) then
-
-       	  call calculate_unbalanced_x(nproc, iproc, unbalanced_amount)		
-          
+          call calculate_unbalanced_x(nproc, iproc, unbalanced_amount)
        end if
 
        ! If we are not using the unbalanced code, either because the
@@ -3577,8 +3575,8 @@ contains
 
        else
              
-          if(proc0) then	
-             write(*, fmt="('Using unbalanced decomposition for xxf. '&
+          if(proc0) then
+             write(*, fmt="('Using unbalanced decomposition for xxf. ',&
               & 'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 
@@ -4102,7 +4100,7 @@ contains
     llim = ((iproc / procfactors) * block_multiple)
     if(modproc .ne. 0) then
        if(modproc .lt. numsmall) then
-!AJ	  llim = llim + smallblocksize * (modproc - 1)
+!AJ       llim = llim + smallblocksize * (modproc - 1)
           llim = llim + smallblocksize * (modproc)
        else
           llim = llim + (smallblocksize * numsmall) + (largeblocksize  * (modproc - numsmall))
@@ -4302,7 +4300,7 @@ contains
           offset_block_number = block_offset * j
           !AJ tempi represents where this index is inside the group of blocks
           !AJ this i point sits.
-	  tempi = i - (block_offset * lo%block_multiple)
+          tempi = i - (block_offset * lo%block_multiple)
           !AJ Work through each block in the group of blocks and see if this i 
           !AJ is within that block.  If it is set the proc_id_xxf as this block 
           !AJ owner.          
@@ -4313,31 +4311,31 @@ contains
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%small_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-	        if(tempi .lt. lo%small_block_size) then
+                if(tempi .lt. lo%small_block_size) then
                    !AJ (k -1) is the number of blocks that we have already considered 
                    !AJ within this group of blocks we have selected. 
-	           proc_id_xxf =  offset_block_number + (k - 1)
-		   exit 
-	        else
+                   proc_id_xxf =  offset_block_number + (k - 1)
+                   exit 
+                else
                    !AJ If the index is not in this block then reduce tempi by a small
                    !AJ block size and move on to the next block.
-	           tempi = tempi - lo%small_block_size
-	        end if
-	     else
+                   tempi = tempi - lo%small_block_size
+                end if
+             else
                 !AJ TODO: The if-else construct used below could potentially be rationalised 
                 !AJ TODO: to a more efficient formula where:
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%large_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-	        if(tempi .lt. lo%large_block_size) then
-	           proc_id_xxf = offset_block_number + (k - 1)
-		   exit 
-	        else
+                if(tempi .lt. lo%large_block_size) then
+                   proc_id_xxf = offset_block_number + (k - 1)
+                   exit 
+                else
                    !AJ If the index is not in this block then reduce tempi by a large
                    !AJ block size and move on to the next block.
-	           tempi = tempi - lo%large_block_size
-	        end if
-	     end if
+                   tempi = tempi - lo%large_block_size
+                end if
+             end if
           end do
        else
           !AJ This code is called if the unbalanced decomposition is not being used.
@@ -4566,8 +4564,8 @@ contains
        
        else
              
-          if(proc0) then	
-             write(*, fmt="('Using unbalanced decomposition for yxf. '&
+          if(proc0) then
+             write(*, fmt="('Using unbalanced decomposition for yxf. ',&
              & 'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 
@@ -4895,9 +4893,9 @@ contains
           !AJ offset_block_number is the number of blocks up to the start of the 
           !AJ group of blocks we are considering.
           offset_block_number = block_offset * j
-	  !AJ tempi represents where this index is inside the group of blocks
+          !AJ tempi represents where this index is inside the group of blocks
           !AJ this i point sits.
-	  tempi = i - (block_offset * lo%block_multiple)
+          tempi = i - (block_offset * lo%block_multiple)
           !AJ Work through each block in the group of blocks and see if this i 
           !AJ is within that block.  If it is set the proc_id_xxf as this block 
           !AJ owner.          
@@ -4908,31 +4906,31 @@ contains
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%small_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-	        if(tempi .lt. lo%small_block_size) then
+                if(tempi .lt. lo%small_block_size) then
                    !AJ (k -1) is the number of blocks that we have already considered 
                    !AJ within this group of blocks we have selected. 
-	           proc_id_yxf = offset_block_number + (k - 1)
-		   exit 
-	        else
+                   proc_id_yxf = offset_block_number + (k - 1)
+                   exit 
+                else
                    !AJ If the index is not in this block then reduce tempi by a small
                    !AJ block size and move on to the next block.
-	           tempi = tempi - lo%small_block_size
-	        end if
-	     else
+                   tempi = tempi - lo%small_block_size
+                end if
+             else
                 !AJ TODO: The if-else construct used below could potentially be rationalised 
                 !AJ TODO: to a more efficient formula where:
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%large_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-	        if(tempi .lt. lo%large_block_size) then
-	           proc_id_yxf = (block_offset * j) + (k - 1)
-		   exit 
-	        else
+                if(tempi .lt. lo%large_block_size) then
+                   proc_id_yxf = (block_offset * j) + (k - 1)
+                   exit 
+                else
                    !AJ If the index is not in this block then reduce tempi by a large
                    !AJ block size and move on to the next block.
-	           tempi = tempi - lo%large_block_size
-	        end if
-	     end if
+                   tempi = tempi - lo%large_block_size
+                end if
+             end if
           end do
        else
           proc_id_yxf = i/lo%blocksize

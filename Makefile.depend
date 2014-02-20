@@ -222,6 +222,7 @@ ingen_mod = \
 	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
@@ -258,9 +259,6 @@ rungridgen_mod = \
 	 gridgen4mod.o \
 	 rungridgen.o \
 	 spl.o 
-
-test_mod = \
-	 test_double.o 
 
 antenna.o: \
 	 antenna_data.o \
@@ -416,6 +414,7 @@ fields_implicit.o: \
 	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
+	 gs2_save.o \
 	 init_g.o \
 	 job_manage.o \
 	 kt_grids.o \
@@ -433,12 +432,14 @@ fields_local.o: \
 	 fields_implicit.o \
 	 file_utils.o \
 	 gs2_layouts.o \
+	 gs2_save.o \
 	 job_manage.o \
 	 kt_grids.o \
 	 matrix_inverse.o \
 	 mp.o \
 	 run_parameters.o \
 	 runtime_tests.o \
+	 species.o \
 	 theta_grid.o 
 fields_parallelization.o: \
 	 kt_grids.o \
@@ -499,6 +500,7 @@ gs2_diagnostics.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 prof.o \
 	 run_parameters.o \
@@ -616,10 +618,12 @@ gs2_reinit.o: \
 gs2_save.o: \
 	 antenna_data.o \
 	 constants.o \
+	 convert.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
+	 gs2_time.o \
 	 kt_grids.o \
 	 layouts_type.o \
 	 le_grids.o \
@@ -780,7 +784,6 @@ om.o: \
 parameter_scan.o: \
 	 fields_implicit.o \
 	 file_utils.o \
-	 gs2_diagnostics.o \
 	 gs2_save.o \
 	 gs2_time.o \
 	 init_g.o \
@@ -827,7 +830,6 @@ species.o: \
 spfunc.o: \
 	 constants.o 
 spl.o: 
-test_double.o: 
 test_layouts.o: \
 	 mp.o 
 text_options.o: 

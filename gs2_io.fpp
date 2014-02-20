@@ -14,7 +14,7 @@ module gs2_io
   public :: init_gs2_io, nc_eigenfunc, nc_final_fields, nc_final_epar
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom, nc_loop, nc_loop_moments
-  public :: nc_loop_vres
+  public :: nc_loop_vres, nc_exchange
   public :: nc_loop_movie, nc_write_fields, nc_write_moments
 
   public :: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
@@ -61,14 +61,16 @@ module gs2_io
   integer :: phi2_by_ky_id, apar2_by_ky_id, bpar2_by_ky_id
   integer :: phi0_id, apar0_id, bpar0_id
   integer :: omega_id, omegaavg_id, phase_id
-  integer :: es_heat_flux_id, es_mom_flux_id, es_part_flux_id, es_energy_exchange_id, es_part_tormom_flux_id
+  integer :: es_heat_flux_id, es_mom_flux_id, es_part_flux_id, es_exchange_id
+  integer :: es_part_tormom_flux_id
   integer :: es_heat_par_id, es_heat_perp_id
   integer :: apar_heat_flux_id, apar_mom_flux_id, apar_part_flux_id
   integer :: apar_heat_par_id, apar_heat_perp_id
   integer :: bpar_heat_flux_id, bpar_mom_flux_id, bpar_part_flux_id
   integer :: bpar_heat_par_id, bpar_heat_perp_id
   integer :: hflux_tot_id, zflux_tot_id, vflux_tot_id
-  integer :: es_heat_by_k_id, es_mom_by_k_id, es_part_by_k_id, es_part_tormom_by_k_id 
+  integer :: es_heat_by_k_id, es_mom_by_k_id, es_part_by_k_id
+  integer :: es_part_tormom_by_k_id, es_exchange_by_k_id
   integer :: es_parmom_by_k_id, es_perpmom_by_k_id, es_mom0_by_k_id, es_mom1_by_k_id
   integer :: es_mom_sym_id, phi_corr_id, phi2_extend_id, phi_corr_2pi_id, es_part_sym_tormom_id 
   integer :: es_part_sym_id 
@@ -950,8 +952,10 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom_flux')
           status = nf90_def_var (ncid, 'es_part_flux', netcdf_real, flux_dim, es_part_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_flux')
-          status = nf90_def_var (ncid, 'es_energy_exchange', netcdf_real, flux_dim, es_energy_exchange_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='es_energy_exchange')
+          status = nf90_def_var (ncid, 'es_exchange', netcdf_real, flux_dim, es_exchange_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_exchange')
+          status = nf90_def_var (ncid, 'es_exchange_by_k', netcdf_real, fluxk_dim, es_exchange_by_k_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='es_exchange_by_k')
           status = nf90_def_var (ncid, 'es_heat_by_k', netcdf_real, fluxk_dim, es_heat_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_heat_by_k')
           status = nf90_def_var (ncid, 'es_mom_by_k',  netcdf_real, fluxk_dim, es_mom_by_k_id)
@@ -978,7 +982,7 @@ contains
        if (write_pflux_tormom) then !JPL
           status = nf90_def_var (ncid, 'es_part_tormom_flux', netcdf_real, flux_dim, es_part_tormom_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_tormom_flux')
-     	  status = nf90_def_var (ncid, 'es_part_tormom_by_k', netcdf_real, fluxk_dim, es_part_tormom_by_k_id)
+          status = nf90_def_var (ncid, 'es_part_tormom_by_k', netcdf_real, fluxk_dim, es_part_tormom_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_tormom_by_k')  
        end if
 
@@ -987,8 +991,8 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='phi_corr_2pi')
        end if
        if (write_fields) then
-	  status = nf90_def_var (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)  !MR
-	  if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')		   
+          status = nf90_def_var (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)  !MR
+          if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')
        endif
        if (write_eigenfunc) then
           status = nf90_def_var (ncid, 'phi_norm',  netcdf_real, final_field_dim, phi_norm_id)
@@ -1837,12 +1841,55 @@ contains
 # endif
   end subroutine nc_final_an
 
+  subroutine nc_exchange (nout, exchange, exchange_avg)
+
+    use species, only: nspec
+    use kt_grids, only: naky, ntheta0
+    use run_parameters, only: fphi
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var
+# endif
+
+    implicit none
+
+    integer, intent (in) :: nout
+    real, dimension (:,:,:), intent (in) :: exchange
+    real, dimension (:), intent (in) :: exchange_avg
+# ifdef NETCDF
+    integer, dimension (2) :: start, count
+    integer, dimension (4) :: start2, count2
+    integer :: status
+
+    start(1) = 1
+    start(2) = nout
+    
+    count(1) = nspec
+    count(2) = 1
+
+    start2(1) = 1
+    start2(2) = 1
+    start2(3) = 1
+    start2(4) = nout
+
+    count2(1) = ntheta0
+    count2(2) = naky
+    count2(3) = nspec
+    count2(4) = 1
+
+    if (fphi > zero) then
+       status = nf90_put_var (ncid, es_exchange_id, exchange_avg, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_exchange_id)
+       status = nf90_put_var (ncid, es_exchange_by_k_id, exchange, start=start2, count=count2)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_exchange_by_k_id)
+    end if
+# endif
+
+  end subroutine nc_exchange
+
   subroutine nc_qflux (nout, qheat, qmheat, qbheat, &
        heat_par,  mheat_par,  bheat_par, &
        heat_perp, mheat_perp, bheat_perp, &
-       heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot, &
-       energy_exchange)
-
+       heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi, fapar, fbpar
@@ -1855,7 +1902,6 @@ contains
     real, dimension (:), intent (in) :: heat_par, mheat_par, bheat_par
     real, dimension (:), intent (in) :: heat_perp, mheat_perp, bheat_perp
     real, dimension (:), intent (in) :: heat_fluxes, mheat_fluxes, bheat_fluxes
-    real, dimension (:), intent (in) :: energy_exchange
     real, dimension (:,:), intent (in) :: x_qmflux
     real, intent (in) :: hflux_tot
 # ifdef NETCDF
@@ -1897,8 +1943,6 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_heat_perp_id)
        status = nf90_put_var (ncid, es_heat_by_k_id, qheat, start=start4, count=count4)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_heat_by_k_id)
-       status = nf90_put_var (ncid, es_energy_exchange_id, energy_exchange, start=start, count=count)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_energy_exchange_id)
     end if
 
     if (fapar > zero) then
@@ -2385,13 +2429,13 @@ contains
     if (fphi > zero) then
 
 
-	!<wkdoc> Write fields at the current timestep, if [[write_phi_over_time]], [[write_apar_over_time]], [[write_bpar_over_time]] are set in the input file</wkdoc>
-	if(write_phi_t) then
+       !<wkdoc> Write fields at the current timestep, if [[write_phi_over_time]], [[write_apar_over_time]], [[write_bpar_over_time]] are set in the input file</wkdoc>
+       if(write_phi_t) then
           call c2r (phinew, ri3)
           !ri_phi_t(:,:,:,:,1) = ri3(:,:,:,:)
-	  status = nf90_put_var (ncid, phi_t_id, ri3, start=start5, count=count5)
+          status = nf90_put_var (ncid, phi_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id)
-	end if
+       end if
 
        if (ntheta0 > 1) then
           do it = 1, ntheta0
@@ -2420,12 +2464,12 @@ contains
 
     if (fapar > zero) then
 
-	if(write_apar_t) then
+       if(write_apar_t) then
           call c2r (aparnew, ri3)
           !ri_apar_t(:,:,:,:,1) = ri3(:,:,:,:)
-	  status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
+          status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id)
-	end if
+       end if
 
        if (ntheta0 > 1) then
           do it = 1, ntheta0
@@ -2454,12 +2498,12 @@ contains
 
     if (fbpar > zero) then
 
-	if(write_bpar_t) then
+       if(write_bpar_t) then
           call c2r (bparnew, ri3)
           !ri_bpar_t(:,:,:,:,1) = ri3(:,:,:,:)
-	  status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
+          status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id)
-	end if
+       end if
 
        if (ntheta0 > 1) then
           do it = 1, ntheta0

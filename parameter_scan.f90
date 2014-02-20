@@ -16,7 +16,8 @@ module parameter_scan
   public :: finish_parameter_scan
   public :: update_scan_parameter_value
   public :: allocate_target_arrays
-
+  public :: target_parameter_switch, scan_type_switch, scan_type_none
+  public :: target_parameter_hflux_tot, target_parameter_momflux_tot, target_parameter_phi2_tot
 
   logical :: scan_restarted
   public :: scan_restarted
@@ -96,12 +97,14 @@ contains
     !current_scan_parameter_value = value
   !end subroutine set_restarted_scan_parameter_value 
 
-  subroutine allocate_target_arrays
-    use gs2_diagnostics, only: nwrite, write_nl_flux
+  subroutine allocate_target_arrays(nwrite,write_nl_flux)
+!    use gs2_diagnostics, only: nwrite, write_nl_flux
 !    use gs2_diagnostics, only: write_flux_line
     use run_parameters, only: nstep
     use mp, only : mp_abort
-
+    implicit none
+    integer, intent(in) :: nwrite
+    logical, intent(in) :: write_nl_flux
     !if (.not. write_flux_line) &
      !call mp_abort("write_flux_line must be set to true for target mode")
 

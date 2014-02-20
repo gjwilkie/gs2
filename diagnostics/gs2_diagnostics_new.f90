@@ -144,6 +144,7 @@ contains
       call create_and_write_variable(gnostics, gnostics%rtype, "t", "t", &
          "Values of the time coordinate", "a/v_thr", user_time) 
       if (gnostics%wryte) call increment_start(gnostics%sfile, "t")
+      if (gnostics%wryte) call syncfile(gnostics%sfile)
     end if
 
     exit = gnostics%exit

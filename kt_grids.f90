@@ -75,7 +75,7 @@ contains
 
        write (report_unit, *) 
        write (report_unit, fmt="('A single k_perp will be evolved, with: ')")
-       if (n0 .gt.0) write (report_unit, fmt="('ky set using toroidal mode number, n0=',i8/T24,'rhostar_single='1pe12.4)") n0, rhostar_single
+       if (n0 .gt.0) write (report_unit, fmt="('ky set using toroidal mode number, n0=',i8/T24,'rhostar_single=',1pe12.4)") n0, rhostar_single
        write (report_unit, *) 
        write (report_unit, fmt="('ky rho = ',f10.4)") aky
        write (report_unit, fmt="('theta_0 = ',f10.4)") theta0
@@ -410,7 +410,7 @@ contains
     integer :: in_file
     logical :: exist
     namelist /kt_grids_box_parameters/ naky, ntheta0, ly, nx, ny, n0, jtwist, &
-	y0, rtwist, x0, nkpolar, rhostar_box
+         y0, rtwist, x0, nkpolar, rhostar_box
 
     call init_theta_grid
 
@@ -671,6 +671,7 @@ contains
     call broadcast (ntheta0)
     call broadcast (ny)
     call broadcast (nx)
+    call broadcast (gridopt_switch)
     call allocate_arrays
 
     if (proc0) call get_grids

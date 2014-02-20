@@ -88,7 +88,7 @@ contains
     real, dimension (ntheta+1) :: thetaold, thetanew
     real, dimension (ntheta+1) :: bmagold, bmagnew
     integer :: i
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
 if (debug) write(6,*) 'gridgen_get_grids'
 
 
@@ -1016,7 +1016,7 @@ contains
     real :: rhoc_save
 !    logical, save :: initialized = .false.
 !CMR nov04: adding following debug switch
-    logical :: debug=.false.
+    logical, parameter :: debug=.false.
 !CMR
 
     if (initialized) return
@@ -1112,7 +1112,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     logical, intent (in) :: gb_to_cv
     integer :: ig
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
 if (debug) write(6,*) 'eik_get_grids: ntgrid=',ntgrid
     do ig=-ntgrid,ntgrid
        theta(ig)     = theta_out(ig)
@@ -1591,7 +1591,7 @@ contains
     use mp, only: proc0
     implicit none
 !    logical, save :: initialized = .false.
-    logical :: debug=.false.
+    logical, parameter :: debug=.false.
     if (initialized) return
     initialized = .true.
 
@@ -1905,7 +1905,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     use theta_grid_file, only: ntheta_file=>ntheta, nperiod_file=>nperiod
     use theta_grid_file, only: nbset_file=>nbset
     implicit none
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
 if (debug) write(6,*) 'get_sizes: eqopt_switch=',eqopt_switch
     select case (eqopt_switch)
     case (eqopt_eik)
@@ -1938,7 +1938,7 @@ if (debug) write(6,*) 'get_sizes: done'
     use theta_grid_params, only: eps, btor_slab
     use geometry, only: rhoc
     implicit none
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
     select case (eqopt_switch)
     case (eqopt_eik)
 if (debug) write(6,*) 'get_grids: call eik_get_grids'

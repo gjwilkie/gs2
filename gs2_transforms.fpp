@@ -277,12 +277,12 @@ contains
 # elif FFT == _FFTW3_
           ! number of ffts to be calculated
           !JH 7th December 2011
-	  !JH xxf_lo%ulim_alloc is used here rather than xxf_lo%lulim_proc
-	  !JH because there are situations where xxf_lo%llim_proc is greater 
-	  !JH than xxf_lo%ulim_proc and that would create a negative number 
-	  !JH of FFTs to be calculated.  However, xxf_lo%ulim_alloc is set
-	  !JH to be xxf_lo%llim_proc in this situation, and that will give 
-	  !JH 1 FFT to be calculated which the code can correctly undertake.
+          !JH xxf_lo%ulim_alloc is used here rather than xxf_lo%lulim_proc
+          !JH because there are situations where xxf_lo%llim_proc is greater 
+          !JH than xxf_lo%ulim_proc and that would create a negative number 
+          !JH of FFTs to be calculated.  However, xxf_lo%ulim_alloc is set
+          !JH to be xxf_lo%llim_proc in this situation, and that will give 
+          !JH 1 FFT to be calculated which the code can correctly undertake.
           nb_ffts = xxf_lo%ulim_alloc - xxf_lo%llim_proc + 1
           
           call init_ccfftw (xf_fft,  1, xxf_lo%nx, nb_ffts, xxf)
