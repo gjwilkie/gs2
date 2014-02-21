@@ -63,7 +63,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use init_g, only: tstart
     use collisions, only: vnmult
     use geometry, only: surfarea, dvdrhon
-    use redistribute, only: time_redist
+    use redistribute, only: time_redist, using_measure_scatter
     use fields_arrays, only: time_field
     use parameter_scan, only: update_scan_parameter_value
     use unit_tests, only: functional_test_flag, ilast_step
@@ -163,6 +163,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        call broadcast (cbuff)
        if (.not. proc0) run_name => cbuff
        call init_parameter_scan
+       !Set using_measure_scatter to indicate we want to use in "gather/scatter" timings
+       using_measure_scatter=.false.
        call init_fields
        call init_gs2_diagnostics (list, nstep)
 
