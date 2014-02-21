@@ -10,7 +10,8 @@ module fields_local
   !> Module level routines
   public :: init_fields_local, init_allfields_local, finish_fields_local
   public :: advance_local, reset_fields_local, dump_response_to_file_local
-  public :: fields_local_functional, read_response_from_file_local
+  public :: fields_local_functional, read_response_from_file_local, minNrow
+  public :: do_smart_update
 
   !> Unit tests
   public :: fields_local_unit_test_init_fields_matrixlocal
@@ -87,6 +88,7 @@ module fields_local
      integer :: nextend !Length of the extended domain
      integer :: nrow, ncol !The number of rows and columns. Equal to nextend*nfield
      integer :: it_left !It index of leftmost cell
+     integer :: head_iproc !The proc id (in sc_sub_all) of the head proc
      logical :: is_local !Does this supercell have any data on this proc?
      logical :: is_empty !Have we got any data for this supercell on this proc?
      logical :: is_all_local !Is all of this supercells data on this proc?
@@ -203,6 +205,8 @@ module fields_local
      procedure :: count_subcom => fm_count_subcom
      procedure :: getfieldeq_nogath => fm_getfieldeq_nogath
      procedure :: getfieldeq1_nogath => fm_getfieldeq1_nogath
+     procedure :: update_fields => fm_update_fields
+     procedure :: update_fields_newstep => fm_update_fields_newstep
   end type fieldmat_type
 
   !>This is the type which controls/organises the parallel
@@ -217,6 +221,8 @@ module fields_local
      integer, dimension(:,:), allocatable :: navail_per_cell !How many rows could we be responsible for in each cell
      integer :: nresp_tot, navail_tot !Total number of rows available/potentially available
      logical :: force_local_invert=.false. !If true then we force local inversion
+     !the local fields. This may impact diagnostics/parallel writing as it means only the processors g_lo local section
+     !of the fields are evolved on this processor.
      !NOTE: If we're doing force local invert really when we populate the supercell we should store all of the 
      !data locally so we don't need to fetch it later.
      logical :: has_to_gather=.true. !If true we have to gather when calling getfieldeq, determined by decomp routine
@@ -256,8 +262,10 @@ module fields_local
   !//////////////////////////////
   integer :: lun=6 !File unit for printing
   integer :: dlun=6 !File unit for debug printing
-  integer :: MinNrow=256 !Smallest row block size used when working out which rows to have.
-  logical :: debug=.true. !Do we do debug stuff?
+  integer :: MinNrow !Smallest row block size used when working out which rows to have. 
+  !Tuning this can improve advance/init time (usually one at the expense of other)
+  logical :: do_smart_update=.false. !If true and x/y distributed then use a "smart" update which only updates
+  logical,parameter :: debug=.false. !Do we do debug stuff?
   logical :: initialised=.false. !Have we initialised yet?
   logical :: reinit=.false. !Are we reinitialising?
   logical :: dump_response=.false. !Do we dump the response matrix?
@@ -1295,6 +1303,11 @@ contains
        head_notfull=(min(1,self%sc_sub_pd%nproc-1).eq.self%sc_sub_pd%iproc)
     endif
 
+    !Store the head_iproc
+    self%head_iproc=0
+    if(self%is_head) self%head_iproc=self%sc_sub_all%iproc
+    call sum_allreduce_sub(self%head_iproc,self%sc_sub_all%id)
+
     !/Now make a subcommunicator involving all empty procs and
     !head pd proc
     if(some_empty)then
@@ -1995,9 +2008,9 @@ contains
     if(pc%has_to_gather)then
        call getfieldeq(phinew,aparnew,bparnew,fq,fqa,fqp)
     else
-       call getfieldeq_nogath(phinew,aparnew,bparnew,fq,fqa,fqp)
+!       call getfieldeq_nogath(phinew,aparnew,bparnew,fq,fqa,fqp)
 !<DD>Could improve performance by using a "smart" routine which only operates on local/not empty data
-!       call self%getfieldeq_nogath(phinew,aparnew,bparnew,fq,fqa,fqp)
+       call self%getfieldeq_nogath(phinew,aparnew,bparnew,fq,fqa,fqp)
     endif
 
     !Now we need to store the field equations in the appropriate places
@@ -2113,9 +2126,9 @@ contains
     if(pc%has_to_gather)then
        call getfieldeq(phi,apar,bpar,fq,fqa,fqp)
     else
-       call getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
+!       call getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
 !<DD>Could improve performance by using a "smart" routine which only operates on local/not empty data
-!       call self%getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
+       call self%getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
     endif
 
     !Now get the field update for each ik
@@ -2422,6 +2435,24 @@ contains
        call sum_reduce_sub(tmp,0,self%fm_sub_headsc_p0)
     endif
 
+    !////////////////////////
+    !// Distribute and unpack
+    !////////////////////////
+    !Note: Currently use a broadcast from proc0 to distribute data to all procs
+    !May be more efficient to use a scatter type approach so we send the minimum
+    !amount of data. This may end up being slower as we don't take advantage of
+    !optimised broadcast which improves bandwidth (branching), as we're doing 1 to many.
+    !Might expect a broadcast from the supercell head on sc_sub_all to be most
+    !efficient, but it doesn't appear to be better than global broadcast.
+    !As the supercell head has knowledge of the result quite early on in the
+    !field update algorithm a non-blocking broadcast (MPI-3) on sc_sub_all
+    !may be useful and would allow the following broadcasts to be replaced
+    !with wait variants plus unpacking.
+    !Note: By doing the broadcast at supercell level we would end up sending
+    !more data than required (if x is parallel) but to do it at cell level 
+    !would require a subcommunicator for each cell, which can easily exceed
+    !the maximum number allowed.
+
     !Fetch to all procs
     if(to_all)then
        call broadcast(tmp)
@@ -2472,6 +2503,89 @@ contains
 !     enddo
 
   end subroutine fm_gather_fields
+
+  !>Update the fields using calculated update
+  subroutine fm_update_fields(self,phi,apar,bpar)
+    use fields_arrays, only: orig_phi=>phi, orig_apar=>apar, orig_bpar=>bpar
+    use run_parameters, only: fphi, fapar, fbpar
+    use kt_grids, only: kwork_filter
+    use mp, only: proc0
+    implicit none
+    class(fieldmat_type), intent(in) ::  self
+    complex,dimension(:,:,:),intent(inout) :: phi,apar,bpar
+    integer :: ik,it,is,ic
+
+    !If we're proc0 then we need to do full array (for diagnostics)
+    if(proc0) then
+       if(fphi>epsilon(0.0)) phi=phi+orig_phi
+       if(fapar>epsilon(0.0)) apar=apar+orig_apar
+       if(fbpar>epsilon(0.0)) bpar=bpar+orig_bpar
+       return
+    endif
+
+    !Now loop over cells and calculate field equation as required
+    do ik=1,self%naky
+       !Skip not local cells
+       if(.not.self%kyb(ik)%is_local) cycle
+       do is=1,self%kyb(ik)%nsupercell
+          if(.not.self%kyb(ik)%supercells(is)%is_local) cycle
+          do ic=1,self%kyb(ik)%supercells(is)%ncell
+             if(.not.self%kyb(ik)%supercells(is)%cells(ic)%is_local) cycle
+
+             it=self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+             if(kwork_filter(it,ik)) cycle
+
+             !Increment fields
+             if(fphi>epsilon(0.0)) phi(:,it,ik)=phi(:,it,ik)+orig_phi(:,it,ik)
+             if(fapar>epsilon(0.0)) apar(:,it,ik)=apar(:,it,ik)+orig_apar(:,it,ik)
+             if(fbpar>epsilon(0.0)) bpar(:,it,ik)=bpar(:,it,ik)+orig_bpar(:,it,ik)
+          enddo
+       enddo
+    enddo
+
+  end subroutine fm_update_fields
+
+  !>Update the fields using the new fields
+  subroutine fm_update_fields_newstep(self)
+    use fields_arrays, only: phi,apar,bpar,phinew,aparnew,bparnew
+    use run_parameters, only: fphi, fapar, fbpar
+    use kt_grids, only: kwork_filter
+    use mp, only: proc0
+    implicit none
+    class(fieldmat_type), intent(in) ::  self
+    integer :: ik,it,is,ic
+
+    !If we're proc0 then we need to do full array (for diagnostics)
+    if(proc0) then
+       if(fphi>epsilon(0.0)) phi=phinew
+       if(fapar>epsilon(0.0)) apar=aparnew
+       if(fbpar>epsilon(0.0)) bpar=bparnew
+       return
+    endif
+
+    !Now loop over cells and calculate field equation as required
+    do ik=1,self%naky
+       !Skip not local cells
+       if(.not.self%kyb(ik)%is_local) cycle
+       do is=1,self%kyb(ik)%nsupercell
+          if(.not.self%kyb(ik)%supercells(is)%is_local) cycle
+          do ic=1,self%kyb(ik)%supercells(is)%ncell
+             if(.not.self%kyb(ik)%supercells(is)%cells(ic)%is_local) cycle
+
+             it=self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+             if(kwork_filter(it,ik)) cycle
+
+             !Increment fields 
+             if(fphi>epsilon(0.0)) phi(:,it,ik)=phinew(:,it,ik)
+             if(fapar>epsilon(0.0)) apar(:,it,ik)=aparnew(:,it,ik)
+             if(fbpar>epsilon(0.0)) bpar(:,it,ik)=bparnew(:,it,ik)
+         enddo
+       enddo
+    enddo
+
+  end subroutine fm_update_fields_newstep
 
   !>Write some debug data to file
   subroutine fm_write_debug_data(self)
@@ -3147,7 +3261,6 @@ contains
     use gs2_layouts, only: init_gs2_layouts
     use mp, only: proc0, mp_abort
     implicit none
-    logical:: debug=.false.
 
     !Early exit if possible
     if (initialised) return
@@ -3155,22 +3268,18 @@ contains
     !Exit if local fields not supported (e.g. compiled with pgi)
     if(.not.fields_local_functional()) call mp_abort("field_option='local' not supported with this build")
 
-    !Make sure only proc0 does the printing
-    debug=debug.and.proc0
-
     !Make sure any dependencies are already initialised and
     !initialise the field matrix object.
-    if (debug) write(6,*) "init_fields_local: gs2_layouts"
+    if (debug.and.proc0) write(6,*) "init_fields_local: gs2_layouts"
     call init_gs2_layouts
-    if (debug) write(6,*) "init_fields_local: theta_grid"
+    if (debug.and.proc0) write(6,*) "init_fields_local: theta_grid"
     call init_theta_grid
-    if (debug) write(6,*) "init_fields_local: kt_grids"
+    if (debug.and.proc0) write(6,*) "init_fields_local: kt_grids"
     call init_kt_grids
-    if (debug) write(6,*) "init_fields_local: init_fields_matrixlocal"
+    if (debug.and.proc0) write(6,*) "init_fields_local: init_fields_matrixlocal"
     call init_fields_matrixlocal
-    if (debug) write(6,*) "init_fields_local: antenna"
+    if (debug.and.proc0) write(6,*) "init_fields_local: antenna"
     call init_antenna
-
 
     !Set the initialised state
     initialised = .true.
@@ -3373,19 +3482,21 @@ contains
   end subroutine finish_fields_local
 
   !>Calculate the update to the fields
-  subroutine getfield_local(phi,apar,bpar,do_gather_in)
+  subroutine getfield_local(phi,apar,bpar,do_gather_in,do_update_in)
     use fields_arrays, only: time_field
     use mp, only: proc0 !, barrier
     use job_manage, only: time_message
     implicit none
     complex, dimension(:,:,:), intent(out) :: phi,apar,bpar !Note, these are actually phinew,... in typical usage
-    logical, optional, intent(in) :: do_gather_in
-    logical :: do_gather
+    logical, optional, intent(in) :: do_gather_in, do_update_in
+    logical :: do_gather, do_update
 
     !Set gather flag, this currently always needs to be true for
     !correct operation.
     do_gather=.false.
     if(present(do_gather_in)) do_gather=do_gather_in
+    do_update=.false.
+    if(present(do_update_in)) do_update=do_update_in
 
     !For timing
     !if(debug)call barrier !!/These barriers influence the reported time
@@ -3399,6 +3510,9 @@ contains
     !actually need to gather everytime, which is a pain!
     !We also fill in the empties here.
     if(do_gather) call fieldmat%gather_fields(phi,apar,bpar)!,to_all_in=.true.)
+
+    !This routine updates *new fields using gathered update
+    if(do_update) call fieldmat%update_fields(phi,apar,bpar)
 
     !For timing
     !Barrier usage ensures that proc0 measures the longest time taken on
@@ -3424,10 +3538,19 @@ contains
     use dist_fn, only: timeadv, exb_shear, g_exb, g_exbfac
     use dist_fn_arrays, only: g, gnew
     use antenna, only: antenna_amplitudes, no_driver
+    use gs2_layouts, only: g_lo
     implicit none
     integer, intent(in) :: istep
     logical, intent(in) :: remove_zonal_flows_switch
     integer :: diagnostics = 1
+    logical, parameter :: do_gather=.true.
+    logical :: do_update
+    !do_gather=.true. => fields are collected from all procs and distributed to everyone (required)
+    !do_update=.true. => "Smart" update routines are used which only update the local parts of the
+    !field arrays. This could help when xy are strongly parallelised but is likely to be slower
+    !when all local, hence we should turn it off if xy all local.
+    do_update=do_smart_update
+    if(g_lo%x_local.and.g_lo%y_local) do_update=.false.
 
     !GGH NOTE: apar_ext is initialized in this call
     if(.not.no_driver) call antenna_amplitudes (apar_ext)
@@ -3437,9 +3560,13 @@ contains
 
     !Update g and fields
     g=gnew
-    if(fphi.gt.0) phi=phinew
-    if(fapar.gt.0) apar=aparnew
-    if(fbpar.gt.0) bpar=bparnew
+    if(do_update)then !Here we tie the "smart" update to do_update
+       call fieldmat%update_fields_newstep
+    else
+       if(fphi.gt.0) phi=phinew
+       if(fapar.gt.0) apar=aparnew
+       if(fbpar.gt.0) bpar=bparnew
+    endif
 
     !Find gnew given fields at time step midpoint
     call timeadv (phi, apar, bpar, phinew, &
@@ -3450,10 +3577,14 @@ contains
     if(.not.no_driver) aparnew=aparnew+apar_ext
 
     !Calculate the fields at the next time point
-    call getfield_local(phinew,aparnew,bparnew,.true.)
-    if(fphi.gt.0) phinew=phinew+phi
-    if(fapar.gt.0) aparnew=aparnew+apar
-    if(fbpar.gt.0) bparnew=bparnew+bpar
+    call getfield_local(phinew,aparnew,bparnew,do_gather,do_update)
+
+    !If we do the update in getfield_local don't do it here
+    if(.not.do_update)then
+       if(fphi.gt.0) phinew=phinew+phi
+       if(fapar.gt.0) aparnew=aparnew+apar
+       if(fbpar.gt.0) bparnew=bparnew+bpar
+    endif
 
     !Remove zonal component if requested
     if(remove_zonal_flows_switch) call remove_zonal_flows

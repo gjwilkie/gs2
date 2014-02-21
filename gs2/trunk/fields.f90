@@ -36,8 +36,9 @@ module fields
 contains
 
   subroutine check_fields(report_unit)
-  implicit none
-  integer :: report_unit
+    use fields_local, only: minNrow, do_smart_update
+    implicit none
+    integer :: report_unit
     select case (fieldopt_switch)
     case (fieldopt_implicit)
        write (report_unit, fmt="('The field equations will be advanced in time implicitly.')")
@@ -54,13 +55,16 @@ contains
        write (report_unit, fmt="('The field equations will be advanced in time implicitly with decomposition respecting g_lo layout.')")
        if(dump_response) write (report_unit, fmt="('The response matrix will be dumped to file.')")
        if(read_response) write (report_unit, fmt="('The response matrix will be read from file.')")
+       write(report_unit, fmt="('Using a min block size of ',I0)") minNrow
+       if(do_smart_update) write(report_unit, fmt="('Using optimised field update.')")
     end select
   end subroutine check_fields
 
 
   subroutine wnml_fields(unit)
-  implicit none
-  integer :: unit
+    use fields_local, only: minNrow, do_smart_update
+    implicit none
+    integer :: unit
      if (.not. exist) return 
        write (unit, *)
        write (unit, fmt="(' &',a)") "fields_knobs"
@@ -71,6 +75,8 @@ contains
           write (unit, fmt="(' field_option = ',a)") '"test"'
        case (fieldopt_local)
           write (unit, fmt="(' field_option = ',a)") '"local"'
+          write (unit, fmt="(' minNrow = ',I0)") minNrow
+          write (unit, fmt="(' do_smart_update = ',I0)") do_smart_update
        end select
        if(dump_response) write (unit, fmt="(' dump_response = ',L1)") dump_response
        if(read_response) write (unit, fmt="(' read_response = ',L1)") read_response
@@ -85,7 +91,7 @@ contains
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
     implicit none
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
 
     
     if (debug) write(6,*) "init_fields: init_theta_grid"
@@ -121,9 +127,10 @@ contains
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
     use kt_grids, only: gridopt_switch, gridopt_box, kwork_filter
+    use mp, only: iproc
     implicit none
     logical :: restarted
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
 
     if (initialized) return
     initialized = .true.
@@ -165,7 +172,7 @@ contains
     use mp, only: proc0
     use fields_local, only: init_allfields_local
     implicit none
-    logical :: debug=.false.
+    logical, parameter :: debug=.false.
     if(proc0.and.debug) write(6,*) "Syncing fields with g."
     select case (fieldopt_switch)
     case (fieldopt_implicit)
@@ -185,7 +192,8 @@ contains
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     use fields_implicit, only: field_subgath, dump_response_imp=>dump_response, read_response_imp=>read_response
-    use fields_local, only: dump_response_local=>dump_response, read_response_local=>read_response
+    use fields_local, only: dump_response_local=>dump_response, read_response_local=>read_response, minNrow
+    use fields_local, only: do_smart_update
     implicit none
     type (text_option), dimension (5), parameter :: fieldopts = &
          (/ text_option('default', fieldopt_implicit), &
@@ -195,7 +203,7 @@ contains
             text_option('implicit_local', fieldopt_local)/)
     character(20) :: field_option
     namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit,&
-         dump_response, read_response
+         dump_response, read_response, minNrow, do_smart_update
     integer :: ierr, in_file
 
     if (proc0) then
@@ -205,6 +213,8 @@ contains
        force_maxwell_reinit=.true.
        dump_response=.false.
        read_response=.false.
+       minNrow=64 !Tuning this can influence both init and advance times
+       do_smart_update=.false.
        in_file = input_unit_exist ("fields_knobs", exist)
 !       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
        if (exist) read (unit=in_file, nml=fields_knobs)
@@ -222,7 +232,7 @@ contains
     call broadcast (force_maxwell_reinit)
     call broadcast (dump_response)
     call broadcast (read_response)
-   
+
     !Set the solve type specific flags
     select case (fieldopt_switch)
     case (fieldopt_implicit)
@@ -230,6 +240,8 @@ contains
        read_response_imp=read_response
     case (fieldopt_test)
     case (fieldopt_local)
+       call broadcast (minNrow)
+       call broadcast (do_smart_update)
        dump_response_local=dump_response
        read_response_local=read_response
     end select
