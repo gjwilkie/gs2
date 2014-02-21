@@ -1800,15 +1800,42 @@ contains
     real :: slb0, slb1, slb2, slbl, slbr, vn, vnh, vnc, ee
 
     je = jend(ig)
-    if (je <= ng2+1) then
-       te = ng2
-       te2 = 2*ng2
-       teh = ng2
+!
+!CMR, 17/2/2014:
+!         te, te2, teh: indices in xi, which runs from +1 -> -1.
+!         te   :  index of minimum xi value >= 0.
+!         te2  :  total #xi values = index of minimum xi value (= -1) 
+!         teh  :  index of minimum xi value > 0.  
+!                 teh = te if no bouncing particle at this location
+!              OR teh = te-1 if there is a bouncing particle
+!
+    if (special_wfb_lorentz) then
+!CMRDDGC, 17/2/2014:
+!   This clause is appropriate for Lorentz collisons with 
+!         SPECIAL (unphysical) treatment of wfb at its bounce point
+       if (je <= ng2+1) then
+          te = ng2
+          te2 = 2*ng2
+          teh = ng2
+       else
+          te = je
+          te2 = 2*je-1
+          teh = je-1
+       end if
     else
-       te = je
-       te2 = 2*je-1
-       teh = je-1
-    end if
+!CMRDDGC, 17/2/2014:
+!   This clause is appropriate for Lorentz collisons with 
+!         STANDARD treatment of wfb at its bounce point
+       if (je <= ng2) then
+          te = ng2
+          te2 = 2*ng2
+          teh = ng2
+       else
+          te = je
+          te2 = 2*je-1
+          teh = je-1
+       end if
+    endif 
     if (collision_model_switch == collision_model_lorentz_test) then
        vn = vnmult(1)*abs(spec(is)%vnewk)*tunits(ik)
        vnc = 0.
@@ -1900,7 +1927,18 @@ contains
           dd(il) =vnc*(-2.0*(1.0-slbr**2)/(wl(ig,il)*(slb2-slb1)) + ee)
           hh(il) =vnh*(-2.0*(1.0-slbr**2)/(wl(ig,il)*(slb2-slb1)) + ee)
        end if
-       
+
+!if ( je .eq. ng2+1 ) then 
+!write(6,*) "slb0,slb1,slb2=",slb0,slb1,slb2
+!write(6,*) "wl(ig,il)=",wl(ig,il)
+!write(6,*) "aa(ng2+1)=",aa(ng2+1)
+!write(6,*) "bb(ng2+1)=",bb(ng2+1)
+!write(6,*) "cc(ng2+1)=",cc(ng2+1)
+!write(6,*) "Max(aa)=",maxval(aa)
+!write(6,*) "Max(bb)=",maxval(bb)
+!write(6,*) "Max(cc)=",maxval(cc)
+!stop
+!endif 
     case (lorentz_scheme_old)
        
        do il = 2, te-1
