@@ -2537,7 +2537,9 @@ if (debug) write(6,*) "loop_diagnostics: -2"
        deallocate (gparity) ; allocate (gparity(-ntgrid:ntgrid,ntheta0,naky,nspec))
        ! obtain normalization factor = int over phase space of |g|**2
        call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
-       call integrate_moment (spread(aj0,2,2)*spread(aj0,2,2)*gnew*conjg(gnew), gparity, 1)
+       !<DD>Do all processors need to know the full result here? Only proc0 seems to do any writing.
+       !If not then remove the last two arguments in the following call.
+       call integrate_moment (spread(aj0,2,2)*spread(aj0,2,2)*gnew*conjg(gnew), gparity, 1, full_arr=.true.)
        call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
        do is = 1, nspec
           do ik = 1, naky

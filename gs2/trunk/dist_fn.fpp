@@ -5240,7 +5240,7 @@ subroutine check_dist_fn(report_unit)
                   & * bparnew(:,it,ik)
           end do
        end do
-       call integrate_moment (g0, ntot, 1)
+       call integrate_moment (g0, ntot, 1,full_arr=.true.)
     endif
 
 ! not guiding center density
@@ -5250,7 +5250,7 @@ subroutine check_dist_fn(report_unit)
        end do
     end do
 
-    call integrate_moment (g0, dens, 1)
+    call integrate_moment (g0, dens, 1,full_arr=.true.)
 
 ! not guiding center upar
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -5259,7 +5259,7 @@ subroutine check_dist_fn(report_unit)
        end do
     end do
 
-    call integrate_moment (g0, upar, 1)
+    call integrate_moment (g0, upar, 1,full_arr=.true.)
 
 ! not guiding center tpar
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -5268,7 +5268,7 @@ subroutine check_dist_fn(report_unit)
        end do
     end do
 
-    call integrate_moment (g0, tpar, 1)
+    call integrate_moment (g0, tpar, 1,full_arr=.true.)
     
 ! not guiding center tperp
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -5277,7 +5277,7 @@ subroutine check_dist_fn(report_unit)
        end do
     end do
 
-    call integrate_moment (g0, tper, 1)
+    call integrate_moment (g0, tper, 1,full_arr=.true.)
 
     do ig=-ntgrid,ntgrid
        do it=1,nakx
@@ -8406,7 +8406,7 @@ subroutine check_dist_fn(report_unit)
                 gtmp(-ntgrid:ntgrid,isgn,iglo) = wgt(-ntgrid:ntgrid)*cmplx(1.,0.)
              end do
           end do
-          call integrate_moment(gtmp,coeff0,1)
+          call integrate_moment(gtmp,coeff0,1,full_arr=.true.)
           where(real(coeff0(0,1:nakx,1:naky,1:nspec)) == 0.)
              mom_coeff(1:nakx,1:naky,1:nspec,i)=1.
           elsewhere
