@@ -121,7 +121,8 @@ module general_f0
                         alpha_f0_semianalytic = 3, &
                         alpha_f0_split = 4, &
                         alpha_f0_equivmaxw = 5, &
-                        alpha_f0_external =6
+                        alpha_f0_external =6, &
+                        alpha_f0_kappa = 7
 
   integer, parameter :: beam_f0_maxwellian = 1, &
                         beam_f0_analytic = 2, &
@@ -151,6 +152,8 @@ module general_f0
   !> Input parameter that gives a simple gradient in F0alpha (not a function of velocity - simply 1/Lnalpha)
   !! Not physical, but could diagnose problems.
   logical :: simple_gradient
+
+  real :: kappa
 
 contains
 
@@ -220,13 +223,14 @@ contains
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     implicit none
-    type (text_option), dimension (6), parameter :: alpha_f0_opts = &
+    type (text_option), dimension (7), parameter :: alpha_f0_opts = &
          (/ text_option('maxwellian', alpha_f0_maxwellian), &
             text_option('analytic', alpha_f0_analytic), &
             text_option('semianalytic', alpha_f0_semianalytic), &
             text_option('split', alpha_f0_split), &
             text_option('equivmaxw', alpha_f0_equivmaxw), &
-            text_option('external', alpha_f0_external) /)
+            text_option('external', alpha_f0_external) ,&
+            text_option('kappa', alpha_f0_kappa) /)
     character(20) :: alpha_f0
     type (text_option), dimension (3), parameter :: beam_f0_opts = &
          (/ text_option('maxwellian', beam_f0_maxwellian), &
@@ -240,7 +244,7 @@ contains
             main_ion_species,&
             energy_min,&
             print_egrid,&
-            vcrit, simple_gradient
+            vcrit, simple_gradient, kappa
 
     integer :: ierr, in_file
     logical :: exist
@@ -253,6 +257,7 @@ contains
        energy_min = 0.1
        vcrit = -1.0
        simple_gradient = .false.
+       kappa = -1.0
 
        in_file = input_unit_exist ("general_f0_parameters", exist)
        if (exist) read (unit=in_file, nml=general_f0_parameters)
@@ -272,6 +277,7 @@ contains
     call broadcast (main_ion_species)
     call broadcast (energy_min)
     call broadcast (vcrit)
+    call broadcast (kappa)
 
   end subroutine read_parameters
 
@@ -308,6 +314,8 @@ contains
           f0 = exp(-v**2)/(pi**1.5)
         case (alpha_f0_analytic)
           call eval_f0_analytic(is,v,f0,dummy,dummy) 
+        case (alpha_f0_kappa)
+          call eval_f0_kappa(is,v,f0,dummy,dummy) 
         case (alpha_f0_semianalytic)
           write(*,*) "ERROR: eval_f0 cannot yet handle semianalytic option."
           call mp_abort('')
@@ -367,6 +375,9 @@ contains
         case (alpha_f0_analytic)
           call check_electromagnetic
           call calculate_f0_arrays_analytic(is)
+        case (alpha_f0_kappa)
+          call check_electromagnetic
+          call calculate_f0_arrays_kappa(is)
         case (alpha_f0_semianalytic)
           call check_electromagnetic
           call calculate_f0_arrays_semianalytic(is)
@@ -1149,5 +1160,206 @@ contains
 
 
   end subroutine calculate_f0_arrays_equivmaxw
+
+  subroutine eval_f0_kappa(is,v,f0,gentemp,f0prim)
+    use species, only: ion_species, electron_species, alpha_species, spec, nspec
+    use constants, only: pi
+    use mp, only: mp_abort, proc0
+    implicit none
+    integer,intent(in):: is
+    real,intent(in):: v
+    real,intent(inout):: f0,gentemp, f0prim
+    real:: gammakmh,gammak,A,df0dv,df0dE
+   
+    gammakmh = exp(lgamma(kappa-0.5))  
+    gammak = exp(lgamma(kappa))
+
+    A = 1.0/(pi**1.5*gammakmh/gammak)
+
+    f0 = A/(1.0 + v**2/kappa)**(kappa+1.0)
+
+    if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
+ 
+    df0dv = - 2.0*v*A*(kappa+1.0)/( kappa* (1.0 + v**2/kappa))
+    df0dE = (0.5/v)*df0dv
+    gentemp = -spec(is)%temp*f0/df0dE
+ 
+    f0prim = 0.0
+     
+  end subroutine eval_f0_kappa
+
+  subroutine calculate_f0_arrays_kappa(is)
+    use constants, only: pi
+    use species, only: spec, nspec
+    use mp, only: mp_abort, proc0
+    implicit none
+    integer,intent(in):: is
+    real:: A, Ti, Ealpha, vstar, v, df0dv, df0dE, B
+    integer:: ie, i, electron_spec
+
+
+    do ie = 1,negrid 
+       v = sqrt(egrid(ie,is))
+       call eval_f0_kappa(is,v,f0_values(ie,is),generalised_temperature(ie,is),f0prim(ie,is))
+    end do
+
+    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
+    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+
+    if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
+
+  end subroutine calculate_f0_arrays_kappa
+
+
+  function lgamma(x)
+
+    use constants, only: pi
+
+    real :: lgamma
+    real, intent(in) :: x
+    integer :: k
+    real :: w, v, t, y
+
+    real, parameter :: a(0:21) = (/ &
+         &  0.00009967270908702825, -0.00019831672170162227, &
+         & -0.00117085315349625822,  0.00722012810948319552, &
+         & -0.00962213009367802970, -0.04219772092994235254, &
+         &  0.16653861065243609743, -0.04200263501129018037, &
+         & -0.65587807152061930091,  0.57721566490153514421, &
+         &  0.99999999999999999764,  0.00004672097259011420, &
+         & -0.00006812300803992063, -0.00132531159076610073, &
+         &  0.00733521178107202770, -0.00968095666383935949, &
+         & -0.04217642811873540280,  0.16653313644244428256, &
+         & -0.04200165481709274859, -0.65587818792782740945, &
+         &  0.57721567315209190522,  0.99999999973565236061 /)
+    real, parameter :: b(0:97) = (/ &
+         & -0.00000000004587497028,  0.00000000019023633960, &
+         &  0.00000000086377323367,  0.00000001155136788610, &
+         & -0.00000002556403058605, -0.00000015236723372486, &
+         & -0.00000316805106385740,  0.00000122903704923381, &
+         &  0.00002334372474572637,  0.00111544038088797696, &
+         &  0.00344717051723468982,  0.03198287045148788384, &
+         & -0.32705333652955399526,  0.40120442440953927615, &
+         & -0.00000000005184290387, -0.00000000083355121068, &
+         & -0.00000000256167239813,  0.00000001455875381397, &
+         &  0.00000013512178394703,  0.00000029898826810905, &
+         & -0.00000358107254612779, -0.00002445260816156224, &
+         & -0.00004417127762011821,  0.00112859455189416567, &
+         &  0.00804694454346728197,  0.04919775747126691372, &
+         & -0.24818372840948854178,  0.11071780856646862561, &
+         &  0.00000000030279161576,  0.00000000160742167357, &
+         & -0.00000000405596009522, -0.00000005089259920266, &
+         & -0.00000002029496209743,  0.00000135130272477793, &
+         &  0.00000391430041115376, -0.00002871505678061895, &
+         & -0.00023052137536922035,  0.00045534656385400747, &
+         &  0.01153444585593040046,  0.07924014651650476036, &
+         & -0.12152192626936502982, -0.07916438300260539592, &
+         & -0.00000000050919149580, -0.00000000115274986907, &
+         &  0.00000001237873512188,  0.00000002937383549209, &
+         & -0.00000030621450667958, -0.00000077409414949954, &
+         &  0.00000816753874325579,  0.00002412433382517375, &
+         & -0.00026061217606063700, -0.00091000087658659231, &
+         &  0.01068093850598380797,  0.11395654404408482305, &
+         &  0.07209569059984075595, -0.10971041451764266684, &
+         &  0.00000000040119897187, -0.00000000013224526679, &
+         & -0.00000001002723190355,  0.00000002569249716518, &
+         &  0.00000020336011868466, -0.00000118097682726060, &
+         & -0.00000300660303810663,  0.00004402212897757763, &
+         & -0.00001462405876235375, -0.00164873795596001280, &
+         &  0.00513927520866443706,  0.13843580753590579416, &
+         &  0.32730190978254056722,  0.08588339725978624973, &
+         & -0.00000000015413428348,  0.00000000064905779353, &
+         &  0.00000000160702811151, -0.00000002655645793815, &
+         &  0.00000007619544277956,  0.00000047604380765353, &
+         & -0.00000490748870866195,  0.00000821513040821212, &
+         &  0.00014804944070262948, -0.00122152255762163238, &
+         & -0.00087425289205498532,  0.14438703699657968310, &
+         &  0.61315889733595543766,  0.55513708159976477557, &
+         &  0.00000000001049740243, -0.00000000025832017855, &
+         &  0.00000000139591845075, -0.00000000021177278325, &
+         & -0.00000005082950464905,  0.00000037801785193343, &
+         & -0.00000073982266659145, -0.00001088918441519888, &
+         &  0.00012491810452478905, -0.00049171790705139895, &
+         & -0.00425707089448266460,  0.13595080378472757216, &
+         &  0.89518356003149514744,  1.31073912535196238583 /)
+    real, parameter :: c(0:64) = (/ &
+         &  0.0000000116333640008,  -0.0000000833156123568, &
+         &  0.0000003832869977018,  -0.0000015814047847688, &
+         &  0.0000065010672324100,  -0.0000274514060128677, &
+         &  0.0001209015360925566,  -0.0005666333178228163, &
+         &  0.0029294103665559733,  -0.0180340086069185819, &
+         &  0.1651788780501166204,   1.1031566406452431944, &
+         &  1.2009736023470742248,   0.0000000013842760642, &
+         & -0.0000000069417501176,   0.0000000342976459827, &
+         & -0.0000001785317236779,   0.0000009525947257118, &
+         & -0.0000052483007560905,   0.0000302364659535708, &
+         & -0.0001858396115473822,   0.0012634378559425382, &
+         & -0.0102594702201954322,   0.1243625515195050218, &
+         &  1.3888709263595291174,   2.4537365708424422209, &
+         &  0.0000000001298977078,  -0.0000000008029574890, &
+         &  0.0000000049454846150,  -0.0000000317563534834, &
+         &  0.0000002092136698089,  -0.0000014252023958462, &
+         &  0.0000101652510114008,  -0.0000774550502862323, &
+         &  0.0006537746948291078,  -0.0066014912535521830, &
+         &  0.0996711934948138193,   1.6110931485817511402, &
+         &  3.9578139676187162939,   0.0000000000183995642, &
+         & -0.0000000001353537034,   0.0000000009984676809, &
+         & -0.0000000076346363974,   0.0000000599311464148, &
+         & -0.0000004868554120177,   0.0000041441957716669, &
+         & -0.0000377160856623282,   0.0003805693126824884, &
+         & -0.0045979851178130194,   0.0831422678749791178, &
+         &  1.7929113303999329439,   5.6625620598571415285, &
+         &  0.0000000000034858778,  -0.0000000000297587783, &
+         &  0.0000000002557677575,  -0.0000000022705728282, &
+         &  0.0000000207024992450,  -0.0000001954426390917, &
+         &  0.0000019343161886722,  -0.0000204790249102570, &
+         &  0.0002405181940241215,  -0.0033842087561074799, &
+         &  0.0713079483483518997,   1.9467574842460867884, &
+         &  7.5343642367587329552 /)
+    real, parameter :: d(0:6) = (/ &
+         & -0.00163312359200500807,  0.00083644533703385956, &
+         & -0.00059518947575728181,  0.00079365057505415415, &
+         & -0.00277777777735463043,  0.08333333333333309869, &
+         &  0.91893853320467274178 /)
+
+    w = x
+    if (x < 0.) w = 1. - x
+    if (w < 0.5) then
+       k = 0
+       if (w >= 0.25) k = 11
+       y = ((((((((((a(k) * w + a(k + 1)) * w + &
+            & a(k + 2)) * w + a(k + 3)) * w + a(k + 4)) * w + &
+            & a(k + 5)) * w + a(k + 6)) * w + a(k + 7)) * w + &
+            & a(k + 8)) * w + a(k + 9)) * w + a(k + 10)) * w
+       y = -log(y)
+    else if (w < 3.5) then
+       t = w - 4.5 / (w + 0.5)
+       k = int(t + 4)
+       t = t - (k - 3.5)
+       k = k * 14
+       y = ((((((((((((b(k) * t + b(k + 1)) * t + &
+            & b(k +  2)) * t + b(k +  3)) * t + b(k +  4)) * t + &
+            & b(k +  5)) * t + b(k +  6)) * t + b(k +  7)) * t + &
+            & b(k +  8)) * t + b(k +  9)) * t + b(k + 10)) * t + &
+            & b(k + 11)) * t + b(k + 12)) * t + b(k + 13)
+    else if (w < 8.) then
+       k = (int(w)) - 3
+       t = w - (k + 3.5)
+       k = k * 13
+       y = (((((((((((c(k) * t + c(k + 1)) * t + &
+            & c(k +  2)) * t + c(k +  3)) * t + c(k +  4)) * t + &
+            & c(k +  5)) * t + c(k +  6)) * t + c(k +  7)) * t + &
+            & c(k +  8)) * t + c(k +  9)) * t + c(k + 10)) * t + &
+            & c(k + 11)) * t + c(k + 12)
+    else
+       v = 1. / w
+       t = v * v
+       y = (((((d(0) * t + d(1)) * t + d(2)) * t + &
+            & d(3)) * t + d(4)) * t + d(5)) * v + d(6)
+       y = y + ((w - 0.5) * log(w) - w)
+    end if
+    if (x < 0.) y = log(pi / sin(pi * x)) - y
+    lgamma = y
+  end function lgamma
 
 end module general_f0
