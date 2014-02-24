@@ -66,6 +66,13 @@ module gs2_diagnostics
   logical :: write_jext=.false.
 !<GGH
 
+! HJL <  Variables for convergence condition testing
+  integer :: trin_istep = 0
+  integer :: conv_isteps_converged = 0
+  real, save, allocatable, dimension(:) :: conv_heat
+  real, save :: heat_sum_av = 0, heat_av = 0, heat_av_test = 0
+
+
   ! internal
   logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
@@ -89,13 +96,18 @@ module gs2_diagnostics
          write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
          write_correlation_extend, nwrite_mult, write_correlation, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
-         write_pflux_sym,  write_pflux_tormom, file_safety_check
+         write_pflux_sym,  write_pflux_tormom, file_safety_check, &
+         conv_nstep_av, conv_test_multiplier, conv_min_step, conv_max_step, conv_nsteps_converged
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: jext_unit   !GGH Additions
   integer :: phase_unit
   integer :: dump_check1_unit, dump_check2_unit
   integer :: res_unit, res_unit2, parity_unit
+  integer :: conv_nstep_av ! The number of timesteps the convergence condition averages over
+  integer :: conv_min_step ! The minimum number of steps before the convergence condition will be met
+  integer :: conv_max_step ! The maximum number of steps allowed before declaring convergence with a warning
+  integer :: conv_nsteps_converged ! The number of steps where convergence is true before convergence is accepted
 
   complex, dimension (:,:,:), allocatable :: omegahist
   ! (navg,ntheta0,naky)
@@ -120,6 +132,7 @@ module gs2_diagnostics
 
   real :: start_time = 0.0
   real, dimension (:), allocatable :: pflux_avg, qflux_avg, heat_avg, vflux_avg
+  real :: conv_test_multiplier ! The value sum av is multiplied by for the convergence test
 
   integer :: ntg_out, ntg_extend, nth0_extend
   integer :: nout = 1
@@ -547,6 +560,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use mp, only: proc0
+    use job_manage, only: trin_job
     use constants
     implicit none
     logical, intent (in) :: list
@@ -611,6 +625,8 @@ contains
 
        allocate (omegahist(0:navg-1,ntheta0,naky))
        omegahist = 0.0
+       if(.not. allocated(conv_heat)) allocate(conv_heat(0:conv_nstep_av/nwrite-1))
+
     end if
 
     !<doc> Allocate arrays for storing the various fluxes which the diagnostics will output </doc>
@@ -691,6 +707,11 @@ contains
        nwrite_mult = 10
        navg = 100
        nsave = -1
+       conv_nstep_av = 4000
+       conv_test_multiplier = 2e-1
+       conv_min_step = 4000
+       conv_max_step = 80000
+       conv_nsteps_converged = 4000
        omegatol = 1e-3
        omegatinst = 1.0
        igomega = 0
@@ -762,7 +783,7 @@ contains
     use antenna, only: dump_ant_amp
     use splines, only: fitp_surf1, fitp_surf2
     use gs2_heating, only: del_htype
-    use job_manage, only: trin_restart
+    use job_manage, only: trin_restart, trin_reset
 
 !    use gs2_dist_io, only: write_dist
     implicit none
@@ -1426,7 +1447,9 @@ contains
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange1, exchange)
     if (allocated(pflux_tormom)) deallocate (pflux_tormom) 
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
-    if (.not. trin_restart .and. allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
+    if (.not. trin_restart .and. allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg) ! check, restart always true?
+
+    if (proc0 .and. trin_reset .and. allocated(conv_heat)) deallocate (conv_heat)
 
 ! HJL <    
     if (allocated(domega)) deallocate(domega)
@@ -1479,6 +1502,7 @@ contains
     use parameter_scan_arrays, only: scan_momflux => momflux_tot 
     use parameter_scan_arrays, only: scan_phi2_tot => phi2_tot 
     use parameter_scan_arrays, only: scan_nout => nout
+    use job_manage, only: trin_restart, trin_reset, trin_job
     use parameter_scan, only: scan_type_switch, scan_type_none, target_parameter_switch
     use parameter_scan, only: target_parameter_hflux_tot,target_parameter_momflux_tot,target_parameter_phi2_tot
     
@@ -1556,6 +1580,7 @@ contains
     character(200) :: filename
     logical :: last = .false.
     logical,optional:: debopt
+
     logical:: debug=.false.
 
     if (present(debopt)) debug=debopt
@@ -1861,6 +1886,9 @@ if (debug) write(6,*) "loop_diagnostics: -1"
           write (*,*) 
        end if
     end if
+
+! Check for convergence
+!    if(nonlin) call check_nonlin_convergence(istep, heat_fluxes(1), exit)
 
     i=istep/nwrite
 
@@ -2752,6 +2780,73 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 if (debug) write(6,*) "loop_diagnostics: done"
   end subroutine loop_diagnostics
 
+
+  ! Trinity convergence condition - simple and experimental
+  ! look for the averaged differential of the summed averaged heat flux to drop below a threshold
+  subroutine check_nonlin_convergence(istep, heat_flux, exit)
+    use job_manage, only: trin_restart, trin_reset, trin_job
+    use gs2_time, only: user_time
+    use mp, only: proc0, broadcast
+
+    logical, intent(inout) :: exit
+    integer, intent(in) :: istep
+    real, intent(in) :: heat_flux
+
+! Variables for convergence condition (HJL)
+    real :: heat_av_new, heat_av_diff
+    integer :: place, iwrite, nwrite_av
+    logical :: debug = .false.
+
+    if(proc0 .and. .not. (trin_istep .ne. 0 .and. istep .eq. 0)) then
+       if(istep .gt. 0) trin_istep = trin_istep + nwrite ! Total number of steps including restarted trinity runs
+       iwrite = trin_istep/nwrite ! Number of diagnostic write steps written
+       nwrite_av = conv_nstep_av/nwrite ! Number of diagnostic write steps to average over        
+
+       heat_sum_av = (heat_sum_av * iwrite + heat_flux) / (iwrite+1) ! Cumulative average of heat flux
+
+       place = mod(trin_istep,conv_nstep_av)/nwrite
+       conv_heat(place) = heat_flux
+     
+       if (debug) write(6,'(A,I5,A,E10.4,A,I6,I6)') 'Job ',trin_job, &
+            ' time = ',user_time, ' step = ',trin_istep
+       if (debug) write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
+            ' heat = ',heat_flux, ' heatsumav = ',heat_av
+
+       if (trin_istep .ge. conv_nstep_av) then
+          heat_av_new = sum(conv_heat) / nwrite_av
+          heat_av_diff = heat_av_new - heat_av
+          if(debug) write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
+               ' heat_sum_av_diff = ',heat_sum_av
+          heat_av = heat_av_new
+          ! Convergence test - needs to be met conv_nsteps_converged/nwrite times in succession
+          if (abs(heat_av_diff) .lt. heat_av_test) then
+             conv_isteps_converged = conv_isteps_converged + 1
+          else
+             conv_isteps_converged = 0
+             heat_av_test = heat_sum_av * conv_test_multiplier
+          endif
+          
+          if (conv_isteps_converged .ge. conv_nsteps_converged/nwrite .and. &
+               trin_istep .ge. conv_min_step .and. &
+               exit_when_converged == .true.) then
+             write(6,'(A,I5,A,I6,I3)')'Job ',trin_job,' &
+                  Reached convergence condition after step ',trin_istep
+             exit = .true.
+          endif
+
+          if(trin_istep .gt. conv_max_step) then
+             write(6,'(A,I5,A,I7)') '*** Warning. Job ',trin_job, &
+                  ' did not meet the convergence condition after ',trin_istep
+             exit = .true.
+          endif
+       endif
+    endif
+
+    call broadcast(exit)
+
+  end subroutine check_nonlin_convergence
+
+
   subroutine heating (istep, h, hk)
 
     use mp, only: proc0
@@ -3008,9 +3103,17 @@ if (debug) write(6,*) "get_omegaavg: done"
   subroutine reset_init
 
     use gs2_time, only: user_time
+    use mp, only: proc0
 
     implicit none
 
+! HJL > reset values for convergence condition
+    if(proc0) then
+       conv_isteps_converged = 0
+       heat_sum_av = 0.0
+       conv_heat = 0.0
+       trin_istep = 0
+    endif
     start_time = user_time
     pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
 
