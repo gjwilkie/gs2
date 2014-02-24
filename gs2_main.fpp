@@ -239,10 +239,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
             call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
        call update_time
        call loop_diagnostics (istep, exit)
+       if(exit .and. present(converged)) converged = .true.
 #ifdef NEW_DIAG
        call run_diagnostics (istep, exit)
 #endif
-       if(exit .and. present(converged)) converged = .true.
        call check_time_step (reset, exit)
        call update_scan_parameter_value(istep, reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
