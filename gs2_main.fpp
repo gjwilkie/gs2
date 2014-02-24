@@ -37,6 +37,7 @@ contains
   !! (EGH - used for Trinity?)
 
 
+
 subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
      pflux, qflux, vflux, heat, dvdrho, grho, trinity_reset, converged)
 
@@ -227,6 +228,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ! Write initial values
     call run_diagnostics(0,exit)
 #endif
+
+    if (present(pflux)) call write_trinity_parameters
     
     call time_message(.false.,time_main_loop,' Main Loop')
 
@@ -450,6 +453,20 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (nensembles > 1) call scope (allprocs)
 
   end subroutine reset_gs2
+  subroutine write_trinity_parameters
+      use file_utils, only: open_output_file, close_output_file
+      use theta_grid_params, only: write_theta_grid => write_trinity_parameters
+      use species, only: write_species => write_trinity_parameters
+      use mp, only: proc0
+      integer :: trinpars_unit
+      
+      if (proc0) then
+        call open_output_file(trinpars_unit, 'trinpars')
+        call write_theta_grid(trinpars_unit)
+        call write_species(trinpars_unit)
+        call close_output_file(trinpars_unit)
+      end if
+  end subroutine write_trinity_parameters
 
   subroutine gs2_trin_init (rhoc, qval, shat, rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift, &
        betaprim, ntspec, dens, temp, fprim, tprim, gexb, mach, nu, use_gs2_geo)

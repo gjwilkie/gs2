@@ -2,6 +2,7 @@ module species
   implicit none
 
   public :: init_species, finish_species, reinit_species, init_trin_species, finish_trin_species
+  public :: write_trinity_parameters
   public :: wnml_species, check_species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
@@ -492,6 +493,21 @@ contains
     end do
 
   end subroutine reinit_species
+
+  subroutine write_trinity_parameters(trinpars_unit)
+    integer, intent(in) :: trinpars_unit
+    integer :: is
+    do is = 1,nspec
+      write(trinpars_unit, "(A,I)") '&species_parameters_', is
+      write (trinpars_unit, *) ' temp = ', spec(is)%temp
+      write (trinpars_unit, *) ' dens = ', spec(is)%dens
+      write (trinpars_unit, *) ' tprim = ', spec(is)%tprim
+      write (trinpars_unit, *) ' fprim = ', spec(is)%fprim
+      write (trinpars_unit, *) ' vnewk = ', spec(is)%vnewk
+      write (trinpars_unit, *) '/'
+    end do
+
+  end subroutine write_trinity_parameters
 
   subroutine init_trin_species (ntspec_in, dens_in, temp_in, fprim_in, tprim_in, nu_in)
 
