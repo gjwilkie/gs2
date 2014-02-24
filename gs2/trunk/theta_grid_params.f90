@@ -3,6 +3,7 @@ module theta_grid_params
 
   public :: init_theta_grid_params, init_trin_geo
   public :: wnml_theta_grid_params
+  public :: write_trinity_parameters
 
   real, public :: rhoc, rmaj, r_geo, eps, epsl
   real, public :: qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri
@@ -119,6 +120,23 @@ contains
     betaprim = betaprim_in
 
   end subroutine reinit_theta_grid_params
+
+  subroutine write_trinity_parameters(trinpars_unit)
+      integer, intent(in) :: trinpars_unit
+      write (trinpars_unit, *) '&theta_grid_parameters'
+      write (trinpars_unit, *) ' rhoc = ', rhoc
+      write (trinpars_unit, *) ' qinp = ', qinp
+      write (trinpars_unit, *) ' shat = ', shat
+      write (trinpars_unit, *) ' rmaj = ', rmaj
+      write (trinpars_unit, *) ' r_geo = ', r_geo
+      write (trinpars_unit, *) ' akappa = ', akappa
+      write (trinpars_unit, *) ' akappri = ', akappri
+      write (trinpars_unit, *) ' tri = ', tri
+      write (trinpars_unit, *) ' tripri = ', tripri
+      write (trinpars_unit, *) ' shift = ', shift
+      write (trinpars_unit, *) ' betaprim = ', betaprim
+      write (trinpars_unit, *) '/'
+  end subroutine write_trinity_parameters
 
   subroutine init_trin_geo (rhoc_in, qval_in, shat_in, rgeo_in, rmaj_in, &
        kappa_in, kappri_in, tri_in, tripri_in, shift_in, betaprim_in)
