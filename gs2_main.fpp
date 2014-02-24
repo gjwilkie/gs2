@@ -40,13 +40,13 @@ contains
 subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
      pflux, qflux, vflux, heat, dvdrho, grho, trinity_reset, converged)
 
-    use job_manage, only: checkstop, job_fork, checktime, time_message, trin_reset, trin_restart
+    use job_manage, only: checkstop, job_fork, checktime, time_message, trin_reset, trin_restart, trin_job
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name!, finish_file_utils
     use fields, only: init_fields, advance
     use species, only: ions, electrons, impurity
-    use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics, gd_reset => reset_init 
+    use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time, nwrite, write_nl_flux
     use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time, margin_cpu_time
@@ -106,11 +106,14 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 !
 !    if (present(nofinish)) nofin=nofinish
      
-     if(present(trinity_reset)) then
-        converged = .false.
-        trin_reset = trinity_reset
-        first_time = .true.
-     endif
+
+! HJL tests on Trinity optionals for load balancing
+    if(present(trinity_reset)) then
+       converged = .false.
+       trin_reset = trinity_reset
+       first_time = .true.
+    endif
+    if(present(job_id)) trin_job = job_id + 1
 
     if (first_time) then
 
@@ -126,13 +129,18 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (proc0) then
           if (nproc == 1) then
              if (.not. nofin) then
-          write(*,*) 'Running on ',nproc,' processor'
-       end if 
-         else
+                write(*,*) 'Running on ',nproc,' processor'
+             end if
+          else
              if (.not. nofin) then
-          write(*,*) 'Running on ',nproc,' processors'
-       end if  
+                if(present(job_id)) then
+                   write(*,*) 'Job ',trin_job,'Running on ',nproc,' processors'
+                else
+                   write(*,*) 'Running on ',nproc,' processors'
+                endif
+             end if
           end if
+
           write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
           !  whether we are doing a [[Trinity]] run or a list of runs. </doc>
@@ -168,8 +176,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        call init_fields
        call init_gs2_diagnostics (list, nstep)
 
-
-
 #ifdef NEW_DIAG
 #ifdef NETCDF_PARALLEL
        diagnostics_init_options%parallel_io = .true.
@@ -197,23 +203,23 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        
        if (proc0) call time_message(.false.,time_init,' Initialization')
        
-        if(present(trinity_reset)) then ! For trinity load balance restarts
-           if(trin_reset) call gd_reset
-           trin_restart = .true. ! All trinity runs are restarted except the first
-        endif
-
        first_time = .false.
+
+       ! When trinity starts a new step it needs to reset after initialisation
+       if(present(trinity_reset) .and. trin_reset) return
 
     else if (present(nensembles)) then
        if (nensembles > 1) then
           call scope (subprocs)
        end if
-    end if
-    
+    endif
+
     istep_end = nstep
     ilast_step = nstep
     
     call loop_diagnostics(0,exit)
+
+    if(present(trinity_reset)) trin_restart = .true. ! All trinity runs are restarted except the first
 
 #ifdef NEW_DIAG
     ! Create variables
@@ -222,13 +228,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     call run_diagnostics(0,exit)
 #endif
     
-    !if (proc0) write(*,*) 'layout ',layout
-    !write (*,*) 'iproc here', iproc
-
     call time_message(.false.,time_main_loop,' Main Loop')
 
     do istep = 1, nstep
-       
+
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
        call advance (istep)
        
@@ -236,10 +239,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
             call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
        call update_time
        call loop_diagnostics (istep, exit)
+       if(exit .and. present(converged)) converged = .true.
 #ifdef NEW_DIAG
        call run_diagnostics (istep, exit)
 #endif
-       if(exit .and. present(converged)) converged = .true.
        call check_time_step (reset, exit)
        call update_scan_parameter_value(istep, reset, exit)
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
@@ -255,7 +258,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (mod(istep,5) == 0) call checkstop(exit)
        
        call checktime(avail_cpu_time,exit,margin_cpu_time)
-       
+
        if (exit) then
           istep_end = istep
           ilast_step = istep
@@ -453,6 +456,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo
+    use job_manage, only: trin_job
+    use mp, only: proc0
 
     implicit none
 
@@ -464,7 +469,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     ! for now do nothing with gexb or mach, but need to include later if want to use GS2
     ! with TRINITY to evolve rotation profiles
-
     call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
     if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, &
          rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift, betaprim)
