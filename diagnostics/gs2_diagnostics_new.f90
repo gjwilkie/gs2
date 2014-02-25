@@ -21,6 +21,7 @@ module gs2_diagnostics_new
   type diagnostics_init_options_type
     logical :: parallel_io
     logical :: default_double
+    logical :: initialized
   end type diagnostics_init_options_type
 
   private 
@@ -88,7 +89,10 @@ contains
     if (.not. gnostics%write_any) return
     call finish_diagnostics_write_fluxes
     call finish_diagnostics_write_omega
-    if (gnostics%parallel .or. proc0) call closefile(gnostics%sfile)
+    if (gnostics%parallel .or. proc0) then
+      write (*,*) "CLosing new"
+      call closefile(gnostics%sfile)
+    end if
   end subroutine finish_gs2_diagnostics_new
 
   !> Create or write all variables according to the value of istep:
