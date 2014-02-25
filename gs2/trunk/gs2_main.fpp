@@ -46,19 +46,22 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use mp, only: max_reduce, min_reduce, sum_reduce
     use file_utils, only: init_file_utils, run_name!, finish_file_utils
     use fields, only: init_fields, advance
-    use species, only: ions, electrons, impurity
+    use species, only: ions, electrons, impurity, spec, nspec
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time, nwrite, write_nl_flux
     use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time, margin_cpu_time
+    use run_parameters, only: trinity_linear_fluxes
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
+    use gs2_diagnostics, only: diffusivity
 #ifdef NEW_DIAG
     use gs2_diagnostics_new, only: run_diagnostics, init_gs2_diagnostics_new
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new, diagnostics_init_options_type
 #endif
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
+    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use gs2_time, only: update_time, write_dt, init_tstart
     use gs2_time, only: user_time, user_dt
     use init_g, only: tstart
@@ -86,7 +89,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 #ifdef NEW_DIAG
     real :: precision_test
 #endif
+    real :: diff
     integer :: istep = 0, istatus, istep_end
+    integer :: is
     logical :: exit, reset, list
     logical :: first_time = .true.
     logical :: nofin= .false.
@@ -187,7 +192,11 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        ! Here we check if reals have been promoted to doubles
        diagnostics_init_options%default_double =  (precision(precision_test).gt.10)
 
-       call init_gs2_diagnostics_new(diagnostics_init_options)
+       if (first_time) diagnostics_init_options%initialized = .false.
+       if (.not. diagnostics_init_options%initialized) then
+         write (*,*) 'initializing diagnostics'
+         call init_gs2_diagnostics_new(diagnostics_init_options)
+       end if
 #endif
 
        call allocate_target_arrays(nwrite,write_nl_flux) ! must be after init_gs2_diagnostics
@@ -224,7 +233,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
 #ifdef NEW_DIAG
     ! Create variables
-    call run_diagnostics(-1,exit)
+    if (.not. diagnostics_init_options%initialized) then
+      call run_diagnostics(-1,exit)
+      diagnostics_init_options%initialized = .true.
+    end if
     ! Write initial values
     call run_diagnostics(0,exit)
 #endif
@@ -282,6 +294,26 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     end if
 
     if (present(pflux)) then
+      
+       ! Use simple gamma / k^2 estimates for transport in the 
+       ! linear case. This is for testing Trinity
+       if (trinity_linear_fluxes .and. &
+             nonlinear_mode_switch .eq. nonlinear_mode_none) then
+         diff = diffusivity()
+         do is = 1,nspec
+           ! Q = n chi grad T = n (gamma / k^2) dT / dr
+           ! = dens  n_r (gamma_N v_thr / k_N**2 rho_r a) dT / drho drho/dr
+           ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) T a / L_T drho/dr
+           ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) temp T_r tprim drho/dr_N/a
+           ! Q / (n_r  v_r T_r rho_r**2/a**2) 
+           ! = dens (gamma_N / k_N**2) temp tprim grho
+           !   
+           ! grho factored to diffusivity in diagnostics
+           qflux_avg(is) =  diff * spec(is)%dens * spec(is)%temp * spec(is)%tprim 
+           pflux_avg(is) =  diff * spec(is)%dens**2.0 * spec(is)%fprim 
+           heat_avg = 0.0
+         end do
+       end if
        if (size(pflux) > 1) then
           pflux(1) = pflux_avg(ions)/time_interval
           qflux(1) = qflux_avg(ions)/time_interval
@@ -461,7 +493,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
       integer :: trinpars_unit
       
       if (proc0) then
-        call open_output_file(trinpars_unit, 'trinpars')
+        call open_output_file(trinpars_unit, '.trinpars')
         call write_theta_grid(trinpars_unit)
         call write_species(trinpars_unit)
         call close_output_file(trinpars_unit)

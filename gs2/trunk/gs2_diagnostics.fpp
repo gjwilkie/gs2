@@ -19,6 +19,10 @@ module gs2_diagnostics
   public :: ensemble_average
   public :: reset_init
   public :: pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time
+  public :: diffusivity
+
+  !Unit tests
+  public :: diagnostics_unit_test_diffusivity
 
   public :: get_omegaavg
   interface get_vol_average
@@ -79,6 +83,9 @@ module gs2_diagnostics
 ! HJL < moved here so that it can be deallocated
   complex, allocatable, save, dimension (:,:,:) :: domega
 ! > HJL
+  !<EGH moved here to make available for diffusivity function
+    complex, dimension (:, :), allocatable :: omega, omegaavg
+   !EGH>
 
   namelist /gs2_diagnostics_knobs/ print_line, print_flux_line, &
          write_line, write_flux_line, &
@@ -549,6 +556,7 @@ contains
        endif
     endif
 
+
     !Setup the parallel fft if we're writing/using the parallel spectrum
     if(write_kpar.or.write_gs) call init_par_filter
   end subroutine init_gs2_diagnostics
@@ -650,6 +658,11 @@ contains
     allocate (pbflux(ntheta0,naky,nspec)) ; pbflux = 0.
     allocate (qbheat(ntheta0,naky,nspec,3)) ; qbheat = 0.
     allocate (vbflux(ntheta0,naky,nspec)) ; vbflux = 0.
+
+    if (.not. allocated(omega)) then
+      allocate(omega(ntheta0, naky))
+      allocate(omegaavg(ntheta0, naky))
+    end if
       
   end subroutine real_init
 
@@ -1447,7 +1460,9 @@ contains
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange1, exchange)
     if (allocated(pflux_tormom)) deallocate (pflux_tormom) 
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
+
     if (.not. trin_restart .and. allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg) ! check, restart always true?
+    if (.not. trin_restart .and. allocated(omega)) deallocate(omega, omegaavg)
 
     if (proc0 .and. trin_reset .and. allocated(conv_heat)) deallocate (conv_heat)
 
@@ -1512,7 +1527,6 @@ contains
     integer, intent (in) :: istep
     logical, intent (out) :: exit
     real, dimension(:,:,:), allocatable :: yxphi, yxapar, yxbpar
-    complex, dimension (ntheta0, naky) :: omega, omegaavg
 
     !GGH J_external
     real, dimension(:,:), allocatable ::  j_ext
@@ -2827,8 +2841,8 @@ if (debug) write(6,*) "loop_diagnostics: done"
           endif
           
           if (conv_isteps_converged .ge. conv_nsteps_converged/nwrite .and. &
-               trin_istep .ge. conv_min_step .and. &
-               exit_when_converged == .true.) then
+               (trin_istep .ge. conv_min_step) .and. &
+               (exit_when_converged .eqv. .true.)) then
              write(6,'(A,I5,A,I6,I3)')'Job ',trin_job,' &
                   Reached convergence condition after step ',trin_istep
              exit = .true.
@@ -2945,6 +2959,40 @@ if (debug) write(6,*) "loop_diagnostics: done"
   end subroutine calc_jext
 !=============================================================================
 !<GGH
+
+  !> A linear estimate of the diffusivity, used for Trinity testing
+  function diffusivity()
+    use kt_grids, only: ntheta0, naky, akx
+    use theta_grid, only: grho
+    real :: diffusivity
+    real, dimension(ntheta0, naky) :: diffusivity_by_k
+    integer  :: ik, it
+    diffusivity_by_k = 0.0
+    do ik=1,naky
+      do it=1,ntheta0
+        if (akx(it).eq.0) cycle
+        diffusivity_by_k(it,ik) = max(aimag(omegaavg(it,ik)), 0.0)/akx(it)**2.0/2.0**0.5
+      end do
+    end do
+    !write (*,*) 'diffusivity_by_k', diffusivity_by_k, 'omegaavg', omegaavg
+    !call get_volume_average(diffusivity_by_k, diffusivity)
+
+    diffusivity = maxval(diffusivity_by_k) * grho(igomega)
+
+  end function diffusivity
+
+
+  function diagnostics_unit_test_diffusivity(results, eps)
+    use unit_tests
+    use mp,only: proc0
+    real, intent(in) :: results, eps
+    logical :: diagnostics_unit_test_diffusivity
+    diagnostics_unit_test_diffusivity = .true.
+    if (proc0) then
+      diagnostics_unit_test_diffusivity = agrees_with(diffusivity(), results, eps)
+    end if
+  end function diagnostics_unit_test_diffusivity
+
 
   subroutine get_omegaavg (istep, exit, omegaavg, debopt)
     use kt_grids, only: naky, ntheta0

@@ -498,13 +498,17 @@ contains
     integer, intent(in) :: trinpars_unit
     integer :: is
     do is = 1,nspec
-      write(trinpars_unit, "(A,I)") '&species_parameters_', is
+      if (is<10) then
+        write(trinpars_unit, "(A20,I1)") '&species_parameters_', is
+      else
+        write(trinpars_unit, "(A20,I2)") '&species_parameters_', is
+      end if
       write (trinpars_unit, *) ' temp = ', spec(is)%temp
       write (trinpars_unit, *) ' dens = ', spec(is)%dens
       write (trinpars_unit, *) ' tprim = ', spec(is)%tprim
       write (trinpars_unit, *) ' fprim = ', spec(is)%fprim
       write (trinpars_unit, *) ' vnewk = ', spec(is)%vnewk
-      write (trinpars_unit, *) '/'
+      write (trinpars_unit, "(A1)") '/'
     end do
 
   end subroutine write_trinity_parameters

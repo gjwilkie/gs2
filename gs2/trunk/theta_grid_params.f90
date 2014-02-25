@@ -123,7 +123,7 @@ contains
 
   subroutine write_trinity_parameters(trinpars_unit)
       integer, intent(in) :: trinpars_unit
-      write (trinpars_unit, *) '&theta_grid_parameters'
+      write (trinpars_unit, "(A22)") '&theta_grid_parameters'
       write (trinpars_unit, *) ' rhoc = ', rhoc
       write (trinpars_unit, *) ' qinp = ', qinp
       write (trinpars_unit, *) ' shat = ', shat
@@ -135,7 +135,7 @@ contains
       write (trinpars_unit, *) ' tripri = ', tripri
       write (trinpars_unit, *) ' shift = ', shift
       write (trinpars_unit, *) ' betaprim = ', betaprim
-      write (trinpars_unit, *) '/'
+      write (trinpars_unit, "(A1)") '/'
   end subroutine write_trinity_parameters
 
   subroutine init_trin_geo (rhoc_in, qval_in, shat_in, rgeo_in, rmaj_in, &
