@@ -384,7 +384,8 @@ contains
           end if
           ne = Zi*ni + spec(is)%z * spec(is)%dens
           vte = sqrt(mime * Ti)     !< Assuming Te=Ti here. This is wrong, but tite has depencency issues with this module
-          ne_prim = (Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim)/ne
+          ne_prim = sum(spec(:)%z*spec(:)%dens*spec(:)%fprim)/ne
+!          ne_prim = (Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim)/ne
           Te_prim = Ti_prim
           write(*,*) "Since electrons are adiabatic, we need to improvise electron parameters to "
           write(*,*) "caluclate alpha species properties. Imposed by global quasineutrality:"
