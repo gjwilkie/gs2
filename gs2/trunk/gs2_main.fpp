@@ -448,6 +448,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use run_parameters, only: fphi, fapar, fbpar
     use antenna, only: a_reset => reset_init
     use mp, only: scope, subprocs, allprocs
+    use run_parameters, only: trinity_linear_fluxes
 
     implicit none
 
@@ -460,6 +461,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ! doing nothing with gexb or mach for now, but in future will need to when
     ! using GS2 to evolve rotation profiles in TRINITY
 
+    if (trinity_linear_fluxes) call reset_linear_magnitude
     if (nensembles > 1) call scope (subprocs)
 
     call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
@@ -485,6 +487,31 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (nensembles > 1) call scope (allprocs)
 
   end subroutine reset_gs2
+
+  subroutine reset_linear_magnitude
+    use dist_fn_arrays, only: g, gnew
+    use fields_arrays, only: phi, apar, bpar
+    use run_parameters, only: fphi, fapar, fbpar
+    real :: norm
+
+    if (fphi .gt. epsilon(0.0)) then
+      norm = maxval(real(conjg(phi)*phi))
+    elseif (fapar .gt. epsilon(0.0)) then
+      norm = maxval(real(conjg(apar)*apar))
+    elseif (fbpar .gt. epsilon(0.0)) then
+      norm = maxval(real(conjg(bpar)*bpar))
+    endif
+
+    norm = norm**0.5
+
+    phi = phi/norm
+    apar = apar/norm
+    bpar = bpar/norm
+    gnew = gnew/norm
+    g = g/norm
+
+  end subroutine reset_linear_magnitude
+
   subroutine write_trinity_parameters
       use file_utils, only: open_output_file, close_output_file
       use theta_grid_params, only: write_theta_grid => write_trinity_parameters
