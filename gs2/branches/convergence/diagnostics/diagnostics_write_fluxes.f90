@@ -70,18 +70,22 @@ contains
     use species, only: nspec, spec
     use fields_arrays, only: phinew, bparnew, aparnew
     use run_parameters, only: fphi, fapar, fbpar
+    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     type(diagnostics_type), intent(in) :: gnostics
     integer :: is
     !if (istep > 0) then
-     call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
-     call flux (phinew, aparnew, bparnew, &
-          pflux,  qheat,  vflux, vflux_par, vflux_perp, &
-          pmflux, qmheat, vmflux, pbflux, qbheat, vbflux, pflux_tormom)
+
+    if (nonlinear_mode_switch .eq. nonlinear_mode_none) &
+      call write_diffusive_estimates(gnostics)
+    call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
+    call flux (phinew, aparnew, bparnew, &
+      pflux,  qheat,  vflux, vflux_par, vflux_perp, &
+      pmflux, qmheat, vmflux, pbflux, qbheat, vbflux, pflux_tormom)
 !#ifdef LOWFLOW
      ! lowflow terms only implemented in electrostatic limit at present
      !call lf_flux (phinew, vflux0, vflux1)
 !#endif
-     call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
+    call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
     !end if
     if (fphi > epsilon(0.0)) then
       do is = 1, nspec
@@ -181,6 +185,112 @@ contains
        end do
     end if
   end subroutine write_fluxes
+
+  !> Calculate estimates of the heat and particles fluxes using
+  !! gamma / k^2 estimate of the diffusivity
+  subroutine write_diffusive_estimates(gnostics)
+    use diagnostics_write_omega, only: omega_average
+    use dist_fn_arrays, only: kperp2
+    use fields_parallelization, only: field_k_local
+    use species, only: spec
+    use kt_grids, only: aky, akx
+    !use geometry, only: surfarea, dvdrhon, grho
+    use theta_grid, only: grho
+    use diagnostics_create_and_write
+    use volume_averages
+    implicit none
+    type(diagnostics_type), intent(in) :: gnostics
+    real, dimension(ntheta0, naky) :: diffusivity_by_k
+    real :: diffusivity
+    real :: heat_flux_max
+    real, dimension(nspec) :: heat_flux_max_by_spec
+    real :: particle_flux_max
+    real, dimension(nspec) :: particle_flux_max_by_spec
+    !real :: grho
+    real, dimension(ntheta0, naky, nspec) :: heat_flux
+    real, dimension(ntheta0, naky, nspec) :: particle_flux
+    real, dimension(naky, nspec) :: heat_flux_by_ky
+    real, dimension(naky, nspec) :: particle_flux_by_ky
+    real, dimension(ntheta0, naky) :: momentum_flux
+    integer :: it, ik, is
+    real :: k2
+    diffusivity_by_k = 0.0
+    heat_flux = 0.0
+    particle_flux = 0.0
+    momentum_flux = 0.0
+    heat_flux_max = 0.0
+    !grho = 1.0
+    !grho = surfarea/dvdrhon
+    !write (*,*) 'grho', grho
+    do ik = 1,naky
+      do it = 1,ntheta0
+        if (.not. gnostics%distributed .or. field_k_local(it,ik)) then
+          k2 = (aky(ik)**2.0 + akx(it)**2.0)**0.5
+          !if (k2.eq.epsilon(0.0)) cycle
+          if (akx(it) .eq. 0.0) cycle
+          !if (kperp2(gnostics%igomega,it,ik).eq.0.0) cycle
+          diffusivity_by_k(it,ik) = &
+            !max(aimag(omega_average(it,ik)),0.0)/kperp2(gnostics%igomega, it, ik)
+            max(aimag(omega_average(it,ik)),0.0)/akx(it)**2.0/2.0**0.5
+            !max(aimag(omega_average(it,ik)),0.0)/k2
+            !aimag(omega_average(it,ik))
+          do is = 1,nspec
+           ! Q = n chi grad T = n (gamma / k^2) dT / dr
+           ! = dens  n_r (gamma_N v_thr / k_N**2 rho_r a) dT / drho drho/dr
+           ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) T a / L_T drho/dr
+           ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) temp T_r tprim drho/dr_N/a
+           ! Q / (n_r  v_r T_r rho_r**2/a**2) 
+           ! = dens (gamma_N / k_N**2) temp tprim grho
+           !   
+           heat_flux(it,ik,is) = diffusivity_by_k(it,ik) * &
+             spec(is)%dens * spec(is)%temp * spec(is)%tprim *  grho(gnostics%igomega)
+           particle_flux(it,ik,is) = diffusivity_by_k(it,ik) * &
+             spec(is)%dens **2.0 * spec(is)%fprim * grho(gnostics%igomega)
+!
+           !heat_flux(it,ik,is) = max(aimag(omega_average(it,ik)),0.0)
+
+           !heat_flux_max = max(heat_flux(it,ik,is), heat_flux_max)
+             
+          end do
+        end if
+      end do
+    end do
+    !heat_flux = 0.0
+    call write_standard_flux_properties(gnostics, &
+      'heat_flux_diff',  'Diffusive estimate of turbulent flux of heat', &
+      'Q_gB = ', heat_flux, gnostics%distributed)
+    
+    call write_standard_flux_properties(gnostics, &
+      'part_flux_diff',  'Diffusive estimate of turbulent flux of particles', &
+      'n_r? ', particle_flux, gnostics%distributed)
+
+
+    !call average_kx(heat_flux, heat_flux_by_ky, gnostics%distributed)
+    !call average_kx(particle_flux, particle_flux_by_ky, gnostics%distributed)
+    heat_flux_by_ky = maxval(heat_flux, 1)
+    particle_flux_by_ky = maxval(particle_flux, 1)
+
+    heat_flux_max_by_spec = maxval(heat_flux_by_ky, 1)
+    particle_flux_max_by_spec = maxval(particle_flux_by_ky, 1)
+
+    heat_flux_max = sum(heat_flux_max_by_spec)
+    particle_flux_max = sum(particle_flux_max_by_spec)
+    
+    call create_and_write_variable(gnostics, gnostics%rtype, "es_heat_flux_diff_max", "st", &
+      " A turbulent estimate of the heat flux, as a function of species and  time", &
+      "Q_gB", heat_flux_max_by_spec)
+    call create_and_write_variable(gnostics, gnostics%rtype, "heat_flux_diff_max", "t", &
+      " A turbulent estimate of the heat flux, as a function of  time", &
+      "Q_gB", heat_flux_max)
+    call create_and_write_variable(gnostics, gnostics%rtype, "es_particle_flux_diff_max", "st", &
+      " A turbulent estimate of the particle flux, as a function of species and  time", &
+      "Q_gB", particle_flux_max_by_spec)
+    call create_and_write_variable(gnostics, gnostics%rtype, "particle_flux_diff_max", "t", &
+      " A turbulent estimate of the particle flux, as a function of  time", &
+      "Q_gB", particle_flux_max)
+
+  end subroutine write_diffusive_estimates
+
   subroutine write_standard_flux_properties(gnostics, flux_name, flux_description, &
     flux_units, flux_value, distributed)
     use kt_grids, only: ntheta0, naky
@@ -206,12 +316,6 @@ contains
       flux_description//" averaged over kx and ky, as a function of species and time", &
       flux_units, flux_by_species)
 
-    if (gnostics%write_fluxes_by_mode) then 
-      call create_and_write_flux_by_mode(gnostics, flux_name, flux_description, flux_units, &
-        flux_value, total_flux_by_mode, distributed)
-    end if
-
-
     total_flux_by_mode = 0.
     do ik = 1,naky
       do it = 1,ntheta0
@@ -223,6 +327,12 @@ contains
         end if
       end do
     end do
+
+    if (gnostics%write_fluxes_by_mode) then 
+      call create_and_write_flux_by_mode(gnostics, flux_name, flux_description, flux_units, &
+        flux_value, total_flux_by_mode, distributed)
+    end if
+
 
 
     call average_kx(total_flux_by_mode, total_flux_by_ky, distributed)

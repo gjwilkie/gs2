@@ -13,6 +13,7 @@ module volume_averages
 
   use theta_grid, only: ntheta, nperiod
   use fields_parallelization, only: field_k_local
+  use species, only: nspec
 
   implicit none
   integer :: ntg_out
@@ -31,6 +32,7 @@ module volume_averages
 
   interface average_kx
     module procedure average_kx_xy
+    module procedure average_kx_xys
   end interface
 
 
@@ -165,6 +167,19 @@ contains
     if (distributed) call sum_allreduce(favg)
 
   end subroutine average_ky_xy
+  subroutine average_kx_xys (f, favg, distributed)
+    use kt_grids, only: naky, ntheta0, aky
+    use fields_parallelization, only: field_k_local
+    use mp, only: sum_allreduce
+    implicit none
+    real, dimension (:,:,:), intent (in) :: f
+    real, dimension (:,:), intent (out) :: favg
+    logical,intent(in) :: distributed
+    integer :: is
+    do is = 1,nspec
+      call average_kx_xy(f(:,:,is), favg(:, is), distributed)
+    end do
+  end subroutine average_kx_xys
   subroutine average_kx_xy (f, favg, distributed)
     use kt_grids, only: naky, ntheta0, aky
     use fields_parallelization, only: field_k_local
