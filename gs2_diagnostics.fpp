@@ -1650,9 +1650,19 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
        if (write_flux_emu) then
           call flux_emu (phinew, aparnew, bparnew, pflux_emu, mflux_emu, bflux_emu)
+          do is = 1,nspec
+             pflux_e(:,is) = pflux_e(:,is) * spec(is)%dens
+             mflux_e(:,is) = mflux_e(:,is) * spec(is)%dens
+             bflux_e(:,is) = bflux_e(:,is) * spec(is)%dens
+          end do
        end if
        if (write_flux_e) then
           call flux_e (phinew, aparnew, bparnew, pflux_e, mflux_e, bflux_e)
+          do is = 1,nspec
+             pflux_e(:,is) = pflux_e(:,is) * spec(is)%dens
+             mflux_e(:,is) = mflux_e(:,is) * spec(is)%dens
+             bflux_e(:,is) = bflux_e(:,is) * spec(is)%dens
+          end do
        end if
        call flux (phinew, aparnew, bparnew, &
             pflux,  qheat,  vflux, vflux_par, vflux_perp, &

@@ -4805,24 +4805,26 @@ subroutine check_dist_fn(report_unit)
     real, dimension (:,:,:,:), intent (in out) :: flx
     real, dimension (-ntgrid:,:,:) :: dnorm
     real, dimension (:,:,:,:), allocatable :: total
-    real:: wgt
+    real:: wgt,fac
     integer :: ik, it, is, ig, iglo, ie, il, isgn
 
     allocate(total(negrid,nlambda,2,nspec))
     total = 0.
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       fac = 0.5
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       if (aky(ik) == 0.) fac = 1.0
 
        wgt = sum(dnorm(-ntgrid:,it,ik)*grho(-ntgrid:))
-       total(ie,il,1,is) = total(ie,il,1,is) + & 
+       total(ie,il,1,is) = total(ie,il,1,is) + fac*& 
           sum(aimag(g0(-ntgrid:,1,iglo)*conjg(fld(-ntgrid:,it,ik)) * &
           dnorm(-ntgrid:,it,ik) * aky(ik)) * Bovervpar(-ntgrid:,il)/wgt)
-       total(ie,il,2,is) = total(ie,il,2,is) + & 
+       total(ie,il,2,is) = total(ie,il,2,is) + fac*& 
           sum(aimag(g0(-ntgrid:,2,iglo)*conjg(fld(-ntgrid:,it,ik)) * &
           dnorm(-ntgrid:,it,ik) * aky(ik)) * Bovervpar(-ntgrid:,il)/wgt)
     end do
@@ -4844,34 +4846,36 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: g_lo,ie_idx,il_idx,is_idx,it_idx,ik_idx,isign_idx,yxf_lo
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
-    real, dimension (:,:), intent (in out) :: flx
+    real, dimension (:,:), intent (inout) :: flx
     real, dimension (-ntgrid:,:,:) :: dnorm
     real, dimension (:,:), allocatable :: total
-    real:: wgt
+    real:: wgt,fac
     integer :: ik, it, is, ig, iglo, ie, il, isgn
 
     allocate(total(negrid,nspec))
     total = 0.
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       fac =0.5
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       if (aky(ik) == 0.) fac = 1.0
 
        wgt = sum(dnorm(-ntgrid:,it,ik)*grho(-ntgrid:))
-       total(ie,is) = total(ie,is) + & 
+       total(ie,is) = total(ie,is) + fac*& 
           sum(aimag(g0(-ntgrid:,1,iglo)*conjg(fld(-ntgrid:,it,ik)) * &
           dnorm(-ntgrid:,it,ik) * aky(ik)) * wl(-ntgrid:,il)/wgt)
-       total(ie,is) = total(ie,is) + & 
+       total(ie,is) = total(ie,is) + fac*& 
           sum(aimag(g0(-ntgrid:,2,iglo)*conjg(fld(-ntgrid:,it,ik)) * &
           dnorm(-ntgrid:,it,ik) * aky(ik)) * wl(-ntgrid:,il)/wgt)
     end do
 
     call sum_reduce(total,0)
 
-    if (proc0) flx = 0.5*total    !< Reality condition from summing over ky
+    if (proc0) flx = 0.5*total  
 
     deallocate(total)
 
