@@ -107,7 +107,7 @@ MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
 
-USE_NEW_DIAG?=
+USE_NEW_DIAG?=on
 
 
 ifdef NPROCS
