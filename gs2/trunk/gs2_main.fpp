@@ -440,6 +440,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use fields_test, only: ft_reset => reset_init
     use init_g, only: g_reset => reset_init
     use nonlinear_terms, only: nl_reset => reset_init
+    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use gs2_diagnostics, only: gd_reset => reset_init
     use gs2_save, only: gs2_save_for_restart!, gs_reset => reset_init
     use species, only: reinit_species
@@ -461,7 +462,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ! doing nothing with gexb or mach for now, but in future will need to when
     ! using GS2 to evolve rotation profiles in TRINITY
 
-    if (trinity_linear_fluxes) call reset_linear_magnitude
+    if (trinity_linear_fluxes.and.nonlinear_mode_switch.eq.nonlinear_mode_none) &
+      call reset_linear_magnitude
     if (nensembles > 1) call scope (subprocs)
 
     call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
@@ -490,25 +492,34 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
   subroutine reset_linear_magnitude
     use dist_fn_arrays, only: g, gnew
-    use fields_arrays, only: phi, apar, bpar
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew,  phinew
     use run_parameters, only: fphi, fapar, fbpar
+    use init_g, only: ginit
     real :: norm
+    logical :: dummy
 
-    if (fphi .gt. epsilon(0.0)) then
-      norm = maxval(real(conjg(phi)*phi))
-    elseif (fapar .gt. epsilon(0.0)) then
-      norm = maxval(real(conjg(apar)*apar))
-    elseif (fbpar .gt. epsilon(0.0)) then
-      norm = maxval(real(conjg(bpar)*bpar))
-    endif
+!    if (fphi .gt. epsilon(0.0)) then
+!      norm = maxval(real(conjg(phi)*phi))
+!    elseif (fapar .gt. epsilon(0.0)) then
+!      norm = maxval(real(conjg(apar)*apar))
+!    elseif (fbpar .gt. epsilon(0.0)) then
+!      norm = maxval(real(conjg(bpar)*bpar))
+!    endif
+!
+!    norm = norm**0.5
+!
+!    phi = phi/norm
+!    apar = apar/norm
+!    bpar = bpar/norm
+!    gnew = gnew/norm
+!    g = g/norm
+     
+     phi = 0.0; apar = 0.0; bpar = 0.0
+     phinew = 0.0; aparnew = 0.0; bparnew = 0.0
+     g = 0.0; gnew = 0.0
 
-    norm = norm**0.5
+     call ginit(dummy)
 
-    phi = phi/norm
-    apar = apar/norm
-    bpar = bpar/norm
-    gnew = gnew/norm
-    g = g/norm
 
   end subroutine reset_linear_magnitude
 
