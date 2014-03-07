@@ -225,13 +225,15 @@ contains
     do ik = 1,naky
       do it = 1,ntheta0
         if (.not. gnostics%distributed .or. field_k_local(it,ik)) then
-          k2 = (aky(ik)**2.0 + akx(it)**2.0)**0.5
+          !k2 = (aky(ik)**2.0 + akx(it)**2.0)**0.5
           !if (k2.eq.epsilon(0.0)) cycle
-          if (akx(it) .eq. 0.0) cycle
-          !if (kperp2(gnostics%igomega,it,ik).eq.0.0) cycle
+          !if (akx(it) .eq. 0.0) cycle
+          !if (aky(ik) .eq. 0.0) cycle
+          if (kperp2(gnostics%igomega,it,ik).eq.0.0) cycle
           diffusivity_by_k(it,ik) = &
-            !max(aimag(omega_average(it,ik)),0.0)/kperp2(gnostics%igomega, it, ik)
-            max(aimag(omega_average(it,ik)),0.0)/akx(it)**2.0/2.0**0.5
+            max(aimag(omega_average(it,ik)),0.0)/kperp2(gnostics%igomega, it, ik)*2.0
+            !max(aimag(omega_average(it,ik)),0.0)/aky(ik)**2.0/2.0**0.5
+            !max(aimag(omega_average(it,ik)),0.0)/akx(ik)**2.0/2.0**0.5
             !max(aimag(omega_average(it,ik)),0.0)/k2
             !aimag(omega_average(it,ik))
           do is = 1,nspec
