@@ -2964,14 +2964,18 @@ if (debug) write(6,*) "loop_diagnostics: done"
   function diffusivity()
     use kt_grids, only: ntheta0, naky, akx
     use theta_grid, only: grho
+    use dist_fn_arrays, only: kperp2
     real :: diffusivity
     real, dimension(ntheta0, naky) :: diffusivity_by_k
     integer  :: ik, it
     diffusivity_by_k = 0.0
     do ik=1,naky
       do it=1,ntheta0
-        if (akx(it).eq.0) cycle
-        diffusivity_by_k(it,ik) = max(aimag(omegaavg(it,ik)), 0.0)/akx(it)**2.0/2.0**0.5
+        !if (akx(it).eq.0) cycle
+        if (kperp2(igomega,it,ik).eq.0.0) cycle
+        !diffusivity_by_k(it,ik) = max(aimag(omegaavg(it,ik)), 0.0)/akx(it)**2.0/2.0**0.5
+        diffusivity_by_k(it,ik) = &
+          max(aimag(omegaavg(it,ik)), 0.0)/kperp2(igomega, it, ik)*2.0
       end do
     end do
     !write (*,*) 'diffusivity_by_k', diffusivity_by_k, 'omegaavg', omegaavg
@@ -2980,7 +2984,6 @@ if (debug) write(6,*) "loop_diagnostics: done"
     diffusivity = maxval(diffusivity_by_k) * grho(igomega)
 
   end function diffusivity
-
 
   function diagnostics_unit_test_diffusivity(results, eps)
     use unit_tests
