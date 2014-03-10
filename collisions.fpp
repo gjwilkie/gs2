@@ -1784,7 +1784,7 @@ contains
   subroutine get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
 
     use species, only: spec
-    use le_grids, only: al, energy, ng2
+    use le_grids, only: al, energy, xi, ng2
     use le_grids, only: wl, jend, al
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: kperp2
@@ -1798,6 +1798,7 @@ contains
 
     integer :: il, je, te, te2, teh
     real :: slb0, slb1, slb2, slbl, slbr, vn, vnh, vnc, ee
+    real deltaxi
 
     je = jend(ig)
 !
@@ -1918,27 +1919,36 @@ contains
        ee = 0.5*energy(ie)*(1+slb1**2) &
             / (bmag(ig)*spec(is)%zstm)**2 &
             * kperp2(ig,it,ik)*cfac
-       
-       cc(il) = 2.0*vn*code_dt*(1.0 - slbr**2)/(wl(ig,il)*(slb2 - slb1))
-       aa(il) = 2.0*vn*code_dt*(1.0 - slbl**2)/(wl(ig,il)*(slb1 - slb0))
+!
+!CMR, 6/3/2014:  
+! STANDARD treatment of pitch angle scattering must resolve T-P boundary.
+! NEED special_wfb= .false. to resolve T-P boundary at wfb bounce point 
+!     (special_wfb= .true. AVOIDS TP boundary at wfb bounce point)
+!
+! Original code (pre-r2766) used eq.(42) Barnes et al, Phys Plasmas 16, 072107 
+! (2009), with pitch angle weights to enhance accuracy in derivatives.
+! NB THIS FAILS at wfb bounce point, giving aa=cc=infinite, 
+!    because weight wl(ig,il)=0 at wfb bounce point.
+!    UNPHYSICAL as d/dxi ((1-xi^2)g) IS NOT resolved numerically for wl=0.
+! MUST accept limitations of the grid resolution and USE FINITE coefficients! 
+! FIX here by setting a FINITE width of the trapped region at wfb B-P 
+!              deltaxi=xi(ig,ng2)-xi(ig,ng2+2)
+! ASIDE: NB    deltaxi=wl is actually 2*spacing in xi !!!
+!              which explains upfront factor 2 in definition of aa, cc
+       deltaxi=wl(ig,il)
+       if (.not. special_wfb_lorentz .and. deltaxi .eq. 0. .and. il .eq. ng2+1) then 
+          deltaxi=xi(ig,ng2)-xi(ig,ng2+2)
+       endif
+       cc(il) = 2.0*vn*code_dt*(1.0 - slbr**2)/(deltaxi*(slb2 - slb1))
+       aa(il) = 2.0*vn*code_dt*(1.0 - slbl**2)/(deltaxi*(slb1 - slb0))
        bb(il) = 1.0 - (aa(il) + cc(il)) + ee*vn*code_dt
        
        if (heating) then
-          dd(il) =vnc*(-2.0*(1.0-slbr**2)/(wl(ig,il)*(slb2-slb1)) + ee)
-          hh(il) =vnh*(-2.0*(1.0-slbr**2)/(wl(ig,il)*(slb2-slb1)) + ee)
+          dd(il) =vnc*(-2.0*(1.0-slbr**2)/(deltaxi*(slb2-slb1)) + ee)
+          hh(il) =vnh*(-2.0*(1.0-slbr**2)/(deltaxi*(slb2-slb1)) + ee)
        end if
+!CMRend
 
-!if ( je .eq. ng2+1 ) then 
-!write(6,*) "slb0,slb1,slb2=",slb0,slb1,slb2
-!write(6,*) "wl(ig,il)=",wl(ig,il)
-!write(6,*) "aa(ng2+1)=",aa(ng2+1)
-!write(6,*) "bb(ng2+1)=",bb(ng2+1)
-!write(6,*) "cc(ng2+1)=",cc(ng2+1)
-!write(6,*) "Max(aa)=",maxval(aa)
-!write(6,*) "Max(bb)=",maxval(bb)
-!write(6,*) "Max(cc)=",maxval(cc)
-!stop
-!endif 
     case (lorentz_scheme_old)
        
        do il = 2, te-1
