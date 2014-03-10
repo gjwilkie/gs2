@@ -615,7 +615,7 @@ gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
 TEST_DEPS?=$(gs2_mod) functional_tests.o
-export
+#export
 TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(LIBS) $(SIMPLEDATAIO_LIB_ABS)" CPPFLAGS="$(CPPFLAGS)"
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
 #MAKETESTS = $(MAKE)
