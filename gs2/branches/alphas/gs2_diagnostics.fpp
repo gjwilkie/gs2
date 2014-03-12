@@ -1651,9 +1651,9 @@ if (debug) write(6,*) "loop_diagnostics: -1"
        if (write_flux_emu) then
           call flux_emu (phinew, aparnew, bparnew, pflux_emu, mflux_emu, bflux_emu)
           do is = 1,nspec
-             pflux_emu(:,is) = pflux_emu(:,is) * spec(is)%dens
-             mflux_emu(:,is) = mflux_emu(:,is) * spec(is)%dens
-             bflux_emu(:,is) = bflux_emu(:,is) * spec(is)%dens
+             pflux_emu(:,:,:,is) = pflux_emu(:,:,:,is) * spec(is)%dens
+             mflux_emu(:,:,:,is) = mflux_emu(:,:,:,is) * spec(is)%dens
+             bflux_emu(:,:,:,is) = bflux_emu(:,:,:,is) * spec(is)%dens
           end do
        end if
        if (write_flux_e) then
