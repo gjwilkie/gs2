@@ -107,10 +107,10 @@ contains
 
      subroutine check_g_bouncepoints(g, ik,it,il,ie,is,err,tol)
 ! CMR, 3/10/2013: 
-!  This routine checks if 
+!  This routine checks trapped particle bounce conditions: 
 !     g(thetab,1:ik,it,il,ie,is)=g(thetab,2:ik,it,il,ie,is)
-!  at a trapped particle bounce point.  Flags fractional disparities 
-!  that exceed a threshold tolerance, tol. 
+!  and flags fractional errors exceeding a threshold tolerance, tol. 
+!
       use theta_grid, only: ntgrid, bmag
       use gs2_layouts, only: g_lo, idx
       use le_grids, only: ng2, jend, al
@@ -123,11 +123,13 @@ contains
       real, optional:: tol
       real :: tolerance, dg
       integer :: iglo, ig
+      logical :: started
 
+      started=.false.
       if (present(tol)) then
          tolerance=tol 
       else 
-         tolerance=1.0e-3
+         tolerance=1.0e-6
       endif
       iglo=idx(g_lo,ik,it,il,ie,is)
       if (iglo.lt.g_lo%llim_proc .or. iglo.gt.g_lo%ulim_proc .or. il.le.ng2) then
@@ -139,13 +141,17 @@ contains
          if (il.eq.jend(ig) .and.  al(il)*bmag(ig).gt.0.999999) then
             dg=abs(g(ig,1,iglo)-g(ig,2,iglo))/max(abs(g(ig,1,iglo)),abs(g(ig,2,iglo)))
             if ( dg .gt. tolerance) then
-               write(6,fmt='(i8, "  (",1pe11.4,",",e11.4,"),  (",e11.4,",",e11.4,")")') ig, g(ig,1,iglo),g(ig,2,iglo)
+               if (.not. started) then
+                  write(6,fmt='(T7,"ig",T17,"g(ig,1,iglo)",T43,"g(ig,2,iglo)",T63,"FracBP Error" )')
+                  started=.true.
+               endif
+               write(6,fmt='(i8, "  (",1pe11.4,",",e11.4,"),(",e11.4,",",e11.4,"), ", e11.4)') ig, g(ig,1,iglo),g(ig,2,iglo), dg
                err=max(err,dg)
             endif
          endif
       enddo
       write(6,fmt='(t5,"ik",t11,"it",t17,"il",t23,"ie",t29,"is",t33,"MaxFracBP Error")')
-      write(6,fmt='(5i6,1pe12.4)')it,ik,il,ie,is,err
+      write(6,fmt='(5i6,1pe12.4)')ik,it,il,ie,is,err
       write(6,*) "-----"
       end subroutine check_g_bouncepoints
 
