@@ -43,7 +43,7 @@ program test_gs2_diagnostics
 
 
     call announce_test('diffusivity')
-    call process_test(diagnostics_unit_test_diffusivity(7.0189128414195920, eps), 'diffusivity')
+    call process_test(diagnostics_unit_test_diffusivity(19.852483466900530, eps), 'diffusivity')
 
     call finish_gs2_diagnostics(ilast_step)
     call finish_gs2

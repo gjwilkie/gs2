@@ -64,19 +64,19 @@ contains
     
     if (gnostics%wryte) then
       ! Dummy writes, necessary for parallel for some reason
-      call write_variable(gnostics%sfile, "omega", omegahist(mod(gnostics%istep,gnostics%navg), :, :))
-      call write_variable(gnostics%sfile, "omega_average", omega_average)
+      call write_variable_with_offset(gnostics%sfile, "omega", omegahist(mod(gnostics%istep,gnostics%navg), :, :))
+      call write_variable_with_offset(gnostics%sfile, "omega_average", omega_average)
 
       do ik=1,naky
         do it=1,ntheta0
           if (.not. gnostics%distributed .or. field_k_local(it, ik)) then 
              call set_start(gnostics%sfile, "omega", "X", it)
              call set_start(gnostics%sfile, "omega", "Y", ik)
-             call write_variable(gnostics%sfile, "omega", omegahist(mod(gnostics%istep,gnostics%navg), :, :))
+             call write_variable_with_offset(gnostics%sfile, "omega", omegahist(mod(gnostics%istep,gnostics%navg), :, :))
 
              call set_start(gnostics%sfile, "omega_average", "X", it)
              call set_start(gnostics%sfile, "omega_average", "Y", ik)
-             call write_variable(gnostics%sfile, "omega_average", omega_average)
+             call write_variable_with_offset(gnostics%sfile, "omega_average", omega_average)
           end if
         end do
       end do

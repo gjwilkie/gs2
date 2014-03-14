@@ -1,21 +1,9 @@
-!module get_c_address
-  !use iso_c_binding
-  !interface c_address
-    !module procedure c_address_real
-  !end interface c_address
 
-!contains
-  !function c_address_real(variable)
-    !real, intent(in) :: variable
-    !real(c_float), allocatable, target :: var
-    !type(c_ptr) ::  c_address_real
-    !allocate(var)
-    !var = variable
-    !c_address_real = c_loc(var)
-    !write (*,*) 'var', var, variable, c_address_real
-   !end function c_address_real
-!end module get_c_address
-
+!> Fortran interface to simpledataio, which requires the
+!! iso_c_binding intrinsic module introduced in Fortran 2003.
+!! All functions of simpledataio are provided in this module
+!! with the exception of write_variable which is provided in
+!! simpledataio_write
 module simpledataio
 
 use netcdf 
@@ -35,59 +23,60 @@ integer, parameter :: SDATIO_UNLIMITED = NF90_UNLIMITED
 #ifdef ISO_C_BINDING
 type,bind(c) :: sdatio_dimension 
   type(c_ptr) :: name
-  integer(c_int) :: size
-  integer(c_int) :: nc_id
-  integer(c_int) :: start
-end type sdatio_dimension
+	integer(c_int) :: size
+	integer(c_int) :: nc_id
+	integer(c_int) :: start
+end type
 
 
 type :: sdatio_variable 
-   character, dimension(:), allocatable :: name
-   integer :: nc_id
-   integer :: type
-   type(c_ptr) :: dimension_list
-   type(c_ptr) :: dimension_ids
-   integer :: type_size
-   type(c_ptr) :: manual_counts
-   type(c_ptr) :: manual_starts
-end type sdatio_variable
+	character, dimension(:), allocatable :: name
+	integer :: nc_id
+	integer :: type
+  type(c_ptr) :: dimension_list
+  type(c_ptr) :: dimension_ids
+	integer :: type_size
+  type(c_ptr) :: manual_counts
+  type(c_ptr) :: manual_starts
+  type(c_ptr) :: manual_offsets
+end type
 
 
 type, bind(c) :: sdatio_file 
-   integer(c_int) :: nc_file_id
-   integer(c_int):: is_parallel
-   integer(c_int) :: n_dimensions
-   type(c_ptr) ::  dimensions
-   integer(c_int)  :: n_variables
-   type(c_ptr) :: variables
-   integer(c_int) :: data_written
-end type sdatio_file
+	integer(c_int) :: nc_file_id
+	integer(c_int):: is_parallel
+	integer(c_int) :: n_dimensions
+  type(c_ptr) ::  dimensions
+	integer(c_int)  :: n_variables
+  type(c_ptr) :: variables
+	integer(c_int) :: data_written
+end type
 
 #else
 
 type :: sdatio_file
-   integer :: nc_file_id
-   integer :: is_parallel
-   integer :: n_dimensions  
-   integer :: n_variables
-   integer :: data_written
-end type sdatio_file
+  integer :: nc_file_id
+  integer :: is_parallel
+  integer :: n_dimensions  
+  integer :: n_variables
+  integer :: data_written
+end type
 
 #endif
 
 !interface 
 !!/* Open a new datafile for writing. fname is the name of the file 
-!!* The stuct sfile is used to store the state information
-!!* of the file.*/
+ !!* The stuct sfile is used to store the state information
+ !!* of the file.*/
 !!/* Create a new dimension in the file sfile. Dimension names must
-!!* be a single letter. */
-!subroutine sdatio_add_dimension(sfile, dimension_name, dimsize, description, units)
-!import sdatio_file
-!type(sdatio_file), intent(in) :: sfile
-!character(*), intent(in) :: dimension_name
-!integer, intent(in) :: dimsize
-!character(*), intent(in) :: description, units
-!end subroutine sdatio_add_dimension
+ !!* be a single letter. */
+ !subroutine sdatio_add_dimension(sfile, dimension_name, dimsize, description, units)
+   !import sdatio_file
+   !type(sdatio_file), intent(in) :: sfile
+   !character(*), intent(in) :: dimension_name
+   !integer, intent(in) :: dimsize
+   !character(*), intent(in) :: description, units
+ !end subroutine sdatio_add_dimension
 
 
 !end interface
@@ -97,8 +86,8 @@ end type sdatio_file
 !int sdatio_debug
 
 !/* Open a new datafile for writing. fname is the name of the file 
-!* The stuct sfile is used to store the state information
-!* of the file.*/
+ !* The stuct sfile is used to store the state information
+ !* of the file.*/
 contains 
   subroutine createfile(sfile, fname)
      type(sdatio_file), intent(out) :: sfile
@@ -186,11 +175,11 @@ contains
    call sdatio_add_dimension(sfile, dimension_name//c_null_char, dimsize, description//c_null_char, units//c_null_char)
 #endif
  end subroutine add_dimension
- !char * dimension_name, 
- !int size,
- !char * description,
- !char * units)
- 
+													 !char * dimension_name, 
+													 !int size,
+													 !char * description,
+													 !char * units)
+
 
 !/* Print out a nice list of all the dimensions defined so far*/
 !void sdatio_print_dimensions(struct sdatio_file * sfile)
@@ -246,11 +235,11 @@ contains
  !* is a character string listing (in order) the dimension names
  !* (which are all single characters) e.g. "xyx".*/
 !void sdatio_create_variable(struct sdatio_file * sfile,
-  !int variable_type,
-  !char * variable_name,
-  !char * dimension_list,
-  !char * description,
-  !char * units)
+														!int variable_type,
+														!char * variable_name,
+														!char * dimension_list,
+														!char * description,
+														!char * units)
  subroutine create_variable(sfile, variable_type, variable_name, dimension_list, description, units)
    implicit none
    type(sdatio_file), intent(in) :: sfile
@@ -314,6 +303,28 @@ contains
    !write (*,*) 'calling'
    !call c_f_pointer(sdatio_find_variable(sfile, variable_name//c_null_char), find_variable)
  !end function find_variable
+
+ subroutine set_offset(sfile, variable_name, dimension_name, offset)
+   type(sdatio_file), intent(in) :: sfile
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_name
+   integer, intent(in) :: offset
+#ifdef ISO_C_BINDING
+   interface
+       subroutine sdatio_set_offset(sfile, variable_name, dimension_name, offset) &
+            bind(c, name='sdatio_set_offset')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+         integer(c_int) :: offset
+         character(c_char) :: variable_name(*)
+         character(c_char) :: dimension_name(*)
+       end subroutine sdatio_set_offset
+   end interface 
+   call sdatio_set_offset(sfile, variable_name//c_null_char, &
+                            dimension_name//c_null_char, offset-1)
+#endif
+ end subroutine set_offset
 
  subroutine set_count(sfile, variable_name, dimension_name, count)
    type(sdatio_file), intent(in) :: sfile
@@ -400,42 +411,47 @@ contains
 #endif
  end subroutine number_of_unlimited_dimensions
 
- subroutine netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts)
+ subroutine netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, &
+   offsets)
    type(sdatio_file), intent(in) :: sfile
    character(*), intent(in) :: variable_name
    integer, intent(out) :: fileid, varid
-   integer, intent(out), dimension(:) :: starts, counts
+   integer, intent(out), dimension(:) :: starts, counts, offsets
    integer :: i,n
 #ifdef ISO_C_BINDING
    type(c_ptr) :: starts_ptr, counts_ptr
-   integer(c_size_t), dimension(:), allocatable, target :: starts_c, counts_c
+   integer(c_size_t), dimension(:), allocatable, target :: starts_c, counts_c, offsets_c
    interface
-       subroutine sdatio_netcdf_inputs(sfile, variable_name, fileid, varid, starts_ptr, counts_ptr) &
+       subroutine sdatio_netcdf_inputs(sfile, variable_name, fileid, varid, &
+            starts_ptr, counts_ptr, offsets_ptr) &
             bind(c, name='sdatio_netcdf_inputs')
          use iso_c_binding
          import sdatio_file
          type(sdatio_file) :: sfile
          integer(c_int) :: varid, fileid
          character(c_char) :: variable_name(*)
-         type(c_ptr), value :: starts_ptr, counts_ptr
+         type(c_ptr), value :: starts_ptr, counts_ptr, offsets_ptr
        end subroutine sdatio_netcdf_inputs
    end interface 
    allocate(starts_c(size(starts)))
    allocate(counts_c(size(counts)))
+   allocate(offsets_c(size(counts)))
 
-   call sdatio_netcdf_inputs(sfile, variable_name//c_null_char, fileid, varid,  c_loc(starts_c), c_loc(counts_c))
+   call sdatio_netcdf_inputs(sfile, variable_name//c_null_char, fileid, varid, &
+     c_loc(starts_c), c_loc(counts_c), c_loc(offsets_c))
 
    n = size(starts)
    do i = 1,n
      counts(i) = counts_c(n-i+1)
      !counts(i) = counts_c(i)
      starts(i) = starts_c(n-i+1)+1
+     offsets(i) = offsets_c(n-i+1)+1
      !starts(i) = starts_c(i)+1
    end do
    
    !write (*,*) variable_name, '  sc', starts, 'c', counts, ' n', n
 
-   deallocate(counts_c, starts_c)
+   deallocate(counts_c, starts_c, offsets_c)
 #endif
 
  end subroutine netcdf_inputs

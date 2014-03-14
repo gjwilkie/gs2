@@ -34,7 +34,7 @@ program test
   call add_dimension(sdatfile, "r", 2, "Real and imaginary parts", "")
   call add_dimension(sdatfile, "t", SDATIO_UNLIMITED, "The time coordinate", "s")
   call print_dimensions(sdatfile)
-  
+
   call create_variable(sdatfile, SDATIO_DOUBLE, "phi", "xy", "Some potential", "Vm")
   call create_variable(sdatfile, SDATIO_DOUBLE, "phicomp", "rxy", "Some complex potential", "Vm")
   call create_variable(sdatfile, SDATIO_DOUBLE, "parameter", "", "A scalar parameter", "(none)")
@@ -44,13 +44,13 @@ program test
   call create_variable(sdatfile, SDATIO_DOUBLE, "phi_txy", "rxyt", "Some complex potential as a function of y and time", "Vm")
   call create_variable(sdatfile, SDATIO_DOUBLE, "y", "y", "Values of the y coordinate", "m")
   call create_variable(sdatfile, SDATIO_DOUBLE, "t", "t", "Values of the time coordinate", "m")
-  
+
   call write_variable(sdatfile, "parameter", parameter1)
   call write_variable(sdatfile, "parameter_comp", parameter_comp)
-  
+
   call print_variables(sdatfile)
   call create_variable(sdatfile, SDATIO_INT, "iky", "y", "y index values", "(none)")
-  
+
   call write_variable(sdatfile, "y", yvar)
   call write_variable(sdatfile, "iky", iy)
   call write_variable(sdatfile, "phi", phivar)
@@ -61,26 +61,41 @@ program test
   call set_count(sdatfile, "phi_txy", "y", 1)
   call write_variable(sdatfile, "phi_txy", phicomp)
 
+
   do i = 1,6
-     t = 0.3 + real(i);
-     phi_tvar(1) = 4 + real(i)/2.0;
-     phi_tvar(2) = 6 + real(i)*3.0; 
-     call write_variable(sdatfile, "t", t);
-     call write_variable(sdatfile, "phi_t", phi_tvar);
-     call increment_start(sdatfile, "t");
-     ! if (i>2) stop
+    t = 0.3d0 + real(i);
+    phi_tvar(1) = 4 + real(i)/2.0;
+    phi_tvar(2) = 6 + real(i)*3.0; 
+    call write_variable(sdatfile, "t", t);
+    call write_variable(sdatfile, "phi_t", phi_tvar);
+    
+    call set_offset(sdatfile, "phi_txy", "x", 1)
+
+    call set_start(sdatfile, "phi_txy", "x", 2)
+    call write_variable_with_offset(sdatfile, "phi_txy", phicomp)
+
+    call set_start(sdatfile, "phi_txy", "y", 2)
+    call write_variable(sdatfile, "phi_txy", parameter_comp)
+    call set_start(sdatfile, "phi_txy", "y", 1)
+
+    call set_start(sdatfile, "phi_txy", "x", 3)
+    call write_variable_with_offset(sdatfile, "phi_txy", phicomp)
+
+
+    call increment_start(sdatfile, "t");
+    ! if (i>2) stop
   end do
 
-  
+
   write (*,*) 'y', yvar
   write(*,*) "This should be t: ", variable_exists(sdatfile, "t")
   write(*,*) "This should be t: ", variable_exists(sdatfile, "phi_t")
   write(*,*) "This should be f: ", variable_exists(sdatfile, "tbbb")
-  
+
   !find_variable(sdatfile, "parameter")
   !svar2 = svar(1)
   !write (*,*) 'id', svar%type_size
   !call write_variable(sdatfile, "parameter", c_address(parameter1));
   call closefile(sdatfile)
-  
+
 end program test

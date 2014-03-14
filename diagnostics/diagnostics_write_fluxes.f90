@@ -417,8 +417,8 @@ contains
      ! For some reason every process has to make at least
      ! one write to a variable with an infinite dimension.
      ! Here we make some dummy writes to satisfy that
-     call write_variable(gnostics%sfile, flux_by_mode_name, dummyc)
-     call write_variable(gnostics%sfile, total_flux_by_mode_name, dummyr)
+     call write_variable_with_offset(gnostics%sfile, flux_by_mode_name, dummyc)
+     call write_variable_with_offset(gnostics%sfile, total_flux_by_mode_name, dummyr)
 
      do ik = 1,naky
        do it = 1,ntheta0
@@ -426,11 +426,11 @@ contains
 
            call set_start(gnostics%sfile, flux_by_mode_name, "X", it)
            call set_start(gnostics%sfile, flux_by_mode_name, "Y", ik)
-           call write_variable(gnostics%sfile, flux_by_mode_name, flux_value)
+           call write_variable_with_offset(gnostics%sfile, flux_by_mode_name, flux_value)
 
            call set_start(gnostics%sfile, total_flux_by_mode_name, "X", it)
            call set_start(gnostics%sfile, total_flux_by_mode_name, "Y", ik)
-           call write_variable(gnostics%sfile, total_flux_by_mode_name, total_flux_by_mode)
+           call write_variable_with_offset(gnostics%sfile, total_flux_by_mode_name, total_flux_by_mode)
 
            !if (write_flux_by_time) then
              !call set_start(gnostics%sfile, flux_t_name, "X", it)
