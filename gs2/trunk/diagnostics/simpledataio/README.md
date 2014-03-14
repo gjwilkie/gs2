@@ -88,3 +88,38 @@ E.g.
 If your netCDF is installed in a non-standard location you may need to add
 
     CFLAGS='-I/path/to/netcdf/include' FCFLAGS='-I/path/to/netcdf/include' LDFLAGS='-L/path/to/netcdf/lib'
+
+
+Advanced Use
+------------
+
+The default behaviour of simpledataio is to write the whole variable. If you want to 
+write only part of a particular dimension for a particular variable, you can manually 
+set starts and counts using `set_start` and `set_count`. 
+
+In C, you can set the starts and counts, but then the array you pass to `write_variable` must
+reflect the reduced shape. For example, if your output variable is a 4x3 array, but you set the start
+of the first dimension to 1 and the count of the first dimension to 2, `write_variable` must be passed
+a 2x3 array. In C you can also use the functions `write_variable_at_index` and `write_variable_at_index_fast`
+(see the test cases for examples). 
+
+In Fortran, the function `write_variable` behaves identically to the C function `write_variable`.
+However, there is also a function `write_variable_with_offset` that assumes that your variable has the same
+shape as the output variable, but that you only want to write a certain part of it. (This is useful for 
+parallel I/O of a variable which all processors have a copy of). 
+It offsets each dimension when writing it. So in `write_variable` we find (for a 5d variable): 
+
+    status =  nf90_put_var(fileid, varid+1, &
+       val(:,:,:,:,:), start=starts, count=counts)
+
+whereas in `write_variable_with_offset` we find (for a 5d variable): 
+
+    status =  nf90_put_var(fileid, varid+1, &
+       val((offsets(1)):,(offsets(2)):,(offsets(3)):,&   
+          (offsets(4)):,(offsets(5)):), start=starts, count=counts)
+
+The variable you pass into this function must have the same number of dimensions as the variable in the 
+output file. The default offset is the value of start, i.e. it will take data from the variable at the same location as
+where it is being written into the output file (this makes sense if you think about it). However, you can manually
+set the offsets for a given variable and dimension using `set_offset` so that it can take data from a different index
+of a given dimension. 

@@ -27,6 +27,8 @@ struct sdatio_variable {
 	int type_size;
 	int * manual_counts;
 	int * manual_starts;
+	/* Only used for Fortran:*/
+	int * manual_offsets;
 };
 
 

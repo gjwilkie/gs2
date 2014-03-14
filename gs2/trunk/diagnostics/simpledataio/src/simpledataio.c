@@ -74,7 +74,7 @@ void sdatio_createfile(struct sdatio_file * sfile, char * fname)  {
 	int retval;
 	/*if (0){}*/
 	/*else {*/
-		if ((retval = nc_create(fname, NC_CLOBBER, &(sfile->nc_file_id)))) ERR(retval);
+		if ((retval = nc_create(fname, NC_NETCDF4|NC_CLOBBER, &(sfile->nc_file_id)))) ERR(retval);
 		/*}*/
 	sfile->n_dimensions = 0;
 	sfile->n_variables = 0;
@@ -330,11 +330,13 @@ void sdatio_create_variable(struct sdatio_file * sfile,
 
 	svar->manual_starts=(int*)malloc(sizeof(int)*ndims);
 	svar->manual_counts=(int*)malloc(sizeof(int)*ndims);
+	svar->manual_offsets=(int*)malloc(sizeof(int)*ndims);
 	int i;
 
 	for (i=0;i<ndims;i++){
 		svar->manual_starts[i]=-1;
 		svar->manual_counts[i]=-1;
+		svar->manual_offsets[i]=-1;
 	}
 
 	sdatio_append_variable(sfile, svar);
@@ -373,6 +375,61 @@ void sdatio_get_counts_and_starts(struct sdatio_file * sfile, struct sdatio_vari
 			abort();
 		}
 	}
+}
+void sdatio_get_offsets(struct sdatio_file * sfile, struct sdatio_variable * svar, size_t * starts, size_t * offsets){
+	struct sdatio_dimension * sdim;
+	int i,j;
+	int found;
+	for (i=0;i<strlen(svar->dimension_list);i++){
+		found = 0;
+		for (j=0;j<sfile->n_dimensions;j++){
+			sdim = sfile->dimensions[j];
+			if (sdim->nc_id == svar->dimension_ids[i]){
+				if (svar->manual_offsets[i] == -1) offsets[i] = starts[i];
+				else offsets[i] = svar->manual_offsets[i];
+				found = 1;
+			}
+		}
+		if (!found) {
+			printf("Couldn't find dimension in sdatio_get_offsets\n");
+			abort();
+		}
+	}
+}
+
+/*** ONLY WORKS FOR THE FORTRAN INTERFACE ***/
+/* Do not set offsets when using the C interface*/
+void sdatio_set_offset(struct sdatio_file * sfile, char * variable_name, char * dimension_name, int * offset){
+	struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
+	struct sdatio_dimension * sdim;
+	struct sdatio_dimension * sdim_found;
+	int i,j;
+	int found;
+	int ndim;
+
+	
+
+  found = 0;
+	for (i=0;i<strlen(svar->dimension_list);i++){
+		for (j=0;j<sfile->n_dimensions;j++){
+			sdim = sfile->dimensions[j];
+			/*printf("sdim %s, comp %d\n", sdim->name, !(strcmp(sdim->name, dimension_name)));*/
+			if ((sdim->nc_id == svar->dimension_ids[i]) && !strcmp(sdim->name, dimension_name)){
+				found = 1;
+				sdim_found = sdim;
+				ndim = i;
+			}
+		}
+	}
+		if (!found) {
+			printf("Couldn't find dimension %s for variable %s in sdatio_set_offset\n", dimension_name, svar->name);
+			abort();
+		}
+		/*printf("Start is %d\n", svar->manual_offsets[ndim]);*/
+	svar->manual_offsets[ndim] = *offset;
+	/*printf("Start is %d\n", svar->manual_starts[ndim]);*/
+
+
 }
 
 void sdatio_set_start(struct sdatio_file * sfile, char * variable_name, char * dimension_name, int * start){
@@ -467,9 +524,12 @@ void sdatio_number_of_unlimited_dimensions(struct sdatio_file * sfile, char * va
 	/*printf("n unlimited was %d\n", *n);*/
 }
 
-void sdatio_netcdf_inputs(struct sdatio_file * sfile, char * variable_name, int * fileid, int * varid, size_t * starts, size_t * counts){
+
+/* Private: used for the Fortran interface*/
+void sdatio_netcdf_inputs(struct sdatio_file * sfile, char * variable_name, int * fileid, int * varid, size_t * starts, size_t * counts, size_t * offsets){
 	struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
 	sdatio_get_counts_and_starts(sfile, svar, counts, starts);
+	sdatio_get_offsets(sfile, svar, starts, offsets);
 	*fileid = sfile->nc_file_id;
 	*varid = svar->nc_id;
 	/*printf("varname %s, fileid %d, varid %d, starts[0] %d \n", variable_name, *fileid, *varid, starts[0]);	*/
@@ -623,6 +683,7 @@ void sdatio_free_variable(struct sdatio_variable * svar){
 	free(svar->dimension_ids);
 	free(svar->manual_counts);
 	free(svar->manual_starts);
+	free(svar->manual_offsets);
 	free(svar);
 }
 

@@ -316,6 +316,7 @@ ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
 ac_ct_FC = @ac_ct_FC@
+ac_has_ruby = @ac_has_ruby@
 am__include = @am__include@
 am__leading_dot = @am__leading_dot@
 am__quote = @am__quote@
@@ -1213,8 +1214,10 @@ uninstall-am: uninstall-binPROGRAMS uninstall-includeHEADERS \
 @ARCHIVEONLY_TRUE@	cp $< $@
 
 # Need to generate the module file for simpledataiof before building simpledataio_write
-src/simpledataio_write.F90: src/generate_simpledataio_write.rb $(SDAT_MOD)
-	env ruby $< > $@
+@HAS_RUBY_TRUE@src/simpledataio_write.F90: src/generate_simpledataio_write.rb $(SDAT_MOD)
+@HAS_RUBY_TRUE@	env ruby $< $@
+@HAS_RUBY_FALSE@src/simpledataio_write.F90: src/generate_simpledataio_write.rb $(SDAT_MOD)
+@HAS_RUBY_FALSE@	echo "****WARNING****: No Ruby: cannot generate $@ from $<; $@ not updated"
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

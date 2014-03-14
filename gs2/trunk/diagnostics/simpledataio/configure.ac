@@ -170,6 +170,9 @@ DEFS_FC=$al_pp_defs_out
 AC_SUBST([DEFS_FC])
 
 
+AC_CHECK_PROG(ac_has_ruby, ruby, yes, no,)
+AM_CONDITIONAL(HAS_RUBY, [test "x$ac_has_ruby" = xyes])
+
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

@@ -147,7 +147,13 @@ endif
 
 
 # Need to generate the module file for simpledataiof before building simpledataio_write
+if HAS_RUBY
 src/simpledataio_write.F90: src/generate_simpledataio_write.rb $(SDAT_MOD)
-	env ruby $< > $@
+	env ruby $< $@
+else
+src/simpledataio_write.F90: src/generate_simpledataio_write.rb $(SDAT_MOD)
+	echo "****WARNING****: No Ruby: cannot generate $@ from $<; $@ not updated"
+endif
+
 
 
