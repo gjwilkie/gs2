@@ -55,7 +55,7 @@ contains
     real, dimension(:,:), intent (out) :: epts
     real, dimension(:,:), intent (out) :: wgts
     real :: vcut_local, laguerre_fac
-    integer :: is,ie,js,main_ion_species
+    integer :: is,ie,js,main_ion_species, nesub_local
 
     call init_egrid (negrid)
 
@@ -74,31 +74,33 @@ contains
            call mp_abort('')
         end if
         laguerre_fac = spec(is)%temp/spec(main_ion_species)%temp
+        nesub_local = negrid
       else
         vcut_local = vcut
         laguerre_fac = 1.0
+        nesub_local = nesub
       end if
       
       ! get grid points in v up to vcut (epts is not E yet)
-      call get_legendre_grids_from_cheb (0.0, vcut_local, epts(:nesub,is), wgts(:nesub, is))
+      call get_legendre_grids_from_cheb (0.0, vcut_local, epts(:nesub_local,is), wgts(:nesub_local, is))
 
       ! change from v to E
-      epts(:nesub,is) = epts(:nesub,is)**2
+      epts(:nesub_local,is) = epts(:nesub_local,is)**2
 
       ! absorb exponential and volume element in weights
       !wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
       ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
       ! See eq. 4.12 of M. Barnes's thesis
       !wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*2.0*pi
-      wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*pi
+      wgts(:nesub_local, is) = wgts(:nesub_local, is)*epts(:nesub_local,is)*pi
 
-      if (negrid > nesub) then
+      if (negrid > nesub_local) then
 
          ! get grid points in y = E - vcut**2 (epts not E yet)
-         call get_laguerre_grids (epts(nesub+1:,is), wgts(nesub+1:, is))
+         call get_laguerre_grids (epts(nesub_local+1:,is), wgts(nesub_local+1:, is))
 
          ! change from y to E
-         epts(nesub+1:,is) = epts(nesub+1:,is)/laguerre_fac + vcut_local**2
+         epts(nesub_local+1:,is) = epts(nesub_local+1:,is)/laguerre_fac + vcut_local**2
 
          ! absort exponential and volume element in weights
          ! See eq. 4.13 of M. Barnes's thesis
@@ -107,7 +109,7 @@ contains
          ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
          ! Note that here this means adding an exponential e^y
          ! See eq. 4.13 of M. Barnes's thesis
-         wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(laguerre_fac*(epts(nesub+1:,is)-vcut_local**2))*pi*0.5*sqrt(epts(nesub+1:,is))/laguerre_fac
+         wgts(nesub_local+1:, is) = wgts(nesub_local+1:, is)*exp(laguerre_fac*(epts(nesub_local+1:,is)-vcut_local**2))*pi*0.5*sqrt(epts(nesub_local+1:,is))/laguerre_fac
   
       end if
 
@@ -118,7 +120,7 @@ contains
     do is = 1,nspec
 !write(*,*) iproc, is, spec(is)%temp, spec(is)%fprim, spec(is)%tprim, spec(is)%stm
        do ie = 1,negrid
-!if (proc0) write(*,*) is, ie, spec(is)%fprim, spec(is)%tprim, f0prim(ie,is)
+if (proc0) write(*,*) is, ie, spec(is)%fprim, spec(is)%tprim, f0prim(ie,is)
 !write(*,*) iproc, is,ie, zogtemp(ie,is)
 !          if (iproc .EQ. 3) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
        end do
@@ -151,7 +153,7 @@ contains
     real, dimension(:,:), intent (out) :: wgts
     real :: vcut_local, laguerre_fac
     real, dimension(1:ne_int):: vpts_temp, wgts_temp, F0_temp
-    integer :: is, main_ion_species, js, ie
+    integer :: is, main_ion_species, js, ie, nesub_local
 
     call init_egrid (negrid)
 
@@ -170,50 +172,52 @@ contains
            call mp_abort('')
         end if
         laguerre_fac = spec(is)%temp/spec(main_ion_species)%temp
+        nesub_local = negrid
       else
         vcut_local = vcut
         laguerre_fac = 1.0
+        nesub_local = nesub
       end if
 
       call set_current_f0_species(is)
 
       if (ne_int .LT. 0) then
          call get_general_weights_from_func_conv (1.e-9,eval_f0, 0.0, vcut_local, &
-                                          nesub,epts(1:nesub,is),wgts(1:nesub,is))
+                                          nesub_local,epts(1:nesub_local,is),wgts(1:nesub_local,is))
       else
          call get_general_weights_from_func (ne_int,eval_f0, 0.0, vcut_local, &
-                                          nesub,epts(1:nesub,is),wgts(1:nesub,is))
+                                          nesub_local,epts(1:nesub_local,is),wgts(1:nesub_local,is))
       end if
           
 !      ! get grid points in v up to vcut (epts is not E yet)
 !      call get_legendre_grids_from_cheb (energy_0**0.5, vcut_local, epts(1:nesub,is), wgts(1:nesub, is))
 
       ! change from v to E
-      epts(:nesub,is) = epts(:nesub,is)**2
+      epts(:nesub_local,is) = epts(:nesub_local,is)**2
 
       ! absorb exponential and volume element in weights
-      !wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
+      !wgts(:nesub_local) = wgts(:nesub_local)*epts(:nesub_local)*exp(-epts(:nesub_local))/sqrt(pi)
       ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
       ! See eq. 4.12 of M. Barnes's thesis
-      !wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*2.0*pi
-      wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*pi**2.5
+      !wgts(:nesub_local, is) = wgts(:nesub_local, is)*epts(:nesub_local,is)*2.0*pi
+      wgts(:nesub_local, is) = wgts(:nesub_local, is)*epts(:nesub_local,is)*pi**2.5
 
-      if (negrid > nesub) then
+      if (negrid > nesub_local) then
 
          ! get grid points in y = E - vcut**2 (epts not E yet)
-         call get_laguerre_grids (epts(nesub+1:,is), wgts(nesub+1:, is))
+         call get_laguerre_grids (epts(nesub_local+1:,is), wgts(nesub_local+1:, is))
 
          ! change from y to E
-         epts(nesub+1:,is) = epts(nesub+1:,is)/laguerre_fac + vcut_local**2
+         epts(nesub_local+1:,is) = epts(nesub_local+1:,is)/laguerre_fac + vcut_local**2
 
          ! absort exponential and volume element in weights
          ! See eq. 4.13 of M. Barnes's thesis
-      !   wgts(nesub+1:) = wgts(nesub+1:)*0.5*sqrt(epts(nesub+1:)/pi)*exp(-vcut**2)
+      !   wgts(nesub_local+1:) = wgts(nesub_local+1:)*0.5*sqrt(epts(nesub_local+1:)/pi)*exp(-vcut**2)
 
          ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
          ! Note that here this means adding an exponential e^y
          ! See eq. 4.13 of M. Barnes's thesis
-         wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(-laguerre_fac*vcut_local**2)*pi*0.5*sqrt(epts(nesub+1:,is))/laguerre_fac
+         wgts(nesub_local+1:, is) = wgts(nesub_local+1:, is)*exp(-laguerre_fac*vcut_local**2)*pi*0.5*sqrt(epts(nesub_local+1:,is))/laguerre_fac
 
       end if
 
