@@ -34,8 +34,12 @@ module species
      !> This is required when species_type is alpha, but using the equivalent-Maxwellian to the
      !! slowing-down distribution. The reason is that le_grids needs to know whether or not a species
      !! is Maxwellian to create the velocity-space grids, but this is before f0 is calculated on said grid,
-     !! which is where is_maxwellian can be changed. So when using "equivmaxw", this needs to be turned on.
-     logical :: equivalent_maxwellian_flag  
+     !! which is where is_maxwellian can be changed. So when using "equivmaxw", this needs to be nonzero.
+     !! 0: Should always be used unless specifically using the Maxwellian equivalent to the slowing-down
+     !! distribution.
+     !! 1: The Estrada-Mila-Waltz equivalent Maxwellian (2006)
+     !! 2: The Angioni-Peeters equivalent Maxwellian (2008)
+     integer :: equivmaxw_opt =0
      
   end type specie
 
@@ -230,13 +234,13 @@ contains
     real :: source, sprim, gamma_ae, gamma_ai, ash_fraction, zero
     character(20) :: type
     integer :: unit
-    integer :: is, alpha_index, main_ion_species, electron_spec
-    logical:: equivalent_maxwellian_flag,alphas_exist
+    integer :: is, alpha_index, main_ion_species, electron_spec, equivmaxw_opt
+    logical:: alphas_exist
     real:: vti,ni,Zi,Ti,ne,vte,veff2va2,vcva,vta,Ealpha,dveff2dvc,ni_prim,ne_prim,Ti_prim,Te_prim
     namelist /species_knobs/ nspec, mime
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
-         tperp0, tpar0, source, sprim, gamma_ai, gamma_ae, ash_fraction, equivalent_maxwellian_flag
+         tperp0, tpar0, source, sprim, gamma_ai, gamma_ae, ash_fraction, equivmaxw_opt
     integer :: ierr, in_file
 
     type (text_option), dimension (9), parameter :: typeopts = &
@@ -291,7 +295,7 @@ contains
           sprim = 0.0
           gamma_ai = 0.1
           gamma_ae = 0.1
-          equivalent_maxwellian_flag = .false.
+          equivmaxw_opt = 0
 
           type = "default"
           read (unit=unit, nml=species_parameters)
@@ -319,7 +323,7 @@ contains
           spec(is)%sprim = sprim
           spec(is)%gamma_ai = gamma_ai
           spec(is)%gamma_ae = gamma_ae
-          spec(is)%equivalent_maxwellian_flag = equivalent_maxwellian_flag
+          spec(is)%equivmaxw_opt = equivmaxw_opt
 
           spec(is)%stm = sqrt(temp/mass)
           spec(is)%zstm = z/sqrt(temp*mass)
@@ -332,7 +336,7 @@ contains
           if (spec(is)%type .eq. alpha_species)  then
             alpha_index = is
             alphas_exist = .true.
-            if (.NOT.equivalent_maxwellian_flag)  then 
+            if (equivmaxw_opt .EQ. 0 )  then 
                spec(is)%is_maxwellian = .false.
             else
               spec(is)%is_maxwellian = .true.
@@ -341,16 +345,6 @@ contains
             spec(is)%is_maxwellian = .true.
           end if
 
-!          if (equivalent_maxwellian_flag) then 
-!             spec(is)%is_maxwellian = .true.
-!             !> Don't trust any of the below values until le_grids is called
-!             zero = 0.0
-!             spec(is)%stm = 1.0/zero
-!             spec(is)%zstm = 1.0/zero
-!             spec(is)%zt = 1.0/zero
-!             spec(is)%tz = 1.0/zero
-!             spec(is)%smz = 1.0/zero
-!          end if
        end do
 
        electron_spec = -1
@@ -394,7 +388,7 @@ contains
           write(*,*) "  Te_prim = ", Te_prim
        end if
 
-       if (alphas_exist .AND. spec(alpha_index)%equivalent_maxwellian_flag) then
+       if (alphas_exist .AND. spec(alpha_index)%equivmaxw_opt .GT. 0) then
           ! Species *becomes* Maxwellian here. So what to normalize by: v_alpha or v_t,eff?
           ! Need to make sure setvgrid does the right thing (i.e. recognizes Maxwellian nature)
           Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
@@ -414,9 +408,10 @@ contains
           dveff2dvc = dveff2dvc + (vcva**2/(3.0*log(1.0+(1.0/vcva)**3)))*temp
 
           temp = Ealpha*veff2va2
-
           spec(is)%temp = temp
-          spec(is)%tprim = (1.0/3.0)*dveff2dvc*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)/veff2va2
+
+          if (spec(is)%equivmaxw_opt .EQ. 1) spec(is)%tprim = (1.0/3.0)*dveff2dvc*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)/veff2va2
+          if (spec(is)%equivmaxw_opt .EQ. 2) spec(is)%tprim = (1.0/3.0)*(vcva/veff2va2)*dveff2dvc**2*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)/veff2va2 !< Angioni & Peeters (2008)
 
           spec(is)%stm = sqrt(temp/mass)
           spec(is)%zstm = z/sqrt(temp*mass)
@@ -424,6 +419,7 @@ contains
           spec(is)%zt = z/temp
           spec(is)%smz = abs(sqrt(temp*mass)/z)
 
+write(*,*) "veff2va2 = ", veff2va2, " dveff2dvc = ", dveff2dvc, Ti_prim, Te_prim, equivmaxw_opt
           spec(is)%is_maxwellian = .true.
           write(*,*) "Using equivalent-Maxwellian option for species ", is
           write(*,*) "Parameters have been changed to the following values:"

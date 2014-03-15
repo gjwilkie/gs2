@@ -108,7 +108,7 @@ module general_f0
              beam_f0_switch
   
   logical :: print_egrid
- 
+
   !> Flag that controls whether or not an externally-supplied f0 
   !! is rescaled to fit the given species parameters.
   !! f0_rescale = T -- F0 is rescaled to fit spec(is)%dens
@@ -1092,8 +1092,8 @@ contains
 !    Ealpha = 1.0
     
     A = (4.0*pi/3.0)*log( (vcrit**3 + 1.0)/(vcrit**3))
-    A = A + (pi*Ti/Ealpha)**1.5*exp(Ealpha/Ti)*(1.0-erf(sqrt(Ealpha/Ti)))/(vcrit**3 + 1.0)
-    A = A + (2.0*pi*Ti/Ealpha)/(vcrit**3 + 1.0)
+!    A = A + (pi*Ti/Ealpha)**1.5*exp(Ealpha/Ti)*(1.0-erf(sqrt(Ealpha/Ti)))/(vcrit**3 + 1.0)
+!    A = A + (2.0*pi*Ti/Ealpha)/(vcrit**3 + 1.0)
     A = 1.0/A
 
     if (v .LE. 1.0) then
