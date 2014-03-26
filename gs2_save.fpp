@@ -1263,7 +1263,7 @@ contains
   end subroutine init_save
 
   subroutine finish_save
-    
+#ifdef NETCDF    
     if (allocated(tmpr)) deallocate(tmpr)
     if (allocated(tmpi)) deallocate(tmpi)
     if (allocated(ftmpr)) deallocate(ftmpr)
@@ -1273,7 +1273,7 @@ contains
     
     initialized = .false.
     initialized_dfn = .false.
-
+#endif
   end subroutine finish_save
 
   subroutine restore_current_scan_parameter_value(current_scan_parameter_value)
