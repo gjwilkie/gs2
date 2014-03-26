@@ -3390,13 +3390,15 @@ contains
        ie = ie_idx(lz_lo,ilz)
        ig = ig_idx(lz_lo,ilz)
 
-!CMRDDGC, 10/2/1014: 
+!CMRDDGC, 10/2/2014: 
 ! Fixes for wfb treatment below, use same je definition in ALL cases
-!   je  = #physical xi values at location, includes duplicate point at vpar=0
-!  je-1 = #physical xi values removing duplicate vpar=0 point
-       je=2*jend(ig)
+!   je  = #physical xi values + 1 
+!       NB +1 above WITH TRAPPED is duplicate xi=vpar=0 point with isign=2
+!          +1 above WITHOUT TRAPPED is entirely unphysical extra grid point
+!  je-1 = #physical xi values removing unphysical/duplicate extra point
+       je=max(2*jend(ig),2*ng2+1)
        nxi_scatt=je-1
-       glz(je,ilz)=0.0d0  ! zero redundant duplicate xi, isign=2 for vpar=0!
+       glz(je,ilz)=0.0  ! zero unphysical/duplicate extra point
        if (jend(ig) == ng2+1 .and.special_wfb_lorentz) then
 !CMRDDGC:  special_wfb_lorentz = t  => unphysical handling of wfb at bounce pt: 
 !          remove wfb from collisions, reinsert later
