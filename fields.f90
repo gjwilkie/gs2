@@ -76,7 +76,7 @@ contains
        case (fieldopt_local)
           write (unit, fmt="(' field_option = ',a)") '"local"'
           write (unit, fmt="(' minNrow = ',I0)") minNrow
-          write (unit, fmt="(' do_smart_update = ',I0)") do_smart_update
+          write (unit, fmt="(' do_smart_update = ',L1)") do_smart_update
        end select
        if(dump_response) write (unit, fmt="(' dump_response = ',L1)") dump_response
        if(read_response) write (unit, fmt="(' read_response = ',L1)") read_response
