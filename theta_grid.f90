@@ -1617,6 +1617,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     use theta_grid_salpha, only: finish_theta_grid_salpha
     use theta_grid_eik, only: finish_theta_grid_eik
     use theta_grid_file, only: finish_theta_grid_file
+    use theta_grid_params, only: finish_theta_grid_params
 
     initialized = .false.
     
@@ -1624,6 +1625,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call finish_theta_grid_salpha
     call finish_theta_grid_eik
     call finish_theta_grid_file
+    call finish_theta_grid_params
     call deallocate_arrays
 
   end subroutine finish_theta_grid
