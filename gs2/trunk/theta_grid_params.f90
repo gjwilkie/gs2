@@ -2,6 +2,7 @@ module theta_grid_params
   implicit none
 
   public :: init_theta_grid_params, init_trin_geo
+  public :: finish_theta_grid_params
   public :: wnml_theta_grid_params
   public :: write_trinity_parameters
 
@@ -15,6 +16,7 @@ module theta_grid_params
   private
 
   logical :: trin_flag = .false.
+  logical :: initialized = .false.
   real :: rhoc_trin, qval_trin, shat_trin, rgeo_trin, rmaj_trin, shift_trin
   real :: kappa_trin, kappri_trin, tri_trin, tripri_trin, betaprim_trin
   real :: kp = -1.
@@ -24,7 +26,7 @@ contains
 
   subroutine init_theta_grid_params
     implicit none
-    logical, save :: initialized = .false.
+!    logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
@@ -33,6 +35,14 @@ contains
          shat_trin, rgeo_trin, rmaj_trin, kappa_trin, kappri_trin, tri_trin, tripri_trin, &
          shift_trin, betaprim_trin)
   end subroutine init_theta_grid_params
+
+  subroutine finish_theta_grid_params
+    implicit none
+    
+    initialized = .false.
+
+  end subroutine finish_theta_grid_params
+
 
   subroutine read_parameters
     use file_utils, only: input_unit, input_unit_exist

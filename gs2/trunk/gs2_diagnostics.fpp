@@ -55,6 +55,7 @@ module gs2_diagnostics
   logical, public :: write_nl_flux
   logical, public :: write_verr, write_cerr, write_max_verr
   logical, public :: exit_when_converged
+  logical, public :: use_nonlin_convergence
   logical, public :: dump_check1, dump_check2
   logical, public :: dump_fields_periodically, make_movie
   logical, public :: save_for_restart
@@ -95,7 +96,7 @@ module gs2_diagnostics
          write_final_epar, write_moments, write_final_moments, write_cerr, &
          write_verr, write_max_verr, write_nl_flux, write_final_db, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
-         exit_when_converged, write_avg_moments, &
+         exit_when_converged, use_nonlin_convergence, write_avg_moments, &
          write_full_moments_notgc, write_cross_phase, &
          dump_check1, dump_check2, &
          dump_fields_periodically, make_movie, &
@@ -189,6 +190,7 @@ contains
        write (unit, fmt="(' write_final_antot = ',L1)") write_final_antot
        write (unit, fmt="(' write_nl_flux = ',L1)") write_nl_flux
        write (unit, fmt="(' exit_when_converged = ',L1)") exit_when_converged
+       write (unit, fmt="(' use_nonlin_convergence = ',L1)") use_nonlin_convergence
        if (write_avg_moments) write (unit, fmt="(' write_avg_moments = ',L1)") write_avg_moments
        if (dump_check1) write (unit, fmt="(' dump_check1 = ',L1)") dump_check1
        if (dump_check2) write (unit, fmt="(' dump_check2 = ',L1)") dump_check2
@@ -491,6 +493,9 @@ contains
     call broadcast (omegatol)
     call broadcast (omegatinst)
 
+    !<HJL> Invokes the nonilinear_convergence check
+    call broadcast (use_nonlin_convergence)
+
     nmovie_tot = nstep/nmovie
     nwrite_big_tot = nstep/(nwrite*nwrite_mult)-nstep/4/(nwrite*nwrite_mult)
     if(nwrite_big_tot .le. 0) nwrite_big_tot = 1
@@ -721,14 +726,15 @@ contains
        navg = 100
        nsave = -1
        conv_nstep_av = 4000
-       conv_test_multiplier = 2e-1
+       conv_test_multiplier = 4e-1
        conv_min_step = 4000
        conv_max_step = 80000
-       conv_nsteps_converged = 4000
+       conv_nsteps_converged = 10000
        omegatol = 1e-3
        omegatinst = 1.0
        igomega = 0
        exit_when_converged = .true.
+       use_nonlin_convergence = .false.
        dump_check1 = .false.
        dump_check2 = .false.
        dump_fields_periodically = .false.
@@ -1902,7 +1908,7 @@ if (debug) write(6,*) "loop_diagnostics: -1"
     end if
 
 ! Check for convergence
-!    if(nonlin) call check_nonlin_convergence(istep, heat_fluxes(1), exit)
+    if(nonlin .and. use_nonlin_convergence) call check_nonlin_convergence(istep, heat_fluxes(1), exit)
 
     i=istep/nwrite
 
@@ -2840,18 +2846,17 @@ if (debug) write(6,*) "loop_diagnostics: done"
              heat_av_test = heat_sum_av * conv_test_multiplier
           endif
           
-          if (conv_isteps_converged .ge. conv_nsteps_converged/nwrite .and. &
-               (trin_istep .ge. conv_min_step) .and. &
-               (exit_when_converged .eqv. .true.)) then
-             write(6,'(A,I5,A,I6,I3)')'Job ',trin_job,' &
-                  Reached convergence condition after step ',trin_istep
-             exit = .true.
+          if ((conv_isteps_converged .ge. conv_nsteps_converged/nwrite) .and. &
+               (trin_istep .ge. conv_min_step)) then
+             if (debug) write(6,'(A,I5,A,I6,I3)')'Job ',trin_job, &  
+                  ' Reached convergence condition after step ',trin_istep
+             exit = .true. .and. exit_when_converged
           endif
 
           if(trin_istep .gt. conv_max_step) then
              write(6,'(A,I5,A,I7)') '*** Warning. Job ',trin_job, &
                   ' did not meet the convergence condition after ',trin_istep
-             exit = .true.
+             exit = .true. .and. exit_when_converged
           endif
        endif
     endif
