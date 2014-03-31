@@ -377,8 +377,8 @@ contains
        else
           if (alphas_exist .AND. mime .LT. 0.0) then
              write(*,*) "WARNING: If using alpha species, you should set mime = (reference mass)/(electron mass) in species_knobs."
-             write(*,*) " Using mime = 1836.0 as default. Assuming Ti = Te. If this is not true, adjust mime appropriately."
-             mime = 1836.0
+             write(*,*) " Using mime = 3670.0 as default. Assuming Ti = Te. If this is not true, adjust mime appropriately."
+             mime = 3670.0
           end if
           ne = Zi*ni + spec(is)%z * spec(is)%dens
           vte = sqrt(mime * Ti)     !< Assuming Te=Ti here. This is wrong, but tite has depencency issues with this module
