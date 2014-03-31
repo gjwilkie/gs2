@@ -857,6 +857,7 @@ contains
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use mp, only: sum_allreduce
+    use species, only: spec
 
     implicit none
 
@@ -878,7 +879,7 @@ contains
        il = il_idx(g_lo,iglo)
 
        !Sum up weighted g
-       total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie,is)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+       if (.NOT. spec(is)%passive_spec) total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie,is)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
     end do
 
     !Reduce sum across all procs to make integral over all velocity space and species
