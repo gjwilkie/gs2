@@ -40,6 +40,8 @@ module species
      !! 1: The Estrada-Mila-Waltz equivalent Maxwellian (2006)
      !! 2: The Angioni-Peeters equivalent Maxwellian (2008)
      integer :: equivmaxw_opt =0
+
+     logical :: passive_spec = .false.
      
   end type specie
 
@@ -235,12 +237,12 @@ contains
     character(20) :: type
     integer :: unit
     integer :: is, alpha_index, main_ion_species, electron_spec, equivmaxw_opt
-    logical:: alphas_exist
+    logical:: alphas_exist, passive_spec
     real:: vti,ni,Zi,Ti,ne,vte,veff2va2,vcva,vta,Ealpha,dveff2dvc,ni_prim,ne_prim,Ti_prim,Te_prim
     namelist /species_knobs/ nspec, mime
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
-         tperp0, tpar0, source, sprim, gamma_ai, gamma_ae, ash_fraction, equivmaxw_opt
+         tperp0, tpar0, source, sprim, gamma_ai, gamma_ae, ash_fraction, equivmaxw_opt, passive_spec
     integer :: ierr, in_file
 
     type (text_option), dimension (9), parameter :: typeopts = &
@@ -296,6 +298,7 @@ contains
           gamma_ai = 0.1
           gamma_ae = 0.1
           equivmaxw_opt = 0
+          passive_spec = .false.
 
           type = "default"
           read (unit=unit, nml=species_parameters)
@@ -324,6 +327,7 @@ contains
           spec(is)%gamma_ai = gamma_ai
           spec(is)%gamma_ae = gamma_ae
           spec(is)%equivmaxw_opt = equivmaxw_opt
+          spec(is)%passive_spec = passive_spec
 
           spec(is)%stm = sqrt(temp/mass)
           spec(is)%zstm = z/sqrt(temp*mass)
@@ -459,6 +463,8 @@ write(*,*) "veff2va2 = ", veff2va2, " dveff2dvc = ", dveff2dvc, Ti_prim, Te_prim
        call broadcast (spec(is)%smz)
        call broadcast (spec(is)%type)
        call broadcast (spec(is)%is_maxwellian)
+       call broadcast (spec(is)%equivmaxw_opt)
+       call broadcast (spec(is)%passive_spec)
     end do
 
 
