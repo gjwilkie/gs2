@@ -441,6 +441,7 @@ subroutine check_dist_fn(report_unit)
        write (unit, fmt="(' nonad_zero = ',L1)") nonad_zero
        write (unit, fmt="(' gridfac = ',e16.10)") gridfac
        write (unit, fmt="(' esv = ',L1)") esv
+       write (unit, fmt="(' cllc = ',L1)") cllc
        write (unit, fmt="(' opt_init_bc = ',L1)") opt_init_bc
 
        if (.not. has_electron_species(spec)) then
@@ -651,8 +652,8 @@ subroutine check_dist_fn(report_unit)
     namelist /dist_fn_knobs/ boundary_option, nonad_zero, gridfac, apfac, &
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
-         g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, lf_decompose, esv, &
-         opt_init_bc
+         g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, &
+         lf_decompose, esv, opt_init_bc
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -1558,6 +1559,12 @@ subroutine check_dist_fn(report_unit)
        nn_from = 0 
 
        do iglo = g_lo%llim_world, g_lo%ulim_world
+!CMR, 20/10/2013:
+!     Communicate pattern sends passing particles to downwind linked cells
+!      (ntgrid,1,iglo)  => each RH connected cell (j,1,iglo_right)
+!      (-ntgrid,2,iglo) => each LH connected cell (j,2,iglo_left)
+!          where j index in receive buffer = #hops in connection
+!                         (nb j=1 is nearest connection)
 
           il = il_idx(g_lo,iglo)
           ! Exclude trapped particles (inc wfb)
@@ -1701,6 +1708,13 @@ subroutine check_dist_fn(report_unit)
        nn_from = 0 
 
        do iglo = g_lo%llim_world, g_lo%ulim_world
+!CMR, 20/10/2013:
+!     Communicate pattern sends wfb endpoint to ALL linked cells
+!      (ntgrid,1,iglo)  => ALL connected cells (j,1,iglo_conn)
+!            where j index in receive buffer = r_links(iglo)+1
+!      (-ntgrid,2,iglo) => ALL connected cells (j,2,iglo_conn)
+!         where j index in receive buffer = l_links(iglo)+1
+!
 
           il = il_idx(g_lo,iglo)
           if (il /= ng2+1) cycle
@@ -1715,23 +1729,27 @@ subroutine check_dist_fn(report_unit)
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
 ! v_par > 0:
-          call find_leftmost_link (iglo, iglo_right, ipright)
+!CMR: introduced iglo_star to make notation below less confusing
+!
+          call find_leftmost_link (iglo, iglo_star, ipright)
           do j = 1, ncell
 ! sender
              if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
 ! receiver
              if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_right_connection (iglo_right, iglo_right, ipright)
+             call get_right_connection (iglo_star, iglo_right, ipright)
+             iglo_star=iglo_right
           end do
              
 ! v_par < 0:
-          call find_rightmost_link (iglo, iglo_left, ipleft)
+          call find_rightmost_link (iglo, iglo_star, ipleft)
           do j = 1, ncell
 ! sender
              if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
 ! receiver
              if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_left_connection (iglo_left, iglo_left, ipleft)
+             call get_left_connection (iglo_star, iglo_left, ipleft)
+             iglo_star=iglo_left
           end do
        end do
        
@@ -1766,7 +1784,7 @@ subroutine check_dist_fn(report_unit)
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
 ! v_par > 0: 
-          call find_leftmost_link (iglo, iglo_right, ipright)
+          call find_leftmost_link (iglo, iglo_star, ipright)
           do j = 1, ncell
 ! sender
              if (ip == iproc) then
@@ -1782,13 +1800,14 @@ subroutine check_dist_fn(report_unit)
                 nn_to(ip) = n
                 to(ip)%first(n) = r_links(ik, it) + 1
                 to(ip)%second(n) = 1
-                to(ip)%third(n) = iglo_right
+                to(ip)%third(n) = iglo_star
              end if
-             call get_right_connection (iglo_right, iglo_right, ipright)
+             call get_right_connection (iglo_star, iglo_right, ipright)
+             iglo_star=iglo_right
           end do
              
 ! v_par < 0: 
-          call find_rightmost_link (iglo, iglo_left, ipleft)
+          call find_rightmost_link (iglo, iglo_star, ipleft)
           do j = 1, ncell
 ! sender
              if (ip == iproc) then
@@ -1804,9 +1823,10 @@ subroutine check_dist_fn(report_unit)
                 nn_to(ip) = n
                 to(ip)%first(n) = l_links(ik, it) + 1
                 to(ip)%second(n) = 2
-                to(ip)%third(n) = iglo_left
+                to(ip)%third(n) = iglo_star
              end if
-             call get_left_connection (iglo_left, iglo_left, ipleft)
+             call get_left_connection (iglo_star, iglo_left, ipleft)
+             iglo_star=iglo_left
           end do
        end do
 
@@ -1841,6 +1861,15 @@ subroutine check_dist_fn(report_unit)
        nn_from = 0 
 
        do iglo = g_lo%llim_world, g_lo%ulim_world
+!CMR, 20/10/2013:
+!     Communicate pattern sends passing homogeneous endpoints to linked cells
+!      (ntgrid,1,iglo) (cell > 2) => RH connected cells (j,1,iglo_conn)
+!            where j index in receive buffer = 2.l_links(iglo)+ #RH hops
+!      (-ntgrid,2,iglo) (cell < ncell-1) => LH connected cells (j,2,iglo_conn)
+!         where j index in receive buffer = 2.r_links(iglo)+#LH hops
+! NB: homogenous(H) follow inhomogeneous (IH), but orders in j differs!
+!     IH#hop=1, IH#hop=2, ... H#hop=2, H#hop=1  
+!          
 
           il = il_idx(g_lo,iglo)
           if (nlambda > ng2 .and. il >= ng2+1) cycle
@@ -1854,6 +1883,10 @@ subroutine check_dist_fn(report_unit)
 
 ! If this is not the first link in the chain, continue
           if (l_links(ik, it) > 0) then
+!CMR, 20/10/2013:  
+! this sends homogeneous solutions for rightwards passing particles 
+! rightwards from all cells APART from the INCOMING cell 
+!
 ! For each link to the right, do:
              iglo_star = iglo
              do j = 1, r_links(ik, it)
@@ -1867,6 +1900,10 @@ subroutine check_dist_fn(report_unit)
           end if
 
           if (r_links(ik, it) > 0) then
+!CMR, 20/10/2013:  
+! this sends homogeneous solutions for leftwards passing particles 
+! leftwards from all cells APART from the INCOMING cell 
+!
 ! For each link to the left, do:
              iglo_star = iglo
              do j = 1, l_links(ik, it)
@@ -1989,6 +2026,17 @@ subroutine check_dist_fn(report_unit)
        nn_from = 0 
 
        do iglo = g_lo%llim_world, g_lo%ulim_world
+!CMR, 20/10/2013:
+!     Communicate pattern sends wfb homogeneous endpoint to ALL linked cells
+!      (ntgrid,1,iglo)  => ALL connected cells (j,1,iglo_conn)
+!            where j index in receive buffer = 2.ncell - r_links(iglo)
+!            1 <= j <= 2.ncell  accommodates inhomog, homog bcs from cells
+!               ncell, ncell-1, ncell-2, ..., 1, 1, 2,... ncell-1, ncell  
+!      (-ntgrid,2,iglo) => ALL connected cells (j,2,iglo_conn)
+!         where j index in receive buffer = 2.ncell - l_links(iglo)
+!         1 <= j <= 2.ncell  accommodates inhomog, homog bcs from cells
+!                1, 2, .., ncell, ncell, ncell-1, .., 2, 1  
+! NB: homogenous follow inhomogeneous bcs, but order of source cell differs!
 
           il = il_idx(g_lo,iglo)
           if (il /= ng2+1) cycle
@@ -2003,23 +2051,25 @@ subroutine check_dist_fn(report_unit)
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
 ! v_par > 0:
-          call find_leftmost_link (iglo, iglo_right, ipright)
+          call find_leftmost_link (iglo, iglo_star, ipright)
           do j = 1, ncell
 ! sender
              if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
 ! receiver
              if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_right_connection (iglo_right, iglo_right, ipright)
+             call get_right_connection (iglo_star, iglo_right, ipright)
+             iglo_star=iglo_right
           end do
 
 ! v_par < 0:
-          call find_rightmost_link (iglo, iglo_left, ipleft)
+          call find_rightmost_link (iglo, iglo_star, ipleft)
           do j = 1, ncell
 ! sender
              if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
 ! receiver
              if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_left_connection (iglo_left, iglo_left, ipleft)
+             call get_left_connection (iglo_star, iglo_left, ipleft)
+             iglo_star=iglo_left
           end do
        end do
        
@@ -2054,7 +2104,7 @@ subroutine check_dist_fn(report_unit)
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
 ! v_par > 0:
-          call find_leftmost_link (iglo, iglo_right, ipright)
+          call find_leftmost_link (iglo, iglo_star, ipright)
           do j = 1, ncell
 ! sender
              if (ip == iproc) then
@@ -2070,13 +2120,14 @@ subroutine check_dist_fn(report_unit)
                 nn_to(ip) = n
                 to(ip)%first(n) = 2*ncell - r_links(ik, it)
                 to(ip)%second(n) = 1
-                to(ip)%third(n) = iglo_right
+                to(ip)%third(n) = iglo_star
              end if
-             call get_right_connection (iglo_right, iglo_right, ipright)
+             call get_right_connection (iglo_star, iglo_right, ipright)
+             iglo_star=iglo_right
           end do
  
 ! v_par < 0:
-          call find_rightmost_link (iglo, iglo_left, ipleft)
+          call find_rightmost_link (iglo, iglo_star, ipleft)
           do j = 1, ncell
 ! sender
              if (ip == iproc) then
@@ -2093,9 +2144,10 @@ subroutine check_dist_fn(report_unit)
                 nn_to(ip) = n
                 to(ip)%first(n) = 2*ncell - l_links(ik, it)
                 to(ip)%second(n) = 2
-                to(ip)%third(n) = iglo_left
+                to(ip)%third(n) = iglo_star
              end if
-             call get_left_connection (iglo_left, iglo_left, ipleft)
+             call get_left_connection (iglo_star, iglo_left, ipleft)
+             iglo_star=iglo_left
           end do
        end do
 
@@ -2660,23 +2712,25 @@ subroutine check_dist_fn(report_unit)
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
 ! v_par > 0:
-          call find_leftmost_link (iglo, iglo_right, ipright)
+          call find_leftmost_link (iglo, iglo_star, ipright)
           do j = 1, ncell
 ! sender
              if (ip == iproc) nn_from(ipright) = nn_from(ipright) + 1
 ! receiver
              if (ipright == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_right_connection (iglo_right, iglo_right, ipright)
+             call get_right_connection (iglo_star, iglo_right, ipright)
+             iglo_star=iglo_right
           end do
              
 ! v_par < 0:
-          call find_rightmost_link (iglo, iglo_left, ipleft)
+          call find_rightmost_link (iglo, iglo_star, ipleft)
           do j = 1, ncell
 ! sender
              if (ip == iproc) nn_from(ipleft) = nn_from(ipleft) + 1
 ! receiver
              if (ipleft == iproc) nn_to(ip) = nn_to(ip) + 1
-             call get_left_connection (iglo_left, iglo_left, ipleft)
+             call get_left_connection (iglo_star, iglo_left, ipleft)
+             iglo_star=iglo_left
           end do
        end do
        
@@ -2715,7 +2769,7 @@ subroutine check_dist_fn(report_unit)
           iglo_right = iglo ; iglo_left = iglo ; ipright = ip ; ipleft = ip
 
 ! v_par > 0: 
-          call find_leftmost_link (iglo, iglo_right, ipright)
+          call find_leftmost_link (iglo, iglo_star, ipright)
           do j = 1, ncell
 ! sender
              if (ip == iproc) then
@@ -2734,13 +2788,14 @@ subroutine check_dist_fn(report_unit)
                 to_p(ip)%third(n) = iglo_right
                 to_h(ip)%first(n) = 2*ncell-r_links(ik,it)
                 to_h(ip)%second(n) = 1
-                to_h(ip)%third(n) = iglo_right
+                to_h(ip)%third(n) = iglo_star
              end if
-             call get_right_connection (iglo_right, iglo_right, ipright)
+             call get_right_connection (iglo_star, iglo_right, ipright)
+             iglo_star=iglo_right
           end do
              
 ! v_par < 0: 
-          call find_rightmost_link (iglo, iglo_left, ipleft)
+          call find_rightmost_link (iglo, iglo_star, ipleft)
           do j = 1, ncell
 ! sender
              if (ip == iproc) then
@@ -2759,9 +2814,10 @@ subroutine check_dist_fn(report_unit)
                 to_p(ip)%third(n) = iglo_left
                 to_h(ip)%first(n) = 2*ncell-l_links(ik, it)
                 to_h(ip)%second(n) = 2
-                to_h(ip)%third(n) = iglo_left
+                to_h(ip)%third(n) = iglo_star
              end if
-             call get_left_connection (iglo_left, iglo_left, ipleft)
+             call get_left_connection (iglo_star, iglo_left, ipleft)
+             iglo_star=iglo_left
           end do
        end do
 
