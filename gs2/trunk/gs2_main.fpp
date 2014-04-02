@@ -7,7 +7,7 @@
 !! include this module and call run_gs2.
 
 module gs2_main
-  
+  implicit none
   public :: run_gs2, finish_gs2, reset_gs2, trin_finish_gs2
  
 contains
@@ -492,7 +492,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
   subroutine reset_linear_magnitude
     use dist_fn_arrays, only: g, gnew
-    use fields_arrays, only: phi, apar, bpar, phinew, aparnew,  phinew
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew,  bparnew
     use run_parameters, only: fphi, fapar, fbpar
     use init_g, only: ginit
     real :: norm
