@@ -2785,7 +2785,7 @@ subroutine check_dist_fn(report_unit)
                 nn_to(ip) = n
                 to_p(ip)%first(n) = r_links(ik, it) + 1
                 to_p(ip)%second(n) = 1
-                to_p(ip)%third(n) = iglo_right
+                to_p(ip)%third(n) = iglo_star
                 to_h(ip)%first(n) = 2*ncell-r_links(ik,it)
                 to_h(ip)%second(n) = 1
                 to_h(ip)%third(n) = iglo_star
@@ -2811,7 +2811,7 @@ subroutine check_dist_fn(report_unit)
                 nn_to(ip) = n
                 to_p(ip)%first(n) = l_links(ik, it) + 1
                 to_p(ip)%second(n) = 2
-                to_p(ip)%third(n) = iglo_left
+                to_p(ip)%third(n) = iglo_star
                 to_h(ip)%first(n) = 2*ncell-l_links(ik, it)
                 to_h(ip)%second(n) = 2
                 to_h(ip)%third(n) = iglo_star
