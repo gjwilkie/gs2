@@ -43,7 +43,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     use job_manage, only: checkstop, job_fork, checktime, time_message, trin_reset, trin_restart, trin_job
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
-    use mp, only: max_reduce, min_reduce, sum_reduce
+    use mp, only: max_reduce, min_reduce, sum_reduce, mp_abort
     use file_utils, only: init_file_utils, run_name!, finish_file_utils
     use fields, only: init_fields, advance
     use species, only: ions, electrons, impurity, spec, nspec
@@ -71,7 +71,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use fields_arrays, only: time_field
     use parameter_scan, only: update_scan_parameter_value
     use unit_tests, only: functional_test_flag, ilast_step
-
+    use eigval, only: init_eigval, do_eigsolve
+#ifdef WITH_EIG
+    use eigval, only: BasicSolve
+#endif
     implicit none
 
     integer, intent (in), optional :: mpi_comm, job_id, nensembles
@@ -242,9 +245,15 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 #endif
 
     if (present(pflux)) call write_trinity_parameters
-    
+    call init_eigval
     call time_message(.false.,time_main_loop,' Main Loop')
-
+if(do_eigsolve)then
+#ifdef WITH_EIG
+   call BasicSolve
+#else
+   call mp_abort("Require slepc/petsc")
+#endif
+else
     do istep = 1, nstep
 
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
@@ -280,7 +289,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
           exit
        end if
     end do
-
+endif
     call time_message(.false.,time_main_loop,' Main Loop')
 
     if (proc0) call time_message(.false.,time_finish,' Finished run')

@@ -1,0 +1,108 @@
+!NOTE: This is NOT a well resolved case!
+&eigval_knobs
+ do_eigsolve=.true.!Do we run the eigensolver
+ n_eig=1 !How many eigenvalues to seek
+ targ_re=0.5 !Real part of target eigenvalue
+ targ_im=0.5 !Imaginary part of target eigenvalue
+! max_iter = !Maximum iterations, if not set petsc decides
+ tolerance = 1.0d-5 !Convergence tolerance
+ solver_option='default' !KrylovSchur
+ extraction_option='slepc_default'
+ which_option='default' !Target_magnitude (i.e. minimise |lambda-targ_re+i*targ_im|)
+ transform_option='slepc_default'
+/
+
+&parameters
+ beta = 0.0
+ zeff = 1.0
+/
+
+&kt_grids_knobs
+ grid_option = "single" 
+/
+
+&kt_grids_single_parameters
+   aky =0.3
+/
+
+&theta_grid_parameters
+ ntheta = 16
+ nperiod = 1
+ eps = 0.18
+ epsl = 2.0
+ shat = 0.8
+ pk = 1.44 
+ shift = 0.0
+/
+
+&theta_grid_knobs
+ equilibrium_option = "s-alpha"
+/
+
+&theta_grid_salpha_knobs
+ model_option = "default" 
+/
+
+&le_grids_knobs
+ ngauss = 8
+ negrid = 8
+/
+
+&dist_fn_knobs
+ adiabatic_option = "iphi00=2"
+/
+&fields_knobs
+ field_option = "local"
+/
+
+&knobs
+ fphi = 1.0 
+ fapar = 0.0 
+ faperp = 0.0
+ delt = 0.01 ! Time step
+ nstep = 100000 ! Maximum number of timesteps
+/
+
+&layouts_knobs
+ layout = "xyles" 
+ opt_redist_nbk = .true.
+ opt_redist_init = .true.
+ intmom_sub = .true.
+ intspec_sub = .true.
+/
+&collisions_knobs
+ collision_model = "none" 
+/
+
+&species_knobs
+ nspec = 1
+/
+&species_parameters_1
+ z = 1.0
+ mass = 1.0
+ dens = 1.0
+ temp = 1.0 
+ tprim = 6.9 
+ fprim = 2.2 
+ uprim = 0.0 
+ vnewk = 0.01
+ type = "ion"
+/
+
+&dist_fn_species_knobs_1
+ fexpr = 0.45 
+ bakdif = 0.05
+/
+
+&init_g_knobs
+ chop_side = .false. 
+ phiinit = 0.001
+ ginit_option = "noise" 
+/
+
+&gs2_diagnostics_knobs
+ print_flux_line = .false.
+ print_line = .false. 
+ write_ascii = .false.
+/
+

@@ -106,9 +106,10 @@ USE_NAGLIB ?=
 MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
+# Compile with PETSC/SLEPC support for determining eigensystem (bin).
+WITH_EIG ?= 
 
 USE_NEW_DIAG?=on
-
 
 ifdef NPROCS
 	NTESTPROCS=$(NPROCS)
@@ -179,6 +180,8 @@ MPI_INC	?=
 MPI_LIB ?=
 FFT_INC ?=
 FFT_LIB ?=
+EIG_INC ?=
+EIG_LIB ?=
 NETCDF_INC ?=
 NETCDF_LIB ?=
 HDF5_INC ?=
@@ -187,6 +190,7 @@ IPM_LIB ?=
 NAG_LIB ?=
 NAG_PREC ?= dble
 PGPLOT_LIB ?=
+PETSC_AVOID_MPIF_H ?=
 
 ################################################### SET COMPILE MODE SWITCHES
 
@@ -354,6 +358,21 @@ ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
+ifdef WITH_EIG
+	PETSC_AVOID_MPIF_H = y
+
+	CPPFLAGS += -DWITH_EIG
+	CFLAGS += -DWITH_EIG 
+
+	ifdef PETSC_AVOID_MPIF_H
+		CPPFLAGS += -DPETSC_AVOID_MPIF_H
+		CFLAGS += -DPETSC_AVOID_MPIF_H
+	endif
+	EIG_LIB += -lpetsc -lslepc -L$(PETSC_DIR)/lib -L$(SLEPC_DIR)/lib -lblas -llapack -lX11
+	EIG_INC += -I$(PETSC_DIR)/include -I$(SLEPC_DIR)/include
+
+endif 
+
 ifdef USE_NEW_DIAG
 sinclude Makefile.diagnostics
 else
@@ -365,11 +384,11 @@ simpledataio:
 endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
-		$(IPM_LIB) $(NAG_LIB)
+		$(IPM_LIB) $(NAG_LIB) $(EIG_LIB)
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
 	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) \
-		 $(SIMPLEDATAIO_INC)
+		 $(SIMPLEDATAIO_INC) $(EIG_INC)
 CFLAGS += $(COPTFLAGS)
 
 DATE=$(shell date +%y%m%d)
@@ -487,7 +506,7 @@ help: helplocal
 
 depend:
 	mv input_parameters_documentation.f90 input_parameters_documentation.f90.hidden
-	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=3 $(VPATH)
+	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=0 $(VPATH)
 	mv input_parameters_documentation.f90.hidden input_parameters_documentation.f90
 
 
@@ -601,6 +620,8 @@ test_make:
 	@echo CPPFLAGS is $(CPPFLAGS)
 	@echo LIBS is $(LIBS)
 	@echo PLIBS is $(PLIBS)
+	@echo WITH_EIG is $(WITH_EIG)
+	@echo PETSC_AVOID_MPIF_H is $(PETSC_AVOID_MPIF_H)
 
 unlink:
 	-rm -f $(F90FROMFPP) layouts_type.h
@@ -610,7 +631,7 @@ revision:
 
 
 gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
-	
+
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
