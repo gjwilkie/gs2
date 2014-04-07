@@ -130,6 +130,9 @@ contains
   
   !> Initialise eigenvalue problem
   subroutine init_eigval
+#ifdef WITH_EIG
+    use mp, only: mp_comm
+#endif
     implicit none
 #ifdef WITH_EIG
     PetscErrorCode :: ierr
@@ -141,6 +144,10 @@ contains
     if(.not.do_eigsolve) return
     
 #ifdef WITH_EIG
+    !Set PETSC_COMM_WORLD to be mp_comm so we can use whatever sub-comm
+    !needed for list mode to work
+    PETSC_COMM_WORLD=mp_comm
+
     !Initialise slepc
     call SlepcInitialize(PETSC_NULL_CHARACTER,ierr)
 
