@@ -243,6 +243,7 @@ contains
     if(.not.eigval_functional())then
        do_eigsolve=.false.
        call broadcast(do_eigsolve)
+       return
     endif
 
 #ifdef WITH_EIG
