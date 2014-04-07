@@ -100,17 +100,21 @@ module eigval
   !Real and imaginary components of target (roughly where we expect eigvals to be)
   real :: targ_re, targ_im
 
+  !Do we specify the initial condition (through ginit)?
+  logical :: use_ginit
+
   !A custom type to make it easy to encapsulate specific settings
   type EpsSettings
-    integer :: n_eig
-    integer :: max_iter
-    integer :: solver_option_switch
-    integer :: extraction_option_switch
-    integer :: which_option_switch
-    integer :: transform_option_switch
-    real :: tolerance
-    real :: targ_re, targ_im
-    complex :: target, target_slepc
+     logical :: use_ginit
+     integer :: n_eig
+     integer :: max_iter
+     integer :: solver_option_switch
+     integer :: extraction_option_switch
+     integer :: which_option_switch
+     integer :: transform_option_switch
+     real :: tolerance
+     real :: targ_re, targ_im
+     complex :: target, target_slepc
   end type EpsSettings
 
   !//////////////////////
@@ -247,7 +251,7 @@ contains
 
     namelist /eigval_knobs/ n_eig, max_iter, tolerance, &
          solver_option, extraction_option, which_option, transform_option,&
-         targ_re, targ_im
+         targ_re, targ_im, use_ginit
     integer :: ierr, in_file
     logical :: exist
 
@@ -263,6 +267,7 @@ contains
        extraction_option='default'
        which_option='default'
        transform_option='default'
+       use_ginit=.false.
 
        !Check if name list exists and if so read it
        in_file=input_unit_exist(nml_name,exist)
@@ -299,7 +304,7 @@ contains
     call broadcast(transform_option_switch)
     call broadcast(targ_re)
     call broadcast(targ_im)
-
+    call broadcast(use_ginit)
 #endif
   end subroutine read_parameters
 
@@ -313,6 +318,7 @@ contains
     write(unit,*)
     write(unit,'(" &",A)') nml_name
     !Basic pars
+    write(unit,'(A,A,"=",L1)') inden,'use_ginit',use_ginit
     write(unit,'(A,A,"=",I0)') inden,'n_eig',n_eig
     write(unit,'(A,A,"=",I0)') inden,'max_iter',max_iter
     write(unit,'(A,A,"=",F12.5)') inden,'toleranace',tolerance
@@ -487,11 +493,14 @@ contains
 
   !> Create a solver and set parameters based on eps_settings
   subroutine InitEPS(eps_solver,mat_operator,eps_settings)
+    use init_g, only: ginit
     implicit none
     EPS, intent(inout) :: eps_solver !The solver object to initialise
     Mat, intent(in) :: mat_operator !The matrix to find eigenpairs of
     type(EpsSettings), intent(in) :: eps_settings
+    Vec :: init_vec
     PetscErrorCode :: ierr
+    logical :: restarted
 
     !Now create the eps solver
     call EPSCreate(PETSC_COMM_WORLD,eps_solver,ierr)
@@ -504,6 +513,22 @@ contains
 
     !Now setup from options
     call SetupEPS(eps_solver,eps_settings)
+
+    !Now initialise if we requested this
+    if(eps_settings%use_ginit)then
+       !Initialise g
+       call ginit(restarted)
+
+       !Setup vector
+       call MatGetVecs(mat_operator,PETSC_NULL_OBJECT,init_vec,ierr)
+       call GnewToVec(init_vec)
+
+       !Set the initial vector
+       call EPSSetInitialSpace(eps_solver,1,init_vec,ierr)
+
+       !Now destroy the vector
+       call VecDestroy(init_vec,ierr)
+    endif
   end subroutine InitEPS
 
   !> Setup the passed solver
@@ -689,7 +714,7 @@ contains
     EPSType :: TmpType !String
     EPSExtraction :: Extract !Integer
     PetscInt :: TmpInt
-!    PetscScalar :: TmpScal !Complex
+    PetscScalar :: TmpScal !Complex
     PetscReal :: TmpReal
     ST :: st
     PetscErrorCode :: ierr
@@ -733,6 +758,10 @@ contains
     call EPSGetWhichEigenPairs(eps_solver,TmpInt,ierr)
     !Could have a select case (in function) to convert integer to string name
     write(ounit,'("   ",A22,2X,":",2X,I0)') "Target type", TmpInt !Note integer, not string
+    !5b. Target value
+    call EPSGetTarget(eps_solver,TmpScal,ierr)
+    write(ounit,'("   ",A22,2X,":",2X,F12.5)') "Real target", PetscRealPart(TmpScal)
+    write(ounit,'("   ",A22,2X,":",2X,F12.5)') "Imag target", PetscImaginaryPart(TmpScal)
 
     !6. Transform type
     call EPSGetST(eps_solver,st,ierr)
@@ -755,6 +784,7 @@ contains
     call InitMatrixOperator(my_operator, advance_eigen)
 
     !Pack the settings type
+    my_settings%use_ginit=use_ginit
     my_settings%n_eig=n_eig
     my_settings%max_iter=max_iter
     my_settings%solver_option_switch=solver_option_switch
@@ -879,6 +909,11 @@ contains
           write(75) FieldArr
           close(75)
        endif
+
+       call VecDestroy(eig_vec_r,ierr)
+       call VecDestroy(eig_vec_i,ierr)
+       if(allocated(FieldArr)) deallocate(FieldArr)
+       if(allocated(EigVals)) deallocate(EigVals)
     else
        if(proc0) write(6,'("No converged eigenvalues found.")')
     endif
