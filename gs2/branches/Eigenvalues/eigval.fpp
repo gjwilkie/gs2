@@ -10,6 +10,9 @@ module eigval
   implicit none
 
 #ifdef WITH_EIG
+!Allows us to user SLEPC_VERSION_MAJOR etc. to automatically
+!disable unsupportted features
+#include <slepcversion.h>
 #include <finclude/petscvecdef.h>
 #include <finclude/petscmatdef.h>
 #include <finclude/slepcepsdef.h>
@@ -574,14 +577,20 @@ contains
           SolverType=EPSLANCZOS
        case(SolverTypeKrylovSchur)
           SolverType=EPSKRYLOVSCHUR
+#if SLEPC_VERSION_GE(3,1,0)
        case(SolverTypeGD)
           SolverType=EPSGD
        case(SolverTypeJD)
           SolverType=EPSJD
+#endif
+#if SLEPC_VERSION_GE(3,3,0)
        case(SolverTypeRQCG)
           SolverType=EPSRQCG
+#endif
+#if SLEPC_VERSION_GE(3,4,0)
        case(SolverTypeCISS)
           SolverType=EPSCISS
+#endif
        case(SolverTypeLapack)
           SolverType=EPSLAPACK
        case(SolverTypeArpack)
@@ -594,8 +603,10 @@ contains
           SolverType=EPSBLOPEX
        case(SolverTypePrimme)
           SolverType=EPSPRIMME
+#if SLEPC_VERSION_GE(3,4,0)
        case(SolverTypeFeast)
           SolverType=EPSFEAST
+#endif
        case default
           !Should never get here
           call mp_abort("Unknown value of solver_option_switch")
