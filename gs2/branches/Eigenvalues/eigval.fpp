@@ -1,13 +1,26 @@
 !> A module for finding eigenvalues and eigenmodes
 !! Requires SLEPC and PETSC
 module eigval
-  use mpi
+#ifdef WITH_EIG
+  use petscvec
+  use petscmat
+  use slepceps
+#endif
+
   implicit none
+
+#ifdef WITH_EIG
+#include <finclude/petscvecdef.h>
+#include <finclude/petscmatdef.h>
+#include <finclude/slepcepsdef.h>
+#endif
+
   private
 
-  public :: eigval_functional, do_eigsolve
+  public :: eigval_functional
   public :: init_eigval, finish_eigval, BasicSolve
   public :: read_parameters, wnml_eigval, check_eigval
+  public :: time_eigval
 
   !//////////////////
   !Slepc related configuration parameters
@@ -72,9 +85,6 @@ module eigval
        TransformNotSpecified=7
   integer :: transform_option_switch
 
-  !Do we want to run the eigenvalue solver?
-  logical :: do_eigsolve
-
   !Number of eigenvalues to seek
   integer :: n_eig
 
@@ -103,20 +113,9 @@ module eigval
   !//////////////////////
   !Operations parameters
   !//////////////////////
-  logical, parameter :: allow_command_line_settings=.false.
+  logical, parameter :: allow_command_line_settings=.true.
+  real, save :: time_eigval(2)=0.
 
-#ifdef WITH_EIG
-#include <finclude/petscsys.h>
-#include <finclude/petscvec.h>
-#include <finclude/petscmat.h>
-#include <finclude/petscvec.h90>
-#include <finclude/petscmat.h90>
-#include <finclude/slepcsys.h>
-#include <finclude/slepceps.h>
-#include <finclude/slepcst.h>
-#include <finclude/slepceps.h90>
-#include <finclude/slepcst.h90>
-#endif
 contains
 
   !>Returns true if GS2 was compiled with WITH_EIG defined
@@ -137,11 +136,14 @@ contains
 #ifdef WITH_EIG
     PetscErrorCode :: ierr
 #endif
+
+    !If we don't have eigenvalue support then ignore any settings in input file
+    if(.not.eigval_functional())then
+       return
+    endif
+
     !Get the input parameters
     call read_parameters
-    
-    !Exit if we're not doing an eigensolve
-    if(.not.do_eigsolve) return
     
 #ifdef WITH_EIG
     !Set PETSC_COMM_WORLD to be mp_comm so we can use whatever sub-comm
@@ -240,23 +242,15 @@ contains
     character(len=20) :: solver_option, extraction_option, which_option, transform_option
     character(len=12),parameter :: nml_name="eigval_knobs"
 
-    namelist /eigval_knobs/ do_eigsolve,n_eig, max_iter, tolerance, &
+    namelist /eigval_knobs/ n_eig, max_iter, tolerance, &
          solver_option, extraction_option, which_option, transform_option,&
          targ_re, targ_im
     integer :: ierr, in_file
     logical :: exist
 
-    !If we don't have eigenvalue support then ignore any settings in input file
-    if(.not.eigval_functional())then
-       do_eigsolve=.false.
-       call broadcast(do_eigsolve)
-       return
-    endif
-
 #ifdef WITH_EIG
     if(proc0)then
        !Defaults
-       do_eigsolve=.false.
        n_eig=1
        max_iter=PETSC_DECIDE
        tolerance=1.0d-6
@@ -293,7 +287,6 @@ contains
     endif
 
     !Broadcasts
-    call broadcast(do_eigsolve)
     call broadcast(n_eig)
     call broadcast(max_iter)
     call broadcast(tolerance)
@@ -500,11 +493,10 @@ contains
     endif
 
     !Now set the spectral transform
-          
-    !Get spectral transform object
-    call EPSGetSt(eps_solver,st,ierr)
+    if(eps_settings%transform_option_switch.ne.TransformNotSpecified)then        
+       !Get spectral transform object
+       call EPSGetSt(eps_solver,st,ierr)
 
-    if(eps_settings%transform_option_switch.ne.TransformNotSpecified)then
        select case(eps_settings%transform_option_switch)
        case(TransformShell)
           TransformType=STSHELL
@@ -533,13 +525,75 @@ contains
 
     !Now we can allow users to override settings from command line if we like
     if(allow_command_line_settings)then
-       !First do the spectral transform object
-       call STSetFromOptions(st,ierr)
-
-       !Now do the solver object
+       !Do the solver object (also updates st object)
        call EPSSetFromOptions(eps_solver,ierr)
     endif
   end subroutine SetupEPS
+
+  subroutine ReportSolverSettings(eps_solver,fext)
+    use mp, only: proc0
+    use file_utils, only: open_output_file, close_output_file
+    implicit none
+    EPS, intent(in) :: eps_solver
+    character(len=*), intent(in), optional :: fext !Optional text to add to file name
+    character(len=80) :: extension
+    integer :: ounit
+    EPSType :: TmpType !String
+    EPSExtraction :: Extract !Integer
+    PetscInt :: TmpInt
+    PetscScalar :: TmpScal !Complex
+    PetscReal :: TmpReal
+    ST :: st
+    PetscErrorCode :: ierr
+
+    !Only proc0 does the writing
+    if(.not.proc0) return
+
+    !Set the default extension
+    extension=".eig.solver_settings"
+
+    !Add optional text is passed
+    if(present(fext)) then
+       extension=trim(fext)//trim(extension)
+    endif
+
+    !Open an output file for writing
+    call open_output_file(ounit,extension)
+    write(ounit,'("Slepc eigensolver settings:")')
+
+    !Now we fetch settings and write them to file
+
+    !1. Solver type
+    call EPSGetType(eps_solver,TmpType,ierr)
+    write(ounit,'("   ",A22,2X,":",2X,A22)') "Type", adjustl(TmpType)
+
+    !2. Number of eigenvalues to look for
+    call EPSGetDimensions(eps_solver,TmpInt,PETSC_NULL_INTEGER,PETSC_NULL_INTEGER,ierr)
+    write(ounit,'("   ",A22,2X,":",2X,I0)') "Number of eigenvalues", TmpInt
+
+    !3. Tolerances
+    call EPSGetTolerances(eps_solver,TmpReal,TmpInt,ierr)
+    write(ounit,'("   ",A22,2X,":",2X,I0)') "Max iterations", TmpInt
+    write(ounit,'("   ",A22,2X,":",1X,E11.4)') "Tolerance", TmpReal
+
+    !4. ExtractionType
+    call EPSGetExtraction(eps_solver,Extract,ierr)
+    !Could have a select case (in function) to convert integer to string name
+    write(ounit,'("   ",A22,2X,":",2X,I0)') "Extraction type", Extract !Note integer, not string
+
+    !5. WhichType
+    call EPSGetWhichEigenPairs(eps_solver,TmpInt,ierr)
+    !Could have a select case (in function) to convert integer to string name
+    write(ounit,'("   ",A22,2X,":",2X,I0)') "Target type", TmpInt !Note integer, not string
+
+    !6. Transform type
+    call EPSGetST(eps_solver,st,ierr)
+    call STGetType(st,TmpType,ierr)
+    write(ounit,'("   ",A22,2X,":",2X,A22)') "Transform type", adjustl(TmpType)
+
+    !Close output file
+    call close_output_file(ounit)
+  end subroutine ReportSolverSettings
 
   subroutine BasicSolve
     use gs2_time, only: code_dt
@@ -569,6 +623,9 @@ contains
     !Create the solver
     call InitEPS(my_solver,my_operator,my_settings)
 
+    !Write settings to file
+    call ReportSolverSettings(my_solver)
+
     !Now we're ready to solve
     call EPSSolve(my_solver,ierr)
 
@@ -596,7 +653,6 @@ contains
     PetscInt :: iteration_count, n_converged
     Vec :: eig_vec_r, eig_vec_i, eig_vec
     PetscScalar :: eig_val_r, eig_val_i
-    PetscScalar, pointer :: eig_vec_r_arr, eig_vec_i_arr
     complex :: EigVal
     complex, dimension(:,:,:), allocatable :: FieldArr
     complex, dimension(:), allocatable :: EigVals

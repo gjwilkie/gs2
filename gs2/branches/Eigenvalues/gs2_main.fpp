@@ -51,7 +51,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time, nwrite, write_nl_flux
     use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time, margin_cpu_time
-    use run_parameters, only: trinity_linear_fluxes
+    use run_parameters, only: trinity_linear_fluxes, do_eigsolve
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
@@ -71,8 +71,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use fields_arrays, only: time_field
     use parameter_scan, only: update_scan_parameter_value
     use unit_tests, only: functional_test_flag, ilast_step
-    use eigval, only: init_eigval, do_eigsolve
 #ifdef WITH_EIG
+    use eigval, only: init_eigval, finish_eigval, time_eigval
     use eigval, only: BasicSolve
 #endif
     implicit none
@@ -245,11 +245,25 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 #endif
 
     if (present(pflux)) call write_trinity_parameters
-    call init_eigval
+
     call time_message(.false.,time_main_loop,' Main Loop')
 if(do_eigsolve)then
 #ifdef WITH_EIG
+   !Start timer
+   call time_message(.false.,time_eigval,' Eigensolver')
+
+   !Initialise slepc and the default/input eigensolver parameters
+   call init_eigval
+
+   !Create a solver based on input paramters, use it to solve and
+   !then destroy it.
    call BasicSolve
+
+   !Tidy up
+   call finish_eigval
+
+   !Stop timer
+   call time_message(.false.,time_eigval,' Eigensolver')
 #else
    call mp_abort("Require slepc/petsc")
 #endif
@@ -361,6 +375,9 @@ endif
 !    if (proc0 .and. .not. nofin) then
 
           print '(/,'' Initialization'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+#ifdef WITH_EIG
+               &'' Eigensolver'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+#endif
                &'' Advance steps'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
                &''(redistribute'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
                &''(field solve'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
@@ -368,6 +385,9 @@ endif
                &'' Finishing'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/,  &
                &'' total from timer is:'', 0pf9.2,'' min'',/)', &
                time_init(1)/60.,time_init(1)/time_total(1), &
+#ifdef WITH_EIG
+               time_eigval(1)/60.,time_eigval(1)/time_total(1), &
+#endif
                time_advance(1)/60.,time_advance(1)/time_total(1), &
                time_redist(1)/60.,time_redist(1)/time_total(1), &
                time_field(1)/60.,time_field(1)/time_total(1), &

@@ -190,7 +190,7 @@ IPM_LIB ?=
 NAG_LIB ?=
 NAG_PREC ?= dble
 PGPLOT_LIB ?=
-PETSC_AVOID_MPIF_H ?=
+#PETSC_AVOID_MPIF_H ?=
 
 ################################################### SET COMPILE MODE SWITCHES
 
@@ -359,16 +359,16 @@ ifdef USE_LE_LAYOUT
 endif
 
 ifdef WITH_EIG
-	PETSC_AVOID_MPIF_H = y
+#	PETSC_AVOID_MPIF_H = y
 
 	CPPFLAGS += -DWITH_EIG
 	CFLAGS += -DWITH_EIG 
 
-	ifdef PETSC_AVOID_MPIF_H
-		CPPFLAGS += -DPETSC_AVOID_MPIF_H
-		CFLAGS += -DPETSC_AVOID_MPIF_H
-	endif
-	EIG_LIB += -lpetsc -lslepc -L$(PETSC_DIR)/lib -L$(SLEPC_DIR)/lib -lblas -llapack -lX11
+#	ifdef PETSC_AVOID_MPIF_H
+#		CPPFLAGS += -DPETSC_AVOID_MPIF_H
+#		CFLAGS += -DPETSC_AVOID_MPIF_H
+#	endif
+	EIG_LIB += -lpetsc -lslepc -L$(PETSC_DIR)/lib -L$(SLEPC_DIR)/lib #-lblas -llapack #-lX11
 	EIG_INC += -I$(PETSC_DIR)/include -I$(SLEPC_DIR)/include
 
 endif 
