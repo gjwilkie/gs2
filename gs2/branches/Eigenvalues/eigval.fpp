@@ -864,7 +864,7 @@ contains
        ! !Allocate eigenvalue storage
        ! allocate(EigVals(n_converged))
 
-       call init_eigenfunc_file(trim(run_name)//"_eig.out.nc",io_ids)
+       call init_eigenfunc_file(trim(run_name)//"_eig.out.nc",fphi,fapar,fbpar,io_ids)
 
        !Now loop over converged values
        do ieig=0,n_converged-1
@@ -888,7 +888,7 @@ contains
           call set_init_fields
 
           !Add to file
-          call add_eigenpair_to_file(EigVal,io_ids)
+          call add_eigenpair_to_file(EigVal,fphi,fapar,fbpar,io_ids)
 
           ! !Store fields | NOTE: Here we assume naky=ntheta0=1
           ! ifield=0

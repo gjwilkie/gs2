@@ -1202,13 +1202,13 @@ contains
   end subroutine gs2_restore_response
 
   !>Initialises a file for saving output of eigensolver to netcdf
-  subroutine init_eigenfunc_file(fname,IDs)
+  subroutine init_eigenfunc_file(fname,fphi,fapar,fbpar,IDs)
     use file_utils, only: error_unit
     use theta_grid, only: ntgrid, theta
-    use run_parameters, only: fphi, fapar, fbpar
     implicit none
     character(len=*), intent(in) :: fname
     type(EigNetcdfID), intent(inout) :: IDs
+    real, intent(in) :: fphi, fapar, fbpar
 #ifdef NETCDF
     integer :: ierr
 #endif
@@ -1270,14 +1270,14 @@ contains
   end subroutine init_eigenfunc_file
 
   !>Add an eigenpairs data to file
-  subroutine add_eigenpair_to_file(eval,IDs,my_conv)
+  subroutine add_eigenpair_to_file(eval,fphi,fapar,fbpar,IDs,my_conv)
     use fields_arrays, only: phinew, aparnew, bparnew
-    use run_parameters, only: fphi, fapar, fbpar
     use convert, only: c2r
     use theta_grid, only: ntgrid
     complex, intent(in) :: eval !Note just use fields to get eigenvectors
     real, intent(in), optional :: my_conv
     type(EigNetcdfID), intent(inout) :: IDs
+    real, intent(in) :: fphi, fapar, fbpar
 #ifdef NETCDF
     real, dimension(2) :: ri_omega
     real, dimension(:,:), allocatable :: ri_field
