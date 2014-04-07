@@ -113,7 +113,8 @@ module eigval
   !//////////////////////
   !Operations parameters
   !//////////////////////
-  logical, parameter :: allow_command_line_settings=.true.
+  logical, parameter :: allow_command_line_settings=.true.    
+  character(len=12),parameter :: nml_name="eigval_knobs"
   real, save :: time_eigval(2)=0.
 
 contains
@@ -240,7 +241,6 @@ contains
          /)
 
     character(len=20) :: solver_option, extraction_option, which_option, transform_option
-    character(len=12),parameter :: nml_name="eigval_knobs"
 
     namelist /eigval_knobs/ n_eig, max_iter, tolerance, &
          solver_option, extraction_option, which_option, transform_option,&
@@ -301,7 +301,144 @@ contains
   end subroutine read_parameters
 
   !> Write the eigval_knobs namelist
-  subroutine wnml_eigval
+  subroutine wnml_eigval(unit)
+    use mp, only: mp_abort
+    implicit none
+    integer, intent(in) :: unit
+    character(len=4) :: inden="    "
+    character(len=30) :: choice
+    write(unit,*)
+    write(unit,'(" &",A)') nml_name
+    !Basic pars
+    write(unit,'(A,A,"=",I0)') inden,'n_eig',n_eig
+    write(unit,'(A,A,"=",I0)') inden,'max_iter',max_iter
+    write(unit,'(A,A,"=",F12.5)') inden,'toleranace',tolerance
+    write(unit,'(A,A,"=",F12.5)') inden,'targ_re',targ_re
+    write(unit,'(A,A,"=",F12.5)') inden,'targ_im',targ_im
+    !string pars
+    !Solver
+    select case(solver_option_switch)
+    case(SolverTypePower)
+       choice='power'
+    case(SolverTypeSubspace)
+       choice='subspace'
+    case(SolverTypeArnoldi)
+       choice='arnoldi'
+    case(SolverTypeLanczos)
+       choice='lanczos'
+    case(SolverTypeKrylovSchur)
+       choice='krylov'
+    case(SolverTypeGD)
+       choice='GD'
+    case(SolverTypeJD)
+       choice='JD'
+    case(SolverTypeRQCG)
+       choice='RQCG'
+    case(SolverTypeCISS)
+       choice='CISS'
+    case(SolverTypeLapack)
+       choice='lapack'
+    case(SolverTypeArpack)
+       choice='arpack'
+    case(SolverTypeBlzpack)
+       choice='blzpack'
+    case(SolverTypeTrlan)
+       choice='trlan'
+    case(SolverTypeBlopex)
+       choice='blopex'
+    case(SolverTypePrimme)
+       choice='primme'
+    case(SolverTypeFeast)
+       choice='feast'
+    case(SolverTypeNotSpecified)
+       choice='slepc_default'
+    case default
+       !Should never get here
+       call mp_abort("Unknown value of solver_option_switch")
+    end select
+    write(unit,'(A,A,"=",A,A,A)') inden,'solver_option','"',choice,'"'
+
+    !Extraction
+    select case(extraction_option_switch)
+    case(ExtractionRitz)
+       choice='ritz'
+    case(ExtractionHarmonic)
+       choice='harmonic'
+    case(ExtractionHarmonicRelative)
+       choice='harmonic_relative'
+    case(ExtractionHarmonicRight)
+       choice='harmonic_right'
+    case(ExtractionHarmonicLargest)
+       choice='harmonic_largest'
+    case(ExtractionRefined)
+       choice='refined'
+    case(ExtractionRefinedHarmonic)
+       choice='refined_harmonic'
+    case(ExtractionNotSpecified)
+       choice='slepc_default'
+    case default
+       !Should never get here
+       call mp_abort("Unknown value of extraction_option_switch")
+    end select
+    write(unit,'(A,A,"=",A,A,A)') inden,'extraction_option','"',choice,'"'
+    
+    !Which type
+    select case(which_option_switch)
+    case(WhichLargestMagnitude)
+       choice='largest_magnitude'
+    case(WhichSmallestMagnitude)
+       choice='smallest_magnitude'
+    case(WhichLargestReal)
+       choice='largest_real'
+    case(WhichSmallestReal)
+       choice='smallest_real'
+    case(WhichLargestImaginary)
+       choice='largest_imaginary'
+    case(WhichSmallestImaginary)
+       choice='smallest_imaginary'
+    case(WhichTargetMagnitude)
+       choice='target_magnitude'
+    case(WhichTargetReal)
+       choice='target_real'
+    case(WhichTargetImaginary)
+       choice='target_imaginary'
+    case(WhichAll)
+       choice='all'
+    case(WhichUser)
+       choice='user'
+    case(WhichNotSpecified)
+       choice='slepc_default'
+    case default
+       !Should never get here
+       call mp_abort("Unknown value of which_option_switch")
+    end select
+    write(unit,'(A,A,"=",A,A,A)') inden,'which_option','"',choice,'"'
+
+    !Transform type
+    select case(transform_option_switch)
+    case(TransformShell)
+       choice='shell'
+    case(TransformShift)
+       choice='shift'
+    case(TransformInvert)
+       choice='invert'
+    case(TransformCayley)
+       choice='cayley'
+    case(TransformFold)
+       choice='fold'
+    case(TransformPrecond)
+       choice='precond'
+    case(TransformNotSpecified)
+       choice='slepc_default'
+    case default
+       !Should never get here
+       call mp_abort("Unknown value of transform_option_switch")
+    end select
+    write(unit,'(A,A,"=",A,A,A)') inden,'transform_option','"',choice,'"'
+
+    !Done
+    write(unit,'(" /")')
+
   end subroutine wnml_eigval
 
   !> Check the eigval settings
@@ -541,7 +678,7 @@ contains
     EPSType :: TmpType !String
     EPSExtraction :: Extract !Integer
     PetscInt :: TmpInt
-    PetscScalar :: TmpScal !Complex
+!    PetscScalar :: TmpScal !Complex
     PetscReal :: TmpReal
     ST :: st
     PetscErrorCode :: ierr
