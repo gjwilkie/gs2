@@ -823,6 +823,8 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     use fields_arrays, only: phinew, aparnew, bparnew
     use fields, only: set_init_fields
+    use gs2_save, only: EigNetcdfID, init_eigenfunc_file, finish_eigenfunc_file, add_eigenpair_to_file
+    use file_utils, only: run_name
     implicit none
     EPS, intent(in) :: my_solver
     Mat, intent(in) :: my_operator
@@ -832,10 +834,11 @@ contains
     Vec :: eig_vec_r, eig_vec_i, eig_vec
     PetscScalar :: eig_val_r, eig_val_i
     complex :: EigVal
-    complex, dimension(:,:,:), allocatable :: FieldArr
-    complex, dimension(:), allocatable :: EigVals
+!    complex, dimension(:,:,:), allocatable :: FieldArr
+!    complex, dimension(:), allocatable :: EigVals
     logical :: all_found
     integer :: ieig, nfield,ifield
+    type(EigNetcdfID) :: io_ids
 
     !Find out how many iterations were performed
     call EPSGetIterationNumber(my_solver,iteration_count,ierr)
@@ -849,17 +852,19 @@ contains
        call MatGetVecs(my_operator,PETSC_NULL_OBJECT,eig_vec_r,ierr)
        call MatGetVecs(my_operator,PETSC_NULL_OBJECT,eig_vec_i,ierr)
 
-       !Count fields
-       nfield=0
-       if(fphi.gt.0) nfield=nfield+1
-       if(fapar.gt.0) nfield=nfield+1
-       if(fbpar.gt.0) nfield=nfield+1
+       ! !Count fields
+       ! nfield=0
+       ! if(fphi.gt.0) nfield=nfield+1
+       ! if(fapar.gt.0) nfield=nfield+1
+       ! if(fbpar.gt.0) nfield=nfield+1
 
-       !Allocate an array to hold all the fields
-       allocate(FieldArr(-ntgrid:ntgrid,nfield,n_converged))
+       ! !Allocate an array to hold all the fields
+       ! allocate(FieldArr(-ntgrid:ntgrid,nfield,n_converged))
        
-       !Allocate eigenvalue storage
-       allocate(EigVals(n_converged))
+       ! !Allocate eigenvalue storage
+       ! allocate(EigVals(n_converged))
+
+       call init_eigenfunc_file(trim(run_name)//"_eig.out.nc",io_ids)
 
        !Now loop over converged values
        do ieig=0,n_converged-1
@@ -875,45 +880,51 @@ contains
 #endif
           !Convert to GS2 eigenvalue
           EigVal=log(EigVal)*cmplx(0.0,1.0)/code_dt
-          EigVals(ieig+1)=EigVal
+!          EigVals(ieig+1)=EigVal
 
           !Get field eigenmodes
           eig_vec=eig_vec_r+eig_vec_i*cmplx(0.0,1.0)
           call VecToGnew(eig_vec)
           call set_init_fields
 
-          !Store fields | NOTE: Here we assume naky=ntheta0=1
-          ifield=0
-          if(fphi.gt.0) then
-             ifield=ifield+1
-             FieldArr(:,ifield,1+ieig)=phinew(:,1,1)
-          endif
-          if(fapar.gt.0) then
-             ifield=ifield+1
-             FieldArr(:,ifield,1+ieig)=aparnew(:,1,1)
-          endif
-          if(fbpar.gt.0) then
-             ifield=ifield+1
-             FieldArr(:,ifield,1+ieig)=bparnew(:,1,1)
-          endif
+          !Add to file
+          call add_eigenpair_to_file(EigVal,io_ids)
+
+          ! !Store fields | NOTE: Here we assume naky=ntheta0=1
+          ! ifield=0
+          ! if(fphi.gt.0) then
+          !    ifield=ifield+1
+          !    FieldArr(:,ifield,1+ieig)=phinew(:,1,1)
+          ! endif
+          ! if(fapar.gt.0) then
+          !    ifield=ifield+1
+          !    FieldArr(:,ifield,1+ieig)=aparnew(:,1,1)
+          ! endif
+          ! if(fbpar.gt.0) then
+          !    ifield=ifield+1
+          !    FieldArr(:,ifield,1+ieig)=bparnew(:,1,1)
+          ! endif
        enddo
 
-       !Now we have the eigenvalues and eigenfields in arrays we can write
-       !them out however we like
-       if(proc0)then
+       !Close netcdf file
+       call finish_eigenfunc_file(io_ids)
+
+       ! !Now we have the eigenvalues and eigenfields in arrays we can write
+       ! !them out however we like
+       ! if(proc0)then
           
-          do ieig=0,n_converged-1
-             write(6,'(I0," ",F12.7," ",F12.7)') ieig+1,real(EigVals(1+ieig)),aimag(EigVals(1+ieig))
-          enddo
-          open(75,FILE="eigvecs.dat",form="unformatted")
-          write(75) FieldArr
-          close(75)
-       endif
+       !    do ieig=0,n_converged-1
+       !       write(6,'(I0," ",F12.7," ",F12.7)') ieig+1,real(EigVals(1+ieig)),aimag(EigVals(1+ieig))
+       !    enddo
+       !    open(75,FILE="eigvecs.dat",form="unformatted")
+       !    write(75) FieldArr
+       !    close(75)
+       ! endif
 
        call VecDestroy(eig_vec_r,ierr)
        call VecDestroy(eig_vec_i,ierr)
-       if(allocated(FieldArr)) deallocate(FieldArr)
-       if(allocated(EigVals)) deallocate(EigVals)
+       ! if(allocated(FieldArr)) deallocate(FieldArr)
+       ! if(allocated(EigVals)) deallocate(EigVals)
     else
        if(proc0) write(6,'("No converged eigenvalues found.")')
     endif
