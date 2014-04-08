@@ -455,7 +455,7 @@ contains
   end subroutine check_eigval
 
 !###############################################################
-!THE SECTION BELOW REQUIRES SLEPC/PETSC SO WE PROVIDES STUBS FOR
+!THE SECTION BELOW REQUIRES SLEPC/PETSC SO WE PROVIDE STUBS FOR
 !ANY PUBLIC ROUTINES HERE
 #ifndef WITH_EIG
   subroutine BasicSolve
@@ -475,8 +475,11 @@ contains
     !Define dimensions
     d1_size=2*ntgrid+1 !Size of theta grid
     d2_size=2          !Size of sigma grid
-    d3_size_local=(1+g_lo%ulim_proc-g_lo%llim_proc) !Size of local distributed domain
+    d3_size_local=(1+g_lo%ulim_alloc-g_lo%llim_proc) !Size of local distributed domain
+    if(g_lo%ulim_proc.lt.g_lo%llim_proc) d3_size_local=0
     d3_size_global=(1+g_lo%ulim_world-g_lo%llim_world) !Size of global distributed domain
+    !We should probably allow callers to pass (at least) d3_size_* so that we can create
+    !operators for sub problems (e.g. a single ky in a run with naky>1)
 
     !How big is the "advance operator matrix"
     n_loc  = d1_size*d2_size*d3_size_local
@@ -760,8 +763,8 @@ contains
     write(ounit,'("   ",A22,2X,":",2X,I0)') "Target type", TmpInt !Note integer, not string
     !5b. Target value
     call EPSGetTarget(eps_solver,TmpScal,ierr)
-    write(ounit,'("   ",A22,2X,":",2X,F12.5)') "Real target", PetscRealPart(TmpScal)
-    write(ounit,'("   ",A22,2X,":",2X,F12.5)') "Imag target", PetscImaginaryPart(TmpScal)
+    write(ounit,'("   ",A22,2X,":",2X,F12.5)') "Real target (slepc)", PetscRealPart(TmpScal)
+    write(ounit,'("   ",A22,2X,":",2X,F12.5)') "Imag target (slepc)", PetscImaginaryPart(TmpScal)
 
     !6. Transform type
     call EPSGetST(eps_solver,st,ierr)
@@ -962,17 +965,20 @@ contains
     PetscErrorCode :: ierr
     integer :: ig, isgn, iglo, local_index
 
+    !No local data
+    if(g_lo%ulim_proc.lt.g_lo%llim_proc) return
+
     !Define dimensions
     d1_size=2*ntgrid+1 !Size of theta grid
     d2_size=2          !Size of sigma grid
-    d3_size_local=(1+g_lo%ulim_proc-g_lo%llim_proc) !Size of local distributed domain
+    d3_size_local=(1+g_lo%ulim_alloc-g_lo%llim_proc) !Size of local distributed domain
     d3_size_global=(1+g_lo%ulim_world-g_lo%llim_world) !Size of global distributed domain
 
     !Get a pointer to the data
     call VecGetArrayF90(VecIn,VecInArr,ierr)
 
     !Extract
-    do iglo=g_lo%llim_proc,g_lo%ulim_proc
+    do iglo=g_lo%llim_proc,g_lo%ulim_alloc
        do isgn=1,2
           do ig=-ntgrid,ntgrid
              !Form local index (note we could just having a running counter which we
@@ -998,17 +1004,20 @@ contains
     PetscErrorCode :: ierr
     integer :: ig, isgn, iglo, local_index
 
+    !No local data
+    if(g_lo%ulim_proc.lt.g_lo%llim_proc) return
+
     !Define dimensions
     d1_size=2*ntgrid+1 !Size of theta grid
     d2_size=2          !Size of sigma grid
-    d3_size_local=(1+g_lo%ulim_proc-g_lo%llim_proc) !Size of local distributed domain
+    d3_size_local=(1+g_lo%ulim_alloc-g_lo%llim_proc) !Size of local distributed domain
     d3_size_global=(1+g_lo%ulim_world-g_lo%llim_world) !Size of global distributed domain
 
     !Get a pointer to the data
     call VecGetArrayF90(VecIn,VecInArr,ierr)
 
     !Extract
-    do iglo=g_lo%llim_proc,g_lo%ulim_proc
+    do iglo=g_lo%llim_proc,g_lo%ulim_alloc
        do isgn=1,2
           do ig=-ntgrid,ntgrid
              !Form local index (note we could just having a running counter which we
