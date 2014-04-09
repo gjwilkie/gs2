@@ -513,9 +513,7 @@ help: helplocal
 .PHONY: depend clean distclean tar test_make diagnostics simpledataio
 
 depend:
-	mv input_parameters_documentation.f90 input_parameters_documentation.f90.hidden
 	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=0 $(VPATH)
-	mv input_parameters_documentation.f90.hidden input_parameters_documentation.f90
 
 
 doc: $(F90FROMFPP)
