@@ -486,9 +486,7 @@ help: helplocal
 .PHONY: depend clean distclean tar test_make diagnostics simpledataio
 
 depend:
-	mv input_parameters_documentation.f90 input_parameters_documentation.f90.hidden
 	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=3 $(VPATH)
-	mv input_parameters_documentation.f90.hidden input_parameters_documentation.f90
 
 
 doc: $(F90FROMFPP)
@@ -610,7 +608,7 @@ revision:
 
 
 gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
-	
+
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
