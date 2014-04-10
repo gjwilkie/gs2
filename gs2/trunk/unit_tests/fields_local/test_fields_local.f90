@@ -7,12 +7,13 @@
 !!   Written by: Edmund Highcock (edmundhighcock@sourceforge.net)
 program test_fields_local
   use unit_tests
-  use fields_local
-  use fields_implicit
+  use fields_local, only: fields_local_unit_test_init_fields_matrixlocal, advance_local, fields_local_functional, minnrow, do_smart_update
+  use fields_implicit, only: fields_implicit_unit_test_init_fields_implicit, advance_implicit
+
   use fields, only: fields_pre_init
   use egrid
   !use general_f0, only: init_general_f0
-  use mp, only: init_mp, finish_mp, proc0
+  use mp, only: init_mp, finish_mp, proc0, broadcast
   use file_utils, only: init_file_utils
   use species, only: init_species, nspec, spec
   use constants, only: pi
@@ -47,6 +48,8 @@ program test_fields_local
   !call init_theta_grid
   !call init_dist_fn
   call fields_pre_init
+  call broadcast(MinNrow)
+  call broadcast(do_smart_update)
   !call init_fields_implicit
 
   call announce_test('init_fields_implicit')
