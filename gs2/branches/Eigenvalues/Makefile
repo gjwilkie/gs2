@@ -365,7 +365,7 @@ ifdef WITH_EIG
 #		CPPFLAGS += -DPETSC_AVOID_MPIF_H
 #		CFLAGS += -DPETSC_AVOID_MPIF_H
 #	endif
-	EIG_LIB += -lpetsc -lslepc -L$(PETSC_DIR)/lib  -L$(SLEPC_DIR)/lib #-lblas -llapack #-lX11
+	EIG_LIB += -L$(PETSC_DIR)/lib  -L$(SLEPC_DIR)/lib #-lblas -llapack #-lX11
 	EIG_INC += -I$(PETSC_DIR)/include -I$(SLEPC_DIR)/include
 
 	ifdef PETSC_ARCH
@@ -376,6 +376,7 @@ ifdef WITH_EIG
 		EIG_LIB += -L$(SLEPC_DIR)/$(SLEPC_ARCH)/lib
 		EIG_INC += -I$(SLEPC_DIR)/$(SLEPC_ARCH)/include
 	endif
+	EIG_LIB += -lslepc -lpetsc
 
 	CPPFLAGS += -DWITH_EIG $(EIG_INC)
 	CFLAGS += -DWITH_EIG 
