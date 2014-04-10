@@ -586,7 +586,7 @@ contains
           call mp_abort("Unknown value of which_option_switch")
        end select
 
-       call EpsSetWhichEigenpairs(eps_solver,WhichType)
+       call EpsSetWhichEigenpairs(eps_solver,WhichType,ierr)
     endif
     
     !Set the target
