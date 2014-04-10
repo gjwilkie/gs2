@@ -486,7 +486,7 @@ help: helplocal
 .PHONY: depend clean distclean tar test_make diagnostics simpledataio
 
 depend:
-	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=3 $(VPATH)
+	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=1 $(VPATH)
 
 
 doc: $(F90FROMFPP)
