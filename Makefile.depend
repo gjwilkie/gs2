@@ -773,6 +773,7 @@ rungridgen.o: \
 species.o: \
 	 file_utils.o \
 	 mp.o \
+	 run_parameters.o \
 	 text_options.o 
 spfunc.o: \
 	 constants.o 

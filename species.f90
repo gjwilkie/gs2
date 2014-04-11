@@ -8,6 +8,10 @@ module species
   public :: alpha_species, beam_species
   public :: has_electron_species, has_slowing_down_species
   public :: ions, electrons, impurity
+  public :: mime, ZI_fac
+
+  real :: mime = -1.0
+  real :: ZI_fac = 1.0
 
   type :: specie
      real :: z
@@ -38,12 +42,12 @@ module species
      !! 0: Should always be used unless specifically using the Maxwellian equivalent to the slowing-down
      !! distribution.
      !! 1: The Estrada-Mila-Waltz equivalent Maxwellian (2006)
-     !! 2: The Angioni-Peeters equivalent Maxwellian (2008)
      integer :: equivmaxw_opt =0
 
      logical :: passive_spec = .false.
      
   end type specie
+
 
   private
 
@@ -64,7 +68,6 @@ module species
   logical :: initialized = .false.
   logical :: exist
 
-  real :: mime = -1.0
 
 contains
 
@@ -239,7 +242,7 @@ contains
     integer :: is, alpha_index, main_ion_species, electron_spec, equivmaxw_opt
     logical:: alphas_exist, passive_spec
     real:: vti,ni,Zi,Ti,ne,vte,veff2va2,vcva,vta,Ealpha,dveff2dvc,ni_prim,ne_prim,Ti_prim,Te_prim
-    namelist /species_knobs/ nspec, mime
+    namelist /species_knobs/ nspec, mime, ZI_fac
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
          tperp0, tpar0, source, sprim, gamma_ai, gamma_ae, ash_fraction, equivmaxw_opt, passive_spec
@@ -270,6 +273,8 @@ contains
     end if
 
     call broadcast (nspec)
+    call broadcast (mime)
+    call broadcast (ZI_fac)
     allocate (spec(nspec))
 
     if (proc0) then
@@ -400,7 +405,8 @@ contains
           z = spec(is)%z     
 
           ! Calculate vc/valpha
-          vcva = (3.0*sqrt(pi)*vti**2*vte*Zi**2*ni/(4.0*ne))**(1.0/3.0)/vta
+          if (spec(is)%equivmaxw_opt .EQ. 1) vcva = (3.0*sqrt(pi)*vti**2*vte*Zi**2*ni/(4.0*ne))**(1.0/3.0)/vta
+          if (spec(is)%equivmaxw_opt .EQ. 2) vcva = (0.25*3.0*sqrt(pi)*ZI_fac*1.371e-4)**(1.0/3.0)*vte/vta
 
           ! Calculate vteff^2/valpha^2
           veff2va2 = 1.0 - pi*vcva**2/(3.0**1.5) + (2.0*vcva**2/sqrt(3.0))*atan((vcva-2.0)/(sqrt(3.0)*vcva)) - (vcva**2/3.0)*log((1.0-vcva+vcva**2)/(1+vcva)**2)
@@ -415,7 +421,10 @@ contains
           spec(is)%temp = temp
 
           if (spec(is)%equivmaxw_opt .EQ. 1) spec(is)%tprim = (1.0/3.0)*dveff2dvc*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)/veff2va2
-          if (spec(is)%equivmaxw_opt .EQ. 2) spec(is)%tprim = (1.0/3.0)*(vcva/veff2va2)*dveff2dvc**2*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)/veff2va2 !< Angioni & Peeters (2008)
+          if (spec(is)%equivmaxw_opt .EQ. 2) then 
+             Te_prim = spec(is)%tprim
+             spec(is)%tprim = (1.0/3.0)*dveff2dvc*1.5*Te_prim/veff2va2
+          end if
 
           spec(is)%stm = sqrt(temp/mass)
           spec(is)%zstm = z/sqrt(temp*mass)

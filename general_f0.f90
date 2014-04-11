@@ -142,7 +142,7 @@ module general_f0
   real, dimension(:), allocatable :: weights_maxwell
 
   !> Which species to use as the main ions in falpha
-  integer :: main_ion_species
+  integer :: main_ion_species, vcrit_opt
 
   !> "Critical speed" that parameterizes the analytic slowing-down distribution 
   !! Can, in principle, be calculated from ion and electron properties, but for now
@@ -244,7 +244,7 @@ contains
             main_ion_species,&
             energy_min,&
             print_egrid,&
-            vcrit, simple_gradient, kappa
+            vcrit, simple_gradient, kappa, vcrit_opt
 
     integer :: ierr, in_file
     logical :: exist
@@ -258,6 +258,7 @@ contains
        vcrit = -1.0
        simple_gradient = .false.
        kappa = -1.0
+       vcrit_opt = 1
 
        in_file = input_unit_exist ("general_f0_parameters", exist)
        if (exist) read (unit=in_file, nml=general_f0_parameters)
@@ -278,6 +279,7 @@ contains
     call broadcast (energy_min)
     call broadcast (vcrit)
     call broadcast (kappa)
+    call broadcast (vcrit_opt)
 
   end subroutine read_parameters
 
@@ -1043,7 +1045,7 @@ contains
   end subroutine calculate_f0_arrays_analytic
 
   subroutine eval_f0_analytic(is,v,f0,gentemp,f0prim)
-    use species, only: ion_species, electron_species, alpha_species, spec, nspec
+    use species, only: ion_species, electron_species, alpha_species, spec, nspec, mime, ZI_fac
     use constants, only: pi
     use mp, only: mp_abort, proc0
     use spfunc, only: erf => erf_ext
@@ -1078,15 +1080,18 @@ contains
           Te_prim = spec(electron_spec)%tprim
        else
           ne = Zi*ni + spec(is)%z * spec(is)%dens
-          vte = sqrt(1836.0 * Ti)
+          vte = sqrt(mime * Ti)
           ne_prim = (Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim)/ne
           Te_prim = Ti_prim
        end if
 
     if (vcrit .LE. 0.0) then
-       vcrit = (3.0*sqrt(pi)*vti**2*vte*Zi**2*ni/(4.0*ne))**(1.0/3.0)/vta
+       if (vcrit_opt .EQ. 1) then
+          vcrit = (3.0*sqrt(pi)*vti**2*vte*Zi**2*ni/(4.0*ne))**(1.0/3.0)/vta
+       else if (vcrit_opt .EQ. 2) then
+           vcrit = (0.25*3.0*sqrt(pi)*ZI_fac*1.371e-4)**(1.0/3.0)*vte/vta
+       endif
     end if
-
 
 !    vstar = sqrt(Ealpha)
 !    Ealpha = 1.0
@@ -1101,7 +1106,12 @@ contains
        df0dv = -A*3.0*v**2/(vcrit**3 + v**3)**2
        df0dE = (0.5/v)*df0dv
        gentemp = -spec(is)%temp*f0/df0dE
-       f0prim = -spec(is)%fprim - (-(vcrit**3/(vcrit**3 + v**3)) + (1.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3)))))*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)
+       if (vcrit_opt .EQ. 1) then
+          f0prim = -spec(is)%fprim - (-(vcrit**3/(vcrit**3 + v**3)) + (1.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3)))))*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)
+       else if (vcrit_opt .EQ. 2) then
+          f0prim = -spec(is)%fprim - (-(vcrit**3/(vcrit**3 + v**3)) + (1.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3)))))*(1.5*spec(is)%tprim)
+       end if
+     
     else
        f0 = exp(-Ealpha*(v**2-1.0)/Ti) * A / (vcrit**3 + 1.0)
        df0dE = -Ealpha*f0/Ti
