@@ -1,22 +1,19 @@
 !> A module for finding eigenvalues and eigenmodes
 !! Requires SLEPC and PETSC
-module eigval
 #ifdef WITH_EIG
+module eigval
   use petscvec
   use petscmat
   use slepceps
-#endif
 
   implicit none
 
-#ifdef WITH_EIG
 !Allows us to user SLEPC_VERSION_MAJOR etc. to automatically
 !disable unsupportted features
 #include <slepcversion.h>
 #include <finclude/petscvecdef.h>
 #include <finclude/petscmatdef.h>
 #include <finclude/slepcepsdef.h>
-#endif
 
   private
 
@@ -112,6 +109,7 @@ module eigval
      integer :: extraction_option_switch
      integer :: which_option_switch
      integer :: transform_option_switch
+     PetscInt :: local_size, global_size
      real :: tolerance
      real :: targ_re, targ_im
      complex :: target, target_slepc
@@ -129,21 +127,14 @@ contains
   !>Returns true if GS2 was compiled with WITH_EIG defined
   function eigval_functional()
     logical :: eigval_functional
-    eigval_functional=.false.
-#ifdef WITH_EIG    
     eigval_functional=.true.
-#endif
   end function eigval_functional
   
   !> Initialise eigenvalue problem
   subroutine init_eigval
-#ifdef WITH_EIG
     use mp, only: mp_comm
-#endif
     implicit none
-#ifdef WITH_EIG
     PetscErrorCode :: ierr
-#endif
 
     !If we don't have eigenvalue support then ignore any settings in input file
     if(.not.eigval_functional())then
@@ -153,26 +144,21 @@ contains
     !Get the input parameters
     call read_parameters
     
-#ifdef WITH_EIG
     !Set PETSC_COMM_WORLD to be mp_comm so we can use whatever sub-comm
     !needed for list mode to work
     PETSC_COMM_WORLD=mp_comm
 
     !Initialise slepc
     call SlepcInitialize(PETSC_NULL_CHARACTER,ierr)
-
-#endif
   end subroutine init_eigval
 
   !> Clean up eigenvalue problem
   subroutine finish_eigval
     implicit none
-#ifdef WITH_EIG
     PetscErrorCode :: ierr
 
     !Finish up slepc
     call SlepcFinalize(ierr)
-#endif
   end subroutine finish_eigval
 
   !> Read the eigval_knobs namelist
@@ -255,7 +241,6 @@ contains
     integer :: ierr, in_file
     logical :: exist
 
-#ifdef WITH_EIG
     if(proc0)then
        !Defaults
        n_eig=1
@@ -305,7 +290,6 @@ contains
     call broadcast(targ_re)
     call broadcast(targ_im)
     call broadcast(use_ginit)
-#endif
   end subroutine read_parameters
 
   !> Write the eigval_knobs namelist
@@ -454,40 +438,45 @@ contains
   subroutine check_eigval
   end subroutine check_eigval
 
-!###############################################################
-!THE SECTION BELOW REQUIRES SLEPC/PETSC SO WE PROVIDE STUBS FOR
-!ANY PUBLIC ROUTINES HERE
-#ifndef WITH_EIG
-  subroutine BasicSolve
-  end subroutine BasicSolve
-#else
+  !> Create a default settings object
+  subroutine InitSettings(eps_settings)
+    use gs2_time, only: code_dt
+    implicit none
+    type(EpsSettings), intent(inout) :: eps_settings
+    eps_settings%use_ginit=use_ginit
+    eps_settings%n_eig=n_eig
+    eps_settings%max_iter=max_iter
+    eps_settings%solver_option_switch=solver_option_switch
+    eps_settings%extraction_option_switch=extraction_option_switch
+    eps_settings%which_option_switch=which_option_switch
+    eps_settings%transform_option_switch=transform_option_switch
+    eps_settings%tolerance=tolerance
+    eps_settings%targ_re=targ_re
+    eps_settings%targ_im=targ_im
+    eps_settings%target=cmplx(targ_re,targ_im)
+    !Convert GS2 eigenvalue to slepc eigenvalue
+    eps_settings%target_slepc=Eig_Gs2ToSlepc(eps_settings%target)
+    !Initialise the dimension attributes to -1 to indicate unset
+    eps_settings%local_size=-1
+    eps_settings%global_size=-1
+  end subroutine InitSettings
+
   !> Setup the matrix operator
-  subroutine InitMatrixOperator(mat_operator, Adv_routine)
-    use theta_grid, only: ntgrid
-    use gs2_layouts, only: g_lo
+  subroutine InitMatrixOperator(mat_operator, Adv_routine, eps_settings)
     implicit none
     Mat, intent(inout) :: mat_operator
     external :: Adv_routine !This returns the result of mat_operator.X (where X is a vector)
-    PetscInt :: d1_size, d2_size, d3_size_global, d3_size_local
-    PetscInt :: n_loc, n_glob
+    type(EpsSettings), intent(in) :: eps_settings
     PetscErrorCode :: ierr
-
-    !Define dimensions
-    d1_size=2*ntgrid+1 !Size of theta grid
-    d2_size=2          !Size of sigma grid
-    d3_size_local=(1+g_lo%ulim_alloc-g_lo%llim_proc) !Size of local distributed domain
-    if(g_lo%ulim_proc.lt.g_lo%llim_proc) d3_size_local=0
-    d3_size_global=(1+g_lo%ulim_world-g_lo%llim_world) !Size of global distributed domain
-    !We should probably allow callers to pass (at least) d3_size_* so that we can create
-    !operators for sub problems (e.g. a single ky in a run with naky>1)
-
-    !How big is the "advance operator matrix"
-    n_loc  = d1_size*d2_size*d3_size_local
-    n_glob = d1_size*d2_size*d3_size_global
+    !Note, whilst we're defining a matrix (i.e. 2D array) we only specify
+    !the local and global length of one side. This is because it is a shell
+    !matrix where we only ever deal with vectors which can interact with the
+    !matrix and never the matrix itself (hence why Sum(n_loc*n_loc)/=n_glob*n_glob
+    !is ok!).
 
     !Make a shell matrix operator (AdvMat)
-    call MatCreateShell(PETSC_COMM_WORLD,n_loc,n_loc,n_glob,n_glob,&
-         PETSC_NULL_INTEGER,mat_operator,ierr)
+    call MatCreateShell(PETSC_COMM_WORLD,eps_settings%local_size,eps_settings%local_size,&
+         eps_settings%global_size,eps_settings%global_size,PETSC_NULL_INTEGER,mat_operator,ierr)
 
     !Set the shell MATOP_MULT operation, i.e. which routine returns the result
     !of a AdvMat.x
@@ -682,8 +671,10 @@ contains
           TransformType=STSINVERT
        case(TransformCayley)
           TransformType=STCAYLEY
+#if SLEPC_VERSION_LE(3,4,4)
        case(TransformFold)
           TransformType=STFOLD
+#endif
        case(TransformPrecond)
           TransformType=STPRECOND
        case default
@@ -776,33 +767,42 @@ contains
   end subroutine ReportSolverSettings
 
   subroutine BasicSolve
-    use gs2_time, only: code_dt
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo
     implicit none
     EPS :: my_solver
     Mat :: my_operator
+    PetscInt :: d1_size, d2_size, d3_size_global, d3_size_local
+    PetscInt :: n_loc, n_glob
     type(EpsSettings) :: my_settings
     PetscErrorCode :: ierr
 
-    !Initialise the matrix operator
-    call InitMatrixOperator(my_operator, advance_eigen)
+    !Define dimensions for problem
+    d1_size=2*ntgrid+1 !Size of theta grid
+    d2_size=2          !Size of sigma grid
+    d3_size_local=(1+g_lo%ulim_alloc-g_lo%llim_proc) !Size of local distributed domain
+    if(g_lo%ulim_proc.lt.g_lo%llim_proc) d3_size_local=0
+    d3_size_global=(1+g_lo%ulim_world-g_lo%llim_world) !Size of global distributed domain
+
+    !How big is the "advance operator matrix"
+    n_loc  = d1_size*d2_size*d3_size_local
+    n_glob = d1_size*d2_size*d3_size_global
 
     !Pack the settings type
-    my_settings%use_ginit=use_ginit
-    my_settings%n_eig=n_eig
-    my_settings%max_iter=max_iter
-    my_settings%solver_option_switch=solver_option_switch
-    my_settings%extraction_option_switch=extraction_option_switch
-    my_settings%which_option_switch=which_option_switch
-    my_settings%transform_option_switch=transform_option_switch
-    my_settings%tolerance=tolerance
-    my_settings%targ_re=targ_re
-    my_settings%targ_im=targ_im
-    my_settings%target=cmplx(targ_re,targ_im)
-    !Convert GS2 eigenvalue to slepc eigenvalue
-    my_settings%target_slepc=exp(-cmplx(0.0,1.0)*my_settings%target*code_dt)
+    call InitSettings(my_settings)
+
+    !Set the sizes
+    my_settings%local_size=n_loc
+    my_settings%global_size=n_glob
+
+    !Initialise the matrix operator
+    call InitMatrixOperator(my_operator, advance_eigen, my_settings)
 
     !Create the solver
     call InitEPS(my_solver,my_operator,my_settings)
+
+    !Attach a monitor
+    !call EPSMonitorSet(my_solver,SimpleMonitor,PETSC_NULL_OBJECT,PETSC_NULL_FUNCTION,ierr)
 
     !Write settings to file
     call ReportSolverSettings(my_solver)
@@ -821,10 +821,8 @@ contains
   !> Routine to write results to screen and netcdf
   subroutine ReportResults(my_solver,my_operator,my_settings)
     use mp, only: proc0
-    use theta_grid, only: ntgrid
     use gs2_time, only: code_dt
     use run_parameters, only: fphi, fapar, fbpar
-    use fields_arrays, only: phinew, aparnew, bparnew
     use fields, only: set_init_fields
     use gs2_save, only: EigNetcdfID, init_eigenfunc_file, finish_eigenfunc_file, add_eigenpair_to_file
     use file_utils, only: run_name
@@ -834,13 +832,11 @@ contains
     type(EpsSettings), intent(in) :: my_settings
     PetscErrorCode :: ierr
     PetscInt :: iteration_count, n_converged
-    Vec :: eig_vec_r, eig_vec_i, eig_vec
+    Vec :: eig_vec_r, eig_vec_i
     PetscScalar :: eig_val_r, eig_val_i
     complex :: EigVal
-!    complex, dimension(:,:,:), allocatable :: FieldArr
-!    complex, dimension(:), allocatable :: EigVals
     logical :: all_found
-    integer :: ieig, nfield,ifield
+    PetscInt :: ieig
     type(EigNetcdfID) :: io_ids
 
     !Find out how many iterations were performed
@@ -848,24 +844,13 @@ contains
 
     !Find out how many converged eigenpairs where found
     call EPSGetConverged(my_solver,n_converged,ierr)
-    all_found=(n_converged.eq.my_settings%n_eig)
+    all_found=(n_converged.ge.my_settings%n_eig)
+    if(proc0) write(6,'("Found ",I0," eigenvalues in ",I0," iterations.")') n_converged,iteration_count
 
     if(n_converged.gt.0)then
        !Initialise the eigenvector arrays
        call MatGetVecs(my_operator,PETSC_NULL_OBJECT,eig_vec_r,ierr)
        call MatGetVecs(my_operator,PETSC_NULL_OBJECT,eig_vec_i,ierr)
-
-       ! !Count fields
-       ! nfield=0
-       ! if(fphi.gt.0) nfield=nfield+1
-       ! if(fapar.gt.0) nfield=nfield+1
-       ! if(fbpar.gt.0) nfield=nfield+1
-
-       ! !Allocate an array to hold all the fields
-       ! allocate(FieldArr(-ntgrid:ntgrid,nfield,n_converged))
-       
-       ! !Allocate eigenvalue storage
-       ! allocate(EigVals(n_converged))
 
        if(proc0)call init_eigenfunc_file(trim(run_name)//"_eig.out.nc",fphi,fapar,fbpar,io_ids)
 
@@ -874,6 +859,7 @@ contains
           !Get eigenpair
           call EPSGetEigenpair(my_solver,ieig,eig_val_r,&
                eig_val_i,eig_vec_r,eig_vec_i,ierr)
+
           !NOTE: If petsc has been compiled with complex support then _i variables
           !are empty, else contains imaginary component
 #ifdef PETSC_USE_COMPLEX
@@ -882,56 +868,45 @@ contains
           EigVal=cmplx(PetscRealPart(eig_val_r),PetscRealPart(eig_val_i))
 #endif
           !Convert to GS2 eigenvalue
-          EigVal=log(EigVal)*cmplx(0.0,1.0)/code_dt
-!          EigVals(ieig+1)=EigVal
+          Eigval=Eig_SlepcToGs2(EigVal)
 
           !Get field eigenmodes
-          eig_vec=eig_vec_r+eig_vec_i*cmplx(0.0,1.0)
-          call VecToGnew(eig_vec)
+          !/First set g
+#ifdef PETSC_USE_COMPLEX
+          call VecToGnew(eig_vec_r)
+#else
+          call VecToGnew2(eig_vec_r,eig_vec_i)
+#endif
+          !/Then calculate fields
           call set_init_fields
 
           !Add to file
           if(proc0)call add_eigenpair_to_file(EigVal,fphi,fapar,fbpar,io_ids)
-
-          ! !Store fields | NOTE: Here we assume naky=ntheta0=1
-          ! ifield=0
-          ! if(fphi.gt.0) then
-          !    ifield=ifield+1
-          !    FieldArr(:,ifield,1+ieig)=phinew(:,1,1)
-          ! endif
-          ! if(fapar.gt.0) then
-          !    ifield=ifield+1
-          !    FieldArr(:,ifield,1+ieig)=aparnew(:,1,1)
-          ! endif
-          ! if(fbpar.gt.0) then
-          !    ifield=ifield+1
-          !    FieldArr(:,ifield,1+ieig)=bparnew(:,1,1)
-          ! endif
        enddo
 
        !Close netcdf file
        if(proc0)call finish_eigenfunc_file(io_ids)
 
-       ! !Now we have the eigenvalues and eigenfields in arrays we can write
-       ! !them out however we like
-       ! if(proc0)then
-          
-       !    do ieig=0,n_converged-1
-       !       write(6,'(I0," ",F12.7," ",F12.7)') ieig+1,real(EigVals(1+ieig)),aimag(EigVals(1+ieig))
-       !    enddo
-       !    open(75,FILE="eigvecs.dat",form="unformatted")
-       !    write(75) FieldArr
-       !    close(75)
-       ! endif
-
        call VecDestroy(eig_vec_r,ierr)
        call VecDestroy(eig_vec_i,ierr)
-       ! if(allocated(FieldArr)) deallocate(FieldArr)
-       ! if(allocated(EigVals)) deallocate(EigVals)
     else
        if(proc0) write(6,'("No converged eigenvalues found.")')
     endif
   end subroutine ReportResults
+
+  elemental complex function Eig_SlepcToGs2(eig)
+    use gs2_time, only: code_dt
+    implicit none
+    complex, intent(in) :: eig
+    Eig_SlepcToGs2=log(eig)*cmplx(0.0,1.0)/code_dt
+  end function Eig_SlepcToGs2
+
+  elemental complex function Eig_Gs2ToSlepc(eig)
+    use gs2_time, only: code_dt
+    implicit none
+    complex, intent(in) :: eig
+    Eig_Gs2ToSlepc=exp(-cmplx(0.0,1.0)*code_dt*eig)
+  end function Eig_Gs2ToSlepc
 
   subroutine advance_eigen(MatOperator,VecIn,Res,ierr)
     use fields, only: set_init_fields, advance
@@ -940,7 +915,6 @@ contains
     Vec, intent(inout) :: VecIn, Res
     PetscErrorCode, intent(inout) :: ierr
     integer, parameter :: istep=2
-
     !First unpack input vector into gnew
     call VecToGnew(VecIn)
 
@@ -993,6 +967,49 @@ contains
     call VecRestoreArrayF90(VecIn,VecInArr,ierr)
   end subroutine VecToGnew
 
+#ifndef PETSC_USE_COMPLEX
+  subroutine VecToGnew2(VecIn,VecInI)
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo
+    use dist_fn_arrays, only: gnew
+    implicit none
+    Vec, intent(inout) :: VecIn,VecInI
+    PetscScalar, pointer :: VecInArr(:),VecInIArr(:)
+    PetscInt :: d1_size, d2_size, d3_size_global, d3_size_local
+    PetscErrorCode :: ierr
+    integer :: ig, isgn, iglo, local_index
+
+    !No local data
+    if(g_lo%ulim_proc.lt.g_lo%llim_proc) return
+
+    !Define dimensions
+    d1_size=2*ntgrid+1 !Size of theta grid
+    d2_size=2          !Size of sigma grid
+    d3_size_local=(1+g_lo%ulim_alloc-g_lo%llim_proc) !Size of local distributed domain
+    d3_size_global=(1+g_lo%ulim_world-g_lo%llim_world) !Size of global distributed domain
+
+    !Get a pointer to the data
+    call VecGetArrayF90(VecIn,VecInArr,ierr)
+    call VecGetArrayF90(VecInI,VecInIArr,ierr)
+
+    !Extract
+    do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+       do isgn=1,2
+          do ig=-ntgrid,ntgrid
+             !Form local index (note we could just having a running counter which we
+             !increment on each loop
+             local_index=1+((iglo-g_lo%llim_proc)*d2_size*d1_size)+(isgn-1)*d1_size+(ig+ntgrid)
+             gnew(ig,isgn,iglo)=cmplx(PetscRealPart(VecInArr(local_index)),PetscRealPart(VecInIArr(local_index)))
+          enddo
+       enddo
+    enddo
+
+    !Get rid of pointer
+    call VecRestoreArrayF90(VecIn,VecInArr,ierr)
+    call VecRestoreArrayF90(VecInI,VecInIArr,ierr)
+  end subroutine VecToGnew2
+#endif
+
   subroutine GnewToVec(VecIn)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
@@ -1031,5 +1048,53 @@ contains
     !Get rid of pointer
     call VecRestoreArrayF90(VecIn,VecInArr,ierr)
   end subroutine GnewToVec
-#endif
+
+  PetscErrorCode function SimpleMonitor(solver,iters,nconv,eig_r,eig_i,err_est,n_est,mm)
+    use mp, only: proc0
+    use gs2_time, only: code_dt
+    implicit none
+    EPS, intent(inout) :: solver
+    PetscInt, intent(inout) :: iters, nconv, n_est
+    PetscScalar,dimension(:), intent(inout) :: eig_r, eig_i
+    PetscReal, dimension(:), intent(inout) :: err_est
+    integer, pointer, intent(inout), optional :: mm
+    integer, save :: nconv_prev=0, iter_prev=0
+    integer :: new_conv, new_iter
+
+    !Set return value
+    SimpleMonitor=0
+
+    !If no change in nconv then return
+    if(nconv_prev.eq.nconv)then
+       return
+    endif
+
+    !Calculate how many extra modes found and how many iterations it took
+    new_conv=nconv-nconv_prev
+    new_iter=iters-iter_prev
+    if(proc0)write(6,'("Found ",I0," eigenvalues in ",I0," iterations:")') new_conv, new_iter
+
+    !Update previous value
+    nconv_prev=nconv
+    iter_prev=iters
+  end function SimpleMonitor
 end module eigval
+
+#else
+
+!###############################################################
+!THE SECTION BELOW PROVIDES THE EIGENVAL MODULE IN THE ABSENCE OF
+!SLEPC/PETSC (i.e. WITH_EIG not defined).
+module eigval
+  implicit none
+  private
+  public :: eigval_functional
+contains
+  !>Returns true if GS2 was compiled with WITH_EIG defined
+  function eigval_functional()
+    logical :: eigval_functional
+    eigval_functional=.false.
+  end function eigval_functional
+end module eigval
+
+#endif

@@ -51,21 +51,16 @@ ffttester_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
-	 diagnostics_config.o \
-	 diagnostics_create_and_write.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_fluxes.o \
-	 diagnostics_write_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
+	 eigval.o \
 	 fft_work.o \
 	 ffttester.o \
 	 fields.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
 	 fields_local.o \
-	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -73,7 +68,6 @@ ffttester_mod = \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -93,7 +87,6 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -112,8 +105,7 @@ ffttester_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o \
-	 volume_averages.o 
+	 unit_tests.o 
 
 gs2_mod = \
 	 antenna.o \
@@ -124,20 +116,15 @@ gs2_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
-	 diagnostics_config.o \
-	 diagnostics_create_and_write.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_fluxes.o \
-	 diagnostics_write_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
+	 eigval.o \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
 	 fields_local.o \
-	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -146,7 +133,6 @@ gs2_mod = \
 	 gridgen4mod.o \
 	 gs2.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -166,7 +152,6 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -185,8 +170,7 @@ gs2_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o \
-	 volume_averages.o 
+	 unit_tests.o 
 
 hrate_mod = \
 	 command_line.o \
@@ -235,7 +219,6 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -390,6 +373,19 @@ drive.o: \
 ediff.o: 
 eeq.o: \
 	 spl.o 
+eigval.o: \
+	 dist_fn_arrays.o \
+	 fields.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 gs2_layouts.o \
+	 gs2_save.o \
+	 gs2_time.o \
+	 init_g.o \
+	 mp.o \
+	 run_parameters.o \
+	 text_options.o \
+	 theta_grid.o 
 et.o: \
 	 geometry.o 
 fft_work.o: \
@@ -471,7 +467,6 @@ file_utils.o: \
 	 command_line.o 
 functional_tests.o: \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_main.o \
 	 job_manage.o \
 	 kt_grids.o \
@@ -490,6 +485,20 @@ geometry.o: \
 	 ideq.o \
 	 leq.o \
 	 peq.o 
+geometry_get_advanced_parameters__genmod.o: \
+	 geometry.o 
+geometry_get_coefficients__genmod.o: \
+	 geometry.o 
+geometry_get_constant_coefficients__genmod.o: \
+	 geometry.o 
+geometry_get_default_advanced_parameters__genmod.o: \
+	 geometry.o 
+geometry_get_miller_parameters__genmod.o: \
+	 geometry.o 
+geometry_set_advanced_parameters__genmod.o: \
+	 geometry.o 
+geometry_set_miller_parameters__genmod.o: \
+	 geometry.o 
 geq.o: \
 	 constants.o \
 	 netcdf_utils.o \
@@ -595,6 +604,7 @@ gs2_main.o: \
 	 collisions.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
+	 eigval.o \
 	 fields.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
@@ -602,7 +612,6 @@ gs2_main.o: \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
@@ -672,9 +681,7 @@ gs2_transforms.o: \
 	 sorting.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o \
-	 convert.o \
-	 file_utils.o 
+	 constants.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -782,7 +789,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -820,8 +826,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
