@@ -402,13 +402,13 @@ contains
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
-    use redistribute, only: opt_redist_nbk
+    use redistribute, only: opt_redist_nbk, opt_redist_persist
     implicit none
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
          max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
          opt_local_copy, opt_redist_nbk, opt_redist_init, intmom_sub, &
-         intspec_sub
+         intspec_sub, opt_redist_persist
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
@@ -418,6 +418,7 @@ contains
     max_unbalanced_yxf = 0.0
     layout = 'lxyes'
     opt_redist_nbk = .false. !<DD>True=>Use nonblocking redistributes
+    opt_redist_persist = .false. !<DD>True=>Use persistent communications in redistributes
     opt_redist_init= .false. !<DD>True=>Use optimised routines to init redist objects
     intmom_sub=.false.
     intspec_sub=.false.
@@ -454,11 +455,12 @@ contains
     
   subroutine broadcast_results
     use mp, only: broadcast
-    use redistribute, only: opt_redist_nbk
+    use redistribute, only: opt_redist_nbk, opt_redist_persist
     implicit none
 
     call broadcast (opt_redist_init)
     call broadcast (opt_redist_nbk)
+    call broadcast (opt_redist_persist)
     call broadcast (intmom_sub)
     call broadcast (intspec_sub)
     call broadcast (layout)
