@@ -3579,6 +3579,9 @@ contains
 !  je-1 = #physical xi values removing duplicate vpar=0 point
        je=2*jend(ig)
        nxi_scatt=je-1
+       if (jend(ig) == ng2+1 .and.special_wfb_lorentz) then
+          nxi_scatt=nxi_scatt-1
+       endif
 ! These fixes address previous comment by CMR: 
 ! "surely wfb's bounce point should be handled like any other trapped bp?"
 !CMR, 1/11/2013:
@@ -3595,7 +3598,6 @@ contains
              gwfb = gle(ng2+1,ie,ile)
 ! then remove vpa = 0 point, weight 0: (CMR confused by this comment!)  
              gle(ng2+1:je-2,ie,ile) = gle(ng2+2:je-1,ie,ile)
-             nxi_scatt=nxi_scatt-1
           endif
 !CMRDDGCend
 
