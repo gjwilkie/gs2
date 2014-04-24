@@ -1648,8 +1648,12 @@ contains
   subroutine init_lorentz (vnmult_target)
     use le_grids, only: negrid, jend, ng2, nxi
     use gs2_layouts, only: le_lo
-    use gs2_layouts, only: lz_lo
+    use gs2_layouts, only: lz_lo, g_lo
     use gs2_layouts, only: ig_idx, ik_idx, ie_idx, is_idx, it_idx
+    use redistribute, only: gather
+    use le_grids, only: g2le
+    use theta_grid, only: ntgrid
+    use dist_fn_arrays, only: aj0, aj1
 
     implicit none
 
@@ -1660,12 +1664,35 @@ contains
     real, dimension (:), allocatable :: dd, hh
     integer :: ile
     integer :: ilz
+    complex, dimension (:,:,:), allocatable :: ctmp, z_big
 
     allocate (aa(nxi+1), bb(nxi+1), cc(nxi+1), dd(nxi+1), hh(nxi+1))
 
     call init_vpdiff
 
     if(use_le_layout) then
+
+       !Make sure aj0le is available if drag term included
+       if(drag)then
+          if(.not.allocated(aj0le))then
+             allocate (z_big(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
+             allocate (ctmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+
+             ! next set aj0le & aj1l
+             z_big(:,1,:) = cmplx(aj0,aj1)
+             z_big(:,2,:) = z_big(:,1,:)
+
+             call gather (g2le, z_big, ctmp)
+
+             allocate (aj0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+             allocate (aj1le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+
+             aj0le = real(ctmp)
+             aj1le = aimag(ctmp)
+
+             deallocate (ctmp, z_big)
+          endif
+       endif
 
       if (heating .and. .not. allocated(glec)) then
          allocate (glec(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
