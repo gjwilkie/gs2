@@ -416,7 +416,7 @@ contains
 
     call set_redist_character_type(g2x, 'g2x')
     call set_xxf_optimised_variables(opt_local_copy, naky, ntgrid, ntheta0, &
-       nlambda, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
+       nlambda, negrid, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
     call init_redist (g2x, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
 
@@ -629,7 +629,7 @@ contains
 
     call set_redist_character_type(g2x, 'g2x')
     call set_xxf_optimised_variables(opt_local_copy, naky, ntgrid, ntheta0, &
-       nlambda, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
+       nlambda, negrid, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
 
     !Create g2x redistribute object
     call init_redist (g2x, 'c', to_low, to_high, to_list, &
