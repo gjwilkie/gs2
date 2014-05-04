@@ -163,9 +163,7 @@ function ffttest (jx,jy,debug)
 
 
   printlots=.false. 
-! Following line was causing seg faults, but the problem has disappeared 
-! (don't know why, but possibly due to fixing a memory leak?)
-  if (present(debug) .and. debug) printlots=.true.
+  if (present(debug)) printlots=debug
 
 !CMR, 5-D FFTs
   g=0
