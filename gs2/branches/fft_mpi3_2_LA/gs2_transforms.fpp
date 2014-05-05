@@ -103,7 +103,7 @@ module gs2_transforms
 
   logical, save, dimension (:), allocatable :: aidx  ! aidx == aliased index
   integer, save, dimension (:), allocatable :: ia, iak
-  complex, save, dimension (:, :), allocatable :: fft, xxf
+  complex, save, dimension (:, :), pointer :: fft=>null(), xxf=>null()
   complex, save, dimension (:, :, :), allocatable :: ag
 
 contains
@@ -138,6 +138,9 @@ contains
     else
        !Recommended for p+log(p)>log(N) where p is number of processors and N is total number of mesh points
        !Could automate selection, though above condition is only fairly rough
+
+       write(0,*) "gs2_transforms_MOD_init_transforms: opt_redist_init", opt_redist_init
+       
        if (opt_redist_init) then
           call init_y_redist_local (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
        else
@@ -163,6 +166,7 @@ contains
   !JH present later in this file.
 
     use mp, only: nproc
+    use shm_mpi3, only : shm_alloc
     use fft_work, only: init_ccfftw
     use gs2_layouts, only: xxf_lo, pe_layout
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
@@ -190,8 +194,10 @@ contains
 
 # elif FFT == _FFTW3_
 
-       if (.not.allocated(xxf)) then
-          allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+       if (.not. associated(xxf)) then
+          !allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+          call shm_alloc(xxf, (/1, xxf_lo%nx, &
+               xxf_lo%llim_proc,xxf_lo%ulim_alloc /))
        endif
 
        ! number of ffts to be calculated
@@ -212,6 +218,7 @@ contains
 
   subroutine init_y_fft (ntgrid)
 
+    use shm_mpi3, only : shm_alloc
     use gs2_layouts, only: xxf_lo, yxf_lo, accel_lo, accelx_lo, dealiasing
     use fft_work, only: init_crfftw, init_rcfftw, init_ccfftw
     implicit none
@@ -263,9 +270,11 @@ contains
     
     else
        ! non-accelerated
-       allocate (fft(yxf_lo%ny/2+1, yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-       if (.not.allocated(xxf))then
-          allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+       !allocate (fft(yxf_lo%ny/2+1, yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+       call shm_alloc(fft, (/1, yxf_lo%ny/2+1, yxf_lo%llim_proc, yxf_lo%ulim_alloc/))
+       if (.not.associated(xxf))then
+          !allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+          call shm_alloc(xxf, (/1, xxf_lo%nx, xxf_lo%llim_proc, xxf_lo%ulim_alloc /))
        endif
 
        if (.not. xfft_initted) then
@@ -322,18 +331,20 @@ contains
     use gs2_layouts, only: opt_local_copy, layout
     
     use mp, only: nproc
+    use shm_mpi3, only : shm_info, shm_onnode, shm_node_id
     use redistribute, only: index_list_type, init_redist, delete_list
     use redistribute, only: set_redist_character_type, set_xxf_optimised_variables
     implicit none
-    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
-    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list, &
+         node_list(0:shm_info%size-1)
+    integer, dimension(0:nproc-1) :: nn_to, nn_from, nn_node(0:shm_info%size-1)
     integer, dimension (3) :: from_low, from_high
     integer, dimension (2) :: to_high
-    integer :: to_low
+    integer, dimension (2) :: to_low
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
 
     integer :: iglo, isign, ig, it, ixxf
-    integer :: n, ip
+    integer :: n, ip, ipn
 
     if (initialized_x_redist) return
     initialized_x_redist = .true.
@@ -350,14 +361,24 @@ contains
     ! count number of elements to be redistributed to/from each processor
     nn_to = 0
     nn_from = 0
+    nn_node = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
              call gidx2xxfidx (ig, isign, iglo, g_lo, xxf_lo, it, ixxf)
+! one should not count the destination on node. 
+! however the gather scatter subrouitne check if the destination is on onde
+! needs revision
              if (idx_local(g_lo,iglo)) &
                   nn_from(proc_id(xxf_lo,ixxf)) = nn_from(proc_id(xxf_lo,ixxf)) + 1
-             if (idx_local(xxf_lo,ixxf)) &
-                nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
+             if (idx_local(xxf_lo,ixxf)) then
+                ip = proc_id(g_lo,iglo); 
+                nn_to(ip) = nn_to(ip) + 1
+                if (shm_onnode(ip)) then 
+                   ipn = shm_node_id(ip) 
+                   nn_node(ipn) = nn_node(ipn) + 1
+                endif
+             endif
           end do
        end do
     end do
@@ -373,11 +394,21 @@ contains
           allocate (to_list(ip)%second(nn_to(ip)))
        end if
     end do
+   
+    do ipn = 0, shm_info%size-1 
+       n =  nn_node(ipn)
+       if (n > 0) then 
+          allocate(node_list(ipn)%first(n), &
+               node_list(ipn)%second(n), &
+               node_list(ipn)%third(n))
+       endif
+    enddo
 
 
     ! get local indices of elements distributed to/from other processors
     nn_to = 0
     nn_from = 0
+    nn_node = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
@@ -396,6 +427,14 @@ contains
                 nn_to(ip) = n
                 to_list(ip)%first(n) = it
                 to_list(ip)%second(n) = ixxf
+                if (shm_onnode(ip)) then
+                   ipn = shm_node_id(ip)
+                   n = nn_node(ipn) + 1	
+                   nn_node(ipn) = n
+                   node_list(ipn)%first(n) = ig
+                   node_list(ipn)%second(n) = isign
+                   node_list(ipn)%third(n) = iglo
+                endif
              end if
           end do
        end do
@@ -405,8 +444,10 @@ contains
     from_low (2) = 1
     from_low (3) = g_lo%llim_proc
 
-    to_low = xxf_lo%llim_proc
-    
+    to_low(1) = xxf_lo%llim_proc
+! <LA made up value, to_low needs to be an array in init_redist 
+    to_low(2) = xxf_lo%llim_proc
+! LA>    
     to_high(1) = xxf_lo%nx
     to_high(2) = xxf_lo%ulim_alloc
 
@@ -418,11 +459,12 @@ contains
     call set_xxf_optimised_variables(opt_local_copy, naky, ntgrid, ntheta0, &
        nlambda, negrid, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
     call init_redist (g2x, 'c', to_low, to_high, to_list, &
-         from_low, from_high, from_list)
+         from_low, from_high, from_list, node_list)
 
     call delete_list (to_list)
     call delete_list (from_list)
-
+    call delete_list (node_list)
+    
   end subroutine init_x_redist
 
   !<DD>
@@ -647,18 +689,20 @@ contains
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx, proc_id, idx_local
     use mp, only: nproc
+    use shm_mpi3, only : shm_info, shm_onnode, shm_node_id
     use redistribute, only: index_list_type, init_redist, delete_list
     use redistribute, only: set_yxf_optimised_variables, set_redist_character_type
     implicit none
-    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
-    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list, &
+         node_list(0:shm_info%size-1)
+    integer, dimension(0:nproc-1) :: nn_to, nn_from, nn_node(0:shm_info%size-1)
     integer, dimension (2) :: from_low, from_high, to_high
-    integer :: to_low
+    integer :: to_low(1)
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
 
     integer :: it, ixxf, ik, iyxf
-    integer :: n, ip
+    integer :: n, ip, ipn
 !<DD>This routine can probably be optimised somewhat.
 !in particular the large number of calls to the index lookup routines
 !and idx_local can be reduced significantly by exploiting knowledge of
@@ -675,13 +719,20 @@ contains
     ! count number of elements to be redistributed to/from each processor
     nn_to = 0
     nn_from = 0
+    nn_node = 0
     do ixxf = xxf_lo%llim_world, xxf_lo%ulim_world
        do it = 1, yxf_lo%nx
           call xxfidx2yxfidx (it, ixxf, xxf_lo, yxf_lo, ik, iyxf)
           if (idx_local(xxf_lo,ixxf)) &
              nn_from(proc_id(yxf_lo,iyxf)) = nn_from(proc_id(yxf_lo,iyxf)) + 1
-          if (idx_local(yxf_lo,iyxf)) &
-             nn_to(proc_id(xxf_lo,ixxf)) = nn_to(proc_id(xxf_lo,ixxf)) + 1
+          if (idx_local(yxf_lo,iyxf)) then
+             ip = proc_id(xxf_lo,ixxf)
+             nn_to(ip) = nn_to(ip) + 1
+             if (shm_onnode(ip)) then 
+                ipn = shm_node_id(ip) 
+                nn_node(ipn) = nn_node(ipn) + 1
+             endif
+          endif
        end do
     end do
 
@@ -696,9 +747,18 @@ contains
        end if
     end do
 
+    do ipn = 0, shm_info%size-1 
+       n =  nn_node(ipn)
+       if (n > 0) then 
+          allocate(node_list(ipn)%first(n), &
+               node_list(ipn)%second(n))
+       endif
+    enddo
+
     ! get local indices of elements distributed to/from other processors
     nn_to = 0
     nn_from = 0
+    nn_node = 0
 !
 !CMR: loop over all xxf indices, find corresponding yxf indices
 !
@@ -728,6 +788,13 @@ contains
              nn_to(ip) = n
              to_list(ip)%first(n) = ik
              to_list(ip)%second(n) = iyxf
+             if (shm_onnode(ip)) then
+                ipn = shm_node_id(ip)
+                n = nn_node(ipn) + 1	
+                nn_node(ipn) = n
+                node_list(ipn)%first(n) = it
+                node_list(ipn)%second(n) = ixxf
+             endif
           end if
        end do
     end do
@@ -735,7 +802,10 @@ contains
     from_low(1) = 1
     from_low(2) = xxf_lo%llim_proc
 
-    to_low = yxf_lo%llim_proc
+    to_low(1) = yxf_lo%llim_proc
+! <LA made up value, to_low needs to be an array in init_redist 
+!    to_low(2) = xxf_lo%llim_proc
+! LA>
 
     to_high(1) = yxf_lo%ny/2+1
     to_high(2) = yxf_lo%ulim_alloc
@@ -747,7 +817,7 @@ contains
     call set_yxf_optimised_variables(yxf_lo%ulim_proc)
 
     call init_redist (x2y, 'c', to_low, to_high, to_list, &
-         from_low, from_high, from_list)
+         from_low, from_high, from_list, node_list)
     call delete_list (to_list)
     call delete_list (from_list)
     
@@ -1666,11 +1736,15 @@ contains
 ! HJL <
 
   subroutine finish_transforms
+    use shm_mpi3, only : shm_free
     use redistribute, only : delete_redist
 
 !    integer :: ip
 
-    if(allocated(xxf)) deallocate(xxf)
+    !if(allocated(xxf)) deallocate(xxf)
+    if (associated(xxf)) then
+       call shm_free(xxf)
+    endif
     if(allocated(ia)) deallocate(ia)
     if(allocated(iak)) deallocate(iak)
     if(allocated(aidx)) deallocate(aidx)
@@ -1679,7 +1753,10 @@ contains
     call delete_redist(g2x)
     call delete_redist(x2y)
 
-    if(allocated(fft)) deallocate(fft) 
+    !if(allocated(fft)) deallocate(fft) 
+    if (associated(fft))then
+       call shm_free(fft)
+    endif
 
 !    do ip = 0, nprocs-1
 !       if(nnfrom(ip)>0) then

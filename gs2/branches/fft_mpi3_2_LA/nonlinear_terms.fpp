@@ -26,7 +26,7 @@ module nonlinear_terms
 
   !complex, dimension(:,:), allocatable :: phi_avg, apar_avg, bpar_avg  
 
-  real, save, dimension (:,:), allocatable :: ba, gb, bracket
+  real, save, dimension (:,:), pointer :: ba => null(), gb => null(), bracket => null()
   ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
 
   real, save, dimension (:,:,:), allocatable :: aba, agb, abracket
@@ -125,7 +125,9 @@ contains
     endif
   end subroutine wnml_nonlinear_terms
 
-  subroutine init_nonlinear_terms 
+  subroutine init_nonlinear_terms
+    use mp, only : iproc
+    use shm_mpi3, only : shm_alloc
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0, nx, ny, akx, aky
     use le_grids, only: init_le_grids, nlambda, negrid
@@ -158,7 +160,14 @@ contains
     if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
     if (nonlinear_mode_switch /= nonlinear_mode_none) then
        call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
-
+       if (iproc == 0) then 
+          if (accelerated) then 
+             print*, "init nl : accelerated"
+          else
+              print*, "init nl : non-accelerated"
+          endif
+       endif
+          
        if (debug) write(6,*) "init_nonlinear_terms: allocations"
        if (alloc) then
           if (accelerated) then
@@ -167,9 +176,12 @@ contains
              allocate (abracket(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
              aba = 0. ; agb = 0. ; abracket = 0.
           else
-             allocate (     ba(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-             allocate (     gb(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-             allocate (bracket(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+             !allocate (     ba(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+             !allocate (     gb(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+             !allocate (bracket(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+             call shm_alloc(ba, (/ 1,yxf_lo%ny,yxf_lo%llim_proc,yxf_lo%ulim_alloc /))
+             call shm_alloc(gb, (/ 1,yxf_lo%ny,yxf_lo%llim_proc,yxf_lo%ulim_alloc /))
+             call shm_alloc(bracket, (/ 1,yxf_lo%ny,yxf_lo%llim_proc,yxf_lo%ulim_alloc /))
              ba = 0. ; gb = 0. ; bracket = 0.
           end if
           alloc = .false.
@@ -557,7 +569,13 @@ contains
     
     call max_allreduce(max_vel)
     
-    dt_cfl = 1./max_vel
+
+    if ( abs (max_vel) > 0.d0) then 
+       dt_cfl = 1./max_vel
+    else
+       dt_cfl = 1.e8 ! as set above ?!?
+    endif
+
     call save_dt_cfl (dt_cfl)
     
     if (accelerated) then
@@ -718,11 +736,21 @@ contains
 
   subroutine finish_nonlinear_terms
 
+    use shm_mpi3, only : shm_free
     implicit none
 
     if (allocated(aba)) deallocate (aba, agb, abracket)
-    if (allocated(ba)) deallocate (ba, gb, bracket)
-
+    !if (allocated(ba)) deallocate (ba, gb, bracket)
+    if (associated(ba)) then
+       call shm_free(ba)
+    endif
+    if (associated(gb)) then
+       call shm_free(gb)
+    endif
+    if (associated(bracket)) then
+       call shm_free(bracket)
+    endif
+    
     nonlin = .false. ; alloc = .true. ; zip = .false. ; accelerated = .false.
     initialized = .false. ; initializing = .true.
 

@@ -23,6 +23,7 @@ program test_nonlinear_terms
   use kt_grids, only: ntheta0, naky
 #ifdef MPI
   use mpi
+  use shm_mpi3
 #endif
   implicit none
   real :: eps
@@ -36,7 +37,7 @@ program test_nonlinear_terms
   integer :: i
 
   complex, dimension (:,:,:), allocatable :: integrate_species_results
-  complex, dimension (:,:,:), allocatable :: g1
+  complex, dimension (:,:,:), pointer :: g1
   complex, dimension (:,:,:), allocatable :: phi, apar, bpar
 
 
@@ -59,8 +60,10 @@ program test_nonlinear_terms
 
   call init_nonlinear_terms
 
-  allocate(g1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
-  allocate(g(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
+  !allocate(g1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
+  !allocate(g(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
+  call shm_alloc(g1, (/ -ntgrid,ntgrid,1,2,g_lo%llim_proc,g_lo%ulim_proc/))
+  call shm_alloc(g, (/ -ntgrid,ntgrid,1,2,g_lo%llim_proc,g_lo%ulim_proc/))
   allocate(phi(-ntgrid:ntgrid,ntheta0,naky))
   allocate(apar(-ntgrid:ntgrid,ntheta0,naky))
   allocate(bpar(-ntgrid:ntgrid,ntheta0,naky))
@@ -77,6 +80,8 @@ program test_nonlinear_terms
 
   call close_module_test('nonlinear_terms')
 
+  call shm_free(g1)
+  call shm_free(g)
   call finish_mp
 
 
@@ -109,7 +114,7 @@ function test_ffts()
       !write(message, '("ffttest ix = ")') 
       !message = 'Hello'
       call announce_check(message)
-      call process_check(test_ffts, ffttest(ix,iy, .false.), message)
+      call process_check(test_ffts, ffttest(ix,iy, .true.), message)
     enddo
   enddo
 
@@ -148,7 +153,7 @@ function ffttest (jx,jy,debug)
   logical, save :: accelerated
   logical,save:: first=.true. 
 
-  real, save, dimension (:,:), allocatable :: gr  ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
+  real, save, dimension (:,:), pointer :: gr  ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
   real, save, dimension (:,:,:), allocatable :: gra  ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
   real:: exact, err
   complex:: fexact
@@ -163,7 +168,9 @@ function ffttest (jx,jy,debug)
 
 
   printlots=.false. 
-  if (present(debug)) printlots=debug
+! Following line was causing seg faults, but the problem has disappeared 
+! (don't know why, but possibly due to fixing a memory leak?)
+  if (present(debug) .and. debug) printlots=.true.
 
 !CMR, 5-D FFTs
   g=0
@@ -258,7 +265,8 @@ if (printlots) call barrier
             write(6,fmt='(A20,I20)') "yxf_lo%ulim_proc",yxf_lo%ulim_proc
             write(6,fmt='(A20,I20)') "yxf_lo%ulim_alloc",yxf_lo%ulim_alloc
          endif
-         allocate (gr(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+         !allocate (gr(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+         call shm_alloc(gr, (/ 1, yxf_lo%ny,yxf_lo%llim_proc,yxf_lo%ulim_alloc /))
          gr=0.
       end if
    end if

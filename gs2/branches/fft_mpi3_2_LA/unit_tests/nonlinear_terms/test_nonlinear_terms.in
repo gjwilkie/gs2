@@ -73,3 +73,8 @@ jtwist = 6
 &nonlinear_terms_knobs
 nonlinear_mode = "on"
 /
+
+&layouts_knobs
+layout="xyles"
+! default lxyes
+/
