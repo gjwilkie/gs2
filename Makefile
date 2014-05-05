@@ -85,7 +85,7 @@ USE_SHMEM ?=
 # which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
 USE_FFT ?= fftw3
 # uses netcdf library (bin)
-USE_NETCDF ?= on
+USE_NETCDF ?=on
 # uses parallel netcdf library
 USE_PARALLEL_NETCDF ?= 
 # uses hdf5 library (bin)
@@ -109,7 +109,6 @@ LOWFLOW ?=
 
 USE_NEW_DIAG?=on
 
-
 ifdef NPROCS
 	NTESTPROCS=$(NPROCS)
 else
@@ -131,7 +130,7 @@ else
 	endif
 endif
 
-export TESTCOMMAND
+export TESTCOMMAND FC LD F90FLAGS LDFLAGS CFLAGS CPPFLAGS LIBS TEST_MODS gs2_mod
 
 #
 # * Targets:
@@ -149,7 +148,7 @@ export TESTCOMMAND
 
 MAKE		= make
 CPP		= cpp
-CPPFLAGS	= -C -P -traditional
+CPPFLAGS	= -C -P -E -traditional
 FC		= f90
 MPIFC		?= mpif90
 H5FC		?= h5fc
@@ -460,7 +459,7 @@ sinclude Makefile.target_$(GK_PROJECT)
 # comment this out to keep intermediate .f90 files
 #.PRECIOUS: $(F90FROMFPP)
 
-.INTERMEDIATE: $(GK_PROJECT)_transforms.f90 $(GK_PROJECT)_io.f90 $(GK_PROJECT)_save.f90 \
+#.INTERMEDIATE: $(GK_PROJECT)_transforms.f90 $(GK_PROJECT)_io.f90 $(GK_PROJECT)_save.f90 \
 		mp.f90 fft_work.f90
 
 # These are special rules for the suffix problem of absoft

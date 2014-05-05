@@ -676,22 +676,22 @@ sub get_dependency{
 # 	    }
 
 	    # include statement
-	    if( $line =~ /^\s*include\s+/ ){
-		chop;
-		(my $dummy, my $incfile)=split;
-		$incfile=~s/[\'\"]//g;  # remove quotation
-		my $match=0;
-		foreach (@$sysfile){ $match++ if ( $incfile eq $_ ); }
-		if ( $match ){
- 		    &message($$msgtype{'debug'},"$incfile is a library include file\n");
-		} else {
-		    if ( -f "$$source{$incfile}{'dir'}/$incfile" ){
-			$$reqfile{$file}{$incfile} = "include";
-		    } else {
-			die ( "Include file $incfile does not exists, bye.\n" )
-		    }
-		}
-	    }
+#	    if( $line =~ /^\s*include\s+/ ){
+#		chop;
+#		(my $dummy, my $incfile)=split;
+#		$incfile=~s/[\'\"]//g;  # remove quotation
+#		my $match=0;
+#		foreach (@$sysfile){ $match++ if ( $incfile eq $_ ); }
+#		if ( $match ){
+# 		    &message($$msgtype{'debug'},"$incfile is a library include file\n");
+#		} else {
+#		    if ( -f "$$source{$incfile}{'dir'}/$incfile" ){
+#			$$reqfile{$file}{$incfile} = "include";
+#		    } else {
+#			die ( "Include file $incfile does not exists, bye.\n" )
+#		    }
+#		}
+#	    }
 	}
 	close(FILE);
     }

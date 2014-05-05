@@ -655,7 +655,7 @@ contains
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
 !<DD>
-    integer :: iglo,ik,it,il,ie,is,col,mycol
+    integer :: iglo,ik,it,il,ie,is,col,mycol, ierr
     integer :: ik_min,ik_max,it_min,it_max,il_min,il_max,ie_min,ie_max,is_min,is_max,ip
     integer :: nproc_subcomm, rank_subcomm
     integer :: nproc_tmp, idim, tmp
