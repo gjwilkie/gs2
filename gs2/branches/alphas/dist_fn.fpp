@@ -3269,6 +3269,7 @@ subroutine check_dist_fn(report_unit)
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fapar, fbpar, fphi, ieqzip
     use species, only: spec
+    use general_f0, only: generalised_temperature
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
@@ -3324,7 +3325,7 @@ subroutine check_dist_fn(report_unit)
              adjleft = anon(ie)*2.0*vperp2(-ntgrid,iglo)*aj1(-ntgrid,iglo) &
                   *bparnew(-ntgrid,it,ik)*fbpar &
                   + spec(is)%z*anon(ie)*phinew(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
-                  /spec(is)%temp*fphi
+                  /generalised_temperature(ie,is)*fphi
              gnew(-ntgrid,1,iglo) = gnew(-ntgrid,1,iglo) - adjleft
           end if
           !This ensures that we only apply the new boundary condition to the rightmost
@@ -3333,7 +3334,7 @@ subroutine check_dist_fn(report_unit)
              adjright = anon(ie)*2.0*vperp2(ntgrid,iglo)*aj1(ntgrid,iglo) &
                   *bparnew(ntgrid,it,ik)*fbpar &
                   + spec(is)%z*anon(ie)*phinew(ntgrid,it,ik)*aj0(ntgrid,iglo) &
-                  /spec(is)%temp*fphi
+                  /generalised_temperature(ie,is)*fphi
              gnew(ntgrid,2,iglo) = gnew(ntgrid,2,iglo) - adjright
          end if
        endif

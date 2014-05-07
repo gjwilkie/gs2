@@ -476,6 +476,9 @@ write(*,*) "veff2va2 = ", veff2va2, " dveff2dvc = ", dveff2dvc, Ti_prim, Te_prim
        call broadcast (spec(is)%passive_spec)
     end do
 
+    call broadcast (ZI_fac)
+    call broadcast (mime)
+
 
   end subroutine read_parameters
 
