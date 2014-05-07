@@ -343,6 +343,7 @@ dist_fn.o: \
 	 text_options.o \
 	 theta_grid.o 
 dist_fn_arrays.o: \
+	 general_f0.o \
 	 gs2_layouts.o \
 	 le_grids.o \
 	 species.o \
@@ -773,7 +774,6 @@ rungridgen.o: \
 species.o: \
 	 file_utils.o \
 	 mp.o \
-	 run_parameters.o \
 	 text_options.o 
 spfunc.o: \
 	 constants.o 

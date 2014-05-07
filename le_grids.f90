@@ -42,7 +42,7 @@ contains
   subroutine setvgrid (vcut, negrid, epts, wgts, nesub)
 
     use mp, only: proc0, mp_abort, iproc
-    use general_f0, only: calculate_f0_arrays, f0_values, zogtemp, f0prim
+    use general_f0, only: calculate_f0_arrays, f0_values, zogtemp, f0prim, generalised_temperature
     use constants, only: pi => dpi
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
     use species, only: nspec, spec, alpha_species, ion_species
@@ -120,7 +120,7 @@ contains
     do is = 1,nspec
 !write(*,*) iproc, is, spec(is)%temp, spec(is)%fprim, spec(is)%tprim, spec(is)%stm
        do ie = 1,negrid
-if (proc0) write(*,*) is, ie, spec(is)%fprim, spec(is)%tprim, f0prim(ie,is)
+if (proc0) write(*,*) is, ie,epts(ie,is),f0_values(ie,is),generalised_temperature(ie,is), f0prim(ie,is)
 !write(*,*) iproc, is,ie, zogtemp(ie,is)
 !          if (iproc .EQ. 3) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
        end do

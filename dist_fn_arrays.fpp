@@ -79,6 +79,7 @@ contains
     use theta_grid, only: ntgrid, bmag
     use le_grids, only: anon
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
+    use general_f0, only: generalised_temperature
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
@@ -98,7 +99,7 @@ contains
            adj = anon(ie)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
                   *bpar(ig,it,ik)*facbpar &
                + spec(is)%z*anon(ie)*phi(ig,it,ik)*aj0(ig,iglo) &
-                  /spec(is)%temp*facphi
+                  /generalised_temperature(ie,is)*facphi
           g(ig,1,iglo) = g(ig,1,iglo) + adj
           g(ig,2,iglo) = g(ig,2,iglo) + adj
        end do
