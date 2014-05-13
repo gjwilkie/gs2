@@ -687,7 +687,14 @@ contains
 
        !Set the type
        call STSetType(st,TransformType,ierr)
-       !STSetMatMode?
+
+       !Set the matrix mode to shell -- This is needed to use a lot of the
+       !spectral transforms but is commented out for the moment because a
+       !few other settings would need to be set including the KSP and PC
+       !types as without implementing other matrix methods (like MATOP_GET_DIAGONAL)
+       !the default KSP/PC won't work. To enable this at run time try something like
+       ! -st_type sinvert -st_ksp_type gmres -st_pc_type none -st_matmode shell
+       !call STSetMatMode(st,ST_MATMODE_SHELL,ierr)
     endif
 
     !Now we can allow users to override settings from command line if we like
