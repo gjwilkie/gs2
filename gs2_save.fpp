@@ -12,7 +12,7 @@ module gs2_save
   use netcdf, only: nf90_var_par_access, NF90_COLLECTIVE
   use netcdf, only: nf90_put_att, NF90_GLOBAL, nf90_get_att
 # endif
-  use netcdf, only: NF90_NOWRITE, NF90_CLOBBER, NF90_NOERR
+  use netcdf, only: NF90_NOWRITE, NF90_CLOBBER, NF90_NOERR, NF90_UNLIMITED
   use netcdf, only: nf90_create, nf90_open, nf90_sync, nf90_close
   use netcdf, only: nf90_def_dim, nf90_def_var, nf90_enddef
   use netcdf, only: nf90_put_var, nf90_get_var, nf90_strerror
@@ -31,7 +31,8 @@ module gs2_save
   public :: read_many, save_many, gs2_save_response, gs2_restore_response
   public :: restore_current_scan_parameter_value
   public :: init_save, init_dt, init_tstart, init_ant_amp
-  public :: init_vnm, restart_writable
+  public :: init_vnm, restart_writable, EigNetcdfID
+  public :: init_eigenfunc_file, finish_eigenfunc_file, add_eigenpair_to_file
 !# ifdef NETCDF
 !  public :: netcdf_real, kind_nf, get_netcdf_code_precision, netcdf_error
 !# endif
@@ -39,6 +40,14 @@ module gs2_save
   interface gs2_restore
      module procedure gs2_restore_many!, gs2_restore_one
   end interface
+
+  !A custom type to look after the netcdf ids for the eigenvalue file
+  type EigNetcdfID
+     integer :: ncid, conv_dim_id, theta_dim_id, ri_dim_id
+     integer :: omega_var_id, theta_var_id, phi_var_id
+     integer :: apar_var_id, bpar_var_id, conv_var_id
+     integer :: nconv_count
+  end type EigNetcdfID
 
   logical :: read_many, save_many ! Read and write single or multiple restart files
   
@@ -1191,6 +1200,153 @@ contains
     close(unit)
 #endif
   end subroutine gs2_restore_response
+
+  !>Initialises a file for saving output of eigensolver to netcdf
+  subroutine init_eigenfunc_file(fname,fphi,fapar,fbpar,IDs)
+    use file_utils, only: error_unit
+    use theta_grid, only: ntgrid, theta
+    implicit none
+    character(len=*), intent(in) :: fname
+    type(EigNetcdfID), intent(inout) :: IDs
+    real, intent(in) :: fphi, fapar, fbpar
+#ifdef NETCDF
+    integer :: ierr
+#endif
+
+    !Set nconv counter to 0
+    IDs%nconv_count=0
+
+#ifdef NETCDF
+    !Get precision
+    if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
+    
+    !/Make file
+    ierr=nf90_create(fname,NF90_CLOBBER,IDs%ncid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,file=fname)
+
+    !/Define dimensions
+    ierr=nf90_def_dim(IDs%ncid,"ri",2,IDs%ri_dim_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="ri")
+    ierr=nf90_def_dim(IDs%ncid,"theta",2*ntgrid+1,IDs%theta_dim_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="theta")
+    ierr=nf90_def_dim(IDs%ncid,"nconv",NF90_UNLIMITED,IDs%conv_dim_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="nconv")
+
+    !/Define variables
+    !Dimensions
+    ierr=nf90_def_var(IDs%ncid,"theta",netcdf_real,IDs%theta_dim_id,IDs%theta_var_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="theta")
+    ierr=nf90_def_var(IDs%ncid,"conv",netcdf_real,IDs%conv_dim_id,IDs%conv_var_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="conv_id")
+    !Fields
+    if(fphi.gt.epsilon(0.0))then
+       ierr=nf90_def_var(IDs%ncid,"phi",netcdf_real,(/IDs%ri_dim_id,IDs%theta_dim_id,&
+            & IDs%conv_dim_id/),IDs%phi_var_id)
+       if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="phi")
+    endif
+    if(fapar.gt.epsilon(0.0))then
+       ierr=nf90_def_var(IDs%ncid,"apar",netcdf_real,(/IDs%ri_dim_id,IDs%theta_dim_id,&
+            & IDs%conv_dim_id/),IDs%apar_var_id)
+       if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="apar")
+    endif
+    if(fbpar.gt.epsilon(0.0))then
+       ierr=nf90_def_var(IDs%ncid,"bpar",netcdf_real,(/IDs%ri_dim_id,IDs%theta_dim_id,&
+            & IDs%conv_dim_id/),IDs%bpar_var_id)
+       if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="bpar")
+    endif
+    !Omega
+    ierr=nf90_def_var(IDs%ncid,"omega",netcdf_real,(/IDs%ri_dim_id,IDs%conv_dim_id/),IDs%omega_var_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="omega")
+    
+    !End definitions
+    ierr=nf90_enddef(IDs%ncid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,file=fname)
+
+    !Now we can place some data in the file
+    ierr=nf90_put_var(IDs%ncid,IDs%theta_var_id,theta)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="theta")
+
+#endif
+  end subroutine init_eigenfunc_file
+
+  !>Add an eigenpairs data to file
+  subroutine add_eigenpair_to_file(eval,fphi,fapar,fbpar,IDs,my_conv)
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use convert, only: c2r
+    use theta_grid, only: ntgrid
+    complex, intent(in) :: eval !Note just use fields to get eigenvectors
+    real, intent(in), optional :: my_conv
+    type(EigNetcdfID), intent(inout) :: IDs
+    real, intent(in) :: fphi, fapar, fbpar
+#ifdef NETCDF
+    real, dimension(2) :: ri_omega
+    real, dimension(:,:), allocatable :: ri_field
+    integer, dimension(3) :: start_field, count_field
+    integer, dimension(2) :: start_omega
+    integer :: ierr
+    real :: local_conv
+#endif
+
+    !First increment counter
+    IDs%nconv_count=IDs%nconv_count+1
+
+#ifdef NETCDF
+    !Now we make start values
+    start_field(1)=1 ; start_field(2)=1 ; start_field(3)=IDs%nconv_count
+    count_field(1)=2 ; count_field(2)=2*ntgrid+1 ; count_field(3)=1
+    start_omega(1)=1 ; start_omega(2)=IDs%nconv_count
+
+    !Set the conv value
+    if(present(my_conv))then
+       local_conv=my_conv
+    else
+       local_conv=IDs%nconv_count*1.0
+    endif
+
+    !Now we can write data
+    !/Conv
+    ierr=nf90_put_var(IDs%ncid,IDs%conv_var_id,local_conv, start=(/IDs%nconv_count/))!,count=(/1/))
+    if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%conv_var_id)
+
+    !/Omega
+    ri_omega(1)=real(eval)
+    ri_omega(2)=aimag(eval)
+    ierr=nf90_put_var(IDs%ncid,IDs%omega_var_id,ri_omega, start=start_omega,count=(/2,1/))
+    if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%omega_var_id)
+
+    !/Fields
+    allocate(ri_field(2,2*ntgrid+1))
+    if(fphi.gt.epsilon(0.0))then
+       call c2r(phinew(:,1,1),ri_field)
+       ierr=nf90_put_var(IDs%ncid,IDs%phi_var_id,ri_field, start=start_field,count=count_field)
+       if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%phi_var_id)
+    endif
+    if(fapar.gt.epsilon(0.0))then
+       call c2r(aparnew(:,1,1),ri_field)
+       ierr=nf90_put_var(IDs%ncid,IDs%apar_var_id,ri_field, start=start_field,count=count_field)
+       if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%apar_var_id)
+    endif
+    if(fbpar.gt.epsilon(0.0))then
+       call c2r(bparnew(:,1,1),ri_field)
+       ierr=nf90_put_var(IDs%ncid,IDs%bpar_var_id,ri_field, start=start_field,count=count_field)
+       if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%bpar_var_id)
+    endif
+    deallocate(ri_field)       
+#endif
+  end subroutine add_eigenpair_to_file
+
+  !>Close the eigenfunction file
+  subroutine finish_eigenfunc_file(IDs)
+    implicit none
+    type(EigNetcdfID), intent(inout) :: IDs
+#ifdef NETCDF
+    integer :: ierr
+
+    !/Now close the file
+    ierr=nf90_close(IDs%ncid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr)
+#endif
+  end subroutine finish_eigenfunc_file
 
   !>This function checks to see if we can create a file with name
   !<restart_file>//<SomeSuffix> if not then our restarts are not

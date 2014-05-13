@@ -20,7 +20,7 @@ module run_parameters
   public :: avail_cpu_time, margin_cpu_time
 !  public :: include_lowflow, rhostar, neo_test
   public :: rhostar, neo_test
-  
+  public :: do_eigsolve
   !> If true and nonlinear_mode is "off", return
   !! simple diffusive estimates of fluxes to trinity
   public :: trinity_linear_fluxes
@@ -46,7 +46,7 @@ module run_parameters
 !  logical :: include_lowflow, neo_test
   logical :: neo_test
 
-  logical :: trinity_linear_fluxes
+  logical :: trinity_linear_fluxes, do_eigsolve
 
   integer, allocatable :: ieqzip(:,:)
   integer :: eqzip_option_switch
@@ -224,7 +224,7 @@ contains
          delt_option, margin, secondary, tertiary, fixpar_secondary, faperp, harris, &
 !         avail_cpu_time, eqzip_option, include_lowflow, neo_test
          avail_cpu_time, margin_cpu_time, eqzip_option, neo_test, &
-         trinity_linear_fluxes
+         trinity_linear_fluxes, do_eigsolve
 
     if (proc0) then
        fbpar = -1.0
@@ -249,6 +249,7 @@ contains
        avail_cpu_time = 1.e10
        margin_cpu_time = 300.
        trinity_linear_fluxes = .false.
+       do_eigsolve = .false.
 
        in_file = input_unit_exist("parameters", rpexist)
 !       if (rpexist) read (unit=input_unit("parameters"), nml=parameters)
@@ -348,7 +349,8 @@ contains
     call broadcast (rhostar)
     call broadcast (neo_test)
     call broadcast (trinity_linear_fluxes)
-    
+    call broadcast (do_eigsolve)
+
     user_delt_max = delt
 
     delt_saved = delt
