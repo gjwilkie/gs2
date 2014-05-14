@@ -112,7 +112,8 @@ module eigval
      PetscInt :: local_size, global_size
      real :: tolerance
      real :: targ_re, targ_im
-     complex :: target, target_slepc
+     complex :: target
+     PetscScalar :: target_slepc
   end type EpsSettings
 
   !//////////////////////
@@ -132,14 +133,35 @@ contains
   
   !> Initialise eigenvalue problem
   subroutine init_eigval
-    use mp, only: mp_comm
+    use mp, only: mp_comm, proc0
+    use file_utils, only: error_unit
     implicit none
     PetscErrorCode :: ierr
+#ifndef PETSC_USE_COMPLEX
+    integer :: unit, ii
+    integer, dimension(2) :: units
+#endif
 
     !If we don't have eigenvalue support then ignore any settings in input file
     if(.not.eigval_functional())then
        return
     endif
+
+    !If petsc has not been compiled with complex support then display
+    !a warning that the results are most likely incorrect.
+#ifndef PETSC_USE_COMPLEX
+    units(1)=error_unit() !Error file
+    units(2)=6            !Screen
+    if(proc0)then
+       do ii=1,2
+          unit=units(ii)
+          write(unit,'(66("#"))')
+          write(unit,'("# ","WARNING : The PETSC library used does not have complex support"," #")')
+          write(unit,'("# ","          --> The results are most likely incorrect.          "," #")')
+          write(unit,'(66("#"))')
+       enddo
+    endif
+#endif
 
     !Get the input parameters
     call read_parameters
@@ -683,7 +705,7 @@ contains
        end select
 
        !Set the shift
-       call STSetShift(st,eps_settings%target,ierr)
+       call STSetShift(st,eps_settings%target_slepc,ierr)
 
        !Set the type
        call STSetType(st,TransformType,ierr)
@@ -736,6 +758,11 @@ contains
     write(ounit,'("Slepc eigensolver settings:")')
 
     !Now we fetch settings and write them to file
+#ifdef PETSC_USE_COMPLEX
+    write(ounit,'("   ",A30)') "Compiled with COMPLEX support"
+#else
+    write(ounit,'("   ",A30)') "Compiled with REAL support"
+#endif
 
     !1. Solver type
     call EPSGetType(eps_solver,TmpType,ierr)
@@ -761,8 +788,12 @@ contains
     write(ounit,'("   ",A22,2X,":",2X,I0)') "Target type", TmpInt !Note integer, not string
     !5b. Target value
     call EPSGetTarget(eps_solver,TmpScal,ierr)
+#ifdef PETSC_USE_COMPLEX
     write(ounit,'("   ",A22,2X,":",2X,F12.5)') "Real target (slepc)", PetscRealPart(TmpScal)
     write(ounit,'("   ",A22,2X,":",2X,F12.5)') "Imag target (slepc)", PetscImaginaryPart(TmpScal)
+#else
+    write(ounit,'("   ",A22,2X,":",2X,F12.5)') "Mag. target (slepc)", PetscRealPart(TmpScal)
+#endif
 
     !6. Transform type
     call EPSGetST(eps_solver,st,ierr)
@@ -893,7 +924,7 @@ contains
 
        !Close netcdf file
        if(proc0)call finish_eigenfunc_file(io_ids)
-
+ 
        call VecDestroy(eig_vec_r,ierr)
        call VecDestroy(eig_vec_i,ierr)
     else
@@ -908,11 +939,17 @@ contains
     Eig_SlepcToGs2=log(eig)*cmplx(0.0,1.0)/code_dt
   end function Eig_SlepcToGs2
 
-  elemental complex function Eig_Gs2ToSlepc(eig)
+  elemental PetscScalar function Eig_Gs2ToSlepc(eig)
     use gs2_time, only: code_dt
     implicit none
     complex, intent(in) :: eig
+    !If PETSC doesn't have a complex type then return the
+    !magnitude of the eigenvalue.
+#ifdef PETSC_USE_COMPLEX
     Eig_Gs2ToSlepc=exp(-cmplx(0.0,1.0)*code_dt*eig)
+#else
+    Eig_Gs2ToSlepc=abs(exp(-cmplx(0.0,1.0)*code_dt*eig))
+#endif
   end function Eig_Gs2ToSlepc
 
   subroutine advance_eigen(MatOperator,VecIn,Res,ierr)
@@ -1016,7 +1053,7 @@ contains
     call VecRestoreArrayF90(VecInI,VecInIArr,ierr)
   end subroutine VecToGnew2
 #endif
-
+ 
   subroutine GnewToVec(VecIn)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
