@@ -56,7 +56,7 @@ module dist_fn
   real :: t0, omega0, gamma0, source0
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
-  logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose, esv, opt_init_bc
+  logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose, esv, opt_init_bc, opt_source
 !CMR, 12/9/13: New logical cllc to modify order of operator in timeadv
   logical :: cllc
 
@@ -136,6 +136,9 @@ module dist_fn
 
   ! set_source
   real, dimension(:,:), allocatable :: ufac
+
+  ! set_source_opt
+  complex, dimension (:,:,:,:), allocatable :: source_coeffs
 
   ! getfieldeq1
   real, allocatable, dimension(:,:) :: awgt
@@ -443,6 +446,7 @@ subroutine check_dist_fn(report_unit)
        write (unit, fmt="(' esv = ',L1)") esv
        write (unit, fmt="(' cllc = ',L1)") cllc
        write (unit, fmt="(' opt_init_bc = ',L1)") opt_init_bc
+       write (unit, fmt="(' opt_source = ',L1)") opt_source
 
        if (.not. has_electron_species(spec)) then
           select case (adiabatic_option_switch)
@@ -611,6 +615,9 @@ subroutine check_dist_fn(report_unit)
     if (debug) write(6,*) "init_dist_fn: init_mom_coeff"
     call init_mom_coeff
 
+    if (debug) write(6,*) "init_dist_fn: init_source_term"
+    call init_source_term
+
   end subroutine init_dist_fn
 
   subroutine read_parameters
@@ -653,7 +660,7 @@ subroutine check_dist_fn(report_unit)
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, &
-         lf_decompose, esv, opt_init_bc
+         lf_decompose, esv, opt_init_bc, opt_source
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -668,6 +675,7 @@ subroutine check_dist_fn(report_unit)
        cllc = .false.
        esv = .false.
        opt_init_bc = .false.
+       opt_source = .false.
        adiabatic_option = 'default'
        poisfac = 0.0
        gridfac = 1.0  ! used to be 5.e4
@@ -726,6 +734,7 @@ subroutine check_dist_fn(report_unit)
     call broadcast (cllc)
     call broadcast (esv)
     call broadcast (opt_init_bc)
+    call broadcast (opt_source)
     call broadcast (adiabatic_option_switch)
     call broadcast (gridfac)
     call broadcast (poisfac)
@@ -1204,11 +1213,14 @@ subroutine check_dist_fn(report_unit)
   end subroutine init_kperp2
 
   subroutine init_invert_rhs
-    use dist_fn_arrays, only: vpar, ittp
+    use dist_fn_arrays, only: vpar, ittp, vpac, aj0
+    use run_parameters, only: wunits
+    use gs2_time, only: code_dt
     use species, only: spec, nspec
-    use theta_grid, only: ntgrid
+    use hyper, only: D_res
+    use theta_grid, only: ntgrid, itor_over_b
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, ng2, forbid, negrid, energy
+    use le_grids, only: nlambda, ng2, forbid, negrid, energy, anon
     use constants, only: pi, zi
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use mp, only: iproc
@@ -1312,6 +1324,22 @@ subroutine check_dist_fn(report_unit)
        
     end select
 
+  end subroutine init_invert_rhs
+
+  subroutine init_source_term
+    use dist_fn_arrays, only: vpar, vpac, aj0
+    use run_parameters, only: wunits, fapar
+    use gs2_time, only: code_dt
+    use species, only: spec,nspec
+    use hyper, only: D_res
+    use theta_grid, only: ntgrid, itor_over_b
+    use le_grids, only: anon, negrid, energy
+    use constants, only: zi,pi
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    implicit none
+    integer :: iglo
+    integer :: ig, ik, it, il, ie, is, isgn
+
     !Initialise ufac for use in set_source
     if (.not. allocated(ufac)) then
        allocate (ufac(negrid, nspec))
@@ -1323,9 +1351,63 @@ subroutine check_dist_fn(report_unit)
        end do
     endif
 
-    initializing = .false.
+    if(.not.opt_source) return
 
-  end subroutine init_invert_rhs
+    !Setup the source coefficients
+    !See comments in get_source_term and set_source
+    !for information on these terms.
+    do iglo=g_lo%llim_proc,g_lo%ulim_proc
+       ie=ie_idx(g_lo,iglo)
+       il=il_idx(g_lo,iglo)
+       ik=ik_idx(g_lo,iglo)
+       it=it_idx(g_lo,iglo)
+       is=is_idx(g_lo,iglo)
+       do isgn=1,2
+          do ig=-ntgrid,ntgrid-1
+#ifdef LOWFLOW
+             !Phi m
+             source_coeffs(1,ig,isgn,iglo)=-2*anon(ie)*vparterm(ig,isgn,iglo)
+             !Phi p
+             source_coeffs(2,ig,isgn,iglo)=-zi*anon(ie)*wdfac(ig,isgn,iglo) &
+              + zi*(wstarfac(ik,ie,is) &
+              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm)
+             if(fapar.gt.0)then
+                !Apar m
+                source_coeffs(3,ig,isgn,iglo)=-spec(is)%zstm*anon(ie)*&
+                     vpac(ig,isgn,iglo)*(aj0(ig+1,iglo)+aj0(ig,iglo))*0.5
+                !Apar p
+                source_coeffs(4,ig,isgn,iglo)=anon(ie)*D_res(it,ik)*spec(is)%zstm*&
+                     vpac(ig,isgn,iglo)-spec(is)%stm*vpac(ig,isgn,iglo)*&
+                     zi*(wstarfac(ik,ie,is) &
+                     + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+                     -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) 
+             endif
+#else
+
+             !Phi m
+             source_coeffs(1,ig,isgn,iglo)=-2*anon(ie)*vpar(ig,isgn,iglo)
+             !Phi p
+             source_coeffs(2,ig,isgn,iglo)=-zi*anon(ie)*wdrift(ig,isgn,iglo) &
+              + zi*(wstar(ik,ie,is) &
+              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm)
+             if(fapar.gt.0)then
+                !Apar m
+                source_coeffs(3,ig,isgn,iglo)=-spec(is)%zstm*anon(ie)*&
+                     vpac(ig,isgn,iglo)*(aj0(ig+1,iglo)+aj0(ig,iglo))*0.5
+                !Apar p
+                source_coeffs(4,ig,isgn,iglo)=anon(ie)*D_res(it,ik)*spec(is)%zstm*&
+                     vpac(ig,isgn,iglo)-spec(is)%stm*vpac(ig,isgn,iglo)*&
+                     zi*(wstar(ik,ie,is) &
+                     + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
+                     -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) 
+             endif
+#endif
+          enddo
+       enddo
+    enddo
+  end subroutine init_source_term
 
   subroutine init_connected_bc
     use theta_grid, only: ntgrid, nperiod, ntheta, theta
@@ -3267,7 +3349,7 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: kx_shift, theta0_shift   ! MR
     use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
-    use run_parameters, only: fixpar_secondary
+    use run_parameters, only: fixpar_secondary,fapar
     implicit none
 !    logical :: alloc = .true.
 
@@ -3277,6 +3359,13 @@ subroutine check_dist_fn(report_unit)
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
 !       allocate (gold (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       if(opt_source)then
+          if(fapar.gt.0)then
+             allocate (source_coeffs(4,-ntgrid:ntgrid-1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          else
+             allocate (source_coeffs(2,-ntgrid:ntgrid-1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          endif
+       endif
        !Note:This currently uses naky times more memory than strictly needed
        if(fixpar_secondary.gt.0) allocate (g_fixpar(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
 #ifdef LOWFLOW
@@ -4271,7 +4360,7 @@ subroutine check_dist_fn(report_unit)
       bdfac_m = 1.-bd*(3.-2.*real(isgn))
 
 
-      do ig = -ntgrid, ntgrid-1
+
 !CMR, 4/8/2011:
 ! Some concerns, may be red herrings !
 ! (1) no bakdif factors in phi_m, apar_p, apar_m, vpar !!! 
@@ -4305,6 +4394,8 @@ subroutine check_dist_fn(report_unit)
 !   2{\chi,f_{0s}}.delt  (allowing for sheared flow)
 !CMRend
 
+!if(fapar.gt.0)then
+      do ig = -ntgrid, ntgrid-1
          phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
          phi_m = phigavg(ig+1)-phigavg(ig)
          ! RN> bdfac factors seem missing for apar_p
@@ -4344,7 +4435,7 @@ subroutine check_dist_fn(report_unit)
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
 #endif
       end do
-        
+
 #ifdef LOWFLOW
       select case (istep)
       case (0)
@@ -4396,6 +4487,215 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine get_source_term
 
+  !This is a version of get_source_term which does both sign (sigma) together
+  !and uses precalculated constant terms. Leads to more memory usage than 
+  !original version but can be significantly faster (~50%)
+  subroutine get_source_term_opt &
+       (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
+        iglo,ik,it,il,ie,is, sourcefac, source)
+#ifdef LOWFLOW
+    use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
+#endif
+    use dist_fn_arrays, only: aj0, aj1, vperp2, g, ittp
+    use theta_grid, only: ntgrid
+    use kt_grids, only: aky
+    use le_grids, only: nlambda, ng2, lmax, anon
+    use species, only: spec
+    use run_parameters, only: fphi, fapar, fbpar
+    use gs2_time, only: code_dt
+    use gs2_layouts, only: g_lo
+    use nonlinear_terms, only: nonlin
+    use constants, only: zi
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
+    integer, intent (in) :: istep
+    integer, intent (in) :: iglo, ik, it, il, ie, is
+    complex, intent (in) :: sourcefac
+    complex, dimension (-ntgrid:,:), intent (out) :: source
+    integer :: ig, isgn
+    complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
+
+    !Temporally weighted fields
+    phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
+                *aj0(:,iglo)*fphi
+
+    if(fbpar.gt.0)then
+       phigavg=phigavg+&
+            (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
+            *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
+    endif
+
+    if(fapar.gt.0)then
+       apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
+            *aj0(:,iglo)*fapar
+    endif
+
+    !Initialise to zero in case where we don't call set_source_opt
+    if(il>lmax)then
+       source=0.0
+    endif
+
+    !Calculate the part of the source related to EM potentials
+    !Do both signs at once to improve memory access
+    do isgn=1,2
+       ! source term in finite difference equations
+       select case (source_option_switch)
+       case (source_option_full)
+          if (il <= lmax) then
+             call set_source_opt
+          end if
+       case(source_option_phiext_full)
+          if (il <= lmax) then
+             call set_source_opt
+             if (aky(ik) < epsilon(0.0)) then
+                source(:ntgrid-1,isgn) = source(:ntgrid-1,isgn) &
+                  - zi*anon(ie)*wdrift(:ntgrid-1,isgn,iglo) &
+                  *2.0*phi_ext*sourcefac*aj0(:ntgrid-1,iglo)
+             end if
+          end if
+       end select
+    enddo
+       
+    ! Do matrix multiplications
+    if (il <= lmax) then
+       do ig = -ntgrid, ntgrid-1
+          source(ig,1) = source(ig,1) &
+               + b(ig,1,iglo)*g(ig,1,iglo) + a(ig,1,iglo)*g(ig+1,1,iglo)
+       end do
+       source(ntgrid,1)=source(-ntgrid,1)  ! is this necessary?  BD
+       do ig = -ntgrid, ntgrid-1
+          source(ig,2) = source(ig,2) &
+               + a(ig,2,iglo)*g(ig,2,iglo) + b(ig,2,iglo)*g(ig+1,2,iglo)
+       end do
+       source(ntgrid,2)=source(-ntgrid,2)  ! is this necessary?  BDa
+    end if
+
+    ! special source term for totally trapped particles (isgn=2 only)
+    isgn=2
+    if (source_option_switch == source_option_full .or. &
+         source_option_switch == source_option_phiext_full) then
+       if (nlambda > ng2) then
+          do ig = -ntgrid, ntgrid
+             if (il < ittp(ig)) cycle
+             source(ig,isgn) &
+                  = g(ig,2,iglo)*a(ig,2,iglo) &
+#ifdef LOWFLOW
+                  - anon(ie)*zi*(wdttpfac(ig,it,ik,ie,is,2)*hneoc(ig,2,iglo))*phigavg(ig) &
+                  + zi*wstar(ik,ie,is)*hneoc(ig,2,iglo)*phigavg(ig)
+#else
+                  - anon(ie)*zi*(wdriftttp(ig,it,ik,ie,is,2))*phigavg(ig) &
+                  + zi*wstar(ik,ie,is)*phigavg(ig)
+#endif             
+          end do
+             
+          if (source_option_switch == source_option_phiext_full .and. &
+               aky(ik) < epsilon(0.0)) then
+             do ig = -ntgrid, ntgrid
+                if (il < ittp(ig)) cycle             
+                source(ig,isgn) = source(ig,isgn) - zi*anon(ie)* &
+#ifdef LOWFLOW
+                     wdttpfac(ig,it,ik,ie,is,isgn)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
+#else
+                     wdriftttp(ig,it,ik,ie,is,isgn)*2.0*phi_ext*sourcefac*aj0(ig,iglo)
+#endif
+             end do
+          endif
+
+          ! add in nonlinear terms 
+          if (nonlin) then         
+             select case (istep)
+             case (0)
+                ! nothing
+             case (1)
+                do ig = -ntgrid, ntgrid
+                   if (il < ittp(ig)) cycle
+                   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
+                end do
+             case (2) 
+                do ig = -ntgrid, ntgrid
+                   if (il < ittp(ig)) cycle
+                   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+                        1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
+                end do
+             case default
+                do ig = -ntgrid, ntgrid
+                   if (il < ittp(ig)) cycle
+                   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+                        (23./12.)*gexp_1(ig,isgn,iglo) &
+                        - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                        + (5./12.) *gexp_3(ig,isgn,iglo))
+                end do
+             end select
+          end if
+       end if
+    end if
+
+  contains
+
+    subroutine set_source_opt
+      implicit none
+      complex :: apar_p, apar_m, phi_p, phi_m
+      real :: bd, bdfac_p, bdfac_m
+
+! try fixing bkdiff dependence
+      bd = bkdiff(1)
+
+      bdfac_p = 1.+bd*(3.-2.*real(isgn))
+      bdfac_m = 1.-bd*(3.-2.*real(isgn))
+
+      if(fapar.gt.0)then
+         do ig = -ntgrid, ntgrid-1
+            phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
+            phi_m = phigavg(ig+1)-phigavg(ig)
+            ! RN> bdfac factors seem missing for apar_p
+            apar_p = apargavg(ig+1)+apargavg(ig)
+            apar_m = aparnew(ig+1,it,ik)+aparnew(ig,it,ik) & 
+                 -apar(ig+1,it,ik)-apar(ig,it,ik)
+            
+            source(ig,isgn)=phi_m*source_coeffs(1,ig,isgn,iglo)+&
+                 phi_p*source_coeffs(2,ig,isgn,iglo)+&
+                 apar_m*source_coeffs(3,ig,isgn,iglo)+&
+                 apar_p*source_coeffs(4,ig,isgn,iglo)
+         end do
+      else
+         do ig = -ntgrid, ntgrid-1
+            phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
+            phi_m = phigavg(ig+1)-phigavg(ig)
+            
+            source(ig,isgn)=phi_m*source_coeffs(1,ig,isgn,iglo)+&
+                 phi_p*source_coeffs(2,ig,isgn,iglo)
+         end do
+      endif
+
+! add in nonlinear terms 
+      if (nonlin) then         
+         select case (istep)
+         case (0)
+            ! nothing
+         case (1)
+            do ig = -ntgrid, ntgrid-1
+               source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
+            end do
+         case (2) 
+            do ig = -ntgrid, ntgrid-1
+               source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+                    1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
+            end do
+         case default
+            do ig = -ntgrid, ntgrid-1
+               source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+                      (23./12.)*gexp_1(ig,isgn,iglo) &
+                    - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                    + (5./12.) *gexp_3(ig,isgn,iglo))
+            end do
+         end select
+      end if
+
+    end subroutine set_source_opt
+
+  end subroutine get_source_term_opt
+
   subroutine invert_rhs_1 &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
         iglo, sourcefac)
@@ -4424,7 +4724,7 @@ subroutine check_dist_fn(report_unit)
     logical :: kperiod_flag, speriod_flag
     integer :: ntgl, ntgr
 
-    call prof_entering ("invert_rhs_1", "dist_fn")
+!    call prof_entering ("invert_rhs_1", "dist_fn")
 
     ik = ik_idx(g_lo,iglo)
     it = it_idx(g_lo,iglo)
@@ -4445,10 +4745,15 @@ subroutine check_dist_fn(report_unit)
     ie = ie_idx(g_lo,iglo)
     is = is_idx(g_lo,iglo)
 
-    do isgn = 1, 2
-       call get_source_term (phi, apar, bpar, phinew, aparnew, bparnew, &
-            istep, isgn, iglo,ik,it,il,ie,is, sourcefac, source(:,isgn))
-    end do
+    if(opt_source)then
+       call get_source_term_opt (phi, apar, bpar, phinew, aparnew, bparnew, &
+            istep, iglo,ik,it,il,ie,is, sourcefac, source)
+    else
+       do isgn = 1, 2
+          call get_source_term (phi, apar, bpar, phinew, aparnew, bparnew, &
+               istep, isgn, iglo,ik,it,il,ie,is, sourcefac, source(:,isgn))
+       end do
+    endif
 
     ! gnew is the inhomogeneous solution
     gnew(:,:,iglo) = 0.0
@@ -4687,7 +4992,7 @@ subroutine check_dist_fn(report_unit)
        gnew(:,2,iglo) = 0.0
     end where
 
-    call prof_leaving ("invert_rhs_1", "dist_fn")
+!    call prof_leaving ("invert_rhs_1", "dist_fn")
 
   contains
 
@@ -8519,6 +8824,7 @@ subroutine check_dist_fn(report_unit)
     if (allocated(connections)) deallocate (connections)
     if (allocated(g_adj)) deallocate (g_adj)
     if (allocated(g)) deallocate (g, gnew, g0)
+    if (allocated(source_coeffs)) deallocate(source_coeffs)
     if (allocated(g_fixpar)) deallocate (g_fixpar)
     if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
     if (allocated(g_h)) deallocate (g_h, save_h)
