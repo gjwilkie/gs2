@@ -193,7 +193,7 @@ contains
     use mp, only: proc0, broadcast
     use fields_implicit, only: field_subgath, dump_response_imp=>dump_response, read_response_imp=>read_response
     use fields_local, only: dump_response_local=>dump_response, read_response_local=>read_response, minNrow
-    use fields_local, only: do_smart_update
+    use fields_local, only: do_smart_update, field_local_allreduce, field_local_allreduce_sub
     implicit none
     type (text_option), dimension (5), parameter :: fieldopts = &
          (/ text_option('default', fieldopt_implicit), &
@@ -203,7 +203,7 @@ contains
             text_option('implicit_local', fieldopt_local)/)
     character(20) :: field_option
     namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit,&
-         dump_response, read_response, minNrow, do_smart_update
+         dump_response, read_response, minNrow, do_smart_update, field_local_allreduce, field_local_allreduce_sub
     integer :: ierr, in_file
 
     if (proc0) then
@@ -215,6 +215,8 @@ contains
        read_response=.false.
        minnrow=64 !Tuning this can influence both init and advance times
        do_smart_update=.false.
+       field_local_allreduce=.false.
+       field_local_allreduce_sub=.false.
        in_file = input_unit_exist ("fields_knobs", exist)
 !       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
        if (exist) read (unit=in_file, nml=fields_knobs)
@@ -242,6 +244,8 @@ contains
     case (fieldopt_local)
        call broadcast (minNrow)
        call broadcast (do_smart_update)
+       call broadcast (field_local_allreduce)
+       call broadcast (field_local_allreduce_sub)
        dump_response_local=dump_response
        read_response_local=read_response
     end select
