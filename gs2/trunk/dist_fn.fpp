@@ -58,7 +58,8 @@ module dist_fn
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
   logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose, esv, opt_init_bc, opt_source
 !CMR, 12/9/13: New logical cllc to modify order of operator in timeadv
-  logical :: cllc
+!CMR, 21/5/14: New logical wfb_cmr to enforce trapping conditions on wfb
+  logical :: cllc, wfb_cmr
 
   integer :: adiabatic_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
@@ -167,6 +168,7 @@ module dist_fn
   type (redist_type), save :: wfb_p, wfb_h
   type (redist_type), save :: pass_right
   type (redist_type), save :: pass_left
+  type (redist_type), save :: pass_wfb
   type (redist_type), save :: parity_redist, parity_redist_ik
 
   integer, dimension (:,:), allocatable :: l_links, r_links
@@ -445,6 +447,7 @@ subroutine check_dist_fn(report_unit)
        write (unit, fmt="(' gridfac = ',e16.10)") gridfac
        write (unit, fmt="(' esv = ',L1)") esv
        write (unit, fmt="(' cllc = ',L1)") cllc
+       write (unit, fmt="(' wfb_cmr = ',L1)") wfb_cmr
        write (unit, fmt="(' opt_init_bc = ',L1)") opt_init_bc
        write (unit, fmt="(' opt_source = ',L1)") opt_source
 
@@ -660,7 +663,7 @@ subroutine check_dist_fn(report_unit)
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, &
-         lf_decompose, esv, opt_init_bc, opt_source
+         lf_decompose, esv, wfb_cmr, opt_init_bc, opt_source
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -672,6 +675,7 @@ subroutine check_dist_fn(report_unit)
     if (proc0) then
        boundary_option = 'default'
        nonad_zero = .true.  ! BD: Default value changed to TRUE  8.15.13
+       wfb_cmr= .false.
        cllc = .false.
        esv = .false.
        opt_init_bc = .false.
@@ -731,6 +735,7 @@ subroutine check_dist_fn(report_unit)
 
     call broadcast (boundary_option_switch)
     call broadcast (nonad_zero)
+    call broadcast (wfb_cmr)
     call broadcast (cllc)
     call broadcast (esv)
     call broadcast (opt_init_bc)
@@ -1563,11 +1568,16 @@ subroutine check_dist_fn(report_unit)
           if (connections(iglo)%iglo_right >= 0 .and. aky(ik) /= 0.0) &
                save_h (2,iglo) = .true.
 ! wfb (linked)
-          if (nlambda > ng2               .and. &
-               il == ng2+1                .and. &
-               connections(iglo)%neighbor .and. &
-               aky(ik) /= 0.0) &
-               save_h (:,iglo) = .true.
+          if ( wfb_cmr ) then
+! if wfb_cmr = .t.  do NOT save homogeneous solutions for wfb
+             if (nlambda > ng2 .and. il == ng2+1) save_h(:,iglo) = .false.
+          else
+             if (nlambda > ng2               .and. &
+                  il == ng2+1                .and. &
+                  connections(iglo)%neighbor .and. &
+                  aky(ik) /= 0.0) &
+                  save_h (:,iglo) = .true.
+          endif
        end do
 
        allocate (l_links(naky, ntheta0))
@@ -1785,6 +1795,9 @@ subroutine check_dist_fn(report_unit)
        call delete_list (to)
        
 ! take care of wfb
+    if ( wfb_cmr ) then
+       call init_pass_wfb
+    else
 
        nn_to = 0
        nn_from = 0 
@@ -1932,6 +1945,7 @@ subroutine check_dist_fn(report_unit)
        
        call delete_list (from)
        call delete_list (to)
+    endif
        
 ! n_links_max is typically 2 * number of cells in largest supercell
        allocate (g_adj (n_links_max, 2, g_lo%llim_proc:g_lo%ulim_alloc))
@@ -2103,7 +2117,7 @@ subroutine check_dist_fn(report_unit)
        call delete_list (to)
 
 ! now take care of wfb (homogeneous part)
-
+    if ( .not. wfb_cmr ) then
        nn_to = 0
        nn_from = 0 
 
@@ -2253,6 +2267,7 @@ subroutine check_dist_fn(report_unit)
        
        call delete_list (from)
        call delete_list (to)
+    endif
 
 200    continue
 
@@ -9135,5 +9150,137 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine init_lowflow
 #endif
+
+  subroutine init_pass_wfb
+! CMR, 21/5/2014: 
+!       simple experimental new routine sets up "pass_wfb" redist_type to pass 
+!       g(ntgrid,1,iglo)  => g(-ntgrid,1,iglo_right) in right connected cell.
+!       g(-ntgrid,2,iglo) => g(ntgrid,1,iglo_right) in left connected cell.
+    use gs2_layouts, only: g_lo, il_idx, idx, proc_id
+    use le_grids, only: ng2
+    use mp, only: iproc, nproc, max_allreduce
+    use redistribute, only: redist_type
+    use redistribute, only: index_list_type, init_fill, delete_list
+    use theta_grid, only:ntgrid 
+    implicit none
+    type (index_list_type), dimension(0:nproc-1) :: to, from
+    integer, dimension (0:nproc-1) :: nn_from, nn_to
+    integer, dimension(3) :: from_low, from_high, to_low, to_high
+    integer :: il, iglo, ip, iglo_left, iglo_right, ipleft, ipright, n, nn_max
+    logical :: haslinks=.true.
+    logical :: debug=.false.
+
+      if (boundary_option_switch .eq. boundary_option_linked) then
+! Need communications to satisfy || boundary conditions
+! First find required blocksizes 
+         nn_to = 0   ! # communicates from ip TO HERE (iproc)
+         nn_from = 0 ! # communicates to ip FROM HERE (iproc)
+         do iglo = g_lo%llim_world, g_lo%ulim_world
+            il = il_idx(g_lo,iglo)          
+            if (il /= ng2+1) cycle     ! ONLY consider wfb 
+            ip = proc_id(g_lo,iglo)
+! First consider rightward connections 
+            call get_right_connection (iglo, iglo_right, ipright)
+            if (ipright .eq. iproc ) then
+               nn_to(ip)=nn_to(ip)+1
+            endif
+            if (ip .eq. iproc .and. ipright .ge. 0 ) then
+               nn_from(ipright)=nn_from(ipright)+1
+            endif
+! Then leftward connections 
+            call get_left_connection (iglo, iglo_left, ipleft)
+            if (ipleft .eq. iproc ) then
+               nn_to(ip)=nn_to(ip)+1
+            endif
+            if (ip .eq. iproc .and. ipleft .ge. 0 ) then
+               nn_from(ipleft)=nn_from(ipleft)+1
+            endif
+         end do
+         nn_max = maxval(nn_to+nn_from)
+         call max_allreduce (nn_max)
+! skip addressing if no links are needed
+         if (nn_max == 0) then 
+            haslinks=.false.
+         endif
+      endif
+      if (debug) then
+         write(6,*) 'init_pass_wfb processor, nn_to:',iproc,nn_to
+         write(6,*) 'init_pass_wfb processor, nn_from:',iproc,nn_from
+      endif
+
+      if (boundary_option_switch.eq.boundary_option_linked .and. haslinks) then
+! 
+! CMR, 12/11/2013: 
+!      communication required to satisfy linked BC for wfb
+!      allocate indirect addresses for sends/receives 
+!     
+!      NB communications use "c_fill_3" as g has 3 indices
+!      but 1 index sufficient as only communicating g(ntgrid,1,*)! 
+!      if "c_fill_1" in redistribute we'd only need allocate: from|to(ip)%first 
+!                             could be more efficient
+!  
+         do ip = 0, nproc-1
+            if (nn_from(ip) > 0) then
+               allocate (from(ip)%first(nn_from(ip)))
+               allocate (from(ip)%second(nn_from(ip)))
+               allocate (from(ip)%third(nn_from(ip)))
+            endif
+            if (nn_to(ip) > 0) then
+               allocate (to(ip)%first(nn_to(ip)))
+               allocate (to(ip)%second(nn_to(ip)))
+               allocate (to(ip)%third(nn_to(ip)))
+            endif
+         end do
+! Now fill the indirect addresses...
+         nn_from = 0 ; nn_to = 0          
+         do iglo = g_lo%llim_world, g_lo%ulim_world
+            il = il_idx(g_lo,iglo)          
+            if (il /= ng2+1) cycle     ! ONLY consider wfb 
+            ip = proc_id(g_lo,iglo)
+! First consider rightward connections 
+            call get_right_connection (iglo, iglo_right, ipright)
+            if (ip .eq. iproc .and. ipright .ge. 0 ) then 
+               n=nn_from(ipright)+1 ; nn_from(ipright)=n
+               from(ipright)%first(n)=ntgrid
+               from(ipright)%second(n)=1
+               from(ipright)%third(n)=iglo
+            endif
+            if (ipright .eq. iproc ) then 
+               n=nn_to(ip)+1 ; nn_to(ip)=n
+               to(ip)%first(n)=-ntgrid
+               to(ip)%second(n)=1
+               to(ip)%third(n)=iglo_right
+            endif
+! Then leftward connections 
+            call get_left_connection (iglo, iglo_left, ipleft)
+            if (ip .eq. iproc .and. ipleft .ge. 0 ) then
+               n=nn_from(ipleft)+1 ; nn_from(ipleft)=n
+               from(ipleft)%first(n)=-ntgrid
+               from(ipleft)%second(n)=2
+               from(ipleft)%third(n)=iglo
+            endif
+            if (ipleft .eq. iproc ) then
+               n=nn_to(ip)+1 ; nn_to(ip)=n
+               to(ip)%first(n)=ntgrid
+               to(ip)%second(n)=2
+               to(ip)%third(n)=iglo_left
+            endif
+         end do
+         if (debug) then
+            write(6,*) 'init_pass_wfb processor, nn_to:',iproc,nn_to
+            write(6,*) 'init_pass_wfb processor, nn_from:',iproc,nn_from
+         endif
+
+         from_low(1)=-ntgrid ; from_low(2)=1 ; from_low(3)=g_lo%llim_proc       
+         from_high(1)=ntgrid; from_high(2)=2; from_high(3)=g_lo%ulim_alloc
+         to_low(1)=-ntgrid  ; to_low(2)=1   ; to_low(3)=g_lo%llim_proc       
+         to_high(1)=ntgrid ; to_high(2)=2  ; to_high(3)=g_lo%ulim_alloc
+         call init_fill (pass_wfb, 'c', to_low, to_high, to, &
+               from_low, from_high, from)
+
+         call delete_list (from)
+         call delete_list (to)
+      endif
+  end subroutine init_pass_wfb
 
 end module dist_fn
