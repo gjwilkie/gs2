@@ -8,10 +8,10 @@ module species
   public :: alpha_species, beam_species
   public :: has_electron_species, has_slowing_down_species
   public :: ions, electrons, impurity
-  public :: mime, ZI_fac
+  public :: ZI_fac, vte
 
-  real :: mime = -1.0
-  real :: ZI_fac = 1.0
+  real :: vte = -1.0     !< Intended vte / vref for use in defining the alpha particle distribution
+  real :: ZI_fac = -1.0  !< defined as the sum of (m_fast / m_alpha)*(n_i m_alpha Z_i^2 / n_e m_i) over all ion species. May use a different combination when defining the alpha particle distribution than what actually exists in the simulation.
 
   type :: specie
      real :: z
@@ -239,10 +239,10 @@ contains
     real :: source, sprim, gamma_ae, gamma_ai, ash_fraction, zero
     character(20) :: type
     integer :: unit
-    integer :: is, alpha_index, main_ion_species, electron_spec, equivmaxw_opt
+    integer :: is, js, alpha_index, main_ion_species, electron_spec, equivmaxw_opt
     logical:: alphas_exist, passive_spec
-    real:: vti,ni,Zi,Ti,ne,vte,veff2va2,vcva,vta,Ealpha,dveff2dvc,ni_prim,ne_prim,Ti_prim,Te_prim
-    namelist /species_knobs/ nspec, mime, ZI_fac
+    real:: vti,ni,Zi,Ti,ne,veff2va2,vcva,vta,Ealpha,dveff2dvc,ni_prim,ne_prim,Ti_prim,Te_prim
+    namelist /species_knobs/ nspec, ZI_fac, vte
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
          tperp0, tpar0, source, sprim, gamma_ai, gamma_ae, ash_fraction, equivmaxw_opt, passive_spec
@@ -270,11 +270,12 @@ contains
                fmt="('Invalid nspec in species_knobs: ', i5)") nspec
           stop
        end if
+ 
     end if
 
     call broadcast (nspec)
-    call broadcast (mime)
     call broadcast (ZI_fac)
+    call broadcast (vte)
     allocate (spec(nspec))
 
     if (proc0) then
@@ -365,13 +366,6 @@ contains
             main_ion_species = is
        end do
 
-       vti = spec(main_ion_species)%stm
-       ni = spec(main_ion_species)%dens
-       Zi = spec(main_ion_species)%z
-       Ti = spec(main_ion_species)%temp
-       Ti_prim = spec(main_ion_species)%tprim
-       ni_prim = spec(main_ion_species)%fprim
-
        is = alpha_index
 
        if (electron_spec .GT. 0) then
@@ -380,16 +374,14 @@ contains
           ne_prim = spec(electron_spec)%fprim
           Te_prim = spec(electron_spec)%tprim
        else
-          if (alphas_exist .AND. mime .LT. 0.0) then
-             write(*,*) "WARNING: If using alpha species, you should set mime = (reference mass)/(electron mass) in species_knobs."
-             write(*,*) " Using mime = 3670.0 as default. Assuming Ti = Te. If this is not true, adjust mime appropriately."
-             mime = 3670.0
-          end if
-          ne = Zi*ni + spec(is)%z * spec(is)%dens
-          vte = sqrt(mime * Ti)     !< Assuming Te=Ti here. This is wrong, but tite has depencency issues with this module
+          if (vte .LT. 0.0) then
+             write(*,*) "WARNING: vte not specified in species_knobs. Assuming reference species is deuterium, so vte = 60.59955"
+             vte = 60.59955
+          end if             
+
+          ne = sum(spec(:)%z*spec(:)%dens)
           ne_prim = sum(spec(:)%z*spec(:)%dens*spec(:)%fprim)/ne
-!          ne_prim = (Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim)/ne
-          Te_prim = Ti_prim
+          Te_prim = spec(main_ion_species)%tprim
           write(*,*) "Since electrons are adiabatic, we need to improvise electron parameters to "
           write(*,*) "caluclate alpha species properties. Imposed by global quasineutrality:"
           write(*,*) "  ne = ", ne
@@ -397,7 +389,18 @@ contains
           write(*,*) "  Te_prim = ", Te_prim
        end if
 
+       ! If ZI_fac is not specified, calculate it from existing ion species:
+       if (alphas_exist .AND. ZI_fac .LT. 0.0) then
+          ZI_fac = 0.0
+          do js = 1,nspec
+             if (spec(js)%type .eq. ion_species) then 
+                ZI_fac = ZI_fac + spec(alpha_index)%mass*spec(js)%dens*spec(js)%z**2/(spec(js)%mass*ne)
+             end if
+          end do
+       end if
+       
        if (alphas_exist .AND. spec(alpha_index)%equivmaxw_opt .GT. 0) then
+
           ! Species *becomes* Maxwellian here. So what to normalize by: v_alpha or v_t,eff?
           ! Need to make sure setvgrid does the right thing (i.e. recognizes Maxwellian nature)
           Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
@@ -405,8 +408,7 @@ contains
           z = spec(is)%z     
 
           ! Calculate vc/valpha
-          if (spec(is)%equivmaxw_opt .EQ. 1) vcva = (3.0*sqrt(pi)*vti**2*vte*Zi**2*ni/(4.0*ne))**(1.0/3.0)/vta
-          if (spec(is)%equivmaxw_opt .EQ. 2) vcva = (0.25*3.0*sqrt(pi)*ZI_fac*1.371e-4)**(1.0/3.0)*vte/vta
+          vcva = (0.25*3.0*sqrt(pi)*ZI_fac*1.371e-4)**(1.0/3.0)*vte/vta
 
           ! Calculate vteff^2/valpha^2
           veff2va2 = 1.0 - pi*vcva**2/(3.0**1.5) + (2.0*vcva**2/sqrt(3.0))*atan((vcva-2.0)/(sqrt(3.0)*vcva)) - (vcva**2/3.0)*log((1.0-vcva+vcva**2)/(1+vcva)**2)
@@ -420,11 +422,7 @@ contains
           temp = Ealpha*veff2va2
           spec(is)%temp = temp
 
-          if (spec(is)%equivmaxw_opt .EQ. 1) spec(is)%tprim = (1.0/3.0)*dveff2dvc*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)/veff2va2
-          if (spec(is)%equivmaxw_opt .EQ. 2) then 
-             Te_prim = spec(is)%tprim
-             spec(is)%tprim = (1.0/3.0)*dveff2dvc*1.5*Te_prim/veff2va2
-          end if
+          spec(is)%tprim = (1.0/3.0)*dveff2dvc*(ni_prim - ne_prim + 1.5*Te_prim)/veff2va2
 
           spec(is)%stm = sqrt(temp/mass)
           spec(is)%zstm = z/sqrt(temp*mass)
@@ -432,13 +430,13 @@ contains
           spec(is)%zt = z/temp
           spec(is)%smz = abs(sqrt(temp*mass)/z)
 
-write(*,*) "veff2va2 = ", veff2va2, " dveff2dvc = ", dveff2dvc, Ti_prim, Te_prim, equivmaxw_opt
           spec(is)%is_maxwellian = .true.
           write(*,*) "Using equivalent-Maxwellian option for species ", is
           write(*,*) "Parameters have been changed to the following values:"
           write(*,*) "  vc/va = ", vcva
           write(*,*) "  temp = ", spec(is)%temp
           write(*,*) "  tprim = ", spec(is)%tprim
+
        end if
 
     end if
@@ -477,7 +475,7 @@ write(*,*) "veff2va2 = ", veff2va2, " dveff2dvc = ", dveff2dvc, Ti_prim, Te_prim
     end do
 
     call broadcast (ZI_fac)
-    call broadcast (mime)
+    call broadcast (vte)
 
 
   end subroutine read_parameters

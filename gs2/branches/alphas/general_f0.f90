@@ -1045,7 +1045,7 @@ contains
   end subroutine calculate_f0_arrays_analytic
 
   subroutine eval_f0_analytic(is,v,f0,gentemp,f0prim)
-    use species, only: ion_species, electron_species, alpha_species, spec, nspec, mime, ZI_fac
+    use species, only: ion_species, electron_species, alpha_species, spec, nspec, ZI_fac, vte
     use constants, only: pi
     use mp, only: mp_abort, proc0
     use spfunc, only: erf => erf_ext
@@ -1053,7 +1053,7 @@ contains
     integer,intent(in):: is
     real,intent(in):: v
     real,intent(inout):: f0,gentemp, f0prim
-    real:: A, Ti, Ealpha, vstar, df0dv, df0dE, vta, vti, vte, Zi,ni,ne, ni_prim,ne_prim,Ti_prim,Te_prim
+    real:: A, Ti, Ealpha, vstar, df0dv, df0dE, vta, vti, Zi,ni,ne, ni_prim,ne_prim,Ti_prim,Te_prim
     integer:: ie, i, electron_spec
 
     electron_spec = -1
@@ -1066,39 +1066,22 @@ contains
     Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
     vta = sqrt(Ealpha/spec(is)%mass)
 
-       vti = spec(main_ion_species)%stm
-       ni = spec(main_ion_species)%dens
-       Zi = spec(main_ion_species)%z
-       Ti = spec(main_ion_species)%temp
-       Ti_prim = spec(main_ion_species)%tprim
-       ni_prim = spec(main_ion_species)%fprim
-
        if (electron_spec .GT. 0) then
-          vte = spec(electron_spec)%stm
           ne = spec(electron_spec)%dens
           ne_prim = spec(electron_spec)%fprim
           Te_prim = spec(electron_spec)%tprim
        else
-          ne = Zi*ni + spec(is)%z * spec(is)%dens
-          vte = sqrt(mime * Ti)
-          ne_prim = (Zi*ni*ni_prim + spec(is)%z*spec(is)%dens*spec(is)%fprim)/ne
-          Te_prim = Ti_prim
+          ne = sum(spec(:)%z * spec(:)%dens )
+          ne_prim = sum(spec(:)%z * spec(:)%dens * spec(:)%fprim )/ne
+          Te_prim = spec(main_ion_species)%tprim
        end if
 
     if (vcrit .LE. 0.0) then
-       if (vcrit_opt .EQ. 1) then
-          vcrit = (3.0*sqrt(pi)*vti**2*vte*Zi**2*ni/(4.0*ne))**(1.0/3.0)/vta
-       else if (vcrit_opt .EQ. 2) then
-           vcrit = (0.25*3.0*sqrt(pi)*ZI_fac*1.371e-4)**(1.0/3.0)*vte/vta
-       endif
+       !> Note that the ratio of me/ma is hardcoded. 
+       vcrit = (0.25*3.0*sqrt(pi)*ZI_fac*1.371e-4)**(1.0/3.0)*vte/vta
     end if
 
-!    vstar = sqrt(Ealpha)
-!    Ealpha = 1.0
-    
     A = (4.0*pi/3.0)*log( (vcrit**3 + 1.0)/(vcrit**3))
-!    A = A + (pi*Ti/Ealpha)**1.5*exp(Ealpha/Ti)*(1.0-erf(sqrt(Ealpha/Ti)))/(vcrit**3 + 1.0)
-!    A = A + (2.0*pi*Ti/Ealpha)/(vcrit**3 + 1.0)
     A = 1.0/A
 
     if (v .LE. 1.0) then
@@ -1119,9 +1102,6 @@ contains
        f0prim = -spec(is)%fprim - (-(vcrit**3/(vcrit**3 + 1.0)) + (1.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3)))))*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)
        f0prim = f0prim - (Ealpha/Ti)*(v**2-1.0)*Ti_prim
     end if
-
-!    if (proc0) write(*,*) ie,Ealpha/Ti,v,f0,gentemp, f0prim
-
 
   end subroutine eval_f0_analytic
 
