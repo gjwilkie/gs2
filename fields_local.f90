@@ -2435,7 +2435,7 @@ contains
        endif
        allocate(tmp(-ntgrid:ntgrid,ntheta0,naky,nfield))
        tmp_tmp=0
-       if(use_sub)tmp=0
+       if(use_sub) tmp=0 !Only need to zero if tmp_tmp is not same size as tmp
     endif
 
     !Now loop over supercells, and store sections
@@ -2489,7 +2489,16 @@ contains
           !would be slightly more efficient but is more complicated and may involve 
           !more local operations which outweigh the benefits. 
           call sum_allreduce_sub(tmp_tmp,g_lo%xyblock_comm)
+       else
+          call sum_allreduce(tmp_tmp)
+       endif
+    endif
+
+    !Now copy tmp_tmp into tmp if we have it
+    if((self%fm_sub_headsc_p0%nproc.gt.0).or.to_all.or.do_allreduce) then
+       if(use_sub)then
           tmp(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,:)=tmp_tmp
+          
           !Here we reduce to proc0 of the lesblock comm (which should include the
           !global proc0). Should only really need to call this on procs which
           !have proc0 in their subcomm but no way to determine this currently
@@ -2501,7 +2510,6 @@ contains
           !increment the field before diagnostics are called.
           if(sub_has_proc0) call sum_reduce_sub(tmp,0,les_comm) 
        else
-          call sum_allreduce(tmp_tmp)
           tmp=tmp_tmp !It would be nice to avoid this copy if possible
        endif
     endif
@@ -2528,7 +2536,7 @@ contains
     if(to_all)then
        call broadcast(tmp)
     endif
-    
+
     !Finally, unpack tmp and deallocate arrays
     if(self%fm_sub_all%proc0.or.to_all.or.do_allreduce)then
        ifl=0
