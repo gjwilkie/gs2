@@ -27,7 +27,8 @@ module init_g
        ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28, &
        ginitopt_recon3 = 29, ginitopt_ot = 30, &
        ginitopt_zonal_only = 31, ginitopt_single_parallel_mode = 32, &
-       ginitopt_all_modes_equal = 33, ginitopt_fixpar= 34
+       ginitopt_all_modes_equal = 33, ginitopt_fixpar= 34, &
+       ginitopt_default_odd=35
 
   real :: width0, dphiinit, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
@@ -703,6 +704,8 @@ contains
     select case (ginitopt_switch)
     case (ginitopt_default)
        call ginit_default
+    case (ginitopt_default_odd)
+       call ginit_default_odd
     case (ginitopt_kz0)
        call ginit_kz0
     case (ginitopt_noise)
@@ -817,8 +820,9 @@ contains
 
     implicit none
 
-    type (text_option), dimension (33), parameter :: ginitopts = &
+    type (text_option), dimension (34), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
+            text_option('default_odd', ginitopt_default_odd), &
             text_option('noise', ginitopt_noise), &
             text_option('xi', ginitopt_xi), &
             text_option('xi2', ginitopt_xi2), &
@@ -990,6 +994,53 @@ contains
     end do
     gnew = g
   end subroutine ginit_default
+
+  subroutine ginit_default_odd
+    use species, only: spec
+    use theta_grid, only: ntgrid, theta
+    use kt_grids, only: naky, ntheta0, theta0, aky, reality
+    use le_grids, only: forbid
+    use dist_fn_arrays, only: g, gnew
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    implicit none
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
+    logical :: right
+    integer :: iglo
+    integer :: ig, ik, it, il, is
+
+    right = .not. left
+
+    do ig = -ntgrid, ntgrid
+       phi(ig,:,:) = sin((theta(ig)-theta0(:,:))/width0)*exp(-((theta(ig)-theta0(:,:))/width0)**2)*cmplx(1.0,1.0)            
+    end do
+    if (chop_side .and. left) phi(:-1,:,:) = 0.0
+    if (chop_side .and. right) phi(1:,:,:) = 0.0
+    
+    if (reality) then
+       phi(:,1,1) = 0.0
+
+       if (naky > 1 .and. aky(1) == 0.0) then
+          phi(:,:,1) = 0.0
+       end if
+
+! not used:
+! reality condition for k_theta = 0 component:
+       do it = 1, ntheta0/2
+          phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
+       enddo
+    end if
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       g(:,1,iglo) = phi(:,it,ik)*spec(is)%z*phiinit
+       where (forbid(:,il)) g(:,1,iglo) = 0.0
+       g(:,2,iglo) = g(:,1,iglo)
+    end do
+    gnew = g
+  end subroutine ginit_default_odd
 
   !> Initialise with only the kparallel = 0 mode.
   
