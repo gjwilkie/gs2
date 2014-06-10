@@ -359,16 +359,18 @@ ifdef USE_LE_LAYOUT
 endif
 
 ifdef WITH_EIG
-	EIG_LIB += -L$(PETSC_DIR)/lib  -L$(SLEPC_DIR)/lib #-lblas -llapack #-lX11
 	EIG_INC += -I$(PETSC_DIR)/include -I$(SLEPC_DIR)/include
-
 	ifdef PETSC_ARCH
 		EIG_LIB += -L$(PETSC_DIR)/$(PETSC_ARCH)/lib
 		EIG_INC += -I$(PETSC_DIR)/$(PETSC_ARCH)/include
+	else
+		EIG_LIB += -L$(PETSC_DIR)/lib
 	endif
 	ifdef SLEPC_ARCH
 		EIG_LIB += -L$(SLEPC_DIR)/$(SLEPC_ARCH)/lib
 		EIG_INC += -I$(SLEPC_DIR)/$(SLEPC_ARCH)/include
+	else
+		EIG_LIB += -L$(SLEPC_DIR)/lib
 	endif
 	EIG_LIB += -lslepc -lpetsc
 
