@@ -40,7 +40,7 @@ contains
     use file_utils, only: run_name
     use mp, only: mp_comm, proc0
     type(diagnostics_init_options_type), intent(in) :: init_options
-
+    if(proc0) write (*,*) 'initializing new diagnostics'
     call init_diagnostics_config(gnostics)
     call init_volume_averages
 
@@ -90,7 +90,7 @@ contains
     call finish_diagnostics_write_fluxes
     call finish_diagnostics_write_omega
     if (gnostics%parallel .or. proc0) then
-      write (*,*) "CLosing new"
+      if(proc0)write (*,*) "Closing new diagnostics"
       call closefile(gnostics%sfile)
     end if
   end subroutine finish_gs2_diagnostics_new
