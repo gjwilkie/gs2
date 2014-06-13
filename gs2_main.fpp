@@ -197,7 +197,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
        if (first_time) diagnostics_init_options%initialized = .false.
        if (.not. diagnostics_init_options%initialized) then
-         write (*,*) 'initializing diagnostics'
          call init_gs2_diagnostics_new(diagnostics_init_options)
        end if
 #endif
