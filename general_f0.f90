@@ -1089,17 +1089,13 @@ contains
        df0dv = -A*3.0*v**2/(vcrit**3 + v**3)**2
        df0dE = (0.5/v)*df0dv
        gentemp = -spec(is)%temp*f0/df0dE
-       if (vcrit_opt .EQ. 1) then
-          f0prim = -spec(is)%fprim - (-(vcrit**3/(vcrit**3 + v**3)) + (1.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3)))))*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)
-       else if (vcrit_opt .EQ. 2) then
-          f0prim = -spec(is)%fprim - (-(vcrit**3/(vcrit**3 + v**3)) + (1.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3)))))*(1.5*spec(is)%tprim)
-       end if
+       f0prim = -spec(is)%fprim - (-(vcrit**3/(vcrit**3 + v**3)) + (1.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3)))))*(ni_prim - ne_prim + 1.5*Te_prim)
      
     else
        f0 = exp(-Ealpha*(v**2-1.0)/Ti) * A / (vcrit**3 + 1.0)
        df0dE = -Ealpha*f0/Ti
        gentemp = -spec(is)%temp*f0/df0dE
-       f0prim = -spec(is)%fprim - (-(vcrit**3/(vcrit**3 + 1.0)) + (1.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3)))))*(ni_prim - ne_prim + Ti_prim + 0.5*Te_prim)
+       f0prim = -spec(is)%fprim - (-(vcrit**3/(vcrit**3 + 1.0)) + (1.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3)))))*(ni_prim - ne_prim + 1.5*Te_prim)
        f0prim = f0prim - (Ealpha/Ti)*(v**2-1.0)*Ti_prim
     end if
 
