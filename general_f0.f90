@@ -1066,15 +1066,17 @@ contains
     Ealpha = spec(is)%temp                    !< temp for alpha species is interpreted as normalized injection energy
     vta = sqrt(Ealpha/spec(is)%mass)
 
-       if (electron_spec .GT. 0) then
-          ne = spec(electron_spec)%dens
-          ne_prim = spec(electron_spec)%fprim
-          Te_prim = spec(electron_spec)%tprim
-       else
-          ne = sum(spec(:)%z * spec(:)%dens )
-          ne_prim = sum(spec(:)%z * spec(:)%dens * spec(:)%fprim )/ne
-          Te_prim = spec(main_ion_species)%tprim
-       end if
+    if (electron_spec .GT. 0) then
+       ne = spec(electron_spec)%dens
+       ne_prim = spec(electron_spec)%fprim
+       Te_prim = spec(electron_spec)%tprim
+    else
+       ne = sum(spec(:)%z * spec(:)%dens )
+       ne_prim = sum(spec(:)%z * spec(:)%dens * spec(:)%fprim )/ne
+       Te_prim = spec(main_ion_species)%tprim
+    end if
+
+    ni_prim = spec(main_ion_species)%fprim
 
     if (vcrit .LE. 0.0) then
        !> Note that the ratio of me/ma is hardcoded. 

@@ -240,7 +240,7 @@ contains
     character(20) :: type
     integer :: unit
     integer :: is, js, alpha_index, main_ion_species, electron_spec, equivmaxw_opt
-    logical:: alphas_exist, passive_spec
+    logical:: alphas_exist, passive_spec, one_ion
     real:: vti,ni,Zi,Ti,ne,veff2va2,vcva,vta,Ealpha,dveff2dvc,ni_prim,ne_prim,Ti_prim,Te_prim
     namelist /species_knobs/ nspec, ZI_fac, vte
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
@@ -388,6 +388,8 @@ contains
           write(*,*) "  ne_prim = ", ne_prim
           write(*,*) "  Te_prim = ", Te_prim
        end if
+
+       ni_prim = spec(main_ion_species)%fprim
 
        ! If ZI_fac is not specified, calculate it from existing ion species:
        if (alphas_exist .AND. ZI_fac .LT. 0.0) then
