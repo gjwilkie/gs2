@@ -46,6 +46,7 @@ module species
 
      logical :: passive_spec = .false.
      
+     
   end type specie
 
 
@@ -411,6 +412,8 @@ contains
 
           ! Calculate vc/valpha
           vcva = (0.25*3.0*sqrt(pi)*ZI_fac*1.371e-4)**(1.0/3.0)*vte/vta
+
+          if (equivmaxw_opt .EQ. 2) Te_prim = spec(is)%tprim
 
           ! Calculate vteff^2/valpha^2
           veff2va2 = 1.0 - pi*vcva**2/(3.0**1.5) + (2.0*vcva**2/sqrt(3.0))*atan((vcva-2.0)/(sqrt(3.0)*vcva)) - (vcva**2/3.0)*log((1.0-vcva+vcva**2)/(1+vcva)**2)
