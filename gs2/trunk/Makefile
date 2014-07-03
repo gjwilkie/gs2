@@ -109,7 +109,7 @@ LOWFLOW ?=
 # Compile with PETSC/SLEPC support for determining eigensystem (bin).
 WITH_EIG ?= 
 
-USE_NEW_DIAG?=on
+USE_NEW_DIAG ?= on
 
 
 ifdef NPROCS
@@ -266,7 +266,7 @@ ifdef USE_MPI
 	CPPFLAGS += -DMPI
 endif
 
-ifdef USE_NEW_DIAG
+ifeq ($(USE_NEW_DIAG),on)
 	CPPFLAGS+=-DNEW_DIAG
 endif
 
@@ -378,10 +378,10 @@ ifdef WITH_EIG
 	CFLAGS += -DWITH_EIG 
 endif 
 
-ifdef USE_NEW_DIAG
+ifeq ($(USE_NEW_DIAG),on)
+#ifdef USE_NEW_DIAG
 sinclude Makefile.diagnostics
 else
-
 distclean_simpledataio:
 clean_simpledataio:
 diagnostics:
@@ -588,6 +588,7 @@ test_make:
 	@echo SVN_REV is $(SVN_REV)
 	@echo
 	@echo Compile mode:
+	@echo  COMPILER is $(COMPILER)
 	@echo  DEBUG is $(DEBUG)
 	@echo  SCAL is $(SCAL)
 	@echo  TEST is $(TEST)
