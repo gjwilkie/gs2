@@ -3437,7 +3437,7 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: gnew, g, g_fixpar
     use nonlinear_terms, only: add_explicit_terms
     use hyper, only: hyper_diff
-    use run_parameters, only: fixpar_secondary
+    use run_parameters, only: fixpar_secondary, reset
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phinew, aparnew, bparnew
@@ -3454,6 +3454,7 @@ subroutine check_dist_fn(report_unit)
        !Calculate the explicit nonlinear terms
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
+       if(reset) return !Return if resetting
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
        !Add hyper terms (damping)
@@ -3466,7 +3467,7 @@ subroutine check_dist_fn(report_unit)
        !Calculate the explicit nonlinear terms
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
-
+       if(reset) return !Return if resetting
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
        !Add hyper terms (damping)
@@ -3477,7 +3478,7 @@ subroutine check_dist_fn(report_unit)
        !Calculate the explicit nonlinear terms
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
-
+       if(reset) return !Return if resetting
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
        !Add hyper terms (damping)
@@ -3489,6 +3490,7 @@ subroutine check_dist_fn(report_unit)
        !    half of istep: keeping for now as may be needed by some code
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
+       if(reset) return !Return if resetting
 
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)

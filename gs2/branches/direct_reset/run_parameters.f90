@@ -8,7 +8,7 @@ module run_parameters
   public :: check_run_parameters, wnml_run_parameters
 
 
-  public :: beta, zeff, tite
+  public :: beta, zeff, tite, reset
   public :: fphi, fapar, fbpar
 !  public :: delt, delt_max, wunits, woutunits, tunits
   public :: code_delt_max, wunits, woutunits, tunits
@@ -34,6 +34,7 @@ module run_parameters
   real, dimension (2) :: vnm_init
   real :: avail_cpu_time, margin_cpu_time
   integer :: nstep
+  logical :: reset=.false.
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
   integer :: fixpar_secondary

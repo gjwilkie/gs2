@@ -51,7 +51,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use parameter_scan, only: init_parameter_scan, allocate_target_arrays
     use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time, nwrite, write_nl_flux
     use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time, margin_cpu_time
-    use run_parameters, only: trinity_linear_fluxes, do_eigsolve
+    use run_parameters, only: trinity_linear_fluxes, do_eigsolve, reset
     use dist_fn_arrays, only: gnew
     use gs2_save, only: gs2_save_for_restart
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
@@ -95,7 +95,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real :: diff
     integer :: istep = 0, istatus, istep_end
     integer :: is
-    logical :: exit, reset, list
+    logical :: exit, list
     logical :: first_time = .true.
     logical :: nofin= .false.
 !    logical, optional, intent(in) :: nofinish
@@ -107,6 +107,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     time_main_loop(1) = 0.
     time_main_loop(2) = 0.
+    exit=.false.
 
 !
 !CMR, 12/2/2010: 
@@ -268,9 +269,33 @@ if(do_eigsolve)then
 #endif
 else
     do istep = 1, nstep
-
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
-       call advance (istep)
+
+       !Initialise reset to true
+       reset=.true.
+
+       do while(reset)
+          reset=.false. !So that we only do this once unless something triggers a reset
+          call advance (istep)
+
+          !If we've triggered a reset then actually reset
+          if (reset) then
+             !First disable the reset flag so we can call 
+             !routines needed in reinit
+             reset=.false.
+
+             ! if called within trinity, do not dump info to screen
+             if (present(job_id)) then
+                call reset_time_step (istep, exit, job_id)
+             else       
+                call reset_time_step (istep, exit)
+             end if
+
+             !Now re-enable reset so we go around the loop again
+             reset=.true.
+          end if
+          if(exit) exit
+       enddo
        
        if (nsave > 0 .and. mod(istep, nsave) == 0) &
             call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
@@ -280,21 +305,29 @@ else
 #ifdef NEW_DIAG
        call run_diagnostics (istep, exit)
 #endif
-       call check_time_step (reset, exit)
-       call update_scan_parameter_value(istep, reset, exit)
-       if (proc0) call time_message(.false.,time_advance,' Advance time step')
-       if (reset) then
-          ! if called within trinity, do not dump info to screen
-          if (present(job_id)) then
-             call reset_time_step (istep, exit, job_id)
-          else       
-             call reset_time_step (istep, exit)
-          end if
-       end if
 
-       if (mod(istep,5) == 0) call checkstop(exit)
-       
-       call checktime(avail_cpu_time,exit,margin_cpu_time)
+       if (proc0) call time_message(.false.,time_advance,' Advance time step')
+
+       if(.not.exit)then
+
+          !Note this should only trigger a reset for timesteps too small
+          !as timesteps too large are already handled
+          call check_time_step(reset,exit)
+          call update_scan_parameter_value(istep, reset, exit)
+
+          !If something has triggered a reset then reset here
+          if (reset) then
+             ! if called within trinity, do not dump info to screen
+             if (present(job_id)) then
+                call reset_time_step (istep, exit, job_id)
+             else       
+                call reset_time_step (istep, exit)
+             end if
+          end if
+
+          if ((mod(istep,5) == 0).and.(.not.exit)) call checkstop(exit)
+          if (.not.exit) call checktime(avail_cpu_time,exit,margin_cpu_time)
+       endif
 
        if (exit) then
           istep_end = istep
