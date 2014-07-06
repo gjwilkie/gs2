@@ -317,12 +317,20 @@ else
 
           !If something has triggered a reset then reset here
           if (reset) then
+             !First disable the reset flag so we can call 
+             !routines needed in reinit
+             reset=.false.
+
              ! if called within trinity, do not dump info to screen
              if (present(job_id)) then
                 call reset_time_step (istep, exit, job_id)
              else       
                 call reset_time_step (istep, exit)
              end if
+
+             !Re-enable reset in case anything later depends
+             !on it (doesn't at the moment but maybe in the future)
+             reset=.true.             
           end if
 
           if ((mod(istep,5) == 0).and.(.not.exit)) call checkstop(exit)
