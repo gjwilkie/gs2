@@ -106,11 +106,12 @@ contains
     if(initeq == 0) return
     if (.not.in_nt) then
 
-       nchar=index(eqfile,' ')-1
+      nchar=index(eqfile,' ')-1
        filename=eqfile(1:nchar)
 !       filename=trim(eqfile) ?
 
 
+      write (*,*)  'Reading CHEASE input file: ', eqfile
         call read_infile(filename)
 
 !     netcdf read scalar: nr

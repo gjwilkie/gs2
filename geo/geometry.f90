@@ -360,6 +360,7 @@ if (debug) write(6,*) "eikcoefs: call check"
     call check(gen_eq, efit_eq, ppl_eq, &
          local_eq, dfit_eq, idfit_eq, chs_eq) 
 
+if (debug) write(6,*) "eikcoefs: allocated(theta)", allocated(theta)
     if(.not. gen_eq .and. .not. ppl_eq &
     .and. .not. transp_eq .and. .not. chs_eq &
          .and. .not. allocated(theta)) then
@@ -380,7 +381,7 @@ if (debug) write(6,*) "eikcoefs: call check"
        call alloc_local_arrays(ntgrid)
     endif
 
-if (debug) write(6,*) "eikcoefs: iflux=",iflux
+if (debug) write(6,*) "eikcoefs: iflux=",iflux, 'chs_eq=', chs_eq
     select case (iflux)
        case (0)
           avgrmid=1.
@@ -2837,6 +2838,42 @@ end subroutine geofax
     if (debug) write(6,*) "alloc_module_arrays: done"
   end subroutine alloc_module_arrays
 
+  subroutine dealloc_module_arrays
+    if (allocated(grho)) deallocate(grho   , &
+         theta, &
+         bmag       , &
+         gradpar    , &
+         cvdrift    , &
+         cvdrift0   , &
+         gbdrift    , &
+         gbdrift0   , &
+         cdrift    , &
+         cdrift0    , &
+         gbdrift_th , &
+         cvdrift_th , &
+         gds2       , &
+         gds21      , &
+         gds22      , &
+         gds23      , &  ! MAB
+         gds24      , &  ! MAB
+         gds24_noq  , &  ! MAB
+         jacob      , &
+         Rplot      , &
+         Zplot      , &
+         aplot      , &
+         Rprime     , &
+         Zprime     , &
+         aprime     , &
+         Uk1        , &
+         Uk2        , &
+         Bpol       )
+  end subroutine dealloc_module_arrays
+
+  subroutine finish_geometry
+    call dealloc_module_arrays
+    eqinit = 1
+  end subroutine finish_geometry
+
   subroutine init_theta(nt)
     
     integer, intent(in) :: nt
@@ -2852,7 +2889,7 @@ end subroutine geofax
     nth = nt / 2
     ntgrid = (2*nperiod - 1)*nth       
     if (debug) write(6,*) "init_theta: allocated(theta),ntgrid=",allocated(theta),ntgrid
-    if (.not. first_local) deallocate (theta)
+    if (.not. first_local .and. allocated(theta)) deallocate (theta)
     allocate(theta(-ntgrid:ntgrid))
     first_local = .false.
 
