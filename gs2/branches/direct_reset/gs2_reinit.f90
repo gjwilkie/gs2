@@ -29,7 +29,7 @@ contains
     use dist_fn, only: d_reset => reset_init
     use fields, only: f_reset => reset_init, init_fields
     use init_g, only: g_reset => reset_init
-    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, fapar, fbpar, reset
     use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
     use gs2_save, only: gs2_save_for_restart
     use dist_fn_arrays, only: gnew
@@ -39,7 +39,7 @@ contains
     use file_utils, only: error_unit
     use antenna, only: dump_ant_amp
     use job_manage, only: time_message
-    logical :: exit
+    logical :: exit, reset_in
     integer :: istep 
     integer, save :: istep_last = -1 ! allow adjustment on first time step
     integer :: istatus
@@ -72,6 +72,11 @@ contains
     end if
 
     if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
+
+    !First disable the reset flag so we can call 
+    !routines needed in reinit
+    reset_in=reset
+    reset=.false.
 
     if (proc0) call dump_ant_amp
     call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
@@ -108,6 +113,8 @@ contains
 
     istep_last = istep
 
+    !Now re-enable reset so we leave it in the same state as on entering
+    reset=reset_in
   end subroutine reset_time_step
 
 !  subroutine check_time_step (istep, reset, exit)
