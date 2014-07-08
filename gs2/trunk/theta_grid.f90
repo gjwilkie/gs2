@@ -1012,14 +1012,14 @@ contains
   subroutine init_theta_grid_eik
     use geometry, only: init_theta, nperiod_geo => nperiod
     use geometry, only: eikcoefs, itor, delrho, rhoc
-    use geometry, only: gen_eq, ppl_eq, transp_eq
+    use geometry, only: gen_eq, ppl_eq, transp_eq, chs_eq
     use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
     use mp, only: proc0
     implicit none
     real :: rhoc_save
 !    logical, save :: initialized = .false.
 !CMR nov04: adding following debug switch
-    logical, parameter :: debug=.false.
+    logical, parameter :: debug=.true.
 !CMR
 
     if (initialized) return
@@ -1036,7 +1036,7 @@ if (debug) write(6,*) "init_theta_grid_eik: call read_parameters, ntheta=",nthet
 !CMR replace call init_theta(ntheta) with following condition 
 !    to avoid inappropriate calls to init_theta (as in geo/et.f90)
     if(.not. gen_eq .and. .not. ppl_eq .and. &
-       .not. transp_eq ) then 
+       .not. transp_eq .and. .not. chs_eq) then 
        if (debug) write(6,*) "init_theta_grid_eik: call init_theta, ntheta=",ntheta
        call init_theta (ntheta)
     endif
@@ -1053,8 +1053,10 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
   end subroutine init_theta_grid_eik
 
   subroutine finish_theta_grid_eik
+    use geometry, only: finish_geometry
 
     initialized = .false.
+    call finish_geometry
 
   end subroutine finish_theta_grid_eik
 
@@ -1194,6 +1196,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
     use geometry, only: shift, qinp, akappa, akappri, tri, tripri, asym, asympri
     use geometry, only: delrho, rmin, rmax
     use geometry, only: isym, in_nt, writelots
+    use geometry, only: chs_eq
     use theta_grid_params, only: nperiod_in => nperiod
     use theta_grid_params, only: rhoc_in => rhoc
     use theta_grid_params, only: rmaj_in => rmaj, r_geo_in => r_geo
@@ -1211,7 +1214,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
          ppl_eq, gen_eq, efit_eq, eqfile, dfit_eq, &
          equal_arc, bishop, local_eq, idfit_eq, gs2d_eq, transp_eq, &
          s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
-         delrho, rmin, rmax, isym, writelots
+         delrho, rmin, rmax, isym, writelots,chs_eq
 
     nperiod = nperiod_in  
     rhoc = rhoc_in
@@ -1242,6 +1245,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
     in_nt = .false.
     writelots = .false.
     local_eq = .true.
+    chs_eq = .false.
 
     in_file = input_unit_exist("theta_grid_eik_knobs", exist)
     if (exist) read (unit=input_unit("theta_grid_eik_knobs"), nml=theta_grid_eik_knobs)
@@ -1503,6 +1507,7 @@ module theta_grid
   public :: ntheta, ntgrid, nperiod, nbset
   public :: Rplot, Zplot, aplot, Rprime, Zprime, aprime, Bpol
   public :: shape, gb_to_cv
+  public :: initialized
 
   private
 
@@ -1614,6 +1619,33 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast_results
 
   end subroutine init_theta_grid
+
+  !function theta_grid_unit_test_init_theta_grid(eqoption, eqfle, bish)
+    !use mp, only: proc0
+    !integer, intent(in) :: eqoption, bish
+    !logical :: theta_grid_unit_test_init_theta_grid
+    !character(*), intent(in) :: eqfle
+    !if (proc0) then
+!if (debug) write(6,*) "init_theta_grid: call read_parameters"
+       !call read_parameters
+       !eqopt_switch = eqoption
+       !bishop = bish
+       !eqfile = eqfle
+!if (debug) write(6,*) "init_theta_grid: call get_sizes"
+       !call get_sizes
+!if (debug) write(6,*) "init_theta_grid: call allocate_arrays"
+       !call allocate_arrays
+!if (debug) write(6,*) "init_theta_grid: call get_grids"
+       !call get_grids
+!if (debug) write(6,*) "init_theta_grid: call finish_init"
+       !call finish_init
+    !end if
+    !call broadcast_results
+
+    !theta_grid_unit_test_init_theta_grid = .true.
+
+  !end function
+
 
   subroutine finish_theta_grid
 
