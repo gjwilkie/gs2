@@ -408,7 +408,7 @@ contains
     use dist_fn_arrays, only: g
     use species, only: spec
     use gs2_transforms, only: transform2, inverse2
-    use run_parameters, only: fapar, fbpar, fphi, reset
+    use run_parameters, only: fapar, fbpar, fphi, reset, immediate_reset
     use kt_grids, only: aky, akx
     use gs2_time, only: save_dt_cfl, check_time_step_too_large
     use constants, only: zi
@@ -560,11 +560,14 @@ contains
     dt_cfl = 1./max_vel
     call save_dt_cfl (dt_cfl)
 
-    !Now check to see if we've violated the cfl condition
-    call check_time_step_too_large(reset)
+    !Now check to see if we've violated the 
+    !cfl condition if requested
+    if(immediate_reset)then
+       call check_time_step_too_large(reset)
 
-    !If we have violated cfl the return immediately
-    if(reset)return
+       !If we have violated cfl the return immediately
+       if(reset)return
+    endif
 
     if (accelerated) then
        call inverse2 (abracket, g1, ia)
