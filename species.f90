@@ -8,10 +8,11 @@ module species
   public :: alpha_species, beam_species
   public :: has_electron_species, has_slowing_down_species
   public :: ions, electrons, impurity
-  public :: ZI_fac, vte
+  public :: ZI_fac, vte, ni_prim
 
   real :: vte = -1.0     !< Intended vte / vref for use in defining the alpha particle distribution
   real :: ZI_fac = -1.0  !< defined as the sum of (m_fast / m_alpha)*(n_i m_alpha Z_i^2 / n_e m_i) over all ion species. May use a different combination when defining the alpha particle distribution than what actually exists in the simulation.
+  real :: ni_prim = 0.0  !< The term in the gradient of the slowing-down distribution that comes from the gradient of the ion density
 
   type :: specie
      real :: z
@@ -242,7 +243,7 @@ contains
     integer :: unit
     integer :: is, js, alpha_index, main_ion_species, electron_spec, equivmaxw_opt
     logical:: alphas_exist, passive_spec, one_ion
-    real:: vti,ni,Zi,Ti,ne,veff2va2,vcva,vta,Ealpha,dveff2dvc,ni_prim,ne_prim,Ti_prim,Te_prim
+    real:: vti,ni,Zi,Ti,ne,veff2va2,vcva,vta,Ealpha,dveff2dvc,ne_prim,Ti_prim,Te_prim
     namelist /species_knobs/ nspec, ZI_fac, vte
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
@@ -390,16 +391,22 @@ contains
           write(*,*) "  Te_prim = ", Te_prim
        end if
 
-       ni_prim = spec(main_ion_species)%fprim
 
+       ni_prim = 0.0
        ! If ZI_fac is not specified, calculate it from existing ion species:
-       if (alphas_exist .AND. ZI_fac .LT. 0.0) then
-          ZI_fac = 0.0
-          do js = 1,nspec
-             if (spec(js)%type .eq. ion_species) then 
-                ZI_fac = ZI_fac + spec(alpha_index)%mass*spec(js)%dens*spec(js)%z**2/(spec(js)%mass*ne)
-             end if
-          end do
+       if (alphas_exist ) then
+          if (ZI_fac .LT. 0.0) then
+             ZI_fac = 0.0
+             do js = 1,nspec
+                if (spec(js)%type .eq. ion_species) then 
+                   ZI_fac = ZI_fac + spec(alpha_index)%mass*spec(js)%dens*spec(js)%z**2/(spec(js)%mass*ne)
+                   ni_prim = ni_prim + spec(alpha_index)%mass*spec(js)%dens*spec(js)%z**2*spec(js)%fprim/(spec(js)%mass*ne)
+                end if
+             end do
+             ni_prim = ni_prim / ZI_fac
+          else
+             ni_prim = ne_prim
+          end if
        end if
        
        if (alphas_exist .AND. spec(alpha_index)%equivmaxw_opt .GT. 0) then

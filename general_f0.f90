@@ -1045,7 +1045,7 @@ contains
   end subroutine calculate_f0_arrays_analytic
 
   subroutine eval_f0_analytic(is,v,f0,gentemp,f0prim)
-    use species, only: ion_species, electron_species, alpha_species, spec, nspec, ZI_fac, vte
+    use species, only: ion_species, electron_species, alpha_species, spec, nspec, ZI_fac, vte, ni_prim
     use constants, only: pi
     use mp, only: mp_abort, proc0
     use spfunc, only: erf => erf_ext
@@ -1053,7 +1053,7 @@ contains
     integer,intent(in):: is
     real,intent(in):: v
     real,intent(inout):: f0,gentemp, f0prim
-    real:: A, Ti, Ealpha, vstar, df0dv, df0dE, vta, vti, Zi,ni,ne, ni_prim,ne_prim,Ti_prim,Te_prim
+    real:: A, Ti, Ealpha, vstar, df0dv, df0dE, vta, vti, Zi,ni,ne, ne_prim,Ti_prim,Te_prim
     integer:: ie, i, electron_spec
 
     electron_spec = -1
@@ -1076,7 +1076,7 @@ contains
        Te_prim = spec(main_ion_species)%tprim
     end if
 
-    ni_prim = spec(main_ion_species)%fprim
+    if (vcrit_opt .EQ. 2) Te_prim = spec(is)%tprim
 
     if (vcrit .LE. 0.0) then
        !> Note that the ratio of me/ma is hardcoded. 
@@ -1119,7 +1119,7 @@ contains
     implicit none
     integer, intent(in):: is
     integer:: electron_spec, i, ie
-    real:: vti,ni,Zi,Ti,Ti_prim,ni_prim,vte,ne,ne_prim,Te_prim,vcva,Ealpha,vta
+    real:: vti,ni,Zi,Ti,Ti_prim,vte,ne,ne_prim,Te_prim,vcva,Ealpha,vta
     real:: veff2va2, dveff2dvc, temp, LTa, Teff, mass, z
 
     f0_values(:,is) = exp(-egrid(:,is)) / (pi**1.5)
