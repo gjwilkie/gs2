@@ -3812,6 +3812,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine getan
 
   subroutine getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+    use general_f0, only: zogtemp
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew, g_adjust
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
@@ -3925,7 +3926,7 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo) ; is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) - anon(ie)*phinew(:,it,ik)*spec(is)%zt
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) - anon(ie)*phinew(:,it,ik)*zogtemp(ie,is)
        end do
     end do
 
@@ -3951,6 +3952,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine getmoms
 
   subroutine getemoms (ntot, tperp)
+    use general_f0, only: zogtemp
     use dist_fn_arrays, only: vperp2, aj0, gnew, g_adjust
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
@@ -4003,7 +4005,7 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo) ; is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) - anon(ie)*phinew(:,it,ik)*spec(is)%zt
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo) - anon(ie)*phinew(:,it,ik)*zogtemp(ie,is)
        end do
     end do
 
@@ -4015,7 +4017,7 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo) ; is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)*vperp2(:,iglo) - anon(ie)*phinew(:,it,ik)*spec(is)%zt*vperp2(:,iglo)
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)*vperp2(:,iglo) - anon(ie)*phinew(:,it,ik)*zogtemp(ie,is)*vperp2(:,iglo)
        end do
     end do
 
@@ -4039,8 +4041,9 @@ subroutine check_dist_fn(report_unit)
   
   ! moment at not guiding center coordinate
   subroutine getmoms_notgc (dens, upar, tpar, tper, ntot, jpar)
+    use general_f0, only: zogtemp, generalised_temperature
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
-    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx
+    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use kt_grids, only: nakx => ntheta0, naky
@@ -4048,12 +4051,11 @@ subroutine check_dist_fn(report_unit)
     use mp, only: iproc
     use fields_arrays, only: phinew, bparnew
     implicit none
-    complex, intent (out) :: &
-         & dens(-ntgrid:,:,:,:), upar(-ntgrid:,:,:,:), &
+    complex, intent (out) :: dens(-ntgrid:,:,:,:), upar(-ntgrid:,:,:,:), &
          & tpar(-ntgrid:,:,:,:), tper(-ntgrid:,:,:,:)
     complex, intent (out), optional :: ntot(-ntgrid:,:,:,:)
     complex, intent (out), optional :: jpar(-ntgrid:,:,:)
-    integer :: isgn, iglo, is
+    integer :: isgn, iglo, is, ie
 
     real :: a, b, tpar2, tper2
     integer :: it, ik, ig
@@ -4066,18 +4068,20 @@ subroutine check_dist_fn(report_unit)
           is = is_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
 
           do isgn = 1, 2
              g0(:,isgn,iglo) = aj0(:,iglo) * gnew(:,isgn,iglo)
           end do
           do isgn = 1, 2
              g0(:,isgn,iglo) = g0(:,isgn,iglo) + phinew(:,it,ik) &
-                  & *(aj0(:,iglo)**2-1.0) * spec(is)%zt
+                  & *(aj0(:,iglo)**2-1.0) * zogtemp(ie,is)
           end do
           do isgn = 1, 2
              g0(:,isgn,iglo) = g0(:,isgn,iglo) &
                   & + 2.*vperp2(:,iglo)*aj1(:,iglo)*aj0(:,iglo) &
-                  & * bparnew(:,it,ik)
+                  & * bparnew(:,it,ik) * spec(is)%temp &
+                  & / generalised_temperature(ie,is)
           end do
        end do
        call integrate_moment (g0, ntot, 1)
@@ -4112,8 +4116,10 @@ subroutine check_dist_fn(report_unit)
     
 ! not guiding center tperp
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = 2.*vperp2(:,iglo)*aj1(:,iglo)*gnew(:,isgn,iglo)
+          g0(:,isgn,iglo) = 2.*vperp2(:,iglo)*aj1(:,iglo)*gnew(:,isgn,iglo) 
        end do
     end do
 
@@ -4216,7 +4222,8 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           g0(:,isgn,iglo) = aj0(:,iglo)*aj1(:,iglo) &
-               *2.0*vperp2(:,iglo)*anon(ie)
+               *2.0*vperp2(:,iglo)*anon(ie) / & 
+               generalised_temperature(ie,is)
        end do
     end do
     wgt = spec%z*spec%dens
@@ -4227,7 +4234,8 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj1(:,iglo)**2*2.0*vperp2(:,iglo)**2*anon(ie)
+          g0(:,isgn,iglo) = aj1(:,iglo)**2*2.0*vperp2(:,iglo)**2*anon(ie)/ &
+             generalised_temperature(ie,is)
        end do
     end do
     wgt = spec%temp*spec%dens
