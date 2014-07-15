@@ -2,6 +2,7 @@
 !> A module containing functions for running unit tests
 module unit_tests
 
+  use runtime_tests, only: verbosity
   implicit none 
   private
 
@@ -62,15 +63,6 @@ module unit_tests
 
 contains
 
-  function verbosity()
-    integer :: verbosity
-    character(len=10) :: verbosity_char
-    call getenv("VERBOSITY", verbosity_char)
-    !For fortran 2003 standard should replace above with
-    !call get_environment_variable("VERBOSITY", verbosity_char)
-    read (verbosity_char,'(I1)') verbosity
-    !write (*,*) 'verbosity is ', verbosity
-  end function verbosity
 
   function proc_message()
     use mp, only: iproc

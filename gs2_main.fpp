@@ -555,6 +555,7 @@ endif
       use file_utils, only: open_output_file, close_output_file
       use theta_grid_params, only: write_theta_grid => write_trinity_parameters
       use species, only: write_species => write_trinity_parameters
+      use run_parameters, only: write_run_parameters => write_trinity_parameters
       use mp, only: proc0
       integer :: trinpars_unit
       
@@ -562,6 +563,7 @@ endif
         call open_output_file(trinpars_unit, '.trinpars')
         call write_theta_grid(trinpars_unit)
         call write_species(trinpars_unit)
+        call write_run_parameters(trinpars_unit)
         call close_output_file(trinpars_unit)
       end if
   end subroutine write_trinity_parameters

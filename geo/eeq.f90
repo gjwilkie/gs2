@@ -1,6 +1,7 @@
 ! This module contains routines to read from CMR's GS2D equilibrium solver
 
 module gs2d
+  use runtime_tests, only: verbosity
   real, dimension(:), allocatable :: ps,amin_gs2d,q,f,p,pp
   real, dimension(:), allocatable :: rsep,zsep,rgrid,zgrid
   real, dimension(:,:), allocatable :: psi
@@ -86,6 +87,8 @@ module eeq
   private
 
   integer :: nw, nh, nbbbs, ntime, ntstar
+
+  integer, public :: verbosity = 0
 
   real, allocatable, dimension (:) :: psi_bar, fp, qsf, pressure, beta, spsi_bar
   real, allocatable, dimension (:) :: dummy, efit_R, efit_Z, sefit_R, sefit_Z, efit_t
@@ -563,7 +566,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     logical, parameter :: debug=.false.
 !cmr
 
-if (debug) write(6,*) "efit_init: do i"     
+if (verbosity > 2) write(6,*) "efit_init: do i"     
     do i = 1, nw
        do j = 1,nh
           if(efit_Z(j) == Z_mag .and. efit_R(i) == R_mag) then
@@ -574,8 +577,11 @@ if (debug) write(6,*) "efit_init: do i"
        enddo
     enddo
 
+if (verbosity > 2) write(6,*) "efit_init: derm"     
     call derm(efit_psi, dpm)
+if (verbosity > 2) write(6,*) "efit_init: tderm"     
     call tderm(eqth, dtm)
+if (verbosity > 2) write(6,*) "efit_init: finished"     
     
   end subroutine efit_init
 
@@ -590,23 +596,29 @@ if (debug) write(6,*) "efit_init: do i"
 ! EFIT grid is equally spaced in R, Z -- this routine uses that fact and 
 ! is therefore not completely general.  It is fine for EFIT output.    
 
+if (verbosity > 2) write(6,*) "efit: tderm: R boundary"     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))/efit_dR
     
     i=nw
     dfm(i,:,1) = 0.5*(3*f(i,:)-4*f(i-1,:)+f(i-2,:))/efit_dR
    
+if (verbosity > 2) write(6,*) "efit: tderm: Z boundary"     
     j=1
     dfm(:,j,2) = -0.5*(3*f(:,j)-4*f(:,j+1)+f(:,j+2))/efit_dZ
     
     j=nh      
     dfm(:,j,2) = 0.5*(3*f(:,j)-4*f(:,j-1)+f(:,j-2))/efit_dZ
     
+if (verbosity > 2) write(6,*) "efit: tderm: R derivative"     
     do i=2,nw-1
        dfm(i,:,1)=0.5*(f(i+1,:)-f(i-1,:))/efit_dR
     enddo
     
+if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"     
     do j=2,nh-1
+          if (verbosity > 4) write(6,*) "efit: tderm: Z derivative, j = ", j,&
+           "/", nh-1 
        do i = 1,nw
           if(f(i,j+1)-f(i,j-1) > pi) then
              dfm(i,j,2)=0.5*(f(i,j+1)-f(i,j-1)-2.*pi)/efit_dZ
@@ -615,6 +627,7 @@ if (debug) write(6,*) "efit_init: do i"
           endif
        enddo
     enddo
+    if (verbosity > 2) write(6,*) "efit: tderm: Z derivative done"     
     
   end subroutine tderm
 

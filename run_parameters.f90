@@ -6,6 +6,7 @@ module run_parameters
 
   public :: init_run_parameters, finish_run_parameters
   public :: check_run_parameters, wnml_run_parameters
+  public :: write_trinity_parameters
 
 
   public :: beta, zeff, tite
@@ -363,6 +364,15 @@ contains
     endif
 
   end subroutine read_parameters
+  
+  subroutine write_trinity_parameters(trinpars_unit)
+    integer, intent(in) :: trinpars_unit
+    integer :: is
+    write(trinpars_unit, "(A15)") '&run_parameters'
+    write (trinpars_unit, *) ' beta = ', beta
+    write (trinpars_unit, "(A1)") '/'
+
+  end subroutine write_trinity_parameters
 
   subroutine adjust_time_norm
     use file_utils, only: error_unit
