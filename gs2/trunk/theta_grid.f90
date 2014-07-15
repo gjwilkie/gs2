@@ -1013,13 +1013,19 @@ contains
     use geometry, only: init_theta, nperiod_geo => nperiod
     use geometry, only: eikcoefs, itor, delrho, rhoc
     use geometry, only: gen_eq, ppl_eq, transp_eq, chs_eq
+    use geometry, only: debug_geo => debug, verb
     use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
+    use runtime_tests, only: verbosity
     use mp, only: proc0
     implicit none
     real :: rhoc_save
 !    logical, save :: initialized = .false.
 !CMR nov04: adding following debug switch
-    logical, parameter :: debug=.true.
+    logical :: debug=.true.
+
+    debug = (verbosity() > 2)
+    debug_geo = debug
+    verb = verbosity()
 !CMR
 
     if (initialized) return

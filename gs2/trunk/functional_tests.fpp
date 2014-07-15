@@ -4,6 +4,7 @@
 !! which runs GS2.
 module functional_tests
   use unit_tests
+  use runtime_tests, only: verbosity
 
   !> Check that the relative error of the growth rates as a 
   !! function of ky with respect to the given rslt is less than

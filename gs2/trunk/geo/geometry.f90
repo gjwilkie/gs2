@@ -55,8 +55,10 @@ module geometry
        qfun, rpofrho, rcenter, init_theta, nth_get, f_trap  !procedures
 
   integer, private :: ntgrid, nth, ntheta
-  !logical, parameter :: debug = .true.
-  logical, parameter :: debug = .false.
+
+  integer :: verb = 0 ! Verbosity of print statements
+  logical :: debug = .true.
+  !logical, parameter :: debug = .false.
 
   character(800) :: eqfile
 
@@ -294,7 +296,7 @@ contains
     use  ceq, only: ceqin, ceq_init 
     
     use  peq, only: peqin => eqin, teqin, peq_init
-    use  eeq, only: efitin, efit_init, gs2din
+    use  eeq, only: efitin, efit_init, gs2din, eeq_verbosity => verbosity
 !cmr    use  eeq, only: efitin, eeq_init => efit_init, gs2din
     use  deq, only: dfitin, deq_init => dfit_init
     use ideq, only: idfitin, ideq_init => dfit_init
@@ -335,6 +337,9 @@ contains
 
     character(1) :: char
     integer :: i, j, k, itot, nthg, n
+
+    ! Set output verbosity levels
+    eeq_verbosity = verb
 
 !     compute the initial constants
     pi=2.*acos(0.)
@@ -680,14 +685,14 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
 if (debug) write(6,*) "eikcoefs:  gradients"
 if (debug) write(6,*) 'drhodpsi', drhodpsi
 if (debug) write(6,*) 'bi', bi
-if (debug) write(6,*) 'rmajor', rmajor(:)
-if (debug) write(6,*) 'Bpolmag', Bpolmag(:)
-if (debug) write(6,*) rpgrad(-nth:nth,1)
-if (debug) write(6,*) rpgrad(-nth:nth,2)
-if (debug) write(6,*) thgrad(-nth:nth,1)
-if (debug) write(6,*) thgrad(-nth:nth,2)
-if (debug) write(6,*) 1.0d0/trip(-nth:nth)
-if (debug) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
+if (verb > 5) write(6,*) 'rmajor', rmajor(:)
+if (verb > 5) write(6,*) 'Bpolmag', Bpolmag(:)
+if (verb > 5) write(6,*) rpgrad(-nth:nth,1)
+if (verb > 5) write(6,*) rpgrad(-nth:nth,2)
+if (verb > 5) write(6,*) thgrad(-nth:nth,1)
+if (verb > 5) write(6,*) thgrad(-nth:nth,2)
+if (verb > 5) write(6,*) 1.0d0/trip(-nth:nth)
+if (verb > 5) write(6,*) -Rpol(-nth:nth)/bpolmag(-nth:nth)
 if (debug) write(6,*) "eikcoefs: end gradients"
 !CMRend
 
@@ -2880,7 +2885,7 @@ end subroutine geofax
     integer i
     real :: pi
 !cmr Jun06: adding following debug switch
-    logical, parameter :: debug=.false.
+    logical, parameter :: debug=.true.
 !cmr
     logical :: first_local = .true.
 
