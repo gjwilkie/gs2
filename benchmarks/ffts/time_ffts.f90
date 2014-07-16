@@ -6,8 +6,9 @@
 !!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
 program time_ffts
   use unit_tests
-  use mp, only: init_mp, finish_mp, proc0, broadcast
+  use mp, only: init_mp, finish_mp, proc0, broadcast, nproc
   use file_utils, only: init_file_utils, run_name
+  use file_utils, only: append_output_file, close_output_file
   use species, only: init_species, nspec, spec
   use constants, only: pi
   use kt_grids, only: naky, ntheta0, init_kt_grids
@@ -18,6 +19,8 @@ program time_ffts
   use nonlinear_terms, only: nonlinear_terms_unit_test_time_add_nl
   use kt_grids, only: ntheta0, naky
   use job_manage, only: time_message
+  !use runtime_tests, only: get_svn_rev, get_compiler_name
+  use benchmarks, only: benchmark_identifier
   implicit none
   real :: eps
     character (500), target :: cbuff
@@ -29,10 +32,12 @@ program time_ffts
   real :: vcut_local
   real :: time_taken(2) = 0.0
   integer :: i
+  integer :: timing_unit
 
   complex, dimension (:,:,:), allocatable :: integrate_species_results
   complex, dimension (:,:,:), allocatable :: g1
   complex, dimension (:,:,:), allocatable :: phi, apar, bpar
+
 
 
   ! General config
@@ -69,8 +74,12 @@ program time_ffts
 
   if (proc0) then
     call time_message(.false., time_taken, "FFT time")
-    write(*, '(" Time for nonlinear_terms: ",F3.1," s")') time_taken(1)
+    write(*, '(" Time for nonlinear_terms on ",I6," procs: ",F3.1," s")') nproc, time_taken(1)
     write(*,*)
+    call append_output_file(timing_unit, &
+      benchmark_identifier())
+    write(timing_unit, '(I6,"   ",F9.3)') nproc, time_taken(1)
+    call close_output_file(timing_unit)
   end if
 
   call finish_nonlinear_terms
