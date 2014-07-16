@@ -3,6 +3,9 @@ sinclude ../Makefile.tests_common
 all: time_ffts 
 	$(TESTCOMMAND) time_ffts time_ffts.in
 
+TIMINGFILES=$(wildcard *.timing.*)
+
+UPLOADCOMMAND = $(call UPLOAD_BENCHMARKS,$(TIMINGFILES))
 
 
 # For building unit tests - to get rid of too much dependency

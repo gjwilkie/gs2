@@ -678,6 +678,9 @@ test_script: unit_tests linear_tests
 benchmarks: functional_tests.o unit_tests.o benchmarks.o $(TEST_DEPS)
 	cd benchmarks && time ${MAKETESTS} && echo && echo "Completed Benchmarks"
 
+upload_benchmarks: 
+	cd benchmarks && time ${MAKETESTS} upload && echo && echo "Completed Benchmarks"
+
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
 

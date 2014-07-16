@@ -18,10 +18,10 @@ export
 all: $(TESTS)
 
 
-clean: 
+clean upload: 
 	for d in $(TESTS); \
 	do \
-		$(MAKE) clean -C $$d; \
+		$(MAKE) $@ -C $$d; \
 	done
 
 
