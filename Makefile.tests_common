@@ -20,6 +20,10 @@
 clean: 
 	$(CLEANCOMMAND)
 
+upload:
+	$(UPLOADCOMMAND)
+
 
 RUNCOMMAND= $(TESTCOMMAND)$(1) $(BLUEGENEARGS) $(2)
 
+UPLOAD_BENCHMARKS= ls $(1) | xargs -n 1 -I {} scp {} $(USER),gyrokinetics@web.sourceforge.net:htdocs/wikifiles/benchmark_data/.

@@ -16,7 +16,7 @@ contains
     write(timenowstr, "(I11)") timenow
     call date_and_time(date=date)
     benchmark_identifier = &
-      '.timing.'//trim(build_indentifier())//'.'//date
+      '.timing.'//date//'.'//trim(build_indentifier())
   end function benchmark_identifier
 
 end module benchmarks
