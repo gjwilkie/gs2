@@ -244,6 +244,10 @@ endif
 SVN_REV='"$(shell svnversion -n .)"'
 CPPFLAGS+=-DSVN_REV=$(SVN_REV)
 
+# Define GK_SYSTEM for runtime_tests so that we can get the system name
+# at runtime
+CPPFLAGS+=-DGK_SYSTEM='"$(GK_SYSTEM)"'
+
 ifdef USE_SHMEM
 $(warning USE_SHMEM is not working yet)
 	override USE_SHMEM =	
@@ -530,7 +534,7 @@ clean: clean_simpledataio
 	-rm -f *.o *.mod *.g90 *.h core */core
 
 CLEANCOMMAND=echo $$$$PWD
-CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch
+CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch *.timing.*
 
 ifdef CLEAN_TEXTFILES
 	CLEANCOMMAND+= *~ *.orig
@@ -638,7 +642,7 @@ gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
-TEST_DEPS?=$(gs2_mod) functional_tests.o
+TEST_DEPS?=$(gs2_mod) functional_tests.o benchmarks.o
 #export
 TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(LIBS) $(SIMPLEDATAIO_LIB_ABS)" CPPFLAGS="$(CPPFLAGS)"
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
@@ -671,8 +675,8 @@ test_script: unit_tests linear_tests
 	echo "echo \"Tests Successful\"" >> test_script.sh
 	#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
 
-benchmarks: functional_tests.o unit_tests.o $(TEST_DEPS)
-	cd benchmarks && time ${MAKE} && echo && echo "Completed Benchmarks"
+benchmarks: functional_tests.o unit_tests.o benchmarks.o $(TEST_DEPS)
+	cd benchmarks && time ${MAKETESTS} && echo && echo "Completed Benchmarks"
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^

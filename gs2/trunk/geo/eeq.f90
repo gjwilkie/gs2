@@ -366,16 +366,20 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     
 ! Need to generalize initialization condition if equilibrium changes
 
+   if (verbosity>2) write (*,*) 'Starting efitin'
     if(initeq == 0) return
     init=0
     
     i=index(eqfile,' ')-1
     filename = eqfile(1:i)
+   if (verbosity>1) write (*,*) 'Opening file ', filename
     open(unit=5,file=filename,status='old',form='formatted')
     
 ! Read the data
 
    read(5,1000) char, char, char, char, char, i, nw, nh
+
+   if (verbosity>1) write (*,*) 'EFIT dimensions are: ', nw, nh
 !   write(*,1000) char, char, char, char, char, i, nw, nh
 
     nwb = nw * big

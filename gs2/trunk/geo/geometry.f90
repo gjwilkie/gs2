@@ -56,7 +56,7 @@ module geometry
 
   integer, private :: ntgrid, nth, ntheta
 
-  integer :: verb = 0 ! Verbosity of print statements
+  integer :: verb = 2 ! Verbosity of print statements
   logical :: debug = .true.
   !logical, parameter :: debug = .false.
 
@@ -436,6 +436,7 @@ if (debug) write(6,*) "eikcoefs: call gs2din eqfile=",eqfile
                 call gs2din(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
 if (debug) write(6,*) "eikcoefs: done gs2din  psi_0,psi_a, rmaj, B_T0, avgrmid=",psi_0,psi_a, rmaj, B_T0, avgrmid
              else
+if (debug) write(6,*) "eikcoefs: call efitin eqfile=",eqfile, "eqinit =", eqinit
                 call efitin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
              endif
           else if(dfit_eq) then
