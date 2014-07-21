@@ -4411,7 +4411,6 @@ subroutine check_dist_fn(report_unit)
 !   2{\chi,f_{0s}}.delt  (allowing for sheared flow)
 !CMRend
 
-!if(fapar.gt.0)then
       do ig = -ntgrid, ntgrid-1
          phi_p = bdfac_p*phigavg(ig+1)+bdfac_m*phigavg(ig)
          phi_m = phigavg(ig+1)-phigavg(ig)
@@ -4740,7 +4739,7 @@ subroutine check_dist_fn(report_unit)
     complex :: beta1
     complex, dimension (-ntgrid:ntgrid,2) :: source, g1, g2
     complex :: adjleft, adjright
-    logical :: kperiod_flag, speriod_flag
+    logical :: use_pass_homog, speriod_flag
     integer :: ntgl, ntgr
 
 !    call prof_entering ("invert_rhs_1", "dist_fn")
@@ -4785,7 +4784,7 @@ subroutine check_dist_fn(report_unit)
 ! Here ensure ZERO incoming particles in nonadiabatic delta f at domain ends
 !  (exploits code used in subroutine g_adjust to transform g_wesson to g_gs2)
     if ( nonad_zero ) then 
-       if (il <= ng2+1) then
+       if (il <= ng2) then
           !This ensures that we only apply the new boundary condition to the leftmost
           !cell for sign going from left to right
           if (l_links(ik,it) .eq. 0) then
@@ -4811,11 +4810,11 @@ subroutine check_dist_fn(report_unit)
     g1 = 0.0
 
 !CMR, 17/4/2012:
-!  kperiod_flag = T  iff one of following applies:   
+!  use_pass_homog = T  iff one of following applies:   
 !                 boundary_option_self_periodic
 !     OR          boundary_option_linked
 !     OR          aky=0
-!  if kperiod_flag = T, compute homogeneous solution (g1) for passing.
+!  if use_pass_homog = T, compute homogeneous solution (g1) for passing.
 !        otherwise ONLY compute inhomogenous solution for passing particles.
 !
 !  speriod_flag = T  iff boundary_option_linked AND aky=0
@@ -4823,32 +4822,32 @@ subroutine check_dist_fn(report_unit)
 
     select case (boundary_option_switch)
     case (boundary_option_self_periodic)
-       kperiod_flag = .true.
+       use_pass_homog = .true.
     case (boundary_option_linked)
-       kperiod_flag = .true.
+       use_pass_homog = .true.
        speriod_flag = aky(ik) == 0.0
     case default
-       kperiod_flag = .false.
+       use_pass_homog = .false.
     end select
 
-    kperiod_flag = kperiod_flag .or. aky(ik) == 0.0
+    use_pass_homog = use_pass_homog .or. aky(ik) == 0.0
 
     ntgl = -ntgrid
     ntgr =  ntgrid
 
 ! ng2+1 is WFB
 
-    if (kperiod_flag) then
-       if (il <= ng2+1) then
+    if (use_pass_homog) then
+       if (il < ng2+1) then
           g1(-ntgrid,1) = 1.0
           g1( ntgrid,2) = 1.0
        end if
     end if
 
-    if (il == ng2+1) then
+    if (il == ng2+1) then ! ng2+1 is WFB
        g1(-ntgrid,1) = wfb  ! wfb should be unity here; variable is for testing
        g1( ntgrid,2) = wfb  ! wfb should be unity here; variable is for testing
-    end if
+    endif
 
 !CMR
 ! g2 simply stores trapped homogeneous boundary conditions at bounce points
@@ -4883,16 +4882,16 @@ subroutine check_dist_fn(report_unit)
        gnew(ig,2,iglo) = -gnew(ig+1,2,iglo)*r(ig,2,iglo) + ainv(ig,2,iglo)*source(ig,2)
     end do
 
-    if (kperiod_flag) then
+    if (use_pass_homog) then
        ilmin = 1
     else
        ilmin = ng2 + 1              !!! ilmin = ng2 + 2
     end if
 
 ! time advance vpar < 0 homogeneous part: g1
-!CMR, 17/4/2012: computes homogeneous solutions for il > ilmin
-!                il > ilmin includes trapped particles
-!                AND passing particles IF kperiod_flag = T
+!CMR, 17/4/2012: computes homogeneous solutions for il >= ilmin
+!                il >= ilmin includes trapped particles, wfb
+!                AND passing particles IF use_pass_homog = T
 
     if (il >= ilmin) then
        do ig = ntgrid-1, -ntgrid, -1
@@ -4906,11 +4905,8 @@ subroutine check_dist_fn(report_unit)
     ! First set BCs for trapped particles at lower bounce point
     ! (excluding wfb and ttp)
 
-! GWH & JAB: see if this fixes a numerical instability, related to close-to-wfb:
-!CMR, 17/4/2012:  il<=lmax excludes ttp 
-!CMR, 1/8/2011:  Not sure why wfb is included in following loop
-    if (nlambda > ng2 .and. il >= ng2+1 .and. il <= lmax) then
-!    if (nlambda > ng2 .and. il >= ng2+2 .and. il <= lmax) then
+!CMR, 17/4/2012: ng2+1< il <=lmax excludes wfb,ttp 
+    if (nlambda > ng2 .and. il > ng2+1 .and. il <= lmax) then
        ! match boundary conditions at lower bounce point
        do ig = -ntgrid, ntgrid-1
           if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
@@ -4977,7 +4973,7 @@ subroutine check_dist_fn(report_unit)
 
     else       
        ! add correct amount of homogeneous solution now
-       if (kperiod_flag .and. il <= ng2+1) then
+       if (use_pass_homog .and. il <= ng2+1) then
           call self_periodic
        else if (il == ng2 + 1) then
           call self_periodic
