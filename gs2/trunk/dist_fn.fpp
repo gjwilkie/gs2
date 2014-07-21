@@ -3456,6 +3456,7 @@ subroutine check_dist_fn(report_unit)
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+
        !Add hyper terms (damping)
        call hyper_diff (gnew, phinew, bparnew)
        !Add collisions
@@ -4267,7 +4268,8 @@ subroutine check_dist_fn(report_unit)
        end if
     end if
 
-    source(ntgrid) = source(-ntgrid)  ! is this necessary?  BD
+!CMR, 21/7/2014: removed redundant line here:    source(ntgrid)=source(-ntgrid) 
+!                as source(ntgrid) should never be used.
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! special source term for totally trapped particles
@@ -4578,12 +4580,14 @@ subroutine check_dist_fn(report_unit)
           source(ig,1) = source(ig,1) &
                + b(ig,1,iglo)*g(ig,1,iglo) + a(ig,1,iglo)*g(ig+1,1,iglo)
        end do
-       source(ntgrid,1)=source(-ntgrid,1)  ! is this necessary?  BD
+!CMR, 21/7/2014: removed redundant line here:    source(ntgrid,1)=source(-ntgrid,1) 
+!                as source(ntgrid,1) should never be used.
        do ig = -ntgrid, ntgrid-1
           source(ig,2) = source(ig,2) &
                + a(ig,2,iglo)*g(ig,2,iglo) + b(ig,2,iglo)*g(ig+1,2,iglo)
        end do
-       source(ntgrid,2)=source(-ntgrid,2)  ! is this necessary?  BDa
+!CMR, 21/7/2014: removed redundant line here:    source(ntgrid,2)=source(-ntgrid,2) 
+!                as source(ntgrid,2) should never be used.
     end if
 
     ! special source term for totally trapped particles (isgn=2 only)
