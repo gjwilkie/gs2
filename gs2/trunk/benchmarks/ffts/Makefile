@@ -1,7 +1,11 @@
 
 sinclude ../Makefile.tests_common
 all: time_ffts 
-	$(TESTCOMMAND) time_ffts time_ffts.in
+	for d in $(NTESTPROCS); \
+	do \
+	  $(call BENCHMARKCOMMAND,$$d,time_ffts,time_ffts.in) ; \
+	done
+	#$(TESTCOMMAND) time_ffts time_ffts.in
 
 TIMINGFILES=$(wildcard *.timing.*)
 
