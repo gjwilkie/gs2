@@ -134,6 +134,7 @@ else
 endif
 
 export TESTCOMMAND
+export NTESTPROCS
 
 #
 # * Targets:
