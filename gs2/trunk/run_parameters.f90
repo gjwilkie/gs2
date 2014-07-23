@@ -9,7 +9,7 @@ module run_parameters
   public :: write_trinity_parameters
 
 
-  public :: beta, zeff, tite
+  public :: beta, zeff, tite, reset, immediate_reset
   public :: fphi, fapar, fbpar
 !  public :: delt, delt_max, wunits, woutunits, tunits
   public :: code_delt_max, wunits, woutunits, tunits
@@ -35,6 +35,8 @@ module run_parameters
   real, dimension (2) :: vnm_init
   real :: avail_cpu_time, margin_cpu_time
   integer :: nstep
+  logical :: reset=.false.
+  logical :: immediate_reset
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
   integer :: fixpar_secondary
@@ -117,6 +119,14 @@ contains
        if (tertiary)  write (report_unit, fmt="('Mode with ky = 0, kx = kx_min fixed in time')")
        if (fixpar_secondary.gt.0)  write (report_unit, fmt="('Mode with ky = ',I0,' fixed in time')") fixpar_secondary
     end if
+
+    write (report_unit, *) 
+    if(immediate_reset)then
+       write (report_unit, fmt="('The time step will be reset immediately after cfl violation detected.')") 
+    else
+       write (report_unit, fmt="('The time step will be reset just before the next time step after cfl violation detected.')") 
+    endif
+    write (report_unit, *) 
   end subroutine check_run_parameters
 
   subroutine wnml_run_parameters(unit,electrons,collisions)
@@ -155,6 +165,7 @@ contains
        case (delt_option_hand)
           ! nothing
        end select
+       write (unit, fmt="(' immediate_reset = ',L1)") immediate_reset
        write (unit, fmt="(' /')")
      endif
   end subroutine wnml_run_parameters
@@ -225,7 +236,7 @@ contains
          delt_option, margin, secondary, tertiary, fixpar_secondary, faperp, harris, &
 !         avail_cpu_time, eqzip_option, include_lowflow, neo_test
          avail_cpu_time, margin_cpu_time, eqzip_option, neo_test, &
-         trinity_linear_fluxes, do_eigsolve
+         trinity_linear_fluxes, do_eigsolve, immediate_reset
 
     if (proc0) then
        fbpar = -1.0
@@ -251,7 +262,8 @@ contains
        margin_cpu_time = 300.
        trinity_linear_fluxes = .false.
        do_eigsolve = .false.
-
+       immediate_reset = .true.
+       
        in_file = input_unit_exist("parameters", rpexist)
 !       if (rpexist) read (unit=input_unit("parameters"), nml=parameters)
        if (rpexist) read (unit=in_file,nml=parameters)
@@ -351,6 +363,7 @@ contains
     call broadcast (neo_test)
     call broadcast (trinity_linear_fluxes)
     call broadcast (do_eigsolve)
+    call broadcast (immediate_reset)
 
     user_delt_max = delt
 

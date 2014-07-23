@@ -315,6 +315,7 @@ contains
   end subroutine getfield
 
   subroutine advance_implicit (istep, remove_zonal_flows_switch)
+    use run_parameters, only: reset
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes, no_driver
@@ -337,6 +338,8 @@ contains
     bpar = bparnew       
     
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+    if(reset) return !Return is resetting
+
     if(.not.no_driver) aparnew = aparnew + apar_ext 
     
     call getfield (phinew, aparnew, bparnew)
