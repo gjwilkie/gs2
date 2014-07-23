@@ -3610,7 +3610,7 @@ contains
 
   !>This routine advances the solution by one full time step
   subroutine advance_local(istep, remove_zonal_flows_switch)
-    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, fapar, fbpar, reset
     use fields_implicit, only: remove_zonal_flows
     use fields_arrays, only: phi, apar, bpar, phinew
     use fields_arrays, only: aparnew, bparnew, apar_ext
@@ -3650,6 +3650,7 @@ contains
     !Find gnew given fields at time step midpoint
     call timeadv (phi, apar, bpar, phinew, &
          aparnew, bparnew, istep)
+    if(reset) return !Return is resetting
 
     !Add in antenna driving if present
     !<DD>TAGGED: Should we only this is fapar>0 as well?

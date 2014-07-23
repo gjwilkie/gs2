@@ -286,7 +286,7 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use dist_fn_arrays, only: g
     use gs2_time, only: save_dt_cfl
-
+    use run_parameters, only: reset
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
@@ -323,7 +323,7 @@ contains
        ! and store it in g1
        if (present(nl)) then
           call add_nl (g1, phi, apar, bpar)
-          
+          if(reset) return !Return if resetting
           ! takes g1 at grid points and returns 2*g1 at cell centers
           call center (g1)
        else
@@ -408,9 +408,9 @@ contains
     use dist_fn_arrays, only: g
     use species, only: spec
     use gs2_transforms, only: transform2, inverse2
-    use run_parameters, only: fapar, fbpar, fphi
+    use run_parameters, only: fapar, fbpar, fphi, reset, immediate_reset
     use kt_grids, only: aky, akx
-    use gs2_time, only: save_dt_cfl
+    use gs2_time, only: save_dt_cfl, check_time_step_too_large
     use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
@@ -559,7 +559,16 @@ contains
     
     dt_cfl = 1./max_vel
     call save_dt_cfl (dt_cfl)
-    
+
+    !Now check to see if we've violated the 
+    !cfl condition if requested
+    if(immediate_reset)then
+       call check_time_step_too_large(reset)
+
+       !If we have violated cfl the return immediately
+       if(reset)return
+    endif
+
     if (accelerated) then
        call inverse2 (abracket, g1, ia)
     else
