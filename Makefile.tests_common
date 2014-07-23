@@ -26,4 +26,6 @@ upload:
 
 RUNCOMMAND= $(TESTCOMMAND)$(1) $(BLUEGENEARGS) $(2)
 
+BENCHMARKCOMMAND= $(call TESTEXEC,$(1))$(2) $(BLUEGENEARGS) $(3)
+
 UPLOAD_BENCHMARKS= ls $(1) | xargs -n 1 -I {} scp {} $(USER),gyrokinetics@web.sourceforge.net:htdocs/wikifiles/benchmark_data/.
