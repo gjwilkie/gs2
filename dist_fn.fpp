@@ -4984,9 +4984,11 @@ subroutine check_dist_fn(report_unit)
     end if
 
     ! add correct amount of homogeneous solution for trapped particles to satisfy boundary conditions
-!JAB include wfb (ng2+1)
- !orig   if (il >= ng2+2 .and. il <= lmax) then
-    if (il >= ng2+1 .and. il <= lmax) then
+!CMR, 24/7/2014:  
+!Revert to looping from il>= ng2+2, i.e. exclude wfb as: 
+!          (1) wfb bc is already handled above
+!          (2) forbid never true for wfb, so including ng2+1 in loop is pointless.
+    if (il >= ng2+2 .and. il <= lmax) then
        beta1 = 0.0
        do ig = ntgr-1, ntgl, -1
           if (ittp(ig) <= il) cycle
@@ -5003,6 +5005,11 @@ subroutine check_dist_fn(report_unit)
 
     if (def_parity) call enforce_parity(parity_redist)
 
+!CMR, 24/7/2014: 
+! not keen on following kludge zeroing forbidden region
+! (1) where is forbidden pollution coming from?  
+! (2) should NOT affect any calculations 
+!  => can we remove it?
     ! zero out spurious gnew outside trapped boundary
     where (forbid(:,il))
        gnew(:,1,iglo) = 0.0
