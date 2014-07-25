@@ -1,6 +1,7 @@
 
 &layouts_knobs
 layout = 'xyles'
+opt_redist_init = .true.
 /
 
 &species_parameters_1
@@ -67,7 +68,7 @@ grid_option="box"
 /
 
 &kt_grids_box_parameters
-ny = 15
+ny = 24
 nx = 16
 y0=10.0
 x0=10.0
@@ -76,4 +77,25 @@ jtwist = 6
 
 &nonlinear_terms_knobs
 nonlinear_mode = "on"
+/
+
+&dist_fn_knobs
+ omprimfac = 1.0 
+ boundary_option = "linked" ! Sets the boundary condition along the field line (i.e. the boundary conditions at theta = +- pi).
+ adiabatic_option = "iphi00=2" ! The form of the adiabatic response (if a species is being modeled as adiabatic).
+ g_exb = 0.0 
+ nonad_zero = .true. ! If true switches on new parallel boundary condition where h=0 at incoming boundary instead of g=0.
+/
+
+&fields_knobs
+ field_option = "implicit" ! Controls which time-advance algorithm is used for the linear terms.
+/
+
+&knobs
+ wstar_units = .false. ! For linear runs only. Evolves each k_y with a different timestep.
+ fphi = 1.0 ! Multiplies Phi (electrostatic potential).
+ fapar = 0.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)
+ faperp = 0.0 ! Multiplies A_perp. Use 1 for high beta, 0 otherwise. Deprecated: use fbpar instead
+ !delt = 0.05 ! Time step
+ !nstep = 600 ! Maximum number of timesteps
 /

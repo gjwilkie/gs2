@@ -16,6 +16,7 @@ ball_mod = \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
+	 runtime_tests.o \
 	 spl.o 
 
 drive_mod = \
@@ -40,6 +41,7 @@ eiktest_mod = \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
+	 runtime_tests.o \
 	 spl.o 
 
 ffttester_mod = \
@@ -291,6 +293,8 @@ antenna.o: \
 antenna_data.o: 
 ball.o: \
 	 geometry.o 
+benchmarks.o: \
+	 runtime_tests.o 
 ceq.o: \
 	 constants.o \
 	 read_chease.o \
@@ -389,6 +393,7 @@ drive.o: \
 	 regression.o 
 ediff.o: 
 eeq.o: \
+	 runtime_tests.o \
 	 spl.o 
 et.o: \
 	 geometry.o 
@@ -477,6 +482,7 @@ functional_tests.o: \
 	 kt_grids.o \
 	 mp.o \
 	 run_parameters.o \
+	 runtime_tests.o \
 	 unit_tests.o 
 gauss_quad.o: \
 	 constants.o \
@@ -860,13 +866,15 @@ theta_grid.o: \
 	 geometry.o \
 	 gridgen4mod.o \
 	 mp.o \
+	 runtime_tests.o \
 	 spl.o \
 	 text_options.o \
 	 theta_grid_params.o 
 theta_grid_params.o: \
 	 file_utils.o 
 unit_tests.o: \
-	 mp.o 
+	 mp.o \
+	 runtime_tests.o 
 volume_averages.o: \
 	 fields_parallelization.o \
 	 kt_grids.o \

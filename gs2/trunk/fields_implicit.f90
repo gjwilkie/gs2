@@ -16,6 +16,12 @@ module fields_implicit
 
   private
 
+  !> A variable to help with running benchmarks... do not set true
+  !! unless you know what you are doing. If true, the response matrix
+  !! will not be initialised and set to zero. The results of any 
+  !! simulation will be garbage
+  logical, public :: skip_initialisation = .false.
+
   integer, save :: nfield
   logical :: initialized = .false.
   logical :: linked = .false.
@@ -47,7 +53,7 @@ contains
     if (debug .and. run_scan) &
         write(6,*) "init_fields_implicit: set_scan_parameter"
         ! Must be done before resp. m.
-        if (run_scan) call set_scan_parameter(dummy)
+        !if (run_scan) call set_scan_parameter(dummy)
     if (debug) write(6,*) "init_fields_implicit: response_matrix"
     call init_response_matrix
     if (debug) write(6,*) "init_fields_implicit: antenna"
@@ -462,6 +468,25 @@ contains
     !Either read the reponse
     if(read_response) then
         call read_response_from_file_imp
+      !elseif(skip_initialisation) then
+       !do i = i_class, 1, -1
+          !!Pretty sure this barrier is not needed
+          !call barrier
+          !!       if (proc0) write(*,*) 'beginning class ',i,' with size ',nidx*N_class(i)
+          !!Allocate matrix am. First dimension is basically theta along the entire
+          !!connected domain for each field. Second dimension is the local section
+          !!of the M_class(i)*N_Class(i)*(2*ntgrid+1)*nfield compound domain.
+          !!Clearly this will 
+          !allocate (am(nidx*N_class(i), f_lo(i)%llim_proc:f_lo(i)%ulim_alloc))
+
+
+          !!Do we need to zero all 8 arrays on every loop? This can be more expensive than might think.
+          !am = 0.0
+          !call init_inverse_matrix (am, i)
+
+          !!Free memory
+          !deallocate (am)
+       !end do
     else
     !or calculate it
 
@@ -535,7 +560,7 @@ contains
                       it = f_lo(i)%it(m,n)
                       phinew(ig,it,ik) = 1.0
                    end do
-                   call init_response_row (ig, ifield, am, i, n)
+                   if (.not. skip_initialisation) call init_response_row (ig, ifield, am, i, n)
                    phinew = 0.0
                 end if
 
@@ -716,155 +741,157 @@ contains
     allocate (a_inv(j,f_lo(ic)%llim_proc:f_lo(ic)%ulim_alloc))
     a_inv = 0.0
     
-    !Set (ifield*ig,ilo) "diagonal" to 1?
-    do ilo = f_lo(ic)%llim_proc, f_lo(ic)%ulim_proc
-       a_inv(if_idx(f_lo(ic),ilo),ilo) = 1.0
-    end do
+    if (.not. skip_initialisation) then
+      !Set (ifield*ig,ilo) "diagonal" to 1?
+      do ilo = f_lo(ic)%llim_proc, f_lo(ic)%ulim_proc
+         a_inv(if_idx(f_lo(ic),ilo),ilo) = 1.0
+      end do
 
-    ! Gauss-Jordan elimination, leaving out internal points at multiples of ntgrid 
-    ! for each supercell
-    !Loop over parallel gridpoints in supercell
-    do i = 1, nidx*N_class(ic)
-       !iskip is true iff the theta grid point(ig) corresponding to i
-       !is at the upper end of a 2pi domain/cell and is not the rightmost gridpoint
-       iskip = N_class(ic) > 1 !Are the multiple cells => are there connections/boundaries
-       iskip = i <= nidx*N_class(ic) - nfield .and. iskip !Are we not near the upper boundary of the supercell
-       iskip = mod((i+nfield-1)/nfield, 2*ntgrid+1) == 0 .and. iskip !Are we at a theta grid point corresponding to the rightmost point of a 2pi domain
-       iskip = i > nfield .and. iskip !Are we not at the lower boundary of the supercell
-       if (iskip) cycle
- 
-       if (local_field_solve) then
-          do m = 1, M_class(ic)
-             ilo = idx(f_lo(ic),i,m)
-             if (idx_local(f_lo(ic),ilo)) then
-                lhscol(:,m) = am(:,ilo)
-                rhsrow(:,m) = a_inv(:,ilo)
-             end if
-          end do
-       else
-          !Loop over classes (supercell lengths)
-          do m = 1, M_class(ic)
-             !Convert to f_lo index
-             ilo = idx(f_lo(ic),i,m)
-             !Is ilo on this proc?
-             if (idx_local(f_lo(ic),ilo)) then
-                !If so store column/row
-                lhscol(:,m) = am(:,ilo)
-                rhsrow(:,m) = a_inv(:,ilo)
-             end if
-             !Here we send lhscol and rhscol sections to all procs
-             !from the one on which it is currently known
-             !Can't do this outside m loop as proc_id depends on m
-             !These broadcasts can be relatively expensive so local_field_solve
-             !may be preferable
-             call broadcast (lhscol(:,m), proc_id(f_lo(ic),ilo))
-             call broadcast (rhsrow(:,m), proc_id(f_lo(ic),ilo))
-          end do
-          !All procs will have the same lhscol and rhsrow after this loop+broadcast
-       end if
-
-       !Loop over field compound dimension
-       do jlo = f_lo(ic)%llim_proc, f_lo(ic)%ulim_proc
-          !jskip is true similarly to iskip
-          jskip = N_class(ic) > 1 !Are there any connections?
-          jskip = ig_idx(f_lo(ic), jlo) == ntgrid .and. jskip !Are we at a theta grid point corresponding to the upper boundary?
-          !Get 2pi domain/cell number out of total for this supercell
-          n = in_idx(f_lo(ic),jlo)
-          jskip = n < N_class(ic) .and. jskip !Are we not in the last cell (i.e. not at the rightmost grid point/upper end of supercell)?
-          if (jskip) cycle  !Skip this point if appropriate
-
-          !Now get m (class number)
-          m = im_idx(f_lo(ic),jlo)
-
-          !Convert class number and cell number to ik and it
-          ik = f_lo(ic)%ik(m,n)
-          it = f_lo(ic)%it(m,n)
-          
-          !Work out what the compound theta*field index is.
-          irow = if_idx(f_lo(ic),jlo)
-
-          !If ky or kx are not 0 (i.e. skip zonal 0,0 mode) then workout the array
-          if (aky(ik) /= 0.0 .or. akx(it) /= 0.0) then
-             !Get factor
-             fac = am(i,jlo)/lhscol(i,m)
-
-             !Store array element
-             am(i,jlo) = fac
-
-             !Store other elements
-             am(:i-1,jlo) = am(:i-1,jlo) - lhscol(:i-1,m)*fac
-             am(i+1:,jlo) = am(i+1:,jlo) - lhscol(i+1:,m)*fac
-             !WOULD the above three commands be better written as
-             !am(:,jlo)=am(:,jlo)-lhscol(:,m)*fac
-             !am(i,jlo)=fac
-
-             !Fill in a_inv
-             if (irow == i) then
-                a_inv(:,jlo) = a_inv(:,jlo)/lhscol(i,m)
-             else
-                a_inv(:,jlo) = a_inv(:,jlo) &
-                     - rhsrow(:,m)*lhscol(irow,m)/lhscol(i,m)
-             end if
-          else
-             a_inv(:,jlo) = 0.0
-          end if
+      ! Gauss-Jordan elimination, leaving out internal points at multiples of ntgrid 
+      ! for each supercell
+      !Loop over parallel gridpoints in supercell
+      do i = 1, nidx*N_class(ic)
+         !iskip is true iff the theta grid point(ig) corresponding to i
+         !is at the upper end of a 2pi domain/cell and is not the rightmost gridpoint
+         iskip = N_class(ic) > 1 !Are the multiple cells => are there connections/boundaries
+         iskip = i <= nidx*N_class(ic) - nfield .and. iskip !Are we not near the upper boundary of the supercell
+         iskip = mod((i+nfield-1)/nfield, 2*ntgrid+1) == 0 .and. iskip !Are we at a theta grid point corresponding to the rightmost point of a 2pi domain
+         iskip = i > nfield .and. iskip !Are we not at the lower boundary of the supercell
+         if (iskip) cycle
    
-       end do
-    end do
+         if (local_field_solve) then
+            do m = 1, M_class(ic)
+               ilo = idx(f_lo(ic),i,m)
+               if (idx_local(f_lo(ic),ilo)) then
+                  lhscol(:,m) = am(:,ilo)
+                  rhsrow(:,m) = a_inv(:,ilo)
+               end if
+            end do
+         else
+            !Loop over classes (supercell lengths)
+            do m = 1, M_class(ic)
+               !Convert to f_lo index
+               ilo = idx(f_lo(ic),i,m)
+               !Is ilo on this proc?
+               if (idx_local(f_lo(ic),ilo)) then
+                  !If so store column/row
+                  lhscol(:,m) = am(:,ilo)
+                  rhsrow(:,m) = a_inv(:,ilo)
+               end if
+               !Here we send lhscol and rhscol sections to all procs
+               !from the one on which it is currently known
+               !Can't do this outside m loop as proc_id depends on m
+               !These broadcasts can be relatively expensive so local_field_solve
+               !may be preferable
+               call broadcast (lhscol(:,m), proc_id(f_lo(ic),ilo))
+               call broadcast (rhsrow(:,m), proc_id(f_lo(ic),ilo))
+            end do
+            !All procs will have the same lhscol and rhsrow after this loop+broadcast
+         end if
 
-    !Free memory
-    deallocate (lhscol, rhsrow)
+         !Loop over field compound dimension
+         do jlo = f_lo(ic)%llim_proc, f_lo(ic)%ulim_proc
+            !jskip is true similarly to iskip
+            jskip = N_class(ic) > 1 !Are there any connections?
+            jskip = ig_idx(f_lo(ic), jlo) == ntgrid .and. jskip !Are we at a theta grid point corresponding to the upper boundary?
+            !Get 2pi domain/cell number out of total for this supercell
+            n = in_idx(f_lo(ic),jlo)
+            jskip = n < N_class(ic) .and. jskip !Are we not in the last cell (i.e. not at the rightmost grid point/upper end of supercell)?
+            if (jskip) cycle  !Skip this point if appropriate
 
-! fill in skipped points for each field and supercell:
-! Do not include internal ntgrid points in sum over supercell
+            !Now get m (class number)
+            m = im_idx(f_lo(ic),jlo)
 
-    do i = 1, nidx*N_class(ic)
-       !iskip is true iff the theta grid point(ig) corresponding to i
-       !is at the upper end of a 2pi domain/cell and is not the rightmost gridpoint
-       iskip = N_class(ic) > 1 !Are the multiple cells => are there connections/boundaries
-       iskip = i <= nidx*N_class(ic) - nfield .and. iskip  !Are we not near the upper boundary of the supercell
-       iskip = mod((i+nfield-1)/nfield, 2*ntgrid+1) == 0 .and. iskip !Are we at a theta grid point corresponding to the rightmost point of a 2pi domain
-       iskip = i > nfield .and. iskip !Are we not at the lower boundary of the supercell
-       !Zero out skipped points
-       if (iskip) then
-          a_inv(i,:) = 0
-          cycle !Seems unnexessary
-       end if
-    end do
-! Make response at internal ntgrid points identical to response
-! at internal -ntgrid points:
-    do jlo = f_lo(ic)%llim_world, f_lo(ic)%ulim_world
-       !jskip is true similarly to iskip
-       jskip = N_class(ic) > 1 !Are there any connections?
-       jskip = ig_idx(f_lo(ic), jlo) == ntgrid .and. jskip  !Are we at a theta grid point corresponding to the upper boundary?
-       jskip = in_idx(f_lo(ic), jlo) < N_class(ic) .and. jskip  !Are we not in the last cell (i.e. not at the rightmost grid point/upper end of supercell)?
-       !If we previously skipped this point then we want to fill it in from the matched/connected point
-       if (jskip) then
-          !What is the index of the matched point?
-          ilo = jlo + nfield
-          !If we have ilo on this proc send it to...
-          if (idx_local(f_lo(ic), ilo)) then
-             !jlo on this proc
-             if (idx_local(f_lo(ic), jlo)) then
-                a_inv(:,jlo) = a_inv(:,ilo)
-             !jlo on proc which has jlo
-             else
-                call send(a_inv(:,ilo), proc_id(f_lo(ic), jlo))
-             endif
-          else
-             !If this proc has jlo then get ready to receive
-             if (idx_local(f_lo(ic), jlo)) then
-                call receive(a_inv(:,jlo), proc_id(f_lo(ic), ilo))
-             end if
-          end if
-       end if
-    end do
-    !The send receives in the above loop should be able to function in a
-    !non-blocking manner fairly easily, but probably don't cost that much
-    !Would require WAITALL before doing am=a_inv line below
+            !Convert class number and cell number to ik and it
+            ik = f_lo(ic)%ik(m,n)
+            it = f_lo(ic)%it(m,n)
+            
+            !Work out what the compound theta*field index is.
+            irow = if_idx(f_lo(ic),jlo)
 
-    !Update am
-    am = a_inv
+            !If ky or kx are not 0 (i.e. skip zonal 0,0 mode) then workout the array
+            if (aky(ik) /= 0.0 .or. akx(it) /= 0.0) then
+               !Get factor
+               fac = am(i,jlo)/lhscol(i,m)
+
+               !Store array element
+               am(i,jlo) = fac
+
+               !Store other elements
+               am(:i-1,jlo) = am(:i-1,jlo) - lhscol(:i-1,m)*fac
+               am(i+1:,jlo) = am(i+1:,jlo) - lhscol(i+1:,m)*fac
+               !WOULD the above three commands be better written as
+               !am(:,jlo)=am(:,jlo)-lhscol(:,m)*fac
+               !am(i,jlo)=fac
+
+               !Fill in a_inv
+               if (irow == i) then
+                  a_inv(:,jlo) = a_inv(:,jlo)/lhscol(i,m)
+               else
+                  a_inv(:,jlo) = a_inv(:,jlo) &
+                       - rhsrow(:,m)*lhscol(irow,m)/lhscol(i,m)
+               end if
+            else
+               a_inv(:,jlo) = 0.0
+            end if
+     
+         end do
+      end do
+
+      !Free memory
+      deallocate (lhscol, rhsrow)
+
+  ! fill in skipped points for each field and supercell:
+  ! Do not include internal ntgrid points in sum over supercell
+
+      do i = 1, nidx*N_class(ic)
+         !iskip is true iff the theta grid point(ig) corresponding to i
+         !is at the upper end of a 2pi domain/cell and is not the rightmost gridpoint
+         iskip = N_class(ic) > 1 !Are the multiple cells => are there connections/boundaries
+         iskip = i <= nidx*N_class(ic) - nfield .and. iskip  !Are we not near the upper boundary of the supercell
+         iskip = mod((i+nfield-1)/nfield, 2*ntgrid+1) == 0 .and. iskip !Are we at a theta grid point corresponding to the rightmost point of a 2pi domain
+         iskip = i > nfield .and. iskip !Are we not at the lower boundary of the supercell
+         !Zero out skipped points
+         if (iskip) then
+            a_inv(i,:) = 0
+            cycle !Seems unnexessary
+         end if
+      end do
+  ! Make response at internal ntgrid points identical to response
+  ! at internal -ntgrid points:
+      do jlo = f_lo(ic)%llim_world, f_lo(ic)%ulim_world
+         !jskip is true similarly to iskip
+         jskip = N_class(ic) > 1 !Are there any connections?
+         jskip = ig_idx(f_lo(ic), jlo) == ntgrid .and. jskip  !Are we at a theta grid point corresponding to the upper boundary?
+         jskip = in_idx(f_lo(ic), jlo) < N_class(ic) .and. jskip  !Are we not in the last cell (i.e. not at the rightmost grid point/upper end of supercell)?
+         !If we previously skipped this point then we want to fill it in from the matched/connected point
+         if (jskip) then
+            !What is the index of the matched point?
+            ilo = jlo + nfield
+            !If we have ilo on this proc send it to...
+            if (idx_local(f_lo(ic), ilo)) then
+               !jlo on this proc
+               if (idx_local(f_lo(ic), jlo)) then
+                  a_inv(:,jlo) = a_inv(:,ilo)
+               !jlo on proc which has jlo
+               else
+                  call send(a_inv(:,ilo), proc_id(f_lo(ic), jlo))
+               endif
+            else
+               !If this proc has jlo then get ready to receive
+               if (idx_local(f_lo(ic), jlo)) then
+                  call receive(a_inv(:,jlo), proc_id(f_lo(ic), ilo))
+               end if
+            end if
+         end if
+      end do
+      !The send receives in the above loop should be able to function in a
+      !non-blocking manner fairly easily, but probably don't cost that much
+      !Would require WAITALL before doing am=a_inv line below
+
+      !Update am
+      am = a_inv
+    end if ! .not. skip_initialisation
 
     !Free memory
     deallocate (a_inv)
