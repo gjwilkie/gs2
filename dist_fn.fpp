@@ -2,7 +2,7 @@
 !
 ! Need to extend the verr tools to include delta B_parallel integrals
 ! There are new factors of 1/B here and there which I do not understand.  
-!
+
 !>The principal function of this module is to evolve the distribution function, 
 !!that is, to advance the discrete gyrokinetic equation. 
 !!This involves calculating the source and dealing with the complexities 

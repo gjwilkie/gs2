@@ -119,6 +119,7 @@ contains
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
     logical, intent (out) :: accelerated
+    logical, parameter :: debug = .false.
 
     character (1) :: char
 ! CMR, 12/2/2010:  return correct status of "accelerated" even if already initialised
@@ -128,16 +129,19 @@ contains
     if (initialized) return
     initialized = .true.
 
+    if (debug) write (*,*) 'init_transforms: init_gs2_layouts'
     call init_gs2_layouts
 
     call pe_layout (char)
 
     if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then  
        accel = .true.
+       if (debug) write (*,*) 'init_transforms: init_gs2_layouts'
        call init_accel_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
     else
        !Recommended for p+log(p)>log(N) where p is number of processors and N is total number of mesh points
        !Could automate selection, though above condition is only fairly rough
+       if (debug) write (*,*) 'init_transforms: init_y_redist'
        if (opt_redist_init) then
           call init_y_redist_local (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
        else
@@ -146,11 +150,15 @@ contains
     end if
 
 ! need these for movies
+     if (debug) write (*,*) 'init_transforms: init_y_transform_layouts'
     call init_y_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+     if (debug) write (*,*) 'init_transforms: init_x_transform_layouts'
     call init_x_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
 
+    if (debug) write (*,*) 'init_transforms: init_y_fft'
     call init_y_fft (ntgrid)
 
+    if (debug) write (*,*) 'init_transforms: done'
     accelerated = accel
 
   end subroutine init_transforms

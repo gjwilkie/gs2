@@ -111,6 +111,8 @@ WITH_EIG ?=
 
 USE_NEW_DIAG ?= on
 
+HAS_ISO_C_BINDING ?=
+
 
 ifdef NPROCS
 	NTESTPROCS=$(NPROCS)
@@ -269,6 +271,10 @@ ifdef USE_MPI
 	FC = $(MPIFC)
 	CC = $(MPICC)
 	CPPFLAGS += -DMPI
+endif
+
+ifdef HAS_ISO_C_BINDING
+	CPPFLAGS += -DISO_C_BINDING
 endif
 
 ifeq ($(USE_NEW_DIAG),on)
@@ -676,7 +682,7 @@ test_script: unit_tests linear_tests
 	echo "echo \"Tests Successful\"" >> test_script.sh
 	#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
 
-benchmarks: functional_tests.o unit_tests.o benchmarks.o $(TEST_DEPS)
+benchmarks: unit_tests.o $(TEST_DEPS)
 	cd benchmarks && time ${MAKETESTS} && echo && echo "Completed Benchmarks"
 
 upload_benchmarks: 
