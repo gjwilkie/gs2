@@ -2886,7 +2886,7 @@ end subroutine geofax
     integer i
     real :: pi
 !cmr Jun06: adding following debug switch
-    logical, parameter :: debug=.true.
+    logical, parameter :: debug=.false.
 !cmr
     logical :: first_local = .true.
 
@@ -3097,7 +3097,7 @@ end subroutine geofax
           rgrid(i)=rfun(rp, theta(i), dbound(theta(i)))
        enddo
     endif
-       
+    if(nperiod>1) call periodic_copy(rgrid,0.0)
   end subroutine rtg
 
   function rfun(rp, thet, broot)
