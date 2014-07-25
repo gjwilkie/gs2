@@ -792,9 +792,7 @@ contains
        scale = 1.
     case (ginitopt_restart_memory)
        call ginit_restart_memory
-       !NOTE: Whilst we have technically restarted we currently want to
-       !recalculate the fields as don't pass them in memory. Could be changed in future
-       !restarted = .true.       
+       restarted = .true.       
        scale = 1.
     case (ginitopt_zonal_only)
        call ginit_restart_zonal_only

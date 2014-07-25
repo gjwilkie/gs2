@@ -635,12 +635,14 @@ gs2_reinit.o: \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields.o \
+	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 gs2_save.o \
 	 gs2_time.o \
 	 init_g.o \
 	 job_manage.o \
+	 kt_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \

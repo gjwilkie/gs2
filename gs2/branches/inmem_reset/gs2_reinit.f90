@@ -24,16 +24,17 @@ contains
           write (unit, fmt="(' /')")       
   end subroutine wnml_gs2_reinit
 
-  subroutine reset_time_step (istep, exit, job_id)
+  subroutine reset_time_step (istep, my_exit, job_id)
 
     use collisions, only: c_reset => reset_init, vnmult
     use dist_fn, only: d_reset => reset_init
-    use fields, only: f_reset => reset_init, init_fields
+    use fields, only: f_reset => reset_init, init_fields, force_maxwell_reinit
     use init_g, only: g_reset => reset_init
     use run_parameters, only: fphi, fapar, fbpar, reset
     use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
     use gs2_save, only: gs2_save_for_restart
     use dist_fn_arrays, only: gnew, g_restart_tmp
+    use fields_arrays, only: phinew, aparnew, bparnew
     use gs2_time, only: user_time, code_dt_min
     use nonlinear_terms, only: nl_reset => reset_init
     use mp, only: proc0
@@ -42,13 +43,18 @@ contains
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use job_manage, only: time_message
-    logical :: exit, reset_in
+    use run_parameters, only: fphi, fapar, fbpar
+    use kt_grids, only: ntheta0, naky
+    logical, intent(inout) :: my_exit
+    logical :: reset_in
     integer :: istep 
     integer, save :: istep_last = -1 ! allow adjustment on first time step
     integer :: istatus
     integer, save :: nconsec=0
     integer, intent (in), optional :: job_id
-    integer :: iostat
+    integer :: iostat, field_iostat
+    complex, dimension(:,:,:), allocatable :: phi_tmp, apar_tmp, bpar_tmp
+
     if (first) call init_reinit
     first = .false.
 
@@ -62,14 +68,14 @@ contains
     endif
 
     if (nconsec .gt. 4 .and. abort_rapid_time_step_change) then
-       exit = .true.
+       my_exit = .true.
        if (proc0) write(error_unit(), *) 'Time step changing rapidly.  Abort run.'
        return
     end if
 
     if (code_dt/delt_adj <= code_dt_min) then
        code_dt = code_dt_min  ! set it so restart is ok
-       exit = .true.
+       my_exit = .true.
        if (proc0) write(error_unit(), *) 'Time step wants to fall below delt_min.  Abort run.'
        return
     end if
@@ -86,8 +92,6 @@ contains
        !Try to allocate storage to hold g
        allocate(g_restart_tmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc),stat=iostat)
 
-       !Should really make tmp copy of fields as well.
-
        !If allocate failed
        if(iostat.ne.0)then
           !Disable in_memory flag
@@ -95,12 +99,66 @@ contains
           !Print error message
           if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for g --> Reverting to file based restart"
        else
+          !Copy into temporary
           g_restart_tmp=gnew
        endif
+
+       !!!!
+       !! NOW WE MAKE COPIES OF THE FIELDS
+       !! --> Don't bother if force_maxwell_reinit as we're going to recalculate
+       !!!!
+
+       !Try to allocate storage to hold phi
+       if(fphi.gt.0.and.(.not.force_maxwell_reinit).and.in_memory)then
+          allocate(phi_tmp(-ntgrid:ntgrid,ntheta0,naky),stat=iostat)
+
+          !If allocate failed
+          if(iostat.ne.0)then
+             !Disable in_memory flag
+             in_memory=.false.
+             !Print error message
+             if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for phi --> Reverting to file based restart"
+          else
+             !Copy into temporary
+             phi_tmp=phinew
+          endif
+       endif
+
+       !Try to allocate storage to hold apar
+       if(fapar.gt.0.and.(.not.force_maxwell_reinit).and.in_memory)then
+          allocate(apar_tmp(-ntgrid:ntgrid,ntheta0,naky),stat=iostat)
+
+          !If allocate failed
+          if(iostat.ne.0)then
+             !Disable in_memory flag
+             in_memory=.false.
+             !Print error message
+             if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for apar --> Reverting to file based restart"
+          else
+             !Copy into temporary
+             apar_tmp=aparnew
+          endif
+       endif
+
+       !Try to allocate storage to hold bpar
+       if(fbpar.gt.0.and.(.not.force_maxwell_reinit).and.in_memory)then
+          allocate(bpar_tmp(-ntgrid:ntgrid,ntheta0,naky),stat=iostat)
+
+          !If allocate failed
+          if(iostat.ne.0)then
+             !Disable in_memory flag
+             in_memory=.false.
+             !Print error message
+             if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for bpar --> Reverting to file based restart"
+          else
+             !Copy into temporary
+             bpar_tmp=bparnew
+          endif
+       endif
+
     endif
 
     if(.not.in_memory)then
-
        !Should really do this with in_memory=.true. as well but
        !not sure that we really need to as we never read in the dumped data.
        if (proc0) call dump_ant_amp
@@ -136,6 +194,14 @@ contains
 ! reinitialize
     call init_fields
 
+!Update fields if done in memory
+!Don't need/want to update if force_maxwell_reinit
+    if(in_memory.and.(.not.force_maxwell_reinit))then
+       if(fphi.gt.0) phinew=phi_tmp
+       if(fapar.gt.0) aparnew=apar_tmp
+       if(fbpar.gt.0) bparnew=bpar_tmp
+    endif
+
     if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
 
     istep_last = istep
@@ -145,6 +211,9 @@ contains
 
     !Deallocate tmp memory
     if(allocated(g_restart_tmp)) deallocate(g_restart_tmp)
+    if(allocated(phi_tmp)) deallocate(phi_tmp)
+    if(allocated(apar_tmp)) deallocate(apar_tmp)
+    if(allocated(bpar_tmp)) deallocate(bpar_tmp)
   end subroutine reset_time_step
 
 !  subroutine check_time_step (istep, reset, exit)
