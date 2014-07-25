@@ -403,12 +403,13 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
     use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
+    use fft_work, only: fft_measure_plan
     implicit none
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
          max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
          opt_local_copy, opt_redist_nbk, opt_redist_init, intmom_sub, &
-         intspec_sub, opt_redist_persist, opt_redist_persist_overlap
+         intspec_sub, opt_redist_persist, opt_redist_persist_overlap, fft_measure_plan
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
@@ -421,6 +422,7 @@ contains
     opt_redist_persist = .false. !<DD>True=>Use persistent communications in redistributes
     opt_redist_persist_overlap = .false. !<DD>True=>Start comms before doing local copy
     opt_redist_init= .false. !<DD>True=>Use optimised routines to init redist objects
+    fft_measure_plan = .true. !<DD>False=>use heuristics rather than measure in fft plan create
     intmom_sub=.false.
     intspec_sub=.false.
     in_file=input_unit_exist("layouts_knobs", exist)
@@ -458,6 +460,7 @@ contains
   subroutine broadcast_results
     use mp, only: broadcast
     use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
+    use fft_work, only: fft_measure_plan
     implicit none
 
     call broadcast (opt_redist_init)
@@ -473,7 +476,7 @@ contains
     call broadcast (max_unbalanced_xxf)
     call broadcast (max_unbalanced_yxf)
     call broadcast (opt_local_copy)
-
+    call broadcast (fft_measure_plan)
   end subroutine broadcast_results
 
   subroutine check_accel (ntheta0, naky, nlambda, negrid, nspec, nblock)
