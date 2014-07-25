@@ -494,40 +494,99 @@ contains
       fac(1) = 1.0
          
 ! shearing rate due to non-zonal modes (on nonzonal modes)
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
       shear_rate_nz = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+#ifdef OPENMP
+!$OMP DO PRIVATE(ik,it)
+#endif
       do ik = 2, naky
          do it = 1, ntheta0
             shear_rate_nz(:) = shear_rate_nz(:) + real(conjg(phi(:,it,ik)) * &
                  phi(:,it,ik)) * (akx(it)**2 + aky(ik)**2)**2 * fac(ik)
          end do
       end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
+
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
       shear_rate_nz = 0.5 * ( -omega_osc + (omega_osc ** 2 + 2 * shear_rate_nz) ** 0.5 )
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
        
 ! shearing rate due to zonal modes (on nonzonal modes)
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
       shear_rate_z = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+#ifdef OPENMP
+!$OMP DO PRIVATE(ik,it)
+#endif
       do ik = 1, 1
          do it = 1, ntheta0
             shear_rate_z(:) = shear_rate_z(:) + real(conjg(phi(:,it,ik)) * &
                  phi(:,it,ik)) * (akx(it)**2 + aky(ik)**2)**2 * fac(ik)
          end do
       end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
+
 ! shear_rate_z = shear_rate_z ** 0.5
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
       shear_rate_z = 0.5 * ( -omega_osc + (omega_osc ** 2 + 2 * shear_rate_z) ** 0.5 )
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
       
 ! shearing rate due to nonzonal modes (on zonal modes)
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
       shear_rate_z_nz = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+
+#ifdef OPENMP
+!$OMP DO PRIVATE(ik,it)
+#endif
       do ik = 2, naky
          do it = 1, ntheta0
             shear_rate_z_nz(:) = shear_rate_z_nz(:) + real(conjg(phi(:,it,ik)) * &
                  phi(:,it,ik)) *  aky(ik)**4 * fac(ik)
          end do
       end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 ! shear_rate_z_nz = shear_rate_z_nz ** 0.5
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
       shear_rate_z_nz = 0.5 * ( -omega_osc + (omega_osc ** 2 + 2 * shear_rate_z_nz) ** 0.5 )
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
        
 ! end of anisotropic shearing rate calculations
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,ik,it)
+#endif
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
          it = it_idx(g_lo, iglo)
@@ -544,6 +603,9 @@ contains
          g0(:,1,iglo) = g0(:,1,iglo) * hypervisc_filter(:,it,ik)
          g0(:,2,iglo) = g0(:,2,iglo) * hypervisc_filter(:,it,ik)
       end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
     
     end subroutine aniso_shear
 
@@ -552,11 +614,26 @@ contains
       real, dimension(naky) :: fac
       
       if (const_amp) then
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
          shear_rate_nz = 1.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
       else
          fac = 0.5
          fac(1) = 1.0
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
          shear_rate_nz = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+#ifdef OPENMP
+!$OMP DO PRIVATE(ik,it)
+#endif
          do ik = 1, naky
             do it = 1, ntheta0
                shear_rate_nz(:) = shear_rate_nz(:) &
@@ -564,9 +641,20 @@ contains
                     * (akx(it)**2 + aky(ik)**2)**2 * fac(ik)
             end do
          end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
          shear_rate_nz = shear_rate_nz**0.5
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
       end if
-
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,ik,it)
+#endif
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
          it = it_idx(g_lo, iglo)
@@ -577,7 +665,9 @@ contains
          g0(:,1,iglo) = g0(:,1,iglo) * hypervisc_filter(:,it,ik)
          g0(:,2,iglo) = g0(:,2,iglo) * hypervisc_filter(:,it,ik)
       end do
-      
+#ifdef OPENMP
+!$OMP END DO
+#endif      
     end subroutine iso_shear
 
   end subroutine hyper_diff

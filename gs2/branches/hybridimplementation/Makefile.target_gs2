@@ -1,8 +1,12 @@
 gs2_all: diagnostics modules gs2 ingen rungridgen
 
+ifndef USE_OPENMP
 gs2: $(gs2_mod) $(SIMPLEDATAIO_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
-
+else
+gs2: $(gs2_mod) $(SIMPLEDATAIO_LIB)
+	$(LD) $(LDFLAGS) -o gs2_hybrid $^ $(LIBS) 
+endif
 gs2.x: $(gs2_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
@@ -82,7 +86,7 @@ libgs2.a: $(filter-out gs2.o, $(gs2_mod))
 # endif
 
 distclean:
-	-rm -f gs2 gs2.x
+	-rm -f gs2.x
 	-rm -f ingen rungridgen regress
 	-rm -f ball eiktest
 	-rm -f ffttester

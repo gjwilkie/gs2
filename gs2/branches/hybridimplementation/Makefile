@@ -80,6 +80,8 @@ STATIC ?=
 DBLE ?= on
 # turns on distributed memory parallelization using MPI (bin)
 USE_MPI ?= on 
+# turns on OpenMP functionality
+USE_OPENMP ?= on 
 # turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?=
 # which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
@@ -269,6 +271,10 @@ ifdef USE_MPI
 	FC = $(MPIFC)
 	CC = $(MPICC)
 	CPPFLAGS += -DMPI
+endif
+
+ifdef USE_OPENMP
+	CPPFLAGS += -DOPENMP
 endif
 
 ifeq ($(USE_NEW_DIAG),on)
@@ -603,6 +609,7 @@ test_make:
 	@echo  DBLE is $(DBLE)
 	@echo
 	@echo Functions:
+	@echo  USE_OPENMP is $(USE_OPENMP)
 	@echo  USE_MPI is $(USE_MPI)
 	@echo  USE_SHMEM is $(USE_SHMEM)
 	@echo  USE_FFT is $(USE_FFT)

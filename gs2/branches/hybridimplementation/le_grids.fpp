@@ -173,6 +173,10 @@ module le_grids
 
   real :: wgt_fac = 10.0
 
+  !Moved to here so that the OpenMP version can treat this array as
+  !a shared variable inside integrate_moment_c34
+  complex, dimension(:,:,:,:),allocatable :: c34_total_small
+
   type (redist_type), save :: lambda_map
   type (redist_type), save :: energy_map
   type (redist_type), save :: g2le
@@ -1288,7 +1292,6 @@ contains
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
-    complex, dimension(:,:,:,:),allocatable :: total_small
     integer, optional, intent(in) :: all
     logical, optional, intent(in) :: full_arr
     logical :: local_full_arr
@@ -1304,13 +1307,38 @@ contains
     !Allocate array and ensure is zero
     if(intmom_sub.and.(present(all)).and.(.not.local_full_arr))then !If we're using reduce then we don't want to make array smaller
 !       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=0.
-       allocate(total_small(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max))
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+       allocate(c34_total_small(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max))
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
+
     else
 !       total=0.
-       allocate(total_small(-ntgrid:ntgrid,g_lo%ntheta0,g_lo%naky,g_lo%nspec))       
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+       allocate(c34_total_small(-ntgrid:ntgrid,g_lo%ntheta0,g_lo%naky,g_lo%nspec))       
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
     endif
-    total_small=0.
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+    c34_total_small=0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+
     !Integrate over local velocity space
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,ik,it,ie,is,il)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
@@ -1319,22 +1347,32 @@ contains
        il = il_idx(g_lo,iglo)
 
        !Perform local sum
-       total_small(:, it, ik, is) = total_small(:, it, ik, is) + &
+       c34_total_small(:, it, ik, is) = c34_total_small(:, it, ik, is) + &
             w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     !Not sure that we really need to limit this to nproc>1 as if
     !we run with 1 proc MPI calls should still work ok
     if (nproc > 1) then     
+#ifdef OPENMP
+!$OMP MASTER
+#endif
        if (present(all).and.(.not.local_full_arr)) then
           !Complete integral over distributed velocity space and ensure all procs in sub communicator know the result
-          !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
+          !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why c34_total_small must be the same size on 
           !all procs in this case.
-          call sum_allreduce_sub (total_small,g_lo%xysblock_comm)
+          call sum_allreduce_sub (c34_total_small,g_lo%xysblock_comm)
        else
           !Complete integral over distributed velocity space but only proc0 knows the answer
-          call sum_reduce (total_small, 0)
+          call sum_reduce (c34_total_small, 0)
        end if
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
     end if
 
     !Copy data into output array
@@ -1343,13 +1381,32 @@ contains
     !In practice we should have two integrate_moment_c34 routines, one for sub-comms
     !and one for world-comms.
     if(intmom_sub.and.(present(all)).and.(.not.local_full_arr))then
-       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=total_small
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=c34_total_small
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
     else
-       total=total_small
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+       total=c34_total_small
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
     endif
 
     !Deallocate
-    deallocate(total_small)
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    deallocate(c34_total_small)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
   end subroutine integrate_moment_c34
 
@@ -1501,6 +1558,9 @@ contains
     complex, dimension (lo%llim_proc:), intent (out) :: total
     integer :: ixi, ie, il, ile, ig, it, ik
     total = cmplx(0.0,0.0)
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,it,ik,ig,ie,ixi,il)
+#endif
     do ile = lo%llim_proc, lo%ulim_proc
        it = it_idx (lo,ile)
        ik = ik_idx (lo,ile)
@@ -1520,6 +1580,9 @@ contains
           end do
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
     ! No need for communication since all velocity grid points are together
     ! and each prcessor does not touch the unset place
     ! They actually don't need to keep all 4D array

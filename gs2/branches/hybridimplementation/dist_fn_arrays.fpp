@@ -85,6 +85,9 @@ contains
     integer :: iglo, ig, ik, it, ie, is
     complex :: adj
 
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,ik,it,ie,is,ig,adj)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
@@ -101,6 +104,9 @@ contains
           g(ig,2,iglo) = g(ig,2,iglo) + adj
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
   end subroutine g_adjust
 
  
