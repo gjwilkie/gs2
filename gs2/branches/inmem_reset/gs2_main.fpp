@@ -532,7 +532,7 @@ endif
     call fi_reset
     call ft_reset
 !    if (.not. ql_flag) call g_reset
-    call g_reset
+    call g_reset(.true.)
     call nl_reset
     call gd_reset
     call a_reset

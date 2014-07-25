@@ -12,6 +12,7 @@ module gs2_reinit
   real, save :: time_reinit(2)=0.
   logical :: abort_rapid_time_step_change
   logical :: first=.true.
+  logical :: in_memory
 contains
   subroutine wnml_gs2_reinit(unit)
     implicit none
@@ -32,12 +33,14 @@ contains
     use run_parameters, only: fphi, fapar, fbpar, reset
     use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
     use gs2_save, only: gs2_save_for_restart
-    use dist_fn_arrays, only: gnew
+    use dist_fn_arrays, only: gnew, g_restart_tmp
     use gs2_time, only: user_time, code_dt_min
     use nonlinear_terms, only: nl_reset => reset_init
     use mp, only: proc0
     use file_utils, only: error_unit
     use antenna, only: dump_ant_amp
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo
     use job_manage, only: time_message
     logical :: exit, reset_in
     integer :: istep 
@@ -45,7 +48,7 @@ contains
     integer :: istatus
     integer, save :: nconsec=0
     integer, intent (in), optional :: job_id
-
+    integer :: iostat
     if (first) call init_reinit
     first = .false.
 
@@ -78,8 +81,32 @@ contains
     reset_in=reset
     reset=.false.
 
-    if (proc0) call dump_ant_amp
-    call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+    !If we want to do restarts in memory then try to allocate storage
+    if(in_memory)then
+       !Try to allocate storage to hold g
+       allocate(g_restart_tmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc),stat=iostat)
+
+       !Should really make tmp copy of fields as well.
+
+       !If allocate failed
+       if(iostat.ne.0)then
+          !Disable in_memory flag
+          in_memory=.false.
+          !Print error message
+          if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for g --> Reverting to file based restart"
+       else
+          g_restart_tmp=gnew
+       endif
+    endif
+
+    if(.not.in_memory)then
+
+       !Should really do this with in_memory=.true. as well but
+       !not sure that we really need to as we never read in the dumped data.
+       if (proc0) call dump_ant_amp
+
+       call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+    endif
 
     gnew = 0.
 
@@ -103,7 +130,7 @@ contains
     call d_reset
     call c_reset
     call f_reset
-    call g_reset
+    call g_reset(.not.in_memory)
     call nl_reset
 
 ! reinitialize
@@ -115,6 +142,9 @@ contains
 
     !Now re-enable reset so we leave it in the same state as on entering
     reset=reset_in
+
+    !Deallocate tmp memory
+    if(allocated(g_restart_tmp)) deallocate(g_restart_tmp)
   end subroutine reset_time_step
 
 !  subroutine check_time_step (istep, reset, exit)
@@ -154,7 +184,7 @@ contains
     logical :: exist
 
     namelist /reinit_knobs/ delt_adj, delt_minimum, delt_cushion, &
-                            abort_rapid_time_step_change
+                            abort_rapid_time_step_change, in_memory
     if(.not.first)return
     first=.false.
     if (proc0) then
@@ -163,6 +193,7 @@ contains
        delt_minimum = 1.e-5
        delt_cushion = 1.5
        abort_rapid_time_step_change = .true.
+       in_memory=.false.
        in_file = input_unit_exist("reinit_knobs",exist)
        if(exist) read (unit=in_file, nml=reinit_knobs)
     endif
@@ -172,7 +203,7 @@ contains
     call broadcast (delt_minimum)
     call broadcast (delt_cushion)
     call broadcast (abort_rapid_time_step_change)
-
+    call broadcast (in_memory)
     call save_dt_min (delt_minimum)
 
   end subroutine init_reinit
