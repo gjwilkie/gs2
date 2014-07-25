@@ -77,6 +77,7 @@ module dist_fn
        boundary_option_alternate_zero = 3, &
        boundary_option_linked = 4
   logical, public :: def_parity, even
+  logical :: zero_forbid
   logical :: mult_imp, test
   logical :: accelerated_x = .false.
   logical :: accelerated_v = .false.
@@ -663,7 +664,7 @@ subroutine check_dist_fn(report_unit)
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, &
-         lf_decompose, esv, wfb_cmr, opt_init_bc, opt_source
+         lf_decompose, esv, wfb_cmr, opt_init_bc, opt_source, zero_forbid
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -702,6 +703,7 @@ subroutine check_dist_fn(report_unit)
        mult_imp = .false.
        test = .false.
        def_parity = .false.
+       zero_forbid = .false.
        even = .true.
        lf_default = .true.
        lf_decompose = .false.
@@ -765,6 +767,7 @@ subroutine check_dist_fn(report_unit)
     call broadcast (mult_imp)
     call broadcast (test)
     call broadcast (def_parity)
+    call broadcast (zero_forbid)
     call broadcast (lf_default)
     call broadcast (lf_decompose)
     call broadcast (even)
@@ -1285,13 +1288,15 @@ subroutine check_dist_fn(report_unit)
                    ainv(ig,isgn,iglo) = 0.0
                 end if
              
-! CMR: set ainv=1 at lower bounce points for trapped particles
-!      part of multiple trapped particle algorithm
-!      NB not applicable to ttp or wfb!
+! CMR, DD, 25/7/2014: 
+!  set ainv=1 just left of lower bounce points ONLY for RIGHTWARDS travelling 
+!  trapped particles. Part of multiple trapped particle algorithm
+!  NB not applicable to ttp or wfb!
+if( isgn.eq.1 )then
                 if (forbid(ig,il) .and. .not. forbid(ig+1,il)) then
                    ainv(ig,isgn,iglo) = 1.0 + ainv(ig,isgn,iglo)
                 end if
-             
+endif
                 ! ???? mysterious mucking around with totally trapped particles
                 ! part of multiple trapped particle algorithm
                 if (il >= ittp(ig) .and. .not. forbid(ig, il)) then
@@ -5005,17 +5010,18 @@ subroutine check_dist_fn(report_unit)
 
     if (def_parity) call enforce_parity(parity_redist)
 
-!CMR, 24/7/2014: 
-! not keen on following kludge zeroing forbidden region
-! (1) where is forbidden pollution coming from?  
-! (2) should NOT affect any calculations 
-!  => can we remove it?
+!CMR,DD, 25/7/2014: 
+! Not keen on following kludge zeroing forbidden region
+! Introduced new flag: zero_forbid defaults to .false.
+!  Tested and default is fine linearly, expect should work nonlinearly, 
+!  (Can easily restore old behaviour by setting: zero_forbid=.true.)
     ! zero out spurious gnew outside trapped boundary
+if(zero_forbid)then
     where (forbid(:,il))
        gnew(:,1,iglo) = 0.0
        gnew(:,2,iglo) = 0.0
     end where
-
+endif
 !    call prof_leaving ("invert_rhs_1", "dist_fn")
 
   contains
