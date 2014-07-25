@@ -50,6 +50,8 @@ module nonlinear_terms
   logical :: accelerated = .false.
 
   logical :: exist
+
+  real :: shared_max_vel
   
 contains
   
@@ -316,8 +318,20 @@ contains
     if (istep /= istep_last) then
 
        zero = epsilon(0.0)
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
        g3 = g2
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
        g2 = g1
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
 
        ! if running nonlinearly, then compute the nonlinear term at grid points
        ! and store it in g1
@@ -327,7 +341,13 @@ contains
           ! takes g1 at grid points and returns 2*g1 at cell centers
           call center (g1)
        else
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
           g1 = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
        end if
 
 #ifdef LOWFLOW
@@ -337,6 +357,9 @@ contains
     end if
 
     if (zip) then
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik)
+#endif
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
@@ -350,6 +373,9 @@ contains
              g1(:,2,iglo) = 0.
           end if
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
     end if
      
     istep_last = istep
@@ -372,6 +398,9 @@ contains
       complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: gtmp
 
       ! factor of one-half appears elsewhere
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,il,ig)
+#endif
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           il = il_idx(g_lo, iglo)
           ! Totally trapped particles get no bakdif 
@@ -387,7 +416,9 @@ contains
              gtmp(:,2,iglo) = 0.0
           end where
        end do
-
+#ifdef OPENMP
+!$OMP END DO
+#endif
     end subroutine center
 
   end subroutine add_explicit
@@ -416,7 +447,7 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer :: i, j, k
-    real :: max_vel, zero
+    real :: zero
     real :: dt_cfl
 
     integer :: iglo, ik, it, is, ig, ia, isgn
@@ -427,28 +458,50 @@ contains
     if (fphi > zero) then
        call load_kx_phi
     else
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
        g1 = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
     end if
 
     if (fbpar > zero) call load_kx_bpar
     if (fapar  > zero) call load_kx_apar
 
+#ifdef OPENMP
+!$OMP MASTER
+#endif
     if (accelerated) then
        call transform2 (g1, aba, ia)
     else
        call transform2 (g1, ba)
     end if
-    
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER    
+#endif
+
     if (fphi > zero) then
        call load_ky_phi
     else
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
        g1 = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
     end if
     if (fbpar > zero) call load_ky_bpar
     
     ! more generally, there should probably be a factor of anon...
     !This is basically doing g_adjust to form i*ky*g_wesson (note the factor anon is missing)
     !/Gives Fourier components of derivative of g_wesson in y direction
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,ik,is,isgn)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -458,66 +511,119 @@ contains
           end do
        end do
     end do
-    
+#ifdef OPENMP
+!$OMP END DO    
+#endif
+#ifdef OPENMP
+!$OMP MASTER
+#endif
     if (accelerated) then
        call transform2 (g1, agb, ia)
     else
        call transform2 (g1, gb)
     end if
-    
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER    
+#endif 
+
     !It should be possible to write the following with vector notation
-    !To find max_vel we'd then use MAXVAL rather than MAX
+    !To find shared_max_vel we'd then use MAXVAL rather than MAX
     !Calculate (d Chi /dx).(d g_wesson/dy)
     if (accelerated) then
-       max_vel = 0.
+       shared_max_vel = 0.
+#ifdef OPENMP
+!$OMP DO PRIVATE(k,j,i) REDUCTION(max:shared_max_vel)
+#endif
        do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
           do j = 1, 2
              do i = 1, 2*ntgrid+1
                 abracket(i,j,k) = aba(i,j,k)*agb(i,j,k)*kxfac
-                max_vel = max(max_vel, abs(aba(i,j,k)))
+                shared_max_vel = max(shared_max_vel, abs(aba(i,j,k)))
              end do
           end do
        end do
-       max_vel = max_vel * cfly
+#ifdef OPENMP
+!$OMP END DO
+#endif
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+       shared_max_vel = shared_max_vel * cfly
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 !       max_vel = maxval(abs(aba)*cfly)
     else
-       max_vel = 0.
+       shared_max_vel = 0.
+#ifdef OPENMP
+!$OMP DO PRIVATE(j,i) REDUCTION(max:shared_max_vel)
+#endif
        do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
           do i = 1, yxf_lo%ny
              bracket(i,j) = ba(i,j)*gb(i,j)*kxfac
-             max_vel = max(max_vel,abs(ba(i,j)))
+             shared_max_vel = max(shared_max_vel,abs(ba(i,j)))
           end do
        end do
-       max_vel = max_vel*cfly
+#ifdef OPENMP
+!$OMP END DO
+#endif
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+       shared_max_vel = shared_max_vel*cfly
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 !       max_vel = maxval(abs(ba)*cfly)
     endif
-
     if (fphi > zero) then
        call load_ky_phi
     else
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
        g1 = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
     end if
     
     if (fbpar > zero) call load_ky_bpar
     if (fapar  > zero) call load_ky_apar
-    
+#ifdef OPENMP
+!$OMP MASTER
+#endif
     if (accelerated) then
        call transform2 (g1, aba, ia)
     else
        call transform2 (g1, ba)
     end if
-    
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif    
     if (fphi > zero) then
        call load_kx_phi
     else
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
        g1 = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
     end if
-    
     if (fbpar > zero) call load_kx_bpar
     
     ! more generally, there should probably be a factor of anon...
     !This is basically doing g_adjust to form i*kx*g_wesson (note the factor anon is missing)
     !/Gives Fourier components of derivative of g_wesson in x direction
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,is,isgn,ig)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
@@ -527,38 +633,65 @@ contains
           end do
        end do
     end do
-    
+#ifdef OPENMP
+!$OMP END DO    
+#endif
+#ifdef OPENMP
+!$OMP MASTER
+#endif
     if (accelerated) then
        call transform2 (g1, agb, ia)
     else
        call transform2 (g1, gb)
     end if
-
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
     !It should be possible to write the following with vector notation
-    !To find max_vel we'd then use MAXVAL rather than MAX   
+    !To find shared_max_vel we'd then use MAXVAL rather than MAX   
     !Calculate (d Chi /dy).(d g_wesson/dx) and subtract from (d Chi /dx).(d g_wesson/dy)
     if (accelerated) then
+#ifdef OPENMP
+!$OMP DO PRIVATE(k,j,i) REDUCTION(max:shared_max_vel)
+#endif
        do k = accelx_lo%llim_proc, accelx_lo%ulim_proc
           do j = 1, 2
              do i = 1, 2*ntgrid+1
                 abracket(i,j,k) = abracket(i,j,k) - aba(i,j,k)*agb(i,j,k)*kxfac
-                max_vel = max(max_vel, abs(aba(i,j,k))*cflx)
+                shared_max_vel = max(shared_max_vel, abs(aba(i,j,k))*cflx)
              end do
           end do
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
     else
+#ifdef OPENMP
+!$OMP DO PRIVATE(j,i) REDUCTION(max:shared_max_vel)
+#endif
        do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
           do i = 1, yxf_lo%ny
              bracket(i,j) = bracket(i,j) - ba(i,j)*gb(i,j)*kxfac
-             max_vel = max(max_vel,abs(ba(i,j))*cflx)
+             shared_max_vel = max(shared_max_vel,abs(ba(i,j))*cflx)
           end do
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
     end if
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    call max_allreduce(shared_max_vel)
     
-    call max_allreduce(max_vel)
-    
-    dt_cfl = 1./max_vel
+    dt_cfl = 1./shared_max_vel
+
     call save_dt_cfl (dt_cfl)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER    
+#endif
 
     !Now check to see if we've violated the 
     !cfl condition if requested
@@ -568,13 +701,18 @@ contains
        !If we have violated cfl the return immediately
        if(reset)return
     endif
-
+#ifdef OPENMP
+!$OMP MASTER
+#endif
     if (accelerated) then
        call inverse2 (abracket, g1, ia)
     else
        call inverse2 (bracket, g1)
     end if
-    
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER    
+#endif
   contains
 
     subroutine load_kx_phi
@@ -582,6 +720,9 @@ contains
       use dist_fn_arrays, only: aj0
       complex :: fac
 
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,ig,fac)
+#endif
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
@@ -591,6 +732,9 @@ contains
             g1(ig,2,iglo) = fac
          end do
       end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     end subroutine load_kx_phi
 
@@ -598,7 +742,9 @@ contains
 
       use dist_fn_arrays, only: aj0
       complex :: fac
-
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,ig,fac)
+#endif
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
@@ -608,6 +754,9 @@ contains
             g1(ig,2,iglo) = fac
          end do
       end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     end subroutine load_ky_phi
 
@@ -617,7 +766,9 @@ contains
 
       use dist_fn_arrays, only: vpa, aj0
       use gs2_layouts, only: is_idx
-
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,is,ig)
+#endif
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
@@ -631,6 +782,9 @@ contains
                  *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
          end do
       end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     end subroutine load_kx_apar
 
@@ -638,7 +792,9 @@ contains
 
       use dist_fn_arrays, only: vpa, aj0
       use gs2_layouts, only: is_idx
-
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,is,ig)
+#endif
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
@@ -652,6 +808,9 @@ contains
                  *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
          end do
       end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     end subroutine load_ky_apar
 
@@ -662,7 +821,9 @@ contains
       complex :: fac
 
 ! Is this factor of two from the old normalization?
-
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,is,ig,fac)
+#endif
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
@@ -674,6 +835,9 @@ contains
             g1(ig,2,iglo) = fac
          end do
       end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     end subroutine load_kx_bpar
 
@@ -684,7 +848,9 @@ contains
       complex :: fac
 
 ! Is this factor of two from the old normalization?
-
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,is,ig,fac)
+#endif
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
@@ -696,6 +862,9 @@ contains
             g1(ig,2,iglo) = fac
          end do
       end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     end subroutine load_ky_bpar
 

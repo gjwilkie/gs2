@@ -139,6 +139,43 @@ module collisions
   real, dimension (:,:), allocatable :: ec1, ebetaa, eql
   ! finish
 
+  ! conserve_diffuse_le_layout variable, moved to here so they are shared in the
+  ! OpenMP region
+  real, dimension (:,:,:), allocatable :: cdll_vns
+  real, dimension (:,:,:,:), allocatable ::vpadelnu
+  complex, dimension (:), allocatable :: cdll_v0y0, cdll_v1y1, cdll_v2y2
+  complex, dimension (:,:,:), allocatable :: cdll_gtmp
+
+  ! conserve_diffuse_standard_layout variables, moved to here so they are 
+  ! shared in the OpenMP region
+  complex, dimension (:,:,:), allocatable :: cdsl_gtmp
+  real, dimension (:,:,:), allocatable :: cdsl_vns
+  complex, dimension (:,:,:,:), allocatable :: cdsl_v0y0, cdsl_v1y1, cdsl_v2y2    
+
+  ! conserve_lorentz_le_layout variables, moved to here so they are 
+  ! shared in the OpenMP region
+  real, dimension (:,:,:,:), allocatable :: vpanud
+  complex, dimension (:), allocatable :: clll_v0y0, clll_v1y1, clll_v2y2
+  complex, dimension (:,:,:), allocatable :: clll_gtmp
+
+  ! conserve_lorentz_standard_layout variables, moved to here so they are 
+  ! shared in the OpenMP region
+  real, dimension (:,:,:), allocatable :: clsl_vns
+  complex, dimension (:,:,:,:), allocatable :: clsl_v0y0, clsl_v1y1, clsl_v2y2
+  complex, dimension (:,:,:), allocatable :: clsl_gtmp
+
+  ! solfp_lorentz_standard_layout variables, moved to here so they are 
+  ! shared in the OpenMP region
+  complex, dimension (:,:), allocatable :: slsl_glz, slsl_glzc
+
+  ! solfp_lorentz_le_layout variables, moved to here so they are 
+  ! shared in the OpenMP region
+  complex, dimension (:), allocatable :: slll_tmp
+
+  ! solfp_ediffuse_standard_layout variables, moved to here so they are 
+  ! shared in the OpenMP region
+  complex, dimension (:,:), allocatable :: sesl_ged	
+
   logical :: drag = .false.
   logical :: heating_flag = .false.
   logical :: colls = .true.
@@ -2453,6 +2490,9 @@ contains
 !       end if
 
        if (drag) then
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,is,it,ik,ie,ig)
+#endif
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              is = is_idx(g_lo,iglo)
              if (spec(is)%type /= electron_species) cycle
@@ -2468,6 +2508,9 @@ contains
                 ! probably need 1/(spec(is_ion)%z*spec(is_ion)%dens) above
              end do
           end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
        end if
 
        ! TMP FOR TESTING -- MAB
@@ -2500,6 +2543,9 @@ contains
     case (collision_model_lorentz,collision_model_lorentz_test)
 
        if (drag) then
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,is,it,ik,ie,ig)
+#endif
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              is = is_idx(g_lo,iglo)
              if (spec(is)%type /= electron_species) cycle
@@ -2514,6 +2560,9 @@ contains
                      / (beta*spec(is)%stm*energy(ie)**1.5)
              end do
           end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
        end if
        
        if (heating_flag) then
@@ -2583,6 +2632,9 @@ contains
 !       end if
 
        if (drag) then
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,is,it,ik,ig,ie,ixi,il,isgn)
+#endif
           do ile = le_lo%llim_proc, le_lo%ulim_proc
              is = is_idx(le_lo,ile)
              if (spec(is)%type /= electron_species) cycle
@@ -2603,6 +2655,9 @@ contains
                 end do
              end do
           end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
        end if
 
        ! TMP FOR TESTING -- MAB
@@ -2635,6 +2690,9 @@ contains
     case (collision_model_lorentz,collision_model_lorentz_test)
 
        if (drag) then
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,is,it,ik,ig,ie,ixi,il,isgn)
+#endif
           do ile = le_lo%llim_proc, le_lo%ulim_proc
              is = is_idx(le_lo,ile)
              if (spec(is)%type /= electron_species) cycle
@@ -2655,6 +2713,9 @@ contains
                 end do
              end do
           end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
        end if
 
        if (heating_flag) then
@@ -2697,54 +2758,86 @@ contains
 
     integer :: isgn, iglo, ik, ie, il, is, it, all = 1
 
-    allocate (v0y0(-ntgrid:ntgrid, ntheta0, naky, nspec))
-    allocate (v1y1(-ntgrid:ntgrid, ntheta0, naky, nspec))
-    allocate (v2y2(-ntgrid:ntgrid, ntheta0, naky, nspec))
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    allocate (clsl_v0y0(-ntgrid:ntgrid, ntheta0, naky, nspec))
+    allocate (clsl_v1y1(-ntgrid:ntgrid, ntheta0, naky, nspec))
+    allocate (clsl_v2y2(-ntgrid:ntgrid, ntheta0, naky, nspec))
 
-    allocate (gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-    allocate (vns(naky,negrid,nspec))
-    vns = vnmult(1)*vnew_D
+    allocate (clsl_gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate (clsl_vns(naky,negrid,nspec))
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
+
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+    clsl_vns = vnmult(1)*vnew_D
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
 
     if (drag) then
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! First get v0y0
-
+! First get clsl_v0y0
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,isgn)
+#endif
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
           if(kwork_filter(it,ik))cycle
           do isgn = 1, 2
              ! v0 = vpa J0 f0, y0 = g
-             gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*g(:,isgn,iglo)
+             clsl_gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*g(:,isgn,iglo)
           end do
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
        
-       call integrate_moment (gtmp, v0y0, all)    ! v0y0
+       call integrate_moment (clsl_gtmp, clsl_v0y0, all)    ! clsl_v0y0
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Get y1 = y0 - v0y0 * z0 / (1 + v0z0)
-
+! Get y1 = y0 - clsl_v0y0 * z0 / (1 + v0z0)
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,is,isgn)
+#endif
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
           if(kwork_filter(it,ik))cycle
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
-             g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
+             g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*clsl_v0y0(:,it,ik,is) &
                   * z0(:,isgn,iglo)
           end do
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     else
 
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
        g1 = g
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
 
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now get v1y1
-
+! Now get clsl_v1y1
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,ik,it,ie,il,is,isgn)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
@@ -2755,34 +2848,45 @@ contains
        do isgn = 1, 2
           ! v1 = nud vpa J0 f0, y1 = g1
           if (conservative) then
-             gtmp(:,isgn,iglo) = vns(ik,ie,is)*sqrt(energy(ie))*vpdiff(:,isgn,il) &
+             clsl_gtmp(:,isgn,iglo) = clsl_vns(ik,ie,is)*sqrt(energy(ie))*vpdiff(:,isgn,il) &
                   * aj0(:,iglo)*g1(:,isgn,iglo)
           else
-             gtmp(:,isgn,iglo) = vns(ik,ie,is)*vpa(:,isgn,iglo)*aj0(:,iglo) &
+             clsl_gtmp(:,isgn,iglo) = clsl_vns(ik,ie,is)*vpa(:,isgn,iglo)*aj0(:,iglo) &
                   * g1(:,isgn,iglo)
           end if
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call integrate_moment (gtmp, v1y1, all)    ! v1y1
+
+    call integrate_moment (clsl_gtmp, clsl_v1y1, all)    ! clsl_v1y1
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Get y2 = y1 - v1y1 * s1 / (1 + v1s1)
-
+! Get y2 = y1 - clsl_v1y1 * s1 / (1 + v1s1)
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,is,isgn)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v1y1(:,it,ik,is) &
+          g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*clsl_v1y1(:,it,ik,is) &
                * s0(:,isgn,iglo)
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now get v2y2
-
+! Now get clsl_v2y2
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,ie,il,is,isgn)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
@@ -2792,28 +2896,43 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v2 = nud vperp J1 f0
-          gtmp(:,isgn,iglo) = vns(ik,ie,is)*energy(ie)*al(il)*aj1(:,iglo) &
+          clsl_gtmp(:,isgn,iglo) = clsl_vns(ik,ie,is)*energy(ie)*al(il)*aj1(:,iglo) &
                * g1(:,isgn,iglo)
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call integrate_moment (gtmp, v2y2, all)    ! v2y2
+    call integrate_moment (clsl_gtmp, clsl_v2y2, all)    ! clsl_v2y2
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Finally get x = y2 - v2y2 * w2 / (1 + v2w2)
-
+! Finally get x = y2 - clsl_v2y2 * w2 / (1 + v2w2)
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,is,isgn)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v2y2(:,it,ik,is) &
+          g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*clsl_v2y2(:,it,ik,is) &
                * w0(:,isgn,iglo)
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    deallocate (vns, v0y0, v1y1, v2y2, gtmp)
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    deallocate (clsl_vns, clsl_v0y0, clsl_v1y1, clsl_v2y2, clsl_gtmp)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
   end subroutine conserve_lorentz_standard_layout
 
@@ -2835,29 +2954,52 @@ contains
     implicit none
 
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
-    complex, dimension (:,:,:), allocatable :: gtmp
-
-    real, dimension (:,:,:,:), allocatable :: vpanud
-    complex, dimension (:), allocatable :: v0y0, v1y1, v2y2
 
     integer :: ig, isgn, ik, ie, il, is, it
     integer :: ile, ixi
 
-    allocate (v0y0(le_lo%llim_proc:le_lo%ulim_alloc))
-    allocate (v1y1(le_lo%llim_proc:le_lo%ulim_alloc))
-    allocate (v2y2(le_lo%llim_proc:le_lo%ulim_alloc))
+#ifdef OPENMP 
+!$OMP MASTER
+#endif
+    allocate (clll_v0y0(le_lo%llim_proc:le_lo%ulim_alloc))
+    allocate (clll_v1y1(le_lo%llim_proc:le_lo%ulim_alloc))
+    allocate (clll_v2y2(le_lo%llim_proc:le_lo%ulim_alloc))
 
     ! Let's work on gle directly instead of g for the moment
-    allocate (gtmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc)) ; gtmp = 0.0
-    allocate (vpanud(-ntgrid:ntgrid, nxi+1, negrid+1, nspec)) ; vpanud = 0.0
+    allocate (clll_gtmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+    allocate (vpanud(-ntgrid:ntgrid, nxi+1, negrid+1, nspec))
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
+
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif 
+    clll_gtmp = 0.0
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+    vpanud = 0.0
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+
 
 !    if (resistivity) then
     if (drag) then
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! First get v0y0
+! First get clll_v0y0
 
-       ! initially define vpanud to be vpa
+       ! initially define vpanud to be vp
+#ifdef OPENMP
+!$OMP DO PRIVATE(is,ie,ixi,ig,il,isgn)
+#endif
        do is = 1, nspec
           do ie = 1, negrid
              do ixi = 1, nxi
@@ -2869,35 +3011,52 @@ contains
              end do
           end do
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
        
        ! v0 = vpa J0 f0, y0 = gle
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,is,ig,it,ik)
+#endif
        do ile = le_lo%llim_proc, le_lo%ulim_proc
           is = is_idx(le_lo,ile)
           ig = ig_idx(le_lo,ile)
           it = it_idx(le_lo,ile)
           ik = ik_idx(le_lo,ile)
           if(kwork_filter(it,ik)) cycle
-          gtmp(:,:,ile) = vpanud(ig,:,:,is) * aj0le(:,:,ile) * gle(:,:,ile)
+          clll_gtmp(:,:,ile) = vpanud(ig,:,:,is) * aj0le(:,:,ile) * gle(:,:,ile)
        end do
-       call integrate_moment (le_lo, gtmp, v0y0)    ! v0y0
+#ifdef OPENMP
+!$OMP END DO
+#endif
+       call integrate_moment (le_lo, clll_gtmp, clll_v0y0)    ! clll_v0y0
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Get y1 = y0 - v0y0 * z0 / (1 + v0z0)
-
+! Get y1 = y0 - clll_v0y0 * z0 / (1 + v0z0)
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,it,ik)
+#endif
        do ile = le_lo%llim_proc, le_lo%ulim_proc
           it = it_idx(le_lo,ile)
           ik = ik_idx(le_lo,ile)
           if(kwork_filter(it,ik)) cycle
-          gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)* z0le(:,:,ile) * v0y0(ile)
+          gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)* z0le(:,:,ile) * clll_v0y0(ile)
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now get v1y1
+! Now get clll_v1y1
 
     ! redefine vpanud to be vpa * nu_D
     if (conservative) then
+#ifdef OPENMP
+!$OMP DO PRIVATE(is,ie,ixi,ig,il,isgn)
+#endif
        do is = 1, nspec
           do ie = 1, negrid
              do ixi = 1, nxi
@@ -2909,7 +3068,13 @@ contains
              end do
           end do
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
     else
+#ifdef OPENMP
+!$OMP DO PRIVATE(is,ie,ixi,ig,il,isgn)
+#endif
        do is = 1, nspec
           do ie = 1, negrid
              do ixi = 1, nxi
@@ -2921,35 +3086,51 @@ contains
              end do
           end do
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
     end if
 
     ! v1 = nud vpa J0 f0, y1 = gle
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,ik,it,is,ig)
+#endif
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        ik = ik_idx(le_lo,ile)
        it = it_idx(le_lo,ile)
        if(kwork_filter(it,ik)) cycle
        is = is_idx(le_lo,ile)
        ig = ig_idx(le_lo,ile)
-       gtmp(:,:,ile) = vpanud(ig,:,:,is) * tunits(ik) * aj0le(:,:,ile) &
+       clll_gtmp(:,:,ile) = vpanud(ig,:,:,is) * tunits(ik) * aj0le(:,:,ile) &
             * gle(:,:,ile)
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call integrate_moment (le_lo, gtmp, v1y1)    ! v1y1
+    call integrate_moment (le_lo, clll_gtmp, clll_v1y1)    ! clll_v1y1
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Get y2 = y1 - v1y1 * s1 / (1 + v1s1)
-
+! Get y2 = y1 - clll_v1y1 * s1 / (1 + v1s1)
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,it,ik)
+#endif
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
        if(kwork_filter(it,ik)) cycle
 
-       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*s0le(:,:,ile) * v1y1(ile)
+       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*s0le(:,:,ile) * clll_v1y1(ile)
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now get v2y2
-
+! Now get clll_v2y2
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,it,ik,is,ig,ixi,il)
+#endif
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
@@ -2959,24 +3140,39 @@ contains
        do ixi=1, nxi
           il = ixi_to_il(ig,ixi)
           ! aj1vp2 = 2 * J1(arg)/arg * vperp^2
-          gtmp(ixi,:negrid,ile) = vnmult(1) * vnew_D(ik,:negrid,is) * aj1le(ixi,:negrid,ile) &
+          clll_gtmp(ixi,:negrid,ile) = vnmult(1) * vnew_D(ik,:negrid,is) * aj1le(ixi,:negrid,ile) &
                * energy(:) * al(il) * gle(ixi,:negrid,ile)
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call integrate_moment (le_lo, gtmp, v2y2)    ! v2y2
+    call integrate_moment (le_lo, clll_gtmp, clll_v2y2)    ! clll_v2y2
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Finally get x = y2 - v2y2 * w2 / (1 + v2w2)
-
+! Finally get x = y2 - clll_v2y2 * w2 / (1 + v2w2)
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,it,ik)
+#endif
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
        if(kwork_filter(it,ik)) cycle
-       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*w0le(:,:,ile) * v2y2(ile)
+       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*w0le(:,:,ile) * clll_v2y2(ile)
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    deallocate (gtmp, vpanud, v0y0, v1y1, v2y2)
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    deallocate (clll_gtmp, vpanud, clll_v0y0, clll_v1y1, clll_v2y2)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
   end subroutine conserve_lorentz_le_layout
 
@@ -2995,28 +3191,48 @@ contains
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1
-    complex, dimension (:,:,:), allocatable :: gtmp
-
-    real, dimension (:,:,:), allocatable :: vns
 
     integer :: isgn, iglo, ik, ie, il, is, it, all = 1
-    complex, dimension (:,:,:,:), allocatable :: v0y0, v1y1, v2y2    
 
-    allocate (v0y0(-ntgrid:ntgrid, ntheta0, naky, nspec))
-    allocate (v1y1(-ntgrid:ntgrid, ntheta0, naky, nspec))
-    allocate (v2y2(-ntgrid:ntgrid, ntheta0, naky, nspec))
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    allocate (cdsl_v0y0(-ntgrid:ntgrid, ntheta0, naky, nspec))
+    allocate (cdsl_v1y1(-ntgrid:ntgrid, ntheta0, naky, nspec))
+    allocate (cdsl_v2y2(-ntgrid:ntgrid, ntheta0, naky, nspec))
 
-    allocate (vns(naky,negrid,nspec))
-    allocate (gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate (cdsl_vns(naky,negrid,nspec))
+    allocate (cdsl_gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
-    vns = vnmult(2)*delvnew
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+    cdsl_vns = vnmult(2)*delvnew
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
 
     !This is needed to to ensure the it,ik values we don't set aren't included
     !in the integral (can also be enforced in integrate_moment routine)
-    if(any(kwork_filter)) gtmp=0.
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! First get v0y0
 
+    if(any(kwork_filter)) then
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+       cdsl_gtmp=0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+    end if
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! First get cdsl_v0y0
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,ik,it,ie,is,isgn)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
@@ -3025,30 +3241,40 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v0 = nu_E E J0 f0
-          gtmp(:,isgn,iglo) = vnmult(2)*vnew_E(ik,ie,is)*aj0(:,iglo) &
+          cdsl_gtmp(:,isgn,iglo) = vnmult(2)*vnew_E(ik,ie,is)*aj0(:,iglo) &
                * g(:,isgn,iglo)
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call integrate_moment (gtmp, v0y0, all)    ! v0y0
+
+    call integrate_moment (cdsl_gtmp, cdsl_v0y0, all)    ! cdsl_v0y0
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Get y1 = y0 - v0y0 * z0 / (1 + v0z0)
-
+! Get y1 = y0 - cdsl_v0y0 * z0 / (1 + v0z0)
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,is,isgn)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*v0y0(:,it,ik,is) &
+          g1(:,isgn,iglo) = g(:,isgn,iglo) - ieqzip(it,ik)*cdsl_v0y0(:,it,ik,is) &
                * bz0(:,isgn,iglo)
        end do
     end do
-
+#ifdef OPENMP
+!$OMP END DO
+#endif
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now get v1y1
-
+! Now get cdsl_v1y1
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,ik,it,ie,is,isgn)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
@@ -3057,30 +3283,40 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v1 = (nus-nud) vpa J0 f0
-          gtmp(:,isgn,iglo) = vns(ik,ie,is)*vpa(:,isgn,iglo)*aj0(:,iglo) &
+          cdsl_gtmp(:,isgn,iglo) = cdsl_vns(ik,ie,is)*vpa(:,isgn,iglo)*aj0(:,iglo) &
                * g1(:,isgn,iglo)
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call integrate_moment (gtmp, v1y1, all)    ! v1y1
+    call integrate_moment (cdsl_gtmp, cdsl_v1y1, all)    ! cdsl_v1y1
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Get y2 = y1 - v1y1 * s1 / (1 + v1s1)
-
+! Get y2 = y1 - cdsl_v1y1 * s1 / (1 + v1s1)
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,is,isgn)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v1y1(:,it,ik,is) &
+          g1(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*cdsl_v1y1(:,it,ik,is) &
                * bs0(:,isgn,iglo)
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now get v2y2
-
+! Now get cdsl_v2y2
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,ik,it,ie,il,is,isgn)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
@@ -3090,28 +3326,43 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v2 = (nus-nud) vperp J1 f0
-          gtmp(:,isgn,iglo) = vns(ik,ie,is)*energy(ie)*al(il)*aj1(:,iglo) &
+          cdsl_gtmp(:,isgn,iglo) = cdsl_vns(ik,ie,is)*energy(ie)*al(il)*aj1(:,iglo) &
                * g1(:,isgn,iglo)
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call integrate_moment (gtmp, v2y2, all)    ! v2y2
+    call integrate_moment (cdsl_gtmp, cdsl_v2y2, all)    ! cdsl_v2y2
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Finally get x = y2 - v2y2 * w2 / (1 + v2w2)
-
+! Finally get x = y2 - cdsl_v2y2 * w2 / (1 + v2w2)
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,it,ik,is,isgn)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        if(kwork_filter(it,ik))cycle
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*v2y2(:,it,ik,is) &
+          g(:,isgn,iglo) = g1(:,isgn,iglo) - ieqzip(it,ik)*cdsl_v2y2(:,it,ik,is) &
                * bw0(:,isgn,iglo)
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    deallocate (vns, v0y0, v1y1, v2y2, gtmp)
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    deallocate (cdsl_vns, cdsl_v0y0, cdsl_v1y1, cdsl_v2y2, cdsl_gtmp)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
   end subroutine conserve_diffuse_standard_layout
 
@@ -3136,33 +3387,70 @@ contains
     implicit none
 
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
-    complex, dimension (:,:,:), allocatable :: gtmp
-
-    real, dimension (:,:,:), allocatable :: vns
 
     integer :: ig, isgn, ik, ie, il, is, it
     integer :: ile, ixi
-    real, dimension (:,:,:,:), allocatable :: vpadelnu
-    complex, dimension (:), allocatable :: v0y0, v1y1, v2y2
 
     ! TMP FOR TESTING -- MAB
 !    integer :: t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, tr
 !    real :: t1tot=0., t2tot = 0., t3tot = 0., t4tot = 0., t5tot = 0., t6tot = 0., t7tot = 0., t8tot = 0., t9tot = 0., t10tot=0.
 
-    allocate (v0y0(le_lo%llim_proc:le_lo%ulim_alloc))
-    allocate (v1y1(le_lo%llim_proc:le_lo%ulim_alloc))
-    allocate (v2y2(le_lo%llim_proc:le_lo%ulim_alloc))
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    allocate (cdll_v0y0(le_lo%llim_proc:le_lo%ulim_alloc))
+    allocate (cdll_v1y1(le_lo%llim_proc:le_lo%ulim_alloc))
+    allocate (cdll_v2y2(le_lo%llim_proc:le_lo%ulim_alloc))
 
-    allocate (gtmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-    allocate (vpadelnu(-ntgrid:ntgrid, nxi+1, negrid+1, nspec)) ; vpadelnu = 0.0
-    allocate (vns(naky,negrid,nspec))
+    allocate (cdll_gtmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+    allocate (vpadelnu(-ntgrid:ntgrid, nxi+1, negrid+1, nspec)) 
+    allocate (cdll_vns(naky,negrid,nspec))
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
+
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif	
+    vpadelnu=0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
 
     !This is needed to to ensure the it,ik values we don't set aren't included
     !in the integral (can also be enforced in integrate_moment routine)
-    if(any(kwork_filter)) gtmp=0.
+    if(any(kwork_filter)) then
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+    cdll_gtmp=0.	
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+    end if
 
     if (.not. allocated(vpatmp)) then
-       allocate(vpatmp(-ntgrid:ntgrid,nxi)) ; vpatmp = 0.0
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+       allocate(vpatmp(-ntgrid:ntgrid,nxi))
+#ifdef OPENMP
+!$OMP END MASTER 
+!$OMP BARRIER
+
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+       vpatmp=0.0	
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+
+#endif
+#ifdef OPENMP
+!$OMP DO PRIVATE(ixi,ig,il,isgn)
+#endif
        do ixi = 1, nxi
           do ig = -ntgrid, ntgrid
              il = ixi_to_il(ig,ixi)
@@ -3171,16 +3459,26 @@ contains
                   vpatmp(ig,ixi) = sgn(isgn)*sqrt(max(0.0,(1.0-al(il)*bmag(ig))))
           end do
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
     end if
 
-    vns = vnmult(2)*vnew_E
-
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+    cdll_vns = vnmult(2)*vnew_E
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! First get v0y0
+! First get cdll_v0y0
     
     ! TMP FOR TESTING -- MAB
 !    if (proc0) call system_clock (count=t0, count_rate=tr)
-
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,is,ik,it,ie,ixi)
+#endif
      do ile = le_lo%llim_proc, le_lo%ulim_proc
         is = is_idx(le_lo,ile)
         ik = ik_idx(le_lo,ile)
@@ -3188,13 +3486,16 @@ contains
         if(kwork_filter(it,ik)) cycle
         do ie=1, negrid
            do ixi = 1, nxi
-              gtmp(ixi,ie,ile) = vns(ik,ie,is)*aj0le(ixi,ie,ile)*gle(ixi,ie,ile)
+              cdll_gtmp(ixi,ie,ile) = cdll_vns(ik,ie,is)*aj0le(ixi,ie,ile)*gle(ixi,ie,ile)
            end do
         end do
      end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call integrate_moment (le_lo, gtmp, v0y0)    ! v0y0
-!    call integrate_moment (le_lo, gle*aj0le, v0y0, vns)    ! v0y0
+    call integrate_moment (le_lo, cdll_gtmp, cdll_v0y0)    ! cdll_v0y0
+!    call integrate_moment (le_lo, gle*aj0le, cdll_v0y0, cdll_vns)    ! cdll_v0y0
 
     ! TMP FOR TESTING -- MAB
 !    if (proc0) then
@@ -3203,39 +3504,57 @@ contains
 !    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Get y1 = y0 - v0y0 * z0 / (1 + v0z0)
-
+! Get y1 = y0 - cdll_v0y0 * z0 / (1 + v0z0)
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,it,ik)
+#endif
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
        if(kwork_filter(it,ik)) cycle
 
-       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*v0y0(ile)*bz0le(:,:,ile)
+       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*cdll_v0y0(ile)*bz0le(:,:,ile)
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now get v1y1
+! Now get cdll_v1y1
 
-    vns(1,:,:) = vnmult(2)*delvnew(1,:,:)/tunits(1)
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+    cdll_vns(1,:,:) = vnmult(2)*delvnew(1,:,:)/tunits(1)
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
 
     ! TMP FOR TESTING -- MAB
 !    if (proc0) then
 !       call system_clock (count=t2)
 !       t2tot = t2tot + real(t2-t1)/tr
 !    end if
-
+#ifdef OPENMP
+!$OMP DO PRIVATE(is,ie)
+#endif
     do is = 1, nspec
        do ie = 1, negrid
-          vpadelnu(:,:nxi,ie,is) = vns(1,ie,is) * vpatmp * speed(ie)
+          vpadelnu(:,:nxi,ie,is) = cdll_vns(1,ie,is) * vpatmp * speed(ie)
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     ! TMP FOR TESTING -- MAB
 !    if (proc0) then
 !       call system_clock (count=t3)
 !       t3tot = t3tot + real(t3-t2)/tr
 !    end if
-
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,is,ig,ik,it)
+#endif
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        is = is_idx(le_lo,ile)
        ig = ig_idx(le_lo,ile)
@@ -3243,10 +3562,13 @@ contains
        it = it_idx(le_lo,ile)
        if(kwork_filter(it,ik)) cycle
 
-       gtmp (:,:,ile) = vpadelnu(ig,:,:,is) * tunits(ik) * aj0le(:,:,ile) * gle(:,:,ile)
+       cdll_gtmp (:,:,ile) = vpadelnu(ig,:,:,is) * tunits(ik) * aj0le(:,:,ile) * gle(:,:,ile)
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call integrate_moment (le_lo, gtmp, v1y1)    ! v1y1
+    call integrate_moment (le_lo, cdll_gtmp, cdll_v1y1)    ! cdll_v1y1
 
     ! TMP FOR TESTING -- MAB
 !    if (proc0) then
@@ -3255,15 +3577,20 @@ contains
 !    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Get y2 = y1 - v1y1 * s1 / (1 + v1s1)
-
+! Get y2 = y1 - cdll_v1y1 * s1 / (1 + v1s1)
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,it,ik)
+#endif
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
        if(kwork_filter(it,ik)) cycle
 
-       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*bs0le(:,:,ile) * v1y1(ile)
+       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*bs0le(:,:,ile) * cdll_v1y1(ile)
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     ! TMP FOR TESTING -- MAB
 !    if (proc0) then
@@ -3272,14 +3599,22 @@ contains
 !    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Now get v2y2
-
+! Now get cdll_v2y2
+#ifdef OPENMP
+!$OMP DO PRIVATE(is,ik)
+#endif
     do is = 1, nspec
        do ik = 1, naky
-          vns(ik,:,is) = delvnew(ik,:,is)*energy 
+          cdll_vns(ik,:,is) = delvnew(ik,:,is)*energy 
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,is,ik,it,ig,ie,ixi,il)
+#endif
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        is = is_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
@@ -3290,13 +3625,16 @@ contains
        do ie=1, negrid
           do ixi = 1, nxi
              il = ixi_to_il(ig,ixi)
-             gtmp(ixi,ie,ile) = vns(ik,ie,is) &
+             cdll_gtmp(ixi,ie,ile) = cdll_vns(ik,ie,is) &
                   * al(il)*aj1le(ixi,ie,ile) * gle(ixi,ie,ile)
           end do
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call integrate_moment (le_lo, gtmp, v2y2)    ! v2y2
+    call integrate_moment (le_lo, cdll_gtmp, cdll_v2y2)    ! cdll_v2y2
 
     ! TMP FOR TESTING -- MAB
 !    if (proc0) then
@@ -3305,15 +3643,20 @@ contains
 !    end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Finally get x = y2 - v2y2 * w2 / (1 + v2w2)
-
+! Finally get x = y2 - cdll_v2y2 * w2 / (1 + v2w2)
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,it,ik)
+#endif
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
        if(kwork_filter(it,ik)) cycle
 
-       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*bw0le(:,:,ile) * v2y2(ile)
+       gle(:,:,ile) = gle(:,:,ile) - ieqzip(it,ik)*bw0le(:,:,ile) * cdll_v2y2(ile)
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
     ! TMP FOR TESTING -- MAB
 !    if (proc0) then
@@ -3325,8 +3668,14 @@ contains
 !    if (proc0) then
 !       write (*,'(a20,7e14.5)') 'conserve_diffuse: ', t1tot, t2tot, t3tot, t4tot, t5tot, t6tot, t7tot
 !    end if
-
-    deallocate (vpadelnu, vns, v0y0, v1y1, v2y2, gtmp)
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    deallocate (vpadelnu, cdll_vns, cdll_v0y0, cdll_v1y1, cdll_v2y2, cdll_gtmp)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
   end subroutine conserve_diffuse_le_layout
 
@@ -3348,7 +3697,6 @@ contains
     integer, optional, intent (in) :: diagnostics
     logical, optional, intent (in) :: init
 
-    complex, dimension (:,:), allocatable :: glz, glzc
     integer :: ilz
     complex, dimension (nxi+1) :: delta
     complex :: fac, gwfb
@@ -3357,16 +3705,53 @@ contains
 
     call prof_entering ("solfp_lorentz", "collisions")
 
-    allocate (glz(nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
-    glz = 0.0
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    allocate (slsl_glz(nxi+1,lz_lo%llim_proc:lz_lo%ulim_alloc))
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+    slsl_glz = 0.0
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+
     if (heating) then
-       allocate (glzc(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
-       glzc = 0.0
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+       allocate (slsl_glzc(max(2*nlambda,2*ng2+1),lz_lo%llim_proc:lz_lo%ulim_alloc))
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+       slsl_glzc = 0.0
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
     end if
 
-    call gather (lambda_map, g, glz)
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    call gather (lambda_map, g, slsl_glz)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
     if (heating .and. present(diagnostics)) then
+#ifdef OPENMP
+!$OMP DO PRIVATE(ilz,ig,je,il,fac)
+#endif
        do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
           ig = ig_idx(lz_lo,ilz)
 
@@ -3375,19 +3760,33 @@ contains
              je = 2*ng2 
           end if
 
-! when il=je-1 below, and we have trapped particles, glz is evaluated at glz(2*jend(ig),ilz).
+! when il=je-1 below, and we have trapped particles, slsl_glz is evaluated at slsl_glz(2*jend(ig),ilz).
 ! this seems like a bug, since there are only 2*jend(ig)-1 grid points and
-! the value glz(2*jend(ig),ilz) corresponds to the value of g at xi = 0...this
+! the value slsl_glz(2*jend(ig),ilz) corresponds to the value of g at xi = 0...this
 ! doesn't make any sense...MAB
 
           do il = 1, je-1
-             fac = glz(il+1,ilz)-glz(il,ilz)
-             glzc(il,ilz) = conjg(fac)*fac*d1(il,ilz)  ! d1 accounts for hC(h) entropy
+             fac = slsl_glz(il+1,ilz)-slsl_glz(il,ilz)
+             slsl_glzc(il,ilz) = conjg(fac)*fac*d1(il,ilz)  ! d1 accounts for hC(h) entropy
           end do
        end do
-       call scatter (lambda_map, glzc, gc)
+#ifdef OPENMP
+!$OMP END DO
+#endif
+
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+       call scatter (lambda_map, slsl_glzc, gc)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
        if (hyper_colls) then
+#ifdef OPENMP
+!$OMP DO PRIVATE(ilz,ig,je,il,fac)
+#endif
           do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
              ig = ig_idx(lz_lo,ilz)
              
@@ -3397,15 +3796,28 @@ contains
              end if
              
              do il = 1, je-1
-                fac = glz(il+1,ilz)-glz(il,ilz)
-                glzc(il,ilz) = conjg(fac)*fac*h1(il,ilz)  ! h1 accounts for hH(h) entropy
+                fac = slsl_glz(il+1,ilz)-slsl_glz(il,ilz)
+                slsl_glzc(il,ilz) = conjg(fac)*fac*h1(il,ilz)  ! h1 accounts for hH(h) entropy
              end do
           end do
-          call scatter (lambda_map, glzc, gh)
+#ifdef OPENMP
+!$OMP END DO
+#endif
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+          call scatter (lambda_map, slsl_glzc, gh)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
        end if
     end if
 
-    ! solve for glz row by row
+    ! solve for slsl_glz row by row
+#ifdef OPENMP
+!$OMP DO PRIVATE(ilz,ik,it,is,ie,ig,je,nxi_scatt,gwfb,delta,il)
+#endif
     do ilz = lz_lo%llim_proc, lz_lo%ulim_proc
 
        ik = ik_idx(lz_lo,ilz)
@@ -3425,38 +3837,38 @@ contains
 !  je-1 = #physical xi values removing unphysical/duplicate extra point
        je=max(2*jend(ig),2*ng2+1)
        nxi_scatt=je-1
-       glz(je,ilz)=0.0  ! zero unphysical/duplicate extra point
+       slsl_glz(je,ilz)=0.0  ! zero unphysical/duplicate extra point
        if (jend(ig) == ng2+1 .and.special_wfb_lorentz) then
 !CMRDDGC:  special_wfb_lorentz = t  => unphysical handling of wfb at bounce pt: 
 !          remove wfb from collisions, reinsert later
 !
 ! first save gwfb for reinsertion later
-          gwfb = glz(ng2+1,ilz) 
+          gwfb = slsl_glz(ng2+1,ilz) 
 ! then remove vpa = 0 point, weight 0: (CMR confused by this comment!)  
-          glz(ng2+1:je-2,ilz) = glz(ng2+2:je-1,ilz)
+          slsl_glz(ng2+1:je-2,ilz) = slsl_glz(ng2+2:je-1,ilz)
           nxi_scatt=nxi_scatt-1
        endif
 !CMRDDGCend
 
        ! right and left sweeps for tridiagonal solve:
 
-       delta(1) = glz(1,ilz)
+       delta(1) = slsl_glz(1,ilz)
        do il = 1, nxi_scatt
-          delta(il+1) = glz(il+1,ilz) - ql(il+1,ilz)*delta(il)
+          delta(il+1) = slsl_glz(il+1,ilz) - ql(il+1,ilz)*delta(il)
        end do
        
-       glz(je,ilz) = delta(je)*betaa(je,ilz)
+       slsl_glz(je,ilz) = delta(je)*betaa(je,ilz)
        do il = nxi_scatt, 1, -1
-          glz(il,ilz) = (delta(il) - c1(il,ilz)*glz(il+1,ilz))*betaa(il,ilz)
+          slsl_glz(il,ilz) = (delta(il) - c1(il,ilz)*slsl_glz(il+1,ilz))*betaa(il,ilz)
        end do
 
-!       ! interpolate to obtain glz(vpa = 0) point for wfb
-!       ! and insert this point into glz
+!       ! interpolate to obtain slsl_glz(vpa = 0) point for wfb
+!       ! and insert this point into slsl_glz
        ! interpolation described above mysteriously causing numerical instability
        ! stabilized by using old (pre-collision) value of g for wfb
        if (jend(ig) == ng2+1.and.special_wfb_lorentz) then
-          glz(ng2+2:je-1,ilz) = glz(ng2+1:je-2,ilz)
-          glz(ng2+1,ilz) = gwfb
+          slsl_glz(ng2+2:je-1,ilz) = slsl_glz(ng2+1:je-2,ilz)
+          slsl_glz(ng2+1,ilz) = gwfb
        end if
 
 !
@@ -3466,15 +3878,32 @@ contains
 ! Overall, this was a rare bug.
 !
 
-!       if (jend(ig) /= 0) glz(je,ilz) = glz(jend(ig),ilz)
-       if (jend(ig) /= 0) glz(2*jend(ig),ilz) = glz(jend(ig),ilz)
+!       if (jend(ig) /= 0) slsl_glz(je,ilz) = slsl_glz(jend(ig),ilz)
+       if (jend(ig) /= 0) slsl_glz(2*jend(ig),ilz) = slsl_glz(jend(ig),ilz)
 
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call scatter (lambda_map, glz, g)
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    call scatter (lambda_map, slsl_glz, g)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
-    deallocate (glz)
-    if (heating) deallocate (glzc)
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    deallocate (slsl_glz)
+    if (heating) deallocate (slsl_glzc)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
     call prof_leaving ("solfp_lorentz", "collisions")
 
@@ -3495,7 +3924,6 @@ contains
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
     integer, optional, intent (in) :: diagnostics
 
-    complex, dimension (:), allocatable :: tmp
     integer :: ile
     complex, dimension (nxi+1) :: delta
     complex :: fac, gwfb
@@ -3504,9 +3932,27 @@ contains
 
     call prof_entering ("solfp_lorentz", "collisions")
 
-    allocate (tmp(le_lo%llim_proc:le_lo%ulim_alloc)) ; tmp = 0.0
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    allocate (slll_tmp(le_lo%llim_proc:le_lo%ulim_alloc))
+#ifdef OPENMP
+!$OMP END MASTER 
+!$OMP BARRIER
+#endif
+
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+    slll_tmp = 0.0
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
 
     if (heating .and. present(diagnostics)) then
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,ig,je,ie,il,fac)
+#endif
        do ile = le_lo%llim_proc, le_lo%ulim_proc
           ig = ig_idx(le_lo,ile)
 
@@ -3527,16 +3973,27 @@ contains
              end do
           end do
        end do
-       call integrate_moment (le_lo, glec, tmp)
+#ifdef OPENMP
+!$OMP END DO
+#endif
+       call integrate_moment (le_lo, glec, slll_tmp)
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,ig,it,ik,is)
+#endif
        do ile = le_lo%llim_proc, le_lo%ulim_proc
           ig = ig_idx(le_lo,ile)
           it = it_idx(le_lo,ile)
           ik = ik_idx(le_lo,ile)
           is = is_idx(le_lo,ile)
-          c_rate(ig,it,ik,is,1) = tmp(ile)
+          c_rate(ig,it,ik,is,1) = slll_tmp(ile)
        end do
-
+#ifdef OPENMP
+!$OMP END DO
+#endif
        if (hyper_colls) then
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,ig,je,ie,il,fac)
+#endif
           do ile = le_lo%llim_proc, le_lo%ulim_proc
              ig = ig_idx(le_lo,ile)
 
@@ -3552,18 +4009,30 @@ contains
                 end do
              end do
           end do
-          call integrate_moment (le_lo, glec, tmp)
+#ifdef OPENMP
+!$OMP END DO
+#endif
+          call integrate_moment (le_lo, glec, slll_tmp)
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,ig,it,ik,is)
+#endif
           do ile = le_lo%llim_proc, le_lo%ulim_proc
              ig = ig_idx(le_lo,ile)
              it = it_idx(le_lo,ile)
              ik = ik_idx(le_lo,ile)
              is = is_idx(le_lo,ile)
-             c_rate(ig,it,ik,is,2) = tmp(ile)
+             c_rate(ig,it,ik,is,2) = slll_tmp(ile)
           end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
        end if
     end if
 
     ! solve for gle row by row
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,it,ik,is,ig,je,nxi_scatt,ie,gwfb,delta,il)
+#endif
     do ile = le_lo%llim_proc, le_lo%ulim_proc
        it = it_idx(le_lo,ile)
        ik = ik_idx(le_lo,ile)
@@ -3612,8 +4081,8 @@ contains
           do il = nxi_scatt, 1, -1
              gle(il,ie,ile) = (delta(il) - c1le(il,ie,ile)*gle(il+1,ie,ile))*betaale(il,ie,ile)
           end do
-!       ! interpolate to obtain glz(vpa = 0) point for wfb
-!       ! and insert this point into glz
+!       ! interpolate to obtain slll_glz(vpa = 0) point for wfb
+!       ! and insert this point into slll_glz
           ! interpolation described above mysteriously causing numerical instability
           ! stabilized by using old (pre-collision) value of g for wfb
           if (jend(ig) == ng2+1.and.special_wfb_lorentz) then
@@ -3630,8 +4099,18 @@ contains
 
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    deallocate (tmp)
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    deallocate (slll_tmp)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif    
     
     call prof_leaving ("solfp_lorentz", "collisions")
 
@@ -3659,14 +4138,38 @@ contains
 
     integer :: ie, is, ig, il, it, ik
     complex, dimension (negrid) :: delta
-    complex, dimension (:,:), allocatable :: ged
     integer :: ielo
 
-    allocate (ged(negrid+1,e_lo%llim_proc:e_lo%ulim_alloc)) ; ged = 0.0
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    allocate (sesl_ged(negrid+1,e_lo%llim_proc:e_lo%ulim_alloc))
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
-    call gather (energy_map, g, ged)
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+     sesl_ged = 0.0
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
 
-    ! solve for ged row by row
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    call gather (energy_map, g, sesl_ged)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
+
+    ! solve for sesl_ged row by row
+#ifdef OPENMP
+!$OMP DO PRIVATE(ielo,it,ik,is,ig,il,delta,ie)
+#endif
     do ielo = e_lo%llim_proc, e_lo%ulim_proc
 
        it = it_idx(e_lo,ielo)       
@@ -3679,21 +4182,38 @@ contains
        il = il_idx(e_lo,ielo)
        if (forbid(ig,il)) cycle
 
-       delta(1) = ged(1,ielo)
+       delta(1) = sesl_ged(1,ielo)
        do ie = 1, negrid-1
-          delta(ie+1) = ged(ie+1,ielo) - eql(ie+1,ielo)*delta(ie)
+          delta(ie+1) = sesl_ged(ie+1,ielo) - eql(ie+1,ielo)*delta(ie)
        end do
        
-       ged(negrid+1,ielo) = 0.0
+       sesl_ged(negrid+1,ielo) = 0.0
        do ie = negrid, 1, -1
-          ged(ie,ielo) = (delta(ie) - ec1(ie,ielo)*ged(ie+1,ielo))*ebetaa(ie,ielo)
+          sesl_ged(ie,ielo) = (delta(ie) - ec1(ie,ielo)*sesl_ged(ie+1,ielo))*ebetaa(ie,ielo)
        end do
 
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
-    call scatter (energy_map, ged, g)
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    call scatter (energy_map, sesl_ged, g)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
-    deallocate (ged)
+#ifdef OPENMP
+!$OMP MASTER
+#endif
+    deallocate (sesl_ged)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
   end subroutine solfp_ediffuse_standard_layout
 
@@ -3716,6 +4236,9 @@ contains
     integer :: ile, ixi, ik, it
 
     ! solve for gle row by row
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,is,it,ik,ig,ixi,il,delta,ie)
+#endif
     do ile = le_lo%llim_proc, le_lo%ulim_proc
 
        is = is_idx(le_lo,ile)
@@ -3742,6 +4265,9 @@ contains
           end do
        end do
     end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
   end subroutine solfp_ediffuse_le_layout
 

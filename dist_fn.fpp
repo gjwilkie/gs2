@@ -3449,41 +3449,47 @@ subroutine check_dist_fn(report_unit)
     modep = 0
     if (present(mode)) modep = mode
 
+#ifdef OPENMP
+!$OMP PARALLEL DEFAULT(SHARED)
+#endif
     if (istep.eq.0 .or. .not.cllc) then
 !CMR do the usual LC when computing response matrix
        !Calculate the explicit nonlinear terms
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
-       if(reset) return !Return if resetting
-       !Solve for gnew
-       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+       if(.not. reset) then
+          !Solve for gnew
+          call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
 
-       !Add hyper terms (damping)
-       call hyper_diff (gnew, phinew, bparnew)
-       !Add collisions
-       call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
+          !Add hyper terms (damping)
+          call hyper_diff (gnew, phinew, bparnew)
+          !Add collisions
+          call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
+       end if
     else if (istep.eq.1 .and. istep.ne.istep_last) then
 !CMR on first half step at istep=1 do CL with all redists
        call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
        !Calculate the explicit nonlinear terms
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
-       if(reset) return !Return if resetting
-       !Solve for gnew
-       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-       !Add hyper terms (damping)
-       call hyper_diff (gnew, phinew, bparnew)
+       if(.not. reset)then
+         !Solve for gnew
+         call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+         !Add hyper terms (damping)
+         call hyper_diff (gnew, phinew, bparnew)
+       end if
     else if (istep.ne.istep_last) then
 !CMR on first half step do CL with all redists without gtoc redist
        call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep,gtoc=.false.)
        !Calculate the explicit nonlinear terms
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
-       if(reset) return !Return if resetting
-       !Solve for gnew
-       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-       !Add hyper terms (damping)
-       call hyper_diff (gnew, phinew, bparnew)
+       if(.not. reset) then
+         !Solve for gnew
+         call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+         !Add hyper terms (damping)
+         call hyper_diff (gnew, phinew, bparnew)
+       end if
     else if (istep.eq.istep_last) then
 !CMR on second half of all timesteps do LC without ctog redist
        !Calculate the explicit nonlinear terms 
@@ -3491,13 +3497,13 @@ subroutine check_dist_fn(report_unit)
        !    half of istep: keeping for now as may be needed by some code
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
          phi, apar, bpar, istep, bkdiff(1), fexp(1))
-       if(reset) return !Return if resetting
-
-       !Solve for gnew
-       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
-       !Add hyper terms (damping)
-       call hyper_diff (gnew, phinew, bparnew)
-       call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep, ctog=.false.)
+       if(.not. reset) then
+         !Solve for gnew
+         call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+         !Add hyper terms (damping)
+         call hyper_diff (gnew, phinew, bparnew)
+         call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep, ctog=.false.)
+       end if
     endif
 
     !Enforce parity if desired (also performed in invert_rhs, but this is required
@@ -3507,9 +3513,18 @@ subroutine check_dist_fn(report_unit)
     !Ensure fixed ik has correct parity parts
     if(fixpar_secondary.gt.0)then
        call enforce_parity(parity_redist_ik,fixpar_secondary)
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
        gnew=gnew+g_fixpar
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
     endif
     istep_last=istep
+#ifdef OPENMP
+!$OMP END PARALLEL
+#endif
 
   end subroutine timeadv
 
@@ -4149,12 +4164,26 @@ subroutine check_dist_fn(report_unit)
        else
           redist_local=parity_redist
        endif
-
+#ifdef OPENMP
+!$OMP MASTER
+#endif
        !Redistribute the data
        call scatter(redist_local,gnew,gnew)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
 
        !Multiply by factor if required
-       if(mult.ne.1) gnew(:,1,:)=mult*gnew(:,1,:)
+       if(mult.ne.1) then
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+          gnew(:,1,:)=mult*gnew(:,1,:)
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+       end if
     else !Ballooning/extended space
        !Ensure ik_local is specified
        if(present(ik_ind))then
@@ -4164,6 +4193,9 @@ subroutine check_dist_fn(report_unit)
        endif
 
        !Loop over all local iglo
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo)
+#endif
        do iglo=g_lo%llim_proc,g_lo%ulim_alloc
           !Skip if needed
           if(ik_local.gt.0) then
@@ -4174,6 +4206,9 @@ subroutine check_dist_fn(report_unit)
           gnew(-ntgrid:-1,1,iglo)=mult*gnew(ntgrid:1:-1,2,iglo)
           gnew(1:ntgrid,1,iglo)=mult*gnew(-1:-ntgrid:-1,2,iglo)
        enddo
+#ifdef OPENMP
+!$OMP END DO
+#endif
     endif
     
   end subroutine enforce_parity
@@ -5049,15 +5084,26 @@ subroutine check_dist_fn(report_unit)
     integer :: il, ik, it, n, i, j
     integer :: iglo, ncell
 
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo)
+#endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        call invert_rhs_1 (phi, apar, bpar, phinew, aparnew, bparnew, &
             istep, iglo, sourcefac)
     end do
-
+#ifdef OPENMP
+!$OMP END DO
+#endif
     if (no_comm) then
        ! nothing
     else       
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
        g_adj = 0. !This shouldn't be needed
+#ifdef OPENMP 
+!$OMP END WORKSHARE
+#endif
        !<DD>Note these fill routines are often equivalent to an all-to-all type
        !communication, i.e. when nproc --> 2 nproc, t_fill --> 4 t_fill
        !By only communicating with our direct neighbours we would significantly
@@ -5065,11 +5111,20 @@ subroutine check_dist_fn(report_unit)
        !scaling. However, if we do this then we lose the ability to perform the linked
        !update (i.e. what we do below) in a parallel manner, so the below code would
        !become partially serial.
+#ifdef OPENMP
+!$OMP MASTER
+#endif
        call fill (links_p, gnew, g_adj)
        call fill (links_h, g_h, g_adj)
        call fill (wfb_p, gnew, g_adj)
        call fill (wfb_h, g_h, g_adj)
-
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo,ik,it,il,ncell,facd,j,i,b0,fac,n)
+#endif
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
@@ -5166,6 +5221,9 @@ subroutine check_dist_fn(report_unit)
           end if
 
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif       
        
     end if
 
@@ -5206,18 +5264,36 @@ subroutine check_dist_fn(report_unit)
        !If fixing parity particular ik then do it an add in fixpar
        if (fixpar_secondary.gt.0) then
           call enforce_parity(parity_redist_ik)
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
           gnew=gnew+g_fixpar
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
        endif
     case default
+#ifdef OPENMP
+!$OMP DO PRIVATE(iglo)
+#endif
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           call invert_rhs_1 (phi, apar, bpar, phinew, aparnew, bparnew, &
                istep, iglo, sourcefac)
        end do
+#ifdef OPENMP
+!$OMP END DO
+#endif
 
        !If fixing parity particular ik then do it an add in fixpar
        if (fixpar_secondary.gt.0) then
           call enforce_parity(ik_ind=fixpar_secondary)
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
           gnew=gnew+g_fixpar
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
        endif
 
     end select

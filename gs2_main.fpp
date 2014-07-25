@@ -75,6 +75,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use eigval, only: init_eigval, finish_eigval, time_eigval
     use eigval, only: BasicSolve
 #endif
+#ifdef OPENMP
+    use omp_lib
+#endif
     implicit none
 
     integer, intent (in), optional :: mpi_comm, job_id, nensembles
@@ -105,6 +108,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     type(diagnostics_init_options_type) :: diagnostics_init_options
 #endif
 
+#ifdef OPENMP
+    integer :: num_threads
+#endif
+
     time_main_loop(1) = 0.
     time_main_loop(2) = 0.
     exit=.false.
@@ -116,6 +123,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 !
 !    if (present(nofinish)) nofin=nofinish
      
+#ifdef OPENMP
+!$OMP PARALLEL DEFAULT(SHARED) 
+    num_threads = omp_get_num_threads();
+!$OMP END PARALLEL
+#endif
+
 
 ! HJL tests on Trinity optionals for load balancing
     if(present(trinity_reset)) then
@@ -146,7 +159,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
                 if(present(job_id)) then
                    write(*,*) 'Job ',trin_job,'Running on ',nproc,' processors'
                 else
+#ifdef OPENMP
+                   write(*,*) 'Running with ',nproc,' MPI processes each with', & 
+                              num_threads,' OpenMP threads'
+#else
                    write(*,*) 'Running on ',nproc,' processors'
+#endif
                 endif
              end if
           end if

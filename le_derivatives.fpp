@@ -6,6 +6,15 @@ module le_derivatives
 
   private
 
+  complex, dimension (:,:,:), allocatable :: gle
+  complex, dimension (:,:,:), allocatable :: gc1, gc2, gc3
+#ifdef LOWFLOW
+  complex, dimension (:,:), allocatable :: gtmp
+#ifdef OPENMP
+!$OMP THREADPRIVATE(gtmp)
+#endif
+#endif
+
 contains
 
   subroutine vspace_derivatives (g, gold, g1, phi, apar, bpar, phinew,aparnew, bparnew, diagnostics, gtoc, ctog)
@@ -37,10 +46,7 @@ contains
     integer :: ile, ig, ie, ixi, isgn, il, is
     integer, dimension (2) :: i
     real :: dvp, vp0
-    complex, dimension (:,:), allocatable :: gtmp
 # endif
-    complex, dimension (:,:,:), allocatable :: gle
-    complex, dimension (:,:,:), allocatable :: gc1, gc2, gc3
     logical :: heating_flag
 
 !CMR, 12/9/2013: 
@@ -82,20 +88,55 @@ contains
              if (heating_flag) call g_adjust (gold, phi, bpar, fphi, fbpar)
           end if
           if (heating_flag) then
+#ifdef OPENMP
+!$OMP MASTER
+#endif
              allocate (gc3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
              gc3 = g
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
           end if
-       
-          allocate (gle(nxi+1,negrid+1,le_lo%llim_proc:le_lo%ulim_alloc)) ; gle = 0.
+#ifdef OPENMP
+!$OMP MASTER
+#endif       
+          allocate (gle(nxi+1,negrid+1,le_lo%llim_proc:le_lo%ulim_alloc))
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+          gle = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
 
       ! map data from g_layout to le_layout
+#ifdef OPENMP
+!$OMP MASTER
+#endif       
           if (g_to_c) call gather (g2le, g, gle)
-       
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif       
 # ifdef LOWFLOW
 
        allocate (gtmp(nxi+1,negrid+1)) ; gtmp = 0.
- 
+
          ! use semi-lagrange scheme to evaluate dg/dvpa term
+#ifdef OPENMP
+!$OMP DO PRIVATE(ile,gtmp,ig,is,dvp,ie,ixi,il,isgn)
+#endif
        do ile = le_lo%llim_proc, le_lo%ulim_proc
           gtmp = gle(:,:,ile)
           ig = ig_idx(le_lo,ile)
@@ -110,7 +151,9 @@ contains
                 end do
              end do
           end do
-
+#ifdef OPENMP
+!$OMP END DO
+#endif
           deallocate (gtmp)
 
           if (colls) then
@@ -122,13 +165,33 @@ contains
           end if
 # endif
          ! remap from le_layout to g_layout
+#ifdef OPENMP
+!$OMP MASTER
+#endif
           if (c_to_g) call scatter (g2le, gle, g)
           deallocate (gle)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
           if (heating_flag) then
             ! form (h_i+1 + h_i)/2 * C(h_i+1) and integrate.  
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
              gc3 = 0.5*conjg(g+gold)*(g-gc3)/code_dt          
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
              call integrate_moment (gc3, c_rate(:,:,:,:,3))
+#ifdef OPENMP
+!$OMP MASTER
+#endif
              deallocate (gc3)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
           endif
 
           if (adjust) then
@@ -144,6 +207,9 @@ contains
 
       if (colls) then
 
+#ifdef OPENMP
+!$OMP MASTER
+#endif
          if (heating_flag) then
             allocate (gc1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
             if (hyper_colls) then
@@ -157,31 +223,90 @@ contains
             allocate (gc2(1,1,1))
             allocate (gc3(1,1,1))
          end if
-         gc1 = 0. ; gc2 = 0. ; gc3 = 0.
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+         gc1 = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+	 gc2 = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+	 gc3 = 0.
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
 
          if (adjust) then
             call g_adjust (g, phinew, bparnew, fphi, fbpar)
             if (heating_flag) call g_adjust (gold, phi, bpar, fphi, fbpar)
          end if
 
-         if (heating_flag) gc3 = g
+         if (heating_flag) then 
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
+	    gc3 = g
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
+	 end if
 
          ! update distribution function to take into account collisions
          call solfp1 (g, g1, gc1, gc2, diagnostics)
 
          if (heating_flag) then
             call integrate_moment (gc1, c_rate(:,:,:,:,1))
+#ifdef OPENMP
+!$OMP MASTER
+#endif
             deallocate (gc1)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
           
             if (hyper_colls) call integrate_moment (gc2, c_rate(:,:,:,:,2))
+#ifdef OPENMP
+!$OMP MASTER
+#endif
             deallocate (gc2)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif
           
             ! form (h_i+1 + h_i)/2 * C(h_i+1) and integrate.  
+#ifdef OPENMP
+!$OMP WORKSHARE
+#endif
             gc3 = 0.5*conjg(g+gold)*(g-gc3)/code_dt
+#ifdef OPENMP
+!$OMP END WORKSHARE
+#endif
           
             call integrate_moment (gc3, c_rate(:,:,:,:,3))
-          
+#ifdef OPENMP
+!$OMP MASTER
+#endif          
             deallocate (gc3)
+#ifdef OPENMP
+!$OMP END MASTER
+!$OMP BARRIER
+#endif          
+
          end if
 
          if (adjust) then
