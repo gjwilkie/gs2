@@ -8,7 +8,7 @@ module fields
 
   public :: init_fields, finish_fields
   public :: read_parameters, wnml_fields, check_fields
-  public :: advance
+  public :: advance, force_maxwell_reinit
   public :: phinorm, kperp, fieldlineavgphi
   public :: phi, apar, bpar, phinew, aparnew, bparnew
   public :: reset_init, set_init_fields

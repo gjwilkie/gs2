@@ -28,7 +28,7 @@ module init_g
        ginitopt_recon3 = 29, ginitopt_ot = 30, &
        ginitopt_zonal_only = 31, ginitopt_single_parallel_mode = 32, &
        ginitopt_all_modes_equal = 33, ginitopt_fixpar= 34, &
-       ginitopt_default_odd=35
+       ginitopt_default_odd=35, ginitopt_restart_memory=36 !Note ginitopt_restart_memory isn't meant to be a user selected choice.
 
   real :: width0, dphiinit, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
@@ -789,6 +789,10 @@ contains
        call ginit_restart_small
        call init_tstart (tstart, istatus)
        restarted = .true.
+       scale = 1.
+    case (ginitopt_restart_memory)
+       call ginit_restart_memory
+       restarted = .true.       
        scale = 1.
     case (ginitopt_zonal_only)
        call ginit_restart_zonal_only
@@ -3541,6 +3545,21 @@ contains
 
   end subroutine ginit_restart_many
 
+  subroutine ginit_restart_memory
+    use dist_fn_arrays, only: g, gnew, g_restart_tmp
+    use file_utils, only: error_unit
+    use mp, only: proc0, mp_abort
+    implicit none
+    
+    if(allocated(g_restart_tmp))then
+       g=g_restart_tmp
+       gnew = g
+    else
+       if(proc0) write(error_unit(),*) "ERROR: Attemping in memory restart but g_restart_tmp not allocated. ABORT"
+       call mp_abort("ERROR in ginit_restart_memory")
+    end if
+  end subroutine ginit_restart_memory
+
   subroutine ginit_restart_small
     use dist_fn_arrays, only: g, gnew
     use gs2_save, only: gs2_restore
@@ -3776,10 +3795,15 @@ contains
 
 
 
-  subroutine reset_init
+  subroutine reset_init(from_file)
+    implicit none
+    logical, intent(in) :: from_file
 
-    ginitopt_switch = ginitopt_restart_many
-
+    if(from_file)then
+       ginitopt_switch = ginitopt_restart_many
+    else
+       ginitopt_switch = ginitopt_restart_memory
+    endif
   end subroutine reset_init
 
   subroutine flae (g, gavg)

@@ -6,7 +6,7 @@ module dist_fn_arrays
 
 ! gold never used
 !  public :: gold
-  public :: g, gnew, kx_shift, theta0_shift, vpa, vpac
+  public :: g, gnew, g_restart_tmp, kx_shift, theta0_shift, vpa, vpac
   public :: vperp2, vpar, ittp, aj0, aj1, aj2, aj0f, aj1f
   public :: apar_ext, kperp2, c_rate, g_fixpar
   public :: g_adjust, check_g_bouncepoints
@@ -17,7 +17,7 @@ module dist_fn_arrays
 
   ! dist fn
 !  complex, dimension (:,:,:), allocatable :: g, gnew, gold, g_fixpar
-  complex, dimension (:,:,:), allocatable :: g, gnew, g_fixpar
+  complex, dimension (:,:,:), allocatable :: g, gnew, g_fixpar, g_restart_tmp
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   real, dimension(:), allocatable :: kx_shift, theta0_shift
