@@ -47,7 +47,8 @@ module parameter_scan
   integer :: nstep_init, nstep_inc
   real :: delta_t_init, delta_t_inc
   real :: target_val
-  integer :: scan_output_file
+  integer, parameter :: initial_scan_unit = -1
+  integer :: scan_output_file = initial_scan_unit
   real :: current_target_value = 0.0
 
 
@@ -137,7 +138,7 @@ contains
     if (allocated(hflux_tot)) deallocate(hflux_tot)
     if (allocated(momflux_tot)) deallocate(momflux_tot)
     if (allocated(phi2_tot)) deallocate(phi2_tot)
-    call close_output_file(scan_output_file)
+    if (scan_output_file .ne. initial_scan_unit) call close_output_file(scan_output_file)
   end subroutine finish_parameter_scan
   
   subroutine update_scan_parameter_value(istep, reset, exit)
