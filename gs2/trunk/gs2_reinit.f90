@@ -52,7 +52,7 @@ contains
     integer :: istatus
     integer, save :: nconsec=0
     integer, intent (in), optional :: job_id
-    integer :: iostat, field_iostat
+    integer :: iostat
     complex, dimension(:,:,:), allocatable :: phi_tmp, apar_tmp, bpar_tmp
 
     if (first) call init_reinit

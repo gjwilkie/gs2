@@ -1016,7 +1016,6 @@ contains
     use geometry, only: debug_geo => debug, verb
     use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
     use runtime_tests, only: verbosity
-    use mp, only: proc0
     implicit none
     real :: rhoc_save
 !    logical, save :: initialized = .false.

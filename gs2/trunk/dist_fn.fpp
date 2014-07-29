@@ -1221,17 +1221,13 @@ subroutine check_dist_fn(report_unit)
   end subroutine init_kperp2
 
   subroutine init_invert_rhs
-    use dist_fn_arrays, only: vpar, ittp, vpac, aj0
-    use run_parameters, only: wunits
-    use gs2_time, only: code_dt
+    use dist_fn_arrays, only: vpar, ittp
     use species, only: spec, nspec
-    use hyper, only: D_res
-    use theta_grid, only: ntgrid, itor_over_b
+    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: nlambda, ng2, forbid, negrid, energy, anon
+    use le_grids, only: nlambda, ng2, forbid, negrid
     use constants, only: pi, zi
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
-    use mp, only: iproc
     implicit none
     integer :: iglo
     integer :: ig, ik, it, il, ie, is, isgn
@@ -4193,11 +4189,10 @@ endif
     use dist_fn_arrays, only: aj0, aj1, vperp2, vpar, vpac, g, ittp
     use theta_grid, only: ntgrid
     use kt_grids, only: aky
-    use le_grids, only: nlambda, ng2, lmax, anon, energy, negrid
+    use le_grids, only: nlambda, ng2, lmax, anon, negrid
     use species, only: spec, nspec
     use run_parameters, only: fphi, fapar, fbpar, wunits
     use gs2_time, only: code_dt
-    use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
     use hyper, only: D_res
     use constants
@@ -4526,7 +4521,6 @@ endif
     use species, only: spec
     use run_parameters, only: fphi, fapar, fbpar
     use gs2_time, only: code_dt
-    use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
     use constants, only: zi
     implicit none
@@ -8567,7 +8561,6 @@ endif
 
   subroutine find_leftmost_link (iglo, iglo_left, ipleft)
     use gs2_layouts, only: it_idx,ik_idx,g_lo,il_idx,ie_idx,is_idx,idx,proc_id
-    use mp, only: iproc
     implicit none
     integer, intent (in) :: iglo
     integer, intent (in out) :: iglo_left, ipleft
@@ -8599,7 +8592,6 @@ endif
 
   subroutine find_rightmost_link (iglo, iglo_right, ipright)
     use gs2_layouts, only: it_idx,ik_idx,g_lo,il_idx,ie_idx,is_idx,idx,proc_id
-    use mp, only: iproc
     implicit none
     integer, intent (in) :: iglo
     integer, intent (in out) :: iglo_right, ipright

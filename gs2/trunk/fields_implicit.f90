@@ -37,7 +37,7 @@ contains
     use parameter_scan_arrays, only: run_scan
     implicit none
     logical, parameter :: debug=.false.
-    logical :: dummy
+!    logical :: dummy
 
     if (initialized) return
     initialized = .true.

@@ -380,7 +380,6 @@ contains
   
   subroutine write_trinity_parameters(trinpars_unit)
     integer, intent(in) :: trinpars_unit
-    integer :: is
     write(trinpars_unit, "(A15)") '&run_parameters'
     write (trinpars_unit, *) ' beta = ', beta
     write (trinpars_unit, "(A1)") '/'
