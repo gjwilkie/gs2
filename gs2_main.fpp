@@ -550,7 +550,7 @@ endif
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew,  bparnew
     use run_parameters, only: fphi, fapar, fbpar
     use init_g, only: ginit
-    real :: norm
+!    real :: norm
     logical :: dummy
 
 !    if (fphi .gt. epsilon(0.0)) then
@@ -574,8 +574,6 @@ endif
      g = 0.0; gnew = 0.0
 
      call ginit(dummy)
-
-
   end subroutine reset_linear_magnitude
 
   subroutine write_trinity_parameters
@@ -600,8 +598,6 @@ endif
 
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo
-    use job_manage, only: trin_job
-    use mp, only: proc0
 
     implicit none
 
