@@ -46,7 +46,7 @@ program time_timestep
   skip_initialisation = .true.
 
 
-  call load_wisdom("wisdom_file")
+  !call load_wisdom("wisdom_file")
 
   ! General config
   eps = 1.0e-7
@@ -115,7 +115,7 @@ program time_timestep
 
   call close_module_test('time_timestep')
 
-  call save_wisdom("wisdom_file")
+  !call save_wisdom("wisdom_file")
 
   call finish_mp
 

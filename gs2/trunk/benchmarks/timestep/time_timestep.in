@@ -2,6 +2,7 @@
 &layouts_knobs
 layout = 'xyles'
 opt_redist_init = .true.
+!fft_wisdom_file = 'mywisfile'
 /
 
 &species_parameters_1

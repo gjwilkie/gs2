@@ -1,4 +1,4 @@
-gs2_all: diagnostics modules gs2 ingen rungridgen
+gs2_all: diagnostics modules gs2 ingen rungridgen generate_fftw_wisdom
 
 gs2: $(gs2_mod) $(SIMPLEDATAIO_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
@@ -7,6 +7,9 @@ gs2.x: $(gs2_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 ingen: $(ingen_mod) $(SIMPLEDATAIO_LIB)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
+
+generate_fftw_wisdom: $(gs2_mod) $(SIMPLEDATAIO_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
 
 rungridgen: $(rungridgen_mod)

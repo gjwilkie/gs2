@@ -76,6 +76,8 @@ module gs2_layouts
   public :: intmom_sub !Do we use sub-communicators in velocity space?
   public :: intspec_sub !Do we use sub-communicators in integrate_species?
 
+  public :: fft_use_wisdom, fft_wisdom_file
+
 
   logical :: initialized_x_transform = .false.
   logical :: initialized_y_transform = .false.
@@ -96,6 +98,8 @@ module gs2_layouts
   logical :: local_field_solve, accel_lxyes, lambda_local, unbalanced_xxf, unbalanced_yxf
   real :: max_unbalanced_xxf, max_unbalanced_yxf
   character (len=5) :: layout
+  character (len=1000) :: fft_wisdom_file
+  logical :: fft_use_wisdom
   logical :: exist
 
 ! TT>
@@ -402,6 +406,7 @@ contains
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
+    use file_utils, only: run_name 
     use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
     use fft_work, only: fft_measure_plan
     implicit none
@@ -409,7 +414,8 @@ contains
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
          max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
          opt_local_copy, opt_redist_nbk, opt_redist_init, intmom_sub, &
-         intspec_sub, opt_redist_persist, opt_redist_persist_overlap, fft_measure_plan
+         intspec_sub, opt_redist_persist, opt_redist_persist_overlap, fft_measure_plan, &
+         fft_use_wisdom, fft_wisdom_file
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
@@ -423,6 +429,10 @@ contains
     opt_redist_persist_overlap = .false. !<DD>True=>Start comms before doing local copy
     opt_redist_init= .false. !<DD>True=>Use optimised routines to init redist objects
     fft_measure_plan = .true. !<DD>False=>use heuristics rather than measure in fft plan create
+    fft_wisdom_file = 'default'  ! Location of fftw wisdom... if left as default, this is set to 
+        ! run_name//'.fftw_wisdom', unless overriden by the environment variable
+        ! GK_FFTW3_WISDOM. If set to anything other default, overrides  GK_FFTW3_WISDOM
+    fft_use_wisdom = .true. ! Try to load and save wisdom about fftw plans to fft_wisdom_file
     intmom_sub=.false.
     intspec_sub=.false.
     in_file=input_unit_exist("layouts_knobs", exist)
@@ -455,8 +465,29 @@ contains
     !Disable settings if dependent settings not set
     opt_redist_persist=opt_redist_persist.and.opt_redist_nbk
     opt_redist_persist_overlap=opt_redist_persist_overlap.and.opt_redist_persist
+    call get_wisdom_file(fft_wisdom_file)
   end subroutine read_parameters
     
+
+  !> Set the fft_wisdom_file based on the value set in the namelist (if any)
+  !! and the value in the GK_FFTW3_WISDOM environment variable
+  subroutine get_wisdom_file(wisdom_file)
+    use file_utils, only: run_name
+    character(len=*), intent(inout) :: wisdom_file
+    character(len=1000) :: env_wisdom_file
+    call get_environment_variable("GK_FFTW3_WISDOM", env_wisdom_file)
+    !read (env_wisdom_file,'(I10)') verbosity
+
+    if (wisdom_file .eq. 'default') then
+      if (trim(env_wisdom_file) .eq. '') then
+        wisdom_file = trim(run_name)//'.fftw_wisdom'
+      else
+        wisdom_file = env_wisdom_file
+      end if
+    end if
+    write (*,*) 'wisdom_file', wisdom_file
+  end subroutine get_wisdom_file
+
   subroutine broadcast_results
     use mp, only: broadcast
     use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
@@ -477,6 +508,8 @@ contains
     call broadcast (max_unbalanced_yxf)
     call broadcast (opt_local_copy)
     call broadcast (fft_measure_plan)
+    call broadcast (fft_use_wisdom)
+    call broadcast (fft_wisdom_file)
   end subroutine broadcast_results
 
   subroutine check_accel (ntheta0, naky, nlambda, negrid, nspec, nblock)

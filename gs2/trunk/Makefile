@@ -111,7 +111,7 @@ WITH_EIG ?=
 
 USE_NEW_DIAG ?= on
 
-HAS_ISO_C_BINDING ?=
+HAS_ISO_C_BINDING ?= on
 
 
 ifdef NPROCS
