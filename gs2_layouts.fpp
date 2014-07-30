@@ -485,7 +485,7 @@ contains
         wisdom_file = env_wisdom_file
       end if
     end if
-    write (*,*) 'wisdom_file', wisdom_file
+    !write (*,*) 'wisdom_file', wisdom_file
   end subroutine get_wisdom_file
 
   subroutine broadcast_results
