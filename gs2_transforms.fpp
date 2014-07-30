@@ -115,6 +115,8 @@ contains
     use gs2_layouts, only: pe_layout, init_accel_transform_layouts
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: init_x_transform_layouts
+    use gs2_layouts, only: fft_wisdom_file, fft_use_wisdom
+    use fft_work, only: load_wisdom, save_wisdom
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
@@ -128,6 +130,8 @@ contains
     !Early exit if possible
     if (initialized) return
     initialized = .true.
+
+    if (fft_use_wisdom) call load_wisdom(trim(fft_wisdom_file))
 
     if (debug) write (*,*) 'init_transforms: init_gs2_layouts'
     call init_gs2_layouts
@@ -160,6 +164,8 @@ contains
 
     if (debug) write (*,*) 'init_transforms: done'
     accelerated = accel
+    
+    if (fft_use_wisdom) call save_wisdom(trim(fft_wisdom_file))
 
   end subroutine init_transforms
 
