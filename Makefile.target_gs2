@@ -9,7 +9,7 @@ gs2.x: $(gs2_mod)
 ingen: $(ingen_mod) $(SIMPLEDATAIO_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
 
-generate_fftw_wisdom: $(gs2_mod) $(SIMPLEDATAIO_LIB)
+generate_fftw_wisdom: $(generate_fftw_wisdom_mod) $(SIMPLEDATAIO_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
 
 dump_response: $(dump_response_mod)
