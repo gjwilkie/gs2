@@ -4,7 +4,7 @@ module gs2_reinit
   public :: reset_time_step
   public :: check_time_step
   public :: init_reinit, wnml_gs2_reinit
-
+  public :: reduce_time_step, increase_time_step
   real :: delt_adj, dt0
 !  real :: delt_cushion = 1.5
   real :: delt_cushion
@@ -23,6 +23,20 @@ contains
           write (unit, fmt="(' delt_minimum = ',e16.10)") delt_minimum
           write (unit, fmt="(' /')")       
   end subroutine wnml_gs2_reinit
+
+  subroutine reduce_time_step
+    use gs2_time, only: code_dt
+    implicit none
+    if (first) call init_reinit
+    code_dt = code_dt/delt_adj
+  end subroutine reduce_time_step
+
+  subroutine increase_time_step
+    use gs2_time, only: code_dt
+    implicit none
+    if (first) call init_reinit
+    code_dt = min(code_dt*delt_adj, dt0)
+  end subroutine increase_time_step
 
   subroutine reset_time_step (istep, my_exit, job_id)
 
@@ -172,12 +186,10 @@ contains
 
 ! If timestep is too big, make it smaller
     if (code_dt > code_dt_cfl) then
-       code_dt = code_dt/delt_adj
-
+       call reduce_time_step
 ! If timestep is too small, make it bigger
     else if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
-       code_dt = min(code_dt*delt_adj, dt0)
-
+       call increase_time_step
     endif
     
     call save_dt (code_dt)
