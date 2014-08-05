@@ -12,6 +12,9 @@ ingen: $(ingen_mod) $(SIMPLEDATAIO_LIB)
 generate_fftw_wisdom: $(gs2_mod) $(SIMPLEDATAIO_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
 
+dump_response: $(dump_response_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
+
 rungridgen: $(rungridgen_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
@@ -89,3 +92,4 @@ distclean:
 	-rm -f ingen rungridgen regress
 	-rm -f ball eiktest
 	-rm -f ffttester
+	-rm -f dump_response
