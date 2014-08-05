@@ -86,7 +86,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     logical, intent (out), optional :: converged
 
     real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
-    real :: time_total(2) = 0.
+    real :: time_total(2) = 0., time_diagnostics(2)=0.
     real :: time_interval
     real :: time_main_loop(2)
 #ifdef NEW_DIAG
@@ -294,12 +294,13 @@ else
        if (nsave > 0 .and. mod(istep, nsave) == 0) &
             call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
        call update_time
+       if(proc0) call time_message(.false.,time_diagnostics,' Diagnostics')
        call loop_diagnostics (istep, exit)
        if(exit .and. present(converged)) converged = .true.
 #ifdef NEW_DIAG
        call run_diagnostics (istep, exit)
 #endif
-
+       if(proc0) call time_message(.false.,time_diagnostics,' Diagnostics')
        if (proc0) call time_message(.false.,time_advance,' Advance time step')
 
        if(.not.exit)then
@@ -407,6 +408,7 @@ endif
                &'' Advance steps'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
                &''(redistribute'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
                &''(field solve'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
+               &''(diagnostics'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
                &'' Re-initialize'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
                &'' Finishing'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/,  &
                &'' total from timer is:'', 0pf9.2,'' min'',/)', &
@@ -417,6 +419,7 @@ endif
                time_advance(1)/60.,time_advance(1)/time_total(1), &
                time_redist(1)/60.,time_redist(1)/time_total(1), &
                time_field(1)/60.,time_field(1)/time_total(1), &
+               time_diagnostics(1)/60.,time_diagnostics(1)/time_total(1), &
                time_reinit(1)/60.,time_reinit(1)/time_total(1), &
                time_finish(1)/60.,time_finish(1)/time_total(1),time_total(1)/60.
        endif

@@ -179,6 +179,9 @@ PERL		= perl
 F90FLAGS_SFX0 =
 F90FLAGS_SFX1 =
 F90FLAGS_SFX2 =
+#This one is just used to ensure that the non-preprocessed
+#files line up the same as preprocessed (make output a little clearer)
+F90FLAGS_SFXJNK =
 
 MPI_INC	?=
 MPI_LIB ?=
@@ -458,7 +461,7 @@ endif
 .SUFFIXES: .fpp .f90 .c .o
 
 .f90.o: 
-	$(FC) $(F90FLAGS) -c $<
+	$(FC) $(F90FLAGS) $(F90FLAGS_SFXJUNK) -c $<
 .fpp.f90:
 	$(CPP) $(CPPFLAGS) $< $@
 .c.o:

@@ -93,3 +93,4 @@ distclean:
 	-rm -f ball eiktest
 	-rm -f ffttester
 	-rm -f dump_response
+	-rm -f generate_fftw_wisdom
