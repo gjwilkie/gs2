@@ -6235,8 +6235,6 @@ endif
     else
        pflux = 0.
        qflux = 0.
-!       qflux_par = 0.
-!       qflux_perp = 0.
        vflux = 0.
     end if
 
@@ -6287,8 +6285,6 @@ endif
     else
        pmflux = 0.
        qmflux = 0.
-!       qmflux_par = 0.
-!       qmflux_perp = 0.
        vmflux = 0.
     end if
 
@@ -6339,8 +6335,6 @@ endif
     else
        pbflux = 0.
        qbflux = 0.
-!       qbflux_par = 0.
-!       qbflux_perp = 0.
        vbflux = 0.
     end if
 
@@ -6406,8 +6400,10 @@ endif
     complex, dimension (:,:,:,:), allocatable :: total
     real :: wgt
     integer :: ik, it, is
-
-
+!<DD> Moved directive to here (was previously just around flx= line below)
+!     as if we haven't compiled with LOWFLOW then this routine shouldn't
+!     do anything (integrate_moment is not that cheap).
+#ifdef LOWFLOW 
     allocate (total(-ntgrid:ntgrid,ntheta0,naky,nspec))
     call integrate_moment (g0, total)
 
@@ -6416,11 +6412,8 @@ endif
           do ik = 1, naky
              do it = 1, ntheta0
                 wgt = sum(dnorm(:,it,ik)*grho)
-#ifdef LOWFLOW
                 flx(it,ik,is) = sum(aimag(total(:,it,ik,is)*conjg(fld(:,it,ik))) &
                      *dnorm(:,it,ik)*aky(ik)*Rplot(:)**2)/wgt*mach_lab(is)
-#endif
- 
              end do
           end do
        end do
@@ -6428,7 +6421,7 @@ endif
     end if
 
     deallocate (total)
-
+#endif
   end subroutine get_flux_tormom !JPL
 
   subroutine eexchange (phinew, phi, exchange1, exchange2)
