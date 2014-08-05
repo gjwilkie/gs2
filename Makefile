@@ -462,7 +462,7 @@ endif
 .fpp.f90:
 	$(CPP) $(CPPFLAGS) $< $@
 .c.o:
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) $(subst -traditional,,$(CPPFLAGS)) -c $<
 
 ##################################################################### TARGETS
 
@@ -481,6 +481,9 @@ endif
 all: $(.DEFAULT_GOAL)
 
 include $(DEPEND)
+
+utils_mod += fftw_save_wisdom.o
+gs2_mod += fftw_save_wisdom.o
 #include Makefile.doc_depend
 
 ifdef USE_C_INDEX
@@ -693,4 +696,7 @@ TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 
 help:
 		# make SCAL=on : makes with SCALASCA instrumentation
+
+
+
 
