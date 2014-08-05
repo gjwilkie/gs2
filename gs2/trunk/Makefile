@@ -462,7 +462,7 @@ endif
 .fpp.f90:
 	$(CPP) $(CPPFLAGS) $< $@
 .c.o:
-	$(CC) $(CFLAGS) $(subst -traditional,,$(CPPFLAGS)) -c $<
+	$(CC) $(CFLAGS) $(subst -traditional,,$(subst -C,,$(subst -P,,$(CPPFLAGS)))) -c $<
 
 ##################################################################### TARGETS
 
@@ -484,6 +484,7 @@ include $(DEPEND)
 
 utils_mod += fft_save_wisdom.o
 gs2_mod += fft_save_wisdom.o
+ingen_mod += fft_save_wisdom.o
 #include Makefile.doc_depend
 
 ifdef USE_C_INDEX
