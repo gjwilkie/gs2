@@ -27,8 +27,8 @@ module init_g
        ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28, &
        ginitopt_recon3 = 29, ginitopt_ot = 30, &
        ginitopt_zonal_only = 31, ginitopt_single_parallel_mode = 32, &
-       ginitopt_all_modes_equal = 33, ginitopt_fixpar= 34, &
-       ginitopt_default_odd=35, ginitopt_restart_memory=36 !Note ginitopt_restart_memory isn't meant to be a user selected choice.
+       ginitopt_all_modes_equal = 33, &
+       ginitopt_default_odd=34, ginitopt_restart_memory=35 !Note ginitopt_restart_memory isn't meant to be a user selected choice.
 
   real :: width0, dphiinit, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
@@ -249,18 +249,13 @@ contains
           write (unit, fmt="(' tperp1 = ',e16.10)") tperp1
           write (unit, fmt="(' tperp2 = ',e16.10)") tperp2
 
-
-       case (ginitopt_fixpar)
-          write (unit, fmt="(' ginit_option = ',a)") '"fixpar"'
-          write (unit, fmt="(' scale = ',e16.10)") scale
-
        end select
        write (unit, fmt="(' /')")
   end subroutine wnml_init_g
 
  
   subroutine check_init_g(report_unit)
-  use run_parameters, only : delt_option_switch, delt_option_auto, fixpar_secondary
+  use run_parameters, only : delt_option_switch, delt_option_auto
   use species, only : spec, has_electron_species
   implicit none
   integer :: report_unit
@@ -548,24 +543,6 @@ contains
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, *) 
 
-    case (ginitopt_fixpar)
-       write (report_unit, fmt="('Initial conditions:')")
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('Under development for study of fixed parity+amplitude primary on secondary.')")
-       write (report_unit, fmt="('Fixing ik:   ',i8)") fixpar_secondary
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-
-       if(fixpar_secondary.le.0)then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('ginit_option = fixpar requires fixpar_secondary>0.')") 
-          write (report_unit, fmt="('fixpar_secondary= ',i8)") fixpar_secondary
-          write (report_unit, fmt="('THIS IS AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       endif
     end select
 
     if (ginitopt_switch == ginitopt_restart_many) then
@@ -811,8 +788,6 @@ contains
        call ginit_recon3
     case (ginitopt_ot)
        call ginit_ot
-    case (ginitopt_fixpar)
-       call ginit_fixpar
     end select
   end subroutine ginit
 
@@ -824,7 +799,7 @@ contains
 
     implicit none
 
-    type (text_option), dimension (34), parameter :: ginitopts = &
+    type (text_option), dimension (33), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('default_odd', ginitopt_default_odd), &
             text_option('noise', ginitopt_noise), &
@@ -857,8 +832,7 @@ contains
             text_option('ot', ginitopt_ot), &
             text_option('zonal_only', ginitopt_zonal_only), &
             text_option('single_parallel_mode', ginitopt_single_parallel_mode), &
-            text_option('all_modes_equal', ginitopt_all_modes_equal), &
-            text_option('fixpar',ginitopt_fixpar) &
+            text_option('all_modes_equal', ginitopt_all_modes_equal) &
             /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
@@ -3729,71 +3703,6 @@ contains
     gnew = g
 
   end subroutine ginit_restart_zonal_only
-
-  subroutine ginit_fixpar
-    use mp, only: proc0,mp_abort
-    use gs2_save, only: gs2_restore
-    use kt_grids, only: naky, ntheta0
-    use dist_fn, only : parity_redist_ik, init_enforce_parity
-    use dist_fn_arrays, only: g, gnew, g_fixpar
-    use fields_arrays, only: phi, apar, bpar
-    use fields_arrays, only: phinew, aparnew, bparnew
-    use gs2_layouts, only: g_lo, ik_idx
-    use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
-    use run_parameters, only : fixpar_secondary
-    implicit none
-    integer :: iglo, istatus
-    integer :: ik, it, ierr
-
-    !Check we should be using this routine
-    if(fixpar_secondary.le.0)then
-       ierr=error_unit()
-       if(proc0) write(ierr,'("ERROR: ginit_option=fixpar should only be used with fixpar_secondary>0")')
-       call mp_abort("Aborting due to incompatible options.")
-    endif
-
-    !Restore the restart data
-    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
-    if (istatus /= 0) then
-       ierr = error_unit()
-       if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
-       g = 0.
-    end if
-
-    !Set all distribution function elements to zero except for 
-    !ik=fixpar_secondary
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       if (ik_idx(g_lo,iglo).eq.fixpar_secondary) cycle
-       g (:,1,iglo) = 0.
-       g (:,2,iglo) = 0.
-    end do
-
-    !Set all the field components to zero except where required
-    do ik = 1, naky
-       do it=1,ntheta0
-          if (ik_idx(g_lo,iglo).eq.fixpar_secondary) cycle
-          phinew(:,it,ik) = 0.
-          aparnew(:,it,ik) = 0.
-          bparnew(:,it,ik) = 0.
-          phi(:,it,ik) = 0.
-          apar(:,it,ik) = 0.
-          bpar(:,it,ik) = 0.          
-       end do
-    end do
-    
-    !Copy data into gnew
-    gnew = g
-
-    !Populate array
-    g_fixpar=gnew
-
-    !Initialise parity redist object
-    call init_enforce_parity(parity_redist_ik,fixpar_secondary)
-  end subroutine ginit_fixpar
-
-
-
 
   subroutine reset_init(from_file)
     implicit none

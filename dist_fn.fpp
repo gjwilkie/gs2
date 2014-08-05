@@ -3361,11 +3361,11 @@ endif
   subroutine allocate_arrays
     use kt_grids, only: naky,  box
     use theta_grid, only: ntgrid, shat
-    use dist_fn_arrays, only: g, gnew, g_fixpar
+    use dist_fn_arrays, only: g, gnew
     use dist_fn_arrays, only: kx_shift, theta0_shift   ! MR
     use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
-    use run_parameters, only: fixpar_secondary,fapar
+    use run_parameters, only: fapar
     implicit none
 !    logical :: alloc = .true.
 
@@ -3382,8 +3382,6 @@ endif
              allocate (source_coeffs(2,-ntgrid:ntgrid-1,2,g_lo%llim_proc:g_lo%ulim_alloc))
           endif
        endif
-       !Note:This currently uses naky times more memory than strictly needed
-       if(fixpar_secondary.gt.0) allocate (g_fixpar(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
 #ifdef LOWFLOW
        allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gexp_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -3435,10 +3433,10 @@ endif
 
     use theta_grid, only: ntgrid
     use le_derivatives, only: vspace_derivatives
-    use dist_fn_arrays, only: gnew, g, g_fixpar
+    use dist_fn_arrays, only: gnew, g
     use nonlinear_terms, only: add_explicit_terms
     use hyper, only: hyper_diff
-    use run_parameters, only: fixpar_secondary, reset
+    use run_parameters, only: reset
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phinew, aparnew, bparnew
@@ -3505,11 +3503,6 @@ endif
     !as collisions etc. may break parity?)
     if (def_parity) call enforce_parity(parity_redist)
       
-    !Ensure fixed ik has correct parity parts
-    if(fixpar_secondary.gt.0)then
-       call enforce_parity(parity_redist_ik,fixpar_secondary)
-       gnew=gnew+g_fixpar
-    endif
     istep_last=istep
 
   end subroutine timeadv
@@ -3927,7 +3920,6 @@ endif
     use gs2_layouts, only : g_lo,proc_id, ik_idx
     use redistribute, only: index_list_type, init_fill, delete_list, redist_type
     use mp, only: iproc, nproc, max_allreduce
-    use run_parameters, only: fixpar_secondary
     implicit none
     type(redist_type), intent(out) :: redist_obj
     integer, intent(in), optional :: ik_ind !If present then resulting redistribute object only applies to ik=ik_ind
@@ -3938,7 +3930,7 @@ endif
     integer, dimension(3) :: from_low, from_high, to_low, to_high
 
     !If enforced parity not requested then exit
-    if(.not.(def_parity.or.(fixpar_secondary.gt.0)))return
+    if(.not.(def_parity))return
     
     !If not linked then don't need any setup so exit
     if(boundary_option_switch.ne.boundary_option_linked)return
@@ -4124,7 +4116,6 @@ endif
     use dist_fn_arrays, only: gnew
     use redistribute, only: scatter,redist_type
     use gs2_layouts, only: g_lo,ik_idx
-    use run_parameters, only: fixpar_secondary
     implicit none
     type(redist_type),intent(in),optional :: redist_obj
     integer, intent(in),optional :: ik_ind
@@ -4133,7 +4124,7 @@ endif
     integer :: iglo,mult
 
     !If enforced parity not requested then exit
-    if(.not.(def_parity.or.(fixpar_secondary.gt.0)))return
+    if(.not.(def_parity))return
     
     !Set multiplier
     if(even) then
@@ -5183,8 +5174,7 @@ endif
     use gs2_layouts, only: g_lo
     use gs2_time, only: code_time
     use constants
-    use run_parameters, only: fixpar_secondary
-    use dist_fn_arrays, only: gnew, g_fixpar
+    use dist_fn_arrays, only: gnew
     use prof, only: prof_entering, prof_leaving
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
@@ -5209,24 +5199,11 @@ endif
     case (boundary_option_linked)
        call invert_rhs_linked &
             (phi, apar, bpar, phinew, aparnew, bparnew, istep, sourcefac) 
-
-       !If fixing parity particular ik then do it an add in fixpar
-       if (fixpar_secondary.gt.0) then
-          call enforce_parity(parity_redist_ik)
-          gnew=gnew+g_fixpar
-       endif
     case default
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           call invert_rhs_1 (phi, apar, bpar, phinew, aparnew, bparnew, &
                istep, iglo, sourcefac)
        end do
-
-       !If fixing parity particular ik then do it an add in fixpar
-       if (fixpar_secondary.gt.0) then
-          call enforce_parity(ik_ind=fixpar_secondary)
-          gnew=gnew+g_fixpar
-       endif
-
     end select
 
     call prof_leaving ("invert_rhs", "dist_fn")
@@ -8821,7 +8798,7 @@ endif
 
     use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
     use dist_fn_arrays, only: aj0, aj1, aj2, kperp2
-    use dist_fn_arrays, only: g, gnew, kx_shift, g_fixpar
+    use dist_fn_arrays, only: g, gnew, kx_shift
 
     implicit none
 
@@ -8847,7 +8824,6 @@ endif
     if (allocated(g_adj)) deallocate (g_adj)
     if (allocated(g)) deallocate (g, gnew, g0)
     if (allocated(source_coeffs)) deallocate(source_coeffs)
-    if (allocated(g_fixpar)) deallocate (g_fixpar)
     if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
     if (allocated(g_h)) deallocate (g_h, save_h)
     if (allocated(kx_shift)) deallocate (kx_shift)
