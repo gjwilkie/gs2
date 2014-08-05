@@ -485,6 +485,8 @@ include $(DEPEND)
 utils_mod += fft_save_wisdom.o
 gs2_mod += fft_save_wisdom.o
 ingen_mod += fft_save_wisdom.o
+generate_fftw_wisdom_mod += fft_save_wisdom.o
+
 #include Makefile.doc_depend
 
 ifdef USE_C_INDEX
