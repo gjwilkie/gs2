@@ -12,6 +12,8 @@ module fields
   public :: phinorm, kperp, fieldlineavgphi
   public :: phi, apar, bpar, phinew, aparnew, bparnew
   public :: reset_init, set_init_fields
+  public :: fields_init_response, set_dump_and_read_response
+  public :: dump_response_to_file
 
   !> Made public for unit tests
   public :: fields_pre_init
@@ -114,6 +116,27 @@ contains
     call allocate_arrays
   end subroutine fields_pre_init
 
+  subroutine fields_init_response
+    use fields_implicit, only: init_fields_implicit
+    use fields_test, only: init_fields_test
+    use fields_local, only: init_fields_local
+    implicit none
+    logical, parameter :: debug = .false.
+    select case (fieldopt_switch)
+    case (fieldopt_implicit)
+       if (debug) write(6,*) "init_fields: init_fields_implicit"
+       call init_fields_implicit
+    case (fieldopt_test)
+       if (debug) write(6,*) "init_fields: init_fields_test"
+       call init_fields_test
+    case (fieldopt_local)
+       if (debug) write(6,*) "init_fields: init_fields_local"
+       call init_fields_local
+    case default
+       !Silently ignore unsupported field options
+    end select
+  end subroutine fields_init_response
+
   subroutine init_fields
 !CMR,18/2/2011:
 ! add optional logical arg "noalloc" to avoid array allocations in ingen
@@ -121,9 +144,6 @@ contains
     use run_parameters, only: init_run_parameters
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
-    use fields_implicit, only: init_fields_implicit
-    use fields_test, only: init_fields_test
-    use fields_local, only: init_fields_local
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
     use kt_grids, only: gridopt_switch, gridopt_box, kwork_filter
@@ -136,17 +156,7 @@ contains
     
     call fields_pre_init
 
-    select case (fieldopt_switch)
-    case (fieldopt_implicit)
-       if (debug) write(6,*) "init_fields: init_fields_implicit"
-       call init_fields_implicit
-    case (fieldopt_test)
-       if (debug) write(6,*) "init_fields: init_fields_test"
-       call init_fields_test
-    case (fieldopt_local)
-       if (debug) write(6,*) "init_fields: init_fields_local"
-       call init_fields_local
-    end select
+    call fields_init_response
 
 ! Turn on nonlinear terms.
     if (debug) write(6,*) "init_fields: nl_finish_init"
@@ -164,6 +174,30 @@ contains
     !If running in flux tube disable evolution of ky=kx=0 mode
     if(gridopt_switch.eq.gridopt_box) kwork_filter(1,1)=.true.
   end subroutine init_fields
+
+  !>Force the current 
+  subroutine dump_response_to_file(suffix)
+    use fields_implicit, only: dump_response_to_file_imp
+    use fields_local, only: dump_response_to_file_local
+    implicit none
+    character(len=*), intent(in), optional :: suffix
+    select case (fieldopt_switch)
+    case (fieldopt_implicit)
+       if(present(suffix)) then
+          call dump_response_to_file_imp(suffix)
+       else
+          call dump_response_to_file_imp
+       end if
+    case (fieldopt_local)
+       if(present(suffix)) then
+          call dump_response_to_file_local(suffix)
+       else
+          call dump_response_to_file_local
+       end if
+    case default
+       !Silently ignore unsupported field options
+    end select
+  end subroutine dump_response_to_file
 
   subroutine set_init_fields
     use fields_implicit, only: init_allfields_implicit
@@ -190,8 +224,8 @@ contains
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
-    use fields_implicit, only: field_subgath, dump_response_imp=>dump_response, read_response_imp=>read_response
-    use fields_local, only: dump_response_local=>dump_response, read_response_local=>read_response, minNrow
+    use fields_implicit, only: field_subgath
+    use fields_local, only: minNrow
     use fields_local, only: do_smart_update, field_local_allreduce, field_local_allreduce_sub
     implicit none
     type (text_option), dimension (5), parameter :: fieldopts = &
@@ -235,21 +269,34 @@ contains
     call broadcast (read_response)
 
     !Set the solve type specific flags
+    call set_dump_and_read_response(dump_response, read_response)
     select case (fieldopt_switch)
     case (fieldopt_implicit)
-       dump_response_imp=dump_response
-       read_response_imp=read_response
     case (fieldopt_test)
     case (fieldopt_local)
        call broadcast (minNrow)
        call broadcast (do_smart_update)
        call broadcast (field_local_allreduce)
        call broadcast (field_local_allreduce_sub)
-       dump_response_local=dump_response
-       read_response_local=read_response
     end select
-
   end subroutine read_parameters
+
+  subroutine set_dump_and_read_response(dump_flag, read_flag)
+    use fields_implicit, only: dump_response_imp => dump_response, read_response_imp=>read_response
+    use fields_local, only: dump_response_loc => dump_response, read_response_loc=>read_response
+    implicit none
+    logical, intent(in) :: dump_flag, read_flag
+    select case (fieldopt_switch)
+    case (fieldopt_implicit)
+       dump_response_imp=dump_flag
+       read_response_imp=read_flag
+    case (fieldopt_local)
+       dump_response_loc=dump_flag
+       read_response_loc=read_flag
+    case default
+       !Silently ignore unsupported field types
+    end select
+  end subroutine set_dump_and_read_response
 
   subroutine allocate_arrays
     use theta_grid, only: ntgrid
