@@ -922,7 +922,7 @@ contains
     use mp, only: proc0, broadcast
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: user_time
-    use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom,nc_exchange, nc_write_fields
+    use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom,nc_exchange, nc_final_fields
     use le_grids, only: negrid
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
@@ -1003,7 +1003,12 @@ contains
 
     if (print_line) call do_print_line(phitot)
 
-    if (write_fields) call nc_write_fields (nout, phinew, aparnew, bparnew)  !MR
+    !This wants to write the fields vs time arrays --> Remove as we now have
+    !write_phi_over_time, write_apar_over_time and write_bpar_over_time
+    !if (write_fields) call nc_write_fields (nout, phinew, aparnew, bparnew)  !MR
+    !Instead replace with a call to nc_final_fields to keep the phi, apar and bpar
+    !output arrays up to date.
+    if(write_fields.and.proc0) call nc_final_fields
 
     if (write_moments) call do_write_moments !CMR
 
@@ -1357,6 +1362,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use gs2_io, only: nc_loop
     use fields, only: phinorm
+    use mp, only: proc0
     implicit none
     real, intent(in) :: t
     integer, intent(in) :: istep
@@ -1385,7 +1391,7 @@ contains
 
     !This was previously guarded by a "if (write_flux_line) then" 
     !statement for somereason
-    call nc_loop (nout, t, fluxfac, &
+    if(proc0) call nc_loop (nout, t, fluxfac, &
          phinew(igomega,:,:), phi2, phi2_by_mode, &
          aparnew(igomega,:,:), apar2, apar2_by_mode, &
          bparnew(igomega,:,:), bpar2, bpar2_by_mode, &
@@ -2248,6 +2254,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use dist_fn, only: getmoms
+    use mp, only: proc0
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
          upar, tpar, tperp, qparflux, pperpj1, qpperpj1
@@ -2255,7 +2262,7 @@ contains
     !<DD>This is quite wasteful as we only write ntot --> all the others are ignored
     !    should either write the other moments or provide a routine which just calcs ntot
     call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
-    call nc_write_moments(nout, ntot)
+    if(proc0) call nc_write_moments(nout, ntot)
   end subroutine do_write_moments
 
   subroutine do_write_crossphase(t)
