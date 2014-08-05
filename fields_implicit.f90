@@ -10,6 +10,7 @@ module fields_implicit
   public :: reset_init
   public :: set_scan_parameter
   public :: field_subgath, dump_response, read_response
+  public :: dump_response_to_file_imp
 
   !> Unit tests
   public :: fields_implicit_unit_test_init_fields_implicit
