@@ -14,7 +14,7 @@ module run_parameters
 !  public :: delt, delt_max, wunits, woutunits, tunits
   public :: code_delt_max, wunits, woutunits, tunits
   public :: nstep, wstar_units, eqzip, margin
-  public :: secondary, tertiary, harris, fixpar_secondary
+  public :: secondary, tertiary, harris
   public :: ieqzip
   public :: k0
   public :: vnm_init
@@ -39,7 +39,6 @@ module run_parameters
   logical :: immediate_reset
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
-  integer :: fixpar_secondary
   real :: k0
   integer, public :: delt_option_switch
   integer, public, parameter :: delt_option_hand = 1, delt_option_auto = 2
@@ -117,7 +116,6 @@ contains
        write (report_unit, *) 
        if (secondary) write (report_unit, fmt="('Mode with kx = 0, ky = ky_min fixed in time')")
        if (tertiary)  write (report_unit, fmt="('Mode with ky = 0, kx = kx_min fixed in time')")
-       if (fixpar_secondary.gt.0)  write (report_unit, fmt="('Mode with ky = ',I0,' fixed in time')") fixpar_secondary
     end if
 
     write (report_unit, *) 
@@ -156,7 +154,6 @@ contains
           write (unit, fmt="(' eqzip = ',L1)") eqzip
           write (unit, fmt="(' secondary = ',L1)") secondary
           write (unit, fmt="(' tertiary = ',L1)") tertiary
-          write (unit, fmt="(' fixpar_secondary = ',i8)") fixpar_secondary
        end if
        write (unit, fmt="(' margin = ',e16.10)") margin
        select case (delt_option_switch)
@@ -233,7 +230,7 @@ contains
     real :: teti  ! for back-compatibility
     namelist /parameters/ beta, zeff, tite, teti, k0, rhostar
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
-         delt_option, margin, secondary, tertiary, fixpar_secondary, faperp, harris, &
+         delt_option, margin, secondary, tertiary, faperp, harris, &
 !         avail_cpu_time, eqzip_option, include_lowflow, neo_test
          avail_cpu_time, margin_cpu_time, eqzip_option, neo_test, &
          trinity_linear_fluxes, do_eigsolve, immediate_reset
@@ -253,7 +250,6 @@ contains
        eqzip = .false.
        secondary = .true.
        tertiary = .false.
-       fixpar_secondary=-1
        harris = .false.
        k0 = 1.
        delt_option = 'default'
@@ -299,13 +295,6 @@ contains
              write (ierr, *) 'because you have chosen harris = TRUE'
              tertiary = .false.
           end if
-          if(fixpar_secondary.gt.0 .and. (secondary.or.tertiary.or.harris))then
-             ierr=error_unit()
-             write (ierr, *) 'Forcing secondary, tertiary and harris to false as fixpar_secondary>0'
-             secondary=.false.
-             tertiary=.false.
-             harris=.false.
-          end if
        endif
 
        ierr = error_unit()
@@ -350,7 +339,6 @@ contains
     call broadcast (wstar_units)
     call broadcast (eqzip)
     call broadcast (secondary)
-    call broadcast (fixpar_secondary)
     call broadcast (tertiary)
     call broadcast (harris)
     call broadcast (margin)
