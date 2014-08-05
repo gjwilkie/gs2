@@ -1039,7 +1039,7 @@ contains
        call lf_flux (phinew, vflux0, vflux1)
 #endif
        call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
-       call eexchange (phinew, phi, exchange1, exchange)
+       if(write_nl_flux.or.print_flux_line.or.(write_flux_line.and.write_ascii)) call eexchange (phinew, phi, exchange1, exchange)
 
        if (proc0) then
           if (fphi > epsilon(0.0)) then
