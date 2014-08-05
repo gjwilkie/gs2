@@ -482,8 +482,8 @@ all: $(.DEFAULT_GOAL)
 
 include $(DEPEND)
 
-utils_mod += fftw_save_wisdom.o
-gs2_mod += fftw_save_wisdom.o
+utils_mod += fft_save_wisdom.o
+gs2_mod += fft_save_wisdom.o
 #include Makefile.doc_depend
 
 ifdef USE_C_INDEX
