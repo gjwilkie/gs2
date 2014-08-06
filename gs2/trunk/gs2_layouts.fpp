@@ -406,7 +406,6 @@ contains
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
-    use file_utils, only: run_name 
     use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
     use fft_work, only: fft_measure_plan
     implicit none

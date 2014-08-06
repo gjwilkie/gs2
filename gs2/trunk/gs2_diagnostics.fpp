@@ -573,7 +573,6 @@ contains
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use mp, only: proc0
-    use job_manage, only: trin_job
     use constants
     implicit none
     logical, intent (in) :: list
@@ -3144,7 +3143,7 @@ contains
   ! Trinity convergence condition - simple and experimental
   ! look for the averaged differential of the summed averaged heat flux to drop below a threshold
   subroutine check_nonlin_convergence(istep, heat_flux, exit)
-    use job_manage, only: trin_restart, trin_reset, trin_job
+    use job_manage, only: trin_job
     use gs2_time, only: user_time
     use mp, only: proc0, broadcast
 
@@ -3306,9 +3305,8 @@ contains
 
   !> A linear estimate of the diffusivity, used for Trinity testing
   function diffusivity()
-    use kt_grids, only: ntheta0, naky
+    use kt_grids, only: ntheta0, naky, kperp2
     use theta_grid, only: grho
-    use dist_fn_arrays, only: kperp2
     real :: diffusivity
     real, dimension(ntheta0, naky) :: diffusivity_by_k
     integer  :: ik, it

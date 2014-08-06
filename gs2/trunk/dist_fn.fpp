@@ -25,7 +25,6 @@ module dist_fn
   public :: reset_init, write_f, reset_physics, write_poly
   public :: M_class, N_class, i_class
   public :: l_links, r_links, itright, itleft, boundary
-  public :: init_kperp2
   public :: get_jext !GGH
   public :: get_verr, get_gtran, write_fyx, collision_error
   public :: get_init_field, getan_nogath
@@ -43,7 +42,7 @@ module dist_fn
   public :: boundary_option_switch, boundary_option_linked
   public :: boundary_option_self_periodic, boundary_option_zero
   public :: pass_right, pass_left, init_pass_ends
-  public :: parity_redist_ik, init_enforce_parity, get_leftmost_it
+  public :: init_enforce_parity, get_leftmost_it
   public :: gridfac1, awgt, gamtot3, fl_avg, apfac
   public :: adiabatic_option_switch, adiabatic_option_fieldlineavg
   private
@@ -150,7 +149,6 @@ module dist_fn
   real, dimension (:,:), allocatable :: kmax
 
   ! connected bc
-
   integer, dimension (:,:), allocatable :: itleft, itright
   ! (naky,ntheta0)
 
@@ -170,7 +168,7 @@ module dist_fn
   type (redist_type), save :: pass_right
   type (redist_type), save :: pass_left
   type (redist_type), save :: pass_wfb
-  type (redist_type), save :: parity_redist, parity_redist_ik
+  type (redist_type), save :: parity_redist
 
   integer, dimension (:,:), allocatable :: l_links, r_links
   integer, dimension (:,:,:), allocatable :: n_links
@@ -183,7 +181,6 @@ module dist_fn
   logical :: initializing = .true.
   logical :: readinit = .false.
   logical :: bessinit = .false.
-  logical :: kp2init = .false.
   logical :: connectinit = .false.
   logical :: feqinit = .false.
   logical :: lpolinit = .false.
@@ -191,6 +188,9 @@ module dist_fn
   logical :: cerrinit = .false.
   logical :: mominit = .false.
 
+  !The following variables are used if write_full_moments_notgc=T
+  !or ginit_options='recon3'. These arrays are currently always initialised
+  !even if they are not to be used. Can we improve this?
   real, allocatable :: mom_coeff(:,:,:,:)
   real, allocatable :: mom_coeff_npara(:,:,:), mom_coeff_nperp(:,:,:)
   real, allocatable :: mom_coeff_tpara(:,:,:), mom_coeff_tperp(:,:,:)
@@ -571,9 +571,6 @@ subroutine check_dist_fn(report_unit)
 
     if (debug) write(6,*) "init_dist_fn: run_parameters"
     call init_run_parameters
-
-    if (debug) write(6,*) "init_dist_fn: kperp2"
-    call init_kperp2
 
     if (debug) write(6,*) "init_dist_fn: dist_fn_layouts"
     call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
@@ -1154,7 +1151,8 @@ subroutine check_dist_fn(report_unit)
   end subroutine init_wstar
 
   subroutine init_bessel
-    use dist_fn_arrays, only: aj0, aj1, aj2, kperp2
+    use dist_fn_arrays, only: aj0, aj1
+    use kt_grids, only: kperp2
     use species, only: spec
     use theta_grid, only: ntgrid, bmag
     use le_grids, only: energy, al
@@ -1170,12 +1168,8 @@ subroutine check_dist_fn(report_unit)
     if (bessinit) return
     bessinit = .true.
 
-    call init_kperp2
-
     allocate (aj0(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (aj1(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-    allocate (aj2(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
-    aj0 = 0. ; aj1 = 0. ; aj2=0.
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -1188,37 +1182,9 @@ subroutine check_dist_fn(report_unit)
           aj0(ig,iglo) = j0(arg)
 ! CMR 17/1/06: BEWARE, j1 returns and aj1 stores J_1(x)/x (NOT J_1(x)), 
           aj1(ig,iglo) = j1(arg)
-          aj2(ig,iglo) = 2.0*aj1(ig,iglo)-aj0(ig,iglo)
        end do
     end do
   end subroutine init_bessel
-
-  subroutine init_kperp2
-    use dist_fn_arrays, only: kperp2
-    use theta_grid, only: ntgrid, gds2, gds21, gds22, shat
-    use kt_grids, only: naky, ntheta0, aky, theta0, akx
-    implicit none
-    integer :: ik, it
-
-    if (kp2init) return
-    kp2init = .true.
-
-    allocate (kperp2(-ntgrid:ntgrid,ntheta0,naky))
-    do ik = 1, naky
-       if (aky(ik) == 0.0) then
-         do it = 1, ntheta0
-             kperp2(:,it,ik) = akx(it)*akx(it)*gds22/(shat*shat)
-          end do
-       else
-          do it = 1, ntheta0
-             kperp2(:,it,ik) = aky(ik)*aky(ik) &
-                  *(gds2 + 2.0*theta0(it,ik)*gds21 &
-                  + theta0(it,ik)*theta0(it,ik)*gds22)
-          end do
-       end if
-    end do
-
-  end subroutine init_kperp2
 
   subroutine init_invert_rhs
     use dist_fn_arrays, only: vpar, ittp
@@ -3373,7 +3339,6 @@ endif
     if (.not. allocated(g)) then
        allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-!       allocate (gold (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        if(opt_source)then
           if(fapar.gt.0)then
@@ -3414,7 +3379,7 @@ endif
        endif                           ! MR end
     endif
 
-    g = 0. ; gnew = 0. ; g0 = 0. !; gold = 0.
+    g = 0. ; gnew = 0. ; g0 = 0.
 
 !    alloc = .false.
   end subroutine allocate_arrays
@@ -5173,8 +5138,7 @@ endif
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_time, only: code_time
-    use constants
-    use dist_fn_arrays, only: gnew
+    use constants, only: zi, pi
     use prof, only: prof_entering, prof_leaving
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
@@ -5257,7 +5221,7 @@ endif
 
   subroutine getan (antot, antota, antotp)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
-    use dist_fn_arrays, only: kperp2
+    use kt_grids, only: kperp2
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use le_grids, only: integrate_species
@@ -5676,10 +5640,10 @@ endif
   end subroutine getmoms_notgc
 
   subroutine init_fieldeq
-    use dist_fn_arrays, only: aj0, aj1, vperp2, kperp2
+    use dist_fn_arrays, only: aj0, aj1, vperp2
     use species, only: nspec, spec, has_electron_species
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0, aky
+    use kt_grids, only: naky, ntheta0, aky, kperp2
     use le_grids, only: anon, integrate_species
     use gs2_layouts, only: g_lo, ie_idx, is_idx
     use run_parameters, only: tite
@@ -5779,9 +5743,8 @@ endif
 
   subroutine getfieldeq1 (phi, apar, bpar, antot, antota, antotp, &
        fieldeq, fieldeqa, fieldeqp)
-    use dist_fn_arrays, only: kperp2
     use theta_grid, only: ntgrid, bmag, delthet, jacob
-    use kt_grids, only: naky, ntheta0, aky
+    use kt_grids, only: naky, ntheta0, aky, kperp2
     use run_parameters, only: fphi, fapar, fbpar
     use run_parameters, only: beta, tite
     use species, only: spec, has_electron_species
@@ -5900,9 +5863,8 @@ endif
 
   subroutine getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
        fieldeq, fieldeqa, fieldeqp)
-    use dist_fn_arrays, only: kperp2
     use theta_grid, only: ntgrid, bmag, delthet, jacob
-    use kt_grids, only: naky, ntheta0, aky
+    use kt_grids, only: naky, ntheta0, aky, kperp2
     use run_parameters, only: fphi, fapar, fbpar
     use run_parameters, only: beta, tite
     use kt_grids, only: kwork_filter
@@ -5973,13 +5935,12 @@ endif
 
   subroutine getan_nogath (antot, antota, antotp)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
-    use dist_fn_arrays, only: kperp2
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use le_grids, only: integrate_species
     use run_parameters, only: beta, fphi, fapar, fbpar
     use gs2_layouts, only: g_lo, it_idx,ik_idx
-    use kt_grids, only: kwork_filter
+    use kt_grids, only: kwork_filter, kperp2
 
     implicit none
 
@@ -6083,9 +6044,8 @@ endif
     ! I haven't made any check for use_Bpar=T case.
     use run_parameters, only: beta, fphi, fapar, fbpar
     use theta_grid, only: ntgrid, bmag
-    use kt_grids, only: ntheta0, naky
-    use dist_fn_arrays, only: kperp2
-
+    use kt_grids, only: ntheta0, naky, kperp2
+    
     complex, dimension (-ntgrid:,:,:), intent (out) :: phi, apar, bpar
     real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: denominator
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: antot, antota, antotp
@@ -6383,13 +6343,13 @@ endif
   end subroutine get_flux
 
   subroutine get_flux_tormom (fld, flx, dnorm) !JPL
-    use theta_grid, only: ntgrid, grho
+    use theta_grid, only: ntgrid
+#ifdef LOWFLOW
     use kt_grids, only: ntheta0, naky
     use le_grids, only: integrate_moment
     use species, only: nspec
     use mp, only: proc0
-#ifdef LOWFLOW
-    use theta_grid, only: rplot
+    use theta_grid, only: rplot, grho
     use kt_grids, only: aky
     use lowflow, only: mach_lab
 #endif
@@ -6397,13 +6357,13 @@ endif
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
     real, dimension (:,:,:), intent (in out) :: flx
     real, dimension (-ntgrid:,:,:) :: dnorm
-    complex, dimension (:,:,:,:), allocatable :: total
-    real :: wgt
-    integer :: ik, it, is
 !<DD> Moved directive to here (was previously just around flx= line below)
 !     as if we haven't compiled with LOWFLOW then this routine shouldn't
 !     do anything (integrate_moment is not that cheap).
 #ifdef LOWFLOW 
+    complex, dimension (:,:,:,:), allocatable :: total
+    real :: wgt
+    integer :: ik, it, is
     allocate (total(-ntgrid:ntgrid,ntheta0,naky,nspec))
     call integrate_moment (g0, total)
 
@@ -6630,10 +6590,9 @@ endif
   end subroutine lf_flux
 
   subroutine get_lfflux (fld, flx, dnorm)
-    use theta_grid, only: ntgrid
+    use theta_grid, only: ntgrid, grho
     use kt_grids, only: ntheta0, naky
     use le_grids, only: integrate_moment
-    use theta_grid, only: grho
     use species, only: nspec
     use mp, only: proc0
     implicit none
@@ -6782,8 +6741,7 @@ endif
 ! Density: Calculate Density perturbations
 !=============================================================================
   subroutine get_jext(j_ext)
-    use dist_fn_arrays, only: kperp2
-    use kt_grids, only: ntheta0, naky,aky
+    use kt_grids, only: ntheta0, naky,aky, kperp2
 !    use mp, only: proc0
     use theta_grid, only: jacob, delthet, ntgrid
     use antenna, only: antenna_apar
@@ -6834,11 +6792,11 @@ endif
   subroutine get_heat (h, hk, phi, apar, bpar, phinew, aparnew, bparnew)
     use mp, only: proc0
     use constants, only: zi
-    use kt_grids, only: ntheta0, naky, aky, akx
+    use kt_grids, only: ntheta0, naky, aky, akx, kperp2
 #ifdef LOWFLOW
     use dist_fn_arrays, only: hneoc
 #endif
-    use dist_fn_arrays, only: vpac, aj0, aj1, vperp2, g, gnew, kperp2, g_adjust
+    use dist_fn_arrays, only: vpac, aj0, aj1, vperp2, g, gnew, g_adjust
     use gs2_heating, only: heating_diagnostics
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, ie_idx
     use le_grids, only: integrate_moment
@@ -7590,6 +7548,10 @@ endif
     allocate(errtmp(2))
     allocate(idxtmp(3))
 
+    !This should probably be something like if(first) then ; call broadcast ; first=.false. ; endif
+    !as we only deallocate kmax during finish_dist_fn.
+    !Really wdim should just be broadcast when we first calculate it -- currently slightly complicated
+    !as calculation triggered in gs2_diagnostics and only called by proc0.
     if (.not. allocated(kmax)) call broadcast (wdim)  ! Odd-looking statement.  BD
 
     if (fphi > epsilon(0.0)) then
@@ -8534,7 +8496,7 @@ endif
     implicit none
     integer, intent (in) :: iglo
     integer, intent (in out) :: iglo_left, ipleft
-    integer :: iglo_star, iglo_left_star, ipleft_star
+    integer :: iglo_star
     integer :: it_cur,ik,it,il,ie,is
     iglo_star = iglo
     it_cur=it_idx(g_lo,iglo)
@@ -8565,7 +8527,7 @@ endif
     implicit none
     integer, intent (in) :: iglo
     integer, intent (in out) :: iglo_right, ipright
-    integer :: iglo_star, iglo_right_star, ipright_star
+    integer :: iglo_star
     integer :: it_cur,ik,it,il,ie,is
     iglo_star = iglo
     it_cur=it_idx(g_lo,iglo)
@@ -8681,9 +8643,9 @@ endif
   subroutine init_mom_coeff
     use gs2_layouts, only: g_lo
     use species, only: nspec, spec
-    use kt_grids, only: nakx => ntheta0, naky
+    use kt_grids, only: nakx => ntheta0, naky, kperp2
     use theta_grid, only: ntgrid
-    use dist_fn_arrays, only: aj0,aj1,vperp2,kperp2
+    use dist_fn_arrays, only: aj0,aj1,vperp2
     use dist_fn_arrays, only: vpa, vperp2
     use le_grids, only: integrate_moment
     integer :: i
@@ -8790,14 +8752,14 @@ endif
   subroutine finish_dist_fn
 
     use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
-    use dist_fn_arrays, only: aj0, aj1, aj2, kperp2
+    use dist_fn_arrays, only: aj0, aj1   
     use dist_fn_arrays, only: g, gnew, kx_shift
 
     implicit none
 
     accelerated_x = .false. ; accelerated_v = .false.
     no_comm = .false.
-    readinit = .false. ; bessinit = .false. ; kp2init = .false. ; connectinit = .false.
+    readinit = .false. ; bessinit = .false. ; connectinit = .false.
     feqinit = .false. ; lpolinit = .false. ; fyxinit = .false. ; cerrinit = .false. ; mominit = .false.
     increase = .true. ; decrease = .false.
 
@@ -8807,8 +8769,7 @@ endif
     if (allocated(ittp)) deallocate (ittp, wdrift, wdriftttp)
     if (allocated(vpa)) deallocate (vpa, vpac, vperp2, vpar)
     if (allocated(wstar)) deallocate (wstar)
-    if (allocated(aj0)) deallocate (aj0, aj1, aj2)
-    if (allocated(kperp2)) deallocate (kperp2)
+    if (allocated(aj0)) deallocate (aj0, aj1)
     if (allocated(a)) deallocate (a, b, r, ainv)
     if (allocated(l_links)) deallocate (l_links, r_links, n_links)
     if (allocated(M_class)) deallocate (M_class, N_class)

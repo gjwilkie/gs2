@@ -2374,8 +2374,8 @@ contains
   subroutine ginit_ot
     use species, only: spec
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, nakx => ntheta0, reality
-    use dist_fn_arrays, only: g, gnew, vpa, kperp2
+    use kt_grids, only: naky, nakx => ntheta0, reality, kperp2
+    use dist_fn_arrays, only: g, gnew, vpa
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
     use fields_arrays, only: phinew, aparnew, bparnew
     use dist_fn, only: get_init_field
@@ -2766,10 +2766,8 @@ contains
     use species, only: nspec, spec, has_electron_species
     use theta_grid, only: ntgrid, theta
     use kt_grids, only: naky, nakx => ntheta0, akx, aky, reality
-    use kt_grids, only: nx,ny
+    use kt_grids, only: nx,ny,kperp2
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
-    use dist_fn_arrays, only: vperp2
-    use dist_fn_arrays, only: kperp2
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
     use gs2_transforms, only: inverse2,transform2
     use run_parameters, only: beta

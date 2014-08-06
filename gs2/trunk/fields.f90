@@ -1,8 +1,6 @@
 module fields
   use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
-  use fields_arrays, only: phitmp, apartmp, bpartmp
-  use fields_arrays, only: phitmp1, apartmp1, bpartmp1
-  use fields_arrays, only: phi_ext, apar_ext
+  use fields_arrays, only: apar_ext
 
   implicit none
 
@@ -92,6 +90,7 @@ contains
     use run_parameters, only: init_run_parameters
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
+    use antenna, only: init_antenna
     implicit none
     logical, parameter :: debug=.false.
 
@@ -110,6 +109,8 @@ contains
     call init_dist_fn
     !if (debug) write(6,*) "init_fields: init_parameter_scan"
     !call init_parameter_scan
+    if (debug) write(6,*) "init_fields: init_antenna"
+    call init_antenna !Must come before allocate_arrays so we know if we need apar_ext
     if (debug) write(6,*) "init_fields: read_parameters"
     call read_parameters
     if (debug) write(6,*) "init_fields: allocate_arrays"
@@ -164,9 +165,9 @@ contains
 
     if (debug) write(6,*) "init_fields: ginit"
     call ginit (restarted)
+    if (restarted .and. .not. force_maxwell_reinit) return
     if (debug) write(6,*) "init_fields: init_antenna"
     call init_antenna
-    if (restarted .and. .not. force_maxwell_reinit) return
 
     !Set the initial fields
     call set_init_fields
@@ -301,6 +302,7 @@ contains
   subroutine allocate_arrays
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
+    use antenna, only: no_driver
     implicit none
 !    logical :: alloc = .true.
 
@@ -312,21 +314,14 @@ contains
        allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (bparnew (-ntgrid:ntgrid,ntheta0,naky))
-       allocate (  phitmp (-ntgrid:ntgrid,ntheta0,naky))
-       allocate ( apartmp (-ntgrid:ntgrid,ntheta0,naky))
-       allocate (bpartmp (-ntgrid:ntgrid,ntheta0,naky))
-!       allocate (  phitmp1(-ntgrid:ntgrid,ntheta0,naky))
-!       allocate ( apartmp1(-ntgrid:ntgrid,ntheta0,naky))
-!       allocate (bpartmp1(-ntgrid:ntgrid,ntheta0,naky))
-!       allocate ( phi_ext (-ntgrid:ntgrid,ntheta0,naky))
-       allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
     endif
-    phi = 0.; phinew = 0.; phitmp = 0. 
-    apar = 0.; aparnew = 0.; apartmp = 0. 
-    bpar = 0.; bparnew = 0.; bpartmp = 0.
-!    phitmp1 = 0. ; apartmp1 = 0. ; bpartmp1 = 0.
-!    phi_ext = 0.
-    apar_ext = 0.
+    phi = 0.; phinew = 0.
+    apar = 0.; aparnew = 0.
+    bpar = 0.; bparnew = 0.
+    if(.not.allocated(apar_ext).and.(.not.no_driver))then
+       allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
+       apar_ext = 0.
+    endif
 
 !    alloc = .false.
   end subroutine allocate_arrays
@@ -368,9 +363,8 @@ contains
 
   subroutine kperp (ntgrid_output, akperp)
     use theta_grid, only: delthet
-    use kt_grids, only: naky, aky, ntheta0
+    use kt_grids, only: naky, aky, ntheta0, kperp2
     use run_parameters, only: fphi, fapar, fbpar
-    use dist_fn_arrays, only: kperp2
     implicit none
     integer, intent (in) :: ntgrid_output
     real, dimension (:,:), intent (out) :: akperp
@@ -489,7 +483,7 @@ contains
     use fields_test, only: test_reset => reset_init
     use fields_local, only: finish_fields_local
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
-    use fields_arrays, only: phitmp, apartmp, bpartmp, apar_ext
+    use fields_arrays, only: apar_ext
 
     implicit none
 
@@ -504,8 +498,8 @@ contains
        call finish_fields_local
     end select
 
-    if (allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew, &
-         phitmp, apartmp, bpartmp, apar_ext)
+    if (allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew)
+    if (allocated(apar_ext)) deallocate (apar_ext)
 
   end subroutine finish_fields
 

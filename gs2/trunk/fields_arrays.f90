@@ -1,15 +1,12 @@
 module fields_arrays
   implicit none
 
+  !Main fields
   complex, dimension (:,:,:), allocatable :: phi,    apar,    bpar
-  complex, dimension (:,:,:), allocatable :: phi_ext, apar_ext
   complex, dimension (:,:,:), allocatable :: phinew, aparnew, bparnew
-  complex, dimension (:,:,:), allocatable :: phitmp, apartmp, bpartmp
-  complex, dimension (:,:,:), allocatable :: phitmp1, apartmp1, bpartmp1
+  !For antenna
+  complex, dimension (:,:,:), allocatable :: apar_ext
   ! (-ntgrid:ntgrid,ntheta0,naky) replicated
-
-!!  complex, dimension (:,:), allocatable :: aminv
-!!  ! (nidx, -*- f_lo -*-)
 
   integer, save :: nidx
 
@@ -34,6 +31,4 @@ module fields_arrays
 
 ! There may be supercells of different sizes or "classes".  
   type (field_matrix_type), dimension (:), allocatable :: aminv
-
-
 end module fields_arrays
