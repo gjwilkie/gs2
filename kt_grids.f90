@@ -622,10 +622,11 @@ module kt_grids
   public :: ikx, iky, jtwist_out
   public :: gridopt_switch, grid_option
   public :: gridopt_single, gridopt_range, gridopt_specified, gridopt_box
-  public :: kwork_filter
+  public :: kwork_filter, kperp2
   private
 
   logical, dimension(:,:), allocatable :: kwork_filter
+  real, dimension (:,:,:), allocatable :: kperp2
   real, dimension (:,:), allocatable :: theta0
   real, dimension (:), allocatable :: aky, akx
   integer, dimension(:), allocatable :: ikx, iky
@@ -641,6 +642,7 @@ module kt_grids
   logical :: reality = .false.
   logical :: box = .false.
   logical :: initialized = .false.
+  logical :: kp2init=.false.
   logical :: nml_exist
 
 contains
@@ -684,6 +686,7 @@ contains
     end do
     allocate(kwork_filter(ntheta0,naky))
     kwork_filter=.false.
+    call init_kperp2
   end subroutine init_kt_grids
 
   subroutine read_parameters
@@ -794,13 +797,39 @@ contains
     end select
   end subroutine get_grids
 
+  subroutine init_kperp2
+    use theta_grid, only: ntgrid, gds2, gds21, gds22, shat
+    implicit none
+    integer :: ik, it
+
+    if (kp2init) return
+    kp2init = .true.
+
+    allocate (kperp2(-ntgrid:ntgrid,ntheta0,naky))
+    do ik = 1, naky
+       if (aky(ik) == 0.0) then
+         do it = 1, ntheta0
+             kperp2(:,it,ik) = akx(it)*akx(it)*gds22/(shat*shat)
+          end do
+       else
+          do it = 1, ntheta0
+             kperp2(:,it,ik) = aky(ik)*aky(ik) &
+                  *(gds2 + 2.0*theta0(it,ik)*gds21 &
+                  + theta0(it,ik)*theta0(it,ik)*gds22)
+          end do
+       end if
+    end do
+  end subroutine init_kperp2
+
   subroutine finish_kt_grids
 
     implicit none
 
     if (allocated(aky)) deallocate (akx, aky, theta0, ikx, iky)
     if (allocated(kwork_filter)) deallocate(kwork_filter)
+    if (allocated(kperp2)) deallocate(kperp2)
     reality = .false. ; box = .false.
+    kp2init = .false.
     initialized = .false.
 
   end subroutine finish_kt_grids

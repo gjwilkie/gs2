@@ -395,11 +395,11 @@ contains
     
     use gs2_layouts, only: g_lo, ie_idx, is_idx, ik_idx, il_idx, it_idx
     use species, only: nspec, spec, electron_species
-    use kt_grids, only: naky, ntheta0
+    use kt_grids, only: kperp2, naky, ntheta0
     use theta_grid, only: ntgrid, bmag
     use le_grids, only: energy, al, integrate_moment, negrid
     use gs2_time, only: code_dt
-    use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
+    use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: tunits
     use le_grids, only: g2le, nxi
     use gs2_layouts, only: le_lo
@@ -806,11 +806,11 @@ contains
     
     use gs2_layouts, only: g_lo, ie_idx, is_idx, ik_idx, il_idx, it_idx
     use species, only: nspec, spec
-    use kt_grids, only: naky, ntheta0
+    use kt_grids, only: naky, ntheta0, kperp2
     use theta_grid, only: ntgrid, bmag
     use le_grids, only: energy, al, integrate_moment, negrid
     use gs2_time, only: code_dt
-    use dist_fn_arrays, only: aj0, aj1, kperp2, vpa
+    use dist_fn_arrays, only: aj0, aj1, vpa
     use le_grids, only: g2le, nxi
     use gs2_layouts, only: le_lo
     use redistribute, only: gather, scatter
@@ -1181,10 +1181,9 @@ contains
   subroutine init_vnew (hee)
     use species, only: nspec, spec, electron_species, has_electron_species
     use le_grids, only: negrid, energy, w
-    use kt_grids, only: naky, ntheta0
+    use kt_grids, only: naky, ntheta0, kperp2
     use theta_grid, only: ntgrid
     use run_parameters, only: zeff, tunits
-    use dist_fn_arrays, only: kperp2
     use constants
     use spfunc, only: erf => erf_ext
 
@@ -1478,7 +1477,7 @@ contains
     use le_grids, only: al, negrid, w
     use spfunc, only: erf => erf_ext
     use constants, only: pi
-    use dist_fn_arrays, only: kperp2
+    use kt_grids, only: kperp2
     use gs2_time, only: code_dt
 
     implicit none
@@ -1814,7 +1813,7 @@ contains
     use le_grids, only: al, energy, xi, ng2
     use le_grids, only: wl, jend, al
     use gs2_time, only: code_dt
-    use dist_fn_arrays, only: kperp2
+    use kt_grids, only: kperp2
     use theta_grid, only: bmag
     use run_parameters, only: tunits
 
@@ -2388,10 +2387,10 @@ contains
     use gs2_time, only: code_dt
     use le_grids, only: energy
     use species, only: spec, electron_species
-    use dist_fn_arrays, only: vpa, kperp2, aj0
+    use dist_fn_arrays, only: vpa, aj0
     use fields_arrays, only: aparnew
     use run_parameters, only: ieqzip
-    use kt_grids, only: kwork_filter
+    use kt_grids, only: kwork_filter, kperp2
     use constants
     ! TMP FOR TESTING -- MAB
 !    use mp, only: proc0
@@ -2541,9 +2540,8 @@ contains
     use gs2_time, only: code_dt
     use le_grids, only: energy, negrid, nxi, ixi_to_il, ixi_to_isgn, sgn, al
     use species, only: spec, electron_species
-    use dist_fn_arrays, only: kperp2
     use fields_arrays, only: aparnew
-    use kt_grids, only: kwork_filter
+    use kt_grids, only: kwork_filter, kperp2
     ! TMP FOR TESTING -- MAB
 !    use mp, only: proc0
 

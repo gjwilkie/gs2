@@ -190,10 +190,9 @@ contains
   !! gamma / k^2 estimate of the diffusivity
   subroutine write_diffusive_estimates(gnostics)
     use diagnostics_write_omega, only: omega_average
-    use dist_fn_arrays, only: kperp2
     use fields_parallelization, only: field_k_local
     use species, only: spec
-    use kt_grids, only: aky, akx
+    use kt_grids, only: aky, akx, kperp2
     !use geometry, only: surfarea, dvdrhon, grho
     use theta_grid, only: grho
     use diagnostics_create_and_write

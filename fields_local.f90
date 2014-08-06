@@ -2821,12 +2821,10 @@ contains
 
   subroutine fm_getfieldeq1_nogath (self,phi, apar, bpar, antot, antota, antotp, &
        fieldeq, fieldeqa, fieldeqp)
-    use dist_fn_arrays, only: kperp2
     use theta_grid, only: ntgrid, bmag, delthet, jacob
-    use kt_grids, only: naky, ntheta0, aky
+    use kt_grids, only: naky, ntheta0, aky, kperp2, kwork_filter
     use run_parameters, only: fphi, fapar, fbpar
     use run_parameters, only: beta, tite
-    use kt_grids, only: kwork_filter
     use species, only: spec, has_electron_species
     use dist_fn, only: gamtot,gamtot1, gamtot2, gamtot3, fl_avg, gridfac1, apfac, awgt
     use dist_fn, only: adiabatic_option_switch, adiabatic_option_fieldlineavg
