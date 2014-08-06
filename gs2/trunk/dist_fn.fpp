@@ -8750,7 +8750,7 @@ endif
   end subroutine init_mom_coeff
 
   subroutine finish_dist_fn
-
+    use redistribute, only: delete_redist
     use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
     use dist_fn_arrays, only: aj0, aj1   
     use dist_fn_arrays, only: g, gnew, kx_shift
@@ -8791,6 +8791,17 @@ endif
     if (allocated(kmax)) deallocate (kmax)
     if (allocated(mom_coeff)) deallocate (mom_coeff, mom_coeff_npara, mom_coeff_nperp, &
          mom_coeff_tpara, mom_coeff_tperp, mom_shift_para, mom_shift_perp)
+
+    call delete_redist(gc_from_left)
+    call delete_redist(gc_from_right)
+    call delete_redist(links_p)
+    call delete_redist(links_h)
+    call delete_redist(wfb_p)
+    call delete_redist(wfb_h)
+    call delete_redist(pass_right)
+    call delete_redist(pass_left)
+    call delete_redist(pass_wfb)
+    call delete_redist(parity_redist)
 
     ! gc_from_left, gc_from_right, links_p, links_h, wfb_p, wfb_h
 

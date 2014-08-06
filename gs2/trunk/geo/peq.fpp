@@ -42,7 +42,7 @@ module peq
   logical :: transp = .false.
 
 !  public :: B_psi 
-  public :: peq_init, eqin, teqin, gradient, eqitem, bgradient, Hahm_Burrell
+  public :: peq_init, eqin, teqin, gradient, eqitem, bgradient, Hahm_Burrell, peq_finish
 
   public :: invR,     initialize_invR
   public :: Rpos
@@ -657,6 +657,20 @@ contains
     dpbish = 0. ; dtbish = 0. ; dbtbish = 0.
 
   end subroutine alloc_arrays
+
+  subroutine dealloc_arrays
+    implicit none
+    if(allocated(rho_d)) deallocate(rho_d,eqpsi,psi_bar,fp,beta,pressure,rc,diam,qsf,rho_b)
+    if(allocated(R_psi)) deallocate(R_psi,Z_psi)
+    if(allocated(drm)) deallocate(drm,dzm,dbtm,dpm,dtm)
+    if(allocated(dpcart)) deallocate(dpcart,dtcart,dbtcart)
+    if(allocated(dpbish)) deallocate(dpbish,dtbish,dbtbish)
+  end subroutine dealloc_arrays
+
+  subroutine peq_finish
+    implicit none
+    call dealloc_arrays
+  end subroutine peq_finish
 
   subroutine peq_init
 

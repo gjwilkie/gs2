@@ -469,7 +469,8 @@ endif
     use nonlinear_terms, only: finish_nonlinear_terms
     use run_parameters, only: finish_run_parameters
     use species, only: finish_species
-
+    use theta_grid, only: finish_theta_grid
+    use gs2_transforms, only: finish_transforms
     implicit none
 
     call finish_antenna
@@ -478,12 +479,14 @@ endif
     call finish_fields
     call finish_hyper
     call finish_init_g
+    call finish_theta_grid
     call finish_kt_grids
     call finish_le_grids
     call finish_nonlinear_terms
     call finish_run_parameters
     call finish_species
     call finish_parameter_scan
+    call finish_transforms
     if (proc0) call finish_file_utils
 
   end subroutine finish_gs2

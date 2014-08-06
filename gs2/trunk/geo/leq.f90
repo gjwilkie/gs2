@@ -19,7 +19,7 @@ module leq
 
   type (flux_surface) :: surf
 
-  public :: leq_init, leqin, gradient, eqitem, bgradient
+  public :: leq_init, leqin, gradient, eqitem, bgradient, leq_finish
 
   public :: invR, Rpos, Zpos, diameter, btori, dbtori,  qfun, pfun, &
        dpfun, betafun, psi, rcenter, dpdrhofun
@@ -53,7 +53,6 @@ contains
     if(.not.allocated(beta)) call alloc_arrays(3, nt)
     surf%nt = nt
     call leq_init
-
   end subroutine leqin
 
   subroutine alloc_arrays(nr, nt)
@@ -68,6 +67,20 @@ contains
     allocate(dpbish(nr, nt, 2), dtbish(nr, nt, 2), dbtbish(nr, nt, 2))
 
   end subroutine alloc_arrays
+
+  subroutine dealloc_arrays
+    implicit none
+    if(allocated(eqpsi)) deallocate(eqpsi, fp, beta, pressure)
+    if(allocated(R_psi)) deallocate(R_psi, Z_psi)
+    if(allocated(drm)) deallocate(drm,dzm,dbtm,dpm,dtm)
+    if(allocated(dpcart)) deallocate(dpcart,dtcart,dbtcart)
+    if(allocated(dpbish)) deallocate(dpbish,dtbish,dbtbish)
+  end subroutine dealloc_arrays
+
+  subroutine leq_finish
+    implicit none
+    call dealloc_arrays
+  end subroutine leq_finish
 
   subroutine leq_init
 

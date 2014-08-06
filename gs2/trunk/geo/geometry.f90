@@ -2876,8 +2876,27 @@ end subroutine geofax
   end subroutine dealloc_module_arrays
 
   subroutine finish_geometry
+    
+    use  geq, only:  geq_finish
+    use  peq, only:  peq_finish
+    use  ceq, only:  ceq_finish
+    use  eeq, only:  eeq_finish => efit_finish
+    use  deq, only:  deq_finish => dfit_finish
+    use ideq, only: ideq_finish => dfit_finish
+    use  leq, only:  leq_finish
+
+    implicit none
     call dealloc_module_arrays
     eqinit = 1
+
+    if(gen_eq)   call  geq_finish
+    if(ppl_eq)   call  peq_finish
+    if(chs_eq)   call  ceq_finish
+    if(efit_eq)  call  eeq_finish
+    if(dfit_eq)  call  deq_finish
+    if(idfit_eq) call ideq_finish
+    if(local_eq) call  leq_finish
+
   end subroutine finish_geometry
 
   subroutine init_theta(nt)
