@@ -109,7 +109,7 @@ module eeq
   logical :: init_beta = .true.
   logical :: init_psi = .true.
 
-  public :: efit_init, efitin, gradient, eqitem, bgradient
+  public :: efit_init, efitin, gradient, eqitem, bgradient, efit_finish
   public :: gs2din
 
   public :: invR
@@ -1028,6 +1028,22 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
     end if
 
   end subroutine alloc_module_arrays
+
+  subroutine dealloc_module_arrays
+    implicit none
+    if(allocated(psi_bar)) deallocate(psi_bar,fp,qsf,pressure,beta)
+    if(allocated(dummy)) deallocate(dummy,efit_R,efit_Z)
+    if(allocated(spsi_bar)) deallocate(spsi_bar,sefit_R,sefit_Z)
+    if(allocated(efit_psi)) deallocate(efit_psi,sefit_psi)
+    if(allocated(dpm)) deallocate(dpm,dtm)
+    if(allocated(dum2)) deallocate(dum2,dum3)
+    if(allocated(efit_t)) deallocate(efit_t)
+  end subroutine dealloc_module_arrays
+
+  subroutine efit_finish
+    implicit none
+    call dealloc_module_arrays
+  end subroutine efit_finish
 
   subroutine a_minor(r, z, Z_mag, a)
 

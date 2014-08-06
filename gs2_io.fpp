@@ -616,18 +616,21 @@ contains
     ! The netcdf limit is 2^31-4 bytes, however this limit still causes a problem so 178180992 is used
     ! This limit was found by running the code with different sizes, it is not exact but this is a hack
     ! and is not worth pursuing at the moment
-    status = nf90_inquire_dimension(ncid, ri_dim, tmpc, dimsize(1))
-    status = nf90_inquire_dimension(ncid, nttotext_dim, tmpc, dimsize(2))
-    status = nf90_inquire_dimension(ncid, nakx_dim, tmpc, dimsize(3))
-    status = nf90_inquire_dimension(ncid, naky_dim, tmpc, dimsize(4))
-    status = nf90_inquire_dimension(ncid, time_big_dim, tmpc, dimsize(5))
-    ierr = error_unit()
-    total = product(real(dimsize(1:5)))
-    if(total .gt. 178180992) then ! number of reals allowed in netcdf
-       write(ierr, *) 'WARNING: phi_corr is larger than maximum netcdf size, removing.'
-       write(ierr, *) 'Try increasing nwrite_mult to avoid this.'
-       io_write_corr_extend = .false.
-       write_correlation_extend = .false.
+    !<DD>Added protective if statement as nttotext_dim is only defined if io_write_corr_extend
+    if(io_write_corr_extend)then
+       status = nf90_inquire_dimension(ncid, ri_dim, tmpc, dimsize(1))
+       status = nf90_inquire_dimension(ncid, nttotext_dim, tmpc, dimsize(2))
+       status = nf90_inquire_dimension(ncid, nakx_dim, tmpc, dimsize(3))
+       status = nf90_inquire_dimension(ncid, naky_dim, tmpc, dimsize(4))
+       status = nf90_inquire_dimension(ncid, time_big_dim, tmpc, dimsize(5))
+       ierr = error_unit()
+       total = product(real(dimsize(1:5)))
+       if(total .gt. 178180992) then ! number of reals allowed in netcdf
+          write(ierr, *) 'WARNING: phi_corr is larger than maximum netcdf size, removing.'
+          write(ierr, *) 'Try increasing nwrite_mult to avoid this.'
+          io_write_corr_extend = .false.
+          write_correlation_extend = .false.
+       endif
     endif
     ! HJL End of hack
     if (io_write_corr_extend) then

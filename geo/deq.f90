@@ -28,7 +28,7 @@ module deq
   logical :: init_R = .true.
   logical :: init_Z = .true.
 
-  public :: dfit_init, dfitin, gradient, eqitem, bgradient
+  public :: dfit_init, dfitin, gradient, eqitem, bgradient, dfit_finish
 
   public :: invR
   public :: Rpos
@@ -749,6 +749,21 @@ contains
   allocate (dpm(nw, nh, 2), dtm(nw, nh, 2))
 
   end subroutine alloc_module_arrays
+
+  subroutine dealloc_module_arrays
+    implicit none
+    if(allocated(rho_mid)) deallocate(rho_mid,psi_mid)
+    if(allocated(psi_bar)) deallocate(psi_bar,fp,qsf,pressure,beta)
+    if(allocated(dummy)) deallocate(dummy,dfit_R,dfit_Z)
+    if(allocated(spsi_bar)) deallocate(spsi_bar,sdfit_R,sdfit_Z)
+    if(allocated(dfit_psi)) deallocate(dfit_psi)
+    if(allocated(dpm)) deallocate(dpm,dtm)
+  end subroutine dealloc_module_arrays
+
+  subroutine dfit_finish
+    implicit none
+    call dealloc_module_arrays
+  end subroutine dfit_finish
 
   subroutine sort(a, b, c, d)
 

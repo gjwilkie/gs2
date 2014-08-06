@@ -40,7 +40,7 @@ module geq
   logical :: init_invR = .true.
 
   public :: B_psi 
-  public :: geq_init, eqin, gradient, eqitem, bgradient, Hahm_Burrell
+  public :: geq_init, eqin, gradient, eqitem, bgradient, Hahm_Burrell, geq_finish
 
   public :: invR,     initialize_invR
   public :: Rpos
@@ -401,6 +401,20 @@ contains
        allocate(dpbish(nr, nt, 2), dbbish(nr, nt, 2), dtbish(nr, nt, 2), dbtbish(nr, nt, 2))
     endif
   end subroutine alloc_arrays
+
+  subroutine dealloc_arrays
+    implicit none
+    if(allocated(rho_d)) deallocate(rho_d,eqpsi,psi_bar,fp,qsf,beta,pressure,rc,diam)
+    if(allocated(R_psi)) deallocate(R_psi,Z_psi,B_psi)
+    if(allocated(drm)) deallocate(drm,dzm,dbm,dbtm,dpm,dtm)
+    if(allocated(dpcart)) deallocate(dpcart,dbcart,dtcart,dbtcart)
+    if(allocated(dpbish)) deallocate(dpbish,dbbish,dtbish,dbtbish)
+  end subroutine dealloc_arrays
+
+  subroutine geq_finish
+    implicit none
+    call dealloc_arrays
+  end subroutine geq_finish
 
   subroutine geq_init
 

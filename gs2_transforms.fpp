@@ -1414,6 +1414,7 @@ contains
        end do
     end do
 
+    !<DD> NO MATCHING DELETE FOR PLAN CREATED IN INIT_3D --> Could leak memory
     deallocate (aphi, phix)
 
   end subroutine transform2_3d
@@ -1492,6 +1493,7 @@ contains
     integer :: ik, it
     type (fft_type) :: xf2d
 
+    !<DD> NO MATCHING DELETE --> Could leak memory
 #if FFT == _FFTW_
 
     call init_crfftw (xf2d, FFTW_BACKWARD, nny, nnx)
@@ -1546,6 +1548,7 @@ contains
     integer :: ik, it
     type (fft_type) :: xf2d
 
+    !<DD> NO MATCHING DELETE --> Could leak memory
 #if FFT == _FFTW_
 
     call init_rcfftw (xf2d, FFTW_FORWARD, nny, nnx)
@@ -1640,6 +1643,8 @@ contains
        end do
     end do
 
+    !<DD> NO MATCHING DELETE FOR PLAN CREATED IN INIT_3D--> Could leak memory
+
     deallocate (aphi, phix)
 
   end subroutine transform2_4d
@@ -1656,6 +1661,7 @@ contains
     if (done) return
     done = .true.
 
+    !<DD> NO MATCHING DELETE --> Could leak memory
     call init_z (zf_fft, 1, 2*ntgrid, howmany)
     
   end subroutine init_zf
@@ -1681,7 +1687,7 @@ contains
 
   subroutine finish_transforms
     use redistribute, only : delete_redist
-
+    use fft_work, only: delete_fft, finish_fft_work
 !    integer :: ip
 
     if(allocated(xxf)) deallocate(xxf)
@@ -1694,6 +1700,19 @@ contains
     call delete_redist(x2y)
 
     if(allocated(fft)) deallocate(fft) 
+
+    !Destroy fftw plans -- Note this may not delete all created ffts.
+    !Additionally there are several routines in which we create
+    !a routine local fft plan but don't delete it. This is probably a memory leak
+    if(initialized_y_fft)then
+       call delete_fft(yf_fft)
+       call delete_fft(yb_fft)
+
+       if(xfft_initted)then
+          call delete_fft(xf_fft)
+          call delete_fft(xb_fft)
+       endif
+    endif
 
 !    do ip = 0, nprocs-1
 !       if(nnfrom(ip)>0) then
@@ -1708,7 +1727,7 @@ contains
     initialized_3d = .false.
     xfft_initted = .false.
 
-
+    call finish_fft_work
   end subroutine finish_transforms
 
 ! > HJL

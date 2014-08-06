@@ -3856,7 +3856,7 @@ contains
    end subroutine write_mpdist_le
 
   subroutine finish_le_grids
-
+    use redistribute, only: delete_redist
     use egrid, only: zeroes
 
     implicit none
@@ -3878,6 +3878,11 @@ contains
     if (allocated(xi)) deallocate (xi)
     if (allocated(ixi_to_il)) deallocate (ixi_to_il)
     if (allocated(ixi_to_isgn)) deallocate (ixi_to_isgn)
+
+    !Deallocate redistribute maps
+    call delete_redist(lambda_map)
+    call delete_redist(energy_map)
+    call delete_redist(g2le)
 
     accel_x = .false. ; accel_v = .false.
     test = .false. ; trapped_particles = .true.
