@@ -3890,6 +3890,14 @@ contains
       if (allocated(ec1le)) deallocate (ec1le, ebetaale, eqle)
       if (allocated(glec)) deallocate (glec)
       if (allocated(vpatmp)) deallocate (vpatmp)
+      if (allocated(s0le)) deallocate(s0le)
+      if (allocated(w0le)) deallocate(w0le)
+      if (allocated(z0le)) deallocate(z0le)
+      if (allocated(aj0le)) deallocate(aj0le)
+      if (allocated(aj1le)) deallocate(aj1le)
+      if (allocated(bs0le)) deallocate(bs0le)
+      if (allocated(bw0le)) deallocate(bw0le)
+      if (allocated(bz0le)) deallocate(bz0le)
     else
       if (allocated(c1)) then
          deallocate (c1, betaa, ql)

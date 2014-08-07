@@ -31,6 +31,7 @@ module gs2_layouts
 ! HJL>
   public :: finish_layouts
 ! <HJL
+  public :: finish_fields_layouts, finish_jfields_layouts
 
   public :: init_fields_layouts
   public :: f_lo, f_layout_type
@@ -1973,9 +1974,8 @@ contains
 
   end subroutine init_fields_layouts
 
-! HJL < Finish routine so that gs2 can be restarted with a different
-! number of processors by trinity
-  subroutine finish_layouts
+  subroutine finish_fields_layouts
+    implicit none
 
     integer :: i,f_size
 
@@ -1986,14 +1986,18 @@ contains
     enddo
 
     if(allocated(f_lo)) deallocate(f_lo)    
-    if(allocated(ij)) deallocate(ij)    
-    if(allocated(mj)) deallocate(mj)    
-    if(allocated(dj)) deallocate(dj)    
+    initialized_fields_layouts = .false.
+  end subroutine finish_fields_layouts
+
+! HJL < Finish routine so that gs2 can be restarted with a different
+! number of processors by trinity
+  subroutine finish_layouts
+    implicit none
+    call finish_fields_layouts
+    call finish_jfields_layouts
 
     initialized_layouts = .false.
     initialized_dist_fn_layouts = .false.
-    initialized_fields_layouts = .false.
-    initialized_jfields_layouts = .false.
     initialized_le_layouts = .false.
     initialized_energy_layouts = .false.
     initialized_lambda_layouts = .false.
@@ -2156,6 +2160,14 @@ contains
     ij = 1  ; mj = 1;  dj = 0
     
   end subroutine init_jfields_layouts
+
+  subroutine finish_jfields_layouts
+    implicit none
+    if(allocated(ij)) deallocate(ij)
+    if(allocated(mj)) deallocate(mj)
+    if(allocated(dj)) deallocate(dj)
+    initialized_jfields_layouts = .false.
+  end subroutine finish_jfields_layouts
 
   function ik_idx_jf (lo, i)
     implicit none

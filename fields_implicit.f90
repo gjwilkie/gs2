@@ -421,6 +421,7 @@ contains
   subroutine reset_init
 
     use fields_arrays, only: aminv
+    use gs2_layouts, only: finish_fields_layouts, finish_jfields_layouts
     integer :: i, j
     initialized = .false.
 
@@ -435,6 +436,8 @@ contains
     end do
     deallocate (aminv)
 
+    call finish_fields_layouts
+    call finish_jfields_layouts
   end subroutine reset_init
 
   subroutine init_response_matrix
