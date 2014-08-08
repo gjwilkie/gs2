@@ -775,7 +775,7 @@ contains
        write_any_fluxes =  write_flux_line .or. print_flux_line .or. write_nl_flux 
        dump_any = dump_check1  .or. dump_fields_periodically &
             .or.  dump_check2 .or. make_movie .or. print_summary &
-            .or.  write_full_moments_notgc
+            .or. write_full_moments_notgc
 
        ntg_out = ntheta/2 + (nperiod-1)*ntheta
     end if 
@@ -2262,10 +2262,8 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
          upar, tpar, tperp, qparflux, pperpj1, qpperpj1
 
-    !<DD>This is quite wasteful as we only write ntot --> all the others are ignored
-    !    should either write the other moments or provide a routine which just calcs ntot
     call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
-    if(proc0) call nc_write_moments(nout, ntot)
+    if(proc0) call nc_write_moments(nout, ntot, density, upar, tpar, tperp,qparflux, pperpj1, qpperpj1) 
   end subroutine do_write_moments
 
   subroutine do_write_crossphase(t)
