@@ -1251,6 +1251,13 @@ if (debug) write(6,*) 'eik_get_grids: end'
     writelots = .false.
     local_eq = .true.
     chs_eq = .false.
+    ppl_eq = .false.
+    gen_eq = .false.
+    efit_eq = .false.
+    dfit_eq = .false.
+    gs2d_eq = .false.
+    transp_eq = .false.
+    idfit_eq = .false.
 
     in_file = input_unit_exist("theta_grid_eik_knobs", exist)
     if (exist) read (unit=input_unit("theta_grid_eik_knobs"), nml=theta_grid_eik_knobs)
