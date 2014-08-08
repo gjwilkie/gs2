@@ -47,14 +47,10 @@ module gs2_transforms
 
   interface transform_x
      module procedure transform_x5d
-!     module procedure transform_x3d
-!     module procedure transform_x1d
   end interface
 
   interface transform_y
      module procedure transform_y5d
-!     module procedure transform_y3d
-!     module procedure transform_y1d
   end interface
 
   interface transform2
@@ -67,14 +63,10 @@ module gs2_transforms
 
   interface inverse_x
      module procedure inverse_x5d
-!     module procedure inverse_x3d
-!     module procedure inverse_x1d
   end interface
 
   interface inverse_y
      module procedure inverse_y5d
-!     module procedure inverse_y3d
-!     module procedure inverse_y1d
   end interface
 
   interface inverse2
@@ -1414,7 +1406,6 @@ contains
        end do
     end do
 
-    !<DD> NO MATCHING DELETE FOR PLAN CREATED IN INIT_3D --> Could leak memory
     deallocate (aphi, phix)
 
   end subroutine transform2_3d
@@ -1643,8 +1634,6 @@ contains
        end do
     end do
 
-    !<DD> NO MATCHING DELETE FOR PLAN CREATED IN INIT_3D--> Could leak memory
-
     deallocate (aphi, phix)
 
   end subroutine transform2_4d
@@ -1661,7 +1650,6 @@ contains
     if (done) return
     done = .true.
 
-    !<DD> NO MATCHING DELETE --> Could leak memory
     call init_z (zf_fft, 1, 2*ntgrid, howmany)
     
   end subroutine init_zf
@@ -1701,18 +1689,18 @@ contains
 
     if(allocated(fft)) deallocate(fft) 
 
-    !Destroy fftw plans -- Note this may not delete all created ffts.
+    !Destroy fftw plans
+    !Note delete_fft is safe to call on plans that have not been created
+    call delete_fft(yf_fft)
+    call delete_fft(yb_fft)
+    call delete_fft(xf_fft)
+    call delete_fft(xb_fft)
+    call delete_fft(zf_fft)
+    call delete_fft(xf3d_cr)
+    call delete_fft(xf3d_rc)
+
     !Additionally there are several routines in which we create
     !a routine local fft plan but don't delete it. This is probably a memory leak
-    if(initialized_y_fft)then
-       call delete_fft(yf_fft)
-       call delete_fft(yb_fft)
-
-       if(xfft_initted)then
-          call delete_fft(xf_fft)
-          call delete_fft(xb_fft)
-       endif
-    endif
 
 !    do ip = 0, nprocs-1
 !       if(nnfrom(ip)>0) then
