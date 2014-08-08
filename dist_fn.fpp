@@ -4730,42 +4730,6 @@ endif
        end do
     endif
 
-    ! gnew is the inhomogeneous solution
-    gnew(:,:,iglo) = 0.0
-
-!CMR, 18/4/2012:
-! What follows is a selectable improved parallel bc for passing particles.
-!                                            (prompted by Greg Hammett)
-! Original bc is: g_gs2 = gnew = 0 at ends of domain:
-!   ONLY implies zero incoming particles in nonadiabatic delta f if phi=bpar=0
-! Here ensure ZERO incoming particles in nonadiabatic delta f at domain ends
-!  (exploits code used in subroutine g_adjust to transform g_wesson to g_gs2)
-    if ( nonad_zero ) then 
-       if (il <= ng2) then
-          !This ensures that we only apply the new boundary condition to the leftmost
-          !cell for sign going from left to right
-          if (l_links(ik,it) .eq. 0) then
-             adjleft = anon(ie)*2.0*vperp2(-ntgrid,iglo)*aj1(-ntgrid,iglo) &
-                  *bparnew(-ntgrid,it,ik)*fbpar &
-                  + spec(is)%z*anon(ie)*phinew(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
-                  /spec(is)%temp*fphi
-             gnew(-ntgrid,1,iglo) = gnew(-ntgrid,1,iglo) - adjleft
-          end if
-          !This ensures that we only apply the new boundary condition to the rightmost
-          !cell for sign going from right to left
-          if (r_links(ik,it) .eq. 0) then
-             adjright = anon(ie)*2.0*vperp2(ntgrid,iglo)*aj1(ntgrid,iglo) &
-                  *bparnew(ntgrid,it,ik)*fbpar &
-                  + spec(is)%z*anon(ie)*phinew(ntgrid,it,ik)*aj0(ntgrid,iglo) &
-                  /spec(is)%temp*fphi
-             gnew(ntgrid,2,iglo) = gnew(ntgrid,2,iglo) - adjright
-         end if
-       endif
-    endif
-
-    ! g1 is the homogeneous solution
-    g1 = 0.0
-
 !CMR, 17/4/2012:
 !  use_pass_homog = T  iff one of following applies:   
 !                 boundary_option_self_periodic
@@ -4788,6 +4752,42 @@ endif
     end select
 
     use_pass_homog = use_pass_homog .or. aky(ik) == 0.0
+
+    ! gnew is the inhomogeneous solution
+    gnew(:,:,iglo) = 0.0
+
+!CMR, 18/4/2012:
+! What follows is a selectable improved parallel bc for passing particles.
+!                                            (prompted by Greg Hammett)
+! Original bc is: g_gs2 = gnew = 0 at ends of domain:
+!   ONLY implies zero incoming particles in nonadiabatic delta f if phi=bpar=0
+! Here ensure ZERO incoming particles in nonadiabatic delta f at domain ends
+!  (exploits code used in subroutine g_adjust to transform g_wesson to g_gs2)
+    if ( nonad_zero ) then 
+       if (il <= ng2) then
+          !Only apply the new boundary condition to the leftmost
+          !cell for sign going from left to right
+          if (l_links(ik,it) .eq. 0) then
+             adjleft = anon(ie)*2.0*vperp2(-ntgrid,iglo)*aj1(-ntgrid,iglo) &
+                  *bparnew(-ntgrid,it,ik)*fbpar &
+                  + spec(is)%z*anon(ie)*phinew(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
+                  /spec(is)%temp*fphi
+             gnew(-ntgrid,1,iglo) = gnew(-ntgrid,1,iglo) - adjleft
+          end if
+          !Only apply the new boundary condition to the rightmost
+          !cell for sign going from right to left
+          if (r_links(ik,it) .eq. 0) then
+             adjright = anon(ie)*2.0*vperp2(ntgrid,iglo)*aj1(ntgrid,iglo) &
+                  *bparnew(ntgrid,it,ik)*fbpar &
+                  + spec(is)%z*anon(ie)*phinew(ntgrid,it,ik)*aj0(ntgrid,iglo) &
+                  /spec(is)%temp*fphi
+             gnew(ntgrid,2,iglo) = gnew(ntgrid,2,iglo) - adjright
+         end if
+       endif
+    endif
+
+    ! g1 is the homogeneous solution
+    g1 = 0.0
 
     ntgl = -ntgrid
     ntgr =  ntgrid
@@ -4908,13 +4908,22 @@ endif
     end if
 
 !CMR, 17/4/2012:  
-! self_periodic bc applied as follows:
-! boundary_option_linked = T
-!      passing + wfb if aky=0
+! self_periodic bc is applied as follows:
+! if boundary_option_linked = .T.
 !      isolated wfb (ie no linked domains) 
-! boundary_option_linked = F
-!      passing and wfb particles if boundary_option_self_periodic = T
+!      passing + wfb if aky=0
+! else (ie boundary_option_linked = .F.)
 !      wfb 
+!      passing and wfb particles if boundary_option_self_periodic = T
+!
+!CMR, 6/8/2014:
+! Parallel BC for wfb is as follows:
+!    in ballooning space 
+!                 wfb ALWAYS self-periodic
+!    in linked fluxtube  
+!                 wfb self-periodic ONLY if ISOLATED, OR if iky=0
+!                     ELSE same BC as passing particle
+
     if (boundary_option_switch == boundary_option_linked) then
        if (speriod_flag .and. il <= ng2+1) then
           call self_periodic
@@ -4981,13 +4990,39 @@ endif
 !     gnew(ntgr,2) = gnew(ntgl,2)
 !     gnew(ntgr,1) = gnew(ntgl,1) 
 ! ie periodic bcs at the ends of the flux tube.
+
+!CMR, 25/7/2014:
+! self-periodic applied to zonal modes (makes sense)
+!                       and wfb        (seems strange)
+! adding adjr, adjl to cope with application of self-periodic to WFB
+!   dadj=adjl-adjr will be ZERO for ky=0 modes, but NOT for WFB.
+! This change sets g_wesson (or h) to be self-periodic for wfb, not g !!!
+! NB this code change will implement this only in ballooning space, 
+! and not in a linked fluxtube.
+
+    complex :: adjl, adjr, dadj
+
+      if (il .eq. ng2+1) then 
+         adjl = anon(ie)*2.0*vperp2(ntgl,iglo)*aj1(ntgl,iglo) &
+              *bparnew(ntgl,it,ik)*fbpar &
+              + spec(is)%z*anon(ie)*phinew(ntgl,it,ik)*aj0(ntgl,iglo) &
+              /spec(is)%temp*fphi
+         adjr = anon(ie)*2.0*vperp2(ntgr,iglo)*aj1(ntgr,iglo) &
+              *bparnew(ntgr,it,ik)*fbpar &
+              + spec(is)%z*anon(ie)*phinew(ntgr,it,ik)*aj0(ntgr,iglo) &
+              /spec(is)%temp*fphi
+         dadj = adjl-adjr
+      else 
+         dadj = cmplx(0.0,0.0)
+      endif
+
       if (g1(ntgr,1) /= 1.) then
-         beta1 = (gnew(ntgr,1,iglo) - gnew(ntgl,1,iglo))/(1.0 - g1(ntgr,1))
+         beta1 = (gnew(ntgr,1,iglo) - gnew(ntgl,1,iglo) - dadj)/(1.0 - g1(ntgr,1))
          gnew(:,1,iglo) = gnew(:,1,iglo) + beta1*g1(:,1)
       end if
 
       if (g1(ntgl,2) /= 1.) then
-         beta1 = (gnew(ntgl,2,iglo) - gnew(ntgr,2,iglo))/(1.0 - g1(ntgl,2))
+         beta1 = (gnew(ntgl,2,iglo) - gnew(ntgr,2,iglo) + dadj)/(1.0 - g1(ntgl,2))
          gnew(:,2,iglo) = gnew(:,2,iglo) + beta1*g1(:,2)
       end if
       
@@ -5045,7 +5080,19 @@ endif
 ! wfb
           if (nlambda > ng2 .and. il == ng2+1) then
              if (save_h(1, iglo)) then
-
+!CMR, 7/8/2014:
+! This code implements "self-periodic" parallel BC for wfb
+! g_adj contains exit point inhomog and homog sol'ns from ALL wfb cells
+! g_adj(j,1,iglo):    bcs for rightwards travelling particles (RP)
+!  j=1:ncell : inhom sol'n at ntgrid in cell j from RIGHT for RP
+!  j=ncell+1:2ncell : hom sol'n at ntgrid in cell (2ncell+1-j) from RIGHT for RP
+! g_adj(j,2,iglo):    bcs for leftwards travelling particles (LP)
+!  j=1:ncell : inhom sol'n at -ntgrid in cell j from LEFT for LP
+!  j=ncell+1:2ncell : hom sol'n at -ntgrid in cell (2ncell+1-j) from LEFT for LP
+!
+!  facd= 1/(1-\Prod_{j=1,ncell} h^r_j)  (see CMR Parallel BC note)    
+!    where h^r_j is the homogeneous exit solution from cell j for RP
+!                      
                 facd = 1.0
                 do j = 1, ncell
                    facd = facd * g_adj(ncell+j,1,iglo)
@@ -5053,24 +5100,41 @@ endif
                 facd = 1./(1.-facd)
                 
                 b0 = 0.
+
+! i labels cell counting from LEFTmost cell.
                 do i = 1, ncell-1
                    fac = 1.0
                    do j = i+1, ncell
+! fac is product of all homog sol's from cells to RIGHT on cell i
+! g_adj(ncell+j,1,iglo) accesses these homog solutions
                       fac = fac * g_adj(ncell+j,1,iglo)
                    end do
+! g_adj(ncell+1-i,1,iglo) accesses inhom solution from cell i
                    b0 = b0 + fac * g_adj(ncell+1-i,1,iglo)
                 end do
+
+! b0 computed next line is homog amplitude in leftmost cell  (see CMR note)
                 b0 = (b0 + g_adj(1,1,iglo))*facd
 
+! BUT we NEED homog amplitude in THIS cell.
+! Solve matrix BC equation by cascading homog amplitude, b0, rightwards 
+!        from leftmost cell to THIS cell.
+
                 do i = 1, l_links(ik, it)
+!  Loop implements cascade to right, using CMR note equ'n:  
+!           a^r_{j+1} = a^r_j h^r_j + i^r_j 
+
                    b0 = b0 * g_adj(ncell+i,1,iglo) + g_adj(ncell+1-i,1,iglo)
                 end do
-                
+
+! Resultant b0 is homog amplitude for THIS cell.
+! Finally add correct homog amplitude to gnew to match the parallel BC.
                 gnew(:,1,iglo) = gnew(:,1,iglo) + b0*g_h(:,1,iglo)
              endif
 
+! Following code repeats same calculation for LEFTWARD travelling wfb.
+!CMRend
              if (save_h(2, iglo)) then
-
                 facd = 1.0
                 do j = 1, ncell
                    facd = facd * g_adj(ncell+j,2,iglo)
