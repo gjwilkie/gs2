@@ -439,6 +439,9 @@ contains
     call real_init (list)
     call broadcast (navg)
     call broadcast (nwrite)
+    call broadcast (print_flux_line)
+    call broadcast (write_flux_line)
+    call broadcast (write_ascii)
     call broadcast (nmovie)
     call broadcast (nwrite_mult)
     call broadcast (nsave)
@@ -1038,7 +1041,8 @@ contains
        call lf_flux (phinew, vflux0, vflux1)
 #endif
        call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
-       if(write_nl_flux.or.print_flux_line.or.(write_flux_line.and.write_ascii)) call eexchange (phinew, phi, exchange1, exchange)
+       if((fphi.gt.epsilon(0.0)).and.(write_nl_flux.or.print_flux_line.or.&
+            (write_flux_line.and.write_ascii))) call eexchange (phinew, phi, exchange1, exchange)
 
        if (proc0) then
           if (fphi > epsilon(0.0)) then
