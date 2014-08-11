@@ -1484,7 +1484,9 @@ contains
     integer :: ik, it
     type (fft_type) :: xf2d
 
-    !<DD> NO MATCHING DELETE --> Could leak memory
+    !May be inefficient to create and destroy this fft plan
+    !on every call to the routine. We may want to move this
+    !variable to module level and check its created flag.
 #if FFT == _FFTW_
 
     call init_crfftw (xf2d, FFTW_BACKWARD, nny, nnx)
@@ -1522,7 +1524,9 @@ contains
 
     deallocate (aphi, phix)
 !RN> this statement causes error for lahey with DEBUG. I don't know why
-!    call delete_fft(xf2d)
+!<DD>Reinstating after discussion with RN, if this causes anyone an issue
+!    then we can guard this line with some directives.   
+    call delete_fft(xf2d)
   end subroutine transform2_2d
 
 
@@ -1539,7 +1543,9 @@ contains
     integer :: ik, it
     type (fft_type) :: xf2d
 
-    !<DD> NO MATCHING DELETE --> Could leak memory
+    !May be inefficient to create and destroy this fft plan
+    !on every call to the routine. We may want to move this
+    !variable to module level and check its created flag.
 #if FFT == _FFTW_
 
     call init_rcfftw (xf2d, FFTW_FORWARD, nny, nnx)
@@ -1574,7 +1580,9 @@ contains
 
     deallocate (aphi, phix)
 !RN> this statement causes error for lahey with DEBUG. I don't know why
-!    call delete_fft(xf2d)
+!<DD>Reinstating after discussion with RN, if this causes anyone an issue
+!    then we can guard this line with some directives.   
+    call delete_fft(xf2d)
   end subroutine inverse2_2d
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1676,7 +1684,6 @@ contains
   subroutine finish_transforms
     use redistribute, only : delete_redist
     use fft_work, only: delete_fft, finish_fft_work
-!    integer :: ip
 
     if(allocated(xxf)) deallocate(xxf)
     if(allocated(ia)) deallocate(ia)
@@ -1699,14 +1706,7 @@ contains
     call delete_fft(xf3d_cr)
     call delete_fft(xf3d_rc)
 
-    !Additionally there are several routines in which we create
-    !a routine local fft plan but don't delete it. This is probably a memory leak
-
-!    do ip = 0, nprocs-1
-!       if(nnfrom(ip)>0) then
-!          if(allocated(from_list(ip)%first)) deallocate(from_list(ip)%first)
-!       endo
-
+    !Reset init state flags
     initialized = .false.
     initialized_x = .false.
     initialized_y_fft = .false.
@@ -1714,12 +1714,9 @@ contains
     initialized_y_redist = .false.
     initialized_3d = .false.
     xfft_initted = .false.
-
+    
+    !Tidy up fft internals (FFTW3 only)
     call finish_fft_work
   end subroutine finish_transforms
-
 ! > HJL
-
-
-
 end module gs2_transforms
