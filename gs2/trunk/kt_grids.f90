@@ -272,7 +272,6 @@ contains
     implicit none
     real :: dky, dtheta0, dkx
     integer :: report_unit, i, j
-    integer :: naky, ntheta0, nx, ny
     real, dimension(:), allocatable:: aky, akx
     real, dimension(:,:), allocatable:: theta0
 
