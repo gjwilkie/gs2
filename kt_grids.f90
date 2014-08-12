@@ -106,8 +106,15 @@ module kt_grids_range
   integer :: naky, ntheta0, nn0, n0_min, n0_max
   real :: aky_min, aky_max, theta0_min, theta0_max
   real :: akx_min, akx_max, rhostar_range
+  character(20) :: kyspacing_option
+  integer :: kyspacingopt_switch
+  !Note if we ever want to offer different spacing for theta0 we could
+  !reuse these flags (rename to spacingopt_...).
+  integer, parameter :: kyspacingopt_linear=1, kyspacingopt_exp=2 
+
   namelist /kt_grids_range_parameters/ naky, ntheta0, nn0, n0_min, n0_max, &
-       aky_min, aky_max, theta0_min, theta0_max, akx_min, akx_max, rhostar_range
+       aky_min, aky_max, theta0_min, theta0_max, akx_min, akx_max, rhostar_range,&
+       kyspacing_option
 
 contains
 
@@ -116,11 +123,16 @@ contains
 ! New namelist variables nn0, n0_min, n0_max, rhostar_range to set ky grid 
 !                                             using toroidal mode numbers.
 ! Toroidal modenumbers are used if n0_min> 0 prescribed in input file. 
-    use file_utils, only: input_unit, input_unit_exist
+    use file_utils, only: input_unit, input_unit_exist, error_unit
+    use text_options, only: text_option, get_option_value
     use theta_grid, only: drhodpsi
     implicit none
-    integer :: in_file
+    integer :: in_file,ierr
     logical :: exist
+    type (text_option), dimension(3), parameter :: kyspacingopts = &
+         (/ text_option('default', kyspacingopt_linear), &
+            text_option('linear', kyspacingopt_linear), &
+            text_option('exponential', kyspacingopt_exp) /)
 
     naky = 1          ;  ntheta0 = 1  
     aky_min = 0.0     ;  aky_max = 0.0
@@ -129,9 +141,25 @@ contains
     nn0 = 1           ;  ntheta0 = 1  
     n0_min = 0        ;  n0_max = 0
     rhostar_range=1.0e-4
-
+    kyspacing_option='default'
+  
     in_file = input_unit_exist ("kt_grids_range_parameters", exist)
     if (exist) read (in_file, nml=kt_grids_range_parameters)
+
+    ierr = error_unit()
+    call get_option_value(kyspacing_option, kyspacingopts, kyspacingopt_switch,&
+         ierr, "kyspacing_option in kt_grids_range_parameters")
+
+    !Override kyspacing_option in certain cases
+    select case (kyspacingopt_switch)
+    case (kyspacingopt_exp)
+       if(aky_min.le.0) then
+          write(ierr,'("Cannot use kyspacing_option=",A," with aky_min<=0.0 --> setting to",A)') &
+               "'exponential'","'linear'"
+          kyspacingopt_switch=kyspacingopt_linear
+       endif
+    end select
+
     if (n0_min .gt. 0) then
 !CMR if n0_min>0 then override aky inputs and use nn0, n0_min, n0_max to determine aky range
        aky_min=n0_min*drhodpsi*rhostar_range
@@ -163,6 +191,12 @@ contains
      write (unit, fmt="(' theta0_max = ',e16.10)") theta0_max
      write (unit, fmt="(' akx_min = ',e16.10)") akx_min
      write (unit, fmt="(' akx_max = ',e16.10)") akx_max
+     select case(kyspacingopt_switch)
+     case (kyspacingopt_linear)
+        write (unit, fmt="(' kyspacing_option = ',A)") "linear"
+     case (kyspacingopt_exp)
+        write (unit, fmt="(' kyspacing_option = ',A)") "exponential"
+     end select
      write (unit, fmt="(' /')")
   end subroutine wnml_kt_grids_range
 
@@ -171,11 +205,9 @@ contains
     integer, intent (out) :: naky_x, ntheta0_x, nx, ny
     naky_x = naky  ;  ntheta0_x = ntheta0
     nx = 0         ;  ny = 0
-
   end subroutine range_get_sizes
 
 ! BD: Could add some logic here to set theta0 if akx is given?  When do we need what?
-
   subroutine range_get_grids (aky, theta0, akx)
     use theta_grid, only: shat
     implicit none
@@ -194,8 +226,18 @@ contains
     endif
 
     dky = 0.0
-    if (naky > 1) dky = (aky_max - aky_min)/real(naky - 1)
-    aky = (/ (aky_min + dky*real(i), i = 0,naky-1) /)
+    if (naky > 1)then 
+       select case (kyspacingopt_switch)
+       case (kyspacingopt_linear)
+          dky = (aky_max - aky_min)/real(naky - 1)
+          aky = (/ (aky_min + dky*real(i), i = 0,naky-1) /)
+       case (kyspacingopt_exp)
+          dky = (log(aky_max) - log(aky_min))/real(naky - 1)
+          aky = (/ (exp(log(aky_min) + dky*real(i)), i = 0,naky-1) /)
+       end select
+    else
+       aky = (/ (aky_min, i = 0,naky-1) /)
+    endif
  
 ! set default theta0 to 0
     theta0=0.0
@@ -212,7 +254,6 @@ contains
                = (/ (theta0_min + dtheta0*real(i), i=0,ntheta0-1) /)
        end do
        akx = theta0(:,1) * shat * aky(1)
-
     else
 
 !CMR, 22/9/2010:  ie here assume boundary_option .eq. 'periodic'
@@ -221,7 +262,6 @@ contains
        dkx = 0.0
        if (ntheta0 > 1) dkx = (akx_max - akx_min)/real(ntheta0 - 1)
        akx = (/ (akx_min + dkx*real(i), i = 0,ntheta0-1) /)
-
     endif
 
   end subroutine range_get_grids
@@ -232,38 +272,43 @@ contains
     implicit none
     real :: dky, dtheta0, dkx
     integer :: report_unit, i, j
+    integer :: naky, ntheta0, nx, ny
+    real, dimension(:), allocatable:: aky, akx
+    real, dimension(:,:), allocatable:: theta0
 
-       write (report_unit, *) 
-       write (report_unit, fmt="('A range of k_perps will be evolved.')")
-       if (n0_min .gt.0) write (report_unit, fmt="('ky set using toroidal mode numbers with n0_min=',i8/T34,'rhostar_range=',1pe12.4)") n0_min,rhostar_range
-       write (report_unit, *) 
-       write (report_unit, fmt="('There are ',i3,' values of ky rho and ',i3,' values of theta_0/kx rho:')") naky, ntheta0
-       write (report_unit, *) 
-          
-       dky = 0.0        ;  if (naky > 1) dky = (aky_max - aky_min)/real(naky - 1)
-       dkx = 0.0        ;  if (ntheta0 > 1) dkx = (akx_max - akx_min)/real(ntheta0 - 1)
-       dtheta0 = 0.0    ;  if (ntheta0 > 1) dtheta0 = (theta0_max - theta0_min)/real(ntheta0 - 1)
+    write (report_unit, *) 
+    write (report_unit, fmt="('A range of k_perps will be evolved.')")
+    if (n0_min .gt.0) write (report_unit, fmt="('ky set using toroidal mode numbers with n0_min=',i8/T34,'rhostar_range=',1pe12.4)") n0_min,rhostar_range
+    write (report_unit, *) 
+    write (report_unit, fmt="('There are ',i3,' values of ky rho and ',i3,' values of theta_0/kx rho:')") naky, ntheta0
+    write (report_unit, *) 
 
-       do j = 0, naky-1
-          do i = 0, ntheta0-1
-             write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4,' kx rho = ',e10.4)") &
-                  aky_min + dky*real(j), theta0_min + dtheta0*real(i), akx_min + dkx*real(i)
-          end do
+    !<DD>Calculate the kt grids
+    allocate(aky(naky),theta0(ntheta0,naky),akx(ntheta0))
+    call range_get_grids(aky, theta0, akx)
+
+    !Report grid values
+    do j = 1, naky
+       do i = 1, ntheta0
+          write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4,' kx rho = ',e10.4)") &
+               aky(j),theta0(i,j),akx(i)
        end do
+    end do
+    deallocate(aky,theta0,akx)
 
 ! CMR, add some !!!error checking!!! for ballooning space runs for shat /= 0 
 ! using flow shear: check that the constraints on theta0 grid are satisfied!
 
-       if (shat /= 0) then
-         if (abs(mod(twopi-theta0_max+theta0_min,twopi)-dtheta0) > 1.0e-3*dtheta0) then
-             write (report_unit, *) 
-             write (report_unit, fmt="('IF using perp ExB flow shear in BALLOONING SPACE there is an ERROR that will corrupt results.')")
-             write (report_unit, fmt="('check_kt_grids_range: inappropriate theta0 grid')")
-             write (report_unit, fmt="('In ballooning space with sheared flow, 2pi-theta0_max+theta0_min =',e10.4,' must be set equal to dtheta = ',e10.4)") twopi-theta0_max+theta0_min, dtheta0
-         endif
+    if (shat /= 0) then
+       if (abs(mod(twopi-theta0_max+theta0_min,twopi)-dtheta0) > 1.0e-3*dtheta0) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('IF using perp ExB flow shear in BALLOONING SPACE there is an ERROR that will corrupt results.')")
+          write (report_unit, fmt="('check_kt_grids_range: inappropriate theta0 grid')")
+          write (report_unit, fmt="('In ballooning space with sheared flow, 2pi-theta0_max+theta0_min =',e10.4,' must be set equal to dtheta = ',e10.4)") twopi-theta0_max+theta0_min, dtheta0
        endif
+    endif
 
-   end subroutine check_kt_grids_range
+  end subroutine check_kt_grids_range
 
 end module kt_grids_range
 
