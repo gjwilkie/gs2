@@ -205,6 +205,8 @@ contains
 ! such as parallel nonlinearity that require derivatives in v-space.
 ! most efficient way to take these derivatives is to go from g_lo to le_lo,
 ! i.e., bring all energies and lambdas onto each processor
+!<DD>Note the user can still disable use_le_layout in the input file
+!    this just changes the default.
 # ifdef LOWFLOW
     use_le_layout = .true.
 # endif
@@ -294,6 +296,9 @@ contains
        test = .false.
        ei_coll_only = .false.
        special_wfb_lorentz=.true.
+       !USE_LE_LAYOUT default set at module level
+       !Note: If we want to move default here then we need to note
+       !      that if LOWFLOW then we want default to be .true.
        in_file = input_unit_exist ("collisions_knobs", exist)
 !       if (exist) read (unit=input_unit("collisions_knobs"), nml=collisions_knobs)
        if (exist) read (unit=in_file, nml=collisions_knobs)
@@ -2862,7 +2867,7 @@ contains
                 do ig = -ntgrid, ntgrid
                    il = ixi_to_il(ig,ixi)
                    isgn = ixi_to_isgn(ig,ixi)
-                   vpanud(ig,ixi,ie,is) = sgn(isgn)*sqrt((1.0-al(il)*bmag(ig))*energy(ie))
+                   vpanud(ig,ixi,ie,is) = sgn(isgn)*sqrt(MAX(1.0-al(il)*bmag(ig),0.0)*energy(ie))
                 end do
              end do
           end do
@@ -2914,7 +2919,7 @@ contains
                 do ig = -ntgrid, ntgrid
                    il = ixi_to_il(ig,ixi)
                    isgn = ixi_to_isgn(ig,ixi)
-                   vpanud(ig,ixi,ie,is) = sgn(isgn)*sqrt((1.0-al(il)*bmag(ig))*energy(ie))*vnmult(1)*vnew_D(1,ie,is)/tunits(1)
+                   vpanud(ig,ixi,ie,is) = sgn(isgn)*sqrt(MAX(1.0-al(il)*bmag(ig),0.0)*energy(ie))*vnmult(1)*vnew_D(1,ie,is)/tunits(1)
                 end do
              end do
           end do
