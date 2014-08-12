@@ -48,7 +48,7 @@ module gs2_diagnostics
   logical, public :: write_g, write_gg, write_gyx
   logical, public :: write_eigenfunc, write_fields, write_final_fields, write_final_antot
   logical, public :: write_final_moments, write_avg_moments, write_parity
-  logical, public :: write_moments, write_final_db
+  logical, public :: write_moments, ob_midplane, write_final_db
   logical, public :: write_full_moments_notgc, write_cross_phase = .false.
   logical, public :: write_final_epar, write_kpar
   logical, public :: write_hrate, write_lorentzian
@@ -93,7 +93,7 @@ module gs2_diagnostics
          write_omega, write_omavg, write_ascii, write_kpar, &
          write_gs, write_gyx, write_g, write_gg, write_hrate, write_lpoly, &
          write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
-         write_final_epar, write_moments, write_final_moments, write_cerr, &
+         write_final_epar, write_moments, ob_midplane, write_final_moments, write_cerr, &
          write_verr, write_max_verr, write_nl_flux, write_final_db, &
          nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
          exit_when_converged, use_nonlin_convergence, write_avg_moments, &
@@ -455,6 +455,7 @@ contains
     call broadcast (dump_check2)
     call broadcast (write_fields)
     call broadcast (write_moments)
+    call broadcast (ob_midplane)
     call broadcast (dump_fields_periodically)
     call broadcast (make_movie)
     call broadcast (save_for_restart)
@@ -534,7 +535,8 @@ contains
          write_fields, write_moments, write_full_moments_notgc, &
          write_symmetry, write_pflux_sym, write_pflux_tormom, &
          write_correlation, nwrite_big_tot, write_correlation_extend, &
-         write_phi_over_time, write_apar_over_time, write_bpar_over_time)
+         write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
+         ob_midplane=ob_midplane)
     
     if (write_cerr) then
        if (collision_model_switch == 1 .or. collision_model_switch == 5) then
@@ -705,6 +707,7 @@ contains
        write_nl_flux = .false.
        write_eigenfunc = .false.
        write_moments = .false.
+       ob_midplane = .true.
        write_final_moments = .false.
        write_avg_moments = .false.
        write_parity = .false.
@@ -753,6 +756,11 @@ contains
        !<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
 !       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
        if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
+!
+!CMR, 12/8/2014: 
+! Ensure write_full_moments_notgc=.false. if (write_moments .and. ob_midplane)
+! to avoid a conflict.  
+       if (write_moments .and. ob_midplane) write_full_moments_notgc=.false.
 
        !Override flags
        if (write_max_verr) write_verr = .true.
@@ -2263,7 +2271,7 @@ contains
          upar, tpar, tperp, qparflux, pperpj1, qpperpj1
 
     call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
-    if(proc0) call nc_write_moments(nout, ntot, density, upar, tpar, tperp,qparflux, pperpj1, qpperpj1) 
+    if(proc0) call nc_write_moments(nout, ntot, density, upar, tpar, tperp,qparflux, pperpj1, qpperpj1,ob_midplane=ob_midplane) 
   end subroutine do_write_moments
 
   subroutine do_write_crossphase(t)
