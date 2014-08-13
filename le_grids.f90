@@ -2342,13 +2342,13 @@ contains
 
   ! calculates and returns toroidal momentum flux as a function
   ! of vpar and theta
-  subroutine get_flux_vs_theta_vs_vpa (f, vflx)
+  subroutine get_flux_vs_theta_vs_vpa (f, vflx, dealloc)
 
     use theta_grid, only: ntgrid, bmag
     use species, only: nspec
 
     implicit none
-
+    logical, intent(in), optional :: dealloc
     real, dimension (-ntgrid:,:,:,:,:), intent (in) :: f
     real, dimension (-ntgrid:,:,:), intent (out) :: vflx
 
@@ -2360,6 +2360,14 @@ contains
 
     integer :: is, il, ie, ig, iv
     integer :: norder
+
+    if(present(dealloc))then
+       if(allocated(vpa1d)) deallocate(vpa1d)
+       if(allocated(hermp1d)) deallocate(hermp1d)
+       if(allocated(vpapts)) deallocate(vpapts)
+       if(allocated(hermp)) deallocate(hermp)
+       return
+    endif
 
     norder = min(negrid, nlambda)/2
 
@@ -3860,6 +3868,8 @@ contains
     use egrid, only: zeroes
 
     implicit none
+    real, dimension(1,1,1,1,1) :: tmpf
+    real, dimension(1,1,1) :: tmpvflx
 
     if (allocated(zeroes)) deallocate (zeroes)
     if (allocated(energy)) deallocate (energy, dele, al, wl, jend, forbid, xx, lgrnge, xloc, speed)
@@ -3883,6 +3893,9 @@ contains
     call delete_redist(lambda_map)
     call delete_redist(energy_map)
     call delete_redist(g2le)
+
+    !Free internal saved arrays
+    call get_flux_vs_theta_vs_vpa(tmpf,tmpvflx,.true.)
 
     accel_x = .false. ; accel_v = .false.
     test = .false. ; trapped_particles = .true.

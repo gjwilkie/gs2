@@ -471,6 +471,7 @@ endif
     use species, only: finish_species
     use theta_grid, only: finish_theta_grid
     use gs2_transforms, only: finish_transforms
+    use gs2_save, only: finish_save
     implicit none
 
     call finish_antenna
@@ -487,6 +488,7 @@ endif
     call finish_species
     call finish_parameter_scan
     call finish_transforms
+    call finish_save
     if (proc0) call finish_file_utils
 
   end subroutine finish_gs2
