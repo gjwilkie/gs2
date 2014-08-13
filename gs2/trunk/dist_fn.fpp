@@ -1352,7 +1352,7 @@ endif
              source_coeffs(1,ig,isgn,iglo)=-2*anon(ie)*vparterm(ig,isgn,iglo)
              !Phi p
              source_coeffs(2,ig,isgn,iglo)=-zi*anon(ie)*wdfac(ig,isgn,iglo) &
-              + zi*(wstarfac(ik,ie,is) &
+              + zi*(wstarfac(ig,isgn,iglo) &
               + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
               -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm)
              if(fapar.gt.0)then
@@ -1362,7 +1362,7 @@ endif
                 !Apar p
                 source_coeffs(4,ig,isgn,iglo)=anon(ie)*D_res(it,ik)*spec(is)%zstm*&
                      vpac(ig,isgn,iglo)-spec(is)%stm*vpac(ig,isgn,iglo)*&
-                     zi*(wstarfac(ik,ie,is) &
+                     zi*(wstarfac(ig,isgn,iglo) &
                      + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
                      -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) 
              endif
@@ -8806,6 +8806,7 @@ endif
        end do
     endif
 
+    !<DD>Currently below could include divide by zero if analytical=.true.
     mom_shift_para(:,:,:)=mom_coeff(:,:,:,2)/mom_coeff(:,:,:,1)
     mom_shift_perp(:,:,:)=mom_coeff(:,:,:,3)/mom_coeff(:,:,:,1)
 
@@ -8828,8 +8829,11 @@ endif
     use redistribute, only: delete_redist
     use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
     use dist_fn_arrays, only: aj0, aj1   
-    use dist_fn_arrays, only: g, gnew, kx_shift
-
+    use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
+#ifdef LOWFLOW
+    use lowflow, only: finish_lowflow_terms
+    use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
+#endif
     implicit none
 
     accelerated_x = .false. ; accelerated_v = .false.
@@ -8856,6 +8860,7 @@ endif
     if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
     if (allocated(g_h)) deallocate (g_h, save_h)
     if (allocated(kx_shift)) deallocate (kx_shift)
+    if (allocated(theta0_shift)) deallocate (theta0_shift)
     if (allocated(jump)) deallocate (jump)
     if (allocated(ikx_indexed)) deallocate (ikx_indexed)
     if (allocated(ufac)) deallocate (ufac)
@@ -8880,6 +8885,16 @@ endif
 
     ! gc_from_left, gc_from_right, links_p, links_h, wfb_p, wfb_h
 
+#ifdef LOWFLOW
+    call finish_lowflow_terms
+    if(allocated(vparterm)) deallocate(vparterm)
+    if(allocated(hneoc)) deallocate(hneoc)
+    if(allocated(wdfac)) deallocate(wdfac)
+    if(allocated(wstarfac)) deallocate(wstarfac)
+    if(allocated(wdttpfac)) deallocate(wdttpfac)
+    if(allocated(wstar_neo)) deallocate(wstar_neo)
+    if(allocated(wcurv)) deallocate(wcurv)
+#endif
   end subroutine finish_dist_fn
 
 #ifdef LOWFLOW
