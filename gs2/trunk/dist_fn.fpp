@@ -96,14 +96,17 @@ module dist_fn
   real, dimension (:,:), allocatable :: wcurv
   real, dimension (:,:,:), allocatable :: wstar_neo
   ! (-ntgrid:ntgrid,ntheta0,naky)
+
+  complex, dimension (:,:,:), allocatable :: wdrift
+  ! (-ntgrid:ntgrid, 2, -g-layout-)
+#else
+  real, dimension (:,:,:), allocatable :: wdrift
+  ! (-ntgrid:ntgrid, 2, -g-layout-)
 #endif
 
 !  real, dimension (:,:,:,:,:), allocatable :: wdriftttp
   real, dimension (:,:,:,:,:,:), allocatable :: wdriftttp
   ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
-
-  real, dimension (:,:,:), allocatable :: wdrift
-  ! (-ntgrid:ntgrid, 2, -g-layout-)
 
   real, dimension (:,:,:), allocatable :: wstar
   ! (naky,negrid,nspec) replicated
@@ -1197,7 +1200,12 @@ subroutine check_dist_fn(report_unit)
     implicit none
     integer :: iglo
     integer :: ig, ik, it, il, ie, is, isgn
-    real :: wd, wdttp, vp, bd
+    real :: wdttp, vp, bd
+#ifdef LOWFLOW
+    complex :: wd
+#else
+    real :: wd
+#endif
     if (.not.allocated(a)) then
        allocate (a(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (b(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -1308,6 +1316,9 @@ endif
     use le_grids, only: anon, negrid, energy
     use constants, only: zi,pi
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+#ifdef LOWFLOW
+    use dist_fn_arrays, only: vparterm, wdfac, wstarfac
+#endif
     implicit none
     integer :: iglo
     integer :: ig, ik, it, il, ie, is, isgn
