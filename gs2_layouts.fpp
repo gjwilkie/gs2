@@ -77,7 +77,7 @@ module gs2_layouts
   public :: intmom_sub !Do we use sub-communicators in velocity space?
   public :: intspec_sub !Do we use sub-communicators in integrate_species?
 
-  public :: fft_use_wisdom, fft_wisdom_file
+  public :: fft_use_wisdom, fft_wisdom_file, fft_measure_plan
 
 
   logical :: initialized_x_transform = .false.
@@ -100,7 +100,7 @@ module gs2_layouts
   real :: max_unbalanced_xxf, max_unbalanced_yxf
   character (len=5) :: layout
   character (len=1000) :: fft_wisdom_file
-  logical :: fft_use_wisdom
+  logical :: fft_use_wisdom, fft_measure_plan
   logical :: exist
 
 ! TT>
@@ -408,7 +408,6 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
     use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
-    use fft_work, only: fft_measure_plan
     implicit none
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
@@ -491,7 +490,6 @@ contains
   subroutine broadcast_results
     use mp, only: broadcast
     use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
-    use fft_work, only: fft_measure_plan
     implicit none
 
     call broadcast (opt_redist_init)

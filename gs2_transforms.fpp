@@ -107,8 +107,8 @@ contains
     use gs2_layouts, only: pe_layout, init_accel_transform_layouts
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: init_x_transform_layouts
-    use gs2_layouts, only: fft_wisdom_file, fft_use_wisdom
-    use fft_work, only: load_wisdom, save_wisdom
+    use gs2_layouts, only: fft_wisdom_file, fft_use_wisdom, fft_measure_plan
+    use fft_work, only: load_wisdom, save_wisdom, measure_plan
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
@@ -123,8 +123,9 @@ contains
     if (initialized) return
     initialized = .true.
 
+    measure_plan = fft_measure_plan
     if (fft_use_wisdom) call load_wisdom(trim(fft_wisdom_file))
-
+    
     if (debug) write (*,*) 'init_transforms: init_gs2_layouts'
     call init_gs2_layouts
 
