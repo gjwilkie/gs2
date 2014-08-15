@@ -191,7 +191,7 @@ contains
   subroutine init_collisions
 
     use species, only: init_species, nspec, spec
-    use theta_grid, only: init_theta_grid, ntgrid
+    use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids, naky, ntheta0
     use le_grids, only: init_le_grids, nlambda, negrid , init_map
     use run_parameters, only: init_run_parameters
@@ -224,7 +224,7 @@ contains
     call init_kt_grids
     call init_le_grids (accelerated_x, accelerated_v)
     call init_run_parameters
-    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
     call read_parameters
     if( .not. use_le_layout ) then
        select case (collision_model_switch)
@@ -892,7 +892,7 @@ contains
 
     if(use_le_layout) then    
       call gather (g2le, bz0, ctmp)
-      call solfp_ediffuse_le_layout (ctmp,le_lo)
+      call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bz0)   ! bz0 is redefined below
     else
       call solfp_ediffuse_standard_layout (bz0,init=.true.)   ! bz0 is redefined below
@@ -978,7 +978,7 @@ contains
 
     if(use_le_layout) then
       call gather (g2le, bs0, ctmp)
-      call solfp_ediffuse_le_layout (ctmp, le_lo)
+      call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bs0)   ! bs0
     else
       call solfp_ediffuse_standard_layout (bs0,init=.true.)    ! s0
@@ -1060,7 +1060,7 @@ contains
 
     if(use_le_layout) then    
       call gather (g2le, bw0, ctmp)
-      call solfp_ediffuse_le_layout (ctmp, le_lo)
+      call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bw0)
     else
       call solfp_ediffuse_standard_layout (bw0,init=.true.)
@@ -1384,7 +1384,6 @@ contains
     use egrid, only: zeroes, x0
     use gs2_layouts, only: le_lo, e_lo, il_idx
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
-    use spfunc, only: erf => erf_ext
 
     implicit none
     
@@ -1392,7 +1391,6 @@ contains
 
     integer :: ie, is, ik, il, ig, it
     real, dimension (:), allocatable :: aa, bb, cc, xe, el
-!    real :: erf ! this is needed for PGI: RN
     integer :: ile, ixi
     integer :: ielo
 
@@ -2569,7 +2567,7 @@ contains
        ! TMP FOR TESTING -- MAB
 !       if (proc0) call system_clock (count=t0, count_rate=tr)
 
-       call solfp_ediffuse_le_layout (gle, le_lo)
+       call solfp_ediffuse_le_layout (gle)
 
        ! TMP FOR TESTING -- MAB
 !       if (proc0) then
@@ -2670,7 +2668,7 @@ contains
 
     case (collision_model_ediffuse)
 
-       call solfp_ediffuse_le_layout (gle, le_lo)
+       call solfp_ediffuse_le_layout (gle)
 
        if (conserve_moments) call conserve_diffuse (gle)
 
@@ -3701,18 +3699,16 @@ contains
   end subroutine solfp_ediffuse_standard_layout
 
 
-  subroutine solfp_ediffuse_le_layout (gle,lo)
+  subroutine solfp_ediffuse_le_layout (gle)
 
     use species, only: spec
     use le_grids, only: nxi, negrid, forbid, ixi_to_il
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx, le_lo
     use run_parameters, only: ieqzip
-    use layouts_type, only: le_layout_type
     use kt_grids, only: kwork_filter
     implicit none
 
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
-    type (le_layout_type), intent (in) :: lo
 
     integer :: ie, is, ig, il
     complex, dimension (negrid) :: delta

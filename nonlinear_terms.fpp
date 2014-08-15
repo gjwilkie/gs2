@@ -151,7 +151,7 @@ contains
     if (debug) write(6,*) "init_nonlinear_terms: init_species"
     call init_species
     if (debug) write(6,*) "init_nonlinear_terms: init_dist_fn_layouts"
-    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
 
     call read_parameters
 
@@ -250,7 +250,7 @@ contains
   end subroutine read_parameters
 
 !  subroutine add_nonlinear_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
-  subroutine add_explicit_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+  subroutine add_explicit_terms (g1, g2, g3, phi, apar, bpar, istep, bd)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_time, only: save_dt_cfl
@@ -259,7 +259,6 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
-    complex, intent (in) :: fexp
     real :: dt_cfl
     logical, save :: nl = .true.
 
@@ -270,17 +269,17 @@ contains
        call save_dt_cfl (dt_cfl)
 #ifdef LOWFLOW
        if (istep /=0) &
-            call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+            call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd)
 #endif
     case (nonlinear_mode_on)
 !       if (istep /= 0) call add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
-       if (istep /= 0) call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
+       if (istep /= 0) call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, nl)
     end select
 !  end subroutine add_nonlinear_terms
   end subroutine add_explicit_terms
 
 
-  subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
+  subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd,  nl)
 
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
@@ -293,7 +292,6 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
-    complex, intent (in) :: fexp
     logical, intent (in), optional :: nl
 
     integer :: istep_last = 0

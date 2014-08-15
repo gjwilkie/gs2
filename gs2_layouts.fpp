@@ -15,6 +15,7 @@ module gs2_layouts
   implicit none
   private
 
+  public :: factors
   public :: pe_layout, layout, local_field_solve
   public :: is_kx_local
   
@@ -679,7 +680,7 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine init_dist_fn_layouts &
-       (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+       (naky, ntheta0, nlambda, negrid, nspec)
     use mp, only: iproc, nproc, proc0
     use mp, only: split, mp_comm, nproc_comm, rank_comm
     use mp, only: sum_allreduce_sub
@@ -687,7 +688,7 @@ contains
     use file_utils, only: error_unit
 ! <TT
     implicit none
-    integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
+    integer, intent (in) :: naky, ntheta0, nlambda, negrid, nspec
 !<DD>
     integer :: iglo,ik,it,il,ie,is,col,mycol
     integer :: ik_min,ik_max,it_min,it_max,il_min,il_max,ie_min,ie_max,is_min,is_max,ip
@@ -1307,11 +1308,11 @@ contains
 
   end subroutine init_dist_fn_layouts
 
-  subroutine is_kx_local(negrid, nspec, nlambda, naky, ntheta0, kx_local)  
+  subroutine is_kx_local(negrid, nspec, nlambda, naky, kx_local)  
 
     use mp, only: nproc
     implicit none
-    integer, intent (in) :: negrid, nspec, nlambda, naky, ntheta0
+    integer, intent (in) :: negrid, nspec, nlambda, naky
     logical, intent (out) :: kx_local
     integer, dimension(:,:), allocatable :: facs
     integer :: nsfacs, nefacs, nyfacs, nlfacs
@@ -3818,7 +3819,7 @@ contains
                       ! decomposed.  In this instance we are at the lowest level of the decomposition so there is nothing left to decompose
                       ! so the remaining data space is 1.  For other levels of the decomposition this 1 is replaced by the part
                       ! of the data space that has not been split up yet.
-                      call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                      call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                            1, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%block_multiple, xxf_lo%llim_proc, xxf_lo%ulim_proc, &
                            xxf_lo%ulim_alloc)
                       
@@ -3831,7 +3832,7 @@ contains
                       call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, xxf_lo%num_small, xxf_lo%num_large, level_proc_num)     
                       ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
                       ! naky for this level of the decomposition.
-                      call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                      call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                            xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%block_multiple,  xxf_lo%llim_proc, xxf_lo%ulim_proc, &
                            xxf_lo%ulim_alloc)
                       
@@ -3846,7 +3847,7 @@ contains
                    call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, xxf_lo%num_small, xxf_lo%num_large, level_proc_num)                         
                    ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
                    ! naky,ntgridtotal for this level of the decomposition.
-                   call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                   call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                         xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%block_multiple, &
                         xxf_lo%llim_proc, xxf_lo%ulim_proc, xxf_lo%ulim_alloc)
                    
@@ -3862,7 +3863,7 @@ contains
                 call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, xxf_lo%num_small, xxf_lo%num_large, level_proc_num)
                 ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
                 ! naky,ntgridtotal,nsign for this level of the decomposition.
-                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                      xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%block_multiple, &
                      xxf_lo%llim_proc, xxf_lo%ulim_proc, xxf_lo%ulim_alloc)
                 
@@ -3880,13 +3881,13 @@ contains
              case('yxels')
                 ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
                 ! naky,ntgridtotal,nsign,negrid for this layout and level of the decomposition.
-                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                      xxf_lo%negrid*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, &
                      xxf_lo%block_multiple, xxf_lo%llim_proc, xxf_lo%ulim_proc, xxf_lo%ulim_alloc)
              case default
                 ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
                 ! naky,ntgridtotal,nsign,nlambda for these layouts and this level of the decomposition.
-                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                      xxf_lo%nlambda*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, &
                      xxf_lo%block_multiple, xxf_lo%llim_proc, xxf_lo%ulim_proc, xxf_lo%ulim_alloc)
              end select
@@ -3902,7 +3903,7 @@ contains
           call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, xxf_lo%num_small, xxf_lo%num_large, level_proc_num)
           ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
           ! naky,ntgridtotal,nsign,nlambda,negrid for this level of the decomposition.
-          call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+          call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                xxf_lo%negrid*xxf_lo%nlambda*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, &
                xxf_lo%large_block_size, xxf_lo%block_multiple, xxf_lo%llim_proc, xxf_lo%ulim_proc, xxf_lo%ulim_alloc)
           
@@ -4048,7 +4049,7 @@ contains
   end subroutine calculate_unbalanced_decomposition
 
 
-  subroutine calculate_block_size(iproc, numsmall, numlarge, smalldecomp, largedecomp, nproc, sizeblock, blocksize, smallblocksize, largeblocksize, block_multiple, llim, ulim, ulim_alloc)
+  subroutine calculate_block_size(iproc, numsmall, numlarge, smalldecomp, largedecomp, sizeblock, blocksize, smallblocksize, largeblocksize, block_multiple, llim, ulim, ulim_alloc)
   !====================================================================
   ! AJ, November 2011: New code from DCSE project
   ! This subroutine (calculate_block_size) is used in the code
@@ -4075,9 +4076,6 @@ contains
   ! decomposition (calculated in subroutine
   ! calculate_unbalanced_decomposition where it is referred to as i.
   !
-  ! Input nproc is the total number of MPI processes that this program
-  ! is using.
-  !
   ! Input sizeblock is the factor that needs to be split over the
   ! cores/processors we have (i.e. everything that has not yet been
   ! decomposed).
@@ -4103,7 +4101,7 @@ contains
   !====================================================================
     implicit none
 
-    integer, intent(in) :: iproc, numsmall, numlarge, smalldecomp, largedecomp, nproc, sizeblock
+    integer, intent(in) :: iproc, numsmall, numlarge, smalldecomp, largedecomp, sizeblock
     integer, intent(out) :: blocksize, smallblocksize, largeblocksize, block_multiple, llim, ulim, ulim_alloc
     integer :: modproc, procfactors
 
@@ -4713,7 +4711,7 @@ contains
                    if(i .ne. 0) then
                       
                       call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, yxf_lo%num_small, yxf_lo%num_large, level_proc_num)
-                      call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                      call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                            1, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%block_multiple, yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
                       
                    end if
@@ -4723,7 +4721,7 @@ contains
                    if(i .ne. 0) then
                       
                       call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, yxf_lo%num_small, yxf_lo%num_large, level_proc_num)     
-                      call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                      call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                            yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%block_multiple, yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
                       
                    end if
@@ -4735,7 +4733,7 @@ contains
                 if(i .ne. 0) then
                    
                    call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, yxf_lo%num_small, yxf_lo%num_large, level_proc_num)                         
-                   call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                   call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                         yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%block_multiple, &
                         yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
                    
@@ -4749,7 +4747,7 @@ contains
              if(i .ne. 0) then
                 
                 call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, yxf_lo%num_small, yxf_lo%num_large, level_proc_num)
-                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                      yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%block_multiple, &
                      yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
                 
@@ -4765,11 +4763,11 @@ contains
              
              select case(layout)
              case('yxels')
-                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                      yxf_lo%negrid*yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, &
                      yxf_lo%block_multiple, yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
              case default
-                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                      yxf_lo%nlambda*yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, &
                      yxf_lo%block_multiple, yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
              end select
@@ -4783,7 +4781,7 @@ contains
        if(i .ne. 0) then
           
           call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, yxf_lo%num_small, yxf_lo%num_large, level_proc_num)
-          call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+          call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                yxf_lo%negrid*yxf_lo%nlambda*yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, &
                yxf_lo%large_block_size, yxf_lo%block_multiple, yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
           
@@ -5412,16 +5410,21 @@ contains
   end subroutine pe_layout
 
   subroutine factors (n, j, div)
+    !CMR, 3/10/13:
+    !    Find all the factors of n and return in div(j)
     integer, intent (in) :: n
     integer, intent (out) :: j
     integer, dimension (:), intent (out) :: div
     integer :: i, imax
 
+    ! find: i = lowest factor of n
+    ! and therefore imax=n/1 is the HIGHEST factor of n
     do i=2,n
        if (mod(n,i)==0) exit
     end do
     imax = n/i
     j=1
+    ! loop over all possible factors of n, and return in div(j)
     do i=1,imax
        if (mod(n,i)==0) then
           div(j) = i

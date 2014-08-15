@@ -122,7 +122,7 @@ contains
 
   subroutine init_gs2_io (write_nl_flux, write_omega, &
       write_hrate, write_final_antot, write_eigenfunc, &
-      make_movie, nmovie_tot, write_verr, write_fields, &
+      make_movie, nmovie_tot, write_verr, &
       write_moments,&
       write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, nwrite_big_tot, &
       write_correlation_extend, & 
@@ -147,7 +147,7 @@ contains
 !    logical :: write_nl_flux, write_omega, write_hrate, make_movie
 !    logical :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_nl_flux, write_omega
-    logical, intent(in) :: write_hrate, make_movie, write_fields, write_moments
+    logical, intent(in) :: write_hrate, make_movie, write_moments
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
     logical, intent(in) :: write_pflux_sym, write_pflux_tormom 
@@ -234,7 +234,7 @@ contains
        call define_dims (nmovie_tot, nwrite_big_tot)
        call define_vars (write_nl_flux, write_omega, &
             write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-            write_fields, write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
+            write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
             write_correlation_extend,ob_midplane=ob_midplane)
        call nc_grids
        call nc_species
@@ -475,7 +475,7 @@ contains
 
   subroutine define_vars (write_nl_flux, write_omega, &
        write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-       write_fields, write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
+       write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
        write_correlation_extend, ob_midplane)
  
     use file_utils, only: error_unit
@@ -494,7 +494,7 @@ contains
 !    logical :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_nl_flux, write_omega
     logical, intent(in) :: write_hrate, write_final_antot
-    logical, intent(in) :: write_eigenfunc, write_verr, write_fields, write_moments
+    logical, intent(in) :: write_eigenfunc, write_verr, write_moments
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
     logical, intent(in) :: write_pflux_sym, write_pflux_tormom 
     logical, intent(inout) :: write_correlation_extend
@@ -2139,7 +2139,7 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_heat_perp_id)
        status = nf90_put_var (ncid, apar_heat_by_k_id, qmheat, start=start4, count=count4)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_heat_by_k_id)
-       status = nf90_put_var (ncid, apar_heat_by_x_id, qmheat, start=start3, count=count3)
+       status = nf90_put_var (ncid, apar_heat_by_x_id, x_qmflux, start=start3, count=count3)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_heat_by_x_id)
     end if
 

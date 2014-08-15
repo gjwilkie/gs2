@@ -203,206 +203,206 @@ contains
    end subroutine wnml_gs2_diagnostics
 
    subroutine check_gs2_diagnostics(report_unit)
-   use file_utils, only: run_name
-   use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_on
-   use dist_fn, only : def_parity, even 
-   use kt_grids, only : gridopt_switch, gridopt_box
-   use init_g, only : restart_file
-   use gs2_save, only: restart_writable
-   implicit none
-   integer :: report_unit
-   logical :: writable
-    write (report_unit, *) 
-    write (report_unit, fmt="('------------------------------------------------------------')")
-    write (report_unit, *) 
-    write (report_unit, fmt="('Diagnostic control section.')")
+     use file_utils, only: run_name
+     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_on
+     use dist_fn, only : def_parity, even 
+     use kt_grids, only : gridopt_switch, gridopt_box
+     use init_g, only : restart_file
+     use gs2_save, only: restart_writable
+     implicit none
+     integer :: report_unit
+     logical :: writable
+     write (report_unit, *) 
+     write (report_unit, fmt="('------------------------------------------------------------')")
+     write (report_unit, *) 
+     write (report_unit, fmt="('Diagnostic control section.')")
 
-    if (print_line) then
-       write (report_unit, fmt="('print_line = T:            Estimated frequencies &
-          & output to the screen every ',i4,' steps.')") nwrite
-    else
-       ! nothing
-    end if
+     if (print_line) then
+        write (report_unit, fmt="('print_line = T:            Estimated frequencies &
+             & output to the screen every ',i4,' steps.')") nwrite
+     else
+        ! nothing
+     end if
 
-    if (write_line) then
-       if (write_ascii) then
-          write (report_unit, fmt="('write_line = T:            Estimated frequencies output to ',a,' every ',i4,' steps.')") &
-               & trim(run_name)//'.out',  nwrite
-       end if
-       write (report_unit, fmt="('write_line = T:            Estimated frequencies output to ',a,' every ',i4,' steps.')") &
-            & trim(run_name)//'.out.nc',  nwrite
-    else
-       ! nothing
-    end if
+     if (write_line) then
+        if (write_ascii) then
+           write (report_unit, fmt="('write_line = T:            Estimated frequencies output to ',a,' every ',i4,' steps.')") &
+                & trim(run_name)//'.out',  nwrite
+        end if
+        write (report_unit, fmt="('write_line = T:            Estimated frequencies output to ',a,' every ',i4,' steps.')") &
+             & trim(run_name)//'.out.nc',  nwrite
+     else
+        ! nothing
+     end if
 
-    if (print_flux_line) then
-       write (report_unit, fmt="('print_flux_line = T:       Instantaneous fluxes output to screen every ', &
+     if (print_flux_line) then
+        write (report_unit, fmt="('print_flux_line = T:       Instantaneous fluxes output to screen every ', &
              & i4,' steps.')") nwrite
-    else
-       ! nothing
-    end if
+     else
+        ! nothing
+     end if
 
-    if (write_flux_line) then
-       if (write_ascii) then
-          write (report_unit, fmt="('write_flux_line = T:       Instantaneous fluxes output to ',a,' every ',i4,' steps.')") &
-               & trim(run_name)//'.out',  nwrite
-       end if
-       write (report_unit, fmt="('write_flux_line = T:       Instantaneous fluxes output to ',a,' every ',i4,' steps.')") &
-            & trim(run_name)//'.out.nc',  nwrite
-    else
-       ! nothing
-    end if
+     if (write_flux_line) then
+        if (write_ascii) then
+           write (report_unit, fmt="('write_flux_line = T:       Instantaneous fluxes output to ',a,' every ',i4,' steps.')") &
+                & trim(run_name)//'.out',  nwrite
+        end if
+        write (report_unit, fmt="('write_flux_line = T:       Instantaneous fluxes output to ',a,' every ',i4,' steps.')") &
+             & trim(run_name)//'.out.nc',  nwrite
+     else
+        ! nothing
+     end if
 
-    if (write_omega) then
-       if (write_ascii) then
-          write (report_unit, fmt="('write_omega = T:           Instantaneous frequencies written to ',a)") trim(run_name)//'.out'
-       else
-          write (report_unit, fmt="('write_omega = T:           No effect.')")
-       end if
-       write (report_unit, fmt="('                           Frequencies calculated at igomega = ',i4)") igomega
-       if (def_parity .and. .not. even) then
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('   You probably want igomega /= 0 for odd parity modes.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-    end if
+     if (write_omega) then
+        if (write_ascii) then
+           write (report_unit, fmt="('write_omega = T:           Instantaneous frequencies written to ',a)") trim(run_name)//'.out'
+        else
+           write (report_unit, fmt="('write_omega = T:           No effect.')")
+        end if
+        write (report_unit, fmt="('                           Frequencies calculated at igomega = ',i4)") igomega
+        if (def_parity .and. .not. even) then
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('   You probably want igomega /= 0 for odd parity modes.')") 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, *) 
+        end if
+     end if
 
-    if (write_omavg) then
-       if (write_ascii) then
-          write (report_unit, fmt="('write_omavg = T:           Time-averaged frequencies written to ',a)") trim(run_name)//'.out'
-          write (report_unit, fmt="('                           Averages taken over ',i4,' timesteps.')") navg
-       else
-          write (report_unit, fmt="('write_omavg = T:           No effect.')")
-       end if
-    end if
+     if (write_omavg) then
+        if (write_ascii) then
+           write (report_unit, fmt="('write_omavg = T:           Time-averaged frequencies written to ',a)") trim(run_name)//'.out'
+           write (report_unit, fmt="('                           Averages taken over ',i4,' timesteps.')") navg
+        else
+           write (report_unit, fmt="('write_omavg = T:           No effect.')")
+        end if
+     end if
 
-    if (write_ascii) then
-       write (report_unit, fmt="('write_ascii = T:           Write some data to ',a)") trim(run_name)//'.out'
-    end if
+     if (write_ascii) then
+        write (report_unit, fmt="('write_ascii = T:           Write some data to ',a)") trim(run_name)//'.out'
+     end if
 
-    if (write_eigenfunc) then
-       if (write_ascii) then
-          write (report_unit, fmt="('write_eigenfunc = T:       Normalized Phi(theta) written to ',a)") trim(run_name)//'.eigenfunc'
-       end if
-       write (report_unit, fmt="('write_eigenfunc = T:       Normalized Phi(theta) written to ',a)") trim(run_name)//'.out.nc'
-    end if
+     if (write_eigenfunc) then
+        if (write_ascii) then
+           write (report_unit, fmt="('write_eigenfunc = T:       Normalized Phi(theta) written to ',a)") trim(run_name)//'.eigenfunc'
+        end if
+        write (report_unit, fmt="('write_eigenfunc = T:       Normalized Phi(theta) written to ',a)") trim(run_name)//'.out.nc'
+     end if
 
-    if (write_final_fields) then
-       if (write_ascii) then
-          write (report_unit, fmt="('write_final_fields = T:    Phi(theta), etc. written to ',a)") trim(run_name)//'.fields'
-       end if
-       write (report_unit, fmt="('write_final_fields = T:    Phi(theta), etc. written to ',a)") trim(run_name)//'.out.nc'
-    end if
+     if (write_final_fields) then
+        if (write_ascii) then
+           write (report_unit, fmt="('write_final_fields = T:    Phi(theta), etc. written to ',a)") trim(run_name)//'.fields'
+        end if
+        write (report_unit, fmt="('write_final_fields = T:    Phi(theta), etc. written to ',a)") trim(run_name)//'.out.nc'
+     end if
 
-    if (write_final_antot) then
-       if (write_ascii) then
-          write (report_unit, fmt="('write_final_antot = T:          Sources for Maxwell eqns. written to ',a)") &
-               & trim(run_name)//'.antot'
-       end if
-       write (report_unit, fmt="('write_final_antot = T:          Sources for Maxwell eqns. written to ',a)") &
-            & trim(run_name)//'.out.nc'
-    end if
+     if (write_final_antot) then
+        if (write_ascii) then
+           write (report_unit, fmt="('write_final_antot = T:          Sources for Maxwell eqns. written to ',a)") &
+                & trim(run_name)//'.antot'
+        end if
+        write (report_unit, fmt="('write_final_antot = T:          Sources for Maxwell eqns. written to ',a)") &
+             & trim(run_name)//'.out.nc'
+     end if
 
-    if (write_final_moments) then
-       if (write_ascii) then
-          write (report_unit, fmt="('write_final_moments = T:   Low-order moments of g written to ',a)") &
-               & trim(run_name)//'.moments'
-          write (report_unit, fmt="('write_final_moments = T:   int dl/B average of low-order moments of g written to ',a)") &
-               & trim(run_name)//'.amoments'
-       end if
-       write (report_unit, fmt="('write_final_moments = T:   Low-order moments of g written to ',a)") &
-            & trim(run_name)//'.out.nc'
-       write (report_unit, fmt="('write_final_moments = T:   int dl/B average of low-order moments of g written to ',a)") &
-            & trim(run_name)//'.out.nc'
-    end if
+     if (write_final_moments) then
+        if (write_ascii) then
+           write (report_unit, fmt="('write_final_moments = T:   Low-order moments of g written to ',a)") &
+                & trim(run_name)//'.moments'
+           write (report_unit, fmt="('write_final_moments = T:   int dl/B average of low-order moments of g written to ',a)") &
+                & trim(run_name)//'.amoments'
+        end if
+        write (report_unit, fmt="('write_final_moments = T:   Low-order moments of g written to ',a)") &
+             & trim(run_name)//'.out.nc'
+        write (report_unit, fmt="('write_final_moments = T:   int dl/B average of low-order moments of g written to ',a)") &
+             & trim(run_name)//'.out.nc'
+     end if
 
-    if (write_avg_moments) then
-       if (gridopt_switch /= gridopt_box) then
-       write (report_unit, *) 
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('write_avg_moments = T:          Ignored unless grid_option=box')")
-       write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, *) 
-       else
-          if (write_ascii) then
-             write (report_unit, fmt="('write_avg_moments = T:     Flux surface averaged low-order moments of g written to ',a)") &
-                  & trim(run_name)//'.moments'
-          end if
-          write (report_unit, fmt="('write_avg_moments = T:     Flux surface averaged low-order moments of g written to ',a)") &
-               & trim(run_name)//'.out.nc'
-       end if
-    end if
+     if (write_avg_moments) then
+        if (gridopt_switch /= gridopt_box) then
+           write (report_unit, *) 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('write_avg_moments = T:          Ignored unless grid_option=box')")
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, *) 
+        else
+           if (write_ascii) then
+              write (report_unit, fmt="('write_avg_moments = T:     Flux surface averaged low-order moments of g written to ',a)") &
+                   & trim(run_name)//'.moments'
+           end if
+           write (report_unit, fmt="('write_avg_moments = T:     Flux surface averaged low-order moments of g written to ',a)") &
+                & trim(run_name)//'.out.nc'
+        end if
+     end if
 
-    if (write_final_epar) then
-       if (write_ascii) then
-          write (report_unit, fmt="('write_final_epar = T:      E_parallel(theta) written to ',a)") trim(run_name)//'.epar'
-       end if
-       write (report_unit, fmt="('write_final_epar = T:      E_parallel(theta) written to ',a)") trim(run_name)//'.out.nc'
-    end if
+     if (write_final_epar) then
+        if (write_ascii) then
+           write (report_unit, fmt="('write_final_epar = T:      E_parallel(theta) written to ',a)") trim(run_name)//'.epar'
+        end if
+        write (report_unit, fmt="('write_final_epar = T:      E_parallel(theta) written to ',a)") trim(run_name)//'.out.nc'
+     end if
 
-    if (write_nl_flux) then
-       if (write_ascii) then
-          write (report_unit, fmt="('write_nl_flux = T:         Phi**2(kx, ky) written to ',a)") trim(run_name)//'.out'
-       end if
-    else
-       write (report_unit, fmt="('write_nl_flux = F:         Phi**2(kx, ky) NOT written to ',a)") trim(run_name)//'.out'
-    end if
+     if (write_nl_flux) then
+        if (write_ascii) then
+           write (report_unit, fmt="('write_nl_flux = T:         Phi**2(kx, ky) written to ',a)") trim(run_name)//'.out'
+        end if
+     else
+        write (report_unit, fmt="('write_nl_flux = F:         Phi**2(kx, ky) NOT written to ',a)") trim(run_name)//'.out'
+     end if
 
-    if (dump_check1) then
-       write (report_unit, fmt="('dump_check1 = T:          Field-line avg of Phi written to ',a)") 'dump.check1'
-       write (report_unit, fmt="('This option is usually used for Rosenbluth-Hinton calculations.')") 
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-    end if
+     if (dump_check1) then
+        write (report_unit, fmt="('dump_check1 = T:          Field-line avg of Phi written to ',a)") 'dump.check1'
+        write (report_unit, fmt="('This option is usually used for Rosenbluth-Hinton calculations.')") 
+        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+     end if
 
-    if (dump_check2) then
-       write (report_unit, fmt="('dump_check2 = T:           Apar(kx, ky, igomega) written to ',a)") trim(run_name)//'.dc2'
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-    end if
+     if (dump_check2) then
+        write (report_unit, fmt="('dump_check2 = T:           Apar(kx, ky, igomega) written to ',a)") trim(run_name)//'.dc2'
+        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+     end if
 
-    if (dump_fields_periodically) then
-       write (report_unit, fmt="('dump_fields_periodically = T:          Phi, Apar, Bpar written to ',a)") 'dump.fields.t=(time)'
-       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.  IT IS EXPENSIVE.')") 
-    end if
+     if (dump_fields_periodically) then
+        write (report_unit, fmt="('dump_fields_periodically = T:          Phi, Apar, Bpar written to ',a)") 'dump.fields.t=(time)'
+        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.  IT IS EXPENSIVE.')") 
+     end if
 
-    if (save_for_restart) then
-       write (report_unit, fmt="('save_for_restart = T:      Restart files written to ',a)") trim(restart_file)//'.(PE)'
-    else
-       if (nonlinear_mode_switch == nonlinear_mode_on) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('save_for_restart = F:              This run cannot be continued.')")
-          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-    end if
+     if (save_for_restart) then
+        write (report_unit, fmt="('save_for_restart = T:      Restart files written to ',a)") trim(restart_file)//'.(PE)'
+     else
+        if (nonlinear_mode_switch == nonlinear_mode_on) then
+           write (report_unit, *) 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, fmt="('save_for_restart = F:              This run cannot be continued.')")
+           write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+           write (report_unit, fmt="('################# WARNING #######################')")
+           write (report_unit, *) 
+        end if
+     end if
 
-    !Verify restart file can be written
-    if((save_for_restart.or.save_distfn).and.(file_safety_check))then
-       !Can we write file?
-       writable=restart_writable()
+     !Verify restart file can be written
+     if((save_for_restart.or.save_distfn).and.(file_safety_check))then
+        !Can we write file?
+        writable=restart_writable()
 
-       !If we can't write the restart file then we should probably quit
-       if((.not.writable))then
-          if(save_for_restart)then 
-             write (report_unit, *) 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('save_for_restart = T:   But we cannot write to a test file like ',A,'.')") trim(restart_file)
-             write (report_unit, fmt="('THIS IS PROBABLY AN ERROR --> Check restart_dir.')") 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
-          endif
-          if(save_distfn)then 
-             write (report_unit, *) 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('save_distfn = T:   But we cannot write to a test file like ',A,'.')") trim(restart_file)
-             write (report_unit, fmt="('THIS IS PROBABLY AN ERROR --> Check restart_dir.')") 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
-          endif
-       endif
-    endif
+        !If we can't write the restart file then we should probably quit
+        if((.not.writable))then
+           if(save_for_restart)then 
+              write (report_unit, *) 
+              write (report_unit, fmt="('################# WARNING #######################')")
+              write (report_unit, fmt="('save_for_restart = T:   But we cannot write to a test file like ',A,'.')") trim(restart_file)
+              write (report_unit, fmt="('THIS IS PROBABLY AN ERROR --> Check restart_dir.')") 
+              write (report_unit, fmt="('################# WARNING #######################')")
+              write (report_unit, *) 
+           endif
+           if(save_distfn)then 
+              write (report_unit, *) 
+              write (report_unit, fmt="('################# WARNING #######################')")
+              write (report_unit, fmt="('save_distfn = T:   But we cannot write to a test file like ',A,'.')") trim(restart_file)
+              write (report_unit, fmt="('THIS IS PROBABLY AN ERROR --> Check restart_dir.')") 
+              write (report_unit, fmt="('################# WARNING #######################')")
+              write (report_unit, *) 
+           endif
+        endif
+     endif
 
   end subroutine check_gs2_diagnostics
 
@@ -532,7 +532,7 @@ contains
     call init_gs2_io (write_nl_flux, write_omega, &
          write_hrate, write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot, write_verr, &
-         write_fields, write_moments, write_full_moments_notgc, &
+         write_moments, write_full_moments_notgc, &
          write_symmetry, write_pflux_sym, write_pflux_tormom, &
          write_correlation, nwrite_big_tot, write_correlation_extend, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
@@ -923,7 +923,7 @@ contains
     use species, only: nspec, spec, has_electron_species
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fapar, fphi, fbpar, nstep
-    use fields, only: phinew, aparnew, bparnew, phi
+    use fields_arrays, only: phinew, aparnew, bparnew, phi
     use dist_fn, only: flux, write_f, write_fyx,lf_flux, eexchange
     use dist_fn, only: omega0, gamma0
     use dist_fn, only: write_poly, collision_error
@@ -992,7 +992,7 @@ contains
        write_mod = mod(istep,nwrite)
     end if
 
-    if (write_verr .and. write_mod == 0) call do_write_verr(istep)
+    if (write_verr .and. write_mod == 0) call do_write_verr
 
     call prof_leaving ("loop_diagnostics")
     if (debug) write(6,*) "loop_diagnostics: call update_time"
@@ -1372,7 +1372,6 @@ contains
     use run_parameters, only: fphi, fapar, fbpar, woutunits
     use kt_grids, only: naky, ntheta0
     use gs2_io, only: nc_loop
-    use fields, only: phinorm
     use mp, only: proc0
     implicit none
     real, intent(in) :: t
@@ -1685,7 +1684,7 @@ contains
     use dist_fn, only: getmoms
     use file_utils, only: open_output_file, close_output_file
     use mp, only: proc0
-    use fields_arrays, only: phinew
+    use fields_arrays, only: phinew, bparnew
     use gs2_io, only: nc_final_moments
     implicit none
     complex, dimension (:,:,:,:), allocatable :: ntot, density, upar, tpar, tperp
@@ -1707,7 +1706,7 @@ contains
     allocate (qpperpj1(-ntgrid:ntgrid,ntheta0,naky,nspec))
 
     !Calculate moments
-    call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+    call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
 
     if (proc0) then
        if (write_ascii) then
@@ -2188,7 +2187,7 @@ contains
     if (fphi > epsilon(0.0)) then
        allocate (yxphi(nnx,nny,-ntgrid:ntgrid))
        !<DD>Commented as removed writing of ntot in favour of apar for consistency
-       !call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+       !call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
        call transform2 (phinew, yxphi, nny, nnx)
     end if
     if (fapar > epsilon(0.0)) then
@@ -2266,11 +2265,12 @@ contains
     use species, only: nspec
     use dist_fn, only: getmoms
     use mp, only: proc0
+    use fields_arrays, only: phinew, bparnew
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
          upar, tpar, tperp, qparflux, pperpj1, qpperpj1
 
-    call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+    call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
     if(proc0) call nc_write_moments(nout, ntot, density, upar, tpar, tperp,qparflux, pperpj1, qpperpj1,ob_midplane=ob_midplane) 
   end subroutine do_write_moments
 
@@ -2321,7 +2321,7 @@ contains
          omegaavg(it,ik)/tunits(ik), omegaavg(it,ik)*woutunits(ik)               
   end subroutine do_write_omavg
 
-  subroutine do_write_verr(istep)
+  subroutine do_write_verr
     use dist_fn, only: get_verr, get_gtran
     use mp, only: proc0
     use le_grids, only: nlambda, ng2
@@ -2330,7 +2330,6 @@ contains
     use collisions, only: vnmult
     use species, only: spec
     implicit none
-    integer, intent(in) :: istep
     real, dimension (:,:), allocatable :: errest
     integer, dimension (:,:), allocatable :: erridx
     real :: geavg, glavg, gtavg
@@ -2342,7 +2341,7 @@ contains
     call get_verr (errest, erridx, phinew, bparnew)
 
     ! error estimate based on monitoring amplitudes of legendre polynomial coefficients
-    call get_gtran (geavg, glavg, gtavg, phinew, bparnew, istep)
+    call get_gtran (geavg, glavg, gtavg, phinew, bparnew)
 
     if (proc0) then
        ! write error estimates to .nc file          
@@ -2486,11 +2485,12 @@ contains
     use species, only: nspec
     use mp, only: proc0
     use gs2_io, only: nc_loop_sym
+    use fields_arrays, only: phinew
     implicit none
     real, dimension(:,:,:), allocatable :: vflx_sym
 
     allocate (vflx_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
-    call flux_vs_theta_vs_vpa (vflx_sym)
+    call flux_vs_theta_vs_vpa (phinew,vflx_sym)
     if (proc0) call nc_loop_sym (nout, vflx_sym)
     deallocate (vflx_sym)
   end subroutine do_write_symmetry
@@ -2993,7 +2993,7 @@ contains
     use mp, only: proc0
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
-    use fields_arrays, only: phinew
+    use fields_arrays, only: phinew, bparnew
     use gs2_io, only: nc_loop_moments
     use theta_grid, only: ntgrid
     implicit none
@@ -3008,7 +3008,7 @@ contains
     real, dimension (ntheta0, naky, nspec) :: tpar2_by_mode, tperp2_by_mode
 
     !<DD>We seem to call this routine a lot in one loop
-    call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+    call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
 
     if (proc0) then
        do is = 1, nspec
@@ -3053,11 +3053,12 @@ contains
     use species, only: nspec
     use mp, only: proc0
     use gs2_io, only: nc_loop_fullmom
+    use fields_arrays, only: phinew, bparnew
     implicit none
     real, intent(in) :: t
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
          upar, tpar, tperp
-    call getmoms_notgc(density,upar,tpar,tperp,ntot)
+    call getmoms_notgc(phinew, bparnew, density,upar,tpar,tperp,ntot)
     if(proc0) then
        call nc_loop_fullmom(nout,t, &
             & ntot(igomega,:,:,:),density(igomega,:,:,:), &
@@ -3218,7 +3219,7 @@ contains
   subroutine heating (istep, h, hk)
     use mp, only: proc0
     use dist_fn, only: get_heat
-    use fields, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use species, only: nspec, spec
     use kt_grids, only: naky, ntheta0, aky, akx
     use theta_grid, only: ntgrid, delthet, jacob
@@ -3405,6 +3406,25 @@ if (debug) write(6,*) "get_omegaavg: omegaavg=",omegaavg
     end if
 if (debug) write(6,*) "get_omegaavg: done"
   end subroutine get_omegaavg
+
+  subroutine phinorm (phitot)
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use theta_grid, only: delthet
+    use kt_grids, only: naky, ntheta0
+    use constants, only: pi
+    implicit none
+    real, dimension (:,:), intent (out) :: phitot
+    integer :: ik, it
+
+    do ik = 1, naky
+       do it = 1, ntheta0
+          phitot(it,ik) = 0.5/pi &
+           *(sum((abs(phinew(:,it,ik))**2 + abs(aparnew(:,it,ik))**2 &
+                  + abs(bparnew(:,it,ik))**2) &
+                 *delthet))
+       end do
+    end do
+  end subroutine phinorm
 
 !NOTE: Here we calculate the correction factors for each possible kperp
   subroutine get_vol_average_all (a, b, axb, axb_by_mode)
@@ -3604,6 +3624,7 @@ if (debug) write(6,*) "get_omegaavg: done"
     use kt_grids, only: ntheta0, naky
     use theta_grid, only: ntgrid
     use dist_fn, only: getemoms
+    use fields_arrays, only: phinew, bparnew
     implicit none
     real, intent (out) :: phase_tot, phase_theta
     complex, dimension (:,:,:,:), allocatable :: ntot, tperp
@@ -3617,7 +3638,7 @@ if (debug) write(6,*) "get_omegaavg: done"
     allocate ( ntot(-ntgrid:ntgrid,ntheta0,naky,nspec))
     allocate (tperp(-ntgrid:ntgrid,ntheta0,naky,nspec))
 
-    call getemoms (ntot, tperp)
+    call getemoms (phinew, bparnew, ntot, tperp)
 
     do is = 1,nspec
        if (spec(is)%type == electron_species) then
@@ -3847,7 +3868,7 @@ if (debug) write(6,*) "get_omegaavg: done"
   end subroutine reorder_kx
 
   subroutine init_par_filter
-    use theta_grid, only: ntgrid, nperiod
+    use theta_grid, only: ntgrid
     use gs2_transforms, only: init_zf
     use kt_grids, only: naky, ntheta0
 
@@ -3855,7 +3876,7 @@ if (debug) write(6,*) "get_omegaavg: done"
        print *,"WARNING: kt_grids used in init_par_filter before initialised?"
     endif
 
-    call init_zf (ntgrid, nperiod, ntheta0*naky)
+    call init_zf (ntgrid, ntheta0*naky)
 
   end subroutine init_par_filter
 
@@ -3866,7 +3887,7 @@ if (debug) write(6,*) "get_omegaavg: done"
     complex, dimension(:,:,:) :: an, an2    
     real :: scale
 
-    call kz_spectrum (an, an2, ntgrid, ntheta0, naky)
+    call kz_spectrum (an, an2, ntheta0, naky)
     scale = 1./real(4*ntgrid**2)
     an2 = an2*scale
 

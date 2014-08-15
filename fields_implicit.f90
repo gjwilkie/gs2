@@ -8,7 +8,6 @@ module fields_implicit
   public :: init_allfields_implicit
   public :: nidx
   public :: reset_init
-  public :: set_scan_parameter
   public :: field_subgath, dump_response, read_response
   public :: dump_response_to_file_imp
 
@@ -35,7 +34,7 @@ contains
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use gs2_layouts, only: init_gs2_layouts
-    use parameter_scan_arrays, only: run_scan
+!    use parameter_scan_arrays, only: run_scan
     implicit none
     logical, parameter :: debug=.false.
 !    logical :: dummy
@@ -51,8 +50,8 @@ contains
     call init_kt_grids
     if (debug) write(6,*) "init_fields_implicit: read_parameters"
     call read_parameters
-    if (debug .and. run_scan) &
-        write(6,*) "init_fields_implicit: set_scan_parameter"
+ !   if (debug .and. run_scan) &
+ !       write(6,*) "init_fields_implicit: set_scan_parameter"
         ! Must be done before resp. m.
         !if (run_scan) call set_scan_parameter(dummy)
     if (debug) write(6,*) "init_fields_implicit: response_matrix"
@@ -70,37 +69,10 @@ contains
 
   end function fields_implicit_unit_test_init_fields_implicit
 
-  
-  subroutine set_scan_parameter(reset)
-    !use parameter_scan_arrays, only: current_scan_parameter_value
-    !use parameter_scan_arrays, only: scan_parameter_switch
-    !use parameter_scan_arrays, only: scan_parameter_tprim
-    !use parameter_scan_arrays, only: scan_parameter_g_exb
-    use parameter_scan_arrays
-    use species, only: spec 
-    use dist_fn, only: g_exb
-    use mp, only: proc0
-    logical, intent (inout) :: reset
-     
-    select case (scan_parameter_switch)
-    case (scan_parameter_tprim)
-       spec(scan_spec)%tprim = current_scan_parameter_value
-       if (proc0) write (*,*) &
-         "Set scan parameter tprim_1 to ", spec(scan_spec)%tprim
-       reset = .true.
-    case (scan_parameter_g_exb)
-       g_exb = current_scan_parameter_value
-       if (proc0) write (*,*) &
-         "Set scan parameter g_exb to ", g_exb
-       reset = .false.
-    end select
-  end subroutine set_scan_parameter
-
   subroutine read_parameters
   end subroutine read_parameters
 
   subroutine init_allfields_implicit
-
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use dist_fn_arrays, only: g, gnew
     use dist_fn, only: get_init_field
@@ -1717,20 +1689,5 @@ contains
     enddo
 
   end subroutine alloc_response_objects
-
-  subroutine timer
-    
-    character (len=10) :: zdate, ztime, zzone
-    integer, dimension(8) :: ival
-    real, save :: told=0., tnew=0.
-    
-    call date_and_time (zdate, ztime, zzone, ival)
-    tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
-    if (told > 0.) then
-       print *, 'Fields_implicit: Time since last called: ',tnew-told,' seconds'
-    end if
-    told = tnew
-  end subroutine timer
-
 end module fields_implicit
 

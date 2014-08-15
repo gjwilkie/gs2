@@ -8,7 +8,7 @@ module le_derivatives
 
 contains
 
-  subroutine vspace_derivatives (g, gold, g1, phi, apar, bpar, phinew,aparnew, bparnew, diagnostics, gtoc, ctog)
+  subroutine vspace_derivatives (g, gold, g1, phi, bpar, phinew, bparnew, diagnostics, gtoc, ctog)
 
     use redistribute, only: gather, scatter
     use dist_fn_arrays, only: c_rate, g_adjust
@@ -30,7 +30,7 @@ contains
     implicit none
     
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, gold, g1
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar, phinew, aparnew, bparnew
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar, phinew, bparnew
     integer, optional, intent (in) :: diagnostics
 
 # ifdef LOWFLOW
@@ -107,21 +107,21 @@ contains
                 isgn = ixi_to_isgn(ig,ixi)
                 if (.not. forbid(ig,il)) &
                    call get_gvpa (gtmp, dvp, ig, il, ixi, ie, isgn, gle(ixi,ie,ile))
-                end do
              end do
           end do
+       end do
 
-          deallocate (gtmp)
-
-          if (colls) then
+       deallocate (gtmp)
+       
+       if (colls) then
 # endif
-       ! update distribution function to take into account collisions
+          ! update distribution function to take into account collisions
           call solfp1 (gle, diagnostics)
 
 # ifdef LOWFLOW
           end if
 # endif
-         ! remap from le_layout to g_layout
+          ! remap from le_layout to g_layout
           if (c_to_g) call scatter (g2le, gle, g)
           deallocate (gle)
           if (heating_flag) then

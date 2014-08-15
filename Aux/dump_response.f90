@@ -57,7 +57,7 @@ program dump_response
   enddo
 
   !Clean up
-  call finish_gs2
+  call finish_dump_response
 
 contains
   subroutine next_time_step
@@ -137,7 +137,7 @@ contains
     time_measure=0.
   end subroutine init_and_dump
 
-  subroutine finish_gs2
+  subroutine finish_dump_response
     use antenna, only: finish_antenna
     use collisions, only: finish_collisions
     use dist_fn, only: finish_dist_fn
@@ -166,7 +166,7 @@ contains
     if (proc0) call finish_file_utils
     call finish_mp
 
-  end subroutine finish_gs2
+  end subroutine finish_dump_response
 
 end program dump_response
 
