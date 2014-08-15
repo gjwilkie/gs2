@@ -1649,11 +1649,11 @@ contains
   
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine init_zf (ntgrid, nperiod, howmany)
+  subroutine init_zf (ntgrid, howmany)
 
     use fft_work, only: init_z
     implicit none
-    integer, intent (in) :: ntgrid, nperiod, howmany
+    integer, intent (in) :: ntgrid, howmany
     logical :: done = .false.
 
     if (done) return
@@ -1665,11 +1665,11 @@ contains
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
-  subroutine kz_spectrum (an, an2, ntgrid, ntheta0, naky)
+  subroutine kz_spectrum (an, an2, ntheta0, naky)
 
     complex, dimension (:,:,:), intent(in)  :: an
     complex, dimension (:,:,:), intent(out) :: an2
-    integer, intent (in) :: ntheta0, naky, ntgrid
+    integer, intent (in) :: ntheta0, naky
 
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)

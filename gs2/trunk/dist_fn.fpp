@@ -528,7 +528,7 @@ subroutine check_dist_fn(report_unit)
   subroutine init_dist_fn
     use mp, only: proc0, finish_mp
     use species, only: init_species, nspec
-    use theta_grid, only: init_theta_grid, ntgrid
+    use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids, naky, ntheta0
     use le_grids, only: init_le_grids, nlambda, negrid
     use run_parameters, only: init_run_parameters
@@ -576,7 +576,7 @@ subroutine check_dist_fn(report_unit)
     call init_run_parameters
 
     if (debug) write(6,*) "init_dist_fn: dist_fn_layouts"
-    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
 
     if (debug) write(6,*) "init_dist_fn: nonlinear_terms"
     call init_nonlinear_terms 
@@ -3428,51 +3428,51 @@ endif
 !CMR do the usual LC when computing response matrix
        !Calculate the explicit nonlinear terms
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
-         phi, apar, bpar, istep, bkdiff(1), fexp(1))
+         phi, apar, bpar, istep, bkdiff(1))
        if(reset) return !Return if resetting
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
 
        !Add hyper terms (damping)
-       call hyper_diff (gnew, phinew, bparnew)
+       call hyper_diff (gnew, phinew)
        !Add collisions
-       call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
+       call vspace_derivatives (gnew, g, g0, phi, bpar, phinew, bparnew, modep)
     else if (istep.eq.1 .and. istep.ne.istep_last) then
 !CMR on first half step at istep=1 do CL with all redists
-       call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep)
+       call vspace_derivatives (gnew, g, g0, phi, bpar, phinew, bparnew, modep)
        !Calculate the explicit nonlinear terms
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
-         phi, apar, bpar, istep, bkdiff(1), fexp(1))
+         phi, apar, bpar, istep, bkdiff(1))
        if(reset) return !Return if resetting
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
        !Add hyper terms (damping)
-       call hyper_diff (gnew, phinew, bparnew)
+       call hyper_diff (gnew, phinew)
     else if (istep.ne.istep_last) then
 !CMR on first half step do CL with all redists without gtoc redist
-       call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep,gtoc=.false.)
+       call vspace_derivatives (gnew, g, g0, phi, bpar, phinew, bparnew, modep,gtoc=.false.)
        !Calculate the explicit nonlinear terms
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
-         phi, apar, bpar, istep, bkdiff(1), fexp(1))
+         phi, apar, bpar, istep, bkdiff(1))
        if(reset) return !Return if resetting
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
        !Add hyper terms (damping)
-       call hyper_diff (gnew, phinew, bparnew)
+       call hyper_diff (gnew, phinew)
     else if (istep.eq.istep_last) then
 !CMR on second half of all timesteps do LC without ctog redist
        !Calculate the explicit nonlinear terms 
        !NB following call should be unnecessary as NL terms not added on second
        !    half of istep: keeping for now as may be needed by some code
        call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
-         phi, apar, bpar, istep, bkdiff(1), fexp(1))
+         phi, apar, bpar, istep, bkdiff(1))
        if(reset) return !Return if resetting
 
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
        !Add hyper terms (damping)
-       call hyper_diff (gnew, phinew, bparnew)
-       call vspace_derivatives (gnew, g, g0, phi, apar, bpar, phinew, aparnew, bparnew, modep, ctog=.false.)
+       call hyper_diff (gnew, phinew)
+       call vspace_derivatives (gnew, g, g0, phi, bpar, phinew, bparnew, modep, ctog=.false.)
     endif
 
     !Enforce parity if desired (also performed in invert_rhs, but this is required
@@ -4174,7 +4174,6 @@ endif
     integer :: ig
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
 
-!    call timer (0, 'get_source_term')
 
 !CMR, 4/8/2011
 ! apargavg and phigavg combine to give the GK EM potential chi. 
@@ -4328,7 +4327,6 @@ endif
        end if
     end if
 
-!    call timer (1, 'get_source_term')
   contains
 
     subroutine set_source
@@ -5373,7 +5371,7 @@ endif
     call prof_leaving ("getan", "dist_fn")
   end subroutine getan
 
-  subroutine getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+  subroutine getmoms (phinew,bparnew,ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew, g_adjust
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
@@ -5381,11 +5379,11 @@ endif
     use le_grids, only: integrate_moment, anon, energy
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
-    use fields_arrays, only: phinew, bparnew
 
     implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
          upar, tpar, tperp, ntot, qparflux, pperpj1, qpperpj1
+    complex, dimension (-ntgrid:,:,:), intent(in) :: phinew, bparnew
 
     integer :: ik, it, isgn, ie, is, iglo
 
@@ -5512,7 +5510,7 @@ endif
     call prof_leaving ("getmoms", "dist_fn")
   end subroutine getmoms
 
-  subroutine getemoms (ntot, tperp)
+  subroutine getemoms (phinew, bparnew, ntot, tperp)
     use dist_fn_arrays, only: vperp2, aj0, gnew, g_adjust
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
@@ -5520,10 +5518,10 @@ endif
     use le_grids, only: integrate_moment, anon
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
-    use fields_arrays, only: phinew, bparnew
 
     implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: tperp, ntot
+    complex, dimension (-ntgrid:,:,:), intent(in) :: phinew, bparnew
 
     integer :: ik, it, isgn, ie, is, iglo
 
@@ -5600,20 +5598,22 @@ endif
   end subroutine getemoms
   
   ! moment at not guiding center coordinate
-  subroutine getmoms_notgc (dens, upar, tpar, tper, ntot, jpar)
+  subroutine getmoms_notgc (phinew, bparnew, dens, upar, tpar, tper, ntot, jpar)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
     use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use kt_grids, only: nakx => ntheta0, naky
     use le_grids, only: integrate_moment
-    use fields_arrays, only: phinew, bparnew
+
     implicit none
     complex, intent (out) :: &
          & dens(-ntgrid:,:,:,:), upar(-ntgrid:,:,:,:), &
          & tpar(-ntgrid:,:,:,:), tper(-ntgrid:,:,:,:)
     complex, intent (out), optional :: ntot(-ntgrid:,:,:,:)
     complex, intent (out), optional :: jpar(-ntgrid:,:,:)
+    complex, dimension(-ntgrid:,:,:), intent(in) :: phinew, bparnew
+
     integer :: isgn, iglo, is
 
     real :: a, b, tpar2, tper2
@@ -6700,11 +6700,9 @@ endif
 
   end subroutine get_lfflux
 
-  subroutine flux_vs_theta_vs_vpa (vflx)
-
+  subroutine flux_vs_theta_vs_vpa (phinew,vflx)
     use constants, only: zi
     use dist_fn_arrays, only: gnew, vperp2, aj1, aj0, vpac
-    use fields_arrays, only: phinew
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: it_idx, ik_idx, is_idx
     use geometry, only: rhoc
@@ -6716,7 +6714,7 @@ endif
     use species, only: spec, nspec
 
     implicit none
-
+    complex, dimension(-ntgrid:,:,:), intent(in) :: phinew
     real, dimension (-ntgrid:,:,:), intent (out) :: vflx
     
     integer :: all = 1
@@ -6757,33 +6755,29 @@ endif
 !=============================================================================
 
   subroutine pflux_vs_theta_vs_vpa (vflx)
-
-   
+#ifdef LOWFLOW   
     use dist_fn_arrays, only: gnew, aj0
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: it_idx, ik_idx, is_idx
-    use theta_grid, only: ntgrid
-#ifdef LOWFLOW
     use theta_grid, only: Rplot !JPL
     use fields_arrays, only: phinew
     use kt_grids, only: aky
-#endif
     use le_grids, only: integrate_volume, nlambda, negrid
     use le_grids, only: get_flux_vs_theta_vs_vpa
     use species, only:  nspec
-#ifdef LOWFLOW
     use lowflow, only: mach_lab    
 #endif
+    use theta_grid, only: ntgrid
     implicit none
 
     real, dimension (-ntgrid:,:,:), intent (out) :: vflx
-    
+    !This whole routine will return zero when not using lowflow so move directive to here <DD>
+#ifdef LOWFLOW  
     integer :: all = 1
     integer :: iglo, isgn, ig, it, ik, is
 
     real, dimension (:,:,:), allocatable :: g0r
     real, dimension (:,:,:,:,:), allocatable :: gavg
- 
     allocate (g0r(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (gavg(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
 
@@ -6794,11 +6788,9 @@ endif
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
              g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo) 
-#ifdef LOWFLOW  
+
              g0r(ig,isgn,iglo) = aimag(g0(ig,isgn,iglo)*conjg(phinew(ig,it,ik)))*aky(ik)*Rplot(ig)**2*mach_lab(is)
-#else
-             g0r(ig,isgn,iglo) = 0.0
-#endif
+
           end do
        end do
     end do
@@ -6808,7 +6800,9 @@ endif
 
     deallocate (gavg)
     deallocate (g0r)
-
+#else
+    vflx=0.
+#endif
   end subroutine pflux_vs_theta_vs_vpa
 
 
@@ -7883,7 +7877,7 @@ endif
 
   end subroutine estimate_error
 
-  subroutine get_gtran (geavg, glavg, gtavg, phi, bpar, istep)
+  subroutine get_gtran (geavg, glavg, gtavg, phi, bpar)
 
     use le_grids, only: legendre_transform, nlambda, ng2, nesub, jend
     use theta_grid, only: ntgrid
@@ -7896,7 +7890,6 @@ endif
 
     implicit none
 
-    integer, intent (in) :: istep
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     real, intent (out) :: geavg, glavg, gtavg
 
@@ -7943,9 +7936,9 @@ endif
 ! perform legendre transform on dist. fn. to obtain coefficients
 ! used when expanding dist. fn. in legendre polynomials 
     if (allocated(gttran)) then
-       call legendre_transform (g0, getran, gltran, istep, gttran)
+       call legendre_transform (g0, getran, gltran, gttran)
     else
-       call legendre_transform (g0, getran, gltran, istep)
+       call legendre_transform (g0, getran, gltran)
     end if
 
 ! transform from h back to g
@@ -8058,6 +8051,7 @@ endif
     end do
 
 ! computes and returns lagrange interpolating polynomial for g0
+!<DD>WARNING: THIS ROUTINE DOESN'T USE g0 FOR ANYTHING IS THIS CORRECT?
     call lagrange_interp (g0, lpoly, istep)
 
     call g_adjust (gnew, phi, bpar, -fphi, -fbpar)
@@ -8627,23 +8621,6 @@ endif
     ipright=proc_id(g_lo,iglo_right)
 
   end subroutine find_rightmost_link
-
-  subroutine timer (i, place)
-    
-    character (len=10) :: zdate, ztime, zzone
-    character (*) :: place
-    integer, intent (in) :: i
-    integer, dimension(8) :: ival
-    real, save :: told=0., tnew=0.
-    
-    call date_and_time (zdate, ztime, zzone, ival)
-    tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
-    if (i == 0) told = -1.
-    if (told > 0.) then
-       print *, ': Elapsed time = ',tnew-told,' seconds in '//trim(place)
-    end if
-    told = tnew
-  end subroutine timer
 
   subroutine dot (a, anew, adot, fac)
 

@@ -23,6 +23,39 @@ drive_mod = \
 	 drive.o \
 	 regression.o 
 
+dump_grids_mod = \
+	 ceq.o \
+	 command_line.o \
+	 constants.o \
+	 deq.o \
+	 dump_grids.o \
+	 eeq.o \
+	 file_utils.o \
+	 gauss_quad.o \
+	 geometry.o \
+	 geq.o \
+	 gridgen4mod.o \
+	 gs2_layouts.o \
+	 ideq.o \
+	 job_manage.o \
+	 kt_grids.o \
+	 layouts_type.o \
+	 le_grids.o \
+	 leq.o \
+	 mp.o \
+	 netcdf_utils.o \
+	 peq.o \
+	 read_chease.o \
+	 redistribute.o \
+	 runtime_tests.o \
+	 sorting.o \
+	 species.o \
+	 spl.o \
+	 text_options.o \
+	 theta_grid.o \
+	 theta_grid_params.o \
+	 unit_tests.o 
+
 dump_response_mod = \
 	 antenna.o \
 	 antenna_data.o \
@@ -398,7 +431,6 @@ collisions.o: \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 kt_grids.o \
-	 layouts_type.o \
 	 le_grids.o \
 	 mp.o \
 	 prof.o \
@@ -454,7 +486,6 @@ dist_fn.o: \
 	 collisions.o \
 	 constants.o \
 	 dist_fn_arrays.o \
-	 fields_arrays.o \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_heating.o \
@@ -482,6 +513,14 @@ dist_fn_arrays.o: \
 	 theta_grid.o 
 drive.o: \
 	 regression.o 
+dump_grids.o: \
+	 file_utils.o \
+	 job_manage.o \
+	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
+	 netcdf_utils.o \
+	 theta_grid.o 
 dump_response.o: \
 	 antenna.o \
 	 collisions.o \
@@ -521,7 +560,6 @@ ffttester.o: \
 	 theta_grid.o 
 fields.o: \
 	 antenna.o \
-	 constants.o \
 	 dist_fn.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
@@ -548,10 +586,8 @@ fields_implicit.o: \
 	 job_manage.o \
 	 kt_grids.o \
 	 mp.o \
-	 parameter_scan_arrays.o \
 	 prof.o \
 	 run_parameters.o \
-	 species.o \
 	 theta_grid.o 
 fields_local.o: \
 	 antenna.o \
@@ -621,7 +657,6 @@ gs2_diagnostics.o: \
 	 constants.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
-	 fields.o \
 	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_heating.o \
@@ -679,7 +714,6 @@ gs2_io.o: \
 	 species.o \
 	 theta_grid.o 
 gs2_layouts.o: \
-	 fft_work.o \
 	 file_utils.o \
 	 layouts_type.o \
 	 mp.o \
@@ -691,8 +725,6 @@ gs2_main.o: \
 	 dist_fn_arrays.o \
 	 fields.o \
 	 fields_arrays.o \
-	 fields_implicit.o \
-	 fields_test.o \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
@@ -892,7 +924,7 @@ nonlinear_terms.o: \
 om.o: \
 	 command_line.o 
 parameter_scan.o: \
-	 fields_implicit.o \
+	 dist_fn.o \
 	 file_utils.o \
 	 gs2_save.o \
 	 gs2_time.o \
@@ -900,6 +932,7 @@ parameter_scan.o: \
 	 mp.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
+	 species.o \
 	 text_options.o 
 parameter_scan_arrays.o: 
 peq.o: \

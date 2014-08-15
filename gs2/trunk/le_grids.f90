@@ -393,7 +393,6 @@ contains
   end subroutine read_parameters
 
   subroutine init_integrations
-    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use gs2_layouts, only: init_dist_fn_layouts, pe_layout
@@ -401,7 +400,7 @@ contains
     implicit none
     character (1) :: char
 
-    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
 
     if (.not. intinit) then
        intinit = .true.
@@ -1051,7 +1050,7 @@ contains
 
   end function le_grids_unit_test_integrate_species
 
-  subroutine legendre_transform (g, tote, totl, istep, tott)
+  subroutine legendre_transform (g, tote, totl, tott)
     
     use egrid, only: zeroes
     use mp, only: nproc, broadcast
@@ -1064,7 +1063,6 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (0:,-ntgrid:,:,:,:), intent (out) :: tote, totl
     complex, dimension (0:,-ntgrid:,:,:,:), intent (out), optional :: tott
-    integer, intent (in) :: istep
 
     complex :: totfac
     real :: ulim
@@ -1223,6 +1221,7 @@ contains
   end subroutine legendre_polynomials
 
   subroutine lagrange_interp (g, poly, istep, all)
+!<DD>WARNING: THIS ROUTINE DOESN'T USE g0 FOR ANYTHING IS THIS CORRECT?
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, idx, idx_local
@@ -2201,22 +2200,6 @@ contains
     end do
 
   end subroutine lagrange_coefs
-
-  subroutine stop_invalid (name, val)
-    use file_utils, only: error_unit
-    use mp, only: proc0, finish_mp
-    implicit none
-    character(*), intent (in) :: name
-    integer, intent (in) :: val
-    integer :: ierr
-
-    if (proc0) then
-       ierr = error_unit()
-       write (unit=ierr, fmt='("Invalid value for ",a,": ",i5)') name, val
-    end if
-    call finish_mp
-    stop
-  end subroutine stop_invalid
 
   subroutine stop_message (message)
 !JAB: print an error message and end program

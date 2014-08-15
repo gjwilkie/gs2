@@ -7,7 +7,7 @@ module fields
   public :: init_fields, finish_fields
   public :: read_parameters, wnml_fields, check_fields
   public :: advance, force_maxwell_reinit
-  public :: phinorm, kperp, fieldlineavgphi
+  public :: kperp, fieldlineavgphi
   public :: phi, apar, bpar, phinew, aparnew, bparnew
   public :: reset_init, set_init_fields
   public :: fields_init_response, set_dump_and_read_response
@@ -343,24 +343,6 @@ contains
     end select
   end subroutine advance
 
-  subroutine phinorm (phitot)
-    use theta_grid, only: delthet
-    use kt_grids, only: naky, ntheta0
-    use constants
-    implicit none
-    real, dimension (:,:), intent (out) :: phitot
-    integer :: ik, it
-
-    do ik = 1, naky
-       do it = 1, ntheta0
-          phitot(it,ik) = 0.5/pi &
-           *(sum((abs(phinew(:,it,ik))**2 + abs(aparnew(:,it,ik))**2 &
-                  + abs(bparnew(:,it,ik))**2) &
-                 *delthet))
-       end do
-    end do
-  end subroutine phinorm
-
   subroutine kperp (ntgrid_output, akperp)
     use theta_grid, only: delthet
     use kt_grids, only: naky, aky, ntheta0, kperp2
@@ -462,20 +444,6 @@ contains
        call fl_reset
     end select
   end subroutine reset_init
-
-  subroutine timer
-    
-    character (len=10) :: zdate, ztime, zzone
-    integer, dimension(8) :: ival
-    real, save :: told=0., tnew=0.
-    
-    call date_and_time (zdate, ztime, zzone, ival)
-    tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
-    if (told > 0.) then
-       print *, 'Fields: Time since last called: ',tnew-told,' seconds'
-    end if
-    told = tnew
-  end subroutine timer
 
   subroutine finish_fields
 

@@ -2775,6 +2775,7 @@ contains
     use dist_fn, only: getmoms_notgc, get_init_field
     use dist_fn, only: mom_coeff, mom_shift_para, mom_shift_perp
     use dist_fn, only: gamtot, gamtot1, gamtot2
+    use fields_arrays, only: phinew, bparnew
     use constants, only: pi, zi
     use file_utils, only: error_unit, get_unused_unit
     use ran, only: ranf
@@ -3260,7 +3261,7 @@ contains
        ! get equilibrium fields
        gnew(:,:,:)=g_eq(:,:,:)
        call get_init_field(phi,apar,bpar)
-       call getmoms_notgc(dens,upar,tpar,tper,jpar=jpar)
+       call getmoms_notgc(phinew,bparnew,dens,upar,tpar,tper,jpar=jpar)
        call transform2(phi,phixy,nny,nnx)
        call transform2(apar,aparxy,nny,nnx)
        call transform2(bpar,bparxy,nny,nnx)
@@ -3293,7 +3294,7 @@ contains
     if(debug.and.proc0) write(6,*) 'check'
     if(input_check_recon) then
 
-       call getmoms_notgc(dens,upar,tpar,tper)
+       call getmoms_notgc(phinew,bparnew,dens,upar,tpar,tper)
        call get_init_field(phi,apar,bpar)
 
        if(nakx==1 .and. naky==1) then ! grid_option = single case
