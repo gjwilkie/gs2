@@ -253,12 +253,24 @@ contains
           theta0(:,j) &
                = (/ (theta0_min + dtheta0*real(i), i=0,ntheta0-1) /)
        end do
-       akx = theta0(:,1) * shat * aky(1)
+       
+       !<DD>Adding support for ky=0, kx/=0
+       if(aky(1)==0)then
+          if(naky>1)then
+             akx = theta0(:,2) * shat * aky(2)
+          else
+             dkx = 0.0
+             if (ntheta0 > 1) dkx = (akx_max - akx_min)/real(ntheta0 - 1)
+             akx = (/ (akx_min + dkx*real(i), i = 0,ntheta0-1) /)
+          end if
+       else
+          !This is the original behaviour
+          akx = theta0(:,1) * shat * aky(1)
+       endif
     else
 
 !CMR, 22/9/2010:  ie here assume boundary_option .eq. 'periodic'
 !new code for periodic finite kx ballooning space runs with shat=0
-
        dkx = 0.0
        if (ntheta0 > 1) dkx = (akx_max - akx_min)/real(ntheta0 - 1)
        akx = (/ (akx_min + dkx*real(i), i = 0,ntheta0-1) /)
@@ -270,7 +282,7 @@ contains
     use constants, only: twopi
     use theta_grid, only: shat
     implicit none
-    real :: dky, dtheta0, dkx
+    real :: dtheta0
     integer :: report_unit, i, j
     real, dimension(:), allocatable:: aky, akx
     real, dimension(:,:), allocatable:: theta0
@@ -299,6 +311,9 @@ contains
 ! using flow shear: check that the constraints on theta0 grid are satisfied!
 
     if (shat /= 0) then
+       !It would be nice to only write this information if g_exb*gexbfac/=0 but currently
+       !dependencies prevent this.
+       dtheta0 = 0.0    ;  if (ntheta0 > 1) dtheta0 = (theta0_max - theta0_min)/real(ntheta0 - 1)
        if (abs(mod(twopi-theta0_max+theta0_min,twopi)-dtheta0) > 1.0e-3*dtheta0) then
           write (report_unit, *) 
           write (report_unit, fmt="('IF using perp ExB flow shear in BALLOONING SPACE there is an ERROR that will corrupt results.')")
