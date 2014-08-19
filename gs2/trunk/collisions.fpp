@@ -438,6 +438,8 @@ contains
     allocate (dtmp(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (vns(naky,negrid,nspec,3))
     
+    duinv=0.0 ; dtmp=0.0; !This initialisation is needed in case kwork_filter is true anywhere
+
     vns(:,:,:,1) = vnmult(1)*vnew_D
     vns(:,:,:,2) = vnmult(1)*vnew_s
     vns(:,:,:,3) = 0.0
@@ -540,10 +542,10 @@ contains
 !       end do
     end if
 
-    where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
-                                        ! duinv=0 iff vnew=0 so ok to keep duinv=0.
-       duinv = 1./duinv  ! now it is 1/du
-    end where
+   where (abs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
+                                        !duinv=0 iff vnew=0 so ok to keep duinv=0.
+      duinv = 1./duinv  ! now it is 1/du
+   end where
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get s0 (first form)
@@ -847,7 +849,7 @@ contains
     allocate (duinv(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (dtmp(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (vns(naky,negrid,nspec,2))
-    
+    duinv=0.0 ; dtmp=0.0    
     vns(:,:,:,1) = vnmult(2)*delvnew
     vns(:,:,:,2) = vnmult(2)*vnew_s
 
@@ -870,10 +872,10 @@ contains
 !       end do
 !    end if
 
-    where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
-                                        ! duinv=0 iff vnew=0 so ok to keep duinv=0.
-       duinv = 1./duinv  ! now it is 1/du
-    end where
+   where (abs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
+                                      !  duinv=0 iff vnew=0 so ok to keep duinv=0.
+      duinv = 1./duinv  ! now it is 1/du
+   end where
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get z0 (first form)
@@ -951,10 +953,10 @@ contains
 !       end do
 !    end if
 
-    where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
-                                        ! duinv=0 iff vnew=0 so ok to keep duinv=0.
-       duinv = 1./duinv  ! now it is 1/du
-    end where
+   where (abs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
+                                      !  duinv=0 iff vnew=0 so ok to keep duinv=0.
+      duinv = 1./duinv  ! now it is 1/du
+   end where
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get s0 (first form)
@@ -1152,7 +1154,6 @@ contains
     end do
 
     deallocate (gtmp, duinv, dtmp, vns)
-
 
     if(use_le_layout) then    
       if (.not. allocated(bs0le)) then
@@ -3160,7 +3161,8 @@ contains
 
     !This is needed to to ensure the it,ik values we don't set aren't included
     !in the integral (can also be enforced in integrate_moment routine)
-    if(any(kwork_filter)) gtmp=0.
+    !if(any(kwork_filter)) gtmp=0.
+    gtmp=0.
 
     if (.not. allocated(vpatmp)) then
        allocate(vpatmp(-ntgrid:ntgrid,nxi)) ; vpatmp = 0.0
@@ -3173,27 +3175,27 @@ contains
           end do
        end do
     end if
-
+    
     vns = vnmult(2)*vnew_E
-
+    
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! First get v0y0
     
     ! TMP FOR TESTING -- MAB
 !    if (proc0) call system_clock (count=t0, count_rate=tr)
 
-     do ile = le_lo%llim_proc, le_lo%ulim_proc
-        is = is_idx(le_lo,ile)
-        ik = ik_idx(le_lo,ile)
-        it = it_idx(le_lo,ile)
-        if(kwork_filter(it,ik)) cycle
-        do ie=1, negrid
-           do ixi = 1, nxi
-              gtmp(ixi,ie,ile) = vns(ik,ie,is)*aj0le(ixi,ie,ile)*gle(ixi,ie,ile)
-           end do
-        end do
-     end do
-
+    do ile = le_lo%llim_proc, le_lo%ulim_proc
+       is = is_idx(le_lo,ile)
+       ik = ik_idx(le_lo,ile)
+       it = it_idx(le_lo,ile)
+       if(kwork_filter(it,ik)) cycle
+       do ie=1, negrid
+          do ixi = 1, nxi
+             gtmp(ixi,ie,ile) = vns(ik,ie,is)*aj0le(ixi,ie,ile)*gle(ixi,ie,ile)
+          end do
+       end do
+    end do
+    
     call integrate_moment (le_lo, gtmp, v0y0)    ! v0y0
 !    call integrate_moment (le_lo, gle*aj0le, v0y0, vns)    ! v0y0
 
