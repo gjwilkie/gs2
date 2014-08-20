@@ -1,10 +1,10 @@
 program eiktest
-
+  use constants, only: pi
   use geometry
   implicit none
 
   integer :: i, nth, ntgrid, ntheta
-  real :: pi, broot
+  real :: broot
   real :: q, qq, qplus, qmnus
   real :: bb, bm, bp, profile_fac
   real :: rk, rkm, rkp, rkpri
@@ -28,8 +28,6 @@ program eiktest
        diffscheme,nbeta,beta_p1,beta_p2,alpha_input,big, &
        beta_prime_times, beta_prime_over, fast, profile_fac, &
        tstar, shotnum, gs2d_eq, transp_eq, Xanthopoulos
-
-  pi=2.*acos(0.)
      
 ! set defaults
 

@@ -62,6 +62,7 @@ contains
 !     rleft      position of leftmost point of domain
 !     zhei       total height of domain
 !
+    use constants, only: pi, twopi
     use splines, only: inter_cspl
     implicit none
 
@@ -213,12 +214,12 @@ contains
 ! Allow for duplicated points near +- pi:
 
     if(thetab(1) == thetab(2)) then
-       thetab(1) = thetab(1) + 4.*acos(0.)
+       thetab(1) = thetab(1) + twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
     if(thetab(nbbbs-1) == thetab(nbbbs)) then
-       thetab(nbbbs) = thetab(nbbbs) - 4.*acos(0.)
+       thetab(nbbbs) = thetab(nbbbs) - twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
@@ -265,7 +266,7 @@ contains
 
 ! MKS: beta = 2 mu_0 p / B**2
 
-    beta = 8. * (2. * acos(0.)) * pressure * 1.e-7 / B_T0**2
+    beta = 8. * pi * pressure * 1.e-7 / B_T0**2
     beta_0 = beta(1)
 
     pressure = pressure / p_0
@@ -300,12 +301,10 @@ contains
   end subroutine dfit_init
 
   subroutine tderm(f, dfm)
-
+    use constants, only: pi
     implicit none
     integer i, j
-    real f(:,:), dfm(:,:,:), pi
-
-    pi = 2.*acos(0.)
+    real f(:,:), dfm(:,:,:)
     
 ! DFIT grid is equally spaced in R, Z -- this routine uses that fact and 
 ! is therefore not completely general.  It is fine for DFIT output.    

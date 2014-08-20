@@ -302,6 +302,7 @@ contains
     use ideq, only: idfitin, ideq_init => dfit_init
     use  leq, only: leqin, dpdrhofun
 
+    use constants, only: pi
     implicit none
 !cmr nov04: adding following debug switch
     !logical, parameter :: debug=.false.
@@ -330,7 +331,7 @@ contains
     real :: rho, rp, rp1, rp2, drhodrp, dqdrho, drhodrhod
     real :: dpsidrp, dpsidrho, dqdrp, dsdrptot, drhodpsi
     real :: qval, qval1, qval2, delrp, dum
-    real :: pi, bi, Ltot, rinv
+    real :: bi, Ltot, rinv
 
     real :: a_b, b_b, c_b
     real :: s_hat, dp, di, pressure, tmp, rbar
@@ -342,7 +343,6 @@ contains
     eeq_verbosity = verb
 
 !     compute the initial constants
-    pi=2.*acos(0.)
     
 if (debug) write(6,*) "eikcoefs: local_eq=",local_eq
     if (local_eq .and. iflux == 1) then
@@ -1194,16 +1194,14 @@ contains
 end subroutine eikcoefs
 
   function surfareafun(rgrid)
-
+    use constants, only: pi
+    implicit none
     real surfareafun
     real, dimension(:) :: rgrid  
     real, dimension(-ntgrid:ntgrid) :: ds, drdth, ans
-    real pi
     integer i
     
     write(*,*) 'surfareafun not generalized yet? needs to be checked.'
-
-    pi=2.*acos(0.)
 
     drdth(-nth)=(rgrid(nth-1)-rgrid(-nth+1))/(theta(nth-1)-theta(-nth+1))
 
@@ -1591,13 +1589,11 @@ end subroutine eikcoefs
   end subroutine seikon
 
   subroutine eikonal(rgrid, rpgrad, thgrad, qval, seik, dsdthet, dpsidrp)
-
+    use constants, only: pi
     real, dimension(-ntgrid:ntgrid) :: trip, seik, dsdthet, rgrid
     real, dimension(-ntgrid:, :) :: rpgrad, thgrad 
-    real :: qval, dpsidrp, pi, bi
+    real :: qval, dpsidrp, bi
     integer :: i
-
-    pi=2.*acos(0.)
     call tripprod2dtgrid(rpgrad, thgrad, rgrid, trip)
     
     bi = btori(rgrid(0),theta(0))
@@ -1653,12 +1649,12 @@ end subroutine eikcoefs
     use ceq, only: ceq_diameter => diameter, ceq_init_diameter => initialize_diameter
     use ideq,only: ideq_diameter => diameter, ideq_init_diameter => initialize_diameter
     use eeq, only: bound
-    
+    use constants, only: pi
+    implicit none
     integer :: i, initd = 1
 
-    real :: rp, pi, diameter
+    real :: rp, diameter
 
-    pi=2.*acos(0.)
     if(rp <= rpmin .and. .not. efit_eq) then 
        diameter = 0.
        return
@@ -2393,13 +2389,11 @@ end subroutine geofax
     use eeq, only: bound, eeq_init_rc => initialize_bound
     use leq, only: leq_rcenter => rcenter
     use ideq, only: ideq_rcenter => rcenter, ideq_init_rc => initialize_rcenter
-
+    use constants, only: pi
+    implicit none
     real, intent (in) :: rp
     real :: rcenter
-    real :: pi
     integer :: i, init_rc = 1
-
-    pi = 2.*acos(0.)
 
     if(eqinit == 1) init_rc = 1
 
@@ -2455,18 +2449,18 @@ end subroutine geofax
   end function bmodfun
 
   subroutine arclength (ntheta, nperiod, gpar, arcl)
-
+    use constants, only: pi
+    implicit none
     integer, intent (in) :: ntheta, nperiod
 !    real, dimension(-ntgrid:), intent (in) :: theta
     real, dimension(-ntgrid:), intent (out) :: arcl
     real, dimension(-ntgrid:), intent (in out) :: gpar
 
     integer :: nth, j, k
-    real :: pi, arcfac
+    real :: arcfac
     
     nth=ntheta/2
     if(2*nth /= ntheta) write(*,*) 'ntheta should be even. ',nth, ntheta
-    pi=2.*acos(0.)
     
     arcl(-nth)=0.
     do j=-nth,nth-1
@@ -2556,7 +2550,8 @@ end subroutine geofax
   end subroutine gradl
 
   subroutine th_bishop(rpgrad, th_bish, nth)
-
+    use constants, only: pi
+    implicit none
     integer, intent (in) :: nth
     
     real, dimension (-ntgrid:, :), intent (in) :: rpgrad
@@ -2564,10 +2559,8 @@ end subroutine geofax
 
     real, dimension (-ntgrid:ntgrid) :: magrp
     real, dimension (-ntgrid:ntgrid, 2) :: tvec
-    real :: pi
     integer :: i
 
-    pi=2*acos(0.)
     do i=-nth,nth
        magrp(i)=sqrt(rpgrad(i,1)**2+rpgrad(i,2)**2)
     enddo
@@ -2632,15 +2625,13 @@ end subroutine geofax
   end subroutine B_mod
 
   subroutine R_pol(theta, th_bish, ltheta, Rpol, nth)
-
+    use constants, only: pi
     integer, intent (in) :: nth
     real, dimension(-ntgrid:), intent (in) :: th_bish, theta, ltheta
     real, dimension(-ntgrid:), intent (out) :: Rpol
     real, dimension(-ntgrid:ntgrid) :: dthdl
-    real :: pi
     integer :: i, is
 
-    pi=2.*acos(0.)
 ! 
 ! R = 1/(d theta/dl * d th_bish/d theta)
 ! 
@@ -2695,7 +2686,8 @@ end subroutine geofax
   end subroutine R_pol
 
   subroutine test(rgrid, theta, Bpolmag, Bmod, Rpol, th_bish, bgrad, nth)
-
+    use constants, only: pi
+    implicit none
     integer, intent (in) :: nth
 
     real, dimension(-ntgrid:), intent (in) :: rgrid, theta, Bmod, Bpolmag, &
@@ -2703,10 +2695,8 @@ end subroutine geofax
     real, dimension(-ntgrid:, :), intent(in) :: bgrad
 
     real, dimension(-ntgrid:ntgrid) :: rmajor, bbgrad
-    real :: pi, dp, bi, di, bp
+    real :: dp, bi, di, bp
     integer :: i
-
-    pi = 2.*acos(0.)
 
     call rmajortgrid(rgrid, theta, rmajor)
 
@@ -2744,8 +2734,8 @@ end subroutine geofax
   end subroutine test
 
   subroutine tdef(nthg, ntheta_returned)
-    
-    real :: pi
+    use constants, only: pi
+    implicit none
 !RN>
 !    integer :: nthg, nthsave, i, ntheta_returned
     integer :: nthg, i
@@ -2759,8 +2749,6 @@ end subroutine geofax
 !    if(.not.first) return
 !    first = .false.
 
-    pi = 2*acos(0.)
-    
 !    nthsave=nth
     nth=nthg/2   ! correct, at least for geq
     if (debug) write(6,*) "tdef: nthg,nth=",nthg,nth
@@ -2900,16 +2888,15 @@ end subroutine geofax
   end subroutine finish_geometry
 
   subroutine init_theta(nt)
-    
+    use constants, only: pi
     integer, intent(in) :: nt
     integer i
-    real :: pi
+
 !cmr Jun06: adding following debug switch
     logical, parameter :: debug=.false.
 !cmr
     logical :: first_local = .true.
 
-    pi = 2*acos(0.)
     ntheta=nt
     nth = nt / 2
     ntgrid = (2*nperiod - 1)*nth       

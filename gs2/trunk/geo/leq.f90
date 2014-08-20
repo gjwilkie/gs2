@@ -83,15 +83,14 @@ contains
   end subroutine leq_finish
 
   subroutine leq_init
-
+    use constants, only: pi=>pi
     implicit none
     real, dimension(nr, nt) :: eqpsi1, eqth, eqbtor
 
     real dr(3)
-    real pi, t, r
+    real t, r
     integer i, j
    
-    pi=2*acos(0.)
     dr(1) = -surf%dr
     dr(2) = 0.
     dr(3) = surf%dr
@@ -155,13 +154,11 @@ contains
   end subroutine leq_init
 
   subroutine derm(f, dfm, char)
-
+    use constants, only: pi=>pi
     implicit none
     integer i, j
     character(1) :: char
-    real f(:,:), dfm(:,:,:), pi
-
-    pi = 2*acos(0.)
+    real f(:,:), dfm(:,:,:)
     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))         
@@ -306,15 +303,14 @@ contains
   end subroutine bgradient
 
   subroutine eqitem(r, theta_in, f, fstar, char)
-      
+    use constants, only: pi=>pi
+    implicit none
     integer :: j, istar, jstar
     character(1) :: char
     real :: r, thet, fstar, tp, tps, theta_in
-    real :: st, dt, pi
+    real :: st, dt
     real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
-    
-    pi = 2.*acos(0.)
 ! find r on psi mesh
     
     istar = 2
@@ -432,9 +428,8 @@ contains
   end function rcenter
 
   function Rpos (r, theta)
-   
     use constants, only: pi
-
+    implicit none
     real, intent (in) :: r, theta
     real :: Rpos
     real :: g, gp, dr
@@ -472,14 +467,11 @@ contains
   end function psi
 
   function mod2pi (theta)
-    
+    use constants, only: pi=>pi
     real, intent(in) :: theta
-    real :: pi, th, mod2pi
+    real :: th, mod2pi
     real, parameter :: theta_tol = 1.e-6
     logical :: out
-    
-    pi=2.*acos(0.)
-    
     if(theta <= pi .and. theta >= -pi) then
        mod2pi = theta
        return
@@ -503,7 +495,7 @@ contains
        if(th <= pi .and. th >= -pi) out=.false.
     enddo
     mod2pi=th
-    
+
   end function mod2pi
    
   function diameter (rp)

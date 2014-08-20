@@ -417,15 +417,11 @@ contains
   end subroutine geq_finish
 
   subroutine geq_init
-
     use constants, only: pi
     implicit none
     real, dimension(nr,nt) :: eqpsi1, eqth, eqbtor
-
-!    real pi
     integer i, j
 
-!    pi=2*acos(0.)
     do j=1,nt
        do i=1,nr
           eqbtor(i,j) = fp(i)/R_psi(i,j)
@@ -487,15 +483,11 @@ contains
   end subroutine geq_init
 
   subroutine derm(f, dfm, char)
-
     use constants, only: pi
     implicit none
     integer :: i, j
     character(1) :: char
-!    real :: f(:,:), dfm(:,:,:), pi
     real :: f(:,:), dfm(:,:,:)
-
-!    pi = 2*acos(0.)
 
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))         
@@ -649,17 +641,14 @@ contains
   end subroutine bgradient
 
   subroutine eqitem(r, theta_in, f, fstar, char)
-
     use constants, only: pi
+    implicit none
     integer :: i, j, istar, jstar
     character(1) :: char
     real :: r, thet, fstar, sign, tp, tps, theta_in
-!    real :: st, dt, sr, dr, pi, rt
     real :: st, dt, sr, dr, rt
     real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
-
-!    pi = 2.*acos(0.)
 
     ! check for axis evaluation
 
@@ -887,14 +876,11 @@ contains
   end function psi
 
   function mod2pi (theta)
-
     use constants, only: pi
+    implicit none
     real, intent(in) :: theta
-!    real :: pi, th, mod2pi
     real :: th, mod2pi
     logical :: out
-
-!    pi=2.*acos(0.)
 
     if(theta <= pi .and. theta >= -pi) then
        mod2pi = theta
