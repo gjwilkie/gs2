@@ -434,7 +434,7 @@ contains
           temp = Ealpha*veff2va2
           spec(is)%temp = temp
 
-          spec(is)%tprim = (1.0/3.0)*dveff2dvc*(ni_prim - ne_prim + 1.5*Te_prim)/veff2va2
+          spec(is)%tprim = (1.0/3.0)*dveff2dvc*(1.5*Te_prim)/veff2va2
 
           spec(is)%stm = sqrt(temp/mass)
           spec(is)%zstm = z/sqrt(temp*mass)
@@ -488,6 +488,7 @@ contains
 
     call broadcast (ZI_fac)
     call broadcast (vte)
+    call broadcast (ni_prim)
 
 
   end subroutine read_parameters
