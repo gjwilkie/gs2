@@ -420,9 +420,7 @@ contains
 !!    real*8, allocatable, dimension(:,:) :: work
 !    real, allocatable, dimension(:,:) :: work
 !    real :: f_N, psi_N
-!!    real pi
 !    
-!!    pi = 2.*acos(0.)
 !!     read the data
 !
 !    if(initeq == 0) then
@@ -715,8 +713,6 @@ contains
     use constants, only: pi
     implicit none
     real, dimension(nr,nt) :: eqpsi1, eqth, eqbtor
-
-!    real pi
     integer i, j
    
     do j=1,nt
@@ -726,7 +722,6 @@ contains
        enddo
     enddo
     
-!    pi=2*acos(0.)
     !if (transp) then
        do j=1,nt
           eqth(:,j) = (j-1)*2.*pi/float(nt-1)-pi
@@ -794,10 +789,7 @@ contains
     implicit none
     integer i, j
     character(1) :: char
-!    real f(:,:), dfm(:,:,:), pi
     real :: f(:,:), dfm(:,:,:)
-
-!    pi = 2*acos(0.)
     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))         
@@ -994,12 +986,9 @@ contains
     integer :: i, j, istar, jstar
     character(1) :: char
     real :: r, thet, fstar, sign, theta_in
-!    real :: st, dt, sr, dr, pi, tp, tps
     real :: st, dt, sr, dr
     real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
-    
-!    pi = 2.*acos(0.)
 
 ! check for axis evaluation
       
@@ -1268,11 +1257,8 @@ contains
 
     use constants, only: pi
     real, intent(in) :: theta
-!    real :: pi, th, mod2pi
     real :: th, mod2pi
     logical :: out
-    
-!    pi=2.*acos(0.)
     
     if(theta <= pi .and. theta >= -pi) then
        mod2pi = theta
