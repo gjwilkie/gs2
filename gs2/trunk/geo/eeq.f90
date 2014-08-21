@@ -185,8 +185,8 @@ if (debug) write(6,fmt='(T2,"psmin",T15,"psedge (Wb)",T27,"b0 (T)",T39,"ip(A)"/1
     rcentr=r0 ; rleft=minval(rgrid)
     R_mag=rmag ; Z_mag=zmag ; psi_0=psmin ; psi_a=psip ; bcentr=b0
 
-    psi_0 = psi_0/(8.0*atan(1.))
-    psi_a = psi_a/(8.0*atan(1.))
+    psi_0 = psi_0/twopi
+    psi_a = psi_a/twopi
 if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
 
 !
@@ -215,7 +215,7 @@ if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
     call inter_cspl(nw, spsi_bar, f, nwb, psi_bar, fp)
     call inter_cspl(nw, spsi_bar, p, nwb, psi_bar, pressure)
 ! divide GS2D psi by 2pi to get poloidal flux in (Wb/rad)
-    sefit_psi=psi/(8.0*atan(1.0))
+    sefit_psi=psi/twopi
 
     allocate(zp(3*nw*nh), temp(nw+2*nh))
     allocate(zx1(nh), zxm(nh), zy1(nw), zyn(nw))
