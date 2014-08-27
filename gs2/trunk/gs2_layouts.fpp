@@ -1978,13 +1978,14 @@ contains
 
     integer :: i,f_size
 
-    f_size = size(f_lo)
-    do i=1,f_size
-       deallocate (f_lo(i)%ik)
-       deallocate (f_lo(i)%it)
-    enddo
-
-    if(allocated(f_lo)) deallocate(f_lo)    
+    if(allocated(f_lo))then
+       f_size = size(f_lo)
+       do i=1,f_size
+          if(associated(f_lo(i)%ik)) deallocate (f_lo(i)%ik)
+          if(associated(f_lo(i)%it)) deallocate (f_lo(i)%it)
+       enddo
+       deallocate(f_lo)    
+    endif
     initialized_fields_layouts = .false.
   end subroutine finish_fields_layouts
 
