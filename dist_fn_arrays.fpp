@@ -59,14 +59,14 @@ contains
     !
     use species, only: spec
     use theta_grid, only: ntgrid
-    use le_grids, only: anon
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
+    use le_grids, only: anon, forbid
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx, il_idx
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     real, intent (in) :: facphi, facbpar
 
-    integer :: iglo, ig, ik, it, ie, is
+    integer :: iglo, ig, ik, it, ie, is, il
     complex :: adj
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -74,9 +74,13 @@ contains
        it = it_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+
        ! BD:  bpar == delta B_parallel / B_0(theta) so no extra factor of 
        ! 1/bmag is needed here.
        do ig = -ntgrid, ntgrid
+          !<DD>Don't adjust in the forbidden region as we don't set g/h here
+          if(forbid(ig,il)) cycle
           adj = anon(ie)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
                *bpar(ig,it,ik)*facbpar &
                + spec(is)%z*anon(ie)*phi(ig,it,ik)*aj0(ig,iglo) &
