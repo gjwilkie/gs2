@@ -318,6 +318,31 @@ hrate_mod = \
 	 command_line.o \
 	 hrate.o 
 
+ideal_ball_mod = \
+	 ballstab.o \
+	 ceq.o \
+	 command_line.o \
+	 constants.o \
+	 deq.o \
+	 eeq.o \
+	 file_utils.o \
+	 geometry.o \
+	 geq.o \
+	 gridgen4mod.o \
+	 ideal_ball.o \
+	 ideq.o \
+	 job_manage.o \
+	 leq.o \
+	 mp.o \
+	 netcdf_utils.o \
+	 peq.o \
+	 read_chease.o \
+	 runtime_tests.o \
+	 spl.o \
+	 text_options.o \
+	 theta_grid.o \
+	 theta_grid_params.o 
+
 ingen_mod = \
 	 antenna.o \
 	 antenna_data.o \
@@ -417,6 +442,11 @@ antenna.o: \
 antenna_data.o: 
 ball.o: \
 	 geometry.o 
+ballstab.o: \
+	 file_utils.o \
+	 geometry.o \
+	 mp.o \
+	 theta_grid.o 
 benchmarks.o: \
 	 runtime_tests.o 
 ceq.o: \
@@ -444,6 +474,7 @@ command_line.o:
 constants.o: 
 convert.o: 
 deq.o: \
+	 constants.o \
 	 spl.o 
 diagnostics_config.o: \
 	 file_utils.o \
@@ -539,9 +570,11 @@ dump_response.o: \
 	 species.o 
 ediff.o: 
 eeq.o: \
+	 constants.o \
 	 runtime_tests.o \
 	 spl.o 
 et.o: \
+	 constants.o \
 	 geometry.o 
 fft_work.o: \
 	 constants.o \
@@ -637,6 +670,7 @@ generate_fftw_wisdom.o: \
 	 nonlinear_terms.o 
 geometry.o: \
 	 ceq.o \
+	 constants.o \
 	 deq.o \
 	 eeq.o \
 	 geq.o \
@@ -648,6 +682,7 @@ geq.o: \
 	 netcdf_utils.o \
 	 spl.o 
 gridgen4mod.o: \
+	 constants.o \
 	 spl.o 
 gs2.o: \
 	 gs2_main.o 
@@ -806,7 +841,14 @@ hyper.o: \
 	 mp.o \
 	 text_options.o \
 	 theta_grid.o 
+ideal_ball.o: \
+	 ballstab.o \
+	 file_utils.o \
+	 job_manage.o \
+	 mp.o \
+	 theta_grid.o 
 ideq.o: \
+	 constants.o \
 	 spl.o 
 ingen.o: \
 	 antenna.o \

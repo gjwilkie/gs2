@@ -140,6 +140,9 @@ if (debug) write(6,*) 'gridgen_get_grids: call regrid'
 !          doesn't actually resize the array. This resizing currently takes
 !          place during finish_init call (look for eik_save). Would be safer
 !          if we could make regrid actually reallocate/resize the array.
+!<DD>NOTE: We only resize the arrays internal to theta_grid. This is what should be used
+!          by the rest of the code, but anywhere where the geometry arrays are used directly
+!          could lead to an error if these arrays are resized as we don't resize the geometry arrays.
     call regrid (ntgrid_old, thetasave, gradpar, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gbdrift, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gbdrift0, ntgrid, theta)
