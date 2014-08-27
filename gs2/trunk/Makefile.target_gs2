@@ -24,6 +24,10 @@ dump_response: $(dump_response_mod)
 dump_grids: $(dump_grids_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
 
+#Calculates the ideal ballooning stability (optionally over a scan in shat/beta_prime)
+ideal_ball: $(ideal_ball_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
+
 #Driver program for gridgen?
 rungridgen: $(rungridgen_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
@@ -108,4 +112,5 @@ distclean:
 	-rm -f ffttester
 	-rm -f dump_response
 	-rm -f dump_grids
+	-rm -f ideal_ball
 	-rm -f generate_fftw_wisdom
