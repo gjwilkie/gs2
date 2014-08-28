@@ -801,6 +801,9 @@ contains
           call mp_abort("Not enough processors for the requested split")
        endif
     else
+       !Blocksize
+       g_lo%blocksize = g_lo%ulim_world/nproc + 1
+
        !If not using a split approach then we only have a single "layout block" so all dimension blocks
        !are just the length of the total dimension size
        g_lo%x_block = g_lo%ntheta0
@@ -818,9 +821,6 @@ contains
        g_lo%split_l = 1
        g_lo%split_e = 1
        g_lo%split_s = 1
-
-       !Blocksize
-       g_lo%blocksize = g_lo%ulim_world/nproc + 1
     endif
 
     g_lo%nproc_used=nproc-nproc_spare
