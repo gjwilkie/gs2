@@ -36,6 +36,7 @@ module layouts_type
      integer :: x_block, y_block, l_block, e_block, s_block !The size of each split dimension
      integer :: is_split_comp, ie_split_comp, il_split_comp, ik_split_comp, it_split_comp !Used to find block offset for each dimension 
      integer,dimension(:,:,:,:,:),allocatable :: inds_to_idx !Used as a simple (and memory inefficient) approach to convert dim indices to iglo
+     integer :: nproc_used
   end type g_layout_type
 
   type :: lz_layout_type

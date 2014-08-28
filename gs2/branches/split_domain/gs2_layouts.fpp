@@ -744,11 +744,6 @@ contains
     g_lo%llim_world = 0
     g_lo%ulim_world = naky*ntheta0*negrid*nlambda*nspec - 1
       
-    g_lo%blocksize = g_lo%ulim_world/nproc + 1
-    g_lo%llim_proc = g_lo%blocksize*iproc
-    g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
-    g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
-
     !Specified split setup
     !1. Copy data into layout
     g_lo%use_split = use_split
@@ -793,9 +788,6 @@ contains
        
        !Update block sizes
        g_lo%blocksize = g_lo%x_block*g_lo%y_block*g_lo%l_block*g_lo%e_block*g_lo%s_block
-       g_lo%llim_proc = g_lo%blocksize*iproc
-       g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
-       g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
 
        !Check if we have enough processors
        tmp=nproc*g_lo%blocksize
@@ -826,7 +818,17 @@ contains
        g_lo%split_l = 1
        g_lo%split_e = 1
        g_lo%split_s = 1
+
+       !Blocksize
+       g_lo%blocksize = g_lo%ulim_world/nproc + 1
     endif
+
+    g_lo%nproc_used=nproc-nproc_spare
+
+    !Calculate processor limits
+    g_lo%llim_proc = g_lo%blocksize*iproc
+    g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
+    g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
 
 !<DD>Calculate constants used in the index lookup routines
 !(rather than calculating them at each call as done previously)
@@ -1230,14 +1232,7 @@ contains
     if(g_lo%use_split)then
        !Dimensions always split nicely if we've got this far and we're
        !using use_split=.true., but we may have some "spare" procs
-       !currently it seems like these spare procs are causing problems
-       !for the velocity space sub-communincators so we naively disable
-       !here if we have spare procs
-       if(nproc_spare.eq.0)then
-          dim_divides(:)=.true.
-       else
-          dim_divides(:)=.false.
-       endif
+       dim_divides(:)=.true.
     else
        do idim=5,1,-1
 
@@ -2155,10 +2150,17 @@ contains
     integer, dimension(:), intent (in) :: M_class, N_class
     integer, intent (in) :: i_class
     integer :: i, utmp, btmp
+    integer :: nproc_field
 
     if (initialized_fields_layouts) return
     initialized_fields_layouts = .true.
-    
+
+    if(intspec_sub) then
+       nproc_field=g_lo%nproc_used
+    else
+       nproc_field=nproc
+    endif
+
     allocate (f_lo(i_class))
     do i = 1, i_class
        allocate (f_lo(i)%ik(M_class(i), N_class(i)))
@@ -2180,10 +2182,11 @@ contains
        f_lo(i)%ulim_world = f_lo(i)%nindex*M_class(i) - 1
        if (local_field_solve) then    ! guarantee local operations for matrix inversion
           utmp = M_class(i) - 1
-          btmp = utmp/nproc + 1
+          btmp = utmp/nproc_field + 1
           f_lo(i)%blocksize = f_lo(i)%nindex*btmp
        else
-          f_lo(i)%blocksize = f_lo(i)%ulim_world/nproc + 1
+
+          f_lo(i)%blocksize = f_lo(i)%ulim_world/nproc_field + 1
        end if
        f_lo(i)%llim_proc = f_lo(i)%blocksize*iproc
        f_lo(i)%ulim_proc = min(f_lo(i)%ulim_world, f_lo(i)%llim_proc + f_lo(i)%blocksize - 1)
@@ -2336,10 +2339,16 @@ contains
     use mp, only: iproc, nproc
     implicit none
     integer, intent (in) :: nfield, nindex, naky, ntheta0, i_class
-    integer :: jlo
+    integer :: jlo, nproc_field
     if (initialized_jfields_layouts) return
     initialized_jfields_layouts = .true.
     
+    if(intspec_sub) then
+       nproc_field=g_lo%nproc_used
+    else
+       nproc_field=nproc
+    endif
+
     jf_lo%iproc = iproc
     jf_lo%nindex = nindex
     jf_lo%ntgrid = (nindex/nfield-1)/2
@@ -2348,7 +2357,7 @@ contains
     jf_lo%ntheta0 = ntheta0
     jf_lo%llim_world = 0
     jf_lo%ulim_world = nindex*ntheta0*naky - 1
-    jf_lo%blocksize = jf_lo%ulim_world/nproc + 1
+    jf_lo%blocksize = jf_lo%ulim_world/nproc_field + 1
     jf_lo%llim_proc = jf_lo%blocksize*iproc
     jf_lo%ulim_proc = min(jf_lo%ulim_world, jf_lo%llim_proc + jf_lo%blocksize - 1)
     jf_lo%ulim_alloc = max(jf_lo%llim_proc, jf_lo%ulim_proc)
