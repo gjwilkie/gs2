@@ -31,6 +31,11 @@ module layouts_type
      integer,dimension(:,:),allocatable :: les_kxky_range !Used in integrate species, holds start and stop indices for flattened kxky dimension
      logical :: x_before_y !Information about layout order
      logical :: x_local, y_local, l_local, e_local, s_local !Used to record if various dimensions are entirely local
+     logical :: use_split !Do we use the specified dimension splitting?
+     integer :: split_x, split_y, split_l, split_e, split_s !How many splits we make in each dimension
+     integer :: x_block, y_block, l_block, e_block, s_block !The size of each split dimension
+     integer :: is_split_comp, ie_split_comp, il_split_comp, ik_split_comp, it_split_comp !Used to find block offset for each dimension 
+     integer,dimension(:,:,:,:,:),allocatable :: inds_to_idx !Used as a simple (and memory inefficient) approach to convert dim indices to iglo
   end type g_layout_type
 
   type :: lz_layout_type
@@ -44,7 +49,6 @@ module layouts_type
      integer :: ig_ord, isgn_ord, ik_ord, it_ord, ie_ord, is_ord
      integer :: ig_comp, isgn_comp, ik_comp, it_comp, ie_comp, is_comp
      integer,dimension(6) :: compound_count
-
   end type lz_layout_type
 
   type :: e_layout_type

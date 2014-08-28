@@ -93,6 +93,9 @@ module gs2_layouts
   logical :: initialized_parity_layouts = .false.
   logical :: initialized_accel_transform_layouts = .false.
 
+  logical :: use_split
+  integer :: split_x, split_y, split_l, split_e, split_s
+
   logical :: opt_local_copy
   logical :: opt_redist_init
   logical :: intmom_sub
@@ -381,6 +384,9 @@ module gs2_layouts
      module procedure idx_local_parity, ig_local_parity
   end interface
 
+  interface ib_idx
+     module procedure ib_idx_g
+  end interface ib_idx
 contains
   subroutine wnml_gs2_layouts(unit)
     implicit none
@@ -415,7 +421,8 @@ contains
          max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
          opt_local_copy, opt_redist_nbk, opt_redist_init, intmom_sub, &
          intspec_sub, opt_redist_persist, opt_redist_persist_overlap, fft_measure_plan, &
-         fft_use_wisdom, fft_wisdom_file
+         fft_use_wisdom, fft_wisdom_file,&
+         use_split, split_x, split_y, split_l, split_e, split_s
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
@@ -435,6 +442,12 @@ contains
     fft_use_wisdom = .true. ! Try to load and save wisdom about fftw plans to fft_wisdom_file
     intmom_sub=.false.
     intspec_sub=.false.
+    use_split = .false.
+    split_x = -1
+    split_y = -1
+    split_l = -1
+    split_e = -1
+    split_s = -1
     in_file=input_unit_exist("layouts_knobs", exist)
     if (exist) read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
     if (layout.ne.'yxels' .and. layout.ne.'yxles' .and. layout.ne.'lexys'&
@@ -509,6 +522,12 @@ contains
     call broadcast (fft_measure_plan)
     call broadcast (fft_use_wisdom)
     call broadcast (fft_wisdom_file)
+    call broadcast (use_split)
+    call broadcast (split_x)
+    call broadcast (split_y)
+    call broadcast (split_l)
+    call broadcast (split_e)
+    call broadcast (split_s)
   end subroutine broadcast_results
 
   subroutine check_accel (ntheta0, naky, nlambda, negrid, nspec, nblock)
@@ -683,7 +702,7 @@ contains
        (naky, ntheta0, nlambda, negrid, nspec)
     use mp, only: iproc, nproc, proc0
     use mp, only: split, mp_comm, nproc_comm, rank_comm
-    use mp, only: sum_allreduce_sub
+    use mp, only: sum_allreduce_sub, mp_abort
 ! TT>
     use file_utils, only: error_unit
 ! <TT
@@ -694,9 +713,11 @@ contains
     integer :: ik_min,ik_max,it_min,it_max,il_min,il_max,ie_min,ie_max,is_min,is_max,ip
     integer :: nproc_subcomm, rank_subcomm
     integer :: nproc_tmp, idim, tmp
+    integer :: nproc_spare
     real :: tmp_r
     integer,dimension(5) :: nproc_dim
     integer,dimension(:),allocatable :: les_kxky_range
+    integer,dimension(5) :: split_compound
     logical,dimension(5) :: dim_divides,dim_local
     logical,dimension(:),allocatable :: it_local, ik_local, il_local, ie_local, is_local
 ! TT>
@@ -728,6 +749,85 @@ contains
     g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
     g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
 
+    !Specified split setup
+    !1. Copy data into layout
+    g_lo%use_split = use_split
+    g_lo%split_x = split_x
+    g_lo%split_y = split_y
+    g_lo%split_l = split_l
+    g_lo%split_e = split_e
+    g_lo%split_s = split_s
+
+    if(g_lo%use_split)then
+       !Note: First we need to validate requested splits
+       !1. Each split_ parameter must be a factor of the relevant dimension
+       !2. The total number of blocks resulting from splitting shouldn't exceed nproc
+
+       !We should implement a check here to automatically set any split parameters which are -ve (i.e. not set)
+       !to make use of any left over processors. To do this in the most consistent manner we should go in layout order
+       !i.e. check rightmost dimension first, if split_ <0 then find all factors of dimension size, pick largest less than
+       !nproc_used*factor < nproc, move onto next dimension.
+       !We may be able to come up with more advanced logic (which e.g. prefers to try to split dims evenly, does some timing
+       !to find out what's best etc.)
+
+       !For now just take absolute value of split_ until we implement the above logic
+       g_lo%split_x=abs(g_lo%split_x)
+       g_lo%split_y=abs(g_lo%split_y)
+       g_lo%split_l=abs(g_lo%split_l)
+       g_lo%split_e=abs(g_lo%split_e)
+       g_lo%split_s=abs(g_lo%split_s)
+
+       !Abort if dimensions don't split nicely
+       if(mod(g_lo%ntheta0,g_lo%split_x).ne.0) call mp_abort("ntheta0 doesn't split nicely with split_x")
+       if(mod(g_lo%naky,g_lo%split_y).ne.0) call mp_abort("naky doesn't split nicely with split_y")
+       if(mod(g_lo%nlambda,g_lo%split_l).ne.0) call mp_abort("nlambda doesn't split nicely with split_l")
+       if(mod(g_lo%negrid,g_lo%split_e).ne.0) call mp_abort("negrid doesn't split nicely with split_e")
+       if(mod(g_lo%nspec,g_lo%split_s).ne.0) call mp_abort("nspec doesn't split nicely with split_s")
+
+       !Now work out block sizes
+       g_lo%x_block = g_lo%ntheta0/g_lo%split_x
+       g_lo%y_block = g_lo%naky/g_lo%split_y
+       g_lo%l_block = g_lo%nlambda/g_lo%split_l
+       g_lo%e_block = g_lo%negrid/g_lo%split_e
+       g_lo%s_block = g_lo%nspec/g_lo%split_s
+       
+       !Update block sizes
+       g_lo%blocksize = g_lo%x_block*g_lo%y_block*g_lo%l_block*g_lo%e_block*g_lo%s_block
+       g_lo%llim_proc = g_lo%blocksize*iproc
+       g_lo%ulim_proc = min(g_lo%ulim_world, g_lo%llim_proc + g_lo%blocksize - 1)
+       g_lo%ulim_alloc = max(g_lo%llim_proc, g_lo%ulim_proc)
+
+       !Check if we have enough processors
+       tmp=nproc*g_lo%blocksize
+       nproc_spare=(nproc-(g_lo%ulim_world+1)/g_lo%blocksize)
+       if(tmp.ge.(g_lo%ulim_world+1)) then !We have enough procs
+          !Print a brief message saying what fraction of procs we don't use
+          if(proc0) then
+             write(6,'("For the requested split we are wasting around ",F9.2,"% of the procs")') 100*nproc_spare/(nproc*1.0)
+          endif
+       else
+          call mp_abort("Not enough processors for the requested split")
+       endif
+    else
+       !If not using a split approach then we only have a single "layout block" so all dimension blocks
+       !are just the length of the total dimension size
+       g_lo%x_block = g_lo%ntheta0
+       g_lo%y_block = g_lo%naky
+       g_lo%l_block = g_lo%nlambda
+       g_lo%e_block = g_lo%negrid
+       g_lo%s_block = g_lo%nspec
+
+       !nproc_spare
+       nproc_spare = nproc-(g_lo%ulim_world+1)/g_lo%blocksize
+
+       !Override splits
+       g_lo%split_x = 1
+       g_lo%split_y = 1
+       g_lo%split_l = 1
+       g_lo%split_e = 1
+       g_lo%split_s = 1
+    endif
+
 !<DD>Calculate constants used in the index lookup routines
 !(rather than calculating them at each call as done previously)
 !This allows the removal of the select case statements in the index routines
@@ -738,80 +838,120 @@ contains
        g_lo%it_ord=2
        g_lo%ik_ord=1
        g_lo%is_ord=5
+             
        g_lo%compound_count(1)=1
-       g_lo%compound_count(2)=naky
-       g_lo%compound_count(3)=naky*ntheta0
-       g_lo%compound_count(4)=naky*ntheta0*negrid
-       g_lo%compound_count(5)=naky*ntheta0*negrid*nlambda
-       g_lo%dim_size(1)=naky
-       g_lo%dim_size(2)=ntheta0
-       g_lo%dim_size(3)=negrid
-       g_lo%dim_size(4)=nlambda
-       g_lo%dim_size(5)=nspec
+       g_lo%compound_count(2)=g_lo%y_block
+       g_lo%compound_count(3)=g_lo%y_block*g_lo%x_block
+       g_lo%compound_count(4)=g_lo%y_block*g_lo%x_block*g_lo%e_block
+       g_lo%compound_count(5)=g_lo%y_block*g_lo%x_block*g_lo%e_block*g_lo%l_block
+
+       split_compound(1)=1
+       split_compound(2)=g_lo%split_y
+       split_compound(3)=g_lo%split_y*g_lo%split_x
+       split_compound(4)=g_lo%split_y*g_lo%split_x*g_lo%split_e
+       split_compound(5)=g_lo%split_y*g_lo%split_x*g_lo%split_e*g_lo%split_l
+
+       g_lo%dim_size(1)=g_lo%y_block
+       g_lo%dim_size(2)=g_lo%x_block
+       g_lo%dim_size(3)=g_lo%e_block
+       g_lo%dim_size(4)=g_lo%l_block
+       g_lo%dim_size(5)=g_lo%s_block
     case ('yxles')
        g_lo%ie_ord=4
        g_lo%il_ord=3
        g_lo%it_ord=2
        g_lo%ik_ord=1
        g_lo%is_ord=5
+
        g_lo%compound_count(1)=1
-       g_lo%compound_count(2)=naky
-       g_lo%compound_count(3)=naky*ntheta0
-       g_lo%compound_count(4)=naky*ntheta0*nlambda
-       g_lo%compound_count(5)=naky*ntheta0*nlambda*negrid
-       g_lo%dim_size(1)=naky
-       g_lo%dim_size(2)=ntheta0
-       g_lo%dim_size(3)=nlambda
-       g_lo%dim_size(4)=negrid
-       g_lo%dim_size(5)=nspec
+       g_lo%compound_count(2)=g_lo%y_block
+       g_lo%compound_count(3)=g_lo%y_block*g_lo%x_block
+       g_lo%compound_count(4)=g_lo%y_block*g_lo%x_block*g_lo%l_block
+       g_lo%compound_count(5)=g_lo%y_block*g_lo%x_block*g_lo%l_block*g_lo%e_block
+
+       split_compound(1)=1
+       split_compound(2)=g_lo%split_y
+       split_compound(3)=g_lo%split_y*g_lo%split_x
+       split_compound(4)=g_lo%split_y*g_lo%split_x*g_lo%split_l
+       split_compound(5)=g_lo%split_y*g_lo%split_x*g_lo%split_l*g_lo%split_e
+
+       g_lo%dim_size(1)=g_lo%y_block
+       g_lo%dim_size(2)=g_lo%x_block
+       g_lo%dim_size(3)=g_lo%l_block
+       g_lo%dim_size(4)=g_lo%e_block
+       g_lo%dim_size(5)=g_lo%s_block
     case ('lexys')
        g_lo%ie_ord=2
        g_lo%il_ord=1
        g_lo%it_ord=3
        g_lo%ik_ord=4
        g_lo%is_ord=5
+
        g_lo%compound_count(1)=1
-       g_lo%compound_count(2)=nlambda
-       g_lo%compound_count(3)=nlambda*negrid
-       g_lo%compound_count(4)=nlambda*negrid*ntheta0
-       g_lo%compound_count(5)=nlambda*negrid*ntheta0*naky
-       g_lo%dim_size(1)=nlambda
-       g_lo%dim_size(2)=negrid
-       g_lo%dim_size(3)=ntheta0
-       g_lo%dim_size(4)=naky
-       g_lo%dim_size(5)=nspec
+       g_lo%compound_count(2)=g_lo%l_block
+       g_lo%compound_count(3)=g_lo%l_block*g_lo%e_block
+       g_lo%compound_count(4)=g_lo%l_block*g_lo%e_block*g_lo%x_block
+       g_lo%compound_count(5)=g_lo%l_block*g_lo%e_block*g_lo%x_block*g_lo%y_block
+
+       split_compound(1)=1
+       split_compound(2)=g_lo%split_l
+       split_compound(3)=g_lo%split_l*g_lo%split_e
+       split_compound(4)=g_lo%split_l*g_lo%split_e*g_lo%split_x
+       split_compound(5)=g_lo%split_l*g_lo%split_e*g_lo%split_x*g_lo%split_y
+
+       g_lo%dim_size(1)=g_lo%l_block
+       g_lo%dim_size(2)=g_lo%e_block
+       g_lo%dim_size(3)=g_lo%x_block
+       g_lo%dim_size(4)=g_lo%y_block
+       g_lo%dim_size(5)=g_lo%s_block
     case ('lxyes')
        g_lo%ie_ord=4
        g_lo%il_ord=1
        g_lo%it_ord=2
        g_lo%ik_ord=3
        g_lo%is_ord=5
+
        g_lo%compound_count(1)=1
-       g_lo%compound_count(2)=nlambda
-       g_lo%compound_count(3)=nlambda*ntheta0
-       g_lo%compound_count(4)=nlambda*ntheta0*naky
-       g_lo%compound_count(5)=nlambda*ntheta0*naky*negrid
-       g_lo%dim_size(1)=nlambda
-       g_lo%dim_size(2)=ntheta0
-       g_lo%dim_size(3)=naky
-       g_lo%dim_size(4)=negrid
-       g_lo%dim_size(5)=nspec
+       g_lo%compound_count(2)=g_lo%l_block
+       g_lo%compound_count(3)=g_lo%l_block*g_lo%x_block
+       g_lo%compound_count(4)=g_lo%l_block*g_lo%x_block*g_lo%y_block
+       g_lo%compound_count(5)=g_lo%l_block*g_lo%x_block*g_lo%y_block*g_lo%e_block
+
+       split_compound(1)=1
+       split_compound(2)=g_lo%split_l
+       split_compound(3)=g_lo%split_l*g_lo%split_x
+       split_compound(4)=g_lo%split_l*g_lo%split_x*g_lo%split_y
+       split_compound(5)=g_lo%split_l*g_lo%split_x*g_lo%split_y*g_lo%split_e
+
+       g_lo%dim_size(1)=g_lo%l_block
+       g_lo%dim_size(2)=g_lo%x_block
+       g_lo%dim_size(3)=g_lo%y_block
+       g_lo%dim_size(4)=g_lo%e_block
+       g_lo%dim_size(5)=g_lo%s_block
     case ('lyxes')
        g_lo%ie_ord=4
        g_lo%il_ord=1
        g_lo%it_ord=3
        g_lo%ik_ord=2
        g_lo%is_ord=5
+
        g_lo%compound_count(1)=1
-       g_lo%compound_count(2)=nlambda
-       g_lo%compound_count(3)=nlambda*naky
-       g_lo%compound_count(4)=nlambda*naky*ntheta0
-       g_lo%compound_count(5)=nlambda*naky*ntheta0*negrid
-       g_lo%dim_size(1)=nlambda
-       g_lo%dim_size(2)=naky
-       g_lo%dim_size(3)=ntheta0
-       g_lo%dim_size(4)=negrid
-       g_lo%dim_size(5)=nspec
+       g_lo%compound_count(2)=g_lo%l_block
+       g_lo%compound_count(3)=g_lo%l_block*g_lo%y_block
+       g_lo%compound_count(4)=g_lo%l_block*g_lo%y_block*g_lo%x_block
+       g_lo%compound_count(5)=g_lo%l_block*g_lo%y_block*g_lo%x_block*g_lo%e_block
+
+       split_compound(1)=1
+       split_compound(2)=g_lo%split_l
+       split_compound(3)=g_lo%split_l*g_lo%split_y
+       split_compound(4)=g_lo%split_l*g_lo%split_y*g_lo%split_x
+       split_compound(5)=g_lo%split_l*g_lo%split_y*g_lo%split_x*g_lo%split_e
+
+       g_lo%dim_size(1)=g_lo%l_block
+       g_lo%dim_size(2)=g_lo%y_block
+       g_lo%dim_size(3)=g_lo%x_block
+       g_lo%dim_size(4)=g_lo%e_block
+       g_lo%dim_size(5)=g_lo%s_block
     case ('xyles')
        g_lo%ie_ord=4
        g_lo%il_ord=3
@@ -819,21 +959,54 @@ contains
        g_lo%ik_ord=2
        g_lo%is_ord=5
        g_lo%compound_count(1)=1
-       g_lo%compound_count(2)=ntheta0
-       g_lo%compound_count(3)=ntheta0*naky
-       g_lo%compound_count(4)=ntheta0*naky*nlambda
-       g_lo%compound_count(5)=ntheta0*naky*nlambda*negrid
-       g_lo%dim_size(1)=ntheta0
-       g_lo%dim_size(2)=naky
-       g_lo%dim_size(3)=nlambda
-       g_lo%dim_size(4)=negrid
-       g_lo%dim_size(5)=nspec
+       g_lo%compound_count(2)=g_lo%x_block
+       g_lo%compound_count(3)=g_lo%x_block*g_lo%y_block
+       g_lo%compound_count(4)=g_lo%x_block*g_lo%y_block*g_lo%l_block
+       g_lo%compound_count(5)=g_lo%x_block*g_lo%y_block*g_lo%l_block*g_lo%e_block
+ 
+       split_compound(1)=1
+       split_compound(2)=g_lo%split_x
+       split_compound(3)=g_lo%split_x*g_lo%split_y
+       split_compound(4)=g_lo%split_x*g_lo%split_y*g_lo%split_l
+       split_compound(5)=g_lo%split_x*g_lo%split_y*g_lo%split_l*g_lo%split_e
+
+       g_lo%dim_size(1)=g_lo%x_block
+       g_lo%dim_size(2)=g_lo%y_block
+       g_lo%dim_size(3)=g_lo%l_block
+       g_lo%dim_size(4)=g_lo%e_block
+       g_lo%dim_size(5)=g_lo%s_block
     end select
+
+    !Used to find index within a block
     g_lo%ik_comp=g_lo%compound_count(g_lo%ik_ord)
     g_lo%it_comp=g_lo%compound_count(g_lo%it_ord)
     g_lo%il_comp=g_lo%compound_count(g_lo%il_ord)
     g_lo%ie_comp=g_lo%compound_count(g_lo%ie_ord)
     g_lo%is_comp=g_lo%compound_count(g_lo%is_ord)
+
+    !Used to find dimension offset of a given block
+    g_lo%is_split_comp=split_compound(g_lo%is_ord)
+    g_lo%ie_split_comp=split_compound(g_lo%ie_ord)
+    g_lo%il_split_comp=split_compound(g_lo%il_ord)
+    g_lo%ik_split_comp=split_compound(g_lo%ik_ord)
+    g_lo%it_split_comp=split_compound(g_lo%it_ord)
+
+!<DD> Temporary hack : The logic for converting (ik,it,il,ie,is) into iglo
+! is more complicated when using the split scheme (nblocks>1) so for now just
+! use a brute force lookup method. This is not really feasible for large problem
+! sizes where the following array could take several GB. For more realistic current
+! cases this may be expected to use up to 500MB.
+    !Populate the reverse lookup array 
+    allocate(g_lo%inds_to_idx(ntheta0,naky,nlambda,negrid,nspec))
+    g_lo%inds_to_idx=0
+    do iglo=g_lo%llim_world,g_lo%ulim_world
+       it=it_idx(g_lo,iglo)
+       ik=ik_idx(g_lo,iglo)
+       il=il_idx(g_lo,iglo)
+       ie=ie_idx(g_lo,iglo)
+       is=is_idx(g_lo,iglo)
+       g_lo%inds_to_idx(it,ik,il,ie,is)=iglo
+    enddo
 
     !<DD>Work out min and max of the five compound indices and the locality
     !These are currently only used to slice the arrays used in the velocity space integrals
@@ -1054,49 +1227,61 @@ contains
     nproc_dim=-1
     dim_divides=.false.
     dim_local=.false.
-    do idim=5,1,-1
-
-       !If we are down to 1 proc then everything else is local
-       !so say dim_divides and exit loop
-       !If nproc_tmp is 0 then this indicates the last dimension
-       !had more entries than procs available
-       if(nproc_tmp.le.1) then
-          dim_divides(idim:1:-1)=.true.
-          dim_local(idim:1:-1)=.true.
-          exit
+    if(g_lo%use_split)then
+       !Dimensions always split nicely if we've got this far and we're
+       !using use_split=.true., but we may have some "spare" procs
+       !currently it seems like these spare procs are causing problems
+       !for the velocity space sub-communincators so we naively disable
+       !here if we have spare procs
+       if(nproc_spare.eq.0)then
+          dim_divides(:)=.true.
+       else
+          dim_divides(:)=.false.
        endif
-       
-       !Does the current dimension divide evenly
-       !amongst the remaining processors
-       tmp_r=(1.0*nproc_tmp)/g_lo%dim_size(idim)
+    else
+       do idim=5,1,-1
 
-       !Check if the current dimension is larger than the number of processors
-       !if so then we can still divide nicely but can't rely on division being integer
-       !Invert division to check!
-       if(int(tmp_r).eq.0) then
-          tmp_r=g_lo%dim_size(idim)/(1.0*nproc_tmp)
-       endif
+          !If we are down to 1 proc then everything else is local
+          !so say dim_divides and exit loop
+          !If nproc_tmp is 0 then this indicates the last dimension
+          !had more entries than procs available
+          if(nproc_tmp.le.1) then
+             dim_divides(idim:1:-1)=.true.
+             dim_local(idim:1:-1)=.true.
+             exit
+          endif
 
-       !Store logical to indicate if things divide perfectly
-       dim_divides(idim)=((tmp_r-int(tmp_r)).eq.0)
+          !Does the current dimension divide evenly
+          !amongst the remaining processors
+          tmp_r=(1.0*nproc_tmp)/g_lo%dim_size(idim)
 
-       !If this dimension doesn't divide perfectly then we exit
-       !loop and leave other dims as "un-initialised"
-       if(.not.dim_divides(idim)) then
-          nproc_dim(idim)=int(tmp_r-int(tmp_r))
-          exit
-       endif
+          !Check if the current dimension is larger than the number of processors
+          !if so then we can still divide nicely but can't rely on division being integer
+          !Invert division to check!
+          if(int(tmp_r).eq.0) then
+             tmp_r=g_lo%dim_size(idim)/(1.0*nproc_tmp)
+          endif
 
-       !If we do split nicely then store how many procs there are
-       !to deal with the subsequent dims
-       !If this is zero then it indicates a dimension that is not
-       !fully distributed.
-       nproc_dim(idim)=nproc_tmp/g_lo%dim_size(idim)
+          !Store logical to indicate if things divide perfectly
+          dim_divides(idim)=((tmp_r-int(tmp_r)).eq.0)
 
-       !Update the available processor count
-       nproc_tmp=nproc_dim(idim)
-    enddo
+          !If this dimension doesn't divide perfectly then we exit
+          !loop and leave other dims as "un-initialised"
+          if(.not.dim_divides(idim)) then
+             nproc_dim(idim)=int(tmp_r-int(tmp_r))
+             exit
+          endif
 
+          !If we do split nicely then store how many procs there are
+          !to deal with the subsequent dims
+          !If this is zero then it indicates a dimension that is not
+          !fully distributed.
+          nproc_dim(idim)=nproc_tmp/g_lo%dim_size(idim)
+
+          !Update the available processor count
+          nproc_tmp=nproc_dim(idim)
+       enddo
+    endif
     !Now print some stuff for debugging
 !     if (proc0) then
 !        write(6,'("Idim | Divides | Nproc_per_block | Size | Local")')
@@ -1435,6 +1620,20 @@ contains
 
   end subroutine is_kx_local
 
+!<DD> This finds the layout block index. For use_split=T this is basically proc_id
+!for use_split=F we only have one layout block. Should find a more elegant way to
+!deal with this.
+  elemental function ib_idx_g(lo, i)
+    integer :: ib_idx_g
+    type (g_layout_type), intent(in) :: lo
+    integer, intent(in) :: i
+    if(lo%use_split) then
+       ib_idx_g = 1+i/lo%blocksize
+    else
+       ib_idx_g = 1
+    endif
+  end function ib_idx_g
+
 ! TT>
 # ifdef USE_C_INDEX
   function is_idx_g (lo, i)
@@ -1458,7 +1657,10 @@ contains
     end interface
     is_idx_g = is_idx_g_c (lo,i)
 # else
-    is_idx_g=1+mod((i-lo%llim_world)/lo%is_comp,lo%nspec)
+    !This gets the index inside the block
+    is_idx_g=1+mod((i-lo%llim_world)/lo%is_comp,lo%s_block)
+    !This gets the index offset of the block
+    is_idx_g=is_idx_g+mod((ib_idx(lo,i)-1)/lo%is_split_comp,lo%split_s)*lo%s_block
 # endif
 ! <TT
 
@@ -1487,7 +1689,9 @@ contains
     end interface
     il_idx_g = il_idx_g_c (lo,i)
 # else
-    il_idx_g=1+mod((i-lo%llim_world)/lo%il_comp,lo%nlambda)
+    il_idx_g=1+mod((i-lo%llim_world)/lo%il_comp,lo%l_block)
+    !This gets the index offset of the block
+    il_idx_g=il_idx_g+mod((ib_idx(lo,i)-1)/lo%il_split_comp,lo%split_l)*lo%l_block
 # endif
 ! <TT
 
@@ -1516,7 +1720,10 @@ contains
     end interface
     ie_idx_g = ie_idx_g_c (lo,i)
 # else
-    ie_idx_g=1+mod((i-lo%llim_world)/lo%ie_comp,lo%negrid)
+    ie_idx_g=1+mod((i-lo%llim_world)/lo%ie_comp,lo%e_block)
+    !This gets the index offset of the block
+    ie_idx_g=ie_idx_g+mod((ib_idx(lo,i)-1)/lo%ie_split_comp,lo%split_e)*lo%e_block
+
 # endif
 ! <TT
 
@@ -1546,7 +1753,10 @@ contains
     end interface
     it_idx_g = it_idx_g_c (lo,i)
 # else
-    it_idx_g=1+mod((i-lo%llim_world)/lo%it_comp,lo%ntheta0)
+    it_idx_g=1+mod((i-lo%llim_world)/lo%it_comp,lo%x_block)
+    !This gets the index offset of the block
+    it_idx_g=it_idx_g+mod((ib_idx(lo,i)-1)/lo%it_split_comp,lo%split_x)*lo%x_block
+
 # endif
 ! <TT
 
@@ -1575,7 +1785,10 @@ contains
     end interface
     ik_idx_g = ik_idx_g_c (lo,i)
 # else
-    ik_idx_g=1+mod((i-lo%llim_world)/lo%ik_comp,lo%naky)
+    ik_idx_g=1+mod((i-lo%llim_world)/lo%ik_comp,lo%y_block)
+    !This gets the index offset of the block
+    ik_idx_g=ik_idx_g+mod((ib_idx(lo,i)-1)/lo%ik_split_comp,lo%split_y)*lo%y_block
+
 # endif
 ! <TT
 
@@ -1614,20 +1827,26 @@ contains
     end interface
     idx_g = idx_g_c (lo, ik, it, il, ie, is)
 # else
-    select case (layout)
-    case ('yxels')
-       idx_g = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(il-1 + lo%nlambda*(is-1))))
-    case ('yxles')
-       idx_g = ik-1 + lo%naky*(it-1 + lo%ntheta0*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1))))
-    case ('lexys')
-       idx_g = il-1 + lo%nlambda*(ie-1 + lo%negrid*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1))))
-    case ('lxyes')
-       idx_g = il-1 + lo%nlambda*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(ie-1 + lo%negrid*(is-1))))
-    case ('lyxes')
-       idx_g = il-1 + lo%nlambda*(ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1))))
-    case ('xyles')
-       idx_g = it-1 + lo%ntheta0*(ik-1 + lo%naky*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1))))
-    end select
+
+    !<DD>This is the original code which works for use_split=F
+    !Need to generalise to cope with n_layout_block>1
+    ! select case (layout)
+    ! case ('yxels')
+    !    idx_g = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(il-1 + lo%nlambda*(is-1))))
+    ! case ('yxles')
+    !    idx_g = ik-1 + lo%naky*(it-1 + lo%ntheta0*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1))))
+    ! case ('lexys')
+    !    idx_g = il-1 + lo%nlambda*(ie-1 + lo%negrid*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1))))
+    ! case ('lxyes')
+    !    idx_g = il-1 + lo%nlambda*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(ie-1 + lo%negrid*(is-1))))
+    ! case ('lyxes')
+    !    idx_g = il-1 + lo%nlambda*(ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1))))
+    ! case ('xyles')
+    !    idx_g = it-1 + lo%ntheta0*(ik-1 + lo%naky*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1))))
+    ! end select
+
+    !<DD>This is a simple lookup table. Not very memory efficient!
+    idx_g = lo%inds_to_idx(it,ik,il,ie,is)
 # endif
 ! <TT
 
