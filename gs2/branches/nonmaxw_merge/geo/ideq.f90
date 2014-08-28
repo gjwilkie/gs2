@@ -48,7 +48,7 @@ module ideq
 contains
   
   subroutine idfitin(eqfile, theta, psi_0_out, psi_a_out, rmaj, B_T, amin, initeq)
-
+    use constants, only: twopi
     use splines
     implicit none
 
@@ -78,7 +78,7 @@ contains
     integer, intent (in) :: initeq
 
     real :: xdum
-    real :: I_ring, twopi
+    real :: I_ring
     real :: dpsidr, dpsidz
     
     integer :: i, j, init
@@ -97,7 +97,6 @@ contains
     init=0
 
     nt = size(theta)
-    twopi = 8.*atan(1.)
     i=index(eqfile,' ')-1
     filename = eqfile(1:i)
     open(unit=5,file=filename,status='old',form='formatted')
@@ -248,12 +247,11 @@ contains
   end subroutine dfit_finish
 
   subroutine dfit_init
-
+    use constants, only: pi
+    implicit none
     real, dimension(nr, nt) :: eqpsi1, eqth 
     integer :: i, j
-    real pi
 
-    pi=2*acos(0.)
     do j=1,nt
        do i=1,nr
           eqpsi1(i,j) = eqpsi(i)
@@ -306,13 +304,11 @@ contains
   end subroutine dfit_init
 
   subroutine derm(f, dfm, char)
-
+    use constants, only: pi
     implicit none
     integer i, j
     character(1) :: char
-    real f(:,:), dfm(:,:,:), pi
-    
-    pi = 2.*acos(0.)
+    real f(:,:), dfm(:,:,:)
     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))         
@@ -467,16 +463,14 @@ contains
   end subroutine bgradient
 
   subroutine eqitem(r, theta_in, f, fstar, char)
-      
+    use constants, only: pi
     integer :: i, j, istar, jstar
     character(1) :: char
     real :: r, thet, fstar, sign, tp, tps, theta_in
-    real :: st, dt, sr, dr, pi, rt
+    real :: st, dt, sr, dr, rt
     real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
     
-    pi = 2.*acos(0.)
-
 ! check for axis evaluation
       
     if(r == eqpsi(1)) then
@@ -698,12 +692,10 @@ contains
   end function psi
 
   function mod2pi (theta)
-    
+    use constants, only: pi
     real, intent(in) :: theta
-    real :: pi, th, mod2pi
+    real :: th, mod2pi
     logical :: out
-    
-    pi=2.*acos(0.)
     
     if(theta <= pi .and. theta >= -pi) then
        mod2pi = theta

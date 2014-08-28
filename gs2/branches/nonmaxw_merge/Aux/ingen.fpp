@@ -839,31 +839,6 @@ if (debug) write(6,*) 'get_namelists: returning'
 
    end subroutine write_namelists
 
-   subroutine factors (n, j, div)
-!CMR, 3/10/13:
-!    Find all the factors of n and return in div(j)
-     integer, intent (in) :: n
-     integer, intent (out) :: j
-     integer, dimension (:), intent (out) :: div
-     integer :: i, imax
-
-! find: i = lowest factor of n
-! and therefore imax=n/1 is the HIGHEST factor of n
-     do i=2,n
-        if (mod(n,i)==0) exit
-     end do
-     imax = n/i
-     j=1
-! loop over all possible factors of n, and return in div(j)
-     do i=1,imax
-        if (mod(n,i)==0) then
-           div(j) = i
-           j=j+1
-        end if
-     end do
-     div(j) = n
-   end subroutine factors
-
    subroutine pfactors (n, div)
      integer, intent (in) :: n
      integer, dimension (:), intent (out) :: div
@@ -1213,7 +1188,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     use kt_grids, only: naky, ntheta0
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
-    use gs2_layouts, only: layout
+    use gs2_layouts, only: layout, factors
     implicit none
     real :: fac
     integer, intent (in) :: nmesh
@@ -1264,7 +1239,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
 
-    use gs2_layouts, only: layout
+    use gs2_layouts, only: layout, factors
     implicit none
     real :: fac
     integer, intent (in) :: nmesh
@@ -1314,7 +1289,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
 
-    use gs2_layouts, only: layout
+    use gs2_layouts, only: layout, factors
     implicit none
     real :: fac
     integer, intent (in) :: nmesh
@@ -1378,7 +1353,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
 
-    use gs2_layouts, only: layout
+    use gs2_layouts, only: layout, factors
     implicit none
     real :: fac
     integer, intent (in) :: nmesh
@@ -1435,7 +1410,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
 
-    use gs2_layouts, only: layout
+    use gs2_layouts, only: layout, factors
     implicit none
     real :: fac
     integer, intent (in) :: nmesh
@@ -1484,7 +1459,7 @@ if (debug) write(6,*) 'get_namelists: returning'
     use kt_grids, only: naky, ntheta0, nx, ny
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
-    use gs2_layouts, only: layout, init_x_transform_layouts, init_y_transform_layouts
+    use gs2_layouts, only: layout, init_x_transform_layouts, init_y_transform_layouts, factors
     implicit none
     real :: fac
     integer, intent (in) :: nmesh

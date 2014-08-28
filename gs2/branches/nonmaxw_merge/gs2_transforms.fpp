@@ -107,8 +107,8 @@ contains
     use gs2_layouts, only: pe_layout, init_accel_transform_layouts
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: init_x_transform_layouts
-    use gs2_layouts, only: fft_wisdom_file, fft_use_wisdom
-    use fft_work, only: load_wisdom, save_wisdom
+    use gs2_layouts, only: fft_wisdom_file, fft_use_wisdom, fft_measure_plan
+    use fft_work, only: load_wisdom, save_wisdom, measure_plan
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
@@ -123,8 +123,9 @@ contains
     if (initialized) return
     initialized = .true.
 
+    measure_plan = fft_measure_plan
     if (fft_use_wisdom) call load_wisdom(trim(fft_wisdom_file))
-
+    
     if (debug) write (*,*) 'init_transforms: init_gs2_layouts'
     call init_gs2_layouts
 
@@ -1648,11 +1649,11 @@ contains
   
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine init_zf (ntgrid, nperiod, howmany)
+  subroutine init_zf (ntgrid, howmany)
 
     use fft_work, only: init_z
     implicit none
-    integer, intent (in) :: ntgrid, nperiod, howmany
+    integer, intent (in) :: ntgrid, howmany
     logical :: done = .false.
 
     if (done) return
@@ -1664,11 +1665,11 @@ contains
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
-  subroutine kz_spectrum (an, an2, ntgrid, ntheta0, naky)
+  subroutine kz_spectrum (an, an2, ntheta0, naky)
 
     complex, dimension (:,:,:), intent(in)  :: an
     complex, dimension (:,:,:), intent(out) :: an2
-    integer, intent (in) :: ntheta0, naky, ntgrid
+    integer, intent (in) :: ntheta0, naky
 
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)

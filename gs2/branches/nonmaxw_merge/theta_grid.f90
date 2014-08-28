@@ -70,7 +70,7 @@ contains
   subroutine gridgen_get_grids (nperiod, ntheta, ntgrid, nbset, &
        theta, bset, bmag, gradpar, gbdrift, gbdrift0, cvdrift, &
        cvdrift0, cdrift, cdrift0, gbdrift_th, cvdrift_th, &
-       gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
+       gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, jacob, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
     use gridgen4mod
     use constants
@@ -82,7 +82,7 @@ contains
     real, dimension (-ntgrid:ntgrid), intent (in out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
+         jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
     integer :: ntheta_old, ntgrid_old, nbset_old
     real, dimension (-ntgrid:ntgrid) :: thetasave
     real, dimension (ntheta+1) :: thetaold, thetanew
@@ -111,6 +111,9 @@ if (debug) write(6,*) 'gridgen_get_grids: call gridgen4_2'
        write(*,*) 'ntheta_new = ',ntheta
        write(*,*) 'Stopping this run would be wise.'
        write(*,*) 'Try again with ntheta = ',ntheta_old + 2
+       if(ntheta_old<ntheta)then
+          write(*,*) 'ntheta_old<ntheta but code assumes ntheta<ntheta_old => Should definitely abort.'
+       endif
     end if
 
     ! interpolate to new grid
@@ -132,6 +135,14 @@ if (debug) write(6,*) 'gridgen_get_grids: call gridgen4_2'
     end do
 
 if (debug) write(6,*) 'gridgen_get_grids: call regrid'
+!<DD>NOTE: Regrid assumes nnew<nold but doesn't check it. Do we need to?
+!          This only packs the new (splined) data into the old array, it
+!          doesn't actually resize the array. This resizing currently takes
+!          place during finish_init call (look for eik_save). Would be safer
+!          if we could make regrid actually reallocate/resize the array.
+!<DD>NOTE: We only resize the arrays internal to theta_grid. This is what should be used
+!          by the rest of the code, but anywhere where the geometry arrays are used directly
+!          could lead to an error if these arrays are resized as we don't resize the geometry arrays.
     call regrid (ntgrid_old, thetasave, gradpar, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gbdrift, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gbdrift0, ntgrid, theta)
@@ -148,6 +159,7 @@ if (debug) write(6,*) 'gridgen_get_grids: call regrid'
     call regrid (ntgrid_old, thetasave, gds24, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gds24_noq, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, grho, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, jacob, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, Rplot, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, Zplot, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, aplot, ntgrid, theta)
@@ -159,6 +171,7 @@ if (debug) write(6,*) 'gridgen_get_grids: call regrid'
 if (debug) write(6,*) 'gridgen_get_grids: end'
   end subroutine gridgen_get_grids
 
+  !<DD>NOTE: This routine assumes nnew<nold
   subroutine regrid (nold, x, y, nnew, xnew)
     use splines
     implicit none
@@ -468,7 +481,7 @@ contains
   subroutine salpha_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, &
        bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
        gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-       Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, &
+       jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, &
        qval, shape, gb_to_cv, Bpol)
     use constants
     use theta_grid_params, only: eps, epsl, shat_param => shat, pk
@@ -481,7 +494,7 @@ contains
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
+         jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     character (8), intent(out) :: shape
     logical, intent (in) :: gb_to_cv
@@ -622,7 +635,7 @@ contains
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-            Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
+            jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
     end if
   end subroutine salpha_get_grids
 
@@ -1079,7 +1092,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
   subroutine eik_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, bmag,&
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, &
-            grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi,&
+            grho, jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi,&
             kxfac, qval, gb_to_cv, Bpol)
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
     use geometry, only: kxfac_out => kxfac
@@ -1118,7 +1131,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
+         jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     logical, intent (in) :: gb_to_cv
     integer :: ig
@@ -1172,7 +1185,7 @@ if (debug) write(6,*) 'eik_get_grids: call gridgen_get_grids'
          theta, bset, bmag, &
          gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, &
-         grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
+         grho, jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
     shat = s_hat_new
     drhodpsi = drhodpsin
     kxfac = kxfac_out
@@ -1415,6 +1428,7 @@ contains
     integer :: unit
     character(200) :: line
     integer :: i
+    !<DD> Should jacob also be provided by this routine?
 
     shat = shat_input
     drhodpsi = drhodpsi_input
@@ -1684,6 +1698,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     use geometry, only: rhoc
     implicit none
 
+    !Scalars
     call broadcast (bmin)
     call broadcast (bmax)
     call broadcast (eps)
@@ -1694,13 +1709,18 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast (ntgrid)
     call broadcast (nperiod)
     call broadcast (nbset)
+    call broadcast (shat)
+    call broadcast (drhodpsi)
+    call broadcast (gb_to_cv)
 
+    !Arrays
     if (.not. proc0) then
        call allocate_arrays
        allocate (theta2(-ntgrid:ntgrid))
        allocate (delthet(-ntgrid:ntgrid))
        allocate (delthet2(-ntgrid:ntgrid))
     end if
+
     call broadcast (theta)
     call broadcast (theta2)
     call broadcast (delthet)
@@ -1725,7 +1745,6 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast (gds24)
     call broadcast (gds24_noq)
     call broadcast (grho)
-    call broadcast (shat)
     call broadcast (jacob)
     call broadcast (Rplot)
     call broadcast (Zplot)
@@ -1734,8 +1753,6 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast (Zprime)
     call broadcast (aprime)
     call broadcast (Bpol)
-    call broadcast (drhodpsi)
-    call broadcast (gb_to_cv)
   end subroutine broadcast_results
 
   subroutine read_parameters
@@ -1917,6 +1934,9 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
        eik_save = grho(-ntgrid:ntgrid); deallocate (grho)
        allocate (grho(-ntgrid:ntgrid)); grho = eik_save
 
+       eik_save = jacob(-ntgrid:ntgrid); deallocate (jacob)
+       allocate (jacob(-ntgrid:ntgrid)); jacob = eik_save
+
        eik_save = Rplot(-ntgrid:ntgrid); deallocate (Rplot)
        allocate (Rplot(-ntgrid:ntgrid)); Rplot = eik_save
 
@@ -1925,6 +1945,15 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
 
        eik_save = aplot(-ntgrid:ntgrid); deallocate (aplot)
        allocate (aplot(-ntgrid:ntgrid)); aplot = eik_save
+
+       eik_save = Rprime(-ntgrid:ntgrid); deallocate (Rprime)
+       allocate (Rprime(-ntgrid:ntgrid)); Rprime = eik_save
+
+       eik_save = Zprime(-ntgrid:ntgrid); deallocate (Zprime)
+       allocate (Zprime(-ntgrid:ntgrid)); Zprime = eik_save
+
+       eik_save = aprime(-ntgrid:ntgrid); deallocate (aprime)
+       allocate (aprime(-ntgrid:ntgrid)); aprime = eik_save
 
        eik_save = Bpol(-ntgrid:ntgrid); deallocate (Bpol)
        allocate (Bpol(-ntgrid:ntgrid)); Bpol = eik_save
@@ -1998,7 +2027,7 @@ if (debug) write(6,*) 'get_grids: call eik_get_grids'
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-            Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
+            jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
             shat, drhodpsi, kxfac, qval, gb_to_cv, Bpol)
        shape = 'torus   '
     case (eqopt_salpha)
@@ -2007,7 +2036,7 @@ if (debug) write(6,*) 'get_grids: call salpha_get_grids'
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-            Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
+            jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
             shat, drhodpsi, kxfac, qval, shape, gb_to_cv, Bpol)
     case (eqopt_file)
 if (debug) write(6,*) 'get_grids: call file_get_grids'

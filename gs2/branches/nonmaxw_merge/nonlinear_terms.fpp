@@ -1,8 +1,5 @@
 module nonlinear_terms
 !
-! not correct for slowing down species
-! terms like df/dU should involve anon, etc.
-!
 ! missing factors of B_a/B(theta) in A_perp terms??
 !
   implicit none
@@ -151,7 +148,7 @@ contains
     if (debug) write(6,*) "init_nonlinear_terms: init_species"
     call init_species
     if (debug) write(6,*) "init_nonlinear_terms: init_dist_fn_layouts"
-    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
 
     call read_parameters
 
@@ -250,7 +247,7 @@ contains
   end subroutine read_parameters
 
 !  subroutine add_nonlinear_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
-  subroutine add_explicit_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+  subroutine add_explicit_terms (g1, g2, g3, phi, apar, bpar, istep, bd)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_time, only: save_dt_cfl
@@ -259,7 +256,6 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
-    complex, intent (in) :: fexp
     real :: dt_cfl
     logical, save :: nl = .true.
 
@@ -270,17 +266,17 @@ contains
        call save_dt_cfl (dt_cfl)
 #ifdef LOWFLOW
        if (istep /=0) &
-            call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+            call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd)
 #endif
     case (nonlinear_mode_on)
 !       if (istep /= 0) call add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
-       if (istep /= 0) call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
+       if (istep /= 0) call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, nl)
     end select
 !  end subroutine add_nonlinear_terms
   end subroutine add_explicit_terms
 
 
-  subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
+  subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd,  nl)
 
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
@@ -293,7 +289,6 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
-    complex, intent (in) :: fexp
     logical, intent (in), optional :: nl
 
     integer :: istep_last = 0
@@ -402,8 +397,9 @@ contains
 
   subroutine add_nl (g1, phi, apar, bpar)
     use mp, only: max_allreduce
+    use general_f0, only: zogtemp
     use theta_grid, only: ntgrid, kxfac
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, ie_idx
     use gs2_layouts, only: accelx_lo, yxf_lo
     use dist_fn_arrays, only: g
     use species, only: spec
@@ -419,7 +415,7 @@ contains
     real :: max_vel, zero
     real :: dt_cfl
 
-    integer :: iglo, ik, it, is, ig, ia, isgn
+    integer :: iglo, ik, it, is, ig, ia, isgn, ie
     
     !Initialise zero so we can be sure tests are sensible
     zero = epsilon(0.0)
@@ -446,15 +442,15 @@ contains
     end if
     if (fbpar > zero) call load_ky_bpar
     
-    ! more generally, there should probably be a factor of anon...
-    !This is basically doing g_adjust to form i*ky*g_wesson (note the factor anon is missing)
+    !This is basically doing g_adjust to form i*ky*g_wesson 
     !/Gives Fourier components of derivative of g_wesson in y direction
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
-             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*aky(ik)*g(ig,isgn,iglo)
+             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*zogtemp(ie,is) + zi*aky(ik)*g(ig,isgn,iglo)
           end do
        end do
     end do
@@ -515,15 +511,14 @@ contains
     
     if (fbpar > zero) call load_kx_bpar
     
-    ! more generally, there should probably be a factor of anon...
-    !This is basically doing g_adjust to form i*kx*g_wesson (note the factor anon is missing)
+    !This is basically doing g_adjust to form i*kx*g_wesson 
     !/Gives Fourier components of derivative of g_wesson in x direction
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
-             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*akx(it)*g(ig,isgn,iglo)
+             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*zogtemp(ie,is) + zi*akx(it)*g(ig,isgn,iglo)
           end do
        end do
     end do

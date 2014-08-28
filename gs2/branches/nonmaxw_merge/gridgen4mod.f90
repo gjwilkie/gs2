@@ -127,6 +127,7 @@ contains
   subroutine gridgen4_2 (n,nbmag,thetain,bmagin, npadd, &
        alknob,epsknob,bpknob,extrknob,thetamax,deltaw,widthw,tension, &
        ntheta,nbset,thetagrid,bmaggrid,bset)
+    use constants, only: pi, twopi
     implicit none
     integer, intent (in) :: n
     integer, intent (in) :: nbmag
@@ -137,8 +138,6 @@ contains
     integer, intent (in out) :: ntheta, nbset
     real, dimension (ntheta+1), intent (out) :: thetagrid, bmaggrid
     real, dimension (nbset), intent (out) :: bset
-
-    real, parameter :: pi = 3.1415926535897931, twopi = 6.2831853071795862
     real :: npi
     integer, parameter :: maxiter = 100
     logical, parameter :: debug_output = .true.

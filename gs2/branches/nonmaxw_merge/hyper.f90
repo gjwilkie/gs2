@@ -440,7 +440,7 @@ contains
 
   end subroutine allocate_arrays
 
-  subroutine hyper_diff (g0, phi, bpar)
+  subroutine hyper_diff (g0, phi)
 
     use gs2_layouts, only: ik_idx, it_idx, is_idx
     use theta_grid, only: ntgrid
@@ -450,7 +450,7 @@ contains
 
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
 
     real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, shear_rate_z, shear_rate_z_nz
 
