@@ -4,8 +4,8 @@
 
 module dist_fn_arrays
 
-  public :: g, gnew, g_restart_tmp, kx_shift, theta0_shift, vpa, vpac
-  public :: vperp2, vpar, ittp, aj0, aj1
+  public :: g, gnew, g_restart_tmp, kx_shift, theta0_shift, vpa, vpac, vpacgen
+  public :: vperp2, vpar, vpargen, ittp, aj0, aj1
   public :: c_rate
   public :: g_adjust, check_g_bouncepoints
 #ifdef LOWFLOW
@@ -19,12 +19,13 @@ module dist_fn_arrays
   real, dimension(:), allocatable :: kx_shift, theta0_shift
   ! (naky)
 
-  real, dimension (:,:,:), allocatable :: vpa, vpac, vpar
+  real, dimension (:,:,:), allocatable :: vpa, vpac, vpar, fpacgen
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   real, dimension (:,:), allocatable :: vperp2, aj0, aj1
   ! (-ntgrid:ntgrid, -g-layout-)
 
+  real, dimension (:,:,:), allocatable :: vpar, vpargen
   integer, dimension (:), allocatable :: ittp
   ! (-ntgrid:ntgrid)
 
@@ -59,14 +60,15 @@ contains
     !
     use species, only: spec
     use theta_grid, only: ntgrid
-    use le_grids, only: anon
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx
+    use le_grids, only: forbid
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx, il_idx
+    use general_f0, only: df0dE
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     real, intent (in) :: facphi, facbpar
 
-    integer :: iglo, ig, ik, it, ie, is
+    integer :: iglo, ig, ik, it, ie, is, il
     complex :: adj
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -74,13 +76,17 @@ contains
        it = it_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+
        ! BD:  bpar == delta B_parallel / B_0(theta) so no extra factor of 
        ! 1/bmag is needed here.
        do ig = -ntgrid, ntgrid
-          adj = anon(ie)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
+          !<DD>Don't adjust in the forbidden region as we don't set g/h here
+          if(forbid(ig,il)) cycle
+          adj = 2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
                *bpar(ig,it,ik)*facbpar &
-               + spec(is)%z*anon(ie)*phi(ig,it,ik)*aj0(ig,iglo) &
-               /spec(is)%temp*facphi
+               + spec(is)%z*phi(ig,it,ik)*aj0(ig,iglo) &
+               *facphi*(-df0dE(ie,is))
           g(ig,1,iglo) = g(ig,1,iglo) + adj
           g(ig,2,iglo) = g(ig,2,iglo) + adj
        end do

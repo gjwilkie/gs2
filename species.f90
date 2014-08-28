@@ -5,8 +5,10 @@ module species
   public :: write_trinity_parameters
   public :: wnml_species, check_species
   public :: nspec, specie, spec
-  public :: ion_species, electron_species, slowing_down_species, tracer_species
-  public :: has_electron_species, has_slowing_down_species
+  public :: ion_species, electron_species, nonmaxw_species, tracer_species, sdequivmaxw_species
+  public :: f0_maxwellian, f0_external, f0_sdanalytic, f0_sdsemianalytic, f0_kappa
+  public :: has_electron_species, has_nonmaxw_species
+  public :: calculate_slowingdown_parameters
   public :: ions, electrons, impurity
 
   type :: specie
@@ -25,15 +27,32 @@ module species
      real :: stm, zstm, tz, smz, zt
      real :: bess_fac !Artificial factor multiplying the Bessel function argument
      integer :: type
+     integer :: f0_type
+     logical :: passive_spec !< Zeros out any contribution to the fields from this species
   end type specie
 
   private
 
   integer, parameter :: ion_species = 1
   integer, parameter :: electron_species = 2 ! for collision operator
-  integer, parameter :: slowing_down_species = 3 ! slowing-down distn
-  integer, parameter :: tracer_species = 4 ! for test particle diffusion studies
+  integer, parameter :: nonmaxw_species = 3 ! Non-Maxwellian
+  integer, parameter :: sdequivmaxw_species = 4 ! Maxwellian w/ same temperature analytic slowing-down distribution
+  integer, parameter :: tracer_species = 5 ! for test particle diffusion studies
 
+  integer, parameter :: f0_maxwellian = 1, &           !< Regular Maxwellian species
+                        f0_external = 2, &             !< f0 determined from table in external input file
+                        f0_sdanalytic = 3, &           !< Analytic Gaffey slowing-down distribution
+                        f0_sdsemianalytic = 4, &       !< Abel's semi-analytic form of the slowing-down distribution, including ash (not currently implemented)
+                        f0_kappa = 5                   !< Kappa distribution
+
+  !> Various quantities needed in the calculation of the slowing-down distribution
+  !! These belong here because the equivalent-Maxwellian properties are calculated here
+  real:: me, ZI_fac, ni_prim, ne_prim, ne, vte
+
+  !> Option for how to calculate vcrit for the equivalent Maxwellian
+  !! Analagous to vcrit_opt in general_f0
+  integer:: equivmaxw_opt = 1
+ 
   integer :: nspec
   type (specie), dimension (:), allocatable :: spec
 
@@ -187,7 +206,7 @@ contains
                write (unit, fmt="(a)") ' type = "ion" /'
           if (spec(i)%type == electron_species) &
                write (unit, fmt="(a)") ' type = "electron"  /'
-          if (spec(i)%type == slowing_down_species) &
+          if (spec(i)%type == nonmaxw_species) &
                write (unit, fmt="(a)") ' type = "fast"  /'
           write (unit, fmt="(' dens0 = ',e13.6)") spec(i)%dens0
           if(spec(i)%bess_fac.ne.1.0) &
@@ -216,29 +235,38 @@ contains
     use mp, only: proc0, broadcast
     implicit none
     real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h
-    real :: tperp0, tpar0, bess_fac
-    character(20) :: type
+    real :: tperp0, tpar0, bess_fac, vcrit, vcritprim
+    character(20) :: type, f0_type
     integer :: unit
     integer :: is, iostat
-    namelist /species_knobs/ nspec
+    logical:: passive_spec
+    namelist /species_knobs/ nspec, ZI_fac, me, equivmaxw_opt
     namelist /species_parameters/ z, mass, dens, dens0, u0, temp, &
          tprim, fprim, uprim, uprim2, vnewk, nustar, type, nu, nu_h, &
-         tperp0, tpar0, bess_fac
+         tperp0, tpar0, bess_fac, f0_type, passive_spec
     integer :: ierr, in_file
 
-    type (text_option), dimension (9), parameter :: typeopts = &
+    type (text_option), dimension (6), parameter :: typeopts = &
          (/ text_option('default', ion_species), &
             text_option('ion', ion_species), &
             text_option('electron', electron_species), &
             text_option('e', electron_species), &
-            text_option('beam', slowing_down_species), &
-            text_option('fast', slowing_down_species), &
-            text_option('alpha', slowing_down_species), &
-            text_option('slowing-down', slowing_down_species), &
+            text_option('nonmaxw', nonmaxw_species), &
             text_option('trace', tracer_species) /)
+
+    type (text_option), dimension (6), parameter :: f0_opts = &
+         (/ text_option('maxwellian', f0_maxwellian), &
+            text_option('external', f0_external), &
+            text_option('sdanalytic', f0_sdanalytic), &
+            text_option('sdsemianalytic', f0_sdsemianalytic), &
+            text_option('external', f0_external) ,&
+            text_option('kappa', f0_kappa) /)
 
     if (proc0) then
        nspec = 2
+       ZI_fac = -1.0
+       me = -1.0
+       equivmaxw_opt = 1
        in_file = input_unit_exist("species_knobs", exist)
 !       if (exist) read (unit=input_unit("species_knobs"), nml=species_knobs)
        if (exist) then
@@ -255,6 +283,9 @@ contains
     end if
 
     call broadcast (nspec)
+    call broadcast (ZI_fac)
+    call broadcast (me)
+    call broadcast (equivmaxw_opt)
     allocate (spec(nspec))
 
     if (proc0) then
@@ -278,6 +309,8 @@ contains
           nu_h = 0.0
           bess_fac=1.0
           type = "default"
+          f0_type = "maxwellian"
+          passive_spec = .false.
           read (unit=unit, nml=species_parameters, iostat=iostat)
           if(iostat /= 0) write(6,*) 'Error ',iostat,'reading species parameters'
           close (unit=unit, iostat=iostat)
@@ -298,6 +331,7 @@ contains
           spec(is)%nustar = nustar
           spec(is)%nu = nu
           spec(is)%nu_h = nu_h
+          spec(is)%passive_spec = passive_spec
 
           spec(is)%stm = sqrt(temp/mass)
           spec(is)%zstm = z/sqrt(temp*mass)
@@ -309,6 +343,20 @@ contains
 
           ierr = error_unit()
           call get_option_value (type, typeopts, spec(is)%type, ierr, "type in species_parameters_x")
+          call get_option_value (f0_type, f0_opts, spec(is)%f0_type, ierr, "f0_type in species_parameters_x")
+       end do
+
+       !> GW: When using the "equivalent Maxwellian" option, some funny things happen. This Maxwellian is calculated
+       !! with the input spec(is)%temp = injection energy. Since it is Maxwellian though, it makes sense to redefine
+       !! this to be the tempeature of the Maxwellian. This is the only sane place to do so because temperature is 
+       !! required for so many other things from here on.
+
+       ! If a species is a slowing-down type species, calculate appropriate quantities
+       do is = 1, nspec
+          ! If sdequivmaxw is the species type, change the definition of spec(is)%temp
+          if ( spec(is)%type == sdequivmaxw_species) &
+             call calculate_slowingdown_parameters(is,equivmaxw_opt,vcrit,vcritprim)
+             call redefine_equivmaxw_temperature(is,vcrit,vcritprim)
        end do
     end if
 
@@ -335,9 +383,117 @@ contains
        call broadcast (spec(is)%zt)
        call broadcast (spec(is)%smz)
        call broadcast (spec(is)%type)
+       call broadcast (spec(is)%f0_type)
+       call broadcast (spec(is)%passive_spec)
        call broadcast (spec(is)%bess_fac)
     end do
   end subroutine read_parameters
+
+  subroutine calculate_slowingdown_parameters(alpha_index,opt,vc,vcprim)
+    use constants, only: pi
+    implicit none
+    integer, intent(in):: alpha_index, opt
+    real, intent(inout):: vc, vcprim
+    integer:: electron_spec, main_ion_species, is,js
+    real:: vinj, Te_prim
+    
+    electron_spec = -1
+    main_ion_species = -1
+
+    do is = 1,nspec
+       if (spec(is)%type .eq. electron_species) electron_spec = is
+         if (main_ion_species < 1 .and. spec(is)%type .eq. ion_species) &
+            main_ion_species = is
+    end do
+
+
+    if (electron_spec .GT. 0) then
+       me = spec(electron_spec)%mass
+       ne = spec(electron_spec)%dens
+       ne_prim = spec(electron_spec)%fprim
+       Te_prim = spec(electron_spec)%tprim
+       vte = sqrt(spec(electron_spec)%temp/spec(electron_spec)%mass)
+    else
+       if (me .LT. 0.0) then
+          write(*,*) "WARNING: vte not specified in species_knobs. Assuming reference species is deuterium, so me = 0.0002723085"
+          me = 0.0002723085
+       end if             
+
+       ne = sum(spec(:)%z*spec(:)%dens)
+       ne_prim = sum(spec(:)%z*spec(:)%dens*spec(:)%fprim)/ne
+       Te_prim = spec(main_ion_species)%tprim
+       vte = sqrt(spec(main_ion_species)%temp/spec(main_ion_species)%mass)
+       write(*,*) "Since electrons are adiabatic, we need to improvise electron parameters to "
+       write(*,*) "caluclate alpha species properties. Imposed by global quasineutrality:"
+       write(*,*) "  ne = ", ne
+       write(*,*) "  vte = ", vte
+       write(*,*) "  ne_prim = ", ne_prim
+       write(*,*) "  Te_prim = ", Te_prim
+    end if
+
+    ni_prim = 0.0
+    ! If ZI_fac is not specified, calculate it from existing ion species:
+    if (ZI_fac .LT. 0.0) then
+       ZI_fac = 0.0
+       do js = 1,nspec
+          if (spec(js)%type .eq. ion_species) then 
+             ZI_fac = ZI_fac   + spec(alpha_index)%mass*spec(js)%dens*spec(js)%z**2/(spec(js)%mass*ne)
+             ni_prim = ni_prim + spec(alpha_index)%mass*spec(js)%dens*spec(js)%z**2*spec(js)%fprim/(spec(js)%mass*ne)
+          end if
+       end do
+    end if
+    ni_prim = ni_prim / ZI_fac 
+
+    if (opt == 2) Te_prim = spec(alpha_index)%tprim
+    
+    ! Calculate vc/vinj
+    vinj = sqrt(spec(alpha_index)%temp/spec(alpha_index)%mass)
+    vc = (0.25*3.0*sqrt(pi)*ZI_fac*me/spec(alpha_index)%mass)**(1.0/3.0)*vte/vinj
+    vcprim = ni_prim - ne_prim + 1.5*Te_prim
+
+  end subroutine calculate_slowingdown_parameters
+            
+  subroutine redefine_equivmaxw_temperature(alpha_index,vcva,vcprim)
+    use constants, only: pi
+    implicit none
+    integer, intent(in):: alpha_index 
+    real, intent(in):: vcva,vcprim
+    real:: Einj, vinj, z, temp, dveff2dvc,veff2va2, mass, Te_prim
+
+    Einj = spec(alpha_index)%temp                    !< temp for alpha species is interpreted as normalized injection energy
+
+    if (equivmaxw_opt .EQ. 2) Te_prim = spec(alpha_index)%tprim
+
+    ! Calculate vteff^2/valpha^2
+    veff2va2 = 1.0 - pi*vcva**2/(3.0**1.5) + (2.0*vcva**2/sqrt(3.0))*atan((vcva-2.0)/(sqrt(3.0)*vcva)) - (vcva**2/3.0)*log((1.0-vcva+vcva**2)/(1+vcva)**2)
+    veff2va2 = veff2va2/log(1.0+(1.0/vcva)**3)
+
+    ! Calculate d/dvc (vteff^2)
+    dveff2dvc = veff2va2 * 3.0 / ( (1.0+vcva**3)*log(1.0+(1.0/vcva)**3))
+    temp = 6.0*vcva/((1.0+vcva)*(1.0-vcva+vcva**2)) - 2.0*pi/sqrt(3.0) + 4.0*sqrt(3.0)*atan((vcva-2.0)/(sqrt(3.0)*vcva)) - 2.0*log((1.0-vcva+vcva**2)/(vcva+1.0)**2)
+    dveff2dvc = dveff2dvc + (vcva**2/(3.0*log(1.0+(1.0/vcva)**3)))*temp
+
+    spec(alpha_index)%temp = Einj*veff2va2
+
+    spec(alpha_index)%tprim = (1.0/3.0)*dveff2dvc*vcprim/veff2va2
+
+    ! Reclaculate the things that depend on temperature
+    z = spec(alpha_index)%z     
+    temp = spec(alpha_index)%temp
+    mass = spec(alpha_index)%mass
+    spec(alpha_index)%stm = sqrt(temp/mass)
+    spec(alpha_index)%zstm = z/sqrt(temp*mass)
+    spec(alpha_index)%tz = temp/z
+    spec(alpha_index)%zt = z/temp
+    spec(alpha_index)%smz = abs(sqrt(temp*mass)/z)
+
+    write(*,*) "Using equivalent-Maxwellian option for species ", alpha_index
+    write(*,*) "Parameters have been changed to the following values:"
+    write(*,*) "  vc/va = ", vcva
+    write(*,*) "  temp = ", spec(alpha_index)%temp
+    write(*,*) "  tprim = ", spec(alpha_index)%tprim
+
+  end subroutine redefine_equivmaxw_temperature
 
   pure function has_electron_species (spec)
     implicit none
@@ -346,12 +502,12 @@ contains
     has_electron_species = any(spec%type == electron_species)
   end function has_electron_species
 
-  pure function has_slowing_down_species (spec)
+  pure function has_nonmaxw_species (spec)
     implicit none
     type (specie), dimension (:), intent (in) :: spec
-    logical :: has_slowing_down_species
-    has_slowing_down_species = any(spec%type == slowing_down_species)
-  end function has_slowing_down_species
+    logical :: has_nonmaxw_species
+    has_nonmaxw_species = any(spec%type == nonmaxw_species)
+  end function has_nonmaxw_species
 
   subroutine finish_species
 

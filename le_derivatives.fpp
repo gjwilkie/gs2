@@ -8,7 +8,7 @@ module le_derivatives
 
 contains
 
-  subroutine vspace_derivatives (g, gold, g1, phi, apar, bpar, phinew,aparnew, bparnew, diagnostics, gtoc, ctog)
+  subroutine vspace_derivatives (g, gold, g1, phi, bpar, phinew, bparnew, diagnostics, gtoc, ctog)
 
     use redistribute, only: gather, scatter
     use dist_fn_arrays, only: c_rate, g_adjust
@@ -22,7 +22,7 @@ contains
     use gs2_layouts, only: ig_idx, is_idx
     use theta_grid, only: gradpar, theta
     use le_grids, only: ixi_to_il, ixi_to_isgn, forbid, write_mpdist_le, write_mpdist, jend
-    use le_grids, only: xi, speed, energy
+    use le_grids, only: xi, speed => speed_maxw, energy => energy_maxw
     use species, only: spec
     use lowflow, only: dphidth
 # endif
@@ -30,7 +30,7 @@ contains
     implicit none
     
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, gold, g1
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar, phinew, aparnew, bparnew
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar, phinew, bparnew
     integer, optional, intent (in) :: diagnostics
 
 # ifdef LOWFLOW
@@ -107,21 +107,21 @@ contains
                 isgn = ixi_to_isgn(ig,ixi)
                 if (.not. forbid(ig,il)) &
                    call get_gvpa (gtmp, dvp, ig, il, ixi, ie, isgn, gle(ixi,ie,ile))
-                end do
              end do
           end do
+       end do
 
-          deallocate (gtmp)
-
-          if (colls) then
+       deallocate (gtmp)
+       
+       if (colls) then
 # endif
-       ! update distribution function to take into account collisions
+          ! update distribution function to take into account collisions
           call solfp1 (gle, diagnostics)
 
 # ifdef LOWFLOW
           end if
 # endif
-         ! remap from le_layout to g_layout
+          ! remap from le_layout to g_layout
           if (c_to_g) call scatter (g2le, gle, g)
           deallocate (gle)
           if (heating_flag) then
@@ -197,7 +197,7 @@ contains
     subroutine get_gvpa (g_in, dv, ig0, il0, ixi0, ie0, isgn0, g_out)
 
       use theta_grid, only: bmag
-      use le_grids, only: speed, energy, al, xi, negrid, jend
+      use le_grids, only: speed=>speed_maxw, energy=>energy_maxw, al, xi, negrid, jend
 
       implicit none
 
@@ -334,7 +334,7 @@ contains
 
     subroutine interp_g (ig0, isgn, il_low, il_up, ix_low, ix_up, ie_low, ie_up, v0, x0, lam0, p0, g, gint)
 
-      use le_grids, only: speed, xi, negrid, sgn
+      use le_grids, only: speed => speed_maxw, xi, negrid, sgn
 !      use le_grids, only: nlambda,al
 
       implicit none

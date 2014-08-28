@@ -234,13 +234,37 @@ contains
   end subroutine check_target_reached
 
   subroutine increment_scan_parameter(increment, reset)
-    use fields_implicit, only: set_scan_parameter
     real, intent (in) :: increment
     logical, intent (inout) :: reset
     current_scan_parameter_value = current_scan_parameter_value + increment
     call set_scan_parameter(reset)
   end subroutine increment_scan_parameter
      
+  subroutine set_scan_parameter(reset)
+    !use parameter_scan_arrays, only: current_scan_parameter_value
+    !use parameter_scan_arrays, only: scan_parameter_switch
+    !use parameter_scan_arrays, only: scan_parameter_tprim
+    !use parameter_scan_arrays, only: scan_parameter_g_exb
+    use parameter_scan_arrays
+    use species, only: spec 
+    use dist_fn, only: g_exb
+    use mp, only: proc0
+    logical, intent (inout) :: reset
+     
+    select case (scan_parameter_switch)
+    case (scan_parameter_tprim)
+       spec(scan_spec)%tprim = current_scan_parameter_value
+       if (proc0) write (*,*) &
+         "Set scan parameter tprim_1 to ", spec(scan_spec)%tprim
+       reset = .true.
+    case (scan_parameter_g_exb)
+       g_exb = current_scan_parameter_value
+       if (proc0) write (*,*) &
+         "Set scan parameter g_exb to ", g_exb
+       reset = .false.
+    end select
+  end subroutine set_scan_parameter
+
   subroutine check_increment_condition_satisfied(istep, increment_condition_satisfied)
     use gs2_time, only: user_time
     use mp, only : mp_abort, proc0

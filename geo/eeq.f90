@@ -144,6 +144,7 @@ contains
 !     zhei       total height of domain
 !
     use splines, only: inter_cspl, fitp_surf2, fitp_surf1
+    use constants, only: pi, twopi
     use gs2d
     implicit none
 
@@ -184,8 +185,8 @@ if (debug) write(6,fmt='(T2,"psmin",T15,"psedge (Wb)",T27,"b0 (T)",T39,"ip(A)"/1
     rcentr=r0 ; rleft=minval(rgrid)
     R_mag=rmag ; Z_mag=zmag ; psi_0=psmin ; psi_a=psip ; bcentr=b0
 
-    psi_0 = psi_0/(8.0*atan(1.))
-    psi_a = psi_a/(8.0*atan(1.))
+    psi_0 = psi_0/twopi
+    psi_a = psi_a/twopi
 if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
 
 !
@@ -214,7 +215,7 @@ if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
     call inter_cspl(nw, spsi_bar, f, nwb, psi_bar, fp)
     call inter_cspl(nw, spsi_bar, p, nwb, psi_bar, pressure)
 ! divide GS2D psi by 2pi to get poloidal flux in (Wb/rad)
-    sefit_psi=psi/(8.0*atan(1.0))
+    sefit_psi=psi/twopi
 
     allocate(zp(3*nw*nh), temp(nw+2*nh))
     allocate(zx1(nh), zxm(nh), zy1(nw), zyn(nw))
@@ -251,12 +252,12 @@ if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
 ! Allow for duplicated points near +- pi:
 
     if(thetab(1) == thetab(2)) then
-       thetab(1) = thetab(1) + 4.*acos(0.)
+       thetab(1) = thetab(1) + twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
     if(thetab(nbbbs-1) == thetab(nbbbs)) then
-       thetab(nbbbs) = thetab(nbbbs) - 4.*acos(0.)
+       thetab(nbbbs) = thetab(nbbbs) - twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
@@ -315,7 +316,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
 ! MKS: beta = 2 mu_0 p / B**2
 
-    beta = 8. * (2. * acos(0.)) * pressure * 1.e-7 / B_T0**2
+    beta = 8. * pi * pressure * 1.e-7 / B_T0**2
     beta_0 = beta(1)
 
     pressure = pressure / p_0
@@ -347,6 +348,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 !     rleft      position of leftmost point of domain
 !     zhei       total height of domain
 !
+    use constants, only: pi, twopi
     use splines, only: inter_cspl, fitp_surf2, fitp_surf1
     implicit none
 
@@ -472,12 +474,12 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 ! Allow for duplicated points near +- pi:
 
     if(thetab(1) == thetab(2)) then
-       thetab(1) = thetab(1) + 4.*acos(0.)
+       thetab(1) = thetab(1) + twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
     if(thetab(nbbbs-1) == thetab(nbbbs)) then
-       thetab(nbbbs) = thetab(nbbbs) - 4.*acos(0.)
+       thetab(nbbbs) = thetab(nbbbs) - twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
@@ -533,7 +535,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
 ! MKS: beta = 2 mu_0 p / B**2
 
-    beta = 8. * (2. * acos(0.)) * pressure * 1.e-7 / B_T0**2
+    beta = 8. * pi * pressure * 1.e-7 / B_T0**2
     beta_0 = beta(1)
 
     pressure = pressure / p_0
@@ -590,12 +592,10 @@ if (verbosity > 2) write(6,*) "efit_init: finished"
   end subroutine efit_init
 
   subroutine tderm(f, dfm)
-
+    use constants, only: pi
     implicit none
     integer i, j
-    real f(:,:), dfm(:,:,:), pi
-
-    pi = 2.*acos(0.)
+    real f(:,:), dfm(:,:,:)
     
 ! EFIT grid is equally spaced in R, Z -- this routine uses that fact and 
 ! is therefore not completely general.  It is fine for EFIT output.    

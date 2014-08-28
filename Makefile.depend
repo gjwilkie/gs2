@@ -23,6 +23,41 @@ drive_mod = \
 	 drive.o \
 	 regression.o 
 
+dump_grids_mod = \
+	 ceq.o \
+	 command_line.o \
+	 constants.o \
+	 deq.o \
+	 dump_grids.o \
+	 eeq.o \
+	 file_utils.o \
+	 gauss_quad.o \
+	 general_f0.o \
+	 geometry.o \
+	 geq.o \
+	 gridgen4mod.o \
+	 gs2_layouts.o \
+	 ideq.o \
+	 job_manage.o \
+	 kt_grids.o \
+	 layouts_type.o \
+	 le_grids.o \
+	 leq.o \
+	 mp.o \
+	 netcdf_utils.o \
+	 peq.o \
+	 read_chease.o \
+	 redistribute.o \
+	 runtime_tests.o \
+	 sorting.o \
+	 species.o \
+	 spfunc.o \
+	 spl.o \
+	 text_options.o \
+	 theta_grid.o \
+	 theta_grid_params.o \
+	 unit_tests.o 
+
 dump_response_mod = \
 	 antenna.o \
 	 antenna_data.o \
@@ -44,6 +79,7 @@ dump_response_mod = \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
+	 general_f0.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -64,7 +100,6 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -114,6 +149,11 @@ ffttester_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_write_fields.o \
+	 diagnostics_write_fluxes.o \
+	 diagnostics_write_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -123,13 +163,16 @@ ffttester_mod = \
 	 fields_arrays.o \
 	 fields_implicit.o \
 	 fields_local.o \
+	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
+	 general_f0.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -149,7 +192,6 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -168,7 +210,8 @@ ffttester_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o 
+	 unit_tests.o \
+	 volume_averages.o 
 
 generate_fftw_wisdom_mod = \
 	 antenna_data.o \
@@ -184,6 +227,7 @@ generate_fftw_wisdom_mod = \
 	 fields_arrays.o \
 	 file_utils.o \
 	 gauss_quad.o \
+	 general_f0.o \
 	 generate_fftw_wisdom.o \
 	 geometry.o \
 	 geq.o \
@@ -210,6 +254,7 @@ generate_fftw_wisdom_mod = \
 	 runtime_tests.o \
 	 sorting.o \
 	 species.o \
+	 spfunc.o \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
@@ -225,6 +270,11 @@ gs2_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_write_fields.o \
+	 diagnostics_write_fluxes.o \
+	 diagnostics_write_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -233,14 +283,17 @@ gs2_mod = \
 	 fields_arrays.o \
 	 fields_implicit.o \
 	 fields_local.o \
+	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
+	 general_f0.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2.o \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -260,7 +313,6 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -279,11 +331,37 @@ gs2_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o 
+	 unit_tests.o \
+	 volume_averages.o 
 
 hrate_mod = \
 	 command_line.o \
 	 hrate.o 
+
+ideal_ball_mod = \
+	 ballstab.o \
+	 ceq.o \
+	 command_line.o \
+	 constants.o \
+	 deq.o \
+	 eeq.o \
+	 file_utils.o \
+	 geometry.o \
+	 geq.o \
+	 gridgen4mod.o \
+	 ideal_ball.o \
+	 ideq.o \
+	 job_manage.o \
+	 leq.o \
+	 mp.o \
+	 netcdf_utils.o \
+	 peq.o \
+	 read_chease.o \
+	 runtime_tests.o \
+	 spl.o \
+	 text_options.o \
+	 theta_grid.o \
+	 theta_grid_params.o 
 
 ingen_mod = \
 	 antenna.o \
@@ -305,6 +383,7 @@ ingen_mod = \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
+	 general_f0.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -328,7 +407,6 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -384,6 +462,11 @@ antenna.o: \
 antenna_data.o: 
 ball.o: \
 	 geometry.o 
+ballstab.o: \
+	 file_utils.o \
+	 geometry.o \
+	 mp.o \
+	 theta_grid.o 
 benchmarks.o: \
 	 runtime_tests.o 
 ceq.o: \
@@ -398,7 +481,6 @@ collisions.o: \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 kt_grids.o \
-	 layouts_type.o \
 	 le_grids.o \
 	 mp.o \
 	 prof.o \
@@ -412,6 +494,7 @@ command_line.o:
 constants.o: 
 convert.o: 
 deq.o: \
+	 constants.o \
 	 spl.o 
 diagnostics_config.o: \
 	 file_utils.o \
@@ -454,8 +537,8 @@ dist_fn.o: \
 	 collisions.o \
 	 constants.o \
 	 dist_fn_arrays.o \
-	 fields_arrays.o \
 	 file_utils.o \
+	 general_f0.o \
 	 geometry.o \
 	 gs2_heating.o \
 	 gs2_layouts.o \
@@ -475,6 +558,7 @@ dist_fn.o: \
 	 text_options.o \
 	 theta_grid.o 
 dist_fn_arrays.o: \
+	 general_f0.o \
 	 gs2_layouts.o \
 	 le_grids.o \
 	 mp.o \
@@ -482,6 +566,14 @@ dist_fn_arrays.o: \
 	 theta_grid.o 
 drive.o: \
 	 regression.o 
+dump_grids.o: \
+	 file_utils.o \
+	 job_manage.o \
+	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
+	 netcdf_utils.o \
+	 theta_grid.o 
 dump_response.o: \
 	 antenna.o \
 	 collisions.o \
@@ -500,9 +592,11 @@ dump_response.o: \
 	 species.o 
 ediff.o: 
 eeq.o: \
+	 constants.o \
 	 runtime_tests.o \
 	 spl.o 
 et.o: \
+	 constants.o \
 	 geometry.o 
 fft_work.o: \
 	 constants.o \
@@ -521,7 +615,6 @@ ffttester.o: \
 	 theta_grid.o 
 fields.o: \
 	 antenna.o \
-	 constants.o \
 	 dist_fn.o \
 	 fields_arrays.o \
 	 fields_implicit.o \
@@ -548,10 +641,8 @@ fields_implicit.o: \
 	 job_manage.o \
 	 kt_grids.o \
 	 mp.o \
-	 parameter_scan_arrays.o \
 	 prof.o \
 	 run_parameters.o \
-	 species.o \
 	 theta_grid.o 
 fields_local.o: \
 	 antenna.o \
@@ -582,6 +673,7 @@ file_utils.o: \
 	 command_line.o 
 functional_tests.o: \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_main.o \
 	 job_manage.o \
 	 kt_grids.o \
@@ -593,6 +685,14 @@ gauss_quad.o: \
 	 constants.o \
 	 file_utils.o \
 	 mp.o 
+general_f0.o: \
+	 constants.o \
+	 file_utils.o \
+	 mp.o \
+	 species.o \
+	 spfunc.o \
+	 spl.o \
+	 text_options.o 
 generate_fftw_wisdom.o: \
 	 benchmarks.o \
 	 file_utils.o \
@@ -601,6 +701,7 @@ generate_fftw_wisdom.o: \
 	 nonlinear_terms.o 
 geometry.o: \
 	 ceq.o \
+	 constants.o \
 	 deq.o \
 	 eeq.o \
 	 geq.o \
@@ -612,6 +713,7 @@ geq.o: \
 	 netcdf_utils.o \
 	 spl.o 
 gridgen4mod.o: \
+	 constants.o \
 	 spl.o 
 gs2.o: \
 	 gs2_main.o 
@@ -621,7 +723,6 @@ gs2_diagnostics.o: \
 	 constants.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
-	 fields.o \
 	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_heating.o \
@@ -666,6 +767,7 @@ gs2_io.o: \
 	 convert.o \
 	 fields_arrays.o \
 	 file_utils.o \
+	 general_f0.o \
 	 gs2_heating.o \
 	 gs2_layouts.o \
 	 gs2_transforms.o \
@@ -679,7 +781,6 @@ gs2_io.o: \
 	 species.o \
 	 theta_grid.o 
 gs2_layouts.o: \
-	 fft_work.o \
 	 file_utils.o \
 	 layouts_type.o \
 	 mp.o \
@@ -691,11 +792,10 @@ gs2_main.o: \
 	 dist_fn_arrays.o \
 	 fields.o \
 	 fields_arrays.o \
-	 fields_implicit.o \
-	 fields_test.o \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
@@ -774,7 +874,14 @@ hyper.o: \
 	 mp.o \
 	 text_options.o \
 	 theta_grid.o 
+ideal_ball.o: \
+	 ballstab.o \
+	 file_utils.o \
+	 job_manage.o \
+	 mp.o \
+	 theta_grid.o 
 ideq.o: \
+	 constants.o \
 	 spl.o 
 ingen.o: \
 	 antenna.o \
@@ -844,6 +951,7 @@ le_grids.o: \
 	 constants.o \
 	 file_utils.o \
 	 gauss_quad.o \
+	 general_f0.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 layouts_type.o \
@@ -871,7 +979,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -879,6 +986,7 @@ nonlinear_terms.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
 	 file_utils.o \
+	 general_f0.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 gs2_transforms.o \
@@ -892,7 +1000,7 @@ nonlinear_terms.o: \
 om.o: \
 	 command_line.o 
 parameter_scan.o: \
-	 fields_implicit.o \
+	 dist_fn.o \
 	 file_utils.o \
 	 gs2_save.o \
 	 gs2_time.o \
@@ -900,6 +1008,7 @@ parameter_scan.o: \
 	 mp.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
+	 species.o \
 	 text_options.o 
 parameter_scan_arrays.o: 
 peq.o: \
@@ -909,8 +1018,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -933,6 +1041,7 @@ rungridgen.o: \
 runtime_tests.o: 
 sorting.o: 
 species.o: \
+	 constants.o \
 	 file_utils.o \
 	 job_manage.o \
 	 mp.o \

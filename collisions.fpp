@@ -191,7 +191,7 @@ contains
   subroutine init_collisions
 
     use species, only: init_species, nspec, spec
-    use theta_grid, only: init_theta_grid, ntgrid
+    use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids, naky, ntheta0
     use le_grids, only: init_le_grids, nlambda, negrid , init_map
     use run_parameters, only: init_run_parameters
@@ -224,7 +224,7 @@ contains
     call init_kt_grids
     call init_le_grids (accelerated_x, accelerated_v)
     call init_run_parameters
-    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
     call read_parameters
     if( .not. use_le_layout ) then
        select case (collision_model_switch)
@@ -402,7 +402,7 @@ contains
     use species, only: nspec, spec, electron_species
     use kt_grids, only: kperp2, naky, ntheta0
     use theta_grid, only: ntgrid, bmag
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxw, al, integrate_moment, negrid
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: tunits
@@ -438,6 +438,8 @@ contains
     allocate (dtmp(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (vns(naky,negrid,nspec,3))
     
+    duinv=0.0 ; dtmp=0.0; !This initialisation is needed in case kwork_filter is true anywhere
+
     vns(:,:,:,1) = vnmult(1)*vnew_D
     vns(:,:,:,2) = vnmult(1)*vnew_s
     vns(:,:,:,3) = 0.0
@@ -540,10 +542,10 @@ contains
 !       end do
     end if
 
-    where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
-                                        ! duinv=0 iff vnew=0 so ok to keep duinv=0.
-       duinv = 1./duinv  ! now it is 1/du
-    end where
+   where (abs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
+                                        !duinv=0 iff vnew=0 so ok to keep duinv=0.
+      duinv = 1./duinv  ! now it is 1/du
+   end where
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get s0 (first form)
@@ -813,7 +815,7 @@ contains
     use species, only: nspec, spec
     use kt_grids, only: naky, ntheta0, kperp2
     use theta_grid, only: ntgrid, bmag
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxw, al, integrate_moment, negrid
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: aj0, aj1, vpa
     use le_grids, only: g2le, nxi
@@ -847,7 +849,7 @@ contains
     allocate (duinv(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (dtmp(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (vns(naky,negrid,nspec,2))
-    
+    duinv=0.0 ; dtmp=0.0    
     vns(:,:,:,1) = vnmult(2)*delvnew
     vns(:,:,:,2) = vnmult(2)*vnew_s
 
@@ -870,10 +872,10 @@ contains
 !       end do
 !    end if
 
-    where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
-                                        ! duinv=0 iff vnew=0 so ok to keep duinv=0.
-       duinv = 1./duinv  ! now it is 1/du
-    end where
+   where (abs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
+                                      !  duinv=0 iff vnew=0 so ok to keep duinv=0.
+      duinv = 1./duinv  ! now it is 1/du
+   end where
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get z0 (first form)
@@ -892,7 +894,7 @@ contains
 
     if(use_le_layout) then    
       call gather (g2le, bz0, ctmp)
-      call solfp_ediffuse_le_layout (ctmp,le_lo)
+      call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bz0)   ! bz0 is redefined below
     else
       call solfp_ediffuse_standard_layout (bz0,init=.true.)   ! bz0 is redefined below
@@ -951,10 +953,10 @@ contains
 !       end do
 !    end if
 
-    where (cabs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
-                                        ! duinv=0 iff vnew=0 so ok to keep duinv=0.
-       duinv = 1./duinv  ! now it is 1/du
-    end where
+   where (abs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
+                                      !  duinv=0 iff vnew=0 so ok to keep duinv=0.
+      duinv = 1./duinv  ! now it is 1/du
+   end where
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Now get s0 (first form)
@@ -978,7 +980,7 @@ contains
 
     if(use_le_layout) then
       call gather (g2le, bs0, ctmp)
-      call solfp_ediffuse_le_layout (ctmp, le_lo)
+      call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bs0)   ! bs0
     else
       call solfp_ediffuse_standard_layout (bs0,init=.true.)    ! s0
@@ -1060,7 +1062,7 @@ contains
 
     if(use_le_layout) then    
       call gather (g2le, bw0, ctmp)
-      call solfp_ediffuse_le_layout (ctmp, le_lo)
+      call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bw0)
     else
       call solfp_ediffuse_standard_layout (bw0,init=.true.)
@@ -1153,7 +1155,6 @@ contains
 
     deallocate (gtmp, duinv, dtmp, vns)
 
-
     if(use_le_layout) then    
       if (.not. allocated(bs0le)) then
          allocate (bs0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
@@ -1185,7 +1186,7 @@ contains
 
   subroutine init_vnew (hee)
     use species, only: nspec, spec, electron_species, has_electron_species
-    use le_grids, only: negrid, energy, w
+    use le_grids, only: negrid, energy => energy_maxw, w => w_maxw
     use kt_grids, only: naky, ntheta0, kperp2
     use theta_grid, only: ntgrid
     use run_parameters, only: zeff, tunits
@@ -1381,10 +1382,9 @@ contains
   subroutine init_ediffuse (vnmult_target)
     use le_grids, only: negrid, nxi
     use le_grids, only: forbid, ixi_to_il
-    use egrid, only: zeroes, x0
+    use egrid, only: zeroes => zeroes_maxw, x0 => x0_maxw
     use gs2_layouts, only: le_lo, e_lo, il_idx
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx
-    use spfunc, only: erf => erf_ext
 
     implicit none
     
@@ -1392,7 +1392,6 @@ contains
 
     integer :: ie, is, ik, il, ig, it
     real, dimension (:), allocatable :: aa, bb, cc, xe, el
-!    real :: erf ! this is needed for PGI: RN
     integer :: ile, ixi
     integer :: ielo
 
@@ -1479,7 +1478,7 @@ contains
     use species, only: spec
     use run_parameters, only: tunits
     use theta_grid, only: bmag
-    use le_grids, only: al, negrid, w
+    use le_grids, only: al, negrid, w=>w_maxw
     use spfunc, only: erf => erf_ext
     use constants, only: pi
     use kt_grids, only: kperp2
@@ -1815,7 +1814,7 @@ contains
   subroutine get_lorentz_matrix (aa, bb, cc, dd, hh, ig, ik, it, ie, is)
 
     use species, only: spec
-    use le_grids, only: al, energy, xi, ng2
+    use le_grids, only: al, energy => energy_maxw, xi, ng2
     use le_grids, only: wl, jend, al
     use gs2_time, only: code_dt
     use kt_grids, only: kperp2
@@ -2390,7 +2389,7 @@ contains
     use theta_grid, only: ntgrid
     use run_parameters, only: beta
     use gs2_time, only: code_dt
-    use le_grids, only: energy
+    use le_grids, only: energy => energy_maxw
     use species, only: spec, electron_species
     use dist_fn_arrays, only: vpa, aj0
     use fields_arrays, only: aparnew
@@ -2543,7 +2542,7 @@ contains
     use theta_grid, only: bmag
     use run_parameters, only: beta, ieqzip
     use gs2_time, only: code_dt
-    use le_grids, only: energy, negrid, nxi, ixi_to_il, ixi_to_isgn, sgn, al
+    use le_grids, only: energy => energy_maxw, negrid, nxi, ixi_to_il, ixi_to_isgn, sgn, al
     use species, only: spec, electron_species
     use fields_arrays, only: aparnew
     use kt_grids, only: kwork_filter, kperp2
@@ -2569,7 +2568,7 @@ contains
        ! TMP FOR TESTING -- MAB
 !       if (proc0) call system_clock (count=t0, count_rate=tr)
 
-       call solfp_ediffuse_le_layout (gle, le_lo)
+       call solfp_ediffuse_le_layout (gle)
 
        ! TMP FOR TESTING -- MAB
 !       if (proc0) then
@@ -2670,7 +2669,7 @@ contains
 
     case (collision_model_ediffuse)
 
-       call solfp_ediffuse_le_layout (gle, le_lo)
+       call solfp_ediffuse_le_layout (gle)
 
        if (conserve_moments) call conserve_diffuse (gle)
 
@@ -2685,7 +2684,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxw, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
     use kt_grids, only: kwork_filter
@@ -2826,7 +2825,7 @@ contains
     use theta_grid, only: ntgrid
     use species, only: nspec
     use gs2_layouts, only: ik_idx, it_idx, ie_idx, il_idx, is_idx
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxw, al, integrate_moment, negrid
     use le_grids, only: ixi_to_il, ixi_to_isgn
     use run_parameters, only: ieqzip
     use le_grids, only: sgn, nxi
@@ -2990,7 +2989,7 @@ contains
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, il_idx, is_idx
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxw, al, integrate_moment, negrid
     use dist_fn_arrays, only: aj0, aj1, vpa
     use run_parameters, only: ieqzip
     use kt_grids, only: kwork_filter
@@ -3124,10 +3123,10 @@ contains
     use species, only: nspec
     use kt_grids, only: naky
     use gs2_layouts, only: ik_idx, it_idx, ie_idx, il_idx, is_idx
-    use le_grids, only: energy, al, integrate_moment, negrid
+    use le_grids, only: energy => energy_maxw, al, integrate_moment, negrid
     use le_grids, only: ixi_to_il, ixi_to_isgn
     use run_parameters, only: ieqzip
-    use le_grids, only: forbid, sgn, speed, nxi
+    use le_grids, only: forbid, sgn, speed => speed_maxw, nxi
     use gs2_layouts, only: le_lo, ig_idx, ik_idx, it_idx
     use redistribute, only: scatter
     use theta_grid, only: bmag
@@ -3162,7 +3161,8 @@ contains
 
     !This is needed to to ensure the it,ik values we don't set aren't included
     !in the integral (can also be enforced in integrate_moment routine)
-    if(any(kwork_filter)) gtmp=0.
+    !if(any(kwork_filter)) gtmp=0.
+    gtmp=0.
 
     if (.not. allocated(vpatmp)) then
        allocate(vpatmp(-ntgrid:ntgrid,nxi)) ; vpatmp = 0.0
@@ -3175,27 +3175,27 @@ contains
           end do
        end do
     end if
-
+    
     vns = vnmult(2)*vnew_E
-
+    
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! First get v0y0
     
     ! TMP FOR TESTING -- MAB
 !    if (proc0) call system_clock (count=t0, count_rate=tr)
 
-     do ile = le_lo%llim_proc, le_lo%ulim_proc
-        is = is_idx(le_lo,ile)
-        ik = ik_idx(le_lo,ile)
-        it = it_idx(le_lo,ile)
-        if(kwork_filter(it,ik)) cycle
-        do ie=1, negrid
-           do ixi = 1, nxi
-              gtmp(ixi,ie,ile) = vns(ik,ie,is)*aj0le(ixi,ie,ile)*gle(ixi,ie,ile)
-           end do
-        end do
-     end do
-
+    do ile = le_lo%llim_proc, le_lo%ulim_proc
+       is = is_idx(le_lo,ile)
+       ik = ik_idx(le_lo,ile)
+       it = it_idx(le_lo,ile)
+       if(kwork_filter(it,ik)) cycle
+       do ie=1, negrid
+          do ixi = 1, nxi
+             gtmp(ixi,ie,ile) = vns(ik,ie,is)*aj0le(ixi,ie,ile)*gle(ixi,ie,ile)
+          end do
+       end do
+    end do
+    
     call integrate_moment (le_lo, gtmp, v0y0)    ! v0y0
 !    call integrate_moment (le_lo, gle*aj0le, v0y0, vns)    ! v0y0
 
@@ -3701,18 +3701,16 @@ contains
   end subroutine solfp_ediffuse_standard_layout
 
 
-  subroutine solfp_ediffuse_le_layout (gle,lo)
+  subroutine solfp_ediffuse_le_layout (gle)
 
     use species, only: spec
     use le_grids, only: nxi, negrid, forbid, ixi_to_il
     use gs2_layouts, only: ig_idx, it_idx, ik_idx, is_idx, le_lo
     use run_parameters, only: ieqzip
-    use layouts_type, only: le_layout_type
     use kt_grids, only: kwork_filter
     implicit none
 
     complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
-    type (le_layout_type), intent (in) :: lo
 
     integer :: ie, is, ig, il
     complex, dimension (negrid) :: delta

@@ -7,63 +7,100 @@ module egrid
   implicit none
 
   public :: setvgrid, init_egrid
-  public :: zeroes, x0
+  public :: zeroes, x0, zeroes_maxw, x0_maxw
 
   private
 
-  real :: x0
-  real, dimension(:), allocatable, save :: zeroes
+  real :: x0_maxw
+  real, dimension(:), allocatable :: x0
+  real, dimension(:), allocatable, save :: zeroes_maxw
+  real, dimension(:,:), allocatable, save :: zeroes
 
 contains
 
   subroutine init_egrid (negrid)
-    
+    use species, only: nspec
+    implicit none
     integer, intent (in) :: negrid
 
     if (.not. allocated(zeroes)) then
-       allocate (zeroes(negrid-1)) ; zeroes = 0.
+       allocate (zeroes(negrid-1, nspec)) ; zeroes = 0.
+       allocate (zeroes_maxw(negrid-1)) ; zeroes_maxw = 0.
+       allocate (x0(nspec))
     end if
 
   end subroutine init_egrid
 
-  subroutine setvgrid (vcut, negrid, epts, wgts, nesub)
-
+  subroutine setvgrid (vcut_in, negrid, epts, wgts, nesub_in)
+    use general_f0, only: calculate_f0_arrays
     use constants, only: pi => dpi
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
+    use species, only: nspec, spec, nonmaxw_species, f0_sdanalytic, f0_sdsemianalytic
 
     implicit none
     
     integer, intent (in) :: negrid
-    real, intent (in) :: vcut
-    integer, intent (in) :: nesub
-    real, dimension(:), intent (out) :: epts, wgts
+    real, intent (in) :: vcut_in
+    integer, intent (in) :: nesub_in
+    real, dimension(:,:), intent (out) :: epts, wgts
+    integer:: nesub, is
+    real:: vcut
 
     call init_egrid (negrid)
     
-    ! get grid points in v up to vcut (epts is not E yet)
-    call get_legendre_grids_from_cheb (0., vcut, epts(:nesub), wgts(:nesub))
+    do is = 1,nspec 
+       if (spec(is)%type .EQ. nonmaxw_species) then
+          !> If some version of the slowing-down distribution is used, v_ref is the injection
+          !! speed, so let that be vcut. For the semianalytic version, there are still some
+          !! points above vcut, so keep those. 
+          select case (spec(is)%f0_type)
+          case(f0_sdanalytic)
+             vcut = 1.0
+             nesub = negrid
+          case(f0_sdsemianalytic)
+             vcut = 1.0
+             nesub = nesub_in
+          case default 
+             vcut = vcut_in 
+             nesub = nesub_in
+          end select
+       else
+          vcut = vcut_in
+          nesub = nesub_in
+       end if
 
-    ! change from v to E
-    epts(:nesub) = epts(:nesub)**2
+       ! get grid points in v up to vcut (epts is not E yet)
+       call get_legendre_grids_from_cheb (0., vcut, epts(:nesub,is), wgts(:nesub,is))
 
-    ! absorb exponential and volume element in weights
-    wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
+       ! change from v to E
+       epts(:nesub,is) = epts(:nesub,is)**2
 
-    if (negrid > nesub) then
+       ! absorb exponential and volume element in weights
+       !wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
+       !> GW: F0 now gets multiplied later
+       wgts(:nesub, is) = wgts(:nesub, is)*epts(:nesub,is)*pi
 
-       ! get grid points in y = E - vcut**2 (epts not E yet)
-       call get_laguerre_grids (epts(nesub+1:), wgts(nesub+1:))
+       if (negrid > nesub) then
 
-       ! change from y to E
-       epts(nesub+1:) = epts(nesub+1:) + vcut**2
+          ! get grid points in y = E - vcut**2 (epts not E yet)
+          call get_laguerre_grids (epts(nesub+1:,is), wgts(nesub+1:,is))
 
-       ! absort exponential and volume element in weights
-       wgts(nesub+1:) = wgts(nesub+1:)*0.5*sqrt(epts(nesub+1:)/pi)*exp(-vcut**2)
+          ! change from y to E
+          epts(nesub+1:,is) = epts(nesub+1:,is) + vcut**2
 
-    end if
+          ! Do not absorb exponential in weights, since we'll be multiplying by f0 later
+          wgts(nesub+1:, is) = wgts(nesub+1:, is)*exp(epts(nesub+1:,is)-vcut**2)*pi*0.5*sqrt(epts(nesub+1:,is))
 
-    zeroes = sqrt(epts(:negrid-1))
-    x0 = sqrt(epts(negrid))
+          ! get grid points in v up to vcut (epts is not E yet)
+          call get_legendre_grids_from_cheb (0.0, vcut, epts(:nesub,is), wgts(:nesub, is))
+
+       end if
+    end do
+
+    call calculate_f0_arrays(epts, wgts)
+
+    zeroes(:,:) = sqrt(epts(:negrid-1,:))
+    x0(:) = sqrt(epts(negrid,:))
 
   end subroutine setvgrid
 
@@ -78,7 +115,7 @@ module le_grids
   public :: init_g2le_redistribute, init_lambda_redistribute, init_energy_redistribute
   public :: read_parameters, wnml_le_grids
   public :: integrate_species, write_mpdist, write_mpdist_le
-  public :: energy, anon, al, delal, jend, forbid, dele, wl, w
+  public :: energy, energy_maxw, speed_maxw, al, delal, jend, forbid, dele, wl, w, w_maxw
   public :: negrid, nlambda, ng2, nxi, lmax, integrate_moment, nesub
   public :: xloc, sgn, ixi_to_il, ixi_to_isgn, speed, xi
   public :: xx, nterp, new_trap_int, vcut
@@ -122,16 +159,19 @@ module le_grids
   end interface
 
   real, dimension (:), allocatable :: xx ! (ng2)
-  real, dimension (:,:), allocatable, save :: werr, wlerr, xloc ! mbmark
+  real, dimension (:,:), allocatable, save :: wlerr, xloc ! mbmark
+  real, dimension (:,:,:), allocatable, save :: werr
   real, dimension (:,:,:), allocatable, save :: wlterr
   real, dimension (:,:,:,:), allocatable, save :: lgrnge
   real, dimension (:,:,:), allocatable, save :: wlmod
   real, dimension (:,:,:), allocatable, save :: wtmod
-  real, dimension (:,:), allocatable, save :: wmod
-  real, dimension (:,:), allocatable, save :: lpe, lpl
+  real, dimension (:,:,:), allocatable, save :: wmod
+  real, dimension (:,:,:), allocatable, save :: lpe
+  real, dimension (:,:), allocatable, save :: lpl
   real, dimension (:,:,:,:), allocatable, save :: lpt
 
-  real, dimension (:), allocatable :: energy, w, anon, dele, speed ! (negrid)
+  real, dimension (:), allocatable :: energy_maxw, w_maxw, speed_maxw 
+  real, dimension (:,:), allocatable :: energy, w, speed, dele
   real, dimension (:), allocatable :: al, delal ! (nlambda)
   real, dimension (:,:), allocatable :: wl ! (nlambda,-ntgrid:ntgrid)
   integer, dimension (:), allocatable :: jend ! (-ntgrid:ntgrid)
@@ -198,6 +238,7 @@ contains
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use gs2_layouts, only: init_gs2_layouts
+    use egrid, only: setvgrid
     implicit none
     logical, intent (out) :: accelerated_x, accelerated_v
 !    logical, save :: initialized = .false.
@@ -213,6 +254,10 @@ contains
 
     if (proc0) then
        call read_parameters
+    end if
+    call broadcast_input
+    call setvgrid (vcut, negrid, energy, w, nesub)
+    if (proc0) then
        call set_grids
     end if
     call broadcast_results
@@ -228,7 +273,7 @@ contains
           end do
           write(*,*) 
           do ie = 1, negrid
-             write(*,*) energy(ie)
+             write(*,*) energy(ie,:)
           end do
        end if
        call finish_mp
@@ -270,21 +315,21 @@ contains
       !do i = 1,nspec
         !write(istr, '(I2)') i
         !call announce_check('values of the energy grid for species '//istr)
-        !!tr = tr .and. agrees_with(energy_grid(:), energy_results(:,i,1), err)
+        !!tr = tr .and. agrees_with(energy_grid(:,i), energy_results(:,i,1), err)
         !call process_check(tr, 'values of the energy grid for species '//istr)
       !end do
     end if
     do i = 1,nspec
       write(istr, '(I2)') i
       call announce_check('values of energy weights for species '//istr)
-      cr =  agrees_with(w(:), energy_results(:,i,2), err)
+      cr =  agrees_with(w(:,i), energy_results(:,i,2), err)
       call process_check(tr, cr, 'values of energy weights for species '//istr)
     end do
     
     le_grids_unit_test_init_le_grids = tr
   end function le_grids_unit_test_init_le_grids
 
-  subroutine broadcast_results
+  subroutine broadcast_input
     use mp, only: proc0, broadcast
     use egrid, only: zeroes, x0, init_egrid
     use theta_grid, only: ntgrid
@@ -309,10 +354,33 @@ contains
     call broadcast (wgt_fac)
     call broadcast (new_trap_int)
     call broadcast (nterp)
+ end subroutine broadcast_input
+
+ subroutine broadcast_results
+    use mp, only: proc0, broadcast
+    use species, only: nspec
+    use egrid, only: zeroes, x0, init_egrid, zeroes_maxw, x0_maxw
+    use theta_grid, only: ntgrid
+    use general_f0, only: broadcast_arrays_gen_f0 => broadcast_arrays
+
+    implicit none
+    integer :: ig, il, is, ie, ipt, isgn, tsize
+
+    tsize = 2*nterp-1
+
+
+
+    call broadcast (lmax)
+    call broadcast (ng2)
+    call broadcast (nlambda)
+    call broadcast (nxi)
 
     if (.not. proc0) then
-       allocate (energy(negrid), w(negrid), anon(negrid), speed(negrid))
-       allocate (dele(negrid))
+       allocate(speed(negrid,nspec))
+       allocate(w_maxw(negrid))
+       allocate(energy_maxw(negrid))
+       allocate(speed_maxw(negrid))
+       allocate(dele(negrid,nspec))
        allocate (al(nlambda), delal(nlambda))
        allocate (wl(-ntgrid:ntgrid,nlambda))
        allocate (jend(-ntgrid:ntgrid))
@@ -327,18 +395,18 @@ contains
 
     call init_egrid (negrid)
     call broadcast (xx)
-    call broadcast (x0)
-    call broadcast (zeroes)
+    call broadcast (x0_maxw)
+    call broadcast (zeroes_maxw)
 
     call broadcast (al)
     call broadcast (delal)
     call broadcast (jend)
  
-    call broadcast (energy)
+    call broadcast (energy_maxw)
     call broadcast (speed)
+    call broadcast (speed_maxw)
     call broadcast (dele)
-    call broadcast (w)
-    call broadcast (anon)
+    call broadcast (w_maxw)
 
     do il = 1, nlambda
        call broadcast (wl(:,il))
@@ -393,7 +461,6 @@ contains
   end subroutine read_parameters
 
   subroutine init_integrations
-    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use gs2_layouts, only: init_dist_fn_layouts, pe_layout
@@ -401,7 +468,7 @@ contains
     implicit none
     character (1) :: char
 
-    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+    call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
 
     if (.not. intinit) then
        intinit = .true.
@@ -422,14 +489,16 @@ contains
   subroutine init_weights
 
     use file_utils, only: open_output_file, close_output_file
+    use general_f0, only: f0_values
     use egrid, only: zeroes
     use constants, only: pi => dpi
+    use species, only: nspec
 
     implicit none
 
     real, dimension (:), allocatable :: modzeroes, werrtmp  ! (negrid-2)
     real, dimension (:), allocatable :: lmodzeroes, wlerrtmp ! (ng2-1)
-    integer :: ipt, ndiv, divmax
+    integer :: ipt, ndiv, divmax, ie,is
     logical :: eflag = .false.
 
 
@@ -440,7 +509,7 @@ contains
 
     wdim = nesub
     allocate(modzeroes(nesub-1), werrtmp(nesub-1))
-    allocate(werr(negrid-1,nesub))
+    allocate(werr(negrid-1,nesub,nspec))
 
     werr = 0.0 ; modzeroes = 0.0 ; werrtmp = 0.0
     
@@ -450,24 +519,26 @@ contains
     ! points that we can choose to drop from the guassian quadrature)
     
     do ipt=1,nesub
+       do is = 1,nspec
        
-       ! drops the point corresponding to ipt from the energy grid
-       
-       if (ipt /= 1) modzeroes(:ipt-1) = zeroes(:ipt-1)
-       if (ipt /= nesub) modzeroes(ipt:nesub-1) = zeroes(ipt+1:nesub)
-       
-       ! get weights for energy grid points
-       
-       call get_weights (nmax,0.0,vcut,modzeroes,werrtmp,ndiv,divmax,eflag)
-       
-       ! a zero is left in the position corresponding to the dropped point
-       
-       if (ipt /= 1) werr(:ipt-1,ipt) = werrtmp(:ipt-1)
-       if (ipt /= nesub) werr(ipt+1:nesub,ipt) = werrtmp(ipt:nesub-1)
-       werr(nesub+1:,ipt) = w(nesub+1:negrid-1)
-       
-       ! absorbing volume element into weights
-       werr(:nesub,ipt) = werr(:nesub,ipt)*energy(:nesub)*exp(-energy(:nesub))/sqrt(pi)
+         ! drops the point corresponding to ipt from the energy grid
+         
+         if (ipt /= 1) modzeroes(:ipt-1) = zeroes(:ipt-1,is)
+         if (ipt /= nesub) modzeroes(ipt:nesub-1) = zeroes(ipt+1:nesub,is)
+         
+         ! get weights for energy grid points
+         
+         call get_weights (nmax,0.0,vcut,modzeroes,werrtmp,ndiv,divmax,eflag)
+         
+         ! a zero is left in the position corresponding to the dropped point
+         
+         if (ipt /= 1) werr(:ipt-1,ipt,is) = werrtmp(:ipt-1)
+         if (ipt /= nesub) werr(ipt+1:nesub,ipt,is) = werrtmp(ipt:nesub-1)
+         werr(nesub+1:,ipt,is) = w(nesub+1:negrid-1,is)
+         
+         ! absorbing volume element into weights
+         werr(:nesub,ipt,is) = werr(:nesub,ipt,is)*energy(:nesub,is)*2.0*pi*f0_values(:nesub,is)
+       end do
        
     end do
 
@@ -661,7 +732,7 @@ contains
           il = il_idx(g_lo,iglo)
 
           !Sum up weighted g
-          total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+          total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie,is)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
        end do
     else
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -673,7 +744,7 @@ contains
           il = il_idx(g_lo,iglo)
 
           !Sum up weighted g
-          total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+          total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie,is)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
        end do
     endif
     !Reduce sum across all procs to make integral over all velocity space and species
@@ -718,7 +789,7 @@ contains
           il = il_idx(g_lo,iglo)
           
           !Sum up weighted g
-          total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+          total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie,is)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
        end do
     else
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -730,7 +801,7 @@ contains
           il = il_idx(g_lo,iglo)
           
           !Sum up weighted g
-          total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+          total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie,is)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
        end do
     endif
 
@@ -832,7 +903,7 @@ contains
           nr=nl+(2*ntgrid)
           
           !Sum up weighted g
-          total_flat(nl:nr) = total_flat(nl:nr) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+          total_flat(nl:nr) = total_flat(nl:nr) + weights(is)*w(ie,is)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
        end do
     else
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -848,7 +919,7 @@ contains
           nr=nl+(2*ntgrid)
 
           !Sum up weighted g
-          total_flat(nl:nr) = total_flat(nl:nr) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+          total_flat(nl:nr) = total_flat(nl:nr) + weights(is)*w(ie,is)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
        end do
     endif
 
@@ -910,7 +981,7 @@ contains
        !Perform local sum
        do ie=1, negrid
            total(ig, it, ik) = total(ig, it, ik) + &
-            weights(is)*w(ie)*wl(ig,il)*g(ie,ielo)
+            weights(is)*w(ie,is)*wl(ig,il)*g(ie,ielo)
        end do
     end do
 !Sum over all procs to make integral over all velocity space and species
@@ -951,7 +1022,7 @@ contains
        do ixi=1, nxi+1
           il = ixi_to_il(ig,ixi)
           total(ig, it, ik) = total(ig, it, ik) + &
-            weights(is)*w(ie)*wl(ig,il)*g(il,ilzlo)
+            weights(is)*w(ie,is)*wl(ig,il)*g(il,ilzlo)
        end do
     end do
 !Sum over all procs to make integral over all velocity space and species
@@ -994,7 +1065,7 @@ contains
 !  
           do ixi=1, nxi+1
              il = ixi_to_il(ig,ixi)
-             total(ig,it,ik) = total(ig,it,ik) + weights(is)*w(ie) * wl(ig,il) * g(ixi,ie,ile)
+             total(ig,it,ik) = total(ig,it,ik) + weights(is)*w(ie,is) * wl(ig,il) * g(ixi,ie,ile)
           end do
        end do
     end do
@@ -1051,7 +1122,7 @@ contains
 
   end function le_grids_unit_test_integrate_species
 
-  subroutine legendre_transform (g, tote, totl, istep, tott)
+  subroutine legendre_transform (g, tote, totl, tott)
     
     use egrid, only: zeroes
     use mp, only: nproc, broadcast
@@ -1064,7 +1135,6 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (0:,-ntgrid:,:,:,:), intent (out) :: tote, totl
     complex, dimension (0:,-ntgrid:,:,:,:), intent (out), optional :: tott
-    integer, intent (in) :: istep
 
     complex :: totfac
     real :: ulim
@@ -1081,11 +1151,13 @@ contains
        allocate(lpl(nlambda,0:ng2-1))
 
        lpesize = nesub
-       allocate(lpe(negrid,0:lpesize-1)) ; lpe = 0.0
+       allocate(lpe(negrid,0:lpesize-1,nspec)) ; lpe = 0.0
        
        ! get value of first nesub legendre polynomials
        ! at each of the grid points on (0,vcut)
-       call legendre_polynomials (0.0,vcut,zeroes(:lpesize),lpe(:lpesize,:))
+       do is = 1,nspec
+          call legendre_polynomials (0.0,vcut,zeroes(:lpesize,is),lpe(:lpesize,:,is))
+       end do
        ! TEMP FOR TESTING -- MAB
        !          lpe = 2.*lpe/vcut
        
@@ -1152,9 +1224,9 @@ contains
                    iglo = idx (g_lo, ik, it, il, ie, is)
                    if (idx_local (g_lo, iglo)) then
                       do ig=-ntgrid,ntgrid
-                         totfac = w(ie)*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
+                         totfac = w(ie,is)*wl(ig,il)*(g(ig,1,iglo)+g(ig,2,iglo))
                          do im=0,lpesize-1
-                            tote(im, ig, it, ik, is) = tote(im, ig, it, ik, is) + totfac*lpe(ie,im)*(2*im+1)
+                            tote(im, ig, it, ik, is) = tote(im, ig, it, ik, is) + totfac*lpe(ie,im,is)*(2*im+1)
                          end do
                          do im=0,ng2-1
                             totl(im, ig, it, ik, is) = totl(im, ig, it, ik, is) + totfac*lpl(il,im)*(2*im+1)
@@ -1162,7 +1234,7 @@ contains
                          if (present(tott)) then
                             do im=0,2*(jend(ig)-ng2-1)
                                tott(im, ig, it, ik, is) = tott(im, ig, it, ik, is) + &
-                                    w(ie)*wl(ig,il)*(lpt(il,im,ig,1)*g(ig,1,iglo)+lpt(il,im,ig,2)*g(ig,2,iglo))*(2*im+1)
+                                    w(ie,is)*wl(ig,il)*(lpt(il,im,ig,1)*g(ig,1,iglo)+lpt(il,im,ig,2)*g(ig,2,iglo))*(2*im+1)
                             end do
                          end if
                       end do
@@ -1223,6 +1295,7 @@ contains
   end subroutine legendre_polynomials
 
   subroutine lagrange_interp (g, poly, istep, all)
+!<DD>WARNING: THIS ROUTINE DOESN'T USE g0 FOR ANYTHING IS THIS CORRECT?
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, idx, idx_local
@@ -1320,7 +1393,7 @@ contains
 
        !Perform local sum
        total_small(:, it, ik, is) = total_small(:, it, ik, is) + &
-            w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+            w(ie,is)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
     end do
 
     !Not sure that we really need to limit this to nproc>1 as if
@@ -1380,7 +1453,7 @@ contains
        il = il_idx(p_lo,iplo)
 
        total(:, ik, is) = total(:, ik, is) + &
-            w(ie)*wl(:,il)*(g(:,1,iplo)+g(:,2,iplo))
+            w(ie,is)*wl(:,il)*(g(:,1,iplo)+g(:,2,iplo))
 
     end do
 
@@ -1424,7 +1497,7 @@ contains
        !Perform local sum
        do ie=1, negrid
            total(ig, it, ik, is) = total(ig, it, ik, is) + &
-            w(ie)*wl(ig,il)*g(ie,ielo)
+            w(ie,is)*wl(ig,il)*g(ie,ielo)
        end do
     end do
 
@@ -1471,7 +1544,7 @@ contains
        do ixi=1, nxi+1
           il = ixi_to_il(ig,ixi)
           total(ig, it, ik, is) = total(ig, it, ik, is) + &
-            w(ie)*wl(ig,il)*g(il,ilzlo)
+            w(ie,is)*wl(ig,il)*g(il,ilzlo)
        end do
     end do
 
@@ -1499,9 +1572,10 @@ contains
     type (le_layout_type), intent (in) :: lo
     complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
     complex, dimension (lo%llim_proc:), intent (out) :: total
-    integer :: ixi, ie, il, ile, ig, it, ik
+    integer :: ixi, ie, il, ile, ig, it, ik, is
     total = cmplx(0.0,0.0)
     do ile = lo%llim_proc, lo%ulim_proc
+       is = is_idx (lo,ile)
        it = it_idx (lo,ile)
        ik = ik_idx (lo,ile)
        if(kwork_filter(it,ik)) cycle
@@ -1516,7 +1590,7 @@ contains
 !  
           do ixi=1, nxi+1
              il = ixi_to_il(ig,ixi)
-             total(ile) = total(ile) + w(ie) * wl(ig,il) * g(ixi,ie,ile)
+             total(ile) = total(ile) + w(ie,is) * wl(ig,il) * g(ixi,ie,ile)
           end do
        end do
     end do
@@ -1561,7 +1635,7 @@ contains
 !  
           do ixi=1, nxi+1
              il = ixi_to_il(ig,ixi)
-             total(ig,it,ik,is) = total(ig,it,ik,is) + w(ie) * wl(ig,il) * g(ixi,ie,ile)
+             total(ig,it,ik,is) = total(ig,it,ik,is) + w(ie,is) * wl(ig,il) * g(ixi,ie,ile)
           end do
        end do
     end do
@@ -1608,7 +1682,7 @@ contains
        is = is_idx(p_lo,iplo)
        il = il_idx(p_lo,iplo)
 
-       total(is) = total(is) + w(ie)*wl(ig,il)*gksum(ie,il,is)
+       total(is) = total(is) + w(ie,is)*wl(ig,il)*gksum(ie,il,is)
     end do
 
     !Do we really need this if?
@@ -1670,7 +1744,7 @@ contains
           is = is_idx(g_lo,iglo)
           il = il_idx(g_lo,iglo)
 
-          total(:, it, ik, ipt) = total(:, it, ik, ipt) + weights(is)*w(ie)*wlmod(:,il,ipt)*(g(:,1,iglo)+g(:,2,iglo))
+          total(:, it, ik, ipt) = total(:, it, ik, ipt) + weights(is)*w(ie,is)*wlmod(:,il,ipt)*(g(:,1,iglo)+g(:,2,iglo))
        end do
     end do
 
@@ -1731,7 +1805,7 @@ contains
           is = is_idx(g_lo,iglo)
           il = il_idx(g_lo,iglo)
 
-          total(:, it, ik, ipt) = total(:, it, ik, ipt) + weights(is)*w(ie)*wtmod(:,il,ipt)*(g(:,1,iglo)+g(:,2,iglo))
+          total(:, it, ik, ipt) = total(:, it, ik, ipt) + weights(is)*w(ie,is)*wtmod(:,il,ipt)*(g(:,1,iglo)+g(:,2,iglo))
        end do
     end do
 
@@ -1742,6 +1816,7 @@ contains
 
   subroutine eint_error (g, weights, total)
     use theta_grid, only: ntgrid
+    use species, only: nspec
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use mp, only: sum_allreduce, proc0, broadcast
@@ -1756,11 +1831,13 @@ contains
     !If we don't have the weights then calculate them now
     if (.not. allocated(wmod)) then
        !Allocate array, don't initialise as we fill in all values below
-       allocate (wmod(negrid,wdim))
+       allocate (wmod(negrid,wdim,nspec))
 
        if (proc0) then
-          wmod(:negrid-1,:) = werr(:,:)
-          wmod(negrid,:) = w(negrid)  
+          wmod(:negrid-1,:,:) = werr(:,:,:)
+          do is = 1,nspec
+            wmod(negrid,:,is) = w(negrid,is)  
+          end do
        end if
 
        !send from proc0 to everywhere else
@@ -1779,7 +1856,7 @@ contains
           is = is_idx(g_lo,iglo)
           il = il_idx(g_lo,iglo)
 
-          total(:, it, ik, ipt) = total(:, it, ik, ipt) + weights(is)*wmod(ie,ipt)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+          total(:, it, ik, ipt) = total(:, it, ik, ipt) + weights(is)*wmod(ie,ipt,is)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
        end do
     end do
 
@@ -1790,26 +1867,45 @@ contains
 
   subroutine set_grids
     use species, only: init_species
-    use egrid, only: setvgrid
+    use egrid, only: setvgrid, x0, x0_maxw, zeroes, zeroes_maxw
+    use species, only: nspec, spec, nonmaxw_species, ion_species, electron_species, sdequivmaxw_species
     use theta_grid, only: init_theta_grid, ntgrid, nbset, bset, eps
     implicit none
 
-    integer :: tsize
+    integer :: tsize,is
+    logical :: has_maxwellian_species, is_maxwellian
 
     call init_theta_grid
     call init_species
 
-    allocate (energy(negrid), w(negrid), anon(negrid), dele(negrid), speed(negrid))
+    allocate (energy(negrid,nspec), w(negrid,nspec), dele(negrid,nspec), speed(negrid,nspec),speed_maxw(negrid))
 
-    call setvgrid (vcut, negrid, energy, w, nesub)
+    w_maxw = 0.0
+    energy_maxw = 0.0
+    speed_maxw = 0.0
+    has_maxwellian_species = .false. 
+
     speed = sqrt(energy)
-    
-    anon = 1.0
 
+    do is = 1,nspec
+      if (.NOT. (spec(is)%type .EQ. nonmaxw_species)) then
+         has_maxwellian_species = .true.
+         w_maxw(:) = w(:,is)
+         energy_maxw(:) = energy(:,is)
+         speed_maxw(:) = speed(:,is)
+         zeroes_maxw(:) = zeroes(:,is)
+         x0_maxw = x0(is)
+         exit
+      end if
+    end do
+    if (.not. has_maxwellian_species) write(*,*) &
+        'Warning; no maxwellian species; collisions will fail'
+    !call setvgrid (vcut, negrid, energy, w, nesub)
+    
     tsize = 2*nterp-1
 
-    dele(1) = energy(1)
-    dele(2:) = energy(2:)-energy(:negrid-1)
+    dele(1,:) = energy(1,:)
+    dele(2:,:) = energy(2:,:)-energy(:negrid-1,:)
 
     ng2 = 2*ngauss
 !    if (eps > epsilon(0.0)) then
@@ -2202,22 +2298,6 @@ contains
 
   end subroutine lagrange_coefs
 
-  subroutine stop_invalid (name, val)
-    use file_utils, only: error_unit
-    use mp, only: proc0, finish_mp
-    implicit none
-    character(*), intent (in) :: name
-    integer, intent (in) :: val
-    integer :: ierr
-
-    if (proc0) then
-       ierr = error_unit()
-       write (unit=ierr, fmt='("Invalid value for ",a,": ",i5)') name, val
-    end if
-    call finish_mp
-    stop
-  end subroutine stop_invalid
-
   subroutine stop_message (message)
 !JAB: print an error message and end program
     use file_utils, only: error_unit
@@ -2342,51 +2422,61 @@ contains
 
   ! calculates and returns toroidal momentum flux as a function
   ! of vpar and theta
-  subroutine get_flux_vs_theta_vs_vpa (f, vflx)
+  subroutine get_flux_vs_theta_vs_vpa (f, vflx, dealloc)
 
     use theta_grid, only: ntgrid, bmag
     use species, only: nspec
 
     implicit none
-
+    logical, intent(in), optional :: dealloc
     real, dimension (-ntgrid:,:,:,:,:), intent (in) :: f
     real, dimension (-ntgrid:,:,:), intent (out) :: vflx
 
     real, dimension (:,:,:), allocatable :: favg
-    real, dimension (:), allocatable, save :: vpa1d
-    real, dimension (:,:), allocatable, save :: hermp1d
-    real, dimension (:,:,:,:), allocatable, save :: vpapts
-    real, dimension (:,:,:,:,:), allocatable, save :: hermp
+    real, dimension (:,:), allocatable, save :: vpa1d
+    real, dimension (:,:,:), allocatable, save :: hermp1d
+    real, dimension (:,:,:,:,:), allocatable, save :: vpapts
+    real, dimension (:,:,:,:,:,:), allocatable, save :: hermp
 
     integer :: is, il, ie, ig, iv
     integer :: norder
+
+    if(present(dealloc))then
+       if(allocated(vpa1d)) deallocate(vpa1d)
+       if(allocated(hermp1d)) deallocate(hermp1d)
+       if(allocated(vpapts)) deallocate(vpapts)
+       if(allocated(hermp)) deallocate(hermp)
+       return
+    endif
 
     norder = min(negrid, nlambda)/2
 
     allocate (favg(-ntgrid:ntgrid,nspec,0:norder-1))
 
     if (.not. allocated(vpapts)) then
-       allocate (vpa1d(negrid*nlambda))
-       allocate (hermp1d(negrid*nlambda,0:norder-1))
-       allocate (vpapts(-ntgrid:ntgrid,nlambda,negrid,2))
-       allocate (hermp(-ntgrid:ntgrid,nlambda,negrid,2,0:norder-1))
+       allocate (vpa1d(negrid*nlambda,nspec))
+       allocate (hermp1d(negrid*nlambda,0:norder-1,nspec))
+       allocate (vpapts(-ntgrid:ntgrid,nlambda,negrid,2,nspec))
+       allocate (hermp(-ntgrid:ntgrid,nlambda,negrid,2,0:norder-1,nspec))
        vpapts = 0.0 ; hermp = 0.0 ; vpa1d = 0.0 ; hermp1d = 0.0
 
        do ie = 1, negrid
           do il = 1, nlambda
              do ig = -ntgrid, ntgrid
-                vpapts(ig,il,ie,1) = sqrt(energy(ie)*max(0.0, 1.0-al(il)*bmag(ig)))
-                vpapts(ig,il,ie,2) = -vpapts(ig,il,ie,1)
+                vpapts(ig,il,ie,1,:) = sqrt(energy(ie,:)*max(0.0, 1.0-al(il)*bmag(ig)))
+                vpapts(ig,il,ie,2,:) = -vpapts(ig,il,ie,1,:)
              end do
           end do
        end do
 
        do iv = 1, negrid*nlambda
-          vpa1d(iv) = sqrt(energy(negrid))*(1. - 2.*(iv-1)/real(negrid*nlambda-1))
+          vpa1d(iv,:) = sqrt(energy(negrid,:))*(1. - 2.*(iv-1)/real(negrid*nlambda-1))
        end do
 
-       call get_hermite_polynomials (vpa1d, hermp1d)
-       call get_hermite_polynomials (vpapts, hermp)
+       do is = 1,nspec
+         call get_hermite_polynomials (vpa1d(:,is), hermp1d(:,:,is))
+         call get_hermite_polynomials (vpapts(:,:,:,:,is), hermp(:,:,:,:,:,is))
+       end do
     end if
 
     favg = 0.
@@ -2395,8 +2485,8 @@ contains
           do il = 1, nlambda
              do ig = -ntgrid, ntgrid
                 favg(ig,is,:) = favg(ig,is,:) &
-                     +w(ie)*wl(ig,il)*(hermp(ig,il,ie,1,:)*f(ig,il,ie,1,is) &
-                     +hermp(ig,il,ie,2,:)*f(ig,il,ie,2,is))
+                     +w(ie,is)*wl(ig,il)*(hermp(ig,il,ie,1,:,is)*f(ig,il,ie,1,is) &
+                     +hermp(ig,il,ie,2,:,is)*f(ig,il,ie,2,is))
              end do
           end do
        end do
@@ -2405,7 +2495,7 @@ contains
     do is = 1, nspec
        do iv = 1, negrid*nlambda
           do ig = -ntgrid, ntgrid
-             vflx(ig,iv,is) = sum(favg(ig,is,:)*hermp1d(iv,:))*exp(-vpa1d(iv)**2)
+             vflx(ig,iv,is) = sum(favg(ig,is,:)*hermp1d(iv,:,is))*exp(-vpa1d(iv,is)**2)
           end do
        end do
     end do
@@ -3774,8 +3864,8 @@ contains
               end if
               if (proc0) then
                  if (.not. forbid(ig,il)) then
-                    vpa1 = sqrt(energy(ie)*max(0.0,1.0-al(il)*bmag(ig)))
-                    write (unit,'(7e14.5)') theta(ig), vpa1, energy(ie), &
+                    vpa1 = sqrt(energy_maxw(ie)*max(0.0,1.0-al(il)*bmag(ig)))
+                    write (unit,'(7e14.5)') theta(ig), vpa1, energy_maxw(ie), &
                          real(gtmp(1)), aimag(gtmp(1)), real(gtmp(2)), aimag(gtmp(2))
 !                    write (unit,'(5e14.5)') theta(ig), vpa1, energy(ie), gtmp(1), gtmp(2)
                  end if
@@ -3840,8 +3930,8 @@ contains
                  end if
                  if (proc0) then
                     if (.not. forbid(ig,il)) then
-                       vpa1 = sqrt(energy(ie)*max(0.0,1.0-al(il)*bmag(ig)))
-                       write (unit,'(5e14.5)') theta(ig), sgn(isgn)*vpa1, energy(ie), &
+                       vpa1 = sqrt(energy_maxw(ie)*max(0.0,1.0-al(il)*bmag(ig)))
+                       write (unit,'(5e14.5)') theta(ig), sgn(isgn)*vpa1, energy_maxw(ie), &
                             real(gtmp), aimag(gtmp)
 !                    write (unit,'(5e14.5)') theta(ig), vpa1, energy(ie), gtmp(1), gtmp(2)
                     end if
@@ -3857,18 +3947,19 @@ contains
 
   subroutine finish_le_grids
     use redistribute, only: delete_redist
-    use egrid, only: zeroes
+    use egrid, only: zeroes, x0, zeroes_maxw
 
     implicit none
+    real, dimension(1,1,1,1,1) :: tmpf
+    real, dimension(1,1,1) :: tmpvflx
 
-    if (allocated(zeroes)) deallocate (zeroes)
-    if (allocated(energy)) deallocate (energy, dele, al, wl, jend, forbid, xx, lgrnge, xloc, speed)
+    if (allocated(zeroes)) deallocate (zeroes,x0,zeroes_maxw)
+    if (allocated(energy)) deallocate (energy, energy_maxw,dele, al, wl, jend, forbid, xx, lgrnge, xloc, speed, speed_maxw)
     if (allocated(integration_work)) deallocate (integration_work)
     if (allocated(wlerr)) deallocate (wlerr)
     if (allocated(werr)) deallocate (werr)
     if (allocated(wlterr)) deallocate (wlterr)
-    if (allocated(w)) deallocate (w)
-    if (allocated(anon)) deallocate (anon)
+    if (allocated(w)) deallocate (w,w_maxw)
     if (allocated(delal)) deallocate (delal)
     if (allocated(lpl)) deallocate (lpl, lpe)
     if (allocated(lpt)) deallocate (lpt)
@@ -3883,6 +3974,9 @@ contains
     call delete_redist(lambda_map)
     call delete_redist(energy_map)
     call delete_redist(g2le)
+
+    !Free internal saved arrays
+    call get_flux_vs_theta_vs_vpa(tmpf,tmpvflx,.true.)
 
     accel_x = .false. ; accel_v = .false.
     test = .false. ; trapped_particles = .true.

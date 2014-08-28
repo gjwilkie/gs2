@@ -2,9 +2,8 @@ module lowflow
   
   implicit none
 
-  public :: get_lowflow_terms, dphidth
-  public :: phineo
-  public :: mach_lab    
+  public :: get_lowflow_terms, finish_lowflow_terms
+  public :: phineo, dphidth, mach_lab
 
   real, dimension (:), allocatable :: dphidth
   real, dimension (:,:,:,:,:), allocatable :: coefs
@@ -15,7 +14,21 @@ module lowflow
   real, dimension (:), allocatable :: mach_lab
 
 contains
-  
+  subroutine finish_lowflow_terms
+    implicit none
+    !<DD>May actually be able to deallocate most of these much
+    !    earlier as most only used during initialisation
+    if(allocated(dphidth)) deallocate(dphidth)
+    if(allocated(coefs)) deallocate(coefs)
+    if(allocated(phineo)) deallocate(phineo)
+    if(allocated(dcoefsdr)) deallocate(dcoefsdr, dcoefsdth)
+    if(allocated(rad_neo)) deallocate(rad_neo)
+    if(allocated(theta_neo)) deallocate(theta_neo)
+    if(allocated(mach_lab)) deallocate(mach_lab)
+    if(allocated(dens_neo)) deallocate(dens_neo)
+    if(allocated(temp_neo)) deallocate(temp_neo)
+  end subroutine finish_lowflow_terms
+
   subroutine get_lowflow_terms (theta, al, energy, bmag, dHdEc, dHdxic, vpadHdEc, dHdrc, &
        dHdthc, hneoc, dphidrc, dphidthc, phi_neo, lf_default, lf_decompose)
     
@@ -258,7 +271,7 @@ contains
        do ir=1, nr
           do is = 1, ns
              write (neot_unit,fmt='(e14.5,i8,12e14.5)') radius(ir), is, pflx(ir,is), qflx(ir,is), vflx(ir,is), &
-                  qparB(ir,is),uparB(ir,is), upar1(ir,is)*sqrt(1.0-drlt), &
+                  qparB(ir,is),uparB(ir,is), upar1(ir,is)*sqrt(temp_neo(ir,is)), &
                   phi2(ir), jboot(ir), rmaj*upar_over_B(ir,is)/rgeo2, upar2(ir,is), qpar2(ir,is), phineo2(ir)
              if (ir==2)  mach_lab(is)=rmaj*upar_over_B(ir,is)/rgeo2
           end do
