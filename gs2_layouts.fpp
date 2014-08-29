@@ -70,7 +70,7 @@ module gs2_layouts
   public :: accelx_lo, accelx_layout_type
 
   public :: ig_idx, ik_idx, it_idx, il_idx, ie_idx, is_idx, if_idx, isign_idx
-  public :: im_idx, in_idx, ij_idx, ifield_idx
+  public :: im_idx, in_idx, ij_idx, ifield_idx, ib_idx
   public :: idx, proc_id, idx_local
 
   public :: opt_local_copy
@@ -386,6 +386,7 @@ module gs2_layouts
 
   interface ib_idx
      module procedure ib_idx_g
+     module procedure ib_idx_rev_g
   end interface ib_idx
 contains
   subroutine wnml_gs2_layouts(unit)
@@ -993,10 +994,10 @@ contains
     g_lo%ik_split_comp=split_compound(g_lo%ik_ord)
     g_lo%it_split_comp=split_compound(g_lo%it_ord)
 
-!<DD> Temporary hack : The logic for converting (ik,it,il,ie,is) into iglo
-! is more complicated when using the split scheme (nblocks>1) so for now just
+!<DD> The logic (arithmetic operations) for converting (ik,it,il,ie,is) into iglo
+! is more complicated when using the split scheme (nblocks>1) so may be some benefit to
 ! use a brute force lookup method. This is not really feasible for large problem
-! sizes where the following array could take several GB. For more realistic current
+! sizes though where the following array could take several GB. For more realistic current
 ! cases this may be expected to use up to 500MB.
     !Populate the reverse lookup array 
     allocate(g_lo%inds_to_idx(ntheta0,naky,nlambda,negrid,nspec))
@@ -1629,6 +1630,40 @@ contains
     endif
   end function ib_idx_g
 
+  elemental function ib_idx_rev_g(lo, ik, it, il, ie, is)
+    integer :: ib_idx_rev_g
+    type (g_layout_type), intent(in) :: lo
+    integer, intent(in) :: ik, it, il, ie, is
+    integer :: nk, nt, nl, ne, ns
+    if(lo%use_split) then
+       !Calculate dimension block index
+       nk=1+(ik-1)/lo%y_block
+       nt=1+(it-1)/lo%x_block
+       nl=1+(il-1)/lo%l_block
+       ne=1+(ie-1)/lo%e_block
+       ns=1+(is-1)/lo%s_block
+
+       select case (layout)
+       case ('yxels')
+          ib_idx_rev_g = nk-1 + lo%split_y*(nt-1 + lo%split_x*(ne-1 + lo%split_e*(nl-1 + lo%split_l*(ns-1))))
+       case ('yxles')
+          ib_idx_rev_g = nk-1 + lo%split_y*(nt-1 + lo%split_x*(nl-1 + lo%split_l*(ne-1 + lo%split_e*(ns-1))))
+       case ('lexys')
+          ib_idx_rev_g = nl-1 + lo%split_l*(ne-1 + lo%split_e*(nt-1 + lo%split_x*(nk-1 + lo%split_y*(ns-1))))
+       case ('lxyes')
+          ib_idx_rev_g = nl-1 + lo%split_l*(nt-1 + lo%split_x*(nk-1 + lo%split_y*(ne-1 + lo%split_e*(ns-1))))
+       case ('lyxes')
+          ib_idx_rev_g = nl-1 + lo%split_l*(nk-1 + lo%split_y*(nt-1 + lo%split_x*(ne-1 + lo%split_e*(ns-1))))
+       case ('xyles')
+          ib_idx_rev_g = nt-1 + lo%split_x*(nk-1 + lo%split_y*(nl-1 + lo%split_l*(ne-1 + lo%split_e*(ns-1))))
+       end select
+
+       ib_idx_rev_g = ib_idx_rev_g + 1
+    else
+       ib_idx_rev_g = 1
+    endif
+  end function ib_idx_rev_g
+
 ! TT>
 # ifdef USE_C_INDEX
   function is_idx_g (lo, i)
@@ -1810,6 +1845,8 @@ contains
     integer :: idx_g
     type (g_layout_type), intent (in) :: lo
     integer, intent (in) :: ik, it, il, ie, is
+    integer :: mik, mit, mil, mie, mis
+    integer :: ib
 ! TT>
 # ifdef USE_C_INDEX
     interface
@@ -1840,8 +1877,37 @@ contains
     !    idx_g = it-1 + lo%ntheta0*(ik-1 + lo%naky*(il-1 + lo%nlambda*(ie-1 + lo%negrid*(is-1))))
     ! end select
 
+    !First get block index
+    ib = ib_idx(lo,ik,it,il,ie,is)
+
+    !Now get block local indices
+    mik = 1+mod(ik-1,lo%y_block)
+    mit = 1+mod(it-1,lo%x_block)
+    mil = 1+mod(il-1,lo%l_block)
+    mie = 1+mod(ie-1,lo%e_block)
+    mis = 1+mod(is-1,lo%s_block)
+
+    !Now get block local compound index
+    select case (layout)
+    case ('yxels')
+       idx_g = mik-1 + lo%y_block*(mit-1 + lo%x_block*(mie-1 + lo%e_block*(mil-1 + lo%l_block*(mis-1))))
+    case ('yxles')
+       idx_g = mik-1 + lo%y_block*(mit-1 + lo%x_block*(mil-1 + lo%l_block*(mie-1 + lo%e_block*(mis-1))))
+    case ('lexys')
+       idx_g = mil-1 + lo%l_block*(mie-1 + lo%e_block*(mit-1 + lo%x_block*(mik-1 + lo%y_block*(mis-1))))
+    case ('lxyes')
+       idx_g = mil-1 + lo%l_block*(mit-1 + lo%x_block*(mik-1 + lo%y_block*(mie-1 + lo%e_block*(mis-1))))
+    case ('lyxes')
+       idx_g = mil-1 + lo%l_block*(mik-1 + lo%y_block*(mit-1 + lo%x_block*(mie-1 + lo%e_block*(mis-1))))
+    case ('xyles')
+       idx_g = mit-1 + lo%x_block*(mik-1 + lo%y_block*(mil-1 + lo%l_block*(mie-1 + lo%e_block*(mis-1))))
+    end select
+
+    !Add in block offset to get final compound index
+    idx_g=idx_g+(ib-1)*lo%blocksize
+
     !<DD>This is a simple lookup table. Not very memory efficient!
-    idx_g = lo%inds_to_idx(it,ik,il,ie,is)
+    !idx_g = lo%inds_to_idx(it,ik,il,ie,is)
 # endif
 ! <TT
 
