@@ -710,7 +710,7 @@ contains
        (naky, ntheta0, nlambda, negrid, nspec)
     use mp, only: iproc, nproc, proc0
     use mp, only: split, mp_comm, nproc_comm, rank_comm
-    use mp, only: sum_allreduce_sub, mp_abort, free_comm
+    use mp, only: sum_allreduce_sub, mp_abort, broadcast
 ! TT>
     use file_utils, only: error_unit
 ! <TT
@@ -721,7 +721,7 @@ contains
     integer :: ik_min,ik_max,it_min,it_max,il_min,il_max,ie_min,ie_max,is_min,is_max,ip
     integer :: nproc_subcomm, rank_subcomm
     integer :: nproc_tmp, idim, tmp
-    integer :: nproc_spare, mp_comm_bak, tmp_comm
+    integer :: nproc_spare
     real :: tmp_r
     integer,dimension(5) :: nproc_dim
     integer,dimension(:),allocatable :: les_kxky_range
@@ -1327,6 +1327,10 @@ contains
        intspec_sub=.false.
     endif
 
+    !Make sure all procs have the same setting
+    call broadcast(intspec_sub)
+    call broadcast(intmom_sub)
+
     !We could(should) use a logical allreduction here to ensure that ALL processors have the same flag settings
     !(if not then we'll get a program hang in the following splits).
     !The logic above **should** ensure everyone has the right answer anyway.
@@ -1341,23 +1345,6 @@ contains
     !as things like the number of procs and the local rank are useful when using the sub
     !comms but don't currently have a logical place to be stored and hence tend to be
     !(re)calculated when needed.
-
-    !First we split mp_comm into two groups, one for all processors with some
-    !g_lo work and another for those with none
-    if(intspec_sub.or.intmom_sub)then
-       mycol=0
-       if(g_lo%ulim_proc.lt.g_lo%llim_proc) mycol=1
-
-       !Back up the mp_comm handle
-       mp_comm_bak=mp_comm
-
-       !Split
-       call split(mycol,tmp_comm)
-       
-       !Temporary update mp_comm handle
-       mp_comm=tmp_comm
-
-    endif
 
     if(intspec_sub) then
        !This is for unique xy blocks
@@ -1434,14 +1421,6 @@ contains
        call split(mycol,g_lo%xysblock_comm)
     else
        g_lo%xysblock_comm=mp_comm
-    endif
-
-    !Restore communicator
-    if(intspec_sub.or.intmom_sub)then
-       !Destroy Temporary communicator
-       call free_comm(tmp_comm)
-       
-       mp_comm=mp_comm_bak
     endif
 
     !Now allocate and fill various arrays
