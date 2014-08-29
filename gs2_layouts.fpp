@@ -480,6 +480,13 @@ contains
     opt_redist_persist=opt_redist_persist.and.opt_redist_nbk
     opt_redist_persist_overlap=opt_redist_persist_overlap.and.opt_redist_persist
     call get_wisdom_file(fft_wisdom_file)
+
+    !Ensure that if split<1 it's exactly -1
+    if(split_x.lt.1) split_x=-1
+    if(split_y.lt.1) split_y=-1
+    if(split_l.lt.1) split_l=-1
+    if(split_e.lt.1) split_e=-1
+    if(split_s.lt.1) split_s=-1
   end subroutine read_parameters
     
 
@@ -703,7 +710,7 @@ contains
        (naky, ntheta0, nlambda, negrid, nspec)
     use mp, only: iproc, nproc, proc0
     use mp, only: split, mp_comm, nproc_comm, rank_comm
-    use mp, only: sum_allreduce_sub, mp_abort
+    use mp, only: sum_allreduce_sub, mp_abort, free_comm
 ! TT>
     use file_utils, only: error_unit
 ! <TT
@@ -714,7 +721,7 @@ contains
     integer :: ik_min,ik_max,it_min,it_max,il_min,il_max,ie_min,ie_max,is_min,is_max,ip
     integer :: nproc_subcomm, rank_subcomm
     integer :: nproc_tmp, idim, tmp
-    integer :: nproc_spare
+    integer :: nproc_spare, mp_comm_bak, tmp_comm
     real :: tmp_r
     integer,dimension(5) :: nproc_dim
     integer,dimension(:),allocatable :: les_kxky_range
@@ -765,6 +772,12 @@ contains
        !nproc_used*factor < nproc, move onto next dimension.
        !We may be able to come up with more advanced logic (which e.g. prefers to try to split dims evenly, does some timing
        !to find out what's best etc.)
+
+       !Loop over dimensions (from right to left) and work out split if not set (-ve)
+       tmp=len_trim(layout)
+       do idim=0,tmp-1
+          call set_next_split(trim(adjustl(layout(tmp-idim:tmp-idim))),g_lo)
+       enddo
 
        !For now just take absolute value of split_ until we implement the above logic
        g_lo%split_x=abs(g_lo%split_x)
@@ -1033,6 +1046,7 @@ contains
     il_local=.false.
     ie_local=.false.
     is_local=.false.
+    !Note that procs without any data assigned will not calculate these correctly
     do iglo=g_lo%llim_proc,g_lo%ulim_proc
        ik=ik_idx(g_lo,iglo)
        it=it_idx(g_lo,iglo)
@@ -1062,7 +1076,7 @@ contains
     g_lo%l_local=all(il_local)
     g_lo%e_local=all(ie_local)
     g_lo%s_local=all(is_local)
-    
+
     !//Deallocate locality data. Note this may actually be useful in some
     !places, so we may want to think about attaching it to the g_lo object
     deallocate(ik_local,it_local,il_local,ie_local,is_local)
@@ -1292,10 +1306,12 @@ contains
        if(intmom_sub.and.proc0) write(error_unit(),'("Disabling intmom_sub -- is,it,ik split nicely ? ",3(L1," "))') dim_divides(g_lo%is_ord),dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
        intmom_sub=.false.
     endif
+
     if(.not.(dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
        if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- it,ik split nicely ? ",2(L1," "))') dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
        intspec_sub=.false.
     endif
+
     !Note that because we currently need to gather amongst LES blocks at the end of
     !integrate_species we need to make sure that LES blocks are also sensible
     !This could be removed if we don't want to gather in integrate_species
@@ -1325,6 +1341,24 @@ contains
     !as things like the number of procs and the local rank are useful when using the sub
     !comms but don't currently have a logical place to be stored and hence tend to be
     !(re)calculated when needed.
+
+    !First we split mp_comm into two groups, one for all processors with some
+    !g_lo work and another for those with none
+    if(intspec_sub.or.intmom_sub)then
+       mycol=0
+       if(g_lo%ulim_proc.lt.g_lo%llim_proc) mycol=1
+
+       !Back up the mp_comm handle
+       mp_comm_bak=mp_comm
+
+       !Split
+       call split(mycol,tmp_comm)
+       
+       !Temporary update mp_comm handle
+       mp_comm=tmp_comm
+
+    endif
+
     if(intspec_sub) then
        !This is for unique xy blocks
        col=1
@@ -1402,6 +1436,14 @@ contains
        g_lo%xysblock_comm=mp_comm
     endif
 
+    !Restore communicator
+    if(intspec_sub.or.intmom_sub)then
+       !Destroy Temporary communicator
+       call free_comm(tmp_comm)
+       
+       mp_comm=mp_comm_bak
+    endif
+
     !Now allocate and fill various arrays
     if(intspec_sub.and.(.not.allocated(g_lo%les_kxky_range))) then
        !->Kx-Ky range for procs in lesblock_comm sub comm
@@ -1451,7 +1493,6 @@ contains
        deallocate(les_kxky_range)
     endif
 !</DD>
-
 !Note: gint_lo isn't used anywhere!
     gint_lo%iproc = iproc
     gint_lo%naky = naky
@@ -1489,6 +1530,145 @@ contains
 
   end subroutine init_dist_fn_layouts
 
+  subroutine set_next_split(dim,lo)
+    use mp, only: nproc, proc0
+    implicit none
+    character, intent(in) :: dim
+    type (g_layout_type), intent(inout) :: lo
+    integer :: max_fac, curr_split_tot, nfac, i, best_fac
+    integer, dimension(:), allocatable :: facs
+    logical, parameter :: debug = .false.!.true.
+    !This is how many splits(procs) we've already assigned
+    curr_split_tot=abs(lo%split_x*lo%split_y*lo%split_l*lo%split_e*lo%split_s)
+
+    !This is the biggest factor remaining
+    max_fac=nproc/curr_split_tot
+
+    select case(dim)
+    case('x')
+       !Exit if we've set this dim already
+       if(lo%split_x.gt.0) return
+
+       !If we've used up all the procs (as much as we can) then exit
+       if(max_fac.le.1) then
+          lo%split_x=1
+          return
+       endif
+
+       !Now we get the available factors in dimension
+       allocate(facs(1+lo%ntheta0/2))
+       facs=0
+       call factors(lo%ntheta0,nfac,facs)
+
+       !Now look for biggest factor less than or equal to max_fac 
+       best_fac=1
+       do i=1,nfac
+          if(facs(i).le.max_fac) best_fac=max(best_fac,facs(i))
+       enddo
+
+       !Set split value
+       lo%split_x=best_fac
+
+    case('y')
+       !Exit if we've set this dim already
+       if(lo%split_y.gt.0) return
+
+       !If we've used up all the procs (as much as we can) then exit
+       if(max_fac.le.1) then
+          lo%split_y=1
+          return
+       endif
+
+       !Now we get the available factors in dimension
+       allocate(facs(1+lo%naky/2))
+       facs=0
+       call factors(lo%naky,nfac,facs)
+
+       !Now look for biggest factor less than or equal to max_fac 
+       best_fac=1
+       do i=1,nfac
+          if(facs(i).le.max_fac) best_fac=max(best_fac,facs(i))
+       enddo
+
+       !Set split value
+       lo%split_y=best_fac
+
+    case('l')
+       !Exit if we've set this dim already
+       if(lo%split_l.gt.0) return
+
+       !If we've used up all the procs (as much as we can) then exit
+       if(max_fac.le.1) then
+          lo%split_l=1
+          return
+       endif
+
+       !Now we get the available factors in dimension
+       allocate(facs(1+lo%nlambda/2))
+       facs=0
+       call factors(lo%nlambda,nfac,facs)
+
+       !Now look for biggest factor less than or equal to max_fac 
+       best_fac=1
+       do i=1,nfac
+          if(facs(i).le.max_fac) best_fac=max(best_fac,facs(i))
+       enddo
+
+       !Set split value
+       lo%split_l=best_fac
+
+    case('e')
+       !Exit if we've set this dim already
+       if(lo%split_e.gt.0) return
+
+       !If we've used up all the procs (as much as we can) then exit
+       if(max_fac.le.1) then
+          lo%split_e=1
+          return
+       endif
+
+       !Now we get the available factors in dimension
+       allocate(facs(1+lo%negrid/2))
+       facs=0
+       call factors(lo%negrid,nfac,facs)
+
+       !Now look for biggest factor less than or equal to max_fac 
+       best_fac=1
+       do i=1,nfac
+          if(facs(i).le.max_fac) best_fac=max(best_fac,facs(i))
+       enddo
+
+       !Set split value
+       lo%split_e=best_fac
+
+    case('s')
+       !Exit if we've set this dim already
+       if(lo%split_s.gt.0) return
+
+       !If we've used up all the procs (as much as we can) then exit
+       if(max_fac.le.1) then
+          lo%split_s=1
+          return
+       endif
+
+       !Now we get the available factors in dimension
+       allocate(facs(1+lo%nspec/2))
+       facs=0
+       call factors(lo%nspec,nfac,facs)
+
+       !Now look for biggest factor less than or equal to max_fac 
+       best_fac=1
+       do i=1,nfac
+          if(facs(i).le.max_fac) best_fac=max(best_fac,facs(i))
+       enddo
+
+       !Set split value
+       lo%split_s=best_fac
+
+    end select
+
+    if(proc0.and.debug) print*,"Choosing to split ",dim," into ",best_fac
+  end subroutine set_next_split
   subroutine is_kx_local(negrid, nspec, nlambda, naky, kx_local)  
 
     use mp, only: nproc
