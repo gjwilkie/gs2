@@ -300,11 +300,11 @@ contains
        ierr = error_unit()
        call get_option_value &
             (delt_option, deltopts, delt_option_switch, ierr, &
-            "delt_option in knobs")
+            "delt_option in knobs",.true.)
 
        call get_option_value ( &
             eqzip_option, eqzipopts, eqzip_option_switch, error_unit(), &
-            "eqzip_option in knobs")
+            "eqzip_option in knobs",.true.)
 
 !!$       ! eqzip_option replaces eqzip, secondary, tertiary, harris
 !!$       if (eqzip .and. eqzip_option_switch == eqzip_option_none) then

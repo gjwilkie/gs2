@@ -258,7 +258,7 @@ contains
        ierr = error_unit()
        call get_option_value &
             (field_option, fieldopts, fieldopt_switch, &
-            ierr, "field_option in fields_knobs")
+            ierr, "field_option in fields_knobs",.true.)
 
     end if
 

@@ -328,7 +328,7 @@ contains
 
        call get_option_value &
             (hyper_option, hyperopts, hyper_option_switch, &
-            ierr, "hyper_option in hyper_knobs")
+            ierr, "hyper_option in hyper_knobs",.true.)
 
        if (.not. isotropic_shear .and. nexp /=2) then
           write (ierr, *) 'Forcing nexp = 2.  Higher values not implemented for anisotropic shear model.'

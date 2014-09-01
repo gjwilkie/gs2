@@ -286,19 +286,19 @@ contains
        !Convert string options to integer flags
        call get_option_value &
             (solver_option,solver_type_opts,solver_option_switch,&
-            ierr,"solver_option in "//nml_name)
+            ierr,"solver_option in "//nml_name,.true.)
        
        call get_option_value &
             (extraction_option,extraction_type_opts,extraction_option_switch,&
-            ierr,"extraction_option in "//nml_name)
+            ierr,"extraction_option in "//nml_name,.true.)
 
        call get_option_value &
             (which_option,which_type_opts,which_option_switch,&
-            ierr,"which_option in "//nml_name)
+            ierr,"which_option in "//nml_name,.true.)
 
        call get_option_value &
             (transform_option,transform_type_opts,transform_option_switch,&
-            ierr,"transform_option in "//nml_name)
+            ierr,"transform_option in "//nml_name,.true.)
     endif
 
     !Broadcasts

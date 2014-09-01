@@ -388,17 +388,17 @@ contains
        ierr = error_unit()
        call get_option_value &
             (scan_par, scan_parameter_opts, scan_parameter_switch, &
-            ierr, "scan_par in parameter_scan_knobs")
+            ierr, "scan_par in parameter_scan_knobs",.true.)
        call get_option_value &
             (scan_type, scan_type_opts, scan_type_switch, &
-            ierr, "scan_type in parameter_scan_knobs")
+            ierr, "scan_type in parameter_scan_knobs",.true.)
        call get_option_value &
             (target_par, target_parameter_opts, target_parameter_switch, &
-            ierr, "target_par in parameter_scan_knobs")
+            ierr, "target_par in parameter_scan_knobs",.true.)
        call get_option_value &
             (inc_con, increment_condition_opts, &
             increment_condition_switch, &
-            ierr, "inc_con in parameter_scan_knobs")
+            ierr, "inc_con in parameter_scan_knobs",.true.)
 
     end if
 

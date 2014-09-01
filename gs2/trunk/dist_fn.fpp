@@ -722,14 +722,14 @@ subroutine check_dist_fn(report_unit)
        ierr = error_unit()
        call get_option_value &
             (boundary_option, boundaryopts, boundary_option_switch, &
-            ierr, "boundary_option in dist_fn_knobs")
+            ierr, "boundary_option in dist_fn_knobs",.true.)
 
        call get_option_value &
             (source_option, sourceopts, source_option_switch, &
-            ierr, "source_option in source_knobs")
+            ierr, "source_option in source_knobs",.true.)
        call get_option_value &
             (adiabatic_option, adiabaticopts, adiabatic_option_switch, &
-            ierr, "adiabatic_option in dist_fn_knobs")
+            ierr, "adiabatic_option in dist_fn_knobs",.true.)
 
     end if
     if (.not.allocated(fexp)) allocate (fexp(nspec), bkdiff(nspec), bd_exp(nspec))
