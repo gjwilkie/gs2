@@ -49,7 +49,7 @@ contains
   
   subroutine idfitin(eqfile, theta, psi_0_out, psi_a_out, rmaj, B_T, amin, initeq)
     use constants, only: twopi
-    use splines
+    use splines, only: new_periodic_spline, delete_periodic_spline, periodic_splint, periodic_spline
     implicit none
 
     type :: grid_type
@@ -729,7 +729,7 @@ contains
 ! normalized minor radius, measured inside the ring, in the plane of 
 ! the ring, starting at the ring and going inward.  
 
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: rp, diameter
     type (spline), save :: spl
 
@@ -755,7 +755,7 @@ contains
 
   function rcenter (rp)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: rp, rcenter
     type (spline), save :: spl
 
@@ -835,7 +835,7 @@ contains
 
   function pfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, pfun
     type (spline), save :: spl
 
@@ -860,7 +860,7 @@ contains
 
   function dpfun (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dpfun
     type (spline), save :: spl
 !
@@ -887,7 +887,7 @@ contains
 
   function betafun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, betafun
     type (spline), save :: spl
 

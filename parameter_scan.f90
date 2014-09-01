@@ -10,7 +10,10 @@
 
 module parameter_scan
 
-  use parameter_scan_arrays
+  !These should really be moved to specific routines where required
+  use parameter_scan_arrays, only: current_scan_parameter_value, write_scan_parameter, run_scan
+  use parameter_scan_arrays, only: scan_parameter_switch, scan_parameter_tprim, scan_parameter_g_exb
+  use parameter_scan_arrays, only: scan_spec, hflux_tot, momflux_tot, phi2_tot, nout
 
   public :: init_parameter_scan
   public :: finish_parameter_scan
@@ -245,7 +248,7 @@ contains
     !use parameter_scan_arrays, only: scan_parameter_switch
     !use parameter_scan_arrays, only: scan_parameter_tprim
     !use parameter_scan_arrays, only: scan_parameter_g_exb
-    use parameter_scan_arrays
+    !use parameter_scan_arrays
     use species, only: spec 
     use dist_fn, only: g_exb
     use mp, only: proc0

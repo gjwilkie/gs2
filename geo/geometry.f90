@@ -3428,8 +3428,10 @@ subroutine geometry_set_inputs(equilibrium_type,&
                                bishop_in, &
                                nperiod_in, &
                                ntheta)
-  use geometry
-
+  use geometry, only: rhoc, nperiod, eqfile, irho, iflux, local_eq, gen_eq, init_theta
+  use geometry, only: ppl_eq, transp_eq, chs_eq, efit_eq, equal_arc, bishop
+  use geometry, only: dp_mult, delrho, rmin, rmax, isym, in_nt, writelots, itor
+  implicit none
   integer, intent(in) :: equilibrium_type, nperiod_in, irho_in, bishop_in
   real, intent(in) :: rhoc_in
   integer, intent(inout) :: ntheta
@@ -3492,7 +3494,8 @@ end subroutine geometry_set_inputs
 !! all the parameters. It does not modify the geometry variables. 
 
 subroutine geometry_get_default_advanced_parameters(advanced_parameters_out)
-  use geometry
+  use geometry, only: advanced_parameters_type
+  implicit none
   type(advanced_parameters_type), intent(out) :: advanced_parameters_out
  
   advanced_parameters_out%equal_arc = .true.
@@ -3509,7 +3512,9 @@ end subroutine geometry_get_default_advanced_parameters
 !> Returns a derived type containing values of the advanced geometry
 !! parameters. 
 subroutine geometry_get_advanced_parameters(advanced_parameters_out)
-  use geometry
+  use geometry, only: equal_arc, dp_mult, delrho, rmin, rmax, isym, in_nt, writelots, itor
+  use geometry, only: advanced_parameters_type, advanced_parameters
+  implicit none
   type(advanced_parameters_type), intent(out) :: advanced_parameters_out
 
   advanced_parameters%equal_arc = equal_arc
@@ -3529,7 +3534,9 @@ end subroutine geometry_get_advanced_parameters
 !> Accepts a derived type containing values of the advanced geometry
 !! parameters and sets the variables in the geometry module accordingly. 
 subroutine geometry_set_advanced_parameters(advanced_parameters_in)
-  use geometry
+  use geometry, only: equal_arc, dp_mult, delrho, rmin, rmax, isym, in_nt, writelots, itor
+  use geometry, only: advanced_parameters_type, advanced_parameters
+  implicit none
   type(advanced_parameters_type), intent(in) :: advanced_parameters_in
 
   write(*,*) 'Setting advanced parameters'
@@ -3550,47 +3557,50 @@ subroutine geometry_set_advanced_parameters(advanced_parameters_in)
 end subroutine geometry_set_advanced_parameters
 
 subroutine geometry_get_miller_parameters(miller_parameters_out)
-  use geometry
+  use geometry, only: rmaj, r_geo, akappa, akappri, tri, tripri
+  use geometry, only: shift, qinp, shat, asym, asympri
+  use geometry, only: miller_parameters_type, miller_parameters
+  implicit none
   type(miller_parameters_type), intent(out) :: miller_parameters_out
-
-
-   miller_parameters%rmaj = rmaj
-   miller_parameters%r_geo = r_geo
-   miller_parameters%akappa = akappa
-   miller_parameters%akappri = akappri
-   miller_parameters%tri = tri
-   miller_parameters%tripri = tripri
-   miller_parameters%shift = shift
-   miller_parameters%qinp = qinp
-   miller_parameters%shat = shat
-   miller_parameters%asym = asym
-   miller_parameters%asympri = asympri
-
-   miller_parameters_out = miller_parameters
+  
+  miller_parameters%rmaj = rmaj
+  miller_parameters%r_geo = r_geo
+  miller_parameters%akappa = akappa
+  miller_parameters%akappri = akappri
+  miller_parameters%tri = tri
+  miller_parameters%tripri = tripri
+  miller_parameters%shift = shift
+  miller_parameters%qinp = qinp
+  miller_parameters%shat = shat
+  miller_parameters%asym = asym
+  miller_parameters%asympri = asympri
+  
+  miller_parameters_out = miller_parameters
 
 end subroutine geometry_get_miller_parameters
 
 subroutine geometry_set_miller_parameters(miller_parameters_in)
-  use geometry
+  use geometry, only: rmaj, r_geo, akappa, akappri, tri, tripri
+  use geometry, only: shift, qinp, shat, asym, asympri
+  use geometry, only: miller_parameters_type, miller_parameters
+  implicit none
   type(miller_parameters_type), intent(in) :: miller_parameters_in
 
-
-
-   miller_parameters = miller_parameters_in
-
-   rmaj = miller_parameters_in%rmaj
-   R_geo = miller_parameters_in%R_geo
-   akappa = miller_parameters_in%akappa
-   akappri = miller_parameters_in%akappri
-   tri = miller_parameters_in%tri
-   tripri = miller_parameters_in%tripri
-   shift = miller_parameters_in%shift
-   qinp = miller_parameters_in%qinp
-   shat = miller_parameters_in%shat
-   asym = miller_parameters_in%asym
-   asympri = miller_parameters_in%asympri
-
-   write(*,*) 's_hat was set to', shat
+  miller_parameters = miller_parameters_in
+  
+  rmaj = miller_parameters_in%rmaj
+  R_geo = miller_parameters_in%R_geo
+  akappa = miller_parameters_in%akappa
+  akappri = miller_parameters_in%akappri
+  tri = miller_parameters_in%tri
+  tripri = miller_parameters_in%tripri
+  shift = miller_parameters_in%shift
+  qinp = miller_parameters_in%qinp
+  shat = miller_parameters_in%shat
+  asym = miller_parameters_in%asym
+  asympri = miller_parameters_in%asympri
+   
+  write(*,*) 's_hat was set to', shat
 
 end subroutine geometry_set_miller_parameters
 
@@ -3599,14 +3609,16 @@ end subroutine geometry_set_miller_parameters
 !! as described variously by Greene & Chance, Bishop and Miller.
 !! 
 subroutine geometry_vary_s_alpha(s_hat_input_in, beta_prime_input_in)
-  use geometry
+  use geometry, only: s_hat_input, beta_prime_input
+  implicit none
   real, intent(in) :: s_hat_input_in, beta_prime_input_in
   s_hat_input = s_hat_input_in
   beta_prime_input = beta_prime_input_in
 end subroutine geometry_vary_s_alpha
 
 subroutine geometry_calculate_coefficients(grid_size)
-  use geometry
+  use geometry, only: eikcoefs, nperiod
+  implicit none
   integer, intent(out) :: grid_size
   integer :: ntheta_out
   call eikcoefs(ntheta_out)
@@ -3617,7 +3629,11 @@ end subroutine geometry_calculate_coefficients
 
 !> Get the geometric coefficients calculated by the geometry module.
 subroutine geometry_get_coefficients(grid_size, coefficients_out)
-  use geometry
+  use geometry, only: grho, bmag, gradpar, cvdrift, cvdrift0, coefficients_type
+  use geometry, only: gbdrift, gbdrift0, cdrift, cdrift0, gbdrift_th
+  use geometry, only: cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq
+  use geometry, only: jacob, Rplot, Zplot, aplot, Rprime, Zprime, aprime, Uk1, Uk2, Bpol
+  implicit none
   integer, intent(in) :: grid_size
   type(coefficients_type), dimension(grid_size) :: coefficients_out
   integer ::ntgrid, i
@@ -3656,45 +3672,46 @@ subroutine geometry_get_coefficients(grid_size, coefficients_out)
 
   write (*,*) 'HERE'
   write (*,*) 'Grid size should be ', 2*ntgrid + 1
-   do i = -ntgrid,ntgrid
-   write (*,*) 'i', i
-   coefficients_out(i+ntgrid+1)%grho        = grho(i)   
-   coefficients_out(i+ntgrid+1)%bmag        = bmag(i)       
-   coefficients_out(i+ntgrid+1)%gradpar     = gradpar(i)    
-   coefficients_out(i+ntgrid+1)%cvdrift     = cvdrift(i)    
-   coefficients_out(i+ntgrid+1)%cvdrift0    = cvdrift0(i)   
-   coefficients_out(i+ntgrid+1)%gbdrift     = gbdrift(i)    
-   coefficients_out(i+ntgrid+1)%gbdrift0    = gbdrift0(i)   
-   coefficients_out(i+ntgrid+1)%cdrift     = cdrift(i)    
-   coefficients_out(i+ntgrid+1)%cdrift0     = cdrift0(i)    
-   coefficients_out(i+ntgrid+1)%gbdrift_th  = gbdrift_th(i) 
-   coefficients_out(i+ntgrid+1)%cvdrift_th  = cvdrift_th(i) 
-   coefficients_out(i+ntgrid+1)%gds2        = gds2(i)       
-   coefficients_out(i+ntgrid+1)%gds21       = gds21(i)      
-   coefficients_out(i+ntgrid+1)%gds22       = gds22(i)      
-   coefficients_out(i+ntgrid+1)%gds23       = gds23(i)      
-   coefficients_out(i+ntgrid+1)%gds24       = gds24(i)      
-   coefficients_out(i+ntgrid+1)%gds24_noq   = gds24_noq(i)  
-   coefficients_out(i+ntgrid+1)%jacob       = jacob(i)      
-   coefficients_out(i+ntgrid+1)%Rplot       = Rplot(i)      
-   coefficients_out(i+ntgrid+1)%Zplot       = Zplot(i)      
-   coefficients_out(i+ntgrid+1)%aplot       = aplot(i)      
-   coefficients_out(i+ntgrid+1)%Rprime      = Rprime(i)     
-   coefficients_out(i+ntgrid+1)%Zprime      = Zprime(i)     
-   coefficients_out(i+ntgrid+1)%aprime      = aprime(i)     
-   coefficients_out(i+ntgrid+1)%Uk1         = Uk1(i)        
-   coefficients_out(i+ntgrid+1)%Uk2         = Uk2(i)        
-   coefficients_out(i+ntgrid+1)%Bpol        = Bpol(i)       
-   end do
+  do i = -ntgrid,ntgrid
+     write (*,*) 'i', i
+     coefficients_out(i+ntgrid+1)%grho        = grho(i)   
+     coefficients_out(i+ntgrid+1)%bmag        = bmag(i)       
+     coefficients_out(i+ntgrid+1)%gradpar     = gradpar(i)    
+     coefficients_out(i+ntgrid+1)%cvdrift     = cvdrift(i)    
+     coefficients_out(i+ntgrid+1)%cvdrift0    = cvdrift0(i)   
+     coefficients_out(i+ntgrid+1)%gbdrift     = gbdrift(i)    
+     coefficients_out(i+ntgrid+1)%gbdrift0    = gbdrift0(i)   
+     coefficients_out(i+ntgrid+1)%cdrift     = cdrift(i)    
+     coefficients_out(i+ntgrid+1)%cdrift0     = cdrift0(i)    
+     coefficients_out(i+ntgrid+1)%gbdrift_th  = gbdrift_th(i) 
+     coefficients_out(i+ntgrid+1)%cvdrift_th  = cvdrift_th(i) 
+     coefficients_out(i+ntgrid+1)%gds2        = gds2(i)       
+     coefficients_out(i+ntgrid+1)%gds21       = gds21(i)      
+     coefficients_out(i+ntgrid+1)%gds22       = gds22(i)      
+     coefficients_out(i+ntgrid+1)%gds23       = gds23(i)      
+     coefficients_out(i+ntgrid+1)%gds24       = gds24(i)      
+     coefficients_out(i+ntgrid+1)%gds24_noq   = gds24_noq(i)  
+     coefficients_out(i+ntgrid+1)%jacob       = jacob(i)      
+     coefficients_out(i+ntgrid+1)%Rplot       = Rplot(i)      
+     coefficients_out(i+ntgrid+1)%Zplot       = Zplot(i)      
+     coefficients_out(i+ntgrid+1)%aplot       = aplot(i)      
+     coefficients_out(i+ntgrid+1)%Rprime      = Rprime(i)     
+     coefficients_out(i+ntgrid+1)%Zprime      = Zprime(i)     
+     coefficients_out(i+ntgrid+1)%aprime      = aprime(i)     
+     coefficients_out(i+ntgrid+1)%Uk1         = Uk1(i)        
+     coefficients_out(i+ntgrid+1)%Uk2         = Uk2(i)        
+     coefficients_out(i+ntgrid+1)%Bpol        = Bpol(i)       
+  end do
 
-   write (*,*) 'Returning....'
+  write (*,*) 'Returning....'
 
 end subroutine geometry_get_coefficients
 
 subroutine geometry_get_constant_coefficients(constant_coefficients_out)
-  use geometry
+  use geometry, only: qsf, rmaj, shat, kxfac, aminor
+  use geometry, only: constant_coefficients_type, constant_coefficients
+  implicit none
   type(constant_coefficients_type), intent(out) :: constant_coefficients_out
-
 
   constant_coefficients%qsf = qsf
   constant_coefficients%rmaj = rmaj
