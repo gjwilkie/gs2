@@ -72,8 +72,8 @@ contains
        cvdrift0, cdrift, cdrift0, gbdrift_th, cvdrift_th, &
        gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, jacob, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
-    use gridgen4mod
-    use constants
+    use gridgen4mod, only: gridgen4_2
+    use constants, only: pi
     implicit none
     integer, intent (in) :: nperiod
     integer, intent (in out) :: ntheta, ntgrid, nbset
@@ -173,7 +173,7 @@ if (debug) write(6,*) 'gridgen_get_grids: end'
 
   !<DD>NOTE: This routine assumes nnew<nold
   subroutine regrid (nold, x, y, nnew, xnew)
-    use splines
+    use splines, only: new_spline, splint, delete_spline, spline
     implicit none
     integer, intent (in) :: nold
     real, dimension (-nold:nold), intent (in) :: x
@@ -483,7 +483,7 @@ contains
        gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
        jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, &
        qval, shape, gb_to_cv, Bpol)
-    use constants
+    use constants, only: pi
     use theta_grid_params, only: eps, epsl, shat_param => shat, pk
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
     implicit none
@@ -1757,7 +1757,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
-    use text_options
+    use text_options, only: text_option, get_option_value
     implicit none
     type (text_option), dimension (5), parameter :: eqopts = &
          (/ text_option('default', eqopt_eik), &

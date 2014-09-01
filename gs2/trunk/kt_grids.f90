@@ -463,7 +463,7 @@ contains
 
     use theta_grid, only: init_theta_grid, shat, drhodpsi
     use file_utils, only: input_unit, input_unit_exist
-    use constants
+    use constants, only: pi
     implicit none
     integer :: naky, ntheta0, nx, ny, nkpolar
     integer :: in_file
@@ -530,7 +530,7 @@ contains
 
   subroutine box_get_grids (aky, theta0, akx, ikx, iky)
     use theta_grid, only: shat
-    use constants
+    use constants, only: pi
     implicit none
     real, dimension (:), intent (out) :: akx, aky
     real, dimension (:,:), intent (out) :: theta0

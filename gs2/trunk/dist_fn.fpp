@@ -1400,7 +1400,6 @@ endif
     use gs2_layouts, only: idx, proc_id
     use mp, only: iproc, nproc, max_allreduce
 !    use mp, only: proc0
-    use constants
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: to, from
@@ -2332,7 +2331,6 @@ endif
     use gs2_layouts, only: idx, proc_id
     use mp, only: iproc, nproc, max_allreduce
 !    use mp, only: proc0
-    use constants
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: from, from_p, from_h, to_p, to_h
@@ -4162,7 +4160,7 @@ endif
     use gs2_time, only: code_dt
     use nonlinear_terms, only: nonlin
     use hyper, only: D_res
-    use constants
+    use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
@@ -6233,7 +6231,7 @@ endif
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use run_parameters, only: woutunits, fphi, fapar, fbpar
     use constants, only: zi
-    use geometry, only: rhoc
+    use geometry, only: rhoc!Should this not be value from theta_grid_params?
     use theta_grid, only: Rplot, Bpol
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
@@ -6741,7 +6739,7 @@ endif
     use dist_fn_arrays, only: gnew, vperp2, aj1, aj0, vpac
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: it_idx, ik_idx, is_idx
-    use geometry, only: rhoc
+    use geometry, only: rhoc!Should this not be value from theta_grid_params?
     use theta_grid, only: ntgrid, bmag, gds21, gds22, qval, shat
     use theta_grid, only: Rplot, Bpol
     use kt_grids, only: aky, theta0
@@ -8920,7 +8918,7 @@ endif
     use dist_fn_arrays, only: vparterm, wdfac, vpac, wdttpfac
     use dist_fn_arrays, only: wstarfac, hneoc, vpar
     use species, only: spec, nspec
-    use geometry, only: rhoc
+    use geometry, only: rhoc!Should this not be value from theta_grid_params?
     use theta_grid, only: theta, ntgrid, delthet, gradpar, bmag
     use theta_grid, only: gds23, gds24, gds24_noq, cvdrift_th, gbdrift_th
     use theta_grid, only: drhodpsi, qval, shat

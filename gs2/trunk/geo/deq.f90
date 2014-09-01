@@ -568,7 +568,7 @@ contains
 
   function btori (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, btori
     type (spline), save :: spl
 
@@ -590,7 +590,7 @@ contains
 
   function dbtori (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dbtori
     type (spline), save :: spl
 
@@ -612,7 +612,7 @@ contains
 
   function qfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, qfun
     type (spline), save :: spl
 
@@ -636,7 +636,7 @@ contains
 
   function pfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, pfun
     type (spline), save :: spl
 
@@ -658,7 +658,7 @@ contains
 
   function dpfun (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dpfun
     type (spline), save :: spl
 
@@ -680,7 +680,7 @@ contains
 
   function betafun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, betafun
     type (spline), save :: spl
 
@@ -702,7 +702,7 @@ contains
 
   function rhofun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, rhofun
     type (spline), save :: spl
 
@@ -724,7 +724,7 @@ contains
 
   function bound(theta) 
 
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: theta, bound
     type (spline), save :: spl
 

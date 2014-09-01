@@ -238,8 +238,7 @@ contains
   end subroutine init_le_grids
 
   function le_grids_unit_test_init_le_grids(sizes, energy_results, err)
-    use unit_tests
-    use egrid
+    use unit_tests, only: announce_check, process_check, agrees_with
     use species, only: nspec
     use mp, only: proc0
     integer, dimension(:), intent(in) :: sizes
@@ -1004,7 +1003,7 @@ contains
 
 
   function le_grids_unit_test_integrate_species(g, weights, sizes, rslt, err)
-    use unit_tests
+    use unit_tests, only: announce_check, process_check, agrees_with
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo
@@ -1838,9 +1837,7 @@ contains
 
     use theta_grid, only: ntgrid, bmag, bmax, eps
     use gauss_quad, only: get_legendre_grids_from_cheb
-    use constants
     use file_utils, only: open_output_file, close_output_file
-
 
     implicit none
 

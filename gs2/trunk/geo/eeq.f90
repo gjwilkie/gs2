@@ -145,7 +145,8 @@ contains
 !
     use splines, only: inter_cspl, fitp_surf2, fitp_surf1
     use constants, only: pi, twopi
-    use gs2d
+    use gs2d, only: read_gs2d, psi, b0, f, ippsi, nr, nz, p, ps
+    use gs2d, only: psip, psmin, q, r0, rgrid, rmag, rsep, zgrid, zmag, zsep
     implicit none
 
     real :: p_0
@@ -866,7 +867,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
 
   function btori (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, btori
     type (spline), save :: spl
 
@@ -888,7 +889,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
 
   function dbtori (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dbtori
     type (spline), save :: spl
 
@@ -910,7 +911,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
 
   function qfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, qfun
     type (spline), save :: spl
 
@@ -934,7 +935,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
 
   function pfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, pfun
     type (spline), save :: spl
 
@@ -956,7 +957,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
 
   function dpfun (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dpfun
     type (spline), save :: spl
 
@@ -978,7 +979,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
 
   function betafun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, betafun
     type (spline), save :: spl
 
@@ -1000,7 +1001,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
 
   function bound(theta) 
 
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: theta, bound
     type (spline), save :: spl
 
@@ -1047,7 +1048,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
 
   subroutine a_minor(r, z, Z_mag, a)
 
-    use splines
+    use splines, only: new_spline, splint, delete_spline, spline
     real, dimension(:), intent (in) :: r, z
     real :: a, Z_mag, r1, r2
     integer, parameter :: nz = 5
