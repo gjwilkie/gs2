@@ -1169,7 +1169,7 @@ contains
     use dist_fn, only: l_links, r_links
     use dist_fn, only: pass_right, init_pass_ends
     use redistribute, only: fill, delete_redist
-    use ran
+    use ran, only: ranf
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
     real :: a, b
@@ -1324,7 +1324,7 @@ contains
     use mp, only: mp_abort
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use ran
+!    use ran, only: ranf
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
     real :: a, b
@@ -1419,7 +1419,6 @@ contains
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use ran
     use mp, only: mp_abort
 !     use file_utils, only: error_unit
     implicit none
@@ -1512,7 +1511,6 @@ contains
     use le_grids, only: forbid, ng2
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use ran
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
     integer :: iglo
@@ -1565,7 +1563,6 @@ contains
     use le_grids, only: forbid, ng2
     use dist_fn_arrays, only: g, gnew, vpa
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use ran
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
     integer :: iglo
@@ -1621,8 +1618,7 @@ contains
 !    use le_grids, only: ng2
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use constants
-    use ran
+    use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
@@ -1724,8 +1720,7 @@ contains
     use fields_arrays, only: aparnew
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use constants
-    use ran
+    use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
@@ -1826,8 +1821,7 @@ contains
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew, vpa, aj0
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
-    use constants
-    use ran
+    use constants, only: zi, pi
     use run_parameters, only: k0
     implicit none
     complex, dimension (ntheta0,naky) :: phi
@@ -1933,8 +1927,7 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use file_utils, only: error_unit
     use run_parameters, only: fphi, fapar, fbpar
-    use constants
-    use ran
+    use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz, odd
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
@@ -2050,7 +2043,7 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
     use file_utils, only: error_unit
     use run_parameters, only: fphi, fapar, fbpar
-    use ran
+    use ran, only: ranf
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
     integer :: iglo, istatus
@@ -2151,7 +2144,7 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
     use file_utils, only: error_unit
     use run_parameters, only: fphi, fapar, fbpar
-    use ran
+    use ran, only: ranf
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
     integer :: iglo, istatus
@@ -2240,7 +2233,6 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
     use file_utils, only: error_unit
     use run_parameters, only: fphi, fapar, fbpar
-    use ran
     implicit none
 !    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz
     integer :: iglo, istatus
@@ -2474,8 +2466,7 @@ contains
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use constants
-    use ran
+    use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac
@@ -2547,8 +2538,8 @@ contains
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
-    use constants
-    use ran
+    use constants, only: pi, zi
+    use ran, only: ranf
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     integer :: iglo
@@ -2611,7 +2602,6 @@ contains
     use kt_grids, only: theta0
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
-    use constants
     implicit none
     integer :: iglo
     integer :: ik, it, il, ie, is
@@ -2637,7 +2627,6 @@ contains
     use kt_grids, only: theta0
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
-    use constants
     implicit none
     integer :: iglo
     integer :: ik, it, il, ie, is
@@ -2661,7 +2650,6 @@ contains
     use le_grids, only: forbid, energy
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, it_idx, il_idx, ie_idx, is_idx
-    use constants
     implicit none
     integer :: iglo
 !    integer :: it, il, ie, is
@@ -2716,7 +2704,7 @@ contains
     use theta_grid_params, only: eps, epsl, pk
     use gs2_layouts, only: g_lo, ik_idx, il_idx
     use mp, only: broadcast
-    use constants
+    use constants, only: zi
     implicit none
     integer :: iglo, ik, il
     real :: c1, c2
@@ -3567,7 +3555,7 @@ contains
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use run_parameters, only: fphi, fapar, fbpar
-    use ran
+    use ran, only: ranf
 
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
@@ -3635,7 +3623,6 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use fields_arrays, only: phinew
     use run_parameters, only: fphi, fapar, fbpar
-    use ran
 
     implicit none
 !     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi

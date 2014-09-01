@@ -154,7 +154,8 @@ contains
   end subroutine init_antenna
 !=============================================================================    
   subroutine read_parameters 
-    use file_utils
+    use file_utils, only: input_unit_exist, get_indexed_namelist_unit, get_unused_unit
+    use file_utils, only: open_output_file, input_unit
     use mp, only: proc0, broadcast
     use antenna_data, only: init_antenna_data
     use gs2_save, only: init_ant_amp
@@ -202,7 +203,7 @@ contains
              call get_indexed_namelist_unit (in_file, "stir", i)
              kx=1
              ky=1
-             kz=1
+              kz=1
              a = -1.
              b = -1.
              travel = .true.
@@ -263,7 +264,8 @@ contains
   end subroutine read_parameters
 !=============================================================================
   subroutine finish_antenna
-
+    use mp, only: proc0
+    use file_utils, only: close_output_file
     use antenna_data, only: finish_antenna_data
 
     implicit none
@@ -272,35 +274,32 @@ contains
     if (allocated(w_stir)) deallocate (w_stir)
     if (allocated(kx_stir)) deallocate (kx_stir, ky_stir, kz_stir, trav)
     if (allocated(apar_new)) deallocate (apar_new, apar_old)
+    call close_output_file(out_unit)
     initialized = .false.
 
   end subroutine finish_antenna
 !=============================================================================
   subroutine antenna_amplitudes (apar)
 
-    use mp
-!    use gs2_time, only: user_dt, user_time
+    use mp, only: broadcast, proc0
     use gs2_time, only: code_dt, code_time
     use kt_grids, only: naky, ntheta0, reality
     use theta_grid, only: theta, ntgrid, gradpar
-    use ran
-    use constants
+    use ran, only: ranf
+    use constants, only: zi
 
     complex, dimension (-ntgrid:,:,:), intent(out) :: apar
     complex :: force_a, force_b
     real :: dt, sigma, time
     integer :: i, it, ik
-!    logical, save :: first = .true.
 
     apar=0.
 
     if (no_driver) return
 
-!    if (first) then
     if (.not. allocated(apar_new)) then
        allocate (apar_new(-ntgrid:ntgrid,ntheta0,naky)) ; apar_new = 0.
        allocate (apar_old(-ntgrid:ntgrid,ntheta0,naky)) 
-!       first = .false.
     end if
 
     apar_old = apar_new

@@ -1190,7 +1190,7 @@ contains
     use kt_grids, only: naky, ntheta0, kperp2
     use theta_grid, only: ntgrid
     use run_parameters, only: zeff, tunits
-    use constants
+    use constants, only: pi
     use spfunc, only: erf => erf_ext
 
     real, dimension (:), intent (out) :: hee
@@ -2395,7 +2395,6 @@ contains
     use fields_arrays, only: aparnew
     use run_parameters, only: ieqzip
     use kt_grids, only: kwork_filter, kperp2
-    use constants
     ! TMP FOR TESTING -- MAB
 !    use mp, only: proc0
 

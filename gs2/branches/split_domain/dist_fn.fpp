@@ -1400,7 +1400,6 @@ endif
     use gs2_layouts, only: idx, proc_id
     use mp, only: iproc, nproc, max_allreduce
 !    use mp, only: proc0
-    use constants
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: to, from
@@ -2332,7 +2331,6 @@ endif
     use gs2_layouts, only: idx, proc_id
     use mp, only: iproc, nproc, max_allreduce
 !    use mp, only: proc0
-    use constants
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: from, from_p, from_h, to_p, to_h
@@ -4162,7 +4160,7 @@ endif
     use gs2_time, only: code_dt
     use nonlinear_terms, only: nonlin
     use hyper, only: D_res
-    use constants
+    use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
@@ -4927,11 +4925,15 @@ endif
 !
 !CMR, 6/8/2014:
 ! Parallel BC for wfb is as follows:
-!    in ballooning space 
-!                 wfb ALWAYS self-periodic
-!    in linked fluxtube  
-!                 wfb self-periodic ONLY if ISOLATED, OR if iky=0
-!                     ELSE same BC as passing particle
+!    ballooning space 
+!           wfb ALWAYS self-periodic (-ntgrid:ntgrid)
+!    linked fluxtube  
+!           wfb self-periodic (-ntgrid:ntgrid) ONLY if ISOLATED, 
+!                                               OR if iky=0
+!           OTHERWISE wfb treated as passing for now in (-ntgrid:ntgrid)
+!                     store homogeneous and inhomog solutions 
+!                     AND set amplitude of homog later in invert_rhs_linked 
+!                     to satisfy self-periodic bc in fully linked SUPER-CELL
 
     if (boundary_option_switch == boundary_option_linked) then
        if (speriod_flag .and. il <= ng2+1) then
@@ -5041,11 +5043,13 @@ endif
 
   subroutine invert_rhs_linked &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, sourcefac)
-    use dist_fn_arrays, only: gnew
+    use dist_fn_arrays, only: gnew, vperp2, aj0, aj1
     use theta_grid, only: ntgrid
-    use le_grids, only: nlambda, ng2
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx
+    use le_grids, only: nlambda, ng2, anon
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx, idx
     use redistribute, only: fill
+    use run_parameters, only: fbpar, fphi
+    use species, only: spec
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
@@ -5055,6 +5059,14 @@ endif
     complex :: b0, fac, facd
     integer :: il, ik, it, n, i, j
     integer :: iglo, ncell
+!
+! adding adjr, adjl to cope with application of self-periodic to WFB
+!   dadj=adjl-adjr will be ZERO for ky=0 modes, but NOT for WFB.
+! This change sets g_wesson (or h) to be self-periodic for wfb, not g !!!
+! NB this code change implement this in a linked fluxtube.
+!
+    integer :: ie, is, itl, itr, iglol, iglor
+    complex :: adjl, adjr, dadj
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        call invert_rhs_1 (phi, apar, bpar, phinew, aparnew, bparnew, &
@@ -5088,6 +5100,28 @@ endif
 
 ! wfb
           if (nlambda > ng2 .and. il == ng2+1) then
+             is = is_idx(g_lo,iglo)
+             ie = ie_idx(g_lo,iglo)
+!CMR, 29/8/2014:
+!(1) compute adjl, adjr: the corrections in mapping from g_gs2 to g_wesson
+!                     at the extreme left and right of the supercell
+!(2) dadj=adjl-adjr then used to apply the self-periodic bc to g_wesson
+!    (was previously applied to g)
+!      
+             itl=get_leftmost_it(it,ik)
+             itr=get_rightmost_it(it,ik)
+             iglol=idx(g_lo, ik, itl, il, ie, is)
+             iglor=idx(g_lo, ik, itr, il, ie, is)
+             adjl = anon(ie)*2.0*vperp2(-ntgrid,iglol)*aj1(-ntgrid,iglol) &
+              *bparnew(-ntgrid,itl,ik)*fbpar &
+              + spec(is)%z*anon(ie)*phinew(-ntgrid,itl,ik)*aj0(-ntgrid,iglol) &
+              /spec(is)%temp*fphi
+             adjr = anon(ie)*2.0*vperp2(ntgrid,iglor)*aj1(ntgrid,iglor) &
+              *bparnew(ntgrid,itr,ik)*fbpar &
+              + spec(is)%z*anon(ie)*phinew(ntgrid,itr,ik)*aj0(ntgrid,iglor) &
+              /spec(is)%temp*fphi
+             dadj = adjl-adjr
+
              if (save_h(1, iglo)) then
 !CMR, 7/8/2014:
 ! This code implements "self-periodic" parallel BC for wfb
@@ -5123,7 +5157,7 @@ endif
                 end do
 
 ! b0 computed next line is homog amplitude in leftmost cell  (see CMR note)
-                b0 = (b0 + g_adj(1,1,iglo))*facd
+                b0 = (b0 + g_adj(1,1,iglo)-dadj)*facd
 
 ! BUT we NEED homog amplitude in THIS cell.
 ! Solve matrix BC equation by cascading homog amplitude, b0, rightwards 
@@ -5158,7 +5192,7 @@ endif
                    end do
                    b0 = b0 + fac * g_adj(ncell+1-i,2,iglo)
                 end do
-                b0 = (b0 + g_adj(1,2,iglo))*facd
+                b0 = (b0 + g_adj(1,2,iglo)+dadj)*facd
 
                 do i = 1, r_links(ik, it)
                    b0 = b0 * g_adj(ncell+i,2,iglo) + g_adj(ncell+1-i,2,iglo)
@@ -6197,7 +6231,7 @@ endif
     use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
     use run_parameters, only: woutunits, fphi, fapar, fbpar
     use constants, only: zi
-    use geometry, only: rhoc
+    use geometry, only: rhoc!Should this not be value from theta_grid_params?
     use theta_grid, only: Rplot, Bpol
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
@@ -6705,7 +6739,7 @@ endif
     use dist_fn_arrays, only: gnew, vperp2, aj1, aj0, vpac
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: it_idx, ik_idx, is_idx
-    use geometry, only: rhoc
+    use geometry, only: rhoc!Should this not be value from theta_grid_params?
     use theta_grid, only: ntgrid, bmag, gds21, gds22, qval, shat
     use theta_grid, only: Rplot, Bpol
     use kt_grids, only: aky, theta0
@@ -8884,7 +8918,7 @@ endif
     use dist_fn_arrays, only: vparterm, wdfac, vpac, wdttpfac
     use dist_fn_arrays, only: wstarfac, hneoc, vpar
     use species, only: spec, nspec
-    use geometry, only: rhoc
+    use geometry, only: rhoc!Should this not be value from theta_grid_params?
     use theta_grid, only: theta, ntgrid, delthet, gradpar, bmag
     use theta_grid, only: gds23, gds24, gds24_noq, cvdrift_th, gbdrift_th
     use theta_grid, only: drhodpsi, qval, shat

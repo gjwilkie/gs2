@@ -3,7 +3,7 @@
 !! linear and nonlinear test cases, as well as a driver function 
 !! which runs GS2.
 module functional_tests
-  use unit_tests
+  use unit_tests, only: announce_check, agrees_with, process_check
   use runtime_tests, only: verbosity
 
   !> Check that the relative error of the growth rates as a 
