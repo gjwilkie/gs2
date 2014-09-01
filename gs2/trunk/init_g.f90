@@ -603,10 +603,10 @@ contains
        restart_file=trim(restart_file(1:ind_slash))//trim(restart_dir)//trim(restart_file(ind_slash+1:))
     endif
 
-
     ! MAB - allows for ensemble averaging of multiple flux tube calculations
     ! job=0 if not doing multiple flux tube calculations, so phiinit unaffected
-    phiinit = phiinit * (job*phifrac+1.0)
+    !<DD>Only let proc0 do this and then broadcast as other procs don't know phiinit,phifrac etc.
+    if(proc0) phiinit = phiinit * (job*phifrac+1.0)
 
     call broadcast (ginitopt_switch)
     call broadcast (width0)

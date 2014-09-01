@@ -42,8 +42,8 @@ module gs2_transforms
 
   private
 
-  logical :: initialized, initialized_x, initialized_y_fft
-  logical :: initialized_x_redist, initialized_y_redist, initialized_3d
+  logical :: initialized=.false., initialized_x=.false., initialized_y_fft=.false.
+  logical :: initialized_x_redist=.false., initialized_y_redist=.false., initialized_3d=.false.
 
   interface transform_x
      module procedure transform_x5d
