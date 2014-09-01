@@ -11,7 +11,7 @@ module theta_grid_gridgen
   integer :: npadd
   real :: alknob, epsknob, bpknob, extrknob, tension
   real :: thetamax, deltaw, widthw
-  logical :: exist, initialized
+  logical :: exist, initialized=.false.
 
 contains
   subroutine wnml_theta_grid_gridgen(unit)

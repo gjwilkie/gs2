@@ -1781,15 +1781,18 @@ end subroutine eikcoefs
     real, intent (in) :: r, thet
     real :: pbar, f
     real, save :: r_last, theta_last, I_last
+    logical, save :: first_run = .true.
     integer :: i, initb = 1
 !
 ! In the present code, most calls to this routine have the same r, thet, so: 
 !
-    if(r == r_last .and. thet == theta_last .and. eqinit /= 1) then
-       btori = I_last
-       return
+    if(.not.first_run)then
+       if(r == r_last .and. thet == theta_last .and. eqinit /= 1) then
+          btori = I_last
+          return
+       endif
     endif
-    
+
     if(eqinit == 1) initb = 1
 
     if(iflux == 1) then
@@ -1821,7 +1824,7 @@ end subroutine eikcoefs
     r_last = r
     theta_last = thet
     I_last = btori
-
+    first_run = .false.
   end function btori
 
   function dbtori(r, thet)
