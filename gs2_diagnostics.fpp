@@ -578,7 +578,6 @@ contains
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use mp, only: proc0
-    use constants
     implicit none
     logical, intent (in) :: list
     character(20) :: datestamp, timestamp, zone
@@ -671,6 +670,8 @@ contains
     if (.not. allocated(omega)) then
       allocate(omega(ntheta0, naky))
       allocate(omegaavg(ntheta0, naky))
+      omega=0
+      omegaavg=0
     end if
       
   end subroutine real_init
@@ -3339,7 +3340,7 @@ contains
   end function diffusivity
 
   function diagnostics_unit_test_diffusivity(results, eps)
-    use unit_tests
+    use unit_tests, only: agrees_with
     use mp,only: proc0
     real, intent(in) :: results, eps
     logical :: diagnostics_unit_test_diffusivity

@@ -1243,7 +1243,7 @@ contains
 
   function diameter (rp)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: rp, diameter
     type (spline), save :: spl
 
@@ -1269,7 +1269,7 @@ contains
 
   function rcenter (rp)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: rp, rcenter
     type (spline), save :: spl
 
@@ -1295,7 +1295,7 @@ contains
 
   function dbtori (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dbtori
     type (spline), save :: spl
 
@@ -1318,7 +1318,7 @@ contains
 
   function btori (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, btori
     type (spline), save :: spl
 
@@ -1341,7 +1341,7 @@ contains
 
   function qfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, qfun
     type (spline), save :: spl
 
@@ -1364,7 +1364,7 @@ contains
 
   function pfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, pfun
     type (spline), save :: spl
 
@@ -1389,7 +1389,7 @@ contains
 
   function dpfun (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dpfun
     type (spline), save :: spl
 !
@@ -1416,7 +1416,7 @@ contains
 
   function betafun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, betafun
     type (spline), save :: spl
 
@@ -1433,8 +1433,6 @@ contains
   end function betafun
 
   subroutine Hahm_Burrell(irho, a) 
-
-    use splines
 
     real, intent(in) :: a
     integer :: i, irho

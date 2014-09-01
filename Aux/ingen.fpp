@@ -27,15 +27,16 @@ program ingen
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   use mp, only: init_mp, finish_mp
-  use constants 
-  use file_utils
   use text_options, only: text_option, get_option_value
+  use file_utils, only: input_unit, get_unused_unit, open_output_file
+  use file_utils, only: close_output_file, input_unit_exist, init_file_utils
+  use file_utils, only: run_name
   implicit none
   
   character (100) :: pythonin
   integer :: interactive_record, interactive_input
 
-  integer :: in_file, i, ierr, unit, is, report_unit, iunit, ncut, npmax
+  integer :: in_file, i, unit, is, report_unit, ncut, npmax
   logical :: exist, scan, stdin
   logical :: coll_on = .false.
 
@@ -676,7 +677,7 @@ contains
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use le_grids, only: init_le_grids
-    use theta_grid, only: init_theta_grid, nbset, ntgrid
+    use theta_grid, only: init_theta_grid, ntgrid
     use constants, only: pi
     implicit none
     logical :: list, accelx=.false., accelv=.false.
@@ -779,7 +780,6 @@ if (debug) write(6,*) 'get_namelists: returning'
     logical :: electrons
 
     integer :: h, t, u
-    integer :: i
     character (4) :: suffix
     character(20) :: datestamp, timestamp, zone
     
@@ -877,7 +877,7 @@ if (debug) write(6,*) 'get_namelists: returning'
      use gs2_diagnostics, only: dump_fields_periodically, save_for_restart
      use gs2_diagnostics, only: nsave, make_movie, nmovie, exit_when_converged, nwrite, omegatol
      use gs2_reinit, only: delt_adj
-     use gs2_time, only: code_dt, user_dt, code_dt_min
+     use gs2_time, only: code_dt, user_dt
      use hyper, only: check_hyper
      use init_g, only: check_init_g
      use kt_grids, only: check_kt_grids, grid_option, gridopt_switch
@@ -886,11 +886,11 @@ if (debug) write(6,*) 'get_namelists: returning'
      use le_grids, only: negrid, nlambda
      use nonlinear_terms, only: nonlin, cfl, check_nonlinear_terms
      use run_parameters, only: check_run_parameters
-     use run_parameters, only: beta, tite, margin, code_delt_max
+     use run_parameters, only: beta, tite, margin
      use run_parameters, only: nstep, wstar_units
-     use species, only: check_species, spec, nspec, has_electron_species
+     use species, only: check_species, nspec, has_electron_species
      use theta_grid, only: check_theta_grid
-     use theta_grid, only: gb_to_cv, nbset, ntgrid
+     use theta_grid, only: gb_to_cv, ntgrid
      use theta_grid_params, only: nperiod, ntheta, eps, epsl, rmaj, r_geo
      use theta_grid_params, only: pk, qinp, rhoc, shift, shat
      use theta_grid_params, only: akappa, akappri, tri, tripri
@@ -901,11 +901,9 @@ if (debug) write(6,*) 'get_namelists: returning'
 
      implicit none
      real :: alne, dbetadrho_spec
-     real :: kxfac, drhodpsi
      character (20) :: datestamp, timestamp, zone
-     character (200) :: line
      logical :: le_ok = .true.
-     integer :: j, nmesh
+     integer :: nmesh
      integer, dimension(4) :: pfacs
 
      call get_unused_unit (report_unit)
@@ -1184,18 +1182,14 @@ if (debug) write(6,*) 'get_namelists: returning'
   subroutine nprocs_xxf(nmesh)
     use nonlinear_terms, only : nonlin
     use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
-    use kt_grids, only: naky, ntheta0
+    use kt_grids, only: naky
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
     use gs2_layouts, only: layout, factors
     implicit none
-    real :: fac
     integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    integer :: nefacs, nlfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
     integer, dimension(:,:), allocatable :: facs
-    integer :: npe
-    real :: time
     integer :: maxfacs
     integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kyfacs
     integer, dimension(6) :: nfac, sdim
@@ -1234,19 +1228,15 @@ if (debug) write(6,*) 'get_namelists: returning'
   subroutine nprocs_yxf(nmesh)
     use nonlinear_terms, only : nonlin
     use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
-    use kt_grids, only: naky, ntheta0, nx
+    use kt_grids, only: naky, nx
     use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
 
     use gs2_layouts, only: layout, factors
     implicit none
-    real :: fac
     integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    integer :: nefacs, nlfacs, nkxfacs, nsgfacs, nspfacs, ntgfacs
     integer, dimension(:,:), allocatable :: facs
-    integer :: npe
-    real :: time
     integer :: maxfacs
     integer, allocatable, dimension(:):: spfacs, efacs, lfacs, sgfacs, tgfacs, kxfacs
     integer, dimension(6) :: nfac, sdim
@@ -1284,19 +1274,15 @@ if (debug) write(6,*) 'get_namelists: returning'
 
   subroutine nprocs_e(nmesh)
     use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: negrid, nlambda
+    use le_grids, only: nlambda
     use theta_grid, only: ntgrid
 
     use gs2_layouts, only: layout, factors
     implicit none
-    real :: fac
     integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    integer :: nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
     integer, dimension(:,:), allocatable :: facs
-    integer :: npe
-    real :: time
     integer :: maxfacs
     integer, allocatable, dimension(:):: spfacs, lfacs, sgfacs, tgfacs, kxfacs, kyfacs
     integer, dimension(6) :: nfac, sdim
@@ -1348,21 +1334,17 @@ if (debug) write(6,*) 'get_namelists: returning'
 
   subroutine nprocs_lz(nmesh)
     use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: negrid, nlambda
+    use le_grids, only: negrid
     use theta_grid, only: ntgrid
 
     use gs2_layouts, only: layout, factors
     implicit none
-    real :: fac
     integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    integer :: nefacs, nkxfacs, nkyfacs, nspfacs, ntgfacs
     integer, dimension(:,:), allocatable :: facs
-    integer :: npe
-    real :: time
     integer :: maxfacs
-    integer, allocatable, dimension(:):: spfacs, efacs, sgfacs, tgfacs, kxfacs, kyfacs
+    integer, allocatable, dimension(:):: spfacs, efacs, tgfacs, kxfacs, kyfacs
     integer, dimension(5) :: nfac, sdim
     character(3), dimension(5):: sym
 
@@ -1405,21 +1387,15 @@ if (debug) write(6,*) 'get_namelists: returning'
 
   subroutine nprocs_le(nmesh)
     use species, only : nspec
-    use kt_grids, only: gridopt_switch, gridopt_single, gridopt_range, gridopt_specified, gridopt_box
     use kt_grids, only: naky, ntheta0
-    use le_grids, only: negrid, nlambda
     use theta_grid, only: ntgrid
-
     use gs2_layouts, only: layout, factors
     implicit none
-    real :: fac
     integer, intent (in) :: nmesh
-    integer :: nefacs, nlfacs, nkxfacs, nkyfacs, nsgfacs, nspfacs, ntgfacs
+    integer :: nkxfacs, nkyfacs, nspfacs, ntgfacs
     integer, dimension(:,:), allocatable :: facs
-    integer :: npe
-    real :: time
     integer :: maxfacs
-    integer, allocatable, dimension(:):: spfacs, efacs, sgfacs, tgfacs, kxfacs, kyfacs
+    integer, allocatable, dimension(:):: spfacs, tgfacs, kxfacs, kyfacs
     integer, dimension(4) :: nfac, sdim
     character(3), dimension(4):: sym
 
@@ -1467,7 +1443,6 @@ if (debug) write(6,*) 'get_namelists: returning'
     integer, dimension(:,:), allocatable :: facs
     integer :: npe, checknpe, i, j
     logical :: onlyxoryfac
-    real :: time
 
     write (report_unit, fmt="('Layout = ',a5,/)") layout 
     write (report_unit, fmt="('Recommended #proc up to:',i8)") npmax 

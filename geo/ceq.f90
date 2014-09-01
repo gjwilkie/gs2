@@ -71,7 +71,9 @@ contains
        avgrmid, initeq, in_nt, nthg) 
 
     use constants, only: pi
-    use read_chease
+    use read_chease, only: read_infile, npsi_chease, nchi_chease, b0exp_chease
+    use read_chease, only: psi_chease, f_chease, q_chease, p_chease
+    use read_chease, only: r_chease, z_chease
     implicit none
     character (len=80) :: eqfile
     real, intent(out) :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid
@@ -1288,7 +1290,7 @@ contains
 
   function diameter (rp)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: rp, diameter
     type (spline), save :: spl
 
@@ -1314,7 +1316,7 @@ contains
 
   function rcenter (rp)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: rp, rcenter
     type (spline), save :: spl
 
@@ -1340,7 +1342,7 @@ contains
 
   function dbtori (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dbtori
     type (spline), save :: spl
 
@@ -1363,7 +1365,7 @@ contains
 
   function btori (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, btori
     type (spline), save :: spl
 
@@ -1386,7 +1388,7 @@ contains
 
   function qfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, qfun
     type (spline), save :: spl
 
@@ -1409,7 +1411,7 @@ contains
 
   function pfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, pfun
     type (spline), save :: spl
 
@@ -1434,7 +1436,7 @@ contains
 
   function dpfun (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dpfun
     type (spline), save :: spl
 !
@@ -1461,7 +1463,7 @@ contains
 
   function betafun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, betafun
     type (spline), save :: spl
 
@@ -1478,8 +1480,6 @@ contains
   end function betafun
 
   subroutine Hahm_Burrell(irho, a) 
-
-    use splines
 
     real, intent(in) :: a
     integer :: i, irho
