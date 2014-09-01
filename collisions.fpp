@@ -306,15 +306,15 @@ contains
        ierr = error_unit()
        call get_option_value &
             (collision_model, modelopts, collision_model_switch, &
-            ierr, "collision_model in collisions_knobs")
+            ierr, "collision_model in collisions_knobs",.true.)
 
        call get_option_value &
             (lorentz_scheme, schemeopts, lorentz_switch, &
-            ierr, "lorentz_scheme in collisions_knobs")
+            ierr, "lorentz_scheme in collisions_knobs",.true.)
 
        call get_option_value &
             (ediff_scheme, eschemeopts, ediff_switch, &
-            ierr, "ediff_scheme in collisions_knobs")
+            ierr, "ediff_scheme in collisions_knobs",.true.)
     end if
 
 

@@ -148,7 +148,7 @@ contains
 
     ierr = error_unit()
     call get_option_value(kyspacing_option, kyspacingopts, kyspacingopt_switch,&
-         ierr, "kyspacing_option in kt_grids_range_parameters")
+         ierr, "kyspacing_option in kt_grids_range_parameters",.true.)
 
     !Override kyspacing_option in certain cases
     select case (kyspacingopt_switch)
@@ -767,7 +767,7 @@ contains
 
     ierr = error_unit()
     call get_option_value (grid_option, gridopts, gridopt_switch, &
-         ierr, "grid_option in kt_grids_knobs")
+         ierr, "grid_option in kt_grids_knobs",.true.)
 
   end subroutine read_parameters
 

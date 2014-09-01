@@ -221,10 +221,10 @@ contains
        ierr = error_unit()
        call get_option_value &
             (nonlinear_mode, nonlinearopts, nonlinear_mode_switch, &
-            ierr, "nonlinear_mode in nonlinear_terms_knobs")
+            ierr, "nonlinear_mode in nonlinear_terms_knobs",.true.)
        call get_option_value &
             (flow_mode, flowopts, flow_mode_switch, &
-            ierr, "flow_mode in nonlinear_terms_knobs")
+            ierr, "flow_mode in nonlinear_terms_knobs",.true.)
     end if
 
     call broadcast (nonlinear_mode_switch)

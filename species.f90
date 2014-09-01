@@ -308,7 +308,7 @@ contains
           spec(is)%bess_fac=bess_fac
 
           ierr = error_unit()
-          call get_option_value (type, typeopts, spec(is)%type, ierr, "type in species_parameters_x")
+          call get_option_value (type, typeopts, spec(is)%type, ierr, "type in species_parameters_x",.true.)
        end do
     end if
 

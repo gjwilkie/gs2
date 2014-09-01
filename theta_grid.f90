@@ -458,7 +458,7 @@ contains
     ierr = error_unit()
     call get_option_value &
          (model_option, modelopts, model_switch, &
-         ierr, "model_option in theta_grid_salpha_knobs")
+         ierr, "model_option in theta_grid_salpha_knobs",.true.)
 
     if (alpmhdfac > epsilon(0.0)) then
        shift = - alpmhd*alpmhdfac
@@ -1784,7 +1784,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     ierr = error_unit()
     call get_option_value &
          (equilibrium_option, eqopts, eqopt_switch, &
-         ierr, "equilibrium_option in theta_grid_knobs")
+         ierr, "equilibrium_option in theta_grid_knobs",.true.)
   end subroutine read_parameters
 
   subroutine allocate_arrays
