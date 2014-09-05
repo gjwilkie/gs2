@@ -3447,7 +3447,11 @@ contains
           delta(il+1) = glz(il+1,ilz) - ql(il+1,ilz)*delta(il)
        end do
        
-       glz(je,ilz) = delta(je)*betaa(je,ilz)
+!CMR, 5/9/14:
+! Correction to next line fixes a bug introduced at r2699 which
+! affected Lorentz scattering operator at wfb bounce point (theta=pi)
+! with default setting of special_wfb_lorentz=t        
+       glz(nxi_scatt+1,ilz) = delta(nxi_scatt+1)*betaa(nxi_scatt+1,ilz)
        do il = nxi_scatt, 1, -1
           glz(il,ilz) = (delta(il) - c1(il,ilz)*glz(il+1,ilz))*betaa(il,ilz)
        end do
@@ -3609,8 +3613,11 @@ contains
           do il = 1, nxi_scatt
              delta(il+1) = gle(il+1,ie,ile) - qle(il+1,ie,ile)*delta(il)
           end do
-       
-          gle(je,ie,ile) = delta(je)*betaale(je,ie,ile)
+!CMR, 5/9/14:
+! Correction to next line fixes a bug introduced at r2699 which
+! affected Lorentz scattering operator at wfb bounce point (theta=pi)
+! with default setting of special_wfb_lorentz=t        
+          gle(nxi_scatt+1,ie,ile) = delta(nxi_scatt+1)*betaale(nxi_scatt+1,ie,ile)
           do il = nxi_scatt, 1, -1
              gle(il,ie,ile) = (delta(il) - c1le(il,ie,ile)*gle(il+1,ie,ile))*betaale(il,ie,ile)
           end do
