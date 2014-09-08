@@ -485,10 +485,15 @@ all: $(.DEFAULT_GOAL)
 
 include $(DEPEND)
 
-utils_mod += fft_save_wisdom.o
-gs2_mod += fft_save_wisdom.o
-ingen_mod += fft_save_wisdom.o
-generate_fftw_wisdom_mod += fft_save_wisdom.o
+#If we're using fft(w) then we want to link the fft_save_wisdom object file
+#this currently has to be handled specially as it comes from a c source file
+#rather than fortran (so isn't picked up by fortdep).
+ifdef USE_FFT
+    utils_mod += fft_save_wisdom.o
+    gs2_mod += fft_save_wisdom.o
+    ingen_mod += fft_save_wisdom.o
+    generate_fftw_wisdom_mod += fft_save_wisdom.o
+endif
 
 #include Makefile.doc_depend
 

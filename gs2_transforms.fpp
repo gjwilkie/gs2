@@ -82,8 +82,8 @@ module gs2_transforms
 
   ! fft
 
-  type (fft_type) :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
-  type (fft_type) :: xf3d_cr, xf3d_rc
+  type (fft_type), save :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
+  type (fft_type), save :: xf3d_cr, xf3d_rc
 
   logical :: xfft_initted = .false.
 
@@ -1043,7 +1043,9 @@ contains
     complex, dimension (:,xxf_lo%llim_proc:), intent (in) :: xxf
 # ifdef FFT
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
+# if FFT == _FFTW_
     integer :: i
+# endif
 # else
     real, dimension (:,yxf_lo%llim_proc:) :: yxf
 # endif
@@ -1665,11 +1667,12 @@ contains
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
-  subroutine kz_spectrum (an, an2, ntheta0, naky)
-
+  subroutine kz_spectrum (an, an2)
+# if FFT == _FFTW_
+    use kt_grids, only: naky, ntheta0
+# endif
     complex, dimension (:,:,:), intent(in)  :: an
     complex, dimension (:,:,:), intent(out) :: an2
-    integer, intent (in) :: ntheta0, naky
 
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)

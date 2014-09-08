@@ -61,7 +61,7 @@ contains
 
   subroutine eqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
        avgrmid, initeq, in_nt, nthg) 
-
+    use mp, only: mp_abort
     use constants, only: pi
 ! SHOULD MOVE AWAY FROM NETCDF MODULE AND USE INCLUDE LINE BELOW.
 !    use netcdf 
@@ -334,14 +334,14 @@ contains
 
     nthg=nt
 # else
-    write(*,*) 'error: peq eqin is called without netcdf'; stop
+    call mp_abort('error: peq eqin is called without netcdf',.true.)
 # endif
 
   end subroutine eqin
 
   subroutine teqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
        avgrmid, initeq, in_nt, nthg) 
-
+    use mp, only: mp_abort
     use constants, only: pi
 !    use netcdf 
     implicit none
@@ -623,7 +623,7 @@ contains
 !       write (*,*) rho_b(i), pressure(i), qsf(i)
 !    end do
 # else
-    write(*,*) 'error: peq teqin is called without netcdf'; stop
+    call mp_abort('error: peq teqin is called without netcdf',.true.)
 # endif
 
   end subroutine teqin
@@ -823,7 +823,7 @@ contains
   end subroutine derm
 
   subroutine gradient(rgrid, theta, grad, char, rp, nth_used, ntm)
-
+    use mp, only: mp_abort
     use splines, only: inter_d_cspl
     implicit none
     
@@ -838,7 +838,7 @@ contains
     select case(char)
     case('B') 
 !       dcart = dbcart
-       write(*,*) 'error: bishop = 1 not allowed with peq.'; stop
+       call mp_abort('error: bishop = 1 not allowed with peq.',.true.)
     case('D')  ! diagnostic 
        dcart = dbtcart
     case('P') 
@@ -886,7 +886,7 @@ contains
   end subroutine gradient
 
   subroutine bgradient(rgrid, theta, grad, char, rp, nth_used, ntm)
-
+    use mp, only: mp_abort
     use splines, only: inter_d_cspl
     implicit none
     
@@ -900,7 +900,7 @@ contains
     select case(char)
     case('B') 
 !       dbish = dbbish
-       write(*,*) 'error: bishop = 1 not allowed with peq. (2)'; stop
+       call mp_abort('error: bishop = 1 not allowed with peq. (2)',.true.)
     case('D')  ! diagnostic
        dbish = dbtbish
     case('P') 
@@ -937,6 +937,7 @@ contains
   end subroutine bgradient
 
   subroutine eqitem(r, theta_in, f, fstar, char)
+    use mp, only: mp_abort
     use constants, only: pi
     implicit none
     integer :: i, j, istar, jstar
@@ -951,7 +952,7 @@ contains
     if(r == eqpsi(1)) then
        write(*,*) 'no evaluation at axis allowed in eqitem'
        write(*,*) r, theta_in, eqpsi(1)
-       stop
+       call mp_abort('no evaluation at axis allowed in eqitem')
     endif
     
 ! allow psi(r) to be a decreasing function
@@ -962,7 +963,7 @@ contains
     if(r < sign*eqpsi(1)) then
        write(*,*) 'r < Psi_0 in eqitem'
        write(*,*) r,sign,eqpsi(1)
-       stop
+       call mp_abort('r < Psi_0 in eqitem')
     endif
       
 ! find r on psi mesh
@@ -973,7 +974,7 @@ contains
        write(*,*) 'No evaluation of eqitem allowed on or outside surface'
        write(*,*) '(Could this be relaxed a bit?)'
        write(*,*) r, theta_in, eqpsi(nr), sign
-       stop      
+       call mp_abort('No evaluation of eqitem allowed on or outside surface')
     endif
     
     istar=0
@@ -991,7 +992,7 @@ contains
     if(istar == 1) then
        write(*,*) 'Too close to axis in eqitem'
        write(*,*) r, theta_in, eqpsi(1), eqpsi(2)
-       stop
+       call mp_abort('Too close to axis in eqitem')
     endif
   
 ! Now do theta direction
@@ -1199,9 +1200,9 @@ contains
 
   end function initialize_psi
 
-  function psi (r, theta)
+  function psi (r)
    
-    real, intent (in) :: r, theta
+    real, intent (in) :: r
     real :: psi
 
     psi = r

@@ -213,10 +213,11 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, get_indexed_namelist_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
-    use mp, only: proc0, broadcast
+    use mp, only: proc0, broadcast, mp_abort
     implicit none
     real :: z, mass, dens, dens0, u0, temp, tprim, fprim, uprim, uprim2, vnewk, nustar, nu, nu_h
     real :: tperp0, tpar0, bess_fac
+    real, dimension(:), allocatable :: tmp_bcast
     character(20) :: type
     integer :: unit
     integer :: is, iostat
@@ -250,7 +251,7 @@ contains
           ierr = error_unit()
           write (unit=ierr, &
                fmt="('Invalid nspec in species_knobs: ', i5)") nspec
-          stop
+          call mp_abort('Invalid nspec in species_knobs')
        end if
     end if
 
@@ -312,31 +313,34 @@ contains
        end do
     end if
 
-    do is = 1, nspec
-       call broadcast (spec(is)%z)
-       call broadcast (spec(is)%mass)
-       call broadcast (spec(is)%dens)
-       call broadcast (spec(is)%dens0)
-       call broadcast (spec(is)%u0)
-       call broadcast (spec(is)%tperp0)
-       call broadcast (spec(is)%tpar0)
-       call broadcast (spec(is)%temp)
-       call broadcast (spec(is)%tprim)
-       call broadcast (spec(is)%fprim)
-       call broadcast (spec(is)%uprim)
-       call broadcast (spec(is)%uprim2)
-       call broadcast (spec(is)%vnewk)
-       call broadcast (spec(is)%nu)
-       call broadcast (spec(is)%nu_h)
-       call broadcast (spec(is)%nustar)
-       call broadcast (spec(is)%stm)
-       call broadcast (spec(is)%zstm)
-       call broadcast (spec(is)%tz)
-       call broadcast (spec(is)%zt)
-       call broadcast (spec(is)%smz)
-       call broadcast (spec(is)%type)
-       call broadcast (spec(is)%bess_fac)
-    end do
+    !We use a temporary array here to allow us to broadcast all species data at once
+    !May be possible to avoid this by simply calling broadcast(spec%z) etc.
+    allocate(tmp_bcast(nspec))
+    tmp_bcast=spec%z ; call broadcast(tmp_bcast) ; spec%z=tmp_bcast
+    tmp_bcast=spec%mass ; call broadcast(tmp_bcast) ; spec%mass=tmp_bcast
+    tmp_bcast=spec%dens ; call broadcast(tmp_bcast) ; spec%dens=tmp_bcast
+    tmp_bcast=spec%dens0 ; call broadcast(tmp_bcast) ; spec%dens0=tmp_bcast
+    tmp_bcast=spec%u0 ; call broadcast(tmp_bcast) ; spec%u0=tmp_bcast
+    tmp_bcast=spec%tperp0 ; call broadcast(tmp_bcast) ; spec%tperp0=tmp_bcast
+    tmp_bcast=spec%tpar0 ; call broadcast(tmp_bcast) ; spec%tpar0=tmp_bcast
+    tmp_bcast=spec%temp ; call broadcast(tmp_bcast) ; spec%temp=tmp_bcast
+    tmp_bcast=spec%tprim ; call broadcast(tmp_bcast) ; spec%tprim=tmp_bcast
+    tmp_bcast=spec%fprim ; call broadcast(tmp_bcast) ; spec%fprim=tmp_bcast
+    tmp_bcast=spec%uprim ; call broadcast(tmp_bcast) ; spec%uprim=tmp_bcast
+    tmp_bcast=spec%uprim2 ; call broadcast(tmp_bcast) ; spec%uprim2=tmp_bcast
+    tmp_bcast=spec%vnewk ; call broadcast(tmp_bcast) ; spec%vnewk=tmp_bcast
+    tmp_bcast=spec%nu ; call broadcast(tmp_bcast) ; spec%nu=tmp_bcast
+    tmp_bcast=spec%nu_h ; call broadcast(tmp_bcast) ; spec%nu_h=tmp_bcast
+    tmp_bcast=spec%nustar ; call broadcast(tmp_bcast) ; spec%nustar=tmp_bcast
+    tmp_bcast=spec%stm ; call broadcast(tmp_bcast) ; spec%stm=tmp_bcast
+    tmp_bcast=spec%zstm ; call broadcast(tmp_bcast) ; spec%zstm=tmp_bcast
+    tmp_bcast=spec%tz ; call broadcast(tmp_bcast) ; spec%tz=tmp_bcast
+    tmp_bcast=spec%zt ; call broadcast(tmp_bcast) ; spec%zt=tmp_bcast
+    tmp_bcast=spec%smz ; call broadcast(tmp_bcast) ; spec%smz=tmp_bcast
+    tmp_bcast=spec%type ; call broadcast(tmp_bcast) ; spec%type=int(tmp_bcast)
+    tmp_bcast=spec%bess_fac ; call broadcast(tmp_bcast) ; spec%bess_fac=tmp_bcast
+    deallocate(tmp_bcast)
+
   end subroutine read_parameters
 
   pure function has_electron_species (spec)
@@ -381,7 +385,7 @@ contains
 
   subroutine reinit_species (ntspec, dens, temp, fprim, tprim, nu)
 
-    use mp, only: broadcast, proc0
+    use mp, only: broadcast, proc0, mp_abort
     use job_manage, only: trin_restart
 
     implicit none
@@ -415,7 +419,7 @@ contains
                 if (proc0) write (*,*) &
                      "Error: TRINITY requires the main ions to have mass 1", &
                      "and the secondary ions to be impurities (mass > 1)"
-                stop
+                call mp_abort("Error: TRINITY requires the main ions to have mass 1 and the secondary ions to be impurities (mass > 1)")
              end if
           end do
        end if

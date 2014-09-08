@@ -14,8 +14,8 @@ module gs2_io
   public :: init_gs2_io, nc_eigenfunc, nc_final_fields, nc_final_epar
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom, nc_loop, nc_loop_moments
-  public :: nc_loop_vres, nc_exchange
-  public :: nc_loop_movie, nc_write_moments
+!  public :: nc_loop_vres
+  public :: nc_loop_movie, nc_write_moments, nc_exchange
 !<DD>  public :: nc_write_fields
   public :: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
   public :: nc_loop_partsym_tormom 
@@ -1265,8 +1265,8 @@ contains
     status = nf90_put_att (ncid, phase_id, 'long_name', 'Normalizing phase')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, phase_id, att='long_name')
 
-!    status = nf90_def_var (ncid, 'phtot', netcdf_real, mode_dim, phtot_id)
-!    if (status /= NF90_NOERR) call netcdf_error (status, var='phtot')
+    status = nf90_def_var (ncid, 'phtot', netcdf_real, mode_dim, phtot_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='phtot')
 !    status = nf90_def_var (ncid, 'dmix', netcdf_real, mode_dim, dmix_id)
 !    if (status /= NF90_NOERR) call netcdf_error (status, var='dmix')
 !    status = nf90_def_var (ncid, 'kperpnorm', netcdf_real, mode_dim, kperpnorm_id)
@@ -1845,53 +1845,53 @@ contains
 # endif
   end subroutine nc_final_moments
 
-  subroutine nc_loop_vres (nout, errest_by_mode, lpcoef_by_mode)
+!   subroutine nc_loop_vres (nout, errest_by_mode, lpcoef_by_mode)
 
-!    use nf90_mod, only: nf90_put_vara
-    use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
-    use species, only: nspec
+! !    use nf90_mod, only: nf90_put_vara
+!     use theta_grid, only: ntgrid
+!     use kt_grids, only: naky, ntheta0
+!     use species, only: nspec
 
-    integer, intent (in) :: nout
-    real, dimension(:,:,:,:), intent (in) :: errest_by_mode
-    real, dimension(:,:,:,:,:), intent (in) :: lpcoef_by_mode
-# ifdef NETCDF
-    integer, dimension (6) :: start2, count2
-    integer, dimension (5) :: start1, count1
-!    integer :: status
+!     integer, intent (in) :: nout
+!     real, dimension(:,:,:,:), intent (in) :: errest_by_mode
+!     real, dimension(:,:,:,:,:), intent (in) :: lpcoef_by_mode
+! # ifdef NETCDF
+!     integer, dimension (6) :: start2, count2
+!     integer, dimension (5) :: start1, count1
+! !    integer :: status
 
-    start1(1) = 1
-    start1(2) = 1
-    start1(3) = 1
-    start1(4) = 1
-    start1(5) = nout
+!     start1(1) = 1
+!     start1(2) = 1
+!     start1(3) = 1
+!     start1(4) = 1
+!     start1(5) = nout
 
-    start2(1) = 1
-    start2(2) = 1
-    start2(3) = 1
-    start2(4) = 1
-    start2(5) = 1
-    start2(6) = nout
+!     start2(1) = 1
+!     start2(2) = 1
+!     start2(3) = 1
+!     start2(4) = 1
+!     start2(5) = 1
+!     start2(6) = nout
   
-    count1(1) = 2*ntgrid+1
-    count1(2) = ntheta0
-    count1(3) = naky
-    count1(4) = 4
-    count1(5) = 1
+!     count1(1) = 2*ntgrid+1
+!     count1(2) = ntheta0
+!     count1(3) = naky
+!     count1(4) = 4
+!     count1(5) = 1
 
-    count2(1) = 2*ntgrid+1
-    count2(2) = ntheta0
-    count2(3) = naky
-    count2(4) = nspec
-    count2(5) = 2
-    count2(6) = 1
+!     count2(1) = 2*ntgrid+1
+!     count2(2) = ntheta0
+!     count2(3) = naky
+!     count2(4) = nspec
+!     count2(5) = 2
+!     count2(6) = 1
 
-!    status = nf90_put_var (ncid, errest_by_mode_id, start=start1, count=count1, errest_by_mode)
-!    if (status /= NF90_NOERR) call netcdf_error (status, ncid, errest_by_mode_id)
-!    status = nf90_put_var (ncid, lpcoef_by_mode_id, start=start2, count=count2, lpcoef_by_mode)
-!    if (status /= NF90_NOERR) call netcdf_error (status, ncid, lpcoef_by_mode_id)
-# endif
-  end subroutine nc_loop_vres
+! !    status = nf90_put_var (ncid, errest_by_mode_id, start=start1, count=count1, errest_by_mode)
+! !    if (status /= NF90_NOERR) call netcdf_error (status, ncid, errest_by_mode_id)
+! !    status = nf90_put_var (ncid, lpcoef_by_mode_id, start=start2, count=count2, lpcoef_by_mode)
+! !    if (status /= NF90_NOERR) call netcdf_error (status, ncid, lpcoef_by_mode_id)
+! # endif
+!   end subroutine nc_loop_vres
 
   subroutine nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, ntot20_by_mode, &
        phi00, ntot00, density00, upar00, tpar00, tperp00, tpar2_by_mode, tperp2_by_mode)
@@ -2827,8 +2827,8 @@ contains
        call netcdf_error (status, ncid, current_scan_parameter_value_id)
      end if
 
-!    status = nf90_put_var (ncid, phtot_id, phitot, start=start, count=count)
-!    if (status /= NF90_NOERR) call netcdf_error (status, ncid, phtot_id)
+    status = nf90_put_var (ncid, phtot_id, phitot, start=start, count=count)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, phtot_id)
     
     if (mod(nout, 10) == 0) then
        status = nf90_sync (ncid)

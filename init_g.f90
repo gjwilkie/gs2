@@ -2750,7 +2750,7 @@ contains
   end subroutine ginit_convect
 
   subroutine ginit_recon3
-    use mp, only: proc0
+    use mp, only: proc0, mp_abort
     use species, only: nspec, spec, has_electron_species
     use theta_grid, only: ntgrid, theta
     use kt_grids, only: naky, nakx => ntheta0, akx, aky, reality
@@ -2997,7 +2997,7 @@ contains
           case default
              if(proc0) write(error_unit(),'(2a)') &
                   & 'ERROR: Invalid equilibrium type', eq_type
-             stop
+             call mp_abort('Invalid equilibrium type')
           end select
           ! subtract (0,0) mode
           ! since it (constant part of potential) does nothing
@@ -3132,7 +3132,7 @@ contains
           if(current==0.) then
              if(proc0) write(error_unit(),'(a)') &
                   & 'ERROR in init_g: invalid input a0, u0'
-             stop
+             call mp_abort('invalid input a0, u0')
           endif
           do it=1,nakx
              do ik=1,naky

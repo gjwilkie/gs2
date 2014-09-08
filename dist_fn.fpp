@@ -80,7 +80,8 @@ module dist_fn
   logical :: mult_imp, test
   logical :: accelerated_x = .false.
   logical :: accelerated_v = .false.
-  logical :: increase = .true., decrease = .false.
+!Not sure why these are module level as only used in one routine
+  logical :: increase = .true., decrease = .false. 
   
 !! k_parallel filter items
 !  real, dimension(:), allocatable :: work, tablekp
@@ -526,7 +527,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine wnml_dist_fn_species
 
   subroutine init_dist_fn
-    use mp, only: proc0, finish_mp
+    use mp, only: proc0, finish_mp, mp_abort
     use species, only: init_species, nspec
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids, naky, ntheta0
@@ -569,7 +570,7 @@ subroutine check_dist_fn(report_unit)
           write (*,*) 'naky = ',naky
        end if
        call finish_mp
-       stop
+       call mp_abort('only testing')
     end if
 
     if (debug) write(6,*) "init_dist_fn: run_parameters"
@@ -1195,7 +1196,7 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use le_grids, only: nlambda, ng2, forbid, negrid
-    use constants, only: pi, zi
+    use constants, only: zi
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     implicit none
     integer :: iglo
@@ -1398,8 +1399,7 @@ endif
     use le_grids, only: ng2, nlambda
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use gs2_layouts, only: idx, proc_id
-    use mp, only: iproc, nproc, max_allreduce
-!    use mp, only: proc0
+    use mp, only: iproc, nproc, max_allreduce, mp_abort
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: to, from
@@ -1574,10 +1574,7 @@ endif
                    l_links(ik, it) = l_links(ik, it) + 1
                    it_star = itleft(ik, it_star)
                    if (l_links(ik, it) > 5000) then
-! abort by deallocating twice
-                      write(*,*) 'l_links error'
-                      deallocate (l_links)
-                      deallocate (l_links)
+                      call mp_abort('l_links error')
                    endif
                 else
                    exit
@@ -1592,10 +1589,7 @@ endif
                    r_links(ik, it) = r_links(ik, it) + 1
                    it_star = itright(ik, it_star)
                    if (r_links(ik, it) > 5000) then
-! abort by deallocating twice
-                      write(*,*) 'r_links error'
-                      deallocate (r_links)
-                      deallocate (r_links)
+                      call mp_abort('r_links error',.true.)
                    endif
                 else
                    exit
@@ -2316,7 +2310,7 @@ endif
 
        if (j /= naky*ntheta0) then
           write(*,*) 'PE ',iproc,'has j= ',j,' k= ',naky*ntheta0,' : Stopping'
-          stop
+          call mp_abort('problem with connnected bc')
        end if
 
     end if
@@ -2329,8 +2323,7 @@ endif
     use le_grids, only: ng2, nlambda
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use gs2_layouts, only: idx, proc_id
-    use mp, only: iproc, nproc, max_allreduce
-!    use mp, only: proc0
+    use mp, only: iproc, nproc, max_allreduce, mp_abort
     use redistribute, only: index_list_type, init_fill, delete_list
     implicit none
     type (index_list_type), dimension(0:nproc-1) :: from, from_p, from_h, to_p, to_h
@@ -2496,10 +2489,7 @@ endif
                    l_links(ik, it) = l_links(ik, it) + 1
                    it_star = itleft(ik, it_star)
                    if (l_links(ik, it) > 5000) then
-! abort by deallocating twice
-                      write(*,*) 'l_links error'
-                      deallocate (l_links)
-                      deallocate (l_links)
+                      call mp_abort('l_links error',.true.)
                    endif
                 else
                    exit
@@ -2514,10 +2504,7 @@ endif
                    r_links(ik, it) = r_links(ik, it) + 1
                    it_star = itright(ik, it_star)
                    if (r_links(ik, it) > 5000) then
-! abort by deallocating twice
-                      write(*,*) 'r_links error'
-                      deallocate (r_links)
-                      deallocate (r_links)
+                      call mp_abort('r_links error',.true.)
                    endif
                 else
                    exit
@@ -2992,7 +2979,7 @@ endif
 
        if (j /= naky*ntheta0) then
           write(*,*) 'PE ',iproc,'has j= ',j,' k= ',naky*ntheta0,' : Stopping'
-          stop
+          call mp_abort('problem with connnected bc')
        end if
 
     end if
@@ -5260,6 +5247,11 @@ endif
     call prof_entering ("invert_rhs", "dist_fn")
 
     time = code_time
+    !Sourcefac ends up being passed all the way through to get_source_term
+    !where it is multiplied by phi_ext (default 0.0) and added to ky<epsilon(0.0)
+    !modes source term. Should probably just be calculated in get_source_term and
+    !only if min(ky)<epsilon(0.0) & phi_ext/=0 & source_option_switch==source_option_phiext_full
+    !
     if (time > t0) then
        sourcefac = source0*exp(-zi*omega0*time+gamma0*time)
     else
@@ -7643,9 +7635,7 @@ endif
     integer, dimension (:), allocatable :: idxtmp
 
     real :: vnmult_target
-
-!    logical :: increase = .true., decrease = .false., first = .true.
-    logical :: trap_flag
+    logical :: trap_flag=.true. !Value doesn't really matter as just used in present() checks
 
     allocate(wgt(nspec))
     allocate(errtmp(2))
@@ -8323,7 +8313,7 @@ endif
        deallocate (grs, gzf)
     end if
 
-    if (proc0) call flush_output_file (unit, ".yxdist")
+    if (proc0) call flush_output_file (unit)
 
     if (proc0) then
        write(unit,*)
@@ -8931,7 +8921,7 @@ endif
     use lowflow, only: get_lowflow_terms
     use file_utils, only: open_output_file, close_output_file
     use collisions, only: use_le_layout
-    use mp, only: proc0
+    use mp, only: proc0, mp_abort
 
     implicit none
 
@@ -9021,7 +9011,7 @@ endif
     
     ! if set neo_test flag to .true. in input file, GS2 exits after writing out
     ! neoclassical quantities of interest
-    if (neo_test) stop
+    if (neo_test) call mp_abort('stopping as neo_test=.true.')
     
     ! intialize mappings from g_lo to e_lo and lz_lo or to le_lo to facilitate
     ! energy and lambda derivatives in parallel nonlinearity, etc.

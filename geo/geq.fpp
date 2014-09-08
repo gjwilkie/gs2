@@ -13,7 +13,7 @@ module geq
   
   use netcdf_utils, only: netcdf_error
 # endif
-
+  use mp, only: mp_abort
   implicit none
   private
   integer :: nr, nt
@@ -382,7 +382,7 @@ contains
 
     nthg=nt
 # else
-    write(*,*) 'error: geq eqin is called without netcdf'; stop
+    call mp_abort('error: geq eqin is called without netcdf',.true.)
 #endif
 
   end subroutine eqin
@@ -452,7 +452,7 @@ contains
     ! 101  format('(gr Z)1 ',g10.4,' (gr Z)2 ',g10.4,' Z ',g10.4)
     ! 102  format('(gr t)1 ',g10.4,' (gr t)2 ',g10.4,' t ',g10.4)
     !      write(*,*) nr, nt
-    !      stop
+    !      call mp_abort('')
 
     ! grad(psi) in cartesian form 
     call eqdcart(dpm, dpcart)    
@@ -642,6 +642,7 @@ contains
 
   subroutine eqitem(r, theta_in, f, fstar, char)
     use constants, only: pi
+    use mp, only: mp_abort
     implicit none
     integer :: i, j, istar, jstar
     character(1) :: char
@@ -655,7 +656,7 @@ contains
     if(r == eqpsi(1)) then
        write(*,*) 'no evaluation at axis allowed in eqitem'
        write(*,*) r, theta_in, eqpsi(1)
-       stop
+       call mp_abort('no evaluation at axis allowed in eqitem')
     endif
 
     ! allow psi(r) to be a decreasing function
@@ -666,7 +667,7 @@ contains
     if(r < sign*eqpsi(1)) then
        write(*,*) 'r < Psi_0 in eqitem'
        write(*,*) r,sign,eqpsi(1)
-       stop
+       call mp_abort('r < Psi_0 in eqitem')
     endif
 
     ! find r on psi mesh
@@ -683,7 +684,7 @@ contains
     if(r >= eqpsi(nr)) then
        write(*,*) 'No evaluation of eqitem allowed outside surface'
        write(*,*) r, theta_in, eqpsi(nr), sign
-       stop      
+       call mp_abort('No evaluation of eqitem allowed outside surface')
     endif
 
     istar=0
@@ -701,7 +702,7 @@ contains
     if(istar == 1) then
        !       write(*,*) 'Too close to axis in eqitem'
        !       write(*,*) r, theta_in, eqpsi(1), eqpsi(2)
-       !       stop
+       !       call mp_abort('Too close to axis in eqitem')
     endif
 
     ! Now do theta direction
@@ -866,9 +867,9 @@ contains
 
   end function initialize_psi
 
-  function psi (r, theta)
+  function psi (r)
 
-    real, intent (in) :: r, theta
+    real, intent (in) :: r
     real :: psi
 
     psi = r

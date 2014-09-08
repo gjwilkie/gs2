@@ -264,7 +264,6 @@ contains
   end subroutine read_parameters
 !=============================================================================
   subroutine finish_antenna
-    use mp, only: proc0
     use file_utils, only: close_output_file
     use antenna_data, only: finish_antenna_data
 

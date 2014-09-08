@@ -405,7 +405,7 @@ if (debug) write(6,fmt='("eikcoefs: transp_eq, eqfile=",a)') eqfile
              ppl_eq = .true.
              call teqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
 if (debug) write(6,*) 'eikcoefs: transp_eq, called teqin'
-if (debug) write(6,fmt='("eikcoefs: teqin returns",1p5e10.2,i6,l2,i6)') psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg
+if (debug) write(6,fmt='("eikcoefs: teqin returns",1p,5e10.2,i6,l2,i6)') psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg
              if(present(ntheta_returned)) then
                 call tdef(nthg, ntheta_returned)
              else
@@ -441,8 +441,10 @@ if (debug) write(6,*) "eikcoefs: call efitin eqfile=",eqfile, "eqinit =", eqinit
              endif
           else if(dfit_eq) then
              if(big <= 0) big = 1
-             call dfitin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, big) 
+             call dfitin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit) 
           else if(idfit_eq) then
+             !<DD>WARNING : ON EXIT AVGRMID WILL BE UNDEFINED AS IDFITIN DOESN'T GIVE IT A VALUE
+             !THIS SHOULD BE FIXED BUT SHOULD BE OK AS AVGRMID NOT USED ANYWHERE (AT THE MOMENT)?
              call idfitin(eqfile, theta, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit) 
              if(present(ntheta_returned)) then
                 call tdef(nthg, ntheta_returned)
@@ -717,7 +719,7 @@ if (debug) write(6,*) "eikcoefs: end gradients"
 ! find shat, pressure' and report them
 
        if(iflux == 0 .or. iflux == 2) then
-          dp = dpdrhofun(rhoc)*drhodpsi
+          dp = dpdrhofun()*drhodpsi
        else          
           dp = dpfun(rgrid(0),theta(0))
        endif
@@ -848,8 +850,8 @@ if (debug) write(6,*) "eikcoefs: end gradients"
           qval2=qval+dqdrho*delrho
        endif
     
-       call seikon(rp1, qval1, seik1, dsdthet1, rgrid1, ltheta, bpolmag, dum)
-       call seikon(rp2, qval2, seik2, dsdthet2, rgrid2, ltheta, bpolmag, dum)
+       call seikon(rp1, qval1, seik1, dsdthet1, rgrid1, dum)
+       call seikon(rp2, qval2, seik2, dsdthet2, rgrid2, dum)
        
        do i=-nth,nth
           dsdrp(i)=(seik2(i)-seik1(i))/(2.*delrp)
@@ -876,7 +878,7 @@ if (debug) write(6,*) "eikcoefs: end gradients"
        rpval(3)=rp2
 
        if(iflux == 0 .or. iflux == 2) then
-          dbetadrho = 2.*dpdrhofun(rhoc)
+          dbetadrho = 2.*dpdrhofun()
        else          
           dbetadrho = 2.*dpfun(rgrid(0),theta(0))/drhodrp
        endif
@@ -1328,7 +1330,8 @@ end subroutine eikcoefs
   end subroutine bmagtgrid
       
   real function bmagfun(r, thet)
-
+    use mp, only: mp_abort
+    implicit none
     real, intent (in) :: r, thet
     real :: bt
     
@@ -1339,8 +1342,7 @@ end subroutine eikcoefs
 ! needs to be upgraded!!!
     else 
        bt = btori(r, thet)*invRfun(r, thet)
-       write(*,*) 'error: bmagfun not defined.'
-       stop
+       call mp_abort('bmagfun not defined.',.true.)
 !       bmagfun = sqrt(bt**2+bpmagfun(r, thet)**2)
     endif
     
@@ -1566,10 +1568,10 @@ end subroutine eikcoefs
   end subroutine sym
       
 
-  subroutine seikon(rp, qval, seik, dsdthet, rgrid, ltheta, bpolmag, dpsidrp)
+  subroutine seikon(rp, qval, seik, dsdthet, rgrid, dpsidrp)
     
     real :: rp, qval
-    real, dimension(-ntgrid:) :: seik, dsdthet, rgrid, ltheta, bpolmag
+    real, dimension(-ntgrid:) :: seik, dsdthet, rgrid
     real, dimension(-ntgrid:ntgrid, 2) :: thgrad, rpgrad
     real :: dpsidrp, dum
     
@@ -1618,7 +1620,8 @@ end subroutine eikcoefs
   end subroutine eikonal
 
   subroutine thetagrad(rgrid, thgrad)
-
+    use mp, only: mp_abort
+    implicit none
     real, dimension(-ntgrid:), intent (in) :: rgrid
     real, dimension(-ntgrid:, :), intent (out) :: thgrad
     real :: dum
@@ -1627,8 +1630,7 @@ end subroutine eikcoefs
     char='T'
     if(bishop == 0) then
        if(efit_eq .or. dfit_eq) then
-          write(*,*) 'error in thetagrad'
-          stop
+          call mp_abort('error in thetagrad',.true.)
        endif
        call grad(rgrid, theta, thgrad, char, dum, nth, ntgrid)
     else
@@ -1818,7 +1820,7 @@ end subroutine eikcoefs
 
        btori=f
     else         
-       btori=leq_btori(pbar)
+       btori=leq_btori()
     endif
 
     r_last = r
@@ -1871,7 +1873,7 @@ end subroutine eikcoefs
 
        dbtori=f
     else         
-       dbtori=leq_dbtori(pbar)
+       dbtori=leq_dbtori()
     endif
 
   end function dbtori
@@ -1891,7 +1893,7 @@ end subroutine eikcoefs
     if (chs_eq) iofrho = ceq_iofpbar(pbarofrho(rho))
     if(efit_eq) iofrho = eeq_iofpbar(pbarofrho(rho))
     if(dfit_eq) iofrho = 0.
-    if(local_eq) iofrho = leq_i(rho)
+    if(local_eq) iofrho = leq_i()
 
   end function iofrho
 
@@ -1954,7 +1956,7 @@ end subroutine eikcoefs
 !endif
     
     if(iflux == 0 .or. iflux == 2) then
-       qfun=leq_qfun(pbar)
+       qfun=leq_qfun()
        return
     endif
 
@@ -1996,7 +1998,7 @@ end subroutine eikcoefs
     integer :: i, initp = 1
 
     if(iflux /= 1) then
-       pfun=leq_pfun(0.) 
+       pfun=leq_pfun() 
        return
     endif
 
@@ -2046,7 +2048,7 @@ end subroutine eikcoefs
     integer :: i, initdp = 1
 
     if(iflux /= 1) then
-       dpfun=leq_dpfun(0.) 
+       dpfun=leq_dpfun() 
        return
     endif
 
@@ -2210,7 +2212,8 @@ end subroutine eikcoefs
   end subroutine root
 
   function phi(rp)
-      
+    use mp, only: mp_abort
+    implicit none
     integer, parameter :: nimax = 200
 
     real :: phi
@@ -2218,10 +2221,10 @@ end subroutine eikcoefs
     real :: pbar, pb(nimax), dpb
     integer :: i, ni
       
+    !This variable+logic doesn't seem to have any point?
     ni=200
     if(ni > nimax) then
-       write(*,*) 'Increase nimax in phi function'
-       stop
+       call mp_abort('Increase nimax in phi function',.true.)
     endif
     
     pbar=(rp-psi_0)/(psi_a-psi_0)
@@ -2272,13 +2275,13 @@ end subroutine eikcoefs
 
     if (gen_eq) then
        i = geq_init_psi(init)
-       psi = geq_psi(r, thet)       
+       psi = geq_psi(r)       
     elseif (ppl_eq) then
        i = ppl_init_psi(init)
-       psi = peq_psi(r, thet)       
+       psi = peq_psi(r)       
     elseif (chs_eq) then
        i = chs_init_psi(init)
-       psi = ceq_psi(r, thet)       
+       psi = ceq_psi(r)       
     else if(efit_eq) then
        i = efit_init_psi(init)
        psi = eeq_psi(r, thet)
@@ -2287,9 +2290,9 @@ end subroutine eikcoefs
        psi = deq_psi(r, thet)
     else if(idfit_eq) then
        i = idfit_init_psi(init)
-       psi = ideq_psi(r, thet)
+       psi = ideq_psi(r)
     else if(local_eq) then
-       psi = leq_psi(r, thet)
+       psi = leq_psi(r)
     endif
 
     init = 0
@@ -2308,17 +2311,21 @@ end subroutine eikcoefs
 
   end function between
 
+  !This routine is just used by eik, not GS2
   subroutine geofax(rho, t, e, d)
-
+    implicit none
     real, intent (in) :: rho
     real, intent (out) :: t, e, d
     real :: a, b, aa, bb
     real, dimension(-ntgrid:ntgrid) :: rgrid
     real :: rp, hmaxu, hmaxl, rmaxu, rmaxl
     real :: rmid, Rlo, Rhi, Rinnr, Routr
-
     integer :: i
-
+    logical, save :: first=.true.
+    if(first)then
+       write(6,'("WARNING: GEOFAX USES UNINITIALISED VALUES -- RESULT MAY NOT BE SENSIBLE")')
+       first=.false.
+    endif
     rp=rpofrho(rho)
 
     if(efit_eq .or. dfit_eq) then
@@ -2352,9 +2359,11 @@ end subroutine eikcoefs
 
        Rlo = min(a,aa)
        Rhi = max(a,aa)
+!<DD>WARNING : Rinnr has not been defined on first loop through
        if (Rinnr > Rlo) then
           Rinnr = Rlo
        end if
+!<DD>WARNING : Routr has not been defined on first loop through
        if (Routr < Rhi) then
           Routr = Rhi
        endif
@@ -2371,10 +2380,9 @@ end subroutine eikcoefs
     d = rcenter(rp) - rcenter(psi_a)
 end subroutine geofax
       
-  function rmagaxis(rp)
+  function rmagaxis()
 
     real :: rmagaxis
-    real, intent (in) :: rp
     
     if(iflux == 1) then
        rmagaxis=rmaj
@@ -2414,15 +2422,15 @@ end subroutine geofax
     if(chs_eq)   rcenter = ceq_rcenter(rp) 
 
     if(efit_eq)  rcenter = rmaj + 0.5*(rfun(rp, 0., bound(0.))-rfun(rp,pi,bound(pi)))
-    if(local_eq) rcenter = leq_rcenter(rp)
+    if(local_eq) rcenter = leq_rcenter()
 
   end function rcenter
 
   function bmodfun(r,thet)
-
     use geq, only: geqitem => eqitem, eqB_psi => B_psi
     use ideq, only: ideqitem => eqitem, ideqB_psi => B_psi
-
+    use mp, only: mp_abort
+    implicit none
     real :: bmodfun
     real, intent (in) :: r, thet
 
@@ -2442,11 +2450,8 @@ end subroutine geofax
        bmodfun=f
        return
     else
-       
        write(*,*) 'Stopping in bmodfun.'  
-       write(*,*) 'You must use gen_eq to call bmodfun.'
-       stop
-       
+       call mp_abort('You must use gen_eq or idfit_eq to call bmodfun.',.true.)
     endif
     
   end function bmodfun
@@ -2689,7 +2694,6 @@ end subroutine geofax
   end subroutine R_pol
 
   subroutine test(rgrid, theta, Bpolmag, Bmod, Rpol, th_bish, bgrad, nth)
-    use constants, only: pi
     implicit none
     integer, intent (in) :: nth
 
@@ -2961,73 +2965,75 @@ end subroutine geofax
   end subroutine bishop_gradB
 
   subroutine check(geq, eeq, peq, leq, deq, ideq, ceq)
+    use mp, only: mp_abort
+    implicit none
     logical, intent(in) :: geq, eeq, peq, leq, deq, ideq, ceq
     
     if (ceq .and. (geq .or. eeq .or. peq .or.  leq .or. deq .or. ideq)) then
       write (*,*) 'Choosing chs_eq = .true. and any of gen_eq, dfit_eq, &
       & efit_eq, ppl_eq, iflux = 0 is not permitted'
        write(*,*) 'Stopping.'
-       stop
+       call mp_abort('Clash of equilibrium flags.')
     endif
 
     if(geq .and. deq) then
        write(*,*) 'Choosing gen_eq = .true. AND dfit_eq = .true. is not permitted.'
        write(*,*) 'Stopping.'
-       stop
+       call mp_abort('Clash of equilibrium flags.')
     endif
 
     if(geq .and. eeq) then
        write(*,*) 'Choosing gen_eq = .true. AND efit_eq = .true. is not permitted.'
        write(*,*) 'Stopping.'
-       stop
+       call mp_abort('Clash of equilibrium flags.')
     endif
 
     if(geq .and. peq) then
        write(*,*) 'Choosing gen_eq = .true. AND ppl_eq = .true. is not permitted.'
        write(*,*) 'Stopping.'
-       stop
+       call mp_abort('Clash of equilibrium flags.')
     endif
 
     if(geq .and. leq) then
        write(*,*) 'Choosing gen_eq = .true. AND iflux = 0 is not permitted.'
        write(*,*) 'Stopping.'
-       stop
+       call mp_abort('Clash of equilibrium flags.')
     endif
 
     if(eeq .and. deq) then
        write(*,*) 'Choosing efit_eq = .true. AND dfit_eq = .true. is not permitted.'
        write(*,*) 'Stopping.'
-       stop
+       call mp_abort('Clash of equilibrium flags.')
     endif
 
     if(eeq .and. leq) then
        write(*,*) 'Choosing efit_eq = .true. AND iflux = 0 is not permitted.'
        write(*,*) 'Stopping.'
-       stop
+       call mp_abort('Clash of equilibrium flags.')
     endif
 
     if(eeq .and. peq) then
        write(*,*) 'Choosing efit_eq = .true. AND ppl_eq = .true. is not permitted.'
        write(*,*) 'Stopping.'
-       stop
+       call mp_abort('Clash of equilibrium flags.')
     endif
 
     if(deq .and. leq) then
        write(*,*) 'Choosing dfit_eq = .true. AND iflux = 0 is not permitted.'
        write(*,*) 'Stopping.'
-       stop
+       call mp_abort('Clash of equilibrium flags.')
     endif
 
     if(deq .and. peq) then
        write(*,*) 'Choosing dfit_eq = .true. AND ppl_eq = .true. is not permitted.'
        write(*,*) 'Stopping.'
-       stop
+       call mp_abort('Clash of equilibrium flags.')
     endif
 
     if(peq .and. leq) then
        write(*,*) 'Choosing ppl_eq = .true. AND iflux = 0 is not permitted.'
        write(*,*) 'Stopping.'
-       stop
+       call mp_abort('Clash of equilibrium flags.')
     endif
 
   end subroutine check
@@ -3054,7 +3060,7 @@ end subroutine geofax
      if(efit_eq)  call  eeq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(dfit_eq)  call  deq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(idfit_eq) call ideq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(local_eq) call  leq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(local_eq) call  leq_gradient(theta, gradf, char, rp, nth, ntgrid)
 
    end subroutine grad
 
@@ -3080,21 +3086,21 @@ end subroutine geofax
      if(efit_eq)  call  eeq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(dfit_eq)  call  deq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(idfit_eq) call ideq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     if(local_eq) call  leq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
+     if(local_eq) call  leq_bgradient(theta, gradf, char, rp, nth, ntgrid)
 
    end subroutine bgrad
 
   subroutine rtg(rgrid, rp)
-
+    use mp, only: mp_abort
     use eeq, only: ebound => bound
     use deq, only: dbound => bound
+    implicit none
     real, dimension(-ntgrid:), intent (out) :: rgrid
     real, intent (in) :: rp
     integer :: i
     
     if(.not. (efit_eq .or. dfit_eq)) then
-       write(*,*) 'error in rtg.  efit_eq = .false.'
-       stop          
+       call mp_abort('error in rtg.  efit_eq = .false.',.true.)
     endif
 
     if (efit_eq) then
@@ -3172,7 +3178,8 @@ end subroutine geofax
   end function rfun
 
   function zbrent(func, x1, x2, rootval, thetroot, tol)
-
+    use mp, only: mp_abort
+    implicit none
     real :: zbrent, func
 !    real, parameter :: eps = 3.e-8, eps1 = 2.e-5
     real, parameter :: eps = 3.e-8, eps1 = 2.e-8
@@ -3197,8 +3204,7 @@ end subroutine geofax
           return
        endif
        write(*,*) a,b,fa,fb
-       write(*,*) 'root must be bracketed for zbrent.'
-       stop
+       call mp_abort('root must be bracketed for zbrent.',.true.)
     endif
     fc=fb
     do 11 iter=1,itmax
@@ -3255,12 +3261,12 @@ end subroutine geofax
        endif
        fb=func(b,thetroot)-rootval
 11     continue
-       write(*,*) 'zbrent exceeding maximum iterations.'
-       stop
+       call mp_abort('zbrent exceeding maximum iterations.',.true.)
        zbrent=b
        
   end function zbrent
 
+  !Not used by GS2 (just eik/et)
   subroutine Hahm_Burrell(i, a)   
 
     use geq, only: geq_Hahm_Burrell => Hahm_Burrell
@@ -3269,7 +3275,8 @@ end subroutine geofax
 
     integer i
     real a
-
+    
+    !Should be a select case?
     if(gen_eq) call geq_Hahm_Burrell(i, a)
     if(ppl_eq) call peq_Hahm_Burrell(i, a)
     if(chs_eq) call ceq_Hahm_Burrell(i, a)
@@ -3434,6 +3441,7 @@ subroutine geometry_set_inputs(equilibrium_type,&
   use geometry, only: rhoc, nperiod, eqfile, irho, iflux, local_eq, gen_eq, init_theta
   use geometry, only: ppl_eq, transp_eq, chs_eq, efit_eq, equal_arc, bishop
   use geometry, only: dp_mult, delrho, rmin, rmax, isym, in_nt, writelots, itor
+  use mp, only: mp_abort
   implicit none
   integer, intent(in) :: equilibrium_type, nperiod_in, irho_in, bishop_in
   real, intent(in) :: rhoc_in
@@ -3484,10 +3492,8 @@ subroutine geometry_set_inputs(equilibrium_type,&
   case default
     write(*,*) "Whatever geometry you are using hasn't "
     write(*,*) "been tested in a long time!"
-    stop 
+    call mp_abort("Whatever geometry you are using hasn't been tested in a long time!",.true.)
   end select
-
-
 
 end subroutine geometry_set_inputs  
 

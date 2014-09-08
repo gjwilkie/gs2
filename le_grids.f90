@@ -288,7 +288,7 @@ contains
     use egrid, only: zeroes, x0, init_egrid
     use theta_grid, only: ntgrid
     implicit none
-    integer :: ig, il, ipt, isgn, tsize
+    integer :: tsize
 
     tsize = 2*nterp-1
 
@@ -339,25 +339,16 @@ contains
     call broadcast (w)
     call broadcast (anon)
 
-    do il = 1, nlambda
-       call broadcast (wl(:,il))
-       call broadcast (forbid(:,il))
-    end do
+    call broadcast(wl)
+    call broadcast(forbid)
 
-    do ipt = 1, tsize
-       call broadcast (xloc(:,ipt))
-       do isgn=1,2
-          do il=1, nlambda
-             call broadcast (lgrnge(:,il,ipt,isgn))
-          end do
-       end do
-    end do
+    call broadcast(xloc)
+    call broadcast(lgrnge)
 
-    do ig = -ntgrid, ntgrid
-       call broadcast (xi(ig,:))
-       call broadcast (ixi_to_il(ig,:))
-       call broadcast (ixi_to_isgn(ig,:))
-    end do
+    call broadcast(xi)
+    call broadcast(ixi_to_il)
+    call broadcast(ixi_to_isgn)
+
     call broadcast (sgn)
 
   end subroutine broadcast_results
@@ -1052,7 +1043,7 @@ contains
   subroutine legendre_transform (g, tote, totl, tott)
     
     use egrid, only: zeroes
-    use mp, only: nproc, broadcast
+    use mp, only: nproc
     use theta_grid, only: ntgrid, bmag, bmax
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -2199,6 +2190,7 @@ contains
   end subroutine lagrange_coefs
 
   subroutine stop_message (message)
+!<DD>WARNING THIS COULD CAUSE A HANG IF NOT CALLED BY ALL PROCS
 !JAB: print an error message and end program
     use file_utils, only: error_unit
     use mp, only: proc0, finish_mp

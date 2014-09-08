@@ -1428,7 +1428,17 @@ contains
     integer :: unit
     character(200) :: line
     integer :: i
+    logical :: first=.true.
     !<DD> Should jacob also be provided by this routine?
+
+    !<DD> NOTE: Not currently settin Bpol here. This is used in flux calculations.
+    !If not set then results will be funny. Add a warning message and set to zero
+    !for now.
+    if(first)then
+       write(*,'("WARNING: When using file_get_grids, Bpol does not have a correct definition --> Currently just setting to zero, may impact some diagnostics")')
+       Bpol=0.
+       first=.false.
+    endif
 
     shat = shat_input
     drhodpsi = drhodpsi_input

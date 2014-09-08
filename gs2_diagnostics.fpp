@@ -85,27 +85,8 @@ module gs2_diagnostics
   complex, allocatable, save, dimension (:,:,:) :: domega
 ! > HJL
   !<EGH moved here to make available for diffusivity function
-    complex, dimension (:, :), allocatable :: omega, omegaavg
-   !EGH>
-
-  namelist /gs2_diagnostics_knobs/ print_line, print_flux_line, &
-         write_line, write_flux_line, &
-         write_omega, write_omavg, write_ascii, write_kpar, &
-         write_gs, write_gyx, write_g, write_gg, write_hrate, write_lpoly, &
-         write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
-         write_final_epar, write_moments, ob_midplane, write_final_moments, write_cerr, &
-         write_verr, write_max_verr, write_nl_flux, write_final_db, &
-         nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
-         exit_when_converged, use_nonlin_convergence, write_avg_moments, &
-         write_full_moments_notgc, write_cross_phase, &
-         dump_check1, dump_check2, &
-         dump_fields_periodically, make_movie, &
-         save_for_restart, save_many, &
-         write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
-         write_correlation_extend, nwrite_mult, write_correlation, &
-         write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
-         write_pflux_sym,  write_pflux_tormom, file_safety_check, &
-         conv_nstep_av, conv_test_multiplier, conv_min_step, conv_max_step, conv_nsteps_converged
+  complex, dimension (:, :), allocatable :: omega, omegaavg
+  !EGH>
 
   integer :: out_unit, kp_unit, heat_unit, polar_raw_unit, polar_avg_unit, heat_unit2, lpc_unit
   integer :: jext_unit   !GGH Additions
@@ -148,6 +129,26 @@ module gs2_diagnostics
   integer :: nout_big = 1
   complex :: wtmp_old = 0.
   logical :: exist
+
+  namelist /gs2_diagnostics_knobs/ print_line, print_flux_line, &
+         write_line, write_flux_line, &
+         write_omega, write_omavg, write_ascii, write_kpar, &
+         write_gs, write_gyx, write_g, write_gg, write_hrate, write_lpoly, &
+         write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
+         write_final_epar, write_moments, ob_midplane, write_final_moments, write_cerr, &
+         write_verr, write_max_verr, write_nl_flux, write_final_db, &
+         nwrite, nmovie, nsave, navg, omegatol, omegatinst, igomega, write_lorentzian, &
+         exit_when_converged, use_nonlin_convergence, write_avg_moments, &
+         write_full_moments_notgc, write_cross_phase, &
+         dump_check1, dump_check2, &
+         dump_fields_periodically, make_movie, &
+         save_for_restart, save_many, &
+         write_parity, write_symmetry, save_distfn, & !<DD> Added for saving distribution function
+         write_correlation_extend, nwrite_mult, write_correlation, &
+         write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
+         write_pflux_sym,  write_pflux_tormom, file_safety_check, &
+         conv_nstep_av, conv_test_multiplier, conv_min_step, conv_max_step, conv_nsteps_converged
+
 
 contains
   !> Define NetCDF vars, call real_init, which calls read_parameters; broadcast all the different write flags. 
@@ -497,7 +498,7 @@ contains
     call broadcast (omegatol)
     call broadcast (omegatinst)
 
-    !<HJL> Invokes the nonilinear_convergence check
+    !<HJL> Invokes the nonlinear_convergence check
     call broadcast (use_nonlin_convergence)
 
     nmovie_tot = nstep/nmovie
@@ -565,7 +566,6 @@ contains
           save_distfn=.false.
        endif
     endif
-
 
     !Setup the parallel fft if we're writing/using the parallel spectrum
     if(write_kpar.or.write_gs) call init_par_filter
@@ -755,7 +755,6 @@ contains
        in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
 
        !<doc> Read in parameters from the namelist gs2_diagnostics_knobs, if the namelist exists </doc>
-!       if (exist) read (unit=input_unit("gs2_diagnostics_knobs"), nml=gs2_diagnostics_knobs)
        if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
 !
 !CMR, 12/8/2014: 
@@ -926,7 +925,6 @@ contains
     use run_parameters, only: fapar, fphi, fbpar, nstep
     use fields_arrays, only: phinew, aparnew, bparnew, phi
     use dist_fn, only: flux, write_f, write_fyx,lf_flux, eexchange
-    use dist_fn, only: omega0, gamma0
     use dist_fn, only: write_poly, collision_error
     use dist_fn_arrays, only: gnew, g_adjust
     use collisions, only: ncheck, vary_vnew
@@ -937,7 +935,6 @@ contains
     use le_grids, only: negrid
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
-    use constants, only: zi
     use parameter_scan_arrays, only: scan_hflux => hflux_tot, scan_momflux => momflux_tot 
     use parameter_scan_arrays, only: scan_phi2_tot => phi2_tot, scan_nout => nout
     use parameter_scan, only: scan_type_switch, scan_type_none
@@ -950,7 +947,6 @@ contains
     real :: phi2, apar2, bpar2
     real :: t
     integer :: ik, it, is, write_mod
-    complex :: sourcefac
     complex, save :: wtmp_new
 
     real, dimension (ntheta0, nspec) :: x_qmflux
@@ -1006,8 +1002,6 @@ contains
     if (write_g) call write_f (last)
 
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
-
-    if (proc0) sourcefac = exp(-zi*omega0*t+gamma0*t)
 
     !Note this also returns phi2, apar2, bpar2 and phitot for other diagnostics
     if (proc0) call do_write_ncloop(t,istep,phi2,apar2,bpar2,phitot)
@@ -1321,7 +1315,7 @@ contains
 !
 ! I have not checked the units in this section. BD
 !       
-    if (dump_check1) call do_write_dump_1(t,sourcefac)
+    if (dump_check1) call do_write_dump_1(t)
     if (dump_check2) call do_write_dump_2(t)
 
     if (dump_fields_periodically .and. mod(istep,10*nwrite) == 0) call do_dump_fields_periodically(t)
@@ -2292,8 +2286,8 @@ contains
     implicit none
     real, intent(in) :: t, phitot
     integer, intent(in) :: ik, it
-    write (out_unit, "('t= ',e16.10,' aky= ',1pe12.4, ' akx= ',1pe12.4, &
-         &' om= ',1p2e12.4,' omav= ', 1p2e12.4,' phtot= ',1pe12.4,' theta0= ',1pe12.4)") &
+    write (out_unit, "('t= ',e16.10,' aky= ',1p,e12.4, ' akx= ',1p,e12.4, &
+         &' om= ',1p,2e12.4,' omav= ', 1p,2e12.4,' phtot= ',1p,e12.4,' theta0= ',1p,e12.4)") &
          t, aky(ik), akx(it), &
          real( omega(it,ik)*woutunits(ik)), &
          aimag(omega(it,ik)*woutunits(ik)), &
@@ -2308,7 +2302,7 @@ contains
     integer, intent(in) :: it, ik
 
     write (out_unit,&
-         fmt='(" omega= (",1pe12.4,",",1pe12.4,")",t45,"omega/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
+         fmt='(" omega= (",1p,e12.4,",",1p,e12.4,")",t45,"omega/(vt/a)= (",1p,e12.4,",",1p,e12.4,")")') &
          omega(it,ik)/tunits(ik), omega(it,ik)*woutunits(ik)
   end subroutine do_write_omega
 
@@ -2318,7 +2312,7 @@ contains
     integer, intent(in) :: it, ik
 
     write (out_unit,&
-         fmt='(" omavg= (",1pe12.4,",",1pe12.4,")",t45,"omavg/(vt/a)= (",1pe12.4,",",1pe12.4,")")') &
+         fmt='(" omavg= (",1p,e12.4,",",1p,e12.4,")",t45,"omavg/(vt/a)= (",1p,e12.4,",",1p,e12.4,")")') &
          omegaavg(it,ik)/tunits(ik), omegaavg(it,ik)*woutunits(ik)               
   end subroutine do_write_omavg
 
@@ -2451,8 +2445,8 @@ contains
        end do
        write (unit=heat_unit2, fmt=*)
 
-       call flush_output_file (heat_unit, ".heat")
-       call flush_output_file (heat_unit2, ".heat2")
+       call flush_output_file (heat_unit)
+       call flush_output_file (heat_unit2)
 
        !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' energy= ',e12.6)") t, h % energy
        !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' energy_dot= ',e12.6)") t, h % energy_dot
@@ -3068,19 +3062,23 @@ contains
     endif
   end subroutine do_write_full_moments_notgc
 
-  subroutine do_write_dump_1(t, sourcefac)
+  subroutine do_write_dump_1(t)
     use mp, only: proc0
     use kt_grids, only: naky, ntheta0, aky, akx
     use theta_grid, only: delthet, jacob
     use fields_arrays, only: phinew
+    use dist_fn, only: omega0, gamma0
+    use constants, only: zi
     implicit none
     real, intent(in) :: t
-    complex, intent(in) :: sourcefac
-    complex :: tmp
+    complex :: tmp, sourcefac
     real :: denom
     integer :: ik, it
 
     if(.not.proc0) return
+
+    !Should we not actually use the sourcefac calculated in dist_fn for consistency?
+    sourcefac = exp(-zi*omega0*t+gamma0*t)
 
     !This looks like a fieldline average, do we not have a standard routine
     !to calculate it? --> get_fldline_avg should do this but includes the last
@@ -3144,12 +3142,12 @@ contains
   subroutine flush_files
     use file_utils, only: flush_output_file
     implicit none
-    call flush_output_file (out_unit, ".out")
+    call flush_output_file (out_unit)
     if (write_verr) then
-       call flush_output_file (res_unit, ".vres")
-       call flush_output_file (lpc_unit, ".lpc")
+       call flush_output_file (res_unit)
+       call flush_output_file (lpc_unit)
     end if
-    if (write_parity) call flush_output_file (parity_unit, ".parity")
+    if (write_parity) call flush_output_file (parity_unit)
   end subroutine flush_files
 
   ! Trinity convergence condition - simple and experimental
@@ -3215,7 +3213,6 @@ contains
     call broadcast(exit)
 
   end subroutine check_nonlin_convergence
-
 
   subroutine heating (istep, h, hk)
     use mp, only: proc0
@@ -3388,6 +3385,12 @@ if (debug) write(6,*) "get_omeaavg: start"
             = log((phinew(j,:,:) + aparnew(j,:,:) + bparnew(j,:,:)) &
                   /(phi(j,:,:)   + apar(j,:,:)    + bpar(j,:,:)))*zi/code_dt
     end where
+
+    !During initialisation fieldnew==field but floating error can lead to finite omegahist
+    !Force omegahist=0 here to avoid erroneous values.
+    !Could think about forcing omegahist=0 where abs(omegahist)<tol
+    if(istep.eq.0) omegahist(:,:,:)=0.0
+
     omegaavg = sum(omegahist/real(navg),dim=1)
 if (debug) write(6,*) "get_omegaavg: omegaavg=",omegaavg
 
@@ -3416,7 +3419,6 @@ if (debug) write(6,*) "get_omegaavg: done"
     implicit none
     real, dimension (:,:), intent (out) :: phitot
     integer :: ik, it
-
     do ik = 1, naky
        do it = 1, ntheta0
           phitot(it,ik) = 0.5/pi &
@@ -3560,18 +3562,19 @@ if (debug) write(6,*) "get_omegaavg: done"
     call group_to_all (pflux_avg, pflx_global, nensembles)
     call group_to_all (qflux_avg, qflx_global, nensembles)
     call group_to_all (vflux_avg, vflx_global, nensembles)
+
+    call broadcast (pflx_global)
+    call broadcast (qflx_global)
+    call broadcast (vflx_global)
     do is = 1, nspec
-       call broadcast (pflx_global(:,is))
-       call broadcast (qflx_global(:,is))
-       call broadcast (vflx_global(:,is))
        pflux_avg = sum(pflx_global(:,is))
        qflux_avg = sum(qflx_global(:,is))
        vflux_avg = sum(vflx_global(:,is))
     end do
     if (write_hrate) then
        call group_to_all (heat_avg, heat_global, nensembles)
+       call broadcast (heat_global)
        do is = 1, nspec
-          call broadcast (heat_global(:,is))
           heat_avg = sum(heat_global(:,is))
        end do
     end if
@@ -3884,11 +3887,10 @@ if (debug) write(6,*) "get_omegaavg: done"
   subroutine par_spectrum(an, an2)
     use gs2_transforms, only: kz_spectrum
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
     complex, dimension(:,:,:) :: an, an2    
     real :: scale
 
-    call kz_spectrum (an, an2, ntheta0, naky)
+    call kz_spectrum (an, an2)
     scale = 1./real(4*ntgrid**2)
     an2 = an2*scale
 
