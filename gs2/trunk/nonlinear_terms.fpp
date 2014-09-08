@@ -100,13 +100,13 @@ contains
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, *) 
        end if
-       write (report_unit, fmt="('The minimum delt ( code_dt_min ) = ',e10.4)") code_dt_min
-       write (report_unit, fmt="('The maximum delt (code_delt_max) = ',e10.4)") code_delt_max
+       write (report_unit, fmt="('The minimum delt ( code_dt_min ) = ',e11.4)") code_dt_min
+       write (report_unit, fmt="('The maximum delt (code_delt_max) = ',e11.4)") code_delt_max
        write (report_unit, fmt="('The maximum delt < ',f10.4,' * min(Delta_perp/v_perp). (cfl)')") cfl
        write (report_unit, fmt="('When the time step needs to be changed, it is adjusted by a factor of ',f10.4)") delt_adj
        write (report_unit, fmt="('The number of time steps nstep = ',i7)") nstep
        write (report_unit, fmt="('If running in batch mode on the NERSC T3E, the run will stop when ', &
-            & f6.4,' % of the time remains.')") 100.*margin
+            & f7.4,' % of the time remains.')") 100.*margin
     endif
   end subroutine check_nonlinear_terms
 
@@ -119,7 +119,7 @@ contains
        write (unit, *)
        write (unit, fmt="(' &',a)") "nonlinear_terms_knobs"
        write (unit, fmt="(' nonlinear_mode = ',a)") '"on"'
-       write (unit, fmt="(' cfl = ',e16.10)") cfl
+       write (unit, fmt="(' cfl = ',e17.10)") cfl
        if (zip) write (unit, fmt="(' zip = ',L1)") zip
        write (unit, fmt="(' /')")
     endif

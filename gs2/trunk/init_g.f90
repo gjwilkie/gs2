@@ -92,26 +92,26 @@ contains
 
        case (ginitopt_default)
           write (unit, fmt="(' ginit_option = ',a)") '"default"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
-          write (unit, fmt="(' width0 = ',e16.10)") width0
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+          write (unit, fmt="(' width0 = ',e17.10)") width0
           write (unit, fmt="(' chop_side = ',L1)") chop_side
           if (chop_side) write (unit, fmt="(' left = ',L1)") left
 
        case (ginitopt_noise)
           write (unit, fmt="(' ginit_option = ',a)") '"noise"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
-          write (unit, fmt="(' zf_init = ',e16.10)") zf_init
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+          write (unit, fmt="(' zf_init = ',e17.10)") zf_init
           write (unit, fmt="(' chop_side = ',L1)") chop_side
           if (chop_side) write (unit, fmt="(' left = ',L1)") left
           write (unit, fmt="(' clean_init = ',L1)") clean_init
 
        case (ginitopt_xi)
           write (unit, fmt="(' ginit_option = ',a)") '"xi"'
-          write (unit, fmt="(' width0 = ',e16.10)") width0
+          write (unit, fmt="(' width0 = ',e17.10)") width0
 
        case (ginitopt_xi2)
           write (unit, fmt="(' ginit_option = ',a)") '"xi2"'
-          write (unit, fmt="(' width0 = ',e16.10)") width0
+          write (unit, fmt="(' width0 = ',e17.10)") width0
 
        case (ginitopt_zero)
           write (unit, fmt="(' ginit_option = ',a)") '"zero"'
@@ -121,7 +121,7 @@ contains
 
        case (ginitopt_convect)
           write (unit, fmt="(' ginit_option = ',a)") '"convect"'
-          write (unit, fmt="(' k0 = ',e16.10)") k0
+          write (unit, fmt="(' k0 = ',e17.10)") k0
 
        case (ginitopt_rh)
           write (unit, fmt="(' ginit_option = ',a)") '"rh"'
@@ -129,34 +129,34 @@ contains
        case (ginitopt_restart_many)
           write (unit, fmt="(' ginit_option = ',a)") '"many"'
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' scale = ',e17.10)") scale
 
        case (ginitopt_restart_small)
           write (unit, fmt="(' ginit_option = ',a)") '"small"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
-          write (unit, fmt="(' zf_init = ',e16.10)") zf_init
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+          write (unit, fmt="(' zf_init = ',e17.10)") zf_init
           write (unit, fmt="(' chop_side = ',L1)") chop_side
           if (chop_side) write (unit, fmt="(' left = ',L1)") left
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' scale = ',e17.10)") scale
 
        case (ginitopt_restart_file)
           write (unit, fmt="(' ginit_option = ',a)") '"file"'
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' scale = ',e17.10)") scale
 
        case (ginitopt_continue)
           write (unit, fmt="(' ginit_option = ',a)") '"cont"'
 
        case (ginitopt_kz0)
           write (unit, fmt="(' ginit_option = ',a)") '"kz0"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
           write (unit, fmt="(' chop_side = ',L1)") chop_side
           if (chop_side) write (unit, fmt="(' left = ',L1)") left
 
        case (ginitopt_nl)
           write (unit, fmt="(' ginit_option = ',a)") '"nl"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
           write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
           write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
           write (unit, fmt="(' chop_side = ',L1)") chop_side
@@ -164,7 +164,7 @@ contains
 
        case (ginitopt_nl2)
           write (unit, fmt="(' ginit_option = ',a)") '"nl2"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
           write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
           write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
           write (unit, fmt="(' chop_side = ',L1)") chop_side
@@ -172,31 +172,31 @@ contains
 
        case (ginitopt_nl3)
           write (unit, fmt="(' ginit_option = ',a)") '"nl3"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
-          write (unit, fmt="(' width0 = ',e16.10)") width0
-          write (unit, fmt="(' refac = ',e16.10)") refac
-          write (unit, fmt="(' imfac = ',e16.10)") imfac
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+          write (unit, fmt="(' width0 = ',e17.10)") width0
+          write (unit, fmt="(' refac = ',e17.10)") refac
+          write (unit, fmt="(' imfac = ',e17.10)") imfac
           write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
           write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
           write (unit, fmt="(' chop_side = ',L1)") chop_side
           if (chop_side) write (unit, fmt="(' left = ',L1)") left
-          write (unit, fmt="(' den0 = ',e16.10)") den0
-          write (unit, fmt="(' den1 = ',e16.10)") den1
-          write (unit, fmt="(' den2 = ',e16.10)") den2
-          write (unit, fmt="(' upar0 = ',e16.10)") upar0
-          write (unit, fmt="(' upar1 = ',e16.10)") upar1
-          write (unit, fmt="(' upar2 = ',e16.10)") upar2
-          write (unit, fmt="(' tpar0 = ',e16.10)") tpar0
-          write (unit, fmt="(' tpar1 = ',e16.10)") tpar1
-          write (unit, fmt="(' tperp0 = ',e16.10)") tperp0
-          write (unit, fmt="(' tperp1 = ',e16.10)") tperp1
-          write (unit, fmt="(' tperp2 = ',e16.10)") tperp2
+          write (unit, fmt="(' den0 = ',e17.10)") den0
+          write (unit, fmt="(' den1 = ',e17.10)") den1
+          write (unit, fmt="(' den2 = ',e17.10)") den2
+          write (unit, fmt="(' upar0 = ',e17.10)") upar0
+          write (unit, fmt="(' upar1 = ',e17.10)") upar1
+          write (unit, fmt="(' upar2 = ',e17.10)") upar2
+          write (unit, fmt="(' tpar0 = ',e17.10)") tpar0
+          write (unit, fmt="(' tpar1 = ',e17.10)") tpar1
+          write (unit, fmt="(' tperp0 = ',e17.10)") tperp0
+          write (unit, fmt="(' tperp1 = ',e17.10)") tperp1
+          write (unit, fmt="(' tperp2 = ',e17.10)") tperp2
 
        case (ginitopt_nl4)
           write (unit, fmt="(' ginit_option = ',a)") '"nl4"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' scale = ',e17.10)") scale
           write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
           write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
           write (unit, fmt="(' chop_side = ',L1)") chop_side
@@ -204,50 +204,50 @@ contains
 
        case (ginitopt_nl5)
           write (unit, fmt="(' ginit_option = ',a)") '"nl5"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' scale = ',e17.10)") scale
           write (unit, fmt="(' chop_side = ',L1)") chop_side
           if (chop_side) write (unit, fmt="(' left = ',L1)") left
 
        case (ginitopt_nl6)
           write (unit, fmt="(' ginit_option = ',a)") '"nl6"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
           write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e16.10)") scale
+          write (unit, fmt="(' scale = ',e17.10)") scale
 
        case (ginitopt_alf)
           write (unit, fmt="(' ginit_option = ',a)") '"alf"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
 
        case (ginitopt_gs)
           write (unit, fmt="(' ginit_option = ',a)") '"gs"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
-          write (unit, fmt="(' refac = ',e16.10)") refac
-          write (unit, fmt="(' imfac = ',e16.10)") imfac
-          write (unit, fmt="(' den1 = ',e16.10)") den1
-          write (unit, fmt="(' upar1 = ',e16.10)") upar1
-          write (unit, fmt="(' tpar1 = ',e16.10)") tpar1
-          write (unit, fmt="(' tperp1 = ',e16.10)") tperp1
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+          write (unit, fmt="(' refac = ',e17.10)") refac
+          write (unit, fmt="(' imfac = ',e17.10)") imfac
+          write (unit, fmt="(' den1 = ',e17.10)") den1
+          write (unit, fmt="(' upar1 = ',e17.10)") upar1
+          write (unit, fmt="(' tpar1 = ',e17.10)") tpar1
+          write (unit, fmt="(' tperp1 = ',e17.10)") tperp1
 
 
        case (ginitopt_kpar)
           write (unit, fmt="(' ginit_option = ',a)") '"kpar"'
-          write (unit, fmt="(' phiinit = ',e16.10)") phiinit
-          write (unit, fmt="(' width0 = ',e16.10)") width0
-          write (unit, fmt="(' refac = ',e16.10)") refac
-          write (unit, fmt="(' imfac = ',e16.10)") imfac
-          write (unit, fmt="(' den0 = ',e16.10)") den0
-          write (unit, fmt="(' den1 = ',e16.10)") den1
-          write (unit, fmt="(' den2 = ',e16.10)") den2
-          write (unit, fmt="(' upar0 = ',e16.10)") upar0
-          write (unit, fmt="(' upar1 = ',e16.10)") upar1
-          write (unit, fmt="(' upar2 = ',e16.10)") upar2
-          write (unit, fmt="(' tpar0 = ',e16.10)") tpar0
-          write (unit, fmt="(' tpar1 = ',e16.10)") tpar1
-          write (unit, fmt="(' tperp0 = ',e16.10)") tperp0
-          write (unit, fmt="(' tperp1 = ',e16.10)") tperp1
-          write (unit, fmt="(' tperp2 = ',e16.10)") tperp2
+          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+          write (unit, fmt="(' width0 = ',e17.10)") width0
+          write (unit, fmt="(' refac = ',e17.10)") refac
+          write (unit, fmt="(' imfac = ',e17.10)") imfac
+          write (unit, fmt="(' den0 = ',e17.10)") den0
+          write (unit, fmt="(' den1 = ',e17.10)") den1
+          write (unit, fmt="(' den2 = ',e17.10)") den2
+          write (unit, fmt="(' upar0 = ',e17.10)") upar0
+          write (unit, fmt="(' upar1 = ',e17.10)") upar1
+          write (unit, fmt="(' upar2 = ',e17.10)") upar2
+          write (unit, fmt="(' tpar0 = ',e17.10)") tpar0
+          write (unit, fmt="(' tpar1 = ',e17.10)") tpar1
+          write (unit, fmt="(' tperp0 = ',e17.10)") tperp0
+          write (unit, fmt="(' tperp1 = ',e17.10)") tperp1
+          write (unit, fmt="(' tperp2 = ',e17.10)") tperp2
 
        end select
        write (unit, fmt="(' /')")

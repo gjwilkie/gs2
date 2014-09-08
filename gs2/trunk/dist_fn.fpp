@@ -213,7 +213,7 @@ subroutine check_dist_fn(report_unit)
     if (gridfac /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('You selected gridfac = ',e10.4,' in dist_fn_knobs.')") gridfac
+       write (report_unit, fmt="('You selected gridfac = ',e11.4,' in dist_fn_knobs.')") gridfac
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
        write (report_unit, fmt="('The normal choice is gridfac = 1.')")
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -223,7 +223,7 @@ subroutine check_dist_fn(report_unit)
     if (apfac /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('You selected apfac = ',e10.4,' in dist_fn_knobs.')") apfac
+       write (report_unit, fmt="('You selected apfac = ',e11.4,' in dist_fn_knobs.')") apfac
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
        write (report_unit, fmt="('The normal choice is apfac = 1.')")
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -233,7 +233,7 @@ subroutine check_dist_fn(report_unit)
     if (driftknob /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('You selected driftknob = ',e10.4,' in dist_fn_knobs.')") driftknob
+       write (report_unit, fmt="('You selected driftknob = ',e11.4,' in dist_fn_knobs.')") driftknob
        write (report_unit, fmt="('THIS IS EITHER AN ERROR, or you are DELIBERATELY SCALING THE DRIFTS.')") 
        write (report_unit, fmt="('The normal choice is driftknob = 1.')")
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -243,7 +243,7 @@ subroutine check_dist_fn(report_unit)
     if (tpdriftknob /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('You selected tpdriftknob = ',e10.4,' in dist_fn_knobs.')") tpdriftknob
+       write (report_unit, fmt="('You selected tpdriftknob = ',e11.4,' in dist_fn_knobs.')") tpdriftknob
        write (report_unit, fmt="('THIS IS EITHER AN ERROR, or you are DELIBERATELY SCALING THE TRAPPED PARTICLE DRIFTS (either via driftknob or via tpdriftknob).')") 
        write (report_unit, fmt="('The normal choice is tpdriftknob = 1.')")
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -333,7 +333,7 @@ subroutine check_dist_fn(report_unit)
 
        if (poisfac /= 0.) then
           write (report_unit, *) 
-          write (report_unit, fmt="('Quasineutrality is not enforced.  The ratio (lambda_Debye/rho)**2 = ',e10.4)") poisfac
+          write (report_unit, fmt="('Quasineutrality is not enforced.  The ratio (lambda_Debye/rho)**2 = ',e11.4)") poisfac
           write (report_unit, *) 
        end if
           
@@ -412,14 +412,14 @@ subroutine check_dist_fn(report_unit)
        if (aimag(fexp(is)) /= 0.) then
           write (report_unit, *) 
           write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('Species ',i2,' has fexpi = ',e10.4)") is, aimag(fexp(is))
+          write (report_unit, fmt="('Species ',i2,' has fexpi = ',e11.4)") is, aimag(fexp(is))
           write (report_unit, fmt="('THIS IS AN ERROR')")
           write (report_unit, fmt="('fexpi should be zero for all species.')")
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, *) 
        end if
 
-       write (report_unit, fmt="('Species ',i2,' has fexpr = ', e10.4)") is, real(fexp(is))
+       write (report_unit, fmt="('Species ',i2,' has fexpr = ', e11.4)") is, real(fexp(is))
     end do
 
   end subroutine check_dist_fn
@@ -449,7 +449,7 @@ subroutine check_dist_fn(report_unit)
        end select
 
        write (unit, fmt="(' nonad_zero = ',L1)") nonad_zero
-       write (unit, fmt="(' gridfac = ',e16.10)") gridfac
+       write (unit, fmt="(' gridfac = ',e17.10)") gridfac
        write (unit, fmt="(' esv = ',L1)") esv
        write (unit, fmt="(' cllc = ',L1)") cllc
        write (unit, fmt="(' wfb_cmr = ',L1)") wfb_cmr
@@ -473,12 +473,12 @@ subroutine check_dist_fn(report_unit)
           end select
        end if
 
-       if (apfac /= 1.) write (unit, fmt="(' apfac = ',e16.10)") apfac
-       if (driftknob /= 1.) write (unit, fmt="(' driftknob = ',e16.10)") driftknob
-       if (tpdriftknob /= 1.) write (unit, fmt="(' tpdriftknob = ',e16.10)") tpdriftknob
-       if (poisfac /= 0.) write (unit, fmt="(' poisfac = ',e16.10)") poisfac
-       if (kfilter /= 0.) write (unit, fmt="(' kfilter = ',e16.10)") kfilter
-       if (afilter /= 0.) write (unit, fmt="(' afilter = ',e16.10)") afilter
+       if (apfac /= 1.) write (unit, fmt="(' apfac = ',e17.10)") apfac
+       if (driftknob /= 1.) write (unit, fmt="(' driftknob = ',e17.10)") driftknob
+       if (tpdriftknob /= 1.) write (unit, fmt="(' tpdriftknob = ',e17.10)") tpdriftknob
+       if (poisfac /= 0.) write (unit, fmt="(' poisfac = ',e17.10)") poisfac
+       if (kfilter /= 0.) write (unit, fmt="(' kfilter = ',e17.10)") kfilter
+       if (afilter /= 0.) write (unit, fmt="(' afilter = ',e17.10)") afilter
        if (mult_imp) write (unit, fmt="(' mult_imp = ',L1)") mult_imp
        if (test) write (unit, fmt="(' test = ',L1)") test
        if (def_parity) then
@@ -497,11 +497,11 @@ subroutine check_dist_fn(report_unit)
 
        case(source_option_phiext_full)
           write (unit, fmt="(' source_option = ',a)") '"phiext_full"'
-          write (unit, fmt="(' source0 = ',e16.10)") source0
-          write (unit, fmt="(' omega0 = ',e16.10)") omega0
-          write (unit, fmt="(' gamma0 = ',e16.10)") gamma0
-          write (unit, fmt="(' t0 = ',e16.10)") t0
-          write (unit, fmt="(' phi_ext = ',e16.10)") phi_ext
+          write (unit, fmt="(' source0 = ',e17.10)") source0
+          write (unit, fmt="(' omega0 = ',e17.10)") omega0
+          write (unit, fmt="(' gamma0 = ',e17.10)") gamma0
+          write (unit, fmt="(' t0 = ',e17.10)") t0
+          write (unit, fmt="(' phi_ext = ',e17.10)") phi_ext
        
        end select
        write (unit, fmt="(' /')")
@@ -8161,7 +8161,7 @@ endif
           if (.not. forbid(ig,il)) then
              vpa = sqrt(energy(ie)*max(0.0, 1.0-al(il)*bmag(ig)))
              vpe = sqrt(energy(ie)*al(il)*bmag(ig))
-             write (unit, "(8(1x,e12.6))") vpa, vpe, energy(ie), al(il), &
+             write (unit, "(8(1x,e13.6))") vpa, vpe, energy(ie), al(il), &
                   xpts(ie), ypts(il), real(gtmp(1)), real(gtmp(2))
           end if
        end if
@@ -8268,7 +8268,7 @@ endif
                 end if
                 
                 if (proc0) then
-                   write (unit, "(6(1x,e12.6))") energy(ie), al(il), &
+                   write (unit, "(6(1x,e13.6))") energy(ie), al(il), &
                         agp0(1), agp0(2), agp0zf(1), agp0zf(2)
                 end if
              end if
@@ -8303,7 +8303,7 @@ endif
                 end if
                 
                 if (proc0) then
-                   write (unit, "(4(1x,e12.6),i8)") energy(ie), al(il), &
+                   write (unit, "(4(1x,e13.6),i8)") energy(ie), al(il), &
                         gp0, gp0zf, isign
                 end if
              end if
@@ -8534,7 +8534,7 @@ endif
     emax = emax/ltmax
 
     if (proc0) then
-       write(unit,"((1x,e12.6),6(i8),2(1x,e12.6))") time, &
+       write(unit,"((1x,e13.6),6(i8),2(1x,e13.6))") time, &
             igmax, ikmax, itmax, iemax, ilmax, ismax, emax, eavg
        if (last) then
           call close_output_file (unit)

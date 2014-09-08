@@ -159,7 +159,7 @@ contains
     case (scan_type_none)
       return
     case (scan_type_range)
-      write (scan_output_file, fmt="('time=  ',e10.4,'  parameter=  ',e10.4)") &
+      write (scan_output_file, fmt="('time=  ',e11.4,'  parameter=  ',e11.4)") &
           user_time, current_scan_parameter_value
       call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       if (.not. increment_condition_satisfied) return
@@ -175,7 +175,7 @@ contains
        end if
      case (scan_type_target)
       write (scan_output_file, &
-        fmt="('time=  ',e10.4,'  parameter=  ',e10.4,'  target=  ',e10.4)") &
+        fmt="('time=  ',e11.4,'  parameter=  ',e11.4,'  target=  ',e11.4)") &
           user_time, current_scan_parameter_value, current_target_value 
       call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       if (.not. increment_condition_satisfied) return
@@ -189,7 +189,7 @@ contains
     case (scan_type_root_finding)
       call mp_abort("scan_type_root_finding not implemented yet!")
       !write (scan_output_file, &
-        !fmt="(time=  e10.4  parameter=  e10.4  target=  e10.4)") &
+        !fmt="(time=  e11.4  parameter=  e11.4  target=  e11.4)") &
           !user_time, current_scan_parameter_value, current_target_value 
       !call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       !if (.not. increment_condition_satisfied) return

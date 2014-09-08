@@ -171,8 +171,8 @@ contains
        write (unit, fmt="(' nwrite = ',i6)") nwrite
        write (unit, fmt="(' nsave = ',i6)") nsave
        write (unit, fmt="(' navg = ',i6)") navg
-       write (unit, fmt="(' omegatol = ',e16.10)") omegatol
-       write (unit, fmt="(' omegatinst = ',e16.10)") omegatinst
+       write (unit, fmt="(' omegatol = ',e17.10)") omegatol
+       write (unit, fmt="(' omegatinst = ',e17.10)") omegatinst
 ! should be legal -- not checked yet
        if (igomega /= 0) write (unit, fmt="(' igomega = ',i6)") igomega  
        
@@ -1147,21 +1147,21 @@ contains
     if (proc0) then
        if (print_flux_line) then
           if (fphi > epsilon(0.0)) then
-             write (unit=*, fmt="('t= ',e16.10,' <phi**2>= ',e12.6, &
-                  & ' heat fluxes: ', 5(1x,e12.6))") &
+             write (unit=*, fmt="('t= ',e17.10,' <phi**2>= ',e13.6, &
+                  & ' heat fluxes: ', 5(1x,e13.6))") &
                   t, phi2, heat_fluxes(1:min(nspec,5))
-             write (unit=*, fmt="('t= ',e16.10,' <phi**2>= ',e12.6, &
-                  & ' energy exchange: ', 5(1x,e12.6))") &
+             write (unit=*, fmt="('t= ',e17.10,' <phi**2>= ',e13.6, &
+                  & ' energy exchange: ', 5(1x,e13.6))") &
                   t, phi2, energy_exchange(1:min(nspec,5))
           end if
           if (fapar > epsilon(0.0)) then
-             write (unit=*, fmt="('t= ',e16.10,' <apar**2>= ',e10.4, &
-                  & ' heat flux m: ', 5(1x,e10.4))") &
+             write (unit=*, fmt="('t= ',e17.10,' <apar**2>= ',e11.4, &
+                  & ' heat flux m: ', 5(1x,e11.4))") &
                   t, apar2, mheat_fluxes(1:min(nspec,5))
           end if
           if (fbpar > epsilon(0.0)) then
-             write (unit=*, fmt="('t= ',e16.10,' <bpar**2>= ',e10.4, &
-                  & ' heat flux b: ', 5(1x,e10.4))") &
+             write (unit=*, fmt="('t= ',e17.10,' <bpar**2>= ',e11.4, &
+                  & ' heat flux b: ', 5(1x,e11.4))") &
                   t, bpar2, bheat_fluxes(1:min(nspec,5))
           end if
        end if
@@ -1193,22 +1193,22 @@ contains
           vflux_tot = 0.
           if (fphi > epsilon(0.0)) then
              if (write_ascii) then
-                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' heat fluxes: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <phi**2>= ',e11.4, &
+                     & ' heat fluxes: ', 5(1x,e11.4))") &
                      t, phi2, heat_fluxes(1:min(nspec,5))
-                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' part fluxes: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <phi**2>= ',e11.4, &
+                     & ' part fluxes: ', 5(1x,e11.4))") &
                      t, phi2, part_fluxes(1:min(nspec,5))
-                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' mom fluxes: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <phi**2>= ',e11.4, &
+                     & ' mom fluxes: ', 5(1x,e11.4))") &
                      t, phi2, mom_fluxes(1:min(nspec,5))
-                write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                     & ' energy exchange: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <phi**2>= ',e11.4, &
+                     & ' energy exchange: ', 5(1x,e11.4))") &
                      t, phi2, energy_exchange(1:min(nspec,5))
 
 #ifdef LOWFLOW
-                   write (unit=out_unit, fmt="('t= ',e16.10,' <phi**2>= ',e10.4, &
-                        & ' lfmom fluxes: ', 5(1x,e10.4),' lfvflx1: ', 5(1x,e10.4))") &
+                   write (unit=out_unit, fmt="('t= ',e17.10,' <phi**2>= ',e11.4, &
+                        & ' lfmom fluxes: ', 5(1x,e11.4),' lfvflx1: ', 5(1x,e11.4))") &
                         t, phi2, lfmom_fluxes(1:min(nspec,5)), vflux1_avg(1:min(nspec,5))
 #endif
              end if
@@ -1220,16 +1220,16 @@ contains
              if (write_lorentzian .and. write_ascii) then
                 wtmp_new = antenna_w()
                 if (real(wtmp_old) /= 0. .and. wtmp_new /= wtmp_old) &
-                     write (unit=out_unit, fmt="('w= ',e16.10, &
-                     &  ' amp= ',e16.10)") real(wtmp_new), sqrt(2.*apar2)
+                     write (unit=out_unit, fmt="('w= ',e17.10, &
+                     &  ' amp= ',e17.10)") real(wtmp_new), sqrt(2.*apar2)
                 wtmp_old = wtmp_new                
              end if
              if (write_ascii) then
-                write (unit=out_unit, fmt="('t= ',e16.10,' <apar**2>= ',e10.4, &
-                     & ' heat mluxes: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <apar**2>= ',e11.4, &
+                     & ' heat mluxes: ', 5(1x,e11.4))") &
                      t, apar2, mheat_fluxes(1:min(nspec,5))
-                write (unit=out_unit, fmt="('t= ',e16.10,' <apar**2>= ',e10.4, &
-                     & ' part mluxes: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <apar**2>= ',e11.4, &
+                     & ' part mluxes: ', 5(1x,e11.4))") &
                      t, apar2, mpart_fluxes(1:min(nspec,5))
              end if
              hflux_tot = hflux_tot + sum(mheat_fluxes)
@@ -1238,19 +1238,19 @@ contains
           end if
           if (fbpar > epsilon(0.0)) then
              if (write_ascii) then
-                write (unit=out_unit, fmt="('t= ',e16.10,' <bpar**2>= ',e10.4, &
-                     & ' heat bluxes: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <bpar**2>= ',e11.4, &
+                     & ' heat bluxes: ', 5(1x,e11.4))") &
                      t, bpar2, bheat_fluxes(1:min(nspec,5))
-                write (unit=out_unit, fmt="('t= ',e16.10,' <bpar**2>= ',e10.4, &
-                     & ' part bluxes: ', 5(1x,e10.4))") &
+                write (unit=out_unit, fmt="('t= ',e17.10,' <bpar**2>= ',e11.4, &
+                     & ' part bluxes: ', 5(1x,e11.4))") &
                      t, bpar2, bpart_fluxes(1:min(nspec,5))
              end if
              hflux_tot = hflux_tot + sum(bheat_fluxes)
              vflux_tot = vflux_tot + sum(bmom_fluxes)
              zflux_tot = zflux_tot + sum(bpart_fluxes*spec%z)
           end if
-          if (write_ascii) write (unit=out_unit, fmt="('t= ',e16.10,' h_tot= ',e10.4, &
-               & ' z_tot= ',e10.4)") t, hflux_tot, zflux_tot
+          if (write_ascii) write (unit=out_unit, fmt="('t= ',e17.10,' h_tot= ',e11.4, &
+               & ' z_tot= ',e11.4)") t, hflux_tot, zflux_tot
           if (write_nl_flux) then
              call nc_qflux (nout, qheat(:,:,:,1), qmheat(:,:,:,1), qbheat(:,:,:,1), &
                   heat_par, mheat_par, bheat_par, &
@@ -2152,7 +2152,7 @@ contains
     !data in main netcdf output by default.
     call open_output_file (unit, ".g")
     write (unit,fmt="('# shape: ',a)") trim(shape)
-    write (unit,fmt="('# q = ',e10.4,' drhodpsi = ',e10.4)") qval, drhodpsi
+    write (unit,fmt="('# q = ',e11.4,' drhodpsi = ',e11.4)") qval, drhodpsi
     write (unit,fmt="('# theta1             R2                  Z3               alpha4      ', &
          &   '       Rprime5              Zprime6           alpha_prime7 ')")
     do i=-ntgrid,ntgrid
@@ -2217,7 +2217,7 @@ contains
        do it = 1, ntheta0
           write (unit=*, fmt="('ky=',1pe9.2, ' kx=',1pe9.2, &
                & ' om=',e9.2,1x,e9.2,' omav=',e9.2,1x,e9.2, &
-               & ' phtot=',e8.2,' theta0=',1pe9.2)") &
+               & ' phtot=',e9.2,' theta0=',1pe9.2)") &
                aky(ik), akx(it), &
                real( omega(it,ik)*woutunits(ik)), &
                aimag(omega(it,ik)*woutunits(ik)), &
@@ -2276,7 +2276,7 @@ contains
     real :: phase_tot, phase_theta
 
     call get_cross_phase (phase_tot, phase_theta)
-    if (proc0) write (unit=phase_unit, fmt="('t= ',e16.10,' phase_tot= ',e10.4,' phase_theta= ',e10.4)") &
+    if (proc0) write (unit=phase_unit, fmt="('t= ',e17.10,' phase_tot= ',e11.4,' phase_theta= ',e11.4)") &
          & t, phase_tot, phase_theta
   end subroutine do_write_crossphase
 
@@ -2286,7 +2286,7 @@ contains
     implicit none
     real, intent(in) :: t, phitot
     integer, intent(in) :: ik, it
-    write (out_unit, "('t= ',e16.10,' aky= ',1p,e12.4, ' akx= ',1p,e12.4, &
+    write (out_unit, "('t= ',e17.10,' aky= ',1p,e12.4, ' akx= ',1p,e12.4, &
          &' om= ',1p,2e12.4,' omav= ', 1p,2e12.4,' phtot= ',1p,e12.4,' theta0= ',1p,e12.4)") &
          t, aky(ik), akx(it), &
          real( omega(it,ik)*woutunits(ik)), &
@@ -2345,14 +2345,14 @@ contains
        ! write error estimates for ion dist. fn. at outboard midplane with ik=it=1 to ascii files
        if (write_ascii) then
           if (nlambda - ng2 > 1) then
-             write(lpc_unit,"(4(1x,e12.6))") user_time, geavg, glavg, gtavg
+             write(lpc_unit,"(4(1x,e13.6))") user_time, geavg, glavg, gtavg
           else
-             write(lpc_unit,"(3(1x,e12.6))") user_time, geavg, glavg
+             write(lpc_unit,"(3(1x,e13.6))") user_time, geavg, glavg
           end if
-          write(res_unit,"(8(1x,e12.6))") user_time, errest(1,2), errest(2,2), errest(3,2), &
+          write(res_unit,"(8(1x,e13.6))") user_time, errest(1,2), errest(2,2), errest(3,2), &
                errest(4,2), errest(5,2), vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
           if (write_max_verr) then
-             write(res_unit2,"(3(i8),(1x,e12.6),3(i8),(1x,e12.6),3(i8),(1x,e12.6),3(i8),(1x,e12.6),3(i8),(1x,e12.6))") &
+             write(res_unit2,"(3(i8),(1x,e13.6),3(i8),(1x,e13.6),3(i8),(1x,e13.6),3(i8),(1x,e13.6),3(i8),(1x,e13.6))") &
                   erridx(1,1), erridx(1,2), erridx(1,3), errest(1,1), &
                   erridx(2,1), erridx(2,2), erridx(2,3), errest(2,1), &
                   erridx(3,1), erridx(3,2), erridx(3,3), errest(3,1), &
@@ -2448,26 +2448,26 @@ contains
        call flush_output_file (heat_unit)
        call flush_output_file (heat_unit2)
 
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' energy= ',e12.6)") t, h % energy
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' energy_dot= ',e12.6)") t, h % energy_dot
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' J_ant.E= ',e12.6)") t, h % antenna
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' energy= ',e13.6)") t, h % energy
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' energy_dot= ',e13.6)") t, h % energy_dot
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' J_ant.E= ',e13.6)") t, h % antenna
 
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hyperC= ',12(1x,e12.6))") t, h % hypercoll
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hCh= ',12(1x,e12.6))") t, h % collisions
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' hw*= ',12(1x,e12.6))") t, h % gradients
-       !GGH!         write (unit=heat_unit, fmt="('t= ',e12.6,' hwd= ',12(1x,e12.6))") t, h % curvature
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' heating= ',12(1x,e12.6))") t, h % heating
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' hyperC= ',12(1x,e13.6))") t, h % hypercoll
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' hCh= ',12(1x,e13.6))") t, h % collisions
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' hw*= ',12(1x,e13.6))") t, h % gradients
+       !GGH!         write (unit=heat_unit, fmt="('t= ',e13.6,' hwd= ',12(1x,e13.6))") t, h % curvature
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' heating= ',12(1x,e13.6))") t, h % heating
 
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hvisc= ',e12.6)") t, sum(h % hypervisc)
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hyperC= ',e12.6)") t, sum(h % hypercoll)
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hCh= ',e12.6)") t, sum(h % collisions)
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_hw*= ',e12.6)") t, sum(h % gradients)
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_heating= ',e12.6)") t, sum(h % heating)
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hvisc= ',e13.6)") t, sum(h % hypervisc)
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hyperC= ',e13.6)") t, sum(h % hypercoll)
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hCh= ',e13.6)") t, sum(h % collisions)
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hw*= ',e13.6)") t, sum(h % gradients)
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_heating= ',e13.6)") t, sum(h % heating)
 
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_power= ',e12.6)") t, &
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_power= ',e13.6)") t, &
        !GGH               sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot
        !GGH TEST try adding sqrt(2.) to the edot
-       !GGH          write (unit=heat_unit, fmt="('t= ',e12.6,' total_power= ',e12.6)") t, &
+       !GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_power= ',e13.6)") t, &
        !GGH               sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot*sqrt(2.)
        !GGH          write (unit=heat_unit, fmt='(a)') ''
     end if
@@ -3123,7 +3123,7 @@ contains
     integer :: ik, it, ig, unit
 
     call get_unused_unit (unit)
-    write (filename, "('dump.fields.t=',e12.6)") t
+    write (filename, "('dump.fields.t=',e13.6)") t
     open (unit=unit, file=filename, status="unknown")
     do ik = 1, naky
        do it = 1, ntheta0
@@ -3176,15 +3176,15 @@ contains
        place = mod(trin_istep,conv_nstep_av)/nwrite
        conv_heat(place) = heat_flux
      
-       if (debug) write(6,'(A,I5,A,E10.4,A,I6,I6)') 'Job ',trin_job, &
+       if (debug) write(6,'(A,I5,A,e11.4,A,I6,I6)') 'Job ',trin_job, &
             ' time = ',user_time, ' step = ',trin_istep
-       if (debug) write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
+       if (debug) write(6,'(A,I5,A,e11.4,A,e11.4)') 'Job ',trin_job, &
             ' heat = ',heat_flux, ' heatsumav = ',heat_av
 
        if (trin_istep .ge. conv_nstep_av) then
           heat_av_new = sum(conv_heat) / nwrite_av
           heat_av_diff = heat_av_new - heat_av
-          if(debug) write(6,'(A,I5,A,E10.4,A,E10.4)') 'Job ',trin_job, &
+          if(debug) write(6,'(A,I5,A,e11.4,A,e11.4)') 'Job ',trin_job, &
                ' heat_sum_av_diff = ',heat_sum_av
           heat_av = heat_av_new
           ! Convergence test - needs to be met conv_nsteps_converged/nwrite times in succession
