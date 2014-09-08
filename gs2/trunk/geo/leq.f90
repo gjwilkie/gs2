@@ -199,14 +199,14 @@ contains
     
   end subroutine derm
 
-  subroutine gradient(rgrid, theta, grad, char, rp, nth_used, ntm)
+  subroutine gradient(theta, grad, char, rp, nth_used, ntm)
 
     use splines, only: inter_d_cspl
     implicit none
     
     integer nth_used, ntm
     character(1) char
-    real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
+    real theta(-ntm:), grad(-ntm:,:)
     real tmp(2), aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) :: dcart
     integer i
@@ -223,8 +223,8 @@ contains
     end select
     
     do i=-nth_used,-1
-       call eqitem(rgrid(i), theta(i), dcart(:,:,1), tmp(1), 'R')
-       call eqitem(rgrid(i), theta(i), dcart(:,:,2), tmp(2), 'Z')
+       call eqitem(theta(i), dcart(:,:,1), tmp(1), 'R')
+       call eqitem(theta(i), dcart(:,:,2), tmp(2), 'Z')
        if(char == 'T') then
           grad(i,1)=-tmp(1)
           grad(i,2)=-tmp(2)
@@ -235,8 +235,8 @@ contains
     enddo
 
     do i=0,nth_used
-       call eqitem(rgrid(i), theta(i), dcart(:,:,1), tmp(1), 'R')
-       call eqitem(rgrid(i), theta(i), dcart(:,:,2), tmp(2), 'Z')
+       call eqitem(theta(i), dcart(:,:,1), tmp(1), 'R')
+       call eqitem(theta(i), dcart(:,:,2), tmp(2), 'Z')
        grad(i,1)=tmp(1)
        grad(i,2)=tmp(2)
     enddo
@@ -254,14 +254,14 @@ contains
 
   end subroutine gradient
 
-  subroutine bgradient(rgrid, theta, grad, char, rp, nth_used, ntm)
+  subroutine bgradient(theta, grad, char, rp, nth_used, ntm)
 
     use splines, only: inter_d_cspl
     implicit none
     
     integer nth_used, ntm
     character(1) char
-    real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
+    real theta(-ntm:), grad(-ntm:,:)
     real :: aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) ::  dbish
     integer i
@@ -278,8 +278,8 @@ contains
     end select
 
     do i=-nth_used,nth_used
-       call eqitem(rgrid(i), theta(i), dbish(:,:,1), grad(i,1), 'R')
-       call eqitem(rgrid(i), theta(i), dbish(:,:,2), grad(i,2), 'Z')
+       call eqitem(theta(i), dbish(:,:,1), grad(i,1), 'R')
+       call eqitem(theta(i), dbish(:,:,2), grad(i,2), 'Z')
     enddo
 
     if (char == 'T') then
@@ -302,12 +302,12 @@ contains
 
   end subroutine bgradient
 
-  subroutine eqitem(r, theta_in, f, fstar, char)
+  subroutine eqitem(theta_in, f, fstar, char)
     use constants, only: pi=>pi
     implicit none
     integer :: j, istar, jstar
     character(1) :: char
-    real :: r, thet, fstar, tp, tps, theta_in
+    real :: thet, fstar, tp, tps, theta_in
     real :: st, dt
     real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
@@ -418,9 +418,8 @@ contains
     
   end function invR
 
-  function rcenter(rp)
+  function rcenter()
 
-    real, intent(in) :: rp
     real :: rcenter
 
     rcenter = surf%R_center
@@ -457,9 +456,9 @@ contains
     
   end function Zpos
 
-  function psi (r, theta)
+  function psi (r)
    
-    real, intent (in) :: r, theta
+    real, intent (in) :: r
     real :: psi
 
     psi = r - surf%r
@@ -506,43 +505,43 @@ contains
 
   end function diameter
 
-  function dbtori (pbar)
-    real :: pbar, dbtori
+  function dbtori ()
+    real :: dbtori
     dbtori = 1.
   end function dbtori
 
-  function btori (pbar)
-    real :: pbar, btori
+  function btori ()
+    real :: btori
     btori = surf%r_geo
   end function btori
 
-  function qfun (pbar)
-    real :: pbar, qfun
+  function qfun ()
+    real :: qfun
     qfun = surf%q
   end function qfun
 
-  function pfun (pbar)
-    real :: pbar, pfun
+  function pfun ()
+    real :: pfun
     pfun = 0.5*beta_0
   end function pfun
   
-  function dpfun (pbar)  
-    real :: pbar, dpfun    
+  function dpfun ()  
+    real :: dpfun    
 
        dpfun = -1.
 
   end function dpfun
 
-  function dpdrhofun(rho)
+  function dpdrhofun()
 
-    real :: rho, dpdrhofun
+    real :: dpdrhofun
 
     dpdrhofun = surf%pp
 
   end function dpdrhofun
   
-  function betafun (pbar)  
-    real :: pbar, betafun
+  function betafun ()  
+    real :: betafun
     betafun = beta_0
   end function betafun
 

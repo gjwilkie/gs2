@@ -412,7 +412,6 @@ contains
 
     implicit none
     
-    logical :: init_flag = .true.
     complex, dimension (1,1,1) :: dum1 = 0., dum2 = 0.
     complex, dimension (:,:,:), allocatable :: gtmp
     complex, dimension (:,:,:,:), allocatable :: duinv, dtmp
@@ -477,7 +476,7 @@ contains
       call solfp_lorentz (ctmp)
       call scatter (g2le, ctmp, z0)   ! z0 is redefined below
     else
-      call solfp_lorentz (z0,dum1,dum2,init=init_flag)   ! z0 is redefined below
+      call solfp_lorentz (z0,dum1,dum2)   ! z0 is redefined below
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -574,7 +573,7 @@ contains
       call solfp_lorentz (ctmp)
       call scatter (g2le, ctmp, s0)   ! s0
     else
-      call solfp_lorentz (s0,dum1,dum2,init=init_flag)   ! s0
+      call solfp_lorentz (s0,dum1,dum2)   ! s0
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -665,7 +664,7 @@ contains
       call solfp_lorentz (ctmp)
       call scatter (g2le, ctmp, w0)
     else
-      call solfp_lorentz (w0,dum1,dum2,init=init_flag)
+      call solfp_lorentz (w0,dum1,dum2)
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -897,7 +896,7 @@ contains
       call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bz0)   ! bz0 is redefined below
     else
-      call solfp_ediffuse_standard_layout (bz0,init=.true.)   ! bz0 is redefined below
+      call solfp_ediffuse_standard_layout (bz0)   ! bz0 is redefined below
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -983,7 +982,7 @@ contains
       call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bs0)   ! bs0
     else
-      call solfp_ediffuse_standard_layout (bs0,init=.true.)    ! s0
+      call solfp_ediffuse_standard_layout (bs0)    ! s0
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1065,7 +1064,7 @@ contains
       call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bw0)
     else
-      call solfp_ediffuse_standard_layout (bw0,init=.true.)
+      call solfp_ediffuse_standard_layout (bw0)
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1391,13 +1390,12 @@ contains
     real, intent (in), optional :: vnmult_target
 
     integer :: ie, is, ik, il, ig, it
-    real, dimension (:), allocatable :: aa, bb, cc, xe, el
+    real, dimension (:), allocatable :: aa, bb, cc, xe
     integer :: ile, ixi
     integer :: ielo
 
     allocate (aa(negrid), bb(negrid), cc(negrid))
     allocate (xe(negrid))
-    allocate (el(negrid))
 
     ! want to use x variables instead of e because we want conservative form
     ! for the x-integration
@@ -1427,7 +1425,7 @@ contains
          do ixi=1, nxi
             il = ixi_to_il(ig,ixi)
             if (forbid(ig,il)) cycle
-            call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, el, xe)
+            call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, xe)
             ec1le(ixi,:,ile) = cc
             ebetaale(ixi,1,ile) = 1.0 / bb(1)
             do ie = 1, negrid-1
@@ -1455,7 +1453,7 @@ contains
          ig = ig_idx(e_lo, ielo)
          it = it_idx(e_lo, ielo)
          if (forbid(ig,il)) cycle
-         call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, el, xe)
+         call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, xe)
          ec1(:,ielo) = cc
 
 ! fill in the arrays for the tridiagonal
@@ -1469,11 +1467,11 @@ contains
 
     end if
 
-    deallocate(aa, bb, cc, xe, el)
+    deallocate(aa, bb, cc, xe)
 
   end subroutine init_ediffuse
 
-  subroutine get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, el, xe)
+  subroutine get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, xe)
 
     use species, only: spec
     use run_parameters, only: tunits
@@ -1487,7 +1485,7 @@ contains
     implicit none
 
     integer, intent (in) :: ig, ik, it, il, is
-    real, dimension (:), intent (in) :: el, xe
+    real, dimension (:), intent (in) :: xe
     real, dimension (:), intent (out) :: aa, bb, cc
 
     integer :: ie
@@ -3332,7 +3330,7 @@ contains
 
   end subroutine conserve_diffuse_le_layout
 
-  subroutine solfp_lorentz_standard_layout (g, gc, gh, diagnostics, init)
+  subroutine solfp_lorentz_standard_layout (g, gc, gh, diagnostics)
 
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, jend, ng2, lambda_map, nxi
@@ -3348,7 +3346,6 @@ contains
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, gc, gh
     integer, optional, intent (in) :: diagnostics
-    logical, optional, intent (in) :: init
 
     complex, dimension (:,:), allocatable :: glz, glzc
     integer :: ilz
@@ -3649,7 +3646,7 @@ contains
   ! energy diffusion subroutine used with energy layout (not le_layout)
   ! this is always the case when initializing the conserving terms,
   ! otherwise is the case if use_le_layout is no specified in the input file.
-  subroutine solfp_ediffuse_standard_layout (g, init)
+  subroutine solfp_ediffuse_standard_layout (g)
 
     use species, only: spec
     use theta_grid, only: ntgrid
@@ -3664,7 +3661,6 @@ contains
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
-    logical, intent (in), optional :: init
 
     integer :: ie, is, ig, il, it, ik
     complex, dimension (negrid) :: delta

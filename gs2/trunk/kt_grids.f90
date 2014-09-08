@@ -210,6 +210,7 @@ contains
 ! BD: Could add some logic here to set theta0 if akx is given?  When do we need what?
   subroutine range_get_grids (aky, theta0, akx)
     use theta_grid, only: shat
+    use mp, only: mp_abort
     implicit none
     real, dimension (:), intent (out) :: akx, aky
     real, dimension (:,:), intent (out) :: theta0
@@ -218,11 +219,11 @@ contains
     integer :: i, j
 
     if ( size(aky) /= naky) then
-       write(6,*) 'range_get_grids: size(aky) /= naky'       ;  stop
+       call mp_abort('range_get_grids: size(aky) /= naky',.true.)
     endif
 
     if ( size(akx) /= ntheta0) then
-       write(6,*) 'range_get_grids: size(akx) /= ntheta0'    ;  stop
+       call mp_abort('range_get_grids: size(akx) /= ntheta0',.true.)
     endif
 
     dky = 0.0
@@ -711,8 +712,6 @@ contains
     use mp, only: proc0, broadcast
     implicit none
 
-    integer :: ik
-
     if (initialized) return
     initialized = .true.
 
@@ -740,9 +739,7 @@ contains
     call broadcast (aky)
     call broadcast (akx)
     call broadcast (jtwist_out)
-    do ik = 1, naky
-       call broadcast (theta0(:,ik))
-    end do
+    call broadcast (theta0)
     allocate(kwork_filter(ntheta0,naky))
     kwork_filter=.false.
     call init_kperp2

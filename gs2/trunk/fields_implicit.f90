@@ -698,7 +698,7 @@ contains
     implicit none
     integer, intent (in) :: ic
     complex, dimension(:,f_lo(ic)%llim_proc:), intent (in out) :: am
-    complex, dimension(:,:), allocatable :: a_inv, lhscol, rhsrow
+    complex, dimension(:,:), allocatable :: a_inv, lhscol, rhsrow, col_row_tmp
     complex, dimension (:), allocatable :: am_tmp
     complex :: fac
     integer :: i, j, k, ik, it, m, n, nn, if, ig, jsc, jf, jg, jc
@@ -744,6 +744,7 @@ contains
                end if
             end do
          else
+            allocate(col_row_tmp(nidx*N_class(ic),2)) ; col_row_tmp = 0.
             !Loop over classes (supercell lengths)
             do m = 1, M_class(ic)
                !Convert to f_lo index
@@ -751,18 +752,24 @@ contains
                !Is ilo on this proc?
                if (idx_local(f_lo(ic),ilo)) then
                   !If so store column/row
-                  lhscol(:,m) = am(:,ilo)
-                  rhsrow(:,m) = a_inv(:,ilo)
+                  !lhscol(:,m) = am(:,ilo)
+                  !rhsrow(:,m) = a_inv(:,ilo)
+                  col_row_tmp(:,1) = am(:,ilo)
+                  col_row_tmp(:,2) = a_inv(:,ilo)
                end if
                !Here we send lhscol and rhscol sections to all procs
                !from the one on which it is currently known
                !Can't do this outside m loop as proc_id depends on m
                !These broadcasts can be relatively expensive so local_field_solve
                !may be preferable
-               call broadcast (lhscol(:,m), proc_id(f_lo(ic),ilo))
-               call broadcast (rhsrow(:,m), proc_id(f_lo(ic),ilo))
+               !call broadcast (lhscol(:,m), proc_id(f_lo(ic),ilo))
+               !call broadcast (rhsrow(:,m), proc_id(f_lo(ic),ilo))
+               call broadcast (col_row_tmp, proc_id(f_lo(ic),ilo))
+               lhscol(:,m) = col_row_tmp(:,1)
+               rhsrow(:,m) = col_row_tmp(:,2)
             end do
             !All procs will have the same lhscol and rhsrow after this loop+broadcast
+            deallocate(col_row_tmp)
          end if
 
          !Loop over field compound dimension
@@ -1087,7 +1094,7 @@ contains
   end subroutine finish_fields_layouts
 
   subroutine kt2ki (i, n, ik, it)
-
+    use mp, only: mp_abort
     use file_utils, only: error_unit
     use dist_fn, only: l_links, r_links, N_class, i_class
 
@@ -1113,7 +1120,7 @@ contains
        write(ierr,*) 'Error in kt2ki:'
        write(ierr,*) 'i = ',i,' ik = ',ik,' it = ',it,&
             ' N(i) = ',N_class(i),' nn = ',nn
-       stop
+       call mp_abort('Error in kt2ki')
     end if
 ! 
 ! Get position in this supercell, counting from the left

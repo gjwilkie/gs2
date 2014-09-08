@@ -13,6 +13,7 @@ ball_mod = \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
+	 mp.o \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
@@ -132,6 +133,7 @@ eiktest_mod = \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
+	 mp.o \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
@@ -424,6 +426,7 @@ rungridgen_mod = \
 	 constants.o \
 	 file_utils.o \
 	 gridgen4mod.o \
+	 mp.o \
 	 rungridgen.o \
 	 spl.o 
 
@@ -679,10 +682,12 @@ geometry.o: \
 	 peq.o 
 geq.o: \
 	 constants.o \
+	 mp.o \
 	 netcdf_utils.o \
 	 spl.o 
 gridgen4mod.o: \
 	 constants.o \
+	 mp.o \
 	 spl.o 
 gs2.o: \
 	 gs2_main.o 
@@ -828,9 +833,7 @@ gs2_transforms.o: \
 	 sorting.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o \
-	 convert.o \
-	 file_utils.o 
+	 constants.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -911,6 +914,7 @@ le_derivatives.o: \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 le_grids.o \
+	 mp.o \
 	 redistribute.o \
 	 run_parameters.o \
 	 theta_grid.o 
@@ -948,7 +952,8 @@ mp.o: \
 mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
-	 file_utils.o 
+	 file_utils.o \
+	 mp.o 
 nonlinear_terms.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
@@ -979,6 +984,7 @@ parameter_scan.o: \
 parameter_scan_arrays.o: 
 peq.o: \
 	 constants.o \
+	 mp.o \
 	 netcdf_utils.o \
 	 spl.o 
 pgplot_utils.o: \
@@ -1015,7 +1021,8 @@ species.o: \
 spfunc.o: \
 	 constants.o 
 spl.o: 
-text_options.o: 
+text_options.o: \
+	 mp.o 
 theta_grid.o: \
 	 constants.o \
 	 file_utils.o \

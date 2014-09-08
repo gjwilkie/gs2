@@ -46,7 +46,7 @@ module deq
 
 contains
   
-  subroutine dfitin(eqfile, psi_0, psi_a, rmaj, B_T, amin, initeq, big)
+  subroutine dfitin(eqfile, psi_0, psi_a, rmaj, B_T, amin, initeq)
 !
 !     This subroutine reads an DFIT output file containing 
 !     the axisymmetric magnetic field geometry on a rectangular 
@@ -62,6 +62,7 @@ contains
 !     rleft      position of leftmost point of domain
 !     zhei       total height of domain
 !
+    use mp, only: mp_abort
     use constants, only: pi, twopi
     use splines, only: inter_cspl
     implicit none
@@ -74,7 +75,7 @@ contains
 !    real, dimension(:), allocatable :: temp, zp, zx1, zxm, zy1, zyn
     character(80) :: filename, eqfile
     
-    integer :: i, j, init, initeq, big, nhb, nwb
+    integer :: i, j, init, initeq, nhb, nwb
     integer :: jmin, jmax
     
     data init /1/
@@ -230,7 +231,7 @@ contains
        if(thetab(i) == thetab(i+1)) then
           write(*,*) 'Duplicates near theta = 0 not allowed.'
           write(*,*) i, i+1, ' Stopping.'
-          stop
+          call mp_abort('Duplicates near theta = 0 not allowed.')
        endif
     enddo
     deallocate (rbbbs, zbbbs)
@@ -442,7 +443,8 @@ contains
   end subroutine bgradient
 
   subroutine eqitem(r, thetin, f, fstar)
-      
+    use mp, only: mp_abort
+    implicit none
     integer :: i, j, istar, jstar
     real, intent (in) :: r, thetin, f(:,:)
     real, intent (out) :: fstar
@@ -458,7 +460,7 @@ contains
        write(*,*) 'No evaluation of eqitem allowed outside'
        write(*,*) 'or on edge of R domain'
        write(*,*) r, thetin, dfit_R(nw), r_pos
-       stop      
+       call mp_abort('No evaluation of eqitem allowed outside or on edge of R domain')
     endif
 
 ! ensure point is on Z mesh
@@ -467,7 +469,7 @@ contains
        write(*,*) 'No evaluation of eqitem allowed outside'
        write(*,*) 'or on edge of Z domain'
        write(*,*) r, thetin, dfit_Z(1), dfit_Z(nh), z_pos
-       stop
+       call mp_abort('No evaluation of eqitem allowed outside or on edge of Z domain')
     endif
     
     istar=0
