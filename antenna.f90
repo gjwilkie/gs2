@@ -64,7 +64,7 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('A Langevin antenna is included, with characteristics:')")
           write (report_unit, *) 
-          write (report_unit, fmt="('Frequency:  (',e10.4,', ',e10.4,')')") w_antenna
+          write (report_unit, fmt="('Frequency:  (',e11.4,', ',e11.4,')')") w_antenna
           write (report_unit, fmt="('Number of independent k values: ',i3)") nk_stir
           if (write_antenna) then
              write (report_unit, *) 
@@ -95,10 +95,10 @@ contains
        write (unit, fmt="(' &',a)") "driver"
        write (unit, fmt="(' ant_off = ',L1)") ant_off
        write (unit, fmt="(' write_antenna = ',L1)") write_antenna
-       write (unit, fmt="(' amplitude = ',e16.10)") amplitude
-       write (unit, fmt="(' w_antenna = (',e16.10,', ',e16.10,')')") w_antenna
-       write (unit, fmt="(' w_dot = ',e16.10)") w_dot
-       write (unit, fmt="(' t0 = ',e16.10)") t0
+       write (unit, fmt="(' amplitude = ',e17.10)") amplitude
+       write (unit, fmt="(' w_antenna = (',e17.10,', ',e17.10,')')") w_antenna
+       write (unit, fmt="(' w_dot = ',e17.10)") w_dot
+       write (unit, fmt="(' t0 = ',e17.10)") t0
        write (unit, fmt="(' nk_stir = ',i3)") nk_stir
        write (unit, fmt="(' /')")
 
@@ -109,8 +109,8 @@ contains
            write(unit, fmt="(' kx = ',i2,' ky = ',i2,' kz = ',i2)") &
                 kx_stir(i), ky_stir(i), kz_stir(i)
            write(unit, fmt="(' travel = ',L1)") trav(i)
-           write(unit, fmt="(' a = (',e19.13,',',e19.13,')')") a_ant(i)
-           write(unit, fmt="(' b = (',e19.13,',',e19.13,') /')") b_ant(i)
+           write(unit, fmt="(' a = (',e20.13,',',e20.13,')')") a_ant(i)
+           write(unit, fmt="(' b = (',e20.13,',',e20.13,') /')") b_ant(i)
         end do
   end subroutine wnml_antenna
 

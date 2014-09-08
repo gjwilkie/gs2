@@ -183,7 +183,7 @@ contains
        case (collision_model_none)
           write (unit, fmt="(' collision_model = ',a)") '"collisionless"'
        end select
-       write (unit, fmt="(' cfac = ',f5.3)") cfac
+       write (unit, fmt="(' cfac = ',f6.3)") cfac
        write (unit, fmt="(' heating = ',L1)") heating
        write (unit, fmt="(' /')")
   end subroutine wnml_collisions

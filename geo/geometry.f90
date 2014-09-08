@@ -2737,7 +2737,7 @@ end subroutine geofax
 !            Bmod(i), bgrad(i,2)
     enddo
 
-  100 format(20(1x,g12.6))
+  100 format(20(1x,g13.6))
   end subroutine test
 
   subroutine tdef(nthg, ntheta_returned)

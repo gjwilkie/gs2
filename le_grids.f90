@@ -188,7 +188,7 @@ contains
        write (unit, fmt="(' nesub = ',i4)") nesub
        write (unit, fmt="(' nesuper = ',i4)") nesuper
        write (unit, fmt="(' ngauss = ',i4)") ngauss
-       write (unit, fmt="(' vcut = ',e16.10)") vcut
+       write (unit, fmt="(' vcut = ',e17.10)") vcut
        write (unit, fmt="(' /')")
   end subroutine wnml_le_grids
 

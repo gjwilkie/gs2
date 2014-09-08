@@ -43,8 +43,8 @@ contains
    integer:: unit
      write (unit, *)
      write (unit, fmt="(' &',a)") "kt_grids_single_parameters"
-     write (unit, fmt="(' aky = ',e16.10)") aky
-     write (unit, fmt="(' theta0 = ',e16.10)") theta0
+     write (unit, fmt="(' aky = ',e17.10)") aky
+     write (unit, fmt="(' theta0 = ',e17.10)") theta0
      write (unit, fmt="(' /')")
   end subroutine wnml_kt_grids_single
 
@@ -180,17 +180,17 @@ contains
      write (unit, *)
      write (unit, fmt="(' &',a)") "kt_grids_range_parameters"
      write (unit, fmt="(' naky = ',i3)") naky
-     write (unit, fmt="(' aky_min = ',e16.10)") aky_min
-     write (unit, fmt="(' aky_max = ',e16.10)") aky_max
+     write (unit, fmt="(' aky_min = ',e17.10)") aky_min
+     write (unit, fmt="(' aky_max = ',e17.10)") aky_max
      write (unit, fmt="(' nn0 = ',i3)") nn0
      write (unit, fmt="(' n0_min = ',i10)") n0_min
      write (unit, fmt="(' n0_max = ',i10)") n0_max
-     write (unit, fmt="(' rhostar_range = ',e16.10)") rhostar_range
+     write (unit, fmt="(' rhostar_range = ',e17.10)") rhostar_range
      write (unit, fmt="(' ntheta0 = ',i3)") ntheta0
-     write (unit, fmt="(' theta0_min = ',e16.10)") theta0_min
-     write (unit, fmt="(' theta0_max = ',e16.10)") theta0_max
-     write (unit, fmt="(' akx_min = ',e16.10)") akx_min
-     write (unit, fmt="(' akx_max = ',e16.10)") akx_max
+     write (unit, fmt="(' theta0_min = ',e17.10)") theta0_min
+     write (unit, fmt="(' theta0_max = ',e17.10)") theta0_max
+     write (unit, fmt="(' akx_min = ',e17.10)") akx_min
+     write (unit, fmt="(' akx_max = ',e17.10)") akx_max
      select case(kyspacingopt_switch)
      case (kyspacingopt_linear)
         write (unit, fmt="(' kyspacing_option = ',A)") "linear"
@@ -302,7 +302,7 @@ contains
     !Report grid values
     do j = 1, naky
        do i = 1, ntheta0
-          write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4,' kx rho = ',e10.4)") &
+          write (report_unit, fmt="('ky rho = ',e11.4,' theta0 = ',e11.4,' kx rho = ',e11.4)") &
                aky(j),theta0(i,j),akx(i)
        end do
     end do
@@ -319,7 +319,7 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('IF using perp ExB flow shear in BALLOONING SPACE there is an ERROR that will corrupt results.')")
           write (report_unit, fmt="('check_kt_grids_range: inappropriate theta0 grid')")
-          write (report_unit, fmt="('In ballooning space with sheared flow, 2pi-theta0_max+theta0_min =',e10.4,' must be set equal to dtheta = ',e10.4)") twopi-theta0_max+theta0_min, dtheta0
+          write (report_unit, fmt="('In ballooning space with sheared flow, 2pi-theta0_max+theta0_min =',e11.4,' must be set equal to dtheta = ',e11.4)") twopi-theta0_max+theta0_min, dtheta0
        endif
     endif
 
@@ -433,7 +433,7 @@ contains
     write (report_unit, fmt="('A set of ',i3,' k_perps will be evolved.')") max(naky,ntheta0)
     write (report_unit, *) 
     do i=1, max(naky,ntheta0)
-       write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4)") aky(i), theta0(i)
+       write (report_unit, fmt="('ky rho = ',e11.4,' theta0 = ',e11.4)") aky(i), theta0(i)
     end do
   end subroutine check_kt_grids_specified
 
@@ -510,9 +510,9 @@ contains
      write (unit, fmt="(' &',a)") "kt_grids_box_parameters"
      write (unit, fmt="(' nx = ',i4)") nx_private
      write (unit, fmt="(' ny = ',i4)") ny_private
-     write (unit, fmt="(' Ly = ',e16.10)") ly
+     write (unit, fmt="(' Ly = ',e17.10)") ly
      if (rtwist /= 0.) then
-        write (unit, fmt="(' rtwist = ',e16.10)") rtwist
+        write (unit, fmt="(' rtwist = ',e17.10)") rtwist
      else
         write (unit, fmt="(' jtwist = ',i4)") jtwist
      end if

@@ -21,14 +21,14 @@ contains
        write (unit, *)
        write (unit, fmt="(' &',a)") "theta_grid_gridgen_knobs"
        write (unit, fmt="(' npadd =    ',i4)") npadd
-       write (unit, fmt="(' alknob =   ',e16.10)") alknob
-       write (unit, fmt="(' epsknob =  ',e16.10)") epsknob
-       write (unit, fmt="(' bpknob =   ',e16.10)") bpknob
-       write (unit, fmt="(' extrknob = ',e16.10)") extrknob
-       write (unit, fmt="(' tension =  ',e16.10)") tension
-       write (unit, fmt="(' thetamax = ',e16.10)") thetamax
-       write (unit, fmt="(' deltaw =   ',e16.10)") deltaw
-       write (unit, fmt="(' widthw =   ',e16.10)") widthw
+       write (unit, fmt="(' alknob =   ',e17.10)") alknob
+       write (unit, fmt="(' epsknob =  ',e17.10)") epsknob
+       write (unit, fmt="(' bpknob =   ',e17.10)") bpknob
+       write (unit, fmt="(' extrknob = ',e17.10)") extrknob
+       write (unit, fmt="(' tension =  ',e17.10)") tension
+       write (unit, fmt="(' thetamax = ',e17.10)") thetamax
+       write (unit, fmt="(' deltaw =   ',e17.10)") deltaw
+       write (unit, fmt="(' widthw =   ',e17.10)") widthw
        write (unit, fmt="(' /')")
   end subroutine wnml_theta_grid_gridgen
 
@@ -371,8 +371,8 @@ contains
      if (.not. exist) return
      write (unit, *)
      write (unit, fmt="(' &',a)") "theta_grid_salpha_knobs"
-     write (unit, fmt="(' alpmhdfac = ',e16.10)") alpmhdfac
-     write (unit, fmt="(' alpha1 =    ',e16.10)") alpha1
+     write (unit, fmt="(' alpmhdfac = ',e17.10)") alpmhdfac
+     write (unit, fmt="(' alpha1 =    ',e17.10)") alpha1
      
      select case (model_switch)
         
