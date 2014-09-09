@@ -537,6 +537,7 @@ contains
          write_symmetry, write_pflux_sym, write_pflux_tormom, &
          write_correlation, nwrite_big_tot, write_correlation_extend, &
          write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
+         write_avg_moments, write_final_moments, write_final_epar, &
          ob_midplane=ob_midplane)
     
     if (write_cerr) then
@@ -2179,16 +2180,20 @@ contains
     ! EAB 09/17/03 -- modify dump_fields_periodically to print out inverse fft of fields in x,y
     nnx = yxf_lo%nx
     nny = yxf_lo%ny
+
+    !<DD>Commented as removed writing of ntot in favour of apar for consistency
+    !call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+
     if (fphi > epsilon(0.0)) then
        allocate (yxphi(nnx,nny,-ntgrid:ntgrid))
-       !<DD>Commented as removed writing of ntot in favour of apar for consistency
-       !call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
        call transform2 (phinew, yxphi, nny, nnx)
     end if
+
     if (fapar > epsilon(0.0)) then
        allocate (yxapar(nnx,nny,-ntgrid:ntgrid))
        call transform2 (aparnew, yxapar, nny, nnx)
     end if
+
     if (fbpar > epsilon(0.0)) then 
        allocate (yxbpar(nnx,nny,-ntgrid:ntgrid))
        call transform2 (bparnew, yxbpar, nny, nnx)
