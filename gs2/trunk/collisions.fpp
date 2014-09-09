@@ -3580,7 +3580,7 @@ contains
 ! Fixes for wfb treatment below, use same je definition in ALL cases
 !   je  = #physical xi values at location, includes duplicate point at vpar=0
 !  je-1 = #physical xi values removing duplicate vpar=0 point
-       je=2*jend(ig)
+       je=max(2*jend(ig),2*ng2+1)
        nxi_scatt=je-1
        if (jend(ig) == ng2+1 .and.special_wfb_lorentz) then
           nxi_scatt=nxi_scatt-1
