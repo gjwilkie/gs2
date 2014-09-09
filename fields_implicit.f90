@@ -34,6 +34,8 @@ contains
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use gs2_layouts, only: init_gs2_layouts
+    use run_parameters, only: fphi, fapar, fbpar
+    use mp, only: mp_abort
 !    use parameter_scan_arrays, only: run_scan
     implicit none
     logical, parameter :: debug=.false.
@@ -41,6 +43,13 @@ contains
 
     if (initialized) return
     initialized = .true.
+
+    !Check we have at least one field. If not abort.
+    !Note, we do this here rather than as soon as we read input file
+    !as other field types may support operation with no fields (e.g. 'local' does)
+    if((fphi.lt.epsilon(0.0)).and.(fapar.lt.epsilon(0.0)).and.(fbpar.lt.epsilon(0.0)))then
+       call mp_abort("Field_option='implicit' requires at least one field is non-zero",.true.)
+    endif
 
     if (debug) write(6,*) "init_fields_implicit: gs2_layouts"
     call init_gs2_layouts
