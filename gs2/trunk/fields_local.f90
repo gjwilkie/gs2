@@ -471,11 +471,18 @@ contains
     class(cell_type), intent(inout) :: self
     
     !Set our locality. Note here we assume all rb have same size
-    self%is_empty=self%rb(1)%nrow.eq.0
+    if(size(self%rb).gt.0)then
+       self%is_empty=self%rb(1)%nrow.eq.0
+       self%is_all_local=self%rb(1)%nrow.eq.self%nrow
+    else
+       self%is_empty=.true.
+       self%is_all_local=.false.
+    endif
+
     !/Also ignore the ky=kx=0 mode
     self%is_empty=(self%is_empty.or.(abs(aky(self%ik_ind)).lt.epsilon(0.0).and.abs(akx(self%it_ind)).lt.epsilon(0.0)))
     self%is_local=pc%is_local(self%it_ind,self%ik_ind).eq.1
-    self%is_all_local=self%rb(1)%nrow.eq.self%nrow
+
   end subroutine c_set_locality
 
   !>Test if a given row belongs to the current cell
@@ -486,7 +493,11 @@ contains
     logical :: c_has_row
     !NOTE: Here we assume all row blocks in the cell have the same
     !row limits
-    c_has_row=(irow.ge.self%rb(1)%row_llim.and.irow.le.self%rb(1)%row_ulim)
+    if(size(self%rb).gt.0)then
+       c_has_row=(irow.ge.self%rb(1)%row_llim.and.irow.le.self%rb(1)%row_ulim)
+    else
+       c_has_row=.false.
+    endif
   end function c_has_row
 
 !------------------------------------------------------------------------
@@ -2727,10 +2738,12 @@ contains
           write(unit,'("        ",4(" ",A8," "))') "ic", "rllim", "rulim", "nrow"
           write(unit,'("        ",4(" ",9("-")))')
           do ic=1,self%kyb(ik)%supercells(is)%ncell
-             write(unit,'("        ",4(I9," "))') ic,&
-                  self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_llim,&
-                  self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_ulim,&
-                  self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             if(size(self%kyb(ik)%supercells(is)%cells(ic)%rb).gt.0)then
+                write(unit,'("        ",4(I9," "))') ic,&
+                     self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_llim,&
+                     self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_ulim,&
+                     self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             endif
           enddo
           write(unit,'("        ",4(" ",9("-")))')
        enddo
@@ -3317,7 +3330,11 @@ contains
              if(fieldmat%kyb(ik)%supercells(is)%is_local) call free_comm(tmp)
 
              !Record the number of responsible rows, note we assume all rb have same size
-             self%nresp_per_cell(it,ik)=fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             if(size(fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb).gt.0)then
+                self%nresp_per_cell(it,ik)=fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             else
+                self%nresp_per_cell(it,ik)=0
+             endif
           enddo
        enddo
     enddo
