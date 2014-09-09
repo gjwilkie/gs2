@@ -1489,7 +1489,13 @@ contains
     complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
     complex, dimension (lo%llim_proc:), intent (out) :: total
     integer :: ixi, ie, il, ile, ig, it, ik
+    integer :: nxup
     total = cmplx(0.0,0.0)
+    if (nxi .gt. 2*ng2) then
+       nxup=nxi+1
+    else
+       nxup=nxi
+    endif
     do ile = lo%llim_proc, lo%ulim_proc
        it = it_idx (lo,ile)
        ik = ik_idx (lo,ile)
@@ -1503,7 +1509,7 @@ contains
 !   needed in collision operator as EQUIVALENT to g_lo(il=nlambda, isign=2).
 !   (In collisions at ig=0, both of these points are EXACTLY equivalent, xi=0.)
 !  
-          do ixi=1, nxi+1
+          do ixi=1, nxup
              il = ixi_to_il(ig,ixi)
              total(ile) = total(ile) + w(ie) * wl(ig,il) * g(ixi,ie,ile)
           end do
