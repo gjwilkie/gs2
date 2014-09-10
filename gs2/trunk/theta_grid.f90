@@ -486,6 +486,7 @@ contains
     use constants, only: pi
     use theta_grid_params, only: eps, epsl, shat_param => shat, pk
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
+    use file_utils, only: error_unit
     implicit none
     integer, intent (in) :: nperiod
     integer, intent (in out) :: ntheta, ntgrid, nbset
@@ -619,12 +620,20 @@ contains
     ! BD: What are gds23 and gds24?  Who put this here?
     ! MB: gds23 and gds24 are geometrical factors appearing at next order in gk eqn
     ! MB: NEED TO INCLUDE SHIFT IN BELOW EXPRESSIONS
-    gds23 = -0.5*epsl*shat*theta*(1.+2.*eps*cos(theta))/eps
-    gds24_noq = 0.5*epsl*(1.+eps*cos(theta))/eps
+    !<DD> The following few lines will cause an issue in the (semi-)valid case where eps=0.0 so adding a guard
+    !     here. These terms are used in lowflow calculations
+    if(eps>epsilon(0.0))then
+       gds23 = -0.5*epsl*shat*theta*(1.+2.*eps*cos(theta))/eps
+       gds24_noq = 0.5*epsl*(1.+eps*cos(theta))/eps
+       ! MB: NEED TO INCLUDE SHIFT BELOW
+       cvdrift_th = -0.25*(cos(theta))*epsl**2/eps
+    else
+       write(error_unit(),'("Warning : Some lowflow related geometrical terms are forced to zero in cases with eps=0.")')
+       gds23 = 0.
+       gds24_noq = 0.
+       cvdrift_th = 0.
+    endif
     gds24 = shat*gds24_noq
-
-    ! MB: NEED TO INCLUDE SHIFT BELOW
-    cvdrift_th = -0.25*(cos(theta))*epsl**2/eps
     gbdrift_th = cvdrift_th
 
     if (model_switch /= model_alpha1) then
