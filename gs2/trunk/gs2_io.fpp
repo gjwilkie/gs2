@@ -3010,19 +3010,19 @@ contains
 # endif
     implicit none
     integer, intent(in) :: nout, nout_movie
-    integer, parameter :: nsync=10
 # ifdef NETCDF
+    integer, parameter :: nsync=10
     integer :: status
 
     !Main file
-    if(mod(nout,10) == 0) then
+    if(mod(nout,nsync) == 0) then
        status = nf90_sync (ncid)
        if (status /= NF90_NOERR) call netcdf_error (status)
     endif
 
     !Movie file
     if(my_make_movie) then
-       if(mod(nout_movie,10) == 0) then
+       if(mod(nout_movie,nsync) == 0) then
           status = nf90_sync (ncid_movie)       
           if (status /= NF90_NOERR) call netcdf_error (status)
        endif
