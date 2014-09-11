@@ -684,6 +684,7 @@ contains
     use file_utils, only: input_unit, input_unit_exist
     use theta_grid, only: nperiod, ntheta
 !    use kt_grids, only: box
+    use run_parameters, only: fphi
     use mp, only: proc0
     implicit none
     integer :: in_file
@@ -772,6 +773,13 @@ contains
           print_line = .false.
           print_flux_line = .false.
        end if
+
+       !These don't store any data if fphi=0 so don't bother
+       !calculating it.
+       if(fphi.eq.0) write_symmetry = .false.
+       if(fphi.eq.0) write_pflux_sym = .false.
+       if(fphi.eq.0) write_correlation = .false.
+       if(fphi.eq.0) write_correlation_extend = .false.
 
        if (.not. save_for_restart) nsave = -1
 ! changed temporarily for testing -- MAB
@@ -932,7 +940,7 @@ contains
     use mp, only: proc0, broadcast
     use prof, only: prof_entering, prof_leaving
     use gs2_time, only: user_time
-    use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom,nc_exchange, nc_final_fields
+    use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom,nc_exchange, nc_final_fields, nc_sync
     use le_grids, only: negrid
     use nonlinear_terms, only: nonlin
     use antenna, only: antenna_w
@@ -1324,6 +1332,9 @@ contains
     ! Update the counter in parameter_scan_arrays
     scan_nout = nout
 
+    !Now sync the data to file (note doesn't actually sync every call)
+    if (proc0) call nc_sync(nout,nout_movie)
+
     !Increment loop counter
     nout = nout + 1
 
@@ -1396,7 +1407,7 @@ contains
     fluxfac(1) = 1.0
 
     !This was previously guarded by a "if (write_flux_line) then" 
-    !statement for somereason
+    !statement for some reason
     if(proc0) call nc_loop (nout, t, fluxfac, &
          phinew(igomega,:,:), phi2, phi2_by_mode, &
          aparnew(igomega,:,:), apar2, apar2_by_mode, &

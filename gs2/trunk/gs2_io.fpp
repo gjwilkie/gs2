@@ -18,7 +18,7 @@ module gs2_io
   public :: nc_loop_movie, nc_write_moments, nc_exchange
 !<DD>  public :: nc_write_fields
   public :: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
-  public :: nc_loop_partsym_tormom 
+  public :: nc_loop_partsym_tormom, nc_sync
 
   logical, parameter :: serial_io = .true.
 # ifdef NETCDF
@@ -124,22 +124,22 @@ contains
       write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
       write_avg_moments, write_final_moments, write_final_epar, &
       ob_midplane) 
-
     !write_fields_over_time added by EGH 08/2009
 !David has made some changes to this subroutine (may 2005) now should 
 !be able to do movies for linear box runs as well as nonlinear box runs.
-
-    use mp, only: proc0, barrier
+    use mp, only: proc0
+# ifdef NETCDF
+    use mp, only: barrier
     use file_utils, only: run_name
     use gs2_transforms, only: init_transforms
     use kt_grids, only: naky, ntheta0,nx,ny
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, negrid
     use species, only: nspec
-# ifdef NETCDF
     use netcdf, only: NF90_CLOBBER, nf90_create
     use netcdf_utils, only: get_netcdf_code_precision, netcdf_real
 # endif
+    implicit none
     logical, intent(in) :: write_nl_flux, write_omega
     logical, intent(in) :: write_hrate, make_movie, write_moments
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
@@ -244,17 +244,16 @@ contains
   end subroutine init_gs2_io
 
   subroutine define_dims (nwrite_big_tot)
-
+# ifdef NETCDF
     use file_utils, only: num_input_lines
     use kt_grids, only: naky, ntheta0, jtwist_out
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, negrid
     use species, only: nspec
-# ifdef NETCDF
     use netcdf, only: NF90_UNLIMITED
     use netcdf, only: nf90_def_dim
 # endif
-
+    implicit none
     integer, intent (in) :: nwrite_big_tot
 # ifdef NETCDF
     integer :: status
@@ -340,8 +339,9 @@ contains
     use le_grids, only: negrid, nlambda, energy, al
     use nonlinear_terms, only: nonlin
     use netcdf, only: nf90_put_var
-    use constants, only: pi
-    
+# endif    
+    implicit none
+# ifdef NETCDF
     integer :: status
     real :: nmesh
 
@@ -427,7 +427,10 @@ contains
   end subroutine nc_grids_mymovie
 
   subroutine netcdf_init (serial_io2)
+# ifdef NETCDF
     use mp, only: proc0
+# endif
+    implicit none
     logical, intent(in) :: serial_io2
 # ifdef NETCDF
     proc_write = proc0 .or. (.not.serial_io2)
@@ -435,11 +438,11 @@ contains
   end subroutine netcdf_init
 
   subroutine nc_finish
-    use mp, only: proc0
 # ifdef NETCDF
+    use mp, only: proc0
     use netcdf, only: nf90_close
     use netcdf_utils, only: netcdf_error
-
+    implicit none
     integer :: status
 
     if (proc0) then
@@ -459,10 +462,9 @@ contains
 # ifdef NETCDF    
     use file_utils, only: num_input_lines, get_input_unit
     use netcdf, only: nf90_put_var
-
+    implicit none
     character(200) line
     integer, dimension (2) :: nin_start, nin_count
-
     integer :: status, n, unit
 
     nin_start(1) = 1
@@ -487,18 +489,18 @@ contains
        write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
        write_correlation_extend, write_avg_moments, write_final_moments, write_final_epar, &
        ob_midplane)
- 
+# ifdef NETCDF 
     use file_utils, only: error_unit
     use mp, only: nproc
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi, fapar, fbpar
     use parameter_scan_arrays, only: write_scan_parameter
-# ifdef NETCDF
     use netcdf, only: NF90_CHAR, NF90_INT, NF90_GLOBAL
     use netcdf, only: nf90_def_var, nf90_put_att, nf90_enddef, nf90_put_var
     use netcdf, only: nf90_inq_libvers, nf90_inquire_dimension
     use netcdf_utils, only: netcdf_real
 # endif
+    implicit none
     logical, intent(in) :: write_nl_flux, write_omega
     logical, intent(in) :: write_hrate, write_final_antot
     logical, intent(in) :: write_eigenfunc, write_verr, write_moments
@@ -1543,13 +1545,10 @@ contains
   subroutine define_vars_mymovie
 # ifdef NETCDF
     use run_parameters, only: fphi, fapar, fbpar
-
     use netcdf, only: NF90_INT, NF90_GLOBAL
     use netcdf, only: nf90_def_var, nf90_put_att, nf90_enddef
     use netcdf_utils, only: netcdf_real
-# endif
     implicit none
-# ifdef NETCDF
     integer :: status
 
     ! added by EAB 03/05/04 for GS2 movies
@@ -1619,14 +1618,15 @@ contains
   end subroutine define_vars_mymovie
 
   subroutine nc_eigenfunc (phase)
+# ifdef NETCDF
     use convert, only: c2r
     use run_parameters, only: fphi, fapar, fbpar
     use fields_arrays, only: phi, apar, bpar
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     complex, dimension(:,:), intent (in) :: phase
 # ifdef NETCDF
     complex, dimension(-ntgrid:ntgrid, ntheta0, naky) :: tmp
@@ -1721,23 +1721,24 @@ contains
 
 !CMR begin
   subroutine nc_write_moments (nout, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1, ob_midplane) 
-    use convert, only: c2r
     use theta_grid, only: ntgrid
+# ifdef NETCDF
+    use convert, only: c2r
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     complex, dimension (-ntgrid:,:,:,:), intent (in) :: ntot, density, upar, tpar, tperp
     complex, dimension (-ntgrid:,:,:,:), intent (in) :: qparflux, pperpj1, qpperpj1
     integer, intent (in) :: nout
     logical, optional, intent(in) :: ob_midplane
+# ifdef NETCDF
     real, dimension (2, 2*ntgrid+1, ntheta0, naky, nspec) :: ri4
     real, dimension (2, ntheta0, naky, nspec) :: ri3
     integer, dimension (6) :: start6, count6
     integer, dimension (5) :: start5, count5
     integer :: status
-# ifdef NETCDF
 
     if (present(ob_midplane)) then
        if (ob_midplane ) then
@@ -1841,15 +1842,15 @@ contains
 !CMR end
 
   subroutine nc_final_fields
+# ifdef NETCDF
     use convert, only: c2r
     !use fields_arrays, only: phi, apar, bpar ! EGH changed Jan 14
     use fields_arrays, only: phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-# ifdef NETCDF
     use run_parameters, only: fphi, fapar, fbpar
     use netcdf, only: nf90_put_var
-
+    implicit none
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
     integer :: status
 
@@ -1874,13 +1875,13 @@ contains
   end subroutine nc_final_fields
 
   subroutine nc_final_epar (epar)
-
 # ifdef NETCDF
     use convert, only: c2r
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     complex, dimension (:,:,:), intent (in) :: epar
 # ifdef NETCDF
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
@@ -1893,13 +1894,14 @@ contains
   end subroutine nc_final_epar
 
   subroutine nc_final_moments (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+# ifdef NETCDF
     use convert, only: c2r
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     complex, dimension (:,:,:,:), intent (in) :: ntot, density, upar, tpar, tperp
     complex, dimension (:,:,:,:), intent (in) :: qparflux, pperpj1, qpperpj1
 # ifdef NETCDF
@@ -1992,12 +1994,13 @@ contains
 !Note these are averaged (volume/field line) moments.
   subroutine nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, ntot20_by_mode, &
        phi00, ntot00, density00, upar00, tpar00, tperp00, tpar2_by_mode, tperp2_by_mode)
+# ifdef NETCDF
     use convert, only: c2r
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     integer, intent (in) :: nout
     real, dimension (:), intent (in) :: ntot2, ntot20
     real, dimension (:,:,:), intent (in) :: ntot2_by_mode, ntot20_by_mode
@@ -2087,14 +2090,15 @@ contains
   end subroutine nc_loop_moments
 
   subroutine nc_final_an (antot, antota, antotp)
+# ifdef NETCDF
     use convert, only: c2r
     use run_parameters, only: fphi, fapar, fbpar
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-    complex, dimension (:,:,:) :: antot, antota, antotp ! intent?
+    implicit none
+    complex, dimension (:,:,:), intent(in) :: antot, antota, antotp
 # ifdef NETCDF
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
     integer :: status
@@ -2120,16 +2124,13 @@ contains
   end subroutine nc_final_an
 
   subroutine nc_exchange (nout, exchange, exchange_avg)
-
+# ifdef NETCDF
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-
     implicit none
-
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: exchange
     real, dimension (:), intent (in) :: exchange_avg
@@ -2161,19 +2162,19 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_exchange_by_k_id)
     end if
 # endif
-
   end subroutine nc_exchange
 
   subroutine nc_qflux (nout, qheat, qmheat, qbheat, &
        heat_par,  mheat_par,  bheat_par, &
        heat_perp, mheat_perp, bheat_perp, &
        heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
+# ifdef NETCDF
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi, fapar, fbpar
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: qheat, qmheat, qbheat
     real, dimension (:), intent (in) :: heat_par, mheat_par, bheat_par
@@ -2253,13 +2254,13 @@ contains
 
   subroutine nc_pflux (nout, pflux, pmflux, pbflux, &
        part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
-
+# ifdef NETCDF
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi, fapar, fbpar
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: pflux, pmflux, pbflux
     real, dimension(:), intent (in) :: part_fluxes, mpart_fluxes, bpart_fluxes
@@ -2312,13 +2313,13 @@ contains
   end subroutine nc_pflux
 
  subroutine nc_pflux_tormom (nout, pflux_tormom, part_tormom_fluxes)
-
+# ifdef NETCDF
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
-# ifdef NETCDF
     use run_parameters, only: fphi
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: pflux_tormom
     real, dimension(:), intent (in) :: part_tormom_fluxes
@@ -2353,17 +2354,16 @@ contains
 # endif
   end subroutine nc_pflux_tormom
 
-
   subroutine nc_vflux (nout, vflux, vmflux, vbflux, &
        mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot, &
        vflux_par, vflux_perp, vflux0, vflux1)
-
+# ifdef NETCDF
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
-# ifdef NETCDF
     use run_parameters, only: fphi, fapar, fbpar
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: vflux, vmflux, vbflux
     real, dimension (:,:,:), intent (in) :: vflux_par, vflux_perp
@@ -2426,13 +2426,13 @@ contains
   end subroutine nc_vflux
 
   subroutine nc_loop_sym (nout, vflx_sym)
-
+    use theta_grid, only: ntgrid
+# ifdef NETCDF
     use species, only: nspec
     use run_parameters, only: fphi
     use le_grids, only: negrid, nlambda
-    use theta_grid, only: ntgrid
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
+    implicit none
 # endif
     integer, intent (in) :: nout
     real, dimension (-ntgrid:,:,:), intent (in) :: vflx_sym
@@ -2459,14 +2459,14 @@ contains
   end subroutine nc_loop_sym
   
   subroutine nc_loop_partsym_tormom (nout, partflx_sym) 
-
+    use theta_grid, only: ntgrid
+# ifdef NETCDF
     use species, only: nspec
     use run_parameters, only: fphi
     use le_grids, only: negrid, nlambda
-    use theta_grid, only: ntgrid
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     integer, intent (in) :: nout
     real, dimension (-ntgrid:,:,:), intent (in) :: partflx_sym
 # ifdef NETCDF
@@ -2492,14 +2492,14 @@ contains
   end subroutine nc_loop_partsym_tormom
 
   subroutine nc_loop_corr (nout,phi_2pi_corr)
-
+    use theta_grid, only: ntgrid
+# ifdef NETCDF
     use convert, only: c2r
     use run_parameters, only: fphi
     use kt_grids, only: naky
-    use theta_grid, only: ntgrid
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     integer, intent (in) :: nout
     complex, dimension (-ntgrid:,:), intent (in) :: phi_2pi_corr
 # ifdef NETCDF
@@ -2528,15 +2528,15 @@ contains
   end subroutine nc_loop_corr
 
   subroutine nc_loop_corr_extend (nout_big,phi_corr,phi2_extend)
-
+# ifdef NETCDF
     use file_utils, only: error_unit
     use convert, only: c2r
     use run_parameters, only: fphi
     use kt_grids, only: ntheta0, naky, jtwist_out
     use theta_grid, only: ntgrid
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
+    implicit none
     integer, intent (in) :: nout_big
     real, dimension (:,:,:), intent (in) :: phi2_extend
     complex, dimension (:,:,:), intent (in) :: phi_corr
@@ -2544,7 +2544,6 @@ contains
     integer, dimension (4) :: start4, count4
     integer, dimension (5) :: start5, count5
     integer :: status, ierr
-
     real, dimension (2, size(phi_corr,1), size(phi_corr,2), size(phi_corr,3)) :: ri3
 
     ierr = error_unit()
@@ -2587,20 +2586,19 @@ contains
        apar0,  apar2,  apar2_by_mode, &
        bpar0, bpar2, bpar2_by_mode, &
        h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
-
-    use gs2_heating, only: heating_diagnostics, hk_repack
+    use gs2_heating, only: heating_diagnostics
+# ifdef NETCDF
+    use gs2_heating, only: hk_repack
     use run_parameters, only: fphi, fapar, fbpar
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use species, only: nspec
     use convert, only: c2r
     use fields_arrays, only: phinew, aparnew, bparnew
-    use parameter_scan_arrays, only: write_scan_parameter,&
-                                     current_scan_parameter_value
-# ifdef NETCDF
-    use netcdf, only: nf90_put_var, nf90_sync
+    use parameter_scan_arrays, only: write_scan_parameter,current_scan_parameter_value
+    use netcdf, only: nf90_put_var
 # endif
-
+    implicit none
     integer, intent (in) :: nout
     real, intent (in) :: time, phi2, apar2, bpar2
     real, dimension (:), intent (in) :: fluxfac, woutunits
@@ -2608,7 +2606,7 @@ contains
     real, dimension(:,:), intent (in) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode, phitot
     type(heating_diagnostics), intent (in) :: h
     type(heating_diagnostics), dimension(:,:), intent (in) :: hk
-    logical :: write_omega, write_hrate
+    logical, intent(in) :: write_omega, write_hrate
 # ifdef NETCDF
     real, dimension (ntheta0) :: field2_by_kx
     real, dimension (naky) :: field2_by_ky
@@ -2911,26 +2909,19 @@ contains
 
     status = nf90_put_var (ncid, phtot_id, phitot, start=start, count=count)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, phtot_id)
-    
-    if (mod(nout, 10) == 0) then
-       status = nf90_sync (ncid)
-       if (status /= NF90_NOERR) call netcdf_error (status)
-    end if
 # endif
   end subroutine nc_loop
 
   ! RN> output full not guiding center moments 
   subroutine nc_loop_fullmom (nout, time, &
        & ntot0, density0, upar0, tpar0, tperp0)
+# ifdef NETCDF
     use kt_grids, only: naky, nakx => ntheta0
     use species, only: nspec
     use convert, only: c2r
-# ifdef NETCDF
-    use netcdf, only: nf90_put_var, nf90_sync
-    use netcdf_utils, only: netcdf_error
+    use netcdf, only: nf90_put_var
 # endif
     implicit none
-
     integer, intent (in) :: nout
     real, intent (in) :: time
     complex, intent(in) :: ntot0(:,:,:), density0(:,:,:), upar0(:,:,:)
@@ -2964,23 +2955,19 @@ contains
     call c2r (tperp0, ri3)
     status = nf90_put_var (ncid, tperp0_id, ri3, start=startmom, count=countmom)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, tperp0_id)
-
-    if (mod(nout, 10) == 0) then
-       status = nf90_sync (ncid)
-       if (status /= NF90_NOERR) call netcdf_error (status)
-    end if
 # endif
   end subroutine nc_loop_fullmom
   ! <RN
 
   ! added by EAB on 03/05/04
   subroutine nc_loop_movie (nout_movie, time, yxphi, yxapar, yxbpar)
+# ifdef NETCDF
     use gs2_layouts, only: yxf_lo
     use theta_grid, only: ntgrid
-# ifdef NETCDF
     use run_parameters, only: fphi, fapar, fbpar
-    use netcdf, only: nf90_put_var, nf90_sync
+    use netcdf, only: nf90_put_var
 # endif
+    implicit none
     integer, intent (in) :: nout_movie
     real, intent (in) :: time
     real, dimension (:,:,:), intent (in):: yxphi, yxapar, yxbpar 
@@ -2999,7 +2986,6 @@ contains
     count(3) = 2*ntgrid+1
     count(4) = 1
 
-
     if ( fphi > zero) then
        status = nf90_put_var (ncid_movie, phi_by_xmode_id, yxphi, start=start, count=count)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, phi_by_xmode_id)
@@ -3014,20 +3000,41 @@ contains
        status = nf90_put_var (ncid_movie, bpar_by_xmode_id, yxbpar, start=start, count=count)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, bpar_by_xmode_id)
     end if
-
-    if (mod(nout_movie, 10) == 0) then
-       status = nf90_sync (ncid_movie)
-       if (status /= NF90_NOERR) call netcdf_error (status)
-    end if
 # endif
   end subroutine nc_loop_movie
 
-  subroutine nc_species
-
-    use species, only: spec
+  !> Sync the files every nsync writes
+  subroutine nc_sync(nout, nout_movie)
 # ifdef NETCDF
-    use netcdf, only: nf90_put_var
+    use netcdf, only: nf90_sync
+# endif
+    implicit none
+    integer, intent(in) :: nout, nout_movie
+    integer, parameter :: nsync=10
+# ifdef NETCDF
+    integer :: status
 
+    !Main file
+    if(mod(nout,10) == 0) then
+       status = nf90_sync (ncid)
+       if (status /= NF90_NOERR) call netcdf_error (status)
+    endif
+
+    !Movie file
+    if(my_make_movie) then
+       if(mod(nout_movie,10) == 0) then
+          status = nf90_sync (ncid_movie)       
+          if (status /= NF90_NOERR) call netcdf_error (status)
+       endif
+    endif
+# endif
+  end subroutine nc_sync
+
+  subroutine nc_species
+# ifdef NETCDF
+    use species, only: spec
+    use netcdf, only: nf90_put_var
+    implicit none
 !    real :: betatot
     integer :: status
 
@@ -3059,16 +3066,14 @@ contains
   end subroutine nc_species
 
   subroutine nc_geo
-
+# ifdef NETCDF
     use theta_grid, only: bmag, gradpar, gbdrift, gbdrift0, &
          cvdrift, cvdrift0, gds2, gds21, gds22, grho, jacob, &
          shat, drhodpsi, eps, cdrift, cdrift0, qval !, surfarea
 !CMR add qval and beta here too, as they are both useful
     use run_parameters, only: beta
-
-# ifdef NETCDF
     use netcdf, only: nf90_put_var
-
+    implicit none
     integer :: status
 
     status = nf90_put_var (ncid, bmag_id, bmag)
@@ -3112,5 +3117,4 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, drhodpsi_id)
 # endif
   end subroutine nc_geo
-
 end module gs2_io
