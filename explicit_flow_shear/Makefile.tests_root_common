@@ -1,0 +1,29 @@
+
+
+#$(info "gs2_mod is $(gs2_mod)")
+
+# This command adds '../../' to all the gs2 modules and gets rid of gs2.o
+TEST_MODS=$(shell echo '$(gs2_mod)' | sed -e "s/gs2.o//" |  sed -e "s/\(\S\+\)/..\/..\/\1/g"  )
+#|  sed -e "s/\(Ldiag\)/..\/..\/\1/g"
+TEST_MODS+= ../../functional_tests.o ../../unit_tests.o 
+
+# All subfolders unless otherwise specified
+TESTS ?= $(wildcard */.) 
+
+
+export
+     
+.PHONY: all $(TESTS) clean
+
+all: $(TESTS)
+
+
+clean upload: 
+	for d in $(TESTS); \
+	do \
+		$(MAKE) $@ -C $$d; \
+	done
+
+
+$(TESTS): 
+	$(MAKE) all -C $@
