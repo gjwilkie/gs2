@@ -98,7 +98,6 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -149,6 +148,11 @@ ffttester_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_write_fields.o \
+	 diagnostics_write_fluxes.o \
+	 diagnostics_write_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -158,6 +162,7 @@ ffttester_mod = \
 	 fields_arrays.o \
 	 fields_implicit.o \
 	 fields_local.o \
+	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -165,6 +170,7 @@ ffttester_mod = \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -184,7 +190,6 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -203,7 +208,8 @@ ffttester_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o 
+	 unit_tests.o \
+	 volume_averages.o 
 
 generate_fftw_wisdom_mod = \
 	 antenna_data.o \
@@ -260,6 +266,11 @@ gs2_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_write_fields.o \
+	 diagnostics_write_fluxes.o \
+	 diagnostics_write_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -268,6 +279,7 @@ gs2_mod = \
 	 fields_arrays.o \
 	 fields_implicit.o \
 	 fields_local.o \
+	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -276,6 +288,7 @@ gs2_mod = \
 	 gridgen4mod.o \
 	 gs2.o \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -295,7 +308,6 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -314,7 +326,8 @@ gs2_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o 
+	 unit_tests.o \
+	 volume_averages.o 
 
 hrate_mod = \
 	 command_line.o \
@@ -388,7 +401,6 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -454,6 +466,7 @@ benchmarks.o: \
 	 runtime_tests.o 
 ceq.o: \
 	 constants.o \
+	 mp.o \
 	 read_chease.o \
 	 spl.o 
 collisions.o: \
@@ -478,6 +491,7 @@ constants.o:
 convert.o: 
 deq.o: \
 	 constants.o \
+	 mp.o \
 	 spl.o 
 diagnostics_config.o: \
 	 file_utils.o \
@@ -574,6 +588,7 @@ dump_response.o: \
 ediff.o: 
 eeq.o: \
 	 constants.o \
+	 mp.o \
 	 runtime_tests.o \
 	 spl.o 
 et.o: \
@@ -654,6 +669,7 @@ file_utils.o: \
 	 command_line.o 
 functional_tests.o: \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_main.o \
 	 job_manage.o \
 	 kt_grids.o \
@@ -679,6 +695,7 @@ geometry.o: \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
+	 mp.o \
 	 peq.o 
 geq.o: \
 	 constants.o \
@@ -768,6 +785,7 @@ gs2_main.o: \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
@@ -833,7 +851,9 @@ gs2_transforms.o: \
 	 sorting.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o 
+	 constants.o \
+	 convert.o \
+	 file_utils.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \
@@ -852,6 +872,7 @@ ideal_ball.o: \
 	 theta_grid.o 
 ideq.o: \
 	 constants.o \
+	 mp.o \
 	 spl.o 
 ingen.o: \
 	 antenna.o \
@@ -949,7 +970,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -990,8 +1010,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -1020,7 +1039,8 @@ species.o: \
 	 text_options.o 
 spfunc.o: \
 	 constants.o 
-spl.o: 
+spl.o: \
+	 mp.o 
 text_options.o: \
 	 mp.o 
 theta_grid.o: \

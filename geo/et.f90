@@ -244,6 +244,9 @@ program eiktest
      write(11,*) 'tri= ',rt
      write(11,*) 'tripri= ',rtpri
      write(11,*) 'surface area= ',surfarea,' avgrmid**2'
+     write(11, *) 'diameter/a = ', diameter(rpofrho(rhoc))
+     write(11, *) 'diameter(rhoc=1.0)/a/2.0 = ', diameter(rpofrho(1.0))/2.0, ' ...  should be 1'
+     write(11, *) 'r/a = ', diameter(rpofrho(rhoc))/diameter(rpofrho(1.0))
   end if
 
 !      write(*,*) 'mag(Bp) at rho= ',rhoc
