@@ -5030,13 +5030,16 @@ endif
 
   subroutine invert_rhs_linked &
        (phi, apar, bpar, phinew, aparnew, bparnew, istep, sourcefac)
-    use dist_fn_arrays, only: gnew, vperp2, aj0, aj1
-    use theta_grid, only: ntgrid
-    use le_grids, only: nlambda, ng2, anon
+    use dist_fn_arrays, only: gnew
+    use theta_grid, only: bmag, ntgrid
+    use le_grids, only: energy, al, nlambda, ng2, anon
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx, idx
     use redistribute, only: fill
     use run_parameters, only: fbpar, fphi
     use species, only: spec
+    use spfunc, only: j0, j1
+    use kt_grids, only: kperp2
+
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
@@ -5052,8 +5055,10 @@ endif
 ! This change sets g_wesson (or h) to be self-periodic for wfb, not g !!!
 ! NB this code change implement this in a linked fluxtube.
 !
-    integer :: ie, is, itl, itr, iglol, iglor
+    integer :: ie, is, itl, itr
     complex :: adjl, adjr, dadj
+    real :: vperp2left, vperp2right, argl, argr, aj0l, aj0r, aj1l, aj1r
+
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        call invert_rhs_1 (phi, apar, bpar, phinew, aparnew, bparnew, &
@@ -5095,17 +5100,24 @@ endif
 !(2) dadj=adjl-adjr then used to apply the self-periodic bc to g_wesson
 !    (was previously applied to g)
 !      
+             vperp2left = bmag(-ntgrid)*al(il)*energy(ie)
+             vperp2right = bmag(ntgrid)*al(il)*energy(ie)
              itl=get_leftmost_it(it,ik)
              itr=get_rightmost_it(it,ik)
-             iglol=idx(g_lo, ik, itl, il, ie, is)
-             iglor=idx(g_lo, ik, itr, il, ie, is)
-             adjl = anon(ie)*2.0*vperp2(-ntgrid,iglol)*aj1(-ntgrid,iglol) &
+             argl = spec(is)%bess_fac*spec(is)%smz*sqrt(energy(ie)*al(il)/bmag(-ntgrid)*kperp2(-ntgrid,itl,ik))
+             argr = spec(is)%bess_fac*spec(is)%smz*sqrt(energy(ie)*al(il)/bmag(ntgrid)*kperp2(ntgrid,itr,ik))
+             aj0l = j0(argl)
+             aj0r = j0(argr)
+             aj1l = j1(argl)
+             aj1r = j1(argr)
+
+             adjl = anon(ie)*2.0*vperp2left*aj1l &
               *bparnew(-ntgrid,itl,ik)*fbpar &
-              + spec(is)%z*anon(ie)*phinew(-ntgrid,itl,ik)*aj0(-ntgrid,iglol) &
+              + spec(is)%z*anon(ie)*phinew(-ntgrid,itl,ik)*aj0l &
               /spec(is)%temp*fphi
-             adjr = anon(ie)*2.0*vperp2(ntgrid,iglor)*aj1(ntgrid,iglor) &
+             adjr = anon(ie)*2.0*vperp2right*aj1r &
               *bparnew(ntgrid,itr,ik)*fbpar &
-              + spec(is)%z*anon(ie)*phinew(ntgrid,itr,ik)*aj0(ntgrid,iglor) &
+              + spec(is)%z*anon(ie)*phinew(ntgrid,itr,ik)*aj0r &
               /spec(is)%temp*fphi
              dadj = adjl-adjr
 
