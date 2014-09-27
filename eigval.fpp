@@ -100,6 +100,10 @@ module eigval
   !Do we specify the initial condition (through ginit)?
   logical :: use_ginit
 
+  !Number of GS2 advance steps per SLEPc call to advance_eigen
+  !May be useful when looking at marginal modes etc.
+  integer :: nadv
+
   !A custom type to make it easy to encapsulate specific settings
   type EpsSettings
      logical :: use_ginit
@@ -259,7 +263,7 @@ contains
 
     namelist /eigval_knobs/ n_eig, max_iter, tolerance, &
          solver_option, extraction_option, which_option, transform_option,&
-         targ_re, targ_im, use_ginit
+         targ_re, targ_im, use_ginit, nadv
     integer :: ierr, in_file
     logical :: exist
 
@@ -275,6 +279,7 @@ contains
        which_option='default'
        transform_option='default'
        use_ginit=.false.
+       nadv=1
 
        !Check if name list exists and if so read it
        in_file=input_unit_exist(nml_name,exist)
@@ -312,6 +317,7 @@ contains
     call broadcast(targ_re)
     call broadcast(targ_im)
     call broadcast(use_ginit)
+    call broadcast(nadv)
   end subroutine read_parameters
 
   !> Write the eigval_knobs namelist
@@ -327,6 +333,7 @@ contains
     write(unit,'(A,A,"=",L1)') inden,'use_ginit',use_ginit
     write(unit,'(A,A,"=",I0)') inden,'n_eig',n_eig
     write(unit,'(A,A,"=",I0)') inden,'max_iter',max_iter
+    write(unit,'(A,A,"=",I0)') inden,'nadv',nadv
     write(unit,'(A,A,"=",F12.5)') inden,'toleranace',tolerance
     write(unit,'(A,A,"=",F12.5)') inden,'targ_re',targ_re
     write(unit,'(A,A,"=",F12.5)') inden,'targ_im',targ_im
@@ -959,14 +966,21 @@ contains
     Vec, intent(inout) :: VecIn, Res
     PetscErrorCode, intent(inout) :: ierr
     integer, parameter :: istep=2
+    integer :: is
+
     !First unpack input vector into gnew
     call VecToGnew(VecIn)
 
     !Now set fields to be consistent with gnew
     call set_init_fields
 
-    !Now do one time step
-    call advance(istep)
+    !Now do a number of time steps
+    do is=1,nadv
+       !Note by using a fixed istep we
+       !force the explicit terms to be excluded
+       !except for the very first call.
+       call advance(istep)
+    enddo
 
     !Now pack gnew into output
     call GnewToVec(Res)
