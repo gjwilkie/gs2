@@ -943,7 +943,7 @@ contains
     use gs2_time, only: code_dt
     implicit none
     complex, intent(in) :: eig
-    Eig_SlepcToGs2=log(eig)*cmplx(0.0,1.0)/code_dt
+    Eig_SlepcToGs2=log(eig)*cmplx(0.0,1.0)/(code_dt*nadv)
   end function Eig_SlepcToGs2
 
   elemental PetscScalar function Eig_Gs2ToSlepc(eig)
@@ -953,9 +953,9 @@ contains
     !If PETSC doesn't have a complex type then return the
     !magnitude of the eigenvalue.
 #ifdef PETSC_USE_COMPLEX
-    Eig_Gs2ToSlepc=exp(-cmplx(0.0,1.0)*code_dt*eig)
+    Eig_Gs2ToSlepc=exp(-cmplx(0.0,1.0)*code_dt*eig*nadv)
 #else
-    Eig_Gs2ToSlepc=abs(exp(-cmplx(0.0,1.0)*code_dt*eig))
+    Eig_Gs2ToSlepc=abs(exp(-cmplx(0.0,1.0)*code_dt*eig*nadv))
 #endif
   end function Eig_Gs2ToSlepc
 
