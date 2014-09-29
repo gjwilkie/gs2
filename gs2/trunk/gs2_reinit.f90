@@ -1,27 +1,30 @@
 module gs2_reinit
   implicit none
 
-  public :: reset_time_step
-  public :: check_time_step
+  public :: reset_time_step, delt_adj
+  public :: check_time_step, time_reinit
   public :: init_reinit, wnml_gs2_reinit
   public :: reduce_time_step, increase_time_step
+
+  private
+
   real :: delt_adj, dt0
-!  real :: delt_cushion = 1.5
   real :: delt_cushion
   real :: delt_minimum 
-  real, save :: time_reinit(2)=0.
+  real :: time_reinit(2)=0.
   logical :: abort_rapid_time_step_change
   logical :: first=.true.
   logical :: in_memory
 contains
+
   subroutine wnml_gs2_reinit(unit)
     implicit none
     integer :: unit
-          write (unit, *)
-          write (unit, fmt="(' &',a)") "reinit_knobs"
-          write (unit, fmt="(' delt_adj = ',e17.10)") delt_adj
-          write (unit, fmt="(' delt_minimum = ',e17.10)") delt_minimum
-          write (unit, fmt="(' /')")       
+    write (unit, *)
+    write (unit, fmt="(' &',a)") "reinit_knobs"
+    write (unit, fmt="(' delt_adj = ',e17.10)") delt_adj
+    write (unit, fmt="(' delt_minimum = ',e17.10)") delt_minimum
+    write (unit, fmt="(' /')")       
   end subroutine wnml_gs2_reinit
 
   subroutine reduce_time_step
@@ -39,7 +42,6 @@ contains
   end subroutine increase_time_step
 
   subroutine reset_time_step (istep, my_exit, job_id)
-
     use collisions, only: c_reset => reset_init, vnmult
     use dist_fn, only: d_reset => reset_init
     use fields, only: f_reset => reset_init, init_fields, force_maxwell_reinit
@@ -59,6 +61,7 @@ contains
     use job_manage, only: time_message
     use run_parameters, only: fphi, fapar, fbpar
     use kt_grids, only: ntheta0, naky
+    implicit none
     logical, intent(inout) :: my_exit
     logical :: reset_in
     integer :: istep 
@@ -228,13 +231,11 @@ contains
     if(allocated(bpar_tmp)) deallocate(bpar_tmp)
   end subroutine reset_time_step
 
-!  subroutine check_time_step (istep, reset, exit)
   subroutine check_time_step (reset, exit)
-
     use gs2_time, only: code_dt_cfl, code_dt
-
-!    integer :: istep
-    logical :: reset, exit
+    implicit none
+    logical, intent(in) :: exit
+    logical, intent(out) :: reset
 
     if (first) call init_reinit
     first = .false.
@@ -249,18 +250,14 @@ contains
 ! If timestep is too small, make it bigger
     if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) reset = .true.
 
-! other choices
-!     if (mod(istep,200) == 0) reset = .true.
-!     if (code_dt > code_dt_cfl) exit = .true.
-
   end subroutine check_time_step
 
   subroutine init_reinit
-
     use run_parameters, only: code_delt_max
     use mp, only: proc0, broadcast
     use file_utils, only: input_unit, input_unit_exist
     use gs2_time, only: save_dt_min
+    implicit none
     integer :: in_file
     logical :: exist
 
@@ -268,6 +265,7 @@ contains
                             abort_rapid_time_step_change, in_memory
     if(.not.first)return
     first=.false.
+
     if (proc0) then
        dt0 = code_delt_max
        delt_adj = 2.0
@@ -286,8 +284,6 @@ contains
     call broadcast (abort_rapid_time_step_change)
     call broadcast (in_memory)
     call save_dt_min (delt_minimum)
-
   end subroutine init_reinit
-
 end module gs2_reinit
 
