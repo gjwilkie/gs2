@@ -102,7 +102,7 @@ contains
 
   subroutine init_transforms &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
-    use mp, only: nproc
+    use mp, only: nproc, proc0
     use gs2_layouts, only: init_gs2_layouts, opt_redist_init
     use gs2_layouts, only: pe_layout, init_accel_transform_layouts
     use gs2_layouts, only: init_y_transform_layouts
@@ -158,7 +158,7 @@ contains
     if (debug) write (*,*) 'init_transforms: done'
     accelerated = accel
     
-    if (fft_use_wisdom) call save_wisdom(trim(fft_wisdom_file))
+    if (proc0.and.fft_use_wisdom) call save_wisdom(trim(fft_wisdom_file))
 
   end subroutine init_transforms
 
