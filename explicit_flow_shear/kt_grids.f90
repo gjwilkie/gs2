@@ -1,15 +1,18 @@
+!> Set up values of kx and ky for linear runs that use a single k_perp mode.
+
 module kt_grids_single
-! <doc> Set up values of kx and ky for linear runs that use a single k_perp mode.
-! </doc>
 
   implicit none
 
   public :: init_kt_grids_single, single_get_sizes, single_get_grids
   public :: check_kt_grids_single, wnml_kt_grids_single 
+  public :: calculate_kt_grids_single, broadcast_akx_in ! Assign actual values to the kgrids EGH
+  !public :: broadcast_akx_in
+  public :: akx
 
   private
 
-  real :: akx, aky, theta0, rhostar_single
+  real :: akx, aky, akx_in, theta0, rhostar_single
   integer :: n0
 
 contains
@@ -31,6 +34,7 @@ contains
     in_file = input_unit_exist ("kt_grids_single_parameters", exist)
     if (exist) read (in_file, nml=kt_grids_single_parameters)
 
+    akx_in = akx
     if (n0 .gt. 0) then
 !CMR if n0>0 then override aky inputs and use n0 to determine aky
        aky=n0*drhodpsi*rhostar_single
@@ -38,6 +42,30 @@ contains
 
   end subroutine init_kt_grids_single
 
+  subroutine broadcast_akx_in
+    use mp, only: broadcast, iproc
+    write (*,*) "Broadcasting akx_in ", akx_in, "... ", iproc
+    call broadcast(akx_in)
+    call broadcast(aky)
+    write (*,*) "Broadcasted akx_in ", akx_in, "... ", iproc
+  end subroutine broadcast_akx_in
+
+  !> Assign actual values to kx. The value of kx may change in time if
+  !! flow shear is being used in a linear run, with time_varying_kx set to
+  !! .true.
+  !    EGH
+  subroutine calculate_kt_grids_single(g_exb, shear_time)
+    use mp, only: proc0
+    use theta_grid, only: shat
+    real, intent(in) :: g_exb, shear_time
+    akx = akx_in + g_exb * aky * shear_time
+    if (proc0) write(*,*) "Calculating kgrids: akx=", akx
+    if (aky .eq. 0.0) then 
+      theta0 = 0.0
+    else
+      theta0 = akx / aky / shat
+    end if
+  end subroutine calculate_kt_grids_single
   subroutine wnml_kt_grids_single(unit)
    implicit none
    integer:: unit
@@ -669,9 +697,9 @@ contains
 
 end module kt_grids_box
 
+!> A module to set up the perpendicular wavenumbers by calling the appropriate sub-modules. 
+
 module kt_grids
-!  <doc> Set up the perpendicular wavenumbers by calling the appropriate sub-modules. 
-! </doc>
   use kt_grids_box, only: jtwist
   implicit none
 
@@ -683,6 +711,9 @@ module kt_grids
   public :: gridopt_switch, grid_option
   public :: gridopt_single, gridopt_range, gridopt_specified, gridopt_box
   public :: kwork_filter, kperp2
+  public :: init_kperp2
+  public :: single       ! true if running linearly for single mode.
+  public :: calculate_kt_grids
   private
 
   logical, dimension(:,:), allocatable :: kwork_filter
@@ -701,6 +732,7 @@ module kt_grids
        gridopt_specified = 3, gridopt_box = 4
   logical :: reality = .false.
   logical :: box = .false.
+  logical :: single = .false.
   logical :: initialized = .false.
   logical :: kp2init=.false.
   logical :: nml_exist
@@ -710,6 +742,7 @@ contains
   subroutine init_kt_grids
     use theta_grid, only: init_theta_grid
     use mp, only: proc0, broadcast
+    use kt_grids_single, only: broadcast_akx_in
     implicit none
 
     if (initialized) return
@@ -726,6 +759,7 @@ contains
 
     call broadcast (reality)
     call broadcast (box)
+    call broadcast (single)
     call broadcast (naky)
     call broadcast (nkpolar)
     call broadcast (ntheta0)
@@ -743,6 +777,7 @@ contains
     allocate(kwork_filter(ntheta0,naky))
     kwork_filter=.false.
     call init_kperp2
+    if (gridopt_switch .eq. gridopt_single) call broadcast_akx_in
   end subroutine init_kt_grids
 
   subroutine read_parameters
@@ -821,6 +856,7 @@ contains
     case (gridopt_single)
        call init_kt_grids_single
        call single_get_sizes (naky, ntheta0, nx, ny)
+       single = .true.
     case (gridopt_range)
        call init_kt_grids_range
        call range_get_sizes (naky, ntheta0, nx, ny)
@@ -843,6 +879,7 @@ contains
     implicit none
     select case (gridopt_switch)
     case (gridopt_single)
+       call calculate_kt_grids(0.0, 0.0)
        call single_get_grids (aky, theta0, akx)
     case (gridopt_range)
        call range_get_grids (aky, theta0, akx)
@@ -858,10 +895,10 @@ contains
     implicit none
     integer :: ik, it
 
-    if (kp2init) return
-    kp2init = .true.
+    if (kp2init .and. .not. single) return
 
-    allocate (kperp2(-ntgrid:ntgrid,ntheta0,naky))
+    if (.not. kp2init) allocate (kperp2(-ntgrid:ntgrid,ntheta0,naky))
+    kp2init = .true.
     do ik = 1, naky
        if (aky(ik) == 0.0) then
          do it = 1, ntheta0
@@ -912,6 +949,22 @@ contains
     end select
 
   end subroutine check_kt_grids
+  !> Used to update kt grids for the single exb shear
+  !! implementation
+  subroutine calculate_kt_grids(g_exb, shear_time)
+    use kt_grids_single, only: calculate_kt_grids_single
+    use kt_grids_single, only: single_get_grids
+    use mp, only: mp_abort
+    real, intent(in) ::  g_exb, shear_time
+    select case (gridopt_switch) 
+    case (gridopt_single) 
+       call calculate_kt_grids_single (g_exb, shear_time)
+       call single_get_grids (aky, theta0, akx)
+       call init_kperp2
+     case default
+       call mp_abort("calculate_kt_grids should only be called for grid_option = 'single' ")
+     end select
+   end subroutine calculate_kt_grids 
 
 end module kt_grids
 

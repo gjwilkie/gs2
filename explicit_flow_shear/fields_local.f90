@@ -3633,7 +3633,7 @@ contains
     if(.not.no_driver) call antenna_amplitudes (apar_ext)
 
     !Apply flow shear if active
-    if(abs(g_exb*g_exbfac).gt.epsilon(0.)) call exb_shear(gnew,phinew,aparnew,bparnew)
+    if(abs(g_exb*g_exbfac).gt.epsilon(0.)) call exb_shear(gnew,phinew,aparnew,bparnew, istep)
 
     !Update g and fields
     g=gnew
