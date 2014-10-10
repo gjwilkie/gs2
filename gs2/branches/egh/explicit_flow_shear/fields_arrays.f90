@@ -4,6 +4,7 @@ module fields_arrays
   !Main fields
   complex, dimension (:,:,:), allocatable :: phi,    apar,    bpar
   complex, dimension (:,:,:), allocatable :: phinew, aparnew, bparnew
+  complex, dimension (:,:,:), allocatable :: phi_store, apar_store, bpar_store
   !For antenna
   complex, dimension (:,:,:), allocatable :: apar_ext
   ! (-ntgrid:ntgrid,ntheta0,naky) replicated

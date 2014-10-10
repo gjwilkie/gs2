@@ -11,6 +11,10 @@ module fields_implicit
   public :: field_subgath, dump_response, read_response
   public :: dump_response_to_file_imp
 
+  !> The number of steps between recalculating
+  !! the response matrix for the alternative flow shear implementation. EGH
+  public :: n_recalc_response     
+
   !> Unit tests
   public :: fields_implicit_unit_test_init_fields_implicit
 
@@ -27,6 +31,11 @@ module fields_implicit
   logical :: linked = .false.
   logical :: field_subgath
   logical :: dump_response=.false., read_response=.false.
+
+  !> For running with the explicit flow shear implementation
+  !! when you want to run using some implicitness 
+  integer, save :: g_exb_error_check_cycle = 0
+  integer, save:: n_recalc_response = 1
 contains
 
   subroutine init_fields_implicit
@@ -293,13 +302,172 @@ contains
 
   end subroutine getfield
 
+  subroutine exb_shear (istep)
+    use dist_fn, only:  exb_shear_d => exb_shear, g_exb, g_exb_error_limit
+    use dist_fn, only:  g_exb_start_timestep, g_exb_start_time
+    use dist_fn, only:  init_bessel, init_fieldeq
+    use dist_fn_arrays, only: gnew, g_store
+    use dist_fn_arrays, only: theta0_shift, kx_shift
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use fields_arrays, only: phi, apar, bpar
+    use fields_arrays, only: phi_store, apar_store, bpar_store
+    use kt_grids, only: single, naky, ntheta0, akx
+    use kt_grids, only: theta0, aky 
+    use kt_grids, only: calculate_kt_grids
+    use theta_grid, only: ntgrid, delthet, jacob
+    use gs2_time, only: code_time, code_dt, code_dt_old
+    use mp, only: proc0, iproc
+
+    integer, intent (in) :: istep
+    logical :: recalc_response
+    logical,save :: check_g_exb_error = .false.
+    complex, dimension(:, :, :), allocatable :: phi_temp, apar_temp, bpar_temp
+    real, dimension (-ntgrid:ntgrid-1) :: wgt
+    real, save :: wait_time = 0.
+    logical, save :: check_error = .false.
+    real :: phi_error, anorm, phitot, gdt
+    integer :: ik, it
+    !integer, parameter :: max_n = 1000 
+    integer :: max_n  
+    if (.not. single) then
+      if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear_d (gnew, phinew, aparnew, bparnew, istep)                             ! See Hammett & Loureiro, APS 2006
+      return
+    end if
+
+    if (abs(g_exb)<epsilon(0.0)) return
+
+    write (*,*) 'Running exb_shear'
+  
+    
+    
+    gdt = 0.5*(code_dt + code_dt_old)
+
+    if (single) then
+      allocate(phi_temp(-ntgrid:ntgrid,ntheta0,naky))
+      allocate(apar_temp(-ntgrid:ntgrid,ntheta0,naky))
+      allocate(bpar_temp(-ntgrid:ntgrid,ntheta0,naky))
+      if (g_exb_start_timestep > 0) then 
+        if (istep < g_exb_start_timestep) then 
+          return
+        else if (g_exb_start_timestep == istep) then
+          wait_time = code_time
+        end if 
+      end if 
+      if (g_exb_start_time >= 0) then 
+        if (code_time < g_exb_start_time) then 
+          return
+        else if (wait_time .eq. 0.0) then
+          wait_time = code_time
+        end if 
+      end if
+
+      ! if g_exb_error_limit < 0, always recalc response matrices
+      if (g_exb_error_limit .lt. 0.0) g_exb_error_check_cycle = 2
+
+      if (g_exb_error_check_cycle .eq. 3) then ! test error
+        if (proc0) write (*,*) "Calculating Error"
+        ! phi_store was calculated without updating response matrix
+        phi_temp = phinew - phi_store
+        !phi_temp = phinew*conjg(phinew) - phi_store*conjg(phi_store)
+        phi_error = 0
+        wgt = delthet(-ntgrid:ntgrid-1)*jacob(-ntgrid:ntgrid-1)  
+        anorm = sum(wgt)
+        do ik = 1, naky
+           do it = 1, ntheta0
+              phitot =  sum( real(conjg(phinew(-ntgrid:ntgrid-1,it,ik)) &
+               * phinew(-ntgrid:ntgrid-1,it,ik)) * wgt ) / anorm   
+              phi_error = phi_error +  (sum( real(conjg(phi_temp(-ntgrid:ntgrid-1,it,ik)) &
+               * phi_temp(-ntgrid:ntgrid-1,it,ik)) * wgt ) / anorm) / phitot     
+              !phi_error = phi_error +  (sum( real(phi_temp(-ntgrid:ntgrid-1,it,ik)) &
+                !* wgt ) / anorm) / phitot     
+           end do
+        end do
+        if (proc0) write (*,*) "phi error with no recalc: ", phi_error
+
+        max_n = floor(1.0/abs(g_exb)/gdt) 
+
+        if (abs(phi_error) .lt. 1.0e-100) then
+          n_recalc_response = max_n 
+          ! Maximum number of timesteps without rechecking
+        else
+          n_recalc_response = floor((g_exb_error_limit / phi_error)**(1.0/3.0))
+        end if
+        if (n_recalc_response .eq. 0) n_recalc_response = 1
+        if (n_recalc_response .gt. max_n) n_recalc_response = max_n
+        if (proc0) write (*,*) "max_n: " , max_n
+        if (proc0) write (*,*) "n_recalc_response: ", n_recalc_response
+        g_exb_error_check_cycle = 0 ! Normal
+
+
+      end if
+
+      write (*,*) 'istep', istep, n_recalc_response
+      if (mod(istep, n_recalc_response) .eq. 0) then
+        recalc_response = .true.
+        if (proc0) write (*,*) "istep: ", istep, " recalc_response: ", recalc_response
+        if (proc0) write (*,*) "n_recalc_response", n_recalc_response 
+      else
+        recalc_response = .false.
+      end if
+      
+      if (recalc_response .and. g_exb_error_check_cycle .eq. 0) then
+        if (proc0) write (*,*) "Saving old arrays"
+        g_exb_error_check_cycle = 1 ! Calculate without recalculating response 
+        g_store = gnew
+        phi_store = phinew; apar_store = aparnew; bpar_store = bparnew
+        if (proc0) write (*,*) "Calling Error check step"
+        call advance_implicit(istep, .false.)
+        if (proc0) write (*,*) "Finished Error check step"
+        g_exb_error_check_cycle = 2 ! Calculate with response
+        gnew = g_store 
+        phi = phinew; apar = aparnew; bpar = bparnew
+        phinew = phi_store; aparnew = apar_store; bparnew = bpar_store
+        phi_store = phi; apar_store = apar; bpar_store = bpar
+        if (proc0) write (*,*) "Reassigned functions"
+      end if
+
+
+      if (recalc_response .and. g_exb_error_check_cycle == 2 ) then
+        if (proc0) write (*,*) "Resetting init"
+        g_store = gnew; phi_temp = phinew; apar_temp =  aparnew;
+        bpar_temp =  bparnew
+        call reset_init
+      end if
+      call calculate_kt_grids(g_exb, code_time - wait_time)
+      ! set akx in kt_grids equal to akx in kt_grids_single
+      !akx = single_akx
+      write (*,*) "Calculated kx: ", akx, "theta0: ", theta0, "ky: ", aky, &
+      "...", iproc, 'g_exb ', g_exb, 'code_time ', code_time, 'wt', wait_time
+      
+      !call init_kperp2
+      call init_bessel
+      call init_fieldeq
+      if (recalc_response .and. g_exb_error_check_cycle .eq. 2  ) then
+        if (proc0) write (*,*) "Recalculating response"
+        call init_response_matrix
+        gnew = g_store; phinew = phi_temp; aparnew = apar_temp; bparnew =  bpar_temp
+        g_exb_error_check_cycle = 3 ! Test error 
+      end if
+
+      deallocate(phi_temp)
+      deallocate(apar_temp)
+      deallocate(bpar_temp)
+      return
+    end if  ! if (single) 
+
+
+
+  end subroutine exb_shear
+
+
   subroutine advance_implicit (istep, remove_zonal_flows_switch)
     use run_parameters, only: reset
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes, no_driver
-    use dist_fn, only: timeadv, exb_shear
+    use dist_fn, only: timeadv !, exb_shear
     use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
+    !use init_g, only: single_kpar, force_single_kpar
     implicit none
     integer :: diagnostics = 1
     integer, intent (in) :: istep
@@ -309,7 +477,8 @@ contains
     !GGH NOTE: apar_ext is initialized in this call
     if(.not.no_driver) call antenna_amplitudes (apar_ext)
        
-    if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
+    call exb_shear  (istep) !EGH
+
     
     g = gnew
     phi = phinew
@@ -332,6 +501,7 @@ contains
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
     
   end subroutine advance_implicit
+
 
   subroutine remove_zonal_flows
     use fields_arrays, only: phinew

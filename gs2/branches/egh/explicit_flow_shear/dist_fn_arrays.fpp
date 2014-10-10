@@ -8,12 +8,14 @@ module dist_fn_arrays
   public :: vperp2, vpar, ittp, aj0, aj1
   public :: c_rate
   public :: g_adjust, check_g_bouncepoints
+  ! EGH
+  public :: g_store
 #ifdef LOWFLOW
   public :: hneoc, vparterm, wdfac, wstarfac, wdttpfac
 #endif
 
   ! dist fn
-  complex, dimension (:,:,:), allocatable :: g, gnew, g_restart_tmp
+  complex, dimension (:,:,:), allocatable :: g, gnew, g_restart_tmp, g_store
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   real, dimension(:), allocatable :: kx_shift, theta0_shift
