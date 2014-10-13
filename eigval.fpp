@@ -875,7 +875,8 @@ contains
     use collisions, only: vnmult
     use run_parameters, only: fphi, fapar, fbpar
     use fields, only: set_init_fields
-    use gs2_save, only: EigNetcdfID, init_eigenfunc_file, finish_eigenfunc_file, add_eigenpair_to_file, gs2_save_for_restart
+    use gs2_save, only: EigNetcdfID, init_eigenfunc_file, finish_eigenfunc_file
+    use gs2_save, only: add_eigenpair_to_file, gs2_save_for_restart, finish_save
     use file_utils, only: run_name
     use dist_fn_arrays, only: gnew
     implicit none
@@ -942,7 +943,10 @@ contains
              !First make the unique bit of the name
              write(restart_unique_string,'(".eig_",I0)') ieig
 
-             call gs2_save_for_restart(gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar,fileopt=restart_unique_string)
+             call gs2_save_for_restart(gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar,.true.,fileopt=restart_unique_string)
+
+             !Reset the status of save_for_restart
+             call finish_save
           endif
        enddo
 
