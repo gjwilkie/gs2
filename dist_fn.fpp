@@ -3494,7 +3494,7 @@ endif
 !
 !  end subroutine init_exb_shear
 
-  subroutine exb_shear (g0, phi, apar, bpar, istep)
+  subroutine exb_shear (g0, phi, apar, bpar, istep, field_local)
 ! MR, 2007: modified Bill Dorland's version to include grids where kx grid
 !           is split over different processors
 ! MR, March 2009: ExB shear now available on extended theta grid (ballooning)
@@ -3504,7 +3504,7 @@ endif
 ! CMR, Oct 2010: add save statements to prevent potentially large and memory 
 !                killing array allocations!
     
-    use mp, only: send, receive, mp_abort
+    use mp, only: send, receive, mp_abort, broadcast
     use gs2_layouts, only: ik_idx, it_idx, g_lo, idx_local, idx, proc_id
     use run_parameters, only: tunits
     use theta_grid, only: ntgrid, ntheta, shat
@@ -3526,7 +3526,8 @@ endif
     integer :: ik, it, ie, is, il, isgn, to_iglo, from_iglo
     integer:: iib, iit, ileft, iright, i
     integer, intent(in) :: istep
-
+    logical, intent(in), optional :: field_local
+    logical :: field_local_loc
     real, save :: dkx, dtheta0
     real :: gdt
     logical, save :: exb_first = .true.
@@ -3604,7 +3605,17 @@ endif
        enddo 
     end if
 
-    
+    !If using field_option='local' and x/it is not entirely local
+    !then we need to make sure that all procs know the full field
+    !THIS IS A TEMPORARY FIX AND WE SHOULD PROBABLY DO SOMETHING BETTER
+    field_local_loc=.false.
+    if(present(field_local)) field_local_loc=field_local
+    if(any(jump.ne.0).and.(.not.g_lo%x_local).and.field_local_loc) then
+       if(fphi>epsilon(0.0)) call broadcast(phi)
+       if(fapar>epsilon(0.0)) call broadcast(apar)
+       if(fbpar>epsilon(0.0)) call broadcast(bpar)
+    endif
+
     if (.not. box .and. shat .ne. 0.0 ) then
 ! MR, March 2009: impact of ExB shear on extended theta grid computed here
 !                 for finite shat
