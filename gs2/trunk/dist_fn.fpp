@@ -4227,10 +4227,15 @@ endif
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! special source term for totally trapped particles
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!CMR, 13/10/2014: 
+! Upper limit of following loops setting source changed from ntgrid to ntgrid-1
+! Source is allocated as: source(-ntgrid:ntgrid-1), so ntgrid is out of bounds.
+
     if (source_option_switch == source_option_full .or. &
         source_option_switch == source_option_phiext_full) then
        if (nlambda > ng2 .and. isgn == 2) then
-          do ig = -ntgrid, ntgrid
+          do ig = -ntgrid, ntgrid-1
              if (il < ittp(ig)) cycle
              source(ig) &
                   = g(ig,2,iglo)*a(ig,2,iglo) &
@@ -4245,7 +4250,7 @@ endif
 
           if (source_option_switch == source_option_phiext_full .and. &
                aky(ik) < epsilon(0.0)) then
-             do ig = -ntgrid, ntgrid
+             do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle             
                 source(ig) = source(ig) - zi*anon(ie)* &
 #ifdef LOWFLOW
@@ -4261,18 +4266,18 @@ endif
           case (0)
              ! nothing
           case (1)
-             do ig = -ntgrid, ntgrid
+             do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle
                 source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
              end do
           case (2) 
-             do ig = -ntgrid, ntgrid
+             do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle
                 source(ig) = source(ig) + 0.5*code_dt*( &
                      1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
              end do
           case default
-             do ig = -ntgrid, ntgrid
+             do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle
                 source(ig) = source(ig) + 0.5*code_dt*( &
                      (23./12.)*gexp_1(ig,isgn,iglo) &
@@ -4287,18 +4292,18 @@ endif
              case (0)
                 ! nothing
              case (1)
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
                 end do
              case (2) 
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*( &
                         1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
                 end do                   
              case default
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*( &
                           (23./12.)*gexp_1(ig,isgn,iglo) &
@@ -4541,11 +4546,16 @@ endif
     end if
 
     ! special source term for totally trapped particles (isgn=2 only)
+
+!CMR, 13/10/2014: 
+! Upper limit of following loops setting source changed from ntgrid to ntgrid-1
+! Source allocated as: source(-ntgrid:ntgrid-1,2), so ntgrid is out of bounds.
+
     isgn=2
     if (source_option_switch == source_option_full .or. &
          source_option_switch == source_option_phiext_full) then
        if (nlambda > ng2) then
-          do ig = -ntgrid, ntgrid
+          do ig = -ntgrid, ntgrid-1
              if (il < ittp(ig)) cycle
              source(ig,isgn) &
                   = g(ig,2,iglo)*a(ig,2,iglo) &
@@ -4560,7 +4570,7 @@ endif
              
           if (source_option_switch == source_option_phiext_full .and. &
                aky(ik) < epsilon(0.0)) then
-             do ig = -ntgrid, ntgrid
+             do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle             
                 source(ig,isgn) = source(ig,isgn) - zi*anon(ie)* &
 #ifdef LOWFLOW
@@ -4577,18 +4587,18 @@ endif
              case (0)
                 ! nothing
              case (1)
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
                 end do
              case (2) 
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                         1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
                 end do
              case default
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                         (23./12.)*gexp_1(ig,isgn,iglo) &
@@ -4688,7 +4698,8 @@ endif
     integer :: ig, ik, it, il, ie, isgn, is
     integer :: ilmin
     complex :: beta1
-    complex, dimension (-ntgrid:ntgrid,2) :: source, g1, g2
+    complex, dimension (-ntgrid:ntgrid,2) :: g1, g2
+    complex, dimension (-ntgrid:ntgrid-1,2) :: source
     complex :: adjleft, adjright
     logical :: use_pass_homog, speriod_flag
     integer :: ntgl, ntgr
