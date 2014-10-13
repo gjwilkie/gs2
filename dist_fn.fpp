@@ -17,6 +17,9 @@ module dist_fn
   public :: init_dist_fn, finish_dist_fn
   public :: read_parameters, wnml_dist_fn, wnml_dist_fn_species, check_dist_fn
   public :: timeadv, exb_shear, g_exb, g_exbfac
+  public :: g_exb_error_limit
+  public :: g_exb_start_timestep, g_exb_start_time
+  public :: init_bessel, init_fieldeq
   public :: getfieldeq, getan, getmoms, getemoms
   public :: getfieldeq_nogath
   public :: flux, lf_flux, eexchange
@@ -55,6 +58,9 @@ module dist_fn
   real :: t0, omega0, gamma0, source0
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
+  real :: g_exb_start_time, g_exb_error_limit
+  integer :: g_exb_start_timestep
+  !logical :: dfexist, skexist, nonad_zero
   logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose, esv, opt_init_bc, opt_source
 !CMR, 12/9/13: New logical cllc to modify order of operator in timeadv
 !CMR, 21/5/14: New logical wfb_cmr to enforce trapping conditions on wfb
@@ -665,6 +671,7 @@ subroutine check_dist_fn(report_unit)
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, &
+         g_exb_start_time, g_exb_start_timestep, g_exb_error_limit, &
          lf_decompose, esv, wfb_cmr, opt_init_bc, opt_source, zero_forbid
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
@@ -697,6 +704,9 @@ subroutine check_dist_fn(report_unit)
        kfilter = 0.0
        g_exb = 0.0
        g_exbfac = 1.0
+       g_exb_error_limit = 0.0
+       g_exb_start_time = -1
+       g_exb_start_timestep = -1
        mach = 0.0
        omprimfac = 1.0
        btor_slab = 0.0
@@ -756,6 +766,9 @@ subroutine check_dist_fn(report_unit)
     call broadcast (phi_ext)
     call broadcast (g_exb)
     call broadcast (g_exbfac)
+    call broadcast (g_exb_start_timestep)
+    call broadcast (g_exb_start_time)
+    call broadcast (g_exb_error_limit)
     call broadcast (mach)
     call broadcast (omprimfac)
     call broadcast (btor_slab)
@@ -3481,7 +3494,7 @@ endif
 !
 !  end subroutine init_exb_shear
 
-  subroutine exb_shear (g0, phi, apar, bpar)
+  subroutine exb_shear (g0, phi, apar, bpar, istep)
 ! MR, 2007: modified Bill Dorland's version to include grids where kx grid
 !           is split over different processors
 ! MR, March 2009: ExB shear now available on extended theta grid (ballooning)
@@ -3501,7 +3514,7 @@ endif
     use species, only: nspec
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kx_shift, theta0_shift
-    use gs2_time, only: code_dt, code_dt_old
+    use gs2_time, only: code_dt, code_dt_old, code_time
     use constants, only: twopi    
 
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
@@ -3512,6 +3525,7 @@ endif
     integer :: ierr, j 
     integer :: ik, it, ie, is, il, isgn, to_iglo, from_iglo
     integer:: iib, iit, ileft, iright, i
+    integer, intent(in) :: istep
 
     real, save :: dkx, dtheta0
     real :: gdt
@@ -3570,6 +3584,8 @@ endif
     ! also to get things right after changing time step size
     ! added May 18, 2009 -- MAB
     gdt = 0.5*(code_dt + code_dt_old)
+    if (g_exb_start_timestep > istep) return
+    if (g_exb_start_time >= 0 .and. code_time < g_exb_start_time) return
     
 ! kx_shift is a function of time.   Update it here:  
 ! MR, 2007: kx_shift array gets saved in restart file

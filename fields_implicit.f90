@@ -342,7 +342,7 @@ contains
     !GGH NOTE: apar_ext is initialized in this call
     if(.not.no_driver) call antenna_amplitudes (apar_ext)
        
-    if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
+    if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew, istep) 
     
     g = gnew
     phi = phinew
