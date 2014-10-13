@@ -47,6 +47,7 @@ module nonlinear_terms
   logical :: initializing = .true.
   logical :: alloc = .true.
   logical :: zip = .false.
+  logical :: nl_forbid_force_zero = .true.
   logical :: accelerated = .false.
 
   logical :: exist
@@ -121,6 +122,7 @@ contains
        write (unit, fmt="(' &',a)") "nonlinear_terms_knobs"
        write (unit, fmt="(' nonlinear_mode = ',a)") '"on"'
        write (unit, fmt="(' cfl = ',e17.10)") cfl
+       write (unit, fmt="(' nl_forbid_force_zero = ',L1)") nl_forbid_force_zero
        if (zip) write (unit, fmt="(' zip = ',L1)") zip
        write (unit, fmt="(' /')")
     endif
@@ -199,7 +201,7 @@ contains
             text_option('on', flow_mode_on) /)
     character(20) :: flow_mode
     namelist /nonlinear_terms_knobs/ nonlinear_mode, flow_mode, cfl, &
-         C_par, C_perp, p_x, p_y, p_z, zip
+         C_par, C_perp, p_x, p_y, p_z, zip, nl_forbid_force_zero
     integer :: ierr, in_file
 !    logical :: done = .false.
 
@@ -236,6 +238,7 @@ contains
     call broadcast (p_x)
     call broadcast (p_y)
     call broadcast (p_z)
+    call broadcast (nl_forbid_force_zero)
     call broadcast (zip)
 
     if (flow_mode_switch == flow_mode_on) then
@@ -359,32 +362,75 @@ contains
     ! and overwrites it with array evaluated at cell centers
     ! note that there is an extra factor of 2 in output array
     subroutine center (gtmp)
-
+!
+!CMR, 13/10/2014
+! Fixing some (cosmetic) issues from prior to R3021.
+! (1) forbid(-ntgrid:ntgrid) refers to grid points at cell boundaries
+!     gtmp(-ntgrid:ntgrid-1) refers to cell centers
+!     => applying forbid to output gtmp did not zero the correct things!!!
+! (2) totally trapped particles are special, so return source without upwinding is fine
+!     BUT source for other trapped particles should NOT enter forbidden region.
+!     if ig or ig+1 forbidden (i.e. ig+1 or ig is bounce point) now return gtmp(ig,:,iglo)=0
+!
       use dist_fn_arrays, only: ittp
       use gs2_layouts, only: g_lo, il_idx
       use theta_grid, only: ntgrid
-      use le_grids, only: forbid
+      use le_grids, only: forbid, ng2, jend
+      use mp, only: mp_abort
 
       implicit none
 
       integer :: iglo, il, ig
       complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: gtmp
+      logical :: trapped = .false.
+
+      if (minval(jend) .gt. ng2) trapped=.true.
 
       ! factor of one-half appears elsewhere
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           il = il_idx(g_lo, iglo)
-          ! Totally trapped particles get no bakdif 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!CMR, 7/10/2014: 
+! Incoming gtmp SHOULD vanish in forbidden region, 
+! New logical in nonlinear_terms_knobs namelist: nl_forbid_force_zero
+!     nl_forbid_force_zero =.t. : force zeroing    (default)
+!     nl_forbid_force_zero =.f. : NO forced zeroing
+!                                 ie assume forbidden gtmp is zero on entry 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+          if ( nl_forbid_force_zero ) then
+         ! force spurious gtmp outside trapped boundary to be zero
+             where (forbid(:,il))
+                 gtmp(:,1,iglo) = 0.0
+                 gtmp(:,2,iglo) = 0.0
+             end where
+          endif
+
           do ig = -ntgrid, ntgrid-1
-             !JAB & GWH: orig if (il == ittp(ig)) cycle 
+!
+!CMR, 7/10/2014: 
+! loop sets gtmp to value at upwinded cell center RIGHT of theta(ig)
+!           except for ttp where upwinding makes no sense!
+!
              if (il >= ittp(ig)) cycle
-             gtmp(ig,1,iglo) = (1.+bd)*gtmp(ig+1,1,iglo) + (1.-bd)*gtmp(ig,1,iglo)
-             gtmp(ig,2,iglo) = (1.-bd)*gtmp(ig+1,2,iglo) + (1.+bd)*gtmp(ig,2,iglo)
+             if ( trapped .and. ( il > jend(ig) .or. il > jend(ig+1)) ) then
+!
+!CMR, 7/10/2014: 
+!   if either ig or ig+1 is forbidden, no source possible in a cell RIGHT of theta(ig) 
+!   => gtmp(ig,1:2,iglo)=0
+!
+                gtmp(ig,1:2,iglo) = 0.0
+             else 
+!
+!CMR, 7/10/2014: 
+!    otherwise ig and ig+1 BOTH allowed, and upwinding in cell RIGHT of theta(ig) is fine
+!
+                gtmp(ig,1,iglo) = (1.+bd)*gtmp(ig+1,1,iglo) + (1.-bd)*gtmp(ig,1,iglo)
+                gtmp(ig,2,iglo) = (1.-bd)*gtmp(ig+1,2,iglo) + (1.+bd)*gtmp(ig,2,iglo)
+
+             endif 
           end do
-          ! zero out spurious gtmp outside trapped boundary
-          where (forbid(:,il))
-             gtmp(:,1,iglo) = 0.0
-             gtmp(:,2,iglo) = 0.0
-          end where
        end do
 
     end subroutine center
