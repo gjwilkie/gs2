@@ -3503,7 +3503,7 @@ endif
 ! CMR, Oct 2010: multiply timestep by tunits(iky) for runs with wstar_units=.t.
 ! CMR, Oct 2010: add save statements to prevent potentially large and memory 
 !                killing array allocations!
-    
+   
     use mp, only: send, receive, mp_abort, broadcast
     use gs2_layouts, only: ik_idx, it_idx, g_lo, idx_local, idx, proc_id
     use run_parameters, only: tunits
@@ -3525,6 +3525,7 @@ endif
     integer :: ierr, j 
     integer :: ik, it, ie, is, il, isgn, to_iglo, from_iglo
     integer:: iib, iit, ileft, iright, i
+    integer, save :: istep_last
     integer, intent(in) :: istep
     logical, intent(in), optional :: field_local
     logical :: field_local_loc
@@ -3587,7 +3588,8 @@ endif
     gdt = 0.5*(code_dt + code_dt_old)
     if (g_exb_start_timestep > istep) return
     if (g_exb_start_time >= 0 .and. code_time < g_exb_start_time) return
-    
+    if (istep.eq.istep_last) return !Don't allow flow shear to happen more than once per step
+    istep_last = istep
 ! kx_shift is a function of time.   Update it here:  
 ! MR, 2007: kx_shift array gets saved in restart file
 ! CMR, 5/10/2010: multiply timestep by tunits(ik) for wstar_units=.true. 
