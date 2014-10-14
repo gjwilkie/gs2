@@ -3351,8 +3351,9 @@ contains
     use antenna, only: init_antenna
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
-    use gs2_layouts, only: init_gs2_layouts
+    use gs2_layouts, only: init_gs2_layouts, g_lo
     use mp, only: proc0, mp_abort
+    use file_utils, only: error_unit
     implicit none
 
     !Early exit if possible
@@ -3373,6 +3374,11 @@ contains
     call init_fields_matrixlocal
     if (debug.and.proc0) write(6,*) "init_fields_local: antenna"
     call init_antenna
+
+    !Print a warning message if x_lo isn't local
+    if((.not.(g_lo%x_local.and.g_lo%y_local)).and.field_local_allreduce_sub) then
+       if(proc0)write(error_unit(),'("Warning : In this run not all procs will hold the full field data (only proc0)")')
+    endif
 
     !Set the initialised state
     initialised = .true.
@@ -3618,6 +3624,7 @@ contains
   !>Initialise the fields from the initial g, just uses the
   !fields_implicit routine
   subroutine init_allfields_local
+    use mp, only: proc0
     use fields_implicit, only: init_allfields_implicit
     implicit none
     call init_allfields_implicit
@@ -3650,7 +3657,7 @@ contains
     if(.not.no_driver) call antenna_amplitudes (apar_ext)
 
     !Apply flow shear if active
-    if(abs(g_exb*g_exbfac).gt.epsilon(0.)) call exb_shear(gnew,phinew,aparnew,bparnew,istep,.true.)
+    if(abs(g_exb*g_exbfac).gt.epsilon(0.)) call exb_shear(gnew,phinew,aparnew,bparnew,istep,field_local_allreduce_sub)
 
     !Update g and fields
     g=gnew
