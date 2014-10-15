@@ -58,7 +58,7 @@ contains
     use mp, only: proc0
     use theta_grid, only: shat
     real, intent(in) :: g_exb, shear_time
-    akx = akx_in + g_exb * aky * shear_time
+    akx = akx_in - g_exb * aky * shear_time
     if (proc0) write(*,*) "Calculating kgrids: akx=", akx
     if (aky .eq. 0.0) then 
       theta0 = 0.0
