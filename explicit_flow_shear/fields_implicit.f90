@@ -384,7 +384,7 @@ contains
         end do
         if (proc0) write (*,*) "phi error with no recalc: ", phi_error
 
-        max_n = floor(1.0/abs(g_exb)/gdt) 
+        max_n = floor(1.0/abs(g_exb)/gdt) / 10
 
         if (abs(phi_error) .lt. 1.0e-100) then
           n_recalc_response = max_n 
