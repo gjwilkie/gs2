@@ -5,6 +5,7 @@ RUBY_GENERATE=env ruby $2 $1; if test "$$?" != 0; then  echo && echo && echo  "W
 
 
 # If USE_AUTOTOOLS is off build simpledataio in the same way as gs2
+# Note that any value other than "on" is considered to be "off"
 ifneq ($(USE_AUTOTOOLS),on)
 
 distclean_simpledataio:
@@ -18,9 +19,11 @@ diagnostics: libsimpledataio.a
 libsimpledataio.a: simpledataio_write.o simpledataiof.o simpledataio.o
 	$(ARCH) $(ARCHFLAGS) $@ $^
 
-simpledataio_write.o: simpledataiof.o
+simpledataio_write.o: simpledataio_write.f90 simpledataiof.o
+	$(FC) $(subst $(DBLEFLAGS),,$(F90FLAGS)) $(F90FLAGS_SFXJUNK) -c $<
 
-simpledataiof.o: simpledataio.o
+simpledataiof.o: simpledataiof.f90 simpledataio.o
+	$(FC) $(subst $(DBLEFLAGS),,$(F90FLAGS)) $(F90FLAGS_SFXJUNK) -c $<
 
 #ifdef DBLE
 #CPPFLAGS+=-DSDATIO_DEFAULT_DOUBLE

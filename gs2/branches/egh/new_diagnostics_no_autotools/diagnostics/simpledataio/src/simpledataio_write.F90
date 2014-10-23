@@ -2,27 +2,13 @@
 module simpledataio_write
 
 interface write_variable_with_offset
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_real_0
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_real_1
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_real_2
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_real_3
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_real_4
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_real_5
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_real_6
-#endif
   module procedure write_variable_with_offset_double_precision_0
   module procedure write_variable_with_offset_double_precision_1
   module procedure write_variable_with_offset_double_precision_2
@@ -44,27 +30,13 @@ interface write_variable_with_offset
   module procedure write_variable_with_offset_character_4
   module procedure write_variable_with_offset_character_5
   module procedure write_variable_with_offset_character_6
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_complex_0
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_complex_1
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_complex_2
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_complex_3
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_complex_4
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_complex_5
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_with_offset_complex_6
-#endif
   module procedure write_variable_with_offset_complex_16_0
   module procedure write_variable_with_offset_complex_16_1
   module procedure write_variable_with_offset_complex_16_2
@@ -75,27 +47,13 @@ interface write_variable_with_offset
 end interface write_variable_with_offset
 
 interface write_variable
-#ifdef SINGLE_PRECISION
   module procedure write_variable_real_0
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_real_1
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_real_2
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_real_3
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_real_4
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_real_5
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_real_6
-#endif
   module procedure write_variable_double_precision_0
   module procedure write_variable_double_precision_1
   module procedure write_variable_double_precision_2
@@ -117,27 +75,13 @@ interface write_variable
   module procedure write_variable_character_4
   module procedure write_variable_character_5
   module procedure write_variable_character_6
-#ifdef SINGLE_PRECISION
   module procedure write_variable_complex_0
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_complex_1
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_complex_2
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_complex_3
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_complex_4
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_complex_5
-#endif
-#ifdef SINGLE_PRECISION
   module procedure write_variable_complex_6
-#endif
   module procedure write_variable_complex_16_0
   module procedure write_variable_complex_16_1
   module procedure write_variable_complex_16_2

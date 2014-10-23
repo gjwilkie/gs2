@@ -21,11 +21,11 @@ class Generator
 		end
 	end
   def interface_name
-    unless @type=~/^(real|complex)$/
+    #unless @type=~/^(real|complex)$/
       "  module procedure " + procedure_name
-    else
-      "#ifdef SINGLE_PRECISION\n  module procedure #{procedure_name}\n#endif"
-    end
+    #else
+      #"#ifdef SINGLE_PRECISION\n  module procedure #{procedure_name}\n#endif"
+    #end
   end
 	def get_n2
 		if @offset
