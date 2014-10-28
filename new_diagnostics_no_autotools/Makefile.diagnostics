@@ -128,3 +128,7 @@ diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_c
 	$(call RUBY_GENERATE,$@,$<)
 diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  $(SIMPLEDATAIO_LIB) 
 	$(call RUBY_GENERATE,$@,$<)
+
+# This must be built without promotion of reals to doubles
+diagnostics_create_and_write.o: diagnostics_create_and_write.f90
+	$(FC) $(subst $(DBLEFLAGS),,$(F90FLAGS)) $(F90FLAGS_SFXJUNK) -c $<

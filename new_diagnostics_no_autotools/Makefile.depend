@@ -154,6 +154,7 @@ ffttester_mod = \
 	 diagnostics_write_fields.o \
 	 diagnostics_write_fluxes.o \
 	 diagnostics_write_omega.o \
+	 diagnostics_write_velocity_space_checks.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -203,6 +204,8 @@ ffttester_mod = \
 	 redistribute.o \
 	 run_parameters.o \
 	 runtime_tests.o \
+	 simpledataio_write.o \
+	 simpledataiof.o \
 	 sorting.o \
 	 species.o \
 	 spfunc.o \
@@ -273,6 +276,7 @@ gs2_mod = \
 	 diagnostics_write_fields.o \
 	 diagnostics_write_fluxes.o \
 	 diagnostics_write_omega.o \
+	 diagnostics_write_velocity_space_checks.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -322,6 +326,8 @@ gs2_mod = \
 	 redistribute.o \
 	 run_parameters.o \
 	 runtime_tests.o \
+	 simpledataio_write.o \
+	 simpledataiof.o \
 	 sorting.o \
 	 species.o \
 	 spfunc.o \
@@ -500,9 +506,12 @@ deq.o: \
 diagnostics_config.o: \
 	 file_utils.o \
 	 mp.o \
+	 simpledataiof.o \
 	 text_options.o 
 diagnostics_create_and_write.o: \
-	 diagnostics_config.o 
+	 diagnostics_config.o \
+	 simpledataio_write.o \
+	 simpledataiof.o 
 diagnostics_write_fields.o: \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
@@ -510,6 +519,8 @@ diagnostics_write_fields.o: \
 	 fields_parallelization.o \
 	 kt_grids.o \
 	 run_parameters.o \
+	 simpledataio_write.o \
+	 simpledataiof.o \
 	 theta_grid.o \
 	 volume_averages.o 
 diagnostics_write_fluxes.o: \
@@ -523,6 +534,8 @@ diagnostics_write_fluxes.o: \
 	 kt_grids.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
+	 simpledataio_write.o \
+	 simpledataiof.o \
 	 species.o \
 	 theta_grid.o \
 	 volume_averages.o 
@@ -532,7 +545,20 @@ diagnostics_write_omega.o: \
 	 fields_arrays.o \
 	 fields_parallelization.o \
 	 gs2_time.o \
-	 kt_grids.o 
+	 kt_grids.o \
+	 simpledataio_write.o \
+	 simpledataiof.o 
+diagnostics_write_velocity_space_checks.o: \
+	 collisions.o \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 dist_fn.o \
+	 fields_arrays.o \
+	 gs2_time.o \
+	 le_grids.o \
+	 mp.o \
+	 simpledataiof.o \
+	 species.o 
 dist_fn.o: \
 	 antenna.o \
 	 collisions.o \
@@ -746,11 +772,13 @@ gs2_diagnostics_new.o: \
 	 diagnostics_write_fields.o \
 	 diagnostics_write_fluxes.o \
 	 diagnostics_write_omega.o \
+	 diagnostics_write_velocity_space_checks.o \
 	 file_utils.o \
 	 gs2_time.o \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
+	 simpledataiof.o \
 	 species.o \
 	 theta_grid.o \
 	 volume_averages.o 
@@ -1037,6 +1065,9 @@ rungridgen.o: \
 	 gridgen4mod.o \
 	 spl.o 
 runtime_tests.o: 
+simpledataio_write.o: \
+	 simpledataiof.o 
+simpledataiof.o: 
 sorting.o: 
 species.o: \
 	 file_utils.o \

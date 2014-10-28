@@ -167,6 +167,7 @@ module le_grids
   logical :: leinit = .false.
   logical :: lzinit = .false.
   logical :: einit = .false.
+  logical :: init_weights_init = .false.
 
   integer :: nmax = 500
   integer :: nterp = 100
@@ -420,6 +421,9 @@ contains
     real, dimension (:), allocatable :: lmodzeroes, wlerrtmp ! (ng2-1)
     integer :: ipt, ndiv, divmax
     logical :: eflag = .false.
+
+    if (init_weights_init) return
+    init_weights_init = .true.
 
 
     allocate(lmodzeroes(ng2-1), wlerrtmp(ng2-1))
@@ -3884,6 +3888,7 @@ contains
     leinit = .false.
     lzinit = .false.
     einit = .false.
+    init_weights_init = .false.
     initialized = .false.
 
   end subroutine finish_le_grids

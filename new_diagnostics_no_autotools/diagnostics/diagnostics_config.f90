@@ -37,6 +37,8 @@ module diagnostics_config
    real :: omegatinst
    real :: omegatol
    logical :: exit_when_converged
+   logical :: write_verr
+   logical :: write_max_verr
   end type diagnostics_type
 
 
@@ -72,6 +74,8 @@ contains
     real :: omegatinst
     real :: omegatol
     logical :: exit_when_converged
+    logical :: write_verr
+    logical :: write_max_verr
     namelist /diagnostics_config/ &
       nwrite, &
       write_any, &
@@ -86,7 +90,9 @@ contains
       igomega, &
       omegatinst, &
       omegatol, &
-      exit_when_converged
+      exit_when_converged, &
+      write_verr, &
+      write_max_verr
 
     integer :: in_file
     logical :: exist
@@ -106,6 +112,8 @@ contains
       omegatinst = 1.0e6
       omegatol = -0.001
       exit_when_converged = .true.
+      write_verr = .true.
+      write_max_verr = .false.
 
       in_file = input_unit_exist ("diagnostics_config", exist)
       if (exist) read (unit=in_file, nml=diagnostics_config)
@@ -124,6 +132,8 @@ contains
       gnostics%omegatinst = omegatinst
       gnostics%omegatol = omegatol
       gnostics%exit_when_converged = exit_when_converged
+      gnostics%write_verr = write_verr
+      gnostics%write_max_verr = write_max_verr
 
     end if
 
@@ -141,6 +151,8 @@ contains
     call broadcast (gnostics%omegatinst)
     call broadcast (gnostics%omegatol)
     call broadcast (gnostics%exit_when_converged)
+    call broadcast (gnostics%write_verr)
+    call broadcast (gnostics%write_max_verr)
 
 
 
