@@ -27,6 +27,11 @@ input_variables_for_diagnostics_config = [
 	['real', 'omegatinst', '1.0e6'],
 	['real', 'omegatol', '-0.001'],
 	['logical', 'exit_when_converged', '.true.'],
+
+  # Parameters for writing out velocity space diagnostics
+	['logical', 'write_verr', '.true.'],
+	['logical', 'write_max_verr', '.false.'],
+  
 ]
 
 

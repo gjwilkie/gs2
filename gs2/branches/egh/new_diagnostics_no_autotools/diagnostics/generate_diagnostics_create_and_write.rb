@@ -44,7 +44,7 @@ EOF
 end
 
 generators = []
-['real', 'integer', 'character'].each do |type| # , 'double precision'
+['real', 'integer', 'character', 'double precision'].each do |type| # 
 	(0..6).each do |dimsize|
 		generators.push Generator.new(type, dimsize)
 	end

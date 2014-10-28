@@ -37,6 +37,7 @@ contains
     use volume_averages, only: init_volume_averages
     use diagnostics_write_fluxes, only: init_diagnostics_write_fluxes
     use diagnostics_write_omega, only: init_diagnostics_write_omega
+    use diagnostics_write_velocity_space_checks, only: init_diagnostics_write_velocity_space_checks
     use file_utils, only: run_name
     use mp, only: mp_comm, proc0
     type(diagnostics_init_options_type), intent(in) :: init_options
@@ -66,6 +67,9 @@ contains
 
     call init_diagnostics_write_fluxes
     call init_diagnostics_write_omega(gnostics)
+
+    !if (gnostics%write_max_verr) gnostics%write_verr = .true.
+    call init_diagnostics_write_velocity_space_checks(gnostics)
 
     !gnostics%create = .true.
    ! Integer below gives the sdatio type 
@@ -105,6 +109,7 @@ contains
     use diagnostics_write_fluxes, only: write_fluxes
     use diagnostics_write_fields, only: write_fields
     use diagnostics_write_omega, only: calculate_omega, write_omega
+    use diagnostics_write_velocity_space_checks, only: write_velocity_space_checks
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
 
@@ -143,6 +148,7 @@ contains
       if (gnostics%write_omega)  call write_omega (gnostics)
       if (gnostics%write_fields) call write_fields(gnostics)
       if (gnostics%write_fluxes) call write_fluxes(gnostics)
+      if (gnostics%write_verr) call write_velocity_space_checks(gnostics)
 !
       ! Finally, write time value and update time index
       call create_and_write_variable(gnostics, gnostics%rtype, "t", "t", &
@@ -176,6 +182,14 @@ contains
     call add_dimension(gnostics%sfile, "s", nspec, "", "")
     call add_dimension(gnostics%sfile, "r", 2, "", "")
     call add_dimension(gnostics%sfile, "t", SDATIO_UNLIMITED, "", "")
+
+    ! A set of generic dimensions for writing arrays of data 
+    ! which are grouped together for convenience like the 
+    ! velocity space diagnostics
+    call add_dimension(gnostics%sfile, "2", 2, "", "")
+    call add_dimension(gnostics%sfile, "3", 3, "", "")
+    call add_dimension(gnostics%sfile, "4", 4, "", "")
+    call add_dimension(gnostics%sfile, "5", 5, "", "")
 
   end subroutine create_dimensions
 
