@@ -28,6 +28,9 @@
       write_fluxes = .true.
       write_fluxes_by_mode = .true.
 
+      write_movie = .true.
+      write_heating = .true.
+
       omegatol = -0.001
 /
 

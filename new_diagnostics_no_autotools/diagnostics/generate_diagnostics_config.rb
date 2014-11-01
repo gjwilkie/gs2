@@ -15,6 +15,12 @@ input_variables_for_diagnostics_config = [
 	['logical', 'write_phi_over_time'],
 	['logical', 'write_apar_over_time'],
 	['logical', 'write_bpar_over_time'],
+	['logical', 'write_movie', '.false.'],
+  
+
+  # Parameters for writing out moments such as density etc
+	['logical', 'write_moments', '.true.'],
+
 
 	# Parameters for writing out fluxes
 	['logical', 'write_fluxes', '.true.'],
@@ -31,6 +37,12 @@ input_variables_for_diagnostics_config = [
   # Parameters for writing out velocity space diagnostics
 	['logical', 'write_verr', '.true.'],
 	['logical', 'write_max_verr', '.false.'],
+
+  # Parameters controlling heating diagnositics
+	['logical', 'write_heating', '.false.'],
+
+
+
   
 ]
 
@@ -87,6 +99,7 @@ module diagnostics_config
 
   type diagnostics_type
    type(sdatio_file) :: sfile
+   !type(sdatio_file) :: sfilemovie
    !> Integer below gives the sdatio type 
    !! which corresponds to a gs2 real
    integer :: rtype
@@ -96,6 +109,7 @@ module diagnostics_config
    logical :: distributed
    logical :: parallel
    logical :: exit
+   real :: user_time
    #{generators.map{|g| g.declaration}.join("\n   ") }
   end type diagnostics_type
 

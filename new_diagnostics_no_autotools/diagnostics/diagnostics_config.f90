@@ -14,6 +14,7 @@ module diagnostics_config
 
   type diagnostics_type
    type(sdatio_file) :: sfile
+   !type(sdatio_file) :: sfilemovie
    !> Integer below gives the sdatio type 
    !! which corresponds to a gs2 real
    integer :: rtype
@@ -23,12 +24,15 @@ module diagnostics_config
    logical :: distributed
    logical :: parallel
    logical :: exit
+   real :: user_time
    integer :: nwrite
    logical :: write_any
    logical :: write_fields
    logical :: write_phi_over_time
    logical :: write_apar_over_time
    logical :: write_bpar_over_time
+   logical :: write_movie
+   logical :: write_moments
    logical :: write_fluxes
    logical :: write_fluxes_by_mode
    logical :: write_omega
@@ -39,6 +43,7 @@ module diagnostics_config
    logical :: exit_when_converged
    logical :: write_verr
    logical :: write_max_verr
+   logical :: write_heating
   end type diagnostics_type
 
 
@@ -66,6 +71,8 @@ contains
     logical :: write_phi_over_time
     logical :: write_apar_over_time
     logical :: write_bpar_over_time
+    logical :: write_movie
+    logical :: write_moments
     logical :: write_fluxes
     logical :: write_fluxes_by_mode
     logical :: write_omega
@@ -76,6 +83,7 @@ contains
     logical :: exit_when_converged
     logical :: write_verr
     logical :: write_max_verr
+    logical :: write_heating
     namelist /diagnostics_config/ &
       nwrite, &
       write_any, &
@@ -83,6 +91,8 @@ contains
       write_phi_over_time, &
       write_apar_over_time, &
       write_bpar_over_time, &
+      write_movie, &
+      write_moments, &
       write_fluxes, &
       write_fluxes_by_mode, &
       write_omega, &
@@ -92,7 +102,8 @@ contains
       omegatol, &
       exit_when_converged, &
       write_verr, &
-      write_max_verr
+      write_max_verr, &
+      write_heating
 
     integer :: in_file
     logical :: exist
@@ -104,6 +115,8 @@ contains
       write_phi_over_time = .false.
       write_apar_over_time = .false.
       write_bpar_over_time = .false.
+      write_movie = .false.
+      write_moments = .true.
       write_fluxes = .true.
       write_fluxes_by_mode = .false.
       write_omega = .true.
@@ -114,6 +127,7 @@ contains
       exit_when_converged = .true.
       write_verr = .true.
       write_max_verr = .false.
+      write_heating = .false.
 
       in_file = input_unit_exist ("diagnostics_config", exist)
       if (exist) read (unit=in_file, nml=diagnostics_config)
@@ -124,6 +138,8 @@ contains
       gnostics%write_phi_over_time = write_phi_over_time
       gnostics%write_apar_over_time = write_apar_over_time
       gnostics%write_bpar_over_time = write_bpar_over_time
+      gnostics%write_movie = write_movie
+      gnostics%write_moments = write_moments
       gnostics%write_fluxes = write_fluxes
       gnostics%write_fluxes_by_mode = write_fluxes_by_mode
       gnostics%write_omega = write_omega
@@ -134,6 +150,7 @@ contains
       gnostics%exit_when_converged = exit_when_converged
       gnostics%write_verr = write_verr
       gnostics%write_max_verr = write_max_verr
+      gnostics%write_heating = write_heating
 
     end if
 
@@ -143,6 +160,8 @@ contains
     call broadcast (gnostics%write_phi_over_time)
     call broadcast (gnostics%write_apar_over_time)
     call broadcast (gnostics%write_bpar_over_time)
+    call broadcast (gnostics%write_movie)
+    call broadcast (gnostics%write_moments)
     call broadcast (gnostics%write_fluxes)
     call broadcast (gnostics%write_fluxes_by_mode)
     call broadcast (gnostics%write_omega)
@@ -153,6 +172,7 @@ contains
     call broadcast (gnostics%exit_when_converged)
     call broadcast (gnostics%write_verr)
     call broadcast (gnostics%write_max_verr)
+    call broadcast (gnostics%write_heating)
 
 
 

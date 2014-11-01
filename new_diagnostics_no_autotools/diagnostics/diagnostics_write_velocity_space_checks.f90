@@ -73,7 +73,7 @@ contains
     ! See
     ! http://www.unidata.ucar.edu/software/netcdf/docs/known_problems.html#f90-debug-segfault
     if (gnostics%write_max_verr) &
-      call create_and_write_variable(gnostics, gnostics%rtype, "vspace_err_maxindex", "52t", &
+      call create_and_write_variable(gnostics, SDATIO_INT, "vspace_err_maxindex", "53t", &
         "Gives the (1) theta index, (2) ky index and (3) kx index of the maximum &
         & error resulting from the &
         & velocity space integrals in the calculation of the following quantities &
@@ -81,58 +81,6 @@ contains
         & (3) k phi, trapped pitch angles, (4) k apar, energy, (5) k apar, untrapped &
         & angles. Relative errors should be < 0.1. ", &
         "1", erridx)
-    !call create_and_write_variable(gnostics, gnostics%rtype, "vspace_lpcfrac_energy", "t", &
-      !"Fraction of free energy contained in the high order coefficients of &
-        !& the Legendre polynomial transform of energy space (should ideally be < 0.1). ", "1", geavg)
-    !call create_and_write_variable(gnostics, gnostics%rtype, "vspace_lpcfrac_passing", "t", &
-      !"Fraction of free energy contained in the high order coefficients of &
-        !& the Legendre polynomial transform of untrapped pitch angles (should ideally be < 0.1). ", "1", glavg)
-    !if (nlambda - ng2 > 1) &
-      !call create_and_write_variable(gnostics, gnostics%rtype, "vspace_lpcfrac_trapped", "t", &
-        !"Fraction of free energy contained in the high order coefficients of &
-          !& the Legendre polynomial transform of trapped pitch angles (should ideally be < 0.1). ", "1", gtavg)
-    !call create_and_write_variable(gnostics, gnostics%rtype, "vspace_errabs_energy", "t", &
-      !"Estimate of the absolute error in phi resulting from the integral over energy space. ", "T_r/(e rho_r)", errest(1,1))
-    !call create_and_write_variable(gnostics, gnostics%rtype, "vspace_err_energy", "t", &
-      !"Estimate of the relative error in phi resulting from the integral over energy &
-      !& space (should ideally be < 0.1). ", "1", errest(1,2))
-    !call create_and_write_variable(gnostics, gnostics%rtype, "vspace_errabs_passing", "t", &
-      !"Estimate of the absolute error in phi resulting from the integral over passing pitch &
-      !& angles.", "1", errest(2,1))
-    !call create_and_write_variable(gnostics, gnostics%rtype, "vspace_err_passing", "t", &
-      !"Estimate of the relative error in phi resulting from the integral over passing pitch &
-      !& angles (should ideally be < 0.1). ", "1", errest(2,2))
-    !if (nlambda - ng2 > 1) then
-      !call create_and_write_variable(gnostics, gnostics%rtype, "vspace_errabs_trapped", "t", &
-        !"Estimate of the absolute error in phi resulting from the integral over passing pitch &
-        !& angles.", "1", errest(2,1))
-      !call create_and_write_variable(gnostics, gnostics%rtype, "vspace_err_trapped", "t", &
-        !"Estimate of the relative error in phi resulting from the integral over passing pitch &
-        !& angles (should ideally be < 0.1). ", "1", errest(2,2))
-    !endif
-    !if (proc0) then
-       !! write error estimates to .nc file          
-       !!          call nc_loop_vres (nout, errest_by_mode, lpcoef_by_mode)
-
-       !! write error estimates for ion dist. fn. at outboard midplane with ik=it=1 to ascii files
-       !if (write_ascii) then
-          !if (nlambda - ng2 > 1) then
-             !write(lpc_unit,"(4(1x,e13.6))") user_time, geavg, glavg, gtavg
-          !else
-             !write(lpc_unit,"(3(1x,e13.6))") user_time, geavg, glavg
-          !end if
-          !write(res_unit,"(8(1x,e13.6))") user_time, errest(1,2), errest(2,2), errest(3,2), &
-               !errest(4,2), errest(5,2), vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
-          !if (write_max_verr) then
-             !write(res_unit2,"(3(i8),(1x,e13.6),3(i8),(1x,e13.6),3(i8),(1x,e13.6),3(i8),(1x,e13.6),3(i8),(1x,e13.6))") &
-                  !erridx(1,1), erridx(1,2), erridx(1,3), errest(1,1), &
-                  !erridx(2,1), erridx(2,2), erridx(2,3), errest(2,1), &
-                  !erridx(3,1), erridx(3,2), erridx(3,3), errest(3,1), &
-                  !erridx(4,1), erridx(4,2), erridx(4,3), errest(4,1), &
-                  !erridx(5,1), erridx(5,2), erridx(5,3), errest(5,1)
-          !end if
-       !end if
-    !end if
     deallocate(errest,erridx)
   end subroutine write_velocity_space_checks
 end module diagnostics_write_velocity_space_checks
