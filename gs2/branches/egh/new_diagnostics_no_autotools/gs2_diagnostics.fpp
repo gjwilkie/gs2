@@ -984,6 +984,7 @@ contains
 
     exit = .false.
 
+    ! DONE
     call do_get_omega(istep,debug,exit)
 
     if (write_hrate) call heating (istep, h, hk)

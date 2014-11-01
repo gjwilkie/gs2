@@ -14,6 +14,7 @@ module volume_averages
   use theta_grid, only: ntheta, nperiod
   use fields_parallelization, only: field_k_local
   use species, only: nspec
+  use kt_grids, only: naky, ntheta0
 
   implicit none
   integer :: ntg_out
@@ -24,10 +25,12 @@ module volume_averages
 
   interface average_theta
     module procedure average_theta_txy
+    module procedure average_theta_txys
   end interface
 
   interface average_ky
     module procedure average_ky_xy
+    module procedure average_ky_xys
   end interface
 
   interface average_kx
@@ -102,6 +105,37 @@ contains
     avg = sum(axb_by_ky)
   end subroutine average_all_txy
 
+  subroutine average_theta_txys (a, b, axb_by_mode, distributed)
+    use theta_grid, only: ntgrid, delthet, jacob, nperiod, ntheta
+    implicit none
+    complex, dimension (-ntgrid:,:,:,:), intent (in) :: a, b
+    real, dimension (:,:,:), intent (out) :: axb_by_mode
+    logical,intent(in) :: distributed
+
+
+    integer :: ik, it, is
+    integer :: ng
+    real, dimension (-ntg_out:ntg_out) :: wgt
+    real :: anorm
+
+    ng = ntg_out
+    wgt = delthet(-ng:ng)*jacob(-ng:ng)
+    anorm = sum(wgt)
+
+    axb_by_mode = 0
+
+    do is = 1,nspec
+      do ik = 1, naky
+         do it = 1, ntheta0
+           if (.not. distributed .or. field_k_local(it,ik)) then
+            axb_by_mode(it,ik,is) &
+                 = sum(real(conjg(a(-ng:ng,it,ik,is))*b(-ng:ng,it,ik,is))*wgt)/anorm
+           end if
+         end do
+      end do
+    end do
+
+  end subroutine average_theta_txys
   subroutine average_theta_txy (a, b, axb_by_mode, distributed)
     use theta_grid, only: ntgrid, delthet, jacob, nperiod, ntheta
     use kt_grids, only: naky, ntheta0
@@ -167,6 +201,43 @@ contains
     if (distributed) call sum_allreduce(favg)
 
   end subroutine average_ky_xy
+  subroutine average_ky_xys (f, favg, distributed)
+    use kt_grids, only: naky, ntheta0, aky
+    use fields_parallelization, only: field_k_local
+    use mp, only: sum_allreduce
+    implicit none
+    real, dimension (:,:,:), intent (in) :: f
+    real, dimension (:,:), intent (out) :: favg
+    logical,intent(in) :: distributed
+    real :: fac
+    integer :: ik, it, is
+
+! ky=0 modes have correct amplitudes; rest must be scaled
+! note contrast with scaling factors in FFT routines.
+
+!CMR+GC: 2/9/2013
+!  fac values here arise because gs2's Fourier coefficients, F_k^gs2, not standard form: 
+!          i.e. f(x) = f_k e^(i k.x)
+!  With standard Fourier coeffs in gs2, we would instead need:  fac=2.0 for ky > 0
+!      (fac=2.0 would account ky<0 contributions, not stored due to reality condition)
+
+    favg = 0.
+    do is = 1, nspec
+      do ik = 1, naky
+         fac = 0.5
+         if (aky(ik) == 0.) fac = 1.0
+         do it = 1, ntheta0
+           if (.not. distributed .or. field_k_local(it,ik)) then
+
+            favg(it,is) = favg(it,is) + f(it, ik,is) * fac
+           end if
+         end do
+      end do
+    end do
+    if (distributed) call sum_allreduce(favg)
+
+  end subroutine average_ky_xys
+
   subroutine average_kx_xys (f, favg, distributed)
     use kt_grids, only: naky, ntheta0, aky
     use fields_parallelization, only: field_k_local
