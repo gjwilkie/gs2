@@ -150,28 +150,22 @@ module diagnostics_heating
       "Total heating sum [h (q dchi/dt - dh/dt * T0)]", "TBC", h%heating)
     call create_and_write_variable(gnostics, gnostics%rtype, "heating_heating_sum", "t", &
       "Total heating sum [h (q dchi/dt - dh/dt * T0)]", "TBC", sum(h%heating))
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_balance", "t", &
+      "Sum of total heating, total injection and total change in stored &
+       & free energy (should be zero)", "TBC", sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot)
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_apar", "t", &
+      "Free energy in perp magnetic field: (k_perp A)**2", "TBC", h%eapar)
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_bpar", "t", &
+      "Free energy in par magnetic field: B_par**2", "TBC", h%ebpar)
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_delfs2", "st", &
+      "Total free energy as a function of species dfs^2  ", "TBC", h%delfs2)
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_hs2", "st", &
+      "Non-adiabatic free energy as a function of species hs^2  ", "TBC", h%hs2)
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_phis2", "st", &
+      "Adiabatic free energy as a function of species phi_bar^2  ", "TBC", h%phis2)
 
-            !h % energy_dot, h % antenna, h % imp_colls, h % hypercoll, h % collisions, &
-            !h % gradients, h % heating, sum(h % imp_colls), sum(h % hypercoll), sum(h % collisions), &
-            !sum(h % gradients), sum(h % heating),sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot, &
-            !h % eapar, h % ebpar, h % delfs2(:),  h % hs2(:), h % phis2(:)
+    !if (gnostics%write_ascii) then
 
-       !  13        [h * (q dchi/dt - dh/dt * T0)]_1
-       !  14        [h * (q dchi/dt - dh/dt * T0)]_2
-       !  15      sum (h C(h) * T_0)  in total, as in 5, 6      
-       !  16     -sum (h H(h) * T_0)      
-       !  17     -sum (h C(h) * T_0)   
-       !  18      sum (h w_* h)  
-       !  19      sum [h (q dchi/dt - dh/dt * T0)]
-       !  20      3 + 4 + 18 + 19
-       !  21      (k_perp A)**2
-       !  22      B_par**2
-       !  23      df_1 ** 2
-       !  24      df_2 ** 2
-       !  25      h_1 ** 2
-       !  26      h_2 ** 2
-       !  27      Phi_bar_1 ** 2
-       !  28      Phi_bar_2 ** 2
        !
        !
        ! For case with one species:

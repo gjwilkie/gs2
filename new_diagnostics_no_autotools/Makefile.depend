@@ -149,6 +149,7 @@ ffttester_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
+	 diagnostics_ascii.o \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
 	 diagnostics_geometry.o \
@@ -274,6 +275,7 @@ gs2_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
+	 diagnostics_ascii.o \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
 	 diagnostics_geometry.o \
@@ -509,7 +511,10 @@ deq.o: \
 	 constants.o \
 	 mp.o \
 	 spl.o 
+diagnostics_ascii.o: \
+	 file_utils.o 
 diagnostics_config.o: \
+	 diagnostics_ascii.o \
 	 file_utils.o \
 	 mp.o \
 	 simpledataiof.o \
@@ -811,6 +816,7 @@ gs2_diagnostics.o: \
 	 theta_grid.o \
 	 unit_tests.o 
 gs2_diagnostics_new.o: \
+	 diagnostics_ascii.o \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
 	 diagnostics_geometry.o \

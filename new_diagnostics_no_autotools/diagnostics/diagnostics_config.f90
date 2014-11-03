@@ -7,6 +7,7 @@
 module diagnostics_config
 
   use simpledataio, only: sdatio_file
+  use diagnostics_ascii, only: diagnostics_ascii_type
 
   public :: init_diagnostics_config
   public :: finish_diagnostics_config
@@ -15,6 +16,7 @@ module diagnostics_config
   type diagnostics_type
    type(sdatio_file) :: sfile
    !type(sdatio_file) :: sfilemovie
+   type(diagnostics_ascii_type) :: ascii_files
    !> Integer below gives the sdatio type 
    !! which corresponds to a gs2 real
    integer :: rtype
@@ -44,6 +46,7 @@ module diagnostics_config
    logical :: write_verr
    logical :: write_max_verr
    logical :: write_heating
+   logical :: write_ascii
   end type diagnostics_type
 
 
@@ -84,6 +87,7 @@ contains
     logical :: write_verr
     logical :: write_max_verr
     logical :: write_heating
+    logical :: write_ascii
     namelist /diagnostics_config/ &
       nwrite, &
       write_any, &
@@ -103,7 +107,8 @@ contains
       exit_when_converged, &
       write_verr, &
       write_max_verr, &
-      write_heating
+      write_heating, &
+      write_ascii
 
     integer :: in_file
     logical :: exist
@@ -128,6 +133,7 @@ contains
       write_verr = .true.
       write_max_verr = .false.
       write_heating = .false.
+      write_ascii = .true.
 
       in_file = input_unit_exist ("diagnostics_config", exist)
       if (exist) read (unit=in_file, nml=diagnostics_config)
@@ -151,6 +157,7 @@ contains
       gnostics%write_verr = write_verr
       gnostics%write_max_verr = write_max_verr
       gnostics%write_heating = write_heating
+      gnostics%write_ascii = write_ascii
 
     end if
 
@@ -173,6 +180,7 @@ contains
     call broadcast (gnostics%write_verr)
     call broadcast (gnostics%write_max_verr)
     call broadcast (gnostics%write_heating)
+    call broadcast (gnostics%write_ascii)
 
 
 
