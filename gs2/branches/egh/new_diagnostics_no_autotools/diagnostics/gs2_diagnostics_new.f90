@@ -39,6 +39,7 @@ contains
     use diagnostics_write_omega, only: init_diagnostics_write_omega
     use diagnostics_write_velocity_space_checks, only: init_diagnostics_write_velocity_space_checks
     use diagnostics_heating, only: init_diagnostics_heating
+    use diagnostics_ascii, only: init_diagnostics_ascii
     use file_utils, only: run_name
     use mp, only: mp_comm, proc0
     type(diagnostics_init_options_type), intent(in) :: init_options
@@ -95,7 +96,18 @@ contains
       call create_dimensions
       !if (gnostics%write_movie) call create_dimensions_movie
     end if
+    if (gnostics%write_ascii) then 
+      call set_ascii_file_switches
+      call init_diagnostics_ascii(gnostics%ascii_files)
+    end if
   end subroutine init_gs2_diagnostics_new
+  
+  subroutine set_ascii_file_switches
+    if (gnostics%write_fields) gnostics%ascii_files%write_to_fields=.true.
+    if (gnostics%write_heating) gnostics%ascii_files%write_to_heat=.true.
+    if (gnostics%write_heating) gnostics%ascii_files%write_to_heat2=.true.
+  end subroutine set_ascii_file_switches
+
 
   !> Close the output file and deallocate arrays
   subroutine finish_gs2_diagnostics_new
@@ -152,6 +164,8 @@ contains
     ! till distributed fields are up and running
     gnostics%distributed = gnostics%parallel
 
+    gnostics%user_time = user_time
+    
     ! Write constants/parameters
     if (istep < 1) then
       call write_dimensions
@@ -164,7 +178,6 @@ contains
     end if
 
 
-    gnostics%user_time = user_time
 
     if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
       if (gnostics%write_omega)  call write_omega (gnostics)
@@ -205,7 +218,7 @@ contains
     call add_dimension(gnostics%sfile, "e", negrid, "", "")
     call add_dimension(gnostics%sfile, "l", nlambda, "", "")
     call add_dimension(gnostics%sfile, "s", nspec, "", "")
-    call add_dimension(gnostics%sfile, "r", 2, "", "")
+    call add_dimension(gnostics%sfile, "r", 2, "Real and imaginary parts", "")
     call add_dimension(gnostics%sfile, "t", SDATIO_UNLIMITED, "", "")
 
     ! A set of generic dimensions for writing arrays of data 

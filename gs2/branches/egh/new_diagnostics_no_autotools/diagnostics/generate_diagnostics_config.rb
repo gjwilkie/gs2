@@ -42,6 +42,8 @@ input_variables_for_diagnostics_config = [
 	['logical', 'write_heating', '.false.'],
 
 
+  # If true, write out old-style text files
+	['logical', 'write_ascii', '.true.'],
 
   
 ]
@@ -92,6 +94,7 @@ string = <<EOF
 module diagnostics_config
 
   use simpledataio, only: sdatio_file
+  use diagnostics_ascii, only: diagnostics_ascii_type
 
   public :: init_diagnostics_config
   public :: finish_diagnostics_config
@@ -100,6 +103,7 @@ module diagnostics_config
   type diagnostics_type
    type(sdatio_file) :: sfile
    !type(sdatio_file) :: sfilemovie
+   type(diagnostics_ascii_type) :: ascii_files
    !> Integer below gives the sdatio type 
    !! which corresponds to a gs2 real
    integer :: rtype
