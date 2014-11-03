@@ -29,10 +29,10 @@ program test_gs2_diagnostics_new
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
 #endif
     implicit none
-    integer :: n_vars 
+    integer :: n_vars, n_file_names
     integer :: i
 
-    character(len=40), dimension(200) :: variables, new_variables, n_lines
+    character(len=40), dimension(200) :: variables, new_variables, n_lines, file_names, n_lines_files
       !variables = (/'lambda', 'phi'/), &
       !n_lines = (/'3', '30'/)
 
@@ -78,6 +78,16 @@ program test_gs2_diagnostics_new
     n_vars = 15
 
 
+    file_names(1) = 'heat'
+    n_lines_files(1) = '16'
+    file_names(2) = 'heat2'
+    n_lines_files(2) = '50'
+    file_names(3) = 'lpc'
+    n_lines_files(3) = '16'
+    file_names(4) = 'vres'
+    n_lines_files(4) = '16'
+
+    n_file_names = 4
 
     call init_mp
 
@@ -104,6 +114,11 @@ program test_gs2_diagnostics_new
         call process_test(test_variable(trim(variables(i)), trim(new_variables(i)), &
           trim(n_lines(i))), &
           "value of "//trim(new_variables(i)))
+      end do
+      do i = 1,n_file_names
+        call announce_test("content of "//trim(file_names(i)))
+        call process_test(test_file(trim(file_names(i)), trim(n_lines_files(i))), &
+          "content of "//trim(file_names(i)))
       end do
     end if
 
@@ -134,7 +149,28 @@ contains
     read(120349, '(L)') test_variable
     close(120349)
 #endif
-  end function test_variable
+  end
+  function test_file(file_name, n_lines)
+    use unit_tests, only: should_print
+    character(*), intent(in) :: file_name, n_lines
+    logical :: test_file
+    character(200) ::  command 
+    
+    test_file=.true.
+#ifdef NEW_DIAG
+    command = "if [ ""`cat test_gs2_diagnostics_new."//file_name//"  | tail -n "//n_lines//"`"" = &
+     &  ""`cat test_gs2_diagnostics_new.new."//file_name//"   | tail -n "//n_lines//"`"" ]; &
+     & then echo ""T"" > test_tmp.txt; fi"
+    
+    if (should_print(3)) write(*,*) command
+    call system(" echo ""F"" > test_tmp.txt")
+    call system(command)
+    !test_= .true.
+    open(120349, file='test_tmp.txt')
+    read(120349, '(L)') test_file
+    close(120349)
+#endif
+  end function test_file
 
 
 end program test_gs2_diagnostics_new

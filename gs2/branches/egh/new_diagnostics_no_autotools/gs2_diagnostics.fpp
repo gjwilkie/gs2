@@ -987,10 +987,13 @@ contains
     ! DONE
     call do_get_omega(istep,debug,exit)
 
+    ! DONE
     if (write_hrate) call heating (istep, h, hk)
 
+    ! DONE
     if (make_movie .and. mod(istep,nmovie)==0) call do_write_movie(t) 
 
+    ! DONE
     if (write_gyx .and. mod(istep,nmovie) == 0) call write_fyx (phinew,bparnew,last)
 
     if (vary_vnew) then

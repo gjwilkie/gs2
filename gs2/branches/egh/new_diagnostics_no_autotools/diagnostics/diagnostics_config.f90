@@ -27,7 +27,9 @@ module diagnostics_config
    logical :: parallel
    logical :: exit
    real :: user_time
+   real, dimension(:), allocatable :: fluxfac
    integer :: nwrite
+   integer :: nwrite_large
    logical :: write_any
    logical :: write_fields
    logical :: write_phi_over_time
@@ -47,6 +49,7 @@ module diagnostics_config
    logical :: write_max_verr
    logical :: write_heating
    logical :: write_ascii
+   logical :: write_gyx
   end type diagnostics_type
 
 
@@ -69,6 +72,7 @@ contains
     implicit none
     type(diagnostics_type), intent(out) :: gnostics
     integer :: nwrite
+    integer :: nwrite_large
     logical :: write_any
     logical :: write_fields
     logical :: write_phi_over_time
@@ -88,8 +92,10 @@ contains
     logical :: write_max_verr
     logical :: write_heating
     logical :: write_ascii
+    logical :: write_gyx
     namelist /diagnostics_config/ &
       nwrite, &
+      nwrite_large, &
       write_any, &
       write_fields, &
       write_phi_over_time, &
@@ -108,13 +114,15 @@ contains
       write_verr, &
       write_max_verr, &
       write_heating, &
-      write_ascii
+      write_ascii, &
+      write_gyx
 
     integer :: in_file
     logical :: exist
 
     if (proc0) then
       nwrite = 10
+      nwrite_large = 100
       write_any = .true.
       write_fields = .true.
       write_phi_over_time = .false.
@@ -134,11 +142,13 @@ contains
       write_max_verr = .false.
       write_heating = .false.
       write_ascii = .true.
+      write_gyx = .false.
 
       in_file = input_unit_exist ("diagnostics_config", exist)
       if (exist) read (unit=in_file, nml=diagnostics_config)
 
       gnostics%nwrite = nwrite
+      gnostics%nwrite_large = nwrite_large
       gnostics%write_any = write_any
       gnostics%write_fields = write_fields
       gnostics%write_phi_over_time = write_phi_over_time
@@ -158,10 +168,12 @@ contains
       gnostics%write_max_verr = write_max_verr
       gnostics%write_heating = write_heating
       gnostics%write_ascii = write_ascii
+      gnostics%write_gyx = write_gyx
 
     end if
 
     call broadcast (gnostics%nwrite)
+    call broadcast (gnostics%nwrite_large)
     call broadcast (gnostics%write_any)
     call broadcast (gnostics%write_fields)
     call broadcast (gnostics%write_phi_over_time)
@@ -181,6 +193,7 @@ contains
     call broadcast (gnostics%write_max_verr)
     call broadcast (gnostics%write_heating)
     call broadcast (gnostics%write_ascii)
+    call broadcast (gnostics%write_gyx)
 
 
 
