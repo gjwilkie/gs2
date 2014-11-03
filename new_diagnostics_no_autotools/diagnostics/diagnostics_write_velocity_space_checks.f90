@@ -81,6 +81,27 @@ contains
         & (3) k phi, trapped pitch angles, (4) k apar, energy, (5) k apar, untrapped &
         & angles. Relative errors should be < 0.1. ", &
         "1", erridx)
+
+    if (proc0 .and. gnostics%write_ascii) call write_ascii
     deallocate(errest,erridx)
+
+    contains
+       subroutine write_ascii
+          if (nlambda - ng2 > 1) then
+             write(gnostics%ascii_files%lpc,"(4(1x,e13.6))") user_time, geavg, glavg, gtavg
+          else
+             write(gnostics%ascii_files%lpc,"(3(1x,e13.6))") user_time, geavg, glavg
+          end if
+          write(gnostics%ascii_files%vres,"(8(1x,e13.6))") user_time, errest(1,2), errest(2,2), errest(3,2), &
+               errest(4,2), errest(5,2), vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk
+          if (gnostics%write_max_verr) then
+             write(gnostics%ascii_files%vres2,"(3(i8),(1x,e13.6),3(i8),(1x,e13.6),3(i8),(1x,e13.6),3(i8),(1x,e13.6),3(i8),(1x,e13.6))") &
+                  erridx(1,1), erridx(1,2), erridx(1,3), errest(1,1), &
+                  erridx(2,1), erridx(2,2), erridx(2,3), errest(2,1), &
+                  erridx(3,1), erridx(3,2), erridx(3,3), errest(3,1), &
+                  erridx(4,1), erridx(4,2), erridx(4,3), errest(4,1), &
+                  erridx(5,1), erridx(5,2), erridx(5,3), errest(5,1)
+          end if
+       end subroutine write_ascii
   end subroutine write_velocity_space_checks
 end module diagnostics_write_velocity_space_checks

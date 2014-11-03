@@ -42,6 +42,7 @@ contains
     use diagnostics_ascii, only: init_diagnostics_ascii
     use file_utils, only: run_name
     use mp, only: mp_comm, proc0
+    use kt_grids, only: naky, aky
     type(diagnostics_init_options_type), intent(in) :: init_options
     if(proc0) write (*,*) 'initializing new diagnostics'
     call init_diagnostics_config(gnostics)
@@ -64,6 +65,16 @@ contains
     end if
     !write (*,*) 'gnostics%rtype', gnostics%rtype, 'doub', SDATIO_DOUBLE, 'float', SDATIO_FLOAT
 
+
+    ! fluxfac is used for summing fields, fluxes etc over ky
+    ! Mostly this is not needed, since the average_ky routine in 
+    ! volume_averages takes care of the factor... you only need it
+    ! if you are manually summing something over ky
+    allocate(gnostics%fluxfac(naky))
+    gnostics%fluxfac = 0.5
+    !<DD>This is only correct if running in box mode surely?
+    !    I think this should be if(aky(1)==0.0) fluxfac(1)=1.0 but I may be wrong
+    if(aky(1)==0.0) gnostics%fluxfac(1) = 1.0
 
 
 
@@ -98,14 +109,18 @@ contains
     end if
     if (gnostics%write_ascii) then 
       call set_ascii_file_switches
-      call init_diagnostics_ascii(gnostics%ascii_files)
+      if (proc0) call init_diagnostics_ascii(gnostics%ascii_files)
     end if
   end subroutine init_gs2_diagnostics_new
   
   subroutine set_ascii_file_switches
-    if (gnostics%write_fields) gnostics%ascii_files%write_to_fields=.true.
-    if (gnostics%write_heating) gnostics%ascii_files%write_to_heat=.true.
-    if (gnostics%write_heating) gnostics%ascii_files%write_to_heat2=.true.
+    gnostics%ascii_files%write_to_fields   = gnostics%write_fields
+    gnostics%ascii_files%write_to_heat     = gnostics%write_heating
+    gnostics%ascii_files%write_to_heat2    = gnostics%write_heating
+    gnostics%ascii_files%write_to_lpc    = gnostics%write_verr
+    gnostics%ascii_files%write_to_vres    = gnostics%write_verr
+    gnostics%ascii_files%write_to_vres2    = gnostics%write_verr
+    !write (*,*) 'gnostics%ascii_files%write_to_heat2', gnostics%ascii_files%write_to_heat2
   end subroutine set_ascii_file_switches
 
 
@@ -114,8 +129,13 @@ contains
     use diagnostics_write_fluxes, only: finish_diagnostics_write_fluxes
     use diagnostics_write_omega, only: finish_diagnostics_write_omega
     use diagnostics_heating, only: finish_diagnostics_heating
+    use diagnostics_ascii, only: finish_diagnostics_ascii
+    use dist_fn, only: write_fyx
     use mp, only: proc0
+    use fields_arrays, only: phinew, bparnew
     if (.not. gnostics%write_any) return
+
+    deallocate(gnostics%fluxfac)
     call finish_diagnostics_write_fluxes
     call finish_diagnostics_write_omega
     if (gnostics%write_heating) call finish_diagnostics_heating(gnostics)
@@ -124,6 +144,10 @@ contains
       call closefile(gnostics%sfile)
       !if (gnostics%write_movie) call closefile(gnostics%sfilemovie)
     end if
+    if (gnostics%write_ascii .and. proc0) call finish_diagnostics_ascii(gnostics%ascii_files)
+
+    ! Random stuff that needs to be put in properly or removed
+    if (gnostics%write_gyx) call write_fyx (phinew,bparnew,.true.)
   end subroutine finish_gs2_diagnostics_new
 
   !> Create or write all variables according to the value of istep:
@@ -178,6 +202,8 @@ contains
     end if
 
 
+    call run_diagnostics_to_be_updated
+
 
     if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
       if (gnostics%write_omega)  call write_omega (gnostics)
@@ -198,6 +224,13 @@ contains
     exit = gnostics%exit
 
   end subroutine run_diagnostics
+
+  subroutine run_diagnostics_to_be_updated
+    use fields_arrays, only: phinew, bparnew
+    use dist_fn, only: write_fyx
+    ! Random stuff that needs to be put in properly or removed
+    if (gnostics%write_gyx .and. mod(gnostics%istep,gnostics%nwrite_large) == 0) call write_fyx (phinew,bparnew,.false.)
+  end subroutine run_diagnostics_to_be_updated
 
   subroutine create_dimensions
     use kt_grids, only: naky, ntheta0, nx, ny

@@ -118,6 +118,7 @@ module diagnostics_heating
   subroutine write_heating(gnostics)
     use species, only: nspec
     use file_utils, only: flush_output_file
+    use mp, only: proc0
     implicit none
     type(diagnostics_type), intent (in) :: gnostics
     real :: t
@@ -164,76 +165,87 @@ module diagnostics_heating
     call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_phis2", "st", &
       "Adiabatic free energy as a function of species phi_bar^2  ", "TBC", h%phis2)
 
-    !if (gnostics%write_ascii) then
+    if (gnostics%write_ascii .and. proc0) call write_ascii
 
-       !
-       !
-       ! For case with one species:
-       !
-       ! Column     Item               
-       !   1        time              
-       !   2        Energy              
-       !   3        dEnergy/dt            
-       !   4        J_ant.E             
-       !   5        [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0 
-       !   6       -[h H(h) * T_0]
-       !   7       -[h C(h) * T_0]
-       !   8        [h w_* h]
-       !   9        [h * (q dchi/dt - dh/dt * T0)]_1
-       !  10      sum (h C(h) * T_0)  in total, as in 5, 6      
-       !  11     -sum (h H(h) * T_0)      
-       !  12     -sum (h C(h) * T_0)   
-       !  13      sum (h w_* h)  
-       !  14      sum [h (q dchi/dt - dh/dt * T0)]
-       !  15      3 + 4 + 9 + 10
-       !  16      (k_perp A)**2
-       !  17      B_par**2
-       !  18      df ** 2
-       !  19      h ** 2
-       !  20      Phi_bar ** 2
-       
+    contains
+      subroutine write_ascii
+        integer :: heat_unit
+        integer :: heat_unit2
 
-       !write (unit=heat_unit, fmt="(28es12.4)") t,h % energy,  &
-            !h % energy_dot, h % antenna, h % imp_colls, h % hypercoll, h % collisions, &
-            !h % gradients, h % heating, sum(h % imp_colls), sum(h % hypercoll), sum(h % collisions), &
-            !sum(h % gradients), sum(h % heating),sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot, &
-            !h % eapar, h % ebpar, h % delfs2(:),  h % hs2(:), h % phis2(:)
+        heat_unit = gnostics%ascii_files%heat
+        heat_unit2 = gnostics%ascii_files%heat2
 
-       !do is=1,nspec
-          !write (unit=heat_unit2, fmt="(15es12.4)") t,h % energy,  &
-               !h % energy_dot, h % antenna, h % imp_colls(is), h % hypercoll(is), h % collisions(is), &
-               !h % gradients(is), h % heating(is), &
-               !h % eapar, h % ebpar, h % delfs2(is),  h % hs2(is), h % phis2(is), real(is)
-          !write (unit=heat_unit2, fmt=*)
-       !end do
-       !write (unit=heat_unit2, fmt=*)
+      
 
-       !call flush_output_file (heat_unit)
-       !call flush_output_file (heat_unit2)
+         !
+         !
+         ! For case with one species:
+         !
+         ! Column     Item               
+         !   1        time              
+         !   2        Energy              
+         !   3        dEnergy/dt            
+         !   4        J_ant.E             
+         !   5        [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0 
+         !   6       -[h H(h) * T_0]
+         !   7       -[h C(h) * T_0]
+         !   8        [h w_* h]
+         !   9        [h * (q dchi/dt - dh/dt * T0)]_1
+         !  10      sum (h C(h) * T_0)  in total, as in 5, 6      
+         !  11     -sum (h H(h) * T_0)      
+         !  12     -sum (h C(h) * T_0)   
+         !  13      sum (h w_* h)  
+         !  14      sum [h (q dchi/dt - dh/dt * T0)]
+         !  15      3 + 4 + 9 + 10
+         !  16      (k_perp A)**2
+         !  17      B_par**2
+         !  18      df ** 2
+         !  19      h ** 2
+         !  20      Phi_bar ** 2
+         
 
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' energy= ',e13.6)") t, h % energy
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' energy_dot= ',e13.6)") t, h % energy_dot
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' J_ant.E= ',e13.6)") t, h % antenna
+         write (unit=heat_unit, fmt="(28es12.4)") t,h % energy,  &
+              h % energy_dot, h % antenna, h % imp_colls, h % hypercoll, h % collisions, &
+              h % gradients, h % heating, sum(h % imp_colls), sum(h % hypercoll), sum(h % collisions), &
+              sum(h % gradients), sum(h % heating),sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot, &
+              h % eapar, h % ebpar, h % delfs2(:),  h % hs2(:), h % phis2(:)
 
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' hyperC= ',12(1x,e13.6))") t, h % hypercoll
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' hCh= ',12(1x,e13.6))") t, h % collisions
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' hw*= ',12(1x,e13.6))") t, h % gradients
-       !!GGH!         write (unit=heat_unit, fmt="('t= ',e13.6,' hwd= ',12(1x,e13.6))") t, h % curvature
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' heating= ',12(1x,e13.6))") t, h % heating
+         do is=1,nspec
+            write (unit=heat_unit2, fmt="(15es12.4)") t,h % energy,  &
+                 h % energy_dot, h % antenna, h % imp_colls(is), h % hypercoll(is), h % collisions(is), &
+                 h % gradients(is), h % heating(is), &
+                 h % eapar, h % ebpar, h % delfs2(is),  h % hs2(is), h % phis2(is), real(is)
+            write (unit=heat_unit2, fmt=*)
+         end do
+         write (unit=heat_unit2, fmt=*)
 
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hvisc= ',e13.6)") t, sum(h % hypervisc)
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hyperC= ',e13.6)") t, sum(h % hypercoll)
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hCh= ',e13.6)") t, sum(h % collisions)
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hw*= ',e13.6)") t, sum(h % gradients)
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_heating= ',e13.6)") t, sum(h % heating)
+         call flush_output_file (heat_unit)
+         call flush_output_file (heat_unit2)
 
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_power= ',e13.6)") t, &
-       !!GGH               sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot
-       !!GGH TEST try adding sqrt(2.) to the edot
-       !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_power= ',e13.6)") t, &
-       !!GGH               sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot*sqrt(2.)
-       !!GGH          write (unit=heat_unit, fmt='(a)') ''
-    !!end if
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' energy= ',e13.6)") t, h % energy
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' energy_dot= ',e13.6)") t, h % energy_dot
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' J_ant.E= ',e13.6)") t, h % antenna
+
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' hyperC= ',12(1x,e13.6))") t, h % hypercoll
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' hCh= ',12(1x,e13.6))") t, h % collisions
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' hw*= ',12(1x,e13.6))") t, h % gradients
+         !!GGH!         write (unit=heat_unit, fmt="('t= ',e13.6,' hwd= ',12(1x,e13.6))") t, h % curvature
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' heating= ',12(1x,e13.6))") t, h % heating
+
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hvisc= ',e13.6)") t, sum(h % hypervisc)
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hyperC= ',e13.6)") t, sum(h % hypercoll)
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hCh= ',e13.6)") t, sum(h % collisions)
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_hw*= ',e13.6)") t, sum(h % gradients)
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_heating= ',e13.6)") t, sum(h % heating)
+
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_power= ',e13.6)") t, &
+         !!GGH               sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot
+         !!GGH TEST try adding sqrt(2.) to the edot
+         !!GGH          write (unit=heat_unit, fmt="('t= ',e13.6,' total_power= ',e13.6)") t, &
+         !!GGH               sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot*sqrt(2.)
+         !!GGH          write (unit=heat_unit, fmt='(a)') ''
+      !!end if
+    end subroutine write_ascii
   end subroutine write_heating
 
 end module diagnostics_heating

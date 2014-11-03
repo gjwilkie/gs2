@@ -44,8 +44,11 @@ contains
     use simpledataio
     use simpledataio_write
     use fields_parallelization, only: field_k_local
+    use run_parameters, only: woutunits
     type(diagnostics_type), intent(in) :: gnostics
     integer :: ik, it
+    complex, dimension(0:gnostics%navg-1,ntheta0,naky) :: omegahist_woutunits
+    complex, dimension(ntheta0, naky) :: omega_average_woutunits
 
 
     ! Here we have to separate creating and writing because the fields
@@ -61,22 +64,28 @@ contains
      call set_count(gnostics%sfile, "omega_average", "Y", 1)
     end if
 
+    do ik=1,naky
+      omegahist_woutunits(:,:,ik) = omegahist(:,:,ik) * woutunits(ik)
+      omega_average_woutunits(:,ik) = omega_average(:,ik) * woutunits(ik)
+    end do
+
     
     if (gnostics%wryte) then
       ! Dummy writes, necessary for parallel for some reason
-      call write_variable_with_offset(gnostics%sfile, "omega", omegahist(mod(gnostics%istep,gnostics%navg), :, :))
-      call write_variable_with_offset(gnostics%sfile, "omega_average", omega_average)
+      call write_variable_with_offset(gnostics%sfile, "omega", omegahist_woutunits(mod(gnostics%istep,gnostics%navg), :, :))
+      call write_variable_with_offset(gnostics%sfile, "omega_average", omega_average_woutunits)
 
       do ik=1,naky
         do it=1,ntheta0
           if (.not. gnostics%distributed .or. field_k_local(it, ik)) then 
              call set_start(gnostics%sfile, "omega", "X", it)
              call set_start(gnostics%sfile, "omega", "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, "omega", omegahist(mod(gnostics%istep,gnostics%navg), :, :))
+             call write_variable_with_offset(gnostics%sfile, "omega", &
+               omegahist_woutunits(mod(gnostics%istep,gnostics%navg), :, :))
 
              call set_start(gnostics%sfile, "omega_average", "X", it)
              call set_start(gnostics%sfile, "omega_average", "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, "omega_average", omega_average)
+             call write_variable_with_offset(gnostics%sfile, "omega_average", omega_average_woutunits)
           end if
         end do
       end do

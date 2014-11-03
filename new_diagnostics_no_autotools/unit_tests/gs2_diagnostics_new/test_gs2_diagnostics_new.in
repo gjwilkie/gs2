@@ -203,7 +203,7 @@
   ! write_g not specified --- Write the distribution function to the '.dist' (NetCDF?)
  write_line = .false. ! If (write_ascii = T) write estimated frequencies and growth rates to the output file
   ! write_gyx not specified --- Write dist fn at a given physical spacial point to a file
- write_hrate = .false. ! Write heating rate, collisonal entropy generation etc to '.heat'
+ write_hrate = .true. ! Write heating rate, collisonal entropy generation etc to '.heat'
   ! write_final_epar not specified --- If (write_ascii = T) E_parallel(theta) written to runname.eigenfunc
  write_avg_moments = .F. ! Write flux surface averaged low-order moments of g to runname.out.nc and runname.moments (if write_ascii = T)
   ! write_lorentzian not specified --- Frequency Sweep Data

@@ -18,25 +18,27 @@ ascii_files = [
 
 class Generator
 	attr_accessor :name
-	def initialize(name)
+	def initialize(name, max)
 		@name = name
+    @max = max
 	end
 	def declaration
 		"integer :: #@name"
 	end
 	def switch
-		"logical :: write_to_#@name = .false."
+		"logical :: write_to_#@name "
 	end
   def open_output_file
-    "if (ascii_files%write_to_#@name) call open_output_file(ascii_files%#@name, '.new.#@name')"
+    "if (ascii_files%write_to_#{sprintf("%-#{@max}s", @name)}) call open_output_file(ascii_files%#@name, '.new.#@name')"
   end
   def close_output_file
-    "if (ascii_files%write_to_#@name) call close_output_file(ascii_files%#@name)"
+    "if (ascii_files%write_to_#{sprintf("%-#{@max}s", @name)}) call close_output_file(ascii_files%#@name)"
   end
 
 end
 
-generators = ascii_files.map{|name| Generator.new(name)}
+max = ascii_files.map{|s| s.size}.max
+generators = ascii_files.map{|name| Generator.new(name, max)}
 
 
 string = <<EOF

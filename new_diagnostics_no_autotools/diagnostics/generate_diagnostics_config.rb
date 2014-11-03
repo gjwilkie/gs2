@@ -8,6 +8,7 @@
 # This list is used in generating diagnostics_config.f90
 input_variables_for_diagnostics_config = [
 	['integer', 'nwrite', '10'],
+	['integer', 'nwrite_large', '100'],
 	['logical', 'write_any', '.true.'],
 
 	# Parameters for writing out fields
@@ -45,7 +46,12 @@ input_variables_for_diagnostics_config = [
   # If true, write out old-style text files
 	['logical', 'write_ascii', '.true.'],
 
-  
+  # If true, write the dist_fn at a range of points in space
+  # as a function of velocity to an output file. Do not enable
+  # in the new and old diagnostics modules at the same time
+	['logical', 'write_gyx', '.false.'],
+
+
 ]
 
 
@@ -114,6 +120,7 @@ module diagnostics_config
    logical :: parallel
    logical :: exit
    real :: user_time
+   real, dimension(:), allocatable :: fluxfac
    #{generators.map{|g| g.declaration}.join("\n   ") }
   end type diagnostics_type
 
