@@ -1,6 +1,6 @@
 !> Module which contains functions for calculating
 !! and writing out the fluxes of heat and momentum etc.
-module diagnostics_write_fluxes
+module diagnostics_fluxes
 
   use kt_grids, only: naky, ntheta0
   use diagnostics_config, only: diagnostics_type
@@ -13,10 +13,10 @@ module diagnostics_write_fluxes
 implicit none
 
 !> Allocate arrays
-public :: init_diagnostics_write_fluxes
+public :: init_diagnostics_fluxes
 
 !> Deallocate arrays
-public :: finish_diagnostics_write_fluxes
+public :: finish_diagnostics_fluxes
 
 !> Calculate and write fluxes.  The fluxes are actually calculated
 !!  in the module dist_fn. They are returned as a function of
@@ -36,7 +36,7 @@ private
 
 
 contains
-  subroutine init_diagnostics_write_fluxes
+  subroutine init_diagnostics_fluxes
   
     allocate (pflux (ntheta0,naky,nspec)) ; pflux = 0.
     allocate (pflux_tormom (ntheta0,naky,nspec)) ; pflux_tormom = 0. 
@@ -57,12 +57,12 @@ contains
     allocate (pbflux(ntheta0,naky,nspec)) ; pbflux = 0.
     allocate (qbheat(ntheta0,naky,nspec,3)) ; qbheat = 0.
     allocate (vbflux(ntheta0,naky,nspec)) ; vbflux = 0.
-  end subroutine init_diagnostics_write_fluxes
+  end subroutine init_diagnostics_fluxes
 
-  subroutine finish_diagnostics_write_fluxes
+  subroutine finish_diagnostics_fluxes
     deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange)
-  end subroutine finish_diagnostics_write_fluxes
+  end subroutine finish_diagnostics_fluxes
 
   subroutine write_fluxes(gnostics)
     use dist_fn, only: flux
@@ -437,4 +437,4 @@ contains
    end if
   end subroutine create_and_write_flux_by_mode
 
-end module diagnostics_write_fluxes
+end module diagnostics_fluxes

@@ -1,16 +1,16 @@
 !> A module which writes out quantities which writes out 
 !! diagnostic quantities which assess whether the velocity 
 !! space resolution is sufficient.
-module diagnostics_write_velocity_space_checks
+module diagnostics_velocity_space
   
   use diagnostics_create_and_write
   use simpledataio
   use diagnostics_config, only: diagnostics_type
-  public :: init_diagnostics_write_velocity_space_checks
+  public :: init_diagnostics_velocity_space
 
 contains
 
-  subroutine init_diagnostics_write_velocity_space_checks(gnostics)
+  subroutine init_diagnostics_velocity_space(gnostics)
     use le_grids, only: init_weights
     use mp, only: proc0
     type(diagnostics_type), intent(in) :: gnostics 
@@ -21,7 +21,7 @@ contains
     ! initialize weights for less accurate integrals used
     ! to provide an error estimate for v-space integrals (energy and untrapped)
     if (proc0) call init_weights
-  end subroutine init_diagnostics_write_velocity_space_checks
+  end subroutine init_diagnostics_velocity_space
 
   
   subroutine write_velocity_space_checks(gnostics)
@@ -106,4 +106,4 @@ contains
           end if
        end subroutine write_ascii
   end subroutine write_velocity_space_checks
-end module diagnostics_write_velocity_space_checks
+end module diagnostics_velocity_space
