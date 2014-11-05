@@ -26,11 +26,13 @@ module diagnostics_config
    logical :: distributed
    logical :: parallel
    logical :: exit
+   logical :: vary_vnew_only
    real :: user_time
    real, dimension(:), allocatable :: fluxfac
    integer :: nwrite
    integer :: nwrite_large
    logical :: write_any
+   logical :: print_line
    logical :: write_fields
    logical :: write_phi_over_time
    logical :: write_apar_over_time
@@ -47,9 +49,12 @@ module diagnostics_config
    logical :: exit_when_converged
    logical :: write_verr
    logical :: write_max_verr
+   integer :: ncheck
    logical :: write_heating
    logical :: write_ascii
    logical :: write_gyx
+   logical :: write_g
+   logical :: write_lpoly
   end type diagnostics_type
 
 
@@ -74,6 +79,7 @@ contains
     integer :: nwrite
     integer :: nwrite_large
     logical :: write_any
+    logical :: print_line
     logical :: write_fields
     logical :: write_phi_over_time
     logical :: write_apar_over_time
@@ -90,13 +96,17 @@ contains
     logical :: exit_when_converged
     logical :: write_verr
     logical :: write_max_verr
+    integer :: ncheck
     logical :: write_heating
     logical :: write_ascii
     logical :: write_gyx
+    logical :: write_g
+    logical :: write_lpoly
     namelist /diagnostics_config/ &
       nwrite, &
       nwrite_large, &
       write_any, &
+      print_line, &
       write_fields, &
       write_phi_over_time, &
       write_apar_over_time, &
@@ -113,9 +123,12 @@ contains
       exit_when_converged, &
       write_verr, &
       write_max_verr, &
+      ncheck, &
       write_heating, &
       write_ascii, &
-      write_gyx
+      write_gyx, &
+      write_g, &
+      write_lpoly
 
     integer :: in_file
     logical :: exist
@@ -124,6 +137,7 @@ contains
       nwrite = 10
       nwrite_large = 100
       write_any = .true.
+      print_line = .false.
       write_fields = .true.
       write_phi_over_time = .false.
       write_apar_over_time = .false.
@@ -140,9 +154,12 @@ contains
       exit_when_converged = .true.
       write_verr = .true.
       write_max_verr = .false.
+      ncheck = 10
       write_heating = .false.
       write_ascii = .true.
       write_gyx = .false.
+      write_g = .false.
+      write_lpoly = .false.
 
       in_file = input_unit_exist ("diagnostics_config", exist)
       if (exist) read (unit=in_file, nml=diagnostics_config)
@@ -150,6 +167,7 @@ contains
       gnostics%nwrite = nwrite
       gnostics%nwrite_large = nwrite_large
       gnostics%write_any = write_any
+      gnostics%print_line = print_line
       gnostics%write_fields = write_fields
       gnostics%write_phi_over_time = write_phi_over_time
       gnostics%write_apar_over_time = write_apar_over_time
@@ -166,15 +184,19 @@ contains
       gnostics%exit_when_converged = exit_when_converged
       gnostics%write_verr = write_verr
       gnostics%write_max_verr = write_max_verr
+      gnostics%ncheck = ncheck
       gnostics%write_heating = write_heating
       gnostics%write_ascii = write_ascii
       gnostics%write_gyx = write_gyx
+      gnostics%write_g = write_g
+      gnostics%write_lpoly = write_lpoly
 
     end if
 
     call broadcast (gnostics%nwrite)
     call broadcast (gnostics%nwrite_large)
     call broadcast (gnostics%write_any)
+    call broadcast (gnostics%print_line)
     call broadcast (gnostics%write_fields)
     call broadcast (gnostics%write_phi_over_time)
     call broadcast (gnostics%write_apar_over_time)
@@ -191,9 +213,12 @@ contains
     call broadcast (gnostics%exit_when_converged)
     call broadcast (gnostics%write_verr)
     call broadcast (gnostics%write_max_verr)
+    call broadcast (gnostics%ncheck)
     call broadcast (gnostics%write_heating)
     call broadcast (gnostics%write_ascii)
     call broadcast (gnostics%write_gyx)
+    call broadcast (gnostics%write_g)
+    call broadcast (gnostics%write_lpoly)
 
 
 

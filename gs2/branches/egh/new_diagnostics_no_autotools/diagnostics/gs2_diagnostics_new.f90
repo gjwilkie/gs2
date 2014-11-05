@@ -130,7 +130,7 @@ contains
     use diagnostics_write_omega, only: finish_diagnostics_write_omega
     use diagnostics_heating, only: finish_diagnostics_heating
     use diagnostics_ascii, only: finish_diagnostics_ascii
-    use dist_fn, only: write_fyx
+    use dist_fn, only: write_fyx, write_f, write_poly
     use mp, only: proc0
     use fields_arrays, only: phinew, bparnew
     if (.not. gnostics%write_any) return
@@ -148,7 +148,18 @@ contains
 
     ! Random stuff that needs to be put in properly or removed
     if (gnostics%write_gyx) call write_fyx (phinew,bparnew,.true.)
+    if (gnostics%write_g) call write_f (.true.)
+    if (gnostics%write_lpoly) call write_poly (phinew,bparnew,.true.,gnostics%istep)
   end subroutine finish_gs2_diagnostics_new
+
+  subroutine run_diagnostics_to_be_updated
+    use fields_arrays, only: phinew, bparnew
+    use dist_fn, only: write_fyx, write_f, write_poly
+    ! Random stuff that needs to be put in properly or removed
+    if (gnostics%write_gyx .and. mod(gnostics%istep,gnostics%nwrite_large) == 0) call write_fyx (phinew,bparnew,.false.)
+    if (gnostics%write_g   .and. mod(gnostics%istep,gnostics%nwrite_large) == 0) call write_f (.false.)
+    if (gnostics%write_lpoly) call write_poly (phinew,bparnew,.false.,gnostics%istep)
+  end subroutine run_diagnostics_to_be_updated
 
   !> Create or write all variables according to the value of istep:
   !! istep=-1 --> Create all netcdf variables
@@ -160,10 +171,11 @@ contains
     use diagnostics_write_fluxes, only: write_fluxes
     use diagnostics_write_fields, only: write_fields, write_movie
     use diagnostics_write_moments, only: write_moments
-    use diagnostics_write_omega, only: calculate_omega, write_omega
+    use diagnostics_write_omega, only: calculate_omega, write_omega, print_line
     use diagnostics_write_velocity_space_checks, only: write_velocity_space_checks
     use diagnostics_heating, only: calculate_heating, write_heating
     use diagnostics_geometry, only: write_geometry
+    use collisions, only: vary_vnew
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
 
@@ -206,6 +218,7 @@ contains
 
 
     if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
+      gnostics%vary_vnew_only = .false.
       if (gnostics%write_omega)  call write_omega (gnostics)
       if (gnostics%write_fields) call write_fields(gnostics)
       if (gnostics%write_fluxes) call write_fluxes(gnostics)
@@ -213,24 +226,24 @@ contains
       if (gnostics%write_moments) call write_moments(gnostics)
       if (gnostics%write_movie) call write_movie(gnostics)
       if (gnostics%write_heating) call write_heating(gnostics)
+      if (gnostics%print_line) call print_line(gnostics)
 !
       ! Finally, write time value and update time index
       call create_and_write_variable(gnostics, gnostics%rtype, "t", "t", &
          "Values of the time coordinate", "a/v_thr", user_time) 
       if (gnostics%wryte) call increment_start(gnostics%sfile, "t")
       if (gnostics%wryte) call syncfile(gnostics%sfile)
+    else if (mod(istep, gnostics%ncheck).eq.0) then
+      ! These lines cause the automated checking of velocity space resolution
+      ! and correction by varying collisionality
+      gnostics%vary_vnew_only = .true.
+      if (gnostics%write_verr .and. vary_vnew) call write_velocity_space_checks(gnostics)
     end if
 
     exit = gnostics%exit
 
   end subroutine run_diagnostics
 
-  subroutine run_diagnostics_to_be_updated
-    use fields_arrays, only: phinew, bparnew
-    use dist_fn, only: write_fyx
-    ! Random stuff that needs to be put in properly or removed
-    if (gnostics%write_gyx .and. mod(gnostics%istep,gnostics%nwrite_large) == 0) call write_fyx (phinew,bparnew,.false.)
-  end subroutine run_diagnostics_to_be_updated
 
   subroutine create_dimensions
     use kt_grids, only: naky, ntheta0, nx, ny
