@@ -42,7 +42,7 @@
 !GENERAL PARAMETERS  
 !==============================
 &parameters
- beta = 0.0 ! Ratio of particle to magnetic pressure (reference Beta, not total beta):  beta=n_0 T_0 /( B^2 / (8 pi))
+ beta = 0.1 ! Ratio of particle to magnetic pressure (reference Beta, not total beta):  beta=n_0 T_0 /( B^2 / (8 pi))
  zeff = 1.0 ! Effective ionic charge.
 /
 
@@ -120,8 +120,9 @@
 &knobs
  wstar_units = .false. ! For linear runs only. Evolves each k_y with a different timestep.
  fphi = 1.0 ! Multiplies Phi (electrostatic potential).
- fapar = 0.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)
+ fapar = 1.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)
  faperp = 0.0 ! Multiplies A_perp. Use 1 for high beta, 0 otherwise. Deprecated: use fbpar instead
+ fbpar = 1.0
  delt = 0.05 ! Time step
  nstep = 200 ! Maximum number of timesteps
 /
