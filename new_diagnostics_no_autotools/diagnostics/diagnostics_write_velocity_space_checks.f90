@@ -50,37 +50,39 @@ contains
 
     !errest(5,:) = -4
 
-    call create_and_write_variable(gnostics, gnostics%rtype, "vspace_lpcfrac", "3t", &
-      "Fraction of free energy contained in the high order coefficients of &
-        & the Legendre polynomial transform of (1) energy space, (2) untrapped &
-        & pitch angles and (3) trapped pitch angles (each should ideally be < 0.1).  &
-        & Note that there are no trapped pitch angles for certain geometries", &
-        "1", (/geavg, glavg, gtavg/))
-    call create_and_write_variable(gnostics, gnostics%rtype, "vspace_err", "52t", &
-      "Estimate of the (1) absolute and (2) relative errors resulting from &
-      & velocity space integrals in the calculation of the following quantities &
-      & in the given dimensions: (1) k phi, energy (2) k phi, untrapped pitch angles &
-      & (3) k phi, trapped pitch angles, (4) k apar, energy, (5) k apar, untrapped &
-      & angles. Relative errors should be < 0.1. ", &
-      "absolute error measures have units T_r/(e rho_r)", errest)
-    call create_and_write_variable(gnostics, gnostics%rtype, "vspace_vnewk", "2t", &
-      "If the simulation is set to vary the collisionality in order to keep &
-      & error in velocity integrals to acceptable levels, contains species 1 &
-      & collisionality in (1) pitch angle and (2) energy  ", &
-      "v_thr/a", (/vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk/))
-    ! This next statement causes annoying printout because of an error in netcdf 4.1
-    ! The error is fixed in 4.2
-    ! See
-    ! http://www.unidata.ucar.edu/software/netcdf/docs/known_problems.html#f90-debug-segfault
-    if (gnostics%write_max_verr) &
-      call create_and_write_variable(gnostics, SDATIO_INT, "vspace_err_maxindex", "53t", &
-        "Gives the (1) theta index, (2) ky index and (3) kx index of the maximum &
-        & error resulting from the &
+    if (.not. gnostics%vary_vnew_only) then
+      call create_and_write_variable(gnostics, gnostics%rtype, "vspace_lpcfrac", "3t", &
+        "Fraction of free energy contained in the high order coefficients of &
+          & the Legendre polynomial transform of (1) energy space, (2) untrapped &
+          & pitch angles and (3) trapped pitch angles (each should ideally be < 0.1).  &
+          & Note that there are no trapped pitch angles for certain geometries", &
+          "1", (/geavg, glavg, gtavg/))
+      call create_and_write_variable(gnostics, gnostics%rtype, "vspace_err", "52t", &
+        "Estimate of the (1) absolute and (2) relative errors resulting from &
         & velocity space integrals in the calculation of the following quantities &
         & in the given dimensions: (1) k phi, energy (2) k phi, untrapped pitch angles &
         & (3) k phi, trapped pitch angles, (4) k apar, energy, (5) k apar, untrapped &
         & angles. Relative errors should be < 0.1. ", &
-        "1", erridx)
+        "absolute error measures have units T_r/(e rho_r)", errest)
+      call create_and_write_variable(gnostics, gnostics%rtype, "vspace_vnewk", "2t", &
+        "If the simulation is set to vary the collisionality in order to keep &
+        & error in velocity integrals to acceptable levels, contains species 1 &
+        & collisionality in (1) pitch angle and (2) energy  ", &
+        "v_thr/a", (/vnmult(1)*spec(1)%vnewk, vnmult(2)*spec(1)%vnewk/))
+      ! This next statement causes annoying printout because of an error in netcdf 4.1
+      ! The error is fixed in 4.2
+      ! See
+      ! http://www.unidata.ucar.edu/software/netcdf/docs/known_problems.html#f90-debug-segfault
+      if (gnostics%write_max_verr) &
+        call create_and_write_variable(gnostics, SDATIO_INT, "vspace_err_maxindex", "53t", &
+          "Gives the (1) theta index, (2) ky index and (3) kx index of the maximum &
+          & error resulting from the &
+          & velocity space integrals in the calculation of the following quantities &
+          & in the given dimensions: (1) k phi, energy (2) k phi, untrapped pitch angles &
+          & (3) k phi, trapped pitch angles, (4) k apar, energy, (5) k apar, untrapped &
+          & angles. Relative errors should be < 0.1. ", &
+          "1", erridx)
+    end if
 
     if (proc0 .and. gnostics%write_ascii) call write_ascii
     deallocate(errest,erridx)

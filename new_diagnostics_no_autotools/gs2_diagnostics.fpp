@@ -996,12 +996,14 @@ contains
     ! DONE
     if (write_gyx .and. mod(istep,nmovie) == 0) call write_fyx (phinew,bparnew,last)
 
+    ! DONE
     if (vary_vnew) then
        write_mod = mod(istep,ncheck)
     else
        write_mod = mod(istep,nwrite)
     end if
 
+    ! DONE
     if (write_verr .and. write_mod == 0) call do_write_verr
 
     call prof_leaving ("loop_diagnostics")
@@ -1012,13 +1014,17 @@ contains
 !########################################################
     if (mod(istep,nwrite) /= 0 .and. .not. exit) return
 
+    !DONE
     if (write_g) call write_f (last)
 
+    ! DONE
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
 
     !Note this also returns phi2, apar2, bpar2 and phitot for other diagnostics
+    ! DONE
     if (proc0) call do_write_ncloop(t,istep,phi2,apar2,bpar2,phitot)
 
+    ! DONE
     if (print_line) call do_print_line(phitot)
 
     !This wants to write the fields vs time arrays --> Remove as we now have
@@ -1026,8 +1032,10 @@ contains
     !if (write_fields) call nc_write_fields (nout, phinew, aparnew, bparnew)  !MR
     !Instead replace with a call to nc_final_fields to keep the phi, apar and bpar
     !output arrays up to date.
+    ! DONE
     if(write_fields.and.proc0) call nc_final_fields
 
+    ! DONE
     if (write_moments) call do_write_moments !CMR
 
     if (write_cross_phase .and. has_electron_species(spec) .and. write_ascii ) call do_write_crossphase(t)

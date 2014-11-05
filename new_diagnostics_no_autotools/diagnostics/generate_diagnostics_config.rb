@@ -11,6 +11,10 @@ input_variables_for_diagnostics_config = [
 	['integer', 'nwrite_large', '100'],
 	['logical', 'write_any', '.true.'],
 
+  # Write instantaneous fluxes to screen
+	['logical', 'print_line', '.false.'],
+
+
 	# Parameters for writing out fields
 	['logical', 'write_fields', '.true.'],
 	['logical', 'write_phi_over_time'],
@@ -38,6 +42,7 @@ input_variables_for_diagnostics_config = [
   # Parameters for writing out velocity space diagnostics
 	['logical', 'write_verr', '.true.'],
 	['logical', 'write_max_verr', '.false.'],
+	['integer', 'ncheck', '10'],
 
   # Parameters controlling heating diagnositics
 	['logical', 'write_heating', '.false.'],
@@ -50,6 +55,8 @@ input_variables_for_diagnostics_config = [
   # as a function of velocity to an output file. Do not enable
   # in the new and old diagnostics modules at the same time
 	['logical', 'write_gyx', '.false.'],
+	['logical', 'write_g', '.false.'],
+	['logical', 'write_lpoly', '.false.'],
 
 
 ]
@@ -119,6 +126,7 @@ module diagnostics_config
    logical :: distributed
    logical :: parallel
    logical :: exit
+   logical :: vary_vnew_only
    real :: user_time
    real, dimension(:), allocatable :: fluxfac
    #{generators.map{|g| g.declaration}.join("\n   ") }

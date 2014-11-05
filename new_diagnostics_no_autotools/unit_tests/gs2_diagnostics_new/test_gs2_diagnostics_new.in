@@ -19,6 +19,7 @@
 
 
 &diagnostics_config
+      print_line = .true.
       nwrite = 10
       write_any = .true.
       write_fields = .true.
@@ -30,6 +31,9 @@
 
       write_movie = .true.
       write_heating = .true.
+
+      write_g = .true.
+      write_lpoly = .true.
 
       omegatol = -0.001
 /

@@ -99,6 +99,7 @@ contains
           vflux(:,:,is) = vflux(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
           vflux_par(:,:,is) = vflux_par(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
           vflux_perp(:,:,is) = vflux_perp(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
+          exchange(:,:,is) = exchange(:,:,is) * spec(is)%dens*spec(is)%z
       end do
       call write_standard_flux_properties(gnostics, &
         'heat_flux',  'Turbulent flux of heat', 'Q_gB = ', qheat(:,:,:,1), gnostics%distributed)
@@ -125,13 +126,7 @@ contains
     end if
 
 
-          !call get_volume_average (vflux(:,:,is), mom_fluxes(is))
 
-          !call get_volume_average (vflux_par(:,:,is), parmom_fluxes(is))
-
-          !call get_volume_average (vflux_perp(:,:,is), perpmom_fluxes(is))
-
-          !exchange(:,:,is) = exchange(:,:,is) * spec(is)%dens*spec(is)%z
           !call get_volume_average (exchange(:,:,is), energy_exchange(is))
 
 !#ifdef LOWFLOW

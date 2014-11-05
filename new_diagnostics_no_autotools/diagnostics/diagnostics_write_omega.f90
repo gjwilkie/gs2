@@ -12,6 +12,7 @@ module diagnostics_write_omega
   public :: calculate_omega
   public :: omega_average
   public :: debug
+  public :: print_line
 
   complex, dimension (:,:), allocatable :: omega_average
   logical :: debug =.false.
@@ -154,5 +155,37 @@ contains
 
     if (debug) write(6,*) "calculate_omega: done"
   end subroutine calculate_omega
+
+  subroutine print_line(gnostics)
+    use mp, only: proc0, sum_reduce
+    use kt_grids, only: naky, ntheta0, aky, akx, theta0
+    use run_parameters, only: woutunits
+    use fields_arrays, only: phinew
+    use volume_averages, only: average_theta
+    implicit none
+    type(diagnostics_type), intent(in) :: gnostics
+    real, dimension (ntheta0, naky) :: phitot
+    integer :: ik, it
+
+    call average_theta(phinew, phinew, phitot, gnostics%distributed)
+
+    if (gnostics%distributed) call sum_reduce(phitot, 0)
+
+    if(.not.(proc0 .and. gnostics%wryte)) return
+    do ik = 1, naky
+       do it = 1, ntheta0
+          write (unit=*, fmt="('ky=',1pe9.2, ' kx=',1pe9.2, &
+               & ' om=',e9.2,1x,e9.2,' omav=',e9.2,1x,e9.2, &
+               & ' phtot=',e9.2,' theta0=',1pe9.2)") &
+               aky(ik), akx(it), &
+               real( omegahist(mod(gnostics%istep,gnostics%navg),it,ik)*woutunits(ik)), &
+               aimag(omegahist(mod(gnostics%istep,gnostics%navg),it,ik)*woutunits(ik)), &
+               real( omega_average(it,ik)*woutunits(ik)), &
+               aimag(omega_average(it,ik)*woutunits(ik)), &
+               phitot(it,ik), theta0(it,ik)
+       end do
+    end do
+    write (*,*) 
+  end subroutine print_line
 
 end module diagnostics_write_omega
