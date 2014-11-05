@@ -109,14 +109,33 @@ module diagnostics_config
   use simpledataio, only: sdatio_file
   use diagnostics_ascii, only: diagnostics_ascii_type
 
+
+
   public :: init_diagnostics_config
   public :: finish_diagnostics_config
   public ::diagnostics_type
+  public :: results_summary_type
 
+
+  !> A type for storing the current results of the simulation
+  type results_summary_type
+    real :: total_heat_flux
+    real :: total_momentum_flux
+    real :: total_particle_flux
+    real :: max_growth_rate
+    real, dimension(:), allocatable :: species_heat_flux
+    real, dimension(:), allocatable :: species_momentum_flux
+    real, dimension(:), allocatable :: species_particle_flux
+  end type results_summary_type
+
+  !> A type for storing the diagnostics configuration,
+  !! a reference to the output file, and current 
+  !! results of the simulation
   type diagnostics_type
    type(sdatio_file) :: sfile
    !type(sdatio_file) :: sfilemovie
    type(diagnostics_ascii_type) :: ascii_files
+   type(results_summary_type) :: current_results
    !> Integer below gives the sdatio type 
    !! which corresponds to a gs2 real
    integer :: rtype
@@ -140,10 +159,37 @@ contains
     use file_utils, only: open_output_file
     type(diagnostics_type), intent(out) :: gnostics
     call read_parameters(gnostics)
+    call allocate_current_results(gnostics)
   end subroutine init_diagnostics_config
 
-  subroutine finish_diagnostics_config
+  subroutine finish_diagnostics_config(gnostics)
+    type(diagnostics_type), intent(out) :: gnostics
+    call deallocate_current_results(gnostics)
   end subroutine finish_diagnostics_config
+
+  subroutine allocate_current_results(gnostics)
+    use species, only: nspec
+    type(diagnostics_type), intent(inout) :: gnostics
+    allocate(gnostics%current_results%species_heat_flux(nspec))
+    allocate(gnostics%current_results%species_momentum_flux(nspec))
+    allocate(gnostics%current_results%species_particle_flux(nspec))
+  end subroutine allocate_current_results
+
+  subroutine deallocate_current_results(gnostics)
+    type(diagnostics_type), intent(inout) :: gnostics
+    ! This routine needs to be fixed: I don't know 
+    ! how to correctly deallocate the derived type
+    return
+    
+    ! One call deallocates gnostics and all allocatable arrays 
+    ! within it
+    !deallocate(gnostics%current_results)
+    write (*,*) "DEALLOCATING"
+    deallocate(gnostics%current_results%species_heat_flux)
+    deallocate(gnostics%current_results%species_momentum_flux)
+    deallocate(gnostics%current_results%species_particle_flux)
+  end subroutine deallocate_current_results
+
 
   subroutine read_parameters(gnostics)
     use file_utils, only: input_unit, error_unit, input_unit_exist

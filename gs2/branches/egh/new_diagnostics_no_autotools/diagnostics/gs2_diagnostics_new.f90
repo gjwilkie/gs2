@@ -130,6 +130,7 @@ contains
     use diagnostics_omega, only: finish_diagnostics_omega
     use diagnostics_heating, only: finish_diagnostics_heating
     use diagnostics_ascii, only: finish_diagnostics_ascii
+    use diagnostics_config, only: finish_diagnostics_config
     use dist_fn, only: write_fyx, write_f, write_poly
     use mp, only: proc0
     use fields_arrays, only: phinew, bparnew
@@ -150,6 +151,8 @@ contains
     if (gnostics%write_gyx) call write_fyx (phinew,bparnew,.true.)
     if (gnostics%write_g) call write_f (.true.)
     if (gnostics%write_lpoly) call write_poly (phinew,bparnew,.true.,gnostics%istep)
+
+    call finish_diagnostics_config(gnostics)
   end subroutine finish_gs2_diagnostics_new
 
   subroutine run_diagnostics_to_be_updated
