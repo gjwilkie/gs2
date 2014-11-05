@@ -184,7 +184,7 @@ contains
   !> Calculate estimates of the heat and particles fluxes using
   !! gamma / k^2 estimate of the diffusivity
   subroutine write_diffusive_estimates(gnostics)
-    use diagnostics_write_omega, only: omega_average
+    use diagnostics_omega, only: omega_average
     use fields_parallelization, only: field_k_local
     use species, only: spec
     use kt_grids, only: aky, akx, kperp2

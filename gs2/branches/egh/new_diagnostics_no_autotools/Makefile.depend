@@ -152,13 +152,13 @@ ffttester_mod = \
 	 diagnostics_ascii.o \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
+	 diagnostics_fields.o \
 	 diagnostics_fluxes.o \
 	 diagnostics_geometry.o \
 	 diagnostics_heating.o \
+	 diagnostics_moments.o \
+	 diagnostics_omega.o \
 	 diagnostics_velocity_space.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_moments.o \
-	 diagnostics_write_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -278,13 +278,13 @@ gs2_mod = \
 	 diagnostics_ascii.o \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
+	 diagnostics_fields.o \
 	 diagnostics_fluxes.o \
 	 diagnostics_geometry.o \
 	 diagnostics_heating.o \
+	 diagnostics_moments.o \
+	 diagnostics_omega.o \
 	 diagnostics_velocity_space.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_moments.o \
-	 diagnostics_write_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -523,10 +523,28 @@ diagnostics_create_and_write.o: \
 	 diagnostics_config.o \
 	 simpledataio_write.o \
 	 simpledataiof.o 
+diagnostics_fields.o: \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 fields_arrays.o \
+	 fields_parallelization.o \
+	 file_utils.o \
+	 gs2_io.o \
+	 gs2_layouts.o \
+	 gs2_transforms.o \
+	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
+	 run_parameters.o \
+	 simpledataio_write.o \
+	 simpledataiof.o \
+	 species.o \
+	 theta_grid.o \
+	 volume_averages.o 
 diagnostics_fluxes.o: \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
-	 diagnostics_write_omega.o \
+	 diagnostics_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
@@ -556,36 +574,7 @@ diagnostics_heating.o: \
 	 mp.o \
 	 species.o \
 	 theta_grid.o 
-diagnostics_velocity_space.o: \
-	 collisions.o \
-	 diagnostics_config.o \
-	 diagnostics_create_and_write.o \
-	 dist_fn.o \
-	 fields_arrays.o \
-	 gs2_time.o \
-	 le_grids.o \
-	 mp.o \
-	 simpledataiof.o \
-	 species.o 
-diagnostics_write_fields.o: \
-	 diagnostics_config.o \
-	 diagnostics_create_and_write.o \
-	 fields_arrays.o \
-	 fields_parallelization.o \
-	 file_utils.o \
-	 gs2_io.o \
-	 gs2_layouts.o \
-	 gs2_transforms.o \
-	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
-	 run_parameters.o \
-	 simpledataio_write.o \
-	 simpledataiof.o \
-	 species.o \
-	 theta_grid.o \
-	 volume_averages.o 
-diagnostics_write_moments.o: \
+diagnostics_moments.o: \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
 	 dist_fn.o \
@@ -599,7 +588,7 @@ diagnostics_write_moments.o: \
 	 species.o \
 	 theta_grid.o \
 	 volume_averages.o 
-diagnostics_write_omega.o: \
+diagnostics_omega.o: \
 	 constants.o \
 	 diagnostics_config.o \
 	 fields_arrays.o \
@@ -611,6 +600,17 @@ diagnostics_write_omega.o: \
 	 simpledataio_write.o \
 	 simpledataiof.o \
 	 volume_averages.o 
+diagnostics_velocity_space.o: \
+	 collisions.o \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 dist_fn.o \
+	 fields_arrays.o \
+	 gs2_time.o \
+	 le_grids.o \
+	 mp.o \
+	 simpledataiof.o \
+	 species.o 
 dist_fn.o: \
 	 antenna.o \
 	 collisions.o \
@@ -823,13 +823,13 @@ gs2_diagnostics_new.o: \
 	 diagnostics_ascii.o \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
+	 diagnostics_fields.o \
 	 diagnostics_fluxes.o \
 	 diagnostics_geometry.o \
 	 diagnostics_heating.o \
+	 diagnostics_moments.o \
+	 diagnostics_omega.o \
 	 diagnostics_velocity_space.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_moments.o \
-	 diagnostics_write_omega.o \
 	 dist_fn.o \
 	 fields_arrays.o \
 	 file_utils.o \

@@ -1,7 +1,7 @@
 !> This module contains functions for writing quantities
 !! that have the dimensions of the fields, including
 !! volume averaged quantities, etc.
-module diagnostics_write_fields
+module diagnostics_fields
    use simpledataio
    use simpledataio_write
    use theta_grid, only: ntgrid
@@ -221,5 +221,5 @@ contains
     !nout_movie = nout_movie + 1
   end subroutine write_movie
 
-end module diagnostics_write_fields
+end module diagnostics_fields
 

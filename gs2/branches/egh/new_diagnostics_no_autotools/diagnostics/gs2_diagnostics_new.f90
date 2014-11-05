@@ -36,7 +36,7 @@ contains
     use diagnostics_config, only: init_diagnostics_config
     use volume_averages, only: init_volume_averages
     use diagnostics_fluxes, only: init_diagnostics_fluxes
-    use diagnostics_write_omega, only: init_diagnostics_write_omega
+    use diagnostics_omega, only: init_diagnostics_omega
     use diagnostics_velocity_space, only: init_diagnostics_velocity_space
     use diagnostics_heating, only: init_diagnostics_heating
     use diagnostics_ascii, only: init_diagnostics_ascii
@@ -82,7 +82,7 @@ contains
     ! Initialise submodules
     !!!!!!!!!!!!!!!!!!!!!!!!!!
     call init_diagnostics_fluxes
-    call init_diagnostics_write_omega(gnostics)
+    call init_diagnostics_omega(gnostics)
     !if (gnostics%write_max_verr) gnostics%write_verr = .true.
     call init_diagnostics_velocity_space(gnostics)
     if (gnostics%write_heating) call init_diagnostics_heating(gnostics)
@@ -127,7 +127,7 @@ contains
   !> Close the output file and deallocate arrays
   subroutine finish_gs2_diagnostics_new
     use diagnostics_fluxes, only: finish_diagnostics_fluxes
-    use diagnostics_write_omega, only: finish_diagnostics_write_omega
+    use diagnostics_omega, only: finish_diagnostics_omega
     use diagnostics_heating, only: finish_diagnostics_heating
     use diagnostics_ascii, only: finish_diagnostics_ascii
     use dist_fn, only: write_fyx, write_f, write_poly
@@ -137,7 +137,7 @@ contains
 
     deallocate(gnostics%fluxfac)
     call finish_diagnostics_fluxes
-    call finish_diagnostics_write_omega
+    call finish_diagnostics_omega
     if (gnostics%write_heating) call finish_diagnostics_heating(gnostics)
     if (gnostics%parallel .or. proc0) then
       if(proc0)write (*,*) "Closing new diagnostics"
@@ -169,9 +169,9 @@ contains
     use gs2_time, only: user_time
     use mp, only: proc0
     use diagnostics_fluxes, only: write_fluxes
-    use diagnostics_write_fields, only: write_fields, write_movie
-    use diagnostics_write_moments, only: write_moments
-    use diagnostics_write_omega, only: calculate_omega, write_omega, print_line
+    use diagnostics_fields, only: write_fields, write_movie
+    use diagnostics_moments, only: write_moments
+    use diagnostics_omega, only: calculate_omega, write_omega, print_line
     use diagnostics_velocity_space, only: write_velocity_space_checks
     use diagnostics_heating, only: calculate_heating, write_heating
     use diagnostics_geometry, only: write_geometry

@@ -1,5 +1,5 @@
 !> A module which calculates and writes the growth rates and frequencies
-module diagnostics_write_omega
+module diagnostics_omega
 
   use diagnostics_config, only: diagnostics_type
   use kt_grids, only: ntheta0, naky
@@ -7,8 +7,8 @@ module diagnostics_write_omega
   implicit none
 
   public :: write_omega
-  public :: init_diagnostics_write_omega
-  public :: finish_diagnostics_write_omega
+  public :: init_diagnostics_omega
+  public :: finish_diagnostics_omega
   public :: calculate_omega
   public :: omega_average
   public :: debug
@@ -24,20 +24,20 @@ module diagnostics_write_omega
 
 contains 
   !> Allocate arrays for storing omega history and averages
-  subroutine init_diagnostics_write_omega(gnostics)
+  subroutine init_diagnostics_omega(gnostics)
     type(diagnostics_type), intent(in) :: gnostics
      allocate (omegahist(0:gnostics%navg-1,ntheta0,naky))
      allocate(domega(gnostics%navg,ntheta0,naky))
      allocate(omega_average(ntheta0, naky))
      omegahist = 0.0
      omega_average = 0.0
-  end subroutine init_diagnostics_write_omega
+  end subroutine init_diagnostics_omega
 
-  subroutine finish_diagnostics_write_omega
+  subroutine finish_diagnostics_omega
     deallocate(omegahist)
     deallocate(domega)
     deallocate(omega_average)
-  end subroutine finish_diagnostics_write_omega
+  end subroutine finish_diagnostics_omega
 
   !> Write omega, omega_average as functions of kx, ky and time
   !! to the new netcdf file
@@ -188,4 +188,4 @@ contains
     write (*,*) 
   end subroutine print_line
 
-end module diagnostics_write_omega
+end module diagnostics_omega
