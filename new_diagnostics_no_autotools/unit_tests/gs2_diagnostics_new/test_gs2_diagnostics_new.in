@@ -20,6 +20,7 @@
 
 &diagnostics_config
       print_line = .true.
+      print_flux_line = .true.
       nwrite = 10
       write_any = .true.
       write_fields = .true.
@@ -36,6 +37,9 @@
       write_lpoly = .true.
 
       omegatol = -0.001
+
+      use_nonlin_convergence = .true.
+
 /
 
 !==============================

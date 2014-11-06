@@ -11,8 +11,14 @@ input_variables_for_diagnostics_config = [
 	['integer', 'nwrite_large', '100'],
 	['logical', 'write_any', '.true.'],
 
+  # Controls the theta location of omega calculation,
+  # also of any quantities that are written out for
+  # a given value of theta
+	['integer', 'igomega', '0'],
+
   # Write instantaneous fluxes to screen
 	['logical', 'print_line', '.false.'],
+	['logical', 'print_flux_line', '.false.'],
 
 
 	# Parameters for writing out fields
@@ -34,7 +40,6 @@ input_variables_for_diagnostics_config = [
 	# Parameters for writing out growth rates and frequencies
 	['logical', 'write_omega', '.true.'],
 	['integer', 'navg', '10'],
-	['integer', 'igomega', '0'],
 	['real', 'omegatinst', '1.0e6'],
 	['real', 'omegatol', '-0.001'],
 	['logical', 'exit_when_converged', '.true.'],
@@ -57,6 +62,18 @@ input_variables_for_diagnostics_config = [
 	['logical', 'write_gyx', '.false.'],
 	['logical', 'write_g', '.false.'],
 	['logical', 'write_lpoly', '.false.'],
+
+  # Parameters controlling Trinity convergence tests
+	['integer', 'conv_nstep_av', '4000'],
+	['real', 'conv_test_multiplier', '4e-1'],
+	['integer', 'conv_min_step', '4000'],
+	['integer', 'conv_max_step', '80000'],
+	['integer', 'conv_nsteps_converged', '10000'],
+	['logical', 'use_nonlin_convergence', '.false.'],
+
+  # Parameters determining what turbulence characteristics are calculated
+	['logical', 'write_cross_phase', '.false.'],
+
 
 
 ]
@@ -119,13 +136,33 @@ module diagnostics_config
 
   !> A type for storing the current results of the simulation
   type results_summary_type
+    real :: phi2
+    real :: apar2
+    real :: bpar2
     real :: total_heat_flux
     real :: total_momentum_flux
     real :: total_particle_flux
     real :: max_growth_rate
+
+    ! Individual heat fluxes
+    real, dimension(:), allocatable :: species_es_heat_flux
+    real, dimension(:), allocatable :: species_apar_heat_flux
+    real, dimension(:), allocatable :: species_bpar_heat_flux
+
+    ! Total fluxes
     real, dimension(:), allocatable :: species_heat_flux
     real, dimension(:), allocatable :: species_momentum_flux
     real, dimension(:), allocatable :: species_particle_flux
+    real, dimension(:), allocatable :: species_energy_exchange
+
+    ! Average total fluxes
+    real, dimension(:), allocatable :: species_heat_flux_avg
+    real, dimension(:), allocatable :: species_momentum_flux_avg
+    real, dimension(:), allocatable :: species_particle_flux_avg
+
+    ! Heating
+    real, dimension(:), allocatable :: species_heating
+    real, dimension(:), allocatable :: species_heating_avg
   end type results_summary_type
 
   !> A type for storing the diagnostics configuration,
@@ -146,7 +183,9 @@ module diagnostics_config
    logical :: parallel
    logical :: exit
    logical :: vary_vnew_only
+   logical :: calculate_fluxes
    real :: user_time
+   real :: user_time_old
    real, dimension(:), allocatable :: fluxfac
    #{generators.map{|g| g.declaration}.join("\n   ") }
   end type diagnostics_type
@@ -170,9 +209,19 @@ contains
   subroutine allocate_current_results(gnostics)
     use species, only: nspec
     type(diagnostics_type), intent(inout) :: gnostics
+    allocate(gnostics%current_results%species_es_heat_flux(nspec))
+    allocate(gnostics%current_results%species_apar_heat_flux(nspec))
+    allocate(gnostics%current_results%species_bpar_heat_flux(nspec))
+
     allocate(gnostics%current_results%species_heat_flux(nspec))
     allocate(gnostics%current_results%species_momentum_flux(nspec))
     allocate(gnostics%current_results%species_particle_flux(nspec))
+    allocate(gnostics%current_results%species_energy_exchange(nspec))
+    allocate(gnostics%current_results%species_heat_flux_avg(nspec))
+    allocate(gnostics%current_results%species_momentum_flux_avg(nspec))
+    allocate(gnostics%current_results%species_particle_flux_avg(nspec))
+    allocate(gnostics%current_results%species_heating(nspec))
+    allocate(gnostics%current_results%species_heating_avg(nspec))
   end subroutine allocate_current_results
 
   subroutine deallocate_current_results(gnostics)
@@ -188,6 +237,11 @@ contains
     deallocate(gnostics%current_results%species_heat_flux)
     deallocate(gnostics%current_results%species_momentum_flux)
     deallocate(gnostics%current_results%species_particle_flux)
+    deallocate(gnostics%current_results%species_heat_flux_avg)
+    deallocate(gnostics%current_results%species_momentum_flux_avg)
+    deallocate(gnostics%current_results%species_particle_flux_avg)
+    deallocate(gnostics%current_results%species_heating)
+    deallocate(gnostics%current_results%species_heating_avg)
   end subroutine deallocate_current_results
 
 

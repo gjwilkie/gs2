@@ -15,6 +15,8 @@ module gs2_diagnostics_new
 
   public :: run_diagnostics
 
+  public :: gnostics
+
   !> Options passed to init_gs2_diagnostics_new 
   public :: diagnostics_init_options_type
 
@@ -40,7 +42,7 @@ contains
     use diagnostics_velocity_space, only: init_diagnostics_velocity_space
     use diagnostics_heating, only: init_diagnostics_heating
     use diagnostics_ascii, only: init_diagnostics_ascii
-    use file_utils, only: run_name
+    use file_utils, only: run_name, error_unit
     use mp, only: mp_comm, proc0
     use kt_grids, only: naky, aky
     type(diagnostics_init_options_type), intent(in) :: init_options
@@ -65,6 +67,7 @@ contains
     end if
     !write (*,*) 'gnostics%rtype', gnostics%rtype, 'doub', SDATIO_DOUBLE, 'float', SDATIO_FLOAT
 
+    gnostics%user_time_old = 0.0
 
     ! fluxfac is used for summing fields, fluxes etc over ky
     ! Mostly this is not needed, since the average_ky routine in 
@@ -77,11 +80,16 @@ contains
     if(aky(1)==0.0) gnostics%fluxfac(1) = 1.0
 
 
+    if (gnostics%print_line .and. .not.(gnostics%write_fields.and.gnostics%write_omega)) then 
+      write (error_unit(), *) 'print_line requires both write_fields and write_omega... enabling'
+      gnostics%write_fields = .true.
+      gnostics%write_omega = .true.
+    end if
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! Initialise submodules
     !!!!!!!!!!!!!!!!!!!!!!!!!!
-    call init_diagnostics_fluxes
+    call init_diagnostics_fluxes(gnostics)
     call init_diagnostics_omega(gnostics)
     !if (gnostics%write_max_verr) gnostics%write_verr = .true.
     call init_diagnostics_velocity_space(gnostics)
@@ -171,14 +179,17 @@ contains
   subroutine run_diagnostics(istep, exit)
     use gs2_time, only: user_time
     use mp, only: proc0
-    use diagnostics_fluxes, only: write_fluxes
+    use diagnostics_screen_printout, only: print_flux_line, print_line
+    use diagnostics_fluxes, only: calculate_fluxes
     use diagnostics_fields, only: write_fields, write_movie
     use diagnostics_moments, only: write_moments
-    use diagnostics_omega, only: calculate_omega, write_omega, print_line
+    use diagnostics_omega, only: calculate_omega, write_omega
     use diagnostics_velocity_space, only: write_velocity_space_checks
     use diagnostics_heating, only: calculate_heating, write_heating
     use diagnostics_geometry, only: write_geometry
+    use diagnostics_nonlinear_convergence, only: check_nonlin_convergence
     use collisions, only: vary_vnew
+    use nonlinear_terms, only: nonlin
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
 
@@ -187,6 +198,9 @@ contains
     gnostics%istep = istep
     gnostics%exit = exit
 
+    ! If parallel, then everybody writes to netcdf,
+    ! otherwise, only proc0. Also, creation of variables
+    ! happens when istep == -1
     if (gnostics%parallel .or. proc0) then
       gnostics%create = (istep==-1)
       gnostics%wryte = (istep>-1)
@@ -203,6 +217,9 @@ contains
     ! till distributed fields are up and running
     gnostics%distributed = gnostics%parallel
 
+    ! Need to also add 'if Trinity run' condition to this
+    gnostics%calculate_fluxes = (gnostics%write_fluxes .or.  gnostics%print_flux_line)
+
     gnostics%user_time = user_time
     
     ! Write constants/parameters
@@ -217,25 +234,31 @@ contains
     end if
 
 
-    call run_diagnostics_to_be_updated
 
 
     if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
       gnostics%vary_vnew_only = .false.
       if (gnostics%write_omega)  call write_omega (gnostics)
       if (gnostics%write_fields) call write_fields(gnostics)
-      if (gnostics%write_fluxes) call write_fluxes(gnostics)
+      if (gnostics%calculate_fluxes) call calculate_fluxes(gnostics)
+      if (gnostics%print_flux_line) call print_flux_line(gnostics)
       if (gnostics%write_verr) call write_velocity_space_checks(gnostics)
       if (gnostics%write_moments) call write_moments(gnostics)
       if (gnostics%write_movie) call write_movie(gnostics)
       if (gnostics%write_heating) call write_heating(gnostics)
       if (gnostics%print_line) call print_line(gnostics)
+      if (nonlin.and.gnostics%use_nonlin_convergence) call check_nonlin_convergence(gnostics)
 !
+      call run_diagnostics_to_be_updated
+
       ! Finally, write time value and update time index
       call create_and_write_variable(gnostics, gnostics%rtype, "t", "t", &
          "Values of the time coordinate", "a/v_thr", user_time) 
       if (gnostics%wryte) call increment_start(gnostics%sfile, "t")
       if (gnostics%wryte) call syncfile(gnostics%sfile)
+
+      ! Update time used for time averages
+      gnostics%user_time_old = gnostics%user_time
     else if (mod(istep, gnostics%ncheck).eq.0) then
       ! These lines cause the automated checking of velocity space resolution
       ! and correction by varying collisionality
@@ -244,6 +267,7 @@ contains
     end if
 
     exit = gnostics%exit
+
 
   end subroutine run_diagnostics
 

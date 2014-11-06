@@ -120,7 +120,7 @@ module diagnostics_heating
     use file_utils, only: flush_output_file
     use mp, only: proc0
     implicit none
-    type(diagnostics_type), intent (in) :: gnostics
+    type(diagnostics_type), intent (inout) :: gnostics
     real :: t
     integer :: is
 
@@ -164,6 +164,10 @@ module diagnostics_heating
       "Non-adiabatic free energy as a function of species hs^2  ", "TBC", h%hs2)
     call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_phis2", "st", &
       "Adiabatic free energy as a function of species phi_bar^2  ", "TBC", h%phis2)
+
+    gnostics%current_results%species_heating = h%imp_colls
+    gnostics%current_results%species_heating_avg = gnostics%current_results%species_heating_avg + &
+      h%imp_colls*(gnostics%user_time - gnostics%user_time_old)
 
     if (gnostics%write_ascii .and. proc0) call write_ascii
 

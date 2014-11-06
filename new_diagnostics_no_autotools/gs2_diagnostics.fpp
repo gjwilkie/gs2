@@ -1188,6 +1188,8 @@ contains
        end if
     end if
 
+    ! DONE UP TO HERE
+
 ! Check for convergence
     if(nonlin .and. use_nonlin_convergence) call check_nonlin_convergence(istep, heat_fluxes(1), exit)
 

@@ -19,13 +19,33 @@ module diagnostics_config
 
   !> A type for storing the current results of the simulation
   type results_summary_type
+    real :: phi2
+    real :: apar2
+    real :: bpar2
     real :: total_heat_flux
     real :: total_momentum_flux
     real :: total_particle_flux
     real :: max_growth_rate
+
+    ! Individual heat fluxes
+    real, dimension(:), allocatable :: species_es_heat_flux
+    real, dimension(:), allocatable :: species_apar_heat_flux
+    real, dimension(:), allocatable :: species_bpar_heat_flux
+
+    ! Total fluxes
     real, dimension(:), allocatable :: species_heat_flux
     real, dimension(:), allocatable :: species_momentum_flux
     real, dimension(:), allocatable :: species_particle_flux
+    real, dimension(:), allocatable :: species_energy_exchange
+
+    ! Average total fluxes
+    real, dimension(:), allocatable :: species_heat_flux_avg
+    real, dimension(:), allocatable :: species_momentum_flux_avg
+    real, dimension(:), allocatable :: species_particle_flux_avg
+
+    ! Heating
+    real, dimension(:), allocatable :: species_heating
+    real, dimension(:), allocatable :: species_heating_avg
   end type results_summary_type
 
   !> A type for storing the diagnostics configuration,
@@ -46,12 +66,16 @@ module diagnostics_config
    logical :: parallel
    logical :: exit
    logical :: vary_vnew_only
+   logical :: calculate_fluxes
    real :: user_time
+   real :: user_time_old
    real, dimension(:), allocatable :: fluxfac
    integer :: nwrite
    integer :: nwrite_large
    logical :: write_any
+   integer :: igomega
    logical :: print_line
+   logical :: print_flux_line
    logical :: write_fields
    logical :: write_phi_over_time
    logical :: write_apar_over_time
@@ -62,7 +86,6 @@ module diagnostics_config
    logical :: write_fluxes_by_mode
    logical :: write_omega
    integer :: navg
-   integer :: igomega
    real :: omegatinst
    real :: omegatol
    logical :: exit_when_converged
@@ -74,6 +97,13 @@ module diagnostics_config
    logical :: write_gyx
    logical :: write_g
    logical :: write_lpoly
+   integer :: conv_nstep_av
+   real :: conv_test_multiplier
+   integer :: conv_min_step
+   integer :: conv_max_step
+   integer :: conv_nsteps_converged
+   logical :: use_nonlin_convergence
+   logical :: write_cross_phase
   end type diagnostics_type
 
 
@@ -95,9 +125,19 @@ contains
   subroutine allocate_current_results(gnostics)
     use species, only: nspec
     type(diagnostics_type), intent(inout) :: gnostics
+    allocate(gnostics%current_results%species_es_heat_flux(nspec))
+    allocate(gnostics%current_results%species_apar_heat_flux(nspec))
+    allocate(gnostics%current_results%species_bpar_heat_flux(nspec))
+
     allocate(gnostics%current_results%species_heat_flux(nspec))
     allocate(gnostics%current_results%species_momentum_flux(nspec))
     allocate(gnostics%current_results%species_particle_flux(nspec))
+    allocate(gnostics%current_results%species_energy_exchange(nspec))
+    allocate(gnostics%current_results%species_heat_flux_avg(nspec))
+    allocate(gnostics%current_results%species_momentum_flux_avg(nspec))
+    allocate(gnostics%current_results%species_particle_flux_avg(nspec))
+    allocate(gnostics%current_results%species_heating(nspec))
+    allocate(gnostics%current_results%species_heating_avg(nspec))
   end subroutine allocate_current_results
 
   subroutine deallocate_current_results(gnostics)
@@ -113,6 +153,11 @@ contains
     deallocate(gnostics%current_results%species_heat_flux)
     deallocate(gnostics%current_results%species_momentum_flux)
     deallocate(gnostics%current_results%species_particle_flux)
+    deallocate(gnostics%current_results%species_heat_flux_avg)
+    deallocate(gnostics%current_results%species_momentum_flux_avg)
+    deallocate(gnostics%current_results%species_particle_flux_avg)
+    deallocate(gnostics%current_results%species_heating)
+    deallocate(gnostics%current_results%species_heating_avg)
   end subroutine deallocate_current_results
 
 
@@ -125,7 +170,9 @@ contains
     integer :: nwrite
     integer :: nwrite_large
     logical :: write_any
+    integer :: igomega
     logical :: print_line
+    logical :: print_flux_line
     logical :: write_fields
     logical :: write_phi_over_time
     logical :: write_apar_over_time
@@ -136,7 +183,6 @@ contains
     logical :: write_fluxes_by_mode
     logical :: write_omega
     integer :: navg
-    integer :: igomega
     real :: omegatinst
     real :: omegatol
     logical :: exit_when_converged
@@ -148,11 +194,20 @@ contains
     logical :: write_gyx
     logical :: write_g
     logical :: write_lpoly
+    integer :: conv_nstep_av
+    real :: conv_test_multiplier
+    integer :: conv_min_step
+    integer :: conv_max_step
+    integer :: conv_nsteps_converged
+    logical :: use_nonlin_convergence
+    logical :: write_cross_phase
     namelist /diagnostics_config/ &
       nwrite, &
       nwrite_large, &
       write_any, &
+      igomega, &
       print_line, &
+      print_flux_line, &
       write_fields, &
       write_phi_over_time, &
       write_apar_over_time, &
@@ -163,7 +218,6 @@ contains
       write_fluxes_by_mode, &
       write_omega, &
       navg, &
-      igomega, &
       omegatinst, &
       omegatol, &
       exit_when_converged, &
@@ -174,7 +228,14 @@ contains
       write_ascii, &
       write_gyx, &
       write_g, &
-      write_lpoly
+      write_lpoly, &
+      conv_nstep_av, &
+      conv_test_multiplier, &
+      conv_min_step, &
+      conv_max_step, &
+      conv_nsteps_converged, &
+      use_nonlin_convergence, &
+      write_cross_phase
 
     integer :: in_file
     logical :: exist
@@ -183,7 +244,9 @@ contains
       nwrite = 10
       nwrite_large = 100
       write_any = .true.
+      igomega = 0
       print_line = .false.
+      print_flux_line = .false.
       write_fields = .true.
       write_phi_over_time = .false.
       write_apar_over_time = .false.
@@ -194,7 +257,6 @@ contains
       write_fluxes_by_mode = .false.
       write_omega = .true.
       navg = 10
-      igomega = 0
       omegatinst = 1.0e6
       omegatol = -0.001
       exit_when_converged = .true.
@@ -206,6 +268,13 @@ contains
       write_gyx = .false.
       write_g = .false.
       write_lpoly = .false.
+      conv_nstep_av = 4000
+      conv_test_multiplier = 4e-1
+      conv_min_step = 4000
+      conv_max_step = 80000
+      conv_nsteps_converged = 10000
+      use_nonlin_convergence = .false.
+      write_cross_phase = .false.
 
       in_file = input_unit_exist ("diagnostics_config", exist)
       if (exist) read (unit=in_file, nml=diagnostics_config)
@@ -213,7 +282,9 @@ contains
       gnostics%nwrite = nwrite
       gnostics%nwrite_large = nwrite_large
       gnostics%write_any = write_any
+      gnostics%igomega = igomega
       gnostics%print_line = print_line
+      gnostics%print_flux_line = print_flux_line
       gnostics%write_fields = write_fields
       gnostics%write_phi_over_time = write_phi_over_time
       gnostics%write_apar_over_time = write_apar_over_time
@@ -224,7 +295,6 @@ contains
       gnostics%write_fluxes_by_mode = write_fluxes_by_mode
       gnostics%write_omega = write_omega
       gnostics%navg = navg
-      gnostics%igomega = igomega
       gnostics%omegatinst = omegatinst
       gnostics%omegatol = omegatol
       gnostics%exit_when_converged = exit_when_converged
@@ -236,13 +306,22 @@ contains
       gnostics%write_gyx = write_gyx
       gnostics%write_g = write_g
       gnostics%write_lpoly = write_lpoly
+      gnostics%conv_nstep_av = conv_nstep_av
+      gnostics%conv_test_multiplier = conv_test_multiplier
+      gnostics%conv_min_step = conv_min_step
+      gnostics%conv_max_step = conv_max_step
+      gnostics%conv_nsteps_converged = conv_nsteps_converged
+      gnostics%use_nonlin_convergence = use_nonlin_convergence
+      gnostics%write_cross_phase = write_cross_phase
 
     end if
 
     call broadcast (gnostics%nwrite)
     call broadcast (gnostics%nwrite_large)
     call broadcast (gnostics%write_any)
+    call broadcast (gnostics%igomega)
     call broadcast (gnostics%print_line)
+    call broadcast (gnostics%print_flux_line)
     call broadcast (gnostics%write_fields)
     call broadcast (gnostics%write_phi_over_time)
     call broadcast (gnostics%write_apar_over_time)
@@ -253,7 +332,6 @@ contains
     call broadcast (gnostics%write_fluxes_by_mode)
     call broadcast (gnostics%write_omega)
     call broadcast (gnostics%navg)
-    call broadcast (gnostics%igomega)
     call broadcast (gnostics%omegatinst)
     call broadcast (gnostics%omegatol)
     call broadcast (gnostics%exit_when_converged)
@@ -265,6 +343,13 @@ contains
     call broadcast (gnostics%write_gyx)
     call broadcast (gnostics%write_g)
     call broadcast (gnostics%write_lpoly)
+    call broadcast (gnostics%conv_nstep_av)
+    call broadcast (gnostics%conv_test_multiplier)
+    call broadcast (gnostics%conv_min_step)
+    call broadcast (gnostics%conv_max_step)
+    call broadcast (gnostics%conv_nsteps_converged)
+    call broadcast (gnostics%use_nonlin_convergence)
+    call broadcast (gnostics%write_cross_phase)
 
 
 

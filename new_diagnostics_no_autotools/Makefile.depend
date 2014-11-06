@@ -157,7 +157,9 @@ ffttester_mod = \
 	 diagnostics_geometry.o \
 	 diagnostics_heating.o \
 	 diagnostics_moments.o \
+	 diagnostics_nonlinear_convergence.o \
 	 diagnostics_omega.o \
+	 diagnostics_screen_printout.o \
 	 diagnostics_velocity_space.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
@@ -283,7 +285,9 @@ gs2_mod = \
 	 diagnostics_geometry.o \
 	 diagnostics_heating.o \
 	 diagnostics_moments.o \
+	 diagnostics_nonlinear_convergence.o \
 	 diagnostics_omega.o \
+	 diagnostics_screen_printout.o \
 	 diagnostics_velocity_space.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
@@ -518,6 +522,7 @@ diagnostics_config.o: \
 	 file_utils.o \
 	 mp.o \
 	 simpledataiof.o \
+	 species.o \
 	 text_options.o 
 diagnostics_create_and_write.o: \
 	 diagnostics_config.o \
@@ -588,6 +593,11 @@ diagnostics_moments.o: \
 	 species.o \
 	 theta_grid.o \
 	 volume_averages.o 
+diagnostics_nonlinear_convergence.o: \
+	 diagnostics_config.o \
+	 gs2_time.o \
+	 job_manage.o \
+	 mp.o 
 diagnostics_omega.o: \
 	 constants.o \
 	 diagnostics_config.o \
@@ -595,10 +605,17 @@ diagnostics_omega.o: \
 	 fields_parallelization.o \
 	 gs2_time.o \
 	 kt_grids.o \
-	 mp.o \
 	 run_parameters.o \
 	 simpledataio_write.o \
-	 simpledataiof.o \
+	 simpledataiof.o 
+diagnostics_screen_printout.o: \
+	 diagnostics_config.o \
+	 diagnostics_omega.o \
+	 fields_arrays.o \
+	 kt_grids.o \
+	 mp.o \
+	 run_parameters.o \
+	 species.o \
 	 volume_averages.o 
 diagnostics_velocity_space.o: \
 	 collisions.o \
@@ -828,7 +845,9 @@ gs2_diagnostics_new.o: \
 	 diagnostics_geometry.o \
 	 diagnostics_heating.o \
 	 diagnostics_moments.o \
+	 diagnostics_nonlinear_convergence.o \
 	 diagnostics_omega.o \
+	 diagnostics_screen_printout.o \
 	 diagnostics_velocity_space.o \
 	 dist_fn.o \
 	 fields_arrays.o \
@@ -837,6 +856,7 @@ gs2_diagnostics_new.o: \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
+	 nonlinear_terms.o \
 	 simpledataiof.o \
 	 species.o \
 	 theta_grid.o \

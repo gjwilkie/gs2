@@ -15,7 +15,7 @@ contains
   subroutine write_fields(gnostics)
     use fields_arrays, only: phinew, aparnew, bparnew
     use run_parameters, only: fphi, fapar, fbpar
-    type(diagnostics_type), intent(in) :: gnostics
+    type(diagnostics_type), intent(inout) :: gnostics
 
     
     if (fphi >epsilon(0.0)) call write_standard_field_properties(gnostics, &
@@ -30,7 +30,7 @@ contains
     field_units, field_value, distributed)
     use diagnostics_create_and_write, only: create_and_write_variable
     use volume_averages
-    type(diagnostics_type), intent(in) :: gnostics
+    type(diagnostics_type), intent(inout) :: gnostics
     character(*), intent(in) :: field_name, field_description, field_units
     complex, dimension(:,:,:), intent(in) :: field_value
     logical, intent(in) :: distributed
@@ -56,6 +56,10 @@ contains
     call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2", "t", &
       field_description//" squared and averaged over theta, kx and ky, as a function of time", &
       "("//field_units//")^2", sum(field2_by_kx))
+
+    if (field_name .eq. 'phi') gnostics%current_results%phi2 = sum(field2_by_kx)
+    if (field_name .eq. 'apar') gnostics%current_results%apar2 = sum(field2_by_kx)
+    if (field_name .eq. 'bpar') gnostics%current_results%bpar2 = sum(field2_by_kx)
 
   end subroutine write_standard_field_properties
 
