@@ -25,16 +25,23 @@ program test_gs2_diagnostics_new
     use unit_tests
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
     use gs2_diagnostics, only: finish_gs2_diagnostics
+    use gs2_diagnostics, only: pflux_avg, qflux_avg, heat_avg, vflux_avg
 #ifdef NEW_DIAG
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
+    use gs2_diagnostics_new, only: gnostics
 #endif
     implicit none
     integer :: n_vars, n_file_names
     integer :: i
+    real :: eps
 
     character(len=40), dimension(200) :: variables, new_variables, n_lines, file_names, n_lines_files
       !variables = (/'lambda', 'phi'/), &
       !n_lines = (/'3', '30'/)
+  ! General config
+  eps = 1.0e-7
+
+  if (precision(eps).lt. 11) eps = eps * 100.0
 
     variables(1) = 'lambda'
     n_lines(1) = '4'
@@ -64,8 +71,8 @@ program test_gs2_diagnostics_new
     variables(12) = 'hflux_tot'
     new_variables(12) = 'heat_flux_tot'
     n_lines(12) = '4'
-    variables(13) = 'es_mom_flux'
-    new_variables(13) = 'es_mom_flux'
+    variables(13) = 'vflux_tot'
+    new_variables(13) = 'mom_flux_tot'
     n_lines(13) = '4'
 
     variables(14) = 'omega'
@@ -102,7 +109,25 @@ program test_gs2_diagnostics_new
     !call announce_test('results')
     !call process_test(test_function(), 'results')
 
+#ifdef NEW_DIAG
+    call announce_test("average heat flux")
+    call process_test( &
+      agrees_with(gnostics%current_results%species_heat_flux_avg, qflux_avg, eps), &
+      "average heat flux")
+    call announce_test("average momentum flux")
+    call process_test( &
+      agrees_with(gnostics%current_results%species_momentum_flux_avg, vflux_avg, eps), &
+      "average momentum flux")
+    call announce_test("average particle flux")
+    call process_test( &
+      agrees_with(gnostics%current_results%species_particle_flux_avg, pflux_avg, eps), &
+      "average particle flux")
+#endif
+
+
+
     call finish_gs2_diagnostics(ilast_step)
+
 #ifdef NEW_DIAG
     call finish_gs2_diagnostics_new
 #endif
