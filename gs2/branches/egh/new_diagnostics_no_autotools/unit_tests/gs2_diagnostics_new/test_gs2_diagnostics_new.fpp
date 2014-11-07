@@ -93,8 +93,12 @@ program test_gs2_diagnostics_new
     n_lines_files(3) = '16'
     file_names(4) = 'vres'
     n_lines_files(4) = '16'
+    file_names(5) = 'phase'
+    n_lines_files(5) = '16'
+    file_names(6) = 'jext'
+    n_lines_files(6) = '16'
 
-    n_file_names = 4
+    n_file_names = 5
 
     call init_mp
 
@@ -110,18 +114,20 @@ program test_gs2_diagnostics_new
     !call process_test(test_function(), 'results')
 
 #ifdef NEW_DIAG
-    call announce_test("average heat flux")
-    call process_test( &
-      agrees_with(gnostics%current_results%species_heat_flux_avg, qflux_avg, eps), &
-      "average heat flux")
-    call announce_test("average momentum flux")
-    call process_test( &
-      agrees_with(gnostics%current_results%species_momentum_flux_avg, vflux_avg, eps), &
-      "average momentum flux")
-    call announce_test("average particle flux")
-    call process_test( &
-      agrees_with(gnostics%current_results%species_particle_flux_avg, pflux_avg, eps), &
-      "average particle flux")
+    if (proc0) then
+      call announce_test("average heat flux")
+      call process_test( &
+        agrees_with(gnostics%current_results%species_heat_flux_avg, qflux_avg, eps), &
+        "average heat flux")
+      call announce_test("average momentum flux")
+      call process_test( &
+        agrees_with(gnostics%current_results%species_momentum_flux_avg, vflux_avg, eps), &
+        "average momentum flux")
+      call announce_test("average particle flux")
+      call process_test( &
+        agrees_with(gnostics%current_results%species_particle_flux_avg, pflux_avg, eps), &
+        "average particle flux")
+    end if
 #endif
 
 

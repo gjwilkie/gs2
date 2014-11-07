@@ -6,6 +6,7 @@
 # ascii output files
 ascii_files = [
   'fields',
+  'phase',
   'heat',
   'heat2',
   'vres',

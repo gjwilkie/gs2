@@ -68,7 +68,7 @@ module gs2_diagnostics
 
   logical, public :: write_phi_over_time, write_apar_over_time, write_bpar_over_time !EGH
 !>GGH
-  logical :: write_jext=.false.
+  logical :: write_jext=.true.
 !<GGH
 
 ! HJL <  Variables for convergence condition testing
@@ -1038,6 +1038,7 @@ contains
     ! DONE
     if (write_moments) call do_write_moments !CMR
 
+    ! DONE
     if (write_cross_phase .and. has_electron_species(spec) .and. write_ascii ) call do_write_crossphase(t)
 
 !###########################
@@ -1191,6 +1192,7 @@ contains
     ! DONE UP TO HERE
 
 ! Check for convergence
+   ! DONE
     if(nonlin .and. use_nonlin_convergence) call check_nonlin_convergence(istep, heat_fluxes(1), exit)
 
     call prof_leaving ("loop_diagnostics-1")
@@ -1207,9 +1209,9 @@ contains
 
 !>GGH
        !Write out data for j_external
+       ! DONE
        if (write_ascii .and. write_jext) call do_write_jext(t,istep)
 !<GGH
-
        if (write_flux_line) then
           hflux_tot = 0.
           zflux_tot = 0.
@@ -2274,9 +2276,9 @@ contains
     call calc_jext(istep,j_ext)
     do ik=1,naky
        do it = 1, ntheta0
-          if (j_ext(ik,it) .ne. 0.) then
+          if (j_ext(it,ik) .ne. 0.) then
              write (unit=jext_unit, fmt="(es12.4,i4,i4,es12.4)")  &
-                  t,it,ik,j_ext(ik,it)
+                  t,it,ik,j_ext(it,ik)
           endif
        enddo
     enddo

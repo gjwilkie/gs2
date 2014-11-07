@@ -42,6 +42,7 @@ contains
     use diagnostics_velocity_space, only: init_diagnostics_velocity_space
     use diagnostics_heating, only: init_diagnostics_heating
     use diagnostics_ascii, only: init_diagnostics_ascii
+    use diagnostics_antenna, only: init_diagnostics_antenna
     use file_utils, only: run_name, error_unit
     use mp, only: mp_comm, proc0
     use kt_grids, only: naky, aky
@@ -93,6 +94,7 @@ contains
     call init_diagnostics_omega(gnostics)
     !if (gnostics%write_max_verr) gnostics%write_verr = .true.
     call init_diagnostics_velocity_space(gnostics)
+    call init_diagnostics_antenna(gnostics)
     if (gnostics%write_heating) call init_diagnostics_heating(gnostics)
 
     !gnostics%create = .true.
@@ -119,8 +121,19 @@ contains
       call set_ascii_file_switches
       if (proc0) call init_diagnostics_ascii(gnostics%ascii_files)
     end if
+
+    call check_parameters
+
   end subroutine init_gs2_diagnostics_new
   
+  subroutine check_parameters
+    use run_parameters, only: fapar
+    if (gnostics%write_jext .and. .not. fapar .gt. epsilon(0.0)) then
+      write (*,*) "ERROR: it doesn't make sense to switch on write_jext without apar"
+      stop 1
+    end if
+  end subroutine check_parameters
+
   subroutine set_ascii_file_switches
     gnostics%ascii_files%write_to_fields   = gnostics%write_fields
     gnostics%ascii_files%write_to_heat     = gnostics%write_heating
@@ -139,6 +152,7 @@ contains
     use diagnostics_heating, only: finish_diagnostics_heating
     use diagnostics_ascii, only: finish_diagnostics_ascii
     use diagnostics_config, only: finish_diagnostics_config
+    use diagnostics_antenna, only: finish_diagnostics_antenna
     use dist_fn, only: write_fyx, write_f, write_poly
     use mp, only: proc0
     use fields_arrays, only: phinew, bparnew
@@ -147,6 +161,7 @@ contains
     deallocate(gnostics%fluxfac)
     call finish_diagnostics_fluxes
     call finish_diagnostics_omega
+    call finish_diagnostics_antenna(gnostics)
     if (gnostics%write_heating) call finish_diagnostics_heating(gnostics)
     if (gnostics%parallel .or. proc0) then
       if(proc0)write (*,*) "Closing new diagnostics"
@@ -188,8 +203,11 @@ contains
     use diagnostics_heating, only: calculate_heating, write_heating
     use diagnostics_geometry, only: write_geometry
     use diagnostics_nonlinear_convergence, only: check_nonlin_convergence
+    use diagnostics_turbulence, only: write_cross_phase
+    use diagnostics_antenna, only: write_jext
     use collisions, only: vary_vnew
     use nonlinear_terms, only: nonlin
+    use species, only: spec, has_electron_species, nspec
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
 
@@ -248,6 +266,8 @@ contains
       if (gnostics%write_heating) call write_heating(gnostics)
       if (gnostics%print_line) call print_line(gnostics)
       if (nonlin.and.gnostics%use_nonlin_convergence) call check_nonlin_convergence(gnostics)
+      if (gnostics%write_cross_phase.and.has_electron_species(spec)) call write_cross_phase(gnostics)
+      if (gnostics%write_jext) call write_jext(gnostics)
 !
       call run_diagnostics_to_be_updated
 

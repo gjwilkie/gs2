@@ -40,6 +40,10 @@
 
       use_nonlin_convergence = .true.
 
+      write_cross_phase = .true.
+
+      write_jext = .true.
+
 /
 
 !==============================
@@ -166,7 +170,7 @@
 !EVOLVED SPECIES  
 !==============================
 &species_knobs
- nspec = 1 ! Number of kinetic species evolved.
+ nspec = 2 ! Number of kinetic species evolved.
 /
 
 !==============================
@@ -175,7 +179,7 @@
 &species_parameters_1
  z = 1.0 ! Charge
  mass = 1.0 ! Mass
- dens = 1.0 ! Density	
+ dens = 1.0 ! Density
  temp = 1.0 ! Temperature
  tprim = 6.9 ! -1/T (dT/drho)
  fprim = 2.2 ! -1/n (dn/drho)
@@ -184,10 +188,31 @@
  type = "ion" ! Type of species, e.g. 'ion', 'electron', 'beam'
 /
 
+
+
+&species_parameters_2
+ z = -1.0 ! Charge
+ mass = 0.0002723311546840959 ! Mass
+ dens = 1.0 ! Densit
+ temp = 1.0 ! Temperature
+ tprim = 6.9 ! -1/T (dT/drho)
+ fprim = 2.2 ! -1/n (dn/drho)
+ uprim = 0.0 ! ?
+ vnewk = 0.01 ! collisionality parameter
+ type = "electron" ! Type of species, e.g. 'ion', 'electron', 'beam'
+/
+
+
 !==============================
 ! 1 
 !==============================
 &dist_fn_species_knobs_1
+ fexpr = 0.45 ! Temporal implicitness parameter. Recommended value: 0.48
+ bakdif = 0.05 ! Spatial implicitness parameter. Recommended value: 0.05
+/
+
+
+&dist_fn_species_knobs_2
  fexpr = 0.45 ! Temporal implicitness parameter. Recommended value: 0.48
  bakdif = 0.05 ! Spatial implicitness parameter. Recommended value: 0.05
 /
@@ -243,6 +268,7 @@
   ! exit_when_converged not specified --- 
   ! write_full_moments_notgc not specified --- 
   ! write_cross_phase not specified --- 
+      write_cross_phase = .true.
   ! dump_check1 not specified --- 
   ! dump_check2 not specified --- 
   ! dump_fields_periodically not specified --- 
