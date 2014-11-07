@@ -104,6 +104,7 @@ module diagnostics_config
    integer :: conv_nsteps_converged
    logical :: use_nonlin_convergence
    logical :: write_cross_phase
+   logical :: write_jext
   end type diagnostics_type
 
 
@@ -201,6 +202,7 @@ contains
     integer :: conv_nsteps_converged
     logical :: use_nonlin_convergence
     logical :: write_cross_phase
+    logical :: write_jext
     namelist /diagnostics_config/ &
       nwrite, &
       nwrite_large, &
@@ -235,7 +237,8 @@ contains
       conv_max_step, &
       conv_nsteps_converged, &
       use_nonlin_convergence, &
-      write_cross_phase
+      write_cross_phase, &
+      write_jext
 
     integer :: in_file
     logical :: exist
@@ -275,6 +278,7 @@ contains
       conv_nsteps_converged = 10000
       use_nonlin_convergence = .false.
       write_cross_phase = .false.
+      write_jext = .false.
 
       in_file = input_unit_exist ("diagnostics_config", exist)
       if (exist) read (unit=in_file, nml=diagnostics_config)
@@ -313,6 +317,7 @@ contains
       gnostics%conv_nsteps_converged = conv_nsteps_converged
       gnostics%use_nonlin_convergence = use_nonlin_convergence
       gnostics%write_cross_phase = write_cross_phase
+      gnostics%write_jext = write_jext
 
     end if
 
@@ -350,6 +355,7 @@ contains
     call broadcast (gnostics%conv_nsteps_converged)
     call broadcast (gnostics%use_nonlin_convergence)
     call broadcast (gnostics%write_cross_phase)
+    call broadcast (gnostics%write_jext)
 
 
 

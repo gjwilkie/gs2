@@ -2,6 +2,7 @@
 !! such as cross phases and correlations
 module diagnostics_turbulence
   use diagnostics_config
+  use diagnostics_create_and_write
   implicit none
   contains
     subroutine write_cross_phase(gnostics)
@@ -13,8 +14,17 @@ module diagnostics_turbulence
 
       t = gnostics%user_time
 
-      call get_cross_phase (phase_tot, phase_theta)
-      if (proc0) write (unit=phase_unit, fmt="('t= ',e17.10,' phase_tot= ',e11.4,' phase_theta= ',e11.4)") &
+      call get_cross_phase (gnostics, phase_tot, phase_theta)
+
+      call create_and_write_variable(gnostics, gnostics%rtype, "electron_cross_phase_theta", "t", &
+        "Cross phase between electron density and perpendicular electron temperature, &
+        &  given at the outboard midplane and averaged across x and y", "radians", phase_theta)
+      call create_and_write_variable(gnostics, gnostics%rtype, "electron_cross_phase_tot", "t", &
+        "Cross phase between electron density and perpendicular electron temperature, &
+         & averaged across all space", "radians", phase_tot)
+
+      if (proc0 .and. gnostics%write_ascii) write (unit=gnostics%ascii_files%phase, &
+        fmt="('t= ',e17.10,' phase_tot= ',e11.4,' phase_theta= ',e11.4)") &
            & t, phase_tot, phase_theta
     end subroutine write_cross_phase
 
@@ -25,13 +35,15 @@ module diagnostics_turbulence
     !! integrated over all v and x. We can generalize this routine to 
     !! other fields at some point, but for now this is just a skeleton for 
     !! a more realistic synthetic diagnostic. 
-    subroutine get_cross_phase (phase_tot, phase_theta)
+    subroutine get_cross_phase (gnostics, phase_tot, phase_theta)
       use species, only: nspec, spec, electron_species
       use kt_grids, only: ntheta0, naky
       use theta_grid, only: ntgrid
       use dist_fn, only: getemoms
       use fields_arrays, only: phinew, bparnew
+      use volume_averages, only: average_all
       implicit none
+      type(diagnostics_type), intent(in) :: gnostics
       real, intent (out) :: phase_tot, phase_theta
       complex, dimension (:,:,:,:), allocatable :: ntot, tperp
       complex, dimension (ntheta0, naky) :: nTp_by_mode
@@ -49,12 +61,14 @@ module diagnostics_turbulence
       do is = 1,nspec
          if (spec(is)%type == electron_species) then
             ! get cross_phase at outboard midplane
-            call get_vol_int (ntot(0,:,:,is), tperp(0,:,:,is), nTp, nTp_by_mode)
-  !          call get_vol_average (ntot(0,:,:,is), ntot(0,:,:,is), n2, n2_by_mode)
+            !call get_vol_int (ntot(0,:,:,is), tperp(0,:,:,is), nTp, nTp_by_mode)
+            call average_all(ntot(0,:,:,is), tperp(0,:,:,is), nTp, gnostics%distributed)
+  !!!          call get_vol_average (ntot(0,:,:,is), ntot(0,:,:,is), n2, n2_by_mode)
   !          call get_vol_average (tperp(0,:,:,is), tperp(0,:,:,is), T2, T2_by_mode)
             phase_theta = atan2(aimag(nTp),real(nTp))!/sqrt(n2*T2)
             ! get integrated cross_phase 
-            call get_vol_int (ntot(:,:,:,is), tperp(:,:,:,is), nTp, nTp_by_mode)
+            call average_all(ntot(:,:,:,is), tperp(:,:,:,is), nTp, gnostics%distributed)
+            !call get_vol_int (ntot(:,:,:,is), tperp(:,:,:,is), nTp, nTp_by_mode)
   !          call get_vol_average (ntot(:,:,:,is), ntot(:,:,:,is), n2, n2_by_mode)
   !          call get_vol_average (tperp(:,:,:,is), tperp(:,:,:,is), T2, T2_by_mode)
             phase_tot = atan2(aimag(nTp),real(nTp))!/sqrt(n2*T2)

@@ -74,6 +74,9 @@ input_variables_for_diagnostics_config = [
   # Parameters determining what turbulence characteristics are calculated
 	['logical', 'write_cross_phase', '.false.'],
 
+  # Parameters controlling diagnostic for the antennna
+	['logical', 'write_jext', '.false.'],
+
 
 
 ]

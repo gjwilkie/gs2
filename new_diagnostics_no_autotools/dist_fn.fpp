@@ -6887,6 +6887,10 @@ endif
 !=============================================================================
 ! Density: Calculate Density perturbations
 !=============================================================================
+  !NOTE... this routine is deprecated... its contents have been moved to the 
+  ! new diagnostics module and this routine is only needed by the old
+  ! diagnostics module. It is thus scheduled for deletion at some point, 
+  ! unless someone pleads for its life :-) . EGH.
   subroutine get_jext(j_ext)
     use kt_grids, only: ntheta0, naky,aky, kperp2
 !    use mp, only: proc0
