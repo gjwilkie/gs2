@@ -33,6 +33,13 @@ interface create_and_write_variable
   module procedure create_and_write_variable_double_precision_4
   module procedure create_and_write_variable_double_precision_5
   module procedure create_and_write_variable_double_precision_6
+  module procedure create_and_write_variable_complex_0
+  module procedure create_and_write_variable_complex_1
+  module procedure create_and_write_variable_complex_2
+  module procedure create_and_write_variable_complex_3
+  module procedure create_and_write_variable_complex_4
+  module procedure create_and_write_variable_complex_5
+  module procedure create_and_write_variable_complex_6
 end interface create_and_write_variable
 
 contains
@@ -652,6 +659,160 @@ contains
    call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_double_precision_6
+
+ subroutine create_and_write_variable_complex_0(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   complex, intent(in) :: val
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+   end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
+   
+   call write_variable(gnostics%sfile, variable_name, val)
+
+ end subroutine create_and_write_variable_complex_0
+
+ subroutine create_and_write_variable_complex_1(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   complex, intent(in), dimension(:)  :: val
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+   end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
+   
+   call write_variable(gnostics%sfile, variable_name, val)
+
+ end subroutine create_and_write_variable_complex_1
+
+ subroutine create_and_write_variable_complex_2(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   complex, intent(in), dimension(:,:)  :: val
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+   end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
+   
+   call write_variable(gnostics%sfile, variable_name, val)
+
+ end subroutine create_and_write_variable_complex_2
+
+ subroutine create_and_write_variable_complex_3(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   complex, intent(in), dimension(:,:,:)  :: val
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+   end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
+   
+   call write_variable(gnostics%sfile, variable_name, val)
+
+ end subroutine create_and_write_variable_complex_3
+
+ subroutine create_and_write_variable_complex_4(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   complex, intent(in), dimension(:,:,:,:)  :: val
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+   end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
+   
+   call write_variable(gnostics%sfile, variable_name, val)
+
+ end subroutine create_and_write_variable_complex_4
+
+ subroutine create_and_write_variable_complex_5(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   complex, intent(in), dimension(:,:,:,:,:)  :: val
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+   end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
+   
+   call write_variable(gnostics%sfile, variable_name, val)
+
+ end subroutine create_and_write_variable_complex_5
+
+ subroutine create_and_write_variable_complex_6(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+   use simpledataio 
+   use simpledataio_write 
+   use diagnostics_config, only: diagnostics_type
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   complex, intent(in), dimension(:,:,:,:,:,:)  :: val
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+   end if
+
+   if (gnostics%create .or. .not. gnostics%wryte) return
+   
+   call write_variable(gnostics%sfile, variable_name, val)
+
+ end subroutine create_and_write_variable_complex_6
 
 
 end module diagnostics_create_and_write

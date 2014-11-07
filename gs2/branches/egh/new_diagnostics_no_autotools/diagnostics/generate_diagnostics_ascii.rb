@@ -5,6 +5,7 @@
 # This is a list of all the 
 # ascii output files
 ascii_files = [
+  'out',
   'fields',
   'phase',
   'heat',

@@ -10,6 +10,7 @@ module diagnostics_ascii
   !> Holds integers corresponding to the
   !! ascii output units
   type diagnostics_ascii_type
+   integer :: out
    integer :: fields
    integer :: phase
    integer :: heat
@@ -19,6 +20,7 @@ module diagnostics_ascii
    integer :: vres2
    integer :: parity
    integer :: jext
+   logical :: write_to_out 
    logical :: write_to_fields 
    logical :: write_to_phase 
    logical :: write_to_heat 
@@ -36,6 +38,7 @@ contains
   subroutine init_diagnostics_ascii(ascii_files)
     use file_utils, only: open_output_file
     type(diagnostics_ascii_type), intent(out) :: ascii_files
+    if (ascii_files%write_to_out   ) call open_output_file(ascii_files%out, '.new.out')
     if (ascii_files%write_to_fields) call open_output_file(ascii_files%fields, '.new.fields')
     if (ascii_files%write_to_phase ) call open_output_file(ascii_files%phase, '.new.phase')
     if (ascii_files%write_to_heat  ) call open_output_file(ascii_files%heat, '.new.heat')
@@ -50,6 +53,7 @@ contains
   subroutine finish_diagnostics_ascii(ascii_files)
     use file_utils, only: close_output_file
     type(diagnostics_ascii_type), intent(out) :: ascii_files
+    if (ascii_files%write_to_out   ) call close_output_file(ascii_files%out)
     if (ascii_files%write_to_fields) call close_output_file(ascii_files%fields)
     if (ascii_files%write_to_phase ) call close_output_file(ascii_files%phase)
     if (ascii_files%write_to_heat  ) call close_output_file(ascii_files%heat)

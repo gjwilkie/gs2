@@ -1166,6 +1166,7 @@ contains
        if (write_hrate) call broadcast (heat_avg)
     end if
 
+    ! DONE
     if (proc0) then
        if (print_flux_line) then
           if (fphi > epsilon(0.0)) then
@@ -1212,6 +1213,7 @@ contains
        ! DONE
        if (write_ascii .and. write_jext) call do_write_jext(t,istep)
 !<GGH
+        ! DONE
        if (write_flux_line) then
           hflux_tot = 0.
           zflux_tot = 0.
@@ -1320,8 +1322,10 @@ contains
 
     if(scan_type_switch.ne.scan_type_none) call bcast_scan_parameter(scan_hflux,scan_momflux,scan_phi2_tot)
 
+    ! DONE
     if (write_cerr) call collision_error(phinew,bparnew,last)
 
+    ! DONE
     if (write_symmetry) call do_write_symmetry
 
     if (write_pflux_sym) call do_write_pflux_sym
