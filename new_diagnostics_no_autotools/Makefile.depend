@@ -96,10 +96,8 @@ dump_response_mod = \
 	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -199,10 +197,8 @@ ffttester_mod = \
 	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -330,10 +326,8 @@ gs2_mod = \
 	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -427,10 +421,8 @@ ingen_mod = \
 	 le_derivatives.o \
 	 le_grids.o \
 	 leq.o \
-	 lowflow.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -571,7 +563,10 @@ diagnostics_fluxes.o: \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 fields_parallelization.o \
+	 gs2_io.o \
 	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
 	 simpledataio_write.o \
@@ -629,6 +624,7 @@ diagnostics_screen_printout.o: \
 	 diagnostics_config.o \
 	 diagnostics_omega.o \
 	 fields_arrays.o \
+	 file_utils.o \
 	 kt_grids.o \
 	 mp.o \
 	 run_parameters.o \
@@ -660,7 +656,6 @@ dist_fn.o: \
 	 collisions.o \
 	 constants.o \
 	 dist_fn_arrays.o \
-	 fields_arrays.o \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_heating.o \
@@ -671,7 +666,6 @@ dist_fn.o: \
 	 kt_grids.o \
 	 le_derivatives.o \
 	 le_grids.o \
-	 lowflow.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 prof.o \
@@ -1078,11 +1072,9 @@ le_derivatives.o: \
 	 gs2_layouts.o \
 	 gs2_time.o \
 	 le_grids.o \
-	 lowflow.o \
 	 mp.o \
 	 redistribute.o \
 	 run_parameters.o \
-	 species.o \
 	 theta_grid.o 
 le_grids.o: \
 	 constants.o \
@@ -1115,7 +1107,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1156,8 +1147,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \

@@ -56,6 +56,16 @@ module diagnostics_antenna
       end if
       deallocate(j_ext)
     end subroutine write_jext
+
+    subroutine write_lorentzian(gnostics)
+      use antenna, only: antenna_w
+      type(diagnostics_type), intent(in) :: gnostics
+      real :: tmp2
+      tmp2 = real(antenna_w())
+      call create_and_write_variable(gnostics, gnostics%rtype, "antenna_w", "rt", &
+        "antenna_w?? ", "TBC", tmp2)
+
+    end subroutine write_lorentzian
     !> A subroutine to calculate the time-averaged antenna current
     !! j_ext = kperp^2 A_antenna
    subroutine calc_jext (gnostics, j_ext)

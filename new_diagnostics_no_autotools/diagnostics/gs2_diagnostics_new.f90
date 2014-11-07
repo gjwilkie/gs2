@@ -47,8 +47,11 @@ contains
     use mp, only: mp_comm, proc0
     use kt_grids, only: naky, aky
     type(diagnostics_init_options_type), intent(in) :: init_options
+
     if(proc0) write (*,*) 'initializing new diagnostics'
     call init_diagnostics_config(gnostics)
+    call check_parameters
+
     call init_volume_averages
 
     if (.not. simpledataio_functional()) then
@@ -81,11 +84,6 @@ contains
     if(aky(1)==0.0) gnostics%fluxfac(1) = 1.0
 
 
-    if (gnostics%print_line .and. .not.(gnostics%write_fields.and.gnostics%write_omega)) then 
-      write (error_unit(), *) 'print_line requires both write_fields and write_omega... enabling'
-      gnostics%write_fields = .true.
-      gnostics%write_omega = .true.
-    end if
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! Initialise submodules
@@ -122,12 +120,21 @@ contains
       if (proc0) call init_diagnostics_ascii(gnostics%ascii_files)
     end if
 
-    call check_parameters
 
   end subroutine init_gs2_diagnostics_new
   
   subroutine check_parameters
     use run_parameters, only: fapar
+    use file_utils, only: error_unit
+    if ((gnostics%print_line .or. gnostics%write_line) .and. .not.(gnostics%write_fields.and.gnostics%write_omega)) then 
+      write (error_unit(), *) 'print_line and write_line require both write_fields and write_omega... enabling'
+      gnostics%write_fields = .true.
+      gnostics%write_omega = .true.
+    end if
+    if ((gnostics%print_flux_line .or. gnostics%write_flux_line) .and. .not.gnostics%write_fields) then 
+      write (error_unit(), *) 'print_flux_line and write_flux_line require both write_fields ... enabling'
+      gnostics%write_fields = .true.
+    end if
     if (gnostics%write_jext .and. .not. fapar .gt. epsilon(0.0)) then
       write (*,*) "ERROR: it doesn't make sense to switch on write_jext without apar"
       stop 1
@@ -153,7 +160,7 @@ contains
     use diagnostics_ascii, only: finish_diagnostics_ascii
     use diagnostics_config, only: finish_diagnostics_config
     use diagnostics_antenna, only: finish_diagnostics_antenna
-    use dist_fn, only: write_fyx, write_f, write_poly
+    use dist_fn, only: write_fyx, write_f, write_poly, collision_error
     use mp, only: proc0
     use fields_arrays, only: phinew, bparnew
     if (.not. gnostics%write_any) return
@@ -174,17 +181,19 @@ contains
     if (gnostics%write_gyx) call write_fyx (phinew,bparnew,.true.)
     if (gnostics%write_g) call write_f (.true.)
     if (gnostics%write_lpoly) call write_poly (phinew,bparnew,.true.,gnostics%istep)
+    if (gnostics%write_cerr) call collision_error(phinew,bparnew,.true.)
 
     call finish_diagnostics_config(gnostics)
   end subroutine finish_gs2_diagnostics_new
 
   subroutine run_diagnostics_to_be_updated
     use fields_arrays, only: phinew, bparnew
-    use dist_fn, only: write_fyx, write_f, write_poly
+    use dist_fn, only: write_fyx, write_f, write_poly, collision_error
     ! Random stuff that needs to be put in properly or removed
     if (gnostics%write_gyx .and. mod(gnostics%istep,gnostics%nwrite_large) == 0) call write_fyx (phinew,bparnew,.false.)
     if (gnostics%write_g   .and. mod(gnostics%istep,gnostics%nwrite_large) == 0) call write_f (.false.)
     if (gnostics%write_lpoly) call write_poly (phinew,bparnew,.false.,gnostics%istep)
+    if (gnostics%write_cerr) call collision_error(phinew,bparnew,.false.)
   end subroutine run_diagnostics_to_be_updated
 
   !> Create or write all variables according to the value of istep:
@@ -194,8 +203,9 @@ contains
   subroutine run_diagnostics(istep, exit)
     use gs2_time, only: user_time
     use mp, only: proc0
-    use diagnostics_screen_printout, only: print_flux_line, print_line
-    use diagnostics_fluxes, only: calculate_fluxes
+    use diagnostics_printout, only: print_flux_line, print_line
+    use diagnostics_printout, only: write_flux_line, write_line
+    use diagnostics_fluxes, only: calculate_fluxes, write_symmetry
     use diagnostics_fields, only: write_fields, write_movie
     use diagnostics_moments, only: write_moments
     use diagnostics_omega, only: calculate_omega, write_omega
@@ -204,7 +214,7 @@ contains
     use diagnostics_geometry, only: write_geometry
     use diagnostics_nonlinear_convergence, only: check_nonlin_convergence
     use diagnostics_turbulence, only: write_cross_phase
-    use diagnostics_antenna, only: write_jext
+    use diagnostics_antenna, only: write_jext, write_lorentzian
     use collisions, only: vary_vnew
     use nonlinear_terms, only: nonlin
     use species, only: spec, has_electron_species, nspec
@@ -236,7 +246,9 @@ contains
     gnostics%distributed = gnostics%parallel
 
     ! Need to also add 'if Trinity run' condition to this
-    gnostics%calculate_fluxes = (gnostics%write_fluxes .or.  gnostics%print_flux_line)
+    gnostics%calculate_fluxes = (gnostics%write_fluxes &
+                           .or.  gnostics%print_flux_line &
+                           .or.  gnostics%write_flux_line)
 
     gnostics%user_time = user_time
     
@@ -257,17 +269,21 @@ contains
     if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
       gnostics%vary_vnew_only = .false.
       if (gnostics%write_omega)  call write_omega (gnostics)
+      if (gnostics%print_line) call print_line(gnostics)
+      if (gnostics%write_line) call write_line(gnostics)
       if (gnostics%write_fields) call write_fields(gnostics)
       if (gnostics%calculate_fluxes) call calculate_fluxes(gnostics)
+      if (gnostics%write_symmetry) call write_symmetry(gnostics)
       if (gnostics%print_flux_line) call print_flux_line(gnostics)
+      if (gnostics%write_flux_line) call write_flux_line(gnostics)
       if (gnostics%write_verr) call write_velocity_space_checks(gnostics)
       if (gnostics%write_moments) call write_moments(gnostics)
       if (gnostics%write_movie) call write_movie(gnostics)
       if (gnostics%write_heating) call write_heating(gnostics)
-      if (gnostics%print_line) call print_line(gnostics)
       if (nonlin.and.gnostics%use_nonlin_convergence) call check_nonlin_convergence(gnostics)
       if (gnostics%write_cross_phase.and.has_electron_species(spec)) call write_cross_phase(gnostics)
       if (gnostics%write_jext) call write_jext(gnostics)
+      if (gnostics%write_lorentzian) call write_lorentzian(gnostics)
 !
       call run_diagnostics_to_be_updated
 
@@ -310,6 +326,7 @@ contains
     call add_dimension(gnostics%sfile, "z", 2*ntgrid+1, "The theta (parallel) dimension", "")
     call add_dimension(gnostics%sfile, "e", negrid, "", "")
     call add_dimension(gnostics%sfile, "l", nlambda, "", "")
+    call add_dimension(gnostics%sfile, "v", negrid*nlambda, "For writing functions of vparallel", "")
     call add_dimension(gnostics%sfile, "s", nspec, "", "")
     call add_dimension(gnostics%sfile, "r", 2, "Real and imaginary parts", "")
     call add_dimension(gnostics%sfile, "t", SDATIO_UNLIMITED, "", "")

@@ -76,6 +76,8 @@ module diagnostics_config
    integer :: igomega
    logical :: print_line
    logical :: print_flux_line
+   logical :: write_line
+   logical :: write_flux_line
    logical :: write_fields
    logical :: write_phi_over_time
    logical :: write_apar_over_time
@@ -84,6 +86,7 @@ module diagnostics_config
    logical :: write_moments
    logical :: write_fluxes
    logical :: write_fluxes_by_mode
+   logical :: write_symmetry
    logical :: write_omega
    integer :: navg
    real :: omegatinst
@@ -97,6 +100,7 @@ module diagnostics_config
    logical :: write_gyx
    logical :: write_g
    logical :: write_lpoly
+   logical :: write_cerr
    integer :: conv_nstep_av
    real :: conv_test_multiplier
    integer :: conv_min_step
@@ -105,6 +109,7 @@ module diagnostics_config
    logical :: use_nonlin_convergence
    logical :: write_cross_phase
    logical :: write_jext
+   logical :: write_lorentzian
   end type diagnostics_type
 
 
@@ -174,6 +179,8 @@ contains
     integer :: igomega
     logical :: print_line
     logical :: print_flux_line
+    logical :: write_line
+    logical :: write_flux_line
     logical :: write_fields
     logical :: write_phi_over_time
     logical :: write_apar_over_time
@@ -182,6 +189,7 @@ contains
     logical :: write_moments
     logical :: write_fluxes
     logical :: write_fluxes_by_mode
+    logical :: write_symmetry
     logical :: write_omega
     integer :: navg
     real :: omegatinst
@@ -195,6 +203,7 @@ contains
     logical :: write_gyx
     logical :: write_g
     logical :: write_lpoly
+    logical :: write_cerr
     integer :: conv_nstep_av
     real :: conv_test_multiplier
     integer :: conv_min_step
@@ -203,6 +212,7 @@ contains
     logical :: use_nonlin_convergence
     logical :: write_cross_phase
     logical :: write_jext
+    logical :: write_lorentzian
     namelist /diagnostics_config/ &
       nwrite, &
       nwrite_large, &
@@ -210,6 +220,8 @@ contains
       igomega, &
       print_line, &
       print_flux_line, &
+      write_line, &
+      write_flux_line, &
       write_fields, &
       write_phi_over_time, &
       write_apar_over_time, &
@@ -218,6 +230,7 @@ contains
       write_moments, &
       write_fluxes, &
       write_fluxes_by_mode, &
+      write_symmetry, &
       write_omega, &
       navg, &
       omegatinst, &
@@ -231,6 +244,7 @@ contains
       write_gyx, &
       write_g, &
       write_lpoly, &
+      write_cerr, &
       conv_nstep_av, &
       conv_test_multiplier, &
       conv_min_step, &
@@ -238,7 +252,8 @@ contains
       conv_nsteps_converged, &
       use_nonlin_convergence, &
       write_cross_phase, &
-      write_jext
+      write_jext, &
+      write_lorentzian
 
     integer :: in_file
     logical :: exist
@@ -250,6 +265,8 @@ contains
       igomega = 0
       print_line = .false.
       print_flux_line = .false.
+      write_line = .true.
+      write_flux_line = .true.
       write_fields = .true.
       write_phi_over_time = .false.
       write_apar_over_time = .false.
@@ -258,6 +275,7 @@ contains
       write_moments = .true.
       write_fluxes = .true.
       write_fluxes_by_mode = .false.
+      write_symmetry = .false.
       write_omega = .true.
       navg = 10
       omegatinst = 1.0e6
@@ -271,6 +289,7 @@ contains
       write_gyx = .false.
       write_g = .false.
       write_lpoly = .false.
+      write_cerr = .false.
       conv_nstep_av = 4000
       conv_test_multiplier = 4e-1
       conv_min_step = 4000
@@ -279,6 +298,7 @@ contains
       use_nonlin_convergence = .false.
       write_cross_phase = .false.
       write_jext = .false.
+      write_lorentzian = .false.
 
       in_file = input_unit_exist ("diagnostics_config", exist)
       if (exist) read (unit=in_file, nml=diagnostics_config)
@@ -289,6 +309,8 @@ contains
       gnostics%igomega = igomega
       gnostics%print_line = print_line
       gnostics%print_flux_line = print_flux_line
+      gnostics%write_line = write_line
+      gnostics%write_flux_line = write_flux_line
       gnostics%write_fields = write_fields
       gnostics%write_phi_over_time = write_phi_over_time
       gnostics%write_apar_over_time = write_apar_over_time
@@ -297,6 +319,7 @@ contains
       gnostics%write_moments = write_moments
       gnostics%write_fluxes = write_fluxes
       gnostics%write_fluxes_by_mode = write_fluxes_by_mode
+      gnostics%write_symmetry = write_symmetry
       gnostics%write_omega = write_omega
       gnostics%navg = navg
       gnostics%omegatinst = omegatinst
@@ -310,6 +333,7 @@ contains
       gnostics%write_gyx = write_gyx
       gnostics%write_g = write_g
       gnostics%write_lpoly = write_lpoly
+      gnostics%write_cerr = write_cerr
       gnostics%conv_nstep_av = conv_nstep_av
       gnostics%conv_test_multiplier = conv_test_multiplier
       gnostics%conv_min_step = conv_min_step
@@ -318,6 +342,7 @@ contains
       gnostics%use_nonlin_convergence = use_nonlin_convergence
       gnostics%write_cross_phase = write_cross_phase
       gnostics%write_jext = write_jext
+      gnostics%write_lorentzian = write_lorentzian
 
     end if
 
@@ -327,6 +352,8 @@ contains
     call broadcast (gnostics%igomega)
     call broadcast (gnostics%print_line)
     call broadcast (gnostics%print_flux_line)
+    call broadcast (gnostics%write_line)
+    call broadcast (gnostics%write_flux_line)
     call broadcast (gnostics%write_fields)
     call broadcast (gnostics%write_phi_over_time)
     call broadcast (gnostics%write_apar_over_time)
@@ -335,6 +362,7 @@ contains
     call broadcast (gnostics%write_moments)
     call broadcast (gnostics%write_fluxes)
     call broadcast (gnostics%write_fluxes_by_mode)
+    call broadcast (gnostics%write_symmetry)
     call broadcast (gnostics%write_omega)
     call broadcast (gnostics%navg)
     call broadcast (gnostics%omegatinst)
@@ -348,6 +376,7 @@ contains
     call broadcast (gnostics%write_gyx)
     call broadcast (gnostics%write_g)
     call broadcast (gnostics%write_lpoly)
+    call broadcast (gnostics%write_cerr)
     call broadcast (gnostics%conv_nstep_av)
     call broadcast (gnostics%conv_test_multiplier)
     call broadcast (gnostics%conv_min_step)
@@ -356,6 +385,7 @@ contains
     call broadcast (gnostics%use_nonlin_convergence)
     call broadcast (gnostics%write_cross_phase)
     call broadcast (gnostics%write_jext)
+    call broadcast (gnostics%write_lorentzian)
 
 
 

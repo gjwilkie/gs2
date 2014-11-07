@@ -16,10 +16,13 @@ input_variables_for_diagnostics_config = [
   # a given value of theta
 	['integer', 'igomega', '0'],
 
-  # Write instantaneous fluxes to screen
+  # Write instantaneous quantities to screen
 	['logical', 'print_line', '.false.'],
 	['logical', 'print_flux_line', '.false.'],
 
+  # Write instantaneous quantites to .new.out
+	['logical', 'write_line', '.true.'],
+	['logical', 'write_flux_line', '.true.'],
 
 	# Parameters for writing out fields
 	['logical', 'write_fields', '.true.'],
@@ -35,7 +38,8 @@ input_variables_for_diagnostics_config = [
 
 	# Parameters for writing out fluxes
 	['logical', 'write_fluxes', '.true.'],
-	['logical', 'write_fluxes_by_mode'],
+	['logical', 'write_fluxes_by_mode', '.false.'],
+	['logical', 'write_symmetry', '.false.'],
 
 	# Parameters for writing out growth rates and frequencies
 	['logical', 'write_omega', '.true.'],
@@ -63,6 +67,10 @@ input_variables_for_diagnostics_config = [
 	['logical', 'write_g', '.false.'],
 	['logical', 'write_lpoly', '.false.'],
 
+
+  # Switches on write collision_error
+	['logical', 'write_cerr', '.false.'],
+
   # Parameters controlling Trinity convergence tests
 	['integer', 'conv_nstep_av', '4000'],
 	['real', 'conv_test_multiplier', '4e-1'],
@@ -74,8 +82,9 @@ input_variables_for_diagnostics_config = [
   # Parameters determining what turbulence characteristics are calculated
 	['logical', 'write_cross_phase', '.false.'],
 
-  # Parameters controlling diagnostic for the antennna
+  # Parameters controlling diagnostics for the antennna
 	['logical', 'write_jext', '.false.'],
+	['logical', 'write_lorentzian', '.false.'],
 
 
 

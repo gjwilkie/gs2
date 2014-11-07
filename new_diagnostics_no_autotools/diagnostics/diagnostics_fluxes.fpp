@@ -25,6 +25,8 @@ public :: finish_diagnostics_fluxes
 !!  and also various averages of them.
 public :: calculate_fluxes
 
+public :: write_symmetry
+
 private
   real, dimension (:,:,:,:), allocatable ::  qheat, qmheat, qbheat
   real, dimension (:,:,:), allocatable ::  pflux,  vflux, vflux_par, vflux_perp
@@ -538,5 +540,28 @@ contains
      end do
    end if
   end subroutine create_and_write_flux_by_mode
+
+  !> 
+  subroutine write_symmetry(gnostics)
+    use dist_fn, only: flux_vs_theta_vs_vpa
+    use theta_grid, only: ntgrid
+    use le_grids, only: nlambda, negrid
+    use species, only: nspec
+    use mp, only: proc0
+    use gs2_io, only: nc_loop_sym
+    use fields_arrays, only: phinew
+    use diagnostics_create_and_write, only: create_and_write_variable
+    implicit none
+    type (diagnostics_type), intent(in) :: gnostics
+    real, dimension(:,:,:), allocatable :: vflx_sym
+
+    allocate (vflx_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
+    call flux_vs_theta_vs_vpa (phinew,vflx_sym)
+    call create_and_write_variable(gnostics, gnostics%rtype, "es_mom_sym", "zvst", &
+      "Momentum flux density as a function theta and vspace, used for looking at the effect of asymmetry, &
+      & see Parra et al POP 18 062501 2011", "See ref", vflx_sym)
+    !if (proc0) call nc_loop_sym (nout, vflx_sym)
+    deallocate (vflx_sym)
+  end subroutine write_symmetry
 
 end module diagnostics_fluxes
