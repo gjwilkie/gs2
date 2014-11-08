@@ -1328,17 +1328,23 @@ contains
     ! DONE
     if (write_symmetry) call do_write_symmetry
 
+    ! DONE
     if (write_pflux_sym) call do_write_pflux_sym
     
+    ! DONE
     if (write_correlation) call do_write_correlation
 
+    ! DONE
     if (write_correlation_extend .and. istep > nstep/4) call do_write_correlation_extend(t,t_old,istep)
 
+    ! DONE
     if (write_parity) call do_write_parity(t)
 
+    ! DONE
     if (write_avg_moments) call do_write_avg_moments
 
     ! RN> output not guiding center moments in x-y plane
+    ! DONE
     if (write_full_moments_notgc) call do_write_full_moments_notgc(t)
 
 !
@@ -1347,6 +1353,7 @@ contains
     if (dump_check1) call do_write_dump_1(t)
     if (dump_check2) call do_write_dump_2(t)
 
+    ! DONE
     if (dump_fields_periodically .and. mod(istep,10*nwrite) == 0) call do_dump_fields_periodically(t)
     
     ! Update the counter in parameter_scan_arrays
@@ -1359,6 +1366,7 @@ contains
     nout = nout + 1
 
     !Flush files
+    ! DONE
     if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) call flush_files
     
     !Update time

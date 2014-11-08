@@ -33,6 +33,13 @@ module volume_averages
     module procedure average_theta_1_real_txy
     module procedure average_theta_2_complex_txy
     module procedure average_theta_txys
+    module procedure average_theta_complex_complex_txys
+
+    module procedure average_theta_real_real_t
+    module procedure average_theta_complex_complex_t
+    module procedure average_theta_complex_complex_real_t
+    module procedure average_theta_complex_complex_complex_t
+
   end interface
 
   interface average_ky
@@ -179,6 +186,38 @@ contains
     avg = sum(axb_by_ky)
   end subroutine average_all_txy
 
+  subroutine average_theta_complex_complex_txys (a, axb_by_mode, distributed)
+    !use theta_grid, only: ntgrid, delthet, jacob, nperiod, ntheta
+    implicit none
+    complex, dimension (-ntgrid:,:,:,:), intent (in) :: a
+    complex, dimension (:,:,:), intent (out) :: axb_by_mode
+    logical,intent(in) :: distributed
+
+
+    integer :: ik, it, is
+    integer :: ng
+    !real, dimension (-ntg_out:ntg_out) :: wgt
+    !real :: anorm
+
+    ng = ntg_out
+    !wgt = delthet(-ng:ng)*jacob(-ng:ng)
+    !anorm = sum(wgt)
+
+    axb_by_mode = 0
+
+    do is = 1,nspec
+      do ik = 1, naky
+         do it = 1, ntheta0
+           if (.not. distributed .or. field_k_local(it,ik)) then
+            call average_theta(a(-ng:ng,it,ik,is), axb_by_mode(it,ik,is))
+            !axb_by_mode(it,ik,is) &
+                 != sum(real(conjg(a(-ng:ng,it,ik,is))*b(-ng:ng,it,ik,is))*wgt)/anorm
+           end if
+         end do
+      end do
+    end do
+
+  end subroutine average_theta_complex_complex_txys
   subroutine average_theta_txys (a, b, axb_by_mode, distributed)
     !use theta_grid, only: ntgrid, delthet, jacob, nperiod, ntheta
     implicit none
@@ -240,6 +279,73 @@ contains
     end do
 
   end subroutine average_theta_1_real_txy
+
+  subroutine average_theta_real_real_t (a, axb)
+    real, dimension (-ntgrid:), intent (in) :: a
+    real, intent (out) :: axb
+    integer :: ng
+    real, dimension (-ntg_out:ntg_out) :: wgt
+    real :: anorm
+
+    ng = ntg_out
+    wgt = delthet(-ng:ng)*jacob(-ng:ng)
+    anorm = sum(wgt)
+
+
+    axb = sum(a*wgt)/anorm
+
+  end subroutine average_theta_real_real_t
+
+  subroutine average_theta_complex_complex_complex_t (a, b, axb)
+    complex, dimension (-ntgrid:), intent (in) :: a, b
+    complex, intent (out) :: axb
+    integer :: ng
+    real, dimension (-ntg_out:ntg_out) :: wgt
+    real :: anorm
+
+    ng = ntg_out
+    wgt = delthet(-ng:ng)*jacob(-ng:ng)
+    anorm = sum(wgt)
+
+
+    axb = sum(conjg(a(-ng:ng))*b(-ng:ng)*wgt)/anorm
+
+  end subroutine average_theta_complex_complex_complex_t
+
+  subroutine average_theta_complex_complex_t (a, axb)
+    complex, dimension (-ntgrid:), intent (in) :: a
+    complex, intent (out) :: axb
+    integer :: ng
+    real, dimension (-ntg_out:ntg_out) :: wgt
+    real :: anorm
+
+    ng = ntg_out
+    wgt = delthet(-ng:ng)*jacob(-ng:ng)
+    anorm = sum(wgt)
+
+
+    axb = sum(a(-ng:ng)*wgt)/anorm
+
+  end subroutine average_theta_complex_complex_t
+
+  subroutine average_theta_complex_complex_real_t (a, b, axb)
+    complex, dimension (-ntgrid:), intent (in) :: a, b
+    real, intent (out) :: axb
+    complex :: axbcomplex
+    !integer :: ng
+    !real, dimension (-ntg_out:ntg_out) :: wgt
+    !real :: anorm
+
+    !ng = ntg_out
+    !wgt = delthet(-ng:ng)*jacob(-ng:ng)
+    !anorm = sum(wgt)
+
+    !axb = sum(real(conjg(a(-ng:ng))*b(-ng:ng))*wgt)/anorm
+    call average_theta(a, b, axbcomplex)
+    axb = real(axbcomplex)
+
+  end subroutine average_theta_complex_complex_real_t
+
   subroutine average_theta_txy (a, b, axb_by_mode, distributed)
     !use theta_grid, only: ntgrid, delthet, jacob, nperiod, ntheta
     !use kt_grids, only: naky, ntheta0

@@ -27,7 +27,7 @@ class Generator
    character(*), intent(in) :: dimension_list
    character(*), intent(in) :: variable_description
    character(*), intent(in) :: variable_units
-   #{@type}, intent(in)#{@dimension} :: val
+   #{@type.sub(/_/, '*')}, intent(in)#{@dimension} :: val
  
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
@@ -44,7 +44,7 @@ EOF
 end
 
 generators = []
-['real', 'integer', 'character', 'double precision', 'complex'].each do |type| # 
+['real', 'integer', 'character', 'double precision', 'complex', 'complex_16'].each do |type| # 
 	(0..6).each do |dimsize|
 		generators.push Generator.new(type, dimsize)
 	end

@@ -30,16 +30,25 @@ input_variables_for_diagnostics_config = [
 	['logical', 'write_apar_over_time'],
 	['logical', 'write_bpar_over_time'],
 	['logical', 'write_movie', '.false.'],
+	['logical', 'dump_fields_periodically', '.false.'],
   
 
   # Parameters for writing out moments such as density etc
 	['logical', 'write_moments', '.true.'],
+	['logical', 'write_full_moments_notgc', '.false.'],
+  # Write out 4-D moments as a function of time ... gives
+  # LARGE data files!
+	['logical', 'write_ntot_over_time', '.false.'],
+	['logical', 'write_density_over_time', '.false.'],
+	['logical', 'write_upar_over_time', '.false.'],
+	['logical', 'write_tperp_over_time', '.false.'],
 
 
 	# Parameters for writing out fluxes
 	['logical', 'write_fluxes', '.true.'],
 	['logical', 'write_fluxes_by_mode', '.false.'],
 	['logical', 'write_symmetry', '.false.'],
+	['logical', 'write_parity', '.false.'],
 
 	# Parameters for writing out growth rates and frequencies
 	['logical', 'write_omega', '.true.'],
@@ -81,6 +90,8 @@ input_variables_for_diagnostics_config = [
 
   # Parameters determining what turbulence characteristics are calculated
 	['logical', 'write_cross_phase', '.false.'],
+	['logical', 'write_correlation', '.true.'],
+	['logical', 'write_correlation_extend', '.false.'],
 
   # Parameters controlling diagnostics for the antennna
 	['logical', 'write_jext', '.false.'],

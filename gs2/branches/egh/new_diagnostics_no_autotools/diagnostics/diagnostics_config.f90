@@ -83,10 +83,17 @@ module diagnostics_config
    logical :: write_apar_over_time
    logical :: write_bpar_over_time
    logical :: write_movie
+   logical :: dump_fields_periodically
    logical :: write_moments
+   logical :: write_full_moments_notgc
+   logical :: write_ntot_over_time
+   logical :: write_density_over_time
+   logical :: write_upar_over_time
+   logical :: write_tperp_over_time
    logical :: write_fluxes
    logical :: write_fluxes_by_mode
    logical :: write_symmetry
+   logical :: write_parity
    logical :: write_omega
    integer :: navg
    real :: omegatinst
@@ -108,6 +115,8 @@ module diagnostics_config
    integer :: conv_nsteps_converged
    logical :: use_nonlin_convergence
    logical :: write_cross_phase
+   logical :: write_correlation
+   logical :: write_correlation_extend
    logical :: write_jext
    logical :: write_lorentzian
   end type diagnostics_type
@@ -186,10 +195,17 @@ contains
     logical :: write_apar_over_time
     logical :: write_bpar_over_time
     logical :: write_movie
+    logical :: dump_fields_periodically
     logical :: write_moments
+    logical :: write_full_moments_notgc
+    logical :: write_ntot_over_time
+    logical :: write_density_over_time
+    logical :: write_upar_over_time
+    logical :: write_tperp_over_time
     logical :: write_fluxes
     logical :: write_fluxes_by_mode
     logical :: write_symmetry
+    logical :: write_parity
     logical :: write_omega
     integer :: navg
     real :: omegatinst
@@ -211,6 +227,8 @@ contains
     integer :: conv_nsteps_converged
     logical :: use_nonlin_convergence
     logical :: write_cross_phase
+    logical :: write_correlation
+    logical :: write_correlation_extend
     logical :: write_jext
     logical :: write_lorentzian
     namelist /diagnostics_config/ &
@@ -227,10 +245,17 @@ contains
       write_apar_over_time, &
       write_bpar_over_time, &
       write_movie, &
+      dump_fields_periodically, &
       write_moments, &
+      write_full_moments_notgc, &
+      write_ntot_over_time, &
+      write_density_over_time, &
+      write_upar_over_time, &
+      write_tperp_over_time, &
       write_fluxes, &
       write_fluxes_by_mode, &
       write_symmetry, &
+      write_parity, &
       write_omega, &
       navg, &
       omegatinst, &
@@ -252,6 +277,8 @@ contains
       conv_nsteps_converged, &
       use_nonlin_convergence, &
       write_cross_phase, &
+      write_correlation, &
+      write_correlation_extend, &
       write_jext, &
       write_lorentzian
 
@@ -272,10 +299,17 @@ contains
       write_apar_over_time = .false.
       write_bpar_over_time = .false.
       write_movie = .false.
+      dump_fields_periodically = .false.
       write_moments = .true.
+      write_full_moments_notgc = .false.
+      write_ntot_over_time = .false.
+      write_density_over_time = .false.
+      write_upar_over_time = .false.
+      write_tperp_over_time = .false.
       write_fluxes = .true.
       write_fluxes_by_mode = .false.
       write_symmetry = .false.
+      write_parity = .false.
       write_omega = .true.
       navg = 10
       omegatinst = 1.0e6
@@ -297,6 +331,8 @@ contains
       conv_nsteps_converged = 10000
       use_nonlin_convergence = .false.
       write_cross_phase = .false.
+      write_correlation = .true.
+      write_correlation_extend = .false.
       write_jext = .false.
       write_lorentzian = .false.
 
@@ -316,10 +352,17 @@ contains
       gnostics%write_apar_over_time = write_apar_over_time
       gnostics%write_bpar_over_time = write_bpar_over_time
       gnostics%write_movie = write_movie
+      gnostics%dump_fields_periodically = dump_fields_periodically
       gnostics%write_moments = write_moments
+      gnostics%write_full_moments_notgc = write_full_moments_notgc
+      gnostics%write_ntot_over_time = write_ntot_over_time
+      gnostics%write_density_over_time = write_density_over_time
+      gnostics%write_upar_over_time = write_upar_over_time
+      gnostics%write_tperp_over_time = write_tperp_over_time
       gnostics%write_fluxes = write_fluxes
       gnostics%write_fluxes_by_mode = write_fluxes_by_mode
       gnostics%write_symmetry = write_symmetry
+      gnostics%write_parity = write_parity
       gnostics%write_omega = write_omega
       gnostics%navg = navg
       gnostics%omegatinst = omegatinst
@@ -341,6 +384,8 @@ contains
       gnostics%conv_nsteps_converged = conv_nsteps_converged
       gnostics%use_nonlin_convergence = use_nonlin_convergence
       gnostics%write_cross_phase = write_cross_phase
+      gnostics%write_correlation = write_correlation
+      gnostics%write_correlation_extend = write_correlation_extend
       gnostics%write_jext = write_jext
       gnostics%write_lorentzian = write_lorentzian
 
@@ -359,10 +404,17 @@ contains
     call broadcast (gnostics%write_apar_over_time)
     call broadcast (gnostics%write_bpar_over_time)
     call broadcast (gnostics%write_movie)
+    call broadcast (gnostics%dump_fields_periodically)
     call broadcast (gnostics%write_moments)
+    call broadcast (gnostics%write_full_moments_notgc)
+    call broadcast (gnostics%write_ntot_over_time)
+    call broadcast (gnostics%write_density_over_time)
+    call broadcast (gnostics%write_upar_over_time)
+    call broadcast (gnostics%write_tperp_over_time)
     call broadcast (gnostics%write_fluxes)
     call broadcast (gnostics%write_fluxes_by_mode)
     call broadcast (gnostics%write_symmetry)
+    call broadcast (gnostics%write_parity)
     call broadcast (gnostics%write_omega)
     call broadcast (gnostics%navg)
     call broadcast (gnostics%omegatinst)
@@ -384,6 +436,8 @@ contains
     call broadcast (gnostics%conv_nsteps_converged)
     call broadcast (gnostics%use_nonlin_convergence)
     call broadcast (gnostics%write_cross_phase)
+    call broadcast (gnostics%write_correlation)
+    call broadcast (gnostics%write_correlation_extend)
     call broadcast (gnostics%write_jext)
     call broadcast (gnostics%write_lorentzian)
 

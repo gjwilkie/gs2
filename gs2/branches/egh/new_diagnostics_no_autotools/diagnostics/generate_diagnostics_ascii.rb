@@ -28,13 +28,18 @@ class Generator
 		"integer :: #@name"
 	end
 	def switch
-		"logical :: write_to_#@name "
+		"logical :: write_to_#@name = .false."
 	end
+    #"write(*,*) \"name\", \"#@name\", ascii_files%write_to_#@name
   def open_output_file
     "if (ascii_files%write_to_#{sprintf("%-#{@max}s", @name)}) call open_output_file(ascii_files%#@name, '.new.#@name')"
   end
   def close_output_file
     "if (ascii_files%write_to_#{sprintf("%-#{@max}s", @name)}) call close_output_file(ascii_files%#@name)"
+  end
+    #"write(*,*) \"name\", \"#@name\"
+  def flush_output_file
+    "if (ascii_files%write_to_#{sprintf("%-#{@max}s", @name)}) call flush_output_file(ascii_files%#@name)"
   end
 
 end
@@ -65,15 +70,21 @@ module diagnostics_ascii
 contains
   subroutine init_diagnostics_ascii(ascii_files)
     use file_utils, only: open_output_file
-    type(diagnostics_ascii_type), intent(out) :: ascii_files
+    type(diagnostics_ascii_type), intent(inout) :: ascii_files
     #{generators.map{|g| g.open_output_file}.join("\n    ") }
   end subroutine init_diagnostics_ascii
 
   subroutine finish_diagnostics_ascii(ascii_files)
     use file_utils, only: close_output_file
-    type(diagnostics_ascii_type), intent(out) :: ascii_files
+    type(diagnostics_ascii_type), intent(inout) :: ascii_files
     #{generators.map{|g| g.close_output_file}.join("\n    ") }
   end subroutine finish_diagnostics_ascii
+
+  subroutine flush_output_files(ascii_files)
+    use file_utils, only: flush_output_file
+    type(diagnostics_ascii_type), intent(in) :: ascii_files
+    #{generators.map{|g| g.flush_output_file}.join("\n    ") }
+  end subroutine flush_output_files
 
 end module diagnostics_ascii
 

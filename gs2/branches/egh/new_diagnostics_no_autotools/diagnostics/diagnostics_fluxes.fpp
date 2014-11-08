@@ -26,6 +26,7 @@ public :: finish_diagnostics_fluxes
 public :: calculate_fluxes
 
 public :: write_symmetry
+public :: write_parity
 
 private
   real, dimension (:,:,:,:), allocatable ::  qheat, qmheat, qbheat
@@ -544,6 +545,7 @@ contains
   !> 
   subroutine write_symmetry(gnostics)
     use dist_fn, only: flux_vs_theta_vs_vpa
+    use dist_fn, only: pflux_vs_theta_vs_vpa
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, negrid
     use species, only: nspec
@@ -554,6 +556,15 @@ contains
     implicit none
     type (diagnostics_type), intent(in) :: gnostics
     real, dimension(:,:,:), allocatable :: vflx_sym
+    real, dimension(:,:,:), allocatable :: pflux_sym
+
+    allocate (pflux_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
+    call pflux_vs_theta_vs_vpa (pflux_sym)
+    call create_and_write_variable(gnostics, gnostics%rtype, "es_part_tormom_sym", "zvst", &
+      "Particle flux density as a function theta and vspace, used for looking at the effect of asymmetry, &
+      & see Parra et al POP 18 062501 2011 and ask Jung-Pyo Lee", "See ref", pflux_sym)
+    !if (proc0) call nc_loop_partsym_tormom (nout, pflux_sym)
+    deallocate (pflux_sym)
 
     allocate (vflx_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
     call flux_vs_theta_vs_vpa (phinew,vflx_sym)
@@ -563,5 +574,439 @@ contains
     !if (proc0) call nc_loop_sym (nout, vflx_sym)
     deallocate (vflx_sym)
   end subroutine write_symmetry
+
+  subroutine write_parity(gnostics)
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use le_grids, only: negrid, nlambda, integrate_moment, integrate_kysum
+    use species, only: nspec
+    use gs2_layouts, only: init_parity_layouts, p_lo, g_lo, idx_local
+    use gs2_layouts, only: ik_idx, it_idx, il_idx, ie_idx, is_idx, idx, proc_id
+    use mp, only: send, receive, proc0
+    use dist_fn_arrays, only: gnew, g_adjust, aj0
+    use fields_arrays, only: phinew, bparnew
+    use run_parameters, only: fphi, fbpar
+    use constants, only: zi
+    use volume_averages, only: average_theta, average_all
+    implicit none
+    type(diagnostics_type), intent(in) :: gnostics
+    real :: t 
+    integer :: iplo, iglo, sgn2, isgn, il, ie, ig, ik, it, is
+    complex, dimension (:,:,:,:), allocatable :: gparity, gmx, gpx
+    complex, dimension (:,:,:), allocatable :: g0, gm, gp
+    complex, dimension (:,:,:), allocatable :: g_kint, gm_kint, gp_kint
+    complex, dimension (:,:), allocatable :: g_avg, gnorm_avg, phim
+    complex, dimension (:), allocatable :: g_all_tot, g_nokx_tot, g_nosig_tot, gtmp
+    complex, dimension (:), allocatable :: gnorm_all_tot, gnorm_nokx_tot, gnorm_nosig_tot
+    real, dimension (:,:,:), allocatable :: gmnorm, gmint, gpint, gmnormint, gmavg, gpavg, gmnormavg
+    real, dimension (:), allocatable :: gmtot, gptot, gtot, gmnormtot
+    real, dimension (:), allocatable :: gm_nokx_tot, gp_nokx_tot, gmnorm_nokx_tot
+    real, dimension (:), allocatable :: gm_nosig_tot, gp_nosig_tot, gmnorm_nosig_tot
+    logical :: first = .true.
+
+    t = gnostics%user_time
+
+    ! initialize layouts for parity diagnostic
+    if (first) then
+       call init_parity_layouts (naky, nlambda, negrid, nspec)
+       first = .false.
+    end if
+
+    allocate (gparity(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
+    allocate (g0(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
+    allocate (gm(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
+    allocate (gp(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
+    allocate (gmnorm(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
+    allocate (gmint(-ntgrid:ntgrid,naky,nspec))
+    allocate (gpint(-ntgrid:ntgrid,naky,nspec))
+    allocate (gmnormint(-ntgrid:ntgrid,naky,nspec))
+    allocate (gmavg(ntheta0,naky,nspec))
+    allocate (gpavg(ntheta0,naky,nspec))
+    allocate (gmnormavg(ntheta0,naky,nspec))
+    allocate (gmtot(nspec), gm_nokx_tot(nspec), gm_nosig_tot(nspec))
+    allocate (gptot(nspec), gp_nokx_tot(nspec), gp_nosig_tot(nspec))
+    allocate (gtot(nspec), gmnormtot(nspec), gmnorm_nokx_tot(nspec), gmnorm_nosig_tot(nspec))
+    allocate (phim(-ntgrid:ntgrid,naky))
+    allocate (g_kint(-ntgrid:ntgrid,2,nspec), gm_kint(-ntgrid:ntgrid,2,nspec), gp_kint(-ntgrid:ntgrid,2,nspec))
+    allocate (g_avg(ntheta0,nspec), gnorm_avg(ntheta0,nspec))
+    allocate (g_all_tot(nspec), g_nokx_tot(nspec), g_nosig_tot(nspec), gtmp(nspec))
+    allocate (gnorm_all_tot(nspec), gnorm_nokx_tot(nspec), gnorm_nosig_tot(nspec))
+
+    ! convert from g to h
+    call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
+
+    ! below we define gparity = J0 * h, where delta f = h - (q phi / T) F0
+    ! because we're ultimately interested in int J0 h * phi (i.e. particle flux)
+    do isgn = 1, 2
+       do ig = -ntgrid, ntgrid
+          do iglo = g_lo%llim_world, g_lo%ulim_world
+             ik = ik_idx(g_lo,iglo)
+             ie = ie_idx(g_lo,iglo)
+             il = il_idx(g_lo,iglo)
+             is = is_idx(g_lo,iglo)
+             it = it_idx(g_lo,iglo)
+             ! count total index for given (ik,il,ie,is) combo (dependent on layout)
+             iplo = idx(p_lo,ik,il,ie,is)
+             ! check to see if value of g corresponding to iglo is on this processor
+             if (idx_local(g_lo,iglo)) then
+                if (idx_local(p_lo,iplo)) then
+                   ! if g value corresponding to iplo should be on this processor, then get it
+                   gparity(ig,it,isgn,iplo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)
+                else
+                   ! otherwise, send g for this iplo value to correct processor
+                   call send (gnew(ig,isgn,iglo)*aj0(ig,iglo),proc_id(p_lo,iplo))
+                end if
+             else if (idx_local(p_lo,iplo)) then
+                ! if g for this iplo not on processor, receive it
+                call receive (gparity(ig,it,isgn,iplo),proc_id(g_lo,iglo))
+             end if
+          end do
+       end do
+    end do
+
+    ! convert from h back to g
+    call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
+
+    ! first diagnostic is phase space average of 
+    ! |J0*(h(z,vpa,kx) +/- h(-z,-vpa,-kx))|**2 / ( |J0*h(z,vpa,kx)|**2 + |J0*h(-z,-vpa,-kx)|**2 )
+    do it = 1, ntheta0
+       ! have to treat kx=0 specially
+       if (it == 1) then
+          do isgn = 1, 2
+             sgn2 = mod(isgn,2)+1
+             do ig = -ntgrid, ntgrid
+                g0(ig,isgn,:) = gparity(-ig,1,sgn2,:)
+             end do
+          end do
+       else
+          do isgn = 1, 2
+             sgn2 = mod(isgn,2)+1
+             do ig = -ntgrid, ntgrid
+                g0(ig,isgn,:) = gparity(-ig,ntheta0-it+2,sgn2,:)
+             end do
+          end do
+       end if
+       gm = gparity(:,it,:,:)-g0
+       gp = gparity(:,it,:,:)+g0
+       gmnorm = real(g0*conjg(g0))
+       ! integrate out velocity dependence
+       call integrate_moment (real(gm*conjg(gm)),gmint,1)
+       call integrate_moment (real(gp*conjg(gp)),gpint,1)
+       call integrate_moment (gmnorm,gmnormint,1)
+       ! average along field line
+       do is = 1, nspec
+          do ik = 1, naky
+             call average_theta (gmint(:,ik,is),gmavg(it,ik,is))
+             call average_theta (gpint(:,ik,is),gpavg(it,ik,is))
+             call average_theta (gmnormint(:,ik,is),gmnormavg(it,ik,is))
+          end do 
+          end do
+
+       ! phim(theta,kx) = phi(-theta,-kx)
+       ! have to treat kx=0 specially
+       if (it == 1) then
+          do ig = -ntgrid, ntgrid
+             phim(ig,:) = phinew(-ig,1,:)
+          end do
+       else
+          do ig = -ntgrid, ntgrid
+             phim(ig,:) = phinew(-ig,ntheta0-it+2,:)
+          end do
+       end if
+
+       ! want int dtheta sum_{kx} int d3v | sum_{ky} [ J0*(h+ * conjg(phi-) + h- * conjg(phi+)) ky ] |**2
+       ! J0*(h+ * conjg(phi-) + h- * conjg(phi+)) = h*conjg(phi) - h(-theta,-vpa,-kx)*conjg(phi(-theta,-kx))
+       do iplo = p_lo%llim_proc, p_lo%ulim_proc
+          ik = ik_idx(p_lo,iplo)
+          do isgn = 1, 2
+             gm(:,isgn,iplo) = gparity(:,it,isgn,iplo)*conjg(phinew(:,it,ik)) - g0(:,isgn,iplo)*conjg(phim(:,ik))
+          end do
+       end do
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             call integrate_kysum (gm(ig,isgn,p_lo%llim_proc:p_lo%ulim_proc),ig,g_kint(ig,isgn,:),1)
+          end do
+       end do
+       do is = 1, nspec
+          call average_theta (g_kint(:,1,is)+g_kint(:,2,is),g_avg(it,is))
+       end do
+
+       ! get normalizing term for above diagnostic
+       do iplo = p_lo%llim_proc, p_lo%ulim_proc
+          ik = ik_idx(p_lo,iplo)
+          do isgn = 1, 2
+             gm(:,isgn,iplo) = gparity(:,it,isgn,iplo)*conjg(phinew(:,it,ik))
+             gp(:,isgn,iplo) = g0(:,isgn,iplo)*conjg(phim(:,ik))
+          end do
+       end do
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             call integrate_kysum (gm(ig,isgn,:),ig,gm_kint(ig,isgn,:),1)
+             call integrate_kysum (gp(ig,isgn,:),ig,gp_kint(ig,isgn,:),1)
+          end do
+       end do
+       do is = 1, nspec
+          call average_theta (gm_kint(:,1,is)+gm_kint(:,2,is) &
+               + gp_kint(:,1,is)+gp_kint(:,2,is),gnorm_avg(it,is))
+       end do
+    end do
+
+    ! average over perp plane
+    do is = 1, nspec
+       call average_all (gmavg(:,:,is), gmtot(is), gnostics%distributed)
+       call average_all (gpavg(:,:,is), gptot(is), gnostics%distributed)
+       call average_all (gmnormavg(:,:,is), gmnormtot(is), gnostics%distributed)    
+       g_all_tot(is) = sum(g_avg(:,is))
+       gnorm_all_tot(is) = sum(gnorm_avg(:,is))
+    end do
+
+    allocate (gmx(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
+    allocate (gpx(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
+
+    ! now we want diagnostic of phase space average of
+    ! |J0*(h(z,vpa) +/- h(-z,-vpa))|**2 / ( |J0*h(z,vpa)|**2 + |J0*h(-z,-vpa)|**2 )
+    do it = 1, ntheta0
+       do isgn = 1, 2
+          sgn2 = mod(isgn,2)+1
+          do ig = -ntgrid, ntgrid
+             g0(ig,isgn,:) = gparity(-ig,it,sgn2,:)
+          end do
+       end do
+       gm = gparity(:,it,:,:)-g0
+       gp = gparity(:,it,:,:)+g0
+       gmnorm = real(g0*conjg(g0))
+       ! integrate out velocity dependence
+       call integrate_moment (real(gm*conjg(gm)),gmint,1)
+       call integrate_moment (real(gp*conjg(gp)),gpint,1)
+       call integrate_moment (gmnorm,gmnormint,1)
+       ! average along field line
+       do is = 1, nspec
+          do ik = 1, naky
+             call average_theta (gmint(:,ik,is),gmavg(it,ik,is))
+             call average_theta (gpint(:,ik,is),gpavg(it,ik,is))
+             call average_theta (gmnormint(:,ik,is),gmnormavg(it,ik,is))
+          end do
+       end do
+
+       ! phim(theta) = phi(-theta)
+       ! have to treat kx=0 specially
+       do ig = -ntgrid, ntgrid
+          phim(ig,:) = phinew(-ig,it,:)
+       end do
+
+       ! want int dtheta int d3v | sum_{kx} sum_{ky} [ J0*(h+ * conjg(phi-) + h- * conjg(phi+)) ky ] |**2
+       ! J0*(h+ * conjg(phi-) + h- * conjg(phi+)) = h*conjg(phi) - h(-theta,-vpa)*conjg(phi(-theta))
+       do iplo = p_lo%llim_proc, p_lo%ulim_proc
+          ik = ik_idx(p_lo,iplo)
+          do isgn = 1, 2
+             gmx(:,it,isgn,iplo) = g0(:,isgn,iplo)*conjg(phim(:,ik))
+             gpx(:,it,isgn,iplo) = gparity(:,it,isgn,iplo)*conjg(phinew(:,it,ik)) - gmx(:,it,isgn,iplo) 
+          end do
+       end do
+    end do
+
+    ! sum over kx
+    gp = sum(gpx,2)
+    deallocate (gpx)
+    do isgn = 1, 2
+       do ig = -ntgrid, ntgrid
+          call integrate_kysum (gp(ig,isgn,:),ig,g_kint(ig,isgn,:),1)
+       end do
+    end do
+    do is = 1, nspec
+       call average_theta (g_kint(:,1,is)+g_kint(:,2,is), g_nokx_tot(is))
+    end do
+
+    ! get normalizing terms for above diagnostic
+    gm = sum(gmx,2)
+    deallocate (gmx)
+    do isgn = 1, 2
+       do ig = -ntgrid, ntgrid
+          call integrate_kysum (gm(ig,isgn,:),ig,gm_kint(ig,isgn,:),1)
+          call integrate_kysum (gm(ig,isgn,:)+gp(ig,isgn,:),ig,gp_kint(ig,isgn,:),1)
+       end do
+    end do
+    do is = 1, nspec
+       call average_theta (gm_kint(:,1,is)+gm_kint(:,2,is) &
+            + gp_kint(:,1,is)+gp_kint(:,2,is), gnorm_nokx_tot(is))
+    end do
+
+    ! average over perp plane
+    do is = 1, nspec
+       call average_all (gmavg(:,:,is), gm_nokx_tot(is), gnostics%distributed)
+       call average_all (gpavg(:,:,is), gp_nokx_tot(is), gnostics%distributed)
+       call average_all (gmnormavg(:,:,is), gmnorm_nokx_tot(is), gnostics%distributed)   
+    end do
+
+    ! final diagnostic is phase space average of 
+    ! |J0*(h(z,kx) +/- h(-z,-kx))|**2 / ( |J0*h(z,kx)|**2 + |J0*h(-z,-kx)|**2 )
+    do it = 1, ntheta0
+       ! have to treat kx=0 specially
+       if (it == 1) then
+          do ig = -ntgrid, ntgrid
+             g0(ig,:,:) = gparity(-ig,1,:,:)
+          end do
+       else
+          do ig = -ntgrid, ntgrid
+             g0(ig,:,:) = gparity(-ig,ntheta0-it+2,:,:)
+          end do
+       end if
+       gm = gparity(:,it,:,:)-g0
+       gp = gparity(:,it,:,:)+g0
+       gmnorm = real(g0*conjg(g0))
+       ! integrate out velocity dependence
+       call integrate_moment (real(gm*conjg(gm)),gmint,1)
+       call integrate_moment (real(gp*conjg(gp)),gpint,1)
+       call integrate_moment (gmnorm,gmnormint,1)
+       ! average along field line
+       do is = 1, nspec
+          do ik = 1, naky
+             call average_theta (gmint(:,ik,is),gmavg(it,ik,is))
+             call average_theta (gpint(:,ik,is),gpavg(it,ik,is))
+             call average_theta (gmnormint(:,ik,is),gmnormavg(it,ik,is))
+          end do
+       end do
+
+       ! phim(theta,kx) = phi(-theta,-kx)
+       ! have to treat kx=0 specially
+       if (it == 1) then
+          do ig = -ntgrid, ntgrid
+             phim(ig,:) = phinew(-ig,1,:)
+          end do
+       else
+          do ig = -ntgrid, ntgrid
+             phim(ig,:) = phinew(-ig,ntheta0-it+2,:)
+          end do
+       end if
+
+       ! want int dtheta sum_{kx} int dE dmu | sum_{sigma} sum_{ky} [ J0*(h+ * conjg(phi-) + h- * conjg(phi+)) ky ] |**2
+       ! J0*(h+ * conjg(phi-) + h- * conjg(phi+)) = h*conjg(phi) - h(-theta,-kx)*conjg(phi(-theta,-kx))
+       do iplo = p_lo%llim_proc, p_lo%ulim_proc
+          ik = ik_idx(p_lo,iplo)
+          do isgn = 1, 2
+             gm(:,isgn,iplo) = gparity(:,it,isgn,iplo)*conjg(phinew(:,it,ik)) - g0(:,isgn,iplo)*conjg(phim(:,ik))
+          end do
+       end do
+       do ig = -ntgrid, ntgrid
+          call integrate_kysum (gm(ig,1,:)+gm(ig,2,:),ig,g_kint(ig,1,:),1)
+       end do
+       do is = 1, nspec
+          call average_theta (g_kint(:,1,is),g_avg(it,is))
+       end do
+
+       ! get normalizing term for above diagnostic
+       do iplo = p_lo%llim_proc, p_lo%ulim_proc
+          ik = ik_idx(p_lo,iplo)
+          do isgn = 1, 2
+             gm(:,isgn,iplo) = gparity(:,it,isgn,iplo)*conjg(phinew(:,it,ik))
+             gp(:,isgn,iplo) = g0(:,isgn,iplo)*conjg(phim(:,ik))
+          end do
+       end do
+       do ig = -ntgrid, ntgrid
+          call integrate_kysum (gm(ig,1,:)+gm(ig,2,:),ig,gm_kint(ig,1,:),1)
+          call integrate_kysum (gp(ig,1,:)+gp(ig,2,:),ig,gp_kint(ig,1,:),1)
+       end do
+       do is = 1, nspec
+          call average_theta (gm_kint(:,1,is)+gp_kint(:,1,is),gnorm_avg(it,is))
+       end do
+    end do
+
+    ! average over perp plane
+    do is = 1, nspec
+       call average_all (gmavg(:,:,is), gm_nosig_tot(is), gnostics%distributed)
+       call average_all (gpavg(:,:,is), gp_nosig_tot(is), gnostics%distributed)
+       call average_all (gmnormavg(:,:,is), gmnorm_nosig_tot(is), gnostics%distributed)    
+       g_nosig_tot(is) = sum(g_avg(:,is))
+       gnorm_nosig_tot(is) = sum(gnorm_avg(:,is))
+    end do
+
+    deallocate (gparity) ; allocate (gparity(-ntgrid:ntgrid,ntheta0,naky,nspec))
+    ! obtain normalization factor = int over phase space of |g|**2
+    call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
+    !<DD>Do all processors need to know the full result here? Only proc0 seems to do any writing.
+    !If not then remove the last two arguments in the following call.
+    call integrate_moment (spread(aj0,2,2)*spread(aj0,2,2)*gnew*conjg(gnew), gparity, 1, full_arr=.true.)
+    call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
+    do is = 1, nspec
+       do ik = 1, naky
+          do it = 1, ntheta0
+             call average_theta (real(gparity(:,it,ik,is)),gmavg(it,ik,is))
+          end do
+       end do
+       call average_all (gmavg(:,:,is), gtot(is), gnostics%distributed)
+    end do
+
+    ! normalize g(theta,vpa,kx) - g(-theta,-vpa,-kx) terms
+    where (gtot+gmnormtot > epsilon(0.0))
+       gmtot = sqrt(gmtot/(gtot+gmnormtot)) ; gptot = sqrt(gptot/(gtot+gmnormtot))
+    elsewhere
+       gmtot = sqrt(gmtot) ; gptot = sqrt(gptot)
+    end where
+
+    where (real(gnorm_all_tot) > epsilon(0.0))
+       gtmp = sqrt(real(g_all_tot)/real(gnorm_all_tot))
+    elsewhere
+       gtmp = sqrt(real(g_all_tot))
+    end where
+    where (aimag(gnorm_all_tot) > epsilon(0.0))
+       g_all_tot = gtmp + zi*sqrt(aimag(g_all_tot)/aimag(gnorm_all_tot))
+    elsewhere
+       g_all_tot = gtmp + zi*sqrt(aimag(g_all_tot))
+    end where
+
+    ! normalize g(theta,vpa) +/- g(-theta,-vpa) terms
+    where (gtot+gmnorm_nokx_tot > epsilon(0.0))
+       gm_nokx_tot = sqrt(gm_nokx_tot/(gtot+gmnorm_nokx_tot)) ; gp_nokx_tot = sqrt(gp_nokx_tot/(gtot+gmnorm_nokx_tot))
+    elsewhere
+       gm_nokx_tot = sqrt(gm_nokx_tot) ; gp_nokx_tot = sqrt(gp_nokx_tot)
+    end where
+
+    where (real(gnorm_nokx_tot) > epsilon(0.0))
+       gtmp = sqrt(real(g_nokx_tot)/real(gnorm_nokx_tot))
+    elsewhere
+       gtmp = sqrt(real(g_nokx_tot))
+    end where
+    where (aimag(gnorm_nokx_tot) > epsilon(0.0))
+       g_nokx_tot = gtmp + zi*sqrt(aimag(g_nokx_tot)/aimag(gnorm_nokx_tot))
+    elsewhere
+       g_nokx_tot = gtmp + zi*sqrt(aimag(g_nokx_tot))
+    end where
+
+    ! normalize g(theta,kx) +/ g(-theta,-kx) terms
+    where (gtot+gmnorm_nosig_tot > epsilon(0.0))
+       gm_nosig_tot = sqrt(gm_nosig_tot/(gtot+gmnorm_nosig_tot)) ; gp_nosig_tot = sqrt(gp_nosig_tot/(gtot+gmnorm_nosig_tot))
+    elsewhere
+       gm_nosig_tot = sqrt(gm_nosig_tot) ; gp_nosig_tot = sqrt(gp_nosig_tot)
+    end where
+
+    where (real(gnorm_nosig_tot) > epsilon(0.0))
+       gtmp = sqrt(real(g_nosig_tot)/real(gnorm_nosig_tot))
+    elsewhere
+       gtmp = sqrt(real(g_nosig_tot))
+    end where
+    where (aimag(gnorm_nosig_tot) > epsilon(0.0))
+       g_nosig_tot = gtmp + zi*sqrt(aimag(g_nosig_tot)/aimag(gnorm_nosig_tot))
+    elsewhere
+       g_nosig_tot = gtmp + zi*sqrt(aimag(g_nosig_tot))
+    end where
+
+    if (proc0 .and. gnostics%write_ascii) write (gnostics%ascii_files%parity,"(19(1x,e12.5))") &
+         t, gmtot, gptot, real(g_all_tot), aimag(g_all_tot), &
+         real(gnorm_all_tot), aimag(gnorm_all_tot), gm_nokx_tot, gp_nokx_tot, real(g_nokx_tot), aimag(g_nokx_tot), &
+         real(gnorm_nokx_tot), aimag(gnorm_nokx_tot), gm_nosig_tot, gp_nosig_tot, &
+         real(g_nosig_tot), aimag(g_nosig_tot), real(gnorm_nosig_tot), aimag(gnorm_nosig_tot)
+
+    deallocate (gparity, g0)
+    deallocate (gm, gp, gmnorm, gmint, gpint, gmnormint)
+    deallocate (gmavg, gpavg, gmnormavg)
+    deallocate (gmtot, gm_nokx_tot, gm_nosig_tot)
+    deallocate (gptot, gp_nokx_tot, gp_nosig_tot)
+    deallocate (gtot, gmnormtot, gmnorm_nokx_tot, gmnorm_nosig_tot)
+    deallocate (g_avg, gnorm_avg)
+    deallocate (g_kint, gm_kint, gp_kint)
+    deallocate (g_all_tot, g_nokx_tot, g_nosig_tot, gtmp)
+    deallocate (gnorm_all_tot, gnorm_nokx_tot, gnorm_nosig_tot)
+    deallocate (phim)
+  end subroutine write_parity
 
 end module diagnostics_fluxes
