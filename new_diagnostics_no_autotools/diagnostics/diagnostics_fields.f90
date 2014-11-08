@@ -264,5 +264,6 @@ contains
     !nout_movie = nout_movie + 1
   end subroutine write_movie
 
+
 end module diagnostics_fields
 

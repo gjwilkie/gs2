@@ -6,6 +6,8 @@ module diagnostics_nonlinear_convergence
   implicit none
 
   public :: check_nonlin_convergence
+  public :: init_nonlinear_convergence
+  public :: finish_nonlinear_convergence
 
 
   private
@@ -14,6 +16,16 @@ module diagnostics_nonlinear_convergence
   real, save, allocatable, dimension(:) :: conv_heat
   real, save :: heat_sum_av = 0, heat_av = 0, heat_av_test = 0
   contains
+
+  subroutine init_nonlinear_convergence(gnostics)
+      type(diagnostics_type), intent(in) :: gnostics
+      if(.not. allocated(conv_heat)) allocate(conv_heat(0:gnostics%conv_nstep_av/gnostics%nwrite-1))
+  end subroutine  init_nonlinear_convergence
+
+  subroutine finish_nonlinear_convergence(gnostics)
+      type(diagnostics_type), intent(in) :: gnostics
+      deallocate(conv_heat)
+  end subroutine  finish_nonlinear_convergence
 
   !> Trinity convergence condition - simple and experimental
   !! look for the averaged differential of the summed averaged heat flux to drop below a threshold

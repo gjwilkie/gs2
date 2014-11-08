@@ -490,6 +490,8 @@ contains
     if (y0 < 0) y0 = -1./y0
 
     if (ly == 0.) ly = 2.0*pi*y0
+    ! NB specifying naky when running nonlinearly will cause nasty
+    ! confusing bugs... we should put in a check
     if (naky == 0) naky = (ny-1)/3 + 1
     if (ntheta0 == 0) ntheta0 = 2*((nx-1)/3) + 1
     if (rtwist == 0.) rtwist = real(jtwist)

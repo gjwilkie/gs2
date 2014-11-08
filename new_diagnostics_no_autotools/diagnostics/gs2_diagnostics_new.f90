@@ -43,6 +43,8 @@ contains
     use diagnostics_heating, only: init_diagnostics_heating
     use diagnostics_ascii, only: init_diagnostics_ascii
     use diagnostics_antenna, only: init_diagnostics_antenna
+    use diagnostics_nonlinear_convergence, only: init_nonlinear_convergence
+    use nonlinear_terms, only: nonlin
     use file_utils, only: run_name, error_unit
     use mp, only: mp_comm, proc0
     use kt_grids, only: naky, aky
@@ -120,6 +122,9 @@ contains
       if (proc0) call init_diagnostics_ascii(gnostics%ascii_files)
     end if
 
+    if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
+
+
 
   end subroutine init_gs2_diagnostics_new
   
@@ -168,15 +173,46 @@ contains
     use diagnostics_ascii, only: finish_diagnostics_ascii
     use diagnostics_config, only: finish_diagnostics_config
     use diagnostics_antenna, only: finish_diagnostics_antenna
+    use diagnostics_nonlinear_convergence, only: finish_nonlinear_convergence
+    use nonlinear_terms, only: nonlin
     use dist_fn, only: write_fyx, write_f, write_poly, collision_error
+    use dist_fn_arrays, only: g_adjust
     use mp, only: proc0
     use fields_arrays, only: phinew, bparnew
+    use gs2_time, only: user_dt
+    use dist_fn_arrays, only: gnew
+    use run_parameters, only: fphi, fapar, fbpar
+    use collisions, only: vnmult
+    use gs2_save, only: gs2_save_for_restart
+    integer :: istatus
     if (.not. gnostics%write_any) return
+
+    if (gnostics%save_for_restart) then
+       call gs2_save_for_restart (gnew, gnostics%user_time, user_dt, vnmult, istatus, &
+            fphi, fapar, fbpar, exit_in=.true.)
+    end if
+    
+    !<DD> Added for saving distribution function
+    if (gnostics%save_distfn) then
+       !Convert h to distribution function
+       call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
+       
+       !Save dfn, fields and velocity grids to file
+       call gs2_save_for_restart (gnew, gnostics%user_time, user_dt, vnmult, istatus, &
+            fphi, fapar, fbpar, exit_in=.true.,distfn=.true.)
+       
+       !Convert distribution function back to h
+       call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
+    end if
+    !</DD> Added for saving distribution function
+
+    call run_old_final_routines
 
     deallocate(gnostics%fluxfac)
     call finish_diagnostics_fluxes
     call finish_diagnostics_omega
     call finish_diagnostics_antenna(gnostics)
+    if (nonlin.and.gnostics%use_nonlin_convergence) call finish_nonlinear_convergence(gnostics)
     if (gnostics%write_heating) call finish_diagnostics_heating(gnostics)
     if (gnostics%parallel .or. proc0) then
       if(proc0)write (*,*) "Closing new diagnostics"
@@ -323,6 +359,52 @@ contains
 
 
   end subroutine run_diagnostics
+
+  subroutine run_old_final_routines
+    use diagnostics_final_routines,only: do_write_eigenfunc
+    use diagnostics_final_routines,only: do_write_final_fields
+    use diagnostics_final_routines,only: do_write_kpar
+    use diagnostics_final_routines,only: do_write_final_epar
+    use diagnostics_final_routines,only: do_write_final_db
+    use diagnostics_final_routines,only: do_write_final_moments
+    use diagnostics_final_routines,only: do_write_final_antot
+    use diagnostics_final_routines,only: do_write_gs
+    use diagnostics_final_routines,only: do_write_geom
+    use diagnostics_final_routines,only: init_par_filter
+    use diagnostics_final_routines,only: ntg_out
+    use nonlinear_terms, only: nonlin
+    use antenna, only: dump_ant_amp
+    use mp, only: proc0
+    use kt_grids, only: ntheta0, naky
+    use theta_grid, only: ntgrid
+    complex, dimension (ntheta0, naky) :: phi0
+
+    if(gnostics%write_kpar.or.gnostics%write_gs) call init_par_filter
+
+    ! ntg_out is imported from diagnostics_final_routines
+    ntg_out = ntgrid
+    if (proc0) then
+       if (gnostics%write_eigenfunc) call do_write_eigenfunc(gnostics,phi0)
+       if (gnostics%write_final_fields) call do_write_final_fields(gnostics)
+       if (gnostics%write_kpar) call do_write_kpar(gnostics)
+       if (gnostics%write_final_epar) call do_write_final_epar(gnostics)
+   
+       ! definition here assumes we are not using wstar_units
+       if (gnostics%write_final_db) call do_write_final_db(gnostics)
+    end if
+    !Note pass in phase factor phi0 which may not be initialised
+    !this is ok as phi0 will be set in routine if not already set
+    if (gnostics%write_final_moments) call do_write_final_moments(gnostics,phi0)
+
+    if (gnostics%write_final_antot) call do_write_final_antot(gnostics)
+
+    if (proc0) call dump_ant_amp
+
+    if (nonlin.and.gnostics%write_gs) call do_write_gs(gnostics)
+    
+    if (proc0) call do_write_geom
+
+  end subroutine run_old_final_routines
 
 
   subroutine create_dimensions

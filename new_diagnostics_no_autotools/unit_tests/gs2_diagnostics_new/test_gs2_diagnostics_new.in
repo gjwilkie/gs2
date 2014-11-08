@@ -55,6 +55,18 @@
 
       write_parity = .true.
 
+write_eigenfunc=.true.
+write_final_fields=.true.
+write_kpar=.true.
+write_final_epar=.true.
+write_final_db=.true.
+write_final_moments=.true.
+write_final_antot=.true.
+write_gs=.true.
+
+save_for_restart=.true.
+
+save_distfn=.true.
 /
 
 !==============================
@@ -74,7 +86,8 @@
 !==============================
 &kt_grids_box_parameters
  y0 = 2
- naky = 2
+ !naky = 2
+ ny = 4
  jtwist = 6
  nx = 6
 /

@@ -52,7 +52,7 @@ contains
 
   subroutine finish_diagnostics_ascii(ascii_files)
     use file_utils, only: close_output_file
-    type(diagnostics_ascii_type), intent(in) :: ascii_files
+    type(diagnostics_ascii_type), intent(inout) :: ascii_files
     if (ascii_files%write_to_out   ) call close_output_file(ascii_files%out)
     if (ascii_files%write_to_fields) call close_output_file(ascii_files%fields)
     if (ascii_files%write_to_phase ) call close_output_file(ascii_files%phase)
