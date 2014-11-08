@@ -408,7 +408,7 @@ contains
 
 
   subroutine create_dimensions
-    use kt_grids, only: naky, ntheta0, nx, ny, jtwist_out
+    use kt_grids, only: naky, ntheta0, nx, ny, jtwist_out, box
     use theta_grid, only: ntgrid
     use le_grids, only: negrid, nlambda
     use species, only: nspec
@@ -433,8 +433,10 @@ contains
 
     ! Some specialised dimensions for specific cases
     call add_dimension(gnostics%sfile, "v", negrid*nlambda, "For writing functions of vparallel", "")
-    call add_dimension(gnostics%sfile, "j", (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1), &
-      "The theta (parallel) dimension along the extended domain", "")
+    if (box) then 
+      call add_dimension(gnostics%sfile, "j", (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1), &
+        "The theta (parallel) dimension along the extended domain", "")
+    end if
 
     ! A set of generic dimensions for writing arrays of data 
     ! which are grouped together for convenience like the 
