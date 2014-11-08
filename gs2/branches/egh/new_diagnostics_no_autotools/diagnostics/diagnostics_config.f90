@@ -119,6 +119,16 @@ module diagnostics_config
    logical :: write_correlation_extend
    logical :: write_jext
    logical :: write_lorentzian
+   logical :: write_eigenfunc
+   logical :: write_final_fields
+   logical :: write_kpar
+   logical :: write_final_epar
+   logical :: write_final_db
+   logical :: write_final_moments
+   logical :: write_final_antot
+   logical :: write_gs
+   logical :: save_for_restart
+   logical :: save_distfn
   end type diagnostics_type
 
 
@@ -231,6 +241,16 @@ contains
     logical :: write_correlation_extend
     logical :: write_jext
     logical :: write_lorentzian
+    logical :: write_eigenfunc
+    logical :: write_final_fields
+    logical :: write_kpar
+    logical :: write_final_epar
+    logical :: write_final_db
+    logical :: write_final_moments
+    logical :: write_final_antot
+    logical :: write_gs
+    logical :: save_for_restart
+    logical :: save_distfn
     namelist /diagnostics_config/ &
       nwrite, &
       nwrite_large, &
@@ -280,7 +300,17 @@ contains
       write_correlation, &
       write_correlation_extend, &
       write_jext, &
-      write_lorentzian
+      write_lorentzian, &
+      write_eigenfunc, &
+      write_final_fields, &
+      write_kpar, &
+      write_final_epar, &
+      write_final_db, &
+      write_final_moments, &
+      write_final_antot, &
+      write_gs, &
+      save_for_restart, &
+      save_distfn
 
     integer :: in_file
     logical :: exist
@@ -335,6 +365,16 @@ contains
       write_correlation_extend = .false.
       write_jext = .false.
       write_lorentzian = .false.
+      write_eigenfunc = .false.
+      write_final_fields = .false.
+      write_kpar = .false.
+      write_final_epar = .false.
+      write_final_db = .false.
+      write_final_moments = .false.
+      write_final_antot = .false.
+      write_gs = .false.
+      save_for_restart = .true.
+      save_distfn = .false.
 
       in_file = input_unit_exist ("diagnostics_config", exist)
       if (exist) read (unit=in_file, nml=diagnostics_config)
@@ -388,6 +428,16 @@ contains
       gnostics%write_correlation_extend = write_correlation_extend
       gnostics%write_jext = write_jext
       gnostics%write_lorentzian = write_lorentzian
+      gnostics%write_eigenfunc = write_eigenfunc
+      gnostics%write_final_fields = write_final_fields
+      gnostics%write_kpar = write_kpar
+      gnostics%write_final_epar = write_final_epar
+      gnostics%write_final_db = write_final_db
+      gnostics%write_final_moments = write_final_moments
+      gnostics%write_final_antot = write_final_antot
+      gnostics%write_gs = write_gs
+      gnostics%save_for_restart = save_for_restart
+      gnostics%save_distfn = save_distfn
 
     end if
 
@@ -440,6 +490,16 @@ contains
     call broadcast (gnostics%write_correlation_extend)
     call broadcast (gnostics%write_jext)
     call broadcast (gnostics%write_lorentzian)
+    call broadcast (gnostics%write_eigenfunc)
+    call broadcast (gnostics%write_final_fields)
+    call broadcast (gnostics%write_kpar)
+    call broadcast (gnostics%write_final_epar)
+    call broadcast (gnostics%write_final_db)
+    call broadcast (gnostics%write_final_moments)
+    call broadcast (gnostics%write_final_antot)
+    call broadcast (gnostics%write_gs)
+    call broadcast (gnostics%save_for_restart)
+    call broadcast (gnostics%save_distfn)
 
 
 

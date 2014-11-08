@@ -97,6 +97,26 @@ input_variables_for_diagnostics_config = [
 	['logical', 'write_jext', '.false.'],
 	['logical', 'write_lorentzian', '.false.'],
 
+  # Parameters controlling some old routines which dump
+  # stuff to text files at the end of the simulation
+	['logical', 'write_eigenfunc', '.false.'],
+	['logical', 'write_final_fields', '.false.'],
+	['logical', 'write_kpar', '.false.'],
+	['logical', 'write_final_epar', '.false.'],
+	['logical', 'write_final_db', '.false.'],
+	['logical', 'write_final_moments', '.false.'],
+	['logical', 'write_final_antot', '.false.'],
+	['logical', 'write_gs', '.false.'],
+
+  # Save the current state of the simulation so 
+  # that it can be restarted
+	['logical', 'save_for_restart', '.true.'],
+
+  # Save the distribution function
+	['logical', 'save_distfn', '.false.'],
+
+
+
 
 
 ]
