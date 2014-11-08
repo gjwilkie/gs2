@@ -81,8 +81,12 @@ program test_gs2_diagnostics_new
     variables(15) = 'omegaavg'
     new_variables(15) = 'omega_average'
     n_lines(15) = '4'
+    
+    variables(16) = 'ntot00'
+    new_variables(16) = 'ntot_flxsurf_avg'
+    n_lines(16) = '20'
 
-    n_vars = 15
+    n_vars = 16
 
 
     file_names(1) = 'heat'
@@ -97,8 +101,10 @@ program test_gs2_diagnostics_new
     n_lines_files(5) = '16'
     file_names(6) = 'jext'
     n_lines_files(6) = '16'
+    file_names(7) = 'parity'
+    n_lines_files(7) = '34'
 
-    n_file_names = 5
+    n_file_names = 7
 
     call init_mp
 

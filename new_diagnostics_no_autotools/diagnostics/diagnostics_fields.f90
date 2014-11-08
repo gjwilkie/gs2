@@ -63,6 +63,45 @@ contains
 
   end subroutine write_standard_field_properties
 
+  !> Dump the fields to a time-labelled ascii file:
+  !! suggestion... use the netcdf file with 
+  !! write_phi_over_time etc on instead :-)
+  subroutine dump_fields_periodically(gnostics)
+    use file_utils, only: get_unused_unit
+    use kt_grids, only: naky, ntheta0, aky, theta0, akx
+    use theta_grid, only: theta
+    use fields_arrays, only: phinew, aparnew, bparnew
+    implicit none
+    type(diagnostics_type), intent(in) :: gnostics
+    real :: t
+    character(200) :: filename
+    integer :: ik, it, ig, unit
+    integer :: ntg_out 
+
+    ! EGH I'm pretty sure that there is no difference
+    ! between ntg_out and ntgrid in the old diagnostics 
+    ! module... anyone disagree?
+    ntg_out = ntgrid
+
+    t = gnostics%user_time
+
+    call get_unused_unit (unit)
+    write (filename, "('dump.fields.t=',e13.6)") t
+    open (unit=unit, file=filename, status="unknown")
+    do ik = 1, naky
+       do it = 1, ntheta0
+          do ig = -ntg_out, ntg_out
+             write (unit=unit, fmt="(20(1x,e12.5))") &
+                  theta(ig), aky(ik), theta0(it,ik), &
+                  phinew(ig,it,ik), aparnew(ig,it,ik), &
+                  bparnew(ig,it,ik), t, akx(it)
+          end do
+          write (unit, "()")
+       end do
+    end do
+    close (unit=unit)
+  end subroutine dump_fields_periodically
+
   subroutine create_and_write_field_by_mode(gnostics, field_name, field_description, field_units, &
       val, field2_by_mode, distributed)
    use fields_parallelization, only: field_k_local

@@ -116,7 +116,7 @@ contains
       !if (gnostics%write_movie) call create_dimensions_movie
     end if
     if (gnostics%write_ascii) then 
-      call set_ascii_file_switches
+      if (proc0) call set_ascii_file_switches
       if (proc0) call init_diagnostics_ascii(gnostics%ascii_files)
     end if
 
@@ -141,13 +141,21 @@ contains
     end if
   end subroutine check_parameters
 
+  !> This subroutine determines which ascii output files are enabled
+  !! ... i.e., opened, flushed at each write, and then closed
+  !! If an ascii file is not enabled here, writing to it will 
+  !! cause some indeterminate unpleasant behaviour
   subroutine set_ascii_file_switches
+    gnostics%ascii_files%write_to_out   = .true.
     gnostics%ascii_files%write_to_fields   = gnostics%write_fields
     gnostics%ascii_files%write_to_heat     = gnostics%write_heating
     gnostics%ascii_files%write_to_heat2    = gnostics%write_heating
     gnostics%ascii_files%write_to_lpc    = gnostics%write_verr
     gnostics%ascii_files%write_to_vres    = gnostics%write_verr
     gnostics%ascii_files%write_to_vres2    = gnostics%write_verr
+    gnostics%ascii_files%write_to_phase    = gnostics%write_cross_phase
+    gnostics%ascii_files%write_to_jext    = gnostics%write_jext
+    gnostics%ascii_files%write_to_parity    = gnostics%write_parity
     !write (*,*) 'gnostics%ascii_files%write_to_heat2', gnostics%ascii_files%write_to_heat2
   end subroutine set_ascii_file_switches
 
@@ -205,16 +213,19 @@ contains
     use mp, only: proc0
     use diagnostics_printout, only: print_flux_line, print_line
     use diagnostics_printout, only: write_flux_line, write_line
-    use diagnostics_fluxes, only: calculate_fluxes, write_symmetry
+    use diagnostics_fluxes, only: calculate_fluxes, write_symmetry, write_parity
     use diagnostics_fields, only: write_fields, write_movie
-    use diagnostics_moments, only: write_moments
+    use diagnostics_fields, only: dump_fields_periodically
+    use diagnostics_moments, only: write_moments, write_full_moments_notgc
     use diagnostics_omega, only: calculate_omega, write_omega
     use diagnostics_velocity_space, only: write_velocity_space_checks
     use diagnostics_heating, only: calculate_heating, write_heating
     use diagnostics_geometry, only: write_geometry
     use diagnostics_nonlinear_convergence, only: check_nonlin_convergence
-    use diagnostics_turbulence, only: write_cross_phase
+    use diagnostics_turbulence, only: write_cross_phase, write_correlation
+    use diagnostics_turbulence, only: write_correlation_extend
     use diagnostics_antenna, only: write_jext, write_lorentzian
+    use diagnostics_ascii, only: flush_output_files
     use collisions, only: vary_vnew
     use nonlinear_terms, only: nonlin
     use species, only: spec, has_electron_species, nspec
@@ -272,17 +283,22 @@ contains
       if (gnostics%print_line) call print_line(gnostics)
       if (gnostics%write_line) call write_line(gnostics)
       if (gnostics%write_fields) call write_fields(gnostics)
+      if (gnostics%dump_fields_periodically) call dump_fields_periodically(gnostics)
       if (gnostics%calculate_fluxes) call calculate_fluxes(gnostics)
       if (gnostics%write_symmetry) call write_symmetry(gnostics)
+      if (gnostics%write_parity) call write_parity(gnostics)
       if (gnostics%print_flux_line) call print_flux_line(gnostics)
       if (gnostics%write_flux_line) call write_flux_line(gnostics)
       if (gnostics%write_verr) call write_velocity_space_checks(gnostics)
       if (gnostics%write_moments) call write_moments(gnostics)
+      if (gnostics%write_full_moments_notgc) call write_full_moments_notgc(gnostics)
       if (gnostics%write_movie) call write_movie(gnostics)
       if (gnostics%write_heating) call write_heating(gnostics)
       if (nonlin.and.gnostics%use_nonlin_convergence) call check_nonlin_convergence(gnostics)
       if (gnostics%write_cross_phase.and.has_electron_species(spec)) call write_cross_phase(gnostics)
       if (gnostics%write_jext) call write_jext(gnostics)
+      if (gnostics%write_correlation) call write_correlation(gnostics)
+      if (gnostics%write_correlation_extend) call write_correlation_extend(gnostics)
       if (gnostics%write_lorentzian) call write_lorentzian(gnostics)
 !
       call run_diagnostics_to_be_updated
@@ -292,6 +308,7 @@ contains
          "Values of the time coordinate", "a/v_thr", user_time) 
       if (gnostics%wryte) call increment_start(gnostics%sfile, "t")
       if (gnostics%wryte) call syncfile(gnostics%sfile)
+      if (proc0 .and. gnostics%write_ascii) call flush_output_files(gnostics%ascii_files)
 
       ! Update time used for time averages
       gnostics%user_time_old = gnostics%user_time
@@ -309,7 +326,7 @@ contains
 
 
   subroutine create_dimensions
-    use kt_grids, only: naky, ntheta0, nx, ny
+    use kt_grids, only: naky, ntheta0, nx, ny, jtwist_out
     use theta_grid, only: ntgrid
     use le_grids, only: negrid, nlambda
     use species, only: nspec
@@ -323,13 +340,19 @@ contains
 
     call add_dimension(gnostics%sfile, "X", ntheta0, "The kx dimension", "")
     call add_dimension(gnostics%sfile, "Y", naky, "The ky dimension", "")
+
     call add_dimension(gnostics%sfile, "z", 2*ntgrid+1, "The theta (parallel) dimension", "")
     call add_dimension(gnostics%sfile, "e", negrid, "", "")
     call add_dimension(gnostics%sfile, "l", nlambda, "", "")
-    call add_dimension(gnostics%sfile, "v", negrid*nlambda, "For writing functions of vparallel", "")
     call add_dimension(gnostics%sfile, "s", nspec, "", "")
     call add_dimension(gnostics%sfile, "r", 2, "Real and imaginary parts", "")
     call add_dimension(gnostics%sfile, "t", SDATIO_UNLIMITED, "", "")
+
+
+    ! Some specialised dimensions for specific cases
+    call add_dimension(gnostics%sfile, "v", negrid*nlambda, "For writing functions of vparallel", "")
+    call add_dimension(gnostics%sfile, "j", (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1), &
+      "The theta (parallel) dimension along the extended domain", "")
 
     ! A set of generic dimensions for writing arrays of data 
     ! which are grouped together for convenience like the 

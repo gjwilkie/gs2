@@ -20,16 +20,16 @@ module diagnostics_ascii
    integer :: vres2
    integer :: parity
    integer :: jext
-   logical :: write_to_out 
-   logical :: write_to_fields 
-   logical :: write_to_phase 
-   logical :: write_to_heat 
-   logical :: write_to_heat2 
-   logical :: write_to_vres 
-   logical :: write_to_lpc 
-   logical :: write_to_vres2 
-   logical :: write_to_parity 
-   logical :: write_to_jext 
+   logical :: write_to_out = .false.
+   logical :: write_to_fields = .false.
+   logical :: write_to_phase = .false.
+   logical :: write_to_heat = .false.
+   logical :: write_to_heat2 = .false.
+   logical :: write_to_vres = .false.
+   logical :: write_to_lpc = .false.
+   logical :: write_to_vres2 = .false.
+   logical :: write_to_parity = .false.
+   logical :: write_to_jext = .false.
   end type diagnostics_ascii_type
 
 
@@ -37,7 +37,7 @@ module diagnostics_ascii
 contains
   subroutine init_diagnostics_ascii(ascii_files)
     use file_utils, only: open_output_file
-    type(diagnostics_ascii_type), intent(out) :: ascii_files
+    type(diagnostics_ascii_type), intent(inout) :: ascii_files
     if (ascii_files%write_to_out   ) call open_output_file(ascii_files%out, '.new.out')
     if (ascii_files%write_to_fields) call open_output_file(ascii_files%fields, '.new.fields')
     if (ascii_files%write_to_phase ) call open_output_file(ascii_files%phase, '.new.phase')
@@ -52,7 +52,7 @@ contains
 
   subroutine finish_diagnostics_ascii(ascii_files)
     use file_utils, only: close_output_file
-    type(diagnostics_ascii_type), intent(out) :: ascii_files
+    type(diagnostics_ascii_type), intent(in) :: ascii_files
     if (ascii_files%write_to_out   ) call close_output_file(ascii_files%out)
     if (ascii_files%write_to_fields) call close_output_file(ascii_files%fields)
     if (ascii_files%write_to_phase ) call close_output_file(ascii_files%phase)
@@ -64,6 +64,21 @@ contains
     if (ascii_files%write_to_parity) call close_output_file(ascii_files%parity)
     if (ascii_files%write_to_jext  ) call close_output_file(ascii_files%jext)
   end subroutine finish_diagnostics_ascii
+
+  subroutine flush_output_files(ascii_files)
+    use file_utils, only: flush_output_file
+    type(diagnostics_ascii_type), intent(in) :: ascii_files
+    if (ascii_files%write_to_out   ) call flush_output_file(ascii_files%out)
+    if (ascii_files%write_to_fields) call flush_output_file(ascii_files%fields)
+    if (ascii_files%write_to_phase ) call flush_output_file(ascii_files%phase)
+    if (ascii_files%write_to_heat  ) call flush_output_file(ascii_files%heat)
+    if (ascii_files%write_to_heat2 ) call flush_output_file(ascii_files%heat2)
+    if (ascii_files%write_to_vres  ) call flush_output_file(ascii_files%vres)
+    if (ascii_files%write_to_lpc   ) call flush_output_file(ascii_files%lpc)
+    if (ascii_files%write_to_vres2 ) call flush_output_file(ascii_files%vres2)
+    if (ascii_files%write_to_parity) call flush_output_file(ascii_files%parity)
+    if (ascii_files%write_to_jext  ) call flush_output_file(ascii_files%jext)
+  end subroutine flush_output_files
 
 end module diagnostics_ascii
 
