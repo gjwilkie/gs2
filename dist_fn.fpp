@@ -1060,33 +1060,38 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: vpa, vpar, vpac, vperp2
     use species, only: spec
     use theta_grid, only: ntgrid, delthet, bmag, gradpar
-    use le_grids, only: energy, al
+    use le_grids, only: energy, al, nlambda, negrid
     use run_parameters, only: tunits
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx
     implicit none
-    integer :: iglo, ik, is
+    integer :: iglo, ik, is, il, ie
     real :: al1, e1
     
     if (.not.allocated(vpa)) then
-       allocate (vpa    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (vpac   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (vperp2 (-ntgrid:ntgrid,  g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (vpar   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       !If lambda/energy are split nicely can just allocate this procs small block of it here
+       allocate (vpa    (-ntgrid:ntgrid,2,g_lo%llim_il:g_lo%ulim_il,g_lo%llim_ie:g_lo%ulim_ie))
+       allocate (vpac   (-ntgrid:ntgrid,2,g_lo%llim_il:g_lo%ulim_il,g_lo%llim_ie:g_lo%ulim_ie))
+       allocate (vperp2 (-ntgrid:ntgrid,g_lo%llim_il:g_lo%ulim_il,g_lo%llim_ie:g_lo%ulim_ie))
     endif
     vpa = 0. ; vpac = 0. ; vperp2 = 0. ; vpar = 0.
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       al1 = al(il_idx(g_lo,iglo))
-       e1 = energy(ie_idx(g_lo,iglo))
 
-       vpa(:,1,iglo) = sqrt(e1*max(0.0, 1.0 - al1*bmag))
-       vpa(:,2,iglo) = - vpa(:,1,iglo)
-       vperp2(:,iglo) = bmag*al1*e1
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+
+       al1 = al(il)
+       e1 = energy(ie)
+
+       vpa(:,1,il,ie) = sqrt(e1*max(0.0, 1.0 - al1*bmag))
+       vpa(:,2,il,ie) = - vpa(:,1,il,ie)
+       vperp2(:,il,ie) = bmag*al1*e1
 
        where (1.0 - al1*bmag < 100.0*epsilon(0.0))
-          vpa(:,1,iglo) = 0.0
-          vpa(:,2,iglo) = 0.0
+          vpa(:,1,il,ie) = 0.0
+          vpa(:,2,il,ie) = 0.0
        end where
 
 ! Where vpac /= 1, it could be weighted by bakdif for better consistency??
@@ -1104,32 +1109,32 @@ subroutine check_dist_fn(report_unit)
 !CMR 
 
        where (1.0 - al1*0.5*(bmag(-ntgrid:ntgrid-1)+bmag(-ntgrid+1:ntgrid)) &
-              < 0.0)
-          vpac(-ntgrid:ntgrid-1,1,iglo) = 1.0
-          vpac(-ntgrid:ntgrid-1,2,iglo) = -1.0
+            < 0.0)
+          vpac(-ntgrid:ntgrid-1,1,il,ie) = 1.0
+          vpac(-ntgrid:ntgrid-1,2,il,ie) = -1.0
        elsewhere
-          vpac(-ntgrid:ntgrid-1,1,iglo) = &
-              0.5*(vpa(-ntgrid:ntgrid-1,1,iglo) + vpa(-ntgrid+1:ntgrid,1,iglo))
-          vpac(-ntgrid:ntgrid-1,2,iglo) = &
-              0.5*(vpa(-ntgrid:ntgrid-1,2,iglo) + vpa(-ntgrid+1:ntgrid,2,iglo))
+          vpac(-ntgrid:ntgrid-1,1,il,ie) = &
+               0.5*(vpa(-ntgrid:ntgrid-1,1,il,ie) + vpa(-ntgrid+1:ntgrid,1,il,ie))
+          vpac(-ntgrid:ntgrid-1,2,il,ie) = &
+               0.5*(vpa(-ntgrid:ntgrid-1,2,il,ie) + vpa(-ntgrid+1:ntgrid,2,il,ie))
        end where
-       vpac(ntgrid,:,iglo) = 0.0
+       vpac(ntgrid,:,il,ie) = 0.0
 
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+
        vpar(-ntgrid:ntgrid-1,1,iglo) = &
             spec(is)%zstm*tunits(ik)*code_dt &
             *0.5/delthet(-ntgrid:ntgrid-1) &
             *(abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid)))&
-            *vpac(-ntgrid:ntgrid-1,1,iglo)
+            *vpac(-ntgrid:ntgrid-1,1,il,ie)
        vpar(-ntgrid:ntgrid-1,2,iglo) = &
             spec(is)%zstm*tunits(ik)*code_dt &
             *0.5/delthet(-ntgrid:ntgrid-1) &
             *(abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid)))&
-            *vpac(-ntgrid:ntgrid-1,2,iglo)
+            *vpac(-ntgrid:ntgrid-1,2,il,ie)
        vpar(ntgrid,:,iglo) = 0.0
     end do
-
   end subroutine init_vpar
 
   subroutine init_wstar
@@ -1354,18 +1359,18 @@ endif
              !Phi p
              source_coeffs(2,ig,isgn,iglo)=-zi*anon(ie)*wdfac(ig,isgn,iglo) &
               + zi*(wstarfac(ig,isgn,iglo) &
-              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm)
+              + vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*ufac(ie,is) &
+              -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm)
              if(fapar.gt.0)then
                 !Apar m
                 source_coeffs(3,ig,isgn,iglo)=-spec(is)%zstm*anon(ie)*&
-                     vpac(ig,isgn,iglo)*(aj0(ig+1,iglo)+aj0(ig,iglo))*0.5
+                     vpac(ig,isgn,il,ie)*(aj0(ig+1,iglo)+aj0(ig,iglo))*0.5
                 !Apar p
                 source_coeffs(4,ig,isgn,iglo)=anon(ie)*D_res(it,ik)*spec(is)%zstm*&
-                     vpac(ig,isgn,iglo)-spec(is)%stm*vpac(ig,isgn,iglo)*&
+                     vpac(ig,isgn,il,ie)-spec(is)%stm*vpac(ig,isgn,il,ie)*&
                      zi*(wstarfac(ig,isgn,iglo) &
-                     + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-                     -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) 
+                     + vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*ufac(ie,is) &
+                     -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) 
              endif
 #else
 
@@ -1374,18 +1379,18 @@ endif
              !Phi p
              source_coeffs(2,ig,isgn,iglo)=-zi*anon(ie)*wdrift(ig,isgn,iglo) &
               + zi*(wstar(ik,ie,is) &
-              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm)
+              + vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*ufac(ie,is) &
+              -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm)
              if(fapar.gt.0)then
                 !Apar m
                 source_coeffs(3,ig,isgn,iglo)=-spec(is)%zstm*anon(ie)*&
-                     vpac(ig,isgn,iglo)*(aj0(ig+1,iglo)+aj0(ig,iglo))*0.5
+                     vpac(ig,isgn,il,ie)*(aj0(ig+1,iglo)+aj0(ig,iglo))*0.5
                 !Apar p
                 source_coeffs(4,ig,isgn,iglo)=anon(ie)*D_res(it,ik)*spec(is)%zstm*&
-                     vpac(ig,isgn,iglo)-spec(is)%stm*vpac(ig,isgn,iglo)*&
+                     vpac(ig,isgn,il,ie)-spec(is)%stm*vpac(ig,isgn,il,ie)*&
                      zi*(wstar(ik,ie,is) &
-                     + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-                     -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) 
+                     + vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*ufac(ie,is) &
+                     -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) 
              endif
 #endif
           enddo
@@ -4170,7 +4175,7 @@ endif
     phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
                 *aj0(:,iglo)*fphi &
              + (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
-                *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
+                *aj1(:,iglo)*fbpar*2.0*vperp2(:,il,ie)*spec(is)%tz
     apargavg = (fexp(is)*apar(:,it,ik)  + (1.0-fexp(is))*aparnew(:,it,ik)) &
                 *aj0(:,iglo)*fapar
 
@@ -4383,24 +4388,24 @@ endif
 !
 #ifdef LOWFLOW
          source(ig) = anon(ie)*(vparterm(ig,isgn,iglo)*phi_m &
-              -spec(is)%zstm*vpac(ig,isgn,iglo) &
+              -spec(is)%zstm*vpac(ig,isgn,il,ie) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
               -zi*wdfac(ig,isgn,iglo)*phi_p) &
               + zi*(wstarfac(ig,isgn,iglo) &
-              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
-              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
+              + vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*ufac(ie,is) &
+              -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
+              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,il,ie))
 #else
          source(ig) = anon(ie)*(-2.0*vpar(ig,isgn,iglo)*phi_m &
-              -spec(is)%zstm*vpac(ig,isgn,iglo) &
+              -spec(is)%zstm*vpac(ig,isgn,il,ie) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
               -zi*wdrift(ig,isgn,iglo)*phi_p) &
               + zi*(wstar(ik,ie,is) &
-              + vpac(ig,isgn,iglo)*code_dt*wunits(ik)*ufac(ie,is) &
-              -2.0*omprimfac*vpac(ig,isgn,iglo)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
-              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,iglo))
+              + vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*ufac(ie,is) &
+              -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
+              *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,il,ie))
 #endif
       end do
 
@@ -4490,7 +4495,7 @@ endif
     if(fbpar.gt.0)then
        phigavg=phigavg+&
             (fexp(is)*bpar(:,it,ik) + (1.0-fexp(is))*bparnew(:,it,ik))&
-            *aj1(:,iglo)*fbpar*2.0*vperp2(:,iglo)*spec(is)%tz
+            *aj1(:,iglo)*fbpar*2.0*vperp2(:,il,ie)*spec(is)%tz
     endif
 
     if(fapar.gt.0)then
@@ -4762,7 +4767,7 @@ endif
           !Only apply the new boundary condition to the leftmost
           !cell for sign going from left to right
           if (l_links(ik,it) .eq. 0) then
-             adjleft = anon(ie)*2.0*vperp2(-ntgrid,iglo)*aj1(-ntgrid,iglo) &
+             adjleft = anon(ie)*2.0*vperp2(-ntgrid,il,ie)*aj1(-ntgrid,iglo) &
                   *bparnew(-ntgrid,it,ik)*fbpar &
                   + spec(is)%z*anon(ie)*phinew(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
                   /spec(is)%temp*fphi
@@ -4771,7 +4776,7 @@ endif
           !Only apply the new boundary condition to the rightmost
           !cell for sign going from right to left
           if (r_links(ik,it) .eq. 0) then
-             adjright = anon(ie)*2.0*vperp2(ntgrid,iglo)*aj1(ntgrid,iglo) &
+             adjright = anon(ie)*2.0*vperp2(ntgrid,il,ie)*aj1(ntgrid,iglo) &
                   *bparnew(ntgrid,it,ik)*fbpar &
                   + spec(is)%z*anon(ie)*phinew(ntgrid,it,ik)*aj0(ntgrid,iglo) &
                   /spec(is)%temp*fphi
@@ -5001,11 +5006,11 @@ endif
     complex :: adjl, adjr, dadj
 
       if (il .eq. ng2+1) then 
-         adjl = anon(ie)*2.0*vperp2(ntgl,iglo)*aj1(ntgl,iglo) &
+         adjl = anon(ie)*2.0*vperp2(ntgl,il,ie)*aj1(ntgl,iglo) &
               *bparnew(ntgl,it,ik)*fbpar &
               + spec(is)%z*anon(ie)*phinew(ntgl,it,ik)*aj0(ntgl,iglo) &
               /spec(is)%temp*fphi
-         adjr = anon(ie)*2.0*vperp2(ntgr,iglo)*aj1(ntgr,iglo) &
+         adjr = anon(ie)*2.0*vperp2(ntgr,il,ie)*aj1(ntgr,iglo) &
               *bparnew(ntgr,it,ik)*fbpar &
               + spec(is)%z*anon(ie)*phinew(ntgr,it,ik)*aj0(ntgr,iglo) &
               /spec(is)%temp*fphi
@@ -5338,12 +5343,12 @@ endif
     use le_grids, only: integrate_species
     use run_parameters, only: beta, fphi, fapar, fbpar
     use prof, only: prof_entering, prof_leaving
-    use gs2_layouts, only: g_lo
+    use gs2_layouts, only: g_lo, il_idx, ie_idx
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (out) :: antot, antota, antotp
     real, dimension (nspec) :: wgt
 
-    integer :: isgn, iglo, ig
+    integer :: isgn, iglo, ig, il, ie
 
     call prof_entering ("getan", "dist_fn")
 
@@ -5375,9 +5380,11 @@ endif
 
     if (fapar > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,iglo)*gnew(ig,isgn,iglo)
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,il,ie)*gnew(ig,isgn,iglo)
              end do
           end do
        end do
@@ -5392,9 +5399,11 @@ endif
 
     if (fbpar > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          il=il_idx(g_lo,iglo)
+          ie=ie_idx(g_lo,iglo)
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
-                g0(ig,isgn,iglo) = aj1(ig,iglo)*vperp2(ig,iglo)*gnew(ig,isgn,iglo)
+                g0(ig,isgn,iglo) = aj1(ig,iglo)*vperp2(ig,il,ie)*gnew(ig,isgn,iglo)
              end do
           end do
        end do
@@ -5411,7 +5420,7 @@ endif
 
   subroutine getmoms (phinew,bparnew,ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew, g_adjust
-    use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
+    use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx, il_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use le_grids, only: integrate_moment, anon, energy
@@ -5423,7 +5432,7 @@ endif
          upar, tpar, tperp, ntot, qparflux, pperpj1, qpperpj1
     complex, dimension (-ntgrid:,:,:), intent(in) :: phinew, bparnew
 
-    integer :: ik, it, isgn, ie, is, iglo
+    integer :: ik, it, isgn, ie, is, iglo, il
 
 ! returns moment integrals to PE 0
     call prof_entering ("getmoms", "dist_fn")
@@ -5461,10 +5470,18 @@ endif
 ! (nb adiabatic part of <delta f> does not contribute to upar, tpar or tperp)
 ! NB UPAR is normalised to vt_s = sqrt(T_s/m_s) vt_ref
 !    ie multiply by spec(is)%stm * vt_ref to get abs upar
-    g0 = vpa*g0
+    do iglo=g_lo%llim_proc,g_lo%ulim_proc
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       g0(:,:,iglo) = vpa(:,:,il,ie)*g0(:,:,iglo)
+    enddo
     call integrate_moment (g0, upar)
 
-    g0 = 2.*vpa*g0
+    do iglo=g_lo%llim_proc,g_lo%ulim_proc
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       g0(:,:,iglo) = 2.*vpa(:,:,il,ie)*g0(:,:,iglo)
+    enddo
     call integrate_moment (g0, tpar)
 ! tpar transiently stores ppar, nonadiabatic perturbed par pressure 
 !      vpa normalised to: sqrt(2 T_s T_ref/m_s m_ref)
@@ -5473,8 +5490,10 @@ endif
 !                         ppar = tpar + density, and so:
     tpar = tpar - density
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       il=il_idx(g_lo,iglo)
+       ie=ie_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = vperp2(:,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)
+          g0(:,isgn,iglo) = vperp2(:,il,ie)*gnew(:,isgn,iglo)*aj0(:,iglo)
        end do
     end do
     call integrate_moment (g0, tperp)
@@ -5488,8 +5507,10 @@ endif
 ! NB QPARFLUX is normalised to n_s n_ref T_s T_ref v_ts
 !    ie multiply by (n_s T_s spec(is)%stm) n_ref T_ref vt_ref to get abs qparflux
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = vpa(:,isgn,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)*energy(ie_idx(g_lo,iglo))
+          g0(:,isgn,iglo) = vpa(:,isgn,il,ie)*gnew(:,isgn,iglo)*aj0(:,iglo)*energy(ie)
        end do
     end do 
     call integrate_moment (g0, qparflux)
@@ -5499,9 +5520,11 @@ endif
 !    ie multiply by (n_s spec(is)%tz) n_ref T_ref/q_ref to get abs PPERPJ1
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        is = is_idx(g_lo,iglo)
+       il=il_idx(g_lo,iglo)
+       ie=ie_idx(g_lo,iglo)
        do isgn = 1, 2
           g0(:,isgn,iglo) &
-               = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz
+               = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,il,ie)*spec(is)%tz
        end do
     end do
     call integrate_moment (g0, pperpj1)
@@ -5550,7 +5573,7 @@ endif
 
   subroutine getemoms (phinew, bparnew, ntot, tperp)
     use dist_fn_arrays, only: vperp2, aj0, gnew, g_adjust
-    use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
+    use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx, il_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use le_grids, only: integrate_moment, anon
@@ -5561,7 +5584,7 @@ endif
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: tperp, ntot
     complex, dimension (-ntgrid:,:,:), intent(in) :: phinew, bparnew
 
-    integer :: ik, it, isgn, ie, is, iglo
+    integer :: ik, it, isgn, ie, is, iglo, il
 
 ! returns electron density and Tperp moment integrals to PE 0
     call prof_entering ("getemoms", "dist_fn")
@@ -5612,8 +5635,9 @@ endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc       
        ie = ie_idx(g_lo,iglo) ; is = is_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo) ; it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)*vperp2(:,iglo) - anon(ie)*phinew(:,it,ik)*spec(is)%zt*vperp2(:,iglo)
+          g0(:,isgn,iglo) = aj0(:,iglo)*gnew(:,isgn,iglo)*vperp2(:,il,ie) - anon(ie)*phinew(:,it,ik)*spec(is)%zt*vperp2(:,il,ie)
        end do
     end do
 
@@ -5638,7 +5662,7 @@ endif
   ! moment at not guiding center coordinate
   subroutine getmoms_notgc (phinew, bparnew, dens, upar, tpar, tper, ntot, jpar)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
-    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx
+    use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use kt_grids, only: nakx => ntheta0, naky
@@ -5655,7 +5679,7 @@ endif
     integer :: isgn, iglo, is
 
     real :: a, b, tpar2, tper2
-    integer :: it, ik, ig
+    integer :: it, ik, ig, il, ie
 
 ! returns moment integrals to PE 0
 
@@ -5675,7 +5699,7 @@ endif
           end do
           do isgn = 1, 2
              g0(:,isgn,iglo) = g0(:,isgn,iglo) &
-                  & + 2.*vperp2(:,iglo)*aj1(:,iglo)*aj0(:,iglo) &
+                  & + 2.*vperp2(:,il,ie)*aj1(:,iglo)*aj0(:,iglo) &
                   & * bparnew(:,it,ik)
           end do
        end do
@@ -5693,8 +5717,10 @@ endif
 
 ! not guiding center upar
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
+          g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,il,ie)*gnew(:,isgn,iglo)
        end do
     end do
 
@@ -5702,8 +5728,10 @@ endif
 
 ! not guiding center tpar
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = 2.*aj0(:,iglo)*vpa(:,isgn,iglo)**2*gnew(:,isgn,iglo)
+          g0(:,isgn,iglo) = 2.*aj0(:,iglo)*vpa(:,isgn,il,ie)**2*gnew(:,isgn,iglo)
        end do
     end do
 
@@ -5712,7 +5740,7 @@ endif
 ! not guiding center tperp
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
-          g0(:,isgn,iglo) = 2.*vperp2(:,iglo)*aj1(:,iglo)*gnew(:,isgn,iglo)
+          g0(:,isgn,iglo) = 2.*vperp2(:,il,ie)*aj1(:,iglo)*gnew(:,isgn,iglo)
        end do
     end do
 
@@ -5758,11 +5786,11 @@ endif
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, aky, kperp2
     use le_grids, only: anon, integrate_species
-    use gs2_layouts, only: g_lo, ie_idx, is_idx
+    use gs2_layouts, only: g_lo, ie_idx, is_idx, il_idx
     use run_parameters, only: tite
     implicit none
     integer :: iglo, isgn
-    integer :: ik, it, ie, is
+    integer :: ik, it, ie, is, il
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: tot
     real, dimension (nspec) :: wgt
 
@@ -5811,9 +5839,10 @@ endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
        do isgn = 1, 2
           g0(:,isgn,iglo) = aj0(:,iglo)*aj1(:,iglo) &
-               *2.0*vperp2(:,iglo)*anon(ie)
+               *2.0*vperp2(:,il,ie)*anon(ie)
        end do
     end do
     wgt = spec%z*spec%dens
@@ -5823,8 +5852,9 @@ endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj1(:,iglo)**2*2.0*vperp2(:,iglo)**2*anon(ie)
+          g0(:,isgn,iglo) = aj1(:,iglo)**2*2.0*vperp2(:,il,ie)**2*anon(ie)
        end do
     end do
     wgt = spec%temp*spec%dens
@@ -6052,14 +6082,14 @@ endif
     use theta_grid, only: ntgrid
     use le_grids, only: integrate_species
     use run_parameters, only: beta, fphi, fapar, fbpar
-    use gs2_layouts, only: g_lo, it_idx,ik_idx
+    use gs2_layouts, only: g_lo, it_idx, ik_idx, il_idx, ie_idx
     use kt_grids, only: kwork_filter, kperp2
 
     implicit none
 
     complex, dimension (-ntgrid:,:,:), intent (out) :: antot, antota, antotp
     real, dimension (nspec) :: wgt
-    integer :: isgn, iglo, it,ik
+    integer :: isgn, iglo, it, ik, il, ie
 
     if (fphi > epsilon(0.0)) then
        !<DD>NOTE: It's possible to rewrite this loop as simply
@@ -6097,14 +6127,18 @@ endif
              it=it_idx(g_lo,iglo)
              ik=ik_idx(g_lo,iglo)
              if(kwork_filter(it,ik))cycle
+             il = il_idx(g_lo,iglo)
+             ie = ie_idx(g_lo,iglo)
              do isgn = 1, 2
-                   g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
+                   g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,il,ie)*gnew(:,isgn,iglo)
              end do
           end do
        else
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             il = il_idx(g_lo,iglo)
+             ie = ie_idx(g_lo,iglo)
              do isgn = 1, 2
-                   g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo)
+                   g0(:,isgn,iglo) = aj0(:,iglo)*vpa(:,isgn,il,ie)*gnew(:,isgn,iglo)
              end do
           end do
        endif
@@ -6122,13 +6156,13 @@ endif
              ik=ik_idx(g_lo,iglo)
              if(kwork_filter(it,ik))cycle
              do isgn = 1, 2
-                   g0(:,isgn,iglo) = aj1(:,iglo)*vperp2(:,iglo)*gnew(:,isgn,iglo)
+                   g0(:,isgn,iglo) = aj1(:,iglo)*vperp2(:,il,ie)*gnew(:,isgn,iglo)
              end do
           end do
        else
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              do isgn = 1, 2
-                   g0(:,isgn,iglo) = aj1(:,iglo)*vperp2(:,iglo)*gnew(:,isgn,iglo)
+                   g0(:,isgn,iglo) = aj1(:,iglo)*vperp2(:,il,ie)*gnew(:,isgn,iglo)
              end do
           end do
        endif
@@ -6232,7 +6266,7 @@ endif
 !    use kt_grids, only: akx
     use le_grids, only: energy
     use dist_fn_arrays, only: gnew, aj0, vpac, vpa, aj1, vperp2
-    use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
+    use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx, il_idx
     use run_parameters, only: woutunits, fphi, fapar, fbpar
     use constants, only: zi
     use geometry, only: rhoc!Should this not be value from theta_grid_params?
@@ -6243,8 +6277,7 @@ endif
     real, dimension (:,:,:), intent (out) :: vflux, vmflux, vbflux, vflux_par, vflux_perp
     real, dimension (:,:,:,:), intent (out) :: qflux, qmflux, qbflux
     real, dimension (:,:,:), allocatable :: dnorm
-    integer :: it, ik, is, isgn, ig
-    integer :: iglo
+    integer :: it, ik, is, isgn, ig, iglo, il, ie
 
     allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
 
@@ -6275,29 +6308,43 @@ endif
        end do
        call get_flux (phi, qflux(:,:,:,1), dnorm)
 
-       do isgn = 1, 2
-          g0(:,isgn,:) = gnew(:,isgn,:)*2.*vpa(:,isgn,:)**2*aj0
-       end do
+       do iglo=g_lo%llim_proc,g_lo%ulim_proc
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          do isgn = 1, 2
+             g0(:,isgn,iglo) = gnew(:,isgn,iglo)*2.*vpa(:,isgn,il,ie)**2*aj0(:,iglo)
+          end do
+       enddo
        call get_flux (phi, qflux(:,:,:,2), dnorm)
 
-       do isgn = 1, 2
-          g0(:,isgn,:) = gnew(:,isgn,:)*vperp2*aj0
-       end do
+       do iglo=g_lo%llim_proc, g_lo%ulim_proc
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          do isgn = 1, 2
+             g0(:,isgn,iglo) = gnew(:,isgn,iglo)*vperp2(:,il,ie)*aj0(:,iglo)
+          end do
+       enddo
        call get_flux (phi, qflux(:,:,:,3), dnorm)
 
-       do isgn = 1, 2
-          do ig = -ntgrid, ntgrid
-             g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)*Rplot(ig)*sqrt(1.0-Bpol(ig)**2/bmag(ig)**2)
+       do iglo=g_lo%llim_proc, g_lo%ulim_proc
+          il=il_idx(g_lo,iglo)          
+          ie=ie_idx(g_lo,iglo)
+          do isgn = 1, 2
+             do ig = -ntgrid, ntgrid
+                g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,il,ie)*Rplot(ig)*sqrt(1.0-Bpol(ig)**2/bmag(ig)**2)
+             end do
           end do
-       end do
+       enddo
        call get_flux (phi, vflux_par, dnorm)
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) = -zi*aky(ik)*gnew(:,isgn,iglo)*aj1(:,iglo) &
-                  *rhoc*(gds21+theta0(it,ik)*gds22)*vperp2(:,iglo)*spec(is)%smz/(qval*shat*bmag**2)
+                  *rhoc*(gds21+theta0(it,ik)*gds22)*vperp2(:,il,ie)*spec(is)%smz/(qval*shat*bmag**2)
 !             g0(:,isgn,iglo) = zi*akx(it)*grho*gnew(:,isgn,iglo)*aj1(:,iglo) &
 !                  *2.0*vperp2(:,iglo)*spec(is)%smz/(bmag**2*drhodpsi)
           end do
@@ -6314,9 +6361,11 @@ endif
     if (fapar > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) &
-                  = -gnew(:,isgn,iglo)*aj0(:,iglo)*spec(is)%stm*vpa(:,isgn,iglo)
+                  = -gnew(:,isgn,iglo)*aj0(:,iglo)*spec(is)%stm*vpa(:,isgn,il,ie)
           end do
        end do
        call get_flux (apar, pmflux, dnorm)
@@ -6328,30 +6377,36 @@ endif
        
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) &
-                  = -gnew(:,isgn,iglo)*aj0(:,iglo)*spec(is)%stm*vpa(:,isgn,iglo) &
-                  *2.*vpa(:,isgn,iglo)**2
+                  = -gnew(:,isgn,iglo)*aj0(:,iglo)*spec(is)%stm*vpa(:,isgn,il,ie) &
+                  *2.*vpa(:,isgn,il,ie)**2
           end do
        end do
        call get_flux (apar, qmflux(:,:,:,2), dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) &
-                  = -gnew(:,isgn,iglo)*aj0(:,iglo)*spec(is)%stm*vpa(:,isgn,iglo) &
-                  *vperp2(:,iglo)
+                  = -gnew(:,isgn,iglo)*aj0(:,iglo)*spec(is)%stm*vpa(:,isgn,il,ie) &
+                  *vperp2(:,il,ie)
           end do
        end do
        call get_flux (apar, qmflux(:,:,:,3), dnorm)
        
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) &
                   = -gnew(:,isgn,iglo)*aj0(:,iglo)*spec(is)%stm &
-                  *vpa(:,isgn,iglo)*vpac(:,isgn,iglo)
+                  *vpa(:,isgn,il,ie)*vpac(:,isgn,il,ie)
           end do
        end do
        call get_flux (apar, vmflux, dnorm)
@@ -6364,9 +6419,11 @@ endif
     if (fbpar > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) &
-                  = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz
+                  = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,il,ie)*spec(is)%tz
           end do
        end do
        call get_flux (bpar, pbflux, dnorm)
@@ -6378,30 +6435,36 @@ endif
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) &
-                  = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz &
-                    *2.*vpa(:,isgn,iglo)**2
+                  = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,il,ie)*spec(is)%tz &
+                    *2.*vpa(:,isgn,il,ie)**2
           end do
        end do
        call get_flux (bpar, qbflux(:,:,:,2), dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) &
-                  = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz &
-                    *vperp2(:,iglo)
+                  = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,il,ie)*spec(is)%tz &
+                    *vperp2(:,il,ie)
           end do
        end do
        call get_flux (bpar, qbflux(:,:,:,3), dnorm)
 
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           is = is_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              g0(:,isgn,iglo) &
-                  = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo) &
-                  *spec(is)%tz*vpac(:,isgn,iglo)
+                  = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,il,ie) &
+                  *spec(is)%tz*vpac(:,isgn,il,ie)
           end do
        end do
        call get_flux (bpar, vbflux, dnorm)
@@ -6566,7 +6629,7 @@ endif
              ! get v_magnetic piece of g0 at cell centers and add in vpar piece at cell centers
              do ig = -ntgrid, ntgrid-1
                 g0(ig,isgn,iglo) = 0.5*(g0(ig,isgn,iglo)+g0(ig+1,isgn,iglo)) &
-                     + 0.5*vpac(ig,isgn,iglo)*(gradpar(ig)+gradpar(ig+1))/delthet(ig) &
+                     + 0.5*vpac(ig,isgn,il,ie)*(gradpar(ig)+gradpar(ig+1))/delthet(ig) &
                      * (gnew(ig+1,isgn,iglo)-gnew(ig,isgn,iglo))*spec(is)%stm
              end do
 
@@ -6632,8 +6695,7 @@ endif
     use theta_grid, only: drhodpsi, IoB
     use kt_grids, only: naky, ntheta0
     use dist_fn_arrays, only: gnew, aj0, vpa
-!    use dist_fn_arrays, only: vpac
-    use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx
+    use gs2_layouts, only: g_lo, ie_idx, is_idx, it_idx, ik_idx, il_idx
     use mp, only: proc0
     use run_parameters, only: woutunits, fphi, rhostar
     use constants, only: zi
@@ -6643,7 +6705,7 @@ endif
     real, dimension (:,:), allocatable :: dum
     real, dimension (:,:,:), allocatable :: dnorm
     complex, dimension (:,:,:), allocatable :: dphi
-    integer :: it, ik, isgn, ig
+    integer :: it, ik, isgn, ig, ie, il
     integer :: iglo
 
     allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
@@ -6669,8 +6731,10 @@ endif
     if (fphi > epsilon(0.0)) then
        ! this is the second term in Pi_0^{tb} in toroidal_flux.pdf notes
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
-             g0(:,isgn,iglo) = -zi*gnew(:,isgn,iglo)*aj0(:,iglo)*vpa(:,isgn,iglo) &
+             g0(:,isgn,iglo) = -zi*gnew(:,isgn,iglo)*aj0(:,iglo)*vpa(:,isgn,il,ie) &
                   *drhodpsi*IoB**2*gradpar*rhostar
           end do
        end do
@@ -6678,23 +6742,14 @@ endif
 
        ! this is the bracketed part of the first term in Pi_0^{tb} in toroidal_flux.pdf notes
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
-             g0(:,isgn,iglo) = 0.5*gnew(:,isgn,iglo)*aj0(:,iglo)*vpa(:,isgn,iglo)**2 &
+             g0(:,isgn,iglo) = 0.5*gnew(:,isgn,iglo)*aj0(:,iglo)*vpa(:,isgn,il,ie)**2 &
                   *drhodpsi*IoB**2*rhostar
           end do
        end do
        call get_flux (phi, vflx1, dnorm)
-
-!        do isgn = 1, 2
-!           do ig = -ntgrid, ntgrid
-!              if (allocated(rmajor_geo)) then
-!                 g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)*rmajor_geo(ig)*sqrt(1.0-bpol_geo(ig)**2/bmag(ig)**2)
-!              else
-!                 g0(ig,isgn,:) = gnew(ig,isgn,:)*aj0(ig,:)*vpac(ig,isgn,:)
-!              end if
-!           end do
-!        end do
-!        call get_flux (phi, vflux_par, dnorm)
     else
        vflx0 = 0. ; vflx1 = 0.
     end if
@@ -6742,7 +6797,7 @@ endif
     use constants, only: zi
     use dist_fn_arrays, only: gnew, vperp2, aj1, aj0, vpac
     use gs2_layouts, only: g_lo
-    use gs2_layouts, only: it_idx, ik_idx, is_idx
+    use gs2_layouts, only: it_idx, ik_idx, is_idx, ie_idx, il_idx
     use geometry, only: rhoc!Should this not be value from theta_grid_params?
     use theta_grid, only: ntgrid, bmag, gds21, gds22, qval, shat
     use theta_grid, only: Rplot, Bpol
@@ -6756,7 +6811,7 @@ endif
     real, dimension (-ntgrid:,:,:), intent (out) :: vflx
     
     integer :: all = 1
-    integer :: iglo, isgn, ig, it, ik, is
+    integer :: iglo, isgn, ig, it, ik, is, il, ie
 
     real, dimension (:,:,:), allocatable :: g0r
     real, dimension (:,:,:,:,:), allocatable :: gavg
@@ -6768,12 +6823,14 @@ endif
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        do isgn = 1, 2
           do ig = -ntgrid, ntgrid
-             g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,iglo) &
+             g0(ig,isgn,iglo) = gnew(ig,isgn,iglo)*aj0(ig,iglo)*vpac(ig,isgn,il,ie) &
                   *Rplot(ig)*sqrt(1.0-Bpol(ig)**2/bmag(ig)**2) &
                   -zi*aky(ik)*gnew(ig,isgn,iglo)*aj1(ig,iglo) &
-                  *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,iglo)*spec(is)%smz/(qval*shat*bmag(ig)**2)
+                  *rhoc*(gds21(ig)+theta0(it,ik)*gds22(ig))*vperp2(ig,il,ie)*spec(is)%smz/(qval*shat*bmag(ig)**2)
              g0r(ig,isgn,iglo) = aimag(g0(ig,isgn,iglo)*conjg(phinew(ig,it,ik)))*aky(ik)
           end do
        end do
@@ -6905,7 +6962,7 @@ endif
 #endif
     use dist_fn_arrays, only: vpac, aj0, aj1, vperp2, g, gnew, g_adjust
     use gs2_heating, only: heating_diagnostics
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, ie_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, ie_idx, il_idx
     use le_grids, only: integrate_moment
     use species, only: spec, nspec,has_electron_species
     use theta_grid, only: jacob, delthet, ntgrid
@@ -6932,7 +6989,7 @@ endif
     complex :: dgdt_hypervisc
     real, dimension (:), allocatable :: wgt
     real :: fac2, dtinv, akperp4
-    integer :: isgn, iglo, ig, is, ik, it, ie
+    integer :: isgn, iglo, ig, is, ik, it, ie, il
 
     g0(ntgrid,:,:) = 0.
 
@@ -6961,14 +7018,16 @@ endif
        it = it_idx(g_lo, iglo)
        ik = ik_idx(g_lo, iglo)
        if (nonlin .and. it == 1 .and. ik == 1) cycle
+       il = il_idx(g_lo, iglo)
+       ie = ie_idx(g_lo, iglo)
        dtinv = 1./(code_dt*tunits(ik))
        do isgn=1,2
           
           do ig=-ntgrid, ntgrid-1
              
              chidot = aj0(ig,iglo)*(phidot(ig,it,ik) &
-                  - vpac(ig,isgn,iglo) * spec(is)%stm * apardot(ig,it,ik)) &
-                  + aj1(ig,iglo)*2.0*vperp2(ig,iglo)*bpardot(ig,it,ik)*spec(is)%tz
+                  - vpac(ig,isgn,il,ie) * spec(is)%stm * apardot(ig,it,ik)) &
+                  + aj1(ig,iglo)*2.0*vperp2(ig,il,ie)*bpardot(ig,it,ik)*spec(is)%tz
              
              hdot = fdot (g   (ig  ,isgn,iglo), &
                           g   (ig+1,isgn,iglo), &
@@ -7232,11 +7291,12 @@ endif
 ! ==========================================================================
 
     do iglo=g_lo%llim_proc, g_lo%ulim_proc
-       is = is_idx(g_lo, iglo)
        it = it_idx(g_lo, iglo)
        ik = ik_idx(g_lo, iglo)
-       ie = ie_idx(g_lo, iglo)
        if (nonlin .and. it == 1 .and. ik == 1) cycle
+       is = is_idx(g_lo, iglo)
+       il = il_idx(g_lo, iglo)
+       ie = ie_idx(g_lo, iglo)
 
        do isgn=1,2
           do ig=-ntgrid, ntgrid-1
@@ -7249,17 +7309,17 @@ endif
 
 !!GGH Bug fix: The apar part should be subtracted (because chi= phi - v|| A|| + B||)
              chi = chi - &
-                  favg (aj0(ig  ,iglo)*apar   (ig  ,it,ik)*vpac(ig  ,isgn,iglo),  &
-                        aj0(ig+1,iglo)*apar   (ig+1,it,ik)*vpac(ig+1,isgn,iglo),  &
-                        aj0(ig  ,iglo)*aparnew(ig  ,it,ik)*vpac(ig  ,isgn,iglo),  &
-                        aj0(ig+1,iglo)*aparnew(ig+1,it,ik)*vpac(ig+1,isgn,iglo)) &
+                  favg (aj0(ig  ,iglo)*apar   (ig  ,it,ik)*vpac(ig  ,isgn,il,ie),  &
+                        aj0(ig+1,iglo)*apar   (ig+1,it,ik)*vpac(ig+1,isgn,il,ie),  &
+                        aj0(ig  ,iglo)*aparnew(ig  ,it,ik)*vpac(ig  ,isgn,il,ie),  &
+                        aj0(ig+1,iglo)*aparnew(ig+1,it,ik)*vpac(ig+1,isgn,il,ie)) &
                         *spec(is)%stm*fapar
                 
              chi = chi + &
-                  favg (aj1(ig  ,iglo)*2.0*bpar   (ig  ,it,ik)*vperp2(ig  ,iglo),  &
-                        aj1(ig+1,iglo)*2.0*bpar   (ig+1,it,ik)*vperp2(ig+1,iglo),  &
-                        aj1(ig  ,iglo)*2.0*bparnew(ig  ,it,ik)*vperp2(ig  ,iglo),  &
-                        aj1(ig+1,iglo)*2.0*bparnew(ig+1,it,ik)*vperp2(ig+1,iglo)) &
+                  favg (aj1(ig  ,iglo)*2.0*bpar   (ig  ,it,ik)*vperp2(ig  ,il,ie),  &
+                        aj1(ig+1,iglo)*2.0*bpar   (ig+1,it,ik)*vperp2(ig+1,il,ie),  &
+                        aj1(ig  ,iglo)*2.0*bparnew(ig  ,it,ik)*vperp2(ig  ,il,ie),  &
+                        aj1(ig+1,iglo)*2.0*bparnew(ig+1,it,ik)*vperp2(ig+1,il,ie)) &
                         *spec(is)%tz*fbpar
 
              havg = favg (g   (ig  ,isgn,iglo), &
@@ -7321,10 +7381,10 @@ endif
                                  aj0(ig  ,iglo) * phinew(ig  ,it,ik), &
                                  aj0(ig+1,iglo) * phinew(ig+1,it,ik)) * fphi * spec(is)%zt
 
-                j1bparavg= favg (aj1(ig  ,iglo)*2.0*bpar   (ig  ,it,ik)*vperp2(ig  ,iglo),  &
-                                 aj1(ig+1,iglo)*2.0*bpar   (ig+1,it,ik)*vperp2(ig+1,iglo),  &
-                                 aj1(ig  ,iglo)*2.0*bparnew(ig  ,it,ik)*vperp2(ig  ,iglo),  &
-                                 aj1(ig+1,iglo)*2.0*bparnew(ig+1,it,ik)*vperp2(ig+1,iglo)) &
+                j1bparavg= favg (aj1(ig  ,iglo)*2.0*bpar   (ig  ,it,ik)*vperp2(ig  ,il,ie),  &
+                                 aj1(ig+1,iglo)*2.0*bpar   (ig+1,it,ik)*vperp2(ig+1,il,ie),  &
+                                 aj1(ig  ,iglo)*2.0*bparnew(ig  ,it,ik)*vperp2(ig  ,il,ie),  &
+                                 aj1(ig+1,iglo)*2.0*bparnew(ig+1,it,ik)*vperp2(ig+1,il,ie)) &
                                  *fbpar
 
                 dgdt_hypervisc = 0.5*((1.0-1./hypervisc_filter(ig,it,ik))*gnew(ig,isgn,iglo) &
@@ -7372,6 +7432,9 @@ endif
           it = it_idx(g_lo, iglo)
           ik = ik_idx(g_lo, iglo)
           if (nonlin .and. it == 1 .and. ik == 1) cycle
+          il = il_idx(g_lo, iglo)
+          ie = ie_idx(g_lo, iglo)
+
           akperp4 = (aky(ik)**2 + akx(it)**2)**nexp
            do isgn=1,2
              do ig=-ntgrid, ntgrid-1
@@ -7385,7 +7448,7 @@ endif
                                  aj0(ig+1,iglo)  * apar(ig+1,it,ik), &
                                  aj0(ig  ,iglo)  * aparnew(ig  ,it,ik), &
                                  aj0(ig+1,iglo)  * aparnew(ig+1,it,ik)) & 
-                                 * fapar * spec(is)%zstm * vpac(ig,isgn,iglo)
+                                 * fapar * spec(is)%zstm * vpac(ig,isgn,il,ie)
 
 !Set g0 for hyperresistive heating
                 g0(ig,isgn,iglo) = spec(is)%dens*spec(is)%temp*D_eta*akperp4* &
@@ -7622,7 +7685,7 @@ endif
     use species, only: nspec, spec
     use dist_fn_arrays, only: gnew, aj0, vpa, g_adjust
     use run_parameters, only: fphi, fapar, fbpar, beta
-    use gs2_layouts, only: g_lo
+    use gs2_layouts, only: g_lo, il_idx, ie_idx
     use collisions, only: init_lorentz, init_ediffuse, init_lorentz_conserve, init_diffuse_conserve
     use collisions, only: etol, ewindow, etola, ewindowa
     use collisions, only: vnmult, vary_vnew
@@ -7634,7 +7697,7 @@ endif
 
     implicit none
 
-    integer :: ig, it, ik, iglo, isgn, ntrap
+    integer :: ig, it, ik, iglo, isgn, ntrap, il, ie
 
     integer, dimension (:,:), intent (out) :: erridx
     real, dimension (:,:), intent (out) :: errest
@@ -7722,9 +7785,11 @@ endif
 
     if (fapar > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              do ig=-ntgrid, ntgrid
-                g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,iglo)*gnew(ig,isgn,iglo)
+                g0(ig,isgn,iglo) = aj0(ig,iglo)*vpa(ig,isgn,il,ie)*gnew(ig,isgn,iglo)
              end do
           end do
        end do
@@ -8729,16 +8794,15 @@ endif
   end function favg_x
 
   subroutine init_mom_coeff
-    use gs2_layouts, only: g_lo
+    use gs2_layouts, only: g_lo, il_idx, ie_idx
     use species, only: nspec, spec
     use kt_grids, only: nakx => ntheta0, naky, kperp2
     use theta_grid, only: ntgrid
-    use dist_fn_arrays, only: aj0,aj1,vperp2
-    use dist_fn_arrays, only: vpa, vperp2
+    use dist_fn_arrays, only: aj0,aj1,vperp2,vpa
     use le_grids, only: integrate_moment
     integer :: i
     integer :: isgn, iglo
-    integer :: it,ik,is
+    integer :: it,ik,is,il,ie
     complex, allocatable :: coeff0(:,:,:,:)
     complex, allocatable :: gtmp(:,:,:)
     real, allocatable :: wgt(:)
@@ -8797,15 +8861,17 @@ endif
     else
        do i = 1, ncnt_mom_coeff
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             il = il_idx(g_lo,iglo)
+             ie = ie_idx(g_lo,iglo)
              do isgn = 1,2
                 if(i==1) wgt(:)=aj0(:,iglo)
-                if(i==2) wgt(:)=aj0(:,iglo)*vpa(:,isgn,iglo)**2
-                if(i==3) wgt(:)=aj0(:,iglo)*vperp2(:,iglo)
-                if(i==4) wgt(:)=aj0(:,iglo)*vpa(:,isgn,iglo)**4
-                if(i==5) wgt(:)=aj0(:,iglo)*vpa(:,isgn,iglo)**2*vperp2(:,iglo)
-                if(i==6) wgt(:)=vperp2(:,iglo)*aj1(:,iglo)
-                if(i==7) wgt(:)=vperp2(:,iglo)*aj1(:,iglo)*vpa(:,isgn,iglo)**2
-                if(i==8) wgt(:)=vperp2(:,iglo)*aj1(:,iglo)*vperp2(:,iglo)
+                if(i==2) wgt(:)=aj0(:,iglo)*vpa(:,isgn,il,ie)**2
+                if(i==3) wgt(:)=aj0(:,iglo)*vperp2(:,il,ie)
+                if(i==4) wgt(:)=aj0(:,iglo)*vpa(:,isgn,il,ie)**4
+                if(i==5) wgt(:)=aj0(:,iglo)*vpa(:,isgn,il,ie)**2*vperp2(:,il,ie)
+                if(i==6) wgt(:)=vperp2(:,il,ie)*aj1(:,iglo)
+                if(i==7) wgt(:)=vperp2(:,il,ie)*aj1(:,iglo)*vpa(:,isgn,il,ie)**2
+                if(i==8) wgt(:)=vperp2(:,il,ie)*aj1(:,iglo)*vperp2(:,il,ie)
                 gtmp(-ntgrid:ntgrid,isgn,iglo) = wgt(-ntgrid:ntgrid)*cmplx(1.,0.)
              end do
           end do
@@ -9097,16 +9163,16 @@ endif
        ! as part of the curvature drift term of Eq. 54.  the other part of 
        ! the curvature drift term of Eq. 54 is dealt with by cdfac below.
        ! no code_dt in wdfac because it multiplies wdrift, which has code_dt in it
-       wdfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/energy(ie)**1.5 &
+       wdfac(-ntgrid:ntgrid-1,1,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,il,ie)/energy(ie)**1.5 &
             - dhdec(-ntgrid:ntgrid-1,1,iglo)
-       wdfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/energy(ie)**1.5 &
+       wdfac(-ntgrid:ntgrid-1,2,iglo) = 0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,il,ie)/energy(ie)**1.5 &
             - dhdec(-ntgrid:ntgrid-1,2,iglo)
        wdfac(ntgrid,:,iglo) = 0.0
 
        ! takes care of part of curvature drift term in Eq. 54 of MAB's GS2 notes.
        ! no code_dt in cdfac because it multiples wcurv, which has code_dt in it.
-       cdfac(-ntgrid:ntgrid-1,1,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,iglo)/sqrt(energy(ie))
-       cdfac(-ntgrid:ntgrid-1,2,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,iglo)/sqrt(energy(ie))
+       cdfac(-ntgrid:ntgrid-1,1,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,1,iglo)*vpac(-ntgrid:ntgrid-1,1,il,ie)/sqrt(energy(ie))
+       cdfac(-ntgrid:ntgrid-1,2,iglo) = -0.5*dhdxic(-ntgrid:ntgrid-1,2,iglo)*vpac(-ntgrid:ntgrid-1,2,il,ie)/sqrt(energy(ie))
        cdfac(ntgrid,:,iglo) = 0.0
        
        ! this is the first term multiplying dF_1/dE in Eq. 42 of MAB's GS2 notes
@@ -9166,6 +9232,7 @@ endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        wdfac(:,1,iglo) = wdfac(:,1,iglo)*wdrift(:,1,iglo) &
@@ -9181,11 +9248,11 @@ endif
        ! this modification of wdrift takes care of -g term in Eq. 67 of MB's gs2_notes
        ! arises from pulling 1/F0 inside dg/dE term
         wdrift(-ntgrid:ntgrid-1,1,iglo) = wdrift(-ntgrid:ntgrid-1,1,iglo) &
-             - zi*code_dt*tunits(ik)*vpac(-ntgrid:ntgrid-1,1,iglo) &
+             - zi*code_dt*tunits(ik)*vpac(-ntgrid:ntgrid-1,1,il,ie) &
              * spec(is)%zt*spec(is)%zstm*tmp8(-ntgrid:ntgrid-1) &
              * 0.5*(abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid)))
         wdrift(-ntgrid:ntgrid-1,2,iglo) = wdrift(-ntgrid:ntgrid-1,2,iglo) &
-             - zi*code_dt*tunits(ik)*vpac(-ntgrid:ntgrid-1,2,iglo) &
+             - zi*code_dt*tunits(ik)*vpac(-ntgrid:ntgrid-1,2,il,ie) &
              * spec(is)%zt*spec(is)%zstm*tmp8(-ntgrid:ntgrid-1) &
              * 0.5*(abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid)))
        

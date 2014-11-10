@@ -31,6 +31,8 @@ module layouts_type
      integer,dimension(:,:),allocatable :: les_kxky_range !Used in integrate species, holds start and stop indices for flattened kxky dimension
      logical :: x_before_y !Information about layout order
      logical :: x_local, y_local, l_local, e_local, s_local !Used to record if various dimensions are entirely local
+     integer :: llim_it, llim_ik, llim_il, llim_ie, llim_is
+     integer :: ulim_it, ulim_ik, ulim_il, ulim_ie, ulim_is
   end type g_layout_type
 
   type :: lz_layout_type

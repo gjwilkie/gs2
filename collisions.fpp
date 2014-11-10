@@ -466,7 +466,7 @@ contains
              z0(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpdiff(:,isgn,il) &
                   * sqrt(energy(ie))*aj0(:,iglo)
           else
-             z0(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpa(:,isgn,iglo)*aj0(:,iglo)
+             z0(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpa(:,isgn,il,ie)*aj0(:,iglo)
           end if
        end do
     end do
@@ -483,9 +483,11 @@ contains
 ! Now get v0z0
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v0 = vpa J0 f0
-          gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*z0(:,isgn,iglo)
+          gtmp(:,isgn,iglo) = vpa(:,isgn,il,ie)*aj0(:,iglo)*z0(:,isgn,iglo)
        end do
     end do
     
@@ -514,7 +516,7 @@ contains
           il = il_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
-             gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
+             gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,il,ie) &
                   * vpdiff(:,isgn,il)*sqrt(energy(ie))
 !             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*energy(ie)
           end do
@@ -529,7 +531,7 @@ contains
           il = il_idx(g_lo,iglo)
           is = is_idx(g_lo,iglo)
           do isgn = 1, 2
-             gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,iglo)**2
+             gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,il,ie)**2
           end do
        end do
 
@@ -562,7 +564,7 @@ contains
                   * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
           else
 !             s0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
-             s0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
+             s0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,il,ie) &
                   * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
           end if
        end do
@@ -580,9 +582,11 @@ contains
 ! Now get v0s0
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v0 = vpa J0 f0
-          gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*s0(:,isgn,iglo)
+          gtmp(:,isgn,iglo) = vpa(:,isgn,il,ie)*aj0(:,iglo)*s0(:,isgn,iglo)
        end do
     end do
 
@@ -615,7 +619,7 @@ contains
              gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*sqrt(energy(ie))*vpdiff(:,isgn,il) &
                   * aj0(:,iglo)*s0(:,isgn,iglo)
           else
-             gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,iglo)*aj0(:,iglo) &
+             gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,il,ie)*aj0(:,iglo) &
                   * s0(:,isgn,iglo)
           end if
        end do
@@ -671,9 +675,11 @@ contains
 ! Now get v0w0
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v0 = vpa J0 f0
-          gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*w0(:,isgn,iglo)
+          gtmp(:,isgn,iglo) = vpa(:,isgn,il,ie)*aj0(:,iglo)*w0(:,isgn,iglo)
        end do
     end do
 
@@ -705,7 +711,7 @@ contains
              gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*sqrt(energy(ie))*vpdiff(:,isgn,il) &
                   * aj0(:,iglo)*w0(:,isgn,iglo)
           else
-             gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,iglo)*aj0(:,iglo) &
+             gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,il,ie)*aj0(:,iglo) &
                   * w0(:,isgn,iglo)
           end if
        end do
@@ -937,8 +943,9 @@ contains
        ik = ik_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
        do isgn = 1, 2
-          gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,iglo)**2
+          gtmp(:,isgn,iglo)  = vns(ik,ie,is,1)*vpa(:,isgn,il,ie)**2
 !             gtmp(:,isgn,iglo)  = vns(ik,ie,is,2)*energy(ie)
 
        end do
@@ -963,12 +970,13 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u1 = -3 nu_s vpa dt J0 f_0 / du
 !          if (conservative) then
-          bs0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
+          bs0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,il,ie) &
                * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
 !          else
 !             bs0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
@@ -1019,11 +1027,12 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v1 = (nu_s - nu_D) vpa J0
-          gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,iglo)*aj0(:,iglo) &
+          gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,il,ie)*aj0(:,iglo) &
                * bs0(:,isgn,iglo)
        end do
     end do
@@ -1100,11 +1109,12 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v1 = (nus-nud) vpa J0 f0
-          gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,iglo)*aj0(:,iglo) &
+          gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,il,ie)*aj0(:,iglo) &
                * bw0(:,isgn,iglo)
        end do
     end do
@@ -2383,7 +2393,7 @@ contains
 
   subroutine solfp1_standard_layout (g, g1, gc1, gc2, diagnostics, gtoc, ctog)
 
-    use gs2_layouts, only: g_lo, it_idx, ik_idx, ie_idx, is_idx
+    use gs2_layouts, only: g_lo, it_idx, ik_idx, ie_idx, is_idx, il_idx
     use theta_grid, only: ntgrid
     use run_parameters, only: beta
     use gs2_time, only: code_dt
@@ -2401,7 +2411,7 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1, gc1, gc2
     integer, optional, intent (in) :: diagnostics
 
-    integer :: ig, it, ik, ie, is, iglo
+    integer :: ig, it, ik, ie, is, iglo, il
 !CMR, 12/9/2013: 
 !CMR   New logical optional input parameters gtoc, ctog used to set
 !CMR   flags (g_to_c and c_to_g) to control whether redistributes required
@@ -2460,10 +2470,11 @@ contains
              ik = ik_idx(g_lo,iglo)
              if(kwork_filter(it,ik)) cycle
              ie = ie_idx(g_lo,iglo)
+             il = il_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
                 g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
                      vnmult(1)*spec(is)%vnewk*code_dt &
-                     * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
+                     * vpa(ig,:,il,ie)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
                      / (beta*spec(is)%stm*energy(ie)**1.5)
                 ! probably need 1/(spec(is_ion)%z*spec(is_ion)%dens) above
              end do
@@ -2507,10 +2518,11 @@ contains
              ik = ik_idx(g_lo,iglo)
              if(kwork_filter(it,ik))cycle
              ie = ie_idx(g_lo,iglo)
+             il = il_idx(g_lo,iglo)
              do ig = -ntgrid, ntgrid
                 g(ig,:,iglo) = g(ig,:,iglo) + ieqzip(it,ik) * &
                      vnmult(1)*spec(is)%vnewk*code_dt &
-                     * vpa(ig,:,iglo)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
+                     * vpa(ig,:,il,ie)*kperp2(ig,it,ik)*aparnew(ig,it,ik)*aj0(ig,iglo) &
                      / (beta*spec(is)%stm*energy(ie)**1.5)
              end do
           end do
@@ -2713,9 +2725,11 @@ contains
           it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
           if(kwork_filter(it,ik))cycle
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
           do isgn = 1, 2
              ! v0 = vpa J0 f0, y0 = g
-             gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*g(:,isgn,iglo)
+             gtmp(:,isgn,iglo) = vpa(:,isgn,il,ie)*aj0(:,iglo)*g(:,isgn,iglo)
           end do
        end do
        
@@ -2757,7 +2771,7 @@ contains
              gtmp(:,isgn,iglo) = vns(ik,ie,is)*sqrt(energy(ie))*vpdiff(:,isgn,il) &
                   * aj0(:,iglo)*g1(:,isgn,iglo)
           else
-             gtmp(:,isgn,iglo) = vns(ik,ie,is)*vpa(:,isgn,iglo)*aj0(:,iglo) &
+             gtmp(:,isgn,iglo) = vns(ik,ie,is)*vpa(:,isgn,il,ie)*aj0(:,iglo) &
                   * g1(:,isgn,iglo)
           end if
        end do
@@ -3052,11 +3066,12 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        if(kwork_filter(it,ik))cycle
+       il = il_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! v1 = (nus-nud) vpa J0 f0
-          gtmp(:,isgn,iglo) = vns(ik,ie,is)*vpa(:,isgn,iglo)*aj0(:,iglo) &
+          gtmp(:,isgn,iglo) = vns(ik,ie,is)*vpa(:,isgn,il,ie)*aj0(:,iglo) &
                * g1(:,isgn,iglo)
        end do
     end do

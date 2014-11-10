@@ -392,7 +392,7 @@ contains
   end subroutine add_explicit
 
   subroutine nonlinear_terms_unit_test_time_add_nl(g1, phi, apar, bpar)
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo
     use theta_grid, only: ntgrid
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
@@ -402,7 +402,7 @@ contains
   subroutine add_nl (g1, phi, apar, bpar)
     use mp, only: max_allreduce
     use theta_grid, only: ntgrid, kxfac
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, ie_idx
     use gs2_layouts, only: accelx_lo, yxf_lo
     use dist_fn_arrays, only: g
     use species, only: spec
@@ -418,7 +418,7 @@ contains
     real :: max_vel, zero
     real :: dt_cfl
 
-    integer :: iglo, ik, it, is, ig, ia, isgn
+    integer :: iglo, ik, it, is, ig, ia, isgn, il, ie
     
     !Initialise zero so we can be sure tests are sensible
     zero = epsilon(0.0)
@@ -620,14 +620,16 @@ contains
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
-         is = is_idx(g_lo,iglo)
+         il = il_idx(g_lo,iglo)
+         ie = ie_idx(g_lo,iglo)
+         is = is_idx(g_lo,iglo)         
          do ig = -ntgrid, ntgrid
             g1(ig,1,iglo) = g1(ig,1,iglo) - zi*akx(it)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,1,iglo)*apar(ig,it,ik)*fapar 
+                 *vpa(ig,1,il,ie)*apar(ig,it,ik)*fapar 
          end do
          do ig = -ntgrid, ntgrid
             g1(ig,2,iglo) = g1(ig,2,iglo) - zi*akx(it)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
+                 *vpa(ig,2,il,ie)*apar(ig,it,ik)*fapar 
          end do
       end do
 
@@ -641,14 +643,16 @@ contains
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
+         il = il_idx(g_lo,iglo)
+         ie = ie_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
          do ig = -ntgrid, ntgrid
             g1(ig,1,iglo) = g1(ig,1,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,1,iglo)*apar(ig,it,ik)*fapar 
+                 *vpa(ig,1,il,ie)*apar(ig,it,ik)*fapar 
          end do
          do ig = -ntgrid, ntgrid
             g1(ig,2,iglo) = g1(ig,2,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
+                 *vpa(ig,2,il,ie)*apar(ig,it,ik)*fapar 
          end do
       end do
 
@@ -666,9 +670,12 @@ contains
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
+         il = il_idx(g_lo,iglo)
+         ie = ie_idx(g_lo,iglo)
+
          do ig = -ntgrid, ntgrid
             fac = g1(ig,1,iglo) + zi*akx(it)*aj1(ig,iglo) &
-                 *2.0*vperp2(ig,iglo)*spec(is)%tz*bpar(ig,it,ik)*fbpar
+                 *2.0*vperp2(ig,il,ie)*spec(is)%tz*bpar(ig,it,ik)*fbpar
             g1(ig,1,iglo) = fac
             g1(ig,2,iglo) = fac
          end do
@@ -688,9 +695,12 @@ contains
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
+         il = il_idx(g_lo,iglo)
+         ie = ie_idx(g_lo,iglo)
+
          do ig = -ntgrid, ntgrid
             fac = g1(ig,1,iglo) + zi*aky(ik)*aj1(ig,iglo) &
-                 *2.0*vperp2(ig,iglo)*spec(is)%tz*bpar(ig,it,ik)*fbpar
+                 *2.0*vperp2(ig,il,ie)*spec(is)%tz*bpar(ig,it,ik)*fbpar
             g1(ig,1,iglo) = fac 
             g1(ig,2,iglo) = fac
          end do
