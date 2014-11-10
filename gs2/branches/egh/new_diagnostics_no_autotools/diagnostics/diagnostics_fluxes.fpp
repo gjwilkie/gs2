@@ -36,6 +36,7 @@ private
   real, dimension (:,:,:), allocatable :: pmflux, vmflux
   real, dimension (:,:,:), allocatable :: pbflux, vbflux
   real, dimension (:,:,:), allocatable :: exchange
+  real, dimension (:,:,:), allocatable :: exchange1
   !integer, parameter :: gnostics%rtype = SDATIO_DOUBLE
 
 
@@ -52,6 +53,8 @@ contains
     allocate (pflux_tormom (ntheta0,naky,nspec)) ; pflux_tormom = 0. 
     allocate (qheat (ntheta0,naky,nspec,3)) ; qheat = 0.
     allocate (vflux (ntheta0,naky,nspec)) ; vflux = 0.
+
+    allocate (exchange1 (ntheta0,naky,nspec)) ; exchange1 = 0.
     allocate (exchange (ntheta0,naky,nspec)) ; exchange = 0.
 
     allocate (vflux_par (ntheta0,naky,nspec)) ; vflux_par = 0.
@@ -67,18 +70,19 @@ contains
     allocate (pbflux(ntheta0,naky,nspec)) ; pbflux = 0.
     allocate (qbheat(ntheta0,naky,nspec,3)) ; qbheat = 0.
     allocate (vbflux(ntheta0,naky,nspec)) ; vbflux = 0.
+
   end subroutine init_diagnostics_fluxes
 
   subroutine finish_diagnostics_fluxes
     deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
-         pbflux, qbheat, vbflux, vflux0, vflux1, exchange)
+         pbflux, qbheat, vbflux, vflux0, vflux1, exchange, exchange1)
   end subroutine finish_diagnostics_fluxes
 
   subroutine calculate_fluxes(gnostics)
-    use dist_fn, only: flux, lf_flux
+    use dist_fn, only: flux, lf_flux, eexchange
     use dist_fn_arrays, only: g_adjust, gnew
     use species, only: nspec, spec
-    use fields_arrays, only: phinew, bparnew, aparnew
+    use fields_arrays, only: phinew, bparnew, aparnew, phi
     use run_parameters, only: fphi, fapar, fbpar
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use diagnostics_create_and_write, only: create_and_write_variable
@@ -105,6 +109,7 @@ contains
      call lf_flux (phinew, vflux0, vflux1)
 #endif
     call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
+    call eexchange (phinew, phi, exchange1, exchange)
     !end if
     if (fphi > epsilon(0.0)) then
       do is = 1, nspec
