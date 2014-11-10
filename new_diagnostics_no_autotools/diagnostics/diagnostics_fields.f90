@@ -109,9 +109,11 @@ contains
    character(*), intent(in) :: field_name
    character(*), intent(in) :: field_description
    character(*), intent(in) :: field_units
+   character(len=len(field_name)+16) :: field_igomega_by_mode_name
    character(len=len(field_name)+9) :: field2_by_mode_name
    character(len=len(field_name)+2) :: field_t_name
    complex, intent(in), dimension(-ntgrid:ntgrid, ntheta0, naky) :: val
+   complex, dimension(ntheta0, naky) :: field_igomega_by_mode
    real, dimension(ntheta0, naky), intent(in) :: field2_by_mode
    logical, intent(in) :: distributed
    complex, dimension(-ntgrid:ntgrid, 1, 1) :: dummyc
@@ -119,6 +121,7 @@ contains
    logical :: write_field_by_time
    integer :: it,ik
 
+   field_igomega_by_mode_name =  field_name//"_igomega_by_mode" 
    field2_by_mode_name =  field_name//"2_by_mode" 
    field_t_name = field_name//"_t"
 
@@ -130,8 +133,11 @@ contains
    
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, gnostics%rtype, field_name, "rzXY", field_description, field_units)
+     call create_variable(gnostics%sfile, gnostics%rtype, field_igomega_by_mode_name, "rXYt", &
+       field_description//" at ig=igomega, as a function of kx and ky" , field_units)
      call create_variable(gnostics%sfile, gnostics%rtype, field2_by_mode_name, "XYt", &
-       field_description//" squared and averaged over theta, as a function of kx and ky" , "("//field_units//")^2")
+       field_description//" squared and averaged over theta, as a function of kx and ky" , &
+       "("//field_units//")^2")
      if (write_field_by_time) then 
        call create_variable(gnostics%sfile, gnostics%rtype, field_t_name, "rzXYt", &
          field_description//" as a function of time", field_units)
@@ -141,17 +147,24 @@ contains
    end if
    
    if (gnostics%create .or. .not. gnostics%wryte) return
+
+   field_igomega_by_mode(:,:) = val(gnostics%igomega, :, :)
    
    if (.not. distributed) then
 
+     ! If the fields are on every processor our job is simple!
+
      call write_variable(gnostics%sfile, field_name, val)
      call write_variable(gnostics%sfile, field2_by_mode_name, field2_by_mode)
+     call write_variable(gnostics%sfile, field_igomega_by_mode_name, field_igomega_by_mode)
      if (write_field_by_time) call write_variable(gnostics%sfile, field_t_name, val)
 
    else
 
      call set_count(gnostics%sfile, field_name, "X", 1)
      call set_count(gnostics%sfile, field_name, "Y", 1)
+     call set_count(gnostics%sfile, field_igomega_by_mode_name, "X", 1)
+     call set_count(gnostics%sfile, field_igomega_by_mode_name, "Y", 1)
      call set_count(gnostics%sfile, field2_by_mode_name, "X", 1)
      call set_count(gnostics%sfile, field2_by_mode_name, "Y", 1)
      if (write_field_by_time) then
@@ -163,6 +176,7 @@ contains
      ! one write to a variable with an infinite dimension.
      ! Here we make some dummy writes to satisfy that
      if (write_field_by_time) call write_variable_with_offset(gnostics%sfile, field_t_name, dummyc)
+     call write_variable_with_offset(gnostics%sfile, field_igomega_by_mode_name, dummyc)
      call write_variable_with_offset(gnostics%sfile, field2_by_mode_name, dummyr)
 
      do ik = 1,naky
@@ -172,6 +186,12 @@ contains
            call set_start(gnostics%sfile, field_name, "X", it)
            call set_start(gnostics%sfile, field_name, "Y", ik)
            call write_variable_with_offset(gnostics%sfile, field_name, val)
+
+           call set_start(gnostics%sfile, field_igomega_by_mode_name, "X", it)
+           call set_start(gnostics%sfile, field_igomega_by_mode_name, "Y", ik)
+           call write_variable_with_offset(gnostics%sfile, &
+             field_igomega_by_mode_name,&
+             field_igomega_by_mode)
 
            call set_start(gnostics%sfile, field2_by_mode_name, "X", it)
            call set_start(gnostics%sfile, field2_by_mode_name, "Y", ik)

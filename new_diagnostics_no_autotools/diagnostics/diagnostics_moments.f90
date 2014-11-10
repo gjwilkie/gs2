@@ -122,10 +122,12 @@ contains
    character(*), intent(in) :: moment_units
    character(len=len(moment_name)+8) :: moment_by_mode_name
    character(len=len(moment_name)+12) :: moment_flx_surfavg_name
+   character(len=len(moment_name)+16) :: moment_igomega_by_mode_name
    character(len=len(moment_name)+9) :: moment2_by_mode_name
    character(len=len(moment_name)+2) :: moment_t_name
    complex, intent(in), dimension(-ntgrid:ntgrid, ntheta0, naky, nspec) :: val
    complex, dimension(ntheta0, naky, nspec) :: moment_by_mode
+   complex, dimension(ntheta0, naky, nspec) :: moment_igomega_by_mode
    complex, dimension(ntheta0, nspec) :: moment_flx_surfavg
    ! It is unnecessary to pass moment2_by_mode in to this routine... 
    ! all it does is save one volume average among thousands. Should
@@ -140,6 +142,7 @@ contains
 
    moment_flx_surfavg_name =  moment_name//"_flxsurf_avg" 
    moment_by_mode_name =  moment_name//"_by_mode" 
+   moment_igomega_by_mode_name =  moment_name//"_igomega_by_mode" 
    moment2_by_mode_name =  moment_name//"2_by_mode" 
    moment_t_name = moment_name//"_t"
 
@@ -157,6 +160,8 @@ contains
        & averaged over theta, at ky=0 (actally ik==1),  as a function of kx" , moment_units)
      call create_variable(gnostics%sfile, gnostics%rtype, moment_by_mode_name, "rXYst", &
        moment_description//" averaged over theta, as a function of kx and ky" , moment_units)
+     call create_variable(gnostics%sfile, gnostics%rtype, moment_igomega_by_mode_name, "rXYst", &
+       moment_description//" at ig=igomega, as a function of kx and ky" , moment_units)
      call create_variable(gnostics%sfile, gnostics%rtype, moment2_by_mode_name, "XYst", &
        moment_description//" squared and averaged over theta, as a function of kx and ky" , "("//moment_units//")^2")
      if (write_moment_by_time) then 
@@ -170,6 +175,7 @@ contains
    if (gnostics%create .or. .not. gnostics%wryte) return
 
    call average_theta(val, moment_by_mode, gnostics%distributed)
+   moment_igomega_by_mode(:,:,:) = val(gnostics%igomega,:,:,:)
    moment_flx_surfavg(:,:) = moment_by_mode(:,1,:)
    
    if (.not. distributed) then
@@ -180,6 +186,7 @@ contains
      call write_variable(gnostics%sfile, moment_name, val)
      call write_variable(gnostics%sfile, moment_flx_surfavg_name, moment_flx_surfavg)
      call write_variable(gnostics%sfile, moment_by_mode_name, moment_by_mode)
+     call write_variable(gnostics%sfile, moment_igomega_by_mode_name, moment_igomega_by_mode)
      call write_variable(gnostics%sfile, moment2_by_mode_name, moment2_by_mode)
      if (write_moment_by_time) call write_variable(gnostics%sfile, moment_t_name, val)
 
@@ -190,6 +197,8 @@ contains
      call set_count(gnostics%sfile, moment_flx_surfavg_name, "X", 1)
      call set_count(gnostics%sfile, moment_by_mode_name, "X", 1)
      call set_count(gnostics%sfile, moment_by_mode_name, "Y", 1)
+     call set_count(gnostics%sfile, moment_igomega_by_mode_name, "X", 1)
+     call set_count(gnostics%sfile, moment_igomega_by_mode_name, "Y", 1)
      call set_count(gnostics%sfile, moment2_by_mode_name, "X", 1)
      call set_count(gnostics%sfile, moment2_by_mode_name, "Y", 1)
      if (write_moment_by_time) then
@@ -203,6 +212,7 @@ contains
      if (write_moment_by_time) call write_variable_with_offset(gnostics%sfile, moment_t_name, dummyc)
      call write_variable_with_offset(gnostics%sfile, moment_flx_surfavg_name, dummyc1)
      call write_variable_with_offset(gnostics%sfile, moment_by_mode_name, dummyc1)
+     call write_variable_with_offset(gnostics%sfile, moment_igomega_by_mode_name, dummyc1)
      call write_variable_with_offset(gnostics%sfile, moment2_by_mode_name, dummyr)
 
      do ik = 1,naky
@@ -221,6 +231,10 @@ contains
            call set_start(gnostics%sfile, moment_by_mode_name, "X", it)
            call set_start(gnostics%sfile, moment_by_mode_name, "Y", ik)
            call write_variable_with_offset(gnostics%sfile, moment_by_mode_name, moment_by_mode)
+
+           call set_start(gnostics%sfile, moment_igomega_by_mode_name, "X", it)
+           call set_start(gnostics%sfile, moment_igomega_by_mode_name, "Y", ik)
+           call write_variable_with_offset(gnostics%sfile, moment_igomega_by_mode_name, moment_igomega_by_mode)
 
            call set_start(gnostics%sfile, moment2_by_mode_name, "X", it)
            call set_start(gnostics%sfile, moment2_by_mode_name, "Y", ik)
