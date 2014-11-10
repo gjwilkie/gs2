@@ -34,6 +34,10 @@ diagnostics/simpledataio/src/simpledataio_write.F90: diagnostics/simpledataio/sr
 
 CPPFLAGS+= -DFORTRAN_NETCDF -DISO_C_BINDING  -DHAVE_MPI
 
+ifdef USE_PARALLEL_NETCDF
+	CPPFLAGS += -DPARALLEL
+endif
+
 CFLAGS+= -Idiagnostics/simpledataio
 
 SIMPLEDATAIO_LIB_ABS=$(PWD)/libsimpledataio.a
