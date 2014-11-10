@@ -57,7 +57,7 @@ module diagnostics_printout
                  phitot(it,ik), theta0(it,ik)
          end do
       end do
-      write (*,*) 
+      write (outunit,*) 
     end subroutine output_line
 
     !> Print instaneous heat fluxes to run_name.new.out

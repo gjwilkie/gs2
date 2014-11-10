@@ -117,10 +117,10 @@ contains
       call create_dimensions
       !if (gnostics%write_movie) call create_dimensions_movie
     end if
-    if (gnostics%write_ascii) then 
+    !if (gnostics%write_ascii) then 
       if (proc0) call set_ascii_file_switches
       if (proc0) call init_diagnostics_ascii(gnostics%ascii_files)
-    end if
+    !end if
 
     if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
 
@@ -147,20 +147,22 @@ contains
   end subroutine check_parameters
 
   !> This subroutine determines which ascii output files are enabled
-  !! ... i.e., opened, flushed at each write, and then closed
+  !! (i.e., opened, flushed at each write, and then closed).
   !! If an ascii file is not enabled here, writing to it will 
   !! cause some indeterminate unpleasant behaviour
+  !!
+  !! Note that the .out file is always enabled
   subroutine set_ascii_file_switches
     gnostics%ascii_files%write_to_out   = .true.
-    gnostics%ascii_files%write_to_fields   = gnostics%write_fields
-    gnostics%ascii_files%write_to_heat     = gnostics%write_heating
-    gnostics%ascii_files%write_to_heat2    = gnostics%write_heating
-    gnostics%ascii_files%write_to_lpc    = gnostics%write_verr
-    gnostics%ascii_files%write_to_vres    = gnostics%write_verr
-    gnostics%ascii_files%write_to_vres2    = gnostics%write_verr
-    gnostics%ascii_files%write_to_phase    = gnostics%write_cross_phase
-    gnostics%ascii_files%write_to_jext    = gnostics%write_jext
-    gnostics%ascii_files%write_to_parity    = gnostics%write_parity
+    gnostics%ascii_files%write_to_fields = gnostics%write_fields  .and.  gnostics%write_ascii
+    gnostics%ascii_files%write_to_heat   = gnostics%write_heating .and.  gnostics%write_ascii
+    gnostics%ascii_files%write_to_heat2  = gnostics%write_heating .and.  gnostics%write_ascii
+    gnostics%ascii_files%write_to_lpc    = gnostics%write_verr    .and.  gnostics%write_ascii
+    gnostics%ascii_files%write_to_vres   = gnostics%write_verr    .and.  gnostics%write_ascii
+    gnostics%ascii_files%write_to_vres2  = gnostics%write_verr    .and.  gnostics%write_ascii
+    gnostics%ascii_files%write_to_phase  = gnostics%write_cross_phase .and.  gnostics%write_ascii
+    gnostics%ascii_files%write_to_jext   = gnostics%write_jext    .and.  gnostics%write_ascii
+    gnostics%ascii_files%write_to_parity = gnostics%write_parity  .and.  gnostics%write_ascii
     !write (*,*) 'gnostics%ascii_files%write_to_heat2', gnostics%ascii_files%write_to_heat2
   end subroutine set_ascii_file_switches
 
@@ -219,7 +221,8 @@ contains
       call closefile(gnostics%sfile)
       !if (gnostics%write_movie) call closefile(gnostics%sfilemovie)
     end if
-    if (gnostics%write_ascii .and. proc0) call finish_diagnostics_ascii(gnostics%ascii_files)
+    !if (gnostics%write_ascii .and. proc0) call finish_diagnostics_ascii(gnostics%ascii_files)
+    if (proc0) call finish_diagnostics_ascii(gnostics%ascii_files)
 
     ! Random stuff that needs to be put in properly or removed
     if (gnostics%write_gyx) call write_fyx (phinew,bparnew,.true.)
@@ -316,15 +319,11 @@ contains
     if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
       gnostics%vary_vnew_only = .false.
       if (gnostics%write_omega)  call write_omega (gnostics)
-      if (gnostics%print_line) call print_line(gnostics)
-      if (gnostics%write_line) call write_line(gnostics)
       if (gnostics%write_fields) call write_fields(gnostics)
       if (gnostics%dump_fields_periodically) call dump_fields_periodically(gnostics)
       if (gnostics%calculate_fluxes) call calculate_fluxes(gnostics)
       if (gnostics%write_symmetry) call write_symmetry(gnostics)
       if (gnostics%write_parity) call write_parity(gnostics)
-      if (gnostics%print_flux_line) call print_flux_line(gnostics)
-      if (gnostics%write_flux_line) call write_flux_line(gnostics)
       if (gnostics%write_verr) call write_velocity_space_checks(gnostics)
       if (gnostics%write_moments) call write_moments(gnostics)
       if (gnostics%write_full_moments_notgc) call write_full_moments_notgc(gnostics)
@@ -337,6 +336,12 @@ contains
       if (gnostics%write_correlation_extend) call write_correlation_extend(gnostics)
       if (gnostics%write_lorentzian) call write_lorentzian(gnostics)
 !
+      if (proc0) then
+        if (gnostics%print_line) call print_line(gnostics)
+        if (gnostics%write_line) call write_line(gnostics)
+        if (gnostics%print_flux_line) call print_flux_line(gnostics)
+        if (gnostics%write_flux_line) call write_flux_line(gnostics)
+      end if
       call run_diagnostics_to_be_updated
 
       ! Finally, write time value and update time index
