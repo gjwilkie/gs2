@@ -1098,6 +1098,44 @@ contains
        nproc_tmp=nproc_dim(idim)
     enddo
 
+    !Set dimension allocate limits. If the dimension is split nicely we only
+    !need to allocate the local segment, else we need to allocate the full dimension (to be safe)
+    if(dim_divides(g_lo%it_ord)) then
+       g_lo%llim_it=g_lo%it_min
+       g_lo%ulim_it=g_lo%it_max
+    else
+       g_lo%llim_it=1
+       g_lo%ulim_it=g_lo%ntheta0
+    endif
+    if(dim_divides(g_lo%ik_ord)) then
+       g_lo%llim_ik=g_lo%ik_min
+       g_lo%ulim_ik=g_lo%ik_max
+    else
+       g_lo%llim_ik=1
+       g_lo%ulim_ik=g_lo%naky
+    endif
+    if(dim_divides(g_lo%il_ord)) then
+       g_lo%llim_il=g_lo%il_min
+       g_lo%ulim_il=g_lo%il_max
+    else
+       g_lo%llim_il=1
+       g_lo%ulim_il=g_lo%nlambda
+    endif
+    if(dim_divides(g_lo%ie_ord)) then
+       g_lo%llim_ie=g_lo%ie_min
+       g_lo%ulim_ie=g_lo%ie_max
+    else
+       g_lo%llim_ie=1
+       g_lo%ulim_ie=g_lo%negrid
+    endif
+    if(dim_divides(g_lo%is_ord)) then
+       g_lo%llim_is=g_lo%is_min
+       g_lo%ulim_is=g_lo%is_max
+    else
+       g_lo%llim_is=1
+       g_lo%ulim_is=g_lo%nspec
+    endif
+
     !Now print some stuff for debugging
 !     if (proc0) then
 !        write(6,'("Idim | Divides | Nproc_per_block | Size | Local")')

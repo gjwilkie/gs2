@@ -1562,11 +1562,11 @@ contains
     use kt_grids, only: naky, ntheta0 
     use le_grids, only: forbid, ng2
     use dist_fn_arrays, only: g, gnew, vpa
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, ie_idx
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
     integer :: iglo
-    integer :: ig, ik, it, il, is, j
+    integer :: ig, ik, it, il, is, j, ie
     
     phi = 0.
     do j = 1, 2
@@ -1599,10 +1599,11 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)       
-       g(:,1,iglo) = -phi(:,it,ik)*phiinit*(1.+vpa(:,1,iglo)*sin(theta))*spec(is)%z
+       g(:,1,iglo) = -phi(:,it,ik)*phiinit*(1.+vpa(:,1,il,ie)*sin(theta))*spec(is)%z
        where (forbid(:,il)) g(:,1,iglo) = 0.0
-       g(:,2,iglo) = -phi(:,it,ik)*phiinit*(1.+vpa(:,2,iglo)*sin(theta))*spec(is)%z
+       g(:,2,iglo) = -phi(:,it,ik)*phiinit*(1.+vpa(:,2,il,ie)*sin(theta))*spec(is)%z
 !       g(:,1,iglo)*vpa(:,2,iglo)
        if (il == ng2+1) g(:,:,iglo) = 0.0
     end do
@@ -1617,13 +1618,13 @@ contains
     use le_grids, only: forbid
 !    use le_grids, only: ng2
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, ie_idx
     use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
     integer :: iglo
-    integer :: ig, ik, it, il, is, j
+    integer :: ig, ik, it, il, is, j, ie
     
     phi = 0.
     odd = 0.
@@ -1683,20 +1684,21 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)       
 !       if (spec(is)%type /= electron_species) cycle
        g(:,1,iglo) = phiinit* &!spec(is)%z* &
             ( dfac*spec(is)%dens0            * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,1,iglo)         * odd(:,it,ik) &
-            + tparfac*(vpa(:,1,iglo)**2-0.5) * phi(:,it,ik) &
-            +tperpfac*(vperp2(:,iglo)-1.)    * phi(:,it,ik))
+            + 2.*ufac* vpa(:,1,il,ie)         * odd(:,it,ik) &
+            + tparfac*(vpa(:,1,il,ie)**2-0.5) * phi(:,it,ik) &
+            +tperpfac*(vperp2(:,il,ie)-1.)    * phi(:,it,ik))
        where (forbid(:,il)) g(:,1,iglo) = 0.0
 
        g(:,2,iglo) = phiinit* &!spec(is)%z* &
             ( dfac*spec(is)%dens0            * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,2,iglo)         * odd(:,it,ik) &
-            + tparfac*(vpa(:,2,iglo)**2-0.5) * phi(:,it,ik) &
-            +tperpfac*(vperp2(:,iglo)-1.)    * phi(:,it,ik))
+            + 2.*ufac* vpa(:,2,il,ie)         * odd(:,it,ik) &
+            + tparfac*(vpa(:,2,il,ie)**2-0.5) * phi(:,it,ik) &
+            +tperpfac*(vperp2(:,il,ie)-1.)    * phi(:,it,ik))
        where (forbid(:,il)) g(:,2,iglo) = 0.0
 
 !       if (il == ng2+1) g(:,:,iglo) = 0.0
@@ -1719,13 +1721,13 @@ contains
     use fields_arrays, only: apar
     use fields_arrays, only: aparnew
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, ie_idx
     use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
     integer :: iglo
-    integer :: ig, ik, it, il, is, j
+    integer :: ig, ik, it, il, is, j, ie
     
     phi = 0.
     odd = 0.
@@ -1789,19 +1791,20 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)       
        g(:,1,iglo) = phiinit* &!spec(is)%z* &
             ( dfac*spec(is)%dens0                * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,1,iglo)*spec(is)%u0 * odd(:,it,ik) &
-            + tparfac*(vpa(:,1,iglo)**2-0.5)     * phi(:,it,ik) &
-            +tperpfac*(vperp2(:,iglo)-1.)        * phi(:,it,ik))
+            + 2.*ufac* vpa(:,1,il,ie)*spec(is)%u0 * odd(:,it,ik) &
+            + tparfac*(vpa(:,1,il,ie)**2-0.5)     * phi(:,it,ik) &
+            +tperpfac*(vperp2(:,il,ie)-1.)        * phi(:,it,ik))
        where (forbid(:,il)) g(:,1,iglo) = 0.0
 
        g(:,2,iglo) = phiinit* &!spec(is)%z* &
             ( dfac*spec(is)%dens0                * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,2,iglo)*spec(is)%u0 * odd(:,it,ik) &
-            + tparfac*(vpa(:,2,iglo)**2-0.5)     * phi(:,it,ik) &
-            +tperpfac*(vperp2(:,iglo)-1.)        * phi(:,it,ik))
+            + 2.*ufac* vpa(:,2,il,ie)*spec(is)%u0 * odd(:,it,ik) &
+            + tparfac*(vpa(:,2,il,ie)**2-0.5)     * phi(:,it,ik) &
+            +tperpfac*(vperp2(:,il,ie)-1.)        * phi(:,it,ik))
        where (forbid(:,il)) g(:,2,iglo) = 0.0
 
 !       if (il == ng2+1) g(:,:,iglo) = 0.0
@@ -1820,14 +1823,14 @@ contains
     use kt_grids, only: naky, ntheta0, reality, nx
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew, vpa, aj0
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx, ie_idx
     use constants, only: zi, pi
     use run_parameters, only: k0
     implicit none
     complex, dimension (ntheta0,naky) :: phi
     integer :: iglo
 !    integer :: ig, ik, it, il, is, j, j1
-    integer :: ik, it, il, is, j, j1
+    integer :: ik, it, il, is, j, j1, ie
     real, dimension(nx) :: lx_pr, a_pr
     complex,dimension(nx) :: ff_pr
     real:: L, dx_pr
@@ -1895,13 +1898,14 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo) 
        il = il_idx(g_lo,iglo) 
+       ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)       
     
 ! ions, kx/=0:
        if ((is==1) .and.(.not.(it==1))) then
        
-          g(:,1,iglo) =  2.* vpa(:,1,iglo)*spec(is)%u0 * phi(it,ik)/aj0(:,iglo)  
-          g(:,2,iglo) =  2.* vpa(:,2,iglo)*spec(is)%u0 * phi(it,ik)/aj0(:,iglo)
+          g(:,1,iglo) =  2.* vpa(:,1,il,ie)*spec(is)%u0 * phi(it,ik)/aj0(:,iglo)  
+          g(:,2,iglo) =  2.* vpa(:,2,il,ie)*spec(is)%u0 * phi(it,ik)/aj0(:,iglo)
 
           where (forbid(:,il)) g(:,1,iglo) = 0.0
           where (forbid(:,il)) g(:,2,iglo) = 0.0
@@ -1924,7 +1928,7 @@ contains
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
     use fields_arrays, only: phi, apar, bpar
     use fields_arrays, only: phinew, aparnew, bparnew
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, ie_idx
     use file_utils, only: error_unit
     use run_parameters, only: fphi, fapar, fbpar
     use constants, only: zi
@@ -1932,7 +1936,7 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz, odd
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
     integer :: iglo, istatus, ierr
-    integer :: ig, ik, it, il, is, j
+    integer :: ig, ik, it, il, is, j, ie
     
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
     if (istatus /= 0) then
@@ -2001,20 +2005,21 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)       
 
        g(:,1,iglo) = phiinit* &!spec(is)%z* &
             ( dfac*spec(is)%dens0            * phiz(:,it,ik) &
-            + 2.*ufac* vpa(:,1,iglo)         * odd (:,it,ik) &
-            + tparfac*(vpa(:,1,iglo)**2-0.5) * phiz(:,it,ik) &
-            +tperpfac*(vperp2(:,iglo)-1.)    * phiz(:,it,ik))
+            + 2.*ufac* vpa(:,1,il,ie)         * odd (:,it,ik) &
+            + tparfac*(vpa(:,1,il,ie)**2-0.5) * phiz(:,it,ik) &
+            +tperpfac*(vperp2(:,il,ie)-1.)    * phiz(:,it,ik))
        where (forbid(:,il)) g(:,1,iglo) = 0.0
 
        g(:,2,iglo) = phiinit* &!spec(is)%z* &
             ( dfac*spec(is)%dens0            * phiz(:,it,ik) &
-            + 2.*ufac* vpa(:,2,iglo)         * odd (:,it,ik) &
-            + tparfac*(vpa(:,2,iglo)**2-0.5) * phiz(:,it,ik) &
-            +tperpfac*(vperp2(:,iglo)-1.)    * phiz(:,it,ik))
+            + 2.*ufac* vpa(:,2,il,ie)         * odd (:,it,ik) &
+            + tparfac*(vpa(:,2,il,ie)**2-0.5) * phiz(:,it,ik) &
+            +tperpfac*(vperp2(:,il,ie)-1.)    * phiz(:,it,ik))
        where (forbid(:,il)) g(:,2,iglo) = 0.0
 
 !       if (il == ng2+1) g(:,:,iglo) = 0.0
@@ -2283,13 +2288,13 @@ contains
     use kt_grids, only: naky, ntheta0, reality
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, ie_idx
     use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac, ct, st, c2t, s2t
     integer :: iglo
-    integer :: ig, ik, it, il, is, j
+    integer :: ig, ik, it, il, is, j, ie
     
     phi = 0.
     odd = 0.
@@ -2340,20 +2345,21 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)       
 
        g(:,1,iglo) = phiinit* &
             ( dfac*spec(is)%dens0            * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,1,iglo)         * odd(:,it,ik) &
-            + tparfac*(vpa(:,1,iglo)**2-0.5) * phi(:,it,ik) &
-            +tperpfac*(vperp2(:,iglo)-1.)    * phi(:,it,ik))
+            + 2.*ufac* vpa(:,1,il,ie)         * odd(:,it,ik) &
+            + tparfac*(vpa(:,1,il,ie)**2-0.5) * phi(:,it,ik) &
+            +tperpfac*(vperp2(:,il,ie)-1.)    * phi(:,it,ik))
        where (forbid(:,il)) g(:,1,iglo) = 0.0
 
        g(:,2,iglo) = phiinit* &
             ( dfac*spec(is)%dens0            * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,2,iglo)         * odd(:,it,ik) &
-            + tparfac*(vpa(:,2,iglo)**2-0.5) * phi(:,it,ik) &
-            +tperpfac*(vperp2(:,iglo)-1.)    * phi(:,it,ik))
+            + 2.*ufac* vpa(:,2,il,ie)         * odd(:,it,ik) &
+            + tparfac*(vpa(:,2,il,ie)**2-0.5) * phi(:,it,ik) &
+            +tperpfac*(vperp2(:,il,ie)-1.)    * phi(:,it,ik))
        where (forbid(:,il)) g(:,2,iglo) = 0.0
 
     end do
@@ -2368,11 +2374,11 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, nakx => ntheta0, reality, kperp2
     use dist_fn_arrays, only: g, gnew, vpa
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx, ie_idx
     use fields_arrays, only: phinew, aparnew, bparnew
     use dist_fn, only: get_init_field
     implicit none
-    integer :: iglo, ik, it, is, i
+    integer :: iglo, ik, it, is, i, il, ie
     real :: fac
     complex, dimension (-ntgrid:ntgrid,nakx,naky) :: phi, jpar !! local !!
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac
@@ -2405,14 +2411,15 @@ contains
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        g(:,1,iglo) = &
             ( dfac*spec(is)%dens0                * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,1,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+            + 2.*ufac* vpa(:,1,il,ie)*spec(is)%u0 * jpar(:,it,ik) )
 
        g(:,2,iglo) = &
             ( dfac*spec(is)%dens0                * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,2,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+            + 2.*ufac* vpa(:,2,il,ie)*spec(is)%u0 * jpar(:,it,ik) )
 
     end do
 
@@ -2443,15 +2450,17 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
 
        g(:,1,iglo) = &
             ( dfac*spec(is)%dens0                * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,1,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+            + 2.*ufac* vpa(:,1,il,ie)*spec(is)%u0 * jpar(:,it,ik) )
 
        g(:,2,iglo) = &
             ( dfac*spec(is)%dens0                * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,2,iglo)*spec(is)%u0 * jpar(:,it,ik) )
+            + 2.*ufac* vpa(:,2,il,ie)*spec(is)%u0 * jpar(:,it,ik) )
 
     end do
 
@@ -2465,14 +2474,13 @@ contains
     use kt_grids, only: naky, ntheta0, theta0
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, ie_idx
     use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac
     integer :: iglo
-!    integer :: ig, ik, it, il, is, j
-    integer :: ig, ik, it, il, is
+    integer :: ig, ik, it, il, is, ie
     
     phi = 0.
     odd = 0.
@@ -2505,20 +2513,21 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)       
 
        g(:,1,iglo) = phiinit* &!spec(is)%z* &
             ( dfac                           * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,1,iglo)         * odd(:,it,ik) &
-            + tparfac*(vpa(:,1,iglo)**2-0.5) * phi(:,it,ik) &
-            +tperpfac*(vperp2(:,iglo)-1.)    * phi(:,it,ik))
+            + 2.*ufac* vpa(:,1,il,ie)         * odd(:,it,ik) &
+            + tparfac*(vpa(:,1,il,ie)**2-0.5) * phi(:,it,ik) &
+            +tperpfac*(vperp2(:,il,ie)-1.)    * phi(:,it,ik))
        where (forbid(:,il)) g(:,1,iglo) = 0.0
 
        g(:,2,iglo) = phiinit* &!spec(is)%z* &
             ( dfac                           * phi(:,it,ik) &
-            + 2.*ufac* vpa(:,2,iglo)         * odd(:,it,ik) &
-            + tparfac*(vpa(:,2,iglo)**2-0.5) * phi(:,it,ik) &
-            +tperpfac*(vperp2(:,iglo)-1.)    * phi(:,it,ik))
+            + 2.*ufac* vpa(:,2,il,ie)         * odd(:,it,ik) &
+            + tparfac*(vpa(:,2,il,ie)**2-0.5) * phi(:,it,ik) &
+            +tperpfac*(vperp2(:,il,ie)-1.)    * phi(:,it,ik))
        where (forbid(:,il)) g(:,2,iglo) = 0.0
 
     end do
@@ -2537,14 +2546,13 @@ contains
     use kt_grids, only: naky, ntheta0
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, ie_idx
     use constants, only: pi, zi
     use ran, only: ranf
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
     integer :: iglo
-!    integer :: ig, ik, it, il, is
-    integer :: ik, it, il, is
+    integer :: ik, it, il, is, ie
     real :: phase
     
     phi = 0.
@@ -2570,20 +2578,21 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)       
 
        g(:,1,iglo) = phiinit* &!spec(is)%z* &
             ( den1                         * phi(:,it,ik) &
-            + 2.*upar1* vpa(:,1,iglo)      * odd(:,it,ik) &
-            + tpar1*(vpa(:,1,iglo)**2-0.5) * phi(:,it,ik) &
-            + tperp1*(vperp2(:,iglo)-1.)   * phi(:,it,ik))
+            + 2.*upar1* vpa(:,1,il,ie)      * odd(:,it,ik) &
+            + tpar1*(vpa(:,1,il,ie)**2-0.5) * phi(:,it,ik) &
+            + tperp1*(vperp2(:,il,ie)-1.)   * phi(:,it,ik))
        where (forbid(:,il)) g(:,1,iglo) = 0.0
        
        g(:,2,iglo) = phiinit* &!spec(is)%z* &
             ( den1                         * phi(:,it,ik) &
-            + 2.*upar1* vpa(:,2,iglo)      * odd(:,it,ik) &
-            + tpar1*(vpa(:,2,iglo)**2-0.5) * phi(:,it,ik) &
-            + tperp1*(vperp2(:,iglo)-1.)   * phi(:,it,ik))
+            + 2.*upar1* vpa(:,2,il,ie)      * odd(:,it,ik) &
+            + tpar1*(vpa(:,2,il,ie)**2-0.5) * phi(:,it,ik) &
+            + tperp1*(vperp2(:,il,ie)-1.)   * phi(:,it,ik))
        where (forbid(:,il)) g(:,2,iglo) = 0.0
 
     end do
@@ -2670,20 +2679,21 @@ contains
     use theta_grid, only: theta
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew, vpa
-    use gs2_layouts, only: g_lo, il_idx, is_idx
+    use gs2_layouts, only: g_lo, il_idx, is_idx, ie_idx
     use species, only: spec, electron_species
 
     implicit none
     integer :: iglo
-    integer :: il, is
+    integer :: il, is, ie
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        is = is_idx(g_lo,iglo)
        if (spec(is_idx(g_lo, iglo))%type == electron_species) cycle
        il = il_idx(g_lo,iglo)
-       g(:,1,iglo) = sin(theta)*vpa(:,1,iglo)*spec(is)%z
+       ie = ie_idx(g_lo,iglo)
+       g(:,1,iglo) = sin(theta)*vpa(:,1,il,ie)*spec(is)%z
        where (forbid(:,il)) g(:,1,iglo) = 0.0
-       g(:,2,iglo) = sin(theta)*vpa(:,2,iglo)*spec(is)%z
+       g(:,2,iglo) = sin(theta)*vpa(:,2,il,ie)*spec(is)%z
        where (forbid(:,il)) g(:,2,iglo) = 0.0
     end do
     g = phiinit * g 
@@ -2702,11 +2712,11 @@ contains
     use theta_grid, only: ntgrid, delthet, bmag
     use kt_grids, only: akx
     use theta_grid_params, only: eps, epsl, pk
-    use gs2_layouts, only: g_lo, ik_idx, il_idx
+    use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx
     use mp, only: broadcast
     use constants, only: zi
     implicit none
-    integer :: iglo, ik, il
+    integer :: iglo, ik, il, ie
     real :: c1, c2
 
     call broadcast (epsl)
@@ -2716,17 +2726,18 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
-       if (any(vpa(-ntgrid:ntgrid-1,:,iglo) == 0.0)) then
+       ie = ie_idx(g_lo,iglo)
+       if (any(vpa(-ntgrid:ntgrid-1,:,il,ie) == 0.0)) then
           c1 = 0.0
           c2 = 0.0
        else
           c2 = -akx(ik)*epsl/eps/pk &
                *sum(delthet(-ntgrid:ntgrid-1)/bmag(-ntgrid:ntgrid-1))
-          c1 = c2/sum(delthet(-ntgrid:ntgrid-1)/vpa(-ntgrid:ntgrid-1,1,iglo))
-          c2 = c2/sum(delthet(-ntgrid:ntgrid-1)/vpa(-ntgrid:ntgrid-1,2,iglo))
+          c1 = c2/sum(delthet(-ntgrid:ntgrid-1)/vpa(-ntgrid:ntgrid-1,1,il,ie))
+          c2 = c2/sum(delthet(-ntgrid:ntgrid-1)/vpa(-ntgrid:ntgrid-1,2,il,ie))
        end if
-       g(:,1,iglo) = -zi*akx(ik)*epsl/eps/pk*vpa(:,1,iglo)/bmag - zi*c1
-       g(:,2,iglo) = -zi*akx(ik)*epsl/eps/pk*vpa(:,2,iglo)/bmag - zi*c2
+       g(:,1,iglo) = -zi*akx(ik)*epsl/eps/pk*vpa(:,1,il,ie)/bmag - zi*c1
+       g(:,2,iglo) = -zi*akx(ik)*epsl/eps/pk*vpa(:,2,il,ie)/bmag - zi*c2
     end do
     gnew = g
   end subroutine ginit_test3
@@ -2756,7 +2767,7 @@ contains
     use kt_grids, only: naky, nakx => ntheta0, akx, aky, reality
     use kt_grids, only: nx,ny,kperp2
     use dist_fn_arrays, only: g, gnew, vpa, vperp2
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx, ie_idx
     use gs2_transforms, only: inverse2,transform2
     use run_parameters, only: beta
     use le_grids, only: integrate_moment
@@ -2770,7 +2781,7 @@ contains
     implicit none
     integer :: iglo
 !    integer :: ig, ik, it, is, is2
-    integer :: ig, ik, it, is
+    integer :: ig, ik, it, is, il, ie
     integer :: i,j
 
     ! nkxyz and ukxyz determine profiles in kx-ky plane
@@ -3154,46 +3165,48 @@ contains
        ik = ik_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
 
        g(:,1,iglo) = ( &
             & ( dfac*spec(is)%dens0 / nnrm(it,ik,is) &
             & + tparfac*spec(is)%tpar0 / tparanrm(it,ik,is) &
-            & * (vpa(:,1,iglo)**2-mom_shift_para(it,ik,is)) &
+            & * (vpa(:,1,il,ie)**2-mom_shift_para(it,ik,is)) &
             & + tperpfac*spec(is)%tperp0 / tperpnrm(it,ik,is) &
-            & * (vperp2(:,iglo)-mom_shift_perp(it,ik,is)) &
+            & * (vperp2(:,il,ie)-mom_shift_perp(it,ik,is)) &
             & ) * nkxyz(:,it,ik) &
-            & + ufac*2.*vpa(:,1,iglo)*spec(is)%u0 / unrm(it,ik,is) &
+            & + ufac*2.*vpa(:,1,il,ie)*spec(is)%u0 / unrm(it,ik,is) &
             & * ukxyz(:,it,ik) &
             )
        g(:,2,iglo) = ( &
             & ( dfac*spec(is)%dens0 / nnrm(it,ik,is) &
             & + tparfac*spec(is)%tpar0 / tparanrm(it,ik,is) &
-            & * (vpa(:,2,iglo)**2-mom_shift_para(it,ik,is)) &
+            & * (vpa(:,2,il,ie)**2-mom_shift_para(it,ik,is)) &
             & + tperpfac*spec(is)%tperp0 / tperpnrm(it,ik,is) &
-            & * (vperp2(:,iglo)-mom_shift_perp(it,ik,is)) &
+            & * (vperp2(:,il,ie)-mom_shift_perp(it,ik,is)) &
             & ) * nkxyz(:,it,ik) &
-            & + ufac*2.*vpa(:,2,iglo)*spec(is)%u0 / unrm(it,ik,is) &
+            & + ufac*2.*vpa(:,2,il,ie)*spec(is)%u0 / unrm(it,ik,is) &
             & * ukxyz(:,it,ik) &
             )
 
        g_eq(:,1,iglo) = ( &
             & ( dfac*spec(is)%dens0 / nnrm(it,ik,is) &
             & + tparfac*spec(is)%tpar0 / tparanrm(it,ik,is) &
-            & * (vpa(:,1,iglo)**2-mom_shift_para(it,ik,is)) &
+            & * (vpa(:,1,il,ie)**2-mom_shift_para(it,ik,is)) &
             & + tperpfac*spec(is)%tperp0 / tperpnrm(it,ik,is) &
-            & * (vperp2(:,iglo)-mom_shift_perp(it,ik,is)) &
+            & * (vperp2(:,il,ie)-mom_shift_perp(it,ik,is)) &
             & ) * nkxyz_eq(:,it,ik) &
-            & + ufac*2.*vpa(:,1,iglo)*spec(is)%u0 / unrm(it,ik,is) &
+            & + ufac*2.*vpa(:,1,il,ie)*spec(is)%u0 / unrm(it,ik,is) &
             & * ukxyz_eq(:,it,ik) &
             )
        g_eq(:,2,iglo) = ( &
             & ( dfac*spec(is)%dens0 / nnrm(it,ik,is) &
             & + tparfac*spec(is)%tpar0 / tparanrm(it,ik,is) &
-            & * (vpa(:,2,iglo)**2-mom_shift_para(it,ik,is)) &
+            & * (vpa(:,2,il,ie)**2-mom_shift_para(it,ik,is)) &
             & + tperpfac*spec(is)%tperp0 / tperpnrm(it,ik,is) &
-            & * (vperp2(:,iglo)-mom_shift_perp(it,ik,is)) &
+            & * (vperp2(:,il,ie)-mom_shift_perp(it,ik,is)) &
             & ) * nkxyz_eq(:,it,ik) &
-            & + ufac*2.*vpa(:,2,iglo)*spec(is)%u0 / unrm(it,ik,is) &
+            & + ufac*2.*vpa(:,2,il,ie)*spec(is)%u0 / unrm(it,ik,is) &
             & * ukxyz_eq(:,it,ik) &
             )
     end do

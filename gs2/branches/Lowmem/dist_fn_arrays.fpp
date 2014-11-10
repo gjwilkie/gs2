@@ -19,10 +19,11 @@ module dist_fn_arrays
   real, dimension(:), allocatable :: kx_shift, theta0_shift
   ! (naky)
 
-  real, dimension (:,:,:), allocatable :: vpa, vpac, vpar
+  real, dimension (:,:,:,:), allocatable :: vpac, vpa
+  real, dimension (:,:,:), allocatable :: vperp2, vpar
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
-  real, dimension (:,:), allocatable :: vperp2, aj0, aj1
+  real, dimension (:,:), allocatable :: aj0, aj1
   ! (-ntgrid:ntgrid, -g-layout-)
 
   integer, dimension (:), allocatable :: ittp
@@ -81,7 +82,7 @@ contains
        do ig = -ntgrid, ntgrid
           !<DD>Don't adjust in the forbidden region as we don't set g/h here
           if(forbid(ig,il)) cycle
-          adj = anon(ie)*2.0*vperp2(ig,iglo)*aj1(ig,iglo) &
+          adj = anon(ie)*2.0*vperp2(ig,il,ie)*aj1(ig,iglo) &
                *bpar(ig,it,ik)*facbpar &
                + spec(is)%z*anon(ie)*phi(ig,it,ik)*aj0(ig,iglo) &
                /spec(is)%temp*facphi

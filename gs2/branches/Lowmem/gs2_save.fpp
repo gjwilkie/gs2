@@ -527,7 +527,7 @@ contains
              !<DD 02-09-2010> Define velocity variables
              !Define vpa variable
              istatus = nf90_def_var (ncid, "vpa", netcdf_real, &
-                  (/ thetaid, signid, gloid /), vpa_id)
+                  (/ thetaid, signid, lambda_id, energy_id /), vpa_id)
              
              !Check variable created successfully
              IF (istatus /= NF90_NOERR) THEN
@@ -538,7 +538,7 @@ contains
              
              !Define vperp2 variable
              istatus = nf90_def_var (ncid, "vperp2", netcdf_real, &
-                  (/ thetaid, gloid /), vperp2_id)
+                  (/ thetaid, lambda_id, energy_id /), vperp2_id)
              
              !Check variable created successfully
              IF (istatus /= NF90_NOERR) THEN
