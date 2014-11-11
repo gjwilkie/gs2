@@ -19,8 +19,8 @@ module dist_fn_arrays
   real, dimension(:), allocatable :: kx_shift, theta0_shift
   ! (naky)
 
-  real, dimension (:,:,:,:), allocatable :: vpac, vpa
-  real, dimension (:,:,:), allocatable :: vperp2, vpar
+  real, dimension (:,:,:,:), allocatable :: vpac, vpa, vpar
+  real, dimension (:,:,:), allocatable :: vperp2
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   real, dimension (:,:), allocatable :: aj0, aj1

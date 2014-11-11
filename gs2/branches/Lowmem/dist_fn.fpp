@@ -618,7 +618,9 @@ subroutine check_dist_fn(report_unit)
     call init_hyper
 
     if (debug) write(6,*) "init_dist_fn: init_mom_coeff"
-    call init_mom_coeff
+    !<DD>Would be nice to avoid this if not used as result in several
+    !potentially large arrays being created.
+    call init_mom_coeff 
 
     if (debug) write(6,*) "init_dist_fn: init_source_term"
     call init_source_term
@@ -1069,8 +1071,8 @@ subroutine check_dist_fn(report_unit)
     real :: al1, e1
     
     if (.not.allocated(vpa)) then
-       allocate (vpar   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        !If lambda/energy are split nicely can just allocate this procs small block of it here
+       allocate (vpar   (-ntgrid:ntgrid,2,g_lo%llim_il:g_lo%ulim_il,g_lo%llim_ie:g_lo%ulim_ie))
        allocate (vpa    (-ntgrid:ntgrid,2,g_lo%llim_il:g_lo%ulim_il,g_lo%llim_ie:g_lo%ulim_ie))
        allocate (vpac   (-ntgrid:ntgrid,2,g_lo%llim_il:g_lo%ulim_il,g_lo%llim_ie:g_lo%ulim_ie))
        allocate (vperp2 (-ntgrid:ntgrid,g_lo%llim_il:g_lo%ulim_il,g_lo%llim_ie:g_lo%ulim_ie))
@@ -1098,9 +1100,11 @@ subroutine check_dist_fn(report_unit)
 !CMR, 4/8/2011:
 !CMR : vpa is parallel velocity at grid points (normalised to v_ts)
 !CMR : vpac is grid centered parallel velocity
-!CMR : vpar = q_s/sqrt{T_s m_s}*DELT/DTHETA * vpac |\gradpar(theta)| 
+!CMR : vpar = DELT/DTHETA * vpac |\gradpar(theta)| 
 !                                     where gradpar(theta) is centered
-!  ie  vpar = q_s/sqrt{T_s m_s} (v_||^GS2). \gradpar(theta)/DTHETA . DELT
+!  ie  vpar = (v_||^GS2). \gradpar(theta)/DTHETA . DELT
+!DD : As part of lowmem approach removed q_s/sqrt{T_s m_s} factor from vpar, now multiply by this (spec(is)%zstm*tunits(ik))
+!     wherever vpar is used
 ! 
 !   comments on vpac, vpar
 !     (i) surely vpac=0 at or beyond bounce points, so WHY was it set to +-1?
@@ -1120,20 +1124,17 @@ subroutine check_dist_fn(report_unit)
        end where
        vpac(ntgrid,:,il,ie) = 0.0
 
-       ik = ik_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-
-       vpar(-ntgrid:ntgrid-1,1,iglo) = &
-            spec(is)%zstm*tunits(ik)*code_dt &
-            *0.5/delthet(-ntgrid:ntgrid-1) &
+       vpar(-ntgrid:ntgrid-1,1,il,ie) = &
+            !spec(is)%zstm*tunits(ik)*code_dt &
+            code_dt*0.5/delthet(-ntgrid:ntgrid-1) &
             *(abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid)))&
             *vpac(-ntgrid:ntgrid-1,1,il,ie)
-       vpar(-ntgrid:ntgrid-1,2,iglo) = &
-            spec(is)%zstm*tunits(ik)*code_dt &
-            *0.5/delthet(-ntgrid:ntgrid-1) &
+       vpar(-ntgrid:ntgrid-1,2,il,ie) = &
+            !spec(is)%zstm*tunits(ik)*code_dt &
+            code_dt*0.5/delthet(-ntgrid:ntgrid-1) &
             *(abs(gradpar(-ntgrid:ntgrid-1)) + abs(gradpar(-ntgrid+1:ntgrid)))&
             *vpac(-ntgrid:ntgrid-1,2,il,ie)
-       vpar(ntgrid,:,iglo) = 0.0
+       vpar(ntgrid,:,il,ie) = 0.0
     end do
   end subroutine init_vpar
 
@@ -1203,6 +1204,7 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: nlambda, ng2, forbid, negrid
     use constants, only: zi
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use run_parameters, only: tunits
     implicit none
     integer :: iglo
     integer :: ig, ik, it, il, ie, is, isgn
@@ -1240,7 +1242,7 @@ subroutine check_dist_fn(report_unit)
              ! when doing parallel field solve for -vpar
              ! also, note that vpar is (vpa bhat + v_{magnetic}) . grad theta / delthet
              ! if compile with LOWFLOW defined
-             vp = vpar(ig,1,iglo)
+             vp = vpar(ig,1,il,ie)*spec(is)%zstm*tunits(ik)
              bd = bkdiff(is)
 
              ainv(ig,isgn,iglo) &
@@ -1314,7 +1316,7 @@ endif
 
   subroutine init_source_term
     use dist_fn_arrays, only: vpar, vpac, aj0
-    use run_parameters, only: wunits, fapar
+    use run_parameters, only: wunits, fapar, tunits
     use gs2_time, only: code_dt
     use species, only: spec,nspec
     use hyper, only: D_res
@@ -1375,7 +1377,7 @@ endif
 #else
 
              !Phi m
-             source_coeffs(1,ig,isgn,iglo)=-2*anon(ie)*vpar(ig,isgn,iglo)
+             source_coeffs(1,ig,isgn,iglo)=-2*anon(ie)*vpar(ig,isgn,il,ie)*spec(is)%zstm*tunits(ik)
              !Phi p
              source_coeffs(2,ig,isgn,iglo)=-zi*anon(ie)*wdrift(ig,isgn,iglo) &
               + zi*(wstar(ik,ie,is) &
@@ -3334,12 +3336,11 @@ endif
     use nonlinear_terms, only: nonlin
     use run_parameters, only: fapar
     implicit none
-!    logical :: alloc = .true.
 
-!    if (alloc) then
     if (.not. allocated(g)) then
        allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       !<DD>CAN WE LIMIT G0 TO ONLY EXIST WHEN REQUIRED, NOT GLOBALLY?
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        if(opt_source)then
           if(fapar.gt.0)then
@@ -3381,8 +3382,6 @@ endif
     endif
 
     g = 0. ; gnew = 0. ; g0 = 0.
-
-!    alloc = .false.
   end subroutine allocate_arrays
 
   !> This function calculates the distribution function at the next timestep. 
@@ -4148,7 +4147,7 @@ endif
     use kt_grids, only: aky
     use le_grids, only: nlambda, ng2, lmax, anon, negrid
     use species, only: spec, nspec
-    use run_parameters, only: fphi, fapar, fbpar, wunits
+    use run_parameters, only: fphi, fapar, fbpar, wunits, tunits
     use gs2_time, only: code_dt
     use nonlinear_terms, only: nonlin
     use hyper, only: D_res
@@ -4397,7 +4396,7 @@ endif
               -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) &
               *(phi_p - apar_p*spec(is)%stm*vpac(ig,isgn,il,ie))
 #else
-         source(ig) = anon(ie)*(-2.0*vpar(ig,isgn,iglo)*phi_m &
+         source(ig) = anon(ie)*(-2.0*vpar(ig,isgn,il,ie)*phi_m*spec(is)%zstm*tunits(ik) &
               -spec(is)%zstm*vpac(ig,isgn,il,ie) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
@@ -8806,12 +8805,9 @@ endif
     complex, allocatable :: coeff0(:,:,:,:)
     complex, allocatable :: gtmp(:,:,:)
     real, allocatable :: wgt(:)
-!    logical, parameter :: analytical = .false.
     logical, parameter :: analytical = .true.
-!    logical, save :: initialized=.false.
     real :: bsq
     
-!    if (initialized) return
     if (mominit) return
     mominit = .true.
 
@@ -9221,7 +9217,14 @@ endif
     ! note that vpar has contribution from v_{magnetic} . grad theta in it
     ! hneoc = 1 + H^{neo} below accounts for usual parallel streaming source term,
     ! as well as first of three terms multiplying F_1 in Eq. 42 of MAB's GS2 notes
-    vparterm = -2.0*vpar*hneoc + vparterm
+    do iglo=g_lo%llim_proc,g_lo%ulim_proc
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+
+       vparterm(:,:,iglo) = -2.0*vpar(:,:,il,ie)*hneoc*spec(is)%zstm*tunits(ik) + vparterm(:,:,iglo)
+    enddo
     
     ! hneoc below accounts for usual v_magnetic source term, 
     ! as well as second of three terms multiplying F_1 in Eq. 42 of MAB's GS2 notes
