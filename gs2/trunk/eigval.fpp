@@ -875,10 +875,12 @@ contains
     use collisions, only: vnmult
     use run_parameters, only: fphi, fapar, fbpar
     use fields, only: set_init_fields
+    use fields_arrays, only: phinew, bparnew
     use gs2_save, only: EigNetcdfID, init_eigenfunc_file, finish_eigenfunc_file
     use gs2_save, only: add_eigenpair_to_file, gs2_save_for_restart, finish_save
     use file_utils, only: run_name
-    use dist_fn_arrays, only: gnew
+    use dist_fn_arrays, only: gnew, g_adjust
+    use gs2_diagnostics, only: save_distfn
     implicit none
     EPS, intent(in) :: my_solver
     Mat, intent(in) :: my_operator
@@ -943,7 +945,20 @@ contains
              !First make the unique bit of the name
              write(restart_unique_string,'(".eig_",I0)') ieig
 
+             !Save restart files
              call gs2_save_for_restart(gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar,.true.,fileopt=restart_unique_string)
+
+             !Save distfn files
+             if(save_distfn)then
+                !Convert h to distribution function
+                call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
+                
+                !Save dfn, fields and velocity grids to file
+                call gs2_save_for_restart(gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar,.true.,distfn=.true.,fileopt=restart_unique_string)
+
+                !Convert distribution function back to h
+                call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
+             endif
 
              !Reset the status of save_for_restart
              call finish_save
