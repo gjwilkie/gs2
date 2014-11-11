@@ -60,7 +60,7 @@ contains
     !
     use species, only: spec
     use theta_grid, only: ntgrid
-    use le_grids, only: anon, forbid
+    use le_grids, only: anon, jend, ng2
     use gs2_layouts, only: g_lo, ik_idx, it_idx, ie_idx, is_idx, il_idx
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
@@ -69,6 +69,9 @@ contains
 
     integer :: iglo, ig, ik, it, ie, is, il
     complex :: adj
+    logical :: trapped=.false.
+
+    if (minval(jend) .gt. ng2) trapped=.true.
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -81,7 +84,11 @@ contains
        ! 1/bmag is needed here.
        do ig = -ntgrid, ntgrid
           !<DD>Don't adjust in the forbidden region as we don't set g/h here
-          if(forbid(ig,il)) cycle
+!CMR, 13/10/2014: attempting minor reduction in memory bandwidth by replacing 
+!         if( forbid(ig,il) ) cycle with 
+!         if ( trapped .and. il > jend(ig))
+          if ( trapped .and. il > jend(ig)) cycle 
+
           adj = anon(ie)*2.0*vperp2(ig,il,ie)*aj1(ig,iglo) &
                *bpar(ig,it,ik)*facbpar &
                + spec(is)%z*anon(ie)*phi(ig,it,ik)*aj0(ig,iglo) &

@@ -104,6 +104,9 @@ module eigval
   !May be useful when looking at marginal modes etc.
   integer :: nadv
 
+  !If true then save restart files for each eigenmode
+  logical :: save_restarts
+
   !A custom type to make it easy to encapsulate specific settings
   type EpsSettings
      logical :: use_ginit
@@ -263,7 +266,7 @@ contains
 
     namelist /eigval_knobs/ n_eig, max_iter, tolerance, &
          solver_option, extraction_option, which_option, transform_option,&
-         targ_re, targ_im, use_ginit, nadv
+         targ_re, targ_im, use_ginit, nadv, save_restarts
     integer :: ierr, in_file
     logical :: exist
 
@@ -280,6 +283,7 @@ contains
        transform_option='default'
        use_ginit=.false.
        nadv=1
+       save_restarts=.false.
 
        !Check if name list exists and if so read it
        in_file=input_unit_exist(nml_name,exist)
@@ -318,6 +322,7 @@ contains
     call broadcast(targ_im)
     call broadcast(use_ginit)
     call broadcast(nadv)
+    call broadcast(save_restarts)
   end subroutine read_parameters
 
   !> Write the eigval_knobs namelist
@@ -866,11 +871,14 @@ contains
   !> Routine to write results to screen and netcdf
   subroutine ReportResults(my_solver,my_operator,my_settings)
     use mp, only: proc0
-    use gs2_time, only: code_dt
+    use gs2_time, only: code_dt, user_time, user_dt
+    use collisions, only: vnmult
     use run_parameters, only: fphi, fapar, fbpar
     use fields, only: set_init_fields
-    use gs2_save, only: EigNetcdfID, init_eigenfunc_file, finish_eigenfunc_file, add_eigenpair_to_file
+    use gs2_save, only: EigNetcdfID, init_eigenfunc_file, finish_eigenfunc_file
+    use gs2_save, only: add_eigenpair_to_file, gs2_save_for_restart, finish_save
     use file_utils, only: run_name
+    use dist_fn_arrays, only: gnew
     implicit none
     EPS, intent(in) :: my_solver
     Mat, intent(in) :: my_operator
@@ -883,6 +891,8 @@ contains
     logical :: all_found
     PetscInt :: ieig
     type(EigNetcdfID) :: io_ids
+    character(len=20) :: restart_unique_string
+    integer :: istatus
 
     !Find out how many iterations were performed
     call EPSGetIterationNumber(my_solver,iteration_count,ierr)
@@ -927,6 +937,17 @@ contains
 
           !Add to file
           if(proc0)call add_eigenpair_to_file(EigVal,fphi,fapar,fbpar,io_ids)
+
+          !Save restart file
+          if(save_restarts) then
+             !First make the unique bit of the name
+             write(restart_unique_string,'(".eig_",I0)') ieig
+
+             call gs2_save_for_restart(gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar,.true.,fileopt=restart_unique_string)
+
+             !Reset the status of save_for_restart
+             call finish_save
+          endif
        enddo
 
        !Close netcdf file

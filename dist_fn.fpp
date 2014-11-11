@@ -17,6 +17,9 @@ module dist_fn
   public :: init_dist_fn, finish_dist_fn
   public :: read_parameters, wnml_dist_fn, wnml_dist_fn_species, check_dist_fn
   public :: timeadv, exb_shear, g_exb, g_exbfac
+  public :: g_exb_error_limit
+  public :: g_exb_start_timestep, g_exb_start_time
+  public :: init_bessel, init_fieldeq
   public :: getfieldeq, getan, getmoms, getemoms
   public :: getfieldeq_nogath
   public :: flux, lf_flux, eexchange
@@ -55,6 +58,8 @@ module dist_fn
   real :: t0, omega0, gamma0, source0
   real :: phi_ext, afilter, kfilter
   real :: wfb, g_exb, g_exbfac, omprimfac, btor_slab, mach
+  real :: g_exb_start_time, g_exb_error_limit
+  integer :: g_exb_start_timestep
   logical :: dfexist, skexist, nonad_zero, lf_default, lf_decompose, esv, opt_init_bc, opt_source
 !CMR, 12/9/13: New logical cllc to modify order of operator in timeadv
 !CMR, 21/5/14: New logical wfb_cmr to enforce trapping conditions on wfb
@@ -667,6 +672,7 @@ subroutine check_dist_fn(report_unit)
          driftknob, tpdriftknob, poisfac, adiabatic_option, &
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, &
+         g_exb_start_time, g_exb_start_timestep, g_exb_error_limit, &
          lf_decompose, esv, wfb_cmr, opt_init_bc, opt_source, zero_forbid
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
@@ -699,6 +705,9 @@ subroutine check_dist_fn(report_unit)
        kfilter = 0.0
        g_exb = 0.0
        g_exbfac = 1.0
+       g_exb_error_limit = 0.0
+       g_exb_start_time = -1
+       g_exb_start_timestep = -1
        mach = 0.0
        omprimfac = 1.0
        btor_slab = 0.0
@@ -758,6 +767,9 @@ subroutine check_dist_fn(report_unit)
     call broadcast (phi_ext)
     call broadcast (g_exb)
     call broadcast (g_exbfac)
+    call broadcast (g_exb_start_timestep)
+    call broadcast (g_exb_start_time)
+    call broadcast (g_exb_error_limit)
     call broadcast (mach)
     call broadcast (omprimfac)
     call broadcast (btor_slab)
@@ -3485,7 +3497,7 @@ endif
 !
 !  end subroutine init_exb_shear
 
-  subroutine exb_shear (g0, phi, apar, bpar)
+  subroutine exb_shear (g0, phi, apar, bpar, istep, field_local)
 ! MR, 2007: modified Bill Dorland's version to include grids where kx grid
 !           is split over different processors
 ! MR, March 2009: ExB shear now available on extended theta grid (ballooning)
@@ -3494,8 +3506,8 @@ endif
 ! CMR, Oct 2010: multiply timestep by tunits(iky) for runs with wstar_units=.t.
 ! CMR, Oct 2010: add save statements to prevent potentially large and memory 
 !                killing array allocations!
-    
-    use mp, only: send, receive, mp_abort
+   
+    use mp, only: send, receive, mp_abort, broadcast
     use gs2_layouts, only: ik_idx, it_idx, g_lo, idx_local, idx, proc_id
     use run_parameters, only: tunits
     use theta_grid, only: ntgrid, ntheta, shat
@@ -3505,7 +3517,7 @@ endif
     use species, only: nspec
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: kx_shift, theta0_shift
-    use gs2_time, only: code_dt, code_dt_old
+    use gs2_time, only: code_dt, code_dt_old, code_time
     use constants, only: twopi    
 
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
@@ -3516,7 +3528,10 @@ endif
     integer :: ierr, j 
     integer :: ik, it, ie, is, il, isgn, to_iglo, from_iglo
     integer:: iib, iit, ileft, iright, i
-
+    integer, save :: istep_last
+    integer, intent(in) :: istep
+    logical, intent(in), optional :: field_local
+    logical :: field_local_loc
     real, save :: dkx, dtheta0
     real :: gdt
     logical, save :: exb_first = .true.
@@ -3574,7 +3589,10 @@ endif
     ! also to get things right after changing time step size
     ! added May 18, 2009 -- MAB
     gdt = 0.5*(code_dt + code_dt_old)
-    
+    if (g_exb_start_timestep > istep) return
+    if (g_exb_start_time >= 0 .and. code_time < g_exb_start_time) return
+    if (istep.eq.istep_last) return !Don't allow flow shear to happen more than once per step
+    istep_last = istep
 ! kx_shift is a function of time.   Update it here:  
 ! MR, 2007: kx_shift array gets saved in restart file
 ! CMR, 5/10/2010: multiply timestep by tunits(ik) for wstar_units=.true. 
@@ -3592,7 +3610,17 @@ endif
        enddo 
     end if
 
-    
+    !If using field_option='local' and x/it is not entirely local
+    !then we need to make sure that all procs know the full field
+    !THIS IS A TEMPORARY FIX AND WE SHOULD PROBABLY DO SOMETHING BETTER
+    field_local_loc=.false.
+    if(present(field_local)) field_local_loc=field_local
+    if(any(jump.ne.0).and.(.not.g_lo%x_local).and.field_local_loc) then
+       if(fphi>epsilon(0.0)) call broadcast(phi)
+       if(fapar>epsilon(0.0)) call broadcast(apar)
+       if(fbpar>epsilon(0.0)) call broadcast(bpar)
+    endif
+
     if (.not. box .and. shat .ne. 0.0 ) then
 ! MR, March 2009: impact of ExB shear on extended theta grid computed here
 !                 for finite shat
@@ -4231,10 +4259,15 @@ endif
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! special source term for totally trapped particles
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!CMR, 13/10/2014: 
+! Upper limit of following loops setting source changed from ntgrid to ntgrid-1
+! Source is allocated as: source(-ntgrid:ntgrid-1), so ntgrid is out of bounds.
+
     if (source_option_switch == source_option_full .or. &
         source_option_switch == source_option_phiext_full) then
        if (nlambda > ng2 .and. isgn == 2) then
-          do ig = -ntgrid, ntgrid
+          do ig = -ntgrid, ntgrid-1
              if (il < ittp(ig)) cycle
              source(ig) &
                   = g(ig,2,iglo)*a(ig,2,iglo) &
@@ -4249,7 +4282,7 @@ endif
 
           if (source_option_switch == source_option_phiext_full .and. &
                aky(ik) < epsilon(0.0)) then
-             do ig = -ntgrid, ntgrid
+             do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle             
                 source(ig) = source(ig) - zi*anon(ie)* &
 #ifdef LOWFLOW
@@ -4265,18 +4298,18 @@ endif
           case (0)
              ! nothing
           case (1)
-             do ig = -ntgrid, ntgrid
+             do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle
                 source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
              end do
           case (2) 
-             do ig = -ntgrid, ntgrid
+             do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle
                 source(ig) = source(ig) + 0.5*code_dt*( &
                      1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
              end do
           case default
-             do ig = -ntgrid, ntgrid
+             do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle
                 source(ig) = source(ig) + 0.5*code_dt*( &
                      (23./12.)*gexp_1(ig,isgn,iglo) &
@@ -4291,18 +4324,18 @@ endif
              case (0)
                 ! nothing
              case (1)
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
                 end do
              case (2) 
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*( &
                         1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
                 end do                   
              case default
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig) = source(ig) + 0.5*code_dt*( &
                           (23./12.)*gexp_1(ig,isgn,iglo) &
@@ -4545,11 +4578,16 @@ endif
     end if
 
     ! special source term for totally trapped particles (isgn=2 only)
+
+!CMR, 13/10/2014: 
+! Upper limit of following loops setting source changed from ntgrid to ntgrid-1
+! Source allocated as: source(-ntgrid:ntgrid-1,2), so ntgrid is out of bounds.
+
     isgn=2
     if (source_option_switch == source_option_full .or. &
          source_option_switch == source_option_phiext_full) then
        if (nlambda > ng2) then
-          do ig = -ntgrid, ntgrid
+          do ig = -ntgrid, ntgrid-1
              if (il < ittp(ig)) cycle
              source(ig,isgn) &
                   = g(ig,2,iglo)*a(ig,2,iglo) &
@@ -4564,7 +4602,7 @@ endif
              
           if (source_option_switch == source_option_phiext_full .and. &
                aky(ik) < epsilon(0.0)) then
-             do ig = -ntgrid, ntgrid
+             do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle             
                 source(ig,isgn) = source(ig,isgn) - zi*anon(ie)* &
 #ifdef LOWFLOW
@@ -4581,18 +4619,18 @@ endif
              case (0)
                 ! nothing
              case (1)
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
                 end do
              case (2) 
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                         1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
                 end do
              case default
-                do ig = -ntgrid, ntgrid
+                do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
                    source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
                         (23./12.)*gexp_1(ig,isgn,iglo) &
@@ -4692,7 +4730,8 @@ endif
     integer :: ig, ik, it, il, ie, isgn, is
     integer :: ilmin
     complex :: beta1
-    complex, dimension (-ntgrid:ntgrid,2) :: source, g1, g2
+    complex, dimension (-ntgrid:ntgrid,2) :: g1, g2
+    complex, dimension (-ntgrid:ntgrid-1,2) :: source
     complex :: adjleft, adjright
     logical :: use_pass_homog, speriod_flag
     integer :: ntgl, ntgr

@@ -819,7 +819,7 @@ contains
 
   end subroutine gs2_save_for_restart
 
-  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar)
+  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, fileopt)
 !MR, 2007: restore kx_shift array if already allocated
 # ifdef NETCDF
     use mp, only: iproc
@@ -836,6 +836,7 @@ contains
     real, intent (in) :: scale
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
+    character (20), INTENT (in), optional :: fileopt
 # ifdef NETCDF
 # ifdef NETCDF_PARALLEL
     integer, dimension(3) :: counts, start_pos
@@ -851,6 +852,10 @@ contains
     if (.not.initialized) then
        initialized = .true.
        file_proc = trim(restart_file)
+
+       IF (PRESENT(fileopt)) THEN
+          file_proc=trim(file_proc)//trim(fileopt)
+       END IF
 
 # ifdef NETCDF_PARALLEL
        if(read_many) then

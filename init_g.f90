@@ -28,7 +28,8 @@ module init_g
        ginitopt_recon3 = 29, ginitopt_ot = 30, &
        ginitopt_zonal_only = 31, ginitopt_single_parallel_mode = 32, &
        ginitopt_all_modes_equal = 33, &
-       ginitopt_default_odd=34, ginitopt_restart_memory=35 !Note ginitopt_restart_memory isn't meant to be a user selected choice.
+       ginitopt_default_odd=34, ginitopt_restart_memory=35, & !Note ginitopt_restart_memory isn't meant to be a user selected choice.
+       ginitopt_restart_eig=36, ginitopt_no_zonal = 37
 
   real :: width0, dphiinit, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
@@ -41,7 +42,7 @@ module init_g
   integer, dimension(2) :: ikk, itt
   integer, dimension(3) :: ikkk,ittt
   complex, dimension (6) :: phiamp, aparamp
-
+  integer :: restart_eig_id
   ! These are used for the function ginit_single_parallel_mode, and specify the
   !  kparallel to initialize. In the case of  zero magnetic shear, of course, the box 
   ! is periodic in the parallel direction, and so only harmonics of the box size 
@@ -665,6 +666,7 @@ contains
     call broadcast (ikpar_init)
     call broadcast (ikx_init)
     call broadcast (kpar_init)
+    call broadcast (restart_eig_id)
     ! <RN
     call init_save (restart_file)
 
@@ -762,6 +764,11 @@ contains
        call init_tstart (tstart, istatus)
        restarted = .true.
        scale = 1.
+    case (ginitopt_restart_eig)
+       call ginit_restart_eig 
+       call init_tstart (tstart, istatus)
+       restarted = .true.
+       scale = 1.
     case (ginitopt_restart_small)
        call ginit_restart_small
        call init_tstart (tstart, istatus)
@@ -773,6 +780,11 @@ contains
        scale = 1.
     case (ginitopt_zonal_only)
        call ginit_restart_zonal_only
+       call init_tstart (tstart, istatus)
+       restarted = .true.
+       scale = 1.
+    case (ginitopt_no_zonal)
+       call ginit_restart_no_zonal
        call init_tstart (tstart, istatus)
        restarted = .true.
        scale = 1.
@@ -799,7 +811,7 @@ contains
 
     implicit none
 
-    type (text_option), dimension (33), parameter :: ginitopts = &
+    type (text_option), dimension (35), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('default_odd', ginitopt_default_odd), &
             text_option('noise', ginitopt_noise), &
@@ -831,8 +843,10 @@ contains
             text_option('recon3', ginitopt_recon3), &
             text_option('ot', ginitopt_ot), &
             text_option('zonal_only', ginitopt_zonal_only), &
+            text_option('no_zonal', ginitopt_no_zonal), &
             text_option('single_parallel_mode', ginitopt_single_parallel_mode), &
-            text_option('all_modes_equal', ginitopt_all_modes_equal) &
+            text_option('all_modes_equal', ginitopt_all_modes_equal), &
+            text_option('eig_restart', ginitopt_restart_eig) &
             /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
@@ -848,8 +862,7 @@ contains
          eq_type, prof_width, eq_mode_u, eq_mode_n, &
          input_check_recon, nkxy_pt, ukxy_pt, &
          ikkk, ittt, phiamp, aparamp, phifrac, ikpar_init, kpar_init, &
-         ikx_init
-
+         ikx_init, restart_eig_id
 
     integer :: ierr, in_file
 
@@ -911,6 +924,7 @@ contains
     kpar_init = 0.0
     ikx_init = -1
     read_many=.false.
+    restart_eig_id = 0
     ! <RN
     restart_file = trim(run_name)//".nc"
     restart_dir = "./"
@@ -3516,8 +3530,30 @@ contains
     end if
     gnew = g
     phi=phinew ; apar=aparnew ; bpar=bparnew
-
   end subroutine ginit_restart_many
+
+  subroutine ginit_restart_eig
+    use dist_fn_arrays, only: g, gnew
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use gs2_save, only: gs2_restore
+    use mp, only: proc0
+    use file_utils, only: error_unit
+    use run_parameters, only: fphi, fapar, fbpar
+    implicit none
+    integer :: istatus, ierr
+    character(len=20) :: restart_unique_string
+
+    write(restart_unique_string,'(".eig_",I0)') restart_eig_id
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, fileopt=restart_unique_string)
+
+    if (istatus /= 0) then
+       ierr = error_unit()
+       if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
+       g = 0.
+    end if
+    gnew = g
+    phi=phinew ; apar=aparnew ; bpar=bparnew
+  end subroutine ginit_restart_eig
 
   subroutine ginit_restart_memory
     use dist_fn_arrays, only: g, gnew, g_restart_tmp
@@ -3702,6 +3738,56 @@ contains
     gnew = g
 
   end subroutine ginit_restart_zonal_only
+
+  !> Restart but remove the zonal flow (ky = 0) component upon restarting.
+  !! It can be selected by setting the input parameter ginit to "no_zonal". 
+  !! The size of the zonal flows can be adjusted using the input parameter zf_init.
+  !! Author: FvW (copy of EGH code)
+
+  subroutine ginit_restart_no_zonal
+
+    use gs2_save, only: gs2_restore
+    use mp, only: proc0
+    use file_utils, only: error_unit
+    use kt_grids, only: naky, ntheta0
+    use le_grids, only: forbid
+    use dist_fn_arrays, only: g, gnew
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use fields_arrays, only: phinew
+    use run_parameters, only: fphi, fapar, fbpar
+
+    implicit none
+    integer :: istatus, ierr
+    integer :: iglo
+    integer :: ik, it, il, is
+
+    !Load phi and g from the restart file
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
+    if (istatus /= 0) then
+       ierr = error_unit()
+       if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
+    end if
+    
+    !Set zonal component of phi to 0
+    phinew(:,:,1) = cmplx(0.0,0.0)
+    
+    !Set zonal components of g to zero using phi
+    
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       if (ik ==  1) then
+          g(:,1,iglo) = 0.0 !-phi(:,it,ik)*spec(is)%z*phiinit
+          where (forbid(:,il)) g(:,1,iglo) = 0.0
+          g(:,2,iglo) = g(:,1,iglo)
+       end if
+    end do
+
+    gnew = g
+
+  end subroutine ginit_restart_no_zonal
 
   subroutine reset_init(from_file)
     implicit none
