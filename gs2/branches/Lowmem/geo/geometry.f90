@@ -1071,8 +1071,11 @@ if (debug) write(6,*) "eikcoefs: end gradients"
 
     Bpol = bpolmag
 
+    !Deallocate local arrays
     call dealloc_local_arrays
 
+    !Deallocate arrays associated with specific geometry implementation
+    call finish_impls
 ! Generate metric tensor elements to compare with Xanthopoulos and Jenko    
 ! Need to change normalization to match XJ
 
@@ -2871,7 +2874,17 @@ end subroutine geofax
   end subroutine dealloc_module_arrays
 
   subroutine finish_geometry
-    
+
+    implicit none
+    call dealloc_module_arrays
+    eqinit = 1
+
+    !Deallocate arrays associated with specific geometry implementation
+    call finish_impls
+  end subroutine finish_geometry
+
+  !>Deallocate arrays associated with specific geometry implementation
+  subroutine finish_impls
     use  geq, only:  geq_finish
     use  peq, only:  peq_finish
     use  ceq, only:  ceq_finish
@@ -2881,8 +2894,6 @@ end subroutine geofax
     use  leq, only:  leq_finish
 
     implicit none
-    call dealloc_module_arrays
-    eqinit = 1
 
     if(gen_eq)   call  geq_finish
     if(ppl_eq)   call  peq_finish
@@ -2891,8 +2902,7 @@ end subroutine geofax
     if(dfit_eq)  call  deq_finish
     if(idfit_eq) call ideq_finish
     if(local_eq) call  leq_finish
-
-  end subroutine finish_geometry
+  end subroutine finish_impls
 
   subroutine init_theta(nt)
     use constants, only: pi
