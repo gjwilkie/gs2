@@ -110,7 +110,6 @@ module dist_fn
   ! (-ntgrid:ntgrid, 2, -g-layout-)
 #endif
 
-!  real, dimension (:,:,:,:,:), allocatable :: wdriftttp
   real, dimension (:,:,:,:,:,:), allocatable :: wdriftttp
   ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspec) replicated
 
@@ -880,23 +879,19 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use le_grids, only: negrid, ng2, nlambda, jend, forbid
-!    use le_grids, only: al
-!    use theta_grids, only: bmag
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, ie_idx, is_idx
     use dist_fn_arrays, only: ittp
     implicit none
     integer :: ig, ik, it, il, ie, is
     integer :: iglo
-!    logical :: alloc = .true.
 !CMR
     logical,parameter :: debug = .false.
 !CMR
 
 ! find totally trapped particles 
-!    if (alloc) allocate (ittp(-ntgrid:ntgrid))
     if (.not. allocated(ittp)) allocate (ittp(-ntgrid:ntgrid))
-!    ittp = 0
-     ittp = nlambda+1
+    ittp = nlambda+1
+
     do ig = -ntgrid+1, ntgrid-1
 !       if (jend(ig) > 0 .and. jend(ig) <= nlambda) then
 !          if (1.0-al(jend(ig))*bmag(ig+1) < 2.0*epsilon(0.0) &
@@ -922,7 +917,10 @@ subroutine check_dist_fn(report_unit)
        ! allocate wdrift with sign(vpa) dependence because will contain 
        ! Coriolis as well as magnetic drifts
        allocate (wdrift(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (wdriftttp(-ntgrid:ntgrid,ntheta0,naky,negrid,nspec,2))
+
+       !<DD>May be better to make this the same shape as wdrift? Though currently don't have lambda dependence here
+       allocate (wdriftttp(-ntgrid:ntgrid,g_lo%llim_it:g_lo%ulim_it,&
+            g_lo%llim_ik:g_lo%ulim_ik,g_lo%llim_ie:g_lo%ulim_ie,g_lo%llim_is:g_lo%ulim_is,2))
     end if
     wdrift = 0.  ; wdriftttp = 0.
 #ifdef LOWFLOW
@@ -959,10 +957,10 @@ subroutine check_dist_fn(report_unit)
        end do
     end do
     wdriftttp = 0.0
-    do is = 1, nspec
-       do ie = 1, negrid
-          do ik = 1, naky
-             do it = 1, ntheta0
+    do is = g_lo%llim_is,g_lo%ulim_is !1, nspec
+       do ie = g_lo%llim_ie,g_lo%ulim_ie
+          do ik = g_lo%llim_ik,g_lo%ulim_ik
+             do it = g_lo%llim_it,g_lo%ulim_it
 ! moved this loop inside. 4.10.99
                 do ig = -ntgrid, ntgrid
                    if (ittp(ig) == nlambda+1) cycle
@@ -1072,10 +1070,8 @@ subroutine check_dist_fn(report_unit)
 
   subroutine init_vpar
     use dist_fn_arrays, only: vpa, vpar, vpac, vperp2
-    use species, only: spec
     use theta_grid, only: ntgrid, delthet, bmag, gradpar
     use le_grids, only: energy, al, nlambda, negrid
-    use run_parameters, only: tunits
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx
     implicit none
@@ -5724,9 +5720,11 @@ endif
 ! not guiding center n_total
     if(present(ntot)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          is = is_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
           it = it_idx(g_lo,iglo)
+          il = il_idx(g_lo,iglo)
+          ie = ie_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
 
           do isgn = 1, 2
              g0(:,isgn,iglo) = aj0(:,iglo) * gnew(:,isgn,iglo)
@@ -8144,6 +8142,9 @@ endif
 
   end subroutine get_gtran
 
+!<DD>THIS DOESN'T APPEAR CORRECT AS:
+! 1. It doesn't use g0 for anything
+! 2. The lagrange array (lgrnge) is not currently set to anything
   subroutine write_poly (phi, bpar, last, istep)
 
     use file_utils, only: open_output_file, close_output_file
@@ -8163,17 +8164,15 @@ endif
 
     complex, dimension (:,:,:,:,:), allocatable :: lpoly
     integer :: iglo, isgn, ix, ig, tsize
-!    logical, save :: first = .true.
     integer, save :: interp_unit
 
+    !<DD>This array can be quite large as nterp~100
     allocate(lpoly(-ntgrid:ntgrid,ntheta0,naky,negrid,2*nterp-1))
 
     if (proc0) then
-!       if (first) then 
        if (.not. lpolinit) then
           call open_output_file (interp_unit, ".interp")
           lpolinit = .true.
-!          first = .false.
        end if
     end if
 
